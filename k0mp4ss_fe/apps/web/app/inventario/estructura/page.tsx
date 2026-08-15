@@ -35,6 +35,7 @@ import { Label } from "@workspace/ui/components/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@workspace/ui/components/select"
 import { IconBuilding, IconPlus, IconChevronRight, IconPencil, IconStack2, IconEdit } from "@tabler/icons-react"
 import { FormularioUnidad } from "@/components/inventario/formulario-unidad"
+import { EstadosDonut } from "@/components/inventario/estados-donut"
 
 export default function EstructuraFisicaPage() {
   const [macroSectores, setMacroSectores] = React.useState(initialMacros)
@@ -68,6 +69,13 @@ export default function EstructuraFisicaPage() {
     
     return matchesMacro && matchesMicro;
   })
+
+  const selectedMicroObj = microSectores.find(m => m.id === selectedMicro)
+  const scopeLabel = selectedMacro === "todos"
+    ? "Vista Global"
+    : selectedMicro === "todos"
+      ? `${currentMacro?.etiqueta} ${currentMacro?.nombre}`
+      : `${currentMacro?.etiqueta} ${currentMacro?.nombre} · ${selectedMicroObj?.etiqueta} ${selectedMicroObj?.nombre}`
 
   const handleSaveMacro = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -201,7 +209,14 @@ export default function EstructuraFisicaPage() {
           <ScrollBar orientation="horizontal" />
         </ScrollArea>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 pt-4">
+        <div className="pt-4">
+          <EstadosDonut
+            estados={filteredUnidades.map(u => u.estado)}
+            scopeLabel={scopeLabel}
+          />
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 pt-6">
           <Card className="md:col-span-1 h-fit">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-xs font-black uppercase tracking-widest text-muted-foreground flex items-center gap-2">
