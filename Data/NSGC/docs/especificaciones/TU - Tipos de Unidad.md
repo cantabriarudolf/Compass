@@ -7,8 +7,11 @@ Este maestro permite estandarizar las características de las unidades del condo
 Cada registro en este maestro define un modelo de unidad que luego será asignado a las unidades físicas.
 
 - **Nombre del Tipo:** Identificador descriptivo (ej: "Departamento Tipo A", "Local Grande", "Bodega Estándar").
+- **Categoría (Etiqueta Física):** Clasificación visual heredada por las unidades (Depto, Casa, Local, Oficina, Bodega, Estacionamiento). Alimenta el maestro `CATEGORIAS_UNIDAD`.
 - **Metraje (m2):** Superficie asociada a este tipo de unidad.
 - **Monto Base Gasto Común:** Valor en pesos ($) predefinido para este tipo de unidad (usado en el modo de cálculo "Monto Fijo").
+- **Activo:** Flag de alta/baja. Los tipos inactivos no aparecen en los formularios de creación de unidades.
+- **Historial de Tarifas:** Registro de cambios del Monto Base con fecha de vigencia (trazabilidad financiera para reajustes y auditoría FI).
 - **Descripción:** Breve detalle de la distribución o características (opcional).
 
 ## 2. Reglas de Negocio

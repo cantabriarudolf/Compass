@@ -78,7 +78,7 @@ export const estacionamientos: Estacionamiento[] = Array.from({ length: 100 }).m
     unidadId,
     macroSectorId,
     asignadoA,
-    estadoId: unidadId ? "ocupado-prop" : "vacante",
+    estadoId: unidadId ? "en-uso" : "vacante",
     historial
   };
 });

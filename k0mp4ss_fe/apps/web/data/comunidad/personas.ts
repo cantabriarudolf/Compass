@@ -1,4 +1,3 @@
-import { ESTADOS_OCUPACION } from "../maestros"
 import { unidades } from "../inventario/estructura"
 import { VinculoUnidad } from "./vinculos"
 

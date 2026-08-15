@@ -25,7 +25,7 @@ Para que el sistema sea universal y soporte tanto edificios como condominios de 
     - **Servicios Básicos (Agua, Luz, Gas):**
         - Registro de Código de Cliente por cada servicio.
         - Registro de Número de Medidor por cada servicio.
-    - **Estado de Ocupación / Disponibilidad:** (En Uso, En Arriendo, En Venta, En Mantención).
+    - **Estado de Ocupación / Disponibilidad:** Alineado al maestro `ESTADOS_OCUPACION` (data/maestros.ts): **Vacante, En Uso, En Arriendo, En Venta, En Mantención**.
     - **Flag Comercial:** Marca para tratamiento diferenciado de GC.
     - **Datos Inmobiliarios (Tabla Anexa Recomendada):** Para no sobrecargar el maestro base, los detalles para corretaje se manejarán en una tabla vinculada:
         - Valor Comercial (Venta).

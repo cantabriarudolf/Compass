@@ -2,7 +2,6 @@
 
 import * as React from "react"
 import { personas } from "@/data/comunidad/personas"
-import { ESTADOS_OCUPACION } from "@/data/maestros"
 // Nota: Deberíamos extraer las condiciones iniciales a data/maestros.ts para que sea global, 
 // por ahora simularé el cruce con un objeto local basado en el mock de admin/maestros
 const CONDICIONES_ESPECIALES: Record<string, { nombre: string, color: string }> = {

@@ -140,7 +140,7 @@ export function FormularioUnidad({ unidad, trigger, onSave }: FormularioUnidadPr
 
             <div className="space-y-2">
               <Label className="text-xs font-bold">Estado de Ocupación</Label>
-              <Select name="estado" defaultValue={unidad?.estado || "Vacío"}>
+              <Select name="estado" defaultValue={unidad?.estado || "Vacante"}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {ESTADOS_OCUPACION.map(e => (

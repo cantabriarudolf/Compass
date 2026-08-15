@@ -117,7 +117,7 @@ export default function EstructuraFisicaPage() {
         metraje: data.metraje || 0,
         prorrateo: data.prorrateo || 0,
         rolSii: data.rolSii || "",
-        estado: data.estado || "Vacío",
+        estado: data.estado || "Vacante",
         servicios: data.servicios || {},
       }
       setUnidades([...unidades, nueva])

@@ -6,6 +6,9 @@ Administración de las plazas de aparcamiento del condominio.
 - **Número de Estacionamiento:** Identificador único.
 - **Ubicación:** (Superficie, Subterráneo).
 - **ID Unidad Principal:** (Opcional) Vínculo con el departamento o local al que pertenece.
+- **Macro-Sector:** (Opcional) Sector físico donde se ubica la plaza (`EF`). Permite filtrar y agrupar estacionamientos por torre/sector.
+- **Asignado A:** Etiqueta visual legible de la asignación actual (ej: "Depto 204 (Torre A)", "Disponible"). Derivada automáticamente de la unidad vinculada.
+- **Estado de Ocupación:** Vínculo al maestro `ESTADOS_OCUPACION` (Vacante, En Uso, En Arriendo, En Venta, En Mantención).
 - **Metraje:** Superficie asignada (si aplica para el prorrateo).
 - **Prorrateo Propio:** Coeficiente si el estacionamiento tributa de forma independiente.
 

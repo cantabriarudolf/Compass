@@ -2,7 +2,6 @@
 
 import * as React from "react"
 import { Persona } from "@/data/comunidad/personas"
-import { ESTADOS_OCUPACION } from "@/data/maestros"
 // Mock de vulnerabilidades (deberían venir de MA)
 const CONDICIONES_ESPECIALES = [
   { id: "c-1", nombre: "Electrodependiente" },

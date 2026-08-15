@@ -127,7 +127,7 @@ export const microSectores: MicroSector[] = [
   { id: "piso-comercial-1", macroSectorId: "comercial", nombre: "Nivel Calle", etiqueta: "Planta" }
 ];
 
-const estados = ["Vacante", "Ocupado por Propietario", "Arrendado", "En Juicio", "Cortesía"];
+const estados = ["Vacante", "En Uso", "En Arriendo", "En Venta", "En Mantención"];
 
 export const unidades: Unidad[] = [
   ...microSectores.filter(p => p.macroSectorId.startsWith("torre")).flatMap((p, pIdx) => 
@@ -152,7 +152,7 @@ export const unidades: Unidad[] = [
       };
     })
   ),
-  { id: "u-LC-01", microSectorId: "piso-comercial-1", numero: "L-01", etiqueta: "Local" as const, tipoUnidadId: "local-a", metraje: 120.0, prorrateo: 0.05, rolSii: "999-01", estado: "Ocupado por Propietario", servicios: { agua: { cliente: "C-LC-01", medidor: "ML-01" } } },
-  { id: "u-LC-02", microSectorId: "piso-comercial-1", numero: "L-02", etiqueta: "Local" as const, tipoUnidadId: "local-b", metraje: 60.0, prorrateo: 0.025, rolSii: "999-02", estado: "Arrendado", servicios: { agua: { cliente: "C-LC-02", medidor: "ML-02" } } },
+  { id: "u-LC-01", microSectorId: "piso-comercial-1", numero: "L-01", etiqueta: "Local" as const, tipoUnidadId: "local-a", metraje: 120.0, prorrateo: 0.05, rolSii: "999-01", estado: "En Uso", servicios: { agua: { cliente: "C-LC-01", medidor: "ML-01" } } },
+  { id: "u-LC-02", microSectorId: "piso-comercial-1", numero: "L-02", etiqueta: "Local" as const, tipoUnidadId: "local-b", metraje: 60.0, prorrateo: 0.025, rolSii: "999-02", estado: "En Arriendo", servicios: { agua: { cliente: "C-LC-02", medidor: "ML-02" } } },
   { id: "u-LC-03", microSectorId: "piso-comercial-1", numero: "L-03", etiqueta: "Local" as const, tipoUnidadId: "local-b", metraje: 60.0, prorrateo: 0.025, rolSii: "999-03", estado: "Vacante", servicios: { agua: { cliente: "C-LC-03", medidor: "ML-03" } } },
 ];
