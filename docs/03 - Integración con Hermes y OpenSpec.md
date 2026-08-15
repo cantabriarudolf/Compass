@@ -42,20 +42,32 @@ You are an autonomous senior developer agent working on Compass (NSGC).
 ## 🚀 ¿Cómo poner a Hermes a trabajar "solito"?
 
 ### Modo 1: Ejecución Directa por Tareas (Recomendado)
-Para lanzar a Hermes a ejecutar el Change activo (`vinculacion-unidades`), abres tu terminal en la carpeta del proyecto y le tiras el siguiente comando:
+Para lanzar a Hermes a ejecutar el Change activo (`ES-estacionamientos`), abres tu terminal en la carpeta del proyecto y le tiras el siguiente comando:
 
 ```bash
-hermes run "Lee openspec/changes/VU-vinculacion-unidades/tasks.md e implementa las tareas pendientes una por una en k0mp4ss_fe."
+hermes run "Lee openspec/changes/ES-estacionamientos/tasks.md e implementa las tareas pendientes una por una en k0mp4ss_fe."
 ```
 
 ### Modo 2: Usar el Workflow `/opsx-apply`
 Como ya tenemos configurados los workflows de OpenSpec en `.agent/workflows/opsx-apply.md`, le dices a Hermes:
 
 ```bash
-hermes run "/opsx-apply vinculacion-unidades"
+hermes run "/opsx-apply ES-estacionamientos"
 ```
 
 Hermes leerá la especificación, ejecutará el código en `k0mp4ss_fe/apps/web/`, probará los componentes UI de `packages/ui` y marcará los checkboxes de `tasks.md` a medida que avance.
+
+---
+
+## 🗺️ Roadmap de Cambios (Estado Global)
+
+| Código | Cambio | Estado |
+| :--- | :--- | :--- |
+| `VU-vinculacion-unidades` | CRUD de vinculación de unidades (comunidad) | ✅ Implementado |
+| `ES-estacionamientos` | Gestión de estacionamientos: inventario, ubicaciones (Superficie/Subterráneo), vinculación con unidades e historial de asignaciones | ✅ Implementado |
+| `correcciones-fase-1` | Correcciones de fase 1 | 🔵 En Proceso |
+
+Las páginas implementadas viven en `k0mp4ss_fe/apps/web/app/inventario/estacionamientos/` y `k0mp4ss_fe/apps/web/components/inventario/formulario-estacionamiento.tsx`.
 
 ---
 

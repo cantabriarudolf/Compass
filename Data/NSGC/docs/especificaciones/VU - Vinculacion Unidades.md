@@ -1,4 +1,4 @@
-# Módulo de Vinculación y Responsabilidad
+# VU - Vinculación de Unidades
 
 Este módulo gestiona la relación entre las Unidades y las Personas (Maestro).
 

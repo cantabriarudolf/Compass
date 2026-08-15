@@ -36,15 +36,16 @@ Each OpenSpec capability maps 1:1 to its module spec in `Data/NSGC/docs/especifi
 | `MA-*` | `MA - Maestros Administrativos.md` |
 | `EF-estructura-fisica` | `EF - Estructura Fisica.md` |
 | `ES-estacionamientos` | `ES - Estacionamientos.md` |
-| `TU-*` | `TU - Tipos de Unidad.md` |
+| `TU-tipos-unidad` | `TU - Tipos de Unidad.md` |
 | `MP-maestro-personas` | `MP - Maestro de Personas.md` |
 | `VU-vinculacion-unidades` | `VU - Vinculacion Unidades.md` |
+| `CV-visor-mensajes` | `CV - Visor de Mensajes.md` |
+| `PL-liquidaciones-remuneraciones` | `PL - Liquidaciones y Remuneraciones.md` |
 | `UI-interfaz-principal` | Cross-cutting UI (no AA code) |
 | `UI-navegacion-lateral` | Cross-cutting UI (no AA code) |
 
 ### Remaining NSGC modules (pending OpenSpec specs)
-`AD`, `GD`, `RP`, `CF`, `FI`, `CO`, `PE`, `IN`, `GE`, `IR`, `RA`, `RE`, `AM`, `PI`, `MT`, `CT` — not yet defined in `openspec/specs/`. Create each spec using its AA prefix when implemented.
-
+`AD`, `GD`, `RP`, `CF`, `FI`, `CO`, `PL`, `IN`, `GE`, `IR`, `RA`, `RE`, `AM`, `PI`, `MT`, `CT` — not yet defined in `openspec/specs/`. Create each spec using its AA prefix when implemented.
 ### Folder naming rule
 - Specs and active changes: `<AA>-<kebab-case-name>` (e.g. `EF-estructura-fisica`).
 - Cross-cutting UI specs use `UI-` prefix.

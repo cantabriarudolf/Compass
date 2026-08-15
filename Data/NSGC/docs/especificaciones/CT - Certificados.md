@@ -1,4 +1,4 @@
-# CT - Módulo de Certificados
+# CT - Certificados
 
 Este módulo permite la generación automatizada de documentación oficial y acreditaciones tanto para residentes como para el personal, garantizando la validez de la información mediante la firma digital del administrador.
 
@@ -18,7 +18,7 @@ El sistema ofrece una suite de documentos predefinidos que se nutren de los dato
 
 ### 1.3 Certificado Liquidación de Sueldo
 - **Objetivo:** Certificar la remuneración, descuentos legales y haberes de un trabajador para trámites externos.
-- **Fuente de Datos:** [Remuneraciones y Adelantos (PE)](<PE - Liquidaciones y Remuneraciones.md>).
+- **Fuente de Datos:** [Remuneraciones y Adelantos (PL)](<PL - Liquidaciones y Remuneraciones.md>).
 - **Control:** Solo puede ser generado por la administración o descargado por el trabajador tras el cierre del mes.
 
 ### 1.4 Certificado "Al Día" (Informativo)

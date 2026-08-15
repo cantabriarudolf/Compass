@@ -22,7 +22,7 @@ Para garantizar la validez de lo redactado, el sistema impone un flujo de revisi
 - **Botonera de Aprobación:** Cada miembro de la directiva tiene un botón para "Aprobar Acta".
 - **Monitor de Firmas Pendientes:** Vista que indica claramente quiénes de la directiva aún no han aprobado el documento.
 - **Publicación Automática:** Una vez que el acta cuenta con la aprobación del 100% (o quorum definido) de la directiva:
-    - Se publica automáticamente en la sección de avisos del [Visor de Mensajes (CO)](<CO - Visor de Mensajes.md>).
+    - Se publica automáticamente en la sección de avisos del [Visor de Mensajes (CV)](<CV - Visor de Mensajes.md>).
     - Se envía una notificación por correo electrónico a todos los **Propietarios** con el acta adjunta o link de descarga.
 
 ## 3. Privacidad y Roles (Propietario vs Residente)
@@ -32,6 +32,7 @@ El sistema hace una distinción estricta de privilegios basada en la relación l
 - **Visibilidad Restringida:** Por defecto, la información de Actas de Asamblea y Reuniones de Directiva es **invisible para los Residentes (Arrendatarios)**. Solo los Propietarios tienen acceso a este repositorio documental.
 - **Check de Autorización (Dueño):** El Propietario tiene un check en su panel: *"Permitir que mis residentes vean las actas y reportes"*. Al quitar este check (que está bloqueado por defecto), el propietario acepta compartir esta información con sus arrendatarios.
 
-## 4. Integración con Auditoría (AM)
+## 4. Integración con Auditoría y Métricas (AM)
 - **Evento:** `GD_ACTA_CREATED`, `GD_ACTA_APPROVED`, `GD_ASISTENCIA_REG`.
-- **Trazabilidad:** Registro exacto de quién aprobó y en qué momento se gatilló la notificación masiva.
+- **Data Cuantificable:** Número de actas aprobadas, días promedio de aprobación, porcentaje de asistencia a reuniones de directiva.
+- **Métrica:** Tiempo promedio de aprobación de actas, tasa de cumplimiento de quórum de directiva, cantidad de actas publicadas en el visor.

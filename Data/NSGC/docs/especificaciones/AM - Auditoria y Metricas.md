@@ -1,4 +1,4 @@
-# Módulo de Auditoría y Métricas Operacionales
+# AM - Auditoría y Métricas
 
 Este módulo tiene como objetivo centralizar el registro de todas las acciones significativas realizadas en el sistema, permitiendo la generación de reportes, KPIs de gestión y trazabilidad completa de la operación.
 

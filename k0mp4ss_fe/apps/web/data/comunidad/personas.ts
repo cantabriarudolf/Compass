@@ -1,19 +1,11 @@
 import { ESTADOS_OCUPACION } from "../maestros"
 import { unidades } from "../inventario/estructura"
+import { VinculoUnidad } from "./vinculos"
 
 // --- INTERFACES ---
 
-export interface VinculoUnidad {
-  id: string;
-  unidadId: string;
-  rol: "propietario" | "residente" | "arrendatario";
-  fechaInicio: string;
-  fechaFin?: string;
-  // Trigger Inmobiliario (PI)
-  estadoOcupacionPropiedad?: "habitada" | "proxima_vacancia" | "en_arriendo" | "arrendada" | "en_venta";
-  // Privacidad Delegada
-  permiteVerFinanzas: boolean;
-}
+export type { VinculoUnidad } from "./vinculos";
+export type { RolVinculo } from "./vinculos";
 
 export interface ExtensionLaboral {
   id: string;
@@ -69,7 +61,6 @@ export const personas: Persona[] = [
     estadoCuenta: "activa",
     condicionesEspecialesIds: [],
     roles: ["propietario", "residente", "directiva"],
-    vinculosUnidad: [{ id: "v-1", unidadId: "u-A-101", rol: "propietario", fechaInicio: "2024-01-15", estadoOcupacionPropiedad: "habitada", permiteVerFinanzas: true }],
     datosGobernanza: { id: "g-1", cargoDirectiva: "presidente", fechaAsuncion: "2025-03-01" }
   },
   // 2. Residente Puro (Arrendatario) con Vulnerabilidad
@@ -84,7 +75,6 @@ export const personas: Persona[] = [
     estadoCuenta: "activa",
     condicionesEspecialesIds: ["c-2"], // Movilidad Reducida
     roles: ["residente"],
-    vinculosUnidad: [{ id: "v-2", unidadId: "u-B-201", rol: "arrendatario", fechaInicio: "2025-01-01", permiteVerFinanzas: false }]
   },
   // 3. Propietario Inversionista (No vive en el edificio, múltiples propiedades)
   {
@@ -98,11 +88,6 @@ export const personas: Persona[] = [
     estadoCuenta: "activa",
     condicionesEspecialesIds: [],
     roles: ["propietario"],
-    vinculosUnidad: [
-      { id: "v-3", unidadId: "u-B-201", rol: "propietario", fechaInicio: "2020-05-10", estadoOcupacionPropiedad: "arrendada", permiteVerFinanzas: false },
-      { id: "v-4", unidadId: "u-C-301", rol: "propietario", fechaInicio: "2023-11-20", estadoOcupacionPropiedad: "proxima_vacancia", permiteVerFinanzas: false },
-      { id: "v-31", unidadId: "u-LC-01", rol: "propietario", fechaInicio: "2021-02-14", estadoOcupacionPropiedad: "en_venta", permiteVerFinanzas: false },
-    ]
   },
   // 4. Personal (Conserje) que además vive en el edificio
   {
@@ -116,7 +101,6 @@ export const personas: Persona[] = [
     estadoCuenta: "activa",
     condicionesEspecialesIds: ["c-1", "c-3"], // Electrodependiente y Adulto Mayor Solo
     roles: ["personal", "residente"],
-    vinculosUnidad: [{ id: "v-5", unidadId: "u-D-401", rol: "residente", fechaInicio: "2022-02-01", permiteVerFinanzas: false }],
     datosLaborales: { id: "l-1", cargo: "Conserje Turno Día", afp: "Habitat", prevision: "Fonasa", fechaIngreso: "2021-06-15" }
   },
   // 5. Administrador (Rol: Personal, No Residente)
@@ -145,7 +129,6 @@ export const personas: Persona[] = [
     estadoCuenta: "activa",
     condicionesEspecialesIds: [],
     roles: ["propietario", "residente", "directiva"],
-    vinculosUnidad: [{ id: "v-6", unidadId: "u-A-102", rol: "propietario", fechaInicio: "2019-10-10", estadoOcupacionPropiedad: "habitada", permiteVerFinanzas: true }],
     datosGobernanza: { id: "g-2", cargoDirectiva: "tesorero", fechaAsuncion: "2025-03-01" }
   },
   // 7. Contratista Permanente (Mantenimiento Ascensores)
@@ -174,7 +157,6 @@ export const personas: Persona[] = [
     estadoCuenta: "inactiva", // Se fue del edificio
     condicionesEspecialesIds: [],
     roles: ["residente"],
-    vinculosUnidad: [{ id: "v-8", unidadId: "u-C-301", rol: "arrendatario", fechaInicio: "2021-03-01", fechaFin: "2023-11-19", permiteVerFinanzas: false }]
   },
   // 9. Trabajador de Aseo (Personal)
   {
@@ -202,6 +184,5 @@ export const personas: Persona[] = [
     estadoCuenta: "bloqueada", // No puede usar amenidades
     condicionesEspecialesIds: [],
     roles: ["residente"],
-    vinculosUnidad: [{ id: "v-10", unidadId: "u-B-202", rol: "arrendatario", fechaInicio: "2024-08-01", permiteVerFinanzas: true }]
   }
 ];

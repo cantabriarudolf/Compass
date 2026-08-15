@@ -1,4 +1,4 @@
-# Módulo de Gestión de Solicitudes (GE)
+# GE - Gestión de Solicitudes
 
 Este módulo centraliza y tipifica todos los requerimientos formales (Tickets) que fluyen hacia la administración, ya sea desde el personal o desde los residentes, asegurando que nada quede en el aire.
 
@@ -43,3 +43,10 @@ Para evitar la sobrecarga visual, el sistema organiza las gestiones en un format
 Cada vez que se oprime el botón "Enviar Solicitud", el sistema gatilla métricas de contabilización en tiempo real.
 - **Dashboard de Control (Administrador):** Un panel dedicado donde el administrador ve el volumen de peticiones segmentadas por estado (Nuevas, En Proceso, Resueltas).
 - **Métricas de Rendimiento (SLA):** El sistema expone gráficamente cuánto tiempo (en horas/días) se demora la administración en resolver las solicitudes, evidenciando cuellos de botella en la gestión.
+
+## 4. Integración con Auditoría y Métricas (AM)
+
+Cada cambio de estado o cierre de ticket debe quedar registrado para alimentar el dashboard de gestiones:
+- **Evento:** `GE_TICKET_CREATED`, `GE_TICKET_STATE_CHANGE`, `GE_TICKET_RESOLVED`.
+- **Data Cuantificable:** Cantidad de solicitudes por tipología, tiempo de resolución (SLA) en horas.
+- **Métrica:** Tasa de resolución, tiempo promedio de respuesta por tipo de gestión.

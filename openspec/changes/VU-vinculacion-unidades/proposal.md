@@ -12,8 +12,7 @@ El módulo de Identidad (Maestro de Personas) y el Inventario (Estructura Físic
 ## Capabilities
 
 ### New Capabilities
-- `gestion-vinculos`: Flujo completo de creación, edición y término de vínculos entre una Persona y múltiples Unidades Físicas (Departamentos, Estacionamientos, etc.), definiendo el rol legal u operativo en cada uno.
-- `roles-ocupacion`: Definición de los permisos y responsabilidades derivadas de cada rol de vinculación (Propietario, Arrendatario, Copropietario/Familiar, Ocupante).
+- `VU-vinculacion-unidades`: Flujo completo de creación, edición y término de vínculos entre una Persona y múltiples Unidades Físicas (Departamentos, Estacionamientos, etc.), definiendo el rol legal u operativo en cada uno, incluyendo permisos derivados (Propietario, Arrendatario, Copropietario/Familiar, Ocupante), privacidad financiera delegada y triggers inmobiliarios.
 
 ### Modified Capabilities
 

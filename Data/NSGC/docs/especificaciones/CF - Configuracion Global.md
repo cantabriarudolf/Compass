@@ -1,4 +1,4 @@
-# Configuracion Global de la Aplicacion
+# CF - Configuración Global de la Aplicación
 
 Este módulo define los parámetros base que rigen el comportamiento de todo el sistema de gestión.
 
@@ -70,7 +70,10 @@ Configuraciones críticas para la lógica de negocio y protección de datos.
 ### Seguridad y Auditoría:
 - **Clave de Eliminación Maestro:** Clave especial requerida para borrados críticos en el sistema.
 - **Log de Auditoría:** El cambio de cualquier parámetro global debe quedar registrado indicando quién, cuándo y qué valor cambió.
-- **Validaciones:** 
+- **Validaciones:**
+    - **Formato:** Validación de RUT, correo electrónico y valores numéricos (montos, días, porcentajes).
+    - **Coherencia:** El **Día de Corte** debe estar dentro del rango 1-31; los **Días Mes Comercial** entre 28-31; la **Jornada Semanal** entre 35-48 horas.
+    - **Confirmación Crítica:** Los cambios sobre SMTP, cálculo de GC y parámetros de seguridad exigen confirmación explícita (según `RG`).
 ## 6. Integración con Auditoría y Métricas (AM)
 
 Cada cambio en la configuración global debe generar un evento en el log:

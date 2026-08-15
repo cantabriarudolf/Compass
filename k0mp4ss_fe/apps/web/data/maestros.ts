@@ -1,4 +1,7 @@
-// Este archivo centraliza los parámetros globales del sistema (Maestros)
+// Este archivo centraliza los maestros de estructura e inventario físico
+// (EF: categorías estructurales, TU: tipos de unidad, ES: estacionamientos).
+// Los maestros administrativos (AFP, bancos, fonasa, feriados, etc.) viven en data/admin/maestros.ts.
+// Los parámetros globales de configuración (SMTP, cálculo de GC, seguridad) pertenecen al módulo CF - Configuración Global.
 
 export type UnidadEtiqueta =
   | "Depto"

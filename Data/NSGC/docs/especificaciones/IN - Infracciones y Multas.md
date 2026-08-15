@@ -1,4 +1,4 @@
-# CRUD de Infracciones y Multas
+# IN - Infracciones y Multas (CRUD)
 
 Este módulo permite la gestión y registro de faltas al Reglamento de Copropiedad y la aplicación de sus respectivas sanciones económicas.
 

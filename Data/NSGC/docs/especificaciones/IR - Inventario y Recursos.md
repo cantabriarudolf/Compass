@@ -1,4 +1,4 @@
-# Gestión de Inventario y Recursos (IR)
+# IR - Inventario y Recursos
 
 Este módulo gestiona todos los activos, insumos y recursos necesarios para la operación del condominio, vinculando la [Estructura Física (EF)](<EF - Estructura Fisica.md>) con el [Personal (PE)](<PE - Personal y Servicios.md>).
 
@@ -61,8 +61,6 @@ La solicitud de insumos no es un simple descuento de stock, es una **Gestión Op
 - Registro de pérdida, robo o fin de vida útil de activos.
 
 ## 4. Integración con Auditoría y Métricas (AM)
-- **Eventos:** `IR_DELIVERY_EPP`, `IR_STOCK_LOW`, `IR_ASSET_REPAIR`.
-- **Métricas:** 
-    - Gasto mensual en insumos de aseo vs presupuesto.
-    - Ratio de pérdida/daño de herramientas.
-    - Cumplimiento de entrega de EPP (Seguridad Laboral).
+- **Evento:** `IR_DELIVERY_EPP`, `IR_STOCK_LOW`, `IR_ASSET_REPAIR`.
+- **Data Cuantificable:** Gasto mensual en insumos de aseo vs presupuesto, ratio de pérdida/daño de herramientas, cumplimiento de entrega de EPP (Seguridad Laboral).
+- **Métrica:** Desviación de gasto en insumos respecto al presupuesto, tasa de rotura/pérdida de activos, porcentaje de personal con EPP entregado a tiempo.

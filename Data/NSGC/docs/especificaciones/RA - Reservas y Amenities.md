@@ -1,4 +1,4 @@
-# Módulo de Reservas y Amenities (RA)
+# RA - Reservas y Amenities
 
 Este módulo gestiona el motor de agendamiento para espacios comunes y activos compartidos de la comunidad, evitando conflictos de uso y controlando la rentabilidad de cada elemento.
 
@@ -31,11 +31,9 @@ Cada elemento reservable funciona como una unidad de negocio independiente dentr
 - **Egresos por Reparación:** Las reparaciones o insumos (ej: carbón para quinchos, filtros para piscina) se descuentan de este fondo, permitiendo una trazabilidad real de su rentabilidad.
 - **Gestión de Garantías:** El sistema alerta a conserjería al momento de devolver el activo. Si el activo está dañado, el administrador puede retener la garantía para cubrir la reparación, alimentando el flujo de este centro de costos.
 
-## 4. Reportería y Métricas (Dashboard de Amenities)
+## 4. Integración con Auditoría y Métricas (AM)
 
 Integración directa con los tableros de `RE` y `AM` para demostrar valor:
-- **Eventos Registrados:** `RA_BOOKING_CREATED`, `RA_WARRANTY_RETAINED`.
-- **Métricas Clave (KPIs):**
-    - *Tasa de Uso:* Porcentaje de tiempo que un quincho está reservado los fines de semana.
-    - *Rentabilidad del Activo:* Ingresos generados vs. Gastos de Mantenimiento. (Ej: "¿Nos conviene comprar otra hidrolavadora considerando lo que recauda la actual?").
-    - *Ranking de Demanda:* Cuáles son los amenities más populares.
+- **Evento:** `RA_BOOKING_CREATED`, `RA_BOOKING_CANCELLED`, `RA_WARRANTY_RETAINED`.
+- **Data Cuantificable:** Número de reservas por amenity, ingresos por tarifas de uso, garantías retenidas por daños, cancelaciones tardías.
+- **Métrica:** Tasa de uso (% de tiempo reservado), rentabilidad del activo (ingresos vs gastos de mantenimiento), ranking de demanda de amenities.

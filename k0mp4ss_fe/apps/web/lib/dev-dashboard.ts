@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
 export type ModuleStatus = 'pendiente' | 'documentado' | 'en_proceso' | 'completado';
@@ -11,6 +11,12 @@ export interface ModuleInfo {
   route: string;
   status: ModuleStatus;
   change?: string;
+  mockData: boolean;
+  mockFile?: string;
+  documented: boolean;
+  specFile?: string;
+  hasManual: boolean;
+  manualFile?: string;
 }
 
 export interface TaskItem {
@@ -63,10 +69,12 @@ const PHASES: Record<string, string> = {
   AD: 'Fase 3',
   GD: 'Fase 3',
   CO: 'Fase 3',
+  CV: 'Fase 3',
   GE: 'Fase 3',
   RE: 'Fase 3',
   AM: 'Fase 3',
   PE: 'Fase 4',
+  PL: 'Fase 4',
   RA: 'Fase 4',
   CT: 'Fase 4',
   IN: 'Fase 4',
@@ -88,6 +96,7 @@ const ROUTES: Record<string, string> = {
   AD: '/dashboard',
   GD: '/comunidad/directiva',
   CO: '/comunidad/comunicacion',
+  CV: '/comunidad/visor-mensajes',
   GE: '/operaciones/solicitudes',
   RA: '/operaciones/reservas',
 };
@@ -95,6 +104,16 @@ const ROUTES: Record<string, string> = {
 const ARCHIVED_OVERRIDES: Record<string, string> = {
   'inventario-estructura': 'EF',
   'maestro-personas': 'MP',
+};
+
+const MOCK_DATA_FILES: Record<string, string> = {
+  RG: 'data/maestros.ts',
+  MA: 'data/maestros.ts',
+  EF: 'data/inventario/estructura.ts',
+  TU: 'data/inventario/estructura.ts',
+  ES: 'data/inventario/estacionamientos.ts',
+  MP: 'data/comunidad/personas.ts',
+  VU: 'data/comunidad/personas.ts',
 };
 
 const PHASE_ORDER: Record<string, number> = {
@@ -120,7 +139,11 @@ function findRepoRoot(): string {
 }
 
 const REPO_ROOT = findRepoRoot();
+const WEB_ROOT = existsSync(path.join(REPO_ROOT, 'k0mp4ss_fe', 'apps', 'web'))
+  ? path.join(REPO_ROOT, 'k0mp4ss_fe', 'apps', 'web')
+  : path.join(REPO_ROOT, 'apps', 'web');
 const ESPEC_DIR = path.join(REPO_ROOT, 'Data', 'NSGC', 'docs', 'especificaciones');
+const MANUALS_DIR = path.join(REPO_ROOT, 'Data', 'NSGC', 'docs', 'manuales');
 const OPENSPEC_DIR = path.join(REPO_ROOT, 'openspec');
 const SPECS_DIR = path.join(OPENSPEC_DIR, 'specs');
 const CHANGES_DIR = path.join(OPENSPEC_DIR, 'changes');
@@ -128,6 +151,8 @@ const ARCHIVE_DIR = path.join(CHANGES_DIR, 'archive');
 
 function readModules(): ModuleInfo[] {
   if (!existsSync(ESPEC_DIR)) return [];
+  const specCodes = new Set(readSpecCodes());
+  const manualCodes = readManualCodes();
   return readdirSync(ESPEC_DIR)
     .filter(f => f.endsWith('.md') && !f.startsWith('00'))
     .map((f): ModuleInfo => {
@@ -135,6 +160,9 @@ function readModules(): ModuleInfo[] {
       const match = base.match(/^([A-Za-z]{2,3})\s*[-–—]\s*(.+)$/);
       const code = match ? match[1]!.toUpperCase() : '';
       const name = match ? match[2]!.trim() : base;
+      const mockFile = code ? MOCK_DATA_FILES[code] : undefined;
+      const specFile = findSpecFile(code);
+      const manualFile = findManualFile(code, name);
       return {
         code,
         name,
@@ -142,6 +170,12 @@ function readModules(): ModuleInfo[] {
         phase: PHASES[code] ?? '—',
         route: ROUTES[code] ?? '',
         status: 'pendiente',
+        mockData: mockFile ? existsSync(path.join(WEB_ROOT, mockFile)) : false,
+        mockFile: mockFile && existsSync(path.join(WEB_ROOT, mockFile)) ? path.relative(REPO_ROOT, path.join(WEB_ROOT, mockFile)) : undefined,
+        documented: specCodes.has(code),
+        specFile,
+        hasManual: manualCodes.has(code) || !!manualFile,
+        manualFile,
       };
     })
     .sort((a, b) => {
@@ -236,6 +270,57 @@ function keywordsMatch(changeId: string, moduleName: string): boolean {
     .some(t => t.length >= 4 && changeTokens.has(t));
 }
 
+function normalize(s: string): string {
+  return s
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(t => t.length >= 3)
+    .join(' ');
+}
+
+function readManualCodes(): Set<string> {
+  const codes = new Set<string>();
+  if (!existsSync(MANUALS_DIR)) return codes;
+  for (const f of readdirSync(MANUALS_DIR)) {
+    const fullPath = path.join(MANUALS_DIR, f);
+    if (statSync(fullPath).size === 0) continue;
+    const match = f.match(/^\d+\s*[-–—]\s*([A-Za-z]{2,3})\s*[-–—]/);
+    if (match) codes.add(match[1]!.toUpperCase());
+  }
+  return codes;
+}
+
+function findSpecFile(code: string): string | undefined {
+  if (!code || !existsSync(SPECS_DIR)) return undefined;
+  return readdirSync(SPECS_DIR, { withFileTypes: true })
+    .filter(e => e.isDirectory() && e.name.toUpperCase().startsWith(`${code}-`))
+    .map(e => `openspec/specs/${e.name}/spec.md`)
+    .find(f => existsSync(path.join(REPO_ROOT, f)));
+}
+
+function findManualFile(code: string, name: string): string | undefined {
+  if (!existsSync(MANUALS_DIR)) return undefined;
+  const target = normalize(name);
+  for (const f of readdirSync(MANUALS_DIR)) {
+    const fullPath = path.join(MANUALS_DIR, f);
+    if (statSync(fullPath).size === 0) continue;
+    if (code) {
+      const codeMatch = f.match(/^\d+\s*[-–—]\s*([A-Za-z]{2,3})\s*[-–—]/);
+      if (codeMatch && codeMatch[1]!.toUpperCase() === code) {
+        return `Data/NSGC/docs/manuales/${f}`;
+      }
+    }
+    const manualName = f.replace(/\.md$/, '').replace(/^\d+\s*[-–—]\s*/, '');
+    const mn = normalize(manualName);
+    if (target && (mn.includes(target) || target.includes(mn))) {
+      return `Data/NSGC/docs/manuales/${f}`;
+    }
+  }
+  return undefined;
+}
+
 function deriveStatus(
   module: ModuleInfo,
   activeIds: string[],
@@ -307,4 +392,19 @@ export function toggleTask(changeId: string, taskId: string): ChangeInfo | null 
 
   const archived = dirPath.startsWith(ARCHIVE_DIR);
   return readChange(dirPath, changeId, archived);
+}
+
+const ALLOWED_FILE_PREFIXES = [
+  `${REPO_ROOT}/openspec/specs/`,
+  `${REPO_ROOT}/openspec/changes/`,
+  `${REPO_ROOT}/Data/NSGC/docs/`,
+  `${WEB_ROOT}/data/`,
+];
+
+export function readProjectFile(relPath: string): string | null {
+  const normalized = path.normalize(relPath).replace(/^[/\\]+/, '');
+  const full = path.resolve(REPO_ROOT, normalized);
+  if (!ALLOWED_FILE_PREFIXES.some(p => full.startsWith(p))) return null;
+  if (!existsSync(full) || statSync(full).size === 0) return null;
+  return readFileSync(full, 'utf8');
 }

@@ -1,4 +1,4 @@
-# Gestión de Personas (CRUD Maestro)
+# MP - Maestro de Personas
 
 Este módulo centraliza la información de todas las personas naturales relacionadas con el condominio, permitiendo su reutilización en distintos roles (vecinos, personal, proveedores).
 
@@ -42,22 +42,22 @@ Un sub-registro vital para emergencias y atención personalizada, gestionado a t
   - *Ficha de Detalle:* Al abrir el perfil del residente, la condición debe resaltarse visualmente en la parte superior del perfil (ej: con un banner rojo o amarillo) para advertir inmediatamente al administrador o conserje.
   - *Uso Operativo:* Crucial en caso de cortes de luz (priorizar electrodependientes) o evacuaciones (asistir a personas con movilidad reducida).
 
-## 2. Gestión de Estados
+## 3. Gestión de Estados
 
 - **Estado de Cuenta:** (Activa, Inactiva, Bloqueada por morosidad extrema).
 - **Preferencias de Comunicación:** (Email, SMS, WhatsApp).
 
-## 3. Definición de Roles y Privacidad de la Información
+## 4. Definición de Roles y Privacidad de la Información
 
 El sistema distingue claramente entre la figura del **Propietario** (dueño legal) y el **Residente** (quien habita la unidad).
 
-### 3.1 Privacidad y Restricción de Contenidos:
+### 4.1 Privacidad y Restricción de Contenidos:
 - **Ocultamiento por Defecto:** Los reportes de morosidad detallados y las actas de asambleas/reuniones de directiva están ocultos para los usuarios con rol de **Residente**.
 - **Check de Consentimiento (Propietario):** En el panel del Propietario, existe un control: *"Permitir acceso a actas y reportes financieros al residente"*.
     - **Por defecto:** Desactivado (No compartir).
     - **Al activar:** El propietario acepta explícitamente que su residente esté al tanto de esta información sensible.
 
-### 3.2 Estado de la Propiedad (Trigger Inmobiliario):
+### 4.2 Estado de la Propiedad (Trigger Inmobiliario):
 El propietario dispone de un selector para definir la situación actual de su unidad, lo cual activa flujos en el [Portal Inmobiliario (PI)](<PI - Portal Inmobiliario.md>):
 - **Estado Habitada/Personal:** Uso regular por el dueño o familia.
 - **Disponibilidad Próxima:** El residente actual ha notificado su salida pero aún habita la unidad. Activa la publicación en el portal inmobiliario bajo la etiqueta *"Próximamente Disponible"* o *"Entrega Programada"*, permitiendo captar interesados antes de la vacancia efectiva.
@@ -65,12 +65,12 @@ El propietario dispone de un selector para definir la situación actual de su un
 - **Arrendado:** Indica que existe un contrato vigente y el residente actual no tiene planes de salida inmediatos.
 - **En Venta:** Activa el flujo de venta y visitas coordinadas.
 
-## 4. Seguridad y Privacidad
+## 5. Seguridad y Privacidad
 
 - **Tratamiento de Datos:** El sistema debe cumplir con la normativa chilena de protección de datos personales.
 - **Registro de Auditoría:** Log de quién creó, modificó o consultó la ficha de una persona.
 
-## 5. Integración con Auditoría y Métricas (AM)
+## 6. Integración con Auditoría y Métricas (AM)
 
 Trazabilidad sobre el acceso y manejo de datos personales sensibles:
 - **Evento:** `MP_CREATE`, `MP_UPDATE_DATA`, `MP_VIEW_FICHA`.

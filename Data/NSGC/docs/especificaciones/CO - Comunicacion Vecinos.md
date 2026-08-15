@@ -1,4 +1,4 @@
-# Módulo de Comunicación con el Vecino
+# CO - Comunicación con Vecinos
 
 El objetivo de este módulo es garantizar que la información fluya de manera clara, profesional y oportuna hacia toda la comunidad.
 

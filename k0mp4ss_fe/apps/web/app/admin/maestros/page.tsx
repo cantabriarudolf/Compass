@@ -5,6 +5,11 @@ import {
   CATEGORIAS_MACRO as initialMacros, 
   ESTADOS_OCUPACION as initialEstados,
 } from "@/data/maestros"
+import {
+  CONDICIONES_ESPECIALES as initialCondiciones,
+  BANCOS as initialBancos,
+  CONTACTOS_EMERGENCIA as initialEmergencias,
+} from "@/data/admin/maestros"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@workspace/ui/components/tabs"
 import { Badge } from "@workspace/ui/components/badge"
@@ -39,23 +44,7 @@ import {
   IconBuildingBank
 } from "@tabler/icons-react"
 
-// MOCKS EXTENDIDOS PARA ESTA FASE
-const initialCondiciones = [
-  { id: "c-1", nombre: "Electrodependiente", color: "bg-blue-500 text-white" },
-  { id: "c-2", nombre: "Movilidad Reducida", color: "bg-amber-500 text-black" },
-  { id: "c-3", nombre: "Adulto Mayor Solo", color: "bg-purple-500 text-white" },
-]
 
-const initialBancos = [
-  { id: "b-1", nombre: "Banco Estado" },
-  { id: "b-2", nombre: "Banco de Chile" },
-  { id: "b-3", nombre: "Santander" },
-]
-
-const initialEmergencias = [
-  { id: "e-1", nombre: "Plan Cuadrante", valor: "+56 9 1234 5678" },
-  { id: "e-2", nombre: "Bomberos 14va Cia", valor: "132" },
-]
 
 export default function MaestrosPage() {
   const [estados, setEstados] = React.useState([...initialEstados])
@@ -73,7 +62,7 @@ export default function MaestrosPage() {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
     const nombre = formData.get("nombre") as string
-    const valor = formData.get("valor") as string
+    const valor = formData.get("telefono") as string
     const color = formData.get("color") as string
     
     // Lógica de guardado simplificada para el demo
@@ -87,8 +76,8 @@ export default function MaestrosPage() {
       if (editingItem) setBancos(bancos.map(i => i.id === editingItem.id ? { ...i, nombre } : i))
       else setBancos([...bancos, { id: Date.now().toString(), nombre }])
     } else if (subTab === "emergencias") {
-      if (editingItem) setEmergencias(emergencias.map(i => i.id === editingItem.id ? { ...i, nombre, valor } : i))
-      else setEmergencias([...emergencias, { id: Date.now().toString(), nombre, valor }])
+      if (editingItem) setEmergencias(emergencias.map(i => i.id === editingItem.id ? { ...i, nombre, telefono: valor } : i))
+      else setEmergencias([...emergencias, { id: Date.now().toString(), nombre, telefono: valor }])
     }
     
     setIsDialogOpen(false)
@@ -202,7 +191,7 @@ export default function MaestrosPage() {
                           {subTab === "condiciones" ? (
                             <Badge className={`${"color" in item ? item.color : ""} font-black text-[9px]`}>{item.nombre.toUpperCase()}</Badge>
                           ) : (
-                            <span className="text-sm font-mono text-blue-600">{"valor" in item ? item.valor : ""}</span>
+                            <span className="text-sm font-mono text-blue-600">{"telefono" in item ? item.telefono : ""}</span>
                           )}
                         </TableCell>
                         <TableCell className="text-right">
@@ -281,7 +270,7 @@ export default function MaestrosPage() {
               {subTab === "emergencias" && (
                 <div className="space-y-2">
                   <Label>Número / Valor</Label>
-                  <Input name="valor" defaultValue={editingItem?.valor} required />
+                  <Input name="telefono" defaultValue={editingItem?.telefono} required />
                 </div>
               )}
             </div>

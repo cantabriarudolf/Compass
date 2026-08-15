@@ -1,4 +1,4 @@
-# Módulo de Finanzas y Morosidad
+# FI - Finanzas y Morosidad
 
 Este módulo centraliza la salud financiera del condominio, asegurando la transparencia en el uso de los recursos y la eficiencia en la recaudación.
 
@@ -48,7 +48,7 @@ Manejo de ahorros obligatorios según la Ley de Copropiedad.
 - **Cálculo de Fondo de Reserva:** Aplicación automática del porcentaje definido por la asamblea sobre el total recaudado.
 - **Uso de Fondos:** Registro de retiros del fondo de reserva con aprobación documentada de la directiva.
 
-## 3. Control de Morosidad y Cobranza Activa
+## 4. Control de Morosidad y Cobranza Activa
 
 Monitoreo constante y automatizado de los pagos pendientes, basado en las configuraciones de `CF` (Día de corte y Meses límite).
 
@@ -62,11 +62,12 @@ Monitoreo constante y automatizado de los pagos pendientes, basado en las config
 
 - **Generación de Documentos Oficiales:** La emisión de **Estados de Cuenta** detallados y el certificado de **Unidad Al Día** se realiza a través del [Módulo de Certificados (CT)](<CT - Certificados.md>), asegurando la validez legal y el formato institucional.
 
-## 4. Integración con Auditoría y Métricas (AM)
+## 5. Integración con Auditoría y Métricas (AM)
 
 Métricas críticas para la salud económica y transparencia de la gestión:
 - **Evento:** `FI_EMISION_GC`, `FI_RECEIVE_PAYMENT`, `FI_MANUAL_DISCOUNT`, `FI_COBRANZA_SENT`.
 - **Data Cuantificable:** Montos emitidos vs recaudados, diferencias por ajustes manuales, cantidad de gestiones de cobranza realizadas.
+- **Métrica:** Índice de morosidad (% de unidades morosas), efectividad de cobranza (% pagado tras aviso), recaudación por fondo (GC, reserva, cuotas extraordinarias).
 - **Métricas y KPIs (Centros de Ingreso):** 
     - Ingresos netos por Mora / Multas aplicadas.
     - Ingresos por Arriendo de Espacios Comunes (Cruzado con `RA`).

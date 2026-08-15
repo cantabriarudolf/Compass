@@ -33,7 +33,7 @@ Información de consulta rápida para residentes y personal.
 
 - **Directorio de Emergencias:** Listado de números críticos (Bomberos, Carabineros, Plan Cuadrante, Ambulancia, Empresa de Ascensores, Empresa Eléctrica).
 - **Mensajes Prefijados (Plantillas):** Gestión centralizada de los textos de comunicación masiva (Asambleas, Cobranza, Urgencias).
-- **Categorías del Carrusel:** Configuración de los tipos de avisos permitidos en el [Visor de Mensajes (CO)](<CO - Visor de Mensajes.md>).
+- **Categorías del Carrusel:** Configuración de los tipos de avisos permitidos en el [Visor de Mensajes (CV)](<CV - Visor de Mensajes.md>).
 
 ## 5. Maestros de Personas (MP)
 
@@ -45,3 +45,10 @@ Aunque la **Gestión (Creación/Edición)** de estos maestros es exclusiva de la
 - El **Personal de Servicio** solo ve el Directorio de Emergencia y los Insumos asignados.
 - el **Residente** solo ve los Números de Emergencia y las categorías de plantillas cuando corresponda (ej: Buzón).
 - El **Comité** tiene acceso de lectura a todos los maestros para auditoría.
+
+## 7. Integración con Auditoría y Métricas (AM)
+
+Todo cambio sobre un maestro de referencia debe quedar trazado, ya que impacta la lógica de múltiples módulos:
+- **Evento:** `MA_MAESTRO_CREATE`, `MA_MAESTRO_UPDATE`, `MA_MAESTRO_DELETE`.
+- **Data Cuantificable:** Cantidad de registros por maestro, frecuencia de actualización de parámetros críticos (AFP, feriados, bancos).
+- **Métrica:** Vigencia de los datos maestros, cantidad de módulos dependientes afectados por cambios.

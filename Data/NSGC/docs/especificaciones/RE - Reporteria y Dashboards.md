@@ -1,4 +1,4 @@
-# Módulo de Reportería y Dashboards (RE)
+# RE - Reportería y Dashboards
 
 Este módulo consolida la información de todos los subsistemas (Finanzas, Operaciones, Estructura) para presentarla de forma digerible, permitiendo la toma de decisiones y la transparencia hacia la comunidad.
 
@@ -55,3 +55,10 @@ Tanto para la reportería como para la mensajería (Módulo `CO`), el sistema pe
 - **Por Tipo de Tenencia:** Solo Propietarios, Solo Residentes (Arrendatarios).
 
 *Ejemplo de Uso:* Generar un reporte de "Fallas en Ascensores de la Torre A" y enviarlo **solo** al grupo: `[Torre A] + [Residentes] + [Propietarios]`.
+
+## 4. Integración con Auditoría y Métricas (AM)
+
+Todo acceso a información sensible y cada distribución de reportes debe quedar registrado:
+- **Evento:** `RE_DASHBOARD_VIEW`, `RE_REPORT_GENERATED`, `RE_REPORT_DISTRIBUTED`.
+- **Data Cuantificable:** Cantidad de reportes generados por periodo, alcance (audiencia) de cada distribución, frecuencia de acceso por perfil.
+- **Métrica:** Tasa de consumo de reportes por rol, exactitud de la segmentación, tiempo de generación de reportes.

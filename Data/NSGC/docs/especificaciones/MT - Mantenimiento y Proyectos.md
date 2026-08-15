@@ -54,3 +54,10 @@ Herramienta estratégica para la planificación preventiva y financiera del cond
 ## 6. Integración con Infraestructura (EF)
 
 El módulo debe leer la estructura física definida en el sistema para permitir una selección precisa del lugar de trabajo, permitiendo generar un histórico de mantenimiento por cada zona o equipo crítico.
+
+## 7. Integración con Auditoría y Métricas (AM)
+
+El historial de intervenciones es la base para medir la vida útil de la infraestructura y el desempeño de proveedores:
+- **Evento:** `MT_WORK_CREATED`, `MT_WORK_FINISHED`, `MT_GUARANTEE_EXPIRED`, `MT_PREVENTIVE_GENERATED`.
+- **Data Cuantificable:** Costo total de obras por periodo, horas de intervención, cantidad de mantenciones preventivas ejecutadas.
+- **Métrica:** Desviación presupuestaria por proyecto, tasa de cumplimiento de ciclos preventivos, incidencia de fallas post-garantía.

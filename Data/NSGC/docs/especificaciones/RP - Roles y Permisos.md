@@ -1,4 +1,4 @@
-# Módulo de Roles y Permisos (Control de Acceso)
+# RP - Roles y Permisos (Control de Acceso)
 
 Este módulo gestiona quién puede ver, editar o ejecutar acciones dentro de la plataforma, garantizando la seguridad y privacidad de la información del condominio.
 
@@ -58,7 +58,7 @@ El registro de una persona en el maestro (`MP`) no implica la creación automát
 - **Roles Múltiples:** Una misma persona puede ser "Propietario" y "Miembro del Comité" al mismo tiempo, sumando los permisos de ambos roles.
 - **Delegación Temporal:** (Deseable) Un administrador puede delegar sus permisos temporalmente a un reemplazante por vacaciones.
 
-## 5. Integración con Auditoría y Métricas (AM)
+## 6. Integración con Auditoría y Métricas (AM)
 
 - **Evento:** `RP_ROLE_ASSIGNED`, `RP_ROLE_REVOKED`, `RP_PERMISSION_DENIED`.
 - **Data Cuantificable:** Número de intentos de acceso no autorizados.

@@ -1,4 +1,4 @@
-# Módulo de Portal Inmobiliario Interno
+# PI - Portal Inmobiliario
 
 Este módulo permite habilitar una vitrina digital dentro del sistema para promover la venta o arriendo de unidades del condominio de forma segura y centralizada.
 

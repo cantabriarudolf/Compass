@@ -30,6 +30,7 @@ Gestión integral del capital humano que presta servicios en el condominio.
 - **Acceso:** Centralización de las fichas de todos los trabajadores (Conserjes, Aseo, Seguridad, Mantención).
 - **Detalle Técnico:** Los requerimientos contractuales, previsionales y operativos de este cajón se encuentran detallados en el módulo [PE - Personal y Servicios](<PE - Personal y Servicios.md>).
 
-## 3. Integración con Auditoría (AM)
+## 3. Integración con Auditoría y Métricas (AM)
 - **Evento:** `AD_OWNER_CONFIG_CHANGE`, `AD_DIRECTIVA_SIGN_UPLOAD`.
+- **Data Cuantificable:** Número de propietarios que activan/desactivan visibilidad de actas/morosidad a residentes; cantidad de firmas digitalizadas de directiva subidas.
 - **Métrica:** Cantidad de propietarios que comparten información con sus residentes, rotación de cargos en la directiva.

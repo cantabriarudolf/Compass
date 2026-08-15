@@ -2,8 +2,9 @@
 
 import * as React from "react"
 import { useParams, useRouter } from "next/navigation"
-import { personas } from "@/data/comunidad/personas"
-import { ESTADOS_OCUPACION } from "@/data/maestros"
+import { personas, Persona } from "@/data/comunidad/personas"
+import { VinculoUnidad, RolVinculo, vinculosPorPersona } from "@/data/comunidad/vinculos"
+import { unidades } from "@/data/inventario/estructura"
 
 // Simulación de Condiciones Especiales (Idealmente vienen de MA)
 const CONDICIONES_ESPECIALES: Record<string, { nombre: string, color: string }> = {
@@ -12,19 +13,55 @@ const CONDICIONES_ESPECIALES: Record<string, { nombre: string, color: string }> 
   "c-3": { nombre: "Adulto Mayor Solo", color: "bg-purple-500 text-white" }
 }
 
+const NOMBRE_ROL: Record<RolVinculo, string> = {
+  propietario: "Propietario",
+  arrendatario: "Arrendatario",
+  copropietario: "Copropietario / Familiar",
+  ocupante: "Ocupante",
+}
+
+const COLOR_ROL_VINCULO: Record<RolVinculo, string> = {
+  propietario: "bg-indigo-600 text-white",
+  arrendatario: "bg-sky-600 text-white",
+  copropietario: "bg-purple-600 text-white",
+  ocupante: "bg-emerald-600 text-white",
+}
+
 import { Button } from "@workspace/ui/components/button"
 import { Badge } from "@workspace/ui/components/badge"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@workspace/ui/components/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@workspace/ui/components/tabs"
-import { 
-  IconArrowLeft, 
-  IconUserCircle, 
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@workspace/ui/components/dialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@workspace/ui/components/alert-dialog"
+import { FormularioVinculoUnidad } from "@/components/comunidad/formulario-vinculo"
+import {
+  IconArrowLeft,
+  IconUserCircle,
   IconAlertTriangleFilled,
   IconBriefcase,
   IconBuildingSkyscraper,
   IconGavel,
   IconKey,
-  IconShieldLock
+  IconShieldLock,
+  IconPlus,
+  IconPencil,
+  IconTrash,
 } from "@tabler/icons-react"
 
 export default function PersonaPerfilPage() {
@@ -33,6 +70,18 @@ export default function PersonaPerfilPage() {
   const id = params.id as string
 
   const persona = personas.find(p => p.id === id)
+
+  // Estado local del sub-maestro de vínculos (sin recargar la página)
+  const [vinculosUnidad, setVinculosUnidad] = React.useState<VinculoUnidad[]>(persona ? vinculosPorPersona(persona.id) : [])
+  const [roles, setRoles] = React.useState<Persona["roles"]>(persona?.roles ?? [])
+  const [dialogoAbierto, setDialogoAbierto] = React.useState(false)
+  const [vinculoEditando, setVinculoEditando] = React.useState<VinculoUnidad | null>(null)
+
+  // Unidades con vínculo activo (excluyendo la unidad del vínculo que se está editando)
+  const unidadesExcluidas = React.useMemo(() => {
+    const activas = vinculosUnidad.filter(v => !v.fechaFin).map(v => v.unidadId)
+    return vinculoEditando ? activas.filter(u => u !== vinculoEditando.unidadId) : activas
+  }, [vinculosUnidad, vinculoEditando])
 
   // SIMULACIÓN TAREA 4.3: Auditoría y Métricas
   React.useEffect(() => {
@@ -58,6 +107,48 @@ export default function PersonaPerfilPage() {
       case "directiva": return "bg-amber-600 text-white";
       default: return "bg-gray-200 text-gray-800";
     }
+  }
+
+  const abrirCrearVinculo = () => {
+    setVinculoEditando(null)
+    setDialogoAbierto(true)
+  }
+
+  const abrirEditarVinculo = (vinculo: VinculoUnidad) => {
+    setVinculoEditando(vinculo)
+    setDialogoAbierto(true)
+  }
+
+  // Sincroniza roles derivados de vínculos (propietario/residente) con la lista de roles de la Persona
+  const sincronizarRoles = (vinculos: VinculoUnidad[], rolesActuales: Persona["roles"]): Persona["roles"] => {
+    const activos = vinculos.filter(v => !v.fechaFin)
+    const nuevos = new Set(rolesActuales)
+    if (activos.some(v => v.rol === "propietario")) nuevos.add("propietario")
+    else nuevos.delete("propietario")
+    if (activos.some(v => v.rol !== "propietario")) nuevos.add("residente")
+    else nuevos.delete("residente")
+    return [...nuevos] as Persona["roles"]
+  }
+
+  const guardarVinculo = (data: Omit<VinculoUnidad, "id" | "personaId">) => {
+    const nuevos = vinculoEditando
+      ? vinculosUnidad.map(v => v.id === vinculoEditando.id ? { ...v, ...data } : v)
+      : [...vinculosUnidad, { id: `v-${Date.now()}`, personaId: persona.id, ...data }]
+    setVinculosUnidad(nuevos)
+    setRoles(sincronizarRoles(nuevos, roles))
+    setDialogoAbierto(false)
+    setVinculoEditando(null)
+  }
+
+  const eliminarVinculo = (vinculoId: string) => {
+    const nuevos = vinculosUnidad.filter(v => v.id !== vinculoId)
+    setVinculosUnidad(nuevos)
+    setRoles(sincronizarRoles(nuevos, roles))
+  }
+
+  const etiquetaUnidad = (unidadId: string) => {
+    const u = unidades.find(un => un.id === unidadId)
+    return u ? `${u.etiqueta} ${u.numero}` : unidadId
   }
 
   return (
@@ -92,7 +183,7 @@ export default function PersonaPerfilPage() {
               </div>
 
               <div className="flex flex-wrap gap-2">
-                {persona.roles.map(rol => (
+                {roles.map(rol => (
                   <Badge key={rol} className={`${getRoleBadgeColor(rol)} uppercase font-bold`}>
                     {rol}
                   </Badge>
@@ -135,7 +226,7 @@ export default function PersonaPerfilPage() {
       {/* TAREA 3.3 y 3.4: Estructura de Tabs Extensibles */}
       <Tabs defaultValue="unidades" className="w-full">
         <TabsList className="w-full justify-start border-b rounded-none h-auto p-0 bg-transparent">
-          {persona.roles.some(r => r === "propietario" || r === "residente") && (
+          {roles.some(r => r === "propietario" || r === "residente") && (
             <TabsTrigger value="unidades" className="data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-6 py-3 font-semibold flex gap-2">
               <IconBuildingSkyscraper className="size-4" /> Unidades Vinculadas
             </TabsTrigger>
@@ -153,47 +244,105 @@ export default function PersonaPerfilPage() {
         </TabsList>
 
         <TabsContent value="unidades" className="mt-6">
-          <div className="grid gap-4">
-            {persona.vinculosUnidad?.map(v => (
+          <div className="flex flex-col gap-4">
+            {/* TAREA 4.1: Acción Vincular Unidad */}
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-muted-foreground">
+                Vínculos legales y operativos con el inventario físico.
+              </p>
+              <Button className="gap-2" onClick={abrirCrearVinculo}>
+                <IconPlus className="size-4" /> Vincular Unidad
+              </Button>
+            </div>
+
+            {vinculosUnidad.length === 0 && (
+              /* TAREA 4.7: Empty State */
+              <Card className="border-dashed">
+                <CardContent className="p-8 flex flex-col items-center gap-2 text-center">
+                  <IconBuildingSkyscraper className="size-10 text-muted-foreground/40" />
+                  <p className="font-semibold">Sin unidades vinculadas</p>
+                  <p className="text-sm text-muted-foreground">
+                    Esta persona no posee vínculos activos con el inventario físico.
+                  </p>
+                </CardContent>
+              </Card>
+            )}
+
+            {vinculosUnidad.map(v => (
               <Card key={v.id}>
-                <CardContent className="p-4 flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <div className={`size-12 rounded-lg flex items-center justify-center text-white ${v.rol === 'propietario' ? 'bg-indigo-600' : 'bg-emerald-600'}`}>
+                <CardContent className="p-4 flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-4 min-w-0">
+                    <div className={`size-12 rounded-lg flex items-center justify-center text-white shrink-0 ${COLOR_ROL_VINCULO[v.rol]}`}>
                       <IconKey className="size-6" />
                     </div>
-                    <div>
-                      <h3 className="font-bold text-lg">Unidad {v.unidadId}</h3>
-                      <p className="text-sm text-muted-foreground uppercase font-semibold">Rol: {v.rol}</p>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h3 className="font-bold text-lg">{etiquetaUnidad(v.unidadId)}</h3>
+                        <Badge className={`${COLOR_ROL_VINCULO[v.rol]} uppercase font-bold`}>
+                          {NOMBRE_ROL[v.rol]}
+                        </Badge>
+                      </div>
+                      <p className="text-xs text-muted-foreground font-mono mt-1">
+                        {v.unidadId} · Desde {v.fechaInicio}
+                        {v.fechaFin ? ` · Hasta ${v.fechaFin}` : " · Vigente"}
+                      </p>
                     </div>
                   </div>
                   
-                  <div className="flex flex-col items-end gap-2">
-                    {/* TAREA 4.2: Selector Inmobiliario (Trigger PI) */}
-                    {v.rol === "propietario" && v.estadoOcupacionPropiedad && (
-                      <Badge variant="outline" className="border-indigo-200 bg-indigo-50 text-indigo-700">
-                        Estado Inmobiliario: {v.estadoOcupacionPropiedad.replace("_", " ")}
-                      </Badge>
-                    )}
+                  <div className="flex items-center gap-4 shrink-0">
+                    <div className="flex flex-col items-end gap-2">
+                      {/* TAREA 4.2: Selector Inmobiliario (Trigger PI) */}
+                      {v.rol === "propietario" && v.estadoOcupacionPropiedad && (
+                        <Badge variant="outline" className="border-indigo-200 bg-indigo-50 text-indigo-700">
+                          Estado Inmobiliario: {v.estadoOcupacionPropiedad.replace("_", " ")}
+                        </Badge>
+                      )}
 
-                    {/* TAREA 4.1: Privacidad Delegada */}
-                    {v.rol === "propietario" && (
-                      <div className="flex items-center gap-1.5 text-xs font-semibold bg-slate-100 px-2 py-1 rounded-md">
-                        <IconShieldLock className="size-3.5" />
-                        Privacidad Financiera: 
-                        <span className={v.permiteVerFinanzas ? "text-emerald-600" : "text-destructive"}>
-                          {v.permiteVerFinanzas ? "COMPARTIDA CON RESIDENTE" : "OCULTA AL RESIDENTE"}
-                        </span>
-                      </div>
-                    )}
+                      {/* TAREA 4.1: Privacidad Delegada */}
+                      {v.rol === "propietario" && (
+                        <div className="flex items-center gap-1.5 text-xs font-semibold bg-slate-100 px-2 py-1 rounded-md">
+                          <IconShieldLock className="size-3.5" />
+                          Privacidad Financiera: 
+                          <span className={v.permiteVerFinanzas ? "text-emerald-600" : "text-destructive"}>
+                            {v.permiteVerFinanzas ? "COMPARTIDA CON RESIDENTE" : "OCULTA AL RESIDENTE"}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                      {/* TAREA 4.3: Editar Vínculo */}
+                      <Button variant="outline" size="sm" className="gap-1.5" onClick={() => abrirEditarVinculo(v)}>
+                        <IconPencil className="size-3.5" /> Editar
+                      </Button>
+
+                      {/* TAREA 4.4: Eliminar / Desvincular */}
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button variant="outline" size="sm" className="gap-1.5 text-destructive">
+                            <IconTrash className="size-3.5" /> Desvincular
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>¿Desvincular unidad?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Se eliminará el vínculo de {etiquetaUnidad(v.unidadId)} ({NOMBRE_ROL[v.rol]}) para {persona.nombreCompleto}. Esta acción no se puede deshacer.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                            <AlertDialogAction variant="destructive" onClick={() => eliminarVinculo(v.id)}>
+                              Desvincular
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
             ))}
-            {(!persona.vinculosUnidad || persona.vinculosUnidad.length === 0) && (
-              <p className="text-muted-foreground text-sm text-center p-8 border border-dashed rounded-lg">
-                Esta persona no posee vínculos activos con el inventario físico.
-              </p>
-            )}
           </div>
         </TabsContent>
 
@@ -250,6 +399,30 @@ export default function PersonaPerfilPage() {
           </TabsContent>
         )}
       </Tabs>
+
+      {/* TAREA 4.2: Dialog modal Creación/Edición de Vínculo */}
+      <Dialog open={dialogoAbierto} onOpenChange={(open) => {
+        setDialogoAbierto(open)
+        if (!open) setVinculoEditando(null)
+      }}>
+        <DialogContent className="sm:max-w-[600px]">
+          <DialogHeader>
+            <DialogTitle>{vinculoEditando ? "Editar Vínculo de Unidad" : "Nuevo Vínculo de Unidad"}</DialogTitle>
+            <DialogDescription>
+              {vinculoEditando
+                ? "Modifica el vínculo existente de esta persona con el inventario físico."
+                : "Vincula a esta persona con una unidad del inventario físico y define su rol."}
+            </DialogDescription>
+          </DialogHeader>
+          <FormularioVinculoUnidad
+            key={vinculoEditando?.id ?? "nuevo"}
+            vinculo={vinculoEditando ?? undefined}
+            unidadesVinculadasIds={unidadesExcluidas}
+            onSave={guardarVinculo}
+            onCancel={() => setDialogoAbierto(false)}
+          />
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

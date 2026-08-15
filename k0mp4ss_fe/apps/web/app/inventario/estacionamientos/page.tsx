@@ -3,7 +3,7 @@
 import * as React from "react"
 import { estacionamientos as initialEstacionamientos, Estacionamiento, AsignacionHistorica } from "@/data/inventario/estacionamientos"
 import { macroSectores } from "@/data/inventario/estructura"
-import { ESTADOS_OCUPACION } from "@/data/maestros"
+import { ESTADOS_OCUPACION, UBICACIONES_ESTACIONAMIENTO } from "@/data/maestros"
 import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
@@ -37,7 +37,8 @@ import {
   IconHistory,
   IconPencil,
   IconX,
-  IconCalendarEvent
+  IconCalendarEvent,
+  IconMapPin
 } from "@tabler/icons-react"
 import { FormularioEstacionamiento } from "@/components/inventario/formulario-estacionamiento"
 
@@ -45,6 +46,7 @@ export default function EstacionamientosPage() {
   const [data, setData] = React.useState(initialEstacionamientos)
   const [busqueda, setBusqueda] = React.useState("")
   const [filtroMacro, setFiltroMacro] = React.useState("all")
+  const [filtroUbicacion, setFiltroUbicacion] = React.useState("all")
   const [filtroEstado, setFiltroEstado] = React.useState("all")
   
   const [historialSelect, setHistorialSelect] = React.useState<Estacionamiento | null>(null)
@@ -52,6 +54,7 @@ export default function EstacionamientosPage() {
   const limpiarFiltros = () => {
     setBusqueda("")
     setFiltroMacro("all")
+    setFiltroUbicacion("all")
     setFiltroEstado("all")
   }
 
@@ -62,9 +65,11 @@ export default function EstacionamientosPage() {
     
     const matchesMacro = filtroMacro === "all" || item.macroSectorId === filtroMacro;
     
+    const matchesUbicacion = filtroUbicacion === "all" || item.ubicacion.toLowerCase().includes(filtroUbicacion.toLowerCase());
+    
     const matchesEstado = filtroEstado === "all" || item.estadoId === filtroEstado;
 
-    return matchesText && matchesMacro && matchesEstado;
+    return matchesText && matchesMacro && matchesUbicacion && matchesEstado;
   })
 
   const handleSave = (newData: Partial<Estacionamiento>, existingId?: string) => {
@@ -128,6 +133,19 @@ export default function EstacionamientosPage() {
                 </SelectContent>
               </Select>
 
+              <Select value={filtroUbicacion} onValueChange={setFiltroUbicacion}>
+                <SelectTrigger className="w-[160px] h-9 text-xs">
+                  <IconMapPin className="size-3 mr-2" />
+                  <SelectValue placeholder="Ubicación" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas las Ubicaciones</SelectItem>
+                  {UBICACIONES_ESTACIONAMIENTO.map(ub => (
+                    <SelectItem key={ub.id} value={ub.nombre}>{ub.nombre}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
               <Select value={filtroEstado} onValueChange={setFiltroEstado}>
                 <SelectTrigger className="w-[130px] h-9 text-xs">
                   <SelectValue placeholder="Estado" />
@@ -140,7 +158,7 @@ export default function EstacionamientosPage() {
                 </SelectContent>
               </Select>
 
-              {(busqueda || filtroMacro !== "all" || filtroEstado !== "all") && (
+              {(busqueda || filtroMacro !== "all" || filtroUbicacion !== "all" || filtroEstado !== "all") && (
                 <Button variant="ghost" size="sm" onClick={limpiarFiltros} className="h-9 px-2 text-amber-600">
                   <IconX className="size-4 mr-1" />
                   Limpiar

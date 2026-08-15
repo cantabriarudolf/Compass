@@ -1,4 +1,4 @@
-# Gestión de Estructura Física (Edificios, Pisos y Unidades)
+# EF - Estructura Física (Edificios, Pisos y Unidades)
 
 Este módulo centraliza la configuración de la infraestructura del condominio, manteniendo la jerarquía necesaria para la operación.
 
@@ -41,12 +41,9 @@ Para que el sistema sea universal y soporte tanto edificios como condominios de 
 - **Unicidad:** La combinación de [Macro-Sector] + [Micro-Sector] + [Unidad] debe ser única en todo el sistema.
 - **Jerarquía Flexible:** Toda unidad debe estar contenida en un Macro-Sector. El Micro-Sector es el único nivel que puede declararse como "No Aplica" en la configuración inicial del condominio.
 
-## 5. Vínculo con Auditoría y Métricas (AM)
-Toda acción administrativa realizada en este módulo (enrolamiento de medidores, creación de unidades, auditoría de superficie) debe ser contabilizada y visibilizada en el **Módulo AM**. Los indicadores de superficie total y enrolamiento de servicios alimentan el Dashboard de Gestión Operativa, transformando la ejecución técnica en valor cuantificable para la comunidad.
-
-## 4. Integración con Auditoría y Métricas (AM)
+## 3. Integración con Auditoría y Métricas (AM)
 
 La modificación de la infraestructura física debe ser rastreable para evitar desajustes en cobros:
 - **Evento:** `EF_CREATE_UNIT`, `EF_UPDATE_METRAJE`, `EF_DELETE_TORRE`.
 - **Data Cuantificable:** Variación en el total de metros cuadrados del condominio, cantidad de unidades creadas.
-- **Métrica:** Ratio de ocupación (Unidades ocupadas vs totales), crecimiento de la infraestructura.
+- **Métrica:** Ratio de ocupación (Unidades ocupadas vs totales), crecimiento de la infraestructura, enrolamiento de servicios por unidad.

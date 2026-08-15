@@ -1,4 +1,4 @@
-# Módulo de Personal y Servicios
+# PE - Personal y Servicios
 
 Este módulo permite la supervisión eficiente de los recursos humanos y técnicos que mantienen la operativa diaria del condominio.
 
@@ -83,7 +83,7 @@ Formulario dinámico para validar el "Trabajo Invisible". (El sistema no cronome
 - **Edición y Trazabilidad:** El reporte cerrado puede editarse, pero el sistema guardará un registro histórico de los cambios.
 - **Notificación Inmediata:** Al enviar, se envía una copia del reporte al correo electrónico registrado en la Ficha del Trabajador.
 
-## 5. Integración con Auditoría y Métricas (AM)
+## 4. Integración con Auditoría y Métricas (AM)
 
 Cuantificación de la labor operativa y cumplimiento de mantenimientos:
 - **Evento:** `PE_START_SHIFT`, `PE_TASK_DONE`, `PE_VISITA_TECNICA`, `PE_ENCOMIENDA_RECIBIDA`.
