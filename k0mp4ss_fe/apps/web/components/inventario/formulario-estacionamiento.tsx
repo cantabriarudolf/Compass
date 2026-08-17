@@ -2,11 +2,10 @@
 
 import * as React from "react"
 import { Estacionamiento } from "@/data/inventario/estacionamientos"
-import { unidades, tiposUnidad, macroSectores, microSectores } from "@/data/inventario/estructura"
+import { useCompassStore } from "@/lib/store"
 import { 
   Dialog, 
   DialogContent, 
-  DialogDescription, 
   DialogFooter, 
   DialogHeader, 
   DialogTitle,
@@ -16,7 +15,6 @@ import { Button } from "@workspace/ui/components/button"
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@workspace/ui/components/select"
-import { ESTADOS_OCUPACION } from "@/data/maestros"
 import { IconParkingCircle, IconLink, IconMapPin } from "@tabler/icons-react"
 
 interface FormularioEstacionamientoProps {
@@ -26,6 +24,11 @@ interface FormularioEstacionamientoProps {
 }
 
 export function FormularioEstacionamiento({ estacionamiento, trigger, onSave }: FormularioEstacionamientoProps) {
+  const tiposUnidad = useCompassStore(s => s.tiposUnidad)
+  const unidades = useCompassStore(s => s.unidades)
+  const macroSectores = useCompassStore(s => s.macroSectores)
+  const microSectores = useCompassStore(s => s.microSectores)
+  const estadosOcupacion = useCompassStore(s => s.maestros.estadosOcupacion)
   const isEditing = !!estacionamiento;
   const [isOpen, setIsOpen] = React.useState(false)
   
@@ -36,9 +39,8 @@ export function FormularioEstacionamiento({ estacionamiento, trigger, onSave }: 
   const [estadoId, setEstadoId] = React.useState(estacionamiento?.estadoId || "vacante")
   const [metraje, setMetraje] = React.useState(estacionamiento?.metraje || 0)
 
-  // Reiniciar estados al abrir para nueva plaza o cargar datos al editar
-  React.useEffect(() => {
-    if (isOpen) {
+  const handleOpenChange = (open: boolean) => {
+    if (open) {
       if (!isEditing) {
         setMacroId("")
         setMicroId("")
@@ -52,7 +54,8 @@ export function FormularioEstacionamiento({ estacionamiento, trigger, onSave }: 
         setEstadoId(estacionamiento?.estadoId || "vacante")
       }
     }
-  }, [isOpen, isEditing, estacionamiento])
+    setIsOpen(open)
+  }
 
   const todosLosTiposActivos = tiposUnidad.filter(t => t.activo);
 
@@ -134,7 +137,7 @@ export function FormularioEstacionamiento({ estacionamiento, trigger, onSave }: 
   }
 
   return (
-    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+    <Dialog open={isOpen} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
         {trigger || <Button className="gap-2"><IconParkingCircle className="size-4" /> Nueva Plaza</Button>}
       </DialogTrigger>
@@ -187,7 +190,7 @@ export function FormularioEstacionamiento({ estacionamiento, trigger, onSave }: 
                   <SelectValue placeholder="Seleccione Estado" />
                 </SelectTrigger>
                 <SelectContent>
-                  {ESTADOS_OCUPACION.map(est => (
+                  {estadosOcupacion.map(est => (
                     <SelectItem key={est.id} value={est.id}>
                       <div className="flex items-center gap-2">
                         <div className={`size-2 rounded-full ${est.color.split(' ')[0]}`} />

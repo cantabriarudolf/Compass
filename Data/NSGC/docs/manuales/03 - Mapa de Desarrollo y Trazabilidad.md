@@ -16,6 +16,8 @@ Este documento vincula la arquitectura del menú con los archivos de especificac
 | Orden | Fase | Módulo | Documento Fuente (Data/NSGC/docs/) | Etiqueta Menú | Ruta Kebab-case | Estado |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | **01** | **0** | **RG** | `RG - Reglas Generales.md` | (Lógica Base) | N/A | 🟢 |
+| **00** | **0** | **ST** | `ST - Capa de Datos Persistente.md` | (Capa de Datos) | `lib/store.ts` | 🟢 |
+| **00** | **0** | **UI** | `UI - Interfaz Principal.md`, `UI - Navegacion Lateral.md` | (Interfaz) | (transversal) | 🟢 |
 | **02** | **1** | **TU** | `TU - Tipos de Unidad.md` | Infraestructura | `/inventario/tipos` | 🟢 |
 | **03** | **1** | **EF** | `EF - Estructura Física.md` | Estructura Física | `/inventario/estructura` | 🟢 |
 | **04** | **1** | **ES** | `ES - Estacionamientos.md` | Estacionamientos | `/inventario/estacionamientos` | 🟢 |

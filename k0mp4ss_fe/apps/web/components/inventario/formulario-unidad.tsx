@@ -1,11 +1,8 @@
 "use client"
 
 import * as React from "react"
-import { 
-  Unidad, 
-  tiposUnidad
-} from "@/data/inventario/estructura"
-import { ESTADOS_OCUPACION, CATEGORIAS_UNIDAD } from "@/data/maestros"
+import { Unidad } from "@/data/inventario/estructura"
+import { useCompassStore } from "@/lib/store"
 import { 
   Dialog, 
   DialogContent, 
@@ -34,6 +31,8 @@ interface FormularioUnidadProps {
 }
 
 export function FormularioUnidad({ unidad, trigger, onSave }: FormularioUnidadProps) {
+  const tiposUnidad = useCompassStore(s => s.tiposUnidad)
+  const estadosOcupacion = useCompassStore(s => s.maestros.estadosOcupacion)
   const isEditing = !!unidad;
   const [isOpen, setIsOpen] = React.useState(false)
   
@@ -63,7 +62,7 @@ export function FormularioUnidad({ unidad, trigger, onSave }: FormularioUnidadPr
       metraje: Number(metraje),
       prorrateo: Number(prorrateo) / 100,
       rolSii: formData.get("rolSii") as string,
-      estado: formData.get("estado") as any,
+      estadoId: formData.get("estadoId") as string,
       servicios: {
         agua: { cliente: formData.get("agua_cliente") as string, medidor: formData.get("agua_medidor") as string },
         luz: { cliente: formData.get("luz_cliente") as string, medidor: formData.get("luz_medidor") as string },
@@ -140,11 +139,11 @@ export function FormularioUnidad({ unidad, trigger, onSave }: FormularioUnidadPr
 
             <div className="space-y-2">
               <Label className="text-xs font-bold">Estado de Ocupación</Label>
-              <Select name="estado" defaultValue={unidad?.estado || "Vacante"}>
+              <Select name="estadoId" defaultValue={unidad?.estadoId || "vacante"}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {ESTADOS_OCUPACION.map(e => (
-                    <SelectItem key={e.id} value={e.nombre}>{e.nombre}</SelectItem>
+                  {estadosOcupacion.map(e => (
+                    <SelectItem key={e.id} value={e.id}>{e.nombre}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>

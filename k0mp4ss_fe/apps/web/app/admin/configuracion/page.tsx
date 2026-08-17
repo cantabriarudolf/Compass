@@ -1,7 +1,8 @@
 "use client"
 
 import * as React from "react"
-import { ConfiguracionGlobal, configuracionDefault } from "@/data/admin/configuracion"
+import { ConfiguracionGlobal } from "@/data/admin/configuracion"
+import { useCompassStore, useStoreRehydrated } from "@/lib/store"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
@@ -18,7 +19,14 @@ import {
 import { IconBuilding, IconMail, IconCalculator, IconBell, IconShield } from "@tabler/icons-react"
 
 export default function ConfiguracionPage() {
-  const [config, setConfig] = React.useState<ConfiguracionGlobal>(configuracionDefault)
+  useStoreRehydrated()
+  const configuracion = useCompassStore(s => s.configuracion)
+  const saveConfiguracion = useCompassStore(s => s.saveConfiguracion)
+  const [config, setConfig] = React.useState<ConfiguracionGlobal>(configuracion)
+
+  React.useEffect(() => {
+    setConfig(configuracion)
+  }, [configuracion])
 
   const updateField = <K extends keyof ConfiguracionGlobal>(field: K, value: ConfiguracionGlobal[K]) => {
     setConfig(prev => ({ ...prev, [field]: value }))
@@ -26,9 +34,9 @@ export default function ConfiguracionPage() {
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault()
-    // TODO: persistir en backend y emitir evento AM CF_UPDATE_PARAM
+    saveConfiguracion(config)
     console.log("[AM] CF_UPDATE_PARAM", config)
-    alert("Configuración guardada (mock)")
+    alert("Configuración guardada (persistida en el store)")
   }
 
   return (
@@ -38,10 +46,10 @@ export default function ConfiguracionPage() {
           <h1 className="text-3xl font-bold tracking-tight">Configuración Global</h1>
           <p className="text-muted-foreground">Parámetros base que rigen el comportamiento del sistema.</p>
         </div>
-        <Button onClick={handleSave}>Guardar Cambios</Button>
+        <Button type="submit" form="config-form">Guardar Cambios</Button>
       </div>
 
-      <form onSubmit={handleSave}>
+      <form id="config-form" onSubmit={handleSave}>
         <Tabs defaultValue="identidad" className="w-full">
           <TabsList className="bg-muted/50 p-1 mb-6 flex flex-wrap h-auto">
             <TabsTrigger value="identidad" className="gap-2"><IconBuilding className="size-4" /> Identidad Legal</TabsTrigger>

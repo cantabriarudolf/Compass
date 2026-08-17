@@ -1,15 +1,8 @@
 "use client"
 
 import * as React from "react"
-import { 
-  CATEGORIAS_MACRO as initialMacros, 
-  ESTADOS_OCUPACION as initialEstados,
-} from "@/data/maestros"
-import {
-  CONDICIONES_ESPECIALES as initialCondiciones,
-  BANCOS as initialBancos,
-  CONTACTOS_EMERGENCIA as initialEmergencias,
-} from "@/data/admin/maestros"
+import { useCompassStore, useStoreRehydrated } from "@/lib/store"
+import { hexDesdeId } from "@/lib/colors"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@workspace/ui/components/tabs"
 import { Badge } from "@workspace/ui/components/badge"
@@ -41,17 +34,21 @@ import {
   IconReceipt2,
   IconPhoneCall,
   IconUserExclamation,
-  IconBuildingBank
+  IconBuildingBank,
+  IconBuildingSkyscraper
 } from "@tabler/icons-react"
 
 
 
 export default function MaestrosPage() {
-  const [estados, setEstados] = React.useState([...initialEstados])
-  const [macros, setMacros] = React.useState([...initialMacros])
-  const [condiciones, setCondiciones] = React.useState([...initialCondiciones])
-  const [bancos, setBancos] = React.useState([...initialBancos])
-  const [emergencias, setEmergencias] = React.useState([...initialEmergencias])
+  useStoreRehydrated()
+  const estados = useCompassStore(s => s.maestros.estadosOcupacion)
+  const macros = useCompassStore(s => s.maestros.categoriasMacro)
+  const micros = useCompassStore(s => s.maestros.categoriasMicro)
+  const condiciones = useCompassStore(s => s.maestros.condicionesEspeciales)
+  const bancos = useCompassStore(s => s.maestros.bancos)
+  const emergencias = useCompassStore(s => s.maestros.contactosEmergencia)
+  const saveMaestro = useCompassStore(s => s.saveMaestro)
   
   const [editingItem, setEditingItem] = React.useState<any>(null)
   const [isDialogOpen, setIsDialogOpen] = React.useState(false)
@@ -67,17 +64,23 @@ export default function MaestrosPage() {
     
     // Lógica de guardado simplificada para el demo
     if (subTab === "estados") {
-      if (editingItem) setEstados(estados.map(i => i.id === editingItem.id ? { ...i, nombre, color } : i))
-      else setEstados([...estados, { id: Date.now().toString(), nombre, color }])
+      const id = editingItem?.id ?? `est-${Date.now()}`
+      saveMaestro("estadosOcupacion", { id, nombre, color, hex: editingItem?.hex ?? hexDesdeId(id) })
+    } else if (subTab === "macros") {
+      if (editingItem) saveMaestro("categoriasMacro", { ...editingItem, nombre })
+      else saveMaestro("categoriasMacro", { id: Date.now().toString(), nombre })
+    } else if (subTab === "micros") {
+      if (editingItem) saveMaestro("categoriasMicro", { ...editingItem, nombre })
+      else saveMaestro("categoriasMicro", { id: Date.now().toString(), nombre })
     } else if (subTab === "condiciones") {
-      if (editingItem) setCondiciones(condiciones.map(i => i.id === editingItem.id ? { ...i, nombre, color } : i))
-      else setCondiciones([...condiciones, { id: Date.now().toString(), nombre, color }])
+      if (editingItem) saveMaestro("condicionesEspeciales", { ...editingItem, nombre, color })
+      else saveMaestro("condicionesEspeciales", { id: Date.now().toString(), nombre, color })
     } else if (subTab === "bancos") {
-      if (editingItem) setBancos(bancos.map(i => i.id === editingItem.id ? { ...i, nombre } : i))
-      else setBancos([...bancos, { id: Date.now().toString(), nombre }])
+      if (editingItem) saveMaestro("bancos", { ...editingItem, nombre })
+      else saveMaestro("bancos", { id: Date.now().toString(), nombre })
     } else if (subTab === "emergencias") {
-      if (editingItem) setEmergencias(emergencias.map(i => i.id === editingItem.id ? { ...i, nombre, telefono: valor } : i))
-      else setEmergencias([...emergencias, { id: Date.now().toString(), nombre, telefono: valor }])
+      if (editingItem) saveMaestro("contactosEmergencia", { ...editingItem, nombre, telefono: valor })
+      else saveMaestro("contactosEmergencia", { id: Date.now().toString(), nombre, telefono: valor })
     }
     
     setIsDialogOpen(false)
@@ -119,6 +122,9 @@ export default function MaestrosPage() {
               <Button variant={subTab === "macros" ? "default" : "ghost"} className="justify-start gap-2" onClick={() => setSubTab("macros")}>
                 <IconTags className="size-4" /> Categorías Macro
               </Button>
+              <Button variant={subTab === "micros" ? "default" : "ghost"} className="justify-start gap-2" onClick={() => setSubTab("micros")}>
+                <IconBuildingSkyscraper className="size-4" /> Categorías Micro
+              </Button>
             </div>
             
             <Card className="col-span-3">
@@ -135,7 +141,7 @@ export default function MaestrosPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {(subTab === "estados" ? estados : macros).map((item) => (
+                    {(subTab === "estados" ? estados : subTab === "micros" ? micros : macros).map((item) => (
                       <TableRow key={item.id}>
                         <TableCell className="font-bold">{item.nombre}</TableCell>
                         {subTab === "estados" && (

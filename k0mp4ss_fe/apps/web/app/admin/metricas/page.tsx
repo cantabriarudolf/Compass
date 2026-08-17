@@ -1,9 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { unidades, tiposUnidad, macroSectores } from "@/data/inventario/estructura"
-import { estacionamientos } from "@/data/inventario/estacionamientos"
-import { ESTADOS_OCUPACION, CATEGORIAS_MACRO, CATEGORIAS_MICRO } from "@/data/maestros"
+import { useCompassStore, useStoreRehydrated } from "@/lib/store"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@workspace/ui/components/card"
 import { Badge } from "@workspace/ui/components/badge"
 import { 
@@ -17,6 +15,14 @@ import {
 } from "@tabler/icons-react"
 
 export default function MetricasPage() {
+  useStoreRehydrated()
+  const unidades = useCompassStore(s => s.unidades)
+  const tiposUnidad = useCompassStore(s => s.tiposUnidad)
+  const estacionamientos = useCompassStore(s => s.estacionamientos)
+  const estadosOcupacion = useCompassStore(s => s.maestros.estadosOcupacion)
+  const categoriasMacro = useCompassStore(s => s.maestros.categoriasMacro)
+  const categoriasMicro = useCompassStore(s => s.maestros.categoriasMicro)
+
   // CÁLCULOS POR MÓDULO
   
   // TU - Tipos de Unidad
@@ -41,8 +47,8 @@ export default function MetricasPage() {
   const totalHistorial = estacionamientos.reduce((acc, e) => acc + (e.historial?.length || 0), 0);
 
   // MA - Maestros
-  const totalEstados = ESTADOS_OCUPACION.length;
-  const totalCategorias = CATEGORIAS_MACRO.length + CATEGORIAS_MICRO.length;
+  const totalEstados = estadosOcupacion.length;
+  const totalCategorias = categoriasMacro.length + categoriasMicro.length;
 
   return (
     <div className="flex flex-col gap-8 pb-10">
@@ -61,7 +67,7 @@ export default function MetricasPage() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <ModuleMetric 
             label="Recaudación Mensual" 
-            value={`$${totalRecaudacion.toLocaleString()}`} 
+            value={`$${totalRecaudacion.toLocaleString("es-CO")}`} 
             sub="Basado en plantillas tarifarias"
           />
           <ModuleMetric 
@@ -86,7 +92,7 @@ export default function MetricasPage() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <ModuleMetric 
             label="Superficie Habitacional" 
-            value={`${totalMetros.toLocaleString()} m²`} 
+            value={`${totalMetros.toLocaleString("es-CO")} m²`} 
             sub="Propiedades auditadas"
           />
           <ModuleMetric 

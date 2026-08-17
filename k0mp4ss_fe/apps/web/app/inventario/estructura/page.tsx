@@ -2,14 +2,11 @@
 
 import * as React from "react"
 import { 
-  macroSectores as initialMacros, 
-  microSectores as initialMicros, 
-  unidades as initialUnidades, 
   MacroSector, 
   MicroSector, 
   Unidad,
 } from "@/data/inventario/estructura"
-import { CATEGORIAS_MACRO, CATEGORIAS_MICRO, ESTADOS_OCUPACION } from "@/data/maestros"
+import { useCompassStore, useStoreRehydrated } from "@/lib/store"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@workspace/ui/components/tabs"
 import { Badge } from "@workspace/ui/components/badge"
@@ -38,9 +35,16 @@ import { FormularioUnidad } from "@/components/inventario/formulario-unidad"
 import { EstadosDonut } from "@/components/inventario/estados-donut"
 
 export default function EstructuraFisicaPage() {
-  const [macroSectores, setMacroSectores] = React.useState(initialMacros)
-  const [microSectores, setMicroSectores] = React.useState(initialMicros)
-  const [unidades, setUnidades] = React.useState(initialUnidades)
+  useStoreRehydrated()
+  const macroSectores = useCompassStore(s => s.macroSectores)
+  const microSectores = useCompassStore(s => s.microSectores)
+  const unidades = useCompassStore(s => s.unidades)
+  const saveMacroSector = useCompassStore(s => s.saveMacroSector)
+  const saveMicroSector = useCompassStore(s => s.saveMicroSector)
+  const saveUnidad = useCompassStore(s => s.saveUnidad)
+  const categoriasMacro = useCompassStore(s => s.maestros.categoriasMacro)
+  const estadosOcupacion = useCompassStore(s => s.maestros.estadosOcupacion)
+  const categoriasMicro = useCompassStore(s => s.maestros.categoriasMicro)
   
   const [selectedMacro, setSelectedMacro] = React.useState<string>("todos")
   const currentMacro = macroSectores.find(m => m.id === selectedMacro)
@@ -86,10 +90,10 @@ export default function EstructuraFisicaPage() {
       descripcion: formData.get("descripcion") as string,
     }
     if (editingMacro) {
-      setMacroSectores(macroSectores.map(m => m.id === editingMacro.id ? { ...m, ...data } : m))
+      saveMacroSector({ ...editingMacro, ...data })
     } else {
       const nuevoId = `ms-${Date.now()}`
-      setMacroSectores([...macroSectores, { id: nuevoId, ...data }])
+      saveMacroSector({ id: nuevoId, ...data })
       setSelectedMacro(nuevoId)
     }
     setIsMacroDialogOpen(false)
@@ -105,7 +109,7 @@ export default function EstructuraFisicaPage() {
       etiqueta: formData.get("etiqueta") as any,
       nombre: formData.get("nombre") as string,
     }
-    setMicroSectores([...microSectores, nuevo])
+    saveMicroSector(nuevo)
     setSelectedMicro(nuevo.id)
     setIsMicroDialogOpen(false)
   }
@@ -113,7 +117,8 @@ export default function EstructuraFisicaPage() {
   const handleSaveUnidad = (data: Partial<Unidad>, existingId?: string) => {
     if (existingId) {
       // Edición: Fusión profunda para no perder datos
-      setUnidades(unidades.map(u => u.id === existingId ? { ...u, ...data } : u))
+      const existente = unidades.find(u => u.id === existingId)
+      if (existente) saveUnidad({ ...existente, ...data })
     } else {
       // Creación: Pasar los servicios capturados en el formulario
       const nueva: Unidad = {
@@ -125,10 +130,10 @@ export default function EstructuraFisicaPage() {
         metraje: data.metraje || 0,
         prorrateo: data.prorrateo || 0,
         rolSii: data.rolSii || "",
-        estado: data.estado || "Vacante",
+        estadoId: data.estadoId || "vacante",
         servicios: data.servicios || {},
       }
-      setUnidades([...unidades, nueva])
+      saveUnidad(nueva)
     }
   }
 
@@ -172,7 +177,7 @@ export default function EstructuraFisicaPage() {
                 <Select name="etiqueta" defaultValue={editingMacro?.etiqueta || "Torre"}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {CATEGORIAS_MACRO.map(c => (
+                    {categoriasMacro.map(c => (
                       <SelectItem key={c.id} value={c.nombre}>{c.nombre}</SelectItem>
                     ))}
                   </SelectContent>
@@ -211,8 +216,10 @@ export default function EstructuraFisicaPage() {
 
         <div className="pt-4">
           <EstadosDonut
-            estados={filteredUnidades.map(u => u.estado)}
+            estados={filteredUnidades.map(u => u.estadoId)}
             scopeLabel={scopeLabel}
+            selectedId={filterStatus === "todos" ? undefined : filterStatus}
+            onSelect={(id) => setFilterStatus(filterStatus === id ? "todos" : id)}
           />
         </div>
 
@@ -286,7 +293,7 @@ export default function EstructuraFisicaPage() {
                     >
                       TODOS
                     </Button>
-                    {ESTADOS_OCUPACION.map(est => (
+                    {estadosOcupacion.map(est => (
                       <Button 
                         key={est.id}
                         variant={filterStatus === est.id ? "default" : "ghost"} 
@@ -316,11 +323,9 @@ export default function EstructuraFisicaPage() {
                     </TableHeader>
                     <TableBody>
                       {filteredUnidades
-                        .filter(u => filterStatus === "todos" || 
-                          ESTADOS_OCUPACION.find(e => e.id === filterStatus)?.nombre === u.estado
-                        )
+                        .filter(u => filterStatus === "todos" || u.estadoId === filterStatus)
                         .map((unidad) => {
-                          const configEstado = ESTADOS_OCUPACION.find(e => e.nombre === unidad.estado);
+                          const configEstado = estadosOcupacion.find(e => e.id === unidad.estadoId);
                           const customClasses = configEstado?.color || "bg-zinc-100 text-zinc-800";
                           
                           const micro = microSectores.find(m => m.id === unidad.microSectorId);
@@ -341,7 +346,7 @@ export default function EstructuraFisicaPage() {
                               )}
                               <TableCell>
                                 <Badge className={`${customClasses} font-bold uppercase text-[9px] px-2 py-0.5 rounded-md`}>
-                                  {unidad.estado}
+                                  {configEstado?.nombre || unidad.estadoId}
                                 </Badge>
                               </TableCell>
                             <TableCell>{unidad.metraje} m²</TableCell>
@@ -374,7 +379,7 @@ export default function EstructuraFisicaPage() {
                 <Select name="etiqueta" defaultValue="Piso">
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {CATEGORIAS_MICRO.map(c => (
+                    {categoriasMicro.map(c => (
                       <SelectItem key={c.id} value={c.nombre}>{c.nombre}</SelectItem>
                     ))}
                   </SelectContent>

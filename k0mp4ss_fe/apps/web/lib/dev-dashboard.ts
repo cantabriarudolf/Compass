@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
 export type ModuleStatus = 'pendiente' | 'documentado' | 'en_proceso' | 'completado';
@@ -17,6 +17,9 @@ export interface ModuleInfo {
   specFile?: string;
   hasManual: boolean;
   manualFile?: string;
+  notes: string;
+  notesFile?: string;
+  notesStatus?: 'pendientes' | 'atendidas';
 }
 
 export interface TaskItem {
@@ -57,6 +60,8 @@ export interface DashboardData {
 
 const PHASES: Record<string, string> = {
   RG: 'Fase 0',
+  ST: 'Fase 0',
+  UI: 'Fase 0',
   TU: 'Fase 1',
   EF: 'Fase 1',
   ES: 'Fase 1',
@@ -176,6 +181,9 @@ function readModules(): ModuleInfo[] {
         specFile,
         hasManual: manualCodes.has(code) || !!manualFile,
         manualFile,
+        notes: readModuleNotes(f),
+        notesFile: existsSync(path.join(REPO_ROOT, notesFileFor(f))) ? notesFileFor(f) : undefined,
+        notesStatus: moduleNotesStatus(f),
       };
     })
     .sort((a, b) => {
@@ -400,6 +408,51 @@ const ALLOWED_FILE_PREFIXES = [
   `${REPO_ROOT}/Data/NSGC/docs/`,
   `${WEB_ROOT}/data/`,
 ];
+
+const NOTES_STATUS_PREFIX = '<!-- estado:';
+
+export function notesFileFor(file: string): string {
+  const base = path.basename(file, '.md');
+  return `openspec/notes/${base}.md`;
+}
+
+function notesStatusOf(content: string): 'pendientes' | 'atendidas' | undefined {
+  const match = content.match(new RegExp(`${NOTES_STATUS_PREFIX}\\s*(pendientes|atendidas)\\s*-->`));
+  if (match) return match[1] as 'pendientes' | 'atendidas';
+  return undefined;
+}
+
+function notesWithoutStatus(content: string): string {
+  return content.replace(new RegExp(`^\\s*${NOTES_STATUS_PREFIX}.*-->\\s*`), '').trim();
+}
+
+export function readModuleNotes(file: string): string {
+  const rel = notesFileFor(file);
+  const full = path.join(REPO_ROOT, rel);
+  if (!existsSync(full)) return '';
+  return readFileSync(full, 'utf8');
+}
+
+export function moduleNotesStatus(file: string): 'pendientes' | 'atendidas' | undefined {
+  const content = readModuleNotes(file);
+  if (!content.trim()) return undefined;
+  return notesStatusOf(content);
+}
+
+export function saveModuleNotes(file: string, content: string, status?: 'pendientes' | 'atendidas'): { ok: boolean; error?: string } {
+  const rel = notesFileFor(file);
+  const full = path.join(REPO_ROOT, rel);
+  const dir = path.dirname(full);
+  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+  const statusLine = status ? `${NOTES_STATUS_PREFIX} ${status} -->\n\n` : '';
+  writeFileSync(full, `${statusLine}${notesWithoutStatus(content)}`, 'utf8');
+  return { ok: true };
+}
+
+export function setModuleNotesStatus(file: string, status: 'pendientes' | 'atendidas'): { ok: boolean; error?: string } {
+  const content = readModuleNotes(file);
+  return saveModuleNotes(file, content, status);
+}
 
 export function readProjectFile(relPath: string): string | null {
   const normalized = path.normalize(relPath).replace(/^[/\\]+/, '');

@@ -16,6 +16,12 @@ Cuando vinculái a alguien a una unidad, tenís que elegir su rol:
 Una persona puede tener vínculos con varias unidades. 
 *Ejemplo: El Sr. Pérez es **Propietario** del Depto 101, pero también es **Propietario** del Estacionamiento E-15 y la Bodega B-02.*
 
+## 🛡️ Reglas que valida el sistema al guardar
+El sistema rechaza el vínculo (y te muestra el motivo) si:
+- **Persona inactiva**: La persona está marcada como inactiva en el Maestro de Personas.
+- **Vínculo duplicado**: La persona ya tiene un vínculo **activo** con la misma unidad.
+- **Solapamiento de arriendos**: Un contrato de arriendo (`Arrendatario`) se solapa con otro contrato vigente en la misma unidad.
+
 ## 💡 ¿Para qué sirve esto?
 Gracias a esta vinculación, el sistema puede:
 1.  **Automatizar Cobros**: Sabe a quién mandarle el mail del Gasto Común.

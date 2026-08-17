@@ -1,7 +1,8 @@
 "use client"
 
 import * as React from "react"
-import { ESTADOS_OCUPACION } from "@/data/maestros"
+import { useCompassStore } from "@/lib/store"
+import { hexDesdeId } from "@/lib/colors"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import { IconChartDonut } from "@tabler/icons-react"
 
@@ -16,15 +17,18 @@ const COLOR_HEX: Record<string, string> = {
 interface EstadosDonutProps {
   estados: string[]
   scopeLabel?: string
+  selectedId?: string
+  onSelect?: (id: string) => void
 }
 
-export function EstadosDonut({ estados, scopeLabel }: EstadosDonutProps) {
+export function EstadosDonut({ estados, scopeLabel, selectedId, onSelect }: EstadosDonutProps) {
+  const estadosOcupacion = useCompassStore(s => s.maestros.estadosOcupacion)
   const total = estados.length
 
-  const data = ESTADOS_OCUPACION.map(est => ({
+  const data = estadosOcupacion.map(est => ({
     ...est,
-    count: estados.filter(e => e === est.nombre).length,
-    color: COLOR_HEX[est.id] ?? "#71717a",
+    count: estados.filter(e => e === est.id).length,
+    color: est.hex ?? COLOR_HEX[est.id] ?? hexDesdeId(est.id),
   })).filter(d => d.count > 0)
 
   const size = 168
@@ -74,23 +78,30 @@ export function EstadosDonut({ estados, scopeLabel }: EstadosDonutProps) {
                   stroke="hsl(var(--muted))"
                   strokeWidth={stroke}
                 />
-                {segments.map(d => (
-                  <circle
-                    key={d.id}
-                    cx={size / 2}
-                    cy={size / 2}
-                    r={r}
-                    fill="none"
-                    stroke={d.color}
-                    strokeWidth={stroke}
-                    strokeDasharray={`${d.len} ${c - d.len}`}
-                    strokeDashoffset={d.offset}
-                  >
-                    <title>
-                      {d.nombre}: {d.count} ({total > 0 ? Math.round((d.count / total) * 100) : 0}%)
-                    </title>
-                  </circle>
-                ))}
+                {segments.map(d => {
+                  const isActive = selectedId === d.id
+                  const isDimmed = !!selectedId && !isActive
+                  return (
+                    <circle
+                      key={d.id}
+                      cx={size / 2}
+                      cy={size / 2}
+                      r={r}
+                      fill="none"
+                      stroke={d.color}
+                      strokeWidth={isActive ? stroke + 4 : stroke}
+                      strokeDasharray={`${d.len} ${c - d.len}`}
+                      strokeDashoffset={d.offset}
+                      className={`transition-all duration-200 ${onSelect ? "cursor-pointer" : ""} ${isDimmed ? "opacity-30" : ""}`}
+                      onClick={() => onSelect?.(d.id)}
+                    >
+                      <title>
+                        {d.nombre}: {d.count} ({total > 0 ? Math.round((d.count / total) * 100) : 0}%)
+                        {onSelect ? " · Clic para filtrar" : ""}
+                      </title>
+                    </circle>
+                  )
+                })}
               </svg>
               <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
                 <span className="text-3xl font-black leading-none">{total}</span>
@@ -101,21 +112,29 @@ export function EstadosDonut({ estados, scopeLabel }: EstadosDonutProps) {
             </div>
 
             <ul className="grid grid-cols-1 gap-2 w-full max-w-xs">
-              {segments.map(d => (
-                <li key={d.id} className="flex items-center gap-2 text-xs">
-                  <span
-                    className="size-2.5 rounded-full shrink-0"
-                    style={{ backgroundColor: d.color }}
-                  />
-                  <span className="font-medium uppercase text-[10px] tracking-wide">
-                    {d.nombre}
-                  </span>
-                  <span className="ml-auto font-bold tabular-nums">{d.count}</span>
-                  <span className="text-muted-foreground w-10 text-right tabular-nums">
-                    {total > 0 ? Math.round((d.count / total) * 100) : 0}%
-                  </span>
-                </li>
-              ))}
+              {segments.map(d => {
+                const isActive = selectedId === d.id
+                const isDimmed = !!selectedId && !isActive
+                return (
+                  <li
+                    key={d.id}
+                    className={`flex items-center gap-2 text-xs rounded-md px-2 py-1 transition-colors ${onSelect ? "cursor-pointer hover:bg-muted" : ""} ${isActive ? "bg-muted ring-1 ring-border" : ""} ${isDimmed ? "opacity-40" : ""}`}
+                    onClick={() => onSelect?.(d.id)}
+                  >
+                    <span
+                      className="size-2.5 rounded-full shrink-0"
+                      style={{ backgroundColor: d.color }}
+                    />
+                    <span className="font-medium uppercase text-[10px] tracking-wide">
+                      {d.nombre}
+                    </span>
+                    <span className="ml-auto font-bold tabular-nums">{d.count}</span>
+                    <span className="text-muted-foreground w-10 text-right tabular-nums">
+                      {total > 0 ? Math.round((d.count / total) * 100) : 0}%
+                    </span>
+                  </li>
+                )
+              })}
             </ul>
           </div>
         )}

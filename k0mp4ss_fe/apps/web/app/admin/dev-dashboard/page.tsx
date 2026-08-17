@@ -17,13 +17,11 @@ import {
 } from '@workspace/ui/components/dropdown-menu';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '@workspace/ui/components/sheet';
 import {
-  IconAdjustments,
   IconListCheck,
   IconStack2,
   IconCheck,
   IconClipboardCopy,
   IconInfoSmall,
-  IconBrandVscode,
   IconRefresh,
   IconAlertTriangle,
   IconFileCode2,
@@ -40,6 +38,20 @@ const STATUS_BADGE: Record<ModuleInfo['status'], { label: string; className: str
   pendiente: { label: '⏳ Pendiente', className: '' },
 };
 
+const STATUS_LEVEL: Record<ModuleInfo['status'], number> = {
+  pendiente: 0,
+  documentado: 1,
+  en_proceso: 2,
+  completado: 4,
+};
+
+const STATUS_BAR_COLOR: Record<ModuleInfo['status'], string> = {
+  pendiente: 'bg-muted-foreground/40',
+  documentado: 'bg-sky-500',
+  en_proceso: 'bg-primary',
+  completado: 'bg-emerald-500',
+};
+
 function buildHermesPrompt(changeId: string | undefined, task: TaskItem): string {
   return `hermes run "Ejecuta la tarea ${task.id} del change ${changeId ?? ''}: ${task.title}"`;
 }
@@ -52,6 +64,9 @@ export default function DevDashboardPage() {
   const [showTasks, setShowTasks] = useState(false);
   const [selectedTask, setSelectedTask] = useState<TaskItem | null>(null);
   const [fileView, setFileView] = useState<{ file: string; content: string; loading: boolean } | null>(null);
+  const [notesDraft, setNotesDraft] = useState('');
+  const [notesSaving, setNotesSaving] = useState(false);
+  const [notesSaved, setNotesSaved] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [moduleSearch, setModuleSearch] = useState('');
@@ -164,7 +179,8 @@ export default function DevDashboardPage() {
         (m.mockData ? 'mock' : '').includes(term) ||
         (m.documented ? 'spec' : '').includes(term) ||
         (m.hasManual ? 'manual' : '').includes(term) ||
-        (m.change ?? '').toLowerCase().includes(term);
+        (m.change ?? '').toLowerCase().includes(term) ||
+        (m.notesStatus ? `nota ${m.notesStatus}` : '').includes(term);
       const matchesPhase = modulePhases.length === 0 || modulePhases.includes(m.phase);
       const matchesStatus = moduleStatuses.length === 0 || moduleStatuses.includes(m.status);
       return matchesSearch && matchesPhase && matchesStatus;
@@ -188,16 +204,18 @@ export default function DevDashboardPage() {
   const toggleTask = useCallback(
     async (task: TaskItem) => {
       if (!activeChange) return;
+      const inArchived = data?.archived.some(c => c.id === activeChange.id) ?? false;
       setSavingId(task.id);
+      const patchTasks = (c: ChangeInfo) =>
+        c.id === activeChange.id
+          ? { ...c, tasks: c.tasks.map(t => (t.id === task.id ? { ...t, completed: !t.completed } : t)) }
+          : c;
       setData(prev =>
         prev
           ? {
               ...prev,
-              changes: prev.changes.map(c =>
-                c.id === activeChange.id
-                  ? { ...c, tasks: c.tasks.map(t => (t.id === task.id ? { ...t, completed: !t.completed } : t)) }
-                  : c
-              ),
+              changes: inArchived ? prev.changes : prev.changes.map(patchTasks),
+              archived: inArchived ? prev.archived.map(patchTasks) : prev.archived,
             }
           : prev
       );
@@ -210,7 +228,13 @@ export default function DevDashboardPage() {
         if (!res.ok) throw new Error(`Error HTTP ${res.status}`);
         const json = await res.json();
         setData(prev =>
-          prev ? { ...prev, changes: prev.changes.map(c => (c.id === activeChange.id ? json.change : c)) } : prev
+          prev
+            ? {
+                ...prev,
+                changes: inArchived ? prev.changes : prev.changes.map(c => (c.id === activeChange.id ? json.change : c)),
+                archived: inArchived ? prev.archived.map(c => (c.id === activeChange.id ? json.change : c)) : prev.archived,
+              }
+            : prev
         );
       } catch (e) {
         setError(e instanceof Error ? e.message : String(e));
@@ -219,7 +243,7 @@ export default function DevDashboardPage() {
         setSavingId(null);
       }
     },
-    [activeChange, refresh]
+    [activeChange, data, refresh]
   );
 
   const copyToClipboard = (text: string, id: string) => {
@@ -244,6 +268,72 @@ export default function DevDashboardPage() {
       setFileView(null);
     }
   }, []);
+
+  const saveNotes = useCallback(async (file: string, content: string, status?: 'pendientes' | 'atendidas') => {
+    setNotesSaving(true);
+    setNotesSaved(false);
+    try {
+      const res = await fetch('/api/dev-dashboard', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ file, content, status }),
+      });
+      if (!res.ok) throw new Error(`Error HTTP ${res.status}`);
+      setNotesSaved(true);
+      setData(prev =>
+        prev
+          ? {
+              ...prev,
+              modules: prev.modules.map(m =>
+                m.file === file
+                  ? {
+                      ...m,
+                      notes: content,
+                      notesFile: `openspec/notes/${file.replace(/\.md$/, '')}.md`,
+                      notesStatus: status ?? 'pendientes',
+                    }
+                  : m
+              ),
+            }
+          : prev
+      );
+      setTimeout(() => setNotesSaved(false), 2000);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setNotesSaving(false);
+    }
+  }, []);
+
+  const setNotesStatus = useCallback(async (file: string, status: 'pendientes' | 'atendidas') => {
+    setNotesSaving(true);
+    try {
+      const res = await fetch('/api/dev-dashboard', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ file, status }),
+      });
+      if (!res.ok) throw new Error(`Error HTTP ${res.status}`);
+      setData(prev =>
+        prev
+          ? {
+              ...prev,
+              modules: prev.modules.map(m =>
+                m.file === file ? { ...m, notesStatus: status } : m
+              ),
+            }
+          : prev
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setNotesSaving(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    setNotesDraft(selectedModule?.notes?.replace(/^\s*<!--\s*estado:.*?-->\s*/, '').trim() ?? '');
+  }, [selectedModule]);
 
   if (loading && !data) {
     return (
@@ -303,63 +393,161 @@ export default function DevDashboardPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card>
-          <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
-            <CardDescription className="font-bold text-xs uppercase tracking-wider">Módulos Completados</CardDescription>
-            <IconStack2 className="size-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {data?.stats.completado ?? 0} / {data?.stats.total ?? 0}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-xl">Comparativa de Cobertura</CardTitle>
+          <CardDescription>
+            Especificaciones del catálogo vs capabilities en OpenSpec vs changes archivados.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="rounded-lg border p-4">
+              <p className="text-xs uppercase font-bold text-muted-foreground">Especificaciones</p>
+              <p className="text-2xl font-black text-primary">{comparative?.total ?? 0}</p>
+              <p className="text-xs text-muted-foreground mt-1">Data/NSGC/docs/especificaciones/</p>
             </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              {data?.stats.enProceso ?? 0} en proceso · {data?.stats.documentado ?? 0} documentados
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
-            <CardDescription className="font-bold text-xs uppercase tracking-wider">Change OpenSpec Activo</CardDescription>
-            <IconBrandVscode className="size-4 text-primary" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-lg font-bold text-primary truncate">{activeChange?.id ?? '—'}</div>
-            <p className="text-xs text-muted-foreground mt-1">
-              {data?.changes.length ?? 0} change(s) activo(s) · {data?.archived.length ?? 0} archivados
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
-            <CardDescription className="font-bold text-xs uppercase tracking-wider">Tareas del Change</CardDescription>
-            <IconListCheck className="size-4 text-amber-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-amber-600">
-              {activeChange ? `${completedCount} / ${totalCount}` : '—'}
+            <div className="rounded-lg border p-4">
+              <p className="text-xs uppercase font-bold text-muted-foreground">Cubiertas en Specs</p>
+              <p className="text-2xl font-black text-sky-600">
+                {comparative?.covered ?? 0} <span className="text-sm text-muted-foreground">/ {comparative?.total ?? 0}</span>
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                {((comparative?.total ?? 0) - (comparative?.covered ?? 0))} sin capability en openspec/specs/
+              </p>
             </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              {activeChange
-                ? `${totalCount - completedCount} tareas pendientes`
-                : 'Selecciona un change'}
-            </p>
-          </CardContent>
-        </Card>
+            <div className="rounded-lg border p-4">
+              <p className="text-xs uppercase font-bold text-muted-foreground">Changes Archivados</p>
+              <p className="text-2xl font-black text-emerald-600">{comparative?.archived ?? 0}</p>
+              <p className="text-xs text-muted-foreground mt-1">openspec/changes/archive/</p>
+            </div>
+            <div className="rounded-lg border p-4">
+              <p className="text-xs uppercase font-bold text-muted-foreground">Changes Activos</p>
+              <p className="text-2xl font-black text-amber-600">{comparative?.active ?? 0}</p>
+              <p className="text-xs text-muted-foreground mt-1">en desarrollo</p>
+            </div>
+          </div>
 
-        <Card>
-          <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
-            <CardDescription className="font-bold text-xs uppercase tracking-wider">Agente Configurado</CardDescription>
-            <IconAdjustments className="size-4 text-emerald-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-lg font-bold text-emerald-600">Hermes Builder</div>
-            <p className="text-xs text-muted-foreground mt-1">HERMES.md cargado</p>
-          </CardContent>
-        </Card>
-      </div>
+          <div className="border-t pt-6 mt-6 flex flex-col items-start gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between w-full gap-3">
+              <div>
+                <h3 className="text-lg font-bold flex items-center gap-2">
+                  <IconFileCode2 className="size-5 text-primary" /> Detalle Specs OpenSpec
+                </h3>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Capabilities consolidadas en <code className="font-mono text-[10px]">openspec/specs/</code> y el historial en{' '}
+                  <code className="font-mono text-[10px]">openspec/changes/archive/</code>.
+                </p>
+              </div>
+              <Button variant="outline" size="sm" onClick={() => setShowComparative(v => !v)}>
+                {showComparative ? (
+                  <>
+                    <IconArrowLeft className="size-4 mr-1" /> Ocultar
+                  </>
+                ) : (
+                  <>
+                    <IconListCheck className="size-4 mr-1" /> Ver
+                  </>
+                )}
+              </Button>
+            </div>
+
+            {showComparative && (
+          <div className="w-full">
+            <div className="border-t pt-6 mt-6">
+            <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+              <IconFileCode2 className="size-5 text-primary" /> Capabilities en openspec/specs/
+            </h3>
+            <p className="text-xs text-muted-foreground mb-4">
+              La fuente de verdad consolidada: las capabilities aceptadas del sistema. Se acumulan al archivar changes.{' '}
+              <span className="font-medium">🟢 Archivada</span> ·{' '}
+              <span className="font-medium">🟠 Pendiente (change activo)</span>
+            </p>
+            {data && capabilities.length > 0 ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {capabilities.map(spec => (
+                  <div
+                    key={spec.name}
+                    className={`rounded-lg border p-4 flex flex-col gap-2 ${
+                      spec.archived ? 'border-emerald-500/40 bg-emerald-500/5' : 'border-orange-500/50 bg-orange-500/5'
+                    }`}
+                  >
+                    <div className="flex flex-wrap items-center gap-2">
+                      <IconFileCode2 className="size-4 text-primary" />
+                      <code className="font-mono font-bold text-sm">{spec.name}</code>
+                      {spec.code && <Badge variant="outline" className="text-[10px]">{spec.code}</Badge>}
+                      <Badge
+                        variant={spec.archived ? 'default' : 'outline'}
+                        className={`text-[10px] ${
+                          spec.archived ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-orange-500 hover:bg-orange-600'
+                        }`}
+                      >
+                        {spec.archived ? '🟢 Archivada' : '🟠 Pendiente'}
+                      </Badge>
+                    </div>
+                    <ul className="text-xs text-muted-foreground font-mono space-y-1">
+                      {spec.files.map(f => (
+                        <li key={f}>• {spec.name}/{f}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="py-12 text-center text-muted-foreground">
+                No hay capabilities definidas en <code className="font-mono text-xs">openspec/specs/</code>.
+              </div>
+            )}
+          </div>
+
+          <div className="border-t pt-6 mt-6">
+            <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+              <IconArchive className="size-5 text-muted-foreground" />
+              Changes Archivados
+            </h3>
+            <p className="text-xs text-muted-foreground mb-4">
+              Historial en <code className="font-mono text-xs">openspec/changes/archive/</code> y los módulos que completaron.
+            </p>
+            {data && data.archived.length > 0 ? (
+              <div className="space-y-3">
+                {data.archived.map(c => {
+                  const relatedModules = moduleByArchivedChange.get(c.id) ?? [];
+                  const done = c.tasks.filter(t => t.completed).length;
+                  return (
+                    <div key={c.id} className="rounded-lg border p-4 flex flex-col md:flex-row justify-between gap-3">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <IconArchive className="size-4 text-muted-foreground" />
+                          <span className="font-mono font-semibold text-sm">{c.id}</span>
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Creado: {c.created ?? '—'} · {done}/{c.tasks.length} tareas completadas
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap gap-1 items-start md:justify-end">
+                        {relatedModules.length > 0 ? (
+                          relatedModules.map(m => (
+                            <Badge key={m} variant="outline" className="text-[10px]">{m}</Badge>
+                          ))
+                        ) : (
+                          <Badge variant="secondary" className="text-[10px]">Sin módulo de negocio</Badge>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="py-12 text-center text-muted-foreground">
+                No hay changes archivados todavía.
+              </div>
+            )}
+          </div>
+            </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="mt-6 space-y-6">
           {selectedModule && (
@@ -462,6 +650,77 @@ export default function DevDashboardPage() {
                     )}
                   </div>
                 )}
+
+                <div className="rounded-lg border p-4 space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div>
+                      <p className="text-sm font-bold flex items-center gap-2">
+                        <IconClipboardCopy className="size-4 text-muted-foreground" /> Notas del módulo
+                        {selectedModule.notesStatus === 'atendidas' && (
+                          <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/40 text-[10px]">
+                            ✓ Atendidas
+                          </Badge>
+                        )}
+                        {selectedModule.notesStatus === 'pendientes' && (
+                          <Badge variant="outline" className="bg-amber-500/10 text-amber-600 border-amber-500/40 text-[10px]">
+                            ⏳ Pendientes
+                          </Badge>
+                        )}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Pendientes y control de avance. Se guardan en{' '}
+                        <code className="font-mono text-[10px]">
+                          {selectedModule.notesFile ?? `openspec/notes/${selectedModule.file.replace(/\.md$/, '')}.md`}
+                        </code>.
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {notesSaved && (
+                        <span className="text-xs text-emerald-600 font-medium">✓ Guardado</span>
+                      )}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setNotesDraft(selectedModule?.notes ?? '')}
+                        disabled={notesSaving}
+                        title="Descartar cambios sin guardar"
+                      >
+                        Revertir
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() =>
+                          setNotesStatus(
+                            selectedModule.file,
+                            selectedModule.notesStatus === 'atendidas' ? 'pendientes' : 'atendidas'
+                          )
+                        }
+                        disabled={notesSaving || !selectedModule.notesStatus}
+                        title={
+                          selectedModule.notesStatus === 'atendidas'
+                            ? 'Quitar la marca de atendidas (volver a pendientes)'
+                            : 'Marcar las notas como revisadas y atendidas'
+                        }
+                      >
+                        {selectedModule.notesStatus === 'atendidas' ? 'Quitar marca' : 'Marcar atendidas'}
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={() => saveNotes(selectedModule.file, notesDraft, selectedModule.notesStatus)}
+                        disabled={notesSaving}
+                      >
+                        {notesSaving ? 'Guardando...' : 'Guardar notas'}
+                      </Button>
+                    </div>
+                  </div>
+                  <textarea
+                    value={notesDraft}
+                    onChange={e => setNotesDraft(e.target.value)}
+                    placeholder="Ej. Falta definir el calculador de prorrateo, revisar herencia de metraje con EF, etc."
+                    className="w-full min-h-[96px] rounded-lg border bg-muted/30 px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  />
+                </div>
 
                 {showTasks && activeChange && (
                   <div className="border-t pt-4">
@@ -620,168 +879,13 @@ export default function DevDashboardPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-xl">Comparativa de Cobertura</CardTitle>
-              <CardDescription>
-                Especificaciones del catálogo vs capabilities en OpenSpec vs changes archivados.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className="rounded-lg border p-4">
-                  <p className="text-xs uppercase font-bold text-muted-foreground">Especificaciones</p>
-                  <p className="text-2xl font-black text-primary">{comparative?.total ?? 0}</p>
-                  <p className="text-xs text-muted-foreground mt-1">Data/NSGC/docs/especificaciones/</p>
-                </div>
-                <div className="rounded-lg border p-4">
-                  <p className="text-xs uppercase font-bold text-muted-foreground">Cubiertas en Specs</p>
-                  <p className="text-2xl font-black text-sky-600">
-                    {comparative?.covered ?? 0} <span className="text-sm text-muted-foreground">/ {comparative?.total ?? 0}</span>
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {((comparative?.total ?? 0) - (comparative?.covered ?? 0))} sin capability en openspec/specs/
-                  </p>
-                </div>
-                <div className="rounded-lg border p-4">
-                  <p className="text-xs uppercase font-bold text-muted-foreground">Changes Archivados</p>
-                  <p className="text-2xl font-black text-emerald-600">{comparative?.archived ?? 0}</p>
-                  <p className="text-xs text-muted-foreground mt-1">openspec/changes/archive/</p>
-                </div>
-                <div className="rounded-lg border p-4">
-                  <p className="text-xs uppercase font-bold text-muted-foreground">Changes Activos</p>
-                  <p className="text-2xl font-black text-amber-600">{comparative?.active ?? 0}</p>
-                  <p className="text-xs text-muted-foreground mt-1">en desarrollo</p>
-                </div>
-              </div>
-
-              <div className="border-t pt-6 mt-6 flex flex-col items-start gap-4">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between w-full gap-3">
-                  <div>
-                    <h3 className="text-lg font-bold flex items-center gap-2">
-                      <IconFileCode2 className="size-5 text-primary" /> Detalle Specs OpenSpec
-                    </h3>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Capabilities consolidadas en <code className="font-mono text-[10px]">openspec/specs/</code> y el historial en{' '}
-                      <code className="font-mono text-[10px]">openspec/changes/archive/</code>.
-                    </p>
-                  </div>
-                  <Button variant="outline" size="sm" onClick={() => setShowComparative(v => !v)}>
-                    {showComparative ? (
-                      <>
-                        <IconArrowLeft className="size-4 mr-1" /> Ocultar
-                      </>
-                    ) : (
-                      <>
-                        <IconListCheck className="size-4 mr-1" /> Ver
-                      </>
-                    )}
-                  </Button>
-                </div>
-
-                {showComparative && (
-              <div className="w-full">
-                <div className="border-t pt-6 mt-6">
-                <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
-                  <IconFileCode2 className="size-5 text-primary" /> Capabilities en openspec/specs/
-                </h3>
-                <p className="text-xs text-muted-foreground mb-4">
-                  La fuente de verdad consolidada: las capabilities aceptadas del sistema. Se acumulan al archivar changes.{' '}
-                  <span className="font-medium">🟢 Archivada</span> ·{' '}
-                  <span className="font-medium">🟠 Pendiente (change activo)</span>
-                </p>
-                {data && capabilities.length > 0 ? (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                    {capabilities.map(spec => (
-                      <div
-                        key={spec.name}
-                        className={`rounded-lg border p-4 flex flex-col gap-2 ${
-                          spec.archived ? 'border-emerald-500/40 bg-emerald-500/5' : 'border-orange-500/50 bg-orange-500/5'
-                        }`}
-                      >
-                        <div className="flex flex-wrap items-center gap-2">
-                          <IconFileCode2 className="size-4 text-primary" />
-                          <code className="font-mono font-bold text-sm">{spec.name}</code>
-                          {spec.code && <Badge variant="outline" className="text-[10px]">{spec.code}</Badge>}
-                          <Badge
-                            variant={spec.archived ? 'default' : 'outline'}
-                            className={`text-[10px] ${
-                              spec.archived ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-orange-500 hover:bg-orange-600'
-                            }`}
-                          >
-                            {spec.archived ? '🟢 Archivada' : '🟠 Pendiente'}
-                          </Badge>
-                        </div>
-                        <ul className="text-xs text-muted-foreground font-mono space-y-1">
-                          {spec.files.map(f => (
-                            <li key={f}>• {spec.name}/{f}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="py-12 text-center text-muted-foreground">
-                    No hay capabilities definidas en <code className="font-mono text-xs">openspec/specs/</code>.
-                  </div>
-                )}
-              </div>
-
-              <div className="border-t pt-6 mt-6">
-                <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
-                  <IconArchive className="size-5 text-muted-foreground" />
-                  Changes Archivados
-                </h3>
-                <p className="text-xs text-muted-foreground mb-4">
-                  Historial en <code className="font-mono text-xs">openspec/changes/archive/</code> y los módulos que completaron.
-                </p>
-                {data && data.archived.length > 0 ? (
-                  <div className="space-y-3">
-                    {data.archived.map(c => {
-                      const relatedModules = moduleByArchivedChange.get(c.id) ?? [];
-                      const done = c.tasks.filter(t => t.completed).length;
-                      return (
-                        <div key={c.id} className="rounded-lg border p-4 flex flex-col md:flex-row justify-between gap-3">
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <IconArchive className="size-4 text-muted-foreground" />
-                              <span className="font-mono font-semibold text-sm">{c.id}</span>
-                            </div>
-                            <p className="text-xs text-muted-foreground mt-1">
-                              Creado: {c.created ?? '—'} · {done}/{c.tasks.length} tareas completadas
-                            </p>
-                          </div>
-                          <div className="flex flex-wrap gap-1 items-start md:justify-end">
-                            {relatedModules.length > 0 ? (
-                              relatedModules.map(m => (
-                                <Badge key={m} variant="outline" className="text-[10px]">{m}</Badge>
-                              ))
-                            ) : (
-                              <Badge variant="secondary" className="text-[10px]">Sin módulo de negocio</Badge>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <div className="py-12 text-center text-muted-foreground">
-                    No hay changes archivados todavía.
-                  </div>
-                )}
-              </div>
-                </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
               <CardTitle className="text-xl">Mapa Global de Fases y Módulos</CardTitle>
               <CardDescription>
                 Estado derivado de <code className="font-mono text-xs">Data/NSGC/docs/especificaciones/</code> + OpenSpec.{' '}
                 <span className="font-medium">🧪 Mock</span> ·{' '}
                 <span className="font-medium">✓ Spec</span> ·{' '}
-                <span className="font-medium">📘 Manual</span>
+                <span className="font-medium">📘 Manual</span> ·{' '}
+                <span className="font-medium">📝 Notas</span>
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -886,6 +990,7 @@ export default function DevDashboardPage() {
                             ['mockData', 'Mock'],
                             ['documented', 'Spec'],
                             ['hasManual', 'Manual'],
+                            ['notesStatus', 'Notas'],
                             ['change', 'Change'],
                           ] as [keyof ModuleInfo, string][]
                         ).map(([key, label]) => (
@@ -956,6 +1061,19 @@ export default function DevDashboardPage() {
                             )}
                           </td>
                           <td className="p-3">
+                            {m.notesStatus === 'atendidas' ? (
+                              <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/40" title="Notas marcadas como atendidas">
+                                ✓ Atendidas
+                              </Badge>
+                            ) : m.notesStatus === 'pendientes' ? (
+                              <Badge variant="outline" className="bg-amber-500/10 text-amber-600 border-amber-500/40" title="Tiene notas pendientes de revisión">
+                                📝 Pendientes
+                              </Badge>
+                            ) : (
+                              <span className="text-muted-foreground text-xs">—</span>
+                            )}
+                          </td>
+                          <td className="p-3">
                             {m.change ? (
                               <span className="flex flex-wrap items-center gap-2" title={`${m.change} · ${info?.done ?? 0} de ${info?.total ?? 0} tareas`}>
                                 <Badge variant="outline" className="bg-orange-500/10 text-orange-600 border-orange-500/40 font-mono text-[10px]">
@@ -973,9 +1091,24 @@ export default function DevDashboardPage() {
                             )}
                           </td>
                           <td className="p-3">
-                            <Badge variant={m.status === 'pendiente' ? 'outline' : 'default'} className={STATUS_BADGE[m.status].className}>
-                              {STATUS_BADGE[m.status].label}
-                            </Badge>
+                            <div className="flex items-center gap-2" title={`${STATUS_BADGE[m.status].label}`}>
+                              <div className="flex items-end gap-0.5" aria-hidden>
+                                {[0, 1, 2, 3].map(i => (
+                                  <span
+                                    key={i}
+                                    className={`w-1.5 rounded-sm transition-colors ${
+                                      i < STATUS_LEVEL[m.status]
+                                        ? STATUS_BAR_COLOR[m.status]
+                                        : 'bg-muted'
+                                    }`}
+                                    style={{ height: `${7 + i * 3}px` }}
+                                  />
+                                ))}
+                              </div>
+                              <span className="text-[10px] text-muted-foreground font-medium">
+                                {STATUS_BADGE[m.status].label.split(' ').slice(1).join(' ')}
+                              </span>
+                            </div>
                           </td>
                         </tr>
                         );

@@ -1,14 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { personas } from "@/data/comunidad/personas"
-// Nota: Deberíamos extraer las condiciones iniciales a data/maestros.ts para que sea global, 
-// por ahora simularé el cruce con un objeto local basado en el mock de admin/maestros
-const CONDICIONES_ESPECIALES: Record<string, { nombre: string, color: string }> = {
-  "c-1": { nombre: "Electrodependiente", color: "bg-blue-500 text-white" },
-  "c-2": { nombre: "Movilidad Reducida", color: "bg-amber-500 text-black" },
-  "c-3": { nombre: "Adulto Mayor Solo", color: "bg-purple-500 text-white" }
-}
+import { useCompassStore, useStoreRehydrated } from "@/lib/store"
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@workspace/ui/components/card"
 import { Input } from "@workspace/ui/components/input"
@@ -43,9 +36,11 @@ import { FormularioPersona } from "@/components/comunidad/formulario-persona"
 import { Persona } from "@/data/comunidad/personas"
 
 export default function DirectorioPersonasPage() {
+  useStoreRehydrated()
+  const listaPersonas = useCompassStore(s => s.personas)
+  const savePersona = useCompassStore(s => s.savePersona)
   const [searchTerm, setSearchTerm] = React.useState("")
   const [isModalOpen, setIsModalOpen] = React.useState(false)
-  const [listaPersonas, setListaPersonas] = React.useState<Persona[]>(personas)
 
   // Filtro reactivo básico
   const personasFiltradas = listaPersonas.filter(p => 
@@ -87,7 +82,7 @@ export default function DirectorioPersonasPage() {
           </DialogHeader>
           <FormularioPersona 
             onSave={(nuevaPersona) => {
-              setListaPersonas([nuevaPersona as Persona, ...listaPersonas])
+              savePersona(nuevaPersona as Persona)
               setIsModalOpen(false)
             }} 
             onCancel={() => setIsModalOpen(false)} 

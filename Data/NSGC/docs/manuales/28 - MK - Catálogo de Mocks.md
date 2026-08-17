@@ -37,22 +37,17 @@ k0mp4ss_fe/apps/web/data/
 | `CATEGORIAS_MACRO` | `{ id, nombre }[]` | 7 items | Tipos de agrupación mayor: Torre, Manzana, Etapa, Sector, Parcela, Calle, Edificio |
 | `CATEGORIAS_MICRO` | `{ id, nombre }[]` | 5 items | Subdivisiones: Piso, Nivel, Pasaje, Bloque, No Aplica |
 | `CATEGORIAS_UNIDAD` | `{ id, nombre }[]` | 6 items | Tipos de propiedad: Departamento, Casa, Local, Oficina, Bodega, Estacionamiento |
-| `ESTADOS_OCUPACION` | `{ id, nombre, color }[]` | 7 items | Estados de una unidad con sus clases CSS de color (Vacante, Ocupado, Arrendado, Juicio, Mantención, Vacío, Inactivo) |
+| `ESTADOS_OCUPACION` | `{ id, nombre, color, hex }[]` | 5 items | Estados de una unidad: id + clases CSS (`color`) para badges y `hex` para gráficos (Vacante, En Uso, En Arriendo, En Venta, En Mantención) |
 | `UBICACIONES_ESTACIONAMIENTO` | `{ id, nombre }[]` | 4 items | Niveles físicos de estacionamiento: Superficie, Subterráneo -1/-2, Visitas |
 
 #### Consumido por:
 
 | Página/Componente | Qué importa |
 |-------------------|-------------|
-| `app/admin/maestros/page.tsx` | `CATEGORIAS_MACRO`, `CATEGORIAS_MICRO`, `CATEGORIAS_UNIDAD`, `ESTADOS_OCUPACION` |
-| `app/admin/metricas/page.tsx` | `ESTADOS_OCUPACION`, `CATEGORIAS_MACRO`, `CATEGORIAS_MICRO` |
-| `app/inventario/estructura/page.tsx` | `CATEGORIAS_MACRO`, `CATEGORIAS_MICRO`, `ESTADOS_OCUPACION` |
-| `app/inventario/estacionamientos/page.tsx` | `ESTADOS_OCUPACION` |
-| `app/comunidad/personas/page.tsx` | `ESTADOS_OCUPACION` |
-| `app/comunidad/personas/[id]/page.tsx` | `ESTADOS_OCUPACION` |
-| `components/inventario/formulario-unidad.tsx` | `ESTADOS_OCUPACION`, `CATEGORIAS_UNIDAD` |
-| `components/inventario/formulario-estacionamiento.tsx` | `ESTADOS_OCUPACION` |
-| `components/comunidad/formulario-persona.tsx` | `ESTADOS_OCUPACION` |
+| `lib/store.ts` | `ESTADOS_OCUPACION`, `CATEGORIAS_MACRO`, `CATEGORIAS_MICRO` (seed de `MaestroCollections`) |
+| `app/inventario/estacionamientos/page.tsx` | `UBICACIONES_ESTACIONAMIENTO` |
+
+> **⚠️ Nota:** Desde la capa de datos persistente (ST), las colecciones `ESTADOS_OCUPACION`, `CATEGORIAS_MACRO` y `CATEGORIAS_MICRO` viven en el store (`MaestroCollections`) y las páginas las leen vía `useCompassStore`. Los estados nuevos creados en MA reciben un `hex` automático (`hexDesdeId`).
 
 > **⚠️ Este es el archivo más transversal.** Casi toda la app lo importa. Cuando se migre a API, este será el primero que se deba resolver.
 
@@ -74,7 +69,7 @@ k0mp4ss_fe/apps/web/data/
 | `TipoUnidad` | `id`, `nombre`, `categoria`, `metraje`, `montoBaseGc`, `activo`, `historialTarifas[]` | Plantilla de unidad |
 | `MacroSector` | `id`, `nombre`, `etiqueta`, `descripcion?` | Torre/Sector |
 | `MicroSector` | `id`, `macroSectorId`, `nombre`, `etiqueta` | Piso/Nivel dentro de un MacroSector |
-| `Unidad` | `id`, `microSectorId`, `numero`, `etiqueta`, `tipoUnidadId`, `metraje`, `prorrateo`, `rolSii`, `estado`, `servicios` | La unidad habitacional concreta |
+| `Unidad` | `id`, `microSectorId`, `numero`, `etiqueta`, `tipoUnidadId`, `metraje`, `prorrateo`, `rolSii`, `estadoId`, `servicios` | La unidad habitacional concreta (el estado se guarda por id → `estadosOcupacion`) |
 
 #### Contenido exportado:
 

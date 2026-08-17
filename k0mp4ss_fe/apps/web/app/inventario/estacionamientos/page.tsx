@@ -1,9 +1,9 @@
 "use client"
 
 import * as React from "react"
-import { estacionamientos as initialEstacionamientos, Estacionamiento, AsignacionHistorica } from "@/data/inventario/estacionamientos"
-import { macroSectores } from "@/data/inventario/estructura"
-import { ESTADOS_OCUPACION, UBICACIONES_ESTACIONAMIENTO } from "@/data/maestros"
+import { Estacionamiento } from "@/data/inventario/estacionamientos"
+import { UBICACIONES_ESTACIONAMIENTO } from "@/data/maestros"
+import { useCompassStore, useStoreRehydrated } from "@/lib/store"
 import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
@@ -43,7 +43,11 @@ import {
 import { FormularioEstacionamiento } from "@/components/inventario/formulario-estacionamiento"
 
 export default function EstacionamientosPage() {
-  const [data, setData] = React.useState(initialEstacionamientos)
+  useStoreRehydrated()
+  const data = useCompassStore(s => s.estacionamientos)
+  const macroSectores = useCompassStore(s => s.macroSectores)
+  const estadosOcupacion = useCompassStore(s => s.maestros.estadosOcupacion)
+  const saveEstacionamiento = useCompassStore(s => s.saveEstacionamiento)
   const [busqueda, setBusqueda] = React.useState("")
   const [filtroMacro, setFiltroMacro] = React.useState("all")
   const [filtroUbicacion, setFiltroUbicacion] = React.useState("all")
@@ -74,7 +78,8 @@ export default function EstacionamientosPage() {
 
   const handleSave = (newData: Partial<Estacionamiento>, existingId?: string) => {
     if (existingId) {
-      setData(prev => prev.map(item => item.id === existingId ? { ...item, ...newData } : item))
+      const existente = data.find(item => item.id === existingId)
+      if (existente) saveEstacionamiento({ ...existente, ...newData })
     } else {
       const nuevo: Estacionamiento = {
         id: `es-${Date.now()}`,
@@ -88,7 +93,7 @@ export default function EstacionamientosPage() {
         estadoId: newData.estadoId || "vacante",
         historial: newData.historial || []
       }
-      setData(prev => [...prev, nuevo])
+      saveEstacionamiento(nuevo)
     }
   }
 
@@ -152,7 +157,7 @@ export default function EstacionamientosPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todos los Estados</SelectItem>
-                  {ESTADOS_OCUPACION.map(est => (
+                  {estadosOcupacion.map(est => (
                     <SelectItem key={est.id} value={est.id}>{est.nombre}</SelectItem>
                   ))}
                 </SelectContent>
@@ -191,7 +196,7 @@ export default function EstacionamientosPage() {
                     </TableCell>
                     <TableCell>
                       {(() => {
-                        const est = ESTADOS_OCUPACION.find(e => e.id === item.estadoId);
+                        const est = estadosOcupacion.find(e => e.id === item.estadoId);
                         return (
                           <Badge className={`${est?.color || "bg-zinc-100 text-zinc-800"} font-bold uppercase text-[9px] px-2 py-0.5 rounded-md border-none`}>
                             {est?.nombre || "Sin Estado"}

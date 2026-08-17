@@ -2,14 +2,7 @@
 
 import * as React from "react"
 import { Persona } from "@/data/comunidad/personas"
-// Mock de vulnerabilidades (deberían venir de MA)
-const CONDICIONES_ESPECIALES = [
-  { id: "c-1", nombre: "Electrodependiente" },
-  { id: "c-2", nombre: "Movilidad Reducida" },
-  { id: "c-3", nombre: "Adulto Mayor Solo" },
-  { id: "c-4", nombre: "Dificultad Visual/Auditiva" }
-]
-
+import { useCompassStore } from "@/lib/store"
 import { Button } from "@workspace/ui/components/button"
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
@@ -31,6 +24,7 @@ interface FormularioPersonaProps {
 
 export function FormularioPersona({ persona, onSave, onCancel }: FormularioPersonaProps) {
   const isEditing = !!persona
+  const condicionesEspeciales = useCompassStore(s => s.maestros.condicionesEspeciales)
   
   // Estados del formulario
   const [rut, setRut] = React.useState(persona?.rut || "")
@@ -140,7 +134,7 @@ export function FormularioPersona({ persona, onSave, onCancel }: FormularioPerso
           <div className="space-y-4">
             <h3 className="font-semibold text-sm text-amber-600 uppercase tracking-widest border-b pb-2">Alertas de Seguridad (Vulnerabilidad)</h3>
             <div className="grid grid-cols-2 gap-3 p-4 rounded-lg border border-amber-500/20 bg-amber-500/5">
-              {CONDICIONES_ESPECIALES.map(cond => (
+              {condicionesEspeciales.map(cond => (
                 <div key={cond.id} className="flex items-center space-x-2">
                   <Checkbox 
                     id={`cond-${cond.id}`} 

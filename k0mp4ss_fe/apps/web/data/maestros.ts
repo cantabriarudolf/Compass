@@ -41,11 +41,11 @@ export const CATEGORIAS_UNIDAD = [
 // Estados de ocupación/disponibilidad de unidades físicas (EF - Estructura Física).
 // Alineados a la spec EF: (En Uso, En Arriendo, En Venta, En Mantención) + Vacante.
 export const ESTADOS_OCUPACION = [
-  { id: "vacante", nombre: "Vacante", color: "bg-emerald-500 text-white hover:bg-emerald-600 border-none" },
-  { id: "en-uso", nombre: "En Uso", color: "bg-blue-600 text-white hover:bg-blue-700 border-none" },
-  { id: "en-arriendo", nombre: "En Arriendo", color: "bg-purple-600 text-white hover:bg-purple-700 border-none" },
-  { id: "en-venta", nombre: "En Venta", color: "bg-cyan-600 text-white hover:bg-cyan-700 border-none" },
-  { id: "en-mantencion", nombre: "En Mantención", color: "bg-amber-500 text-black hover:bg-amber-600 border-none" },
+  { id: "vacante", nombre: "Vacante", color: "bg-emerald-500 text-white hover:bg-emerald-600 border-none", hex: "#10b981" },
+  { id: "en-uso", nombre: "En Uso", color: "bg-blue-600 text-white hover:bg-blue-700 border-none", hex: "#2563eb" },
+  { id: "en-arriendo", nombre: "En Arriendo", color: "bg-purple-600 text-white hover:bg-purple-700 border-none", hex: "#a855f7" },
+  { id: "en-venta", nombre: "En Venta", color: "bg-cyan-600 text-white hover:bg-cyan-700 border-none", hex: "#0891b2" },
+  { id: "en-mantencion", nombre: "En Mantención", color: "bg-amber-500 text-black hover:bg-amber-600 border-none", hex: "#f59e0b" },
 ];
 
 export const UBICACIONES_ESTACIONAMIENTO = [

@@ -1,7 +1,8 @@
 "use client"
 
 import * as React from "react"
-import { tiposUnidad as initialTipos, unidades, TipoUnidad } from "@/data/inventario/estructura"
+import { TipoUnidad } from "@/data/inventario/estructura"
+import { useCompassStore, useStoreRehydrated } from "@/lib/store"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@workspace/ui/components/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@workspace/ui/components/table"
 import { Badge } from "@workspace/ui/components/badge"
@@ -16,6 +17,7 @@ import {
   DialogTitle, 
   DialogTrigger 
 } from "@workspace/ui/components/dialog"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@workspace/ui/components/select"
 import { 
   IconPlus, 
   IconPencil, 
@@ -27,9 +29,14 @@ import {
 } from "@tabler/icons-react"
 
 export default function TiposUnidadPage() {
-  const [data, setData] = React.useState(initialTipos)
+  useStoreRehydrated()
+  const data = useCompassStore(s => s.tiposUnidad)
+  const unidades = useCompassStore(s => s.unidades)
+  const saveTipoUnidad = useCompassStore(s => s.saveTipoUnidad)
+  const toggleActivoTipoUnidad = useCompassStore(s => s.toggleActivoTipoUnidad)
   const [editingItem, setEditingItem] = React.useState<TipoUnidad | null>(null)
   const [isDialogOpen, setIsDialogOpen] = React.useState(false)
+  const [categoria, setCategoria] = React.useState<TipoUnidad["categoria"]>("Depto")
 
   // Variables para el calculador de impacto
   const [montoSimulado, setMontoSimulado] = React.useState<number>(0)
@@ -39,6 +46,14 @@ export default function TiposUnidadPage() {
   const handleOpenEdit = (item: TipoUnidad) => {
     setEditingItem(item)
     setMontoSimulado(item.montoBaseGc)
+    setCategoria(item.categoria)
+    setIsDialogOpen(true)
+  }
+
+  const handleOpenNew = () => {
+    setEditingItem(null)
+    setMontoSimulado(0)
+    setCategoria("Depto")
     setIsDialogOpen(true)
   }
 
@@ -61,20 +76,38 @@ export default function TiposUnidadPage() {
         })
       }
 
-      setData(data.map(t => t.id === editingItem.id ? {
-        ...t,
+      saveTipoUnidad({
+        ...editingItem,
         nombre: formData.get("nombre") as string,
+        categoria,
         metraje: Number(formData.get("metraje")),
         montoBaseGc: nuevoMonto,
         descripcion: formData.get("descripcion") as string,
         historialTarifas: nuevoHistorial
-      } : t))
+      })
+    } else {
+      const nuevoTipo: TipoUnidad = {
+        id: `tipo-${Date.now()}`,
+        nombre: formData.get("nombre") as string,
+        categoria: categoria,
+        metraje: Number(formData.get("metraje")),
+        montoBaseGc: nuevoMonto,
+        descripcion: formData.get("descripcion") as string,
+        activo: true,
+        historialTarifas: [{
+          id: `t-${Date.now()}`,
+          monto: nuevoMonto,
+          fechaVigencia: fechaVigencia || new Date().toISOString().split('T')[0] || "",
+          creadoEn: new Date().toISOString().split('T')[0] || ""
+        }]
+      }
+      saveTipoUnidad(nuevoTipo)
     }
     setIsDialogOpen(false)
   }
 
   const toggleActivo = (id: string) => {
-    setData(data.map(t => t.id === id ? { ...t, activo: !t.activo } : t))
+    toggleActivoTipoUnidad(id)
   }
 
   return (
@@ -84,7 +117,7 @@ export default function TiposUnidadPage() {
           <h1 className="text-3xl font-bold tracking-tight">Tipos de Unidad</h1>
           <p className="text-muted-foreground">Gestión de plantillas técnicas y tarifarios base.</p>
         </div>
-        <Button onClick={() => { setEditingItem(null); setIsDialogOpen(true); }}>
+        <Button onClick={handleOpenNew}>
           <IconPlus className="size-4 mr-2" /> Nuevo Tipo
         </Button>
       </div>
@@ -119,7 +152,7 @@ export default function TiposUnidadPage() {
                 </div>
                 <div className="space-y-1">
                   <span className="text-[10px] uppercase font-bold text-muted-foreground">Monto Base GC</span>
-                  <p className="text-xl font-black text-primary">${item.montoBaseGc.toLocaleString()}</p>
+                  <p className="text-xl font-black text-primary">${item.montoBaseGc.toLocaleString("es-CO")}</p>
                 </div>
                 <div className="space-y-1">
                   <span className="text-[10px] uppercase font-bold text-muted-foreground">Unidades Vinculadas</span>
@@ -131,7 +164,7 @@ export default function TiposUnidadPage() {
                     {item.historialTarifas.slice(-2).reverse().map(h => (
                       <div key={h.id} className="text-[10px] flex justify-between border-b pb-1">
                         <span className="font-medium">{h.fechaVigencia}:</span>
-                        <span className="font-bold text-primary">${h.monto.toLocaleString()}</span>
+                        <span className="font-bold text-primary">${h.monto.toLocaleString("es-CO")}</span>
                       </div>
                     ))}
                   </div>
@@ -153,6 +186,22 @@ export default function TiposUnidadPage() {
                 <div className="space-y-2">
                   <Label>Nombre del Tipo</Label>
                   <Input name="nombre" defaultValue={editingItem?.nombre} required />
+                </div>
+                <div className="space-y-2">
+                  <Label>Categoría</Label>
+                  <Select value={categoria} onValueChange={(v) => setCategoria(v as TipoUnidad["categoria"])}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Depto">Depto</SelectItem>
+                      <SelectItem value="Casa">Casa</SelectItem>
+                      <SelectItem value="Local">Local</SelectItem>
+                      <SelectItem value="Oficina">Oficina</SelectItem>
+                      <SelectItem value="Bodega">Bodega</SelectItem>
+                      <SelectItem value="Estacionamiento">Estacionamiento</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
@@ -195,20 +244,20 @@ export default function TiposUnidadPage() {
                       <div className="flex justify-between items-center text-sm">
                         <span>Variación Unitaria:</span>
                         <span className={`font-bold ${impact >= 0 ? "text-green-600" : "text-red-600"}`}>
-                          {impact >= 0 ? "+" : ""}${(montoSimulado - editingItem.montoBaseGc).toLocaleString()}
+                          {impact >= 0 ? "+" : ""}${(montoSimulado - editingItem.montoBaseGc).toLocaleString("es-CO")}
                         </span>
                       </div>
                       <div className="border-t pt-2 space-y-3">
                         <div>
                           <p className="text-[10px] font-black uppercase text-muted-foreground">Impacto Mensual Total</p>
                           <p className={`text-xl font-black ${impact >= 0 ? "text-green-600" : "text-rose-600"}`}>
-                            {impact >= 0 ? "+" : ""}${impact.toLocaleString()}
+                            {impact >= 0 ? "+" : ""}${impact.toLocaleString("es-CO")}
                           </p>
                         </div>
                         <div className="pt-2 border-t border-dashed">
                           <p className="text-[10px] font-black uppercase text-muted-foreground">Proyección Anual (Ponderado)</p>
                           <p className={`text-xl font-black ${impact >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
-                            {impact >= 0 ? "+" : ""}${(impact * 12).toLocaleString()}
+                            {impact >= 0 ? "+" : ""}${(impact * 12).toLocaleString("es-CO")}
                           </p>
                         </div>
                       </div>

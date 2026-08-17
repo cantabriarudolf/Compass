@@ -4,6 +4,7 @@ Este documento sirve como guía para navegar por los requerimientos técnicos y 
 
 ## Configuración y Reglas Base
 - [RG - Reglas Generales](<RG - Reglas Generales.md>)
+- [ST - Capa de Datos Persistente](<ST - Capa de Datos Persistente.md>)
 - [MA - Maestros Administrativos](<MA - Maestros Administrativos.md>)
 - [AD - Gestión Administrativa](<AD - Gestión Administrativa.md>)
 - [GD - Gestión de Directiva](<GD - Gestión de Directiva.md>)
@@ -31,3 +32,7 @@ Este documento sirve como guía para navegar por los requerimientos técnicos y 
 - [TU - Tipos de Unidad](<TU - Tipos de Unidad.md>)
 - [ES - Estacionamientos](<ES - Estacionamientos.md>)
 - [VU - Vinculacion Unidades](<VU - Vinculacion Unidades.md>)
+
+## Interfaz de Usuario (UI)
+- [UI - Interfaz Principal](<UI - Interfaz Principal.md>)
+- [UI - Navegacion Lateral](<UI - Navegacion Lateral.md>)

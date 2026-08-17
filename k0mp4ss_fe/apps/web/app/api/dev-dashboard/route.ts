@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getDashboardData, toggleTask, readProjectFile } from '@/lib/dev-dashboard';
+import { getDashboardData, toggleTask, readProjectFile, saveModuleNotes, setModuleNotesStatus } from '@/lib/dev-dashboard';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,6 +23,31 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: `Archivo no disponible: ${file}` }, { status: 404 });
     }
     return NextResponse.json({ ok: true, file, content });
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 });
+  }
+}
+
+export async function PUT(request: Request) {
+  try {
+    const body = await request.json();
+    const { file, content, status } = body;
+    if (!file || typeof file !== 'string') {
+      return NextResponse.json({ error: 'file es requerido' }, { status: 400 });
+    }
+    let result;
+    if (typeof content === 'string') {
+      const validStatus = status === 'pendientes' || status === 'atendidas' ? status : undefined;
+      result = saveModuleNotes(file, content, validStatus);
+    } else if (status === 'pendientes' || status === 'atendidas') {
+      result = setModuleNotesStatus(file, status);
+    } else {
+      return NextResponse.json({ error: 'content o status son requeridos' }, { status: 400 });
+    }
+    if (!result.ok) {
+      return NextResponse.json({ error: result.error ?? 'Error al guardar' }, { status: 500 });
+    }
+    return NextResponse.json({ ok: true, file, status: status ?? undefined });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 });
   }

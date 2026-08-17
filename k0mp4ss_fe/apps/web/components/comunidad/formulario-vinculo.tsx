@@ -1,7 +1,8 @@
 "use client"
 
 import * as React from "react"
-import { unidades, microSectores, macroSectores, Unidad } from "@/data/inventario/estructura"
+import { Unidad, MicroSector, MacroSector } from "@/data/inventario/estructura"
+import { useCompassStore, StoreResult } from "@/lib/store"
 import { RolVinculo, VinculoUnidad } from "@/data/comunidad/vinculos"
 
 import { Button } from "@workspace/ui/components/button"
@@ -35,14 +36,11 @@ const ESTADOS_INMOBILIARIOS: { id: NonNullable<VinculoUnidad["estadoOcupacionPro
   { id: "en_venta", nombre: "En Venta" },
 ]
 
-const microPorId = new Map(microSectores.map(m => [m.id, m]))
-const macroPorId = new Map(macroSectores.map(m => [m.id, m]))
-
 function etiquetaUnidad(u: Unidad) {
   return `${u.etiqueta} ${u.numero}`
 }
 
-function nombreSector(unidad: Unidad) {
+function nombreSector(unidad: Unidad, microPorId: Map<string, MicroSector>, macroPorId: Map<string, MacroSector>) {
   const micro = microPorId.get(unidad.microSectorId)
   const macro = micro ? macroPorId.get(micro.macroSectorId) : undefined
   return macro ? `${macro.etiqueta} ${macro.nombre}`.trim() : "Otros"
@@ -52,12 +50,17 @@ interface FormularioVinculoUnidadProps {
   vinculo?: VinculoUnidad;
   // IDs de unidades con vínculo ACTIVO de la persona (excluir el propio vínculo en modo edición)
   unidadesVinculadasIds: string[];
-  onSave: (data: Omit<VinculoUnidad, "id" | "personaId">) => void;
+  onSave: (data: Omit<VinculoUnidad, "id" | "personaId">) => StoreResult;
   onCancel: () => void;
 }
 
 export function FormularioVinculoUnidad({ vinculo, unidadesVinculadasIds, onSave, onCancel }: FormularioVinculoUnidadProps) {
   const isEditing = !!vinculo
+  const unidades = useCompassStore(s => s.unidades)
+  const microSectores = useCompassStore(s => s.microSectores)
+  const macroSectores = useCompassStore(s => s.macroSectores)
+  const microPorId = React.useMemo(() => new Map(microSectores.map(m => [m.id, m])), [microSectores])
+  const macroPorId = React.useMemo(() => new Map(macroSectores.map(m => [m.id, m])), [macroSectores])
 
   const [busqueda, setBusqueda] = React.useState("")
   const [unidadId, setUnidadId] = React.useState(vinculo?.unidadId ?? "")
@@ -76,17 +79,17 @@ export function FormularioVinculoUnidad({ vinculo, unidadesVinculadasIds, onSave
       etiquetaUnidad(u).toLowerCase().includes(q) ||
       u.id.toLowerCase().includes(q)
     )
-  }, [busqueda, unidadesVinculadasIds])
+  }, [busqueda, unidades, unidadesVinculadasIds])
 
   const unidadesPorSector = React.useMemo(() => {
     const grupos = new Map<string, Unidad[]>()
     for (const u of unidadesDisponibles) {
-      const nombre = nombreSector(u)
+      const nombre = nombreSector(u, microPorId, macroPorId)
       if (!grupos.has(nombre)) grupos.set(nombre, [])
       grupos.get(nombre)!.push(u)
     }
     return [...grupos.entries()]
-  }, [unidadesDisponibles])
+  }, [unidadesDisponibles, microPorId, macroPorId])
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -105,7 +108,7 @@ export function FormularioVinculoUnidad({ vinculo, unidadesVinculadasIds, onSave
     setErrores(nuevosErrores)
     if (Object.keys(nuevosErrores).length > 0) return
 
-    onSave({
+    const resultado = onSave({
       unidadId,
       rol: rol as RolVinculo,
       fechaInicio,
@@ -114,12 +117,21 @@ export function FormularioVinculoUnidad({ vinculo, unidadesVinculadasIds, onSave
         ? { estadoOcupacionPropiedad: estadoOcupacionPropiedad ?? "habitada", permiteVerFinanzas }
         : { permiteVerFinanzas: false }),
     })
+    if (resultado && !resultado.ok) {
+      setErrores({ global: resultado.error ?? "No se pudo guardar el vínculo." })
+    }
   }
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col h-full max-h-[80vh]">
       <ScrollArea className="flex-1 pr-4">
         <div className="grid gap-6 py-4">
+
+          {errores.global && (
+            <div className="bg-destructive/10 border border-destructive/30 rounded-md p-3 text-sm text-destructive font-medium">
+              {errores.global}
+            </div>
+          )}
 
           <div className="space-y-4">
             <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-widest border-b pb-2">Unidad Física</h3>

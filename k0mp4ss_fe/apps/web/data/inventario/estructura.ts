@@ -41,7 +41,7 @@ export interface Unidad {
   metraje: number;
   prorrateo: number;
   rolSii: string;
-  estado: string;
+  estadoId: string;
   servicios: {
     agua?: { cliente: string; medidor: string };
     luz?: { cliente: string; medidor: string };
@@ -124,10 +124,10 @@ export const microSectores: MicroSector[] = [
       etiqueta: "Piso"
     }))
   ),
-  { id: "piso-comercial-1", macroSectorId: "comercial", nombre: "Nivel Calle", etiqueta: "Planta" }
+  { id: "piso-comercial-1", macroSectorId: "comercial", nombre: "Calle", etiqueta: "Nivel" }
 ];
 
-const estados = ["Vacante", "En Uso", "En Arriendo", "En Venta", "En Mantención"];
+const estados = ["vacante", "en-uso", "en-arriendo", "en-venta", "en-mantencion"];
 
 export const unidades: Unidad[] = [
   ...microSectores.filter(p => p.macroSectorId.startsWith("torre")).flatMap((p, pIdx) => 
@@ -144,7 +144,7 @@ export const unidades: Unidad[] = [
         metraje: tipo === "tipo-a" ? 55.5 : 42.0,
         prorrateo: 0.0125,
         rolSii: `123-${torreLetra}${pisoNum}${u}`,
-        estado: estados[(pIdx + u) % estados.length] ?? "Vacante",
+        estadoId: estados[(pIdx + u) % estados.length] ?? "vacante",
         servicios: {
           agua: { cliente: `C-AG-${torreLetra}-${pisoNum}0${u}`, medidor: `M-1234` },
           luz: { cliente: `C-LZ-${torreLetra}-${pisoNum}0${u}`, medidor: `M-5678` }
@@ -152,7 +152,7 @@ export const unidades: Unidad[] = [
       };
     })
   ),
-  { id: "u-LC-01", microSectorId: "piso-comercial-1", numero: "L-01", etiqueta: "Local" as const, tipoUnidadId: "local-a", metraje: 120.0, prorrateo: 0.05, rolSii: "999-01", estado: "En Uso", servicios: { agua: { cliente: "C-LC-01", medidor: "ML-01" } } },
-  { id: "u-LC-02", microSectorId: "piso-comercial-1", numero: "L-02", etiqueta: "Local" as const, tipoUnidadId: "local-b", metraje: 60.0, prorrateo: 0.025, rolSii: "999-02", estado: "En Arriendo", servicios: { agua: { cliente: "C-LC-02", medidor: "ML-02" } } },
-  { id: "u-LC-03", microSectorId: "piso-comercial-1", numero: "L-03", etiqueta: "Local" as const, tipoUnidadId: "local-b", metraje: 60.0, prorrateo: 0.025, rolSii: "999-03", estado: "Vacante", servicios: { agua: { cliente: "C-LC-03", medidor: "ML-03" } } },
+  { id: "u-LC-01", microSectorId: "piso-comercial-1", numero: "L-01", etiqueta: "Local" as const, tipoUnidadId: "local-a", metraje: 120.0, prorrateo: 0.05, rolSii: "999-01", estadoId: "en-uso", servicios: { agua: { cliente: "C-LC-01", medidor: "ML-01" } } },
+  { id: "u-LC-02", microSectorId: "piso-comercial-1", numero: "L-02", etiqueta: "Local" as const, tipoUnidadId: "local-b", metraje: 60.0, prorrateo: 0.025, rolSii: "999-02", estadoId: "en-arriendo", servicios: { agua: { cliente: "C-LC-02", medidor: "ML-02" } } },
+  { id: "u-LC-03", microSectorId: "piso-comercial-1", numero: "L-03", etiqueta: "Local" as const, tipoUnidadId: "local-b", metraje: 60.0, prorrateo: 0.025, rolSii: "999-03", estadoId: "vacante", servicios: { agua: { cliente: "C-LC-03", medidor: "ML-03" } } },
 ];

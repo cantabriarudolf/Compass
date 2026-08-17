@@ -2,16 +2,9 @@
 
 import * as React from "react"
 import { useParams, useRouter } from "next/navigation"
-import { personas, Persona } from "@/data/comunidad/personas"
-import { VinculoUnidad, RolVinculo, vinculosPorPersona } from "@/data/comunidad/vinculos"
-import { unidades } from "@/data/inventario/estructura"
-
-// Simulación de Condiciones Especiales (Idealmente vienen de MA)
-const CONDICIONES_ESPECIALES: Record<string, { nombre: string, color: string }> = {
-  "c-1": { nombre: "Electrodependiente", color: "bg-blue-500 text-white" },
-  "c-2": { nombre: "Movilidad Reducida", color: "bg-amber-500 text-black" },
-  "c-3": { nombre: "Adulto Mayor Solo", color: "bg-purple-500 text-white" }
-}
+import { Persona } from "@/data/comunidad/personas"
+import { VinculoUnidad, RolVinculo } from "@/data/comunidad/vinculos"
+import { useCompassStore, useStoreRehydrated, StoreResult } from "@/lib/store"
 
 const NOMBRE_ROL: Record<RolVinculo, string> = {
   propietario: "Propietario",
@@ -65,15 +58,23 @@ import {
 } from "@tabler/icons-react"
 
 export default function PersonaPerfilPage() {
+  useStoreRehydrated()
   const params = useParams()
   const router = useRouter()
   const id = params.id as string
 
+  const personas = useCompassStore(s => s.personas)
+  const vinculosStore = useCompassStore(s => s.vinculos)
+  const unidades = useCompassStore(s => s.unidades)
+  const condicionesEspeciales = useCompassStore(s => s.maestros.condicionesEspeciales)
+  const savePersona = useCompassStore(s => s.savePersona)
+  const saveVinculo = useCompassStore(s => s.saveVinculo)
+  const removeVinculo = useCompassStore(s => s.removeVinculo)
+
   const persona = personas.find(p => p.id === id)
 
-  // Estado local del sub-maestro de vínculos (sin recargar la página)
-  const [vinculosUnidad, setVinculosUnidad] = React.useState<VinculoUnidad[]>(persona ? vinculosPorPersona(persona.id) : [])
-  const [roles, setRoles] = React.useState<Persona["roles"]>(persona?.roles ?? [])
+  // Vínculos de la persona leídos del store
+  const vinculosUnidad = vinculosStore.filter(v => v.personaId === id)
   const [dialogoAbierto, setDialogoAbierto] = React.useState(false)
   const [vinculoEditando, setVinculoEditando] = React.useState<VinculoUnidad | null>(null)
 
@@ -130,20 +131,29 @@ export default function PersonaPerfilPage() {
     return [...nuevos] as Persona["roles"]
   }
 
-  const guardarVinculo = (data: Omit<VinculoUnidad, "id" | "personaId">) => {
+  const actualizarRolesPersona = (vinculos: VinculoUnidad[]) => {
+    savePersona({ ...persona, roles: sincronizarRoles(vinculos, persona.roles) })
+  }
+
+  const guardarVinculo = (data: Omit<VinculoUnidad, "id" | "personaId">): StoreResult => {
+    const vinculoGuardado: VinculoUnidad = vinculoEditando
+      ? { ...vinculoEditando, ...data }
+      : { id: `v-${Date.now()}`, personaId: persona.id, ...data }
+    const resultado = saveVinculo(vinculoGuardado)
+    if (!resultado.ok) return resultado
     const nuevos = vinculoEditando
-      ? vinculosUnidad.map(v => v.id === vinculoEditando.id ? { ...v, ...data } : v)
-      : [...vinculosUnidad, { id: `v-${Date.now()}`, personaId: persona.id, ...data }]
-    setVinculosUnidad(nuevos)
-    setRoles(sincronizarRoles(nuevos, roles))
+      ? vinculosUnidad.map(v => v.id === vinculoEditando.id ? vinculoGuardado : v)
+      : [...vinculosUnidad, vinculoGuardado]
+    actualizarRolesPersona(nuevos)
     setDialogoAbierto(false)
     setVinculoEditando(null)
+    return resultado
   }
 
   const eliminarVinculo = (vinculoId: string) => {
     const nuevos = vinculosUnidad.filter(v => v.id !== vinculoId)
-    setVinculosUnidad(nuevos)
-    setRoles(sincronizarRoles(nuevos, roles))
+    removeVinculo(vinculoId)
+    actualizarRolesPersona(nuevos)
   }
 
   const etiquetaUnidad = (unidadId: string) => {
@@ -183,7 +193,7 @@ export default function PersonaPerfilPage() {
               </div>
 
               <div className="flex flex-wrap gap-2">
-                {roles.map(rol => (
+                {persona.roles.map(rol => (
                   <Badge key={rol} className={`${getRoleBadgeColor(rol)} uppercase font-bold`}>
                     {rol}
                   </Badge>
@@ -199,7 +209,7 @@ export default function PersonaPerfilPage() {
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {persona.condicionesEspecialesIds.map(id => {
-                      const c = CONDICIONES_ESPECIALES[id]
+                      const c = condicionesEspeciales.find(c => c.id === id)
                       return c ? (
                         <Badge key={id} className={`${c.color} font-bold`}>{c.nombre}</Badge>
                       ) : null
@@ -226,7 +236,7 @@ export default function PersonaPerfilPage() {
       {/* TAREA 3.3 y 3.4: Estructura de Tabs Extensibles */}
       <Tabs defaultValue="unidades" className="w-full">
         <TabsList className="w-full justify-start border-b rounded-none h-auto p-0 bg-transparent">
-          {roles.some(r => r === "propietario" || r === "residente") && (
+          {persona.roles.some(r => r === "propietario" || r === "residente") && (
             <TabsTrigger value="unidades" className="data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none px-6 py-3 font-semibold flex gap-2">
               <IconBuildingSkyscraper className="size-4" /> Unidades Vinculadas
             </TabsTrigger>
@@ -248,9 +258,11 @@ export default function PersonaPerfilPage() {
             {/* TAREA 4.1: Acción Vincular Unidad */}
             <div className="flex items-center justify-between">
               <p className="text-sm text-muted-foreground">
-                Vínculos legales y operativos con el inventario físico.
+                {persona.estadoCuenta === "inactiva"
+                  ? "Cuenta inactiva: no se pueden registrar nuevos vínculos."
+                  : "Vínculos legales y operativos con el inventario físico."}
               </p>
-              <Button className="gap-2" onClick={abrirCrearVinculo}>
+              <Button className="gap-2" onClick={abrirCrearVinculo} disabled={persona.estadoCuenta === "inactiva"}>
                 <IconPlus className="size-4" /> Vincular Unidad
               </Button>
             </div>

@@ -1,4 +1,3 @@
-import { unidades } from "../inventario/estructura"
 import { VinculoUnidad } from "./vinculos"
 
 // --- INTERFACES ---
@@ -100,7 +99,7 @@ export const personas: Persona[] = [
     estadoCuenta: "activa",
     condicionesEspecialesIds: ["c-1", "c-3"], // Electrodependiente y Adulto Mayor Solo
     roles: ["personal", "residente"],
-    datosLaborales: { id: "l-1", cargo: "Conserje Turno Día", afp: "Habitat", prevision: "Fonasa", fechaIngreso: "2021-06-15" }
+    datosLaborales: { id: "l-1", cargo: "Conserje Turno Día", afp: "Habitat", prevision: "FONASA", fechaIngreso: "2021-06-15" }
   },
   // 5. Administrador (Rol: Personal, No Residente)
   {
@@ -169,7 +168,7 @@ export const personas: Persona[] = [
     estadoCuenta: "activa",
     condicionesEspecialesIds: [],
     roles: ["personal"],
-    datosLaborales: { id: "l-3", cargo: "Auxiliar de Aseo", afp: "Modelo", prevision: "Fonasa", fechaIngreso: "2020-05-15" }
+    datosLaborales: { id: "l-3", cargo: "Auxiliar de Aseo", afp: "Modelo", prevision: "FONASA", fechaIngreso: "2020-05-15" }
   },
   // 10. Cuenta Bloqueada (Arrendatario Moroso Extremo / Conflictivo)
   {
