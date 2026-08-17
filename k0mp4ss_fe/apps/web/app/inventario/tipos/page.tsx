@@ -30,6 +30,7 @@ import {
 
 export default function TiposUnidadPage() {
   useStoreRehydrated()
+  const hasHydrated = useCompassStore(s => s.hasHydrated)
   const data = useCompassStore(s => s.tiposUnidad)
   const unidades = useCompassStore(s => s.unidades)
   const saveTipoUnidad = useCompassStore(s => s.saveTipoUnidad)
@@ -108,6 +109,16 @@ export default function TiposUnidadPage() {
 
   const toggleActivo = (id: string) => {
     toggleActivoTipoUnidad(id)
+  }
+
+  if (!hasHydrated) {
+    return (
+      <div className="flex flex-col gap-6 animate-pulse">
+        <div className="h-9 w-72 rounded bg-muted/40" />
+        <div className="h-4 w-96 max-w-full rounded bg-muted/30" />
+        <div className="h-64 w-full rounded-lg bg-muted/30" />
+      </div>
+    )
   }
 
   return (

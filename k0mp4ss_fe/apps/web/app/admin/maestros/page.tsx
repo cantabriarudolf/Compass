@@ -42,6 +42,7 @@ import {
 
 export default function MaestrosPage() {
   useStoreRehydrated()
+  const hasHydrated = useCompassStore(s => s.hasHydrated)
   const estados = useCompassStore(s => s.maestros.estadosOcupacion)
   const macros = useCompassStore(s => s.maestros.categoriasMacro)
   const micros = useCompassStore(s => s.maestros.categoriasMicro)
@@ -85,6 +86,16 @@ export default function MaestrosPage() {
     
     setIsDialogOpen(false)
     setEditingItem(null)
+  }
+
+  if (!hasHydrated) {
+    return (
+      <div className="flex flex-col gap-6 animate-pulse">
+        <div className="h-9 w-72 rounded bg-muted/40" />
+        <div className="h-4 w-96 max-w-full rounded bg-muted/30" />
+        <div className="h-64 w-full rounded-lg bg-muted/30" />
+      </div>
+    )
   }
 
   return (

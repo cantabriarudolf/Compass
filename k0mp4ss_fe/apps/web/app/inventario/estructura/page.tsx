@@ -36,6 +36,7 @@ import { EstadosDonut } from "@/components/inventario/estados-donut"
 
 export default function EstructuraFisicaPage() {
   useStoreRehydrated()
+  const hasHydrated = useCompassStore(s => s.hasHydrated)
   const macroSectores = useCompassStore(s => s.macroSectores)
   const microSectores = useCompassStore(s => s.microSectores)
   const unidades = useCompassStore(s => s.unidades)
@@ -135,6 +136,20 @@ export default function EstructuraFisicaPage() {
       }
       saveUnidad(nueva)
     }
+  }
+
+  if (!hasHydrated) {
+    return (
+      <div className="flex flex-col gap-6 animate-pulse">
+        <div className="h-9 w-72 rounded bg-muted/40" />
+        <div className="h-4 w-96 max-w-full rounded bg-muted/30" />
+        <div className="h-10 w-full rounded-md bg-muted/30" />
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          <div className="h-80 rounded-lg bg-muted/30 md:col-span-1" />
+          <div className="h-80 rounded-lg bg-muted/30 md:col-span-3" />
+        </div>
+      </div>
+    )
   }
 
   return (

@@ -20,6 +20,7 @@ import { IconBuilding, IconMail, IconCalculator, IconBell, IconShield } from "@t
 
 export default function ConfiguracionPage() {
   useStoreRehydrated()
+  const hasHydrated = useCompassStore(s => s.hasHydrated)
   const configuracion = useCompassStore(s => s.configuracion)
   const saveConfiguracion = useCompassStore(s => s.saveConfiguracion)
   const [config, setConfig] = React.useState<ConfiguracionGlobal>(configuracion)
@@ -37,6 +38,16 @@ export default function ConfiguracionPage() {
     saveConfiguracion(config)
     console.log("[AM] CF_UPDATE_PARAM", config)
     alert("Configuración guardada (persistida en el store)")
+  }
+
+  if (!hasHydrated) {
+    return (
+      <div className="flex flex-col gap-6 animate-pulse">
+        <div className="h-9 w-72 rounded bg-muted/40" />
+        <div className="h-4 w-96 max-w-full rounded bg-muted/30" />
+        <div className="h-64 w-full rounded-lg bg-muted/30" />
+      </div>
+    )
   }
 
   return (

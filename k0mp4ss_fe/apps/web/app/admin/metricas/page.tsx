@@ -16,6 +16,7 @@ import {
 
 export default function MetricasPage() {
   useStoreRehydrated()
+  const hasHydrated = useCompassStore(s => s.hasHydrated)
   const unidades = useCompassStore(s => s.unidades)
   const tiposUnidad = useCompassStore(s => s.tiposUnidad)
   const estacionamientos = useCompassStore(s => s.estacionamientos)
@@ -49,6 +50,16 @@ export default function MetricasPage() {
   // MA - Maestros
   const totalEstados = estadosOcupacion.length;
   const totalCategorias = categoriasMacro.length + categoriasMicro.length;
+
+  if (!hasHydrated) {
+    return (
+      <div className="flex flex-col gap-6 animate-pulse">
+        <div className="h-9 w-72 rounded bg-muted/40" />
+        <div className="h-4 w-96 max-w-full rounded bg-muted/30" />
+        <div className="h-64 w-full rounded-lg bg-muted/30" />
+      </div>
+    )
+  }
 
   return (
     <div className="flex flex-col gap-8 pb-10">

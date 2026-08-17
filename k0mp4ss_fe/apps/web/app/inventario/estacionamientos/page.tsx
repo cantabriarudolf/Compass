@@ -44,6 +44,7 @@ import { FormularioEstacionamiento } from "@/components/inventario/formulario-es
 
 export default function EstacionamientosPage() {
   useStoreRehydrated()
+  const hasHydrated = useCompassStore(s => s.hasHydrated)
   const data = useCompassStore(s => s.estacionamientos)
   const macroSectores = useCompassStore(s => s.macroSectores)
   const estadosOcupacion = useCompassStore(s => s.maestros.estadosOcupacion)
@@ -95,6 +96,16 @@ export default function EstacionamientosPage() {
       }
       saveEstacionamiento(nuevo)
     }
+  }
+
+  if (!hasHydrated) {
+    return (
+      <div className="flex flex-col gap-6 animate-pulse">
+        <div className="h-9 w-72 rounded bg-muted/40" />
+        <div className="h-4 w-96 max-w-full rounded bg-muted/30" />
+        <div className="h-64 w-full rounded-lg bg-muted/30" />
+      </div>
+    )
   }
 
   return (

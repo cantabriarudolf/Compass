@@ -95,3 +95,14 @@ El sistema SHALL usar una única instancia de estado por entidad, de modo que la
 #### Scenario: Unidad editada reflejada en todos los módulos
 - **WHEN** se edita una unidad en Estructura Física
 - **THEN** los módulos que referencian esa unidad (Tipos de Unidad, Estacionamientos) muestran el valor actualizado.
+
+### Requirement: Hidratación segura en renderizado SSR
+El sistema SHALL configurar el persist con `skipHydration: true` y rehidratar manualmente mediante `useStoreRehydrated()` (efecto del cliente). Toda página que renderice datos del store SHALL mostrar un esqueleto (skeleton) mientras `hasHydrated` es `false` y montar el contenido real solo tras la hidratación, de modo que el HTML del servidor y el primer render del cliente coincidan y no se produzcan errores de hidratación de React.
+
+#### Scenario: Página del store renderizada en servidor
+- **WHEN** el servidor renderiza una página que lee datos del store
+- **THEN** el HTML inicial contiene únicamente el esqueleto (no datos del dominio), evitando diferencias con el primer render del cliente.
+
+#### Scenario: Nueva página que consume el store
+- **WHEN** se crea una página que lee entidades del store
+- **THEN** la página incluye `useStoreRehydrated()`, el guard `hasHydrated` y un skeleton, siguiendo el mismo patrón de las páginas existentes.

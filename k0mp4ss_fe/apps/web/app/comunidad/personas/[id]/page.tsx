@@ -59,6 +59,7 @@ import {
 
 export default function PersonaPerfilPage() {
   useStoreRehydrated()
+  const hasHydrated = useCompassStore(s => s.hasHydrated)
   const params = useParams()
   const router = useRouter()
   const id = params.id as string
@@ -90,6 +91,16 @@ export default function PersonaPerfilPage() {
       console.log(`[AUDITORÍA AM] Evento: MP_VIEW_FICHA | UsuarioID: ${persona.id} | Timestamp: ${new Date().toISOString()}`)
     }
   }, [persona])
+
+  if (!hasHydrated) {
+    return (
+      <div className="flex flex-col gap-6 animate-pulse">
+        <div className="h-9 w-72 rounded bg-muted/40" />
+        <div className="h-4 w-96 max-w-full rounded bg-muted/30" />
+        <div className="h-64 w-full rounded-lg bg-muted/30" />
+      </div>
+    )
+  }
 
   if (!persona) {
     return (

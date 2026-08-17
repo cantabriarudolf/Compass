@@ -47,3 +47,11 @@ Al existir una única instancia de estado por entidad, las modificaciones hechas
 - En la primera carga (sin estado persistido), el store se siembra desde los mocks de `apps/web/data/`.
 - Una vez persistido, el localStorage manda por sobre el seed.
 - La versión del esquema (`compass-store` v3) habilita migraciones ordenadas de datos sin romper al usuario.
+
+## 6. Hidratación y Renderizado SSR
+
+Para evitar errores de hidratación de React (mismatch entre el HTML del servidor y el primer render del cliente):
+
+- El persist usa `skipHydration: true`; la rehidratación se dispara solo en el cliente mediante `useStoreRehydrated()` (useEffect).
+- Toda página que renderiza datos del store muestra un esqueleto (skeleton) mientras `hasHydrated` es `false` y monta el contenido real solo tras la hidratación.
+- Regla obligatoria para páginas nuevas: incluir `useStoreRehydrated()`, el guard `hasHydrated` y el skeleton, siguiendo el patrón de las páginas existentes (TU, EF, ES, MP, VU, MA, CF, AM).

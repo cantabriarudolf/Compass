@@ -37,6 +37,7 @@ import { Persona } from "@/data/comunidad/personas"
 
 export default function DirectorioPersonasPage() {
   useStoreRehydrated()
+  const hasHydrated = useCompassStore(s => s.hasHydrated)
   const listaPersonas = useCompassStore(s => s.personas)
   const savePersona = useCompassStore(s => s.savePersona)
   const [searchTerm, setSearchTerm] = React.useState("")
@@ -56,6 +57,16 @@ export default function DirectorioPersonasPage() {
       case "directiva": return "bg-amber-600 text-white";
       default: return "bg-gray-200 text-gray-800";
     }
+  }
+
+  if (!hasHydrated) {
+    return (
+      <div className="flex flex-col gap-6 animate-pulse">
+        <div className="h-9 w-72 rounded bg-muted/40" />
+        <div className="h-4 w-96 max-w-full rounded bg-muted/30" />
+        <div className="h-64 w-full rounded-lg bg-muted/30" />
+      </div>
+    )
   }
 
   return (

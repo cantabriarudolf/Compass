@@ -23,7 +23,7 @@ Módulo a validar: [MÓDULO] (doc fuente: `Data/NSGC/docs/especificaciones/[MÓD
 - Ninguna página/componente importa entidades desde `@/data/...` (solo `lib/store.ts` importa mocks; formularios reutilizados leen del store).
 - Ningún `useState` sembrado desde mocks para datos de dominio (estado local solo para UI efímera: inputs, diálogos, filtros).
 - No hay colecciones estáticas (`CATEGORIAS_*`, `ESTADOS_*`, listas hardcodeadas) que debieran vivir en el store; si el módulo necesita una nueva colección, va a `MaestroCollections` con su `migrate` si aplica.
-- Las páginas llaman `useStoreRehydrated` y respetan `hasHydrated` (no mutar antes de hidratar).
+- Las páginas llaman `useStoreRehydrated` y respetan `hasHydrated` (no mutar antes de hidratar). Además renderizan un skeleton mientras `hasHydrated` es `false` y montan el contenido real solo tras la hidratación (regla "Hidratación segura en renderizado SSR" del spec ST), evitando mismatch SSR/cliente.
 - Eliminaciones validadas por dependencias (la acción devuelve `StoreResult` con error; la UI lo muestra).
 - Los ids nuevos siguen el patrón existente del módulo (ej: `v-`, `u-`, `t-`, `est-`) y no colisionan con el seed.
 
