@@ -109,6 +109,7 @@ const ROUTES: Record<string, string> = {
 const ARCHIVED_OVERRIDES: Record<string, string> = {
   'inventario-estructura': 'EF',
   'maestro-personas': 'MP',
+  'UI-interfaz-principal': 'UI',
 };
 
 const MOCK_DATA_FILES: Record<string, string> = {
