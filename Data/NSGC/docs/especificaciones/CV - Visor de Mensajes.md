@@ -1,5 +1,7 @@
 # CV - Visor de Mensajes (Carrusel Público)
 
+> 🔌 **Datos:** este módulo persiste en la capa de datos (ST) — ver [ST - Capa de Datos Persistente](<ST - Capa de Datos Persistente.md>).
+
 El objetivo de este módulo es proveer un canal de comunicación visual, dinámico y de alta visibilidad para los residentes y el personal, diseñado específicamente para ser proyectado en pantallas ubicadas en áreas comunes (como la recepción, conserjería o ascensores).
 
 ## 1. Gestor de Avisos (Panel de Administración)

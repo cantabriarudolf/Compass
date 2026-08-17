@@ -23,6 +23,7 @@ Each module represents a functional domain (Finance, Community, Infrastructure, 
 - **Language**: Simple Spanish for folder names, routes, and documentation.
 - **Technology**: Next.js (App Router), Tailwind CSS, shadcn/ui.
 - **Methodology**: OpenSpec for change and specification management.
+- **Data layer (ST)**: All domain data lives in the global store `apps/web/lib/store.ts` (Zustand + persist, key `compass-store`, versioned with `migrate`). Pages and components MUST read via `useCompassStore` and MUST only mutate through store actions (repository pattern). Mocks in `apps/web/data/` are the store's seed only and MUST NOT be imported directly by pages/components. Every new capability MUST declare its entities and CRUD actions (`saveX`/`removeX` returning `StoreResult`) on the store, including referential-integrity validations on delete. See `ST-capa-datos-persistente` and `RG` (Reglas Generales).
 
 ---
 

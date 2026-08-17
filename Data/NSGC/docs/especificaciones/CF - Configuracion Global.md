@@ -1,5 +1,7 @@
 # CF - Configuración Global de la Aplicación
 
+> 🔌 **Datos:** este módulo persiste en la capa de datos (ST) — ver [ST - Capa de Datos Persistente](<ST - Capa de Datos Persistente.md>).
+
 Este módulo define los parámetros base que rigen el comportamiento de todo el sistema de gestión.
 
 ## 1. Identidad y Representación Legal

@@ -1,5 +1,7 @@
 # PE - Personal y Servicios
 
+> 🔌 **Datos:** este módulo persiste en la capa de datos (ST) — ver [ST - Capa de Datos Persistente](<ST - Capa de Datos Persistente.md>).
+
 Este módulo permite la supervisión eficiente de los recursos humanos y técnicos que mantienen la operativa diaria del condominio.
 
 ## 1. Gestión de Personal Interno

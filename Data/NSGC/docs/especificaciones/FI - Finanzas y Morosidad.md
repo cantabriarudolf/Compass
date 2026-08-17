@@ -1,5 +1,7 @@
 # FI - Finanzas y Morosidad
 
+> 🔌 **Datos:** este módulo persiste en la capa de datos (ST) — ver [ST - Capa de Datos Persistente](<ST - Capa de Datos Persistente.md>).
+
 Este módulo centraliza la salud financiera del condominio, asegurando la transparencia en el uso de los recursos y la eficiencia en la recaudación.
 
 ## 1. Gestión de Gastos (Egresos)

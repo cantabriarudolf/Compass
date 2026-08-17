@@ -1,5 +1,7 @@
 # PI - Portal Inmobiliario
 
+> 🔌 **Datos:** este módulo persiste en la capa de datos (ST) — ver [ST - Capa de Datos Persistente](<ST - Capa de Datos Persistente.md>).
+
 Este módulo permite habilitar una vitrina digital dentro del sistema para promover la venta o arriendo de unidades del condominio de forma segura y centralizada.
 
 ## 1. Funcionamiento y Exposición

@@ -1,5 +1,7 @@
 # RE - Reportería y Dashboards
 
+> 🔌 **Datos:** este módulo persiste en la capa de datos (ST) — ver [ST - Capa de Datos Persistente](<ST - Capa de Datos Persistente.md>).
+
 Este módulo consolida la información de todos los subsistemas (Finanzas, Operaciones, Estructura) para presentarla de forma digerible, permitiendo la toma de decisiones y la transparencia hacia la comunidad.
 
 ## 1. Dashboards por Perfil

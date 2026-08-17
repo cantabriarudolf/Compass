@@ -1,5 +1,7 @@
 # CO - Comunicación con Vecinos
 
+> 🔌 **Datos:** este módulo persiste en la capa de datos (ST) — ver [ST - Capa de Datos Persistente](<ST - Capa de Datos Persistente.md>).
+
 El objetivo de este módulo es garantizar que la información fluya de manera clara, profesional y oportuna hacia toda la comunidad.
 
 ## 1. Centro de Mensajería Masiva

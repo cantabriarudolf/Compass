@@ -1,5 +1,7 @@
 # RA - Reservas y Amenities
 
+> 🔌 **Datos:** este módulo persiste en la capa de datos (ST) — ver [ST - Capa de Datos Persistente](<ST - Capa de Datos Persistente.md>).
+
 Este módulo gestiona el motor de agendamiento para espacios comunes y activos compartidos de la comunidad, evitando conflictos de uso y controlando la rentabilidad de cada elemento.
 
 ## 1. Maestro de Elementos Reservables

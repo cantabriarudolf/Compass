@@ -1,5 +1,7 @@
 # AD - Gestión Administrativa (Panel del Administrador)
 
+> 🔌 **Datos:** este módulo persiste en la capa de datos (ST) — ver [ST - Capa de Datos Persistente](<ST - Capa de Datos Persistente.md>).
+
 Este módulo centraliza las herramientas de gestión directa del administrador, organizadas en "cajones" operativos para facilitar el control de la comunidad y los recursos humanos.
 
 ## 1. Cajón de Comunidad

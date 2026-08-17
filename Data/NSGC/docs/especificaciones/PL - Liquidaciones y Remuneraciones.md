@@ -1,5 +1,7 @@
 # PL - Liquidaciones y Remuneraciones
 
+> 🔌 **Datos:** este módulo persiste en la capa de datos (ST) — ver [ST - Capa de Datos Persistente](<ST - Capa de Datos Persistente.md>).
+
 El objetivo de este módulo es automatizar el cálculo de haberes, descuentos y pagos del personal, integrando la asistencia reportada con las condiciones contractuales para generar documentos legales y registros contables precisos.
 
 ## 1. Generación de Liquidaciones (Liquidar)

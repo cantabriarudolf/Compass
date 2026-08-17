@@ -1,5 +1,7 @@
 # GD - Gestión de Directiva y Actas
 
+> 🔌 **Datos:** este módulo persiste en la capa de datos (ST) — ver [ST - Capa de Datos Persistente](<ST - Capa de Datos Persistente.md>).
+
 Este módulo provee las herramientas necesarias para la gobernanza del condominio, facilitando la toma de decisiones, el registro legal de asambleas y la comunicación formal entre el Comité y los Propietarios.
 
 ## 1. Gestión de Reuniones y Actas

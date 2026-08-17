@@ -1,5 +1,7 @@
 # RP - Roles y Permisos (Control de Acceso)
 
+> 🔌 **Datos:** este módulo persiste en la capa de datos (ST) — ver [ST - Capa de Datos Persistente](<ST - Capa de Datos Persistente.md>).
+
 Este módulo gestiona quién puede ver, editar o ejecutar acciones dentro de la plataforma, garantizando la seguridad y privacidad de la información del condominio.
 
 ## 1. Concepto Base (RBAC)

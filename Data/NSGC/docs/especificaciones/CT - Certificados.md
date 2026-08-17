@@ -1,5 +1,7 @@
 # CT - Certificados
 
+> 🔌 **Datos:** este módulo persiste en la capa de datos (ST) — ver [ST - Capa de Datos Persistente](<ST - Capa de Datos Persistente.md>).
+
 Este módulo permite la generación automatizada de documentación oficial y acreditaciones tanto para residentes como para el personal, garantizando la validez de la información mediante la firma digital del administrador.
 
 ## 1. Tipologías de Certificados

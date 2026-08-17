@@ -1,5 +1,7 @@
 # MA - Maestros Administrativos (Tablas de Referencia)
 
+> 🔌 **Datos:** este módulo persiste en la capa de datos (ST) — ver [ST - Capa de Datos Persistente](<ST - Capa de Datos Persistente.md>).
+
 Este módulo centraliza la gestión de todas las tablas base y parámetros técnicos que alimentan la lógica de los demás módulos del sistema. Solo usuarios con el rol de **Administrador Maestro** tienen acceso de escritura aquí.
 
 ## 1. Maestros de Recursos Humanos (PE)

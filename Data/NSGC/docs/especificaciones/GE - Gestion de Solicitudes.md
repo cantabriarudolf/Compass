@@ -1,5 +1,7 @@
 # GE - Gestión de Solicitudes
 
+> 🔌 **Datos:** este módulo persiste en la capa de datos (ST) — ver [ST - Capa de Datos Persistente](<ST - Capa de Datos Persistente.md>).
+
 Este módulo centraliza y tipifica todos los requerimientos formales (Tickets) que fluyen hacia la administración, ya sea desde el personal o desde los residentes, asegurando que nada quede en el aire.
 
 ## 1. Tipologías de Solicitudes (Gestiones)
