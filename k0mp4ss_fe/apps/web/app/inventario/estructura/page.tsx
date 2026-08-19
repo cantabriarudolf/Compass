@@ -23,6 +23,7 @@ import {
 import { 
   Dialog, 
   DialogContent, 
+  DialogDescription,
   DialogFooter, 
   DialogHeader, 
   DialogTitle, 
@@ -30,7 +31,7 @@ import {
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@workspace/ui/components/select"
-import { IconBuilding, IconPlus, IconChevronRight, IconPencil, IconStack2, IconEdit } from "@tabler/icons-react"
+import { IconBuilding, IconPlus, IconChevronRight, IconPencil, IconStack2, IconEdit, IconHistory, IconCalendarEvent } from "@tabler/icons-react"
 import { FormularioUnidad } from "@/components/inventario/formulario-unidad"
 import { EstadosDonut } from "@/components/inventario/estados-donut"
 
@@ -46,6 +47,7 @@ export default function EstructuraFisicaPage() {
   const categoriasMacro = useCompassStore(s => s.maestros.categoriasMacro)
   const estadosOcupacion = useCompassStore(s => s.maestros.estadosOcupacion)
   const categoriasMicro = useCompassStore(s => s.maestros.categoriasMicro)
+  const categoriasUnidad = useCompassStore(s => s.maestros.categoriasUnidad)
   
   const [selectedMacro, setSelectedMacro] = React.useState<string>("todos")
   const currentMacro = macroSectores.find(m => m.id === selectedMacro)
@@ -55,16 +57,10 @@ export default function EstructuraFisicaPage() {
   const [isMacroDialogOpen, setIsMacroDialogOpen] = React.useState(false)
   const [isMicroDialogOpen, setIsMicroDialogOpen] = React.useState(false)
   const [editingMacro, setEditingMacro] = React.useState<MacroSector | null>(null)
+  const vinculos = useCompassStore(s => s.vinculos)
+  const personas = useCompassStore(s => s.personas)
   const [filterStatus, setFilterStatus] = React.useState("todos")
-
-  React.useEffect(() => {
-    if (selectedMacro === "todos") {
-      setSelectedMicro("todos")
-      return
-    }
-    const micros = microSectores.filter(m => m.macroSectorId === selectedMacro)
-    setSelectedMicro("todos") // Al cambiar de macro, por defecto vemos "todo" el macro
-  }, [selectedMacro, microSectores])
+  const [historialSelect, setHistorialSelect] = React.useState<Unidad | null>(null)
 
   // LÓGICA DE FILTRADO MULTI-ESCALA
   const filteredUnidades = unidades.filter(u => {
@@ -82,11 +78,22 @@ export default function EstructuraFisicaPage() {
       ? `${currentMacro?.etiqueta} ${currentMacro?.nombre}`
       : `${currentMacro?.etiqueta} ${currentMacro?.nombre} · ${selectedMicroObj?.etiqueta} ${selectedMicroObj?.nombre}`
 
+  const handleMacroTabChange = (id: string) => {
+    setSelectedMacro(id)
+    if (id === "todos") {
+      setSelectedMicro("todos")
+      return
+    }
+    const micros = microSectores.filter(m => m.macroSectorId === id)
+    const microValido = micros.some(m => m.id === selectedMicro)
+    if (!microValido) setSelectedMicro("todos")
+  }
+
   const handleSaveMacro = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
     const data = {
-      etiqueta: formData.get("etiqueta") as any,
+      etiqueta: formData.get("etiqueta") as string,
       nombre: formData.get("nombre") as string,
       descripcion: formData.get("descripcion") as string,
     }
@@ -96,6 +103,7 @@ export default function EstructuraFisicaPage() {
       const nuevoId = `ms-${Date.now()}`
       saveMacroSector({ id: nuevoId, ...data })
       setSelectedMacro(nuevoId)
+      setSelectedMicro("todos")
     }
     setIsMacroDialogOpen(false)
     setEditingMacro(null)
@@ -107,7 +115,7 @@ export default function EstructuraFisicaPage() {
     const nuevo: MicroSector = {
       id: `mic-${Date.now()}`,
       macroSectorId: selectedMacro,
-      etiqueta: formData.get("etiqueta") as any,
+      etiqueta: formData.get("etiqueta") as string,
       nombre: formData.get("nombre") as string,
     }
     saveMicroSector(nuevo)
@@ -121,11 +129,19 @@ export default function EstructuraFisicaPage() {
       const existente = unidades.find(u => u.id === existingId)
       if (existente) saveUnidad({ ...existente, ...data })
     } else {
-      // Creación: Pasar los servicios capturados en el formulario
+      // Creación: exigir asociación a un sub-sector válido
+      const microSectorId = data.microSectorId
+      const microValido = microSectorId && microSectorId !== "todos" &&
+        microSectores.some(m => m.id === microSectorId)
+      if (!microValido) {
+        alert("Debe seleccionar un macro-sector y un sub-sector válidos para la unidad.")
+        return
+      }
+
       const nueva: Unidad = {
         id: `u-${Date.now()}`,
-        microSectorId: selectedMicro,
-        etiqueta: data.etiqueta || "Depto",
+        microSectorId,
+        etiqueta: data.etiqueta || categoriasUnidad[0]?.nombre || "",
         numero: data.numero || "",
         tipoUnidadId: data.tipoUnidadId || "",
         metraje: data.metraje || 0,
@@ -157,7 +173,7 @@ export default function EstructuraFisicaPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Estructura Física</h1>
-          <p className="text-muted-foreground">Gestión de la jerarquía física del condominio.</p>
+          <p className="text-muted-foreground">Gestión de la jerarquía física de la comunidad.</p>
         </div>
         
         <div className="flex gap-2">
@@ -189,7 +205,7 @@ export default function EstructuraFisicaPage() {
             <div className="grid gap-4 py-4">
               <div className="space-y-2">
                 <Label>Categoría</Label>
-                <Select name="etiqueta" defaultValue={editingMacro?.etiqueta || "Torre"}>
+                <Select name="etiqueta" defaultValue={editingMacro?.etiqueta || categoriasMacro[0]?.nombre || ""}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {categoriasMacro.map(c => (
@@ -212,7 +228,34 @@ export default function EstructuraFisicaPage() {
         </DialogContent>
       </Dialog>
 
-      <Tabs value={selectedMacro} onValueChange={setSelectedMacro} className="w-full">
+      {macroSectores.length === 0 ? (
+        <Card className="p-8 text-center border-dashed">
+          <CardHeader>
+            <CardTitle className="text-lg">Faltan sectores reales</CardTitle>
+            <CardDescription className="space-y-2">
+              <p>
+                Las categorías que creaste en <strong>Maestros Administrativos</strong> (Torre, Piso…) definen los tipos de sectores, pero todavía no son sectores reales.
+              </p>
+              <p>
+                Para crear una unidad necesitás sectores <strong>concretos</strong> acá: por ejemplo, <em>Torre A</em> y <em>Piso 1</em>.
+              </p>
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col items-center gap-3">
+            <Button onClick={() => {
+              setEditingMacro(null)
+              setIsMacroDialogOpen(true)
+            }}>
+              <IconPlus className="size-4 mr-2" />
+              Crear primer Macro-Sector
+            </Button>
+            <p className="text-[10px] text-muted-foreground">
+              Después de crear el macro, agregá al menos un sub-sector y ahí podrás crear la unidad.
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
+      <Tabs value={selectedMacro} onValueChange={handleMacroTabChange} className="w-full">
         <ScrollArea className="w-full whitespace-nowrap rounded-md border bg-muted/50 p-1 mb-6">
           <TabsList className="inline-flex w-max">
             <TabsTrigger value="todos" className="gap-2 font-black text-primary uppercase text-[10px] tracking-widest">
@@ -245,18 +288,15 @@ export default function EstructuraFisicaPage() {
                 <IconStack2 className="size-4" />
                 Sub-Sectores
               </CardTitle>
-              {selectedMacro !== "todos" && (
-                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setIsMicroDialogOpen(true)}>
-                  <IconPlus className="size-4" />
-                </Button>
-              )}
             </CardHeader>
             <CardContent className="p-0">
               <div className="flex flex-col">
                 {selectedMacro === "todos" ? (
-                  <div className="p-8 text-center bg-muted/20 border-y border-dashed opacity-50">
-                    <p className="text-[10px] font-bold uppercase tracking-tighter">Consolidado Activo</p>
-                    <p className="text-[8px] italic">Filtre por torre para ver pisos</p>
+                  <div className="p-6 text-center bg-muted/20 border-y border-dashed space-y-2">
+                    <p className="text-[10px] font-bold uppercase tracking-tighter">Ningún Macro-Sector seleccionado</p>
+                    <p className="text-[10px] text-muted-foreground">
+                      Seleccioná un sector arriba (ej: Torre A) para crear y ver sus sub-sectores.
+                    </p>
                   </div>
                 ) : (
                   <>
@@ -281,6 +321,17 @@ export default function EstructuraFisicaPage() {
                         <IconChevronRight className="size-4 opacity-50" />
                       </button>
                     ))}
+                    <div className="p-3 border-t">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full text-[10px] font-bold uppercase"
+                        onClick={() => setIsMicroDialogOpen(true)}
+                      >
+                        <IconPlus className="size-3 mr-1" />
+                        Crear Sub-Sector en {currentMacro?.etiqueta} {currentMacro?.nombre}
+                      </Button>
+                    </div>
                   </>
                 )}
               </div>
@@ -295,7 +346,11 @@ export default function EstructuraFisicaPage() {
                       {filteredUnidades.length} unidades en este sector.
                     </CardDescription>
                   </div>
-                  <FormularioUnidad onSave={(data) => handleSaveUnidad(data)} />
+                  <FormularioUnidad
+                    macroSectorId={selectedMacro}
+                    microSectorId={selectedMicro}
+                    onSave={(data) => handleSaveUnidad(data)}
+                  />
                 </CardHeader>
                 <CardContent>
                   <div className="flex items-center gap-2 mb-4 bg-muted/30 p-2 rounded-md border border-dashed overflow-x-auto no-scrollbar">
@@ -327,8 +382,8 @@ export default function EstructuraFisicaPage() {
                         <TableHead>N° Unidad</TableHead>
                         {(selectedMacro === "todos" || selectedMicro === "todos") && (
                           <>
-                            <TableHead>Sector</TableHead>
-                            <TableHead>Piso/Nivel</TableHead>
+                            <TableHead>Macro Zona</TableHead>
+                            <TableHead>Micro Zona</TableHead>
                           </>
                         )}
                         <TableHead>Estado</TableHead>
@@ -366,11 +421,21 @@ export default function EstructuraFisicaPage() {
                               </TableCell>
                             <TableCell>{unidad.metraje} m²</TableCell>
                             <TableCell className="text-right">
-                              <FormularioUnidad 
-                                unidad={unidad} 
-                                onSave={(data) => handleSaveUnidad(data, unidad.id)}
-                                trigger={<Button variant="ghost" size="icon"><IconPencil className="size-4" /></Button>} 
-                              />
+                              <div className="flex justify-end gap-1">
+                                <FormularioUnidad 
+                                  unidad={unidad} 
+                                  onSave={(data) => handleSaveUnidad(data, unidad.id)}
+                                  trigger={<Button variant="ghost" size="icon"><IconPencil className="size-4" /></Button>} 
+                                />
+                                <Button 
+                                  variant="ghost" 
+                                  size="icon" 
+                                  className={`h-8 w-8 ${vinculos.some(v => v.unidadId === unidad.id) ? "text-blue-600" : "text-muted-foreground opacity-40"}`}
+                                  onClick={() => setHistorialSelect(unidad)}
+                                >
+                                  <IconHistory className="size-4" />
+                                </Button>
+                              </div>
                             </TableCell>
                           </TableRow>
                         )
@@ -381,6 +446,67 @@ export default function EstructuraFisicaPage() {
               </Card>
             </div>
       </Tabs>
+      )}
+
+      {/* MODAL DE HISTORIAL (TRAZABILIDAD DE UNIDADES) */}
+      <Dialog open={!!historialSelect} onOpenChange={() => setHistorialSelect(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <IconHistory className="size-5 text-primary" />
+              Historial de Asignaciones: {historialSelect?.etiqueta} {historialSelect?.numero}
+            </DialogTitle>
+            <DialogDescription>
+              Trazabilidad completa de vínculos de la unidad.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="py-4 space-y-4">
+            {(() => {
+              const vinculosUnidad = vinculos
+                .filter(v => v.unidadId === historialSelect?.id)
+                .sort((a, b) => b.fechaInicio.localeCompare(a.fechaInicio))
+              
+              if (vinculosUnidad.length === 0) {
+                return (
+                  <div className="text-center py-8 text-muted-foreground italic text-sm">
+                    No hay registros históricos para esta unidad.
+                  </div>
+                )
+              }
+
+              return (
+                <div className="relative border-l-2 border-primary/20 ml-3 space-y-6">
+                  {vinculosUnidad.map((v, idx) => {
+                    const persona = personas.find(p => p.id === v.personaId)
+                    const isActive = !v.fechaFin
+                    return (
+                      <div key={v.id} className="relative pl-6">
+                        <div className="absolute -left-[9px] top-1 size-4 rounded-full bg-primary border-2 border-background shadow-sm" />
+                        <div className="space-y-1">
+                          <div className="text-sm font-bold text-primary">
+                            {persona ? `${persona.nombres} ${persona.apellidos}` : "Persona desconocida"}
+                          </div>
+                          <div className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">
+                            {v.rol}
+                          </div>
+                          <div className="flex items-center gap-2 text-[10px] text-muted-foreground uppercase font-bold tracking-wider">
+                            <IconCalendarEvent className="size-3" />
+                            {v.fechaInicio} — {v.fechaFin || "Actualidad"}
+                          </div>
+                          {isActive && (
+                            <Badge variant="default" className="text-[8px] h-4 mt-1 bg-green-600">Periodo Activo</Badge>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )
+            })()}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={isMicroDialogOpen} onOpenChange={setIsMicroDialogOpen}>
         <DialogContent>
@@ -391,7 +517,7 @@ export default function EstructuraFisicaPage() {
             <div className="grid gap-4 py-4">
               <div className="space-y-2">
                 <Label>Categoría</Label>
-                <Select name="etiqueta" defaultValue="Piso">
+                <Select name="etiqueta" defaultValue={categoriasMicro[0]?.nombre || ""}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {categoriasMicro.map(c => (

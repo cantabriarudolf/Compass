@@ -14,6 +14,11 @@ The system MUST use user-friendly terminology (Categorías) instead of technical
 - **Categoría Micro**: Piso, Nivel, Pasaje.
 - **Categoría Unidad**: Depto, Casa, Local, Estacionamiento, Bodega.
 
+#### Scenario: Labels Administered in MA
+- **WHEN** the admin manages categorías (macro, micro o de unidad) in the Maestros Administrativos module (`/admin/maestros`)
+- **THEN** the created/edited labels MUST be persisted in `MaestroCollections` of the store (`categoriasMacro`, `categoriasMicro`, `categoriasUnidad`)
+- **AND** the EF forms and unit etiquetas MUST read them from the store, never from hardcoded lists
+
 ### Requirement: Technical Unit Sheet (Ficha Técnica)
 Every unit MUST contain detailed technical and tax data.
 - **Tributario**: MUST include "Rol de Avalúo (SII)".

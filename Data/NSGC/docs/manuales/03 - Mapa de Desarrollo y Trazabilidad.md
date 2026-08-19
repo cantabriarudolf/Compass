@@ -19,7 +19,7 @@ Este documento vincula la arquitectura del menú con los archivos de especificac
 | **00** | **0** | **ST** | `ST - Capa de Datos Persistente.md` | (Capa de Datos) | `lib/store.ts` | 🟢 |
 | **00** | **0** | **UI** | `UI - Interfaz Principal.md`, `UI - Navegacion Lateral.md` | (Interfaz) | (transversal) | 🟢 |
 | **02** | **1** | **TU** | `TU - Tipos de Unidad.md` | Infraestructura | `/inventario/tipos` | 🟢 |
-| **03** | **1** | **EF** | `EF - Estructura Física.md` | Estructura Física | `/inventario/estructura` | 🟢 |
+| **03** | **1** | **EF** | `EF - Estructura Física.md` | Estructura Física | `/inventario/estructura` | 🔵 |
 | **04** | **1** | **ES** | `ES - Estacionamientos.md` | Estacionamientos | `/inventario/estacionamientos` | 🟢 |
 | **05** | **2** | **MA** | `MA - Maestros Administrativos.md` | Maestros | `/admin/maestros` | 🟢 |
 | **06** | **2** | **MP** | `MP - Maestro de Personas.md` | Directorio Personas | `/comunidad/personas` | 🟢 |

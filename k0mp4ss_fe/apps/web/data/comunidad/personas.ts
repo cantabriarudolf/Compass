@@ -45,142 +45,303 @@ export interface Persona {
 }
 
 // --- MOCK DATA ---
+// ~55 personas cubriendo ~55 unidades de 83 totales (realismo residencial + comercial)
 
 export const personas: Persona[] = [
-  // 1. Propietario, Residente y Presidente (Caso Complejo 1)
+  // ===== TORRE A =====
   {
-    id: "p-1",
-    rut: "15.123.456-7",
-    nombreCompleto: "Juan Pérez González",
-    nombres: "Juan",
-    apellidos: "Pérez González",
-    email: "juan.perez@email.com",
-    telefonoMovil: "+56 9 1234 5678",
-    estadoCuenta: "activa",
-    condicionesEspecialesIds: [],
-    roles: ["propietario", "residente", "directiva"],
+    id: "p-1", rut: "15.123.456-7", nombreCompleto: "Juan Pérez González", nombres: "Juan", apellidos: "Pérez González",
+    email: "juan.perez@email.com", telefonoMovil: "+56 9 1234 5678", estadoCuenta: "activa",
+    condicionesEspecialesIds: [], roles: ["propietario", "residente", "directiva"],
     datosGobernanza: { id: "g-1", cargoDirectiva: "presidente", fechaAsuncion: "2025-03-01" }
   },
-  // 2. Residente Puro (Arrendatario) con Vulnerabilidad
   {
-    id: "p-2",
-    rut: "18.987.654-3",
-    nombreCompleto: "María López Soto",
-    nombres: "María",
-    apellidos: "López Soto",
-    email: "maria.lopez@email.com",
-    telefonoMovil: "+56 9 8765 4321",
-    estadoCuenta: "activa",
-    condicionesEspecialesIds: ["c-2"], // Movilidad Reducida
-    roles: ["residente"],
+    id: "p-11", rut: "17.234.567-8", nombreCompleto: "Carolina Espinoza Rojas", nombres: "Carolina", apellidos: "Espinoza Rojas",
+    email: "c.espinoza@email.com", telefonoMovil: "+56 9 2345 6789", estadoCuenta: "activa",
+    condicionesEspecialesIds: [], roles: ["propietario", "residente"]
   },
-  // 3. Propietario Inversionista (No vive en el edificio, múltiples propiedades)
   {
-    id: "p-3",
-    rut: "12.345.678-9",
-    nombreCompleto: "Roberto Gómez Bolaños",
-    nombres: "Roberto",
-    apellidos: "Gómez Bolaños",
-    email: "roberto.gomez@email.com",
-    telefonoMovil: "+56 9 5555 4444",
-    estadoCuenta: "activa",
-    condicionesEspecialesIds: [],
-    roles: ["propietario"],
+    id: "p-12", rut: "18.345.678-9", nombreCompleto: "Rodrigo Fuentes Salas", nombres: "Rodrigo", apellidos: "Fuentes Salas",
+    email: "r.fuentes@email.com", telefonoMovil: "+56 9 3456 7890", estadoCuenta: "activa",
+    condicionesEspecialesIds: [], roles: ["residente"]
   },
-  // 4. Personal (Conserje) que además vive en el edificio
   {
-    id: "p-4",
-    rut: "19.111.222-K",
-    nombreCompleto: "Ana María Silva",
-    nombres: "Ana María",
-    apellidos: "Silva",
-    email: "ana.silva@email.com",
-    telefonoMovil: "+56 9 9999 1111",
-    estadoCuenta: "activa",
-    condicionesEspecialesIds: ["c-1", "c-3"], // Electrodependiente y Adulto Mayor Solo
-    roles: ["personal", "residente"],
+    id: "p-13", rut: "19.456.789-0", nombreCompleto: "Valentina Reyes López", nombres: "Valentina", apellidos: "Reyes López",
+    email: "v.reyes@email.com", telefonoMovil: "+56 9 4567 8901", estadoCuenta: "activa",
+    condicionesEspecialesIds: [], roles: ["propietario"]
+  },
+  {
+    id: "p-14", rut: "20.567.890-1", nombreCompleto: "Felipe Morales Díaz", nombres: "Felipe", apellidos: "Morales Díaz",
+    email: "f.morales@email.com", telefonoMovil: "+56 9 5678 9012", estadoCuenta: "activa",
+    condicionesEspecialesIds: ["c-2"], roles: ["propietario", "residente"]
+  },
+  {
+    id: "p-15", rut: "14.678.901-2", nombreCompleto: "Isidora Catalán Vargas", nombres: "Isidora", apellidos: "Catalán Vargas",
+    email: "i.catalan@email.com", telefonoMovil: "+56 9 6789 0123", estadoCuenta: "activa",
+    condicionesEspecialesIds: [], roles: ["residente"]
+  },
+  {
+    id: "p-16", rut: "16.789.012-3", nombreCompleto: "Martín Sepúlveda Castro", nombres: "Martín", apellidos: "Sepúlveda Castro",
+    email: "m.sepulveda@email.com", telefonoMovil: "+56 9 7890 1234", estadoCuenta: "activa",
+    condicionesEspecialesIds: [], roles: ["propietario", "residente"]
+  },
+  {
+    id: "p-17", rut: "18.890.123-4", nombreCompleto: "Constanza Bravo Muñoz", nombres: "Constanza", apellidos: "Bravo Muñoz",
+    email: "c.bravo@email.com", telefonoMovil: "+56 9 8901 2345", estadoCuenta: "activa",
+    condicionesEspecialesIds: [], roles: ["residente"]
+  },
+  {
+    id: "p-18", rut: "19.901.234-5", nombreCompleto: "Andrés Villanueva Soto", nombres: "Andrés", apellidos: "Villanueva Soto",
+    email: "a.villanueva@email.com", telefonoMovil: "+56 9 9012 3456", estadoCuenta: "activa",
+    condicionesEspecialesIds: [], roles: ["propietario"]
+  },
+
+  // ===== TORRE B =====
+  {
+    id: "p-2", rut: "18.987.654-3", nombreCompleto: "María López Soto", nombres: "María", apellidos: "López Soto",
+    email: "maria.lopez@email.com", telefonoMovil: "+56 9 8765 4321", estadoCuenta: "activa",
+    condicionesEspecialesIds: ["c-2"], roles: ["residente"]
+  },
+  {
+    id: "p-3", rut: "12.345.678-9", nombreCompleto: "Roberto Gómez Bolaños", nombres: "Roberto", apellidos: "Gómez Bolaños",
+    email: "roberto.gomez@email.com", telefonoMovil: "+56 9 5555 4444", estadoCuenta: "activa",
+    condicionesEspecialesIds: [], roles: ["propietario"]
+  },
+  {
+    id: "p-19", rut: "15.111.222-3", nombreCompleto: "Fernanda Toro Gutiérrez", nombres: "Fernanda", apellidos: "Toro Gutiérrez",
+    email: "f.toro@email.com", telefonoMovil: "+56 9 1111 2233", estadoCuenta: "activa",
+    condicionesEspecialesIds: [], roles: ["propietario", "residente"]
+  },
+  {
+    id: "p-20", rut: "16.222.333-4", nombreCompleto: "Sebastián Contreras Vega", nombres: "Sebastián", apellidos: "Contreras Vega",
+    email: "s.contreras@email.com", telefonoMovil: "+56 9 2222 3344", estadoCuenta: "activa",
+    condicionesEspecialesIds: [], roles: ["residente"]
+  },
+  {
+    id: "p-21", rut: "17.333.444-5", nombreCompleto: "Javiera Navarro Ríos", nombres: "Javiera", apellidos: "Navarro Ríos",
+    email: "j.navarro@email.com", telefonoMovil: "+56 9 3333 4455", estadoCuenta: "activa",
+    condicionesEspecialesIds: [], roles: ["propietario", "residente"]
+  },
+  {
+    id: "p-22", rut: "18.444.555-6", nombreCompleto: "Diego Arriagada Peña", nombres: "Diego", apellidos: "Arriagada Peña",
+    email: "d.arriagada@email.com", telefonoMovil: "+56 9 4444 5566", estadoCuenta: "activa",
+    condicionesEspecialesIds: [], roles: ["residente"]
+  },
+  {
+    id: "p-23", rut: "19.555.666-7", nombreCompleto: "Camila Herrera Soto", nombres: "Camila", apellidos: "Herrera Soto",
+    email: "c.herrera@email.com", telefonoMovil: "+56 9 5555 6677", estadoCuenta: "activa",
+    condicionesEspecialesIds: [], roles: ["propietario"]
+  },
+  {
+    id: "p-24", rut: "20.666.777-8", nombreCompleto: "Gabriel Mardones Lizana", nombres: "Gabriel", apellidos: "Mardones Lizana",
+    email: "g.mardones@email.com", telefonoMovil: "+56 9 6666 7788", estadoCuenta: "activa",
+    condicionesEspecialesIds: ["c-1"], roles: ["propietario", "residente"]
+  },
+
+  // ===== TORRE C =====
+  {
+    id: "p-25", rut: "14.777.888-9", nombreCompleto: "Paula Quiroz Espinoza", nombres: "Paula", apellidos: "Quiroz Espinoza",
+    email: "p.quiroz@email.com", telefonoMovil: "+56 9 7777 8899", estadoCuenta: "activa",
+    condicionesEspecialesIds: [], roles: ["propietario", "residente"]
+  },
+  {
+    id: "p-26", rut: "15.888.999-0", nombreCompleto: "Cristóbal Flores Aguirre", nombres: "Cristóbal", apellidos: "Flores Aguirre",
+    email: "c.flores@email.com", telefonoMovil: "+56 9 8888 9900", estadoCuenta: "activa",
+    condicionesEspecialesIds: [], roles: ["propietario"]
+  },
+  {
+    id: "p-27", rut: "16.999.000-1", nombreCompleto: "Florencia Riquelme Díaz", nombres: "Florencia", apellidos: "Riquelme Díaz",
+    email: "f.riquelme@email.com", telefonoMovil: "+56 9 9999 0011", estadoCuenta: "activa",
+    condicionesEspecialesIds: [], roles: ["residente"]
+  },
+  {
+    id: "p-28", rut: "17.000.111-2", nombreCompleto: "Tomás Pinto Vergara", nombres: "Tomás", apellidos: "Pinto Vergara",
+    email: "t.pinto@email.com", telefonoMovil: "+56 9 0000 1122", estadoCuenta: "activa",
+    condicionesEspecialesIds: [], roles: ["residente"]
+  },
+  {
+    id: "p-29", rut: "18.111.222-3", nombreCompleto: "Javiera Solís Muñoz", nombres: "Javiera", apellidos: "Solís Muñoz",
+    email: "j.solis@email.com", telefonoMovil: "+56 9 1111 2244", estadoCuenta: "activa",
+    condicionesEspecialesIds: [], roles: ["propietario", "residente"]
+  },
+  {
+    id: "p-30", rut: "19.222.333-4", nombreCompleto: "Alejandro Guzmán Rojas", nombres: "Alejandro", apellidos: "Guzmán Rojas",
+    email: "a.guzman@email.com", telefonoMovil: "+56 9 2222 3355", estadoCuenta: "activa",
+    condicionesEspecialesIds: [], roles: ["residente"]
+  },
+  {
+    id: "p-31", rut: "20.333.444-5", nombreCompleto: "Macarena Silva Fuentes", nombres: "Macarena", apellidos: "Silva Fuentes",
+    email: "m.silva@email.com", telefonoMovil: "+56 9 3333 4466", estadoCuenta: "activa",
+    condicionesEspecialesIds: [], roles: ["propietario"]
+  },
+  {
+    id: "p-32", rut: "14.444.555-6", nombreCompleto: "Nicolás Vega Soto", nombres: "Nicolás", apellidos: "Vega Soto",
+    email: "n.vega@email.com", telefonoMovil: "+56 9 4444 5577", estadoCuenta: "activa",
+    condicionesEspecialesIds: [], roles: ["propietario", "residente"]
+  },
+
+  // ===== TORRE D =====
+  {
+    id: "p-4", rut: "19.111.222-K", nombreCompleto: "Ana María Silva", nombres: "Ana María", apellidos: "Silva",
+    email: "ana.silva@email.com", telefonoMovil: "+56 9 9999 1111", estadoCuenta: "activa",
+    condicionesEspecialesIds: ["c-1", "c-3"], roles: ["personal", "residente"],
     datosLaborales: { id: "l-1", cargo: "Conserje Turno Día", afp: "Habitat", prevision: "FONASA", fechaIngreso: "2021-06-15" }
   },
-  // 5. Administrador (Rol: Personal, No Residente)
   {
-    id: "p-5",
-    rut: "13.555.666-8",
-    nombreCompleto: "Carlos Castillo Ruiz",
-    nombres: "Carlos",
-    apellidos: "Castillo Ruiz",
-    email: "admin@compass.cl",
-    telefonoMovil: "+56 9 3333 7777",
-    estadoCuenta: "activa",
-    condicionesEspecialesIds: [],
-    roles: ["personal"],
+    id: "p-33", rut: "15.555.666-7", nombreCompleto: "Francisca León Contreras", nombres: "Francisca", apellidos: "León Contreras",
+    email: "f.leon@email.com", telefonoMovil: "+56 9 5555 6688", estadoCuenta: "activa",
+    condicionesEspecialesIds: [], roles: ["propietario", "residente"]
+  },
+  {
+    id: "p-34", rut: "16.666.777-8", nombreCompleto: "Ignacio Aguilera Pizarro", nombres: "Ignacio", apellidos: "Aguilera Pizarro",
+    email: "i.aguilera@email.com", telefonoMovil: "+56 9 6666 7799", estadoCuenta: "activa",
+    condicionesEspecialesIds: [], roles: ["residente"]
+  },
+  {
+    id: "p-35", rut: "17.777.888-9", nombreCompleto: "Daniela Muñoz Rojas", nombres: "Daniela", apellidos: "Muñoz Rojas",
+    email: "d.munoz@email.com", telefonoMovil: "+56 9 7777 8800", estadoCuenta: "activa",
+    condicionesEspecialesIds: [], roles: ["propietario"]
+  },
+  {
+    id: "p-36", rut: "18.888.999-0", nombreCompleto: "Mateo Castillo Vera", nombres: "Mateo", apellidos: "Castillo Vera",
+    email: "m.castillo@email.com", telefonoMovil: "+56 9 8888 9911", estadoCuenta: "activa",
+    condicionesEspecialesIds: [], roles: ["propietario", "residente"]
+  },
+  {
+    id: "p-37", rut: "19.999.000-1", nombreCompleto: "Agustina Reyes Soto", nombres: "Agustina", apellidos: "Reyes Soto",
+    email: "a.reyes@email.com", telefonoMovil: "+56 9 9999 0022", estadoCuenta: "activa",
+    condicionesEspecialesIds: [], roles: ["residente"]
+  },
+  {
+    id: "p-38", rut: "20.000.111-2", nombreCompleto: "Lucas Espinoza Figueroa", nombres: "Lucas", apellidos: "Espinoza Figueroa",
+    email: "l.espinoza@email.com", telefonoMovil: "+56 9 0000 1133", estadoCuenta: "activa",
+    condicionesEspecialesIds: [], roles: ["propietario"]
+  },
+  {
+    id: "p-39", rut: "14.111.222-3", nombreCompleto: "Isabella Vergara Muñoz", nombres: "Isabella", apellidos: "Vergara Muñoz",
+    email: "i.vergara@email.com", telefonoMovil: "+56 9 1111 2255", estadoCuenta: "activa",
+    condicionesEspecialesIds: ["c-2"], roles: ["propietario", "residente"]
+  },
+
+  // ===== TORRE E =====
+  {
+    id: "p-40", rut: "15.222.333-4", nombreCompleto: "Catalina Díaz Peña", nombres: "Catalina", apellidos: "Díaz Peña",
+    email: "c.diaz@email.com", telefonoMovil: "+56 9 2222 3366", estadoCuenta: "activa",
+    condicionesEspecialesIds: [], roles: ["propietario", "residente"]
+  },
+  {
+    id: "p-41", rut: "16.333.444-5", nombreCompleto: "Benjamín Vargas Rojas", nombres: "Benjamín", apellidos: "Vargas Rojas",
+    email: "b.vargas@email.com", telefonoMovil: "+56 9 3333 4477", estadoCuenta: "activa",
+    condicionesEspecialesIds: [], roles: ["residente"]
+  },
+  {
+    id: "p-42", rut: "17.444.555-6", nombreCompleto: "Fernanda Soto Espinoza", nombres: "Fernanda", apellidos: "Soto Espinoza",
+    email: "f.soto@email.com", telefonoMovil: "+56 9 4444 5588", estadoCuenta: "activa",
+    condicionesEspecialesIds: [], roles: ["propietario", "residente"]
+  },
+  {
+    id: "p-43", rut: "18.555.666-7", nombreCompleto: "Vicente Lara Contreras", nombres: "Vicente", apellidos: "Lara Contreras",
+    email: "v.lara@email.com", telefonoMovil: "+56 9 5555 6699", estadoCuenta: "activa",
+    condicionesEspecialesIds: [], roles: ["propietario"]
+  },
+  {
+    id: "p-44", rut: "19.666.777-8", nombreCompleto: "Antonia Ríos Fuentes", nombres: "Antonia", apellidos: "Ríos Fuentes",
+    email: "a.rios@email.com", telefonoMovil: "+56 9 6666 7700", estadoCuenta: "activa",
+    condicionesEspecialesIds: [], roles: ["residente"]
+  },
+  {
+    id: "p-45", rut: "20.777.888-9", nombreCompleto: "Sebastián Muñoz Soto", nombres: "Sebastián", apellidos: "Muñoz Soto",
+    email: "s.munoz@email.com", telefonoMovil: "+56 9 7777 8811", estadoCuenta: "activa",
+    condicionesEspecialesIds: [], roles: ["propietario", "residente"]
+  },
+  {
+    id: "p-46", rut: "14.888.999-0", nombreCompleto: "Amanda Carvajal Reyes", nombres: "Amanda", apellidos: "Carvajal Reyes",
+    email: "a.carvajal@email.com", telefonoMovil: "+56 9 8888 9922", estadoCuenta: "activa",
+    condicionesEspecialesIds: [], roles: ["propietario"]
+  },
+  {
+    id: "p-47", rut: "15.999.000-1", nombreCompleto: "Joaquín Figueroa Silva", nombres: "Joaquín", apellidos: "Figueroa Silva",
+    email: "j.figueroa@email.com", telefonoMovil: "+56 9 9999 0033", estadoCuenta: "activa",
+    condicionesEspecialesIds: [], roles: ["propietario", "residente"]
+  },
+
+  // ===== LOCALES COMERCIALES =====
+  {
+    id: "p-48", rut: "11.222.333-4", nombreCompleto: "Restaurant El Buen Sabor SpA", nombres: "Restaurant El Buen Sabor", apellidos: "SpA",
+    email: "contacto@buensabor.cl", telefonoMovil: "+56 9 1234 5001", estadoCuenta: "activa",
+    condicionesEspecialesIds: [], roles: ["contratista"]
+  },
+  {
+    id: "p-49", rut: "12.333.444-5", nombreCompleto: "Farmacia Salud Total SpA", nombres: "Farmacia Salud Total", apellidos: "SpA",
+    email: "info@saludtotal.cl", telefonoMovil: "+56 9 1234 5002", estadoCuenta: "activa",
+    condicionesEspecialesIds: [], roles: ["contratista"]
+  },
+
+  // ===== PERSONAL / ADMIN =====
+  {
+    id: "p-5", rut: "13.555.666-8", nombreCompleto: "Carlos Castillo Ruiz", nombres: "Carlos", apellidos: "Castillo Ruiz",
+    email: "admin@compass.cl", telefonoMovil: "+56 9 3333 7777", estadoCuenta: "activa",
+    condicionesEspecialesIds: [], roles: ["personal"],
     datosLaborales: { id: "l-2", cargo: "Administrador General", afp: "Cuprum", prevision: "Isapre Banmédica", fechaIngreso: "2023-01-01" }
   },
-  // 6. Tesorero de la Directiva (Propietario y Residente)
   {
-    id: "p-6",
-    rut: "14.222.333-4",
-    nombreCompleto: "Laura Martínez Cárdenas",
-    nombres: "Laura",
-    apellidos: "Martínez Cárdenas",
-    email: "laura.tesoreria@email.com",
-    telefonoMovil: "+56 9 8888 2222",
-    estadoCuenta: "activa",
-    condicionesEspecialesIds: [],
-    roles: ["propietario", "residente", "directiva"],
+    id: "p-6", rut: "14.222.333-4", nombreCompleto: "Laura Martínez Cárdenas", nombres: "Laura", apellidos: "Martínez Cárdenas",
+    email: "laura.tesoreria@email.com", telefonoMovil: "+56 9 8888 2222", estadoCuenta: "activa",
+    condicionesEspecialesIds: [], roles: ["propietario", "residente", "directiva"],
     datosGobernanza: { id: "g-2", cargoDirectiva: "tesorero", fechaAsuncion: "2025-03-01" }
   },
-  // 7. Contratista Permanente (Mantenimiento Ascensores)
   {
-    id: "p-7",
-    rut: "17.444.555-6",
-    nombreCompleto: "Pedro Valdés Orellana",
-    nombres: "Pedro",
-    apellidos: "Valdés Orellana",
-    email: "pvaldes@ascensores.cl",
-    telefonoMovil: "+56 9 6666 5555",
-    estadoCuenta: "activa",
-    condicionesEspecialesIds: [],
-    roles: ["contratista"],
-    // Omitimos datosLaborales ya que es empresa externa, se mapeará en el futuro Módulo de Proveedores
+    id: "p-7", rut: "17.444.555-6b", nombreCompleto: "Pedro Valdés Orellana", nombres: "Pedro", apellidos: "Valdés Orellana",
+    email: "pvaldes@ascensores.cl", telefonoMovil: "+56 9 6666 5555", estadoCuenta: "activa",
+    condicionesEspecialesIds: [], roles: ["contratista"]
   },
-  // 8. Residente Inactivo (Antiguo Arrendatario para trazabilidad)
   {
-    id: "p-8",
-    rut: "20.123.987-5",
-    nombreCompleto: "Tomás Alarcón",
-    nombres: "Tomás",
-    apellidos: "Alarcón",
-    email: "tomas.alarcon.antiguo@email.com",
-    telefonoMovil: "+56 9 1111 2222",
-    estadoCuenta: "inactiva", // Se fue del edificio
-    condicionesEspecialesIds: [],
-    roles: ["residente"],
-  },
-  // 9. Trabajador de Aseo (Personal)
-  {
-    id: "p-9",
-    rut: "11.234.567-0",
-    nombreCompleto: "Rosa Meléndez",
-    nombres: "Rosa",
-    apellidos: "Meléndez",
-    email: "rosa.aseo@email.com",
-    telefonoMovil: "+56 9 4444 3333",
-    estadoCuenta: "activa",
-    condicionesEspecialesIds: [],
-    roles: ["personal"],
+    id: "p-9", rut: "11.234.567-0", nombreCompleto: "Rosa Meléndez", nombres: "Rosa", apellidos: "Meléndez",
+    email: "rosa.aseo@email.com", telefonoMovil: "+56 9 4444 3333", estadoCuenta: "activa",
+    condicionesEspecialesIds: [], roles: ["personal"],
     datosLaborales: { id: "l-3", cargo: "Auxiliar de Aseo", afp: "Modelo", prevision: "FONASA", fechaIngreso: "2020-05-15" }
   },
-  // 10. Cuenta Bloqueada (Arrendatario Moroso Extremo / Conflictivo)
+
+  // ===== CASOS ESPECIALES =====
   {
-    id: "p-10",
-    rut: "16.777.888-9",
-    nombreCompleto: "Esteban Dido",
-    nombres: "Esteban",
-    apellidos: "Dido",
-    email: "esteban.bloqueado@email.com",
-    telefonoMovil: "+56 9 0000 0000",
-    estadoCuenta: "bloqueada", // No puede usar amenidades
-    condicionesEspecialesIds: [],
-    roles: ["residente"],
-  }
+    id: "p-8", rut: "20.123.987-5", nombreCompleto: "Tomás Alarcón", nombres: "Tomás", apellidos: "Alarcón",
+    email: "tomas.alarcon.antiguo@email.com", telefonoMovil: "+56 9 1111 2222", estadoCuenta: "inactiva",
+    condicionesEspecialesIds: [], roles: ["residente"]
+  },
+  {
+    id: "p-10", rut: "16.777.888-9", nombreCompleto: "Esteban Dido", nombres: "Esteban", apellidos: "Dido",
+    email: "esteban.bloqueado@email.com", telefonoMovil: "+56 9 0000 0000", estadoCuenta: "bloqueada",
+    condicionesEspecialesIds: [], roles: ["residente"]
+  },
+  {
+    id: "p-50", rut: "18.000.111-2", nombreCompleto: "Rodrigo Paredes Flores", nombres: "Rodrigo", apellidos: "Paredes Flores",
+    email: "r.paredes@email.com", telefonoMovil: "+56 9 0000 1144", estadoCuenta: "inactiva",
+    condicionesEspecialesIds: [], roles: ["residente"]
+  },
+
+  // ===== DIRECTIVA ADICIONAL =====
+  {
+    id: "p-51", rut: "19.111.222-5", nombreCompleto: "Marcela Toro Espinoza", nombres: "Marcela", apellidos: "Toro Espinoza",
+    email: "m.toro@email.com", telefonoMovil: "+56 9 1111 2266", estadoCuenta: "activa",
+    condicionesEspecialesIds: [], roles: ["propietario", "residente", "directiva"],
+    datosGobernanza: { id: "g-3", cargoDirectiva: "secretario", fechaAsuncion: "2025-03-01" }
+  },
+  {
+    id: "p-52", rut: "20.222.333-6", nombreCompleto: "Alejandro Fuentes Riquelme", nombres: "Alejandro", apellidos: "Fuentes Riquelme",
+    email: "a.fuentes@email.com", telefonoMovil: "+56 9 2222 3377", estadoCuenta: "activa",
+    condicionesEspecialesIds: [], roles: ["propietario", "residente", "directiva"],
+    datosGobernanza: { id: "g-4", cargoDirectiva: "director", fechaAsuncion: "2025-03-01" }
+  },
+
+  // ===== VACÍOS (Cuenta inactiva/bloqueada sin vínculos) =====
+  {
+    id: "p-53", rut: "15.333.444-7", nombreCompleto: "Claudia Soto Vargas", nombres: "Claudia", apellidos: "Soto Vargas",
+    email: "c.soto@email.com", telefonoMovil: "+56 9 3333 4488", estadoCuenta: "inactiva",
+    condicionesEspecialesIds: [], roles: ["residente"]
+  },
+  {
+    id: "p-54", rut: "16.444.555-8", nombreCompleto: "Patricio Lagos Muñoz", nombres: "Patricio", apellidos: "Lagos Muñoz",
+    email: "p.lagos@email.com", telefonoMovil: "+56 9 4444 5599", estadoCuenta: "bloqueada",
+    condicionesEspecialesIds: [], roles: ["residente"]
+  },
 ];

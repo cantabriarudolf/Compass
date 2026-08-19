@@ -3,8 +3,10 @@ import { Geist, Geist_Mono, Inter } from "next/font/google"
 import "@workspace/ui/globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
 import { cn } from "@workspace/ui/lib/utils";
-import { SidebarInset, SidebarProvider, SidebarTrigger } from "@workspace/ui/components/sidebar";
+import { SidebarInset, SidebarProvider } from "@workspace/ui/components/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
+import { SidebarToggle } from "@/components/sidebar-toggle";
+import { CommunityHeader } from "@/components/community-header";
 import { Separator } from "@workspace/ui/components/separator";
 import { ModeToggle } from "@/components/mode-toggle";
 import { TooltipProvider } from "@workspace/ui/components/tooltip";
@@ -34,10 +36,10 @@ export default function RootLayout({
               <AppSidebar />
               <SidebarInset>
                 <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
-                  <SidebarTrigger className="-ml-1" />
+                  <SidebarToggle />
                   <Separator orientation="vertical" className="mr-2 h-4" />
                   <div className="flex-1">
-                    <h2 className="text-sm font-medium">Proyecto Compass</h2>
+                    <CommunityHeader />
                   </div>
                   <ModeToggle />
                 </header>

@@ -18,7 +18,7 @@ import {
   Estacionamiento,
 } from "@/data/inventario/estacionamientos"
 import { personas as seedPersonas, Persona } from "@/data/comunidad/personas"
-import { vinculos as seedVinculos, VinculoUnidad } from "@/data/comunidad/vinculos"
+import { vinculos as seedVinculos, VinculoUnidad, ESTADOS_INMOBILIARIOS as seedEstadosInmobiliarios } from "@/data/comunidad/vinculos"
 import {
   AFPS as seedAFPS,
   PREVISIONES_SALUD as seedPrevisionesSalud,
@@ -51,9 +51,13 @@ import {
   ESTADOS_OCUPACION as seedEstadosOcupacion,
   CATEGORIAS_MACRO as seedCategoriasMacro,
   CATEGORIAS_MICRO as seedCategoriasMicro,
+  CATEGORIAS_UNIDAD as seedCategoriasUnidad,
+  UBICACIONES_ESTACIONAMIENTO as seedUbicacionesEstacionamiento,
 } from "@/data/maestros"
 
 export type StoreResult = { ok: boolean; error?: string }
+
+export const STORE_VERSION = 7
 
 export interface MaestroCollections {
   afps: Afp[]
@@ -70,6 +74,9 @@ export interface MaestroCollections {
   estadosOcupacion: { id: string; nombre: string; color: string; hex?: string }[]
   categoriasMacro: { id: string; nombre: string }[]
   categoriasMicro: { id: string; nombre: string }[]
+  categoriasUnidad: { id: string; nombre: string }[]
+  ubicacionesEstacionamiento: { id: string; nombre: string }[]
+  estadosInmobiliarios: { id: string; nombre: string; color?: string }[]
 }
 
 export interface CompassData {
@@ -140,7 +147,7 @@ function migrarEstadoUnidades(unidades: Unidad[]): Unidad[] {
   })
 }
 
-const seedData = (): CompassData => ({
+export const seedData = (): CompassData => ({
   tiposUnidad: seedTiposUnidad,
   macroSectores: seedMacroSectores,
   microSectores: seedMicroSectores,
@@ -164,6 +171,9 @@ const seedData = (): CompassData => ({
     estadosOcupacion: seedEstadosOcupacion,
     categoriasMacro: seedCategoriasMacro,
     categoriasMicro: seedCategoriasMicro,
+    categoriasUnidad: seedCategoriasUnidad,
+    ubicacionesEstacionamiento: seedUbicacionesEstacionamiento,
+    estadosInmobiliarios: seedEstadosInmobiliarios,
   },
 })
 
@@ -329,6 +339,28 @@ export const useCompassStore = create<CompassStore>()(
             return { ok: false, error: "El contrato de arriendo se solapa con otro contrato vigente en la misma unidad." }
           }
         }
+
+        // Cierre automático de tramo anterior (solo propietario/arrendatario)
+        const cerrarAnterior = vinculo.cerrarAnterior !== false
+        if (cerrarAnterior && !vinculo.fechaFin && (vinculo.rol === "propietario" || vinculo.rol === "arrendatario")) {
+          const anterior = get().vinculos.find(v =>
+            v.unidadId === vinculo.unidadId &&
+            v.rol === vinculo.rol &&
+            !v.fechaFin &&
+            v.id !== vinculo.id
+          )
+          if (anterior) {
+            const fechaCierre = new Date(vinculo.fechaInicio)
+            fechaCierre.setDate(fechaCierre.getDate() - 1)
+            const fechaFinStr = fechaCierre.toISOString().split("T")[0]
+            set(s => ({
+              vinculos: s.vinculos.map(v =>
+                v.id === anterior.id ? { ...v, fechaFin: fechaFinStr } : v
+              ),
+            }))
+          }
+        }
+
         set(s => ({ vinculos: upsert(s.vinculos, vinculo) }))
         return { ok: true }
       },
@@ -370,7 +402,7 @@ export const useCompassStore = create<CompassStore>()(
     }),
     {
       name: "compass-store",
-      version: 3,
+      version: STORE_VERSION,
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({
         tiposUnidad: state.tiposUnidad,
@@ -399,6 +431,39 @@ export const useCompassStore = create<CompassStore>()(
           result = {
             ...result,
             unidades: migrarEstadoUnidades(prev.unidades ?? []),
+          }
+        }
+        if ((version ?? 0) < 4) {
+          result = {
+            ...result,
+            maestros: {
+              ...seedData().maestros,
+              ...prev.maestros,
+            },
+          }
+        }
+        if ((version ?? 0) < 5) {
+          result = {
+            ...result,
+            maestros: {
+              ...seedData().maestros,
+              ...prev.maestros,
+            },
+          }
+        }
+        if ((version ?? 0) < 6) {
+          result = {
+            ...result,
+            maestros: {
+              ...seedData().maestros,
+              ...prev.maestros,
+            },
+          }
+        }
+        if ((version ?? 0) < 7) {
+          result = {
+            ...result,
+            estacionamientos: seedEstacionamientos,
           }
         }
         return result

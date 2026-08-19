@@ -28,11 +28,16 @@ El sistema SHALL inicializarse con los datos de los mocks de `apps/web/data/` (t
 - **THEN** el store se siembra con el seed derivado de los mocks y las vistas muestran los datos esperados.
 
 ### Requirement: Colecciones de maestros de estructura e inventario en el store
-El sistema SHALL incluir en `MaestroCollections` los maestros de estructura e inventario (`estadosOcupacion`, `categoriasMacro` y `categoriasMicro`, sembrados desde `data/maestros.ts`) además de los maestros administrativos, de modo que el módulo de Maestros (MA) los gestione con `saveMaestro`/`removeMaestro` y el resto de módulos los lean desde el store.
+El sistema SHALL incluir en `MaestroCollections` los maestros de estructura, inventario y vínculos (`estadosOcupacion`, `categoriasMacro`, `categoriasMicro`, `categoriasUnidad`, `ubicacionesEstacionamiento` y `estadosInmobiliarios`, sembrados desde `data/maestros.ts` y `data/comunidad/vinculos.ts`) además de los maestros administrativos, de modo que el módulo de Maestros (MA) los gestione con `saveMaestro`/`removeMaestro` y el resto de módulos los lean desde el store.
 
 #### Scenario: Gestión de estados y categorías desde el módulo MA
-- **WHEN** el usuario crea o edita un estado de ocupación o una categoría macro/micro en `/admin/maestros`
+- **WHEN** el usuario crea o edita un estado de ocupación o una categoría macro/micro/de unidad en `/admin/maestros`
 - **THEN** el cambio se persiste en el store y se refleja en las vistas que leen dichas colecciones.
+
+#### Scenario: Categoría de unidad consumida desde el store
+- **WHEN** los módulos TU (Tipos de Unidad), EF (Estructura Física), ES (Estacionamientos) y VU (Vinculación de Unidades) renderizan selectores de categoría, ubicación o estado inmobiliario
+- **THEN** las opciones provienen de `maestros.categoriasUnidad`, `maestros.ubicacionesEstacionamiento` y `maestros.estadosInmobiliarios` respectivamente (nunca de listas hardcodeadas en la UI)
+- **AND** si el usuario crea una categoría/ubicación/estado nuevo en MA, éste aparece en dichos selectores sin cambios de código.
 
 #### Scenario: Estado nuevo con color asignado
 - **WHEN** el usuario crea un nuevo estado de ocupación en MA

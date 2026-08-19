@@ -10,7 +10,7 @@ import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
 import { Switch } from "@workspace/ui/components/switch"
 import { ScrollArea } from "@workspace/ui/components/scroll-area"
-import { IconSearch } from "@tabler/icons-react"
+import { IconSearch, IconAlertTriangle } from "@tabler/icons-react"
 import {
   Select,
   SelectContent,
@@ -26,14 +26,6 @@ const ROLES_VINCULO: { id: RolVinculo; nombre: string }[] = [
   { id: "arrendatario", nombre: "Arrendatario" },
   { id: "copropietario", nombre: "Copropietario / Familiar" },
   { id: "ocupante", nombre: "Ocupante" },
-]
-
-const ESTADOS_INMOBILIARIOS: { id: NonNullable<VinculoUnidad["estadoOcupacionPropiedad"]>; nombre: string }[] = [
-  { id: "habitada", nombre: "Habitada" },
-  { id: "proxima_vacancia", nombre: "Próxima Vacancia" },
-  { id: "en_arriendo", nombre: "En Arriendo" },
-  { id: "arrendada", nombre: "Arrendada" },
-  { id: "en_venta", nombre: "En Venta" },
 ]
 
 function etiquetaUnidad(u: Unidad) {
@@ -59,6 +51,7 @@ export function FormularioVinculoUnidad({ vinculo, unidadesVinculadasIds, onSave
   const unidades = useCompassStore(s => s.unidades)
   const microSectores = useCompassStore(s => s.microSectores)
   const macroSectores = useCompassStore(s => s.macroSectores)
+  const estadosInmobiliarios = useCompassStore(s => s.maestros.estadosInmobiliarios)
   const microPorId = React.useMemo(() => new Map(microSectores.map(m => [m.id, m])), [microSectores])
   const macroPorId = React.useMemo(() => new Map(macroSectores.map(m => [m.id, m])), [macroSectores])
 
@@ -69,6 +62,7 @@ export function FormularioVinculoUnidad({ vinculo, unidadesVinculadasIds, onSave
   const [fechaFin, setFechaFin] = React.useState(vinculo?.fechaFin ?? "")
   const [permiteVerFinanzas, setPermiteVerFinanzas] = React.useState(vinculo?.permiteVerFinanzas ?? false)
   const [estadoOcupacionPropiedad, setEstadoOcupacionPropiedad] = React.useState<VinculoUnidad["estadoOcupacionPropiedad"]>(vinculo?.estadoOcupacionPropiedad ?? "habitada")
+  const [cerrarAnterior, setCerrarAnterior] = React.useState(vinculo?.cerrarAnterior !== false)
   const [errores, setErrores] = React.useState<Record<string, string>>({})
 
   const unidadesDisponibles = React.useMemo(() => {
@@ -116,6 +110,7 @@ export function FormularioVinculoUnidad({ vinculo, unidadesVinculadasIds, onSave
       ...(rol === "propietario"
         ? { estadoOcupacionPropiedad: estadoOcupacionPropiedad ?? "habitada", permiteVerFinanzas }
         : { permiteVerFinanzas: false }),
+      ...(rol === "propietario" || rol === "arrendatario" ? { cerrarAnterior } : {}),
     })
     if (resultado && !resultado.ok) {
       setErrores({ global: resultado.error ?? "No se pudo guardar el vínculo." })
@@ -221,6 +216,33 @@ export function FormularioVinculoUnidad({ vinculo, unidadesVinculadasIds, onSave
             </div>
           </div>
 
+          {(rol === "propietario" || rol === "arrendatario") && (
+            <div className="space-y-4">
+              <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-widest border-b pb-2">Cierre Automático</h3>
+              <div className="flex items-center justify-between gap-4 rounded-lg border p-4">
+                <div>
+                  <Label htmlFor="cerrar-anterior">Cerrar vínculo activo anterior</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Cierra automáticamente el {rol === "propietario" ? "propietario" : "arrendatario"} activo actual al guardar uno nuevo.
+                  </p>
+                </div>
+                <Switch
+                  id="cerrar-anterior"
+                  checked={cerrarAnterior}
+                  onCheckedChange={setCerrarAnterior}
+                />
+              </div>
+              {cerrarAnterior && !fechaFin && (
+                <div className="flex items-start gap-2 rounded-md bg-amber-50 border border-amber-200 p-3 text-xs text-amber-800">
+                  <IconAlertTriangle className="size-4 mt-0.5 shrink-0" />
+                  <span>
+                    Se cerrará automáticamente el vínculo vigente de este rol en la unidad, asignándole como fecha de fin el día anterior al inicio del nuevo.
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+
           {rol === "propietario" && (
             <div className="space-y-4">
               <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-widest border-b pb-2">Configuración Inmobiliaria</h3>
@@ -239,12 +261,12 @@ export function FormularioVinculoUnidad({ vinculo, unidadesVinculadasIds, onSave
 
               <div className="space-y-2">
                 <Label>Estado Ocupación de la Propiedad</Label>
-                <Select value={estadoOcupacionPropiedad} onValueChange={(v) => setEstadoOcupacionPropiedad(v as VinculoUnidad["estadoOcupacionPropiedad"])}>
+                <Select value={estadoOcupacionPropiedad} onValueChange={(v) => setEstadoOcupacionPropiedad(v)}>
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="Selecciona el estado..." />
                   </SelectTrigger>
                   <SelectContent>
-                    {ESTADOS_INMOBILIARIOS.map(e => (
+                    {estadosInmobiliarios.map(e => (
                       <SelectItem key={e.id} value={e.id}>{e.nombre}</SelectItem>
                     ))}
                   </SelectContent>

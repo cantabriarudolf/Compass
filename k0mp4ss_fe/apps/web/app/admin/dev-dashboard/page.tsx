@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@workspace/ui/components/card';
 import { Badge } from '@workspace/ui/components/badge';
 import { Button } from '@workspace/ui/components/button';
@@ -17,6 +17,14 @@ import {
 } from '@workspace/ui/components/dropdown-menu';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from '@workspace/ui/components/sheet';
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@workspace/ui/components/dialog';
+import {
   IconListCheck,
   IconStack2,
   IconCheck,
@@ -27,9 +35,17 @@ import {
   IconFileCode2,
   IconArchive,
   IconArrowLeft,
-  IconSearch
+  IconSearch,
+  IconDownload,
+  IconUpload,
+  IconTrash,
+  IconChevronDown
 } from '@tabler/icons-react';
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@workspace/ui/components/collapsible';
 import type { DashboardData, ModuleInfo, TaskItem, ChangeInfo } from '@/lib/dev-dashboard';
+import { useCompassStore, STORE_VERSION, seedData } from '@/lib/store';
+import { STORE_KEY, validateStoreBackup, type BackupValidation } from '@/lib/store-backup';
+import { diffCompassData, type CompassDataDiff } from '@/lib/store-diff';
 
 const STATUS_BADGE: Record<ModuleInfo['status'], { label: string; className: string }> = {
   completado: { label: '🟢 Completado', className: 'bg-emerald-600 hover:bg-emerald-700' },
@@ -56,6 +72,59 @@ function buildHermesPrompt(changeId: string | undefined, task: TaskItem): string
   return `hermes run "Ejecuta la tarea ${task.id} del change ${changeId ?? ''}: ${task.title}"`;
 }
 
+interface BackupSummaryItem {
+  label: string;
+  count: number;
+  type: 'main' | 'maestro';
+}
+
+function DiffSection({ title, diffs }: { title: string; diffs: import('@/lib/store-diff').CollectionDiff[] }) {
+  const withChanges = diffs.filter(d => d.added.length + d.removed.length + d.modified.length > 0);
+  if (withChanges.length === 0) return null;
+  return (
+    <div className="mt-1.5 pt-1.5 border-t space-y-2">
+      <p className="text-muted-foreground font-medium">{title}</p>
+      {withChanges.map((d) => (
+        <div key={d.label} className="space-y-1">
+          <div className="flex items-center gap-2">
+            <span className="font-semibold">{d.label}</span>
+            <span className="text-muted-foreground">({d.seedCount} → {d.currentCount})</span>
+            {d.added.length > 0 && <Badge variant="secondary" className="text-[10px] px-1 py-0 text-emerald-700 bg-emerald-100">+{d.added.length}</Badge>}
+            {d.removed.length > 0 && <Badge variant="secondary" className="text-[10px] px-1 py-0 text-destructive bg-destructive/10">-{d.removed.length}</Badge>}
+            {d.modified.length > 0 && <Badge variant="secondary" className="text-[10px] px-1 py-0 text-amber-700 bg-amber-100">~{d.modified.length}</Badge>}
+          </div>
+          <div className="pl-2 space-y-1">
+            {d.added.length > 0 && (
+              <div className="flex flex-wrap gap-1">
+                <span className="text-emerald-700 text-[10px] font-medium">Agregados:</span>
+                {d.added.map((item) => (
+                  <span key={item.id} className="text-[10px] bg-emerald-50 text-emerald-700 px-1 rounded border border-emerald-200">{item.name}</span>
+                ))}
+              </div>
+            )}
+            {d.removed.length > 0 && (
+              <div className="flex flex-wrap gap-1">
+                <span className="text-destructive text-[10px] font-medium">Eliminados:</span>
+                {d.removed.map((item) => (
+                  <span key={item.id} className="text-[10px] bg-destructive/5 text-destructive px-1 rounded border border-destructive/20 line-through">{item.name}</span>
+                ))}
+              </div>
+            )}
+            {d.modified.length > 0 && (
+              <div className="flex flex-wrap gap-1">
+                <span className="text-amber-700 text-[10px] font-medium">Modificados:</span>
+                {d.modified.map((item) => (
+                  <span key={item.id} className="text-[10px] bg-amber-50 text-amber-700 px-1 rounded border border-amber-200">{item.name}</span>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function DevDashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -72,8 +141,171 @@ export default function DevDashboardPage() {
   const [moduleSearch, setModuleSearch] = useState('');
   const [modulePhases, setModulePhases] = useState<string[]>([]);
   const [moduleStatuses, setModuleStatuses] = useState<string[]>([]);
+  const [moduleCierres, setModuleCierres] = useState<string[]>([]);
   const [moduleSort, setModuleSort] = useState<{ key: keyof ModuleInfo; dir: 1 | -1 } | null>(null);
   const [showComparative, setShowComparative] = useState(false);
+  const [storeBackupMsg, setStoreBackupMsg] = useState<{ type: 'ok' | 'error'; text: string } | null>(null);
+  const [storeImportPending, setStoreImportPending] = useState<{ json: string; fileName: string } | null>(null);
+  const [storeImportValidation, setStoreImportValidation] = useState<BackupValidation | null>(null);
+  const [storeImportDialogOpen, setStoreImportDialogOpen] = useState(false);
+  const [storeClearDialogOpen, setStoreClearDialogOpen] = useState(false);
+  const [backupSummary, setBackupSummary] = useState<BackupSummaryItem[] | null>(null);
+  const [backupDetailOpen, setBackupDetailOpen] = useState(false);
+  const [backupToRepo, setBackupToRepo] = useState(false);
+  const [backupDiff, setBackupDiff] = useState<CompassDataDiff | null>(null);
+  const storeFileInputRef = useRef<HTMLInputElement>(null);
+
+  const exportStore = useCallback(async () => {
+    try {
+      const s = useCompassStore.getState();
+      const items: BackupSummaryItem[] = [
+        { label: 'Tipos de Unidad', count: s.tiposUnidad.length, type: 'main' },
+        { label: 'Macro Sectores', count: s.macroSectores.length, type: 'main' },
+        { label: 'Micro Sectores', count: s.microSectores.length, type: 'main' },
+        { label: 'Unidades', count: s.unidades.length, type: 'main' },
+        { label: 'Estacionamientos', count: s.estacionamientos.length, type: 'main' },
+        { label: 'Personas', count: s.personas.length, type: 'main' },
+        { label: 'Vínculos', count: s.vinculos.length, type: 'main' },
+      ];
+      const m = s.maestros;
+      const maestroEntries: [string, unknown[]][] = [
+        ['AFP', m.afps], ['Previsión Salud', m.previsionesSalud], ['Mutuales/Cajas', m.mutualesCajas],
+        ['Feriados', m.feriados], ['Bancos', m.bancos], ['Índices Ajuste', m.indicesAjuste],
+        ['Cajas Fondos', m.cajasFondos], ['Categorías Insumos', m.categoriasInsumos],
+        ['Unidades Medida', m.unidadesMedida], ['Contactos Emergencia', m.contactosEmergencia],
+        ['Condiciones Especiales', m.condicionesEspeciales], ['Estados Ocupación', m.estadosOcupacion],
+        ['Categorías Macro', m.categoriasMacro], ['Categorías Micro', m.categoriasMicro],
+        ['Categorías Unidad', m.categoriasUnidad], ['Ubicaciones Estacionamiento', m.ubicacionesEstacionamiento],
+        ['Estados Inmobiliarios', m.estadosInmobiliarios],
+      ];
+      for (const [label, arr] of maestroEntries) {
+        items.push({ label, count: Array.isArray(arr) ? arr.length : 0, type: 'maestro' });
+      }
+
+      const totalRecords = items.reduce((sum, it) => sum + it.count, 0);
+      const withData = items.filter(it => it.count > 0).length;
+
+      const payload = {
+        _summary: {
+          exportDate: new Date().toISOString(),
+          totalRecords,
+          collectionsWithData: withData,
+          details: items,
+        },
+        state: {
+          tiposUnidad: s.tiposUnidad,
+          macroSectores: s.macroSectores,
+          microSectores: s.microSectores,
+          unidades: s.unidades,
+          estacionamientos: s.estacionamientos,
+          personas: s.personas,
+          vinculos: s.vinculos,
+          configuracion: s.configuracion,
+          maestros: s.maestros,
+        },
+        version: STORE_VERSION,
+      };
+      const jsonStr = JSON.stringify(payload, null, 2);
+      const now = new Date();
+      const stamp = now.toISOString().replace(/[:.]/g, '-').slice(0, 19);
+      const fileName = `compass-backup-${stamp}.json`;
+
+      const blob = new Blob([jsonStr], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      a.click();
+      URL.revokeObjectURL(url);
+
+      let repoMsg = '';
+      if (backupToRepo) {
+        try {
+          const res = await fetch('/api/backup', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content: jsonStr, fileName }),
+          });
+          const data = await res.json();
+          if (data.ok) {
+            repoMsg = ` | Copia en: ${data.path}`;
+          } else {
+            repoMsg = ` | Error al guardar en repo: ${data.error}`;
+          }
+        } catch (err) {
+          repoMsg = ` | Error al conectar con el servidor`;
+        }
+      }
+
+      setBackupSummary(items);
+      setBackupDiff(diffCompassData(s, seedData()));
+      setBackupDetailOpen(false);
+      setStoreBackupMsg({
+        type: 'ok',
+        text: `Backup exportado: ${fileName} — ${totalRecords} registros en ${withData} colecciones${repoMsg}`,
+      });
+    } catch (e) {
+      setStoreBackupMsg({ type: 'error', text: e instanceof Error ? e.message : String(e) });
+    }
+  }, [backupToRepo]);
+
+  const onStoreFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const parsed = JSON.parse(String(reader.result));
+        const validation = validateStoreBackup(parsed);
+        setStoreImportValidation(validation);
+        setStoreImportPending({ json: JSON.stringify(parsed), fileName: file.name });
+        setStoreImportDialogOpen(true);
+      } catch {
+        setStoreBackupMsg({ type: 'error', text: 'El archivo no es un JSON válido.' });
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  }, []);
+
+  const confirmStoreImport = useCallback(() => {
+    if (!storeImportPending || !storeImportValidation) return;
+    if (!storeImportValidation.ok) {
+      setStoreBackupMsg({
+        type: 'error',
+        text: `Importación bloqueada: ${storeImportValidation.errors[0]}`,
+      });
+      return;
+    }
+    try {
+      const parsed = JSON.parse(storeImportPending.json);
+      const envelope =
+        parsed && typeof parsed === 'object' && 'state' in parsed
+          ? parsed
+          : { state: parsed, version: STORE_VERSION };
+      localStorage.setItem(STORE_KEY, JSON.stringify(envelope));
+      setStoreImportDialogOpen(false);
+      setStoreImportPending(null);
+      setStoreImportValidation(null);
+      setStoreBackupMsg({ type: 'ok', text: 'Importación exitosa. Recargando...' });
+      window.setTimeout(() => window.location.reload(), 600);
+    } catch (e) {
+      setStoreBackupMsg({ type: 'error', text: e instanceof Error ? e.message : String(e) });
+      setStoreImportDialogOpen(false);
+    }
+  }, [storeImportPending, storeImportValidation]);
+
+  const confirmStoreClear = useCallback(() => {
+    try {
+      localStorage.removeItem(STORE_KEY);
+      setStoreClearDialogOpen(false);
+      setStoreBackupMsg({ type: 'ok', text: 'Datos temporales eliminados. Recargando con los datos de fábrica...' });
+      window.setTimeout(() => window.location.reload(), 600);
+    } catch (e) {
+      setStoreBackupMsg({ type: 'error', text: e instanceof Error ? e.message : String(e) });
+      setStoreClearDialogOpen(false);
+    }
+  }, []);
 
   const refresh = useCallback(async () => {
     try {
@@ -120,11 +352,20 @@ export default function DevDashboardPage() {
 
   const capabilities = useMemo(() => {
     if (!data) return [];
+    const archivedIds = data.archived.map(c => c.id.toUpperCase());
     const activeIds = data.changes.map(c => c.id.toUpperCase());
-    return data.specs.map(s => ({
-      ...s,
-      archived: s.code ? !activeIds.some(id => id.startsWith(`${s.code.toUpperCase()}-`)) : true,
-    }));
+    return data.specs.map(s => {
+      const specName = s.name.toUpperCase();
+      const isArchived = archivedIds.some(id => {
+        const key = id.replace(/^\d{4}-\d{2}-\d{2}-/, '');
+        return key === specName || id.startsWith(`${specName}-`);
+      });
+      const isActive = activeIds.some(id => id.startsWith(`${specName}-`));
+      return {
+        ...s,
+        archived: isArchived && !isActive,
+      };
+    });
   }, [data]);
 
   const moduleByArchivedChange = useMemo(() => {
@@ -180,10 +421,12 @@ export default function DevDashboardPage() {
         (m.documented ? 'spec' : '').includes(term) ||
         (m.hasManual ? 'manual' : '').includes(term) ||
         (m.change ?? '').toLowerCase().includes(term) ||
+        (m.cierre ?? '').includes(term) ||
         (m.notesStatus ? `nota ${m.notesStatus}` : '').includes(term);
       const matchesPhase = modulePhases.length === 0 || modulePhases.includes(m.phase);
       const matchesStatus = moduleStatuses.length === 0 || moduleStatuses.includes(m.status);
-      return matchesSearch && matchesPhase && matchesStatus;
+      const matchesCierre = moduleCierres.length === 0 || moduleCierres.includes(m.cierre);
+      return matchesSearch && matchesPhase && matchesStatus && matchesCierre;
     });
     if (moduleSort) {
       const { key, dir } = moduleSort;
@@ -194,7 +437,7 @@ export default function DevDashboardPage() {
       });
     }
     return rows;
-  }, [data, moduleSearch, modulePhases, moduleStatuses, moduleSort]);
+  }, [data, moduleSearch, modulePhases, moduleStatuses, moduleCierres, moduleSort]);
 
   const completedCount = activeChange?.tasks.filter(t => t.completed).length ?? 0;
   const totalCount = activeChange?.tasks.length ?? 0;
@@ -377,6 +620,88 @@ export default function DevDashboardPage() {
           </p>
         </div>
         <div className="flex items-center gap-4">
+          <div className="flex flex-col items-end gap-1">
+            <div className="flex items-center gap-2">
+              <input
+                ref={storeFileInputRef}
+                type="file"
+                accept="application/json,.json"
+                className="hidden"
+                onChange={onStoreFileChange}
+              />
+              <Button variant="outline" size="sm" onClick={exportStore} title="Descargar los datos del store local (localStorage) como JSON">
+                <IconDownload className="size-4 mr-1" /> Exportar datos
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => storeFileInputRef.current?.click()} title="Restaurar un backup JSON del store local">
+                <IconUpload className="size-4 mr-1" /> Importar datos
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setStoreClearDialogOpen(true)}
+                title="Eliminar los datos temporales del store local y volver a los datos de fábrica"
+                className="text-destructive border-destructive/40 hover:bg-destructive/10"
+              >
+                <IconTrash className="size-4 mr-1" /> Limpiar datos
+              </Button>
+            </div>
+            <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer select-none">
+              <Checkbox
+                checked={backupToRepo}
+                onCheckedChange={(v) => setBackupToRepo(v === true)}
+              />
+              Guardar copia en Data/NSGC/backups/
+            </label>
+            {storeBackupMsg && (
+              <span
+                className={`text-xs font-medium ${storeBackupMsg.type === 'ok' ? 'text-emerald-600' : 'text-destructive'}`}
+              >
+                {storeBackupMsg.text}
+              </span>
+            )}
+            {backupSummary && backupDiff && (
+              <Collapsible open={backupDetailOpen} onOpenChange={setBackupDetailOpen}>
+                <div className="mt-1 rounded-lg border bg-muted/40 p-2.5 text-xs space-y-1.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex flex-wrap gap-1.5">
+                      {backupDiff.main.filter(d => d.added.length + d.removed.length + d.modified.length > 0).map((d) => (
+                        <Badge key={d.label} variant="secondary" className="font-mono text-[10px] px-1.5 py-0">
+                          {d.label}: {d.seedCount}→{d.currentCount}
+                          {d.added.length > 0 && <span className="text-emerald-600 ml-1">+{d.added.length}</span>}
+                          {d.removed.length > 0 && <span className="text-destructive ml-1">-{d.removed.length}</span>}
+                          {d.modified.length > 0 && <span className="text-amber-600 ml-1">~{d.modified.length}</span>}
+                        </Badge>
+                      ))}
+                      {(() => {
+                        const maestroAdded = backupDiff.maestros.reduce((s, d) => s + d.added.length, 0);
+                        const maestroRemoved = backupDiff.maestros.reduce((s, d) => s + d.removed.length, 0);
+                        const maestroModified = backupDiff.maestros.reduce((s, d) => s + d.modified.length, 0);
+                        const totalChanges = maestroAdded + maestroRemoved + maestroModified;
+                        return totalChanges > 0 ? (
+                          <Badge variant="outline" className="font-mono text-[10px] px-1.5 py-0">
+                            Maestros
+                            {maestroAdded > 0 && <span className="text-emerald-600 ml-1">+{maestroAdded}</span>}
+                            {maestroRemoved > 0 && <span className="text-destructive ml-1">-{maestroRemoved}</span>}
+                            {maestroModified > 0 && <span className="text-amber-600 ml-1">~{maestroModified}</span>}
+                          </Badge>
+                        ) : null;
+                      })()}
+                    </div>
+                    <CollapsibleTrigger asChild>
+                      <Button variant="ghost" size="sm" className="h-5 px-1.5 text-[10px] gap-0.5">
+                        Detalle
+                        <IconChevronDown className={`size-3 transition-transform ${backupDetailOpen ? 'rotate-180' : ''}`} />
+                      </Button>
+                    </CollapsibleTrigger>
+                  </div>
+                  <CollapsibleContent>
+                    <DiffSection title="Colecciones principales" diffs={backupDiff.main} />
+                    <DiffSection title="Maestros" diffs={backupDiff.maestros} />
+                  </CollapsibleContent>
+                </div>
+              </Collapsible>
+            )}
+          </div>
           <div className="text-right">
             <div className="text-2xl font-black text-primary">{progressPercent}%</div>
             <div className="text-xs text-muted-foreground font-medium">Progreso Change Activo</div>
@@ -392,6 +717,130 @@ export default function DevDashboardPage() {
           </Button>
         </div>
       </div>
+
+      <Dialog open={storeImportDialogOpen} onOpenChange={setStoreImportDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Importar datos del store</DialogTitle>
+            <DialogDescription>
+              Se reemplazará el contenido actual del store local (<code className="font-mono text-xs">compass-store</code>) con el
+              archivo <code className="font-mono text-xs">{storeImportPending?.fileName ?? ''}</code>. La página se recargará al confirmar.
+            </DialogDescription>
+          </DialogHeader>
+
+          {storeImportValidation && (
+            <div className="space-y-3 text-sm">
+              {storeImportValidation.exportSummary && (
+                <div className="rounded-lg border border-sky-500/40 bg-sky-500/5 p-3 grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  <div>
+                    <p className="text-xs text-muted-foreground font-medium">Fecha de exportación</p>
+                    <p className="font-mono font-bold">
+                      {storeImportValidation.exportSummary.exportDate
+                        ? new Date(storeImportValidation.exportSummary.exportDate).toLocaleString()
+                        : '—'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground font-medium">Total registros</p>
+                    <p className="font-mono font-bold">{storeImportValidation.exportSummary.totalRecords ?? '—'}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground font-medium">Colecciones con datos</p>
+                    <p className="font-mono font-bold">{storeImportValidation.exportSummary.collectionsWithData ?? '—'}</p>
+                  </div>
+                </div>
+              )}
+
+              {storeImportValidation.summary && (
+                <div className="rounded-lg border bg-muted/40 p-3 grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  <div>
+                    <p className="text-xs text-muted-foreground font-medium">Versión</p>
+                    <p className="font-mono font-bold">v{storeImportValidation.summary.version}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground font-medium">Personas</p>
+                    <p className="font-mono font-bold">{storeImportValidation.summary.personas}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground font-medium">Vínculos</p>
+                    <p className="font-mono font-bold">{storeImportValidation.summary.vinculos}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground font-medium">Unidades</p>
+                    <p className="font-mono font-bold">{storeImportValidation.summary.unidades}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground font-medium">Estacionamientos</p>
+                    <p className="font-mono font-bold">{storeImportValidation.summary.estacionamientos}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground font-medium">Maestros</p>
+                    <p className="font-mono font-bold">{storeImportValidation.summary.maestros} colecciones</p>
+                  </div>
+                </div>
+              )}
+
+              {storeImportValidation.errors.length > 0 && (
+                <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-3">
+                  <p className="font-semibold text-destructive mb-1">Errores de validación:</p>
+                  <ul className="space-y-1">
+                    {storeImportValidation.errors.map((err, i) => (
+                      <li key={i} className="text-xs text-destructive flex items-start gap-1">
+                        <IconAlertTriangle className="size-3.5 mt-0.5 shrink-0" /> {err}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {storeImportValidation.warnings.length > 0 && (
+                <div className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-3">
+                  <p className="font-semibold text-amber-600 mb-1">Advertencias:</p>
+                  <ul className="space-y-1">
+                    {storeImportValidation.warnings.map((w, i) => (
+                      <li key={i} className="text-xs text-amber-600 flex items-start gap-1">
+                        <IconAlertTriangle className="size-3.5 mt-0.5 shrink-0" /> {w}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setStoreImportDialogOpen(false)}>Cancelar</Button>
+            <Button onClick={confirmStoreImport} disabled={!storeImportValidation?.ok}>
+              <IconCheck className="size-4 mr-1" /> Confirmar importación
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={storeClearDialogOpen} onOpenChange={setStoreClearDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Limpiar datos temporales</DialogTitle>
+            <DialogDescription>
+              Se eliminará el contenido actual del store local (<code className="font-mono text-xs">compass-store</code>) y la
+              app recargará con los datos de fábrica (seed). Esta acción no se puede deshacer.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm flex items-start gap-2">
+            <IconAlertTriangle className="size-4 mt-0.5 shrink-0 text-destructive" />
+            <span>
+              Los cambios temporales realizados en la app se perderán. Usa{' '}
+              <span className="font-semibold">Exportar datos</span> si quieres conservar una copia antes de limpiar.
+            </span>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setStoreClearDialogOpen(false)}>Cancelar</Button>
+            <Button variant="destructive" onClick={confirmStoreClear}>
+              <IconTrash className="size-4 mr-1" /> Confirmar limpieza
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Card>
         <CardHeader>
@@ -975,6 +1424,48 @@ export default function DevDashboardPage() {
                     )}
                   </DropdownMenuContent>
                 </DropdownMenu>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm" className="md:w-auto">
+                      <IconArchive className="size-4 mr-2" /> Cierre
+                      {moduleCierres.length > 0 && (
+                        <Badge variant="default" className="ml-2 text-[10px]">{moduleCierres.length}</Badge>
+                      )}
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="w-56">
+                    <DropdownMenuLabel className="text-xs text-muted-foreground">Filtrar por cierre (/cierra-modulo)</DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    {([
+                      ['pendiente', '🔵 Falta cierre'],
+                      ['cerrado', '🟢 Cerrado'],
+                      ['no_aplica', '— No aplica'],
+                    ] as const).map(([k, label]) => (
+                      <DropdownMenuCheckboxItem
+                        key={k}
+                        checked={moduleCierres.includes(k)}
+                        onCheckedChange={checked => {
+                          setModuleCierres(prev =>
+                            checked ? [...prev, k] : prev.filter(x => x !== k)
+                          );
+                        }}
+                      >
+                        {label}
+                      </DropdownMenuCheckboxItem>
+                    ))}
+                    {moduleCierres.length > 0 && (
+                      <>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          onSelect={e => { e.preventDefault(); setModuleCierres([]); }}
+                          className="text-xs text-destructive focus:text-destructive"
+                        >
+                          Limpiar cierres
+                        </DropdownMenuItem>
+                      </>
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
               {data && data.modules.length > 0 ? (
                 <div className="rounded-lg border overflow-hidden">
@@ -992,6 +1483,7 @@ export default function DevDashboardPage() {
                             ['hasManual', 'Manual'],
                             ['notesStatus', 'Notas'],
                             ['change', 'Change'],
+                            ['cierre', 'Cierre'],
                           ] as [keyof ModuleInfo, string][]
                         ).map(([key, label]) => (
                           <th
@@ -1086,6 +1578,34 @@ export default function DevDashboardPage() {
                                   </Badge>
                                 )}
                               </span>
+                            ) : (
+                              <span className="text-muted-foreground text-xs">—</span>
+                            )}
+                          </td>
+                          <td className="p-3">
+                            {m.cierre === 'cerrado' ? (
+                              <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/40" title="Módulo cerrado (change archivado)">
+                                🟢 Cerrado
+                              </Badge>
+                            ) : m.cierre === 'pendiente' ? (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-6 px-2 text-[10px] bg-orange-500/10 text-orange-600 border-orange-500/40 hover:bg-orange-500/20"
+                                title={`Copiar comando: /cierra-modulo ${m.change ?? ''}`}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  copyToClipboard(`/cierra-modulo ${m.change ?? ''}`, `cierre-${m.code}`);
+                                }}
+                              >
+                                {copiedId === `cierre-${m.code}` ? (
+                                  <>
+                                    <IconCheck className="size-3 mr-1 text-green-500" /> ¡Copiado!
+                                  </>
+                                ) : (
+                                  <>🔵 Falta cierre</>
+                                )}
+                              </Button>
                             ) : (
                               <span className="text-muted-foreground text-xs">—</span>
                             )}

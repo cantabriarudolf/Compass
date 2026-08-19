@@ -28,8 +28,10 @@ import {
   IconCommand,
 } from "@tabler/icons-react"
 
+import Image from "next/image"
 import { usePathname } from "next/navigation"
 
+import { useCompassStore, useStoreRehydrated } from "@/lib/store"
 import {
   Sidebar,
   SidebarContent,
@@ -134,7 +136,6 @@ const data = {
       icon: IconSettings,
       roles: ["admin"],
       items: [
-        { title: "Control OpenSpec", url: "/admin/dev-dashboard" },
         { title: "Auditoría y Métricas", url: "/admin/metricas" },
         { title: "Maestros Administrativos", url: "/admin/maestros" },
         { title: "Configuración", url: "/admin/configuracion" },
@@ -146,10 +147,13 @@ const data = {
 }
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+  useStoreRehydrated()
   const pathname = usePathname()
+  const hasHydrated = useCompassStore((s) => s.hasHydrated)
+  const configuracion = useCompassStore((s) => s.configuracion)
 
   // Placeholder para el rol actual (en el futuro vendrá de un AuthContext)
-  const currentRole = "admin" 
+  const currentRole = "admin"
 
   return (
     <Sidebar collapsible="icon" {...props}>
@@ -158,11 +162,24 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" asChild>
               <a href="/">
-                <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-                  <IconCommand className="size-4" />
+                <div className="flex aspect-square size-8 items-center justify-center overflow-hidden rounded-lg bg-primary text-primary-foreground">
+                  {hasHydrated && configuracion.logoUrl ? (
+                    <Image
+                      src={configuracion.logoUrl}
+                      alt={configuracion.nombreComunidad}
+                      width={32}
+                      height={32}
+                      unoptimized
+                      className="size-full object-contain"
+                    />
+                  ) : (
+                    <IconCommand className="size-4" />
+                  )}
                 </div>
                 <div className="grid flex-1 text-left text-sm leading-tight">
-                  <span className="truncate font-semibold">Compass</span>
+                  <span className="truncate font-semibold">
+                    {hasHydrated ? configuracion.nombreComunidad : "GECOS"}
+                  </span>
                   <span className="truncate text-xs">Administración</span>
                 </div>
               </a>

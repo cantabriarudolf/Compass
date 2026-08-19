@@ -73,7 +73,8 @@ Real estate information destined for the Portal Inmobiliario (PI) MUST be exclus
 
 #### Scenario: Real Estate Status Setting
 - **WHEN** the role "Propietario" is selected
-- **THEN** a dropdown MUST appear to select "Estado Ocupación Propiedad" (habitada, proxima_vacancia, en_arriendo, arrendada, en_venta)
+- **THEN** a dropdown MUST appear to select "Estado Ocupación Propiedad"
+- **AND** the options MUST come from the `estadosInmobiliarios` collection managed by MA (habitada, proxima_vacancia, en_arriendo, arrendada, en_venta seeded by default), never from a hardcoded UI list
 
 ### Requirement: Delegated Financial Privacy
 The system SHALL allow only the 'Propietario' role to define whether their financial data (Gastos Comunes) can be viewed by residents of the unit.

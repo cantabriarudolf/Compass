@@ -13,6 +13,14 @@ Every "Tipo de Unidad" MUST define the base attributes of a unit model, includin
 - **THEN** the admin MUST provide Nombre del Tipo, Metraje (m2) and Monto Base Gasto Común
 - **AND** the Descripción field MUST be optional
 
+### Requirement: Category From MA Master
+The "Categoría" of a "Tipo de Unidad" MUST be selected from the `categoriasUnidad` collection managed by the Maestros Administrativos (MA) module. The UI MUST NOT hardcode category options.
+
+#### Scenario: Category Options
+- **WHEN** the admin opens the create/edit form of a type
+- **THEN** the Categoría selector MUST list the categories from `maestros.categoriasUnidad` of the store
+- **AND** a category created in MA MUST appear in the selector without code changes
+
 ### Requirement: Value Inheritance
 When a "Tipo de Unidad" is assigned to a physical unit, the unit MUST inherit the metraje and gasto común amount defined in the maestro.
 

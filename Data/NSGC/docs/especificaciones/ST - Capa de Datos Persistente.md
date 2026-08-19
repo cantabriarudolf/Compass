@@ -12,7 +12,7 @@ Este módulo define la capa de datos del frontend: un store global que centraliz
 
 - **Inventario (TU/EF/ES):** tipos de unidad, macro sectores, micro sectores, unidades físicas y estacionamientos.
 - **Comunidad (MP/VU):** personas y vínculos de unidad.
-- **Administración (MA):** maestros administrativos (AFP, bancos, previsión, feriados, etc.) y maestros de estructura e inventario (estados de ocupación con `hex` de color, categorías macro y categorías micro).
+- **Administración (MA):** maestros administrativos (AFP, bancos, previsión, feriados, etc.) y maestros de estructura, inventario y vínculos (estados de ocupación con `hex` de color, categorías macro, categorías micro, categorías de unidad, ubicaciones de estacionamiento y estados inmobiliarios).
 - **Configuración (CF):** parámetros globales del condominio.
 
 ## 3. Reglas de Integridad al Eliminar
@@ -46,7 +46,7 @@ Al existir una única instancia de estado por entidad, las modificaciones hechas
 
 - En la primera carga (sin estado persistido), el store se siembra desde los mocks de `apps/web/data/`.
 - Una vez persistido, el localStorage manda por sobre el seed.
-- La versión del esquema (`compass-store` v3) habilita migraciones ordenadas de datos sin romper al usuario.
+- La versión del esquema (`compass-store` v6) habilita migraciones ordenadas de datos sin romper al usuario.
 
 ## 6. Hidratación y Renderizado SSR
 

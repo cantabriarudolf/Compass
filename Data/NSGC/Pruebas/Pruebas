@@ -1,0 +1,34 @@
+Pruebas en Modulos: Maestros Administrativos
+
+    Estructura e Inventario: Crear Parametros en:
+
+        - Estados de Ocupacion: EdOTEST
+        - Etiquetas Macro: EMacroTEST
+        - Etiquetas Micro: EMicroTEST
+        - Tipos de Propiedad: TPropTEST
+        - Ubicaciones de Estacionamiento: UEstTEST
+
+    Personas y Comunidad: Crear Parametros en:
+
+        - Condiciones Especiales: VuelnerabilidadTEST
+        - Estamos Inmobiliarios: EImmobiTEST
+        - Directorio de Emergencia: NCritTEST
+
+    Finanzas y RRHH: Crear Parametros en:
+
+        - Instituciones Bancarias: BancoTEST
+
+-------
+
+
+Pruebas en Modulos: Inventario
+
+    Estructura Fisica: Crear Parametros en:
+
+        - Macro Sector: 
+            Seleccionar Caegoria: EMacroTESTM
+            Nombre: SectorTEST
+            Descripcion: DescripMSectorTEST
+
+        - Alta de Nueva Unidad:
+Seleecionar Macro-Sector:             

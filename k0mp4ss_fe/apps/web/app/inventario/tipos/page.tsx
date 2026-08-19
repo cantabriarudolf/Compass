@@ -3,7 +3,9 @@
 import * as React from "react"
 import { TipoUnidad } from "@/data/inventario/estructura"
 import { useCompassStore, useStoreRehydrated } from "@/lib/store"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@workspace/ui/components/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
+import { Tabs, TabsList, TabsTrigger } from "@workspace/ui/components/tabs"
+import { ScrollArea, ScrollBar } from "@workspace/ui/components/scroll-area"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@workspace/ui/components/table"
 import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
@@ -14,8 +16,7 @@ import {
   DialogContent, 
   DialogFooter, 
   DialogHeader, 
-  DialogTitle, 
-  DialogTrigger 
+  DialogTitle 
 } from "@workspace/ui/components/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@workspace/ui/components/select"
 import { 
@@ -23,23 +24,44 @@ import {
   IconPencil, 
   IconEyeOff, 
   IconEye, 
-  IconTrendingUp, 
   IconHistory,
-  IconCalendarStats
+  IconCalendarStats,
+  IconHome,
+  IconStack2
 } from "@tabler/icons-react"
+import { EstadosDonut } from "@/components/inventario/estados-donut"
 
 export default function TiposUnidadPage() {
   useStoreRehydrated()
   const hasHydrated = useCompassStore(s => s.hasHydrated)
   const data = useCompassStore(s => s.tiposUnidad)
   const unidades = useCompassStore(s => s.unidades)
+  const microSectores = useCompassStore(s => s.microSectores)
+  const macroSectores = useCompassStore(s => s.macroSectores)
+  const estadosOcupacion = useCompassStore(s => s.maestros.estadosOcupacion)
   const saveTipoUnidad = useCompassStore(s => s.saveTipoUnidad)
   const toggleActivoTipoUnidad = useCompassStore(s => s.toggleActivoTipoUnidad)
+  const categoriasUnidad = useCompassStore(s => s.maestros.categoriasUnidad)
+
+  const [selectedTipo, setSelectedTipo] = React.useState<string>("todos")
+  const [filtroEstado, setFiltroEstado] = React.useState<string>("todos")
   const [editingItem, setEditingItem] = React.useState<TipoUnidad | null>(null)
   const [isDialogOpen, setIsDialogOpen] = React.useState(false)
-  const [categoria, setCategoria] = React.useState<TipoUnidad["categoria"]>("Depto")
+  const [historialSelect, setHistorialSelect] = React.useState<TipoUnidad | null>(null)
+  const [categoria, setCategoria] = React.useState<string>(categoriasUnidad[0]?.nombre ?? "")
 
-  // Variables para el calculador de impacto
+  const filteredData = data.filter(t =>
+    selectedTipo === "todos" || t.id === selectedTipo
+  )
+
+  const unidadesVisibles = selectedTipo === "todos"
+    ? unidades.filter(u => data.some(t => t.id === u.tipoUnidadId))
+    : unidades.filter(u => u.tipoUnidadId === selectedTipo)
+
+  const scopeLabel = selectedTipo === "todos"
+    ? "Vista Global"
+    : data.find(t => t.id === selectedTipo)?.nombre || "Tipo"
+
   const [montoSimulado, setMontoSimulado] = React.useState<number>(0)
   const countUnits = editingItem ? unidades.filter(u => u.tipoUnidadId === editingItem.id).length : 0
   const impact = editingItem ? (montoSimulado - editingItem.montoBaseGc) * countUnits : 0
@@ -54,7 +76,7 @@ export default function TiposUnidadPage() {
   const handleOpenNew = () => {
     setEditingItem(null)
     setMontoSimulado(0)
-    setCategoria("Depto")
+    setCategoria(categoriasUnidad[0]?.nombre ?? "")
     setIsDialogOpen(true)
   }
 
@@ -116,7 +138,11 @@ export default function TiposUnidadPage() {
       <div className="flex flex-col gap-6 animate-pulse">
         <div className="h-9 w-72 rounded bg-muted/40" />
         <div className="h-4 w-96 max-w-full rounded bg-muted/30" />
-        <div className="h-64 w-full rounded-lg bg-muted/30" />
+        <div className="h-10 w-full rounded-md bg-muted/30" />
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          <div className="h-80 rounded-lg bg-muted/30 md:col-span-1" />
+          <div className="h-80 rounded-lg bg-muted/30 md:col-span-3" />
+        </div>
       </div>
     )
   }
@@ -133,58 +159,224 @@ export default function TiposUnidadPage() {
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 gap-4">
-        {data.map((item) => {
-          const unitsCount = unidades.filter(u => u.tipoUnidadId === item.id).length;
-          return (
-            <Card key={item.id} className={!item.activo ? "opacity-50 grayscale" : ""}>
-              <CardHeader className="flex flex-row items-center justify-between py-4 border-b">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <CardTitle className="text-lg">{item.nombre}</CardTitle>
-                    <Badge variant="outline" className="text-[10px] uppercase">{item.categoria}</Badge>
-                    {!item.activo && <Badge variant="destructive" className="text-[8px]">Inactivo</Badge>}
-                  </div>
-                  <CardDescription>{item.descripcion}</CardDescription>
-                </div>
-                <div className="flex gap-2">
-                  <Button variant="ghost" size="icon" onClick={() => handleOpenEdit(item)}>
-                    <IconPencil className="size-4" />
-                  </Button>
-                  <Button variant="ghost" size="icon" onClick={() => toggleActivo(item.id)}>
-                    {item.activo ? <IconEyeOff className="size-4 text-amber-600" /> : <IconEye className="size-4 text-green-600" />}
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent className="grid grid-cols-1 md:grid-cols-4 gap-6 pt-4">
-                <div className="space-y-1">
-                  <span className="text-[10px] uppercase font-bold text-muted-foreground">Metraje Base</span>
-                  <p className="text-xl font-black">{item.metraje} m²</p>
-                </div>
-                <div className="space-y-1">
-                  <span className="text-[10px] uppercase font-bold text-muted-foreground">Monto Base GC</span>
-                  <p className="text-xl font-black text-primary">${item.montoBaseGc.toLocaleString("es-CO")}</p>
-                </div>
-                <div className="space-y-1">
-                  <span className="text-[10px] uppercase font-bold text-muted-foreground">Unidades Vinculadas</span>
-                  <p className="text-xl font-black">{unitsCount} propiedades</p>
-                </div>
-                <div className="space-y-1 border-l pl-4">
-                  <span className="text-[10px] uppercase font-bold text-muted-foreground">Historial Reciente</span>
-                  <div className="flex flex-col gap-1 mt-1">
-                    {item.historialTarifas.slice(-2).reverse().map(h => (
-                      <div key={h.id} className="text-[10px] flex justify-between border-b pb-1">
-                        <span className="font-medium">{h.fechaVigencia}:</span>
-                        <span className="font-bold text-primary">${h.monto.toLocaleString("es-CO")}</span>
+      <Tabs value={selectedTipo} onValueChange={setSelectedTipo} className="w-full">
+        <ScrollArea className="w-full whitespace-nowrap rounded-md border bg-muted/50 p-1 mb-2">
+          <TabsList className="inline-flex w-max">
+            <TabsTrigger value="todos" className="gap-2 font-black text-primary uppercase text-[10px] tracking-widest">
+              <IconStack2 className="size-4" />
+              Vista Global
+            </TabsTrigger>
+            {data.map((tipo) => (
+              <TabsTrigger key={tipo.id} value={tipo.id} className="gap-2 uppercase text-[10px] font-bold">
+                <IconHome className="size-4" />
+                {tipo.nombre}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+          <ScrollBar orientation="horizontal" />
+        </ScrollArea>
+
+        <div className="pt-2">
+          <EstadosDonut
+            estados={unidadesVisibles.map(u => u.estadoId)}
+            scopeLabel={scopeLabel}
+            selectedId={filtroEstado === "todos" ? undefined : filtroEstado}
+            onSelect={selectedTipo !== "todos" ? (id) => setFiltroEstado(filtroEstado === id ? "todos" : id) : undefined}
+          />
+        </div>
+
+        <div className="grid grid-cols-1 gap-6 pt-6">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4 border-b bg-muted/20">
+              <div>
+                <CardTitle>
+                  {selectedTipo === "todos" ? "Plantillas Técnicas" : `Unidades: ${data.find(t => t.id === selectedTipo)?.nombre}`}
+                </CardTitle>
+                <CardDescription>
+                  {selectedTipo === "todos"
+                    ? `${filteredData.length} tipos de unidad.`
+                    : `${unidades.filter(u => u.tipoUnidadId === selectedTipo).length} unidades vinculadas a este tipo.`
+                  }
+                </CardDescription>
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              {selectedTipo === "todos" ? (
+                <Table>
+                  <TableHeader className="bg-muted/50">
+                    <TableRow>
+                      <TableHead className="pl-6">Tipo</TableHead>
+                      <TableHead>Metraje Base</TableHead>
+                      <TableHead>Monto Base GC</TableHead>
+                      <TableHead>Unidades</TableHead>
+                      <TableHead>Estado</TableHead>
+                      <TableHead className="text-right pr-6">Acciones</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredData.map((item) => {
+                      const unitsCount = unidades.filter(u => u.tipoUnidadId === item.id).length;
+                      const ultimaTarifa = item.historialTarifas[item.historialTarifas.length - 1];
+                      return (
+                        <TableRow key={item.id} className={`hover:bg-muted/30 ${!item.activo ? "opacity-60" : ""}`}>
+                          <TableCell className="pl-6">
+                            <div className="flex flex-col gap-0.5">
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm font-bold">{item.nombre}</span>
+                                <Badge variant="outline" className="text-[9px] uppercase px-1.5">{item.categoria}</Badge>
+                              </div>
+                              {item.descripcion && (
+                                <span className="text-[11px] text-muted-foreground">{item.descripcion}</span>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell className="font-medium">{item.metraje} m²</TableCell>
+                          <TableCell>
+                            <span className="font-bold text-primary">${item.montoBaseGc.toLocaleString("es-CO")}</span>
+                            <span className="block text-[10px] text-muted-foreground uppercase">
+                              vig. {ultimaTarifa?.fechaVigencia || "—"}
+                            </span>
+                          </TableCell>
+                          <TableCell>
+                            <span className="font-medium">{unitsCount}</span>
+                            <span className="text-[10px] text-muted-foreground uppercase"> propiedades</span>
+                          </TableCell>
+                          <TableCell>
+                            {item.activo ? (
+                              <Badge className="bg-emerald-600 font-bold uppercase text-[9px] px-2 py-0.5 rounded-md border-none">
+                                Activo
+                              </Badge>
+                            ) : (
+                              <Badge className="bg-zinc-200 text-zinc-700 font-bold uppercase text-[9px] px-2 py-0.5 rounded-md border-none">
+                                Inactivo
+                              </Badge>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right pr-6">
+                            <div className="flex justify-end gap-1">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-blue-600"
+                                onClick={() => setHistorialSelect(item)}
+                              >
+                                <IconHistory className="size-4" />
+                              </Button>
+                              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleOpenEdit(item)}>
+                                <IconPencil className="size-4" />
+                              </Button>
+                              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => toggleActivo(item.id)}>
+                                {item.activo ? <IconEyeOff className="size-4 text-amber-600" /> : <IconEye className="size-4 text-green-600" />}
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                    {filteredData.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
+                          No hay tipos de unidad en esta categoría.
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              ) : (
+                (() => {
+                  const unidadesFiltradas = unidades
+                    .filter(u => u.tipoUnidadId === selectedTipo)
+                    .filter(u => filtroEstado === "todos" || u.estadoId === filtroEstado)
+                  return (
+                    <Table>
+                      <TableHeader className="bg-muted/50">
+                        <TableRow>
+                          <TableHead className="pl-6">N° Unidad</TableHead>
+                          <TableHead>Macro Zona</TableHead>
+                          <TableHead>Micro Zona</TableHead>
+                          <TableHead>Estado</TableHead>
+                          <TableHead>Metraje</TableHead>
+                          <TableHead>Prorrateo</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {unidadesFiltradas.map((unidad) => {
+                          const micro = microSectores.find(m => m.id === unidad.microSectorId)
+                          const macro = macroSectores.find(m => m.id === micro?.macroSectorId)
+                          const est = estadosOcupacion.find(e => e.id === unidad.estadoId)
+                          return (
+                            <TableRow key={unidad.id} className="hover:bg-muted/30">
+                              <TableCell className="font-bold pl-6">
+                                <div className="flex items-center gap-2 text-xs">
+                                  <IconHome className="size-4 text-primary" />
+                                  {unidad.etiqueta} {unidad.numero}
+                                </div>
+                              </TableCell>
+                              <TableCell className="text-[10px] font-medium uppercase opacity-70">
+                                {macro ? `${macro.etiqueta} ${macro.nombre}` : "---"}
+                              </TableCell>
+                              <TableCell className="text-[10px] font-medium uppercase opacity-70">
+                                {micro ? `${micro.etiqueta} ${micro.nombre}` : "---"}
+                              </TableCell>
+                              <TableCell>
+                                <Badge className={`${est?.color || "bg-zinc-100 text-zinc-800"} font-bold uppercase text-[9px] px-2 py-0.5 rounded-md border-none`}>
+                                  {est?.nombre || "Sin Estado"}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="font-medium">{unidad.metraje} m²</TableCell>
+                              <TableCell className="text-muted-foreground">{unidad.prorrateo}</TableCell>
+                            </TableRow>
+                          )
+                        })}
+                        {unidadesFiltradas.length === 0 && (
+                          <TableRow>
+                            <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
+                              No hay unidades asociadas a este tipo de unidad.
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </TableBody>
+                    </Table>
+                  )
+                })()
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      </Tabs>
+
+      <Dialog open={!!historialSelect} onOpenChange={() => setHistorialSelect(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <IconHistory className="size-5 text-primary" />
+              Historial de Tarifas: {historialSelect?.nombre}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-4 space-y-4">
+            {historialSelect && historialSelect.historialTarifas.length > 0 ? (
+              <div className="relative border-l-2 border-primary/20 ml-3 space-y-6">
+                {[...historialSelect.historialTarifas].reverse().map((h) => (
+                  <div key={h.id} className="relative pl-6">
+                    <div className="absolute -left-[9px] top-1 size-4 rounded-full bg-primary border-2 border-background shadow-sm" />
+                    <div className="space-y-0.5">
+                      <div className="text-sm font-bold text-primary">${h.monto.toLocaleString("es-CO")}</div>
+                      <div className="flex items-center gap-2 text-[10px] text-muted-foreground uppercase font-bold tracking-wider">
+                        <IconCalendarStats className="size-3" />
+                        Vigencia: {h.fechaVigencia}
                       </div>
-                    ))}
+                    </div>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-8 text-muted-foreground italic text-sm">
+                No hay registros de tarifas para este tipo de unidad.
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="max-w-2xl">
@@ -200,19 +392,19 @@ export default function TiposUnidadPage() {
                 </div>
                 <div className="space-y-2">
                   <Label>Categoría</Label>
-                  <Select value={categoria} onValueChange={(v) => setCategoria(v as TipoUnidad["categoria"])}>
+                  <Select value={categoria} onValueChange={(v) => setCategoria(v)}>
                     <SelectTrigger className="w-full">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="Depto">Depto</SelectItem>
-                      <SelectItem value="Casa">Casa</SelectItem>
-                      <SelectItem value="Local">Local</SelectItem>
-                      <SelectItem value="Oficina">Oficina</SelectItem>
-                      <SelectItem value="Bodega">Bodega</SelectItem>
-                      <SelectItem value="Estacionamiento">Estacionamiento</SelectItem>
+                      {categoriasUnidad.map(c => (
+                        <SelectItem key={c.id} value={c.nombre}>{c.nombre}</SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
+                  <p className="text-[10px] text-muted-foreground italic">
+                    Se administra en Maestros Administrativos → Categorías de Unidad.
+                  </p>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">

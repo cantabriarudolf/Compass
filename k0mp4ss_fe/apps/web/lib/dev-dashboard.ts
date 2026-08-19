@@ -3,6 +3,8 @@ import path from 'node:path';
 
 export type ModuleStatus = 'pendiente' | 'documentado' | 'en_proceso' | 'completado';
 
+export type CierreStatus = 'cerrado' | 'pendiente' | 'no_aplica';
+
 export interface ModuleInfo {
   code: string;
   name: string;
@@ -11,6 +13,7 @@ export interface ModuleInfo {
   route: string;
   status: ModuleStatus;
   change?: string;
+  cierre: CierreStatus;
   mockData: boolean;
   mockFile?: string;
   documented: boolean;
@@ -90,6 +93,8 @@ const PHASES: Record<string, string> = {
 
 const ROUTES: Record<string, string> = {
   RG: '(Lógica Base)',
+  ST: '(Cross-cutting)',
+  UI: '(Cross-cutting)',
   TU: '/inventario/tipos',
   EF: '/inventario/estructura',
   ES: '/inventario/estacionamientos',
@@ -104,12 +109,22 @@ const ROUTES: Record<string, string> = {
   CV: '/comunidad/visor-mensajes',
   GE: '/operaciones/solicitudes',
   RA: '/operaciones/reservas',
+  AM: '/admin/metricas',
+  RP: '/admin/permisos',
+  PI: '/comunidad/portal',
+  CT: '/comunidad/certificados',
+  IN: '/finanzas/multas',
+  IR: '/inventario/recursos',
+  MT: '/inventario/proyectos',
+  PE: '/personas/personal',
+  PL: '/finanzas/remuneraciones',
+  RE: '/reportes',
 };
 
-const ARCHIVED_OVERRIDES: Record<string, string> = {
-  'inventario-estructura': 'EF',
-  'maestro-personas': 'MP',
-  'UI-interfaz-principal': 'UI',
+const ARCHIVED_OVERRIDES: Record<string, { code: string; name?: string }> = {
+  'inventario-estructura': { code: 'EF' },
+  'maestro-personas': { code: 'MP' },
+  'UI-interfaz-principal': { code: 'UI', name: 'Interfaz Principal' },
 };
 
 const MOCK_DATA_FILES: Record<string, string> = {
@@ -176,6 +191,7 @@ function readModules(): ModuleInfo[] {
         phase: PHASES[code] ?? '—',
         route: ROUTES[code] ?? '',
         status: 'pendiente',
+        cierre: 'no_aplica',
         mockData: mockFile ? existsSync(path.join(WEB_ROOT, mockFile)) : false,
         mockFile: mockFile && existsSync(path.join(WEB_ROOT, mockFile)) ? path.relative(REPO_ROOT, path.join(WEB_ROOT, mockFile)) : undefined,
         documented: specCodes.has(code),
@@ -312,15 +328,33 @@ function findSpecFile(code: string): string | undefined {
 function findManualFile(code: string, name: string): string | undefined {
   if (!existsSync(MANUALS_DIR)) return undefined;
   const target = normalize(name);
+  const candidates: string[] = [];
+
   for (const f of readdirSync(MANUALS_DIR)) {
     const fullPath = path.join(MANUALS_DIR, f);
     if (statSync(fullPath).size === 0) continue;
     if (code) {
       const codeMatch = f.match(/^\d+\s*[-–—]\s*([A-Za-z]{2,3})\s*[-–—]/);
       if (codeMatch && codeMatch[1]!.toUpperCase() === code) {
+        candidates.push(f);
+      }
+    }
+  }
+
+  if (candidates.length > 0) {
+    for (const f of candidates) {
+      const manualName = f.replace(/\.md$/, '').replace(/^\d+\s*[-–—]\s*([A-Za-z]{2,3})\s*[-–—]\s*/, '');
+      const mn = normalize(manualName);
+      if (target && (mn.includes(target) || target.includes(mn))) {
         return `Data/NSGC/docs/manuales/${f}`;
       }
     }
+    return `Data/NSGC/docs/manuales/${candidates[0]}`;
+  }
+
+  for (const f of readdirSync(MANUALS_DIR)) {
+    const fullPath = path.join(MANUALS_DIR, f);
+    if (statSync(fullPath).size === 0) continue;
     const manualName = f.replace(/\.md$/, '').replace(/^\d+\s*[-–—]\s*/, '');
     const mn = normalize(manualName);
     if (target && (mn.includes(target) || target.includes(mn))) {
@@ -335,23 +369,26 @@ function deriveStatus(
   activeIds: string[],
   archivedIds: string[],
   specCodes: string[]
-): { status: ModuleStatus; change?: string } {
+): { status: ModuleStatus; change?: string; cierre: CierreStatus } {
   const { code } = module;
-  if (!code) return { status: 'pendiente' };
+  if (!code) return { status: 'pendiente', cierre: 'no_aplica' };
 
   const active = activeIds.find(id => id.toUpperCase().startsWith(`${code}-`));
-  if (active) return { status: 'en_proceso', change: active };
+  if (active) return { status: 'en_proceso', change: active, cierre: 'pendiente' };
 
-  const byOverride = archivedIds.find(id => ARCHIVED_OVERRIDES[archivedKey(id)] === code);
-  if (byOverride) return { status: 'completado', change: byOverride };
+  const byOverride = archivedIds.find(id => {
+    const override = ARCHIVED_OVERRIDES[archivedKey(id)];
+    return override && override.code === code && (!override.name || module.name.includes(override.name));
+  });
+  if (byOverride) return { status: 'completado', change: byOverride, cierre: 'cerrado' };
 
   const keywordArchived = archivedIds.find(
     id => !ARCHIVED_OVERRIDES[archivedKey(id)] && keywordsMatch(id, module.name)
   );
-  if (keywordArchived) return { status: 'completado', change: keywordArchived };
+  if (keywordArchived) return { status: 'completado', change: keywordArchived, cierre: 'cerrado' };
 
-  if (specCodes.includes(code)) return { status: 'documentado' };
-  return { status: 'pendiente' };
+  if (specCodes.includes(code)) return { status: 'documentado', cierre: 'no_aplica' };
+  return { status: 'pendiente', cierre: 'no_aplica' };
 }
 
 export function getDashboardData(): DashboardData {
@@ -369,6 +406,7 @@ export function getDashboardData(): DashboardData {
     const derived = deriveStatus(mod, activeIds, archivedIds, specCodes);
     mod.status = derived.status;
     mod.change = derived.change;
+    mod.cierre = derived.cierre;
     if (derived.status === 'completado') stats.completado += 1;
     else if (derived.status === 'en_proceso') stats.enProceso += 1;
     else if (derived.status === 'documentado') stats.documentado += 1;

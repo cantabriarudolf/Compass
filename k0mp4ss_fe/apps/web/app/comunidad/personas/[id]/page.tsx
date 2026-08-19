@@ -55,6 +55,8 @@ import {
   IconPlus,
   IconPencil,
   IconTrash,
+  IconHistory,
+  IconCalendarEvent,
 } from "@tabler/icons-react"
 
 export default function PersonaPerfilPage() {
@@ -78,6 +80,7 @@ export default function PersonaPerfilPage() {
   const vinculosUnidad = vinculosStore.filter(v => v.personaId === id)
   const [dialogoAbierto, setDialogoAbierto] = React.useState(false)
   const [vinculoEditando, setVinculoEditando] = React.useState<VinculoUnidad | null>(null)
+  const [historialVinculo, setHistorialVinculo] = React.useState<VinculoUnidad | null>(null)
 
   // Unidades con vínculo activo (excluyendo la unidad del vínculo que se está editando)
   const unidadesExcluidas = React.useMemo(() => {
@@ -334,6 +337,11 @@ export default function PersonaPerfilPage() {
                     </div>
 
                     <div className="flex flex-col gap-1">
+                      {/* Historial del Vínculo */}
+                      <Button variant="ghost" size="sm" className="gap-1.5" onClick={() => setHistorialVinculo(v)}>
+                        <IconHistory className="size-3.5" /> Historial
+                      </Button>
+
                       {/* TAREA 4.3: Editar Vínculo */}
                       <Button variant="outline" size="sm" className="gap-1.5" onClick={() => abrirEditarVinculo(v)}>
                         <IconPencil className="size-3.5" /> Editar
@@ -444,6 +452,60 @@ export default function PersonaPerfilPage() {
             onSave={guardarVinculo}
             onCancel={() => setDialogoAbierto(false)}
           />
+        </DialogContent>
+      </Dialog>
+
+      {/* MODAL DE HISTORIAL DEL VÍNCULO (TIMELINE) */}
+      <Dialog open={!!historialVinculo} onOpenChange={() => setHistorialVinculo(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <IconHistory className="size-5 text-primary" />
+              Historial de Vínculo
+            </DialogTitle>
+            <DialogDescription>
+              Trazabilidad del vínculo con {historialVinculo ? etiquetaUnidad(historialVinculo.unidadId) : ""}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="py-4 space-y-4">
+            {historialVinculo && (() => {
+              const isActive = !historialVinculo.fechaFin
+              return (
+                <div className="relative border-l-2 border-primary/20 ml-3 space-y-6">
+                  <div className="relative pl-6">
+                    <div className="absolute -left-[9px] top-1 size-4 rounded-full bg-primary border-2 border-background shadow-sm" />
+                    <div className="space-y-1">
+                      <div className="text-sm font-bold text-primary">
+                        {persona?.nombreCompleto}
+                      </div>
+                      <div className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">
+                        {NOMBRE_ROL[historialVinculo.rol]}
+                      </div>
+                      <div className="flex items-center gap-2 text-[10px] text-muted-foreground uppercase font-bold tracking-wider">
+                        <IconCalendarEvent className="size-3" />
+                        {historialVinculo.fechaInicio} — {historialVinculo.fechaFin || "Actualidad"}
+                      </div>
+                      {historialVinculo.estadoOcupacionPropiedad && (
+                        <div className="text-[10px] text-muted-foreground">
+                          Estado inmobiliario: <span className="font-bold">{historialVinculo.estadoOcupacionPropiedad.replace("_", " ")}</span>
+                        </div>
+                      )}
+                      <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                        <IconShieldLock className="size-3" />
+                        Privacidad financiera: <span className={`font-bold ${historialVinculo.permiteVerFinanzas ? "text-emerald-600" : "text-destructive"}`}>
+                          {historialVinculo.permiteVerFinanzas ? "Compartida" : "Oculta"}
+                        </span>
+                      </div>
+                      {isActive && (
+                        <Badge variant="default" className="text-[8px] h-4 mt-1 bg-green-600">Periodo Activo</Badge>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )
+            })()}
+          </div>
         </DialogContent>
       </Dialog>
     </div>

@@ -17,68 +17,72 @@ export interface Estacionamiento {
   unidadId?: string;
   macroSectorId?: string;
   asignadoA?: string;
-  estadoId: string; // Vínculo dinámico al Maestro de Estados
+  estadoId: string;
   historial: AsignacionHistorica[]; 
+}
+
+const ESTADOS = ["vacante", "en-uso", "en-arriendo", "en-venta", "en-mantencion"];
+const UBICACIONES = ["Superficie", "Subterráneo -1", "Subterráneo -2", "Sector Visitas"];
+const MACROS = ["torre-a", "torre-b", "torre-c", "torre-d", "torre-e", "comercial"];
+
+function pick<T>(arr: T[], seed: number): T {
+  return arr[seed % arr.length] as T;
 }
 
 export const estacionamientos: Estacionamiento[] = Array.from({ length: 100 }).map((_, i) => {
   const num = i + 1;
   const id = `es-${num}`;
   const numero = `P-${num.toString().padStart(3, '0')}`;
-  const nivel = num <= 50 ? "Subterráneo -1" : "Subterráneo -2";
-  
+
+  const ubicacion = pick(UBICACIONES, num);
+  const macroSectorId = pick(MACROS, num * 3 + 7);
+
+  const estadoIdx = num % 10;
+  let estadoId: string;
+  if (estadoIdx < 2) estadoId = "vacante";
+  else if (estadoIdx < 6) estadoId = "en-uso";
+  else if (estadoIdx < 7) estadoId = "en-arriendo";
+  else if (estadoIdx < 8) estadoId = "en-venta";
+  else estadoId = "en-mantencion";
+
   let unidadId: string | undefined = undefined;
   let asignadoA = "Disponible";
-  let macroSectorId = "torre-a";
-  let historial: AsignacionHistorica[] = [];
+  const historial: AsignacionHistorica[] = [];
 
-  // MOCK DE HISTORIAL PARA ALGUNAS PLAZAS (Simulando rotación)
-  if (num === 1) { // Caso con mucha rotación
-    historial = [
-      { id: `h-${id}-prev1`, unidadId: "old-1", asignadoA: "Constructora (Entrega)", fechaInicio: "2023-01-01", fechaFin: "2023-06-30" },
-      { id: `h-${id}-prev2`, unidadId: "old-2", asignadoA: "Depto 204 (Ex-Dueño)", fechaInicio: "2023-07-01", fechaFin: "2023-12-31" },
-      { id: `h-${id}-actual`, unidadId: "u-LC-01", asignadoA: "Local Comercial L-01 (Ancla)", fechaInicio: "2024-01-01" }
-    ];
-    unidadId = "u-LC-01";
-    asignadoA = "Local Comercial L-01 (Ancla)";
-    macroSectorId = "comercial";
-  } else if (num === 15 || num === 30) { // Caso con un dueño anterior
-    const u = unidades[num-1];
-    historial = [
-      { id: `h-${id}-prev`, unidadId: "old-x", asignadoA: "Residente Temporal", fechaInicio: "2023-10-01", fechaFin: "2024-01-15" },
-      { id: `h-${id}-actual`, unidadId: u?.id || "", asignadoA: `Depto ${u?.numero} (Torre ${u?.id.split("-")[1]})`, fechaInicio: "2024-01-16" }
-    ];
-    unidadId = u?.id;
-    asignadoA = `Depto ${u?.numero} (Torre ${u?.id.split("-")[1]})`;
-    macroSectorId = `torre-${(u?.id.split("-")[1] ?? "").toLowerCase()}`;
-  } else if (num <= 8) {
-    const lId = num <= 4 ? "u-LC-01" : (num <= 6 ? "u-LC-02" : "u-LC-03");
-    unidadId = lId;
-    asignadoA = `Local Comercial ${lId.split("-")[2]}`;
-    macroSectorId = "comercial";
-    historial = [{ id: `h-${id}-1`, unidadId: lId, asignadoA: asignadoA, fechaInicio: "2024-01-01" }];
-  } else if (num <= 88) {
-    const uIdx = num - 9;
-    const unidad = unidades[uIdx];
-    if (unidad) {
-      unidadId = unidad.id;
-      const torreId = unidad.id.split("-")[1] ?? "";
-      asignadoA = `Depto ${unidad.numero} (Torre ${torreId})`;
-      macroSectorId = `torre-${torreId.toLowerCase()}`;
-      historial = [{ id: `h-${id}-1`, unidadId: unidad.id, asignadoA: asignadoA, fechaInicio: "2024-02-15" }];
+  if (estadoId === "vacante") {
+    asignadoA = "Disponible";
+  } else if (estadoId === "en-uso") {
+    const u = unidades[num % unidades.length];
+    if (u) {
+      unidadId = u.id;
+      const torreId = u.id.split("-")[1] ?? "";
+      asignadoA = `Depto ${u.numero} (Torre ${torreId})`;
+      historial.push({ id: `h-${id}-1`, unidadId: u.id, asignadoA, fechaInicio: "2024-01-15" });
     }
+  } else if (estadoId === "en-arriendo") {
+    const inquilinos = ["Inquilino Pérez", "Inquilino Gómez", "Inquilino López", "Inquilino Rojas", "Inquilino Muñoz"];
+    asignadoA = pick(inquilinos, num);
+    const u = unidades[num % unidades.length];
+    if (u) unidadId = u.id;
+    historial.push({ id: `h-${id}-1`, unidadId: unidadId || "", asignadoA, fechaInicio: "2024-03-01" });
+  } else if (estadoId === "en-venta") {
+    asignadoA = "Disponible (Venta)";
+    historial.push({ id: `h-${id}-1`, unidadId: "", asignadoA: "En proceso de venta", fechaInicio: "2024-06-01" });
+  } else {
+    asignadoA = "En mantención preventiva";
+    historial.push({ id: `h-${id}-1`, unidadId: "", asignadoA, fechaInicio: "2024-07-15" });
   }
 
   return {
     id,
     numero,
-    ubicacion: `${nivel}, Sector ${num % 2 === 0 ? 'Alfa' : 'Beta'}, Plaza ${numero}`,
+    ubicacion: `${ubicacion}, Plaza ${numero}`,
     metraje: 12.5,
     prorrateo: 0.005,
     unidadId,
     macroSectorId,
     asignadoA,
-    estadoId: unidadId ? "en-uso" : "vacante",
-    historial
+    estadoId,
+    historial,
   };
 });

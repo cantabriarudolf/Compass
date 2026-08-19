@@ -33,6 +33,14 @@ git log --oneline origin/main..HEAD
 git diff --name-only origin/main...HEAD
 ```
 
+> **Regla RG §4 (Terminología):** el término oficial es **"comunidad"**; **"condominio"** está en desuso y NO debe introducirse en ningún archivo del cambio. Antes de continuar:
+>
+> ```bash
+> git diff HEAD -- . | rg -n "condominio" || echo "OK"
+> ```
+>
+> Si aparece en código, UI, specs, manuales o avances del cambio → reemplazar por "comunidad" y volver a revisar. No se corrigen avances históricos ya commiteados.
+
 ### 2. Detect affected areas
 
 Map the changed paths to their documentation requirements:

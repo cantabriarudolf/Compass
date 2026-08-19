@@ -17,6 +17,7 @@ import {
   SelectValue,
 } from "@workspace/ui/components/select"
 import { IconBuilding, IconMail, IconCalculator, IconBell, IconShield } from "@tabler/icons-react"
+import { LogoUploader } from "@/components/admin/logo-uploader"
 
 export default function ConfiguracionPage() {
   useStoreRehydrated()
@@ -74,9 +75,15 @@ export default function ConfiguracionPage() {
             <Card>
               <CardHeader>
                 <CardTitle>Identidad y Representación Legal</CardTitle>
-                <CardDescription>Datos oficiales del condominio para documentos y comunicaciones.</CardDescription>
+                <CardDescription>Datos oficiales de la comunidad para documentos y comunicaciones.</CardDescription>
               </CardHeader>
               <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2 md:col-span-2">
+                  <LogoUploader
+                    value={config.logoUrl}
+                    onChange={(value) => updateField("logoUrl", value)}
+                  />
+                </div>
                 <div className="space-y-2"><Label>Nombre de la Comunidad *</Label><Input value={config.nombreComunidad} onChange={e => updateField("nombreComunidad", e.target.value)} required /></div>
                 <div className="space-y-2"><Label>RUT del Condominio *</Label><Input value={config.rutCondominio} onChange={e => updateField("rutCondominio", e.target.value)} required /></div>
                 <div className="space-y-2 md:col-span-2"><Label>Dirección Oficial *</Label><Input value={config.direccionOficial} onChange={e => updateField("direccionOficial", e.target.value)} required /></div>

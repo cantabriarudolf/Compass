@@ -1,0 +1,97 @@
+# AM-auditoria-metricas Specification
+
+## Purpose
+Centralizar el registro de acciones significativas del sistema, permitir la generación de reportes, KPIs de gestión y trazabilidad completa de la operación. Fuente de verdad: `Data/NSGC/docs/especificaciones/AM - Auditoria y Metricas.md`.
+
+## Requirements
+
+### Requirement: Registro Universal de Eventos
+Every action triggered by a user or by the system automatically MUST generate an immutable audit event.
+
+#### Scenario: Event Structure
+- **WHEN** an auditable action occurs
+- **THEN** the system MUST record:
+  - `timestamp`: exact date and time
+  - `usuario`: who performed the action (Admin, Conserje, Residente, Sistema)
+  - `categoria`: module identifier (FI, PE, CO, EF, etc.)
+  - `tipoAccion`: specific action (Emisión, Pago, Notificación, Registro, Eliminación)
+  - `referenciaId`: link to the affected object
+  - `descripcion`: human-readable detail
+  - `valorCuantificable`: numeric value when applicable
+
+### Requirement: Event Catalog
+The system MUST emit domain-specific events for each module.
+
+#### Scenario: Financial Events
+- **WHEN** a common expense is emitted or a payment is registered
+- **THEN** events `FI_EMISION_GC` and `FI_PAGO_RECIBIDO` MUST be logged.
+
+#### Scenario: Operational Events
+- **WHEN** a visit, package, reservation or supply request is recorded
+- **THEN** events such as `OP_VISITA_REGISTRADA`, `OP_ENCOMIENDA_RECIBIDA`, `RA_RESERVA_CONFIRMADA`, `IR_INSUMO_SOLICITADO` MUST be logged.
+
+#### Scenario: Master Data Events
+- **WHEN** a master record is created, updated or deleted
+- **THEN** events `MA_MAESTRO_CREATE`, `MA_MAESTRO_UPDATE`, `MA_MAESTRO_DELETE` MUST be logged.
+
+#### Scenario: Configuration Events
+- **WHEN** global configuration changes
+- **THEN** event `CF_UPDATE_PARAM` MUST be logged, including old and new values.
+
+#### Scenario: Access Control Events
+- **WHEN** a role is assigned/revoked or a permission is denied
+- **THEN** events `RP_ROLE_ASSIGNED`, `RP_ROLE_REVOKED`, `RP_PERMISSION_DENIED` MUST be logged.
+
+### Requirement: Panel de Incumplimientos y Tareas Huérfanas
+The system MUST actively monitor temporary states that do not reach their final state within the expected time.
+
+#### Scenario: Unclosed Shifts
+- **WHEN** a shift ends without a Cierre de Turno
+- **THEN** a critical alert "Operación No Reportada" MUST be raised.
+
+#### Scenario: Ghost Visits
+- **WHEN** a visit or contractor was scheduled but never marked as entered/cancelled
+- **THEN** the task MUST be flagged as orphaned.
+
+#### Scenario: Stalled Requests
+- **WHEN** a supply request or support ticket exceeds its SLA without resolution
+- **THEN** the system MUST highlight it as stalled.
+
+### Requirement: Métricas y KPIs
+The system MUST calculate and display key performance indicators derived from events and orphaned tasks.
+
+#### Scenario: Operational Efficiency
+- **WHEN** the user opens the Auditoría dashboard
+- **THEN** they MUST see:
+  - Tasa de Eficiencia Operativa
+  - Productivity counts
+  - Amenity usage and revenue
+  - Service level response times
+  - Collection velocity curve
+
+### Requirement: Logs de Auditoría
+The system MUST provide a dedicated view to browse, filter and export audit logs.
+
+#### Scenario: Log Viewer
+- **WHEN** the user navigates to `/admin/logs`
+- **THEN** they MUST see a searchable and filterable list of audit events
+- **AND** logs MUST be sorted by timestamp descending.
+
+#### Scenario: Log Immutability
+- **WHEN** an audit log is created
+- **THEN** it MUST NOT be editable or deletable by any user, including administrators.
+
+#### Scenario: Retention
+- **WHEN** audit logs are stored
+- **THEN** they MUST be retained for a minimum of 5 years.
+
+### Requirement: Value Aesthetics
+The system MUST display proactive value indicators to make administrative effort visible.
+
+#### Scenario: Automated Work Counter
+- **WHEN** the dashboard loads
+- **THEN** it SHOULD show quantified automation (e.g., "83 properties audited", "100 parking spots monitored").
+
+#### Scenario: Economic Impact
+- **WHEN** the admin changes a price or fee parameter
+- **THEN** the system SHOULD project the impact on expected revenue.

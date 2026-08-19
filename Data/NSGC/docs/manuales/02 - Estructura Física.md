@@ -8,6 +8,13 @@ Permite construir la jerarquía física en tres niveles:
 2.  **Micro-Sector**: (Ej: Piso 5, Nivel -1). Es opcional; si tenís casas, te lo podís saltar.
 3.  **Unidad**: La propiedad final (Depto 502, Casa 14).
 
+## 📝 Creación de Unidades
+Al crear una unidad, el formulario hereda la selección actual de la página:
+- Si elegiste un **Macro-Sector** y un **Sub-Sector** antes de apretar **Nueva Unidad**, ambos selectores se precargan.
+- Si el Macro-Sector tiene **un solo Sub-Sector**, el formulario lo selecciona automáticamente.
+- Si cambiás de Macro-Sector dentro del formulario, el Sub-Sector se limpia solo cuando no corresponde al nuevo sector; si el nuevo sector tiene un solo Sub-Sector, se selecciona solo.
+- El botón **Registrar Unidad** se habilita una vez que ambos sectores y la categoría física estén seleccionados.
+
 ## 📊 Ficha Técnica Premium
 Cada unidad tiene una ficha ultra detallada que incluye:
 - **Datos SII**: El Rol de Avalúo para temas de contribuciones.

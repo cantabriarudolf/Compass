@@ -1,5 +1,3 @@
-import { UnidadEtiqueta } from "../maestros";
-
 export interface TarifaHistorica {
   id: string;
   monto: number;
@@ -10,7 +8,7 @@ export interface TarifaHistorica {
 export interface TipoUnidad {
   id: string;
   nombre: string;
-  categoria: UnidadEtiqueta;
+  categoria: string;
   metraje: number;
   montoBaseGc: number;
   descripcion?: string;
@@ -36,7 +34,7 @@ export interface Unidad {
   id: string;
   microSectorId: string;
   numero: string;
-  etiqueta: UnidadEtiqueta;
+  etiqueta: string;
   tipoUnidadId: string;
   metraje: number;
   prorrateo: number;

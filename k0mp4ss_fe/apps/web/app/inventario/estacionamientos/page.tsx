@@ -2,12 +2,13 @@
 
 import * as React from "react"
 import { Estacionamiento } from "@/data/inventario/estacionamientos"
-import { UBICACIONES_ESTACIONAMIENTO } from "@/data/maestros"
 import { useCompassStore, useStoreRehydrated } from "@/lib/store"
-import { Card, CardContent, CardHeader, CardTitle } from "@workspace/ui/components/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
 import { Input } from "@workspace/ui/components/input"
+import { Tabs, TabsList, TabsTrigger } from "@workspace/ui/components/tabs"
+import { ScrollArea, ScrollBar } from "@workspace/ui/components/scroll-area"
 import { 
   Table, 
   TableBody, 
@@ -16,13 +17,6 @@ import {
   TableHeader, 
   TableRow 
 } from "@workspace/ui/components/table"
-import { 
-  Select, 
-  SelectContent, 
-  SelectItem, 
-  SelectTrigger, 
-  SelectValue 
-} from "@workspace/ui/components/select"
 import { 
   Dialog, 
   DialogContent, 
@@ -33,14 +27,14 @@ import {
 import { 
   IconParkingCircle, 
   IconSearch, 
-  IconFilter, 
   IconHistory,
   IconPencil,
-  IconX,
   IconCalendarEvent,
-  IconMapPin
+  IconMapPin,
+  IconStack2
 } from "@tabler/icons-react"
 import { FormularioEstacionamiento } from "@/components/inventario/formulario-estacionamiento"
+import { EstadosDonut } from "@/components/inventario/estados-donut"
 
 export default function EstacionamientosPage() {
   useStoreRehydrated()
@@ -48,34 +42,34 @@ export default function EstacionamientosPage() {
   const data = useCompassStore(s => s.estacionamientos)
   const macroSectores = useCompassStore(s => s.macroSectores)
   const estadosOcupacion = useCompassStore(s => s.maestros.estadosOcupacion)
+  const ubicacionesEstacionamiento = useCompassStore(s => s.maestros.ubicacionesEstacionamiento)
   const saveEstacionamiento = useCompassStore(s => s.saveEstacionamiento)
+
+  const [selectedUbicacion, setSelectedUbicacion] = React.useState<string>("todos")
+  const [filtroEstado, setFiltroEstado] = React.useState<string>("todos")
   const [busqueda, setBusqueda] = React.useState("")
-  const [filtroMacro, setFiltroMacro] = React.useState("all")
-  const [filtroUbicacion, setFiltroUbicacion] = React.useState("all")
-  const [filtroEstado, setFiltroEstado] = React.useState("all")
-  
+
   const [historialSelect, setHistorialSelect] = React.useState<Estacionamiento | null>(null)
 
-  const limpiarFiltros = () => {
-    setBusqueda("")
-    setFiltroMacro("all")
-    setFiltroUbicacion("all")
-    setFiltroEstado("all")
-  }
+  const scopeLabel = selectedUbicacion === "todos"
+    ? "Vista Global"
+    : selectedUbicacion
 
   const filteredData = data.filter(item => {
-    const matchesText = item.numero.toLowerCase().includes(busqueda.toLowerCase()) || 
-                       item.asignadoA?.toLowerCase().includes(busqueda.toLowerCase()) ||
-                       item.ubicacion.toLowerCase().includes(busqueda.toLowerCase());
-    
-    const matchesMacro = filtroMacro === "all" || item.macroSectorId === filtroMacro;
-    
-    const matchesUbicacion = filtroUbicacion === "all" || item.ubicacion.toLowerCase().includes(filtroUbicacion.toLowerCase());
-    
-    const matchesEstado = filtroEstado === "all" || item.estadoId === filtroEstado;
-
-    return matchesText && matchesMacro && matchesUbicacion && matchesEstado;
+    const matchesUbicacion = selectedUbicacion === "todos" || item.ubicacion.toLowerCase().includes(selectedUbicacion.toLowerCase())
+    const matchesEstado = filtroEstado === "todos" || item.estadoId === filtroEstado
+    const matchesText = !busqueda ||
+      item.numero.toLowerCase().includes(busqueda.toLowerCase()) ||
+      item.asignadoA?.toLowerCase().includes(busqueda.toLowerCase()) ||
+      item.ubicacion.toLowerCase().includes(busqueda.toLowerCase())
+    return matchesUbicacion && matchesEstado && matchesText
   })
+
+  const handleUbicacionTabChange = (id: string) => {
+    setSelectedUbicacion(id)
+    setFiltroEstado("todos")
+    setBusqueda("")
+  }
 
   const handleSave = (newData: Partial<Estacionamiento>, existingId?: string) => {
     if (existingId) {
@@ -89,7 +83,7 @@ export default function EstacionamientosPage() {
         metraje: newData.metraje || 0,
         prorrateo: newData.prorrateo || 0,
         unidadId: newData.unidadId,
-        macroSectorId: newData.macroSectorId,
+        macroSectorId: newData.macroSectorId || "",
         asignadoA: newData.asignadoA || "Disponible",
         estadoId: newData.estadoId || "vacante",
         historial: newData.historial || []
@@ -103,7 +97,11 @@ export default function EstacionamientosPage() {
       <div className="flex flex-col gap-6 animate-pulse">
         <div className="h-9 w-72 rounded bg-muted/40" />
         <div className="h-4 w-96 max-w-full rounded bg-muted/30" />
-        <div className="h-64 w-full rounded-lg bg-muted/30" />
+        <div className="h-10 w-full rounded-md bg-muted/30" />
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          <div className="h-80 rounded-lg bg-muted/30 md:col-span-1" />
+          <div className="h-80 rounded-lg bg-muted/30 md:col-span-3" />
+        </div>
       </div>
     )
   }
@@ -120,137 +118,156 @@ export default function EstacionamientosPage() {
         <FormularioEstacionamiento onSave={(data) => handleSave(data)} />
       </div>
 
-      <Card>
-        <CardHeader className="pb-4 border-b bg-muted/20">
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-            <div className="flex items-center gap-2 flex-1 max-w-md">
-              <div className="relative w-full">
+      <Tabs value={selectedUbicacion} onValueChange={handleUbicacionTabChange} className="w-full">
+        <ScrollArea className="w-full whitespace-nowrap rounded-md border bg-muted/50 p-1 mb-2">
+          <TabsList className="inline-flex w-max">
+            <TabsTrigger value="todos" className="gap-2 font-black text-primary uppercase text-[10px] tracking-widest">
+              <IconStack2 className="size-4" />
+              Vista Global
+            </TabsTrigger>
+            {ubicacionesEstacionamiento.map((ub) => (
+              <TabsTrigger key={ub.id} value={ub.nombre} className="gap-2 uppercase text-[10px] font-bold">
+                <IconMapPin className="size-4" />
+                {ub.nombre}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+          <ScrollBar orientation="horizontal" />
+        </ScrollArea>
+
+        <div className="pt-2">
+          <EstadosDonut
+            estados={filteredData.map(e => e.estadoId)}
+            scopeLabel={scopeLabel}
+            selectedId={filtroEstado === "todos" ? undefined : filtroEstado}
+            onSelect={(id) => setFiltroEstado(filtroEstado === id ? "todos" : id)}
+          />
+        </div>
+
+        {filtroEstado !== "todos" && (
+          <Card className="mt-4">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-xs font-black uppercase tracking-widest text-muted-foreground">
+                Distribución por Agrupación — {estadosOcupacion.find(e => e.id === filtroEstado)?.nombre}
+              </CardTitle>
+              <CardDescription>
+                {filteredData.length} plazas con este estado en el ámbito seleccionado.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+                {macroSectores.map((macro) => {
+                  const count = filteredData.filter(e => e.macroSectorId === macro.id).length
+                  const total = filteredData.length
+                  const pct = total > 0 ? Math.round((count / total) * 100) : 0
+                  return (
+                    <div key={macro.id} className={`rounded-lg border p-3 text-center ${count > 0 ? "border-primary bg-primary/5" : ""}`}>
+                      <p className="text-[10px] uppercase font-bold text-muted-foreground">{macro.etiqueta} {macro.nombre}</p>
+                      <p className={`text-xl font-black mt-1 ${count > 0 ? "text-primary" : "text-muted-foreground"}`}>{count}</p>
+                      <p className="text-[10px] text-muted-foreground">{pct}%</p>
+                    </div>
+                  )
+                })}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        <div className="grid grid-cols-1 gap-6 pt-6">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4 border-b bg-muted/20">
+              <div>
+                <CardTitle>Plazas</CardTitle>
+                <CardDescription>
+                  {filteredData.length} plazas en este ámbito.
+                </CardDescription>
+              </div>
+              <div className="relative w-64">
                 <IconSearch className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
                 <Input
-                  placeholder="Buscar..."
+                  placeholder="Buscar plaza o asignatario..."
                   className="pl-8 h-9"
                   value={busqueda}
                   onChange={(e) => setBusqueda(e.target.value)}
                 />
               </div>
-            </div>
-            
-            <div className="flex flex-wrap items-center gap-3">
-              <Select value={filtroMacro} onValueChange={setFiltroMacro}>
-                <SelectTrigger className="w-[160px] h-9 text-xs">
-                  <IconFilter className="size-3 mr-2" />
-                  <SelectValue placeholder="Agrupación" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Ver Todas</SelectItem>
-                  {macroSectores.map(m => (
-                    <SelectItem key={m.id} value={m.id}>{m.etiqueta} {m.nombre}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              <Select value={filtroUbicacion} onValueChange={setFiltroUbicacion}>
-                <SelectTrigger className="w-[160px] h-9 text-xs">
-                  <IconMapPin className="size-3 mr-2" />
-                  <SelectValue placeholder="Ubicación" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todas las Ubicaciones</SelectItem>
-                  {UBICACIONES_ESTACIONAMIENTO.map(ub => (
-                    <SelectItem key={ub.id} value={ub.nombre}>{ub.nombre}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              <Select value={filtroEstado} onValueChange={setFiltroEstado}>
-                <SelectTrigger className="w-[130px] h-9 text-xs">
-                  <SelectValue placeholder="Estado" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos los Estados</SelectItem>
-                  {estadosOcupacion.map(est => (
-                    <SelectItem key={est.id} value={est.id}>{est.nombre}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-
-              {(busqueda || filtroMacro !== "all" || filtroUbicacion !== "all" || filtroEstado !== "all") && (
-                <Button variant="ghost" size="sm" onClick={limpiarFiltros} className="h-9 px-2 text-amber-600">
-                  <IconX className="size-4 mr-1" />
-                  Limpiar
-                </Button>
-              )}
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader className="bg-muted/50">
-              <TableRow>
-                <TableHead className="w-[120px] pl-6">N° Plaza</TableHead>
-                <TableHead>Estado</TableHead>
-                <TableHead>Agrupación</TableHead>
-                <TableHead>Asignado A</TableHead>
-                <TableHead className="text-right pr-6">Acciones</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredData.map((item) => {
-                const macro = macroSectores.find(m => m.id === item.macroSectorId);
-                return (
-                  <TableRow key={item.id} className="hover:bg-muted/30">
-                    <TableCell className="font-bold pl-6">
-                      <div className="flex items-center gap-2 text-xs">
-                        <IconParkingCircle className="size-4 text-primary" />
-                        {item.numero}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      {(() => {
-                        const est = estadosOcupacion.find(e => e.id === item.estadoId);
-                        return (
-                          <Badge className={`${est?.color || "bg-zinc-100 text-zinc-800"} font-bold uppercase text-[9px] px-2 py-0.5 rounded-md border-none`}>
-                            {est?.nombre || "Sin Estado"}
-                          </Badge>
-                        );
-                      })()}
-                    </TableCell>
-                    <TableCell className="text-[10px] font-medium uppercase opacity-70">
-                      {macro ? `${macro.etiqueta} ${macro.nombre}` : "---"}
-                    </TableCell>
-                    <TableCell>
-                      <span className={`text-xs font-medium ${item.unidadId ? "text-primary" : "text-muted-foreground italic"}`}>
-                        {item.asignadoA}
-                      </span>
-                    </TableCell>
-                    <TableCell className="text-right pr-6">
-                      <div className="flex justify-end gap-1">
-                        <FormularioEstacionamiento 
-                          estacionamiento={item}
-                          onSave={(newData) => handleSave(newData, item.id)}
-                          trigger={
-                            <Button variant="ghost" size="icon" className="h-8 w-8">
-                              <IconPencil className="size-4" />
-                            </Button>
-                          }
-                        />
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          className={`h-8 w-8 ${item.historial.length > 0 ? "text-blue-600" : "text-muted-foreground opacity-40"}`}
-                          onClick={() => setHistorialSelect(item)}
-                        >
-                          <IconHistory className="size-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
+            </CardHeader>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader className="bg-muted/50">
+                  <TableRow>
+                    <TableHead className="w-[120px] pl-6">N° Plaza</TableHead>
+                    <TableHead>Estado</TableHead>
+                    <TableHead>Agrupación</TableHead>
+                    <TableHead>Asignado A</TableHead>
+                    <TableHead className="text-right pr-6">Acciones</TableHead>
                   </TableRow>
-                )
-              })}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+                </TableHeader>
+                <TableBody>
+                  {filteredData.map((item) => {
+                    const macro = macroSectores.find(m => m.id === item.macroSectorId);
+                    return (
+                    <TableRow key={item.id} className="hover:bg-muted/30">
+                      <TableCell className="font-bold pl-6">
+                        <div className="flex items-center gap-2 text-xs">
+                          <IconParkingCircle className="size-4 text-primary" />
+                          {item.numero}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        {(() => {
+                          const est = estadosOcupacion.find(e => e.id === item.estadoId);
+                          return (
+                            <Badge className={`${est?.color || "bg-zinc-100 text-zinc-800"} font-bold uppercase text-[9px] px-2 py-0.5 rounded-md border-none`}>
+                              {est?.nombre || "Sin Estado"}
+                            </Badge>
+                          );
+                        })()}
+                      </TableCell>
+                      <TableCell className="text-[10px] font-medium uppercase opacity-70">
+                        {macro ? `${macro.etiqueta} ${macro.nombre}` : "---"}
+                      </TableCell>
+                      <TableCell>
+                        <span className={`text-xs font-medium ${item.unidadId ? "text-primary" : "text-muted-foreground italic"}`}>
+                          {item.asignadoA}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-right pr-6">
+                        <div className="flex justify-end gap-1">
+                          <FormularioEstacionamiento 
+                            estacionamiento={item}
+                            onSave={(newData) => handleSave(newData, item.id)}
+                            trigger={
+                              <Button variant="ghost" size="icon" className="h-8 w-8">
+                                <IconPencil className="size-4" />
+                              </Button>
+                            }
+                          />
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className={`h-8 w-8 ${item.historial.length > 0 ? "text-blue-600" : "text-muted-foreground opacity-40"}`}
+                            onClick={() => setHistorialSelect(item)}
+                          >
+                            <IconHistory className="size-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  )})}
+                  {filteredData.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
+                        No hay plazas que coincidan con los filtros seleccionados.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </div>
+      </Tabs>
 
       {/* MODAL DE HISTORIAL (TRAZABILIDAD) */}
       <Dialog open={!!historialSelect} onOpenChange={() => setHistorialSelect(null)}>

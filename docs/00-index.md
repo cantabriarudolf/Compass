@@ -17,6 +17,8 @@
 | **06** | [`06 - Interfaces TypeScript FormularioVinculoUnidad.md`](<06 - Interfaces TypeScript FormularioVinculoUnidad.md>) | Contratos de tipos, props del componente, estado local del formulario y mapeo con el mock `personas.ts`. |
 | **07** | [`07 - Agente Personalizado Hermes Compass.md`](<07 - Agente Personalizado Hermes Compass.md>) | Configuración del Agente Dedicado en Hermes, System Prompt y permisos para el proyecto Compass. |
 | **08** | [`08 - Dashboard de Control de Avance y Tareas.md`](<08 - Dashboard de Control de Avance y Tareas.md>) | Guía del Dashboard de Control interactivo en la app para gestionar la Tarea 1.1 y el avance de OpenSpec. |
+| **11** | [`11 - Dev Dashboard - Portabilidad y Handoff.md`](<11 - Dev Dashboard - Portabilidad y Handoff.md>) | Guía del Dev Dashboard: portabilidad, handoff y lectura del repositorio. |
+| **12** | [`12 - Chuleta de Comandos de Flujo.md`](<12 - Chuleta de Comandos de Flujo.md>) | Chuleta consolidada de comandos: ciclo OpenSpec, `/respaldo-parcial`, `/cierra-modulo`, `/nsgc-prepush` y validaciones. |
 
 ---
 

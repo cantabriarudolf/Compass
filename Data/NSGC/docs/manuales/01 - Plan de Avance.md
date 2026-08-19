@@ -4,7 +4,7 @@ Este documento actúa como la hoja de ruta oficial para el desarrollo del Proyec
 
 ## 📋 Resumen de Progreso
 - **Estado Global:** 🟢 Fase 1 Completada - Fase 2 en Proceso
-- **Módulos Completados:** 6/28 (Base Shell, Estructura de Menú, EF, TU, ES, MA, MP, VU)
+- **Módulos Completados:** 5/28 (Base Shell, Estructura de Menú, TU, ES, MA, MP, VU)
 - **Próximo Hito:** CF - Configuración Global & RP - Roles y Permisos
 
 ---
@@ -19,7 +19,7 @@ Este documento actúa como la hoja de ruta oficial para el desarrollo del Proyec
 ## 🏢 Fase 1: Inventario Físico
 | ID | Módulo | Estado | Descripción |
 | :--- | :--- | :--- | :--- |
-| 03 | EF - Estructura Física | 🟢 Completado | CRUD de Torres, Pisos y Unidades |
+| 03 | EF - Estructura Física | 🔵 En Proceso | CRUD de Torres, Pisos y Unidades |
 | 04 | TU - Tipos de Unidad | 🟢 Completado | Categorización de inmuebles |
 | 05 | ES - Estacionamientos | 🟢 Completado | Gestión de espacios de parking |
 

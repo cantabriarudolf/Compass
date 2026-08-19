@@ -1,0 +1,4772 @@
+{
+  "_summary": {
+    "exportDate": "2026-08-19T00:24:45.526Z",
+    "totalRecords": 333,
+    "collectionsWithData": 24,
+    "details": [
+      {
+        "label": "Tipos de Unidad",
+        "count": 5,
+        "type": "main"
+      },
+      {
+        "label": "Macro Sectores",
+        "count": 7,
+        "type": "main"
+      },
+      {
+        "label": "Micro Sectores",
+        "count": 23,
+        "type": "main"
+      },
+      {
+        "label": "Unidades",
+        "count": 84,
+        "type": "main"
+      },
+      {
+        "label": "Estacionamientos",
+        "count": 100,
+        "type": "main"
+      },
+      {
+        "label": "Personas",
+        "count": 10,
+        "type": "main"
+      },
+      {
+        "label": "Vínculos",
+        "count": 9,
+        "type": "main"
+      },
+      {
+        "label": "AFP",
+        "count": 6,
+        "type": "maestro"
+      },
+      {
+        "label": "Previsión Salud",
+        "count": 6,
+        "type": "maestro"
+      },
+      {
+        "label": "Mutuales/Cajas",
+        "count": 5,
+        "type": "maestro"
+      },
+      {
+        "label": "Feriados",
+        "count": 4,
+        "type": "maestro"
+      },
+      {
+        "label": "Bancos",
+        "count": 7,
+        "type": "maestro"
+      },
+      {
+        "label": "Índices Ajuste",
+        "count": 2,
+        "type": "maestro"
+      },
+      {
+        "label": "Cajas Fondos",
+        "count": 4,
+        "type": "maestro"
+      },
+      {
+        "label": "Categorías Insumos",
+        "count": 5,
+        "type": "maestro"
+      },
+      {
+        "label": "Unidades Medida",
+        "count": 5,
+        "type": "maestro"
+      },
+      {
+        "label": "Contactos Emergencia",
+        "count": 7,
+        "type": "maestro"
+      },
+      {
+        "label": "Condiciones Especiales",
+        "count": 6,
+        "type": "maestro"
+      },
+      {
+        "label": "Estados Ocupación",
+        "count": 6,
+        "type": "maestro"
+      },
+      {
+        "label": "Categorías Macro",
+        "count": 8,
+        "type": "maestro"
+      },
+      {
+        "label": "Categorías Micro",
+        "count": 6,
+        "type": "maestro"
+      },
+      {
+        "label": "Categorías Unidad",
+        "count": 7,
+        "type": "maestro"
+      },
+      {
+        "label": "Ubicaciones Estacionamiento",
+        "count": 5,
+        "type": "maestro"
+      },
+      {
+        "label": "Estados Inmobiliarios",
+        "count": 6,
+        "type": "maestro"
+      }
+    ]
+  },
+  "state": {
+    "tiposUnidad": [
+      {
+        "id": "tipo-a",
+        "nombre": "Depto Tipo A",
+        "categoria": "Depto",
+        "metraje": 55.5,
+        "montoBaseGc": 45000,
+        "activo": true,
+        "descripcion": "2D + 2B",
+        "historialTarifas": [
+          {
+            "id": "t-a-1",
+            "monto": 42000,
+            "fechaVigencia": "2023-01-01",
+            "creadoEn": "2022-12-01"
+          },
+          {
+            "id": "t-a-2",
+            "monto": 45000,
+            "fechaVigencia": "2024-01-01",
+            "creadoEn": "2023-11-15"
+          }
+        ]
+      },
+      {
+        "id": "tipo-b",
+        "nombre": "Depto Tipo B",
+        "categoria": "Depto",
+        "metraje": 42,
+        "montoBaseGc": 35000,
+        "activo": true,
+        "descripcion": "1D + 1B",
+        "historialTarifas": [
+          {
+            "id": "t-b-1",
+            "monto": 35000,
+            "fechaVigencia": "2024-01-01",
+            "creadoEn": "2023-11-15"
+          }
+        ]
+      },
+      {
+        "id": "local-a",
+        "nombre": "Local Comercial A (Grande)",
+        "categoria": "Local",
+        "metraje": 120,
+        "montoBaseGc": 95000,
+        "activo": true,
+        "descripcion": "Local Ancla",
+        "historialTarifas": [
+          {
+            "id": "t-la-1",
+            "monto": 95000,
+            "fechaVigencia": "2024-01-01",
+            "creadoEn": "2023-12-01"
+          }
+        ]
+      },
+      {
+        "id": "local-b",
+        "nombre": "Local Comercial B (Estándar)",
+        "categoria": "Local",
+        "metraje": 60,
+        "montoBaseGc": 50000,
+        "activo": true,
+        "descripcion": "Tienda Retail",
+        "historialTarifas": [
+          {
+            "id": "t-lb-1",
+            "monto": 50000,
+            "fechaVigencia": "2024-01-01",
+            "creadoEn": "2023-12-01"
+          }
+        ]
+      },
+      {
+        "id": "tipo-es-1",
+        "nombre": "Estacionamiento Estándar",
+        "categoria": "Estacionamiento",
+        "metraje": 12.5,
+        "montoBaseGc": 5000,
+        "activo": true,
+        "historialTarifas": [
+          {
+            "id": "t-e-1",
+            "monto": 5000,
+            "fechaVigencia": "2024-01-01",
+            "creadoEn": "2023-12-01"
+          }
+        ]
+      }
+    ],
+    "macroSectores": [
+      {
+        "id": "torre-a",
+        "nombre": "A",
+        "etiqueta": "Torre"
+      },
+      {
+        "id": "torre-b",
+        "nombre": "B",
+        "etiqueta": "Torre"
+      },
+      {
+        "id": "torre-c",
+        "nombre": "C",
+        "etiqueta": "Torre"
+      },
+      {
+        "id": "torre-d",
+        "nombre": "D",
+        "etiqueta": "Torre"
+      },
+      {
+        "id": "torre-e",
+        "nombre": "E",
+        "etiqueta": "Torre"
+      },
+      {
+        "id": "comercial",
+        "nombre": "Centro Comercial",
+        "etiqueta": "Sector",
+        "descripcion": "Locales de Servicios"
+      },
+      {
+        "id": "ms-1787088978156",
+        "etiqueta": "EMacroTEST",
+        "nombre": "EMacroTESTM",
+        "descripcion": "EMacroTESTM"
+      }
+    ],
+    "microSectores": [
+      {
+        "id": "piso-torre-a-1",
+        "macroSectorId": "torre-a",
+        "nombre": "Piso 1",
+        "etiqueta": "Piso"
+      },
+      {
+        "id": "piso-torre-a-2",
+        "macroSectorId": "torre-a",
+        "nombre": "Piso 2",
+        "etiqueta": "Piso"
+      },
+      {
+        "id": "piso-torre-a-3",
+        "macroSectorId": "torre-a",
+        "nombre": "Piso 3",
+        "etiqueta": "Piso"
+      },
+      {
+        "id": "piso-torre-a-4",
+        "macroSectorId": "torre-a",
+        "nombre": "Piso 4",
+        "etiqueta": "Piso"
+      },
+      {
+        "id": "piso-torre-b-1",
+        "macroSectorId": "torre-b",
+        "nombre": "Piso 1",
+        "etiqueta": "Piso"
+      },
+      {
+        "id": "piso-torre-b-2",
+        "macroSectorId": "torre-b",
+        "nombre": "Piso 2",
+        "etiqueta": "Piso"
+      },
+      {
+        "id": "piso-torre-b-3",
+        "macroSectorId": "torre-b",
+        "nombre": "Piso 3",
+        "etiqueta": "Piso"
+      },
+      {
+        "id": "piso-torre-b-4",
+        "macroSectorId": "torre-b",
+        "nombre": "Piso 4",
+        "etiqueta": "Piso"
+      },
+      {
+        "id": "piso-torre-c-1",
+        "macroSectorId": "torre-c",
+        "nombre": "Piso 1",
+        "etiqueta": "Piso"
+      },
+      {
+        "id": "piso-torre-c-2",
+        "macroSectorId": "torre-c",
+        "nombre": "Piso 2",
+        "etiqueta": "Piso"
+      },
+      {
+        "id": "piso-torre-c-3",
+        "macroSectorId": "torre-c",
+        "nombre": "Piso 3",
+        "etiqueta": "Piso"
+      },
+      {
+        "id": "piso-torre-c-4",
+        "macroSectorId": "torre-c",
+        "nombre": "Piso 4",
+        "etiqueta": "Piso"
+      },
+      {
+        "id": "piso-torre-d-1",
+        "macroSectorId": "torre-d",
+        "nombre": "Piso 1",
+        "etiqueta": "Piso"
+      },
+      {
+        "id": "piso-torre-d-2",
+        "macroSectorId": "torre-d",
+        "nombre": "Piso 2",
+        "etiqueta": "Piso"
+      },
+      {
+        "id": "piso-torre-d-3",
+        "macroSectorId": "torre-d",
+        "nombre": "Piso 3",
+        "etiqueta": "Piso"
+      },
+      {
+        "id": "piso-torre-d-4",
+        "macroSectorId": "torre-d",
+        "nombre": "Piso 4",
+        "etiqueta": "Piso"
+      },
+      {
+        "id": "piso-torre-e-1",
+        "macroSectorId": "torre-e",
+        "nombre": "Piso 1",
+        "etiqueta": "Piso"
+      },
+      {
+        "id": "piso-torre-e-2",
+        "macroSectorId": "torre-e",
+        "nombre": "Piso 2",
+        "etiqueta": "Piso"
+      },
+      {
+        "id": "piso-torre-e-3",
+        "macroSectorId": "torre-e",
+        "nombre": "Piso 3",
+        "etiqueta": "Piso"
+      },
+      {
+        "id": "piso-torre-e-4",
+        "macroSectorId": "torre-e",
+        "nombre": "Piso 4",
+        "etiqueta": "Piso"
+      },
+      {
+        "id": "piso-comercial-1",
+        "macroSectorId": "comercial",
+        "nombre": "Calle",
+        "etiqueta": "Nivel"
+      },
+      {
+        "id": "mic-1787089010626",
+        "macroSectorId": "ms-1787088978156",
+        "etiqueta": "EMicroTEST",
+        "nombre": "101"
+      },
+      {
+        "id": "mic-1787091022994",
+        "macroSectorId": "ms-1787088978156",
+        "etiqueta": "Piso",
+        "nombre": "99X"
+      }
+    ],
+    "unidades": [
+      {
+        "id": "u-A-101",
+        "microSectorId": "piso-torre-a-1",
+        "numero": "101",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-a",
+        "metraje": 55.5,
+        "prorrateo": 0.0125,
+        "rolSii": "123-A11",
+        "estadoId": "en-uso",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-A-101",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-A-101",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-A-102",
+        "microSectorId": "piso-torre-a-1",
+        "numero": "102",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-a",
+        "metraje": 55.5,
+        "prorrateo": 0.0125,
+        "rolSii": "123-A12",
+        "estadoId": "en-arriendo",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-A-102",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-A-102",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-A-103",
+        "microSectorId": "piso-torre-a-1",
+        "numero": "103",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-b",
+        "metraje": 42,
+        "prorrateo": 0.0125,
+        "rolSii": "123-A13",
+        "estadoId": "en-venta",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-A-103",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-A-103",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-A-104",
+        "microSectorId": "piso-torre-a-1",
+        "numero": "104",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-b",
+        "metraje": 42,
+        "prorrateo": 0.0125,
+        "rolSii": "123-A14",
+        "estadoId": "en-mantencion",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-A-104",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-A-104",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-A-201",
+        "microSectorId": "piso-torre-a-2",
+        "numero": "201",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-a",
+        "metraje": 55.5,
+        "prorrateo": 0.0125,
+        "rolSii": "123-A21",
+        "estadoId": "en-arriendo",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-A-201",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-A-201",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-A-202",
+        "microSectorId": "piso-torre-a-2",
+        "numero": "202",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-a",
+        "metraje": 55.5,
+        "prorrateo": 0.0125,
+        "rolSii": "123-A22",
+        "estadoId": "en-venta",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-A-202",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-A-202",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-A-203",
+        "microSectorId": "piso-torre-a-2",
+        "numero": "203",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-b",
+        "metraje": 42,
+        "prorrateo": 0.0125,
+        "rolSii": "123-A23",
+        "estadoId": "en-mantencion",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-A-203",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-A-203",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-A-204",
+        "microSectorId": "piso-torre-a-2",
+        "numero": "204",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-b",
+        "metraje": 42,
+        "prorrateo": 0.0125,
+        "rolSii": "123-A24",
+        "estadoId": "vacante",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-A-204",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-A-204",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-A-301",
+        "microSectorId": "piso-torre-a-3",
+        "numero": "301",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-a",
+        "metraje": 55.5,
+        "prorrateo": 0.0125,
+        "rolSii": "123-A31",
+        "estadoId": "en-venta",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-A-301",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-A-301",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-A-302",
+        "microSectorId": "piso-torre-a-3",
+        "numero": "302",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-a",
+        "metraje": 55.5,
+        "prorrateo": 0.0125,
+        "rolSii": "123-A32",
+        "estadoId": "en-mantencion",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-A-302",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-A-302",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-A-303",
+        "microSectorId": "piso-torre-a-3",
+        "numero": "303",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-b",
+        "metraje": 42,
+        "prorrateo": 0.0125,
+        "rolSii": "123-A33",
+        "estadoId": "vacante",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-A-303",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-A-303",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-A-304",
+        "microSectorId": "piso-torre-a-3",
+        "numero": "304",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-b",
+        "metraje": 42,
+        "prorrateo": 0.0125,
+        "rolSii": "123-A34",
+        "estadoId": "en-uso",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-A-304",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-A-304",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-A-401",
+        "microSectorId": "piso-torre-a-4",
+        "numero": "401",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-a",
+        "metraje": 55.5,
+        "prorrateo": 0.0125,
+        "rolSii": "123-A41",
+        "estadoId": "en-mantencion",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-A-401",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-A-401",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-A-402",
+        "microSectorId": "piso-torre-a-4",
+        "numero": "402",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-a",
+        "metraje": 55.5,
+        "prorrateo": 0.0125,
+        "rolSii": "123-A42",
+        "estadoId": "vacante",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-A-402",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-A-402",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-A-403",
+        "microSectorId": "piso-torre-a-4",
+        "numero": "403",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-b",
+        "metraje": 42,
+        "prorrateo": 0.0125,
+        "rolSii": "123-A43",
+        "estadoId": "en-uso",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-A-403",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-A-403",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-A-404",
+        "microSectorId": "piso-torre-a-4",
+        "numero": "404",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-b",
+        "metraje": 42,
+        "prorrateo": 0.0125,
+        "rolSii": "123-A44",
+        "estadoId": "en-arriendo",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-A-404",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-A-404",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-B-101",
+        "microSectorId": "piso-torre-b-1",
+        "numero": "101",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-a",
+        "metraje": 55.5,
+        "prorrateo": 0.0125,
+        "rolSii": "123-B11",
+        "estadoId": "vacante",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-B-101",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-B-101",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-B-102",
+        "microSectorId": "piso-torre-b-1",
+        "numero": "102",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-a",
+        "metraje": 55.5,
+        "prorrateo": 0.0125,
+        "rolSii": "123-B12",
+        "estadoId": "en-uso",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-B-102",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-B-102",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-B-103",
+        "microSectorId": "piso-torre-b-1",
+        "numero": "103",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-b",
+        "metraje": 42,
+        "prorrateo": 0.0125,
+        "rolSii": "123-B13",
+        "estadoId": "en-arriendo",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-B-103",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-B-103",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-B-104",
+        "microSectorId": "piso-torre-b-1",
+        "numero": "104",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-b",
+        "metraje": 42,
+        "prorrateo": 0.0125,
+        "rolSii": "123-B14",
+        "estadoId": "en-venta",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-B-104",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-B-104",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-B-201",
+        "microSectorId": "piso-torre-b-2",
+        "numero": "201",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-a",
+        "metraje": 55.5,
+        "prorrateo": 0.0125,
+        "rolSii": "123-B21",
+        "estadoId": "en-uso",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-B-201",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-B-201",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-B-202",
+        "microSectorId": "piso-torre-b-2",
+        "numero": "202",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-a",
+        "metraje": 55.5,
+        "prorrateo": 0.0125,
+        "rolSii": "123-B22",
+        "estadoId": "en-arriendo",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-B-202",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-B-202",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-B-203",
+        "microSectorId": "piso-torre-b-2",
+        "numero": "203",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-b",
+        "metraje": 42,
+        "prorrateo": 0.0125,
+        "rolSii": "123-B23",
+        "estadoId": "en-venta",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-B-203",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-B-203",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-B-204",
+        "microSectorId": "piso-torre-b-2",
+        "numero": "204",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-b",
+        "metraje": 42,
+        "prorrateo": 0.0125,
+        "rolSii": "123-B24",
+        "estadoId": "en-mantencion",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-B-204",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-B-204",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-B-301",
+        "microSectorId": "piso-torre-b-3",
+        "numero": "301",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-a",
+        "metraje": 55.5,
+        "prorrateo": 0.0125,
+        "rolSii": "123-B31",
+        "estadoId": "en-arriendo",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-B-301",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-B-301",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-B-302",
+        "microSectorId": "piso-torre-b-3",
+        "numero": "302",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-a",
+        "metraje": 55.5,
+        "prorrateo": 0.0125,
+        "rolSii": "123-B32",
+        "estadoId": "en-venta",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-B-302",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-B-302",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-B-303",
+        "microSectorId": "piso-torre-b-3",
+        "numero": "303",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-b",
+        "metraje": 42,
+        "prorrateo": 0.0125,
+        "rolSii": "123-B33",
+        "estadoId": "en-mantencion",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-B-303",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-B-303",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-B-304",
+        "microSectorId": "piso-torre-b-3",
+        "numero": "304",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-b",
+        "metraje": 42,
+        "prorrateo": 0.0125,
+        "rolSii": "123-B34",
+        "estadoId": "vacante",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-B-304",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-B-304",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-B-401",
+        "microSectorId": "piso-torre-b-4",
+        "numero": "401",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-a",
+        "metraje": 55.5,
+        "prorrateo": 0.0125,
+        "rolSii": "123-B41",
+        "estadoId": "en-venta",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-B-401",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-B-401",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-B-402",
+        "microSectorId": "piso-torre-b-4",
+        "numero": "402",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-a",
+        "metraje": 55.5,
+        "prorrateo": 0.0125,
+        "rolSii": "123-B42",
+        "estadoId": "en-mantencion",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-B-402",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-B-402",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-B-403",
+        "microSectorId": "piso-torre-b-4",
+        "numero": "403",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-b",
+        "metraje": 42,
+        "prorrateo": 0.0125,
+        "rolSii": "123-B43",
+        "estadoId": "vacante",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-B-403",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-B-403",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-B-404",
+        "microSectorId": "piso-torre-b-4",
+        "numero": "404",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-b",
+        "metraje": 42,
+        "prorrateo": 0.0125,
+        "rolSii": "123-B44",
+        "estadoId": "en-uso",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-B-404",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-B-404",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-C-101",
+        "microSectorId": "piso-torre-c-1",
+        "numero": "101",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-a",
+        "metraje": 55.5,
+        "prorrateo": 0.0125,
+        "rolSii": "123-C11",
+        "estadoId": "en-mantencion",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-C-101",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-C-101",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-C-102",
+        "microSectorId": "piso-torre-c-1",
+        "numero": "102",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-a",
+        "metraje": 55.5,
+        "prorrateo": 0.0125,
+        "rolSii": "123-C12",
+        "estadoId": "vacante",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-C-102",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-C-102",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-C-103",
+        "microSectorId": "piso-torre-c-1",
+        "numero": "103",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-b",
+        "metraje": 42,
+        "prorrateo": 0.0125,
+        "rolSii": "123-C13",
+        "estadoId": "en-uso",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-C-103",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-C-103",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-C-104",
+        "microSectorId": "piso-torre-c-1",
+        "numero": "104",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-b",
+        "metraje": 42,
+        "prorrateo": 0.0125,
+        "rolSii": "123-C14",
+        "estadoId": "en-arriendo",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-C-104",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-C-104",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-C-201",
+        "microSectorId": "piso-torre-c-2",
+        "numero": "201",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-a",
+        "metraje": 55.5,
+        "prorrateo": 0.0125,
+        "rolSii": "123-C21",
+        "estadoId": "vacante",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-C-201",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-C-201",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-C-202",
+        "microSectorId": "piso-torre-c-2",
+        "numero": "202",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-a",
+        "metraje": 55.5,
+        "prorrateo": 0.0125,
+        "rolSii": "123-C22",
+        "estadoId": "en-uso",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-C-202",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-C-202",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-C-203",
+        "microSectorId": "piso-torre-c-2",
+        "numero": "203",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-b",
+        "metraje": 42,
+        "prorrateo": 0.0125,
+        "rolSii": "123-C23",
+        "estadoId": "en-arriendo",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-C-203",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-C-203",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-C-204",
+        "microSectorId": "piso-torre-c-2",
+        "numero": "204",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-b",
+        "metraje": 42,
+        "prorrateo": 0.0125,
+        "rolSii": "123-C24",
+        "estadoId": "en-venta",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-C-204",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-C-204",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-C-301",
+        "microSectorId": "piso-torre-c-3",
+        "numero": "301",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-a",
+        "metraje": 55.5,
+        "prorrateo": 0.0125,
+        "rolSii": "123-C31",
+        "estadoId": "en-uso",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-C-301",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-C-301",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-C-302",
+        "microSectorId": "piso-torre-c-3",
+        "numero": "302",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-a",
+        "metraje": 55.5,
+        "prorrateo": 0.0125,
+        "rolSii": "123-C32",
+        "estadoId": "en-arriendo",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-C-302",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-C-302",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-C-303",
+        "microSectorId": "piso-torre-c-3",
+        "numero": "303",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-b",
+        "metraje": 42,
+        "prorrateo": 0.0125,
+        "rolSii": "123-C33",
+        "estadoId": "en-venta",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-C-303",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-C-303",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-C-304",
+        "microSectorId": "piso-torre-c-3",
+        "numero": "304",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-b",
+        "metraje": 42,
+        "prorrateo": 0.0125,
+        "rolSii": "123-C34",
+        "estadoId": "en-mantencion",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-C-304",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-C-304",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-C-401",
+        "microSectorId": "piso-torre-c-4",
+        "numero": "401",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-a",
+        "metraje": 55.5,
+        "prorrateo": 0.0125,
+        "rolSii": "123-C41",
+        "estadoId": "en-arriendo",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-C-401",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-C-401",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-C-402",
+        "microSectorId": "piso-torre-c-4",
+        "numero": "402",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-a",
+        "metraje": 55.5,
+        "prorrateo": 0.0125,
+        "rolSii": "123-C42",
+        "estadoId": "en-venta",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-C-402",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-C-402",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-C-403",
+        "microSectorId": "piso-torre-c-4",
+        "numero": "403",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-b",
+        "metraje": 42,
+        "prorrateo": 0.0125,
+        "rolSii": "123-C43",
+        "estadoId": "en-mantencion",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-C-403",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-C-403",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-C-404",
+        "microSectorId": "piso-torre-c-4",
+        "numero": "404",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-b",
+        "metraje": 42,
+        "prorrateo": 0.0125,
+        "rolSii": "123-C44",
+        "estadoId": "vacante",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-C-404",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-C-404",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-D-101",
+        "microSectorId": "piso-torre-d-1",
+        "numero": "101",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-a",
+        "metraje": 55.5,
+        "prorrateo": 0.0125,
+        "rolSii": "123-D11",
+        "estadoId": "en-venta",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-D-101",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-D-101",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-D-102",
+        "microSectorId": "piso-torre-d-1",
+        "numero": "102",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-a",
+        "metraje": 55.5,
+        "prorrateo": 0.0125,
+        "rolSii": "123-D12",
+        "estadoId": "en-mantencion",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-D-102",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-D-102",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-D-103",
+        "microSectorId": "piso-torre-d-1",
+        "numero": "103",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-b",
+        "metraje": 42,
+        "prorrateo": 0.0125,
+        "rolSii": "123-D13",
+        "estadoId": "vacante",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-D-103",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-D-103",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-D-104",
+        "microSectorId": "piso-torre-d-1",
+        "numero": "104",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-b",
+        "metraje": 42,
+        "prorrateo": 0.0125,
+        "rolSii": "123-D14",
+        "estadoId": "en-uso",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-D-104",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-D-104",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-D-201",
+        "microSectorId": "piso-torre-d-2",
+        "numero": "201",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-a",
+        "metraje": 55.5,
+        "prorrateo": 0.0125,
+        "rolSii": "123-D21",
+        "estadoId": "en-mantencion",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-D-201",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-D-201",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-D-202",
+        "microSectorId": "piso-torre-d-2",
+        "numero": "202",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-a",
+        "metraje": 55.5,
+        "prorrateo": 0.0125,
+        "rolSii": "123-D22",
+        "estadoId": "vacante",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-D-202",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-D-202",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-D-203",
+        "microSectorId": "piso-torre-d-2",
+        "numero": "203",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-b",
+        "metraje": 42,
+        "prorrateo": 0.0125,
+        "rolSii": "123-D23",
+        "estadoId": "en-uso",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-D-203",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-D-203",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-D-204",
+        "microSectorId": "piso-torre-d-2",
+        "numero": "204",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-b",
+        "metraje": 42,
+        "prorrateo": 0.0125,
+        "rolSii": "123-D24",
+        "estadoId": "en-arriendo",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-D-204",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-D-204",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-D-301",
+        "microSectorId": "piso-torre-d-3",
+        "numero": "301",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-a",
+        "metraje": 55.5,
+        "prorrateo": 0.0125,
+        "rolSii": "123-D31",
+        "estadoId": "vacante",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-D-301",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-D-301",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-D-302",
+        "microSectorId": "piso-torre-d-3",
+        "numero": "302",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-a",
+        "metraje": 55.5,
+        "prorrateo": 0.0125,
+        "rolSii": "123-D32",
+        "estadoId": "en-uso",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-D-302",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-D-302",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-D-303",
+        "microSectorId": "piso-torre-d-3",
+        "numero": "303",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-b",
+        "metraje": 42,
+        "prorrateo": 0.0125,
+        "rolSii": "123-D33",
+        "estadoId": "en-arriendo",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-D-303",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-D-303",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-D-304",
+        "microSectorId": "piso-torre-d-3",
+        "numero": "304",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-b",
+        "metraje": 42,
+        "prorrateo": 0.0125,
+        "rolSii": "123-D34",
+        "estadoId": "en-venta",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-D-304",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-D-304",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-D-401",
+        "microSectorId": "piso-torre-d-4",
+        "numero": "401",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-a",
+        "metraje": 55.5,
+        "prorrateo": 0.0125,
+        "rolSii": "123-D41",
+        "estadoId": "en-uso",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-D-401",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-D-401",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-D-402",
+        "microSectorId": "piso-torre-d-4",
+        "numero": "402",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-a",
+        "metraje": 55.5,
+        "prorrateo": 0.0125,
+        "rolSii": "123-D42",
+        "estadoId": "en-arriendo",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-D-402",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-D-402",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-D-403",
+        "microSectorId": "piso-torre-d-4",
+        "numero": "403",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-b",
+        "metraje": 42,
+        "prorrateo": 0.0125,
+        "rolSii": "123-D43",
+        "estadoId": "en-venta",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-D-403",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-D-403",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-D-404",
+        "microSectorId": "piso-torre-d-4",
+        "numero": "404",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-b",
+        "metraje": 42,
+        "prorrateo": 0.0125,
+        "rolSii": "123-D44",
+        "estadoId": "en-mantencion",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-D-404",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-D-404",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-E-101",
+        "microSectorId": "piso-torre-e-1",
+        "numero": "101",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-a",
+        "metraje": 55.5,
+        "prorrateo": 0.0125,
+        "rolSii": "123-E11",
+        "estadoId": "en-arriendo",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-E-101",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-E-101",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-E-102",
+        "microSectorId": "piso-torre-e-1",
+        "numero": "102",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-a",
+        "metraje": 55.5,
+        "prorrateo": 0.0125,
+        "rolSii": "123-E12",
+        "estadoId": "en-venta",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-E-102",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-E-102",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-E-103",
+        "microSectorId": "piso-torre-e-1",
+        "numero": "103",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-b",
+        "metraje": 42,
+        "prorrateo": 0.0125,
+        "rolSii": "123-E13",
+        "estadoId": "en-mantencion",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-E-103",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-E-103",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-E-104",
+        "microSectorId": "piso-torre-e-1",
+        "numero": "104",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-b",
+        "metraje": 42,
+        "prorrateo": 0.0125,
+        "rolSii": "123-E14",
+        "estadoId": "vacante",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-E-104",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-E-104",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-E-201",
+        "microSectorId": "piso-torre-e-2",
+        "numero": "201",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-a",
+        "metraje": 55.5,
+        "prorrateo": 0.0125,
+        "rolSii": "123-E21",
+        "estadoId": "en-venta",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-E-201",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-E-201",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-E-202",
+        "microSectorId": "piso-torre-e-2",
+        "numero": "202",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-a",
+        "metraje": 55.5,
+        "prorrateo": 0.0125,
+        "rolSii": "123-E22",
+        "estadoId": "en-mantencion",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-E-202",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-E-202",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-E-203",
+        "microSectorId": "piso-torre-e-2",
+        "numero": "203",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-b",
+        "metraje": 42,
+        "prorrateo": 0.0125,
+        "rolSii": "123-E23",
+        "estadoId": "vacante",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-E-203",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-E-203",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-E-204",
+        "microSectorId": "piso-torre-e-2",
+        "numero": "204",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-b",
+        "metraje": 42,
+        "prorrateo": 0.0125,
+        "rolSii": "123-E24",
+        "estadoId": "en-uso",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-E-204",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-E-204",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-E-301",
+        "microSectorId": "piso-torre-e-3",
+        "numero": "301",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-a",
+        "metraje": 55.5,
+        "prorrateo": 0.0125,
+        "rolSii": "123-E31",
+        "estadoId": "en-mantencion",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-E-301",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-E-301",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-E-302",
+        "microSectorId": "piso-torre-e-3",
+        "numero": "302",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-a",
+        "metraje": 55.5,
+        "prorrateo": 0.0125,
+        "rolSii": "123-E32",
+        "estadoId": "vacante",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-E-302",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-E-302",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-E-303",
+        "microSectorId": "piso-torre-e-3",
+        "numero": "303",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-b",
+        "metraje": 42,
+        "prorrateo": 0.0125,
+        "rolSii": "123-E33",
+        "estadoId": "en-uso",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-E-303",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-E-303",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-E-304",
+        "microSectorId": "piso-torre-e-3",
+        "numero": "304",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-b",
+        "metraje": 42,
+        "prorrateo": 0.0125,
+        "rolSii": "123-E34",
+        "estadoId": "en-arriendo",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-E-304",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-E-304",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-E-401",
+        "microSectorId": "piso-torre-e-4",
+        "numero": "401",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-a",
+        "metraje": 55.5,
+        "prorrateo": 0.0125,
+        "rolSii": "123-E41",
+        "estadoId": "vacante",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-E-401",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-E-401",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-E-402",
+        "microSectorId": "piso-torre-e-4",
+        "numero": "402",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-a",
+        "metraje": 55.5,
+        "prorrateo": 0.0125,
+        "rolSii": "123-E42",
+        "estadoId": "en-uso",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-E-402",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-E-402",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-E-403",
+        "microSectorId": "piso-torre-e-4",
+        "numero": "403",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-b",
+        "metraje": 42,
+        "prorrateo": 0.0125,
+        "rolSii": "123-E43",
+        "estadoId": "en-arriendo",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-E-403",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-E-403",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-E-404",
+        "microSectorId": "piso-torre-e-4",
+        "numero": "404",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-b",
+        "metraje": 42,
+        "prorrateo": 0.0125,
+        "rolSii": "123-E44",
+        "estadoId": "en-venta",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-E-404",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-E-404",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-LC-01",
+        "microSectorId": "piso-comercial-1",
+        "numero": "L-01",
+        "etiqueta": "Local",
+        "tipoUnidadId": "local-a",
+        "metraje": 120,
+        "prorrateo": 0.05,
+        "rolSii": "999-01",
+        "estadoId": "en-uso",
+        "servicios": {
+          "agua": {
+            "cliente": "C-LC-01",
+            "medidor": "ML-01"
+          }
+        }
+      },
+      {
+        "id": "u-LC-02",
+        "microSectorId": "piso-comercial-1",
+        "numero": "L-02",
+        "etiqueta": "Local",
+        "tipoUnidadId": "local-b",
+        "metraje": 60,
+        "prorrateo": 0.025,
+        "rolSii": "999-02",
+        "estadoId": "en-arriendo",
+        "servicios": {
+          "agua": {
+            "cliente": "C-LC-02",
+            "medidor": "ML-02"
+          }
+        }
+      },
+      {
+        "id": "u-LC-03",
+        "microSectorId": "piso-comercial-1",
+        "numero": "L-03",
+        "etiqueta": "Local",
+        "tipoUnidadId": "local-b",
+        "metraje": 60,
+        "prorrateo": 0.025,
+        "rolSii": "999-03",
+        "estadoId": "vacante",
+        "servicios": {
+          "agua": {
+            "cliente": "C-LC-03",
+            "medidor": "ML-03"
+          }
+        }
+      },
+      {
+        "id": "u-1787091075765",
+        "microSectorId": "mic-1787089010626",
+        "etiqueta": "Depto",
+        "numero": "1001",
+        "tipoUnidadId": "tipo-a",
+        "metraje": 55.5,
+        "prorrateo": 0,
+        "rolSii": "sdsd",
+        "estadoId": "vacante",
+        "servicios": {
+          "agua": {
+            "cliente": "1212",
+            "medidor": "2121"
+          },
+          "luz": {
+            "cliente": "4343",
+            "medidor": "3434"
+          },
+          "gas": {
+            "cliente": "5656",
+            "medidor": "6565"
+          }
+        }
+      }
+    ],
+    "estacionamientos": [
+      {
+        "id": "es-1",
+        "numero": "P-001",
+        "ubicacion": "Subterráneo -1, Sector Beta, Plaza P-001",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "unidadId": "u-LC-01",
+        "macroSectorId": "comercial",
+        "asignadoA": "Local Comercial L-01 (Ancla)",
+        "estadoId": "en-uso",
+        "historial": [
+          {
+            "id": "h-es-1-prev1",
+            "unidadId": "old-1",
+            "asignadoA": "Constructora (Entrega)",
+            "fechaInicio": "2023-01-01",
+            "fechaFin": "2023-06-30"
+          },
+          {
+            "id": "h-es-1-prev2",
+            "unidadId": "old-2",
+            "asignadoA": "Depto 204 (Ex-Dueño)",
+            "fechaInicio": "2023-07-01",
+            "fechaFin": "2023-12-31"
+          },
+          {
+            "id": "h-es-1-actual",
+            "unidadId": "u-LC-01",
+            "asignadoA": "Local Comercial L-01 (Ancla)",
+            "fechaInicio": "2024-01-01"
+          }
+        ]
+      },
+      {
+        "id": "es-2",
+        "numero": "P-002",
+        "ubicacion": "Subterráneo -1, Sector Alfa, Plaza P-002",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "unidadId": "u-LC-01",
+        "macroSectorId": "comercial",
+        "asignadoA": "Local Comercial 01",
+        "estadoId": "en-uso",
+        "historial": [
+          {
+            "id": "h-es-2-1",
+            "unidadId": "u-LC-01",
+            "asignadoA": "Local Comercial 01",
+            "fechaInicio": "2024-01-01"
+          }
+        ]
+      },
+      {
+        "id": "es-3",
+        "numero": "P-003",
+        "ubicacion": "Subterráneo -1, Sector Beta, Plaza P-003",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "unidadId": "u-LC-01",
+        "macroSectorId": "comercial",
+        "asignadoA": "Local Comercial 01",
+        "estadoId": "en-uso",
+        "historial": [
+          {
+            "id": "h-es-3-1",
+            "unidadId": "u-LC-01",
+            "asignadoA": "Local Comercial 01",
+            "fechaInicio": "2024-01-01"
+          }
+        ]
+      },
+      {
+        "id": "es-4",
+        "numero": "P-004",
+        "ubicacion": "Subterráneo -1, Sector Alfa, Plaza P-004",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "unidadId": "u-LC-01",
+        "macroSectorId": "comercial",
+        "asignadoA": "Local Comercial 01",
+        "estadoId": "en-uso",
+        "historial": [
+          {
+            "id": "h-es-4-1",
+            "unidadId": "u-LC-01",
+            "asignadoA": "Local Comercial 01",
+            "fechaInicio": "2024-01-01"
+          }
+        ]
+      },
+      {
+        "id": "es-5",
+        "numero": "P-005",
+        "ubicacion": "Subterráneo -1, Sector Beta, Plaza P-005",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "unidadId": "u-LC-02",
+        "macroSectorId": "comercial",
+        "asignadoA": "Local Comercial 02",
+        "estadoId": "en-uso",
+        "historial": [
+          {
+            "id": "h-es-5-1",
+            "unidadId": "u-LC-02",
+            "asignadoA": "Local Comercial 02",
+            "fechaInicio": "2024-01-01"
+          }
+        ]
+      },
+      {
+        "id": "es-6",
+        "numero": "P-006",
+        "ubicacion": "Subterráneo -1, Sector Alfa, Plaza P-006",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "unidadId": "u-LC-02",
+        "macroSectorId": "comercial",
+        "asignadoA": "Local Comercial 02",
+        "estadoId": "en-uso",
+        "historial": [
+          {
+            "id": "h-es-6-1",
+            "unidadId": "u-LC-02",
+            "asignadoA": "Local Comercial 02",
+            "fechaInicio": "2024-01-01"
+          }
+        ]
+      },
+      {
+        "id": "es-7",
+        "numero": "P-007",
+        "ubicacion": "Subterráneo -1, Sector Beta, Plaza P-007",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "unidadId": "u-LC-03",
+        "macroSectorId": "comercial",
+        "asignadoA": "Local Comercial 03",
+        "estadoId": "en-uso",
+        "historial": [
+          {
+            "id": "h-es-7-1",
+            "unidadId": "u-LC-03",
+            "asignadoA": "Local Comercial 03",
+            "fechaInicio": "2024-01-01"
+          }
+        ]
+      },
+      {
+        "id": "es-8",
+        "numero": "P-008",
+        "ubicacion": "Subterráneo -1, Sector Alfa, Plaza P-008",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "unidadId": "u-LC-03",
+        "macroSectorId": "comercial",
+        "asignadoA": "Local Comercial 03",
+        "estadoId": "en-uso",
+        "historial": [
+          {
+            "id": "h-es-8-1",
+            "unidadId": "u-LC-03",
+            "asignadoA": "Local Comercial 03",
+            "fechaInicio": "2024-01-01"
+          }
+        ]
+      },
+      {
+        "id": "es-9",
+        "numero": "P-009",
+        "ubicacion": "Subterráneo -1, Sector Beta, Plaza P-009",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "unidadId": "u-A-101",
+        "macroSectorId": "torre-a",
+        "asignadoA": "Depto 101 (Torre A)",
+        "estadoId": "en-uso",
+        "historial": [
+          {
+            "id": "h-es-9-1",
+            "unidadId": "u-A-101",
+            "asignadoA": "Depto 101 (Torre A)",
+            "fechaInicio": "2024-02-15"
+          }
+        ]
+      },
+      {
+        "id": "es-10",
+        "numero": "P-010",
+        "ubicacion": "Subterráneo -1, Sector Alfa, Plaza P-010",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "unidadId": "u-A-102",
+        "macroSectorId": "torre-a",
+        "asignadoA": "Depto 102 (Torre A)",
+        "estadoId": "en-uso",
+        "historial": [
+          {
+            "id": "h-es-10-1",
+            "unidadId": "u-A-102",
+            "asignadoA": "Depto 102 (Torre A)",
+            "fechaInicio": "2024-02-15"
+          }
+        ]
+      },
+      {
+        "id": "es-11",
+        "numero": "P-011",
+        "ubicacion": "Subterráneo -1, Sector Beta, Plaza P-011",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "unidadId": "u-A-103",
+        "macroSectorId": "torre-a",
+        "asignadoA": "Depto 103 (Torre A)",
+        "estadoId": "en-uso",
+        "historial": [
+          {
+            "id": "h-es-11-1",
+            "unidadId": "u-A-103",
+            "asignadoA": "Depto 103 (Torre A)",
+            "fechaInicio": "2024-02-15"
+          }
+        ]
+      },
+      {
+        "id": "es-12",
+        "numero": "P-012",
+        "ubicacion": "Subterráneo -1, Sector Alfa, Plaza P-012",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "unidadId": "u-A-104",
+        "macroSectorId": "torre-a",
+        "asignadoA": "Depto 104 (Torre A)",
+        "estadoId": "en-uso",
+        "historial": [
+          {
+            "id": "h-es-12-1",
+            "unidadId": "u-A-104",
+            "asignadoA": "Depto 104 (Torre A)",
+            "fechaInicio": "2024-02-15"
+          }
+        ]
+      },
+      {
+        "id": "es-13",
+        "numero": "P-013",
+        "ubicacion": "Subterráneo -1, Sector Beta, Plaza P-013",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "unidadId": "u-A-201",
+        "macroSectorId": "torre-a",
+        "asignadoA": "Depto 201 (Torre A)",
+        "estadoId": "en-uso",
+        "historial": [
+          {
+            "id": "h-es-13-1",
+            "unidadId": "u-A-201",
+            "asignadoA": "Depto 201 (Torre A)",
+            "fechaInicio": "2024-02-15"
+          }
+        ]
+      },
+      {
+        "id": "es-14",
+        "numero": "P-014",
+        "ubicacion": "Subterráneo -1, Sector Alfa, Plaza P-014",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "unidadId": "u-A-202",
+        "macroSectorId": "torre-a",
+        "asignadoA": "Depto 202 (Torre A)",
+        "estadoId": "en-uso",
+        "historial": [
+          {
+            "id": "h-es-14-1",
+            "unidadId": "u-A-202",
+            "asignadoA": "Depto 202 (Torre A)",
+            "fechaInicio": "2024-02-15"
+          }
+        ]
+      },
+      {
+        "id": "es-15",
+        "numero": "P-015",
+        "ubicacion": "Subterráneo -1, Sector Beta, Plaza P-015",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "unidadId": "u-A-403",
+        "macroSectorId": "torre-a",
+        "asignadoA": "Depto 403 (Torre A)",
+        "estadoId": "en-uso",
+        "historial": [
+          {
+            "id": "h-es-15-prev",
+            "unidadId": "old-x",
+            "asignadoA": "Residente Temporal",
+            "fechaInicio": "2023-10-01",
+            "fechaFin": "2024-01-15"
+          },
+          {
+            "id": "h-es-15-actual",
+            "unidadId": "u-A-403",
+            "asignadoA": "Depto 403 (Torre A)",
+            "fechaInicio": "2024-01-16"
+          }
+        ]
+      },
+      {
+        "id": "es-16",
+        "numero": "P-016",
+        "ubicacion": "Subterráneo -1, Sector Alfa, Plaza P-016",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "unidadId": "u-A-204",
+        "macroSectorId": "torre-a",
+        "asignadoA": "Depto 204 (Torre A)",
+        "estadoId": "en-uso",
+        "historial": [
+          {
+            "id": "h-es-16-1",
+            "unidadId": "u-A-204",
+            "asignadoA": "Depto 204 (Torre A)",
+            "fechaInicio": "2024-02-15"
+          }
+        ]
+      },
+      {
+        "id": "es-17",
+        "numero": "P-017",
+        "ubicacion": "Subterráneo -1, Sector Beta, Plaza P-017",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "unidadId": "u-A-301",
+        "macroSectorId": "torre-a",
+        "asignadoA": "Depto 301 (Torre A)",
+        "estadoId": "en-uso",
+        "historial": [
+          {
+            "id": "h-es-17-1",
+            "unidadId": "u-A-301",
+            "asignadoA": "Depto 301 (Torre A)",
+            "fechaInicio": "2024-02-15"
+          }
+        ]
+      },
+      {
+        "id": "es-18",
+        "numero": "P-018",
+        "ubicacion": "Subterráneo -1, Sector Alfa, Plaza P-018",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "unidadId": "u-A-302",
+        "macroSectorId": "torre-a",
+        "asignadoA": "Depto 302 (Torre A)",
+        "estadoId": "en-uso",
+        "historial": [
+          {
+            "id": "h-es-18-1",
+            "unidadId": "u-A-302",
+            "asignadoA": "Depto 302 (Torre A)",
+            "fechaInicio": "2024-02-15"
+          }
+        ]
+      },
+      {
+        "id": "es-19",
+        "numero": "P-019",
+        "ubicacion": "Subterráneo -1, Sector Beta, Plaza P-019",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "unidadId": "u-A-303",
+        "macroSectorId": "torre-a",
+        "asignadoA": "Depto 303 (Torre A)",
+        "estadoId": "en-uso",
+        "historial": [
+          {
+            "id": "h-es-19-1",
+            "unidadId": "u-A-303",
+            "asignadoA": "Depto 303 (Torre A)",
+            "fechaInicio": "2024-02-15"
+          }
+        ]
+      },
+      {
+        "id": "es-20",
+        "numero": "P-020",
+        "ubicacion": "Subterráneo -1, Sector Alfa, Plaza P-020",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "unidadId": "u-A-304",
+        "macroSectorId": "torre-a",
+        "asignadoA": "Depto 304 (Torre A)",
+        "estadoId": "en-uso",
+        "historial": [
+          {
+            "id": "h-es-20-1",
+            "unidadId": "u-A-304",
+            "asignadoA": "Depto 304 (Torre A)",
+            "fechaInicio": "2024-02-15"
+          }
+        ]
+      },
+      {
+        "id": "es-21",
+        "numero": "P-021",
+        "ubicacion": "Subterráneo -1, Sector Beta, Plaza P-021",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "unidadId": "u-A-401",
+        "macroSectorId": "torre-a",
+        "asignadoA": "Depto 401 (Torre A)",
+        "estadoId": "en-uso",
+        "historial": [
+          {
+            "id": "h-es-21-1",
+            "unidadId": "u-A-401",
+            "asignadoA": "Depto 401 (Torre A)",
+            "fechaInicio": "2024-02-15"
+          }
+        ]
+      },
+      {
+        "id": "es-22",
+        "numero": "P-022",
+        "ubicacion": "Subterráneo -1, Sector Alfa, Plaza P-022",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "unidadId": "u-A-402",
+        "macroSectorId": "torre-a",
+        "asignadoA": "Depto 402 (Torre A)",
+        "estadoId": "en-uso",
+        "historial": [
+          {
+            "id": "h-es-22-1",
+            "unidadId": "u-A-402",
+            "asignadoA": "Depto 402 (Torre A)",
+            "fechaInicio": "2024-02-15"
+          }
+        ]
+      },
+      {
+        "id": "es-23",
+        "numero": "P-023",
+        "ubicacion": "Subterráneo -1, Sector Beta, Plaza P-023",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "unidadId": "u-A-403",
+        "macroSectorId": "torre-a",
+        "asignadoA": "Depto 403 (Torre A)",
+        "estadoId": "en-uso",
+        "historial": [
+          {
+            "id": "h-es-23-1",
+            "unidadId": "u-A-403",
+            "asignadoA": "Depto 403 (Torre A)",
+            "fechaInicio": "2024-02-15"
+          }
+        ]
+      },
+      {
+        "id": "es-24",
+        "numero": "P-024",
+        "ubicacion": "Subterráneo -1, Sector Alfa, Plaza P-024",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "unidadId": "u-A-404",
+        "macroSectorId": "torre-a",
+        "asignadoA": "Depto 404 (Torre A)",
+        "estadoId": "en-uso",
+        "historial": [
+          {
+            "id": "h-es-24-1",
+            "unidadId": "u-A-404",
+            "asignadoA": "Depto 404 (Torre A)",
+            "fechaInicio": "2024-02-15"
+          }
+        ]
+      },
+      {
+        "id": "es-25",
+        "numero": "P-025",
+        "ubicacion": "Subterráneo -1, Sector Beta, Plaza P-025",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "unidadId": "u-B-101",
+        "macroSectorId": "torre-b",
+        "asignadoA": "Depto 101 (Torre B)",
+        "estadoId": "en-uso",
+        "historial": [
+          {
+            "id": "h-es-25-1",
+            "unidadId": "u-B-101",
+            "asignadoA": "Depto 101 (Torre B)",
+            "fechaInicio": "2024-02-15"
+          }
+        ]
+      },
+      {
+        "id": "es-26",
+        "numero": "P-026",
+        "ubicacion": "Subterráneo -1, Sector Alfa, Plaza P-026",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "unidadId": "u-B-102",
+        "macroSectorId": "torre-b",
+        "asignadoA": "Depto 102 (Torre B)",
+        "estadoId": "en-uso",
+        "historial": [
+          {
+            "id": "h-es-26-1",
+            "unidadId": "u-B-102",
+            "asignadoA": "Depto 102 (Torre B)",
+            "fechaInicio": "2024-02-15"
+          }
+        ]
+      },
+      {
+        "id": "es-27",
+        "numero": "P-027",
+        "ubicacion": "Subterráneo -1, Sector Beta, Plaza P-027",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "unidadId": "u-B-103",
+        "macroSectorId": "torre-b",
+        "asignadoA": "Depto 103 (Torre B)",
+        "estadoId": "en-uso",
+        "historial": [
+          {
+            "id": "h-es-27-1",
+            "unidadId": "u-B-103",
+            "asignadoA": "Depto 103 (Torre B)",
+            "fechaInicio": "2024-02-15"
+          }
+        ]
+      },
+      {
+        "id": "es-28",
+        "numero": "P-028",
+        "ubicacion": "Subterráneo -1, Sector Alfa, Plaza P-028",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "unidadId": "u-B-104",
+        "macroSectorId": "torre-b",
+        "asignadoA": "Depto 104 (Torre B)",
+        "estadoId": "en-uso",
+        "historial": [
+          {
+            "id": "h-es-28-1",
+            "unidadId": "u-B-104",
+            "asignadoA": "Depto 104 (Torre B)",
+            "fechaInicio": "2024-02-15"
+          }
+        ]
+      },
+      {
+        "id": "es-29",
+        "numero": "P-029",
+        "ubicacion": "Subterráneo -1, Sector Beta, Plaza P-029",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "unidadId": "u-B-201",
+        "macroSectorId": "torre-b",
+        "asignadoA": "Depto 201 (Torre B)",
+        "estadoId": "en-uso",
+        "historial": [
+          {
+            "id": "h-es-29-1",
+            "unidadId": "u-B-201",
+            "asignadoA": "Depto 201 (Torre B)",
+            "fechaInicio": "2024-02-15"
+          }
+        ]
+      },
+      {
+        "id": "es-30",
+        "numero": "P-030",
+        "ubicacion": "Subterráneo -1, Sector Alfa, Plaza P-030",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "unidadId": "u-B-402",
+        "macroSectorId": "torre-b",
+        "asignadoA": "Depto 402 (Torre B)",
+        "estadoId": "en-uso",
+        "historial": [
+          {
+            "id": "h-es-30-prev",
+            "unidadId": "old-x",
+            "asignadoA": "Residente Temporal",
+            "fechaInicio": "2023-10-01",
+            "fechaFin": "2024-01-15"
+          },
+          {
+            "id": "h-es-30-actual",
+            "unidadId": "u-B-402",
+            "asignadoA": "Depto 402 (Torre B)",
+            "fechaInicio": "2024-01-16"
+          }
+        ]
+      },
+      {
+        "id": "es-31",
+        "numero": "P-031",
+        "ubicacion": "Subterráneo -1, Sector Beta, Plaza P-031",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "unidadId": "u-B-203",
+        "macroSectorId": "torre-b",
+        "asignadoA": "Depto 203 (Torre B)",
+        "estadoId": "en-uso",
+        "historial": [
+          {
+            "id": "h-es-31-1",
+            "unidadId": "u-B-203",
+            "asignadoA": "Depto 203 (Torre B)",
+            "fechaInicio": "2024-02-15"
+          }
+        ]
+      },
+      {
+        "id": "es-32",
+        "numero": "P-032",
+        "ubicacion": "Subterráneo -1, Sector Alfa, Plaza P-032",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "unidadId": "u-B-204",
+        "macroSectorId": "torre-b",
+        "asignadoA": "Depto 204 (Torre B)",
+        "estadoId": "en-uso",
+        "historial": [
+          {
+            "id": "h-es-32-1",
+            "unidadId": "u-B-204",
+            "asignadoA": "Depto 204 (Torre B)",
+            "fechaInicio": "2024-02-15"
+          }
+        ]
+      },
+      {
+        "id": "es-33",
+        "numero": "P-033",
+        "ubicacion": "Subterráneo -1, Sector Beta, Plaza P-033",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "unidadId": "u-B-301",
+        "macroSectorId": "torre-b",
+        "asignadoA": "Depto 301 (Torre B)",
+        "estadoId": "en-uso",
+        "historial": [
+          {
+            "id": "h-es-33-1",
+            "unidadId": "u-B-301",
+            "asignadoA": "Depto 301 (Torre B)",
+            "fechaInicio": "2024-02-15"
+          }
+        ]
+      },
+      {
+        "id": "es-34",
+        "numero": "P-034",
+        "ubicacion": "Subterráneo -1, Sector Alfa, Plaza P-034",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "unidadId": "u-B-302",
+        "macroSectorId": "torre-b",
+        "asignadoA": "Depto 302 (Torre B)",
+        "estadoId": "en-uso",
+        "historial": [
+          {
+            "id": "h-es-34-1",
+            "unidadId": "u-B-302",
+            "asignadoA": "Depto 302 (Torre B)",
+            "fechaInicio": "2024-02-15"
+          }
+        ]
+      },
+      {
+        "id": "es-35",
+        "numero": "P-035",
+        "ubicacion": "Subterráneo -1, Sector Beta, Plaza P-035",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "unidadId": "u-B-303",
+        "macroSectorId": "torre-b",
+        "asignadoA": "Depto 303 (Torre B)",
+        "estadoId": "en-uso",
+        "historial": [
+          {
+            "id": "h-es-35-1",
+            "unidadId": "u-B-303",
+            "asignadoA": "Depto 303 (Torre B)",
+            "fechaInicio": "2024-02-15"
+          }
+        ]
+      },
+      {
+        "id": "es-36",
+        "numero": "P-036",
+        "ubicacion": "Subterráneo -1, Sector Alfa, Plaza P-036",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "unidadId": "u-B-304",
+        "macroSectorId": "torre-b",
+        "asignadoA": "Depto 304 (Torre B)",
+        "estadoId": "en-uso",
+        "historial": [
+          {
+            "id": "h-es-36-1",
+            "unidadId": "u-B-304",
+            "asignadoA": "Depto 304 (Torre B)",
+            "fechaInicio": "2024-02-15"
+          }
+        ]
+      },
+      {
+        "id": "es-37",
+        "numero": "P-037",
+        "ubicacion": "Subterráneo -1, Sector Beta, Plaza P-037",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "unidadId": "u-B-401",
+        "macroSectorId": "torre-b",
+        "asignadoA": "Depto 401 (Torre B)",
+        "estadoId": "en-uso",
+        "historial": [
+          {
+            "id": "h-es-37-1",
+            "unidadId": "u-B-401",
+            "asignadoA": "Depto 401 (Torre B)",
+            "fechaInicio": "2024-02-15"
+          }
+        ]
+      },
+      {
+        "id": "es-38",
+        "numero": "P-038",
+        "ubicacion": "Subterráneo -1, Sector Alfa, Plaza P-038",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "unidadId": "u-B-402",
+        "macroSectorId": "torre-b",
+        "asignadoA": "Depto 402 (Torre B)",
+        "estadoId": "en-uso",
+        "historial": [
+          {
+            "id": "h-es-38-1",
+            "unidadId": "u-B-402",
+            "asignadoA": "Depto 402 (Torre B)",
+            "fechaInicio": "2024-02-15"
+          }
+        ]
+      },
+      {
+        "id": "es-39",
+        "numero": "P-039",
+        "ubicacion": "Subterráneo -1, Sector Beta, Plaza P-039",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "unidadId": "u-B-403",
+        "macroSectorId": "torre-b",
+        "asignadoA": "Depto 403 (Torre B)",
+        "estadoId": "en-uso",
+        "historial": [
+          {
+            "id": "h-es-39-1",
+            "unidadId": "u-B-403",
+            "asignadoA": "Depto 403 (Torre B)",
+            "fechaInicio": "2024-02-15"
+          }
+        ]
+      },
+      {
+        "id": "es-40",
+        "numero": "P-040",
+        "ubicacion": "Subterráneo -1, Sector Alfa, Plaza P-040",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "unidadId": "u-B-404",
+        "macroSectorId": "torre-b",
+        "asignadoA": "Depto 404 (Torre B)",
+        "estadoId": "en-uso",
+        "historial": [
+          {
+            "id": "h-es-40-1",
+            "unidadId": "u-B-404",
+            "asignadoA": "Depto 404 (Torre B)",
+            "fechaInicio": "2024-02-15"
+          }
+        ]
+      },
+      {
+        "id": "es-41",
+        "numero": "P-041",
+        "ubicacion": "Subterráneo -1, Sector Beta, Plaza P-041",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "unidadId": "u-C-101",
+        "macroSectorId": "torre-c",
+        "asignadoA": "Depto 101 (Torre C)",
+        "estadoId": "en-uso",
+        "historial": [
+          {
+            "id": "h-es-41-1",
+            "unidadId": "u-C-101",
+            "asignadoA": "Depto 101 (Torre C)",
+            "fechaInicio": "2024-02-15"
+          }
+        ]
+      },
+      {
+        "id": "es-42",
+        "numero": "P-042",
+        "ubicacion": "Subterráneo -1, Sector Alfa, Plaza P-042",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "unidadId": "u-C-102",
+        "macroSectorId": "torre-c",
+        "asignadoA": "Depto 102 (Torre C)",
+        "estadoId": "en-uso",
+        "historial": [
+          {
+            "id": "h-es-42-1",
+            "unidadId": "u-C-102",
+            "asignadoA": "Depto 102 (Torre C)",
+            "fechaInicio": "2024-02-15"
+          }
+        ]
+      },
+      {
+        "id": "es-43",
+        "numero": "P-043",
+        "ubicacion": "Subterráneo -1, Sector Beta, Plaza P-043",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "unidadId": "u-C-103",
+        "macroSectorId": "torre-c",
+        "asignadoA": "Depto 103 (Torre C)",
+        "estadoId": "en-uso",
+        "historial": [
+          {
+            "id": "h-es-43-1",
+            "unidadId": "u-C-103",
+            "asignadoA": "Depto 103 (Torre C)",
+            "fechaInicio": "2024-02-15"
+          }
+        ]
+      },
+      {
+        "id": "es-44",
+        "numero": "P-044",
+        "ubicacion": "Subterráneo -1, Sector Alfa, Plaza P-044",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "unidadId": "u-C-104",
+        "macroSectorId": "torre-c",
+        "asignadoA": "Depto 104 (Torre C)",
+        "estadoId": "en-uso",
+        "historial": [
+          {
+            "id": "h-es-44-1",
+            "unidadId": "u-C-104",
+            "asignadoA": "Depto 104 (Torre C)",
+            "fechaInicio": "2024-02-15"
+          }
+        ]
+      },
+      {
+        "id": "es-45",
+        "numero": "P-045",
+        "ubicacion": "Subterráneo -1, Sector Beta, Plaza P-045",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "unidadId": "u-C-201",
+        "macroSectorId": "torre-c",
+        "asignadoA": "Depto 201 (Torre C)",
+        "estadoId": "en-uso",
+        "historial": [
+          {
+            "id": "h-es-45-1",
+            "unidadId": "u-C-201",
+            "asignadoA": "Depto 201 (Torre C)",
+            "fechaInicio": "2024-02-15"
+          }
+        ]
+      },
+      {
+        "id": "es-46",
+        "numero": "P-046",
+        "ubicacion": "Subterráneo -1, Sector Alfa, Plaza P-046",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "unidadId": "u-C-202",
+        "macroSectorId": "torre-c",
+        "asignadoA": "Depto 202 (Torre C)",
+        "estadoId": "en-uso",
+        "historial": [
+          {
+            "id": "h-es-46-1",
+            "unidadId": "u-C-202",
+            "asignadoA": "Depto 202 (Torre C)",
+            "fechaInicio": "2024-02-15"
+          }
+        ]
+      },
+      {
+        "id": "es-47",
+        "numero": "P-047",
+        "ubicacion": "Subterráneo -1, Sector Beta, Plaza P-047",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "unidadId": "u-C-203",
+        "macroSectorId": "torre-c",
+        "asignadoA": "Depto 203 (Torre C)",
+        "estadoId": "en-uso",
+        "historial": [
+          {
+            "id": "h-es-47-1",
+            "unidadId": "u-C-203",
+            "asignadoA": "Depto 203 (Torre C)",
+            "fechaInicio": "2024-02-15"
+          }
+        ]
+      },
+      {
+        "id": "es-48",
+        "numero": "P-048",
+        "ubicacion": "Subterráneo -1, Sector Alfa, Plaza P-048",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "unidadId": "u-C-204",
+        "macroSectorId": "torre-c",
+        "asignadoA": "Depto 204 (Torre C)",
+        "estadoId": "en-uso",
+        "historial": [
+          {
+            "id": "h-es-48-1",
+            "unidadId": "u-C-204",
+            "asignadoA": "Depto 204 (Torre C)",
+            "fechaInicio": "2024-02-15"
+          }
+        ]
+      },
+      {
+        "id": "es-49",
+        "numero": "P-049",
+        "ubicacion": "Subterráneo -1, Sector Beta, Plaza P-049",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "unidadId": "u-C-301",
+        "macroSectorId": "torre-c",
+        "asignadoA": "Depto 301 (Torre C)",
+        "estadoId": "en-uso",
+        "historial": [
+          {
+            "id": "h-es-49-1",
+            "unidadId": "u-C-301",
+            "asignadoA": "Depto 301 (Torre C)",
+            "fechaInicio": "2024-02-15"
+          }
+        ]
+      },
+      {
+        "id": "es-50",
+        "numero": "P-050",
+        "ubicacion": "Subterráneo -1, Sector Alfa, Plaza P-050",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "unidadId": "u-C-302",
+        "macroSectorId": "torre-c",
+        "asignadoA": "Depto 302 (Torre C)",
+        "estadoId": "en-uso",
+        "historial": [
+          {
+            "id": "h-es-50-1",
+            "unidadId": "u-C-302",
+            "asignadoA": "Depto 302 (Torre C)",
+            "fechaInicio": "2024-02-15"
+          }
+        ]
+      },
+      {
+        "id": "es-51",
+        "numero": "P-051",
+        "ubicacion": "Subterráneo -2, Sector Beta, Plaza P-051",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "unidadId": "u-C-303",
+        "macroSectorId": "torre-c",
+        "asignadoA": "Depto 303 (Torre C)",
+        "estadoId": "en-uso",
+        "historial": [
+          {
+            "id": "h-es-51-1",
+            "unidadId": "u-C-303",
+            "asignadoA": "Depto 303 (Torre C)",
+            "fechaInicio": "2024-02-15"
+          }
+        ]
+      },
+      {
+        "id": "es-52",
+        "numero": "P-052",
+        "ubicacion": "Subterráneo -2, Sector Alfa, Plaza P-052",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "unidadId": "u-C-304",
+        "macroSectorId": "torre-c",
+        "asignadoA": "Depto 304 (Torre C)",
+        "estadoId": "en-uso",
+        "historial": [
+          {
+            "id": "h-es-52-1",
+            "unidadId": "u-C-304",
+            "asignadoA": "Depto 304 (Torre C)",
+            "fechaInicio": "2024-02-15"
+          }
+        ]
+      },
+      {
+        "id": "es-53",
+        "numero": "P-053",
+        "ubicacion": "Subterráneo -2, Sector Beta, Plaza P-053",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "unidadId": "u-C-401",
+        "macroSectorId": "torre-c",
+        "asignadoA": "Depto 401 (Torre C)",
+        "estadoId": "en-uso",
+        "historial": [
+          {
+            "id": "h-es-53-1",
+            "unidadId": "u-C-401",
+            "asignadoA": "Depto 401 (Torre C)",
+            "fechaInicio": "2024-02-15"
+          }
+        ]
+      },
+      {
+        "id": "es-54",
+        "numero": "P-054",
+        "ubicacion": "Subterráneo -2, Sector Alfa, Plaza P-054",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "unidadId": "u-C-402",
+        "macroSectorId": "torre-c",
+        "asignadoA": "Depto 402 (Torre C)",
+        "estadoId": "en-uso",
+        "historial": [
+          {
+            "id": "h-es-54-1",
+            "unidadId": "u-C-402",
+            "asignadoA": "Depto 402 (Torre C)",
+            "fechaInicio": "2024-02-15"
+          }
+        ]
+      },
+      {
+        "id": "es-55",
+        "numero": "P-055",
+        "ubicacion": "Subterráneo -2, Sector Beta, Plaza P-055",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "unidadId": "u-C-403",
+        "macroSectorId": "torre-c",
+        "asignadoA": "Depto 403 (Torre C)",
+        "estadoId": "en-uso",
+        "historial": [
+          {
+            "id": "h-es-55-1",
+            "unidadId": "u-C-403",
+            "asignadoA": "Depto 403 (Torre C)",
+            "fechaInicio": "2024-02-15"
+          }
+        ]
+      },
+      {
+        "id": "es-56",
+        "numero": "P-056",
+        "ubicacion": "Subterráneo -2, Sector Alfa, Plaza P-056",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "unidadId": "u-C-404",
+        "macroSectorId": "torre-c",
+        "asignadoA": "Depto 404 (Torre C)",
+        "estadoId": "en-uso",
+        "historial": [
+          {
+            "id": "h-es-56-1",
+            "unidadId": "u-C-404",
+            "asignadoA": "Depto 404 (Torre C)",
+            "fechaInicio": "2024-02-15"
+          }
+        ]
+      },
+      {
+        "id": "es-57",
+        "numero": "P-057",
+        "ubicacion": "Subterráneo -2, Sector Beta, Plaza P-057",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "unidadId": "u-D-101",
+        "macroSectorId": "torre-d",
+        "asignadoA": "Depto 101 (Torre D)",
+        "estadoId": "en-uso",
+        "historial": [
+          {
+            "id": "h-es-57-1",
+            "unidadId": "u-D-101",
+            "asignadoA": "Depto 101 (Torre D)",
+            "fechaInicio": "2024-02-15"
+          }
+        ]
+      },
+      {
+        "id": "es-58",
+        "numero": "P-058",
+        "ubicacion": "Subterráneo -2, Sector Alfa, Plaza P-058",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "unidadId": "u-D-102",
+        "macroSectorId": "torre-d",
+        "asignadoA": "Depto 102 (Torre D)",
+        "estadoId": "en-uso",
+        "historial": [
+          {
+            "id": "h-es-58-1",
+            "unidadId": "u-D-102",
+            "asignadoA": "Depto 102 (Torre D)",
+            "fechaInicio": "2024-02-15"
+          }
+        ]
+      },
+      {
+        "id": "es-59",
+        "numero": "P-059",
+        "ubicacion": "Subterráneo -2, Sector Beta, Plaza P-059",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "unidadId": "u-D-103",
+        "macroSectorId": "torre-d",
+        "asignadoA": "Depto 103 (Torre D)",
+        "estadoId": "en-uso",
+        "historial": [
+          {
+            "id": "h-es-59-1",
+            "unidadId": "u-D-103",
+            "asignadoA": "Depto 103 (Torre D)",
+            "fechaInicio": "2024-02-15"
+          }
+        ]
+      },
+      {
+        "id": "es-60",
+        "numero": "P-060",
+        "ubicacion": "Subterráneo -2, Sector Alfa, Plaza P-060",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "unidadId": "u-D-104",
+        "macroSectorId": "torre-d",
+        "asignadoA": "Depto 104 (Torre D)",
+        "estadoId": "en-uso",
+        "historial": [
+          {
+            "id": "h-es-60-1",
+            "unidadId": "u-D-104",
+            "asignadoA": "Depto 104 (Torre D)",
+            "fechaInicio": "2024-02-15"
+          }
+        ]
+      },
+      {
+        "id": "es-61",
+        "numero": "P-061",
+        "ubicacion": "Subterráneo -2, Sector Beta, Plaza P-061",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "unidadId": "u-D-201",
+        "macroSectorId": "torre-d",
+        "asignadoA": "Depto 201 (Torre D)",
+        "estadoId": "en-uso",
+        "historial": [
+          {
+            "id": "h-es-61-1",
+            "unidadId": "u-D-201",
+            "asignadoA": "Depto 201 (Torre D)",
+            "fechaInicio": "2024-02-15"
+          }
+        ]
+      },
+      {
+        "id": "es-62",
+        "numero": "P-062",
+        "ubicacion": "Subterráneo -2, Sector Alfa, Plaza P-062",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "unidadId": "u-D-202",
+        "macroSectorId": "torre-d",
+        "asignadoA": "Depto 202 (Torre D)",
+        "estadoId": "en-uso",
+        "historial": [
+          {
+            "id": "h-es-62-1",
+            "unidadId": "u-D-202",
+            "asignadoA": "Depto 202 (Torre D)",
+            "fechaInicio": "2024-02-15"
+          }
+        ]
+      },
+      {
+        "id": "es-63",
+        "numero": "P-063",
+        "ubicacion": "Subterráneo -2, Sector Beta, Plaza P-063",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "unidadId": "u-D-203",
+        "macroSectorId": "torre-d",
+        "asignadoA": "Depto 203 (Torre D)",
+        "estadoId": "en-uso",
+        "historial": [
+          {
+            "id": "h-es-63-1",
+            "unidadId": "u-D-203",
+            "asignadoA": "Depto 203 (Torre D)",
+            "fechaInicio": "2024-02-15"
+          }
+        ]
+      },
+      {
+        "id": "es-64",
+        "numero": "P-064",
+        "ubicacion": "Subterráneo -2, Sector Alfa, Plaza P-064",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "unidadId": "u-D-204",
+        "macroSectorId": "torre-d",
+        "asignadoA": "Depto 204 (Torre D)",
+        "estadoId": "en-uso",
+        "historial": [
+          {
+            "id": "h-es-64-1",
+            "unidadId": "u-D-204",
+            "asignadoA": "Depto 204 (Torre D)",
+            "fechaInicio": "2024-02-15"
+          }
+        ]
+      },
+      {
+        "id": "es-65",
+        "numero": "P-065",
+        "ubicacion": "Subterráneo -2, Sector Beta, Plaza P-065",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "unidadId": "u-D-301",
+        "macroSectorId": "torre-d",
+        "asignadoA": "Depto 301 (Torre D)",
+        "estadoId": "en-uso",
+        "historial": [
+          {
+            "id": "h-es-65-1",
+            "unidadId": "u-D-301",
+            "asignadoA": "Depto 301 (Torre D)",
+            "fechaInicio": "2024-02-15"
+          }
+        ]
+      },
+      {
+        "id": "es-66",
+        "numero": "P-066",
+        "ubicacion": "Subterráneo -2, Sector Alfa, Plaza P-066",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "unidadId": "u-D-302",
+        "macroSectorId": "torre-d",
+        "asignadoA": "Depto 302 (Torre D)",
+        "estadoId": "en-uso",
+        "historial": [
+          {
+            "id": "h-es-66-1",
+            "unidadId": "u-D-302",
+            "asignadoA": "Depto 302 (Torre D)",
+            "fechaInicio": "2024-02-15"
+          }
+        ]
+      },
+      {
+        "id": "es-67",
+        "numero": "P-067",
+        "ubicacion": "Subterráneo -2, Sector Beta, Plaza P-067",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "unidadId": "u-D-303",
+        "macroSectorId": "torre-d",
+        "asignadoA": "Depto 303 (Torre D)",
+        "estadoId": "en-uso",
+        "historial": [
+          {
+            "id": "h-es-67-1",
+            "unidadId": "u-D-303",
+            "asignadoA": "Depto 303 (Torre D)",
+            "fechaInicio": "2024-02-15"
+          }
+        ]
+      },
+      {
+        "id": "es-68",
+        "numero": "P-068",
+        "ubicacion": "Subterráneo -2, Sector Alfa, Plaza P-068",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "unidadId": "u-D-304",
+        "macroSectorId": "torre-d",
+        "asignadoA": "Depto 304 (Torre D)",
+        "estadoId": "en-uso",
+        "historial": [
+          {
+            "id": "h-es-68-1",
+            "unidadId": "u-D-304",
+            "asignadoA": "Depto 304 (Torre D)",
+            "fechaInicio": "2024-02-15"
+          }
+        ]
+      },
+      {
+        "id": "es-69",
+        "numero": "P-069",
+        "ubicacion": "Subterráneo -2, Sector Beta, Plaza P-069",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "unidadId": "u-D-401",
+        "macroSectorId": "torre-d",
+        "asignadoA": "Depto 401 (Torre D)",
+        "estadoId": "en-uso",
+        "historial": [
+          {
+            "id": "h-es-69-1",
+            "unidadId": "u-D-401",
+            "asignadoA": "Depto 401 (Torre D)",
+            "fechaInicio": "2024-02-15"
+          }
+        ]
+      },
+      {
+        "id": "es-70",
+        "numero": "P-070",
+        "ubicacion": "Subterráneo -2, Sector Alfa, Plaza P-070",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "unidadId": "u-D-402",
+        "macroSectorId": "torre-d",
+        "asignadoA": "Depto 402 (Torre D)",
+        "estadoId": "en-uso",
+        "historial": [
+          {
+            "id": "h-es-70-1",
+            "unidadId": "u-D-402",
+            "asignadoA": "Depto 402 (Torre D)",
+            "fechaInicio": "2024-02-15"
+          }
+        ]
+      },
+      {
+        "id": "es-71",
+        "numero": "P-071",
+        "ubicacion": "Subterráneo -2, Sector Beta, Plaza P-071",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "unidadId": "u-D-403",
+        "macroSectorId": "torre-d",
+        "asignadoA": "Depto 403 (Torre D)",
+        "estadoId": "en-uso",
+        "historial": [
+          {
+            "id": "h-es-71-1",
+            "unidadId": "u-D-403",
+            "asignadoA": "Depto 403 (Torre D)",
+            "fechaInicio": "2024-02-15"
+          }
+        ]
+      },
+      {
+        "id": "es-72",
+        "numero": "P-072",
+        "ubicacion": "Subterráneo -2, Sector Alfa, Plaza P-072",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "unidadId": "u-D-404",
+        "macroSectorId": "torre-d",
+        "asignadoA": "Depto 404 (Torre D)",
+        "estadoId": "en-uso",
+        "historial": [
+          {
+            "id": "h-es-72-1",
+            "unidadId": "u-D-404",
+            "asignadoA": "Depto 404 (Torre D)",
+            "fechaInicio": "2024-02-15"
+          }
+        ]
+      },
+      {
+        "id": "es-73",
+        "numero": "P-073",
+        "ubicacion": "Subterráneo -2, Sector Beta, Plaza P-073",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "unidadId": "u-E-101",
+        "macroSectorId": "torre-e",
+        "asignadoA": "Depto 101 (Torre E)",
+        "estadoId": "en-uso",
+        "historial": [
+          {
+            "id": "h-es-73-1",
+            "unidadId": "u-E-101",
+            "asignadoA": "Depto 101 (Torre E)",
+            "fechaInicio": "2024-02-15"
+          }
+        ]
+      },
+      {
+        "id": "es-74",
+        "numero": "P-074",
+        "ubicacion": "Subterráneo -2, Sector Alfa, Plaza P-074",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "unidadId": "u-E-102",
+        "macroSectorId": "torre-e",
+        "asignadoA": "Depto 102 (Torre E)",
+        "estadoId": "en-uso",
+        "historial": [
+          {
+            "id": "h-es-74-1",
+            "unidadId": "u-E-102",
+            "asignadoA": "Depto 102 (Torre E)",
+            "fechaInicio": "2024-02-15"
+          }
+        ]
+      },
+      {
+        "id": "es-75",
+        "numero": "P-075",
+        "ubicacion": "Subterráneo -2, Sector Beta, Plaza P-075",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "unidadId": "u-E-103",
+        "macroSectorId": "torre-e",
+        "asignadoA": "Depto 103 (Torre E)",
+        "estadoId": "en-uso",
+        "historial": [
+          {
+            "id": "h-es-75-1",
+            "unidadId": "u-E-103",
+            "asignadoA": "Depto 103 (Torre E)",
+            "fechaInicio": "2024-02-15"
+          }
+        ]
+      },
+      {
+        "id": "es-76",
+        "numero": "P-076",
+        "ubicacion": "Subterráneo -2, Sector Alfa, Plaza P-076",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "unidadId": "u-E-104",
+        "macroSectorId": "torre-e",
+        "asignadoA": "Depto 104 (Torre E)",
+        "estadoId": "en-uso",
+        "historial": [
+          {
+            "id": "h-es-76-1",
+            "unidadId": "u-E-104",
+            "asignadoA": "Depto 104 (Torre E)",
+            "fechaInicio": "2024-02-15"
+          }
+        ]
+      },
+      {
+        "id": "es-77",
+        "numero": "P-077",
+        "ubicacion": "Subterráneo -2, Sector Beta, Plaza P-077",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "unidadId": "u-E-201",
+        "macroSectorId": "torre-e",
+        "asignadoA": "Depto 201 (Torre E)",
+        "estadoId": "en-uso",
+        "historial": [
+          {
+            "id": "h-es-77-1",
+            "unidadId": "u-E-201",
+            "asignadoA": "Depto 201 (Torre E)",
+            "fechaInicio": "2024-02-15"
+          }
+        ]
+      },
+      {
+        "id": "es-78",
+        "numero": "P-078",
+        "ubicacion": "Subterráneo -2, Sector Alfa, Plaza P-078",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "unidadId": "u-E-202",
+        "macroSectorId": "torre-e",
+        "asignadoA": "Depto 202 (Torre E)",
+        "estadoId": "en-uso",
+        "historial": [
+          {
+            "id": "h-es-78-1",
+            "unidadId": "u-E-202",
+            "asignadoA": "Depto 202 (Torre E)",
+            "fechaInicio": "2024-02-15"
+          }
+        ]
+      },
+      {
+        "id": "es-79",
+        "numero": "P-079",
+        "ubicacion": "Subterráneo -2, Sector Beta, Plaza P-079",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "unidadId": "u-E-203",
+        "macroSectorId": "torre-e",
+        "asignadoA": "Depto 203 (Torre E)",
+        "estadoId": "en-uso",
+        "historial": [
+          {
+            "id": "h-es-79-1",
+            "unidadId": "u-E-203",
+            "asignadoA": "Depto 203 (Torre E)",
+            "fechaInicio": "2024-02-15"
+          }
+        ]
+      },
+      {
+        "id": "es-80",
+        "numero": "P-080",
+        "ubicacion": "Subterráneo -2, Sector Alfa, Plaza P-080",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "unidadId": "u-E-204",
+        "macroSectorId": "torre-e",
+        "asignadoA": "Depto 204 (Torre E)",
+        "estadoId": "en-uso",
+        "historial": [
+          {
+            "id": "h-es-80-1",
+            "unidadId": "u-E-204",
+            "asignadoA": "Depto 204 (Torre E)",
+            "fechaInicio": "2024-02-15"
+          }
+        ]
+      },
+      {
+        "id": "es-81",
+        "numero": "P-081",
+        "ubicacion": "Subterráneo -2, Sector Beta, Plaza P-081",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "unidadId": "u-E-301",
+        "macroSectorId": "torre-e",
+        "asignadoA": "Depto 301 (Torre E)",
+        "estadoId": "en-uso",
+        "historial": [
+          {
+            "id": "h-es-81-1",
+            "unidadId": "u-E-301",
+            "asignadoA": "Depto 301 (Torre E)",
+            "fechaInicio": "2024-02-15"
+          }
+        ]
+      },
+      {
+        "id": "es-82",
+        "numero": "P-082",
+        "ubicacion": "Subterráneo -2, Sector Alfa, Plaza P-082",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "unidadId": "u-E-302",
+        "macroSectorId": "torre-e",
+        "asignadoA": "Depto 302 (Torre E)",
+        "estadoId": "en-uso",
+        "historial": [
+          {
+            "id": "h-es-82-1",
+            "unidadId": "u-E-302",
+            "asignadoA": "Depto 302 (Torre E)",
+            "fechaInicio": "2024-02-15"
+          }
+        ]
+      },
+      {
+        "id": "es-83",
+        "numero": "P-083",
+        "ubicacion": "Subterráneo -2, Sector Beta, Plaza P-083",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "unidadId": "u-E-303",
+        "macroSectorId": "torre-e",
+        "asignadoA": "Depto 303 (Torre E)",
+        "estadoId": "en-uso",
+        "historial": [
+          {
+            "id": "h-es-83-1",
+            "unidadId": "u-E-303",
+            "asignadoA": "Depto 303 (Torre E)",
+            "fechaInicio": "2024-02-15"
+          }
+        ]
+      },
+      {
+        "id": "es-84",
+        "numero": "P-084",
+        "ubicacion": "Subterráneo -2, Sector Alfa, Plaza P-084",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "unidadId": "u-E-304",
+        "macroSectorId": "torre-e",
+        "asignadoA": "Depto 304 (Torre E)",
+        "estadoId": "en-uso",
+        "historial": [
+          {
+            "id": "h-es-84-1",
+            "unidadId": "u-E-304",
+            "asignadoA": "Depto 304 (Torre E)",
+            "fechaInicio": "2024-02-15"
+          }
+        ]
+      },
+      {
+        "id": "es-85",
+        "numero": "P-085",
+        "ubicacion": "Subterráneo -2, Sector Beta, Plaza P-085",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "unidadId": "u-E-401",
+        "macroSectorId": "torre-e",
+        "asignadoA": "Depto 401 (Torre E)",
+        "estadoId": "en-uso",
+        "historial": [
+          {
+            "id": "h-es-85-1",
+            "unidadId": "u-E-401",
+            "asignadoA": "Depto 401 (Torre E)",
+            "fechaInicio": "2024-02-15"
+          }
+        ]
+      },
+      {
+        "id": "es-86",
+        "numero": "P-086",
+        "ubicacion": "Subterráneo -2, Sector Alfa, Plaza P-086",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "unidadId": "u-E-402",
+        "macroSectorId": "torre-e",
+        "asignadoA": "Depto 402 (Torre E)",
+        "estadoId": "en-uso",
+        "historial": [
+          {
+            "id": "h-es-86-1",
+            "unidadId": "u-E-402",
+            "asignadoA": "Depto 402 (Torre E)",
+            "fechaInicio": "2024-02-15"
+          }
+        ]
+      },
+      {
+        "id": "es-87",
+        "numero": "P-087",
+        "ubicacion": "Subterráneo -2, Sector Beta, Plaza P-087",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "unidadId": "u-E-403",
+        "macroSectorId": "torre-e",
+        "asignadoA": "Depto 403 (Torre E)",
+        "estadoId": "en-uso",
+        "historial": [
+          {
+            "id": "h-es-87-1",
+            "unidadId": "u-E-403",
+            "asignadoA": "Depto 403 (Torre E)",
+            "fechaInicio": "2024-02-15"
+          }
+        ]
+      },
+      {
+        "id": "es-88",
+        "numero": "P-088",
+        "ubicacion": "Subterráneo -2, Sector Alfa, Plaza P-088",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "unidadId": "u-E-404",
+        "macroSectorId": "torre-e",
+        "asignadoA": "Depto 404 (Torre E)",
+        "estadoId": "en-uso",
+        "historial": [
+          {
+            "id": "h-es-88-1",
+            "unidadId": "u-E-404",
+            "asignadoA": "Depto 404 (Torre E)",
+            "fechaInicio": "2024-02-15"
+          }
+        ]
+      },
+      {
+        "id": "es-89",
+        "numero": "P-089",
+        "ubicacion": "Subterráneo -2, Sector Beta, Plaza P-089",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "macroSectorId": "torre-a",
+        "asignadoA": "Disponible",
+        "estadoId": "vacante",
+        "historial": []
+      },
+      {
+        "id": "es-90",
+        "numero": "P-090",
+        "ubicacion": "Subterráneo -2, Sector Alfa, Plaza P-090",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "macroSectorId": "torre-a",
+        "asignadoA": "Disponible",
+        "estadoId": "vacante",
+        "historial": []
+      },
+      {
+        "id": "es-91",
+        "numero": "P-091",
+        "ubicacion": "Subterráneo -2, Sector Beta, Plaza P-091",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "macroSectorId": "torre-a",
+        "asignadoA": "Disponible",
+        "estadoId": "vacante",
+        "historial": []
+      },
+      {
+        "id": "es-92",
+        "numero": "P-092",
+        "ubicacion": "Subterráneo -2, Sector Alfa, Plaza P-092",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "macroSectorId": "torre-a",
+        "asignadoA": "Disponible",
+        "estadoId": "vacante",
+        "historial": []
+      },
+      {
+        "id": "es-93",
+        "numero": "P-093",
+        "ubicacion": "Subterráneo -2, Sector Beta, Plaza P-093",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "macroSectorId": "torre-a",
+        "asignadoA": "Disponible",
+        "estadoId": "vacante",
+        "historial": []
+      },
+      {
+        "id": "es-94",
+        "numero": "P-094",
+        "ubicacion": "Subterráneo -2, Sector Alfa, Plaza P-094",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "macroSectorId": "torre-a",
+        "asignadoA": "Disponible",
+        "estadoId": "vacante",
+        "historial": []
+      },
+      {
+        "id": "es-95",
+        "numero": "P-095",
+        "ubicacion": "Subterráneo -2, Sector Beta, Plaza P-095",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "macroSectorId": "torre-a",
+        "asignadoA": "Disponible",
+        "estadoId": "vacante",
+        "historial": []
+      },
+      {
+        "id": "es-96",
+        "numero": "P-096",
+        "ubicacion": "Subterráneo -2, Sector Alfa, Plaza P-096",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "macroSectorId": "torre-a",
+        "asignadoA": "Disponible",
+        "estadoId": "vacante",
+        "historial": []
+      },
+      {
+        "id": "es-97",
+        "numero": "P-097",
+        "ubicacion": "Subterráneo -2, Sector Beta, Plaza P-097",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "macroSectorId": "torre-a",
+        "asignadoA": "Disponible",
+        "estadoId": "vacante",
+        "historial": []
+      },
+      {
+        "id": "es-98",
+        "numero": "P-098",
+        "ubicacion": "Subterráneo -2, Sector Alfa, Plaza P-098",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "macroSectorId": "torre-a",
+        "asignadoA": "Disponible",
+        "estadoId": "vacante",
+        "historial": []
+      },
+      {
+        "id": "es-99",
+        "numero": "P-099",
+        "ubicacion": "Subterráneo -2, Sector Beta, Plaza P-099",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "macroSectorId": "torre-a",
+        "asignadoA": "Disponible",
+        "estadoId": "vacante",
+        "historial": []
+      },
+      {
+        "id": "es-100",
+        "numero": "P-100",
+        "ubicacion": "Subterráneo -2, Sector Alfa, Plaza P-100",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "macroSectorId": "torre-a",
+        "asignadoA": "Disponible",
+        "estadoId": "vacante",
+        "historial": []
+      }
+    ],
+    "personas": [
+      {
+        "id": "p-1",
+        "rut": "15.123.456-7",
+        "nombreCompleto": "Juan Pérez González",
+        "nombres": "Juan",
+        "apellidos": "Pérez González",
+        "email": "juan.perez@email.com",
+        "telefonoMovil": "+56 9 1234 5678",
+        "estadoCuenta": "activa",
+        "condicionesEspecialesIds": [],
+        "roles": [
+          "propietario",
+          "residente",
+          "directiva"
+        ],
+        "datosGobernanza": {
+          "id": "g-1",
+          "cargoDirectiva": "presidente",
+          "fechaAsuncion": "2025-03-01"
+        }
+      },
+      {
+        "id": "p-2",
+        "rut": "18.987.654-3",
+        "nombreCompleto": "María López Soto",
+        "nombres": "María",
+        "apellidos": "López Soto",
+        "email": "maria.lopez@email.com",
+        "telefonoMovil": "+56 9 8765 4321",
+        "estadoCuenta": "activa",
+        "condicionesEspecialesIds": [
+          "c-2"
+        ],
+        "roles": [
+          "residente"
+        ]
+      },
+      {
+        "id": "p-3",
+        "rut": "12.345.678-9",
+        "nombreCompleto": "Roberto Gómez Bolaños",
+        "nombres": "Roberto",
+        "apellidos": "Gómez Bolaños",
+        "email": "roberto.gomez@email.com",
+        "telefonoMovil": "+56 9 5555 4444",
+        "estadoCuenta": "activa",
+        "condicionesEspecialesIds": [],
+        "roles": [
+          "propietario"
+        ]
+      },
+      {
+        "id": "p-4",
+        "rut": "19.111.222-K",
+        "nombreCompleto": "Ana María Silva",
+        "nombres": "Ana María",
+        "apellidos": "Silva",
+        "email": "ana.silva@email.com",
+        "telefonoMovil": "+56 9 9999 1111",
+        "estadoCuenta": "activa",
+        "condicionesEspecialesIds": [
+          "c-1",
+          "c-3"
+        ],
+        "roles": [
+          "personal",
+          "residente"
+        ],
+        "datosLaborales": {
+          "id": "l-1",
+          "cargo": "Conserje Turno Día",
+          "afp": "Habitat",
+          "prevision": "FONASA",
+          "fechaIngreso": "2021-06-15"
+        }
+      },
+      {
+        "id": "p-5",
+        "rut": "13.555.666-8",
+        "nombreCompleto": "Carlos Castillo Ruiz",
+        "nombres": "Carlos",
+        "apellidos": "Castillo Ruiz",
+        "email": "admin@compass.cl",
+        "telefonoMovil": "+56 9 3333 7777",
+        "estadoCuenta": "activa",
+        "condicionesEspecialesIds": [],
+        "roles": [
+          "personal"
+        ],
+        "datosLaborales": {
+          "id": "l-2",
+          "cargo": "Administrador General",
+          "afp": "Cuprum",
+          "prevision": "Isapre Banmédica",
+          "fechaIngreso": "2023-01-01"
+        }
+      },
+      {
+        "id": "p-6",
+        "rut": "14.222.333-4",
+        "nombreCompleto": "Laura Martínez Cárdenas",
+        "nombres": "Laura",
+        "apellidos": "Martínez Cárdenas",
+        "email": "laura.tesoreria@email.com",
+        "telefonoMovil": "+56 9 8888 2222",
+        "estadoCuenta": "activa",
+        "condicionesEspecialesIds": [],
+        "roles": [
+          "propietario",
+          "residente",
+          "directiva"
+        ],
+        "datosGobernanza": {
+          "id": "g-2",
+          "cargoDirectiva": "tesorero",
+          "fechaAsuncion": "2025-03-01"
+        }
+      },
+      {
+        "id": "p-7",
+        "rut": "17.444.555-6",
+        "nombreCompleto": "Pedro Valdés Orellana",
+        "nombres": "Pedro",
+        "apellidos": "Valdés Orellana",
+        "email": "pvaldes@ascensores.cl",
+        "telefonoMovil": "+56 9 6666 5555",
+        "estadoCuenta": "activa",
+        "condicionesEspecialesIds": [],
+        "roles": [
+          "contratista"
+        ]
+      },
+      {
+        "id": "p-8",
+        "rut": "20.123.987-5",
+        "nombreCompleto": "Tomás Alarcón",
+        "nombres": "Tomás",
+        "apellidos": "Alarcón",
+        "email": "tomas.alarcon.antiguo@email.com",
+        "telefonoMovil": "+56 9 1111 2222",
+        "estadoCuenta": "inactiva",
+        "condicionesEspecialesIds": [],
+        "roles": [
+          "residente"
+        ]
+      },
+      {
+        "id": "p-9",
+        "rut": "11.234.567-0",
+        "nombreCompleto": "Rosa Meléndez",
+        "nombres": "Rosa",
+        "apellidos": "Meléndez",
+        "email": "rosa.aseo@email.com",
+        "telefonoMovil": "+56 9 4444 3333",
+        "estadoCuenta": "activa",
+        "condicionesEspecialesIds": [],
+        "roles": [
+          "personal"
+        ],
+        "datosLaborales": {
+          "id": "l-3",
+          "cargo": "Auxiliar de Aseo",
+          "afp": "Modelo",
+          "prevision": "FONASA",
+          "fechaIngreso": "2020-05-15"
+        }
+      },
+      {
+        "id": "p-10",
+        "rut": "16.777.888-9",
+        "nombreCompleto": "Esteban Dido",
+        "nombres": "Esteban",
+        "apellidos": "Dido",
+        "email": "esteban.bloqueado@email.com",
+        "telefonoMovil": "+56 9 0000 0000",
+        "estadoCuenta": "bloqueada",
+        "condicionesEspecialesIds": [],
+        "roles": [
+          "residente"
+        ]
+      }
+    ],
+    "vinculos": [
+      {
+        "id": "v-1",
+        "personaId": "p-1",
+        "unidadId": "u-A-101",
+        "rol": "propietario",
+        "fechaInicio": "2024-01-15",
+        "estadoOcupacionPropiedad": "habitada",
+        "permiteVerFinanzas": true
+      },
+      {
+        "id": "v-2",
+        "personaId": "p-2",
+        "unidadId": "u-B-201",
+        "rol": "arrendatario",
+        "fechaInicio": "2025-01-01",
+        "permiteVerFinanzas": false
+      },
+      {
+        "id": "v-3",
+        "personaId": "p-3",
+        "unidadId": "u-B-201",
+        "rol": "propietario",
+        "fechaInicio": "2020-05-10",
+        "estadoOcupacionPropiedad": "arrendada",
+        "permiteVerFinanzas": false
+      },
+      {
+        "id": "v-4",
+        "personaId": "p-3",
+        "unidadId": "u-C-301",
+        "rol": "propietario",
+        "fechaInicio": "2023-11-20",
+        "estadoOcupacionPropiedad": "proxima_vacancia",
+        "permiteVerFinanzas": false
+      },
+      {
+        "id": "v-31",
+        "personaId": "p-3",
+        "unidadId": "u-LC-01",
+        "rol": "propietario",
+        "fechaInicio": "2021-02-14",
+        "estadoOcupacionPropiedad": "en_venta",
+        "permiteVerFinanzas": false
+      },
+      {
+        "id": "v-5",
+        "personaId": "p-4",
+        "unidadId": "u-D-401",
+        "rol": "ocupante",
+        "fechaInicio": "2022-02-01",
+        "permiteVerFinanzas": false
+      },
+      {
+        "id": "v-6",
+        "personaId": "p-6",
+        "unidadId": "u-A-102",
+        "rol": "propietario",
+        "fechaInicio": "2019-10-10",
+        "estadoOcupacionPropiedad": "habitada",
+        "permiteVerFinanzas": true
+      },
+      {
+        "id": "v-8",
+        "personaId": "p-8",
+        "unidadId": "u-C-301",
+        "rol": "arrendatario",
+        "fechaInicio": "2021-03-01",
+        "fechaFin": "2023-11-19",
+        "permiteVerFinanzas": false
+      },
+      {
+        "id": "v-10",
+        "personaId": "p-10",
+        "unidadId": "u-B-202",
+        "rol": "arrendatario",
+        "fechaInicio": "2024-08-01",
+        "permiteVerFinanzas": true
+      }
+    ],
+    "configuracion": {
+      "nombreComunidad": "Edificio Plaza Central",
+      "rutCondominio": "77.123.456-7",
+      "direccionOficial": "Av. Libertador 1234, Santiago",
+      "administradorResponsable": "Carlos Castillo Ruiz",
+      "rutAdministrador": "13.555.666-8",
+      "telefonoAdmin": "+56 9 3333 7777",
+      "modoCalculoGC": "variable",
+      "diaCortePago": 5,
+      "limiteMesesAvisoCorte": 3,
+      "smtpHost": "smtp.gmail.com",
+      "smtpPort": 587,
+      "smtpUser": "gdcuentas@sgc.cl",
+      "smtpPassword": "",
+      "smtpSecurity": "tls",
+      "smtpFrom": "gdcuentas@sgc.cl",
+      "smtpFromName": "Administración Edificio Plaza Central",
+      "smtpBcc": "auditoria@sgc.cl",
+      "smtpRecepcion": "conserjeria@sgc.cl",
+      "notificarEmisionGC": true,
+      "notificarRegistroVisitas": true,
+      "notificarEncomiendas": true,
+      "notificarReservas": true,
+      "notificarAvisosSistema": true,
+      "notificarSugerenciasReclamos": true,
+      "diasMesComercial": 30,
+      "diasVacacionesMes": 1.25,
+      "jornadaSemanalEstandar": 45,
+      "claveEliminacionMaestro": ""
+    },
+    "maestros": {
+      "afps": [
+        {
+          "id": "afp-habitat",
+          "nombre": "AFP Habitat",
+          "tasaCotizacion": 10.58
+        },
+        {
+          "id": "afp-cuprum",
+          "nombre": "AFP Cuprum",
+          "tasaCotizacion": 10.58
+        },
+        {
+          "id": "afp-modelo",
+          "nombre": "AFP Modelo",
+          "tasaCotizacion": 10.58
+        },
+        {
+          "id": "afp-planvital",
+          "nombre": "AFP Planvital",
+          "tasaCotizacion": 10.58
+        },
+        {
+          "id": "afp-provida",
+          "nombre": "AFP Provida",
+          "tasaCotizacion": 10.58
+        },
+        {
+          "id": "afp-uno",
+          "nombre": "AFP Uno",
+          "tasaCotizacion": 10.58
+        }
+      ],
+      "previsionesSalud": [
+        {
+          "id": "fonasa",
+          "nombre": "FONASA",
+          "tipo": "fonasa"
+        },
+        {
+          "id": "isapre-banmedica",
+          "nombre": "Isapre Banmédica",
+          "tipo": "isapre"
+        },
+        {
+          "id": "isapre-colmena",
+          "nombre": "Isapre Colmena",
+          "tipo": "isapre"
+        },
+        {
+          "id": "isapre-consalud",
+          "nombre": "Isapre Consalud",
+          "tipo": "isapre"
+        },
+        {
+          "id": "isapre-cruzblanca",
+          "nombre": "Isapre Cruz Blanca",
+          "tipo": "isapre"
+        },
+        {
+          "id": "isapre-vidatres",
+          "nombre": "Isapre Vida Tres",
+          "tipo": "isapre"
+        }
+      ],
+      "mutualesCajas": [
+        {
+          "id": "achs",
+          "nombre": "ACHS"
+        },
+        {
+          "id": "mutual",
+          "nombre": "Mutual de Seguridad"
+        },
+        {
+          "id": "cmac-cordillera",
+          "nombre": "Caja de Compensación Los Andes"
+        },
+        {
+          "id": "cmac-biobio",
+          "nombre": "Caja de Compensación La Araucana"
+        },
+        {
+          "id": "cmac-losheroes",
+          "nombre": "Caja de Compensación Los Héroes"
+        }
+      ],
+      "feriados": [
+        {
+          "id": "f-1",
+          "fecha": "2025-01-01",
+          "nombre": "Año Nuevo",
+          "irrenunciable": false
+        },
+        {
+          "id": "f-2",
+          "fecha": "2025-09-18",
+          "nombre": "Fiestas Patrias",
+          "irrenunciable": true
+        },
+        {
+          "id": "f-3",
+          "fecha": "2025-09-19",
+          "nombre": "Día de las Glorias del Ejército",
+          "irrenunciable": true
+        },
+        {
+          "id": "f-4",
+          "fecha": "2025-12-25",
+          "nombre": "Navidad",
+          "irrenunciable": false
+        }
+      ],
+      "bancos": [
+        {
+          "id": "banco-estado",
+          "nombre": "Banco Estado"
+        },
+        {
+          "id": "banco-chile",
+          "nombre": "Banco de Chile"
+        },
+        {
+          "id": "banco-santander",
+          "nombre": "Banco Santander"
+        },
+        {
+          "id": "banco-itau",
+          "nombre": "Banco Itaú"
+        },
+        {
+          "id": "banco-bci",
+          "nombre": "BCI"
+        },
+        {
+          "id": "banco-scotiabank",
+          "nombre": "Scotiabank"
+        },
+        {
+          "id": "1787088763913",
+          "nombre": "BancoTEST"
+        }
+      ],
+      "indicesAjuste": [
+        {
+          "id": "ipc",
+          "nombre": "Índice de Precios al Consumidor",
+          "codigo": "IPC"
+        },
+        {
+          "id": "uf",
+          "nombre": "Unidad de Fomento",
+          "codigo": "UF"
+        }
+      ],
+      "cajasFondos": [
+        {
+          "id": "gc",
+          "nombre": "Fondo de Gasto Común",
+          "tipo": "gasto-comun"
+        },
+        {
+          "id": "reserva",
+          "nombre": "Fondo de Reserva",
+          "tipo": "reserva"
+        },
+        {
+          "id": "amenities",
+          "nombre": "Fondo de Amenities",
+          "tipo": "amenities"
+        },
+        {
+          "id": "extraordinaria",
+          "nombre": "Fondo Cuota Extraordinaria",
+          "tipo": "especial"
+        }
+      ],
+      "categoriasInsumos": [
+        {
+          "id": "limpieza",
+          "nombre": "Limpieza"
+        },
+        {
+          "id": "oficina",
+          "nombre": "Oficina"
+        },
+        {
+          "id": "iluminacion",
+          "nombre": "Iluminación"
+        },
+        {
+          "id": "cafe",
+          "nombre": "Cafetería"
+        },
+        {
+          "id": "epp",
+          "nombre": "EPP"
+        }
+      ],
+      "unidadesMedida": [
+        {
+          "id": "unidad",
+          "nombre": "Unidad",
+          "abreviatura": "un"
+        },
+        {
+          "id": "litro",
+          "nombre": "Litro",
+          "abreviatura": "L"
+        },
+        {
+          "id": "kilo",
+          "nombre": "Kilogramo",
+          "abreviatura": "kg"
+        },
+        {
+          "id": "metro",
+          "nombre": "Metro",
+          "abreviatura": "m"
+        },
+        {
+          "id": "metro-cuadrado",
+          "nombre": "Metro Cuadrado",
+          "abreviatura": "m²"
+        }
+      ],
+      "contactosEmergencia": [
+        {
+          "id": "e-1",
+          "categoria": "urgencia",
+          "nombre": "Carabineros",
+          "telefono": "133"
+        },
+        {
+          "id": "e-2",
+          "categoria": "urgencia",
+          "nombre": "Bomberos",
+          "telefono": "132"
+        },
+        {
+          "id": "e-3",
+          "categoria": "urgencia",
+          "nombre": "Ambulancia",
+          "telefono": "131"
+        },
+        {
+          "id": "e-4",
+          "categoria": "urgencia",
+          "nombre": "Plan Cuadrante",
+          "telefono": "+56 9 1234 5678"
+        },
+        {
+          "id": "e-5",
+          "categoria": "tecnico",
+          "nombre": "Empresa de Ascensores",
+          "telefono": "+56 2 2345 6789"
+        },
+        {
+          "id": "e-6",
+          "categoria": "tecnico",
+          "nombre": "Electricista de Guardia",
+          "telefono": "+56 9 8765 4321"
+        },
+        {
+          "id": "1787088715499",
+          "nombre": "NCritTEST",
+          "telefono": "NCritTESTa"
+        }
+      ],
+      "condicionesEspeciales": [
+        {
+          "id": "c-1",
+          "nombre": "Electrodependiente",
+          "color": "bg-blue-500 text-white"
+        },
+        {
+          "id": "c-2",
+          "nombre": "Movilidad Reducida",
+          "color": "bg-amber-500 text-black"
+        },
+        {
+          "id": "c-3",
+          "nombre": "Adulto Mayor Solo",
+          "color": "bg-purple-500 text-white"
+        },
+        {
+          "id": "c-4",
+          "nombre": "Dificultad Auditiva",
+          "color": "bg-rose-500 text-white"
+        },
+        {
+          "id": "c-5",
+          "nombre": "Dificultad Visual",
+          "color": "bg-emerald-500 text-white"
+        },
+        {
+          "id": "1787088672286",
+          "nombre": "VuelnerabilidadTEST",
+          "color": "bg-rose-500 text-white"
+        }
+      ],
+      "estadosOcupacion": [
+        {
+          "id": "vacante",
+          "nombre": "Vacante",
+          "color": "bg-emerald-500 text-white",
+          "hex": "#10b981"
+        },
+        {
+          "id": "en-uso",
+          "nombre": "En Uso",
+          "color": "bg-blue-500 text-white",
+          "hex": "#2563eb"
+        },
+        {
+          "id": "en-arriendo",
+          "nombre": "En Arriendo",
+          "color": "bg-purple-500 text-white",
+          "hex": "#a855f7"
+        },
+        {
+          "id": "en-venta",
+          "nombre": "En Venta",
+          "color": "bg-cyan-500 text-white",
+          "hex": "#0891b2"
+        },
+        {
+          "id": "en-mantencion",
+          "nombre": "En Mantención",
+          "color": "bg-amber-500 text-black",
+          "hex": "#f59e0b"
+        },
+        {
+          "id": "est-1787088588658",
+          "nombre": "EdOTEST",
+          "color": "bg-amber-500 text-black",
+          "hex": "#f43f5e"
+        }
+      ],
+      "categoriasMacro": [
+        {
+          "id": "torre",
+          "nombre": "Torre"
+        },
+        {
+          "id": "manzana",
+          "nombre": "Manzana"
+        },
+        {
+          "id": "etapa",
+          "nombre": "Etapa"
+        },
+        {
+          "id": "sector",
+          "nombre": "Sector"
+        },
+        {
+          "id": "parcela",
+          "nombre": "Parcela"
+        },
+        {
+          "id": "calle",
+          "nombre": "Calle"
+        },
+        {
+          "id": "edificio",
+          "nombre": "Edificio"
+        },
+        {
+          "id": "1787088599464",
+          "nombre": "EMacroTEST"
+        }
+      ],
+      "categoriasMicro": [
+        {
+          "id": "piso",
+          "nombre": "Piso"
+        },
+        {
+          "id": "nivel",
+          "nombre": "Nivel"
+        },
+        {
+          "id": "pasaje",
+          "nombre": "Pasaje"
+        },
+        {
+          "id": "bloque",
+          "nombre": "Bloque"
+        },
+        {
+          "id": "no-aplica",
+          "nombre": "No Aplica"
+        },
+        {
+          "id": "1787088633761",
+          "nombre": "EMicroTEST"
+        }
+      ],
+      "categoriasUnidad": [
+        {
+          "id": "depto",
+          "nombre": "Depto"
+        },
+        {
+          "id": "casa",
+          "nombre": "Casa"
+        },
+        {
+          "id": "local",
+          "nombre": "Local"
+        },
+        {
+          "id": "oficina",
+          "nombre": "Oficina"
+        },
+        {
+          "id": "bodega",
+          "nombre": "Bodega"
+        },
+        {
+          "id": "estacionamiento",
+          "nombre": "Estacionamiento"
+        },
+        {
+          "id": "1787088648805",
+          "nombre": "TPropTEST"
+        }
+      ],
+      "ubicacionesEstacionamiento": [
+        {
+          "id": "superficie",
+          "nombre": "Superficie"
+        },
+        {
+          "id": "subterraneo-1",
+          "nombre": "Subterráneo -1"
+        },
+        {
+          "id": "subterraneo-2",
+          "nombre": "Subterráneo -2"
+        },
+        {
+          "id": "visitas",
+          "nombre": "Sector Visitas"
+        },
+        {
+          "id": "1787088658421",
+          "nombre": "UEstTEST"
+        }
+      ],
+      "estadosInmobiliarios": [
+        {
+          "id": "habitada",
+          "nombre": "Habitada",
+          "color": "bg-emerald-500 text-white"
+        },
+        {
+          "id": "proxima_vacancia",
+          "nombre": "Próxima Vacancia",
+          "color": "bg-amber-500 text-black"
+        },
+        {
+          "id": "en_arriendo",
+          "nombre": "En Arriendo",
+          "color": "bg-blue-500 text-white"
+        },
+        {
+          "id": "arrendada",
+          "nombre": "Arrendada",
+          "color": "bg-purple-500 text-white"
+        },
+        {
+          "id": "en_venta",
+          "nombre": "En Venta",
+          "color": "bg-rose-500 text-white"
+        },
+        {
+          "id": "1787088698650",
+          "nombre": "EImmobiTEST",
+          "color": "bg-purple-500 text-white"
+        }
+      ]
+    }
+  },
+  "version": 6
+}
