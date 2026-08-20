@@ -65,10 +65,11 @@ const PHASES: Record<string, string> = {
   RG: 'Fase 0',
   ST: 'Fase 0',
   UI: 'Fase 0',
+  RP: 'Fase 0',
+  MA: 'Fase 1',
   TU: 'Fase 1',
   EF: 'Fase 1',
   ES: 'Fase 1',
-  MA: 'Fase 2',
   MP: 'Fase 2',
   VU: 'Fase 2',
   CF: 'Fase 2',
@@ -79,16 +80,15 @@ const PHASES: Record<string, string> = {
   CO: 'Fase 3',
   CV: 'Fase 3',
   GE: 'Fase 3',
-  RE: 'Fase 3',
   AM: 'Fase 3',
+  RE: 'Fase 3',
   PE: 'Fase 4',
   PL: 'Fase 4',
   RA: 'Fase 4',
-  CT: 'Fase 4',
+  IR: 'Fase 4',
   IN: 'Fase 4',
   MT: 'Fase 4',
-  RP: 'Fase 4',
-  IR: 'Fase 4',
+  CT: 'Fase 4',
 };
 
 const ROUTES: Record<string, string> = {
@@ -378,15 +378,37 @@ function deriveStatus(
     const override = ARCHIVED_OVERRIDES[archivedKey(id)];
     return override && override.code === code && (!override.name || module.name.includes(override.name));
   });
-  if (byOverride) return { status: 'completado', change: byOverride, cierre: 'cerrado' };
+  if (byOverride) {
+    if (isSpecDirtyAfterArchive(code, byOverride)) return { status: 'documentado', change: byOverride, cierre: 'no_aplica' };
+    return { status: 'completado', change: byOverride, cierre: 'cerrado' };
+  }
 
   const keywordArchived = archivedIds.find(
     id => !ARCHIVED_OVERRIDES[archivedKey(id)] && keywordsMatch(id, module.name)
   );
-  if (keywordArchived) return { status: 'completado', change: keywordArchived, cierre: 'cerrado' };
+  if (keywordArchived) {
+    if (isSpecDirtyAfterArchive(code, keywordArchived)) return { status: 'documentado', change: keywordArchived, cierre: 'no_aplica' };
+    return { status: 'completado', change: keywordArchived, cierre: 'cerrado' };
+  }
 
   if (specCodes.includes(code)) return { status: 'documentado', cierre: 'no_aplica' };
   return { status: 'pendiente', cierre: 'no_aplica' };
+}
+
+function isSpecDirtyAfterArchive(code: string, archivedId: string): boolean {
+  try {
+    const specDir = readdirSync(SPECS_DIR, { withFileTypes: true }).find(e => e.isDirectory() && e.name.toUpperCase().startsWith(`${code}-`));
+    if (!specDir) return false;
+    const specFile = path.join(SPECS_DIR, specDir.name, 'spec.md');
+    if (!existsSync(specFile)) return false;
+    const archiveDir = path.join(ARCHIVE_DIR, archivedId);
+    if (!existsSync(archiveDir)) return false;
+    const specMtime = statSync(specFile).mtimeMs;
+    const archiveMtime = statSync(archiveDir).mtimeMs;
+    return specMtime > archiveMtime;
+  } catch {
+    return false;
+  }
 }
 
 export function getDashboardData(): DashboardData {
