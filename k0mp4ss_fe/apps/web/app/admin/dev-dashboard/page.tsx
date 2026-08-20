@@ -921,6 +921,13 @@ export default function DevDashboardPage() {
                         className={`text-[10px] ${
                           tone === 'archived' ? 'bg-emerald-600 hover:bg-emerald-700' : tone === 'dirty' ? 'bg-sky-600 hover:bg-sky-700 text-white' : 'bg-orange-500 hover:bg-orange-600'
                         }`}
+                        title={
+                          tone === 'archived'
+                            ? 'Archivada: spec sincronizado con el último archive en openspec/changes/archive/'
+                            : tone === 'dirty'
+                              ? 'Sucio: spec modificado después de archivar — el sistema lo detecta solo (spec mtime > archive mtime), ejecuta /cierra-modulo para re-archivar y volver a verde'
+                              : 'Pendiente: capability con spec pero sin archive, o con change activo en openspec/changes/'
+                        }
                       >
                         {tone === 'archived' ? '🟢 Archivada' : tone === 'dirty' ? '🟡 Sucio' : '🟠 Pendiente'}
                       </Badge>
