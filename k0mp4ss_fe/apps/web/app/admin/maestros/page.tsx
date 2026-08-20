@@ -37,7 +37,6 @@ import {
   IconBuildingBank,
   IconBuildingSkyscraper,
   IconBuildingCottage,
-  IconMapPin,
   IconHome,
   IconAlertTriangle
 } from "@tabler/icons-react"
@@ -74,7 +73,6 @@ export default function MaestrosPage() {
   const macros = useCompassStore(s => s.maestros.categoriasMacro)
   const micros = useCompassStore(s => s.maestros.categoriasMicro)
   const tiposPropiedad = useCompassStore(s => s.maestros.categoriasUnidad)
-  const ubicaciones = useCompassStore(s => s.maestros.ubicacionesEstacionamiento)
   const estadosInmobiliarios = useCompassStore(s => s.maestros.estadosInmobiliarios)
   const condiciones = useCompassStore(s => s.maestros.condicionesEspeciales)
   const bancos = useCompassStore(s => s.maestros.bancos)
@@ -88,7 +86,7 @@ export default function MaestrosPage() {
   const [duplicateError, setDuplicateError] = React.useState<string | null>(null)
 
   const TAB_SUBTABS: Record<string, string[]> = {
-    inventario: ["estados", "macros", "micros", "tipos", "ubicaciones"],
+    inventario: ["estados", "macros", "micros", "tipos"],
     personas: ["condiciones", "estadosInmobiliarios", "emergencias"],
     finanzas: ["bancos"],
   }
@@ -114,7 +112,7 @@ export default function MaestrosPage() {
     if (!nombre || !subTab) return
 
     const collections: Record<string, { nombre: string; id: string }[]> = {
-      estados, macros, micros, tipos: tiposPropiedad, ubicaciones,
+      estados, macros, micros, tipos: tiposPropiedad,
       condiciones, estadosInmobiliarios, bancos, emergencias,
     }
     const currentCollection = collections[subTab] ?? []
@@ -139,9 +137,6 @@ export default function MaestrosPage() {
     } else if (subTab === "tipos") {
       if (editingItem) saveMaestro("categoriasUnidad", { ...editingItem, nombre })
       else saveMaestro("categoriasUnidad", { id: Date.now().toString(), nombre })
-    } else if (subTab === "ubicaciones") {
-      if (editingItem) saveMaestro("ubicacionesEstacionamiento", { ...editingItem, nombre })
-      else saveMaestro("ubicacionesEstacionamiento", { id: Date.now().toString(), nombre })
     } else if (subTab === "estadosInmobiliarios") {
       if (editingItem) saveMaestro("estadosInmobiliarios", { ...editingItem, nombre, color })
       else saveMaestro("estadosInmobiliarios", { id: Date.now().toString(), nombre, color })
@@ -211,9 +206,6 @@ export default function MaestrosPage() {
               <Button variant={subTab === "tipos" ? "default" : "ghost"} className="justify-start gap-2" onClick={() => handleSubTabChange("tipos")}>
                 <IconBuildingCottage className="size-4" /> Categorías de Unidad
               </Button>
-              <Button variant={subTab === "ubicaciones" ? "default" : "ghost"} className="justify-start gap-2" onClick={() => handleSubTabChange("ubicaciones")}>
-                <IconMapPin className="size-4" /> Ubicaciones de Estacionamiento
-              </Button>
             </div>
             
             <Card className="col-span-3">
@@ -227,10 +219,8 @@ export default function MaestrosPage() {
                         ? "Categorías Macro Sectores"
                         : subTab === "micros"
                           ? "Categorías Micro Sectores"
-                          : subTab === "tipos"
-                            ? "Categorías de Unidad"
-                            : subTab === "ubicaciones"
-                              ? "Ubicaciones de Estacionamiento"
+                            : subTab === "tipos"
+                              ? "Categorías de Unidad"
                               : "Jerarquía de Sectores"}
                 </CardTitle>
                 <CardDescription>
@@ -238,10 +228,8 @@ export default function MaestrosPage() {
                     ? "Elegí una categoría del menú de la izquierda para ver y administrar sus registros."
                     : subTab === "estados"
                       ? <>Estos estados definen la condición de ocupación de cada unidad y se reflejan automáticamente en el mapa de departamentos y estacionamientos.</>
-                      : subTab === "tipos"
-                        ? <>Estas categorías alimentan el campo <strong>Categoría</strong> del módulo <strong>Tipos de Unidad (TU)</strong> y la etiqueta de las unidades en <strong>Estructura Física</strong>.</>
-                        : subTab === "ubicaciones"
-                          ? <>Estas ubicaciones permiten sectorizar los estacionamientos de la comunidad (Superficie, Subterráneo, Sector Visitas…) para poder ubicar y agrupar las plazas en el módulo <strong>Estacionamientos (ES)</strong>.</>
+                        : subTab === "tipos"
+                          ? <>Estas categorías alimentan el campo <strong>Categoría</strong> del módulo <strong>Tipos de Unidad (TU)</strong> y la etiqueta de las unidades en <strong>Estructura Física</strong>.</>
                           : subTab === "macros"
                             ? <>Son los distintos tipos de Macro-Sectores que puede tener la comunidad. El sector concreto (ej: Torre A) se crea luego en <strong>Inventario → Estructura Física</strong>.</>
                             : <>Son los distintos tipos de Micro-Sectores que puede tener un Macro-Sector. El sector concreto (ej: Piso 1) se crea luego en <strong>Inventario → Estructura Física</strong>.</>}
@@ -269,9 +257,7 @@ export default function MaestrosPage() {
                         ? micros
                         : subTab === "tipos"
                           ? tiposPropiedad
-                          : subTab === "ubicaciones"
-                            ? ubicaciones
-                            : macros
+                          : macros
                     ).map((item) => (
                       <TableRow key={item.id}>
                         <TableCell className="font-bold">{item.nombre}</TableCell>

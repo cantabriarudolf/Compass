@@ -106,7 +106,6 @@ const data = {
       items: [
         { title: "Estructura Física", url: "/inventario/estructura" },
         { title: "Tipos de Unidad", url: "/inventario/tipos" },
-        { title: "Estacionamientos", url: "/inventario/estacionamientos" },
         { title: "Recursos y EPP", url: "/inventario/recursos" },
         { title: "Mantenimiento", url: "/inventario/proyectos" },
       ],

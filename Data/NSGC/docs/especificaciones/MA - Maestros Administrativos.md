@@ -45,10 +45,10 @@ Información de consulta rápida para residentes y personal.
 
 Categorías que alimentan el módulo [EF - Estructura Física](<EF - Estructura Fisica.md>), los selectores de inventario y el módulo [VU - Vinculación de Unidades](<VU - Vinculacion Unidades.md>).
 
-- **Categorías Macro Sectores:** Define los distintos tipos de Macro-Sectores que puede tener la comunidad (ej: Torre, Manzana, Etapa, Edificio).
-- **Categorías Micro Sectores:** Define los distintos tipos de Micro-Sectores que puede tener un Macro-Sector (ej: Piso, Nivel, Pasaje, Bloque, "No Aplica").
+- **Categorías Macro Sectores:** Define los distintos tipos de Macro-Sectores que puede tener la comunidad (ej: Torre, Manzana, Etapa, Edificio, Sector Estacionamientos).
+- **Categorías Micro Sectores:** Define los distintos tipos de Micro-Sectores que puede tener un Macro-Sector (ej: Piso, Nivel, Pasaje, Bloque, "No Aplica", Superficie/Subterráneo/Sector Visitas para estacionamientos).
 - **Categorías de Unidad:** Define las categorías de propiedades (ej: Depto, Casa, Local, Oficina, Bodega, Estacionamiento). Alimentan el campo **Categoría** del módulo [TU - Tipos de Unidad](<TU - Tipos de Unidad.md>) y la etiqueta de las unidades en EF.
-- **Ubicaciones de Estacionamiento:** Define las ubicaciones para sectorizar las plazas (ej: Superficie, Subterráneo -1, Sector Visitas). Alimentan el módulo [ES - Estacionamientos](<ES - Estacionamientos.md>).
+- **Ubicaciones de Estacionamiento (legacy v7, absorbido en v8):** Históricamente definía ubicaciones para el módulo [ES - Estacionamientos](<ES - Estacionamientos.md>). Desde v8 se modela como microsectores `est-*` del macrosector `estacionamientos` en [EF - Estructura Física](<EF - Estructura Fisica.md>); la colección `ubicacionesEstacionamiento` ya no existe en `MaestroCollections`.
 - **Estados Inmobiliarios:** Define los estados de ocupación de la propiedad (ej: Habitada, Próxima Vacancia, En Arriendo, Arrendada, En Venta). Alimentan el campo **Estado Ocupación Propiedad** del módulo [VU - Vinculación de Unidades](<VU - Vinculacion Unidades.md>).
 - **Regla importante:** Estas categorías definen los **tipos** de sectores, pero no son sectores reales. Los sectores concretos (por ejemplo, "Torre A" o "Piso 3") se crean en el módulo EF; hasta entonces no es posible asignarles unidades.
 

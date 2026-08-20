@@ -111,6 +111,7 @@ export const macroSectores: MacroSector[] = [
   { id: "torre-d", nombre: "D", etiqueta: "Torre" },
   { id: "torre-e", nombre: "E", etiqueta: "Torre" },
   { id: "comercial", nombre: "Centro Comercial", etiqueta: "Sector", descripcion: "Locales de Servicios" },
+  { id: "estacionamientos", nombre: "Estacionamientos", etiqueta: "Sector" },
 ];
 
 export const microSectores: MicroSector[] = [
@@ -122,7 +123,11 @@ export const microSectores: MicroSector[] = [
       etiqueta: "Piso"
     }))
   ),
-  { id: "piso-comercial-1", macroSectorId: "comercial", nombre: "Calle", etiqueta: "Nivel" }
+  { id: "piso-comercial-1", macroSectorId: "comercial", nombre: "Calle", etiqueta: "Nivel" },
+  { id: "est-sup", macroSectorId: "estacionamientos", nombre: "Superficie", etiqueta: "Nivel" },
+  { id: "est-sub1", macroSectorId: "estacionamientos", nombre: "Subterráneo -1", etiqueta: "Nivel" },
+  { id: "est-sub2", macroSectorId: "estacionamientos", nombre: "Subterráneo -2", etiqueta: "Nivel" },
+  { id: "est-vis", macroSectorId: "estacionamientos", nombre: "Sector Visitas", etiqueta: "Nivel" },
 ];
 
 const estados = ["vacante", "en-uso", "en-arriendo", "en-venta", "en-mantencion"];
@@ -153,4 +158,29 @@ export const unidades: Unidad[] = [
   { id: "u-LC-01", microSectorId: "piso-comercial-1", numero: "L-01", etiqueta: "Local" as const, tipoUnidadId: "local-a", metraje: 120.0, prorrateo: 0.05, rolSii: "999-01", estadoId: "en-uso", servicios: { agua: { cliente: "C-LC-01", medidor: "ML-01" } } },
   { id: "u-LC-02", microSectorId: "piso-comercial-1", numero: "L-02", etiqueta: "Local" as const, tipoUnidadId: "local-b", metraje: 60.0, prorrateo: 0.025, rolSii: "999-02", estadoId: "en-arriendo", servicios: { agua: { cliente: "C-LC-02", medidor: "ML-02" } } },
   { id: "u-LC-03", microSectorId: "piso-comercial-1", numero: "L-03", etiqueta: "Local" as const, tipoUnidadId: "local-b", metraje: 60.0, prorrateo: 0.025, rolSii: "999-03", estadoId: "vacante", servicios: { agua: { cliente: "C-LC-03", medidor: "ML-03" } } },
+  // --- Estacionamientos (83 plazas) ---
+  ...([
+    { microSectorId: "est-sup",  start: 1,  count: 20 },
+    { microSectorId: "est-sub1", start: 21, count: 21 },
+    { microSectorId: "est-sub2", start: 42, count: 21 },
+    { microSectorId: "est-vis",  start: 63, count: 21 },
+  ]).flatMap(({ microSectorId, start, count }) =>
+    Array.from({ length: count }, (_, i) => {
+      const num = start + i;
+      const numStr = num.toString().padStart(3, "0");
+      const estadosEst = ["vacante", "en-uso", "en-uso", "en-uso", "en-uso", "en-arriendo", "en-venta", "en-mantencion"];
+      return {
+        id: `u-E-${numStr}`,
+        microSectorId,
+        numero: `E-${numStr}`,
+        etiqueta: "Estacionamiento" as const,
+        tipoUnidadId: "tipo-es-1",
+        metraje: 12.5,
+        prorrateo: 0.005,
+        rolSii: "",
+        estadoId: estadosEst[num % estadosEst.length] ?? "vacante",
+        servicios: {},
+      };
+    })
+  ),
 ];

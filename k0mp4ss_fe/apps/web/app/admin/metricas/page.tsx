@@ -7,7 +7,6 @@ import { Badge } from "@workspace/ui/components/badge"
 import { 
   IconTrendingUp, 
   IconBuildingCommunity, 
-  IconParkingCircle, 
   IconSettings,
   IconFingerprint,
   IconBolt,
@@ -19,7 +18,6 @@ export default function MetricasPage() {
   const hasHydrated = useCompassStore(s => s.hasHydrated)
   const unidades = useCompassStore(s => s.unidades)
   const tiposUnidad = useCompassStore(s => s.tiposUnidad)
-  const estacionamientos = useCompassStore(s => s.estacionamientos)
   const estadosOcupacion = useCompassStore(s => s.maestros.estadosOcupacion)
   const categoriasMacro = useCompassStore(s => s.maestros.categoriasMacro)
   const categoriasMicro = useCompassStore(s => s.maestros.categoriasMicro)
@@ -41,11 +39,6 @@ export default function MetricasPage() {
     if (u.servicios.gas) count++;
     return acc + count;
   }, 0);
-
-  // ES - Estacionamientos
-  const totalSpots = estacionamientos.length;
-  const ocupados = estacionamientos.filter(e => !!e.unidadId).length;
-  const totalHistorial = estacionamientos.reduce((acc, e) => acc + (e.historial?.length || 0), 0);
 
   // MA - Maestros
   const totalEstados = estadosOcupacion.length;
@@ -115,30 +108,6 @@ export default function MetricasPage() {
             label="Servicios Monitoreados" 
             value={totalServicios} 
             sub="Cuentas Agua/Luz/Gas enroladas"
-          />
-        </div>
-      </section>
-
-      {/* --- MÓDULO: ESTACIONAMIENTOS (ES) --- */}
-      <section className="space-y-4">
-        <div className="flex items-center gap-2 text-amber-600 font-bold uppercase text-xs tracking-widest px-1">
-          <IconParkingCircle className="size-4" /> Módulo: Estacionamientos (ES)
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <ModuleMetric 
-            label="Tasa de Ocupación" 
-            value={`${((ocupados/totalSpots)*100).toFixed(1)}%`} 
-            sub={`${ocupados} de ${totalSpots} plazas`}
-          />
-          <ModuleMetric 
-            label="Trazabilidad Histórica" 
-            value={totalHistorial} 
-            sub="Registros de rotación"
-          />
-          <ModuleMetric 
-            label="Plazas Disponibles" 
-            value={totalSpots - ocupados} 
-            sub="Incluye sector visitas"
           />
         </div>
       </section>

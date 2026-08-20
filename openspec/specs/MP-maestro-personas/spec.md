@@ -1,7 +1,7 @@
 # MP-maestro-personas Specification
 
 ## Purpose
-Establecer un registro único de identidad para todas las personas relacionadas con el condominio, permitiendo una gestión centralizada, segura y con enfoque en la vulnerabilidad.
+Establecer un registro único de identidad para todas las personas relacionadas con la comunidad, permitiendo una gestión centralizada, segura y con enfoque en la vulnerabilidad.
 
 ## Requirements
 

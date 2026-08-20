@@ -1,7 +1,7 @@
 # EF-estructura-fisica Specification
 
 ## Purpose
-Establecer la infraestructura física y lógica de las propiedades del condominio, permitiendo una gestión jerárquica, auditable y basada en plantillas técnicas.
+Establecer la infraestructura física y lógica de las propiedades de la comunidad, permitiendo una gestión jerárquica, auditable y basada en plantillas técnicas.
 
 ## Requirements
 

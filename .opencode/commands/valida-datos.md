@@ -1,10 +1,10 @@
 ---
-description: "Valida que un módulo llevado a OpenSpec respete la capa de datos ST (store, seed, acciones CRUD)"
+description: "Valida que un módulo llevado a OpenSpec respete la capa de datos ST (store, seed, acciones CRUD, versión/migración, backup y terminología)"
 ---
 
 Valida que el módulo [MÓDULO] respete la convención de la capa de datos persistente (ST) al ir a OpenSpec. NO implementes el módulo; valida y corrige solo lo que esté claramente dentro de la validación.
 
-Contexto: existe una capa de datos persistente (ST) — store Zustand+persist en `apps/web/lib/store.ts` (key `compass-store`, versión 3, `hasHydrated`). Regla de la casa declarada en RG y `openspec/specs/project.md`: TODO módulo lee/escribe datos vía `useCompassStore` y sus acciones CRUD; las páginas NUNCA usan `useState` sembrado de mocks, imports estáticos de `data/` para entidades, ni mutan el store directo. El seed vive en `apps/web/data/` y solo lo importa `lib/store.ts`.
+Contexto: existe una capa de datos persistente (ST) — store Zustand+persist en `apps/web/lib/store.ts` (key `compass-store`, versión `STORE_VERSION`, `hasHydrated`). Regla de la casa declarada en RG y `openspec/specs/project.md`: TODO módulo lee/escribe datos vía `useCompassStore` y sus acciones CRUD; las páginas NUNCA usan `useState` sembrado de mocks, imports estáticos de `data/` para entidades (solo `import type` para tipos), ni mutan el store directo. El seed vive en `apps/web/data/` y solo lo importa `lib/store.ts`. Desde v8, `ES - Estacionamientos` está absorbido como unidades (`tipo: Estacionamiento`) en `EF`, no como colección separada.
 
 Módulo a validar: [MÓDULO] (doc fuente: `Data/NSGC/docs/especificaciones/[MÓDULO].md`, change: `openspec/changes/[AA]-[modulo]/`).
 
@@ -20,20 +20,29 @@ Módulo a validar: [MÓDULO] (doc fuente: `Data/NSGC/docs/especificaciones/[MÓD
 - Se especifica el seed: qué mock de `data/` siembra el estado inicial (o se declara que no hay seed).
 
 ## 3) Implementación contra antipatrones históricos
-- Ninguna página/componente importa entidades desde `@/data/...` (solo `lib/store.ts` importa mocks; formularios reutilizados leen del store).
+- Ninguna página/componente importa **valores/entidades** desde `@/data/...` (solo `lib/store.ts` importa mocks; formularios reutilizados leen del store). Se permite `import type { Unidad, TipoUnidad, Persona }` solo para tipos, nunca `import { unidades, personas, seed* }` ni datos runtime.
 - Ningún `useState` sembrado desde mocks para datos de dominio (estado local solo para UI efímera: inputs, diálogos, filtros).
 - No hay colecciones estáticas (`CATEGORIAS_*`, `ESTADOS_*`, `UBICACIONES_*`, listas hardcodeadas) que debieran vivir en el store; si el módulo necesita una nueva colección, va a `MaestroCollections` con su `migrate` si aplica.
-- **Maestros de referencia administrables (categorías, etiquetas, estados, tipos de propiedad):** ningún formulario/select repite opciones hardcodeadas en la UI. Las opciones administrables viven en `MaestroCollections` gestionadas por el módulo MA en `/admin/maestros` (patrón `saveMaestro`/`removeMaestro`) y los módulos consumidores (TU, EF, ES, etc.) las leen del store. Si el módulo requiere una etiqueta nueva, debe declararse en la especificación MA (`Data/NSGC/docs/especificaciones/MA - Maestros Administrativos.md`) y agregarse a la colección correspondiente del store, subiendo `STORE_VERSION` con su `migrate` si el estado persistido anterior no la incluye.
+- **Maestros de referencia administrables (categorías, etiquetas, estados, tipos de propiedad):** ningún formulario/select repite opciones hardcodeadas en la UI. Las opciones administrables viven en `MaestroCollections` gestionadas por el módulo MA en `/admin/maestros` (patrón `saveMaestro`/`removeMaestro`) y los módulos consumidores (TU, EF, VU, etc. — ES absorbido en EF) las leen del store. Si el módulo requiere una etiqueta nueva, debe declararse en la especificación MA (`Data/NSGC/docs/especificaciones/MA - Maestros Administrativos.md`) y agregarse a la colección correspondiente del store, subiendo `STORE_VERSION` con su `migrate` si el estado persistido anterior no la incluye. Los badges de estado usan la paleta canónica `BADGE_OPTIONS` + `normalizeBadgeColor` + `hexDesdeId` (no clases Tailwind a mano).
 - Las páginas llaman `useStoreRehydrated` y respetan `hasHydrated` (no mutar antes de hidratar). Además renderizan un skeleton mientras `hasHydrated` es `false` y montan el contenido real solo tras la hidratación (regla "Hidratación segura en renderizado SSR" del spec ST), evitando mismatch SSR/cliente.
-- Eliminaciones validadas por dependencias (la acción devuelve `StoreResult` con error; la UI lo muestra).
+- Eliminaciones validadas por dependencias (la acción devuelve `StoreResult` con error; la UI lo muestra). `removeMaestro` también valida que ningún `unidad.estadoId` / `unidad.etiqueta` / `vinculo.estadoOcupacionPropiedad` referencie el id a borrar.
 - Los ids nuevos siguen el patrón existente del módulo (ej: `v-`, `u-`, `t-`, `est-`) y no colisionan con el seed.
+- **Terminología RG §4:** el diff del módulo NO introduce "condominio" (término en desuso); el oficial es "comunidad". Verificar con `git diff HEAD -- . | rg -n "condominio"`.
 
 ## 4) Integración entre módulos
 - Si el módulo lee de otros (ej: FI usa `tiposUnidad`, `unidades`, `personas`), el spec lo declara y la implementación lee del store (no de imports).
 - Si el módulo modifica entidades de otro módulo, usa las acciones de ese módulo, no mutación directa.
+- **Coherencia ES→EF (desde v8):** `ES-estacionamientos` ya no es colección propia; los estacionamientos son `unidades` con `tipoUnidadId: tipo-es-1` y microsectores `est-*` en `EF`. Si el change toca estacionamientos, validar que no reintroduzca `estacionamientos`/`ubicacionesEstacionamiento` en store/specs/docs y que `project.md` lo marque como absorbido.
 
-## 5) Verificación
+## 5) Contrato técnico ST (versión, persistencia y backup)
+- `STORE_VERSION` en `lib/store.ts` se bumppea si hay nueva colección/campo y `migrate` cubre el upgrade (mergeById, limpieza de keys legacy, no pisar personalizaciones). `partialize` persiste exactamente `CompassData` (sin `hasHydrated`).
+- `validateStoreBackup` en `lib/store-backup.ts` está alineado con `CompassData` actual (sin `estacionamientos` legacy) y se ejecuta sin errores.
+- Los backups `Data/NSGC/Pruebas/*.json` no quedan con `estacionamientos` huérfanos; los de v7 previos se documentan como migrados.
+
+## 6) Verificación
 - `npx tsc --noEmit` y `npx turbo lint` (0 errores).
+- `git diff HEAD -- . | rg -n "condominio" || echo "OK"` (0 hits en el diff del módulo).
+- `rg -n "from.*@/data" apps/web/app apps/web/components --include="*.ts" --include="*.tsx"` solo con `import type` (sin imports de valores).
 
 ## Entregable
-Informe en chileno con (a) hallazgos por severidad (crítica/media/baja) con archivo+línea y regla violada, (b) correcciones aplicadas con justificación, (c) checklist explícito de los 5 puntos marcando ✅/❌. Si todo está conforme, decláralo explícitamente. No commitear.
+Informe en chileno con (a) hallazgos por severidad (crítica/media/baja) con archivo+línea y regla violada, (b) correcciones aplicadas con justificación, (c) checklist explícito de los 6 puntos marcando ✅/❌ (artefactos, contrato datos, antipatrones, integración, contrato técnico ST, verificación). Si todo está conforme, decláralo explícitamente. No commitear.

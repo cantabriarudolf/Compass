@@ -163,7 +163,6 @@ export default function DevDashboardPage() {
         { label: 'Macro Sectores', count: s.macroSectores.length, type: 'main' },
         { label: 'Micro Sectores', count: s.microSectores.length, type: 'main' },
         { label: 'Unidades', count: s.unidades.length, type: 'main' },
-        { label: 'Estacionamientos', count: s.estacionamientos.length, type: 'main' },
         { label: 'Personas', count: s.personas.length, type: 'main' },
         { label: 'Vínculos', count: s.vinculos.length, type: 'main' },
       ];
@@ -175,7 +174,7 @@ export default function DevDashboardPage() {
         ['Unidades Medida', m.unidadesMedida], ['Contactos Emergencia', m.contactosEmergencia],
         ['Condiciones Especiales', m.condicionesEspeciales], ['Estados Ocupación', m.estadosOcupacion],
         ['Categorías Macro', m.categoriasMacro], ['Categorías Micro', m.categoriasMicro],
-        ['Categorías Unidad', m.categoriasUnidad], ['Ubicaciones Estacionamiento', m.ubicacionesEstacionamiento],
+        ['Categorías Unidad', m.categoriasUnidad],
         ['Estados Inmobiliarios', m.estadosInmobiliarios],
       ];
       for (const [label, arr] of maestroEntries) {
@@ -197,7 +196,6 @@ export default function DevDashboardPage() {
           macroSectores: s.macroSectores,
           microSectores: s.microSectores,
           unidades: s.unidades,
-          estacionamientos: s.estacionamientos,
           personas: s.personas,
           vinculos: s.vinculos,
           configuracion: s.configuracion,
@@ -768,10 +766,6 @@ export default function DevDashboardPage() {
                   <div>
                     <p className="text-xs text-muted-foreground font-medium">Unidades</p>
                     <p className="font-mono font-bold">{storeImportValidation.summary.unidades}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground font-medium">Estacionamientos</p>
-                    <p className="font-mono font-bold">{storeImportValidation.summary.estacionamientos}</p>
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground font-medium">Maestros</p>

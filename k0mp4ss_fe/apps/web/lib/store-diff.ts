@@ -81,7 +81,6 @@ export function diffCompassData(current: CompassData, seed: CompassData): Compas
       diffArray("Macro Sectores", current.macroSectores, seed.macroSectores),
       diffArray("Micro Sectores", current.microSectores, seed.microSectores),
       diffArray("Unidades", current.unidades, seed.unidades),
-      diffArray("Estacionamientos", current.estacionamientos, seed.estacionamientos),
       diffArray("Personas", current.personas, seed.personas),
       diffArray("Vínculos", current.vinculos, seed.vinculos),
     ],
@@ -101,7 +100,6 @@ export function diffCompassData(current: CompassData, seed: CompassData): Compas
       diffArray("Categorías Macro", current.maestros.categoriasMacro, seed.maestros.categoriasMacro),
       diffArray("Categorías Micro", current.maestros.categoriasMicro, seed.maestros.categoriasMicro),
       diffArray("Categorías Unidad", current.maestros.categoriasUnidad, seed.maestros.categoriasUnidad),
-      diffArray("Ubicaciones Estacionamiento", current.maestros.ubicacionesEstacionamiento, seed.maestros.ubicacionesEstacionamiento),
       diffArray("Estados Inmobiliarios", current.maestros.estadosInmobiliarios, seed.maestros.estadosInmobiliarios),
     ],
   };

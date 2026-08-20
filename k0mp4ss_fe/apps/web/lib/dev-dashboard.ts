@@ -97,7 +97,6 @@ const ROUTES: Record<string, string> = {
   UI: '(Cross-cutting)',
   TU: '/inventario/tipos',
   EF: '/inventario/estructura',
-  ES: '/inventario/estacionamientos',
   MA: '/admin/maestros',
   MP: '/comunidad/personas',
   VU: '/comunidad/personas/[id]',
@@ -132,7 +131,6 @@ const MOCK_DATA_FILES: Record<string, string> = {
   MA: 'data/maestros.ts',
   EF: 'data/inventario/estructura.ts',
   TU: 'data/inventario/estructura.ts',
-  ES: 'data/inventario/estacionamientos.ts',
   MP: 'data/comunidad/personas.ts',
   VU: 'data/comunidad/personas.ts',
 };

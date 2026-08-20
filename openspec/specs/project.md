@@ -35,8 +35,8 @@ Each OpenSpec capability maps 1:1 to its module spec in `Data/NSGC/docs/especifi
 | :--- | :--- |
 | `RG-*` | `RG - Reglas Generales.md` |
 | `MA-*` | `MA - Maestros Administrativos.md` |
-| `EF-estructura-fisica` | `EF - Estructura Fisica.md` |
-| `ES-estacionamientos` | `ES - Estacionamientos.md` |
+| `EF-estructura-fisica` | `EF - Estructura Fisica.md` (desde v8 incluye estacionamientos como `u-E-*`) |
+| `ES-estacionamientos` | `ES - Estacionamientos.md` — **deprecado v8, absorbido en EF** (spec histórico) |
 | `TU-tipos-unidad` | `TU - Tipos de Unidad.md` |
 | `MP-maestro-personas` | `MP - Maestro de Personas.md` |
 | `VU-vinculacion-unidades` | `VU - Vinculacion Unidades.md` |

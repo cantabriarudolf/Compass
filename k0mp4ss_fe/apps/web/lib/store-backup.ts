@@ -8,7 +8,6 @@ const REQUIRED_STATE_KEYS: (keyof CompassData)[] = [
   "macroSectores",
   "microSectores",
   "unidades",
-  "estacionamientos",
   "personas",
   "vinculos",
   "configuracion",
@@ -20,7 +19,6 @@ export interface BackupSummary {
   personas: number
   vinculos: number
   unidades: number
-  estacionamientos: number
   maestros: number
 }
 
@@ -119,7 +117,6 @@ export function validateStoreBackup(parsed: unknown): BackupValidation {
   const personas = asArray(state.personas)
   const vinculos = asArray(state.vinculos)
   const unidades = asArray(state.unidades)
-  const estacionamientos = asArray(state.estacionamientos)
   const maestros = asObject(state.maestros)
 
   const personaIds = new Set(personas.map(p => asObject(p)?.id).filter(Boolean) as string[])
@@ -137,17 +134,6 @@ export function validateStoreBackup(parsed: unknown): BackupValidation {
     )
   }
 
-  const estacionamientosHuérfanos = estacionamientos.filter(e => {
-    const eObj = asObject(e)
-    const unidadId = eObj?.unidadId
-    return unidadId !== undefined && unidadId !== null && !unidadIds.has(String(unidadId))
-  })
-  if (estacionamientosHuérfanos.length > 0) {
-    errors.push(
-      `${estacionamientosHuérfanos.length} estacionamiento(s) apuntan a una unidad inexistente en el backup.`
-    )
-  }
-
   return {
     ok: errors.length === 0,
     errors,
@@ -159,7 +145,6 @@ export function validateStoreBackup(parsed: unknown): BackupValidation {
       personas: personas.length,
       vinculos: vinculos.length,
       unidades: unidades.length,
-      estacionamientos: estacionamientos.length,
       maestros: maestros ? Object.keys(maestros).length : 0,
     },
     exportSummary,

@@ -1,7 +1,7 @@
 # TU-tipos-unidad Specification
 
 ## Purpose
-Gestionar el maestro de tipos de unidad que estandariza las características de las unidades del condominio, permitiendo la creación masiva y asegurando la consistencia en los cobros. Fuente de verdad: `Data/NSGC/docs/especificaciones/TU - Tipos de Unidad.md`.
+Gestionar el maestro de tipos de unidad que estandariza las características de las unidades de la comunidad, permitiendo la creación masiva y asegurando la consistencia en los cobros. Fuente de verdad: `Data/NSGC/docs/especificaciones/TU - Tipos de Unidad.md`.
 
 ## Requirements
 

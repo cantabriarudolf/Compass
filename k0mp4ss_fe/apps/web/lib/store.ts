@@ -13,10 +13,6 @@ import {
   MicroSector,
   Unidad,
 } from "@/data/inventario/estructura"
-import {
-  estacionamientos as seedEstacionamientos,
-  Estacionamiento,
-} from "@/data/inventario/estacionamientos"
 import { personas as seedPersonas, Persona } from "@/data/comunidad/personas"
 import { vinculos as seedVinculos, VinculoUnidad, ESTADOS_INMOBILIARIOS as seedEstadosInmobiliarios } from "@/data/comunidad/vinculos"
 import {
@@ -52,12 +48,11 @@ import {
   CATEGORIAS_MACRO as seedCategoriasMacro,
   CATEGORIAS_MICRO as seedCategoriasMicro,
   CATEGORIAS_UNIDAD as seedCategoriasUnidad,
-  UBICACIONES_ESTACIONAMIENTO as seedUbicacionesEstacionamiento,
 } from "@/data/maestros"
 
 export type StoreResult = { ok: boolean; error?: string }
 
-export const STORE_VERSION = 7
+export const STORE_VERSION = 8
 
 export interface MaestroCollections {
   afps: Afp[]
@@ -75,7 +70,6 @@ export interface MaestroCollections {
   categoriasMacro: { id: string; nombre: string }[]
   categoriasMicro: { id: string; nombre: string }[]
   categoriasUnidad: { id: string; nombre: string }[]
-  ubicacionesEstacionamiento: { id: string; nombre: string }[]
   estadosInmobiliarios: { id: string; nombre: string; color?: string }[]
 }
 
@@ -84,7 +78,6 @@ export interface CompassData {
   macroSectores: MacroSector[]
   microSectores: MicroSector[]
   unidades: Unidad[]
-  estacionamientos: Estacionamiento[]
   personas: Persona[]
   vinculos: VinculoUnidad[]
   configuracion: ConfiguracionGlobal
@@ -106,9 +99,6 @@ interface CompassStore extends CompassData {
   // Unidades (EF)
   saveUnidad: (unidad: Unidad) => void
   removeUnidad: (id: string) => StoreResult
-  // Estacionamientos (ES)
-  saveEstacionamiento: (estacionamiento: Estacionamiento) => void
-  removeEstacionamiento: (id: string) => StoreResult
   // Personas (MP)
   savePersona: (persona: Persona) => void
   removePersona: (id: string) => StoreResult
@@ -152,7 +142,6 @@ export const seedData = (): CompassData => ({
   macroSectores: seedMacroSectores,
   microSectores: seedMicroSectores,
   unidades: seedUnidades,
-  estacionamientos: seedEstacionamientos,
   personas: seedPersonas,
   vinculos: seedVinculos,
   configuracion: seedConfiguracion,
@@ -172,7 +161,6 @@ export const seedData = (): CompassData => ({
     categoriasMacro: seedCategoriasMacro,
     categoriasMicro: seedCategoriasMicro,
     categoriasUnidad: seedCategoriasUnidad,
-    ubicacionesEstacionamiento: seedUbicacionesEstacionamiento,
     estadosInmobiliarios: seedEstadosInmobiliarios,
   },
 })
@@ -257,35 +245,14 @@ export const useCompassStore = create<CompassStore>()(
 
       removeUnidad: (id) => {
         if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
-        const linkedEst = get().estacionamientos.filter(e => e.unidadId === id)
         const linkedVinculos = get().vinculos.filter(v => v.unidadId === id)
-        if (linkedEst.length > 0 || linkedVinculos.length > 0) {
+        if (linkedVinculos.length > 0) {
           return {
             ok: false,
-            error: "No se puede eliminar la unidad: tiene estacionamientos o vínculos asociados.",
+            error: "No se puede eliminar la unidad: tiene vínculos asociados.",
           }
         }
         set(s => ({ unidades: s.unidades.filter(u => u.id !== id) }))
-        return { ok: true }
-      },
-
-      // --- ES: Estacionamientos ---
-      saveEstacionamiento: (estacionamiento) => {
-        if (!get().hasHydrated) return
-        set(s => ({ estacionamientos: upsert(s.estacionamientos, estacionamiento) }))
-      },
-
-      removeEstacionamiento: (id) => {
-        if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
-        const target = get().estacionamientos.find(e => e.id === id)
-        const activo = target?.historial?.some(h => !h.fechaFin)
-        if (activo) {
-          return {
-            ok: false,
-            error: "No se puede eliminar el estacionamiento: tiene una asignación activa.",
-          }
-        }
-        set(s => ({ estacionamientos: s.estacionamientos.filter(e => e.id !== id) }))
         return { ok: true }
       },
 
@@ -384,14 +351,47 @@ export const useCompassStore = create<CompassStore>()(
 
       removeMaestro: (key, id) => {
         if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
-        const result: StoreResult = { ok: true }
+        // Validación de integridad referencial para maestros consumidos por unidades/vínculos
+        if (key === "estadosOcupacion") {
+          const enUso = get().unidades.some(u => u.estadoId === id)
+          if (enUso) return { ok: false, error: `No se puede eliminar el estado de ocupación: ${get().unidades.filter(u => u.estadoId === id).length} unidad(es) lo usan.` }
+        }
+        if (key === "categoriasUnidad") {
+          const cat = get().maestros.categoriasUnidad.find(c => c.id === id)
+          const nombre = cat?.nombre
+          if (nombre) {
+            const enUso = get().tiposUnidad.some(t => t.categoria === nombre) || get().unidades.some(u => u.etiqueta === nombre)
+            if (enUso) return { ok: false, error: `No se puede eliminar la categoría de unidad "${nombre}": está en uso por tipos o unidades.` }
+          }
+        }
+        if (key === "categoriasMacro") {
+          const cat = get().maestros.categoriasMacro.find(c => c.id === id)
+          // Validación laxa: si algún macroSector usa la etiqueta de esta categoría como nombre de etiqueta, bloquear
+          if (cat && get().macroSectores.some(m => m.etiqueta === cat.nombre)) {
+            return { ok: false, error: `No se puede eliminar la categoría macro "${cat.nombre}": hay sectores que la usan como etiqueta.` }
+          }
+        }
+        if (key === "categoriasMicro") {
+          const cat = get().maestros.categoriasMicro.find(c => c.id === id)
+          if (cat && get().microSectores.some(m => m.etiqueta === cat.nombre)) {
+            return { ok: false, error: `No se puede eliminar la categoría micro "${cat.nombre}": hay sub-sectores que la usan.` }
+          }
+        }
+        if (key === "estadosInmobiliarios") {
+          const enUso = get().vinculos.some(v => v.estadoOcupacionPropiedad === id)
+          if (enUso) return { ok: false, error: `No se puede eliminar el estado inmobiliario: ${get().vinculos.filter(v => v.estadoOcupacionPropiedad === id).length} vínculo(s) lo usan.` }
+        }
+        if (key === "condicionesEspeciales") {
+          const enUso = get().personas.some(p => (p.condicionesEspecialesIds ?? []).includes(id))
+          if (enUso) return { ok: false, error: "No se puede eliminar la condición especial: hay personas que la tienen asignada." }
+        }
         set(s => ({
           maestros: {
             ...s.maestros,
             [key]: (s.maestros[key] as { id: string }[]).filter(i => i.id !== id),
           },
         }))
-        return result
+        return { ok: true }
       },
 
       // --- CF: Configuración Global ---
@@ -409,7 +409,6 @@ export const useCompassStore = create<CompassStore>()(
         macroSectores: state.macroSectores,
         microSectores: state.microSectores,
         unidades: state.unidades,
-        estacionamientos: state.estacionamientos,
         personas: state.personas,
         vinculos: state.vinculos,
         configuracion: state.configuracion,
@@ -460,11 +459,32 @@ export const useCompassStore = create<CompassStore>()(
             },
           }
         }
-        if ((version ?? 0) < 7) {
+        if ((version ?? 0) < 8) {
+          const seed = seedData()
+          const mergeById = <T extends { id: string }>(prevArr: T[], seedArr: T[]): T[] => {
+            const prevIds = new Set(prevArr.map(p => p.id))
+            return [...prevArr, ...seedArr.filter(s => !prevIds.has(s.id))]
+          }
+          // Limpiar keys legacy v7 que ya no existen en CompassData
+          const prevAny = prev as unknown as Record<string, unknown>
           result = {
             ...result,
-            estacionamientos: seedEstacionamientos,
+            macroSectores: mergeById((prev.macroSectores ?? []) as { id: string }[], seed.macroSectores as unknown as { id: string }[]) as never,
+            microSectores: mergeById((prev.microSectores ?? []) as { id: string }[], seed.microSectores as unknown as { id: string }[]) as never,
+            unidades: mergeById((prev.unidades ?? []) as { id: string }[], seed.unidades as unknown as { id: string }[]) as never,
+            maestros: {
+              ...seed.maestros,
+              ...(prev.maestros ?? {}),
+              categoriasMacro: mergeById(
+                (prev.maestros?.categoriasMacro ?? []) as { id: string }[],
+                seed.maestros.categoriasMacro as unknown as { id: string }[]
+              ) as never,
+            } as never,
           }
+          // Eliminar estacionamientos legacy del persistido si existe
+          if (prevAny["estacionamientos"] !== undefined) delete (result as unknown as Record<string, unknown>)["estacionamientos"]
+          const maestrosAny = (result.maestros ?? {}) as unknown as Record<string, unknown>
+          if (maestrosAny["ubicacionesEstacionamiento"] !== undefined) delete maestrosAny["ubicacionesEstacionamiento"]
         }
         return result
       },

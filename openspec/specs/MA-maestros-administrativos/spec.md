@@ -19,7 +19,7 @@ El sistema SHALL administrar en `/admin/maestros` las categorías de estructura 
 - **Categorías Micro Sectores** (`categoriasMicro`): Piso, Nivel, Pasaje, etc. — definen los tipos de Micro-Sectores que alimentan EF al crear micro-sectores.
 - **Categorías de Unidad** (`categoriasUnidad`): Depto, Casa, Local, Oficina, Bodega, Estacionamiento — alimentan el campo Categoría de TU y la etiqueta de las unidades en EF.
 - **Estados de Ocupación** (`estadosOcupacion`): con badge de color canónico y `hex` derivado para la dona de distribución.
-- **Ubicaciones de Estacionamiento** (`ubicacionesEstacionamiento`): Superficie, Subterráneo -1, etc. — permiten sectorizar las plazas del módulo ES.
+- **Ubicaciones de Estacionamiento** (`ubicacionesEstacionamiento`): deprecado en v8 — absorbido como microsectores `est-*` en EF (ver `ST-capa-datos-persistente`). No crear esta colección en implementaciones nuevas.
 - **Estados Inmobiliarios** (`estadosInmobiliarios`): Habitada, Próxima Vacancia, En Arriendo, Arrendada, En Venta — alimentan el campo **Estado Ocupación Propiedad** del módulo VU.
 
 #### Scenario: Categoría de unidad consumida por TU

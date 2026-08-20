@@ -31,9 +31,9 @@ The navigation menu MUST follow the hierarchy implemented in `AppSidebar` and re
     - Certificados (`/comunidad/certificados`)
     - Portal Inmobiliario (`/comunidad/portal`)
   - **Inventario**
-    - Estructura Física (`/inventario/estructura`)
+    - Estructura Física (`/inventario/estructura` — incluye estacionamientos como `u-E-*`)
     - Tipos de Unidad (`/inventario/tipos`)
-    - Estacionamientos (`/inventario/estacionamientos`)
+    - Estacionamientos (`/inventario/estacionamientos`) — **deprecado v8, filtrar `Estructura Física` por sector `Estacionamientos`**
     - Recursos y EPP (`/inventario/recursos`)
     - Mantenimiento (`/inventario/proyectos`)
   - **Personas**

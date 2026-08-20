@@ -1,5 +1,5 @@
 // Este archivo centraliza los maestros de estructura e inventario físico
-// (EF: categorías estructurales, TU: tipos de unidad, ES: estacionamientos).
+// (EF: categorías estructurales, TU: tipos de unidad).
 // Los maestros administrativos (AFP, bancos, fonasa, feriados, etc.) viven en data/admin/maestros.ts.
 // Los parámetros globales de configuración (SMTP, cálculo de GC, seguridad) pertenecen al módulo CF - Configuración Global.
 
@@ -11,6 +11,7 @@ export const CATEGORIAS_MACRO = [
   { id: "parcela", nombre: "Parcela" },
   { id: "calle", nombre: "Calle" },
   { id: "edificio", nombre: "Edificio" },
+  { id: "estacionamientos", nombre: "Estacionamientos" },
 ];
 
 export const CATEGORIAS_MICRO = [
@@ -38,11 +39,4 @@ export const ESTADOS_OCUPACION = [
   { id: "en-arriendo", nombre: "En Arriendo", color: "bg-purple-500 text-white", hex: "#a855f7" },
   { id: "en-venta", nombre: "En Venta", color: "bg-cyan-500 text-white", hex: "#0891b2" },
   { id: "en-mantencion", nombre: "En Mantención", color: "bg-amber-500 text-black", hex: "#f59e0b" },
-];
-
-export const UBICACIONES_ESTACIONAMIENTO = [
-  { id: "superficie", nombre: "Superficie" },
-  { id: "subterraneo-1", nombre: "Subterráneo -1" },
-  { id: "subterraneo-2", nombre: "Subterráneo -2" },
-  { id: "visitas", nombre: "Sector Visitas" },
 ];

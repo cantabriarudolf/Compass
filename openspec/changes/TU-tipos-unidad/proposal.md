@@ -1,6 +1,6 @@
 ## Why
 
-Los tipos de unidad son la plantilla técnica y tarifaria que estandariza las unidades del condominio. Sin un maestro centralizado, la creación masiva de unidades es inconsistente y los cobros de gasto común carecen de una base homogénea. Este cambio incorpora el módulo `TU` bajo OpenSpec, alimentado por la fuente de verdad `Data/NSGC/docs/especificaciones/TU - Tipos de Unidad.md`.
+Los tipos de unidad son la plantilla técnica y tarifaria que estandariza las unidades de la comunidad. Sin un maestro centralizado, la creación masiva de unidades es inconsistente y los cobros de gasto común carecen de una base homogénea. Este cambio incorpora el módulo `TU` bajo OpenSpec, alimentado por la fuente de verdad `Data/NSGC/docs/especificaciones/TU - Tipos de Unidad.md`.
 
 ## What Changes
 

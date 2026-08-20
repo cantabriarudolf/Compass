@@ -4,7 +4,7 @@ Los tipos de unidad definen la plantilla base (metraje y monto GC) que heredan l
 
 ## Goals
 
-- Estandarizar las características de las unidades del condominio.
+- Estandarizar las características de las unidades de la comunidad.
 - Asegurar consistencia en los cobros de gasto común.
 - Soportar reajustes retroactivos del tarifario con fecha de vigencia.
 - Cuantificar el impacto de los cambios de tarifario sobre la recaudación.
