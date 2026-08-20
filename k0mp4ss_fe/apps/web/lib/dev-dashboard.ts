@@ -43,6 +43,8 @@ export interface SpecCapability {
   name: string;
   code: string;
   files: string[];
+  archived: boolean;
+  dirty: boolean;
 }
 
 export interface DashboardStats {
@@ -263,7 +265,7 @@ function readSpecCodes(): string[] {
 
 function readSpecs(): SpecCapability[] {
   if (!existsSync(SPECS_DIR)) return [];
-  return readdirSync(SPECS_DIR, { withFileTypes: true })
+  const specs = readdirSync(SPECS_DIR, { withFileTypes: true })
     .filter(entry => entry.isDirectory())
     .map(entry => {
       const dirPath = path.join(SPECS_DIR, entry.name);
@@ -272,8 +274,12 @@ function readSpecs(): SpecCapability[] {
         name: entry.name,
         code: entry.name.split('-')[0]?.toUpperCase() ?? '',
         files,
+        archived: false,
+        dirty: false,
       };
     });
+  // archived/dirty se calculan en getDashboardData con acceso a archivedIds
+  return specs;
 }
 
 function archivedKey(id: string): string {
@@ -433,7 +439,23 @@ export function getDashboardData(): DashboardData {
     else stats.pendiente += 1;
   }
 
-  return { modules, changes, archived, specs: readSpecs(), stats };
+  const specs = readSpecs();
+  const activeUpper = activeIds.map(id => id.toUpperCase());
+  for (const s of specs) {
+    const specName = s.name.toUpperCase();
+    const isActive = activeUpper.some(id => id.startsWith(`${specName}-`) || id === specName);
+    const archivedOrig = archivedIds.find(id => {
+      const up = id.toUpperCase();
+      const key = up.replace(/^\d{4}-\d{2}-\d{2}-/, '');
+      return key === specName || up.startsWith(`${specName}-`);
+    });
+    const isArchivedRaw = !!archivedOrig && !isActive;
+    const dirty = isArchivedRaw ? isSpecDirtyAfterArchive(s.code, archivedOrig!) : false;
+    s.archived = isArchivedRaw && !dirty;
+    s.dirty = dirty;
+  }
+
+  return { modules, changes, archived, specs, stats };
 }
 
 export function toggleTask(changeId: string, taskId: string): ChangeInfo | null {

@@ -350,20 +350,12 @@ export default function DevDashboardPage() {
 
   const capabilities = useMemo(() => {
     if (!data) return [];
-    const archivedIds = data.archived.map(c => c.id.toUpperCase());
-    const activeIds = data.changes.map(c => c.id.toUpperCase());
-    return data.specs.map(s => {
-      const specName = s.name.toUpperCase();
-      const isArchived = archivedIds.some(id => {
-        const key = id.replace(/^\d{4}-\d{2}-\d{2}-/, '');
-        return key === specName || id.startsWith(`${specName}-`);
-      });
-      const isActive = activeIds.some(id => id.startsWith(`${specName}-`));
-      return {
-        ...s,
-        archived: isArchived && !isActive,
-      };
-    });
+    // `archived` y `dirty` ya vienen calculados server-side con isSpecDirtyAfterArchive
+    return data.specs.map(s => ({
+      ...s,
+      archived: (s as unknown as { archived?: boolean }).archived ?? false,
+      dirty: (s as unknown as { dirty?: boolean }).dirty ?? false,
+    }));
   }, [data]);
 
   const moduleByArchivedChange = useMemo(() => {
@@ -904,15 +896,20 @@ export default function DevDashboardPage() {
             <p className="text-xs text-muted-foreground mb-4">
               La fuente de verdad consolidada: las capabilities aceptadas del sistema. Se acumulan al archivar changes.{' '}
               <span className="font-medium">🟢 Archivada</span> ·{' '}
-              <span className="font-medium">🟠 Pendiente (change activo)</span>
+              <span className="font-medium">🟠 Pendiente (change activo)</span> ·{' '}
+              <span className="font-medium">🟡 Sucio (spec modificado post-archivo)</span>
             </p>
             {data && capabilities.length > 0 ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {capabilities.map(spec => (
+                {capabilities.map(spec => {
+                  const dirty = (spec as unknown as { dirty?: boolean }).dirty;
+                  const isArchived = (spec as unknown as { archived?: boolean }).archived;
+                  const tone = dirty ? 'dirty' : isArchived ? 'archived' : 'pending';
+                  return (
                   <div
                     key={spec.name}
                     className={`rounded-lg border p-4 flex flex-col gap-2 ${
-                      spec.archived ? 'border-emerald-500/40 bg-emerald-500/5' : 'border-orange-500/50 bg-orange-500/5'
+                      tone === 'archived' ? 'border-emerald-500/40 bg-emerald-500/5' : tone === 'dirty' ? 'border-sky-500/40 bg-sky-500/5' : 'border-orange-500/50 bg-orange-500/5'
                     }`}
                   >
                     <div className="flex flex-wrap items-center gap-2">
@@ -920,12 +917,12 @@ export default function DevDashboardPage() {
                       <code className="font-mono font-bold text-sm">{spec.name}</code>
                       {spec.code && <Badge variant="outline" className="text-[10px]">{spec.code}</Badge>}
                       <Badge
-                        variant={spec.archived ? 'default' : 'outline'}
+                        variant={tone === 'archived' ? 'default' : 'outline'}
                         className={`text-[10px] ${
-                          spec.archived ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-orange-500 hover:bg-orange-600'
+                          tone === 'archived' ? 'bg-emerald-600 hover:bg-emerald-700' : tone === 'dirty' ? 'bg-sky-600 hover:bg-sky-700 text-white' : 'bg-orange-500 hover:bg-orange-600'
                         }`}
                       >
-                        {spec.archived ? '🟢 Archivada' : '🟠 Pendiente'}
+                        {tone === 'archived' ? '🟢 Archivada' : tone === 'dirty' ? '🟡 Sucio' : '🟠 Pendiente'}
                       </Badge>
                     </div>
                     <ul className="text-xs text-muted-foreground font-mono space-y-1">
@@ -934,7 +931,7 @@ export default function DevDashboardPage() {
                       ))}
                     </ul>
                   </div>
-                ))}
+                )})}
               </div>
             ) : (
               <div className="py-12 text-center text-muted-foreground">
