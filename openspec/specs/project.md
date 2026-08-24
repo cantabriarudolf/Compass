@@ -24,6 +24,9 @@ Each module represents a functional domain (Finance, Community, Infrastructure, 
 - **Technology**: Next.js (App Router), Tailwind CSS, shadcn/ui.
 - **Methodology**: OpenSpec for change and specification management.
 - **Data layer (ST)**: All domain data lives in the global store `apps/web/lib/store.ts` (Zustand + persist, key `compass-store`, versioned with `migrate`). Pages and components MUST read via `useCompassStore` and MUST only mutate through store actions (repository pattern). Mocks in `apps/web/data/` are the store's seed only and MUST NOT be imported directly by pages/components. Every new capability MUST declare its entities and CRUD actions (`saveX`/`removeX` returning `StoreResult`) on the store, including referential-integrity validations on delete. See `ST-capa-datos-persistente` and `RG` (Reglas Generales).
+- **Alcance de cambios (OpenSpec)**: 1 módulo NSGC = 1 change OpenSpec (convención 1:1 con la capability `<AA>-<kebab-name>`); excepción: PE puede partirse en 2 changes si su alcance lo exige.
+- **Documentos PDF**: pdfmake es el motor estándar de generación documental (CT certificados, PL liquidaciones) con firma digitalizada embebida como imagen; se instala al implementar dichos módulos, no antes.
+- **Notificaciones**: se materializan como bandeja in-app simulada (`notify()` en el store, canal `email_simulado`, eventos AM); el envío real por correo (SMTP) queda fuera de alcance hasta SG. Media/adjuntos siempre por referencia (metadatos + URL), jamás base64/Blob en el store (ver ST).
 
 ---
 
@@ -45,11 +48,15 @@ Each OpenSpec capability maps 1:1 to its module spec in `Data/NSGC/docs/especifi
 | `CF-configuracion-global` | `CF - Configuracion Global.md` |
 | `AM-auditoria-metricas` | `AM - Auditoria y Metricas.md` |
 | `RP-roles-permisos` | `RP - Roles y Permisos.md` |
+| `AU-autenticacion-sesion` | `AU - Autenticacion y Sesion.md` (parcial: scaffold propio; resto según consolidado de auditorías) |
+| `SG-hardening-despliegue` | `SG - Hardening y Despliegue.md` |
+| `LAB-mejoras` | `LAB - Mejoras Lab.md` |
+| `DEV-qa-lab` | Interno (tooling QA, sin doc NSGC) |
 | `UI-interfaz-principal` | Cross-cutting UI (no AA code) |
 | `UI-navegacion-lateral` | Cross-cutting UI (no AA code) |
 
 ### Remaining NSGC modules (pending OpenSpec specs)
-`AD`, `GD`, `FI`, `CO`, `PL`, `IN`, `GE`, `IR`, `RA`, `RE`, `PI`, `MT`, `CT` — not yet defined in `openspec/specs/`. Create each spec using its AA prefix when implemented.
+`AD`, `GD`, `FI`, `CO`, `PL`, `IN`, `GE`, `IR`, `RA`, `RE`, `PI`, `MT`, `CT` — not yet defined in `openspec/specs/`. Create each spec using its AA prefix when implemented. `AU` está parcialmente implementada vía auditorías (`Data/NSGC/docs/auditorias/consolidado - 2026-08-24-b.md`); `SG` pendiente según `SG - Hardening y Despliegue.md` §1 y §3.
 ### Folder naming rule
 - Specs and active changes: `<AA>-<kebab-case-name>` (e.g. `EF-estructura-fisica`).
 - Cross-cutting UI specs use `UI-` prefix.
