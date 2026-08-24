@@ -48,10 +48,10 @@ export interface ConfiguracionGlobal {
 
 export const configuracionDefault: ConfiguracionGlobal = {
   nombreComunidad: "Edificio Plaza Central",
-  rutCondominio: "77.123.456-7",
+  rutCondominio: "77.123.456-9",
   direccionOficial: "Av. Libertador 1234, Santiago",
   administradorResponsable: "Carlos Castillo Ruiz",
-  rutAdministrador: "13.555.666-8",
+  rutAdministrador: "13.555.666-1",
   telefonoAdmin: "+56 9 3333 7777",
 
   modoCalculoGC: "variable",

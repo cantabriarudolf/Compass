@@ -49,6 +49,7 @@ export default function TiposUnidadPage() {
   const [isDialogOpen, setIsDialogOpen] = React.useState(false)
   const [historialSelect, setHistorialSelect] = React.useState<TipoUnidad | null>(null)
   const [categoria, setCategoria] = React.useState<string>(categoriasUnidad[0]?.nombre ?? "")
+  const [errorGuardado, setErrorGuardado] = React.useState<string | null>(null)
 
   const filteredData = data.filter(t =>
     selectedTipo === "todos" || t.id === selectedTipo
@@ -70,6 +71,7 @@ export default function TiposUnidadPage() {
     setEditingItem(item)
     setMontoSimulado(item.montoBaseGc)
     setCategoria(item.categoria)
+    setErrorGuardado(null)
     setIsDialogOpen(true)
   }
 
@@ -77,6 +79,7 @@ export default function TiposUnidadPage() {
     setEditingItem(null)
     setMontoSimulado(0)
     setCategoria(categoriasUnidad[0]?.nombre ?? "")
+    setErrorGuardado(null)
     setIsDialogOpen(true)
   }
 
@@ -86,6 +89,7 @@ export default function TiposUnidadPage() {
     const nuevoMonto = Number(formData.get("montoBaseGc"))
     const fechaVigencia = formData.get("fechaVigencia") as string
 
+    let resultado: { ok: boolean; error?: string } | null = null
     if (editingItem) {
       const actualizoMonto = nuevoMonto !== editingItem.montoBaseGc
       const nuevoHistorial = [...editingItem.historialTarifas]
@@ -99,7 +103,7 @@ export default function TiposUnidadPage() {
         })
       }
 
-      saveTipoUnidad({
+      resultado = saveTipoUnidad({
         ...editingItem,
         nombre: formData.get("nombre") as string,
         categoria,
@@ -124,8 +128,13 @@ export default function TiposUnidadPage() {
           creadoEn: new Date().toISOString().split('T')[0] || ""
         }]
       }
-      saveTipoUnidad(nuevoTipo)
+      resultado = saveTipoUnidad(nuevoTipo)
     }
+    if (!resultado.ok) {
+      setErrorGuardado(resultado.error ?? "No se pudo guardar el tipo de unidad.")
+      return
+    }
+    setErrorGuardado(null)
     setIsDialogOpen(false)
   }
 
@@ -384,6 +393,11 @@ export default function TiposUnidadPage() {
             <DialogHeader>
               <DialogTitle>{editingItem ? `Editar: ${editingItem.nombre}` : "Nuevo Tipo de Unidad"}</DialogTitle>
             </DialogHeader>
+            {errorGuardado && (
+              <div className="bg-destructive/10 border border-destructive/30 rounded-md p-3 text-sm text-destructive font-medium mt-4">
+                {errorGuardado}
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-6 py-4">
               <div className="space-y-4">
                 <div className="space-y-2">

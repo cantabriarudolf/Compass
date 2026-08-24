@@ -6,7 +6,7 @@ import {
   MicroSector, 
   Unidad,
 } from "@/data/inventario/estructura"
-import { useCompassStore, useStoreRehydrated } from "@/lib/store"
+import { useCompassStore, useStoreRehydrated, StoreResult } from "@/lib/store"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@workspace/ui/components/tabs"
 import { Badge } from "@workspace/ui/components/badge"
@@ -61,6 +61,7 @@ export default function EstructuraFisicaPage() {
   const personas = useCompassStore(s => s.personas)
   const [filterStatus, setFilterStatus] = React.useState("todos")
   const [historialSelect, setHistorialSelect] = React.useState<Unidad | null>(null)
+  const [errorDialogo, setErrorDialogo] = React.useState<string | null>(null)
 
   // LÓGICA DE FILTRADO MULTI-ESCALA
   const filteredUnidades = unidades.filter(u => {
@@ -97,14 +98,24 @@ export default function EstructuraFisicaPage() {
       nombre: formData.get("nombre") as string,
       descripcion: formData.get("descripcion") as string,
     }
+    let resultado: { ok: boolean; error?: string }
     if (editingMacro) {
-      saveMacroSector({ ...editingMacro, ...data })
+      resultado = saveMacroSector({ ...editingMacro, ...data })
     } else {
       const nuevoId = `ms-${Date.now()}`
-      saveMacroSector({ id: nuevoId, ...data })
+      resultado = saveMacroSector({ id: nuevoId, ...data })
+      if (!resultado.ok) {
+        setErrorDialogo(resultado.error ?? "No se pudo guardar el macro sector.")
+        return
+      }
       setSelectedMacro(nuevoId)
       setSelectedMicro("todos")
     }
+    if (!resultado.ok) {
+      setErrorDialogo(resultado.error ?? "No se pudo guardar el macro sector.")
+      return
+    }
+    setErrorDialogo(null)
     setIsMacroDialogOpen(false)
     setEditingMacro(null)
   }
@@ -118,16 +129,22 @@ export default function EstructuraFisicaPage() {
       etiqueta: formData.get("etiqueta") as string,
       nombre: formData.get("nombre") as string,
     }
-    saveMicroSector(nuevo)
+    const resultado = saveMicroSector(nuevo)
+    if (!resultado.ok) {
+      setErrorDialogo(resultado.error ?? "No se pudo guardar el sub-sector.")
+      return
+    }
+    setErrorDialogo(null)
     setSelectedMicro(nuevo.id)
     setIsMicroDialogOpen(false)
   }
 
-  const handleSaveUnidad = (data: Partial<Unidad>, existingId?: string) => {
+  const handleSaveUnidad = (data: Partial<Unidad>, existingId?: string): StoreResult => {
     if (existingId) {
       // Edición: Fusión profunda para no perder datos
       const existente = unidades.find(u => u.id === existingId)
-      if (existente) saveUnidad({ ...existente, ...data })
+      if (existente) return saveUnidad({ ...existente, ...data })
+      return { ok: false, error: "La unidad a editar no existe en el inventario." }
     } else {
       // Creación: exigir asociación a un sub-sector válido
       const microSectorId = data.microSectorId
@@ -135,7 +152,7 @@ export default function EstructuraFisicaPage() {
         microSectores.some(m => m.id === microSectorId)
       if (!microValido) {
         alert("Debe seleccionar un macro-sector y un sub-sector válidos para la unidad.")
-        return
+        return { ok: false, error: "Debe seleccionar un macro-sector y un sub-sector válidos para la unidad." }
       }
 
       const nueva: Unidad = {
@@ -150,7 +167,7 @@ export default function EstructuraFisicaPage() {
         estadoId: data.estadoId || "vacante",
         servicios: data.servicios || {},
       }
-      saveUnidad(nueva)
+      return saveUnidad(nueva)
     }
   }
 
@@ -180,6 +197,7 @@ export default function EstructuraFisicaPage() {
           {currentMacro && (
             <Button variant="outline" size="sm" onClick={() => {
               setEditingMacro(currentMacro)
+              setErrorDialogo(null)
               setIsMacroDialogOpen(true)
             }}>
               <IconEdit className="size-4 mr-2" />
@@ -188,6 +206,7 @@ export default function EstructuraFisicaPage() {
           )}
           <Button className="gap-2" onClick={() => {
             setEditingMacro(null)
+            setErrorDialogo(null)
             setIsMacroDialogOpen(true)
           }}>
             <IconPlus className="size-4" />
@@ -202,6 +221,11 @@ export default function EstructuraFisicaPage() {
             <DialogHeader>
               <DialogTitle>{editingMacro ? "Editar" : "Nuevo"} Macro-Sector</DialogTitle>
             </DialogHeader>
+            {errorDialogo && (
+              <div className="bg-destructive/10 border border-destructive/30 rounded-md p-3 text-sm text-destructive font-medium mt-4">
+                {errorDialogo}
+              </div>
+            )}
             <div className="grid gap-4 py-4">
               <div className="space-y-2">
                 <Label>Categoría</Label>
@@ -326,7 +350,7 @@ export default function EstructuraFisicaPage() {
                         variant="outline"
                         size="sm"
                         className="w-full text-[10px] font-bold uppercase"
-                        onClick={() => setIsMicroDialogOpen(true)}
+                        onClick={() => { setErrorDialogo(null); setIsMicroDialogOpen(true) }}
                       >
                         <IconPlus className="size-3 mr-1" />
                         Crear Sub-Sector en {currentMacro?.etiqueta} {currentMacro?.nombre}
@@ -514,6 +538,11 @@ export default function EstructuraFisicaPage() {
             <DialogHeader>
               <DialogTitle>Nuevo Sector en {currentMacro?.nombre}</DialogTitle>
             </DialogHeader>
+            {errorDialogo && (
+              <div className="bg-destructive/10 border border-destructive/30 rounded-md p-3 text-sm text-destructive font-medium mt-4">
+                {errorDialogo}
+              </div>
+            )}
             <div className="grid gap-4 py-4">
               <div className="space-y-2">
                 <Label>Categoría</Label>

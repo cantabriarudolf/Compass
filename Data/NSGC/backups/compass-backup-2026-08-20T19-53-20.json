@@ -1,0 +1,4874 @@
+{
+  "_summary": {
+    "exportDate": "2026-08-20T19:53:20.024Z",
+    "totalRecords": 391,
+    "collectionsWithData": 22,
+    "details": [
+      {
+        "label": "Tipos de Unidad",
+        "count": 5,
+        "type": "main"
+      },
+      {
+        "label": "Macro Sectores",
+        "count": 7,
+        "type": "main"
+      },
+      {
+        "label": "Micro Sectores",
+        "count": 25,
+        "type": "main"
+      },
+      {
+        "label": "Unidades",
+        "count": 166,
+        "type": "main"
+      },
+      {
+        "label": "Personas",
+        "count": 54,
+        "type": "main"
+      },
+      {
+        "label": "Vínculos",
+        "count": 51,
+        "type": "main"
+      },
+      {
+        "label": "AFP",
+        "count": 6,
+        "type": "maestro"
+      },
+      {
+        "label": "Previsión Salud",
+        "count": 6,
+        "type": "maestro"
+      },
+      {
+        "label": "Mutuales/Cajas",
+        "count": 5,
+        "type": "maestro"
+      },
+      {
+        "label": "Feriados",
+        "count": 4,
+        "type": "maestro"
+      },
+      {
+        "label": "Bancos",
+        "count": 6,
+        "type": "maestro"
+      },
+      {
+        "label": "Índices Ajuste",
+        "count": 2,
+        "type": "maestro"
+      },
+      {
+        "label": "Cajas Fondos",
+        "count": 4,
+        "type": "maestro"
+      },
+      {
+        "label": "Categorías Insumos",
+        "count": 5,
+        "type": "maestro"
+      },
+      {
+        "label": "Unidades Medida",
+        "count": 5,
+        "type": "maestro"
+      },
+      {
+        "label": "Contactos Emergencia",
+        "count": 6,
+        "type": "maestro"
+      },
+      {
+        "label": "Condiciones Especiales",
+        "count": 5,
+        "type": "maestro"
+      },
+      {
+        "label": "Estados Ocupación",
+        "count": 5,
+        "type": "maestro"
+      },
+      {
+        "label": "Categorías Macro",
+        "count": 8,
+        "type": "maestro"
+      },
+      {
+        "label": "Categorías Micro",
+        "count": 5,
+        "type": "maestro"
+      },
+      {
+        "label": "Categorías Unidad",
+        "count": 6,
+        "type": "maestro"
+      },
+      {
+        "label": "Estados Inmobiliarios",
+        "count": 5,
+        "type": "maestro"
+      }
+    ]
+  },
+  "state": {
+    "tiposUnidad": [
+      {
+        "id": "tipo-a",
+        "nombre": "Depto Tipo A",
+        "categoria": "Depto",
+        "metraje": 55.5,
+        "montoBaseGc": 45000,
+        "activo": true,
+        "descripcion": "2D + 2B",
+        "historialTarifas": [
+          {
+            "id": "t-a-1",
+            "monto": 42000,
+            "fechaVigencia": "2023-01-01",
+            "creadoEn": "2022-12-01"
+          },
+          {
+            "id": "t-a-2",
+            "monto": 45000,
+            "fechaVigencia": "2024-01-01",
+            "creadoEn": "2023-11-15"
+          }
+        ]
+      },
+      {
+        "id": "tipo-b",
+        "nombre": "Depto Tipo B",
+        "categoria": "Depto",
+        "metraje": 42,
+        "montoBaseGc": 35000,
+        "activo": true,
+        "descripcion": "1D + 1B",
+        "historialTarifas": [
+          {
+            "id": "t-b-1",
+            "monto": 35000,
+            "fechaVigencia": "2024-01-01",
+            "creadoEn": "2023-11-15"
+          }
+        ]
+      },
+      {
+        "id": "local-a",
+        "nombre": "Local Comercial A (Grande)",
+        "categoria": "Local",
+        "metraje": 120,
+        "montoBaseGc": 95000,
+        "activo": true,
+        "descripcion": "Local Ancla",
+        "historialTarifas": [
+          {
+            "id": "t-la-1",
+            "monto": 95000,
+            "fechaVigencia": "2024-01-01",
+            "creadoEn": "2023-12-01"
+          }
+        ]
+      },
+      {
+        "id": "local-b",
+        "nombre": "Local Comercial B (Estándar)",
+        "categoria": "Local",
+        "metraje": 60,
+        "montoBaseGc": 50000,
+        "activo": true,
+        "descripcion": "Tienda Retail",
+        "historialTarifas": [
+          {
+            "id": "t-lb-1",
+            "monto": 50000,
+            "fechaVigencia": "2024-01-01",
+            "creadoEn": "2023-12-01"
+          }
+        ]
+      },
+      {
+        "id": "tipo-es-1",
+        "nombre": "Estacionamiento Estándar",
+        "categoria": "Estacionamiento",
+        "metraje": 12.5,
+        "montoBaseGc": 5000,
+        "activo": true,
+        "historialTarifas": [
+          {
+            "id": "t-e-1",
+            "monto": 5000,
+            "fechaVigencia": "2024-01-01",
+            "creadoEn": "2023-12-01"
+          }
+        ]
+      }
+    ],
+    "macroSectores": [
+      {
+        "id": "torre-a",
+        "nombre": "A",
+        "etiqueta": "Torre"
+      },
+      {
+        "id": "torre-b",
+        "nombre": "B",
+        "etiqueta": "Torre"
+      },
+      {
+        "id": "torre-c",
+        "nombre": "C",
+        "etiqueta": "Torre"
+      },
+      {
+        "id": "torre-d",
+        "nombre": "D",
+        "etiqueta": "Torre"
+      },
+      {
+        "id": "torre-e",
+        "nombre": "E",
+        "etiqueta": "Torre"
+      },
+      {
+        "id": "comercial",
+        "nombre": "Centro Comercial",
+        "etiqueta": "Sector",
+        "descripcion": "Locales de Servicios"
+      },
+      {
+        "id": "estacionamientos",
+        "nombre": "Estacionamientos",
+        "etiqueta": "Sector"
+      }
+    ],
+    "microSectores": [
+      {
+        "id": "piso-torre-a-1",
+        "macroSectorId": "torre-a",
+        "nombre": "Piso 1",
+        "etiqueta": "Piso"
+      },
+      {
+        "id": "piso-torre-a-2",
+        "macroSectorId": "torre-a",
+        "nombre": "Piso 2",
+        "etiqueta": "Piso"
+      },
+      {
+        "id": "piso-torre-a-3",
+        "macroSectorId": "torre-a",
+        "nombre": "Piso 3",
+        "etiqueta": "Piso"
+      },
+      {
+        "id": "piso-torre-a-4",
+        "macroSectorId": "torre-a",
+        "nombre": "Piso 4",
+        "etiqueta": "Piso"
+      },
+      {
+        "id": "piso-torre-b-1",
+        "macroSectorId": "torre-b",
+        "nombre": "Piso 1",
+        "etiqueta": "Piso"
+      },
+      {
+        "id": "piso-torre-b-2",
+        "macroSectorId": "torre-b",
+        "nombre": "Piso 2",
+        "etiqueta": "Piso"
+      },
+      {
+        "id": "piso-torre-b-3",
+        "macroSectorId": "torre-b",
+        "nombre": "Piso 3",
+        "etiqueta": "Piso"
+      },
+      {
+        "id": "piso-torre-b-4",
+        "macroSectorId": "torre-b",
+        "nombre": "Piso 4",
+        "etiqueta": "Piso"
+      },
+      {
+        "id": "piso-torre-c-1",
+        "macroSectorId": "torre-c",
+        "nombre": "Piso 1",
+        "etiqueta": "Piso"
+      },
+      {
+        "id": "piso-torre-c-2",
+        "macroSectorId": "torre-c",
+        "nombre": "Piso 2",
+        "etiqueta": "Piso"
+      },
+      {
+        "id": "piso-torre-c-3",
+        "macroSectorId": "torre-c",
+        "nombre": "Piso 3",
+        "etiqueta": "Piso"
+      },
+      {
+        "id": "piso-torre-c-4",
+        "macroSectorId": "torre-c",
+        "nombre": "Piso 4",
+        "etiqueta": "Piso"
+      },
+      {
+        "id": "piso-torre-d-1",
+        "macroSectorId": "torre-d",
+        "nombre": "Piso 1",
+        "etiqueta": "Piso"
+      },
+      {
+        "id": "piso-torre-d-2",
+        "macroSectorId": "torre-d",
+        "nombre": "Piso 2",
+        "etiqueta": "Piso"
+      },
+      {
+        "id": "piso-torre-d-3",
+        "macroSectorId": "torre-d",
+        "nombre": "Piso 3",
+        "etiqueta": "Piso"
+      },
+      {
+        "id": "piso-torre-d-4",
+        "macroSectorId": "torre-d",
+        "nombre": "Piso 4",
+        "etiqueta": "Piso"
+      },
+      {
+        "id": "piso-torre-e-1",
+        "macroSectorId": "torre-e",
+        "nombre": "Piso 1",
+        "etiqueta": "Piso"
+      },
+      {
+        "id": "piso-torre-e-2",
+        "macroSectorId": "torre-e",
+        "nombre": "Piso 2",
+        "etiqueta": "Piso"
+      },
+      {
+        "id": "piso-torre-e-3",
+        "macroSectorId": "torre-e",
+        "nombre": "Piso 3",
+        "etiqueta": "Piso"
+      },
+      {
+        "id": "piso-torre-e-4",
+        "macroSectorId": "torre-e",
+        "nombre": "Piso 4",
+        "etiqueta": "Piso"
+      },
+      {
+        "id": "piso-comercial-1",
+        "macroSectorId": "comercial",
+        "nombre": "Calle",
+        "etiqueta": "Nivel"
+      },
+      {
+        "id": "est-sup",
+        "macroSectorId": "estacionamientos",
+        "nombre": "Superficie",
+        "etiqueta": "Nivel"
+      },
+      {
+        "id": "est-sub1",
+        "macroSectorId": "estacionamientos",
+        "nombre": "Subterráneo -1",
+        "etiqueta": "Nivel"
+      },
+      {
+        "id": "est-sub2",
+        "macroSectorId": "estacionamientos",
+        "nombre": "Subterráneo -2",
+        "etiqueta": "Nivel"
+      },
+      {
+        "id": "est-vis",
+        "macroSectorId": "estacionamientos",
+        "nombre": "Sector Visitas",
+        "etiqueta": "Nivel"
+      }
+    ],
+    "unidades": [
+      {
+        "id": "u-A-101",
+        "microSectorId": "piso-torre-a-1",
+        "numero": "101",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-a",
+        "metraje": 55.5,
+        "prorrateo": 0.0125,
+        "rolSii": "123-A11",
+        "estadoId": "en-uso",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-A-101",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-A-101",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-A-102",
+        "microSectorId": "piso-torre-a-1",
+        "numero": "102",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-a",
+        "metraje": 55.5,
+        "prorrateo": 0.0125,
+        "rolSii": "123-A12",
+        "estadoId": "en-arriendo",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-A-102",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-A-102",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-A-103",
+        "microSectorId": "piso-torre-a-1",
+        "numero": "103",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-b",
+        "metraje": 42,
+        "prorrateo": 0.0125,
+        "rolSii": "123-A13",
+        "estadoId": "en-venta",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-A-103",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-A-103",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-A-104",
+        "microSectorId": "piso-torre-a-1",
+        "numero": "104",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-b",
+        "metraje": 42,
+        "prorrateo": 0.0125,
+        "rolSii": "123-A14",
+        "estadoId": "en-mantencion",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-A-104",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-A-104",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-A-201",
+        "microSectorId": "piso-torre-a-2",
+        "numero": "201",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-a",
+        "metraje": 55.5,
+        "prorrateo": 0.0125,
+        "rolSii": "123-A21",
+        "estadoId": "en-arriendo",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-A-201",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-A-201",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-A-202",
+        "microSectorId": "piso-torre-a-2",
+        "numero": "202",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-a",
+        "metraje": 55.5,
+        "prorrateo": 0.0125,
+        "rolSii": "123-A22",
+        "estadoId": "en-venta",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-A-202",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-A-202",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-A-203",
+        "microSectorId": "piso-torre-a-2",
+        "numero": "203",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-b",
+        "metraje": 42,
+        "prorrateo": 0.0125,
+        "rolSii": "123-A23",
+        "estadoId": "en-mantencion",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-A-203",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-A-203",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-A-204",
+        "microSectorId": "piso-torre-a-2",
+        "numero": "204",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-b",
+        "metraje": 42,
+        "prorrateo": 0.0125,
+        "rolSii": "123-A24",
+        "estadoId": "vacante",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-A-204",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-A-204",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-A-301",
+        "microSectorId": "piso-torre-a-3",
+        "numero": "301",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-a",
+        "metraje": 55.5,
+        "prorrateo": 0.0125,
+        "rolSii": "123-A31",
+        "estadoId": "en-venta",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-A-301",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-A-301",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-A-302",
+        "microSectorId": "piso-torre-a-3",
+        "numero": "302",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-a",
+        "metraje": 55.5,
+        "prorrateo": 0.0125,
+        "rolSii": "123-A32",
+        "estadoId": "en-mantencion",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-A-302",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-A-302",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-A-303",
+        "microSectorId": "piso-torre-a-3",
+        "numero": "303",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-b",
+        "metraje": 42,
+        "prorrateo": 0.0125,
+        "rolSii": "123-A33",
+        "estadoId": "vacante",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-A-303",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-A-303",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-A-304",
+        "microSectorId": "piso-torre-a-3",
+        "numero": "304",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-b",
+        "metraje": 42,
+        "prorrateo": 0.0125,
+        "rolSii": "123-A34",
+        "estadoId": "en-uso",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-A-304",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-A-304",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-A-401",
+        "microSectorId": "piso-torre-a-4",
+        "numero": "401",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-a",
+        "metraje": 55.5,
+        "prorrateo": 0.0125,
+        "rolSii": "123-A41",
+        "estadoId": "en-mantencion",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-A-401",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-A-401",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-A-402",
+        "microSectorId": "piso-torre-a-4",
+        "numero": "402",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-a",
+        "metraje": 55.5,
+        "prorrateo": 0.0125,
+        "rolSii": "123-A42",
+        "estadoId": "vacante",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-A-402",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-A-402",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-A-403",
+        "microSectorId": "piso-torre-a-4",
+        "numero": "403",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-b",
+        "metraje": 42,
+        "prorrateo": 0.0125,
+        "rolSii": "123-A43",
+        "estadoId": "en-uso",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-A-403",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-A-403",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-A-404",
+        "microSectorId": "piso-torre-a-4",
+        "numero": "404",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-b",
+        "metraje": 42,
+        "prorrateo": 0.0125,
+        "rolSii": "123-A44",
+        "estadoId": "en-arriendo",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-A-404",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-A-404",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-B-101",
+        "microSectorId": "piso-torre-b-1",
+        "numero": "101",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-a",
+        "metraje": 55.5,
+        "prorrateo": 0.0125,
+        "rolSii": "123-B11",
+        "estadoId": "vacante",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-B-101",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-B-101",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-B-102",
+        "microSectorId": "piso-torre-b-1",
+        "numero": "102",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-a",
+        "metraje": 55.5,
+        "prorrateo": 0.0125,
+        "rolSii": "123-B12",
+        "estadoId": "en-uso",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-B-102",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-B-102",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-B-103",
+        "microSectorId": "piso-torre-b-1",
+        "numero": "103",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-b",
+        "metraje": 42,
+        "prorrateo": 0.0125,
+        "rolSii": "123-B13",
+        "estadoId": "en-arriendo",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-B-103",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-B-103",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-B-104",
+        "microSectorId": "piso-torre-b-1",
+        "numero": "104",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-b",
+        "metraje": 42,
+        "prorrateo": 0.0125,
+        "rolSii": "123-B14",
+        "estadoId": "en-venta",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-B-104",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-B-104",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-B-201",
+        "microSectorId": "piso-torre-b-2",
+        "numero": "201",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-a",
+        "metraje": 55.5,
+        "prorrateo": 0.0125,
+        "rolSii": "123-B21",
+        "estadoId": "en-uso",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-B-201",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-B-201",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-B-202",
+        "microSectorId": "piso-torre-b-2",
+        "numero": "202",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-a",
+        "metraje": 55.5,
+        "prorrateo": 0.0125,
+        "rolSii": "123-B22",
+        "estadoId": "en-arriendo",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-B-202",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-B-202",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-B-203",
+        "microSectorId": "piso-torre-b-2",
+        "numero": "203",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-b",
+        "metraje": 42,
+        "prorrateo": 0.0125,
+        "rolSii": "123-B23",
+        "estadoId": "en-venta",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-B-203",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-B-203",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-B-204",
+        "microSectorId": "piso-torre-b-2",
+        "numero": "204",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-b",
+        "metraje": 42,
+        "prorrateo": 0.0125,
+        "rolSii": "123-B24",
+        "estadoId": "en-mantencion",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-B-204",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-B-204",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-B-301",
+        "microSectorId": "piso-torre-b-3",
+        "numero": "301",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-a",
+        "metraje": 55.5,
+        "prorrateo": 0.0125,
+        "rolSii": "123-B31",
+        "estadoId": "en-arriendo",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-B-301",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-B-301",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-B-302",
+        "microSectorId": "piso-torre-b-3",
+        "numero": "302",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-a",
+        "metraje": 55.5,
+        "prorrateo": 0.0125,
+        "rolSii": "123-B32",
+        "estadoId": "en-venta",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-B-302",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-B-302",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-B-303",
+        "microSectorId": "piso-torre-b-3",
+        "numero": "303",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-b",
+        "metraje": 42,
+        "prorrateo": 0.0125,
+        "rolSii": "123-B33",
+        "estadoId": "en-mantencion",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-B-303",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-B-303",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-B-304",
+        "microSectorId": "piso-torre-b-3",
+        "numero": "304",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-b",
+        "metraje": 42,
+        "prorrateo": 0.0125,
+        "rolSii": "123-B34",
+        "estadoId": "vacante",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-B-304",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-B-304",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-B-401",
+        "microSectorId": "piso-torre-b-4",
+        "numero": "401",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-a",
+        "metraje": 55.5,
+        "prorrateo": 0.0125,
+        "rolSii": "123-B41",
+        "estadoId": "en-venta",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-B-401",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-B-401",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-B-402",
+        "microSectorId": "piso-torre-b-4",
+        "numero": "402",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-a",
+        "metraje": 55.5,
+        "prorrateo": 0.0125,
+        "rolSii": "123-B42",
+        "estadoId": "en-mantencion",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-B-402",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-B-402",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-B-403",
+        "microSectorId": "piso-torre-b-4",
+        "numero": "403",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-b",
+        "metraje": 42,
+        "prorrateo": 0.0125,
+        "rolSii": "123-B43",
+        "estadoId": "vacante",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-B-403",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-B-403",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-B-404",
+        "microSectorId": "piso-torre-b-4",
+        "numero": "404",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-b",
+        "metraje": 42,
+        "prorrateo": 0.0125,
+        "rolSii": "123-B44",
+        "estadoId": "en-uso",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-B-404",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-B-404",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-C-101",
+        "microSectorId": "piso-torre-c-1",
+        "numero": "101",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-a",
+        "metraje": 55.5,
+        "prorrateo": 0.0125,
+        "rolSii": "123-C11",
+        "estadoId": "en-mantencion",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-C-101",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-C-101",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-C-102",
+        "microSectorId": "piso-torre-c-1",
+        "numero": "102",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-a",
+        "metraje": 55.5,
+        "prorrateo": 0.0125,
+        "rolSii": "123-C12",
+        "estadoId": "vacante",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-C-102",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-C-102",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-C-103",
+        "microSectorId": "piso-torre-c-1",
+        "numero": "103",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-b",
+        "metraje": 42,
+        "prorrateo": 0.0125,
+        "rolSii": "123-C13",
+        "estadoId": "en-uso",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-C-103",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-C-103",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-C-104",
+        "microSectorId": "piso-torre-c-1",
+        "numero": "104",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-b",
+        "metraje": 42,
+        "prorrateo": 0.0125,
+        "rolSii": "123-C14",
+        "estadoId": "en-arriendo",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-C-104",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-C-104",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-C-201",
+        "microSectorId": "piso-torre-c-2",
+        "numero": "201",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-a",
+        "metraje": 55.5,
+        "prorrateo": 0.0125,
+        "rolSii": "123-C21",
+        "estadoId": "vacante",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-C-201",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-C-201",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-C-202",
+        "microSectorId": "piso-torre-c-2",
+        "numero": "202",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-a",
+        "metraje": 55.5,
+        "prorrateo": 0.0125,
+        "rolSii": "123-C22",
+        "estadoId": "en-uso",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-C-202",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-C-202",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-C-203",
+        "microSectorId": "piso-torre-c-2",
+        "numero": "203",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-b",
+        "metraje": 42,
+        "prorrateo": 0.0125,
+        "rolSii": "123-C23",
+        "estadoId": "en-arriendo",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-C-203",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-C-203",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-C-204",
+        "microSectorId": "piso-torre-c-2",
+        "numero": "204",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-b",
+        "metraje": 42,
+        "prorrateo": 0.0125,
+        "rolSii": "123-C24",
+        "estadoId": "en-venta",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-C-204",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-C-204",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-C-301",
+        "microSectorId": "piso-torre-c-3",
+        "numero": "301",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-a",
+        "metraje": 55.5,
+        "prorrateo": 0.0125,
+        "rolSii": "123-C31",
+        "estadoId": "en-uso",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-C-301",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-C-301",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-C-302",
+        "microSectorId": "piso-torre-c-3",
+        "numero": "302",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-a",
+        "metraje": 55.5,
+        "prorrateo": 0.0125,
+        "rolSii": "123-C32",
+        "estadoId": "en-arriendo",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-C-302",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-C-302",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-C-303",
+        "microSectorId": "piso-torre-c-3",
+        "numero": "303",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-b",
+        "metraje": 42,
+        "prorrateo": 0.0125,
+        "rolSii": "123-C33",
+        "estadoId": "en-venta",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-C-303",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-C-303",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-C-304",
+        "microSectorId": "piso-torre-c-3",
+        "numero": "304",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-b",
+        "metraje": 42,
+        "prorrateo": 0.0125,
+        "rolSii": "123-C34",
+        "estadoId": "en-mantencion",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-C-304",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-C-304",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-C-401",
+        "microSectorId": "piso-torre-c-4",
+        "numero": "401",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-a",
+        "metraje": 55.5,
+        "prorrateo": 0.0125,
+        "rolSii": "123-C41",
+        "estadoId": "en-arriendo",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-C-401",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-C-401",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-C-402",
+        "microSectorId": "piso-torre-c-4",
+        "numero": "402",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-a",
+        "metraje": 55.5,
+        "prorrateo": 0.0125,
+        "rolSii": "123-C42",
+        "estadoId": "en-venta",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-C-402",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-C-402",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-C-403",
+        "microSectorId": "piso-torre-c-4",
+        "numero": "403",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-b",
+        "metraje": 42,
+        "prorrateo": 0.0125,
+        "rolSii": "123-C43",
+        "estadoId": "en-mantencion",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-C-403",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-C-403",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-C-404",
+        "microSectorId": "piso-torre-c-4",
+        "numero": "404",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-b",
+        "metraje": 42,
+        "prorrateo": 0.0125,
+        "rolSii": "123-C44",
+        "estadoId": "vacante",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-C-404",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-C-404",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-D-101",
+        "microSectorId": "piso-torre-d-1",
+        "numero": "101",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-a",
+        "metraje": 55.5,
+        "prorrateo": 0.0125,
+        "rolSii": "123-D11",
+        "estadoId": "en-venta",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-D-101",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-D-101",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-D-102",
+        "microSectorId": "piso-torre-d-1",
+        "numero": "102",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-a",
+        "metraje": 55.5,
+        "prorrateo": 0.0125,
+        "rolSii": "123-D12",
+        "estadoId": "en-mantencion",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-D-102",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-D-102",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-D-103",
+        "microSectorId": "piso-torre-d-1",
+        "numero": "103",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-b",
+        "metraje": 42,
+        "prorrateo": 0.0125,
+        "rolSii": "123-D13",
+        "estadoId": "vacante",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-D-103",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-D-103",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-D-104",
+        "microSectorId": "piso-torre-d-1",
+        "numero": "104",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-b",
+        "metraje": 42,
+        "prorrateo": 0.0125,
+        "rolSii": "123-D14",
+        "estadoId": "en-uso",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-D-104",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-D-104",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-D-201",
+        "microSectorId": "piso-torre-d-2",
+        "numero": "201",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-a",
+        "metraje": 55.5,
+        "prorrateo": 0.0125,
+        "rolSii": "123-D21",
+        "estadoId": "en-mantencion",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-D-201",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-D-201",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-D-202",
+        "microSectorId": "piso-torre-d-2",
+        "numero": "202",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-a",
+        "metraje": 55.5,
+        "prorrateo": 0.0125,
+        "rolSii": "123-D22",
+        "estadoId": "vacante",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-D-202",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-D-202",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-D-203",
+        "microSectorId": "piso-torre-d-2",
+        "numero": "203",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-b",
+        "metraje": 42,
+        "prorrateo": 0.0125,
+        "rolSii": "123-D23",
+        "estadoId": "en-uso",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-D-203",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-D-203",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-D-204",
+        "microSectorId": "piso-torre-d-2",
+        "numero": "204",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-b",
+        "metraje": 42,
+        "prorrateo": 0.0125,
+        "rolSii": "123-D24",
+        "estadoId": "en-arriendo",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-D-204",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-D-204",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-D-301",
+        "microSectorId": "piso-torre-d-3",
+        "numero": "301",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-a",
+        "metraje": 55.5,
+        "prorrateo": 0.0125,
+        "rolSii": "123-D31",
+        "estadoId": "vacante",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-D-301",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-D-301",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-D-302",
+        "microSectorId": "piso-torre-d-3",
+        "numero": "302",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-a",
+        "metraje": 55.5,
+        "prorrateo": 0.0125,
+        "rolSii": "123-D32",
+        "estadoId": "en-uso",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-D-302",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-D-302",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-D-303",
+        "microSectorId": "piso-torre-d-3",
+        "numero": "303",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-b",
+        "metraje": 42,
+        "prorrateo": 0.0125,
+        "rolSii": "123-D33",
+        "estadoId": "en-arriendo",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-D-303",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-D-303",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-D-304",
+        "microSectorId": "piso-torre-d-3",
+        "numero": "304",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-b",
+        "metraje": 42,
+        "prorrateo": 0.0125,
+        "rolSii": "123-D34",
+        "estadoId": "en-venta",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-D-304",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-D-304",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-D-401",
+        "microSectorId": "piso-torre-d-4",
+        "numero": "401",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-a",
+        "metraje": 55.5,
+        "prorrateo": 0.0125,
+        "rolSii": "123-D41",
+        "estadoId": "en-uso",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-D-401",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-D-401",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-D-402",
+        "microSectorId": "piso-torre-d-4",
+        "numero": "402",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-a",
+        "metraje": 55.5,
+        "prorrateo": 0.0125,
+        "rolSii": "123-D42",
+        "estadoId": "en-arriendo",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-D-402",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-D-402",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-D-403",
+        "microSectorId": "piso-torre-d-4",
+        "numero": "403",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-b",
+        "metraje": 42,
+        "prorrateo": 0.0125,
+        "rolSii": "123-D43",
+        "estadoId": "en-venta",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-D-403",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-D-403",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-D-404",
+        "microSectorId": "piso-torre-d-4",
+        "numero": "404",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-b",
+        "metraje": 42,
+        "prorrateo": 0.0125,
+        "rolSii": "123-D44",
+        "estadoId": "en-mantencion",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-D-404",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-D-404",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-E-101",
+        "microSectorId": "piso-torre-e-1",
+        "numero": "101",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-a",
+        "metraje": 55.5,
+        "prorrateo": 0.0125,
+        "rolSii": "123-E11",
+        "estadoId": "en-arriendo",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-E-101",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-E-101",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-E-102",
+        "microSectorId": "piso-torre-e-1",
+        "numero": "102",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-a",
+        "metraje": 55.5,
+        "prorrateo": 0.0125,
+        "rolSii": "123-E12",
+        "estadoId": "en-venta",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-E-102",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-E-102",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-E-103",
+        "microSectorId": "piso-torre-e-1",
+        "numero": "103",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-b",
+        "metraje": 42,
+        "prorrateo": 0.0125,
+        "rolSii": "123-E13",
+        "estadoId": "en-mantencion",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-E-103",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-E-103",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-E-104",
+        "microSectorId": "piso-torre-e-1",
+        "numero": "104",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-b",
+        "metraje": 42,
+        "prorrateo": 0.0125,
+        "rolSii": "123-E14",
+        "estadoId": "vacante",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-E-104",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-E-104",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-E-201",
+        "microSectorId": "piso-torre-e-2",
+        "numero": "201",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-a",
+        "metraje": 55.5,
+        "prorrateo": 0.0125,
+        "rolSii": "123-E21",
+        "estadoId": "en-venta",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-E-201",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-E-201",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-E-202",
+        "microSectorId": "piso-torre-e-2",
+        "numero": "202",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-a",
+        "metraje": 55.5,
+        "prorrateo": 0.0125,
+        "rolSii": "123-E22",
+        "estadoId": "en-mantencion",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-E-202",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-E-202",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-E-203",
+        "microSectorId": "piso-torre-e-2",
+        "numero": "203",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-b",
+        "metraje": 42,
+        "prorrateo": 0.0125,
+        "rolSii": "123-E23",
+        "estadoId": "vacante",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-E-203",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-E-203",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-E-204",
+        "microSectorId": "piso-torre-e-2",
+        "numero": "204",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-b",
+        "metraje": 42,
+        "prorrateo": 0.0125,
+        "rolSii": "123-E24",
+        "estadoId": "en-uso",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-E-204",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-E-204",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-E-301",
+        "microSectorId": "piso-torre-e-3",
+        "numero": "301",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-a",
+        "metraje": 55.5,
+        "prorrateo": 0.0125,
+        "rolSii": "123-E31",
+        "estadoId": "en-mantencion",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-E-301",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-E-301",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-E-302",
+        "microSectorId": "piso-torre-e-3",
+        "numero": "302",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-a",
+        "metraje": 55.5,
+        "prorrateo": 0.0125,
+        "rolSii": "123-E32",
+        "estadoId": "vacante",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-E-302",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-E-302",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-E-303",
+        "microSectorId": "piso-torre-e-3",
+        "numero": "303",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-b",
+        "metraje": 42,
+        "prorrateo": 0.0125,
+        "rolSii": "123-E33",
+        "estadoId": "en-uso",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-E-303",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-E-303",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-E-304",
+        "microSectorId": "piso-torre-e-3",
+        "numero": "304",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-b",
+        "metraje": 42,
+        "prorrateo": 0.0125,
+        "rolSii": "123-E34",
+        "estadoId": "en-arriendo",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-E-304",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-E-304",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-E-401",
+        "microSectorId": "piso-torre-e-4",
+        "numero": "401",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-a",
+        "metraje": 55.5,
+        "prorrateo": 0.0125,
+        "rolSii": "123-E41",
+        "estadoId": "vacante",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-E-401",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-E-401",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-E-402",
+        "microSectorId": "piso-torre-e-4",
+        "numero": "402",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-a",
+        "metraje": 55.5,
+        "prorrateo": 0.0125,
+        "rolSii": "123-E42",
+        "estadoId": "en-uso",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-E-402",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-E-402",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-E-403",
+        "microSectorId": "piso-torre-e-4",
+        "numero": "403",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-b",
+        "metraje": 42,
+        "prorrateo": 0.0125,
+        "rolSii": "123-E43",
+        "estadoId": "en-arriendo",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-E-403",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-E-403",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-E-404",
+        "microSectorId": "piso-torre-e-4",
+        "numero": "404",
+        "etiqueta": "Depto",
+        "tipoUnidadId": "tipo-b",
+        "metraje": 42,
+        "prorrateo": 0.0125,
+        "rolSii": "123-E44",
+        "estadoId": "en-venta",
+        "servicios": {
+          "agua": {
+            "cliente": "C-AG-E-404",
+            "medidor": "M-1234"
+          },
+          "luz": {
+            "cliente": "C-LZ-E-404",
+            "medidor": "M-5678"
+          }
+        }
+      },
+      {
+        "id": "u-LC-01",
+        "microSectorId": "piso-comercial-1",
+        "numero": "L-01",
+        "etiqueta": "Local",
+        "tipoUnidadId": "local-a",
+        "metraje": 120,
+        "prorrateo": 0.05,
+        "rolSii": "999-01",
+        "estadoId": "en-uso",
+        "servicios": {
+          "agua": {
+            "cliente": "C-LC-01",
+            "medidor": "ML-01"
+          }
+        }
+      },
+      {
+        "id": "u-LC-02",
+        "microSectorId": "piso-comercial-1",
+        "numero": "L-02",
+        "etiqueta": "Local",
+        "tipoUnidadId": "local-b",
+        "metraje": 60,
+        "prorrateo": 0.025,
+        "rolSii": "999-02",
+        "estadoId": "en-arriendo",
+        "servicios": {
+          "agua": {
+            "cliente": "C-LC-02",
+            "medidor": "ML-02"
+          }
+        }
+      },
+      {
+        "id": "u-LC-03",
+        "microSectorId": "piso-comercial-1",
+        "numero": "L-03",
+        "etiqueta": "Local",
+        "tipoUnidadId": "local-b",
+        "metraje": 60,
+        "prorrateo": 0.025,
+        "rolSii": "999-03",
+        "estadoId": "vacante",
+        "servicios": {
+          "agua": {
+            "cliente": "C-LC-03",
+            "medidor": "ML-03"
+          }
+        }
+      },
+      {
+        "id": "u-E-001",
+        "microSectorId": "est-sup",
+        "numero": "E-001",
+        "etiqueta": "Estacionamiento",
+        "tipoUnidadId": "tipo-es-1",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "rolSii": "",
+        "estadoId": "en-uso",
+        "servicios": {}
+      },
+      {
+        "id": "u-E-002",
+        "microSectorId": "est-sup",
+        "numero": "E-002",
+        "etiqueta": "Estacionamiento",
+        "tipoUnidadId": "tipo-es-1",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "rolSii": "",
+        "estadoId": "en-uso",
+        "servicios": {}
+      },
+      {
+        "id": "u-E-003",
+        "microSectorId": "est-sup",
+        "numero": "E-003",
+        "etiqueta": "Estacionamiento",
+        "tipoUnidadId": "tipo-es-1",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "rolSii": "",
+        "estadoId": "en-uso",
+        "servicios": {}
+      },
+      {
+        "id": "u-E-004",
+        "microSectorId": "est-sup",
+        "numero": "E-004",
+        "etiqueta": "Estacionamiento",
+        "tipoUnidadId": "tipo-es-1",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "rolSii": "",
+        "estadoId": "en-uso",
+        "servicios": {}
+      },
+      {
+        "id": "u-E-005",
+        "microSectorId": "est-sup",
+        "numero": "E-005",
+        "etiqueta": "Estacionamiento",
+        "tipoUnidadId": "tipo-es-1",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "rolSii": "",
+        "estadoId": "en-arriendo",
+        "servicios": {}
+      },
+      {
+        "id": "u-E-006",
+        "microSectorId": "est-sup",
+        "numero": "E-006",
+        "etiqueta": "Estacionamiento",
+        "tipoUnidadId": "tipo-es-1",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "rolSii": "",
+        "estadoId": "en-venta",
+        "servicios": {}
+      },
+      {
+        "id": "u-E-007",
+        "microSectorId": "est-sup",
+        "numero": "E-007",
+        "etiqueta": "Estacionamiento",
+        "tipoUnidadId": "tipo-es-1",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "rolSii": "",
+        "estadoId": "en-mantencion",
+        "servicios": {}
+      },
+      {
+        "id": "u-E-008",
+        "microSectorId": "est-sup",
+        "numero": "E-008",
+        "etiqueta": "Estacionamiento",
+        "tipoUnidadId": "tipo-es-1",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "rolSii": "",
+        "estadoId": "vacante",
+        "servicios": {}
+      },
+      {
+        "id": "u-E-009",
+        "microSectorId": "est-sup",
+        "numero": "E-009",
+        "etiqueta": "Estacionamiento",
+        "tipoUnidadId": "tipo-es-1",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "rolSii": "",
+        "estadoId": "en-uso",
+        "servicios": {}
+      },
+      {
+        "id": "u-E-010",
+        "microSectorId": "est-sup",
+        "numero": "E-010",
+        "etiqueta": "Estacionamiento",
+        "tipoUnidadId": "tipo-es-1",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "rolSii": "",
+        "estadoId": "en-uso",
+        "servicios": {}
+      },
+      {
+        "id": "u-E-011",
+        "microSectorId": "est-sup",
+        "numero": "E-011",
+        "etiqueta": "Estacionamiento",
+        "tipoUnidadId": "tipo-es-1",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "rolSii": "",
+        "estadoId": "en-uso",
+        "servicios": {}
+      },
+      {
+        "id": "u-E-012",
+        "microSectorId": "est-sup",
+        "numero": "E-012",
+        "etiqueta": "Estacionamiento",
+        "tipoUnidadId": "tipo-es-1",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "rolSii": "",
+        "estadoId": "en-uso",
+        "servicios": {}
+      },
+      {
+        "id": "u-E-013",
+        "microSectorId": "est-sup",
+        "numero": "E-013",
+        "etiqueta": "Estacionamiento",
+        "tipoUnidadId": "tipo-es-1",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "rolSii": "",
+        "estadoId": "en-arriendo",
+        "servicios": {}
+      },
+      {
+        "id": "u-E-014",
+        "microSectorId": "est-sup",
+        "numero": "E-014",
+        "etiqueta": "Estacionamiento",
+        "tipoUnidadId": "tipo-es-1",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "rolSii": "",
+        "estadoId": "en-venta",
+        "servicios": {}
+      },
+      {
+        "id": "u-E-015",
+        "microSectorId": "est-sup",
+        "numero": "E-015",
+        "etiqueta": "Estacionamiento",
+        "tipoUnidadId": "tipo-es-1",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "rolSii": "",
+        "estadoId": "en-mantencion",
+        "servicios": {}
+      },
+      {
+        "id": "u-E-016",
+        "microSectorId": "est-sup",
+        "numero": "E-016",
+        "etiqueta": "Estacionamiento",
+        "tipoUnidadId": "tipo-es-1",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "rolSii": "",
+        "estadoId": "vacante",
+        "servicios": {}
+      },
+      {
+        "id": "u-E-017",
+        "microSectorId": "est-sup",
+        "numero": "E-017",
+        "etiqueta": "Estacionamiento",
+        "tipoUnidadId": "tipo-es-1",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "rolSii": "",
+        "estadoId": "en-uso",
+        "servicios": {}
+      },
+      {
+        "id": "u-E-018",
+        "microSectorId": "est-sup",
+        "numero": "E-018",
+        "etiqueta": "Estacionamiento",
+        "tipoUnidadId": "tipo-es-1",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "rolSii": "",
+        "estadoId": "en-uso",
+        "servicios": {}
+      },
+      {
+        "id": "u-E-019",
+        "microSectorId": "est-sup",
+        "numero": "E-019",
+        "etiqueta": "Estacionamiento",
+        "tipoUnidadId": "tipo-es-1",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "rolSii": "",
+        "estadoId": "en-uso",
+        "servicios": {}
+      },
+      {
+        "id": "u-E-020",
+        "microSectorId": "est-sup",
+        "numero": "E-020",
+        "etiqueta": "Estacionamiento",
+        "tipoUnidadId": "tipo-es-1",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "rolSii": "",
+        "estadoId": "en-uso",
+        "servicios": {}
+      },
+      {
+        "id": "u-E-021",
+        "microSectorId": "est-sub1",
+        "numero": "E-021",
+        "etiqueta": "Estacionamiento",
+        "tipoUnidadId": "tipo-es-1",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "rolSii": "",
+        "estadoId": "en-arriendo",
+        "servicios": {}
+      },
+      {
+        "id": "u-E-022",
+        "microSectorId": "est-sub1",
+        "numero": "E-022",
+        "etiqueta": "Estacionamiento",
+        "tipoUnidadId": "tipo-es-1",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "rolSii": "",
+        "estadoId": "en-venta",
+        "servicios": {}
+      },
+      {
+        "id": "u-E-023",
+        "microSectorId": "est-sub1",
+        "numero": "E-023",
+        "etiqueta": "Estacionamiento",
+        "tipoUnidadId": "tipo-es-1",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "rolSii": "",
+        "estadoId": "en-mantencion",
+        "servicios": {}
+      },
+      {
+        "id": "u-E-024",
+        "microSectorId": "est-sub1",
+        "numero": "E-024",
+        "etiqueta": "Estacionamiento",
+        "tipoUnidadId": "tipo-es-1",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "rolSii": "",
+        "estadoId": "vacante",
+        "servicios": {}
+      },
+      {
+        "id": "u-E-025",
+        "microSectorId": "est-sub1",
+        "numero": "E-025",
+        "etiqueta": "Estacionamiento",
+        "tipoUnidadId": "tipo-es-1",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "rolSii": "",
+        "estadoId": "en-uso",
+        "servicios": {}
+      },
+      {
+        "id": "u-E-026",
+        "microSectorId": "est-sub1",
+        "numero": "E-026",
+        "etiqueta": "Estacionamiento",
+        "tipoUnidadId": "tipo-es-1",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "rolSii": "",
+        "estadoId": "en-uso",
+        "servicios": {}
+      },
+      {
+        "id": "u-E-027",
+        "microSectorId": "est-sub1",
+        "numero": "E-027",
+        "etiqueta": "Estacionamiento",
+        "tipoUnidadId": "tipo-es-1",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "rolSii": "",
+        "estadoId": "en-uso",
+        "servicios": {}
+      },
+      {
+        "id": "u-E-028",
+        "microSectorId": "est-sub1",
+        "numero": "E-028",
+        "etiqueta": "Estacionamiento",
+        "tipoUnidadId": "tipo-es-1",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "rolSii": "",
+        "estadoId": "en-uso",
+        "servicios": {}
+      },
+      {
+        "id": "u-E-029",
+        "microSectorId": "est-sub1",
+        "numero": "E-029",
+        "etiqueta": "Estacionamiento",
+        "tipoUnidadId": "tipo-es-1",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "rolSii": "",
+        "estadoId": "en-arriendo",
+        "servicios": {}
+      },
+      {
+        "id": "u-E-030",
+        "microSectorId": "est-sub1",
+        "numero": "E-030",
+        "etiqueta": "Estacionamiento",
+        "tipoUnidadId": "tipo-es-1",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "rolSii": "",
+        "estadoId": "en-venta",
+        "servicios": {}
+      },
+      {
+        "id": "u-E-031",
+        "microSectorId": "est-sub1",
+        "numero": "E-031",
+        "etiqueta": "Estacionamiento",
+        "tipoUnidadId": "tipo-es-1",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "rolSii": "",
+        "estadoId": "en-mantencion",
+        "servicios": {}
+      },
+      {
+        "id": "u-E-032",
+        "microSectorId": "est-sub1",
+        "numero": "E-032",
+        "etiqueta": "Estacionamiento",
+        "tipoUnidadId": "tipo-es-1",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "rolSii": "",
+        "estadoId": "vacante",
+        "servicios": {}
+      },
+      {
+        "id": "u-E-033",
+        "microSectorId": "est-sub1",
+        "numero": "E-033",
+        "etiqueta": "Estacionamiento",
+        "tipoUnidadId": "tipo-es-1",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "rolSii": "",
+        "estadoId": "en-uso",
+        "servicios": {}
+      },
+      {
+        "id": "u-E-034",
+        "microSectorId": "est-sub1",
+        "numero": "E-034",
+        "etiqueta": "Estacionamiento",
+        "tipoUnidadId": "tipo-es-1",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "rolSii": "",
+        "estadoId": "en-uso",
+        "servicios": {}
+      },
+      {
+        "id": "u-E-035",
+        "microSectorId": "est-sub1",
+        "numero": "E-035",
+        "etiqueta": "Estacionamiento",
+        "tipoUnidadId": "tipo-es-1",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "rolSii": "",
+        "estadoId": "en-uso",
+        "servicios": {}
+      },
+      {
+        "id": "u-E-036",
+        "microSectorId": "est-sub1",
+        "numero": "E-036",
+        "etiqueta": "Estacionamiento",
+        "tipoUnidadId": "tipo-es-1",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "rolSii": "",
+        "estadoId": "en-uso",
+        "servicios": {}
+      },
+      {
+        "id": "u-E-037",
+        "microSectorId": "est-sub1",
+        "numero": "E-037",
+        "etiqueta": "Estacionamiento",
+        "tipoUnidadId": "tipo-es-1",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "rolSii": "",
+        "estadoId": "en-arriendo",
+        "servicios": {}
+      },
+      {
+        "id": "u-E-038",
+        "microSectorId": "est-sub1",
+        "numero": "E-038",
+        "etiqueta": "Estacionamiento",
+        "tipoUnidadId": "tipo-es-1",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "rolSii": "",
+        "estadoId": "en-venta",
+        "servicios": {}
+      },
+      {
+        "id": "u-E-039",
+        "microSectorId": "est-sub1",
+        "numero": "E-039",
+        "etiqueta": "Estacionamiento",
+        "tipoUnidadId": "tipo-es-1",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "rolSii": "",
+        "estadoId": "en-mantencion",
+        "servicios": {}
+      },
+      {
+        "id": "u-E-040",
+        "microSectorId": "est-sub1",
+        "numero": "E-040",
+        "etiqueta": "Estacionamiento",
+        "tipoUnidadId": "tipo-es-1",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "rolSii": "",
+        "estadoId": "vacante",
+        "servicios": {}
+      },
+      {
+        "id": "u-E-041",
+        "microSectorId": "est-sub1",
+        "numero": "E-041",
+        "etiqueta": "Estacionamiento",
+        "tipoUnidadId": "tipo-es-1",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "rolSii": "",
+        "estadoId": "en-uso",
+        "servicios": {}
+      },
+      {
+        "id": "u-E-042",
+        "microSectorId": "est-sub2",
+        "numero": "E-042",
+        "etiqueta": "Estacionamiento",
+        "tipoUnidadId": "tipo-es-1",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "rolSii": "",
+        "estadoId": "en-uso",
+        "servicios": {}
+      },
+      {
+        "id": "u-E-043",
+        "microSectorId": "est-sub2",
+        "numero": "E-043",
+        "etiqueta": "Estacionamiento",
+        "tipoUnidadId": "tipo-es-1",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "rolSii": "",
+        "estadoId": "en-uso",
+        "servicios": {}
+      },
+      {
+        "id": "u-E-044",
+        "microSectorId": "est-sub2",
+        "numero": "E-044",
+        "etiqueta": "Estacionamiento",
+        "tipoUnidadId": "tipo-es-1",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "rolSii": "",
+        "estadoId": "en-uso",
+        "servicios": {}
+      },
+      {
+        "id": "u-E-045",
+        "microSectorId": "est-sub2",
+        "numero": "E-045",
+        "etiqueta": "Estacionamiento",
+        "tipoUnidadId": "tipo-es-1",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "rolSii": "",
+        "estadoId": "en-arriendo",
+        "servicios": {}
+      },
+      {
+        "id": "u-E-046",
+        "microSectorId": "est-sub2",
+        "numero": "E-046",
+        "etiqueta": "Estacionamiento",
+        "tipoUnidadId": "tipo-es-1",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "rolSii": "",
+        "estadoId": "en-venta",
+        "servicios": {}
+      },
+      {
+        "id": "u-E-047",
+        "microSectorId": "est-sub2",
+        "numero": "E-047",
+        "etiqueta": "Estacionamiento",
+        "tipoUnidadId": "tipo-es-1",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "rolSii": "",
+        "estadoId": "en-mantencion",
+        "servicios": {}
+      },
+      {
+        "id": "u-E-048",
+        "microSectorId": "est-sub2",
+        "numero": "E-048",
+        "etiqueta": "Estacionamiento",
+        "tipoUnidadId": "tipo-es-1",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "rolSii": "",
+        "estadoId": "vacante",
+        "servicios": {}
+      },
+      {
+        "id": "u-E-049",
+        "microSectorId": "est-sub2",
+        "numero": "E-049",
+        "etiqueta": "Estacionamiento",
+        "tipoUnidadId": "tipo-es-1",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "rolSii": "",
+        "estadoId": "en-uso",
+        "servicios": {}
+      },
+      {
+        "id": "u-E-050",
+        "microSectorId": "est-sub2",
+        "numero": "E-050",
+        "etiqueta": "Estacionamiento",
+        "tipoUnidadId": "tipo-es-1",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "rolSii": "",
+        "estadoId": "en-uso",
+        "servicios": {}
+      },
+      {
+        "id": "u-E-051",
+        "microSectorId": "est-sub2",
+        "numero": "E-051",
+        "etiqueta": "Estacionamiento",
+        "tipoUnidadId": "tipo-es-1",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "rolSii": "",
+        "estadoId": "en-uso",
+        "servicios": {}
+      },
+      {
+        "id": "u-E-052",
+        "microSectorId": "est-sub2",
+        "numero": "E-052",
+        "etiqueta": "Estacionamiento",
+        "tipoUnidadId": "tipo-es-1",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "rolSii": "",
+        "estadoId": "en-uso",
+        "servicios": {}
+      },
+      {
+        "id": "u-E-053",
+        "microSectorId": "est-sub2",
+        "numero": "E-053",
+        "etiqueta": "Estacionamiento",
+        "tipoUnidadId": "tipo-es-1",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "rolSii": "",
+        "estadoId": "en-arriendo",
+        "servicios": {}
+      },
+      {
+        "id": "u-E-054",
+        "microSectorId": "est-sub2",
+        "numero": "E-054",
+        "etiqueta": "Estacionamiento",
+        "tipoUnidadId": "tipo-es-1",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "rolSii": "",
+        "estadoId": "en-venta",
+        "servicios": {}
+      },
+      {
+        "id": "u-E-055",
+        "microSectorId": "est-sub2",
+        "numero": "E-055",
+        "etiqueta": "Estacionamiento",
+        "tipoUnidadId": "tipo-es-1",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "rolSii": "",
+        "estadoId": "en-mantencion",
+        "servicios": {}
+      },
+      {
+        "id": "u-E-056",
+        "microSectorId": "est-sub2",
+        "numero": "E-056",
+        "etiqueta": "Estacionamiento",
+        "tipoUnidadId": "tipo-es-1",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "rolSii": "",
+        "estadoId": "vacante",
+        "servicios": {}
+      },
+      {
+        "id": "u-E-057",
+        "microSectorId": "est-sub2",
+        "numero": "E-057",
+        "etiqueta": "Estacionamiento",
+        "tipoUnidadId": "tipo-es-1",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "rolSii": "",
+        "estadoId": "en-uso",
+        "servicios": {}
+      },
+      {
+        "id": "u-E-058",
+        "microSectorId": "est-sub2",
+        "numero": "E-058",
+        "etiqueta": "Estacionamiento",
+        "tipoUnidadId": "tipo-es-1",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "rolSii": "",
+        "estadoId": "en-uso",
+        "servicios": {}
+      },
+      {
+        "id": "u-E-059",
+        "microSectorId": "est-sub2",
+        "numero": "E-059",
+        "etiqueta": "Estacionamiento",
+        "tipoUnidadId": "tipo-es-1",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "rolSii": "",
+        "estadoId": "en-uso",
+        "servicios": {}
+      },
+      {
+        "id": "u-E-060",
+        "microSectorId": "est-sub2",
+        "numero": "E-060",
+        "etiqueta": "Estacionamiento",
+        "tipoUnidadId": "tipo-es-1",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "rolSii": "",
+        "estadoId": "en-uso",
+        "servicios": {}
+      },
+      {
+        "id": "u-E-061",
+        "microSectorId": "est-sub2",
+        "numero": "E-061",
+        "etiqueta": "Estacionamiento",
+        "tipoUnidadId": "tipo-es-1",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "rolSii": "",
+        "estadoId": "en-arriendo",
+        "servicios": {}
+      },
+      {
+        "id": "u-E-062",
+        "microSectorId": "est-sub2",
+        "numero": "E-062",
+        "etiqueta": "Estacionamiento",
+        "tipoUnidadId": "tipo-es-1",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "rolSii": "",
+        "estadoId": "en-venta",
+        "servicios": {}
+      },
+      {
+        "id": "u-E-063",
+        "microSectorId": "est-vis",
+        "numero": "E-063",
+        "etiqueta": "Estacionamiento",
+        "tipoUnidadId": "tipo-es-1",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "rolSii": "",
+        "estadoId": "en-mantencion",
+        "servicios": {}
+      },
+      {
+        "id": "u-E-064",
+        "microSectorId": "est-vis",
+        "numero": "E-064",
+        "etiqueta": "Estacionamiento",
+        "tipoUnidadId": "tipo-es-1",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "rolSii": "",
+        "estadoId": "vacante",
+        "servicios": {}
+      },
+      {
+        "id": "u-E-065",
+        "microSectorId": "est-vis",
+        "numero": "E-065",
+        "etiqueta": "Estacionamiento",
+        "tipoUnidadId": "tipo-es-1",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "rolSii": "",
+        "estadoId": "en-uso",
+        "servicios": {}
+      },
+      {
+        "id": "u-E-066",
+        "microSectorId": "est-vis",
+        "numero": "E-066",
+        "etiqueta": "Estacionamiento",
+        "tipoUnidadId": "tipo-es-1",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "rolSii": "",
+        "estadoId": "en-uso",
+        "servicios": {}
+      },
+      {
+        "id": "u-E-067",
+        "microSectorId": "est-vis",
+        "numero": "E-067",
+        "etiqueta": "Estacionamiento",
+        "tipoUnidadId": "tipo-es-1",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "rolSii": "",
+        "estadoId": "en-uso",
+        "servicios": {}
+      },
+      {
+        "id": "u-E-068",
+        "microSectorId": "est-vis",
+        "numero": "E-068",
+        "etiqueta": "Estacionamiento",
+        "tipoUnidadId": "tipo-es-1",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "rolSii": "",
+        "estadoId": "en-uso",
+        "servicios": {}
+      },
+      {
+        "id": "u-E-069",
+        "microSectorId": "est-vis",
+        "numero": "E-069",
+        "etiqueta": "Estacionamiento",
+        "tipoUnidadId": "tipo-es-1",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "rolSii": "",
+        "estadoId": "en-arriendo",
+        "servicios": {}
+      },
+      {
+        "id": "u-E-070",
+        "microSectorId": "est-vis",
+        "numero": "E-070",
+        "etiqueta": "Estacionamiento",
+        "tipoUnidadId": "tipo-es-1",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "rolSii": "",
+        "estadoId": "en-venta",
+        "servicios": {}
+      },
+      {
+        "id": "u-E-071",
+        "microSectorId": "est-vis",
+        "numero": "E-071",
+        "etiqueta": "Estacionamiento",
+        "tipoUnidadId": "tipo-es-1",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "rolSii": "",
+        "estadoId": "en-mantencion",
+        "servicios": {}
+      },
+      {
+        "id": "u-E-072",
+        "microSectorId": "est-vis",
+        "numero": "E-072",
+        "etiqueta": "Estacionamiento",
+        "tipoUnidadId": "tipo-es-1",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "rolSii": "",
+        "estadoId": "vacante",
+        "servicios": {}
+      },
+      {
+        "id": "u-E-073",
+        "microSectorId": "est-vis",
+        "numero": "E-073",
+        "etiqueta": "Estacionamiento",
+        "tipoUnidadId": "tipo-es-1",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "rolSii": "",
+        "estadoId": "en-uso",
+        "servicios": {}
+      },
+      {
+        "id": "u-E-074",
+        "microSectorId": "est-vis",
+        "numero": "E-074",
+        "etiqueta": "Estacionamiento",
+        "tipoUnidadId": "tipo-es-1",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "rolSii": "",
+        "estadoId": "en-uso",
+        "servicios": {}
+      },
+      {
+        "id": "u-E-075",
+        "microSectorId": "est-vis",
+        "numero": "E-075",
+        "etiqueta": "Estacionamiento",
+        "tipoUnidadId": "tipo-es-1",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "rolSii": "",
+        "estadoId": "en-uso",
+        "servicios": {}
+      },
+      {
+        "id": "u-E-076",
+        "microSectorId": "est-vis",
+        "numero": "E-076",
+        "etiqueta": "Estacionamiento",
+        "tipoUnidadId": "tipo-es-1",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "rolSii": "",
+        "estadoId": "en-uso",
+        "servicios": {}
+      },
+      {
+        "id": "u-E-077",
+        "microSectorId": "est-vis",
+        "numero": "E-077",
+        "etiqueta": "Estacionamiento",
+        "tipoUnidadId": "tipo-es-1",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "rolSii": "",
+        "estadoId": "en-arriendo",
+        "servicios": {}
+      },
+      {
+        "id": "u-E-078",
+        "microSectorId": "est-vis",
+        "numero": "E-078",
+        "etiqueta": "Estacionamiento",
+        "tipoUnidadId": "tipo-es-1",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "rolSii": "",
+        "estadoId": "en-venta",
+        "servicios": {}
+      },
+      {
+        "id": "u-E-079",
+        "microSectorId": "est-vis",
+        "numero": "E-079",
+        "etiqueta": "Estacionamiento",
+        "tipoUnidadId": "tipo-es-1",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "rolSii": "",
+        "estadoId": "en-mantencion",
+        "servicios": {}
+      },
+      {
+        "id": "u-E-080",
+        "microSectorId": "est-vis",
+        "numero": "E-080",
+        "etiqueta": "Estacionamiento",
+        "tipoUnidadId": "tipo-es-1",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "rolSii": "",
+        "estadoId": "vacante",
+        "servicios": {}
+      },
+      {
+        "id": "u-E-081",
+        "microSectorId": "est-vis",
+        "numero": "E-081",
+        "etiqueta": "Estacionamiento",
+        "tipoUnidadId": "tipo-es-1",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "rolSii": "",
+        "estadoId": "en-uso",
+        "servicios": {}
+      },
+      {
+        "id": "u-E-082",
+        "microSectorId": "est-vis",
+        "numero": "E-082",
+        "etiqueta": "Estacionamiento",
+        "tipoUnidadId": "tipo-es-1",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "rolSii": "",
+        "estadoId": "en-uso",
+        "servicios": {}
+      },
+      {
+        "id": "u-E-083",
+        "microSectorId": "est-vis",
+        "numero": "E-083",
+        "etiqueta": "Estacionamiento",
+        "tipoUnidadId": "tipo-es-1",
+        "metraje": 12.5,
+        "prorrateo": 0.005,
+        "rolSii": "",
+        "estadoId": "en-uso",
+        "servicios": {}
+      }
+    ],
+    "personas": [
+      {
+        "id": "p-1",
+        "rut": "15.123.456-7",
+        "nombreCompleto": "Juan Pérez González",
+        "nombres": "Juan",
+        "apellidos": "Pérez González",
+        "email": "juan.perez@email.com",
+        "telefonoMovil": "+56 9 1234 5678",
+        "estadoCuenta": "activa",
+        "condicionesEspecialesIds": [],
+        "roles": [
+          "propietario",
+          "residente",
+          "directiva"
+        ],
+        "datosGobernanza": {
+          "id": "g-1",
+          "cargoDirectiva": "presidente",
+          "fechaAsuncion": "2025-03-01"
+        }
+      },
+      {
+        "id": "p-11",
+        "rut": "17.234.567-8",
+        "nombreCompleto": "Carolina Espinoza Rojas",
+        "nombres": "Carolina",
+        "apellidos": "Espinoza Rojas",
+        "email": "c.espinoza@email.com",
+        "telefonoMovil": "+56 9 2345 6789",
+        "estadoCuenta": "activa",
+        "condicionesEspecialesIds": [],
+        "roles": [
+          "propietario",
+          "residente"
+        ]
+      },
+      {
+        "id": "p-12",
+        "rut": "18.345.678-9",
+        "nombreCompleto": "Rodrigo Fuentes Salas",
+        "nombres": "Rodrigo",
+        "apellidos": "Fuentes Salas",
+        "email": "r.fuentes@email.com",
+        "telefonoMovil": "+56 9 3456 7890",
+        "estadoCuenta": "activa",
+        "condicionesEspecialesIds": [],
+        "roles": [
+          "residente"
+        ]
+      },
+      {
+        "id": "p-13",
+        "rut": "19.456.789-0",
+        "nombreCompleto": "Valentina Reyes López",
+        "nombres": "Valentina",
+        "apellidos": "Reyes López",
+        "email": "v.reyes@email.com",
+        "telefonoMovil": "+56 9 4567 8901",
+        "estadoCuenta": "activa",
+        "condicionesEspecialesIds": [],
+        "roles": [
+          "propietario"
+        ]
+      },
+      {
+        "id": "p-14",
+        "rut": "20.567.890-1",
+        "nombreCompleto": "Felipe Morales Díaz",
+        "nombres": "Felipe",
+        "apellidos": "Morales Díaz",
+        "email": "f.morales@email.com",
+        "telefonoMovil": "+56 9 5678 9012",
+        "estadoCuenta": "activa",
+        "condicionesEspecialesIds": [
+          "c-2"
+        ],
+        "roles": [
+          "propietario",
+          "residente"
+        ]
+      },
+      {
+        "id": "p-15",
+        "rut": "14.678.901-2",
+        "nombreCompleto": "Isidora Catalán Vargas",
+        "nombres": "Isidora",
+        "apellidos": "Catalán Vargas",
+        "email": "i.catalan@email.com",
+        "telefonoMovil": "+56 9 6789 0123",
+        "estadoCuenta": "activa",
+        "condicionesEspecialesIds": [],
+        "roles": [
+          "residente"
+        ]
+      },
+      {
+        "id": "p-16",
+        "rut": "16.789.012-3",
+        "nombreCompleto": "Martín Sepúlveda Castro",
+        "nombres": "Martín",
+        "apellidos": "Sepúlveda Castro",
+        "email": "m.sepulveda@email.com",
+        "telefonoMovil": "+56 9 7890 1234",
+        "estadoCuenta": "activa",
+        "condicionesEspecialesIds": [],
+        "roles": [
+          "propietario",
+          "residente"
+        ]
+      },
+      {
+        "id": "p-17",
+        "rut": "18.890.123-4",
+        "nombreCompleto": "Constanza Bravo Muñoz",
+        "nombres": "Constanza",
+        "apellidos": "Bravo Muñoz",
+        "email": "c.bravo@email.com",
+        "telefonoMovil": "+56 9 8901 2345",
+        "estadoCuenta": "activa",
+        "condicionesEspecialesIds": [],
+        "roles": [
+          "residente"
+        ]
+      },
+      {
+        "id": "p-18",
+        "rut": "19.901.234-5",
+        "nombreCompleto": "Andrés Villanueva Soto",
+        "nombres": "Andrés",
+        "apellidos": "Villanueva Soto",
+        "email": "a.villanueva@email.com",
+        "telefonoMovil": "+56 9 9012 3456",
+        "estadoCuenta": "activa",
+        "condicionesEspecialesIds": [],
+        "roles": [
+          "propietario"
+        ]
+      },
+      {
+        "id": "p-2",
+        "rut": "18.987.654-3",
+        "nombreCompleto": "María López Soto",
+        "nombres": "María",
+        "apellidos": "López Soto",
+        "email": "maria.lopez@email.com",
+        "telefonoMovil": "+56 9 8765 4321",
+        "estadoCuenta": "activa",
+        "condicionesEspecialesIds": [
+          "c-2"
+        ],
+        "roles": [
+          "residente"
+        ]
+      },
+      {
+        "id": "p-3",
+        "rut": "12.345.678-9",
+        "nombreCompleto": "Roberto Gómez Bolaños",
+        "nombres": "Roberto",
+        "apellidos": "Gómez Bolaños",
+        "email": "roberto.gomez@email.com",
+        "telefonoMovil": "+56 9 5555 4444",
+        "estadoCuenta": "activa",
+        "condicionesEspecialesIds": [],
+        "roles": [
+          "propietario"
+        ]
+      },
+      {
+        "id": "p-19",
+        "rut": "15.111.222-3",
+        "nombreCompleto": "Fernanda Toro Gutiérrez",
+        "nombres": "Fernanda",
+        "apellidos": "Toro Gutiérrez",
+        "email": "f.toro@email.com",
+        "telefonoMovil": "+56 9 1111 2233",
+        "estadoCuenta": "activa",
+        "condicionesEspecialesIds": [],
+        "roles": [
+          "propietario",
+          "residente"
+        ]
+      },
+      {
+        "id": "p-20",
+        "rut": "16.222.333-4",
+        "nombreCompleto": "Sebastián Contreras Vega",
+        "nombres": "Sebastián",
+        "apellidos": "Contreras Vega",
+        "email": "s.contreras@email.com",
+        "telefonoMovil": "+56 9 2222 3344",
+        "estadoCuenta": "activa",
+        "condicionesEspecialesIds": [],
+        "roles": [
+          "residente"
+        ]
+      },
+      {
+        "id": "p-21",
+        "rut": "17.333.444-5",
+        "nombreCompleto": "Javiera Navarro Ríos",
+        "nombres": "Javiera",
+        "apellidos": "Navarro Ríos",
+        "email": "j.navarro@email.com",
+        "telefonoMovil": "+56 9 3333 4455",
+        "estadoCuenta": "activa",
+        "condicionesEspecialesIds": [],
+        "roles": [
+          "propietario",
+          "residente"
+        ]
+      },
+      {
+        "id": "p-22",
+        "rut": "18.444.555-6",
+        "nombreCompleto": "Diego Arriagada Peña",
+        "nombres": "Diego",
+        "apellidos": "Arriagada Peña",
+        "email": "d.arriagada@email.com",
+        "telefonoMovil": "+56 9 4444 5566",
+        "estadoCuenta": "activa",
+        "condicionesEspecialesIds": [],
+        "roles": [
+          "residente"
+        ]
+      },
+      {
+        "id": "p-23",
+        "rut": "19.555.666-7",
+        "nombreCompleto": "Camila Herrera Soto",
+        "nombres": "Camila",
+        "apellidos": "Herrera Soto",
+        "email": "c.herrera@email.com",
+        "telefonoMovil": "+56 9 5555 6677",
+        "estadoCuenta": "activa",
+        "condicionesEspecialesIds": [],
+        "roles": [
+          "propietario"
+        ]
+      },
+      {
+        "id": "p-24",
+        "rut": "20.666.777-8",
+        "nombreCompleto": "Gabriel Mardones Lizana",
+        "nombres": "Gabriel",
+        "apellidos": "Mardones Lizana",
+        "email": "g.mardones@email.com",
+        "telefonoMovil": "+56 9 6666 7788",
+        "estadoCuenta": "activa",
+        "condicionesEspecialesIds": [
+          "c-1"
+        ],
+        "roles": [
+          "propietario",
+          "residente"
+        ]
+      },
+      {
+        "id": "p-25",
+        "rut": "14.777.888-9",
+        "nombreCompleto": "Paula Quiroz Espinoza",
+        "nombres": "Paula",
+        "apellidos": "Quiroz Espinoza",
+        "email": "p.quiroz@email.com",
+        "telefonoMovil": "+56 9 7777 8899",
+        "estadoCuenta": "activa",
+        "condicionesEspecialesIds": [],
+        "roles": [
+          "propietario",
+          "residente"
+        ]
+      },
+      {
+        "id": "p-26",
+        "rut": "15.888.999-0",
+        "nombreCompleto": "Cristóbal Flores Aguirre",
+        "nombres": "Cristóbal",
+        "apellidos": "Flores Aguirre",
+        "email": "c.flores@email.com",
+        "telefonoMovil": "+56 9 8888 9900",
+        "estadoCuenta": "activa",
+        "condicionesEspecialesIds": [],
+        "roles": [
+          "propietario"
+        ]
+      },
+      {
+        "id": "p-27",
+        "rut": "16.999.000-1",
+        "nombreCompleto": "Florencia Riquelme Díaz",
+        "nombres": "Florencia",
+        "apellidos": "Riquelme Díaz",
+        "email": "f.riquelme@email.com",
+        "telefonoMovil": "+56 9 9999 0011",
+        "estadoCuenta": "activa",
+        "condicionesEspecialesIds": [],
+        "roles": [
+          "residente"
+        ]
+      },
+      {
+        "id": "p-28",
+        "rut": "17.000.111-2",
+        "nombreCompleto": "Tomás Pinto Vergara",
+        "nombres": "Tomás",
+        "apellidos": "Pinto Vergara",
+        "email": "t.pinto@email.com",
+        "telefonoMovil": "+56 9 0000 1122",
+        "estadoCuenta": "activa",
+        "condicionesEspecialesIds": [],
+        "roles": [
+          "residente"
+        ]
+      },
+      {
+        "id": "p-29",
+        "rut": "18.111.222-3",
+        "nombreCompleto": "Javiera Solís Muñoz",
+        "nombres": "Javiera",
+        "apellidos": "Solís Muñoz",
+        "email": "j.solis@email.com",
+        "telefonoMovil": "+56 9 1111 2244",
+        "estadoCuenta": "activa",
+        "condicionesEspecialesIds": [],
+        "roles": [
+          "propietario",
+          "residente"
+        ]
+      },
+      {
+        "id": "p-30",
+        "rut": "19.222.333-4",
+        "nombreCompleto": "Alejandro Guzmán Rojas",
+        "nombres": "Alejandro",
+        "apellidos": "Guzmán Rojas",
+        "email": "a.guzman@email.com",
+        "telefonoMovil": "+56 9 2222 3355",
+        "estadoCuenta": "activa",
+        "condicionesEspecialesIds": [],
+        "roles": [
+          "residente"
+        ]
+      },
+      {
+        "id": "p-31",
+        "rut": "20.333.444-5",
+        "nombreCompleto": "Macarena Silva Fuentes",
+        "nombres": "Macarena",
+        "apellidos": "Silva Fuentes",
+        "email": "m.silva@email.com",
+        "telefonoMovil": "+56 9 3333 4466",
+        "estadoCuenta": "activa",
+        "condicionesEspecialesIds": [],
+        "roles": [
+          "propietario"
+        ]
+      },
+      {
+        "id": "p-32",
+        "rut": "14.444.555-6",
+        "nombreCompleto": "Nicolás Vega Soto",
+        "nombres": "Nicolás",
+        "apellidos": "Vega Soto",
+        "email": "n.vega@email.com",
+        "telefonoMovil": "+56 9 4444 5577",
+        "estadoCuenta": "activa",
+        "condicionesEspecialesIds": [],
+        "roles": [
+          "propietario",
+          "residente"
+        ]
+      },
+      {
+        "id": "p-4",
+        "rut": "19.111.222-K",
+        "nombreCompleto": "Ana María Silva",
+        "nombres": "Ana María",
+        "apellidos": "Silva",
+        "email": "ana.silva@email.com",
+        "telefonoMovil": "+56 9 9999 1111",
+        "estadoCuenta": "activa",
+        "condicionesEspecialesIds": [
+          "c-1",
+          "c-3"
+        ],
+        "roles": [
+          "personal",
+          "residente"
+        ],
+        "datosLaborales": {
+          "id": "l-1",
+          "cargo": "Conserje Turno Día",
+          "afp": "Habitat",
+          "prevision": "FONASA",
+          "fechaIngreso": "2021-06-15"
+        }
+      },
+      {
+        "id": "p-33",
+        "rut": "15.555.666-7",
+        "nombreCompleto": "Francisca León Contreras",
+        "nombres": "Francisca",
+        "apellidos": "León Contreras",
+        "email": "f.leon@email.com",
+        "telefonoMovil": "+56 9 5555 6688",
+        "estadoCuenta": "activa",
+        "condicionesEspecialesIds": [],
+        "roles": [
+          "propietario",
+          "residente"
+        ]
+      },
+      {
+        "id": "p-34",
+        "rut": "16.666.777-8",
+        "nombreCompleto": "Ignacio Aguilera Pizarro",
+        "nombres": "Ignacio",
+        "apellidos": "Aguilera Pizarro",
+        "email": "i.aguilera@email.com",
+        "telefonoMovil": "+56 9 6666 7799",
+        "estadoCuenta": "activa",
+        "condicionesEspecialesIds": [],
+        "roles": [
+          "residente"
+        ]
+      },
+      {
+        "id": "p-35",
+        "rut": "17.777.888-9",
+        "nombreCompleto": "Daniela Muñoz Rojas",
+        "nombres": "Daniela",
+        "apellidos": "Muñoz Rojas",
+        "email": "d.munoz@email.com",
+        "telefonoMovil": "+56 9 7777 8800",
+        "estadoCuenta": "activa",
+        "condicionesEspecialesIds": [],
+        "roles": [
+          "propietario"
+        ]
+      },
+      {
+        "id": "p-36",
+        "rut": "18.888.999-0",
+        "nombreCompleto": "Mateo Castillo Vera",
+        "nombres": "Mateo",
+        "apellidos": "Castillo Vera",
+        "email": "m.castillo@email.com",
+        "telefonoMovil": "+56 9 8888 9911",
+        "estadoCuenta": "activa",
+        "condicionesEspecialesIds": [],
+        "roles": [
+          "propietario",
+          "residente"
+        ]
+      },
+      {
+        "id": "p-37",
+        "rut": "19.999.000-1",
+        "nombreCompleto": "Agustina Reyes Soto",
+        "nombres": "Agustina",
+        "apellidos": "Reyes Soto",
+        "email": "a.reyes@email.com",
+        "telefonoMovil": "+56 9 9999 0022",
+        "estadoCuenta": "activa",
+        "condicionesEspecialesIds": [],
+        "roles": [
+          "residente"
+        ]
+      },
+      {
+        "id": "p-38",
+        "rut": "20.000.111-2",
+        "nombreCompleto": "Lucas Espinoza Figueroa",
+        "nombres": "Lucas",
+        "apellidos": "Espinoza Figueroa",
+        "email": "l.espinoza@email.com",
+        "telefonoMovil": "+56 9 0000 1133",
+        "estadoCuenta": "activa",
+        "condicionesEspecialesIds": [],
+        "roles": [
+          "propietario"
+        ]
+      },
+      {
+        "id": "p-39",
+        "rut": "14.111.222-3",
+        "nombreCompleto": "Isabella Vergara Muñoz",
+        "nombres": "Isabella",
+        "apellidos": "Vergara Muñoz",
+        "email": "i.vergara@email.com",
+        "telefonoMovil": "+56 9 1111 2255",
+        "estadoCuenta": "activa",
+        "condicionesEspecialesIds": [
+          "c-2"
+        ],
+        "roles": [
+          "propietario",
+          "residente"
+        ]
+      },
+      {
+        "id": "p-40",
+        "rut": "15.222.333-4",
+        "nombreCompleto": "Catalina Díaz Peña",
+        "nombres": "Catalina",
+        "apellidos": "Díaz Peña",
+        "email": "c.diaz@email.com",
+        "telefonoMovil": "+56 9 2222 3366",
+        "estadoCuenta": "activa",
+        "condicionesEspecialesIds": [],
+        "roles": [
+          "propietario",
+          "residente"
+        ]
+      },
+      {
+        "id": "p-41",
+        "rut": "16.333.444-5",
+        "nombreCompleto": "Benjamín Vargas Rojas",
+        "nombres": "Benjamín",
+        "apellidos": "Vargas Rojas",
+        "email": "b.vargas@email.com",
+        "telefonoMovil": "+56 9 3333 4477",
+        "estadoCuenta": "activa",
+        "condicionesEspecialesIds": [],
+        "roles": [
+          "residente"
+        ]
+      },
+      {
+        "id": "p-42",
+        "rut": "17.444.555-6",
+        "nombreCompleto": "Fernanda Soto Espinoza",
+        "nombres": "Fernanda",
+        "apellidos": "Soto Espinoza",
+        "email": "f.soto@email.com",
+        "telefonoMovil": "+56 9 4444 5588",
+        "estadoCuenta": "activa",
+        "condicionesEspecialesIds": [],
+        "roles": [
+          "propietario",
+          "residente"
+        ]
+      },
+      {
+        "id": "p-43",
+        "rut": "18.555.666-7",
+        "nombreCompleto": "Vicente Lara Contreras",
+        "nombres": "Vicente",
+        "apellidos": "Lara Contreras",
+        "email": "v.lara@email.com",
+        "telefonoMovil": "+56 9 5555 6699",
+        "estadoCuenta": "activa",
+        "condicionesEspecialesIds": [],
+        "roles": [
+          "propietario"
+        ]
+      },
+      {
+        "id": "p-44",
+        "rut": "19.666.777-8",
+        "nombreCompleto": "Antonia Ríos Fuentes",
+        "nombres": "Antonia",
+        "apellidos": "Ríos Fuentes",
+        "email": "a.rios@email.com",
+        "telefonoMovil": "+56 9 6666 7700",
+        "estadoCuenta": "activa",
+        "condicionesEspecialesIds": [],
+        "roles": [
+          "residente"
+        ]
+      },
+      {
+        "id": "p-45",
+        "rut": "20.777.888-9",
+        "nombreCompleto": "Sebastián Muñoz Soto",
+        "nombres": "Sebastián",
+        "apellidos": "Muñoz Soto",
+        "email": "s.munoz@email.com",
+        "telefonoMovil": "+56 9 7777 8811",
+        "estadoCuenta": "activa",
+        "condicionesEspecialesIds": [],
+        "roles": [
+          "propietario",
+          "residente"
+        ]
+      },
+      {
+        "id": "p-46",
+        "rut": "14.888.999-0",
+        "nombreCompleto": "Amanda Carvajal Reyes",
+        "nombres": "Amanda",
+        "apellidos": "Carvajal Reyes",
+        "email": "a.carvajal@email.com",
+        "telefonoMovil": "+56 9 8888 9922",
+        "estadoCuenta": "activa",
+        "condicionesEspecialesIds": [],
+        "roles": [
+          "propietario"
+        ]
+      },
+      {
+        "id": "p-47",
+        "rut": "15.999.000-1",
+        "nombreCompleto": "Joaquín Figueroa Silva",
+        "nombres": "Joaquín",
+        "apellidos": "Figueroa Silva",
+        "email": "j.figueroa@email.com",
+        "telefonoMovil": "+56 9 9999 0033",
+        "estadoCuenta": "activa",
+        "condicionesEspecialesIds": [],
+        "roles": [
+          "propietario",
+          "residente"
+        ]
+      },
+      {
+        "id": "p-48",
+        "rut": "11.222.333-4",
+        "nombreCompleto": "Restaurant El Buen Sabor SpA",
+        "nombres": "Restaurant El Buen Sabor",
+        "apellidos": "SpA",
+        "email": "contacto@buensabor.cl",
+        "telefonoMovil": "+56 9 1234 5001",
+        "estadoCuenta": "activa",
+        "condicionesEspecialesIds": [],
+        "roles": [
+          "contratista"
+        ]
+      },
+      {
+        "id": "p-49",
+        "rut": "12.333.444-5",
+        "nombreCompleto": "Farmacia Salud Total SpA",
+        "nombres": "Farmacia Salud Total",
+        "apellidos": "SpA",
+        "email": "info@saludtotal.cl",
+        "telefonoMovil": "+56 9 1234 5002",
+        "estadoCuenta": "activa",
+        "condicionesEspecialesIds": [],
+        "roles": [
+          "contratista"
+        ]
+      },
+      {
+        "id": "p-5",
+        "rut": "13.555.666-8",
+        "nombreCompleto": "Carlos Castillo Ruiz",
+        "nombres": "Carlos",
+        "apellidos": "Castillo Ruiz",
+        "email": "admin@compass.cl",
+        "telefonoMovil": "+56 9 3333 7777",
+        "estadoCuenta": "activa",
+        "condicionesEspecialesIds": [],
+        "roles": [
+          "personal"
+        ],
+        "datosLaborales": {
+          "id": "l-2",
+          "cargo": "Administrador General",
+          "afp": "Cuprum",
+          "prevision": "Isapre Banmédica",
+          "fechaIngreso": "2023-01-01"
+        }
+      },
+      {
+        "id": "p-6",
+        "rut": "14.222.333-4",
+        "nombreCompleto": "Laura Martínez Cárdenas",
+        "nombres": "Laura",
+        "apellidos": "Martínez Cárdenas",
+        "email": "laura.tesoreria@email.com",
+        "telefonoMovil": "+56 9 8888 2222",
+        "estadoCuenta": "activa",
+        "condicionesEspecialesIds": [],
+        "roles": [
+          "propietario",
+          "residente",
+          "directiva"
+        ],
+        "datosGobernanza": {
+          "id": "g-2",
+          "cargoDirectiva": "tesorero",
+          "fechaAsuncion": "2025-03-01"
+        }
+      },
+      {
+        "id": "p-7",
+        "rut": "17.444.555-6b",
+        "nombreCompleto": "Pedro Valdés Orellana",
+        "nombres": "Pedro",
+        "apellidos": "Valdés Orellana",
+        "email": "pvaldes@ascensores.cl",
+        "telefonoMovil": "+56 9 6666 5555",
+        "estadoCuenta": "activa",
+        "condicionesEspecialesIds": [],
+        "roles": [
+          "contratista"
+        ]
+      },
+      {
+        "id": "p-9",
+        "rut": "11.234.567-0",
+        "nombreCompleto": "Rosa Meléndez",
+        "nombres": "Rosa",
+        "apellidos": "Meléndez",
+        "email": "rosa.aseo@email.com",
+        "telefonoMovil": "+56 9 4444 3333",
+        "estadoCuenta": "activa",
+        "condicionesEspecialesIds": [],
+        "roles": [
+          "personal"
+        ],
+        "datosLaborales": {
+          "id": "l-3",
+          "cargo": "Auxiliar de Aseo",
+          "afp": "Modelo",
+          "prevision": "FONASA",
+          "fechaIngreso": "2020-05-15"
+        }
+      },
+      {
+        "id": "p-8",
+        "rut": "20.123.987-5",
+        "nombreCompleto": "Tomás Alarcón",
+        "nombres": "Tomás",
+        "apellidos": "Alarcón",
+        "email": "tomas.alarcon.antiguo@email.com",
+        "telefonoMovil": "+56 9 1111 2222",
+        "estadoCuenta": "inactiva",
+        "condicionesEspecialesIds": [],
+        "roles": [
+          "residente"
+        ]
+      },
+      {
+        "id": "p-10",
+        "rut": "16.777.888-9",
+        "nombreCompleto": "Esteban Dido",
+        "nombres": "Esteban",
+        "apellidos": "Dido",
+        "email": "esteban.bloqueado@email.com",
+        "telefonoMovil": "+56 9 0000 0000",
+        "estadoCuenta": "bloqueada",
+        "condicionesEspecialesIds": [],
+        "roles": [
+          "residente"
+        ]
+      },
+      {
+        "id": "p-50",
+        "rut": "18.000.111-2",
+        "nombreCompleto": "Rodrigo Paredes Flores",
+        "nombres": "Rodrigo",
+        "apellidos": "Paredes Flores",
+        "email": "r.paredes@email.com",
+        "telefonoMovil": "+56 9 0000 1144",
+        "estadoCuenta": "inactiva",
+        "condicionesEspecialesIds": [],
+        "roles": [
+          "residente"
+        ]
+      },
+      {
+        "id": "p-51",
+        "rut": "19.111.222-5",
+        "nombreCompleto": "Marcela Toro Espinoza",
+        "nombres": "Marcela",
+        "apellidos": "Toro Espinoza",
+        "email": "m.toro@email.com",
+        "telefonoMovil": "+56 9 1111 2266",
+        "estadoCuenta": "activa",
+        "condicionesEspecialesIds": [],
+        "roles": [
+          "propietario",
+          "residente",
+          "directiva"
+        ],
+        "datosGobernanza": {
+          "id": "g-3",
+          "cargoDirectiva": "secretario",
+          "fechaAsuncion": "2025-03-01"
+        }
+      },
+      {
+        "id": "p-52",
+        "rut": "20.222.333-6",
+        "nombreCompleto": "Alejandro Fuentes Riquelme",
+        "nombres": "Alejandro",
+        "apellidos": "Fuentes Riquelme",
+        "email": "a.fuentes@email.com",
+        "telefonoMovil": "+56 9 2222 3377",
+        "estadoCuenta": "activa",
+        "condicionesEspecialesIds": [],
+        "roles": [
+          "propietario",
+          "residente",
+          "directiva"
+        ],
+        "datosGobernanza": {
+          "id": "g-4",
+          "cargoDirectiva": "director",
+          "fechaAsuncion": "2025-03-01"
+        }
+      },
+      {
+        "id": "p-53",
+        "rut": "15.333.444-7",
+        "nombreCompleto": "Claudia Soto Vargas",
+        "nombres": "Claudia",
+        "apellidos": "Soto Vargas",
+        "email": "c.soto@email.com",
+        "telefonoMovil": "+56 9 3333 4488",
+        "estadoCuenta": "inactiva",
+        "condicionesEspecialesIds": [],
+        "roles": [
+          "residente"
+        ]
+      },
+      {
+        "id": "p-54",
+        "rut": "16.444.555-8",
+        "nombreCompleto": "Patricio Lagos Muñoz",
+        "nombres": "Patricio",
+        "apellidos": "Lagos Muñoz",
+        "email": "p.lagos@email.com",
+        "telefonoMovil": "+56 9 4444 5599",
+        "estadoCuenta": "bloqueada",
+        "condicionesEspecialesIds": [],
+        "roles": [
+          "residente"
+        ]
+      }
+    ],
+    "vinculos": [
+      {
+        "id": "v-1",
+        "personaId": "p-1",
+        "unidadId": "u-A-101",
+        "rol": "propietario",
+        "fechaInicio": "2024-01-15",
+        "estadoOcupacionPropiedad": "habitada",
+        "permiteVerFinanzas": true
+      },
+      {
+        "id": "v-11",
+        "personaId": "p-11",
+        "unidadId": "u-A-102",
+        "rol": "propietario",
+        "fechaInicio": "2020-03-10",
+        "estadoOcupacionPropiedad": "habitada",
+        "permiteVerFinanzas": true
+      },
+      {
+        "id": "v-12",
+        "personaId": "p-12",
+        "unidadId": "u-A-103",
+        "rol": "arrendatario",
+        "fechaInicio": "2025-06-01",
+        "permiteVerFinanzas": false
+      },
+      {
+        "id": "v-13",
+        "personaId": "p-13",
+        "unidadId": "u-A-104",
+        "rol": "propietario",
+        "fechaInicio": "2019-11-20",
+        "estadoOcupacionPropiedad": "en_venta",
+        "permiteVerFinanzas": false
+      },
+      {
+        "id": "v-14",
+        "personaId": "p-14",
+        "unidadId": "u-A-201",
+        "rol": "propietario",
+        "fechaInicio": "2021-05-08",
+        "estadoOcupacionPropiedad": "habitada",
+        "permiteVerFinanzas": true
+      },
+      {
+        "id": "v-15",
+        "personaId": "p-15",
+        "unidadId": "u-A-202",
+        "rol": "arrendatario",
+        "fechaInicio": "2024-09-01",
+        "permiteVerFinanzas": false
+      },
+      {
+        "id": "v-16",
+        "personaId": "p-16",
+        "unidadId": "u-A-203",
+        "rol": "propietario",
+        "fechaInicio": "2022-07-15",
+        "estadoOcupacionPropiedad": "habitada",
+        "permiteVerFinanzas": true
+      },
+      {
+        "id": "v-17",
+        "personaId": "p-17",
+        "unidadId": "u-A-204",
+        "rol": "arrendatario",
+        "fechaInicio": "2025-02-01",
+        "permiteVerFinanzas": false
+      },
+      {
+        "id": "v-18",
+        "personaId": "p-18",
+        "unidadId": "u-A-301",
+        "rol": "propietario",
+        "fechaInicio": "2018-04-20",
+        "estadoOcupacionPropiedad": "habitada",
+        "permiteVerFinanzas": true
+      },
+      {
+        "id": "v-19",
+        "personaId": "p-13",
+        "unidadId": "u-A-304",
+        "rol": "propietario",
+        "fechaInicio": "2023-08-10",
+        "estadoOcupacionPropiedad": "en_venta",
+        "permiteVerFinanzas": false
+      },
+      {
+        "id": "v-3",
+        "personaId": "p-3",
+        "unidadId": "u-B-201",
+        "rol": "propietario",
+        "fechaInicio": "2020-05-10",
+        "estadoOcupacionPropiedad": "arrendada",
+        "permiteVerFinanzas": false
+      },
+      {
+        "id": "v-2",
+        "personaId": "p-2",
+        "unidadId": "u-B-201",
+        "rol": "arrendatario",
+        "fechaInicio": "2025-01-01",
+        "permiteVerFinanzas": false
+      },
+      {
+        "id": "v-20",
+        "personaId": "p-19",
+        "unidadId": "u-B-101",
+        "rol": "propietario",
+        "fechaInicio": "2021-03-15",
+        "estadoOcupacionPropiedad": "habitada",
+        "permiteVerFinanzas": true
+      },
+      {
+        "id": "v-21",
+        "personaId": "p-20",
+        "unidadId": "u-B-102",
+        "rol": "arrendatario",
+        "fechaInicio": "2025-04-01",
+        "permiteVerFinanzas": false
+      },
+      {
+        "id": "v-22",
+        "personaId": "p-21",
+        "unidadId": "u-B-103",
+        "rol": "propietario",
+        "fechaInicio": "2020-09-20",
+        "estadoOcupacionPropiedad": "habitada",
+        "permiteVerFinanzas": true
+      },
+      {
+        "id": "v-23",
+        "personaId": "p-22",
+        "unidadId": "u-B-104",
+        "rol": "arrendatario",
+        "fechaInicio": "2024-11-01",
+        "permiteVerFinanzas": false
+      },
+      {
+        "id": "v-24",
+        "personaId": "p-23",
+        "unidadId": "u-B-202",
+        "rol": "propietario",
+        "fechaInicio": "2019-06-10",
+        "estadoOcupacionPropiedad": "en_venta",
+        "permiteVerFinanzas": false
+      },
+      {
+        "id": "v-25",
+        "personaId": "p-24",
+        "unidadId": "u-B-203",
+        "rol": "propietario",
+        "fechaInicio": "2022-01-15",
+        "estadoOcupacionPropiedad": "habitada",
+        "permiteVerFinanzas": true
+      },
+      {
+        "id": "v-26",
+        "personaId": "p-23",
+        "unidadId": "u-B-304",
+        "rol": "propietario",
+        "fechaInicio": "2023-04-01",
+        "estadoOcupacionPropiedad": "en_venta",
+        "permiteVerFinanzas": false
+      },
+      {
+        "id": "v-4",
+        "personaId": "p-3",
+        "unidadId": "u-C-301",
+        "rol": "propietario",
+        "fechaInicio": "2023-11-20",
+        "estadoOcupacionPropiedad": "proxima_vacancia",
+        "permiteVerFinanzas": false
+      },
+      {
+        "id": "v-8",
+        "personaId": "p-8",
+        "unidadId": "u-C-301",
+        "rol": "arrendatario",
+        "fechaInicio": "2021-03-01",
+        "fechaFin": "2023-11-19",
+        "permiteVerFinanzas": false
+      },
+      {
+        "id": "v-27",
+        "personaId": "p-25",
+        "unidadId": "u-C-101",
+        "rol": "propietario",
+        "fechaInicio": "2020-08-10",
+        "estadoOcupacionPropiedad": "habitada",
+        "permiteVerFinanzas": true
+      },
+      {
+        "id": "v-28",
+        "personaId": "p-26",
+        "unidadId": "u-C-102",
+        "rol": "propietario",
+        "fechaInicio": "2019-12-05",
+        "estadoOcupacionPropiedad": "habitada",
+        "permiteVerFinanzas": true
+      },
+      {
+        "id": "v-29",
+        "personaId": "p-27",
+        "unidadId": "u-C-103",
+        "rol": "copropietario",
+        "fechaInicio": "2022-06-15",
+        "estadoOcupacionPropiedad": "habitada",
+        "permiteVerFinanzas": true
+      },
+      {
+        "id": "v-30",
+        "personaId": "p-28",
+        "unidadId": "u-C-104",
+        "rol": "arrendatario",
+        "fechaInicio": "2025-03-01",
+        "permiteVerFinanzas": false
+      },
+      {
+        "id": "v-31",
+        "personaId": "p-3",
+        "unidadId": "u-LC-01",
+        "rol": "propietario",
+        "fechaInicio": "2021-02-14",
+        "estadoOcupacionPropiedad": "en_venta",
+        "permiteVerFinanzas": false
+      },
+      {
+        "id": "v-32",
+        "personaId": "p-29",
+        "unidadId": "u-C-201",
+        "rol": "propietario",
+        "fechaInicio": "2021-10-20",
+        "estadoOcupacionPropiedad": "habitada",
+        "permiteVerFinanzas": true
+      },
+      {
+        "id": "v-33",
+        "personaId": "p-30",
+        "unidadId": "u-C-202",
+        "rol": "arrendatario",
+        "fechaInicio": "2024-07-01",
+        "permiteVerFinanzas": false
+      },
+      {
+        "id": "v-34",
+        "personaId": "p-31",
+        "unidadId": "u-C-303",
+        "rol": "propietario",
+        "fechaInicio": "2023-02-01",
+        "estadoOcupacionPropiedad": "en_venta",
+        "permiteVerFinanzas": false
+      },
+      {
+        "id": "v-5",
+        "personaId": "p-4",
+        "unidadId": "u-D-401",
+        "rol": "ocupante",
+        "fechaInicio": "2022-02-01",
+        "permiteVerFinanzas": false
+      },
+      {
+        "id": "v-35",
+        "personaId": "p-33",
+        "unidadId": "u-D-101",
+        "rol": "propietario",
+        "fechaInicio": "2020-11-10",
+        "estadoOcupacionPropiedad": "habitada",
+        "permiteVerFinanzas": true
+      },
+      {
+        "id": "v-36",
+        "personaId": "p-34",
+        "unidadId": "u-D-102",
+        "rol": "arrendatario",
+        "fechaInicio": "2024-10-01",
+        "permiteVerFinanzas": false
+      },
+      {
+        "id": "v-37",
+        "personaId": "p-35",
+        "unidadId": "u-D-103",
+        "rol": "propietario",
+        "fechaInicio": "2019-08-20",
+        "estadoOcupacionPropiedad": "habitada",
+        "permiteVerFinanzas": true
+      },
+      {
+        "id": "v-38",
+        "personaId": "p-36",
+        "unidadId": "u-D-201",
+        "rol": "propietario",
+        "fechaInicio": "2021-04-15",
+        "estadoOcupacionPropiedad": "habitada",
+        "permiteVerFinanzas": true
+      },
+      {
+        "id": "v-39",
+        "personaId": "p-37",
+        "unidadId": "u-D-202",
+        "rol": "arrendatario",
+        "fechaInicio": "2025-05-01",
+        "permiteVerFinanzas": false
+      },
+      {
+        "id": "v-40",
+        "personaId": "p-38",
+        "unidadId": "u-D-204",
+        "rol": "propietario",
+        "fechaInicio": "2022-09-10",
+        "estadoOcupacionPropiedad": "habitada",
+        "permiteVerFinanzas": true
+      },
+      {
+        "id": "v-41",
+        "personaId": "p-38",
+        "unidadId": "u-D-302",
+        "rol": "propietario",
+        "fechaInicio": "2023-06-01",
+        "estadoOcupacionPropiedad": "en_venta",
+        "permiteVerFinanzas": false
+      },
+      {
+        "id": "v-42",
+        "personaId": "p-39",
+        "unidadId": "u-D-303",
+        "rol": "propietario",
+        "fechaInicio": "2020-07-20",
+        "estadoOcupacionPropiedad": "habitada",
+        "permiteVerFinanzas": true
+      },
+      {
+        "id": "v-43",
+        "personaId": "p-40",
+        "unidadId": "u-E-101",
+        "rol": "propietario",
+        "fechaInicio": "2021-01-15",
+        "estadoOcupacionPropiedad": "habitada",
+        "permiteVerFinanzas": true
+      },
+      {
+        "id": "v-44",
+        "personaId": "p-41",
+        "unidadId": "u-E-102",
+        "rol": "arrendatario",
+        "fechaInicio": "2024-12-01",
+        "permiteVerFinanzas": false
+      },
+      {
+        "id": "v-45",
+        "personaId": "p-42",
+        "unidadId": "u-E-103",
+        "rol": "propietario",
+        "fechaInicio": "2020-06-10",
+        "estadoOcupacionPropiedad": "habitada",
+        "permiteVerFinanzas": true
+      },
+      {
+        "id": "v-46",
+        "personaId": "p-43",
+        "unidadId": "u-E-201",
+        "rol": "propietario",
+        "fechaInicio": "2019-10-20",
+        "estadoOcupacionPropiedad": "habitada",
+        "permiteVerFinanzas": true
+      },
+      {
+        "id": "v-47",
+        "personaId": "p-44",
+        "unidadId": "u-E-202",
+        "rol": "arrendatario",
+        "fechaInicio": "2025-06-01",
+        "permiteVerFinanzas": false
+      },
+      {
+        "id": "v-48",
+        "personaId": "p-45",
+        "unidadId": "u-E-302",
+        "rol": "propietario",
+        "fechaInicio": "2022-03-15",
+        "estadoOcupacionPropiedad": "habitada",
+        "permiteVerFinanzas": true
+      },
+      {
+        "id": "v-49",
+        "personaId": "p-45",
+        "unidadId": "u-E-303",
+        "rol": "propietario",
+        "fechaInicio": "2023-09-01",
+        "estadoOcupacionPropiedad": "en_venta",
+        "permiteVerFinanzas": false
+      },
+      {
+        "id": "v-50",
+        "personaId": "p-46",
+        "unidadId": "u-E-304",
+        "rol": "propietario",
+        "fechaInicio": "2021-07-10",
+        "estadoOcupacionPropiedad": "habitada",
+        "permiteVerFinanzas": true
+      },
+      {
+        "id": "v-51",
+        "personaId": "p-47",
+        "unidadId": "u-E-402",
+        "rol": "propietario",
+        "fechaInicio": "2020-04-20",
+        "estadoOcupacionPropiedad": "habitada",
+        "permiteVerFinanzas": true
+      },
+      {
+        "id": "v-52",
+        "personaId": "p-48",
+        "unidadId": "u-LC-01",
+        "rol": "ocupante",
+        "fechaInicio": "2023-01-15",
+        "estadoOcupacionPropiedad": "habitada",
+        "permiteVerFinanzas": false
+      },
+      {
+        "id": "v-53",
+        "personaId": "p-49",
+        "unidadId": "u-LC-02",
+        "rol": "arrendatario",
+        "fechaInicio": "2024-06-01",
+        "permiteVerFinanzas": false
+      },
+      {
+        "id": "v-54",
+        "personaId": "p-51",
+        "unidadId": "u-A-402",
+        "rol": "propietario",
+        "fechaInicio": "2019-03-01",
+        "estadoOcupacionPropiedad": "habitada",
+        "permiteVerFinanzas": true
+      },
+      {
+        "id": "v-55",
+        "personaId": "p-52",
+        "unidadId": "u-E-404",
+        "rol": "propietario",
+        "fechaInicio": "2020-01-15",
+        "estadoOcupacionPropiedad": "habitada",
+        "permiteVerFinanzas": true
+      }
+    ],
+    "configuracion": {
+      "nombreComunidad": "Edificio Plaza Central",
+      "rutCondominio": "77.123.456-7",
+      "direccionOficial": "Av. Libertador 1234, Santiago",
+      "administradorResponsable": "Carlos Castillo Ruiz",
+      "rutAdministrador": "13.555.666-8",
+      "telefonoAdmin": "+56 9 3333 7777",
+      "modoCalculoGC": "variable",
+      "diaCortePago": 5,
+      "limiteMesesAvisoCorte": 3,
+      "smtpHost": "smtp.gmail.com",
+      "smtpPort": 587,
+      "smtpUser": "gdcuentas@sgc.cl",
+      "smtpPassword": "",
+      "smtpSecurity": "tls",
+      "smtpFrom": "gdcuentas@sgc.cl",
+      "smtpFromName": "Administración Edificio Plaza Central",
+      "smtpBcc": "auditoria@sgc.cl",
+      "smtpRecepcion": "conserjeria@sgc.cl",
+      "notificarEmisionGC": true,
+      "notificarRegistroVisitas": true,
+      "notificarEncomiendas": true,
+      "notificarReservas": true,
+      "notificarAvisosSistema": true,
+      "notificarSugerenciasReclamos": true,
+      "diasMesComercial": 30,
+      "diasVacacionesMes": 1.25,
+      "jornadaSemanalEstandar": 45,
+      "claveEliminacionMaestro": ""
+    },
+    "maestros": {
+      "afps": [
+        {
+          "id": "afp-habitat",
+          "nombre": "AFP Habitat",
+          "tasaCotizacion": 10.58
+        },
+        {
+          "id": "afp-cuprum",
+          "nombre": "AFP Cuprum",
+          "tasaCotizacion": 10.58
+        },
+        {
+          "id": "afp-modelo",
+          "nombre": "AFP Modelo",
+          "tasaCotizacion": 10.58
+        },
+        {
+          "id": "afp-planvital",
+          "nombre": "AFP Planvital",
+          "tasaCotizacion": 10.58
+        },
+        {
+          "id": "afp-provida",
+          "nombre": "AFP Provida",
+          "tasaCotizacion": 10.58
+        },
+        {
+          "id": "afp-uno",
+          "nombre": "AFP Uno",
+          "tasaCotizacion": 10.58
+        }
+      ],
+      "previsionesSalud": [
+        {
+          "id": "fonasa",
+          "nombre": "FONASA",
+          "tipo": "fonasa"
+        },
+        {
+          "id": "isapre-banmedica",
+          "nombre": "Isapre Banmédica",
+          "tipo": "isapre"
+        },
+        {
+          "id": "isapre-colmena",
+          "nombre": "Isapre Colmena",
+          "tipo": "isapre"
+        },
+        {
+          "id": "isapre-consalud",
+          "nombre": "Isapre Consalud",
+          "tipo": "isapre"
+        },
+        {
+          "id": "isapre-cruzblanca",
+          "nombre": "Isapre Cruz Blanca",
+          "tipo": "isapre"
+        },
+        {
+          "id": "isapre-vidatres",
+          "nombre": "Isapre Vida Tres",
+          "tipo": "isapre"
+        }
+      ],
+      "mutualesCajas": [
+        {
+          "id": "achs",
+          "nombre": "ACHS"
+        },
+        {
+          "id": "mutual",
+          "nombre": "Mutual de Seguridad"
+        },
+        {
+          "id": "cmac-cordillera",
+          "nombre": "Caja de Compensación Los Andes"
+        },
+        {
+          "id": "cmac-biobio",
+          "nombre": "Caja de Compensación La Araucana"
+        },
+        {
+          "id": "cmac-losheroes",
+          "nombre": "Caja de Compensación Los Héroes"
+        }
+      ],
+      "feriados": [
+        {
+          "id": "f-1",
+          "fecha": "2025-01-01",
+          "nombre": "Año Nuevo",
+          "irrenunciable": false
+        },
+        {
+          "id": "f-2",
+          "fecha": "2025-09-18",
+          "nombre": "Fiestas Patrias",
+          "irrenunciable": true
+        },
+        {
+          "id": "f-3",
+          "fecha": "2025-09-19",
+          "nombre": "Día de las Glorias del Ejército",
+          "irrenunciable": true
+        },
+        {
+          "id": "f-4",
+          "fecha": "2025-12-25",
+          "nombre": "Navidad",
+          "irrenunciable": false
+        }
+      ],
+      "bancos": [
+        {
+          "id": "banco-estado",
+          "nombre": "Banco Estado"
+        },
+        {
+          "id": "banco-chile",
+          "nombre": "Banco de Chile"
+        },
+        {
+          "id": "banco-santander",
+          "nombre": "Banco Santander"
+        },
+        {
+          "id": "banco-itau",
+          "nombre": "Banco Itaú"
+        },
+        {
+          "id": "banco-bci",
+          "nombre": "BCI"
+        },
+        {
+          "id": "banco-scotiabank",
+          "nombre": "Scotiabank"
+        }
+      ],
+      "indicesAjuste": [
+        {
+          "id": "ipc",
+          "nombre": "Índice de Precios al Consumidor",
+          "codigo": "IPC"
+        },
+        {
+          "id": "uf",
+          "nombre": "Unidad de Fomento",
+          "codigo": "UF"
+        }
+      ],
+      "cajasFondos": [
+        {
+          "id": "gc",
+          "nombre": "Fondo de Gasto Común",
+          "tipo": "gasto-comun"
+        },
+        {
+          "id": "reserva",
+          "nombre": "Fondo de Reserva",
+          "tipo": "reserva"
+        },
+        {
+          "id": "amenities",
+          "nombre": "Fondo de Amenities",
+          "tipo": "amenities"
+        },
+        {
+          "id": "extraordinaria",
+          "nombre": "Fondo Cuota Extraordinaria",
+          "tipo": "especial"
+        }
+      ],
+      "categoriasInsumos": [
+        {
+          "id": "limpieza",
+          "nombre": "Limpieza"
+        },
+        {
+          "id": "oficina",
+          "nombre": "Oficina"
+        },
+        {
+          "id": "iluminacion",
+          "nombre": "Iluminación"
+        },
+        {
+          "id": "cafe",
+          "nombre": "Cafetería"
+        },
+        {
+          "id": "epp",
+          "nombre": "EPP"
+        }
+      ],
+      "unidadesMedida": [
+        {
+          "id": "unidad",
+          "nombre": "Unidad",
+          "abreviatura": "un"
+        },
+        {
+          "id": "litro",
+          "nombre": "Litro",
+          "abreviatura": "L"
+        },
+        {
+          "id": "kilo",
+          "nombre": "Kilogramo",
+          "abreviatura": "kg"
+        },
+        {
+          "id": "metro",
+          "nombre": "Metro",
+          "abreviatura": "m"
+        },
+        {
+          "id": "metro-cuadrado",
+          "nombre": "Metro Cuadrado",
+          "abreviatura": "m²"
+        }
+      ],
+      "contactosEmergencia": [
+        {
+          "id": "e-1",
+          "categoria": "urgencia",
+          "nombre": "Carabineros",
+          "telefono": "133"
+        },
+        {
+          "id": "e-2",
+          "categoria": "urgencia",
+          "nombre": "Bomberos",
+          "telefono": "132"
+        },
+        {
+          "id": "e-3",
+          "categoria": "urgencia",
+          "nombre": "Ambulancia",
+          "telefono": "131"
+        },
+        {
+          "id": "e-4",
+          "categoria": "urgencia",
+          "nombre": "Plan Cuadrante",
+          "telefono": "+56 9 1234 5678"
+        },
+        {
+          "id": "e-5",
+          "categoria": "tecnico",
+          "nombre": "Empresa de Ascensores",
+          "telefono": "+56 2 2345 6789"
+        },
+        {
+          "id": "e-6",
+          "categoria": "tecnico",
+          "nombre": "Electricista de Guardia",
+          "telefono": "+56 9 8765 4321"
+        }
+      ],
+      "condicionesEspeciales": [
+        {
+          "id": "c-1",
+          "nombre": "Electrodependiente",
+          "color": "bg-blue-500 text-white"
+        },
+        {
+          "id": "c-2",
+          "nombre": "Movilidad Reducida",
+          "color": "bg-amber-500 text-black"
+        },
+        {
+          "id": "c-3",
+          "nombre": "Adulto Mayor Solo",
+          "color": "bg-purple-500 text-white"
+        },
+        {
+          "id": "c-4",
+          "nombre": "Dificultad Auditiva",
+          "color": "bg-rose-500 text-white"
+        },
+        {
+          "id": "c-5",
+          "nombre": "Dificultad Visual",
+          "color": "bg-emerald-500 text-white"
+        }
+      ],
+      "estadosOcupacion": [
+        {
+          "id": "vacante",
+          "nombre": "Vacante",
+          "color": "bg-emerald-500 text-white",
+          "hex": "#10b981"
+        },
+        {
+          "id": "en-uso",
+          "nombre": "En Uso",
+          "color": "bg-blue-500 text-white",
+          "hex": "#2563eb"
+        },
+        {
+          "id": "en-arriendo",
+          "nombre": "En Arriendo",
+          "color": "bg-purple-500 text-white",
+          "hex": "#a855f7"
+        },
+        {
+          "id": "en-venta",
+          "nombre": "En Venta",
+          "color": "bg-cyan-500 text-white",
+          "hex": "#0891b2"
+        },
+        {
+          "id": "en-mantencion",
+          "nombre": "En Mantención",
+          "color": "bg-amber-500 text-black",
+          "hex": "#f59e0b"
+        }
+      ],
+      "categoriasMacro": [
+        {
+          "id": "torre",
+          "nombre": "Torre"
+        },
+        {
+          "id": "manzana",
+          "nombre": "Manzana"
+        },
+        {
+          "id": "etapa",
+          "nombre": "Etapa"
+        },
+        {
+          "id": "sector",
+          "nombre": "Sector"
+        },
+        {
+          "id": "parcela",
+          "nombre": "Parcela"
+        },
+        {
+          "id": "calle",
+          "nombre": "Calle"
+        },
+        {
+          "id": "edificio",
+          "nombre": "Edificio"
+        },
+        {
+          "id": "estacionamientos",
+          "nombre": "Estacionamientos"
+        }
+      ],
+      "categoriasMicro": [
+        {
+          "id": "piso",
+          "nombre": "Piso"
+        },
+        {
+          "id": "nivel",
+          "nombre": "Nivel"
+        },
+        {
+          "id": "pasaje",
+          "nombre": "Pasaje"
+        },
+        {
+          "id": "bloque",
+          "nombre": "Bloque"
+        },
+        {
+          "id": "no-aplica",
+          "nombre": "No Aplica"
+        }
+      ],
+      "categoriasUnidad": [
+        {
+          "id": "depto",
+          "nombre": "Depto"
+        },
+        {
+          "id": "casa",
+          "nombre": "Casa"
+        },
+        {
+          "id": "local",
+          "nombre": "Local"
+        },
+        {
+          "id": "oficina",
+          "nombre": "Oficina"
+        },
+        {
+          "id": "bodega",
+          "nombre": "Bodega"
+        },
+        {
+          "id": "estacionamiento",
+          "nombre": "Estacionamiento"
+        }
+      ],
+      "estadosInmobiliarios": [
+        {
+          "id": "habitada",
+          "nombre": "Habitada",
+          "color": "bg-emerald-500 text-white"
+        },
+        {
+          "id": "proxima_vacancia",
+          "nombre": "Próxima Vacancia",
+          "color": "bg-amber-500 text-black"
+        },
+        {
+          "id": "en_arriendo",
+          "nombre": "En Arriendo",
+          "color": "bg-blue-500 text-white"
+        },
+        {
+          "id": "arrendada",
+          "nombre": "Arrendada",
+          "color": "bg-purple-500 text-white"
+        },
+        {
+          "id": "en_venta",
+          "nombre": "En Venta",
+          "color": "bg-rose-500 text-white"
+        }
+      ]
+    }
+  },
+  "version": 8
+}

@@ -33,6 +33,11 @@ El sistema SHALL administrar en `/admin/maestros` las categorías de estructura 
 ### Requirement: Selección de Badge Visual con paleta canónica
 Los maestros con color visual (Estados de Ocupación, Estados Inmobiliarios, Condiciones Especiales) SHALL ofrecer la paleta canónica `BADGE_OPTIONS` mediante un selector de muestra visual. NO SHALL permitir escribir clases Tailwind manualmente, y los valores legacy SHALL normalizarse con `normalizeBadgeColor`.
 
+#### Scenario: Selector de paleta
+- **WHEN** el admin crea un estado de ocupación con color
+- **THEN** el selector MUST mostrar la paleta `BADGE_OPTIONS` con preview visual
+- **AND** el valor guardado MUST ser un id de la paleta, no una clase Tailwind libre
+
 ### Requirement: Gestión con patrón repository
 Las páginas SHALL mutar los maestros únicamente mediante `saveMaestro(key, item)` y `removeMaestro(key, id)` del store. NO SHALL existir listas hardcodeadas de opciones en la UI de módulos consumidores.
 

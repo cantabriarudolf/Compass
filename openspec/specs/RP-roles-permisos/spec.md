@@ -46,7 +46,7 @@ Permissions MUST be defined per module and action type.
 - **AND** the matrix MUST clearly indicate which roles have each permission.
 
 ### Requirement: Permisos Contextuales (ABAC)
-The system SHOULD support Attribute-Based Access Control for resource-specific or context-specific actions.
+The system SHALL support Attribute-Based Access Control for resource-specific or context-specific actions. The system SHOULD expose it as optional contextual filtering where applicable.
 
 #### Scenario: Supply Request Context
 - **WHEN** a resident requests a maintenance supply
@@ -68,7 +68,7 @@ Account creation MUST be a deliberate administrative action, not automatic upon 
 - **AND** the user MUST be forced to change the password on first login.
 
 ### Requirement: Autenticación Futura
-The system SHOULD support Google SSO as a future authentication method.
+The system SHALL be designed to allow future Google SSO as an optional authentication method. The system SHOULD expose it as `SHOULD` until implemented.
 
 #### Scenario: Google SSO
 - **WHEN** a user attempts to log in with Google

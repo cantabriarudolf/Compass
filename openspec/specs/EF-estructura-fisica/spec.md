@@ -8,6 +8,10 @@ Establecer la infraestructura física y lógica de las propiedades de la comunid
 ### Requirement: Flexible Hierarchy
 The system MUST support a 3-level hierarchy (Macro-Sector > Micro-Sector > Unit) where the Micro-Sector level MUST be optional.
 
+#### Scenario: Optional Micro-Sector
+- **WHEN** an administrator creates a macro-sector for a horizontal community (casas) without needing a micro-sector
+- **THEN** the system MUST allow saving the unit directly under the macro-sector with `No Aplica` as micro-sector
+
 ### Requirement: Customizable Labels (Categorías)
 The system MUST use user-friendly terminology (Categorías) instead of technical names.
 - **Categoría Macro**: Torre, Manzana, Etapa.
@@ -25,18 +29,29 @@ Every unit MUST contain detailed technical and tax data.
 - **Servicios**: MUST include Customer ID and Meter Number for Water, Electricity, and Gas.
 - **Metrics**: MUST include Metraje (m2) and Prorrateo (%).
 
+#### Scenario: Complete Technical Sheet
+- **WHEN** an administrator views or edits a unit
+- **THEN** the ficha MUST display Rol de Avalúo, Customer IDs and Meter Numbers for Agua/Luz/Gas, plus Metraje and Prorrateo
+- **AND** missing fields MUST be highlighted as required
+
 ### Requirement: Template Inheritance
 Units MUST inherit their base metrics (m2, monto GC) from a "Tipo de Unidad" (Categoría Física) template.
-- **Scenario**: Metraje Protection
-  - **WHEN** viewing a unit form
-  - **THEN** the metraje MUST be read-only and inherited from the template.
+
+#### Scenario: Metraje Protection
+- **WHEN** viewing a unit form
+- **THEN** the metraje MUST be read-only and inherited from the template
 
 ### Requirement: Logical Deactivation (Soft Delete)
 Master data (Unit Types, Categories) MUST NOT be permanently deleted.
-- **Scenario**: Toggle Status
-  - **WHEN** an admin wants to remove a type
-  - **THEN** they MUST toggle its status to "Inactive".
-  - **THEN** inactive types MUST NOT appear in new registration forms.
+
+#### Scenario: Toggle Status
+- **WHEN** an admin wants to remove a type
+- **THEN** they MUST toggle its status to "Inactive"
+- **AND** inactive types MUST NOT appear in new registration forms
 
 ### Requirement: Scalable Macro-Sector Navigation
 The UI MUST handle an arbitrary number of Macro-Sectors using scrollable tabs or a compact selector.
+
+#### Scenario: Many Towers
+- **WHEN** the community has more than 6 macro-sectors
+- **THEN** the navigation MUST remain scrollable and accessible without breaking the layout

@@ -38,7 +38,6 @@ import {
   IconSearch,
   IconDownload,
   IconUpload,
-  IconTrash,
   IconChevronDown
 } from '@tabler/icons-react';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@workspace/ui/components/collapsible';
@@ -148,7 +147,6 @@ export default function DevDashboardPage() {
   const [storeImportPending, setStoreImportPending] = useState<{ json: string; fileName: string } | null>(null);
   const [storeImportValidation, setStoreImportValidation] = useState<BackupValidation | null>(null);
   const [storeImportDialogOpen, setStoreImportDialogOpen] = useState(false);
-  const [storeClearDialogOpen, setStoreClearDialogOpen] = useState(false);
   const [backupSummary, setBackupSummary] = useState<BackupSummaryItem[] | null>(null);
   const [backupDetailOpen, setBackupDetailOpen] = useState(false);
   const [backupToRepo, setBackupToRepo] = useState(false);
@@ -292,18 +290,6 @@ export default function DevDashboardPage() {
       setStoreImportDialogOpen(false);
     }
   }, [storeImportPending, storeImportValidation]);
-
-  const confirmStoreClear = useCallback(() => {
-    try {
-      localStorage.removeItem(STORE_KEY);
-      setStoreClearDialogOpen(false);
-      setStoreBackupMsg({ type: 'ok', text: 'Datos temporales eliminados. Recargando con los datos de fábrica...' });
-      window.setTimeout(() => window.location.reload(), 600);
-    } catch (e) {
-      setStoreBackupMsg({ type: 'error', text: e instanceof Error ? e.message : String(e) });
-      setStoreClearDialogOpen(false);
-    }
-  }, []);
 
   const refresh = useCallback(async () => {
     try {
@@ -625,15 +611,6 @@ export default function DevDashboardPage() {
               <Button variant="outline" size="sm" onClick={() => storeFileInputRef.current?.click()} title="Restaurar un backup JSON del store local">
                 <IconUpload className="size-4 mr-1" /> Importar datos
               </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setStoreClearDialogOpen(true)}
-                title="Eliminar los datos temporales del store local y volver a los datos de fábrica"
-                className="text-destructive border-destructive/40 hover:bg-destructive/10"
-              >
-                <IconTrash className="size-4 mr-1" /> Limpiar datos
-              </Button>
             </div>
             <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer select-none">
               <Checkbox
@@ -798,31 +775,6 @@ export default function DevDashboardPage() {
             <Button variant="outline" onClick={() => setStoreImportDialogOpen(false)}>Cancelar</Button>
             <Button onClick={confirmStoreImport} disabled={!storeImportValidation?.ok}>
               <IconCheck className="size-4 mr-1" /> Confirmar importación
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={storeClearDialogOpen} onOpenChange={setStoreClearDialogOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Limpiar datos temporales</DialogTitle>
-            <DialogDescription>
-              Se eliminará el contenido actual del store local (<code className="font-mono text-xs">compass-store</code>) y la
-              app recargará con los datos de fábrica (seed). Esta acción no se puede deshacer.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm flex items-start gap-2">
-            <IconAlertTriangle className="size-4 mt-0.5 shrink-0 text-destructive" />
-            <span>
-              Los cambios temporales realizados en la app se perderán. Usa{' '}
-              <span className="font-semibold">Exportar datos</span> si quieres conservar una copia antes de limpiar.
-            </span>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setStoreClearDialogOpen(false)}>Cancelar</Button>
-            <Button variant="destructive" onClick={confirmStoreClear}>
-              <IconTrash className="size-4 mr-1" /> Confirmar limpieza
             </Button>
           </DialogFooter>
         </DialogContent>

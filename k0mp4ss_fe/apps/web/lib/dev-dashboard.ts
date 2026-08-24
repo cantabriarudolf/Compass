@@ -91,6 +91,7 @@ const PHASES: Record<string, string> = {
   IN: 'Fase 4',
   MT: 'Fase 4',
   CT: 'Fase 4',
+  LAB: 'Fase 5',
 };
 
 const ROUTES: Record<string, string> = {
@@ -120,6 +121,7 @@ const ROUTES: Record<string, string> = {
   PE: '/personas/personal',
   PL: '/finanzas/remuneraciones',
   RE: '/reportes',
+  LAB: '/admin/qa-lab',
 };
 
 const ARCHIVED_OVERRIDES: Record<string, { code: string; name?: string }> = {
@@ -143,6 +145,7 @@ const PHASE_ORDER: Record<string, number> = {
   'Fase 2': 2,
   'Fase 3': 3,
   'Fase 4': 4,
+  'Fase 5': 5,
 };
 
 function findRepoRoot(): string {
@@ -458,9 +461,12 @@ export function getDashboardData(): DashboardData {
   return { modules, changes, archived, specs, stats };
 }
 
+const SAFE_CHANGE_ID = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
+
 export function toggleTask(changeId: string, taskId: string): ChangeInfo | null {
+  if (!SAFE_CHANGE_ID.test(changeId)) return null;
   const candidates = [path.join(CHANGES_DIR, changeId), path.join(ARCHIVE_DIR, changeId)];
-  const dirPath = candidates.find(existsSync);
+  const dirPath = candidates.find(c => existsSync(c) && statSync(c).isDirectory());
   if (!dirPath) return null;
 
   const filePath = path.join(dirPath, 'tasks.md');

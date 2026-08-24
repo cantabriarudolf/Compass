@@ -1,5 +1,6 @@
 {
   "$schema": "https://turbo.build/schema.json",
+  "globalEnv": ["COMPASS_ROOT", "NEXT_PUBLIC_APP_ENV", "APP_ENV"],
   "ui": "tui",
   "tasks": {
     "build": {

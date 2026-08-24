@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { useCompassStore, useStoreRehydrated } from "@/lib/store"
+import { useCompassStore, useStoreRehydrated, StoreResult } from "@/lib/store"
 
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@workspace/ui/components/card"
 import { Tabs, TabsList, TabsTrigger } from "@workspace/ui/components/tabs"
@@ -159,10 +159,13 @@ export default function DirectorioPersonasPage() {
     setIsModalOpen(true)
   }
 
-  const handleSave = (data: Partial<Persona>) => {
-    savePersona(data as Persona)
-    setIsModalOpen(false)
-    setEditingPersona(null)
+  const handleSave = (data: Partial<Persona>): StoreResult => {
+    const resultado = savePersona(data as Persona)
+    if (resultado.ok) {
+      setIsModalOpen(false)
+      setEditingPersona(null)
+    }
+    return resultado
   }
 
   if (!hasHydrated) {

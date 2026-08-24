@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { Unidad } from "@/data/inventario/estructura"
-import { useCompassStore } from "@/lib/store"
+import { useCompassStore, StoreResult } from "@/lib/store"
 import { 
   Dialog, 
   DialogContent, 
@@ -29,14 +29,14 @@ interface FormularioUnidadProps {
   macroSectorId?: string;
   microSectorId?: string;
   trigger?: React.ReactNode;
-  onSave?: (data: Partial<Unidad>) => void;
+  onSave?: (data: Partial<Unidad>) => StoreResult | void;
 }
 
 interface FormularioUnidadContentProps {
   unidad?: Unidad;
   macroSectorId?: string;
   microSectorId?: string;
-  onSave?: (data: Partial<Unidad>) => void;
+  onSave?: (data: Partial<Unidad>) => StoreResult | void;
   onCancel?: () => void;
 }
 
@@ -105,9 +105,12 @@ function FormularioUnidadContent({ unidad, macroSectorId, microSectorId, onSave,
     }
   }
 
+  const [errorGuardado, setErrorGuardado] = React.useState<string | null>(null)
+
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     if (!microId) return
+    setErrorGuardado(null)
 
     const formData = new FormData(e.currentTarget)
     
@@ -126,7 +129,11 @@ function FormularioUnidadContent({ unidad, macroSectorId, microSectorId, onSave,
         gas: { cliente: formData.get("gas_cliente") as string, medidor: formData.get("gas_medidor") as string },
       }
     }
-    onSave?.(data)
+    const resultado = onSave?.(data)
+    if (resultado && !resultado.ok) {
+      setErrorGuardado(resultado.error ?? "No se pudo guardar la unidad.")
+      return
+    }
     onCancel?.()
   }
 
@@ -304,6 +311,12 @@ function FormularioUnidadContent({ unidad, macroSectorId, microSectorId, onSave,
           </div>
         </div>
       </div>
+
+      {errorGuardado && (
+        <div className="bg-destructive/10 border border-destructive/30 rounded-md p-3 text-sm text-destructive font-medium">
+          {errorGuardado}
+        </div>
+      )}
 
       <DialogFooter className="border-t pt-4">
         <Button variant="ghost" type="button" onClick={onCancel}>Cancelar</Button>

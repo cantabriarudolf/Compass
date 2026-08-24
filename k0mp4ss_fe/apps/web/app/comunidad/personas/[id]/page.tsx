@@ -81,6 +81,7 @@ export default function PersonaPerfilPage() {
   const [dialogoAbierto, setDialogoAbierto] = React.useState(false)
   const [vinculoEditando, setVinculoEditando] = React.useState<VinculoUnidad | null>(null)
   const [historialVinculo, setHistorialVinculo] = React.useState<VinculoUnidad | null>(null)
+  const [errorVinculos, setErrorVinculos] = React.useState("")
 
   // Unidades con vínculo activo (excluyendo la unidad del vínculo que se está editando)
   const unidadesExcluidas = React.useMemo(() => {
@@ -165,8 +166,13 @@ export default function PersonaPerfilPage() {
   }
 
   const eliminarVinculo = (vinculoId: string) => {
+    const resultado = removeVinculo(vinculoId)
+    if (!resultado.ok) {
+      setErrorVinculos(resultado.error ?? "No se pudo eliminar el vínculo.")
+      return
+    }
+    setErrorVinculos("")
     const nuevos = vinculosUnidad.filter(v => v.id !== vinculoId)
-    removeVinculo(vinculoId)
     actualizarRolesPersona(nuevos)
   }
 
@@ -280,6 +286,12 @@ export default function PersonaPerfilPage() {
                 <IconPlus className="size-4" /> Vincular Unidad
               </Button>
             </div>
+
+            {errorVinculos && (
+              <div className="rounded-md border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm font-medium text-destructive">
+                {errorVinculos}
+              </div>
+            )}
 
             {vinculosUnidad.length === 0 && (
               /* TAREA 4.7: Empty State */

@@ -1,17 +1,24 @@
 import { NextResponse } from 'next/server';
 import { getDashboardData, toggleTask, readProjectFile, saveModuleNotes, setModuleNotesStatus } from '@/lib/dev-dashboard';
+import { isWriteApiEnabled } from '@/lib/env-guard';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
+  if (!isWriteApiEnabled()) {
+    return NextResponse.json({ error: 'Not Found' }, { status: 404 });
+  }
   try {
     return NextResponse.json(getDashboardData());
-  } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 });
+  } catch {
+    return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 });
   }
 }
 
 export async function POST(request: Request) {
+  if (!isWriteApiEnabled()) {
+    return NextResponse.json({ error: 'Not Found' }, { status: 404 });
+  }
   try {
     const body = await request.json();
     const { file } = body;
@@ -20,15 +27,18 @@ export async function POST(request: Request) {
     }
     const content = readProjectFile(file);
     if (content === null) {
-      return NextResponse.json({ error: `Archivo no disponible: ${file}` }, { status: 404 });
+      return NextResponse.json({ error: 'Recurso no disponible' }, { status: 404 });
     }
     return NextResponse.json({ ok: true, file, content });
-  } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 });
+  } catch {
+    return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 });
   }
 }
 
 export async function PUT(request: Request) {
+  if (!isWriteApiEnabled()) {
+    return NextResponse.json({ error: 'Not Found' }, { status: 404 });
+  }
   try {
     const body = await request.json();
     const { file, content, status } = body;
@@ -45,15 +55,19 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: 'content o status son requeridos' }, { status: 400 });
     }
     if (!result.ok) {
-      return NextResponse.json({ error: result.error ?? 'Error al guardar' }, { status: 500 });
+      console.error('[api/dev-dashboard] Error al guardar:', result.error);
+      return NextResponse.json({ error: 'No se pudo guardar' }, { status: 500 });
     }
     return NextResponse.json({ ok: true, file, status: status ?? undefined });
-  } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 });
+  } catch {
+    return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 });
   }
 }
 
 export async function PATCH(request: Request) {
+  if (!isWriteApiEnabled()) {
+    return NextResponse.json({ error: 'Not Found' }, { status: 404 });
+  }
   try {
     const body = await request.json();
     const { changeId, taskId } = body;
@@ -62,10 +76,10 @@ export async function PATCH(request: Request) {
     }
     const change = toggleTask(changeId, taskId);
     if (!change) {
-      return NextResponse.json({ error: `Change "${changeId}" no encontrado` }, { status: 404 });
+      return NextResponse.json({ error: 'Recurso no encontrado' }, { status: 404 });
     }
     return NextResponse.json({ ok: true, change });
-  } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : String(error) }, { status: 500 });
+  } catch {
+    return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 });
   }
 }

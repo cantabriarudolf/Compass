@@ -127,28 +127,43 @@ export default function MaestrosPage() {
     
     if (subTab === "estados") {
       const id = editingItem?.id ?? `est-${Date.now()}`
-      saveMaestro("estadosOcupacion", { id, nombre, color, hex: editingItem?.hex ?? hexDesdeId(id) })
+      const resultado = saveMaestro("estadosOcupacion", { id, nombre, color, hex: editingItem?.hex ?? hexDesdeId(id) })
+      if (!resultado.ok) { setDuplicateError(resultado.error ?? "No se pudo guardar el registro."); return }
     } else if (subTab === "macros") {
-      if (editingItem) saveMaestro("categoriasMacro", { ...editingItem, nombre })
-      else saveMaestro("categoriasMacro", { id: Date.now().toString(), nombre })
+      const resultado = editingItem
+        ? saveMaestro("categoriasMacro", { ...editingItem, nombre })
+        : saveMaestro("categoriasMacro", { id: Date.now().toString(), nombre })
+      if (!resultado.ok) { setDuplicateError(resultado.error ?? "No se pudo guardar el registro."); return }
     } else if (subTab === "micros") {
-      if (editingItem) saveMaestro("categoriasMicro", { ...editingItem, nombre })
-      else saveMaestro("categoriasMicro", { id: Date.now().toString(), nombre })
+      const resultado = editingItem
+        ? saveMaestro("categoriasMicro", { ...editingItem, nombre })
+        : saveMaestro("categoriasMicro", { id: Date.now().toString(), nombre })
+      if (!resultado.ok) { setDuplicateError(resultado.error ?? "No se pudo guardar el registro."); return }
     } else if (subTab === "tipos") {
-      if (editingItem) saveMaestro("categoriasUnidad", { ...editingItem, nombre })
-      else saveMaestro("categoriasUnidad", { id: Date.now().toString(), nombre })
+      const resultado = editingItem
+        ? saveMaestro("categoriasUnidad", { ...editingItem, nombre })
+        : saveMaestro("categoriasUnidad", { id: Date.now().toString(), nombre })
+      if (!resultado.ok) { setDuplicateError(resultado.error ?? "No se pudo guardar el registro."); return }
     } else if (subTab === "estadosInmobiliarios") {
-      if (editingItem) saveMaestro("estadosInmobiliarios", { ...editingItem, nombre, color })
-      else saveMaestro("estadosInmobiliarios", { id: Date.now().toString(), nombre, color })
+      const resultado = editingItem
+        ? saveMaestro("estadosInmobiliarios", { ...editingItem, nombre, color })
+        : saveMaestro("estadosInmobiliarios", { id: Date.now().toString(), nombre, color })
+      if (!resultado.ok) { setDuplicateError(resultado.error ?? "No se pudo guardar el registro."); return }
     } else if (subTab === "condiciones") {
-      if (editingItem) saveMaestro("condicionesEspeciales", { ...editingItem, nombre, color })
-      else saveMaestro("condicionesEspeciales", { id: Date.now().toString(), nombre, color })
+      const resultado = editingItem
+        ? saveMaestro("condicionesEspeciales", { ...editingItem, nombre, color })
+        : saveMaestro("condicionesEspeciales", { id: Date.now().toString(), nombre, color })
+      if (!resultado.ok) { setDuplicateError(resultado.error ?? "No se pudo guardar el registro."); return }
     } else if (subTab === "bancos") {
-      if (editingItem) saveMaestro("bancos", { ...editingItem, nombre })
-      else saveMaestro("bancos", { id: Date.now().toString(), nombre })
+      const resultado = editingItem
+        ? saveMaestro("bancos", { ...editingItem, nombre })
+        : saveMaestro("bancos", { id: Date.now().toString(), nombre })
+      if (!resultado.ok) { setDuplicateError(resultado.error ?? "No se pudo guardar el registro."); return }
     } else if (subTab === "emergencias") {
-      if (editingItem) saveMaestro("contactosEmergencia", { ...editingItem, nombre, telefono: valor })
-      else saveMaestro("contactosEmergencia", { id: Date.now().toString(), nombre, telefono: valor })
+      const resultado = editingItem
+        ? saveMaestro("contactosEmergencia", { ...editingItem, nombre, telefono: valor })
+        : saveMaestro("contactosEmergencia", { id: Date.now().toString(), nombre, telefono: valor })
+      if (!resultado.ok) { setDuplicateError(resultado.error ?? "No se pudo guardar el registro."); return }
     }
     
     setIsDialogOpen(false)

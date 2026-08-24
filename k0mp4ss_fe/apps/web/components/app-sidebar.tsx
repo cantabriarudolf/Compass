@@ -127,6 +127,8 @@ const data = {
       roles: ["admin"],
       items: [
         { title: "Dashboard OpenSpec", url: "/admin/dev-dashboard" },
+        { title: "Laboratorio QA", url: "/admin/qa-lab" },
+        { title: "Mantenimiento", url: "/admin/mantenimiento" },
       ],
     },
     {

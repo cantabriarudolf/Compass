@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { Persona } from "@/data/comunidad/personas"
-import { useCompassStore } from "@/lib/store"
+import { useCompassStore, StoreResult } from "@/lib/store"
 import { Button } from "@workspace/ui/components/button"
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
@@ -18,14 +18,14 @@ import { ScrollArea } from "@workspace/ui/components/scroll-area"
 
 interface FormularioPersonaProps {
   persona?: Persona;
-  onSave: (personaData: Partial<Persona>) => void;
+  onSave: (personaData: Partial<Persona>) => StoreResult;
   onCancel: () => void;
 }
 
 export function FormularioPersona({ persona, onSave, onCancel }: FormularioPersonaProps) {
   const isEditing = !!persona
   const condicionesEspeciales = useCompassStore(s => s.maestros.condicionesEspeciales)
-  
+
   // Estados del formulario
   const [rut, setRut] = React.useState(persona?.rut || "")
   const [nombres, setNombres] = React.useState(persona?.nombres || "")
@@ -33,10 +33,11 @@ export function FormularioPersona({ persona, onSave, onCancel }: FormularioPerso
   const [email, setEmail] = React.useState(persona?.email || "")
   const [telefonoMovil, setTelefonoMovil] = React.useState(persona?.telefonoMovil || "")
   const [estadoCuenta, setEstadoCuenta] = React.useState(persona?.estadoCuenta || "activa")
-  
+
   // Roles y Condiciones (Arrays)
   const [roles, setRoles] = React.useState<string[]>(persona?.roles || [])
   const [condiciones, setCondiciones] = React.useState<string[]>(persona?.condicionesEspecialesIds || [])
+  const [errores, setErrores] = React.useState<Record<string, string>>({})
 
   const toggleRole = (role: string) => {
     setRoles(prev => prev.includes(role) ? prev.filter(r => r !== role) : [...prev, role])
@@ -48,7 +49,7 @@ export function FormularioPersona({ persona, onSave, onCancel }: FormularioPerso
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     const nuevaPersona: Partial<Persona> = {
       id: persona?.id || `p-${Date.now()}`,
       rut,
@@ -62,15 +63,24 @@ export function FormularioPersona({ persona, onSave, onCancel }: FormularioPerso
       condicionesEspecialesIds: condiciones,
       vinculosUnidad: persona?.vinculosUnidad || []
     }
-    
-    onSave(nuevaPersona)
+
+    const resultado = onSave(nuevaPersona)
+    if (resultado && !resultado.ok) {
+      setErrores({ global: resultado.error ?? "No se pudo guardar la persona." })
+    }
   }
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col h-full max-h-[80vh]">
       <ScrollArea className="flex-1 pr-4">
         <div className="grid gap-6 py-4">
-          
+
+          {errores.global && (
+            <div className="bg-destructive/10 border border-destructive/30 rounded-md p-3 text-sm text-destructive font-medium">
+              {errores.global}
+            </div>
+          )}
+
           <div className="space-y-4">
             <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-widest border-b pb-2">Identidad Base</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

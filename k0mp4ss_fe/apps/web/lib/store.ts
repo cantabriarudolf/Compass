@@ -3,18 +3,15 @@
 import { useEffect } from "react"
 import { create } from "zustand"
 import { persist, createJSONStorage } from "zustand/middleware"
+import { normalizarDocumento, calcularDigitoVerificador } from "./rut"
 import {
   tiposUnidad as seedTiposUnidad,
   macroSectores as seedMacroSectores,
   microSectores as seedMicroSectores,
   unidades as seedUnidades,
-  TipoUnidad,
-  MacroSector,
-  MicroSector,
-  Unidad,
 } from "@/data/inventario/estructura"
-import { personas as seedPersonas, Persona } from "@/data/comunidad/personas"
-import { vinculos as seedVinculos, VinculoUnidad, ESTADOS_INMOBILIARIOS as seedEstadosInmobiliarios } from "@/data/comunidad/vinculos"
+import { personas as seedPersonas } from "@/data/comunidad/personas"
+import { vinculos as seedVinculos, ESTADOS_INMOBILIARIOS as seedEstadosInmobiliarios } from "@/data/comunidad/vinculos"
 import {
   AFPS as seedAFPS,
   PREVISIONES_SALUD as seedPrevisionesSalud,
@@ -41,7 +38,6 @@ import {
 } from "@/data/admin/maestros"
 import {
   configuracionDefault as seedConfiguracion,
-  ConfiguracionGlobal,
 } from "@/data/admin/configuracion"
 import {
   ESTADOS_OCUPACION as seedEstadosOcupacion,
@@ -49,10 +45,72 @@ import {
   CATEGORIAS_MICRO as seedCategoriasMicro,
   CATEGORIAS_UNIDAD as seedCategoriasUnidad,
 } from "@/data/maestros"
+import {
+  TipoUnidadSchema,
+  MacroSectorSchema,
+  MicroSectorSchema,
+  UnidadSchema,
+  PersonaSchema,
+  VinculoUnidadSchema,
+  ConfiguracionGlobalSchema,
+  EventoAuditoriaSchema,
+  MAESTRO_SCHEMAS,
+  validarConEsquema,
+  validarMaestro,
+  type TipoUnidad,
+  type MacroSector,
+  type MicroSector,
+  type Unidad,
+  type Persona,
+  type VinculoUnidad,
+  type ConfiguracionGlobal,
+} from "@/lib/schemas"
+import { z } from "zod"
 
 export type StoreResult = { ok: boolean; error?: string }
 
-export const STORE_VERSION = 8
+export interface EventoAuditoria {
+  id: string
+  timestamp: string
+  usuario: string
+  categoria: string
+  tipoAccion: string
+  referenciaId: string
+  descripcion: string
+}
+
+const MAX_EVENTOS = 500
+
+type SetStateFn = (partial: Partial<CompassStore> | ((state: CompassStore) => Partial<CompassStore>)) => void
+
+function registrarEvento(
+  set: SetStateFn,
+  tipoAccion: string,
+  referenciaId: string,
+  descripcion: string
+): void {
+  set(s => ({
+    eventos: [
+      ...s.eventos.slice(-(MAX_EVENTOS - 1)),
+      {
+        id: `ev-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        timestamp: new Date().toISOString(),
+        usuario: "Admin",
+        categoria: "VU",
+        tipoAccion,
+        referenciaId,
+        descripcion,
+      },
+    ],
+  }))
+}
+
+function nombrePersona(get: () => CompassStore, personaId: string): string {
+  const p = get().personas.find(x => x.id === personaId)
+  return p ? `${p.nombres} ${p.apellidos}` : personaId
+}
+
+export const STORE_VERSION = 10
 
 export interface MaestroCollections {
   afps: Afp[]
@@ -80,6 +138,7 @@ export interface CompassData {
   unidades: Unidad[]
   personas: Persona[]
   vinculos: VinculoUnidad[]
+  eventos: EventoAuditoria[]
   configuracion: ConfiguracionGlobal
   maestros: MaestroCollections
 }
@@ -87,29 +146,29 @@ export interface CompassData {
 interface CompassStore extends CompassData {
   hasHydrated: boolean
   // Tipos de Unidad (TU)
-  saveTipoUnidad: (tipo: TipoUnidad) => void
+  saveTipoUnidad: (tipo: TipoUnidad) => StoreResult
   toggleActivoTipoUnidad: (id: string) => void
   removeTipoUnidad: (id: string) => StoreResult
   // Macro Sectores (EF)
-  saveMacroSector: (macro: MacroSector) => void
+  saveMacroSector: (macro: MacroSector) => StoreResult
   removeMacroSector: (id: string) => StoreResult
   // Micro Sectores (EF)
-  saveMicroSector: (micro: MicroSector) => void
+  saveMicroSector: (micro: MicroSector) => StoreResult
   removeMicroSector: (id: string) => StoreResult
   // Unidades (EF)
-  saveUnidad: (unidad: Unidad) => void
+  saveUnidad: (unidad: Unidad) => StoreResult
   removeUnidad: (id: string) => StoreResult
   // Personas (MP)
-  savePersona: (persona: Persona) => void
+  savePersona: (persona: Persona) => StoreResult
   removePersona: (id: string) => StoreResult
   // Vínculos (VU)
   saveVinculo: (vinculo: VinculoUnidad) => StoreResult
   removeVinculo: (id: string) => StoreResult
   // Maestros Administrativos (MA)
-  saveMaestro: <K extends keyof MaestroCollections>(key: K, item: MaestroCollections[K][number]) => void
+  saveMaestro: <K extends keyof MaestroCollections>(key: K, item: MaestroCollections[K][number]) => StoreResult
   removeMaestro: <K extends keyof MaestroCollections>(key: K, id: string) => StoreResult
   // Configuración Global (CF)
-  saveConfiguracion: (config: ConfiguracionGlobal) => void
+  saveConfiguracion: (config: ConfiguracionGlobal) => StoreResult
 }
 
 function upsert<T extends { id: string }>(list: T[], item: T): T[] {
@@ -144,6 +203,7 @@ export const seedData = (): CompassData => ({
   unidades: seedUnidades,
   personas: seedPersonas,
   vinculos: seedVinculos,
+  eventos: [],
   configuracion: seedConfiguracion,
   maestros: {
     afps: seedAFPS,
@@ -165,6 +225,97 @@ export const seedData = (): CompassData => ({
   },
 })
 
+// VAL-006: esquema por colección del estado persistido. En rehidratación/migración
+// cada colección se valida con safeParse; si una llega corrupta se descarta y se
+// re-siembra desde el seed, sin que el resto del store deje de cargar.
+const ESQUEMAS_COLECCION = {
+  tiposUnidad: z.array(TipoUnidadSchema),
+  macroSectores: z.array(MacroSectorSchema),
+  microSectores: z.array(MicroSectorSchema),
+  unidades: z.array(UnidadSchema),
+  personas: z.array(PersonaSchema),
+  vinculos: z.array(VinculoUnidadSchema),
+  eventos: z.array(EventoAuditoriaSchema),
+  configuracion: ConfiguracionGlobalSchema,
+} as const
+
+type ClaveColeccion = keyof typeof ESQUEMAS_COLECCION
+type ClaveMaestro = keyof MaestroCollections
+
+function sanitizarColecciones(prev: Partial<CompassData> | undefined | null): Partial<CompassData> | null {
+  if (!prev || typeof prev !== "object") return null
+  const seed = seedData()
+  const fixes: Record<string, unknown> = {}
+  let changed = false
+
+  for (const key of Object.keys(ESQUEMAS_COLECCION) as ClaveColeccion[]) {
+    const valor = (prev as Record<string, unknown>)[key]
+    if (valor === undefined) continue
+    if (!ESQUEMAS_COLECCION[key].safeParse(valor).success) {
+      fixes[key] = seed[key]
+      changed = true
+    }
+  }
+
+  // Maestros (MA): colección por colección. Las ausentes o inválidas se rellenan
+  // desde el seed para no dejar huecos que rompan el consumo en la UI.
+  if (prev.maestros !== undefined) {
+    const maestrosSaneados: Record<string, unknown> = {}
+    let maestrosChanged = false
+    for (const key of Object.keys(MAESTRO_SCHEMAS) as ClaveMaestro[]) {
+      const valor = prev.maestros
+        ? (prev.maestros as unknown as Record<string, unknown>)[key]
+        : undefined
+      const valido =
+        valor !== undefined && z.array(MAESTRO_SCHEMAS[key]).safeParse(valor).success
+      if (valido) {
+        maestrosSaneados[key] = valor
+      } else {
+        maestrosSaneados[key] = seed.maestros[key]
+        maestrosChanged = true
+      }
+    }
+    if (maestrosChanged) {
+      fixes.maestros = maestrosSaneados
+      changed = true
+    }
+  }
+
+  return changed ? (fixes as Partial<CompassData>) : null
+}
+
+// VAL-005 (migración v10): los RUT sembrados históricamente tenían dígito
+// verificador ficticio. Al endurecer la validación con módulo 11, todo store
+// persistido previo fallaría safeParse y perdería la colección de personas.
+// Se repara recalculando el DV del cuerpo (el cuerpo no cambia, solo el DV),
+// preservando el formato original del cuerpo (con o sin puntos).
+export function repararRut(rut: string): string {
+  const normalizado = normalizarDocumento(rut)
+  const indiceGuion = normalizado.lastIndexOf("-")
+  if (indiceGuion === -1) return rut
+  const cuerpoConFormato = normalizado.slice(0, indiceGuion)
+  const cuerpo = cuerpoConFormato.replace(/\./g, "")
+  if (!/^\d{7,8}$/.test(cuerpo)) return rut
+  return `${cuerpoConFormato}-${calcularDigitoVerificador(cuerpo)}`
+}
+
+function repararDocumentos(result: Partial<CompassData>): Partial<CompassData> {
+  let personas = result.personas
+  if (Array.isArray(personas)) {
+    personas = (personas as Persona[]).map((p) => ({ ...p, rut: repararRut(p.rut) }))
+  }
+  let configuracion = result.configuracion
+  if (configuracion) {
+    configuracion = {
+      ...configuracion,
+      rutCondominio: repararRut(configuracion.rutCondominio),
+      rutAdministrador: repararRut(configuracion.rutAdministrador),
+    }
+  }
+  if (personas === result.personas && configuracion === result.configuracion) return result
+  return { ...result, ...(personas !== result.personas ? { personas } : {}), ...(configuracion !== result.configuracion ? { configuracion } : {}) }
+}
+
 export const useCompassStore = create<CompassStore>()(
   persist(
     (set, get) => ({
@@ -173,8 +324,11 @@ export const useCompassStore = create<CompassStore>()(
 
       // --- TU: Tipos de Unidad ---
       saveTipoUnidad: (tipo) => {
-        if (!get().hasHydrated) return
-        set(s => ({ tiposUnidad: upsert(s.tiposUnidad, tipo) }))
+        if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
+        const validacion = validarConEsquema(TipoUnidadSchema, tipo)
+        if (!validacion.ok) return validacion
+        set(s => ({ tiposUnidad: upsert(s.tiposUnidad, validacion.data) }))
+        return { ok: true }
       },
 
       toggleActivoTipoUnidad: (id) => {
@@ -201,8 +355,11 @@ export const useCompassStore = create<CompassStore>()(
 
       // --- EF: Macro Sectores ---
       saveMacroSector: (macro) => {
-        if (!get().hasHydrated) return
-        set(s => ({ macroSectores: upsert(s.macroSectores, macro) }))
+        if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
+        const validacion = validarConEsquema(MacroSectorSchema, macro)
+        if (!validacion.ok) return validacion
+        set(s => ({ macroSectores: upsert(s.macroSectores, validacion.data) }))
+        return { ok: true }
       },
 
       removeMacroSector: (id) => {
@@ -220,8 +377,11 @@ export const useCompassStore = create<CompassStore>()(
 
       // --- EF: Micro Sectores ---
       saveMicroSector: (micro) => {
-        if (!get().hasHydrated) return
-        set(s => ({ microSectores: upsert(s.microSectores, micro) }))
+        if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
+        const validacion = validarConEsquema(MicroSectorSchema, micro)
+        if (!validacion.ok) return validacion
+        set(s => ({ microSectores: upsert(s.microSectores, validacion.data) }))
+        return { ok: true }
       },
 
       removeMicroSector: (id) => {
@@ -239,8 +399,11 @@ export const useCompassStore = create<CompassStore>()(
 
       // --- EF: Unidades ---
       saveUnidad: (unidad) => {
-        if (!get().hasHydrated) return
-        set(s => ({ unidades: upsert(s.unidades, unidad) }))
+        if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
+        const validacion = validarConEsquema(UnidadSchema, unidad)
+        if (!validacion.ok) return validacion
+        set(s => ({ unidades: upsert(s.unidades, validacion.data) }))
+        return { ok: true }
       },
 
       removeUnidad: (id) => {
@@ -258,8 +421,11 @@ export const useCompassStore = create<CompassStore>()(
 
       // --- MP: Personas ---
       savePersona: (persona) => {
-        if (!get().hasHydrated) return
-        set(s => ({ personas: upsert(s.personas, persona) }))
+        if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
+        const validacion = validarConEsquema(PersonaSchema, persona)
+        if (!validacion.ok) return validacion
+        set(s => ({ personas: upsert(s.personas, validacion.data) }))
+        return { ok: true }
       },
 
       removePersona: (id) => {
@@ -278,10 +444,16 @@ export const useCompassStore = create<CompassStore>()(
       // --- VU: Vínculos ---
       saveVinculo: (vinculo) => {
         if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
+        const validacion = validarConEsquema(VinculoUnidadSchema, vinculo)
+        if (!validacion.ok) return validacion
         const persona = get().personas.find(p => p.id === vinculo.personaId)
         if (!persona) return { ok: false, error: "La persona no existe en el Maestro de Personas." }
         if (persona.estadoCuenta === "inactiva") {
           return { ok: false, error: "No se puede vincular: la persona está marcada como inactiva en el Maestro de Personas." }
+        }
+        // TST-001 (D6: bloqueo duro): una cuenta bloqueada no puede recibir vínculos, sin excepciones.
+        if (persona.estadoCuenta === "bloqueada") {
+          return { ok: false, error: "No se puede vincular: la persona está marcada como bloqueada en el Maestro de Personas." }
         }
         const duplicado = get().vinculos.find(v =>
           v.personaId === vinculo.personaId &&
@@ -292,25 +464,14 @@ export const useCompassStore = create<CompassStore>()(
         if (duplicado) {
           return { ok: false, error: "Esta persona ya posee un vínculo activo con esta unidad." }
         }
-        if (vinculo.rol === "arrendatario") {
-          const inicio = vinculo.fechaInicio
-          const fin = vinculo.fechaFin ?? "9999-12-31"
-          const conflicto = get().vinculos.find(v =>
-            v.unidadId === vinculo.unidadId &&
-            v.rol === "arrendatario" &&
-            v.id !== vinculo.id &&
-            inicio <= (v.fechaFin ?? "9999-12-31") &&
-            v.fechaInicio <= fin
-          )
-          if (conflicto) {
-            return { ok: false, error: "El contrato de arriendo se solapa con otro contrato vigente en la misma unidad." }
-          }
-        }
 
-        // Cierre automático de tramo anterior (solo propietario/arrendatario)
+        // Cierre automático de tramo anterior (solo propietario/arrendatario).
+        // Se calcula sobre un snapshot en memoria para poder validar contra el estado post-cierre sin mutar aún el store.
+        let working = [...get().vinculos]
+        let cerrado: { vinculo: VinculoUnidad; fechaFin: string } | null = null
         const cerrarAnterior = vinculo.cerrarAnterior !== false
         if (cerrarAnterior && !vinculo.fechaFin && (vinculo.rol === "propietario" || vinculo.rol === "arrendatario")) {
-          const anterior = get().vinculos.find(v =>
+          const anterior = working.find(v =>
             v.unidadId === vinculo.unidadId &&
             v.rol === vinculo.rol &&
             !v.fechaFin &&
@@ -319,34 +480,101 @@ export const useCompassStore = create<CompassStore>()(
           if (anterior) {
             const fechaCierre = new Date(vinculo.fechaInicio)
             fechaCierre.setDate(fechaCierre.getDate() - 1)
-            const fechaFinStr = fechaCierre.toISOString().split("T")[0]
-            set(s => ({
-              vinculos: s.vinculos.map(v =>
-                v.id === anterior.id ? { ...v, fechaFin: fechaFinStr } : v
-              ),
-            }))
+            const fechaFinStr = fechaCierre.toISOString().slice(0, 10)
+            working = working.map(v =>
+              v.id === anterior.id ? { ...v, fechaFin: fechaFinStr } : v
+            )
+            cerrado = { vinculo: anterior, fechaFin: fechaFinStr }
           }
         }
 
-        set(s => ({ vinculos: upsert(s.vinculos, vinculo) }))
+        const inicio = vinculo.fechaInicio
+        const fin = vinculo.fechaFin ?? "9999-12-31"
+
+        // Exclusividad de titularidad/arriendo: un solo tramo vigente por unidad (cruza personas)
+        if (vinculo.rol === "propietario" || vinculo.rol === "arrendatario") {
+          const conflicto = working.find(v =>
+            v.unidadId === vinculo.unidadId &&
+            v.rol === vinculo.rol &&
+            v.id !== vinculo.id &&
+            inicio <= (v.fechaFin ?? "9999-12-31") &&
+            v.fechaInicio <= fin
+          )
+          if (conflicto) {
+            return {
+              ok: false,
+              error:
+                vinculo.rol === "arrendatario"
+                  ? "El contrato de arriendo se solapa con otro contrato vigente en la misma unidad."
+                  : "Ya existe un tramo de propietario que se solapa con las fechas indicadas en esta unidad.",
+            }
+          }
+        }
+
+        // Anti-autosolapamiento: la misma persona no puede tener dos tramos solapados del mismo rol en la unidad
+        const autosolape = working.find(v =>
+          v.personaId === vinculo.personaId &&
+          v.unidadId === vinculo.unidadId &&
+          v.rol === vinculo.rol &&
+          v.id !== vinculo.id &&
+          inicio <= (v.fechaFin ?? "9999-12-31") &&
+          v.fechaInicio <= fin
+        )
+        if (autosolape) {
+          return { ok: false, error: "Esta persona ya registra un tramo del mismo rol que se solapa con las fechas indicadas en esta unidad." }
+        }
+
+        set(() => ({ vinculos: upsert(working, vinculo) }))
+
+        const nombreAnterior = cerrado ? nombrePersona(get, cerrado.vinculo.personaId) : ""
+        if (cerrado) {
+          registrarEvento(
+            set,
+            "VU_ASSIGN_RELEASED",
+            cerrado.vinculo.id,
+            `Tramo cerrado automáticamente (${cerrado.vinculo.rol}) de ${nombreAnterior} hasta ${cerrado.fechaFin}.`
+          )
+        }
+        if (!vinculo.fechaFin && cerrado) {
+          const nombreNuevo = nombrePersona(get, vinculo.personaId)
+          if (vinculo.rol === "propietario") {
+            registrarEvento(set, "VU_CHANGE_OWNER", vinculo.unidadId, `${nombreNuevo} reemplaza a ${nombreAnterior} como propietario.`)
+          } else if (vinculo.rol === "arrendatario") {
+            registrarEvento(set, "VU_NEW_TENANT", vinculo.unidadId, `${nombreNuevo} reemplaza a ${nombreAnterior} como arrendatario.`)
+          }
+        }
+
         return { ok: true }
       },
 
       removeVinculo: (id) => {
         if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
+        const objetivo = get().vinculos.find(v => v.id === id)
         set(s => ({ vinculos: s.vinculos.filter(v => v.id !== id) }))
+        if (objetivo) {
+          const unidad = get().unidades.find(u => u.id === objetivo.unidadId)
+          const ref = unidad ? `${unidad.etiqueta} ${unidad.numero}` : objetivo.unidadId
+          if (!objetivo.fechaFin) {
+            registrarEvento(set, "VU_ASSIGN_RELEASED", id, `Vínculo eliminado (${objetivo.rol}) sobre ${ref}.`)
+          } else {
+            registrarEvento(set, "VU_DELETE", id, `Tramo histórico (${objetivo.rol}) eliminado de ${ref}.`)
+          }
+        }
         return { ok: true }
       },
 
       // --- MA: Maestros Administrativos ---
       saveMaestro: (key, item) => {
-        if (!get().hasHydrated) return
+        if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
+        const validacion = validarMaestro(key, item)
+        if (!validacion.ok) return validacion
         set(s => ({
           maestros: {
             ...s.maestros,
             [key]: upsert(s.maestros[key] as { id: string }[], item),
           },
         }))
+        return { ok: true }
       },
 
       removeMaestro: (key, id) => {
@@ -396,8 +624,11 @@ export const useCompassStore = create<CompassStore>()(
 
       // --- CF: Configuración Global ---
       saveConfiguracion: (config) => {
-        if (!get().hasHydrated) return
-        set(() => ({ configuracion: config }))
+        if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
+        const validacion = validarConEsquema(ConfiguracionGlobalSchema, config)
+        if (!validacion.ok) return validacion
+        set(() => ({ configuracion: validacion.data }))
+        return { ok: true }
       },
     }),
     {
@@ -411,7 +642,12 @@ export const useCompassStore = create<CompassStore>()(
         unidades: state.unidades,
         personas: state.personas,
         vinculos: state.vinculos,
-        configuracion: state.configuracion,
+        eventos: state.eventos,
+        // SEC-005: los secretos no se persisten en localStorage; viven solo en
+        // memoria de la sesión hasta su traslado definitivo al servidor (Fase C).
+        configuracion: state.configuracion
+          ? { ...state.configuracion, smtpPassword: "", claveEliminacionMaestro: "" }
+          : state.configuracion,
         maestros: state.maestros,
       }),
       migrate: (persisted, version) => {
@@ -465,13 +701,20 @@ export const useCompassStore = create<CompassStore>()(
             const prevIds = new Set(prevArr.map(p => p.id))
             return [...prevArr, ...seedArr.filter(s => !prevIds.has(s.id))]
           }
+          // TST-002: mergeById reconstruye `unidades` desde el persistido crudo y
+          // deshacía la conversión estado→estadoId de la rama <3; se reaplica
+          // migrarEstadoUnidades sobre la fusión resultante.
+          const unidadesFusionadas = mergeById(
+            (prev.unidades ?? []) as { id: string }[],
+            seed.unidades as unknown as { id: string }[]
+          )
           // Limpiar keys legacy v7 que ya no existen en CompassData
           const prevAny = prev as unknown as Record<string, unknown>
           result = {
             ...result,
             macroSectores: mergeById((prev.macroSectores ?? []) as { id: string }[], seed.macroSectores as unknown as { id: string }[]) as never,
             microSectores: mergeById((prev.microSectores ?? []) as { id: string }[], seed.microSectores as unknown as { id: string }[]) as never,
-            unidades: mergeById((prev.unidades ?? []) as { id: string }[], seed.unidades as unknown as { id: string }[]) as never,
+            unidades: migrarEstadoUnidades(unidadesFusionadas as unknown as Unidad[]) as never,
             maestros: {
               ...seed.maestros,
               ...(prev.maestros ?? {}),
@@ -486,9 +729,29 @@ export const useCompassStore = create<CompassStore>()(
           const maestrosAny = (result.maestros ?? {}) as unknown as Record<string, unknown>
           if (maestrosAny["ubicacionesEstacionamiento"] !== undefined) delete maestrosAny["ubicacionesEstacionamiento"]
         }
+        // TST-002: los stores que ya quedaron en v8 con unidades dañadas por este
+        // bug (estado sin estadoId) se rescatan aquí en el salto a v9.
+        if ((version ?? 0) < STORE_VERSION && Array.isArray(result.unidades)) {
+          result = { ...result, unidades: migrarEstadoUnidades(result.unidades) }
+        }
+        // VAL-005: reparación de DV de RUT en datos persistidos ≤v9, antes del
+        // saneo para que la colección personas/configuración pase la validación.
+        if ((version ?? 0) < STORE_VERSION) {
+          result = repararDocumentos(result)
+        }
+        // VAL-006: saneo por colección antes de devolver el resultado migrado.
+        // Colección inválida → re-sembrada desde seed; resto del store intacto.
+        const saneado = sanitizarColecciones(result)
+        if (saneado) result = { ...result, ...saneado }
         return result
       },
-      onRehydrateStorage: () => () => {
+      onRehydrateStorage: () => (state, error) => {
+        // VAL-006: lo cargado sin migrate (versión vigente o fresh install) también
+        // se sanea; una colección corrupta se re-siembra sin romper el resto.
+        if (!error && state) {
+          const saneado = sanitizarColecciones(state)
+          if (saneado) useCompassStore.setState(saneado)
+        }
         useCompassStore.setState({ hasHydrated: true })
       },
       skipHydration: true,

@@ -19,6 +19,7 @@ Bienvenido a la documentación operativa del sistema de administración de condo
 - [28 - MK - Catálogo de Mocks](<28 - MK - Catálogo de Mocks.md>): Inventario completo de datos mockeados, ubicación, dependencias y hoja de ruta de migración a backend.
 - [29 - MK - Data Dump Inventario](<29 - MK - Data Dump Inventario.md>): Todas las unidades, sectores y tipos resueltos en tablas planas (83 deptos + 3 locales).
 - [30 - MK - Data Dump Comunidad](<30 - MK - Data Dump Comunidad.md>): Las 10 personas, vínculos, extensiones laborales/gobernanza y las 100 plazas de estacionamiento.
+- [34 - Historia de Poblamiento - Relato de Uso](<34 - Historia de Poblamiento - Relato de Uso.md>): Crónica humana del poblamiento ordenado (MA/CF → TU/MP → EF → VU → PE/IR/CO → FI → AM) con relato, gear técnico y verificación cruzada.
 
 ---
-*Última actualización: Mayo 2026*
+*Última actualización: 2026-08-20 - Añadido 34 - Historia de Poblamiento (change enhance-rg-st-seed-gears)*

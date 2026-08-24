@@ -14,12 +14,13 @@ Guía rápida única con todos los comandos del flujo: ciclo OpenSpec, respaldos
 
 | Momento | Comando | ¿Archiva? | ¿Commitea/Pushea? |
 | :--- | :--- | :---: | :---: |
-| Diseñar módulo nuevo | `/opsx-propose <change> @[doc.md]` | ❌ | ❌ |
+| Diseñar módulo nuevo | `/opsx-propose` con prompt estándar SPEC *(abajo)* | ❌ | ❌ |
 | Implementar tareas | `/opsx-apply` | ❌ | ❌ |
 | Pausa / cambio de módulo | `/respaldo-parcial [ruta-json]` | ❌ | ❌ |
-| Validar módulo contra ST | `/valida-datos [módulo]` | ❌ | ❌ |
+| Validar 1 módulo sin cerrar | `/valida-datos SPEC --partial` *(abajo)* | ❌ | ❌ |
+| Validar todos activos | `/valida-datos --all-active --partial` | ❌ | ❌ |
 | Validar un backup JSON | `/valida-backup [ruta-json]` | ❌ | ❌ |
-| Cerrar módulo terminado | `/cierra-modulo [change]` | ✅ | ❌ (pregunta al final) |
+| Cerrar módulo terminado | `/cierra-modulo SPEC` *(abajo)* | ✅ | ❌ (pregunta al final) |
 | Publicar a GitHub | `/nsgc-prepush` | — | ✅ |
 
 ---
@@ -79,14 +80,45 @@ Guía rápida única con todos los comandos del flujo: ciclo OpenSpec, respaldos
 
 ---
 
-## ✅ `/valida-datos` y `/valida-backup`
+## ✅ `/valida-datos` y `/valida-backup` (actualizado enhance-rg-st-seed-gears)
 
-| Comando | Valida | ¿Corrige? |
+| Comando | Valida (7 puntos) | ¿Corrige? |
 | :--- | :--- | :---: |
-| `/valida-datos [módulo]` | 5 puntos: artefactos OpenSpec, contrato de datos ST, antipatrones (imports de `data/`, `useState` de dominio), integración entre módulos, tsc/lint. | ✅ (solo lo que esté en alcance) |
-| `/valida-backup [json]` | Estructura del backup, compatibilidad de versiones, integridad referencial, coherencia con migraciones. | ❌ (solo informa) |
+| `/valida-datos SPEC --partial` | 1 Artefactos · 2 Contrato datos (Rank 0..99 + Depende de) · 3 Antipatrones · 4 Integración · 5 Contrato ST (STORE_VERSION/migrate + SeedValidationReport + backups) · 6 Verificación (tsc + `rg condominio`) · 7 Carga ordenada y relato (34 Historia + FK en save* + qa-lab) | ✅ (solo en alcance ST) |
+| `/valida-datos --all-active --partial` | Lo mismo pero para **todos** los `openspec/changes/*` activos + chequeo global DAG `Rank` (detecta ciclo/FK a rank mayor entre changes) | ✅ |
+| `/valida-backup [json]` | Estructura, compatibilidad versiones, integridad referencial, coherencia migraciones | ❌ (solo informa) |
+
+**Modo sin cerrar:** añade `--partial` / `--sin-cerrar` para validar y seguir con otras specs en paralelo (tu flujo actual). Sin el flag, `cierra-modulo` lo usa como FASE 1 y exige cierre.
 
 ---
+
+## 🚀 Prompts Estándar — una sola variable `SPEC`
+
+> **Regla:** reemplaza **`SPEC`** una sola vez por el nombre del archivo en `Data/NSGC/docs/especificaciones/` (ej: `FI - Finanzas y Morosidad`). El agente deriva el `change` kebab (`FI-finanzas-morosidad`) y la ruta `@` automáticamente. Copiar-pegar tal cual.
+
+**1. Llevar una spec a OpenSpec:**
+```bash
+Lleva a OpenSpec la spec @Data/NSGC/docs/especificaciones/SPEC.md — crea el change (kebab de SPEC: AA-nombre-kebab), con proposal/design/tasks y delta specs que incluyan Dependencias de Carga y Seed (Rank 0..99 + Entidades ST + Seed Manifest + Validación FK en save* + Bulk SeedReport + Migración + eventos AM) y deja Historia 34 al día. Usa solo SPEC como variable.
+# Ej: SPEC = FI - Finanzas y Morosidad  →  @Data/NSGC/docs/especificaciones/FI - Finanzas y Morosidad.md  →  change FI-finanzas-morosidad
+```
+
+**2. Validar sin cerrar (avance paralelo):**
+```bash
+/valida-datos SPEC --partial
+# Ej: SPEC = FI-finanzas-morosidad  (o FI - Finanzas y Morosidad, el agente lo mapea)
+# Para todos los activos en paralelo:
+/valida-datos --all-active --partial
+# No archiva, solo valida 7 puntos y deja el change abierto por si queda algo en el tintero
+```
+
+**3. Cerrar módulo:**
+```bash
+/cierra-modulo SPEC
+# Ej: SPEC = FI-finanzas-morosidad
+# Hace valida-datos + tsc/lint + STORE_VERSION/migrate + Mocks/Manual/Avance/Trazabilidad + Archivado + pregunta push
+```
+
+> Tip: en `SPEC` puedes pegar `FI - Finanzas y Morosidad` o `FI-finanzas-morosidad`; el agente normaliza a kebab para el `change`.
 
 ## 📊 Dashboard (`/admin/dev-dashboard`)
 

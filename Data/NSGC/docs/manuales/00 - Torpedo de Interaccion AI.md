@@ -44,7 +44,32 @@ Si seguimos el paso a paso, tú no tienes que preocuparte del código. Pero para
 
 *Si mantienes esteTorpedo en mente, construirás Compass 10 veces más rápido, gastando el mínimo de saldo y sin "romper" nada en producción.*
 
-## 5. 🧪 Norma de Documentación de Mocks
+## 5. 🚀 Prompts Estándar — una sola variable `SPEC` (Copiar-Pegar)
+
+> Reemplaza **`SPEC`** una sola vez por el nombre del archivo en `Data/NSGC/docs/especificaciones/` (ej: `FI - Finanzas y Morosidad`). El agente deriva el `change` kebab y la ruta `@` automáticamente.
+
+**A. Llevar spec a OpenSpec:**
+```
+Lleva a OpenSpec la spec @Data/NSGC/docs/especificaciones/SPEC.md — crea el change (kebab de SPEC: AA-nombre-kebab), con proposal/design/tasks y delta specs que incluyan Dependencias de Carga y Seed (Rank 0..99 + Entidades ST + Seed Manifest + Validación FK en save* + Bulk SeedReport + Migración + eventos AM) y deja Historia 34 al día.
+# Ej: SPEC = FI - Finanzas y Morosidad → @Data/NSGC/docs/especificaciones/FI - Finanzas y Morosidad.md → change FI-finanzas-morosidad
+```
+
+**B. Validar sin cerrar (tu flujo paralelo):**
+```
+ /valida-datos SPEC --partial
+# Ej: SPEC = FI-finanzas-morosidad
+ /valida-datos --all-active --partial   # valida todos los changes activos + DAG global Rank, sin archivar
+```
+
+**C. Cerrar módulo:**
+```
+/cierra-modulo SPEC
+# Ej: SPEC = FI-finanzas-morosidad   # hace valida-datos + tsc/lint + STORE_VERSION/migrate + Mocks/Manual/Avance/Trazabilidad + Archivado + pregunta push
+```
+
+> Desde `enhance-rg-st-seed-gears` valida-datos tiene 7 puntos (Penta + Rank + FK save + Bulk + Historia 34 `Data/NSGC/docs/manuales/34 - Historia de Poblamiento - Relato de Uso.md:1`) y modo `--partial` para no cerrar.
+
+## 6. 🧪 Norma de Documentación de Mocks
 
 **OBLIGATORIO al cerrar cada módulo.** Cuando se creen o modifiquen archivos en `data/`, el Agente DEBE:
 

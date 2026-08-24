@@ -17,6 +17,7 @@ Este documento actúa como la hoja de ruta oficial para el desarrollo del Proyec
 | 01 | Estructura de Menú | 🟢 Completado | Jerarquía de navegación del sistema |
 | 02 | RG - Reglas Generales | 🟡 Documentado (sucio) | Lógica transversal — archivado `2026-08-17` pero spec modificado v8 (terminología comunidad) — re-archivar pendiente |
 | 03 | ST - Capa de Datos Persistente | 🟡 Documentado (sucio) | Store `compass-store` v8 — archivado `2026-08-16` pero spec sincronizado ES→EF — re-archivar pendiente |
+| 03b | RG+ST Engranes | 🔵 En Proceso | Carga ordenada Rank 0..99 + Historia 34 + valida-datos 7 puntos — change `enhance-rg-st-seed-gears` (14/14, abierto sin cerrar) |
 | 04 | RP - Roles y Permisos | 🟡 Documentado | Control de acceso basado en perfiles — spec existe, sin implementación aún |
 
 ## 🏢 Fase 1: Inventario Físico
@@ -57,6 +58,12 @@ Este documento actúa como la hoja de ruta oficial para el desarrollo del Proyec
 | 25 | IN - Infracciones y Multas | ⏳ Pendiente | Multas |
 | 26 | MT - Mantenimiento y Proyectos | ⏳ Pendiente | Obras |
 | 27 | CT - Certificados | ⏳ Pendiente | Emisión certificados |
+
+## 🧪 Fase 5: Laboratorio y Automatización (Mejoras)
+| ID | Módulo | Estado | Descripción |
+| :--- | :--- | :--- | :--- |
+| 28 | LAB - Mejoras Lab | 🔵 En Proceso | Vínculos en nueva ventana + screenshots Playwright + previews — change `lab-fase-mejoras` (backlog Fase 5) |
+| 29 | QA-Lab | 🟢 Completado (sin archivar) | Lab QA con `Qué se probó` + `Cómo va quedando` + JSON en `Data/NSGC/backups/` — change `qa-lab` 11/11 |
 
 ---
 
