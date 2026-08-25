@@ -19,7 +19,7 @@ Un catálogo único con código `IR-A-####` por recurso y cuatro naturalezas: in
 - **Alarma solo al cruzar**: `IR_STOCK_LOW` dispara cuando el stock pasa de sobre-el-umbral a bajo-el-umbral; no repite mientras siga bajo.
 - **Comodín = operativa sin freno**: la solicitud queda bloqueada hasta que el admin decida; aprobada_creada deja el artículo listo para futuras solicitudes (stock 0 inicial).
 - **Entrega sin stock rechaza** indicando faltante; nada se muta parcialmente.
-- **Referencia pendiente FI**: toda compra con factura marca `cargoFIReferencia:"pendiente"` (se conecta con Finanzas en Sesión 5).
+- **Referencia pendiente FI**: toda compra con factura marca `cargoFIReferencia:"pendiente"` (la vinculación contable del ingreso de recursos queda post-serie; la conexión de Sesión 5 cubrió IN/MT/RA).
 - **Auditoría**: `IR_STOCK_LOW`, `IR_DELIVERY_EPP`, `IR_ASSET_REPAIR`, `IR_COMODIN_ALERTA` (+ baja auditada).
 
 ## 🔗 Dependencias

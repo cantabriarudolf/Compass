@@ -26,6 +26,7 @@ Bienvenido a la documentación operativa del sistema de administración de condo
 - [35 - MK - Data Dump Portal, Admin y Directiva](<35 - MK - Data Dump Portal, Admin y Directiva.md>): Colecciones Sesión 1 NSGC (`publicacionesPortal`, `leadsPortal`, `notificaciones`, `controlesPropiedades`, `actasGD`) — vacías por diseño, con estructura, campos y patrones de ID.
 - [36 - MK - Data Dump Comunicación y Solicitudes](<36 - MK - Data Dump Comunicación y Solicitudes.md>): Colecciones Sesión 2 NSGC (`plantillasCO` con 5 registros sembrados del NSGC + `enviosCO`, `mensajesBuzonCO`, `documentosCO`, `solicitudesGE`) con workflow GE y patrones de folio BUZ/GE; incluye desde Sesión 4 el dump de `plantillasCV` (4 plantillas rápidas del carrusel).
 - [37 - MK - Data Dump Recursos, Multas y Mantenimiento](<37 - MK - Data Dump Recursos, Multas y Mantenimiento.md>): Colecciones Sesión 3 NSGC (`tiposInfraccionIN` con 5 faltas sembradas del NSGC + `activosIR`, `solicitudesInsumoIR`, `entregasEPP`, `infraccionesIN`, `trabajosMT`, `proyectosMT`) con patrones de código IR-A/SI/IN/MT.
+- [38 - MK - Data Dump Finanzas](<38 - MK - Data Dump Finanzas.md>): Colecciones Sesión 5 NSGC (`fondosFI` con 3 fondos sembrados del NSGC + `egresosFI`, `emisionesGC`, `cobrosFI` operativas) con reglas de cálculo (prorrateo, mora pro-rata, vencimientos) y origen de cargos automáticos IN/RA.
 
 ---
-*Última actualización: 2026-08-25 - Sesión 3 NSGC: manuales IR/IN/MT completados, Dump 37 creado, seed tipos-infraccion.ts catalogado (store v18)*
+*Última actualización: 2026-08-25 - Sesión 5 NSGC: manual FI completado, Dump 38 creado, Catálogo ampliado con sección 9 (colecciones FI, store v21) e integraciones IN/MT/RA materializadas.*

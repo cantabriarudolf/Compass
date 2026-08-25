@@ -16,7 +16,7 @@ Cada infracción nace con folio único `IN-####` en estado En Revisión, amarrad
 
 - **Estados estrictos**: En Revisión → Apelada (descargos del vecino) → Aplicada o Desestimada; ya resueltas no admiten segunda resolución.
 - **Graves con quórum directivo**: multas Grave/Gravísima exigen ≥1 respaldo de miembro vigente de la directiva antes de aplicarse; los comentarios internos son exclusivos de admin/directiva.
-- **Aplicar fija el monto**: monto fijo del catálogo o costo del daño; el % GC queda registrado como tal (la conversión a pesos llega con FI). Toda aplicación deja `cargoFIReferencia:"pendiente"` y notifica al propietario vigente de la unidad (pasa por gate AD).
+- **Aplicar fija el monto**: monto fijo del catálogo o costo del daño; el % GC se convierte a pesos contra el último GC emitido de la unidad (sin historial usa el valor nominal). Toda aplicación genera el cobro real de multa en FI y materializa `cargoFIReferencia` con su id; además notifica al propietario vigente de la unidad (pasa por gate AD).
 - **Desestimación exige justificación**: queda escrita en el expediente.
 - **Tipo en uso no eliminable**: el catálogo bloquea borrar faltas con infracciones registradas.
 - **Auditoría**: `IN_REG_EVENT`, `IN_APELACION`, `IN_APPLY_FINE`.

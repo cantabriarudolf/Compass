@@ -14,9 +14,9 @@ Dos pilares: el **Maestro de Elementos** define qué se puede reservar (espacio 
 ## 💡 Tips de Oro
 
 - **Overbooking imposible**: dos tramos se solapan si `inicioA < finB && inicioB < finA`; día completo ocupa 00:00–23:59. Con stock N caben N reservas paralelas; la N+1 es rechazada con "Conflicto horario".
-- **Cancelación tardía con diente**: si faltan ≤ cancelacionTardiaDias días, la cancelación marca `tardia` y deriva la penalización como cargo FI pendiente.
-- **Garantía retenida = evento**: al devolver un activo dañado, retén la garantía con motivo — notifica a administración (`RA_WARRANTY_RETAINED`) y queda pendiente para el fondo de amenities.
-- **Todo cobro espera FI**: tarifas, penalizaciones y garantías retenidas viajan como `cargoFIReferencia:"pendiente"` hasta conectar Finanzas (Ventana 6); el gate de morosidad también se activa ahí.
+- **Cancelación tardía con diente**: si faltan ≤ cancelacionTardiaDias días, la cancelación marca `tardia` y deriva la penalización como cobro real al Fondo de Amenities en FI.
+- **Garantía retenida = evento**: al devolver un activo dañado, retén la garantía con motivo — notifica a administración (`RA_WARRANTY_RETAINED`) y genera un cobro del fondo de amenities.
+- **Cobros vivos en FI**: tarifas, penalizaciones y garantías retenidas se materializan como cobros del Fondo de Amenities y `cargoFIReferencia` guarda el id del cobro (conexión FI, Sesión 5); el gate de morosidad está activo: quien arrastra deuda vencida no puede reservar.
 - **Auditoría**: `RA_BOOKING_CREATED`, `RA_BOOKING_CANCELLED`, `RA_WARRANTY_RETAINED`.
 
 ## 🔗 Dependencias

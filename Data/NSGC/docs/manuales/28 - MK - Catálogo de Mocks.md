@@ -25,7 +25,7 @@ k0mp4ss_fe/apps/web/data/
     └── estructura.ts              ← Tipos de unidad, sectores y unidades (incluye plazas u-E-*)
 ```
 
-> **⚠️ Desde ST**, casi todo vive en el store `compass-store` (`lib/store.ts`) con migraciones versionadas. Las colecciones PI/AD/GD (Sesión 1) nacen **vacías por diseño** dentro del store — ver sección 5. Las colecciones CO/GE (Sesión 2) siguen el mismo patrón; la excepción es `plantillasCO`, que se **siembra** desde `data/comunidad/plantillas-co.ts` — ver sección 6. En la Sesión 3 el patrón se repite para **IR/IN/MT**: `tiposInfraccionIN` se siembra desde `data/finanzas/tipos-infraccion.ts`; `activosIR`, `solicitudesInsumoIR`, `entregasEPP`, `infraccionesIN`, `trabajosMT` y `proyectosMT` nacen vacías — ver sección 7. En la **Sesión 4** lo hace **RA/CV**: `plantillasCV` se siembra desde `data/comunidad/plantillas-cv.ts`; `elementosRA`, `reservasRA` y `avisosCV` nacen vacías — ver sección 8.
+> **⚠️ Desde ST**, casi todo vive en el store `compass-store` (`lib/store.ts`) con migraciones versionadas. Las colecciones PI/AD/GD (Sesión 1) nacen **vacías por diseño** dentro del store — ver sección 5. Las colecciones CO/GE (Sesión 2) siguen el mismo patrón; la excepción es `plantillasCO`, que se **siembra** desde `data/comunidad/plantillas-co.ts` — ver sección 6. En la Sesión 3 el patrón se repite para **IR/IN/MT**: `tiposInfraccionIN` se siembra desde `data/finanzas/tipos-infraccion.ts`; `activosIR`, `solicitudesInsumoIR`, `entregasEPP`, `infraccionesIN`, `trabajosMT` y `proyectosMT` nacen vacías — ver sección 7. En la **Sesión 4** lo hace **RA/CV**: `plantillasCV` se siembra desde `data/comunidad/plantillas-cv.ts`; `elementosRA`, `reservasRA` y `avisosCV` nacen vacías — ver sección 8. En la **Sesión 5** llega **FI**: `fondosFI` se siembra inline desde el propio store (3 fondos NSGC); `egresosFI`, `emisionesGC` y `cobrosFI` nacen vacías — ver sección 9.
 
 ---
 
@@ -282,9 +282,9 @@ Consumido por: `lib/store.ts` (seedData). Dump completo en `37 - MK - Data Dump 
 | `solicitudesInsumoIR` | v16 | Folio `SI-####`, quién×qué×área destino, comodín con 3 salidas admin, entrega con descuento de stock | `saveSolicitudInsumoIR` (alerta comodín), `resolverComodinIR` (aprobar_crear/sustituir/rechazar), `entregarSolicitudInsumoIR` (`IR_STOCK_LOW` al cruzar umbral) |
 | `entregasEPP` | v16 | Entregas individuales {recursoId, personaId, talla, estado, proximaRenovacion} | `registrarEntregaEPP` (`IR_DELIVERY_EPP`) |
 | `tiposInfraccionIN` | v17 | Seed NSGC (arriba); CRUD libre | `saveTipoInfraccionIN`, `removeTipoInfraccionIN` (bloqueo si usada) |
-| `infraccionesIN` | v17 | Folio `IN-####`, tipo catálogo XOR daño directo, unidad infractora, evidencias D1, estado en_revision/apelada/aplicada/desestimada, comentariosDirectiva[], respaldosDirectiva[], `cargoFIReferencia:"pendiente"` | `saveInfraccionIN` (`IN_REG_EVENT`), `apelarInfraccionIN` (`IN_APELACION`), `respaldarInfraccionIN`, `aplicarInfraccionIN` (grave exige respaldo; `IN_APPLY_FINE`), `desestimarInfraccionIN`, `removeInfraccionIN` |
+| `infraccionesIN` | v17 | Folio `IN-####`, tipo catálogo XOR daño directo, unidad infractora, evidencias D1, estado en_revision/apelada/aplicada/desestimada, comentariosDirectiva[], respaldosDirectiva[], `cargoFIReferencia` = id del cobro multa_in al aplicar (v21; `"pendiente"` solo legacy) | `saveInfraccionIN` (`IN_REG_EVENT`), `apelarInfraccionIN` (`IN_APELACION`), `respaldarInfraccionIN`, `aplicarInfraccionIN` (grave exige respaldo; `IN_APPLY_FINE`; crea cobro FI), `desestimarInfraccionIN`, `removeInfraccionIN` |
 | `trabajosMT` | v18 | Folio `MT-####`, ubicación EF/equipo IR, responsable interno o proveedor, prioridad, costo+origenFondos+estadoPago, garantías, evidencias D1 tipadas, preventivo{periodicidadMeses} | `saveTrabajoMT`, `iniciarTrabajoMT`, `finalizarTrabajoMT` (genera próximo preventivo), `cancelarTrabajoMT`, `actualizarPagoTrabajoMT`, `verificarGarantiasMT` (idempotente), `removeTrabajoMT` |
-| `proyectosMT` | v18 | Planes largo plazo {presupuestoEstimado, plazoMeses → cuota sugerida derivable} | `saveProyectoMT`, `removeProyectoMT` |
+| `proyectosMT` | v18→v21 | Planes largo plazo {presupuestoEstimado, plazoMeses → cuota sugerida derivable, `fondoFinanciamientoId?`} | `saveProyectoMT` (v21: valida fondo FI activo con saldo ≥ presupuesto), `removeProyectoMT` |
 
 Consumidores: `app/inventario/recursos/page.tsx` (IR), `app/finanzas/multas/page.tsx` (IN), `app/inventario/proyectos/page.tsx` (MT). Eventos AM: `IR_STOCK_LOW/DELIVERY_EPP/ASSET_REPAIR/COMODIN_ALERTA`; `IN_REG_EVENT/APPLY_FINE/APELACION`; `MT_WORK_CREATED/STARTED/FINISHED/PREVENTIVE_GENERATED/GUARANTEE_EXPIRED`.
 
@@ -305,11 +305,34 @@ Consumido por: `lib/store.ts` (seedData). Dump completo en `36 - MK - Data Dump 
 | Colección | Store | Contenido | Acciones repository |
 |-----------|-------|-----------|---------------------|
 | `elementosRA` | v19 | Tipo espacio_fisico/activo_mobiliario, ubicación EF (microSectorId) o IR (activoIRId), franja bloques_horas/dia_completo, tarifa ($0 gratis), garantía, aforo/stock, reglas anticipación/tardía+penalización | `saveElementoRA`, `removeElementoRA` (bloqueado con reservas vigentes) |
-| `reservasRA` | v19 | Folio `RA-####`, solicitante MP, fecha + tramo HH:MM, snapshots tarifa/garantía, cancelación {tardia, penalizacion}, retención de garantía, `cargoFIReferencia:"pendiente"` al fondo de amenities | `saveReservaRA` (overbooking por solape con stock concurrente; gate morosidad FI inerte), `cancelarReservaRA`, `retenerGarantiaRA` |
+| `reservasRA` | v19→v21 | Folio `RA-####`, solicitante MP, fecha + tramo HH:MM, snapshots tarifa/garantía, cancelación {tardia, penalizacion}, retención de garantía, `cargoFIReferencia` = id del cobro del fondo amenities (v21; `"pendiente"` solo legacy) | `saveReservaRA` (overbooking por solape con stock concurrente; gate morosidad FI activo desde v21), `cancelarReservaRA` (crea cobro penalización), `retenerGarantiaRA` (crea cobro garantía) |
 | `avisosCV` | v20 | Tipología info/exito/advertencia/peligro, duración ≥3s, expiresAt caducidad, imagen URL D1 XOR video YouTube, pantallaCompleta, tags, ciclo borrador/publicado/archivado, origen manual/plantilla/acta_gd | `saveAvisoCV` (`CV_DRAFT_CREATED`/`CV_EDITED`), `removeAvisoCV` (solo borrador), `publicarAvisoCV` (VB), `archivarAvisoCV`, `caducarAvisosCV` (idempotente) |
 | `plantillasCV` | v20 | Seed NSGC (arriba); CRUD administración | `savePlantillaCV`, `removePlantillaCV` (bloqueo si avisos la usan), `activarPlantillaCV` (aviso publicado instantáneo) |
 
 Integraciones: `publicarActaEnCV(actaId)` consume `actasGD.avisoCVReferencia === "pendiente"`, crea el aviso origen `acta_gd` y marca la referencia con el id del aviso. Flags de soporte: `permiteCreacionManualCV` (MP) y `cvRequiereVistoBueno` (CF, default true). Consumidores: `app/operaciones/reservas/page.tsx` (RA), `app/comunidad/visor/page.tsx` (panel CV), `app/visor-mensajes/page.tsx` (carrusel público con próximas reservas RA). Eventos AM: `RA_BOOKING_CREATED/CANCELLED/WARRANTY_RETAINED`; `CV_DRAFT_CREATED/PUBLISHED/EDITED/ARCHIVED`.
+
+### 9. Store + Seed — Sesión 5 NSGC (FI)
+
+#### 9.0 Seed inline de `fondosFI` (store v21)
+
+| Campo | Detalle |
+|-------|---------|
+| **Ubicación** | `lib/store.ts` → constante `FONDOS_FI_SEED` (no hay archivo en `data/`: el maestro es financiero-operativo, no mock de catálogo) |
+| **Propósito** | Los 3 fondos base del NSGC sembrados vía migrate aditivo v20→v21 |
+| **Registros** | `fondo-gc` (Fondo de Gasto Común, gasto_comun), `fondo-reserva` (Fondo de Reserva, reserva, porcentajeAporte 5), `fondo-amenities` (Fondo de Amenities, amenities) |
+
+Dump completo en `38 - MK - Data Dump Finanzas.md`.
+
+#### 9.1 Colecciones store FI (vacías salvo `fondosFI`)
+
+| Colección | Store | Contenido | Acciones repository |
+|-----------|-------|-----------|---------------------|
+| `fondosFI` | v21 | Maestro de cajas {nombre, tipo gasto_comun/reserva/especial/amenities, porcentajeAporte? para reserva, activo}; saldo derivable en base caja | `saveFondoFI` (unicidad nombre), `removeFondoFI` (bloqueado con movimientos imputados) |
+| `egresosFI` | v21 | Folio `FE-####`, categoría sueldos/mantencion/servicios/administracion/uso_de_fondo/otro, fondo obligatorio, recurrente flag, comprobante D1, microSectoresIds (gastos diferenciados), aprobacionActaGDId (retiros) | `saveEgresoFI` (`FI_EGRESS_CREATED`), `removeEgresoFI`, `retirarFondoFI` (reserva exige acta GD publicada + saldo; `FI_FUND_WITHDRAWN`) |
+| `emisionesGC` | v21 | Periodo `AAAA-MM` único, modo snapshot fijo/variable, gastoTotal, líneas {unidadId, responsablePersonaId, monto, cobroId}, fondoReservaAporte {fondoId, monto} | `emitirGastoComun` (gate "CF no cargado", responsable por unidad, prorrateo = round(gastoTotal × coeficiente), aporte % reserva, `FI_EMISION_GC`) |
+| `cobrosFI` | v21 | Libro unificado: concepto gc/cuota_extraordinaria/multa_in/consumo/reserva_ra/penalizacion_ra/garantia_ra, origenModulo FI/IN/RA + origenRef, fondo, montoBase, fechaVencimiento desde diaCortePago, moras[] idempotentes por día, pagos[], diferencias[] inmutables | `aplicarMoraFI` (pro-rata, `FI_MORA_APPLIED`), `registrarPagoFI` (`FI_RECEIVE_PAYMENT` + `FI_MANUAL_DISCOUNT` si ajusta), `enviarCobranzaFI` (`FI_COBRANZA_SENT`) |
+
+Integraciones entrantes (patrón inverso): `aplicarInfraccionIN` crea cobro `multa_in` (% GC resuelto contra último GC emitido de la unidad) y materializa `cargoFIReferencia`; `saveProyectoMT` valida `fondoFinanciamientoId` contra fondosFI y saldo ≥ presupuesto; `saveReservaRA`/`cancelarReservaRA`/`retenerGarantiaRA` crean cobros del fondo amenities y materializan `cargoFIReferencia`; gate de morosidad RA activo vía deuda vencida en unidades vinculadas. Helpers puros en `lib/finanzas-utils.ts`. Consumidores: `app/finanzas/gastos-comunes/page.tsx`, `app/finanzas/pagos/page.tsx`. Eventos AM: los listados arriba.
 
 ---
 

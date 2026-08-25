@@ -29,7 +29,7 @@ Este documento vincula la arquitectura del menú con los archivos de especificac
 | **09** | **2** | **VU** | `VU - Vinculacion Unidades.md` | Pestaña Unidades | `/comunidad/personas/[id]` | 🟢 Completado (`VU-vinculacion-unidades` + `VU-historial-asignaciones-unidad`, archivados `2026-08-24`) |
 | **10** | **2** | **CF** | `CF - Configuración Global.md` | Configuración | `/admin/configuracion` | 🟡 Documentado (D4 parametrización legal Chile en spec vía `prep-fundamentos-serie-2`) |
 | **11** | **2** | **PI** | `PI - Portal Inmobiliario.md` | Portal Inmobiliario | `/comunidad/portal` | 🟢 Completado (`PI-portal-inmobiliario` archivado `2026-08-25`, Sesión 1 NSGC) |
-| **12** | **3** | **FI** | `FI - Finanzas y Morosidad.md` | Gastos Comunes | `/finanzas/gastos-comunes` | ⏳ Pendiente |
+| **12** | **3** | **FI** | `FI - Finanzas y Morosidad.md` | Gastos Comunes | `/finanzas/gastos-comunes` (+ Recaudación `/finanzas/pagos`) | 🟢 Completado (`FI-finanzas-morosidad` archivado `2026-08-25`, Sesión 5 NSGC; materializa `cargoFIReferencia` de IN/MT/RA y activa el gate de morosidad de RA) |
 | 13 | 3 | AD | `AD - Gestión Administrativa.md` | Resumen | `/admin/gestion` | 🟢 Completado (`AD-gestion-administrativa` archivado `2026-08-25`, Sesión 1 NSGC) |
 | 14 | 3 | GD | `GD - Gestión de Directiva.md` | Directiva | `/comunidad/directiva` | 🟢 Completado (`GD-gestion-directiva` archivado `2026-08-25`, Sesión 1 NSGC) |
 | 15 | 3 | CO | `CO - Comunicación Vecinos.md` | Comunicación | `/comunidad/comunicacion` | 🟢 Completado (`CO-comunicacion-vecinos` archivado `2026-08-25`, Sesión 2 NSGC) |
