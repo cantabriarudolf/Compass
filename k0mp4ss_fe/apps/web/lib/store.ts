@@ -58,6 +58,7 @@ import {
   LeadPortalSchema,
   NotificacionSchema,
   ControlPropiedadSchema,
+  ActaGDSchema,
   MAESTRO_SCHEMAS,
   validarConEsquema,
   validarMaestro,
@@ -73,6 +74,7 @@ import {
   type Notificacion,
   type OperacionPortal,
   type ControlPropiedad,
+  type ActaGD,
 } from "@/lib/schemas"
 import { z } from "zod"
 
@@ -125,7 +127,7 @@ function refUnidad(get: () => CompassStore, unidadId: string): string {
   return u ? `${u.etiqueta} ${u.numero}` : unidadId
 }
 
-export const STORE_VERSION = 12
+export const STORE_VERSION = 13
 
 export interface MaestroCollections {
   afps: Afp[]
@@ -163,6 +165,8 @@ export interface CompassData {
   notificaciones: Notificacion[]
   // Gestión Administrativa (AD)
   controlesPropiedades: ControlPropiedad[]
+  // Gestión de Directiva (GD)
+  actasGD: ActaGD[]
 }
 
 interface CompassStore extends CompassData {
@@ -202,6 +206,10 @@ interface CompassStore extends CompassData {
   // Gestión Administrativa (AD)
   saveControlPropiedad: (control: ControlPropiedad) => StoreResult
   removeControlPropiedad: (id: string) => StoreResult
+  // Gestión de Directiva (GD)
+  saveActaGD: (acta: ActaGD) => StoreResult
+  removeActaGD: (id: string) => StoreResult
+  aprobarActaGD: (id: string, personaId: string) => StoreResult
 }
 
 function upsert<T extends { id: string }>(list: T[], item: T): T[] {
@@ -242,6 +250,7 @@ export const seedData = (): CompassData => ({
   leadsPortal: [],
   notificaciones: [],
   controlesPropiedades: [],
+  actasGD: [],
   maestros: {
     afps: seedAFPS,
     previsionesSalud: seedPrevisionesSalud,
@@ -278,6 +287,7 @@ const ESQUEMAS_COLECCION = {
   leadsPortal: z.array(LeadPortalSchema),
   notificaciones: z.array(NotificacionSchema),
   controlesPropiedades: z.array(ControlPropiedadSchema),
+  actasGD: z.array(ActaGDSchema),
 } as const
 
 type ClaveColeccion = keyof typeof ESQUEMAS_COLECCION
@@ -887,6 +897,89 @@ export const useCompassStore = create<CompassStore>()(
         set(s => ({ controlesPropiedades: s.controlesPropiedades.filter(c => c.id !== id) }))
         return { ok: true }
       },
+
+      // --- GD: Gestión de Directiva ---
+      saveActaGD: (acta) => {
+        if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
+        const validacion = validarConEsquema(ActaGDSchema, acta)
+        if (!validacion.ok) return validacion
+        // Integridad referencial: presentes/ausentes deben ser miembros de directiva vigentes.
+        for (const idAsistente of [...validacion.data.presentes, ...validacion.data.ausentes]) {
+          const persona = get().personas.find(p => p.id === idAsistente)
+          if (!persona) {
+            return { ok: false, error: `No se puede guardar el acta: el asistente "${idAsistente}" no existe en el Maestro de Personas.` }
+          }
+          if (!persona.datosGobernanza) {
+            return { ok: false, error: `No se puede guardar el acta: ${persona.nombres} ${persona.apellidos} no es miembro de la directiva (sin extensión de gobernanza).` }
+          }
+        }
+        const esNueva = !get().actasGD.some(a => a.id === validacion.data.id)
+        set(s => ({ actasGD: upsert(s.actasGD, validacion.data) }))
+        if (esNueva) {
+          registrarEvento(set, "GD_ACTA_CREATED", validacion.data.id, `Acta de reunión del ${validacion.data.fecha} registrada (${validacion.data.lugar}).`, "GD")
+          for (const presenteId of validacion.data.presentes) {
+            registrarEvento(set, "GD_ASISTENCIA_REG", presenteId, `Asistencia registrada (${nombrePersona(get, presenteId)}) en acta ${validacion.data.id}.`, "GD")
+          }
+        }
+        return { ok: true }
+      },
+
+      removeActaGD: (id) => {
+        if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
+        set(s => ({ actasGD: s.actasGD.filter(a => a.id !== id) }))
+        return { ok: true }
+      },
+
+      aprobarActaGD: (id, personaId) => {
+        if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
+        const acta = get().actasGD.find(a => a.id === id)
+        if (!acta) return { ok: false, error: "No se puede aprobar: el acta no existe." }
+        if (acta.estado === "publicada") return { ok: false, error: "El acta ya está publicada." }
+        const firmante = get().personas.find(p => p.id === personaId)
+        if (!firmante?.datosGobernanza || firmante.estadoCuenta !== "activa") {
+          return { ok: false, error: "Solo un miembro vigente de la directiva puede aprobar el acta." }
+        }
+        if (acta.aprobaciones.includes(personaId)) {
+          return { ok: false, error: "Esta directiva ya aprobó el acta." }
+        }
+        const aprobaciones = [...acta.aprobaciones, personaId]
+        // Quórum 100% de la directiva vigente (personas activas con extensión de gobernanza).
+        const directivaVigente = get().personas.filter(p => p.datosGobernanza && p.estadoCuenta === "activa").map(p => p.id)
+        const quorumCompleto = directivaVigente.every(idMiembro => aprobaciones.includes(idMiembro))
+        if (quorumCompleto) {
+          const publicada: ActaGD = {
+            ...acta,
+            aprobaciones,
+            estado: "publicada",
+            fechaPublicacion: new Date().toISOString().slice(0, 10),
+            avisoCVReferencia: "pendiente",
+          }
+          set(s => ({ actasGD: upsert(s.actasGD, publicada) }))
+
+          registrarEvento(set, "GD_ACTA_APPROVED", id, `Acta ${id} aprobada por ${nombrePersona(get, personaId)} y PUBLICADA (quórum 100%).`, "GD")
+
+          // Publicación automática: notificación formal a todos los propietarios
+          // (acto de gobernanza; no pasa por el gate de alertas operativas).
+          const propietarios = new Set(
+            get().vinculos.filter(v => v.rol === "propietario" && !v.fechaFin).map(v => v.personaId)
+          )
+          for (const idPropietario of propietarios) {
+            get().notify({
+              destinatarioRol: "propietario",
+              destinatarioPersonaId: idPropietario,
+              asunto: `Nueva acta publicada (${publicada.fecha})`,
+              cuerpo: `Ya está disponible el acta de la reunión del ${publicada.fecha} en ${publicada.lugar}. Revisa el repositorio de actas.`,
+              moduloOrigen: "GD",
+            })
+          }
+        } else {
+          set(s => ({
+            actasGD: s.actasGD.map(a => (a.id === id ? { ...a, aprobaciones } : a)),
+          }))
+          registrarEvento(set, "GD_ACTA_APPROVED", id, `${nombrePersona(get, personaId)} aprobó el acta ${id}. Pendientes: ${directivaVigente.filter(x => !aprobaciones.includes(x)).length}.`, "GD")
+        }
+        return { ok: true }
+      },
     }),
     {
       name: "compass-store",
@@ -910,6 +1003,7 @@ export const useCompassStore = create<CompassStore>()(
         leadsPortal: state.leadsPortal,
         notificaciones: state.notificaciones,
         controlesPropiedades: state.controlesPropiedades,
+        actasGD: state.actasGD,
       }),
       migrate: (persisted, version) => {
         const prev = (persisted ?? {}) as Partial<CompassData>
@@ -1004,6 +1098,12 @@ export const useCompassStore = create<CompassStore>()(
           result = {
             ...result,
             controlesPropiedades: prev.controlesPropiedades ?? [],
+          }
+        }
+        if ((version ?? 0) < 13) {
+          result = {
+            ...result,
+            actasGD: prev.actasGD ?? [],
           }
         }
         // TST-002: los stores que ya quedaron en v8 con unidades dañadas por este

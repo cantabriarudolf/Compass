@@ -51,6 +51,7 @@ const PLAN: Record<string, string[]> = {
   vu: ["Amarrar Propietario: 99.999.999-9 → Depto 999 (estado PreReservaQA)", "Amarrar Propietario: 99.999.999-9 → Estacionamiento E-999", "Amarrar Arrendatario: 88.888.888-8 → Depto 999 (2026-08-20 a 2027-08-20)"],
   pi: ["Publicar en vitrina: E-999 en venta ($8.500.000) con imagen por referencia", "Registrar lead TEST Lead QA → notificación email_simulado al propietario"],
   ad: ["Registrar controles de privacidad para E-999 (morosidad visible, actas ocultas, alertas activas)", "Verificar defaults de lectura sin registro"],
+  gd: ["Extender a TEST Persona QA Uno como Presidente de directiva", "Registrar acta TEST con asistencia y minuta", "Firmar hasta quórum 100% → publicada + notificación email_simulado"],
 }
 
 const TITULOS: Record<string, string> = {
@@ -63,6 +64,7 @@ const TITULOS: Record<string, string> = {
   vu: "7. Amarras — quién vive dónde",
   pi: "8. Vitrina Inmobiliaria (PI)",
   ad: "9. Gestión Administrativa (AD)",
+  gd: "10. Actas de Directiva (GD)",
 }
 
 const COMO_LLEGAR: Record<string, string> = {
@@ -86,6 +88,7 @@ const COMO_LLEGAR_HREF: Record<string, string> = {
   vu: "/comunidad/personas",
   pi: "/comunidad/portal",
   ad: "/admin/gestion",
+  gd: "/comunidad/directiva",
 }
 
 interface SeedReport {
@@ -154,6 +157,7 @@ export default function QaLabPage() {
     { id: "vu", label: TITULOS["vu"]!, rank: 3, fase: "Paso 7" },
     { id: "pi", label: TITULOS["pi"]!, rank: 4, fase: "Paso 8" },
     { id: "ad", label: TITULOS["ad"]!, rank: 4, fase: "Paso 9" },
+    { id: "gd", label: TITULOS["gd"]!, rank: 5, fase: "Paso 10" },
   ]
 
   const FASE_MODULOS: Record<string, string[]> = {
@@ -163,7 +167,8 @@ export default function QaLabPage() {
     "3": ["vu"],
     "4": ["pi"],
     "5": ["ad"],
-    "todo": ["ma", "tu", "mp", "ef-macro", "ef-micro", "ef-unidad", "vu", "pi", "ad"],
+    "6": ["gd"],
+    "todo": ["ma", "tu", "mp", "ef-macro", "ef-micro", "ef-unidad", "vu", "pi", "ad", "gd"],
   }
 
   const LABEL_FASE: Record<string, string> = {
@@ -173,6 +178,7 @@ export default function QaLabPage() {
     "3": "4. Amarras — personas a deptos",
     "4": "5. Vitrina — publicación y lead",
     "5": "6. Panel AD — controles por unidad",
+    "6": "7. Acta GD — firmas y publicación",
     "todo": "Carga completa",
   }
 
@@ -295,6 +301,32 @@ export default function QaLabPage() {
     return { id: "ad", label: TITULOS["ad"]!, rank: 4, status: errores.length ? "error" : "ok", count: 1, errores, pasos }
   }, [])
 
+  const cargarFase6GD = React.useCallback(async (): Promise<ModReport> => {
+    const s = useCompassStore.getState()
+    const pasos: Paso[] = (PLAN["gd"]! as string[]).map(desc => ({ desc, estado: "pendiente" as ModuleState }))
+    // 1) Extender a la persona TEST con gobernanza (presidente)
+    const p99 = s.personas.find(x => x.id === "test-p-99")
+    if (!p99) { pasos[0]!.estado = "error"; pasos[0]!.error = "Falta test-p-99 (carga fase MP)" }
+    else {
+      const r1 = s.savePersona({ ...p99, roles: Array.from(new Set([...(p99.roles ?? []), "directiva"])), datosGobernanza: { id: "gob-test-1", cargoDirectiva: "presidente", fechaAsuncion: "2026-08-24" } } as any)
+      if (!r1.ok) { pasos[0]!.estado = "error"; pasos[0]!.error = r1.error } else pasos[0]!.estado = "ok"
+    }
+    // 2) Registrar acta TEST con asistencia
+    const r2 = s.saveActaGD({ id: "test-acta-gd", fecha: "2026-08-24", hora: "19:30", lugar: "Sede comunitaria TEST", tablaTemas: ["Tema TEST GD"], presentes: ["test-p-99"], ausentes: [], invitados: [], minuta: "Minuta de prueba del acta TEST.", adjuntos: [{ nombre: "test-acta.pdf", tipoMime: "application/pdf", tamanoKB: 250, url: "https://placeholder.supabase.co/test-acta.pdf" }], estado: "borrador", aprobaciones: [] } as any)
+    if (!r2.ok) { pasos[1]!.estado = "error"; pasos[1]!.error = r2.error } else pasos[1]!.estado = "ok"
+    // 3) Firmar hasta quórum 100% de la directiva vigente
+    const directivaVigente = s.personas.filter(p => p.datosGobernanza && p.estadoCuenta === "activa").map(p => p.id)
+    let falloFirma: string | null = null
+    for (const idMiembro of directivaVigente) {
+      const r3 = s.aprobarActaGD("test-acta-gd", idMiembro)
+      if (!r3.ok && !falloFirma) falloFirma = `${idMiembro}: ${r3.error}`
+    }
+    const actaFinal = s.actasGD.find(a => a.id === "test-acta-gd")
+    if (falloFirma || actaFinal?.estado !== "publicada") { pasos[2]!.estado = "error"; pasos[2]!.error = falloFirma ?? `Estado final: ${actaFinal?.estado}` } else pasos[2]!.estado = "ok"
+    const errores = pasos.filter(p => p.estado === "error").map(p => p.error || p.desc)
+    return { id: "gd", label: TITULOS["gd"]!, rank: 5, status: errores.length ? "error" : "ok", count: 1, errores, pasos }
+  }, [])
+
   const buildHistoria = React.useCallback((mods: ModReport[]): SeedReport["historia"] => {
     return HISTORIA.map(h => ({ capitulo: h.capitulo, estado: (() => {
       const rankMods = mods.filter(m => m.rank === h.rank)
@@ -368,6 +400,18 @@ export default function QaLabPage() {
         }
         mods.push(await cargarFase5AD())
       }
+      if (fase === "6" || fase === "todo") {
+        if (fase === "6") {
+          mods.push(await cargarFase0())
+          mods.push(await cargarFase1TU())
+          mods.push(await cargarFase1MP())
+          mods.push(await cargarFase2Macro())
+          mods.push(await cargarFase2Micro())
+          mods.push(await cargarFase2Unidad())
+          mods.push(await cargarFase3VU())
+        }
+        mods.push(await cargarFase6GD())
+      }
       if (fase === "todo") {
         // ya se cargaron todos en orden
       }
@@ -382,14 +426,17 @@ export default function QaLabPage() {
     } finally {
       setLoading(false)
     }
-  }, [cargarFase0, cargarFase1MP, cargarFase1TU, cargarFase2Macro, cargarFase2Micro, cargarFase2Unidad, cargarFase3VU, cargarFase4PI, cargarFase5AD, buildHistoria, ensureHydrated])
+  }, [cargarFase0, cargarFase1MP, cargarFase1TU, cargarFase2Macro, cargarFase2Micro, cargarFase2Unidad, cargarFase3VU, cargarFase4PI, cargarFase5AD, cargarFase6GD, buildHistoria, ensureHydrated])
 
   const limpiar = React.useCallback(async () => {
     if (!ensureHydrated()) return
     setLoading(true)
     const errores: string[] = []
     const s = useCompassStore.getState()
-    // inverso AD -> PI -> VU -> EF unidades -> EF micro -> EF macro -> MP -> TU -> MA
+    // inverso GD -> AD -> PI -> VU -> EF unidades -> EF micro -> EF macro -> MP -> TU -> MA
+    const rActa = s.removeActaGD("test-acta-gd")
+    if (!rActa.ok) errores.push(rActa.error || "acta")
+    useCompassStore.setState(st => ({ notificaciones: st.notificaciones.filter(n => (n.moduloOrigen !== "PI" && n.moduloOrigen !== "GD") || !n.destinatarioPersonaId?.startsWith("test-")) }))
     const rCtrl = s.removeControlPropiedad("test-ctrl-e999")
     if (!rCtrl.ok) errores.push(rCtrl.error || "ctrl")
     // PI no define removeLeadPortal (los leads son histórico); se purgan por filtro.
@@ -555,6 +602,7 @@ export default function QaLabPage() {
               { fase: "3", label: "4. Amarrar personas a deptos" },
               { fase: "4", label: "5. Publicar vitrina PI con lead" },
               { fase: "5", label: "6. Panel AD con controles" },
+              { fase: "6", label: "7. Acta GD firmada y publicada" },
             ].map(item => {
               const isActive = ultimaFase === item.fase
               const modsFase = isActive && report ? report.modulos.filter(m => FASE_MODULOS[item.fase]!.includes(m.id)) : []

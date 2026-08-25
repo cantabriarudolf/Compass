@@ -180,6 +180,31 @@ export const ControlPropiedadSchema = z.object({
   alertasResidentesActivas: z.boolean({ required_error: "El flag de alertas es obligatorio." }),
 })
 
+// --- Gestión de Directiva (GD) ---
+
+export const EstadoActaSchema = z.enum(["borrador", "publicada"])
+
+export const ActaGDSchema = z.object({
+  id: IdEntidadSchema,
+  fecha: FechaISOSchema,
+  hora: z.string({ required_error: "La hora es obligatoria." }).regex(/^\d{2}:\d{2}$/, "La hora debe tener formato HH:MM."),
+  lugar: z.string({ required_error: "El lugar es obligatorio." }).min(1, "El lugar es obligatorio."),
+  tablaTemas: z.array(z.string()),
+  // Miembros de la directiva (personas con datosGobernanza)
+  presentes: z.array(IdEntidadSchema),
+  ausentes: z.array(IdEntidadSchema),
+  invitados: z.array(z.string()),
+  minuta: z.string(),
+  // Soporte documental por referencia (D1): acta escaneada o imágenes.
+  adjuntos: z.array(ImagenReferenciaSchema),
+  estado: EstadoActaSchema,
+  // Firmas de aprobación de miembros de la directiva vigente.
+  aprobaciones: z.array(IdEntidadSchema),
+  fechaPublicacion: FechaISOSchema.optional(),
+  // Referencia para publicación futura en el Visor de Mensajes (CV, módulo pendiente).
+  avisoCVReferencia: z.literal("pendiente").optional(),
+})
+
 export const MensajeDocumentoInvalido = "RUT inválido (dígito verificador incorrecto) o pasaporte con formato no válido."
 
 const DocumentoIdentidadSchema = z
@@ -405,6 +430,8 @@ export type PublicacionPortal = z.infer<typeof PublicacionPortalSchema>
 export type LeadPortal = z.infer<typeof LeadPortalSchema>
 export type Notificacion = z.infer<typeof NotificacionSchema>
 export type ControlPropiedad = z.infer<typeof ControlPropiedadSchema>
+export type EstadoActa = z.infer<typeof EstadoActaSchema>
+export type ActaGD = z.infer<typeof ActaGDSchema>
 
 // --- Utilidades de validación para el store ---
 
