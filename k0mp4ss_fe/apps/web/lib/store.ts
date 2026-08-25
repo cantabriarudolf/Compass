@@ -73,6 +73,8 @@ import {
   InfraccionINSchema,
   TrabajoMTSchema,
   ProyectoMTSchema,
+  ElementoRASchema,
+  ReservaRASchema,
   MAESTRO_SCHEMAS,
   validarConEsquema,
   validarMaestro,
@@ -106,6 +108,8 @@ import {
   type TrabajoMT,
   type ProyectoMT,
   type EstadoPagoMT,
+  type ElementoRA,
+  type ReservaRA,
 } from "@/lib/schemas"
 import { z } from "zod"
 
@@ -186,7 +190,23 @@ function siguienteCodigoIR(get: () => CompassStore): string {
   return `IR-A-${String(siguiente).padStart(4, "0")}`
 }
 
-export const STORE_VERSION = 18
+// RA: siguiente folio de reserva RA-####.
+function siguienteFolioRA(get: () => CompassStore): string {
+  const numeros = get().reservasRA
+    .map(r => Number.parseInt(r.folio.replace(/^RA-/, ""), 10))
+    .filter(n => Number.isFinite(n))
+  const siguiente = (numeros.length > 0 ? Math.max(...numeros) : 0) + 1
+  return `RA-${String(siguiente).padStart(4, "0")}`
+}
+
+// RA §2: gate de morosidad — devuelve el mensaje de bloqueo si el solicitante
+// mantiene deuda vigente en Finanzas. Inerte hasta conectar FI (Ventana 6):
+// hoy no existe fuente de deuda en el store.
+function getDeudaVigenteFI(): string | null {
+  return null
+}
+
+export const STORE_VERSION = 19
 
 export interface MaestroCollections {
   afps: Afp[]
@@ -243,6 +263,9 @@ export interface CompassData {
   // Mantenimiento y Proyectos (MT)
   trabajosMT: TrabajoMT[]
   proyectosMT: ProyectoMT[]
+  // Reservas y Amenities (RA)
+  elementosRA: ElementoRA[]
+  reservasRA: ReservaRA[]
 }
 
 interface CompassStore extends CompassData {
@@ -335,6 +358,12 @@ interface CompassStore extends CompassData {
   verificarGarantiasMT: () => StoreResult
   saveProyectoMT: (proyecto: ProyectoMT) => StoreResult
   removeProyectoMT: (id: string) => StoreResult
+  // Reservas y Amenities (RA)
+  saveElementoRA: (elemento: ElementoRA) => StoreResult
+  removeElementoRA: (id: string) => StoreResult
+  saveReservaRA: (reserva: ReservaRA) => StoreResult
+  cancelarReservaRA: (id: string) => StoreResult
+  retenerGarantiaRA: (id: string, motivo: string) => StoreResult
 }
 
 function upsert<T extends { id: string }>(list: T[], item: T): T[] {
@@ -388,6 +417,8 @@ export const seedData = (): CompassData => ({
   infraccionesIN: [],
   trabajosMT: [],
   proyectosMT: [],
+  elementosRA: [],
+  reservasRA: [],
   maestros: {
     afps: seedAFPS,
     previsionesSalud: seedPrevisionesSalud,
@@ -437,6 +468,8 @@ const ESQUEMAS_COLECCION = {
   infraccionesIN: z.array(InfraccionINSchema),
   trabajosMT: z.array(TrabajoMTSchema),
   proyectosMT: z.array(ProyectoMTSchema),
+  elementosRA: z.array(ElementoRASchema),
+  reservasRA: z.array(ReservaRASchema),
 } as const
 
 type ClaveColeccion = keyof typeof ESQUEMAS_COLECCION
@@ -2264,6 +2297,188 @@ export const useCompassStore = create<CompassStore>()(
         set(s => ({ proyectosMT: s.proyectosMT.filter(p => p.id !== id) }))
         return { ok: true }
       },
+
+      // --- RA: Reservas y Amenities ---
+      saveElementoRA: (elemento) => {
+        if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
+        const validacion = validarConEsquema(ElementoRASchema, elemento)
+        if (!validacion.ok) return validacion
+        const registro = validacion.data
+        if (!registro.microSectorId && !registro.activoIRId) {
+          return { ok: false, error: "El elemento reservable exige una ubicación: sub-sector de la Estructura Física o activo del catálogo IR." }
+        }
+        if (registro.microSectorId && !get().microSectores.some(m => m.id === registro.microSectorId)) {
+          return { ok: false, error: "No se puede guardar el elemento: el sub-sector indicado no existe en el inventario." }
+        }
+        if (registro.activoIRId && !get().activosIR.some(r => r.id === registro.activoIRId)) {
+          return { ok: false, error: "No se puede guardar el elemento: el activo del catálogo IR indicado no existe." }
+        }
+        set(s => ({ elementosRA: upsert(s.elementosRA, registro) }))
+        return { ok: true }
+      },
+
+      removeElementoRA: (id) => {
+        if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
+        const vigentes = get().reservasRA.filter(r => r.elementoId === id && r.estado !== "cancelada")
+        if (vigentes.length > 0) {
+          return { ok: false, error: `No se puede eliminar el elemento: ${vigentes.length} reserva(s) sin cancelar lo referencian.` }
+        }
+        set(s => ({ elementosRA: s.elementosRA.filter(e => e.id !== id) }))
+        return { ok: true }
+      },
+
+      saveReservaRA: (reserva) => {
+        if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
+        const esNueva = !get().reservasRA.some(r => r.id === reserva.id)
+        let candidato: ReservaRA = reserva
+        if (esNueva) candidato = { ...reserva, folio: siguienteFolioRA(get), estado: "confirmada" }
+        const validacion = validarConEsquema(ReservaRASchema, candidato)
+        if (!validacion.ok) return validacion
+        const registro = validacion.data
+
+        const elemento = get().elementosRA.find(e => e.id === registro.elementoId)
+        if (!elemento) return { ok: false, error: "No se puede reservar: el elemento reservable no existe." }
+        if (!elemento.activo) return { ok: false, error: `No se puede reservar: ${elemento.nombre} está deshabilitado para reservas.` }
+        const solicitante = get().personas.find(p => p.id === registro.solicitantePersonaId)
+        if (!solicitante) return { ok: false, error: "No se puede reservar: el solicitante no existe en el Maestro de Personas." }
+        if (solicitante.estadoCuenta !== "activa") {
+          return { ok: false, error: "No se puede reservar: la cuenta del solicitante no está activa." }
+        }
+        if (registro.unidadId && !get().unidades.some(u => u.id === registro.unidadId)) {
+          return { ok: false, error: "No se puede reservar: la unidad indicada no existe en el inventario." }
+        }
+        if (registro.horaInicio >= registro.horaFin) {
+          return { ok: false, error: "El tramo horario es inválido: la hora de inicio debe ser anterior a la de término." }
+        }
+
+        // Regla especial: anticipación mínima para reservar.
+        if (elemento.anticipacionMinimaDias) {
+          const limite = new Date()
+          limite.setDate(limite.getDate() + elemento.anticipacionMinimaDias)
+          const limiteStr = limite.toISOString().slice(0, 10)
+          if (registro.fecha < limiteStr) {
+            return { ok: false, error: `Anticipación insuficiente: ${elemento.nombre} exige reservar con al menos ${elemento.anticipacionMinimaDias} día(s) de anticipación (hasta ${limiteStr}).` }
+          }
+        }
+
+        // Validación de morosidad (NSGC §2): bloquea solicitantes con deuda vigente.
+        // Gate inerte hasta conectar Finanzas (Ventana 6): hoy no existe fuente de deuda en el store.
+        const deudaFI = getDeudaVigenteFI()
+        if (deudaFI) return { ok: false, error: deudaFI }
+
+        // Prevención de overbooking: solapamiento [inicio, fin) según stock concurrente.
+        const solapadas = get().reservasRA.filter(
+          r =>
+            r.elementoId === registro.elementoId &&
+            r.fecha === registro.fecha &&
+            r.estado === "confirmada" &&
+            registro.horaInicio < r.horaFin &&
+            r.horaInicio < registro.horaFin
+        )
+        const capacidad = Math.max(1, elemento.stock ?? 1)
+        if (solapadas.length >= capacidad) {
+          const tramo = solapadas[0]!
+          return {
+            ok: false,
+            error: `Conflicto horario: ${elemento.nombre} ya tiene ${solapadas.length} reserva(s) confirmada(s) que se solapan el ${registro.fecha} (${tramo.horaInicio}–${tramo.horaFin}).`,
+          }
+        }
+
+        let final = registro
+        if (esNueva) {
+          final = {
+            ...registro,
+            montoTarifa: elemento.tarifaUso,
+            montoGarantia: elemento.garantiaRequerida,
+            cargoFIReferencia: elemento.tarifaUso > 0 ? "pendiente" : registro.cargoFIReferencia,
+          }
+        }
+        set(s => ({ reservasRA: upsert(s.reservasRA, final) }))
+        if (esNueva) {
+          registrarEvento(
+            set,
+            "RA_BOOKING_CREATED",
+            final.id,
+            `Reserva ${final.folio} CONFIRMADA: ${elemento.nombre} el ${final.fecha} ${final.horaInicio}–${final.horaFin} a nombre de ${nombrePersona(get, final.solicitantePersonaId)}${final.montoTarifa > 0 ? ` (tarifa $${final.montoTarifa.toLocaleString("es-CL")}, cargo FI pendiente)` : ""}.`,
+            "RA"
+          )
+        }
+        return { ok: true }
+      },
+
+      cancelarReservaRA: (id) => {
+        if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
+        const reserva = get().reservasRA.find(r => r.id === id)
+        if (!reserva) return { ok: false, error: "No se puede cancelar: la reserva no existe." }
+        if (reserva.estado !== "confirmada") {
+          return { ok: false, error: "Solo una reserva Confirmada puede cancelarse." }
+        }
+        const elemento = get().elementosRA.find(e => e.id === reserva.elementoId)
+        const hoyStr = new Date().toISOString().slice(0, 10)
+        const diasRestantes = Math.round((new Date(`${reserva.fecha}T00:00:00`).getTime() - new Date(`${hoyStr}T00:00:00`).getTime()) / 86400000)
+        const ventanaTardia = elemento?.cancelacionTardiaDias
+        const tardia = ventanaTardia !== undefined && diasRestantes <= ventanaTardia
+        const penalizacion = tardia && elemento?.penalizacionTardiaMonto ? elemento.penalizacionTardiaMonto : undefined
+        set(s => ({
+          reservasRA: s.reservasRA.map(r =>
+            r.id === id
+              ? {
+                  ...r,
+                  estado: "cancelada",
+                  cancelacion: { fecha: hoyStr, tardia, ...(penalizacion ? { penalizacion } : {}) },
+                  cargoFIReferencia: penalizacion ? "pendiente" : r.cargoFIReferencia,
+                }
+              : r
+          ),
+        }))
+        registrarEvento(
+          set,
+          "RA_BOOKING_CANCELLED",
+          id,
+          `Reserva ${reserva.folio} cancelada${tardia ? ` FUERA DE PLAZO (faltaban ${diasRestantes} día(s))` : ""}${penalizacion ? `; penalización $${penalizacion.toLocaleString("es-CL")} con cargo FI pendiente` : ""}.`,
+          "RA"
+        )
+        return { ok: true }
+      },
+
+      retenerGarantiaRA: (id, motivo) => {
+        if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
+        const reserva = get().reservasRA.find(r => r.id === id)
+        if (!reserva) return { ok: false, error: "No se puede retener: la reserva no existe." }
+        if (reserva.estado !== "confirmada") {
+          return { ok: false, error: "La garantía se retiene sobre una reserva Confirmada." }
+        }
+        if (reserva.garantiaRetenida) {
+          return { ok: false, error: "La garantía de esta reserva ya fue retenida." }
+        }
+        if (motivo.trim().length === 0) {
+          return { ok: false, error: "La retención exige describir el daño o motivo." }
+        }
+        if (reserva.montoGarantia <= 0) {
+          return { ok: false, error: "El elemento no exige garantía: nada que retener." }
+        }
+        set(s => ({
+          reservasRA: s.reservasRA.map(r =>
+            r.id === id
+              ? { ...r, garantiaRetenida: { monto: r.montoGarantia, motivo: motivo.trim() }, cargoFIReferencia: "pendiente" }
+              : r
+          ),
+        }))
+        registrarEvento(
+          set,
+          "RA_WARRANTY_RETAINED",
+          id,
+          `Garantía RETENIDA ($${reserva.montoGarantia.toLocaleString("es-CL")}) en reserva ${reserva.folio}: ${motivo.trim()} Cargo al fondo de amenities pendiente.`,
+          "RA"
+        )
+        get().notify({
+          destinatarioRol: "administracion",
+          asunto: `Garantía retenida (reserva ${reserva.folio})`,
+          cuerpo: `Se retuvo la garantía de $${reserva.montoGarantia.toLocaleString("es-CL")} por: ${motivo.trim()}`,
+          moduloOrigen: "RA",
+        })
+        return { ok: true }
+      },
     }),
     {
       name: "compass-store",
@@ -2300,6 +2515,8 @@ export const useCompassStore = create<CompassStore>()(
         infraccionesIN: state.infraccionesIN,
         trabajosMT: state.trabajosMT,
         proyectosMT: state.proyectosMT,
+        elementosRA: state.elementosRA,
+        reservasRA: state.reservasRA,
       }),
       migrate: (persisted, version) => {
         const prev = (persisted ?? {}) as Partial<CompassData>
@@ -2444,6 +2661,14 @@ export const useCompassStore = create<CompassStore>()(
             ...result,
             trabajosMT: prev.trabajosMT ?? [],
             proyectosMT: prev.proyectosMT ?? [],
+          }
+        }
+        // RA (v19): maestro de elementos reservables y reservas. Aditivo.
+        if ((version ?? 0) < 19) {
+          result = {
+            ...result,
+            elementosRA: prev.elementosRA ?? [],
+            reservasRA: prev.reservasRA ?? [],
           }
         }
         // TST-002: los stores que ya quedaron en v8 con unidades dañadas por este

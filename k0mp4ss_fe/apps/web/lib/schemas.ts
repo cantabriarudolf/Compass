@@ -580,6 +580,76 @@ export const ProyectoMTSchema = z.object({
   estado: EstadoProyectoMTSchema,
 })
 
+// --- Reservas y Amenities (RA) ---
+
+export const TIPOS_ELEMENTO_RA = ["espacio_fisico", "activo_mobiliario"] as const
+export const TipoElementoRASchema = z.enum(TIPOS_ELEMENTO_RA)
+
+export const FRANJAS_RA = ["bloques_horas", "dia_completo"] as const
+export const FranjaRASchema = z.enum(FRANJAS_RA)
+
+// Elemento reservable: centro de costos del Fondo de Amenities (FI, ventana 6).
+export const ElementoRASchema = z
+  .object({
+    id: IdEntidadSchema,
+    nombre: z.string({ required_error: "El nombre del elemento es obligatorio." }).min(1, "El nombre del elemento es obligatorio."),
+    tipo: TipoElementoRASchema,
+    // Ubicación por referencia: micro sector EF o activo del catálogo IR.
+    microSectorId: IdEntidadSchema.optional(),
+    activoIRId: IdEntidadSchema.optional(),
+    franja: FranjaRASchema,
+    duracionBloqueHoras: z.number().int().min(1, "El bloque debe durar al menos 1 hora.").max(24, "El bloque no puede superar 24 horas.").optional(),
+    tarifaUso: z.number({ required_error: "La tarifa de uso es obligatoria." }).min(0, "La tarifa no puede ser negativa."),
+    garantiaRequerida: z.number({ required_error: "La garantía requerida es obligatoria." }).min(0, "La garantía no puede ser negativa."),
+    aforo: z.number().int().positive("El aforo debe ser mayor a cero.").optional(),
+    stock: z.number().int().min(1, "El stock debe ser de al menos 1 unidad.").optional(),
+    anticipacionMinimaDias: z.number().int().min(0).optional(),
+    cancelacionTardiaDias: z.number().int().min(0).optional(),
+    penalizacionTardiaMonto: z.number().positive("La penalización debe ser mayor a cero.").optional(),
+    activo: z.boolean({ required_error: "El estado activo es obligatorio." }),
+  })
+  .refine((e) => e.franja === "dia_completo" || (e.duracionBloqueHoras ?? 0) >= 1, {
+    message: "Los bloques horarios exigen una duración de bloque en horas.",
+  })
+
+export const ESTADOS_RESERVA_RA = ["confirmada", "cancelada"] as const
+export const EstadoReservaRASchema = z.enum(ESTADOS_RESERVA_RA)
+
+export const CancelacionRASchema = z.object({
+  fecha: FechaISOSchema,
+  tardia: z.boolean({ required_error: "El flag de cancelación tardía es obligatorio." }),
+  penalizacion: z.number().min(0, "La penalización no puede ser negativa.").optional(),
+})
+
+export const RetencionGarantiaRASchema = z.object({
+  monto: z.number({ required_error: "El monto retenido es obligatorio." }).positive("El monto retenido debe ser mayor a cero."),
+  motivo: z.string({ required_error: "El motivo de la retención es obligatorio." }).min(1, "El motivo de la retención es obligatorio."),
+})
+
+const HoraRASchema = z
+  .string({ required_error: "La hora es obligatoria." })
+  .regex(/^\d{2}:\d{2}$/, "La hora debe tener formato HH:MM.")
+
+export const ReservaRASchema = z.object({
+  id: IdEntidadSchema,
+  folio: z.string({ required_error: "El folio es obligatorio." }).min(1, "El folio es obligatorio."),
+  elementoId: IdEntidadSchema,
+  solicitantePersonaId: IdEntidadSchema,
+  unidadId: IdEntidadSchema.optional(),
+  fecha: FechaISOSchema,
+  // Tramo [inicio, fin); día completo usa 00:00–23:59.
+  horaInicio: HoraRASchema,
+  horaFin: HoraRASchema,
+  estado: EstadoReservaRASchema,
+  // Snapshots tarifarios vigentes al confirmar la reserva.
+  montoTarifa: z.number({ required_error: "El monto de tarifa es obligatorio." }).min(0, "La tarifa no puede ser negativa."),
+  montoGarantia: z.number({ required_error: "El monto de garantía es obligatorio." }).min(0, "La garantía no puede ser negativa."),
+  cancelacion: CancelacionRASchema.optional(),
+  garantiaRetenida: RetencionGarantiaRASchema.optional(),
+  // Cobros al Fondo de Amenities: pendientes hasta implementar FI.
+  cargoFIReferencia: z.literal("pendiente").optional(),
+})
+
 // --- Administración: Maestros (MA) ---
 
 export const AfpSchema = z.object({
@@ -816,6 +886,13 @@ export type ProyectoMT = z.infer<typeof ProyectoMTSchema>
 export type EstadoPagoMT = z.infer<typeof EstadoPagoMTSchema>
 export type EstadoTrabajoMT = z.infer<typeof EstadoTrabajoMTSchema>
 export type PrioridadMT = z.infer<typeof PrioridadMTSchema>
+export type TipoElementoRA = z.infer<typeof TipoElementoRASchema>
+export type FranjaRA = z.infer<typeof FranjaRASchema>
+export type ElementoRA = z.infer<typeof ElementoRASchema>
+export type EstadoReservaRA = z.infer<typeof EstadoReservaRASchema>
+export type CancelacionRA = z.infer<typeof CancelacionRASchema>
+export type RetencionGarantiaRA = z.infer<typeof RetencionGarantiaRASchema>
+export type ReservaRA = z.infer<typeof ReservaRASchema>
 
 // --- Utilidades de validación para el store ---
 
