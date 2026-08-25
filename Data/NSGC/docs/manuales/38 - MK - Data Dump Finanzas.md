@@ -8,7 +8,7 @@
 
 | id | nombre | tipo | descripcion | porcentajeAporte | activo |
 |----|--------|------|-------------|------------------|--------|
-| `fondo-gc` | Fondo de Gasto Común | gasto_comun | Caja principal para la operación ordinaria del condominio. | — | true |
+| `fondo-gc` | Fondo de Gasto Común | gasto_comun | Caja principal para la operación ordinaria de la comunidad. | — | true |
 | `fondo-reserva` | Fondo de Reserva | reserva | Ahorro obligatorio según la Ley de Copropiedad. | 5 | true |
 | `fondo-amenities` | Fondo de Amenities | amenities | Centro de costos de reservas, tarifas y garantías de amenities. | — | true |
 

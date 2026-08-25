@@ -74,7 +74,7 @@ El sistema SHALL calcular la mora sobre cobros vencidos usando `diaCortePago` (C
 - **THEN** el responsable recibe notificación email_simulado y queda registrado `FI_COBRANZA_SENT`
 
 ### Requirement: Pagos con Ajuste Manual e Informe de Diferencia Inmutable
-Al recibir un pago, el sistema MUST cargar el monto exigible exacto (deuda base + moras − pagos previos) mediante `registrarPagoFI(cobroId, pago)`. Si el administrador ingresa un monto distinto (descuento a favor del residente o recargo a favor del condominio), el sistema MUST exigir justificación obligatoria, procesar el pago y generar un informe de diferencia inmutable (sin acciones de edición ni borrado) que registra esperado, recibido, diferencia, tipo y justificación; audita `FI_RECEIVE_PAYMENT` y, ante ajuste, también `FI_MANUAL_DISCOUNT`.
+Al recibir un pago, el sistema MUST cargar el monto exigible exacto (deuda base + moras − pagos previos) mediante `registrarPagoFI(cobroId, pago)`. Si el administrador ingresa un monto distinto (descuento a favor del residente o recargo a favor de la comunidad), el sistema MUST exigir justificación obligatoria, procesar el pago y generar un informe de diferencia inmutable (sin acciones de edición ni borrado) que registra esperado, recibido, diferencia, tipo y justificación; audita `FI_RECEIVE_PAYMENT` y, ante ajuste, también `FI_MANUAL_DISCOUNT`.
 
 #### Scenario: Pago exacto cierra el cobro
 - **WHEN** se registra un pago igual al exigible de un cobro vencido con mora

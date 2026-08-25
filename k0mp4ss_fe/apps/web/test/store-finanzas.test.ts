@@ -329,7 +329,7 @@ describe("FI - Finanzas y Morosidad en el store", () => {
       expect(getState().eventos.some(e => e.tipoAccion === "FI_MANUAL_DISCOUNT")).toBe(true)
     })
 
-    it("recargo con justificación a favor del condominio", () => {
+    it("recargo con justificación a favor de la comunidad", () => {
       const exigible = exigibleDe(getState().cobrosFI.find(c => c.id === cobroId)!)
       const r = getState().registrarPagoFI(cobroId, { monto: exigible + 2500, medio: "efectivo", ajusteJustificacion: "Saldo pendiente de mes anterior facturado ahora." })
       expect(r.ok).toBe(true)
