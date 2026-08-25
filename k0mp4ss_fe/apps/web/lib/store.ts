@@ -54,6 +54,9 @@ import {
   VinculoUnidadSchema,
   ConfiguracionGlobalSchema,
   EventoAuditoriaSchema,
+  PublicacionPortalSchema,
+  LeadPortalSchema,
+  NotificacionSchema,
   MAESTRO_SCHEMAS,
   validarConEsquema,
   validarMaestro,
@@ -64,6 +67,10 @@ import {
   type Persona,
   type VinculoUnidad,
   type ConfiguracionGlobal,
+  type PublicacionPortal,
+  type LeadPortal,
+  type Notificacion,
+  type OperacionPortal,
 } from "@/lib/schemas"
 import { z } from "zod"
 
@@ -87,7 +94,8 @@ function registrarEvento(
   set: SetStateFn,
   tipoAccion: string,
   referenciaId: string,
-  descripcion: string
+  descripcion: string,
+  categoria = "VU"
 ): void {
   set(s => ({
     eventos: [
@@ -96,7 +104,7 @@ function registrarEvento(
         id: `ev-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         timestamp: new Date().toISOString(),
         usuario: "Admin",
-        categoria: "VU",
+        categoria,
         tipoAccion,
         referenciaId,
         descripcion,
@@ -110,7 +118,12 @@ function nombrePersona(get: () => CompassStore, personaId: string): string {
   return p ? `${p.nombres} ${p.apellidos}` : personaId
 }
 
-export const STORE_VERSION = 10
+function refUnidad(get: () => CompassStore, unidadId: string): string {
+  const u = get().unidades.find(x => x.id === unidadId)
+  return u ? `${u.etiqueta} ${u.numero}` : unidadId
+}
+
+export const STORE_VERSION = 11
 
 export interface MaestroCollections {
   afps: Afp[]
@@ -141,6 +154,11 @@ export interface CompassData {
   eventos: EventoAuditoria[]
   configuracion: ConfiguracionGlobal
   maestros: MaestroCollections
+  // Portal Inmobiliario (PI)
+  publicacionesPortal: PublicacionPortal[]
+  leadsPortal: LeadPortal[]
+  // Notificaciones simuladas (D3, consumidas por todos los módulos)
+  notificaciones: Notificacion[]
 }
 
 interface CompassStore extends CompassData {
@@ -169,6 +187,14 @@ interface CompassStore extends CompassData {
   removeMaestro: <K extends keyof MaestroCollections>(key: K, id: string) => StoreResult
   // Configuración Global (CF)
   saveConfiguracion: (config: ConfiguracionGlobal) => StoreResult
+  // Portal Inmobiliario (PI)
+  savePublicacionPortal: (publicacion: PublicacionPortal) => StoreResult
+  removePublicacionPortal: (id: string) => StoreResult
+  saveLeadPortal: (lead: LeadPortal) => StoreResult
+  syncPublicacionesDesdeVinculos: (unidadId: string) => void
+  // Notificaciones simuladas (D3)
+  notify: (notificacion: Omit<Notificacion, "id" | "leida" | "canal" | "fecha"> & { canal?: Notificacion["canal"] }) => void
+  marcarNotificacionLeida: (id: string) => void
 }
 
 function upsert<T extends { id: string }>(list: T[], item: T): T[] {
@@ -205,6 +231,9 @@ export const seedData = (): CompassData => ({
   vinculos: seedVinculos,
   eventos: [],
   configuracion: seedConfiguracion,
+  publicacionesPortal: [],
+  leadsPortal: [],
+  notificaciones: [],
   maestros: {
     afps: seedAFPS,
     previsionesSalud: seedPrevisionesSalud,
@@ -237,6 +266,9 @@ const ESQUEMAS_COLECCION = {
   vinculos: z.array(VinculoUnidadSchema),
   eventos: z.array(EventoAuditoriaSchema),
   configuracion: ConfiguracionGlobalSchema,
+  publicacionesPortal: z.array(PublicacionPortalSchema),
+  leadsPortal: z.array(LeadPortalSchema),
+  notificaciones: z.array(NotificacionSchema),
 } as const
 
 type ClaveColeccion = keyof typeof ESQUEMAS_COLECCION
@@ -544,6 +576,9 @@ export const useCompassStore = create<CompassStore>()(
           }
         }
 
+        // PI: sincroniza la vitrina según el estado inmobiliario del propietario vigente.
+        get().syncPublicacionesDesdeVinculos(vinculo.unidadId)
+
         return { ok: true }
       },
 
@@ -559,6 +594,8 @@ export const useCompassStore = create<CompassStore>()(
           } else {
             registrarEvento(set, "VU_DELETE", id, `Tramo histórico (${objetivo.rol}) eliminado de ${ref}.`)
           }
+          // PI: al retirar un vínculo puede desaparecer la oferta vigente.
+          get().syncPublicacionesDesdeVinculos(objetivo.unidadId)
         }
         return { ok: true }
       },
@@ -630,6 +667,155 @@ export const useCompassStore = create<CompassStore>()(
         set(() => ({ configuracion: validacion.data }))
         return { ok: true }
       },
+
+      // --- PI: Portal Inmobiliario ---
+      savePublicacionPortal: (publicacion) => {
+        if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
+        const validacion = validarConEsquema(PublicacionPortalSchema, publicacion)
+        if (!validacion.ok) return validacion
+        const unidad = get().unidades.find(u => u.id === validacion.data.unidadId)
+        if (!unidad) {
+          return { ok: false, error: "No se puede guardar la publicación: la unidad no existe en el inventario." }
+        }
+        const existente = get().publicacionesPortal.find(p => p.id === validacion.data.id)
+        set(s => ({ publicacionesPortal: upsert(s.publicacionesPortal, validacion.data) }))
+
+        // Eventos AM según transición de visibilidad en la vitrina.
+        const ref = refUnidad(get, validacion.data.unidadId)
+        if ((!existente || !existente.activa) && validacion.data.activa) {
+          registrarEvento(set, "PI_PROPERTY_LISTED", validacion.data.id, `Publicación ${validacion.data.operacion} activada para ${ref}.`, "PI")
+        }
+        if (existente?.activa && !validacion.data.activa) {
+          registrarEvento(set, "PI_PROPERTY_UNLISTED", validacion.data.id, `Publicación retirada de la vitrina (${ref}).`, "PI")
+        }
+        return { ok: true }
+      },
+
+      removePublicacionPortal: (id) => {
+        if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
+        const leads = get().leadsPortal.filter(l => l.publicacionId === id)
+        if (leads.length > 0) {
+          return {
+            ok: false,
+            error: `No se puede eliminar la publicación: tiene ${leads.length} lead(s) asociado(s).`,
+          }
+        }
+        set(s => ({ publicacionesPortal: s.publicacionesPortal.filter(p => p.id !== id) }))
+        return { ok: true }
+      },
+
+      saveLeadPortal: (lead) => {
+        if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
+        const validacion = validarConEsquema(LeadPortalSchema, lead)
+        if (!validacion.ok) return validacion
+        const publicacion = get().publicacionesPortal.find(p => p.id === validacion.data.publicacionId)
+        if (!publicacion) {
+          return { ok: false, error: "No se puede registrar el interés: la publicación no existe." }
+        }
+        if (!publicacion.activa) {
+          return { ok: false, error: "No se puede registrar el interés: la publicación no está activa." }
+        }
+        // Idempotencia bulk: solo el alta nueva genera notificación y evento.
+        const esNueva = !get().leadsPortal.some(l => l.id === validacion.data.id)
+        set(s => ({ leadsPortal: upsert(s.leadsPortal, validacion.data) }))
+        if (!esNueva) return { ok: true }
+
+        // Contacto seguro (D3): notifica al propietario vigente sin exponer sus datos.
+        const propietario = get().vinculos.find(v =>
+          v.unidadId === publicacion.unidadId && v.rol === "propietario" && !v.fechaFin
+        )
+        get().notify({
+          destinatarioRol: "propietario",
+          destinatarioPersonaId: propietario?.personaId,
+          asunto: "Nuevo interesado en tu propiedad",
+          cuerpo: `${validacion.data.nombreContacto} mostró interés en ${refUnidad(get, publicacion.unidadId)} (${publicacion.operacion}). Contacto: ${validacion.data.contacto}`,
+          moduloOrigen: "PI",
+        })
+        registrarEvento(set, "PI_LEAD_CONTACT", validacion.data.id, `Lead de ${validacion.data.nombreContacto} sobre ${refUnidad(get, publicacion.unidadId)}.`, "PI")
+        return { ok: true }
+      },
+
+      syncPublicacionesDesdeVinculos: (unidadId) => {
+        const s = get()
+        const claveEstado = (estadoId?: string): string => {
+          if (!estadoId) return ""
+          const e = s.maestros.estadosInmobiliarios.find(x => x.id === estadoId)
+          if (!e) return ""
+          return `${e.id} ${e.nombre}`.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+        }
+        const esOferta = (clave: string): boolean => clave.includes("arriendo") || clave.includes("venta")
+
+        const vigente = s.vinculos.find(
+          v => v.unidadId === unidadId && v.rol === "propietario" && !v.fechaFin && esOferta(claveEstado(v.estadoOcupacionPropiedad))
+        )
+        const existente = s.publicacionesPortal.find(p => p.unidadId === unidadId)
+
+        if (vigente) {
+          const operacion: OperacionPortal = claveEstado(vigente.estadoOcupacionPropiedad).includes("venta") ? "venta" : "arriendo"
+          if (!existente) {
+            const nueva: PublicacionPortal = {
+              id: `pub-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+              unidadId,
+              operacion,
+              precio: 0,
+              imagenes: [],
+              activa: true,
+              fechaPublicacion: new Date().toISOString().slice(0, 10),
+            }
+            set(st => ({ publicacionesPortal: upsert(st.publicacionesPortal, nueva) }))
+            registrarEvento(set, "PI_PROPERTY_LISTED", nueva.id, `Trigger inmobiliario: ${refUnidad(get, unidadId)} publicada como ${operacion}.`, "PI")
+          } else {
+            const cambios: Partial<PublicacionPortal> = {}
+            if (!existente.activa) cambios.activa = true
+            if (existente.operacion !== operacion) cambios.operacion = operacion
+            if (Object.keys(cambios).length > 0) {
+              set(st => ({
+                publicacionesPortal: st.publicacionesPortal.map(p =>
+                  p.id === existente.id ? { ...p, ...cambios } : p
+                ),
+              }))
+              if (cambios.activa) {
+                registrarEvento(set, "PI_PROPERTY_LISTED", existente.id, `Trigger inmobiliario: ${refUnidad(get, unidadId)} vuelve a la vitrina como ${operacion}.`, "PI")
+              }
+            }
+          }
+        } else if (existente?.activa) {
+          set(st => ({
+            publicacionesPortal: st.publicacionesPortal.map(p =>
+              p.id === existente.id ? { ...p, activa: false } : p
+            ),
+          }))
+          registrarEvento(set, "PI_PROPERTY_UNLISTED", existente.id, `Trigger inmobiliario: ${refUnidad(get, unidadId)} retirada de la vitrina.`, "PI")
+        }
+      },
+
+      // --- Notificaciones simuladas (D3) ---
+      notify: (notificacion) => {
+        if (!get().hasHydrated) return
+        const completa: Notificacion = {
+          id: `notif-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          destinatarioRol: notificacion.destinatarioRol,
+          destinatarioPersonaId: notificacion.destinatarioPersonaId,
+          asunto: notificacion.asunto,
+          cuerpo: notificacion.cuerpo,
+          canal: notificacion.canal ?? "email_simulado",
+          moduloOrigen: notificacion.moduloOrigen,
+          fecha: new Date().toISOString().slice(0, 10),
+          leida: false,
+        }
+        const validacion = validarConEsquema(NotificacionSchema, completa)
+        if (!validacion.ok) return
+        set(s => ({
+          notificaciones: [...s.notificaciones.slice(-(MAX_EVENTOS - 1)), validacion.data],
+        }))
+      },
+
+      marcarNotificacionLeida: (id) => {
+        if (!get().hasHydrated) return
+        set(s => ({
+          notificaciones: s.notificaciones.map(n => (n.id === id ? { ...n, leida: true } : n)),
+        }))
+      },
     }),
     {
       name: "compass-store",
@@ -649,6 +835,9 @@ export const useCompassStore = create<CompassStore>()(
           ? { ...state.configuracion, smtpPassword: "", claveEliminacionMaestro: "" }
           : state.configuracion,
         maestros: state.maestros,
+        publicacionesPortal: state.publicacionesPortal,
+        leadsPortal: state.leadsPortal,
+        notificaciones: state.notificaciones,
       }),
       migrate: (persisted, version) => {
         const prev = (persisted ?? {}) as Partial<CompassData>
@@ -728,6 +917,16 @@ export const useCompassStore = create<CompassStore>()(
           if (prevAny["estacionamientos"] !== undefined) delete (result as unknown as Record<string, unknown>)["estacionamientos"]
           const maestrosAny = (result.maestros ?? {}) as unknown as Record<string, unknown>
           if (maestrosAny["ubicacionesEstacionamiento"] !== undefined) delete maestrosAny["ubicacionesEstacionamiento"]
+        }
+        // PI (v11): colecciones nuevas del Portal Inmobiliario + notificaciones
+        // simuladas (D3). Aditivas: si no existen en el persistido, entran vacías.
+        if ((version ?? 0) < 11) {
+          result = {
+            ...result,
+            publicacionesPortal: prev.publicacionesPortal ?? [],
+            leadsPortal: prev.leadsPortal ?? [],
+            notificaciones: prev.notificaciones ?? [],
+          }
         }
         // TST-002: los stores que ya quedaron en v8 con unidades dañadas por este
         // bug (estado sin estadoId) se rescatan aquí en el salto a v9.

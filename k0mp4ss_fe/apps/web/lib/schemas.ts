@@ -110,6 +110,64 @@ export const ExtensionGobernanzaSchema = z.object({
 
 export const ROLES_PERSONA = ["propietario", "residente", "personal", "directiva", "contratista"] as const
 
+// --- Portal Inmobiliario (PI) ---
+
+// D1 (media por referencia): solo metadatos + URL; jamás payload binario.
+export const ImagenReferenciaSchema = z.object({
+  nombre: z.string().min(1, "El nombre del archivo es obligatorio."),
+  tipoMime: z.string().min(1, "El tipo MIME es obligatorio."),
+  tamanoKB: z.number().min(0, "El tamaño no puede ser negativo."),
+  url: z
+    .string()
+    .min(1, "La URL de la imagen es obligatoria.")
+    .max(2048, "La URL excede el largo permitido.")
+    .refine((valor) => !/^data:/i.test(valor) && !/^blob:/i.test(valor), {
+      message: "Media por referencia: no se permiten data-URL ni Blob embebidos (D1).",
+    }),
+})
+
+export const OperacionPortalSchema = z.enum(["venta", "arriendo"])
+
+export const PublicacionPortalSchema = z.object({
+  id: IdEntidadSchema,
+  unidadId: IdEntidadSchema,
+  operacion: OperacionPortalSchema,
+  precio: z.number({ required_error: "El precio es obligatorio." }).min(0, "El precio no puede ser negativo."),
+  moneda: z.enum(["CLP", "UF"]).optional(),
+  dormitorios: z.number().int().min(0).optional(),
+  banos: z.number().int().min(0).optional(),
+  etiquetaEstado: z.string().optional(),
+  descripcion: z.string().optional(),
+  urlMapa: z.string().url("La URL del mapa no es válida.").or(z.literal("")).optional(),
+  condicionesContractuales: z.string().optional(),
+  imagenes: z.array(ImagenReferenciaSchema),
+  activa: z.boolean({ required_error: "El estado activo es obligatorio." }),
+  fechaPublicacion: FechaISOSchema,
+})
+
+export const LeadPortalSchema = z.object({
+  id: IdEntidadSchema,
+  publicacionId: IdEntidadSchema,
+  nombreContacto: z.string().min(1, "El nombre de contacto es obligatorio."),
+  contacto: z.string().min(1, "El contacto (teléfono o correo) es obligatorio."),
+  mensaje: z.string().optional(),
+  fecha: FechaISOSchema,
+  atendido: z.boolean({ required_error: "El estado atendido es obligatorio." }),
+})
+
+// D3 (notificaciones simuladas): bandeja in-app con canal email_simulado.
+export const NotificacionSchema = z.object({
+  id: IdEntidadSchema,
+  destinatarioRol: z.enum(["administracion", "propietario", "residente", "directiva", "personal"]),
+  destinatarioPersonaId: z.string().optional(),
+  asunto: z.string().min(1, "El asunto es obligatorio."),
+  cuerpo: z.string().min(1, "El cuerpo es obligatorio."),
+  canal: z.literal("email_simulado"),
+  moduloOrigen: z.string().min(1),
+  fecha: FechaISOSchema,
+  leida: z.boolean(),
+})
+
 export const MensajeDocumentoInvalido = "RUT inválido (dígito verificador incorrecto) o pasaporte con formato no válido."
 
 const DocumentoIdentidadSchema = z
@@ -281,6 +339,10 @@ export const ConfiguracionGlobalSchema = z.object({
   diasVacacionesMes: z.number().positive("Los días de vacaciones deben ser mayores a 0."),
   jornadaSemanalEstandar: z.number().int().min(1, "La jornada semanal debe ser mayor a 0.").max(80, "La jornada semanal no puede superar 80 horas."),
   claveEliminacionMaestro: z.string(),
+
+  // 6. Portal Inmobiliario (PI): opcional para compatibilidad con stores previos.
+  // Ausente = modo "residentes" (por defecto, según spec PI).
+  visibilidadPortalInmobiliario: z.enum(["residentes", "publica"]).optional(),
 })
 
 // --- Auditoría interna del store ---
@@ -325,6 +387,11 @@ export type ModoCalculoGC = z.infer<typeof ModoCalculoGCSchema>
 export type SeguridadSMTP = z.infer<typeof SeguridadSMTPSchema>
 export type ConfiguracionGlobal = z.infer<typeof ConfiguracionGlobalSchema>
 export type EventoAuditoria = z.infer<typeof EventoAuditoriaSchema>
+export type ImagenReferencia = z.infer<typeof ImagenReferenciaSchema>
+export type OperacionPortal = z.infer<typeof OperacionPortalSchema>
+export type PublicacionPortal = z.infer<typeof PublicacionPortalSchema>
+export type LeadPortal = z.infer<typeof LeadPortalSchema>
+export type Notificacion = z.infer<typeof NotificacionSchema>
 
 // --- Utilidades de validación para el store ---
 

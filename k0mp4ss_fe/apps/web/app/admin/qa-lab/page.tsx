@@ -49,6 +49,7 @@ const PLAN: Record<string, string[]> = {
   "ef-micro": ["Crear Piso: Piso99-TEST (etiqueta TEST-MICRO-PisoQA) dentro de SectorTEST"],
   "ef-unidad": ["Crear Depto: 999 (tipo LoftQA, estado EnLimpieza, en Piso99-TEST)", "Crear Estacionamiento: E-999 (en Superficie TEST, tipo Estacionamiento)"],
   vu: ["Amarrar Propietario: 99.999.999-9 → Depto 999 (estado PreReservaQA)", "Amarrar Propietario: 99.999.999-9 → Estacionamiento E-999", "Amarrar Arrendatario: 88.888.888-8 → Depto 999 (2026-08-20 a 2027-08-20)"],
+  pi: ["Publicar en vitrina: E-999 en venta ($8.500.000) con imagen por referencia", "Registrar lead TEST Lead QA → notificación email_simulado al propietario"],
 }
 
 const TITULOS: Record<string, string> = {
@@ -59,6 +60,7 @@ const TITULOS: Record<string, string> = {
   "ef-micro": "5. Piso",
   "ef-unidad": "6. Deptos y Estacionamientos",
   vu: "7. Amarras — quién vive dónde",
+  pi: "8. Vitrina Inmobiliaria (PI)",
 }
 
 const COMO_LLEGAR: Record<string, string> = {
@@ -69,6 +71,7 @@ const COMO_LLEGAR: Record<string, string> = {
   "ef-micro": "Inventario → Estructura Física → abre SectorTEST → verás Piso99-TEST",
   "ef-unidad": "Inventario → Estructura Física → tabla filtra 999 y E-999",
   vu: "Comunidad → Directorio de Personas → abre 99.999.999-9 → pestaña Unidades Vinculadas",
+  pi: "Comunidad → Portal Inmobiliario → tarjeta E-999",
 }
 
 const COMO_LLEGAR_HREF: Record<string, string> = {
@@ -79,6 +82,7 @@ const COMO_LLEGAR_HREF: Record<string, string> = {
   "ef-micro": "/inventario/estructura",
   "ef-unidad": "/inventario/estructura",
   vu: "/comunidad/personas",
+  pi: "/comunidad/portal",
 }
 
 interface SeedReport {
@@ -145,6 +149,7 @@ export default function QaLabPage() {
     { id: "ef-micro", label: TITULOS["ef-micro"]!, rank: 2, fase: "Paso 5" },
     { id: "ef-unidad", label: TITULOS["ef-unidad"]!, rank: 2, fase: "Paso 6" },
     { id: "vu", label: TITULOS["vu"]!, rank: 3, fase: "Paso 7" },
+    { id: "pi", label: TITULOS["pi"]!, rank: 4, fase: "Paso 8" },
   ]
 
   const FASE_MODULOS: Record<string, string[]> = {
@@ -152,7 +157,8 @@ export default function QaLabPage() {
     "1": ["tu", "mp"],
     "2": ["ef-macro", "ef-micro", "ef-unidad"],
     "3": ["vu"],
-    "todo": ["ma", "tu", "mp", "ef-macro", "ef-micro", "ef-unidad", "vu"],
+    "4": ["pi"],
+    "todo": ["ma", "tu", "mp", "ef-macro", "ef-micro", "ef-unidad", "vu", "pi"],
   }
 
   const LABEL_FASE: Record<string, string> = {
@@ -160,6 +166,7 @@ export default function QaLabPage() {
     "1": "2. Plantillas y Personas",
     "2": "3. Torres, Pisos y Deptos",
     "3": "4. Amarras — personas a deptos",
+    "4": "5. Vitrina — publicación y lead",
     "todo": "Carga completa",
   }
 
@@ -258,6 +265,17 @@ export default function QaLabPage() {
     return { id: "vu", label: TITULOS["vu"]!, rank: 3, status: errores.length ? "error" : "ok", count: 3, errores, pasos }
   }, [])
 
+  const cargarFase4PI = React.useCallback(async (): Promise<ModReport> => {
+    const s = useCompassStore.getState()
+    const pasos: Paso[] = (PLAN["pi"]! as string[]).map(desc => ({ desc, estado: "pendiente" as ModuleState }))
+    const r1 = s.savePublicacionPortal({ id: "test-pub-pi-e999", unidadId: "test-u-e-999", operacion: "venta", precio: 8500000, moneda: "CLP", descripcion: "Estacionamiento TEST publicado en vitrina", urlMapa: "", imagenes: [{ nombre: "test-foto-e999.jpg", tipoMime: "image/jpeg", tamanoKB: 120, url: "https://placeholder.supabase.co/test-foto-e999.jpg" }], activa: true, fechaPublicacion: "2026-08-24" } as any)
+    if (!r1.ok) { pasos[0]!.estado = "error"; pasos[0]!.error = r1.error } else pasos[0]!.estado = "ok"
+    const r2 = s.saveLeadPortal({ id: "test-lead-pi-1", publicacionId: "test-pub-pi-e999", nombreContacto: "TEST Lead QA", contacto: "+56 9 0000 0001", mensaje: "Interesado en E-999, ¿acepta oferta?", fecha: "2026-08-24", atendido: false } as any)
+    if (!r2.ok) { pasos[1]!.estado = "error"; pasos[1]!.error = r2.error } else pasos[1]!.estado = "ok"
+    const errores = pasos.filter(p => p.estado === "error").map(p => p.error || p.desc)
+    return { id: "pi", label: TITULOS["pi"]!, rank: 4, status: errores.length ? "error" : "ok", count: 2, errores, pasos }
+  }, [])
+
   const buildHistoria = React.useCallback((mods: ModReport[]): SeedReport["historia"] => {
     return HISTORIA.map(h => ({ capitulo: h.capitulo, estado: (() => {
       const rankMods = mods.filter(m => m.rank === h.rank)
@@ -307,6 +325,18 @@ export default function QaLabPage() {
         }
         mods.push(await cargarFase3VU())
       }
+      if (fase === "4" || fase === "todo") {
+        if (fase === "4") {
+          mods.push(await cargarFase0())
+          mods.push(await cargarFase1TU())
+          mods.push(await cargarFase1MP())
+          mods.push(await cargarFase2Macro())
+          mods.push(await cargarFase2Micro())
+          mods.push(await cargarFase2Unidad())
+          mods.push(await cargarFase3VU())
+        }
+        mods.push(await cargarFase4PI())
+      }
       if (fase === "todo") {
         // ya se cargaron todos en orden
       }
@@ -321,14 +351,21 @@ export default function QaLabPage() {
     } finally {
       setLoading(false)
     }
-  }, [cargarFase0, cargarFase1MP, cargarFase1TU, cargarFase2Macro, cargarFase2Micro, cargarFase2Unidad, cargarFase3VU, buildHistoria, ensureHydrated])
+  }, [cargarFase0, cargarFase1MP, cargarFase1TU, cargarFase2Macro, cargarFase2Micro, cargarFase2Unidad, cargarFase3VU, cargarFase4PI, buildHistoria, ensureHydrated])
 
   const limpiar = React.useCallback(async () => {
     if (!ensureHydrated()) return
     setLoading(true)
     const errores: string[] = []
     const s = useCompassStore.getState()
-    // inverso VU -> EF unidades -> EF micro -> EF macro -> MP -> TU -> MA
+    // inverso PI -> VU -> EF unidades -> EF micro -> EF macro -> MP -> TU -> MA
+    // PI no define removeLeadPortal (los leads son histórico); se purgan por filtro.
+    useCompassStore.setState(st => ({
+      leadsPortal: st.leadsPortal.filter(l => l.id !== "test-lead-pi-1"),
+      notificaciones: st.notificaciones.filter(n => n.moduloOrigen !== "PI" || !n.destinatarioPersonaId?.startsWith("test-")),
+    }))
+    const rPub = s.removePublicacionPortal("test-pub-pi-e999")
+    if (!rPub.ok) errores.push(rPub.error || "pub")
     for (const id of ["test-v-arr-999", "test-v-prop-e999", "test-v-prop-999"]) {
       const r = s.removeVinculo(id)
       if (!r.ok) errores.push(r.error || id)
@@ -483,6 +520,7 @@ export default function QaLabPage() {
               { fase: "1", label: "2. Crear Plantillas y Personas" },
               { fase: "2", label: "3. Levantar Torres, Pisos y Deptos" },
               { fase: "3", label: "4. Amarrar personas a deptos" },
+              { fase: "4", label: "5. Publicar vitrina PI con lead" },
             ].map(item => {
               const isActive = ultimaFase === item.fase
               const modsFase = isActive && report ? report.modulos.filter(m => FASE_MODULOS[item.fase]!.includes(m.id)) : []
