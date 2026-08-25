@@ -13,6 +13,7 @@ import {
 import { personas as seedPersonas } from "@/data/comunidad/personas"
 import { vinculos as seedVinculos, ESTADOS_INMOBILIARIOS as seedEstadosInmobiliarios } from "@/data/comunidad/vinculos"
 import { plantillasComunicacion as seedPlantillasCO } from "@/data/comunidad/plantillas-co"
+import { tiposInfraccionSeed } from "@/data/finanzas/tipos-infraccion"
 import {
   AFPS as seedAFPS,
   PREVISIONES_SALUD as seedPrevisionesSalud,
@@ -68,6 +69,8 @@ import {
   RecursoIRSchema,
   SolicitudInsumoIRSchema,
   EntregaEPPSchema,
+  TipoInfraccionINSchema,
+  InfraccionINSchema,
   MAESTRO_SCHEMAS,
   validarConEsquema,
   validarMaestro,
@@ -95,6 +98,9 @@ import {
   type SolicitudInsumoIR,
   type EntregaEPP,
   type EstadoActivoIR,
+  type TipoInfraccionIN,
+  type InfraccionIN,
+  type EstadoInfraccionIN,
 } from "@/lib/schemas"
 import { z } from "zod"
 
@@ -175,7 +181,7 @@ function siguienteCodigoIR(get: () => CompassStore): string {
   return `IR-A-${String(siguiente).padStart(4, "0")}`
 }
 
-export const STORE_VERSION = 16
+export const STORE_VERSION = 17
 
 export interface MaestroCollections {
   afps: Afp[]
@@ -226,6 +232,9 @@ export interface CompassData {
   activosIR: RecursoIR[]
   solicitudesInsumoIR: SolicitudInsumoIR[]
   entregasEPP: EntregaEPP[]
+  // Infracciones y Multas (IN)
+  tiposInfraccionIN: TipoInfraccionIN[]
+  infraccionesIN: InfraccionIN[]
 }
 
 interface CompassStore extends CompassData {
@@ -298,6 +307,16 @@ interface CompassStore extends CompassData {
   registrarEntregaEPP: (entrega: EntregaEPP) => StoreResult
   asignarAccesoIR: (recursoId: string, personaId: string) => StoreResult
   devolverAccesoIR: (recursoId: string) => StoreResult
+  // Infracciones y Multas (IN)
+  saveTipoInfraccionIN: (tipo: TipoInfraccionIN) => StoreResult
+  removeTipoInfraccionIN: (id: string) => StoreResult
+  saveInfraccionIN: (infraccion: InfraccionIN) => StoreResult
+  apelarInfraccionIN: (id: string, descargos: string) => StoreResult
+  comentarInfraccionIN: (id: string, comentario: { autorPersonaId: string; texto: string }) => StoreResult
+  respaldarInfraccionIN: (id: string, personaId: string) => StoreResult
+  aplicarInfraccionIN: (id: string) => StoreResult
+  desestimarInfraccionIN: (id: string, justificacion: string) => StoreResult
+  removeInfraccionIN: (id: string) => StoreResult
 }
 
 function upsert<T extends { id: string }>(list: T[], item: T): T[] {
@@ -347,6 +366,8 @@ export const seedData = (): CompassData => ({
   activosIR: [],
   solicitudesInsumoIR: [],
   entregasEPP: [],
+  tiposInfraccionIN: tiposInfraccionSeed,
+  infraccionesIN: [],
   maestros: {
     afps: seedAFPS,
     previsionesSalud: seedPrevisionesSalud,
@@ -392,6 +413,8 @@ const ESQUEMAS_COLECCION = {
   activosIR: z.array(RecursoIRSchema),
   solicitudesInsumoIR: z.array(SolicitudInsumoIRSchema),
   entregasEPP: z.array(EntregaEPPSchema),
+  tiposInfraccionIN: z.array(TipoInfraccionINSchema),
+  infraccionesIN: z.array(InfraccionINSchema),
 } as const
 
 type ClaveColeccion = keyof typeof ESQUEMAS_COLECCION
@@ -1791,6 +1814,225 @@ export const useCompassStore = create<CompassStore>()(
         registrarEvento(set, "IR_ACCESO_DEVUELTO", recursoId, `${recurso.nombre} devuelto por ${nombrePersona(get, recurso.asignacionActual.personaId)}.`, "IR")
         return { ok: true }
       },
+
+      // --- IN: Infracciones y Multas ---
+      saveTipoInfraccionIN: (tipo) => {
+        if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
+        const validacion = validarConEsquema(TipoInfraccionINSchema, tipo)
+        if (!validacion.ok) return validacion
+        set(s => ({ tiposInfraccionIN: upsert(s.tiposInfraccionIN, validacion.data) }))
+        return { ok: true }
+      },
+
+      removeTipoInfraccionIN: (id) => {
+        if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
+        const enUso = get().infraccionesIN.filter(i => i.tipoInfraccionId === id)
+        if (enUso.length > 0) {
+          return { ok: false, error: `No se puede eliminar el tipo de infracción: ${enUso.length} infracción(es) registrada(s) lo utilizan.` }
+        }
+        set(s => ({ tiposInfraccionIN: s.tiposInfraccionIN.filter(t => t.id !== id) }))
+        return { ok: true }
+      },
+
+      saveInfraccionIN: (infraccion) => {
+        if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
+        const esNueva = !get().infraccionesIN.some(i => i.id === infraccion.id)
+        let candidato: InfraccionIN = infraccion
+        if (esNueva) {
+          const numeros = get().infraccionesIN
+            .map(i => Number.parseInt(i.folio.replace(/^IN-/, ""), 10))
+            .filter(n => Number.isFinite(n))
+          const siguiente = (numeros.length > 0 ? Math.max(...numeros) : 0) + 1
+          candidato = {
+            ...infraccion,
+            folio: `IN-${String(siguiente).padStart(4, "0")}`,
+            estado: "en_revision",
+            comentariosDirectiva: [],
+            respaldosDirectiva: [],
+          }
+        }
+        const validacion = validarConEsquema(InfraccionINSchema, candidato)
+        if (!validacion.ok) return validacion
+        const registro = validacion.data
+
+        // Excluyentes: catálogo o daño directo.
+        if (!registro.tipoInfraccionId && !registro.danoDirecto) {
+          return { ok: false, error: "La infracción exige un tipo del catálogo o ser un cobro directo por daños con descripción y costo." }
+        }
+        if (registro.tipoInfraccionId && registro.danoDirecto) {
+          return { ok: false, error: "Una infracción no puede tener tipo de catálogo y cobro directo por daños a la vez." }
+        }
+        if (registro.tipoInfraccionId && !get().tiposInfraccionIN.some(t => t.id === registro.tipoInfraccionId)) {
+          return { ok: false, error: "No se puede registrar: el tipo de infracción indicado no existe en el catálogo." }
+        }
+        if (registro.danoDirecto && registro.evidencias.length === 0) {
+          return { ok: false, error: "El cobro directo por daños exige al menos una evidencia adjunta (cotización/factura/foto)." }
+        }
+        if (!get().unidades.some(u => u.id === registro.unidadId)) {
+          return { ok: false, error: "No se puede registrar: la unidad infractora no existe en el inventario." }
+        }
+        if (registro.reportantePersonaId && !get().personas.some(p => p.id === registro.reportantePersonaId)) {
+          return { ok: false, error: "No se puede registrar: el reportante no existe en el Maestro de Personas." }
+        }
+        if (registro.mensajeBuzonId && !get().mensajesBuzonCO.some(m => m.id === registro.mensajeBuzonId)) {
+          return { ok: false, error: "No se puede registrar: el mensaje del buzón CO indicado no existe." }
+        }
+
+        set(s => ({ infraccionesIN: upsert(s.infraccionesIN, registro) }))
+        if (esNueva) {
+          const referencia = registro.danoDirecto
+            ? `Daño directo: ${registro.danoDirecto.descripcionDaño}`
+            : get().tiposInfraccionIN.find(t => t.id === registro.tipoInfraccionId)?.nombre ?? registro.tipoInfraccionId
+          registrarEvento(set, "IN_REG_EVENT", registro.id, `Infracción ${registro.folio} (${referencia}) registrada para unidad ${refUnidad(get, registro.unidadId)}.`, "IN")
+          get().notify({
+            destinatarioRol: "administracion",
+            asunto: `Nueva infracción ${registro.folio} en Revisión`,
+            cuerpo: `Unidad ${refUnidad(get, registro.unidadId)}: ${referencia}. Antecedentes: ${registro.antecedentes.slice(0, 140)}…`,
+            moduloOrigen: "IN",
+          })
+        }
+        return { ok: true }
+      },
+
+      apelarInfraccionIN: (id, descargos) => {
+        if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
+        const infraccion = get().infraccionesIN.find(i => i.id === id)
+        if (!infraccion) return { ok: false, error: "No se puede apelar: la infracción no existe." }
+        if (infraccion.estado !== "en_revision") {
+          return { ok: false, error: "Solo una infracción En Revisión puede recibir descargos de apelación." }
+        }
+        if (descargos.trim().length < 10) {
+          return { ok: false, error: "Los descargos deben detallar la posición del vecino (mínimo 10 caracteres)." }
+        }
+        set(s => ({
+          infraccionesIN: s.infraccionesIN.map(x =>
+            x.id === id ? { ...x, estado: "apelada", apelacion: { descargos: descargos.trim(), fecha: new Date().toISOString().slice(0, 10) } } : x
+          ),
+        }))
+        registrarEvento(set, "IN_APELACION", id, `Descargos presentados en infracción ${infraccion.folio}: En Revisión → Apelada.`, "IN")
+        return { ok: true }
+      },
+
+      comentarInfraccionIN: (id, comentario) => {
+        if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
+        const infraccion = get().infraccionesIN.find(i => i.id === id)
+        if (!infraccion) return { ok: false, error: "No se puede comentar: la infracción no existe." }
+        if (comentario.texto.trim().length === 0) return { ok: false, error: "El comentario no puede estar vacío." }
+        const autor = get().personas.find(p => p.id === comentario.autorPersonaId)
+        if (!autor?.datosGobernanza || autor.estadoCuenta !== "activa") {
+          return { ok: false, error: "Solo administración y directiva pueden dejar comentarios internos." }
+        }
+        set(s => ({
+          infraccionesIN: s.infraccionesIN.map(x =>
+            x.id === id
+              ? {
+                  ...x,
+                  comentariosDirectiva: [
+                    ...x.comentariosDirectiva,
+                    { id: `com-in-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, autorPersonaId: comentario.autorPersonaId, texto: comentario.texto.trim(), fecha: new Date().toISOString() },
+                  ],
+                }
+              : x
+          ),
+        }))
+        registrarEvento(set, "IN_COMENTARIO_DIRECTIVA", id, `Comentario interno de ${nombrePersona(get, comentario.autorPersonaId)} en ${infraccion.folio}.`, "IN")
+        return { ok: true }
+      },
+
+      respaldarInfraccionIN: (id, personaId) => {
+        if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
+        const infraccion = get().infraccionesIN.find(i => i.id === id)
+        if (!infraccion) return { ok: false, error: "No se puede respaldar: la infracción no existe." }
+        if (["aplicada", "desestimada"].includes(infraccion.estado)) {
+          return { ok: false, error: "La infracción ya tiene resolución final." }
+        }
+        const firmante = get().personas.find(p => p.id === personaId)
+        if (!firmante?.datosGobernanza || firmante.estadoCuenta !== "activa") {
+          return { ok: false, error: "Solo un miembro vigente de la directiva puede respaldar la aplicación de la multa." }
+        }
+        if (infraccion.respaldosDirectiva.includes(personaId)) {
+          return { ok: false, error: "Este miembro de la directiva ya respaldó la multa." }
+        }
+        set(s => ({
+          infraccionesIN: s.infraccionesIN.map(x =>
+            x.id === id ? { ...x, respaldosDirectiva: [...x.respaldosDirectiva, personaId] } : x
+          ),
+        }))
+        registrarEvento(set, "IN_RESPALDO_DIRECTIVA", id, `${nombrePersona(get, personaId)} respalda la aplicación de la multa ${infraccion.folio}.`, "IN")
+        return { ok: true }
+      },
+
+      aplicarInfraccionIN: (id) => {
+        if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
+        const infraccion = get().infraccionesIN.find(i => i.id === id)
+        if (!infraccion) return { ok: false, error: "No se puede aplicar: la infracción no existe." }
+        if (!["en_revision", "apelada"].includes(infraccion.estado)) {
+          return { ok: false, error: "Solo una infracción En Revisión o Apelada puede aplicarse." }
+        }
+
+        let montoAplicado: number
+        let descripcionSancion: string
+        if (infraccion.danoDirecto) {
+          montoAplicado = infraccion.danoDirecto.costoReparacion
+          descripcionSancion = `Cobro directo $${montoAplicado.toLocaleString("es-CL")}`
+        } else {
+          const tipo = get().tiposInfraccionIN.find(t => t.id === infraccion.tipoInfraccionId)
+          if (!tipo) return { ok: false, error: "No se puede aplicar: el tipo de infracción ya no existe en el catálogo." }
+          montoAplicado = tipo.valor
+          descripcionSancion = tipo.tipoSancion === "porcentaje_gc" ? `${tipo.valor}% del Gasto Común` : `$${tipo.valor.toLocaleString("es-CL")} monto fijo`
+          // Multas grave/gravísima exigen respaldo previo de la directiva.
+          if (["grave", "gravisima"].includes(tipo.categoria) && infraccion.respaldosDirectiva.length === 0) {
+            return { ok: false, error: "Las multas Grave/Gravísima requieren el respaldo de la directiva antes de cargarse al Gasto Común." }
+          }
+        }
+
+        set(s => ({
+          infraccionesIN: s.infraccionesIN.map(x =>
+            x.id === id
+              ? { ...x, estado: "aplicada" as EstadoInfraccionIN, montoAplicado, cargoFIReferencia: "pendiente" as const }
+              : x
+          ),
+        }))
+        registrarEvento(set, "IN_APPLY_FINE", id, `Multa ${infraccion.folio} APLICADA (${descripcionSancion}) para unidad ${refUnidad(get, infraccion.unidadId)}; cargo FI pendiente.`, "IN")
+        // Notifica al propietario vigente de la unidad infractora (pasa por gate AD).
+        const propietario = get().vinculos.find(v => v.unidadId === infraccion.unidadId && v.rol === "propietario" && !v.fechaFin)
+        if (propietario) {
+          get().notify({
+            destinatarioRol: "propietario",
+            destinatarioPersonaId: propietario.personaId,
+            asunto: `Multa aplicada a tu unidad (${infraccion.folio})`,
+            cuerpo: `Se aplicó una sanción de ${descripcionSancion} según antecedentes registrados. Será cargada al Gasto Común del periodo.`,
+            moduloOrigen: "IN",
+            unidadId: infraccion.unidadId,
+          })
+        }
+        return { ok: true }
+      },
+
+      desestimarInfraccionIN: (id, justificacion) => {
+        if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
+        const infraccion = get().infraccionesIN.find(i => i.id === id)
+        if (!infraccion) return { ok: false, error: "No se puede desestimar: la infracción no existe." }
+        if (!["en_revision", "apelada"].includes(infraccion.estado)) {
+          return { ok: false, error: "La infracción ya tiene resolución final." }
+        }
+        if (justificacion.trim().length === 0) {
+          return { ok: false, error: "La desestimación exige justificación obligatoria." }
+        }
+        set(s => ({
+          infraccionesIN: s.infraccionesIN.map(x =>
+            x.id === id ? { ...x, estado: "desestimada", desestimacionJustificacion: justificacion.trim() } : x
+          ),
+        }))
+        registrarEvento(set, "IN_DESESTIMADA", id, `Infracción ${infraccion.folio} desestimada: ${justificacion.trim()}`, "IN")
+        return { ok: true }
+      },
+
+      removeInfraccionIN: (id) => {
+        if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
+        set(s => ({ infraccionesIN: s.infraccionesIN.filter(i => i.id !== id) }))
+        return { ok: true }
+      },
     }),
     {
       name: "compass-store",
@@ -1823,6 +2065,8 @@ export const useCompassStore = create<CompassStore>()(
         activosIR: state.activosIR,
         solicitudesInsumoIR: state.solicitudesInsumoIR,
         entregasEPP: state.entregasEPP,
+        tiposInfraccionIN: state.tiposInfraccionIN,
+        infraccionesIN: state.infraccionesIN,
       }),
       migrate: (persisted, version) => {
         const prev = (persisted ?? {}) as Partial<CompassData>
@@ -1950,6 +2194,15 @@ export const useCompassStore = create<CompassStore>()(
             activosIR: prev.activosIR ?? [],
             solicitudesInsumoIR: prev.solicitudesInsumoIR ?? [],
             entregasEPP: prev.entregasEPP ?? [],
+          }
+        }
+        // IN (v17): catálogo de tipos de infracción (sembrado si ausente) e
+        // infracciones registradas. Aditivo.
+        if ((version ?? 0) < 17) {
+          result = {
+            ...result,
+            tiposInfraccionIN: prev.tiposInfraccionIN ?? tiposInfraccionSeed,
+            infraccionesIN: prev.infraccionesIN ?? [],
           }
         }
         // TST-002: los stores que ya quedaron en v8 con unidades dañadas por este

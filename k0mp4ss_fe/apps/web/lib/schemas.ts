@@ -446,6 +446,69 @@ export const EntregaEPPSchema = z.object({
   proximaRenovacion: FechaISOSchema.optional(),
 })
 
+// --- Infracciones y Multas (IN) ---
+
+export const CATEGORIAS_INFRACCION_IN = ["leve", "grave", "gravisima"] as const
+export const CategoriaInfraccionINSchema = z.enum(CATEGORIAS_INFRACCION_IN)
+
+export const TIPOS_SANCION_IN = ["monto_fijo", "porcentaje_gc"] as const
+export const TipoSancionINSchema = z.enum(TIPOS_SANCION_IN)
+
+// Catálogo parametrizable de faltas al Reglamento de Copropiedad.
+export const TipoInfraccionINSchema = z.object({
+  id: IdEntidadSchema,
+  nombre: z.string({ required_error: "El nombre de la infracción es obligatorio." }).min(1, "El nombre de la infracción es obligatorio."),
+  categoria: CategoriaInfraccionINSchema,
+  tipoSancion: TipoSancionINSchema,
+  valor: z.number({ required_error: "El monto/valor asociado a la sanción es obligatorio." }).min(0, "El valor no puede ser negativo."),
+})
+
+export const ESTADOS_INFRACCION_IN = ["en_revision", "apelada", "aplicada", "desestimada"] as const
+export const EstadoInfraccionINSchema = z.enum(ESTADOS_INFRACCION_IN)
+
+// Cobro directo por daños (responsabilidad civil): sin tipo de catálogo.
+export const DanoDirectoINSchema = z.object({
+  descripcionDaño: z.string({ required_error: "La descripción del daño es obligatoria." }).min(1, "La descripción del daño es obligatoria."),
+  costoReparacion: z.number({ required_error: "El costo de la reparación es obligatorio." }).positive("El costo debe ser mayor a cero."),
+})
+
+export const ComentarioInternoINSchema = z.object({
+  id: IdEntidadSchema,
+  autorPersonaId: IdEntidadSchema,
+  texto: z.string().min(1, "El comentario no puede estar vacío."),
+  fecha: z.string().min(1, "La fecha del comentario es obligatoria."),
+})
+
+export const ApelacionINSchema = z.object({
+  descargos: z.string({ required_error: "Los descargos son obligatorios." }).min(10, "Los descargos deben detallar la posición del vecino (mínimo 10 caracteres)."),
+  fecha: FechaISOSchema,
+})
+
+export const InfraccionINSchema = z.object({
+  id: IdEntidadSchema,
+  folio: z.string({ required_error: "El folio es obligatorio." }).min(1, "El folio es obligatorio."),
+  // Excluyentes: tipo del catálogo O cobro directo por daños.
+  tipoInfraccionId: IdEntidadSchema.optional(),
+  danoDirecto: DanoDirectoINSchema.optional(),
+  unidadId: IdEntidadSchema,
+  reportantePersonaId: IdEntidadSchema.optional(),
+  // Nacimiento desde reclamo verídico del buzón CO (arrastra contexto).
+  mensajeBuzonId: IdEntidadSchema.optional(),
+  fechaSuceso: FechaISOSchema,
+  horaSuceso: z.string({ required_error: "La hora del suceso es obligatoria." }).regex(/^\d{2}:\d{2}$/, "La hora del suceso debe tener formato HH:MM."),
+  antecedentes: z.string({ required_error: "Los antecedentes son obligatorios." }).min(20, "Los antecedentes deben detallar los hechos (mínimo 20 caracteres)."),
+  evidencias: z.array(ImagenReferenciaSchema),
+  estado: EstadoInfraccionINSchema,
+  fechaRegistro: FechaISOSchema,
+  montoAplicado: z.number().min(0, "El monto no puede ser negativo.").optional(),
+  comentariosDirectiva: z.array(ComentarioInternoINSchema),
+  respaldosDirectiva: z.array(IdEntidadSchema),
+  apelacion: ApelacionINSchema.optional(),
+  desestimacionJustificacion: z.string().optional(),
+  // Cargo al Gasto Común: pendiente hasta implementar FI.
+  cargoFIReferencia: z.literal("pendiente").optional(),
+})
+
 // --- Administración: Maestros (MA) ---
 
 export const AfpSchema = z.object({
@@ -669,6 +732,13 @@ export type EstadoActivoIR = z.infer<typeof EstadoActivoIRSchema>
 export type EstadoSolicitudInsumoIR = z.infer<typeof EstadoSolicitudInsumoIRSchema>
 export type EstadoComodinIR = z.infer<typeof EstadoComodinIRSchema>
 export type EstadoEPPIR = z.infer<typeof EstadoEPPIRSchema>
+export type TipoInfraccionIN = z.infer<typeof TipoInfraccionINSchema>
+export type DanoDirectoIN = z.infer<typeof DanoDirectoINSchema>
+export type ComentarioInternoIN = z.infer<typeof ComentarioInternoINSchema>
+export type ApelacionIN = z.infer<typeof ApelacionINSchema>
+export type InfraccionIN = z.infer<typeof InfraccionINSchema>
+export type CategoriaInfraccionIN = z.infer<typeof CategoriaInfraccionINSchema>
+export type EstadoInfraccionIN = z.infer<typeof EstadoInfraccionINSchema>
 
 // --- Utilidades de validación para el store ---
 
