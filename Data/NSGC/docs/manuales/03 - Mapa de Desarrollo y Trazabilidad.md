@@ -33,13 +33,13 @@ Este documento vincula la arquitectura del menú con los archivos de especificac
 | 13 | 3 | AD | `AD - Gestión Administrativa.md` | Resumen | `/admin/gestion` | 🟢 Completado (`AD-gestion-administrativa` archivado `2026-08-25`, Sesión 1 NSGC) |
 | 14 | 3 | GD | `GD - Gestión de Directiva.md` | Directiva | `/comunidad/directiva` | 🟢 Completado (`GD-gestion-directiva` archivado `2026-08-25`, Sesión 1 NSGC) |
 | 15 | 3 | CO | `CO - Comunicación Vecinos.md` | Comunicación | `/comunidad/comunicacion` | 🟢 Completado (`CO-comunicacion-vecinos` archivado `2026-08-25`, Sesión 2 NSGC) |
-| 16 | 3 | CV | `CV - Visor de Mensajes.md` | Visor | `/comunidad/visor-mensajes` | ⏳ Pendiente |
+| 16 | 3 | CV | `CV - Visor de Mensajes.md` | Visor | `/comunidad/visor` (+ visor público `/visor-mensajes`) | 🟢 Completado (`CV-visor-mensajes` archivado `2026-08-25`, Sesión 4 NSGC; materializa `avisoCVReferencia` de GD) |
 | 17 | 3 | GE | `GE - Gestión de Solicitudes.md` | Solicitudes | `/operaciones/solicitudes` | 🟢 Completado (`GE-gestion-solicitudes` archivado `2026-08-25`, Sesión 2 NSGC) |
 | 18 | 3 | AM | `AM - Auditoría y Métricas.md` | Auditoría | `/admin/metricas` | 🟡 Documentado |
 | 19 | 3 | RE | `RE - Reportería y Dashboards.md` | Informes | `/reportes` | ⏳ Pendiente |
 | 20 | 4 | PE | `PE - Personal y Servicios.md` | Personal / Bitácora | `/personas/personal` | ⏳ Pendiente |
 | 21 | 4 | PL | `PL - Liquidaciones y Remuneraciones.md` | Remuneraciones | `/finanzas/remuneraciones` | ⏳ Pendiente |
-| 22 | 4 | RA | `RA - Reservas y Amenities.md` | Reservas | `/operaciones/reservas` | ⏳ Pendiente |
+| 22 | 4 | RA | `RA - Reservas y Amenities.md` | Reservas y Amenities | `/operaciones/reservas` | 🟢 Completado (`RA-reservas-amenities` archivado `2026-08-25`, Sesión 4 NSGC) |
 | 23 | 4 | IR | `IR - Inventario y Recursos.md` | Recursos y EPP | `/inventario/recursos` | 🟢 Completado (`IR-inventario-recursos` archivado `2026-08-25`, Sesión 3 NSGC) |
 | 24 | 4 | IN | `IN - Infracciones y Multas.md` | Multas | `/finanzas/multas` | 🟢 Completado (`IN-infracciones-multas` archivado `2026-08-25`, Sesión 3 NSGC) |
 | 25 | 4 | MT | `MT - Mantenimiento y Proyectos.md` | Mantenimiento | `/inventario/proyectos` | 🟢 Completado (`MT-mantenimiento-proyectos` archivado `2026-08-25`, Sesión 3 NSGC) |
@@ -52,6 +52,7 @@ Este documento vincula la arquitectura del menú con los archivos de especificac
 > Cambios Sesión 1 NSGC (`2026-08-25`): `PI`, `AD`, `GD` pasan a 🟢 Completado con convención 1 módulo = 1 change; `TU/EF/ES/VU/RG/ST/LAB/QA-Lab` regularizados según archivo limpio `2026-08-24`. Ruta AD corregida a `/admin/gestion` (panel real, no `/dashboard`).
 > Cambios Sesión 2 NSGC (`2026-08-25`): `CO`, `GE` pasan a 🟢 Completado (store v14/v15); ST actualizado a v15.
 > Cambios Sesión 3 NSGC (`2026-08-25`): `IR`, `IN`, `MT` pasan a 🟢 Completado con convención 1 módulo = 1 change (store v16/v17/v18); pasos qa-lab 10–12 con limpieza inversa extendida.
+> Cambios Sesión 4 NSGC (`2026-08-25`): `RA`, `CV` pasan a 🟢 Completado (store v19/v20); CV materializa `avisoCVReferencia` de GD vía `publicarActaEnCV`; paso qa-lab 13 (RA+CV) con aviso desde el acta TEST de GD.
 
 ---
 

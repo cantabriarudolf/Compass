@@ -24,7 +24,7 @@ Bienvenido a la documentación operativa del sistema de administración de condo
 - [30 - MK - Data Dump Comunidad](<30 - MK - Data Dump Comunidad.md>): Personas, vínculos y extensiones laborales/gobernanza (ver banner: dump histórico).
 - [34 - Historia de Poblamiento - Relato de Uso](<34 - Historia de Poblamiento - Relato de Uso.md>): Crónica humana del poblamiento ordenado (MA/CF → TU/MP → EF → VU → PE/IR/CO → FI → AM) con relato, gear técnico y verificación cruzada.
 - [35 - MK - Data Dump Portal, Admin y Directiva](<35 - MK - Data Dump Portal, Admin y Directiva.md>): Colecciones Sesión 1 NSGC (`publicacionesPortal`, `leadsPortal`, `notificaciones`, `controlesPropiedades`, `actasGD`) — vacías por diseño, con estructura, campos y patrones de ID.
-- [36 - MK - Data Dump Comunicación y Solicitudes](<36 - MK - Data Dump Comunicación y Solicitudes.md>): Colecciones Sesión 2 NSGC (`plantillasCO` con 5 registros sembrados del NSGC + `enviosCO`, `mensajesBuzonCO`, `documentosCO`, `solicitudesGE`) con workflow GE y patrones de folio BUZ/GE.
+- [36 - MK - Data Dump Comunicación y Solicitudes](<36 - MK - Data Dump Comunicación y Solicitudes.md>): Colecciones Sesión 2 NSGC (`plantillasCO` con 5 registros sembrados del NSGC + `enviosCO`, `mensajesBuzonCO`, `documentosCO`, `solicitudesGE`) con workflow GE y patrones de folio BUZ/GE; incluye desde Sesión 4 el dump de `plantillasCV` (4 plantillas rápidas del carrusel).
 - [37 - MK - Data Dump Recursos, Multas y Mantenimiento](<37 - MK - Data Dump Recursos, Multas y Mantenimiento.md>): Colecciones Sesión 3 NSGC (`tiposInfraccionIN` con 5 faltas sembradas del NSGC + `activosIR`, `solicitudesInsumoIR`, `entregasEPP`, `infraccionesIN`, `trabajosMT`, `proyectosMT`) con patrones de código IR-A/SI/IN/MT.
 
 ---

@@ -105,4 +105,28 @@ nuevo ──(abrir admin)──▶ en_revision ──(admin pide datos)──▶
 
 ---
 
-*Última actualización: 25 de Agosto 2026 — Sesión 2 NSGC (store v14/v15)*
+## 📺 Plantillas Rápidas CV — `plantillasCV` (4 registros sembrados)
+
+> Fuente: `k0mp4ss_fe/apps/web/data/comunidad/plantillas-cv.ts` (store v20, Sesión 4 NSGC). Multimedia por URL remota (D1); imagen y video excluyentes.
+
+| ID | Título | Cuerpo | Tipología | Duración sugerida | Pantalla completa | Tags |
+|----|--------|--------|-----------|-------------------|-------------------|------|
+| `plant-cv-hidropack` | Falla de servicios — Hidropack | Problemas con sistema Hidropack - Técnicos en camino. | peligro | 15s | no | servicios, urgente |
+| `plant-cv-porton` | Control de acceso — Portón | Portón principal en mantención - Acceso restringido. | advertencia | 10s | no | acceso, conserjeria |
+| `plant-cv-corte` | Corte programado | Corte de luz programado para este [FECHA] de [HORA_INICIO] a [HORA_FIN]. | peligro | 20s | sí | cortes, directiva |
+| `plant-cv-piscina` | Habilitación de áreas — Piscina | Mantenimiento de piscinas finalizado. Habilitada para uso. | exito | 10s | no | areas-comunes, mantencion |
+
+### Patrón para crear plantillas manualmente
+
+```
+ID:        plant-cv-{tema}   (ej: plant-cv-ascensor)
+Tipología: info (azul) | exito (verde) | advertencia (naranja) | peligro (rojo)
+Duración:  ≥3 segundos por ciclo en el carrusel
+Multimedia: imagenUrl (URL remota D1) XOR videoUrl (YouTube watch/shorts/youtu.be)
+```
+
+Las colecciones `avisosCV` (avisos del carrusel) nacen vacías: se pueblan desde el panel `/comunidad/visor`, desde la activación de estas plantillas, o desde actas GD vía `publicarActaEnCV`.
+
+---
+
+*Última actualización: 25 de Agosto 2026 — Sesión 2 NSGC (store v14/v15) + Sesión 4 NSGC (store v20, plantillas CV)*

@@ -17,14 +17,15 @@ k0mp4ss_fe/apps/web/data/
 ├── comunidad/
 │   ├── personas.ts                ← Maestro de Personas (identidades + roles)
 │   ├── vinculos.ts                ← Vínculos persona ↔ unidad (VU)
-│   └── plantillas-co.ts           ← Seed del Maestro de Plantillas (CO, Sesión 2)
+│   ├── plantillas-co.ts           ← Seed del Maestro de Plantillas (CO, Sesión 2)
+│   └── plantillas-cv.ts           ← Seed del Maestro de Plantillas Rápidas (CV, Sesión 4)
 ├── finanzas/
 │   └── tipos-infraccion.ts        ← Seed del Catálogo de Faltas (IN, Sesión 3)
 └── inventario/
     └── estructura.ts              ← Tipos de unidad, sectores y unidades (incluye plazas u-E-*)
 ```
 
-> **⚠️ Desde ST**, casi todo vive en el store `compass-store` (`lib/store.ts`) con migraciones versionadas. Las colecciones PI/AD/GD (Sesión 1) nacen **vacías por diseño** dentro del store — ver sección 5. Las colecciones CO/GE (Sesión 2) siguen el mismo patrón; la excepción es `plantillasCO`, que se **siembra** desde `data/comunidad/plantillas-co.ts` — ver sección 6. En la Sesión 3 el patrón se repite para **IR/IN/MT**: `tiposInfraccionIN` se siembra desde `data/finanzas/tipos-infraccion.ts`; `activosIR`, `solicitudesInsumoIR`, `entregasEPP`, `infraccionesIN`, `trabajosMT` y `proyectosMT` nacen vacías — ver sección 7.
+> **⚠️ Desde ST**, casi todo vive en el store `compass-store` (`lib/store.ts`) con migraciones versionadas. Las colecciones PI/AD/GD (Sesión 1) nacen **vacías por diseño** dentro del store — ver sección 5. Las colecciones CO/GE (Sesión 2) siguen el mismo patrón; la excepción es `plantillasCO`, que se **siembra** desde `data/comunidad/plantillas-co.ts` — ver sección 6. En la Sesión 3 el patrón se repite para **IR/IN/MT**: `tiposInfraccionIN` se siembra desde `data/finanzas/tipos-infraccion.ts`; `activosIR`, `solicitudesInsumoIR`, `entregasEPP`, `infraccionesIN`, `trabajosMT` y `proyectosMT` nacen vacías — ver sección 7. En la **Sesión 4** lo hace **RA/CV**: `plantillasCV` se siembra desde `data/comunidad/plantillas-cv.ts`; `elementosRA`, `reservasRA` y `avisosCV` nacen vacías — ver sección 8.
 
 ---
 
@@ -231,7 +232,7 @@ Consumidor: `app/admin/gestion/page.tsx`; gobierna visibilidad en GD. Acciones: 
 | `estado` | `"borrador" \| "publicada"` | Publica al quórum 100% |
 | `aprobaciones` | ids personas | Firmas de directiva vigente |
 | `fechaPublicacion?` | ISO date | |
-| `avisoCVReferencia?` | `"pendiente"` (literal) | Hasta que exista CV |
+| `avisoCVReferencia?` | string | `"pendiente"` hasta que CV publica; luego id del aviso |
 
 Consumidor: `app/comunidad/directiva/page.tsx`. Acciones: `saveActaGD`, `removeActaGD`, `aprobarActaGD`.
 
@@ -286,6 +287,29 @@ Consumido por: `lib/store.ts` (seedData). Dump completo en `37 - MK - Data Dump 
 | `proyectosMT` | v18 | Planes largo plazo {presupuestoEstimado, plazoMeses → cuota sugerida derivable} | `saveProyectoMT`, `removeProyectoMT` |
 
 Consumidores: `app/inventario/recursos/page.tsx` (IR), `app/finanzas/multas/page.tsx` (IN), `app/inventario/proyectos/page.tsx` (MT). Eventos AM: `IR_STOCK_LOW/DELIVERY_EPP/ASSET_REPAIR/COMODIN_ALERTA`; `IN_REG_EVENT/APPLY_FINE/APELACION`; `MT_WORK_CREATED/STARTED/FINISHED/PREVENTIVE_GENERATED/GUARANTEE_EXPIRED`.
+
+### 8. Store + Seed — Sesión 4 NSGC (RA / CV)
+
+#### 8.0 `data/comunidad/plantillas-cv.ts` (seed real de `plantillasCV`, store v20)
+
+| Campo | Detalle |
+|-------|---------|
+| **Ruta** | `k0mp4ss_fe/apps/web/data/comunidad/plantillas-cv.ts` |
+| **Propósito** | Las 4 plantillas rápidas de las categorías NSGC (§2: Falla de Servicios, Control de Acceso, Cortes Programados, Habilitación de Áreas), sembradas en `plantillasCV` vía migrate aditivo. |
+| **Export** | `plantillasCVSeed: PlantillaCV[]` (4 registros: hidropack/peligro-15s, porton/advertencia-10s, corte/peligro-20s-pantalla-completa, piscina/exito-10s). Multimedia por URL remota (D1); imagen y video excluyentes. |
+
+Consumido por: `lib/store.ts` (seedData). Dump completo en `36 - MK - Data Dump Comunicación y Solicitudes.md`.
+
+#### 8.1 Colecciones store RA/CV (vacías salvo `plantillasCV`)
+
+| Colección | Store | Contenido | Acciones repository |
+|-----------|-------|-----------|---------------------|
+| `elementosRA` | v19 | Tipo espacio_fisico/activo_mobiliario, ubicación EF (microSectorId) o IR (activoIRId), franja bloques_horas/dia_completo, tarifa ($0 gratis), garantía, aforo/stock, reglas anticipación/tardía+penalización | `saveElementoRA`, `removeElementoRA` (bloqueado con reservas vigentes) |
+| `reservasRA` | v19 | Folio `RA-####`, solicitante MP, fecha + tramo HH:MM, snapshots tarifa/garantía, cancelación {tardia, penalizacion}, retención de garantía, `cargoFIReferencia:"pendiente"` al fondo de amenities | `saveReservaRA` (overbooking por solape con stock concurrente; gate morosidad FI inerte), `cancelarReservaRA`, `retenerGarantiaRA` |
+| `avisosCV` | v20 | Tipología info/exito/advertencia/peligro, duración ≥3s, expiresAt caducidad, imagen URL D1 XOR video YouTube, pantallaCompleta, tags, ciclo borrador/publicado/archivado, origen manual/plantilla/acta_gd | `saveAvisoCV` (`CV_DRAFT_CREATED`/`CV_EDITED`), `removeAvisoCV` (solo borrador), `publicarAvisoCV` (VB), `archivarAvisoCV`, `caducarAvisosCV` (idempotente) |
+| `plantillasCV` | v20 | Seed NSGC (arriba); CRUD administración | `savePlantillaCV`, `removePlantillaCV` (bloqueo si avisos la usan), `activarPlantillaCV` (aviso publicado instantáneo) |
+
+Integraciones: `publicarActaEnCV(actaId)` consume `actasGD.avisoCVReferencia === "pendiente"`, crea el aviso origen `acta_gd` y marca la referencia con el id del aviso. Flags de soporte: `permiteCreacionManualCV` (MP) y `cvRequiereVistoBueno` (CF, default true). Consumidores: `app/operaciones/reservas/page.tsx` (RA), `app/comunidad/visor/page.tsx` (panel CV), `app/visor-mensajes/page.tsx` (carrusel público con próximas reservas RA). Eventos AM: `RA_BOOKING_CREATED/CANCELLED/WARRANTY_RETAINED`; `CV_DRAFT_CREATED/PUBLISHED/EDITED/ARCHIVED`.
 
 ---
 

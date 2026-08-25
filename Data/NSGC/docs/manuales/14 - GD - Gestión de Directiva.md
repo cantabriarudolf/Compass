@@ -17,7 +17,7 @@ Llevar el ciclo completo del acta: se crea como borrador, los miembros de la dir
 ## 💡 Tips de Oro
 
 - **Quórum 100%**: una sola firma faltante mantiene el acta en borrador; usa el monitor para recordar quién falta.
-- **Aviso al Visor pendiente**: la publicación queda marcada `avisoCVReferencia="pendiente"` hasta que exista **CV - Visor de Mensajes**; la notificación simulada a propietarios sí es inmediata (D3).
+- **Aviso al Visor materializado**: la publicación nace con `avisoCVReferencia="pendiente"`; cuando el **CV - Visor de Mensajes** difunde el acta, la referencia se marca con el id del aviso creado (sin republicaciones duplicadas). La notificación simulada a propietarios es inmediata (D3).
 - **PDF futuro**: la generación del PDF del acta quedó reservada para **CT - Certificados** (pdfmake, decisión D2); hoy el contenido vive en el sistema.
 - **Auditoría**: creación, asistencia y aprobación generan eventos `GD_ACTA_CREATED`, `GD_ASISTENCIA_REG` y `GD_ACTA_APPROVED`.
 
