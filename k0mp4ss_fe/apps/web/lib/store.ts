@@ -71,6 +71,8 @@ import {
   EntregaEPPSchema,
   TipoInfraccionINSchema,
   InfraccionINSchema,
+  TrabajoMTSchema,
+  ProyectoMTSchema,
   MAESTRO_SCHEMAS,
   validarConEsquema,
   validarMaestro,
@@ -101,6 +103,9 @@ import {
   type TipoInfraccionIN,
   type InfraccionIN,
   type EstadoInfraccionIN,
+  type TrabajoMT,
+  type ProyectoMT,
+  type EstadoPagoMT,
 } from "@/lib/schemas"
 import { z } from "zod"
 
@@ -181,7 +186,7 @@ function siguienteCodigoIR(get: () => CompassStore): string {
   return `IR-A-${String(siguiente).padStart(4, "0")}`
 }
 
-export const STORE_VERSION = 17
+export const STORE_VERSION = 18
 
 export interface MaestroCollections {
   afps: Afp[]
@@ -235,6 +240,9 @@ export interface CompassData {
   // Infracciones y Multas (IN)
   tiposInfraccionIN: TipoInfraccionIN[]
   infraccionesIN: InfraccionIN[]
+  // Mantenimiento y Proyectos (MT)
+  trabajosMT: TrabajoMT[]
+  proyectosMT: ProyectoMT[]
 }
 
 interface CompassStore extends CompassData {
@@ -317,6 +325,16 @@ interface CompassStore extends CompassData {
   aplicarInfraccionIN: (id: string) => StoreResult
   desestimarInfraccionIN: (id: string, justificacion: string) => StoreResult
   removeInfraccionIN: (id: string) => StoreResult
+  // Mantenimiento y Proyectos (MT)
+  saveTrabajoMT: (trabajo: TrabajoMT) => StoreResult
+  removeTrabajoMT: (id: string) => StoreResult
+  iniciarTrabajoMT: (id: string) => StoreResult
+  finalizarTrabajoMT: (id: string, cierre?: { fechaTermino?: string; costoFinal?: number }) => StoreResult
+  cancelarTrabajoMT: (id: string) => StoreResult
+  actualizarPagoTrabajoMT: (id: string, estadoPago: EstadoPagoMT) => StoreResult
+  verificarGarantiasMT: () => StoreResult
+  saveProyectoMT: (proyecto: ProyectoMT) => StoreResult
+  removeProyectoMT: (id: string) => StoreResult
 }
 
 function upsert<T extends { id: string }>(list: T[], item: T): T[] {
@@ -368,6 +386,8 @@ export const seedData = (): CompassData => ({
   entregasEPP: [],
   tiposInfraccionIN: tiposInfraccionSeed,
   infraccionesIN: [],
+  trabajosMT: [],
+  proyectosMT: [],
   maestros: {
     afps: seedAFPS,
     previsionesSalud: seedPrevisionesSalud,
@@ -415,6 +435,8 @@ const ESQUEMAS_COLECCION = {
   entregasEPP: z.array(EntregaEPPSchema),
   tiposInfraccionIN: z.array(TipoInfraccionINSchema),
   infraccionesIN: z.array(InfraccionINSchema),
+  trabajosMT: z.array(TrabajoMTSchema),
+  proyectosMT: z.array(ProyectoMTSchema),
 } as const
 
 type ClaveColeccion = keyof typeof ESQUEMAS_COLECCION
@@ -2033,6 +2055,215 @@ export const useCompassStore = create<CompassStore>()(
         set(s => ({ infraccionesIN: s.infraccionesIN.filter(i => i.id !== id) }))
         return { ok: true }
       },
+
+      // --- MT: Mantenimiento y Proyectos ---
+      saveTrabajoMT: (trabajo) => {
+        if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
+        const esNuevo = !get().trabajosMT.some(t => t.id === trabajo.id)
+        let candidato: TrabajoMT = trabajo
+        if (esNuevo) {
+          const numeros = get().trabajosMT
+            .map(t => Number.parseInt(t.folio.replace(/^MT-/, ""), 10))
+            .filter(n => Number.isFinite(n))
+          const siguiente = (numeros.length > 0 ? Math.max(...numeros) : 0) + 1
+          candidato = {
+            ...trabajo,
+            folio: `MT-${String(siguiente).padStart(4, "0")}`,
+            estado: trabajo.estado ?? "planificado",
+            estadoPago: trabajo.estadoPago ?? "pendiente",
+            alertaGarantiaEnviada: trabajo.alertaGarantiaEnviada ?? false,
+          }
+        }
+        const validacion = validarConEsquema(TrabajoMTSchema, candidato)
+        if (!validacion.ok) return validacion
+        const registro = validacion.data
+
+        if (!registro.unidadId && !registro.microSectorId) {
+          return { ok: false, error: "El trabajo exige una ubicación: unidad o sub-sector de la Estructura Física." }
+        }
+        if (registro.unidadId && !get().unidades.some(u => u.id === registro.unidadId)) {
+          return { ok: false, error: "No se puede guardar el trabajo: la unidad indicada no existe en el inventario." }
+        }
+        if (registro.microSectorId && !get().microSectores.some(m => m.id === registro.microSectorId)) {
+          return { ok: false, error: "No se puede guardar el trabajo: el sub-sector indicado no existe en el inventario." }
+        }
+        if (registro.activoIRId && !get().activosIR.some(r => r.id === registro.activoIRId)) {
+          return { ok: false, error: "No se puede guardar el trabajo: el activo del catálogo IR indicado no existe." }
+        }
+        if (registro.responsablePersonaId && !get().personas.some(p => p.id === registro.responsablePersonaId)) {
+          return { ok: false, error: "No se puede guardar el trabajo: el responsable interno no existe en el Maestro de Personas." }
+        }
+        if (!registro.responsablePersonaId && !registro.proveedor) {
+          return { ok: false, error: "El trabajo exige responsable: personal interno del maestro o proveedor externo." }
+        }
+        if (registro.garantiaInicio && registro.garantiaFin && registro.garantiaFin < registro.garantiaInicio) {
+          return { ok: false, error: "La garantía no puede terminar antes de iniciar." }
+        }
+
+        set(s => ({ trabajosMT: upsert(s.trabajosMT, registro) }))
+        if (esNuevo) {
+          registrarEvento(set, "MT_WORK_CREATED", registro.id, `Trabajo ${registro.folio} "${registro.titulo}" creado (${registro.prioridad}${registro.preventivo ? `, preventivo cada ${registro.preventivo.periodicidadMeses} mes(es)` : ""}).`, "MT")
+        }
+        return { ok: true }
+      },
+
+      removeTrabajoMT: (id) => {
+        if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
+        set(s => ({ trabajosMT: s.trabajosMT.filter(t => t.id !== id) }))
+        return { ok: true }
+      },
+
+      iniciarTrabajoMT: (id) => {
+        if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
+        const trabajo = get().trabajosMT.find(t => t.id === id)
+        if (!trabajo) return { ok: false, error: "No se puede iniciar: el trabajo no existe." }
+        if (trabajo.estado !== "planificado") {
+          return { ok: false, error: "Solo un trabajo Planificado puede iniciarse." }
+        }
+        set(s => ({
+          trabajosMT: s.trabajosMT.map(t =>
+            t.id === id ? { ...t, estado: "en_curso", fechaInicio: new Date().toISOString().slice(0, 10) } : t
+          ),
+        }))
+        registrarEvento(set, "MT_WORK_STARTED", id, `Trabajo ${trabajo.folio} "${trabajo.titulo}" En Curso.`, "MT")
+        return { ok: true }
+      },
+
+      finalizarTrabajoMT: (id, cierre) => {
+        if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
+        const trabajo = get().trabajosMT.find(t => t.id === id)
+        if (!trabajo) return { ok: false, error: "No se puede finalizar: el trabajo no existe." }
+        if (trabajo.estado === "finalizado") return { ok: false, error: "El trabajo ya está finalizado." }
+        if (trabajo.estado === "cancelado") return { ok: false, error: "Un trabajo cancelado no puede finalizarse." }
+
+        const fechaTermino = cierre?.fechaTermino ?? new Date().toISOString().slice(0, 10)
+        const costoFinal = cierre?.costoFinal ?? trabajo.costoTotal
+        set(s => ({
+          trabajosMT: s.trabajosMT.map(t =>
+            t.id === id ? { ...t, estado: "finalizado", fechaTermino, costoTotal: costoFinal } : t
+          ),
+        }))
+        registrarEvento(set, "MT_WORK_FINISHED", id, `Trabajo ${trabajo.folio} FINALIZADO (${fechaTermino}, costo $${costoFinal.toLocaleString("es-CL")}).`, "MT")
+
+        // Generación automática de la siguiente mantención preventiva.
+        if (trabajo.preventivo) {
+          const base = new Date(`${fechaTermino}T00:00:00`)
+          base.setMonth(base.getMonth() + trabajo.preventivo.periodicidadMeses)
+          const proximaFecha = base.toISOString().slice(0, 10)
+          const numeros = get().trabajosMT
+            .map(t => Number.parseInt(t.folio.replace(/^MT-/, ""), 10))
+            .filter(n => Number.isFinite(n))
+          const siguienteNum = (numeros.length > 0 ? Math.max(...numeros) : 0) + 1
+          const siguiente: TrabajoMT = {
+            ...trabajo,
+            id: `mt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            folio: `MT-${String(siguienteNum).padStart(4, "0")}`,
+            titulo: trabajo.titulo,
+            estado: "planificado",
+            estadoPago: "pendiente",
+            alertaGarantiaEnviada: false,
+            evidencias: [],
+            fechaProgramada: proximaFecha,
+            fechaInicio: undefined,
+            fechaTermino: undefined,
+          }
+          set(s => ({ trabajosMT: upsert(s.trabajosMT, siguiente) }))
+          registrarEvento(set, "MT_PREVENTIVE_GENERATED", siguiente.id, `Mantención preventiva ${siguiente.folio} generada automáticamente (${siguiente.fechaProgramada}).`, "MT")
+          get().notify({
+            destinatarioRol: "administracion",
+            asunto: `Mantención preventiva programada (${siguiente.folio})`,
+            cuerpo: `"${siguiente.titulo}" fue reprogramada automáticamente para el ${proximaFecha}.`,
+            moduloOrigen: "MT",
+          })
+        }
+        return { ok: true }
+      },
+
+      cancelarTrabajoMT: (id) => {
+        if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
+        const trabajo = get().trabajosMT.find(t => t.id === id)
+        if (!trabajo) return { ok: false, error: "No se puede cancelar: el trabajo no existe." }
+        if (["finalizado", "cancelado"].includes(trabajo.estado)) {
+          return { ok: false, error: `Un trabajo ${trabajo.estado} no puede cancelarse.` }
+        }
+        set(s => ({
+          trabajosMT: s.trabajosMT.map(t => (t.id === id ? { ...t, estado: "cancelado" } : t)),
+        }))
+        registrarEvento(set, "MT_WORK_CANCELLED", id, `Trabajo ${trabajo.folio} "${trabajo.titulo}" cancelado.`, "MT")
+        return { ok: true }
+      },
+
+      actualizarPagoTrabajoMT: (id, estadoPago) => {
+        if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
+        const trabajo = get().trabajosMT.find(t => t.id === id)
+        if (!trabajo) return { ok: false, error: "No se puede actualizar: el trabajo no existe." }
+        if (trabajo.estadoPago === estadoPago) return { ok: true }
+        // Sin saltos inversos inválidos: pagado solo desde parcial; parcial desde pendiente.
+        const FLUJO: Record<EstadoPagoMT, EstadoPagoMT[]> = {
+          pendiente: ["parcial", "pagado"],
+          parcial: ["pagado", "pendiente"],
+          pagado: ["pendiente"],
+        }
+        if (!FLUJO[trabajo.estadoPago]?.includes(estadoPago)) {
+          return { ok: false, error: `Transición inválida: un pago ${trabajo.estadoPago} no puede pasar directamente a ${estadoPago}.` }
+        }
+        set(s => ({
+          trabajosMT: s.trabajosMT.map(t => (t.id === id ? { ...t, estadoPago } : t)),
+        }))
+        registrarEvento(set, "MT_PAYMENT_UPDATE", id, `Estado de pago de ${trabajo.folio}: ${trabajo.estadoPago} → ${estadoPago}.`, "MT")
+        return { ok: true }
+      },
+
+      verificarGarantiasMT: () => {
+        if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
+        const hoyStr = new Date().toISOString().slice(0, 10)
+        const limite30 = new Date()
+        limite30.setDate(limite30.getDate() + 30)
+        const limiteStr = limite30.toISOString().slice(0, 10)
+        for (const trabajo of get().trabajosMT) {
+          if (!trabajo.garantiaFin || trabajo.alertaGarantiaEnviada || trabajo.estado !== "finalizado") continue
+          const porVencer = trabajo.garantiaFin >= hoyStr && trabajo.garantiaFin <= limiteStr
+          const vencida = trabajo.garantiaFin < hoyStr
+          if (!porVencer && !vencida) continue
+          set(s => ({
+            trabajosMT: s.trabajosMT.map(t =>
+              t.id === trabajo.id ? { ...t, alertaGarantiaEnviada: true } : t
+            ),
+          }))
+          registrarEvento(
+            set,
+            "MT_GUARANTEE_EXPIRED",
+            trabajo.id,
+            vencida
+              ? `Garantía VENCIDA de ${trabajo.folio} "${trabajo.titulo}" (hasta ${trabajo.garantiaFin}); agendar inspección con proveedor.`
+              : `Garantía por expirar (${trabajo.garantiaFin}) de ${trabajo.folio}; realizar inspección final.`,
+            "MT"
+          )
+          get().notify({
+            destinatarioRol: "administracion",
+            asunto: `Garantía ${vencida ? "vencida" : "por expirar"}: ${trabajo.titulo}`,
+            cuerpo: vencida
+              ? `La garantía venció el ${trabajo.garantiaFin}. Considera registrar el cumplimiento del proveedor.`
+              : `Realiza la inspección final antes del ${trabajo.garantiaFin}.`,
+            moduloOrigen: "MT",
+          })
+        }
+        return { ok: true }
+      },
+
+      saveProyectoMT: (proyecto) => {
+        if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
+        const validacion = validarConEsquema(ProyectoMTSchema, proyecto)
+        if (!validacion.ok) return validacion
+        set(s => ({ proyectosMT: upsert(s.proyectosMT, validacion.data) }))
+        return { ok: true }
+      },
+
+      removeProyectoMT: (id) => {
+        if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
+        set(s => ({ proyectosMT: s.proyectosMT.filter(p => p.id !== id) }))
+        return { ok: true }
+      },
     }),
     {
       name: "compass-store",
@@ -2067,6 +2298,8 @@ export const useCompassStore = create<CompassStore>()(
         entregasEPP: state.entregasEPP,
         tiposInfraccionIN: state.tiposInfraccionIN,
         infraccionesIN: state.infraccionesIN,
+        trabajosMT: state.trabajosMT,
+        proyectosMT: state.proyectosMT,
       }),
       migrate: (persisted, version) => {
         const prev = (persisted ?? {}) as Partial<CompassData>
@@ -2203,6 +2436,14 @@ export const useCompassStore = create<CompassStore>()(
             ...result,
             tiposInfraccionIN: prev.tiposInfraccionIN ?? tiposInfraccionSeed,
             infraccionesIN: prev.infraccionesIN ?? [],
+          }
+        }
+        // MT (v18): trabajos/mantenciones y proyectos a largo plazo. Aditivo.
+        if ((version ?? 0) < 18) {
+          result = {
+            ...result,
+            trabajosMT: prev.trabajosMT ?? [],
+            proyectosMT: prev.proyectosMT ?? [],
           }
         }
         // TST-002: los stores que ya quedaron en v8 con unidades dañadas por este

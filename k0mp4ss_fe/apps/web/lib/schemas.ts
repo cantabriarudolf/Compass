@@ -509,6 +509,77 @@ export const InfraccionINSchema = z.object({
   cargoFIReferencia: z.literal("pendiente").optional(),
 })
 
+// --- Mantenimiento y Proyectos (MT) ---
+
+export const PRIORIDADES_MT = ["baja", "media", "alta", "emergencia"] as const
+export const PrioridadMTSchema = z.enum(PRIORIDADES_MT)
+
+export const ESTADOS_TRABAJO_MT = ["planificado", "en_curso", "finalizado", "cancelado"] as const
+export const EstadoTrabajoMTSchema = z.enum(ESTADOS_TRABAJO_MT)
+
+export const ORIGENES_FONDOS_MT = ["gasto_comun", "fondo_reserva", "fondo_especial", "pendiente_definir"] as const
+export const OrigenFondosMTSchema = z.enum(ORIGENES_FONDOS_MT)
+
+export const ESTADOS_PAGO_MT = ["pendiente", "parcial", "pagado"] as const
+export const EstadoPagoMTSchema = z.enum(ESTADOS_PAGO_MT)
+
+export const ProveedorMTSchema = z.object({
+  nombre: z.string({ required_error: "El nombre del proveedor es obligatorio." }).min(1, "El nombre del proveedor es obligatorio."),
+  contacto: z.string().optional(),
+})
+
+// Evidencia tipada por referencia (D1): fotos antes/después, presupuestos y facturas.
+export const EvidenciaMTSchema = ImagenReferenciaSchema.extend({
+  tipo: z.enum(["foto_antes", "foto_despues", "presupuesto", "factura"]),
+})
+
+// Configuración de mantención preventiva (ej. Hidropack mensual, CCTV semestral).
+export const PreventivoConfigSchema = z.object({
+  periodicidadMeses: z.number({ required_error: "La periodicidad es obligatoria." }).int().min(1, "La periodicidad debe ser al menos 1 mes."),
+})
+
+export const TrabajoMTSchema = z.object({
+  id: IdEntidadSchema,
+  folio: z.string({ required_error: "El folio es obligatorio." }).min(1, "El folio es obligatorio."),
+  titulo: z.string({ required_error: "El título del trabajo es obligatorio." }).min(1, "El título del trabajo es obligatorio."),
+  descripcion: z.string({ required_error: "La descripción técnica es obligatoria." }).min(20, "La descripción técnica debe detallar el trabajo (mínimo 20 caracteres)."),
+  // Ubicación EF (al menos una) + equipo crítico IR opcional.
+  unidadId: IdEntidadSchema.optional(),
+  microSectorId: IdEntidadSchema.optional(),
+  activoIRId: IdEntidadSchema.optional(),
+  // Responsable interno (MP) o empresa externa.
+  responsablePersonaId: IdEntidadSchema.optional(),
+  proveedor: ProveedorMTSchema.optional(),
+  prioridad: PrioridadMTSchema,
+  estado: EstadoTrabajoMTSchema,
+  fechaProgramada: FechaISOSchema.optional(),
+  fechaInicio: FechaISOSchema.optional(),
+  fechaTermino: FechaISOSchema.optional(),
+  costoTotal: z.number({ required_error: "El costo es obligatorio." }).min(0, "El costo no puede ser negativo."),
+  origenFondos: OrigenFondosMTSchema,
+  estadoPago: EstadoPagoMTSchema,
+  garantiaInicio: FechaISOSchema.optional(),
+  garantiaFin: FechaISOSchema.optional(),
+  alertaGarantiaEnviada: z.boolean({ required_error: "El flag de alerta de garantía es obligatorio." }),
+  evidencias: z.array(EvidenciaMTSchema),
+  preventivo: PreventivoConfigSchema.optional(),
+  cargoFIReferencia: z.literal("pendiente").optional(),
+})
+
+export const ESTADOS_PROYECTO_MT = ["planificado", "en_ejecucion", "completado", "descartado"] as const
+export const EstadoProyectoMTSchema = z.enum(ESTADOS_PROYECTO_MT)
+
+// Proyecto a largo plazo: cuota sugerida derivable = presupuesto / plazo.
+export const ProyectoMTSchema = z.object({
+  id: IdEntidadSchema,
+  nombre: z.string({ required_error: "El nombre del proyecto es obligatorio." }).min(1, "El nombre del proyecto es obligatorio."),
+  descripcion: z.string().optional(),
+  presupuestoEstimado: z.number({ required_error: "El presupuesto estimado es obligatorio." }).positive("El presupuesto debe ser mayor a cero."),
+  plazoMeses: z.number({ required_error: "El plazo es obligatorio." }).int().positive("El plazo debe ser mayor a cero."),
+  fechaObjetivo: FechaISOSchema.optional(),
+  estado: EstadoProyectoMTSchema,
+})
+
 // --- Administración: Maestros (MA) ---
 
 export const AfpSchema = z.object({
@@ -739,6 +810,12 @@ export type ApelacionIN = z.infer<typeof ApelacionINSchema>
 export type InfraccionIN = z.infer<typeof InfraccionINSchema>
 export type CategoriaInfraccionIN = z.infer<typeof CategoriaInfraccionINSchema>
 export type EstadoInfraccionIN = z.infer<typeof EstadoInfraccionINSchema>
+export type TrabajoMT = z.infer<typeof TrabajoMTSchema>
+export type EvidenciaMT = z.infer<typeof EvidenciaMTSchema>
+export type ProyectoMT = z.infer<typeof ProyectoMTSchema>
+export type EstadoPagoMT = z.infer<typeof EstadoPagoMTSchema>
+export type EstadoTrabajoMT = z.infer<typeof EstadoTrabajoMTSchema>
+export type PrioridadMT = z.infer<typeof PrioridadMTSchema>
 
 // --- Utilidades de validación para el store ---
 
