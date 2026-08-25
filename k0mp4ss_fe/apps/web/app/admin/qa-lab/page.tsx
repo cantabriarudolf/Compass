@@ -59,6 +59,7 @@ const PLAN: Record<string, string[]> = {
   mt: ["Crear activo Hidropack TEST en catálogo IR", "Trabajo preventivo mensual Hidropack TEST (proveedor AquaServicio TEST)", "Iniciar → En Curso", "Finalizar → genera próximo preventivo automáticamente", "Correctivo con garantía vencida → verificar garantías alerta una vez", "Proyecto Techos TEST ($12M / 120 meses → cuota $100.000)"],
   ra: ["Crear Quincho central TEST (bloques 3h, tarifa $15.000, garantía $20.000, tardía ≤1 día → penalización $5.000)", "Reservar quincho mañana 19:00–22:00 para TEST Persona QA Uno → confirmada con cargo FI pendiente", "Solicitud solapada 20:00–23:00 → rechazada por conflicto horario", "Crear Hidrolavadora TEST (mobiliario, stock 2) y agotar cupo con 2 reservas paralelas", "Cancelar reserva del quincho fuera de plazo → penalización registrada", "Retener garantía de la hidrolavadora por daño"],
   cv: ["Activar plantilla rápida Portón TEST (advertencia) → aviso publicado al instante", "Aviso manual TEST con imagen URL remota → borrador → publicar", "Aviso vencido ayer → caducidad automática lo archiva", "Publicar el acta GD TEST en el visor → avisoCVReferencia materializada con el id del aviso", "Cola del carrusel: avisos publicados vigentes con duraciones individuales"],
+  fi: ["Crear Fondo Extraordinario Pintura TEST (especial) junto al seed GC/Reserva/Amenities", "Egreso recurrente TEST imputado al Fondo de Gasto Común con comprobante D1", "Emisión GC variable sobre unidades TEST ($450.000) → cobros prorrateados + aporte 5% reserva", "Emisión sin alcance sobre todo el condominio → rechazada por unidades sin responsable", "Pago exacto del cobro GC del depto TEST → estado pagado", "Mora al 1% sobre el periodo vencido (mes anterior) e idempotencia diaria", "Pago con descuento justificado en la multa TEST → informe de diferencia inmutable", "Multa grave aplicada tiene cobro multa_in materializado (conexión IN)", "Tarifa del quincho reservado quedó como cobro del fondo amenities (conexión RA)", "Proyecto MT de $12M financiado por fondo GC sin saldo → rechazado (conexión MT)", "Retiro del fondo reserva exige acta publicada → rechazado sin aprobación"],
 }
 
 const TITULOS: Record<string, string> = {
@@ -79,6 +80,7 @@ const TITULOS: Record<string, string> = {
   mt: "15. Mantenimiento y Proyectos (MT)",
   ra: "16. Reservas y Amenities (RA)",
   cv: "17. Visor de Mensajes (CV)",
+  fi: "18. Finanzas y Morosidad (FI)",
 }
 
 const COMO_LLEGAR: Record<string, string> = {
@@ -99,6 +101,7 @@ const COMO_LLEGAR: Record<string, string> = {
   mt: "Inventario → Mantenimiento → trabajos MT-TEST, prevención y proyecto",
   ra: "Operaciones → Reservas y Amenities → quincho/hidrolavadora TEST y calendario",
   cv: "Comunidad → Visor de Mensajes → avisos TEST, actas GD y plantillas",
+  fi: "Finanzas → Gastos Comunes → fondos/emisión TEST · Recaudación → cobros y moras TEST",
 }
 
 const COMO_LLEGAR_HREF: Record<string, string> = {
@@ -117,6 +120,7 @@ const COMO_LLEGAR_HREF: Record<string, string> = {
   mt: "/inventario/proyectos",
   ra: "/operaciones/reservas",
   cv: "/comunidad/visor",
+  fi: "/finanzas/gastos-comunes",
 }
 
 interface SeedReport {
@@ -138,7 +142,6 @@ const HISTORIA = [
 
 const PENDIENTES: { id: string; archivo: string; lineas: number; desc: string; pruebas: string[] }[] = [
   { id: "CT", archivo: "CT - Certificados.md", lineas: 44, desc: "Documentos oficiales y acreditaciones", pruebas: ["Certificado Unidad Al Día con firma digital", "Plantilla CT con datos ST"] },
-  { id: "FI", archivo: "FI - Finanzas y Morosidad.md", lineas: 76, desc: "Fondos, emisión GC y cobranza", pruebas: ["Maestro Fondos con imputación", "Emisión GC fija vs prorrateo", "Cálculo mora y corte servicios", "Informe diferencia ajuste manual"] },
   { id: "GD", archivo: "GD - Gestión de Directiva.md", lineas: 40, desc: "Gobernanza y actas", pruebas: ["Acta con firma directiva", "Votación asamblea por RP"] },
   { id: "GE", archivo: "GE - Gestion de Solicitudes.md", lineas: 54, desc: "Tickets con workflow automático", pruebas: ["Ticket Nuevo → En Revisión al abrir", "Requiere Acción Vecino → En Proceso", "SLA dashboard GE"] },
   { id: "PE", archivo: "PE - Personal y Servicios.md", lineas: 93, desc: "RRHH, contratos, bitácora y turnos", pruebas: ["Ficha trabajador con AFP/Isapre y banco", "Feriados → proyección reemplazos y costo FI", "Bitácora visita/encomienda/contratista", "Cierre turno con checklist jornada"] },
@@ -185,6 +188,7 @@ export default function QaLabPage() {
     { id: "mt", label: TITULOS["mt"]!, rank: 7, fase: "Paso 15" },
     { id: "ra", label: TITULOS["ra"]!, rank: 8, fase: "Paso 16" },
     { id: "cv", label: TITULOS["cv"]!, rank: 8, fase: "Paso 17" },
+    { id: "fi", label: TITULOS["fi"]!, rank: 9, fase: "Paso 18" },
   ]
 
   const FASE_MODULOS: Record<string, string[]> = {
@@ -201,7 +205,8 @@ export default function QaLabPage() {
     "10": ["in"],
     "11": ["mt"],
     "12": ["ra", "cv"],
-    "todo": ["ma", "tu", "mp", "ef-macro", "ef-micro", "ef-unidad", "vu", "pi", "ad", "gd", "co", "ge", "ir", "in", "mt", "ra", "cv"],
+    "13": ["fi"],
+    "todo": ["ma", "tu", "mp", "ef-macro", "ef-micro", "ef-unidad", "vu", "pi", "ad", "gd", "co", "ge", "ir", "in", "mt", "ra", "cv", "fi"],
   }
 
   const LABEL_FASE: Record<string, string> = {
@@ -218,6 +223,7 @@ export default function QaLabPage() {
     "10": "11. IN — faltas, apelaciones y directiva",
     "11": "12. MT — preventivos y proyectos",
     "12": "13. RA+CV — reservas, avisos y actas en visor",
+    "13": "14. FI — fondos, emisión GC y morosidad",
     "todo": "Carga completa",
   }
 
@@ -493,11 +499,11 @@ export default function QaLabPage() {
     // 5) Respaldo directiva sobre la grave
     const r5 = s.respaldarInfraccionIN("test-in-grave", "test-p-99")
     if (!r5.ok) { pasos[4]!.estado = "error"; pasos[4]!.error = r5.error } else pasos[4]!.estado = "ok"
-    // 6) Aplicar grave → % GC + cargo FI pendiente
+    // 6) Aplicar grave → % GC + cobro FI materializado
     const r6 = s.aplicarInfraccionIN("test-in-grave")
     const grave = s.infraccionesIN.find(i => i.id === "test-in-grave")
-    if (!r6.ok || grave?.estado !== "aplicada" || grave.cargoFIReferencia !== "pendiente") {
-      pasos[5]!.estado = "error"; pasos[5]!.error = r6.error ?? `Estado: ${grave?.estado}`
+    if (!r6.ok || grave?.estado !== "aplicada" || !String(grave.cargoFIReferencia ?? "").startsWith("cob-") || !s.cobrosFI.some(c => c.id === grave.cargoFIReferencia && c.concepto === "multa_in")) {
+      pasos[5]!.estado = "error"; pasos[5]!.error = r6.error ?? `Estado/cargo: ${grave?.estado}/${grave?.cargoFIReferencia}`
     } else pasos[5]!.estado = "ok"
     // 7) Desestimar la leve apelada con justificación
     const r7 = s.desestimarInfraccionIN("test-in-leve", "Descargos verificados: los residuos corresponden a mudanza autorizada.")
@@ -554,7 +560,7 @@ export default function QaLabPage() {
     // 2) Reserva confirmada mañana 19:00–22:00
     const r2 = s.saveReservaRA({ id: "test-ra-rs-1", folio: "", elementoId: "test-ra-quincho", solicitantePersonaId: "test-p-99", unidadId: "test-u-999", fecha: mananaStr(), horaInicio: "19:00", horaFin: "22:00", estado: "confirmada", montoTarifa: 0, montoGarantia: 0 } as any)
     const rs1 = s.reservasRA.find(x => x.id === "test-ra-rs-1")
-    if (!r2.ok || rs1?.folio !== "RA-0001" || rs1.cargoFIReferencia !== "pendiente") { pasos[1]!.estado = "error"; pasos[1]!.error = r2.error ?? `Folio/cargo: ${rs1?.folio}/${rs1?.cargoFIReferencia}` } else pasos[1]!.estado = "ok"
+    if (!r2.ok || rs1?.folio !== "RA-0001" || !String(rs1.cargoFIReferencia ?? "").startsWith("cob-")) { pasos[1]!.estado = "error"; pasos[1]!.error = r2.error ?? `Folio/cargo: ${rs1?.folio}/${rs1?.cargoFIReferencia}` } else pasos[1]!.estado = "ok"
     // 3) Solapamiento rechazado
     const r3 = s.saveReservaRA({ id: "test-ra-rs-x", folio: "", elementoId: "test-ra-quincho", solicitantePersonaId: "test-p-88", fecha: mananaStr(), horaInicio: "20:00", horaFin: "23:00", estado: "confirmada", montoTarifa: 0, montoGarantia: 0 } as any)
     if (r3.ok || !String(r3.error).includes("Conflicto horario")) { pasos[2]!.estado = "error"; pasos[2]!.error = r3.ok ? "El solapamiento pasó" : String(r3.error) } else pasos[2]!.estado = "ok"
@@ -623,8 +629,85 @@ export default function QaLabPage() {
     return { id: "cv", label: TITULOS["cv"]!, rank: 8, status: errores.length ? "error" : "ok", count: 1, errores, pasos }
   }, [])
 
-  const buildHistoria = React.useCallback((mods: ModReport[]): SeedReport["historia"] => {
-    return HISTORIA.map(h => ({ capitulo: h.capitulo, estado: (() => {
+  const periodoMesesAtrasFI = (meses: number): string => {
+    const d = new Date()
+    d.setMonth(d.getMonth() - meses)
+    return d.toISOString().slice(0, 7)
+  }
+
+  const cargarFase13FI = React.useCallback(async (): Promise<ModReport> => {
+    const s = useCompassStore.getState()
+    const pasos: Paso[] = (PLAN["fi"]! as string[]).map(desc => ({ desc, estado: "pendiente" as ModuleState }))
+    // 1) Fondo extraordinario TEST junto al seed de fondos NSGC
+    const r1 = s.saveFondoFI({ id: "test-fondo-pintura", nombre: "Fondo Cuota Extraordinaria Pintura TEST", tipo: "especial", descripcion: "Cuota aprobada en asamblea para pintura de fachadas.", activo: true } as any)
+    if (!r1.ok) { pasos[0]!.estado = "error"; pasos[0]!.error = r1.error } else pasos[0]!.estado = "ok"
+    // 2) Egreso recurrente imputado con comprobante D1
+    const r2 = s.saveEgresoFI({ id: "test-egr-1", fecha: new Date().toISOString().slice(0, 10), categoria: "sueldos", descripcion: "Sueldo conserje TEST", monto: 350000, fondoId: "fondo-gc", esRecurrente: true, comprobante: { nombre: "test-boleta.pdf", tipoMime: "application/pdf", tamanoKB: 90, url: "https://placeholder.supabase.co/test-boleta.pdf" } } as any)
+    if (!r2.ok || !s.egresosFI.find(e => e.id === "test-egr-1")?.folio?.startsWith("FE-")) { pasos[1]!.estado = "error"; pasos[1]!.error = r2.error ?? "Sin folio FE" } else pasos[1]!.estado = "ok"
+    // 3) Emisión GC variable sobre unidades TEST con aporte al fondo de reserva
+    const unidadTest = "test-u-999"
+    const uTest = s.unidades.find(u => u.id === unidadTest)
+    const montoEsperado = Math.round(450000 * (uTest?.prorrateo ?? 0))
+    const r3 = s.emitirGastoComun({ periodo: new Date().toISOString().slice(0, 7), gastoTotal: 450000, unidadIds: [unidadTest] })
+    const emision = useCompassStore.getState().emisionesGC.find(e => e.periodo === new Date().toISOString().slice(0, 7))
+    const aporteEsperado = Math.round(montoEsperado * 5 / 100)
+    if (!r3.ok || !emision || emision.lineas[0]?.monto !== montoEsperado || emision.fondoReservaAporte?.monto !== aporteEsperado) {
+      pasos[2]!.estado = "error"; pasos[2]!.error = r3.error ?? `Monto/aporte: ${emision?.lineas[0]?.monto}/${emision?.fondoReservaAporte?.monto} (esperado ${montoEsperado}/${aporteEsperado})`
+    } else pasos[2]!.estado = "ok"
+    // 4) Emisión sin alcance → bloqueada por unidades sin responsable
+    const r4 = s.emitirGastoComun({ periodo: "2025-12", gastoTotal: 1000000 })
+    if (r4.ok || !String(r4.error).includes("responsable de cobro")) { pasos[3]!.estado = "error"; pasos[3]!.error = r4.ok ? "La emisión completa pasó sin responsables" : String(r4.error) } else pasos[3]!.estado = "ok"
+    // 5) Pago exacto del cobro GC del depto TEST
+    const cobroGC = useCompassStore.getState().cobrosFI.find(c => c.concepto === "gasto_comun" && c.periodo === new Date().toISOString().slice(0, 7))
+    if (!cobroGC) { pasos[4]!.estado = "error"; pasos[4]!.error = "No existe el cobro GC del periodo" } else {
+      const exigibleGC = cobroGC.montoBase + cobroGC.moras.reduce((a, m) => a + m.monto, 0) - cobroGC.pagos.reduce((a, p) => a + p.monto, 0)
+      const r5 = s.registrarPagoFI(cobroGC.id, { monto: exigibleGC, medio: "transferencia" })
+      const pagadoOk = useCompassStore.getState().cobrosFI.find(c => c.id === cobroGC.id)?.pagos.length === 1
+      if (!r5.ok || !pagadoOk) { pasos[4]!.estado = "error"; pasos[4]!.error = r5.error ?? "Pago no registrado" } else pasos[4]!.estado = "ok"
+    }
+    // 6) Mora sobre el periodo vencido (mes anterior), idempotente por día
+    const r6a = s.emitirGastoComun({ periodo: periodoMesesAtrasFI(1), gastoTotal: 200000, unidadIds: [unidadTest] })
+    const cobroVencido = useCompassStore.getState().cobrosFI.find(c => c.concepto === "gasto_comun" && c.periodo === periodoMesesAtrasFI(1))
+    let moraOk = false
+    if (r6a.ok && cobroVencido) {
+      s.aplicarMoraFI(cobroVencido.id, 1)
+      moraOk = (useCompassStore.getState().cobrosFI.find(c => c.id === cobroVencido.id)?.moras.length ?? 0) >= 1
+      s.aplicarMoraFI(cobroVencido.id, 1)
+      moraOk = moraOk && (useCompassStore.getState().cobrosFI.find(c => c.id === cobroVencido.id)?.moras.length ?? 0) >= 1
+    }
+    if (!moraOk) { pasos[5]!.estado = "error"; pasos[5]!.error = r6a.error ?? "Mora no aplicada" } else pasos[5]!.estado = "ok"
+    // 7) Pago con descuento justificado sobre la multa TEST → informe de diferencia inmutable
+    const cobroMulta = useCompassStore.getState().cobrosFI.find(c => c.concepto === "multa_in")
+    if (!cobroMulta) { pasos[6]!.estado = "error"; pasos[6]!.error = "No existe el cobro multa_in (ejecuta la fase IN)" } else {
+      const sinJustificacion = s.registrarPagoFI(cobroMulta.id, { monto: cobroMulta.montoBase - 1000, medio: "efectivo" })
+      const conJustificacion = s.registrarPagoFI(cobroMulta.id, { monto: cobroMulta.montoBase - 1000, medio: "efectivo", ajusteJustificacion: "Condonación parcial autorizada por la directiva TEST." })
+      const dif = useCompassStore.getState().cobrosFI.find(c => c.id === cobroMulta.id)?.diferencias.length === 1
+      if (!sinJustificacion.ok && conJustificacion.ok && dif && s.eventos.some(e => e.tipoAccion === "FI_MANUAL_DISCOUNT")) pasos[6]!.estado = "ok"
+      else { pasos[6]!.estado = "error"; pasos[6]!.error = conJustificacion.error ?? `Diferencias: ${useCompassStore.getState().cobrosFI.find(c => c.id === cobroMulta.id)?.diferencias.length}` }
+    }
+    // 8) Conexión IN: la multa grave aplicada vive como cobro real imputado
+    const grave = s.infraccionesIN.find(i => i.id === "test-in-grave")
+    const cobroGrave = useCompassStore.getState().cobrosFI.find(c => c.origenRef === "test-in-grave" && c.concepto === "multa_in")
+    if (!grave || !String(grave.cargoFIReferencia ?? "").startsWith("cob-") || !cobroGrave || cobroGrave.fondoId !== "fondo-gc") {
+      pasos[7]!.estado = "error"; pasos[7]!.error = "Cobro multa_in no materializado (ejecuta la fase IN)"
+    } else pasos[7]!.estado = "ok"
+    // 9) Conexión RA: la tarifa del quincho quedó como cobro del fondo amenities
+    const reservaQuincho = s.reservasRA.find(r => r.id === "test-ra-rs-1")
+    const cobroTarifa = useCompassStore.getState().cobrosFI.find(c => c.origenRef === "test-ra-rs-1" && c.concepto === "reserva_ra")
+    if (!reservaQuincho || reservaQuincho.cargoFIReferencia !== cobroTarifa?.id || cobroTarifa === undefined || cobroTarifa.fondoId !== "fondo-amenities") {
+      pasos[8]!.estado = "error"; pasos[8]!.error = "Cobro reserva_ra no materializado (ejecuta la fase RA)"
+    } else pasos[8]!.estado = "ok"
+    // 10) Conexión MT: proyecto financiado por fondo GC sin saldo → rechazado
+    const r10 = s.saveProyectoMT({ id: "test-py-financiado", nombre: "Repintado fachada TEST", presupuestoEstimado: 12000000, plazoMeses: 120, estado: "planificado", fondoFinanciamientoId: "fondo-gc" } as any)
+    if (r10.ok || !String(r10.error).includes("Saldo insuficiente")) { pasos[9]!.estado = "error"; pasos[9]!.error = r10.ok ? "El proyecto pasó sin saldo suficiente" : String(r10.error) } else pasos[9]!.estado = "ok"
+    // 11) Retiro del fondo de reserva sin acta publicada → rechazado
+    const r11 = s.retirarFondoFI({ fondoId: "fondo-reserva", monto: 50000, descripcion: "Retiro sin respaldo TEST" })
+    if (r11.ok || !String(r11.error).includes("acta")) { pasos[10]!.estado = "error"; pasos[10]!.error = r11.ok ? "El retiro sin acta pasó" : String(r11.error) } else pasos[10]!.estado = "ok"
+    const errores = pasos.filter(p => p.estado === "error").map(p => p.error || p.desc)
+    return { id: "fi", label: TITULOS["fi"]!, rank: 9, status: errores.length ? "error" : "ok", count: 1, errores, pasos }
+  }, [])
+
+  const buildHistoria = React.useCallback((mods: ModReport[]): SeedReport["historia"] => {    return HISTORIA.map(h => ({ capitulo: h.capitulo, estado: (() => {
       const rankMods = mods.filter(m => m.rank === h.rank)
       if (rankMods.length === 0) return "pendiente" as ModuleState
       if (rankMods.some(m => m.status === "error")) return "error" as ModuleState
@@ -774,6 +857,21 @@ export default function QaLabPage() {
         mods.push(await cargarFase12RA())
         mods.push(await cargarFase12CV())
       }
+      if (fase === "13") {
+        mods.push(await cargarFase0())
+        mods.push(await cargarFase1TU())
+        mods.push(await cargarFase1MP())
+        mods.push(await cargarFase2Macro())
+        mods.push(await cargarFase2Micro())
+        mods.push(await cargarFase2Unidad())
+        mods.push(await cargarFase3VU())
+        mods.push(await cargarFase7CO())
+        mods.push(await cargarFase6GD())
+        mods.push(await cargarFase10IN())
+        mods.push(await cargarFase11MT())
+        mods.push(await cargarFase12RA())
+        mods.push(await cargarFase13FI())
+      }
       if (fase === "todo") {
         mods.push(await cargarFase8GE())
         mods.push(await cargarFase9IR())
@@ -781,6 +879,7 @@ export default function QaLabPage() {
         mods.push(await cargarFase11MT())
         mods.push(await cargarFase12RA())
         mods.push(await cargarFase12CV())
+        mods.push(await cargarFase13FI())
       }
       const historia = buildHistoria(mods)
       const erroresGlobales = mods.flatMap(m => m.errores.map(e => `${m.label}: ${e}`))
@@ -793,13 +892,22 @@ export default function QaLabPage() {
     } finally {
       setLoading(false)
     }
-  }, [cargarFase0, cargarFase1MP, cargarFase1TU, cargarFase2Macro, cargarFase2Micro, cargarFase2Unidad, cargarFase3VU, cargarFase4PI, cargarFase5AD, cargarFase6GD, cargarFase7CO, cargarFase8GE, cargarFase9IR, cargarFase10IN, cargarFase11MT, cargarFase12RA, cargarFase12CV, buildHistoria, ensureHydrated])
+  }, [cargarFase0, cargarFase1MP, cargarFase1TU, cargarFase2Macro, cargarFase2Micro, cargarFase2Unidad, cargarFase3VU, cargarFase4PI, cargarFase5AD, cargarFase6GD, cargarFase7CO, cargarFase8GE, cargarFase9IR, cargarFase10IN, cargarFase11MT, cargarFase12RA, cargarFase12CV, cargarFase13FI, buildHistoria, ensureHydrated])
 
   const limpiar = React.useCallback(async () => {
     if (!ensureHydrated()) return
     setLoading(true)
     const errores: string[] = []
     const s = useCompassStore.getState()
+    // FI: libro de cobros de unidades TEST, emisiones sobre TEST, egresos y
+    // fondos TEST se purgan primero para liberar las referencias entrantes.
+    useCompassStore.setState(st => ({
+      cobrosFI: st.cobrosFI.filter(c => !c.unidadId.startsWith("test-")),
+      emisionesGC: st.emisionesGC.filter(e => !e.lineas.some(l => l.unidadId.startsWith("test-"))),
+      egresosFI: st.egresosFI.filter(e => !e.id.startsWith("test-")),
+      fondosFI: st.fondosFI.filter(f => !f.id.startsWith("test-")),
+      notificaciones: st.notificaciones.filter(n => n.moduloOrigen !== "FI"),
+    }))
     // inverso MT -> IN -> IR -> GE -> CO -> GD -> AD -> PI -> VU -> EF unidades -> EF micro -> EF macro -> MP -> TU -> MA
     // MT
     useCompassStore.setState(st => ({ proyectosMT: st.proyectosMT.filter(p => p.id !== "test-py-techos") }))
@@ -1035,6 +1143,7 @@ export default function QaLabPage() {
               { fase: "10", label: "11. IN — faltas, apelaciones y directiva" },
               { fase: "11", label: "12. MT — preventivos y proyectos" },
               { fase: "12", label: "13. RA+CV — reservas, avisos y visor" },
+              { fase: "13", label: "14. FI — fondos, emisión GC y morosidad" },
             ].map(item => {
               const isActive = ultimaFase === item.fase
               const modsFase = isActive && report ? report.modulos.filter(m => FASE_MODULOS[item.fase]!.includes(m.id)) : []

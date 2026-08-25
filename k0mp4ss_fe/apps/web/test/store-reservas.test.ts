@@ -86,7 +86,10 @@ describe("RA - Reservas y Amenities en el store", () => {
       const primera = getState().reservasRA[0]!
       expect(primera.montoTarifa).toBe(15000)
       expect(primera.montoGarantia).toBe(20000)
-      expect(primera.cargoFIReferencia).toBe("pendiente")
+      expect(String(primera.cargoFIReferencia)).toMatch(/^cob-/)
+      const cobroTarifa = getState().cobrosFI.find(c => c.id === primera.cargoFIReferencia)!
+      expect(cobroTarifa.concepto).toBe("reserva_ra")
+      expect(cobroTarifa.fondoId).toBe(getState().fondosFI.find(f => f.tipo === "amenities")!.id)
       expect(getState().eventos.filter(e => e.tipoAccion === "RA_BOOKING_CREATED")).toHaveLength(2)
     })
 
@@ -186,7 +189,7 @@ describe("RA - Reservas y Amenities en el store", () => {
       expect(getState().eventos.filter(e => e.tipoAccion === "RA_BOOKING_CANCELLED")).toHaveLength(1)
     })
 
-    it("cancelación tardía registra penalización con cargo FI pendiente", () => {
+    it("cancelación tardía registra penalización con cobro FI materializado", () => {
       const ayerMenosUno = new Date()
       ayerMenosUno.setDate(ayerMenosUno.getDate() + 1)
       getState().saveReservaRA(reservaBase({ fecha: ayerMenosUno.toISOString().slice(0, 10) }))
@@ -195,7 +198,8 @@ describe("RA - Reservas y Amenities en el store", () => {
       const reserva = getState().reservasRA[0]!
       expect(reserva.cancelacion?.tardia).toBe(true)
       expect(reserva.cancelacion?.penalizacion).toBe(5000)
-      expect(reserva.cargoFIReferencia).toBe("pendiente")
+      expect(String(reserva.cargoFIReferencia)).toMatch(/^cob-/)
+      expect(getState().cobrosFI.find(c => c.id === reserva.cargoFIReferencia)?.montoBase).toBe(5000)
       expect(getState().eventos.some(e => e.tipoAccion === "RA_BOOKING_CANCELLED" && e.descripcion.includes("FUERA DE PLAZO"))).toBe(true)
     })
 
@@ -213,7 +217,8 @@ describe("RA - Reservas y Amenities en el store", () => {
       expect(getState().retenerGarantiaRA("ra-rs-1", "Manguera fracturada al devolver el equipo.").ok).toBe(true)
       const reserva = getState().reservasRA[0]!
       expect(reserva.garantiaRetenida).toEqual({ monto: 20000, motivo: "Manguera fracturada al devolver el equipo." })
-      expect(reserva.cargoFIReferencia).toBe("pendiente")
+      expect(String(reserva.cargoFIReferencia)).toMatch(/^cob-/)
+      expect(getState().cobrosFI.find(c => c.id === reserva.cargoFIReferencia)?.concepto).toBe("garantia_ra")
       expect(getState().eventos.filter(e => e.tipoAccion === "RA_WARRANTY_RETAINED")).toHaveLength(1)
       expect(getState().notificaciones.some(n => n.moduloOrigen === "RA")).toBe(true)
 

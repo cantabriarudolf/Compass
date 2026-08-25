@@ -178,8 +178,14 @@ describe("IN - Infracciones y Multas en el store", () => {
       let infraccion = getState().infraccionesIN.find(i => i.id === "in-1")!
       expect(infraccion.estado).toBe("aplicada")
       expect(infraccion.montoAplicado).toBe(15000)
-      expect(infraccion.cargoFIReferencia).toBe("pendiente")
       expect(getState().eventos.filter(e => e.tipoAccion === "IN_APPLY_FINE")).toHaveLength(1)
+
+      // FI conectado: la multa aplicada materializa un cobro real en el libro.
+      expect(String(infraccion.cargoFIReferencia)).toMatch(/^cob-/)
+      const cobroMulta = getState().cobrosFI.find(c => c.id === infraccion.cargoFIReferencia)!
+      expect(cobroMulta.concepto).toBe("multa_in")
+      expect(cobroMulta.montoBase).toBe(15000)
+      expect(cobroMulta.origenRef).toBe("in-1")
 
       // Grave sin respaldo.
       getState().saveInfraccionIN(infraccionBase({ id: "in-grave", unidadId: unidadIdSeed(), tipoInfraccionId: "tipo-in-ruidos" }))
@@ -198,7 +204,7 @@ describe("IN - Infracciones y Multas en el store", () => {
       expect(aplicada.ok).toBe(true)
       infraccion = getState().infraccionesIN.find(i => i.id === "in-grave")!
       expect(infraccion.montoAplicado).toBe(50)
-      expect(infraccion.cargoFIReferencia).toBe("pendiente")
+      expect(String(infraccion.cargoFIReferencia)).toMatch(/^cob-/)
     })
 
     it("desestimación exige justificación", () => {

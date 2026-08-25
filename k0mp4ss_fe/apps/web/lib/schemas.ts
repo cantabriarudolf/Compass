@@ -508,8 +508,9 @@ export const InfraccionINSchema = z.object({
   respaldosDirectiva: z.array(IdEntidadSchema),
   apelacion: ApelacionINSchema.optional(),
   desestimacionJustificacion: z.string().optional(),
-  // Cargo al Gasto Común: pendiente hasta implementar FI.
-  cargoFIReferencia: z.literal("pendiente").optional(),
+  // Cargo al Gasto Común: id del cobro FI una vez aplicada la multa
+  // ("pendiente" solo en registros históricos previos a la conexión FI).
+  cargoFIReferencia: z.string().optional(),
 })
 
 // --- Mantenimiento y Proyectos (MT) ---
@@ -565,8 +566,8 @@ export const TrabajoMTSchema = z.object({
   garantiaFin: FechaISOSchema.optional(),
   alertaGarantiaEnviada: z.boolean({ required_error: "El flag de alerta de garantía es obligatorio." }),
   evidencias: z.array(EvidenciaMTSchema),
-  preventivo: PreventivoConfigSchema.optional(),
-  cargoFIReferencia: z.literal("pendiente").optional(),
+   preventivo: PreventivoConfigSchema.optional(),
+   cargoFIReferencia: z.string().optional(),
 })
 
 export const ESTADOS_PROYECTO_MT = ["planificado", "en_ejecucion", "completado", "descartado"] as const
@@ -581,6 +582,7 @@ export const ProyectoMTSchema = z.object({
   plazoMeses: z.number({ required_error: "El plazo es obligatorio." }).int().positive("El plazo debe ser mayor a cero."),
   fechaObjetivo: FechaISOSchema.optional(),
   estado: EstadoProyectoMTSchema,
+  fondoFinanciamientoId: IdEntidadSchema.optional(),
 })
 
 // --- Reservas y Amenities (RA) ---
@@ -649,8 +651,130 @@ export const ReservaRASchema = z.object({
   montoGarantia: z.number({ required_error: "El monto de garantía es obligatorio." }).min(0, "La garantía no puede ser negativa."),
   cancelacion: CancelacionRASchema.optional(),
   garantiaRetenida: RetencionGarantiaRASchema.optional(),
-  // Cobros al Fondo de Amenities: pendientes hasta implementar FI.
-  cargoFIReferencia: z.literal("pendiente").optional(),
+  // Cobros al Fondo de Amenities: id del cobro FI materializado
+  // ("pendiente" solo en registros históricos previos a la conexión FI).
+  cargoFIReferencia: z.string().optional(),
+})
+
+// --- Finanzas y Morosidad (FI) ---
+
+export const ModoCalculoGCSchema = z.enum(["fijo", "variable"])
+
+export const TIPOS_FONDO_FI = ["gasto_comun", "reserva", "especial", "amenities"] as const
+export const TipoFondoFISchema = z.enum(TIPOS_FONDO_FI)
+
+export const FondoFISchema = z.object({
+  id: IdEntidadSchema,
+  nombre: z.string({ required_error: "El nombre del fondo es obligatorio." }).min(1, "El nombre del fondo es obligatorio."),
+  tipo: TipoFondoFISchema,
+  descripcion: z.string().optional(),
+  // Solo relevante para fondos de reserva: % aplicado sobre el total emitido.
+  porcentajeAporte: z.number().min(0, "El porcentaje no puede ser negativo.").max(100, "El porcentaje no puede superar 100.").optional(),
+  activo: z.boolean({ required_error: "El estado activo es obligatorio." }),
+})
+
+export const CATEGORIAS_EGRESO_FI = ["sueldos", "mantencion", "servicios", "administracion", "uso_de_fondo", "otro"] as const
+export const CategoriaEgresoFISchema = z.enum(CATEGORIAS_EGRESO_FI)
+
+export const EgresoFISchema = z.object({
+  id: IdEntidadSchema,
+  // Folio FE-#### (auto-generado al alta).
+  folio: z.string().min(1, "El folio es obligatorio.").optional(),
+  fecha: FechaISOSchema,
+  categoria: CategoriaEgresoFISchema,
+  descripcion: z.string({ required_error: "La descripción del gasto es obligatoria." }).min(1, "La descripción del gasto es obligatoria."),
+  monto: z.number({ required_error: "El monto es obligatorio." }).positive("El monto debe ser mayor a cero."),
+  // Imputación obligatoria al fondo de origen del dinero.
+  fondoId: IdEntidadSchema,
+  esRecurrente: z.boolean({ required_error: "El flag recurrente/fijo es obligatorio." }),
+  comprobante: ImagenReferenciaSchema.optional(),
+  microSectoresIds: z.array(IdEntidadSchema).optional(),
+  proveedor: z.string().optional(),
+  unidadId: IdEntidadSchema.optional(),
+  aprobacionActaGDId: IdEntidadSchema.optional(),
+})
+
+export const LineaEmisionGCSchema = z.object({
+  unidadId: IdEntidadSchema,
+  responsablePersonaId: IdEntidadSchema,
+  monto: z.number().min(0),
+  cobroId: IdEntidadSchema,
+})
+
+export const AporteFondoReservaSchema = z.object({
+  fondoId: IdEntidadSchema,
+  monto: z.number().positive("El aporte debe ser mayor a cero."),
+})
+
+export const EmisionGCSchema = z.object({
+  id: IdEntidadSchema,
+  periodo: z
+    .string({ required_error: "El periodo es obligatorio." })
+    .regex(/^\d{4}-\d{2}$/, "El periodo debe tener formato AAAA-MM."),
+  modo: ModoCalculoGCSchema,
+  gastoTotal: z.number().min(0),
+  lineas: z.array(LineaEmisionGCSchema).min(1, "La emisión exige al menos una unidad."),
+  fondoReservaAporte: AporteFondoReservaSchema.optional(),
+  fechaEmision: FechaISOSchema,
+})
+
+export const CONCEPTOS_COBRO_FI = [
+  "gasto_comun",
+  "cuota_extraordinaria",
+  "multa_in",
+  "consumo",
+  "reserva_ra",
+  "penalizacion_ra",
+  "garantia_ra",
+] as const
+export const ConceptoCobroFISchema = z.enum(CONCEPTOS_COBRO_FI)
+
+export const OrigenModuloCobroFISchema = z.enum(["FI", "IN", "RA"])
+
+export const MoraCobroFISchema = z.object({
+  id: IdEntidadSchema,
+  monto: z.number().positive("La mora debe ser mayor a cero."),
+  diasAtraso: z.number().int().min(0),
+  tasaMensualPct: z.number().positive("La tasa debe ser mayor a cero."),
+  fecha: FechaISOSchema,
+})
+
+export const PagoCobroFISchema = z.object({
+  id: IdEntidadSchema,
+  monto: z.number().positive("El pago debe ser mayor a cero."),
+  fecha: FechaISOSchema,
+  medio: z.string({ required_error: "El medio de pago es obligatorio." }).min(1, "El medio de pago es obligatorio."),
+})
+
+export const DiferenciaPagoFISchema = z.object({
+  id: IdEntidadSchema,
+  tipo: z.enum(["descuento", "recargo"]),
+  esperado: z.number().min(0),
+  recibido: z.number().min(0),
+  diferencia: z.number().positive("La diferencia debe ser mayor a cero."),
+  justificacion: z
+    .string({ required_error: "La justificación del ajuste es obligatoria." })
+    .min(10, "La justificación debe explicar el motivo del ajuste (mínimo 10 caracteres)."),
+  fecha: FechaISOSchema,
+})
+
+export const CobroFISchema = z.object({
+  id: IdEntidadSchema,
+  unidadId: IdEntidadSchema,
+  periodo: z
+    .string({ required_error: "El periodo es obligatorio." })
+    .regex(/^\d{4}-\d{2}$/, "El periodo debe tener formato AAAA-MM."),
+  concepto: ConceptoCobroFISchema,
+  origenModulo: OrigenModuloCobroFISchema,
+  origenRef: IdEntidadSchema.optional(),
+  fondoId: IdEntidadSchema,
+  descripcion: z.string({ required_error: "La descripción del cobro es obligatoria." }).min(1, "La descripción del cobro es obligatoria."),
+  montoBase: z.number({ required_error: "El monto base es obligatorio." }).positive("El monto base debe ser mayor a cero."),
+  fechaCargo: FechaISOSchema,
+  fechaVencimiento: FechaISOSchema.optional(),
+  moras: z.array(MoraCobroFISchema),
+  pagos: z.array(PagoCobroFISchema),
+  diferencias: z.array(DiferenciaPagoFISchema),
 })
 
 // --- Visor de Mensajes (CV) ---
@@ -821,7 +945,6 @@ export const MAESTRO_SCHEMAS = {
 
 // --- Administración: Configuración Global (CF) ---
 
-export const ModoCalculoGCSchema = z.enum(["fijo", "variable"])
 export const SeguridadSMTPSchema = z.enum(["ssl", "tls", "none"])
 
 export const ConfiguracionGlobalSchema = z.object({
@@ -974,6 +1097,18 @@ export type EstadoAvisoCV = z.infer<typeof EstadoAvisoCVSchema>
 export type OrigenAvisoCV = z.infer<typeof OrigenAvisoCVSchema>
 export type AvisoCV = z.infer<typeof AvisoCVSchema>
 export type PlantillaCV = z.infer<typeof PlantillaCVSchema>
+export type FondoFI = z.infer<typeof FondoFISchema>
+export type TipoFondoFI = z.infer<typeof TipoFondoFISchema>
+export type CategoriaEgresoFI = z.infer<typeof CategoriaEgresoFISchema>
+export type EgresoFI = z.infer<typeof EgresoFISchema>
+export type LineaEmisionGC = z.infer<typeof LineaEmisionGCSchema>
+export type AporteFondoReserva = z.infer<typeof AporteFondoReservaSchema>
+export type EmisionGC = z.infer<typeof EmisionGCSchema>
+export type ConceptoCobroFI = z.infer<typeof ConceptoCobroFISchema>
+export type MoraCobroFI = z.infer<typeof MoraCobroFISchema>
+export type PagoCobroFI = z.infer<typeof PagoCobroFISchema>
+export type DiferenciaPagoFI = z.infer<typeof DiferenciaPagoFISchema>
+export type CobroFI = z.infer<typeof CobroFISchema>
 
 // --- Utilidades de validación para el store ---
 

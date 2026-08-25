@@ -78,6 +78,10 @@ import {
   ReservaRASchema,
   AvisoCVSchema,
   PlantillaCVSchema,
+  FondoFISchema,
+  EgresoFISchema,
+  EmisionGCSchema,
+  CobroFISchema,
   MAESTRO_SCHEMAS,
   validarConEsquema,
   validarMaestro,
@@ -115,7 +119,21 @@ import {
   type ReservaRA,
   type AvisoCV,
   type PlantillaCV,
+  type FondoFI,
+  type EgresoFI,
+  type EmisionGC,
+  type CobroFI,
 } from "@/lib/schemas"
+import {
+  exigibleTotal,
+  estadoDeCobro,
+  hoyISO,
+  montoMoraPropuesta,
+  saldoFondo,
+  saldoPendiente,
+  totalPagado,
+  vencimientoDesdeDiaCorte,
+} from "@/lib/finanzas-utils"
 import { z } from "zod"
 
 export type StoreResult = { ok: boolean; error?: string }
@@ -204,14 +222,38 @@ function siguienteFolioRA(get: () => CompassStore): string {
   return `RA-${String(siguiente).padStart(4, "0")}`
 }
 
-// RA §2: gate de morosidad — devuelve el mensaje de bloqueo si el solicitante
-// mantiene deuda vigente en Finanzas. Inerte hasta conectar FI (Ventana 6):
-// hoy no existe fuente de deuda en el store.
-function getDeudaVigenteFI(): string | null {
-  return null
+// RA §2: gate de morosidad — bloquea al solicitante que mantiene cobros
+// vencidos sin cubrir en las unidades donde tiene vínculo vigente.
+function getDeudaVigenteFI(get: () => CompassStore, personaId: string): string | null {
+  const hoy = hoyISO()
+  const unidadesPersona = get().vinculos.filter(v => v.personaId === personaId && !v.fechaFin).map(v => v.unidadId)
+  const vencidos = get().cobrosFI.filter(
+    c =>
+      unidadesPersona.includes(c.unidadId) &&
+      c.fechaVencimiento !== undefined &&
+      c.fechaVencimiento < hoy &&
+      saldoPendiente(c) > 0
+  )
+  if (vencidos.length === 0) return null
+  const total = vencidos.reduce((acc, c) => acc + saldoPendiente(c), 0)
+  return `No se puede reservar: mantienes deuda vencida en Finanzas ($${total.toLocaleString("es-CL")} en ${vencidos.length} cobro(s)). Regulariza tu situación para volver a reservar.`
 }
 
-export const STORE_VERSION = 20
+function siguienteFolioFE(get: () => CompassStore): string {
+  const numeros = get().egresosFI
+    .map(e => Number.parseInt((e.folio ?? "").replace(/^FE-/, ""), 10))
+    .filter(n => Number.isFinite(n))
+  const siguiente = (numeros.length > 0 ? Math.max(...numeros) : 0) + 1
+  return `FE-${String(siguiente).padStart(4, "0")}`
+}
+
+const FONDOS_FI_SEED: FondoFI[] = [
+  { id: "fondo-gc", nombre: "Fondo de Gasto Común", tipo: "gasto_comun", descripcion: "Caja principal para la operación ordinaria del condominio.", activo: true },
+  { id: "fondo-reserva", nombre: "Fondo de Reserva", tipo: "reserva", descripcion: "Ahorro obligatorio según la Ley de Copropiedad.", porcentajeAporte: 5, activo: true },
+  { id: "fondo-amenities", nombre: "Fondo de Amenities", tipo: "amenities", descripcion: "Centro de costos de reservas, tarifas y garantías de amenities.", activo: true },
+]
+
+export const STORE_VERSION = 21
 
 export interface MaestroCollections {
   afps: Afp[]
@@ -274,6 +316,11 @@ export interface CompassData {
   // Visor de Mensajes (CV)
   avisosCV: AvisoCV[]
   plantillasCV: PlantillaCV[]
+  // Finanzas y Morosidad (FI)
+  fondosFI: FondoFI[]
+  egresosFI: EgresoFI[]
+  emisionesGC: EmisionGC[]
+  cobrosFI: CobroFI[]
 }
 
 interface CompassStore extends CompassData {
@@ -382,6 +429,16 @@ interface CompassStore extends CompassData {
   removePlantillaCV: (id: string) => StoreResult
   activarPlantillaCV: (id: string) => StoreResult
   publicarActaEnCV: (actaId: string) => StoreResult
+  // Finanzas y Morosidad (FI)
+  saveFondoFI: (fondo: FondoFI) => StoreResult
+  removeFondoFI: (id: string) => StoreResult
+  saveEgresoFI: (egreso: EgresoFI) => StoreResult
+  removeEgresoFI: (id: string) => StoreResult
+  emitirGastoComun: (input: { periodo: string; gastoTotal?: number; fechaVencimiento?: string; unidadIds?: string[] }) => StoreResult
+  aplicarMoraFI: (cobroId: string, tasaMensualPct?: number) => StoreResult
+  registrarPagoFI: (cobroId: string, pago: { monto: number; medio: string; ajusteJustificacion?: string }) => StoreResult
+  enviarCobranzaFI: (unidadId: string) => StoreResult
+  retirarFondoFI: (input: { fondoId: string; monto: number; descripcion: string; aprobacionActaGDId?: string }) => StoreResult
 }
 
 function upsert<T extends { id: string }>(list: T[], item: T): T[] {
@@ -439,6 +496,10 @@ export const seedData = (): CompassData => ({
   reservasRA: [],
   avisosCV: [],
   plantillasCV: plantillasCVSeed,
+  fondosFI: FONDOS_FI_SEED,
+  egresosFI: [],
+  emisionesGC: [],
+  cobrosFI: [],
   maestros: {
     afps: seedAFPS,
     previsionesSalud: seedPrevisionesSalud,
@@ -492,6 +553,10 @@ const ESQUEMAS_COLECCION = {
   reservasRA: z.array(ReservaRASchema),
   avisosCV: z.array(AvisoCVSchema),
   plantillasCV: z.array(PlantillaCVSchema),
+  fondosFI: z.array(FondoFISchema),
+  egresosFI: z.array(EgresoFISchema),
+  emisionesGC: z.array(EmisionGCSchema),
+  cobrosFI: z.array(CobroFISchema),
 } as const
 
 type ClaveColeccion = keyof typeof ESQUEMAS_COLECCION
@@ -2061,16 +2126,52 @@ export const useCompassStore = create<CompassStore>()(
           if (["grave", "gravisima"].includes(tipo.categoria) && infraccion.respaldosDirectiva.length === 0) {
             return { ok: false, error: "Las multas Grave/Gravísima requieren el respaldo de la directiva antes de cargarse al Gasto Común." }
           }
+          // FI: la sanción % GC se resuelve contra el último cobro GC emitido a la unidad;
+          // sin historial previo se usa el valor nominal del catálogo.
+          if (tipo.tipoSancion === "porcentaje_gc") {
+            const ultimoGC = [...get().cobrosFI]
+              .filter(c => c.concepto === "gasto_comun" && c.unidadId === infraccion.unidadId)
+              .sort((a, b) => b.periodo.localeCompare(a.periodo))[0]
+            if (ultimoGC) {
+              montoAplicado = Math.round((tipo.valor / 100) * ultimoGC.montoBase)
+              descripcionSancion = `${tipo.valor}% del Gasto Común ($${montoAplicado.toLocaleString("es-CL")})`
+            }
+          }
+        }
+
+        const hoyStr = hoyISO()
+        const fondoGC = get().fondosFI.find(f => f.tipo === "gasto_comun" && f.activo)
+        let cargoFIReferencia: string | undefined
+        let nuevoCobro: CobroFI | undefined
+        if (fondoGC && montoAplicado > 0) {
+          nuevoCobro = {
+            id: `cob-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            unidadId: infraccion.unidadId,
+            periodo: hoyStr.slice(0, 7),
+            concepto: "multa_in",
+            origenModulo: "IN",
+            origenRef: infraccion.id,
+            fondoId: fondoGC.id,
+            descripcion: `Multa ${infraccion.folio}: ${descripcionSancion}`,
+            montoBase: montoAplicado,
+            fechaCargo: hoyStr,
+            fechaVencimiento: vencimientoDesdeDiaCorte(hoyStr.slice(0, 7), get().configuracion?.diaCortePago ?? 5),
+            moras: [],
+            pagos: [],
+            diferencias: [],
+          }
+          cargoFIReferencia = nuevoCobro.id
         }
 
         set(s => ({
           infraccionesIN: s.infraccionesIN.map(x =>
             x.id === id
-              ? { ...x, estado: "aplicada" as EstadoInfraccionIN, montoAplicado, cargoFIReferencia: "pendiente" as const }
+              ? { ...x, estado: "aplicada" as EstadoInfraccionIN, montoAplicado, ...(cargoFIReferencia ? { cargoFIReferencia } : { cargoFIReferencia: "pendiente" as const }) }
               : x
           ),
+          ...(nuevoCobro ? { cobrosFI: [...s.cobrosFI, nuevoCobro] } : {}),
         }))
-        registrarEvento(set, "IN_APPLY_FINE", id, `Multa ${infraccion.folio} APLICADA (${descripcionSancion}) para unidad ${refUnidad(get, infraccion.unidadId)}; cargo FI pendiente.`, "IN")
+        registrarEvento(set, "IN_APPLY_FINE", id, `Multa ${infraccion.folio} APLICADA (${descripcionSancion}) para unidad ${refUnidad(get, infraccion.unidadId)}${nuevoCobro ? `; cobro FI materializado (${nuevoCobro.id})` : "; sin fondo disponible para imputar el cargo"}.`, "IN")
         // Notifica al propietario vigente de la unidad infractora (pasa por gate AD).
         const propietario = get().vinculos.find(v => v.unidadId === infraccion.unidadId && v.rol === "propietario" && !v.fechaFin)
         if (propietario) {
@@ -2310,7 +2411,20 @@ export const useCompassStore = create<CompassStore>()(
         if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
         const validacion = validarConEsquema(ProyectoMTSchema, proyecto)
         if (!validacion.ok) return validacion
-        set(s => ({ proyectosMT: upsert(s.proyectosMT, validacion.data) }))
+        const registro = validacion.data
+        if (registro.fondoFinanciamientoId) {
+          const fondo = get().fondosFI.find(f => f.id === registro.fondoFinanciamientoId)
+          if (!fondo) return { ok: false, error: "No se puede guardar el proyecto: el fondo de financiamiento indicado no existe en Finanzas." }
+          if (!fondo.activo) return { ok: false, error: `No se puede guardar el proyecto: el fondo "${fondo.nombre}" está inactivo.` }
+          const saldo = saldoFondo(fondo.id, { cobros: get().cobrosFI, egresos: get().egresosFI, emisiones: get().emisionesGC })
+          if (saldo < registro.presupuestoEstimado) {
+            return {
+              ok: false,
+              error: `Saldo insuficiente en "${fondo.nombre}": disponible $${saldo.toLocaleString("es-CL")} para financiar un presupuesto de $${registro.presupuestoEstimado.toLocaleString("es-CL")}.`,
+            }
+          }
+        }
+        set(s => ({ proyectosMT: upsert(s.proyectosMT, registro) }))
         return { ok: true }
       },
 
@@ -2383,9 +2497,8 @@ export const useCompassStore = create<CompassStore>()(
           }
         }
 
-        // Validación de morosidad (NSGC §2): bloquea solicitantes con deuda vigente.
-        // Gate inerte hasta conectar Finanzas (Ventana 6): hoy no existe fuente de deuda en el store.
-        const deudaFI = getDeudaVigenteFI()
+        // Validación de morosidad (RA §2): bloquea solicitantes con deuda vencida en FI.
+        const deudaFI = getDeudaVigenteFI(get, registro.solicitantePersonaId)
         if (deudaFI) return { ok: false, error: deudaFI }
 
         // Prevención de overbooking: solapamiento [inicio, fin) según stock concurrente.
@@ -2412,7 +2525,35 @@ export const useCompassStore = create<CompassStore>()(
             ...registro,
             montoTarifa: elemento.tarifaUso,
             montoGarantia: elemento.garantiaRequerida,
-            cargoFIReferencia: elemento.tarifaUso > 0 ? "pendiente" : registro.cargoFIReferencia,
+          }
+          if (elemento.tarifaUso > 0) {
+            const fondoAmenities = get().fondosFI.find(f => f.tipo === "amenities" && f.activo)
+            const unidadCobro = registro.unidadId ?? get().vinculos.find(v => v.personaId === registro.solicitantePersonaId && !v.fechaFin)?.unidadId
+            if (fondoAmenities && unidadCobro) {
+              const hoyStr = hoyISO()
+              const cobro: CobroFI = {
+                id: `cob-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+                unidadId: unidadCobro,
+                periodo: hoyStr.slice(0, 7),
+                concepto: "reserva_ra",
+                origenModulo: "RA",
+                origenRef: registro.id,
+                fondoId: fondoAmenities.id,
+                descripcion: `Tarifa reserva ${elemento.nombre} (${registro.fecha})`,
+                montoBase: elemento.tarifaUso,
+                fechaCargo: hoyStr,
+                fechaVencimiento: registro.fecha,
+                moras: [],
+                pagos: [],
+                diferencias: [],
+              }
+              const v = validarConEsquema(CobroFISchema, cobro)
+              if (!v.ok) return v
+              set(s => ({ cobrosFI: [...s.cobrosFI, cobro] }))
+              final = { ...final, cargoFIReferencia: cobro.id }
+            }
+          } else {
+            final = { ...final, cargoFIReferencia: registro.cargoFIReferencia }
           }
         }
         set(s => ({ reservasRA: upsert(s.reservasRA, final) }))
@@ -2441,6 +2582,34 @@ export const useCompassStore = create<CompassStore>()(
         const ventanaTardia = elemento?.cancelacionTardiaDias
         const tardia = ventanaTardia !== undefined && diasRestantes <= ventanaTardia
         const penalizacion = tardia && elemento?.penalizacionTardiaMonto ? elemento.penalizacionTardiaMonto : undefined
+        let cargoPenalizacion: string | undefined
+        if (penalizacion) {
+          const fondoAmenities = get().fondosFI.find(f => f.tipo === "amenities" && f.activo)
+          const unidadCobro = reserva.unidadId ?? get().vinculos.find(v => v.personaId === reserva.solicitantePersonaId && !v.fechaFin)?.unidadId
+          if (fondoAmenities && unidadCobro) {
+            const hoyStr2 = hoyISO()
+            const cobro: CobroFI = {
+              id: `cob-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+              unidadId: unidadCobro,
+              periodo: hoyStr2.slice(0, 7),
+              concepto: "penalizacion_ra",
+              origenModulo: "RA",
+              origenRef: reserva.id,
+              fondoId: fondoAmenities.id,
+              descripcion: `Penalización por cancelación tardía (${reserva.folio})`,
+              montoBase: penalizacion,
+              fechaCargo: hoyStr2,
+              fechaVencimiento: hoyStr2,
+              moras: [],
+              pagos: [],
+              diferencias: [],
+            }
+            const v = validarConEsquema(CobroFISchema, cobro)
+            if (!v.ok) return v
+            cargoPenalizacion = cobro.id
+            set(s => ({ cobrosFI: [...s.cobrosFI, cobro] }))
+          }
+        }
         set(s => ({
           reservasRA: s.reservasRA.map(r =>
             r.id === id
@@ -2448,7 +2617,7 @@ export const useCompassStore = create<CompassStore>()(
                   ...r,
                   estado: "cancelada",
                   cancelacion: { fecha: hoyStr, tardia, ...(penalizacion ? { penalizacion } : {}) },
-                  cargoFIReferencia: penalizacion ? "pendiente" : r.cargoFIReferencia,
+                  ...(cargoPenalizacion ? { cargoFIReferencia: cargoPenalizacion } : {}),
                 }
               : r
           ),
@@ -2457,7 +2626,7 @@ export const useCompassStore = create<CompassStore>()(
           set,
           "RA_BOOKING_CANCELLED",
           id,
-          `Reserva ${reserva.folio} cancelada${tardia ? ` FUERA DE PLAZO (faltaban ${diasRestantes} día(s))` : ""}${penalizacion ? `; penalización $${penalizacion.toLocaleString("es-CL")} con cargo FI pendiente` : ""}.`,
+          `Reserva ${reserva.folio} cancelada${tardia ? ` FUERA DE PLAZO (faltaban ${diasRestantes} día(s))` : ""}${cargoPenalizacion ? `; penalización $${penalizacion!.toLocaleString("es-CL")} con cobro FI materializado (${cargoPenalizacion})` : ""}.`,
           "RA"
         )
         return { ok: true }
@@ -2479,18 +2648,45 @@ export const useCompassStore = create<CompassStore>()(
         if (reserva.montoGarantia <= 0) {
           return { ok: false, error: "El elemento no exige garantía: nada que retener." }
         }
+        const fondoAmenities = get().fondosFI.find(f => f.tipo === "amenities" && f.activo)
+        const unidadCobro = reserva.unidadId ?? get().vinculos.find(v => v.personaId === reserva.solicitantePersonaId && !v.fechaFin)?.unidadId
+        let cargoGarantia: string | undefined
+        let nuevoCobro: CobroFI | undefined
+        if (fondoAmenities && unidadCobro) {
+          const hoyStr = hoyISO()
+          nuevoCobro = {
+            id: `cob-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            unidadId: unidadCobro,
+            periodo: hoyStr.slice(0, 7),
+            concepto: "garantia_ra",
+            origenModulo: "RA",
+            origenRef: reserva.id,
+            fondoId: fondoAmenities.id,
+            descripcion: `Garantía retenida (${reserva.folio}): ${motivo.trim()}`,
+            montoBase: reserva.montoGarantia,
+            fechaCargo: hoyStr,
+            fechaVencimiento: hoyStr,
+            moras: [],
+            pagos: [],
+            diferencias: [],
+          }
+          const v = validarConEsquema(CobroFISchema, nuevoCobro)
+          if (!v.ok) return v
+          cargoGarantia = nuevoCobro.id
+        }
         set(s => ({
           reservasRA: s.reservasRA.map(r =>
             r.id === id
-              ? { ...r, garantiaRetenida: { monto: r.montoGarantia, motivo: motivo.trim() }, cargoFIReferencia: "pendiente" }
+              ? { ...r, garantiaRetenida: { monto: r.montoGarantia, motivo: motivo.trim() }, ...(cargoGarantia ? { cargoFIReferencia: cargoGarantia } : {}) }
               : r
           ),
+          ...(nuevoCobro ? { cobrosFI: [...s.cobrosFI, nuevoCobro] } : {}),
         }))
         registrarEvento(
           set,
           "RA_WARRANTY_RETAINED",
           id,
-          `Garantía RETENIDA ($${reserva.montoGarantia.toLocaleString("es-CL")}) en reserva ${reserva.folio}: ${motivo.trim()} Cargo al fondo de amenities pendiente.`,
+          `Garantía RETENIDA ($${reserva.montoGarantia.toLocaleString("es-CL")}) en reserva ${reserva.folio}: ${motivo.trim()}. ${cargoGarantia ? `Cargo al fondo de amenities materializado (${cargoGarantia}).` : ""}`,
           "RA"
         )
         get().notify({
@@ -2693,6 +2889,375 @@ export const useCompassStore = create<CompassStore>()(
         registrarEvento(set, "CV_PUBLISHED", validacion.data.id, `Aviso "${aviso.titulo}" PUBLICADO desde acta ${acta.id}; referencia avisoCVReferencia materializada.`, "CV")
         return { ok: true }
       },
+
+      // --- FI: Finanzas y Morosidad ---
+      saveFondoFI: (fondo) => {
+        if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
+        const validacion = validarConEsquema(FondoFISchema, fondo)
+        if (!validacion.ok) return validacion
+        const duplicado = get().fondosFI.find(f => f.nombre.toLowerCase() === validacion.data.nombre.toLowerCase() && f.id !== validacion.data.id)
+        if (duplicado) return { ok: false, error: `Ya existe un fondo con el nombre "${validacion.data.nombre}".` }
+        set(s => ({ fondosFI: upsert(s.fondosFI, validacion.data) }))
+        return { ok: true }
+      },
+
+      removeFondoFI: (id) => {
+        if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
+        const egresos = get().egresosFI.filter(e => e.fondoId === id).length
+        const cobros = get().cobrosFI.filter(c => c.fondoId === id).length
+        const aportes = get().emisionesGC.filter(e => e.fondoReservaAporte?.fondoId === id).length
+        const total = egresos + cobros + aportes
+        if (total > 0) {
+          return { ok: false, error: `No se puede eliminar el fondo: ${total} movimiento(s) financiero(s) lo imputan.` }
+        }
+        set(s => ({ fondosFI: s.fondosFI.filter(f => f.id !== id) }))
+        return { ok: true }
+      },
+
+      saveEgresoFI: (egreso) => {
+        if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
+        const esNuevo = !get().egresosFI.some(e => e.id === egreso.id)
+        let candidato: EgresoFI = egreso
+        if (esNuevo) candidato = { ...egreso, folio: siguienteFolioFE(get) }
+        const validacion = validarConEsquema(EgresoFISchema, candidato)
+        if (!validacion.ok) return validacion
+        const registro = validacion.data
+        const fondo = get().fondosFI.find(f => f.id === registro.fondoId)
+        if (!fondo) return { ok: false, error: "No se puede guardar el gasto: el fondo de imputación no existe." }
+        if (!fondo.activo) return { ok: false, error: `No se puede guardar el gasto: el fondo "${fondo.nombre}" está inactivo.` }
+        for (const microId of registro.microSectoresIds ?? []) {
+          if (!get().microSectores.some(m => m.id === microId)) {
+            return { ok: false, error: "No se puede guardar el gasto: uno de los sub-sectores diferenciados no existe." }
+          }
+        }
+        if (registro.unidadId && !get().unidades.some(u => u.id === registro.unidadId)) {
+          return { ok: false, error: "No se puede guardar el gasto: la unidad indicada no existe en el inventario." }
+        }
+        if (registro.aprobacionActaGDId && !get().actasGD.some(a => a.id === registro.aprobacionActaGDId)) {
+          return { ok: false, error: "No se puede guardar el gasto: el acta de aprobación indicada no existe." }
+        }
+        set(s => ({ egresosFI: upsert(s.egresosFI, registro) }))
+        if (esNuevo) {
+          registrarEvento(
+            set,
+            "FI_EGRESS_CREATED",
+            registro.id,
+            `Egreso ${registro.folio} "${registro.descripcion}" por $${registro.monto.toLocaleString("es-CL")} imputado a ${fondo.nombre}${registro.esRecurrente ? " (recurrente)" : ""}.`,
+            "FI"
+          )
+        }
+        return { ok: true }
+      },
+
+      removeEgresoFI: (id) => {
+        if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
+        set(s => ({ egresosFI: s.egresosFI.filter(e => e.id !== id) }))
+        return { ok: true }
+      },
+
+      emitirGastoComun: (input) => {
+        if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
+        const configuracion = get().configuracion
+        if (!configuracion || configuracion.modoCalculoGC === undefined) {
+          return { ok: false, error: "CF no cargado: la configuración global debe estar disponible para emitir el Gasto Común." }
+        }
+        if (!/^\d{4}-\d{2}$/.test(input.periodo)) {
+          return { ok: false, error: "El periodo debe tener formato AAAA-MM." }
+        }
+        if (get().emisionesGC.some(e => e.periodo === input.periodo)) {
+          return { ok: false, error: `El periodo ${input.periodo} ya fue procesado previamente.` }
+        }
+        const modo = configuracion.modoCalculoGC
+        const fondoGC = get().fondosFI.find(f => f.tipo === "gasto_comun" && f.activo)
+        if (!fondoGC) {
+          return { ok: false, error: "No existe un Fondo de Gasto Común activo para imputar la emisión." }
+        }
+        const elegibles = get().unidades.filter(u => {
+          if (u.id.startsWith("u-E-")) return false
+          if (input.unidadIds && input.unidadIds.length > 0) return input.unidadIds.includes(u.id)
+          return true
+        })
+        if (elegibles.length === 0) {
+          return { ok: false, error: "No hay unidades elegibles para la emisión." }
+        }
+        const sinResponsable = elegibles.filter(
+          u => !get().vinculos.some(v => v.unidadId === u.id && v.rol === "propietario" && !v.fechaFin)
+        )
+        if (sinResponsable.length > 0) {
+          const refs = sinResponsable.slice(0, 3).map(u => refUnidad(get, u.id)).join(", ")
+          return { ok: false, error: `Emisión bloqueada: ${sinResponsable.length} unidad(es) sin responsable de cobro asignado (${refs}${sinResponsable.length > 3 ? "…" : ""}).` }
+        }
+        if (modo === "variable" && (!input.gastoTotal || input.gastoTotal <= 0)) {
+          return { ok: false, error: "La modalidad prorrateo exige definir el gasto total a recaudar." }
+        }
+
+        const hoyStr = hoyISO()
+        const vencimiento = input.fechaVencimiento ?? vencimientoDesdeDiaCorte(input.periodo, configuracion.diaCortePago)
+        const stamp = Date.now()
+        const emisionId = `egc-${stamp}-${Math.random().toString(36).slice(2, 8)}`
+        const lineas: EmisionGC["lineas"] = []
+        const nuevosCobros: CobroFI[] = []
+        elegibles.forEach((u, idx) => {
+          const responsable = get().vinculos.find(v => v.unidadId === u.id && v.rol === "propietario" && !v.fechaFin)!
+          let monto: number
+          if (modo === "fijo") {
+            const tipo = get().tiposUnidad.find(t => t.id === u.tipoUnidadId)
+            monto = Math.round(tipo?.montoBaseGc ?? 0)
+          } else {
+            monto = Math.round((input.gastoTotal ?? 0) * u.prorrateo)
+          }
+          const cobroId = `cob-${stamp}-${idx}-${Math.random().toString(36).slice(2, 8)}`
+          lineas.push({ unidadId: u.id, responsablePersonaId: responsable.personaId, monto, cobroId })
+          nuevosCobros.push({
+            id: cobroId,
+            unidadId: u.id,
+            periodo: input.periodo,
+            concepto: "gasto_comun",
+            origenModulo: "FI",
+            origenRef: emisionId,
+            fondoId: fondoGC.id,
+            descripcion: `Gasto Común ${input.periodo}`,
+            montoBase: monto,
+            fechaCargo: hoyStr,
+            fechaVencimiento: vencimiento,
+            moras: [],
+            pagos: [],
+            diferencias: [],
+          })
+        })
+        const fondoReserva = get().fondosFI.find(f => f.tipo === "reserva" && f.activo && (f.porcentajeAporte ?? 0) > 0)
+        const totalEmitido = lineas.reduce((acc, l) => acc + l.monto, 0)
+        const aporte = fondoReserva
+          ? { fondoId: fondoReserva.id, monto: Math.round((totalEmitido * (fondoReserva.porcentajeAporte ?? 0)) / 100) }
+          : undefined
+        const emision: EmisionGC = {
+          id: emisionId,
+          periodo: input.periodo,
+          modo,
+          gastoTotal: modo === "variable" ? (input.gastoTotal ?? totalEmitido) : totalEmitido,
+          lineas,
+          fondoReservaAporte: aporte && aporte.monto > 0 ? aporte : undefined,
+          fechaEmision: hoyStr,
+        }
+        const validacion = validarConEsquema(EmisionGCSchema, emision)
+        if (!validacion.ok) return validacion
+        for (const cobro of nuevosCobros) {
+          const v = validarConEsquema(CobroFISchema, cobro)
+          if (!v.ok) return v
+        }
+        set(s => ({
+          emisionesGC: upsert(s.emisionesGC, validacion.data),
+          cobrosFI: [...s.cobrosFI, ...nuevosCobros],
+        }))
+        registrarEvento(
+          set,
+          "FI_EMISION_GC",
+          emisionId,
+          `Emitido GC ${input.periodo} en modalidad ${modo === "fijo" ? "Fija" : "Variable"}: $${totalEmitido.toLocaleString("es-CL")} a ${lineas.length} unidad(es), vencimiento ${vencimiento}${aporte && aporte.monto > 0 ? `, aporte $${aporte.monto.toLocaleString("es-CL")} al Fondo de Reserva` : ""}.`,
+          "FI"
+        )
+        if (configuracion.notificarEmisionGC !== false) {
+          for (const linea of lineas) {
+            get().notify({
+              destinatarioRol: "propietario",
+              destinatarioPersonaId: linea.responsablePersonaId,
+              asunto: `Gasto Común ${input.periodo} emitido`,
+              cuerpo: `${refUnidad(get, linea.unidadId)}: su Gasto Común ${input.periodo} es de $${linea.monto.toLocaleString("es-CL")} con vencimiento ${vencimiento}.`,
+              moduloOrigen: "FI",
+              unidadId: linea.unidadId,
+            })
+          }
+        }
+        return { ok: true }
+      },
+
+      aplicarMoraFI: (cobroId, tasaMensualPct = 1) => {
+        if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
+        const cobro = get().cobrosFI.find(c => c.id === cobroId)
+        if (!cobro) return { ok: false, error: "No se puede aplicar mora: el cobro no existe." }
+        if (!cobro.fechaVencimiento) return { ok: false, error: "El cobro no tiene fecha de vencimiento registrada." }
+        if (tasaMensualPct <= 0) return { ok: false, error: "La tasa de mora debe ser mayor a cero." }
+        const hoyStr = hoyISO()
+        const dias = Math.max(
+          0,
+          Math.floor((new Date(`${hoyStr}T00:00:00`).getTime() - new Date(`${cobro.fechaVencimiento}T00:00:00`).getTime()) / 86400000)
+        )
+        if (dias <= 0) return { ok: false, error: "El cobro aún no está vencido: no procede aplicar mora." }
+        const pendiente = saldoPendiente(cobro)
+        if (pendiente <= 0) return { ok: false, error: "El cobro ya está completamente pagado." }
+        if (cobro.moras.some(m => m.fecha === hoyStr)) return { ok: true }
+        const monto = montoMoraPropuesta(pendiente, dias, tasaMensualPct)
+        if (monto <= 0) return { ok: false, error: "El cálculo no arrojó mora aplicable." }
+        set(s => ({
+          cobrosFI: s.cobrosFI.map(c =>
+            c.id === cobroId
+              ? {
+                  ...c,
+                  moras: [
+                    ...c.moras,
+                    { id: `mora-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, monto, diasAtraso: dias, tasaMensualPct, fecha: hoyStr },
+                  ],
+                }
+              : c
+          ),
+        }))
+        registrarEvento(
+          set,
+          "FI_MORA_APPLIED",
+          cobroId,
+          `Mora aplicada a ${cobro.descripcion}: $${monto.toLocaleString("es-CL")} (${dias} día(s) de atraso, tasa ${tasaMensualPct}% mensual pro-rata).`,
+          "FI"
+        )
+        return { ok: true }
+      },
+
+      registrarPagoFI: (cobroId, pago) => {
+        if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
+        const cobro = get().cobrosFI.find(c => c.id === cobroId)
+        if (!cobro) return { ok: false, error: "No se puede registrar el pago: el cobro no existe." }
+        if (!(pago.monto > 0)) return { ok: false, error: "El monto del pago debe ser mayor a cero." }
+        if (pago.medio.trim().length === 0) return { ok: false, error: "Debe indicar el medio de pago." }
+        const pendiente = saldoPendiente(cobro)
+        if (pendiente <= 0) return { ok: false, error: "El cobro ya está completamente pagado." }
+        const hoyStr = hoyISO()
+        const ajuste = pago.monto !== pendiente
+        let diferencia: CobroFI["diferencias"][number] | undefined
+        if (ajuste) {
+          const justificacion = pago.ajusteJustificacion?.trim()
+          if (!justificacion) {
+            return { ok: false, error: "El ajuste manual exige una justificación obligatoria para generar el informe de diferencia." }
+          }
+          if (justificacion.length < 10) {
+            return { ok: false, error: "La justificación debe explicar el motivo del ajuste (mínimo 10 caracteres)." }
+          }
+          diferencia = {
+            id: `dif-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            tipo: pago.monto < pendiente ? "descuento" : "recargo",
+            esperado: exigibleTotal(cobro),
+            recibido: totalPagado(cobro) + pago.monto,
+            diferencia: Math.abs(pago.monto - pendiente),
+            justificacion,
+            fecha: hoyStr,
+          }
+        }
+        set(s => ({
+          cobrosFI: s.cobrosFI.map(c =>
+            c.id === cobroId
+              ? {
+                  ...c,
+                  pagos: [
+                    ...c.pagos,
+                    { id: `pag-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, monto: pago.monto, fecha: hoyStr, medio: pago.medio.trim() },
+                  ],
+                  ...(diferencia ? { diferencias: [...c.diferencias, diferencia] } : {}),
+                }
+              : c
+          ),
+        }))
+        registrarEvento(
+          set,
+          "FI_RECEIVE_PAYMENT",
+          cobroId,
+          `Pago recibido de ${refUnidad(get, cobro.unidadId)} por $${pago.monto.toLocaleString("es-CL")} (${pago.medio.trim()}) sobre ${cobro.descripcion}.`,
+          "FI"
+        )
+        if (diferencia) {
+          registrarEvento(
+            set,
+            "FI_MANUAL_DISCOUNT",
+            cobroId,
+            `Ajuste manual (${diferencia.tipo}) de $${diferencia.diferencia.toLocaleString("es-CL")} en ${cobro.descripcion}: ${diferencia.justificacion}.`,
+            "FI"
+          )
+        }
+        const propietario = get().vinculos.find(v => v.unidadId === cobro.unidadId && v.rol === "propietario" && !v.fechaFin)
+        if (propietario) {
+          get().notify({
+            destinatarioRol: "propietario",
+            destinatarioPersonaId: propietario.personaId,
+            asunto: `Pago recibido: ${cobro.descripcion}`,
+            cuerpo: `Registramos tu pago de $${pago.monto.toLocaleString("es-CL")} por ${cobro.descripcion}.${diferencia ? ` Se aplicó un ajuste (${diferencia.tipo}) documentado.` : ""}`,
+            moduloOrigen: "FI",
+            unidadId: cobro.unidadId,
+          })
+        }
+        return { ok: true }
+      },
+
+      enviarCobranzaFI: (unidadId) => {
+        if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
+        if (!get().unidades.some(u => u.id === unidadId)) {
+          return { ok: false, error: "No se puede enviar la cobranza: la unidad no existe en el inventario." }
+        }
+        const hoyStr = hoyISO()
+        const vencidos = get().cobrosFI.filter(c => c.unidadId === unidadId && estadoDeCobro(c, hoyStr) === "vencido")
+        if (vencidos.length === 0) {
+          return { ok: false, error: "La unidad no registra deuda vencida: no hay nada que cobrar." }
+        }
+        const total = vencidos.reduce((acc, c) => acc + saldoPendiente(c), 0)
+        const propietario = get().vinculos.find(v => v.unidadId === unidadId && v.rol === "propietario" && !v.fechaFin)
+        if (!propietario) {
+          return { ok: false, error: "La unidad no tiene responsable de cobro asignado." }
+        }
+        const detalle = vencidos.map(c => `${c.descripcion} ($${saldoPendiente(c).toLocaleString("es-CL")})`).join("; ")
+        get().notify({
+          destinatarioRol: "propietario",
+          destinatarioPersonaId: propietario.personaId,
+          asunto: `Recordatorio de deuda vencida (${refUnidad(get, unidadId)})`,
+          cuerpo: `Su unidad registra $${total.toLocaleString("es-CL")} en ${vencidos.length} cobro(s) vencido(s): ${detalle}. Regularice su situación para evitar corte de servicios.`,
+          moduloOrigen: "FI",
+          unidadId,
+        })
+        registrarEvento(set, "FI_COBRANZA_SENT", unidadId, `Gestión de cobranza enviada a ${refUnidad(get, unidadId)}: $${total.toLocaleString("es-CL")} en ${vencidos.length} cobro(s) vencido(s).`, "FI")
+        return { ok: true }
+      },
+
+      retirarFondoFI: (input) => {
+        if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
+        const fondo = get().fondosFI.find(f => f.id === input.fondoId)
+        if (!fondo) return { ok: false, error: "No se puede retirar: el fondo no existe." }
+        if (!fondo.activo) return { ok: false, error: `No se puede retirar: el fondo "${fondo.nombre}" está inactivo.` }
+        if (!(input.monto > 0)) return { ok: false, error: "El monto del retiro debe ser mayor a cero." }
+        if (input.descripcion.trim().length === 0) return { ok: false, error: "El retiro exige describir el uso del dinero." }
+        let actaPublicada: string | undefined
+        if (input.aprobacionActaGDId) {
+          const acta = get().actasGD.find(a => a.id === input.aprobacionActaGDId)
+          if (!acta) return { ok: false, error: "El acta de aprobación indicada no existe." }
+          if (acta.estado !== "publicada") {
+            return { ok: false, error: "Solo un acta Publicada por la directiva respalda el retiro." }
+          }
+          actaPublicada = acta.id
+        }
+        if (fondo.tipo === "reserva" && !actaPublicada) {
+          return { ok: false, error: "El retiro del Fondo de Reserva exige aprobación documentada mediante un acta publicada de la directiva." }
+        }
+        const saldo = saldoFondo(fondo.id, { cobros: get().cobrosFI, egresos: get().egresosFI, emisiones: get().emisionesGC })
+        if (input.monto > saldo) {
+          return { ok: false, error: `Saldo insuficiente en "${fondo.nombre}": disponible $${saldo.toLocaleString("es-CL")} para un retiro de $${input.monto.toLocaleString("es-CL")}.` }
+        }
+        const egreso: EgresoFI = {
+          id: `egr-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          folio: siguienteFolioFE(get),
+          fecha: hoyISO(),
+          categoria: "uso_de_fondo",
+          descripcion: input.descripcion.trim(),
+          monto: input.monto,
+          fondoId: fondo.id,
+          esRecurrente: false,
+          aprobacionActaGDId: actaPublicada,
+        }
+        const validacion = validarConEsquema(EgresoFISchema, egreso)
+        if (!validacion.ok) return validacion
+        set(s => ({ egresosFI: upsert(s.egresosFI, validacion.data) }))
+        registrarEvento(
+          set,
+          "FI_FUND_WITHDRAWN",
+          validacion.data.id,
+          `Retiro de $${input.monto.toLocaleString("es-CL")} desde ${fondo.nombre}: ${input.descripcion.trim()}${actaPublicada ? ` (aprobado en acta ${actaPublicada})` : ""}.`,
+          "FI"
+        )
+        return { ok: true }
+      },
     }),
     {
       name: "compass-store",
@@ -2733,6 +3298,10 @@ export const useCompassStore = create<CompassStore>()(
         reservasRA: state.reservasRA,
         avisosCV: state.avisosCV,
         plantillasCV: state.plantillasCV,
+        fondosFI: state.fondosFI,
+        egresosFI: state.egresosFI,
+        emisionesGC: state.emisionesGC,
+        cobrosFI: state.cobrosFI,
       }),
       migrate: (persisted, version) => {
         const prev = (persisted ?? {}) as Partial<CompassData>
@@ -2894,6 +3463,17 @@ export const useCompassStore = create<CompassStore>()(
             ...result,
             avisosCV: prev.avisosCV ?? [],
             plantillasCV: prev.plantillasCV ?? plantillasCVSeed,
+          }
+        }
+        // FI (v21): maestro de fondos (sembrado si ausente), egresos, emisiones
+        // GC y libro de cobros. Aditivo.
+        if ((version ?? 0) < 21) {
+          result = {
+            ...result,
+            fondosFI: prev.fondosFI ?? FONDOS_FI_SEED,
+            egresosFI: prev.egresosFI ?? [],
+            emisionesGC: prev.emisionesGC ?? [],
+            cobrosFI: prev.cobrosFI ?? [],
           }
         }
         // TST-002: los stores que ya quedaron en v8 con unidades dañadas por este
