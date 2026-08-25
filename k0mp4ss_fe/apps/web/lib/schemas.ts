@@ -297,6 +297,61 @@ export const PersonaSchema = z.object({
   datosGobernanza: ExtensionGobernanzaSchema.optional(),
 })
 
+// --- Gestión de Solicitudes (GE) ---
+
+export const TIPOS_SOLICITUD_GE = ["insumos", "grabaciones", "buzon"] as const
+export const TipoSolicitudGESchema = z.enum(TIPOS_SOLICITUD_GE)
+
+// Workflow NSGC §1.4: Nuevo → En Revisión (auto al abrir) → Requiere Acción
+// Vecino ↔ En Proceso → Resuelto / Cerrado.
+export const ESTADOS_SOLICITUD_GE = ["nuevo", "en_revision", "requiere_accion_vecino", "en_proceso", "resuelto", "cerrado"] as const
+export const EstadoSolicitudGESchema = z.enum(ESTADOS_SOLICITUD_GE)
+
+export const ComentarioGESchema = z.object({
+  id: IdEntidadSchema,
+  autorRol: z.enum(["administracion", "solicitante"]),
+  texto: z.string().min(1, "El comentario no puede estar vacío."),
+  // Timestamp ISO completo: alimenta el cálculo de SLA.
+  fecha: z.string({ required_error: "La fecha del comentario es obligatoria." }).min(1, "La fecha del comentario es obligatoria."),
+})
+
+export const CambioEstadoGESchema = z.object({
+  de: EstadoSolicitudGESchema.optional(),
+  a: EstadoSolicitudGESchema,
+  fecha: z.string().min(1, "La fecha del cambio es obligatoria."),
+})
+
+export const DetalleGrabacionesSchema = z.object({
+  fechaSuceso: FechaISOSchema,
+  horaSuceso: z.string({ required_error: "La hora del suceso es obligatoria." }).regex(/^\d{2}:\d{2}$/, "La hora del suceso debe tener formato HH:MM."),
+  justificacion: z.string({ required_error: "La justificación es obligatoria." }).min(20, "La justificación debe detallar motivo y contexto (mínimo 20 caracteres)."),
+})
+
+export const DetalleInsumosSchema = z.object({
+  areaDestino: z.string().min(1, "El área de destino es obligatoria."),
+  // Referencia pendiente a IR (catálogo de materiales aún no implementado).
+  materialSolicitado: z.string().min(1, "El material solicitado es obligatorio."),
+})
+
+export const SolicitudGESchema = z.object({
+  id: IdEntidadSchema,
+  folio: z.string({ required_error: "El folio es obligatorio." }).min(1, "El folio es obligatorio."),
+  tipo: TipoSolicitudGESchema,
+  titulo: z.string({ required_error: "El título es obligatorio." }).min(1, "El título es obligatorio."),
+  descripcion: z.string({ required_error: "La descripción es obligatoria." }).min(1, "La descripción es obligatoria."),
+  solicitantePersonaId: IdEntidadSchema.optional(),
+  unidadId: IdEntidadSchema.optional(),
+  estado: EstadoSolicitudGESchema,
+  fechaCreacion: FechaISOSchema,
+  comentarios: z.array(ComentarioGESchema),
+  detalleGrabaciones: DetalleGrabacionesSchema.optional(),
+  detalleInsumos: DetalleInsumosSchema.optional(),
+  mensajeBuzonId: IdEntidadSchema.optional(),
+  resolucion: z.string().optional(),
+  fechaCierre: FechaISOSchema.optional(),
+  historialEstados: z.array(CambioEstadoGESchema),
+})
+
 // --- Administración: Maestros (MA) ---
 
 export const AfpSchema = z.object({
@@ -504,6 +559,13 @@ export type EstadoBuzonCO = z.infer<typeof EstadoBuzonCOSchema>
 export type RespuestaBuzonCO = z.infer<typeof RespuestaBuzonCOSchema>
 export type MensajeBuzonCO = z.infer<typeof MensajeBuzonCOSchema>
 export type DocumentoCO = z.infer<typeof DocumentoCOSchema>
+export type TipoSolicitudGE = z.infer<typeof TipoSolicitudGESchema>
+export type EstadoSolicitudGE = z.infer<typeof EstadoSolicitudGESchema>
+export type ComentarioGE = z.infer<typeof ComentarioGESchema>
+export type CambioEstadoGE = z.infer<typeof CambioEstadoGESchema>
+export type DetalleGrabaciones = z.infer<typeof DetalleGrabacionesSchema>
+export type DetalleInsumos = z.infer<typeof DetalleInsumosSchema>
+export type SolicitudGE = z.infer<typeof SolicitudGESchema>
 
 // --- Utilidades de validación para el store ---
 

@@ -52,6 +52,8 @@ const PLAN: Record<string, string[]> = {
   pi: ["Publicar en vitrina: E-999 en venta ($8.500.000) con imagen por referencia", "Registrar lead TEST Lead QA → notificación email_simulado al propietario"],
   ad: ["Registrar controles de privacidad para E-999 (morosidad visible, actas ocultas, alertas activas)", "Verificar defaults de lectura sin registro"],
   gd: ["Extender a TEST Persona QA Uno como Presidente de directiva", "Registrar acta TEST con asistencia y minuta", "Firmar hasta quórum 100% → publicada + notificación email_simulado"],
+  co: ["Crear plantilla TEST de cobranza con variable [Nombre_Usuario]", "Enviar masivo TEST a los 2 residentes TEST (notificaciones email_simulado)", "Simular lectura del envío (tasa apertura)", "Agregar documento TEST a la biblioteca (referencia D1)", "Ingresar reclamo TEST al buzón (folio BUZ)", "Responder y resolver el ticket TEST"],
+  ge: ["Crear ticket grabaciones CCTV TEST (suceso + justificación, unidad E-999… Depto 999)", "Abrir ticket → En Revisión automático", "Admin pide datos → Requiere Acción Vecino (alerta al vecino)", "Vecino responde → En Proceso", "Resolver y cerrar → SLA registrado", "Ticket tipo buzon vinculado al reclamo TEST de CO"],
 }
 
 const TITULOS: Record<string, string> = {
@@ -65,6 +67,8 @@ const TITULOS: Record<string, string> = {
   pi: "8. Vitrina Inmobiliaria (PI)",
   ad: "9. Gestión Administrativa (AD)",
   gd: "10. Actas de Directiva (GD)",
+  co: "11. Comunicación Vecinos (CO)",
+  ge: "12. Solicitudes (GE)",
 }
 
 const COMO_LLEGAR: Record<string, string> = {
@@ -76,6 +80,10 @@ const COMO_LLEGAR: Record<string, string> = {
   "ef-unidad": "Inventario → Estructura Física → tabla filtra 999 y E-999",
   vu: "Comunidad → Directorio de Personas → abre 99.999.999-9 → pestaña Unidades Vinculadas",
   pi: "Comunidad → Portal Inmobiliario → tarjeta E-999",
+  ad: "Admin → Gestión Administrativa → controles E-999",
+  gd: "Comunidad → Directiva → acta del 2026-08-24 publicada",
+  co: "Comunidad → Comunicación → envío TEST, buzón folio BUZ y biblioteca",
+  ge: "Operaciones → Solicitudes → ticket GE con workflow completo",
 }
 
 const COMO_LLEGAR_HREF: Record<string, string> = {
@@ -109,8 +117,6 @@ const HISTORIA = [
 ]
 
 const PENDIENTES: { id: string; archivo: string; lineas: number; desc: string; pruebas: string[] }[] = [
-  { id: "AD", archivo: "AD - Gestión Administrativa.md", lineas: 38, desc: "Panel admin, cajón comunidad y RRHH", pruebas: ["Cajón Comunidad: propietario con Notificar Residente", "Directiva con cargo y firma digital", "Cajón RRHH vinculado a PE"] },
-  { id: "CO", archivo: "CO - Comunicacion Vecinos.md", lineas: 75, desc: "Mensajería masiva y buzón ciudadano", pruebas: ["Envío masivo por filtro EF/MP", "Plantilla con variable [Nombre_Usuario]", "Buzón felicitaciones/sugerencias/reclamos con ticket"] },
   { id: "CT", archivo: "CT - Certificados.md", lineas: 44, desc: "Documentos oficiales y acreditaciones", pruebas: ["Certificado Unidad Al Día con firma digital", "Plantilla CT con datos ST"] },
   { id: "CV", archivo: "CV - Visor de Mensajes.md", lineas: 68, desc: "Carrusel en pantallas comunes", pruebas: ["Carrusel público con rotación", "Visor con contenido de CO/RE"] },
   { id: "FI", archivo: "FI - Finanzas y Morosidad.md", lineas: 76, desc: "Fondos, emisión GC y cobranza", pruebas: ["Maestro Fondos con imputación", "Emisión GC fija vs prorrateo", "Cálculo mora y corte servicios", "Informe diferencia ajuste manual"] },
@@ -158,6 +164,8 @@ export default function QaLabPage() {
     { id: "pi", label: TITULOS["pi"]!, rank: 4, fase: "Paso 8" },
     { id: "ad", label: TITULOS["ad"]!, rank: 4, fase: "Paso 9" },
     { id: "gd", label: TITULOS["gd"]!, rank: 5, fase: "Paso 10" },
+    { id: "co", label: TITULOS["co"]!, rank: 6, fase: "Paso 11" },
+    { id: "ge", label: TITULOS["ge"]!, rank: 6, fase: "Paso 12" },
   ]
 
   const FASE_MODULOS: Record<string, string[]> = {
@@ -168,7 +176,9 @@ export default function QaLabPage() {
     "4": ["pi"],
     "5": ["ad"],
     "6": ["gd"],
-    "todo": ["ma", "tu", "mp", "ef-macro", "ef-micro", "ef-unidad", "vu", "pi", "ad", "gd"],
+    "7": ["co"],
+    "8": ["ge"],
+    "todo": ["ma", "tu", "mp", "ef-macro", "ef-micro", "ef-unidad", "vu", "pi", "ad", "gd", "co", "ge"],
   }
 
   const LABEL_FASE: Record<string, string> = {
@@ -179,6 +189,8 @@ export default function QaLabPage() {
     "4": "5. Vitrina — publicación y lead",
     "5": "6. Panel AD — controles por unidad",
     "6": "7. Acta GD — firmas y publicación",
+    "7": "8. CO — envío masivo, buzón y biblioteca",
+    "8": "9. GE — workflow de tickets y SLA",
     "todo": "Carga completa",
   }
 
@@ -327,6 +339,71 @@ export default function QaLabPage() {
     return { id: "gd", label: TITULOS["gd"]!, rank: 5, status: errores.length ? "error" : "ok", count: 1, errores, pasos }
   }, [])
 
+  const cargarFase7CO = React.useCallback(async (): Promise<ModReport> => {
+    const s = useCompassStore.getState()
+    const pasos: Paso[] = (PLAN["co"]! as string[]).map(desc => ({ desc, estado: "pendiente" as ModuleState }))
+    // 1) Plantilla TEST de cobranza con variable
+    const r1 = s.savePlantillaCO({ id: "test-plant-co", nombre: "TEST-Plantilla-CobranzaQA", categoria: "cobranza", asunto: "Recordatorio GC [Nombre_Usuario]", cuerpo: "Estimado/a [Nombre_Usuario], su gasto común TEST vence pronto." })
+    if (!r1.ok) { pasos[0]!.estado = "error"; pasos[0]!.error = r1.error } else pasos[0]!.estado = "ok"
+    // 2) Envío masivo TEST a las 2 personas TEST
+    const r2 = s.saveEnvioCO({ id: "test-env-co-1", asunto: "Aviso TEST CO", cuerpo: "Hola [Nombre_Usuario], este es un envío masivo de prueba.", plantillaId: undefined, destinatarios: [{ personaId: "test-p-99" }, { personaId: "test-p-88" }], fechaEnvio: "2026-08-25", lecturas: [] })
+    if (!r2.ok) { pasos[1]!.estado = "error"; pasos[1]!.error = r2.error } else pasos[1]!.estado = "ok"
+    // 3) Lectura simulada del primer destinatario
+    if (r2.ok) {
+      const r3 = s.registrarLecturaEnvioCO("test-env-co-1", "test-p-99")
+      if (!r3.ok) { pasos[2]!.estado = "error"; pasos[2]!.error = r3.error } else pasos[2]!.estado = "ok"
+    }
+    // 4) Documento TEST por referencia (D1)
+    const r4 = s.saveDocumentoCO({ id: "test-doc-co", nombre: "TEST-ReglamentoQA.pdf", tipoMime: "application/pdf", tamanoKB: 180, url: "https://placeholder.supabase.co/test-reglamento.pdf", categoria: "reglamento" })
+    if (!r4.ok) { pasos[3]!.estado = "error"; pasos[3]!.error = r4.error } else pasos[3]!.estado = "ok"
+    // 5) Reclamo TEST al buzón
+    const r5 = s.saveMensajeBuzonCO({ id: "test-buz-co-1", folio: "", clasificacion: "reclamo", reportantePersonaId: "test-p-88", reportanteNombre: "TEST Persona QA Dos", asunto: "Reclamo TEST buzón", cuerpo: "Falla de servicio en área común TEST.", visibilidadComite: true, fechaIngreso: "2026-08-25", estado: "recibido", respuestas: [] })
+    if (!r5.ok) { pasos[4]!.estado = "error"; pasos[4]!.error = r5.error } else pasos[4]!.estado = "ok"
+    // 6) Responder → En Gestión; resolver → notifica al reportante
+    let r6: { ok: boolean; error?: string } | null = null
+    if (r5.ok) {
+      r6 = s.responderMensajeBuzonCO("test-buz-co-1", { autor: "Administración", texto: "Respuesta TEST al reclamo.", compromisos: "Visita técnica esta semana" })
+      const r6b = s.cambiarEstadoBuzonCO("test-buz-co-1", "resuelto")
+      if (!r6.ok || !r6b.ok) { pasos[5]!.estado = "error"; pasos[5]!.error = r6.error ?? r6b.error } else pasos[5]!.estado = "ok"
+    }
+    const errores = pasos.filter(p => p.estado === "error").map(p => p.error || p.desc)
+    return { id: "co", label: TITULOS["co"]!, rank: 6, status: errores.length ? "error" : "ok", count: 1, errores, pasos }
+  }, [])
+
+  const cargarFase8GE = React.useCallback(async (): Promise<ModReport> => {
+    const s = useCompassStore.getState()
+    const pasos: Paso[] = (PLAN["ge"]! as string[]).map(desc => ({ desc, estado: "pendiente" as ModuleState }))
+    // 1) Ticket grabaciones CCTV TEST sobre Depto 999
+    const r1 = s.saveSolicitudGE({ id: "test-sol-ge-1", folio: "", tipo: "grabaciones", titulo: "Grabaciones CCTV TEST", descripcion: "Revisión de cámaras por paquete retirado indebidamente.", solicitantePersonaId: "test-p-88", unidadId: "test-u-999", estado: "nuevo", fechaCreacion: "2026-08-25", comentarios: [], detalleGrabaciones: { fechaSuceso: "2026-08-24", horaSuceso: "18:30", justificacion: "Un courier retiró un paquete que no era suyo a las 18:30." }, historialEstados: [] })
+    if (!r1.ok) { pasos[0]!.estado = "error"; pasos[0]!.error = r1.error } else pasos[0]!.estado = "ok"
+    // 2) Abrir → En Revisión automático
+    if (r1.ok) {
+      const r2 = s.abrirSolicitudGE("test-sol-ge-1")
+      const estadoTrasAbrir = s.solicitudesGE.find(x => x.id === "test-sol-ge-1")?.estado
+      if (!r2.ok || estadoTrasAbrir !== "en_revision") { pasos[1]!.estado = "error"; pasos[1]!.error = `Estado tras abrir: ${estadoTrasAbrir}` } else pasos[1]!.estado = "ok"
+    }
+    // 3) Admin pide datos → Requiere Acción Vecino + alerta
+    if (r1.ok) {
+      const r3 = s.responderSolicitudGE("test-sol-ge-1", { autorRol: "administracion", texto: "Indique la hora exacta del retiro." })
+      const estado3 = s.solicitudesGE.find(x => x.id === "test-sol-ge-1")?.estado
+      if (!r3.ok || estado3 !== "requiere_accion_vecino") { pasos[2]!.estado = "error"; pasos[2]!.error = `Estado: ${estado3}` } else pasos[2]!.estado = "ok"
+    }
+    // 4) Vecino responde → En Proceso
+    const r4 = s.responderSolicitudGE("test-sol-ge-1", { autorRol: "solicitante", texto: "Fue a las 18:30 aprox." })
+    const estado4 = s.solicitudesGE.find(x => x.id === "test-sol-ge-1")?.estado
+    if (!r4.ok || estado4 !== "en_proceso") { pasos[3]!.estado = "error"; pasos[3]!.error = `Estado: ${estado4}` } else pasos[3]!.estado = "ok"
+    // 5) Resolver y cerrar → SLA
+    const r5 = s.resolverSolicitudGE("test-sol-ge-1", "Se entregó link TEST del video al vecino.")
+    const r5b = s.cerrarSolicitudGE("test-sol-ge-1")
+    const estado5 = s.solicitudesGE.find(x => x.id === "test-sol-ge-1")?.estado
+    if (!r5.ok || !r5b.ok || estado5 !== "cerrado") { pasos[4]!.estado = "error"; pasos[4]!.error = `Estado final: ${estado5}` } else pasos[4]!.estado = "ok"
+    // 6) Ticket tipo buzon vinculado al reclamo TEST de CO
+    const r6 = s.saveSolicitudGE({ id: "test-sol-ge-2", folio: "", tipo: "buzon", titulo: "[Buzón] Reclamo TEST buzón", descripcion: "Gestión operativa del reclamo ciudadano TEST.", unidadId: "test-u-999", estado: "nuevo", fechaCreacion: "2026-08-25", comentarios: [], mensajeBuzonId: "test-buz-co-1", historialEstados: [] })
+    if (!r6.ok) { pasos[5]!.estado = "error"; pasos[5]!.error = r6.error } else pasos[5]!.estado = "ok"
+    const errores = pasos.filter(p => p.estado === "error").map(p => p.error || p.desc)
+    return { id: "ge", label: TITULOS["ge"]!, rank: 6, status: errores.length ? "error" : "ok", count: 1, errores, pasos }
+  }, [])
+
   const buildHistoria = React.useCallback((mods: ModReport[]): SeedReport["historia"] => {
     return HISTORIA.map(h => ({ capitulo: h.capitulo, estado: (() => {
       const rankMods = mods.filter(m => m.rank === h.rank)
@@ -412,6 +489,29 @@ export default function QaLabPage() {
         }
         mods.push(await cargarFase6GD())
       }
+      if (fase === "7" || fase === "todo") {
+        if (fase === "7") {
+          mods.push(await cargarFase0())
+          mods.push(await cargarFase1TU())
+          mods.push(await cargarFase1MP())
+          mods.push(await cargarFase2Macro())
+          mods.push(await cargarFase2Micro())
+          mods.push(await cargarFase2Unidad())
+          mods.push(await cargarFase3VU())
+        }
+        mods.push(await cargarFase7CO())
+      }
+      if (fase === "8") {
+        mods.push(await cargarFase0())
+        mods.push(await cargarFase1TU())
+        mods.push(await cargarFase1MP())
+        mods.push(await cargarFase2Macro())
+        mods.push(await cargarFase2Micro())
+        mods.push(await cargarFase2Unidad())
+        mods.push(await cargarFase3VU())
+        mods.push(await cargarFase7CO())
+        mods.push(await cargarFase8GE())
+      }
       if (fase === "todo") {
         // ya se cargaron todos en orden
       }
@@ -426,14 +526,29 @@ export default function QaLabPage() {
     } finally {
       setLoading(false)
     }
-  }, [cargarFase0, cargarFase1MP, cargarFase1TU, cargarFase2Macro, cargarFase2Micro, cargarFase2Unidad, cargarFase3VU, cargarFase4PI, cargarFase5AD, cargarFase6GD, buildHistoria, ensureHydrated])
+  }, [cargarFase0, cargarFase1MP, cargarFase1TU, cargarFase2Macro, cargarFase2Micro, cargarFase2Unidad, cargarFase3VU, cargarFase4PI, cargarFase5AD, cargarFase6GD, cargarFase7CO, cargarFase8GE, buildHistoria, ensureHydrated])
 
   const limpiar = React.useCallback(async () => {
     if (!ensureHydrated()) return
     setLoading(true)
     const errores: string[] = []
     const s = useCompassStore.getState()
-    // inverso GD -> AD -> PI -> VU -> EF unidades -> EF micro -> EF macro -> MP -> TU -> MA
+    // inverso GE -> CO -> GD -> AD -> PI -> VU -> EF unidades -> EF micro -> EF macro -> MP -> TU -> MA
+    const rSol1 = s.removeSolicitudGE("test-sol-ge-1")
+    if (!rSol1.ok) errores.push(rSol1.error || "sol-ge-1")
+    const rSol2 = s.removeSolicitudGE("test-sol-ge-2")
+    if (!rSol2.ok) errores.push(rSol2.error || "sol-ge-2")
+    const rBuz = s.removeMensajeBuzonCO("test-buz-co-1")
+    if (!rBuz.ok) errores.push(rBuz.error || "buz-co")
+    const rDoc = s.removeDocumentoCO("test-doc-co")
+    if (!rDoc.ok) errores.push(rDoc.error || "doc-co")
+    // CO no define removeEnvioCO (el snapshot es histórico); se purga por filtro.
+    useCompassStore.setState(st => ({
+      enviosCO: st.enviosCO.filter(e => e.id !== "test-env-co-1"),
+      notificaciones: st.notificaciones.filter(n => (n.moduloOrigen !== "CO" && n.moduloOrigen !== "GE") || !n.destinatarioPersonaId?.startsWith("test-")),
+    }))
+    const rPlant = s.removePlantillaCO("test-plant-co")
+    if (!rPlant.ok) errores.push(rPlant.error || "plant-co")
     const rActa = s.removeActaGD("test-acta-gd")
     if (!rActa.ok) errores.push(rActa.error || "acta")
     useCompassStore.setState(st => ({ notificaciones: st.notificaciones.filter(n => (n.moduloOrigen !== "PI" && n.moduloOrigen !== "GD") || !n.destinatarioPersonaId?.startsWith("test-")) }))
@@ -603,6 +718,8 @@ export default function QaLabPage() {
               { fase: "4", label: "5. Publicar vitrina PI con lead" },
               { fase: "5", label: "6. Panel AD con controles" },
               { fase: "6", label: "7. Acta GD firmada y publicada" },
+              { fase: "7", label: "8. CO — masivo, buzón y biblioteca" },
+              { fase: "8", label: "9. GE — tickets con workflow y SLA" },
             ].map(item => {
               const isActive = ultimaFase === item.fase
               const modsFase = isActive && report ? report.modulos.filter(m => FASE_MODULOS[item.fase]!.includes(m.id)) : []
@@ -855,21 +972,21 @@ export default function QaLabPage() {
           <Card className="border-amber-200 bg-amber-50/40 dark:bg-amber-950/10 dark:border-amber-900/50">
             <CardHeader className="pb-2">
               <CardTitle className="flex items-center gap-2 text-sm"><IconEye className="size-4 text-amber-600" /> Pruebas eventuales — lo que pasaría si migraras una especificación tentativa</CardTitle>
-              <CardDescription className="text-xs">Hoy el QA solo muestra pruebas reales (`13/28` specs formalizados `46.4%`). Aquí ves el estimado de las `15` tentativas en `Data/NSGC/docs/especificaciones/` aún no en `openspec/specs/` — líneas tentativas `877L` → estimado formalizado `~1249L`, total eventual `~2239L` (`44.2%` hoy).</CardDescription>
+              <CardDescription className="text-xs">Hoy el QA solo muestra pruebas reales (`15/28` specs formalizados `53.6%`). Aquí ves el estimado de las `13` tentativas en `Data/NSGC/docs/especificaciones/` aún no en `openspec/specs/` — líneas tentativas `748L` → estimado formalizado `~1062L`, total eventual `~2239L`.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="grid grid-cols-3 gap-2 text-center">
                 <div className="rounded-lg border bg-white dark:bg-card p-2">
                   <p className="text-xs text-muted-foreground">Real</p>
-                  <p className="text-lg font-bold text-emerald-600">13 <span className="text-xs font-normal text-muted-foreground">/28</span></p>
-                  <p className="text-[11px] text-muted-foreground">46.4% formalizado · 990L spec</p>
-                  <p className="text-[10px] font-mono text-emerald-700 dark:text-emerald-400">7 módulos QA (ma,tu,mp,ef×3,vu)</p>
+                  <p className="text-lg font-bold text-emerald-600">15 <span className="text-xs font-normal text-muted-foreground">/28</span></p>
+                  <p className="text-[11px] text-muted-foreground">53.6% formalizado · 1119L spec</p>
+                  <p className="text-[10px] font-mono text-emerald-700 dark:text-emerald-400">12 módulos QA (ma,tu,mp,ef×3,vu,pi,ad,gd,co,ge)</p>
                 </div>
                 <div className="rounded-lg border border-dashed bg-muted/20 p-2">
                   <p className="text-xs text-muted-foreground">Tentativo</p>
-                  <p className="text-lg font-bold">15 <span className="text-xs font-normal text-muted-foreground">/28</span></p>
-                  <p className="text-[11px] text-muted-foreground">53.6% pendiente · 877L tentativas</p>
-                  <p className="text-[10px] font-mono text-muted-foreground">estimado +1249L formalizados</p>
+                  <p className="text-lg font-bold">13 <span className="text-xs font-normal text-muted-foreground">/28</span></p>
+                  <p className="text-[11px] text-muted-foreground">46.4% pendiente · 748L tentativas</p>
+                  <p className="text-[10px] font-mono text-muted-foreground">estimado +1062L formalizados</p>
                 </div>
                 <div className="rounded-lg border bg-white dark:bg-card p-2">
                   <p className="text-xs text-muted-foreground">Eventual</p>
