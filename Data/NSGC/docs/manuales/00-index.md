@@ -24,6 +24,7 @@ Bienvenido a la documentación operativa del sistema de administración de condo
 - [30 - MK - Data Dump Comunidad](<30 - MK - Data Dump Comunidad.md>): Personas, vínculos y extensiones laborales/gobernanza (ver banner: dump histórico).
 - [34 - Historia de Poblamiento - Relato de Uso](<34 - Historia de Poblamiento - Relato de Uso.md>): Crónica humana del poblamiento ordenado (MA/CF → TU/MP → EF → VU → PE/IR/CO → FI → AM) con relato, gear técnico y verificación cruzada.
 - [35 - MK - Data Dump Portal, Admin y Directiva](<35 - MK - Data Dump Portal, Admin y Directiva.md>): Colecciones Sesión 1 NSGC (`publicacionesPortal`, `leadsPortal`, `notificaciones`, `controlesPropiedades`, `actasGD`) — vacías por diseño, con estructura, campos y patrones de ID.
+- [36 - MK - Data Dump Comunicación y Solicitudes](<36 - MK - Data Dump Comunicación y Solicitudes.md>): Colecciones Sesión 2 NSGC (`plantillasCO` con 5 registros sembrados del NSGC + `enviosCO`, `mensajesBuzonCO`, `documentosCO`, `solicitudesGE`) con workflow GE y patrones de folio BUZ/GE.
 
 ---
-*Última actualización: 2026-08-25 - Sesión 1 NSGC: manuales PI/AD/GD completados y Dump 35 creado (store v13)*
+*Última actualización: 2026-08-25 - Sesión 2 NSGC: manuales CO/GE completados, Dump 36 creado, seed plantillas-co.ts catalogado (store v15)*

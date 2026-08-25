@@ -18,7 +18,7 @@ Este documento vincula la arquitectura del menú con los archivos de especificac
 | Orden | Fase | Módulo | Documento Fuente (Data/NSGC/docs/) | Etiqueta Menú | Ruta Kebab-case | Estado |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | **00** | **0** | **RG** | `RG - Reglas Generales.md` | (Lógica Base) | N/A | 🟢 Completado (`enhance-rg-st-seed-gears` archivado `2026-08-24`) |
-| **01** | **0** | **ST** | `ST - Capa de Datos Persistente.md` | (Capa de Datos) | `lib/store.ts` v13 | 🟢 Completado (`enhance-rg-st-seed-gears` archivado `2026-08-24`) |
+| **01** | **0** | **ST** | `ST - Capa de Datos Persistente.md` | (Capa de Datos) | `lib/store.ts` v15 | 🟢 Completado (`enhance-rg-st-seed-gears` archivado `2026-08-24`) |
 | **02** | **0** | **UI** | `UI - Interfaz Principal.md`, `UI - Navegacion Lateral.md` | (Interfaz) | (transversal) | 🟡 Documentado |
 | **03** | **0** | **RP** | `RP - Roles y Permisos.md` | Permisos | `/admin/permisos` | 🟡 Documentado |
 | **04** | **1** | **MA** | `MA - Maestros Administrativos.md` | Maestros | `/admin/maestros` | 🟡 Documentado |
@@ -32,9 +32,9 @@ Este documento vincula la arquitectura del menú con los archivos de especificac
 | **12** | **3** | **FI** | `FI - Finanzas y Morosidad.md` | Gastos Comunes | `/finanzas/gastos-comunes` | ⏳ Pendiente |
 | 13 | 3 | AD | `AD - Gestión Administrativa.md` | Resumen | `/admin/gestion` | 🟢 Completado (`AD-gestion-administrativa` archivado `2026-08-25`, Sesión 1 NSGC) |
 | 14 | 3 | GD | `GD - Gestión de Directiva.md` | Directiva | `/comunidad/directiva` | 🟢 Completado (`GD-gestion-directiva` archivado `2026-08-25`, Sesión 1 NSGC) |
-| 15 | 3 | CO | `CO - Comunicación Vecinos.md` | Comunicación | `/comunidad/comunicacion` | ⏳ Pendiente |
+| 15 | 3 | CO | `CO - Comunicación Vecinos.md` | Comunicación | `/comunidad/comunicacion` | 🟢 Completado (`CO-comunicacion-vecinos` archivado `2026-08-25`, Sesión 2 NSGC) |
 | 16 | 3 | CV | `CV - Visor de Mensajes.md` | Visor | `/comunidad/visor-mensajes` | ⏳ Pendiente |
-| 17 | 3 | GE | `GE - Gestión de Solicitudes.md` | Solicitudes | `/operaciones/solicitudes` | ⏳ Pendiente |
+| 17 | 3 | GE | `GE - Gestión de Solicitudes.md` | Solicitudes | `/operaciones/solicitudes` | 🟢 Completado (`GE-gestion-solicitudes` archivado `2026-08-25`, Sesión 2 NSGC) |
 | 18 | 3 | AM | `AM - Auditoría y Métricas.md` | Auditoría | `/admin/metricas` | 🟡 Documentado |
 | 19 | 3 | RE | `RE - Reportería y Dashboards.md` | Informes | `/reportes` | ⏳ Pendiente |
 | 20 | 4 | PE | `PE - Personal y Servicios.md` | Personal / Bitácora | `/personas/personal` | ⏳ Pendiente |
@@ -46,10 +46,11 @@ Este documento vincula la arquitectura del menú con los archivos de especificac
 | 26 | 4 | CT | `CT - Certificados.md` | Certificados | `/comunidad/certificados` | ⏳ Pendiente |
 | **27** | **0** | **34 - Historia** | `34 - Historia de Poblamiento - Relato de Uso.md` | (Transversal) | (manual) | 🟢 Completado (`enhance-rg-st-seed-gears`) |
 | **28** | **5** | **LAB** | `LAB - Mejoras Lab` (Fase 5) | Laboratorio QA | `/admin/qa-lab` | 🟢 Completado (`lab-fase-mejoras` archivado `2026-08-24`) |
-| 29 | 5 | QA-Lab | `DEV-qa-lab` | Laboratorio QA | `/admin/qa-lab` | 🟢 Completado (`qa-lab` archivado `2026-08-24`; pasos 8–10 PI/AD/GD en Sesión 1 NSGC) |
+| 29 | 5 | QA-Lab | `DEV-qa-lab` | Laboratorio QA | `/admin/qa-lab` | 🟢 Completado (`qa-lab` archivado `2026-08-24`; pasos 8–10 PI/AD/GD en Sesión 1; pasos CO/GE con limpieza inversa en Sesión 2) |
 
 > Cambios v8: `MA` movido Fase2→Fase1 y `RP` a Fase0 para alinear `PHASES` con dependencias (MA alimenta EF/TU, RP transversal). `ES` marcado deprecado (ver `ES - ...md` y `ST` v8). `PI` queda Fase2 (no Fase5) y `AM/RE` Fase3 (no Fase5) para unificar Dashboard ↔ Plan.
 > Cambios Sesión 1 NSGC (`2026-08-25`): `PI`, `AD`, `GD` pasan a 🟢 Completado con convención 1 módulo = 1 change; `TU/EF/ES/VU/RG/ST/LAB/QA-Lab` regularizados según archivo limpio `2026-08-24`. Ruta AD corregida a `/admin/gestion` (panel real, no `/dashboard`).
+> Cambios Sesión 2 NSGC (`2026-08-25`): `CO`, `GE` pasan a 🟢 Completado (store v14/v15); ST actualizado a v15.
 
 ---
 

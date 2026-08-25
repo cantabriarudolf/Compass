@@ -16,12 +16,13 @@ k0mp4ss_fe/apps/web/data/
 │   └── configuracion.ts           ← Configuración Global por defecto (CF)
 ├── comunidad/
 │   ├── personas.ts                ← Maestro de Personas (identidades + roles)
-│   └── vinculos.ts                ← Vínculos persona ↔ unidad (VU)
+│   ├── vinculos.ts                ← Vínculos persona ↔ unidad (VU)
+│   └── plantillas-co.ts           ← Seed del Maestro de Plantillas (CO, Sesión 2)
 └── inventario/
     └── estructura.ts              ← Tipos de unidad, sectores y unidades (incluye plazas u-E-*)
 ```
 
-> **⚠️ Desde ST**, casi todo vive en el store `compass-store` (`lib/store.ts`) con migraciones versionadas. Las colecciones PI/AD/GD (Sesión 1 NSGC) nacen **vacías por diseño** dentro del store — ver sección 5.
+> **⚠️ Desde ST**, casi todo vive en el store `compass-store` (`lib/store.ts`) con migraciones versionadas. Las colecciones PI/AD/GD (Sesión 1) nacen **vacías por diseño** dentro del store — ver sección 5. Las colecciones CO/GE (Sesión 2) siguen el mismo patrón; la excepción es `plantillasCO`, que se **siembra** desde `data/comunidad/plantillas-co.ts` — ver sección 6.
 
 ---
 
@@ -234,6 +235,32 @@ Consumidor: `app/comunidad/directiva/page.tsx`. Acciones: `saveActaGD`, `removeA
 
 ---
 
+### 6. Store + Seed — Sesión 2 NSGC (CO / GE)
+
+#### 6.0 `data/comunidad/plantillas-co.ts` (seed real de `plantillasCO`, store v14)
+
+| Campo | Detalle |
+|-------|---------|
+| **Ruta** | `k0mp4ss_fe/apps/web/data/comunidad/plantillas-co.ts` |
+| **Propósito** | Las 5 plantillas prefijadas de ejemplo del NSGC (§2), sembradas en `plantillasCO` vía migrate aditivo. |
+| **Export** | `plantillasComunicacion: PlantillaCO[]` (5 registros: asamblea/comunidad, corte-agua/urgente, recordatorio-gc/cobranza, ascensores/informacion, bienvenida/onboarding). El cuerpo soporta variables `[Nombre_Usuario]`, `[Nombre_Torre]`, `[Nombre_Comunidad]`. |
+
+Consumido por: `lib/store.ts` (seedData). Dump completo en `36 - MK - Data Dump Comunicación y Solicitudes.md`.
+
+#### 6.1 Colecciones store CO/GE (vacías salvo `plantillasCO`)
+
+| Colección | Store | Contenido | Acciones repository |
+|-----------|-------|-----------|---------------------|
+| `plantillasCO` | v14 | 5 plantillas seed (arriba); CRUD libre | `savePlantillaCO`, `removePlantillaCO` (bloqueo si envíos la usan) |
+| `enviosCO` | v14 | Snapshot inmutable `{personaId, unidadId?}[]` + lecturas[] | `saveEnvioCO` (loop `notify()` + `CO_SEND_MASSIVE`), `registrarLecturaEnvioCO` (idempotente) |
+| `mensajesBuzonCO` | v14 | Folio `BUZ-####`, clasificación felicitacion/sugerencia/reclamo, estado recibido→en_gestion→resuelto→cerrado, respuestas[], `visibilidadComite` | `saveMensajeBuzonCO`, `responderMensajeBuzonCO` (auto En Gestión), `cambiarEstadoBuzonCO` (matriz estricta), `removeMensajeBuzonCO` |
+| `documentosCO` | v14 | Referencias D1 {nombre, tipoMime, tamanoKB, url, categoria} | `saveDocumentoCO` (rechaza data:/blob:), `removeDocumentoCO`, `registrarDescargaDocCO` |
+| `solicitudesGE` | v15 | Folio `GE-####`, tipo insumos/grabaciones/buzon, estado workflow NSGC §1.4, comentarios[], historialEstados[] con timestamps SLA | `saveSolicitudGE`, `abrirSolicitudGE` (auto En Revisión), `responderSolicitudGE`, `resolverSolicitudGE`, `cerrarSolicitudGE`, `removeSolicitudGE` |
+
+Consumidores: `app/comunidad/comunicacion/page.tsx` (CO), `app/operaciones/solicitudes/page.tsx` (GE). Eventos AM: `CO_SEND_MASSIVE`, `CO_TICKET_CREATED/RESPONDIDO/ESTADO`, `CO_DOC_DOWNLOAD`; `GE_TICKET_CREATED/STATE_CHANGE/RESOLVED`.
+
+---
+
 ## 🔗 Mapa de Dependencias
 
 ```
@@ -250,8 +277,9 @@ maestros.ts (RAÍZ - sin dependencias)
             └──→ vinculos.ts (importa: personas + unidades + estadosInmobiliarios)
 
 lib/store.ts consume TODOS los seeds anteriores y añade las colecciones
-PI/AD/GD vacías por diseño: publicacionesPortal, leadsPortal,
-notificaciones, controlesPropiedades, actasGD (store v13).
+PI/AD/GD vacías por diseño (v13) + CO/GE de la Sesión 2 (v14/v15):
+plantillasCO (sembrada), enviosCO, mensajesBuzonCO, documentosCO,
+solicitudesGE.
 ```
 
 ---
@@ -272,5 +300,5 @@ Cuando se conecte cada módulo al backend NestJS, este es el orden sugerido:
 
 ---
 
-*Última actualización: 25 de Agosto 2026 — Sesión 1 NSGC (colecciones store PI/AD/GD, ES eliminado/absorbido en EF)*
+*Última actualización: 25 de Agosto 2026 — Sesión 2 NSGC (seed plantillas-co.ts + colecciones store CO/GE v14/v15)*
 *Generado para trazabilidad del proyecto Compass/NSGC*
