@@ -265,8 +265,9 @@ export const ActaGDSchema = z.object({
   // Firmas de aprobación de miembros de la directiva vigente.
   aprobaciones: z.array(IdEntidadSchema),
   fechaPublicacion: FechaISOSchema.optional(),
-  // Referencia para publicación futura en el Visor de Mensajes (CV, módulo pendiente).
-  avisoCVReferencia: z.literal("pendiente").optional(),
+  // Referencia de publicación en el Visor de Mensajes (CV): "pendiente" hasta
+  // publicar el aviso; luego el id del aviso creado (materializado por CV).
+  avisoCVReferencia: z.string().optional(),
 })
 
 export const MensajeDocumentoInvalido = "RUT inválido (dígito verificador incorrecto) o pasaporte con formato no válido."
@@ -295,6 +296,8 @@ export const PersonaSchema = z.object({
   vinculosUnidad: z.array(VinculoUnidadSchema).optional(),
   datosLaborales: ExtensionLaboralSchema.optional(),
   datosGobernanza: ExtensionGobernanzaSchema.optional(),
+  // CV: habilitación especial para crear mensajes manuales en el visor.
+  permiteCreacionManualCV: z.boolean().optional(),
 })
 
 // --- Gestión de Solicitudes (GE) ---
@@ -650,6 +653,75 @@ export const ReservaRASchema = z.object({
   cargoFIReferencia: z.literal("pendiente").optional(),
 })
 
+// --- Visor de Mensajes (CV) ---
+
+export const TIPOLOGIAS_CV = ["info", "exito", "advertencia", "peligro"] as const
+export const TipologiaCVSchema = z.enum(TIPOLOGIAS_CV)
+
+export const ESTADOS_AVISO_CV = ["borrador", "publicado", "archivado"] as const
+export const EstadoAvisoCVSchema = z.enum(ESTADOS_AVISO_CV)
+
+export const ORIGENES_AVISO_CV = ["manual", "plantilla", "acta_gd"] as const
+export const OrigenAvisoCVSchema = z.enum(ORIGENES_AVISO_CV)
+
+// D1: imagen solo por URL remota (jamás data:/blob:).
+const ImagenUrlCVSchema = z
+  .string()
+  .max(2048, "La URL excede el largo permitido.")
+  .refine((valor) => !/^data:/i.test(valor) && !/^blob:/i.test(valor), {
+    message: "Media por referencia (D1): la imagen debe ser una URL remota, no contenido embebido.",
+  })
+
+// Video: solo enlaces YouTube (watch, Shorts o youtu.be).
+const VideoUrlCVSchema = z
+  .string()
+  .max(2048, "La URL excede el largo permitido.")
+  .regex(/^https:\/\/(www\.)?(youtube\.com\/(watch\?v=|shorts\/)|youtu\.be\/)\S+$/, "El video debe ser un enlace de YouTube (watch, Shorts o youtu.be).")
+
+export const AvisoCVSchema = z
+  .object({
+    id: IdEntidadSchema,
+    titulo: z.string({ required_error: "El título del aviso es obligatorio." }).min(1, "El título del aviso es obligatorio."),
+    cuerpo: z.string({ required_error: "El cuerpo del aviso es obligatorio." }).min(1, "El cuerpo del aviso es obligatorio."),
+    tipologia: TipologiaCVSchema,
+    duracionSegundos: z.number({ required_error: "La duración en pantalla es obligatoria." }).int().min(3, "La duración debe ser de al menos 3 segundos."),
+    imagenUrl: ImagenUrlCVSchema.optional(),
+    videoUrl: VideoUrlCVSchema.optional(),
+    pantallaCompleta: z.boolean({ required_error: "El flag de pantalla completa es obligatorio." }),
+    expiresAt: FechaISOSchema.optional(),
+    tags: z.array(z.string()),
+    estado: EstadoAvisoCVSchema,
+    requiereVistoBueno: z.boolean({ required_error: "El flag de visto bueno es obligatorio." }),
+    creadoPorPersonaId: IdEntidadSchema.optional(),
+    origen: OrigenAvisoCVSchema,
+    plantillaId: IdEntidadSchema.optional(),
+    actaId: IdEntidadSchema.optional(),
+    fechaCreacion: FechaISOSchema,
+    fechaPublicacion: FechaISOSchema.optional(),
+    fechaArchivado: FechaISOSchema.optional(),
+  })
+  .refine((a) => !(a.imagenUrl && a.videoUrl), {
+    message: "Multimedia excluyente: el aviso admite imagen o video, no ambos.",
+  })
+  .refine((a) => !a.imagenUrl || !/^data:/i.test(a.imagenUrl), { message: "Media por referencia (D1): sin base64." })
+
+export const PlantillaCVSchema = z
+  .object({
+    id: IdEntidadSchema,
+    titulo: z.string({ required_error: "El título de la plantilla es obligatorio." }).min(1, "El título de la plantilla es obligatorio."),
+    cuerpo: z.string({ required_error: "El cuerpo de la plantilla es obligatorio." }).min(1, "El cuerpo de la plantilla es obligatorio."),
+    tipologia: TipologiaCVSchema,
+    duracionSegundosSugerida: z.number({ required_error: "La duración sugerida es obligatoria." }).int().min(3, "La duración sugerida debe ser de al menos 3 segundos."),
+    imagenUrl: ImagenUrlCVSchema.optional(),
+    videoUrl: VideoUrlCVSchema.optional(),
+    pantallaCompleta: z.boolean({ required_error: "El flag de pantalla completa es obligatorio." }),
+    tags: z.array(z.string()),
+    activa: z.boolean({ required_error: "El estado activo es obligatorio." }),
+  })
+  .refine((p) => !(p.imagenUrl && p.videoUrl), {
+    message: "Multimedia excluyente: la plantilla admite imagen o video, no ambos.",
+  })
+
 // --- Administración: Maestros (MA) ---
 
 export const AfpSchema = z.object({
@@ -797,6 +869,10 @@ export const ConfiguracionGlobalSchema = z.object({
   // 6. Portal Inmobiliario (PI): opcional para compatibilidad con stores previos.
   // Ausente = modo "residentes" (por defecto, según spec PI).
   visibilidadPortalInmobiliario: z.enum(["residentes", "publica"]).optional(),
+
+  // 7. Visor de Mensajes (CV): visto bueno obligatorio de administración para
+  // mensajes creados por terceros habilitados. Ausente = true (por defecto).
+  cvRequiereVistoBueno: z.boolean().optional(),
 })
 
 // --- Auditoría interna del store ---
@@ -893,6 +969,11 @@ export type EstadoReservaRA = z.infer<typeof EstadoReservaRASchema>
 export type CancelacionRA = z.infer<typeof CancelacionRASchema>
 export type RetencionGarantiaRA = z.infer<typeof RetencionGarantiaRASchema>
 export type ReservaRA = z.infer<typeof ReservaRASchema>
+export type TipologiaCV = z.infer<typeof TipologiaCVSchema>
+export type EstadoAvisoCV = z.infer<typeof EstadoAvisoCVSchema>
+export type OrigenAvisoCV = z.infer<typeof OrigenAvisoCVSchema>
+export type AvisoCV = z.infer<typeof AvisoCVSchema>
+export type PlantillaCV = z.infer<typeof PlantillaCVSchema>
 
 // --- Utilidades de validación para el store ---
 

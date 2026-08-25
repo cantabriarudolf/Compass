@@ -69,7 +69,7 @@ const data = {
         { title: "Bitácora Diaria", url: "/operaciones/bitacora" },
         { title: "Accesos y Visitas", url: "/operaciones/accesos" },
         { title: "Encomiendas", url: "/operaciones/paqueteria" },
-        { title: "Reservas", url: "/operaciones/reservas" },
+        { title: "Reservas y Amenities", url: "/operaciones/reservas" },
         { title: "Solicitudes", url: "/operaciones/solicitudes" },
       ],
     },
@@ -93,6 +93,7 @@ const data = {
       items: [
         { title: "Directorio de Personas", url: "/comunidad/personas" },
         { title: "Comunicación", url: "/comunidad/comunicacion" },
+        { title: "Visor de Mensajes", url: "/comunidad/visor" },
         { title: "Directiva", url: "/comunidad/directiva" },
         { title: "Certificados", url: "/comunidad/certificados" },
         { title: "Portal Inmobiliario", url: "/comunidad/portal" },

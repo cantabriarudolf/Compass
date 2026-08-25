@@ -13,6 +13,7 @@ import {
 import { personas as seedPersonas } from "@/data/comunidad/personas"
 import { vinculos as seedVinculos, ESTADOS_INMOBILIARIOS as seedEstadosInmobiliarios } from "@/data/comunidad/vinculos"
 import { plantillasComunicacion as seedPlantillasCO } from "@/data/comunidad/plantillas-co"
+import { plantillasCVSeed } from "@/data/comunidad/plantillas-cv"
 import { tiposInfraccionSeed } from "@/data/finanzas/tipos-infraccion"
 import {
   AFPS as seedAFPS,
@@ -75,6 +76,8 @@ import {
   ProyectoMTSchema,
   ElementoRASchema,
   ReservaRASchema,
+  AvisoCVSchema,
+  PlantillaCVSchema,
   MAESTRO_SCHEMAS,
   validarConEsquema,
   validarMaestro,
@@ -110,6 +113,8 @@ import {
   type EstadoPagoMT,
   type ElementoRA,
   type ReservaRA,
+  type AvisoCV,
+  type PlantillaCV,
 } from "@/lib/schemas"
 import { z } from "zod"
 
@@ -206,7 +211,7 @@ function getDeudaVigenteFI(): string | null {
   return null
 }
 
-export const STORE_VERSION = 19
+export const STORE_VERSION = 20
 
 export interface MaestroCollections {
   afps: Afp[]
@@ -266,6 +271,9 @@ export interface CompassData {
   // Reservas y Amenities (RA)
   elementosRA: ElementoRA[]
   reservasRA: ReservaRA[]
+  // Visor de Mensajes (CV)
+  avisosCV: AvisoCV[]
+  plantillasCV: PlantillaCV[]
 }
 
 interface CompassStore extends CompassData {
@@ -364,6 +372,16 @@ interface CompassStore extends CompassData {
   saveReservaRA: (reserva: ReservaRA) => StoreResult
   cancelarReservaRA: (id: string) => StoreResult
   retenerGarantiaRA: (id: string, motivo: string) => StoreResult
+  // Visor de Mensajes (CV)
+  saveAvisoCV: (aviso: AvisoCV, creadoPorPersonaId?: string) => StoreResult
+  removeAvisoCV: (id: string) => StoreResult
+  publicarAvisoCV: (id: string) => StoreResult
+  archivarAvisoCV: (id: string) => StoreResult
+  caducarAvisosCV: () => StoreResult
+  savePlantillaCV: (plantilla: PlantillaCV) => StoreResult
+  removePlantillaCV: (id: string) => StoreResult
+  activarPlantillaCV: (id: string) => StoreResult
+  publicarActaEnCV: (actaId: string) => StoreResult
 }
 
 function upsert<T extends { id: string }>(list: T[], item: T): T[] {
@@ -419,6 +437,8 @@ export const seedData = (): CompassData => ({
   proyectosMT: [],
   elementosRA: [],
   reservasRA: [],
+  avisosCV: [],
+  plantillasCV: plantillasCVSeed,
   maestros: {
     afps: seedAFPS,
     previsionesSalud: seedPrevisionesSalud,
@@ -470,6 +490,8 @@ const ESQUEMAS_COLECCION = {
   proyectosMT: z.array(ProyectoMTSchema),
   elementosRA: z.array(ElementoRASchema),
   reservasRA: z.array(ReservaRASchema),
+  avisosCV: z.array(AvisoCVSchema),
+  plantillasCV: z.array(PlantillaCVSchema),
 } as const
 
 type ClaveColeccion = keyof typeof ESQUEMAS_COLECCION
@@ -2479,6 +2501,198 @@ export const useCompassStore = create<CompassStore>()(
         })
         return { ok: true }
       },
+
+      // --- CV: Visor de Mensajes ---
+      saveAvisoCV: (aviso, creadoPorPersonaId) => {
+        if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
+        const esNuevo = !get().avisosCV.some(a => a.id === aviso.id)
+        let candidato: AvisoCV = aviso
+
+        if (esNuevo) {
+          // Creación por tercero habilitado: exige flag MP y visto bueno según CF.
+          if (creadoPorPersonaId) {
+            const autor = get().personas.find(p => p.id === creadoPorPersonaId)
+            if (!autor) return { ok: false, error: "No se puede crear el mensaje: el autor no existe en el Maestro de Personas." }
+            if (!autor.permiteCreacionManualCV) {
+              return { ok: false, error: "Sin habilitación: la creación manual exige el permiso especial en el perfil del usuario." }
+            }
+            const vbGlobal = get().configuracion.cvRequiereVistoBueno !== false
+            candidato = {
+              ...candidato,
+              creadoPorPersonaId,
+              requiereVistoBueno: vbGlobal,
+              estado: "borrador",
+              origen: "manual",
+              fechaCreacion: new Date().toISOString().slice(0, 10),
+            }
+          } else {
+            // Creación directa de administración.
+            candidato = {
+              ...candidato,
+              requiereVistoBueno: false,
+              estado: "borrador",
+              fechaCreacion: new Date().toISOString().slice(0, 10),
+            }
+          }
+        } else {
+          const anterior = get().avisosCV.find(a => a.id === aviso.id)!
+          if (anterior.estado === "archivado") {
+            return { ok: false, error: "Un aviso Archivado conserva su data para auditoría y no admite ediciones." }
+          }
+        }
+
+        const validacion = validarConEsquema(AvisoCVSchema, candidato)
+        if (!validacion.ok) return validacion
+        set(s => ({ avisosCV: upsert(s.avisosCV, validacion.data) }))
+        if (esNuevo) {
+          registrarEvento(set, "CV_DRAFT_CREATED", validacion.data.id, `Borrador "${validacion.data.titulo}" creado (${validacion.data.tipologia}${validacion.data.requiereVistoBueno ? ", espera visto bueno" : ""}).`, "CV")
+        } else {
+          registrarEvento(set, "CV_EDITED", validacion.data.id, `Aviso "${validacion.data.titulo}" editado (${validacion.data.duracionSegundos}s${validacion.data.expiresAt ? `, vence ${validacion.data.expiresAt}` : ""}).`, "CV")
+        }
+        return { ok: true }
+      },
+
+      removeAvisoCV: (id) => {
+        if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
+        const aviso = get().avisosCV.find(a => a.id === id)
+        if (!aviso) return { ok: false, error: "No se puede eliminar: el aviso no existe." }
+        if (aviso.estado !== "borrador") {
+          return { ok: false, error: "Solo un aviso Borrador admite eliminación; los publicados se archivan." }
+        }
+        set(s => ({ avisosCV: s.avisosCV.filter(a => a.id !== id) }))
+        return { ok: true }
+      },
+
+      publicarAvisoCV: (id) => {
+        if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
+        const aviso = get().avisosCV.find(a => a.id === id)
+        if (!aviso) return { ok: false, error: "No se puede publicar: el aviso no existe." }
+        if (aviso.estado !== "borrador") {
+          return { ok: false, error: `Solo un aviso Borrador puede publicarse (estado actual: ${aviso.estado}).` }
+        }
+        const publicado: AvisoCV = { ...aviso, estado: "publicado", requiereVistoBueno: false, fechaPublicacion: new Date().toISOString().slice(0, 10) }
+        set(s => ({ avisosCV: upsert(s.avisosCV, publicado) }))
+        registrarEvento(set, "CV_PUBLISHED", id, `Aviso "${aviso.titulo}" PUBLICADO en el carrusel (${aviso.duracionSegundos}s por ciclo${aviso.actaId ? ", desde acta de directiva" : ""}).`, "CV")
+        return { ok: true }
+      },
+
+      archivarAvisoCV: (id) => {
+        if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
+        const aviso = get().avisosCV.find(a => a.id === id)
+        if (!aviso) return { ok: false, error: "No se puede archivar: el aviso no existe." }
+        if (aviso.estado !== "publicado") {
+          return { ok: false, error: `Solo un aviso Publicado puede archivarse (estado actual: ${aviso.estado}).` }
+        }
+        set(s => ({
+          avisosCV: s.avisosCV.map(a => (a.id === id ? { ...a, estado: "archivado", fechaArchivado: new Date().toISOString().slice(0, 10) } : a)),
+        }))
+        registrarEvento(set, "CV_ARCHIVED", id, `Aviso "${aviso.titulo}" ARCHIVADO (retirado del carrusel; data conservada para auditoría).`, "CV")
+        return { ok: true }
+      },
+
+      caducarAvisosCV: () => {
+        if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
+        const hoyStr = new Date().toISOString().slice(0, 10)
+        const vencidos = get().avisosCV.filter(a => a.estado === "publicado" && a.expiresAt && a.expiresAt < hoyStr)
+        if (vencidos.length === 0) return { ok: true }
+        set(s => ({
+          avisosCV: s.avisosCV.map(a =>
+            vencidos.some(v => v.id === a.id)
+              ? { ...a, estado: "archivado", fechaArchivado: hoyStr }
+              : a
+          ),
+        }))
+        for (const aviso of vencidos) {
+          registrarEvento(set, "CV_ARCHIVED", aviso.id, `Aviso "${aviso.titulo}" expiró automáticamente (${aviso.expiresAt}) y salió del carrusel.`, "CV")
+        }
+        return { ok: true }
+      },
+
+      savePlantillaCV: (plantilla) => {
+        if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
+        const validacion = validarConEsquema(PlantillaCVSchema, plantilla)
+        if (!validacion.ok) return validacion
+        set(s => ({ plantillasCV: upsert(s.plantillasCV, validacion.data) }))
+        return { ok: true }
+      },
+
+      removePlantillaCV: (id) => {
+        if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
+        const enUso = get().avisosCV.filter(a => a.plantillaId === id)
+        if (enUso.length > 0) {
+          return { ok: false, error: `No se puede eliminar la plantilla: ${enUso.length} aviso(es) fueron activados desde ella.` }
+        }
+        set(s => ({ plantillasCV: s.plantillasCV.filter(p => p.id !== id) }))
+        return { ok: true }
+      },
+
+      activarPlantillaCV: (id) => {
+        if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
+        const plantilla = get().plantillasCV.find(p => p.id === id)
+        if (!plantilla) return { ok: false, error: "No se puede activar: la plantilla no existe." }
+        if (!plantilla.activa) return { ok: false, error: "La plantilla está desactivada por administración." }
+        const hoyStr = new Date().toISOString().slice(0, 10)
+        const aviso: AvisoCV = {
+          id: `cv-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          titulo: plantilla.titulo,
+          cuerpo: plantilla.cuerpo,
+          tipologia: plantilla.tipologia,
+          duracionSegundos: plantilla.duracionSegundosSugerida,
+          ...(plantilla.imagenUrl ? { imagenUrl: plantilla.imagenUrl } : {}),
+          ...(plantilla.videoUrl ? { videoUrl: plantilla.videoUrl } : {}),
+          pantallaCompleta: plantilla.pantallaCompleta,
+          tags: [...plantilla.tags],
+          estado: "publicado",
+          requiereVistoBueno: false,
+          origen: "plantilla",
+          plantillaId: plantilla.id,
+          fechaCreacion: hoyStr,
+          fechaPublicacion: hoyStr,
+        }
+        const validacion = validarConEsquema(AvisoCVSchema, aviso)
+        if (!validacion.ok) return validacion
+        set(s => ({ avisosCV: upsert(s.avisosCV, validacion.data) }))
+        registrarEvento(set, "CV_PUBLISHED", validacion.data.id, `Plantilla "${plantilla.titulo}" activada por personal de servicio: aviso PUBLICADO (${aviso.duracionSegundos}s).`, "CV")
+        return { ok: true }
+      },
+
+      publicarActaEnCV: (actaId) => {
+        if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
+        const acta = get().actasGD.find(a => a.id === actaId)
+        if (!acta) return { ok: false, error: "No se puede publicar: el acta no existe." }
+        if (acta.estado !== "publicada") {
+          return { ok: false, error: "Solo un acta Publicada por quórum puede difundirse en el visor." }
+        }
+        if (acta.avisoCVReferencia && acta.avisoCVReferencia !== "pendiente") {
+          return { ok: false, error: `El acta ya fue publicada en el visor (aviso ${acta.avisoCVReferencia}).` }
+        }
+        const hoyStr = new Date().toISOString().slice(0, 10)
+        const temas = acta.tablaTemas.length > 0 ? `Temas: ${acta.tablaTemas.join("; ")}. ` : ""
+        const minuta = acta.minuta ? acta.minuta.slice(0, 240) : ""
+        const aviso: AvisoCV = {
+          id: `cv-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          titulo: `Acta de reunión del ${acta.fecha}`,
+          cuerpo: `Reunión de directiva en ${acta.lugar}. ${temas}${minuta}`.trim(),
+          tipologia: "info",
+          duracionSegundos: 15,
+          pantallaCompleta: false,
+          tags: ["directiva", "acta"],
+          estado: "publicado",
+          requiereVistoBueno: false,
+          origen: "acta_gd",
+          actaId: acta.id,
+          fechaCreacion: hoyStr,
+          fechaPublicacion: hoyStr,
+        }
+        const validacion = validarConEsquema(AvisoCVSchema, aviso)
+        if (!validacion.ok) return validacion
+        set(s => ({
+          avisosCV: upsert(s.avisosCV, validacion.data),
+          actasGD: s.actasGD.map(a => (a.id === actaId ? { ...a, avisoCVReferencia: validacion.data.id } : a)),
+        }))
+        registrarEvento(set, "CV_PUBLISHED", validacion.data.id, `Aviso "${aviso.titulo}" PUBLICADO desde acta ${acta.id}; referencia avisoCVReferencia materializada.`, "CV")
+        return { ok: true }
+      },
     }),
     {
       name: "compass-store",
@@ -2517,6 +2731,8 @@ export const useCompassStore = create<CompassStore>()(
         proyectosMT: state.proyectosMT,
         elementosRA: state.elementosRA,
         reservasRA: state.reservasRA,
+        avisosCV: state.avisosCV,
+        plantillasCV: state.plantillasCV,
       }),
       migrate: (persisted, version) => {
         const prev = (persisted ?? {}) as Partial<CompassData>
@@ -2669,6 +2885,15 @@ export const useCompassStore = create<CompassStore>()(
             ...result,
             elementosRA: prev.elementosRA ?? [],
             reservasRA: prev.reservasRA ?? [],
+          }
+        }
+        // CV (v20): avisos del carrusel y plantillas rápidas (sembradas si
+        // ausente). Aditivo.
+        if ((version ?? 0) < 20) {
+          result = {
+            ...result,
+            avisosCV: prev.avisosCV ?? [],
+            plantillasCV: prev.plantillasCV ?? plantillasCVSeed,
           }
         }
         // TST-002: los stores que ya quedaron en v8 con unidades dañadas por este
