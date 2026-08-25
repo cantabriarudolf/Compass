@@ -168,6 +168,70 @@ export const NotificacionSchema = z.object({
   leida: z.boolean(),
 })
 
+// --- Comunicación con Vecinos (CO) ---
+
+export const CATEGORIAS_PLANTILLA_CO = ["comunidad", "urgente", "cobranza", "informacion", "onboarding"] as const
+export const CategoriaPlantillaCOSchema = z.enum(CATEGORIAS_PLANTILLA_CO)
+
+// Maestro de Mensajes Prefijados: cuerpo soporta variables dinámicas
+// [Nombre_Usuario], [Nombre_Torre] y [Nombre_Comunidad] (se resuelven al enviar).
+export const PlantillaCOSchema = z.object({
+  id: IdEntidadSchema,
+  nombre: z.string({ required_error: "El nombre de la plantilla es obligatorio." }).min(1, "El nombre de la plantilla es obligatorio."),
+  categoria: CategoriaPlantillaCOSchema,
+  asunto: z.string({ required_error: "El asunto es obligatorio." }).min(1, "El asunto es obligatorio."),
+  cuerpo: z.string({ required_error: "El cuerpo es obligatorio." }).min(1, "El cuerpo es obligatorio."),
+})
+
+export const DestinatarioEnvioSchema = z.object({
+  personaId: IdEntidadSchema,
+  unidadId: z.string().optional(),
+})
+
+export const EnvioCOSchema = z.object({
+  id: IdEntidadSchema,
+  asunto: z.string({ required_error: "El asunto es obligatorio." }).min(1, "El asunto es obligatorio."),
+  cuerpo: z.string({ required_error: "El cuerpo es obligatorio." }).min(1, "El cuerpo es obligatorio."),
+  plantillaId: IdEntidadSchema.optional(),
+  destinatarios: z.array(DestinatarioEnvioSchema).min(1, "El envío requiere al menos un destinatario."),
+  fechaEnvio: FechaISOSchema,
+  lecturas: z.array(IdEntidadSchema),
+})
+
+export const ClasificacionBuzonSchema = z.enum(["felicitacion", "sugerencia", "reclamo"])
+export const EstadoBuzonCOSchema = z.enum(["recibido", "en_gestion", "resuelto", "cerrado"])
+
+export const RespuestaBuzonCOSchema = z.object({
+  id: IdEntidadSchema,
+  autor: z.string().min(1, "El autor de la respuesta es obligatorio."),
+  texto: z.string().min(1, "El texto de la respuesta es obligatorio."),
+  compromisos: z.string().optional(),
+  fecha: FechaISOSchema,
+})
+
+// Buzón de Interacción Ciudadana: ciclo ciudadano propio (Recibido → En Gestión
+// → Resuelto → Cerrado). El workflow operativo vive en GE vía mensajeBuzonId.
+export const MensajeBuzonCOSchema = z.object({
+  id: IdEntidadSchema,
+  folio: z.string({ required_error: "El folio de seguimiento es obligatorio." }).min(1, "El folio de seguimiento es obligatorio."),
+  clasificacion: ClasificacionBuzonSchema,
+  reportantePersonaId: IdEntidadSchema.optional(),
+  reportanteNombre: z.string().min(1, "El nombre del reportante es obligatorio."),
+  unidadId: z.string().optional(),
+  asunto: z.string().min(1, "El asunto es obligatorio."),
+  cuerpo: z.string().min(1, "El cuerpo del mensaje es obligatorio."),
+  visibilidadComite: z.boolean({ required_error: "El flag de visibilidad para el Comité es obligatorio." }),
+  fechaIngreso: FechaISOSchema,
+  estado: EstadoBuzonCOSchema,
+  respuestas: z.array(RespuestaBuzonCOSchema),
+})
+
+// Biblioteca documental: reutiliza metadatos D1 (nombre/tipoMime/tamanoKB/url).
+export const DocumentoCOSchema = ImagenReferenciaSchema.extend({
+  id: IdEntidadSchema,
+  categoria: z.string().min(1, "La categoría del documento es obligatoria."),
+})
+
 // --- Gestión Administrativa (AD) ---
 
 // Controles de privacidad/comunicación del propietario sobre su unidad.
@@ -432,6 +496,14 @@ export type Notificacion = z.infer<typeof NotificacionSchema>
 export type ControlPropiedad = z.infer<typeof ControlPropiedadSchema>
 export type EstadoActa = z.infer<typeof EstadoActaSchema>
 export type ActaGD = z.infer<typeof ActaGDSchema>
+export type PlantillaCO = z.infer<typeof PlantillaCOSchema>
+export type DestinatarioEnvio = z.infer<typeof DestinatarioEnvioSchema>
+export type EnvioCO = z.infer<typeof EnvioCOSchema>
+export type ClasificacionBuzon = z.infer<typeof ClasificacionBuzonSchema>
+export type EstadoBuzonCO = z.infer<typeof EstadoBuzonCOSchema>
+export type RespuestaBuzonCO = z.infer<typeof RespuestaBuzonCOSchema>
+export type MensajeBuzonCO = z.infer<typeof MensajeBuzonCOSchema>
+export type DocumentoCO = z.infer<typeof DocumentoCOSchema>
 
 // --- Utilidades de validación para el store ---
 
