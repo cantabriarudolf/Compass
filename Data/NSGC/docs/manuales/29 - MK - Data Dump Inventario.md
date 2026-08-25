@@ -3,6 +3,9 @@
 > Todos los registros mock **ya resueltos** (sin algoritmos). Copia y pega lo que necesites sin gastar tokens.
 > Archivo fuente: `k0mp4ss_fe/apps/web/data/inventario/estructura.ts`
 
+> [!WARNING]
+> **Actualización v8+ (ES absorbido en EF):** ya no existen plazas `es-*` con historial propio. Las plazas hoy son unidades `u-E-{NNN}` generadas dentro de `estructura.ts` (83 plazas: Superficie 1–20 `est-sup`, Subterráneo -1 21–41 `est-sub1`, Subterráneo -2 42–62 `est-sub2`, Visitas 63–83 `est-vis`; metraje 12.5, prorrateo 0.005, tipo `tipo-es-1`). Total vigente: 80 deptos + 3 locales + 83 plazas = **166 unidades**, macro sector nuevo `estacionamientos`. Las secciones históricas de estacionamientos de este dump pueden quedar obsoletas; manda el código fuente.
+
 ---
 
 ## 🏗️ Tipos de Unidad (5 registros)

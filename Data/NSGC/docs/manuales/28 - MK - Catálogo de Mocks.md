@@ -7,16 +7,21 @@
 
 ## 📍 Ubicación Base
 
-Todos los mocks viven en:
+Los mocks de seed viven en `data/` y las colecciones de módulos nuevos viven en el store (`lib/store.ts`, seeds vacíos):
 ```
 k0mp4ss_fe/apps/web/data/
-├── maestros.ts                    ← Parámetros globales del sistema
+├── maestros.ts                    ← Categorías estructurales y estados de ocupación
+├── admin/
+│   ├── maestros.ts                ← AFP, salud, mutuales, feriados, bancos, etc. (MA)
+│   └── configuracion.ts           ← Configuración Global por defecto (CF)
 ├── comunidad/
-│   └── personas.ts                ← Maestro de Personas (identidades + roles)
+│   ├── personas.ts                ← Maestro de Personas (identidades + roles)
+│   └── vinculos.ts                ← Vínculos persona ↔ unidad (VU)
 └── inventario/
-    ├── estructura.ts              ← Tipos de unidad, sectores, unidades
-    └── estacionamientos.ts        ← Plazas de estacionamiento + historial
+    └── estructura.ts              ← Tipos de unidad, sectores y unidades (incluye plazas u-E-*)
 ```
+
+> **⚠️ Desde ST**, casi todo vive en el store `compass-store` (`lib/store.ts`) con migraciones versionadas. Las colecciones PI/AD/GD (Sesión 1 NSGC) nacen **vacías por diseño** dentro del store — ver sección 5.
 
 ---
 
@@ -95,45 +100,12 @@ k0mp4ss_fe/apps/web/data/
 
 ---
 
-### 3. `data/inventario/estacionamientos.ts`
+### 3. `data/inventario/estacionamientos.ts` — ❌ ELIMINADO (v8)
 
 | Campo | Detalle |
 |-------|---------|
-| **Ruta** | `k0mp4ss_fe/apps/web/data/inventario/estacionamientos.ts` |
-| **Propósito** | 100 plazas de estacionamiento con asignación a unidades y historial de rotación. |
-| **Líneas** | ~85 |
-| **Depende de** | `estructura.ts` → importa `unidades` para vincular plazas a deptos |
-
-#### Interfaces definidas:
-
-| Interface | Campos clave |
-|-----------|-------------|
-| `AsignacionHistorica` | `id`, `unidadId`, `fechaInicio`, `fechaFin?`, `asignadoA` |
-| `Estacionamiento` | `id`, `numero`, `ubicacion`, `metraje`, `prorrateo`, `unidadId?`, `macroSectorId?`, `asignadoA?`, `estadoId`, `historial[]` |
-
-#### Contenido exportado:
-
-| Export | Cantidad | Cómo se genera |
-|--------|----------|----------------|
-| `estacionamientos` | 100 registros | **Generados algorítmicamente** con `Array.from({ length: 100 })` |
-
-#### Lógica de generación:
-
-| Rango | Comportamiento | Propósito del mock |
-|-------|---------------|-------------------|
-| Plaza 1 | Historial con 3 rotaciones (Constructora → Ex-Dueño → Local Ancla) | Simular caso de alta rotación |
-| Plazas 15 y 30 | Historial con 1 dueño anterior + actual | Caso de rotación moderada |
-| Plazas 2-8 | Asignadas a locales comerciales | Estacionamientos de clientes/empleados |
-| Plazas 9-88 | Asignadas a unidades residenciales (en orden) | Ocupación estándar |
-| Plazas 89-100 | Sin asignar (`Disponible`) | Pool de plazas libres |
-
-#### Consumido por:
-
-| Página/Componente | Qué importa |
-|-------------------|-------------|
-| `app/admin/metricas/page.tsx` | `estacionamientos` |
-| `app/inventario/estacionamientos/page.tsx` | `estacionamientos`, `Estacionamiento`, `AsignacionHistorica` |
-| `components/inventario/formulario-estacionamiento.tsx` | `Estacionamiento` (solo la interface) |
+| **Estado** | **Eliminado.** El módulo ES fue absorbido por EF: las plazas hoy son unidades `u-E-*` dentro de `estructura.ts` (83 plazas: Superficie 1–20, Subterráneo -1 21–41, Subterráneo -2 42–62, Visitas 63–83). |
+| **Impacto en docs** | Los dumps históricos de plazas `es-*` quedaron obsoletos; el patrón vigente es `u-E-{NNN}`. |
 
 ---
 
@@ -168,7 +140,9 @@ k0mp4ss_fe/apps/web/data/
 | `p-7` | Pedro Valdés Orellana | 17.444.555-6 | contratista | **Externo:** mantención de ascensores, sin datos laborales internos |
 | `p-8` | Tomás Alarcón | 20.123.987-5 | residente | **Inactivo:** ex-arrendatario con `fechaFin`, mantiene trazabilidad |
 | `p-9` | Rosa Meléndez | 11.234.567-0 | personal | **Auxiliar de aseo:** personal estándar con datos laborales |
-| `p-10` | Esteban Dido | 16.777.888-9 | residente | **Bloqueado:** moroso extremo, cuenta bloqueada |
+| `p-10` | Esteban Dido | 16.777.888-7 | residente | **Bloqueado:** moroso extremo, cuenta bloqueada |
+
+> **⚠️ Actualización:** el maestro creció a **54 personas** (`p-1` … `p-54`, incluye empresas SpA) y todos los RUT fueron migrados a DV válido (`scripts/fix-rut-seeds.cjs`). Los RUT de esta tabla histórica pueden diferir; el dump vigente es el código fuente.
 
 #### Consumido por:
 
@@ -180,19 +154,104 @@ k0mp4ss_fe/apps/web/data/
 
 ---
 
+### 5. Colecciones del Store — Sesión 1 NSGC (PI / AD / GD)
+
+Estas colecciones **no viven en `data/`**: nacen en `lib/store.ts` con seeds vacíos por diseño (el usuario las puebla desde la UI) y sus esquemas están en `lib/schemas.ts`. Documentadas por estructura/campos según la norma.
+
+#### 5.1 `publicacionesPortal` (PI, store v11)
+
+| Campo | Tipo | Notas |
+|-------|------|-------|
+| `id` | string | Patrón: id de entidad |
+| `unidadId` | string | FK a unidades (`u-*`) |
+| `operacion` | `"venta" \| "arriendo"` | Trigger desde VU |
+| `precio` | number ≥ 0 | |
+| `moneda` | `"CLP" \| "UF"?` | |
+| `dormitorios`, `banos`, `etiquetaEstado`, `descripcion`, `urlMapa`, `condicionesContractuales` | opcionales | Ficha pública |
+| `imagenes` | array referencia | URL/metadatos, jamás base64 (D1) |
+| `activa` | boolean | |
+| `fechaPublicacion` | ISO date | |
+
+Consumidor: `app/comunidad/portal/page.tsx`. Acciones: `savePublicacionPortal`, `removePublicacionPortal`, `syncPublicacionesDesdeVinculos`.
+
+#### 5.2 `leadsPortal` (PI, store v11)
+
+| Campo | Tipo | Notas |
+|-------|------|-------|
+| `id` | string | |
+| `publicacionId` | string | FK a `publicacionesPortal` |
+| `nombreContacto`, `contacto` | string | Contacto seguro, no revela datos del dueño |
+| `mensaje?` | string | |
+| `fecha` | ISO date | |
+| `atendido` | boolean | |
+
+Acción: `saveLeadPortal` → dispara `notify()` (D3) al propietario.
+
+#### 5.3 `notificaciones` (D3, transversal, store v11+)
+
+| Campo | Tipo | Notas |
+|-------|------|-------|
+| `id` | string | |
+| `destinatarioRol` | `"administracion" \| "propietario" \| "residente" \| "directiva" \| "personal"` | |
+| `destinatarioPersonaId?` | string | |
+| `asunto`, `cuerpo` | string | |
+| `canal` | `"email_simulado"` (literal) | Correo simulado, sin SMTP real |
+| `moduloOrigen` | string | PI/AD/GD/... |
+| `fecha` | ISO date | |
+| `leida` | boolean | |
+
+Acciones: `notify()`, `marcarNotificacionLeida`. Tope: 500 eventos.
+
+#### 5.4 `controlesPropiedades` (AD, store v12)
+
+| Campo | Tipo | Default sin registro |
+|-------|------|---------------------|
+| `id` | string | |
+| `unidadId` | string | FK a unidades |
+| `residenteVeMorosidad` | boolean | `false` |
+| `residenteVeActas` | boolean | `false` |
+| `alertasResidentesActivas` | boolean | `true` |
+
+Consumidor: `app/admin/gestion/page.tsx`; gobierna visibilidad en GD. Acciones: `saveControlPropiedad`, `removeControlPropiedad`.
+
+#### 5.5 `actasGD` (GD, store v13)
+
+| Campo | Tipo | Notas |
+|-------|------|-------|
+| `id` | string | |
+| `fecha`, `hora` (HH:MM), `lugar` | | Datos de reunión |
+| `tablaTemas` | string[] | |
+| `presentes`, `ausentes` | ids personas | Miembros con `datosGobernanza` |
+| `invitados` | string[] | Nombres libres |
+| `minuta` | string | |
+| `adjuntos` | array referencia | D1 |
+| `estado` | `"borrador" \| "publicada"` | Publica al quórum 100% |
+| `aprobaciones` | ids personas | Firmas de directiva vigente |
+| `fechaPublicacion?` | ISO date | |
+| `avisoCVReferencia?` | `"pendiente"` (literal) | Hasta que exista CV |
+
+Consumidor: `app/comunidad/directiva/page.tsx`. Acciones: `saveActaGD`, `removeActaGD`, `aprobarActaGD`.
+
+---
+
 ## 🔗 Mapa de Dependencias
 
 ```
 maestros.ts (RAÍZ - sin dependencias)
     │
     ├──→ estructura.ts (importa: UnidadEtiqueta de maestros)
-    │       │
-    │       ├──→ estacionamientos.ts (importa: unidades de estructura)
-    │       │
-    │       └──→ personas.ts (importa: ESTADOS_OCUPACION de maestros,
-    │                                   unidades y estacionamientos de inventario)
+    │       └──→ [unidades u-* incluidas las plazas u-E-*]
     │
-    └──→ [Prácticamente TODA la app importa maestros.ts]
+    ├──→ admin/maestros.ts + admin/configuracion.ts (Rank 0, seed dual MA/CF)
+    │
+    └──→ comunidad/
+            ├──→ personas.ts (importa: ESTADOS_OCUPACION de maestros,
+            │                 unidades de inventario)
+            └──→ vinculos.ts (importa: personas + unidades + estadosInmobiliarios)
+
+lib/store.ts consume TODOS los seeds anteriores y añade las colecciones
+PI/AD/GD vacías por diseño: publicacionesPortal, leadsPortal,
+notificaciones, controlesPropiedades, actasGD (store v13).
 ```
 
 ---
@@ -203,14 +262,15 @@ Cuando se conecte cada módulo al backend NestJS, este es el orden sugerido:
 
 | Prioridad | Mock a reemplazar | Endpoint esperado | Módulos afectados |
 |-----------|-------------------|--------------------|--------------------|
-| 🔴 1 | `maestros.ts` | `GET /api/maestros/*` | **TODOS** (es transversal) |
-| 🟠 2 | `estructura.ts` | `GET /api/inventario/tipos-unidad`, `GET /api/inventario/sectores`, `GET /api/inventario/unidades` | Inventario, Métricas, Estacionamientos |
-| 🟡 3 | `estacionamientos.ts` | `GET /api/inventario/estacionamientos` | Estacionamientos, Métricas |
-| 🟢 4 | `personas.ts` | `GET /api/comunidad/personas` | Maestro Personas, Directorio |
+| 🔴 1 | `maestros.ts` + `admin/` | `GET /api/maestros/*`, `GET /api/configuracion` | **TODOS** (transversales) |
+| 🟠 2 | `estructura.ts` | `GET /api/inventario/tipos-unidad`, `GET /api/inventario/sectores`, `GET /api/inventario/unidades` | Inventario, Métricas |
+| 🟡 3 | `personas.ts` | `GET /api/comunidad/personas` | Maestro Personas, Directorio, AD |
+| 🟢 4 | `vinculos.ts` | `GET /api/comunidad/vinculos` | VU, PI (trigger portal) |
+| 🟢 5 | Colecciones store PI/AD/GD | `/api/portal/*`, `/api/admin/controles/*`, `/api/directiva/actas` | Portal, Gestión, Directiva |
 
 > **Regla de oro:** Cuando reemplaces un mock, basta con cambiar el `import` en la página/componente por un `fetch` o `useQuery`. Las interfaces (`TipoUnidad`, `Persona`, etc.) ya están definidas y deberían coincidir con el contrato del API.
 
 ---
 
-*Última actualización: 09 de Mayo 2026*
+*Última actualización: 25 de Agosto 2026 — Sesión 1 NSGC (colecciones store PI/AD/GD, ES eliminado/absorbido en EF)*
 *Generado para trazabilidad del proyecto Compass/NSGC*

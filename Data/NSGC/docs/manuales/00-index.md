@@ -10,16 +10,20 @@ Bienvenido a la documentación operativa del sistema de administración de condo
 ## ⚙️ Fase 2: Configuración Administrativa
 - [04 - Auditoría y Métricas](<04 - Auditoría y Métricas.md>): Control de logs y reportes de gestión.
 - [04 - Maestros Administrativos](<04 - Maestros Administrativos.md>): Parámetros globales, zonas y estados de ocupación.
+- [13 - AD - Gestión Administrativa](<13 - AD - Gestión Administrativa.md>): Panel del administrador con cajones de Comunidad y RRHH, controles de privacidad por unidad y firma digitalizada de directiva.
 
 ## 👥 Fase 3: Residentes y Comunidad
 - [05 - Maestro de Personas](<05 - Maestro de Personas.md>)
 - [06 - Vinculación de Unidades](<06 - Vinculación de Unidades.md>)
+- [27 - PI - Portal Inmobiliario](<27 - PI - Portal Inmobiliario.md>): Vitrina de arriendo/venta con trigger automático desde VU, leads con contacto seguro y visibilidad residentes/pública.
+- [14 - GD - Gestión de Directiva](<14 - GD - Gestión de Directiva.md>): Actas con asistencia, flujo de aprobación por quórum 100%, publicación formal y privacidad propietario/residente.
 
 ## 🔧 Documentación Transversal
 - [28 - MK - Catálogo de Mocks](<28 - MK - Catálogo de Mocks.md>): Inventario completo de datos mockeados, ubicación, dependencias y hoja de ruta de migración a backend.
-- [29 - MK - Data Dump Inventario](<29 - MK - Data Dump Inventario.md>): Todas las unidades, sectores y tipos resueltos en tablas planas (83 deptos + 3 locales).
-- [30 - MK - Data Dump Comunidad](<30 - MK - Data Dump Comunidad.md>): Las 10 personas, vínculos, extensiones laborales/gobernanza y las 100 plazas de estacionamiento.
+- [29 - MK - Data Dump Inventario](<29 - MK - Data Dump Inventario.md>): Todas las unidades, sectores y tipos resueltos en tablas planas (166 unidades: 80 deptos + 3 locales + 83 plazas `u-E-*`).
+- [30 - MK - Data Dump Comunidad](<30 - MK - Data Dump Comunidad.md>): Personas, vínculos y extensiones laborales/gobernanza (ver banner: dump histórico).
 - [34 - Historia de Poblamiento - Relato de Uso](<34 - Historia de Poblamiento - Relato de Uso.md>): Crónica humana del poblamiento ordenado (MA/CF → TU/MP → EF → VU → PE/IR/CO → FI → AM) con relato, gear técnico y verificación cruzada.
+- [35 - MK - Data Dump Portal, Admin y Directiva](<35 - MK - Data Dump Portal, Admin y Directiva.md>): Colecciones Sesión 1 NSGC (`publicacionesPortal`, `leadsPortal`, `notificaciones`, `controlesPropiedades`, `actasGD`) — vacías por diseño, con estructura, campos y patrones de ID.
 
 ---
-*Última actualización: 2026-08-20 - Añadido 34 - Historia de Poblamiento (change enhance-rg-st-seed-gears)*
+*Última actualización: 2026-08-25 - Sesión 1 NSGC: manuales PI/AD/GD completados y Dump 35 creado (store v13)*

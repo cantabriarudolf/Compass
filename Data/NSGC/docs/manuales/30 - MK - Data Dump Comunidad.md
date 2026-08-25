@@ -1,7 +1,10 @@
 # 📋 MK - Data Dump: Personas y Estacionamientos
 
 > Todos los registros mock de comunidad y parking **ya resueltos**.
-> Archivos fuente: `data/comunidad/personas.ts` y `data/inventario/estacionamientos.ts`
+> Archivos fuente: `data/comunidad/personas.ts` (y `data/inventario/estacionamientos.ts`, hoy eliminado).
+
+> [!WARNING]
+> **Dump histórico.** El maestro creció a **54 personas** (`p-1`…`p-54`, incluye empresas SpA) con 51 vínculos, y todos los RUT fueron migrados a DV válido (`scripts/fix-rut-seeds.cjs`) — los RUT de las tablas de abajo pueden diferir del código vigente. Las plazas `es-*` ya no existen: son unidades `u-E-*` en EF (ver Dump 29). Para registros actuales manda el código fuente; las colecciones nuevas de Sesión 1 NSGC están vacías por diseño (ver Dump 35).
 
 ---
 

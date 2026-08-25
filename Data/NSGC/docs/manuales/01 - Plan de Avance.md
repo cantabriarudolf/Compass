@@ -3,10 +3,10 @@
 Este documento actúa como la hoja de ruta oficial para el desarrollo del Proyecto Compass. Se actualiza conforme se completan las especificaciones y el código. **Fuente de verdad de fases:** `k0mp4ss_fe/apps/web/lib/dev-dashboard.ts:64` (`PHASES`). Los estados se derivan del dashboard (`deriveStatus`): `completado` = archivado sin suciedad, `documentado` = spec existe, `en_proceso` = change activo, `pendiente` = sin spec.
 
 ## 📋 Resumen de Progreso
-- **Estado Global:** 🟡 Fase 0 Documentado (sucio post-archivo) - Fase 1 En Proceso - Fase 2 En Proceso
-- **Módulos:** 0 completado / 4 en proceso / 9 documentado / 15 pendiente (total 28, UI duplicado por 2 specs)
+- **Estado Global:** 🟢 Fases 0–2 completadas + Sesión 1 NSGC (PI/AD/GD) — sin changes activos
+- **Módulos:** 14 completado / 0 en proceso / 5 documentado / 12 pendiente (total 31 filas del plan)
 - **Dashboard:** `/admin/dev-dashboard` (PHASES + deriveStatus con detección de spec sucio `isSpecDirtyAfterArchive`)
-- **Próximo Hito:** `VU` (cerrar vinculación + historial) → `CF`/`RP` → `FI`
+- **Próximo Hito:** Serie NSGC — Sesión 2 (propuesta pendiente; candidatos CO/CV/GE/FI según roadmap NSGC)
 
 ---
 
@@ -15,33 +15,33 @@ Este documento actúa como la hoja de ruta oficial para el desarrollo del Proyec
 | :--- | :--- | :--- | :--- |
 | 00 | Base Shell | 🟢 Completado | Layout principal, Sidebar y Theme |
 | 01 | Estructura de Menú | 🟢 Completado | Jerarquía de navegación del sistema |
-| 02 | RG - Reglas Generales | 🟡 Documentado (sucio) | Lógica transversal — archivado `2026-08-17` pero spec modificado v8 (terminología comunidad) — re-archivar pendiente |
-| 03 | ST - Capa de Datos Persistente | 🟡 Documentado (sucio) | Store `compass-store` v8 — archivado `2026-08-16` pero spec sincronizado ES→EF — re-archivar pendiente |
-| 03b | RG+ST Engranes | 🔵 En Proceso | Carga ordenada Rank 0..99 + Historia 34 + valida-datos 7 puntos — change `enhance-rg-st-seed-gears` (14/14, abierto sin cerrar) |
+| 02 | RG - Reglas Generales | 🟢 Completado | Lógica transversal — `enhance-rg-st-seed-gears` archivado `2026-08-24` con spec sincronizada |
+| 03 | ST - Capa de Datos Persistente | 🟢 Completado | Store `compass-store` v13 — migraciones v11/v12/v13 aditivas (PI/AD/GD) |
+| 03b | RG+ST Engranes | 🟢 Completado | Carga ordenada Rank 0..99 + Historia 34 + valida-datos 7 puntos — archivado `2026-08-24` |
 | 04 | RP - Roles y Permisos | 🟡 Documentado | Control de acceso basado en perfiles — spec existe, sin implementación aún |
 
 ## 🏢 Fase 1: Inventario Físico
 | ID | Módulo | Estado | Descripción |
 | :--- | :--- | :--- | :--- |
-| 05 | MA - Maestros Admin | 🟡 Documentado | Tablas auxiliares — spec + UI `/admin/maestros` OK, sin change activo (falta archivar) |
-| 06 | TU - Tipos de Unidad | 🔵 En Proceso | Categorización de inmuebles — change activo `TU-tipos-unidad` |
-| 07 | EF - Estructura Física | 🔵 En Proceso | CRUD Torres/Pisos/Unidades (incluye `u-E-*` estacionamientos) — change `EF-estructura-fisica` |
-| 08 | ES - Estacionamientos | 🔵 En Proceso (deprecado v8) | Absorbido como `unidades` en EF — spec histórico, change `ES-estacionamientos` pendiente archivar como absorbido |
+| 05 | MA - Maestros Admin | 🟡 Documentado | Tablas auxiliares — spec + UI `/admin/maestros` OK, sin change propio (spec vía engranes) |
+| 06 | TU - Tipos de Unidad | 🟢 Completado | Categorización de inmuebles — `TU-tipos-unidad` archivado `2026-08-24` |
+| 07 | EF - Estructura Física | 🟢 Completado | CRUD Torres/Pisos/Unidades (incluye `u-E-*`) — `EF-estructura-fisica` archivado `2026-08-24` |
+| 08 | ES - Estacionamientos | 🟢 Completado (deprecado v8) | Absorbido como unidades `u-E-*` en EF — change archivado como absorbido `2026-08-24` |
 
 ## 👥 Fase 2: Identidad, Accesos y Configuración
 | ID | Módulo | Estado | Descripción |
 | :--- | :--- | :--- | :--- |
-| 09 | MP - Maestro Personas | 🟡 Documentado (sucio) | Base de datos residentes — archivado `2026-05-19` pero spec retocado v8 — re-archivar pendiente |
-| 10 | VU - Vinculación | 🔵 En Proceso | Relación unidades↔personas — changes `VU-vinculacion-unidades` + `VU-historial-asignaciones-unidad` |
-| 11 | CF - Configuración Global | 🟡 Documentado | Parámetros base (SMTP, GC, seguridad) — spec + UI, sin change activo |
-| 12 | PI - Portal Inmobiliario | ⏳ Pendiente | Vitrina arriendo/venta — depende de VU |
+| 09 | MP - Maestro Personas | 🟡 Documentado | Base de datos residentes (54 personas, RUT DV válido) — spec re-sincronizada `2026-08-24` |
+| 10 | VU - Vinculación | 🟢 Completado | Relación unidades↔personas — changes archivados `2026-08-24` |
+| 11 | CF - Configuración Global | 🟡 Documentado | Parámetros base + D4 legal Chile en spec — sin change propio |
+| 12 | PI - Portal Inmobiliario | 🟢 Completado | Vitrina arriendo/venta con trigger VU y leads D3 — `PI-portal-inmobiliario` archivado `2026-08-25` (Sesión 1 NSGC) |
 
 ## 💰 Fase 3: Operación y Finanzas (Core)
 | ID | Módulo | Estado | Descripción |
 | :--- | :--- | :--- | :--- |
 | 13 | FI - Finanzas y Morosidad | ⏳ Pendiente | Gastos comunes, cobranza — depende de TU/EF/VU |
-| 14 | AD - Gestión Administrativa | ⏳ Pendiente | Panel administrador |
-| 15 | GD - Gestión de Directiva | ⏳ Pendiente | Reuniones, actas |
+| 14 | AD - Gestión Administrativa | 🟢 Completado | Panel `/admin/gestion`: cajones Comunidad/RRHH, controles por unidad, firma D1 — archivado `2026-08-25` (Sesión 1 NSGC) |
+| 15 | GD - Gestión de Directiva | 🟢 Completado | Actas con asistencia, quórum 100%, publicación con notify formal, privacidad AD — archivado `2026-08-25` (Sesión 1 NSGC) |
 | 16 | CO - Comunicación Vecinos | ⏳ Pendiente | Mensajería masiva |
 | 17 | CV - Visor de Mensajes | ⏳ Pendiente | Carrusel avisos |
 | 18 | GE - Gestión de Solicitudes | ⏳ Pendiente | Tickets |
@@ -62,8 +62,8 @@ Este documento actúa como la hoja de ruta oficial para el desarrollo del Proyec
 ## 🧪 Fase 5: Laboratorio y Automatización (Mejoras)
 | ID | Módulo | Estado | Descripción |
 | :--- | :--- | :--- | :--- |
-| 28 | LAB - Mejoras Lab | 🔵 En Proceso | Vínculos en nueva ventana + screenshots Playwright + previews — change `lab-fase-mejoras` (backlog Fase 5) |
-| 29 | QA-Lab | 🟢 Completado (sin archivar) | Lab QA con `Qué se probó` + `Cómo va quedando` + JSON en `Data/NSGC/backups/` — change `qa-lab` 11/11 |
+| 28 | LAB - Mejoras Lab | 🟢 Completado | `lab-fase-mejoras` archivado `2026-08-24` (backlog restante vive en spec LAB) |
+| 29 | QA-Lab | 🟢 Completado | Lab QA con carga ordenada por rank — `qa-lab` archivado `2026-08-24`; pasos 8–10 (PI/AD/GD) en Sesión 1 NSGC |
 
 ---
 

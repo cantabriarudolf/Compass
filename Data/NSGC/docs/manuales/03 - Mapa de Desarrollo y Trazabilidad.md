@@ -17,21 +17,21 @@ Este documento vincula la arquitectura del menú con los archivos de especificac
 
 | Orden | Fase | Módulo | Documento Fuente (Data/NSGC/docs/) | Etiqueta Menú | Ruta Kebab-case | Estado |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **00** | **0** | **RG** | `RG - Reglas Generales.md` | (Lógica Base) | N/A | 🟡 Documentado (sucio post `2026-08-17`) |
-| **01** | **0** | **ST** | `ST - Capa de Datos Persistente.md` | (Capa de Datos) | `lib/store.ts` v8 | 🟡 Documentado (sucio post `2026-08-16`) |
-| **02** | **0** | **UI** | `UI - Interfaz Principal.md`, `UI - Navegacion Lateral.md` | (Interfaz) | (transversal) | 🟡 Documentado (sucio) |
+| **00** | **0** | **RG** | `RG - Reglas Generales.md` | (Lógica Base) | N/A | 🟢 Completado (`enhance-rg-st-seed-gears` archivado `2026-08-24`) |
+| **01** | **0** | **ST** | `ST - Capa de Datos Persistente.md` | (Capa de Datos) | `lib/store.ts` v13 | 🟢 Completado (`enhance-rg-st-seed-gears` archivado `2026-08-24`) |
+| **02** | **0** | **UI** | `UI - Interfaz Principal.md`, `UI - Navegacion Lateral.md` | (Interfaz) | (transversal) | 🟡 Documentado |
 | **03** | **0** | **RP** | `RP - Roles y Permisos.md` | Permisos | `/admin/permisos` | 🟡 Documentado |
 | **04** | **1** | **MA** | `MA - Maestros Administrativos.md` | Maestros | `/admin/maestros` | 🟡 Documentado |
-| **05** | **1** | **TU** | `TU - Tipos de Unidad.md` | Infraestructura | `/inventario/tipos` | 🔵 En Proceso (`TU-tipos-unidad`) |
-| **06** | **1** | **EF** | `EF - Estructura Física.md` | Estructura Física | `/inventario/estructura` | 🔵 En Proceso (`EF-estructura-fisica`) |
-| **07** | **1** | **ES** | `ES - Estacionamientos.md` | Estacionamientos | `/inventario/estacionamientos` (deprecado v8) | 🔵 En Proceso (deprecado, absorbido como `u-E-*` en EF) |
-| **08** | **2** | **MP** | `MP - Maestro de Personas.md` | Directorio Personas | `/comunidad/personas` | 🟡 Documentado (sucio post `2026-05-19`) |
-| **09** | **2** | **VU** | `VU - Vinculacion Unidades.md` | Pestaña Unidades | `/comunidad/personas/[id]` | 🔵 En Proceso (`VU-vinculacion-unidades` + `VU-historial-asignaciones-unidad`) |
-| **10** | **2** | **CF** | `CF - Configuración Global.md` | Configuración | `/admin/configuracion` | 🟡 Documentado |
-| **11** | **2** | **PI** | `PI - Portal Inmobiliario.md` | Portal Inmobiliario | `/comunidad/portal` | ⏳ Pendiente |
+| **05** | **1** | **TU** | `TU - Tipos de Unidad.md` | Infraestructura | `/inventario/tipos` | 🟢 Completado (`TU-tipos-unidad` archivado `2026-08-24`) |
+| **06** | **1** | **EF** | `EF - Estructura Física.md` | Estructura Física | `/inventario/estructura` | 🟢 Completado (`EF-estructura-fisica` archivado `2026-08-24`) |
+| **07** | **1** | **ES** | `ES - Estacionamientos.md` | Estacionamientos | `/inventario/estacionamientos` (deprecado v8) | 🟢 Completado (`ES-estacionamientos` archivado como absorbido `u-E-*` en EF) |
+| **08** | **2** | **MP** | `MP - Maestro de Personas.md` | Directorio Personas | `/comunidad/personas` | 🟡 Documentado (spec re-sincronizada `2026-08-24`) |
+| **09** | **2** | **VU** | `VU - Vinculacion Unidades.md` | Pestaña Unidades | `/comunidad/personas/[id]` | 🟢 Completado (`VU-vinculacion-unidades` + `VU-historial-asignaciones-unidad`, archivados `2026-08-24`) |
+| **10** | **2** | **CF** | `CF - Configuración Global.md` | Configuración | `/admin/configuracion` | 🟡 Documentado (D4 parametrización legal Chile en spec vía `prep-fundamentos-serie-2`) |
+| **11** | **2** | **PI** | `PI - Portal Inmobiliario.md` | Portal Inmobiliario | `/comunidad/portal` | 🟢 Completado (`PI-portal-inmobiliario` archivado `2026-08-25`, Sesión 1 NSGC) |
 | **12** | **3** | **FI** | `FI - Finanzas y Morosidad.md` | Gastos Comunes | `/finanzas/gastos-comunes` | ⏳ Pendiente |
-| 13 | 3 | AD | `AD - Gestión Administrativa.md` | Resumen | `/dashboard` | ⏳ Pendiente |
-| 14 | 3 | GD | `GD - Gestión de Directiva.md` | Directiva | `/comunidad/directiva` | ⏳ Pendiente |
+| 13 | 3 | AD | `AD - Gestión Administrativa.md` | Resumen | `/admin/gestion` | 🟢 Completado (`AD-gestion-administrativa` archivado `2026-08-25`, Sesión 1 NSGC) |
+| 14 | 3 | GD | `GD - Gestión de Directiva.md` | Directiva | `/comunidad/directiva` | 🟢 Completado (`GD-gestion-directiva` archivado `2026-08-25`, Sesión 1 NSGC) |
 | 15 | 3 | CO | `CO - Comunicación Vecinos.md` | Comunicación | `/comunidad/comunicacion` | ⏳ Pendiente |
 | 16 | 3 | CV | `CV - Visor de Mensajes.md` | Visor | `/comunidad/visor-mensajes` | ⏳ Pendiente |
 | 17 | 3 | GE | `GE - Gestión de Solicitudes.md` | Solicitudes | `/operaciones/solicitudes` | ⏳ Pendiente |
@@ -45,10 +45,11 @@ Este documento vincula la arquitectura del menú con los archivos de especificac
 | 25 | 4 | MT | `MT - Mantenimiento y Proyectos.md` | Mantenimiento | `/inventario/proyectos` | ⏳ Pendiente |
 | 26 | 4 | CT | `CT - Certificados.md` | Certificados | `/comunidad/certificados` | ⏳ Pendiente |
 | **27** | **0** | **34 - Historia** | `34 - Historia de Poblamiento - Relato de Uso.md` | (Transversal) | (manual) | 🟢 Completado (`enhance-rg-st-seed-gears`) |
-| **28** | **5** | **LAB** | `LAB - Mejoras Lab` (Fase 5) | Laboratorio QA | `/admin/qa-lab` | 🔵 En Proceso (`lab-fase-mejoras` backlog) |
-| 29 | 5 | QA-Lab | `DEV-qa-lab` | Laboratorio QA | `/admin/qa-lab` | 🔵 En Proceso (`qa-lab` 11/11) |
+| **28** | **5** | **LAB** | `LAB - Mejoras Lab` (Fase 5) | Laboratorio QA | `/admin/qa-lab` | 🟢 Completado (`lab-fase-mejoras` archivado `2026-08-24`) |
+| 29 | 5 | QA-Lab | `DEV-qa-lab` | Laboratorio QA | `/admin/qa-lab` | 🟢 Completado (`qa-lab` archivado `2026-08-24`; pasos 8–10 PI/AD/GD en Sesión 1 NSGC) |
 
 > Cambios v8: `MA` movido Fase2→Fase1 y `RP` a Fase0 para alinear `PHASES` con dependencias (MA alimenta EF/TU, RP transversal). `ES` marcado deprecado (ver `ES - ...md` y `ST` v8). `PI` queda Fase2 (no Fase5) y `AM/RE` Fase3 (no Fase5) para unificar Dashboard ↔ Plan.
+> Cambios Sesión 1 NSGC (`2026-08-25`): `PI`, `AD`, `GD` pasan a 🟢 Completado con convención 1 módulo = 1 change; `TU/EF/ES/VU/RG/ST/LAB/QA-Lab` regularizados según archivo limpio `2026-08-24`. Ruta AD corregida a `/admin/gestion` (panel real, no `/dashboard`).
 
 ---
 
