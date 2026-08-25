@@ -60,13 +60,14 @@ Each OpenSpec capability maps 1:1 to its module spec in `Data/NSGC/docs/especifi
 | `MT-mantenimiento-proyectos` | `MT - Mantenimiento y Proyectos.md` |
 | `RA-reservas-amenities` | `RA - Reservas y Amenities.md` |
 | `CV-visor-mensajes` | `CV - Visor de Mensajes.md` (consume `actasGD.avisoCVReferencia` de GD) |
+| `FI-finanzas-morosidad` | `FI - Finanzas y Morosidad.md` (materializa `cargoFIReferencia` de IN/MT/RA) |
 | `LAB-mejoras` | `LAB - Mejoras Lab.md` |
 | `DEV-qa-lab` | Interno (tooling QA, sin doc NSGC) |
 | `UI-interfaz-principal` | Cross-cutting UI (no AA code) |
 | `UI-navegacion-lateral` | Cross-cutting UI (no AA code) |
 
 ### Remaining NSGC modules (pending OpenSpec specs)
-`FI`, `PL`, `RE`, `CT` — not yet defined in `openspec/specs/`. Create each spec using its AA prefix when implemented. `AU` está parcialmente implementada vía auditorías (`Data/NSGC/docs/auditorias/consolidado - 2026-08-24-b.md`); `SG` pendiente según `SG - Hardening y Despliegue.md` §1 y §3.
+`PL`, `RE`, `CT` — not yet defined in `openspec/specs/`. Create each spec using its AA prefix when implemented. `AU` está parcialmente implementada vía auditorías (`Data/NSGC/docs/auditorias/consolidado - 2026-08-24-b.md`); `SG` pendiente según `SG - Hardening y Despliegue.md` §1 y §3.
 ### Folder naming rule
 - Specs and active changes: `<AA>-<kebab-case-name>` (e.g. `EF-estructura-fisica`).
 - Cross-cutting UI specs use `UI-` prefix.
