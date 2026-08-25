@@ -57,6 +57,8 @@ const PLAN: Record<string, string[]> = {
   ir: ["Crear insumo crítico Cloro TEST (stock 10, umbral 5)", "Crear EPP Casco TEST con renovación semestral", "Crear Llave Depto 999 TEST vinculada a la unidad", "Solicitud SI de cloro ×3 → entrega descuenta stock", "Comodín Escobillón TEST → aprobar y crear en catálogo", "Entrega EPP individual al residente TEST", "Asignar llave al arrendatario TEST"],
   in: ["Crear tipo de falta TEST (Leve, $25.000)", "Registrar infracción leve TEST con evidencia D1", "Apelar con descargos → Apelada", "Registrar infracción grave TEST desde reclamo CO", "Respaldo de directiva TEST sobre la grave", "Aplicar grave → % GC + cargo FI pendiente", "Desestimar la leve con justificación"],
   mt: ["Crear activo Hidropack TEST en catálogo IR", "Trabajo preventivo mensual Hidropack TEST (proveedor AquaServicio TEST)", "Iniciar → En Curso", "Finalizar → genera próximo preventivo automáticamente", "Correctivo con garantía vencida → verificar garantías alerta una vez", "Proyecto Techos TEST ($12M / 120 meses → cuota $100.000)"],
+  ra: ["Crear Quincho central TEST (bloques 3h, tarifa $15.000, garantía $20.000, tardía ≤1 día → penalización $5.000)", "Reservar quincho mañana 19:00–22:00 para TEST Persona QA Uno → confirmada con cargo FI pendiente", "Solicitud solapada 20:00–23:00 → rechazada por conflicto horario", "Crear Hidrolavadora TEST (mobiliario, stock 2) y agotar cupo con 2 reservas paralelas", "Cancelar reserva del quincho fuera de plazo → penalización registrada", "Retener garantía de la hidrolavadora por daño"],
+  cv: ["Activar plantilla rápida Portón TEST (advertencia) → aviso publicado al instante", "Aviso manual TEST con imagen URL remota → borrador → publicar", "Aviso vencido ayer → caducidad automática lo archiva", "Publicar el acta GD TEST en el visor → avisoCVReferencia materializada con el id del aviso", "Cola del carrusel: avisos publicados vigentes con duraciones individuales"],
 }
 
 const TITULOS: Record<string, string> = {
@@ -75,6 +77,8 @@ const TITULOS: Record<string, string> = {
   ir: "13. Recursos y EPP (IR)",
   in: "14. Infracciones y Multas (IN)",
   mt: "15. Mantenimiento y Proyectos (MT)",
+  ra: "16. Reservas y Amenities (RA)",
+  cv: "17. Visor de Mensajes (CV)",
 }
 
 const COMO_LLEGAR: Record<string, string> = {
@@ -93,6 +97,8 @@ const COMO_LLEGAR: Record<string, string> = {
   ir: "Inventario → Recursos y EPP → cloro/casco/llave TEST y solicitud SI",
   in: "Finanzas → Multas → infracciones IN-TEST, panel directiva y catálogo",
   mt: "Inventario → Mantenimiento → trabajos MT-TEST, prevención y proyecto",
+  ra: "Operaciones → Reservas y Amenities → quincho/hidrolavadora TEST y calendario",
+  cv: "Comunidad → Visor de Mensajes → avisos TEST, actas GD y plantillas",
 }
 
 const COMO_LLEGAR_HREF: Record<string, string> = {
@@ -109,6 +115,8 @@ const COMO_LLEGAR_HREF: Record<string, string> = {
   ir: "/inventario/recursos",
   in: "/finanzas/multas",
   mt: "/inventario/proyectos",
+  ra: "/operaciones/reservas",
+  cv: "/comunidad/visor",
 }
 
 interface SeedReport {
@@ -130,14 +138,11 @@ const HISTORIA = [
 
 const PENDIENTES: { id: string; archivo: string; lineas: number; desc: string; pruebas: string[] }[] = [
   { id: "CT", archivo: "CT - Certificados.md", lineas: 44, desc: "Documentos oficiales y acreditaciones", pruebas: ["Certificado Unidad Al Día con firma digital", "Plantilla CT con datos ST"] },
-  { id: "CV", archivo: "CV - Visor de Mensajes.md", lineas: 68, desc: "Carrusel en pantallas comunes", pruebas: ["Carrusel público con rotación", "Visor con contenido de CO/RE"] },
   { id: "FI", archivo: "FI - Finanzas y Morosidad.md", lineas: 76, desc: "Fondos, emisión GC y cobranza", pruebas: ["Maestro Fondos con imputación", "Emisión GC fija vs prorrateo", "Cálculo mora y corte servicios", "Informe diferencia ajuste manual"] },
   { id: "GD", archivo: "GD - Gestión de Directiva.md", lineas: 40, desc: "Gobernanza y actas", pruebas: ["Acta con firma directiva", "Votación asamblea por RP"] },
   { id: "GE", archivo: "GE - Gestion de Solicitudes.md", lineas: 54, desc: "Tickets con workflow automático", pruebas: ["Ticket Nuevo → En Revisión al abrir", "Requiere Acción Vecino → En Proceso", "SLA dashboard GE"] },
   { id: "PE", archivo: "PE - Personal y Servicios.md", lineas: 93, desc: "RRHH, contratos, bitácora y turnos", pruebas: ["Ficha trabajador con AFP/Isapre y banco", "Feriados → proyección reemplazos y costo FI", "Bitácora visita/encomienda/contratista", "Cierre turno con checklist jornada"] },
   { id: "PI", archivo: "PI - Portal Inmobiliario.md", lineas: 27, desc: "Vitrina venta/arriendo unidades", pruebas: ["Unidad en portal con VU", "Contacto interesado → MP"] },
-  { id: "PL", archivo: "PL - Liquidaciones y Remuneraciones.md", lineas: 69, desc: "Haberes y descuentos", pruebas: ["Liquidación con asistencia PE", "Generación documento legal"] },
-  { id: "RA", archivo: "RA - Reservas y Amenities.md", lineas: 41, desc: "Agendamiento espacios comunes", pruebas: ["Reserva amenity con conflicto horario", "Cobro RA → FI"] },
   { id: "RE", archivo: "RE - Reporteria y Dashboards.md", lineas: 66, desc: "Dashboards y segmentación", pruebas: ["Dashboard demográfico/operativo/financiero", "Segmentación EF+MP+tenencia + distribución CO/RE", "RE_DASHBOARD_VIEW auditado"] },
 ]
 
@@ -178,6 +183,8 @@ export default function QaLabPage() {
     { id: "ir", label: TITULOS["ir"]!, rank: 7, fase: "Paso 13" },
     { id: "in", label: TITULOS["in"]!, rank: 7, fase: "Paso 14" },
     { id: "mt", label: TITULOS["mt"]!, rank: 7, fase: "Paso 15" },
+    { id: "ra", label: TITULOS["ra"]!, rank: 8, fase: "Paso 16" },
+    { id: "cv", label: TITULOS["cv"]!, rank: 8, fase: "Paso 17" },
   ]
 
   const FASE_MODULOS: Record<string, string[]> = {
@@ -193,7 +200,8 @@ export default function QaLabPage() {
     "9": ["ir"],
     "10": ["in"],
     "11": ["mt"],
-    "todo": ["ma", "tu", "mp", "ef-macro", "ef-micro", "ef-unidad", "vu", "pi", "ad", "gd", "co", "ge", "ir", "in", "mt"],
+    "12": ["ra", "cv"],
+    "todo": ["ma", "tu", "mp", "ef-macro", "ef-micro", "ef-unidad", "vu", "pi", "ad", "gd", "co", "ge", "ir", "in", "mt", "ra", "cv"],
   }
 
   const LABEL_FASE: Record<string, string> = {
@@ -209,6 +217,7 @@ export default function QaLabPage() {
     "9": "10. IR — catálogo, stock crítico y EPP",
     "10": "11. IN — faltas, apelaciones y directiva",
     "11": "12. MT — preventivos y proyectos",
+    "12": "13. RA+CV — reservas, avisos y actas en visor",
     "todo": "Carga completa",
   }
 
@@ -530,6 +539,90 @@ export default function QaLabPage() {
     return { id: "mt", label: TITULOS["mt"]!, rank: 7, status: errores.length ? "error" : "ok", count: 1, errores, pasos }
   }, [])
 
+  const mananaStr = () => {
+    const m = new Date()
+    m.setDate(m.getDate() + 1)
+    return m.toISOString().slice(0, 10)
+  }
+
+  const cargarFase12RA = React.useCallback(async (): Promise<ModReport> => {
+    const s = useCompassStore.getState()
+    const pasos: Paso[] = (PLAN["ra"]! as string[]).map(desc => ({ desc, estado: "pendiente" as ModuleState }))
+    // 1) Quincho TEST con reglas completas (tarifa/garantía/tardía)
+    const r1 = s.saveElementoRA({ id: "test-ra-quincho", nombre: "Quincho central TEST", tipo: "espacio_fisico", microSectorId: "test-micro-piso99", franja: "bloques_horas", duracionBloqueHoras: 3, tarifaUso: 15000, garantiaRequerida: 20000, aforo: 20, anticipacionMinimaDias: 0, cancelacionTardiaDias: 1, penalizacionTardiaMonto: 5000, activo: true } as any)
+    if (!r1.ok) { pasos[0]!.estado = "error"; pasos[0]!.error = r1.error } else pasos[0]!.estado = "ok"
+    // 2) Reserva confirmada mañana 19:00–22:00
+    const r2 = s.saveReservaRA({ id: "test-ra-rs-1", folio: "", elementoId: "test-ra-quincho", solicitantePersonaId: "test-p-99", unidadId: "test-u-999", fecha: mananaStr(), horaInicio: "19:00", horaFin: "22:00", estado: "confirmada", montoTarifa: 0, montoGarantia: 0 } as any)
+    const rs1 = s.reservasRA.find(x => x.id === "test-ra-rs-1")
+    if (!r2.ok || rs1?.folio !== "RA-0001" || rs1.cargoFIReferencia !== "pendiente") { pasos[1]!.estado = "error"; pasos[1]!.error = r2.error ?? `Folio/cargo: ${rs1?.folio}/${rs1?.cargoFIReferencia}` } else pasos[1]!.estado = "ok"
+    // 3) Solapamiento rechazado
+    const r3 = s.saveReservaRA({ id: "test-ra-rs-x", folio: "", elementoId: "test-ra-quincho", solicitantePersonaId: "test-p-88", fecha: mananaStr(), horaInicio: "20:00", horaFin: "23:00", estado: "confirmada", montoTarifa: 0, montoGarantia: 0 } as any)
+    if (r3.ok || !String(r3.error).includes("Conflicto horario")) { pasos[2]!.estado = "error"; pasos[2]!.error = r3.ok ? "El solapamiento pasó" : String(r3.error) } else pasos[2]!.estado = "ok"
+    // 4) Hidrolavadora stock 2 → 2 paralelas OK, tercera rechazada
+    const r4 = s.saveElementoRA({ id: "test-ra-hidro", nombre: "Hidrolavadora TEST", tipo: "activo_mobiliario", microSectorId: "test-micro-piso99", franja: "dia_completo", tarifaUso: 5000, garantiaRequerida: 30000, stock: 2, activo: true } as any)
+    if (!r4.ok) { pasos[3]!.estado = "error"; pasos[3]!.error = r4.error } else {
+      const a = s.saveReservaRA({ id: "test-ra-rs-2", folio: "", elementoId: "test-ra-hidro", solicitantePersonaId: "test-p-88", unidadId: "test-u-999", fecha: mananaStr(), horaInicio: "00:00", horaFin: "23:59", estado: "confirmada", montoTarifa: 0, montoGarantia: 0 } as any)
+      const b = s.saveReservaRA({ id: "test-ra-rs-3", folio: "", elementoId: "test-ra-hidro", solicitantePersonaId: "test-p-99", fecha: mananaStr(), horaInicio: "00:00", horaFin: "23:59", estado: "confirmada", montoTarifa: 0, montoGarantia: 0 } as any)
+      const c = s.saveReservaRA({ id: "test-ra-rs-y", folio: "", elementoId: "test-ra-hidro", solicitantePersonaId: "test-p-88", fecha: mananaStr(), horaInicio: "00:00", horaFin: "23:59", estado: "confirmada", montoTarifa: 0, montoGarantia: 0 } as any)
+      if (!a.ok || !b.ok || c.ok || !String(c.error).includes("Conflicto horario")) { pasos[3]!.estado = "error"; pasos[3]!.error = c.ok ? "Tercera reserva paralela pasó el control de stock" : a.error ?? b.error ?? String(c.error) } else pasos[3]!.estado = "ok"
+    }
+    // 5) Cancelación tardía con penalización
+    const r5 = s.cancelarReservaRA("test-ra-rs-1")
+    const cancelada = s.reservasRA.find(x => x.id === "test-ra-rs-1")
+    if (!r5.ok || cancelada?.cancelacion?.tardia !== true || cancelada.cancelacion.penalizacion !== 5000) { pasos[4]!.estado = "error"; pasos[4]!.error = r5.error ?? `Cancelación: ${JSON.stringify(cancelada?.cancelacion)}` } else pasos[4]!.estado = "ok"
+    // 6) Retención de garantía por daño
+    const r6 = s.retenerGarantiaRA("test-ra-rs-2", "Manguera fracturada al devolver el equipo TEST.")
+    const retenida = s.reservasRA.find(x => x.id === "test-ra-rs-2")?.garantiaRetenida
+    if (!r6.ok || retenida?.monto !== 30000) { pasos[5]!.estado = "error"; pasos[5]!.error = r6.error ?? JSON.stringify(retenida) } else pasos[5]!.estado = "ok"
+    const errores = pasos.filter(p => p.estado === "error").map(p => p.error || p.desc)
+    return { id: "ra", label: TITULOS["ra"]!, rank: 8, status: errores.length ? "error" : "ok", count: 1, errores, pasos }
+  }, [])
+
+  const cargarFase12CV = React.useCallback(async (): Promise<ModReport> => {
+    const s = useCompassStore.getState()
+    const pasos: Paso[] = (PLAN["cv"]! as string[]).map(desc => ({ desc, estado: "pendiente" as ModuleState }))
+    // 1) Activación instantánea de plantilla por personal de servicio
+    const r1 = s.activarPlantillaCV("plant-cv-porton")
+    const avisoPorton = s.avisosCV.find(a => a.plantillaId === "plant-cv-porton")
+    if (!r1.ok || avisoPorton?.estado !== "publicado" || avisoPorton.tipologia !== "advertencia") { pasos[0]!.estado = "error"; pasos[0]!.error = r1.error ?? `Estado: ${avisoPorton?.estado}` } else pasos[0]!.estado = "ok"
+    // 2) Aviso manual con imagen URL remota → publicar
+    const ayer = new Date()
+    ayer.setDate(ayer.getDate() - 1)
+    const r2 = s.saveAvisoCV({ id: "test-cv-manual", titulo: "Corte de agua programado TEST", cuerpo: "Corte de agua TEST entre 10:00 y 14:00 por mantención del estanque.", tipologia: "info", duracionSegundos: 8, imagenUrl: "https://placeholder.supabase.co/test-cv-agua.jpg", pantallaCompleta: false, tags: ["qa", "cortes"], estado: "borrador", requiereVistoBueno: false, origen: "manual", fechaCreacion: new Date().toISOString().slice(0, 10) })
+    let publicadoOk = false
+    if (!r2.ok) { pasos[1]!.estado = "error"; pasos[1]!.error = r2.error } else {
+      publicadoOk = s.publicarAvisoCV("test-cv-manual").ok && s.avisosCV.find(a => a.id === "test-cv-manual")?.estado === "publicado"
+      if (!publicadoOk) { pasos[1]!.estado = "error"; pasos[1]!.error = "No quedó publicado" } else pasos[1]!.estado = "ok"
+    }
+    // 3) Caducidad automática de un vencido
+    const r3 = s.saveAvisoCV({ id: "test-cv-expirado", titulo: "Aviso vencido TEST", cuerpo: "Este aviso TEST venció ayer para probar la caducidad automática.", tipologia: "exito", duracionSegundos: 5, expiresAt: ayer.toISOString().slice(0, 10), pantallaCompleta: false, tags: ["qa"], estado: "borrador", requiereVistoBueno: false, origen: "manual", fechaCreacion: ayer.toISOString().slice(0, 10) })
+    let caducadoOk = false
+    if (!r3.ok) { pasos[2]!.estado = "error"; pasos[2]!.error = r3.error } else {
+      s.publicarAvisoCV("test-cv-expirado")
+      s.caducarAvisosCV()
+      caducadoOk = s.avisosCV.find(a => a.id === "test-cv-expirado")?.estado === "archivado"
+      if (!caducadoOk) { pasos[2]!.estado = "error"; pasos[2]!.error = "No fue archivado por caducidad" } else pasos[2]!.estado = "ok"
+    }
+    // 4) Publicar acta GD TEST → materializa avisoCVReferencia
+    const acta = s.actasGD.find(a => a.id === "test-acta-gd")
+    if (!acta || acta.estado !== "publicada") {
+      pasos[3]!.estado = "error"; pasos[3]!.error = "Falta test-acta-gd publicada (ejecuta la fase GD)"
+    } else {
+      const r4 = s.publicarActaEnCV("test-acta-gd")
+      const actaFinal = s.actasGD.find(a => a.id === "test-acta-gd")
+      const avisoActa = actaFinal?.avisoCVReferencia ? s.avisosCV.find(a => a.id === actaFinal.avisoCVReferencia) : undefined
+      if (!r4.ok || !actaFinal || !actaFinal.avisoCVReferencia || actaFinal.avisoCVReferencia === "pendiente" || avisoActa?.origen !== "acta_gd" || avisoActa.estado !== "publicado") {
+        pasos[3]!.estado = "error"; pasos[3]!.error = r4.error ?? `Referencia: ${actaFinal?.avisoCVReferencia}`
+      } else pasos[3]!.estado = "ok"
+    }
+    // 5) Cola del carrusel con duraciones individuales
+    const cola = s.avisosCV.filter(a => a.estado === "publicado")
+    const duraciones = new Set(cola.map(a => a.duracionSegundos))
+    if (cola.length < 3 || duraciones.size < 2) { pasos[4]!.estado = "error"; pasos[4]!.error = `Cola: ${cola.length} avisos, ${duraciones.size} duración(es)` } else pasos[4]!.estado = "ok"
+    const errores = pasos.filter(p => p.estado === "error").map(p => p.error || p.desc)
+    return { id: "cv", label: TITULOS["cv"]!, rank: 8, status: errores.length ? "error" : "ok", count: 1, errores, pasos }
+  }, [])
+
   const buildHistoria = React.useCallback((mods: ModReport[]): SeedReport["historia"] => {
     return HISTORIA.map(h => ({ capitulo: h.capitulo, estado: (() => {
       const rankMods = mods.filter(m => m.rank === h.rank)
@@ -669,11 +762,25 @@ export default function QaLabPage() {
         mods.push(await cargarFase3VU())
         mods.push(await cargarFase11MT())
       }
+      if (fase === "12") {
+        mods.push(await cargarFase0())
+        mods.push(await cargarFase1TU())
+        mods.push(await cargarFase1MP())
+        mods.push(await cargarFase2Macro())
+        mods.push(await cargarFase2Micro())
+        mods.push(await cargarFase2Unidad())
+        mods.push(await cargarFase3VU())
+        mods.push(await cargarFase6GD())
+        mods.push(await cargarFase12RA())
+        mods.push(await cargarFase12CV())
+      }
       if (fase === "todo") {
         mods.push(await cargarFase8GE())
         mods.push(await cargarFase9IR())
         mods.push(await cargarFase10IN())
         mods.push(await cargarFase11MT())
+        mods.push(await cargarFase12RA())
+        mods.push(await cargarFase12CV())
       }
       const historia = buildHistoria(mods)
       const erroresGlobales = mods.flatMap(m => m.errores.map(e => `${m.label}: ${e}`))
@@ -686,7 +793,7 @@ export default function QaLabPage() {
     } finally {
       setLoading(false)
     }
-  }, [cargarFase0, cargarFase1MP, cargarFase1TU, cargarFase2Macro, cargarFase2Micro, cargarFase2Unidad, cargarFase3VU, cargarFase4PI, cargarFase5AD, cargarFase6GD, cargarFase7CO, cargarFase8GE, cargarFase9IR, cargarFase10IN, cargarFase11MT, buildHistoria, ensureHydrated])
+  }, [cargarFase0, cargarFase1MP, cargarFase1TU, cargarFase2Macro, cargarFase2Micro, cargarFase2Unidad, cargarFase3VU, cargarFase4PI, cargarFase5AD, cargarFase6GD, cargarFase7CO, cargarFase8GE, cargarFase9IR, cargarFase10IN, cargarFase11MT, cargarFase12RA, cargarFase12CV, buildHistoria, ensureHydrated])
 
   const limpiar = React.useCallback(async () => {
     if (!ensureHydrated()) return
@@ -701,6 +808,20 @@ export default function QaLabPage() {
     // El preventivo generado automáticamente hereda el título TEST del padre.
     useCompassStore.setState(st => ({
       trabajosMT: st.trabajosMT.filter(t => !t.titulo.includes("TEST")),
+    }))
+    // CV (antes de remover el acta GD): purga avisos TEST, los nacidos del acta
+    // TEST y los activados desde plantilla en la fase; el maestro sembrado se conserva.
+    useCompassStore.setState(st => ({
+      avisosCV: st.avisosCV.filter(a =>
+        !a.id.startsWith("test-") && a.actaId !== "test-acta-gd" && a.plantillaId !== "plant-cv-porton"
+      ),
+    }))
+    // RA: reservas y elementos TEST se purgan directo (removeElementoRA exige
+    // reservas canceladas; el filtro inverso no depende de estados).
+    useCompassStore.setState(st => ({
+      reservasRA: st.reservasRA.filter(r => !r.id.startsWith("test-ra-")),
+      elementosRA: st.elementosRA.filter(e => !e.id.startsWith("test-ra-")),
+      notificaciones: st.notificaciones.filter(n => !["IR", "IN", "MT", "RA"].includes(n.moduloOrigen)),
     }))
     // IN
     const rIn1 = s.removeInfraccionIN("test-in-leve")
@@ -913,6 +1034,7 @@ export default function QaLabPage() {
               { fase: "9", label: "10. IR — catálogo, stock crítico y EPP" },
               { fase: "10", label: "11. IN — faltas, apelaciones y directiva" },
               { fase: "11", label: "12. MT — preventivos y proyectos" },
+              { fase: "12", label: "13. RA+CV — reservas, avisos y visor" },
             ].map(item => {
               const isActive = ultimaFase === item.fase
               const modsFase = isActive && report ? report.modulos.filter(m => FASE_MODULOS[item.fase]!.includes(m.id)) : []
@@ -1165,21 +1287,21 @@ export default function QaLabPage() {
           <Card className="border-amber-200 bg-amber-50/40 dark:bg-amber-950/10 dark:border-amber-900/50">
             <CardHeader className="pb-2">
               <CardTitle className="flex items-center gap-2 text-sm"><IconEye className="size-4 text-amber-600" /> Pruebas eventuales — lo que pasaría si migraras una especificación tentativa</CardTitle>
-              <CardDescription className="text-xs">Hoy el QA solo muestra pruebas reales (`15/28` specs formalizados `53.6%`). Aquí ves el estimado de las `13` tentativas en `Data/NSGC/docs/especificaciones/` aún no en `openspec/specs/` — líneas tentativas `748L` → estimado formalizado `~1062L`, total eventual `~2239L`.</CardDescription>
+              <CardDescription className="text-xs">Hoy el QA solo muestra pruebas reales (`17/28` specs formalizados `60.7%`). Aquí ves el estimado de las `11` tentativas en `Data/NSGC/docs/especificaciones/` aún no en `openspec/specs/`.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="grid grid-cols-3 gap-2 text-center">
                 <div className="rounded-lg border bg-white dark:bg-card p-2">
                   <p className="text-xs text-muted-foreground">Real</p>
-                  <p className="text-lg font-bold text-emerald-600">15 <span className="text-xs font-normal text-muted-foreground">/28</span></p>
-                  <p className="text-[11px] text-muted-foreground">53.6% formalizado · 1119L spec</p>
-                  <p className="text-[10px] font-mono text-emerald-700 dark:text-emerald-400">12 módulos QA (ma,tu,mp,ef×3,vu,pi,ad,gd,co,ge)</p>
+                  <p className="text-lg font-bold text-emerald-600">17 <span className="text-xs font-normal text-muted-foreground">/28</span></p>
+                  <p className="text-[11px] text-muted-foreground">60.7% formalizado · 1119L spec</p>
+                  <p className="text-[10px] font-mono text-emerald-700 dark:text-emerald-400">14 módulos QA (ma,tu,mp,ef×3,vu,pi,ad,gd,co,ge,ir,in,mt,ra,cv)</p>
                 </div>
                 <div className="rounded-lg border border-dashed bg-muted/20 p-2">
                   <p className="text-xs text-muted-foreground">Tentativo</p>
-                  <p className="text-lg font-bold">13 <span className="text-xs font-normal text-muted-foreground">/28</span></p>
-                  <p className="text-[11px] text-muted-foreground">46.4% pendiente · 748L tentativas</p>
-                  <p className="text-[10px] font-mono text-muted-foreground">estimado +1062L formalizados</p>
+                  <p className="text-lg font-bold">11 <span className="text-xs font-normal text-muted-foreground">/28</span></p>
+                  <p className="text-[11px] text-muted-foreground">39.3% pendiente · 639L tentativas</p>
+                  <p className="text-[10px] font-mono text-muted-foreground">estimado +908L formalizados</p>
                 </div>
                 <div className="rounded-lg border bg-white dark:bg-card p-2">
                   <p className="text-xs text-muted-foreground">Eventual</p>
