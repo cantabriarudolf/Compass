@@ -352,6 +352,100 @@ export const SolicitudGESchema = z.object({
   historialEstados: z.array(CambioEstadoGESchema),
 })
 
+// --- Inventario y Recursos (IR) ---
+
+export const CATEGORIAS_RECURSO_IR = ["infraestructura", "mobiliario", "insumo", "epp", "acceso"] as const
+export const CategoriaRecursoIRSchema = z.enum(CATEGORIAS_RECURSO_IR)
+
+export const ESTADOS_ACTIVO_IR = ["disponible", "en_uso", "reparacion", "baja"] as const
+export const EstadoActivoIRSchema = z.enum(ESTADOS_ACTIVO_IR)
+
+// Referencia D1: ficha técnica y facturas solo por URL (jamás base64/Blob).
+const UrlReferenciaIRSchema = z
+  .string()
+  .max(2048, "La URL excede el largo permitido.")
+  .refine((valor) => !/^data:/i.test(valor) && !/^blob:/i.test(valor), {
+    message: "Media por referencia (D1): no se permiten data-URL ni Blob embebidos.",
+  })
+
+export const RecursoIRSchema = z.object({
+  id: IdEntidadSchema,
+  // Código de inventario IR-A-#### (auto-generado al alta).
+  codigo: z.string().min(1, "El código de inventario es obligatorio.").optional(),
+  nombre: z.string({ required_error: "El nombre del recurso es obligatorio." }).min(1, "El nombre del recurso es obligatorio."),
+  categoria: CategoriaRecursoIRSchema,
+  marca: z.string().optional(),
+  modelo: z.string().optional(),
+  descripcion: z.string().optional(),
+  fichaTecnicaUrl: UrlReferenciaIRSchema.optional(),
+  // Ubicación EF (infraestructura exige micro sector o unidad; llave exige unidad).
+  microSectorId: IdEntidadSchema.optional(),
+  unidadId: IdEntidadSchema.optional(),
+  responsablePersonaId: IdEntidadSchema.optional(),
+  estadoActivo: EstadoActivoIRSchema,
+  // Insumos (stock)
+  unidadMedidaId: IdEntidadSchema.optional(),
+  stock: z.number({ required_error: "El stock es obligatorio." }).min(0, "El stock no puede ser negativo."),
+  esCritico: z.boolean({ required_error: "El flag de stock crítico es obligatorio." }),
+  umbralCritico: z.number().min(0, "El umbral no puede ser negativo.").optional(),
+  // Ingreso (compras): proveedor/garantía/factura como metadatos.
+  proveedor: z.string().optional(),
+  numeroFactura: z.string().optional(),
+  facturaUrl: UrlReferenciaIRSchema.optional(),
+  garantiaHasta: FechaISOSchema.optional(),
+  // EPP
+  talla: z.string().optional(),
+  renovacionMeses: z.number().int().positive("La renovación debe ser al menos 1 mes.").optional(),
+  // Accesos: quién tiene qué (asignación vigente).
+  asignacionActual: z.object({
+    personaId: IdEntidadSchema,
+    fecha: FechaISOSchema,
+  }).optional(),
+  cargoFIReferencia: z.literal("pendiente").optional(),
+})
+
+export const ESTADOS_SOLICITUD_INSUMO_IR = ["pendiente", "entregada", "rechazada"] as const
+export const EstadoSolicitudInsumoIRSchema = z.enum(ESTADOS_SOLICITUD_INSUMO_IR)
+
+export const ESTADOS_COMODIN_IR = ["no_comodin", "pendiente", "aprobada_creada", "sustituida", "rechazada"] as const
+export const EstadoComodinIRSchema = z.enum(ESTADOS_COMODIN_IR)
+
+// Comodín: artículo fuera de catálogo con descripción y justificación extendida.
+export const ComodinIRSchema = z.object({
+  descripcionArticulo: z.string({ required_error: "La descripción del artículo es obligatoria." }).min(1, "La descripción del artículo es obligatoria."),
+  justificacion: z.string({ required_error: "La justificación es obligatoria." }).min(20, "La justificación debe detallar el motivo (mínimo 20 caracteres)."),
+})
+
+export const SolicitudInsumoIRSchema = z.object({
+  id: IdEntidadSchema,
+  folio: z.string({ required_error: "El folio es obligatorio." }).min(1, "El folio es obligatorio."),
+  solicitantePersonaId: IdEntidadSchema,
+  recursoInsumoId: IdEntidadSchema.optional(),
+  comodin: ComodinIRSchema.optional(),
+  // Artículo similar asignado al resolver un comodín por sustitución.
+  recursoSustitutoId: IdEntidadSchema.optional(),
+  estadoComodin: EstadoComodinIRSchema,
+  cantidad: z.number({ required_error: "La cantidad es obligatoria." }).positive("La cantidad debe ser mayor a cero."),
+  areaDestino: z.string({ required_error: "El área de destino es obligatoria." }).min(1, "El área de destino es obligatoria."),
+  estado: EstadoSolicitudInsumoIRSchema,
+  fechaSolicitud: FechaISOSchema,
+  entregaFecha: FechaISOSchema.optional(),
+  rechazoJustificacion: z.string().optional(),
+})
+
+export const ESTADOS_EPP_IR = ["nuevo", "usado", "renovar"] as const
+export const EstadoEPPIRSchema = z.enum(ESTADOS_EPP_IR)
+
+export const EntregaEPPSchema = z.object({
+  id: IdEntidadSchema,
+  recursoId: IdEntidadSchema,
+  personaId: IdEntidadSchema,
+  fechaEntrega: FechaISOSchema,
+  talla: z.string().optional(),
+  estado: EstadoEPPIRSchema,
+  proximaRenovacion: FechaISOSchema.optional(),
+})
+
 // --- Administración: Maestros (MA) ---
 
 export const AfpSchema = z.object({
@@ -566,6 +660,15 @@ export type CambioEstadoGE = z.infer<typeof CambioEstadoGESchema>
 export type DetalleGrabaciones = z.infer<typeof DetalleGrabacionesSchema>
 export type DetalleInsumos = z.infer<typeof DetalleInsumosSchema>
 export type SolicitudGE = z.infer<typeof SolicitudGESchema>
+export type RecursoIR = z.infer<typeof RecursoIRSchema>
+export type SolicitudInsumoIR = z.infer<typeof SolicitudInsumoIRSchema>
+export type ComodinIR = z.infer<typeof ComodinIRSchema>
+export type EntregaEPP = z.infer<typeof EntregaEPPSchema>
+export type CategoriaRecursoIR = z.infer<typeof CategoriaRecursoIRSchema>
+export type EstadoActivoIR = z.infer<typeof EstadoActivoIRSchema>
+export type EstadoSolicitudInsumoIR = z.infer<typeof EstadoSolicitudInsumoIRSchema>
+export type EstadoComodinIR = z.infer<typeof EstadoComodinIRSchema>
+export type EstadoEPPIR = z.infer<typeof EstadoEPPIRSchema>
 
 // --- Utilidades de validación para el store ---
 
