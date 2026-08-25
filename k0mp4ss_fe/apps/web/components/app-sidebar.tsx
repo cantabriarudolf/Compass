@@ -138,6 +138,7 @@ const data = {
       roles: ["admin"],
       items: [
         { title: "Auditoría y Métricas", url: "/admin/metricas" },
+        { title: "Gestión Administrativa", url: "/admin/gestion" },
         { title: "Maestros Administrativos", url: "/admin/maestros" },
         { title: "Configuración", url: "/admin/configuracion" },
         { title: "Permisos", url: "/admin/permisos" },

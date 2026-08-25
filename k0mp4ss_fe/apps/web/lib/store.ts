@@ -57,6 +57,7 @@ import {
   PublicacionPortalSchema,
   LeadPortalSchema,
   NotificacionSchema,
+  ControlPropiedadSchema,
   MAESTRO_SCHEMAS,
   validarConEsquema,
   validarMaestro,
@@ -71,6 +72,7 @@ import {
   type LeadPortal,
   type Notificacion,
   type OperacionPortal,
+  type ControlPropiedad,
 } from "@/lib/schemas"
 import { z } from "zod"
 
@@ -123,7 +125,7 @@ function refUnidad(get: () => CompassStore, unidadId: string): string {
   return u ? `${u.etiqueta} ${u.numero}` : unidadId
 }
 
-export const STORE_VERSION = 11
+export const STORE_VERSION = 12
 
 export interface MaestroCollections {
   afps: Afp[]
@@ -159,6 +161,8 @@ export interface CompassData {
   leadsPortal: LeadPortal[]
   // Notificaciones simuladas (D3, consumidas por todos los módulos)
   notificaciones: Notificacion[]
+  // Gestión Administrativa (AD)
+  controlesPropiedades: ControlPropiedad[]
 }
 
 interface CompassStore extends CompassData {
@@ -193,8 +197,11 @@ interface CompassStore extends CompassData {
   saveLeadPortal: (lead: LeadPortal) => StoreResult
   syncPublicacionesDesdeVinculos: (unidadId: string) => void
   // Notificaciones simuladas (D3)
-  notify: (notificacion: Omit<Notificacion, "id" | "leida" | "canal" | "fecha"> & { canal?: Notificacion["canal"] }) => void
+  notify: (notificacion: Omit<Notificacion, "id" | "leida" | "canal" | "fecha"> & { canal?: Notificacion["canal"]; unidadId?: string }) => void
   marcarNotificacionLeida: (id: string) => void
+  // Gestión Administrativa (AD)
+  saveControlPropiedad: (control: ControlPropiedad) => StoreResult
+  removeControlPropiedad: (id: string) => StoreResult
 }
 
 function upsert<T extends { id: string }>(list: T[], item: T): T[] {
@@ -234,6 +241,7 @@ export const seedData = (): CompassData => ({
   publicacionesPortal: [],
   leadsPortal: [],
   notificaciones: [],
+  controlesPropiedades: [],
   maestros: {
     afps: seedAFPS,
     previsionesSalud: seedPrevisionesSalud,
@@ -269,6 +277,7 @@ const ESQUEMAS_COLECCION = {
   publicacionesPortal: z.array(PublicacionPortalSchema),
   leadsPortal: z.array(LeadPortalSchema),
   notificaciones: z.array(NotificacionSchema),
+  controlesPropiedades: z.array(ControlPropiedadSchema),
 } as const
 
 type ClaveColeccion = keyof typeof ESQUEMAS_COLECCION
@@ -454,9 +463,25 @@ export const useCompassStore = create<CompassStore>()(
       // --- MP: Personas ---
       savePersona: (persona) => {
         if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
+        // AD (D1): foto y firma digitalizada solo por referencia; jamás base64/Blob.
+        const esReferenciaValida = (valor?: string): boolean =>
+          valor === undefined || (!/^data:/i.test(valor) && !/^blob:/i.test(valor) && valor.length <= 2048)
+        if (!esReferenciaValida(persona.fotografiaUrl)) {
+          return { ok: false, error: "Media por referencia (D1): la fotografía debe ser una URL, no contenido embebido." }
+        }
+        const firma = persona.datosGobernanza?.firmaDigital
+        if (!esReferenciaValida(firma)) {
+          return { ok: false, error: "Media por referencia (D1): la firma digitalizada debe ser una URL, no contenido embebido." }
+        }
         const validacion = validarConEsquema(PersonaSchema, persona)
         if (!validacion.ok) return validacion
+        const anterior = get().personas.find(p => p.id === persona.id)
         set(s => ({ personas: upsert(s.personas, validacion.data) }))
+        // AD: carga/reemplazo de firma digitalizada de directiva queda auditado.
+        const firmaNueva = validacion.data.datosGobernanza?.firmaDigital
+        if (anterior && firmaNueva && anterior.datosGobernanza?.firmaDigital !== firmaNueva) {
+          registrarEvento(set, "AD_DIRECTIVA_SIGN_UPLOAD", persona.id, `Firma digitalizada actualizada para ${validacion.data.nombres} ${validacion.data.apellidos}.`, "AD")
+        }
         return { ok: true }
       },
 
@@ -792,6 +817,13 @@ export const useCompassStore = create<CompassStore>()(
       // --- Notificaciones simuladas (D3) ---
       notify: (notificacion) => {
         if (!get().hasHydrated) return
+        // AD: el propietario puede silenciar las alertas automáticas hacia los
+        // residentes de su unidad ("Gestión de Alertas Residentes"). Los actos
+        // formales de gobernanza (GD) no pasan por este gate.
+        if (notificacion.destinatarioRol === "residente" && notificacion.unidadId) {
+          const control = get().controlesPropiedades.find(c => c.unidadId === notificacion.unidadId)
+          if (control && !control.alertasResidentesActivas) return
+        }
         const completa: Notificacion = {
           id: `notif-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
           destinatarioRol: notificacion.destinatarioRol,
@@ -816,6 +848,45 @@ export const useCompassStore = create<CompassStore>()(
           notificaciones: s.notificaciones.map(n => (n.id === id ? { ...n, leida: true } : n)),
         }))
       },
+
+      // --- AD: Gestión Administrativa ---
+      saveControlPropiedad: (control) => {
+        if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
+        const validacion = validarConEsquema(ControlPropiedadSchema, control)
+        if (!validacion.ok) return validacion
+        if (!get().unidades.some(u => u.id === validacion.data.unidadId)) {
+          return { ok: false, error: "No se puede guardar el control: la unidad no existe en el inventario." }
+        }
+        // Unicidad: un solo registro de controles por unidad.
+        const duplicado = get().controlesPropiedades.find(
+          c => c.unidadId === validacion.data.unidadId && c.id !== validacion.data.id
+        )
+        if (duplicado) {
+          return { ok: false, error: `La unidad ya tiene controles registrados (${duplicado.id}).` }
+        }
+        const anterior = get().controlesPropiedades.find(c => c.id === validacion.data.id)
+        set(s => ({ controlesPropiedades: upsert(s.controlesPropiedades, validacion.data) }))
+
+        const ref = refUnidad(get, validacion.data.unidadId)
+        if (!anterior) {
+          registrarEvento(set, "AD_OWNER_CONFIG_CHANGE", validacion.data.id, `Controles de privacidad creados para ${ref}.`, "AD")
+        } else {
+          const cambios: string[] = []
+          if (anterior.residenteVeMorosidad !== validacion.data.residenteVeMorosidad) cambios.push(`morosidad=${validacion.data.residenteVeMorosidad ? "visible" : "oculta"}`)
+          if (anterior.residenteVeActas !== validacion.data.residenteVeActas) cambios.push(`actas=${validacion.data.residenteVeActas ? "visibles" : "ocultas"}`)
+          if (anterior.alertasResidentesActivas !== validacion.data.alertasResidentesActivas) cambios.push(`alertas=${validacion.data.alertasResidentesActivas ? "activas" : "silenciadas"}`)
+          if (cambios.length > 0) {
+            registrarEvento(set, "AD_OWNER_CONFIG_CHANGE", validacion.data.id, `Controles de ${ref} actualizados: ${cambios.join("; ")}.`, "AD")
+          }
+        }
+        return { ok: true }
+      },
+
+      removeControlPropiedad: (id) => {
+        if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
+        set(s => ({ controlesPropiedades: s.controlesPropiedades.filter(c => c.id !== id) }))
+        return { ok: true }
+      },
     }),
     {
       name: "compass-store",
@@ -838,6 +909,7 @@ export const useCompassStore = create<CompassStore>()(
         publicacionesPortal: state.publicacionesPortal,
         leadsPortal: state.leadsPortal,
         notificaciones: state.notificaciones,
+        controlesPropiedades: state.controlesPropiedades,
       }),
       migrate: (persisted, version) => {
         const prev = (persisted ?? {}) as Partial<CompassData>
@@ -926,6 +998,12 @@ export const useCompassStore = create<CompassStore>()(
             publicacionesPortal: prev.publicacionesPortal ?? [],
             leadsPortal: prev.leadsPortal ?? [],
             notificaciones: prev.notificaciones ?? [],
+          }
+        }
+        if ((version ?? 0) < 12) {
+          result = {
+            ...result,
+            controlesPropiedades: prev.controlesPropiedades ?? [],
           }
         }
         // TST-002: los stores que ya quedaron en v8 con unidades dañadas por este

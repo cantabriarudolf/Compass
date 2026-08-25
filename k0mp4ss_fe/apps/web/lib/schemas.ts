@@ -168,6 +168,18 @@ export const NotificacionSchema = z.object({
   leida: z.boolean(),
 })
 
+// --- Gestión Administrativa (AD) ---
+
+// Controles de privacidad/comunicación del propietario sobre su unidad.
+// Defaults al leer sin registro: {residenteVeMorosidad:false, residenteVeActas:false, alertasResidentesActivas:true}
+export const ControlPropiedadSchema = z.object({
+  id: IdEntidadSchema,
+  unidadId: IdEntidadSchema,
+  residenteVeMorosidad: z.boolean({ required_error: "El flag de morosidad visible es obligatorio." }),
+  residenteVeActas: z.boolean({ required_error: "El flag de actas visibles es obligatorio." }),
+  alertasResidentesActivas: z.boolean({ required_error: "El flag de alertas es obligatorio." }),
+})
+
 export const MensajeDocumentoInvalido = "RUT inválido (dígito verificador incorrecto) o pasaporte con formato no válido."
 
 const DocumentoIdentidadSchema = z
@@ -392,6 +404,7 @@ export type OperacionPortal = z.infer<typeof OperacionPortalSchema>
 export type PublicacionPortal = z.infer<typeof PublicacionPortalSchema>
 export type LeadPortal = z.infer<typeof LeadPortalSchema>
 export type Notificacion = z.infer<typeof NotificacionSchema>
+export type ControlPropiedad = z.infer<typeof ControlPropiedadSchema>
 
 // --- Utilidades de validación para el store ---
 
