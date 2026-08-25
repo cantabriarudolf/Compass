@@ -12,7 +12,7 @@ El acta MUST permanecer en estado "Borrador de Directiva" hasta que todos los mi
 - **AND** `notify()` genera una notificación por propietario con canal `email_simulado`
 - **AND** la referencia de aviso en CV queda `"pendiente"` hasta su publicación en el visor
 
-#### Scenario: Referencia materializada por CV (nuevo)
+#### Scenario: Referencia materializada por CV
 - **WHEN** el visor de mensajes publica un acta Publicada con referencia `"pendiente"`
 - **THEN** `avisoCVReferencia` guarda el id del aviso creado y no admite republicación
 
