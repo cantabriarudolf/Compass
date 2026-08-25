@@ -55,13 +55,16 @@ Each OpenSpec capability maps 1:1 to its module spec in `Data/NSGC/docs/especifi
 | `GD-gestion-directiva` | `GD - Gestión de Directiva.md` |
 | `CO-comunicacion-vecinos` | `CO - Comunicacion Vecinos.md` |
 | `GE-gestion-solicitudes` | `GE - Gestion de Solicitudes.md` |
+| `IR-inventario-recursos` | `IR - Inventario y Recursos.md` |
+| `IN-infracciones-multas` | `IN - Infracciones y Multas.md` |
+| `MT-mantenimiento-proyectos` | `MT - Mantenimiento y Proyectos.md` |
 | `LAB-mejoras` | `LAB - Mejoras Lab.md` |
 | `DEV-qa-lab` | Interno (tooling QA, sin doc NSGC) |
 | `UI-interfaz-principal` | Cross-cutting UI (no AA code) |
 | `UI-navegacion-lateral` | Cross-cutting UI (no AA code) |
 
 ### Remaining NSGC modules (pending OpenSpec specs)
-`FI`, `PL`, `IN`, `IR`, `RA`, `RE`, `MT`, `CT`, `CV` — not yet defined in `openspec/specs/`. Create each spec using its AA prefix when implemented. `AU` está parcialmente implementada vía auditorías (`Data/NSGC/docs/auditorias/consolidado - 2026-08-24-b.md`); `SG` pendiente según `SG - Hardening y Despliegue.md` §1 y §3.
+`FI`, `PL`, `RA`, `RE`, `CT`, `CV` — not yet defined in `openspec/specs/`. Create each spec using its AA prefix when implemented. `AU` está parcialmente implementada vía auditorías (`Data/NSGC/docs/auditorias/consolidado - 2026-08-24-b.md`); `SG` pendiente según `SG - Hardening y Despliegue.md` §1 y §3.
 ### Folder naming rule
 - Specs and active changes: `<AA>-<kebab-case-name>` (e.g. `EF-estructura-fisica`).
 - Cross-cutting UI specs use `UI-` prefix.
