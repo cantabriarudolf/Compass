@@ -18,11 +18,13 @@ k0mp4ss_fe/apps/web/data/
 │   ├── personas.ts                ← Maestro de Personas (identidades + roles)
 │   ├── vinculos.ts                ← Vínculos persona ↔ unidad (VU)
 │   └── plantillas-co.ts           ← Seed del Maestro de Plantillas (CO, Sesión 2)
+├── finanzas/
+│   └── tipos-infraccion.ts        ← Seed del Catálogo de Faltas (IN, Sesión 3)
 └── inventario/
     └── estructura.ts              ← Tipos de unidad, sectores y unidades (incluye plazas u-E-*)
 ```
 
-> **⚠️ Desde ST**, casi todo vive en el store `compass-store` (`lib/store.ts`) con migraciones versionadas. Las colecciones PI/AD/GD (Sesión 1) nacen **vacías por diseño** dentro del store — ver sección 5. Las colecciones CO/GE (Sesión 2) siguen el mismo patrón; la excepción es `plantillasCO`, que se **siembra** desde `data/comunidad/plantillas-co.ts` — ver sección 6.
+> **⚠️ Desde ST**, casi todo vive en el store `compass-store` (`lib/store.ts`) con migraciones versionadas. Las colecciones PI/AD/GD (Sesión 1) nacen **vacías por diseño** dentro del store — ver sección 5. Las colecciones CO/GE (Sesión 2) siguen el mismo patrón; la excepción es `plantillasCO`, que se **siembra** desde `data/comunidad/plantillas-co.ts` — ver sección 6. En la Sesión 3 el patrón se repite para **IR/IN/MT**: `tiposInfraccionIN` se siembra desde `data/finanzas/tipos-infraccion.ts`; `activosIR`, `solicitudesInsumoIR`, `entregasEPP`, `infraccionesIN`, `trabajosMT` y `proyectosMT` nacen vacías — ver sección 7.
 
 ---
 
@@ -258,6 +260,32 @@ Consumido por: `lib/store.ts` (seedData). Dump completo en `36 - MK - Data Dump 
 | `solicitudesGE` | v15 | Folio `GE-####`, tipo insumos/grabaciones/buzon, estado workflow NSGC §1.4, comentarios[], historialEstados[] con timestamps SLA | `saveSolicitudGE`, `abrirSolicitudGE` (auto En Revisión), `responderSolicitudGE`, `resolverSolicitudGE`, `cerrarSolicitudGE`, `removeSolicitudGE` |
 
 Consumidores: `app/comunidad/comunicacion/page.tsx` (CO), `app/operaciones/solicitudes/page.tsx` (GE). Eventos AM: `CO_SEND_MASSIVE`, `CO_TICKET_CREATED/RESPONDIDO/ESTADO`, `CO_DOC_DOWNLOAD`; `GE_TICKET_CREATED/STATE_CHANGE/RESOLVED`.
+
+### 7. Store + Seed — Sesión 3 NSGC (IR / IN / MT)
+
+#### 7.0 `data/finanzas/tipos-infraccion.ts` (seed real de `tiposInfraccionIN`, store v17)
+
+| Campo | Detalle |
+|-------|---------|
+| **Ruta** | `k0mp4ss_fe/apps/web/data/finanzas/tipos-infraccion.ts` |
+| **Propósito** | Faltas de ejemplo al Reglamento de Copropiedad (IN §1) con sanción base monto fijo o % GC, sembradas en `tiposInfraccionIN` vía migrate aditivo. |
+| **Export** | `tiposInfraccionSeed: TipoInfraccionIN[]` (5 registros: ruidos-molestos/grave/%GC-50, mascotas/leve/$15.000, basura/leve/$10.000, areas-comunes/grave/$50.000, obras/gravisima/%GC-100). |
+
+Consumido por: `lib/store.ts` (seedData). Dump completo en `37 - MK - Data Dump Recursos, Multas y Mantenimiento.md`.
+
+#### 7.1 Colecciones store IR/IN/MT (vacías salvo `tiposInfraccionIN`)
+
+| Colección | Store | Contenido | Acciones repository |
+|-----------|-------|-----------|---------------------|
+| `activosIR` | v16 | Código `IR-A-####`, categoria infraestructura/mobiliario/insumo/epp/acceso, ubicación EF (microSectorId/unidadId), stock+umbral crítico, proveedor/factura D1, asignación vigente de accesos | `saveRecursoIR`, `removeRecursoIR` (integridad), `cambiarEstadoRecursoIR` (`IR_ASSET_REPAIR`/baja), `asignarAccesoIR`, `devolverAccesoIR` |
+| `solicitudesInsumoIR` | v16 | Folio `SI-####`, quién×qué×área destino, comodín con 3 salidas admin, entrega con descuento de stock | `saveSolicitudInsumoIR` (alerta comodín), `resolverComodinIR` (aprobar_crear/sustituir/rechazar), `entregarSolicitudInsumoIR` (`IR_STOCK_LOW` al cruzar umbral) |
+| `entregasEPP` | v16 | Entregas individuales {recursoId, personaId, talla, estado, proximaRenovacion} | `registrarEntregaEPP` (`IR_DELIVERY_EPP`) |
+| `tiposInfraccionIN` | v17 | Seed NSGC (arriba); CRUD libre | `saveTipoInfraccionIN`, `removeTipoInfraccionIN` (bloqueo si usada) |
+| `infraccionesIN` | v17 | Folio `IN-####`, tipo catálogo XOR daño directo, unidad infractora, evidencias D1, estado en_revision/apelada/aplicada/desestimada, comentariosDirectiva[], respaldosDirectiva[], `cargoFIReferencia:"pendiente"` | `saveInfraccionIN` (`IN_REG_EVENT`), `apelarInfraccionIN` (`IN_APELACION`), `respaldarInfraccionIN`, `aplicarInfraccionIN` (grave exige respaldo; `IN_APPLY_FINE`), `desestimarInfraccionIN`, `removeInfraccionIN` |
+| `trabajosMT` | v18 | Folio `MT-####`, ubicación EF/equipo IR, responsable interno o proveedor, prioridad, costo+origenFondos+estadoPago, garantías, evidencias D1 tipadas, preventivo{periodicidadMeses} | `saveTrabajoMT`, `iniciarTrabajoMT`, `finalizarTrabajoMT` (genera próximo preventivo), `cancelarTrabajoMT`, `actualizarPagoTrabajoMT`, `verificarGarantiasMT` (idempotente), `removeTrabajoMT` |
+| `proyectosMT` | v18 | Planes largo plazo {presupuestoEstimado, plazoMeses → cuota sugerida derivable} | `saveProyectoMT`, `removeProyectoMT` |
+
+Consumidores: `app/inventario/recursos/page.tsx` (IR), `app/finanzas/multas/page.tsx` (IN), `app/inventario/proyectos/page.tsx` (MT). Eventos AM: `IR_STOCK_LOW/DELIVERY_EPP/ASSET_REPAIR/COMODIN_ALERTA`; `IN_REG_EVENT/APPLY_FINE/APELACION`; `MT_WORK_CREATED/STARTED/FINISHED/PREVENTIVE_GENERATED/GUARANTEE_EXPIRED`.
 
 ---
 

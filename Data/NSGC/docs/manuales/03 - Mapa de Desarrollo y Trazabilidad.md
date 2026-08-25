@@ -18,7 +18,7 @@ Este documento vincula la arquitectura del menú con los archivos de especificac
 | Orden | Fase | Módulo | Documento Fuente (Data/NSGC/docs/) | Etiqueta Menú | Ruta Kebab-case | Estado |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | **00** | **0** | **RG** | `RG - Reglas Generales.md` | (Lógica Base) | N/A | 🟢 Completado (`enhance-rg-st-seed-gears` archivado `2026-08-24`) |
-| **01** | **0** | **ST** | `ST - Capa de Datos Persistente.md` | (Capa de Datos) | `lib/store.ts` v15 | 🟢 Completado (`enhance-rg-st-seed-gears` archivado `2026-08-24`) |
+| **01** | **0** | **ST** | `ST - Capa de Datos Persistente.md` | (Capa de Datos) | `lib/store.ts` v18 | 🟢 Completado (`enhance-rg-st-seed-gears` archivado `2026-08-24`) |
 | **02** | **0** | **UI** | `UI - Interfaz Principal.md`, `UI - Navegacion Lateral.md` | (Interfaz) | (transversal) | 🟡 Documentado |
 | **03** | **0** | **RP** | `RP - Roles y Permisos.md` | Permisos | `/admin/permisos` | 🟡 Documentado |
 | **04** | **1** | **MA** | `MA - Maestros Administrativos.md` | Maestros | `/admin/maestros` | 🟡 Documentado |
@@ -40,9 +40,9 @@ Este documento vincula la arquitectura del menú con los archivos de especificac
 | 20 | 4 | PE | `PE - Personal y Servicios.md` | Personal / Bitácora | `/personas/personal` | ⏳ Pendiente |
 | 21 | 4 | PL | `PL - Liquidaciones y Remuneraciones.md` | Remuneraciones | `/finanzas/remuneraciones` | ⏳ Pendiente |
 | 22 | 4 | RA | `RA - Reservas y Amenities.md` | Reservas | `/operaciones/reservas` | ⏳ Pendiente |
-| 23 | 4 | IR | `IR - Inventario y Recursos.md` | Recursos y EPP | `/inventario/recursos` | ⏳ Pendiente |
-| 24 | 4 | IN | `IN - Infracciones y Multas.md` | Multas | `/finanzas/multas` | ⏳ Pendiente |
-| 25 | 4 | MT | `MT - Mantenimiento y Proyectos.md` | Mantenimiento | `/inventario/proyectos` | ⏳ Pendiente |
+| 23 | 4 | IR | `IR - Inventario y Recursos.md` | Recursos y EPP | `/inventario/recursos` | 🟢 Completado (`IR-inventario-recursos` archivado `2026-08-25`, Sesión 3 NSGC) |
+| 24 | 4 | IN | `IN - Infracciones y Multas.md` | Multas | `/finanzas/multas` | 🟢 Completado (`IN-infracciones-multas` archivado `2026-08-25`, Sesión 3 NSGC) |
+| 25 | 4 | MT | `MT - Mantenimiento y Proyectos.md` | Mantenimiento | `/inventario/proyectos` | 🟢 Completado (`MT-mantenimiento-proyectos` archivado `2026-08-25`, Sesión 3 NSGC) |
 | 26 | 4 | CT | `CT - Certificados.md` | Certificados | `/comunidad/certificados` | ⏳ Pendiente |
 | **27** | **0** | **34 - Historia** | `34 - Historia de Poblamiento - Relato de Uso.md` | (Transversal) | (manual) | 🟢 Completado (`enhance-rg-st-seed-gears`) |
 | **28** | **5** | **LAB** | `LAB - Mejoras Lab` (Fase 5) | Laboratorio QA | `/admin/qa-lab` | 🟢 Completado (`lab-fase-mejoras` archivado `2026-08-24`) |
@@ -51,6 +51,7 @@ Este documento vincula la arquitectura del menú con los archivos de especificac
 > Cambios v8: `MA` movido Fase2→Fase1 y `RP` a Fase0 para alinear `PHASES` con dependencias (MA alimenta EF/TU, RP transversal). `ES` marcado deprecado (ver `ES - ...md` y `ST` v8). `PI` queda Fase2 (no Fase5) y `AM/RE` Fase3 (no Fase5) para unificar Dashboard ↔ Plan.
 > Cambios Sesión 1 NSGC (`2026-08-25`): `PI`, `AD`, `GD` pasan a 🟢 Completado con convención 1 módulo = 1 change; `TU/EF/ES/VU/RG/ST/LAB/QA-Lab` regularizados según archivo limpio `2026-08-24`. Ruta AD corregida a `/admin/gestion` (panel real, no `/dashboard`).
 > Cambios Sesión 2 NSGC (`2026-08-25`): `CO`, `GE` pasan a 🟢 Completado (store v14/v15); ST actualizado a v15.
+> Cambios Sesión 3 NSGC (`2026-08-25`): `IR`, `IN`, `MT` pasan a 🟢 Completado con convención 1 módulo = 1 change (store v16/v17/v18); pasos qa-lab 10–12 con limpieza inversa extendida.
 
 ---
 
