@@ -54,6 +54,9 @@ const PLAN: Record<string, string[]> = {
   gd: ["Extender a TEST Persona QA Uno como Presidente de directiva", "Registrar acta TEST con asistencia y minuta", "Firmar hasta quórum 100% → publicada + notificación email_simulado"],
   co: ["Crear plantilla TEST de cobranza con variable [Nombre_Usuario]", "Enviar masivo TEST a los 2 residentes TEST (notificaciones email_simulado)", "Simular lectura del envío (tasa apertura)", "Agregar documento TEST a la biblioteca (referencia D1)", "Ingresar reclamo TEST al buzón (folio BUZ)", "Responder y resolver el ticket TEST"],
   ge: ["Crear ticket grabaciones CCTV TEST (suceso + justificación, unidad E-999… Depto 999)", "Abrir ticket → En Revisión automático", "Admin pide datos → Requiere Acción Vecino (alerta al vecino)", "Vecino responde → En Proceso", "Resolver y cerrar → SLA registrado", "Ticket tipo buzon vinculado al reclamo TEST de CO"],
+  ir: ["Crear insumo crítico Cloro TEST (stock 10, umbral 5)", "Crear EPP Casco TEST con renovación semestral", "Crear Llave Depto 999 TEST vinculada a la unidad", "Solicitud SI de cloro ×3 → entrega descuenta stock", "Comodín Escobillón TEST → aprobar y crear en catálogo", "Entrega EPP individual al residente TEST", "Asignar llave al arrendatario TEST"],
+  in: ["Crear tipo de falta TEST (Leve, $25.000)", "Registrar infracción leve TEST con evidencia D1", "Apelar con descargos → Apelada", "Registrar infracción grave TEST desde reclamo CO", "Respaldo de directiva TEST sobre la grave", "Aplicar grave → % GC + cargo FI pendiente", "Desestimar la leve con justificación"],
+  mt: ["Crear activo Hidropack TEST en catálogo IR", "Trabajo preventivo mensual Hidropack TEST (proveedor AquaServicio TEST)", "Iniciar → En Curso", "Finalizar → genera próximo preventivo automáticamente", "Correctivo con garantía vencida → verificar garantías alerta una vez", "Proyecto Techos TEST ($12M / 120 meses → cuota $100.000)"],
 }
 
 const TITULOS: Record<string, string> = {
@@ -69,6 +72,9 @@ const TITULOS: Record<string, string> = {
   gd: "10. Actas de Directiva (GD)",
   co: "11. Comunicación Vecinos (CO)",
   ge: "12. Solicitudes (GE)",
+  ir: "13. Recursos y EPP (IR)",
+  in: "14. Infracciones y Multas (IN)",
+  mt: "15. Mantenimiento y Proyectos (MT)",
 }
 
 const COMO_LLEGAR: Record<string, string> = {
@@ -84,6 +90,9 @@ const COMO_LLEGAR: Record<string, string> = {
   gd: "Comunidad → Directiva → acta del 2026-08-24 publicada",
   co: "Comunidad → Comunicación → envío TEST, buzón folio BUZ y biblioteca",
   ge: "Operaciones → Solicitudes → ticket GE con workflow completo",
+  ir: "Inventario → Recursos y EPP → cloro/casco/llave TEST y solicitud SI",
+  in: "Finanzas → Multas → infracciones IN-TEST, panel directiva y catálogo",
+  mt: "Inventario → Mantenimiento → trabajos MT-TEST, prevención y proyecto",
 }
 
 const COMO_LLEGAR_HREF: Record<string, string> = {
@@ -97,6 +106,9 @@ const COMO_LLEGAR_HREF: Record<string, string> = {
   pi: "/comunidad/portal",
   ad: "/admin/gestion",
   gd: "/comunidad/directiva",
+  ir: "/inventario/recursos",
+  in: "/finanzas/multas",
+  mt: "/inventario/proyectos",
 }
 
 interface SeedReport {
@@ -122,9 +134,6 @@ const PENDIENTES: { id: string; archivo: string; lineas: number; desc: string; p
   { id: "FI", archivo: "FI - Finanzas y Morosidad.md", lineas: 76, desc: "Fondos, emisión GC y cobranza", pruebas: ["Maestro Fondos con imputación", "Emisión GC fija vs prorrateo", "Cálculo mora y corte servicios", "Informe diferencia ajuste manual"] },
   { id: "GD", archivo: "GD - Gestión de Directiva.md", lineas: 40, desc: "Gobernanza y actas", pruebas: ["Acta con firma directiva", "Votación asamblea por RP"] },
   { id: "GE", archivo: "GE - Gestion de Solicitudes.md", lineas: 54, desc: "Tickets con workflow automático", pruebas: ["Ticket Nuevo → En Revisión al abrir", "Requiere Acción Vecino → En Proceso", "SLA dashboard GE"] },
-  { id: "IN", archivo: "IN - Infracciones y Multas.md", lineas: 53, desc: "Faltas y sanciones", pruebas: ["Infracción con multa y vínculo FI", "Cierre multa → cargo FI"] },
-  { id: "IR", archivo: "IR - Inventario y Recursos.md", lineas: 68, desc: "Activos e insumos por EF/PE", pruebas: ["Insumo con área destino y stock", "Vinculación IR ↔ EF ↔ PE"] },
-  { id: "MT", archivo: "MT - Mantenimiento y Proyectos.md", lineas: 65, desc: "Trabajos y planificación financiera", pruebas: ["Mantención preventiva con alerta", "Proyecto con fondo FI"] },
   { id: "PE", archivo: "PE - Personal y Servicios.md", lineas: 93, desc: "RRHH, contratos, bitácora y turnos", pruebas: ["Ficha trabajador con AFP/Isapre y banco", "Feriados → proyección reemplazos y costo FI", "Bitácora visita/encomienda/contratista", "Cierre turno con checklist jornada"] },
   { id: "PI", archivo: "PI - Portal Inmobiliario.md", lineas: 27, desc: "Vitrina venta/arriendo unidades", pruebas: ["Unidad en portal con VU", "Contacto interesado → MP"] },
   { id: "PL", archivo: "PL - Liquidaciones y Remuneraciones.md", lineas: 69, desc: "Haberes y descuentos", pruebas: ["Liquidación con asistencia PE", "Generación documento legal"] },
@@ -166,6 +175,9 @@ export default function QaLabPage() {
     { id: "gd", label: TITULOS["gd"]!, rank: 5, fase: "Paso 10" },
     { id: "co", label: TITULOS["co"]!, rank: 6, fase: "Paso 11" },
     { id: "ge", label: TITULOS["ge"]!, rank: 6, fase: "Paso 12" },
+    { id: "ir", label: TITULOS["ir"]!, rank: 7, fase: "Paso 13" },
+    { id: "in", label: TITULOS["in"]!, rank: 7, fase: "Paso 14" },
+    { id: "mt", label: TITULOS["mt"]!, rank: 7, fase: "Paso 15" },
   ]
 
   const FASE_MODULOS: Record<string, string[]> = {
@@ -178,7 +190,10 @@ export default function QaLabPage() {
     "6": ["gd"],
     "7": ["co"],
     "8": ["ge"],
-    "todo": ["ma", "tu", "mp", "ef-macro", "ef-micro", "ef-unidad", "vu", "pi", "ad", "gd", "co", "ge"],
+    "9": ["ir"],
+    "10": ["in"],
+    "11": ["mt"],
+    "todo": ["ma", "tu", "mp", "ef-macro", "ef-micro", "ef-unidad", "vu", "pi", "ad", "gd", "co", "ge", "ir", "in", "mt"],
   }
 
   const LABEL_FASE: Record<string, string> = {
@@ -191,6 +206,9 @@ export default function QaLabPage() {
     "6": "7. Acta GD — firmas y publicación",
     "7": "8. CO — envío masivo, buzón y biblioteca",
     "8": "9. GE — workflow de tickets y SLA",
+    "9": "10. IR — catálogo, stock crítico y EPP",
+    "10": "11. IN — faltas, apelaciones y directiva",
+    "11": "12. MT — preventivos y proyectos",
     "todo": "Carga completa",
   }
 
@@ -404,6 +422,114 @@ export default function QaLabPage() {
     return { id: "ge", label: TITULOS["ge"]!, rank: 6, status: errores.length ? "error" : "ok", count: 1, errores, pasos }
   }, [])
 
+  const cargarFase9IR = React.useCallback(async (): Promise<ModReport> => {
+    const s = useCompassStore.getState()
+    const pasos: Paso[] = (PLAN["ir"]! as string[]).map(desc => ({ desc, estado: "pendiente" as ModuleState }))
+    // 1) Insumo crítico con stock y umbral
+    const r1 = s.saveRecursoIR({ id: "test-ir-cloro", nombre: "Cloro bidón 5L TEST", categoria: "insumo", estadoActivo: "disponible", stock: 10, esCritico: true, umbralCritico: 5, proveedor: "Distribuidora TEST", numeroFactura: "F-QA-001" } as any)
+    if (!r1.ok) { pasos[0]!.estado = "error"; pasos[0]!.error = r1.error } else pasos[0]!.estado = "ok"
+    // 2) EPP con renovación semestral
+    const r2 = s.saveRecursoIR({ id: "test-ir-casco", nombre: "Casco seguridad TEST", categoria: "epp", estadoActivo: "disponible", stock: 0, esCritico: false, talla: "M", renovacionMeses: 6 } as any)
+    if (!r2.ok) { pasos[1]!.estado = "error"; pasos[1]!.error = r2.error } else pasos[1]!.estado = "ok"
+    // 3) Llave vinculada a la unidad Depto 999
+    const r3 = s.saveRecursoIR({ id: "test-ir-llave999", nombre: "Llave Depto 999 TEST", categoria: "acceso", estadoActivo: "disponible", stock: 0, esCritico: false, unidadId: "test-u-999" } as any)
+    if (!r3.ok) { pasos[2]!.estado = "error"; pasos[2]!.error = r3.error } else pasos[2]!.estado = "ok"
+    // 4) Solicitud SI de cloro ×3 → entrega (10 → 7, sin cruzar umbral 5)
+    const r4 = s.saveSolicitudInsumoIR({ id: "test-si-1", folio: "", solicitantePersonaId: "test-p-99", recursoInsumoId: "test-ir-cloro", estadoComodin: "no_comodin", cantidad: 3, areaDestino: "Piso 1 Torre TEST", estado: "pendiente", fechaSolicitud: "2026-08-25" } as any)
+    let r4b: { ok: boolean; error?: string } = { ok: false }
+    if (r4.ok) {
+      r4b = s.entregarSolicitudInsumoIR("test-si-1")
+      const stockTrasEntrega = s.activosIR.find(x => x.id === "test-ir-cloro")?.stock
+      if (!r4b.ok || stockTrasEntrega !== 7) { pasos[3]!.estado = "error"; pasos[3]!.error = `Stock tras entrega: ${stockTrasEntrega}` } else pasos[3]!.estado = "ok"
+    } else { pasos[3]!.estado = "error"; pasos[3]!.error = r4.error }
+    // 5) Comodín → aprobar y crear en catálogo
+    const r5 = s.saveSolicitudInsumoIR({ id: "test-si-2", folio: "", solicitantePersonaId: "test-p-88", comodin: { descripcionArticulo: "Escobillón industrial TEST", justificacion: "Emergencia de aseo post evento TEST en áreas comunes del edificio." }, estadoComodin: "no_comodin", cantidad: 1, areaDestino: "Conserjería TEST", estado: "pendiente", fechaSolicitud: "2026-08-25" } as any)
+    let r5b: { ok: boolean; error?: string } = { ok: false }
+    if (r5.ok) {
+      r5b = s.resolverComodinIR("test-si-2", "aprobar_crear")
+      const creado = s.activosIR.find(x => x.nombre === "Escobillón industrial TEST")
+      if (!r5b.ok || !creado) { pasos[4]!.estado = "error"; pasos[4]!.error = r5b.error ?? "No se creó el artículo" } else pasos[4]!.estado = "ok"
+    } else { pasos[4]!.estado = "error"; pasos[4]!.error = r5.error }
+    // 6) Entrega EPP individual con renovación calculada
+    const r6 = s.registrarEntregaEPP({ id: "test-epp-1", recursoId: "test-ir-casco", personaId: "test-p-88", fechaEntrega: "2026-08-25", talla: "M", estado: "nuevo" } as any)
+    const eppGuardada = s.entregasEPP.find(e => e.id === "test-epp-1")
+    if (!r6.ok || eppGuardada?.proximaRenovacion !== "2027-02-25") { pasos[5]!.estado = "error"; pasos[5]!.error = r6.error ?? `Renovación: ${eppGuardada?.proximaRenovacion}` } else pasos[5]!.estado = "ok"
+    // 7) Asignar llave al arrendatario TEST
+    const r7 = s.asignarAccesoIR("test-ir-llave999", "test-p-88")
+    if (!r7.ok) { pasos[6]!.estado = "error"; pasos[6]!.error = r7.error } else pasos[6]!.estado = "ok"
+    const errores = pasos.filter(p => p.estado === "error").map(p => p.error || p.desc)
+    return { id: "ir", label: TITULOS["ir"]!, rank: 7, status: errores.length ? "error" : "ok", count: 1, errores, pasos }
+  }, [])
+
+  const cargarFase10IN = React.useCallback(async (): Promise<ModReport> => {
+    const s = useCompassStore.getState()
+    const pasos: Paso[] = (PLAN["in"]! as string[]).map(desc => ({ desc, estado: "pendiente" as ModuleState }))
+    // Directiva TEST vigente (requisito de respaldo; reusa extensión GD si existe).
+    const p99 = s.personas.find(x => x.id === "test-p-99")
+    if (!p99?.datosGobernanza) {
+      s.savePersona({ ...s.personas.find(x => x.id === "test-p-99")!, roles: Array.from(new Set([...(p99?.roles ?? []), "directiva"])), datosGobernanza: { id: "gob-test-1", cargoDirectiva: "presidente", fechaAsuncion: "2026-08-24" } } as any)
+    }
+    // 1) Tipo de falta TEST monto fijo
+    const r1 = s.saveTipoInfraccionIN({ id: "test-tipo-in", nombre: "Falta TEST Reglamento", categoria: "leve", tipoSancion: "monto_fijo", valor: 25000 } as any)
+    if (!r1.ok) { pasos[0]!.estado = "error"; pasos[0]!.error = r1.error } else pasos[0]!.estado = "ok"
+    // 2) Infracción leve con evidencia D1
+    const r2 = s.saveInfraccionIN({ id: "test-in-leve", folio: "", tipoInfraccionId: "test-tipo-in", unidadId: "test-u-999", reportantePersonaId: undefined, fechaSuceso: "2026-08-24", horaSuceso: "21:30", antecedentes: "Basura depositada fuera de horario en contenedor central TEST.", evidencias: [{ nombre: "test-evidencia.jpg", tipoMime: "image/jpeg", tamanoKB: 80, url: "https://placeholder.supabase.co/test-evidencia.jpg" }], estado: "en_revision", fechaRegistro: "2026-08-25", comentariosDirectiva: [], respaldosDirectiva: [] } as any)
+    if (!r2.ok) { pasos[1]!.estado = "error"; pasos[1]!.error = r2.error } else pasos[1]!.estado = "ok"
+    // 3) Apelación con descargos
+    const r3 = s.apelarInfraccionIN("test-in-leve", "Los desechos eran del servicio de mudanza contratado por el vecino vecino.")
+    if (!r3.ok) { pasos[2]!.estado = "error"; pasos[2]!.error = r3.error } else pasos[2]!.estado = "ok"
+    // 4) Infracción grave nacida desde el reclamo TEST de CO
+    const r4 = s.saveInfraccionIN({ id: "test-in-grave", folio: "", tipoInfraccionId: "tipo-in-ruidos", unidadId: "test-u-999", mensajeBuzonId: "test-buz-co-1", fechaSuceso: "2026-08-24", horaSuceso: "23:45", antecedentes: "Ruidos molestos reiterados verificados mediante revisión de cámaras CCTV.", evidencias: [], estado: "en_revision", fechaRegistro: "2026-08-25", comentariosDirectiva: [], respaldosDirectiva: [] } as any)
+    if (!r4.ok) { pasos[3]!.estado = "error"; pasos[3]!.error = r4.error } else pasos[3]!.estado = "ok"
+    // 5) Respaldo directiva sobre la grave
+    const r5 = s.respaldarInfraccionIN("test-in-grave", "test-p-99")
+    if (!r5.ok) { pasos[4]!.estado = "error"; pasos[4]!.error = r5.error } else pasos[4]!.estado = "ok"
+    // 6) Aplicar grave → % GC + cargo FI pendiente
+    const r6 = s.aplicarInfraccionIN("test-in-grave")
+    const grave = s.infraccionesIN.find(i => i.id === "test-in-grave")
+    if (!r6.ok || grave?.estado !== "aplicada" || grave.cargoFIReferencia !== "pendiente") {
+      pasos[5]!.estado = "error"; pasos[5]!.error = r6.error ?? `Estado: ${grave?.estado}`
+    } else pasos[5]!.estado = "ok"
+    // 7) Desestimar la leve apelada con justificación
+    const r7 = s.desestimarInfraccionIN("test-in-leve", "Descargos verificados: los residuos corresponden a mudanza autorizada.")
+    if (!r7.ok) { pasos[6]!.estado = "error"; pasos[6]!.error = r7.error } else pasos[6]!.estado = "ok"
+    const errores = pasos.filter(p => p.estado === "error").map(p => p.error || p.desc)
+    return { id: "in", label: TITULOS["in"]!, rank: 7, status: errores.length ? "error" : "ok", count: 1, errores, pasos }
+  }, [])
+
+  const cargarFase11MT = React.useCallback(async (): Promise<ModReport> => {
+    const s = useCompassStore.getState()
+    const pasos: Paso[] = (PLAN["mt"]! as string[]).map(desc => ({ desc, estado: "pendiente" as ModuleState }))
+    // 1) Activo de infraestructura IR para vincular el trabajo
+    const r0 = s.saveRecursoIR({ id: "test-ir-hidro", nombre: "Hidropack TEST", categoria: "infraestructura", marca: "Grundfos TEST", estadoActivo: "disponible", stock: 0, esCritico: false, microSectorId: "test-micro-piso99" } as any)
+    if (!r0.ok) { pasos[0]!.estado = "error"; pasos[0]!.error = r0.error } else pasos[0]!.estado = "ok"
+    // 2) Trabajo preventivo mensual con proveedor externo
+    const r1 = s.saveTrabajoMT({ id: "test-mt-1", folio: "", titulo: "Mantención mensual Hidropack TEST", descripcion: "Revisión de presiones, sellos y tablero de control del hidropack del recinto.", activoIRId: "test-ir-hidro", microSectorId: "test-micro-piso99", proveedor: { nombre: "AquaServicio TEST", contacto: "+56 9 8888 0000" }, prioridad: "alta", costoTotal: 180000, origenFondos: "gasto_comun", estadoPago: "pendiente", alertaGarantiaEnviada: false, evidencias: [], preventivo: { periodicidadMeses: 1 }, cargoFIReferencia: "pendiente" } as any)
+    if (!r1.ok) { pasos[1]!.estado = "error"; pasos[1]!.error = r1.error } else pasos[1]!.estado = "ok"
+    // 3) Iniciar → En Curso
+    const r2 = s.iniciarTrabajoMT("test-mt-1")
+    const enCurso = s.trabajosMT.find(t => t.id === "test-mt-1")?.estado === "en_curso"
+    if (!r2.ok || !enCurso) { pasos[2]!.estado = "error"; pasos[2]!.error = r2.error ?? "No quedó En Curso" } else pasos[2]!.estado = "ok"
+    // 4) Finalizar → genera próximo preventivo (+1 mes)
+    const r3 = s.finalizarTrabajoMT("test-mt-1", { fechaTermino: "2026-08-25", costoFinal: 185000 })
+    const generado = s.trabajosMT.find(t => t.estado === "planificado" && t.preventivo && t.id !== "test-mt-1")
+    if (!r3.ok || !generado || generado.fechaProgramada !== "2026-09-25") {
+      pasos[3]!.estado = "error"; pasos[3]!.error = r3.error ?? `Próximo preventivo: ${generado?.fechaProgramada}`
+    } else pasos[3]!.estado = "ok"
+    // 5) Correctivo con garantía vencida → verificar alerta única
+    const r4 = s.saveTrabajoMT({ id: "test-mt-2", folio: "", titulo: "Impermeabilización losa TEST", descripcion: "Sellado de losas y muros perimetrales del estanque de agua potable.", microSectorId: "test-micro-piso99", proveedor: { nombre: "WaterProof TEST" }, prioridad: "media", costoTotal: 950000, origenFondos: "fondo_reserva", estadoPago: "parcial", estado: "finalizado", fechaTermino: "2026-01-10", garantiaInicio: "2026-01-10", garantiaFin: "2026-07-01", alertaGarantiaEnviada: false, evidencias: [{ tipo: "factura", nombre: "test-factura.pdf", tipoMime: "application/pdf", tamanoKB: 210, url: "https://placeholder.supabase.co/test-factura.pdf" }] } as any)
+    if (r4.ok) {
+      s.verificarGarantiasMT()
+      const eventosGarantia = s.eventos.filter(e => e.tipoAccion === "MT_GUARANTEE_EXPIRED" && e.referenciaId === "test-mt-2")
+      if (eventosGarantia.length !== 1) { pasos[4]!.estado = "error"; pasos[4]!.error = `Alertas garantía: ${eventosGarantia.length}` } else pasos[4]!.estado = "ok"
+    } else { pasos[4]!.estado = "error"; pasos[4]!.error = r4.error }
+    // 6) Proyecto largo plazo con cuota derivable ($12M / 120m = $100.000)
+    const r5 = s.saveProyectoMT({ id: "test-py-techos", nombre: "Mantención de techos TEST", presupuestoEstimado: 12000000, plazoMeses: 120, estado: "planificado" } as any)
+    if (!r5.ok) { pasos[5]!.estado = "error"; pasos[5]!.error = r5.error } else pasos[5]!.estado = "ok"
+    const errores = pasos.filter(p => p.estado === "error").map(p => p.error || p.desc)
+    return { id: "mt", label: TITULOS["mt"]!, rank: 7, status: errores.length ? "error" : "ok", count: 1, errores, pasos }
+  }, [])
+
   const buildHistoria = React.useCallback((mods: ModReport[]): SeedReport["historia"] => {
     return HISTORIA.map(h => ({ capitulo: h.capitulo, estado: (() => {
       const rankMods = mods.filter(m => m.rank === h.rank)
@@ -512,8 +638,42 @@ export default function QaLabPage() {
         mods.push(await cargarFase7CO())
         mods.push(await cargarFase8GE())
       }
+      if (fase === "9") {
+        mods.push(await cargarFase0())
+        mods.push(await cargarFase1TU())
+        mods.push(await cargarFase1MP())
+        mods.push(await cargarFase2Macro())
+        mods.push(await cargarFase2Micro())
+        mods.push(await cargarFase2Unidad())
+        mods.push(await cargarFase3VU())
+        mods.push(await cargarFase9IR())
+      }
+      if (fase === "10") {
+        mods.push(await cargarFase0())
+        mods.push(await cargarFase1TU())
+        mods.push(await cargarFase1MP())
+        mods.push(await cargarFase2Macro())
+        mods.push(await cargarFase2Micro())
+        mods.push(await cargarFase2Unidad())
+        mods.push(await cargarFase3VU())
+        mods.push(await cargarFase7CO())
+        mods.push(await cargarFase10IN())
+      }
+      if (fase === "11") {
+        mods.push(await cargarFase0())
+        mods.push(await cargarFase1TU())
+        mods.push(await cargarFase1MP())
+        mods.push(await cargarFase2Macro())
+        mods.push(await cargarFase2Micro())
+        mods.push(await cargarFase2Unidad())
+        mods.push(await cargarFase3VU())
+        mods.push(await cargarFase11MT())
+      }
       if (fase === "todo") {
-        // ya se cargaron todos en orden
+        mods.push(await cargarFase8GE())
+        mods.push(await cargarFase9IR())
+        mods.push(await cargarFase10IN())
+        mods.push(await cargarFase11MT())
       }
       const historia = buildHistoria(mods)
       const erroresGlobales = mods.flatMap(m => m.errores.map(e => `${m.label}: ${e}`))
@@ -526,14 +686,44 @@ export default function QaLabPage() {
     } finally {
       setLoading(false)
     }
-  }, [cargarFase0, cargarFase1MP, cargarFase1TU, cargarFase2Macro, cargarFase2Micro, cargarFase2Unidad, cargarFase3VU, cargarFase4PI, cargarFase5AD, cargarFase6GD, cargarFase7CO, cargarFase8GE, buildHistoria, ensureHydrated])
+  }, [cargarFase0, cargarFase1MP, cargarFase1TU, cargarFase2Macro, cargarFase2Micro, cargarFase2Unidad, cargarFase3VU, cargarFase4PI, cargarFase5AD, cargarFase6GD, cargarFase7CO, cargarFase8GE, cargarFase9IR, cargarFase10IN, cargarFase11MT, buildHistoria, ensureHydrated])
 
   const limpiar = React.useCallback(async () => {
     if (!ensureHydrated()) return
     setLoading(true)
     const errores: string[] = []
     const s = useCompassStore.getState()
-    // inverso GE -> CO -> GD -> AD -> PI -> VU -> EF unidades -> EF micro -> EF macro -> MP -> TU -> MA
+    // inverso MT -> IN -> IR -> GE -> CO -> GD -> AD -> PI -> VU -> EF unidades -> EF micro -> EF macro -> MP -> TU -> MA
+    // MT
+    useCompassStore.setState(st => ({ proyectosMT: st.proyectosMT.filter(p => p.id !== "test-py-techos") }))
+    const rMt2 = s.removeTrabajoMT("test-mt-2")
+    if (!rMt2.ok) errores.push(rMt2.error || "mt-2")
+    // El preventivo generado automáticamente hereda el título TEST del padre.
+    useCompassStore.setState(st => ({
+      trabajosMT: st.trabajosMT.filter(t => !t.titulo.includes("TEST")),
+    }))
+    // IN
+    const rIn1 = s.removeInfraccionIN("test-in-leve")
+    if (!rIn1.ok) errores.push(rIn1.error || "in-leve")
+    const rIn2 = s.removeInfraccionIN("test-in-grave")
+    if (!rIn2.ok) errores.push(rIn2.error || "in-grave")
+    const rTipoIn = s.removeTipoInfraccionIN("test-tipo-in")
+    if (!rTipoIn.ok) errores.push(rTipoIn.error || "tipo-in")
+    // IR
+    useCompassStore.setState(st => ({
+      solicitudesInsumoIR: st.solicitudesInsumoIR.filter(x => !x.id.startsWith("test-")),
+      entregasEPP: st.entregasEPP.filter(e => !e.id.startsWith("test-")),
+    }))
+    const rDev = s.devolverAccesoIR("test-ir-llave999")
+    if (!rDev.ok && s.activosIR.some(x => x.id === "test-ir-llave999")) errores.push(rDev.error || "dev-llave")
+    for (const id of ["test-ir-cloro", "test-ir-casco", "test-ir-llave999", "test-ir-hidro"]) {
+      const r = s.removeRecursoIR(id)
+      if (!r.ok && s.activosIR.some(x => x.id === id)) errores.push(r.error || id)
+    }
+    useCompassStore.setState(st => ({
+      activosIR: st.activosIR.filter(a => a.nombre !== "Escobillón industrial TEST"),
+      notificaciones: st.notificaciones.filter(n => !["IR", "IN", "MT"].includes(n.moduloOrigen)),
+    }))
     const rSol1 = s.removeSolicitudGE("test-sol-ge-1")
     if (!rSol1.ok) errores.push(rSol1.error || "sol-ge-1")
     const rSol2 = s.removeSolicitudGE("test-sol-ge-2")
@@ -720,6 +910,9 @@ export default function QaLabPage() {
               { fase: "6", label: "7. Acta GD firmada y publicada" },
               { fase: "7", label: "8. CO — masivo, buzón y biblioteca" },
               { fase: "8", label: "9. GE — tickets con workflow y SLA" },
+              { fase: "9", label: "10. IR — catálogo, stock crítico y EPP" },
+              { fase: "10", label: "11. IN — faltas, apelaciones y directiva" },
+              { fase: "11", label: "12. MT — preventivos y proyectos" },
             ].map(item => {
               const isActive = ultimaFase === item.fase
               const modsFase = isActive && report ? report.modulos.filter(m => FASE_MODULOS[item.fase]!.includes(m.id)) : []
