@@ -2,9 +2,7 @@
 
 ## Purpose
 Registrar reuniones y actas de la directiva con control de asistencia, flujo de aprobación por quórum 100% y publicación formal a propietarios, resguardando la privacidad frente a residentes. Fuente de verdad: `Data/NSGC/docs/especificaciones/GD - Gestión de Directiva.md`.
-
 ## Requirements
-
 ### Requirement: Registro de Reunión y Acta
 El sistema MUST permitir registrar reuniones con fecha, hora, lugar y tabla de temas; control de asistencia marcando presentes y ausentes de la directiva vigente (`personas.datosGobernanza`) e invitados especiales (texto libre); minuta de acuerdos; y soporte documental con adjuntos por referencia (acta escaneada o imágenes: solo nombre, tipo MIME, tamañoKB, url — D1). La gestión se realiza con `saveActaGD`/`removeActaGD` retornando `StoreResult` con validación referencial de asistentes.
 
@@ -22,11 +20,8 @@ El sistema MUST permitir registrar reuniones con fecha, hora, lugar y tabla de t
 - **THEN** retorna `{ok:false}` con error de integridad y no muta el estado
 
 ### Requirement: Flujo de Aprobación de Actas
-El acta MUST permanecer en estado "Borrador de Directiva" hasta que todos los miembros vigentes de la directiva aprueben mediante `aprobarActaGD` (botonera "Aprobar Acta" por miembro, con firma digitalizada disponible desde AD). El sistema MUST ofrecer un monitor de firmas pendientes. Al alcanzar el 100% de la directiva vigente, el acta pasa a "Publicada": emite notificación a todos los propietarios vía `notify()` con canal `email_simulado` (con link/descarga del acta referenciada) y queda con la referencia de aviso en CV marcada como `"pendiente"` hasta que el Visor de Mensajes la publique mediante `publicarActaEnCV`, momento en que la referencia se materializa con el id del aviso creado.
 
-#### Scenario: Aprobación individual auditada
-- **WHEN** un miembro de la directiva aprueba el acta
-- **THEN** `aprobarActaGD` registra su id en `aprobaciones`, emite `GD_ACTA_APPROVED` y el monitor muestra las firmas restantes
+El acta MUST permanecer en estado "Borrador de Directiva" hasta que todos los miembros vigentes de la directiva aprueben mediante `aprobarActaGD` (botonera "Aprobar Acta" por miembro, con firma digitalizada disponible desde AD). El sistema MUST ofrecer un monitor de firmas pendientes. Al alcanzar el 100% de la directiva vigente, el acta pasa a "Publicada": emite notificación a todos los propietarios vía `notify()` con canal `email_simulado` (con link/descarga del acta referenciada) y queda con la referencia de aviso en CV marcada como `"pendiente"` hasta que el Visor de Mensajes la publique mediante `publicarActaEnCV`, momento en que la referencia se materializa con el id del aviso creado.
 
 #### Scenario: Publicación automática al quórum
 - **WHEN** la última firma pendiente completa el 100% de la directiva vigente
@@ -37,6 +32,10 @@ El acta MUST permanecer en estado "Borrador de Directiva" hasta que todos los mi
 #### Scenario: Referencia materializada por CV
 - **WHEN** el visor de mensajes publica un acta Publicada con referencia `"pendiente"`
 - **THEN** `avisoCVReferencia` guarda el id del aviso creado y no admite republicación
+
+#### Scenario: Aprobación individual auditada
+- **WHEN** un miembro de la directiva aprueba el acta
+- **THEN** `aprobarActaGD` registra su id en `aprobaciones`, emite `GD_ACTA_APPROVED` y el monitor muestra las firmas restantes
 
 #### Scenario: Aprobación sin ser directivo rechazada
 - **WHEN** un rol sin `datosGobernanza` vigente intenta aprobar
@@ -63,3 +62,4 @@ El módulo SHALL emitir `GD_ACTA_CREATED`, `GD_ACTA_APPROVED` y `GD_ASISTENCIA_R
 #### Scenario: Métricas de gobernanza
 - **WHEN** la reportería consulta gobernanza
 - **THEN** puede derivar tiempo promedio de aprobación, cumplimiento de quórum y actas publicadas a partir de eventos y fechas del acta
+
