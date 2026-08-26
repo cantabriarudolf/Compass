@@ -8,7 +8,7 @@
 | 4 | S3: IR + IN + MT | HECHA (07f4552) | — |
 | 5 | S4: RA + CV (CV resuelve avisoCVReferencia de GD) | HECHA (62f1916) | 62f1916 |
 | 6 | S5: FI (conecta pendientes de IN/MT/RA) | HECHA (0e3d36a) | 3d06c58 |
-| 7 | S6: PE | pendiente | — |
+| 7 | S6: PE | EN CURSO | — |
 | 8 | S7: PL + CT + RE (pdfmake) | pendiente | — |
 | 9 | QA integral engranajes + cierre | pendiente | — |
 MÁXIMO: 9 ventanas. Fuera de serie (post): AU B/C/D, SG, migración a BD.

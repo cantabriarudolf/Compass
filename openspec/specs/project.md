@@ -61,6 +61,7 @@ Each OpenSpec capability maps 1:1 to its module spec in `Data/NSGC/docs/especifi
 | `RA-reservas-amenities` | `RA - Reservas y Amenities.md` |
 | `CV-visor-mensajes` | `CV - Visor de Mensajes.md` (consume `actasGD.avisoCVReferencia` de GD) |
 | `FI-finanzas-morosidad` | `FI - Finanzas y Morosidad.md` (materializa `cargoFIReferencia` de IN/MT/RA) |
+| `PE-personal-servicios` | `PE - Personal y Servicios.md` (proyección PE → FI con `liquidacionPLReferencia` pendiente a PL) |
 | `LAB-mejoras` | `LAB - Mejoras Lab.md` |
 | `DEV-qa-lab` | Interno (tooling QA, sin doc NSGC) |
 | `UI-interfaz-principal` | Cross-cutting UI (no AA code) |

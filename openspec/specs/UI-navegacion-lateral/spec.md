@@ -19,6 +19,7 @@ The navigation menu MUST follow the hierarchy implemented in `AppSidebar` and re
     - Encomiendas (`/operaciones/paqueteria`)
     - Reservas (`/operaciones/reservas`)
     - Solicitudes (`/operaciones/solicitudes`)
+    - Proveedores y Servicios (`/operaciones/proveedores`)
   - **Finanzas**
     - Gastos Comunes (`/finanzas/gastos-comunes`)
     - Recaudación (`/finanzas/pagos`)
