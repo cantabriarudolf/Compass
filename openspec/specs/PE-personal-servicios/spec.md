@@ -1,5 +1,9 @@
 # PE-personal-servicios Specification
 
+## Purpose
+Supervisar los recursos humanos y técnicos que mantienen la operativa diaria de la comunidad: ficha integral del trabajador con FKs a maestros legales, proyección operativa sobre feriados con costos enviados a FI, proveedores externos con mantenciones preventivas y visitas técnicas, directorio de emergencias, bitácora digital de conserjería (visitas/encomiendas/contratistas), reporte diario y protocolo de cierre de turno notificado. Fuente de verdad: `Data/NSGC/docs/especificaciones/PE - Personal y Servicios.md`.
+
+
 ## Requirements
 
 ### Requirement: Ficha Integral del Trabajador

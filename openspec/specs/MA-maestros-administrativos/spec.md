@@ -89,7 +89,6 @@ Los Maestros Administrativos MUST gestionar las colecciones `afp` (nombre, tasa)
 - **WHEN** se intenta eliminar un tramo referenciado por una ficha de trabajador con cargas
 - **THEN** la acción retorna `{ok:false}` citando las fichas asociadas
 
-## ADDED Requirements
 
 ### Requirement: Maestros Operativos de Personal (PE)
 El sistema SHALL mantener los maestros operativos que normalizan la bitácora de conserjería: `jornadas` (Mañana/Tarde/Noche, usado por visitas, contratistas y cierre de turno), `couriers` (empresas de encomiendas/delivery para evitar escritura libre) y `contratistas` (empresas concurrentes o servicios autorizados), sembrados con los valores NSGC base, gestionados con el patrón repository existente (`saveMaestro`/`removeMaestro`) y consumidos por PE mediante id. `removeMaestro` SHALL bloquear la eliminación de jornadas, couriers o contratistas en uso por registros operativos.
