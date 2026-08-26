@@ -36,14 +36,14 @@ Este documento vincula la arquitectura del menú con los archivos de especificac
 | 16 | 3 | CV | `CV - Visor de Mensajes.md` | Visor | `/comunidad/visor` (+ visor público `/visor-mensajes`) | 🟢 Completado (`CV-visor-mensajes` archivado `2026-08-25`, Sesión 4 NSGC; materializa `avisoCVReferencia` de GD) |
 | 17 | 3 | GE | `GE - Gestión de Solicitudes.md` | Solicitudes | `/operaciones/solicitudes` | 🟢 Completado (`GE-gestion-solicitudes` archivado `2026-08-25`, Sesión 2 NSGC) |
 | 18 | 3 | AM | `AM - Auditoría y Métricas.md` | Auditoría | `/admin/metricas` | 🟡 Documentado |
-| 19 | 3 | RE | `RE - Reportería y Dashboards.md` | Informes | `/reportes` | ⏳ Pendiente |
-| **20** | **4** | **PE** | `PE - Personal y Servicios.md` | Personal / Bitácora | `/personas/personal` (+ Bitácora `/operaciones/bitacora` + Proveedores `/operaciones/proveedores`) | 🟢 Completado (`PE-personal-servicios` archivado `2026-08-25`, Sesión 6 NSGC; proyección de costos viaja a FI con `liquidacionPLReferencia` pendiente a PL) |
-| 21 | 4 | PL | `PL - Liquidaciones y Remuneraciones.md` | Remuneraciones | `/finanzas/remuneraciones` | ⏳ Pendiente |
+| 19 | 3 | RE | `RE - Reportería y Dashboards.md` | Reportería y Dashboards | `/admin/reporteria` | 🟢 Completado (`RE-reporteria-dashboards` archivado `2026-08-26`, Sesión 7 NSGC; Centro de Mando + segmentación EF×MP×tenencia, rank 99 sumidero) |
+| **20** | **4** | **PE** | `PE - Personal y Servicios.md` | Personal / Bitácora | `/personas/personal` (+ Bitácora `/operaciones/bitacora` + Proveedores `/operaciones/proveedores`) | 🟢 Completado (`PE-personal-servicios` archivado `2026-08-25`, Sesión 6 NSGC; proyección de costos viaja a FI con `liquidacionPLReferencia` materializada por PL desde Sesión 7) |
+| 21 | 4 | PL | `PL - Liquidaciones y Remuneraciones.md` | Remuneraciones | `/finanzas/remuneraciones` | 🟢 Completado (`PL-liquidaciones-remuneraciones` archivado `2026-08-26`, Sesión 7 NSGC; materializa `liquidacionPLReferencia` de PE y sincroniza egreso FI Sueldos) |
 | 22 | 4 | RA | `RA - Reservas y Amenities.md` | Reservas y Amenities | `/operaciones/reservas` | 🟢 Completado (`RA-reservas-amenities` archivado `2026-08-25`, Sesión 4 NSGC) |
 | 23 | 4 | IR | `IR - Inventario y Recursos.md` | Recursos y EPP | `/inventario/recursos` | 🟢 Completado (`IR-inventario-recursos` archivado `2026-08-25`, Sesión 3 NSGC) |
 | 24 | 4 | IN | `IN - Infracciones y Multas.md` | Multas | `/finanzas/multas` | 🟢 Completado (`IN-infracciones-multas` archivado `2026-08-25`, Sesión 3 NSGC) |
 | 25 | 4 | MT | `MT - Mantenimiento y Proyectos.md` | Mantenimiento | `/inventario/proyectos` | 🟢 Completado (`MT-mantenimiento-proyectos` archivado `2026-08-25`, Sesión 3 NSGC) |
-| 26 | 4 | CT | `CT - Certificados.md` | Certificados | `/comunidad/certificados` | ⏳ Pendiente |
+| 26 | 4 | CT | `CT - Certificados.md` | Certificados | `/comunidad/certificados` | 🟢 Completado (`CT-certificados` archivado `2026-08-26`, Sesión 7 NSGC; firma embebida solo en el PDF con código de verificación VC) |
 | **27** | **0** | **34 - Historia** | `34 - Historia de Poblamiento - Relato de Uso.md` | (Transversal) | (manual) | 🟢 Completado (`enhance-rg-st-seed-gears`) |
 | **28** | **5** | **LAB** | `LAB - Mejoras Lab` (Fase 5) | Laboratorio QA | `/admin/qa-lab` | 🟢 Completado (`lab-fase-mejoras` archivado `2026-08-24`) |
 | 29 | 5 | QA-Lab | `DEV-qa-lab` | Laboratorio QA | `/admin/qa-lab` | 🟢 Completado (`qa-lab` archivado `2026-08-24`; pasos 8–10 PI/AD/GD en Sesión 1; pasos CO/GE con limpieza inversa en Sesión 2) |
@@ -71,3 +71,4 @@ Para asegurar un desarrollo fluido, seguiremos estas reglas de oro:
 - Las carpetas en `apps/web/app/` deben crearse siguiendo exactamente la columna **Ruta Kebab-case**.
 - Los estados `🟡 Documentado (sucio)` indican spec más nuevo que su archive — ejecutar `/cierra-modulo` para re-archivar o revertir.
 > Cambios Sesión 6 NSGC (`2026-08-25`): `PE` pasa a 🟢 Completado (store v21→v22); cierra pendiente D3 (`asignacionFamiliar`) y añade maestros operativos `jornadas/couriers/contratistas`; paso qa-lab 15 (PE) con limpieza inversa; sidebar suma Proveedores y Servicios.
+> Cambios Sesión 7 NSGC (`2026-08-26`, ventana 8): `PL`, `CT`, `RE` pasan a 🟢 Completado (store v22→v25, motor pdfmake); PL materializa `liquidacionPLReferencia` de PE y sincroniza egreso FI Sueldos; CT cierra la documentación oficial con firma embebida; RE suma el Centro de Mando bajo Sistema. **Serie NSGC de módulos COMPLETA** — queda fuera de serie AU B/C/D, SG y migración a BD.

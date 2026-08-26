@@ -407,3 +407,18 @@ Cuando se conecte cada módulo al backend NestJS, este es el orden sugerido:
 
 *Última actualización: 25 de Agosto 2026 — Sesión 6 NSGC (seeds maestros legales/operativos PE + colecciones store PE v22)*
 *Generado para trazabilidad del proyecto Compass/NSGC*
+
+---
+
+### 11. Store + Seed — Sesión 7 NSGC (PL + CT + RE)
+
+Colecciones transaccionales nuevas (nacen vacías, sin seeds estáticos). Bumps v23→v24→v25 con migrate aditivo.
+
+| Colección | Store | Contenido | Acciones repository |
+|-----------|-------|-----------|---------------------|
+| `liquidacionesPL` | v23 | Snapshot LIQ: haberes §1.1, gratificación tope, descuentos AFP/salud/SIS/cesantía/APV, totales de control, `egresoFIReferencia`, `proyeccionPEReferencia` | `generarLiquidacionPL`, `confirmarLiquidacionPL` (egreso FI sueldos), `removeLiquidacionPL` (solo borrador) |
+| `adelantosPL` | v23 | Folio `ADE-####`, glosa obligatoria, ciclo pendiente→descontado amarrado a LIQ | `saveAdelantoPL` (notify trabajador), `removeAdelantoPL` |
+| `certificadosCT` | v24 | Folio `CT-####` + código `VC-XXXXXXXX`, 4 tipologías con gates, snapshot del PDF emitido, firma por referencia D1 | `generarCertificadoCT`, `removeCertificadoCT` (historial inmutable salvo TEST) |
+| `reportesRE` | v25 | Bloques gastos_mes/bitacora_seguridad/morosidad/consumo_insumos con payloadSnapshot inmutable; segmento EF+MP+tenencia; distribución idempotente | `registrarVistaDashboardRE`, `generarReporteRE`, `distribuirReporteRE` (resuelve destinatarios vigentes), `removeReporteRE` |
+
+Extensión aditiva CF: parámetros legales `ufMensual/ingresoMinimoMensual/topeGratificacionLegal/tasaSIS` (opcionales, auditados `CF_UPDATE_PARAM`). Extensión aditiva PE: `datosLaborales.sueldoBase`. Motor documental **pdfmake** instalado (`lib/pdf-utils.ts`): el binario PDF y la firma viven solo en memoria del documento (D1). Helpers puros en `lib/pl-utils.ts` y `lib/reporteria-utils.ts`. Consumidores: `/finanzas/remuneraciones`, `/comunidad/certificados`, `/admin/reporteria`. Dump completo en `40 - MK - Data Dump Remuneraciones, Certificados y Reportería.md`.

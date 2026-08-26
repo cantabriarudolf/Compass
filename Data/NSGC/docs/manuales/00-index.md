@@ -17,6 +17,7 @@ Bienvenido a la documentación operativa del sistema de administración de condo
 - [06 - Vinculación de Unidades](<06 - Vinculación de Unidades.md>)
 - [27 - PI - Portal Inmobiliario](<27 - PI - Portal Inmobiliario.md>): Vitrina de arriendo/venta con trigger automático desde VU, leads con contacto seguro y visibilidad residentes/pública.
 - [14 - GD - Gestión de Directiva](<14 - GD - Gestión de Directiva.md>): Actas con asistencia, flujo de aprobación por quórum 100%, publicación formal y privacidad propietario/residente.
+- [26 - CT - Certificados](<26 - CT - Certificados.md>): Documentación oficial con firma embebida en el PDF, gates por tipología (Al Día saldo ≤ 0, residencia VU activo) e historial con código de verificación.
 
 ## 🔧 Documentación Transversal
 - [28 - MK - Catálogo de Mocks](<28 - MK - Catálogo de Mocks.md>): Inventario completo de datos mockeados, ubicación, dependencias y hoja de ruta de migración a backend.
@@ -28,6 +29,9 @@ Bienvenido a la documentación operativa del sistema de administración de condo
 - [37 - MK - Data Dump Recursos, Multas y Mantenimiento](<37 - MK - Data Dump Recursos, Multas y Mantenimiento.md>): Colecciones Sesión 3 NSGC (`tiposInfraccionIN` con 5 faltas sembradas del NSGC + `activosIR`, `solicitudesInsumoIR`, `entregasEPP`, `infraccionesIN`, `trabajosMT`, `proyectosMT`) con patrones de código IR-A/SI/IN/MT.
 - [39 - MK - Data Dump Personal y Servicios](<39 - MK - Data Dump Personal y Servicios.md>): Maestros operativos Sesión 6 NSGC (`asignacionFamiliar` 4 tramos, `jornadas`, `couriers`, `contratistas`) + las 8 colecciones operativas PE (bitácora, encomiendas, contratistas, proveedores, mantenciones, visitas técnicas, cierres de turno, proyecciones) con extensión laboral profunda.
 - [38 - MK - Data Dump Finanzas](<38 - MK - Data Dump Finanzas.md>): Colecciones Sesión 5 NSGC (`fondosFI` con 3 fondos sembrados del NSGC + `egresosFI`, `emisionesGC`, `cobrosFI` operativas) con reglas de cálculo (prorrateo, mora pro-rata, vencimientos) y origen de cargos automáticos IN/RA.
+- [40 - MK - Data Dump Remuneraciones, Certificados y Reportería](<40 - MK - Data Dump Remuneraciones, Certificados y Reportería.md>): Colecciones transaccionales Sesión 7 NSGC (`liquidacionesPL` folios LIQ, `adelantosPL` folios ADE, `certificadosCT` folios CT+código VC, `reportesRE`) — estructura y patrones, vacías por diseño.
+- [19 - PE - Liquidaciones y Remuneraciones](<19 - PE - Liquidaciones y Remuneraciones.md>): Motor de remuneraciones estándar Chile (hora extra §1.1, gratificación tope, AFP/salud/SIS), adelantos ADE, egreso FI Sueldos y PDF firmado.
+- [25 - RE - Reportería y Dashboards](<25 - RE - Reportería y Dashboards.md>): Centro de mando (censo, pulso operativo, embudo GE, salud de caja con termómetro) y distribución segmentada EF×perfil×tenencia.
 
 ---
-*Última actualización: 2026-08-25 - Sesión 6 NSGC: manual PE completado, Dump 39 creado, Catálogo ampliado con sección 10 (colecciones PE, store v22).*
+*Última actualización: 2026-08-26 - Sesión 7 NSGC (ventana 8): manuales PL/CT/RE completados, Dump 40 creado, Catálogo ampliado con sección 11 (colecciones PL/CT/RE, store v25). Serie NSGC de módulos COMPLETA.*
