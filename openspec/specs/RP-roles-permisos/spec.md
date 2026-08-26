@@ -108,3 +108,41 @@ Cualquier permiso no listado SHALL denegarse conforme a Menor Privilegio, regist
 #### Scenario: Residente agenda visita a su unidad
 - **WHEN** un residente agenda una visita o contratista indicando su unidad
 - **THEN** la pre-agenda se registra a la espera del ingreso sellado por conserjería, sin exponerle otros registros
+
+### Requirement: Matriz de Permisos del Módulo PL
+La matriz de permisos MUST definir el acceso a Liquidaciones y Remuneraciones por rol:
+- **Administrador Maestro / administración**: ver, crear, confirmar y eliminar liquidaciones; registrar adelantos; editar parámetros legales CF; generar el PDF oficial.
+- **Conserjería / Seguridad (personal)**: consultar sus propios documentos remuneratorios emitidos (PDF de su liquidación); sin acceso a liquidaciones de terceros ni a parámetros legales.
+- **Propietario / Residente**: sin acceso al módulo.
+
+Cualquier permiso no listado SHALL denegarse conforme a Menor Privilegio, registrando `RP_PERMISSION_DENIED`.
+
+#### Scenario: Trabajador consulta su liquidación
+- **WHEN** un usuario con rol personal accede a Remuneraciones
+- **THEN** puede descargar únicamente sus propias liquidaciones confirmadas
+
+### Requirement: Matriz de Permisos del Módulo CT
+La matriz de permisos MUST definir el acceso a Certificados por rol:
+- **Administrador Maestro / administración**: generar cualquier tipología para cualquier unidad/persona; consultar y exportar el historial completo.
+- **Propietario / Residente**: solicitar certificado de residencia, estado de cuenta y al día de SU unidad; sin acceso al historial global.
+- **Conserjería / Seguridad (personal)**: descargar únicamente sus certificados de liquidación de sueldo confirmados.
+- **Directiva / Comité**: lectura del historial de emisión.
+
+Cualquier permiso no listado SHALL denegarse conforme a Menor Privilegio, registrando `RP_PERMISSION_DENIED`.
+
+#### Scenario: Residente solicita solo lo suyo
+- **WHEN** un residente solicita un certificado Al Día
+- **THEN** solo puede seleccionar unidades donde mantiene vínculo vigente
+
+### Requirement: Matriz de Permisos del Módulo RE
+La matriz de permisos MUST definir el acceso a Reportería y Dashboards por rol:
+- **Administrador Maestro / administración**: ver todas las vistas del Centro de Mando; crear, distribuir y eliminar reportes; configurar cualquier segmentación.
+- **Directiva / Comité**: lectura del Centro de Mando (demográfico, operativo, gestiones y financiero); sin distribución.
+- **Conserjería / Seguridad (personal)**: acceso al Reporte Diario operativo (PE); sin acceso al Centro de Mando financiero.
+- **Propietario / Residente**: únicamente los reportes distribuidos hacia él vía bandeja simulada; sin acceso al generador.
+
+Cualquier permiso no listado SHALL denegarse conforme a Menor Privilegio, registrando `RP_PERMISSION_DENIED`.
+
+#### Scenario: Comité consulta sin distribuir
+- **WHEN** un miembro del comité abre el Centro de Mando
+- **THEN** visualiza las métricas pero las acciones de generar/distribuir reportes le resultan denegadas

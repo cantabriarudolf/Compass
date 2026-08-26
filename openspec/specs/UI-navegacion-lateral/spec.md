@@ -42,7 +42,9 @@ The navigation menu MUST follow the hierarchy implemented in `AppSidebar` and re
     - Personal (`/personas/personal`)
   - **Desarrollo AI**
     - Dashboard OpenSpec (`/admin/dev-dashboard`)
+    - Laboratorio QA (`/admin/qa-lab`)
   - **Sistema**
+    - Reportería y Dashboards (`/admin/reporteria`)
     - Auditoría y Métricas (`/admin/metricas`)
     - Maestros Administrativos (`/admin/maestros`)
     - Configuración (`/admin/configuracion`)

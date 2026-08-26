@@ -115,7 +115,7 @@ El sistema SHALL configurar el persist con `skipHydration: true` y rehidratar ma
 
 ### Requirement: Manifest de Seeds y Orden Canónico por Rank
 
-El sistema SHALL mantener un manifest de seeds que declare para cada colección `colección ST -> seedFile -> tipo (colección|singleton|vistaDerivada) -> dependsOn -> loadOrder Rank -> count`. El orden canónico es `0=CF/MA`, `1=TU/MP`, `2=EF(macro->micro->unidad)`, `3=VU`, `4=FI/PE/IR/IN`, `5=RA/GE/MT`, `6=CT/PL`, `99=RE/AM`. Toda página que cargue bulk SHALL iterar por rank asc.
+El sistema SHALL mantener un manifest de seeds que declare para cada colección `colección ST -> seedFile -> tipo (colección|singleton|vistaDerivada) -> dependsOn -> loadOrder Rank -> count`. El orden canónico es `0=CF/MA`, `1=TU/MP`, `2=EF(macro->micro->unidad)`, `3=VU`, `4=FI/PE/IR/IN`, `5=RA/GE/MT`, `6=CT/PL`, `99=RE/AM`. Toda página que cargue bulk SHALL iterar por rank asc. `reportesRE` ocupa el rank 99 como sumidero reportería junto a AM.
 
 #### Scenario: Manifest completo para core
 
@@ -252,3 +252,54 @@ El sistema SHALL incluir en `CompassData` las colecciones operacionales de PE: `
 
 - **WHEN** una encomienda o un cierre con incidencias adjunta evidencia como data-URL/base64
 - **THEN** la acción retorna `{ok:false}` citando D1 y no muta el estado
+
+### Requirement: Colecciones de remuneraciones de PL en el store
+
+El sistema SHALL incluir en `CompassData` las colecciones `liquidacionesPL` (snapshot inmutable de líneas calculadas, totales de control y referencias a FI/proyección PE) y `adelantosPL` (monto con glosa obligatoria, folio ADE, ciclo pendiente→descontado), gestionadas mediante acciones repository que retornan `StoreResult`. PL ocupa el rank 6 del manifest canónico (`6=CT/PL`) dependiendo de MP/PE (1/4), MA (0), CF (0) y FI (4). El bump de versión SHALL ser 22 → 23 con migrate aditivo (colecciones vacías). La extensión de `ExtensionLaboralSchema.sueldoBase` y los parámetros legales de CF SHALL ser opcionales para no invalidar stores persistidos.
+
+#### Scenario: Escritura valida FKs del trabajador
+
+- **WHEN** `generarLiquidacionPL` recibe un trabajador sin ficha laboral o con FK legal huérfana
+- **THEN** retorna `{ok:false}` citando la causa y no muta `liquidacionesPL`
+
+#### Scenario: Migración aditiva v22→v23
+
+- **WHEN** un store persistido en versión 22 se rehidrata
+- **THEN** `liquidacionesPL` y `adelantosPL` quedan disponibles vacías y ningún dato previo cambia
+
+### Requirement: Auditoría CF_UPDATE_PARAM de parámetros legales
+
+`saveConfiguracion` SHALL emitir el evento `CF_UPDATE_PARAM` cuando cambien los parámetros legales de remuneraciones (`ufMensual`, `ingresoMinimoMensual`, `topeGratificacionLegal`, `tasaSIS`), incluyendo old/new conforme a `CF-configuracion-global`.
+
+#### Scenario: Cambio de UF mensual auditado
+
+- **WHEN** la administración actualiza `ufMensual` y guarda la configuración
+- **THEN** AM registra `CF_UPDATE_PARAM` con el valor anterior y nuevo
+
+### Requirement: Colección de certificados CT en el store
+
+El sistema SHALL incluir en `CompassData` la colección `certificadosCT` (folio, código de verificación único, tipología, snapshot del payload emitido, referencia a fuente y a la firma usada), gestionada mediante acciones repository que retornan `StoreResult`. CT ocupa el rank 6 del manifest canónico (`6=CT/PL`) dependiendo de MP/VU (1/3), FI (4), PL (6) y CF (0). El bump de versión SHALL ser 23 → 24 con migrate aditivo (colección vacía). La firma digitalizada se persiste SOLO por referencia (D1): el binario del PDF y la imagen de firma jamás entran al store.
+
+#### Scenario: Escritura valida FKs por tipología
+
+- **WHEN** `generarCertificadoCT` recibe una unidad o liquidación inexistente para la tipología pedida
+- **THEN** retorna `{ok:false}` citando la FK y no muta `certificadosCT`
+
+#### Scenario: Media por referencia en firma
+
+- **WHEN** un intento de emisión adjunta la firma como data-URL/base64
+- **THEN** la acción retorna `{ok:false}` citando D1 y no muta el estado
+
+### Requirement: Colección de reportería RE en el store
+
+El sistema SHALL incluir en `CompassData` la colección `reportesRE` (título, bloques snapshot inmutables, segmento declarado EF+MP+tenencia, destinatarios resueltos y contador de distribución), gestionada mediante acciones repository que retornan `StoreResult`. RE ocupa el rank 99 del manifest canónico (`99=RE/AM`) como sumidero dependiente de todos los módulos. El bump de versión SHALL ser 24 → 25 con migrate aditivo (colección vacía).
+
+#### Scenario: Escritura valida segmento
+
+- **WHEN** `generarReporteRE` recibe un segmento con macro/micro/unidad inexistente
+- **THEN** retorna `{ok:false}` citando la FK huérfana y no muta `reportesRE`
+
+#### Scenario: Rehidratación v24→v25
+
+- **WHEN** un store persistido en versión 24 se rehidrata
+- **THEN** `reportesRE` queda disponible vacía y ningún dato previo cambia

@@ -61,14 +61,17 @@ Each OpenSpec capability maps 1:1 to its module spec in `Data/NSGC/docs/especifi
 | `RA-reservas-amenities` | `RA - Reservas y Amenities.md` |
 | `CV-visor-mensajes` | `CV - Visor de Mensajes.md` (consume `actasGD.avisoCVReferencia` de GD) |
 | `FI-finanzas-morosidad` | `FI - Finanzas y Morosidad.md` (materializa `cargoFIReferencia` de IN/MT/RA) |
-| `PE-personal-servicios` | `PE - Personal y Servicios.md` (proyección PE → FI con `liquidacionPLReferencia` pendiente a PL) |
+| `PE-personal-servicios` | `PE - Personal y Servicios.md` (proyección PE → FI con `liquidacionPLReferencia` materializada por PL) |
+| `PL-liquidaciones-remuneraciones` | `PL - Liquidaciones y Remuneraciones.md` (materializa `liquidacionPLReferencia` de PE; egreso FI sueldos) |
+| `CT-certificados` | `CT - Certificados.md` (consume VU/FI/PL; firma embebida solo en el PDF) |
+| `RE-reporteria-dashboards` | `RE - Reporteria y Dashboards.md` (consolida MP/VU/EF/PE/GE/FI/IR/AM) |
 | `LAB-mejoras` | `LAB - Mejoras Lab.md` |
 | `DEV-qa-lab` | Interno (tooling QA, sin doc NSGC) |
 | `UI-interfaz-principal` | Cross-cutting UI (no AA code) |
 | `UI-navegacion-lateral` | Cross-cutting UI (no AA code) |
 
 ### Remaining NSGC modules (pending OpenSpec specs)
-`PL`, `RE`, `CT` — not yet defined in `openspec/specs/`. Create each spec using its AA prefix when implemented. `AU` está parcialmente implementada vía auditorías (`Data/NSGC/docs/auditorias/consolidado - 2026-08-24-b.md`); `SG` pendiente según `SG - Hardening y Despliegue.md` §1 y §3.
+Serie NSGC completa: todos los módulos del roadmap tienen spec en `openspec/specs/`. `AU` está parcialmente implementada vía auditorías (`Data/NSGC/docs/auditorias/consolidado - 2026-08-24-b.md`) y queda fuera de serie; `SG` pendiente según `SG - Hardening y Despliegue.md` §1 y §3.
 ### Folder naming rule
 - Specs and active changes: `<AA>-<kebab-case-name>` (e.g. `EF-estructura-fisica`).
 - Cross-cutting UI specs use `UI-` prefix.

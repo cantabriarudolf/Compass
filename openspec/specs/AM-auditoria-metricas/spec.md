@@ -126,3 +126,24 @@ El catálogo de eventos MUST incluir los eventos operativos del módulo PE: `PE_
 #### Scenario: Turno no cerrado visible para AM
 - **WHEN** una jornada termina sin cierre de turno registrado para esa fecha
 - **THEN** la tarjeta correspondiente del reporte diario queda No Informado y el caso es detectable por el panel de incumplimientos
+
+### Requirement: Eventos de Remuneraciones (PL)
+El catálogo de eventos MUST incluir los eventos del módulo PL: `PL_GENERATE_PAYSLIP` (liquidación generada en borrador), `PL_ADD_ADVANCE` (adelanto registrado con folio ADE), `PL_DELETE_PAYSLIP` (liquidación borrador eliminada) y `PL_EXPENSE_SYNC` (confirmación sincronizada como egreso FI categoría sueldos). Cada evento SHALL registrar data cuantificable cuando aplique (monto total, monto del adelanto, horas extra liquidadas) y alimentar las métricas derivables: gasto mensual total en remuneraciones, volumen de adelantos por trabajador, desviación presupuestaria vs proyección PE y tasa de retenciones previsionales.
+
+#### Scenario: Ciclo de pago auditado
+- **WHEN** se registra un adelanto, se genera la liquidación y se confirma
+- **THEN** los tres eventos quedan registrados como inmutables con su data cuantificable y el egreso FI referenciado
+
+### Requirement: Eventos de Certificados (CT)
+El catálogo de eventos MUST incluir los eventos del módulo CT: `CT_GENERATE_RESIDENCE`, `CT_GENERATE_FINANCIAL` (incluye estado de cuenta y al día con su data), `CT_GENERATE_PAYROLL` y `CT_GENERATE_AL_DIA`. Cada evento SHALL registrar data cuantificable (tipología emitida, unidad/persona destino) y alimentar las métricas derivables: cantidad de certificados por tipo, unidades con mayor demanda y trazabilidad por código de verificación.
+
+#### Scenario: Emisión auditada por tipología
+- **WHEN** se emiten certificados de las cuatro tipologías
+- **THEN** cada emisión queda registrada como evento inmutable con su referencia al registro CT
+
+### Requirement: Eventos de Reportería (RE)
+El catálogo de eventos MUST incluir los eventos del módulo RE: `RE_DASHBOARD_VIEW` (acceso a cada vista del mando), `RE_REPORT_GENERATED` (reporte creado con bloques) y `RE_REPORT_DISTRIBUTED` (distribución con alcance). Cada evento SHALL registrar data cuantificable (vista consultada, bloques incluidos, cantidad de destinatarios) y alimentar las métricas derivables: tasa de consumo de reportes por rol, frecuencia de acceso por perfil y exactitud de la segmentación.
+
+#### Scenario: Ciclo reportería auditado
+- **WHEN** se abre el mando, se genera un reporte segmentado y se distribuye
+- **THEN** los tres eventos quedan registrados como inmutables con su data cuantificable
