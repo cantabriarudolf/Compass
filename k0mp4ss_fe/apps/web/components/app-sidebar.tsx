@@ -139,6 +139,7 @@ const data = {
       icon: IconSettings,
       roles: ["admin"],
       items: [
+        { title: "Reportería y Dashboards", url: "/admin/reporteria" },
         { title: "Auditoría y Métricas", url: "/admin/metricas" },
         { title: "Gestión Administrativa", url: "/admin/gestion" },
         { title: "Maestros Administrativos", url: "/admin/maestros" },

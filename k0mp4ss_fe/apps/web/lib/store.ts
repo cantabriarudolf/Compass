@@ -101,6 +101,7 @@ import {
   LiquidacionPLSchema,
   AdelantoPLSchema,
   CertificadoCTSchema,
+  ReporteRESchema,
   MAESTRO_SCHEMAS,
   validarConEsquema,
   validarMaestro,
@@ -153,6 +154,7 @@ import {
   type LiquidacionPL,
   type AdelantoPL,
   type CertificadoCT,
+  type ReporteRE,
 } from "@/lib/schemas"
 import {
   calcularProyeccionCobertura,
@@ -163,6 +165,9 @@ import {
   calcularLiquidacion,
   hoyISOPL,
 } from "@/lib/pl-utils"
+import {
+  resolverSegmentacionRE,
+} from "@/lib/reporteria-utils"
 import {
   exigibleTotal,
   estadoDeCobro,
@@ -292,7 +297,7 @@ const FONDOS_FI_SEED: FondoFI[] = [
   { id: "fondo-amenities", nombre: "Fondo de Amenities", tipo: "amenities", descripcion: "Centro de costos de reservas, tarifas y garantías de amenities.", activo: true },
 ]
 
-export const STORE_VERSION = 24
+export const STORE_VERSION = 25
 
 export interface MaestroCollections {
   afps: Afp[]
@@ -379,6 +384,8 @@ export interface CompassData {
   adelantosPL: AdelantoPL[]
   // Certificados (CT)
   certificadosCT: CertificadoCT[]
+  // Reportería y Dashboards (RE)
+  reportesRE: ReporteRE[]
 }
 
 interface CompassStore extends CompassData {
@@ -547,6 +554,22 @@ interface CompassStore extends CompassData {
     id?: string
   }) => StoreResult
   removeCertificadoCT: (id: string) => StoreResult
+  // Reportería y Dashboards (RE)
+  registrarVistaDashboardRE: (vista: "demografico" | "operativo" | "gestiones" | "financiero") => void
+  generarReporteRE: (input: {
+    titulo: string
+    bloques: ("gastos_mes" | "bitacora_seguridad" | "morosidad" | "consumo_insumos")[]
+    segmento: {
+      macroSectorIds?: string[]
+      microSectorIds?: string[]
+      unidadIds?: string[]
+      perfiles?: ("administracion" | "personal" | "propietario" | "residente")[]
+      tenencias?: ("propietarios" | "arrendatarios")[]
+    }
+    id?: string
+  }) => StoreResult
+  distribuirReporteRE: (id: string) => StoreResult
+  removeReporteRE: (id: string) => StoreResult
 }
 
 function upsert<T extends { id: string }>(list: T[], item: T): T[] {
@@ -619,6 +642,7 @@ export const seedData = (): CompassData => ({
   liquidacionesPL: [],
   adelantosPL: [],
   certificadosCT: [],
+  reportesRE: [],
   maestros: {
     afps: seedAFPS,
     previsionesSalud: seedPrevisionesSalud,
@@ -691,6 +715,7 @@ const ESQUEMAS_COLECCION = {
   liquidacionesPL: z.array(LiquidacionPLSchema),
   adelantosPL: z.array(AdelantoPLSchema),
   certificadosCT: z.array(CertificadoCTSchema),
+  reportesRE: z.array(ReporteRESchema),
 } as const
 
 type ClaveColeccion = keyof typeof ESQUEMAS_COLECCION
@@ -4337,6 +4362,184 @@ export const useCompassStore = create<CompassStore>()(
         set(s => ({ certificadosCT: s.certificadosCT.filter(c => c.id !== id) }))
         return { ok: true }
       },
+
+      // --- RE: Reportería y Dashboards ---
+
+      registrarVistaDashboardRE: (vista) => {
+        if (!get().hasHydrated) return
+        registrarEvento(set, "RE_DASHBOARD_VIEW", vista, `Vista "${vista}" del Centro de Mando consultada por administración.`, "RE")
+      },
+
+      generarReporteRE: (input) => {
+        if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
+        if (!input.titulo || input.titulo.trim().length < 3) {
+          return { ok: false, error: "El título debe tener al menos 3 caracteres." }
+        }
+        const bloques = [...new Set(input.bloques)]
+        if (bloques.length === 0) return { ok: false, error: "Selecciona al menos un bloque de información." }
+        // Validación FK del segmento.
+        const macroSectorIds = input.segmento.macroSectorIds ?? []
+        const microSectorIds = input.segmento.microSectorIds ?? []
+        const unidadIds = input.segmento.unidadIds ?? []
+        for (const id of macroSectorIds) {
+          if (!get().macroSectores.some(m => m.id === id)) return { ok: false, error: `macroSectorId ${id} no existe en la Estructura Física.` }
+        }
+        for (const id of microSectorIds) {
+          if (!get().microSectores.some(m => m.id === id)) return { ok: false, error: `microSectorId ${id} no existe en la Estructura Física.` }
+        }
+        for (const id of unidadIds) {
+          if (!get().unidades.some(u => u.id === id)) return { ok: false, error: `unidadId ${id} no existe en el inventario.` }
+        }
+
+        // Snapshot inmutable por bloque (congelado al momento de generar).
+        const mesActual = hoyISO().slice(0, 7)
+        const payloadSnapshot: ReporteRE["payloadSnapshot"] = []
+        for (const bloque of bloques) {
+          const lineas: { etiqueta: string; valor: string }[] = []
+          if (bloque === "gastos_mes") {
+            const delMes = get().egresosFI.filter(e => e.fecha.startsWith(`${mesActual}-`))
+            const total = delMes.reduce((acc, e) => acc + e.monto, 0)
+            lineas.push({ etiqueta: "Mes", valor: mesActual })
+            lineas.push({ etiqueta: "Egresos registrados", valor: String(delMes.length) })
+            lineas.push({ etiqueta: "Total egresos", valor: `$${total.toLocaleString("es-CL")}` })
+            const recurrentes = delMes.filter(e => e.esRecurrente).reduce((acc, e) => acc + e.monto, 0)
+            lineas.push({ etiqueta: "Gastos fijos recurrentes", valor: `$${recurrentes.toLocaleString("es-CL")}` })
+          } else if (bloque === "bitacora_seguridad") {
+            const conNovedades = [...get().cierresTurnoPE]
+              .filter(c => c.incidencias.hubo || c.novedadesGenerales)
+              .sort((a, b) => b.fecha.localeCompare(a.fecha))
+              .slice(0, 10)
+            lineas.push({ etiqueta: "Reportes con novedades (últimos 10)", valor: String(conNovedades.length) })
+            for (const c of conNovedades.slice(0, 5)) {
+              lineas.push({
+                etiqueta: `${c.fecha} (${nombrePersona(get, c.trabajadorPersonaId)})`,
+                valor: c.incidencias.hubo ? (c.incidencias.descripcion ?? "").slice(0, 80) : (c.novedadesGenerales ?? "").slice(0, 80),
+              })
+            }
+          } else if (bloque === "morosidad") {
+            const vencidos = get().cobrosFI
+              .map(c => ({ cobro: c, saldo: saldoPendiente(c) }))
+              .filter(x => x.saldo > 0 && x.cobro.fechaVencimiento !== undefined && x.cobro.fechaVencimiento < hoyISO())
+              .sort((a, b) => b.saldo - a.saldo)
+            const totalVencido = vencidos.reduce((acc, x) => acc + x.saldo, 0)
+            lineas.push({ etiqueta: "Cobros vencidos con deuda", valor: String(vencidos.length) })
+            lineas.push({ etiqueta: "Deuda vencida total", valor: `$${totalVencido.toLocaleString("es-CL")}` })
+            for (const x of vencidos.slice(0, 5)) {
+              lineas.push({ etiqueta: refUnidad(get, x.cobro.unidadId), valor: `$${x.saldo.toLocaleString("es-CL")}` })
+            }
+          } else {
+            const entregas = get().solicitudesInsumoIR.filter(s => s.estado === "entregada")
+            lineas.push({ etiqueta: "Solicitudes entregadas (histórico)", valor: String(entregas.length) })
+            const porArea = new Map<string, number>()
+            for (const s of entregas) porArea.set(s.areaDestino, (porArea.get(s.areaDestino) ?? 0) + s.cantidad)
+            for (const [area, cantidad] of [...porArea.entries()].slice(0, 5)) {
+              lineas.push({ etiqueta: area, valor: `${cantidad} ítem(s)` })
+            }
+          }
+          payloadSnapshot.push({ bloque, lineas })
+        }
+
+        const registro: ReporteRE = {
+          id: input.id ?? `re-rep-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          titulo: input.titulo.trim(),
+          bloques,
+          segmento: {
+            macroSectorIds,
+            microSectorIds,
+            unidadIds,
+            perfiles: input.segmento.perfiles ?? [],
+            tenencias: input.segmento.tenencias ?? [],
+          },
+          payloadSnapshot,
+          fechaGeneracion: hoyISO(),
+          destinatariosPersonaId: [],
+          distribuidoA: 0,
+        }
+        const validacion = validarConEsquema(ReporteRESchema, registro)
+        if (!validacion.ok) return validacion
+        set(s => ({ reportesRE: upsert(s.reportesRE, validacion.data) }))
+        registrarEvento(
+          set,
+          "RE_REPORT_GENERATED",
+          validacion.data.id,
+          `Reporte "${registro.titulo}" generado con ${bloques.length} bloque(s); snapshot inmutable capturado.`,
+          "RE"
+        )
+        return { ok: true }
+      },
+
+      distribuirReporteRE: (id) => {
+        if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
+        const reporte = get().reportesRE.find(r => r.id === id)
+        if (!reporte) return { ok: false, error: "No se puede distribuir: el reporte no existe." }
+        if (reporte.distribuidoA > 0 || reporte.fechaDistribucion) {
+          return { ok: false, error: `El reporte ya fue distribuido a ${reporte.distribuidoA} destinatario(s) el ${reporte.fechaDistribucion}.` }
+        }
+
+        // Alcance EF resuelto: unidades directas + micros + macros completos.
+        const alcance = new Set<string>(reporte.segmento.unidadIds)
+        for (const microId of reporte.segmento.microSectorIds) {
+          for (const u of get().unidades.filter(u => u.microSectorId === microId)) alcance.add(u.id)
+        }
+        for (const macroId of reporte.segmento.macroSectorIds) {
+          const microsDelMacro = new Set(get().microSectores.filter(m => m.macroSectorId === macroId).map(m => m.id))
+          for (const u of get().unidades.filter(u => microsDelMacro.has(u.microSectorId))) alcance.add(u.id)
+        }
+
+        // Resolución vigente al momento de distribuir.
+        const destinatarios = resolverSegmentacionRE({
+          segmento: { perfiles: reporte.segmento.perfiles, tenencias: reporte.segmento.tenencias },
+          unidadesAlcanceIds: [...alcance],
+          vinculos: get().vinculos,
+          personas: get().personas,
+        })
+        if (destinatarios.length === 0) {
+          return { ok: false, error: "La segmentación no resolvió destinatarios vigentes; ajusta el alcance." }
+        }
+
+        const primerBloque = reporte.payloadSnapshot[0]
+        const resumenBloques = reporte.bloques.join(", ")
+        for (const personaId of destinatarios) {
+          const persona = get().personas.find(p => p.id === personaId)
+          const rolBandeja = persona?.roles.includes("personal") ? "personal" as const : persona?.roles.includes("directiva") || persona?.datosGobernanza !== undefined ? "directiva" as const : "residente" as const
+          const unidadVinculo = get().vinculos.find(v => v.personaId === personaId && !v.fechaFin)?.unidadId
+          get().notify({
+            ...(rolBandeja === "personal" ? { destinatarioRol: "personal" as const } : rolBandeja === "directiva" ? { destinatarioRol: "directiva" as const } : { destinatarioRol: "residente" as const }),
+            destinatarioPersonaId: personaId,
+            asunto: `Reporte distribuido: ${reporte.titulo}`,
+            cuerpo: `${reporte.titulo} — bloques: ${resumenBloques}.${primerBloque?.lineas[0] ? ` ${primerBloque.lineas[0].etiqueta}: ${primerBloque.lineas[0].valor}.` : ""}`,
+            moduloOrigen: "RE",
+            ...(unidadVinculo ? { unidadId: unidadVinculo } : {}),
+          })
+        }
+
+        set(s => ({
+          reportesRE: s.reportesRE.map(r =>
+            r.id === id
+              ? { ...r, destinatariosPersonaId: destinatarios, distribuidoA: destinatarios.length, fechaDistribucion: hoyISO() }
+              : r
+          ),
+        }))
+        registrarEvento(
+          set,
+          "RE_REPORT_DISTRIBUTED",
+          id,
+          `Reporte "${reporte.titulo}" distribuido a ${destinatarios.length} destinatario(s) vía bandeja simulada (segmentación EF+MP+tenencia).`,
+          "RE"
+        )
+        return { ok: true }
+      },
+
+      removeReporteRE: (id) => {
+        if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
+        const reporte = get().reportesRE.find(r => r.id === id)
+        if (!reporte) return { ok: false, error: "No se puede eliminar: el reporte no existe." }
+        if (!id.startsWith("test-")) {
+          return { ok: false, error: "Solo los reportes TEST pueden eliminarse; los emitidos quedan trazados en AM." }
+        }
+        set(s => ({ reportesRE: s.reportesRE.filter(r => r.id !== id) }))
+        return { ok: true }
+      },
     }),
     {
       name: "compass-store",
@@ -4392,6 +4595,7 @@ export const useCompassStore = create<CompassStore>()(
         liquidacionesPL: state.liquidacionesPL,
         adelantosPL: state.adelantosPL,
         certificadosCT: state.certificadosCT,
+        reportesRE: state.reportesRE,
       }),
       migrate: (persisted, version) => {
         const prev = (persisted ?? {}) as Partial<CompassData>
@@ -4610,6 +4814,14 @@ export const useCompassStore = create<CompassStore>()(
           result = {
             ...result,
             certificadosCT: prev.certificadosCT ?? [],
+          }
+        }
+        // RE (v25): reportería personalizada (transaccional, nace vacía).
+        // Aditivo.
+        if ((version ?? 0) < 25) {
+          result = {
+            ...result,
+            reportesRE: prev.reportesRE ?? [],
           }
         }
         // TST-002: los stores que ya quedaron en v8 con unidades dañadas por este

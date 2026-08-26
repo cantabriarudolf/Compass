@@ -1342,6 +1342,8 @@ export type EstadoAdelantoPL = z.infer<typeof EstadoAdelantoPLSchema>
 export type LiquidacionPL = z.infer<typeof LiquidacionPLSchema>
 export type TipoCertificadoCT = z.infer<typeof TipoCertificadoCTSchema>
 export type CertificadoCT = z.infer<typeof CertificadoCTSchema>
+export type BloqueReporteRE = z.infer<typeof BloqueReporteRESchema>
+export type ReporteRE = z.infer<typeof ReporteRESchema>
 
 // --- Liquidaciones y Remuneraciones (PL) ---
 
@@ -1457,6 +1459,37 @@ export const CertificadoCTSchema = z.object({
     })
     .optional(),
   fechaEmision: FechaISOSchema,
+})
+
+// --- Reportería y Dashboards (RE) ---
+
+export const BLOQUES_REPORTE_RE = ["gastos_mes", "bitacora_seguridad", "morosidad", "consumo_insumos"] as const
+export const BloqueReporteRESchema = z.enum(BLOQUES_REPORTE_RE)
+
+// Reporte personalizado: bloques snapshot inmutables al generar + segmento
+// declarado (EF+MP+tenencia). Los destinatarios se resuelven al distribuir.
+export const ReporteRESchema = z.object({
+  id: IdEntidadSchema,
+  titulo: z.string({ required_error: "El título del reporte es obligatorio." }).min(3, "El título debe tener al menos 3 caracteres."),
+  bloques: z.array(BloqueReporteRESchema).min(1, "Selecciona al menos un bloque de información."),
+  segmento: z.object({
+    macroSectorIds: z.array(IdEntidadSchema),
+    microSectorIds: z.array(IdEntidadSchema),
+    unidadIds: z.array(IdEntidadSchema),
+    perfiles: z.array(z.enum(["administracion", "personal", "propietario", "residente"])),
+    tenencias: z.array(z.enum(["propietarios", "arrendatarios"])),
+  }),
+  payloadSnapshot: z.array(z.object({
+    bloque: BloqueReporteRESchema,
+    lineas: z.array(z.object({
+      etiqueta: z.string().min(1),
+      valor: z.string().min(1),
+    })),
+  })),
+  fechaGeneracion: FechaISOSchema,
+  destinatariosPersonaId: z.array(IdEntidadSchema),
+  distribuidoA: z.number().int().min(0),
+  fechaDistribucion: FechaISOSchema.optional(),
 })
 
 // --- Utilidades de validación para el store ---

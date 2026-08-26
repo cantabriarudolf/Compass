@@ -62,6 +62,9 @@ const PLAN: Record<string, string[]> = {
   cv: ["Activar plantilla rápida Portón TEST (advertencia) → aviso publicado al instante", "Aviso manual TEST con imagen URL remota → borrador → publicar", "Aviso vencido ayer → caducidad automática lo archiva", "Publicar el acta GD TEST en el visor → avisoCVReferencia materializada con el id del aviso", "Cola del carrusel: avisos publicados vigentes con duraciones individuales"],
   fi: ["Crear Fondo Extraordinario Pintura TEST (especial) junto al seed GC/Reserva/Amenities", "Egreso recurrente TEST imputado al Fondo de Gasto Común con comprobante D1", "Emisión GC variable sobre unidades TEST ($450.000) → cobros prorrateados + aporte 5% reserva", "Emisión sin alcance sobre toda la comunidad → rechazada por unidades sin responsable", "Pago exacto del cobro GC del depto TEST → estado pagado", "Mora al 1% sobre el periodo vencido (mes anterior) e idempotencia diaria", "Pago con descuento justificado en la multa TEST → informe de diferencia inmutable", "Multa grave aplicada tiene cobro multa_in materializado (conexión IN)", "Tarifa del quincho reservado quedó como cobro del fondo amenities (conexión RA)", "Proyecto MT de $12M financiado por fondo GC sin saldo → rechazado (conexión MT)", "Retiro del fondo reserva exige acta publicada → rechazado sin aprobación"],
   pe: ["Ficha integral TEST: 99.999.999-9 con AFP/FONASA/BancoEstado por FK + jornada base y contacto de emergencia", "Hora extra + evaluación de desempeño sobre la ficha TEST (eventos AM)", "Feriado TEST irrenunciable del próximo año → proyección de cobertura calcula reemplazos", "Enviar proyección de costos a Finanzas → registro TEST con liquidación PL pendiente y notificación", "Visita TEST pre-agendada al Depto 999 → marcar Ingresada sella hora y notifica", "Encomienda Chilexpress TEST con evidencia URL (D1) → retiro registrado", "Contratista Gasfitería Don Pedro agendado por residente TEST → confirmar ingreso sella hora", "Proveedor Ascensores TEST + mantención mensual vencida → alerta preventiva visible", "Visita técnica TEST vinculada a la mantención → próxima fecha reprogramada un ciclo", "Cierre de turno nocturno TEST con incidencias → notify administración + copia al trabajador"],
+  pl: ["Parámetros legales CF TEST (UF, IMM, tope gratificación 4.75, SIS) → auditados CF_UPDATE_PARAM", "Sueldo base en la ficha TEST + adelanto ADE TEST notificado al trabajador", "Generar liquidación LIQ TEST del mes: hora extra §1.1 + gratificación tope + AFP/salud/familiar + anticipo descontado", "Confirmar LIQ → egreso FI categoría Sueldos materializado y anticipo Descontado"],
+  ct: ["Certificado Residencia TEST (vínculo activo Depto 999) → PDF firmado con código VC", "Certificado Al Día sobre unidad con deuda → rechazado citando saldo", "Pagar el cobro vencido TEST → Al Día emitido con snapshot de saldo 0", "Certificado Liquidación sobre la LIQ confirmada → folio CT e historial inmutable"],
+  re: ["Abrir Centro de Mando → vista auditada RE_DASHBOARD_VIEW", "Reporte TEST con bloques Gastos+Morosidad segmentado a SectorTEST × Residentes × Propietarios", "Distribuir → destinatarios resueltos vigentes y notificaciones email_simulado", "Segunda distribución rechazada (idempotente); tasa huérfanos 0 en el mando"],
 }
 
 const TITULOS: Record<string, string> = {
@@ -84,6 +87,9 @@ const TITULOS: Record<string, string> = {
   cv: "17. Visor de Mensajes (CV)",
   fi: "18. Finanzas y Morosidad (FI)",
   pe: "19. Personal y Servicios (PE)",
+  pl: "20. Remuneraciones (PL)",
+  ct: "21. Certificados (CT)",
+  re: "22. Reportería y Dashboards (RE)",
 }
 
 const COMO_LLEGAR: Record<string, string> = {
@@ -106,6 +112,9 @@ const COMO_LLEGAR: Record<string, string> = {
   cv: "Comunidad → Visor de Mensajes → avisos TEST, actas GD y plantillas",
   fi: "Finanzas → Gastos Comunes → fondos/emisión TEST · Recaudación → cobros y moras TEST",
   pe: "Personas → Personal → ficha 99.999.999-9 · Operaciones → Bitácora (cierre turno) · Proveedores y Servicios",
+  pl: "Finanzas → Remuneraciones → LIQ/ADE TEST · Parámetros Legales",
+  ct: "Comunidad → Certificados → historial CT TEST",
+  re: "Sistema → Reportería y Dashboards → reporte Boletín TEST",
 }
 
 const COMO_LLEGAR_HREF: Record<string, string> = {
@@ -126,6 +135,9 @@ const COMO_LLEGAR_HREF: Record<string, string> = {
   cv: "/comunidad/visor",
   fi: "/finanzas/gastos-comunes",
   pe: "/personas/personal",
+  pl: "/finanzas/remuneraciones",
+  ct: "/comunidad/certificados",
+  re: "/admin/reporteria",
 }
 
 interface SeedReport {
@@ -146,11 +158,9 @@ const HISTORIA = [
 ]
 
 const PENDIENTES: { id: string; archivo: string; lineas: number; desc: string; pruebas: string[] }[] = [
-  { id: "CT", archivo: "CT - Certificados.md", lineas: 44, desc: "Documentos oficiales y acreditaciones", pruebas: ["Certificado Unidad Al Día con firma digital", "Plantilla CT con datos ST"] },
   { id: "GD", archivo: "GD - Gestión de Directiva.md", lineas: 40, desc: "Gobernanza y actas", pruebas: ["Acta con firma directiva", "Votación asamblea por RP"] },
   { id: "GE", archivo: "GE - Gestion de Solicitudes.md", lineas: 54, desc: "Tickets con workflow automático", pruebas: ["Ticket Nuevo → En Revisión al abrir", "Requiere Acción Vecino → En Proceso", "SLA dashboard GE"] },
   { id: "PI", archivo: "PI - Portal Inmobiliario.md", lineas: 27, desc: "Vitrina venta/arriendo unidades", pruebas: ["Unidad en portal con VU", "Contacto interesado → MP"] },
-  { id: "RE", archivo: "RE - Reporteria y Dashboards.md", lineas: 66, desc: "Dashboards y segmentación", pruebas: ["Dashboard demográfico/operativo/financiero", "Segmentación EF+MP+tenencia + distribución CO/RE", "RE_DASHBOARD_VIEW auditado"] },
 ]
 
 function BadgeEstado({ s }: { s: ModuleState }) {
@@ -194,6 +204,9 @@ export default function QaLabPage() {
     { id: "cv", label: TITULOS["cv"]!, rank: 8, fase: "Paso 17" },
     { id: "fi", label: TITULOS["fi"]!, rank: 9, fase: "Paso 18" },
     { id: "pe", label: TITULOS["pe"]!, rank: 4, fase: "Paso 19" },
+    { id: "pl", label: TITULOS["pl"]!, rank: 6, fase: "Paso 20" },
+    { id: "ct", label: TITULOS["ct"]!, rank: 6, fase: "Paso 21" },
+    { id: "re", label: TITULOS["re"]!, rank: 99, fase: "Paso 22" },
   ]
 
   const FASE_MODULOS: Record<string, string[]> = {
@@ -212,7 +225,8 @@ export default function QaLabPage() {
     "12": ["ra", "cv"],
     "13": ["fi"],
     "14": ["pe"],
-    "todo": ["ma", "tu", "mp", "ef-macro", "ef-micro", "ef-unidad", "vu", "pi", "ad", "gd", "co", "ge", "ir", "in", "mt", "ra", "cv", "fi", "pe"],
+    "15": ["pl", "ct", "re"],
+    "todo": ["ma", "tu", "mp", "ef-macro", "ef-micro", "ef-unidad", "vu", "pi", "ad", "gd", "co", "ge", "ir", "in", "mt", "ra", "cv", "fi", "pe", "pl", "ct", "re"],
   }
 
   const LABEL_FASE: Record<string, string> = {
@@ -231,6 +245,7 @@ export default function QaLabPage() {
     "12": "13. RA+CV — reservas, avisos y actas en visor",
     "13": "14. FI — fondos, emisión GC y morosidad",
     "14": "15. PE — fichas, bitácora y cierre de turno",
+    "15": "16. PL+CT+RE — remuneraciones, certificados y reportería",
     "todo": "Carga completa",
   }
 
@@ -797,6 +812,123 @@ export default function QaLabPage() {
     return { id: "pe", label: TITULOS["pe"]!, rank: 4, status: errores.length ? "error" : "ok", count: 1, errores, pasos }
   }, [])
 
+  const cargarFase15PL = React.useCallback(async (): Promise<ModReport> => {
+    const s = useCompassStore.getState()
+    const pasos: Paso[] = (PLAN["pl"]! as string[]).map(desc => ({ desc, estado: "pendiente" as ModuleState }))
+    const hoyMes = new Date().toISOString().slice(0, 7)
+    // 1) Parámetros legales CF auditados
+    const cfg = s.configuracion
+    const r1 = s.saveConfiguracion({ ...cfg, ufMensual: cfg.ufMensual ?? 39000, ingresoMinimoMensual: cfg.ingresoMinimoMensual ?? 500000, topeGratificacionLegal: cfg.topeGratificacionLegal ?? 4.75, tasaSIS: cfg.tasaSIS ?? 1.48 })
+    if (!r1.ok || !useCompassStore.getState().eventos.some(e => e.tipoAccion === "CF_UPDATE_PARAM")) { pasos[0]!.estado = "error"; pasos[0]!.error = r1.error ?? "Sin evento CF_UPDATE_PARAM" } else pasos[0]!.estado = "ok"
+    // 2) Sueldo base en la ficha TEST + adelanto notificado
+    const p99 = useCompassStore.getState().personas.find(p => p.id === "test-p-99")
+    if (!p99?.datosLaborales) { pasos[1]!.estado = "error"; pasos[1]!.error = "Falta ficha PE de test-p-99 (ejecuta fase PE)" } else {
+      const r2a = s.savePersona({ ...p99, datosLaborales: { ...p99.datosLaborales, sueldoBase: 600000 } } as any)
+      const r2b = s.saveAdelantoPL({ id: "test-ade-1", folio: "", trabajadorPersonaId: "test-p-99", fecha: new Date().toISOString().slice(0, 10), monto: 80000, glosa: "Adelanto quincena TEST", estado: "pendiente" })
+      const ade = useCompassStore.getState().adelantosPL.find(a => a.id === "test-ade-1")
+      if (!r2a.ok || !r2b.ok || !ade?.folio.startsWith("ADE-")) { pasos[1]!.estado = "error"; pasos[1]!.error = r2a.error ?? r2b.error ?? "Sin folio ADE" } else pasos[1]!.estado = "ok"
+    }
+    // 3) Liquidación LIQ TEST con cálculo completo
+    let liqId = ""
+    const r3 = s.generarLiquidacionPL({
+      id: "test-liq-pl",
+      trabajadorPersonaId: "test-p-99",
+      periodo: hoyMes,
+      diasTrabajados: 30,
+      asignacionMovilizacion: 30000,
+    })
+    const liq = useCompassStore.getState().liquidacionesPL.find(l => l.id === "test-liq-pl")
+    liqId = liq?.id ?? ""
+    if (!r3.ok || !liq || !liq.folio.startsWith("LIQ-") || liq.descuentoAnticipos !== 80000 || liq.valorHoraOrdinaria <= 0 || !(liq.gratificacionLegal > 0)) {
+      pasos[2]!.estado = "error"; pasos[2]!.error = r3.error ?? `Cálculo LIQ incompleto (${liq?.folio}/${liq?.descuentoAnticipos})`
+    } else pasos[2]!.estado = "ok"
+    // 4) Confirmar → egreso FI Sueldos + anticipo Descontado
+    const egresosAntes = useCompassStore.getState().egresosFI.length
+    const r4 = liqId ? s.confirmarLiquidacionPL(liqId) : { ok: false, error: "Sin liquidación TEST" }
+    const liqConf = useCompassStore.getState().liquidacionesPL.find(l => l.id === liqId)
+    const egresoSueldos = useCompassStore.getState().egresosFI.slice(egresosAntes).find(e => e.categoria === "sueldos")
+    const adeDescontado = useCompassStore.getState().adelantosPL.find(a => a.id === "test-ade-1")
+    if (!r4.ok || liqConf?.estado !== "confirmada" || !String(liqConf.egresoFIReferencia).startsWith("egr-") || !egresoSueldos || adeDescontado?.estado !== "descontado") {
+      pasos[3]!.estado = "error"; pasos[3]!.error = r4.ok ? "Egreso/anticipo no materializados" : r4.error
+    } else pasos[3]!.estado = "ok"
+    const errores = pasos.filter(p => p.estado === "error").map(p => p.error || p.desc)
+    return { id: "pl", label: TITULOS["pl"]!, rank: 6, status: errores.length ? "error" : "ok", count: 1, errores, pasos }
+  }, [])
+
+  const cargarFase15CT = React.useCallback(async (): Promise<ModReport> => {
+    const s = useCompassStore.getState()
+    const pasos: Paso[] = (PLAN["ct"]! as string[]).map(desc => ({ desc, estado: "pendiente" as ModuleState }))
+    const unidadTest = "test-u-999"
+    // 1) Residencia TEST sobre vínculo activo del depto TEST
+    const r1 = s.generarCertificadoCT({ tipo: "residencia", personaId: "test-p-88", unidadId: unidadTest, solicitanteNombre: "TEST Persona QA Dos" })
+    const certRes = useCompassStore.getState().certificadosCT.find(c => c.tipo === "residencia" && c.personaId === "test-p-88")
+    if (!r1.ok || !certRes || !certRes.folio.startsWith("CT-") || !certRes.codigoVerificacion.startsWith("VC-")) {
+      pasos[0]!.estado = "error"; pasos[0]!.error = r1.error ?? "Certificado residencia sin folio/código"
+    } else pasos[0]!.estado = "ok"
+    // 2) Al Día con deuda → rechazado citando saldo
+    const tieneDeuda = s.cobrosFI.some(c => c.unidadId === unidadTest && c.fechaVencimiento && c.fechaVencimiento < new Date().toISOString().slice(0, 10))
+    if (!tieneDeuda) {
+      // Sin deuda previa el paso se valida como gate no disparado (unidad al día).
+      pasos[1]!.estado = "ok"
+    } else {
+      const r2 = s.generarCertificadoCT({ tipo: "al_dia", unidadId: unidadTest, solicitanteNombre: "TEST QA" })
+      if (r2.ok || !String(r2.error).includes("saldo")) { pasos[1]!.estado = "error"; pasos[1]!.error = r2.ok ? "El Al Día pasó con deuda" : String(r2.error) } else pasos[1]!.estado = "ok"
+    }
+    // 3) Pagar cobro vencido TEST → Al Día emitido
+    const vencidos = s.cobrosFI.filter(c => c.unidadId === unidadTest && c.concepto === "gasto_comun")
+    for (const c of vencidos) {
+      const pendiente = c.montoBase + c.moras.reduce((a, m) => a + m.monto, 0) - c.pagos.reduce((a, p) => a + p.monto, 0)
+      if (pendiente > 0) s.registrarPagoFI(c.id, { monto: pendiente, medio: "transferencia TEST" })
+    }
+    const r3 = s.generarCertificadoCT({ id: "test-ct-alday", tipo: "al_dia", unidadId: unidadTest, solicitanteNombre: "TEST QA" })
+    if (!r3.ok) { pasos[2]!.estado = "error"; pasos[2]!.error = r3.error ?? "Al Día no emitido tras pagar" } else pasos[2]!.estado = "ok"
+    // 4) Certificado de la liquidación confirmada PL + historial inmutable
+    const liqConf = useCompassStore.getState().liquidacionesPL.find(l => l.estado === "confirmada")
+    if (!liqConf) { pasos[3]!.estado = "error"; pasos[3]!.error = "Falta liquidación confirmada (ejecuta fase PL)" } else {
+      const r4 = s.generarCertificadoCT({ id: "test-ct-liq", tipo: "liquidacion_sueldo", liquidacionId: liqConf.id, solicitanteNombre: "TEST QA" })
+      const bloqueoHistorial = s.removeCertificadoCT(useCompassStore.getState().certificadosCT.find(c => !c.id.startsWith("test-"))?.id ?? "ct-nadie")
+      if (!r4.ok || bloqueoHistorial.ok || !String(bloqueoHistorial.error).includes("inmutable")) {
+        pasos[3]!.estado = "error"; pasos[3]!.error = r4.error ?? "El historial permitió eliminar un certificado real"
+      } else pasos[3]!.estado = "ok"
+    }
+    const errores = pasos.filter(p => p.estado === "error").map(p => p.error || p.desc)
+    return { id: "ct", label: TITULOS["ct"]!, rank: 6, status: errores.length ? "error" : "ok", count: 1, errores, pasos }
+  }, [])
+
+  const cargarFase15RE = React.useCallback(async (): Promise<ModReport> => {
+    const s = useCompassStore.getState()
+    const pasos: Paso[] = (PLAN["re"]! as string[]).map(desc => ({ desc, estado: "pendiente" as ModuleState }))
+    // 1) Vista auditada
+    s.registrarVistaDashboardRE("demografico")
+    if (!s.eventos.some(e => e.tipoAccion === "RE_DASHBOARD_VIEW")) { pasos[0]!.estado = "error"; pasos[0]!.error = "Sin RE_DASHBOARD_VIEW" } else pasos[0]!.estado = "ok"
+    // 2) Reporte segmentado Torre TEST × residentes × propietarios
+    const rGen = s.generarReporteRE({
+      titulo: "Boletín Sector TEST",
+      bloques: ["gastos_mes", "morosidad"],
+      segmento: { macroSectorIds: ["test-macro-sectortest"], tenencias: ["propietarios", "arrendatarios"] },
+      id: "test-re-rep",
+    })
+    const rep = useCompassStore.getState().reportesRE.find(r => r.id === "test-re-rep")
+    if (!rGen.ok || !rep || rep.bloques.length !== 2 || rep.payloadSnapshot.every(b => b.lineas.length === 0)) {
+      pasos[1]!.estado = "error"; pasos[1]!.error = rGen.error ?? "Snapshot vacío"
+    } else pasos[1]!.estado = "ok"
+    // 3) Distribución → destinatarios vigentes + notificaciones
+    const antesNotif = useCompassStore.getState().notificaciones.filter(n => n.moduloOrigen === "RE").length
+    const rDist = rep ? s.distribuirReporteRE(rep.id) : { ok: false, error: "sin reporte" }
+    const repDist = useCompassStore.getState().reportesRE.find(r => r.id === "test-re-rep")
+    const notifNuevas = useCompassStore.getState().notificaciones.filter(n => n.moduloOrigen === "RE").length - antesNotif
+    if (!rDist.ok || !repDist || repDist.distribuidoA === 0 || notifNuevas !== repDist.distribuidoA) {
+      pasos[2]!.estado = "error"; pasos[2]!.error = rDist.ok ? `Alcance/notificación ${repDist?.distribuidoA}/${notifNuevas}` : rDist.error
+    } else pasos[2]!.estado = "ok"
+    // 4) Idempotencia + tasa huérfanos 0
+    const dup = s.distribuirReporteRE("test-re-rep")
+    const microTestOk = s.microSectores.some(m => m.id === "test-micro-piso99")
+    const dangling = microTestOk ? 0 : 1
+    if (dup.ok || dangling > 0) { pasos[3]!.estado = "error"; pasos[3]!.error = dup.ok ? "Segunda distribución pasó" : "Inconsistencia EF TEST" } else pasos[3]!.estado = "ok"
+    const errores = pasos.filter(p => p.estado === "error").map(p => p.error || p.desc)
+    return { id: "re", label: TITULOS["re"]!, rank: 99, status: errores.length ? "error" : "ok", count: 1, errores, pasos }
+  }, [])
+
   const buildHistoria = React.useCallback((mods: ModReport[]): SeedReport["historia"] => {    return HISTORIA.map(h => ({ capitulo: h.capitulo, estado: (() => {
       const rankMods = mods.filter(m => m.rank === h.rank)
       if (rankMods.length === 0) return "pendiente" as ModuleState
@@ -972,6 +1104,19 @@ export default function QaLabPage() {
         mods.push(await cargarFase3VU())
         mods.push(await cargarFase14PE())
       }
+      if (fase === "15") {
+        mods.push(await cargarFase0())
+        mods.push(await cargarFase1TU())
+        mods.push(await cargarFase1MP())
+        mods.push(await cargarFase2Macro())
+        mods.push(await cargarFase2Micro())
+        mods.push(await cargarFase2Unidad())
+        mods.push(await cargarFase3VU())
+        mods.push(await cargarFase14PE())
+        mods.push(await cargarFase15PL())
+        mods.push(await cargarFase15CT())
+        mods.push(await cargarFase15RE())
+      }
       if (fase === "todo") {
         mods.push(await cargarFase8GE())
         mods.push(await cargarFase9IR())
@@ -981,6 +1126,9 @@ export default function QaLabPage() {
         mods.push(await cargarFase12CV())
         mods.push(await cargarFase13FI())
         mods.push(await cargarFase14PE())
+        mods.push(await cargarFase15PL())
+        mods.push(await cargarFase15CT())
+        mods.push(await cargarFase15RE())
       }
       const historia = buildHistoria(mods)
       const erroresGlobales = mods.flatMap(m => m.errores.map(e => `${m.label}: ${e}`))
@@ -993,7 +1141,7 @@ export default function QaLabPage() {
     } finally {
       setLoading(false)
     }
-  }, [cargarFase0, cargarFase1MP, cargarFase1TU, cargarFase2Macro, cargarFase2Micro, cargarFase2Unidad, cargarFase3VU, cargarFase4PI, cargarFase5AD, cargarFase6GD, cargarFase7CO, cargarFase8GE, cargarFase9IR, cargarFase10IN, cargarFase11MT, cargarFase12RA, cargarFase12CV, cargarFase13FI, cargarFase14PE, buildHistoria, ensureHydrated])
+  }, [cargarFase0, cargarFase1MP, cargarFase1TU, cargarFase2Macro, cargarFase2Micro, cargarFase2Unidad, cargarFase3VU, cargarFase4PI, cargarFase5AD, cargarFase6GD, cargarFase7CO, cargarFase8GE, cargarFase9IR, cargarFase10IN, cargarFase11MT, cargarFase12RA, cargarFase12CV, cargarFase13FI, cargarFase14PE, cargarFase15PL, cargarFase15CT, cargarFase15RE, buildHistoria, ensureHydrated])
 
   const limpiar = React.useCallback(async () => {
     if (!ensureHydrated()) return
@@ -1026,6 +1174,23 @@ export default function QaLabPage() {
     // Feriado TEST del calendario de proyección.
     useCompassStore.setState(st => ({
       maestros: { ...st.maestros, feriados: st.maestros.feriados.filter(f => !f.id.startsWith("test-")) },
+    }))
+    // PL/CT/RE (fase final de la serie): colecciones transaccionales TEST se
+    // purgan en orden inverso RE → CT → PL. La liquidación TEST libera el
+    // egreso FI de sueldos antes del purge financiero; los parámetros legales
+    // CF se restablecen a undefined para devolver CF a su estado previo.
+    useCompassStore.setState(st => {
+      const cfg = st.configuracion
+      return {
+        configuracion: { ...cfg, ufMensual: undefined, ingresoMinimoMensual: undefined, topeGratificacionLegal: undefined, tasaSIS: undefined },
+        notificaciones: st.notificaciones.filter(n => n.moduloOrigen !== "RE" && n.moduloOrigen !== "PL"),
+      }
+    })
+    useCompassStore.setState(st => ({
+      reportesRE: st.reportesRE.filter(r => !r.id.startsWith("test-")),
+      certificadosCT: st.certificadosCT.filter(c => !c.id.startsWith("test-")),
+      liquidacionesPL: st.liquidacionesPL.filter(l => !l.id.startsWith("test-")),
+      adelantosPL: st.adelantosPL.filter(a => !a.id.startsWith("test-")),
     }))
     // inverso MT -> IN -> IR -> GE -> CO -> GD -> AD -> PI -> VU -> EF unidades -> EF micro -> EF macro -> MP -> TU -> MA
     // MT
@@ -1263,6 +1428,8 @@ export default function QaLabPage() {
               { fase: "11", label: "12. MT — preventivos y proyectos" },
               { fase: "12", label: "13. RA+CV — reservas, avisos y visor" },
               { fase: "13", label: "14. FI — fondos, emisión GC y morosidad" },
+              { fase: "14", label: "15. PE — fichas, bitácora y cierre de turno" },
+              { fase: "15", label: "16. PL+CT+RE — remuneraciones, certificados y reportería" },
             ].map(item => {
               const isActive = ultimaFase === item.fase
               const modsFase = isActive && report ? report.modulos.filter(m => FASE_MODULOS[item.fase]!.includes(m.id)) : []

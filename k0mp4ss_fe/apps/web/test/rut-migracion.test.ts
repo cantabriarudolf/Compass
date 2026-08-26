@@ -22,8 +22,8 @@ describe("repararRut (migración v10)", () => {
 })
 
 describe(`migración a v${STORE_VERSION}`, () => {
-  it("STORE_VERSION es 24", () => {
-    expect(STORE_VERSION).toBe(24)
+  it("STORE_VERSION es 25", () => {
+    expect(STORE_VERSION).toBe(25)
   })
 
   it("un persistido v9 con RUTs ficticios queda reparado y sin cambios de colección", () => {
