@@ -46,7 +46,7 @@ describe("Seed inicial desde apps/web/data/", () => {
   })
 
   it(`usa versión de store ${STORE_VERSION} y exige hidratación para operar`, () => {
-    expect(STORE_VERSION).toBe(22)
+    expect(STORE_VERSION).toBe(23)
     useCompassStore.setState({ hasHydrated: false })
     const result = getState().saveVinculo({
       id: "x", personaId: "p-1", unidadId: "u-A-302", rol: "ocupante",

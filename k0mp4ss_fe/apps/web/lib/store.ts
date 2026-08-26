@@ -98,6 +98,8 @@ import {
   VisitaTecnicaPESchema,
   CierreTurnoPESchema,
   ProyeccionPESchema,
+  LiquidacionPLSchema,
+  AdelantoPLSchema,
   MAESTRO_SCHEMAS,
   validarConEsquema,
   validarMaestro,
@@ -147,12 +149,18 @@ import {
   type VisitaTecnicaPE,
   type CierreTurnoPE,
   type ProyeccionPE,
+  type LiquidacionPL,
+  type AdelantoPL,
 } from "@/lib/schemas"
 import {
   calcularProyeccionCobertura,
   costoProyeccionPE,
   proximaFechaPreventiva,
 } from "@/lib/personal-utils"
+import {
+  calcularLiquidacion,
+  hoyISOPL,
+} from "@/lib/pl-utils"
 import {
   exigibleTotal,
   estadoDeCobro,
@@ -282,7 +290,7 @@ const FONDOS_FI_SEED: FondoFI[] = [
   { id: "fondo-amenities", nombre: "Fondo de Amenities", tipo: "amenities", descripcion: "Centro de costos de reservas, tarifas y garantías de amenities.", activo: true },
 ]
 
-export const STORE_VERSION = 22
+export const STORE_VERSION = 23
 
 export interface MaestroCollections {
   afps: Afp[]
@@ -364,6 +372,9 @@ export interface CompassData {
   visitasTecnicasPE: VisitaTecnicaPE[]
   cierresTurnoPE: CierreTurnoPE[]
   proyeccionesPE: ProyeccionPE[]
+  // Liquidaciones y Remuneraciones (PL)
+  liquidacionesPL: LiquidacionPL[]
+  adelantosPL: AdelantoPL[]
 }
 
 interface CompassStore extends CompassData {
@@ -505,6 +516,23 @@ interface CompassStore extends CompassData {
   editarCierreTurnoPE: (id: string, cambios: Partial<Pick<CierreTurnoPE, "jornadaReportadaId" | "novedadesGenerales" | "incidencias" | "checklistInstalaciones" | "checklistEquipamiento">>, resumen: string) => StoreResult
   removeCierreTurnoPE: (id: string) => StoreResult
   enviarProyeccionCostoFI: (mesAnio: string, params: { costoParche: number; costoDiaExtra: number; id?: string }) => StoreResult
+  // Liquidaciones y Remuneraciones (PL)
+  generarLiquidacionPL: (input: {
+    trabajadorPersonaId: string
+    periodo: string
+    diasTrabajados: number
+    asignacionMovilizacion?: number
+    asignacionColacion?: number
+    montoAPV?: number
+    saludPorcentaje?: number
+    saludValorUF?: number
+    bonos?: { id?: string; glosa: string; monto: number; imponible: boolean }[]
+    id?: string
+  }) => StoreResult
+  confirmarLiquidacionPL: (id: string) => StoreResult
+  removeLiquidacionPL: (id: string) => StoreResult
+  saveAdelantoPL: (adelanto: AdelantoPL) => StoreResult
+  removeAdelantoPL: (id: string) => StoreResult
 }
 
 function upsert<T extends { id: string }>(list: T[], item: T): T[] {
@@ -574,6 +602,8 @@ export const seedData = (): CompassData => ({
   visitasTecnicasPE: [],
   cierresTurnoPE: [],
   proyeccionesPE: [],
+  liquidacionesPL: [],
+  adelantosPL: [],
   maestros: {
     afps: seedAFPS,
     previsionesSalud: seedPrevisionesSalud,
@@ -643,6 +673,8 @@ const ESQUEMAS_COLECCION = {
   visitasTecnicasPE: z.array(VisitaTecnicaPESchema),
   cierresTurnoPE: z.array(CierreTurnoPESchema),
   proyeccionesPE: z.array(ProyeccionPESchema),
+  liquidacionesPL: z.array(LiquidacionPLSchema),
+  adelantosPL: z.array(AdelantoPLSchema),
 } as const
 
 type ClaveColeccion = keyof typeof ESQUEMAS_COLECCION
@@ -1103,7 +1135,23 @@ export const useCompassStore = create<CompassStore>()(
         if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
         const validacion = validarConEsquema(ConfiguracionGlobalSchema, config)
         if (!validacion.ok) return validacion
+        const anterior = get().configuracion
         set(() => ({ configuracion: validacion.data }))
+        // PL: cambios de parámetros legales de remuneraciones quedan auditados.
+        const CAMPOS_LEGALES = ["ufMensual", "ingresoMinimoMensual", "topeGratificacionLegal", "tasaSIS"] as const
+        for (const campo of CAMPOS_LEGALES) {
+          const viejo = anterior?.[campo]
+          const nuevo = validacion.data[campo]
+          if (JSON.stringify(viejo) !== JSON.stringify(nuevo)) {
+            registrarEvento(
+              set,
+              "CF_UPDATE_PARAM",
+              campo,
+              `Parámetro legal ${campo} actualizado (${JSON.stringify(viejo ?? null)} → ${JSON.stringify(nuevo ?? null)}).`,
+              "CF"
+            )
+          }
+        }
         return { ok: true }
       },
 
@@ -3876,6 +3924,264 @@ export const useCompassStore = create<CompassStore>()(
         )
         return { ok: true }
       },
+
+      // --- PL: Liquidaciones y Remuneraciones ---
+
+      generarLiquidacionPL: (input) => {
+        if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
+        if (!/^\d{4}-\d{2}$/.test(input.periodo)) return { ok: false, error: "El periodo debe tener formato AAAA-MM." }
+        const trabajador = get().personas.find(p => p.id === input.trabajadorPersonaId)
+        if (!trabajador) return { ok: false, error: "El trabajador no existe en el Maestro de Personas." }
+        const dl = trabajador.datosLaborales
+        if (!dl) return { ok: false, error: "La persona no tiene ficha laboral de PE." }
+        const sueldoBase = dl.sueldoBase ?? 0
+        if (!(sueldoBase > 0)) return { ok: false, error: "La ficha del trabajador no registra sueldo base contractual (PE)." }
+        // FKs legales vigentes contra los maestros (RG escritura).
+        const m = get().maestros
+        if (dl.afpId && !m.afps.some(a => a.id === dl.afpId)) return { ok: false, error: "afpId no existe en el maestro de AFPs." }
+        if (dl.saludId && !m.previsionesSalud.some(s => s.id === dl.saludId)) return { ok: false, error: "saludId no existe en el maestro de previsiones de salud." }
+        if (dl.asignacionFamiliarId && !m.asignacionFamiliar.some(a => a.id === dl.asignacionFamiliarId)) {
+          return { ok: false, error: "asignacionFamiliarId no existe en el maestro de tramos legales." }
+        }
+        // CF sin parámetros legales bloquea la generación.
+        const cfg = get().configuracion
+        const diasMesComercial = cfg.diasMesComercial ?? 30
+        if (
+          cfg.ufMensual === undefined ||
+          cfg.ingresoMinimoMensual === undefined ||
+          cfg.topeGratificacionLegal === undefined ||
+          cfg.tasaSIS === undefined
+        ) {
+          return { ok: false, error: "CF no cargado: faltan parámetros legales de remuneraciones (UF mensual, ingreso mínimo, tope gratificación o tasa SIS)." }
+        }
+        // Un solo documento por trabajador y periodo.
+        const duplicado = get().liquidacionesPL.some(
+          l => l.trabajadorPersonaId === input.trabajadorPersonaId && l.periodo === input.periodo
+        )
+        if (duplicado) {
+          return { ok: false, error: `Ya existe una liquidación ${input.periodo} para este trabajador.` }
+        }
+
+        const esHonorarios = dl.tipoContrato === "honorarios"
+        const afp = dl.afpId ? m.afps.find(a => a.id === dl.afpId) : undefined
+        const salud = dl.saludId ? m.previsionesSalud.find(s => s.id === dl.saludId) : undefined
+        const tramo = dl.asignacionFamiliarId ? m.asignacionFamiliar.find(a => a.id === dl.asignacionFamiliarId) : undefined
+        const bonos = (input.bonos ?? []).map((b, idx) => ({
+          id: b.id ?? `bono-${Date.now()}-${idx}-${Math.random().toString(36).slice(2, 6)}`,
+          glosa: b.glosa,
+          monto: b.monto,
+          imponible: b.imponible,
+        }))
+        const anticiposPendientes = get().adelantosPL.filter(a => a.trabajadorPersonaId === input.trabajadorPersonaId && a.estado === "pendiente")
+
+        const calculo = calcularLiquidacion({
+          sueldoBaseContrato: sueldoBase,
+          diasTrabajados: input.diasTrabajados,
+          diasMesComercial,
+          jornadaSemanal: dl.jornadaBaseHoras ?? cfg.jornadaSemanalEstandar,
+          horasExtrasHoras: (dl.horasExtras ?? []).filter(h => h.fecha.startsWith(`${input.periodo}-`)).reduce((acc, h) => acc + h.horas, 0),
+          bonos,
+          asignacionMovilizacion: input.asignacionMovilizacion ?? 0,
+          asignacionColacion: input.asignacionColacion ?? 0,
+          montoAsignacionFamiliar: tramo ? tramo.monto * Math.max(0, dl.cargas ?? 0) : 0,
+          tasaAFP: afp?.tasaCotizacion ?? 0,
+          saludPlan: {
+            tipo: salud?.tipo ?? "fonasa",
+            porcentaje: input.saludPorcentaje,
+            valorUF: input.saludValorUF,
+            ufVigente: cfg.ufMensual!,
+          },
+          ufVigente: cfg.ufMensual!,
+          ingresoMinimoMensual: cfg.ingresoMinimoMensual!,
+          topeGratificacionLegal: cfg.topeGratificacionLegal!,
+          tasaSIS: cfg.tasaSIS!,
+          tasaSeguroCesantia: 0.6,
+          esHonorarios,
+          montoAPV: input.montoAPV ?? (dl.apv ? 0 : 0),
+          anticiposPendientes: anticiposPendientes.map(a => ({ id: a.id, monto: a.monto })),
+        })
+
+        // Folio LIQ correlativo.
+        const numeros = get().liquidacionesPL
+          .map(l => Number.parseInt(l.folio.replace(/^LIQ-/, ""), 10))
+          .filter(n => Number.isFinite(n))
+        const folio = `LIQ-${String((numeros.length > 0 ? Math.max(...numeros) : 0) + 1).padStart(4, "0")}`
+
+        // Referencia a la proyección PE del periodo si existe.
+        const proyeccion = get().proyeccionesPE.find(p => p.mesAnio === input.periodo)
+
+        const liquidacion: LiquidacionPL = {
+          id: input.id ?? `pl-liq-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          folio,
+          trabajadorPersonaId: input.trabajadorPersonaId,
+          periodo: input.periodo,
+          fechaGeneracion: hoyISOPL(),
+          diasTrabajados: input.diasTrabajados,
+          sueldoBaseContrato: sueldoBase,
+          diasMesComercial,
+          jornadaSemanal: dl.jornadaBaseHoras ?? cfg.jornadaSemanalEstandar,
+          sueldoBaseProporcional: calculo.sueldoBaseProporcional,
+          horasExtrasHoras: (dl.horasExtras ?? []).filter(h => h.fecha.startsWith(`${input.periodo}-`)).reduce((acc, h) => acc + h.horas, 0),
+          valorHoraOrdinaria: calculo.valorHoraOrdinaria,
+          montoHorasExtras: calculo.montoHorasExtras,
+          bonos,
+          gratificacionLegal: calculo.gratificacionLegal,
+          totalImponible: calculo.totalImponible,
+          asignacionMovilizacion: input.asignacionMovilizacion ?? 0,
+          asignacionColacion: input.asignacionColacion ?? 0,
+          asignacionFamiliarTramoId: dl.asignacionFamiliarId,
+          cargas: Math.max(0, dl.cargas ?? 0),
+          montoAsignacionFamiliar: tramo ? tramo.monto * Math.max(0, dl.cargas ?? 0) : 0,
+          totalHaberes: calculo.totalHaberes,
+          afpId: dl.afpId,
+          nombreAfp: afp?.nombre ?? (esHonorarios ? "Boleta honorarios" : ""),
+          tasaAFP: afp?.tasaCotizacion ?? 0,
+          montoAFP: calculo.montoAFP,
+          saludId: dl.saludId,
+          nombreSalud: salud?.nombre ?? "",
+          saludTipo: salud?.tipo ?? "fonasa",
+          saludPorcentaje: input.saludPorcentaje,
+          saludValorUF: input.saludValorUF,
+          ufAplicada: cfg.ufMensual,
+          montoSalud: calculo.montoSalud,
+          tasaSIS: cfg.tasaSIS!,
+          montoSIS: calculo.montoSIS,
+          montoSeguroCesantia: calculo.montoSeguroCesantia,
+          montoAPV: input.montoAPV ?? 0,
+          totalDescuentos: calculo.totalDescuentos,
+          descuentoAnticipos: calculo.descuentoAnticipos,
+          adelantosIds: calculo.adelantosIds,
+          alcanceLiquido: calculo.alcanceLiquido,
+          liquidoAPagar: calculo.liquidoAPagar,
+          estado: "borrador",
+          egresoFIReferencia: "pendiente",
+          ...(proyeccion ? { proyeccionPEReferencia: proyeccion.id } : {}),
+        }
+        const validacion = validarConEsquema(LiquidacionPLSchema, liquidacion)
+        if (!validacion.ok) return validacion
+
+        set(s => ({
+          liquidacionesPL: upsert(s.liquidacionesPL, validacion.data),
+          proyeccionesPE: s.proyeccionesPE.map(p =>
+            p.mesAnio === input.periodo && p.liquidacionPLReferencia === "pendiente"
+              ? { ...p, liquidacionPLReferencia: validacion.data.id }
+              : p
+          ),
+        }))
+        registrarEvento(
+          set,
+          "PL_GENERATE_PAYSLIP",
+          validacion.data.id,
+          `Liquidación ${folio} generada para ${trabajador.nombres} ${trabajador.apellidos} (${input.periodo}): haberes $${calculo.totalHaberes.toLocaleString("es-CL")}, líquido a pagar $${calculo.liquidoAPagar.toLocaleString("es-CL")}.`,
+          "PL"
+        )
+        return { ok: true }
+      },
+
+      confirmarLiquidacionPL: (id) => {
+        if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
+        const liquidacion = get().liquidacionesPL.find(l => l.id === id)
+        if (!liquidacion) return { ok: false, error: "No se puede confirmar: la liquidación no existe." }
+        if (liquidacion.estado !== "borrador") return { ok: false, error: "La liquidación ya está confirmada." }
+        const fondoGC = get().fondosFI.find(f => f.tipo === "gasto_comun" && f.activo)
+        if (!fondoGC) return { ok: false, error: "No existe un Fondo de Gasto Común activo para imputar el egreso de sueldos." }
+        const trabajador = get().personas.find(p => p.id === liquidacion.trabajadorPersonaId)
+        const nombreCompleto = trabajador ? `${trabajador.nombres} ${trabajador.apellidos}` : liquidacion.trabajadorPersonaId
+
+        const egreso: EgresoFI = {
+          id: `egr-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          folio: siguienteFolioFE(get),
+          fecha: hoyISO(),
+          categoria: "sueldos",
+          descripcion: `Liquidación ${liquidacion.folio} ${nombreCompleto} (${liquidacion.periodo})`,
+          monto: Math.max(1, liquidacion.liquidoAPagar),
+          fondoId: fondoGC.id,
+          esRecurrente: false,
+        }
+        const validacionEgreso = validarConEsquema(EgresoFISchema, egreso)
+        if (!validacionEgreso.ok) return validacionEgreso
+
+        set(s => ({
+          liquidacionesPL: s.liquidacionesPL.map(l =>
+            l.id === id ? { ...l, estado: "confirmada" as const, egresoFIReferencia: validacionEgreso.data.id } : l
+          ),
+          adelantosPL: s.adelantosPL.map(a =>
+            a.estado === "pendiente" && liquidacion.adelantosIds.includes(a.id)
+              ? { ...a, estado: "descontado" as const, liquidacionId: id }
+              : a
+          ),
+          egresosFI: [...s.egresosFI, validacionEgreso.data],
+        }))
+        registrarEvento(
+          set,
+          "PL_EXPENSE_SYNC",
+          id,
+          `Liquidación ${liquidacion.folio} CONFIRMADA: egreso ${validacionEgreso.data.folio} de $${egreso.monto.toLocaleString("es-CL")} imputado a ${fondoGC.nombre} (categoría Sueldos); ${liquidacion.adelantosIds.length} anticipo(s) descontado(s).`,
+          "PL"
+        )
+        return { ok: true }
+      },
+
+      removeLiquidacionPL: (id) => {
+        if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
+        const liquidacion = get().liquidacionesPL.find(l => l.id === id)
+        if (!liquidacion) return { ok: false, error: "No se puede eliminar: la liquidación no existe." }
+        if (liquidacion.estado !== "borrador" || (liquidacion.egresoFIReferencia && liquidacion.egresoFIReferencia !== "pendiente")) {
+          return { ok: false, error: "Solo una liquidación en borrador sin egreso sincronizado puede eliminarse." }
+        }
+        set(s => ({ liquidacionesPL: s.liquidacionesPL.filter(l => l.id !== id) }))
+        registrarEvento(set, "PL_DELETE_PAYSLIP", id, `Liquidación borrador ${liquidacion.folio} (${liquidacion.periodo}) eliminada por administración.`, "PL")
+        return { ok: true }
+      },
+
+      saveAdelantoPL: (adelanto) => {
+        if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
+        const esNuevo = !get().adelantosPL.some(a => a.id === adelanto.id)
+        let candidato: AdelantoPL = adelanto
+        if (esNuevo) {
+          const numeros = get().adelantosPL
+            .map(a => Number.parseInt(a.folio.replace(/^ADE-/, ""), 10))
+            .filter(n => Number.isFinite(n))
+          const siguiente = (numeros.length > 0 ? Math.max(...numeros) : 0) + 1
+          candidato = { ...adelanto, folio: `ADE-${String(siguiente).padStart(4, "0")}`, estado: "pendiente" }
+        }
+        const validacion = validarConEsquema(AdelantoPLSchema, candidato)
+        if (!validacion.ok) return validacion
+        const registro = validacion.data
+        const trabajador = get().personas.find(p => p.id === registro.trabajadorPersonaId)
+        if (!trabajador) return { ok: false, error: "El trabajador no existe en el Maestro de Personas." }
+        if (!trabajador.datosLaborales) return { ok: false, error: "La persona no tiene ficha laboral de PE." }
+
+        set(s => ({ adelantosPL: upsert(s.adelantosPL, registro) }))
+        if (esNuevo) {
+          registrarEvento(
+            set,
+            "PL_ADD_ADVANCE",
+            registro.id,
+            `Adelanto ${registro.folio} de $${registro.monto.toLocaleString("es-CL")} entregado a ${trabajador.nombres} ${trabajador.apellidos}: ${registro.glosa}`,
+            "PL"
+          )
+          get().notify({
+            destinatarioRol: "personal",
+            destinatarioPersonaId: trabajador.id,
+            asunto: `Comprobante de adelanto ${registro.folio}`,
+            cuerpo: `Se registró un adelanto de $${registro.monto.toLocaleString("es-CL")} (${registro.glosa}). Será descontado en tu próxima liquidación.`,
+            moduloOrigen: "PL",
+          })
+        }
+        return { ok: true }
+      },
+
+      removeAdelantoPL: (id) => {
+        if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
+        const adelanto = get().adelantosPL.find(a => a.id === id)
+        if (!adelanto) return { ok: false, error: "No se puede eliminar: el adelanto no existe." }
+        if (adelanto.estado !== "pendiente") {
+          return { ok: false, error: "No se puede eliminar un adelanto ya descontado en liquidación." }
+        }
+        set(s => ({ adelantosPL: s.adelantosPL.filter(a => a.id !== id) }))
+        return { ok: true }
+      },
     }),
     {
       name: "compass-store",
@@ -3928,6 +4234,8 @@ export const useCompassStore = create<CompassStore>()(
         visitasTecnicasPE: state.visitasTecnicasPE,
         cierresTurnoPE: state.cierresTurnoPE,
         proyeccionesPE: state.proyeccionesPE,
+        liquidacionesPL: state.liquidacionesPL,
+        adelantosPL: state.adelantosPL,
       }),
       migrate: (persisted, version) => {
         const prev = (persisted ?? {}) as Partial<CompassData>
@@ -4129,6 +4437,15 @@ export const useCompassStore = create<CompassStore>()(
               couriers: mergeById(maestrosPrev["couriers"] as Courier[] | undefined, seed.maestros.couriers),
               contratistas: mergeById(maestrosPrev["contratistas"] as Contratista[] | undefined, seed.maestros.contratistas),
             } as never,
+          }
+        }
+        // PL (v23): colecciones de remuneraciones (transaccionales, nacen
+        // vacías). Aditivo.
+        if ((version ?? 0) < 23) {
+          result = {
+            ...result,
+            liquidacionesPL: prev.liquidacionesPL ?? [],
+            adelantosPL: prev.adelantosPL ?? [],
           }
         }
         // TST-002: los stores que ya quedaron en v8 con unidades dañadas por este

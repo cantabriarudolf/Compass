@@ -125,6 +125,8 @@ export const ExtensionLaboralSchema = z.object({
     relacion: z.string().optional(),
   })).optional(),
   jornadaBaseHoras: z.number({ invalid_type_error: "La jornada base debe ser un número." }).positive("La jornada base debe ser mayor a cero.").max(80, "La jornada base no puede superar 80 horas.").optional(),
+  // PL (ventana 8): renta base contractual usada por el cálculo de liquidaciones.
+  sueldoBase: z.number().min(0, "El sueldo base no puede ser negativo.").optional(),
   horasExtras: z.array(z.object({
     id: IdEntidadSchema,
     fecha: FechaISOSchema,
@@ -1201,6 +1203,13 @@ export const ConfiguracionGlobalSchema = z.object({
   // 7. Visor de Mensajes (CV): visto bueno obligatorio de administración para
   // mensajes creados por terceros habilitados. Ausente = true (por defecto).
   cvRequiereVistoBueno: z.boolean().optional(),
+
+  // 8. Parámetros Legales Chile para Remuneraciones (PL): opcionales para
+  // compatibilidad; su ausencia bloquea la generación de liquidaciones.
+  ufMensual: z.number().positive("El valor UF debe ser mayor a cero.").optional(),
+  ingresoMinimoMensual: z.number().positive("El ingreso mínimo debe ser mayor a cero.").optional(),
+  topeGratificacionLegal: z.number().positive("El tope de gratificación debe ser mayor a cero.").optional(),
+  tasaSIS: z.number().min(0, "La tasa SIS no puede ser negativa.").max(100, "La tasa SIS no puede superar 100.").optional(),
 })
 
 // --- Auditoría interna del store ---
@@ -1327,6 +1336,93 @@ export type AsignacionFamiliar = z.infer<typeof AsignacionFamiliarSchema>
 export type ContratistaMA = z.infer<typeof ContratistaSchema>
 export type Jornada = z.infer<typeof JornadaSchema>
 export type Courier = z.infer<typeof CourierSchema>
+export type BonoLiquidacion = z.infer<typeof BonoLiquidacionSchema>
+export type AdelantoPL = z.infer<typeof AdelantoPLSchema>
+export type EstadoAdelantoPL = z.infer<typeof EstadoAdelantoPLSchema>
+export type LiquidacionPL = z.infer<typeof LiquidacionPLSchema>
+
+// --- Liquidaciones y Remuneraciones (PL) ---
+
+export const ESTADOS_ADELANTO_PL = ["pendiente", "descontado"] as const
+export const EstadoAdelantoPLSchema = z.enum(ESTADOS_ADELANTO_PL)
+
+// Adelanto de sueldo: glosa explicativa obligatoria y folio ADE auto-generado
+// como comprobante de entrega. Ciclo: pendiente → descontado en liquidación.
+export const AdelantoPLSchema = z.object({
+  id: IdEntidadSchema,
+  folio: z.string().min(1, "El folio del adelanto es obligatorio."),
+  trabajadorPersonaId: IdEntidadSchema,
+  fecha: FechaISOSchema,
+  monto: z.number({ required_error: "El monto es obligatorio." }).positive("El monto del adelanto debe ser mayor a cero."),
+  glosa: z.string({ required_error: "La glosa explicativa es obligatoria." }).min(5, "Debe describir el motivo del adelanto (mínimo 5 caracteres)."),
+  estado: EstadoAdelantoPLSchema,
+  liquidacionId: IdEntidadSchema.optional(),
+})
+
+const BonoLiquidacionSchema = z.object({
+  id: IdEntidadSchema,
+  glosa: z.string({ required_error: "La glosa del bono es obligatoria." }).min(1, "La glosa del bono es obligatoria."),
+  monto: z.number().min(0, "El monto no puede ser negativo."),
+  imponible: z.boolean({ required_error: "El flag imponible es obligatorio." }),
+})
+
+// Liquidación de sueldo: snapshot inmutable de las líneas calculadas al
+// generar. La edición posterior no reescribe históricos (auditoría documental).
+export const LiquidacionPLSchema = z.object({
+  id: IdEntidadSchema,
+  folio: z.string().min(1, "El folio es obligatorio."),
+  trabajadorPersonaId: IdEntidadSchema,
+  periodo: z
+    .string({ required_error: "El periodo es obligatorio." })
+    .regex(/^\d{4}-\d{2}$/, "El periodo debe tener formato AAAA-MM."),
+  fechaGeneracion: FechaISOSchema,
+  diasTrabajados: z.number().int().min(0, "Los días trabajados no pueden ser negativos.").max(31, "Los días trabajados no pueden superar 31."),
+  // Snapshot contractual y paramétrico usado en el cálculo.
+  sueldoBaseContrato: z.number().min(0),
+  diasMesComercial: z.number().int().min(28).max(31),
+  jornadaSemanal: z.number().positive(),
+  // Haberes imponibles.
+  sueldoBaseProporcional: z.number().min(0),
+  horasExtrasHoras: z.number().min(0),
+  valorHoraOrdinaria: z.number().min(0),
+  montoHorasExtras: z.number().min(0),
+  bonos: z.array(BonoLiquidacionSchema),
+  gratificacionLegal: z.number().min(0),
+  totalImponible: z.number().min(0),
+  // Haberes no imponibles.
+  asignacionMovilizacion: z.number().min(0),
+  asignacionColacion: z.number().min(0),
+  asignacionFamiliarTramoId: IdEntidadSchema.optional(),
+  cargas: z.number().int().min(0),
+  montoAsignacionFamiliar: z.number().min(0),
+  totalHaberes: z.number().min(0),
+  // Descuentos legales y voluntarios.
+  afpId: IdEntidadSchema.optional(),
+  nombreAfp: z.string(),
+  tasaAFP: z.number().min(0),
+  montoAFP: z.number().min(0),
+  saludId: IdEntidadSchema.optional(),
+  nombreSalud: z.string(),
+  saludTipo: z.enum(["fonasa", "isapre"]),
+  saludPorcentaje: z.number().min(0).optional(),
+  saludValorUF: z.number().min(0).optional(),
+  ufAplicada: z.number().min(0).optional(),
+  montoSalud: z.number().min(0),
+  tasaSIS: z.number().min(0),
+  montoSIS: z.number().min(0),
+  montoSeguroCesantia: z.number().min(0),
+  montoAPV: z.number().min(0),
+  totalDescuentos: z.number().min(0),
+  // Totales de control.
+  descuentoAnticipos: z.number().min(0),
+  adelantosIds: z.array(IdEntidadSchema),
+  alcanceLiquido: z.number().min(0),
+  liquidoAPagar: z.number().min(0),
+  estado: z.enum(["borrador", "confirmada"]),
+  // Referencia contable FI ("pendiente" hasta confirmar).
+  egresoFIReferencia: z.string().optional(),
+  proyeccionPEReferencia: z.string().optional(),
+})
 
 // --- Utilidades de validación para el store ---
 
