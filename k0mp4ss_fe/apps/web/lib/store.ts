@@ -27,6 +27,10 @@ import {
   UNIDADES_MEDIDA as seedUnidadesMedida,
   CONTACTOS_EMERGENCIA as seedContactosEmergencia,
   CONDICIONES_ESPECIALES as seedCondicionesEspeciales,
+  ASIGNACION_FAMILIAR as seedAsignacionFamiliar,
+  JORNADAS as seedJornadas,
+  COURIERS as seedCouriers,
+  CONTRATISTAS as seedContratistas,
   Afp,
   PrevisionSalud,
   MutualCaja,
@@ -38,6 +42,10 @@ import {
   UnidadMedida,
   ContactoEmergencia,
   CondicionEspecial,
+  AsignacionFamiliar,
+  Jornada,
+  Courier,
+  Contratista,
 } from "@/data/admin/maestros"
 import {
   configuracionDefault as seedConfiguracion,
@@ -82,6 +90,14 @@ import {
   EgresoFISchema,
   EmisionGCSchema,
   CobroFISchema,
+  BitacoraVisitaPESchema,
+  EncomiendaPESchema,
+  IngresoContratistaPESchema,
+  ProveedorPESchema,
+  MantencionPreventivaPESchema,
+  VisitaTecnicaPESchema,
+  CierreTurnoPESchema,
+  ProyeccionPESchema,
   MAESTRO_SCHEMAS,
   validarConEsquema,
   validarMaestro,
@@ -123,7 +139,20 @@ import {
   type EgresoFI,
   type EmisionGC,
   type CobroFI,
+  type BitacoraVisitaPE,
+  type EncomiendaPE,
+  type IngresoContratistaPE,
+  type ProveedorPE,
+  type MantencionPreventivaPE,
+  type VisitaTecnicaPE,
+  type CierreTurnoPE,
+  type ProyeccionPE,
 } from "@/lib/schemas"
+import {
+  calcularProyeccionCobertura,
+  costoProyeccionPE,
+  proximaFechaPreventiva,
+} from "@/lib/personal-utils"
 import {
   exigibleTotal,
   estadoDeCobro,
@@ -253,7 +282,7 @@ const FONDOS_FI_SEED: FondoFI[] = [
   { id: "fondo-amenities", nombre: "Fondo de Amenities", tipo: "amenities", descripcion: "Centro de costos de reservas, tarifas y garantías de amenities.", activo: true },
 ]
 
-export const STORE_VERSION = 21
+export const STORE_VERSION = 22
 
 export interface MaestroCollections {
   afps: Afp[]
@@ -272,6 +301,11 @@ export interface MaestroCollections {
   categoriasMicro: { id: string; nombre: string }[]
   categoriasUnidad: { id: string; nombre: string }[]
   estadosInmobiliarios: { id: string; nombre: string; color?: string }[]
+  // Maestros legales/operativos de PE
+  asignacionFamiliar: AsignacionFamiliar[]
+  jornadas: Jornada[]
+  couriers: Courier[]
+  contratistas: Contratista[]
 }
 
 export interface CompassData {
@@ -321,6 +355,15 @@ export interface CompassData {
   egresosFI: EgresoFI[]
   emisionesGC: EmisionGC[]
   cobrosFI: CobroFI[]
+  // Personal y Servicios (PE)
+  bitacoraVisitasPE: BitacoraVisitaPE[]
+  encomiendasPE: EncomiendaPE[]
+  ingresosContratistasPE: IngresoContratistaPE[]
+  proveedoresPE: ProveedorPE[]
+  mantencionesPreventivasPE: MantencionPreventivaPE[]
+  visitasTecnicasPE: VisitaTecnicaPE[]
+  cierresTurnoPE: CierreTurnoPE[]
+  proyeccionesPE: ProyeccionPE[]
 }
 
 interface CompassStore extends CompassData {
@@ -439,6 +482,29 @@ interface CompassStore extends CompassData {
   registrarPagoFI: (cobroId: string, pago: { monto: number; medio: string; ajusteJustificacion?: string }) => StoreResult
   enviarCobranzaFI: (unidadId: string) => StoreResult
   retirarFondoFI: (input: { fondoId: string; monto: number; descripcion: string; aprobacionActaGDId?: string }) => StoreResult
+  // Personal y Servicios (PE)
+  registrarHoraExtraPE: (personaId: string, horaExtra: { fecha: string; horas: number; motivo: string }) => StoreResult
+  registrarEvaluacionPE: (personaId: string, evaluacion: { fecha: string; puntaje: number; comentarios?: string }) => StoreResult
+  iniciarTurnoPE: (personaId: string, jornadaId: string) => StoreResult
+  completarTareaMonitoreoPE: (trabajoMTId: string) => StoreResult
+  saveBitacoraVisitaPE: (visita: BitacoraVisitaPE) => StoreResult
+  ingresarBitacoraVisitaPE: (id: string) => StoreResult
+  removeBitacoraVisitaPE: (id: string) => StoreResult
+  saveEncomiendaPE: (encomienda: EncomiendaPE) => StoreResult
+  registrarRetiroEncomiendaPE: (id: string, retiradoPor: string, relacion?: string) => StoreResult
+  removeEncomiendaPE: (id: string) => StoreResult
+  saveIngresoContratistaPE: (ingreso: IngresoContratistaPE) => StoreResult
+  confirmarIngresoContratistaPE: (id: string) => StoreResult
+  removeIngresoContratistaPE: (id: string) => StoreResult
+  saveProveedorPE: (proveedor: ProveedorPE) => StoreResult
+  removeProveedorPE: (id: string) => StoreResult
+  saveMantencionPE: (mantencion: MantencionPreventivaPE) => StoreResult
+  removeMantencionPE: (id: string) => StoreResult
+  registrarVisitaTecnicaPE: (visita: VisitaTecnicaPE) => StoreResult
+  cerrarTurnoPE: (input: Omit<CierreTurnoPE, "id" | "historialCambios" | "notificadoAAdmin"> & { id?: string }) => StoreResult
+  editarCierreTurnoPE: (id: string, cambios: Partial<Pick<CierreTurnoPE, "jornadaReportadaId" | "novedadesGenerales" | "incidencias" | "checklistInstalaciones" | "checklistEquipamiento">>, resumen: string) => StoreResult
+  removeCierreTurnoPE: (id: string) => StoreResult
+  enviarProyeccionCostoFI: (mesAnio: string, params: { costoParche: number; costoDiaExtra: number; id?: string }) => StoreResult
 }
 
 function upsert<T extends { id: string }>(list: T[], item: T): T[] {
@@ -500,6 +566,14 @@ export const seedData = (): CompassData => ({
   egresosFI: [],
   emisionesGC: [],
   cobrosFI: [],
+  bitacoraVisitasPE: [],
+  encomiendasPE: [],
+  ingresosContratistasPE: [],
+  proveedoresPE: [],
+  mantencionesPreventivasPE: [],
+  visitasTecnicasPE: [],
+  cierresTurnoPE: [],
+  proyeccionesPE: [],
   maestros: {
     afps: seedAFPS,
     previsionesSalud: seedPrevisionesSalud,
@@ -517,6 +591,10 @@ export const seedData = (): CompassData => ({
     categoriasMicro: seedCategoriasMicro,
     categoriasUnidad: seedCategoriasUnidad,
     estadosInmobiliarios: seedEstadosInmobiliarios,
+    asignacionFamiliar: seedAsignacionFamiliar,
+    jornadas: seedJornadas,
+    couriers: seedCouriers,
+    contratistas: seedContratistas,
   },
 })
 
@@ -557,6 +635,14 @@ const ESQUEMAS_COLECCION = {
   egresosFI: z.array(EgresoFISchema),
   emisionesGC: z.array(EmisionGCSchema),
   cobrosFI: z.array(CobroFISchema),
+  bitacoraVisitasPE: z.array(BitacoraVisitaPESchema),
+  encomiendasPE: z.array(EncomiendaPESchema),
+  ingresosContratistasPE: z.array(IngresoContratistaPESchema),
+  proveedoresPE: z.array(ProveedorPESchema),
+  mantencionesPreventivasPE: z.array(MantencionPreventivaPESchema),
+  visitasTecnicasPE: z.array(VisitaTecnicaPESchema),
+  cierresTurnoPE: z.array(CierreTurnoPESchema),
+  proyeccionesPE: z.array(ProyeccionPESchema),
 } as const
 
 type ClaveColeccion = keyof typeof ESQUEMAS_COLECCION
@@ -754,12 +840,37 @@ export const useCompassStore = create<CompassStore>()(
         }
         const validacion = validarConEsquema(PersonaSchema, persona)
         if (!validacion.ok) return validacion
+        // PE: FKs de la ficha laboral contra los maestros legales de MA (RG escritura).
+        const dl = validacion.data.datosLaborales
+        if (dl) {
+          const m = get().maestros
+          const fks: [string, string | undefined, { id: string }[]][] = [
+            ["afpId", dl.afpId, m.afps],
+            ["saludId", dl.saludId, m.previsionesSalud],
+            ["asignacionFamiliarId", dl.asignacionFamiliarId, m.asignacionFamiliar],
+            ["mutualidadId", dl.mutualidadId, m.mutualesCajas],
+            ["bancoId", dl.bancoId, m.bancos],
+          ]
+          for (const [campo, valor, coleccion] of fks) {
+            if (valor && !coleccion.some(x => x.id === valor)) {
+              return { ok: false, error: `${campo} no existe en el maestro correspondiente.` }
+            }
+          }
+        }
         const anterior = get().personas.find(p => p.id === persona.id)
         set(s => ({ personas: upsert(s.personas, validacion.data) }))
         // AD: carga/reemplazo de firma digitalizada de directiva queda auditado.
         const firmaNueva = validacion.data.datosGobernanza?.firmaDigital
         if (anterior && firmaNueva && anterior.datosGobernanza?.firmaDigital !== firmaNueva) {
           registrarEvento(set, "AD_DIRECTIVA_SIGN_UPLOAD", persona.id, `Firma digitalizada actualizada para ${validacion.data.nombres} ${validacion.data.apellidos}.`, "AD")
+        }
+        // PE: guardado de la ficha integral queda auditado solo si cambia.
+        if (
+          dl &&
+          JSON.stringify(anterior?.datosLaborales ?? null) !== JSON.stringify(dl) &&
+          Object.keys(dl).length > 4
+        ) {
+          registrarEvento(set, "PE_FICHA_SAVED", persona.id, `Ficha integral del trabajador ${validacion.data.nombres} ${validacion.data.apellidos} guardada (${dl.cargo}).`, "PE")
         }
         return { ok: true }
       },
@@ -953,6 +1064,30 @@ export const useCompassStore = create<CompassStore>()(
         if (key === "condicionesEspeciales") {
           const enUso = get().personas.some(p => (p.condicionesEspecialesIds ?? []).includes(id))
           if (enUso) return { ok: false, error: "No se puede eliminar la condición especial: hay personas que la tienen asignada." }
+        }
+        // PE: maestros legales referenciados por fichas de trabajadores.
+        if (["afps", "previsionesSalud", "asignacionFamiliar", "mutualesCajas", "bancos"].includes(key)) {
+          const campo = { afps: "afpId", previsionesSalud: "saludId", asignacionFamiliar: "asignacionFamiliarId", mutualesCajas: "mutualidadId", bancos: "bancoId" }[key as "afps" | "previsionesSalud" | "asignacionFamiliar" | "mutualesCajas" | "bancos"]!
+          const enUso = get().personas.filter(p => (p.datosLaborales as unknown as Record<string, string | undefined> | undefined)?.[campo] === id)
+          if (enUso.length > 0) {
+            return { ok: false, error: `No se puede eliminar el registro del maestro "${key}": ${enUso.length} ficha(s) de trabajador lo referencian.` }
+          }
+        }
+        // PE: maestros operativos de la bitácora.
+        if (key === "jornadas") {
+          const enUso =
+            get().bitacoraVisitasPE.filter(v => v.jornadaId === id).length +
+            get().ingresosContratistasPE.filter(i => i.jornadaId === id).length +
+            get().cierresTurnoPE.filter(c => c.jornadaReportadaId === id).length
+          if (enUso > 0) return { ok: false, error: `No se puede eliminar la jornada: ${enUso} registro(s) operativo(s) la usan.` }
+        }
+        if (key === "couriers") {
+          const enUso = get().encomiendasPE.filter(e => e.courierId === id).length
+          if (enUso > 0) return { ok: false, error: `No se puede eliminar el courier: ${enUso} encomienda(s) lo usan.` }
+        }
+        if (key === "contratistas") {
+          const enUso = get().ingresosContratistasPE.filter(i => i.contratistaId === id).length
+          if (enUso > 0) return { ok: false, error: `No se puede eliminar el contratista: ${enUso} ingreso(s) registrados lo usan.` }
         }
         set(s => ({
           maestros: {
@@ -3258,6 +3393,489 @@ export const useCompassStore = create<CompassStore>()(
         )
         return { ok: true }
       },
+
+      // --- PE: Personal y Servicios ---
+
+      registrarHoraExtraPE: (personaId, horaExtra) => {
+        if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
+        const persona = get().personas.find(p => p.id === personaId)
+        if (!persona?.datosLaborales) return { ok: false, error: "La persona no tiene ficha laboral de PE." }
+        const entrada = { id: `he-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, ...horaExtra }
+        const actualizada: Persona = {
+          ...persona,
+          datosLaborales: { ...persona.datosLaborales, horasExtras: [...(persona.datosLaborales.horasExtras ?? []), entrada] },
+        }
+        const validacion = validarConEsquema(PersonaSchema, actualizada)
+        if (!validacion.ok) return validacion
+        set(s => ({ personas: upsert(s.personas, validacion.data) }))
+        registrarEvento(set, "PE_HORA_EXTRA_REGISTRADA", personaId, `${horaExtra.horas} h extra (${horaExtra.motivo}) registradas para ${persona.nombres} ${persona.apellidos}.`, "PE")
+        return { ok: true }
+      },
+
+      registrarEvaluacionPE: (personaId, evaluacion) => {
+        if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
+        const persona = get().personas.find(p => p.id === personaId)
+        if (!persona?.datosLaborales) return { ok: false, error: "La persona no tiene ficha laboral de PE." }
+        const entrada = { id: `ev-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, ...evaluacion }
+        const actualizada: Persona = {
+          ...persona,
+          datosLaborales: { ...persona.datosLaborales, evaluaciones: [...(persona.datosLaborales.evaluaciones ?? []), entrada] },
+        }
+        const validacion = validarConEsquema(PersonaSchema, actualizada)
+        if (!validacion.ok) return validacion
+        set(s => ({ personas: upsert(s.personas, validacion.data) }))
+        registrarEvento(set, "PE_EVALUACION_REGISTRADA", personaId, `Evaluación de desempeño (${evaluacion.puntaje}/7) registrada para ${persona.nombres} ${persona.apellidos}.`, "PE")
+        return { ok: true }
+      },
+
+      iniciarTurnoPE: (personaId, jornadaId) => {
+        if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
+        const persona = get().personas.find(p => p.id === personaId)
+        if (!persona) return { ok: false, error: "El trabajador no existe en el Maestro de Personas." }
+        if (!persona.datosLaborales) return { ok: false, error: "La persona no tiene ficha laboral de PE." }
+        if (!get().maestros.jornadas.some(j => j.id === jornadaId)) return { ok: false, error: "jornadaId no existe en el maestro de jornadas." }
+        registrarEvento(
+          set,
+          "PE_START_SHIFT",
+          personaId,
+          `${persona.nombres} ${persona.apellidos} inicia turno (${get().maestros.jornadas.find(j => j.id === jornadaId)?.nombre ?? jornadaId}).`,
+          "PE"
+        )
+        return { ok: true }
+      },
+
+      completarTareaMonitoreoPE: (trabajoMTId) => {
+        if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
+        const trabajo = get().trabajosMT.find(t => t.id === trabajoMTId)
+        if (!trabajo) return { ok: false, error: "La tarea indicada no existe en Mantenimiento." }
+        if (trabajo.estado === "finalizado" || trabajo.estado === "cancelado") {
+          return { ok: false, error: "La tarea ya se encuentra cerrada." }
+        }
+        set(s => ({
+          trabajosMT: s.trabajosMT.map(t =>
+            t.id === trabajoMTId ? { ...t, estado: "finalizado" as const, fechaTermino: t.fechaTermino ?? hoyISO() } : t
+          ),
+        }))
+        registrarEvento(set, "PE_TASK_DONE", trabajoMTId, `Tarea "${trabajo.titulo}" completada desde el panel de monitoreo de PE.`, "PE")
+        return { ok: true }
+      },
+
+      saveBitacoraVisitaPE: (visita) => {
+        if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
+        const validacion = validarConEsquema(BitacoraVisitaPESchema, visita)
+        if (!validacion.ok) return validacion
+        const v = validacion.data
+        if (!get().maestros.jornadas.some(j => j.id === v.jornadaId)) {
+          return { ok: false, error: "jornadaId no existe en el maestro de jornadas." }
+        }
+        if (v.unidadId && !get().unidades.some(u => u.id === v.unidadId)) {
+          return { ok: false, error: "unidadId no existe en el inventario." }
+        }
+        if (v.destinoPersonaId && !get().personas.some(p => p.id === v.destinoPersonaId)) {
+          return { ok: false, error: "destinoPersonaId no existe en el Maestro de Personas." }
+        }
+        set(s => ({ bitacoraVisitasPE: upsert(s.bitacoraVisitasPE, v) }))
+        if (v.estado === "ingresada") {
+          const hora = v.horaIngreso ?? new Date().toTimeString().slice(0, 5)
+          set(s => ({
+            bitacoraVisitasPE: s.bitacoraVisitasPE.map(x => (x.id === v.id ? { ...x, horaIngreso: x.horaIngreso ?? hora } : x)),
+          }))
+          registrarEvento(set, "PE_VISITA_INGRESADA", v.id, `Visita ${v.nombre} ingresada (${v.origenAgenda === "pre_agendada" ? "agendada" : "sin aviso"}) a las ${hora}.`, "PE")
+          const cfg = get().configuracion
+          if (cfg.notificarRegistroVisitas !== false && v.destinoPersonaId) {
+            get().notify({
+              destinatarioRol: "residente",
+              destinatarioPersonaId: v.destinoPersonaId,
+              asunto: `Visita recibida: ${v.nombre}`,
+              cuerpo: `${v.nombre} fue ingresada por conserjería a las ${hora}.`,
+              moduloOrigen: "PE",
+              unidadId: v.unidadId,
+            })
+          }
+        }
+        return { ok: true }
+      },
+
+      ingresarBitacoraVisitaPE: (id) => {
+        if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
+        const visita = get().bitacoraVisitasPE.find(v => v.id === id)
+        if (!visita) return { ok: false, error: "La visita agendada no existe." }
+        if (visita.estado !== "agendada") return { ok: false, error: "Solo las visitas agendadas pueden marcarse como ingresadas." }
+        const hora = new Date().toTimeString().slice(0, 5)
+        set(s => ({
+          bitacoraVisitasPE: s.bitacoraVisitasPE.map(v => (v.id === id ? { ...v, estado: "ingresada" as const, horaIngreso: hora } : v)),
+        }))
+        registrarEvento(set, "PE_VISITA_INGRESADA", id, `Visita pre-agendada ${visita.nombre} sellada a las ${hora}.`, "PE")
+        const cfg = get().configuracion
+        if (cfg.notificarRegistroVisitas !== false && visita.destinoPersonaId) {
+          get().notify({
+            destinatarioRol: "residente",
+            destinatarioPersonaId: visita.destinoPersonaId,
+            asunto: `Visita ingresada: ${visita.nombre}`,
+            cuerpo: `${visita.nombre} llegó y fue registrada por conserjería a las ${hora}.`,
+            moduloOrigen: "PE",
+            unidadId: visita.unidadId,
+          })
+        }
+        return { ok: true }
+      },
+
+      removeBitacoraVisitaPE: (id) => {
+        if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
+        const visita = get().bitacoraVisitasPE.find(v => v.id === id)
+        if (visita?.estado === "ingresada") {
+          return { ok: false, error: "No se puede eliminar una visita ya ingresada (registro auditable)." }
+        }
+        set(s => ({ bitacoraVisitasPE: s.bitacoraVisitasPE.filter(v => v.id !== id) }))
+        return { ok: true }
+      },
+
+      saveEncomiendaPE: (encomienda) => {
+        if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
+        const validacion = validarConEsquema(EncomiendaPESchema, encomienda)
+        if (!validacion.ok) return validacion
+        const e = validacion.data
+        if (!get().maestros.couriers.some(c => c.id === e.courierId)) {
+          return { ok: false, error: "courierId no existe en el maestro de couriers." }
+        }
+        if (e.destinatarioPersonaId && !get().personas.some(p => p.id === e.destinatarioPersonaId)) {
+          return { ok: false, error: "destinatarioPersonaId no existe en el Maestro de Personas." }
+        }
+        if (e.unidadId && !get().unidades.some(u => u.id === e.unidadId)) {
+          return { ok: false, error: "unidadId no existe en el inventario." }
+        }
+        set(s => ({ encomiendasPE: upsert(s.encomiendasPE, e) }))
+        registrarEvento(set, "PE_ENCOMIENDA_RECIBIDA", e.id, `Encomienda recibida de ${get().maestros.couriers.find(c => c.id === e.courierId)?.nombre ?? e.courierId}.`, "PE")
+        const cfg = get().configuracion
+        if (cfg.notificarEncomiendas !== false && e.destinatarioPersonaId) {
+          get().notify({
+            destinatarioRol: "residente",
+            destinatarioPersonaId: e.destinatarioPersonaId,
+            asunto: "Encomienda recibida en conserjería",
+            cuerpo: `Tiene una encomienda recibida el ${e.fechaRecepcion}. Retírela presentando su identificación.`,
+            moduloOrigen: "PE",
+            unidadId: e.unidadId,
+          })
+        }
+        return { ok: true }
+      },
+
+      registrarRetiroEncomiendaPE: (id, retiradoPor, relacion) => {
+        if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
+        const encomienda = get().encomiendasPE.find(e => e.id === id)
+        if (!encomienda) return { ok: false, error: "La encomienda no existe." }
+        if (encomienda.estado === "retirada") return { ok: false, error: "La encomienda ya fue retirada." }
+        if (!retiradoPor || retiradoPor.trim().length === 0) return { ok: false, error: "Debe identificar quién retira la encomienda." }
+        set(s => ({
+          encomiendasPE: s.encomiendasPE.map(e =>
+            e.id === id
+              ? { ...e, estado: "retirada" as const, retiro: { retiradoPor: retiradoPor.trim(), fechaRetiro: hoyISO(), relacion } }
+              : e
+          ),
+        }))
+        registrarEvento(set, "PE_ENCOMIENDA_RETIRADA", id, `Encomienda entregada a ${retiradoPor.trim()}.`, "PE")
+        return { ok: true }
+      },
+
+      removeEncomiendaPE: (id) => {
+        if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
+        const encomienda = get().encomiendasPE.find(e => e.id === id)
+        if (encomienda?.estado === "retirada") {
+          return { ok: false, error: "No se puede eliminar una encomienda retirada (registro auditable)." }
+        }
+        set(s => ({ encomiendasPE: s.encomiendasPE.filter(e => e.id !== id) }))
+        return { ok: true }
+      },
+
+      saveIngresoContratistaPE: (ingreso) => {
+        if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
+        const validacion = validarConEsquema(IngresoContratistaPESchema, ingreso)
+        if (!validacion.ok) return validacion
+        const i = validacion.data
+        if (!get().maestros.contratistas.some(c => c.id === i.contratistaId)) {
+          return { ok: false, error: "contratistaId no existe en el maestro de contratistas." }
+        }
+        if (!get().maestros.jornadas.some(j => j.id === i.jornadaId)) {
+          return { ok: false, error: "jornadaId no existe en el maestro de jornadas." }
+        }
+        if (i.unidadId && !get().unidades.some(u => u.id === i.unidadId)) {
+          return { ok: false, error: "unidadId no existe en el inventario." }
+        }
+        if (i.personaAgendaId && !get().personas.some(p => p.id === i.personaAgendaId)) {
+          return { ok: false, error: "personaAgendaId no existe en el Maestro de Personas." }
+        }
+        set(s => ({ ingresosContratistasPE: upsert(s.ingresosContratistasPE, i) }))
+        return { ok: true }
+      },
+
+      confirmarIngresoContratistaPE: (id) => {
+        if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
+        const ingreso = get().ingresosContratistasPE.find(i => i.id === id)
+        if (!ingreso) return { ok: false, error: "El ingreso agendado no existe." }
+        if (ingreso.estado !== "agendado") return { ok: false, error: "Solo ingresos agendados pueden confirmarse." }
+        const hora = new Date().toTimeString().slice(0, 5)
+        set(s => ({
+          ingresosContratistasPE: s.ingresosContratistasPE.map(i => (i.id === id ? { ...i, estado: "ingresado" as const, horaIngreso: hora } : i)),
+        }))
+        const contratista = get().maestros.contratistas.find(c => c.id === ingreso.contratistaId)?.nombre ?? ingreso.contratistaId
+        registrarEvento(set, "PE_CONTRATISTA_INGRESADO", id, `Contratista ${contratista} ingresó (${ingreso.motivo.slice(0, 60)}).`, "PE")
+        return { ok: true }
+      },
+
+      removeIngresoContratistaPE: (id) => {
+        if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
+        const ingreso = get().ingresosContratistasPE.find(i => i.id === id)
+        if (ingreso?.estado === "ingresado") {
+          return { ok: false, error: "No se puede eliminar un contratista ya ingresado (registro auditable)." }
+        }
+        set(s => ({ ingresosContratistasPE: s.ingresosContratistasPE.filter(i => i.id !== id) }))
+        return { ok: true }
+      },
+
+      saveProveedorPE: (proveedor) => {
+        if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
+        const validacion = validarConEsquema(ProveedorPESchema, proveedor)
+        if (!validacion.ok) return validacion
+        const duplicado = get().proveedoresPE.find(p => p.nombre.toLowerCase() === validacion.data.nombre.toLowerCase() && p.id !== validacion.data.id)
+        if (duplicado) return { ok: false, error: `Ya existe un proveedor con el nombre "${validacion.data.nombre}".` }
+        set(s => ({ proveedoresPE: upsert(s.proveedoresPE, validacion.data) }))
+        registrarEvento(set, "PE_PROVEEDOR_SAVED", validacion.data.id, `Proveedor "${validacion.data.nombre}" (${validacion.data.rubro}) guardado.`, "PE")
+        return { ok: true }
+      },
+
+      removeProveedorPE: (id) => {
+        if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
+        const mantenciones = get().mantencionesPreventivasPE.filter(m => m.proveedorId === id)
+        const visitas = get().visitasTecnicasPE.filter(v => v.proveedorId === id)
+        if (mantenciones.length > 0 || visitas.length > 0) {
+          return { ok: false, error: `No se puede eliminar el proveedor: ${mantenciones.length} mantención(es) y ${visitas.length} visita(s) técnica(s) asociadas.` }
+        }
+        set(s => ({ proveedoresPE: s.proveedoresPE.filter(p => p.id !== id) }))
+        return { ok: true }
+      },
+
+      saveMantencionPE: (mantencion) => {
+        if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
+        const validacion = validarConEsquema(MantencionPreventivaPESchema, mantencion)
+        if (!validacion.ok) return validacion
+        const proveedor = get().proveedoresPE.find(p => p.id === validacion.data.proveedorId)
+        if (!proveedor) return { ok: false, error: "proveedorId no existe en el catálogo de proveedores." }
+        if (!proveedor.activo) return { ok: false, error: `El proveedor "${proveedor.nombre}" está inactivo.` }
+        set(s => ({ mantencionesPreventivasPE: upsert(s.mantencionesPreventivasPE, validacion.data) }))
+        registrarEvento(set, "PE_MANTENCION_SAVED", validacion.data.id, `Mantención preventiva "${validacion.data.descripcion}" programada para ${validacion.data.proximaFecha}.`, "PE")
+        return { ok: true }
+      },
+
+      removeMantencionPE: (id) => {
+        if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
+        const vinculadas = get().visitasTecnicasPE.filter(v => v.mantencionId === id)
+        if (vinculadas.length > 0) {
+          return { ok: false, error: `No se puede eliminar la mantención: ${vinculadas.length} visita(s) técnica(s) asociadas.` }
+        }
+        set(s => ({ mantencionesPreventivasPE: s.mantencionesPreventivasPE.filter(m => m.id !== id) }))
+        return { ok: true }
+      },
+
+      registrarVisitaTecnicaPE: (visita) => {
+        if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
+        const validacion = validarConEsquema(VisitaTecnicaPESchema, visita)
+        if (!validacion.ok) return validacion
+        const v = validacion.data
+        const proveedor = get().proveedoresPE.find(p => p.id === v.proveedorId)
+        if (!proveedor) return { ok: false, error: "proveedorId no existe en el catálogo de proveedores." }
+        const mantencion = get().mantencionesPreventivasPE.find(m => m.id === v.mantencionId)
+        if (v.mantencionId && !mantencion) {
+          return { ok: false, error: "mantencionId no existe en el calendario preventivo." }
+        }
+        if (v.supervisorPersonaId && !get().personas.some(p => p.id === v.supervisorPersonaId)) {
+          return { ok: false, error: "supervisorPersonaId no existe en el Maestro de Personas." }
+        }
+        if (v.unidadId && !get().unidades.some(u => u.id === v.unidadId)) {
+          return { ok: false, error: "unidadId no existe en el inventario." }
+        }
+        set(s => ({ visitasTecnicasPE: upsert(s.visitasTecnicasPE, v) }))
+        // Ciclo preventivo cerrado: la próxima fecha avanza según periodicidad.
+        if (mantencion) {
+          const proxima = proximaFechaPreventiva(v.fecha, mantencion.periodicidadMeses)
+          set(s => ({
+            mantencionesPreventivasPE: s.mantencionesPreventivasPE.map(m =>
+              m.id === mantencion!.id ? { ...m, proximaFecha: proxima } : m
+            ),
+          }))
+        }
+        registrarEvento(
+          set,
+          "PE_VISITA_TECNICA",
+          v.id,
+          `Visita técnica de ${proveedor.nombre}: ${v.trabajoRealizado.slice(0, 80)}${mantencion ? `; próximo ciclo ${proximaFechaPreventiva(v.fecha, mantencion.periodicidadMeses)}` : ""}.`,
+          "PE"
+        )
+        return { ok: true }
+      },
+
+      cerrarTurnoPE: (input) => {
+        if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
+        const trabajador = get().personas.find(p => p.id === input.trabajadorPersonaId)
+        if (!trabajador) return { ok: false, error: "El trabajador no existe en el Maestro de Personas." }
+        if (!trabajador.datosLaborales) return { ok: false, error: "El trabajador no tiene ficha laboral de PE." }
+        if (!get().maestros.jornadas.some(j => j.id === input.jornadaReportadaId)) {
+          return { ok: false, error: "jornadaReportadaId no existe en el maestro de jornadas." }
+        }
+        // Anti-negligencia: incidencias marcadas exigen descripción y evidencia.
+        if (input.incidencias.hubo) {
+          if (!input.incidencias.descripcion || input.incidencias.descripcion.trim().length < 20) {
+            return { ok: false, error: "Con incidencias marcadas debe describir lo ocurrido (mínimo 20 caracteres)." }
+          }
+          if (!input.incidencias.evidencias || input.incidencias.evidencias.length === 0) {
+            return { ok: false, error: "Con incidencias marcadas debe adjuntar al menos una evidencia por referencia (URL)." }
+          }
+        }
+        if (input.checklistInstalaciones.length === 0 || input.checklistEquipamiento.length === 0) {
+          return { ok: false, error: "El cierre exige los checklist de instalaciones y equipamiento." }
+        }
+        const duplicado = get().cierresTurnoPE.some(c =>
+          c.fecha === input.fecha &&
+          c.jornadaReportadaId === input.jornadaReportadaId &&
+          c.trabajadorPersonaId === input.trabajadorPersonaId
+        )
+        if (duplicado) {
+          return { ok: false, error: "Este trabajador ya registró un cierre para esa fecha y jornada." }
+        }
+        const cierre: CierreTurnoPE = {
+          ...input,
+          incidencias: {
+            hubo: input.incidencias.hubo,
+            descripcion: input.incidencias.descripcion,
+            evidencias: input.incidencias.evidencias,
+          },
+          id: input.id ?? `pe-cierre-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          historialCambios: [],
+          notificadoAAdmin: true,
+        }
+        const validacion = validarConEsquema(CierreTurnoPESchema, cierre)
+        if (!validacion.ok) return validacion
+        set(s => ({ cierresTurnoPE: upsert(s.cierresTurnoPE, validacion.data) }))
+        const jornadaNombre = get().maestros.jornadas.find(j => j.id === input.jornadaReportadaId)?.nombre ?? input.jornadaReportadaId
+        const resumen = [
+          input.novedadesGenerales?.trim(),
+          input.incidencias.hubo ? `Incidencias: ${input.incidencias.descripcion!.slice(0, 120)}` : "Sin incidencias reportadas",
+        ].filter(Boolean).join(". ")
+        get().notify({
+          destinatarioRol: "administracion",
+          asunto: `Cierre de turno ${jornadaNombre} – ${input.fecha}`,
+          cuerpo: `${trabajador.nombres} ${trabajador.apellidos} cerró el turno de la jornada ${jornadaNombre}. ${resumen}`,
+          moduloOrigen: "PE",
+        })
+        // Copia del reporte al correo registrado en la ficha del trabajador (D2).
+        get().notify({
+          destinatarioRol: "personal",
+          destinatarioPersonaId: trabajador.id,
+          asunto: `Copia de su cierre de turno (${jornadaNombre}, ${input.fecha})`,
+          cuerpo: `Gracias ${trabajador.nombres}. Su reporte fue enviado a administración. ${resumen}`,
+          moduloOrigen: "PE",
+        })
+        registrarEvento(
+          set,
+          "PE_CIERRE_TURNO",
+          validacion.data.id,
+          `Cierre de turno ${jornadaNombre} enviado por ${trabajador.nombres} ${trabajador.apellidos}${input.incidencias.hubo ? " con incidencias" : " sin incidencias"}; copia enviada a administración y al trabajador.`,
+          "PE"
+        )
+        return { ok: true }
+      },
+
+      editarCierreTurnoPE: (id, cambios, resumen) => {
+        if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
+        const cierre = get().cierresTurnoPE.find(c => c.id === id)
+        if (!cierre) return { ok: false, error: "El cierre de turno no existe." }
+        if (!resumen || resumen.trim().length < 5) {
+          return { ok: false, error: "Cada edición exige un resumen del cambio (mínimo 5 caracteres)." }
+        }
+        const fusionado: CierreTurnoPE = {
+          ...cierre,
+          ...cambios,
+          incidencias: cambios.incidencias ?? cierre.incidencias,
+          checklistInstalaciones: cambios.checklistInstalaciones ?? cierre.checklistInstalaciones,
+          checklistEquipamiento: cambios.checklistEquipamiento ?? cierre.checklistEquipamiento,
+          jornadaReportadaId: cambios.jornadaReportadaId ?? cierre.jornadaReportadaId,
+          novedadesGenerales: cambios.novedadesGenerales ?? cierre.novedadesGenerales,
+        }
+        if (fusionado.incidencias.hubo) {
+          if (!fusionado.incidencias.descripcion || fusionado.incidencias.descripcion.trim().length < 20) {
+            return { ok: false, error: "Con incidencias marcadas debe describir lo ocurrido (mínimo 20 caracteres)." }
+          }
+          if (!fusionado.incidencias.evidencias || fusionado.incidencias.evidencias.length === 0) {
+            return { ok: false, error: "Con incidencias marcadas debe adjuntar al menos una evidencia por referencia (URL)." }
+          }
+        }
+        if (fusionado.jornadaReportadaId && !get().maestros.jornadas.some(j => j.id === fusionado.jornadaReportadaId)) {
+          return { ok: false, error: "jornadaReportadaId no existe en el maestro de jornadas." }
+        }
+        const editado: CierreTurnoPE = {
+          ...fusionado,
+          historialCambios: [...cierre.historialCambios, { fecha: hoyISO(), resumen: resumen.trim() }],
+        }
+        const validacion = validarConEsquema(CierreTurnoPESchema, editado)
+        if (!validacion.ok) return validacion
+        set(s => ({ cierresTurnoPE: upsert(s.cierresTurnoPE, validacion.data) }))
+        registrarEvento(set, "PE_CIERRE_EDITADO", id, `Cierre de turno editado: ${resumen.trim()}`, "PE")
+        return { ok: true }
+      },
+
+      removeCierreTurnoPE: (id) => {
+        if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
+        const cierre = get().cierresTurnoPE.find(c => c.id === id)
+        if (!cierre) return { ok: false, error: "El cierre de turno no existe." }
+        // Auditoría: solo cierres TEST o del día en curso son removibles.
+        if (!id.startsWith("test-") && cierre.fecha !== hoyISO()) {
+          return { ok: false, error: "Solo pueden eliminarse cierres del día en curso (los históricos son auditablemente inmutables)." }
+        }
+        set(s => ({ cierresTurnoPE: s.cierresTurnoPE.filter(c => c.id !== id) }))
+        registrarEvento(set, "PE_CIERRE_ELIMINADO", id, `Cierre de turno del ${cierre.fecha} eliminado por administración.`, "PE")
+        return { ok: true }
+      },
+
+      enviarProyeccionCostoFI: (mesAnio, params) => {
+        if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
+        if (!/^\d{4}-\d{2}$/.test(mesAnio)) return { ok: false, error: "El mes debe tener formato AAAA-MM." }
+        const proyeccionBase = calcularProyeccionCobertura({ feriados: get().maestros.feriados, mesAnio })
+        if (proyeccionBase.diasFeriados === 0) {
+          return { ok: false, error: `No hay feriados registrados para ${mesAnio}; cargue el calendario antes de proyectar.` }
+        }
+        if (params.costoParche < 0 || params.costoDiaExtra < 0) {
+          return { ok: false, error: "Los costos de parche y día extra no pueden ser negativos." }
+        }
+        const personalPlanta = get().personas.filter(p => p.datosLaborales !== undefined && p.estadoCuenta === "activa").length
+        const costoEstimado = costoProyeccionPE(proyeccionBase.reemplazosNecesarios, personalPlanta, params.costoParche, params.costoDiaExtra)
+        const proyeccion: ProyeccionPE = {
+          id: params.id ?? `pe-proy-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          mesAnio,
+          feriados: proyeccionBase.feriados,
+          diasFeriados: proyeccionBase.diasFeriados,
+          reemplazosNecesarios: proyeccionBase.reemplazosNecesarios,
+          costoEstimado,
+          detalleCosto: { personalPlanta, costoParche: params.costoParche, costoDiaExtra: params.costoDiaExtra },
+          enviadoAFI: true,
+          liquidacionPLReferencia: "pendiente",
+        }
+        const validacion = validarConEsquema(ProyeccionPESchema, proyeccion)
+        if (!validacion.ok) return validacion
+        set(s => ({ proyeccionesPE: upsert(s.proyeccionesPE, validacion.data) }))
+        get().notify({
+          destinatarioRol: "administracion",
+          asunto: `Proyección operativa ${mesAnio}: ${proyeccionBase.diasFeriados} feriado(s)`,
+          cuerpo: `Se requerirán ${proyeccionBase.reemplazosNecesarios} reemplazo(s) (parches) para cubrir los descansos legales. Sobrecosto estimado: $${costoEstimado.toLocaleString("es-CL")}. Proyección enviada a Finanzas.`,
+          moduloOrigen: "PE",
+        })
+        registrarEvento(
+          set,
+          "PE_PROYECCION_ENVIADA",
+          validacion.data.id,
+          `Proyección ${mesAnio}: ${proyeccionBase.diasFeriados} feriado(s), ${proyeccionBase.reemplazosNecesarios} reemplazo(s), costo estimado $${costoEstimado.toLocaleString("es-CL")} (liquidación pendiente en PL).`,
+          "PE"
+        )
+        return { ok: true }
+      },
     }),
     {
       name: "compass-store",
@@ -3302,6 +3920,14 @@ export const useCompassStore = create<CompassStore>()(
         egresosFI: state.egresosFI,
         emisionesGC: state.emisionesGC,
         cobrosFI: state.cobrosFI,
+        bitacoraVisitasPE: state.bitacoraVisitasPE,
+        encomiendasPE: state.encomiendasPE,
+        ingresosContratistasPE: state.ingresosContratistasPE,
+        proveedoresPE: state.proveedoresPE,
+        mantencionesPreventivasPE: state.mantencionesPreventivasPE,
+        visitasTecnicasPE: state.visitasTecnicasPE,
+        cierresTurnoPE: state.cierresTurnoPE,
+        proyeccionesPE: state.proyeccionesPE,
       }),
       migrate: (persisted, version) => {
         const prev = (persisted ?? {}) as Partial<CompassData>
@@ -3474,6 +4100,35 @@ export const useCompassStore = create<CompassStore>()(
             egresosFI: prev.egresosFI ?? [],
             emisionesGC: prev.emisionesGC ?? [],
             cobrosFI: prev.cobrosFI ?? [],
+          }
+        }
+        // PE (v22): maestros legales/operativos nuevos (sembrados si ausentes)
+        // y colecciones operacionales de Personal y Servicios. Aditivo.
+        if ((version ?? 0) < 22) {
+          const seed = seedData()
+          const mergeById = <T extends { id: string }>(prevArr: T[] | undefined, seedArr: T[]): T[] => {
+            if (!prevArr) return seedArr
+            const prevIds = new Set(prevArr.map(p => p.id))
+            return [...prevArr, ...seedArr.filter(s => !prevIds.has(s.id))]
+          }
+          const maestrosPrev = (prev.maestros ?? {}) as Record<string, unknown>
+          result = {
+            ...result,
+            bitacoraVisitasPE: prev.bitacoraVisitasPE ?? [],
+            encomiendasPE: prev.encomiendasPE ?? [],
+            ingresosContratistasPE: prev.ingresosContratistasPE ?? [],
+            proveedoresPE: prev.proveedoresPE ?? [],
+            mantencionesPreventivasPE: prev.mantencionesPreventivasPE ?? [],
+            visitasTecnicasPE: prev.visitasTecnicasPE ?? [],
+            cierresTurnoPE: prev.cierresTurnoPE ?? [],
+            proyeccionesPE: prev.proyeccionesPE ?? [],
+            maestros: {
+              ...(result.maestros ?? prev.maestros ?? {}),
+              asignacionFamiliar: mergeById(maestrosPrev["asignacionFamiliar"] as AsignacionFamiliar[] | undefined, seed.maestros.asignacionFamiliar),
+              jornadas: mergeById(maestrosPrev["jornadas"] as Jornada[] | undefined, seed.maestros.jornadas),
+              couriers: mergeById(maestrosPrev["couriers"] as Courier[] | undefined, seed.maestros.couriers),
+              contratistas: mergeById(maestrosPrev["contratistas"] as Contratista[] | undefined, seed.maestros.contratistas),
+            } as never,
           }
         }
         // TST-002: los stores que ya quedaron en v8 con unidades dañadas por este

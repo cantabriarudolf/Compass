@@ -99,6 +99,44 @@ export const ExtensionLaboralSchema = z.object({
   afp: z.string().min(1, "La AFP es obligatoria."),
   prevision: z.string().min(1, "La previsión es obligatoria."),
   fechaIngreso: FechaISOSchema,
+  // PE (ventana 7): profundización opcional de la ficha integral. Los campos
+  // mínimos de arriba se preservan para el cajón RRHH de AD; las FKs nuevas
+  // apuntan por id a los maestros legales de MA (nunca texto libre).
+  tipoContrato: z.enum(["indefinido", "plazo_fijo", "honorarios"]).optional(),
+  afpId: IdEntidadSchema.optional(),
+  saludId: IdEntidadSchema.optional(),
+  asignacionFamiliarId: IdEntidadSchema.optional(),
+  cargas: z.number().int().min(0).optional(),
+  mutualidadId: IdEntidadSchema.optional(),
+  bancoId: IdEntidadSchema.optional(),
+  numeroCuenta: z.string().optional(),
+  tipoCuenta: z.enum(["corriente", "vista", "ahorro"]).optional(),
+  seguroComplementario: z.string().optional(),
+  apv: z.boolean().optional(),
+  fichaMedica: z.object({
+    medicamentos: z.string().optional(),
+    alergias: z.string().optional(),
+    condiciones: z.string().optional(),
+  }).optional(),
+  contactosEmergencia: z.array(z.object({
+    id: IdEntidadSchema,
+    nombre: z.string({ required_error: "El nombre del contacto es obligatorio." }).min(1, "El nombre del contacto es obligatorio."),
+    telefono: z.string({ required_error: "El teléfono del contacto es obligatorio." }).min(1, "El teléfono del contacto es obligatorio."),
+    relacion: z.string().optional(),
+  })).optional(),
+  jornadaBaseHoras: z.number({ invalid_type_error: "La jornada base debe ser un número." }).positive("La jornada base debe ser mayor a cero.").max(80, "La jornada base no puede superar 80 horas.").optional(),
+  horasExtras: z.array(z.object({
+    id: IdEntidadSchema,
+    fecha: FechaISOSchema,
+    horas: z.number({ invalid_type_error: "Las horas deben ser un número." }).positive("Las horas extra deben ser mayores a cero."),
+    motivo: z.string({ required_error: "El motivo de la hora extra es obligatorio." }).min(1, "El motivo de la hora extra es obligatorio."),
+  })).optional(),
+  evaluaciones: z.array(z.object({
+    id: IdEntidadSchema,
+    fecha: FechaISOSchema,
+    puntaje: z.number().min(1, "El puntaje va de 1 a 7.").max(7, "El puntaje va de 1 a 7."),
+    comentarios: z.string().optional(),
+  })).optional(),
 })
 
 export const ExtensionGobernanzaSchema = z.object({
@@ -777,6 +815,151 @@ export const CobroFISchema = z.object({
   diferencias: z.array(DiferenciaPagoFISchema),
 })
 
+// --- Personal y Servicios (PE) ---
+
+const HoraPESchema = z
+  .string({ required_error: "La hora es obligatoria." })
+  .regex(/^\d{2}:\d{2}$/, "La hora debe tener formato HH:MM.")
+
+// Bitácora: control de visitas con pre-agendamiento o llegada sin aviso.
+export const BitacoraVisitaPESchema = z.object({
+  id: IdEntidadSchema,
+  fecha: FechaISOSchema,
+  nombre: z.string({ required_error: "El nombre de la visita es obligatorio." }).min(1, "El nombre de la visita es obligatorio."),
+  dni: z.string({ required_error: "El DNI de la visita es obligatorio." }).min(1, "El DNI de la visita es obligatorio."),
+  patente: z.string().optional(),
+  unidadId: IdEntidadSchema.optional(),
+  destinoPersonaId: IdEntidadSchema.optional(),
+  jornadaId: IdEntidadSchema,
+  origenAgenda: z.enum(["pre_agendada", "sin_aviso"]),
+  agendadaPorPersonaId: IdEntidadSchema.optional(),
+  estado: z.enum(["agendada", "ingresada", "cancelada"]),
+  horaIngreso: HoraPESchema.optional(),
+  notas: z.string().optional(),
+})
+
+// Encomiendas: courier normalizado por maestro + evidencia D1.
+export const EncomiendaPESchema = z.object({
+  id: IdEntidadSchema,
+  courierId: IdEntidadSchema,
+  destinatarioPersonaId: IdEntidadSchema.optional(),
+  unidadId: IdEntidadSchema.optional(),
+  descripcionPaquete: z.string().optional(),
+  evidencia: ImagenReferenciaSchema.optional(),
+  fechaRecepcion: FechaISOSchema,
+  estado: z.enum(["recibida", "retirada"]),
+  retiro: z.object({
+    retiradoPor: z.string({ required_error: "El nombre de quien retira es obligatorio." }).min(1, "El nombre de quien retira es obligatorio."),
+    fechaRetiro: FechaISOSchema,
+    relacion: z.string().optional(),
+  }).optional(),
+})
+
+// Contratistas: ingreso con motivo específico obligatorio.
+export const IngresoContratistaPESchema = z.object({
+  id: IdEntidadSchema,
+  contratistaId: IdEntidadSchema,
+  motivo: z.string({ required_error: "El motivo del ingreso es obligatorio." }).min(5, "Debe detallar el motivo específico del ingreso (mínimo 5 caracteres)."),
+  unidadId: IdEntidadSchema.optional(),
+  fecha: FechaISOSchema,
+  jornadaId: IdEntidadSchema,
+  agendadoPor: z.enum(["residente", "administracion"]),
+  personaAgendaId: IdEntidadSchema.optional(),
+  estado: z.enum(["agendado", "ingresado", "cancelado"]),
+  horaIngreso: HoraPESchema.optional(),
+  notas: z.string().optional(),
+})
+
+// Proveedores externos (ascensores, bombas, CCTV, etc.).
+export const ProveedorPESchema = z.object({
+  id: IdEntidadSchema,
+  rut: DocumentoIdentidadSchema,
+  nombre: z.string({ required_error: "El nombre del proveedor es obligatorio." }).min(1, "El nombre del proveedor es obligatorio."),
+  rubro: z.string({ required_error: "El rubro del servicio es obligatorio." }).min(1, "El rubro del servicio es obligatorio."),
+  contacto: z.string().optional(),
+  telefono: z.string().optional(),
+  email: z.string().email("El correo electrónico no es válido.").or(z.literal("")).optional(),
+  sitioWeb: z.string().url("La URL del sitio no es válida.").or(z.literal("")).optional(),
+  activo: z.boolean({ required_error: "El estado activo es obligatorio." }),
+})
+
+// Mantención preventiva con ciclo periódico y próxima fecha programada.
+export const MantencionPreventivaPESchema = z.object({
+  id: IdEntidadSchema,
+  proveedorId: IdEntidadSchema,
+  descripcion: z.string({ required_error: "La descripción del servicio es obligatoria." }).min(1, "La descripción del servicio es obligatoria."),
+  periodicidadMeses: z.number({ required_error: "La periodicidad es obligatoria." }).int().min(1, "La periodicidad debe ser al menos 1 mes."),
+  proximaFecha: FechaISOSchema,
+  alertaDiasAntes: z.number({ required_error: "El horizonte de alerta es obligatorio." }).int().min(0),
+  activo: z.boolean({ required_error: "El estado activo es obligatorio." }),
+})
+
+// Libro de visitas técnicas: qué hizo el técnico y quién lo supervisó.
+export const VisitaTecnicaPESchema = z.object({
+  id: IdEntidadSchema,
+  proveedorId: IdEntidadSchema,
+  mantencionId: IdEntidadSchema.optional(),
+  tecnicoNombre: z.string({ required_error: "El nombre del técnico es obligatorio." }).min(1, "El nombre del técnico es obligatorio."),
+  fecha: FechaISOSchema,
+  trabajoRealizado: z.string({ required_error: "El trabajo realizado es obligatorio." }).min(5, "Debe describir el trabajo realizado (mínimo 5 caracteres)."),
+  supervisorPersonaId: IdEntidadSchema.optional(),
+  unidadId: IdEntidadSchema.optional(),
+})
+
+const ChecklistItemTurnoSchema = z.object({
+  item: z.string().min(1, "El ítem del checklist es obligatorio."),
+  ok: z.boolean({ required_error: "El estado del ítem es obligatorio." }),
+  observacion: z.string().optional(),
+})
+
+// Cierre de turno: reporte obligatorio con checklist snapshot e historial de cambios inmutable.
+export const CierreTurnoPESchema = z.object({
+  id: IdEntidadSchema,
+  fecha: FechaISOSchema,
+  hora: HoraPESchema,
+  // Jornada reportada (editable para reemplazos), ligada al maestro jornadas.
+  jornadaReportadaId: IdEntidadSchema,
+  trabajadorPersonaId: IdEntidadSchema,
+  novedadesGenerales: z.string().optional(),
+  incidencias: z.object({
+    hubo: z.boolean({ required_error: "El flag de incidencias es obligatorio." }),
+    descripcion: z.string().max(2000).optional(),
+    evidencias: z.array(ImagenReferenciaSchema).optional(),
+  }),
+  checklistInstalaciones: z.array(ChecklistItemTurnoSchema),
+  checklistEquipamiento: z.array(ChecklistItemTurnoSchema),
+  historialCambios: z.array(z.object({
+    fecha: FechaISOSchema,
+    resumen: z.string({ required_error: "El resumen del cambio es obligatorio." }).min(5, "El resumen del cambio debe detallar la modificación (mínimo 5 caracteres)."),
+  })),
+  notificadoAAdmin: z.boolean({ required_error: "El flag de notificación es obligatorio." }),
+})
+
+// Proyección operativa de feriados enviada a Finanzas; PL materializa la
+// liquidación en la ventana 8 (liquidacionPLReferencia queda "pendiente").
+export const ProyeccionPESchema = z.object({
+  id: IdEntidadSchema,
+  mesAnio: z
+    .string({ required_error: "El mes de proyección es obligatorio." })
+    .regex(/^\d{4}-\d{2}$/, "El mes debe tener formato AAAA-MM."),
+  feriados: z.array(z.object({
+    id: IdEntidadSchema,
+    fecha: FechaISOSchema,
+    nombre: z.string().min(1),
+    irrenunciable: z.boolean(),
+  })),
+  diasFeriados: z.number().int().min(0),
+  reemplazosNecesarios: z.number().int().min(0),
+  costoEstimado: z.number().min(0),
+  detalleCosto: z.object({
+    personalPlanta: z.number().int().min(0),
+    costoParche: z.number().min(0),
+    costoDiaExtra: z.number().min(0),
+  }),
+  enviadoAFI: z.boolean({ required_error: "El flag de envío a FI es obligatorio." }),
+  liquidacionPLReferencia: z.string().optional(),
+})
+
 // --- Visor de Mensajes (CV) ---
 
 export const TIPOLOGIAS_CV = ["info", "exito", "advertencia", "peligro"] as const
@@ -924,6 +1107,24 @@ export const EstadoInmobiliarioSchema = z.object({
   color: z.string().optional(),
 })
 
+// Maestros legales/operativos de PE (ventana 7).
+export const AsignacionFamiliarSchema = z.object({
+  id: IdEntidadSchema,
+  nombre: z.string().min(1, "El nombre es obligatorio."),
+  monto: z.number().min(0, "El monto del tramo no puede ser negativo."),
+  rangoRentas: z.string().optional(),
+})
+
+export const ContratistaSchema = z.object({
+  id: IdEntidadSchema,
+  nombre: z.string().min(1, "El nombre es obligatorio."),
+  rubro: z.string().optional(),
+  telefono: z.string().optional(),
+})
+
+export const JornadaSchema = NombreSimpleSchema
+export const CourierSchema = NombreSimpleSchema
+
 export const MAESTRO_SCHEMAS = {
   afps: AfpSchema,
   previsionesSalud: PrevisionSaludSchema,
@@ -941,6 +1142,10 @@ export const MAESTRO_SCHEMAS = {
   categoriasMicro: CategoriaMicroSchema,
   categoriasUnidad: CategoriaUnidadSchema,
   estadosInmobiliarios: EstadoInmobiliarioSchema,
+  asignacionFamiliar: AsignacionFamiliarSchema,
+  jornadas: JornadaSchema,
+  couriers: CourierSchema,
+  contratistas: ContratistaSchema,
 } as const
 
 // --- Administración: Configuración Global (CF) ---
@@ -1109,6 +1314,19 @@ export type MoraCobroFI = z.infer<typeof MoraCobroFISchema>
 export type PagoCobroFI = z.infer<typeof PagoCobroFISchema>
 export type DiferenciaPagoFI = z.infer<typeof DiferenciaPagoFISchema>
 export type CobroFI = z.infer<typeof CobroFISchema>
+export type BitacoraVisitaPE = z.infer<typeof BitacoraVisitaPESchema>
+export type EncomiendaPE = z.infer<typeof EncomiendaPESchema>
+export type IngresoContratistaPE = z.infer<typeof IngresoContratistaPESchema>
+export type ProveedorPE = z.infer<typeof ProveedorPESchema>
+export type MantencionPreventivaPE = z.infer<typeof MantencionPreventivaPESchema>
+export type VisitaTecnicaPE = z.infer<typeof VisitaTecnicaPESchema>
+export type ChecklistItemTurno = z.infer<typeof ChecklistItemTurnoSchema>
+export type CierreTurnoPE = z.infer<typeof CierreTurnoPESchema>
+export type ProyeccionPE = z.infer<typeof ProyeccionPESchema>
+export type AsignacionFamiliar = z.infer<typeof AsignacionFamiliarSchema>
+export type ContratistaMA = z.infer<typeof ContratistaSchema>
+export type Jornada = z.infer<typeof JornadaSchema>
+export type Courier = z.infer<typeof CourierSchema>
 
 // --- Utilidades de validación para el store ---
 

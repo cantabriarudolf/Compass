@@ -71,6 +71,7 @@ const data = {
         { title: "Encomiendas", url: "/operaciones/paqueteria" },
         { title: "Reservas y Amenities", url: "/operaciones/reservas" },
         { title: "Solicitudes", url: "/operaciones/solicitudes" },
+        { title: "Proveedores y Servicios", url: "/operaciones/proveedores" },
       ],
     },
     {

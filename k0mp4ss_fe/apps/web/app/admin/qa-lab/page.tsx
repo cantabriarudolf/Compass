@@ -3,6 +3,7 @@
 import * as React from "react"
 import { useCompassStore, useStoreRehydrated, STORE_VERSION } from "@/lib/store"
 import { STORE_KEY } from "@/lib/store-backup"
+import { calcularProyeccionCobertura } from "@/lib/personal-utils"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
@@ -60,6 +61,7 @@ const PLAN: Record<string, string[]> = {
   ra: ["Crear Quincho central TEST (bloques 3h, tarifa $15.000, garantía $20.000, tardía ≤1 día → penalización $5.000)", "Reservar quincho mañana 19:00–22:00 para TEST Persona QA Uno → confirmada con cargo FI pendiente", "Solicitud solapada 20:00–23:00 → rechazada por conflicto horario", "Crear Hidrolavadora TEST (mobiliario, stock 2) y agotar cupo con 2 reservas paralelas", "Cancelar reserva del quincho fuera de plazo → penalización registrada", "Retener garantía de la hidrolavadora por daño"],
   cv: ["Activar plantilla rápida Portón TEST (advertencia) → aviso publicado al instante", "Aviso manual TEST con imagen URL remota → borrador → publicar", "Aviso vencido ayer → caducidad automática lo archiva", "Publicar el acta GD TEST en el visor → avisoCVReferencia materializada con el id del aviso", "Cola del carrusel: avisos publicados vigentes con duraciones individuales"],
   fi: ["Crear Fondo Extraordinario Pintura TEST (especial) junto al seed GC/Reserva/Amenities", "Egreso recurrente TEST imputado al Fondo de Gasto Común con comprobante D1", "Emisión GC variable sobre unidades TEST ($450.000) → cobros prorrateados + aporte 5% reserva", "Emisión sin alcance sobre toda la comunidad → rechazada por unidades sin responsable", "Pago exacto del cobro GC del depto TEST → estado pagado", "Mora al 1% sobre el periodo vencido (mes anterior) e idempotencia diaria", "Pago con descuento justificado en la multa TEST → informe de diferencia inmutable", "Multa grave aplicada tiene cobro multa_in materializado (conexión IN)", "Tarifa del quincho reservado quedó como cobro del fondo amenities (conexión RA)", "Proyecto MT de $12M financiado por fondo GC sin saldo → rechazado (conexión MT)", "Retiro del fondo reserva exige acta publicada → rechazado sin aprobación"],
+  pe: ["Ficha integral TEST: 99.999.999-9 con AFP/FONASA/BancoEstado por FK + jornada base y contacto de emergencia", "Hora extra + evaluación de desempeño sobre la ficha TEST (eventos AM)", "Feriado TEST irrenunciable del próximo año → proyección de cobertura calcula reemplazos", "Enviar proyección de costos a Finanzas → registro TEST con liquidación PL pendiente y notificación", "Visita TEST pre-agendada al Depto 999 → marcar Ingresada sella hora y notifica", "Encomienda Chilexpress TEST con evidencia URL (D1) → retiro registrado", "Contratista Gasfitería Don Pedro agendado por residente TEST → confirmar ingreso sella hora", "Proveedor Ascensores TEST + mantención mensual vencida → alerta preventiva visible", "Visita técnica TEST vinculada a la mantención → próxima fecha reprogramada un ciclo", "Cierre de turno nocturno TEST con incidencias → notify administración + copia al trabajador"],
 }
 
 const TITULOS: Record<string, string> = {
@@ -81,6 +83,7 @@ const TITULOS: Record<string, string> = {
   ra: "16. Reservas y Amenities (RA)",
   cv: "17. Visor de Mensajes (CV)",
   fi: "18. Finanzas y Morosidad (FI)",
+  pe: "19. Personal y Servicios (PE)",
 }
 
 const COMO_LLEGAR: Record<string, string> = {
@@ -102,6 +105,7 @@ const COMO_LLEGAR: Record<string, string> = {
   ra: "Operaciones → Reservas y Amenities → quincho/hidrolavadora TEST y calendario",
   cv: "Comunidad → Visor de Mensajes → avisos TEST, actas GD y plantillas",
   fi: "Finanzas → Gastos Comunes → fondos/emisión TEST · Recaudación → cobros y moras TEST",
+  pe: "Personas → Personal → ficha 99.999.999-9 · Operaciones → Bitácora (cierre turno) · Proveedores y Servicios",
 }
 
 const COMO_LLEGAR_HREF: Record<string, string> = {
@@ -121,6 +125,7 @@ const COMO_LLEGAR_HREF: Record<string, string> = {
   ra: "/operaciones/reservas",
   cv: "/comunidad/visor",
   fi: "/finanzas/gastos-comunes",
+  pe: "/personas/personal",
 }
 
 interface SeedReport {
@@ -144,7 +149,6 @@ const PENDIENTES: { id: string; archivo: string; lineas: number; desc: string; p
   { id: "CT", archivo: "CT - Certificados.md", lineas: 44, desc: "Documentos oficiales y acreditaciones", pruebas: ["Certificado Unidad Al Día con firma digital", "Plantilla CT con datos ST"] },
   { id: "GD", archivo: "GD - Gestión de Directiva.md", lineas: 40, desc: "Gobernanza y actas", pruebas: ["Acta con firma directiva", "Votación asamblea por RP"] },
   { id: "GE", archivo: "GE - Gestion de Solicitudes.md", lineas: 54, desc: "Tickets con workflow automático", pruebas: ["Ticket Nuevo → En Revisión al abrir", "Requiere Acción Vecino → En Proceso", "SLA dashboard GE"] },
-  { id: "PE", archivo: "PE - Personal y Servicios.md", lineas: 93, desc: "RRHH, contratos, bitácora y turnos", pruebas: ["Ficha trabajador con AFP/Isapre y banco", "Feriados → proyección reemplazos y costo FI", "Bitácora visita/encomienda/contratista", "Cierre turno con checklist jornada"] },
   { id: "PI", archivo: "PI - Portal Inmobiliario.md", lineas: 27, desc: "Vitrina venta/arriendo unidades", pruebas: ["Unidad en portal con VU", "Contacto interesado → MP"] },
   { id: "RE", archivo: "RE - Reporteria y Dashboards.md", lineas: 66, desc: "Dashboards y segmentación", pruebas: ["Dashboard demográfico/operativo/financiero", "Segmentación EF+MP+tenencia + distribución CO/RE", "RE_DASHBOARD_VIEW auditado"] },
 ]
@@ -189,6 +193,7 @@ export default function QaLabPage() {
     { id: "ra", label: TITULOS["ra"]!, rank: 8, fase: "Paso 16" },
     { id: "cv", label: TITULOS["cv"]!, rank: 8, fase: "Paso 17" },
     { id: "fi", label: TITULOS["fi"]!, rank: 9, fase: "Paso 18" },
+    { id: "pe", label: TITULOS["pe"]!, rank: 4, fase: "Paso 19" },
   ]
 
   const FASE_MODULOS: Record<string, string[]> = {
@@ -206,7 +211,8 @@ export default function QaLabPage() {
     "11": ["mt"],
     "12": ["ra", "cv"],
     "13": ["fi"],
-    "todo": ["ma", "tu", "mp", "ef-macro", "ef-micro", "ef-unidad", "vu", "pi", "ad", "gd", "co", "ge", "ir", "in", "mt", "ra", "cv", "fi"],
+    "14": ["pe"],
+    "todo": ["ma", "tu", "mp", "ef-macro", "ef-micro", "ef-unidad", "vu", "pi", "ad", "gd", "co", "ge", "ir", "in", "mt", "ra", "cv", "fi", "pe"],
   }
 
   const LABEL_FASE: Record<string, string> = {
@@ -224,6 +230,7 @@ export default function QaLabPage() {
     "11": "12. MT — preventivos y proyectos",
     "12": "13. RA+CV — reservas, avisos y actas en visor",
     "13": "14. FI — fondos, emisión GC y morosidad",
+    "14": "15. PE — fichas, bitácora y cierre de turno",
     "todo": "Carga completa",
   }
 
@@ -707,6 +714,89 @@ export default function QaLabPage() {
     return { id: "fi", label: TITULOS["fi"]!, rank: 9, status: errores.length ? "error" : "ok", count: 1, errores, pasos }
   }, [])
 
+  const cargarFase14PE = React.useCallback(async (): Promise<ModReport> => {
+    const s = useCompassStore.getState()
+    const pasos: Paso[] = (PLAN["pe"]! as string[]).map(desc => ({ desc, estado: "pendiente" as ModuleState }))
+    const hoy = new Date().toISOString().slice(0, 10)
+    const anioProximo = new Date().getFullYear() + 1
+    const mesProyeccion = `${anioProximo}-01`
+    // 1) Ficha integral del trabajador TEST con FKs a maestros legales
+    const p99 = s.personas.find(p => p.id === "test-p-99")
+    const r1 = p99 ? s.savePersona({
+      ...p99,
+      datosLaborales: {
+        id: "l-test-pe", cargo: "Conserje Turno Noche TEST", afp: "Habitat", prevision: "FONASA",
+        fechaIngreso: "2026-01-05", tipoContrato: "indefinido", afpId: "afp-habitat", saludId: "fonasa",
+        bancoId: "banco-estado", asignacionFamiliarId: "asf-a", cargas: 1, jornadaBaseHoras: 45,
+        contactosEmergencia: [{ id: "test-pe-ce-1", nombre: "Contacto Emergencia TEST", telefono: "+56 9 9999 0000", relacion: "Pareja" }],
+      },
+    } as any) : { ok: false, error: "test-p-99 no existe" }
+    if (!r1.ok || !s.personas.find(p => p.id === "test-p-99")?.datosLaborales?.afpId) { pasos[0]!.estado = "error"; pasos[0]!.error = r1.ok ? "Ficha sin FKs legales" : r1.error } else pasos[0]!.estado = "ok"
+    // 2) Hora extra + evaluación de desempeño auditadas
+    const r2a = s.registrarHoraExtraPE("test-p-99", { fecha: hoy, horas: 2, motivo: "Reemplazo jornada tarde TEST" })
+    const r2b = s.registrarEvaluacionPE("test-p-99", { fecha: hoy, puntaje: 6, comentarios: "Desempeño TEST destacado" })
+    if (!r2a.ok || !r2b.ok || (s.eventos.filter(e => e.tipoAccion === "PE_HORA_EXTRA_REGISTRADA" || e.tipoAccion === "PE_EVALUACION_REGISTRADA").length < 2)) { pasos[1]!.estado = "error"; pasos[1]!.error = r2a.error ?? r2b.error } else pasos[1]!.estado = "ok"
+    // 3) Feriado TEST irrenunciable → proyección de cobertura
+    s.saveMaestro("feriados", { id: `test-feriado-${anioProximo}-0101`, fecha: `${anioProximo}-01-01`, nombre: "Año Nuevo TEST", irrenunciable: true } as any)
+    const proyeccionBase = calcularProyeccionCobertura({ feriados: useCompassStore.getState().maestros.feriados, mesAnio: mesProyeccion })
+    if (proyeccionBase.diasFeriados !== 1 || proyeccionBase.reemplazosNecesarios !== 2) { pasos[2]!.estado = "error"; pasos[2]!.error = `Cobertura: ${proyeccionBase.diasFeriados} feriado(s), ${proyeccionBase.reemplazosNecesarios} reemplazo(s)` } else pasos[2]!.estado = "ok"
+    // 4) Enviar proyección de costos a FI con PL pendiente
+    const r4 = s.enviarProyeccionCostoFI(mesProyeccion, { costoParche: 30000, costoDiaExtra: 25000, id: "test-pe-proy" })
+    const proy = useCompassStore.getState().proyeccionesPE.find(p => p.id === "test-pe-proy")
+    if (!r4.ok || !proy || proy.liquidacionPLReferencia !== "pendiente") { pasos[3]!.estado = "error"; pasos[3]!.error = r4.error ?? "Proyección sin marcador PL" } else pasos[3]!.estado = "ok"
+    // 5) Visita pre-agendada → ingresada sella hora
+    const r5a = s.saveBitacoraVisitaPE({ id: "test-pe-visita", fecha: hoy, nombre: "Visita QA TEST", dni: "16.444.555-0", unidadId: "test-u-999", destinoPersonaId: "test-p-88", jornadaId: "j-manana", origenAgenda: "pre_agendada", estado: "agendada" } as any)
+    const r5b = s.ingresarBitacoraVisitaPE("test-pe-visita")
+    const visitaIngresada = useCompassStore.getState().bitacoraVisitasPE.find(v => v.id === "test-pe-visita")
+    if (!r5a.ok || !r5b.ok || visitaIngresada?.estado !== "ingresada" || !visitaIngresada.horaIngreso) { pasos[4]!.estado = "error"; pasos[4]!.error = r5a.error ?? r5b.error ?? "Hora de ingreso no sellada" } else pasos[4]!.estado = "ok"
+    // 6) Encomienda TEST con evidencia D1 y retiro
+    const r6a = s.saveEncomiendaPE({ id: "test-pe-enc", courierId: "cour-chilexpress", destinatarioPersonaId: "test-p-99", descripcionPaquete: "Paquete TEST", evidencia: { nombre: "test-paquete.jpg", tipoMime: "image/jpeg", tamanoKB: 80, url: "https://placeholder.supabase.co/test-paquete.jpg" }, fechaRecepcion: hoy, estado: "recibida" } as any)
+    const r6b = s.registrarRetiroEncomiendaPE("test-pe-enc", "TEST Persona QA Uno")
+    if (!r6a.ok || !r6b.ok) { pasos[5]!.estado = "error"; pasos[5]!.error = r6a.error ?? r6b.error } else pasos[5]!.estado = "ok"
+    // 7) Contratista agendado por residente → confirmación sella hora
+    const r7a = s.saveIngresoContratistaPE({ id: "test-pe-cont", contratistaId: "cont-gasfiteria", motivo: "Reparación de fuga en cocina Depto 999 TEST", unidadId: "test-u-999", fecha: hoy, jornadaId: "j-tarde", agendadoPor: "residente", personaAgendaId: "test-p-88", estado: "agendado" } as any)
+    const r7b = s.confirmarIngresoContratistaPE("test-pe-cont")
+    if (!r7a.ok || !r7b.ok) { pasos[6]!.estado = "error"; pasos[6]!.error = r7a.error ?? r7b.error } else pasos[6]!.estado = "ok"
+    // 8) Proveedor TEST + mantención mensual vencida → alerta
+    const ayer = new Date(Date.now() - 86400000).toISOString().slice(0, 10)
+    const r8a = s.saveProveedorPE({ id: "test-pe-prov", rut: "76.543.210-3", nombre: "Ascensores TEST Ltda.", rubro: "Ascensores", telefono: "+56 2 9999 8888", activo: true } as any)
+    const r8b = s.saveMantencionPE({ id: "test-pe-mant", proveedorId: "test-pe-prov", descripcion: "Mantención ascensor Torre TEST", periodicidadMeses: 1, proximaFecha: ayer, alertaDiasAntes: 5, activo: true } as any)
+    if (!r8a.ok || !r8b.ok) { pasos[7]!.estado = "error"; pasos[7]!.error = r8a.error ?? r8b.error } else pasos[7]!.estado = "ok"
+    // 9) Visita técnica reprograma el ciclo preventivo un mes
+    const r9 = s.registrarVisitaTecnicaPE({ id: "test-pe-vt", proveedorId: "test-pe-prov", mantencionId: "test-pe-mant", tecnicoNombre: "Técnico TEST", fecha: hoy, trabajoRealizado: "Inspección completa de cabina TEST", supervisorPersonaId: "test-p-99" } as any)
+    const proxima = useCompassStore.getState().mantencionesPreventivasPE.find(m => m.id === "test-pe-mant")?.proximaFecha
+    const mesSiguiente = (() => { const d = new Date(`${hoy}T00:00:00`); d.setMonth(d.getMonth() + 1); return d.toISOString().slice(0, 10) })()
+    if (!r9.ok || proxima !== mesSiguiente) { pasos[8]!.estado = "error"; pasos[8]!.error = r9.error ?? `Próxima fecha ${proxima} != ${mesSiguiente}` } else pasos[8]!.estado = "ok"
+    // 10) Cierre de turno nocturno con incidencias → notify administración + copia
+    const r10a = s.iniciarTurnoPE("test-p-99", "j-noche")
+    const r10b = s.cerrarTurnoPE({
+      id: "test-pe-cierre",
+      fecha: hoy,
+      hora: "20:30",
+      jornadaReportadaId: "j-noche",
+      trabajadorPersonaId: "test-p-99",
+      novedadesGenerales: "Rondas nocturnas completas TEST.",
+      incidencias: { hubo: true, descripcion: "Luminaria del perímetro norte fuera de servicio TEST.", evidencias: [{ nombre: "test-luminaria.jpg", tipoMime: "image/jpeg", tamanoKB: 95, url: "https://placeholder.supabase.co/test-luminaria.jpg" }] },
+      checklistInstalaciones: [
+        { item: "Perímetro verificado con rondas", ok: true },
+        { item: "Puertas de acceso aseguradas", ok: true },
+        { item: "Iluminación nocturna operativa", ok: false, observacion: "Luminaria norte" },
+        { item: "Registro de ronda al día", ok: true },
+      ],
+      checklistEquipamiento: [
+        { item: "Celular de turno operativo", ok: true },
+        { item: "PC de conserjería operativo", ok: true },
+        { item: "Llaves maestras completas", ok: true },
+      ],
+    } as any)
+    const notifPE = useCompassStore.getState().notificaciones.filter(n => n.moduloOrigen === "PE" && n.asunto.includes("Cierre de turno"))
+    const copiaTrabajador = notifPE.some(n => n.destinatarioRol === "personal" && n.destinatarioPersonaId === "test-p-99")
+    const avisoAdmin = notifPE.some(n => n.destinatarioRol === "administracion")
+    if (!r10a.ok || !r10b.ok || !copiaTrabajador || !avisoAdmin) { pasos[9]!.estado = "error"; pasos[9]!.error = r10a.error ?? r10b.error ?? `Notificaciones admin/copía: ${avisoAdmin}/${copiaTrabajador}` } else pasos[9]!.estado = "ok"
+    const errores = pasos.filter(p => p.estado === "error").map(p => p.error || p.desc)
+    return { id: "pe", label: TITULOS["pe"]!, rank: 4, status: errores.length ? "error" : "ok", count: 1, errores, pasos }
+  }, [])
+
   const buildHistoria = React.useCallback((mods: ModReport[]): SeedReport["historia"] => {    return HISTORIA.map(h => ({ capitulo: h.capitulo, estado: (() => {
       const rankMods = mods.filter(m => m.rank === h.rank)
       if (rankMods.length === 0) return "pendiente" as ModuleState
@@ -872,6 +962,16 @@ export default function QaLabPage() {
         mods.push(await cargarFase12RA())
         mods.push(await cargarFase13FI())
       }
+      if (fase === "14") {
+        mods.push(await cargarFase0())
+        mods.push(await cargarFase1TU())
+        mods.push(await cargarFase1MP())
+        mods.push(await cargarFase2Macro())
+        mods.push(await cargarFase2Micro())
+        mods.push(await cargarFase2Unidad())
+        mods.push(await cargarFase3VU())
+        mods.push(await cargarFase14PE())
+      }
       if (fase === "todo") {
         mods.push(await cargarFase8GE())
         mods.push(await cargarFase9IR())
@@ -880,6 +980,7 @@ export default function QaLabPage() {
         mods.push(await cargarFase12RA())
         mods.push(await cargarFase12CV())
         mods.push(await cargarFase13FI())
+        mods.push(await cargarFase14PE())
       }
       const historia = buildHistoria(mods)
       const erroresGlobales = mods.flatMap(m => m.errores.map(e => `${m.label}: ${e}`))
@@ -892,7 +993,7 @@ export default function QaLabPage() {
     } finally {
       setLoading(false)
     }
-  }, [cargarFase0, cargarFase1MP, cargarFase1TU, cargarFase2Macro, cargarFase2Micro, cargarFase2Unidad, cargarFase3VU, cargarFase4PI, cargarFase5AD, cargarFase6GD, cargarFase7CO, cargarFase8GE, cargarFase9IR, cargarFase10IN, cargarFase11MT, cargarFase12RA, cargarFase12CV, cargarFase13FI, buildHistoria, ensureHydrated])
+  }, [cargarFase0, cargarFase1MP, cargarFase1TU, cargarFase2Macro, cargarFase2Micro, cargarFase2Unidad, cargarFase3VU, cargarFase4PI, cargarFase5AD, cargarFase6GD, cargarFase7CO, cargarFase8GE, cargarFase9IR, cargarFase10IN, cargarFase11MT, cargarFase12RA, cargarFase12CV, cargarFase13FI, cargarFase14PE, buildHistoria, ensureHydrated])
 
   const limpiar = React.useCallback(async () => {
     if (!ensureHydrated()) return
@@ -907,6 +1008,24 @@ export default function QaLabPage() {
       egresosFI: st.egresosFI.filter(e => !e.id.startsWith("test-")),
       fondosFI: st.fondosFI.filter(f => !f.id.startsWith("test-")),
       notificaciones: st.notificaciones.filter(n => n.moduloOrigen !== "FI"),
+    }))
+    // PE: las colecciones operacionales TEST se purgan antes de personas y
+    // unidades; los cierres de turno usan id generado, así que se filtran por
+    // trabajador TEST (y por prefijo para los creados con id determinista).
+    useCompassStore.setState(st => ({
+      bitacoraVisitasPE: st.bitacoraVisitasPE.filter(v => !v.id.startsWith("test-")),
+      encomiendasPE: st.encomiendasPE.filter(e => !e.id.startsWith("test-")),
+      ingresosContratistasPE: st.ingresosContratistasPE.filter(i => !i.id.startsWith("test-")),
+      proveedoresPE: st.proveedoresPE.filter(p => !p.id.startsWith("test-")),
+      mantencionesPreventivasPE: st.mantencionesPreventivasPE.filter(m => !m.id.startsWith("test-")),
+      visitasTecnicasPE: st.visitasTecnicasPE.filter(v => !v.id.startsWith("test-")),
+      cierresTurnoPE: st.cierresTurnoPE.filter(c => !c.trabajadorPersonaId.startsWith("test-") && !c.id.startsWith("test-")),
+      proyeccionesPE: st.proyeccionesPE.filter(p => !p.id.startsWith("test-")),
+      notificaciones: st.notificaciones.filter(n => n.moduloOrigen !== "PE"),
+    }))
+    // Feriado TEST del calendario de proyección.
+    useCompassStore.setState(st => ({
+      maestros: { ...st.maestros, feriados: st.maestros.feriados.filter(f => !f.id.startsWith("test-")) },
     }))
     // inverso MT -> IN -> IR -> GE -> CO -> GD -> AD -> PI -> VU -> EF unidades -> EF micro -> EF macro -> MP -> TU -> MA
     // MT

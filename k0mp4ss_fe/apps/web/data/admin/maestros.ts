@@ -46,6 +46,65 @@ export const MUTUALES_CAJAS: MutualCaja[] = [
   { id: "cmac-losheroes", nombre: "Caja de Compensación Los Héroes" },
 ];
 
+// Tramos legales de asignación familiar (referencia vigente; MA los mantiene
+// actualizables y las fichas de PE los referencian por id).
+export interface AsignacionFamiliar {
+  id: string;
+  nombre: string;
+  monto: number;
+  rangoRentas?: string;
+}
+
+export const ASIGNACION_FAMILIAR: AsignacionFamiliar[] = [
+  { id: "asf-a", nombre: "Tramo A", monto: 20622, rangoRentas: "Hasta $658.409" },
+  { id: "asf-b", nombre: "Tramo B", monto: 30314, rangoRentas: "$658.410 - $963.479" },
+  { id: "asf-c", nombre: "Tramo C", monto: 47604, rangoRentas: "$963.480 - $1.502.368" },
+  { id: "asf-d", nombre: "Tramo D", monto: 61590, rangoRentas: "$1.502.369 o más" },
+];
+
+// Jornadas operativas de conserjería (PE): visitas, contratistas y cierre de
+// turno las referencian por id.
+export interface Jornada {
+  id: string;
+  nombre: string;
+}
+
+export const JORNADAS: Jornada[] = [
+  { id: "j-manana", nombre: "Mañana" },
+  { id: "j-tarde", nombre: "Tarde" },
+  { id: "j-noche", nombre: "Noche" },
+];
+
+// Couriers/apps de encomiendas: normaliza el registro sin escritura libre.
+export interface Courier {
+  id: string;
+  nombre: string;
+}
+
+export const COURIERS: Courier[] = [
+  { id: "cour-chilexpress", nombre: "Chilexpress" },
+  { id: "cour-starken", nombre: "Starken" },
+  { id: "cour-pedidosya", nombre: "PedidosYa" },
+  { id: "cour-uberflash", nombre: "Uber Flash" },
+  { id: "cour-correos", nombre: "Correos Chile" },
+  { id: "cour-otro", nombre: "Otro Courier" },
+];
+
+// Empresas contratistas concurrentes o servicios autorizados (PE §3).
+export interface Contratista {
+  id: string;
+  nombre: string;
+  rubro?: string;
+  telefono?: string;
+}
+
+export const CONTRATISTAS: Contratista[] = [
+  { id: "cont-gasfiteria", nombre: "Gasfitería Don Pedro", rubro: "Gasfitería", telefono: "+56 9 6000 1001" },
+  { id: "cont-electricidad", nombre: "Electricidad Sur Ltda.", rubro: "Electricidad", telefono: "+56 9 6000 1002" },
+  { id: "cont-jardineria", nombre: "Jardines Verdes SpA", rubro: "Jardinería", telefono: "+56 9 6000 1003" },
+  { id: "cont-mudanzas", nombre: "Mudanzas Rápidas", rubro: "Mudanzas", telefono: "+56 9 6000 1004" },
+];
+
 export interface Feriado {
   id: string;
   fecha: string; // YYYY-MM-DD
