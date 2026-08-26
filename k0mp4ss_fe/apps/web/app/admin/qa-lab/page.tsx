@@ -698,11 +698,17 @@ export default function QaLabPage() {
       moraOk = moraOk && (useCompassStore.getState().cobrosFI.find(c => c.id === cobroVencido.id)?.moras.length ?? 0) >= 1
     }
     if (!moraOk) { pasos[5]!.estado = "error"; pasos[5]!.error = r6a.error ?? "Mora no aplicada" } else pasos[5]!.estado = "ok"
-    // 7) Pago con descuento justificado sobre la multa TEST → informe de diferencia inmutable
+    // 7) Pago con descuento justificado sobre la multa TEST → informe de diferencia inmutable.
+    // El descuento es proporcional (10%, mínimo $1) porque una multa % GC sin emisión
+    // previa cae al valor nominal del catálogo (ej. $50) y un descuento fijo de $1000
+    // daría un monto negativo que el store rechaza siempre.
     const cobroMulta = useCompassStore.getState().cobrosFI.find(c => c.concepto === "multa_in")
     if (!cobroMulta) { pasos[6]!.estado = "error"; pasos[6]!.error = "No existe el cobro multa_in (ejecuta la fase IN)" } else {
-      const sinJustificacion = s.registrarPagoFI(cobroMulta.id, { monto: cobroMulta.montoBase - 1000, medio: "efectivo" })
-      const conJustificacion = s.registrarPagoFI(cobroMulta.id, { monto: cobroMulta.montoBase - 1000, medio: "efectivo", ajusteJustificacion: "Condonación parcial autorizada por la directiva TEST." })
+      const pendienteMulta = cobroMulta.montoBase + cobroMulta.moras.reduce((a, m) => a + m.monto, 0) - cobroMulta.pagos.reduce((a, p) => a + p.monto, 0)
+      const descuento = Math.max(1, Math.round(pendienteMulta * 0.1))
+      const montoConDescuento = pendienteMulta - descuento
+      const sinJustificacion = s.registrarPagoFI(cobroMulta.id, { monto: montoConDescuento, medio: "efectivo" })
+      const conJustificacion = s.registrarPagoFI(cobroMulta.id, { monto: montoConDescuento, medio: "efectivo", ajusteJustificacion: "Condonación parcial autorizada por la directiva TEST." })
       const dif = useCompassStore.getState().cobrosFI.find(c => c.id === cobroMulta.id)?.diferencias.length === 1
       if (!sinJustificacion.ok && conJustificacion.ok && dif && s.eventos.some(e => e.tipoAccion === "FI_MANUAL_DISCOUNT")) pasos[6]!.estado = "ok"
       else { pasos[6]!.estado = "error"; pasos[6]!.error = conJustificacion.error ?? `Diferencias: ${useCompassStore.getState().cobrosFI.find(c => c.id === cobroMulta.id)?.diferencias.length}` }
@@ -859,9 +865,11 @@ export default function QaLabPage() {
     const s = useCompassStore.getState()
     const pasos: Paso[] = (PLAN["ct"]! as string[]).map(desc => ({ desc, estado: "pendiente" as ModuleState }))
     const unidadTest = "test-u-999"
-    // 1) Residencia TEST sobre vínculo activo del depto TEST
-    const r1 = s.generarCertificadoCT({ tipo: "residencia", personaId: "test-p-88", unidadId: unidadTest, solicitanteNombre: "TEST Persona QA Dos" })
-    const certRes = useCompassStore.getState().certificadosCT.find(c => c.tipo === "residencia" && c.personaId === "test-p-88")
+    // 1) Residencia TEST sobre vínculo activo del depto TEST. Se usa el
+    // propietario porque su vínculo no tiene fechaFin; el arrendatario TEST
+    // tiene contrato a plazo y el store exige vínculo sin fechaFin (vigente).
+    const r1 = s.generarCertificadoCT({ tipo: "residencia", personaId: "test-p-99", unidadId: unidadTest, solicitanteNombre: "TEST Persona QA Uno" })
+    const certRes = useCompassStore.getState().certificadosCT.find(c => c.tipo === "residencia" && c.personaId === "test-p-99")
     if (!r1.ok || !certRes || !certRes.folio.startsWith("CT-") || !certRes.codigoVerificacion.startsWith("VC-")) {
       pasos[0]!.estado = "error"; pasos[0]!.error = r1.error ?? "Certificado residencia sin folio/código"
     } else pasos[0]!.estado = "ok"
@@ -874,9 +882,11 @@ export default function QaLabPage() {
       const r2 = s.generarCertificadoCT({ tipo: "al_dia", unidadId: unidadTest, solicitanteNombre: "TEST QA" })
       if (r2.ok || !String(r2.error).includes("saldo")) { pasos[1]!.estado = "error"; pasos[1]!.error = r2.ok ? "El Al Día pasó con deuda" : String(r2.error) } else pasos[1]!.estado = "ok"
     }
-    // 3) Pagar cobro vencido TEST → Al Día emitido
-    const vencidos = s.cobrosFI.filter(c => c.unidadId === unidadTest && c.concepto === "gasto_comun")
-    for (const c of vencidos) {
+    // 3) Pagar TODOS los cargos pendientes TEST (GC, multa IN, tarifas/penalizaciones
+    // RA y garantía retenida) → Al Día emitido. El certificado exige saldo total <= 0
+    // de la unidad; pagar solo gasto_comun deja cargos cross-módulo vivos y lo bloquea.
+    const pendientesUnidad = s.cobrosFI.filter(c => c.unidadId === unidadTest)
+    for (const c of pendientesUnidad) {
       const pendiente = c.montoBase + c.moras.reduce((a, m) => a + m.monto, 0) - c.pagos.reduce((a, p) => a + p.monto, 0)
       if (pendiente > 0) s.registrarPagoFI(c.id, { monto: pendiente, medio: "transferencia TEST" })
     }
