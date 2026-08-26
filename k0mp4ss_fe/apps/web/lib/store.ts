@@ -100,6 +100,7 @@ import {
   ProyeccionPESchema,
   LiquidacionPLSchema,
   AdelantoPLSchema,
+  CertificadoCTSchema,
   MAESTRO_SCHEMAS,
   validarConEsquema,
   validarMaestro,
@@ -151,6 +152,7 @@ import {
   type ProyeccionPE,
   type LiquidacionPL,
   type AdelantoPL,
+  type CertificadoCT,
 } from "@/lib/schemas"
 import {
   calcularProyeccionCobertura,
@@ -290,7 +292,7 @@ const FONDOS_FI_SEED: FondoFI[] = [
   { id: "fondo-amenities", nombre: "Fondo de Amenities", tipo: "amenities", descripcion: "Centro de costos de reservas, tarifas y garantías de amenities.", activo: true },
 ]
 
-export const STORE_VERSION = 23
+export const STORE_VERSION = 24
 
 export interface MaestroCollections {
   afps: Afp[]
@@ -375,6 +377,8 @@ export interface CompassData {
   // Liquidaciones y Remuneraciones (PL)
   liquidacionesPL: LiquidacionPL[]
   adelantosPL: AdelantoPL[]
+  // Certificados (CT)
+  certificadosCT: CertificadoCT[]
 }
 
 interface CompassStore extends CompassData {
@@ -533,6 +537,16 @@ interface CompassStore extends CompassData {
   removeLiquidacionPL: (id: string) => StoreResult
   saveAdelantoPL: (adelanto: AdelantoPL) => StoreResult
   removeAdelantoPL: (id: string) => StoreResult
+  // Certificados (CT)
+  generarCertificadoCT: (input: {
+    tipo: "residencia" | "estado_cuenta" | "liquidacion_sueldo" | "al_dia"
+    unidadId?: string
+    personaId?: string
+    liquidacionId?: string
+    solicitanteNombre: string
+    id?: string
+  }) => StoreResult
+  removeCertificadoCT: (id: string) => StoreResult
 }
 
 function upsert<T extends { id: string }>(list: T[], item: T): T[] {
@@ -604,6 +618,7 @@ export const seedData = (): CompassData => ({
   proyeccionesPE: [],
   liquidacionesPL: [],
   adelantosPL: [],
+  certificadosCT: [],
   maestros: {
     afps: seedAFPS,
     previsionesSalud: seedPrevisionesSalud,
@@ -675,6 +690,7 @@ const ESQUEMAS_COLECCION = {
   proyeccionesPE: z.array(ProyeccionPESchema),
   liquidacionesPL: z.array(LiquidacionPLSchema),
   adelantosPL: z.array(AdelantoPLSchema),
+  certificadosCT: z.array(CertificadoCTSchema),
 } as const
 
 type ClaveColeccion = keyof typeof ESQUEMAS_COLECCION
@@ -4182,6 +4198,145 @@ export const useCompassStore = create<CompassStore>()(
         set(s => ({ adelantosPL: s.adelantosPL.filter(a => a.id !== id) }))
         return { ok: true }
       },
+
+      // --- CT: Certificados ---
+
+      generarCertificadoCT: (input) => {
+        if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
+        if (!input.solicitanteNombre || input.solicitanteNombre.trim().length === 0) {
+          return { ok: false, error: "Debe identificar al solicitante del certificado." }
+        }
+        const cfg = get().configuracion
+        const firmaUrl = cfg.firmaDigitalizadaUrl
+        if (firmaUrl && (/^data:/i.test(firmaUrl) || /^blob:/i.test(firmaUrl))) {
+          return { ok: false, error: "Media por referencia (D1): la firma digitalizada configurada en CF no puede estar embebida como base64/Blob." }
+        }
+
+        let unidadId = input.unidadId
+        let personaId = input.personaId
+        let origenRef = input.unidadId ?? input.personaId ?? input.liquidacionId
+        let resumen = ""
+        let detalle: [string, string][] = []
+        let evento: string
+
+        if (input.tipo === "residencia") {
+          if (!personaId || !unidadId) return { ok: false, error: "El certificado de residencia exige persona y unidad." }
+          const persona = get().personas.find(p => p.id === personaId)
+          if (!persona) return { ok: false, error: "La persona indicada no existe en el Maestro de Personas." }
+          if (!get().unidades.some(u => u.id === unidadId)) return { ok: false, error: "unidadId no existe en el inventario." }
+          // Requisito VU: solicitante Activo en la unidad.
+          const vinculoVigente = get().vinculos.find(v => v.personaId === personaId && v.unidadId === unidadId && !v.fechaFin)
+          if (!vinculoVigente) {
+            return { ok: false, error: "No se puede emitir: el solicitante no mantiene un vínculo activo en la unidad (VU)." }
+          }
+          origenRef = vinculoVigente.id
+          resumen = `Se certifica que ${persona.nombres} ${persona.apellidos} (RUT ${persona.rut}) reside actualmente en ${refUnidad(get, unidadId)} según los registros de vinculación vigentes.`
+          detalle = [
+            ["Residente", `${persona.nombres} ${persona.apellidos}`],
+            ["RUT", persona.rut],
+            ["Unidad", refUnidad(get, unidadId)],
+            ["Rol", vinculoVigente.rol],
+          ]
+          evento = "CT_GENERATE_RESIDENCE"
+        } else if (input.tipo === "estado_cuenta" || input.tipo === "al_dia") {
+          if (!unidadId) return { ok: false, error: `El certificado de ${input.tipo === "al_dia" ? "unidad al día" : "estado de cuenta"} exige una unidad.` }
+          if (!get().unidades.some(u => u.id === unidadId)) return { ok: false, error: "unidadId no existe en el inventario." }
+          const cobros = get().cobrosFI.filter(c => c.unidadId === unidadId)
+          const totalCargado = cobros.reduce((acc, c) => acc + exigibleTotal(c), 0)
+          const saldoPendienteTotal = cobros.reduce((acc, c) => acc + saldoPendiente(c), 0)
+          if (input.tipo === "al_dia" && saldoPendienteTotal > 0) {
+            return { ok: false, error: `No se puede emitir: la unidad mantiene $${saldoPendienteTotal.toLocaleString("es-CL")} pendiente(s). El certificado Al Día exige saldo <= 0.` }
+          }
+          const propietario = get().vinculos.find(v => v.unidadId === unidadId && v.rol === "propietario" && !v.fechaFin)
+          const nombreProp = propietario ? nombrePersona(get, propietario.personaId) : "—"
+          if (input.tipo === "estado_cuenta") {
+            resumen = `Estado de cuenta oficial de ${refUnidad(get, unidadId)}: detalle de gastos comunes pagados, cuotas extraordinarias y fondos pendientes según el libro de Finanzas.`
+            evento = "CT_GENERATE_FINANCIAL"
+          } else {
+            resumen = `Se certifica que la unidad ${refUnidad(get, unidadId)} NO registra deudas pendientes con la comunidad a la fecha de emisión.`
+            evento = "CT_GENERATE_AL_DIA"
+          }
+          detalle = [
+            ["Unidad", refUnidad(get, unidadId)],
+            ["Propietario", nombreProp],
+            ["Cobros registrados", String(cobros.length)],
+            ["Total cargado", `$${totalCargado.toLocaleString("es-CL")}`],
+            ["Saldo pendiente", `$${saldoPendienteTotal.toLocaleString("es-CL")}`],
+          ]
+        } else {
+          // liquidacion_sueldo
+          if (!input.liquidacionId) return { ok: false, error: "El certificado de liquidación exige una liquidación de PL." }
+          const liq = get().liquidacionesPL.find(l => l.id === input.liquidacionId)
+          if (!liq) return { ok: false, error: "liquidacionId no existe en Remuneraciones." }
+          if (liq.estado !== "confirmada") {
+            return { ok: false, error: "Solo liquidaciones confirmadas admiten certificado oficial (control tras cierre del mes)." }
+          }
+          unidadId = undefined
+          personaId = liq.trabajadorPersonaId
+          origenRef = liq.id
+          const trabajador = get().personas.find(p => p.id === liq.trabajadorPersonaId)
+          const nombreTrabajador = trabajador ? `${trabajador.nombres} ${trabajador.apellidos}` : liq.trabajadorPersonaId
+          resumen = `Se certifica la remuneración, descuentos legales y haberes de ${nombreTrabajador} correspondientes al periodo ${liq.periodo}, según la liquidación folio ${liq.folio} emitida por la administración.`
+          detalle = [
+            ["Trabajador", nombreTrabajador],
+            ["Periodo", liq.periodo],
+            ["Folio liquidación", liq.folio],
+            ["Total imponible", `$${liq.totalImponible.toLocaleString("es-CL")}`],
+            ["Total haberes", `$${liq.totalHaberes.toLocaleString("es-CL")}`],
+            ["Total descuentos legales", `$${liq.totalDescuentos.toLocaleString("es-CL")}`],
+            ["Líquido a pagar", `$${liq.liquidoAPagar.toLocaleString("es-CL")}`],
+          ]
+          evento = "CT_GENERATE_PAYROLL"
+        }
+
+        // Folio CT correlativo + código de verificación único.
+        const numeros = get().certificadosCT
+          .map(c => Number.parseInt(c.folio.replace(/^CT-/, ""), 10))
+          .filter(n => Number.isFinite(n))
+        const folio = `CT-${String((numeros.length > 0 ? Math.max(...numeros) : 0) + 1).padStart(4, "0")}`
+        let codigoVerificacion = `VC-${Math.random().toString(36).slice(2, 10).toUpperCase()}`
+        while (get().certificadosCT.some(c => c.codigoVerificacion === codigoVerificacion)) {
+          codigoVerificacion = `VC-${Math.random().toString(36).slice(2, 10).toUpperCase()}`
+        }
+
+        const registro: CertificadoCT = {
+          id: input.id ?? `ct-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          folio,
+          codigoVerificacion,
+          tipo: input.tipo,
+          ...(unidadId ? { unidadId } : {}),
+          ...(personaId ? { personaId } : {}),
+          ...(origenRef ? { origenRef } : {}),
+          solicitanteNombre: input.solicitanteNombre.trim(),
+          resumen,
+          detalle: detalle.map(([clave, valor]) => ({ clave, valor })),
+          ...(firmaUrl ? { firmaUrl } : {}),
+          fechaEmision: hoyISO(),
+        }
+        const validacion = validarConEsquema(CertificadoCTSchema, registro)
+        if (!validacion.ok) return validacion
+        set(s => ({ certificadosCT: [...s.certificadosCT, validacion.data] }))
+        registrarEvento(
+          set,
+          evento,
+          validacion.data.id,
+          `Certificado ${folio} (${validacion.data.tipo}) emitido para ${validacion.data.solicitanteNombre}; código de verificación ${codigoVerificacion}.`,
+          "CT"
+        )
+        return { ok: true }
+      },
+
+      removeCertificadoCT: (id) => {
+        if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
+        const certificado = get().certificadosCT.find(c => c.id === id)
+        if (!certificado) return { ok: false, error: "No se puede eliminar: el certificado no existe." }
+        // Historial de emisión auditablemente inmutable; solo registros TEST son removibles.
+        if (!id.startsWith("test-")) {
+          return { ok: false, error: "El historial de emisión es inmutable: los certificados emitidos no pueden eliminarse." }
+        }
+        set(s => ({ certificadosCT: s.certificadosCT.filter(c => c.id !== id) }))
+        return { ok: true }
+      },
     }),
     {
       name: "compass-store",
@@ -4236,6 +4391,7 @@ export const useCompassStore = create<CompassStore>()(
         proyeccionesPE: state.proyeccionesPE,
         liquidacionesPL: state.liquidacionesPL,
         adelantosPL: state.adelantosPL,
+        certificadosCT: state.certificadosCT,
       }),
       migrate: (persisted, version) => {
         const prev = (persisted ?? {}) as Partial<CompassData>
@@ -4446,6 +4602,14 @@ export const useCompassStore = create<CompassStore>()(
             ...result,
             liquidacionesPL: prev.liquidacionesPL ?? [],
             adelantosPL: prev.adelantosPL ?? [],
+          }
+        }
+        // CT (v24): historial de certificados emitidos (transaccional, nace
+        // vacía). Aditivo.
+        if ((version ?? 0) < 24) {
+          result = {
+            ...result,
+            certificadosCT: prev.certificadosCT ?? [],
           }
         }
         // TST-002: los stores que ya quedaron en v8 con unidades dañadas por este

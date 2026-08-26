@@ -1340,6 +1340,8 @@ export type BonoLiquidacion = z.infer<typeof BonoLiquidacionSchema>
 export type AdelantoPL = z.infer<typeof AdelantoPLSchema>
 export type EstadoAdelantoPL = z.infer<typeof EstadoAdelantoPLSchema>
 export type LiquidacionPL = z.infer<typeof LiquidacionPLSchema>
+export type TipoCertificadoCT = z.infer<typeof TipoCertificadoCTSchema>
+export type CertificadoCT = z.infer<typeof CertificadoCTSchema>
 
 // --- Liquidaciones y Remuneraciones (PL) ---
 
@@ -1422,6 +1424,39 @@ export const LiquidacionPLSchema = z.object({
   // Referencia contable FI ("pendiente" hasta confirmar).
   egresoFIReferencia: z.string().optional(),
   proyeccionPEReferencia: z.string().optional(),
+})
+
+// --- Certificados (CT) ---
+
+export const TIPOS_CERTIFICADO_CT = ["residencia", "estado_cuenta", "liquidacion_sueldo", "al_dia"] as const
+export const TipoCertificadoCTSchema = z.enum(TIPOS_CERTIFICADO_CT)
+
+// Certificado oficial emitido: snapshot inmutable del contenido usado al
+// generar el PDF + referencias D1 (la firma vive solo dentro del documento).
+export const CertificadoCTSchema = z.object({
+  id: IdEntidadSchema,
+  folio: z.string().min(1, "El folio es obligatorio."),
+  codigoVerificacion: z.string({ required_error: "El código de verificación es obligatorio." }).min(6, "El código de verificación debe tener al menos 6 caracteres."),
+  tipo: TipoCertificadoCTSchema,
+  unidadId: IdEntidadSchema.optional(),
+  personaId: IdEntidadSchema.optional(),
+  // Fuente del dato según tipología (vínculo VU, libro FI o liquidación PL).
+  origenRef: IdEntidadSchema.optional(),
+  solicitanteNombre: z.string({ required_error: "El solicitante es obligatorio." }).min(1, "Debe identificar al solicitante."),
+  resumen: z.string({ required_error: "El resumen del certificado es obligatorio." }).min(1, "El resumen del certificado es obligatorio."),
+  detalle: z.array(z.object({
+    clave: z.string().min(1, "La clave del detalle es obligatoria."),
+    valor: z.string().min(1, "El valor del detalle es obligatorio."),
+  })),
+  // Firma digitalizada usada: SOLO referencia (D1), jamás binario embebido.
+  firmaUrl: z
+    .string()
+    .max(2048, "La URL excede el largo permitido.")
+    .refine((valor) => !/^data:/i.test(valor) && !/^blob:/i.test(valor), {
+      message: "Media por referencia (D1): la firma debe ser una URL, no contenido embebido.",
+    })
+    .optional(),
+  fechaEmision: FechaISOSchema,
 })
 
 // --- Utilidades de validación para el store ---
