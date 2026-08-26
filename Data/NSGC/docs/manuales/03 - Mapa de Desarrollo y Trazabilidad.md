@@ -37,7 +37,7 @@ Este documento vincula la arquitectura del menú con los archivos de especificac
 | 17 | 3 | GE | `GE - Gestión de Solicitudes.md` | Solicitudes | `/operaciones/solicitudes` | 🟢 Completado (`GE-gestion-solicitudes` archivado `2026-08-25`, Sesión 2 NSGC) |
 | 18 | 3 | AM | `AM - Auditoría y Métricas.md` | Auditoría | `/admin/metricas` | 🟡 Documentado |
 | 19 | 3 | RE | `RE - Reportería y Dashboards.md` | Informes | `/reportes` | ⏳ Pendiente |
-| 20 | 4 | PE | `PE - Personal y Servicios.md` | Personal / Bitácora | `/personas/personal` | ⏳ Pendiente |
+| **20** | **4** | **PE** | `PE - Personal y Servicios.md` | Personal / Bitácora | `/personas/personal` (+ Bitácora `/operaciones/bitacora` + Proveedores `/operaciones/proveedores`) | 🟢 Completado (`PE-personal-servicios` archivado `2026-08-25`, Sesión 6 NSGC; proyección de costos viaja a FI con `liquidacionPLReferencia` pendiente a PL) |
 | 21 | 4 | PL | `PL - Liquidaciones y Remuneraciones.md` | Remuneraciones | `/finanzas/remuneraciones` | ⏳ Pendiente |
 | 22 | 4 | RA | `RA - Reservas y Amenities.md` | Reservas y Amenities | `/operaciones/reservas` | 🟢 Completado (`RA-reservas-amenities` archivado `2026-08-25`, Sesión 4 NSGC) |
 | 23 | 4 | IR | `IR - Inventario y Recursos.md` | Recursos y EPP | `/inventario/recursos` | 🟢 Completado (`IR-inventario-recursos` archivado `2026-08-25`, Sesión 3 NSGC) |
@@ -70,3 +70,4 @@ Para asegurar un desarrollo fluido, seguiremos estas reglas de oro:
 - El componente **AppSidebar.tsx** ya tiene configuradas todas estas rutas (ES como filtrado de EF `u-E-*` desde v8).
 - Las carpetas en `apps/web/app/` deben crearse siguiendo exactamente la columna **Ruta Kebab-case**.
 - Los estados `🟡 Documentado (sucio)` indican spec más nuevo que su archive — ejecutar `/cierra-modulo` para re-archivar o revertir.
+> Cambios Sesión 6 NSGC (`2026-08-25`): `PE` pasa a 🟢 Completado (store v21→v22); cierra pendiente D3 (`asignacionFamiliar`) y añade maestros operativos `jornadas/couriers/contratistas`; paso qa-lab 15 (PE) con limpieza inversa; sidebar suma Proveedores y Servicios.

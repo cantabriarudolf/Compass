@@ -336,6 +336,36 @@ Integraciones entrantes (patrón inverso): `aplicarInfraccionIN` crea cobro `mul
 
 ---
 
+### 10. Store + Seed — Sesión 6 NSGC (PE)
+
+#### 10.1 Nuevos seeds en `admin/maestros.ts` (store v22)
+
+| Maestro | ID pattern | Registros | Consumidor |
+|---------|-----------|-----------|------------|
+| `ASIGNACION_FAMILIAR` → `maestros.asignacionFamiliar` | `asf-<tramo>` | 4 tramos con monto y rango de rentas | Fichas PE (`asignacionFamiliarId`) |
+| `JORNADAS` → `maestros.jornadas` | `j-<slug>` | Mañana / Tarde / Noche | Visitas, contratistas, cierre de turno |
+| `COURIERS` → `maestros.couriers` | `cour-<slug>` | Chilexpress, Starken, PedidosYa, Uber Flash, Correos Chile, Otro | Encomiendas |
+| `CONTRATISTAS` → `maestros.contratistas` | `cont-<slug>` | 4 empresas autorizadas con rubro/teléfono | Ingresos de contratistas |
+
+Cierra el pendiente D3/MA: la colección legal `asignacionFamiliar` ya referenciable por fichas. `removeMaestro` bloquea estos maestros en uso.
+
+#### 10.2 Colecciones store PE (vacías salvo maestros)
+
+| Colección | Store | Contenido | Acciones repository |
+|-----------|-------|-----------|---------------------|
+| `bitacoraVisitasPE` | v22 | Visitas con jornada FK, pre-agenda o sin aviso, hora sellada al ingresar | `saveBitacoraVisitaPE`, `ingresarBitacoraVisitaPE`, `removeBitacoraVisitaPE` (bloquea ingresadas) |
+| `encomiendasPE` | v22 | Courier FK + evidencia D1 + retiro registrado | `saveEncomiendaPE` (`PE_ENCOMIENDA_RECIBIDA`), `registrarRetiroEncomiendaPE`, `removeEncomiendaPE` |
+| `ingresosContratistasPE` | v22 | Contratista FK, motivo obligatorio ≥5, agendadoPor residente/admin | `saveIngresoContratistaPE`, `confirmarIngresoContratistaPE`, `removeIngresoContratistaPE` |
+| `proveedoresPE` | v22 | RUT validado, nombre único, rubro, activo | `saveProveedorPE` (dedupe), `removeProveedorPE` (bloqueado con historial) |
+| `mantencionesPreventivasPE` | v22 | Ciclo {periodicidadMeses, proximaFecha, alertaDiasAntes} | `saveMantencionPE`, `removeMantencionPE` |
+| `visitasTecnicasPE` | v22 | Libro inmutable; reprograma la mantención vinculada | `registrarVisitaTecnicaPE` (`PE_VISITA_TECNICA`) |
+| `cierresTurnoPE` | v22 | Protocolo anti-negligencia, checklist snapshot por jornada, historialCambios inmutable | `cerrarTurnoPE` (notify admin + copia trabajador), `editarCierreTurnoPE` (`PE_CIERRE_EDITADO`), `removeCierreTurnoPE` (solo día en curso o TEST) |
+| `proyeccionesPE` | v22 | Proyección feriados→costos enviada a FI con `liquidacionPLReferencia:"pendiente"` | `enviarProyeccionCostoFI` (`PE_PROYECCION_ENVIADA`) |
+
+Profundización aditiva de `ExtensionLaboralSchema` dentro de `personas` (FKs legales validadas en `savePersona`; evento `PE_FICHA_SAVED`). Helpers puros en `lib/personal-utils.ts`. Consumidores: `/personas/personal`, `/operaciones/bitacora`, `/operaciones/proveedores`. Dump completo en `39 - MK - Data Dump Personal y Servicios.md`.
+
+---
+
 ## 🔗 Mapa de Dependencias
 
 ```
@@ -375,5 +405,5 @@ Cuando se conecte cada módulo al backend NestJS, este es el orden sugerido:
 
 ---
 
-*Última actualización: 25 de Agosto 2026 — Sesión 2 NSGC (seed plantillas-co.ts + colecciones store CO/GE v14/v15)*
+*Última actualización: 25 de Agosto 2026 — Sesión 6 NSGC (seeds maestros legales/operativos PE + colecciones store PE v22)*
 *Generado para trazabilidad del proyecto Compass/NSGC*
