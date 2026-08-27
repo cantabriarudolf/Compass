@@ -410,6 +410,14 @@ Cuando se conecte cada módulo al backend NestJS, este es el orden sugerido:
 
 ---
 
+### 12. Plataforma P3 — C2-final + D5 (26/08/2026)
+
+**C2-final (store v26)**: `data/admin/configuracion.ts` y `lib/schemas.ts:ConfiguracionGlobalSchema` **dejan de exponer** `smtpPassword` y `claveEliminacionMaestro`. El seed `configuracionDefault` ya no siembra secretos; viven solo como env servidor `SMTP_PASSWORD` / `CLAVE_ELIMINACION_MAESTRO` (documentadas en `.env.example`). `STORE_VERSION` 26 con `migrate` que borra ambas keys del persistido v25 sin romper el resto (patrón v8). `partialize` simplificado — persiste `configuracion` tal cual. UI `/admin/configuracion` tabs SMTP y Operación muestran nota "Gestionado por el servidor" sin `<Input type="password">`.
+
+**D5 aviso duplicados (no bloqueante)**: formularios `app/inventario/tipos/page.tsx` (TU `nombre`), `app/inventario/estructura/page.tsx` (EF `macroSectores`/`microSectores` `nombre`+`etiqueta`) y `components/comunidad/formulario-persona.tsx` (MP `nombreCompleto`) detectan duplicado existente en el store (case-insensitive trim, excluyendo propio `id` en edición) y piden `window.confirm` advisory "¿Deseas continuar? (D5: repetidos permitidos)" — confirmar persiste, cancelar aborta. Store sigue permitiendo repetidos si se llama directo (`save*` sin bloqueo).
+
+---
+
 ### 11. Store + Seed — Sesión 7 NSGC (PL + CT + RE)
 
 Colecciones transaccionales nuevas (nacen vacías, sin seeds estáticos). Bumps v23→v24→v25 con migrate aditivo.
@@ -422,3 +430,5 @@ Colecciones transaccionales nuevas (nacen vacías, sin seeds estáticos). Bumps 
 | `reportesRE` | v25 | Bloques gastos_mes/bitacora_seguridad/morosidad/consumo_insumos con payloadSnapshot inmutable; segmento EF+MP+tenencia; distribución idempotente | `registrarVistaDashboardRE`, `generarReporteRE`, `distribuirReporteRE` (resuelve destinatarios vigentes), `removeReporteRE` |
 
 Extensión aditiva CF: parámetros legales `ufMensual/ingresoMinimoMensual/topeGratificacionLegal/tasaSIS` (opcionales, auditados `CF_UPDATE_PARAM`). Extensión aditiva PE: `datosLaborales.sueldoBase`. Motor documental **pdfmake** instalado (`lib/pdf-utils.ts`): el binario PDF y la firma viven solo en memoria del documento (D1). Helpers puros en `lib/pl-utils.ts` y `lib/reporteria-utils.ts`. Consumidores: `/finanzas/remuneraciones`, `/comunidad/certificados`, `/admin/reporteria`. Dump completo en `40 - MK - Data Dump Remuneraciones, Certificados y Reportería.md`.
+
+*Última actualización: 27 de Agosto 2026 — Plataforma P3 (store v26 C2-final + D5 aviso duplicados)*

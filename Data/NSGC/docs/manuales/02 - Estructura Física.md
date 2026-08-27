@@ -32,5 +32,14 @@ Arriba de la tabla de unidades se muestra un **gráfico de dona** que resume el 
 - **Colorimetría alineada**: los colores del gráfico usan el `hex` de los maestros `ESTADOS_OCUPACION` (gestionados en MA), manteniendo coherencia visual con las etiquetas de estado de la tabla. Un estado nuevo creado en MA obtiene su color automáticamente.
 - **Categorías desde MA**: las opciones de categoría macro y micro (Torre, Piso, Nivel...) se leen del store y se configuran en el módulo Maestros (MA).
 
+## ⚠️ Aviso de Duplicados (D5 — Plataforma P3)
+
+Repetidos **permitidos** (D5): el sistema no bloquea, pero avisa.
+
+- **Macro-sector**: al guardar con `nombre`+`etiqueta` ya existentes (case-insensitive, excluyendo propio en edición) la UI pide confirmación advisory: *"Ya existe un macro sector con ese nombre/etiqueta. ¿Deseas continuar? (D5: repetidos permitidos)"* (`k0mp4ss_fe/apps/web/app/inventario/estructura/page.tsx:93`).
+- **Micro-sector**: al crear con `nombre`+`etiqueta` ya existentes **dentro del mismo `macroSectorId`** se pide el mismo confirm. Confirmar persiste, cancelar aborta. El store `saveMacroSector`/`saveMicroSector` siguen permitiendo repetidos si se llaman directo.
+
 ## 📊 Vínculo con Auditoría y Métricas (AM)
 Toda acción administrativa realizada en este módulo (enrolamiento de medidores, creación de unidades, auditoría de superficie) debe ser contabilizada y visibilizada en el **Módulo AM**. Los indicadores de superficie total y enrolamiento de servicios alimentan el Dashboard de Gestión Operativa, transformando la ejecución técnica en valor cuantificable para la comunidad.
+
+*Actualizado: 27/08/2026 — P3 D5 aviso duplicados EF por nombre/etiqueta (no bloqueante)*
