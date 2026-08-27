@@ -2,7 +2,7 @@
 
 ## MODIFIED Requirements
 
-### Requirement: Sesión y autenticación vía Auth.js (AU §3)
+### Requirement: Estado implementado del scaffold (§1 — contexto)
 El sistema SHALL usar Auth.js (`next-auth@beta`, v5) para emisión y verificación de sesión, reemplazando el scaffold propio de §1: instancia Node en `k0mp4ss_fe/apps/web/lib/auth.ts` (`NextAuth` con provider credentials y adapter Prisma sobre `Usuario`) exportando `handlers`/`auth`/`signIn`/`signOut`, y configuración edge-safe en `lib/auth.config.ts` (estrategia JWT, maxAge 30 días, `pages.signIn = "/ingresar"`, callback session que expone `user.id = token.sub`). Las rutas Auth.js SHALL vivir en `app/api/auth/[...nextauth]/route.ts` (`/api/auth/*`: csrf, session, signin, signout, callback, providers, error) y la cookie de sesión SHALL ser la de Auth.js (`authjs.session-token`, JWE con `AUTH_SECRET`; `__Secure-` en https). `proxy.ts` SHALL verificar con `auth()` (instancia edge-safe sin Prisma) manteniendo el mismo matcher `/admin/:path*` + `/api/:path*`, las mismas rutas públicas (`/ingresar`, `/api/auth`), 401 JSON para `/api` y redirect `/ingresar?next=` para páginas. El sistema SHALL NOT contener `ADMIN_EMAIL`, `ADMIN_PASSWORD`, credenciales hardcodeadas ni fallback dev de secreto; `AUTH_SECRET` SHALL mantenerse como variable de entorno usada por Auth.js.
 
 #### Scenario: Autenticación contra Auth.js sin credenciales de entorno
@@ -16,6 +16,10 @@ El sistema SHALL usar Auth.js (`next-auth@beta`, v5) para emisión y verificaci�
 #### Scenario: sub es el id de Usuario en BD
 - **WHEN** un usuario inicia sesión con credenciales válidas
 - **THEN** el JWT `sub` y `session.user.id` son el `Usuario.id` de la BD (vinculable a MP vía `personaId`), no el email.
+
+#### Scenario: Scaffold vigente sin Auth.js
+- **WHEN** se inspecciona `k0mp4ss_fe/apps/web/lib/auth.ts` y `proxy.ts`
+- **THEN** la sesión es JWT de Auth.js con `auth()` y `proxy.ts` verifica sin `verificarToken` ni `compass_session`, y `openspec validate --all` sigue verde con `next-auth`.
 
 ### Requirement: Seed dev de 2 comunidades con membresías
 El sistema SHALL proveer helper `k0mp4ss_fe/apps/web/lib/seed-authz.ts` idempotente que crea 2 comunidades (`comunidad-a`, `comunidad-b`) y usuarios TEST (`admin@test.cl` admin en A+B, `comite@test.cl` comite en A, `conserjeria@test.cl` conserjeria en A, `residente@test.cl` residente en A, `mantencion@test.cl` mantencion en A) con `Membresia` por comunidad y `passwordHash` bcrypt asignado (password TEST documentada en manual), de modo que los usuarios TEST puedan iniciar sesión vía Auth.js. Para el primer arranque (BD sin usuarios, login imposible por diseño fail-closed) SHALL existir bootstrap CLI `npm run seed:authz` (`scripts/seed-authz.mjs`) idempotente que replica el seed sin servidor. El endpoint qa-lab `POST /api/admin/seed-authz` SHALL exigir sesión de administrador (`puede(rol, "crear", "admin:usuarios")`) sin fallback legado.
