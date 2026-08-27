@@ -1,4 +1,12 @@
-import { beforeEach } from "vitest"
+import "@testing-library/jest-dom/vitest"
+import { beforeAll, afterAll, afterEach, beforeEach } from "vitest"
+import { setupServer } from "msw/node"
+
+export const server = setupServer()
+
+beforeAll(() => server.listen({ onUnhandledRequest: "error" }))
+afterEach(() => server.resetHandlers())
+afterAll(() => server.close())
 
 beforeEach(() => {
   window.localStorage.clear()

@@ -9,6 +9,18 @@ const securityHeaders = [
 
 const nextConfig = {
   transpilePackages: ["@workspace/ui"],
+  // Permite HMR / _next/* desde otros equipos en la misma red local.
+  // Sin esto Next 16 bloquea peticiones cross-origin en dev.
+  allowedDevOrigins: [
+    "10.70.169.24",
+    "10.210.145.24",
+    "localhost",
+    "127.0.0.1",
+    // Cubre cualquier IP de la red local si el DHCP vuelve a rotar
+    "10.70.169.0/24",
+    "10.210.145.0/24",
+    "192.168.0.0/16",
+  ],
   async headers() {
     return [
       {

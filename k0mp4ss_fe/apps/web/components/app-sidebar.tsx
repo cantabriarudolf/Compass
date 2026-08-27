@@ -26,6 +26,7 @@ import {
   IconHistory,
   IconChevronRight,
   IconCommand,
+  IconClock,
 } from "@tabler/icons-react"
 
 import Image from "next/image"
@@ -48,6 +49,17 @@ import {
   SidebarRail,
 } from "@workspace/ui/components/sidebar"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@workspace/ui/components/collapsible"
+
+// Rutas del menú cuyo page.tsx aún no existe — se destacan en el sidebar para
+// evitar 404 silenciosos y señalar trabajo pendiente sin ocultar la opción.
+const RUTAS_PENDIENTES = new Set<string>([
+  "/dashboard",
+  "/operaciones/accesos",
+  "/operaciones/paqueteria",
+  "/personas/residentes",
+  "/admin/permisos",
+  "/admin/logs",
+])
 
 const data = {
   navMain: [
@@ -212,15 +224,35 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                       </CollapsibleTrigger>
                       <CollapsibleContent>
                         <SidebarMenuSub>
-                          {group.items?.map((subItem) => (
-                            <SidebarMenuSubItem key={subItem.title}>
-                              <SidebarMenuSubButton asChild isActive={pathname === subItem.url}>
-                                <a href={subItem.url}>
-                                  <span>{subItem.title}</span>
-                                </a>
-                              </SidebarMenuSubButton>
-                            </SidebarMenuSubItem>
-                          ))}
+                          {group.items?.map((subItem) => {
+                            const isPendiente = RUTAS_PENDIENTES.has(subItem.url)
+                            return (
+                              <SidebarMenuSubItem key={subItem.title}>
+                                {isPendiente ? (
+                                  <SidebarMenuSubButton
+                                    aria-disabled
+                                    isActive={false}
+                                    title="Próximamente — ruta aún no implementada"
+                                    className="cursor-not-allowed opacity-60 border border-dashed border-amber-500/30 bg-amber-50/60 dark:bg-amber-950/20 dark:border-amber-500/20"
+                                  >
+                                    <span className="flex w-full items-center gap-2">
+                                      <span className="truncate">{subItem.title}</span>
+                                      <span className="ml-auto inline-flex shrink-0 items-center gap-1 rounded-full border border-amber-500/30 bg-amber-100 px-1.5 py-0 text-[10px] font-medium leading-none text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 dark:border-amber-500/30">
+                                        <IconClock className="size-3" />
+                                        Próximamente
+                                      </span>
+                                    </span>
+                                  </SidebarMenuSubButton>
+                                ) : (
+                                  <SidebarMenuSubButton asChild isActive={pathname === subItem.url}>
+                                    <a href={subItem.url}>
+                                      <span>{subItem.title}</span>
+                                    </a>
+                                  </SidebarMenuSubButton>
+                                )}
+                              </SidebarMenuSubItem>
+                            )
+                          })}
                         </SidebarMenuSub>
                       </CollapsibleContent>
                     </SidebarMenuItem>

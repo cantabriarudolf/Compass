@@ -26,6 +26,9 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.18",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.6",
     "@types/node": "^25.1.0",
     "@types/react": "^19.2.10",
     "@types/react-dom": "^19.2.3",
@@ -34,6 +37,7 @@
     "@workspace/typescript-config": "*",
     "eslint": "^9.39.2",
     "jsdom": "^26.1.0",
+    "msw": "^2.15.0",
     "typescript": "^5.9.3",
     "vitest": "^3.2.7"
   }
