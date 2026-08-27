@@ -4,7 +4,15 @@ const securityHeaders = [
   { key: "X-Content-Type-Options", value: "nosniff" },
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
   { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
+  // D-ii: HSTS sin preload mientras no haya dominio real (PUBLIC_DOMAIN). Se activa preload solo con dominio.
+  // Ver .env.example PUBLIC_DOMAIN y docs/manual de despliegue. Mantener includeSubDomains.
   { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains" },
+  // Complementos securityheaders.com (no rompen next dev HMR; COEP credentialless es compatible con youtube embeds)
+  { key: "X-DNS-Prefetch-Control", value: "on" },
+  { key: "X-Permitted-Cross-Domain-Policies", value: "none" },
+  { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
+  { key: "Cross-Origin-Resource-Policy", value: "same-origin" },
+  { key: "Cross-Origin-Embedder-Policy", value: "credentialless" },
 ]
 
 const nextConfig = {

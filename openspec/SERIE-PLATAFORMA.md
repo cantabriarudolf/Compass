@@ -8,7 +8,7 @@
 | P3 | C2-final secretos a env (store v26) + aviso duplicados D5 | HECHA | e09c50e |
 | P4 | B3 autorización: authz.ts + membresías por comunidad | HECHA | d53b288 |
 | P5 | Auth.js + Prisma adapter + rate limit persistente (D-v) | HECHA | c9a3b4d |
-| P6 | D-i/ii/iii CSP + headers + re-chequeos scripted | pendiente | — |
+| P6 | D-i/ii/iii CSP + headers + re-chequeos scripted | EN CURSO | — |
 | P7 | D-iv re-auditoría OWASP + D-vi backups con restore | pendiente | — |
 | P8 | Cierre integral engranajes + prepush final + push | pendiente | — |
 MÁXIMO: 8 ventanas. Post-serie: dominio real/deploy del owner, migración de datos históricos.
