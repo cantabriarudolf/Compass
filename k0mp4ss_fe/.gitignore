@@ -31,6 +31,10 @@ dist
 # Debug
 npm-debug.log*
 
+# Prisma / SQLite (C1)
+*.db
+*.db-journal
+
 # Misc
 .DS_Store
 *.pem

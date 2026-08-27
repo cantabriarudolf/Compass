@@ -16,6 +16,10 @@ out/
 .env.*
 !.env.example
 
+# Prisma / SQLite (C1)
+*.db
+*.db-journal
+
 # Logs
 *.log
 npm-debug.log*

@@ -9,5 +9,5 @@ afterEach(() => server.resetHandlers())
 afterAll(() => server.close())
 
 beforeEach(() => {
-  window.localStorage.clear()
+  if (typeof window !== "undefined" && window.localStorage) window.localStorage.clear()
 })

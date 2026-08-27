@@ -14,6 +14,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@prisma/client": "^6.19.3",
     "@tabler/icons-react": "^3.42.0",
     "@workspace/ui": "*",
     "next": "16.1.6",
@@ -38,6 +39,7 @@
     "eslint": "^9.39.2",
     "jsdom": "^26.1.0",
     "msw": "^2.15.0",
+    "prisma": "^6.19.3",
     "typescript": "^5.9.3",
     "vitest": "^3.2.7"
   }
