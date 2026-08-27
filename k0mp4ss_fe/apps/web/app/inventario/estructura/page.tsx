@@ -98,6 +98,25 @@ export default function EstructuraFisicaPage() {
       nombre: formData.get("nombre") as string,
       descripcion: formData.get("descripcion") as string,
     }
+    const nombreTrim = data.nombre.trim().toLowerCase()
+    const etiquetaTrim = data.etiqueta.trim().toLowerCase()
+    if (nombreTrim) {
+      const existe = macroSectores.some(
+        (m) =>
+          m.id !== (editingMacro?.id ?? "") &&
+          m.nombre.trim().toLowerCase() === nombreTrim &&
+          m.etiqueta.trim().toLowerCase() === etiquetaTrim
+      )
+      if (existe) {
+        const confirmar = window.confirm(
+          "Ya existe un macro sector con ese nombre/etiqueta. ¿Deseas continuar? (D5: repetidos permitidos, es solo un aviso)"
+        )
+        if (!confirmar) {
+          setErrorDialogo("Guardado cancelado: duplicado detectado (D5: repetidos permitidos).")
+          return
+        }
+      }
+    }
     let resultado: { ok: boolean; error?: string }
     if (editingMacro) {
       resultado = saveMacroSector({ ...editingMacro, ...data })
@@ -128,6 +147,25 @@ export default function EstructuraFisicaPage() {
       macroSectorId: selectedMacro,
       etiqueta: formData.get("etiqueta") as string,
       nombre: formData.get("nombre") as string,
+    }
+    const nombreTrim = nuevo.nombre.trim().toLowerCase()
+    const etiquetaTrim = nuevo.etiqueta.trim().toLowerCase()
+    if (nombreTrim) {
+      const existe = microSectores.some(
+        (m) =>
+          m.macroSectorId === nuevo.macroSectorId &&
+          m.nombre.trim().toLowerCase() === nombreTrim &&
+          m.etiqueta.trim().toLowerCase() === etiquetaTrim
+      )
+      if (existe) {
+        const confirmar = window.confirm(
+          "Ya existe un micro sector con ese nombre/etiqueta en este macro sector. ¿Deseas continuar? (D5: repetidos permitidos, es solo un aviso)"
+        )
+        if (!confirmar) {
+          setErrorDialogo("Guardado cancelado: duplicado detectado (D5: repetidos permitidos).")
+          return
+        }
+      }
     }
     const resultado = saveMicroSector(nuevo)
     if (!resultado.ok) {

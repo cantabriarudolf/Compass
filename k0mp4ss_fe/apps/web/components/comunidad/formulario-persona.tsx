@@ -25,6 +25,7 @@ interface FormularioPersonaProps {
 export function FormularioPersona({ persona, onSave, onCancel }: FormularioPersonaProps) {
   const isEditing = !!persona
   const condicionesEspeciales = useCompassStore(s => s.maestros.condicionesEspeciales)
+  const personas = useCompassStore(s => s.personas)
 
   // Estados del formulario
   const [rut, setRut] = React.useState(persona?.rut || "")
@@ -50,10 +51,27 @@ export function FormularioPersona({ persona, onSave, onCancel }: FormularioPerso
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
 
+    const nombreCompleto = `${nombres} ${apellidos}`.trim()
+    const nombreCompletoNorm = nombreCompleto.toLowerCase()
+    if (nombreCompletoNorm) {
+      const existeDuplicado = personas.some(
+        (p) => p.id !== (persona?.id ?? "") && p.nombreCompleto.trim().toLowerCase() === nombreCompletoNorm
+      )
+      if (existeDuplicado) {
+        const confirmar = window.confirm(
+          "Ya existe una persona con ese nombre completo. ¿Deseas continuar? (D5: repetidos permitidos, es solo un aviso)"
+        )
+        if (!confirmar) {
+          setErrores({ global: "Guardado cancelado: duplicado detectado (D5: repetidos permitidos)." })
+          return
+        }
+      }
+    }
+
     const nuevaPersona: Partial<Persona> = {
       id: persona?.id || `p-${Date.now()}`,
       rut,
-      nombreCompleto: `${nombres} ${apellidos}`,
+      nombreCompleto,
       nombres,
       apellidos,
       email,

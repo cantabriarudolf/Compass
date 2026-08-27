@@ -88,6 +88,21 @@ export default function TiposUnidadPage() {
     const formData = new FormData(e.currentTarget)
     const nuevoMonto = Number(formData.get("montoBaseGc"))
     const fechaVigencia = formData.get("fechaVigencia") as string
+    const nombreTrim = ((formData.get("nombre") as string) ?? "").trim()
+    if (nombreTrim) {
+      const existeDuplicado = data.some(
+        (t) => t.id !== (editingItem?.id ?? "") && t.nombre.trim().toLowerCase() === nombreTrim.toLowerCase()
+      )
+      if (existeDuplicado) {
+        const confirmar = window.confirm(
+          "Ya existe un tipo de unidad con ese nombre. ¿Deseas continuar? (D5: repetidos permitidos, es solo un aviso)"
+        )
+        if (!confirmar) {
+          setErrorGuardado("Guardado cancelado: duplicado detectado (D5: repetidos permitidos).")
+          return
+        }
+      }
+    }
 
     let resultado: { ok: boolean; error?: string } | null = null
     if (editingItem) {
