@@ -20,11 +20,10 @@ export interface ConfiguracionGlobal {
   diaCortePago: number;
   limiteMesesAvisoCorte: number;
 
-  // 3. Configuración de Correo Electrónico (SMTP)
+  // 3. Configuración de Correo Electrónico (SMTP) — C2-final: smtpPassword solo env servidor (SMTP_PASSWORD)
   smtpHost: string;
   smtpPort: number;
   smtpUser: string;
-  smtpPassword: string; // en producción encriptado
   smtpSecurity: SeguridadSMTP;
   smtpFrom: string;
   smtpFromName: string;
@@ -39,11 +38,10 @@ export interface ConfiguracionGlobal {
   notificarAvisosSistema: boolean;
   notificarSugerenciasReclamos: boolean;
 
-  // 5. Parámetros Operativos y Seguridad
+  // 5. Parámetros Operativos y Seguridad — C2-final: claveEliminacionMaestro solo env servidor (CLAVE_ELIMINACION_MAESTRO)
   diasMesComercial: number;
   diasVacacionesMes: number;
   jornadaSemanalEstandar: number;
-  claveEliminacionMaestro: string;
 }
 
 export const configuracionDefault: ConfiguracionGlobal = {
@@ -61,7 +59,6 @@ export const configuracionDefault: ConfiguracionGlobal = {
   smtpHost: "smtp.gmail.com",
   smtpPort: 587,
   smtpUser: "gdcuentas@sgc.cl",
-  smtpPassword: "",
   smtpSecurity: "tls",
   smtpFrom: "gdcuentas@sgc.cl",
   smtpFromName: "Administración Edificio Plaza Central",
@@ -78,5 +75,4 @@ export const configuracionDefault: ConfiguracionGlobal = {
   diasMesComercial: 30,
   diasVacacionesMes: 1.25,
   jornadaSemanalEstandar: 45,
-  claveEliminacionMaestro: "",
 };

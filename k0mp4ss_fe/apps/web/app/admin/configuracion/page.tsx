@@ -41,7 +41,7 @@ export default function ConfiguracionPage() {
       alert(`No se pudo guardar la configuración: ${resultado.error}`)
       return
     }
-    console.log("[AM] CF_UPDATE_PARAM", { ...config, smtpPassword: "***", claveEliminacionMaestro: "***" })
+    console.log("[AM] CF_UPDATE_PARAM", config)
     alert("Configuración guardada (persistida en el store)")
   }
 
@@ -131,7 +131,10 @@ export default function ConfiguracionPage() {
                 <div className="space-y-2"><Label>Servidor SMTP *</Label><Input value={config.smtpHost} onChange={e => updateField("smtpHost", e.target.value)} required /></div>
                 <div className="space-y-2"><Label>Puerto *</Label><Input type="number" value={config.smtpPort} onChange={e => updateField("smtpPort", Number(e.target.value))} required /></div>
                 <div className="space-y-2"><Label>Usuario *</Label><Input value={config.smtpUser} onChange={e => updateField("smtpUser", e.target.value)} required /></div>
-                <div className="space-y-2"><Label>Contraseña / Token *</Label><Input type="password" value={config.smtpPassword ?? ""} onChange={e => updateField("smtpPassword", e.target.value)} placeholder="No se guarda en este navegador (SEC-005)" required /></div>
+                <div className="space-y-2 rounded-md border border-dashed bg-muted/20 p-3">
+                  <Label className="text-xs font-bold uppercase tracking-widest">Contraseña / Token</Label>
+                  <p className="text-xs text-muted-foreground mt-1">Gestionado por el servidor (variable de entorno <code className="font-mono bg-muted px-1 rounded">SMTP_PASSWORD</code>) — no se edita en el cliente (C2-final).</p>
+                </div>
                 <div className="space-y-2">
                   <Label>Seguridad *</Label>
                   <Select value={config.smtpSecurity} onValueChange={v => updateField("smtpSecurity", v as ConfiguracionGlobal["smtpSecurity"])}>
@@ -187,7 +190,10 @@ export default function ConfiguracionPage() {
                 <div className="space-y-2"><Label>Días Mes Comercial (28-31) *</Label><Input type="number" min={28} max={31} value={config.diasMesComercial} onChange={e => updateField("diasMesComercial", Number(e.target.value))} required /></div>
                 <div className="space-y-2"><Label>Días Vacaciones / Mes *</Label><Input type="number" step={0.01} value={config.diasVacacionesMes} onChange={e => updateField("diasVacacionesMes", Number(e.target.value))} required /></div>
                 <div className="space-y-2"><Label>Jornada Semanal Estándar (35-48 hrs) *</Label><Input type="number" min={35} max={48} value={config.jornadaSemanalEstandar} onChange={e => updateField("jornadaSemanalEstandar", Number(e.target.value))} required /></div>
-                <div className="space-y-2"><Label>Clave de Eliminación Maestro *</Label><Input type="password" value={config.claveEliminacionMaestro ?? ""} onChange={e => updateField("claveEliminacionMaestro", e.target.value)} placeholder="No se guarda en este navegador (SEC-005)" required /></div>
+                <div className="space-y-2 rounded-md border border-dashed bg-muted/20 p-3">
+                  <Label className="text-xs font-bold uppercase tracking-widest">Clave de Eliminación Maestro</Label>
+                  <p className="text-xs text-muted-foreground mt-1">Gestionado por el servidor (variable de entorno <code className="font-mono bg-muted px-1 rounded">CLAVE_ELIMINACION_MAESTRO</code>) — no se edita en el cliente (C2-final).</p>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>

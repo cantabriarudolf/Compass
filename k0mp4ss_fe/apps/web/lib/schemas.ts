@@ -1171,11 +1171,10 @@ export const ConfiguracionGlobalSchema = z.object({
   diaCortePago: z.number().int().min(1, "El día de corte debe estar entre 1 y 31.").max(31, "El día de corte debe estar entre 1 y 31."),
   limiteMesesAvisoCorte: z.number().int().min(1, "El límite de meses debe ser mayor a 0."),
 
-  // 3. Configuración de Correo Electrónico (SMTP)
+  // 3. Configuración de Correo Electrónico (SMTP) — C2-final: smtpPassword vive solo en env servidor (SMTP_PASSWORD), no en schema cliente
   smtpHost: z.string().min(1, "El servidor SMTP es obligatorio."),
   smtpPort: z.number().int().min(1, "El puerto SMTP es inválido.").max(65535, "El puerto SMTP es inválido."),
   smtpUser: z.string().min(1, "El usuario SMTP es obligatorio."),
-  smtpPassword: z.string(),
   smtpSecurity: SeguridadSMTPSchema,
   smtpFrom: z.string().min(1, "El remitente SMTP es obligatorio."),
   smtpFromName: z.string().min(1, "El nombre del remitente es obligatorio."),
@@ -1190,11 +1189,10 @@ export const ConfiguracionGlobalSchema = z.object({
   notificarAvisosSistema: z.boolean(),
   notificarSugerenciasReclamos: z.boolean(),
 
-  // 5. Parámetros Operativos y Seguridad
+  // 5. Parámetros Operativos y Seguridad — C2-final: claveEliminacionMaestro vive solo en env servidor (CLAVE_ELIMINACION_MAESTRO), no en schema cliente
   diasMesComercial: z.number().int().min(1, "Los días mes comercial deben estar entre 1 y 31.").max(31, "Los días mes comercial deben estar entre 1 y 31."),
   diasVacacionesMes: z.number().positive("Los días de vacaciones deben ser mayores a 0."),
   jornadaSemanalEstandar: z.number().int().min(1, "La jornada semanal debe ser mayor a 0.").max(80, "La jornada semanal no puede superar 80 horas."),
-  claveEliminacionMaestro: z.string(),
 
   // 6. Portal Inmobiliario (PI): opcional para compatibilidad con stores previos.
   // Ausente = modo "residentes" (por defecto, según spec PI).

@@ -297,7 +297,7 @@ const FONDOS_FI_SEED: FondoFI[] = [
   { id: "fondo-amenities", nombre: "Fondo de Amenities", tipo: "amenities", descripcion: "Centro de costos de reservas, tarifas y garantías de amenities.", activo: true },
 ]
 
-export const STORE_VERSION = 25
+export const STORE_VERSION = 26
 
 export interface MaestroCollections {
   afps: Afp[]
@@ -4553,11 +4553,10 @@ export const useCompassStore = create<CompassStore>()(
         personas: state.personas,
         vinculos: state.vinculos,
         eventos: state.eventos,
-        // SEC-005: los secretos no se persisten en localStorage; viven solo en
-        // memoria de la sesión hasta su traslado definitivo al servidor (Fase C).
-        configuracion: state.configuracion
-          ? { ...state.configuracion, smtpPassword: "", claveEliminacionMaestro: "" }
-          : state.configuracion,
+        // C2-final: los secretos (smtpPassword/claveEliminacionMaestro) ya no existen
+        // en el schema cliente; viven solo como env servidor (SMTP_PASSWORD /
+        // CLAVE_ELIMINACION_MAESTRO). Se persiste configuracion tal cual.
+        configuracion: state.configuracion,
         maestros: state.maestros,
         publicacionesPortal: state.publicacionesPortal,
         leadsPortal: state.leadsPortal,
@@ -4822,6 +4821,14 @@ export const useCompassStore = create<CompassStore>()(
           result = {
             ...result,
             reportesRE: prev.reportesRE ?? [],
+          }
+        }
+        // C2-final v26: limpieza de secretos legacy del persistido v25 sin romper resto (patrón v8)
+        if ((version ?? 0) < 26) {
+          if (result.configuracion && typeof result.configuracion === "object") {
+            const cfg = result.configuracion as Record<string, unknown>
+            if ("smtpPassword" in cfg) delete cfg.smtpPassword
+            if ("claveEliminacionMaestro" in cfg) delete cfg.claveEliminacionMaestro
           }
         }
         // TST-002: los stores que ya quedaron en v8 con unidades dañadas por este

@@ -5,7 +5,7 @@
 |---|---|---|---|
 | P1 | B4 testing UI RTL+MSW (flujo auth) | HECHA | 212da14 |
 | P2 | C1+C1b+C3b Prisma comunidadId + repos scoping | HECHA | adf42b0 |
-| P3 | C2-final secretos a env (store v26) + aviso duplicados D5 | pendiente | — |
+| P3 | C2-final secretos a env (store v26) + aviso duplicados D5 | EN CURSO | — |
 | P4 | B3 autorización: authz.ts + membresías por comunidad | pendiente | — |
 | P5 | Auth.js + Prisma adapter + rate limit persistente (D-v) | pendiente | — |
 | P6 | D-i/ii/iii CSP + headers + re-chequeos scripted | pendiente | — |

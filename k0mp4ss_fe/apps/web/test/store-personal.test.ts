@@ -485,7 +485,7 @@ describe("PE - Personal y Servicios en el store", () => {
     })
 
     it(`usa versión ${STORE_VERSION} y migrate v21 siembra maestros nuevos`, async () => {
-      expect(STORE_VERSION).toBe(25)
+      expect(STORE_VERSION).toBe(26)
       const seed = seedData()
       const prev: Record<string, unknown> = {
         personas: seed.personas,
