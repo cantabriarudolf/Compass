@@ -21,7 +21,7 @@ Bienvenido a la documentación operativa del sistema de administración de condo
 
 ## 🔧 Documentación Transversal
 - [AU - Autenticación y Sesión](<AU - Autenticacion y Sesion.md>): Login Auth.js (JWT + credentials), usuarios en BD con `passwordHash`, rate limit persistente D-v y guardia `proxy.ts`.
-- [SG - Hardening y Despliegue](<SG - Hardening y Despliegue.md>): CSP report-only con nonce (D-i), headers HSTS sin preload + PUBLIC_DOMAIN (D-ii) y runbook de re-chequeos 5/5 scripted (D-iii) — listo para `securityheaders.com` y deploy del owner.
+- [SG - Hardening y Despliegue](<SG - Hardening y Despliegue.md>): CSP report-only con nonce (D-i), headers HSTS sin preload + PUBLIC_DOMAIN (D-ii), runbook de re-chequeos 5/5 scripted (D-iii), re-auditoría OWASP final con cero 🔴 abiertos (D-iv, informe `auditorias/auditoria - 2026-08-27 - owasp-final.md`) y runbook backups/restauración de BD `backup:db`/`restore:db` con prueba de restore (D-vi) — listo para `securityheaders.com` y deploy del owner.
 - [28 - MK - Catálogo de Mocks](<28 - MK - Catálogo de Mocks.md>): Inventario completo de datos mockeados, ubicación, dependencias y hoja de ruta de migración a backend.
 - [29 - MK - Data Dump Inventario](<29 - MK - Data Dump Inventario.md>): Todas las unidades, sectores y tipos resueltos en tablas planas (166 unidades: 80 deptos + 3 locales + 83 plazas `u-E-*`).
 - [30 - MK - Data Dump Comunidad](<30 - MK - Data Dump Comunidad.md>): Personas, vínculos y extensiones laborales/gobernanza (ver banner: dump histórico).

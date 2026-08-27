@@ -34,7 +34,3 @@ export async function POST() {
     return NextResponse.json({ error: "No se pudo crear seed" }, { status: 500 })
   }
 }
-
-export async function GET() {
-  return POST()
-}

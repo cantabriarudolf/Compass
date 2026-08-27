@@ -66,6 +66,11 @@ describe("lib/auth — superficie Auth.js", () => {
     expect(mod.verificarToken).toBeUndefined()
     // @ts-ignore
     expect(mod.credencialesValidas).toBeUndefined()
+
+    // D-iv SEC-013: seed-authz solo POST (sin side effects en GET)
+    const ruta = await import("@/app/api/admin/seed-authz/route")
+    expect(typeof ruta.POST).toBe("function")
+    expect((ruta as Record<string, unknown>).GET).toBeUndefined()
     // @ts-ignore
     expect(mod.ADMIN_EMAIL).toBeUndefined()
   })

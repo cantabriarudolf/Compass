@@ -16,13 +16,26 @@ export class LimiteIntentos extends CredentialsSignin {
   code = "rate_limited"
 }
 
+/**
+ * Hash bcrypt de una password inexistente (cost 10). Se usa como comparación
+ * dummy cuando el usuario no existe, para igualar el tiempo de respuesta y no
+ * filtrar existencia de emails por timing (SEC-012, D-iv).
+ */
+const HASH_DUMMY = "$2a$10$7EqJtq98hPqEX7fNZaFWoOhi5B0G1S3kQvPzEmg8BkSxTQhxnWJmK"
+
 function claveIp(request: Request): string {
-  return request.headers.get("x-forwarded-for") ?? "local"
+  // Primer hop del header (spoofable — por eso el rate limit también aplica por email).
+  const bruto = request.headers.get("x-forwarded-for") ?? "local"
+  return bruto.split(",")[0]!.trim() || "local"
 }
 
 /**
  * authorize de Auth.js (AU §3): valida contra BD con bcrypt, aplica rate limit
  * persistente D-v y retorna el usuario con id de BD (sub = Usuario.id).
+ *
+ * D-iv SEC-011: el límite se evalúa y registra sobre DOS claves — IP (x-forwarded-for,
+ * spoofable rotando el header) y email normalizado (no spoofable al atacar una cuenta
+ * concreta). Rotar IPs NO reinicia el contador de la cuenta víctima.
  */
 async function autorizarCredenciales(
   credentials: Partial<Record<"email" | "password", unknown>>,
@@ -33,21 +46,28 @@ async function autorizarCredenciales(
   const password = typeof credentials.password === "string" ? credentials.password : ""
   if (!email || !password) throw new CredencialesInvalidas()
 
-  const clave = claveIp(request)
+  const claves = [claveIp(request), `email:${email}`]
 
   // D-v: fail-closed antes de tocar bcrypt (sin leak de timing ni gasto de CPU)
-  if (await excedeIntentos(clave)) throw new LimiteIntentos()
+  for (const clave of claves) {
+    if (await excedeIntentos(clave)) throw new LimiteIntentos()
+  }
 
   const usuario = await prisma.usuario.findUnique({ where: { email } })
-  const hashValido =
-    usuario?.passwordHash ? await bcrypt.compare(password, usuario.passwordHash) : false
+  // SEC-012: comparar SIEMPRE un hash (real o dummy) para igualar timing.
+  const hash = usuario?.passwordHash ?? HASH_DUMMY
+  const hashValido = await bcrypt.compare(password, hash)
 
-  if (!usuario || !usuario.activo || !hashValido) {
-    await registrarFallo(clave)
+  if (!usuario || !usuario.activo || !usuario.passwordHash || !hashValido) {
+    for (const clave of claves) {
+      await registrarFallo(clave)
+    }
     throw new CredencialesInvalidas()
   }
 
-  await limpiarIntentos(clave)
+  for (const clave of claves) {
+    await limpiarIntentos(clave)
+  }
   return { id: usuario.id, email: usuario.email }
 }
 

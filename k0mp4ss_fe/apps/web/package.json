@@ -12,6 +12,8 @@
     "test": "vitest run --coverage",
     "test:watch": "vitest",
     "seed:authz": "node --env-file-if-exists=.env scripts/seed-authz.mjs",
+    "backup:db": "node scripts/backup-db.mjs",
+    "restore:db": "node scripts/restore-db.mjs",
     "check:headers": "node scripts/check-headers.mjs",
     "check:rechecks": "node scripts/security-recheck.mjs",
     "typecheck": "tsc --noEmit"

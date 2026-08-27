@@ -172,6 +172,60 @@ describe("Auth.js — /api/auth/* (login credentials + sesión + D-v)", () => {
     expect(setCookies.find((c: string) => c.startsWith("authjs.session-token="))).toBeFalsy()
   })
 
+  it("D-iv SEC-011: rotar x-forwarded-for NO evade el rate limit (clave por email)", async () => {
+    const emailVictima = `rate-email-${Date.now()}@test.cl`
+    const ips: string[] = []
+    // 10 fallos contra la MISMA cuenta con IPs rotativas (spoof de XFF)
+    for (let i = 0; i < 10; i++) {
+      const ip = `spoof-${Date.now()}-${i}`
+      ips.push(ip)
+      const res = await login(emailVictima, "password-erronea", undefined, ip)
+      const datos = (await res.json()) as { url: string }
+      expect(codigoDesdeUrl(datos).code).toBe("credentials")
+    }
+    // El contador de la clave email: acumuló los 10 fallos pese a IPs distintas
+    const porEmail = await prisma.rateLimitAttempt.count({ where: { clave: `email:${emailVictima}` } })
+    expect(porEmail).toBe(10)
+
+    // 11º intento con credenciales CORRECTAS (usuario creado ahora) e IP nueva → rate_limited
+    const passwordHash = await bcrypt.hash(PASSWORD_VALIDA, 10)
+    await prisma.usuario.upsert({
+      where: { email: emailVictima },
+      update: {},
+      create: { id: `uid-${emailVictima}`, email: emailVictima, activo: true, passwordHash },
+    })
+    const res = await login(emailVictima, PASSWORD_VALIDA, undefined, `ip-final-${Date.now()}`)
+    const datos = (await res.json()) as { url: string }
+    const { error, code } = codigoDesdeUrl(datos)
+    expect(error).toBe("CredentialsSignin")
+    expect(code).toBe("rate_limited")
+    // no setea cookie de sesión
+    const setCookies = res.headers.getSetCookie().map((c: string) => c.split(";")[0]!)
+    expect(setCookies.find((c: string) => c.startsWith("authjs.session-token="))).toBeFalsy()
+
+    await prisma.usuario.deleteMany({ where: { email: emailVictima } })
+    await prisma.rateLimitAttempt.deleteMany({
+      where: { clave: { in: [...ips, `email:${emailVictima}`] } },
+    })
+  }, 30_000)
+
+  it("D-iv SEC-012: usuario inexistente → mismo error y fallos persistidos en ambas claves", async () => {
+    const emailFantasma = `fantasma-${Date.now()}@test.cl`
+    const ip = `ip-fantasma-${Date.now()}`
+    const res = await login(emailFantasma, "lo-que-sea", undefined, ip)
+    const datos = (await res.json()) as { url: string }
+    const { error, code } = codigoDesdeUrl(datos)
+    // mismo code que password errónea (sin enumeración por mensaje ni por timing de branch)
+    expect(error).toBe("CredentialsSignin")
+    expect(code).toBe("credentials")
+    // fallo registrado en clave IP y clave email
+    expect(await prisma.rateLimitAttempt.count({ where: { clave: ip } })).toBe(1)
+    expect(await prisma.rateLimitAttempt.count({ where: { clave: `email:${emailFantasma}` } })).toBe(1)
+    await prisma.rateLimitAttempt.deleteMany({
+      where: { clave: { in: [ip, `email:${emailFantasma}`] } },
+    })
+  })
+
   it("login exitoso limpia los intentos de la clave (ventana reinicia)", async () => {
     const ip = `ip-limpia-${Date.now()}`
     await prisma.rateLimitAttempt.create({ data: { clave: ip } })

@@ -1,10 +1,10 @@
 # 🛡️ SG - Hardening y Despliegue
 
-Acá verificás que Compass está listo para salir a producción con los candados de seguridad activos. Desde P6, la app emite CSP en modo report-only con nonce, headers HSTS sin preload (dominio aún no existe) y un runbook de re-chequeos scripted 5/5.
+Acá verificás que Compass está listo para salir a producción con los candados de seguridad activos. Desde P6, la app emite CSP en modo report-only con nonce, headers HSTS sin preload (dominio aún no existe) y un runbook de re-chequeos scripted 5/5. Desde P7, además, la auditoría OWASP final está cerrada (cero 🔴 abiertos, informe `Data/NSGC/docs/auditorias/auditoria - 2026-08-27 - owasp-final.md`) y hay runbook de backups/restauración de BD (`backup:db`/`restore:db`).
 
 ## 🚀 Funcionalidad Principal
 
-Blindar la plataforma antes del deploy real del owner: CSP estricta en report-only (sin forzar), headers contra dominio definitivo configurable por env y re-chequeos manuales convertidos en script repetible.
+Blindar la plataforma antes del deploy real del owner: CSP estricta en report-only (sin forzar), headers contra dominio definitivo configurable por env, re-chequeos manuales convertidos en script repetible y respaldo/restauración de la BD Prisma con verificación de conteos.
 
 ## 🛠️ Secciones
 
@@ -24,6 +24,22 @@ Blindar la plataforma antes del deploy real del owner: CSP estricta en report-on
   5. `GET /api/*` sin sesión → `401` JSON `No autenticado.` (proxy + handlers `auth()`).
   Ejecutables: `k0mp4ss_fe/apps/web/scripts/security-recheck.mjs` (estático, `node scripts/security-recheck.mjs` → 5/5 OK) y `k0mp4ss_fe/apps/web/test/security-rechecks.test.ts` (vitest, `NextRequest` real + `test/helpers/sesion-authjs.ts`, imprime OK/FAIL). También `npm run check:headers` (fetch vivo si `next dev` corre, sino estático).
 
+- **Backups de BD** (SG §3 D-vi, P7): scripts npm en `k0mp4ss_fe/apps/web`:
+
+  - `npm run backup:db` (→ `scripts/backup-db.mjs`): vuelca la BD SQLite dev a `Data/NSGC/backups/db-<timestamp>/` con:
+    `sqlite/dev.db` (copia consistente: `PRAGMA wal_checkpoint(TRUNCATE)` antes de copiar, así no hace falta copiar `-wal`/`-shm`), `tables/<Model>.json` por cada modelo de `prisma/schema.prisma` (69 tablas, export vía Prisma `findMany`) y `manifest.json` (timestamp, conteos por tabla, total de filas, `sha256` y bytes de la copia). Acepta `--label=pre-restore` para snapshots etiquetados.
+  - `npm run restore:db -- db-<timestamp>|latest [--yes]` (→ `scripts/restore-db.mjs`): restaura desde `Data/NSGC/backups/`. Guardas: **bloqueado con `APP_ENV=production`** (la BD gestionada de prod la opera el owner con su proveedor, fuera de alcance), **exige `--yes` o `RESTORE_CONFIRM=1`** (sobrescribe la BD actual), y **crea snapshot `db-<ts>-pre-restore` automáticamente antes de tocar nada**. Tras copiar el archivo de vuelta (y limpiar `-wal`/`-shm` obsoletos) verifica los conteos de cada tabla contra el manifest e imprime divergencias; sale `exit 2` si hay divergencias.
+
+  - **Prueba de restauración ejecutada (P7, 2026-08-27):** `backup:db` → backup `db-20260827T163813` (69 tablas, 18 filas, sha256 5d4a714b…); se insertó fila de prueba `RateLimitAttempt clave='RESTORE-TEST-PROOF'` (rateLimitAttempt pasó de 2 a 3 filas); `restore:db -- db-20260827T163813 --yes` → snapshot pre-restore `db-20260827T163850-pre-restore` creado automáticamente; **69 tablas verificadas contra manifest, 0 divergencias**; post-restore: fila de prueba `count=0`, total `rateLimitAttempt=2` (estado exactamente el del backup). Resultado: ✅ restauración funcional y verificable.
+  - **Paso a paso para reproducir la prueba en local:**
+    1. `npm run backup:db` → anota el nombre del dir `db-<ts>` impreso.
+    2. Inserta una fila marcadora: `node -e "const {PrismaClient}=require('@prisma/client');const p=new PrismaClient();p.rateLimitAttempt.create({data:{clave:'RESTORE-TEST-PROOF'}}).then(r=>console.log('insertada',r.id)).finally(()=>p.$disconnect())"`.
+    3. Verifica que la fila está: `count` de `rateLimitAttempt` aumentó en 1.
+    4. `npm run restore:db -- db-<ts> --yes` (usa el timestamp del paso 1).
+    5. Verifica salida `69 tablas verificadas … 0 divergencias` y que la fila marcadora ya no existe (`count where clave='RESTORE-TEST-PROOF'` = 0).
+    6. Los backups de prueba (`db-<ts>` y `db-<ts>-pre-restore`) se pueden borrar a mano tras verificar.
+  - **Producción (pendiente del owner):** el provider/schedule/retención de la BD gestionada queda a elección del owner al definir `DATABASE_URL` de prod (ej. managed Postgres + snapshots del proveedor + retención 30d). Este runbook cubre el ciclo dev (SQLite) y el patrón manifest+verificación a replicar en prod. `restore:db` nunca corre contra prod (guardia `APP_ENV`).
+
 - **Plan de activación CSP enforcement** (D-i): Telemetría en Report-Only: DevTools Console → CSP violations, Network → `content-security-policy-report-only`, opcional `/api/csp-report` (POST sink `console.warn`). Revisar 7 días de tráfico dev/staging, 0 violations para `script-src`/`frame-src`/`img-src` en `/`, `/ingresar`, `/admin/*`, `/visor-mensajes` con y sin youtube. Criterio 0 violations 7 días → cambiar en `proxy.ts` a `Content-Security-Policy` (o dual) quitando `unsafe-inline`/`unsafe-eval` dejando `'nonce-{x}' 'strict-dynamic'`, mantener `style-src unsafe-inline`. Redeploy + re-medir; si violations → rollback a Report-Only. Con dominio real, activar `preload` en HSTS (`includeSubDomains; preload`) y someter a `hstspreload.org` tras `securityheaders.com` A+.
 
 ## 💡 Tips de Oro
@@ -32,10 +48,13 @@ Blindar la plataforma antes del deploy real del owner: CSP estricta en report-on
 - **Google Fonts sin red rompe `next build`**: usa `next dev` + `npm run check:headers` para verificar headers; no persigas el build aquí.
 - **Report-Only no bloquea**: puedes navegar con violations sin que se caiga la app; sirve para medir antes de forzar.
 - **Runbook repetible**: `npm test -- test/security-rechecks.test.ts` + `node scripts/security-recheck.mjs` deben dar 5/5 OK antes de cada deploy. Si alguno falla, el script hace `exit 1` (CI rojo).
+- **Backup antes de tocar BD**: corre `npm run backup:db` antes de cualquier migración o restore; el manifest (sha256 + conteos) es tu punto de verificación. `restore:db` siempre crea su propio snapshot pre-restore igual.
+- **Restore exige confirmación**: sin `--yes` el restore aborta — es deliberado, la BD se sobrescribe.
 
 ## 🔗 Dependencias
 
 - Sesión y guardia en **AU - Autenticación y Sesión** (`proxy.ts` + `lib/auth.ts` + `test/helpers/sesion-authjs.ts`).
 - Tenant y scoping en **ST - Capa de Datos Persistente** (`comunidadId` + `lib/prisma.ts` + `lib/env-guard.ts`).
 - Visor CV en **16 - CO - Visor de Mensajes** (origen youtube auditado).
-- Trazabilidad en **03 - Mapa de Desarrollo y Trazabilidad** y serie en `openspec/SERIE-PLATAFORMA.md` (P6 D-i/ii/iii).
+- Trazabilidad en **03 - Mapa de Desarrollo y Trazabilidad** y serie en `openspec/SERIE-PLATAFORMA.md` (P6 D-i/ii/iii, P7 D-iv + D-vi).
+- Auditoría OWASP final en `Data/NSGC/docs/auditorias/auditoria - 2026-08-27 - owasp-final.md` (D-iv, P7).
