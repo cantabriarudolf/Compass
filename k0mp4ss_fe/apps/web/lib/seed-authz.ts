@@ -10,8 +10,8 @@ export interface SeedAuthzResult {
 /**
  * seedUsuariosMembresias — crea 2 comunidades + 5 usuarios TEST con membresías
  * Idempotente: upsert por id/slug/email y membresia unique.
- * Comunidad A: comunidad-a (Condominio Los Aromos TEST)
- * Comunidad B: comunidad-b (Condominio Las Palmas TEST)
+ * Comunidad A: comunidad-a (Comunidad Los Aromos TEST)
+ * Comunidad B: comunidad-b (Comunidad Las Palmas TEST)
  * Usuarios: admin@test.cl (admin A+B), comite@test.cl (comite A), conserjeria@test.cl, residente@test.cl, mantencion@test.cl
  * Cada usuario queda vinculado por membresia a su comunidad; admin en ambas para probar aislamiento A/B.
  * Llamado desde qa-lab (fase AU) y desde tests con client temporal.
@@ -22,8 +22,8 @@ export async function seedUsuariosMembresias(client?: PrismaClient): Promise<See
 
   // comunidades
   const comunidadesData = [
-    { id: "comunidad-a", nombre: "Condominio Los Aromos TEST", slug: "los-aromos-test" },
-    { id: "comunidad-b", nombre: "Condominio Las Palmas TEST", slug: "las-palmas-test" },
+    { id: "comunidad-a", nombre: "Comunidad Los Aromos TEST", slug: "los-aromos-test" },
+    { id: "comunidad-b", nombre: "Comunidad Las Palmas TEST", slug: "las-palmas-test" },
   ]
 
   for (const c of comunidadesData) {
