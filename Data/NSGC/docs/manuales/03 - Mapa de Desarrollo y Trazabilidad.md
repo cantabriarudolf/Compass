@@ -48,7 +48,7 @@ Este documento vincula la arquitectura del menú con los archivos de especificac
 | **28** | **5** | **LAB** | `LAB - Mejoras Lab` (Fase 5) | Laboratorio QA | `/admin/qa-lab` | 🟢 Completado (`lab-fase-mejoras` archivado `2026-08-24`) |
 | 29 | 5 | QA-Lab | `DEV-qa-lab` | Laboratorio QA | `/admin/qa-lab` | 🟢 Completado (`qa-lab` archivado `2026-08-24`; pasos 8–10 PI/AD/GD en Sesión 1; pasos CO/GE con limpieza inversa en Sesión 2) |
 | 30 | 5 (Plat.) | AU | `AU - Autenticacion y Sesion.md` | Autenticación | `/ingresar` + `/api/auth/*` | 🟢 Completado (`au-authjs` archivado `2026-08-27`, P5 Auth.js JWT + D-v) |
-| 31 | D (Plat.) | SG | `SG - Hardening y Despliegue.md` | Hardening | (transversal: `proxy.ts` + `next.config.mjs`) | 🔵 En Proceso (`sg-predeploy-headers` P6 D-i/ii/iii) |
+| 31 | D (Plat.) | SG | `SG - Hardening y Despliegue.md` | Hardening | (transversal: `proxy.ts` + `next.config.mjs`) | 🟢 Completado (`sg-predeploy-headers` archivado `2026-08-27`, P6 D-i/ii/iii CSP report-only + headers + 5/5) |
 
 > Cambios v8: `MA` movido Fase2→Fase1 y `RP` a Fase0 para alinear `PHASES` con dependencias (MA alimenta EF/TU, RP transversal). `ES` marcado deprecado (ver `ES - ...md` y `ST` v8). `PI` queda Fase2 (no Fase5) y `AM/RE` Fase3 (no Fase5) para unificar Dashboard ↔ Plan.
 > Cambios Sesión 1 NSGC (`2026-08-25`): `PI`, `AD`, `GD` pasan a 🟢 Completado con convención 1 módulo = 1 change; `TU/EF/ES/VU/RG/ST/LAB/QA-Lab` regularizados según archivo limpio `2026-08-24`. Ruta AD corregida a `/admin/gestion` (panel real, no `/dashboard`).
