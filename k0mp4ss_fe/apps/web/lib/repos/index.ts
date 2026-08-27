@@ -64,9 +64,24 @@ export function crearRepositorio(comunidadId: string, client?: PrismaClient) {
     findMany: () => (prisma.comunidad.findMany as any)({ where: { id: cid } }) as Promise<unknown>,
   }
 
+  // Authz B3: Usuario es global (email @unique), Membresia es scoped por comunidadId (D3)
+  const usuariosGlobal = {
+    findById: (id: string) => (prisma.usuario.findUnique as any)({ where: { id } }) as Promise<unknown>,
+    findByEmail: (email: string) => (prisma.usuario.findUnique as any)({ where: { email } }) as Promise<unknown>,
+    findMany: (args?: Record<string, unknown>) => (prisma.usuario.findMany as any)(args ?? {}) as Promise<unknown>,
+    create: (data: Record<string, unknown>) => (prisma.usuario.create as any)({ data }) as Promise<unknown>,
+    update: (id: string, data: Record<string, unknown>) => (prisma.usuario.update as any)({ where: { id }, data }) as Promise<unknown>,
+    delete: (id: string) => (prisma.usuario.delete as any)({ where: { id } }) as Promise<unknown>,
+    count: (where?: Record<string, unknown>) => (prisma.usuario.count as any)({ where: where ?? {} }) as Promise<number>,
+    _delegate: prisma.usuario,
+  }
+  const membresiasScoped = scoped(prisma.membresia as any)
+
   return {
     // raíz
     comunidad: comunidadScoped,
+    usuarios: usuariosGlobal,
+    membresias: membresiasScoped,
     // estructura / comunidad
     tiposUnidad: scoped(prisma.tipoUnidad),
     macroSectores: scoped(prisma.macroSector),

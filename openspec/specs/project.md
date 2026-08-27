@@ -48,7 +48,7 @@ Each OpenSpec capability maps 1:1 to its module spec in `Data/NSGC/docs/especifi
 | `CF-configuracion-global` | `CF - Configuracion Global.md` |
 | `AM-auditoria-metricas` | `AM - Auditoria y Metricas.md` |
 | `RP-roles-permisos` | `RP - Roles y Permisos.md` |
-| `AU-autenticacion-sesion` | `AU - Autenticacion y Sesion.md` (parcial: scaffold propio; resto según consolidado de auditorías) |
+| `AU-autenticacion-sesion` | `AU - Autenticacion y Sesion.md` (parcial: scaffold + B3 authz con `Usuario`/`Membresia` por comunidad y `puede()` server-side; Auth.js + rate limit persistente pendientes P5) |
 | `SG-hardening-despliegue` | `SG - Hardening y Despliegue.md` |
 | `PI-portal-inmobiliario` | `PI - Portal Inmobiliario.md` |
 | `AD-gestion-administrativa` | `AD - Gestión Administrativa.md` |

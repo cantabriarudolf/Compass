@@ -1419,6 +1419,24 @@ export default function QaLabPage() {
           <Button variant="outline" onClick={validar} disabled={loading}><IconEye className="size-4 mr-1" /> Revisar que nada quedó suelto</Button>
           <Button variant="outline" onClick={exportar} disabled={!report}><IconDownload className="size-4 mr-1" /> Guardar comprobante</Button>
           <Button variant="destructive" onClick={limpiar} disabled={loading}><IconTrash className="size-4 mr-1" /> Borrar todo lo de prueba</Button>
+          <Button
+            variant="outline"
+            disabled={loading}
+            onClick={async () => {
+              setLoading(true)
+              setMsg(null)
+              try {
+                const res = await fetch("/api/admin/seed-authz", { method: "POST" })
+                const data = await res.json()
+                if (res.ok) setMsg({ type: "ok", text: `Seed AU B3 OK: ${data.counts.membresias} membresías en ${data.counts.comunidades} comunidades (admin@test.cl en A+B, resto en A)` })
+                else setMsg({ type: "error", text: data.error ?? "Error seed AU" })
+              } catch (e) { setMsg({ type: "error", text: String(e) }) }
+              finally { setLoading(false) }
+            }}
+            className="border-violet-300 text-violet-700 hover:bg-violet-50"
+          >
+            👥 Crear usuarios TEST (2 comunidades, B3)
+          </Button>
         </div>
         <details className="text-xs" open={!!ultimaFase && ultimaFase !== "todo"}>
           <summary className="cursor-pointer text-muted-foreground underline">¿Quieres poblar por partes? (avanzado)</summary>

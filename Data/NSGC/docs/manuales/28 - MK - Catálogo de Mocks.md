@@ -431,4 +431,37 @@ Colecciones transaccionales nuevas (nacen vacías, sin seeds estáticos). Bumps 
 
 Extensión aditiva CF: parámetros legales `ufMensual/ingresoMinimoMensual/topeGratificacionLegal/tasaSIS` (opcionales, auditados `CF_UPDATE_PARAM`). Extensión aditiva PE: `datosLaborales.sueldoBase`. Motor documental **pdfmake** instalado (`lib/pdf-utils.ts`): el binario PDF y la firma viven solo en memoria del documento (D1). Helpers puros en `lib/pl-utils.ts` y `lib/reporteria-utils.ts`. Consumidores: `/finanzas/remuneraciones`, `/comunidad/certificados`, `/admin/reporteria`. Dump completo en `40 - MK - Data Dump Remuneraciones, Certificados y Reportería.md`.
 
-*Última actualización: 27 de Agosto 2026 — Plataforma P3 (store v26 C2-final + D5 aviso duplicados)*
+### 13. Plataforma P4 — B3 Autorización por Roles (27/08/2026 — AU §4, RP, D3)
+
+No bump de `STORE_VERSION` (permanece 26) — fundamento Prisma + authz server-side.
+
+| Archivo | Ruta | Propósito | Consumers |
+|---------|------|-----------|-----------|
+| `prisma/schema.prisma` | `k0mp4ss_fe/apps/web/prisma/schema.prisma` | Modelos `Usuario`/`Membresia` (B3) + 66 previos con `comunidadId` | `lib/prisma.ts`, `lib/repos`, `seed-authz` |
+| `lib/authz.ts` | `k0mp4ss_fe/apps/web/lib/authz.ts` | Matriz pura `puede(rol,accion,recurso)` + `tienePermiso(roles,accion,recurso)` — 5 roles RP, 5 acciones, recursos `FI/MP/PE/PL/CT/RE/IR/admin:usuarios/backup` | `app/api/admin/usuarios`, `app/api/backup`, tests |
+| `lib/seed-authz.ts` | `k0mp4ss_fe/apps/web/lib/seed-authz.ts` | Helper `seedUsuariosMembresias()` idempotente: 2 comunidades (`comunidad-a`/`b`) + 5 usuarios TEST + 6 membresias (admin en A+B) | `/api/admin/seed-authz`, `/admin/qa-lab` |
+| `lib/repos/index.ts` | `k0mp4ss_fe/apps/web/lib/repos/index.ts` | Expone `usuarios` global + `membresias` scoped por `comunidadId` (D3) | Handlers, tests |
+| `app/api/admin/usuarios/route.ts` | `k0mp4ss_fe/apps/web/app/api/admin/usuarios/route.ts` | `GET ?comunidadId=` lista membresias+usuarios scoped, gate `puede(rol,"ver","admin:usuarios")` (solo `administrador`) — 401/400/403/200 | Admin UI / tests |
+| `app/api/admin/seed-authz/route.ts` | `k0mp4ss_fe/apps/web/app/api/admin/seed-authz/route.ts` | `POST` seed dev B3 (admin-only tras seed, legacy bypass si `sub===ADMIN_EMAIL`) | QA Lab botón 👥 |
+
+**Modelos Prisma (B3):**
+
+| Model | Campos clave | Índices/Constraints |
+|-------|--------------|---------------------|
+| `Usuario` | `id cuid, email @unique, personaId? (0..1→MP), activo Boolean @default(true)` | `email @unique` global |
+| `Membresia` | `id cuid, usuarioId FK Usuario Cascade, comunidadId FK Comunidad Cascade, rol String, createdAt` | `@@unique([usuarioId, comunidadId])`, `@@index([comunidadId])`, `@@index([usuarioId])` |
+
+**Seed TEST (idempotente):**
+
+| Comunidad | id | slug | Usuarios (rol) |
+|-----------|----|------|----------------|
+| Los Aromos TEST | `comunidad-a` | `los-aromos-test` | `admin@test.cl` (`administrador`), `comite@test.cl` (`comite`), `conserjeria@test.cl` (`conserjeria`), `residente@test.cl` (`residente`), `mantencion@test.cl` (`mantencion`) |
+| Las Palmas TEST | `comunidad-b` | `las-palmas-test` | `admin@test.cl` (`administrador` en B también) |
+
+**Matriz `puede()` (extracto RP):** `administrador` wildcard true; `comite` ver FI/balance/centro mando; `conserjeria` bitácora/cierre/directorio sin FI; `residente` CT propio/IR mantenimiento pero no IR interno/admin; `mantencion` MT + IR interno. Ver `lib/authz.ts:19` tabla completa y `lib/authz.test.ts` 12 suites.
+
+**Mapa repos:** `crearRepositorio(comunidadId)` scopéa `membresias` (C1b) + `fondosFI/proveedoresPE` etc. Aislamiento A/B verificado en `lib/repos/repos.authz.test.ts` (6) y `test/api-admin-usuarios.test.ts` (6 endpoint 403/200).
+
+**Hoja de ruta migración backend:** `prisma generate` crea cliente NestJS futuro; `authz` es sustituible por guard ABAC sin cambiar handlers.
+
+*Última actualización: 27 de Agosto 2026 — Plataforma P4 (B3 authz, sin bump STORE_VERSION)*

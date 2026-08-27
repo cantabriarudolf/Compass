@@ -134,4 +134,32 @@ Sector:    num par → "Alfa" | num impar → "Beta"
 
 ---
 
-*Última actualización: 09 de Mayo 2026*
+### Plataforma P4 — B3 Usuarios y Membresías por Comunidad (27/08/2026)
+
+> **Nuevo en BD (no mocks `data/`):** `prisma/schema.prisma` + `lib/seed-authz.ts`. Tenant compartido `comunidadId` + `lib/repos` scoping. Ver Catálogo 28 §13.
+
+| Comunidad seed | id | slug |
+|---------------|----|------|
+| Los Aromos TEST | `comunidad-a` | `los-aromos-test` |
+| Las Palmas TEST | `comunidad-b` | `las-palmas-test` |
+
+| Usuario seed | id | email | personaId | activo |
+|--------------|----|-------|----------|--------|
+| Admin | `usuario-admin` | `admin@test.cl` | `p-5` | true |
+| Comité | `usuario-comite` | `comite@test.cl` | `p-6` | true |
+| Conserjería | `usuario-conserjeria` | `conserjeria@test.cl` | `p-4` | true |
+| Residente | `usuario-residente` | `residente@test.cl` | `p-3` | true |
+| Mantención | `usuario-mantencion` | `mantencion@test.cl` | `p-7` | true |
+
+| Membresía | usuario | comunidad | rol |
+|-----------|---------|-----------|-----|
+| `mem-admin-a` | `usuario-admin` | `comunidad-a` | `administrador` |
+| `mem-admin-b` | `usuario-admin` | `comunidad-b` | `administrador` |
+| `mem-comite-a` | `usuario-comite` | `comunidad-a` | `comite` |
+| `mem-conserjeria-a` | `usuario-conserjeria` | `comunidad-a` | `conserjeria` |
+| `mem-residente-a` | `usuario-residente` | `comunidad-a` | `residente` |
+| `mem-mantencion-a` | `usuario-mantencion` | `comunidad-a` | `mantencion` |
+
+Patrón creación: `email` único global, `personaId` 0..1 (puede ser `null`), `rol` uno de `administrador|comite|conserjeria|residente|mantencion` (ver `lib/authz.ts:puede()`). `@@unique([usuarioId, comunidadId])` impide doble rol en misma comunidad; para múltiples roles se usa `tienePermiso()` unión. Endpoint: `GET /api/admin/usuarios?comunidadId=` solo `administrador`.
+
+*Última actualización: 27 de Agosto 2026 — Plataforma P4 (B3 authz)*

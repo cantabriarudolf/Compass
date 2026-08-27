@@ -61,6 +61,7 @@ model Comunidad {
   adelantosPL              AdelantoPL[]
   certificadosCT           CertificadoCT[]
   reportesRE               ReporteRE[]
+  membresias               Membresia[]
   // maestros
   afps                     Afp[]
   previsionesSalud         PrevisionSalud[]
@@ -82,6 +83,34 @@ model Comunidad {
   jornadas                 Jornada[]
   couriers                 Courier[]
   contratistas             Contratista[]
+}
+
+// Autenticación y Autorización (B3 — AU §4, RP, D3)
+model Usuario {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  personaId String? // 0..1 hacia MP.Persona.id (no FK estricta para desacoplar)
+  activo    Boolean  @default(true)
+  membresias Membresia[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("usuarios")
+}
+
+model Membresia {
+  id          String   @id @default(cuid())
+  usuarioId   String
+  usuario     Usuario   @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  comunidadId String
+  comunidad   Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  rol         String
+  createdAt   DateTime @default(now())
+
+  @@unique([usuarioId, comunidadId])
+  @@index([comunidadId])
+  @@index([usuarioId])
+  @@map("membresias")
 }
 
 // Estructura Física — Inventario
