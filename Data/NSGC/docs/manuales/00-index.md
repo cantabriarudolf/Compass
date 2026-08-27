@@ -20,6 +20,7 @@ Bienvenido a la documentación operativa del sistema de administración de condo
 - [26 - CT - Certificados](<26 - CT - Certificados.md>): Documentación oficial con firma embebida en el PDF, gates por tipología (Al Día saldo ≤ 0, residencia VU activo) e historial con código de verificación.
 
 ## 🔧 Documentación Transversal
+- [AU - Autenticación y Sesión](<AU - Autenticacion y Sesion.md>): Login Auth.js (JWT + credentials), usuarios en BD con `passwordHash`, rate limit persistente D-v y guardia `proxy.ts`.
 - [28 - MK - Catálogo de Mocks](<28 - MK - Catálogo de Mocks.md>): Inventario completo de datos mockeados, ubicación, dependencias y hoja de ruta de migración a backend.
 - [29 - MK - Data Dump Inventario](<29 - MK - Data Dump Inventario.md>): Todas las unidades, sectores y tipos resueltos en tablas planas (166 unidades: 80 deptos + 3 locales + 83 plazas `u-E-*`).
 - [30 - MK - Data Dump Comunidad](<30 - MK - Data Dump Comunidad.md>): Personas, vínculos y extensiones laborales/gobernanza (ver banner: dump histórico).
@@ -34,4 +35,4 @@ Bienvenido a la documentación operativa del sistema de administración de condo
 - [25 - RE - Reportería y Dashboards](<25 - RE - Reportería y Dashboards.md>): Centro de mando (censo, pulso operativo, embudo GE, salud de caja con termómetro) y distribución segmentada EF×perfil×tenencia.
 
 ---
-*Última actualización: 2026-08-26 - Sesión 7 NSGC (ventana 8): manuales PL/CT/RE completados, Dump 40 creado, Catálogo ampliado con sección 11 (colecciones PL/CT/RE, store v25). Serie NSGC de módulos COMPLETA.*
+*Última actualización: 2026-08-27 - Plataforma P5: Auth.js JWT (AU §3) + rate limit D-v, manual AU creado, Catálogo actualizado con mocks de sesión, store v26.*

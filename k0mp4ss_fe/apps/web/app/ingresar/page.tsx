@@ -6,7 +6,58 @@ import { Button } from "@workspace/ui/components/button"
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
 
-export default function PaginaIngresar() {
+interface RespuestaLogin {
+  ok: boolean
+  error?: "credenciales" | "limite_intentos" | "conexion" | "desconocido"
+}
+
+/**
+ * Login contra Auth.js (provider credentials) — AU §3 P5.
+ * Danza estándar: GET /api/auth/csrf → POST /api/auth/callback/credentials
+ * con X-Auth-Return-Redirect (respuesta JSON {url}; fallo codificado como
+ * query params error=CredentialsSignin&code=<code>).
+ */
+async function iniciarSesion(email: string, password: string, callbackUrl: string): Promise<RespuestaLogin> {
+  let csrfToken = ""
+  try {
+    const csrfRes = await fetch("/api/auth/csrf", { headers: { Accept: "application/json" } })
+    if (csrfRes.ok) {
+      const datos = await csrfRes.json().catch(() => null)
+      csrfToken = typeof datos?.csrfToken === "string" ? datos.csrfToken : ""
+    }
+  } catch {
+    return { ok: false, error: "conexion" }
+  }
+
+  let respuesta: Response
+  try {
+    respuesta = await fetch("/api/auth/callback/credentials", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        Accept: "application/json",
+        "X-Auth-Return-Redirect": "1",
+      },
+      body: new URLSearchParams({ csrfToken, email, password, callbackUrl }),
+    })
+  } catch {
+    return { ok: false, error: "conexion" }
+  }
+
+  const datos = (await respuesta.json().catch(() => null)) as { url?: string } | null
+  if (!respuesta.ok || !datos?.url) {
+    return { ok: false, error: "desconocido" }
+  }
+  const url = new URL(datos.url, window.location.origin)
+  if (url.searchParams.get("error")) {
+    const code = url.searchParams.get("code")
+    if (code === "rate_limited") return { ok: false, error: "limite_intentos" }
+    return { ok: false, error: "credenciales" }
+  }
+  return { ok: true }
+}
+
+function IngresarForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [email, setEmail] = React.useState("")
@@ -19,17 +70,25 @@ export default function PaginaIngresar() {
     setError(null)
     setCargando(true)
     try {
-      const respuesta = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
-      })
-      const datos = await respuesta.json().catch(() => ({}))
-      if (!respuesta.ok) {
-        setError(datos.error ?? "No fue posible iniciar sesión.")
+      const destino = searchParams.get("next")
+      const urlDestino = destino && destino.startsWith("/") ? destino : "/admin"
+      const resultado = await iniciarSesion(
+        email,
+        password,
+        new URL(urlDestino, window.location.origin).href
+      )
+      if (!resultado.ok) {
+        if (resultado.error === "limite_intentos") {
+          setError("Demasiados intentos. Espere unos minutos.")
+        } else if (resultado.error === "credenciales") {
+          setError("Credenciales inválidas.")
+        } else if (resultado.error === "conexion") {
+          setError("Error de conexión con el servidor.")
+        } else {
+          setError("No fue posible iniciar sesión.")
+        }
         return
       }
-      const destino = searchParams.get("next")
       router.push(destino && destino.startsWith("/") ? destino : "/admin")
     } catch {
       setError("Error de conexión con el servidor.")
@@ -63,5 +122,13 @@ export default function PaginaIngresar() {
         </Button>
       </form>
     </main>
+  )
+}
+
+export default function PaginaIngresar() {
+  return (
+    <React.Suspense fallback={<main className="flex min-h-screen items-center justify-center p-4"><p className="text-sm text-muted-foreground">Cargando…</p></main>}>
+      <IngresarForm />
+    </React.Suspense>
   )
 }

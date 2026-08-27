@@ -4,11 +4,15 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest"
 import { NextRequest } from "next/server"
 import { prisma } from "@/lib/prisma"
-import { crearToken, nuevaExpiracion } from "@/lib/auth"
+
+const state = vi.hoisted(() => ({ cookie: "" }))
+vi.mock("next/headers", () => ({
+  headers: () => Promise.resolve(new Headers(state.cookie ? { cookie: state.cookie, "x-forwarded-proto": "http" } : { "x-forwarded-proto": "http" })),
+}))
 
 const AUTH_SECRET = "test-secret-12345678"
 
-describe("GET /api/admin/usuarios — autorización server-side (B3)", () => {
+describe("GET /api/admin/usuarios — autorización server-side (B3, Auth.js)", () => {
   const comunidadA = "comunidad-a-endpoint"
   const comunidadB = "comunidad-b-endpoint"
   const adminEmail = "endpoint-admin@test.cl"
@@ -16,17 +20,14 @@ describe("GET /api/admin/usuarios — autorización server-side (B3)", () => {
 
   beforeAll(async () => {
     process.env.AUTH_SECRET = AUTH_SECRET
-    // Asegura comunidades de test
     for (const c of [
       { id: comunidadA, nombre: "Comunidad A Endpoint", slug: "comunidad-a-endpoint" },
       { id: comunidadB, nombre: "Comunidad B Endpoint", slug: "comunidad-b-endpoint" },
     ]) {
       await prisma.comunidad.upsert({ where: { id: c.id }, update: {}, create: c }).catch(async () => {
-        // si slug colisiona, actualiza
         await prisma.comunidad.upsert({ where: { slug: c.slug }, update: {}, create: c }).catch(() => {})
       })
     }
-    // Usuarios
     for (const u of [
       { id: "endpoint-usuario-admin", email: adminEmail, activo: true },
       { id: "endpoint-usuario-conserje", email: conserjeEmail, activo: true },
@@ -37,16 +38,14 @@ describe("GET /api/admin/usuarios — autorización server-side (B3)", () => {
     const conserjeUser = await prisma.usuario.findUnique({ where: { email: conserjeEmail } })
     if (!adminUser || !conserjeUser) throw new Error("seed usuarios endpoint falló")
 
-    // Limpia membresias previas de estos usuarios
     await prisma.membresia.deleteMany({ where: { usuarioId: { in: [adminUser.id, conserjeUser.id] } } })
-    // Crea membresías: admin solo en A, conserje solo en A
     await prisma.membresia.create({ data: { usuarioId: adminUser.id, comunidadId: comunidadA, rol: "administrador" } })
     await prisma.membresia.create({ data: { usuarioId: conserjeUser.id, comunidadId: comunidadA, rol: "conserjeria" } })
-    // Importante: admin no tiene membresía en B -> prueba aislamiento
   }, 30_000)
 
   afterAll(async () => {
     try {
+      state.cookie = ""
       const adminUser = await prisma.usuario.findUnique({ where: { email: adminEmail } })
       const conserjeUser = await prisma.usuario.findUnique({ where: { email: conserjeEmail } })
       const ids = [adminUser?.id, conserjeUser?.id].filter(Boolean) as string[]
@@ -58,18 +57,27 @@ describe("GET /api/admin/usuarios — autorización server-side (B3)", () => {
     } catch {}
   })
 
-  async function callGet({ comunidadId, email, cookie, headers }: { comunidadId?: string; email?: string; cookie?: string; headers?: Record<string, string> }) {
+  async function sesionCookie(email: string): Promise<string> {
+    const user = await prisma.usuario.findUnique({ where: { email } })
+    if (!user) throw new Error(`usuario no encontrado: ${email}`)
+    const { cookieSesionAuthjs } = await import("./helpers/sesion-authjs")
+    return cookieSesionAuthjs({ sub: user.id, email: user.email })
+  }
+
+  async function callGet({ comunidadId, email, headers }: { comunidadId?: string; email?: string; headers?: Record<string, string> }) {
     const { GET } = await import("@/app/api/admin/usuarios/route")
     const url = `http://localhost/api/admin/usuarios${comunidadId ? `?comunidadId=${comunidadId}` : ""}`
-    const token = email ? crearToken({ sub: email, exp: nuevaExpiracion() }) : null
-    const cookieHeader = cookie ?? (token ? `compass_session=${token}` : "")
+    state.cookie = email ? await sesionCookie(email) : ""
     const req = new NextRequest(url, {
       headers: {
-        ...(cookieHeader ? { cookie: cookieHeader } : {}),
+        "x-forwarded-proto": "http",
+        ...(state.cookie ? { cookie: state.cookie } : {}),
         ...headers,
       },
     })
-    return GET(req)
+    const res = await GET(req)
+    state.cookie = ""
+    return res
   }
 
   it("responde 401 sin sesión", async () => {
@@ -96,7 +104,6 @@ describe("GET /api/admin/usuarios — autorización server-side (B3)", () => {
     expect(j.comunidadId).toBe(comunidadA)
     expect(Array.isArray(j.membresias)).toBe(true)
     expect(j.total).toBeGreaterThanOrEqual(1)
-    // solo membresias de A, no fuga de B
     expect(j.membresias.every((m: { comunidadId: string }) => m.comunidadId === comunidadA)).toBe(true)
   })
 
@@ -106,12 +113,14 @@ describe("GET /api/admin/usuarios — autorización server-side (B3)", () => {
   })
 
   it("header x-comunidad-id alternativo funciona para admin", async () => {
-    const token = crearToken({ sub: adminEmail, exp: nuevaExpiracion() })
+    const cookie = await sesionCookie(adminEmail)
+    state.cookie = cookie
     const req = new NextRequest(`http://localhost/api/admin/usuarios`, {
-      headers: { cookie: `compass_session=${token}`, "x-comunidad-id": comunidadA },
+      headers: { cookie, "x-comunidad-id": comunidadA, "x-forwarded-proto": "http" },
     })
     const { GET } = await import("@/app/api/admin/usuarios/route")
     const res = await GET(req)
+    state.cookie = ""
     expect(res.status).toBe(200)
   })
 })

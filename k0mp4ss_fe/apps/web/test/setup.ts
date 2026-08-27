@@ -8,6 +8,10 @@ if (!process.env.DATABASE_URL) {
   process.env.DATABASE_URL = `file:${path.resolve(__dirname, "../prisma/dev.db")}`
 }
 
+// P5 (AU §3): NextAuth() captura AUTH_SECRET al cargar el módulo; se fija un
+// default para tests antes de cualquier import de lib/auth o proxy.
+process.env.AUTH_SECRET ??= "test-secret-12345678"
+
 export const server = setupServer()
 
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }))

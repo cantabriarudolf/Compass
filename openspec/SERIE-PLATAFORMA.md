@@ -7,7 +7,7 @@
 | P2 | C1+C1b+C3b Prisma comunidadId + repos scoping | HECHA | adf42b0 |
 | P3 | C2-final secretos a env (store v26) + aviso duplicados D5 | HECHA | e09c50e |
 | P4 | B3 autorización: authz.ts + membresías por comunidad | HECHA | d53b288 |
-| P5 | Auth.js + Prisma adapter + rate limit persistente (D-v) | pendiente | — |
+| P5 | Auth.js + Prisma adapter + rate limit persistente (D-v) | EN CURSO | — |
 | P6 | D-i/ii/iii CSP + headers + re-chequeos scripted | pendiente | — |
 | P7 | D-iv re-auditoría OWASP + D-vi backups con restore | pendiente | — |
 | P8 | Cierre integral engranajes + prepush final + push | pendiente | — |

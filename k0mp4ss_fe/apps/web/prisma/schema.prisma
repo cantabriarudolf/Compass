@@ -85,15 +85,16 @@ model Comunidad {
   contratistas             Contratista[]
 }
 
-// Autenticación y Autorización (B3 — AU §4, RP, D3)
+// Autenticación y Autorización (B3 — AU §4, RP, D3; P5 — AU §3 Auth.js + SG D-v)
 model Usuario {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  personaId String? // 0..1 hacia MP.Persona.id (no FK estricta para desacoplar)
-  activo    Boolean  @default(true)
-  membresias Membresia[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           String   @id @default(cuid())
+  email        String   @unique
+  personaId    String? // 0..1 hacia MP.Persona.id (no FK estricta para desacoplar)
+  activo       Boolean  @default(true)
+  passwordHash String? // bcrypt (AU §3: login contra BD vía Auth.js credentials)
+  membresias   Membresia[]
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   @@map("usuarios")
 }
@@ -111,6 +112,16 @@ model Membresia {
   @@index([comunidadId])
   @@index([usuarioId])
   @@map("membresias")
+}
+
+// SG D-v: rate limit persistente (10 fallos/15 min por clave IP) — reemplaza el Map en memoria
+model RateLimitAttempt {
+  id        String   @id @default(cuid())
+  clave     String
+  createdAt DateTime @default(now())
+
+  @@index([clave, createdAt])
+  @@map("rate_limit_attempts")
 }
 
 // Estructura Física — Inventario

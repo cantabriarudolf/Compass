@@ -1,0 +1,33 @@
+import type { NextAuthConfig } from "next-auth"
+import type { DefaultSession } from "next-auth"
+
+declare module "next-auth" {
+  interface Session {
+    user: {
+      id: string
+    } & DefaultSession["user"]
+  }
+}
+
+/**
+ * Configuración edge-safe de Auth.js (AU §3, P5).
+ * NO importar aquí nada de Node/Prisma: proxy.ts (edge) construye su propia
+ * instancia con esta configuración para verificar el JWT de sesión sin BD.
+ * El provider Credentials (authorize con Prisma + bcrypt) vive solo en lib/auth.ts.
+ */
+export const authConfig = {
+  // JWT para que proxy.ts (edge) verifique sin Prisma; el adapter vive server-side.
+  session: { strategy: "jwt", maxAge: 30 * 24 * 60 * 60 },
+  pages: { signIn: "/ingresar", error: "/ingresar" },
+  // Deploy self-hosted: sin esto Auth.js no confía en el Host en producción.
+  trustHost: true,
+  providers: [], // edge-safe; el provider real se agrega en lib/auth.ts (runtime Node)
+  callbacks: {
+    session({ session, token }) {
+      // sub = Usuario.id en BD (AU §3.2); email para identificar en UI/logs.
+      session.user.id = token.sub ?? ""
+      if (token.email) session.user.email = token.email
+      return session
+    },
+  },
+} satisfies NextAuthConfig

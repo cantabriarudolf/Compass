@@ -1,4 +1,11 @@
 import type { PrismaClient } from "@prisma/client"
+import bcrypt from "bcryptjs"
+
+/**
+ * Password TEST de los usuarios de seed (AU §3 P5): dato de demo en BD,
+ * no una credencial de entorno. Documentada en el manual de autenticación.
+ */
+export const PASSWORD_TEST = "test1234"
 
 export interface SeedAuthzResult {
   ok: boolean
@@ -9,12 +16,14 @@ export interface SeedAuthzResult {
 
 /**
  * seedUsuariosMembresias — crea 2 comunidades + 5 usuarios TEST con membresías
+ * y passwordHash bcrypt (login vía Auth.js credentials, AU §3 P5).
  * Idempotente: upsert por id/slug/email y membresia unique.
  * Comunidad A: comunidad-a (Comunidad Los Aromos TEST)
  * Comunidad B: comunidad-b (Comunidad Las Palmas TEST)
  * Usuarios: admin@test.cl (admin A+B), comite@test.cl (comite A), conserjeria@test.cl, residente@test.cl, mantencion@test.cl
  * Cada usuario queda vinculado por membresia a su comunidad; admin en ambas para probar aislamiento A/B.
- * Llamado desde qa-lab (fase AU) y desde tests con client temporal.
+ * Llamado desde qa-lab (fase AU, requiere sesión admin) y desde tests con client temporal.
+ * Primer arranque sin usuarios: `npm run seed:authz` (scripts/seed-authz.mjs).
  */
 export async function seedUsuariosMembresias(client?: PrismaClient): Promise<SeedAuthzResult> {
   const { prisma: defaultPrisma } = await import("./prisma")
@@ -44,18 +53,20 @@ export async function seedUsuariosMembresias(client?: PrismaClient): Promise<See
     }
   }
 
+  const passwordHash = await bcrypt.hash(PASSWORD_TEST, 10)
+
   const usuariosData = [
-    { id: "usuario-admin", email: "admin@test.cl", personaId: "p-5", activo: true },
-    { id: "usuario-comite", email: "comite@test.cl", personaId: "p-6", activo: true },
-    { id: "usuario-conserjeria", email: "conserjeria@test.cl", personaId: "p-4", activo: true },
-    { id: "usuario-residente", email: "residente@test.cl", personaId: "p-3", activo: true },
-    { id: "usuario-mantencion", email: "mantencion@test.cl", personaId: "p-7", activo: true },
+    { id: "usuario-admin", email: "admin@test.cl", personaId: "p-5", activo: true, passwordHash },
+    { id: "usuario-comite", email: "comite@test.cl", personaId: "p-6", activo: true, passwordHash },
+    { id: "usuario-conserjeria", email: "conserjeria@test.cl", personaId: "p-4", activo: true, passwordHash },
+    { id: "usuario-residente", email: "residente@test.cl", personaId: "p-3", activo: true, passwordHash },
+    { id: "usuario-mantencion", email: "mantencion@test.cl", personaId: "p-7", activo: true, passwordHash },
   ]
 
   for (const u of usuariosData) {
     await (prisma as any).usuario.upsert({
       where: { email: u.email },
-      update: { personaId: u.personaId, activo: u.activo },
+      update: { personaId: u.personaId, activo: u.activo, passwordHash: u.passwordHash },
       create: u,
     })
   }

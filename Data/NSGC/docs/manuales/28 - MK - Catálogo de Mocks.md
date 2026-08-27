@@ -464,4 +464,29 @@ No bump de `STORE_VERSION` (permanece 26) — fundamento Prisma + authz server-s
 
 **Hoja de ruta migración backend:** `prisma generate` crea cliente NestJS futuro; `authz` es sustituible por guard ABAC sin cambiar handlers.
 
-*Última actualización: 27 de Agosto 2026 — Plataforma P4 (B3 authz, sin bump STORE_VERSION)*
+### 14. Plataforma P5 — Auth.js + Rate Limit D-v (27/08/2026 — AU §3, C-extra-3)
+
+No bump de `STORE_VERSION` (permanece 26) — reemplazo del scaffold HMAC por Auth.js JWT.
+
+| Archivo | Ruta | Propósito | Consumers |
+|---------|------|-----------|-----------|
+| `lib/auth.config.ts` | `k0mp4ss_fe/apps/web/lib/auth.config.ts` | Config edge-safe Auth.js: `session {strategy: "jwt", maxAge 30d}`, `pages.signIn = "/ingresar"`, `trustHost: true`, `callbacks.session → session.user.id = token.sub` | `proxy.ts` (edge), `lib/auth.ts` |
+| `lib/auth.ts` | `k0mp4ss_fe/apps/web/lib/auth.ts` | Instancia Node `NextAuth({...authConfig, adapter, providers: [Credentials]})`: `authorize` valida `Usuario.passwordHash` (bcrypt) + `activo`, aplica `lib/rate-limit.ts`, `sub = Usuario.id`, `handlers`/`auth`/`signIn`/`signOut` | `app/api/auth/[...nextauth]/route.ts`, `app/api/admin/*`, `app/api/backup`, tests |
+| `lib/auth-adapter.ts` | `k0mp4ss_fe/apps/web/lib/auth-adapter.ts` | Contrato `Adapter` (next-auth/adapters) sobre Prisma/`Usuario` (mapea `getUserByEmail`/`getUser`/…; Account/Session/VerificationToken no-op) | `lib/auth.ts` |
+| `lib/rate-limit.ts` | `k0mp4ss_fe/apps/web/lib/rate-limit.ts` | D-v persistente: `excedeIntentos`/`registrarFallo`/`limpiarIntentos` (10 fallos/15 min por `clave`, `await` Prisma, cleanup oportunista) | `lib/auth.ts:authorize`, tests |
+| `test/helpers/sesion-authjs.ts` | `k0mp4ss_fe/apps/web/test/helpers/sesion-authjs.ts` | Minta cookies `authjs.session-token` reales vía `@auth/core/jwt.encode` (HKDF `AUTH_SECRET`+salt) | `test/auth/proxy.test.ts`, `test/api-admin-usuarios.test.ts`, `test/api-backup-authz.test.ts` |
+
+**Modelos Prisma (P5 — migración `20260827140912_authjs_password_ratelimit`):**
+
+| Model | Campos clave | Índices/Constraints |
+|-------|--------------|---------------------|
+| `Usuario` | `+ passwordHash String? (bcrypt P5)` | `email @unique` global |
+| `RateLimitAttempt` | `id cuid, clave String (IP), createdAt DateTime @default(now())` | `@@index([clave, createdAt])` |
+
+**Seed TEST (password P5):** `admin@test.cl` etc. ahora con `passwordHash = bcrypt("test1234")`; `lib/seed-authz.ts` + `scripts/seed-authz.mjs` idempotentes (`npm run seed:authz` primer arranque).
+
+**Mocks de sesión (test):** cookie `authjs.session-token` (dev http) / `__Secure-authjs.session-token` (prod https), JWE `A256CBC-HS512` con `AUTH_SECRET` (HKDF). Flujo login: `GET /api/auth/csrf` → `POST /api/auth/callback/credentials` (`X-Auth-Return-Redirect: 1`, respuesta `{url}` con `code=credentials|rate_limited`). Ver `test/auth/api-auth.test.ts` (8 integración CSRF) y `test/auth/rate-limit.test.ts` (5 D-v).
+
+**Hoja de ruta:** adapter custom inactivo con JWT+credentials (listo para OAuth futuro sin duplicar modelos).
+
+*Última actualización: 27 de Agosto 2026 — Plataforma P5 (Auth.js JWT + D-v, sin bump STORE_VERSION)*

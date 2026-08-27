@@ -1,175 +1,229 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest"
-import { NextRequest } from "next/server"
-import { POST as loginPOST } from "@/app/api/auth/login/route"
-import { GET as sessionGET } from "@/app/api/auth/session/route"
-import { POST as logoutPOST } from "@/app/api/auth/logout/route"
-import { crearToken, nuevaExpiracion, NOMBRE_COOKIE_SESION, registrarFallo } from "@/lib/auth"
+/**
+ * @vitest-environment node
+ *
+ * Integración real contra los handlers de Auth.js (app/api/auth/[...nextauth]):
+ * danza CSRF + login credentials + sesión + rate limit D-v persistente.
+ */
+import { describe, it, expect, beforeAll, afterAll } from "vitest"
+import { prisma } from "@/lib/prisma"
+import bcrypt from "bcryptjs"
 
-function mkLoginRequest(body: unknown, headers: Record<string, string> = {}) {
-  return new Request("http://localhost/api/auth/login", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...headers },
-    body: JSON.stringify(body),
-  }) as unknown as Request
+const BASE = "http://localhost"
+const PASSWORD_VALIDA = "secret123"
+
+const emailOk = `authjs-ok-${Date.now()}@test.cl`
+const emailInactivo = `authjs-inactivo-${Date.now()}@test.cl`
+const emailMalaPass = `authjs-bad-${Date.now()}@test.cl`
+const claveRate = `ip-rate-${Date.now()}`
+
+async function handlers() {
+  return await import("@/app/api/auth/[...nextauth]/route")
 }
 
-function mkSessionRequest(cookie?: string) {
-  const req = new NextRequest("http://localhost/api/auth/session", {
-    headers: cookie ? { cookie: `${NOMBRE_COOKIE_SESION}=${cookie}` } : {},
-  })
-  return req
+async function obtenerCsrf(): Promise<{ csrfToken: string; cookie: string }> {
+  const { GET } = await handlers()
+  const res = await (GET as any)(new Request(`${BASE}/api/auth/csrf`, { headers: { "x-forwarded-proto": "http" } }))
+  const datos = (await res.json()) as { csrfToken: string }
+  const setCookies = res.headers.getSetCookie().map((c: string) => c.split(";")[0]!)
+  return { csrfToken: datos.csrfToken, cookie: setCookies.join("; ") }
 }
 
-describe("POST /api/auth/login", () => {
-  const originalSecret = process.env.AUTH_SECRET
-  const originalNodeEnv = process.env.NODE_ENV
-  const originalAdminEmail = process.env.ADMIN_EMAIL
-  const originalAdminPass = process.env.ADMIN_PASSWORD
+async function login(email: string, password: string, extraCookie?: string, ip?: string) {
+  const { GET, POST } = await handlers()
+  const csrf = await (GET as any)(new Request(`${BASE}/api/auth/csrf`, { headers: { "x-forwarded-proto": "http" } }))
+  const { csrfToken } = (await csrf.json()) as { csrfToken: string }
+  const cookies = [
+    ...csrf.headers.getSetCookie().map((c: string) => c.split(";")[0]!),
+    ...(extraCookie ? [extraCookie] : []),
+  ].join("; ")
+  return (POST as any)(
+    new Request(`${BASE}/api/auth/callback/credentials`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "x-forwarded-proto": "http",
+        "X-Auth-Return-Redirect": "1",
+        cookie: cookies,
+        ...(ip ? { "x-forwarded-for": ip } : {}),
+      },
+      body: new URLSearchParams({ csrfToken, email, password, callbackUrl: `${BASE}/admin` }),
+    })
+  )
+}
 
-  beforeEach(() => {
-    process.env.AUTH_SECRET = "test-secret-12345678"
-    // @ts-ignore
-    process.env.NODE_ENV = "test"
-    delete process.env.ADMIN_EMAIL
-    delete process.env.ADMIN_PASSWORD
-  })
+async function pedirSesion(cookie?: string) {
+  const { GET } = await handlers()
+  return (GET as any)(
+    new Request(`${BASE}/api/auth/session`, {
+      headers: { "x-forwarded-proto": "http", ...(cookie ? { cookie } : {}) },
+    })
+  )
+}
 
-  afterEach(() => {
-    if (originalSecret === undefined) delete process.env.AUTH_SECRET
-    else process.env.AUTH_SECRET = originalSecret
-    // @ts-ignore
-    process.env.NODE_ENV = originalNodeEnv
-    if (originalAdminEmail === undefined) delete process.env.ADMIN_EMAIL
-    else process.env.ADMIN_EMAIL = originalAdminEmail
-    if (originalAdminPass === undefined) delete process.env.ADMIN_PASSWORD
-    else process.env.ADMIN_PASSWORD = originalAdminPass
-  })
+function codigoDesdeUrl(datos: { url?: string }): { error: string | null; code: string | null } {
+  if (!datos.url) return { error: null, code: null }
+  const url = new URL(datos.url)
+  return { error: url.searchParams.get("error"), code: url.searchParams.get("code") }
+}
 
-  it("400 si cuerpo inválido o sin campos", async () => {
-    const r1 = await loginPOST(new Request("http://localhost/api/auth/login", { method: "POST", body: "not-json", headers: { "Content-Type": "application/json" } }) as Request)
-    expect(r1.status).toBe(400)
-    const j1 = await r1.json()
-    expect(j1.error).toMatch(/inválido/i)
-
-    const r2 = await loginPOST(mkLoginRequest({}))
-    expect(r2.status).toBe(400)
-    const j2 = await r2.json()
-    expect(j2.error).toMatch(/obligatorios/i)
-
-    const r3 = await loginPOST(mkLoginRequest({ email: "admin@compass.local" }))
-    expect(r3.status).toBe(400)
-  })
-
-  it("503 si AUTH_SECRET ausente en producción", async () => {
-    delete process.env.AUTH_SECRET
-    // @ts-ignore
-    process.env.NODE_ENV = "production"
-    const r = await loginPOST(mkLoginRequest({ email: "admin@compass.local", password: "x" }))
-    expect(r.status).toBe(503)
-    const j = await r.json()
-    expect(j.error).toMatch(/AUTH_SECRET/)
-  })
-
-  it("401 con credenciales inválidas y 429 tras 10 fallos", async () => {
-    const ip = `test-ip-${Date.now()}-${Math.random()}`
-    for (let i = 0; i < 10; i++) {
-      const r = await loginPOST(mkLoginRequest({ email: "admin@compass.local", password: "wrong" }, { "x-forwarded-for": ip }))
-      expect(r.status).toBe(401)
+describe("Auth.js — /api/auth/* (login credentials + sesión + D-v)", () => {
+  beforeAll(async () => {
+    const passwordHash = await bcrypt.hash(PASSWORD_VALIDA, 10)
+    for (const u of [
+      { email: emailOk, activo: true, passwordHash },
+      { email: emailInactivo, activo: false, passwordHash },
+      { email: emailMalaPass, activo: true, passwordHash },
+    ]) {
+      await prisma.usuario.upsert({ where: { email: u.email }, update: u, create: { id: `uid-${u.email}`, ...u } })
     }
-    const r429 = await loginPOST(mkLoginRequest({ email: "admin@compass.local", password: "wrong" }, { "x-forwarded-for": ip }))
-    expect(r429.status).toBe(429)
+  }, 30_000)
+
+  afterAll(async () => {
+    try {
+      await prisma.usuario.deleteMany({ where: { email: { in: [emailOk, emailInactivo, emailMalaPass] } } })
+      await prisma.rateLimitAttempt.deleteMany({ where: { clave: claveRate } })
+    } catch {}
   })
 
-  it("200 y Set-Cookie en éxito", async () => {
-    const r = await loginPOST(mkLoginRequest({ email: "admin@compass.local", password: "compass-dev" }))
-    expect(r.status).toBe(200)
-    const j = await r.json()
-    expect(j.ok).toBe(true)
-    const setCookie = r.headers.get("set-cookie") ?? r.cookies.get(NOMBRE_COOKIE_SESION)?.value ?? ""
-    // NextResponse cookies se lee via r.cookies, pero también puede estar en header
-    const cookie = (r as unknown as { cookies: { get: (n: string)=>{value:string}|undefined } }).cookies?.get(NOMBRE_COOKIE_SESION)
-    expect(cookie?.value).toBeTruthy()
-    // verificar que el token es válido
-    const token = cookie!.value
-    const { verificarToken } = await import("@/lib/auth")
-    const sesion = verificarToken(token)
-    expect(sesion?.sub).toBe("admin@compass.local")
+  it("csrf entrega token y cookie de doble submit", async () => {
+    const { csrfToken, cookie } = await obtenerCsrf()
+    expect(csrfToken).toBeTruthy()
+    expect(cookie).toContain("authjs.csrf-token=")
   })
 
-  it("usa x-forwarded-for como clave de rate limit y fallback a local", async () => {
-    const r = await loginPOST(mkLoginRequest({ email: "admin@compass.local", password: "wrong" }))
-    expect([401, 429]).toContain(r.status)
-  })
-})
-
-describe("GET /api/auth/session", () => {
-  const originalSecret = process.env.AUTH_SECRET
-  beforeEach(() => {
-    process.env.AUTH_SECRET = "test-secret-12345678"
-  })
-  afterEach(() => {
-    if (originalSecret === undefined) delete process.env.AUTH_SECRET
-    else process.env.AUTH_SECRET = originalSecret
-  })
-
-  it("autenticado false sin cookie", async () => {
-    const req = mkSessionRequest()
-    const res = await sessionGET(req)
-    const j = await res.json()
-    expect(j.autenticado).toBe(false)
-  })
-
-  it("autenticado false con token inválido", async () => {
-    const req = mkSessionRequest("invalido.token")
-    const res = await sessionGET(req)
-    const j = await res.json()
-    expect(j.autenticado).toBe(false)
-  })
-
-  it("autenticado true con token válido", async () => {
-    const token = crearToken({ sub: "admin@compass.local", exp: nuevaExpiracion() })
-    const req = mkSessionRequest(token)
-    const res = await sessionGET(req)
-    const j = await res.json()
-    expect(j.autenticado).toBe(true)
-  })
-
-  it("autenticado false con token expirado", async () => {
-    const token = crearToken({ sub: "admin@compass.local", exp: Date.now() - 1000 })
-    const req = mkSessionRequest(token)
-    const res = await sessionGET(req)
-    const j = await res.json()
-    expect(j.autenticado).toBe(false)
-  })
-})
-
-describe("POST /api/auth/logout", () => {
-  it("borra cookie con maxAge 0", async () => {
-    const res = await logoutPOST()
+  it("login exitoso setea cookie de sesión y session.user.id = Usuario.id (sub)", async () => {
+    const res = await login(emailOk, PASSWORD_VALIDA)
     expect(res.status).toBe(200)
-    const j = await res.json()
-    expect(j.ok).toBe(true)
-    const header = res.headers.get("set-cookie") ?? ""
-    // comprobar que cookie se limpia: maxAge=0 o valor vacío
-    const cookie = (res as unknown as { cookies: { get: (n:string)=>{value:string}|undefined } }).cookies?.get(NOMBRE_COOKIE_SESION)
-    // NextResponse set con maxAge 0 puede no aparecer en header en test, pero cookies.get debe existir con valor ""
-    if (cookie) expect(cookie.value).toBe("")
-    // al menos header contiene el nombre de cookie
-    expect(header.includes(NOMBRE_COOKIE_SESION) || cookie !== undefined).toBe(true)
+    const datos = (await res.json()) as { url: string }
+    const { error } = codigoDesdeUrl(datos)
+    expect(error).toBeNull()
+    expect(datos.url).toContain("/admin")
+
+    const setCookies = res.headers.getSetCookie().map((c: string) => c.split(";")[0]!)
+    const sesionCookie = setCookies.find((c: string) => c.startsWith("authjs.session-token="))
+    expect(sesionCookie).toBeTruthy()
+
+    const usuario = await prisma.usuario.findUnique({ where: { email: emailOk } })
+    const sesionRes = await pedirSesion(sesionCookie!)
+    const sesion = (await sesionRes.json()) as { user?: { id?: string; email?: string } }
+    expect(sesion.user?.id).toBe(usuario!.id)
+    expect(sesion.user?.email).toBe(emailOk)
   })
 
-  it("flujo login → session true → logout → session false", async () => {
-    process.env.AUTH_SECRET = "test-secret-12345678"
-    const loginRes = await loginPOST(mkLoginRequest({ email: "admin@compass.local", password: "compass-dev" }))
-    const cookie = (loginRes as unknown as { cookies: { get: (n:string)=>{value:string}|undefined } }).cookies.get(NOMBRE_COOKIE_SESION)!
-    expect(cookie.value).toBeTruthy()
-    const sess1 = await sessionGET(mkSessionRequest(cookie.value))
-    expect((await sess1.json()).autenticado).toBe(true)
+  it("login sin sesión previa: /api/auth/session responde null", async () => {
+    const res = await pedirSesion()
+    expect(res.status).toBe(200)
+    expect(await res.json()).toBeNull()
+  })
 
-    const logoutRes = await logoutPOST()
-    expect((await logoutRes.json()).ok).toBe(true)
+  it("credenciales inválidas → error=CredentialsSignin&code=credentials y fallo persistido", async () => {
+    const ip = `ip-fallo-${Date.now()}`
+    const res = await login(emailMalaPass, "password-erronea", undefined, ip)
+    expect(res.status).toBe(200) // X-Auth-Return-Redirect: error como JSON {url}
+    const datos = (await res.json()) as { url: string }
+    const { error, code } = codigoDesdeUrl(datos)
+    expect(error).toBe("CredentialsSignin")
+    expect(code).toBe("credentials")
 
-    const sess2 = await sessionGET(mkSessionRequest(""))
-    expect((await sess2.json()).autenticado).toBe(false)
+    const persistido = await prisma.rateLimitAttempt.count({ where: { clave: ip } })
+    expect(persistido).toBe(1)
+    await prisma.rateLimitAttempt.deleteMany({ where: { clave: ip } })
+  })
+
+  it("usuario inactivo → mismo code=credentials (sin enumeración)", async () => {
+    const res = await login(emailInactivo, PASSWORD_VALIDA)
+    const datos = (await res.json()) as { url: string }
+    const { error, code } = codigoDesdeUrl(datos)
+    expect(error).toBe("CredentialsSignin")
+    expect(code).toBe("credentials")
+  })
+
+  it("sin csrf token → rechazado (MissingCSRF, no llega a authorize)", async () => {
+    const { POST } = await handlers()
+    const res = await (POST as any)(
+      new Request(`${BASE}/api/auth/callback/credentials`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+          "x-forwarded-proto": "http",
+          "X-Auth-Return-Redirect": "1",
+        },
+        body: new URLSearchParams({ email: emailOk, password: PASSWORD_VALIDA, callbackUrl: `${BASE}/admin` }),
+      })
+    )
+    const datos = (await res.json()) as { url: string }
+    const { error } = codigoDesdeUrl(datos)
+    expect(error).toBeTruthy()
+  })
+
+  it("D-v: 10 fallos previos en BD → code=rate_limited sin verificar credenciales", async () => {
+    // Siembra 10 fallos persistidos para la clave IP (ventana 15 min)
+    for (let i = 0; i < 10; i++) {
+      await prisma.rateLimitAttempt.create({ data: { clave: claveRate } })
+    }
+    // Aunque las credenciales son CORRECTAS, el límite aplica primero (fail-closed)
+    const res = await login(emailOk, PASSWORD_VALIDA, undefined, claveRate)
+    const datos = (await res.json()) as { url: string }
+    const { error, code } = codigoDesdeUrl(datos)
+    expect(error).toBe("CredentialsSignin")
+    expect(code).toBe("rate_limited")
+    // no setea cookie de sesión
+    const setCookies = res.headers.getSetCookie().map((c: string) => c.split(";")[0]!)
+    expect(setCookies.find((c: string) => c.startsWith("authjs.session-token="))).toBeFalsy()
+  })
+
+  it("login exitoso limpia los intentos de la clave (ventana reinicia)", async () => {
+    const ip = `ip-limpia-${Date.now()}`
+    await prisma.rateLimitAttempt.create({ data: { clave: ip } })
+    const res = await login(emailOk, PASSWORD_VALIDA, undefined, ip)
+    const datos = (await res.json()) as { url: string }
+    expect(codigoDesdeUrl(datos).error).toBeNull()
+    const restantes = await prisma.rateLimitAttempt.count({ where: { clave: ip } })
+    expect(restantes).toBe(0)
+  })
+
+  it("signout invalida la cookie de sesión", async () => {
+    const { POST } = await handlers()
+    const loginRes = await login(emailOk, PASSWORD_VALIDA)
+    const sesionCookie = loginRes.headers
+      .getSetCookie()
+      .map((c: string) => c.split(";")[0]!)
+      .find((c: string) => c.startsWith("authjs.session-token="))
+
+    const csrfRes = await pedirCsrfBruto()
+    const cookies = [sesionCookie!, ...csrfRes.cookies].join("; ")
+    const res = await (POST as any)(
+      new Request(`${BASE}/api/auth/signout`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+          "x-forwarded-proto": "http",
+          "X-Auth-Return-Redirect": "1",
+          cookie: cookies,
+        },
+        body: new URLSearchParams({ csrfToken: csrfRes.csrfToken, callbackUrl: `${BASE}/` }),
+      })
+    )
+    expect(res.status).toBe(200)
+    const rawCookies = res.headers.getSetCookie()
+    const limpiada = rawCookies
+      .map((c: string) => c.split(";")[0]!)
+      .find((c: string) => c.startsWith("authjs.session-token="))
+    // Auth.js invalida con valor vacío/expirado (JWT: stateless, limpia cookie)
+    expect(limpiada !== undefined).toBe(true)
+    // la cookie limpiada debe tener valor vacío o estar expirada
+    const valorLimpio = limpiada!.split("=")[1] ?? ""
+    const esVacia = valorLimpio === "" || rawCookies.some((c: string) => c.includes("Max-Age=0") || c.includes("Expires=Thu, 01 Jan 1970"))
+    expect(esVacia).toBe(true)
+    // sin cookie no hay sesión
+    const sesionResVacia = await pedirSesion()
+    expect(await sesionResVacia.json()).toBeNull()
   })
 })
+
+async function pedirCsrfBruto(): Promise<{ csrfToken: string; cookies: string[] }> {
+  const { GET } = await handlers()
+  const res = await (GET as any)(new Request(`${BASE}/api/auth/csrf`, { headers: { "x-forwarded-proto": "http" } }))
+  const { csrfToken } = (await res.json()) as { csrfToken: string }
+  return { csrfToken, cookies: res.headers.getSetCookie().map((c: string) => c.split(";")[0]!) }
+}

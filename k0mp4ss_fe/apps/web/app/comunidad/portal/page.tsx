@@ -69,13 +69,14 @@ export default function PortalInmobiliarioPage() {
   const notify = useCompassStore(s => s.notify)
   const saveConfiguracion = useCompassStore(s => s.saveConfiguracion)
 
-  // Sesión (cookie httpOnly): se consulta al servidor tras montar.
+  // Sesión (cookie httpOnly de Auth.js): se consulta al servidor tras montar.
+  // AU §3 P5: /api/auth/session de Auth.js responde { user, expires } | null.
   const [autenticado, setAutenticado] = React.useState<boolean | null>(null)
   React.useEffect(() => {
     let vigente = true
     fetch("/api/auth/session")
       .then(r => r.json())
-      .then(d => { if (vigente) setAutenticado(Boolean(d.autenticado)) })
+      .then(d => { if (vigente) setAutenticado(Boolean(d?.user)) })
       .catch(() => { if (vigente) setAutenticado(false) })
     return () => { vigente = false }
   }, [])

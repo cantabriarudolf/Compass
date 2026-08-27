@@ -1,6 +1,6 @@
 import { NextResponse, NextRequest } from "next/server"
 import { prisma } from "@/lib/prisma"
-import { NOMBRE_COOKIE_SESION, verificarToken } from "@/lib/auth"
+import { auth } from "@/lib/auth"
 import { puede } from "@/lib/authz"
 
 export const dynamic = "force-dynamic"
@@ -9,12 +9,12 @@ export const dynamic = "force-dynamic"
  * GET /api/admin/usuarios?comunidadId=xxx
  * Lista membresías + usuarios de la comunidad del contexto.
  * Autorización server-side (SG §4.1): proxy solo autentica, aquí se decide puede(rol, ver, admin:usuarios).
+ * Sesión vía Auth.js: sub = Usuario.id en BD (AU §3 P5).
  * Headers alternativos: x-comunidad-id
  */
 export async function GET(request: NextRequest) {
-  const token = request.cookies.get(NOMBRE_COOKIE_SESION)?.value
-  const sesion = verificarToken(token)
-  if (!sesion) {
+  const sesion = await auth()
+  if (!sesion?.user?.id) {
     return NextResponse.json({ error: "No autenticado." }, { status: 401 })
   }
 
@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Comunidad no encontrada" }, { status: 404 })
   }
 
-  const usuario = await prisma.usuario.findUnique({ where: { email: sesion.sub } })
+  const usuario = await prisma.usuario.findUnique({ where: { id: sesion.user.id } })
   if (!usuario || !usuario.activo) {
     return NextResponse.json({ error: "Usuario no encontrado o inactivo" }, { status: 401 })
   }
@@ -61,10 +61,6 @@ export async function GET(request: NextRequest) {
     include: { usuario: true },
     orderBy: { createdAt: "asc" },
   })
-
-  // También demuestra scoping de repo (opcional): personas de la comunidad
-  // const repo = crearRepositorio(cid)
-  // const personas = await repo.personas.findMany()
 
   return NextResponse.json({
     comunidadId: cid,
