@@ -37,19 +37,21 @@ Each OpenSpec capability maps 1:1 to its module spec in `Data/NSGC/docs/especifi
 | OpenSpec capability (spec folder) | NSGC spec file |
 | :--- | :--- |
 | `RG-*` | `RG - Reglas Generales.md` |
-| `MA-*` | `MA - Maestros Administrativos.md` |
+| `MA-maestros-administrativos` | `MA - Maestros Administrativos.md` |
 | `EF-estructura-fisica` | `EF - Estructura Fisica.md` (desde v8 incluye estacionamientos como `u-E-*`) |
 | `ES-estacionamientos` | `ES - Estacionamientos.md` — **deprecado v8, absorbido en EF** (spec histórico) |
 | `TU-tipos-unidad` | `TU - Tipos de Unidad.md` |
 | `MP-maestro-personas` | `MP - Maestro de Personas.md` |
 | `VU-vinculacion-unidades` | `VU - Vinculacion Unidades.md` |
-| `CV-visor-mensajes` | `CV - Visor de Mensajes.md` |
-| `PL-liquidaciones-remuneraciones` | `PL - Liquidaciones y Remuneraciones.md` |
+| `CV-visor-mensajes` | `CV - Visor de Mensajes.md` (consume `actasGD.avisoCVReferencia` de GD) |
+| `PL-liquidaciones-remuneraciones` | `PL - Liquidaciones y Remuneraciones.md` (materializa `liquidacionPLReferencia` de PE; egreso FI sueldos) |
 | `CF-configuracion-global` | `CF - Configuracion Global.md` |
 | `AM-auditoria-metricas` | `AM - Auditoria y Metricas.md` |
 | `RP-roles-permisos` | `RP - Roles y Permisos.md` |
-| `AU-autenticacion-sesion` | `AU - Autenticacion y Sesion.md` (parcial: scaffold + B3 authz con `Usuario`/`Membresia` por comunidad y `puede()` server-side; Auth.js + rate limit persistente pendientes P5) |
-| `SG-hardening-despliegue` | `SG - Hardening y Despliegue.md` |
+| `AU-autenticacion-sesion` | `AU - Autenticacion y Sesion.md` (implementada: Auth.js credentials JWT + `Usuario`/`Membresia` por comunidad con `puede()` server-side + rate limit persistente BD 10/15min, serie Plataforma P5/P4) |
+| `SG-hardening-despliegue` | `SG - Hardening y Despliegue.md` (implementado serie Plataforma P6/P7: CSP report-only + headers, re-chequeos D-iii 5/5, backups con restore probado) |
+| `RG-reglas-generales` | `03 - RG - Reglas Generales.md` |
+| `ST-capa-datos-persistente` | Interno (capa de datos/persistencia, cross-cutting) |
 | `PI-portal-inmobiliario` | `PI - Portal Inmobiliario.md` |
 | `AD-gestion-administrativa` | `AD - Gestión Administrativa.md` |
 | `GD-gestion-directiva` | `GD - Gestión de Directiva.md` |
@@ -71,7 +73,7 @@ Each OpenSpec capability maps 1:1 to its module spec in `Data/NSGC/docs/especifi
 | `UI-navegacion-lateral` | Cross-cutting UI (no AA code) |
 
 ### Remaining NSGC modules (pending OpenSpec specs)
-Serie NSGC completa: todos los módulos del roadmap tienen spec en `openspec/specs/`. `AU` está parcialmente implementada vía auditorías (`Data/NSGC/docs/auditorias/consolidado - 2026-08-24-b.md`) y queda fuera de serie; `SG` pendiente según `SG - Hardening y Despliegue.md` §1 y §3.
+Ninguno: los 32 specs del roadmap (incluidos `AU` y `SG`) existen en `openspec/specs/` y la serie Plataforma P1–P8 está completa (auth, authz, Prisma scoping, secretos, Auth.js, CSP/headers, auditoría OWASP, backups con restore probado).
 ### Folder naming rule
 - Specs and active changes: `<AA>-<kebab-case-name>` (e.g. `EF-estructura-fisica`).
 - Cross-cutting UI specs use `UI-` prefix.

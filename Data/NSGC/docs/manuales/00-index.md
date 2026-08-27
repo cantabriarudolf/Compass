@@ -36,4 +36,4 @@ Bienvenido a la documentación operativa del sistema de administración de condo
 - [25 - RE - Reportería y Dashboards](<25 - RE - Reportería y Dashboards.md>): Centro de mando (censo, pulso operativo, embudo GE, salud de caja con termómetro) y distribución segmentada EF×perfil×tenencia.
 
 ---
-*Última actualización: 2026-08-27 - Plataforma P6: D-i/ii/iii CSP report-only + headers + re-chequeos scripted (SG), manual SG creado, runbook 5/5, 410 tests, store v26.*
+*Última actualización: 2026-08-27 - Plataforma P8 (cierre): serie P1–P8 COMPLETA. Engranajes verificados en vivo (sesión login→/admin→API 200→logout→401, 403 por rol, aislamiento A/B, rate limit, migrate desde cero, backup/restore 0 divergencias, re-chequeos 5/5). Fix `/admin` → `/admin/gestion` con test regresivo. 413 tests, store v26.*
