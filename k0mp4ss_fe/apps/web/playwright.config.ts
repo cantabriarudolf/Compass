@@ -20,7 +20,8 @@ export default defineConfig({
     : [["html", { open: "never" }], ["list"]],
   use: {
     baseURL: process.env.BASE_URL || "http://localhost:3000",
-    channel: "chrome",
+    // CI: chromium embebido de Playwright. Local: Chrome del sistema (cero descargas).
+    channel: process.env.CI ? undefined : "chrome",
     trace: "on-first-retry",
     screenshot: "only-on-failure",
     video: "retain-on-failure",
@@ -37,7 +38,9 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: "npm run dev",
+    // CI: servidor de producción (next start tras npm run build).
+    // Local: next dev con reuseExistingServer para iterar rápido.
+    command: process.env.CI ? "npm run start" : "npm run dev",
     url: "http://localhost:3000",
     reuseExistingServer: !process.env.CI,
     timeout: 180_000,

@@ -1,0 +1,114 @@
+# CI Compass (k0mp4ss): Vitest (unidad/integración con mocks) + E2E Playwright
+# (navegador real contra build de producción). Rate-limit corre en job aislado
+# porque contamina el contador persistente por IP (SG D-v) — ver
+# e2e/auth/rate-limit.spec.ts y avance 2026-08-28.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # BD efímera del runner + secret efímero de CI (no es producción).
+  DATABASE_URL: file:./dev.db
+  AUTH_SECRET: ci-e2e-secret-no-produccion
+  # Importante: en development las APIs de escritura están habilitadas
+  # (lib/env-guard.ts isWriteApiEnabled); next start pondría NODE_ENV=production.
+  NEXT_PUBLIC_APP_ENV: development
+
+jobs:
+  unit:
+    name: Unit + integración (Vitest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: k0mp4ss_fe/apps/web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: k0mp4ss_fe/package-lock.json
+      - run: npm ci
+        working-directory: k0mp4ss_fe
+      - run: npx prisma generate
+      - run: npx tsc --noEmit
+      - run: npm test
+
+  e2e:
+    name: E2E Playwright (build producción)
+    runs-on: ubuntu-latest
+    needs: unit
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: k0mp4ss_fe/apps/web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: k0mp4ss_fe/package-lock.json
+      - run: npm ci
+        working-directory: k0mp4ss_fe
+      - run: npx prisma generate
+      - run: npx playwright install --with-deps chromium
+      - name: BD desde cero + seed usuarios TEST
+        run: |
+          npx prisma migrate deploy
+          npm run seed:authz
+      - run: npm run build
+      - run: npx playwright test
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report-e2e
+          path: |
+            k0mp4ss_fe/apps/web/playwright-report/
+            k0mp4ss_fe/apps/web/test-results/
+          retention-days: 14
+
+  e2e-rate-limit:
+    name: E2E rate-limit (aislado)
+    runs-on: ubuntu-latest
+    needs: unit
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: k0mp4ss_fe/apps/web
+    env:
+      # Único lugar donde corre: bloquea la IP del runner 15 min al final.
+      E2E_RATE_LIMIT: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: k0mp4ss_fe/package-lock.json
+      - run: npm ci
+        working-directory: k0mp4ss_fe
+      - run: npx prisma generate
+      - run: npx playwright install --with-deps chromium
+      - name: BD desde cero + seed usuarios TEST
+        run: |
+          npx prisma migrate deploy
+          npm run seed:authz
+      - run: npm run build
+      - run: npx playwright test e2e/auth/rate-limit.spec.ts
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report-rate-limit
+          path: |
+            k0mp4ss_fe/apps/web/playwright-report/
+            k0mp4ss_fe/apps/web/test-results/
+          retention-days: 14
