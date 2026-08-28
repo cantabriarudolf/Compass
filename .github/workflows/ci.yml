@@ -39,6 +39,9 @@ jobs:
       - run: npm ci
         working-directory: k0mp4ss_fe
       - run: npx prisma generate
+      # Algunos tests endpoint (api-admin-usuarios, api-backup-authz) usan
+      # Prisma real: necesitan el esquema. Local pasaba porque dev.db existe.
+      - run: npx prisma migrate deploy
       - run: npx tsc --noEmit
       - run: npm test
 
