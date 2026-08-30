@@ -14,7 +14,10 @@ test.describe("CRUD — Finanzas/Pagos (GATED)", () => {
 
     const btnPoblar = page.getByRole("button", { name: "Poblar todo de una vez" })
     await expect(btnPoblar).toBeVisible({ timeout: 15_000 })
-    await btnPoblar.click({ force: true, noWaitAfter: true })
+    // Click robusto: bypass actionability wait que puede colgarse con carga del dev server
+    await btnPoblar.evaluate((b: HTMLElement) => b.click()).catch(async () => {
+      await btnPoblar.click({ force: true, noWaitAfter: true }).catch(() => {})
+    })
 
     // Esperar 🟢 Listo con timeout generoso (poblamiento puede tardar)
     await expect(page.getByText("🟢 Listo").first()).toBeVisible({ timeout: 120_000 })
