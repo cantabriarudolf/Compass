@@ -123,7 +123,7 @@ test.describe("CRUD — Inventario/Recursos", () => {
     // Buscar row que contiene titulo
     const row = page.getByRole("row").filter({ hasText: titulo })
     await expect(row).toBeVisible({ timeout: 10_000 })
-    await expect(row.getByText(/10/)).toBeVisible({ timeout: 10_000 })
+    await expect(row.getByText(/10/).first()).toBeVisible({ timeout: 10_000 })
 
     expect(errores, "Excepciones no capturadas en inventario/recursos").toEqual([])
   })
