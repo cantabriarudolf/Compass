@@ -76,7 +76,7 @@ NO ESCRIBIR: /inventario/estacionamientos (route sin página — 404).
 
 | Ventana | Alcance | Estado | Commit final |
 |---|---|---|---|
-| P1 | Batch Admin/Personas (maestros, configuracion, reporteria, personal). *Skill `pruebas` v2 + `/qa` ya materializadas por el orquestador en el setup — P1 las verifica y ajusta solo si difieren* | pendiente | — |
+| P1 | Batch Admin/Personas (maestros, configuracion, reporteria, personal). *Skill `pruebas` v2 + `/qa` ya materializadas por el orquestador en el setup — P1 las verifica y ajusta solo si difieren* | HECHA | 9a2c406 |
 | P2 | Batch Inventario (tipos, estructura, recursos, proyectos) | pendiente | — |
 | P3 | Batch Operaciones (reservas, solicitudes, bitacora, proveedores) | pendiente | — |
 | P4 | Batch Comunidad (comunicacion, directiva, visor+visor-mensajes, gestion) | pendiente | — |
@@ -85,4 +85,4 @@ NO ESCRIBIR: /inventario/estacionamientos (route sin página — 404).
 
 ## Bitácora
 
-(vacía — cada ventana añade antes del push: `- [fecha] P<n> HECHA: resumen (commit hash)`)
+- [2026-08-30] P1 HECHA: lane crud Batch Admin/Personas — 4 specs (maestros, configuracion, reporteria, personal) verdes; infraestructura de verificación sin change openspec ni bump STORE_VERSION (26). Skill pruebas v2 y /qa verificadas (existían y mapa coincide con 00-plan, sin ajustes). Desviaciones: maestros usa input name=nombre y requiere .first() por badge duplicado; configuracion/reporteria usan placeholders sin htmlFor (textbox vecino/placeholder); reporteria requiere perfil "Propietarios" para resolver destinatarios; personal dialog no autocierra tras guardar (cerrado manual) y requiere label→combobox vecino. (9a2c406)
