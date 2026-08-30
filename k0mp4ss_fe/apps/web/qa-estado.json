@@ -81,6 +81,28 @@
         "duracion": "5.1m",
         "fallos": []
       }
+    },
+    {
+      "id": "2026-08-31-serie-crud-e2e-cierre",
+      "fecha": "2026-08-31T02:45:00-04:00",
+      "tipo": "e2e",
+      "alcance": "suite completa (cierre Serie CRUD-E2E, 6/6 ventanas)",
+      "visualizacion": "headless (como CI)",
+      "comando": "npx playwright test",
+      "sistema": {
+        "loadAvg1": 2.5,
+        "cores": 2,
+        "nota": "Cierre integral de la Serie CRUD-E2E: 22 specs CRUD nuevos (6 ventanas, hashes 18f06e0..e6f3461). Suite completa 38 passed / 1 skipped (rate-limit gated) en 15.8m; lane crud 23 passed en 11.8m."
+      },
+      "estimadoMinutos": 16,
+      "resultado": {
+        "estado": "passed",
+        "passed": 38,
+        "failed": 0,
+        "skipped": 1,
+        "duracion": "15.8m",
+        "fallos": []
+      }
     }
   ]
 }

@@ -118,13 +118,13 @@ export function getFactorCarga(s: QaSistema): QaFactor {
 // Baselines medidos 2026-08-29 (máquina local, load bajo). El skill los
 // recalibra con cada corrida real (ver SKILL.md §Estimados).
 const BASELINES: Omit<QaEstimado, "minutosEstimados">[] = [
-  { id: "unit-suite", etiqueta: "Unit — suite completa (413 tests)", motor: "cli", minutosBase: 5.1, fuente: "medido 307s" },
+  { id: "unit-suite", etiqueta: "Unit — suite completa (413 tests)", motor: "cli", minutosBase: 3.5, fuente: "medido 208s" },
   { id: "unit-archivo", etiqueta: "Unit — un archivo", motor: "cli", minutosBase: 0.2, fuente: "aprox" },
   { id: "e2e-smoke", etiqueta: "E2E Chrome — smoke (8 módulos)", motor: "chrome", minutosBase: 2.5, fuente: "medido ~150s" },
   { id: "e2e-auth", etiqueta: "E2E Chrome — auth (login/guard)", motor: "chrome", minutosBase: 1.5, fuente: "medido ~90s" },
   { id: "e2e-flujo", etiqueta: "E2E Chrome — flujo (journey + personas)", motor: "chrome", minutosBase: 3.6, fuente: "medido 3.6m" },
-  { id: "e2e-crud", etiqueta: "E2E Chrome — CRUD general (lane)", motor: "chrome", minutosBase: 8, fuente: "aprox" },
-  { id: "e2e-suite", etiqueta: "E2E Chrome — suite completa", motor: "chrome", minutosBase: 20, fuente: "medido 28.9m bajo carga" },
+  { id: "e2e-crud", etiqueta: "E2E Chrome — CRUD general (22 specs)", motor: "chrome", minutosBase: 12, fuente: "medido 11.8m" },
+  { id: "e2e-suite", etiqueta: "E2E Chrome — suite completa", motor: "chrome", minutosBase: 16, fuente: "medido 15.8m (38 passed)" },
   { id: "report", etiqueta: "show-report (HTML último run)", motor: "chrome", minutosBase: 0.1, fuente: "instantáneo" },
 ]
 

@@ -54,13 +54,13 @@ Chrome = Playwright:
 
 | Prueba | Motor | Base |
 |---|---|---|
-| suite completa (413 tests) | CLI | 5.1 min (medido 307s) |
+| suite completa (413 tests) | CLI | 3.5 min (medido 208s, cierre Serie CRUD-E2E) |
 | un archivo | CLI | ~12 s |
 | smoke (8 módulos) | Chrome | 2.5 min |
 | auth (login/guard) | Chrome | 1.5 min |
 | flujo (journey + personas) | Chrome | 3.6 min (medido) |
-| CRUD general (lane) | Chrome | ~8 min (aprox) |
-| suite completa | Chrome | ~20 min (28.9m medido bajo carga) |
+| CRUD general (lane, 22 specs) | Chrome | 12 min (medido 11.8m) |
+| suite completa | Chrome | 16 min (medido 15.8m, 38 passed) |
 | show-report | Chrome | instantáneo |
 
 **Estimado al owner** = `base × factorCarga` del alcance elegido, en 1-2 líneas
