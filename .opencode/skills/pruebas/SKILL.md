@@ -1,6 +1,6 @@
 ---
 name: pruebas
-description: Puerta de entrada de QA del proyecto — presenta el abanico de pruebas (unit/e2e, suite/smoke/auth/flujo/CRUD por módulo, headless/headed en vivo/ui/reporte), corre lo elegido y reporta. Use when the user says "pruebas", "qa", "/qa", "correr pruebas", "probar módulo X", "ver pruebas en vivo", "navegador visible", "reporte de tests", "qué pruebas hay", "crud de un módulo".
+description: Puerta de entrada de QA del proyecto — presenta el abanico de pruebas (unit/e2e, suite/smoke/auth/flujo/CRUD por módulo, headless/headed en vivo/ui/reporte), estima carga del sistema y tiempos CLI vs Chrome antes de correr, corre lo elegido, registra el resultado en el dashboard /admin/qa-dashboard y reporta. Use when the user says "pruebas", "qa", "/qa", "correr pruebas", "probar módulo X", "ver pruebas en vivo", "navegador visible", "reporte de tests", "qué pruebas hay", "crud de un módulo", "estado de las pruebas", "cuánto demora una prueba".
 ---
 
 # Skill: Pruebas — puerta de entrada de QA (abanico de combinaciones)
@@ -19,10 +19,53 @@ elige y corre. Tu rol es de recepcionista de QA + corredor + reportero.
    - **¿Cómo lo ves?** (si e2e) `headless (como CI)` · `--headed (Chrome VISIBLE en vivo)` ·
      `--ui (debugger paso a paso)` · `show-report (HTML del último run)`
    Si el owner ya dijo qué quiere ("prueba el módulo reservas en vivo"), salta esa pregunta.
-2. **Ejecuta el comando** del mapa de abajo (workdir `k0mp4ss_fe/apps/web`).
-3. **Reporta en 2-4 líneas**: passed/failed/skipped + duración. Ante fallo: archivo + test +
-   causa raíz (leer `test-results/**/error-context.md` ANTES de diagnosticar) y proponer
-   fix sin aplicarlo, salvo que sea obvio de una línea.
+2. **Preflight de sistema + estimado (SIEMPRE antes de ejecutar, ver §Estimados)**:
+   mide la carga (`uptime` + `free -h` + `nproc`), calcula factor y muestra al owner el
+   estimado CLI vs Chrome del alcance elegido. Si la máquina está ahogada (swap >90%,
+   RAM <700 MB libres o factor >2), adviértelo en 1 línea y pregunta si correr igual.
+3. **Ejecuta el comando** del mapa de abajo (workdir `k0mp4ss_fe/apps/web`).
+4. **Reporta en 2-4 líneas**: passed/failed/skipped + duración + estimado vs real. Ante
+   fallo: archivo + test + causa raíz (leer `test-results/**/error-context.md` ANTES de
+   diagnosticar) y proponer fix sin aplicarlo, salvo que sea obvio de una línea.
+5. **Registra la corrida en el dashboard (SIEMPRE al terminar, pase lo que pase)**:
+   agrega la corrida a `k0mp4ss_fe/apps/web/qa-estado.json` (schema en
+   `lib/qa-estado.ts`, máx 10 runs, agotar el más viejo) y recalibra el baseline del
+   alcance en §Estimados con la duración real (máquina sana, factor ≤1.2). Cierra el
+   reporte apuntando al dashboard: Desarrollo AI → "Estado de Pruebas QA"
+   (`/admin/qa-dashboard`, API `/api/qa-estado`, visible solo en development).
+
+## Estimados CLI vs Chrome + carga del sistema
+
+**Medir carga al momento de ejecutar** (preflight y para registrar en el JSON):
+
+```bash
+uptime && free -h && nproc   # load avg 1/5/15, RAM/swap libre, cores
+```
+
+- `factorCarga = max(1, load₁ / cores)` (redondeado a 1 decimal). El dashboard
+  (`/admin/qa-dashboard`) muestra este factor en vivo y escala los estimados solos.
+- **Máquina ahogada** = swap >90% llena, o RAM <700 MB libres, o factor >2. Hoy esto
+  causó: `browserType.launch` timeout 180s, GPU process `exit_code=9` y `page.goto`
+  que nunca dispara `load` aunque curl responda 200 en ~1s (swap thrashing). Con esa
+  señal: avisar y (si el owner acepta) pedirle liberar recursos antes de correr.
+
+**Baselines (máquina sana, recalibrar con cada corrida real)** — CLI = Vitest,
+Chrome = Playwright:
+
+| Prueba | Motor | Base |
+|---|---|---|
+| suite completa (413 tests) | CLI | 5.1 min (medido 307s) |
+| un archivo | CLI | ~12 s |
+| smoke (8 módulos) | Chrome | 2.5 min |
+| auth (login/guard) | Chrome | 1.5 min |
+| flujo (journey + personas) | Chrome | 3.6 min (medido) |
+| CRUD general (lane) | Chrome | ~8 min (aprox) |
+| suite completa | Chrome | ~20 min (28.9m medido bajo carga) |
+| show-report | Chrome | instantáneo |
+
+**Estimado al owner** = `base × factorCarga` del alcance elegido, en 1-2 líneas
+("Suite completa e2e: ~20 min base, ~29 min con la carga actual ×1.4"). Al terminar,
+compara estimado vs real en el reporte y recalibra si factor ≤1.2.
 
 ## Mapa de comandos validados
 
@@ -87,6 +130,11 @@ dirá "Carga completa OK").
   pageerror), `flujo/` (journey Historia de Poblamiento via QA Lab + CRUD personas),
   `crud/` (Serie CRUD-E2E: 16 módulos).
 - CI (`.github/workflows/ci.yml`): jobs `unit`, `e2e`, `e2e-rate-limit` (aislado). Node 24.
+- Dashboard de estado: `/admin/qa-dashboard` (Desarrollo AI → "Estado de Pruebas QA").
+  Lee `apps/web/qa-estado.json` vía `/api/qa-estado` (`lib/qa-estado.ts`). Muestra última
+  corrida (passed/failed/skipped, duración, estimado vs real, fallos con causa), carga del
+  sistema en vivo con factor y alerta de máquina ahogada, tabla estimados CLI vs Chrome y
+  historial (últimas 10). Solo en development (`env-guard`).
 - Contexto de decisiones: `Data/NSGC/docs/avances/avance - 2026-08-28 12-52.md` (por qué
   Playwright) y `avance - 2026-08-29 11-10.md` (lane flujo + quirúrgicos E2E).
 

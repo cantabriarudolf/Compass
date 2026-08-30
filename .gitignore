@@ -32,3 +32,6 @@ Thumbs.db
 .obsidian/
 .vscode/
 .idea/
+
+# Artefactos de tests (los snapshots manuales sí se versionan)
+Data/NSGC/backups/test-*.json

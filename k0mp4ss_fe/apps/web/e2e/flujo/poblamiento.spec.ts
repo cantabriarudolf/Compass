@@ -9,6 +9,8 @@ import { expect, test } from "@playwright/test"
 test.use({ actionTimeout: 30_000 })
 
 test.describe("Flujo de poblamiento (Historia de Poblamiento)", () => {
+  test.setTimeout(300_000)
+
   test("puebla la comunidad de prueba y valida coherencia sin huérfanos", async ({ page }) => {
     const errores: string[] = []
     page.on("pageerror", (err) => errores.push(err.message))

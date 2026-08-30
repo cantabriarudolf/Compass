@@ -1,0 +1,86 @@
+{
+  "runs": [
+    {
+      "id": "2026-08-29-suite-completa-1348",
+      "fecha": "2026-08-29T13:48:00-04:00",
+      "tipo": "e2e",
+      "alcance": "suite completa",
+      "visualizacion": "headless (como CI)",
+      "comando": "npx playwright test",
+      "sistema": {
+        "loadAvg1": 17.95,
+        "cores": 2,
+        "nota": "Máquina ahogada al correr (swap 3.7/3.7GiB llena): flakes de setup, Chrome launch timeout y GPU exit_code=9."
+      },
+      "estimadoMinutos": 90,
+      "resultado": {
+        "estado": "parcial",
+        "passed": 13,
+        "failed": 3,
+        "skipped": 1,
+        "duracion": "28.9m",
+        "fallos": [
+          {
+            "archivo": "e2e/flujo/poblamiento.spec.ts:12",
+            "test": "puebla la comunidad de prueba y valida coherencia sin huérfanos",
+            "causa": "Timeout de test 120s insuficiente: click a 'Poblar todo de una vez' (90s) + esperar 🟢 Listo (90s) exceden el presupuesto; dev server compilando en frío."
+          },
+          {
+            "archivo": "e2e/flujo/poblamiento.spec.ts:47",
+            "test": "la persona semilla del relato aparece en el directorio (MP)",
+            "causa": "Flake de entorno: browserType.launch timeout 180s, GPU process exit_code=9 por carga del sistema."
+          },
+          {
+            "archivo": "e2e/flujo/poblamiento.spec.ts:60",
+            "test": "el depto 999 del relato aparece en la estructura física (EF)",
+            "causa": "Misma causa raíz que :12 — timeout de test 120s bajo máquina ahogada."
+          }
+        ]
+      }
+    },
+    {
+      "id": "2026-08-29-poblamiento-1500",
+      "fecha": "2026-08-29T15:00:00-04:00",
+      "tipo": "e2e",
+      "alcance": "flujo (journey poblamiento + CRUD personas)",
+      "visualizacion": "headless (como CI)",
+      "comando": "npx playwright test e2e/flujo/poblamiento.spec.ts",
+      "sistema": {
+        "loadAvg1": 3.85,
+        "cores": 2,
+        "nota": "Máquina recuperada tras liberar recursos (load bajó de ~17 a ~4). Fix aplicado: test.setTimeout(300_000) en el describe."
+      },
+      "estimadoMinutos": 4.5,
+      "resultado": {
+        "estado": "passed",
+        "passed": 4,
+        "failed": 0,
+        "skipped": 0,
+        "duracion": "3.6m",
+        "fallos": []
+      }
+    },
+    {
+      "id": "2026-08-29-unit-suite-1514",
+      "fecha": "2026-08-29T15:14:33-04:00",
+      "tipo": "unit",
+      "alcance": "suite completa (calibración baseline)",
+      "visualizacion": "CLI (Vitest)",
+      "comando": "npx vitest run",
+      "sistema": {
+        "loadAvg1": 3.9,
+        "cores": 2,
+        "nota": "Calibración del baseline unit para el dashboard: 307s bajo load ~4."
+      },
+      "estimadoMinutos": 5.1,
+      "resultado": {
+        "estado": "passed",
+        "passed": 413,
+        "failed": 0,
+        "skipped": 0,
+        "duracion": "5.1m",
+        "fallos": []
+      }
+    }
+  ]
+}
