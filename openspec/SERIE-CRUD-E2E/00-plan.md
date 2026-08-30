@@ -77,7 +77,7 @@ NO ESCRIBIR: /inventario/estacionamientos (route sin página — 404).
 | Ventana | Alcance | Estado | Commit final |
 |---|---|---|---|
 | P1 | Batch Admin/Personas (maestros, configuracion, reporteria, personal). *Skill `pruebas` v2 + `/qa` ya materializadas por el orquestador en el setup — P1 las verifica y ajusta solo si difieren* | HECHA | 18f06e0 |
-| P2 | Batch Inventario (tipos, estructura, recursos, proyectos) | pendiente | — |
+| P2 | Batch Inventario (tipos, estructura, recursos, proyectos) | HECHA | — |
 | P3 | Batch Operaciones (reservas, solicitudes, bitacora, proveedores) | pendiente | — |
 | P4 | Batch Comunidad (comunicacion, directiva, visor+visor-mensajes, gestion) | pendiente | — |
 | P5 | Batch Finanzas (gastos-comunes, multas, pagos gated) | pendiente | — |
@@ -86,3 +86,4 @@ NO ESCRIBIR: /inventario/estacionamientos (route sin página — 404).
 ## Bitácora
 
 - [2026-08-30] P1 HECHA: lane crud Batch Admin/Personas — 4 specs (maestros, configuracion, reporteria, personal) verdes; infraestructura de verificación sin change openspec ni bump STORE_VERSION (26). Skill pruebas v2 y /qa verificadas (existían y mapa coincide con 00-plan, sin ajustes). Desviaciones: maestros usa input name=nombre y requiere .first() por badge duplicado; configuracion/reporteria usan placeholders sin htmlFor (textbox vecino/placeholder); reporteria requiere perfil "Propietarios" para resolver destinatarios; personal dialog no autocierra tras guardar (cerrado manual) y requiere label→combobox vecino. (18f06e0)
+- [2026-08-31] P2 HECHA: lane crud Batch Inventario — 4 specs (tipos, estructura, recursos, proyectos) verdes; infraestructura de verificación sin change openspec ni bump STORE_VERSION (26). Desviaciones: tipos misma etiqueta "Actualizar Tarifario" para crear/editar, inputs con name=nombre/metraje/montoBaseGc sin htmlFor y monto controlado por estado (fill directo) + Select categoría por label→combobox vecino y submit fuera de viewport → requestSubmit; estructura requiere picks de Macro-Sector/Sub-Sector/Categoría Física vía label→combobox y QA-9999 único, botón Registrar deshabilitado hasta picks; recursos Naturaleza insumo por defecto pero se fuerza pick "Insumo / Consumible", checkbox stock crítico habilita umbral, Nombre via placeholder + label vecino, stock/umbral via label vecino/placeholder; proyectos usa placeholders para título/proveedor, textarea descripción min 20 chars, unidad EF pick primera real (skip Ninguna) y responsable via proveedor externo, transición Iniciar→En Curso. (—)
