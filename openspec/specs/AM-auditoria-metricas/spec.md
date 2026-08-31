@@ -2,9 +2,7 @@
 
 ## Purpose
 Centralizar el registro de acciones significativas del sistema, permitir la generación de reportes, KPIs de gestión y trazabilidad completa de la operación. Fuente de verdad: `Data/NSGC/docs/especificaciones/AM - Auditoria y Metricas.md`.
-
 ## Requirements
-
 ### Requirement: Registro Universal de Eventos
 Every action triggered by a user or by the system automatically MUST generate an immutable audit event.
 
@@ -70,16 +68,26 @@ The system MUST calculate and display key performance indicators derived from ev
   - Collection velocity curve
 
 ### Requirement: Logs de Auditoría
+
 The system MUST provide a dedicated view to browse, filter and export audit logs.
 
 #### Scenario: Log Viewer
 - **WHEN** the user navigates to `/admin/logs`
 - **THEN** they MUST see a searchable and filterable list of audit events
 - **AND** logs MUST be sorted by timestamp descending.
+- **AND** the list MUST support text search over `descripcion`, `referenciaId` and `tipoAccion`.
+- **AND** the list MUST support filtering by `categoria` (module code) and by `tipoAccion`.
+
+#### Scenario: Log Export
+- **WHEN** the user applies a filter or search and requests the export
+- **THEN** the system MUST download a CSV containing the filtered result set
+- **AND** the CSV MUST include one header row with the fields
+  `timestamp, usuario, categoria, tipoAccion, referenciaId, descripcion`.
 
 #### Scenario: Log Immutability
 - **WHEN** an audit log is created
 - **THEN** it MUST NOT be editable or deletable by any user, including administrators.
+- **AND** the `/admin/logs` view MUST NOT offer edit or delete actions for any event.
 
 #### Scenario: Retention
 - **WHEN** audit logs are stored
@@ -147,3 +155,4 @@ El catálogo de eventos MUST incluir los eventos del módulo RE: `RE_DASHBOARD_V
 #### Scenario: Ciclo reportería auditado
 - **WHEN** se abre el mando, se genera un reporte segmentado y se distribuye
 - **THEN** los tres eventos quedan registrados como inmutables con su data cuantificable
+
