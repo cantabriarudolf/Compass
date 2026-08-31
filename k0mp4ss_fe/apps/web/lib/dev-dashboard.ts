@@ -128,7 +128,14 @@ const ROUTES: Record<string, string> = {
 const ARCHIVED_OVERRIDES: Record<string, { code: string; name?: string }> = {
   'inventario-estructura': { code: 'EF' },
   'maestro-personas': { code: 'MP' },
-  'UI-interfaz-principal': { code: 'UI', name: 'Interfaz Principal' },
+  // P1 MENU-100: 6 módulos documentado → completado (keyword falla, specs actualizados por otros archives)
+  // Cada entrada mapea el change archivado real que completó el spec del módulo.
+  'UI-interfaz-principal': { code: 'UI' }, // cubre UI Interfaz Principal + UI Navegacion Lateral (mismo archive contiene ambos specs; keyword "navegacion/lateral" no matchea "interfaz/principal")
+  'enhance-rg-st-seed-gears': { code: 'MA' }, // MA-maestros: seed ST rank 0 + maestros base (keyword "maestros/administrativos" no matchea); no colisiona con PE-personal-servicios
+  'sg-secretos-env': { code: 'CF' }, // CF-configuracion-global: secretos a env (CF_UPDATE_PARAM sin smtpPassword/claveEliminacionMaestro)
+  'am-logs-visor': { code: 'AM' }, // AM-auditoria-metricas: visor logs /admin/logs + eventos AM
+  'au-authjs': { code: 'AU' }, // AU-autenticacion-sesion: scaffold Auth.js + rate-limit persistente (también au-autorizacion-roles aporta RP/matriz)
+  'sg-predeploy-headers': { code: 'SG' }, // SG-hardening: CSP report-only + headers HSTS sin preload + re-chequeos D-iii
 };
 
 const MOCK_DATA_FILES: Record<string, string> = {

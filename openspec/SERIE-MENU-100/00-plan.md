@@ -54,7 +54,7 @@ existentes; salvo P4/P5 si la extracción requiere mover código — sin cambios
 
 | Ventana | Alcance | Estado | Commit final |
 |---|---|---|---|
-| P1 | B — Dashboard OpenSpec 6 documentado → completado (mapeo/overrides + verificación del dashboard con datos reales) | pendiente | — |
+| P1 | B — Dashboard OpenSpec 6 documentado → completado (mapeo/overrides + verificación del dashboard con datos reales) | HECHA | — ver Bitácora |
 | P2 | A2 — change `mp-residentes-vista`: `/personas/residentes` (directorio filtrado MP) + e2e | pendiente | — |
 | P3 | A1 — change `ui-resumen-dashboard`: `/dashboard` (Resumen con KPIs del store) + e2e | pendiente | — |
 | P4 | A3 — change `pe-accesos-vista`: `/operaciones/accesos` (Visitas + Contratistas dedicadas) + e2e | pendiente | — |
@@ -63,4 +63,4 @@ existentes; salvo P4/P5 si la extracción requiere mover código — sin cambios
 
 ## Bitácora
 
-(vacía — cada ventana añade antes del push: `- [fecha] P<n> HECHA: resumen (commit hash)`)
+- [2026-08-31] P1 HECHA: fix mapeo dev-dashboard 6 módulos documentado→completado (UI via UI-interfaz-principal, MA via enhance-rg-st-seed-gears, CF via sg-secretos-env, AM via am-logs-visor, AU via au-authjs, SG via sg-predeploy-headers) — 31/31 completado verificado, sin falsos — tsc 0, lint 0 errores, Vitest 425/425, openspec 32/32 — (commit pendiente hash)
