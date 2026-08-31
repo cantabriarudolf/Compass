@@ -117,9 +117,9 @@ npx playwright show-report                      # reporte HTML del último run
 | portal | `crud/portal.spec.ts` (gated: poblar) | publicación en vitrina |
 | personas | `e2e/flujo/personas.spec.ts` (existente) | Nueva Identidad → grilla |
 
-Fixture gated: `/admin/qa-lab` → "Poblar todo de una vez" → esperar `🟢 Listo` (los datos
-TEST core se crean aunque hoy el mensaje diga "Carga con 27 errores"; tras la Serie QA-LAB
-dirá "Carga completa OK").
+Fixture gated: `/admin/qa-lab` → "Poblar todo de una vez" → esperar `🟢 Listo` (desde la
+Serie QA-LAB la carga completa es "Carga completa OK" con 27→0 errores y 22/22 fases OK;
+el guard "Existen datos TEST-*" bloquea una 2ª corrida sin limpiar antes).
 
 ## Mapa de la suite
 
@@ -127,8 +127,9 @@ dirá "Carga completa OK").
   unidad/integración con mocks.
 - `e2e/` — `auth.setup.ts` (login real → storageState compartido), `auth/ingresar.spec.ts`
   (3 flujos), `auth/rate-limit.spec.ts` (GATED), `smoke/modulos.spec.ts` (8 módulos, 0
-  pageerror), `flujo/` (journey Historia de Poblamiento via QA Lab + CRUD personas),
-  `crud/` (Serie CRUD-E2E: 16 módulos).
+  pageerror), `flujo/` (journey Historia de Poblamiento via QA Lab + CRUD personas +
+  `ciclo.spec.ts`: ciclo limpiar→poblar→validar→limpiar y guard de 2ª corrida),
+  `crud/` (Serie CRUD-E2E: 22 specs, SERIE COMPLETA).
 - CI (`.github/workflows/ci.yml`): jobs `unit`, `e2e`, `e2e-rate-limit` (aislado). Node 24.
 - Dashboard de estado: `/admin/qa-dashboard` (Desarrollo AI → "Estado de Pruebas QA").
   Lee `apps/web/qa-estado.json` vía `/api/qa-estado` (`lib/qa-estado.ts`). Muestra última

@@ -103,6 +103,28 @@
         "duracion": "15.8m",
         "fallos": []
       }
+    },
+    {
+      "id": "2026-08-31-serie-qa-lab-cierre",
+      "fecha": "2026-08-31T04:30:00-04:00",
+      "tipo": "e2e",
+      "alcance": "cierre Serie QA-LAB (ciclo limpiar→poblar→validar→limpiar + guard) por lanes",
+      "visualizacion": "headless (como CI)",
+      "comando": "npx playwright test e2e/flujo/ e2e/crud/ e2e/smoke/ e2e/auth/",
+      "sistema": {
+        "loadAvg1": 2.2,
+        "cores": 2,
+        "nota": "Serie QA-LAB completa (e64657b + 738d540 + 750f1bb): lab 27→0 errores, 'Carga completa OK', 22/22 fases OK, guard bloquea 2ª corrida, validar() 9 áreas 0 huérfanos. Lanes medidos por separado: ciclo 4/4 · flujo 8/8 · crud 23/23 · smoke 9/9 · auth 4/1skipped. Vitest 421/421."
+      },
+      "estimadoMinutos": 18,
+      "resultado": {
+        "estado": "passed",
+        "passed": 40,
+        "failed": 0,
+        "skipped": 1,
+        "duracion": "≈18m (5 lanes)",
+        "fallos": []
+      }
     }
   ]
 }
