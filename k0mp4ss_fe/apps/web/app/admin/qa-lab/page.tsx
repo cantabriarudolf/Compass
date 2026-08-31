@@ -16,6 +16,7 @@ import {
   DialogTitle,
 } from "@workspace/ui/components/dialog"
 import { IconCheck, IconAlertTriangle, IconDownload, IconTrash, IconRefresh, IconEye, IconHistory, IconFlask, IconBook, IconChevronDown, IconMapPin } from "@tabler/icons-react"
+import { getAppEnv } from "@/lib/env-guard"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@workspace/ui/components/collapsible"
 import {
   isTestNotificacion,
@@ -192,7 +193,10 @@ export default function QaLabPage() {
   const [msg, setMsg] = React.useState<{ type: "ok" | "error"; text: string } | null>(null)
   const [ultimaFase, setUltimaFase] = React.useState<string | null>(null)
 
-  const isDev = process.env.NODE_ENV !== "production"
+  // Mismo criterio que env-guard (isWriteApiEnabled): APP_ENV=development
+  // habilita el lab aunque NODE_ENV sea production (build prod de CI e2e).
+  // En producción real sin APP_ENV, NODE_ENV=production → oculto.
+  const isDev = getAppEnv() === "development"
 
   const modulosOrden: { id: string; label: string; rank: number; fase: string }[] = [
     { id: "ma", label: TITULOS["ma"]!, rank: 0, fase: "Paso 1" },
