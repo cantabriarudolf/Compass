@@ -18,6 +18,8 @@ El sistema DEBE exponer esta matriz como snapshot legible para la vista administ
 - **WHEN** any user opens `/admin/permisos`
 - **THEN** the view MUST NOT offer actions to assign roles, edit memberships or mutate the matrix.
 
+## ADDED Requirements
+
 ### Requirement: Selector de Comunidad y Membresías
 
 The system MUST let an authenticated user with memberships see the communities they belong to, and an administrator browse the memberships of a selected community scoped by `comunidadId`.

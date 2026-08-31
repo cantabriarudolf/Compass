@@ -2,9 +2,7 @@
 
 ## Purpose
 Gestionar quién puede ver, crear, editar, eliminar o ejecutar acciones dentro de GECOS mediante un modelo de control de acceso basado en roles (RBAC), con soporte futuro para permisos contextuales (ABAC). Fuente de verdad: `Data/NSGC/docs/especificaciones/RP - Roles y Permisos.md`.
-
 ## Requirements
-
 ### Requirement: Modelo RBAC
 The system MUST use Role-Based Access Control to authorize users.
 
@@ -29,21 +27,22 @@ The system MUST ship with predefined roles and allow custom roles.
   - **Personal de Mantención**: access to assigned tasks and physical incident reporting.
 
 ### Requirement: Matriz de Permisos
-Permissions MUST be defined per module and action type.
+
+The system MUST define a permission matrix for each standard role, listing which actions each role can execute on each resource, following least privilege.
+El sistema DEBE exponer esta matriz como snapshot legible para la vista administrativa de solo lectura `/admin/permisos`.
 
 #### Scenario: Action Types
-- **WHEN** a permission is granted
-- **THEN** it MUST apply to one of the following action types:
-  - `ver`
-  - `crear`
-  - `editar`
-  - `eliminar`
-  - `ejecutar`
+- **WHEN** the permission matrix is consulted
+- **THEN** each resource-role pair MUST define allowed actions among ver, crear, editar, eliminar, ejecutar
+- **AND** actions not explicitly listed MUST be denied (least privilege).
 
 #### Scenario: Module Permissions
-- **WHEN** the administrator reviews the permission matrix
-- **THEN** they MUST see permissions grouped by module (FI, MP, EF, PE, etc.)
-- **AND** the matrix MUST clearly indicate which roles have each permission.
+- **WHEN** an administrator opens `/admin/permisos`
+- **THEN** they MUST see the effective permission matrix per standard role, including the administrator wildcard.
+
+#### Scenario: Vista solo lectura
+- **WHEN** any user opens `/admin/permisos`
+- **THEN** the view MUST NOT offer actions to assign roles, edit memberships or mutate the matrix.
 
 ### Requirement: Permisos Contextuales (ABAC)
 The system SHALL support Attribute-Based Access Control for resource-specific or context-specific actions. The system SHOULD expose it as optional contextual filtering where applicable.
@@ -146,3 +145,22 @@ Cualquier permiso no listado SHALL denegarse conforme a Menor Privilegio, regist
 #### Scenario: Comité consulta sin distribuir
 - **WHEN** un miembro del comité abre el Centro de Mando
 - **THEN** visualiza las métricas pero las acciones de generar/distribuir reportes le resultan denegadas
+
+### Requirement: Selector de Comunidad y Membresías
+
+The system MUST let an authenticated user with memberships see the communities they belong to, and an administrator browse the memberships of a selected community scoped by `comunidadId`.
+
+#### Scenario: Comunidades propias
+- **WHEN** an authenticated user opens `/admin/permisos` without choosing a community
+- **THEN** the system MUST list the communities where the user has a membership, with the user's role in each
+- **AND** the response MUST NOT include other users' data.
+
+#### Scenario: Membresías de la comunidad
+- **WHEN** an administrator selects a community where they hold an administrative membership
+- **THEN** the system MUST list the community memberships: user email, role and active status
+- **AND** the list MUST be scoped by `comunidadId` (no cross-community data).
+
+#### Scenario: Acceso denegado por rol
+- **WHEN** a user without administrative role in the selected community requests the membership list
+- **THEN** the system MUST deny access with 403 and log the denial (AM).
+
