@@ -155,3 +155,8 @@ el guard "Existen datos TEST-*" bloquea una 2ª corrida sin limpiar antes).
 5. Quirúrgicos E2E del proyecto (dialogs fuera de viewport → `requestSubmit()`, alert()
    nativo en configuracion, botones pesados con `force/noWaitAfter`, strict mode scoping):
    ver `openspec/SERIE-CRUD-E2E/00-plan.md` §Quirúrgicos y el avance 2026-08-29 11-10.
+6. Servidores y rutas: un `next dev` **muy viejo** puede no registrar rutas nuevas de
+   turbopack (404 limpio) — reinícialo con acuerdo del owner. Si turbopack panic
+   (`inner_of_upper_lost_followers`) al arrancar: `rm -rf .next` y volver a subir. El
+   Laboratorio QA se oculta cuando el gate da "production" (`getAppEnv()` en
+   `app/admin/qa-lab/page.tsx`) — en CI el job e2e define `NEXT_PUBLIC_APP_ENV=development`.

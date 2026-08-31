@@ -1,4 +1,5 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { execSync } from 'node:child_process';
 import path from 'node:path';
 
 export type ModuleStatus = 'pendiente' | 'documentado' | 'en_proceso' | 'completado';
@@ -404,17 +405,43 @@ function deriveStatus(
   return { status: 'pendiente', cierre: 'no_aplica' };
 }
 
+function gitLog(cwd: string, args: string): string | null {
+  try {
+    // -C garantiza que corra contra el repo raíz sin depender del cwd del server.
+    return execSync(`git -C "${cwd}" log -1 --format=%ct -- ${args}`, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim() || null;
+  } catch {
+    return null; // sin git (o sin historial): la señal cae en no-dirty, sin falsos positivos
+  }
+}
+
+function gitPorcelana(cwd: string, args: string): boolean {
+  try {
+    return execSync(`git -C "${cwd}" status --porcelain -- ${args}`, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim().length > 0;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Dirty = el spec tiene ediciones más nuevas que toda la actividad de archive/
+ * (commit estrictamente posterior, o cambios sin commitear). Los mtime daban
+ * falsos positivos: el mismo commit del archive escribe el spec después de
+ * mover el directorio, y specs compartidos (RG/ST) se actualizan legítimamente
+ * en archives de OTROS changes posteriores.
+ */
 function isSpecDirtyAfterArchive(code: string, archivedId: string): boolean {
   try {
     const specDir = readdirSync(SPECS_DIR, { withFileTypes: true }).find(e => e.isDirectory() && e.name.toUpperCase().startsWith(`${code}-`));
     if (!specDir) return false;
     const specFile = path.join(SPECS_DIR, specDir.name, 'spec.md');
     if (!existsSync(specFile)) return false;
-    const archiveDir = path.join(ARCHIVE_DIR, archivedId);
-    if (!existsSync(archiveDir)) return false;
-    const specMtime = statSync(specFile).mtimeMs;
-    const archiveMtime = statSync(archiveDir).mtimeMs;
-    return specMtime > archiveMtime;
+    const specRel = path.relative(REPO_ROOT, specFile);
+    if (gitPorcelana(REPO_ROOT, `"${specRel}"`)) return true;
+    const specCommit = gitLog(REPO_ROOT, `"${specRel}"`);
+    if (specCommit === null) return false;
+    const archiveCommit = gitLog(REPO_ROOT, '"openspec/changes/archive"');
+    if (archiveCommit === null) return false;
+    return Number(specCommit) > Number(archiveCommit);
   } catch {
     return false;
   }
