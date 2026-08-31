@@ -17,6 +17,16 @@ import {
 } from "@workspace/ui/components/dialog"
 import { IconCheck, IconAlertTriangle, IconDownload, IconTrash, IconRefresh, IconEye, IconHistory, IconFlask, IconBook, IconChevronDown, IconMapPin } from "@tabler/icons-react"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@workspace/ui/components/collapsible"
+import {
+  isTestNotificacion,
+  getConfiguracionLimpiaOwnershipScoped,
+  tieneDatosTest,
+  obtenerIdsEgresosPLTest,
+  esCertificadoTest,
+  esCobroTest,
+  validarEstadoCompleto,
+  formatearMensajeValidacion,
+} from "@/lib/qa-lab-helpers"
 
 type ModuleState = "pendiente" | "cargando" | "ok" | "error"
 
@@ -954,6 +964,11 @@ export default function QaLabPage() {
 
   const runFase = React.useCallback(async (fase: string) => {
     if (!ensureHydrated()) return
+    // Guard clean-first: bloquea segunda corrida sin limpiar
+    if (tieneDatosTest(useCompassStore.getState() as unknown as Record<string, unknown>)) {
+      setMsg({ type: "error", text: "Existen datos TEST-*: ejecuta primero «Borrar todo lo de prueba»" })
+      return
+    }
     setLoading(true)
     setMsg(null)
     const start = Date.now()
@@ -1162,18 +1177,16 @@ export default function QaLabPage() {
     setLoading(true)
     const errores: string[] = []
     const s = useCompassStore.getState()
-    // FI: libro de cobros de unidades TEST, emisiones sobre TEST, egresos y
-    // fondos TEST se purgan primero para liberar las referencias entrantes.
+    const idsEgresosPLTest = obtenerIdsEgresosPLTest(s as unknown as Record<string, unknown>)
+    // FI: libro de cobros TEST (unidadId u origenRef test-*), emisiones sobre TEST, egresos (incl. aleatorios de PL) y fondos TEST se purgan primero.
     useCompassStore.setState(st => ({
-      cobrosFI: st.cobrosFI.filter(c => !c.unidadId.startsWith("test-")),
+      cobrosFI: st.cobrosFI.filter(c => !esCobroTest(c as unknown as { id: string; unidadId: string; origenRef?: string })),
       emisionesGC: st.emisionesGC.filter(e => !e.lineas.some(l => l.unidadId.startsWith("test-"))),
-      egresosFI: st.egresosFI.filter(e => !e.id.startsWith("test-")),
+      egresosFI: st.egresosFI.filter(e => !e.id.startsWith("test-") && !idsEgresosPLTest.has(e.id)),
       fondosFI: st.fondosFI.filter(f => !f.id.startsWith("test-")),
-      notificaciones: st.notificaciones.filter(n => n.moduloOrigen !== "FI"),
+      notificaciones: (st.notificaciones as unknown as Parameters<typeof isTestNotificacion>[0][]).filter(n => !isTestNotificacion(n as unknown as Parameters<typeof isTestNotificacion>[0])),
     }))
-    // PE: las colecciones operacionales TEST se purgan antes de personas y
-    // unidades; los cierres de turno usan id generado, así que se filtran por
-    // trabajador TEST (y por prefijo para los creados con id determinista).
+    // PE: colecciones operacionales TEST se purgan antes de personas y unidades; los cierres de turno con id aleatorio se filtran por trabajador TEST.
     useCompassStore.setState(st => ({
       bitacoraVisitasPE: st.bitacoraVisitasPE.filter(v => !v.id.startsWith("test-")),
       encomiendasPE: st.encomiendasPE.filter(e => !e.id.startsWith("test-")),
@@ -1183,28 +1196,30 @@ export default function QaLabPage() {
       visitasTecnicasPE: st.visitasTecnicasPE.filter(v => !v.id.startsWith("test-")),
       cierresTurnoPE: st.cierresTurnoPE.filter(c => !c.trabajadorPersonaId.startsWith("test-") && !c.id.startsWith("test-")),
       proyeccionesPE: st.proyeccionesPE.filter(p => !p.id.startsWith("test-")),
-      notificaciones: st.notificaciones.filter(n => n.moduloOrigen !== "PE"),
+      notificaciones: (st.notificaciones as unknown as Parameters<typeof isTestNotificacion>[0][]).filter(n => !isTestNotificacion(n as unknown as Parameters<typeof isTestNotificacion>[0])),
     }))
     // Feriado TEST del calendario de proyección.
     useCompassStore.setState(st => ({
       maestros: { ...st.maestros, feriados: st.maestros.feriados.filter(f => !f.id.startsWith("test-")) },
     }))
-    // PL/CT/RE (fase final de la serie): colecciones transaccionales TEST se
-    // purgan en orden inverso RE → CT → PL. La liquidación TEST libera el
-    // egreso FI de sueldos antes del purge financiero; los parámetros legales
-    // CF se restablecen a undefined para devolver CF a su estado previo.
+    // PL/CT/RE: colecciones transaccionales TEST se purgan en orden inverso RE → CT → PL; config CF ownership-scoped.
     useCompassStore.setState(st => {
-      const cfg = st.configuracion
+      const cfg = st.configuracion as unknown as Record<string, unknown>
+      const limpia = getConfiguracionLimpiaOwnershipScoped(cfg)
       return {
-        configuracion: { ...cfg, ufMensual: undefined, ingresoMinimoMensual: undefined, topeGratificacionLegal: undefined, tasaSIS: undefined },
-        notificaciones: st.notificaciones.filter(n => n.moduloOrigen !== "RE" && n.moduloOrigen !== "PL"),
+        configuracion: limpia as unknown as typeof st.configuracion,
+        notificaciones: (st.notificaciones as unknown as Parameters<typeof isTestNotificacion>[0][]).filter(n => !isTestNotificacion(n as unknown as Parameters<typeof isTestNotificacion>[0])),
       }
     })
     useCompassStore.setState(st => ({
       reportesRE: st.reportesRE.filter(r => !r.id.startsWith("test-")),
-      certificadosCT: st.certificadosCT.filter(c => !c.id.startsWith("test-")),
+      certificadosCT: (st.certificadosCT as unknown as Parameters<typeof esCertificadoTest>[0][]).filter(c => !esCertificadoTest(c as unknown as Parameters<typeof esCertificadoTest>[0])),
       liquidacionesPL: st.liquidacionesPL.filter(l => !l.id.startsWith("test-")),
       adelantosPL: st.adelantosPL.filter(a => !a.id.startsWith("test-")),
+    }))
+    // Eventos AM de entidades TEST (referenciaId test-*) se purgan para evitar huérfanos post-limpieza.
+    useCompassStore.setState(st => ({
+      eventos: st.eventos.filter(e => !(e.referenciaId && String(e.referenciaId).startsWith("test-"))),
     }))
     // inverso MT -> IN -> IR -> GE -> CO -> GD -> AD -> PI -> VU -> EF unidades -> EF micro -> EF macro -> MP -> TU -> MA
     // MT
@@ -1215,19 +1230,17 @@ export default function QaLabPage() {
     useCompassStore.setState(st => ({
       trabajosMT: st.trabajosMT.filter(t => !t.titulo.includes("TEST")),
     }))
-    // CV (antes de remover el acta GD): purga avisos TEST, los nacidos del acta
-    // TEST y los activados desde plantilla en la fase; el maestro sembrado se conserva.
+    // CV (antes de remover el acta GD): purga avisos TEST, los nacidos del acta TEST y los activados desde plantilla en la fase; el maestro sembrado se conserva.
     useCompassStore.setState(st => ({
       avisosCV: st.avisosCV.filter(a =>
-        !a.id.startsWith("test-") && a.actaId !== "test-acta-gd" && a.plantillaId !== "plant-cv-porton"
+        !a.id.startsWith("test-") && !(a.actaId && String(a.actaId).startsWith("test-")) && a.plantillaId !== "plant-cv-porton"
       ),
     }))
-    // RA: reservas y elementos TEST se purgan directo (removeElementoRA exige
-    // reservas canceladas; el filtro inverso no depende de estados).
+    // RA: reservas y elementos TEST se purgan directo (removeElementoRA exige reservas canceladas; el filtro inverso no depende de estados).
     useCompassStore.setState(st => ({
       reservasRA: st.reservasRA.filter(r => !r.id.startsWith("test-ra-")),
       elementosRA: st.elementosRA.filter(e => !e.id.startsWith("test-ra-")),
-      notificaciones: st.notificaciones.filter(n => !["IR", "IN", "MT", "RA"].includes(n.moduloOrigen)),
+      notificaciones: (st.notificaciones as unknown as Parameters<typeof isTestNotificacion>[0][]).filter(n => !isTestNotificacion(n as unknown as Parameters<typeof isTestNotificacion>[0])),
     }))
     // IN
     const rIn1 = s.removeInfraccionIN("test-in-leve")
@@ -1249,7 +1262,7 @@ export default function QaLabPage() {
     }
     useCompassStore.setState(st => ({
       activosIR: st.activosIR.filter(a => a.nombre !== "Escobillón industrial TEST"),
-      notificaciones: st.notificaciones.filter(n => !["IR", "IN", "MT"].includes(n.moduloOrigen)),
+      notificaciones: (st.notificaciones as unknown as Parameters<typeof isTestNotificacion>[0][]).filter(n => !isTestNotificacion(n as unknown as Parameters<typeof isTestNotificacion>[0])),
     }))
     const rSol1 = s.removeSolicitudGE("test-sol-ge-1")
     if (!rSol1.ok) errores.push(rSol1.error || "sol-ge-1")
@@ -1262,19 +1275,19 @@ export default function QaLabPage() {
     // CO no define removeEnvioCO (el snapshot es histórico); se purga por filtro.
     useCompassStore.setState(st => ({
       enviosCO: st.enviosCO.filter(e => e.id !== "test-env-co-1"),
-      notificaciones: st.notificaciones.filter(n => (n.moduloOrigen !== "CO" && n.moduloOrigen !== "GE") || !n.destinatarioPersonaId?.startsWith("test-")),
+      notificaciones: (st.notificaciones as unknown as Parameters<typeof isTestNotificacion>[0][]).filter(n => !isTestNotificacion(n as unknown as Parameters<typeof isTestNotificacion>[0])),
     }))
     const rPlant = s.removePlantillaCO("test-plant-co")
     if (!rPlant.ok) errores.push(rPlant.error || "plant-co")
     const rActa = s.removeActaGD("test-acta-gd")
     if (!rActa.ok) errores.push(rActa.error || "acta")
-    useCompassStore.setState(st => ({ notificaciones: st.notificaciones.filter(n => (n.moduloOrigen !== "PI" && n.moduloOrigen !== "GD") || !n.destinatarioPersonaId?.startsWith("test-")) }))
+    useCompassStore.setState(st => ({ notificaciones: (st.notificaciones as unknown as Parameters<typeof isTestNotificacion>[0][]).filter(n => !isTestNotificacion(n as unknown as Parameters<typeof isTestNotificacion>[0])) }))
     const rCtrl = s.removeControlPropiedad("test-ctrl-e999")
     if (!rCtrl.ok) errores.push(rCtrl.error || "ctrl")
     // PI no define removeLeadPortal (los leads son histórico); se purgan por filtro.
     useCompassStore.setState(st => ({
       leadsPortal: st.leadsPortal.filter(l => l.id !== "test-lead-pi-1"),
-      notificaciones: st.notificaciones.filter(n => n.moduloOrigen !== "PI" || !n.destinatarioPersonaId?.startsWith("test-")),
+      notificaciones: (st.notificaciones as unknown as Parameters<typeof isTestNotificacion>[0][]).filter(n => !isTestNotificacion(n as unknown as Parameters<typeof isTestNotificacion>[0])),
     }))
     const rPub = s.removePublicacionPortal("test-pub-pi-e999")
     if (!rPub.ok) errores.push(rPub.error || "pub")
@@ -1368,22 +1381,16 @@ export default function QaLabPage() {
 
   const validar = React.useCallback(() => {
     if (!ensureHydrated()) return
-    const s = useCompassStore.getState()
-    const errores: string[] = []
-    // check dangling FKs para TEST-*
-    for (const u of s.unidades.filter(u => u.id.startsWith("test-"))) {
-      if (!s.microSectores.find(m => m.id === u.microSectorId)) errores.push(`unidad ${u.id} micro huérfano ${u.microSectorId}`)
-      if (!s.tiposUnidad.find(t => t.id === u.tipoUnidadId)) errores.push(`unidad ${u.id} tipo huérfano ${u.tipoUnidadId}`)
-      if (u.estadoId && !s.maestros.estadosOcupacion.find(e => e.id === u.estadoId)) errores.push(`unidad ${u.id} estado huérfano ${u.estadoId}`)
+    const s = useCompassStore.getState() as unknown as Record<string, unknown>
+    const resultado = validarEstadoCompleto(s)
+    const tasa = resultado.total === 0 ? 0 : resultado.total / (Number(((s as unknown as { unidades: unknown[] }).unidades.length)) + Number(((s as unknown as { vinculos: unknown[] }).vinculos.length)) || 1)
+    if (resultado.total === 0) setMsg({ type: "ok", text: formatearMensajeValidacion(resultado) })
+    else {
+      const base = formatearMensajeValidacion(resultado)
+      const tasaStr = (tasa * 100).toFixed(1)
+      setMsg({ type: "error", text: `${base} — tasa ${tasaStr}%` })
     }
-    for (const v of s.vinculos.filter(v => v.id.startsWith("test-"))) {
-      if (!s.personas.find(p => p.id === v.personaId)) errores.push(`vinculo ${v.id} persona huérfana`)
-      if (!s.unidades.find(u => u.id === v.unidadId)) errores.push(`vinculo ${v.id} unidad huérfana`)
-    }
-    const tasa = errores.length === 0 ? 0 : errores.length / (s.unidades.length + s.vinculos.length)
-    if (errores.length === 0) setMsg({ type: "ok", text: `Validación OK — tasa huérfanos 0, TEST-* coherente` })
-    else setMsg({ type: "error", text: `Validación: ${errores.length} huérfanos, tasa ${(tasa*100).toFixed(1)}% — ${errores.slice(0,2).join("; ")}` })
-    if (report) setReport({ ...report, erroresGlobales: errores, ok: errores.length === 0 })
+    if (report) setReport({ ...report, erroresGlobales: resultado.errores, ok: resultado.total === 0 })
   }, [ensureHydrated, report])
 
   if (!isDev) {
