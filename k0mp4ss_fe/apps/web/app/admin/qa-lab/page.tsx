@@ -269,8 +269,8 @@ export default function QaLabPage() {
   const cargarFase0 = React.useCallback(async (): Promise<ModReport> => {
     const s = useCompassStore.getState()
     const pasos: Paso[] = (PLAN["ma"]! as string[]).map(desc => ({ desc, estado: "pendiente" as ModuleState }))
-    const run = (idx: number, fn: () => void) => {
-      try { fn(); pasos[idx]!.estado = "ok" } catch (e) { pasos[idx]!.estado = "error"; pasos[idx]!.error = String(e) }
+    const run = (idx: number, fn: () => { ok: boolean; error?: string }) => {
+      try { const r = fn(); if (!r.ok) { pasos[idx]!.estado = "error"; pasos[idx]!.error = r.error } else pasos[idx]!.estado = "ok" } catch (e) { pasos[idx]!.estado = "error"; pasos[idx]!.error = String(e) }
     }
     run(0, () => s.saveMaestro("estadosOcupacion", { id: "test-edo-enlimpieza", nombre: "TEST-EdO-EnLimpieza", color: "destructive", hex: "#ef4444" } as any))
     run(1, () => s.saveMaestro("categoriasMacro", { id: "test-macro-torreqa", nombre: "TEST-MACRO-TorreQA" } as any))
@@ -295,8 +295,8 @@ export default function QaLabPage() {
   const cargarFase1MP = React.useCallback(async (): Promise<ModReport> => {
     const s = useCompassStore.getState()
     const pasos: Paso[] = (PLAN["mp"]! as string[]).map(desc => ({ desc, estado: "pendiente" as ModuleState }))
-    try { s.savePersona({ id: "test-p-99", rut: "99.999.999-9", nombreCompleto: "TEST Persona QA Uno", nombres: "TEST", apellidos: "Persona QA Uno", email: "test.qa@compass.cl", telefonoMovil: "+56 9 9999 9999", estadoCuenta: "activa", condicionesEspecialesIds: ["test-vuln-electroqa"], roles: ["residente"] } as any); pasos[0]!.estado = "ok" } catch (e) { pasos[0]!.estado = "error"; pasos[0]!.error = String(e) }
-    try { s.savePersona({ id: "test-p-88", rut: "88.888.888-8", nombreCompleto: "TEST Persona QA Dos", nombres: "TEST", apellidos: "Persona QA Dos", email: "test.qa2@compass.cl", telefonoMovil: "+56 9 8888 8888", estadoCuenta: "activa", condicionesEspecialesIds: [], roles: ["residente"] } as any); pasos[1]!.estado = "ok" } catch (e) { pasos[1]!.estado = "error"; pasos[1]!.error = String(e) }
+    try { const r = s.savePersona({ id: "test-p-99", rut: "99.999.999-9", nombreCompleto: "TEST Persona QA Uno", nombres: "TEST", apellidos: "Persona QA Uno", email: "test.qa@compass.cl", telefonoMovil: "+56 9 9999 9999", estadoCuenta: "activa", condicionesEspecialesIds: ["test-vuln-electroqa"], roles: ["residente"] } as any); if (!r.ok) { pasos[0]!.estado = "error"; pasos[0]!.error = r.error } else pasos[0]!.estado = "ok" } catch (e) { pasos[0]!.estado = "error"; pasos[0]!.error = String(e) }
+    try { const r = s.savePersona({ id: "test-p-88", rut: "88.888.888-8", nombreCompleto: "TEST Persona QA Dos", nombres: "TEST", apellidos: "Persona QA Dos", email: "test.qa2@compass.cl", telefonoMovil: "+56 9 8888 8888", estadoCuenta: "activa", condicionesEspecialesIds: [], roles: ["residente"] } as any); if (!r.ok) { pasos[1]!.estado = "error"; pasos[1]!.error = r.error } else pasos[1]!.estado = "ok" } catch (e) { pasos[1]!.estado = "error"; pasos[1]!.error = String(e) }
     const errores = pasos.filter(p => p.estado === "error").map(p => p.error || p.desc)
     return { id: "mp", label: TITULOS["mp"]!, rank: 1, status: errores.length ? "error" : "ok", count: 2, errores, pasos }
   }, [])
@@ -381,14 +381,14 @@ export default function QaLabPage() {
     // 2) Registrar acta TEST con asistencia
     const r2 = s.saveActaGD({ id: "test-acta-gd", fecha: "2026-08-24", hora: "19:30", lugar: "Sede comunitaria TEST", tablaTemas: ["Tema TEST GD"], presentes: ["test-p-99"], ausentes: [], invitados: [], minuta: "Minuta de prueba del acta TEST.", adjuntos: [{ nombre: "test-acta.pdf", tipoMime: "application/pdf", tamanoKB: 250, url: "https://placeholder.supabase.co/test-acta.pdf" }], estado: "borrador", aprobaciones: [] } as any)
     if (!r2.ok) { pasos[1]!.estado = "error"; pasos[1]!.error = r2.error } else pasos[1]!.estado = "ok"
-    // 3) Firmar hasta quórum 100% de la directiva vigente
-    const directivaVigente = s.personas.filter(p => p.datosGobernanza && p.estadoCuenta === "activa").map(p => p.id)
+    // 3) Firmar hasta quórum 100% de la directiva vigente (fresco + incluye test-p-99)
+    const directivaVigente = useCompassStore.getState().personas.filter(p => p.datosGobernanza && p.estadoCuenta === "activa").map(p => p.id)
     let falloFirma: string | null = null
     for (const idMiembro of directivaVigente) {
       const r3 = s.aprobarActaGD("test-acta-gd", idMiembro)
       if (!r3.ok && !falloFirma) falloFirma = `${idMiembro}: ${r3.error}`
     }
-    const actaFinal = s.actasGD.find(a => a.id === "test-acta-gd")
+    const actaFinal = useCompassStore.getState().actasGD.find(a => a.id === "test-acta-gd")
     if (falloFirma || actaFinal?.estado !== "publicada") { pasos[2]!.estado = "error"; pasos[2]!.error = falloFirma ?? `Estado final: ${actaFinal?.estado}` } else pasos[2]!.estado = "ok"
     const errores = pasos.filter(p => p.estado === "error").map(p => p.error || p.desc)
     return { id: "gd", label: TITULOS["gd"]!, rank: 5, status: errores.length ? "error" : "ok", count: 1, errores, pasos }
@@ -434,23 +434,23 @@ export default function QaLabPage() {
     // 2) Abrir → En Revisión automático
     if (r1.ok) {
       const r2 = s.abrirSolicitudGE("test-sol-ge-1")
-      const estadoTrasAbrir = s.solicitudesGE.find(x => x.id === "test-sol-ge-1")?.estado
+      const estadoTrasAbrir = useCompassStore.getState().solicitudesGE.find(x => x.id === "test-sol-ge-1")?.estado
       if (!r2.ok || estadoTrasAbrir !== "en_revision") { pasos[1]!.estado = "error"; pasos[1]!.error = `Estado tras abrir: ${estadoTrasAbrir}` } else pasos[1]!.estado = "ok"
     }
     // 3) Admin pide datos → Requiere Acción Vecino + alerta
     if (r1.ok) {
       const r3 = s.responderSolicitudGE("test-sol-ge-1", { autorRol: "administracion", texto: "Indique la hora exacta del retiro." })
-      const estado3 = s.solicitudesGE.find(x => x.id === "test-sol-ge-1")?.estado
+      const estado3 = useCompassStore.getState().solicitudesGE.find(x => x.id === "test-sol-ge-1")?.estado
       if (!r3.ok || estado3 !== "requiere_accion_vecino") { pasos[2]!.estado = "error"; pasos[2]!.error = `Estado: ${estado3}` } else pasos[2]!.estado = "ok"
     }
     // 4) Vecino responde → En Proceso
     const r4 = s.responderSolicitudGE("test-sol-ge-1", { autorRol: "solicitante", texto: "Fue a las 18:30 aprox." })
-    const estado4 = s.solicitudesGE.find(x => x.id === "test-sol-ge-1")?.estado
+    const estado4 = useCompassStore.getState().solicitudesGE.find(x => x.id === "test-sol-ge-1")?.estado
     if (!r4.ok || estado4 !== "en_proceso") { pasos[3]!.estado = "error"; pasos[3]!.error = `Estado: ${estado4}` } else pasos[3]!.estado = "ok"
     // 5) Resolver y cerrar → SLA
     const r5 = s.resolverSolicitudGE("test-sol-ge-1", "Se entregó link TEST del video al vecino.")
     const r5b = s.cerrarSolicitudGE("test-sol-ge-1")
-    const estado5 = s.solicitudesGE.find(x => x.id === "test-sol-ge-1")?.estado
+    const estado5 = useCompassStore.getState().solicitudesGE.find(x => x.id === "test-sol-ge-1")?.estado
     if (!r5.ok || !r5b.ok || estado5 !== "cerrado") { pasos[4]!.estado = "error"; pasos[4]!.error = `Estado final: ${estado5}` } else pasos[4]!.estado = "ok"
     // 6) Ticket tipo buzon vinculado al reclamo TEST de CO
     const r6 = s.saveSolicitudGE({ id: "test-sol-ge-2", folio: "", tipo: "buzon", titulo: "[Buzón] Reclamo TEST buzón", descripcion: "Gestión operativa del reclamo ciudadano TEST.", unidadId: "test-u-999", estado: "nuevo", fechaCreacion: "2026-08-25", comentarios: [], mensajeBuzonId: "test-buz-co-1", historialEstados: [] })
@@ -476,7 +476,7 @@ export default function QaLabPage() {
     let r4b: { ok: boolean; error?: string } = { ok: false }
     if (r4.ok) {
       r4b = s.entregarSolicitudInsumoIR("test-si-1")
-      const stockTrasEntrega = s.activosIR.find(x => x.id === "test-ir-cloro")?.stock
+      const stockTrasEntrega = useCompassStore.getState().activosIR.find(x => x.id === "test-ir-cloro")?.stock
       if (!r4b.ok || stockTrasEntrega !== 7) { pasos[3]!.estado = "error"; pasos[3]!.error = `Stock tras entrega: ${stockTrasEntrega}` } else pasos[3]!.estado = "ok"
     } else { pasos[3]!.estado = "error"; pasos[3]!.error = r4.error }
     // 5) Comodín → aprobar y crear en catálogo
@@ -484,12 +484,12 @@ export default function QaLabPage() {
     let r5b: { ok: boolean; error?: string } = { ok: false }
     if (r5.ok) {
       r5b = s.resolverComodinIR("test-si-2", "aprobar_crear")
-      const creado = s.activosIR.find(x => x.nombre === "Escobillón industrial TEST")
+      const creado = useCompassStore.getState().activosIR.find(x => x.nombre === "Escobillón industrial TEST")
       if (!r5b.ok || !creado) { pasos[4]!.estado = "error"; pasos[4]!.error = r5b.error ?? "No se creó el artículo" } else pasos[4]!.estado = "ok"
     } else { pasos[4]!.estado = "error"; pasos[4]!.error = r5.error }
     // 6) Entrega EPP individual con renovación calculada
     const r6 = s.registrarEntregaEPP({ id: "test-epp-1", recursoId: "test-ir-casco", personaId: "test-p-88", fechaEntrega: "2026-08-25", talla: "M", estado: "nuevo" } as any)
-    const eppGuardada = s.entregasEPP.find(e => e.id === "test-epp-1")
+    const eppGuardada = useCompassStore.getState().entregasEPP.find(e => e.id === "test-epp-1")
     if (!r6.ok || eppGuardada?.proximaRenovacion !== "2027-02-25") { pasos[5]!.estado = "error"; pasos[5]!.error = r6.error ?? `Renovación: ${eppGuardada?.proximaRenovacion}` } else pasos[5]!.estado = "ok"
     // 7) Asignar llave al arrendatario TEST
     const r7 = s.asignarAccesoIR("test-ir-llave999", "test-p-88")
@@ -504,7 +504,8 @@ export default function QaLabPage() {
     // Directiva TEST vigente (requisito de respaldo; reusa extensión GD si existe).
     const p99 = s.personas.find(x => x.id === "test-p-99")
     if (!p99?.datosGobernanza) {
-      s.savePersona({ ...s.personas.find(x => x.id === "test-p-99")!, roles: Array.from(new Set([...(p99?.roles ?? []), "directiva"])), datosGobernanza: { id: "gob-test-1", cargoDirectiva: "presidente", fechaAsuncion: "2026-08-24" } } as any)
+      const rAux = s.savePersona({ ...s.personas.find(x => x.id === "test-p-99")!, roles: Array.from(new Set([...(p99?.roles ?? []), "directiva"])), datosGobernanza: { id: "gob-test-1", cargoDirectiva: "presidente", fechaAsuncion: "2026-08-24" } } as any)
+      if (!rAux.ok) { pasos[0]!.estado = "error"; pasos[0]!.error = rAux.error }
     }
     // 1) Tipo de falta TEST monto fijo
     const r1 = s.saveTipoInfraccionIN({ id: "test-tipo-in", nombre: "Falta TEST Reglamento", categoria: "leve", tipoSancion: "monto_fijo", valor: 25000 } as any)
@@ -523,8 +524,8 @@ export default function QaLabPage() {
     if (!r5.ok) { pasos[4]!.estado = "error"; pasos[4]!.error = r5.error } else pasos[4]!.estado = "ok"
     // 6) Aplicar grave → % GC + cobro FI materializado
     const r6 = s.aplicarInfraccionIN("test-in-grave")
-    const grave = s.infraccionesIN.find(i => i.id === "test-in-grave")
-    if (!r6.ok || grave?.estado !== "aplicada" || !String(grave.cargoFIReferencia ?? "").startsWith("cob-") || !s.cobrosFI.some(c => c.id === grave.cargoFIReferencia && c.concepto === "multa_in")) {
+    const grave = useCompassStore.getState().infraccionesIN.find(i => i.id === "test-in-grave")
+    if (!r6.ok || grave?.estado !== "aplicada" || !String(grave.cargoFIReferencia ?? "").startsWith("cob-") || !useCompassStore.getState().cobrosFI.some(c => c.id === grave.cargoFIReferencia && c.concepto === "multa_in")) {
       pasos[5]!.estado = "error"; pasos[5]!.error = r6.error ?? `Estado/cargo: ${grave?.estado}/${grave?.cargoFIReferencia}`
     } else pasos[5]!.estado = "ok"
     // 7) Desestimar la leve apelada con justificación
@@ -545,11 +546,11 @@ export default function QaLabPage() {
     if (!r1.ok) { pasos[1]!.estado = "error"; pasos[1]!.error = r1.error } else pasos[1]!.estado = "ok"
     // 3) Iniciar → En Curso
     const r2 = s.iniciarTrabajoMT("test-mt-1")
-    const enCurso = s.trabajosMT.find(t => t.id === "test-mt-1")?.estado === "en_curso"
+    const enCurso = useCompassStore.getState().trabajosMT.find(t => t.id === "test-mt-1")?.estado === "en_curso"
     if (!r2.ok || !enCurso) { pasos[2]!.estado = "error"; pasos[2]!.error = r2.error ?? "No quedó En Curso" } else pasos[2]!.estado = "ok"
     // 4) Finalizar → genera próximo preventivo (+1 mes)
     const r3 = s.finalizarTrabajoMT("test-mt-1", { fechaTermino: "2026-08-25", costoFinal: 185000 })
-    const generado = s.trabajosMT.find(t => t.estado === "planificado" && t.preventivo && t.id !== "test-mt-1")
+    const generado = useCompassStore.getState().trabajosMT.find(t => t.estado === "planificado" && t.preventivo && t.id !== "test-mt-1")
     if (!r3.ok || !generado || generado.fechaProgramada !== "2026-09-25") {
       pasos[3]!.estado = "error"; pasos[3]!.error = r3.error ?? `Próximo preventivo: ${generado?.fechaProgramada}`
     } else pasos[3]!.estado = "ok"
@@ -557,7 +558,7 @@ export default function QaLabPage() {
     const r4 = s.saveTrabajoMT({ id: "test-mt-2", folio: "", titulo: "Impermeabilización losa TEST", descripcion: "Sellado de losas y muros perimetrales del estanque de agua potable.", microSectorId: "test-micro-piso99", proveedor: { nombre: "WaterProof TEST" }, prioridad: "media", costoTotal: 950000, origenFondos: "fondo_reserva", estadoPago: "parcial", estado: "finalizado", fechaTermino: "2026-01-10", garantiaInicio: "2026-01-10", garantiaFin: "2026-07-01", alertaGarantiaEnviada: false, evidencias: [{ tipo: "factura", nombre: "test-factura.pdf", tipoMime: "application/pdf", tamanoKB: 210, url: "https://placeholder.supabase.co/test-factura.pdf" }] } as any)
     if (r4.ok) {
       s.verificarGarantiasMT()
-      const eventosGarantia = s.eventos.filter(e => e.tipoAccion === "MT_GUARANTEE_EXPIRED" && e.referenciaId === "test-mt-2")
+      const eventosGarantia = useCompassStore.getState().eventos.filter(e => e.tipoAccion === "MT_GUARANTEE_EXPIRED" && e.referenciaId === "test-mt-2")
       if (eventosGarantia.length !== 1) { pasos[4]!.estado = "error"; pasos[4]!.error = `Alertas garantía: ${eventosGarantia.length}` } else pasos[4]!.estado = "ok"
     } else { pasos[4]!.estado = "error"; pasos[4]!.error = r4.error }
     // 6) Proyecto largo plazo con cuota derivable ($12M / 120m = $100.000)
@@ -581,8 +582,8 @@ export default function QaLabPage() {
     if (!r1.ok) { pasos[0]!.estado = "error"; pasos[0]!.error = r1.error } else pasos[0]!.estado = "ok"
     // 2) Reserva confirmada mañana 19:00–22:00
     const r2 = s.saveReservaRA({ id: "test-ra-rs-1", folio: "", elementoId: "test-ra-quincho", solicitantePersonaId: "test-p-99", unidadId: "test-u-999", fecha: mananaStr(), horaInicio: "19:00", horaFin: "22:00", estado: "confirmada", montoTarifa: 0, montoGarantia: 0 } as any)
-    const rs1 = s.reservasRA.find(x => x.id === "test-ra-rs-1")
-    if (!r2.ok || rs1?.folio !== "RA-0001" || !String(rs1.cargoFIReferencia ?? "").startsWith("cob-")) { pasos[1]!.estado = "error"; pasos[1]!.error = r2.error ?? `Folio/cargo: ${rs1?.folio}/${rs1?.cargoFIReferencia}` } else pasos[1]!.estado = "ok"
+    const rs1 = useCompassStore.getState().reservasRA.find(x => x.id === "test-ra-rs-1")
+    if (!r2.ok || !/^RA-\d{4}$/.test(rs1?.folio ?? "") || !String(rs1?.cargoFIReferencia ?? "").startsWith("cob-")) { pasos[1]!.estado = "error"; pasos[1]!.error = r2.error ?? `Folio/cargo: ${rs1?.folio}/${rs1?.cargoFIReferencia}` } else pasos[1]!.estado = "ok"
     // 3) Solapamiento rechazado
     const r3 = s.saveReservaRA({ id: "test-ra-rs-x", folio: "", elementoId: "test-ra-quincho", solicitantePersonaId: "test-p-88", fecha: mananaStr(), horaInicio: "20:00", horaFin: "23:00", estado: "confirmada", montoTarifa: 0, montoGarantia: 0 } as any)
     if (r3.ok || !String(r3.error).includes("Conflicto horario")) { pasos[2]!.estado = "error"; pasos[2]!.error = r3.ok ? "El solapamiento pasó" : String(r3.error) } else pasos[2]!.estado = "ok"
@@ -596,11 +597,11 @@ export default function QaLabPage() {
     }
     // 5) Cancelación tardía con penalización
     const r5 = s.cancelarReservaRA("test-ra-rs-1")
-    const cancelada = s.reservasRA.find(x => x.id === "test-ra-rs-1")
+    const cancelada = useCompassStore.getState().reservasRA.find(x => x.id === "test-ra-rs-1")
     if (!r5.ok || cancelada?.cancelacion?.tardia !== true || cancelada.cancelacion.penalizacion !== 5000) { pasos[4]!.estado = "error"; pasos[4]!.error = r5.error ?? `Cancelación: ${JSON.stringify(cancelada?.cancelacion)}` } else pasos[4]!.estado = "ok"
     // 6) Retención de garantía por daño
     const r6 = s.retenerGarantiaRA("test-ra-rs-2", "Manguera fracturada al devolver el equipo TEST.")
-    const retenida = s.reservasRA.find(x => x.id === "test-ra-rs-2")?.garantiaRetenida
+    const retenida = useCompassStore.getState().reservasRA.find(x => x.id === "test-ra-rs-2")?.garantiaRetenida
     if (!r6.ok || retenida?.monto !== 30000) { pasos[5]!.estado = "error"; pasos[5]!.error = r6.error ?? JSON.stringify(retenida) } else pasos[5]!.estado = "ok"
     const errores = pasos.filter(p => p.estado === "error").map(p => p.error || p.desc)
     return { id: "ra", label: TITULOS["ra"]!, rank: 8, status: errores.length ? "error" : "ok", count: 1, errores, pasos }
@@ -611,7 +612,7 @@ export default function QaLabPage() {
     const pasos: Paso[] = (PLAN["cv"]! as string[]).map(desc => ({ desc, estado: "pendiente" as ModuleState }))
     // 1) Activación instantánea de plantilla por personal de servicio
     const r1 = s.activarPlantillaCV("plant-cv-porton")
-    const avisoPorton = s.avisosCV.find(a => a.plantillaId === "plant-cv-porton")
+    const avisoPorton = useCompassStore.getState().avisosCV.find(a => a.plantillaId === "plant-cv-porton")
     if (!r1.ok || avisoPorton?.estado !== "publicado" || avisoPorton.tipologia !== "advertencia") { pasos[0]!.estado = "error"; pasos[0]!.error = r1.error ?? `Estado: ${avisoPorton?.estado}` } else pasos[0]!.estado = "ok"
     // 2) Aviso manual con imagen URL remota → publicar
     const ayer = new Date()
@@ -619,7 +620,7 @@ export default function QaLabPage() {
     const r2 = s.saveAvisoCV({ id: "test-cv-manual", titulo: "Corte de agua programado TEST", cuerpo: "Corte de agua TEST entre 10:00 y 14:00 por mantención del estanque.", tipologia: "info", duracionSegundos: 8, imagenUrl: "https://placeholder.supabase.co/test-cv-agua.jpg", pantallaCompleta: false, tags: ["qa", "cortes"], estado: "borrador", requiereVistoBueno: false, origen: "manual", fechaCreacion: new Date().toISOString().slice(0, 10) })
     let publicadoOk = false
     if (!r2.ok) { pasos[1]!.estado = "error"; pasos[1]!.error = r2.error } else {
-      publicadoOk = s.publicarAvisoCV("test-cv-manual").ok && s.avisosCV.find(a => a.id === "test-cv-manual")?.estado === "publicado"
+      publicadoOk = s.publicarAvisoCV("test-cv-manual").ok && useCompassStore.getState().avisosCV.find(a => a.id === "test-cv-manual")?.estado === "publicado"
       if (!publicadoOk) { pasos[1]!.estado = "error"; pasos[1]!.error = "No quedó publicado" } else pasos[1]!.estado = "ok"
     }
     // 3) Caducidad automática de un vencido
@@ -628,23 +629,23 @@ export default function QaLabPage() {
     if (!r3.ok) { pasos[2]!.estado = "error"; pasos[2]!.error = r3.error } else {
       s.publicarAvisoCV("test-cv-expirado")
       s.caducarAvisosCV()
-      caducadoOk = s.avisosCV.find(a => a.id === "test-cv-expirado")?.estado === "archivado"
+      caducadoOk = useCompassStore.getState().avisosCV.find(a => a.id === "test-cv-expirado")?.estado === "archivado"
       if (!caducadoOk) { pasos[2]!.estado = "error"; pasos[2]!.error = "No fue archivado por caducidad" } else pasos[2]!.estado = "ok"
     }
     // 4) Publicar acta GD TEST → materializa avisoCVReferencia
-    const acta = s.actasGD.find(a => a.id === "test-acta-gd")
+    const acta = useCompassStore.getState().actasGD.find(a => a.id === "test-acta-gd")
     if (!acta || acta.estado !== "publicada") {
       pasos[3]!.estado = "error"; pasos[3]!.error = "Falta test-acta-gd publicada (ejecuta la fase GD)"
     } else {
       const r4 = s.publicarActaEnCV("test-acta-gd")
-      const actaFinal = s.actasGD.find(a => a.id === "test-acta-gd")
-      const avisoActa = actaFinal?.avisoCVReferencia ? s.avisosCV.find(a => a.id === actaFinal.avisoCVReferencia) : undefined
+      const actaFinal = useCompassStore.getState().actasGD.find(a => a.id === "test-acta-gd")
+      const avisoActa = actaFinal?.avisoCVReferencia ? useCompassStore.getState().avisosCV.find(a => a.id === actaFinal.avisoCVReferencia) : undefined
       if (!r4.ok || !actaFinal || !actaFinal.avisoCVReferencia || actaFinal.avisoCVReferencia === "pendiente" || avisoActa?.origen !== "acta_gd" || avisoActa.estado !== "publicado") {
         pasos[3]!.estado = "error"; pasos[3]!.error = r4.error ?? `Referencia: ${actaFinal?.avisoCVReferencia}`
       } else pasos[3]!.estado = "ok"
     }
     // 5) Cola del carrusel con duraciones individuales
-    const cola = s.avisosCV.filter(a => a.estado === "publicado")
+    const cola = useCompassStore.getState().avisosCV.filter(a => a.estado === "publicado")
     const duraciones = new Set(cola.map(a => a.duracionSegundos))
     if (cola.length < 3 || duraciones.size < 2) { pasos[4]!.estado = "error"; pasos[4]!.error = `Cola: ${cola.length} avisos, ${duraciones.size} duración(es)` } else pasos[4]!.estado = "ok"
     const errores = pasos.filter(p => p.estado === "error").map(p => p.error || p.desc)
@@ -653,6 +654,7 @@ export default function QaLabPage() {
 
   const periodoMesesAtrasFI = (meses: number): string => {
     const d = new Date()
+    d.setDate(1)
     d.setMonth(d.getMonth() - meses)
     return d.toISOString().slice(0, 7)
   }
@@ -665,7 +667,7 @@ export default function QaLabPage() {
     if (!r1.ok) { pasos[0]!.estado = "error"; pasos[0]!.error = r1.error } else pasos[0]!.estado = "ok"
     // 2) Egreso recurrente imputado con comprobante D1
     const r2 = s.saveEgresoFI({ id: "test-egr-1", fecha: new Date().toISOString().slice(0, 10), categoria: "sueldos", descripcion: "Sueldo conserje TEST", monto: 350000, fondoId: "fondo-gc", esRecurrente: true, comprobante: { nombre: "test-boleta.pdf", tipoMime: "application/pdf", tamanoKB: 90, url: "https://placeholder.supabase.co/test-boleta.pdf" } } as any)
-    if (!r2.ok || !s.egresosFI.find(e => e.id === "test-egr-1")?.folio?.startsWith("FE-")) { pasos[1]!.estado = "error"; pasos[1]!.error = r2.error ?? "Sin folio FE" } else pasos[1]!.estado = "ok"
+    if (!r2.ok || !useCompassStore.getState().egresosFI.find(e => e.id === "test-egr-1")?.folio?.startsWith("FE-")) { pasos[1]!.estado = "error"; pasos[1]!.error = r2.error ?? "Sin folio FE" } else pasos[1]!.estado = "ok"
     // 3) Emisión GC variable sobre unidades TEST con aporte al fondo de reserva
     const unidadTest = "test-u-999"
     const uTest = s.unidades.find(u => u.id === unidadTest)
@@ -710,7 +712,7 @@ export default function QaLabPage() {
       const sinJustificacion = s.registrarPagoFI(cobroMulta.id, { monto: montoConDescuento, medio: "efectivo" })
       const conJustificacion = s.registrarPagoFI(cobroMulta.id, { monto: montoConDescuento, medio: "efectivo", ajusteJustificacion: "Condonación parcial autorizada por la directiva TEST." })
       const dif = useCompassStore.getState().cobrosFI.find(c => c.id === cobroMulta.id)?.diferencias.length === 1
-      if (!sinJustificacion.ok && conJustificacion.ok && dif && s.eventos.some(e => e.tipoAccion === "FI_MANUAL_DISCOUNT")) pasos[6]!.estado = "ok"
+      if (!sinJustificacion.ok && conJustificacion.ok && dif && useCompassStore.getState().eventos.some(e => e.tipoAccion === "FI_MANUAL_DISCOUNT")) pasos[6]!.estado = "ok"
       else { pasos[6]!.estado = "error"; pasos[6]!.error = conJustificacion.error ?? `Diferencias: ${useCompassStore.getState().cobrosFI.find(c => c.id === cobroMulta.id)?.diferencias.length}` }
     }
     // 8) Conexión IN: la multa grave aplicada vive como cobro real imputado
@@ -719,10 +721,10 @@ export default function QaLabPage() {
     if (!grave || !String(grave.cargoFIReferencia ?? "").startsWith("cob-") || !cobroGrave || cobroGrave.fondoId !== "fondo-gc") {
       pasos[7]!.estado = "error"; pasos[7]!.error = "Cobro multa_in no materializado (ejecuta la fase IN)"
     } else pasos[7]!.estado = "ok"
-    // 9) Conexión RA: la tarifa del quincho quedó como cobro del fondo amenities
-    const reservaQuincho = s.reservasRA.find(r => r.id === "test-ra-rs-1")
+    // 9) Conexión RA: la tarifa del quincho quedó como cobro del fondo amenities (cargo puede ser penalización tras cancelación)
+    const reservaQuincho = useCompassStore.getState().reservasRA.find(r => r.id === "test-ra-rs-1")
     const cobroTarifa = useCompassStore.getState().cobrosFI.find(c => c.origenRef === "test-ra-rs-1" && c.concepto === "reserva_ra")
-    if (!reservaQuincho || reservaQuincho.cargoFIReferencia !== cobroTarifa?.id || cobroTarifa === undefined || cobroTarifa.fondoId !== "fondo-amenities") {
+    if (!reservaQuincho || !cobroTarifa || cobroTarifa.fondoId !== "fondo-amenities") {
       pasos[8]!.estado = "error"; pasos[8]!.error = "Cobro reserva_ra no materializado (ejecuta la fase RA)"
     } else pasos[8]!.estado = "ok"
     // 10) Conexión MT: proyecto financiado por fondo GC sin saldo → rechazado
@@ -752,15 +754,17 @@ export default function QaLabPage() {
         contactosEmergencia: [{ id: "test-pe-ce-1", nombre: "Contacto Emergencia TEST", telefono: "+56 9 9999 0000", relacion: "Pareja" }],
       },
     } as any) : { ok: false, error: "test-p-99 no existe" }
-    if (!r1.ok || !s.personas.find(p => p.id === "test-p-99")?.datosLaborales?.afpId) { pasos[0]!.estado = "error"; pasos[0]!.error = r1.ok ? "Ficha sin FKs legales" : r1.error } else pasos[0]!.estado = "ok"
+    if (!r1.ok || !useCompassStore.getState().personas.find(p => p.id === "test-p-99")?.datosLaborales?.afpId) { pasos[0]!.estado = "error"; pasos[0]!.error = r1.ok ? "Ficha sin FKs legales" : r1.error } else pasos[0]!.estado = "ok"
     // 2) Hora extra + evaluación de desempeño auditadas
     const r2a = s.registrarHoraExtraPE("test-p-99", { fecha: hoy, horas: 2, motivo: "Reemplazo jornada tarde TEST" })
     const r2b = s.registrarEvaluacionPE("test-p-99", { fecha: hoy, puntaje: 6, comentarios: "Desempeño TEST destacado" })
-    if (!r2a.ok || !r2b.ok || (s.eventos.filter(e => e.tipoAccion === "PE_HORA_EXTRA_REGISTRADA" || e.tipoAccion === "PE_EVALUACION_REGISTRADA").length < 2)) { pasos[1]!.estado = "error"; pasos[1]!.error = r2a.error ?? r2b.error } else pasos[1]!.estado = "ok"
+    if (!r2a.ok || !r2b.ok || (useCompassStore.getState().eventos.filter(e => e.tipoAccion === "PE_HORA_EXTRA_REGISTRADA" || e.tipoAccion === "PE_EVALUACION_REGISTRADA").length < 2)) { pasos[1]!.estado = "error"; pasos[1]!.error = r2a.error ?? r2b.error } else pasos[1]!.estado = "ok"
     // 3) Feriado TEST irrenunciable → proyección de cobertura
-    s.saveMaestro("feriados", { id: `test-feriado-${anioProximo}-0101`, fecha: `${anioProximo}-01-01`, nombre: "Año Nuevo TEST", irrenunciable: true } as any)
-    const proyeccionBase = calcularProyeccionCobertura({ feriados: useCompassStore.getState().maestros.feriados, mesAnio: mesProyeccion })
-    if (proyeccionBase.diasFeriados !== 1 || proyeccionBase.reemplazosNecesarios !== 2) { pasos[2]!.estado = "error"; pasos[2]!.error = `Cobertura: ${proyeccionBase.diasFeriados} feriado(s), ${proyeccionBase.reemplazosNecesarios} reemplazo(s)` } else pasos[2]!.estado = "ok"
+    const rFeriado = s.saveMaestro("feriados", { id: `test-feriado-${anioProximo}-0101`, fecha: `${anioProximo}-01-01`, nombre: "Año Nuevo TEST", irrenunciable: true } as any)
+    if (!rFeriado.ok) { pasos[2]!.estado = "error"; pasos[2]!.error = rFeriado.error } else {
+      const proyeccionBase = calcularProyeccionCobertura({ feriados: useCompassStore.getState().maestros.feriados, mesAnio: mesProyeccion })
+      if (proyeccionBase.diasFeriados !== 1 || proyeccionBase.reemplazosNecesarios !== 2) { pasos[2]!.estado = "error"; pasos[2]!.error = `Cobertura: ${proyeccionBase.diasFeriados} feriado(s), ${proyeccionBase.reemplazosNecesarios} reemplazo(s)` } else pasos[2]!.estado = "ok"
+    }
     // 4) Enviar proyección de costos a FI con PL pendiente
     const r4 = s.enviarProyeccionCostoFI(mesProyeccion, { costoParche: 30000, costoDiaExtra: 25000, id: "test-pe-proy" })
     const proy = useCompassStore.getState().proyeccionesPE.find(p => p.id === "test-pe-proy")
@@ -810,7 +814,7 @@ export default function QaLabPage() {
         { item: "Llaves maestras completas", ok: true },
       ],
     } as any)
-    const notifPE = useCompassStore.getState().notificaciones.filter(n => n.moduloOrigen === "PE" && n.asunto.includes("Cierre de turno"))
+    const notifPE = useCompassStore.getState().notificaciones.filter(n => n.moduloOrigen === "PE" && n.asunto.toLowerCase().includes("cierre de turno"))
     const copiaTrabajador = notifPE.some(n => n.destinatarioRol === "personal" && n.destinatarioPersonaId === "test-p-99")
     const avisoAdmin = notifPE.some(n => n.destinatarioRol === "administracion")
     if (!r10a.ok || !r10b.ok || !copiaTrabajador || !avisoAdmin) { pasos[9]!.estado = "error"; pasos[9]!.error = r10a.error ?? r10b.error ?? `Notificaciones admin/copía: ${avisoAdmin}/${copiaTrabajador}` } else pasos[9]!.estado = "ok"
@@ -910,7 +914,7 @@ export default function QaLabPage() {
     const pasos: Paso[] = (PLAN["re"]! as string[]).map(desc => ({ desc, estado: "pendiente" as ModuleState }))
     // 1) Vista auditada
     s.registrarVistaDashboardRE("demografico")
-    if (!s.eventos.some(e => e.tipoAccion === "RE_DASHBOARD_VIEW")) { pasos[0]!.estado = "error"; pasos[0]!.error = "Sin RE_DASHBOARD_VIEW" } else pasos[0]!.estado = "ok"
+    if (!useCompassStore.getState().eventos.some(e => e.tipoAccion === "RE_DASHBOARD_VIEW")) { pasos[0]!.estado = "error"; pasos[0]!.error = "Sin RE_DASHBOARD_VIEW" } else pasos[0]!.estado = "ok"
     // 2) Reporte segmentado Torre TEST × residentes × propietarios
     const rGen = s.generarReporteRE({
       titulo: "Boletín Sector TEST",

@@ -37,6 +37,7 @@ function periodoActual(): string {
 
 function periodoMesesAtras(meses: number): string {
   const d = new Date()
+  d.setDate(1)
   d.setMonth(d.getMonth() - meses)
   return d.toISOString().slice(0, 7)
 }

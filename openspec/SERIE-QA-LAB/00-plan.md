@@ -94,7 +94,7 @@ Fases afectadas: GD(1) GE(4) IR(3) IN(1) MT(3) RA(3) CV(5) FI(2) PE(2) RE(1).
 
 | Ventana | Alcance | Estado | Commit final |
 |---|---|---|---|
-| P1 | Lecturas frescas en los 10 `cargarFaseX` + fixes estructurales GD/PE/FI + aserción RA por regex + propagación de todos los `StoreResult` + e2e afirmando `Carga completa OK` | pendiente | — |
+| P1 | Lecturas frescas en los 10 `cargarFaseX` + fixes estructurales GD/PE/FI + aserción RA por regex + propagación de todos los `StoreResult` + e2e afirmando `Carga completa OK` | HECHA | — |
 | P2 | Limpieza ownership-scoped TEST + preservación de config/notificaciones reales + purge de artefactos de id aleatorio + `validar()` completo + guard clean-first | pendiente | — |
 | P3 | Cierre integral: e2e del ciclo limpiar→poblar→validar→limpiar + 2ª corrida bloqueada + suites completas + avance final + bitácora SERIE COMPLETA | pendiente | — |
 

@@ -34,6 +34,7 @@ test.describe("Flujo de poblamiento (Historia de Poblamiento)", () => {
     const tarjetasListas = page.getByText("🟢 Listo")
     await expect(tarjetasListas.first()).toBeVisible({ timeout: 90_000 })
     expect(await tarjetasListas.count()).toBeGreaterThan(0)
+    await expect(page.getByText(/Carga completa OK/)).toBeVisible({ timeout: 30_000 })
 
     // 2) Revisar que nada quedó suelto -> validación de FKs (tasa huérfanos = 0)
     await page
@@ -54,6 +55,7 @@ test.describe("Flujo de poblamiento (Historia de Poblamiento)", () => {
       .getByRole("button", { name: /Poblar todo de una vez/ })
       .click({ force: true, noWaitAfter: true, timeout: 90_000 })
     await expect(page.getByText("🟢 Listo").first()).toBeVisible({ timeout: 90_000 })
+    await expect(page.getByText(/Carga completa OK/)).toBeVisible({ timeout: 30_000 })
 
     await page.goto("/comunidad/personas")
     await expect(page.getByText("99.999.999-9")).toBeVisible({ timeout: 30_000 })
@@ -66,6 +68,7 @@ test.describe("Flujo de poblamiento (Historia de Poblamiento)", () => {
       .getByRole("button", { name: /Poblar todo de una vez/ })
       .click({ force: true, noWaitAfter: true, timeout: 90_000 })
     await expect(page.getByText("🟢 Listo").first()).toBeVisible({ timeout: 90_000 })
+    await expect(page.getByText(/Carga completa OK/)).toBeVisible({ timeout: 30_000 })
 
     await page.goto("/inventario/estructura")
     await expect(page.getByText("TEST-CATU-LoftQA 999")).toBeVisible({ timeout: 30_000 })
