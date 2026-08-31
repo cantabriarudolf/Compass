@@ -6,11 +6,13 @@ import { puede } from "@/lib/authz"
 export const dynamic = "force-dynamic"
 
 /**
- * GET /api/admin/usuarios?comunidadId=xxx
- * Lista membresías + usuarios de la comunidad del contexto.
+ * GET /api/admin/usuarios
+ * - SIN comunidadId: comunidades donde el usuario autenticado tiene membresía
+ *   ({ comunidades: [{ id, nombre, rol }] }) — sin datos de terceros (RP /admin/permisos).
+ * - CON comunidadId (query ?comunidadId= o header x-comunidad-id): lista membresías +
+ *   usuarios de esa comunidad.
  * Autorización server-side (SG §4.1): proxy solo autentica, aquí se decide puede(rol, ver, admin:usuarios).
  * Sesión vía Auth.js: sub = Usuario.id en BD (AU §3 P5).
- * Headers alternativos: x-comunidad-id
  */
 export async function GET(request: NextRequest) {
   const sesion = await auth()
@@ -24,8 +26,25 @@ export async function GET(request: NextRequest) {
     request.headers.get("x-comunidad-id") ??
     request.headers.get("x-comunidadId")
 
+  const usuario = await prisma.usuario.findUnique({ where: { id: sesion.user.id } })
+  if (!usuario || !usuario.activo) {
+    return NextResponse.json({ error: "Usuario no encontrado o inactivo" }, { status: 401 })
+  }
+
+  // Rama sin comunidadId: comunidades propias (vista /admin/permisos, solo lectura)
   if (!comunidadId || typeof comunidadId !== "string" || comunidadId.trim().length === 0) {
-    return NextResponse.json({ error: "comunidadId es requerido (query ?comunidadId= o header x-comunidad-id)" }, { status: 400 })
+    const propias = await prisma.membresia.findMany({
+      where: { usuarioId: usuario.id },
+      include: { comunidad: true },
+      orderBy: { createdAt: "asc" },
+    })
+    return NextResponse.json({
+      comunidades: propias.map((m) => ({
+        id: m.comunidadId,
+        nombre: (m as unknown as { comunidad: { nombre: string } }).comunidad.nombre,
+        rol: m.rol,
+      })),
+    })
   }
 
   const cid = comunidadId.trim()
@@ -34,11 +53,6 @@ export async function GET(request: NextRequest) {
   const comunidad = await prisma.comunidad.findUnique({ where: { id: cid } })
   if (!comunidad) {
     return NextResponse.json({ error: "Comunidad no encontrada" }, { status: 404 })
-  }
-
-  const usuario = await prisma.usuario.findUnique({ where: { id: sesion.user.id } })
-  if (!usuario || !usuario.activo) {
-    return NextResponse.json({ error: "Usuario no encontrado o inactivo" }, { status: 401 })
   }
 
   const membresia = await prisma.membresia.findFirst({

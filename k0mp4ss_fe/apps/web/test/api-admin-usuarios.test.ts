@@ -85,9 +85,16 @@ describe("GET /api/admin/usuarios — autorización server-side (B3, Auth.js)", 
     expect(res.status).toBe(401)
   })
 
-  it("responde 400 sin comunidadId", async () => {
+  it("sin comunidadId responde 200 con las comunidades propias (sin datos de terceros)", async () => {
     const res = await callGet({ email: adminEmail })
-    expect(res.status).toBe(400)
+    expect(res.status).toBe(200)
+    const j = await res.json()
+    expect(Array.isArray(j.comunidades)).toBe(true)
+    const propia = j.comunidades.find((c: { id: string }) => c.id === comunidadA)
+    expect(propia).toBeDefined()
+    expect(propia.rol).toBe("administrador")
+    expect(propia.nombre).toBeTruthy()
+    expect(j.comunidades.every((c: { rol: string }) => typeof c.rol === "string")).toBe(true)
   })
 
   it("responde 403 con rol sin permiso (conserjeria) en misma comunidad", async () => {

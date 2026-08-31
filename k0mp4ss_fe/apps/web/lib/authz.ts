@@ -193,3 +193,26 @@ export const RECURSOS_CONOCIDOS = [
   "admin:usuarios",
   "backup",
 ] as const
+
+export interface EntradaMatriz {
+  recurso: string
+  acciones: Accion[]
+}
+
+/**
+ * matrizPermisos — snapshot plano de la MATRIZ para la vista /admin/permisos (solo lectura).
+ * Derivado en tiempo de ejecución de MATRIZ (nunca desincroniza con el motor).
+ * Entradas con Set vacío se conservan: comunican bloqueo explícito (menor privilegio).
+ */
+export function matrizPermisos(): Record<Rol, EntradaMatriz[]> {
+  const out = {} as Record<Rol, EntradaMatriz[]>
+  for (const rol of ROLES) {
+    out[rol] = Object.entries(MATRIZ[rol])
+      .map(([recurso, acciones]) => ({
+        recurso,
+        acciones: [...acciones].filter((a) => ACCIONES_VALIDAS.has(a)).sort(),
+      }))
+      .sort((a, b) => a.recurso.localeCompare(b.recurso))
+  }
+  return out
+}

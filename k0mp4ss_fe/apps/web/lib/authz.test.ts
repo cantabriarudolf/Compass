@@ -2,7 +2,7 @@
  * @vitest-environment node
  */
 import { describe, it, expect } from "vitest"
-import { puede, tienePermiso, ROLES } from "./authz"
+import { puede, tienePermiso, ROLES, matrizPermisos } from "./authz"
 
 describe("lib/authz — matriz RP (pure, sin IO)", () => {
   it("expone 5 roles estándar RP", () => {
@@ -124,5 +124,36 @@ describe("lib/authz — matriz RP (pure, sin IO)", () => {
     expect(puede("administrador", "ejecutar", "backup")).toBe(true)
     expect(puede("comite", "ejecutar", "backup")).toBe(false)
     expect(puede("conserjeria", "ejecutar", "backup")).toBe(false)
+  })
+})
+
+describe("lib/authz — matrizPermisos() snapshot para /admin/permisos", () => {
+  const matriz = matrizPermisos()
+
+  it("expone los 5 roles estándar como claves", () => {
+    expect(Object.keys(matriz).sort()).toEqual([...ROLES].sort())
+  })
+
+  it("administrador — recurso wildcard * con las 5 acciones", () => {
+    const entrada = matriz.administrador.find((e) => e.recurso === "*")
+    expect(entrada).toBeDefined()
+    expect(entrada!.acciones).toEqual(["crear", "editar", "ejecutar", "eliminar", "ver"])
+  })
+
+  it("conserjeria — pl bloqueado (entrada vacía) y solo pl:propia ver", () => {
+    expect(matriz.conserjeria.find((e) => e.recurso === "pl")!.acciones).toEqual([])
+    expect(matriz.conserjeria.find((e) => e.recurso === "pl:propia")!.acciones).toEqual(["ver"])
+    expect(matriz.conserjeria.find((e) => e.recurso === "admin:usuarios")).toBeUndefined()
+  })
+
+  it("menor privilegio — solo recursos listados aparecen por rol", () => {
+    for (const rol of ROLES) {
+      if (rol === "administrador") continue
+      for (const entrada of matriz[rol]) {
+        expect(entrada.acciones.every((a) => ["ver", "crear", "editar", "eliminar", "ejecutar"].includes(a))).toBe(true)
+      }
+    }
+    expect(matriz.residente.find((e) => e.recurso === "backup")).toBeUndefined()
+    expect(matriz.mantencion.find((e) => e.recurso === "admin:usuarios")).toBeUndefined()
   })
 })
