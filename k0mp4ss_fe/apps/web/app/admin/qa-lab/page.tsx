@@ -1184,7 +1184,7 @@ export default function QaLabPage() {
       emisionesGC: st.emisionesGC.filter(e => !e.lineas.some(l => l.unidadId.startsWith("test-"))),
       egresosFI: st.egresosFI.filter(e => !e.id.startsWith("test-") && !idsEgresosPLTest.has(e.id)),
       fondosFI: st.fondosFI.filter(f => !f.id.startsWith("test-")),
-      notificaciones: (st.notificaciones as unknown as Parameters<typeof isTestNotificacion>[0][]).filter(n => !isTestNotificacion(n as unknown as Parameters<typeof isTestNotificacion>[0])),
+      notificaciones: (st.notificaciones as unknown as Parameters<typeof isTestNotificacion>[0][]).filter(n => !isTestNotificacion(n as unknown as Parameters<typeof isTestNotificacion>[0])) as unknown as typeof st.notificaciones,
     }))
     // PE: colecciones operacionales TEST se purgan antes de personas y unidades; los cierres de turno con id aleatorio se filtran por trabajador TEST.
     useCompassStore.setState(st => ({
@@ -1196,7 +1196,7 @@ export default function QaLabPage() {
       visitasTecnicasPE: st.visitasTecnicasPE.filter(v => !v.id.startsWith("test-")),
       cierresTurnoPE: st.cierresTurnoPE.filter(c => !c.trabajadorPersonaId.startsWith("test-") && !c.id.startsWith("test-")),
       proyeccionesPE: st.proyeccionesPE.filter(p => !p.id.startsWith("test-")),
-      notificaciones: (st.notificaciones as unknown as Parameters<typeof isTestNotificacion>[0][]).filter(n => !isTestNotificacion(n as unknown as Parameters<typeof isTestNotificacion>[0])),
+      notificaciones: (st.notificaciones as unknown as Parameters<typeof isTestNotificacion>[0][]).filter(n => !isTestNotificacion(n as unknown as Parameters<typeof isTestNotificacion>[0])) as unknown as typeof st.notificaciones,
     }))
     // Feriado TEST del calendario de proyección.
     useCompassStore.setState(st => ({
@@ -1208,12 +1208,12 @@ export default function QaLabPage() {
       const limpia = getConfiguracionLimpiaOwnershipScoped(cfg)
       return {
         configuracion: limpia as unknown as typeof st.configuracion,
-        notificaciones: (st.notificaciones as unknown as Parameters<typeof isTestNotificacion>[0][]).filter(n => !isTestNotificacion(n as unknown as Parameters<typeof isTestNotificacion>[0])),
+        notificaciones: (st.notificaciones as unknown as Parameters<typeof isTestNotificacion>[0][]).filter(n => !isTestNotificacion(n as unknown as Parameters<typeof isTestNotificacion>[0])) as unknown as typeof st.notificaciones,
       }
     })
     useCompassStore.setState(st => ({
       reportesRE: st.reportesRE.filter(r => !r.id.startsWith("test-")),
-      certificadosCT: (st.certificadosCT as unknown as Parameters<typeof esCertificadoTest>[0][]).filter(c => !esCertificadoTest(c as unknown as Parameters<typeof esCertificadoTest>[0])),
+      certificadosCT: (st.certificadosCT as unknown as Parameters<typeof esCertificadoTest>[0][]).filter(c => !esCertificadoTest(c as unknown as Parameters<typeof esCertificadoTest>[0])) as unknown as typeof st.certificadosCT,
       liquidacionesPL: st.liquidacionesPL.filter(l => !l.id.startsWith("test-")),
       adelantosPL: st.adelantosPL.filter(a => !a.id.startsWith("test-")),
     }))
@@ -1240,7 +1240,7 @@ export default function QaLabPage() {
     useCompassStore.setState(st => ({
       reservasRA: st.reservasRA.filter(r => !r.id.startsWith("test-ra-")),
       elementosRA: st.elementosRA.filter(e => !e.id.startsWith("test-ra-")),
-      notificaciones: (st.notificaciones as unknown as Parameters<typeof isTestNotificacion>[0][]).filter(n => !isTestNotificacion(n as unknown as Parameters<typeof isTestNotificacion>[0])),
+      notificaciones: (st.notificaciones as unknown as Parameters<typeof isTestNotificacion>[0][]).filter(n => !isTestNotificacion(n as unknown as Parameters<typeof isTestNotificacion>[0])) as unknown as typeof st.notificaciones,
     }))
     // IN
     const rIn1 = s.removeInfraccionIN("test-in-leve")
@@ -1262,7 +1262,7 @@ export default function QaLabPage() {
     }
     useCompassStore.setState(st => ({
       activosIR: st.activosIR.filter(a => a.nombre !== "Escobillón industrial TEST"),
-      notificaciones: (st.notificaciones as unknown as Parameters<typeof isTestNotificacion>[0][]).filter(n => !isTestNotificacion(n as unknown as Parameters<typeof isTestNotificacion>[0])),
+      notificaciones: (st.notificaciones as unknown as Parameters<typeof isTestNotificacion>[0][]).filter(n => !isTestNotificacion(n as unknown as Parameters<typeof isTestNotificacion>[0])) as unknown as typeof st.notificaciones,
     }))
     const rSol1 = s.removeSolicitudGE("test-sol-ge-1")
     if (!rSol1.ok) errores.push(rSol1.error || "sol-ge-1")
@@ -1275,19 +1275,19 @@ export default function QaLabPage() {
     // CO no define removeEnvioCO (el snapshot es histórico); se purga por filtro.
     useCompassStore.setState(st => ({
       enviosCO: st.enviosCO.filter(e => e.id !== "test-env-co-1"),
-      notificaciones: (st.notificaciones as unknown as Parameters<typeof isTestNotificacion>[0][]).filter(n => !isTestNotificacion(n as unknown as Parameters<typeof isTestNotificacion>[0])),
+      notificaciones: (st.notificaciones as unknown as Parameters<typeof isTestNotificacion>[0][]).filter(n => !isTestNotificacion(n as unknown as Parameters<typeof isTestNotificacion>[0])) as unknown as typeof st.notificaciones,
     }))
     const rPlant = s.removePlantillaCO("test-plant-co")
     if (!rPlant.ok) errores.push(rPlant.error || "plant-co")
     const rActa = s.removeActaGD("test-acta-gd")
     if (!rActa.ok) errores.push(rActa.error || "acta")
-    useCompassStore.setState(st => ({ notificaciones: (st.notificaciones as unknown as Parameters<typeof isTestNotificacion>[0][]).filter(n => !isTestNotificacion(n as unknown as Parameters<typeof isTestNotificacion>[0])) }))
+    useCompassStore.setState(st => ({ notificaciones: (st.notificaciones as unknown as Parameters<typeof isTestNotificacion>[0][]).filter(n => !isTestNotificacion(n as unknown as Parameters<typeof isTestNotificacion>[0])) as unknown as typeof st.notificaciones }))
     const rCtrl = s.removeControlPropiedad("test-ctrl-e999")
     if (!rCtrl.ok) errores.push(rCtrl.error || "ctrl")
     // PI no define removeLeadPortal (los leads son histórico); se purgan por filtro.
     useCompassStore.setState(st => ({
       leadsPortal: st.leadsPortal.filter(l => l.id !== "test-lead-pi-1"),
-      notificaciones: (st.notificaciones as unknown as Parameters<typeof isTestNotificacion>[0][]).filter(n => !isTestNotificacion(n as unknown as Parameters<typeof isTestNotificacion>[0])),
+      notificaciones: (st.notificaciones as unknown as Parameters<typeof isTestNotificacion>[0][]).filter(n => !isTestNotificacion(n as unknown as Parameters<typeof isTestNotificacion>[0])) as unknown as typeof st.notificaciones,
     }))
     const rPub = s.removePublicacionPortal("test-pub-pi-e999")
     if (!rPub.ok) errores.push(rPub.error || "pub")
@@ -1329,6 +1329,10 @@ export default function QaLabPage() {
       const r = (s.removeMaestro as any)(k, id)
       if (!r.ok) errores.push(r.error || `${String(k)}:${id}`)
     }
+    // Purga final de eventos TEST huérfanos generados por los remove* (VU genera VU_ASSIGN_RELEASED/DELETE con id test-*)
+    useCompassStore.setState(st => ({
+      eventos: st.eventos.filter(e => !(e.referenciaId && String(e.referenciaId).startsWith("test-"))),
+    }))
     setLoading(false)
     if (errores.length) setMsg({ type: "error", text: `Limpieza con ${errores.length} bloqueos (dependencias): ${errores.slice(0,2).join("; ")}` })
     else {
