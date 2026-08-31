@@ -94,10 +94,10 @@ Fases afectadas: GD(1) GE(4) IR(3) IN(1) MT(3) RA(3) CV(5) FI(2) PE(2) RE(1).
 
 | Ventana | Alcance | Estado | Commit final |
 |---|---|---|---|
-| P1 | Lecturas frescas en los 10 `cargarFaseX` + fixes estructurales GD/PE/FI + aserción RA por regex + propagación de todos los `StoreResult` + e2e afirmando `Carga completa OK` | HECHA | — |
+| P1 | Lecturas frescas en los 10 `cargarFaseX` + fixes estructurales GD/PE/FI + aserción RA por regex + propagación de todos los `StoreResult` + e2e afirmando `Carga completa OK` | HECHA | e64657b |
 | P2 | Limpieza ownership-scoped TEST + preservación de config/notificaciones reales + purge de artefactos de id aleatorio + `validar()` completo + guard clean-first | pendiente | — |
 | P3 | Cierre integral: e2e del ciclo limpiar→poblar→validar→limpiar + 2ª corrida bloqueada + suites completas + avance final + bitácora SERIE COMPLETA | pendiente | — |
 
 ## Bitácora
 
-(vacía — cada ventana añade antes del push: `- [fecha] P<n> HECHA: resumen (commit hash)`)
+- [2026-08-31] P1 HECHA: lecturas frescas 24/27 + GD quórum 5/5 (g-1..g-4+test-p-99) → acta publicada, PE case-insensitive, FI evento fresco, RA regex /^RA-\d{4}$/, StoreResult propagado (MA/MP/IN/PE) y e2e Carga completa OK; Vitest 413/413 tsc0 lint0 e2e flujo 5/5. 27→0 errores, 22/22 fases OK. Desviación: helper periodoMesesAtras con overflow 31→01 fix y FI paso9 cargo penalización (no equality). (e64657b)
