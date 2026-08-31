@@ -58,7 +58,6 @@ const RUTAS_PENDIENTES = new Set<string>([
   "/operaciones/paqueteria",
   "/personas/residentes",
   "/admin/permisos",
-  "/admin/logs",
 ])
 
 const data = {

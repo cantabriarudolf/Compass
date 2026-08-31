@@ -115,6 +115,7 @@ npx playwright show-report                      # reporte HTML del último run
 | certificados | `crud/certificados.spec.ts` (gated: poblar) | generar PDF firmado |
 | remuneraciones | `crud/remuneraciones.spec.ts` (gated: poblar) | liquidación → confirmar |
 | portal | `crud/portal.spec.ts` (gated: poblar) | publicación en vitrina |
+| logs | `crud/logs.spec.ts` (read-oriented) | evento real vía módulo → buscar/filtrar/exportar CSV |
 | personas | `e2e/flujo/personas.spec.ts` (existente) | Nueva Identidad → grilla |
 
 Fixture gated: `/admin/qa-lab` → "Poblar todo de una vez" → esperar `🟢 Listo` (desde la
@@ -129,7 +130,7 @@ el guard "Existen datos TEST-*" bloquea una 2ª corrida sin limpiar antes).
   (3 flujos), `auth/rate-limit.spec.ts` (GATED), `smoke/modulos.spec.ts` (8 módulos, 0
   pageerror), `flujo/` (journey Historia de Poblamiento via QA Lab + CRUD personas +
   `ciclo.spec.ts`: ciclo limpiar→poblar→validar→limpiar y guard de 2ª corrida),
-  `crud/` (Serie CRUD-E2E: 22 specs, SERIE COMPLETA).
+  `crud/` (Serie CRUD-E2E: 22 specs + `logs.spec.ts` read-oriented, SERIE COMPLETA).
 - CI (`.github/workflows/ci.yml`): jobs `unit`, `e2e`, `e2e-rate-limit` (aislado). Node 24.
 - Dashboard de estado: `/admin/qa-dashboard` (Desarrollo AI → "Estado de Pruebas QA").
   Lee `apps/web/qa-estado.json` vía `/api/qa-estado` (`lib/qa-estado.ts`). Muestra última
