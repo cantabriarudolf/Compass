@@ -31,6 +31,7 @@ import {
   IconCheck,
   IconLock,
 } from "@tabler/icons-react"
+import { puedeContextual } from "@/lib/authz"
 import type { ActaGD } from "@/lib/schemas"
 
 type Vista = "administrador" | "propietario" | "residente"
@@ -69,13 +70,16 @@ export default function DirectivaPage() {
   const pendientesDe = (acta: ActaGD) => directivaVigente.filter(d => !acta.aprobaciones.includes(d.id))
 
   const puedeVerBorradores = vista === "administrador"
-  // Residentes solo ven actas si el dueño de su unidad autorizó (AD: residenteVeActas).
+  // ABAC GD — residente solo ve actas si el dueño autorizó (AD: residenteVeActas) via puedeContextual (P4 behavior-preserving).
   const residenteAutorizado = controlesPropiedades.some(c => c.residenteVeActas)
+  const puedeResidenteVerGD = puedeContextual("residente", "ver", "gd", {
+    privacidad: { residenteVeActas: residenteAutorizado },
+  })
 
   const visibles = actas.filter(a => {
     if (puedeVerBorradores) return true
     if (vista === "propietario") return a.estado === "publicada"
-    return a.estado === "publicada" && residenteAutorizado
+    return a.estado === "publicada" && puedeResidenteVerGD
   })
 
   const abrirNueva = () => {
@@ -141,8 +145,8 @@ export default function DirectivaPage() {
         </div>
       </div>
 
-      {/* Aviso de privacidad según vista */}
-      {vista === "residente" && !residenteAutorizado && (
+      {/* Aviso de privacidad según vista — paridad con puedeContextual */}
+      {vista === "residente" && !puedeResidenteVerGD && (
         <Card>
           <CardContent className="flex items-center gap-3 py-4">
             <IconLock className="size-5 text-muted-foreground" />

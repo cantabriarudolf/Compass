@@ -157,6 +157,83 @@ export function tienePermiso(roles: string[], accion: string, recurso: string): 
   return roles.some((r) => puede(r, accion, recurso))
 }
 
+// ABAC contextual — refinamiento puro sobre puede() (RP §Permisos Contextuales)
+export interface ContextoABAC {
+  personaId?: string // identidad del usuario autenticado (sesión)
+  unidadId?: string // unidad reclamada
+  unidadIdsVinculadas?: string[] // unidades con vínculo vigente del usuario
+  privacidad?: { residenteVeMorosidad?: boolean; residenteVeActas?: boolean; alertasResidentesActivas?: boolean }
+}
+
+/**
+ * puedeContextual — ABAC behavior-preserving sobre puede()
+ * @param rol - rol estándar RP (o alias)
+ * @param accion - ver|crear|editar|eliminar|ejecutar
+ * @param recurso - módulo o recurso granular
+ * @param ctx - contexto ABAC (identidad, unidad, vinculaciones, privacidad)
+ * @returns true si tiene permiso base y supera refinamiento contextual; false si base deniega o contexto no satisface
+ * Regla: contextos sin dimensión ABAC delegan a puede(); administrador bypassa refinamientos (full access).
+ */
+export function puedeContextual(rol: string, accion: string, recurso: string, ctx: ContextoABAC = {}): boolean {
+  if (!puede(rol, accion, recurso)) return false
+  const rolNorm = normalizaRol(rol)
+  const recursoNorm = normalizaRecurso(recurso)
+  if (!rolNorm || !recursoNorm) return false
+  // administrador bypassa refinamientos ABAC (paridad: admin no necesita vínculo ni privacidad)
+  if (rolNorm === "administrador") return true
+
+  // mp:propios — requiere identidad propia (personaId) presente (paridad con UI que solo muestra propios si autenticado)
+  if (recursoNorm === "mp:propios" || recursoNorm === "mp:propio") {
+    return !!ctx.personaId && ctx.personaId.trim().length > 0
+  }
+  // pl:propia — trabajador solo ve su liquidación (paridad: requiere personaId, sin él no ve ni propia)
+  if (recursoNorm === "pl:propia" || recursoNorm === "pl") {
+    // pl exact sin sufijo tiene Set vacío para conserjeria → ya denegado arriba; si algún rol tuviera pl base, igual requiere personaId
+    return !!ctx.personaId && ctx.personaId.trim().length > 0
+  }
+  // CT familia — certificado de su unidad (paridad con lib/store.ts:4253 vinculoVigente + app/comunidad/certificados/page.tsx:177 filtro unidades)
+  if (
+    recursoNorm === "ct:propio" ||
+    recursoNorm === "ct:residencia" ||
+    recursoNorm === "ct:al_dia" ||
+    recursoNorm === "ct:propia" ||
+    recursoNorm === "ct:estado_cuenta"
+  ) {
+    if (!ctx.unidadId || !Array.isArray(ctx.unidadIdsVinculadas)) return false
+    return ctx.unidadIdsVinculadas.includes(ctx.unidadId)
+  }
+  // Para ct genérico con unidad específica, si el caller provee unidadId, validar vinculación (si no provee, delega)
+  if (recursoNorm === "ct" && ctx.unidadId) {
+    if (!Array.isArray(ctx.unidadIdsVinculadas)) return false
+    return ctx.unidadIdsVinculadas.includes(ctx.unidadId)
+  }
+  // GD — actas visibles solo si propietario autorizó (paridad con app/comunidad/directiva/page.tsx:73 residenteAutorizado)
+  if (recursoNorm === "gd" || recursoNorm.startsWith("gd:")) {
+    if (rolNorm === "residente") {
+      return !!ctx.privacidad?.residenteVeActas
+    }
+    return true
+  }
+  // Morosidad FI/MP visible según privacidad (paridad con app/admin/gestion/page.tsx switch + controlesPropiedad)
+  if (recursoNorm === "mp:morosidad" || recursoNorm === "fi:morosidad") {
+    if (rolNorm === "residente") {
+      return !!ctx.privacidad?.residenteVeMorosidad
+    }
+    return true
+  }
+  // Alertas a residente silenciables (paridad con lib/store.ts:1327 notify gate alertasResidentesActivas)
+  // Recurso semántico: si se evalúa notificación operativa a residente, checkea alertasResidentesActivas
+  if (recursoNorm === "notify:residente" || recursoNorm === "pe:notify_residente") {
+    if (rolNorm === "residente") {
+      // default true si no hay control; solo false explícito silencia
+      if (ctx.privacidad?.alertasResidentesActivas === false) return false
+    }
+    return true
+  }
+  // Resto sin dimensión contextual → delega directo a puede() (ya validado arriba)
+  return true
+}
+
 // Helpers para tests/docs: lista recursos conocidos
 export const RECURSOS_CONOCIDOS = [
   "fi",
