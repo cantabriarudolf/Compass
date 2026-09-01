@@ -12,6 +12,7 @@ Mantener una experiencia coherente en todas las páginas y personalizar la aplic
 - **Barra Lateral**: Navegación principal plegable. Ver manual de **Navegación Lateral (UI)**.
 - **Área de Contenido**: Donde se renderiza cada módulo del sistema.
 - **Tema Claro/Oscuro**: Botón para cambiar entre modos de visualización.
+- **Resumen (`/dashboard`)**: Landing gerencial del grupo Inicio. Muestra KPIs clave del store (unidades totales y ocupadas, personas registradas, residentes vigentes con vínculo `propietario`/`arrendatario`, tipos de unidad, sectores, estados de ocupación y fondos FI) con link a su módulo fuente, más un grid de **Accesos rápidos** a los módulos principales. Solo lectura — sin cambios de esquema ni bump `STORE_VERSION`.
 
 ## 💡 Tips de Oro
 
