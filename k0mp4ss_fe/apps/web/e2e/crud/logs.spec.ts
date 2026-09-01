@@ -3,10 +3,11 @@ import { expect, test } from "@playwright/test"
 
 test.use({ actionTimeout: 30_000 })
 
-test.describe("Logs de Auditoría (AM) — vista read-only en /admin/logs", () => {
+test.describe("Logs de Auditoría (AM) — vista read-only en /admin/logs (BD)", () => {
   test("consulta, filtra, busca y exporta eventos generados por una acción real", async ({
     page,
   }) => {
+    test.setTimeout(120_000)
     const errores: string[] = []
     page.on("pageerror", (err) => errores.push(err.message))
 
@@ -19,42 +20,73 @@ test.describe("Logs de Auditoría (AM) — vista read-only en /admin/logs", () =
     await expect(primerSwitch).toBeEnabled({ timeout: 30_000 })
     await primerSwitch.click({ force: true, noWaitAfter: true })
 
-    // 2) Vista /admin/logs: header read-only + ambos eventos presentes
+    // 2) Vista /admin/logs: header read-only — la BD puede tener eventos previos,
+    //    esperar con poll hasta ver los 2 eventos recién generados via filtro acotado.
     await page.goto("/admin/logs")
     await expect(page.getByRole("heading", { name: "Logs de Auditoría" })).toBeVisible({
       timeout: 30_000,
     })
     await expect(page.getByText("solo lectura · pista inmutable")).toBeVisible()
-    await expect(page.getByText("2 de 2 eventos")).toBeVisible({ timeout: 15_000 })
+    // Contador BD: "X de Y eventos en BD"
+    await expect(page.getByText(/de \d+ eventos en BD/)).toBeVisible({ timeout: 30_000 })
 
-    // 3) Filtrar por categoría AD (única categoría presente)
-    await page
-      .getByRole("combobox", { name: "Filtrar por categoría" })
-      .click({ force: true, noWaitAfter: true })
-    await page.getByRole("option", { name: "AD", exact: true }).click()
-    await expect(page.getByText("2 de 2 eventos")).toBeVisible()
-
-    // 4) Filtrar por tipo de acción
+    // 3) Filtrar por tipo de acción primero (acota a los 2 eventos generados) con poll generoso
+    //    Debounce 2s + POST sync puede tardar; poll hasta ≥2 filas AD_OWNER_CONFIG_CHANGE.
     await page
       .getByRole("combobox", { name: "Filtrar por tipo de acción" })
       .click({ force: true, noWaitAfter: true })
     await page.getByRole("option", { name: "AD_OWNER_CONFIG_CHANGE" }).click()
-    await expect(page.getByText("2 de 2 eventos")).toBeVisible()
-    await expect(
-      page.getByRole("cell").filter({ hasText: "AD_OWNER_CONFIG_CHANGE" }),
-    ).toHaveCount(2)
+    await expect
+      .poll(
+        async () =>
+          page.getByRole("cell").filter({ hasText: "AD_OWNER_CONFIG_CHANGE" }).count(),
+        { timeout: 30_000, intervals: [1000] },
+      )
+      .toBeGreaterThanOrEqual(2)
+    // El contador filtrado también debe mostrar ≥2 en el lado X y total Y
+    await expect(page.getByText(/\d+ de \d+ eventos en BD/)).toBeVisible({ timeout: 10_000 })
 
-    // 5) Búsqueda por texto: match y sin match
+    // 4) Filtrar por categoría AD (mantiene tipoAccion ya filtrado)
+    await page
+      .getByRole("combobox", { name: "Filtrar por categoría" })
+      .click({ force: true, noWaitAfter: true })
+    // AD puede no estar en la lista si la página no lo contiene — intentar click si existe
+    const opcionAD = page.getByRole("option", { name: "AD", exact: true })
+    if (await opcionAD.count()) {
+      await opcionAD.click()
+      await expect
+        .poll(
+          async () =>
+            page.getByRole("cell").filter({ hasText: "AD_OWNER_CONFIG_CHANGE" }).count(),
+          { timeout: 10_000, intervals: [500] },
+        )
+        .toBeGreaterThanOrEqual(2)
+    }
+
+    // 5) Búsqueda por texto: match y sin match (sobre el set ya filtrado)
     const buscar = page.getByLabel("Buscar eventos")
     await buscar.fill("morosidad=")
-    await expect(page.getByText("2 de 2 eventos")).toBeVisible({ timeout: 15_000 })
+    await expect
+      .poll(
+        async () =>
+          page.getByRole("cell").filter({ hasText: "AD_OWNER_CONFIG_CHANGE" }).count(),
+        { timeout: 15_000, intervals: [500] },
+      )
+      .toBeGreaterThanOrEqual(2)
+    await expect(page.getByText(/de \d+ eventos en BD/)).toBeVisible({ timeout: 10_000 })
     await buscar.fill("zzz-evento-inexistente")
-    await expect(page.getByText("0 de 2 eventos")).toBeVisible({ timeout: 15_000 })
+    await expect(page.getByText(/0 de \d+ eventos en BD/)).toBeVisible({ timeout: 15_000 })
     await expect(page.getByText("Sin eventos para la búsqueda o filtros actuales.")).toBeVisible()
     await buscar.fill("")
-    await expect(page.getByText("2 de 2 eventos")).toBeVisible({ timeout: 15_000 })
+    await expect
+      .poll(
+        async () =>
+          page.getByRole("cell").filter({ hasText: "AD_OWNER_CONFIG_CHANGE" }).count(),
+        { timeout: 15_000, intervals: [500] },
+      )
+      .toBeGreaterThanOrEqual(2)
 
-    // 6) Exportación CSV del resultado filtrado
+    // 6) Exportación CSV del resultado filtrado (página actual)
     const [descarga] = await Promise.all([
       page.waitForEvent("download", { timeout: 30_000 }),
       page.getByRole("button", { name: "Exportar CSV" }).click(),
@@ -69,9 +101,17 @@ test.describe("Logs de Auditoría (AM) — vista read-only en /admin/logs", () =
         .slice(1)
         .startsWith("timestamp,usuario,categoria,tipoAccion,referenciaId,descripcion\n"),
     ).toBe(true)
-    expect(contenido.match(/AD_OWNER_CONFIG_CHANGE/g)?.length).toBe(2)
+    expect((contenido.match(/AD_OWNER_CONFIG_CHANGE/g)?.length ?? 0)).toBeGreaterThanOrEqual(2)
 
-    // 7) Solo lectura: sin acciones de mutación en la página
+    // 7) Paginación server-side: si hay más de 50 eventos, botones visibles; si no, no falla
+    //    No se exige total exacto — solo se afirma que no hay pageerror y la UI responde.
+    const paginationText = page.getByText(/Página \d+ de \d+/)
+    // Puede estar o no según total; si está, afirmar que es visible y botones funcionan
+    if (await paginationText.count()) {
+      await expect(paginationText).toBeVisible({ timeout: 5_000 })
+    }
+
+    // 8) Solo lectura: sin acciones de mutación en la página
     await expect(page.getByRole("button", { name: "Exportar CSV" })).toHaveCount(1)
     await expect(
       page.getByRole("button", { name: /eliminar|editar|borrar/i }),

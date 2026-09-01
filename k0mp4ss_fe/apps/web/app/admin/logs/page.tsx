@@ -1,7 +1,6 @@
 "use client"
 
 import * as React from "react"
-import { useCompassStore, useStoreRehydrated } from "@/lib/store"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
@@ -33,26 +32,82 @@ import {
 const FILAS_POR_PAGINA = 50
 const CAMPOS_CSV = ["timestamp", "usuario", "categoria", "tipoAccion", "referenciaId", "descripcion"] as const
 
+type EventoAuditoria = {
+  id: string
+  timestamp: string
+  usuario: string
+  categoria: string
+  tipoAccion: string
+  referenciaId: string
+  descripcion: string
+}
+
 function escaparCsv(valor: string): string {
   if (/[";\n]/.test(valor)) return `"${valor.replace(/"/g, '""')}"`
   return valor
 }
 
 export default function LogsPage() {
-  useStoreRehydrated()
-  const hasHydrated = useCompassStore(s => s.hasHydrated)
-  const eventos = useCompassStore(s => s.eventos)
-
   const [busqueda, setBusqueda] = React.useState("")
   const [busquedaDebounced, setBusquedaDebounced] = React.useState("")
   const [categoria, setCategoria] = React.useState("todas")
   const [tipoAccion, setTipoAccion] = React.useState("todas")
   const [pagina, setPagina] = React.useState(1)
 
+  const [eventos, setEventos] = React.useState<EventoAuditoria[]>([])
+  const [total, setTotal] = React.useState(0)
+  const [cargando, setCargando] = React.useState(true)
+  const [error, setError] = React.useState<string | null>(null)
+
   React.useEffect(() => {
     const t = setTimeout(() => setBusquedaDebounced(busqueda), 200)
     return () => clearTimeout(t)
   }, [busqueda])
+
+  React.useEffect(() => {
+    setPagina(1)
+  }, [busquedaDebounced, categoria, tipoAccion])
+
+  React.useEffect(() => {
+    const controller = new AbortController()
+    async function cargar() {
+      setCargando(true)
+      setError(null)
+      try {
+        const params = new URLSearchParams()
+        if (categoria !== "todas") params.set("categoria", categoria)
+        if (tipoAccion !== "todas") params.set("tipoAccion", tipoAccion)
+        const q = busquedaDebounced.trim()
+        if (q) params.set("q", q)
+        params.set("page", String(pagina))
+        params.set("pageSize", String(FILAS_POR_PAGINA))
+        const res = await fetch(`/api/auditoria?${params.toString()}`, {
+          signal: controller.signal,
+        })
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}))
+          throw new Error((body as { error?: string }).error ?? `Error ${res.status}`)
+        }
+        const data = (await res.json()) as {
+          total: number
+          page: number
+          pageSize: number
+          eventos: EventoAuditoria[]
+        }
+        if (!controller.signal.aborted) {
+          setEventos(data.eventos)
+          setTotal(data.total)
+        }
+      } catch (e) {
+        if ((e as Error).name === "AbortError") return
+        if (!controller.signal.aborted) setError((e as Error).message)
+      } finally {
+        if (!controller.signal.aborted) setCargando(false)
+      }
+    }
+    void cargar()
+    return () => controller.abort()
+  }, [busquedaDebounced, categoria, tipoAccion, pagina])
 
   const categorias = React.useMemo(
     () => Array.from(new Set(eventos.map(e => e.categoria))).sort(),
@@ -63,51 +118,14 @@ export default function LogsPage() {
     [eventos],
   )
 
-  const eventosOrdenados = React.useMemo(
-    () =>
-      [...eventos].sort(
-        (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
-      ),
-    [eventos],
-  )
-
-  const filtrados = React.useMemo(() => {
-    const q = busquedaDebounced.trim().toLowerCase()
-    return eventosOrdenados.filter(e => {
-      if (categoria !== "todas" && e.categoria !== categoria) return false
-      if (tipoAccion !== "todas" && e.tipoAccion !== tipoAccion) return false
-      if (
-        q &&
-        !e.descripcion.toLowerCase().includes(q) &&
-        !e.referenciaId.toLowerCase().includes(q) &&
-        !e.tipoAccion.toLowerCase().includes(q)
-      ) {
-        return false
-      }
-      return true
-    })
-  }, [eventosOrdenados, busquedaDebounced, categoria, tipoAccion])
-
-  const totalPaginas = Math.max(1, Math.ceil(filtrados.length / FILAS_POR_PAGINA))
+  const totalPaginas = Math.max(1, Math.ceil(total / FILAS_POR_PAGINA))
   const paginaActual = Math.min(pagina, totalPaginas)
-  const visibles = React.useMemo(
-    () =>
-      filtrados.slice(
-        (paginaActual - 1) * FILAS_POR_PAGINA,
-        paginaActual * FILAS_POR_PAGINA,
-      ),
-    [filtrados, paginaActual],
-  )
-
-  React.useEffect(() => {
-    setPagina(1)
-  }, [busquedaDebounced, categoria, tipoAccion])
 
   function exportarCsv() {
     const filas = [CAMPOS_CSV.join(",")]
-    for (const e of filtrados) {
+    for (const e of eventos) {
       filas.push(
-        CAMPOS_CSV.map(c => escaparCsv(String(e[c]))).join(","),
+        CAMPOS_CSV.map(c => escaparCsv(String(e[c as typeof CAMPOS_CSV[number]]))).join(","),
       )
     }
     const blob = new Blob(["\uFEFF" + filas.join("\n")], {
@@ -121,7 +139,7 @@ export default function LogsPage() {
     URL.revokeObjectURL(url)
   }
 
-  if (!hasHydrated) {
+  if (cargando && eventos.length === 0) {
     return (
       <div className="flex flex-col gap-6 animate-pulse">
         <div className="h-9 w-72 rounded bg-muted/40" />
@@ -182,19 +200,25 @@ export default function LogsPage() {
             ))}
           </SelectContent>
         </Select>
-        <Button variant="outline" onClick={exportarCsv} disabled={filtrados.length === 0}>
+        <Button variant="outline" onClick={exportarCsv} disabled={eventos.length === 0}>
           <IconDownload className="size-4 mr-1" /> Exportar CSV
         </Button>
         <span className="text-xs text-muted-foreground ml-auto">
-          {filtrados.length.toLocaleString("es-CL")} de {eventos.length.toLocaleString("es-CL")} eventos
+          {eventos.length.toLocaleString("es-CL")} de {total.toLocaleString("es-CL")} eventos en BD
         </span>
       </div>
+
+      {error && (
+        <p className="text-sm text-destructive" role="alert">
+          {error}
+        </p>
+      )}
 
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-sm">Eventos de auditoría</CardTitle>
           <CardDescription className="text-xs">
-            Ordenados por fecha descendente · ventana visible de {eventos.length} eventos (retención completa en capa de datos)
+            Ordenados por fecha descendente · {total.toLocaleString("es-CL")} eventos en BD (retención completa en capa de datos)
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -209,14 +233,20 @@ export default function LogsPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {visibles.length === 0 ? (
+              {cargando ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-center text-muted-foreground text-sm py-8">
+                    Cargando eventos…
+                  </TableCell>
+                </TableRow>
+              ) : eventos.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={5} className="text-center text-muted-foreground text-sm py-8">
                     Sin eventos para la búsqueda o filtros actuales.
                   </TableCell>
                 </TableRow>
               ) : (
-                visibles.map(e => (
+                eventos.map(e => (
                   <TableRow key={e.id}>
                     <TableCell className="text-xs whitespace-nowrap tabular-nums">
                       {new Date(e.timestamp).toLocaleString("es-CL", {

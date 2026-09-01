@@ -35,7 +35,7 @@ curso, commitea y deja el estado exacto aquí.
 |---|---|---|---|---|
 | P1 | C2 | Guard QA Lab → confirmación "Limpiar y poblar de una vez" + e2e `crud/poblado-idempotente.spec.ts` | HECHA | 0c9fb6a |
 | P2 | C1.1 | change `am-auditoria-sync`: API `POST /api/auditoria/sync` + `GET /api/auditoria` + cliente sync debounce + tests API con Prisma real | HECHA | 1882e98 |
-| P3 | C1.2 | change `am-logs-bd`: `/admin/logs` lee BD (GET auditoría), export adaptado, e2e con BD | pendiente | — |
+| P3 | C1.2 | change `am-logs-bd`: `/admin/logs` lee BD (GET auditoría), export adaptado, e2e con BD | HECHA | TBD |
 | P4 | C4.1 | change `rp-abac-contextual`: `puedeContextual()` + migración 4 checks inline sin cambio de comportamiento | pendiente | — |
 | P5 | C4.2 | change `rp-abac-matriz`: sección "Permisos contextuales (ABAC)" read-only en `/admin/permisos` | pendiente | — |
 | P6 | Cierre | Suite completa (Vitest + e2e) + avance NSGC + SERIE COMPLETA + BACKLOG-100 actualizado (C3 en pausa) | pendiente | — |
@@ -44,3 +44,4 @@ curso, commitea y deja el estado exacto aquí.
 
 - [2026-09-01] P1 HECHA: guard QA Lab idempotente via Dialog confirmación "Limpiar y poblar" (limpiar()+runFase todo) + e2e poblado-idempotente 2 tests (confirmar/cancelar) + fix ciclo.spec guard → dialog + fix STORE finanzas vencimiento día 1 (2 meses) para 425/425 (commit 0c9fb6a)
 - [2026-09-01] P2 HECHA: API auditoría sync (POST upsert idempotente + GET paginado con filtros q/categoria/tipoAccion) scoped por comunidad + cliente sync debounce 2s con Set ids y guard 401 sin loop + 10 tests API Prisma real para 435/435 (commit 1882e98)
+- [2026-09-01] P3 HECHA: /admin/logs lee BD vía GET /api/auditoria?categoria=&tipoAccion=&q=&page=&pageSize=50 (estado carga, debounce 200ms, paginación server-side, contador X de Y en BD, facetas por página actual) + e2e logs.spec robusto a BD con poll ≥2 AD_OWNER_CONFIG_CHANGE + export ≥2 + aplica openspec validate 33 passed + Vitest 435/435 + tsc/lint 0 (commit TBD)
