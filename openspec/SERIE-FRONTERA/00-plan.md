@@ -34,7 +34,7 @@ curso, commitea y deja el estado exacto aquí.
 | Ventana | Ítem | Alcance | Estado | Commit final |
 |---|---|---|---|---|
 | P1 | C2 | Guard QA Lab → confirmación "Limpiar y poblar de una vez" + e2e `crud/poblado-idempotente.spec.ts` | HECHA | 0c9fb6a |
-| P2 | C1.1 | change `am-auditoria-sync`: API `POST /api/auditoria/sync` + `GET /api/auditoria` + cliente sync debounce + tests API con Prisma real | EN CURSO | — |
+| P2 | C1.1 | change `am-auditoria-sync`: API `POST /api/auditoria/sync` + `GET /api/auditoria` + cliente sync debounce + tests API con Prisma real | HECHA | 1882e98 |
 | P3 | C1.2 | change `am-logs-bd`: `/admin/logs` lee BD (GET auditoría), export adaptado, e2e con BD | pendiente | — |
 | P4 | C4.1 | change `rp-abac-contextual`: `puedeContextual()` + migración 4 checks inline sin cambio de comportamiento | pendiente | — |
 | P5 | C4.2 | change `rp-abac-matriz`: sección "Permisos contextuales (ABAC)" read-only en `/admin/permisos` | pendiente | — |
@@ -43,3 +43,4 @@ curso, commitea y deja el estado exacto aquí.
 ## Bitácora
 
 - [2026-09-01] P1 HECHA: guard QA Lab idempotente via Dialog confirmación "Limpiar y poblar" (limpiar()+runFase todo) + e2e poblado-idempotente 2 tests (confirmar/cancelar) + fix ciclo.spec guard → dialog + fix STORE finanzas vencimiento día 1 (2 meses) para 425/425 (commit 0c9fb6a)
+- [2026-09-01] P2 HECHA: API auditoría sync (POST upsert idempotente + GET paginado con filtros q/categoria/tipoAccion) scoped por comunidad + cliente sync debounce 2s con Set ids y guard 401 sin loop + 10 tests API Prisma real para 435/435 (commit 1882e98)
