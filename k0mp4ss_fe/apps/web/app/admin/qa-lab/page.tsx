@@ -703,9 +703,9 @@ export default function QaLabPage() {
       const pagadoOk = useCompassStore.getState().cobrosFI.find(c => c.id === cobroGC.id)?.pagos.length === 1
       if (!r5.ok || !pagadoOk) { pasos[4]!.estado = "error"; pasos[4]!.error = r5.error ?? "Pago no registrado" } else pasos[4]!.estado = "ok"
     }
-    // 6) Mora sobre el periodo vencido (mes anterior), idempotente por día
-    const r6a = s.emitirGastoComun({ periodo: periodoMesesAtrasFI(1), gastoTotal: 200000, unidadIds: [unidadTest] })
-    const cobroVencido = useCompassStore.getState().cobrosFI.find(c => c.concepto === "gasto_comun" && c.periodo === periodoMesesAtrasFI(1))
+    // 6) Mora sobre el periodo vencido (2 meses atrás garantiza vencimiento aunque hoy sea día 1), idempotente por día
+    const r6a = s.emitirGastoComun({ periodo: periodoMesesAtrasFI(2), gastoTotal: 200000, unidadIds: [unidadTest] })
+    const cobroVencido = useCompassStore.getState().cobrosFI.find(c => c.concepto === "gasto_comun" && c.periodo === periodoMesesAtrasFI(2))
     let moraOk = false
     if (r6a.ok && cobroVencido) {
       s.aplicarMoraFI(cobroVencido.id, 1)
