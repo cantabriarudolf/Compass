@@ -55,7 +55,7 @@ existentes; salvo P4/P5 si la extracción requiere mover código — sin cambios
 | Ventana | Alcance | Estado | Commit final |
 |---|---|---|---|
 | P1 | B — Dashboard OpenSpec 6 documentado → completado (mapeo/overrides + verificación del dashboard con datos reales) | HECHA | 527cd96 |
-| P2 | A2 — change `mp-residentes-vista`: `/personas/residentes` (directorio filtrado MP) + e2e | pendiente | — |
+| P2 | A2 — change `mp-residentes-vista`: `/personas/residentes` (directorio filtrado MP) + e2e | HECHA | bfc87c3 |
 | P3 | A1 — change `ui-resumen-dashboard`: `/dashboard` (Resumen con KPIs del store) + e2e | pendiente | — |
 | P4 | A3 — change `pe-accesos-vista`: `/operaciones/accesos` (Visitas + Contratistas dedicadas) + e2e | pendiente | — |
 | P5 | A4 — change `pe-paqueteria-vista`: `/operaciones/paqueteria` (Encomiendas dedicada) + e2e | pendiente | — |
@@ -64,3 +64,4 @@ existentes; salvo P4/P5 si la extracción requiere mover código — sin cambios
 ## Bitácora
 
 - [2026-08-31] P1 HECHA: fix mapeo dev-dashboard 6 módulos documentado→completado (UI via UI-interfaz-principal, MA via enhance-rg-st-seed-gears, CF via sg-secretos-env, AM via am-logs-visor, AU via au-authjs, SG via sg-predeploy-headers) — 31/31 completado verificado, sin falsos — tsc 0, lint 0 errores, Vitest 425/425, openspec 32/32 — commit 527cd96
+- [2026-08-31] P2 HECHA: `mp-residentes-vista` /personas/residentes directorio filtrado MP (vínculo vigente propietario/arrendatario, unidad vinculada, Ver Ficha) — read-only sobre store existente sin bump STORE_VERSION — quita de RUTAS_PENDIENTES — e2e read-oriented verde — tsc 0, lint 0 errores, Vitest 425/425, openspec 33/33, playwright 2 passed — commit bfc87c3
