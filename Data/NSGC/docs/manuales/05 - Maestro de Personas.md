@@ -23,7 +23,17 @@ Repetidos **permitidos** (D5): el sistema no bloquea nombres repetidos, pero te 
 ## 💡 Multiperfil
 No te extrañe si ves a la misma persona en distintos lados. El sistema permite que el "Seba" sea el **Propietario** de un departamento, pero que viva como **Residente** en otro. Todo queda amarrado a su mismo RUT.
 
+## 🏠 Vista Residentes (`/personas/residentes` — P2 MENU-100)
+
+Directorio **solo lectura** de residentes y propietarios con vínculo vigente. No duplica la edición — esa vive en `/comunidad/personas`.
+
+- **Filtro**: personas con al menos un `vinculos` vigente (`!fechaFin`) y `rol` en `propietario` / `arrendatario`. Se excluyen `copropietario`/`ocupante` y tramos cerrados.
+- **Columnas**: identidad (nombre + RUT + badges de `roles`), unidad vinculada (`Depto 101`, `Local L-01` con badge de rol), contacto (móvil + email), estado de cuenta y acción **Ver Ficha** → `/comunidad/personas/[id]`.
+- **Búsqueda**: por nombre o RUT en la misma vista.
+- **Skeleton**: `animate-pulse` mientras `!hasHydrated`; empty state "Sin residentes con vínculo vigente" si no calza nada.
+- **Navegación**: el item "Personas → Residentes" ya no es "Próximamente" — quitado de `RUTAS_PENDIENTES` en `AppSidebar`.
+
 ## ⚠️ Privacidad
 Recuerda que estos son datos sensibles. El acceso a este maestro debe estar limitado solo a personal de confianza de la administración.
 
-*Actualizado: 27/08/2026 — P3 D5 aviso duplicados MP por nombreCompleto (no bloqueante)*
+*Actualizado: 31/08/2026 — P2 MENU-100 Vista Residentes read-only (MP-maestro-personas ADDED) + P3 D5*
