@@ -20,7 +20,7 @@ const manana = () => {
 const mesAtras = () => {
   const d = new Date()
   d.setDate(1)
-  d.setMonth(d.getMonth() - 1)
+  d.setMonth(d.getMonth() - 2)
   return d.toISOString().slice(0, 7)
 }
 const pendienteCobro = (c: { montoBase: number; moras: { monto: number }[]; pagos: { monto: number }[] }) =>

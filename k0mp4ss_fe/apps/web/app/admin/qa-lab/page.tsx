@@ -12,6 +12,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@workspace/ui/components/dialog"
@@ -192,6 +193,8 @@ export default function QaLabPage() {
   const [detalle, setDetalle] = React.useState<ModReport | null>(null)
   const [msg, setMsg] = React.useState<{ type: "ok" | "error"; text: string } | null>(null)
   const [ultimaFase, setUltimaFase] = React.useState<string | null>(null)
+  const [confirmOpen, setConfirmOpen] = React.useState(false)
+  const [pendingFase, setPendingFase] = React.useState<string | null>(null)
 
   // Mismo criterio que env-guard (isWriteApiEnabled): APP_ENV=development
   // habilita el lab aunque NODE_ENV sea production (build prod de CI e2e).
@@ -968,9 +971,10 @@ export default function QaLabPage() {
 
   const runFase = React.useCallback(async (fase: string) => {
     if (!ensureHydrated()) return
-    // Guard clean-first: bloquea segunda corrida sin limpiar
+    // Guard idempotente: si hay datos TEST-* ofrece confirmación "Limpiar y poblar de una vez"
     if (tieneDatosTest(useCompassStore.getState() as unknown as Record<string, unknown>)) {
-      setMsg({ type: "error", text: "Existen datos TEST-*: ejecuta primero «Borrar todo lo de prueba»" })
+      setPendingFase(fase)
+      setConfirmOpen(true)
       return
     }
     setLoading(true)
@@ -1345,6 +1349,14 @@ export default function QaLabPage() {
       setUltimaFase(null)
     }
   }, [ensureHydrated])
+
+  const handleConfirmPoblar = React.useCallback(async () => {
+    const fase = pendingFase ?? "todo"
+    setConfirmOpen(false)
+    setPendingFase(null)
+    await limpiar()
+    await runFase(fase)
+  }, [pendingFase, limpiar, runFase])
 
   const exportar = React.useCallback(async () => {
     if (!report) { setMsg({ type: "error", text: "Nada que exportar: ejecuta una carga primero" }); return }
@@ -1806,6 +1818,20 @@ export default function QaLabPage() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Existen datos TEST-*</DialogTitle>
+            <DialogDescription>Existen datos TEST-* — ¿Limpiar y poblar de una vez?</DialogDescription>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">Se borrarán los datos de prueba actuales y se poblará la comunidad completa (22 fases). Esta acción es idempotente.</p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setConfirmOpen(false); setPendingFase(null) }}>Cancelar</Button>
+            <Button onClick={handleConfirmPoblar} className="bg-emerald-600 hover:bg-emerald-700">Limpiar y poblar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={!!detalle} onOpenChange={(o) => !o && setDetalle(null)}>
         <DialogContent className="max-w-2xl">

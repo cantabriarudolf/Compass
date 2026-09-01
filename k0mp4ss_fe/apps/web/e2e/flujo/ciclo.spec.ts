@@ -89,10 +89,18 @@ test.describe("QA Lab — ciclo completo y guard clean-first (Serie QA-LAB P3)",
     // Capturar snapshot del contador antes del guard (scoped a tarjetas)
     const listasAntes = await page.locator('[id^="mod-"]').count()
 
-    // Segunda corrida SIN limpiar → debe bloquearse
+    // Segunda corrida SIN limpiar → ahora abre Dialog de confirmación (idempotente P1 C2)
+    // El guard ya no bloquea con error, sino que ofrece "Limpiar y poblar"
     await clickPoblar(page)
-    await expect(page.getByText(/Existen datos TEST-\*/)).toBeVisible({ timeout: 30_000 })
-    await expect(page.getByText(/ejecuta primero.*Borrar todo lo de prueba/)).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByRole("dialog")).toBeVisible({ timeout: 30_000 })
+    await expect(page.getByText(/¿Limpiar y poblar de una vez\?/)).toBeVisible({ timeout: 10_000 })
+    // Cancelar para no mutar — el estado no debe haber cambiado
+    const btnCancelar = page.getByRole("button", { name: /^Cancelar$/ })
+    await expect(btnCancelar).toBeVisible({ timeout: 10_000 })
+    await btnCancelar.evaluate((b: HTMLElement) => b.click()).catch(async () => {
+      await btnCancelar.click({ force: true, noWaitAfter: true }).catch(() => {})
+    })
+    await expect(page.getByRole("dialog")).toBeHidden({ timeout: 10_000 })
 
     // El estado no debe haber cambiado (mismas 22 tarjetas Listo, sin errores nuevos)
     await expect(page.locator('[id^="mod-"]')).toHaveCount(listasAntes, { timeout: 10_000 } as any)

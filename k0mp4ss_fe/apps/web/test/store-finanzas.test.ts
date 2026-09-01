@@ -226,7 +226,8 @@ describe("FI - Finanzas y Morosidad en el store", () => {
     let objetivo: { unidadId: string }
     beforeEach(() => {
       objetivo = unidadConPropietario()!
-      expect(getState().emitirGastoComun({ periodo: periodoMesesAtras(1), gastoTotal: 200000, unidadIds: [objetivo.unidadId] }).ok).toBe(true)
+      // 2 meses atrás garantiza vencimiento aunque hoy sea día 1 (vencimiento es día 5 del mes siguiente)
+      expect(getState().emitirGastoComun({ periodo: periodoMesesAtras(2), gastoTotal: 200000, unidadIds: [objetivo.unidadId] }).ok).toBe(true)
       cobroVencidoId = getState().cobrosFI[0]!.id
     })
 
@@ -258,7 +259,7 @@ describe("FI - Finanzas y Morosidad en el store", () => {
       expect(sinDeudaTrasPagar.ok).toBe(false)
       expect(sinDeudaTrasPagar.error).toContain("no registra deuda")
 
-      expect(getState().emitirGastoComun({ periodo: periodoMesesAtras(2), gastoTotal: 100000, unidadIds: [objetivo.unidadId] }).ok).toBe(true)
+      expect(getState().emitirGastoComun({ periodo: periodoMesesAtras(3), gastoTotal: 100000, unidadIds: [objetivo.unidadId] }).ok).toBe(true)
       expect(getState().enviarCobranzaFI(objetivo.unidadId).ok).toBe(true)
       expect(getState().eventos.filter(e => e.tipoAccion === "FI_COBRANZA_SENT")).toHaveLength(2)
     })
@@ -298,7 +299,8 @@ describe("FI - Finanzas y Morosidad en el store", () => {
     let cobroId: string
     beforeEach(() => {
       const objetivo = unidadConPropietario()!
-      expect(getState().emitirGastoComun({ periodo: periodoMesesAtras(1), gastoTotal: 300000, unidadIds: [objetivo.unidadId] }).ok).toBe(true)
+      // 2 meses atrás garantiza vencimiento para mora (día 1 edge)
+      expect(getState().emitirGastoComun({ periodo: periodoMesesAtras(2), gastoTotal: 300000, unidadIds: [objetivo.unidadId] }).ok).toBe(true)
       cobroId = getState().cobrosFI[0]!.id
       expect(getState().aplicarMoraFI(cobroId, 1).ok).toBe(true)
     })
