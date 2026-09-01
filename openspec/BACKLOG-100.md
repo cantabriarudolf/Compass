@@ -1,20 +1,21 @@
-# BACKLOG-100 — Frontera "futuro" (decisión del owner 2026-08-31 · actualizado 2026-09-01)
+# BACKLOG-100 — Frontera "futuro" (decisión del owner 2026-08-31 · actualizado 2026-09-01 cierre SERIE-FRONTERA)
 
 > Contexto durable para continuar en CUALQUIER chat futuro. El owner definió que el 100%
 > del spec vigente se cierra con la `SERIE-MENU-100` (A+B, COMPLETA 6/6). La frontera
 > C1-C4 se ejecuta en la **`SERIE-FRONTERA`** (C2 + C1 + C4; C3 EN PAUSA por credenciales
 > Google). Estado vivo: ver `openspec/SERIE-FRONTERA/00-plan.md` §Roadmap/Bitácora.
+> **SERIE-FRONTERA COMPLETA 6/6** — C1/C2/C4 HECHOS, C3 EN PAUSA pendiente de credenciales.
 
-## Estado de ejecución (2026-09-01)
+## Estado de ejecución (2026-09-01 — CIERRE)
 
 | Ítem | Estado | Dónde |
 |---|---|---|
-| C2 Idempotencia poblado | 🔄 En ejecución (P1 SERIE-FRONTERA) — diseño cerrado: **auto limpiar+poblar** (guard → confirmación), descartado upsert por IDs | SERIE-FRONTERA P1 |
-| C1 Retención logs 5 años | 🔄 En ejecución (P2-P3) — diseño cerrado: **sync batch debounce 2s** → `POST /api/auditoria/sync` upsert idempotente + `GET /api/auditoria` + `/admin/logs` lee BD. Base ya existente: tabla `EventoAuditoria` (schema.prisma:248) + `repos.eventos` (repos/index.ts:92) | SERIE-FRONTERA P2-P3 |
-| C3 Google SSO | ⏸ **EN PAUSA** — requiere del owner: Client ID + Client Secret de Google Cloud Console, redirect URI autorizada (p. ej. `http://localhost:3000/api/auth/callback/google` y su equivalente de producción). Provider va en `lib/auth.ts` (runtime Node), vinculación solo para usuarios ya activados por email, credentials queda como fallback | Este archivo |
-| C4 ABAC contextual | 🔄 En ejecución (P4-P5) — diseño cerrado: **`puedeContextual(rol, accion, recurso, contexto)`** behavior-preserving (migración 1:1 de checks inline: `mp:propios`, `pl:propia`, `ct:propio`, `residenteVeMorosidad`) + matriz contextual read-only en `/admin/permisos` | SERIE-FRONTERA P4-P5 |
+| C2 Idempotencia poblado | ✅ HECHO — SERIE-FRONTERA P1 `0c9fb6a` — guard → confirmación "Limpiar y poblar de una vez" (`limpiar()`+`runFase todo`), e2e `poblado-idempotente` 2/2 | SERIE-FRONTERA P1 (00-plan.md + avance 2026-09-01 06-30) |
+| C1 Retención logs 5 años | ✅ HECHO — SERIE-FRONTERA P2 `1882e98` + P3 `a9cd1b7` — sync batch debounce 2s → `POST /api/auditoria/sync` upsert idempotente + `GET /api/auditoria` paginado + `/admin/logs` lee BD con paginación server-side y export CSV | SERIE-FRONTERA P2-P3 (avances 2026-09-01 07-15/08-15) |
+| C3 Google SSO | ⏸ **EN PAUSA** — requiere del owner (ver §C3 checklist) — provider en `lib/auth.ts` (runtime Node), solo usuarios activados, credentials fallback | Este archivo §C3 — pendiente |
+| C4 ABAC contextual | ✅ HECHO — SERIE-FRONTERA P4 `913489b` + P5 `d336cd6` — `puedeContextual(rol,accion,recurso,ctx)` puro + `reglasContextuales()` snapshot + matriz contextual read-only en `/admin/permisos` (16 reglas, motor/check local) | SERIE-FRONTERA P4-P5 (avances 2026-09-01 09-30/10-30) |
 
-## C1 — Retención de logs de auditoría (5 años)
+## C1 — Retención de logs de auditoría (5 años) — ✅ HECHO P2-P3 (1882e98/a9cd1b7)
 
 - **Spec:** `openspec/specs/AM-auditoria-metricas/spec.md` §Logs de Auditoría (Scenario
   Retention: "MUST be retained for a minimum of 5 years") + `AM:80` inmutabilidad.
@@ -28,7 +29,7 @@
 - **Sugerencia:** change `am-retencion-logs`: tabla `EventoAuditoria` + writer en
   `registrarEvento` (o batch) + `/admin/logs` leyendo BD con paginación server-side.
 
-## C2 — Idempotencia del poblado QA Lab
+## C2 — Idempotencia del poblado QA Lab — ✅ HECHO P1 (0c9fb6a)
 
 - **Spec/contexto:** Serie QA-LAB (`openspec/SERIE-QA-LAB/`, COMPLETA 3/3) dejó el guard
   clean-first ("Existen datos TEST-*: ejecuta primero «Borrar todo lo de prueba»"). La
@@ -44,20 +45,22 @@
 - **Sugerencia:** change `qa-lab-poblado-idempotente` con spike primero (qué colecciones
   colisionan: FI cobros, PL liquidaciones, CV avisos, CT certificados).
 
-## C3 — Google SSO
+## C3 — Google SSO — ⏸ EN PAUSA (pendiente de credenciales del owner)
 
 - **Spec:** `openspec/specs/AU-autenticacion-sesion/spec.md` §Autenticación Futura (Scenario
   Google SSO). El proyecto hoy: Auth.js credentials + JWT + rate limit persistente (Serie
   Plataforma P5/P4, ver `project.md`).
-- **Estado hoy:** infraestructura Auth.js ya existe (adapter Prisma propio) — añadir provider
-  Google es lo natural, PERO implica: credenciales OAuth (env/secretos), vincular
-  `Usuario.email` ↔ cuenta Google, decisión de rol/membresía por defecto al primer login,
-  y qué pasa con el rate limit por email.
-- **Esfuerzo:** change grande. **Dependencias:** cuenta Google Cloud del owner + secretos.
-- **Sugerencia:** change `au-google-sso` — provider opcional, solo para usuarios ya
-  activados (Activación de Cuentas RP/MP), manteniendo credentials como fallback.
+- **Estado hoy (2026-09-01 cierre):** SERIE-FRONTERA no ejecuta C3. Infraestructura Auth.js ya existe (adapter Prisma propio) — añadir provider Google es natural, PERO bloqueado hasta que el owner provea credenciales. SERIE COMPLETA 6/6 sin C3.
+- **Checklist pendiente del owner (obligatorio para desbloquear `au-google-sso`):**
+  - [ ] `GOOGLE_CLIENT_ID` — Client ID de Google Cloud Console (OAuth 2.0 Client)
+  - [ ] `GOOGLE_CLIENT_SECRET` — Client Secret correspondiente (secreto, no commitear)
+  - [ ] `redirect URI` autorizada — `http://localhost:3000/api/auth/callback/google` (dev) + URL de producción (ej. `https://<dominio>/api/auth/callback/google`) registrada en Google Cloud → Authorized redirect URIs
+  - [ ] Decisión owner: vinculación solo para usuarios ya activados (`RP/MP Activación de Cuentas`), credentials queda como fallback; rol/membresía por defecto al primer login Google y tratamiento del rate limit por email
+- **Esfuerzo:** change grande. **Dependencias:** cuenta Google Cloud del owner + secretos (bloqueante).
+- **Sugerencia:** change `au-google-sso` — provider opcional, solo para usuarios ya activados (Activación de Cuentas RP/MP), manteniendo credentials como fallback. Al desbloquear, crear change openspec `au-google-sso` con `lib/auth.ts` (runtime Node) + env + tests.
+- **Serie:** SERIE-FRONTERA P6 cierra con C3 documentado EN PAUSA en `openspec/SERIE-FRONTERA/00-plan.md` Bitácora "SERIE COMPLETA" + este §C3.
 
-## C4 — ABAC contextual completo
+## C4 — ABAC contextual completo — ✅ HECHO P4-P5 (913489b/d336cd6)
 
 - **Spec:** `openspec/specs/RP-roles-permisos/spec.md` §Permisos Contextuales (ABAC) +
   atributos ya presentes: `mp:propios`, `pl:propia`, `ct:propio`, `residenteVeMorosidad`
