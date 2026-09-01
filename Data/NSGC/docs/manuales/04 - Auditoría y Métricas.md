@@ -21,7 +21,7 @@ Los eventos del store (`eventos: EventoAuditoria[]` en `lib/store.ts`) hoy viven
 - **Server:** `POST /api/auditoria/sync` (auth→usuario→membresía→401/403, máx 500, `upsert` por `id` con `comunidadId` de la membresía, `{ ok, recibidos, persistidos }`, idempotente) y `GET /api/auditoria?categoria=&tipoAccion=&q=&page=&pageSize=` (scoping por comunidad, filtros server-side + paginación `total/page/pageSize/eventos` orden `timestamp` desc). Sin `delete`/`update` (inmutable).
 - **BD:** tabla `EventoAuditoria` (`prisma/schema.prisma:248`) ya existía (`repos.eventos` en `lib/repos/index.ts:92`); no requirió migración (`prisma generate` valida).
 
-> `/admin/logs` aún lee el store (P3 lo migrará a `GET /api/auditoria` con paginación server-side).
+> **P3 (2026-09-01):** `/admin/logs` ahora lee la BD vía `GET /api/auditoria?categoria=&tipoAccion=&q=&page=&pageSize=50` (paginación server-side, contador "X de Y eventos en BD", búsqueda debounce 200ms mapeada a `q`, selects `categoria`/`tipoAccion` derivados de la página actual, export CSV de la página cargada con BOM + header). Skeleton "Cargando…" y empty state "Sin eventos…". `/admin/logs` mantiene badge "solo lectura · pista inmutable" y cero mutaciones. Las facetas del select reflejan solo la página actual (evolución futura: endpoint `/api/auditoria/facetas` si el volumen lo exige).
 
 ## 💡 Próximos Pasos
 A medida que sumemos módulos (Personas, Finanzas, Gastos Comunes), este panel se va a ir llenando de más tarjetas de valor. La regla es: **si algo se puede contar, tiene que aparecer aquí**.

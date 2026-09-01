@@ -8,7 +8,7 @@ Registrar eventos significativos del sistema, detectar tareas huérfanas y proye
 
 ## 🛠️ Secciones
 
-- **Logs de Auditoría** (`/admin/logs`): Pista inmutable en solo lectura, ordenada de lo más nuevo a lo más viejo. Buscá por texto libre (descripción, referencia o acción) y filtrá por módulo (`categoria`) o tipo de acción (`tipoAccion`). Con **Exportar CSV** te llevás el resultado filtrado a Excel. La ventana visible conserva los últimos 500 eventos.
+- **Logs de Auditoría** (`/admin/logs` — BD, C1.2 2026-09-01): Pista inmutable en solo lectura sobre `GET /api/auditoria` (retención 5 años en BD). Ordenada `timestamp` desc, paginación server-side `page/pageSize=50` con contador "X de Y eventos en BD" y botones anterior/siguiente. Buscá por texto libre (descripción, referencia o acción, debounce 200ms → `q`) y filtrá por módulo (`categoria`) o tipo de acción (`tipoAccion`); los selects se alimentan de la página actual. Con **Exportar CSV** te llevás la página cargada (BOM + header `timestamp,usuario,categoria,tipoAccion,referenciaId,descripcion`). Skeleton "Cargando…" y empty "Sin eventos…" con badge "solo lectura · pista inmutable" y cero mutaciones.
 - **Tareas Huérfanas**: Alertas automáticas cuando algo quedó pendiente más tiempo del esperado (turnos no cerrados, visitas no registradas, solicitudes fuera de SLA).
 - **Dashboard de Métricas**: KPIs como tasa de eficiencia operativa, productividad, uso de amenidades, nivel de servicio y curva de recaudación.
 - **Valor Aesthetics**: Contadores visuales del trabajo automatizado y el impacto económico de decisiones administrativas.
