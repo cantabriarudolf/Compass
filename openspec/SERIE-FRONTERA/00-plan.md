@@ -34,7 +34,7 @@ curso, commitea y deja el estado exacto aquí.
 | Ventana | Ítem | Alcance | Estado | Commit final |
 |---|---|---|---|---|
 | P1 | C2 | Guard QA Lab → confirmación "Limpiar y poblar de una vez" + e2e `crud/poblado-idempotente.spec.ts` | HECHA | 0c9fb6a |
-| P2 | C1.1 | change `am-auditoria-sync`: API `POST /api/auditoria/sync` + `GET /api/auditoria` + cliente sync debounce + tests API con Prisma real | pendiente | — |
+| P2 | C1.1 | change `am-auditoria-sync`: API `POST /api/auditoria/sync` + `GET /api/auditoria` + cliente sync debounce + tests API con Prisma real | EN CURSO | — |
 | P3 | C1.2 | change `am-logs-bd`: `/admin/logs` lee BD (GET auditoría), export adaptado, e2e con BD | pendiente | — |
 | P4 | C4.1 | change `rp-abac-contextual`: `puedeContextual()` + migración 4 checks inline sin cambio de comportamiento | pendiente | — |
 | P5 | C4.2 | change `rp-abac-matriz`: sección "Permisos contextuales (ABAC)" read-only en `/admin/permisos` | pendiente | — |

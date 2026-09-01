@@ -10,6 +10,7 @@ import { CommunityHeader } from "@/components/community-header";
 import { Separator } from "@workspace/ui/components/separator";
 import { ModeToggle } from "@/components/mode-toggle";
 import { TooltipProvider } from "@workspace/ui/components/tooltip";
+import { AuditoriaSyncInit } from "@/components/auditoria-sync-init";
 
 const inter = Inter({subsets:['latin'],variable:'--font-sans'})
 
@@ -30,6 +31,7 @@ export default function RootLayout({
       className={cn("antialiased", fontMono.variable, "font-sans", inter.variable)}
     >
       <body>
+        <AuditoriaSyncInit />
         <ThemeProvider>
           <TooltipProvider>
             <SidebarProvider>
