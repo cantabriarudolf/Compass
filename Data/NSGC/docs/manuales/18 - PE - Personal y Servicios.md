@@ -18,6 +18,8 @@ Dos mundos que comparten módulo: **RRHH** profundiza la extensión laboral mín
   - **Encomiendas**: courier del maestro (sin texto libre), evidencia fotográfica por URL (D1) y retiro registrado.
   - **Contratistas**: empresa del maestro `contratistas` con motivo específico obligatorio; origen residente o administración; confirmación de ingreso sellada.
   - **Cierre de Turno**: protocolo anti-negligencia (preguntas críticas llegan en "SÍ"; sin descripción ≥20 caracteres + evidencia no persiste), checklist de instalaciones según la jornada reportada (editable por reemplazos), checklist de equipamiento de ronda, edición posterior con historial de cambios inmutable y **notificación a administración con copia al correo del trabajador** (`email_simulado`).
+- **Accesos y Visitas (`/operaciones/accesos`)**:
+  - Vista dedicada que reutiliza los paneles de Visitas y Contratistas extraídos de la bitácora como componentes compartidos (`components/pe/visitas-panel.tsx`, `contratistas-panel.tsx`) — mismo modelo y acciones del store (`bitacoraVisitasPE`, `ingresosContratistasPE`), sin tabs de turno, con selector de día propio y heading "Accesos y Visitas". Bitácora conserva sus tabs intactos (cero regresión).
 - **Proveedores y Servicios (`/operaciones/proveedores`)**:
   - Catálogo de empresas (RUT validado), calendario preventivo con alerta automática cuando el servicio vence dentro del horizonte configurado, libro de visitas técnicas (qué hizo el técnico y quién lo supervisó — cada visita reprograma la próxima fecha del ciclo) y directorio de emergencias leído del maestro `contactosEmergencia` de MA con enlace `tel:`.
 
