@@ -1,7 +1,12 @@
-## ADDED Requirements
+## MODIFIED Requirements
 
 ### Requirement: Permisos Contextuales (ABAC)
-El sistema SHALL evaluar permisos con contexto mediante `puedeContextual(rol, accion, recurso, contexto)` donde `contexto` incluye identidad propia (`personaId`), unidad reclamada (`unidadId`), unidades con vínculo vigente (`unidadIdsVinculadas`) y controles de privacidad (`privacidad: { residenteVeMorosidad, residenteVeActas, alertasResidentesActivas }`). El sistema MUST preservar menor privilegio y paridad 1:1 con las decisiones actuales: `puedeContextual` = `puede(rol, accion, recurso)` base + refinamiento ABAC solo para recursos granulares (`:propios`, `:propia`, `:residencia`, `:al_dia`, privacidad). Recursos sin dimensión contextual MUST delegar directo a `puede()`. La migración de checks existentes SHALL NOT cambiar decisiones observables.
+The system SHALL support Attribute-Based Access Control for resource-specific or context-specific actions via `puedeContextual(rol, accion, recurso, contexto)` where `contexto` includes `personaId` (identidad propia), `unidadId` (unidad reclamada), `unidadIdsVinculadas` (unidades con vínculo vigente) and `privacidad { residenteVeMorosidad, residenteVeActas, alertasResidentesActivas }`. The system SHALL expose it as optional contextual filtering where applicable. The system MUST preserve least privilege and parity 1:1 with current decisions: `puedeContextual = puede() base + refinamiento ABAC` only for granular resources (`:propios`, `:propia`, `:residencia`, `:al_dia`, privacidad); resources without contextual dimension MUST delegate directly to `puede()`. Migration of existing inline checks SHALL NOT change observable decisions.
+
+#### Scenario: Supply Request Context
+- **WHEN** a resident requests a maintenance supply
+- **THEN** they MUST only see the category "Solicitar Insumo Mantenimiento"
+- **AND** the category "Solicitar Insumo Uso Interno" MUST be hidden.
 
 #### Scenario: Identidad propia requerida para mp:propios
 - **WHEN** un usuario con rol que tiene `mp:propios` llama `puedeContextual(rol, "ver", "mp:propios", { personaId: "p-1" })`
