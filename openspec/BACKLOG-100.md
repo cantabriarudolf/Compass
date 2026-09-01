@@ -1,9 +1,18 @@
-# BACKLOG-100 — Frontera "futuro" (decisión del owner 2026-08-31)
+# BACKLOG-100 — Frontera "futuro" (decisión del owner 2026-08-31 · actualizado 2026-09-01)
 
 > Contexto durable para continuar en CUALQUIER chat futuro. El owner definió que el 100%
-> del spec vigente se cierra con la `SERIE-MENU-100` (A+B). Los ítems C1-C4 quedan
-> planificados pero FUERA de esa tanda. Para retomar uno: abrir este archivo, leer el ítem,
-> y hacer openspec-propose → apply como siempre (o pedir al orquestador una serie).
+> del spec vigente se cierra con la `SERIE-MENU-100` (A+B, COMPLETA 6/6). La frontera
+> C1-C4 se ejecuta en la **`SERIE-FRONTERA`** (C2 + C1 + C4; C3 EN PAUSA por credenciales
+> Google). Estado vivo: ver `openspec/SERIE-FRONTERA/00-plan.md` §Roadmap/Bitácora.
+
+## Estado de ejecución (2026-09-01)
+
+| Ítem | Estado | Dónde |
+|---|---|---|
+| C2 Idempotencia poblado | 🔄 En ejecución (P1 SERIE-FRONTERA) — diseño cerrado: **auto limpiar+poblar** (guard → confirmación), descartado upsert por IDs | SERIE-FRONTERA P1 |
+| C1 Retención logs 5 años | 🔄 En ejecución (P2-P3) — diseño cerrado: **sync batch debounce 2s** → `POST /api/auditoria/sync` upsert idempotente + `GET /api/auditoria` + `/admin/logs` lee BD. Base ya existente: tabla `EventoAuditoria` (schema.prisma:248) + `repos.eventos` (repos/index.ts:92) | SERIE-FRONTERA P2-P3 |
+| C3 Google SSO | ⏸ **EN PAUSA** — requiere del owner: Client ID + Client Secret de Google Cloud Console, redirect URI autorizada (p. ej. `http://localhost:3000/api/auth/callback/google` y su equivalente de producción). Provider va en `lib/auth.ts` (runtime Node), vinculación solo para usuarios ya activados por email, credentials queda como fallback | Este archivo |
+| C4 ABAC contextual | 🔄 En ejecución (P4-P5) — diseño cerrado: **`puedeContextual(rol, accion, recurso, contexto)`** behavior-preserving (migración 1:1 de checks inline: `mp:propios`, `pl:propia`, `ct:propio`, `residenteVeMorosidad`) + matriz contextual read-only en `/admin/permisos` | SERIE-FRONTERA P4-P5 |
 
 ## C1 — Retención de logs de auditoría (5 años)
 
