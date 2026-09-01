@@ -2,7 +2,7 @@
  * @vitest-environment node
  */
 import { describe, it, expect } from "vitest"
-import { puede, tienePermiso, ROLES, matrizPermisos, puedeContextual } from "./authz"
+import { puede, tienePermiso, ROLES, matrizPermisos, puedeContextual, reglasContextuales } from "./authz"
 
 describe("lib/authz — matriz RP (pure, sin IO)", () => {
   it("expone 5 roles estándar RP", () => {
@@ -268,5 +268,89 @@ describe("lib/authz — matrizPermisos() snapshot para /admin/permisos", () => {
     }
     expect(matriz.residente.find((e) => e.recurso === "backup")).toBeUndefined()
     expect(matriz.mantencion.find((e) => e.recurso === "admin:usuarios")).toBeUndefined()
+  })
+})
+
+describe("lib/authz — reglasContextuales() snapshot ABAC para /admin/permisos", () => {
+  const reglas = reglasContextuales()
+
+  it("expone reglas derivadas sin datos duros — lista no vacía y orden determinista por rol+recurso", () => {
+    expect(reglas.length).toBeGreaterThanOrEqual(12)
+    // orden por ROLES y recurso alfabético
+    const sorted = [...reglas].sort((a, b) => {
+      const ia = ROLES.indexOf(a.rol)
+      const ib = ROLES.indexOf(b.rol)
+      if (ia !== ib) return ia - ib
+      return a.recurso.localeCompare(b.recurso)
+    })
+    expect(reglas).toEqual(sorted)
+  })
+
+  it("mp:propios — 4 roles con condición solo propios y donde motor", () => {
+    for (const rol of ["residente", "comite", "conserjeria", "mantencion"] as const) {
+      const r = reglas.find((e) => e.rol === rol && e.recurso === "mp:propios")
+      expect(r, `falta mp:propios para ${rol}`).toBeDefined()
+      expect(r!.condicion).toBe("solo propios")
+      expect(r!.donde).toBe("motor")
+      expect(r!.descripcion.length).toBeGreaterThan(10)
+    }
+  })
+
+  it("pl:propia — conserjeria solo propia con donde motor", () => {
+    const r = reglas.find((e) => e.rol === "conserjeria" && e.recurso === "pl:propia")
+    expect(r).toBeDefined()
+    expect(r!.condicion).toBe("solo propia")
+    expect(r!.donde).toBe("motor")
+  })
+
+  it("ct familia — unidad vinculada con donde motor (ct:propio, ct:residencia, ct:al_dia, ct:estado_cuenta, ct:propia)", () => {
+    expect(reglas.find((e) => e.rol === "residente" && e.recurso === "ct:propio")!.condicion).toBe("unidad vinculada")
+    expect(reglas.find((e) => e.rol === "residente" && e.recurso === "ct:residencia")!.donde).toBe("motor")
+    expect(reglas.find((e) => e.rol === "residente" && e.recurso === "ct:al_dia")!.condicion).toBe("unidad vinculada")
+    expect(reglas.find((e) => e.rol === "residente" && e.recurso === "ct:estado_cuenta")!.descripcion).toMatch(/unidad vinculada/i)
+    expect(reglas.find((e) => e.rol === "conserjeria" && e.recurso === "ct:propia")!.donde).toBe("motor")
+  })
+
+  it("gd — residenteVeActas con donde motor (gd y gd:acta)", () => {
+    const r = reglas.find((e) => e.rol === "residente" && e.recurso === "gd")
+    expect(r).toBeDefined()
+    expect(r!.condicion).toBe("según privacidad: residenteVeActas")
+    expect(r!.donde).toBe("motor")
+    expect(reglas.find((e) => e.recurso === "gd:acta")!.donde).toBe("motor")
+  })
+
+  it("morosidad — check local con residenteVeMorosidad (mp:morosidad y fi:morosidad)", () => {
+    const mp = reglas.find((e) => e.rol === "residente" && e.recurso === "mp:morosidad")
+    const fi = reglas.find((e) => e.rol === "residente" && e.recurso === "fi:morosidad")
+    expect(mp).toBeDefined()
+    expect(fi).toBeDefined()
+    expect(mp!.condicion).toBe("según privacidad: residenteVeMorosidad")
+    expect(mp!.donde).toBe("check local")
+    expect(fi!.donde).toBe("check local")
+    expect(mp!.detalle).toMatch(/app\/admin\/gestion/)
+  })
+
+  it("alertasResidentesActivas — check local con notify:residente / pe:notify_residente", () => {
+    const n = reglas.find((e) => e.recurso === "notify:residente")
+    const pe = reglas.find((e) => e.recurso === "pe:notify_residente")
+    expect(n).toBeDefined()
+    expect(pe).toBeDefined()
+    expect(n!.condicion).toBe("según privacidad: alertasResidentesActivas")
+    expect(n!.donde).toBe("check local")
+    expect(pe!.donde).toBe("check local")
+    expect(n!.detalle).toMatch(/lib\/store\.ts:1327/)
+  })
+
+  it("retorna copia no referencial y nunca desincroniza con el motor (puedeContextual)", () => {
+    const a = reglasContextuales()
+    const b = reglasContextuales()
+    expect(a).not.toBe(b)
+    expect(a).toEqual(b)
+    // cada entrada debe tener donde válido y descripcion legible
+    for (const r of a) {
+      expect(["motor", "check local"]).toContain(r.donde)
+      expect(r.descripcion.length).toBeGreaterThan(5)
+      expect(r.condicion.length).toBeGreaterThan(3)
+    }
   })
 })

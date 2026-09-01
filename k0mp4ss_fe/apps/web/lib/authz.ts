@@ -293,3 +293,54 @@ export function matrizPermisos(): Record<Rol, EntradaMatriz[]> {
   }
   return out
 }
+
+export interface EntradaABAC {
+  rol: Rol
+  recurso: string
+  condicion: string
+  descripcion: string
+  donde: "motor" | "check local"
+  detalle?: string
+}
+
+// Snapshot contextual derivado del código de puedeContextual (paridad con MATRIZ/matrízPermisos()).
+// Refleja TODAS las reglas ABAC del sistema, marcando si se aplica en el motor puedeContextual
+// o como check local heredado (lección P4: 3 familias inline no migradas por acoplo a store/UI).
+const REGLAS_ABAC: EntradaABAC[] = [
+  // mp:propios — requiere identidad propia (motor)
+  { rol: "residente", recurso: "mp:propios", condicion: "solo propios", descripcion: "Solo ve y edita sus propios datos de persona", donde: "motor", detalle: "lib/authz.ts:puedeContextual mp:propios requiere personaId" },
+  { rol: "comite", recurso: "mp:propios", condicion: "solo propios", descripcion: "Solo ve y edita sus propios datos de persona", donde: "motor", detalle: "lib/authz.ts:puedeContextual mp:propios requiere personaId" },
+  { rol: "conserjeria", recurso: "mp:propios", condicion: "solo propios", descripcion: "Solo ve y edita sus propios datos de persona", donde: "motor", detalle: "lib/authz.ts:puedeContextual mp:propios requiere personaId" },
+  { rol: "mantencion", recurso: "mp:propios", condicion: "solo propios", descripcion: "Solo ve y edita sus propios datos de persona", donde: "motor", detalle: "lib/authz.ts:puedeContextual mp:propios requiere personaId" },
+  // pl:propia — solo su liquidación (motor)
+  { rol: "conserjeria", recurso: "pl:propia", condicion: "solo propia", descripcion: "Solo ve su propia liquidación (filtra por personaId)", donde: "motor", detalle: "lib/authz.ts:puedeContextual pl:propia requiere personaId — paridad lib/store.ts:3807" },
+  // CT — unidad vinculada (motor)
+  { rol: "residente", recurso: "ct:propio", condicion: "unidad vinculada", descripcion: "Solo certificados de su unidad con vínculo vigente", donde: "motor", detalle: "lib/authz.ts:puedeContextual ct:propio requiere unidadId ∈ unidadIdsVinculadas — paridad lib/store.ts:4253 vinculoVigente" },
+  { rol: "residente", recurso: "ct:residencia", condicion: "unidad vinculada", descripcion: "Certificado residencia exige vínculo vigente a la unidad reclamada", donde: "motor", detalle: "lib/authz.ts:puedeContextual ct:residencia — paridad app/comunidad/certificados/page.tsx:177 filtro unidades por vínculo" },
+  { rol: "residente", recurso: "ct:al_dia", condicion: "unidad vinculada", descripcion: "Certificado al día exige unidad vinculada (saldo lo decide CT)", donde: "motor", detalle: "lib/authz.ts:puedeContextual ct:al_dia vinculación; saldo pendiente bloquea en lib/store.ts:4272 (check local complementario)" },
+  { rol: "residente", recurso: "ct:estado_cuenta", condicion: "unidad vinculada", descripcion: "Estado de cuenta solo de su unidad vinculada", donde: "motor", detalle: "lib/authz.ts:puedeContextual ct:estado_cuenta requiere unidadId ∈ unidadIdsVinculadas" },
+  { rol: "conserjeria", recurso: "ct:propia", condicion: "unidad vinculada", descripcion: "Solo certificados de su unidad vinculada", donde: "motor", detalle: "lib/authz.ts:puedeContextual ct:propia" },
+  // GD — privacidad actas (motor, migrado P4)
+  { rol: "residente", recurso: "gd", condicion: "según privacidad: residenteVeActas", descripcion: "Residente solo ve actas si el control de privacidad lo autoriza", donde: "motor", detalle: "lib/authz.ts:puedeContextual gd residenteVeActas — migrado P4 desde app/comunidad/directiva/page.tsx:73" },
+  { rol: "residente", recurso: "gd:acta", condicion: "según privacidad: residenteVeActas", descripcion: "Actas GD visibles solo si propietario autorizó (privacidad)", donde: "motor", detalle: "lib/authz.ts:puedeContextual gd:* residenteVeActas" },
+  // Morosidad — privacidad (check local heredado P4)
+  { rol: "residente", recurso: "mp:morosidad", condicion: "según privacidad: residenteVeMorosidad", descripcion: "Visibilidad de morosidad FI filtrada por control de privacidad", donde: "check local", detalle: "app/admin/gestion/page.tsx:176 switch residenteVeMorosidad + lib/schemas.ts:282 flag — modelado en puedeContextual:218 pero UI/store aún filtra local" },
+  { rol: "residente", recurso: "fi:morosidad", condicion: "según privacidad: residenteVeMorosidad", descripcion: "Visibilidad de morosidad FI para residente según privacidad", donde: "check local", detalle: "app/admin/gestion/page.tsx:176 — check local no migrado por acoplo a switch UI" },
+  // Alertas a residente — privacidad (check local heredado P4)
+  { rol: "residente", recurso: "notify:residente", condicion: "según privacidad: alertasResidentesActivas", descripcion: "Notificaciones operativas a residente silenciables por privacidad", donde: "check local", detalle: "lib/store.ts:1327 notify gate alertasResidentesActivas — modelado en puedeContextual:226 pero aún con lectura directa de controlesPropiedad" },
+  { rol: "residente", recurso: "pe:notify_residente", condicion: "según privacidad: alertasResidentesActivas", descripcion: "Notificaciones PE a residente respetan alerta activa", donde: "check local", detalle: "lib/store.ts:1327 — check local heredado P4" },
+]
+
+/**
+ * reglasContextuales — snapshot plano de REGLAS_ABAC para la vista /admin/permisos (solo lectura).
+ * Derivado en tiempo de ejecución (constante de módulo, como matrizPermisos()), nunca datos duros en la vista.
+ * Orden determinista por rol (ROLES) y recurso alfabético.
+ */
+export function reglasContextuales(): EntradaABAC[] {
+  return [...REGLAS_ABAC].sort((a, b) => {
+    const ia = ROLES.indexOf(a.rol)
+    const ib = ROLES.indexOf(b.rol)
+    if (ia !== ib) return ia - ib
+    return a.recurso.localeCompare(b.recurso)
+  })
+}

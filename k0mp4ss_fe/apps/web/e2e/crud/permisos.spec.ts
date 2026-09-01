@@ -29,14 +29,27 @@ test.describe("Permisos y Roles (RP) — vista read-only en /admin/permisos", ()
     await expect(page.getByText("solo lectura", { exact: true })).toBeVisible()
 
     // 2) Matriz por rol: wildcard del administrador + recursos de otros roles
-    await expect(page.getByText("Administrador Maestro")).toBeVisible()
+    await expect(page.getByText("Administrador Maestro").first()).toBeVisible()
     await expect(page.getByText("wildcard", { exact: true })).toBeVisible()
-    await expect(page.getByText("Miembro del Comité")).toBeVisible()
-    await expect(page.getByText("Conserjería / Seguridad")).toBeVisible()
-    await expect(page.getByText("Propietario / Residente")).toBeVisible()
-    await expect(page.getByText("Personal de Mantención")).toBeVisible()
+    await expect(page.getByText("Miembro del Comité").first()).toBeVisible()
+    await expect(page.getByText("Conserjería / Seguridad").first()).toBeVisible()
+    await expect(page.getByText("Propietario / Residente").first()).toBeVisible()
+    await expect(page.getByText("Personal de Mantención").first()).toBeVisible()
     await expect(page.getByText("sin acciones (bloqueado)").first()).toBeVisible()
     await expect(page.getByText("ct:propio").first()).toBeVisible()
+
+    // 2b) ABAC — sección Permisos contextuales (read-only, derivada de puedeContextual)
+    await expect(page.getByRole("heading", { name: "Permisos contextuales (ABAC)" })).toBeVisible()
+    await expect(page.getByText("solo propios").first()).toBeVisible()
+    await expect(page.getByText("unidad vinculada").first()).toBeVisible()
+    await expect(page.getByText("según privacidad: residenteVeActas").first()).toBeVisible()
+    await expect(page.getByText("mp:propios").nth(1)).toBeVisible()
+    await expect(page.getByText("gd").first()).toBeVisible()
+    // badges donde
+    await expect(page.getByText("motor", { exact: true }).first()).toBeVisible()
+    await expect(page.getByText("check local", { exact: true }).first()).toBeVisible()
+    // sin mutaciones en sección ABAC
+    await expect(page.locator("section", { hasText: "Permisos contextuales" }).getByRole("button")).toHaveCount(0)
 
     // 3) Selector de comunidad: membresías propias del admin (comunidades TEST A y B)
     const selector = page.getByRole("combobox", { name: "Elegir comunidad" })

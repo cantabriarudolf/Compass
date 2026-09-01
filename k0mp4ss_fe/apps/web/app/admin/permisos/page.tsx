@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { matrizPermisos, ROLES, type EntradaMatriz, type Rol } from "@/lib/authz"
+import { matrizPermisos, reglasContextuales, ROLES, type EntradaABAC, type EntradaMatriz, type Rol } from "@/lib/authz"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import { Badge } from "@workspace/ui/components/badge"
 import {
@@ -92,8 +92,55 @@ function MatrizRol({ rol, entradas }: { rol: Rol; entradas: EntradaMatriz[] }) {
   )
 }
 
+function SeccionABAC({ reglas }: { reglas: EntradaABAC[] }) {
+  const porRol = React.useMemo(() => {
+    const m = new Map<Rol, EntradaABAC[]>()
+    for (const r of reglas) {
+      if (!m.has(r.rol)) m.set(r.rol, [])
+      m.get(r.rol)!.push(r)
+    }
+    return m
+  }, [reglas])
+  const rolesConReglas = ROLES.filter((rol) => porRol.has(rol))
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      {rolesConReglas.map((rol) => (
+        <Card key={rol}>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm flex items-center gap-2">
+              <IconShieldCheck className="size-4 text-primary" /> {ETIQUETAS_ROL[rol]}
+            </CardTitle>
+            <CardDescription className="text-xs">
+              {porRol.get(rol)!.length} regla(s) ABAC
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {porRol.get(rol)!.map((e) => (
+              <div key={`${e.rol}:${e.recurso}`} className="flex flex-col gap-1 rounded-md border p-2 text-xs">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <code className="font-mono text-muted-foreground" title={e.recurso}>{e.recurso}</code>
+                  <Badge variant="secondary" className="text-[10px] bg-sky-100 text-sky-800 dark:bg-sky-950/40 dark:text-sky-300">{e.condicion}</Badge>
+                  <Badge
+                    variant="outline"
+                    className={`text-[10px] ${e.donde === "motor" ? "border-emerald-500/40 text-emerald-700 dark:text-emerald-400" : "border-amber-500/40 text-amber-700 dark:text-amber-400"}`}
+                  >
+                    {e.donde}
+                  </Badge>
+                </div>
+                <span className="text-muted-foreground leading-tight">{e.descripcion}</span>
+                {e.detalle && <span className="font-mono text-[10px] text-muted-foreground/70 truncate" title={e.detalle}>{e.detalle}</span>}
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      ))}
+    </div>
+  )
+}
+
 export default function PermisosPage() {
   const matriz = React.useMemo(() => matrizPermisos(), [])
+  const abac = React.useMemo(() => reglasContextuales(), [])
   const [comunidades, setComunidades] = React.useState<ComunidadPropia[] | null>(null)
   const [comunidadId, setComunidadId] = React.useState<string>("")
   const [membresias, setMembresias] = React.useState<Membresia[] | null>(null)
@@ -181,6 +228,16 @@ export default function PermisosPage() {
             <MatrizRol key={rol} rol={rol} entradas={matriz[rol]} />
           ))}
         </div>
+      </section>
+
+      <section className="space-y-3">
+        <h2 className="text-sm font-semibold uppercase tracking-widest text-muted-foreground px-1">
+          Permisos contextuales (ABAC)
+        </h2>
+        <p className="text-xs text-muted-foreground px-1">
+          Reglas ABAC derivadas de <code className="font-mono">puedeContextual()</code> — snapshot read-only — condición legible + dónde se aplica (motor / check local).
+        </p>
+        <SeccionABAC reglas={abac} />
       </section>
 
       <section className="space-y-3">
