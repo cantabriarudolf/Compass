@@ -57,7 +57,7 @@ existentes; salvo P4/P5 si la extracción requiere mover código — sin cambios
 | P1 | B — Dashboard OpenSpec 6 documentado → completado (mapeo/overrides + verificación del dashboard con datos reales) | HECHA | 527cd96 |
 | P2 | A2 — change `mp-residentes-vista`: `/personas/residentes` (directorio filtrado MP) + e2e | HECHA | bfc87c3 |
 | P3 | A1 — change `ui-resumen-dashboard`: `/dashboard` (Resumen con KPIs del store) + e2e | HECHA | 2f8db01 |
-| P4 | A3 — change `pe-accesos-vista`: `/operaciones/accesos` (Visitas + Contratistas dedicadas) + e2e | pendiente | — |
+| P4 | A3 — change `pe-accesos-vista`: `/operaciones/accesos` (Visitas + Contratistas dedicadas) + e2e | EN CURSO | — |
 | P5 | A4 — change `pe-paqueteria-vista`: `/operaciones/paqueteria` (Encomiendas dedicada) + e2e | pendiente | — |
 | P6 | Cierre integral: suite e2e completa verde + Vitest + avance NSGC + SERIE COMPLETA | pendiente | — |
 

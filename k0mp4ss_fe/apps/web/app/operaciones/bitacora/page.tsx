@@ -7,7 +7,6 @@ import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
 import { Button } from "@workspace/ui/components/button"
 import { Badge } from "@workspace/ui/components/badge"
-import { Switch } from "@workspace/ui/components/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@workspace/ui/components/tabs"
 import {
   Select,
@@ -31,44 +30,18 @@ import {
   IconCheck,
   IconPencil,
   IconTrash,
-  IconScan,
 } from "@tabler/icons-react"
-import type { BitacoraVisitaPE, EncomiendaPE, IngresoContratistaPE } from "@/lib/schemas"
+import type { EncomiendaPE } from "@/lib/schemas"
 import {
   checklistEquipamientoBase,
   checklistInstalacionesParaJornada,
   estadoReporteDiario,
 } from "@/lib/personal-utils"
+import { VisitasPanel } from "@/components/pe/visitas-panel"
+import { ContratistasPanel } from "@/components/pe/contratistas-panel"
 
 function hoyISO(): string {
   return new Date().toISOString().slice(0, 10)
-}
-
-// Escaneo DNI simulado (Feature Local): genera identidad placeholder con RUT
-// válido hasta que SG/hardware habilite la lectura real de cédula.
-function escaneoDNISimulado(): { nombre: string; dni: string } {
-  const nombres = ["Camila Rojas Fuentes", "Matías Sepúlveda Muñoz", "Valentina Herrera Soto", "Diego Cifuentes Vega"]
-  const cuerpo = String(Math.floor(10000000 + Math.random() * 79999999))
-  let suma = 0
-  let factor = 2
-  for (let i = cuerpo.length - 1; i >= 0; i--) {
-    suma += Number(cuerpo[i]) * factor
-    factor = factor === 7 ? 2 : factor + 1
-  }
-  const dv = 11 - (suma % 11)
-  const dvStr = dv === 11 ? "0" : dv === 10 ? "K" : String(dv)
-  return { nombre: nombres[Math.floor(Math.random() * nombres.length)]!, dni: `${cuerpo}-${dvStr}` }
-}
-
-interface FormVisita {
-  nombre: string
-  dni: string
-  patente: string
-  unidadId: string
-  destinoPersonaId: string
-  jornadaId: string
-  origenAgenda: "pre_agendada" | "sin_aviso"
-  notas: string
 }
 
 interface FormEncomienda {
@@ -78,15 +51,6 @@ interface FormEncomienda {
   descripcionPaquete: string
   evidenciaNombre: string
   evidenciaUrl: string
-}
-
-interface FormContratista {
-  contratistaId: string
-  motivo: string
-  unidadId: string
-  jornadaId: string
-  agendadoPor: "residente" | "administracion"
-  personaAgendaId: string
 }
 
 export default function BitacoraPage() {
@@ -99,27 +63,16 @@ export default function BitacoraPage() {
   const encomiendas = useCompassStore(s => s.encomiendasPE)
   const ingresosContratistas = useCompassStore(s => s.ingresosContratistasPE)
   const cierresTurnoPE = useCompassStore(s => s.cierresTurnoPE)
-  const saveBitacoraVisitaPE = useCompassStore(s => s.saveBitacoraVisitaPE)
-  const ingresarBitacoraVisitaPE = useCompassStore(s => s.ingresarBitacoraVisitaPE)
-  const removeBitacoraVisitaPE = useCompassStore(s => s.removeBitacoraVisitaPE)
   const saveEncomiendaPE = useCompassStore(s => s.saveEncomiendaPE)
   const registrarRetiroEncomiendaPE = useCompassStore(s => s.registrarRetiroEncomiendaPE)
   const removeEncomiendaPE = useCompassStore(s => s.removeEncomiendaPE)
-  const saveIngresoContratistaPE = useCompassStore(s => s.saveIngresoContratistaPE)
-  const confirmarIngresoContratistaPE = useCompassStore(s => s.confirmarIngresoContratistaPE)
-  const removeIngresoContratistaPE = useCompassStore(s => s.removeIngresoContratistaPE)
   const cerrarTurnoPE = useCompassStore(s => s.cerrarTurnoPE)
   const editarCierreTurnoPE = useCompassStore(s => s.editarCierreTurnoPE)
 
   const [error, setError] = React.useState<string | null>(null)
   const [okMsg, setOkMsg] = React.useState<string | null>(null)
   const [diaReporte, setDiaReporte] = React.useState(hoyISO())
-  const [formVisita, setFormVisita] = React.useState<FormVisita>({
-    nombre: "", dni: "", patente: "", unidadId: "", destinoPersonaId: "",
-    jornadaId: "j-manana", origenAgenda: "sin_aviso", notas: "",
-  })
   const [formEnc, setFormEnc] = React.useState<FormEncomienda>({ courierId: "", destinatarioPersonaId: "", unidadId: "", descripcionPaquete: "", evidenciaNombre: "", evidenciaUrl: "" })
-  const [formCont, setFormCont] = React.useState<FormContratista>({ contratistaId: "", motivo: "", unidadId: "", jornadaId: "j-manana", agendadoPor: "administracion", personaAgendaId: "" })
   const [formCierre, setFormCierre] = React.useState({
     trabajadorPersonaId: "",
     jornadaReportadaId: "j-manana",
@@ -156,46 +109,6 @@ export default function BitacoraPage() {
   // Anti-negligencia UX: al marcar NO en incidencias se ocultan los campos.
   const toggleIncidencias = (hubo: boolean) => setFormCierre(f => ({ ...f, huboIncidencias: hubo }))
 
-  const guardarVisita = () => {
-    if (!formVisita.nombre.trim() || !formVisita.dni.trim()) {
-      setError("Nombre y DNI de la visita son obligatorios.")
-      return
-    }
-    if (!formVisita.unidadId && !formVisita.destinoPersonaId) {
-      setError("Indique la unidad o el residente destino.")
-      return
-    }
-    const esAgendada = formVisita.origenAgenda === "pre_agendada"
-    const visita: BitacoraVisitaPE = {
-      id: `pe-vis-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      fecha: diaReporte,
-      nombre: formVisita.nombre.trim(),
-      dni: formVisita.dni.trim(),
-      patente: formVisita.patente.trim() || undefined,
-      unidadId: formVisita.unidadId || undefined,
-      destinoPersonaId: formVisita.destinoPersonaId || undefined,
-      jornadaId: formVisita.jornadaId,
-      origenAgenda: formVisita.origenAgenda,
-      agendadaPorPersonaId: undefined,
-      estado: esAgendada ? "agendada" : "ingresada",
-      notas: formVisita.notas.trim() || undefined,
-    }
-    const r = saveBitacoraVisitaPE(visita)
-    if (!r.ok) {
-      setError(r.error ?? "No se pudo registrar la visita.")
-      return
-    }
-    setFormVisita({ ...formVisita, nombre: "", dni: "", patente: "", notas: "" })
-    setError(null)
-    setOkMsg(esAgendada ? "Visita pre-agendada a la espera del ingreso." : "Visita registrada e ingresada.")
-  }
-
-  const escanearDNI = () => {
-    const sim = escaneoDNISimulado()
-    setFormVisita(f => ({ ...f, nombre: sim.nombre, dni: sim.dni }))
-    setOkMsg("Escaneo DNI simulado completado: identidad autocompletada (feature local).")
-  }
-
   const guardarEncomienda = () => {
     if (!formEnc.courierId) {
       setError("Seleccione el courier del maestro.")
@@ -229,36 +142,6 @@ export default function BitacoraPage() {
     setFormEnc({ courierId: "", destinatarioPersonaId: "", unidadId: "", descripcionPaquete: "", evidenciaNombre: "", evidenciaUrl: "" })
     setError(null)
     setOkMsg("Encomienda recibida y notificada según configuración.")
-  }
-
-  const guardarContratista = () => {
-    if (!formCont.contratistaId) {
-      setError("Seleccione la empresa del maestro de contratistas.")
-      return
-    }
-    if (formCont.motivo.trim().length < 5) {
-      setError("Se exige detallar el motivo específico del ingreso.")
-      return
-    }
-    const ingreso: IngresoContratistaPE = {
-      id: `pe-cont-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      contratistaId: formCont.contratistaId,
-      motivo: formCont.motivo.trim(),
-      unidadId: formCont.unidadId || undefined,
-      fecha: diaReporte,
-      jornadaId: formCont.jornadaId,
-      agendadoPor: formCont.agendadoPor,
-      personaAgendaId: formCont.agendadoPor === "residente" ? formCont.personaAgendaId || undefined : undefined,
-      estado: "agendado",
-    }
-    const r = saveIngresoContratistaPE(ingreso)
-    if (!r.ok) {
-      setError(r.error ?? "No se pudo registrar el ingreso.")
-      return
-    }
-    setFormCont({ ...formCont, motivo: "" })
-    setError(null)
-    setOkMsg("Contratista agendado. Conserjería confirma el ingreso al llegar.")
   }
 
   const enviarCierre = () => {
@@ -349,84 +232,9 @@ export default function BitacoraPage() {
           </div>
         </TabsContent>
 
-        {/* --- Control de visitas --- */}
-        <TabsContent value="visitas" className="mt-4 grid gap-4 lg:grid-cols-[420px_1fr]">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center justify-between gap-2">Registro de visita
-                <Button size="sm" variant="outline" onClick={escanearDNI}><IconScan className="mr-1 size-4" /> Escanear DNI</Button>
-              </CardTitle>
-              <CardDescription>Pre-agendamiento o llegada sin aviso. * obligatorios.</CardDescription>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-3">
-              <div className="grid grid-cols-2 gap-2">
-                <div className="flex flex-col gap-1.5"><Label htmlFor="v-nombre">Nombre *</Label><Input id="v-nombre" value={formVisita.nombre} onChange={e => setFormVisita({ ...formVisita, nombre: e.target.value })} /></div>
-                <div className="flex flex-col gap-1.5"><Label htmlFor="v-dni">DNI *</Label><Input id="v-dni" value={formVisita.dni} onChange={e => setFormVisita({ ...formVisita, dni: e.target.value })} /></div>
-                <div className="flex flex-col gap-1.5"><Label htmlFor="v-patente">Patente</Label><Input id="v-patente" value={formVisita.patente} onChange={e => setFormVisita({ ...formVisita, patente: e.target.value })} /></div>
-                <div className="flex flex-col gap-1.5">
-                  <Label>Jornada</Label>
-                  <Select value={formVisita.jornadaId} onValueChange={v => setFormVisita({ ...formVisita, jornadaId: v })}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>{jornadas.map(j => <SelectItem key={j.id} value={j.id}>{j.nombre}</SelectItem>)}</SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div className="flex flex-col gap-1.5">
-                  <Label>Unidad destino</Label>
-                  <Select value={formVisita.unidadId || "__none"} onValueChange={v => setFormVisita({ ...formVisita, unidadId: v === "__none" ? "" : v })}>
-                    <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__none">Sin unidad</SelectItem>
-                      {unidades.filter(u => !u.id.startsWith("u-E-")).slice(0, 100).map(u => <SelectItem key={u.id} value={u.id}>{u.etiqueta} {u.numero}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label>Residente destino</Label>
-                  <Select value={formVisita.destinoPersonaId || "__none"} onValueChange={v => setFormVisita({ ...formVisita, destinoPersonaId: v === "__none" ? "" : v })}>
-                    <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__none">Sin residente</SelectItem>
-                      {personas.slice(0, 100).map(p => <SelectItem key={p.id} value={p.id}>{p.nombreCompleto}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <label className="flex items-center gap-2 text-sm"><Switch checked={formVisita.origenAgenda === "pre_agendada"} onCheckedChange={v => setFormVisita({ ...formVisita, origenAgenda: v ? "pre_agendada" : "sin_aviso" })} /> Pre-agendada (espera confirmación de ingreso)</label>
-              <div className="flex flex-col gap-1.5"><Label htmlFor="v-notas">Notas</Label><Input id="v-notas" value={formVisita.notas} onChange={e => setFormVisita({ ...formVisita, notas: e.target.value })} /></div>
-              <Button onClick={guardarVisita}><IconCheck className="mr-1 size-4" /> Registrar visita</Button>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader><CardTitle>Control del día seleccionado ({diaReporte})</CardTitle><CardDescription>Las visitas agendadas se sellan al llegar.</CardDescription></CardHeader>
-            <CardContent className="p-0">
-              {visitas.filter(v => v.fecha === diaReporte).length === 0 ? (
-                <p className="p-4 text-sm text-muted-foreground">Sin visitas registradas para esta fecha.</p>
-              ) : (
-                <table className="w-full text-sm">
-                  <thead><tr className="border-b text-left text-muted-foreground"><th className="p-3">Nombre</th><th className="p-3">Destino</th><th className="p-3">Jornada</th><th className="p-3">Estado</th><th className="p-3"></th></tr></thead>
-                  <tbody>
-                    {visitas.filter(v => v.fecha === diaReporte).map(v => (
-                      <tr key={v.id} className="border-b last:border-0">
-                        <td className="p-3">{v.nombre}<span className="block text-xs text-muted-foreground">{v.dni}{v.patente ? ` · ${v.patente}` : ""}</span></td>
-                        <td className="p-3">{refUnidad(v.unidadId)}{v.destinoPersonaId ? <span className="block text-xs text-muted-foreground">{nombrePersona(v.destinoPersonaId)}</span> : null}</td>
-                        <td className="p-3">{jornadas.find(j => j.id === v.jornadaId)?.nombre ?? "—"}</td>
-                        <td className="p-3">
-                          {v.estado === "ingresada" ? <Badge variant="outline">Ingresada {v.horaIngreso}</Badge> : v.estado === "agendada" ? <Badge variant="secondary">Agendada</Badge> : <Badge variant="destructive">Cancelada</Badge>}
-                        </td>
-                        <td className="p-3 flex gap-1">
-                          {v.estado === "agendada" && <Button size="sm" variant="outline" onClick={() => { const r = ingresarBitacoraVisitaPE(v.id); if (!r.ok) setError(r.error ?? ""); else setOkMsg(`Visita ${v.nombre} ingresada.`) }}>Marcar Ingresada</Button>}
-                          {v.estado !== "ingresada" && <Button size="icon" variant="ghost" onClick={() => { const r = removeBitacoraVisitaPE(v.id); if (!r.ok) setError(r.error ?? ""); }}><IconTrash className="size-4" /></Button>}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </CardContent>
-          </Card>
+        {/* --- Control de visitas (extraído) --- */}
+        <TabsContent value="visitas" className="mt-4">
+          <VisitasPanel diaReporte={diaReporte} onError={setError} onSuccess={setOkMsg} />
         </TabsContent>
 
         {/* --- Encomiendas --- */}
@@ -503,90 +311,9 @@ export default function BitacoraPage() {
           </Card>
         </TabsContent>
 
-        {/* --- Contratistas --- */}
-        <TabsContent value="contratistas" className="mt-4 grid gap-4 lg:grid-cols-[420px_1fr]">
-          <Card>
-            <CardHeader><CardTitle>Agendamiento de contratista</CardTitle><CardDescription>Residente particular o administración · motivo específico obligatorio.</CardDescription></CardHeader>
-            <CardContent className="flex flex-col gap-3">
-              <div className="flex flex-col gap-1.5">
-                <Label>Empresa (maestro) *</Label>
-                <Select value={formCont.contratistaId || undefined} onValueChange={v => setFormCont({ ...formCont, contratistaId: v })}>
-                  <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
-                  <SelectContent>{maestros.contratistas.map(c => <SelectItem key={c.id} value={c.id}>{c.nombre}</SelectItem>)}</SelectContent>
-                </Select>
-              </div>
-              <div className="flex flex-col gap-1.5"><Label htmlFor="ct-motivo">Motivo específico del ingreso *</Label><Input id="ct-motivo" value={formCont.motivo} onChange={e => setFormCont({ ...formCont, motivo: e.target.value })} placeholder="Ej.: reparación de fuga en cocina U-201" /></div>
-              <div className="grid grid-cols-2 gap-2">
-                <div className="flex flex-col gap-1.5">
-                  <Label>Jornada</Label>
-                  <Select value={formCont.jornadaId} onValueChange={v => setFormCont({ ...formCont, jornadaId: v })}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>{jornadas.map(j => <SelectItem key={j.id} value={j.id}>{j.nombre}</SelectItem>)}</SelectContent>
-                  </Select>
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label>Agendado por</Label>
-                  <Select value={formCont.agendadoPor} onValueChange={v => setFormCont({ ...formCont, agendadoPor: v as "residente" | "administracion" })}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent><SelectItem value="administracion">Administración</SelectItem><SelectItem value="residente">Residente</SelectItem></SelectContent>
-                  </Select>
-                </div>
-              </div>
-              {formCont.agendadoPor === "residente" && (
-                <div className="flex flex-col gap-1.5">
-                  <Label>Residente solicitante</Label>
-                  <Select value={formCont.personaAgendaId || "__none"} onValueChange={v => setFormCont({ ...formCont, personaAgendaId: v === "__none" ? "" : v })}>
-                    <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__none">Sin identificar</SelectItem>
-                      {personas.slice(0, 100).map(p => <SelectItem key={p.id} value={p.id}>{p.nombreCompleto}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-              <div className="flex flex-col gap-1.5">
-                <Label>Unidad destino</Label>
-                <Select value={formCont.unidadId || "__none"} onValueChange={v => setFormCont({ ...formCont, unidadId: v === "__none" ? "" : v })}>
-                  <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none">Áreas comunes</SelectItem>
-                    {unidades.filter(u => !u.id.startsWith("u-E-")).slice(0, 100).map(u => <SelectItem key={u.id} value={u.id}>{u.etiqueta} {u.numero}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <Button onClick={guardarContratista}><IconCheck className="mr-1 size-4" /> Agendar ingreso</Button>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader><CardTitle>Ingresos del día ({diaReporte})</CardTitle></CardHeader>
-            <CardContent className="p-0">
-              {ingresosContratistas.filter(i => i.fecha === diaReporte).length === 0 ? (
-                <p className="p-4 text-sm text-muted-foreground">Sin contratistas agendados para esta fecha.</p>
-              ) : (
-                <table className="w-full text-sm">
-                  <thead><tr className="border-b text-left text-muted-foreground"><th className="p-3">Empresa</th><th className="p-3">Motivo</th><th className="p-3">Estado</th><th className="p-3"></th></tr></thead>
-                  <tbody>
-                    {ingresosContratistas.filter(i => i.fecha === diaReporte).map(i => (
-                      <tr key={i.id} className="border-b last:border-0">
-                        <td className="p-3">{maestros.contratistas.find(c => c.id === i.contratistaId)?.nombre ?? i.contratistaId}<span className="block text-xs text-muted-foreground">{refUnidad(i.unidadId)} · {jornadas.find(j => j.id === i.jornadaId)?.nombre}</span></td>
-                        <td className="p-3 max-w-[220px]">{i.motivo}<span className="block text-xs text-muted-foreground">Agendó: {i.agendadoPor === "residente" ? nombrePersona(i.personaAgendaId) : "Administración"}</span></td>
-                        <td className="p-3">{i.estado === "agendado" ? <Badge variant="secondary">Agendado</Badge> : i.estado === "ingresado" ? <Badge variant="outline">Ingresado {i.horaIngreso}</Badge> : <Badge variant="destructive">Cancelado</Badge>}</td>
-                        <td className="p-3">
-                          {i.estado === "agendado" && (
-                            <>
-                              <Button size="sm" variant="outline" onClick={() => { const r = confirmarIngresoContratistaPE(i.id); if (!r.ok) setError(r.error ?? ""); else setOkMsg("Ingreso de contratista confirmado.") }}>Confirmar</Button>
-                              <Button size="icon" variant="ghost" onClick={() => { const r = removeIngresoContratistaPE(i.id); if (!r.ok) setError(r.error ?? ""); }}><IconTrash className="size-4" /></Button>
-                            </>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </CardContent>
-          </Card>
+        {/* --- Contratistas (extraído) --- */}
+        <TabsContent value="contratistas" className="mt-4">
+          <ContratistasPanel diaReporte={diaReporte} onError={setError} onSuccess={setOkMsg} />
         </TabsContent>
 
         {/* --- Protocolo de cierre de turno --- */}

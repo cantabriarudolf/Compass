@@ -53,7 +53,6 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@workspace/
 // Rutas del menú cuyo page.tsx aún no existe — se destacan en el sidebar para
 // evitar 404 silenciosos y señalar trabajo pendiente sin ocultar la opción.
 const RUTAS_PENDIENTES = new Set<string>([
-  "/operaciones/accesos",
   "/operaciones/paqueteria",
 ])
 
