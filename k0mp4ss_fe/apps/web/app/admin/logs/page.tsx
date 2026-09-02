@@ -56,6 +56,10 @@ export default function LogsPage() {
 
   const [eventos, setEventos] = React.useState<EventoAuditoria[]>([])
   const [total, setTotal] = React.useState(0)
+  const [facetas, setFacetas] = React.useState<{ categorias: string[]; tiposAccion: string[] }>({
+    categorias: [],
+    tiposAccion: [],
+  })
   const [cargando, setCargando] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
 
@@ -93,10 +97,12 @@ export default function LogsPage() {
           page: number
           pageSize: number
           eventos: EventoAuditoria[]
+          facetas?: { categorias: string[]; tiposAccion: string[] }
         }
         if (!controller.signal.aborted) {
           setEventos(data.eventos)
           setTotal(data.total)
+          if (data.facetas) setFacetas(data.facetas)
         }
       } catch (e) {
         if ((e as Error).name === "AbortError") return
@@ -109,14 +115,8 @@ export default function LogsPage() {
     return () => controller.abort()
   }, [busquedaDebounced, categoria, tipoAccion, pagina])
 
-  const categorias = React.useMemo(
-    () => Array.from(new Set(eventos.map(e => e.categoria))).sort(),
-    [eventos],
-  )
-  const tiposAccion = React.useMemo(
-    () => Array.from(new Set(eventos.map(e => e.tipoAccion))).sort(),
-    [eventos],
-  )
+  const categorias = React.useMemo(() => [...facetas.categorias].sort(), [facetas])
+  const tiposAccion = React.useMemo(() => [...facetas.tiposAccion].sort(), [facetas])
 
   const totalPaginas = Math.max(1, Math.ceil(total / FILAS_POR_PAGINA))
   const paginaActual = Math.min(pagina, totalPaginas)

@@ -70,5 +70,33 @@ export async function GET(request: Request) {
     take: pageSize,
   })
 
-  return NextResponse.json({ total, page, pageSize, eventos })
+  // Facetas de TODA la comunidad (no solo la página): los selects de filtros
+  // de /admin/logs deben ofrecer todos los valores presentes en BD — con
+  // volumen real (miles de eventos del poblado), derivarlos de la página
+  // actual esconde opciones y rompe los filtros.
+  const [facetaCategorias, facetaTipos] = await Promise.all([
+    prisma.eventoAuditoria.findMany({
+      where: { comunidadId } as never,
+      select: { categoria: true },
+      distinct: ["categoria"],
+      orderBy: { categoria: "asc" },
+    }),
+    prisma.eventoAuditoria.findMany({
+      where: { comunidadId } as never,
+      select: { tipoAccion: true },
+      distinct: ["tipoAccion"],
+      orderBy: { tipoAccion: "asc" },
+    }),
+  ])
+
+  return NextResponse.json({
+    total,
+    page,
+    pageSize,
+    eventos,
+    facetas: {
+      categorias: facetaCategorias.map(f => f.categoria),
+      tiposAccion: facetaTipos.map(f => f.tipoAccion),
+    },
+  })
 }

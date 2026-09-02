@@ -27,8 +27,8 @@ test.describe("Logs de Auditoría (AM) — vista read-only en /admin/logs (BD)",
       timeout: 30_000,
     })
     await expect(page.getByText("solo lectura · pista inmutable")).toBeVisible()
-    // Contador BD: "X de Y eventos en BD"
-    await expect(page.getByText(/de \d+ eventos en BD/)).toBeVisible({ timeout: 30_000 })
+    // Contador BD: "X de Y eventos en BD" — números con separador "." es-CL (1.815)
+    await expect(page.getByText(/de [\d.]+ eventos en BD/)).toBeVisible({ timeout: 30_000 })
 
     // 3) Filtrar por tipo de acción primero (acota a los 2 eventos generados) con poll generoso
     //    Debounce 2s + POST sync puede tardar; poll hasta ≥2 filas AD_OWNER_CONFIG_CHANGE.
@@ -43,8 +43,8 @@ test.describe("Logs de Auditoría (AM) — vista read-only en /admin/logs (BD)",
         { timeout: 30_000, intervals: [1000] },
       )
       .toBeGreaterThanOrEqual(2)
-    // El contador filtrado también debe mostrar ≥2 en el lado X y total Y
-    await expect(page.getByText(/\d+ de \d+ eventos en BD/)).toBeVisible({ timeout: 10_000 })
+    // El contador filtrado también debe mostrar ≥2 en el lado X y total Y (con separador "." es-CL)
+    await expect(page.getByText(/[\d.]+ de [\d.]+ eventos en BD/)).toBeVisible({ timeout: 10_000 })
 
     // 4) Filtrar por categoría AD (mantiene tipoAccion ya filtrado)
     await page
@@ -73,9 +73,9 @@ test.describe("Logs de Auditoría (AM) — vista read-only en /admin/logs (BD)",
         { timeout: 15_000, intervals: [500] },
       )
       .toBeGreaterThanOrEqual(2)
-    await expect(page.getByText(/de \d+ eventos en BD/)).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByText(/de [\d.]+ eventos en BD/)).toBeVisible({ timeout: 10_000 })
     await buscar.fill("zzz-evento-inexistente")
-    await expect(page.getByText(/0 de \d+ eventos en BD/)).toBeVisible({ timeout: 15_000 })
+    await expect(page.getByText(/0 de [\d.]+ eventos en BD/)).toBeVisible({ timeout: 15_000 })
     await expect(page.getByText("Sin eventos para la búsqueda o filtros actuales.")).toBeVisible()
     await buscar.fill("")
     await expect

@@ -12,13 +12,18 @@ elige y corre. Tu rol es de recepcionista de QA + corredor + reportero.
 ## Protocolo de puerta de entrada (SIEMPRE al invocar)
 
 1. **Presenta el abanico con el tool `question`** (una sola tanda, máx 3 preguntas):
-   - **¿Qué probar?** `unit` (Vitest, rápido, sin navegador) · `e2e` (Chrome real) · `ambas`
-   - **¿Alcance?** (si e2e o ambas) `suite completa` · `smoke (8 módulos renderizan)` ·
-     `auth (login/guard)` · `flujo (journey poblamiento + CRUD personas)` ·
-     `CRUD de un módulo` (menú con el mapa de abajo) · `CRUD general (todo el lane)`
-   - **¿Cómo lo ves?** (si e2e) `headless (como CI)` · `--headed (Chrome VISIBLE en vivo)` ·
-     `--ui (debugger paso a paso)` · `show-report (HTML del último run)`
-   Si el owner ya dijo qué quiere ("prueba el módulo reservas en vivo"), salta esa pregunta.
+    - **¿Qué probar?** `unit` (Vitest, rápido, sin navegador) · `e2e` (Chrome real) · `ambas`
+    - **¿Alcance?** (si e2e o ambas) `suite completa` · `smoke (8 módulos renderizan)` ·
+      `auth (login/guard)` · `flujo (journey poblamiento + CRUD personas)` ·
+      `CRUD de un módulo` (menú con el mapa de abajo) · `CRUD general (todo el lane)`
+    - **¿Cómo lo ves?** (si e2e) `headless (como CI)` · `--headed (Chrome VISIBLE en vivo)` ·
+      `--ui (debugger paso a paso)` · `show-report (HTML del último run)`
+    - **¿Con qué cuenta?** `admin` (default) · `comite` · `conserjeria` · `residente` ·
+      `mantencion` — las 5 del seed (`seed-authz.ts`, password `test1234`). Los specs con
+      `test.use({ storageState: "e2e/.auth/<rol>.json" })` ya fijan su cuenta; este
+      parámetro aplica a pruebas ad-hoc y a los journeys generales. Si el owner no elige,
+      usa `admin`.
+    Si el owner ya dijo qué quiere ("prueba el módulo reservas en vivo"), salta esa pregunta.
 2. **Preflight de sistema + estimado (SIEMPRE antes de ejecutar, ver §Estimados)**:
    mide la carga (`uptime` + `free -h` + `nproc`), calcula factor y muestra al owner el
    estimado CLI vs Chrome del alcance elegido. Si la máquina está ahogada (swap >90%,
@@ -28,11 +33,13 @@ elige y corre. Tu rol es de recepcionista de QA + corredor + reportero.
    fallo: archivo + test + causa raíz (leer `test-results/**/error-context.md` ANTES de
    diagnosticar) y proponer fix sin aplicarlo, salvo que sea obvio de una línea.
 5. **Registra la corrida en el dashboard (SIEMPRE al terminar, pase lo que pase)**:
-   agrega la corrida a `k0mp4ss_fe/apps/web/qa-estado.json` (schema en
-   `lib/qa-estado.ts`, máx 10 runs, agotar el más viejo) y recalibra el baseline del
-   alcance en §Estimados con la duración real (máquina sana, factor ≤1.2). Cierra el
-   reporte apuntando al dashboard: Desarrollo AI → "Estado de Pruebas QA"
-   (`/admin/qa-dashboard`, API `/api/qa-estado`, visible solo en development).
+    agrega la corrida a `k0mp4ss_fe/apps/web/qa-estado.json` (schema en
+    `lib/qa-estado.ts`, máx 10 runs, agotar el más viejo; campo opcional `cuenta` con
+    el rol/email usado — ej. `admin@test.cl` o `admin` — no rompe runs viejos) y
+    recalibra el baseline del alcance en §Estimados con la duración real (máquina sana,
+    factor ≤1.2). Cierra el reporte apuntando al dashboard: Desarrollo AI →
+    "Estado de Pruebas QA" (`/admin/qa-dashboard`, API `/api/qa-estado`, visible solo
+    en development).
 
 ## Estimados CLI vs Chrome + carga del sistema
 
@@ -54,13 +61,13 @@ Chrome = Playwright:
 
 | Prueba | Motor | Base |
 |---|---|---|
-| suite completa (413 tests) | CLI | 3.5 min (medido 208s, cierre Serie CRUD-E2E) |
+| suite completa (455 tests) | CLI | 3.5 min (medido 208s, cierre Serie CRUD-E2E) |
 | un archivo | CLI | ~12 s |
 | smoke (8 módulos) | Chrome | 2.5 min |
-| auth (login/guard) | Chrome | 1.5 min |
+| auth (login/guard + roles) | Chrome | 1.5 min (+ roles-menu/accesos 1m) |
 | flujo (journey + personas) | Chrome | 3.6 min (medido) |
-| CRUD general (lane, 29 specs) | Chrome | 15 min (12m local dev · 6.2m prod CI=1) |
-| suite completa | Chrome | 20 min (52 tests: crud 29 + flujo 7 + smoke 8 + auth 3) |
+| CRUD general (lane, 30 specs incl. roles-journeys) | Chrome | 15 min (12m local dev · 6.2m prod CI=1) |
+| suite completa | Chrome | 20 min (37 activos: crud 30 + flujo 3 + smoke 1 + auth 3 activos +2 skip + setup 5) |
 | show-report | Chrome | instantáneo |
 
 **Estimado al owner** = `base × factorCarga` del alcance elegido, en 1-2 líneas
@@ -71,7 +78,7 @@ compara estimado vs real en el reporte y recalibra si factor ≤1.2.
 
 ```bash
 # UNIT (Vitest)
-npx vitest run                                  # suite completa (413), rápido
+npx vitest run                                  # suite completa (455), rápido
 npx vitest run test/store-finanzas.test.ts      # un archivo
 npx vitest run --coverage                       # como CI (umbrales)
 
@@ -131,20 +138,29 @@ Desde la Serie FRONTERA el poblado es **idempotente**: si hay datos TEST-* apare
 
 ## Mapa de la suite
 
-- `test/` — 38 archivos / 413 tests Vitest (stores, auth, seguridad, migraciones). Lane de
+- `test/` — 38 archivos / 455 tests Vitest (stores, auth, seguridad, authz, migraciones). Lane de
   unidad/integración con mocks.
-- `e2e/` — `auth.setup.ts` (login real → storageState compartido), `auth/ingresar.spec.ts`
-  (3 flujos), `auth/rate-limit.spec.ts` (GATED), `smoke/modulos.spec.ts` (8 módulos, 0
-  pageerror), `flujo/` (journey Historia de Poblamiento via QA Lab + CRUD personas +
-  `ciclo.spec.ts`: ciclo limpiar→poblar→validar→limpiar y guard de 2ª corrida),
-  `crud/` (29 specs: Serie CRUD-E2E 22 + residentes/dashboard/accesos/paqueteria + logs/
-  permisos read-oriented + poblado-idempotente — SERIES COMPLETAS).
+- `e2e/` — `auth.setup.ts` (login real → 5 storageStates `e2e/.auth/*.json` via `test1234`),
+  `auth/` 5 specs: `ingresar.spec.ts` (3 flujos) + `rate-limit.spec.ts` (GATED, skip local)
+  + `roles-menu.spec.ts` (matriz rol×grupos 5/5) + `roles-accesos.spec.ts` (rutas por rol 5/5)
+  + `roles-descubrimiento.spec.ts` (skip evidencia histórica P1); `smoke/modulos.spec.ts`
+  (8 módulos, 0 pageerror), `flujo/` (journey Historia de Poblamiento via QA Lab + CRUD
+  personas + `ciclo.spec.ts`: ciclo limpiar→poblar→validar→limpiar y guard de 2ª corrida),
+  `crud/` 30 specs: Serie CRUD-E2E 22 + residentes/dashboard/accesos/paqueteria + logs/
+  permisos read-oriented + poblado-idempotente + `roles-journeys.spec.ts` (4 journeys por
+  rol no-admin) — SERIES COMPLETAS. Total e2e sin contar setup: 30 crud + 3 flujo + 1 smoke
+  + 3 auth activos (+2 skip) = 37 activos.
+- Cuentas disponibles (seed-authz.ts, `test1234`): `admin@test.cl` (A+B, 8/8 grupos) ·
+  `comite@test.cl` (4/8: Inicio/Finanzas/Comunidad/Sistema) ·
+  `conserjeria@test.cl` (2/8: Inicio/Operaciones) · `residente@test.cl` (4/8:
+  Inicio/Operaciones/Finanzas/Comunidad) · `mantencion@test.cl` (3/8:
+  Inicio/Operaciones/Inventario granular). `e2e/.auth/` gitignored (cookies).
 - CI (`.github/workflows/ci.yml`): jobs `unit`, `e2e`, `e2e-rate-limit` (aislado). Node 24.
 - Dashboard de estado: `/admin/qa-dashboard` (Desarrollo AI → "Estado de Pruebas QA").
-  Lee `apps/web/qa-estado.json` vía `/api/qa-estado` (`lib/qa-estado.ts`). Muestra última
-  corrida (passed/failed/skipped, duración, estimado vs real, fallos con causa), carga del
-  sistema en vivo con factor y alerta de máquina ahogada, tabla estimados CLI vs Chrome y
-  historial (últimas 10). Solo en development (`env-guard`).
+  Lee `apps/web/qa-estado.json` vía `/api/qa-estado` (`lib/qa-estado.ts`, campo opcional
+  `cuenta`). Muestra última corrida (passed/failed/skipped, duración, estimado vs real,
+  fallos con causa), carga del sistema en vivo con factor y alerta de máquina ahogada,
+  tabla estimados CLI vs Chrome y historial (últimas 10). Solo en development (`env-guard`).
 - Contexto de decisiones: `Data/NSGC/docs/avances/avance - 2026-08-28 12-52.md` (por qué
   Playwright) y `avance - 2026-08-29 11-10.md` (lane flujo + quirúrgicos E2E).
 
@@ -167,3 +183,20 @@ Desde la Serie FRONTERA el poblado es **idempotente**: si hay datos TEST-* apare
    (`inner_of_upper_lost_followers`) al arrancar: `rm -rf .next` y volver a subir. El
    Laboratorio QA se oculta cuando el gate da "production" (`getAppEnv()` en
    `app/admin/qa-lab/page.tsx`) — en CI el job e2e define `NEXT_PUBLIC_APP_ENV=development`.
+
+## Orquestación de series (materializadas)
+
+Si el owner pide correr una serie materializada (`openspec/SERIE-*/` con `00-plan.md` +
+`prompt-NN.md`):
+
+1. **NO la corras inline** dentro de esta skill. Carga la skill `serie-ventanas`
+   (`.agents/skills/serie-ventanas/SKILL.md`) y delega cada `prompt-NN.md` al subagente
+   `ejecutor-ventana` — un prompt por ventana, en orden.
+2. **Verifica estado desde el repo entre ventanas** (Bitácora de `00-plan.md` + `git log`
+   + `git status`): el orquestador lee el estado real antes de lanzar la siguiente ventana.
+   Reanudación en chat nuevo: "ya terminó prompt N" → leer Roadmap/Bitácora; NUNCA texto
+   pegado de otros chats.
+3. **No edites `prompt-*.md`** (inmutables durante la serie); desvíos se declaran en el
+   Reporte y en la Bitácora.
+4. Esta skill puede invocarse *dentro* de una ventana para validar su alcance (e2e por
+   cuenta, suite completa, etc.) — usa el parámetro "¿Con qué cuenta?" cuando corresponda.
