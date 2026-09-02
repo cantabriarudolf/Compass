@@ -74,6 +74,21 @@ The Sidebar MUST only show groups and items that the current user role is author
 - **WHEN** the session has no `roles` (unauthenticated or token before jwt enrichment)
 - **THEN** the sidebar MUST show no navigation groups beyond the public header (no groups assumed).
 
+#### Scenario: Matriz ampliada — comite y mantencion según MATRIZ RP
+
+- **WHEN** el usuario autenticado tiene rol `comite` (`comite@test.cl` — `comite` en `comunidad-a`, MATRIZ: `fi:ver`, `re:centro_mando:ver`, `ct:historial:ver`, `pe:directorio:ver`, `ir:mantenimiento:ver`)
+- **THEN** MUST ver los grupos `Inicio`, `Finanzas` (Gastos Comunes/Recaudación/Multas, no Remuneraciones), `Comunidad` (Directorio/Certificados), `Sistema` (Reportería y Dashboards + Logs de Auditoría visibles según item granular) — 4/8 grupos visibles.
+
+#### Scenario: Mantencion — Inventario/MT y Operaciones
+
+- **WHEN** el usuario tiene rol `mantencion` (`mantencion@test.cl` — MATRIZ: `mt:ver/crear/editar/ejecutar`, `ir:mantenimiento:ver/crear`, `pe:bitacora:ver`, `pe:directorio:ver`)
+- **THEN** MUST ver `Inicio`, `Operaciones` (Bitácora Diaria) e `Inventario` (Recursos y EPP + Mantenimiento con `roles:["administrador","mantencion"]`; Estructura Física/Tipos solo admin) — 3/8 grupos visibles.
+
+#### Scenario: Personas — menor privilegio por mp:propios
+
+- **WHEN** un usuario no-admin con `mp:propios:ver` (`comite`, `conserjeria`, `residente`, `mantencion`) navega al grupo `Personas`
+- **THEN** MUST NOT ver el grupo `Personas` completo (listado global admin-only); `mp:propios` es contextual (`puedeContextual` con `personaId`) y no habilita listado — decisión de menor privilegio documentada en design.
+
 ### Requirement: Active Link Highlighting
 The current active route MUST be visually highlighted in the menu.
 
