@@ -59,7 +59,7 @@ pruebas de cuentas por rol con journeys reales.
 |---|---|---|---|
 | P1 | Fase 0+1 — spec descubrimiento (evidencia del gap) + change `rp-menu-sesion`: roles por unión de membresías en sesión Auth.js + sidebar conectado con alias normalizados + e2e `auth/roles-menu.spec.ts` (matriz rol×grupos) | HECHA (2026-09-01) | 4514141 |
 | P2 | Fase 2+3 — infra multi-cuenta (setup 5 storageStates + gitignore `.auth/`) + `auth/roles-accesos.spec.ts` (rutas permitidas/denegadas por rol) + `crud/roles-journeys.spec.ts` (1 journey feliz por rol no-admin) | HECHA (2026-09-02) | ce3ab7a |
-| P3 | Fase 4 — skill `pruebas`: parámetro "¿con qué cuenta?" + sección orquestación de series (delega a ejecutor-ventana) + rol en `qa-estado.json` + cierre integral (Vitest/e2e reales) + avance NSGC + SERIE COMPLETA | HECHA (2026-09-02) | 1b7c3d0 |
+| P3 | Fase 4 — skill `pruebas`: parámetro "¿con qué cuenta?" + sección orquestación de series (delega a ejecutor-ventana) + rol en `qa-estado.json` + cierre integral (Vitest/e2e reales) + avance NSGC + SERIE COMPLETA | HECHA (2026-09-02) | b84c2da |
 
 ## Bitácora
 
