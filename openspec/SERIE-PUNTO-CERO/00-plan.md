@@ -54,10 +54,10 @@ validados contra el libro.
 
 | Ventana | Alcance | Estado | Commit final |
 |---|---|---|---|
-| P1 | Feature "Ingreso manual a fondo": IngresoFISchema + colección ingresosFI + acción registrarIngresoFI + saldoInicial en FondoFI + saldoFondo() extendido + STORE_VERSION 27 + migración (vacía de datos, solo versión) + UI form/lista en FI + tests unit | HECHA | ac608f9 |
+| P1 | Feature "Ingreso manual a fondo": IngresoFISchema + colección ingresosFI + acción registrarIngresoFI + saldoInicial en FondoFI + saldoFondo() extendido + STORE_VERSION 27 + migración (vacía de datos, solo versión) + UI form/lista en FI + tests unit | HECHA | ca52ab9 |
 | P2 | ETL punto cero: fixture `data/finanzas/punto-cero-2324.json` (xlsx→JSON con mapeos) + migración v27 que carga fondo CC + 186 egresos + 45 ingresos + apertura cuadrada + validación saldo==0 + tests de la migración | pendiente | — |
 | P3 | e2e del punto cero (egresos históricos visibles con folio, ingresos manuales, saldo del fondo CC en UI) + dashboards/reportería reflejando 2023-2024 + cierre integral (suite completa) + avance NSGC + SERIE COMPLETA | pendiente | — |
 
 ## Bitácora
 
-- [2026-09-02] P1 HECHA: FI ingreso manual a fondo + saldoInicial versátil + STORE_VERSION 27 + migración ingresosFI + UI FI + 12 tests (474/474) + e2e FI verde (ac608f9)
+- [2026-09-02] P1 HECHA: FI ingreso manual a fondo + saldoInicial versátil + STORE_VERSION 27 + migración ingresosFI + UI FI + 12 tests (474/474) + e2e FI verde (ca52ab9)
