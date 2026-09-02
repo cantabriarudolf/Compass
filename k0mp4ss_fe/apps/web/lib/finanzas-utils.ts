@@ -1,4 +1,4 @@
-import type { CobroFI, EgresoFI, EmisionGC, Unidad } from "./schemas"
+import type { CobroFI, EgresoFI, EmisionGC, IngresoFI, Unidad } from "./schemas"
 
 export type EstadoCobroFI = "pendiente" | "parcial" | "pagado" | "vencido"
 
@@ -6,6 +6,8 @@ export type ContextoSaldoFondo = {
   cobros: Pick<CobroFI, "fondoId" | "pagos">[]
   egresos: Pick<EgresoFI, "fondoId" | "monto">[]
   emisiones: Pick<EmisionGC, "fondoReservaAporte">[]
+  ingresosFI?: Pick<IngresoFI, "fondoId" | "monto">[]
+  saldoInicialPorFondo?: Record<string, number>
 }
 
 export function hoyISO(): string {
@@ -53,11 +55,15 @@ export function saldoFondo(fondoId: string, ctx: ContextoSaldoFondo): number {
   const ingresosCobros = ctx.cobros
     .filter(c => c.fondoId === fondoId)
     .reduce((acc, c) => acc + totalPagado(c), 0)
+  const ingresosManuales = (ctx.ingresosFI ?? [])
+    .filter(i => i.fondoId === fondoId)
+    .reduce((acc, i) => acc + i.monto, 0)
   const aportes = ctx.emisiones
     .filter(e => e.fondoReservaAporte?.fondoId === fondoId)
     .reduce((acc, e) => acc + (e.fondoReservaAporte?.monto ?? 0), 0)
   const egresos = ctx.egresos.filter(e => e.fondoId === fondoId).reduce((acc, e) => acc + e.monto, 0)
-  return ingresosCobros + aportes - egresos
+  const saldoInicial = ctx.saldoInicialPorFondo?.[fondoId] ?? 0
+  return saldoInicial + ingresosCobros + ingresosManuales + aportes - egresos
 }
 
 export type MorosidadUnidad = {

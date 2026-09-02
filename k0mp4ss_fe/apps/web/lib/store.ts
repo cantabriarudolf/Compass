@@ -88,6 +88,7 @@ import {
   PlantillaCVSchema,
   FondoFISchema,
   EgresoFISchema,
+  IngresoFISchema,
   EmisionGCSchema,
   CobroFISchema,
   BitacoraVisitaPESchema,
@@ -141,6 +142,7 @@ import {
   type PlantillaCV,
   type FondoFI,
   type EgresoFI,
+  type IngresoFI,
   type EmisionGC,
   type CobroFI,
   type BitacoraVisitaPE,
@@ -297,7 +299,7 @@ const FONDOS_FI_SEED: FondoFI[] = [
   { id: "fondo-amenities", nombre: "Fondo de Amenities", tipo: "amenities", descripcion: "Centro de costos de reservas, tarifas y garantías de amenities.", activo: true },
 ]
 
-export const STORE_VERSION = 26
+export const STORE_VERSION = 27
 
 export interface MaestroCollections {
   afps: Afp[]
@@ -368,6 +370,7 @@ export interface CompassData {
   // Finanzas y Morosidad (FI)
   fondosFI: FondoFI[]
   egresosFI: EgresoFI[]
+  ingresosFI: IngresoFI[]
   emisionesGC: EmisionGC[]
   cobrosFI: CobroFI[]
   // Personal y Servicios (PE)
@@ -499,6 +502,8 @@ interface CompassStore extends CompassData {
   removeFondoFI: (id: string) => StoreResult
   saveEgresoFI: (egreso: EgresoFI) => StoreResult
   removeEgresoFI: (id: string) => StoreResult
+  registrarIngresoFI: (input: { id?: string; fecha: string; monto: number; concepto: string; fondoId: string; familia?: string }) => StoreResult
+  removeIngresoFI: (id: string) => StoreResult
   emitirGastoComun: (input: { periodo: string; gastoTotal?: number; fechaVencimiento?: string; unidadIds?: string[] }) => StoreResult
   aplicarMoraFI: (cobroId: string, tasaMensualPct?: number) => StoreResult
   registrarPagoFI: (cobroId: string, pago: { monto: number; medio: string; ajusteJustificacion?: string }) => StoreResult
@@ -629,6 +634,7 @@ export const seedData = (): CompassData => ({
   plantillasCV: plantillasCVSeed,
   fondosFI: FONDOS_FI_SEED,
   egresosFI: [],
+  ingresosFI: [],
   emisionesGC: [],
   cobrosFI: [],
   bitacoraVisitasPE: [],
@@ -702,6 +708,7 @@ const ESQUEMAS_COLECCION = {
   plantillasCV: z.array(PlantillaCVSchema),
   fondosFI: z.array(FondoFISchema),
   egresosFI: z.array(EgresoFISchema),
+  ingresosFI: z.array(IngresoFISchema),
   emisionesGC: z.array(EmisionGCSchema),
   cobrosFI: z.array(CobroFISchema),
   bitacoraVisitasPE: z.array(BitacoraVisitaPESchema),
@@ -3128,9 +3135,10 @@ export const useCompassStore = create<CompassStore>()(
       removeFondoFI: (id) => {
         if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
         const egresos = get().egresosFI.filter(e => e.fondoId === id).length
+        const ingresos = get().ingresosFI.filter(i => i.fondoId === id).length
         const cobros = get().cobrosFI.filter(c => c.fondoId === id).length
         const aportes = get().emisionesGC.filter(e => e.fondoReservaAporte?.fondoId === id).length
-        const total = egresos + cobros + aportes
+        const total = egresos + ingresos + cobros + aportes
         if (total > 0) {
           return { ok: false, error: `No se puede eliminar el fondo: ${total} movimiento(s) financiero(s) lo imputan.` }
         }
@@ -3176,6 +3184,38 @@ export const useCompassStore = create<CompassStore>()(
       removeEgresoFI: (id) => {
         if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
         set(s => ({ egresosFI: s.egresosFI.filter(e => e.id !== id) }))
+        return { ok: true }
+      },
+
+      registrarIngresoFI: (input) => {
+        if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
+        const candidato: IngresoFI = {
+          id: input.id ?? `fi-ing-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          fecha: input.fecha,
+          monto: input.monto,
+          concepto: input.concepto,
+          fondoId: input.fondoId,
+          ...(input.familia ? { familia: input.familia } : {}),
+        }
+        const validacion = validarConEsquema(IngresoFISchema, candidato)
+        if (!validacion.ok) return validacion
+        const fondo = get().fondosFI.find(f => f.id === validacion.data.fondoId)
+        if (!fondo) return { ok: false, error: "No se puede registrar el ingreso: el fondo de imputación no existe." }
+        if (!fondo.activo) return { ok: false, error: `No se puede registrar el ingreso: el fondo "${fondo.nombre}" está inactivo.` }
+        set(s => ({ ingresosFI: upsert(s.ingresosFI, validacion.data) }))
+        registrarEvento(
+          set,
+          "FI_INGRESO_REGISTRADO",
+          validacion.data.id,
+          `Ingreso "${validacion.data.concepto}" por $${validacion.data.monto.toLocaleString("es-CL")} a ${fondo.nombre}.`,
+          "FI"
+        )
+        return { ok: true }
+      },
+
+      removeIngresoFI: (id) => {
+        if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
+        set(s => ({ ingresosFI: s.ingresosFI.filter(i => i.id !== id) }))
         return { ok: true }
       },
 
@@ -4581,6 +4621,7 @@ export const useCompassStore = create<CompassStore>()(
         plantillasCV: state.plantillasCV,
         fondosFI: state.fondosFI,
         egresosFI: state.egresosFI,
+        ingresosFI: state.ingresosFI,
         emisionesGC: state.emisionesGC,
         cobrosFI: state.cobrosFI,
         bitacoraVisitasPE: state.bitacoraVisitasPE,
@@ -4829,6 +4870,13 @@ export const useCompassStore = create<CompassStore>()(
             const cfg = result.configuracion as Record<string, unknown>
             if ("smtpPassword" in cfg) delete cfg.smtpPassword
             if ("claveEliminacionMaestro" in cfg) delete cfg.claveEliminacionMaestro
+          }
+        }
+        // FI v27: colección ingresosFI (transaccional, nace vacía). Aditivo; no carga datos históricos (P2).
+        if ((version ?? 0) < 27) {
+          result = {
+            ...result,
+            ingresosFI: (prev as unknown as Record<string, unknown>)["ingresosFI"] as IngresoFI[] ?? [],
           }
         }
         // TST-002: los stores que ya quedaron en v8 con unidades dañadas por este

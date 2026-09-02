@@ -711,6 +711,17 @@ export const FondoFISchema = z.object({
   // Solo relevante para fondos de reserva: % aplicado sobre el total emitido.
   porcentajeAporte: z.number().min(0, "El porcentaje no puede ser negativo.").max(100, "El porcentaje no puede superar 100.").optional(),
   activo: z.boolean({ required_error: "El estado activo es obligatorio." }),
+  // Saldo de apertura versátil (P1): 0 = fiel al flujo, ajustado = cuadra con el libro.
+  saldoInicial: z.number().min(0, "El saldo inicial no puede ser negativo.").optional(),
+})
+
+export const IngresoFISchema = z.object({
+  id: IdEntidadSchema,
+  fecha: FechaISOSchema,
+  monto: z.number({ required_error: "El monto es obligatorio." }).positive("El monto debe ser mayor a cero."),
+  concepto: z.string({ required_error: "El concepto es obligatorio." }).min(1, "El concepto es obligatorio."),
+  fondoId: IdEntidadSchema,
+  familia: z.string().optional(),
 })
 
 export const CATEGORIAS_EGRESO_FI = ["sueldos", "mantencion", "servicios", "administracion", "uso_de_fondo", "otro"] as const
@@ -1313,6 +1324,7 @@ export type FondoFI = z.infer<typeof FondoFISchema>
 export type TipoFondoFI = z.infer<typeof TipoFondoFISchema>
 export type CategoriaEgresoFI = z.infer<typeof CategoriaEgresoFISchema>
 export type EgresoFI = z.infer<typeof EgresoFISchema>
+export type IngresoFI = z.infer<typeof IngresoFISchema>
 export type LineaEmisionGC = z.infer<typeof LineaEmisionGCSchema>
 export type AporteFondoReserva = z.infer<typeof AporteFondoReservaSchema>
 export type EmisionGC = z.infer<typeof EmisionGCSchema>

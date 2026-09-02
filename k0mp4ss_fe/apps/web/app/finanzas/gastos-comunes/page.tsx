@@ -60,6 +60,7 @@ interface FormFondo {
   descripcion: string
   porcentajeAporte: string
   activo: boolean
+  saldoInicial: string
 }
 
 interface FormEgreso {
@@ -74,6 +75,14 @@ interface FormEgreso {
   proveedor: string
 }
 
+interface FormIngreso {
+  fecha: string
+  monto: string
+  concepto: string
+  fondoId: string
+  familia: string
+}
+
 function periodoSugerido(): string {
   return new Date().toISOString().slice(0, 7)
 }
@@ -83,6 +92,7 @@ export default function GastosComunesPage() {
   const hasHydrated = useCompassStore(s => s.hasHydrated)
   const fondos = useCompassStore(s => s.fondosFI)
   const egresos = useCompassStore(s => s.egresosFI)
+  const ingresosFI = useCompassStore(s => s.ingresosFI)
   const emisionesGC = useCompassStore(s => s.emisionesGC)
   const cobros = useCompassStore(s => s.cobrosFI)
   const unidades = useCompassStore(s => s.unidades)
@@ -93,6 +103,8 @@ export default function GastosComunesPage() {
   const removeFondoFI = useCompassStore(s => s.removeFondoFI)
   const saveEgresoFI = useCompassStore(s => s.saveEgresoFI)
   const removeEgresoFI = useCompassStore(s => s.removeEgresoFI)
+  const registrarIngresoFI = useCompassStore(s => s.registrarIngresoFI)
+  const removeIngresoFI = useCompassStore(s => s.removeIngresoFI)
   const emitirGastoComun = useCompassStore(s => s.emitirGastoComun)
   const aplicarMoraFI = useCompassStore(s => s.aplicarMoraFI)
   const enviarCobranzaFI = useCompassStore(s => s.enviarCobranzaFI)
@@ -102,14 +114,19 @@ export default function GastosComunesPage() {
   const [formFondo, setFormFondo] = React.useState<FormFondo | null>(null)
   const [editandoFondoId, setEditandoFondoId] = React.useState<string | null>(null)
   const [formEgreso, setFormEgreso] = React.useState<FormEgreso | null>(null)
+  const [formIngreso, setFormIngreso] = React.useState<FormIngreso | null>(null)
   const [periodo, setPeriodo] = React.useState(periodoSugerido())
   const [gastoTotal, setGastoTotal] = React.useState("")
   const [unidadIdsEmision, setUnidadIdsEmision] = React.useState<string>("todas")
   const [moraTasa, setMoraTasa] = React.useState("1")
 
 
+  const saldoInicialPorFondo = React.useMemo(
+    () => Object.fromEntries(fondos.map(f => [f.id, f.saldoInicial ?? 0])),
+    [fondos]
+  )
   const saldoDe = (fondoId: string) =>
-    saldoFondo(fondoId, { cobros, egresos, emisiones: emisionesGC })
+    saldoFondo(fondoId, { cobros, egresos, emisiones: emisionesGC, ingresosFI, saldoInicialPorFondo })
 
   const elegiblesEmision = React.useMemo(
     () => unidades.filter(u => !u.id.startsWith("u-E-")),
@@ -160,6 +177,7 @@ export default function GastosComunesPage() {
     if (!formFondo) return
     setError(null)
     const existente = editandoFondoId ? fondos.find(f => f.id === editandoFondoId) : undefined
+    const saldoInicialNum = Number.parseFloat(formFondo.saldoInicial.replace(/\./g, "").replace(",", ".")) || 0
     const r = saveFondoFI({
       id: existente?.id ?? `fondo-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       nombre: formFondo.nombre.trim(),
@@ -169,6 +187,7 @@ export default function GastosComunesPage() {
         ? { porcentajeAporte: Number.parseFloat(formFondo.porcentajeAporte) || 0 }
         : {}),
       activo: formFondo.activo,
+      ...(saldoInicialNum > 0 ? { saldoInicial: saldoInicialNum } : {}),
     })
     if (!r.ok) setError(r.error ?? "No se pudo guardar el fondo.")
     else {
@@ -205,6 +224,23 @@ export default function GastosComunesPage() {
     else {
       setOkMsg(`Gasto "${formEgreso.descripcion}" registrado e imputado.`)
       setFormEgreso(null)
+    }
+  }
+
+  const guardarIngreso = () => {
+    if (!formIngreso) return
+    setError(null)
+    const r = registrarIngresoFI({
+      fecha: formIngreso.fecha,
+      monto: Number.parseFloat(formIngreso.monto.replace(/\./g, "").replace(",", ".")) || 0,
+      concepto: formIngreso.concepto.trim(),
+      fondoId: formIngreso.fondoId,
+      ...(formIngreso.familia.trim() ? { familia: formIngreso.familia.trim() } : {}),
+    })
+    if (!r.ok) setError(r.error ?? "No se pudo registrar el ingreso.")
+    else {
+      setOkMsg(`Ingreso "${formIngreso.concepto}" registrado.`)
+      setFormIngreso(null)
     }
   }
 
@@ -247,13 +283,14 @@ export default function GastosComunesPage() {
         <TabsList>
           <TabsTrigger value="fondos">Fondos</TabsTrigger>
           <TabsTrigger value="egresos">Egresos</TabsTrigger>
+          <TabsTrigger value="ingresos">Ingresos</TabsTrigger>
           <TabsTrigger value="emision">Emisión GC</TabsTrigger>
           <TabsTrigger value="morosidad">Morosidad</TabsTrigger>
         </TabsList>
 
         <TabsContent value="fondos" className="space-y-4 pt-4">
           <div className="flex justify-end">
-            <Button onClick={() => { setEditandoFondoId(null); setFormFondo({ nombre: "", tipo: "especial", descripcion: "", porcentajeAporte: "", activo: true }) }}>
+            <Button onClick={() => { setEditandoFondoId(null); setFormFondo({ nombre: "", tipo: "especial", descripcion: "", porcentajeAporte: "", activo: true, saldoInicial: "" }) }}>
               <IconPlus className="size-4 mr-1" /> Nuevo Fondo
             </Button>
           </div>
@@ -264,7 +301,7 @@ export default function GastosComunesPage() {
                   <div className="flex items-start justify-between gap-2">
                     <div>
                       <CardTitle className="text-base">{f.nombre}</CardTitle>
-                      <CardDescription className="text-xs">{TIPO_FONDO_LABEL[f.tipo]}{f.porcentajeAporte !== undefined ? ` · aporte ${f.porcentajeAporte}%` : ""}</CardDescription>
+                      <CardDescription className="text-xs">{TIPO_FONDO_LABEL[f.tipo]}{f.porcentajeAporte !== undefined ? ` · aporte ${f.porcentajeAporte}%` : ""}{f.saldoInicial !== undefined && f.saldoInicial > 0 ? ` · apertura $${f.saldoInicial.toLocaleString("es-CL")}` : ""}</CardDescription>
                     </div>
                     {!f.activo && <Badge variant="secondary">Inactivo</Badge>}
                   </div>
@@ -273,7 +310,7 @@ export default function GastosComunesPage() {
                   <p className="text-2xl font-semibold tabular-nums">${saldoDe(f.id).toLocaleString("es-CL")}</p>
                   <p className="text-xs text-muted-foreground">{f.descripcion ?? "Sin descripción."}</p>
                   <div className="flex gap-2">
-                    <Button size="sm" variant="outline" onClick={() => { setEditandoFondoId(f.id); setFormFondo({ nombre: f.nombre, tipo: f.tipo, descripcion: f.descripcion ?? "", porcentajeAporte: f.porcentajeAporte?.toString() ?? "", activo: f.activo }) }}>
+                    <Button size="sm" variant="outline" onClick={() => { setEditandoFondoId(f.id); setFormFondo({ nombre: f.nombre, tipo: f.tipo, descripcion: f.descripcion ?? "", porcentajeAporte: f.porcentajeAporte?.toString() ?? "", activo: f.activo, saldoInicial: f.saldoInicial?.toString() ?? "" }) }}>
                       <IconPencil className="size-3.5 mr-1" /> Editar
                     </Button>
                     <Button size="sm" variant="ghost" className="text-destructive" onClick={() => { const r = removeFondoFI(f.id); if (!r.ok) setError(r.error ?? ""); else setOkMsg("Fondo eliminado.") }}>
@@ -331,6 +368,47 @@ export default function GastosComunesPage() {
           </Card>
         </TabsContent>
 
+        <TabsContent value="ingresos" className="space-y-4 pt-4">
+          <div className="flex justify-end">
+            <Button disabled={fondos.length === 0} onClick={() => setFormIngreso({ fecha: hoyISO(), monto: "", concepto: "", fondoId: fondos[0]?.id ?? "", familia: "" })}>
+              <IconPlus className="size-4 mr-1" /> Registrar ingreso a fondo
+            </Button>
+          </div>
+          <Card>
+            <CardContent className="p-0">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-left text-xs uppercase tracking-wide text-muted-foreground">
+                    <th className="px-4 py-3">Fecha</th>
+                    <th className="px-4 py-3">Concepto</th>
+                    <th className="px-4 py-3">Fondo</th>
+                    <th className="px-4 py-3 text-right">Monto</th>
+                    <th className="px-4 py-3"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[...ingresosFI].reverse().slice(0, 20).map(i => (
+                    <tr key={i.id} className="border-b last:border-0">
+                      <td className="px-4 py-2">{i.fecha}</td>
+                      <td className="px-4 py-2">{i.concepto}{i.familia && <Badge variant="outline" className="ml-2 text-[10px]">{i.familia}</Badge>}</td>
+                      <td className="px-4 py-2">{fondos.find(f => f.id === i.fondoId)?.nombre ?? i.fondoId}</td>
+                      <td className="px-4 py-2 text-right tabular-nums">${i.monto.toLocaleString("es-CL")}</td>
+                      <td className="px-4 py-2 text-right">
+                        <Button size="sm" variant="ghost" className="text-destructive" onClick={() => removeIngresoFI(i.id)}>
+                          <IconTrash className="size-3.5" />
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                  {ingresosFI.length === 0 && (
+                    <tr><td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">Sin ingresos manuales registrados.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
         <TabsContent value="emision" className="space-y-4 pt-4">
           <div className="grid gap-4 lg:grid-cols-2">
             <Card>
@@ -354,9 +432,9 @@ export default function GastosComunesPage() {
                   )}
                 </div>
                 <div className="space-y-1.5">
-                  <Label>Alcance</Label>
+                  <Label htmlFor="alcance-emision">Alcance</Label>
                   <Select value={unidadIdsEmision} onValueChange={setUnidadIdsEmision}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger id="alcance-emision" aria-label="Alcance de la emisión"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="todas">Todas las unidades con responsable</SelectItem>
                       <SelectItem value="custom">Alcance personalizado (ids separados por coma)</SelectItem>
@@ -499,9 +577,9 @@ export default function GastosComunesPage() {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <Label>Tipo</Label>
+                  <Label htmlFor="fondo-tipo">Tipo</Label>
                   <Select value={formFondo.tipo} onValueChange={v => setFormFondo({ ...formFondo, tipo: v as TipoFondoFI })}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger id="fondo-tipo" aria-label="Tipo de fondo"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {(Object.keys(TIPO_FONDO_LABEL) as TipoFondoFI[]).map(t => (
                         <SelectItem key={t} value={t}>{TIPO_FONDO_LABEL[t]}</SelectItem>
@@ -519,6 +597,10 @@ export default function GastosComunesPage() {
               <div className="space-y-1.5">
                 <Label htmlFor="fondo-desc">Descripción</Label>
                 <Input id="fondo-desc" value={formFondo.descripcion} onChange={ev => setFormFondo({ ...formFondo, descripcion: ev.target.value })} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="fondo-saldo-inicial">Saldo de apertura (opcional, $)</Label>
+                <Input id="fondo-saldo-inicial" value={formFondo.saldoInicial} onChange={ev => setFormFondo({ ...formFondo, saldoInicial: ev.target.value })} placeholder="0" />
               </div>
               <div className="flex items-center gap-2">
                 <Switch id="fondo-activo" checked={formFondo.activo} onCheckedChange={v => setFormFondo({ ...formFondo, activo: v })} />
@@ -557,9 +639,9 @@ export default function GastosComunesPage() {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <Label>Categoría</Label>
+                  <Label htmlFor="egr-categoria">Categoría</Label>
                   <Select value={formEgreso.categoria} onValueChange={v => setFormEgreso({ ...formEgreso, categoria: v as CategoriaEgresoFI })}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger id="egr-categoria" aria-label="Categoría del gasto"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {(Object.keys(CATEGORIA_EGRESO_LABEL) as CategoriaEgresoFI[]).map(c => (
                         <SelectItem key={c} value={c}>{CATEGORIA_EGRESO_LABEL[c]}</SelectItem>
@@ -568,9 +650,9 @@ export default function GastosComunesPage() {
                   </Select>
                 </div>
                 <div className="space-y-1.5">
-                  <Label>Fondo de imputación</Label>
+                  <Label htmlFor="egr-fondo">Fondo de imputación</Label>
                   <Select value={formEgreso.fondoId} onValueChange={v => setFormEgreso({ ...formEgreso, fondoId: v })}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger id="egr-fondo" aria-label="Fondo de imputación del gasto"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {fondos.filter(f => f.activo).map(f => (
                         <SelectItem key={f.id} value={f.id}>{f.nombre}</SelectItem>
@@ -604,6 +686,54 @@ export default function GastosComunesPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setFormEgreso(null)}>Cancelar</Button>
             <Button onClick={guardarEgreso}>Registrar gasto</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={formIngreso !== null} onOpenChange={open => !open && setFormIngreso(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Registrar ingreso a fondo</DialogTitle>
+            <DialogDescription>El dinero entra directo al fondo sin origen en cobros.</DialogDescription>
+          </DialogHeader>
+          {formIngreso && (
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="ing-fecha">Fecha</Label>
+                  <Input id="ing-fecha" type="date" value={formIngreso.fecha} onChange={ev => setFormIngreso({ ...formIngreso, fecha: ev.target.value })} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="ing-monto">Monto ($)</Label>
+                  <Input id="ing-monto" value={formIngreso.monto} onChange={ev => setFormIngreso({ ...formIngreso, monto: ev.target.value })} placeholder="50000" />
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="ing-concepto">Concepto</Label>
+                <Input id="ing-concepto" value={formIngreso.concepto} onChange={ev => setFormIngreso({ ...formIngreso, concepto: ev.target.value })} placeholder="Aporte extraordinario" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="ing-fondo">Fondo de destino</Label>
+                  <Select value={formIngreso.fondoId} onValueChange={v => setFormIngreso({ ...formIngreso, fondoId: v })}>
+                    <SelectTrigger id="ing-fondo" aria-label="Fondo de destino del ingreso"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {fondos.filter(f => f.activo).map(f => (
+                        <SelectItem key={f.id} value={f.id}>{f.nombre}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="ing-familia">Familia (opcional)</Label>
+                  <Input id="ing-familia" value={formIngreso.familia} onChange={ev => setFormIngreso({ ...formIngreso, familia: ev.target.value })} placeholder="Contribuciones" />
+                </div>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setFormIngreso(null)}>Cancelar</Button>
+            <Button onClick={guardarIngreso}>Registrar ingreso</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
