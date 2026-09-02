@@ -138,8 +138,16 @@ Desde la Serie FRONTERA el poblado es **idempotente**: si hay datos TEST-* apare
 
 ## Mapa de la suite
 
-- `test/` — 38 archivos / 455 tests Vitest (stores, auth, seguridad, authz, migraciones). Lane de
+- `test/` — 41 archivos / 462 tests Vitest (stores, auth, authz RBAC+ABAC, seguridad,
+  migraciones, API con Prisma real + **componentes RTL** en `test/componentes/pe-panels.test.tsx`:
+  los 3 paneles PE extraídos, con stubs Radix/ResizeObserver y `test.use` jsdom). Lane de
   unidad/integración con mocks.
+- **Accesibilidad** — `e2e/a11y/axe.spec.ts` (axe-core, wcag2a/aa): 8 módulos, umbral sin
+  violaciones `critical/serious` NUEVAS; la deuda preexistente vive en `DEUDA_CONOCIDA` por
+  ruta (aria-valid-attr-value, button-name, color-contrast, scrollable-region-focusable).
+  Si axe encuentra un rule-id grave fuera de la lista → test rojo (gate anti-regresión).
+- **Móvil** — `e2e/smoke/modulos-mobile.spec.ts` (viewport 390×844): los módulos principales
+  renderizan sin errores.
 - `e2e/` — `auth.setup.ts` (login real → 5 storageStates `e2e/.auth/*.json` via `test1234`),
   `auth/` 5 specs: `ingresar.spec.ts` (3 flujos) + `rate-limit.spec.ts` (GATED, skip local)
   + `roles-menu.spec.ts` (matriz rol×grupos 5/5) + `roles-accesos.spec.ts` (rutas por rol 5/5)

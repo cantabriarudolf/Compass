@@ -1,4 +1,5 @@
 import { Geist, Geist_Mono, Inter } from "next/font/google"
+import type { Metadata } from "next"
 
 import "@workspace/ui/globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
@@ -12,6 +13,16 @@ import { ModeToggle } from "@/components/mode-toggle";
 import { TooltipProvider } from "@workspace/ui/components/tooltip";
 import { AuditoriaSyncInit } from "@/components/auditoria-sync-init";
 import { auth } from "@/lib/auth";
+
+// Título por defecto para TODAS las páginas (axe document-title): las páginas
+// client no exportan metadata propia — el default del root layout las cubre.
+export const metadata: Metadata = {
+  title: {
+    default: "GECOS — Sistema de Gestión de Condominios",
+    template: "%s · GECOS",
+  },
+  description: "Sistema de gestión de comunidades: finanzas, operaciones, comunidad e inventario.",
+}
 
 const inter = Inter({subsets:['latin'],variable:'--font-sans'})
 
