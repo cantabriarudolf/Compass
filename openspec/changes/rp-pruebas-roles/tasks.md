@@ -23,9 +23,9 @@
 
 - [x] 5.1 Ejecutar `npx playwright test e2e/auth/roles-menu.spec.ts` (regresión P1 con storageStates/mapping ampliado) verde.
 - [x] 5.2 Ejecutar `npx tsc --noEmit` (0), `npm run lint` (0), `npx vitest run` (455/455), `openspec validate --all` (32/32) en verde.
-- [ ] 5.3 Actualizar `openspec/SERIE-CUENTAS/00-plan.md` fila P2 EN CURSO→HECHA y Bitácora con mapping antes/después, hashes, verificaciones reales.
+- [x] 5.3 Actualizar `openspec/SERIE-CUENTAS/00-plan.md` fila P2 EN CURSO→HECHA y Bitácora con mapping antes/después, hashes, verificaciones reales.
 
 ## 6. Cierre
 
-- [ ] 6.1 Commit conventional español + `nsgc-prepush` + push a `origin/main`.
+- [x] 6.1 Commit conventional español + `nsgc-prepush` + push a `origin/main`.
 - [ ] 6.2 `openspec archive rp-pruebas-roles` (git status limpio).

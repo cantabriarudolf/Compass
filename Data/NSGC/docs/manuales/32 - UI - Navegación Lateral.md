@@ -19,12 +19,14 @@ Navegar rápidamente entre módulos, identificar la página activa y plegar la b
   - Desarrollo AI
   - Sistema
 - **Ruta Activa**: El ítem correspondiente a la página donde estás se resalta automáticamente.
-- **Visibilidad por Rol (RP-unión)**: La barra muestra solo lo que tu **unión de membresías** autoriza (fuente: `Membresia.rol` en `lib/auth.ts` → `session.user.roles`). Regla: grupo/ítem visible si `tuRoles ∩ rolesDeclarados ≠ ∅`. Ítems sin `roles` heredan la visibilidad del grupo. Alias normalizados a `RP` (`administrador`/`comite`/`conserjeria`/`residente`/`mantencion`).
-  - **Administrador** (`admin@test.cl` — membresías A+B): ve 8/8 grupos (todo).
-  - **Residente** (`residente@test.cl`): ve Inicio, Operaciones, Finanzas, Comunidad (4/8); Remuneraciones solo admin queda oculto.
+ - **Visibilidad por Rol (RP-unión)**: La barra muestra solo lo que tu **unión de membresías** autoriza (fuente: `Membresia.rol` en `lib/auth.ts` → `session.user.roles`). Regla: grupo/ítem visible si `tuRoles ∩ rolesDeclarados ≠ ∅`. Ítems sin `roles` heredan la visibilidad del grupo. Alias normalizados a `RP` (`administrador`/`comite`/`conserjeria`/`residente`/`mantencion`).
+  - **Administrador** (`admin@test.cl` — membresías A+B): ve 8/8 grupos (todo; `Remuneraciones`/`Estructura`/`Tipos`/`Gestión` solo admin).
+  - **Comité** (`comite@test.cl`): ve Inicio, Finanzas (Gastos/Recaudación/Multas, no Remuneraciones), Comunidad, Sistema (solo Reportería) — 4/8.
   - **Conserjería** (`conserjeria@test.cl`): ve Inicio, Operaciones (2/8).
-  - **Comité/Mantención**: hoy 0/8 (ningún grupo los declara; se ampliará en P2 si aplica).
-  - Sesión sin roles = 0 grupos. Vía técnica: `app/layout.tsx` (server, `auth()`) pasa `roles` por props a `AppSidebar` (client) — opción (a) elegida por menor fricción vs `SessionProvider`/`fetch`.
+  - **Residente** (`residente@test.cl`): ve Inicio, Operaciones, Finanzas, Comunidad (4/8); `Remuneraciones` solo admin queda oculto, `Gastos Comunes` hereda grupo.
+  - **Mantención** (`mantencion@test.cl`): ve Inicio, Operaciones (Bitácora), Inventario (Recursos/Mantenimiento, no Estructura/Tipos) — 3/8.
+  - **Personas**: solo `administrador` (menor privilegio: `mp:propios` es contextual con `personaId`, no habilita listado global).
+  - Sesión sin roles = 0 grupos. Vía técnica: `app/layout.tsx` (server, `auth()`) pasa `roles` por props a `AppSidebar` (client) — opción (a) elegida por menor fricción vs `SessionProvider`/`fetch`. Infra: `e2e/auth.setup.ts` genera 5 `storageStates` (`e2e/.auth/<rol>.json`, `test1234`) y specs usan `test.use({ storageState })` sin 5 proyectos.
 
 ## 💡 Tips de Oro
 
