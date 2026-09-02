@@ -55,13 +55,24 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@workspace/
 // SERIE-MENU-100 P5: todas las rutas pendientes implementadas — Set vacío (menú 100%).
 const RUTAS_PENDIENTES = new Set<string>([])
 
+export const SIDEBAR_GROUPS = [
+  "Inicio",
+  "Operaciones",
+  "Finanzas",
+  "Comunidad",
+  "Inventario",
+  "Personas",
+  "Desarrollo AI",
+  "Sistema",
+] as const
+
 const data = {
   navMain: [
     {
       title: "Inicio",
       url: "/dashboard",
       icon: IconLayoutDashboard,
-      roles: ["admin", "conserje", "residente"],
+      roles: ["administrador", "conserjeria", "residente"],
       items: [
         { title: "Resumen", url: "/dashboard" },
       ],
@@ -70,7 +81,7 @@ const data = {
       title: "Operaciones",
       url: "/operaciones",
       icon: IconBook,
-      roles: ["admin", "conserje", "residente"],
+      roles: ["administrador", "conserjeria", "residente"],
       items: [
         { title: "Bitácora Diaria", url: "/operaciones/bitacora" },
         { title: "Accesos y Visitas", url: "/operaciones/accesos" },
@@ -84,19 +95,19 @@ const data = {
       title: "Finanzas",
       url: "/finanzas",
       icon: IconReceipt,
-      roles: ["admin", "residente"],
+      roles: ["administrador", "residente"],
       items: [
         { title: "Gastos Comunes", url: "/finanzas/gastos-comunes" },
         { title: "Recaudación", url: "/finanzas/pagos" },
         { title: "Multas", url: "/finanzas/multas" },
-        { title: "Remuneraciones", url: "/finanzas/remuneraciones", roles: ["admin"] },
+        { title: "Remuneraciones", url: "/finanzas/remuneraciones", roles: ["administrador"] },
       ],
     },
     {
       title: "Comunidad",
       url: "/comunidad",
       icon: IconSpeakerphone,
-      roles: ["admin", "residente"],
+      roles: ["administrador", "residente"],
       items: [
         { title: "Directorio de Personas", url: "/comunidad/personas" },
         { title: "Comunicación", url: "/comunidad/comunicacion" },
@@ -110,7 +121,7 @@ const data = {
       title: "Inventario",
       url: "/inventario",
       icon: IconBuildingSkyscraper,
-      roles: ["admin"],
+      roles: ["administrador"],
       items: [
         { title: "Estructura Física", url: "/inventario/estructura" },
         { title: "Tipos de Unidad", url: "/inventario/tipos" },
@@ -122,7 +133,7 @@ const data = {
       title: "Personas",
       url: "/personas",
       icon: IconUserHeart,
-      roles: ["admin"],
+      roles: ["administrador"],
       items: [
         { title: "Residentes", url: "/personas/residentes" },
         { title: "Personal", url: "/personas/personal" },
@@ -132,7 +143,7 @@ const data = {
       title: "Desarrollo AI",
       url: "/admin/dev-dashboard",
       icon: IconAdjustments,
-      roles: ["admin"],
+      roles: ["administrador"],
       items: [
         { title: "Dashboard OpenSpec", url: "/admin/dev-dashboard" },
         { title: "Laboratorio QA", url: "/admin/qa-lab" },
@@ -144,7 +155,7 @@ const data = {
       title: "Sistema",
       url: "/admin",
       icon: IconSettings,
-      roles: ["admin"],
+      roles: ["administrador"],
       items: [
         { title: "Reportería y Dashboards", url: "/admin/reporteria" },
         { title: "Auditoría y Métricas", url: "/admin/metricas" },
@@ -158,14 +169,16 @@ const data = {
   ],
 }
 
-export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+export function AppSidebar({ roles = [], ...props }: React.ComponentProps<typeof Sidebar> & { roles?: string[] }) {
   useStoreRehydrated()
   const pathname = usePathname()
   const hasHydrated = useCompassStore((s) => s.hasHydrated)
   const configuracion = useCompassStore((s) => s.configuracion)
 
-  // Placeholder para el rol actual (en el futuro vendrá de un AuthContext)
-  const currentRole = "admin"
+  // Roles reales de la sesión (unión de membresías vía Auth.js jwt/session callbacks, lib/auth.ts).
+  // Filtrado por intersección: grupo/item visible si algún rol del usuario está en roles declarados.
+  // Items sin `roles` heredan visibilidad del grupo.
+  const userRoles = roles
 
   return (
     <Sidebar collapsible="icon" {...props}>
@@ -201,7 +214,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       </SidebarHeader>
       <SidebarContent>
         {data.navMain
-          .filter(group => group.roles.includes(currentRole))
+          .filter((group) => group.roles.some((r: string) => userRoles.includes(r)))
           .map((group) => {
             const isGroupActive = pathname.startsWith(group.url)
             return (
@@ -219,7 +232,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                       </CollapsibleTrigger>
                       <CollapsibleContent>
                         <SidebarMenuSub>
-                          {group.items?.map((subItem) => {
+                          {group.items
+                            ?.filter((subItem: any) => !subItem.roles || subItem.roles.some((r: string) => userRoles.includes(r)))
+                            .map((subItem) => {
                             const isPendiente = RUTAS_PENDIENTES.has(subItem.url)
                             return (
                               <SidebarMenuSubItem key={subItem.title}>

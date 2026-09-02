@@ -5,9 +5,12 @@ declare module "next-auth" {
   interface Session {
     user: {
       id: string
+      roles?: string[]
     } & DefaultSession["user"]
   }
 }
+
+// JWT roles se tipa via (token as any).roles en lib/auth.ts para no acoplar edge-safe a JWT type.
 
 /**
  * Configuración edge-safe de Auth.js (AU §3, P5).

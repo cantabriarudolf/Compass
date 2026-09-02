@@ -87,4 +87,32 @@ export const { handlers, auth, signIn, signOut }: any = NextAuth({
       authorize: autorizarCredenciales,
     }),
   ],
+  callbacks: {
+    async jwt({ token, trigger }: any) {
+      // Unión de roles por membresías — cacheada en el JWT entre requests.
+      // Solo consulta Prisma cuando el token aún no tiene roles o en trigger update
+      // (activación de cuenta). Evita N+1 por request; membresías cambian poco.
+      if (token.sub) {
+        const necesitaRefresh = !Array.isArray((token as any).roles) || trigger === "update"
+        if (necesitaRefresh) {
+          try {
+            const rows = await (prisma as any).membresia.findMany({
+              where: { usuarioId: token.sub },
+              select: { rol: true },
+            })
+            token.roles = [...new Set(rows.map((r: { rol: string }) => r.rol))]
+          } catch {
+            token.roles = (token.roles as string[]) ?? []
+          }
+        }
+      }
+      return token
+    },
+    session({ session, token }: any) {
+      session.user.id = token.sub ?? ""
+      if (token.email) session.user.email = token.email
+      session.user.roles = (token.roles as string[]) ?? []
+      return session
+    },
+  },
 })

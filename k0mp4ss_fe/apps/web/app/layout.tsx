@@ -11,6 +11,7 @@ import { Separator } from "@workspace/ui/components/separator";
 import { ModeToggle } from "@/components/mode-toggle";
 import { TooltipProvider } from "@workspace/ui/components/tooltip";
 import { AuditoriaSyncInit } from "@/components/auditoria-sync-init";
+import { auth } from "@/lib/auth";
 
 const inter = Inter({subsets:['latin'],variable:'--font-sans'})
 
@@ -19,11 +20,13 @@ const fontMono = Geist_Mono({
   variable: "--font-mono",
 })
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode
 }>) {
+  const session = await (auth() as Promise<any>).catch(() => null)
+  const roles: string[] = Array.isArray(session?.user?.roles) ? session.user.roles : []
   return (
     <html
       lang="es"
@@ -35,7 +38,7 @@ export default function RootLayout({
         <ThemeProvider>
           <TooltipProvider>
             <SidebarProvider>
-              <AppSidebar />
+              <AppSidebar roles={roles} />
               <SidebarInset>
                 <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
                   <SidebarToggle />
