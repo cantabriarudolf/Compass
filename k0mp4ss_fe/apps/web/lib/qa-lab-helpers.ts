@@ -211,7 +211,7 @@ export function validarEstadoCompleto(state: Record<string, unknown>): Validacio
     ...avisoIds,
   ])
   // Extiende con cualquier otra colección que contenga ids (maestros, PI, CO, GE, IR, MT, RE, etc.)
-  for (const [k, v] of Object.entries(state)) {
+  for (const [, v] of Object.entries(state)) {
     if (Array.isArray(v)) {
       for (const it of v as unknown[]) {
         const id = (it as { id?: string })?.id

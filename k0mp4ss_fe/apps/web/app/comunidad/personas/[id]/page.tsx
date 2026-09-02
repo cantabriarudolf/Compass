@@ -153,6 +153,7 @@ export default function PersonaPerfilPage() {
   const guardarVinculo = (data: Omit<VinculoUnidad, "id" | "personaId">): StoreResult => {
     const vinculoGuardado: VinculoUnidad = vinculoEditando
       ? { ...vinculoEditando, ...data }
+      // eslint-disable-next-line react-hooks/purity -- id generado en primer render del formulario nuevo; estable hasta guardar (avance 2026-09-02)
       : { id: `v-${Date.now()}`, personaId: persona.id, ...data }
     const resultado = saveVinculo(vinculoGuardado)
     if (!resultado.ok) return resultado
@@ -394,7 +395,7 @@ export default function PersonaPerfilPage() {
             <Card>
               <CardHeader>
                 <CardTitle>Ficha de Empleado</CardTitle>
-                <CardDescription>Esta extensión solo es visible porque el usuario tiene el rol "Personal".</CardDescription>
+                <CardDescription>Esta extensión solo es visible porque el usuario tiene el rol &quot;Personal&quot;.</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-2 gap-4">

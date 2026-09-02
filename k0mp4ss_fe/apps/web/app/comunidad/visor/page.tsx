@@ -33,7 +33,7 @@ import {
   IconGavel,
   IconExternalLink,
 } from "@tabler/icons-react"
-import type { AvisoCV, PlantillaCV, TipologiaCV } from "@/lib/schemas"
+import type { AvisoCV, TipologiaCV } from "@/lib/schemas"
 
 const TIPOLOGIA_CLASE: Record<TipologiaCV, string> = {
   info: "bg-sky-600 hover:bg-sky-700 text-white",
@@ -520,6 +520,7 @@ export default function VisorPanelPage() {
               <h2 className="text-2xl font-bold leading-tight">{preview.titulo}</h2>
               <p className="mt-3 whitespace-pre-line text-base leading-relaxed text-white/85">{preview.cuerpo}</p>
               {preview.imagenUrl && (
+                // eslint-disable-next-line @next/next/no-img-element -- URL de imagen provista por el usuario (D1), no optimizable por next/image
                 <img src={preview.imagenUrl} alt={preview.titulo} className="mt-4 max-h-48 rounded-lg object-contain" />
               )}
               {preview.videoUrl && (

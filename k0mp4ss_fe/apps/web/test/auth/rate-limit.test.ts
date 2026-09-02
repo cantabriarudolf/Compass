@@ -1,7 +1,7 @@
 /**
  * @vitest-environment node
  */
-import { describe, it, expect, beforeEach } from "vitest"
+import { describe, it, expect } from "vitest"
 import { prisma } from "@/lib/prisma"
 import { excedeIntentos, registrarFallo, limpiarIntentos } from "@/lib/rate-limit"
 

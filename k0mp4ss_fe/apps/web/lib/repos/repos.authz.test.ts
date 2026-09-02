@@ -81,8 +81,12 @@ describe("Aislamiento A/B con membresías por comunidad (B3, D3)", () => {
   afterAll(async () => {
     if (prismaTest) await prismaTest.$disconnect().catch(() => {})
     if (tmpDbPath && fs.existsSync(tmpDbPath)) {
-      try { fs.unlinkSync(tmpDbPath) } catch {}
-      try { fs.unlinkSync(`${tmpDbPath}-journal`) } catch {}
+      try { fs.unlinkSync(tmpDbPath) } catch {
+        // intencional: vacío por diseño
+      }
+      try { fs.unlinkSync(`${tmpDbPath}-journal`) } catch {
+        // intencional: vacío por diseño
+      }
     }
   })
 

@@ -54,7 +54,9 @@ describe("GET /api/admin/usuarios — autorización server-side (B3, Auth.js)", 
       if (conserjeUser) await prisma.usuario.delete({ where: { id: conserjeUser.id } }).catch(() => {})
       await prisma.comunidad.delete({ where: { id: comunidadA } }).catch(() => {})
       await prisma.comunidad.delete({ where: { id: comunidadB } }).catch(() => {})
-    } catch {}
+    } catch {
+      // intencional: vacío por diseño
+    }
   })
 
   async function sesionCookie(email: string): Promise<string> {

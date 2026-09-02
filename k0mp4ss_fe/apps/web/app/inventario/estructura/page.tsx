@@ -8,7 +8,7 @@ import {
 } from "@/data/inventario/estructura"
 import { useCompassStore, useStoreRehydrated, StoreResult } from "@/lib/store"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@workspace/ui/components/tabs"
+import { Tabs, TabsList, TabsTrigger } from "@workspace/ui/components/tabs"
 import { Badge } from "@workspace/ui/components/badge"
 import { Button } from "@workspace/ui/components/button"
 import { ScrollArea, ScrollBar } from "@workspace/ui/components/scroll-area"
@@ -539,7 +539,7 @@ export default function EstructuraFisicaPage() {
 
               return (
                 <div className="relative border-l-2 border-primary/20 ml-3 space-y-6">
-                  {vinculosUnidad.map((v, idx) => {
+                  {vinculosUnidad.map((v) => {
                     const persona = personas.find(p => p.id === v.personaId)
                     const isActive = !v.fechaFin
                     return (

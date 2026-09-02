@@ -9,10 +9,8 @@ import AxeBuilder from "@axe-core/playwright"
  * NO está en la lista, el test falla (gate contra regresiones nuevas).
  */
 const DEUDA_CONOCIDA: Record<string, string[]> = {
-  "/comunidad/personas": ["aria-valid-attr-value", "button-name", "color-contrast"],
+  "/comunidad/personas": ["aria-valid-attr-value", "color-contrast"],
   "/operaciones/bitacora": ["color-contrast"],
-  "/inventario/recursos": ["button-name"],
-  "/admin/logs": ["scrollable-region-focusable"],
 }
 
 test.describe("Accesibilidad (axe-core) — módulos principales", () => {
@@ -48,6 +46,10 @@ test.describe("Accesibilidad (axe-core) — módulos principales", () => {
           `[axe] ${ruta}: graves →`,
           graves.map((v) => `${v.id} (${v.impact}, ${v.nodes.length} nodos)`).join(", "),
         )
+        // Debug de deuda: HTML de los primeros nodos por regla
+        for (const v of graves) {
+          console.log(`[axe-html] ${ruta} | ${v.id} |`, v.nodes.slice(0, 3).map((n) => (n.html || "").slice(0, 140)))
+        }
       }
       const moderadas = resultados.violations.filter(
         (v) => v.impact === "moderate" || v.impact === "minor",

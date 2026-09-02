@@ -87,6 +87,7 @@ export default function VisorMensajesPage() {
       <header className="absolute left-0 right-0 top-0 z-10 flex items-center justify-between px-10 py-6 backdrop-blur-sm">
         <div className="flex items-center gap-4">
           {configuracion.logoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element -- URL de imagen provista por el usuario (D1), no optimizable por next/image
             <img src={configuracion.logoUrl} alt="Logo" className="h-12 w-auto rounded bg-white/95 object-contain p-1" />
           ) : (
             <div className="flex size-12 items-center justify-center rounded-xl bg-white/10 text-2xl font-black">K</div>
@@ -131,6 +132,7 @@ export default function VisorMensajesPage() {
             <h1 className={`font-black leading-tight ${aviso.pantallaCompleta ? "text-7xl" : "text-5xl"}`}>{aviso.titulo}</h1>
             <p className={`mt-6 whitespace-pre-line leading-relaxed text-white/85 ${aviso.pantallaCompleta ? "text-3xl" : "text-2xl"}`}>{aviso.cuerpo}</p>
             {aviso.imagenUrl && (
+              // eslint-disable-next-line @next/next/no-img-element -- URL de imagen provista por el usuario (D1), no optimizable por next/image
               <img src={aviso.imagenUrl} alt={aviso.titulo} className="mt-8 max-h-[42vh] self-center rounded-2xl object-contain shadow-lg" />
             )}
             {embed && (

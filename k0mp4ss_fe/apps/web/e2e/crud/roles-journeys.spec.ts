@@ -3,7 +3,6 @@
 // Afirma contra seedData previo (verificado en lib/store.ts).
 import { expect, test } from "@playwright/test"
 
-const PASSWORD_TEST = "test1234"
 
 async function gotoStable(page: import("@playwright/test").Page, url: string) {
   await page.goto(url)
@@ -198,7 +197,7 @@ test.describe("mantencion — ve MT y crea incidente IR", () => {
         if (await inpTitulo.isVisible().catch(()=>false)) await inpTitulo.fill(titulo)
         else {
           const labelTitulo = dialog.getByText(/Título|Nombre/).first()
-          let inp = labelTitulo.locator("..").locator("input").first()
+          const inp = labelTitulo.locator("..").locator("input").first()
           if (await inp.isVisible().catch(()=>false)) await inp.fill(titulo)
         }
         // Intentar guardar

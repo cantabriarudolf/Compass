@@ -4,32 +4,19 @@ import * as React from "react"
 import {
   IconLayoutDashboard,
   IconBook,
-  IconUserCheck,
-  IconPackage,
-  IconCalendarEvent,
-  IconClipboardList,
   IconReceipt,
-  IconWallet,
-  IconGavel,
-  IconCash,
   IconSpeakerphone,
-  IconUsersGroup,
-  IconCertificate,
-  IconSmartHome,
   IconBuildingSkyscraper,
-  IconTool,
   IconSettings,
   IconUserHeart,
-  IconUserStar,
   IconAdjustments,
-  IconLock,
-  IconHistory,
   IconChevronRight,
   IconCommand,
   IconClock,
 } from "@tabler/icons-react"
 
 import Image from "next/image"
+import Link from "next/link"
 import { usePathname } from "next/navigation"
 
 import { useCompassStore, useStoreRehydrated } from "@/lib/store"
@@ -186,7 +173,7 @@ export function AppSidebar({ roles = [], ...props }: React.ComponentProps<typeof
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" asChild>
-              <a href="/">
+              <Link href="/">
                 <div className="flex aspect-square size-8 items-center justify-center overflow-hidden rounded-lg bg-primary text-primary-foreground">
                   {hasHydrated && configuracion.logoUrl ? (
                     <Image
@@ -207,7 +194,7 @@ export function AppSidebar({ roles = [], ...props }: React.ComponentProps<typeof
                   </span>
                   <span className="truncate text-xs">Administración</span>
                 </div>
-              </a>
+              </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
@@ -233,7 +220,7 @@ export function AppSidebar({ roles = [], ...props }: React.ComponentProps<typeof
                       <CollapsibleContent>
                         <SidebarMenuSub>
                           {group.items
-                            ?.filter((subItem: any) => !subItem.roles || subItem.roles.some((r: string) => userRoles.includes(r)))
+                            ?.filter((subItem: { roles?: string[] }) => !subItem.roles || subItem.roles.some((r) => userRoles.includes(r)))
                             .map((subItem) => {
                             const isPendiente = RUTAS_PENDIENTES.has(subItem.url)
                             return (

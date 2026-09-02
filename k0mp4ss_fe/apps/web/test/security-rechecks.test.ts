@@ -1,10 +1,11 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- tests de seguridad con fakes de NextAuth/Request */
 /**
  * @vitest-environment node
  * D-iii re-chequeos scripted — 5 checks repetibles invocando handlers directamente.
  * Cada test imprime OK/FAIL y falla si no pasa (vitest expect).
  * Uso: npm test -- test/security-rechecks.test.ts  y  node scripts/security-recheck.mjs (estático)
  */
-import { describe, it, expect, beforeAll, afterAll, vi, beforeEach, afterEach } from "vitest"
+import { describe, it, expect, beforeAll, afterAll, vi } from "vitest"
 import { NextRequest } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { readFileSync } from "node:fs"
@@ -44,8 +45,12 @@ describe("D-iii re-chequeos 5/5 (scripted)", () => {
         await prisma.membresia.deleteMany({ where: { usuarioId: u.id } })
         await prisma.usuario.delete({ where: { id: u.id } }).catch(() => {})
       }
-      await prisma.comunidad.delete({ where: { id: comunidadA } }).catch(() => {})
-    } catch {}
+      await prisma.comunidad.delete({ where: { id: comunidadA } }).catch(() => {
+        // intencional: vacío por diseño
+      })
+    } catch {
+      // intencional: el fallo ya se verifica arriba
+    }
     if (originalSecret === undefined) delete process.env.AUTH_SECRET
     else process.env.AUTH_SECRET = originalSecret
     if (originalAppEnv === undefined) delete process.env.NEXT_PUBLIC_APP_ENV
@@ -152,9 +157,6 @@ describe("D-iii re-chequeos 5/5 (scripted)", () => {
     console.log(`[3/5] readProjectFile("../../etc/passwd") → null: ${r3 === null ? "OK" : `FAIL`}`)
     expect(r3).toBeNull()
 
-    const r4 = readProjectFile("openspec/specs/../specs/SG-hardening-despliegue/spec.md")
-    // Este debería pasar porque normalized sigue dentro de ALLOWED? Pero con ".." podría salir; debe ser null si sale del allowlist
-    // No asertamos este, solo el traversal malicioso
 
     // vía handler PATCH con traversal
     process.env.NEXT_PUBLIC_APP_ENV = "development"

@@ -69,6 +69,7 @@ export default function LogsPage() {
   }, [busqueda])
 
   React.useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- reset intencional de paginación al cambiar filtros (avance 2026-09-02)
     setPagina(1)
   }, [busquedaDebounced, categoria, tipoAccion])
 

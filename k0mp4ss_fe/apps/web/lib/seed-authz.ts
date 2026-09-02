@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- seed idempotente idéntico al patrón QA Lab; clientes Prisma tipados en runtime */
 import type { PrismaClient } from "@prisma/client"
 import bcrypt from "bcryptjs"
 

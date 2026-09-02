@@ -112,9 +112,7 @@ test.describe("CRUD — Comunidad/Certificados (GATED)", () => {
     await page.waitForTimeout(400)
     // Elegir opción que contenga 999
     const opt999 = page.getByRole("option", { name: /999/ }).first()
-    let unidadElegida = ""
     if (await opt999.isVisible().catch(() => false)) {
-      unidadElegida = (await opt999.textContent())?.trim() ?? ""
       await opt999.click({ force: true, noWaitAfter: true })
     } else {
       const opts = page.getByRole("option")
@@ -123,7 +121,6 @@ test.describe("CRUD — Comunidad/Certificados (GATED)", () => {
         const o = opts.nth(i)
         const txt = (await o.textContent())?.trim() ?? ""
         if (txt && !txt.includes("Selecciona")) {
-          unidadElegida = txt
           await o.click({ force: true, noWaitAfter: true }).catch(() => {})
           break
         }

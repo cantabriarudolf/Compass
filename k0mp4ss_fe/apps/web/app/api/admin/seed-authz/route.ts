@@ -1,4 +1,4 @@
-import { NextResponse, NextRequest } from "next/server"
+import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { seedUsuariosMembresias } from "@/lib/seed-authz"

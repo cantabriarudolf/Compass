@@ -35,7 +35,7 @@ import {
   IconTrendingUp,
   IconWallet,
 } from "@tabler/icons-react"
-import type { CategoriaEgresoFI, EgresoFI, FondoFI, TipoFondoFI } from "@/lib/schemas"
+import type { CategoriaEgresoFI, TipoFondoFI } from "@/lib/schemas"
 import { morosidadPorUnidad, saldoFondo, estadoDeCobro, hoyISO } from "@/lib/finanzas-utils"
 
 const TIPO_FONDO_LABEL: Record<TipoFondoFI, string> = {
@@ -88,7 +88,6 @@ export default function GastosComunesPage() {
   const unidades = useCompassStore(s => s.unidades)
   const vinculos = useCompassStore(s => s.vinculos)
   const tiposUnidad = useCompassStore(s => s.tiposUnidad)
-  const microSectores = useCompassStore(s => s.microSectores)
   const configuracion = useCompassStore(s => s.configuracion)
   const saveFondoFI = useCompassStore(s => s.saveFondoFI)
   const removeFondoFI = useCompassStore(s => s.removeFondoFI)
@@ -108,16 +107,6 @@ export default function GastosComunesPage() {
   const [unidadIdsEmision, setUnidadIdsEmision] = React.useState<string>("todas")
   const [moraTasa, setMoraTasa] = React.useState("1")
 
-  const nombrePersona = (id?: string) => {
-    if (!id) return "—"
-    const p = useCompassStore.getState().personas.find(x => x.id === id)
-    return p ? `${p.nombres} ${p.apellidos}` : id
-  }
-  const refUnidad = (id?: string) => {
-    if (!id) return "—"
-    const u = unidades.find(x => x.id === id)
-    return u ? `${u.etiqueta} ${u.numero}` : id
-  }
 
   const saldoDe = (fondoId: string) =>
     saldoFondo(fondoId, { cobros, egresos, emisiones: emisionesGC })

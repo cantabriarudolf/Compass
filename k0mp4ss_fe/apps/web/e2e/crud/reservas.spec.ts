@@ -46,7 +46,7 @@ test.describe("CRUD — Operaciones/Reservas", () => {
     {
       const labelMicro = dialogEl.getByText("Sub-sector EF", { exact: true }).first()
       let triggerMicro = labelMicro.locator("..").getByRole("combobox").first()
-      let visMicro = await triggerMicro.isVisible().catch(() => false)
+      const visMicro = await triggerMicro.isVisible().catch(() => false)
       if (!visMicro) {
         const c = dialogEl.locator("div").filter({ has: labelMicro }).first()
         triggerMicro = c.getByRole("combobox").first()
@@ -123,7 +123,7 @@ test.describe("CRUD — Operaciones/Reservas", () => {
     async function pickByLabel(dialog: import("@playwright/test").Locator, labelExact: string, optionName?: RegExp | string) {
       const label = dialog.getByText(labelExact, { exact: true }).first()
       let trigger = label.locator("..").getByRole("combobox").first()
-      let vis = await trigger.isVisible().catch(() => false)
+      const vis = await trigger.isVisible().catch(() => false)
       if (!vis) {
         const c = dialog.locator("div").filter({ has: label }).first()
         trigger = c.getByRole("combobox").first()

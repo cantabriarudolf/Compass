@@ -95,7 +95,6 @@ test.describe("CRUD — Comunidad/Portal (GATED)", () => {
     // La tabla tiene columnas Unidad / Operación / Precio / Estado / Leads / Acciones
     // Buscar por unidadDialog si existe, si no fallback a última fila
     await page.waitForTimeout(500)
-    const tablaGestion = page.getByText("Gestión de la vitrina").locator("..").locator("..")
     const rowsAfter = await page.getByRole("row").count()
     expect(rowsAfter, "Debe haber al menos una fila más tras crear publicación").toBeGreaterThanOrEqual(rowsBefore)
 

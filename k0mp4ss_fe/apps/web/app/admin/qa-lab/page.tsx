@@ -1,4 +1,6 @@
-"use client"
+"use client";
+
+/* eslint-disable @typescript-eslint/no-explicit-any -- seeds TEST del QA Lab: literales complejos cross-módulo validados en runtime por zod (462 pruebas); tiparlos duplicaría los schemas sin valor en esta capa */
 
 import * as React from "react"
 import { useCompassStore, useStoreRehydrated, STORE_VERSION } from "@/lib/store"
@@ -16,7 +18,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@workspace/ui/components/dialog"
-import { IconCheck, IconAlertTriangle, IconDownload, IconTrash, IconRefresh, IconEye, IconHistory, IconFlask, IconBook, IconChevronDown, IconMapPin } from "@tabler/icons-react"
+import { IconCheck, IconAlertTriangle, IconDownload, IconTrash, IconEye, IconHistory, IconFlask, IconBook, IconChevronDown, IconMapPin } from "@tabler/icons-react"
 import { getAppEnv } from "@/lib/env-guard"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@workspace/ui/components/collapsible"
 import {
@@ -185,8 +187,6 @@ function BadgeEstado({ s }: { s: ModuleState }) {
 export default function QaLabPage() {
   useStoreRehydrated()
   const hasHydrated = useCompassStore(s => s.hasHydrated)
-  const store = useCompassStore()
-
   const [report, setReport] = React.useState<SeedReport | null>(null)
   const [activeTab, setActiveTab] = React.useState("carga")
   const [loading, setLoading] = React.useState(false)

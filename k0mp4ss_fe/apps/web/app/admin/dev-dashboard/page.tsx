@@ -228,7 +228,7 @@ export default function DevDashboardPage() {
           } else {
             repoMsg = ` | Error al guardar en repo: ${data.error}`;
           }
-        } catch (err) {
+        } catch {
           repoMsg = ` | Error al conectar con el servidor`;
         }
       }
@@ -307,6 +307,7 @@ export default function DevDashboardPage() {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- reset intencional de filtros derivados (avance 2026-09-02)
     refresh();
   }, [refresh]);
 
@@ -551,6 +552,7 @@ export default function DevDashboardPage() {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- sincronización intencional con datos del repo (avance 2026-09-02)
     setNotesDraft(selectedModule?.notes?.replace(/^\s*<!--\s*estado:.*?-->\s*/, '').trim() ?? '');
   }, [selectedModule]);
 

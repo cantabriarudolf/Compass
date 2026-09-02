@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- helpers de test: fakes intencionalmente laxos */
 import { describe, it, expect } from "vitest"
 import {
   isTestId,

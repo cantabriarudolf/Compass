@@ -29,7 +29,7 @@ test.describe("CRUD — Operaciones/Paqueteria", () => {
     const labelCourier = page.getByText("Courier / App *", { exact: true }).first()
     await expect(labelCourier).toBeVisible({ timeout: 10_000 })
     let triggerCourier = labelCourier.locator("..").getByRole("combobox").first()
-    let visC = await triggerCourier.isVisible().catch(() => false)
+    const visC = await triggerCourier.isVisible().catch(() => false)
     if (!visC) {
       const c = page.locator("div").filter({ has: labelCourier }).first()
       triggerCourier = c.getByRole("combobox").first()
@@ -55,7 +55,7 @@ test.describe("CRUD — Operaciones/Paqueteria", () => {
     let pickedDestino = false
     const labelDest = page.getByText("Destinatario", { exact: true }).first()
     let triggerDest = labelDest.locator("..").getByRole("combobox").first()
-    let visD = await triggerDest.isVisible().catch(() => false)
+    const visD = await triggerDest.isVisible().catch(() => false)
     if (!visD) {
       const c = page.locator("div").filter({ has: labelDest }).first()
       triggerDest = c.getByRole("combobox").first()
@@ -87,7 +87,7 @@ test.describe("CRUD — Operaciones/Paqueteria", () => {
     if (!pickedDestino) {
       const labelUnidad = page.getByText("Unidad", { exact: true }).first()
       let triggerUnidad = labelUnidad.locator("..").getByRole("combobox").first()
-      let visU = await triggerUnidad.isVisible().catch(() => false)
+      const visU = await triggerUnidad.isVisible().catch(() => false)
       if (!visU) {
         const c = page.locator("div").filter({ has: labelUnidad }).first()
         triggerUnidad = c.getByRole("combobox").first()

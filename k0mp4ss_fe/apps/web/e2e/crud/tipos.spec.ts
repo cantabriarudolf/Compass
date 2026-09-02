@@ -31,7 +31,7 @@ test.describe("CRUD — Inventario/Tipos", () => {
     // El Select no tiene htmlFor, usamos Label + combobox vecino
     const labelCategoria = dialog.getByText("Categoría", { exact: true }).first()
     let triggerCategoria = labelCategoria.locator("..").getByRole("combobox").first()
-    let visCat = await triggerCategoria.isVisible().catch(() => false)
+    const visCat = await triggerCategoria.isVisible().catch(() => false)
     if (!visCat) {
       const container = dialog.locator("div").filter({ has: labelCategoria }).first()
       triggerCategoria = container.getByRole("combobox").first()

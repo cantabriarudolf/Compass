@@ -79,6 +79,7 @@ export default function MaestrosPage() {
   const emergencias = useCompassStore(s => s.maestros.contactosEmergencia)
   const saveMaestro = useCompassStore(s => s.saveMaestro)
   
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- item editable polimórfico según sub-tab (unión de 30+ maestros)
   const [editingItem, setEditingItem] = React.useState<any>(null)
   const [isDialogOpen, setIsDialogOpen] = React.useState(false)
   const [activeTab, setActiveTab] = React.useState("inventario")

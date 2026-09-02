@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import type { NextRequest } from 'next/server';
 import { saveBackup } from '@/lib/backup';
 import { isWriteApiEnabled } from '@/lib/env-guard';
 import { prisma } from '@/lib/prisma';

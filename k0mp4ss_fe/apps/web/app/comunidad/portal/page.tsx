@@ -66,7 +66,6 @@ export default function PortalInmobiliarioPage() {
   const removePublicacionPortal = useCompassStore(s => s.removePublicacionPortal)
   const saveLeadPortal = useCompassStore(s => s.saveLeadPortal)
   const marcarNotificacionLeida = useCompassStore(s => s.marcarNotificacionLeida)
-  const notify = useCompassStore(s => s.notify)
   const saveConfiguracion = useCompassStore(s => s.saveConfiguracion)
 
   // Sesión (cookie httpOnly de Auth.js): se consulta al servidor tras montar.

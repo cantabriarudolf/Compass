@@ -35,7 +35,7 @@ describe("Repositorios con scoping obligatorio por comunidadId (C1b)", () => {
         env: { ...process.env, DATABASE_URL: databaseUrl },
         stdio: "pipe",
       })
-    } catch (e) {
+    } catch {
       // Fallback: db push con accept-data-loss
       execSync(`npx prisma db push --schema=${sp} --skip-generate --accept-data-loss`, {
         env: { ...process.env, DATABASE_URL: databaseUrl },
@@ -60,8 +60,12 @@ describe("Repositorios con scoping obligatorio por comunidadId (C1b)", () => {
   afterAll(async () => {
     if (prismaTest) await prismaTest.$disconnect().catch(() => {})
     if (tmpDbPath && fs.existsSync(tmpDbPath)) {
-      try { fs.unlinkSync(tmpDbPath) } catch {}
-      try { fs.unlinkSync(`${tmpDbPath}-journal`) } catch {}
+      try { fs.unlinkSync(tmpDbPath) } catch {
+        // intencional: vacío por diseño
+      }
+      try { fs.unlinkSync(`${tmpDbPath}-journal`) } catch {
+        // intencional: vacío por diseño
+      }
     }
   })
 

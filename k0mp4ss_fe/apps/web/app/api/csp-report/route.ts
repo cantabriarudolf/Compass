@@ -13,9 +13,13 @@ export async function POST(request: Request) {
     let parsed: unknown = body
     try {
       parsed = JSON.parse(body)
-    } catch {}
+    } catch {
+      // intencional: vacío por diseño
+    }
     console.warn("[csp-report] violation:", typeof parsed === "string" ? parsed.slice(0, 1000) : JSON.stringify(parsed).slice(0, 2000))
-  } catch {}
+  } catch {
+    // intencional: vacío por diseño
+  }
   return new NextResponse(null, { status: 204 })
 }
 

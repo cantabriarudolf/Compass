@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- fakes de NextAuth/Prisma */
 import { describe, it, expect } from "vitest"
 import { authConfig } from "@/lib/auth.config"
 
@@ -60,18 +61,18 @@ describe("lib/auth — superficie Auth.js", () => {
 
   it("no exporta secretos ni credenciales hardcodeadas", async () => {
     const mod = await import("@/lib/auth")
-    // @ts-ignore
+    // @ts-expect-error -- entrada inválida a propósito
     expect(mod.crearToken).toBeUndefined()
-    // @ts-ignore
+    // @ts-expect-error -- entrada inválida a propósito
     expect(mod.verificarToken).toBeUndefined()
-    // @ts-ignore
+    // @ts-expect-error -- entrada inválida a propósito
     expect(mod.credencialesValidas).toBeUndefined()
 
     // D-iv SEC-013: seed-authz solo POST (sin side effects en GET)
     const ruta = await import("@/app/api/admin/seed-authz/route")
     expect(typeof ruta.POST).toBe("function")
     expect((ruta as Record<string, unknown>).GET).toBeUndefined()
-    // @ts-ignore
+    // @ts-expect-error -- entrada inválida a propósito
     expect(mod.ADMIN_EMAIL).toBeUndefined()
   })
 })

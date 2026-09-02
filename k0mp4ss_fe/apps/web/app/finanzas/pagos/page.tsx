@@ -30,7 +30,7 @@ import {
   IconLock,
 } from "@tabler/icons-react"
 import type { CobroFI, ConceptoCobroFI } from "@/lib/schemas"
-import { estadoDeCobro, hoyISO, saldoPendiente, type EstadoCobroFI } from "@/lib/finanzas-utils"
+import { estadoDeCobro, saldoPendiente, type EstadoCobroFI } from "@/lib/finanzas-utils"
 
 const CONCEPTO_LABEL: Record<ConceptoCobroFI, string> = {
   gasto_comun: "Gasto Común",

@@ -32,7 +32,7 @@ test.describe("CRUD — Operaciones/Bitacora", () => {
     // Unidad destino — Select "Unidad destino"
     const labelUnidad = page.getByText("Unidad destino", { exact: true }).first()
     let triggerUnidad = labelUnidad.locator("..").getByRole("combobox").first()
-    let visU = await triggerUnidad.isVisible().catch(() => false)
+    const visU = await triggerUnidad.isVisible().catch(() => false)
     if (!visU) {
       const c = page.locator("div").filter({ has: labelUnidad }).first()
       triggerUnidad = c.getByRole("combobox").first()

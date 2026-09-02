@@ -22,13 +22,12 @@ test.describe("CRUD — Personas/Personal", () => {
 
     // Buscar botón Crear ficha primero, fallback a Editar
     let triggerBtn = page.getByRole("button", { name: "Crear ficha" }).first()
-    let hasCrear = (await triggerBtn.count()) > 0 && (await triggerBtn.isVisible().catch(() => false))
+    const hasCrear = (await triggerBtn.count()) > 0 && (await triggerBtn.isVisible().catch(() => false))
     if (!hasCrear) {
       triggerBtn = page.getByRole("button", { name: "Editar" }).first()
     }
     await expect(triggerBtn).toBeVisible({ timeout: 15_000 })
     // Guardar nombre del trabajador para localizar el dialog
-    const card = triggerBtn.locator("..").locator("..")
     // Click con quirúrgico pesado
     await triggerBtn.click({ force: true, noWaitAfter: true })
 

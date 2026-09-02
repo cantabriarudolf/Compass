@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- fake de sesión Auth.js */
 /**
  * Helper de tests: minta cookies de sesión Auth.js reales (JWE) con la misma
  * derivación de llave que @auth/core (HKDF secret+salt), para ejercitar la

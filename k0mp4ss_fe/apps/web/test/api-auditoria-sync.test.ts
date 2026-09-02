@@ -62,7 +62,9 @@ describe("Auditoría sync — POST /api/auditoria/sync + GET /api/auditoria (C1.
       if (userSin) await prisma.usuario.delete({ where: { id: userSin.id } }).catch(() => {})
       await prisma.comunidad.delete({ where: { id: comunidadA } }).catch(() => {})
       await prisma.comunidad.delete({ where: { id: comunidadB } }).catch(() => {})
-    } catch {}
+    } catch {
+      // intencional: vacío por diseño
+    }
   })
 
   async function sesionCookie(email: string): Promise<string> {

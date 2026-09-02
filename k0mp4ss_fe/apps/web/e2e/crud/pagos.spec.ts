@@ -92,7 +92,7 @@ test.describe("CRUD — Finanzas/Pagos (GATED)", () => {
 
       // Periodo siguiente no existente — usar 2026-09 o 2026-10
       const periodoInput = page.locator("#periodo-emision")
-      let periodoUsado = "2026-09"
+      const periodoUsado = "2026-09"
       if (await periodoInput.isVisible().catch(() => false)) {
         // probar 2026-09 primero; si ya existe, fallback a 2026-10
         await periodoInput.fill(periodoUsado)
@@ -243,7 +243,9 @@ test.describe("CRUD — Finanzas/Pagos (GATED)", () => {
           }
           state.cobrosFI = [...(state.cobrosFI || []), nuevo]
           localStorage.setItem("compass-store", JSON.stringify(parsed))
-        } catch {}
+        } catch {
+          // intencional: vacío por diseño
+        }
       })
       await page.reload()
       await expect(page.getByRole("heading", { name: /Recaudación/ })).toBeVisible({ timeout: 15_000 })
@@ -274,7 +276,7 @@ test.describe("CRUD — Finanzas/Pagos (GATED)", () => {
 
     // Extraer monto exigible limpio para usar en el dialog
     // exigibleText like "$120.000" → número 120000; pero el dialog espera formato sin separadores? admite replace
-    const match = exigibleText.match(/\$?\s*([\d\.]+)/)
+    const match = exigibleText.match(/\$?\s*([\d.]+)/)
     let montoLimpio = match ? match[1]!.replace(/\./g, "") : ""
     if (!montoLimpio) {
       // intentar leer del dialog directamente tras abrir
@@ -293,7 +295,7 @@ test.describe("CRUD — Finanzas/Pagos (GATED)", () => {
       const exigibleBox = dialog.getByText(/Exigible hoy/).first()
       if (await exigibleBox.isVisible().catch(() => false)) {
         const txt = (await exigibleBox.textContent()) ?? ""
-        const m = txt.match(/\$?\s*([\d\.]+)/)
+        const m = txt.match(/\$?\s*([\d.]+)/)
         if (m) montoLimpio = m[1]!.replace(/\./g, "") ?? ""
       }
     }
@@ -370,7 +372,6 @@ test.describe("CRUD — Finanzas/Pagos (GATED)", () => {
     await expect(pagadoBadge).toBeVisible({ timeout: 15_000 })
 
     // Además, la fila target ya no debe tener Registrar pago o debe tener estado pagado
-    const stillHasBtn = await targetRow!.getByRole("button", { name: "Registrar pago" }).isVisible().catch(() => false)
     // Si aún existe (porque filtramos), no fallar si hay al menos un pagado global; si la fila aún tiene botón, puede ser otra fila
     // Mejor: si la fila sigue con botón, considerar que el pago no se aplicó a esa fila específica pero sí a alguna → buscar otra confirmación
     // Intentamos afirmar que el contador de pagados aumentó: verificar que hay al menos 1 pagado

@@ -396,7 +396,7 @@ function deriveStatus(
     return override && override.code === code && (!override.name || module.name.includes(override.name));
   });
   if (byOverride) {
-    if (isSpecDirtyAfterArchive(code, byOverride)) return { status: 'documentado', change: byOverride, cierre: 'no_aplica' };
+    if (isSpecDirtyAfterArchive(code)) return { status: 'documentado', change: byOverride, cierre: 'no_aplica' };
     return { status: 'completado', change: byOverride, cierre: 'cerrado' };
   }
 
@@ -404,7 +404,7 @@ function deriveStatus(
     id => !ARCHIVED_OVERRIDES[archivedKey(id)] && keywordsMatch(id, module.name)
   );
   if (keywordArchived) {
-    if (isSpecDirtyAfterArchive(code, keywordArchived)) return { status: 'documentado', change: keywordArchived, cierre: 'no_aplica' };
+    if (isSpecDirtyAfterArchive(code)) return { status: 'documentado', change: keywordArchived, cierre: 'no_aplica' };
     return { status: 'completado', change: keywordArchived, cierre: 'cerrado' };
   }
 
@@ -436,7 +436,7 @@ function gitPorcelana(cwd: string, args: string): boolean {
  * mover el directorio, y specs compartidos (RG/ST) se actualizan legítimamente
  * en archives de OTROS changes posteriores.
  */
-function isSpecDirtyAfterArchive(code: string, archivedId: string): boolean {
+function isSpecDirtyAfterArchive(code: string): boolean {
   try {
     const specDir = readdirSync(SPECS_DIR, { withFileTypes: true }).find(e => e.isDirectory() && e.name.toUpperCase().startsWith(`${code}-`));
     if (!specDir) return false;
@@ -487,7 +487,7 @@ export function getDashboardData(): DashboardData {
       return key === specName || up.startsWith(`${specName}-`);
     });
     const isArchivedRaw = !!archivedOrig && !isActive;
-    const dirty = isArchivedRaw ? isSpecDirtyAfterArchive(s.code, archivedOrig!) : false;
+    const dirty = isArchivedRaw ? isSpecDirtyAfterArchive(s.code) : false;
     s.archived = isArchivedRaw && !dirty;
     s.dirty = dirty;
   }

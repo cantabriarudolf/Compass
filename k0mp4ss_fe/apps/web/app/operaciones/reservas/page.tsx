@@ -166,6 +166,7 @@ export default function ReservasPage() {
       return
     }
     const r = useCompassStore.getState().saveReservaRA({
+      // eslint-disable-next-line react-hooks/purity -- id generado en primer render del formulario nuevo; estable hasta guardar (avance 2026-09-02)
       id: `ra-rs-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
       folio: "",
       elementoId: elementoSeleccionado.id,

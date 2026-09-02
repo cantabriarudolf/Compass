@@ -1,6 +1,20 @@
 {
   "$schema": "https://turbo.build/schema.json",
-  "globalEnv": ["COMPASS_ROOT", "NEXT_PUBLIC_APP_ENV", "APP_ENV"],
+  "globalEnv": [
+    "COMPASS_ROOT",
+    "NEXT_PUBLIC_APP_ENV",
+    "APP_ENV",
+    "NODE_ENV",
+    "DATABASE_URL",
+    "AUTH_SECRET",
+    "AUTH_URL",
+    "NEXTAUTH_URL",
+    "GOOGLE_CLIENT_ID",
+    "GOOGLE_CLIENT_SECRET",
+    "E2E_RATE_LIMIT",
+    "BASE_URL",
+    "CI"
+  ],
   "ui": "tui",
   "tasks": {
     "build": {

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- fixture localStorage compass-store (estado completo, no tipado para tests) */
 import { expect, test } from "@playwright/test"
 
 // Serie QA-LAB P3 — cierre integral: ciclo limpiar→poblar→validar→limpiar

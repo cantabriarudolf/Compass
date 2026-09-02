@@ -23,7 +23,7 @@ test.describe("CRUD — Operaciones/Solicitudes", () => {
     // Tipo de gestión = Insumos y Materiales
     const labelTipo = dialog.getByText("Tipo de gestión", { exact: true }).first()
     let triggerTipo = labelTipo.locator("..").getByRole("combobox").first()
-    let visTipo = await triggerTipo.isVisible().catch(() => false)
+    const visTipo = await triggerTipo.isVisible().catch(() => false)
     if (!visTipo) {
       const c = dialog.locator("div").filter({ has: labelTipo }).first()
       triggerTipo = c.getByRole("combobox").first()

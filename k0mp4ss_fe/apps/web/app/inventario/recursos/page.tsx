@@ -312,7 +312,7 @@ export default function RecursosPage() {
               <IconPlus className="size-4 mr-1" /> Nuevo recurso
             </Button>
             <Select value={fCategoria} onValueChange={v => setFCategoria(v as typeof fCategoria)}>
-              <SelectTrigger className="w-56"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="w-56" aria-label="Filtrar por categoría"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="todas">Todas las naturalezas</SelectItem>
                 {(Object.keys(CATEGORIA_LABEL) as CategoriaRecursoIR[]).map(c => (
@@ -321,7 +321,7 @@ export default function RecursosPage() {
               </SelectContent>
             </Select>
             <Select value={fEstado} onValueChange={v => setFEstado(v as typeof fEstado)}>
-              <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="w-44" aria-label="Filtrar por estado"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="todos">Todos los estados</SelectItem>
                 {(Object.keys(ESTADO_ACTIVO_LABEL) as EstadoActivoIR[]).map(e => (

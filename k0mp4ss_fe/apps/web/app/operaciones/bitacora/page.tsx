@@ -45,7 +45,6 @@ function hoyISO(): string {
 export default function BitacoraPage() {
   useStoreRehydrated()
   const hasHydrated = useCompassStore(s => s.hasHydrated)
-  const unidades = useCompassStore(s => s.unidades)
   const personas = useCompassStore(s => s.personas)
   const maestros = useCompassStore(s => s.maestros)
   const visitas = useCompassStore(s => s.bitacoraVisitasPE)
@@ -79,11 +78,6 @@ export default function BitacoraPage() {
   const encomiendasDelDia = (fecha: string) => encomiendas.filter(e => e.fechaRecepcion === fecha)
   const contratistasDelDia = (fecha: string) => ingresosContratistas.filter(i => i.fecha === fecha)
 
-  const refUnidad = (id?: string) => {
-    if (!id) return "—"
-    const u = unidades.find(x => x.id === id)
-    return u ? `${u.etiqueta} ${u.numero}` : id
-  }
   const nombrePersona = (id?: string) => {
     if (!id) return "—"
     const p = personas.find(x => x.id === id)

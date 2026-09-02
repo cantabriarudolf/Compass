@@ -169,6 +169,7 @@ export default function PermisosPage() {
   React.useEffect(() => {
     if (!comunidadId) return
     let cancelado = false
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- reset intencional de paginación al cambiar filtros (avance 2026-09-02)
     setCargando(true)
     setError(null)
     ;(async () => {

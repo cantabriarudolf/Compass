@@ -1,4 +1,4 @@
-import { Geist, Geist_Mono, Inter } from "next/font/google"
+import { Geist_Mono, Inter } from "next/font/google"
 import type { Metadata } from "next"
 
 import "@workspace/ui/globals.css"
@@ -36,7 +36,7 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode
 }>) {
-  const session = await (auth() as Promise<any>).catch(() => null)
+  const session = await auth().catch(() => null)
   const roles: string[] = Array.isArray(session?.user?.roles) ? session.user.roles : []
   return (
     <html

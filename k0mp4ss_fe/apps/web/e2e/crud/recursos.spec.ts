@@ -34,7 +34,7 @@ test.describe("CRUD — Inventario/Recursos", () => {
       // Fallback: label vecino
       const labelNombre = dialog.getByText("Nombre *", { exact: true }).first()
       let inp = labelNombre.locator("..").locator("input").first()
-      let vis = await inp.isVisible().catch(() => false)
+      const vis = await inp.isVisible().catch(() => false)
       if (!vis) {
         const c = dialog.locator("div").filter({ has: labelNombre }).first()
         inp = c.locator("input").first()
@@ -45,7 +45,7 @@ test.describe("CRUD — Inventario/Recursos", () => {
     // Naturaleza — seleccionar "Insumo / Consumible"
     const labelNat = dialog.getByText("Naturaleza", { exact: true }).first()
     let triggerNat = labelNat.locator("..").getByRole("combobox").first()
-    let visNat = await triggerNat.isVisible().catch(() => false)
+    const visNat = await triggerNat.isVisible().catch(() => false)
     if (!visNat) {
       const c = dialog.locator("div").filter({ has: labelNat }).first()
       triggerNat = c.getByRole("combobox").first()
@@ -82,7 +82,7 @@ test.describe("CRUD — Inventario/Recursos", () => {
     // Stock inicial * → input number min 0
     const labelStock = dialog.getByText("Stock inicial *", { exact: true }).first()
     let inputStock = labelStock.locator("..").locator("input").first()
-    let visStock = await inputStock.isVisible().catch(() => false)
+    const visStock = await inputStock.isVisible().catch(() => false)
     if (!visStock) {
       const c = dialog.locator("div").filter({ has: labelStock }).first()
       inputStock = c.locator("input").first()

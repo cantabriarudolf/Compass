@@ -93,7 +93,9 @@ export function __resetAuditoriaSyncForTest(): void {
   enviados = new Set<string>()
   fallidos401 = new Set<string>()
   if (unsub) {
-    try { unsub() } catch {}
+    try { unsub() } catch {
+      // intencional: vacío por diseño
+    }
   }
   unsub = null
   iniciado = false

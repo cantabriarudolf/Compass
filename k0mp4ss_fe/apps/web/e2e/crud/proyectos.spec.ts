@@ -55,7 +55,7 @@ test.describe("CRUD — Inventario/Proyectos", () => {
     // Unidad EF * — seleccionar primera unidad del seed
     const labelUnidad = dialog.getByText("Unidad EF *", { exact: true }).first()
     let triggerU = labelUnidad.locator("..").getByRole("combobox").first()
-    let visU = await triggerU.isVisible().catch(() => false)
+    const visU = await triggerU.isVisible().catch(() => false)
     if (!visU) {
       const c = dialog.locator("div").filter({ has: labelUnidad }).first()
       triggerU = c.getByRole("combobox").first()
@@ -95,7 +95,7 @@ test.describe("CRUD — Inventario/Proyectos", () => {
     // Costo total ($) *
     const labelCosto = dialog.getByText("Costo total ($) *", { exact: true }).first()
     let inputCosto = labelCosto.locator("..").locator("input").first()
-    let visCosto = await inputCosto.isVisible().catch(() => false)
+    const visCosto = await inputCosto.isVisible().catch(() => false)
     if (!visCosto) {
       const c = dialog.locator("div").filter({ has: labelCosto }).first()
       inputCosto = c.locator("input").first()

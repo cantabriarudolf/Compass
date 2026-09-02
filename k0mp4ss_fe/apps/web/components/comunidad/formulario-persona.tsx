@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import { Persona } from "@/data/comunidad/personas"
+import { ROLES_PERSONA } from "@/lib/schemas"
 import { useCompassStore, StoreResult } from "@/lib/store"
 import { Button } from "@workspace/ui/components/button"
 import { Input } from "@workspace/ui/components/input"
@@ -77,7 +78,7 @@ export function FormularioPersona({ persona, onSave, onCancel }: FormularioPerso
       email,
       telefonoMovil,
       estadoCuenta: estadoCuenta as "activa" | "inactiva" | "bloqueada",
-      roles: roles as any,
+      roles: roles as unknown as (typeof ROLES_PERSONA[number])[],
       condicionesEspecialesIds: condiciones,
       vinculosUnidad: persona?.vinculosUnidad || []
     }

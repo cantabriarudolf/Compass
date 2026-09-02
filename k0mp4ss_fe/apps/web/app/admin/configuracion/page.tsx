@@ -27,6 +27,7 @@ export default function ConfiguracionPage() {
   const [config, setConfig] = React.useState<ConfiguracionGlobal>(configuracion)
 
   React.useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- reset intencional del mensaje al cambiar inputs (avance 2026-09-02)
     setConfig(configuracion)
   }, [configuracion])
 

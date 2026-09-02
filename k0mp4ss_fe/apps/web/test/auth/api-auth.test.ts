@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- fakes de NextAuth para probar authorize */
 /**
  * @vitest-environment node
  *
@@ -82,7 +83,10 @@ describe("Auth.js — /api/auth/* (login credentials + sesión + D-v)", () => {
     try {
       await prisma.usuario.deleteMany({ where: { email: { in: [emailOk, emailInactivo, emailMalaPass] } } })
       await prisma.rateLimitAttempt.deleteMany({ where: { clave: claveRate } })
-    } catch {}
+        // intencional: bloque vacío por diseño
+    } catch {
+      // intencional: el fallo ya se verifica arriba
+    }
   })
 
   it("csrf entrega token y cookie de doble submit", async () => {

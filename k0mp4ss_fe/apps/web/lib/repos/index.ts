@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- capa de repos genérica: el wrapper scoped() delega delegates de Prisma con genéricos no expresables sin regenerar tipos; la validez la dan los tests con Prisma real */
 import { prisma as defaultPrisma } from "../prisma"
 import type { PrismaClient } from "@prisma/client"
 

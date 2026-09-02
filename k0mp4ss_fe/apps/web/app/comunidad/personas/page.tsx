@@ -110,7 +110,7 @@ export default function DirectorioPersonasPage() {
     // Filtro por rol (tab o donut)
     const activeRoleFilter = donutRole || (selectedRole !== "todos" ? selectedRole : undefined)
     if (activeRoleFilter) {
-      result = result.filter(p => p.roles.includes(activeRoleFilter as any))
+      result = result.filter(p => p.roles.map(r => String(r)).includes(String(activeRoleFilter)))
     }
 
     // Filtro por estado (sidebar)
@@ -403,7 +403,7 @@ export default function DirectorioPersonasPage() {
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-1">
-                            <Button variant="ghost" size="icon" onClick={() => abrirEditar(persona)}>
+                            <Button variant="ghost" size="icon" aria-label={`Editar ${persona.nombres} ${persona.apellidos}`} onClick={() => abrirEditar(persona)}>
                               <IconPencil className="size-4" />
                             </Button>
                             <Button variant="secondary" size="sm" asChild className="text-xs font-bold">

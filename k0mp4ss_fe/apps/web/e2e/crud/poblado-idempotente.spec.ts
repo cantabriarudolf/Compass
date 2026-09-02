@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- fixture localStorage compass-store (estado completo, no tipado para tests) */
 import { expect, test } from "@playwright/test"
 
 // P1 C2 — Guard QA Lab pasa de bloquear a confirmación "Limpiar y poblar de una vez"

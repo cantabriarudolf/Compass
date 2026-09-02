@@ -26,7 +26,7 @@ test.describe("CRUD — Inventario/Estructura", () => {
       const label = dialog.getByText(labelText, { exact: true }).first()
       // Intentar localizar combobox cercano
       let trigger = label.locator("..").getByRole("combobox").first()
-      let vis = await trigger.isVisible().catch(() => false)
+      const vis = await trigger.isVisible().catch(() => false)
       if (!vis) {
         const container = dialog.locator("div").filter({ has: label }).first()
         trigger = container.getByRole("combobox").first()

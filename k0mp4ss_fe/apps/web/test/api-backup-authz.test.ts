@@ -42,7 +42,9 @@ describe("POST /api/backup — reforzado con authz B3 (Auth.js)", () => {
       const conserjeUser = await prisma.usuario.findUnique({ where: { email: conserjeEmail } })
       const ids = [adminUser?.id, conserjeUser?.id].filter(Boolean) as string[]
       if (ids.length) await prisma.membresia.deleteMany({ where: { usuarioId: { in: ids } } })
-    } catch {}
+    } catch {
+      // intencional: vacío por diseño
+    }
   })
 
   async function cookiePara(email: string): Promise<string> {

@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { useCompassStore, useStoreRehydrated } from "@/lib/store"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@workspace/ui/components/card"
+import { Card, CardContent } from "@workspace/ui/components/card"
 import { Badge } from "@workspace/ui/components/badge"
 import { 
   IconTrendingUp, 
@@ -10,7 +10,6 @@ import {
   IconSettings,
   IconFingerprint,
   IconBolt,
-  IconArrowRight
 } from "@tabler/icons-react"
 
 export default function MetricasPage() {
@@ -154,7 +153,7 @@ export default function MetricasPage() {
   )
 }
 
-function ModuleMetric({ label, value, sub, color = "text-foreground" }: any) {
+function ModuleMetric({ label, value, sub, color = "text-foreground" }: { label: string; value: React.ReactNode; sub?: string; color?: string }) {
   return (
     <Card className="shadow-none border-muted-foreground/10">
       <CardContent className="pt-4 space-y-1">

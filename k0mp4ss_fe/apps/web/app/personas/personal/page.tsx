@@ -160,7 +160,6 @@ export default function PersonalPage() {
   useStoreRehydrated()
   const hasHydrated = useCompassStore(s => s.hasHydrated)
   const personas = useCompassStore(s => s.personas)
-  const unidades = useCompassStore(s => s.unidades)
   const trabajosMT = useCompassStore(s => s.trabajosMT)
   const cierresTurnoPE = useCompassStore(s => s.cierresTurnoPE)
   const proyeccionesPE = useCompassStore(s => s.proyeccionesPE)
@@ -342,11 +341,6 @@ export default function PersonalPage() {
   )
   const tareasAbiertas = trabajosMT.filter(t => (t.estado === "planificado" || t.estado === "en_curso") && t.responsablePersonaId && personal.some(p => p.id === t.responsablePersonaId))
 
-  const refUnidad = (id?: string) => {
-    if (!id) return "—"
-    const u = unidades.find(x => x.id === id)
-    return u ? `${u.etiqueta} ${u.numero}` : id
-  }
 
   if (!hasHydrated) {
     return <div className="flex min-h-[60vh] flex-col gap-4 animate-pulse"><div className="h-9 w-72 rounded bg-muted/40" /><div className="h-64 w-full rounded-lg bg-muted" /></div>

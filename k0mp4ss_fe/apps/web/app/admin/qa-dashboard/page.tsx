@@ -68,6 +68,7 @@ export default function QaDashboardPage() {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- carga inicial intencional desde API al montar (avance 2026-09-02)
     cargar();
   }, [cargar]);
 
