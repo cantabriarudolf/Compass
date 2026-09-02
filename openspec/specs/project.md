@@ -74,6 +74,11 @@ Each OpenSpec capability maps 1:1 to its module spec in `Data/NSGC/docs/especifi
 
 ### Remaining NSGC modules (pending OpenSpec specs)
 Ninguno: los 32 specs del roadmap (incluidos `AU` y `SG`) existen en `openspec/specs/` y la serie Plataforma P1–P8 está completa (auth, authz, Prisma scoping, secretos, Auth.js, CSP/headers, auditoría OWASP, backups con restore probado).
+
+### Novedades 2026-08-31 / 2026-09-01 (QA + menú 100% + frontera)
+- **QA infra**: Dashboard QA `/admin/qa-dashboard` (estado de corridas, estimados CLI vs Chrome, alerta de máquina ahogada — `lib/qa-estado.ts` + `qa-estado.json`); skill `pruebas` v2.1 (preflight de sistema + registro en dashboard); CI e2e verde con suite completa (setup e2e resiliente + gate del QA Lab por `APP_ENV`).
+- **Series completadas**: CRUD-E2E (6/6, 22 specs CRUD), QA-LAB (3/3, lab 27→0 errores "Carga completa OK" + guard), MENU-100 (6/6: `/personas/residentes`, `/dashboard` Resumen, `/operaciones/accesos`, `/operaciones/paqueteria`, menú sin placeholders, dashboard OpenSpec 31/31 Completado), FRONTERA (6/6: poblado idempotente "Limpiar y poblar", logs de auditoría con retención en BD — `POST /api/auditoria/sync` + `GET /api/auditoria` — y ABAC contextual `puedeContextual()` + matriz visible en `/admin/permisos`).
+- **Frontera restante**: C3 Google SSO — EN PAUSA pendiente credenciales Google Cloud del owner (checklist en `openspec/BACKLOG-100.md` §C3).
 ### Folder naming rule
 - Specs and active changes: `<AA>-<kebab-case-name>` (e.g. `EF-estructura-fisica`).
 - Cross-cutting UI specs use `UI-` prefix.

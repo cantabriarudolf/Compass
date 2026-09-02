@@ -59,8 +59,8 @@ Chrome = Playwright:
 | smoke (8 módulos) | Chrome | 2.5 min |
 | auth (login/guard) | Chrome | 1.5 min |
 | flujo (journey + personas) | Chrome | 3.6 min (medido) |
-| CRUD general (lane, 22 specs) | Chrome | 12 min (medido 11.8m) |
-| suite completa | Chrome | 16 min (medido 15.8m, 38 passed) |
+| CRUD general (lane, 29 specs) | Chrome | 15 min (12m local dev · 6.2m prod CI=1) |
+| suite completa | Chrome | 20 min (52 tests: crud 29 + flujo 7 + smoke 8 + auth 3) |
 | show-report | Chrome | instantáneo |
 
 **Estimado al owner** = `base × factorCarga` del alcance elegido, en 1-2 líneas
@@ -115,13 +115,19 @@ npx playwright show-report                      # reporte HTML del último run
 | certificados | `crud/certificados.spec.ts` (gated: poblar) | generar PDF firmado |
 | remuneraciones | `crud/remuneraciones.spec.ts` (gated: poblar) | liquidación → confirmar |
 | portal | `crud/portal.spec.ts` (gated: poblar) | publicación en vitrina |
-| logs | `crud/logs.spec.ts` (read-oriented) | evento real vía módulo → buscar/filtrar/exportar CSV |
-| permisos | `crud/permisos.spec.ts` (read-oriented) | matriz RBAC + membresías scoping A/B (selector propio) |
+| logs | `crud/logs.spec.ts` (read-oriented, sobre BD) | evento real vía módulo → buscar/filtrar/exportar CSV |
+| permisos | `crud/permisos.spec.ts` (read-oriented) | matriz RBAC + ABAC + membresías scoping A/B (selector propio) |
+| residentes | `crud/residentes.spec.ts` (read-oriented) | directorio MP filtrado a vínculos vigentes |
+| dashboard | `crud/dashboard.spec.ts` (read-oriented) | Resumen /dashboard con KPIs del seed |
+| accesos | `crud/accesos.spec.ts` (read-oriented) | paneles Visitas + Contratistas dedicados |
+| paqueteria | `crud/paqueteria.spec.ts` | recibir encomienda TEST-* → fila |
+| poblado idempotente | `crud/poblado-idempotente.spec.ts` | 2ª corrida → dialog limpiar+poblar → 22/22 |
 | personas | `e2e/flujo/personas.spec.ts` (existente) | Nueva Identidad → grilla |
 
 Fixture gated: `/admin/qa-lab` → "Poblar todo de una vez" → esperar `🟢 Listo` (desde la
-Serie QA-LAB la carga completa es "Carga completa OK" con 27→0 errores y 22/22 fases OK;
-el guard "Existen datos TEST-*" bloquea una 2ª corrida sin limpiar antes).
+Serie QA-LAB la carga completa es "Carga completa OK" con 27→0 errores y 22/22 fases OK).
+Desde la Serie FRONTERA el poblado es **idempotente**: si hay datos TEST-* aparece un dialog
+"¿Limpiar y poblar?" — confirmar repite limpiar+poblar automáticamente; cancelar no muta nada.
 
 ## Mapa de la suite
 
@@ -131,7 +137,8 @@ el guard "Existen datos TEST-*" bloquea una 2ª corrida sin limpiar antes).
   (3 flujos), `auth/rate-limit.spec.ts` (GATED), `smoke/modulos.spec.ts` (8 módulos, 0
   pageerror), `flujo/` (journey Historia de Poblamiento via QA Lab + CRUD personas +
   `ciclo.spec.ts`: ciclo limpiar→poblar→validar→limpiar y guard de 2ª corrida),
-  `crud/` (Serie CRUD-E2E: 22 specs + logs/permisos read-oriented, SERIE COMPLETA).
+  `crud/` (29 specs: Serie CRUD-E2E 22 + residentes/dashboard/accesos/paqueteria + logs/
+  permisos read-oriented + poblado-idempotente — SERIES COMPLETAS).
 - CI (`.github/workflows/ci.yml`): jobs `unit`, `e2e`, `e2e-rate-limit` (aislado). Node 24.
 - Dashboard de estado: `/admin/qa-dashboard` (Desarrollo AI → "Estado de Pruebas QA").
   Lee `apps/web/qa-estado.json` vía `/api/qa-estado` (`lib/qa-estado.ts`). Muestra última
