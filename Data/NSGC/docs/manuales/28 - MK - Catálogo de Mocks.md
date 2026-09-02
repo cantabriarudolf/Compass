@@ -20,12 +20,13 @@ k0mp4ss_fe/apps/web/data/
 │   ├── plantillas-co.ts           ← Seed del Maestro de Plantillas (CO, Sesión 2)
 │   └── plantillas-cv.ts           ← Seed del Maestro de Plantillas Rápidas (CV, Sesión 4)
 ├── finanzas/
-│   └── tipos-infraccion.ts        ← Seed del Catálogo de Faltas (IN, Sesión 3)
+│   ├── tipos-infraccion.ts        ← Seed del Catálogo de Faltas (IN, Sesión 3)
+│   └── punto-cero-2324.json       ← Fixture histórico 2023-2024 (P2): fondo Cuenta Corriente + 182 egresos +44 ingresos +24 saldos CC (fuente INGvsEGR.xlsx, 4+1 con monto 0 filtrados)
 └── inventario/
     └── estructura.ts              ← Tipos de unidad, sectores y unidades (incluye plazas u-E-*)
 ```
 
-> **⚠️ Desde ST**, casi todo vive en el store `compass-store` (`lib/store.ts`) con migraciones versionadas. Las colecciones PI/AD/GD (Sesión 1) nacen **vacías por diseño** dentro del store — ver sección 5. Las colecciones CO/GE (Sesión 2) siguen el mismo patrón; la excepción es `plantillasCO`, que se **siembra** desde `data/comunidad/plantillas-co.ts` — ver sección 6. En la Sesión 3 el patrón se repite para **IR/IN/MT**: `tiposInfraccionIN` se siembra desde `data/finanzas/tipos-infraccion.ts`; `activosIR`, `solicitudesInsumoIR`, `entregasEPP`, `infraccionesIN`, `trabajosMT` y `proyectosMT` nacen vacías — ver sección 7. En la **Sesión 4** lo hace **RA/CV**: `plantillasCV` se siembra desde `data/comunidad/plantillas-cv.ts`; `elementosRA`, `reservasRA` y `avisosCV` nacen vacías — ver sección 8. En la **Sesión 5** llega **FI**: `fondosFI` se siembra inline desde el propio store (3 fondos NSGC); `egresosFI`, `emisionesGC` y `cobrosFI` nacen vacías — ver sección 9.
+> **⚠️ Desde ST**, casi todo vive en el store `compass-store` (`lib/store.ts`) con migraciones versionadas. Las colecciones PI/AD/GD (Sesión 1) nacen **vacías por diseño** dentro del store — ver sección 5. Las colecciones CO/GE (Sesión 2) siguen el mismo patrón; la excepción es `plantillasCO`, que se **siembra** desde `data/comunidad/plantillas-co.ts` — ver sección 6. En la Sesión 3 el patrón se repite para **IR/IN/MT**: `tiposInfraccionIN` se siembra desde `data/finanzas/tipos-infraccion.ts`; `activosIR`, `solicitudesInsumoIR`, `entregasEPP`, `infraccionesIN`, `trabajosMT` y `proyectosMT` nacen vacías — ver sección 7. En la **Sesión 4** lo hace **RA/CV**: `plantillasCV` se siembra desde `data/comunidad/plantillas-cv.ts`; `elementosRA`, `reservasRA` y `avisosCV` nacen vacías — ver sección 8. En la **Sesión 5** llega **FI**: `fondosFI` se siembra inline desde el propio store (3 fondos NSGC); `egresosFI`, `emisionesGC` y `cobrosFI` nacen vacías — ver sección 9. **P2 Punto Cero** añade `punto-cero-2324.json` (fixture versionado) y migra 4º fondo + 182 egresos +44 ingresos vía v27 idempotente.
 
 ---
 
@@ -311,24 +312,25 @@ Consumido por: `lib/store.ts` (seedData). Dump completo en `36 - MK - Data Dump 
 
 Integraciones: `publicarActaEnCV(actaId)` consume `actasGD.avisoCVReferencia === "pendiente"`, crea el aviso origen `acta_gd` y marca la referencia con el id del aviso. Flags de soporte: `permiteCreacionManualCV` (MP) y `cvRequiereVistoBueno` (CF, default true). Consumidores: `app/operaciones/reservas/page.tsx` (RA), `app/comunidad/visor/page.tsx` (panel CV), `app/visor-mensajes/page.tsx` (carrusel público con próximas reservas RA). Eventos AM: `RA_BOOKING_CREATED/CANCELLED/WARRANTY_RETAINED`; `CV_DRAFT_CREATED/PUBLISHED/EDITED/ARCHIVED`.
 
-### 9. Store + Seed — Sesión 5 NSGC (FI)
+### 9. Store + Seed — Sesión 5 NSGC (FI) + Punto Cero 2023-2024 (P2)
 
-#### 9.0 Seed inline de `fondosFI` (store v21)
+#### 9.0 Seed inline de `fondosFI` (store v21 → v27 con punto cero)
 
 | Campo | Detalle |
 |-------|---------|
-| **Ubicación** | `lib/store.ts` → constante `FONDOS_FI_SEED` (no hay archivo en `data/`: el maestro es financiero-operativo, no mock de catálogo) |
-| **Propósito** | Los 3 fondos base del NSGC sembrados vía migrate aditivo v20→v21 |
-| **Registros** | `fondo-gc` (Fondo de Gasto Común, gasto_comun), `fondo-reserva` (Fondo de Reserva, reserva, porcentajeAporte 5), `fondo-amenities` (Fondo de Amenities, amenities) |
+| **Ubicación** | `lib/store.ts` → constante `FONDOS_FI_SEED` (3 fondos base NSGC) + `PUNTO_CERO_FONDO` importado de `data/finanzas/punto-cero-2324.json` |
+| **Propósito** | Los 3 fondos base del NSGC sembrados vía migrate aditivo v20→v21 + fondo histórico **Cuenta Corriente** (`fondo-cc-punto-cero`, gasto_comun, saldoInicial 17082694) que cuadra el libro INGvsEGR.xlsx (P2) |
+| **Registros** | `fondo-gc` (Gasto Común), `fondo-reserva` (Reserva, 5%), `fondo-amenities` (Amenities) + `fondo-cc-punto-cero` (Cuenta Corriente, saldoInicial 17082694) = **4 fondos** en seedData v27 |
 
 Dump completo en `38 - MK - Data Dump Finanzas.md`.
 
-#### 9.1 Colecciones store FI (vacías salvo `fondosFI`)
+#### 9.1 Colecciones store FI (operativas con históricos P2)
 
 | Colección | Store | Contenido | Acciones repository |
 |-----------|-------|-----------|---------------------|
-| `fondosFI` | v21 | Maestro de cajas {nombre, tipo gasto_comun/reserva/especial/amenities, porcentajeAporte? para reserva, activo}; saldo derivable en base caja | `saveFondoFI` (unicidad nombre), `removeFondoFI` (bloqueado con movimientos imputados) |
-| `egresosFI` | v21 | Folio `FE-####`, categoría sueldos/mantencion/servicios/administracion/uso_de_fondo/otro, fondo obligatorio, recurrente flag, comprobante D1, microSectoresIds (gastos diferenciados), aprobacionActaGDId (retiros) | `saveEgresoFI` (`FI_EGRESS_CREATED`), `removeEgresoFI`, `retirarFondoFI` (reserva exige acta GD publicada + saldo; `FI_FUND_WITHDRAWN`) |
+| `fondosFI` | v21→v27 | Maestro de cajas {nombre, tipo gasto_comun/reserva/especial/amenities, porcentajeAporte? para reserva, activo, **saldoInicial?**}; saldo derivable `saldoInicial + ingresosCobros + aportes − egresos`. **P2** añade 4º fondo `fondo-cc-punto-cero` (Cuenta Corriente, saldoInicial 17082694) | `saveFondoFI` (unicidad nombre, saldoInicial validado), `removeFondoFI` (bloqueado con movimientos imputados incluye ingresos manuales) |
+| `egresosFI` | v21→v27 | Folio `FE-####` continuo (respetando max existente), categoría sueldos/mantencion/servicios/administracion/uso_de_fondo/otro, fondo obligatorio, recurrente flag, comprobante D1, microSectoresIds, aprobacionActaGDId. **P2**: 182 históricos `fi-egr-hist-001..182` desde `data/finanzas/punto-cero-2324.json` (4 con monto 0 filtrados del libro) | `saveEgresoFI` (`FI_EGRESS_CREATED`), `removeEgresoFI`, `retirarFondoFI` |
+| `ingresosFI` | v27 | Ingreso manual a fondo {fecha ISO, monto>0, concepto, fondoId FK, familia?}; **P2**: 44 históricos `fi-ing-hist-001..044` (1 con monto 0 filtrado) imputados a Cuenta Corriente | `registrarIngresoFI` (`FI_INGRESO_REGISTRADO`), `removeIngresoFI` |
 | `emisionesGC` | v21 | Periodo `AAAA-MM` único, modo snapshot fijo/variable, gastoTotal, líneas {unidadId, responsablePersonaId, monto, cobroId}, fondoReservaAporte {fondoId, monto} | `emitirGastoComun` (gate "CF no cargado", responsable por unidad, prorrateo = round(gastoTotal × coeficiente), aporte % reserva, `FI_EMISION_GC`) |
 | `cobrosFI` | v21 | Libro unificado: concepto gc/cuota_extraordinaria/multa_in/consumo/reserva_ra/penalizacion_ra/garantia_ra, origenModulo FI/IN/RA + origenRef, fondo, montoBase, fechaVencimiento desde diaCortePago, moras[] idempotentes por día, pagos[], diferencias[] inmutables | `aplicarMoraFI` (pro-rata, `FI_MORA_APPLIED`), `registrarPagoFI` (`FI_RECEIVE_PAYMENT` + `FI_MANUAL_DISCOUNT` si ajusta), `enviarCobranzaFI` (`FI_COBRANZA_SENT`) |
 
