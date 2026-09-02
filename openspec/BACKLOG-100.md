@@ -75,6 +75,14 @@
 - **Sugerencia:** change `rp-abac-contextual` en 2 fases: (1) modelo + migración de checks
   existentes sin cambio de comportamiento (tests verde), (2) vista en /admin/permisos.
 
+## Punto cero financiero (2026-09-02)
+
+**HECHO** — la historia real 2023-2024 (INGvsEGR.xlsx) es la línea base del sistema: feature
+"Ingreso manual a fondo" + `FondoFI.saldoInicial` (versátil: fiel al flujo o cuadrado) +
+STORE_VERSION 27 con migración idempotente (fondo "Cuenta Corriente", 182 egresos FE-0001..0182,
+44 ingresos). **Pendiente**: sincronizar FI→Prisma (ST) para que el punto cero viva también en
+BD — mismo patrón que el sync de auditoría (C1).
+
 ## Nota de proceso
 
 - Cualquier chat puede retomar estos ítems: la fuente de verdad es este archivo + los specs
