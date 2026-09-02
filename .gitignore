@@ -35,3 +35,6 @@ Thumbs.db
 
 # Artefactos de tests (los snapshots manuales sí se versionan)
 Data/NSGC/backups/test-*.json
+
+# Sesiones e2e (cookies — nunca commitear)
+k0mp4ss_fe/apps/web/e2e/.auth/
