@@ -56,6 +56,7 @@ import {
   CATEGORIAS_MICRO as seedCategoriasMicro,
   CATEGORIAS_UNIDAD as seedCategoriasUnidad,
 } from "@/data/maestros"
+import puntoCeroData from "@/data/finanzas/punto-cero-2324.json"
 import {
   TipoUnidadSchema,
   MacroSectorSchema,
@@ -298,6 +299,49 @@ const FONDOS_FI_SEED: FondoFI[] = [
   { id: "fondo-reserva", nombre: "Fondo de Reserva", tipo: "reserva", descripcion: "Ahorro obligatorio según la Ley de Copropiedad.", porcentajeAporte: 5, activo: true },
   { id: "fondo-amenities", nombre: "Fondo de Amenities", tipo: "amenities", descripcion: "Centro de costos de reservas, tarifas y garantías de amenities.", activo: true },
 ]
+
+// P2 — Punto cero histórico 2023-2024 (fixture canónico). Se importa el JSON
+// versionado y se deriva seed + migración. El fondo CC cuadra el libro
+// (saldoInicial 17.082.694) y deja saldo 0 tras cargar 186 egresos + 45 ingresos.
+const PUNTO_CERO_FONDO: FondoFI = {
+  id: (puntoCeroData as { fondoCC: { id: string } }).fondoCC.id as string,
+  nombre: (puntoCeroData as { fondoCC: { nombre: string } }).fondoCC.nombre,
+  tipo: (puntoCeroData as { fondoCC: { tipo: FondoFI["tipo"] } }).fondoCC.tipo,
+  descripcion: "Cuenta corriente histórica (punto cero 2023-2024). Saldo inicial cuadra el libro.",
+  saldoInicial: (puntoCeroData as { fondoCC: { saldoInicial: number } }).fondoCC.saldoInicial,
+  activo: true,
+}
+
+function buildPuntoCeroEgresos(startFolioNum: number): EgresoFI[] {
+  const egresosRaw = (puntoCeroData as { egresos: { fecha: string; monto: number; concepto: string; categoria: string; esRecurrente: boolean }[] }).egresos
+  return egresosRaw.map((e, idx) => ({
+    id: `fi-egr-hist-${String(idx + 1).padStart(3, "0")}`,
+    folio: `FE-${String(startFolioNum + idx).padStart(4, "0")}`,
+    fecha: e.fecha,
+    categoria: e.categoria as EgresoFI["categoria"],
+    descripcion: e.concepto,
+    monto: e.monto,
+    fondoId: PUNTO_CERO_FONDO.id,
+    esRecurrente: e.esRecurrente,
+  }))
+}
+
+function buildPuntoCeroIngresos(): IngresoFI[] {
+  const ingresosRaw = (puntoCeroData as { ingresos: { fecha: string; monto: number; concepto: string; familia?: string }[] }).ingresos
+  return ingresosRaw.map((e, idx) => ({
+    id: `fi-ing-hist-${String(idx + 1).padStart(3, "0")}`,
+    fecha: e.fecha,
+    monto: e.monto,
+    concepto: e.concepto,
+    fondoId: PUNTO_CERO_FONDO.id,
+    ...(e.familia ? { familia: e.familia } : {}),
+  }))
+}
+
+// Seed incluye punto cero: fresh installs arrancan con historia completa.
+// Para migrados, el migrate v27 inyecta los mismos ids de forma idempotente.
+const PUNTO_CERO_EGRESOS_SEED: EgresoFI[] = buildPuntoCeroEgresos(1)
+const PUNTO_CERO_INGRESOS_SEED: IngresoFI[] = buildPuntoCeroIngresos()
 
 export const STORE_VERSION = 27
 
@@ -632,9 +676,9 @@ export const seedData = (): CompassData => ({
   reservasRA: [],
   avisosCV: [],
   plantillasCV: plantillasCVSeed,
-  fondosFI: FONDOS_FI_SEED,
-  egresosFI: [],
-  ingresosFI: [],
+  fondosFI: [...FONDOS_FI_SEED, PUNTO_CERO_FONDO],
+  egresosFI: [...PUNTO_CERO_EGRESOS_SEED],
+  ingresosFI: [...PUNTO_CERO_INGRESOS_SEED],
   emisionesGC: [],
   cobrosFI: [],
   bitacoraVisitasPE: [],
@@ -4872,11 +4916,54 @@ export const useCompassStore = create<CompassStore>()(
             if ("claveEliminacionMaestro" in cfg) delete cfg.claveEliminacionMaestro
           }
         }
-        // FI v27: colección ingresosFI (transaccional, nace vacía). Aditivo; no carga datos históricos (P2).
+        // FI v27: punto cero histórico 2023-2024. Aditivo e idempotente por IDs
+        // deterministas. Crea fondo Cuenta Corriente con saldoInicial 17082694 e
+        // inyecta 186 egresos (folio FE-#### continuo sin chocar) + 45 ingresos.
+        // Documentado: históricos usan rango siguiente a max(FE) existente.
         if ((version ?? 0) < 27) {
+          const prevFondos = (prev as unknown as Record<string, unknown>)["fondosFI"] as FondoFI[] | undefined
+          const prevEgresos = (prev as unknown as Record<string, unknown>)["egresosFI"] as EgresoFI[] | undefined
+          const prevIngresos = (prev as unknown as Record<string, unknown>)["ingresosFI"] as IngresoFI[] | undefined
+
+          // Asegura colecciones base si vienen undefined
+          const fondosBase: FondoFI[] = prevFondos ?? (result.fondosFI as FondoFI[] | undefined) ?? []
+          const egresosBase: EgresoFI[] = prevEgresos ?? (result.egresosFI as EgresoFI[] | undefined) ?? []
+          const ingresosBase: IngresoFI[] = prevIngresos ?? (result.ingresosFI as IngresoFI[] | undefined) ?? []
+
+          // Fondo Cuenta Corriente (idempotente por id)
+          const tieneFondoCC = fondosBase.some(f => f.id === PUNTO_CERO_FONDO.id)
+          const fondosNext: FondoFI[] = tieneFondoCC ? fondosBase : [...fondosBase, PUNTO_CERO_FONDO]
+
+          // Egresos históricos: idempotente por id, folios continuos desde max existente
+          const idsEgresosExistentes = new Set(egresosBase.map(e => e.id))
+          let egresosNext = [...egresosBase]
+          const faltanEgresos = PUNTO_CERO_EGRESOS_SEED.filter(e => !idsEgresosExistentes.has(e.id))
+          if (faltanEgresos.length > 0) {
+            const maxFolio = egresosBase
+              .map(e => Number.parseInt((e.folio ?? "").replace(/^FE-/, ""), 10))
+              .filter(n => Number.isFinite(n))
+              .reduce((a, b) => Math.max(a, b), 0)
+            let nextFolio = maxFolio + 1
+            // Si no hay folios previos, empezamos en 1 (ya viene en seed)
+            // Pero para idempotencia fresca con max=0, PUNTO_CERO_EGRESOS_SEED ya trae 1..186, así que usamos esos folios
+            // Solo si max>0 necesitamos re-foliar los faltantes
+            if (maxFolio === 0) {
+              egresosNext = [...egresosBase, ...faltanEgresos]
+            } else {
+              const refolios = faltanEgresos.map(e => ({ ...e, folio: `FE-${String(nextFolio++).padStart(4, "0")}` }))
+              egresosNext = [...egresosBase, ...refolios]
+            }
+          }
+
+          // Ingresos históricos: idempotente por id
+          const idsIngresosExistentes = new Set(ingresosBase.map(i => i.id))
+          const ingresosNext = [...ingresosBase, ...PUNTO_CERO_INGRESOS_SEED.filter(i => !idsIngresosExistentes.has(i.id))]
+
           result = {
             ...result,
-            ingresosFI: (prev as unknown as Record<string, unknown>)["ingresosFI"] as IngresoFI[] ?? [],
+            fondosFI: fondosNext,
+            egresosFI: egresosNext,
+            ingresosFI: ingresosNext,
           }
         }
         // TST-002: los stores que ya quedaron en v8 con unidades dañadas por este

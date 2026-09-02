@@ -13,19 +13,22 @@ describe("FI - Ingreso manual a fondo y saldoInicial", () => {
     expect(STORE_VERSION).toBe(27)
   })
 
-  it("registrar ingreso OK persiste y saldoFondo refleja", () => {
+  it("registrar ingreso OK persiste y saldoFondo refleja (con punto cero)", () => {
+    const antes = getState().ingresosFI.length // 44 del punto cero (1 con monto 0 filtrado)
+    expect(antes).toBe(44)
     const r = getState().registrarIngresoFI({ fecha: "2026-09-01", monto: 50000, concepto: "Aporte extraordinario", fondoId: "fondo-gc" })
     expect(r.ok).toBe(true)
-    expect(getState().ingresosFI).toHaveLength(1)
-    expect(getState().ingresosFI[0]!.concepto).toBe("Aporte extraordinario")
+    expect(getState().ingresosFI).toHaveLength(45)
+    expect(getState().ingresosFI.some(i => i.concepto === "Aporte extraordinario")).toBe(true)
     expect(getState().eventos.some(e => e.tipoAccion === "FI_INGRESO_REGISTRADO")).toBe(true)
     const saldo = saldoFondo("fondo-gc", {
-      cobros: getState().cobrosFI,
-      egresos: getState().egresosFI,
+      cobros: getState().cobrosFI.filter(c => c.fondoId === "fondo-gc"),
+      egresos: getState().egresosFI.filter(e => e.fondoId === "fondo-gc"),
       emisiones: getState().emisionesGC,
-      ingresosFI: getState().ingresosFI,
+      ingresosFI: getState().ingresosFI.filter(i => i.fondoId === "fondo-gc"),
       saldoInicialPorFondo: {},
     })
+    // Con punto cero, fondo-gc tiene 0 ingresos/egresos históricos (van a CC), así que saldo es solo el nuevo
     expect(saldo).toBe(50000)
   })
 
@@ -37,12 +40,14 @@ describe("FI - Ingreso manual a fondo y saldoInicial", () => {
     expect(getState().ingresosFI).toHaveLength(antes)
   })
 
-  it("monto ≤0 → error zod y no muta", () => {
+  it("monto ≤0 → error zod y no muta (mantiene punto cero)", () => {
+    const antes = getState().ingresosFI.length
+    expect(antes).toBe(44)
     const r1 = getState().registrarIngresoFI({ fecha: "2026-09-01", monto: 0, concepto: "X", fondoId: "fondo-gc" })
     expect(r1.ok).toBe(false)
     const r2 = getState().registrarIngresoFI({ fecha: "2026-09-01", monto: -100, concepto: "X", fondoId: "fondo-gc" })
     expect(r2.ok).toBe(false)
-    expect(getState().ingresosFI).toHaveLength(0)
+    expect(getState().ingresosFI).toHaveLength(44)
   })
 
   it("concepto vacío → error zod", () => {
@@ -105,24 +110,31 @@ describe("FI - Ingreso manual a fondo y saldoInicial", () => {
     expect(saldo).toBe(12345)
   })
 
-  it("removeIngresoFI paridad con removeEgresoFI", () => {
+  it("removeIngresoFI paridad con removeEgresoFI (con punto cero)", () => {
+    const base = getState().ingresosFI.length // 44
     getState().registrarIngresoFI({ fecha: "2026-09-01", monto: 1000, concepto: "A", fondoId: "fondo-gc" })
-    const id = getState().ingresosFI[0]!.id
-    expect(getState().removeIngresoFI(id).ok).toBe(true)
-    expect(getState().ingresosFI).toHaveLength(0)
+    expect(getState().ingresosFI).toHaveLength(45)
+    const nuevoId = getState().ingresosFI.find(i => i.concepto === "A")!.id
+    expect(getState().removeIngresoFI(nuevoId).ok).toBe(true)
+    expect(getState().ingresosFI).toHaveLength(44)
+    expect(base).toBe(44)
   })
 
-  it("migración v26→v27 idempotente asegura ingresosFI []", () => {
-    const prev = { fondosFI: getState().fondosFI, egresosFI: [] }
+  it("migración v26→v27 idempotente asegura punto cero inyectado (182+44) y preserva saldoInicial", () => {
+    const prev = { fondosFI: getState().fondosFI.filter(f=> f.id !== "fondo-cc-punto-cero"), egresosFI: [], ingresosFI: [] }
     const r1 = migrate!(prev as never, 26) as unknown as Record<string, unknown>
     expect(Array.isArray(r1["ingresosFI"])).toBe(true)
-    expect((r1["ingresosFI"] as unknown[]).length).toBe(0)
+    expect((r1["ingresosFI"] as unknown[]).length).toBe(44)
+    expect((r1["egresosFI"] as unknown[]).length).toBe(182)
+    expect(((r1["fondosFI"] as unknown) as {id:string}[]).some(f=> f.id==="fondo-cc-punto-cero")).toBe(true)
     const r2 = migrate!(r1 as never, 26) as unknown as Record<string, unknown>
-    expect((r2["ingresosFI"] as unknown[]).length).toBe(0)
-    // con fondo con saldoInicial preservado
-    const prev2 = { fondosFI: [{ id: "fondo-gc", nombre: "X", tipo: "gasto_comun", activo: true, saldoInicial: 999 }], ingresosFI: [] as never[] }
-    const r3 = migrate!(prev2 as never, 26) as unknown as { fondosFI: { saldoInicial?: number }[] }
-    expect(r3.fondosFI[0]!.saldoInicial).toBe(999)
+    expect((r2["ingresosFI"] as unknown[]).length).toBe(44)
+    expect((r2["egresosFI"] as unknown[]).length).toBe(182)
+    // con fondo con saldoInicial preservado (no lo pisa si ya existe)
+    const prev2 = { fondosFI: [{ id: "fondo-gc", nombre: "X", tipo: "gasto_comun", activo: true, saldoInicial: 999 }], egresosFI: [] as never[], ingresosFI: [] as never[] }
+    const r3 = migrate!(prev2 as never, 26) as unknown as { fondosFI: { id:string; saldoInicial?: number }[] }
+    expect(r3.fondosFI.find(f=> f.id==="fondo-gc")!.saldoInicial).toBe(999)
+    expect(r3.fondosFI.some(f=> f.id==="fondo-cc-punto-cero")).toBe(true)
   })
 
   it("hydrated gate en registrarIngresoFI", () => {

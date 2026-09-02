@@ -55,9 +55,10 @@ validados contra el libro.
 | Ventana | Alcance | Estado | Commit final |
 |---|---|---|---|
 | P1 | Feature "Ingreso manual a fondo": IngresoFISchema + colección ingresosFI + acción registrarIngresoFI + saldoInicial en FondoFI + saldoFondo() extendido + STORE_VERSION 27 + migración (vacía de datos, solo versión) + UI form/lista en FI + tests unit | HECHA | ca52ab9 |
-| P2 | ETL punto cero: fixture `data/finanzas/punto-cero-2324.json` (xlsx→JSON con mapeos) + migración v27 que carga fondo CC + 186 egresos + 45 ingresos + apertura cuadrada + validación saldo==0 + tests de la migración | pendiente | — |
+| P2 | ETL punto cero: fixture `data/finanzas/punto-cero-2324.json` (xlsx→JSON con mapeos) + migración v27 que carga fondo CC + 182 egresos + 44 ingresos (4+1 con monto 0 filtrados, totales idénticos) + apertura 17.082.694 validación saldo==0 + tests migración | HECHA | <hash> |
 | P3 | e2e del punto cero (egresos históricos visibles con folio, ingresos manuales, saldo del fondo CC en UI) + dashboards/reportería reflejando 2023-2024 + cierre integral (suite completa) + avance NSGC + SERIE COMPLETA | pendiente | — |
 
 ## Bitácora
 
 - [2026-09-02] P1 HECHA: FI ingreso manual a fondo + saldoInicial versátil + STORE_VERSION 27 + migración ingresosFI + UI FI + 12 tests (474/474) + e2e FI verde (ca52ab9)
+- [2026-09-02] P2 HECHA: ETL INGvsEGR.xlsx→punto-cero-2324.json (182 egresos $62.491.011 +44 ingresos $45.408.317, 4 egresos +1 ingreso monto 0 filtrados por zod>0, totales por año: e2023 19.506.242 e2024 42.984.769 i2023 13.309.017 i2024 32.099.300, saldo 0 con apertura 17.082.694), migración v27 idempotente FE continuo (max+1), seed incluye punto cero, 481/481 tests verdes, tsc 0, lint 0 errores, validate ok (<hash>)

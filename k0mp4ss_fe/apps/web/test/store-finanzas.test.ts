@@ -126,10 +126,17 @@ describe("FI - Finanzas y Morosidad en el store", () => {
   })
 
   describe("egresos con imputación", () => {
-    it("folio FE secuencial y evento de auditoría", () => {
+    it("folio FE secuencial y evento de auditoría (continúa tras punto cero)", () => {
+      const baseCount = getState().egresosFI.length // 182 del punto cero (4 con monto 0 filtrados)
+      expect(baseCount).toBe(182)
       expect(getState().saveEgresoFI(egresoBase({})).ok).toBe(true)
       expect(getState().saveEgresoFI(egresoBase({ id: "egr-2" })).ok).toBe(true)
-      expect(getState().egresosFI.map(e => e.folio)).toEqual(["FE-0001", "FE-0002"])
+      const folios = getState().egresosFI.map(e => e.folio)
+      // Los 182 históricos son FE-0001..0182, los nuevos deben ser 0183,0184
+      expect(folios.slice(-2)).toEqual(["FE-0183", "FE-0184"])
+      expect(folios.length).toBe(184)
+      // Un solo set folio único, sin colisión
+      expect(new Set(folios).size).toBe(folios.length)
       expect(getState().eventos.filter(e => e.tipoAccion === "FI_EGRESS_CREATED")).toHaveLength(2)
     })
 

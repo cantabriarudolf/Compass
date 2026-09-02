@@ -1,0 +1,1854 @@
+{
+  "fondoCC": {
+    "id": "fondo-cc-punto-cero",
+    "nombre": "Cuenta Corriente",
+    "tipo": "gasto_comun",
+    "saldoInicial": 17082694
+  },
+  "egresos": [
+    {
+      "fecha": "2023-01-31",
+      "monto": 100000,
+      "concepto": "Útiles de Aseo",
+      "familia": "Útiles de Aseo",
+      "categoria": "otro",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2023-01-31",
+      "monto": 74000,
+      "concepto": "Servicios Básicos",
+      "familia": "Servicios Básicos",
+      "categoria": "servicios",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2023-01-31",
+      "monto": 15000,
+      "concepto": "Notaria",
+      "familia": "Trámites",
+      "categoria": "administracion",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2023-01-31",
+      "monto": 250000,
+      "concepto": "Pago Administración",
+      "familia": "Remuneraciones",
+      "categoria": "sueldos",
+      "esRecurrente": true
+    },
+    {
+      "fecha": "2023-01-31",
+      "monto": 128000,
+      "concepto": "Anticipos",
+      "familia": "Remuneraciones",
+      "categoria": "sueldos",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2023-01-31",
+      "monto": 75000,
+      "concepto": "Mantenimiento Hidropack",
+      "familia": "Mantenimientos",
+      "categoria": "mantencion",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2023-02-28",
+      "monto": 90000,
+      "concepto": "Útiles de Aseo",
+      "familia": "Útiles de Aseo",
+      "categoria": "otro",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2023-02-28",
+      "monto": 85000,
+      "concepto": "Servicios Básicos",
+      "familia": "Servicios Básicos",
+      "categoria": "servicios",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2023-02-28",
+      "monto": 24000,
+      "concepto": "Notaria",
+      "familia": "Trámites",
+      "categoria": "administracion",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2023-02-28",
+      "monto": 250000,
+      "concepto": "Pago Administración",
+      "familia": "Remuneraciones",
+      "categoria": "sueldos",
+      "esRecurrente": true
+    },
+    {
+      "fecha": "2023-02-28",
+      "monto": 128000,
+      "concepto": "Anticipos",
+      "familia": "Remuneraciones",
+      "categoria": "sueldos",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2023-02-28",
+      "monto": 75000,
+      "concepto": "Mantenimiento Hidropack",
+      "familia": "Mantenimientos",
+      "categoria": "mantencion",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2023-03-31",
+      "monto": 80000,
+      "concepto": "Útiles de Aseo",
+      "familia": "Útiles de Aseo",
+      "categoria": "otro",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2023-03-31",
+      "monto": 63000,
+      "concepto": "Servicios Básicos",
+      "familia": "Servicios Básicos",
+      "categoria": "servicios",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2023-03-31",
+      "monto": 12000,
+      "concepto": "Notaria",
+      "familia": "Trámites",
+      "categoria": "administracion",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2023-03-31",
+      "monto": 250000,
+      "concepto": "Pago Administración",
+      "familia": "Remuneraciones",
+      "categoria": "sueldos",
+      "esRecurrente": true
+    },
+    {
+      "fecha": "2023-03-31",
+      "monto": 128000,
+      "concepto": "Anticipos",
+      "familia": "Remuneraciones",
+      "categoria": "sueldos",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2023-03-31",
+      "monto": 75000,
+      "concepto": "Mantenimiento Hidropack",
+      "familia": "Mantenimientos",
+      "categoria": "mantencion",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2023-04-30",
+      "monto": 110000,
+      "concepto": "Útiles de Aseo",
+      "familia": "Útiles de Aseo",
+      "categoria": "otro",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2023-04-30",
+      "monto": 99000,
+      "concepto": "Servicios Básicos",
+      "familia": "Servicios Básicos",
+      "categoria": "servicios",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2023-04-30",
+      "monto": 24000,
+      "concepto": "Notaria",
+      "familia": "Trámites",
+      "categoria": "administracion",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2023-04-30",
+      "monto": 250000,
+      "concepto": "Pago Administración",
+      "familia": "Remuneraciones",
+      "categoria": "sueldos",
+      "esRecurrente": true
+    },
+    {
+      "fecha": "2023-04-30",
+      "monto": 128000,
+      "concepto": "Anticipos",
+      "familia": "Remuneraciones",
+      "categoria": "sueldos",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2023-04-30",
+      "monto": 75000,
+      "concepto": "Mantenimiento Hidropack",
+      "familia": "Mantenimientos",
+      "categoria": "mantencion",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2023-05-31",
+      "monto": 88000,
+      "concepto": "Útiles de Aseo",
+      "familia": "Útiles de Aseo",
+      "categoria": "otro",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2023-05-31",
+      "monto": 111000,
+      "concepto": "Servicios Básicos",
+      "familia": "Servicios Básicos",
+      "categoria": "servicios",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2023-05-31",
+      "monto": 21000,
+      "concepto": "Notaria",
+      "familia": "Trámites",
+      "categoria": "administracion",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2023-05-31",
+      "monto": 250000,
+      "concepto": "Pago Administración",
+      "familia": "Remuneraciones",
+      "categoria": "sueldos",
+      "esRecurrente": true
+    },
+    {
+      "fecha": "2023-05-31",
+      "monto": 128000,
+      "concepto": "Anticipos",
+      "familia": "Remuneraciones",
+      "categoria": "sueldos",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2023-05-31",
+      "monto": 75000,
+      "concepto": "Mantenimiento Hidropack",
+      "familia": "Mantenimientos",
+      "categoria": "mantencion",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2023-06-30",
+      "monto": 95000,
+      "concepto": "Útiles de Aseo",
+      "familia": "Útiles de Aseo",
+      "categoria": "otro",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2023-06-30",
+      "monto": 120000,
+      "concepto": "Servicios Básicos",
+      "familia": "Servicios Básicos",
+      "categoria": "servicios",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2023-06-30",
+      "monto": 33000,
+      "concepto": "Notaria",
+      "familia": "Trámites",
+      "categoria": "administracion",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2023-06-30",
+      "monto": 250000,
+      "concepto": "Pago Administración",
+      "familia": "Remuneraciones",
+      "categoria": "sueldos",
+      "esRecurrente": true
+    },
+    {
+      "fecha": "2023-06-30",
+      "monto": 128000,
+      "concepto": "Anticipos",
+      "familia": "Remuneraciones",
+      "categoria": "sueldos",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2023-06-30",
+      "monto": 75000,
+      "concepto": "Mantenimiento Hidropack",
+      "familia": "Mantenimientos",
+      "categoria": "mantencion",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2023-07-31",
+      "monto": 80000,
+      "concepto": "Útiles de Aseo",
+      "familia": "Útiles de Aseo",
+      "categoria": "otro",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2023-07-31",
+      "monto": 63000,
+      "concepto": "Servicios Básicos",
+      "familia": "Servicios Básicos",
+      "categoria": "servicios",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2023-07-31",
+      "monto": 12000,
+      "concepto": "Notaria",
+      "familia": "Trámites",
+      "categoria": "administracion",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2023-07-31",
+      "monto": 250000,
+      "concepto": "Pago Administración",
+      "familia": "Remuneraciones",
+      "categoria": "sueldos",
+      "esRecurrente": true
+    },
+    {
+      "fecha": "2023-07-31",
+      "monto": 128000,
+      "concepto": "Anticipos",
+      "familia": "Remuneraciones",
+      "categoria": "sueldos",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2023-07-31",
+      "monto": 75000,
+      "concepto": "Mantenimiento Hidropack",
+      "familia": "Mantenimientos",
+      "categoria": "mantencion",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2023-08-31",
+      "monto": 211690,
+      "concepto": "Útiles de Aseo",
+      "familia": "Útiles de Aseo",
+      "categoria": "otro",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2023-08-31",
+      "monto": 170616,
+      "concepto": "Servicios Básicos",
+      "familia": "Servicios Básicos",
+      "categoria": "servicios",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2023-08-31",
+      "monto": 150000,
+      "concepto": "Pago Administración",
+      "familia": "Remuneraciones",
+      "categoria": "sueldos",
+      "esRecurrente": true
+    },
+    {
+      "fecha": "2023-08-31",
+      "monto": 29740,
+      "concepto": "Notaria",
+      "familia": "Trámites",
+      "categoria": "administracion",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2023-08-31",
+      "monto": 238650,
+      "concepto": "Cotizaciones Previsionales",
+      "familia": "Imposiciones",
+      "categoria": "sueldos",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2023-08-31",
+      "monto": 85000,
+      "concepto": "Anticipos",
+      "familia": "Remuneraciones",
+      "categoria": "sueldos",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2023-08-31",
+      "monto": 758426,
+      "concepto": "Mantenimientos",
+      "familia": "HidroPack",
+      "categoria": "mantencion",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2023-08-31",
+      "monto": 350000,
+      "concepto": "Mantenimientos",
+      "familia": "Portón",
+      "categoria": "mantencion",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2023-08-31",
+      "monto": 30000,
+      "concepto": "Telon",
+      "familia": "Materiales",
+      "categoria": "otro",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2023-08-31",
+      "monto": 720940,
+      "concepto": "Varios",
+      "familia": "Sin Especificar",
+      "categoria": "otro",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2023-09-30",
+      "monto": 90270,
+      "concepto": "Útiles de Aseo",
+      "familia": "Útiles de Aseo",
+      "categoria": "otro",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2023-09-30",
+      "monto": 155370,
+      "concepto": "Servicios Básicos",
+      "familia": "Servicios Básicos",
+      "categoria": "servicios",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2023-09-30",
+      "monto": 250000,
+      "concepto": "Pago Administración",
+      "familia": "Remuneraciones",
+      "categoria": "sueldos",
+      "esRecurrente": true
+    },
+    {
+      "fecha": "2023-09-30",
+      "monto": 135000,
+      "concepto": "Aguinaldos",
+      "familia": "Aguinaldos",
+      "categoria": "sueldos",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2023-09-30",
+      "monto": 227303,
+      "concepto": "Cotizaciones Previsionales",
+      "familia": "Imposiciones",
+      "categoria": "sueldos",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2023-09-30",
+      "monto": 190000,
+      "concepto": "Anticipos",
+      "familia": "Remuneraciones",
+      "categoria": "sueldos",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2023-09-30",
+      "monto": 168980,
+      "concepto": "Mantenimientos",
+      "familia": "HidroPack",
+      "categoria": "mantencion",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2023-09-30",
+      "monto": 905637,
+      "concepto": "Sueldos",
+      "familia": "Remuneraciones",
+      "categoria": "sueldos",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2023-09-30",
+      "monto": 899200,
+      "concepto": "Mantenimientos",
+      "familia": "Sin Especificar",
+      "categoria": "otro",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2023-10-31",
+      "monto": 56830,
+      "concepto": "Útiles de Aseo",
+      "familia": "Útiles de Aseo",
+      "categoria": "otro",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2023-10-31",
+      "monto": 93405,
+      "concepto": "Servicios Básicos",
+      "familia": "Servicios Básicos",
+      "categoria": "servicios",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2023-10-31",
+      "monto": 261400,
+      "concepto": "Mantenimientos",
+      "familia": "Sin Especificar",
+      "categoria": "otro",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2023-10-31",
+      "monto": 500000,
+      "concepto": "Pago Administración",
+      "familia": "Remuneraciones",
+      "categoria": "sueldos",
+      "esRecurrente": true
+    },
+    {
+      "fecha": "2023-10-31",
+      "monto": 276158,
+      "concepto": "Cotizaciones Previsionales",
+      "familia": "Remuneraciones",
+      "categoria": "sueldos",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2023-10-31",
+      "monto": 229900,
+      "concepto": "Anticipos",
+      "familia": "Remuneraciones",
+      "categoria": "sueldos",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2023-10-31",
+      "monto": 73780,
+      "concepto": "Mantenimiento Hidropack",
+      "familia": "Mantenimientos",
+      "categoria": "mantencion",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2023-10-31",
+      "monto": 2690984,
+      "concepto": "Sueldos",
+      "familia": "Remuneraciones",
+      "categoria": "sueldos",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2023-10-31",
+      "monto": 100500,
+      "concepto": "Fiesta 18 Septiembre",
+      "familia": "Varios",
+      "categoria": "otro",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2023-11-30",
+      "monto": 133850,
+      "concepto": "Útiles de Aseo",
+      "familia": "Útiles de Aseo",
+      "categoria": "otro",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2023-11-30",
+      "monto": 15990,
+      "concepto": "Servicios Básicos",
+      "familia": "Servicios Básicos",
+      "categoria": "servicios",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2023-11-30",
+      "monto": 250000,
+      "concepto": "Pago Administración",
+      "familia": "Remuneraciones",
+      "categoria": "sueldos",
+      "esRecurrente": true
+    },
+    {
+      "fecha": "2023-11-30",
+      "monto": 30000,
+      "concepto": "Notaria",
+      "familia": "Trámites",
+      "categoria": "administracion",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2023-11-30",
+      "monto": 251726,
+      "concepto": "Cotizaciones Previsionales",
+      "familia": "Imposiciones",
+      "categoria": "sueldos",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2023-11-30",
+      "monto": 299900,
+      "concepto": "Anticipos",
+      "familia": "Remuneraciones",
+      "categoria": "sueldos",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2023-11-30",
+      "monto": 73780,
+      "concepto": "Mantenimientos",
+      "familia": "HidroPack",
+      "categoria": "mantencion",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2023-11-30",
+      "monto": 1056038,
+      "concepto": "Sueldos",
+      "familia": "Remuneraciones",
+      "categoria": "sueldos",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2023-11-30",
+      "monto": 60000,
+      "concepto": "Mantenimientos",
+      "familia": "Sin Especificar",
+      "categoria": "otro",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2023-12-31",
+      "monto": 97750,
+      "concepto": "Útiles de Aseo",
+      "familia": "Útiles de Aseo",
+      "categoria": "otro",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2023-12-31",
+      "monto": 173390,
+      "concepto": "Servicios Básicos",
+      "familia": "Servicios Básicos",
+      "categoria": "servicios",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2023-12-31",
+      "monto": 250000,
+      "concepto": "Pago Administración",
+      "familia": "Remuneraciones",
+      "categoria": "sueldos",
+      "esRecurrente": true
+    },
+    {
+      "fecha": "2023-12-31",
+      "monto": 160000,
+      "concepto": "Aguinaldos",
+      "familia": "Aguinaldos",
+      "categoria": "sueldos",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2023-12-31",
+      "monto": 344253,
+      "concepto": "Cotizaciones Previsionales",
+      "familia": "Imposiciones",
+      "categoria": "sueldos",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2023-12-31",
+      "monto": 294900,
+      "concepto": "Anticipos",
+      "familia": "Remuneraciones",
+      "categoria": "sueldos",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2023-12-31",
+      "monto": 73780,
+      "concepto": "Mantenimientos",
+      "familia": "HidroPack",
+      "categoria": "mantencion",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2023-12-31",
+      "monto": 1083055,
+      "concepto": "Sueldos",
+      "familia": "Remuneraciones",
+      "categoria": "sueldos",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2023-12-31",
+      "monto": 238051,
+      "concepto": "Gastos Fiesta Navidad",
+      "familia": "Sin Especificar",
+      "categoria": "otro",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2024-01-31",
+      "monto": 37080,
+      "concepto": "Útiles de Aseo",
+      "familia": "Útiles de Aseo",
+      "categoria": "otro",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2024-01-31",
+      "monto": 98681,
+      "concepto": "Servicios Básicos",
+      "familia": "Servicios Básicos",
+      "categoria": "servicios",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2024-01-31",
+      "monto": 250000,
+      "concepto": "Pago Administración",
+      "familia": "Remuneraciones",
+      "categoria": "sueldos",
+      "esRecurrente": true
+    },
+    {
+      "fecha": "2024-01-31",
+      "monto": 423639,
+      "concepto": "Cotizaciones Previsionales",
+      "familia": "Imposiciones",
+      "categoria": "sueldos",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2024-01-31",
+      "monto": 140000,
+      "concepto": "Anticipos",
+      "familia": "Remuneraciones",
+      "categoria": "sueldos",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2024-01-31",
+      "monto": 73780,
+      "concepto": "Mantenimientos",
+      "familia": "HidroPack",
+      "categoria": "mantencion",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2024-01-31",
+      "monto": 1224996,
+      "concepto": "Sueldos",
+      "familia": "Remuneraciones",
+      "categoria": "sueldos",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2024-01-31",
+      "monto": 3000,
+      "concepto": "Mantenimientos",
+      "familia": "Sin Especificar",
+      "categoria": "otro",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2024-02-28",
+      "monto": 123630,
+      "concepto": "Útiles de Aseo",
+      "familia": "Útiles de Aseo",
+      "categoria": "otro",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2024-02-28",
+      "monto": 61200,
+      "concepto": "Servicios Básicos",
+      "familia": "Servicios Básicos",
+      "categoria": "servicios",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2024-02-28",
+      "monto": 396547,
+      "concepto": "Cotizaciones Previsionales",
+      "familia": "Imposiciones",
+      "categoria": "sueldos",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2024-02-28",
+      "monto": 130000,
+      "concepto": "Anticipos",
+      "familia": "Remuneraciones",
+      "categoria": "sueldos",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2024-02-28",
+      "monto": 73780,
+      "concepto": "Mantenimientos",
+      "familia": "HidroPack",
+      "categoria": "mantencion",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2024-03-31",
+      "monto": 81860,
+      "concepto": "Útiles de Aseo",
+      "familia": "Útiles de Aseo",
+      "categoria": "otro",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2024-03-31",
+      "monto": 61070,
+      "concepto": "Servicios Básicos",
+      "familia": "Servicios Básicos",
+      "categoria": "servicios",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2024-03-31",
+      "monto": 250000,
+      "concepto": "Pago Administración",
+      "familia": "Remuneraciones",
+      "categoria": "sueldos",
+      "esRecurrente": true
+    },
+    {
+      "fecha": "2024-03-31",
+      "monto": 54270,
+      "concepto": "Notaria",
+      "familia": "Trámites",
+      "categoria": "administracion",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2024-03-31",
+      "monto": 313614,
+      "concepto": "Cotizaciones Previsionales",
+      "familia": "Imposiciones",
+      "categoria": "sueldos",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2024-03-31",
+      "monto": 128000,
+      "concepto": "Anticipos",
+      "familia": "Remuneraciones",
+      "categoria": "sueldos",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2024-03-31",
+      "monto": 193780,
+      "concepto": "Mantenimientos",
+      "familia": "HidroPack",
+      "categoria": "mantencion",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2024-03-31",
+      "monto": 1287485,
+      "concepto": "Sueldos",
+      "familia": "Remuneraciones",
+      "categoria": "sueldos",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2024-04-30",
+      "monto": 109970,
+      "concepto": "Útiles de Aseo",
+      "familia": "Útiles de Aseo",
+      "categoria": "otro",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2024-04-30",
+      "monto": 151020,
+      "concepto": "Servicios Básicos",
+      "familia": "Servicios Básicos",
+      "categoria": "servicios",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2024-04-30",
+      "monto": 250000,
+      "concepto": "Pago Administración",
+      "familia": "Remuneraciones",
+      "categoria": "sueldos",
+      "esRecurrente": true
+    },
+    {
+      "fecha": "2024-04-30",
+      "monto": 301758,
+      "concepto": "Cotizaciones Previsionales",
+      "familia": "Imposiciones",
+      "categoria": "sueldos",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2024-04-30",
+      "monto": 258000,
+      "concepto": "Anticipos",
+      "familia": "Remuneraciones",
+      "categoria": "sueldos",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2024-04-30",
+      "monto": 128780,
+      "concepto": "Mantenimientos",
+      "familia": "HidroPack",
+      "categoria": "mantencion",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2024-04-30",
+      "monto": 1179750,
+      "concepto": "Sueldos",
+      "familia": "Remuneraciones",
+      "categoria": "sueldos",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2024-05-31",
+      "monto": 108270,
+      "concepto": "Útiles de Aseo",
+      "familia": "Útiles de Aseo",
+      "categoria": "otro",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2024-05-31",
+      "monto": 142940,
+      "concepto": "Servicios Básicos",
+      "familia": "Servicios Básicos",
+      "categoria": "servicios",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2024-05-31",
+      "monto": 250000,
+      "concepto": "Pago Administración",
+      "familia": "Remuneraciones",
+      "categoria": "sueldos",
+      "esRecurrente": true
+    },
+    {
+      "fecha": "2024-05-31",
+      "monto": 420154,
+      "concepto": "Cotizaciones Previsionales",
+      "familia": "Imposiciones",
+      "categoria": "sueldos",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2024-05-31",
+      "monto": 202000,
+      "concepto": "Anticipos",
+      "familia": "Remuneraciones",
+      "categoria": "sueldos",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2024-05-31",
+      "monto": 73780,
+      "concepto": "Mantenimientos",
+      "familia": "HidroPack",
+      "categoria": "mantencion",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2024-05-31",
+      "monto": 1233281,
+      "concepto": "Sueldos",
+      "familia": "Remuneraciones",
+      "categoria": "sueldos",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2024-05-31",
+      "monto": 113000,
+      "concepto": "Mantenimientos",
+      "familia": "Sin Especificar",
+      "categoria": "otro",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2024-06-30",
+      "monto": 116770,
+      "concepto": "Útiles de Aseo",
+      "familia": "Útiles de Aseo",
+      "categoria": "otro",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2024-06-30",
+      "monto": 42330,
+      "concepto": "Servicios Básicos",
+      "familia": "Servicios Básicos",
+      "categoria": "servicios",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2024-06-30",
+      "monto": 500000,
+      "concepto": "Pago Administración",
+      "familia": "Remuneraciones",
+      "categoria": "sueldos",
+      "esRecurrente": true
+    },
+    {
+      "fecha": "2024-06-30",
+      "monto": 357170,
+      "concepto": "Cotizaciones Previsionales",
+      "familia": "Imposiciones",
+      "categoria": "sueldos",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2024-06-30",
+      "monto": 201500,
+      "concepto": "Anticipos",
+      "familia": "Remuneraciones",
+      "categoria": "sueldos",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2024-06-30",
+      "monto": 73780,
+      "concepto": "Mantenimientos",
+      "familia": "HidroPack",
+      "categoria": "mantencion",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2024-06-30",
+      "monto": 2502795,
+      "concepto": "Sueldos",
+      "familia": "Remuneraciones",
+      "categoria": "sueldos",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2024-06-30",
+      "monto": 380000,
+      "concepto": "Mantenimientos",
+      "familia": "Sin Especificar",
+      "categoria": "otro",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2024-07-31",
+      "monto": 153340,
+      "concepto": "Útiles de Aseo",
+      "familia": "Útiles de Aseo",
+      "categoria": "otro",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2024-07-31",
+      "monto": 81840,
+      "concepto": "Servicios Básicos",
+      "familia": "Servicios Básicos",
+      "categoria": "servicios",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2024-07-31",
+      "monto": 25000,
+      "concepto": "Pago Administración",
+      "familia": "Remuneraciones",
+      "categoria": "sueldos",
+      "esRecurrente": true
+    },
+    {
+      "fecha": "2024-07-31",
+      "monto": 367400,
+      "concepto": "Finiquito",
+      "familia": "Trámites",
+      "categoria": "administracion",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2024-07-31",
+      "monto": 401585,
+      "concepto": "Cotizaciones Previsionales",
+      "familia": "Imposiciones",
+      "categoria": "sueldos",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2024-07-31",
+      "monto": 217000,
+      "concepto": "Anticipos",
+      "familia": "Remuneraciones",
+      "categoria": "sueldos",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2024-07-31",
+      "monto": 73780,
+      "concepto": "Mantenimientos",
+      "familia": "HidroPack",
+      "categoria": "mantencion",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2024-07-31",
+      "monto": 13537000,
+      "concepto": "Sueldos",
+      "familia": "Remuneraciones",
+      "categoria": "sueldos",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2024-07-31",
+      "monto": 49250,
+      "concepto": "Mantenimientos",
+      "familia": "Sin Especificar",
+      "categoria": "otro",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2024-08-31",
+      "monto": 76130,
+      "concepto": "Útiles de Aseo",
+      "familia": "Útiles de Aseo",
+      "categoria": "otro",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2024-08-31",
+      "monto": 231379,
+      "concepto": "Servicios Básicos",
+      "familia": "Servicios Básicos",
+      "categoria": "servicios",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2024-08-31",
+      "monto": 250000,
+      "concepto": "Pago Administración",
+      "familia": "Remuneraciones",
+      "categoria": "sueldos",
+      "esRecurrente": true
+    },
+    {
+      "fecha": "2024-08-31",
+      "monto": 387537,
+      "concepto": "Cotizaciones Previsionales",
+      "familia": "Imposiciones",
+      "categoria": "sueldos",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2024-08-31",
+      "monto": 205000,
+      "concepto": "Anticipos",
+      "familia": "Remuneraciones",
+      "categoria": "sueldos",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2024-08-31",
+      "monto": 73780,
+      "concepto": "Mantenimientos",
+      "familia": "HidroPack",
+      "categoria": "mantencion",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2024-08-31",
+      "monto": 1247995,
+      "concepto": "Sueldos",
+      "familia": "Remuneraciones",
+      "categoria": "sueldos",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2024-08-31",
+      "monto": 28800,
+      "concepto": "Mantenimientos",
+      "familia": "Sin Especificar",
+      "categoria": "otro",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2024-09-30",
+      "monto": 104679,
+      "concepto": "Útiles de Aseo",
+      "familia": "Útiles de Aseo",
+      "categoria": "otro",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2024-09-30",
+      "monto": 100681,
+      "concepto": "Servicios Básicos",
+      "familia": "Servicios Básicos",
+      "categoria": "servicios",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2024-09-30",
+      "monto": 58667,
+      "concepto": "Finiquito",
+      "familia": "Trámites",
+      "categoria": "administracion",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2024-09-30",
+      "monto": 122610,
+      "concepto": "Fiesta 18 Septiembre",
+      "familia": "Aguinaldos",
+      "categoria": "sueldos",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2024-09-30",
+      "monto": 404517,
+      "concepto": "Cotizaciones Previsionales",
+      "familia": "Imposiciones",
+      "categoria": "sueldos",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2024-09-30",
+      "monto": 250000,
+      "concepto": "Anticipos",
+      "familia": "Remuneraciones",
+      "categoria": "sueldos",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2024-09-30",
+      "monto": 73780,
+      "concepto": "Mantenimientos",
+      "familia": "HidroPack",
+      "categoria": "mantencion",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2024-09-30",
+      "monto": 210000,
+      "concepto": "Sueldos",
+      "familia": "Remuneraciones",
+      "categoria": "sueldos",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2024-09-30",
+      "monto": 364000,
+      "concepto": "Mantenimientos",
+      "familia": "Sin Especificar",
+      "categoria": "otro",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2024-10-31",
+      "monto": 88930,
+      "concepto": "Útiles de Aseo",
+      "familia": "Útiles de Aseo",
+      "categoria": "otro",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2024-10-31",
+      "monto": 112232,
+      "concepto": "Servicios Básicos",
+      "familia": "Servicios Básicos",
+      "categoria": "servicios",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2024-10-31",
+      "monto": 250000,
+      "concepto": "Pago Administración",
+      "familia": "Remuneraciones",
+      "categoria": "sueldos",
+      "esRecurrente": true
+    },
+    {
+      "fecha": "2024-10-31",
+      "monto": 468092,
+      "concepto": "Cotizaciones Previsionales",
+      "familia": "Imposiciones",
+      "categoria": "sueldos",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2024-10-31",
+      "monto": 265000,
+      "concepto": "Anticipos",
+      "familia": "Remuneraciones",
+      "categoria": "sueldos",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2024-10-31",
+      "monto": 73780,
+      "concepto": "Mantenimientos",
+      "familia": "HidroPack",
+      "categoria": "mantencion",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2024-10-31",
+      "monto": 1575535,
+      "concepto": "Sueldos",
+      "familia": "Remuneraciones",
+      "categoria": "sueldos",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2024-10-31",
+      "monto": 30000,
+      "concepto": "Mantenimientos",
+      "familia": "Sin Especificar",
+      "categoria": "otro",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2024-11-30",
+      "monto": 78020,
+      "concepto": "Útiles de Aseo",
+      "familia": "Útiles de Aseo",
+      "categoria": "otro",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2024-11-30",
+      "monto": 72599,
+      "concepto": "Servicios Básicos",
+      "familia": "Servicios Básicos",
+      "categoria": "servicios",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2024-11-30",
+      "monto": 500000,
+      "concepto": "Pago Administración",
+      "familia": "Remuneraciones",
+      "categoria": "sueldos",
+      "esRecurrente": true
+    },
+    {
+      "fecha": "2024-11-30",
+      "monto": 448768,
+      "concepto": "Cotizaciones Previsionales",
+      "familia": "Imposiciones",
+      "categoria": "sueldos",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2024-11-30",
+      "monto": 194000,
+      "concepto": "Anticipos",
+      "familia": "Remuneraciones",
+      "categoria": "sueldos",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2024-11-30",
+      "monto": 73780,
+      "concepto": "Mantenimientos",
+      "familia": "HidroPack",
+      "categoria": "mantencion",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2024-11-30",
+      "monto": 2630046,
+      "concepto": "Sueldos",
+      "familia": "Remuneraciones",
+      "categoria": "sueldos",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2024-11-30",
+      "monto": 95000,
+      "concepto": "Mantenimientos",
+      "familia": "Sin Especificar",
+      "categoria": "otro",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2024-12-31",
+      "monto": 90000,
+      "concepto": "Útiles de Aseo",
+      "familia": "Útiles de Aseo",
+      "categoria": "otro",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2024-12-31",
+      "monto": 85000,
+      "concepto": "Servicios Básicos",
+      "familia": "Servicios Básicos",
+      "categoria": "servicios",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2024-12-31",
+      "monto": 24000,
+      "concepto": "Notaria",
+      "familia": "Trámites",
+      "categoria": "administracion",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2024-12-31",
+      "monto": 250000,
+      "concepto": "Pago Administración",
+      "familia": "Remuneraciones",
+      "categoria": "sueldos",
+      "esRecurrente": true
+    },
+    {
+      "fecha": "2024-12-31",
+      "monto": 333333,
+      "concepto": "Cotizaciones Previsionales",
+      "familia": "Remuneraciones",
+      "categoria": "sueldos",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2024-12-31",
+      "monto": 128000,
+      "concepto": "Anticipos",
+      "familia": "Remuneraciones",
+      "categoria": "sueldos",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2024-12-31",
+      "monto": 75000,
+      "concepto": "Mantenimiento Hidropack",
+      "familia": "Mantenimientos",
+      "categoria": "mantencion",
+      "esRecurrente": false
+    },
+    {
+      "fecha": "2024-12-31",
+      "monto": 1444444,
+      "concepto": "Sueldos",
+      "familia": "Remuneraciones",
+      "categoria": "sueldos",
+      "esRecurrente": false
+    }
+  ],
+  "ingresos": [
+    {
+      "fecha": "2023-08-31",
+      "monto": 1654000,
+      "concepto": "Gastos Comunes",
+      "familia": "Contribuciones"
+    },
+    {
+      "fecha": "2023-08-31",
+      "monto": 293000,
+      "concepto": "Fondo de Reserva",
+      "familia": "Fondo de Reserva"
+    },
+    {
+      "fecha": "2023-08-31",
+      "monto": 5000,
+      "concepto": "Fondo Serviu",
+      "familia": "Multas"
+    },
+    {
+      "fecha": "2023-09-30",
+      "monto": 1937000,
+      "concepto": "Gastos Comunes",
+      "familia": "Contribuciones"
+    },
+    {
+      "fecha": "2023-09-30",
+      "monto": 305000,
+      "concepto": "Fondo de Reserva",
+      "familia": "Fondo de Reserva"
+    },
+    {
+      "fecha": "2023-09-30",
+      "monto": 873017,
+      "concepto": "Pago Daño Portón",
+      "familia": "Otros Ingresos"
+    },
+    {
+      "fecha": "2023-10-31",
+      "monto": 2025000,
+      "concepto": "Gastos Comunes",
+      "familia": "Contribuciones"
+    },
+    {
+      "fecha": "2023-10-31",
+      "monto": 100500,
+      "concepto": "Aporte FF.PP",
+      "familia": "Otros Ingresos"
+    },
+    {
+      "fecha": "2023-10-31",
+      "monto": 232000,
+      "concepto": "Fondo de Reserva",
+      "familia": "Fondo de Reserva"
+    },
+    {
+      "fecha": "2023-11-30",
+      "monto": 2389000,
+      "concepto": "Gastos Comunes",
+      "familia": "Contribuciones"
+    },
+    {
+      "fecha": "2023-11-30",
+      "monto": 226000,
+      "concepto": "Fondo de Reserva",
+      "familia": "Fondo de Reserva"
+    },
+    {
+      "fecha": "2023-12-31",
+      "monto": 3044500,
+      "concepto": "Gastos Comunes",
+      "familia": "Contribuciones"
+    },
+    {
+      "fecha": "2023-12-31",
+      "monto": 140000,
+      "concepto": "Aporte FF.N",
+      "familia": "Otros Ingresos"
+    },
+    {
+      "fecha": "2023-12-31",
+      "monto": 85000,
+      "concepto": "Fondo de Reserva",
+      "familia": "Fondo de Reserva"
+    },
+    {
+      "fecha": "2024-01-31",
+      "monto": 4112000,
+      "concepto": "Gastos Comunes",
+      "familia": "Contribuciones"
+    },
+    {
+      "fecha": "2024-01-31",
+      "monto": 202000,
+      "concepto": "Fondo de Reserva",
+      "familia": "Fondo de Reserva"
+    },
+    {
+      "fecha": "2024-01-31",
+      "monto": 36000,
+      "concepto": "Aporte Cerco Electrico",
+      "familia": "Otros Ingresos"
+    },
+    {
+      "fecha": "2024-02-28",
+      "monto": 1758000,
+      "concepto": "Gastos Comunes",
+      "familia": "Contribuciones"
+    },
+    {
+      "fecha": "2024-03-31",
+      "monto": 2441000,
+      "concepto": "Gastos Comunes",
+      "familia": "Contribuciones"
+    },
+    {
+      "fecha": "2024-03-31",
+      "monto": 53000,
+      "concepto": "Fondo de Reserva",
+      "familia": "Fondo de Reserva"
+    },
+    {
+      "fecha": "2024-03-31",
+      "monto": 25000,
+      "concepto": "Ingreso Proyecto",
+      "familia": "Otros Ingresos"
+    },
+    {
+      "fecha": "2024-04-30",
+      "monto": 2067000,
+      "concepto": "Gastos Comunes",
+      "familia": "Contribuciones"
+    },
+    {
+      "fecha": "2024-04-30",
+      "monto": 11000,
+      "concepto": "Fondo de Reserva",
+      "familia": "Fondo de Reserva"
+    },
+    {
+      "fecha": "2024-05-31",
+      "monto": 8000,
+      "concepto": "Fondo de Reserva",
+      "familia": "Fondo de Reserva"
+    },
+    {
+      "fecha": "2024-05-31",
+      "monto": 2283000,
+      "concepto": "Gastos Comunes",
+      "familia": "Multas"
+    },
+    {
+      "fecha": "2024-06-30",
+      "monto": 2466000,
+      "concepto": "Gastos Comunes",
+      "familia": "Contribuciones"
+    },
+    {
+      "fecha": "2024-06-30",
+      "monto": 13000,
+      "concepto": "Fondo de Reserva",
+      "familia": "Fondo de Reserva"
+    },
+    {
+      "fecha": "2024-06-30",
+      "monto": 90000,
+      "concepto": "Fondo Proyecto",
+      "familia": "Otros Ingresos"
+    },
+    {
+      "fecha": "2024-07-31",
+      "monto": 2199500,
+      "concepto": "Gastos Comunes",
+      "familia": "Contribuciones"
+    },
+    {
+      "fecha": "2024-07-31",
+      "monto": 76000,
+      "concepto": "Fondo de Reserva",
+      "familia": "Fondo de Reserva"
+    },
+    {
+      "fecha": "2024-08-31",
+      "monto": 2274000,
+      "concepto": "Gastos Comunes",
+      "familia": "Contribuciones"
+    },
+    {
+      "fecha": "2024-08-31",
+      "monto": 18000,
+      "concepto": "Fondo de Reserva",
+      "familia": "Fondo de Reserva"
+    },
+    {
+      "fecha": "2024-08-31",
+      "monto": 183800,
+      "concepto": "Sin Especificar",
+      "familia": "Otros Ingresos"
+    },
+    {
+      "fecha": "2024-09-30",
+      "monto": 2867000,
+      "concepto": "Gastos Comunes",
+      "familia": "Contribuciones"
+    },
+    {
+      "fecha": "2024-09-30",
+      "monto": 689500,
+      "concepto": "Otros Ingresos",
+      "familia": "Otros Ingresos"
+    },
+    {
+      "fecha": "2024-10-31",
+      "monto": 3043000,
+      "concepto": "Gastos Comunes",
+      "familia": "Contribuciones"
+    },
+    {
+      "fecha": "2024-10-31",
+      "monto": 101000,
+      "concepto": "Fondo de Reserva",
+      "familia": "Fondo de Reserva"
+    },
+    {
+      "fecha": "2024-11-30",
+      "monto": 2394000,
+      "concepto": "Gastos Comunes",
+      "familia": "Contribuciones"
+    },
+    {
+      "fecha": "2024-11-30",
+      "monto": 151500,
+      "concepto": "Otros Ingresos",
+      "familia": "Otros Ingresos"
+    },
+    {
+      "fecha": "2024-11-30",
+      "monto": 60000,
+      "concepto": "Fondo de Reserva",
+      "familia": "Fondo de Reserva"
+    },
+    {
+      "fecha": "2024-11-30",
+      "monto": 122000,
+      "concepto": "Fondo Proyecto",
+      "familia": "Otros Ingresos"
+    },
+    {
+      "fecha": "2024-12-31",
+      "monto": 2300000,
+      "concepto": "Gastos Comunes",
+      "familia": "Contribuciones"
+    },
+    {
+      "fecha": "2024-12-31",
+      "monto": 33000,
+      "concepto": "Fondo de Reserva",
+      "familia": "Fondo de Reserva"
+    },
+    {
+      "fecha": "2024-12-31",
+      "monto": 22000,
+      "concepto": "Gastos Comunes",
+      "familia": "Multas"
+    }
+  ],
+  "saldoCC": [
+    {
+      "fecha": "2023-01-31",
+      "monto": 0,
+      "mes": "Enero"
+    },
+    {
+      "fecha": "2023-02-28",
+      "monto": 0,
+      "mes": "Febrero"
+    },
+    {
+      "fecha": "2023-03-31",
+      "monto": 0,
+      "mes": "Marzo"
+    },
+    {
+      "fecha": "2023-04-30",
+      "monto": 0,
+      "mes": "Abril"
+    },
+    {
+      "fecha": "2023-05-31",
+      "monto": 0,
+      "mes": "Mayo"
+    },
+    {
+      "fecha": "2023-06-30",
+      "monto": 0,
+      "mes": "Junio"
+    },
+    {
+      "fecha": "2023-07-31",
+      "monto": 3881470,
+      "mes": "Julio"
+    },
+    {
+      "fecha": "2023-08-31",
+      "monto": 4014831,
+      "mes": "Agosto"
+    },
+    {
+      "fecha": "2023-09-30",
+      "monto": 3748248,
+      "mes": "Septiembre"
+    },
+    {
+      "fecha": "2023-10-31",
+      "monto": 1732262,
+      "mes": "Octubre"
+    },
+    {
+      "fecha": "2023-11-30",
+      "monto": 1736718,
+      "mes": "Noviembre"
+    },
+    {
+      "fecha": "2023-12-31",
+      "monto": 1420130,
+      "mes": "Diciembre"
+    },
+    {
+      "fecha": "2024-01-31",
+      "monto": 2299171,
+      "mes": "Enero"
+    },
+    {
+      "fecha": "2024-02-28",
+      "monto": 3175200,
+      "mes": "Febrero"
+    },
+    {
+      "fecha": "2024-03-31",
+      "monto": 2299171,
+      "mes": "Marzo"
+    },
+    {
+      "fecha": "2024-04-30",
+      "monto": 2860023,
+      "mes": "Abril"
+    },
+    {
+      "fecha": "2024-05-31",
+      "monto": 1474270,
+      "mes": "Mayo"
+    },
+    {
+      "fecha": "2024-06-30",
+      "monto": 1484180,
+      "mes": "Junio"
+    },
+    {
+      "fecha": "2024-07-31",
+      "monto": 938715,
+      "mes": "Julio"
+    },
+    {
+      "fecha": "2024-08-31",
+      "monto": 2860023,
+      "mes": "Agosto"
+    },
+    {
+      "fecha": "2024-09-30",
+      "monto": 1437620,
+      "mes": "Septiembre"
+    },
+    {
+      "fecha": "2024-10-31",
+      "monto": 1507035,
+      "mes": "Octubre"
+    },
+    {
+      "fecha": "2024-11-30",
+      "monto": 0,
+      "mes": "Noviembre"
+    },
+    {
+      "fecha": "2024-12-31",
+      "monto": 0,
+      "mes": "Diciembre"
+    }
+  ]
+}
