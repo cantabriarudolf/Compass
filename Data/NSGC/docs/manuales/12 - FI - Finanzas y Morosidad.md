@@ -16,6 +16,7 @@ Dos pilares: el **Libro Financiero** concentra todo el movimiento en cobros (`co
   - **Emisión GC**: wizard por periodo `AAAA-MM` (no repetible), alcance total o personalizado, vista previa prorrateada; exige propietario vigente en cada unidad incluida y aplica automáticamente el % al Fondo de Reserva.
   - **Morosidad**: tabla de unidades atrasadas con botón "Aplicar mora" (tasa mensual configurable, pro-rata diario), panel destacado de **Corte de Servicios** según `limiteMesesAvisoCorte` y gestión de cobranza notificada.
 - **Recaudación (`/finanzas/pagos`)**: libro unificado filtrable por concepto/estado con KPIs recaudado vs por cobrar; detalle por cobro (moras, pagos, diferencias) y registro de pago con exigible exacto (base + moras − pagos previos). Si el monto difiere, la justificación es obligatoria y nace un **informe de diferencia inmutable**.
+- **Espejo BD (ST) (`/finanzas`)**: panel read-only de verificación del espejo en la capa de datos persistente (change `fi-sync-bd`). El cliente sync (`lib/fi-sync.ts`) envía a `POST /api/fi/sync` el delta de fondos (con saldo de apertura), egresos e ingresos 2s después del último cambio (debounce, batch ≤500, upsert idempotente, sin delete); el panel consulta `GET /api/fi` y muestra por fondo los totales BD vs Store con badge **Cuadrado/Pendiente-Divergente**. Con BD limpia, el fondo Cuenta Corriente del punto cero cuadra exacto ($17.082.694 apertura / $62.491.011 egresos / $45.408.317 ingresos / saldo $0). El store sigue siendo la fuente de la UI — la BD es espejo de retención/consulta.
 
 ## 💡 Tips de Oro
 
@@ -32,5 +33,6 @@ Dos pilares: el **Libro Financiero** concentra todo el movimiento en cobros (`co
 - **CF**: modo de cálculo, día de corte, límite de meses y opt-in de notificación.
 - **EF/TU/VU**: unidades elegibles (sin estacionamientos), `montoBaseGc`, coeficiente de prorrateo y responsable de cobro (propietario vigente).
 - **GD**: actas publicadas como respaldo de retiros del fondo de reserva.
+- **ST/Prisma**: el espejo BD (`fi-sync-bd`) persiste fondos/egresos/ingresos vía `/api/fi/sync` — requiere sesión activa (el sync corre con el usuario logueado; ante 401 espera el próximo cambio).
 - **IN / MT / RA**: origen de cargos y validación de financiamiento (conexión inversa materializada en esta ventana).
 - Notificaciones con `notify()` (**ST**, D3). Estados de cuenta y certificado "Unidad Al Día" llegarán con **CT**.

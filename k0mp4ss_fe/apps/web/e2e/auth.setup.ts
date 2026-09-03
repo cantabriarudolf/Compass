@@ -18,9 +18,11 @@ const CUENTAS: Cuenta[] = [
 ]
 
 async function correoOFormulario(page: import("@playwright/test").Page): Promise<boolean> {
+  // 30s: con dev server frío (turbopack compila /ingresar al primer uso) bajo carga,
+  // 10s se quedaba corto y el setup tomaba la rama "sin formulario" flakeando (fi-sync-bd P4).
   return page
     .getByLabel("Correo electrónico")
-    .waitFor({ state: "visible", timeout: 10_000 })
+    .waitFor({ state: "visible", timeout: 30_000 })
     .then(() => true)
     .catch(() => false)
 }

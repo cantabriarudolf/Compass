@@ -12,6 +12,7 @@ import { Separator } from "@workspace/ui/components/separator";
 import { ModeToggle } from "@/components/mode-toggle";
 import { TooltipProvider } from "@workspace/ui/components/tooltip";
 import { AuditoriaSyncInit } from "@/components/auditoria-sync-init";
+import { FISyncInit } from "@/components/fi-sync-init";
 import { auth } from "@/lib/auth";
 
 // Título por defecto para TODAS las páginas (axe document-title): las páginas
@@ -46,6 +47,7 @@ export default async function RootLayout({
     >
       <body>
         <AuditoriaSyncInit />
+        <FISyncInit />
         <ThemeProvider>
           <TooltipProvider>
             <SidebarProvider>

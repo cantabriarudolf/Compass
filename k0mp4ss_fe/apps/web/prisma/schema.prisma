@@ -47,6 +47,7 @@ model Comunidad {
   plantillasCV             PlantillaCV[]
   fondosFI                 FondoFI[]
   egresosFI                EgresoFI[]
+  ingresosFI               IngresoFI[]
   emisionesGC              EmisionGC[]
   cobrosFI                 CobroFI[]
   bitacoraVisitasPE        BitacoraVisitaPE[]
@@ -794,12 +795,30 @@ model FondoFI {
   descripcion      String?
   porcentajeAporte Float?
   activo           Boolean
+  saldoInicial     Float?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
   @@index([comunidadId])
   @@unique([comunidadId, nombre])
   @@map("fondos_fi")
+}
+
+// Espejo FI del store (fi-sync-bd): ingresos manuales a fondo incl. punto cero
+model IngresoFI {
+  id          String   @id
+  comunidadId String
+  comunidad   Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  fondoId     String
+  fecha       String
+  monto       Float
+  concepto    String
+  familia     String?
+  createdAt   DateTime @default(now())
+
+  @@index([comunidadId])
+  @@index([fondoId])
+  @@map("ingresos_fi")
 }
 
 model EgresoFI {
