@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "fs"
+import { existsSync, readFileSync, statSync, writeFileSync } from "fs"
 import os from "os"
 import path from "path"
 
@@ -34,6 +34,55 @@ export interface QaFallo {
   causa: string
 }
 
+export type QaEtapaEstado = "pendiente" | "en_curso" | "ok" | "fallida" | "omitida"
+
+export interface QaEtapa {
+  id: string
+  nombre: string
+  chispa: string
+  comando: string
+  specGlobs: string[]
+  minutosBase: number
+  minutosEstimados: number
+  orden: number
+  estado: QaEtapaEstado
+  duracionRealMin?: number
+  nota?: string | null
+  fallos?: QaFallo[]
+}
+
+export interface QaEtapaDef {
+  id: string
+  nombre: string
+  chispa: string
+  comando: string
+  specGlobs: string[]
+  minutosBaseDefault: number
+  orden: number
+}
+
+export interface QaBaselineEtapa {
+  minutosBase: number
+  fuente: string
+}
+
+export interface QaRoadmapLiveEtapa {
+  id: string
+  estado: QaEtapaEstado
+  duracionRealMin?: number
+  passed?: number
+  total?: number
+}
+
+export interface QaRoadmapLive {
+  runId: string
+  alcance: string
+  modo: "seguido" | "por etapas"
+  iniciado: string
+  etapas: QaRoadmapLiveEtapa[]
+  testActual?: string
+}
+
 export interface QaRun {
   id: string
   fecha: string
@@ -52,23 +101,36 @@ export interface QaRun {
     duracion: string
     fallos: QaFallo[]
   }
+  etapas?: QaEtapa[]
 }
 
 export interface QaEstadoData {
   runs: QaRun[]
+  baselinesEtapa?: Record<string, QaBaselineEtapa>
 }
 
 const QA_ESTADO_PATH = path.join(process.cwd(), "qa-estado.json")
 const MAX_RUNS = 10
+const QA_ROADMAP_LIVE_PATH = path.join(process.cwd(), "qa-roadmap-live.json")
+const LIVE_FRESCO_MS = 5 * 60 * 1000
 
 export function getQaEstado(): QaEstadoData | null {
   if (!existsSync(QA_ESTADO_PATH)) return null
   try {
     const raw = JSON.parse(readFileSync(QA_ESTADO_PATH, "utf8")) as QaEstadoData
     if (!Array.isArray(raw.runs)) return null
-    return { runs: raw.runs.slice(-MAX_RUNS) }
+    return { runs: raw.runs.slice(-MAX_RUNS), baselinesEtapa: raw.baselinesEtapa }
   } catch {
     return null
+  }
+}
+
+function escribirQaEstado(data: QaEstadoData): boolean {
+  try {
+    writeFileSync(QA_ESTADO_PATH, JSON.stringify(data, null, 2) + "\n", "utf8")
+    return true
+  } catch {
+    return false
   }
 }
 
@@ -144,5 +206,324 @@ export function getQaDashboardData() {
     sistema,
     factor,
     estimados: getEstimados(sistema, factor),
+  }
+}
+
+// Etapas del recorrido QA narrativo (D1): comandos validados según el mapa de la
+// skill `pruebas` y lotes CRUD por SERIE-CRUD-E2E. Fuente de verdad para el plan
+// (`planRoadmap`), el reporter (F2) y el dashboard /admin/qa-dashboard modo 🦉.
+export const ROADMAP_ETAPAS: QaEtapaDef[] = [
+  {
+    id: "setup",
+    nombre: "La Puerta",
+    chispa:
+      "5 logins reales (test1234) crean los storageStates; si falla no corre nada más. Última causa típica: server frío compilando bajo carga.",
+    comando: "npx playwright test e2e/auth.setup.ts",
+    specGlobs: ["e2e/auth.setup.ts"],
+    minutosBaseDefault: 1.0,
+    orden: 1,
+  },
+  {
+    id: "smoke",
+    nombre: "El Tour",
+    chispa:
+      "8 módulos renderizan sin pageerror. Si algo rompe aquí, es de infraestructura (rutas/SSR), no de lógica de módulo.",
+    comando: "npx playwright test e2e/smoke/",
+    specGlobs: ["e2e/smoke/"],
+    minutosBaseDefault: 2.5,
+    orden: 2,
+  },
+  {
+    id: "auth",
+    nombre: "El Guardián de Cuentas",
+    chispa:
+      "Login/guard + matriz rol×grupos (5 cuentas). Mirar redirects a /ingresar y permisos de sidebar. rate-limit.spec está GATED: jamás correrlo local.",
+    comando: "npx playwright test e2e/auth/ingresar.spec.ts e2e/auth/roles-menu.spec.ts e2e/auth/roles-accesos.spec.ts",
+    specGlobs: ["e2e/auth/ingresar.spec.ts", "e2e/auth/roles-menu.spec.ts", "e2e/auth/roles-accesos.spec.ts"],
+    minutosBaseDefault: 2.5,
+    orden: 3,
+  },
+  {
+    id: "flujo",
+    nombre: "El Poblador",
+    chispa:
+      "Journey QA Lab + ciclo limpiar→poblar→validar→limpiar + CRUD personas. Mirar 'Carga completa OK', el guard de 2ª corrida y 0 huérfanos. Si falla, cae todo lo gated.",
+    comando: "npx playwright test e2e/flujo/",
+    specGlobs: ["e2e/flujo/"],
+    minutosBaseDefault: 3.6,
+    orden: 4,
+  },
+  {
+    id: "crud-maestros",
+    nombre: "Maestros y Config",
+    chispa:
+      "Catálogos admin + configuración persistente + reportería + personal. Mirar guardado/persistencia de sub-tabs y exports de reportes; alert() nativo en configuración es quirúrgico.",
+    comando:
+      "npx playwright test e2e/crud/admin-maestros.spec.ts e2e/crud/admin-configuracion.spec.ts e2e/crud/admin-reporteria.spec.ts e2e/crud/personal.spec.ts",
+    specGlobs: [
+      "e2e/crud/admin-maestros.spec.ts",
+      "e2e/crud/admin-configuracion.spec.ts",
+      "e2e/crud/admin-reporteria.spec.ts",
+      "e2e/crud/personal.spec.ts",
+    ],
+    minutosBaseDefault: 2.0,
+    orden: 5,
+  },
+  {
+    id: "crud-inventario",
+    nombre: "Inventario",
+    chispa:
+      "Tipos de unidad alimentan prorrateo; estructura es la raíz de FKs (unidades borradas rompen VU/IN/RA).",
+    comando:
+      "npx playwright test e2e/crud/tipos.spec.ts e2e/crud/estructura.spec.ts e2e/crud/recursos.spec.ts e2e/crud/proyectos.spec.ts",
+    specGlobs: [
+      "e2e/crud/tipos.spec.ts",
+      "e2e/crud/estructura.spec.ts",
+      "e2e/crud/recursos.spec.ts",
+      "e2e/crud/proyectos.spec.ts",
+    ],
+    minutosBaseDefault: 2.0,
+    orden: 6,
+  },
+  {
+    id: "crud-operaciones",
+    nombre: "Operaciones",
+    chispa:
+      "RA valida anti-overbooking y gate de morosidad; GE auto-En Revisión; bitacora marca Ingresada.",
+    comando:
+      "npx playwright test e2e/crud/reservas.spec.ts e2e/crud/solicitudes.spec.ts e2e/crud/bitacora.spec.ts e2e/crud/proveedores.spec.ts e2e/crud/accesos.spec.ts e2e/crud/paqueteria.spec.ts",
+    specGlobs: [
+      "e2e/crud/reservas.spec.ts",
+      "e2e/crud/solicitudes.spec.ts",
+      "e2e/crud/bitacora.spec.ts",
+      "e2e/crud/proveedores.spec.ts",
+      "e2e/crud/accesos.spec.ts",
+      "e2e/crud/paqueteria.spec.ts",
+    ],
+    minutosBaseDefault: 2.5,
+    orden: 7,
+  },
+  {
+    id: "crud-comunidad",
+    nombre: "Comunidad",
+    chispa:
+      "GD acta→CV encadenado, visor público, switches de privacidad de /admin/gestion alimentan el ABAC.",
+    comando:
+      "npx playwright test e2e/crud/comunicacion.spec.ts e2e/crud/directiva.spec.ts e2e/crud/visor.spec.ts e2e/crud/gestion.spec.ts e2e/crud/residentes.spec.ts",
+    specGlobs: [
+      "e2e/crud/comunicacion.spec.ts",
+      "e2e/crud/directiva.spec.ts",
+      "e2e/crud/visor.spec.ts",
+      "e2e/crud/gestion.spec.ts",
+      "e2e/crud/residentes.spec.ts",
+    ],
+    minutosBaseDefault: 2.5,
+    orden: 8,
+  },
+  {
+    id: "crud-finanzas",
+    nombre: "Finanzas",
+    chispa:
+      "Cobros gated (poblar QA Lab primero), folios FE-####, punto cero 2023-2024 (saldo CC=0) y espejo BD. Multas aplicadas nacen como cobro real.",
+    comando:
+      "npx playwright test e2e/crud/gastos-comunes.spec.ts e2e/crud/multas.spec.ts e2e/crud/pagos.spec.ts e2e/crud/punto-cero.spec.ts e2e/crud/fi-espejo.spec.ts",
+    specGlobs: [
+      "e2e/crud/gastos-comunes.spec.ts",
+      "e2e/crud/multas.spec.ts",
+      "e2e/crud/pagos.spec.ts",
+      "e2e/crud/punto-cero.spec.ts",
+      "e2e/crud/fi-espejo.spec.ts",
+    ],
+    minutosBaseDefault: 3.0,
+    orden: 9,
+  },
+  {
+    id: "crud-complejos",
+    nombre: "Complejos gated",
+    chispa:
+      "PDF firmado, liquidaciones con cálculo legal completo, vitrina portal + el guard idempotente del poblado.",
+    comando:
+      "npx playwright test e2e/crud/certificados.spec.ts e2e/crud/remuneraciones.spec.ts e2e/crud/portal.spec.ts e2e/crud/poblado-idempotente.spec.ts",
+    specGlobs: [
+      "e2e/crud/certificados.spec.ts",
+      "e2e/crud/remuneraciones.spec.ts",
+      "e2e/crud/portal.spec.ts",
+      "e2e/crud/poblado-idempotente.spec.ts",
+    ],
+    minutosBaseDefault: 2.5,
+    orden: 10,
+  },
+  {
+    id: "crud-lectura",
+    nombre: "Lectura y roles",
+    chispa:
+      "Logs sobre BD real con export CSV, matriz RBAC+ABAC read-only, 4 journeys por rol no-admin. Aquí se valida el menor privilegio.",
+    comando: "npx playwright test e2e/crud/logs.spec.ts e2e/crud/permisos.spec.ts e2e/crud/roles-journeys.spec.ts",
+    specGlobs: ["e2e/crud/logs.spec.ts", "e2e/crud/permisos.spec.ts", "e2e/crud/roles-journeys.spec.ts"],
+    minutosBaseDefault: 2.0,
+    orden: 11,
+  },
+]
+
+export const ALCANCES_ROADMAP = ["suite completa", "smoke", "auth", "flujo", "crud", "crud general"] as const
+export type AlcanceRoadmap = (typeof ALCANCES_ROADMAP)[number]
+
+// Alcance desconocido → plan vacío (el endpoint valida y responde 400).
+export function planRoadmap(
+  alcance: string,
+  factor: number,
+  baselines?: Record<string, QaBaselineEtapa>
+): { etapas: QaEtapa[]; totalMinutos: number } {
+  const factorSeguro = Number.isFinite(factor) && factor > 0 ? factor : 1
+  const defs = ROADMAP_ETAPAS.filter((d) => {
+    if (alcance === "suite completa") return true
+    if (alcance === "smoke") return d.id === "setup" || d.id === "smoke"
+    if (alcance === "auth") return d.id === "setup" || d.id === "auth"
+    if (alcance === "flujo") return d.id === "setup" || d.id === "flujo"
+    if (alcance === "crud" || alcance === "crud general") return d.id === "setup" || d.id.startsWith("crud-")
+    return false
+  })
+  const etapas: QaEtapa[] = defs.map((d) => {
+    const minutosBase = baselines?.[d.id]?.minutosBase ?? d.minutosBaseDefault
+    return {
+      id: d.id,
+      nombre: d.nombre,
+      chispa: d.chispa,
+      comando: d.comando,
+      specGlobs: d.specGlobs,
+      minutosBase,
+      minutosEstimados: Math.round(minutosBase * factorSeguro * 10) / 10,
+      orden: d.orden,
+      estado: "pendiente",
+    }
+  })
+  const totalMinutos = Math.round(etapas.reduce((t, e) => t + e.minutosEstimados, 0) * 10) / 10
+  return { etapas, totalMinutos }
+}
+
+export type QaAccionResultado = { ok: true; mensaje: string } | { ok: false; error: string }
+
+export function guardarNotaEtapa(runId: string, etapaId: string, texto: string): QaAccionResultado {
+  const id = runId.trim()
+  const etapaIdLimpio = etapaId.trim()
+  const nota = texto.trim()
+  if (!id || !etapaIdLimpio) return { ok: false, error: "runId y etapaId son obligatorios" }
+  if (!nota) return { ok: false, error: "La nota no puede estar vacía" }
+  const data = getQaEstado()
+  if (!data) return { ok: false, error: "qa-estado.json no existe o es inválido" }
+  const run = data.runs.find((r) => r.id === id)
+  if (!run) return { ok: false, error: `Run no encontrado: ${id}` }
+  const entrada = run.etapas?.find((e) => e.id === etapaIdLimpio)
+  if (!entrada) return { ok: false, error: `La etapa ${etapaIdLimpio} no existe en el run ${id}` }
+  entrada.nota = nota
+  if (!escribirQaEstado(data)) return { ok: false, error: "No se pudo escribir qa-estado.json" }
+  return { ok: true, mensaje: "Nota guardada" }
+}
+
+export function recalibrarBaselineEtapa(etapaId: string, minutosReales: number): QaAccionResultado {
+  const etapaIdLimpio = etapaId.trim()
+  if (!etapaIdLimpio) return { ok: false, error: "etapaId es obligatorio" }
+  if (!ROADMAP_ETAPAS.some((d) => d.id === etapaIdLimpio)) {
+    return { ok: false, error: `Etapa desconocida: ${etapaIdLimpio}` }
+  }
+  if (!Number.isFinite(minutosReales) || minutosReales <= 0) {
+    return { ok: false, error: "minutosReales debe ser un número > 0" }
+  }
+  const data = getQaEstado()
+  if (!data) return { ok: false, error: "qa-estado.json no existe o es inválido" }
+  const minutosBase = Math.round(minutosReales * 10) / 10
+  data.baselinesEtapa = {
+    ...data.baselinesEtapa,
+    [etapaIdLimpio]: { minutosBase, fuente: `medido ${new Date().toISOString()}` },
+  }
+  if (!escribirQaEstado(data)) return { ok: false, error: "No se pudo escribir qa-estado.json" }
+  return { ok: true, mensaje: `Baseline de ${etapaIdLimpio} recalibrado a ${minutosBase} min` }
+}
+
+export function getQaRoadmapLive(): QaRoadmapLive | null {
+  if (!existsSync(QA_ROADMAP_LIVE_PATH)) return null
+  try {
+    const mtimeMs = statSync(QA_ROADMAP_LIVE_PATH).mtimeMs
+    if (Date.now() - mtimeMs > LIVE_FRESCO_MS) return null
+    const raw = JSON.parse(readFileSync(QA_ROADMAP_LIVE_PATH, "utf8")) as QaRoadmapLive
+    if (!raw || typeof raw.runId !== "string" || !Array.isArray(raw.etapas)) return null
+    return raw
+  } catch {
+    return null
+  }
+}
+
+export interface QaEtapaNodo extends QaEtapa {
+  historico: { fecha: string; causa: string } | null
+  nota: string | null
+}
+
+export interface QaRoadmapData {
+  alcance: string
+  factorCarga: number
+  totalMinutos: number
+  etapas: QaEtapaNodo[]
+  live: QaRoadmapLive | null
+  testActual: string | null
+  runReferenciaId: string | null
+}
+
+function nodoConMemoria(etapa: QaEtapa, runs: QaRun[]): QaEtapaNodo {
+  let historico: { fecha: string; causa: string } | null = null
+  let nota: string | null = null
+  for (let i = runs.length - 1; i >= 0; i--) {
+    const run = runs[i]
+    if (!run) continue
+    const entrada = run.etapas?.find((e) => e.id === etapa.id)
+    if (!entrada) continue
+    if (!historico && entrada.estado === "fallida") {
+      const causa = entrada.fallos?.[0]?.causa ?? run.resultado.fallos[0]?.causa ?? "Sin causa registrada"
+      historico = { fecha: run.fecha, causa }
+    }
+    if (nota === null && typeof entrada.nota === "string" && entrada.nota.trim()) {
+      nota = entrada.nota.trim()
+    }
+  }
+  return { ...etapa, historico, nota }
+}
+
+export function getQaRoadmapData(alcance = "suite completa"): QaRoadmapData {
+  const sistema = getSistema()
+  const factor = getFactorCarga(sistema)
+  const estado = getQaEstado()
+  const runs = estado?.runs ?? []
+  const live = getQaRoadmapLive()
+  const { etapas, totalMinutos } = planRoadmap(alcance, factor.factorCarga, estado?.baselinesEtapa)
+
+  let runReferencia: QaRun | null = null
+  for (let i = runs.length - 1; i >= 0; i--) {
+    const r = runs[i]
+    if (r?.etapas && r.etapas.length > 0) {
+      runReferencia = r
+      break
+    }
+  }
+
+  const etapasNodo = etapas.map((e) => {
+    const nodo = nodoConMemoria(e, runs)
+    const enLive = live?.etapas.find((le) => le.id === e.id)
+    if (enLive) {
+      return { ...nodo, estado: enLive.estado, duracionRealMin: enLive.duracionRealMin }
+    }
+    const enRun = runReferencia?.etapas?.find((re) => re.id === e.id)
+    if (enRun) {
+      return { ...nodo, estado: enRun.estado, duracionRealMin: enRun.duracionRealMin ?? nodo.duracionRealMin }
+    }
+    return nodo
+  })
+
+  return {
+    alcance,
+    factorCarga: factor.factorCarga,
+    totalMinutos,
+    etapas: etapasNodo,
+    live,
+    testActual: live?.testActual ?? null,
+    runReferenciaId: live?.runId ?? runReferencia?.id ?? null,
   }
 }

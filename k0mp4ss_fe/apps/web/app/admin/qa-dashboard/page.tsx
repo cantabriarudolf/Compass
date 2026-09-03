@@ -13,7 +13,9 @@ import {
   IconTestPipe,
   IconHistory,
 } from '@tabler/icons-react';
-import type { QaEstadoData, QaEstimado, QaFactor, QaRun, QaSistema } from '@/lib/qa-estado';
+import type { QaEstadoData, QaEstimado, QaEtapaEstado, QaFactor, QaRoadmapData, QaRun, QaSistema } from '@/lib/qa-estado';
+
+const ALCANCES_UI = ['suite completa', 'smoke', 'auth', 'flujo', 'crud', 'crud general'];
 
 interface QaDashboardData {
   estado: QaEstadoData | null;
@@ -32,6 +34,30 @@ function fmtFecha(fecha: string): string {
   const d = new Date(fecha);
   if (Number.isNaN(d.getTime())) return fecha;
   return d.toLocaleString('es-CL', { dateStyle: 'medium', timeStyle: 'short' });
+}
+
+function emojiEstado(estado: QaEtapaEstado): string {
+  if (estado === 'ok') return '✅';
+  if (estado === 'en_curso') return '🦉';
+  if (estado === 'fallida') return '❌';
+  if (estado === 'omitida') return '⏭';
+  return '⏳';
+}
+
+function etiquetaEstado(estado: QaEtapaEstado): string {
+  if (estado === 'ok') return 'OK';
+  if (estado === 'en_curso') return 'En curso';
+  if (estado === 'fallida') return 'Fallida';
+  if (estado === 'omitida') return 'Omitida';
+  return 'Pendiente';
+}
+
+function clasesCirculo(estado: QaEtapaEstado): string {
+  if (estado === 'ok') return 'border-emerald-500/70 text-emerald-600 dark:text-emerald-400';
+  if (estado === 'en_curso') return 'border-amber-500/80 text-amber-600 dark:text-amber-400 animate-pulse';
+  if (estado === 'fallida') return 'border-destructive/70 text-destructive';
+  if (estado === 'omitida') return 'border-muted-foreground/30 text-muted-foreground/50 opacity-70';
+  return 'border-muted-foreground/40 text-muted-foreground';
 }
 
 function BadgeEstado({ estado }: { estado: QaRun['resultado']['estado'] }) {
@@ -72,6 +98,66 @@ export default function QaDashboardPage() {
     cargar();
   }, [cargar]);
 
+  const [modo, setModo] = useState<'corrida' | 'roadmap'>('corrida');
+  const [alcanceRoadmap, setAlcanceRoadmap] = useState<string>('suite completa');
+  const [roadmap, setRoadmap] = useState<QaRoadmapData | null>(null);
+  const [notas, setNotas] = useState<Record<string, string>>({});
+  const [guardandoNota, setGuardandoNota] = useState<string | null>(null);
+  const [notaMsg, setNotaMsg] = useState<{ etapaId: string; ok: boolean; texto: string } | null>(null);
+
+  const cargarRoadmap = useCallback(async (alcance: string) => {
+    try {
+      const res = await fetch(`/api/qa-roadmap?alcance=${encodeURIComponent(alcance)}`, { cache: 'no-store' });
+      const json = (await res.json()) as QaRoadmapData & { error?: string };
+      if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
+      setRoadmap(json);
+    } catch (e) {
+      setError(`No se pudo cargar el roadmap: ${String(e)}`);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (modo !== 'roadmap') return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- carga inicial intencional del plan al entrar al modo (avance 2026-09-03)
+    void cargarRoadmap(alcanceRoadmap);
+  }, [modo, alcanceRoadmap, cargarRoadmap]);
+
+  const liveFresco = modo === 'roadmap' && roadmap?.live != null;
+
+  useEffect(() => {
+    if (!liveFresco) return;
+    const id = setInterval(() => {
+      void cargarRoadmap(alcanceRoadmap);
+    }, 2000);
+    return () => clearInterval(id);
+  }, [liveFresco, alcanceRoadmap, cargarRoadmap]);
+
+  const guardarNota = useCallback(
+    async (etapaId: string) => {
+      const texto = (notas[etapaId] ?? '').trim();
+      const runId = roadmap?.runReferenciaId ?? null;
+      if (!texto || !runId) return;
+      setGuardandoNota(etapaId);
+      setNotaMsg(null);
+      try {
+        const res = await fetch('/api/qa-estado', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ accion: 'nota', runId, etapaId, texto }),
+        });
+        const json = (await res.json()) as { ok?: boolean; error?: string };
+        if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
+        setNotaMsg({ etapaId, ok: true, texto: 'Nota guardada' });
+        await cargarRoadmap(alcanceRoadmap);
+      } catch (e) {
+        setNotaMsg({ etapaId, ok: false, texto: `No se pudo guardar: ${String(e)}` });
+      } finally {
+        setGuardandoNota(null);
+      }
+    },
+    [notas, roadmap?.runReferenciaId, cargarRoadmap, alcanceRoadmap]
+  );
+
   const runs = data?.estado?.runs ?? [];
   const ultima = runs.length > 0 ? runs[runs.length - 1] : null;
   const sistema = data?.sistema;
@@ -97,6 +183,15 @@ export default function QaDashboardPage() {
         </div>
       </div>
 
+      <div className="flex flex-wrap items-center gap-2">
+        <Button variant={modo === 'corrida' ? 'default' : 'outline'} size="sm" onClick={() => setModo('corrida')}>
+          Última corrida
+        </Button>
+        <Button variant={modo === 'roadmap' ? 'default' : 'outline'} size="sm" onClick={() => setModo('roadmap')}>
+          🦉 Roadmap
+        </Button>
+      </div>
+
       {error && (
         <Card className="border-destructive/50">
           <CardContent className="py-3 text-sm text-destructive flex items-center gap-2">
@@ -105,7 +200,7 @@ export default function QaDashboardPage() {
         </Card>
       )}
 
-      {sistema && factor && (
+      {modo === 'corrida' && sistema && factor && (
         <Card className={factor.ahogada ? 'border-amber-400 bg-amber-50/40 dark:bg-amber-950/20 dark:border-amber-900' : ''}>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm flex items-center gap-2">
@@ -130,7 +225,7 @@ export default function QaDashboardPage() {
         </Card>
       )}
 
-      {ultima ? (
+      {modo === 'corrida' && (ultima ? (
         <Card className={ultima.resultado.estado === 'passed' ? 'border-emerald-500/40' : ultima.resultado.estado === 'failed' ? 'border-destructive/50' : 'border-amber-400/60'}>
           <CardHeader className="pb-2">
             <div className="flex items-start justify-between gap-2">
@@ -182,8 +277,9 @@ export default function QaDashboardPage() {
             </CardContent>
           </Card>
         )
-      )}
+      ))}
 
+      {modo === 'corrida' && (
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-sm flex items-center gap-2">
@@ -222,8 +318,9 @@ export default function QaDashboardPage() {
           </div>
         </CardContent>
       </Card>
+      )}
 
-      {runs.length > 1 && (
+      {modo === 'corrida' && runs.length > 1 && (
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm flex items-center gap-2">
@@ -255,6 +352,118 @@ export default function QaDashboardPage() {
                 </tbody>
               </table>
             </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {modo === 'roadmap' && (
+        <Card>
+          <CardHeader className="pb-2">
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <IconClock className="size-4 text-primary" /> 🦉 Roadmap — recorrido por etapas
+                </CardTitle>
+                <CardDescription className="text-xs">
+                  Plan narrativo con estimados escalados por carga (×{roadmap?.factorCarga ?? factor?.factorCarga ?? 1}).
+                  {roadmap?.live ? ' Run en vivo — actualizando cada 2s.' : ' Sin run en vivo: se muestra el último recorrido con etapas o el plan sugerido.'}
+                </CardDescription>
+              </div>
+              <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                Alcance:
+                <select
+                  value={alcanceRoadmap}
+                  onChange={(e) => setAlcanceRoadmap(e.target.value)}
+                  className="h-8 rounded-md border bg-background px-2 text-xs"
+                >
+                  {ALCANCES_UI.map((a) => (
+                    <option key={a} value={a}>{a}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <div className="flex flex-wrap gap-2 text-xs pt-1">
+              <Badge variant="secondary">Total estimado: {fmtMin(roadmap?.totalMinutos ?? 0)}</Badge>
+              {roadmap?.testActual && <Badge variant="secondary" className="max-w-full truncate">🦉 {roadmap.testActual}</Badge>}
+              {roadmap?.runReferenciaId && (
+                <Badge variant="secondary" className="font-mono text-[10px]">run: {roadmap.runReferenciaId}</Badge>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent>
+            {!roadmap ? (
+              <p className="py-6 text-center text-sm text-muted-foreground">Cargando plan del recorrido…</p>
+            ) : roadmap.etapas.length === 0 ? (
+              <p className="py-6 text-center text-sm text-muted-foreground">
+                El alcance <b>{roadmap.alcance}</b> no tiene etapas asociadas.
+              </p>
+            ) : (
+              <div className="relative">
+                <div aria-hidden="true" className="absolute left-5 top-2 bottom-2 hidden w-px bg-border sm:block" />
+                <div className="flex flex-col gap-3">
+                  {roadmap.etapas.map((n, i) => (
+                    <div key={n.id} className={`relative flex items-start gap-3 ${i % 2 === 0 ? 'sm:ml-10' : 'sm:mr-10'}`}>
+                      <div
+                        className={`z-10 flex size-10 shrink-0 items-center justify-center rounded-full border-2 bg-background text-base ${clasesCirculo(n.estado)}`}
+                        title={etiquetaEstado(n.estado)}
+                      >
+                        {emojiEstado(n.estado)}
+                      </div>
+                      <div className="min-w-0 flex-1 rounded-lg border bg-card p-3 shadow-sm">
+                        <div className="flex flex-wrap items-center justify-between gap-1">
+                          <p className="text-sm font-semibold">
+                            {n.orden}. {n.nombre}
+                          </p>
+                          <span className="text-[11px] tabular-nums text-muted-foreground">
+                            Estimado {fmtMin(n.minutosEstimados)}
+                            {n.duracionRealMin != null ? ` → real ${fmtMin(n.duracionRealMin)}` : ''}
+                          </span>
+                        </div>
+                        <p className="mt-1 text-xs italic text-muted-foreground">{n.chispa}</p>
+                        {n.historico && (
+                          <p className="mt-1 text-xs text-destructive/90">
+                            última vez: {fmtFecha(n.historico.fecha)} — {n.historico.causa}
+                          </p>
+                        )}
+                        <code className="mt-1 block truncate font-mono text-[10px] text-muted-foreground" title={n.comando}>
+                          {n.comando}
+                        </code>
+                        <div className="mt-2 flex items-start gap-2">
+                          <textarea
+                            value={notas[n.id] ?? n.nota ?? ''}
+                            onChange={(e) => setNotas((prev) => ({ ...prev, [n.id]: e.target.value }))}
+                            rows={2}
+                            placeholder="Nota para esta etapa — se guarda con el run y reaparece en futuros recorridos"
+                            className="min-w-0 flex-1 rounded-md border bg-background p-2 text-xs"
+                          />
+                          <div className="flex flex-col items-start gap-1">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 text-xs"
+                              disabled={guardandoNota === n.id || !roadmap.runReferenciaId || !(notas[n.id] ?? n.nota ?? '').trim()}
+                              onClick={() => void guardarNota(n.id)}
+                            >
+                              {guardandoNota === n.id ? 'Guardando…' : 'Guardar nota'}
+                            </Button>
+                            {notaMsg?.etapaId === n.id && (
+                              <span className={`text-[10px] ${notaMsg.ok ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive'}`}>
+                                {notaMsg.texto}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        {!roadmap.runReferenciaId && (
+                          <p className="mt-1 text-[10px] text-muted-foreground">
+                            Sin run con etapas para asociar la nota (corre el roadmap por etapas primero).
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}

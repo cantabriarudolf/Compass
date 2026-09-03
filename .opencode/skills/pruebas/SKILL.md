@@ -1,6 +1,6 @@
 ---
 name: pruebas
-description: Puerta de entrada de QA del proyecto — presenta el abanico de pruebas (unit/e2e, suite/smoke/auth/flujo/CRUD por módulo, headless/headed en vivo/ui/reporte), estima carga del sistema y tiempos CLI vs Chrome antes de correr, corre lo elegido, registra el resultado en el dashboard /admin/qa-dashboard y reporta. Use when the user says "pruebas", "qa", "/qa", "correr pruebas", "probar módulo X", "ver pruebas en vivo", "navegador visible", "reporte de tests", "qué pruebas hay", "crud de un módulo", "estado de las pruebas", "cuánto demora una prueba".
+description: Puerta de entrada de QA del proyecto — presenta el abanico de pruebas (unit/e2e, suite/smoke/auth/flujo/CRUD por módulo, seguido/por etapas, headless/headed en vivo/ui/reporte), estima carga del sistema y tiempos CLI vs Chrome antes de correr, corre lo elegido, registra el resultado en el dashboard /admin/qa-dashboard y reporta. Use when the user says "pruebas", "qa", "/qa", "correr pruebas", "probar módulo X", "ver pruebas en vivo", "navegador visible", "reporte de tests", "qué pruebas hay", "crud de un módulo", "estado de las pruebas", "cuánto demora una prueba", "roadmap", "por etapas".
 ---
 
 # Skill: Pruebas — puerta de entrada de QA (abanico de combinaciones)
@@ -11,11 +11,14 @@ elige y corre. Tu rol es de recepcionista de QA + corredor + reportero.
 
 ## Protocolo de puerta de entrada (SIEMPRE al invocar)
 
-1. **Presenta el abanico con el tool `question`** (una sola tanda, máx 3 preguntas):
+1. **Presenta el abanico con el tool `question`** (una sola tanda, máx 4 preguntas):
     - **¿Qué probar?** `unit` (Vitest, rápido, sin navegador) · `e2e` (Chrome real) · `ambas`
     - **¿Alcance?** (si e2e o ambas) `suite completa` · `smoke (8 módulos renderizan)` ·
       `auth (login/guard)` · `flujo (journey poblamiento + CRUD personas)` ·
       `CRUD de un módulo` (menú con el mapa de abajo) · `CRUD general (todo el lane)`
+    - **¿Cómo recorres?** (si e2e) `seguido` (un run completo; el roadmap se actualiza por
+      etapa al final) · `por etapas` (corre etapa → pausa → interpreta → nota → sigue, ver
+      §Modo por etapas). Default: `seguido`.
     - **¿Cómo lo ves?** (si e2e) `headless (como CI)` · `--headed (Chrome VISIBLE en vivo)` ·
       `--ui (debugger paso a paso)` · `show-report (HTML del último run)`
     - **¿Con qué cuenta?** `admin` (default) · `comite` · `conserjeria` · `residente` ·
@@ -40,6 +43,74 @@ elige y corre. Tu rol es de recepcionista de QA + corredor + reportero.
     factor ≤1.2). Cierra el reporte apuntando al dashboard: Desarrollo AI →
     "Estado de Pruebas QA" (`/admin/qa-dashboard`, API `/api/qa-estado`, visible solo
     en development).
+
+## Modo por etapas (¿Cómo recorres? = `por etapas`)
+
+El recorrido se hace ETAPA a ETAPA con pausas: el concierge orquesta, el dashboard
+(`/admin/qa-dashboard` modo "🦉 Roadmap") pinta el avance. Protocolo por etapa:
+
+1. **Plan**: consulta `GET /api/qa-roadmap?alcance=<alcance>` (dev-only) o deriva el plan
+   con `planRoadmap(alcance, factor, baselines)` de `lib/qa-estado.ts`. Muestra el plan:
+   nodos con nombre, estimado ×factor, chispa y comando por etapa.
+2. **Corre UNA etapa**: ejecuta el `comando` de la etapa (mapa §Etapas del recorrido
+   abajo). Una sola; nada de adelantarte.
+3. **Reporta con interpretación**: passed/failed + duración, `estimado vs real` de la
+   etapa, y la chispa (qué mirar / qué suele fallar). Si falló, leer
+   `test-results/**/error-context.md` antes de diagnosticar.
+4. **Pregunta observación al owner** ("¿notaste algo?") y registra su respuesta:
+   `POST /api/qa-estado` con `{"accion":"nota","runId":"<id del run registrado>","etapaId":"<id etapa>","texto":"<observación>"}`.
+   La nota persiste en `qa-estado.json` (run `etapas[].nota`) y reaparece en el nodo del
+   roadmap en futuros recorridos.
+5. **Recalibra si corresponde** (máquina sana, factor ≤1.2):
+   `POST /api/qa-estado` con `{"accion":"recalibrar","etapaId":"<id etapa>","minutosReales":<min>}`.
+6. **Registra la corrida de la etapa** en `qa-estado.json` (paso 5 del protocolo general)
+   con `etapas[]` completas: `{ id, estado: "ok"|"fallida"|"omitida", duracionRealMin,
+   nota?, fallos? }` + actualiza `qa-roadmap-live.json` (schema `QaRoadmapLive` en
+   `lib/qa-estado.ts`: `{ runId, alcance, modo: "por etapas", iniciado, etapas: [{ id,
+   estado, duracionRealMin?, passed?, total? }], testActual? }`) para que el dashboard lo
+   muestre fresco (<5 min) en el próximo polling.
+7. **ESPERA señal explícita del owner** ("sigue"/"continúa") antes de correr la etapa
+   siguiente. El modo por etapas es un recorrido pausado, no una cola de comandos.
+
+## Registro de etapas en `qa-estado.json` (protocolo)
+
+Cada corrida guarda el run histórico con su campo opcional `etapas` (los runs viejos sin
+`etapas` siguen siendo válidos). Reglas:
+
+- `etapas[]` usa el schema `QaEtapa` de `lib/qa-estado.ts`: `{ id, nombre, chispa,
+  comando, specGlobs, minutosBase, minutosEstimados, orden, estado
+  ("pendiente"|"en_curso"|"ok"|"fallida"|"omitida"), duracionRealMin?, nota?, fallos? }`.
+  En el run registrado, cada etapa corrida va con su `estado` y `duracionRealMin` reales.
+- El `id` de cada etapa DEBE ser uno de los de `ROADMAP_ETAPAS` (tabla de abajo) — así el
+  roadmap del historial es fiel a lo corrido y la nota POST la encuentra.
+- Baselines por etapa: `baselinesEtapa` en `qa-estado.json`
+  (`{ [etapaId]: { minutosBase, fuente: "medido <fecha>" } }`), merge sobre los defaults
+  de código. Se recalibra con `POST /api/qa-estado accion=recalibrar` (o editando el
+  JSON), nunca tocando código.
+- `qa-roadmap-live.json` es transitorio y gitignored: si queda huérfano (>5 min) el
+  dashboard lo ignora solo.
+
+## Etapas del recorrido (ROADMAP_ETAPAS — mapeo alcance → etapas)
+
+Fuente de verdad: `ROADMAP_ETAPAS` en `lib/qa-estado.ts`. Minutos base por etapa
+(máquina sana; el factor de carga escala encima):
+
+| # | Etapa (id) | Comando | Base |
+|---|---|---|---|
+| 1 | La Puerta (`setup`) | `npx playwright test e2e/auth.setup.ts` | 1.0 |
+| 2 | El Tour (`smoke`) | `npx playwright test e2e/smoke/` | 2.5 |
+| 3 | El Guardián de Cuentas (`auth`) | `npx playwright test e2e/auth/ingresar.spec.ts e2e/auth/roles-menu.spec.ts e2e/auth/roles-accesos.spec.ts` | 2.5 |
+| 4 | El Poblador (`flujo`) | `npx playwright test e2e/flujo/` | 3.6 |
+| 5 | Maestros y Config (`crud-maestros`) | `npx playwright test e2e/crud/admin-maestros.spec.ts e2e/crud/admin-configuracion.spec.ts e2e/crud/admin-reporteria.spec.ts e2e/crud/personal.spec.ts` | 2.0 |
+| 6 | Inventario (`crud-inventario`) | `npx playwright test e2e/crud/tipos.spec.ts e2e/crud/estructura.spec.ts e2e/crud/recursos.spec.ts e2e/crud/proyectos.spec.ts` | 2.0 |
+| 7 | Operaciones (`crud-operaciones`) | `npx playwright test e2e/crud/reservas.spec.ts e2e/crud/solicitudes.spec.ts e2e/crud/bitacora.spec.ts e2e/crud/proveedores.spec.ts e2e/crud/accesos.spec.ts e2e/crud/paqueteria.spec.ts` | 2.5 |
+| 8 | Comunidad (`crud-comunidad`) | `npx playwright test e2e/crud/comunicacion.spec.ts e2e/crud/directiva.spec.ts e2e/crud/visor.spec.ts e2e/crud/gestion.spec.ts e2e/crud/residentes.spec.ts` | 2.5 |
+| 9 | Finanzas (`crud-finanzas`) | `npx playwright test e2e/crud/gastos-comunes.spec.ts e2e/crud/multas.spec.ts e2e/crud/pagos.spec.ts e2e/crud/punto-cero.spec.ts e2e/crud/fi-espejo.spec.ts` | 3.0 |
+| 10 | Complejos gated (`crud-complejos`) | `npx playwright test e2e/crud/certificados.spec.ts e2e/crud/remuneraciones.spec.ts e2e/crud/portal.spec.ts e2e/crud/poblado-idempotente.spec.ts` | 2.5 |
+| 11 | Lectura y roles (`crud-lectura`) | `npx playwright test e2e/crud/logs.spec.ts e2e/crud/permisos.spec.ts e2e/crud/roles-journeys.spec.ts` | 2.0 |
+
+Alcance → etapas (`planRoadmap`): `suite completa` = todas (1-11) · `smoke` = 1+2 ·
+`auth` = 1+3 · `flujo` = 1+4 · `crud` y `crud general` = 1 + 5-11.
 
 ## Estimados CLI vs Chrome + carga del sistema
 
@@ -168,7 +239,10 @@ Desde la Serie FRONTERA el poblado es **idempotente**: si hay datos TEST-* apare
   Lee `apps/web/qa-estado.json` vía `/api/qa-estado` (`lib/qa-estado.ts`, campo opcional
   `cuenta`). Muestra última corrida (passed/failed/skipped, duración, estimado vs real,
   fallos con causa), carga del sistema en vivo con factor y alerta de máquina ahogada,
-  tabla estimados CLI vs Chrome y historial (últimas 10). Solo en development (`env-guard`).
+  tabla estimados CLI vs Chrome, historial (últimas 10) y modo "🦉 Roadmap" (path zigzag
+  de `ROADMAP_ETAPAS` con chispa/nota/línea histórica por nodo y polling 2s con
+  `qa-roadmap-live.json` fresco; APIs `/api/qa-roadmap` y `POST /api/qa-estado`). Solo en
+  development (`env-guard`).
 - Contexto de decisiones: `Data/NSGC/docs/avances/avance - 2026-08-28 12-52.md` (por qué
   Playwright) y `avance - 2026-08-29 11-10.md` (lane flujo + quirúrgicos E2E).
 
