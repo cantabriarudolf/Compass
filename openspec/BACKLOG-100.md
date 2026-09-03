@@ -89,6 +89,11 @@ opcional del mismo patrón.
 
 ## Nota de proceso
 
+- **EN CURSO (2026-09-03): change `qa-roadmap-visual`** — Modo QA Roadmap tipo búho
+  (etapas con estimados + pausas + notas + chispas de intuición; F2 reporter en vivo).
+  Estado fino: `openspec/changes/qa-roadmap-visual/tasks.md` (F1 pendiente al crear).
+  Ejecución delegada a subagente por fase; esta fuente basta para retomar en cualquier
+  ventana (`/inicio`).
 - Cualquier chat puede retomar estos ítems: la fuente de verdad es este archivo + los specs
   citados. Al elegir uno, crear el change openspec correspondiente (no serie necesaria salvo
   C1/C4 que ameritan 2 ventanas).
