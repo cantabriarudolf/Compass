@@ -1,0 +1,32 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "$comment": "Perfil HIBRIDO (default): criticos en opencode-go (glm-5.3 / kimi-k2.7-code), mecanicos en free de Zen. Regenerable con: node scripts/doctor.mjs --auto --perfil hibrido",
+  "model": "opencode-go/glm-5.3-flash",
+  "small_model": "opencode-go/glm-5.3-flash",
+  "agent": {
+    "build": {
+      "model": "opencode-go/glm-5.3-flash"
+    },
+    "plan": {
+      "model": "opencode-go/glm-5.3"
+    },
+    "arquitecto": {
+      "model": "opencode-go/glm-5.3"
+    },
+    "codificador": {
+      "model": "opencode-go/kimi-k2.7-code"
+    },
+    "lector": {
+      "model": "opencode/nemotron-3.5-lightning-free"
+    },
+    "revisor-fin": {
+      "model": "opencode/ling-3.0-flash-fin-free"
+    },
+    "revisor-codigo": {
+      "model": "opencode-go/glm-5.3"
+    },
+    "documentador": {
+      "model": "opencode/mimo-v2.5-free"
+    }
+  }
+}

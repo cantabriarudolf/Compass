@@ -101,3 +101,11 @@ opcional del mismo patrón.
   C1/C4 que ameritan 2 ventanas).
 - Orden sugerido si hay ganas: C2 (mejora QA diaria) → C1 (compliance AM) → C3 → C4.
 - Estado al 2026-08-31: A+B se ejecutan en SERIE-MENU-100; C1-C4 sin empezar.
+
+**Hallazgos documentales del dry-run @revisor-fin (2026-09-03, arnés)**: (F1) la apertura
+17.082.694 es DERIVADA (egresos − ingresos) y no proviene del libro — el "saldo 0" es
+tautológico por construcción; documentar en fixture/comentario + test que declare la
+identidad. (F2) la serie mensual `saldoCC` del fixture sigue la cuenta bancaria del libro
+y NO reconcilia mes a mes con la derivada (23/24 meses difieren) — está en el JSON pero no
+se materializa; declarar su semántica o removerla para evitar doble verdad. Bajo: solo
+aclaración documental, 0 errores de cálculo.
