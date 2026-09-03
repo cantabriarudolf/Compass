@@ -13,7 +13,7 @@
 
 ## Fase 2 — El búho vivo (reporter test a test)
 
-- [ ] 2.1 `e2e/reporters/roadmap-reporter.ts`: reporter Playwright (onBegin/onTestEnd/onEnd) que mapea spec→etapa vía `specGlobs`, escribe `qa-roadmap-live.json` (runId, modo "seguido", etapas con estado/passed/total, testActual) con try/catch en cada escritura — nunca rompe la corrida
-- [ ] 2.2 `playwright.config.ts`: añadir `["./e2e/reporters/roadmap-reporter.ts"]` al array de reporters (convive con html/junit)
-- [ ] 2.3 Verificación F2: e2e smoke en modo seguido con el dashboard abierto — el búho avanza test a test (polling refleja passed/total de la etapa en curso); suite completa sin regresiones
+- [x] 2.1 `e2e/reporters/roadmap-reporter.ts`: reporter Playwright (onBegin/onTestEnd/onEnd) que mapea spec→etapa vía `specGlobs`, escribe `qa-roadmap-live.json` (runId, modo "seguido", etapas con estado/passed/total, testActual) con try/catch en cada escritura — nunca rompe la corrida
+- [x] 2.2 `playwright.config.ts`: añadir `["./e2e/reporters/roadmap-reporter.ts"]` al array de reporters (convive con html/junit)
+- [x] 2.3 Verificación F2: e2e smoke en modo seguido con el dashboard abierto — el búho avanza test a test (polling refleja passed/total de la etapa en curso); suite completa sin regresiones
 - [ ] 2.4 Cierre: suite completa verde (Vitest + e2e), avance NSGC + manual del dashboard + Trazabilidad + BACKLOG-100 nota de cierre

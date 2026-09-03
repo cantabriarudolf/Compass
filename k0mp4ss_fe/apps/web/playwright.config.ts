@@ -1,7 +1,11 @@
 // E2E con navegador real (Playwright). Lane separada de Vitest/RTL:
 // Vitest = unidad/integración (mocks), Playwright = flujos completos de usuario.
 // Patrones según skill e2e-testing (webServer, storageState, trace/video on-failure).
-import { defineConfig, devices } from "@playwright/test"
+import { defineConfig, devices, type ReporterDescription } from "@playwright/test"
+
+const reportersBase: ReporterDescription[] = process.env.CI
+  ? [["html", { open: "never" }], ["junit", { outputFile: "test-results/junit.xml" }]]
+  : [["html", { open: "never" }], ["list"]]
 
 export default defineConfig({
   testDir: "./e2e",
@@ -15,9 +19,9 @@ export default defineConfig({
   // Local: next dev compila cada ruta al primer uso (hasta ~60s de turbo).
   // CI: build de producción, rutas calientes.
   timeout: process.env.CI ? 30_000 : 120_000,
-  reporter: process.env.CI
-    ? [["html", { open: "never" }], ["junit", { outputFile: "test-results/junit.xml" }]]
-    : [["html", { open: "never" }], ["list"]],
+  // El roadmap-reporter escribe qa-roadmap-live.json (transitorio, gitignored);
+  // su escritura es try/catch — jamás interfiere con html/junit/list.
+  reporter: [["./e2e/reporters/roadmap-reporter.ts"], ...reportersBase],
   use: {
     baseURL: process.env.BASE_URL || "http://localhost:3000",
     // CI: chromium embebido de Playwright. Local: Chrome del sistema (cero descargas).

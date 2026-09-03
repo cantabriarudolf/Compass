@@ -13,12 +13,13 @@ vi.mock("fs", async (importOriginal) => {
   const actual = await importOriginal<typeof import("fs")>()
   return {
     ...actual,
-    existsSync: (p: Parameters<typeof actual.existsSync>[0]) =>
-      fsState.files.has(String(p)) || actual.existsSync(p),
+    // Sin fallback al FS real: si existe qa-roadmap-live.json en cwd, los tests
+    // de "archivo inexistente" fallarían. Aislamiento total vía fsState.
+    existsSync: (p: Parameters<typeof actual.existsSync>[0]) => fsState.files.has(String(p)),
     readFileSync: ((p: Parameters<typeof actual.readFileSync>[0], ...rest: unknown[]) => {
       const key = String(p)
       if (fsState.files.has(key)) return fsState.files.get(key)
-      return (actual.readFileSync as (...a: unknown[]) => unknown)(p, ...rest)
+      throw new Error(`ENOENT: ${key} (mock: archivo no sembrado en fsState)`)
     }) as typeof actual.readFileSync,
     writeFileSync: ((p: Parameters<typeof actual.writeFileSync>[0], data: unknown) => {
       fsState.files.set(String(p), String(data))
