@@ -80,7 +80,7 @@
 **HECHO** — la historia real 2023-2024 (INGvsEGR.xlsx) es la línea base del sistema: feature
 "Ingreso manual a fondo" + `FondoFI.saldoInicial` (versátil: fiel al flujo o cuadrado) +
 STORE_VERSION 27 con migración idempotente (fondo "Cuenta Corriente", 182 egresos FE-0001..0182,
-44 ingresos). **FI→BD también HECHO (2026-09-03, change `fi-sync-bd`)**: espejo Prisma/SQLite del
+44 ingresos). **FI→BD también HECHO (2026-09-03, change `fi-sync-bd`, commit `25f6aab`, CI 🟢)**: espejo Prisma/SQLite del
 punto cero vía `POST /api/fi/sync` (batch idempotente, patrón C1 auditoría) + panel read-only
 "Espejo BD (ST)" en `/finanzas` — `saldoInicial` en `FondoFI` + modelo `IngresoFI` en schema
 (migración `20260903032006_fi_sync_bd`); store sigue siendo fuente de la UI, BD espejo de
