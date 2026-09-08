@@ -109,3 +109,12 @@ identidad. (F2) la serie mensual `saldoCC` del fixture sigue la cuenta bancaria 
 y NO reconcilia mes a mes con la derivada (23/24 meses difieren) — está en el JSON pero no
 se materializa; declarar su semántica o removerla para evitar doble verdad. Bajo: solo
 aclaración documental, 0 errores de cálculo.
+
+## Hallazgos de la Revisión 2026-09-08 (SERIE-REVISION P1-P5)
+
+> Revisión nocturna con arnés gentle-ai. Commits: `8fada6d` (P1), `55ad834` (P2), `2114ede` (P3), `1185512` (P4).
+
+- **Estabilidad**: suite unit 517/517 verde, e2e 86/88 verde (2 skipped). Lint: 12 warnings (0 errores).
+- **Seguridad aplicada**: recurso `am` en authz, authz checks en APIs FI/Auditoría, auth en dev/QA endpoints, CSP report sanitizado.
+- **Deuda técnica documentada**: store monolito (5007 líneas), 27+ repeticiones de patrón ID, 4 funciones `hoyISO*` duplicadas. Ver `openspec/changes/revision-arquitectura/` y `openspec/changes/revision-integraal/`.
+- **Tareas derivadas**: ver `openspec/changes/revision-integraal/tasks.md` (priorizadas Critical/High/Medium/Low).
