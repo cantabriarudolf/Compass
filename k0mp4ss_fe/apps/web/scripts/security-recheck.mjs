@@ -15,12 +15,12 @@
  * Límite documentado: `next build` falla por Google Fonts sin red; por defecto usa handlers directos,
  * no `next start`. Con `CHECK_RECHECK_LIVE=1` levanta `next dev --port 0` efímero.
  */
+/* global process */
 import { readFileSync, existsSync } from "node:fs"
 import path from "node:path"
 
 const WEB_ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..")
 
-function okFail(cond) { return cond ? "OK" : "FAIL" }
 let passed = 0
 let failed = 0
 function check(idx, label, cond, detail = "") {
@@ -70,7 +70,6 @@ async function main() {
     const hasSafe = ddRaw.includes("SAFE_CHANGE_ID") && ddRaw.includes("^[A-Za-z0-9]")
     const hasToggleGuard = ddRaw.includes("SAFE_CHANGE_ID.test(changeId)") && ddRaw.includes("return null")
     const hasAllowedPrefixes = ddRaw.includes("ALLOWED_FILE_PREFIXES")
-    const hasReadGuard = ddRaw.includes("full.startsWith(p)") === false ? ddRaw.includes("ALLOWED_FILE_PREFIXES.some") : true
     const drHas404 = drRaw.includes("Recurso no encontrado") || drRaw.includes("Recurso no disponible")
     // lógica pura: probar regex directamente
     const SAFE = /^[A-Za-z0-9][A-Za-z0-9._-]*$/
@@ -84,7 +83,6 @@ async function main() {
     const proxy = path.join(WEB_ROOT, "proxy.ts")
     const raw = existsSync(proxy) ? readFileSync(proxy, "utf8") : ""
     const hasRedirect = raw.includes("/ingresar") && raw.includes("next=") && raw.includes("encodeURIComponent")
-    const hasMatcher = raw.includes("matcher")
     const hasAuth401Else = raw.includes('401') && raw.includes("No autenticado")
     const cond = hasRedirect && hasAuth401Else
     check(4, "/admin sin cookie → redirect /ingresar?next=", cond, cond ? "proxy redirect con next param" : "falta redirect /ingresar")
@@ -114,6 +112,7 @@ async function main() {
   }
 
   // Intento de verificación viva opcional con fetch si hay servidor (no obligatorio para CI)
+  // eslint-disable-next-line turbo/no-undeclared-env-vars -- CHECK_RECHECK_LIVE es parámetro de invocación manual de este CLI, no una env de tareas turbo
   if (process.env.CHECK_RECHECK_LIVE) {
     console.log("\n— Verificación viva (CHECK_RECHECK_LIVE=1) — intenta fetch contra dev —")
     // se deja a test/security-rechecks.test.ts para invocación handlers directa; aquí solo informamos

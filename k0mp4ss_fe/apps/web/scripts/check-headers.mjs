@@ -7,6 +7,7 @@
  *
  * Límite documentado: `next build` rompe por Google Fonts sin red, por eso se usa `next dev` + curl/fetch.
  */
+/* global process */
 import { readFileSync, existsSync } from "node:fs"
 import path from "node:path"
 import { pathToFileURL } from "node:url"
@@ -61,7 +62,9 @@ async function main() {
         securityHeaders = hdrs[0]?.headers ?? []
         console.log("\n  headers() resueltos desde next.config.mjs:")
         for (const h of securityHeaders) console.log(`    ${h.key}: ${h.value}`)
-      } catch {}
+      } catch {
+        // Best-effort: headers() es opcional en next.config.mjs; la lectura estática igual cubre el check.
+      }
     }
 
     const errs = []
@@ -94,7 +97,6 @@ async function main() {
     const proxyRaw = readFileSync(PROXY_TS, "utf8")
     const hasCSP = proxyRaw.includes("Content-Security-Policy-Report-Only")
     const hasNonce = proxyRaw.includes("nonce-") && proxyRaw.includes("generarNonce")
-    const hasNoEnforcement = !proxyRaw.includes('set("Content-Security-Policy",') || proxyRaw.includes("Content-Security-Policy-Report-Only")
     // Verifica que no emita enforcement puro
     const emitsEnforcement = /headers\.set\(\s*"Content-Security-Policy"\s*,/.test(proxyRaw) && !/Report-Only/.test(proxyRaw.match(/headers\.set\(\s*"Content-Security-Policy[^"]*"/)?.[0] ?? "")
     console.log(`  CSP-Report-Only presente: ${okFail(hasCSP)}`)
@@ -112,6 +114,7 @@ async function main() {
   }
 
   // 3) Fetch vivo si hay servidor
+  // eslint-disable-next-line turbo/no-undeclared-env-vars -- CHECK_HEADERS_URL es parámetro de invocación manual de este CLI, no una env de tareas turbo
   const baseUrl = process.env.CHECK_HEADERS_URL || "http://localhost:3000"
   const candidates = ["/", "/ingresar"]
   console.log(`\n— Fetch vivo contra ${baseUrl} (si next dev corre) —`)

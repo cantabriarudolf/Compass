@@ -18,8 +18,8 @@
 
 | Ventana | Alcance | Estado | Commit final |
 |---|---|---|---|
-| P1 | Estabilización express: test roto RA + lint warnings + flaky PE | EN CURSO | — |
-| P2 | Security Audit Parte I: AuthZ (A01/A07) — authz.ts, puedeContextual, middleware, ABAC matriz | pendiente | — |
+| P1 | Estabilización express: test roto RA + lint warnings + flaky PE | ✅ HECHA | `8fada6d` |
+| P2 | Security Audit Parte I: AuthZ (A01/A07) — authz.ts, puedeContextual, middleware, ABAC matriz | EN CURSO | — |
 | P3 | Security Audit Parte II: APIs + Data (A03/A02/A05/A01-data) — endpoints, Zod, crypto, headers, env | pendiente | — |
 | P4 | Arquitectura & Deuda Técnica — store monolito, schemas, SRP, DRY, hallazgos revisor-fin | pendiente | — |
 | P5 | Tests, cobertura, documentación y cierre — gaps, flakiness, openspec archive, BACKLOG | pendiente | — |
@@ -28,4 +28,4 @@
 
 ## Bitácora
 
-(vacía — cada ventana añade antes del push: `- [fecha] P<n> HECHA: resumen (commit hash)`)
+- [2026-09-08] P1 HECHA: test RA arreglado (fecha dinámica +30d, regla de negocio documentada), 31/43 warnings lint limpiados en scripts/*.mjs, PE verificado estable (5/5 corridas individuales, 516/516 suite verde). Change archivado `2026-09-08-revision-estabilizacion`. Commit `8fada6d`.

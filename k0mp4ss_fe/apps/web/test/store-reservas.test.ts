@@ -180,7 +180,13 @@ describe("RA - Reservas y Amenities en el store", () => {
     })
 
     it("cancelación anticipada sin penalización", () => {
-      getState().saveReservaRA(reservaBase({}))
+      // Regla de negocio (RA): una cancelación es "tardía" solo si ocurre dentro de los
+      // `cancelacionTardiaDias` días previos a la fecha de la reserva (diasRestantes <= ventana).
+      // Fuera de esa ventana (holgura mayor) es "anticipada" → tardia:false, sin penalización.
+      // Fecha dinámica: un fixture hardcodeado envejece y eventualmente cae dentro de la ventana.
+      const enTreintaDias = new Date()
+      enTreintaDias.setDate(enTreintaDias.getDate() + 30)
+      getState().saveReservaRA(reservaBase({ fecha: enTreintaDias.toISOString().slice(0, 10) }))
       const r = getState().cancelarReservaRA("ra-rs-1")
       expect(r.ok).toBe(true)
       const reserva = getState().reservasRA[0]!

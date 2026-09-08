@@ -13,7 +13,8 @@
  *   npm run restore:db -- latest                  (backup más reciente)
  *   npm run restore:db -- latest --yes
  */
-import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs"
+/* global process */
+import { copyFileSync, existsSync, readFileSync, readdirSync, rmSync } from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 
@@ -49,6 +50,7 @@ function guardasEntorno() {
 }
 
 function confirmado() {
+  // eslint-disable-next-line turbo/no-undeclared-env-vars -- RESTORE_CONFIRM es parámetro de invocación manual de este CLI, no una env de tareas turbo
   return process.argv.includes("--yes") || process.env.RESTORE_CONFIRM === "1"
 }
 

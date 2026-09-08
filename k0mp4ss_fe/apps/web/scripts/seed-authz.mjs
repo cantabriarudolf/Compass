@@ -2,6 +2,7 @@
 // Se usa en el PRIMER arranque (BD sin usuarios → Auth.js no permite login →
 // fail-closed intencional). Idempotente; espejo de lib/seed-authz.ts.
 // Uso: npm run seed:authz   (lee .env vía --env-file-if-exists)
+/* global process */
 import { PrismaClient } from "@prisma/client"
 import bcrypt from "bcryptjs"
 

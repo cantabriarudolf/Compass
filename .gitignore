@@ -44,3 +44,5 @@ arnes-opencode/
 
 # Snapshots de rollback del arnés (locales, no viajan)
 .opencode/backup-pre-arnes/
+# Local Pi runtime state
+.atl/

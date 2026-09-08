@@ -7,8 +7,9 @@
  *   db-<ts>/manifest.json            meta + conteos + sha256 del archivo
  * Uso: npm run backup:db [-- --label=pre-restore]
  */
+/* global process */
 import { createHash } from "node:crypto"
-import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs"
+import { copyFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 
@@ -79,7 +80,9 @@ async function main() {
   // Flush WAL al archivo principal para una copia consistente de solo dev.db
   try {
     await prisma.$queryRawUnsafe("PRAGMA wal_checkpoint(TRUNCATE)")
-  } catch {}
+  } catch {
+    // Best-effort: si el checkpoint WAL falla (p. ej. BD sin WAL activo), la copia igual procede.
+  }
 
   const counts = {}
   for (const model of modelNames()) {
