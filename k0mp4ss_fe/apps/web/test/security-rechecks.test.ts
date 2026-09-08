@@ -158,15 +158,18 @@ describe("D-iii re-chequeos 5/5 (scripted)", () => {
     expect(r3).toBeNull()
 
 
-    // vía handler PATCH con traversal
+    // vía handler PATCH con traversal (P3: ahora requiere auth en dev-dashboard)
     process.env.NEXT_PUBLIC_APP_ENV = "development"
     const { PATCH } = await import("@/app/api/dev-dashboard/route")
+    const cookie = await cookieAdmin()
+    state.cookie = cookie
     const req = new Request("http://localhost/api/dev-dashboard", {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", cookie },
       body: JSON.stringify({ changeId: "../../etc/passwd", taskId: "1.1" }),
     })
     const res = await PATCH(req as never)
+    state.cookie = ""
     console.log(`[3/5] PATCH dev-dashboard traversal → 404: ${res.status === 404 ? "OK" : `FAIL (status=${res.status})`}`)
     expect(res.status).toBe(404)
   })

@@ -1,13 +1,24 @@
 import { NextResponse } from 'next/server';
 import { getDashboardData, toggleTask, readProjectFile, saveModuleNotes, setModuleNotesStatus } from '@/lib/dev-dashboard';
 import { isWriteApiEnabled } from '@/lib/env-guard';
+import { auth } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
+
+async function requireAuth() {
+  const sesion = await auth();
+  if (!sesion?.user?.id) {
+    return NextResponse.json({ error: 'No autenticado.' }, { status: 401 });
+  }
+  return null;
+}
 
 export async function GET() {
   if (!isWriteApiEnabled()) {
     return NextResponse.json({ error: 'Not Found' }, { status: 404 });
   }
+  const authError = await requireAuth();
+  if (authError) return authError;
   try {
     return NextResponse.json(getDashboardData());
   } catch {
@@ -19,6 +30,8 @@ export async function POST(request: Request) {
   if (!isWriteApiEnabled()) {
     return NextResponse.json({ error: 'Not Found' }, { status: 404 });
   }
+  const authError = await requireAuth();
+  if (authError) return authError;
   try {
     const body = await request.json();
     const { file } = body;
@@ -39,6 +52,8 @@ export async function PUT(request: Request) {
   if (!isWriteApiEnabled()) {
     return NextResponse.json({ error: 'Not Found' }, { status: 404 });
   }
+  const authError = await requireAuth();
+  if (authError) return authError;
   try {
     const body = await request.json();
     const { file, content, status } = body;
@@ -68,6 +83,8 @@ export async function PATCH(request: Request) {
   if (!isWriteApiEnabled()) {
     return NextResponse.json({ error: 'Not Found' }, { status: 404 });
   }
+  const authError = await requireAuth();
+  if (authError) return authError;
   try {
     const body = await request.json();
     const { changeId, taskId } = body;

@@ -16,7 +16,20 @@ export async function POST(request: Request) {
     } catch {
       // intencional: vacío por diseño
     }
-    console.warn("[csp-report] violation:", typeof parsed === "string" ? parsed.slice(0, 1000) : JSON.stringify(parsed).slice(0, 2000))
+    // P3 security audit: sanitizar — solo loguear campos estándar CSP, nunca el body completo
+    // (evita log injection si un atacante envía POST crafted con PII/exfiltración).
+    const report = (typeof parsed === "object" && parsed !== null)
+      ? (parsed as Record<string, unknown>)["csp-report"] as Record<string, unknown> | undefined
+      : undefined;
+    const safe = report
+      ? {
+          "document-uri": report["document-uri"],
+          "violated-directive": report["violated-directive"],
+          "blocked-uri": report["blocked-uri"],
+          "effective-directive": report["effective-directive"],
+        }
+      : { raw: (typeof parsed === "string" ? parsed : JSON.stringify(parsed)).slice(0, 200) };
+    console.warn("[csp-report] violation:", JSON.stringify(safe))
   } catch {
     // intencional: vacío por diseño
   }
