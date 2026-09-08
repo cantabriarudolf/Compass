@@ -26,6 +26,7 @@ const MATRIZ: Record<Rol, Record<string, Set<Accion>>> = {
     "fi": new Set<Accion>(["ver", "ejecutar"]), // ver balance, ejecutar aprobar gasto
     "fi:balance": new Set<Accion>(["ver"]),
     "fi:gasto_comun": new Set<Accion>(["ver", "ejecutar"]),
+    "am": new Set<Accion>(["ver"]), // RP §Roles Estándar: comité lee auditorías (P2 security audit); crear/editar solo admin
     "mp": new Set<Accion>(["ver", "editar"]), // editar propios + ver morosidad (filtrado abajo)
     "mp:propios": new Set<Accion>(["ver", "editar"]),
     "mp:morosidad": new Set<Accion>(["ver"]),
@@ -263,6 +264,7 @@ export const RECURSOS_CONOCIDOS = [
   "ir:mantenimiento",
   "ir:interno",
   "mt",
+  "am",
   "ra",
   "ge",
   "co",

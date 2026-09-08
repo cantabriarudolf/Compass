@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { auth } from "@/lib/auth"
+import { puede } from "@/lib/authz"
 
 export const dynamic = "force-dynamic"
 
@@ -98,7 +99,7 @@ function esIngresoValido(i: unknown): i is IngresoIn {
   )
 }
 
-async function resolverComunidadId(request: Request, usuarioId: string): Promise<{ comunidadId: string | null; error?: { status: number; body: { error: string } } }> {
+async function resolverComunidadId(request: Request, usuarioId: string): Promise<{ comunidadId: string | null; rol?: string; error?: { status: number; body: { error: string } } }> {
   const url = new URL(request.url)
   const headerCid =
     request.headers.get("x-comunidad-id") ??
@@ -109,13 +110,13 @@ async function resolverComunidadId(request: Request, usuarioId: string): Promise
   if (headerCid && headerCid.trim().length > 0) {
     const cid = headerCid.trim()
     const mem = await prisma.membresia.findFirst({ where: { usuarioId, comunidadId: cid } })
-    if (!mem) return { comunidadId: null, error: { status: 403, body: { error: "Sin pertenencia a la comunidad" } } }
-    return { comunidadId: cid }
+    if (!mem) return { comunidadId: null, rol: undefined, error: { status: 403, body: { error: "Sin pertenencia a la comunidad" } } }
+    return { comunidadId: cid, rol: mem.rol }
   }
   // Sin comunidadId explícito: primera membresía del usuario (orden creación)
   const mem = await prisma.membresia.findFirst({ where: { usuarioId }, orderBy: { createdAt: "asc" } })
-  if (!mem) return { comunidadId: null, error: { status: 403, body: { error: "Sin pertenencia a la comunidad" } } }
-  return { comunidadId: mem.comunidadId }
+  if (!mem) return { comunidadId: null, rol: undefined, error: { status: 403, body: { error: "Sin pertenencia a la comunidad" } } }
+  return { comunidadId: mem.comunidadId, rol: mem.rol }
 }
 
 /**
@@ -134,9 +135,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Usuario no encontrado o inactivo" }, { status: 401 })
   }
 
-  const { comunidadId, error } = await resolverComunidadId(request, usuario.id)
+  const { comunidadId, rol, error } = await resolverComunidadId(request, usuario.id)
   if (error) return NextResponse.json(error.body, { status: error.status })
   const cid = comunidadId!
+
+  // P2 security audit (A01): escribir en el espejo FI (upsert fondos/egresos/ingresos) es
+  // RBAC admin-only (puede(rol, "crear", "fi")); comité solo lee/aprueba (ejecutar).
+  if (!puede(rol ?? "", "crear", "fi")) {
+    console.warn(`[authz] RP_PERMISSION_DENIED fi sync usuario=${usuario.email} rol=${rol ?? "none"} comunidad=${cid}`)
+    return NextResponse.json({ error: "Permiso denegado. Requiere rol administrador." }, { status: 403 })
+  }
 
   let body: unknown
   try {

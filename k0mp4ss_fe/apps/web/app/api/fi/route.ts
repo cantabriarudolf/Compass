@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { auth } from "@/lib/auth"
+import { puede } from "@/lib/authz"
 
 export const dynamic = "force-dynamic"
 
@@ -28,15 +29,25 @@ export async function GET(request: Request) {
     url.searchParams.get("comunidad-id")
 
   let comunidadId: string
+  let rol: string
   if (headerCid && headerCid.trim().length > 0) {
     const cid = headerCid.trim()
     const mem = await prisma.membresia.findFirst({ where: { usuarioId: usuario.id, comunidadId: cid } })
     if (!mem) return NextResponse.json({ error: "Sin pertenencia a la comunidad" }, { status: 403 })
     comunidadId = cid
+    rol = mem.rol
   } else {
     const mem = await prisma.membresia.findFirst({ where: { usuarioId: usuario.id }, orderBy: { createdAt: "asc" } })
     if (!mem) return NextResponse.json({ error: "Sin pertenencia a la comunidad" }, { status: 403 })
     comunidadId = mem.comunidadId
+    rol = mem.rol
+  }
+
+  // P2 security audit (A01): la pertenencia NO autoriza — RBAC server-side según matriz RP.
+  // Solo comité/administrador leen finanzas (puede(rol, "ver", "fi")); conserjería/residente/mantención no (RP §Roles Estándar).
+  if (!puede(rol, "ver", "fi")) {
+    console.warn(`[authz] RP_PERMISSION_DENIED fi ver usuario=${usuario.email} rol=${rol} comunidad=${comunidadId}`)
+    return NextResponse.json({ error: "Permiso denegado. Requiere rol comité o administrador." }, { status: 403 })
   }
 
   const fondoId = url.searchParams.get("fondoId")?.trim() || undefined

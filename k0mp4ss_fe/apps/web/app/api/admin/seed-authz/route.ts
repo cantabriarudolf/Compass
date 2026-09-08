@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { seedUsuariosMembresias } from "@/lib/seed-authz"
 import { puede } from "@/lib/authz"
+import { isWriteApiEnabled } from "@/lib/env-guard"
 
 export const dynamic = "force-dynamic"
 
@@ -13,6 +14,11 @@ export const dynamic = "force-dynamic"
  * porque con Auth.js el login exige usuarios en BD (fail-closed).
  */
 export async function POST() {
+  // P2 security audit: seed crea usuarios de prueba con credenciales conocidas —
+  // solo debe existir en desarrollo (misma política que /api/dev-dashboard y /api/backup).
+  if (!isWriteApiEnabled()) {
+    return NextResponse.json({ error: "Not Found" }, { status: 404 })
+  }
   const sesion = await auth()
   if (!sesion?.user?.id) {
     return NextResponse.json({ error: "No autenticado." }, { status: 401 })

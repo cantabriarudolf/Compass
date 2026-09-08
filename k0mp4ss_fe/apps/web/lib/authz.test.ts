@@ -115,6 +115,17 @@ describe("lib/authz — matriz RP (pure, sin IO)", () => {
     expect(puede("residente", "crear", "ir:interno")).toBe(false)
   })
 
+  it("am — auditoría: comité lee, nadie más (excepto admin) ve o crea (P2 security audit)", () => {
+    expect(puede("comite", "ver", "am")).toBe(true)
+    expect(puede("comite", "crear", "am")).toBe(false)
+    expect(puede("comite", "editar", "am")).toBe(false)
+    expect(puede("residente", "ver", "am")).toBe(false)
+    expect(puede("conserjeria", "ver", "am")).toBe(false)
+    expect(puede("mantencion", "ver", "am")).toBe(false)
+    expect(puede("administrador", "ver", "am")).toBe(true)
+    expect(puede("administrador", "crear", "am")).toBe(true) // wildcard: ingesta sync /api/auditoria/sync
+  })
+
   it("admin:usuarios y backup solo administrador", () => {
     expect(puede("administrador", "ver", "admin:usuarios")).toBe(true)
     expect(puede("comite", "ver", "admin:usuarios")).toBe(false)
