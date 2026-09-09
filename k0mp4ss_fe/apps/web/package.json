@@ -3,9 +3,11 @@
   "version": "0.0.1",
   "type": "module",
   "private": true,
+  "//": "Variables de entorno obligatorias en producción: DATABASE_URL (Prisma), AUTH_SECRET (Auth.js). Recomendadas: NEXT_PUBLIC_APP_ENV=production (explícita; NODE_ENV=production ya la fija el build de Next). No commitear secretos reales: solo .env local / dashboard de Vercel.",
   "scripts": {
     "dev": "next dev --turbopack",
     "build": "next build",
+    "build:analyze": "ANALYZE=true next build",
     "start": "next start",
     "lint": "eslint",
     "format": "prettier --write \"**/*.{ts,tsx}\"",
@@ -35,6 +37,7 @@
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",
+    "@next/bundle-analyzer": "^16.3.4",
     "@playwright/test": "^1.62.1",
     "@tailwindcss/postcss": "^4.1.18",
     "@testing-library/jest-dom": "^6.9.1",

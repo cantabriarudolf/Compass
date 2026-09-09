@@ -13,7 +13,8 @@
     "GOOGLE_CLIENT_SECRET",
     "E2E_RATE_LIMIT",
     "BASE_URL",
-    "CI"
+    "CI",
+    "ANALYZE"
   ],
   "ui": "tui",
   "tasks": {
