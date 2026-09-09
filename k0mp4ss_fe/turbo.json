@@ -14,7 +14,8 @@
     "E2E_RATE_LIMIT",
     "BASE_URL",
     "CI",
-    "ANALYZE"
+    "ANALYZE",
+    "LOG_LEVEL"
   ],
   "ui": "tui",
   "tasks": {

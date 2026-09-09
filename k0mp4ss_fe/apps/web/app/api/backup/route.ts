@@ -4,6 +4,7 @@ import { isWriteApiEnabled } from '@/lib/env-guard';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { puede } from '@/lib/authz';
+import { logger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
 
@@ -41,7 +42,8 @@ export async function POST(request: Request) {
     membresia = await prisma.membresia.findFirst({ where: { usuarioId: usuario.id, rol: 'administrador' } });
   }
   if (!membresia || !puede(membresia.rol, 'ejecutar', 'backup')) {
-    console.warn(`[authz] RP_PERMISSION_DENIED backup usuario=${usuario.email} rol=${membresia?.rol ?? 'none'}`);
+    // P3: sin PII en logs — identificamos por usuario.id, nunca email.
+    logger.warn({ event: 'RP_PERMISSION_DENIED', usuarioId: usuario.id, rol: membresia?.rol ?? 'none', recurso: 'backup' }, '[authz] RP_PERMISSION_DENIED backup');
     return NextResponse.json({ error: 'Permiso denegado. Requiere rol administrador.' }, { status: 403 });
   }
 

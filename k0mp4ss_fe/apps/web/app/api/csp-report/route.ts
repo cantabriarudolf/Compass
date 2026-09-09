@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { logger } from "@/lib/logger"
 
 export const dynamic = "force-dynamic"
 
@@ -29,7 +30,8 @@ export async function POST(request: Request) {
           "effective-directive": report["effective-directive"],
         }
       : { raw: (typeof parsed === "string" ? parsed : JSON.stringify(parsed)).slice(0, 200) };
-    console.warn("[csp-report] violation:", JSON.stringify(safe))
+    // P3: logging estructurado sin PII (safe ya solo trae campos estándar CSP).
+    logger.warn({ csp: safe }, "[csp-report] violation")
   } catch {
     // intencional: vacío por diseño
   }

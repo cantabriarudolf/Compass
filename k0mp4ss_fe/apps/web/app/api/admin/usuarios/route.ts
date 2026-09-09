@@ -2,6 +2,7 @@ import { NextResponse, NextRequest } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { puede } from "@/lib/authz"
+import { logger } from "@/lib/logger"
 
 export const dynamic = "force-dynamic"
 
@@ -65,7 +66,8 @@ export async function GET(request: NextRequest) {
 
   if (!puede(membresia.rol, "ver", "admin:usuarios")) {
     // RP Menor privilegio → RP_PERMISSION_DENIED (AM) — se loguea server side
-    console.warn(`[authz] RP_PERMISSION_DENIED usuario=${usuario.email} rol=${membresia.rol} recurso=admin:usuarios comunidad=${cid}`)
+    // P3: sin PII en logs — identificamos por usuario.id, nunca email.
+    logger.warn({ event: "RP_PERMISSION_DENIED", usuarioId: usuario.id, rol: membresia.rol, recurso: "admin:usuarios", comunidadId: cid }, "[authz] RP_PERMISSION_DENIED admin:usuarios")
     return NextResponse.json({ error: "Permiso denegado. Requiere rol administrador." }, { status: 403 })
   }
 

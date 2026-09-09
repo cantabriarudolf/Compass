@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { puede } from "@/lib/authz"
+import { logger } from "@/lib/logger"
 
 export const dynamic = "force-dynamic"
 
@@ -46,7 +47,8 @@ export async function GET(request: Request) {
   // P2 security audit (A01): la pertenencia NO autoriza — RBAC server-side según matriz RP.
   // Solo comité/administrador leen finanzas (puede(rol, "ver", "fi")); conserjería/residente/mantención no (RP §Roles Estándar).
   if (!puede(rol, "ver", "fi")) {
-    console.warn(`[authz] RP_PERMISSION_DENIED fi ver usuario=${usuario.email} rol=${rol} comunidad=${comunidadId}`)
+    // P3: sin PII en logs — identificamos por usuario.id, nunca email.
+    logger.warn({ event: "RP_PERMISSION_DENIED", usuarioId: usuario.id, rol, comunidadId }, "[authz] RP_PERMISSION_DENIED fi ver")
     return NextResponse.json({ error: "Permiso denegado. Requiere rol comité o administrador." }, { status: 403 })
   }
 
