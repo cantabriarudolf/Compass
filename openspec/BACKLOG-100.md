@@ -118,3 +118,33 @@ aclaración documental, 0 errores de cálculo.
 - **Seguridad aplicada**: recurso `am` en authz, authz checks en APIs FI/Auditoría, auth en dev/QA endpoints, CSP report sanitizado.
 - **Deuda técnica documentada**: store monolito (5007 líneas), 27+ repeticiones de patrón ID, 4 funciones `hoyISO*` duplicadas. Ver `openspec/changes/revision-arquitectura/` y `openspec/changes/revision-integraal/`.
 - **Tareas derivadas**: ver `openspec/changes/revision-integraal/tasks.md` (priorizadas Critical/High/Medium/Low).
+
+## Mejoras de infraestructura de producción (SERIE-PRODUCCION P1-P6) — ✅ COMPLETA 2026-09-09
+
+> Serie de remediación ejecutada automáticamente mientras el owner dormía. Commits: `39f3cdc` (P1), `52c83a7` (P2), `125d86d` (P3), `5948e0e` (P4), `fb2c094` (P5), `0da618d` (P6).
+
+| Ventana | Qué se hizo | Estado |
+|---|---|---|
+| P1 | Unificación `hoyISO*()` en `lib/date-utils.ts` + 27 repeticiones de ID reemplazadas por `generarId()` + tests | ✅ |
+| P2 | `vercel.json` + `output: standalone` + `env-guard.ts` endurecido + bundle-analyzer | ✅ |
+| P3 | `/api/health` con check BD + `pino` logger estructurado + `instrumentation.ts` + redacción PII en logs | ✅ |
+| P4 | `husky` + `lint-staged` pre-commit hooks + coverage extendido a 8 archivos + auditoría dependencias | ✅ |
+| P5 | Job `deploy` en GitHub Actions (Vercel) + script `deploy-vercel.mjs` manual | ✅ |
+| P6 | `README-DEPLOY.md` + `runbook-operaciones.md` + `TROUBLESHOOTING.md` | ✅ |
+
+**Métricas post-serie:**
+- Tests: 552/552 unit verdes (subieron de 517)
+- Lint: 13 warnings (0 errores) — heredados de proxy.ts/e2e/scripts
+- tsc: 0 errores
+- Coverage extendido: 8 archivos (store.ts, date-utils.ts, id-utils.ts, env-guard.ts, logger.ts, authz.ts, schemas.ts, api routes)
+
+**Post-serie (requiere decisión del owner):**
+- [ ] **Migración SQLite → PostgreSQL** — Elige proveedor: Vercel Postgres, Supabase, Neon, AWS RDS
+- [ ] **Cifrado de datos sensibles en reposo** — Estrategia: AES-256 por campo vs TDE de BD
+- [ ] **2FA/MFA** — Elige método: TOTP app (Google Authenticator), SMS, email
+- [ ] **Sentry** — Crea cuenta en https://sentry.io e integra DSN
+- [ ] **Política de privacidad y consentimiento** — Contenido legal para cumplir Ley 19.628 / 21.719
+- [ ] **CSP enforcement** — Requiere dominio real + 7 días de telemetría Report-Only
+- [ ] **Password policy** — Mínimo de complejidad, breach-list, rotación
+- [ ] **Reducción de sesión JWT** — De 30 días a 24h con sliding refresh
+- [ ] **Derechos ARCO** — UI/API para acceso, rectificación, cancelación de datos personales
