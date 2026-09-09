@@ -2,10 +2,6 @@
 // store: reciben slices tipados y devuelven derivaciones testables.
 import type { CierreTurnoPE, SolicitudGE, CobroFI, EgresoFI, Persona, VinculoUnidad } from "./schemas"
 
-export function hoyISORE(): string {
-  return new Date().toISOString().slice(0, 10)
-}
-
 // --- Métricas demográficas (censo) ---
 
 export interface MetricasDemograficasRE {

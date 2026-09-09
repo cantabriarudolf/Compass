@@ -2,10 +2,6 @@
 // al store: reciben slices tipados y devuelven derivaciones testables.
 import type { BonoLiquidacion } from "./schemas"
 
-export function hoyISOPL(): string {
-  return new Date().toISOString().slice(0, 10)
-}
-
 // §1.1 Lógica de cálculo de horas extras (estándar Chile):
 // diario = base / días mes comercial (CF) → semanal = diario × 7 →
 // hora ordinaria = semanal / jornada semanal (PE/CF) → recargo 50%.

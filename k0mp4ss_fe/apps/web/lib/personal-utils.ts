@@ -14,10 +14,6 @@ export interface FeriadoSnapshotPE {
   irrenunciable: boolean
 }
 
-export function hoyISOPE(): string {
-  return new Date().toISOString().slice(0, 10)
-}
-
 export function feriadosDelMes(feriados: Feriado[], mesAnio: string): Feriado[] {
   return feriados
     .filter(f => f.fecha.startsWith(`${mesAnio}-`))

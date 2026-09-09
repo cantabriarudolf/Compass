@@ -1,5 +1,10 @@
 import type { CobroFI, EgresoFI, EmisionGC, IngresoFI, Unidad } from "./schemas"
 
+// SERIE-PRODUCCION P1: hoyISO vive en date-utils; se reexporta por
+// compatibilidad con app/finanzas/gastos-comunes/page.tsx que lo importa aquí.
+import { hoyISO } from "./date-utils"
+export { hoyISO }
+
 export type EstadoCobroFI = "pendiente" | "parcial" | "pagado" | "vencido"
 
 export type ContextoSaldoFondo = {
@@ -8,10 +13,6 @@ export type ContextoSaldoFondo = {
   emisiones: Pick<EmisionGC, "fondoReservaAporte">[]
   ingresosFI?: Pick<IngresoFI, "fondoId" | "monto">[]
   saldoInicialPorFondo?: Record<string, number>
-}
-
-export function hoyISO(): string {
-  return new Date().toISOString().slice(0, 10)
 }
 
 export function diasDeAtraso(fechaVencimiento: string, hoy: string): number {

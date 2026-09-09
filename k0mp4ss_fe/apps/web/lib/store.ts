@@ -166,7 +166,6 @@ import {
 } from "@/lib/personal-utils"
 import {
   calcularLiquidacion,
-  hoyISOPL,
 } from "@/lib/pl-utils"
 import {
   resolverSegmentacionRE,
@@ -174,13 +173,14 @@ import {
 import {
   exigibleTotal,
   estadoDeCobro,
-  hoyISO,
   montoMoraPropuesta,
   saldoFondo,
   saldoPendiente,
   totalPagado,
   vencimientoDesdeDiaCorte,
 } from "@/lib/finanzas-utils"
+import { ahoraISO, hoyISO } from "@/lib/date-utils"
+import { generarId } from "@/lib/id-utils"
 import { z } from "zod"
 
 export type StoreResult = { ok: boolean; error?: string }
@@ -210,8 +210,8 @@ function registrarEvento(
     eventos: [
       ...s.eventos.slice(-(MAX_EVENTOS - 1)),
       {
-        id: `ev-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-        timestamp: new Date().toISOString(),
+        id: generarId("ev"),
+        timestamp: ahoraISO(),
         usuario: "Admin",
         categoria,
         tipoAccion,
@@ -1333,13 +1333,13 @@ export const useCompassStore = create<CompassStore>()(
           const operacion: OperacionPortal = claveEstado(vigente.estadoOcupacionPropiedad).includes("venta") ? "venta" : "arriendo"
           if (!existente) {
             const nueva: PublicacionPortal = {
-              id: `pub-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+              id: generarId("pub"),
               unidadId,
               operacion,
               precio: 0,
               imagenes: [],
               activa: true,
-              fechaPublicacion: new Date().toISOString().slice(0, 10),
+              fechaPublicacion: hoyISO(),
             }
             set(st => ({ publicacionesPortal: upsert(st.publicacionesPortal, nueva) }))
             registrarEvento(set, "PI_PROPERTY_LISTED", nueva.id, `Trigger inmobiliario: ${refUnidad(get, unidadId)} publicada como ${operacion}.`, "PI")
@@ -1379,14 +1379,14 @@ export const useCompassStore = create<CompassStore>()(
           if (control && !control.alertasResidentesActivas) return
         }
         const completa: Notificacion = {
-          id: `notif-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          id: generarId("notif"),
           destinatarioRol: notificacion.destinatarioRol,
           destinatarioPersonaId: notificacion.destinatarioPersonaId,
           asunto: notificacion.asunto,
           cuerpo: notificacion.cuerpo,
           canal: notificacion.canal ?? "email_simulado",
           moduloOrigen: notificacion.moduloOrigen,
-          fecha: new Date().toISOString().slice(0, 10),
+          fecha: hoyISO(),
           leida: false,
         }
         const validacion = validarConEsquema(NotificacionSchema, completa)
@@ -1495,7 +1495,7 @@ export const useCompassStore = create<CompassStore>()(
             ...acta,
             aprobaciones,
             estado: "publicada",
-            fechaPublicacion: new Date().toISOString().slice(0, 10),
+            fechaPublicacion: hoyISO(),
             avisoCVReferencia: "pendiente",
           }
           set(s => ({ actasGD: upsert(s.actasGD, publicada) }))
@@ -1645,11 +1645,11 @@ export const useCompassStore = create<CompassStore>()(
           respuestas: [
             ...mensaje.respuestas,
             {
-              id: `resp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+              id: generarId("resp"),
               autor: respuesta.autor,
               texto: respuesta.texto,
               compromisos: respuesta.compromisos?.trim() || undefined,
-              fecha: new Date().toISOString().slice(0, 10),
+              fecha: hoyISO(),
             },
           ],
         }
@@ -1790,7 +1790,7 @@ export const useCompassStore = create<CompassStore>()(
         set(s => ({
           solicitudesGE: s.solicitudesGE.map(t =>
             t.id === id
-              ? { ...t, estado: "en_revision", historialEstados: [...t.historialEstados, { de: t.estado, a: "en_revision", fecha: new Date().toISOString() }] }
+              ? { ...t, estado: "en_revision", historialEstados: [...t.historialEstados, { de: t.estado, a: "en_revision", fecha: ahoraISO() }] }
               : t
           ),
         }))
@@ -1820,9 +1820,9 @@ export const useCompassStore = create<CompassStore>()(
               ? {
                   ...t,
                   estado: nuevoEstado,
-                  comentarios: [...t.comentarios, { id: `com-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, autorRol: comentario.autorRol, texto: comentario.texto.trim(), fecha: new Date().toISOString() }],
+                  comentarios: [...t.comentarios, { id: generarId("com"), autorRol: comentario.autorRol, texto: comentario.texto.trim(), fecha: ahoraISO() }],
                   ...(nuevoEstado !== t.estado
-                    ? { historialEstados: [...t.historialEstados, { de: t.estado, a: nuevoEstado, fecha: new Date().toISOString() }] }
+                    ? { historialEstados: [...t.historialEstados, { de: t.estado, a: nuevoEstado, fecha: ahoraISO() }] }
                     : {}),
                 }
               : t
@@ -1869,7 +1869,7 @@ export const useCompassStore = create<CompassStore>()(
                   ...t,
                   estado: "resuelto",
                   resolucion: resolucion.trim(),
-                  historialEstados: [...t.historialEstados, { de: t.estado, a: "resuelto", fecha: new Date().toISOString() }],
+                  historialEstados: [...t.historialEstados, { de: t.estado, a: "resuelto", fecha: ahoraISO() }],
                 }
               : t
           ),
@@ -1902,8 +1902,8 @@ export const useCompassStore = create<CompassStore>()(
               ? {
                   ...t,
                   estado: "cerrado",
-                  fechaCierre: new Date().toISOString().slice(0, 10),
-                  historialEstados: [...t.historialEstados, { de: "resuelto", a: "cerrado", fecha: new Date().toISOString() }],
+                  fechaCierre: hoyISO(),
+                  historialEstados: [...t.historialEstados, { de: "resuelto", a: "cerrado", fecha: ahoraISO() }],
                 }
               : t
           ),
@@ -2102,7 +2102,7 @@ export const useCompassStore = create<CompassStore>()(
         // aprobar_crear: alta automática al catálogo para futuras solicitudes.
         const nombreArticulo = solicitud.comodin.descripcionArticulo.trim()
         const creado: RecursoIR = {
-          id: `ir-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          id: generarId("ir"),
           codigo: siguienteCodigoIR(get),
           nombre: nombreArticulo,
           categoria: "insumo",
@@ -2150,7 +2150,7 @@ export const useCompassStore = create<CompassStore>()(
         set(s => ({
           activosIR: s.activosIR.map(r => (r.id === recurso.id ? { ...r, stock: stockNuevo } : r)),
           solicitudesInsumoIR: s.solicitudesInsumoIR.map(x =>
-            x.id === id ? { ...x, estado: "entregada", entregaFecha: new Date().toISOString().slice(0, 10) } : x
+            x.id === id ? { ...x, estado: "entregada", entregaFecha: hoyISO() } : x
           ),
         }))
         // Alarma de reposición automática al cruzar el umbral crítico.
@@ -2210,7 +2210,7 @@ export const useCompassStore = create<CompassStore>()(
         set(s => ({
           activosIR: s.activosIR.map(r =>
             r.id === recursoId
-              ? { ...r, asignacionActual: { personaId, fecha: new Date().toISOString().slice(0, 10) }, estadoActivo: "en_uso" }
+              ? { ...r, asignacionActual: { personaId, fecha: hoyISO() }, estadoActivo: "en_uso" }
               : r
           ),
         }))
@@ -2323,7 +2323,7 @@ export const useCompassStore = create<CompassStore>()(
         }
         set(s => ({
           infraccionesIN: s.infraccionesIN.map(x =>
-            x.id === id ? { ...x, estado: "apelada", apelacion: { descargos: descargos.trim(), fecha: new Date().toISOString().slice(0, 10) } } : x
+            x.id === id ? { ...x, estado: "apelada", apelacion: { descargos: descargos.trim(), fecha: hoyISO() } } : x
           ),
         }))
         registrarEvento(set, "IN_APELACION", id, `Descargos presentados en infracción ${infraccion.folio}: En Revisión → Apelada.`, "IN")
@@ -2346,7 +2346,7 @@ export const useCompassStore = create<CompassStore>()(
                   ...x,
                   comentariosDirectiva: [
                     ...x.comentariosDirectiva,
-                    { id: `com-in-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, autorPersonaId: comentario.autorPersonaId, texto: comentario.texto.trim(), fecha: new Date().toISOString() },
+                    { id: generarId("com-in"), autorPersonaId: comentario.autorPersonaId, texto: comentario.texto.trim(), fecha: ahoraISO() },
                   ],
                 }
               : x
@@ -2420,7 +2420,7 @@ export const useCompassStore = create<CompassStore>()(
         let nuevoCobro: CobroFI | undefined
         if (fondoGC && montoAplicado > 0) {
           nuevoCobro = {
-            id: `cob-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            id: generarId("cob"),
             unidadId: infraccion.unidadId,
             periodo: hoyStr.slice(0, 7),
             concepto: "multa_in",
@@ -2553,7 +2553,7 @@ export const useCompassStore = create<CompassStore>()(
         }
         set(s => ({
           trabajosMT: s.trabajosMT.map(t =>
-            t.id === id ? { ...t, estado: "en_curso", fechaInicio: new Date().toISOString().slice(0, 10) } : t
+            t.id === id ? { ...t, estado: "en_curso", fechaInicio: hoyISO() } : t
           ),
         }))
         registrarEvento(set, "MT_WORK_STARTED", id, `Trabajo ${trabajo.folio} "${trabajo.titulo}" En Curso.`, "MT")
@@ -2567,7 +2567,7 @@ export const useCompassStore = create<CompassStore>()(
         if (trabajo.estado === "finalizado") return { ok: false, error: "El trabajo ya está finalizado." }
         if (trabajo.estado === "cancelado") return { ok: false, error: "Un trabajo cancelado no puede finalizarse." }
 
-        const fechaTermino = cierre?.fechaTermino ?? new Date().toISOString().slice(0, 10)
+        const fechaTermino = cierre?.fechaTermino ?? hoyISO()
         const costoFinal = cierre?.costoFinal ?? trabajo.costoTotal
         set(s => ({
           trabajosMT: s.trabajosMT.map(t =>
@@ -2587,7 +2587,7 @@ export const useCompassStore = create<CompassStore>()(
           const siguienteNum = (numeros.length > 0 ? Math.max(...numeros) : 0) + 1
           const siguiente: TrabajoMT = {
             ...trabajo,
-            id: `mt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            id: generarId("mt"),
             folio: `MT-${String(siguienteNum).padStart(4, "0")}`,
             titulo: trabajo.titulo,
             estado: "planificado",
@@ -2647,7 +2647,7 @@ export const useCompassStore = create<CompassStore>()(
 
       verificarGarantiasMT: () => {
         if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
-        const hoyStr = new Date().toISOString().slice(0, 10)
+        const hoyStr = hoyISO()
         const limite30 = new Date()
         limite30.setDate(limite30.getDate() + 30)
         const limiteStr = limite30.toISOString().slice(0, 10)
@@ -2807,7 +2807,7 @@ export const useCompassStore = create<CompassStore>()(
             if (fondoAmenities && unidadCobro) {
               const hoyStr = hoyISO()
               const cobro: CobroFI = {
-                id: `cob-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+                id: generarId("cob"),
                 unidadId: unidadCobro,
                 periodo: hoyStr.slice(0, 7),
                 concepto: "reserva_ra",
@@ -2852,7 +2852,7 @@ export const useCompassStore = create<CompassStore>()(
           return { ok: false, error: "Solo una reserva Confirmada puede cancelarse." }
         }
         const elemento = get().elementosRA.find(e => e.id === reserva.elementoId)
-        const hoyStr = new Date().toISOString().slice(0, 10)
+        const hoyStr = hoyISO()
         const diasRestantes = Math.round((new Date(`${reserva.fecha}T00:00:00`).getTime() - new Date(`${hoyStr}T00:00:00`).getTime()) / 86400000)
         const ventanaTardia = elemento?.cancelacionTardiaDias
         const tardia = ventanaTardia !== undefined && diasRestantes <= ventanaTardia
@@ -2864,7 +2864,7 @@ export const useCompassStore = create<CompassStore>()(
           if (fondoAmenities && unidadCobro) {
             const hoyStr2 = hoyISO()
             const cobro: CobroFI = {
-              id: `cob-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+              id: generarId("cob"),
               unidadId: unidadCobro,
               periodo: hoyStr2.slice(0, 7),
               concepto: "penalizacion_ra",
@@ -2930,7 +2930,7 @@ export const useCompassStore = create<CompassStore>()(
         if (fondoAmenities && unidadCobro) {
           const hoyStr = hoyISO()
           nuevoCobro = {
-            id: `cob-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            id: generarId("cob"),
             unidadId: unidadCobro,
             periodo: hoyStr.slice(0, 7),
             concepto: "garantia_ra",
@@ -2994,7 +2994,7 @@ export const useCompassStore = create<CompassStore>()(
               requiereVistoBueno: vbGlobal,
               estado: "borrador",
               origen: "manual",
-              fechaCreacion: new Date().toISOString().slice(0, 10),
+              fechaCreacion: hoyISO(),
             }
           } else {
             // Creación directa de administración.
@@ -3002,7 +3002,7 @@ export const useCompassStore = create<CompassStore>()(
               ...candidato,
               requiereVistoBueno: false,
               estado: "borrador",
-              fechaCreacion: new Date().toISOString().slice(0, 10),
+              fechaCreacion: hoyISO(),
             }
           }
         } else {
@@ -3041,7 +3041,7 @@ export const useCompassStore = create<CompassStore>()(
         if (aviso.estado !== "borrador") {
           return { ok: false, error: `Solo un aviso Borrador puede publicarse (estado actual: ${aviso.estado}).` }
         }
-        const publicado: AvisoCV = { ...aviso, estado: "publicado", requiereVistoBueno: false, fechaPublicacion: new Date().toISOString().slice(0, 10) }
+        const publicado: AvisoCV = { ...aviso, estado: "publicado", requiereVistoBueno: false, fechaPublicacion: hoyISO() }
         set(s => ({ avisosCV: upsert(s.avisosCV, publicado) }))
         registrarEvento(set, "CV_PUBLISHED", id, `Aviso "${aviso.titulo}" PUBLICADO en el carrusel (${aviso.duracionSegundos}s por ciclo${aviso.actaId ? ", desde acta de directiva" : ""}).`, "CV")
         return { ok: true }
@@ -3055,7 +3055,7 @@ export const useCompassStore = create<CompassStore>()(
           return { ok: false, error: `Solo un aviso Publicado puede archivarse (estado actual: ${aviso.estado}).` }
         }
         set(s => ({
-          avisosCV: s.avisosCV.map(a => (a.id === id ? { ...a, estado: "archivado", fechaArchivado: new Date().toISOString().slice(0, 10) } : a)),
+          avisosCV: s.avisosCV.map(a => (a.id === id ? { ...a, estado: "archivado", fechaArchivado: hoyISO() } : a)),
         }))
         registrarEvento(set, "CV_ARCHIVED", id, `Aviso "${aviso.titulo}" ARCHIVADO (retirado del carrusel; data conservada para auditoría).`, "CV")
         return { ok: true }
@@ -3063,7 +3063,7 @@ export const useCompassStore = create<CompassStore>()(
 
       caducarAvisosCV: () => {
         if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
-        const hoyStr = new Date().toISOString().slice(0, 10)
+        const hoyStr = hoyISO()
         const vencidos = get().avisosCV.filter(a => a.estado === "publicado" && a.expiresAt && a.expiresAt < hoyStr)
         if (vencidos.length === 0) return { ok: true }
         set(s => ({
@@ -3102,9 +3102,9 @@ export const useCompassStore = create<CompassStore>()(
         const plantilla = get().plantillasCV.find(p => p.id === id)
         if (!plantilla) return { ok: false, error: "No se puede activar: la plantilla no existe." }
         if (!plantilla.activa) return { ok: false, error: "La plantilla está desactivada por administración." }
-        const hoyStr = new Date().toISOString().slice(0, 10)
+        const hoyStr = hoyISO()
         const aviso: AvisoCV = {
-          id: `cv-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          id: generarId("cv"),
           titulo: plantilla.titulo,
           cuerpo: plantilla.cuerpo,
           tipologia: plantilla.tipologia,
@@ -3137,11 +3137,11 @@ export const useCompassStore = create<CompassStore>()(
         if (acta.avisoCVReferencia && acta.avisoCVReferencia !== "pendiente") {
           return { ok: false, error: `El acta ya fue publicada en el visor (aviso ${acta.avisoCVReferencia}).` }
         }
-        const hoyStr = new Date().toISOString().slice(0, 10)
+        const hoyStr = hoyISO()
         const temas = acta.tablaTemas.length > 0 ? `Temas: ${acta.tablaTemas.join("; ")}. ` : ""
         const minuta = acta.minuta ? acta.minuta.slice(0, 240) : ""
         const aviso: AvisoCV = {
-          id: `cv-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          id: generarId("cv"),
           titulo: `Acta de reunión del ${acta.fecha}`,
           cuerpo: `Reunión de directiva en ${acta.lugar}. ${temas}${minuta}`.trim(),
           tipologia: "info",
@@ -3234,7 +3234,7 @@ export const useCompassStore = create<CompassStore>()(
       registrarIngresoFI: (input) => {
         if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
         const candidato: IngresoFI = {
-          id: input.id ?? `fi-ing-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          id: input.id ?? generarId("fi-ing"),
           fecha: input.fecha,
           monto: input.monto,
           concepto: input.concepto,
@@ -3403,7 +3403,7 @@ export const useCompassStore = create<CompassStore>()(
                   ...c,
                   moras: [
                     ...c.moras,
-                    { id: `mora-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, monto, diasAtraso: dias, tasaMensualPct, fecha: hoyStr },
+                    { id: generarId("mora"), monto, diasAtraso: dias, tasaMensualPct, fecha: hoyStr },
                   ],
                 }
               : c
@@ -3439,7 +3439,7 @@ export const useCompassStore = create<CompassStore>()(
             return { ok: false, error: "La justificación debe explicar el motivo del ajuste (mínimo 10 caracteres)." }
           }
           diferencia = {
-            id: `dif-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            id: generarId("dif"),
             tipo: pago.monto < pendiente ? "descuento" : "recargo",
             esperado: exigibleTotal(cobro),
             recibido: totalPagado(cobro) + pago.monto,
@@ -3455,7 +3455,7 @@ export const useCompassStore = create<CompassStore>()(
                   ...c,
                   pagos: [
                     ...c.pagos,
-                    { id: `pag-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, monto: pago.monto, fecha: hoyStr, medio: pago.medio.trim() },
+                    { id: generarId("pag"), monto: pago.monto, fecha: hoyStr, medio: pago.medio.trim() },
                   ],
                   ...(diferencia ? { diferencias: [...c.diferencias, diferencia] } : {}),
                 }
@@ -3544,7 +3544,7 @@ export const useCompassStore = create<CompassStore>()(
           return { ok: false, error: `Saldo insuficiente en "${fondo.nombre}": disponible $${saldo.toLocaleString("es-CL")} para un retiro de $${input.monto.toLocaleString("es-CL")}.` }
         }
         const egreso: EgresoFI = {
-          id: `egr-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          id: generarId("egr"),
           folio: siguienteFolioFE(get),
           fecha: hoyISO(),
           categoria: "uso_de_fondo",
@@ -3573,7 +3573,7 @@ export const useCompassStore = create<CompassStore>()(
         if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
         const persona = get().personas.find(p => p.id === personaId)
         if (!persona?.datosLaborales) return { ok: false, error: "La persona no tiene ficha laboral de PE." }
-        const entrada = { id: `he-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, ...horaExtra }
+        const entrada = { id: generarId("he"), ...horaExtra }
         const actualizada: Persona = {
           ...persona,
           datosLaborales: { ...persona.datosLaborales, horasExtras: [...(persona.datosLaborales.horasExtras ?? []), entrada] },
@@ -3589,7 +3589,7 @@ export const useCompassStore = create<CompassStore>()(
         if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
         const persona = get().personas.find(p => p.id === personaId)
         if (!persona?.datosLaborales) return { ok: false, error: "La persona no tiene ficha laboral de PE." }
-        const entrada = { id: `ev-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, ...evaluacion }
+        const entrada = { id: generarId("ev"), ...evaluacion }
         const actualizada: Persona = {
           ...persona,
           datosLaborales: { ...persona.datosLaborales, evaluaciones: [...(persona.datosLaborales.evaluaciones ?? []), entrada] },
@@ -3921,7 +3921,7 @@ export const useCompassStore = create<CompassStore>()(
             descripcion: input.incidencias.descripcion,
             evidencias: input.incidencias.evidencias,
           },
-          id: input.id ?? `pe-cierre-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          id: input.id ?? generarId("pe-cierre"),
           historialCambios: [],
           notificadoAAdmin: true,
         }
@@ -4021,7 +4021,7 @@ export const useCompassStore = create<CompassStore>()(
         const personalPlanta = get().personas.filter(p => p.datosLaborales !== undefined && p.estadoCuenta === "activa").length
         const costoEstimado = costoProyeccionPE(proyeccionBase.reemplazosNecesarios, personalPlanta, params.costoParche, params.costoDiaExtra)
         const proyeccion: ProyeccionPE = {
-          id: params.id ?? `pe-proy-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          id: params.id ?? generarId("pe-proy"),
           mesAnio,
           feriados: proyeccionBase.feriados,
           diasFeriados: proyeccionBase.diasFeriados,
@@ -4136,11 +4136,11 @@ export const useCompassStore = create<CompassStore>()(
         const proyeccion = get().proyeccionesPE.find(p => p.mesAnio === input.periodo)
 
         const liquidacion: LiquidacionPL = {
-          id: input.id ?? `pl-liq-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          id: input.id ?? generarId("pl-liq"),
           folio,
           trabajadorPersonaId: input.trabajadorPersonaId,
           periodo: input.periodo,
-          fechaGeneracion: hoyISOPL(),
+          fechaGeneracion: hoyISO(),
           diasTrabajados: input.diasTrabajados,
           sueldoBaseContrato: sueldoBase,
           diasMesComercial,
@@ -4214,7 +4214,7 @@ export const useCompassStore = create<CompassStore>()(
         const nombreCompleto = trabajador ? `${trabajador.nombres} ${trabajador.apellidos}` : liquidacion.trabajadorPersonaId
 
         const egreso: EgresoFI = {
-          id: `egr-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          id: generarId("egr"),
           folio: siguienteFolioFE(get),
           fecha: hoyISO(),
           categoria: "sueldos",
@@ -4409,7 +4409,7 @@ export const useCompassStore = create<CompassStore>()(
         }
 
         const registro: CertificadoCT = {
-          id: input.id ?? `ct-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          id: input.id ?? generarId("ct"),
           folio,
           codigoVerificacion,
           tipo: input.tipo,
@@ -4524,7 +4524,7 @@ export const useCompassStore = create<CompassStore>()(
         }
 
         const registro: ReporteRE = {
-          id: input.id ?? `re-rep-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          id: input.id ?? generarId("re-rep"),
           titulo: input.titulo.trim(),
           bloques,
           segmento: {
