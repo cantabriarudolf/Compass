@@ -25,6 +25,7 @@
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",
+    "@prisma/extension-accelerate": "^3.0.1",
     "@tabler/icons-react": "^3.42.0",
     "@workspace/ui": "*",
     "bcryptjs": "^3.0.3",
@@ -39,8 +40,13 @@
     "zustand": "^5.0.15"
   },
   "lint-staged": {
-    "*.{ts,tsx}": ["eslint --fix", "prettier --write"],
-    "*.{json,md,mjs}": ["prettier --write"]
+    "*.{ts,tsx}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{json,md,mjs}": [
+      "prettier --write"
+    ]
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",

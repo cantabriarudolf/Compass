@@ -15,6 +15,7 @@
     "BASE_URL",
     "CI",
     "ANALYZE",
+    "NEXT_RUNTIME",
     "LOG_LEVEL"
   ],
   "ui": "tui",

@@ -44,18 +44,14 @@ describe("Aislamiento A/B con membresías por comunidad (B3, D3)", () => {
     comunidadAId = ca.id
     comunidadBId = cb.id
 
-    // Usuarios globales
     await prismaTest.usuario.create({ data: { id: "usuario-admin-a", email: "admin-a@test.cl", activo: true } })
     await prismaTest.usuario.create({ data: { id: "usuario-admin-b", email: "admin-b@test.cl", activo: true } })
     await prismaTest.usuario.create({ data: { id: "usuario-residente-a", email: "residente-a@test.cl", activo: true } })
 
-    // Membresías scoped
     await prismaTest.membresia.create({ data: { id: "mem-admin-a", usuarioId: "usuario-admin-a", comunidadId: comunidadAId, rol: "administrador" } })
     await prismaTest.membresia.create({ data: { id: "mem-admin-b", usuarioId: "usuario-admin-b", comunidadId: comunidadBId, rol: "administrador" } })
     await prismaTest.membresia.create({ data: { id: "mem-residente-a", usuarioId: "usuario-residente-a", comunidadId: comunidadAId, rol: "residente" } })
-    // Importante: admin-a NO tiene membresía en B, residente-a NO en B — prueba aislamiento
 
-    // Datos de dominio / Tenant: TipoUnidad en A vs B
     const repoA = crearRepositorio(comunidadAId, prismaTest)
     const repoB = crearRepositorio(comunidadBId, prismaTest)
     await repoA.tiposUnidad.create({
@@ -81,12 +77,8 @@ describe("Aislamiento A/B con membresías por comunidad (B3, D3)", () => {
   afterAll(async () => {
     if (prismaTest) await prismaTest.$disconnect().catch(() => {})
     if (tmpDbPath && fs.existsSync(tmpDbPath)) {
-      try { fs.unlinkSync(tmpDbPath) } catch {
-        // intencional: vacío por diseño
-      }
-      try { fs.unlinkSync(`${tmpDbPath}-journal`) } catch {
-        // intencional: vacío por diseño
-      }
+      try { fs.unlinkSync(tmpDbPath) } catch { /* intencional */ }
+      try { fs.unlinkSync(`${tmpDbPath}-journal`) } catch { /* intencional */ }
     }
   })
 
@@ -99,7 +91,6 @@ describe("Aislamiento A/B con membresías por comunidad (B3, D3)", () => {
     expect(memA.some(m => m.id === "mem-admin-b")).toBe(false)
     expect(memB.some(m => m.id === "mem-admin-b")).toBe(true)
     expect(memB.some(m => m.id === "mem-admin-a")).toBe(false)
-    // residente-a solo en A
     expect(memA.some(m => m.id === "mem-residente-a")).toBe(true)
     expect(memB.some(m => m.id === "mem-residente-a")).toBe(false)
   })
@@ -134,11 +125,9 @@ describe("Aislamiento A/B con membresías por comunidad (B3, D3)", () => {
   })
 
   it("unique compuesto usuario+comunidad: duplicado en misma comunidad falla", async () => {
-    // intentar crear segunda membresia mismo usuario+comunidad debe fallar por @@unique
     await expect(
       prismaTest.membresia.create({ data: { usuarioId: "usuario-admin-a", comunidadId: comunidadAId, rol: "comite" } })
     ).rejects.toThrow()
-    // mismo usuario en otra comunidad sí permite (ya existe admin-a en A, admin-b en B es otro usuario pero prueba usuario distinto)
     await prismaTest.usuario.create({ data: { id: "usuario-extra", email: "extra@test.cl", activo: true } })
     await expect(
       prismaTest.membresia.create({ data: { usuarioId: "usuario-extra", comunidadId: comunidadAId, rol: "residente" } })

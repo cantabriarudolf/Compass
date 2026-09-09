@@ -20,9 +20,7 @@ describe("Repositorios con scoping obligatorio por comunidadId (C1b)", () => {
     const tmpDir = os.tmpdir()
     tmpDbPath = path.join(tmpDir, `test-p2-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.db`)
     const databaseUrl = `file:${tmpDbPath}`
-    // Migra el esquema al DB temporal (usa deploy para no crear una nueva migración)
     const schemaPath = path.resolve(process.cwd(), "k0mp4ss_fe/apps/web/prisma/schema.prisma")
-    // Si process.cwd() ya es k0mp4ss_fe/apps/web, ajusta
     const tryPaths = [
       path.resolve("prisma/schema.prisma"),
       schemaPath,
@@ -36,7 +34,6 @@ describe("Repositorios con scoping obligatorio por comunidadId (C1b)", () => {
         stdio: "pipe",
       })
     } catch {
-      // Fallback: db push con accept-data-loss
       execSync(`npx prisma db push --schema=${sp} --skip-generate --accept-data-loss`, {
         env: { ...process.env, DATABASE_URL: databaseUrl },
         stdio: "pipe",
@@ -46,7 +43,6 @@ describe("Repositorios con scoping obligatorio por comunidadId (C1b)", () => {
     prismaTest = new PrismaClient({ datasourceUrl: databaseUrl })
     await prismaTest.$connect()
 
-    // Crea dos comunidades tenant
     const comunidadA = await prismaTest.comunidad.create({
       data: { id: "comunidad-a", nombre: "Comunidad A", slug: "comunidad-a" },
     })
@@ -60,12 +56,8 @@ describe("Repositorios con scoping obligatorio por comunidadId (C1b)", () => {
   afterAll(async () => {
     if (prismaTest) await prismaTest.$disconnect().catch(() => {})
     if (tmpDbPath && fs.existsSync(tmpDbPath)) {
-      try { fs.unlinkSync(tmpDbPath) } catch {
-        // intencional: vacío por diseño
-      }
-      try { fs.unlinkSync(`${tmpDbPath}-journal`) } catch {
-        // intencional: vacío por diseño
-      }
+      try { fs.unlinkSync(tmpDbPath) } catch { /* intencional */ }
+      try { fs.unlinkSync(`${tmpDbPath}-journal`) } catch { /* intencional */ }
     }
   })
 
@@ -80,7 +72,6 @@ describe("Repositorios con scoping obligatorio por comunidadId (C1b)", () => {
     const repoA = crearRepositorio(comunidadAId, prismaTest)
     const repoB = crearRepositorio(comunidadBId, prismaTest)
 
-    // Crea TipoUnidad en A
     await repoA.tiposUnidad.create({
       id: "tu-a1",
       nombre: "Tipo A1",
@@ -136,7 +127,6 @@ describe("Repositorios con scoping obligatorio por comunidadId (C1b)", () => {
       descripcion: "desc",
     })
 
-    // Intento de update cross-comunidad debe retornar null y no mutar
     const updatedByB = await repoB.macroSectores.update("macro-a1", { nombre: "Hacked" })
     expect(updatedByB).toBeNull()
 
@@ -197,7 +187,6 @@ describe("Repositorios con scoping obligatorio por comunidadId (C1b)", () => {
     const repoA = crearRepositorio(comunidadAId, prismaTest)
     const repoB = crearRepositorio(comunidadBId, prismaTest)
 
-    // TipoUnidad tiene @@unique([comunidadId, nombre]) — mismo nombre en otra comunidad debe permitirse
     await repoA.tiposUnidad.create({
       id: "tu-shared-a",
       nombre: "Tipo Compartido",
@@ -207,7 +196,6 @@ describe("Repositorios con scoping obligatorio por comunidadId (C1b)", () => {
       activo: true,
       historialTarifas: [],
     })
-    // Debe permitir crear mismo nombre en B
     await expect(
       repoB.tiposUnidad.create({
         id: "tu-shared-b",
@@ -228,14 +216,12 @@ describe("Repositorios con scoping obligatorio por comunidadId (C1b)", () => {
 
   it("duplicado dentro de la misma comunidad falla por constraint (C3b)", async () => {
     const repoA = crearRepositorio(comunidadAId, prismaTest)
-    // Primer fondo con nombre X ya creado en test anterior? Creamos uno nuevo único
     await repoA.fondosFI.create({
       id: "fondo-dup-1",
       nombre: "Fondo Unico",
       tipo: "reserva",
       activo: true,
     })
-    // Segundo con mismo [comunidadId, nombre] debe fallar a nivel BD (unique)
     await expect(
       repoA.fondosFI.create({
         id: "fondo-dup-2",
