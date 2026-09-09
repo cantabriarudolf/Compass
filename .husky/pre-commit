@@ -1,0 +1,1 @@
+cd k0mp4ss_fe/apps/web && npx lint-staged

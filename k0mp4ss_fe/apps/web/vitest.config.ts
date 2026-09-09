@@ -28,7 +28,16 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       reporter: ["text", "json-summary", "json", "html"],
-      include: ["lib/store.ts"],
+      include: [
+        "lib/store.ts",
+        "lib/date-utils.ts",
+        "lib/id-utils.ts",
+        "lib/env-guard.ts",
+        "lib/logger.ts",
+        "lib/authz.ts",
+        "lib/schemas.ts",
+        "app/api/**/route.ts",
+      ],
       reportsDirectory: "./coverage",
       // C5: baseline estable post Fase A (96.57/83.26/89.65/96.57).
       thresholds: { statements: 90, branches: 75, functions: 85, lines: 90 },
