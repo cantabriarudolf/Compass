@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma"
 import { authConfig } from "@/lib/auth.config"
 import { AdapterPrismaCompass } from "@/lib/auth-adapter"
 import { excedeIntentos, registrarFallo, limpiarIntentos } from "@/lib/rate-limit"
+import { validarPassword, MENSAJE_PASSWORD_INVALIDA } from "@/lib/password-policy"
 
 /** Credenciales inválidas (password errónea, usuario inexistente/inactivo/sin hash). Mensaje genérico para no enumerar emails. */
 export class CredencialesInvalidas extends CredentialsSignin {
@@ -16,6 +17,11 @@ export class LimiteIntentos extends CredentialsSignin {
   code = "rate_limited"
 }
 
+/** SERIE-PRODUCCION-FASE2 P2: password no cumple con la política de seguridad. */
+export class PasswordDebil extends CredentialsSignin {
+  code = "password_debil"
+}
+
 /**
  * Hash bcrypt de una password inexistente (cost 10). Se usa como comparación
  * dummy cuando el usuario no existe, para igualar el tiempo de respuesta y no
@@ -24,18 +30,15 @@ export class LimiteIntentos extends CredentialsSignin {
 const HASH_DUMMY = "$2a$10$7EqJtq98hPqEX7fNZaFWoOhi5B0G1S3kQvPzEmg8BkSxTQhxnWJmK"
 
 function claveIp(request: Request): string {
-  // Primer hop del header (spoofable — por eso el rate limit también aplica por email).
   const bruto = request.headers.get("x-forwarded-for") ?? "local"
   return bruto.split(",")[0]!.trim() || "local"
 }
 
 /**
  * authorize de Auth.js (AU §3): valida contra BD con bcrypt, aplica rate limit
- * persistente D-v y retorna el usuario con id de BD (sub = Usuario.id).
+ * persistente D-v, valida password policy, y retorna el usuario con id de BD.
  *
- * D-iv SEC-011: el límite se evalúa y registra sobre DOS claves — IP (x-forwarded-for,
- * spoofable rotando el header) y email normalizado (no spoofable al atacar una cuenta
- * concreta). Rotar IPs NO reinicia el contador de la cuenta víctima.
+ * SERIE-PRODUCCION-FASE2 P2: añadida validación de password policy.
  */
 async function autorizarCredenciales(
   credentials: Partial<Record<"email" | "password", unknown>>,
@@ -46,15 +49,17 @@ async function autorizarCredenciales(
   const password = typeof credentials.password === "string" ? credentials.password : ""
   if (!email || !password) throw new CredencialesInvalidas()
 
+  // P2: validar password policy
+  const { valido } = validarPassword(password)
+  if (!valido) throw new PasswordDebil()
+
   const claves = [claveIp(request), `email:${email}`]
 
-  // D-v: fail-closed antes de tocar bcrypt (sin leak de timing ni gasto de CPU)
   for (const clave of claves) {
     if (await excedeIntentos(clave)) throw new LimiteIntentos()
   }
 
   const usuario = await prisma.usuario.findUnique({ where: { email } })
-  // SEC-012: comparar SIEMPRE un hash (real o dummy) para igualar timing.
   const hash = usuario?.passwordHash ?? HASH_DUMMY
   const hashValido = await bcrypt.compare(password, hash)
 
@@ -71,14 +76,7 @@ async function autorizarCredenciales(
   return { id: usuario.id, email: usuario.email }
 }
 
-/**
- * Instancia Auth.js (Node) — AU §3 P5.
- * - handlers: rutas /api/auth/* (app/api/auth/[...nextauth]/route.ts)
- * - auth(): sesión en server components / route handlers
- * - signIn/signOut: server actions si se necesitan
- * La verificación edge (proxy.ts) usa lib/auth.config.ts sin Prisma.
- */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- el tipado completo de NextAuth v5 exige module augmentation global; documentado en design de AU
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const { handlers, auth, signIn, signOut }: any = NextAuth({
   ...authConfig,
   adapter: AdapterPrismaCompass(prisma),
@@ -89,14 +87,23 @@ export const { handlers, auth, signIn, signOut }: any = NextAuth({
     }),
   ],
   callbacks: {
-    async jwt({ token, trigger }: { token: Record<string, unknown> & { roles?: string[] }; trigger?: string }) {
-      // Unión de roles por membresías — cacheada en el JWT entre requests.
-      // Solo consulta Prisma cuando el token aún no tiene roles o en trigger update
-      // (activación de cuenta). Evita N+1 por request; membresías cambian poco.
+    async jwt({ token, trigger }: { token: Record<string, unknown> & { roles?: string[]; tokenVersion?: number }; trigger?: string }) {
       if (token.sub) {
         const necesitaRefresh = !Array.isArray(token.roles) || trigger === "update"
         if (necesitaRefresh) {
           try {
+            const usuario = await prisma.usuario.findUnique({
+              where: { id: token.sub as string },
+              select: { tokenVersion: true },
+            })
+            // P2: invalidar sesión si tokenVersion cambió
+            if (usuario && typeof usuario.tokenVersion === "number") {
+              if (token.tokenVersion !== undefined && token.tokenVersion !== usuario.tokenVersion) {
+                // Sesión invalidada — retornar token vacío para forzar re-login
+                return { sub: "" } as any
+              }
+              token.tokenVersion = usuario.tokenVersion
+            }
             const rows = await prisma.membresia.findMany({
               where: { usuarioId: token.sub },
               select: { rol: true },

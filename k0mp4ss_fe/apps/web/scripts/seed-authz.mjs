@@ -6,7 +6,7 @@
 import { PrismaClient } from "@prisma/client"
 import bcrypt from "bcryptjs"
 
-const PASSWORD_TEST = "test1234"
+const PASSWORD_TEST = "Test1234!"
 
 const comunidadesData = [
   { id: "comunidad-a", nombre: "Comunidad Los Aromos TEST", slug: "los-aromos-test" },

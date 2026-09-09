@@ -95,3 +95,83 @@ export async function GET(request: NextRequest) {
     })),
   })
 }
+
+/**
+ * PATCH /api/admin/usuarios
+ * Actualiza un usuario (rol o estado activo). Requiere admin.
+ * SERIE-PRODUCCION-FASE2 P2: incrementa tokenVersion al cambiar rol o desactivar,
+ * invalidando sesiones activas del usuario.
+ */
+export async function PATCH(request: NextRequest) {
+  const sesion = await auth()
+  if (!sesion?.user?.id) {
+    return NextResponse.json({ error: "No autenticado." }, { status: 401 })
+  }
+
+  const url = new URL(request.url)
+  const comunidadId =
+    url.searchParams.get("comunidadId") ??
+    request.headers.get("x-comunidad-id") ??
+    request.headers.get("x-comunidadId")
+
+  if (!comunidadId || typeof comunidadId !== "string") {
+    return NextResponse.json({ error: "comunidadId requerido" }, { status: 400 })
+  }
+
+  const cid = comunidadId.trim()
+  const adminMembresia = await prisma.membresia.findFirst({
+    where: { usuarioId: sesion.user.id, comunidadId: cid },
+  })
+
+  if (!adminMembresia || !puede(adminMembresia.rol, "editar", "admin:usuarios")) {
+    return NextResponse.json({ error: "Permiso denegado" }, { status: 403 })
+  }
+
+  let body: Record<string, unknown>
+  try {
+    body = await request.json()
+  } catch {
+    return NextResponse.json({ error: "Cuerpo inválido" }, { status: 400 })
+  }
+
+  const usuarioId = String(body.usuarioId ?? "")
+  if (!usuarioId) {
+    return NextResponse.json({ error: "usuarioId requerido" }, { status: 400 })
+  }
+
+  // Verificar que el usuario pertenece a la comunidad
+  const membresia = await prisma.membresia.findFirst({
+    where: { usuarioId, comunidadId: cid },
+  })
+  if (!membresia) {
+    return NextResponse.json({ error: "Usuario no pertenece a la comunidad" }, { status: 404 })
+  }
+
+  const cambiaRol = typeof body.rol === "string"
+  const cambiaActivo = typeof body.activo === "boolean"
+
+  if (cambiaRol) {
+    await prisma.membresia.update({
+      where: { id: membresia.id },
+      data: { rol: String(body.rol) },
+    })
+  }
+
+  if (cambiaActivo) {
+    await prisma.usuario.update({
+      where: { id: usuarioId },
+      data: { activo: Boolean(body.activo) },
+    })
+  }
+
+  // P2: invalidar sesiones si cambió rol o desactivó
+  if (cambiaRol || (cambiaActivo && body.activo === false)) {
+    await prisma.usuario.update({
+      where: { id: usuarioId },
+      data: { tokenVersion: { increment: 1 } },
+    })
+    logger.info({ event: "SESSION_INVALIDATED", usuarioId, adminId: sesion.user.id, comunidadId: cid }, "Sesión invalidada por cambio de rol/estado")
+  }
+
+  return NextResponse.json({ ok: true, cambios: { rol: cambiaRol, activo: cambiaActivo } })
+}

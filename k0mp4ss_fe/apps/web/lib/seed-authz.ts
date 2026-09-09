@@ -6,7 +6,8 @@ import bcrypt from "bcryptjs"
  * Password TEST de los usuarios de seed (AU §3 P5): dato de demo en BD,
  * no una credencial de entorno. Documentada en el manual de autenticación.
  */
-export const PASSWORD_TEST = "test1234"
+// SERIE-PRODUCCION-FASE2 P2: password debe cumplir policy (8+ chars, mayúscula, minúscula, número)
+export const PASSWORD_TEST = "Test1234!"
 
 export interface SeedAuthzResult {
   ok: boolean

@@ -10,7 +10,7 @@ import { prisma } from "@/lib/prisma"
 import bcrypt from "bcryptjs"
 
 const BASE = "http://localhost"
-const PASSWORD_VALIDA = "secret123"
+const PASSWORD_VALIDA = "Secret123"
 
 const emailOk = `authjs-ok-${Date.now()}@test.cl`
 const emailInactivo = `authjs-inactivo-${Date.now()}@test.cl`
@@ -122,7 +122,7 @@ describe("Auth.js — /api/auth/* (login credentials + sesión + D-v)", () => {
 
   it("credenciales inválidas → error=CredentialsSignin&code=credentials y fallo persistido", async () => {
     const ip = `ip-fallo-${Date.now()}`
-    const res = await login(emailMalaPass, "password-erronea", undefined, ip)
+    const res = await login(emailMalaPass, "WrongPass123!", undefined, ip)
     expect(res.status).toBe(200) // X-Auth-Return-Redirect: error como JSON {url}
     const datos = (await res.json()) as { url: string }
     const { error, code } = codigoDesdeUrl(datos)
@@ -183,7 +183,7 @@ describe("Auth.js — /api/auth/* (login credentials + sesión + D-v)", () => {
     for (let i = 0; i < 10; i++) {
       const ip = `spoof-${Date.now()}-${i}`
       ips.push(ip)
-      const res = await login(emailVictima, "password-erronea", undefined, ip)
+      const res = await login(emailVictima, "WrongPass123!", undefined, ip)
       const datos = (await res.json()) as { url: string }
       expect(codigoDesdeUrl(datos).code).toBe("credentials")
     }
@@ -216,7 +216,7 @@ describe("Auth.js — /api/auth/* (login credentials + sesión + D-v)", () => {
   it("D-iv SEC-012: usuario inexistente → mismo error y fallos persistidos en ambas claves", async () => {
     const emailFantasma = `fantasma-${Date.now()}@test.cl`
     const ip = `ip-fantasma-${Date.now()}`
-    const res = await login(emailFantasma, "lo-que-sea", undefined, ip)
+    const res = await login(emailFantasma, "WrongPass123!", undefined, ip)
     const datos = (await res.json()) as { url: string }
     const { error, code } = codigoDesdeUrl(datos)
     // mismo code que password errónea (sin enumeración por mensaje ni por timing de branch)

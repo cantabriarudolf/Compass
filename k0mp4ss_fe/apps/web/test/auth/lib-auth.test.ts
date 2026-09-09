@@ -3,9 +3,9 @@ import { describe, it, expect } from "vitest"
 import { authConfig } from "@/lib/auth.config"
 
 describe("lib/auth.config — Auth.js P5", () => {
-  it("usa estrategia JWT con maxAge 30 días y trustHost", () => {
+  it("usa estrategia JWT con maxAge 24h y trustHost", () => {
     expect(authConfig.session?.strategy).toBe("jwt")
-    expect(authConfig.session?.maxAge).toBe(30 * 24 * 60 * 60)
+    expect(authConfig.session?.maxAge).toBe(24 * 60 * 60)
     expect(authConfig.trustHost).toBe(true)
   })
 

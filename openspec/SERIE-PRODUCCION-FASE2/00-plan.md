@@ -7,7 +7,7 @@
 | Ventana | Alcance | Estado | Commit final |
 |---|---|---|---|
 | P1 | Infraestructura Neon PostgreSQL: lib/prisma.ts, .env.example, backup migraciones | HECHA (parcial) | 7fe4b9c |
-| P2 | Password policy + JWT 24h + invalidación de sesiones | pendiente | — |
+| P2 | Password policy + JWT 24h + invalidación de sesiones | **EN CURSO** | — |
 | P3 | 2FA/TOTP con Google Authenticator | pendiente | — |
 | P4 | Cifrado de datos sensibles en reposo (AES-256) | pendiente | — |
 | P5 | Sentry + CSP enforcement | pendiente | — |

@@ -20,7 +20,10 @@ declare module "next-auth" {
  */
 export const authConfig = {
   // JWT para que proxy.ts (edge) verifique sin Prisma; el adapter vive server-side.
-  session: { strategy: "jwt", maxAge: 30 * 24 * 60 * 60 },
+  // SERIE-PRODUCCION-FASE2 P2: sesión de 24h con sliding refresh (1h).
+  // Antes: 30 días. Ahora: 24h de vida, se extiende 24h más si el usuario
+  // está activo (cada 1h de actividad).
+  session: { strategy: "jwt", maxAge: 24 * 60 * 60, updateAge: 60 * 60 },
   pages: { signIn: "/ingresar", error: "/ingresar" },
   // Deploy self-hosted: sin esto Auth.js no confía en el Host en producción.
   trustHost: true,
