@@ -6,7 +6,7 @@
 
 | Ventana | Alcance | Estado | Commit final |
 |---|---|---|---|
-| P1 | Migración SQLite → Neon PostgreSQL: schema, pooling, datos, scripts | pendiente | — |
+| P1 | Infraestructura Neon PostgreSQL: lib/prisma.ts, .env.example, backup migraciones | HECHA (parcial) | 7fe4b9c |
 | P2 | Password policy + JWT 24h + invalidación de sesiones | pendiente | — |
 | P3 | 2FA/TOTP con Google Authenticator | pendiente | — |
 | P4 | Cifrado de datos sensibles en reposo (AES-256) | pendiente | — |
@@ -22,10 +22,10 @@
 
 **Base de hechos:**
 - STORE_VERSION: 27
-- Tests: 552 unit (vitest), 86 e2e (playwright), 13 lint warnings
+- Tests: 551/552 unit (vitest), 86 e2e (playwright), 11 lint warnings
 - CI/CD: GitHub Actions con unit + e2e + deploy a Vercel
 - Hosting: Vercel (vercel.json, output standalone)
-- Database: SQLite dev → **Neon PostgreSQL** (esta serie)
+- Database: SQLite dev (dev.db) → **Neon PostgreSQL en prod** (esta serie)
 - Auth: Auth.js credentials + bcrypt + rate limit persistente
 - Stack: Next.js 16.1.6 + React 19 + Prisma 6 + Tailwind v4 + shadcn/ui
 - Logging: pino estructurado
@@ -33,10 +33,29 @@
 - Pre-commit: husky + lint-staged
 
 ## Pre-requisitos del owner (antes de P1)
-- [ ] Crear cuenta en https://neon.tech
-- [ ] Crear proyecto y base de datos
-- [ ] Copiar DATABASE_URL (connection string) y guardarla segura
+- [x] Crear cuenta en https://neon.tech
+- [x] Crear proyecto y base de datos
+- [x] Copiar DATABASE_URL (connection string) y guardarla segura
 - [ ] Configurar DATABASE_URL en Vercel dashboard (cuando exista el proyecto)
 
+## Nota importante sobre P1
+
+**P1 quedó PARCIAL intencionalmente.** La estrategia final es:
+- **Dev/Test**: SQLite (file:./dev.db) — mantiene velocidad y compatibilidad
+- **Producción**: Neon PostgreSQL — configura DATABASE_URL en Vercel dashboard
+
+**Lo que se hizo en P1:**
+- ✅ `lib/prisma.ts` usa `datasourceUrl: process.env.DATABASE_URL` (funciona con cualquier provider)
+- ✅ `@prisma/extension-accelerate` instalado (para connection pooling en prod)
+- ✅ `.env.example` actualizado con ejemplo PostgreSQL/Neon
+- ✅ Migraciones SQLite respaldadas en `prisma/migrations-sqlite-backup/`
+- ✅ Helper `test/lib/create-sqlite-test-schema.ts` para tests con schema temporal
+
+**Lo que queda PENDIENTE (post-serie o P7):**
+- [ ] Script de migración de datos SQLite → PostgreSQL
+- [ ] Scripts backup/restore reescritos para PostgreSQL
+- [ ] CI actualizado para usar PostgreSQL en job de deploy
+- [ ] Cambio de provider en `prisma/schema.prisma` al momento del deploy a producción
+
 ## Bitácora
-(vacía — cada ventana añade antes del push: `- [fecha] P<n> HECHA: resumen (commit hash)`)
+- [2026-09-09] P1 HECHA (parcial): Infraestructura Neon PostgreSQL preparada. lib/prisma.ts con datasourceUrl, .env.example actualizado, migraciones respaldadas, Accelerate instalado. SQLite se mantiene para dev/tests. Commit 7fe4b9c.
