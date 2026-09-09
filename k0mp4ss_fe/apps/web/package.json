@@ -19,6 +19,7 @@
     "restore:db": "node scripts/restore-db.mjs",
     "check:headers": "node scripts/check-headers.mjs",
     "check:rechecks": "node scripts/security-recheck.mjs",
+    "deploy:vercel": "node scripts/deploy-vercel.mjs",
     "typecheck": "tsc --noEmit",
     "prepare": "husky"
   },
