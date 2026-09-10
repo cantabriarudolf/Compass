@@ -8,7 +8,7 @@
 |---|---|---|---|
 | P1 | Infraestructura Neon PostgreSQL: lib/prisma.ts, .env.example, backup migraciones | HECHA (parcial) | 7fe4b9c |
 | P2 | Password policy + JWT 24h + invalidación de sesiones | HECHA | e45bcb2 |
-| P3 | 2FA/TOTP con Google Authenticator | HECHA | 3ec9b7e |
+| P3 | 2FA/TOTP con Google Authenticator | HECHA | 6a9d205 |
 | P4 | Cifrado de datos sensibles en reposo (AES-256) | pendiente | — |
 | P5 | Sentry + CSP enforcement | pendiente | — |
 | P6 | Política de privacidad + derechos ARCO + cierre | pendiente | — |
@@ -60,4 +60,4 @@
 ## Bitácora
 - [2026-09-09] P1 HECHA (parcial): Infraestructura Neon PostgreSQL preparada. lib/prisma.ts con datasourceUrl, .env.example actualizado, migraciones respaldadas, Accelerate instalado. SQLite se mantiene para dev/tests. Commit 7fe4b9c.
 - [2026-09-09] P2 HECHA: Password policy + JWT 24h + invalidación de sesiones (tokenVersion). Commit e45bcb2.
-- [2026-09-10] P3 HECHA: 2FA/TOTP con Google Authenticator + backup codes. 6 rutas API, challenge JWE 5min, sesión Auth.js real al verificar. UI login 2FA diferida (solo API). Commit 3ec9b7e.
+- [2026-09-10] P3 HECHA: 2FA/TOTP con Google Authenticator + backup codes. 6 rutas API, challenge JWE 5min, sesión Auth.js real al verificar. UI login 2FA diferida (solo API). Commit 6a9d205.
