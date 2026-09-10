@@ -94,6 +94,9 @@ model Usuario {
   activo       Boolean  @default(true)
   passwordHash String? // bcrypt (AU §3: login contra BD vía Auth.js credentials)
   tokenVersion Int      @default(0) // SERIE-PRODUCCION-FASE2 P2: invalidación de sesiones
+  twoFactorSecret      String?   // SERIE-PRODUCCION-FASE2 P3: secreto TOTP Base32 (pendiente hasta verify-setup)
+  twoFactorEnabled     Boolean   @default(false) // SERIE-PRODUCCION-FASE2 P3: 2FA activo
+  twoFactorBackupCodes String?   // SERIE-PRODUCCION-FASE2 P3: JSON array de hashes bcrypt de códigos de respaldo
   membresias   Membresia[]
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt

@@ -23,6 +23,14 @@ export class PasswordDebil extends CredentialsSignin {
 }
 
 /**
+ * SERIE-PRODUCCION-FASE2 P3: el usuario tiene 2FA activo y debe completar el
+ * desafío TOTP (challenge → verify) en vez del login directo.
+ */
+export class Requiere2FA extends CredentialsSignin {
+  code = "requiere_2fa"
+}
+
+/**
  * Hash bcrypt de una password inexistente (cost 10). Se usa como comparación
  * dummy cuando el usuario no existe, para igualar el tiempo de respuesta y no
  * filtrar existencia de emails por timing (SEC-012, D-iv).
@@ -34,28 +42,34 @@ function claveIp(request: Request): string {
   return bruto.split(",")[0]!.trim() || "local"
 }
 
+export interface CredencialesVerificadas {
+  id: string
+  email: string
+  twoFactorEnabled: boolean
+}
+
 /**
- * authorize de Auth.js (AU §3): valida contra BD con bcrypt, aplica rate limit
- * persistente D-v, valida password policy, y retorna el usuario con id de BD.
+ * Valida email+password contra BD (bcrypt + rate limit D-v + password policy P2).
+ * Comparte la lógica entre authorize de Auth.js y el challenge 2FA (P3) para
+ * que ambos caminos apliquen idénticas defensas (sin oráculo de enumeración:
+ * mensaje genérico + comparación dummy por timing).
  *
- * SERIE-PRODUCCION-FASE2 P2: añadida validación de password policy.
+ * Lanza CredencialesInvalidas | PasswordDebil | LimiteIntentos.
  */
-async function autorizarCredenciales(
-  credentials: Partial<Record<"email" | "password", unknown>>,
-  request: Request
-): Promise<{ id: string; email: string } | null> {
-  const email =
-    typeof credentials.email === "string" ? credentials.email.trim().toLowerCase() : ""
-  const password = typeof credentials.password === "string" ? credentials.password : ""
+export async function verificarCredenciales(
+  emailBruto: unknown,
+  passwordBruto: unknown,
+  clavesRateLimit: string[]
+): Promise<CredencialesVerificadas> {
+  const email = typeof emailBruto === "string" ? emailBruto.trim().toLowerCase() : ""
+  const password = typeof passwordBruto === "string" ? passwordBruto : ""
   if (!email || !password) throw new CredencialesInvalidas()
 
   // P2: validar password policy
   const { valido } = validarPassword(password)
   if (!valido) throw new PasswordDebil()
 
-  const claves = [claveIp(request), `email:${email}`]
-
-  for (const clave of claves) {
+  for (const clave of clavesRateLimit) {
     if (await excedeIntentos(clave)) throw new LimiteIntentos()
   }
 
@@ -64,15 +78,34 @@ async function autorizarCredenciales(
   const hashValido = await bcrypt.compare(password, hash)
 
   if (!usuario || !usuario.activo || !usuario.passwordHash || !hashValido) {
-    for (const clave of claves) {
+    for (const clave of clavesRateLimit) {
       await registrarFallo(clave)
     }
     throw new CredencialesInvalidas()
   }
 
-  for (const clave of claves) {
+  for (const clave of clavesRateLimit) {
     await limpiarIntentos(clave)
   }
+  return { id: usuario.id, email: usuario.email, twoFactorEnabled: usuario.twoFactorEnabled }
+}
+
+/**
+ * authorize de Auth.js (AU §3): valida credenciales y retorna el usuario con id de BD.
+ *
+ * SERIE-PRODUCCION-FASE2 P2: añadida validación de password policy.
+ * SERIE-PRODUCCION-FASE2 P3: usuarios con 2FA NO obtienen sesión aquí;
+ * deben completar el flujo challenge → verify (Requiere2FA).
+ */
+async function autorizarCredenciales(
+  credentials: Partial<Record<"email" | "password", unknown>>,
+  request: Request
+): Promise<{ id: string; email: string } | null> {
+  const email =
+    typeof credentials.email === "string" ? credentials.email.trim().toLowerCase() : ""
+  const claves = [claveIp(request), `email:${email}`]
+  const usuario = await verificarCredenciales(credentials.email, credentials.password, claves)
+  if (usuario.twoFactorEnabled) throw new Requiere2FA()
   return { id: usuario.id, email: usuario.email }
 }
 
