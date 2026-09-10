@@ -11,6 +11,7 @@ import speakeasy from "speakeasy"
 import bcrypt from "bcryptjs"
 import { decode } from "next-auth/jwt"
 import { prisma } from "@/lib/prisma"
+import { prismaCifrado } from "@/lib/prisma-cifrado"
 import {
   generarSecreto2FA,
   verificarCodigo2FA,
@@ -336,7 +337,9 @@ describe("P3 — enrolamiento y baja (rutas setup/verify-setup/disable)", () => 
   it("verify-setup con código válido activa 2FA y retorna backup codes", async () => {
     const { POST } = await import("@/app/api/auth/2fa/verify-setup/route")
     const cookie = await sesionCookie(usuarioId, EMAIL_SETUP)
-    const u = await prisma.usuario.findUnique({ where: { id: usuarioId } })
+    const u = (await prismaCifrado.usuario.findUnique({ where: { id: usuarioId } })) as unknown as {
+      twoFactorSecret: string
+    }
     const res = await call(
       "/api/auth/2fa/verify-setup",
       { POST },
@@ -347,7 +350,9 @@ describe("P3 — enrolamiento y baja (rutas setup/verify-setup/disable)", () => 
     const j = (await res.json()) as { ok: boolean; backupCodes: string[] }
     expect(j.ok).toBe(true)
     expect(j.backupCodes).toHaveLength(10)
-    const actualizado = await prisma.usuario.findUnique({ where: { id: usuarioId } })
+    const actualizado = (await prismaCifrado.usuario.findUnique({
+      where: { id: usuarioId },
+    })) as unknown as { twoFactorEnabled: boolean; twoFactorBackupCodes: string }
     expect(actualizado!.twoFactorEnabled).toBe(true)
     expect(parsearBackupCodes(actualizado!.twoFactorBackupCodes)).toHaveLength(10)
   }, 30_000)

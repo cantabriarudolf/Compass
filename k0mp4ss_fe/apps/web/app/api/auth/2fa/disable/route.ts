@@ -1,7 +1,7 @@
 import { NextResponse, NextRequest } from "next/server"
 import { z } from "zod"
 import bcrypt from "bcryptjs"
-import { prisma } from "@/lib/prisma"
+import { prismaCifrado as prisma } from "@/lib/prisma-cifrado"
 import { auth } from "@/lib/auth"
 import { logger } from "@/lib/logger"
 

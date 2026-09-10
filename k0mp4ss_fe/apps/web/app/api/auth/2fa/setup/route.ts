@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { prisma } from "@/lib/prisma"
+import { prismaCifrado as prisma } from "@/lib/prisma-cifrado"
 import { auth } from "@/lib/auth"
 import { logger } from "@/lib/logger"
 import { generarSecreto2FA } from "@/lib/two-factor"
