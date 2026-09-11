@@ -30,6 +30,8 @@ Las eliminaciones validan dependencias. No podés borrar:
 - Un estacionamiento con asignación activa.
 - Una persona con vínculos de unidad.
 
+- **Producción: Neon PostgreSQL** (FASE2 P1, parcial intencional): `lib/prisma.ts` usa `datasourceUrl: process.env.DATABASE_URL` (SQLite en dev/test, Neon en prod vía dashboard Vercel) + `@prisma/extension-accelerate` para pooling. Migraciones SQLite respaldadas en `prisma/migrations-sqlite-backup/`. Pendiente: script de datos SQLite→PG, backup/restore para PG y cambio de provider al desplegar.
+
 ## 💡 Tips de Oro
 
 - **Hidratación**: toda página que lee del store debe usar `useStoreRehydrated()` y mostrar un skeleton hasta que `hasHydrated` sea `true`.

@@ -23,6 +23,10 @@ Autenticar usuarios por email + contraseña, mantener sesión segura y limitar i
 
 - **Seed dev / QA Lab** (B3 + P5): `lib/seed-authz.ts:seedUsuariosMembresias()` idempotente crea 2 comunidades (`comunidad-a` Los Aromos TEST, `comunidad-b` Las Palmas TEST) + 5 usuarios TEST (`admin@test.cl` admin en A+B, `comite`/`conserjeria`/`residente`/`mantencion` en A) con `passwordHash` bcrypt (`test1234`, dato de demo documentado). Botón "👥 Crear usuarios TEST" en `/admin/qa-lab` (requiere sesión admin) invoca `POST /api/admin/seed-authz`. **Primer arranque sin usuarios**: `npm run seed:authz` (`scripts/seed-authz.mjs`, PrismaClient+bcryptjs directo, idempotente, lee `.env`).
 
+    - **Password policy + sesiones 24h** (FASE2 P2): `lib/password-policy.ts` exige 8+ chars con mayúscula, minúscula y número (login rechaza débiles sin enumerar). `auth.config.ts`: `maxAge` 24h + sliding `updateAge` 1h (antes 30 días). `Usuario.tokenVersion` + check en callback `jwt`: admin puede invalidar sesiones (`PATCH /api/admin/usuarios`).
+
+    - **2FA/TOTP + backup codes** (FASE2 P3): enrolamiento en `POST /api/auth/2fa/setup` (QR para Google Authenticator) → `verify-setup` (activa + entrega 10 backup codes bcrypt, un solo uso) → `disable` (pide contraseña e invalida sesiones). Login en dos fases: `challenge` (valida credenciales, devuelve JWE de 5 min) → `verify`/`backup` (acuña cookie de sesión real). `authorize` rechaza login directo con 2FA (`code=requiere_2fa`, sin bypass). Secretos cifrados en reposo (ver SG cifrado).
+
 ## 💡 Tips de Oro
 
 - **Fail-closed**: sin `AUTH_SECRET` (≥32 chars en prod) o sin cookie → 401/redirect; usuario inactivo/sin hash → login falla sin distinguir causa (anti-enumeración).
