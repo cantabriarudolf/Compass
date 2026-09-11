@@ -148,3 +148,34 @@ aclaración documental, 0 errores de cálculo.
 - [ ] **Password policy** — Mínimo de complejidad, breach-list, rotación
 - [ ] **Reducción de sesión JWT** — De 30 días a 24h con sliding refresh
 - [ ] **Derechos ARCO** — UI/API para acceso, rectificación, cancelación de datos personales
+
+## Seguridad y compliance de producción (SERIE-PRODUCCION-FASE2 P1-P6) — ✅ COMPLETA 2026-09-10
+
+> Lleva Compass de "infraestructura mínima" a "producto seguro y compliant".
+> Detalle por ventana: `openspec/SERIE-PRODUCCION-FASE2/00-plan.md`.
+
+| Ventana | Qué se hizo | Commit |
+|---|---|---|
+| P1 | Infra Neon PostgreSQL (parcial intencional): `lib/prisma.ts` con `datasourceUrl`, `.env.example`, migraciones respaldadas, Accelerate | `7fe4b9c` |
+| P2 | Password policy + JWT 24h (sliding 1h) + invalidación de sesiones (`tokenVersion`) | `e45bcb2` |
+| P3 | 2FA/TOTP + backup codes: 6 rutas API, desafío JWE 5min, sesión Auth.js real | `6a9d205` |
+| P4 | Cifrado AES-256-GCM en reposo: `lib/crypto`, extensión Prisma opt-in, script migración idempotente | `5efa23b` |
+| P5 | Sentry code-complete (pendiente DSN) + CSP en enforcement con report-uri | `7a5bf36` |
+| P6 | Privacidad/términos + API y UI de derechos ARCO + banner consentimiento + cierre | `<hash>` |
+
+**Métricas post-serie:**
+- Tests: 606/606 unit verdes (subieron de 552; incl. 22 de 2FA, 15 de cifrado, 4 de Sentry, 6 de ARCO)
+- tsc: 0 errores · Lint: 13 warnings (0 errores) · openspec validate: 37/37
+- STORE_VERSION: 27 (sin cambios en la serie)
+
+**Post-serie (requiere decisión/acción del owner):**
+- [ ] **Push a origin + NSGC pre-push** — la serie va ~21 commits ahead de `origin/main`
+- [ ] **Sentry**: pegar `SENTRY_DSN` real (y `SENTRY_AUTH_TOKEN` para source maps) — código listo
+- [ ] **Revisar privacidad/términos con abogado** — scaffolds funcionales, no texto legal definitivo
+- [ ] **Correr `npm run cifrar:datos`** en producción tras desplegar (con `CLAVE_CIFRADO_DATOS` real)
+- [ ] **Rollout cifrado por módulo + blind index HMAC** para búsqueda por rut/email cifrados
+- [ ] **UI login 2FA** (form 6 dígitos en `/ingresar`; API completa)
+- [ ] **Pen-test dinámico** + auditoría de seguridad externa (recomendado)
+- [ ] **Registro como encargado de datos (Ley 21.719)**
+- [ ] **Migración de datos SQLite → PostgreSQL** (pendiente de P1: script, backup/restore, CI, cambio de provider)
+- [ ] **Configurar `DATABASE_URL` en Vercel dashboard** cuando exista el proyecto

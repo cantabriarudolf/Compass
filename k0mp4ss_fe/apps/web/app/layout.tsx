@@ -12,6 +12,7 @@ import { Separator } from "@workspace/ui/components/separator";
 import { ModeToggle } from "@/components/mode-toggle";
 import { TooltipProvider } from "@workspace/ui/components/tooltip";
 import { AuditoriaSyncInit } from "@/components/auditoria-sync-init";
+import { ConsentBanner } from "@/components/consent-banner";
 import { FISyncInit } from "@/components/fi-sync-init";
 import { auth } from "@/lib/auth";
 
@@ -68,6 +69,7 @@ export default async function RootLayout({
             </SidebarProvider>
           </TooltipProvider>
         </ThemeProvider>
+        <ConsentBanner />
       </body>
     </html>
   )

@@ -3,18 +3,33 @@ import { ahoraISO, finMesISO, hoyISO, inicioMesISO } from "@/lib/date-utils"
 
 describe("hoyISO", () => {
   it("devuelve la fecha de hoy en formato YYYY-MM-DD", () => {
-    const resultado = hoyISO()
-    expect(resultado).toMatch(/^\d{4}-\d{2}-\d{2}$/)
-    expect(resultado).toBe(new Date().toISOString().slice(0, 10))
+    // P6: reloj congelado — la comparación contra new Date() era flaky en
+    // frontera de milisegundo/medianoche (heredado P2).
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date("2026-03-15T12:00:00.000Z"))
+    try {
+      const resultado = hoyISO()
+      expect(resultado).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+      expect(resultado).toBe(new Date().toISOString().slice(0, 10))
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
 
 describe("ahoraISO", () => {
   it("devuelve un timestamp ISO-8601 completo parseable", () => {
-    const resultado = ahoraISO()
-    const parsed = new Date(resultado)
-    expect(Number.isNaN(parsed.getTime())).toBe(false)
-    expect(resultado).toBe(new Date().toISOString())
+    // P6: reloj congelado (ver hoyISO).
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date("2026-03-15T12:00:00.000Z"))
+    try {
+      const resultado = ahoraISO()
+      const parsed = new Date(resultado)
+      expect(Number.isNaN(parsed.getTime())).toBe(false)
+      expect(resultado).toBe(new Date().toISOString())
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
 

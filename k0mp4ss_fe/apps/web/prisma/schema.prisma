@@ -97,6 +97,8 @@ model Usuario {
   twoFactorSecret      String?   // SERIE-PRODUCCION-FASE2 P3: secreto TOTP Base32 (pendiente hasta verify-setup)
   twoFactorEnabled     Boolean   @default(false) // SERIE-PRODUCCION-FASE2 P3: 2FA activo
   twoFactorBackupCodes String?   // SERIE-PRODUCCION-FASE2 P3: JSON array de hashes bcrypt de códigos de respaldo
+  solicitudEliminacion   Boolean   @default(false) // SERIE-PRODUCCION-FASE2 P6: derecho a olvido (Ley 21.719)
+  solicitudEliminacionAt DateTime? // SERIE-PRODUCCION-FASE2 P6: fecha de la solicitud
   membresias   Membresia[]
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
