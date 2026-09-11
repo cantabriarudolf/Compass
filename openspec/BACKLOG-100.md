@@ -179,3 +179,4 @@ aclaración documental, 0 errores de cálculo.
 - [ ] **Registro como encargado de datos (Ley 21.719)**
 - [ ] **Migración de datos SQLite → PostgreSQL** (pendiente de P1: script, backup/restore, CI, cambio de provider)
 - [ ] **Configurar `DATABASE_URL` en Vercel dashboard** cuando exista el proyecto
+- [ ] **Mantenimiento skill `pruebas`** (era opencode): falta `.opencode/qa-config.json`, dos copias difieren, conteos viejos (~400 vs 606+43). `test-catalogo` (Pi) informa; `pruebas` ejecuta — ver handoff en el skill
