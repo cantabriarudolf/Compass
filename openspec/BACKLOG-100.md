@@ -161,7 +161,7 @@ aclaración documental, 0 errores de cálculo.
 | P3 | 2FA/TOTP + backup codes: 6 rutas API, desafío JWE 5min, sesión Auth.js real | `6a9d205` |
 | P4 | Cifrado AES-256-GCM en reposo: `lib/crypto`, extensión Prisma opt-in, script migración idempotente | `5efa23b` |
 | P5 | Sentry code-complete (pendiente DSN) + CSP en enforcement con report-uri | `7a5bf36` |
-| P6 | Privacidad/términos + API y UI de derechos ARCO + banner consentimiento + cierre | `<hash>` |
+| P6 | Privacidad/términos + API y UI de derechos ARCO + banner consentimiento + cierre | `c85ca2e` |
 
 **Métricas post-serie:**
 - Tests: 606/606 unit verdes (subieron de 552; incl. 22 de 2FA, 15 de cifrado, 4 de Sentry, 6 de ARCO)
