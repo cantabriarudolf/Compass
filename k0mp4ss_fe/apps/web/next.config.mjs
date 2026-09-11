@@ -58,4 +58,16 @@ if (process.env.ANALYZE === "true") {
   nextConfig = withBundleAnalyzer({ enabled: true })(nextConfig)
 }
 
+// SERIE-PRODUCCION-FASE2 P5 — Sentry solo con SENTRY_DSN (sin DSN el build es
+// idéntico al anterior: el SDK queda deshabilitado). Source maps se suben solo
+// en producción y solo con SENTRY_AUTH_TOKEN (CI/Vercel); sin token se omiten
+// sin romper el build.
+if (process.env.SENTRY_DSN) {
+  const { withSentryConfig } = await import("@sentry/nextjs")
+  nextConfig = withSentryConfig(nextConfig, {
+    silent: true,
+    sourcemaps: { disable: !process.env.SENTRY_AUTH_TOKEN },
+  })
+}
+
 export default nextConfig

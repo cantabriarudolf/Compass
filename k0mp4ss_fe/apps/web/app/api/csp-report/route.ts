@@ -39,5 +39,5 @@ export async function POST(request: Request) {
 }
 
 export async function GET() {
-  return NextResponse.json({ ok: true, note: "CSP report sink (Report-Only). POST violations here. See design.md plan enforcement." })
+  return NextResponse.json({ ok: true, note: "CSP report sink (P5: enforcement activo; report-uri sigue recibiendo telemetría)." })
 }

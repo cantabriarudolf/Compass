@@ -208,20 +208,21 @@ describe("D-iii re-chequeos 5/5 (scripted)", () => {
     expect(res2.status).toBe(401)
   })
 
-  it("CSP report-only presente con nonce por request y no enforcement", async () => {
-    const proxy = (await import("@/proxy")).default
-    const r1: any = await (proxy as any)(new NextRequest("http://localhost/", { headers: { "x-forwarded-proto": "http" } }) as any, undefined as never)
-    const r2: any = await (proxy as any)(new NextRequest("http://localhost/", { headers: { "x-forwarded-proto": "http" } }) as any, undefined as never)
-    const csp1 = r1.headers.get("content-security-policy-report-only") ?? ""
-    const csp2 = r2.headers.get("content-security-policy-report-only") ?? ""
-    const enforce = r1.headers.get("content-security-policy") ?? ""
-    console.log(`[CSP] report-only nonce único: ${csp1.includes("nonce-") && csp2.includes("nonce-") && csp1 !== csp2 ? "OK" : `FAIL`}`)
-    expect(csp1).toContain("nonce-")
-    expect(csp2).toContain("nonce-")
-    expect(csp1).not.toBe(csp2) // nonce por request
-    expect(enforce).toBe("") // no enforcement
-    expect(csp1).toContain("youtube.com")
-    expect(csp1).toContain("img-src")
+  it("P5: CSP en enforcement con nonce por request y report-uri (sin report-only)", async () => {
+        const proxy = (await import("@/proxy")).default
+        const r1: any = await (proxy as any)(new NextRequest("http://localhost/", { headers: { "x-forwarded-proto": "http" } }) as any, undefined as never)
+        const r2: any = await (proxy as any)(new NextRequest("http://localhost/", { headers: { "x-forwarded-proto": "http" } }) as any, undefined as never)
+        const csp1 = r1.headers.get("content-security-policy") ?? ""
+        const csp2 = r2.headers.get("content-security-policy") ?? ""
+        const reportOnly = r1.headers.get("content-security-policy-report-only") ?? ""
+        console.log(`[CSP] enforce nonce único: ${csp1.includes("nonce-") && csp2.includes("nonce-") && csp1 !== csp2 ? "OK" : `FAIL`}`)
+        expect(csp1).toContain("nonce-")
+        expect(csp2).toContain("nonce-")
+        expect(csp1).not.toBe(csp2) // nonce por request
+        expect(reportOnly).toBe("") // ya no report-only
+        expect(csp1).toContain("report-uri /api/csp-report")
+        expect(csp1).toContain("youtube.com")
+        expect(csp1).toContain("img-src")
   })
 
   it("headers D-ii: next.config HSTS sin preload y complementos", async () => {

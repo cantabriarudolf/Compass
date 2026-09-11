@@ -27,6 +27,7 @@
   "dependencies": {
     "@prisma/client": "^6.19.3",
     "@prisma/extension-accelerate": "^3.0.1",
+    "@sentry/nextjs": "^10.74.0",
     "@tabler/icons-react": "^3.42.0",
     "@workspace/ui": "*",
     "bcryptjs": "^3.0.3",

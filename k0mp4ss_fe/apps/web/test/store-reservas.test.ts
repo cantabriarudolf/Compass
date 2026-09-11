@@ -17,12 +17,20 @@ const elementoBase = (partial: Partial<ElementoRA>): ElementoRA => ({
   ...partial,
 })
 
+// P5: fechas dinámicas (los hardcodes 2026-09-10/11 se pudrieron al avanzar el
+// reloj UTC: el cobro de r1 vencía y la morosidad bloqueaba r2). +30/+31 días.
+function fechaFutura(dias: number): string {
+  const d = new Date()
+  d.setDate(d.getDate() + dias)
+  return d.toISOString().slice(0, 10)
+}
+
 const reservaBase = (partial: Partial<ReservaRA>): ReservaRA => ({
   id: "ra-rs-1",
   folio: "",
   elementoId: "ra-el-1",
   solicitantePersonaId: getState().personas[0]!.id,
-  fecha: "2026-09-10",
+  fecha: fechaFutura(30),
   horaInicio: "19:00",
   horaFin: "22:00",
   estado: "confirmada",
@@ -79,7 +87,7 @@ describe("RA - Reservas y Amenities en el store", () => {
 
     it("confirma con folio RA único y snapshots de tarifa/garantía del elemento", () => {
       const r1 = getState().saveReservaRA(reservaBase({}))
-      const r2 = getState().saveReservaRA(reservaBase({ id: "ra-rs-2", fecha: "2026-09-11" }))
+      const r2 = getState().saveReservaRA(reservaBase({ id: "ra-rs-2", fecha: fechaFutura(31) }))
       expect(r1.ok).toBe(true)
       expect(r2.ok).toBe(true)
       expect(getState().reservasRA.map(x => x.folio)).toEqual(["RA-0001", "RA-0002"])

@@ -11,6 +11,7 @@
  */
 import pino from "pino"
 import { getAppEnv, type AppEnv } from "./env-guard"
+import { capturarMensaje, depurarObjeto } from "./sentry"
 
 export const SERVICE = "compass"
 
@@ -65,3 +66,35 @@ export function crearLogger(opciones: CrearLoggerOpciones = {}): pino.Logger {
 
 /** Logger de la aplicación (singleton por proceso). */
 export const logger = crearLogger()
+
+/**
+ * P5: error/fatal también van a Sentry (no-op sin SENTRY_DSN).
+ * Solo el singleton lleva el hook; loggers de test (crearLogger) no.
+ */
+function mensajeParaSentry(args: unknown[]): string {
+  const [primero, segundo] = args
+  if (typeof segundo === "string") return segundo
+  if (typeof primero === "string") return primero
+  if (primero !== null && typeof primero === "object") {
+    const err = (primero as { err?: { message?: unknown } }).err
+    if (err !== undefined && typeof err.message === "string") return err.message
+    try {
+      return JSON.stringify(depurarObjeto(primero))
+    } catch {
+      return "[no serializable]"
+    }
+  }
+  return String(primero)
+}
+
+for (const nivel of ["error", "fatal"] as const) {
+  const original = logger[nivel].bind(logger) as (...args: never[]) => unknown
+  logger[nivel] = ((...args: never[]) => {
+    try {
+      capturarMensaje(mensajeParaSentry(args), nivel)
+    } catch {
+      // intencional: observabilidad nunca rompe el log
+    }
+    return original(...args)
+  }) as typeof logger.error
+}

@@ -37,6 +37,9 @@ export async function onRequestError(
 ): Promise<void> {
   if (process.env.NEXT_RUNTIME !== "nodejs") return
   const { logger } = await import("./lib/logger")
+  // P5: errores no capturados también van a Sentry (no-op sin SENTRY_DSN)
+  const { capturarError } = await import("./lib/sentry")
+  capturarError(error, { method: request?.method, path: request?.path })
   const mensaje = error instanceof Error ? error.message : String(error)
   logger.error(
     {

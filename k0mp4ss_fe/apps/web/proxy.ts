@@ -24,7 +24,10 @@ function generarNonce(): string {
   return Math.random().toString(36).slice(2, 18) + Math.random().toString(36).slice(2, 18)
 }
 
-function cspReportOnly(nonce: string): string {
+// P5 SERIE-PRODUCCION-FASE2: CSP en ENFORCE (antes Report-Only D-i).
+// REVERSIÓN: cambiar el header de abajo de vuelta a
+// "Content-Security-Policy-Report-Only" (una línea) si algo legítimo se rompe.
+function cspEnforce(nonce: string): string {
   // D-i: orígenes auditados — self, imágenes https/data/blob, YouTube embeds visor CV, fonts Google
   return [
     "default-src 'self'",
@@ -39,12 +42,13 @@ function cspReportOnly(nonce: string): string {
     "base-uri 'self'",
     "form-action 'self'",
     "frame-ancestors 'none'",
+    "report-uri /api/csp-report",
   ].join("; ")
 }
 
 export default (auth as any)((request: any) => {
   const nonce = generarNonce()
-  const csp = cspReportOnly(nonce)
+  const csp = cspEnforce(nonce)
   // Propaga nonce a downstream (handlers/server components) vía request headers
   try {
     request.headers.set("x-nonce", nonce)
@@ -73,7 +77,9 @@ export default (auth as any)((request: any) => {
     res.headers.set("x-nonce", nonce)
     res.headers.set("x-csp-nonce", nonce)
   } catch {}
-  res.headers.set("Content-Security-Policy-Report-Only", csp)
+  res.headers.set("Content-Security-Policy", csp)
+  // P5: enforcement activo. Si rompe algo legítimo, revertir a Report-Only
+  // cambiando este header (ver comentario en cspEnforce).
   // HSTS ya viene de next.config.mjs; CSP-RO es dinámico por request
   return res
 })
