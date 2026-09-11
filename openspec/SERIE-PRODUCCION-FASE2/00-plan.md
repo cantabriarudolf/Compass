@@ -10,7 +10,7 @@
 | P2 | Password policy + JWT 24h + invalidación de sesiones | HECHA | e45bcb2 |
 | P3 | 2FA/TOTP con Google Authenticator | HECHA | 6a9d205 |
 | P4 | Cifrado de datos sensibles en reposo (AES-256) | HECHA | 5efa23b |
-| P5 | Sentry + CSP enforcement | HECHA | <hash> |
+| P5 | Sentry + CSP enforcement | HECHA | 7a5bf36 |
 | P6 | Política de privacidad + derechos ARCO + cierre | pendiente | — |
 
 **MÁXIMO: 6 ventanas.**
@@ -62,4 +62,4 @@
 - [2026-09-09] P2 HECHA: Password policy + JWT 24h + invalidación de sesiones (tokenVersion). Commit e45bcb2.
 - [2026-09-10] P3 HECHA: 2FA/TOTP con Google Authenticator + backup codes. 6 rutas API, challenge JWE 5min, sesión Auth.js real al verificar. UI login 2FA diferida (solo API). Commit 6a9d205.
 - [2026-09-10] P4 HECHA: Cifrado AES-256-GCM en reposo. lib/crypto + extensión Prisma opt-in, rutas 2FA re-cableadas (secretos cifrados), script migración idempotente. Rollout global y blind index pendientes. Commit 5efa23b.
-- [2026-09-10] P5 HECHA: Sentry code-complete (pendiente DSN owner) + CSP en enforcement con report-uri. Fix time-bomb fechas test reservas. Commit <hash>.
+- [2026-09-10] P5 HECHA: Sentry code-complete (pendiente DSN owner) + CSP en enforcement con report-uri. Fix time-bomb fechas test reservas. Commit 7a5bf36.
