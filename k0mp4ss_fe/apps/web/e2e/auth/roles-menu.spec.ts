@@ -1,11 +1,11 @@
 // P1 — rp-menu-sesion: matriz rol×grupos via sesion real (union de membresias)
-// Login por FORM (fill email/password test1234) — storageStates llegan en P2.
+// Login por FORM (fill email/password Test1234!) — storageStates llegan en P2.
 // Verifica data real normalizada del sidebar (authz aliases).
 import { expect, test } from "@playwright/test"
 
 test.use({ storageState: { cookies: [], origins: [] } })
 
-const PASSWORD_TEST = "test1234"
+const PASSWORD_TEST = "Test1234!"
 
 const GRUPOS = [
   "Inicio",

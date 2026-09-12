@@ -1,11 +1,11 @@
 // Login real contra /ingresar (NextAuth credentials) — multi-cuenta P2.
-// Para cada uno de los 5 roles del seed (PASSWORD_TEST=test1234) guarda
+// Para cada uno de los 5 roles del seed (PASSWORD_TEST=Test1234!) guarda
 // e2e/.auth/<rol>.json via test.use({ storageState }) por spec.
 // Si la sesión previa sigue vigente, /ingresar redirige a /admin → se guarda
 // el storageState existente sin reloggear. Patrón sin 5 proyectos en config.
 import { expect, test as setup } from "@playwright/test"
 
-const PASSWORD_TEST = "test1234"
+const PASSWORD_TEST = "Test1234!"
 
 type Cuenta = { email: string; archivo: string }
 
