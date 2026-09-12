@@ -17,16 +17,16 @@
 - [x] 2.3 Reemplazar el bloque con `stamp` compartido (emisión GC: `egc`/`cob` con idx) por `generarId("egc")` / `generarId("cob", idx)`.
 - [x] 2.4 Reemplazar `bono-${Date.now()}-${idx}-...` por `generarId("bono", idx)`.
 - [x] 2.5 Importar `generarId` en `store.ts`; verificar que no queden ocurrencias del patrón salvo el `codigoVerificacion` CT (no es ID).
-- [ ] 2.6 Reemplazar el patrón en `app/operaciones/{reservas,proveedores}/page.tsx` — BLOQUEADO: fuera de las superficies de edición autorizadas; escalado al owner.
+- [x] 2.6 Reemplazar el patrón en `app/operaciones/{reservas,proveedores}/page.tsx` — HECHO por owner (`generarId("ra-el"/"ra-rs"/"prov"/"mant"/"vt")`).
 
 ## 3. Tarea 3 — Lint warnings
 
 - [x] 3.1 `test/qa-roadmap.test.ts`: eliminar `...rest` sin uso del mock de `readFileSync`.
-- [ ] 3.2 Los 11 warnings restantes (`proxy.ts` ×8, `e2e/crud/punto-cero.spec.ts` ×1, `scripts/fix-rut-seeds.cjs` ×2) — BLOQUEADO: archivos fuera de las superficies autorizadas; escalado al owner.
+- [x] 3.2 Los 11 warnings restantes (`proxy.ts` ×8, `e2e/crud/punto-cero.spec.ts` ×1, `scripts/fix-rut-seeds.cjs` ×2) — HECHO por owner (más `auth.ts` ×2: import sin uso + `as any`→`JWT`).
 
 ## 4. Tarea 4 — Validación final
 
 - [x] 4.1 `npx tsc --noEmit` → 0 errores.
 - [x] 4.2 `npm test` → suite unit completa verde (517 previos + nuevos).
-- [ ] 4.3 `npm run lint` → 0 warnings (parcial: 11 warnings fuera de superficie pendientes de decisión del owner).
+- [x] 4.3 `npm run lint` → 0 warnings.
 - [x] 4.4 `openspec validate --all` → sin fallos.

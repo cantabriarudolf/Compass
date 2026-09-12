@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { generarId } from "@/lib/id-utils"
 import { useCompassStore, useStoreRehydrated } from "@/lib/store"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import { Input } from "@workspace/ui/components/input"
@@ -136,7 +137,7 @@ export default function ReservasPage() {
     if (!formEl) return
     setError(null)
     const payload: ElementoRA = {
-      id: editandoElId ?? `ra-el-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+      id: editandoElId ?? generarId("ra-el"),
       nombre: formEl.nombre,
       tipo: formEl.tipo,
       franja: formEl.franja,
@@ -167,7 +168,7 @@ export default function ReservasPage() {
     }
     const r = useCompassStore.getState().saveReservaRA({
       // eslint-disable-next-line react-hooks/purity -- id generado en primer render del formulario nuevo; estable hasta guardar (avance 2026-09-02)
-      id: `ra-rs-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+      id: generarId("ra-rs"),
       folio: "",
       elementoId: elementoSeleccionado.id,
       solicitantePersonaId: rPersonaId,

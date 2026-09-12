@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { generarId } from "@/lib/id-utils"
 import { useCompassStore, useStoreRehydrated } from "@/lib/store"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import { Input } from "@workspace/ui/components/input"
@@ -87,7 +88,7 @@ export default function ProveedoresPage() {
       return
     }
     const r = saveProveedorPE({
-      id: editandoProvId ?? `prov-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      id: editandoProvId ?? generarId("prov"),
       rut: formProv.rut.trim(),
       nombre: formProv.nombre.trim(),
       rubro: formProv.rubro.trim(),
@@ -114,7 +115,7 @@ export default function ProveedoresPage() {
       return
     }
     const r = saveMantencionPE({
-      id: editandoMantId ?? `mant-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      id: editandoMantId ?? generarId("mant"),
       proveedorId: formMant.proveedorId,
       descripcion: formMant.descripcion.trim(),
       periodicidadMeses: Math.max(1, Number(formMant.periodicidadMeses) || 1),
@@ -139,7 +140,7 @@ export default function ProveedoresPage() {
       return
     }
     const visita: VisitaTecnicaPE = {
-      id: `vt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      id: generarId("vt"),
       proveedorId: formVisita.proveedorId,
       mantencionId: formVisita.mantencionId || undefined,
       tecnicoNombre: formVisita.tecnicoNombre.trim(),
