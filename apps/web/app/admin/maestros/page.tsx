@@ -91,7 +91,6 @@ export default function MaestrosPage() {
 
 function MaestroTable({ title, data, onAdd, onUpdate, onToggle, fullWidth, isStatusTable }: any) {
   const [editingItem, setEditingItem] = React.useState<any>(null)
-  const [isDialogOpen, setIsDialogOpen] = React.useState(false)
   const [name, setName] = React.useState("")
   const [color, setColor] = React.useState("secondary")
 
