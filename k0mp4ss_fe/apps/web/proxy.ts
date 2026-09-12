@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
 import NextAuth from "next-auth"
 import { authConfig } from "@/lib/auth.config"
 
@@ -9,9 +9,16 @@ const { auth } = NextAuth({ ...authConfig })
 
 const RUTAS_PUBLICAS = ["/ingresar", "/api/auth"]
 
+type GlobalConCripto = typeof globalThis & {
+  crypto?: {
+    randomUUID?: () => string
+    getRandomValues?: (arreglo: Uint8Array) => Uint8Array
+  }
+}
+
 function generarNonce(): string {
   try {
-    const g: any = globalThis as any
+    const g = globalThis as GlobalConCripto
     if (g.crypto?.randomUUID) return g.crypto.randomUUID().replace(/-/g, "")
     if (g.crypto?.getRandomValues) {
       const a = new Uint8Array(16)
@@ -20,8 +27,10 @@ function generarNonce(): string {
       for (const b of a) s += b.toString(16).padStart(2, "0")
       return s
     }
-  } catch {}
-  return Math.random().toString(36).slice(2, 18) + Math.random().toString(36).slice(2, 18)
+      } catch {
+        // Sin cripto disponible (entorno mínimo): se usa Math.random abajo.
+      }
+      return Math.random().toString(36).slice(2, 18) + Math.random().toString(36).slice(2, 18)
 }
 
 // P5 SERIE-PRODUCCION-FASE2: CSP en ENFORCE (antes Report-Only D-i).
@@ -46,17 +55,24 @@ function cspEnforce(nonce: string): string {
   ].join("; ")
 }
 
-export default (auth as any)((request: any) => {
+type PeticionConAuth = NextRequest & { auth?: unknown }
+
+// SAFETY: el tipo de `auth` de Auth.js no expone el envoltorio de forma
+// utilizable en el edge; el cast solo fija la firma local
+// (request con auth opcional) sin cambiar el comportamiento en runtime.
+export default (auth as unknown as (manejador: (req: PeticionConAuth) => NextResponse) => (req: NextRequest, evento?: unknown) => Response | Promise<Response>)((request: PeticionConAuth) => {
   const nonce = generarNonce()
   const csp = cspEnforce(nonce)
   // Propaga nonce a downstream (handlers/server components) vía request headers
   try {
     request.headers.set("x-nonce", nonce)
     request.headers.set("x-csp-nonce", nonce)
-  } catch {}
+  } catch {
+    // Headers de solo lectura en este runtime: se continúa sin nonce.
+  }
 
   const { pathname } = request.nextUrl
-  let res: any
+  let res: NextResponse
   if (RUTAS_PUBLICAS.some((ruta) => pathname === ruta || pathname.startsWith(`${ruta}/`))) {
     res = NextResponse.next()
   } else {
@@ -76,7 +92,9 @@ export default (auth as any)((request: any) => {
   try {
     res.headers.set("x-nonce", nonce)
     res.headers.set("x-csp-nonce", nonce)
-  } catch {}
+  } catch {
+    // Respuesta inmutable en este runtime: se continúa sin inyectar nonce.
+  }
   res.headers.set("Content-Security-Policy", csp)
   // P5: enforcement activo. Si rompe algo legítimo, revertir a Report-Only
   // cambiando este header (ver comentario en cspEnforce).

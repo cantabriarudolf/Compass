@@ -1,3 +1,4 @@
+import type { JWT } from "next-auth/jwt"
 import NextAuth, { CredentialsSignin } from "next-auth"
 import Credentials from "next-auth/providers/credentials"
 import bcrypt from "bcryptjs"
@@ -5,7 +6,7 @@ import { prisma } from "@/lib/prisma"
 import { authConfig } from "@/lib/auth.config"
 import { AdapterPrismaCompass } from "@/lib/auth-adapter"
 import { excedeIntentos, registrarFallo, limpiarIntentos } from "@/lib/rate-limit"
-import { validarPassword, MENSAJE_PASSWORD_INVALIDA } from "@/lib/password-policy"
+import { validarPassword } from "@/lib/password-policy"
 
 /** Credenciales inválidas (password errónea, usuario inexistente/inactivo/sin hash). Mensaje genérico para no enumerar emails. */
 export class CredencialesInvalidas extends CredentialsSignin {
@@ -133,7 +134,7 @@ export const { handlers, auth, signIn, signOut }: any = NextAuth({
             if (usuario && typeof usuario.tokenVersion === "number") {
               if (token.tokenVersion !== undefined && token.tokenVersion !== usuario.tokenVersion) {
                 // Sesión invalidada — retornar token vacío para forzar re-login
-                return { sub: "" } as any
+                return { sub: "" } as JWT
               }
               token.tokenVersion = usuario.tokenVersion
             }

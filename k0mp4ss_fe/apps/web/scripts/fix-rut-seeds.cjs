@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-require-imports, no-undef -- script CJS legacy: require es lo correcto aquí */
 const fs = require("fs")
 
 function dv(cuerpo) {

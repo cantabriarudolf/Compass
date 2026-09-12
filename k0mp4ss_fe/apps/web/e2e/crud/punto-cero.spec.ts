@@ -37,7 +37,6 @@ test.describe("Punto Cero 2023-2024 — FI histórico read-only", () => {
 
     // UI intenta mostrar saldo $0 y apertura; si no, se valida vía store (criterio orquestador)
     const ccCardText = await page.getByText("Cuenta Corriente").first().evaluate((el) => {
-      const card = el.closest("div")?.parentElement?.textContent ?? el.textContent ?? ""
       // fallback: buscar card contenedora
       let node: HTMLElement | null = el as HTMLElement
       for (let i = 0; i < 6 && node; i++) {
