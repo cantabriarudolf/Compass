@@ -216,6 +216,13 @@ export const ExtensionGobernanzaSchema = z.object({
   firmaDigital: z.string().optional(),
   fechaAsuncion: FechaISOSchema,
 })
+.refine(
+  (e) => !e.firmaDigital || (!/^data:/i.test(e.firmaDigital) && !/^blob:/i.test(e.firmaDigital)),
+  {
+    message: "Media por referencia (D1): la firma debe ser una URL, no contenido embebido.",
+    path: ["firmaDigital"],
+  }
+)
 
 export const ROLES_PERSONA = [
   "propietario",
