@@ -16,10 +16,7 @@ function dv(cuerpo) {
   return String(v)
 }
 
-const archivos = [
-  "data/comunidad/personas.ts",
-  "data/admin/configuracion.ts",
-]
+const archivos = ["data/comunidad/personas.ts", "data/admin/configuracion.ts"]
 
 for (const archivo of archivos) {
   let contenido = fs.readFileSync(archivo, "utf8")

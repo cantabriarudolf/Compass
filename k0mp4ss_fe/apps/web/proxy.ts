@@ -17,25 +17,30 @@ type GlobalConCripto = typeof globalThis & {
 }
 
 function generarNonce(): string {
-  try {
-    const g = globalThis as GlobalConCripto
-    if (g.crypto?.randomUUID) return g.crypto.randomUUID().replace(/-/g, "")
-    if (g.crypto?.getRandomValues) {
-      const a = new Uint8Array(16)
-      g.crypto.getRandomValues(a)
-      let s = ""
-      for (const b of a) s += b.toString(16).padStart(2, "0")
-      return s
-    }
-      } catch {
-        // Sin cripto disponible (entorno mínimo): se usa Math.random abajo.
-      }
-      return Math.random().toString(36).slice(2, 18) + Math.random().toString(36).slice(2, 18)
+  const g = globalThis as GlobalConCripto
+  if (g.crypto?.randomUUID) {
+    // randomUUID -> base64url (sin padding, URL-safe)
+    return g.crypto.randomUUID().replace(/-/g, "").replace(/=/g, "")
+  }
+  if (g.crypto?.getRandomValues) {
+    const a = new Uint8Array(16)
+    g.crypto.getRandomValues(a)
+    // base64url encoding
+    let s = ""
+    for (const b of a) s += String.fromCharCode(b)
+    return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "")
+  }
+  // Entorno sin Web Crypto (no esperado en producción): fallback determinístico
+  const arr = new Uint8Array(16)
+  for (let i = 0; i < 16; i++) arr[i] = Math.floor(Math.random() * 256)
+  let s = ""
+  for (const b of arr) s += String.fromCharCode(b)
+  return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "")
 }
 
-// P5 SERIE-PRODUCCION-FASE2: CSP en ENFORCE (antes Report-Only D-i).
-// REVERSIÓN: cambiar el header de abajo de vuelta a
-// "Content-Security-Policy-Report-Only" (una línea) si algo legítimo se rompe.
+// D-i: CSP en Report-Only mode. Nonce único por request via Web Crypto.
+// Plan de activación enforcement: openspec/changes/sg-predeploy-headers/design.md
+// (telemetría DevTools CSP violations, criterio 0 violations 7 días).
 function cspEnforce(nonce: string): string {
   // D-i: orígenes auditados — self, imágenes https/data/blob, YouTube embeds visor CV, fonts Google
   return [
@@ -60,7 +65,11 @@ type PeticionConAuth = NextRequest & { auth?: unknown }
 // SAFETY: el tipo de `auth` de Auth.js no expone el envoltorio de forma
 // utilizable en el edge; el cast solo fija la firma local
 // (request con auth opcional) sin cambiar el comportamiento en runtime.
-export default (auth as unknown as (manejador: (req: PeticionConAuth) => NextResponse) => (req: NextRequest, evento?: unknown) => Response | Promise<Response>)((request: PeticionConAuth) => {
+export default (
+  auth as unknown as (
+    manejador: (req: PeticionConAuth) => NextResponse
+  ) => (req: NextRequest, evento?: unknown) => Response | Promise<Response>
+)((request: PeticionConAuth) => {
   const nonce = generarNonce()
   const csp = cspEnforce(nonce)
   // Propaga nonce a downstream (handlers/server components) vía request headers
@@ -73,10 +82,15 @@ export default (auth as unknown as (manejador: (req: PeticionConAuth) => NextRes
 
   const { pathname } = request.nextUrl
   let res: NextResponse
-  if (RUTAS_PUBLICAS.some((ruta) => pathname === ruta || pathname.startsWith(`${ruta}/`))) {
+  if (
+    RUTAS_PUBLICAS.some(
+      (ruta) => pathname === ruta || pathname.startsWith(`${ruta}/`)
+    )
+  ) {
     res = NextResponse.next()
   } else {
-    const protegida = pathname.startsWith("/admin") || pathname.startsWith("/api")
+    const protegida =
+      pathname.startsWith("/admin") || pathname.startsWith("/api")
     if (!protegida) res = NextResponse.next()
     else if (request.auth) res = NextResponse.next()
     else if (pathname.startsWith("/api")) {
@@ -95,9 +109,9 @@ export default (auth as unknown as (manejador: (req: PeticionConAuth) => NextRes
   } catch {
     // Respuesta inmutable en este runtime: se continúa sin inyectar nonce.
   }
-  res.headers.set("Content-Security-Policy", csp)
-  // P5: enforcement activo. Si rompe algo legítimo, revertir a Report-Only
-  // cambiando este header (ver comentario en cspEnforce).
+  res.headers.set("Content-Security-Policy-Report-Only", csp)
+  // D-i: Report-Only mode. Plan de activación enforcement documentado en
+  // openspec/changes/sg-predeploy-headers/design.md (telemetría, 0 violations 7 días).
   // HSTS ya viene de next.config.mjs; CSP-RO es dinámico por request
   return res
 })

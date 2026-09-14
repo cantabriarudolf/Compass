@@ -793,6 +793,7 @@ function sanitizarColecciones(prev: Partial<CompassData> | undefined | null): Pa
     const maestrosSaneados: Record<string, unknown> = {}
     let maestrosChanged = false
     for (const key of Object.keys(MAESTRO_SCHEMAS) as ClaveMaestro[]) {
+      // SAFETY: prev.maestros is Record<string, unknown> at runtime; narrow for indexed access
       const valor = prev.maestros
         ? (prev.maestros as unknown as Record<string, unknown>)[key]
         : undefined
@@ -836,9 +837,12 @@ function repararDocumentos(result: Partial<CompassData>): Partial<CompassData> {
   }
   let configuracion = result.configuracion
   if (configuracion) {
+    // Soportar tanto rutCondominio (legacy) como rutComunidad (actual)
+    const rutValue = (configuracion as Record<string, unknown>).rutCondominio
+      ?? configuracion.rutComunidad
     configuracion = {
       ...configuracion,
-      rutCondominio: repararRut(configuracion.rutCondominio),
+      rutComunidad: rutValue ? repararRut(rutValue as string) : (configuracion.rutComunidad ?? undefined),
       rutAdministrador: repararRut(configuracion.rutAdministrador),
     }
   }
@@ -930,9 +934,19 @@ export const useCompassStore = create<CompassStore>()(
       // --- EF: Unidades ---
       saveUnidad: (unidad) => {
         if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
-        const validacion = validarConEsquema(UnidadSchema, unidad)
-        if (!validacion.ok) return validacion
-        set(s => ({ unidades: upsert(s.unidades, validacion.data) }))
+            const validacion = validarConEsquema(UnidadSchema, unidad)
+            if (!validacion.ok) return validacion
+            // RG escritura: validar FKs
+            if (!get().microSectores.some((m) => m.id === unidad.microSectorId)) {
+              return { ok: false, error: "microSectorId no existe en microSectores." }
+            }
+            if (!get().tiposUnidad.some((t) => t.id === unidad.tipoUnidadId)) {
+              return { ok: false, error: "tipoUnidadId no existe en tiposUnidad." }
+            }
+            if (!get().maestros.estadosOcupacion.some((e) => e.id === unidad.estadoId)) {
+              return { ok: false, error: "estadoId no existe en maestros.estadosOcupacion." }
+            }
+            set(s => ({ unidades: upsert(s.unidades, validacion.data) }))
         return { ok: true }
       },
 
@@ -981,6 +995,16 @@ export const useCompassStore = create<CompassStore>()(
             }
           }
         }
+        // MP: validar condicionesEspecialesIds subset de maestros.condicionesEspeciales
+        const conds = validacion.data.condicionesEspecialesIds ?? []
+        if (conds.length > 0) {
+          const condMaestros = get().maestros.condicionesEspeciales.map(c => c.id)
+          for (const cid of conds) {
+            if (!condMaestros.includes(cid)) {
+              return { ok: false, error: `condicionEspecial ${cid} no existe.` }
+            }
+          }
+        }
         const anterior = get().personas.find(p => p.id === persona.id)
         set(s => ({ personas: upsert(s.personas, validacion.data) }))
         // AD: carga/reemplazo de firma digitalizada de directiva queda auditado.
@@ -1017,8 +1041,12 @@ export const useCompassStore = create<CompassStore>()(
         if (!get().hasHydrated) return { ok: false, error: "El almacenamiento aún se está hidratando. Intenta de nuevo." }
         const validacion = validarConEsquema(VinculoUnidadSchema, vinculo)
         if (!validacion.ok) return validacion
-        const persona = get().personas.find(p => p.id === vinculo.personaId)
-        if (!persona) return { ok: false, error: "La persona no existe en el Maestro de Personas." }
+            const persona = get().personas.find(p => p.id === vinculo.personaId)
+            if (!persona) return { ok: false, error: "La persona no existe en el Maestro de Personas." }
+            // RG escritura: validar FK unidadId existe
+            if (!get().unidades.some(u => u.id === vinculo.unidadId)) {
+              return { ok: false, error: "unidadId no existe en unidades." }
+            }
         if (persona.estadoCuenta === "inactiva") {
           return { ok: false, error: "No se puede vincular: la persona está marcada como inactiva en el Maestro de Personas." }
         }
@@ -1192,6 +1220,7 @@ export const useCompassStore = create<CompassStore>()(
         // PE: maestros legales referenciados por fichas de trabajadores.
         if (["afps", "previsionesSalud", "asignacionFamiliar", "mutualesCajas", "bancos"].includes(key)) {
           const campo = { afps: "afpId", previsionesSalud: "saludId", asignacionFamiliar: "asignacionFamiliarId", mutualesCajas: "mutualidadId", bancos: "bancoId" }[key as "afps" | "previsionesSalud" | "asignacionFamiliar" | "mutualesCajas" | "bancos"]!
+          // SAFETY: datosLaborales is ExtensionLaboral | undefined; cast to access dynamic field
           const enUso = get().personas.filter(p => (p.datosLaborales as unknown as Record<string, string | undefined> | undefined)?.[campo] === id)
           if (enUso.length > 0) {
             return { ok: false, error: `No se puede eliminar el registro del maestro "${key}": ${enUso.length} ficha(s) de trabajador lo referencian.` }
@@ -4735,20 +4764,25 @@ export const useCompassStore = create<CompassStore>()(
           // TST-002: mergeById reconstruye `unidades` desde el persistido crudo y
           // deshacía la conversión estado→estadoId de la rama <3; se reaplica
           // migrarEstadoUnidades sobre la fusión resultante.
+          // SAFETY: prev/seed arrays contain objects with id; narrow to {id:string}[] for mergeById
           const unidadesFusionadas = mergeById(
             (prev.unidades ?? []) as { id: string }[],
             seed.unidades as unknown as { id: string }[]
           )
-          // Limpiar keys legacy v7 que ya no existen en CompassData
+          // SAFETY: prev may have legacy keys; cast to Record for safe key deletion
           const prevAny = prev as unknown as Record<string, unknown>
           result = {
             ...result,
+            // SAFETY: same pattern for macro/micro sectores
             macroSectores: mergeById((prev.macroSectores ?? []) as { id: string }[], seed.macroSectores as unknown as { id: string }[]) as never,
+            // SAFETY: same pattern for micro sectores
             microSectores: mergeById((prev.microSectores ?? []) as { id: string }[], seed.microSectores as unknown as { id: string }[]) as never,
+            // SAFETY: unidadesFusionadas contains Unidad-compatible objects
             unidades: migrarEstadoUnidades(unidadesFusionadas as unknown as Unidad[]) as never,
             maestros: {
               ...seed.maestros,
               ...(prev.maestros ?? {}),
+              // SAFETY: maestro arrays contain objects with id
               categoriasMacro: mergeById(
                 (prev.maestros?.categoriasMacro ?? []) as { id: string }[],
                 seed.maestros.categoriasMacro as unknown as { id: string }[]
@@ -4756,7 +4790,9 @@ export const useCompassStore = create<CompassStore>()(
             } as never,
           }
           // Eliminar estacionamientos legacy del persistido si existe
+          // SAFETY: result is Partial<CompassData>; cast to delete legacy key
           if (prevAny["estacionamientos"] !== undefined) delete (result as unknown as Record<string, unknown>)["estacionamientos"]
+          // SAFETY: result.maestros is Record<string, unknown> at runtime
           const maestrosAny = (result.maestros ?? {}) as unknown as Record<string, unknown>
           if (maestrosAny["ubicacionesEstacionamiento"] !== undefined) delete maestrosAny["ubicacionesEstacionamiento"]
         }

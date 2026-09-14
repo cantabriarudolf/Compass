@@ -11,7 +11,9 @@ test.describe("Ingresar", () => {
     await page.getByRole("button", { name: "Ingresar" }).click()
     // Scoping al form: el route announcer de Next (#__next-route-announcer__)
     // también expone role=alert y provoca strict mode violation.
-    await expect(page.locator("form").getByRole("alert")).toContainText("Credenciales inválidas.")
+    await expect(page.locator("form").getByRole("alert")).toContainText(
+      "Credenciales inválidas."
+    )
   })
 
   test("login exitoso redirige a /admin", async ({ page }) => {
@@ -22,7 +24,9 @@ test.describe("Ingresar", () => {
     await expect(page).toHaveURL(/\/admin/)
   })
 
-  test("usuario sin sesión que visita /admin es redirigido a /ingresar", async ({ page }) => {
+  test("usuario sin sesión que visita /admin es redirigido a /ingresar", async ({
+    page,
+  }) => {
     await page.goto("/admin")
     await expect(page).toHaveURL(/\/ingresar/)
   })

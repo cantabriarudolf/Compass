@@ -20,17 +20,27 @@ export const FechaISOSchema = z
 
 export const TarifaHistoricaSchema = z.object({
   id: IdEntidadSchema,
-  monto: z.number({ required_error: "El monto es obligatorio." }).min(0, "El monto no puede ser negativo."),
+  monto: z
+    .number({ required_error: "El monto es obligatorio." })
+    .min(0, "El monto no puede ser negativo."),
   fechaVigencia: FechaISOSchema,
   creadoEn: FechaISOSchema,
 })
 
 export const TipoUnidadSchema = z.object({
   id: IdEntidadSchema,
-  nombre: z.string({ required_error: "El nombre es obligatorio." }).min(1, "El nombre es obligatorio."),
-  categoria: z.string({ required_error: "La categoría es obligatoria." }).min(1, "La categoría es obligatoria."),
-  metraje: z.number({ required_error: "El metraje es obligatorio." }).min(0, "El metraje no puede ser negativo."),
-  montoBaseGc: z.number({ required_error: "El monto base GC es obligatorio." }).min(0, "El monto base GC no puede ser negativo."),
+  nombre: z
+    .string({ required_error: "El nombre es obligatorio." })
+    .min(1, "El nombre es obligatorio."),
+  categoria: z
+    .string({ required_error: "La categoría es obligatoria." })
+    .min(1, "La categoría es obligatoria."),
+  metraje: z
+    .number({ required_error: "El metraje es obligatorio." })
+    .min(0, "El metraje no puede ser negativo."),
+  montoBaseGc: z
+    .number({ required_error: "El monto base GC es obligatorio." })
+    .min(0, "El monto base GC no puede ser negativo."),
   descripcion: z.string().optional(),
   activo: z.boolean({ required_error: "El estado activo es obligatorio." }),
   historialTarifas: z.array(TarifaHistoricaSchema),
@@ -38,16 +48,24 @@ export const TipoUnidadSchema = z.object({
 
 export const MacroSectorSchema = z.object({
   id: IdEntidadSchema,
-  nombre: z.string({ required_error: "El nombre es obligatorio." }).min(1, "El nombre es obligatorio."),
-  etiqueta: z.string({ required_error: "La etiqueta es obligatoria." }).min(1, "La etiqueta es obligatoria."),
+  nombre: z
+    .string({ required_error: "El nombre es obligatorio." })
+    .min(1, "El nombre es obligatorio."),
+  etiqueta: z
+    .string({ required_error: "La etiqueta es obligatoria." })
+    .min(1, "La etiqueta es obligatoria."),
   descripcion: z.string().optional(),
 })
 
 export const MicroSectorSchema = z.object({
   id: IdEntidadSchema,
   macroSectorId: IdEntidadSchema,
-  nombre: z.string({ required_error: "El nombre es obligatorio." }).min(1, "El nombre es obligatorio."),
-  etiqueta: z.string({ required_error: "La etiqueta es obligatoria." }).min(1, "La etiqueta es obligatoria."),
+  nombre: z
+    .string({ required_error: "El nombre es obligatorio." })
+    .min(1, "El nombre es obligatorio."),
+  etiqueta: z
+    .string({ required_error: "La etiqueta es obligatoria." })
+    .min(1, "La etiqueta es obligatoria."),
 })
 
 const ServicioMedidorSchema = z.object({
@@ -64,11 +82,19 @@ export const ServiciosUnidadSchema = z.object({
 export const UnidadSchema = z.object({
   id: IdEntidadSchema,
   microSectorId: IdEntidadSchema,
-  numero: z.string({ required_error: "El número de unidad es obligatorio." }).min(1, "El número de unidad es obligatorio."),
-  etiqueta: z.string({ required_error: "La categoría de la unidad es obligatoria." }).min(1, "La categoría de la unidad es obligatoria."),
+  numero: z
+    .string({ required_error: "El número de unidad es obligatorio." })
+    .min(1, "El número de unidad es obligatorio."),
+  etiqueta: z
+    .string({ required_error: "La categoría de la unidad es obligatoria." })
+    .min(1, "La categoría de la unidad es obligatoria."),
   tipoUnidadId: IdEntidadSchema,
-  metraje: z.number({ required_error: "El metraje es obligatorio." }).min(0, "El metraje no puede ser negativo."),
-  prorrateo: z.number({ required_error: "El prorrateo es obligatorio." }).min(0, "El prorrateo no puede ser negativo."),
+  metraje: z
+    .number({ required_error: "El metraje es obligatorio." })
+    .min(0, "El metraje no puede ser negativo."),
+  prorrateo: z
+    .number({ required_error: "El prorrateo es obligatorio." })
+    .min(0, "El prorrateo no puede ser negativo."),
   rolSii: z.string(),
   estadoId: IdEntidadSchema,
   servicios: ServiciosUnidadSchema.default({}),
@@ -76,7 +102,12 @@ export const UnidadSchema = z.object({
 
 // --- Comunidad: Vínculos (VU) y Personas (MP) ---
 
-export const RolesVinculo = ["propietario", "arrendatario", "copropietario", "ocupante"] as const
+export const RolesVinculo = [
+  "propietario",
+  "arrendatario",
+  "copropietario",
+  "ocupante",
+] as const
 export const RolVinculoSchema = z.enum(RolesVinculo)
 
 export const VinculoUnidadSchema = z.object({
@@ -88,7 +119,9 @@ export const VinculoUnidadSchema = z.object({
   fechaFin: FechaISOSchema.optional(),
   // Trigger Inmobiliario (PI): referencia a estadosInmobiliarios (MA)
   estadoOcupacionPropiedad: z.string().min(1).optional(),
-  permiteVerFinanzas: z.boolean({ required_error: "El flag de privacidad financiera es obligatorio." }),
+  permiteVerFinanzas: z.boolean({
+    required_error: "El flag de privacidad financiera es obligatorio.",
+  }),
   // Cierre automático de tramo anterior (solo propietario/arrendatario)
   cerrarAnterior: z.boolean().optional(),
 })
@@ -113,32 +146,68 @@ export const ExtensionLaboralSchema = z.object({
   tipoCuenta: z.enum(["corriente", "vista", "ahorro"]).optional(),
   seguroComplementario: z.string().optional(),
   apv: z.boolean().optional(),
-  fichaMedica: z.object({
-    medicamentos: z.string().optional(),
-    alergias: z.string().optional(),
-    condiciones: z.string().optional(),
-  }).optional(),
-  contactosEmergencia: z.array(z.object({
-    id: IdEntidadSchema,
-    nombre: z.string({ required_error: "El nombre del contacto es obligatorio." }).min(1, "El nombre del contacto es obligatorio."),
-    telefono: z.string({ required_error: "El teléfono del contacto es obligatorio." }).min(1, "El teléfono del contacto es obligatorio."),
-    relacion: z.string().optional(),
-  })).optional(),
-  jornadaBaseHoras: z.number({ invalid_type_error: "La jornada base debe ser un número." }).positive("La jornada base debe ser mayor a cero.").max(80, "La jornada base no puede superar 80 horas.").optional(),
+  fichaMedica: z
+    .object({
+      medicamentos: z.string().optional(),
+      alergias: z.string().optional(),
+      condiciones: z.string().optional(),
+    })
+    .optional(),
+  contactosEmergencia: z
+    .array(
+      z.object({
+        id: IdEntidadSchema,
+        nombre: z
+          .string({ required_error: "El nombre del contacto es obligatorio." })
+          .min(1, "El nombre del contacto es obligatorio."),
+        telefono: z
+          .string({
+            required_error: "El teléfono del contacto es obligatorio.",
+          })
+          .min(1, "El teléfono del contacto es obligatorio."),
+        relacion: z.string().optional(),
+      })
+    )
+    .optional(),
+  jornadaBaseHoras: z
+    .number({ invalid_type_error: "La jornada base debe ser un número." })
+    .positive("La jornada base debe ser mayor a cero.")
+    .max(80, "La jornada base no puede superar 80 horas.")
+    .optional(),
   // PL (ventana 8): renta base contractual usada por el cálculo de liquidaciones.
-  sueldoBase: z.number().min(0, "El sueldo base no puede ser negativo.").optional(),
-  horasExtras: z.array(z.object({
-    id: IdEntidadSchema,
-    fecha: FechaISOSchema,
-    horas: z.number({ invalid_type_error: "Las horas deben ser un número." }).positive("Las horas extra deben ser mayores a cero."),
-    motivo: z.string({ required_error: "El motivo de la hora extra es obligatorio." }).min(1, "El motivo de la hora extra es obligatorio."),
-  })).optional(),
-  evaluaciones: z.array(z.object({
-    id: IdEntidadSchema,
-    fecha: FechaISOSchema,
-    puntaje: z.number().min(1, "El puntaje va de 1 a 7.").max(7, "El puntaje va de 1 a 7."),
-    comentarios: z.string().optional(),
-  })).optional(),
+  sueldoBase: z
+    .number()
+    .min(0, "El sueldo base no puede ser negativo.")
+    .optional(),
+  horasExtras: z
+    .array(
+      z.object({
+        id: IdEntidadSchema,
+        fecha: FechaISOSchema,
+        horas: z
+          .number({ invalid_type_error: "Las horas deben ser un número." })
+          .positive("Las horas extra deben ser mayores a cero."),
+        motivo: z
+          .string({
+            required_error: "El motivo de la hora extra es obligatorio.",
+          })
+          .min(1, "El motivo de la hora extra es obligatorio."),
+      })
+    )
+    .optional(),
+  evaluaciones: z
+    .array(
+      z.object({
+        id: IdEntidadSchema,
+        fecha: FechaISOSchema,
+        puntaje: z
+          .number()
+          .min(1, "El puntaje va de 1 a 7.")
+          .max(7, "El puntaje va de 1 a 7."),
+        comentarios: z.string().optional(),
+      })
+    )
+    .optional(),
 })
 
 export const ExtensionGobernanzaSchema = z.object({
@@ -148,7 +217,13 @@ export const ExtensionGobernanzaSchema = z.object({
   fechaAsuncion: FechaISOSchema,
 })
 
-export const ROLES_PERSONA = ["propietario", "residente", "personal", "directiva", "contratista"] as const
+export const ROLES_PERSONA = [
+  "propietario",
+  "residente",
+  "personal",
+  "directiva",
+  "contratista",
+] as const
 
 // --- Portal Inmobiliario (PI) ---
 
@@ -162,7 +237,8 @@ export const ImagenReferenciaSchema = z.object({
     .min(1, "La URL de la imagen es obligatoria.")
     .max(2048, "La URL excede el largo permitido.")
     .refine((valor) => !/^data:/i.test(valor) && !/^blob:/i.test(valor), {
-      message: "Media por referencia: no se permiten data-URL ni Blob embebidos (D1).",
+      message:
+        "Media por referencia: no se permiten data-URL ni Blob embebidos (D1).",
     }),
 })
 
@@ -172,13 +248,19 @@ export const PublicacionPortalSchema = z.object({
   id: IdEntidadSchema,
   unidadId: IdEntidadSchema,
   operacion: OperacionPortalSchema,
-  precio: z.number({ required_error: "El precio es obligatorio." }).min(0, "El precio no puede ser negativo."),
+  precio: z
+    .number({ required_error: "El precio es obligatorio." })
+    .min(0, "El precio no puede ser negativo."),
   moneda: z.enum(["CLP", "UF"]).optional(),
   dormitorios: z.number().int().min(0).optional(),
   banos: z.number().int().min(0).optional(),
   etiquetaEstado: z.string().optional(),
   descripcion: z.string().optional(),
-  urlMapa: z.string().url("La URL del mapa no es válida.").or(z.literal("")).optional(),
+  urlMapa: z
+    .string()
+    .url("La URL del mapa no es válida.")
+    .or(z.literal(""))
+    .optional(),
   condicionesContractuales: z.string().optional(),
   imagenes: z.array(ImagenReferenciaSchema),
   activa: z.boolean({ required_error: "El estado activo es obligatorio." }),
@@ -189,7 +271,9 @@ export const LeadPortalSchema = z.object({
   id: IdEntidadSchema,
   publicacionId: IdEntidadSchema,
   nombreContacto: z.string().min(1, "El nombre de contacto es obligatorio."),
-  contacto: z.string().min(1, "El contacto (teléfono o correo) es obligatorio."),
+  contacto: z
+    .string()
+    .min(1, "El contacto (teléfono o correo) es obligatorio."),
   mensaje: z.string().optional(),
   fecha: FechaISOSchema,
   atendido: z.boolean({ required_error: "El estado atendido es obligatorio." }),
@@ -198,7 +282,13 @@ export const LeadPortalSchema = z.object({
 // D3 (notificaciones simuladas): bandeja in-app con canal email_simulado.
 export const NotificacionSchema = z.object({
   id: IdEntidadSchema,
-  destinatarioRol: z.enum(["administracion", "propietario", "residente", "directiva", "personal"]),
+  destinatarioRol: z.enum([
+    "administracion",
+    "propietario",
+    "residente",
+    "directiva",
+    "personal",
+  ]),
   destinatarioPersonaId: z.string().optional(),
   asunto: z.string().min(1, "El asunto es obligatorio."),
   cuerpo: z.string().min(1, "El cuerpo es obligatorio."),
@@ -210,17 +300,29 @@ export const NotificacionSchema = z.object({
 
 // --- Comunicación con Vecinos (CO) ---
 
-export const CATEGORIAS_PLANTILLA_CO = ["comunidad", "urgente", "cobranza", "informacion", "onboarding"] as const
+export const CATEGORIAS_PLANTILLA_CO = [
+  "comunidad",
+  "urgente",
+  "cobranza",
+  "informacion",
+  "onboarding",
+] as const
 export const CategoriaPlantillaCOSchema = z.enum(CATEGORIAS_PLANTILLA_CO)
 
 // Maestro de Mensajes Prefijados: cuerpo soporta variables dinámicas
 // [Nombre_Usuario], [Nombre_Torre] y [Nombre_Comunidad] (se resuelven al enviar).
 export const PlantillaCOSchema = z.object({
   id: IdEntidadSchema,
-  nombre: z.string({ required_error: "El nombre de la plantilla es obligatorio." }).min(1, "El nombre de la plantilla es obligatorio."),
+  nombre: z
+    .string({ required_error: "El nombre de la plantilla es obligatorio." })
+    .min(1, "El nombre de la plantilla es obligatorio."),
   categoria: CategoriaPlantillaCOSchema,
-  asunto: z.string({ required_error: "El asunto es obligatorio." }).min(1, "El asunto es obligatorio."),
-  cuerpo: z.string({ required_error: "El cuerpo es obligatorio." }).min(1, "El cuerpo es obligatorio."),
+  asunto: z
+    .string({ required_error: "El asunto es obligatorio." })
+    .min(1, "El asunto es obligatorio."),
+  cuerpo: z
+    .string({ required_error: "El cuerpo es obligatorio." })
+    .min(1, "El cuerpo es obligatorio."),
 })
 
 export const DestinatarioEnvioSchema = z.object({
@@ -230,16 +332,31 @@ export const DestinatarioEnvioSchema = z.object({
 
 export const EnvioCOSchema = z.object({
   id: IdEntidadSchema,
-  asunto: z.string({ required_error: "El asunto es obligatorio." }).min(1, "El asunto es obligatorio."),
-  cuerpo: z.string({ required_error: "El cuerpo es obligatorio." }).min(1, "El cuerpo es obligatorio."),
+  asunto: z
+    .string({ required_error: "El asunto es obligatorio." })
+    .min(1, "El asunto es obligatorio."),
+  cuerpo: z
+    .string({ required_error: "El cuerpo es obligatorio." })
+    .min(1, "El cuerpo es obligatorio."),
   plantillaId: IdEntidadSchema.optional(),
-  destinatarios: z.array(DestinatarioEnvioSchema).min(1, "El envío requiere al menos un destinatario."),
+  destinatarios: z
+    .array(DestinatarioEnvioSchema)
+    .min(1, "El envío requiere al menos un destinatario."),
   fechaEnvio: FechaISOSchema,
   lecturas: z.array(IdEntidadSchema),
 })
 
-export const ClasificacionBuzonSchema = z.enum(["felicitacion", "sugerencia", "reclamo"])
-export const EstadoBuzonCOSchema = z.enum(["recibido", "en_gestion", "resuelto", "cerrado"])
+export const ClasificacionBuzonSchema = z.enum([
+  "felicitacion",
+  "sugerencia",
+  "reclamo",
+])
+export const EstadoBuzonCOSchema = z.enum([
+  "recibido",
+  "en_gestion",
+  "resuelto",
+  "cerrado",
+])
 
 export const RespuestaBuzonCOSchema = z.object({
   id: IdEntidadSchema,
@@ -253,14 +370,20 @@ export const RespuestaBuzonCOSchema = z.object({
 // → Resuelto → Cerrado). El workflow operativo vive en GE vía mensajeBuzonId.
 export const MensajeBuzonCOSchema = z.object({
   id: IdEntidadSchema,
-  folio: z.string({ required_error: "El folio de seguimiento es obligatorio." }).min(1, "El folio de seguimiento es obligatorio."),
+  folio: z
+    .string({ required_error: "El folio de seguimiento es obligatorio." })
+    .min(1, "El folio de seguimiento es obligatorio."),
   clasificacion: ClasificacionBuzonSchema,
   reportantePersonaId: IdEntidadSchema.optional(),
-  reportanteNombre: z.string().min(1, "El nombre del reportante es obligatorio."),
+  reportanteNombre: z
+    .string()
+    .min(1, "El nombre del reportante es obligatorio."),
   unidadId: z.string().optional(),
   asunto: z.string().min(1, "El asunto es obligatorio."),
   cuerpo: z.string().min(1, "El cuerpo del mensaje es obligatorio."),
-  visibilidadComite: z.boolean({ required_error: "El flag de visibilidad para el Comité es obligatorio." }),
+  visibilidadComite: z.boolean({
+    required_error: "El flag de visibilidad para el Comité es obligatorio.",
+  }),
   fechaIngreso: FechaISOSchema,
   estado: EstadoBuzonCOSchema,
   respuestas: z.array(RespuestaBuzonCOSchema),
@@ -279,9 +402,15 @@ export const DocumentoCOSchema = ImagenReferenciaSchema.extend({
 export const ControlPropiedadSchema = z.object({
   id: IdEntidadSchema,
   unidadId: IdEntidadSchema,
-  residenteVeMorosidad: z.boolean({ required_error: "El flag de morosidad visible es obligatorio." }),
-  residenteVeActas: z.boolean({ required_error: "El flag de actas visibles es obligatorio." }),
-  alertasResidentesActivas: z.boolean({ required_error: "El flag de alertas es obligatorio." }),
+  residenteVeMorosidad: z.boolean({
+    required_error: "El flag de morosidad visible es obligatorio.",
+  }),
+  residenteVeActas: z.boolean({
+    required_error: "El flag de actas visibles es obligatorio.",
+  }),
+  alertasResidentesActivas: z.boolean({
+    required_error: "El flag de alertas es obligatorio.",
+  }),
 })
 
 // --- Gestión de Directiva (GD) ---
@@ -291,8 +420,12 @@ export const EstadoActaSchema = z.enum(["borrador", "publicada"])
 export const ActaGDSchema = z.object({
   id: IdEntidadSchema,
   fecha: FechaISOSchema,
-  hora: z.string({ required_error: "La hora es obligatoria." }).regex(/^\d{2}:\d{2}$/, "La hora debe tener formato HH:MM."),
-  lugar: z.string({ required_error: "El lugar es obligatorio." }).min(1, "El lugar es obligatorio."),
+  hora: z
+    .string({ required_error: "La hora es obligatoria." })
+    .regex(/^\d{2}:\d{2}$/, "La hora debe tener formato HH:MM."),
+  lugar: z
+    .string({ required_error: "El lugar es obligatorio." })
+    .min(1, "El lugar es obligatorio."),
   tablaTemas: z.array(z.string()),
   // Miembros de la directiva (personas con datosGobernanza)
   presentes: z.array(IdEntidadSchema),
@@ -310,21 +443,34 @@ export const ActaGDSchema = z.object({
   avisoCVReferencia: z.string().optional(),
 })
 
-export const MensajeDocumentoInvalido = "RUT inválido (dígito verificador incorrecto) o pasaporte con formato no válido."
+export const MensajeDocumentoInvalido =
+  "RUT inválido (dígito verificador incorrecto) o pasaporte con formato no válido."
 
 const DocumentoIdentidadSchema = z
   .string({ required_error: "El RUT o pasaporte es obligatorio." })
   .min(1, "El RUT o pasaporte es obligatorio.")
-  .refine((valor) => validarDocumentoIdentidad(valor), { message: MensajeDocumentoInvalido })
+  .refine((valor) => validarDocumentoIdentidad(valor), {
+    message: MensajeDocumentoInvalido,
+  })
 
 export const PersonaSchema = z.object({
   id: IdEntidadSchema,
   rut: DocumentoIdentidadSchema,
-  nombreCompleto: z.string({ required_error: "El nombre completo es obligatorio." }).min(1, "El nombre completo es obligatorio."),
-  nombres: z.string({ required_error: "Los nombres son obligatorios." }).min(1, "Los nombres son obligatorios."),
-  apellidos: z.string({ required_error: "Los apellidos son obligatorios." }).min(1, "Los apellidos son obligatorios."),
-  email: z.string({ required_error: "El correo electrónico es obligatorio." }).email("El correo electrónico no es válido."),
-  telefonoMovil: z.string({ required_error: "El teléfono móvil es obligatorio." }).min(1, "El teléfono móvil es obligatorio."),
+  nombreCompleto: z
+    .string({ required_error: "El nombre completo es obligatorio." })
+    .min(1, "El nombre completo es obligatorio."),
+  nombres: z
+    .string({ required_error: "Los nombres son obligatorios." })
+    .min(1, "Los nombres son obligatorios."),
+  apellidos: z
+    .string({ required_error: "Los apellidos son obligatorios." })
+    .min(1, "Los apellidos son obligatorios."),
+  email: z
+    .string({ required_error: "El correo electrónico es obligatorio." })
+    .email("El correo electrónico no es válido."),
+  telefonoMovil: z
+    .string({ required_error: "El teléfono móvil es obligatorio." })
+    .min(1, "El teléfono móvil es obligatorio."),
   telefonoFijo: z.string().optional(),
   fotografiaUrl: z.string().optional(),
   estadoCuenta: z.enum(["activa", "inactiva", "bloqueada"], {
@@ -347,7 +493,14 @@ export const TipoSolicitudGESchema = z.enum(TIPOS_SOLICITUD_GE)
 
 // Workflow NSGC §1.4: Nuevo → En Revisión (auto al abrir) → Requiere Acción
 // Vecino ↔ En Proceso → Resuelto / Cerrado.
-export const ESTADOS_SOLICITUD_GE = ["nuevo", "en_revision", "requiere_accion_vecino", "en_proceso", "resuelto", "cerrado"] as const
+export const ESTADOS_SOLICITUD_GE = [
+  "nuevo",
+  "en_revision",
+  "requiere_accion_vecino",
+  "en_proceso",
+  "resuelto",
+  "cerrado",
+] as const
 export const EstadoSolicitudGESchema = z.enum(ESTADOS_SOLICITUD_GE)
 
 export const ComentarioGESchema = z.object({
@@ -355,7 +508,9 @@ export const ComentarioGESchema = z.object({
   autorRol: z.enum(["administracion", "solicitante"]),
   texto: z.string().min(1, "El comentario no puede estar vacío."),
   // Timestamp ISO completo: alimenta el cálculo de SLA.
-  fecha: z.string({ required_error: "La fecha del comentario es obligatoria." }).min(1, "La fecha del comentario es obligatoria."),
+  fecha: z
+    .string({ required_error: "La fecha del comentario es obligatoria." })
+    .min(1, "La fecha del comentario es obligatoria."),
 })
 
 export const CambioEstadoGESchema = z.object({
@@ -366,22 +521,37 @@ export const CambioEstadoGESchema = z.object({
 
 export const DetalleGrabacionesSchema = z.object({
   fechaSuceso: FechaISOSchema,
-  horaSuceso: z.string({ required_error: "La hora del suceso es obligatoria." }).regex(/^\d{2}:\d{2}$/, "La hora del suceso debe tener formato HH:MM."),
-  justificacion: z.string({ required_error: "La justificación es obligatoria." }).min(20, "La justificación debe detallar motivo y contexto (mínimo 20 caracteres)."),
+  horaSuceso: z
+    .string({ required_error: "La hora del suceso es obligatoria." })
+    .regex(/^\d{2}:\d{2}$/, "La hora del suceso debe tener formato HH:MM."),
+  justificacion: z
+    .string({ required_error: "La justificación es obligatoria." })
+    .min(
+      20,
+      "La justificación debe detallar motivo y contexto (mínimo 20 caracteres)."
+    ),
 })
 
 export const DetalleInsumosSchema = z.object({
   areaDestino: z.string().min(1, "El área de destino es obligatoria."),
   // Referencia pendiente a IR (catálogo de materiales aún no implementado).
-  materialSolicitado: z.string().min(1, "El material solicitado es obligatorio."),
+  materialSolicitado: z
+    .string()
+    .min(1, "El material solicitado es obligatorio."),
 })
 
 export const SolicitudGESchema = z.object({
   id: IdEntidadSchema,
-  folio: z.string({ required_error: "El folio es obligatorio." }).min(1, "El folio es obligatorio."),
+  folio: z
+    .string({ required_error: "El folio es obligatorio." })
+    .min(1, "El folio es obligatorio."),
   tipo: TipoSolicitudGESchema,
-  titulo: z.string({ required_error: "El título es obligatorio." }).min(1, "El título es obligatorio."),
-  descripcion: z.string({ required_error: "La descripción es obligatoria." }).min(1, "La descripción es obligatoria."),
+  titulo: z
+    .string({ required_error: "El título es obligatorio." })
+    .min(1, "El título es obligatorio."),
+  descripcion: z
+    .string({ required_error: "La descripción es obligatoria." })
+    .min(1, "La descripción es obligatoria."),
   solicitantePersonaId: IdEntidadSchema.optional(),
   unidadId: IdEntidadSchema.optional(),
   estado: EstadoSolicitudGESchema,
@@ -397,10 +567,21 @@ export const SolicitudGESchema = z.object({
 
 // --- Inventario y Recursos (IR) ---
 
-export const CATEGORIAS_RECURSO_IR = ["infraestructura", "mobiliario", "insumo", "epp", "acceso"] as const
+export const CATEGORIAS_RECURSO_IR = [
+  "infraestructura",
+  "mobiliario",
+  "insumo",
+  "epp",
+  "acceso",
+] as const
 export const CategoriaRecursoIRSchema = z.enum(CATEGORIAS_RECURSO_IR)
 
-export const ESTADOS_ACTIVO_IR = ["disponible", "en_uso", "reparacion", "baja"] as const
+export const ESTADOS_ACTIVO_IR = [
+  "disponible",
+  "en_uso",
+  "reparacion",
+  "baja",
+] as const
 export const EstadoActivoIRSchema = z.enum(ESTADOS_ACTIVO_IR)
 
 // Referencia D1: ficha técnica y facturas solo por URL (jamás base64/Blob).
@@ -408,14 +589,20 @@ const UrlReferenciaIRSchema = z
   .string()
   .max(2048, "La URL excede el largo permitido.")
   .refine((valor) => !/^data:/i.test(valor) && !/^blob:/i.test(valor), {
-    message: "Media por referencia (D1): no se permiten data-URL ni Blob embebidos.",
+    message:
+      "Media por referencia (D1): no se permiten data-URL ni Blob embebidos.",
   })
 
 export const RecursoIRSchema = z.object({
   id: IdEntidadSchema,
   // Código de inventario IR-A-#### (auto-generado al alta).
-  codigo: z.string().min(1, "El código de inventario es obligatorio.").optional(),
-  nombre: z.string({ required_error: "El nombre del recurso es obligatorio." }).min(1, "El nombre del recurso es obligatorio."),
+  codigo: z
+    .string()
+    .min(1, "El código de inventario es obligatorio.")
+    .optional(),
+  nombre: z
+    .string({ required_error: "El nombre del recurso es obligatorio." })
+    .min(1, "El nombre del recurso es obligatorio."),
   categoria: CategoriaRecursoIRSchema,
   marca: z.string().optional(),
   modelo: z.string().optional(),
@@ -428,9 +615,16 @@ export const RecursoIRSchema = z.object({
   estadoActivo: EstadoActivoIRSchema,
   // Insumos (stock)
   unidadMedidaId: IdEntidadSchema.optional(),
-  stock: z.number({ required_error: "El stock es obligatorio." }).min(0, "El stock no puede ser negativo."),
-  esCritico: z.boolean({ required_error: "El flag de stock crítico es obligatorio." }),
-  umbralCritico: z.number().min(0, "El umbral no puede ser negativo.").optional(),
+  stock: z
+    .number({ required_error: "El stock es obligatorio." })
+    .min(0, "El stock no puede ser negativo."),
+  esCritico: z.boolean({
+    required_error: "El flag de stock crítico es obligatorio.",
+  }),
+  umbralCritico: z
+    .number()
+    .min(0, "El umbral no puede ser negativo.")
+    .optional(),
   // Ingreso (compras): proveedor/garantía/factura como metadatos.
   proveedor: z.string().optional(),
   numeroFactura: z.string().optional(),
@@ -438,38 +632,67 @@ export const RecursoIRSchema = z.object({
   garantiaHasta: FechaISOSchema.optional(),
   // EPP
   talla: z.string().optional(),
-  renovacionMeses: z.number().int().positive("La renovación debe ser al menos 1 mes.").optional(),
+  renovacionMeses: z
+    .number()
+    .int()
+    .positive("La renovación debe ser al menos 1 mes.")
+    .optional(),
   // Accesos: quién tiene qué (asignación vigente).
-  asignacionActual: z.object({
-    personaId: IdEntidadSchema,
-    fecha: FechaISOSchema,
-  }).optional(),
+  asignacionActual: z
+    .object({
+      personaId: IdEntidadSchema,
+      fecha: FechaISOSchema,
+    })
+    .optional(),
   cargoFIReferencia: z.literal("pendiente").optional(),
 })
 
-export const ESTADOS_SOLICITUD_INSUMO_IR = ["pendiente", "entregada", "rechazada"] as const
+export const ESTADOS_SOLICITUD_INSUMO_IR = [
+  "pendiente",
+  "entregada",
+  "rechazada",
+] as const
 export const EstadoSolicitudInsumoIRSchema = z.enum(ESTADOS_SOLICITUD_INSUMO_IR)
 
-export const ESTADOS_COMODIN_IR = ["no_comodin", "pendiente", "aprobada_creada", "sustituida", "rechazada"] as const
+export const ESTADOS_COMODIN_IR = [
+  "no_comodin",
+  "pendiente",
+  "aprobada_creada",
+  "sustituida",
+  "rechazada",
+] as const
 export const EstadoComodinIRSchema = z.enum(ESTADOS_COMODIN_IR)
 
 // Comodín: artículo fuera de catálogo con descripción y justificación extendida.
 export const ComodinIRSchema = z.object({
-  descripcionArticulo: z.string({ required_error: "La descripción del artículo es obligatoria." }).min(1, "La descripción del artículo es obligatoria."),
-  justificacion: z.string({ required_error: "La justificación es obligatoria." }).min(20, "La justificación debe detallar el motivo (mínimo 20 caracteres)."),
+  descripcionArticulo: z
+    .string({ required_error: "La descripción del artículo es obligatoria." })
+    .min(1, "La descripción del artículo es obligatoria."),
+  justificacion: z
+    .string({ required_error: "La justificación es obligatoria." })
+    .min(
+      20,
+      "La justificación debe detallar el motivo (mínimo 20 caracteres)."
+    ),
 })
 
 export const SolicitudInsumoIRSchema = z.object({
   id: IdEntidadSchema,
-  folio: z.string({ required_error: "El folio es obligatorio." }).min(1, "El folio es obligatorio."),
+  folio: z
+    .string({ required_error: "El folio es obligatorio." })
+    .min(1, "El folio es obligatorio."),
   solicitantePersonaId: IdEntidadSchema,
   recursoInsumoId: IdEntidadSchema.optional(),
   comodin: ComodinIRSchema.optional(),
   // Artículo similar asignado al resolver un comodín por sustitución.
   recursoSustitutoId: IdEntidadSchema.optional(),
   estadoComodin: EstadoComodinIRSchema,
-  cantidad: z.number({ required_error: "La cantidad es obligatoria." }).positive("La cantidad debe ser mayor a cero."),
-  areaDestino: z.string({ required_error: "El área de destino es obligatoria." }).min(1, "El área de destino es obligatoria."),
+  cantidad: z
+    .number({ required_error: "La cantidad es obligatoria." })
+    .positive("La cantidad debe ser mayor a cero."),
+  areaDestino: z
+    .string({ required_error: "El área de destino es obligatoria." })
+    .min(1, "El área de destino es obligatoria."),
   estado: EstadoSolicitudInsumoIRSchema,
   fechaSolicitud: FechaISOSchema,
   entregaFecha: FechaISOSchema.optional(),
@@ -500,19 +723,34 @@ export const TipoSancionINSchema = z.enum(TIPOS_SANCION_IN)
 // Catálogo parametrizable de faltas al Reglamento de Copropiedad.
 export const TipoInfraccionINSchema = z.object({
   id: IdEntidadSchema,
-  nombre: z.string({ required_error: "El nombre de la infracción es obligatorio." }).min(1, "El nombre de la infracción es obligatorio."),
+  nombre: z
+    .string({ required_error: "El nombre de la infracción es obligatorio." })
+    .min(1, "El nombre de la infracción es obligatorio."),
   categoria: CategoriaInfraccionINSchema,
   tipoSancion: TipoSancionINSchema,
-  valor: z.number({ required_error: "El monto/valor asociado a la sanción es obligatorio." }).min(0, "El valor no puede ser negativo."),
+  valor: z
+    .number({
+      required_error: "El monto/valor asociado a la sanción es obligatorio.",
+    })
+    .min(0, "El valor no puede ser negativo."),
 })
 
-export const ESTADOS_INFRACCION_IN = ["en_revision", "apelada", "aplicada", "desestimada"] as const
+export const ESTADOS_INFRACCION_IN = [
+  "en_revision",
+  "apelada",
+  "aplicada",
+  "desestimada",
+] as const
 export const EstadoInfraccionINSchema = z.enum(ESTADOS_INFRACCION_IN)
 
 // Cobro directo por daños (responsabilidad civil): sin tipo de catálogo.
 export const DanoDirectoINSchema = z.object({
-  descripcionDaño: z.string({ required_error: "La descripción del daño es obligatoria." }).min(1, "La descripción del daño es obligatoria."),
-  costoReparacion: z.number({ required_error: "El costo de la reparación es obligatorio." }).positive("El costo debe ser mayor a cero."),
+  descripcionDaño: z
+    .string({ required_error: "La descripción del daño es obligatoria." })
+    .min(1, "La descripción del daño es obligatoria."),
+  costoReparacion: z
+    .number({ required_error: "El costo de la reparación es obligatorio." })
+    .positive("El costo debe ser mayor a cero."),
 })
 
 export const ComentarioInternoINSchema = z.object({
@@ -523,13 +761,20 @@ export const ComentarioInternoINSchema = z.object({
 })
 
 export const ApelacionINSchema = z.object({
-  descargos: z.string({ required_error: "Los descargos son obligatorios." }).min(10, "Los descargos deben detallar la posición del vecino (mínimo 10 caracteres)."),
+  descargos: z
+    .string({ required_error: "Los descargos son obligatorios." })
+    .min(
+      10,
+      "Los descargos deben detallar la posición del vecino (mínimo 10 caracteres)."
+    ),
   fecha: FechaISOSchema,
 })
 
 export const InfraccionINSchema = z.object({
   id: IdEntidadSchema,
-  folio: z.string({ required_error: "El folio es obligatorio." }).min(1, "El folio es obligatorio."),
+  folio: z
+    .string({ required_error: "El folio es obligatorio." })
+    .min(1, "El folio es obligatorio."),
   // Excluyentes: tipo del catálogo O cobro directo por daños.
   tipoInfraccionId: IdEntidadSchema.optional(),
   danoDirecto: DanoDirectoINSchema.optional(),
@@ -538,12 +783,22 @@ export const InfraccionINSchema = z.object({
   // Nacimiento desde reclamo verídico del buzón CO (arrastra contexto).
   mensajeBuzonId: IdEntidadSchema.optional(),
   fechaSuceso: FechaISOSchema,
-  horaSuceso: z.string({ required_error: "La hora del suceso es obligatoria." }).regex(/^\d{2}:\d{2}$/, "La hora del suceso debe tener formato HH:MM."),
-  antecedentes: z.string({ required_error: "Los antecedentes son obligatorios." }).min(20, "Los antecedentes deben detallar los hechos (mínimo 20 caracteres)."),
+  horaSuceso: z
+    .string({ required_error: "La hora del suceso es obligatoria." })
+    .regex(/^\d{2}:\d{2}$/, "La hora del suceso debe tener formato HH:MM."),
+  antecedentes: z
+    .string({ required_error: "Los antecedentes son obligatorios." })
+    .min(
+      20,
+      "Los antecedentes deben detallar los hechos (mínimo 20 caracteres)."
+    ),
   evidencias: z.array(ImagenReferenciaSchema),
   estado: EstadoInfraccionINSchema,
   fechaRegistro: FechaISOSchema,
-  montoAplicado: z.number().min(0, "El monto no puede ser negativo.").optional(),
+  montoAplicado: z
+    .number()
+    .min(0, "El monto no puede ser negativo.")
+    .optional(),
   comentariosDirectiva: z.array(ComentarioInternoINSchema),
   respaldosDirectiva: z.array(IdEntidadSchema),
   apelacion: ApelacionINSchema.optional(),
@@ -558,17 +813,29 @@ export const InfraccionINSchema = z.object({
 export const PRIORIDADES_MT = ["baja", "media", "alta", "emergencia"] as const
 export const PrioridadMTSchema = z.enum(PRIORIDADES_MT)
 
-export const ESTADOS_TRABAJO_MT = ["planificado", "en_curso", "finalizado", "cancelado"] as const
+export const ESTADOS_TRABAJO_MT = [
+  "planificado",
+  "en_curso",
+  "finalizado",
+  "cancelado",
+] as const
 export const EstadoTrabajoMTSchema = z.enum(ESTADOS_TRABAJO_MT)
 
-export const ORIGENES_FONDOS_MT = ["gasto_comun", "fondo_reserva", "fondo_especial", "pendiente_definir"] as const
+export const ORIGENES_FONDOS_MT = [
+  "gasto_comun",
+  "fondo_reserva",
+  "fondo_especial",
+  "pendiente_definir",
+] as const
 export const OrigenFondosMTSchema = z.enum(ORIGENES_FONDOS_MT)
 
 export const ESTADOS_PAGO_MT = ["pendiente", "parcial", "pagado"] as const
 export const EstadoPagoMTSchema = z.enum(ESTADOS_PAGO_MT)
 
 export const ProveedorMTSchema = z.object({
-  nombre: z.string({ required_error: "El nombre del proveedor es obligatorio." }).min(1, "El nombre del proveedor es obligatorio."),
+  nombre: z
+    .string({ required_error: "El nombre del proveedor es obligatorio." })
+    .min(1, "El nombre del proveedor es obligatorio."),
   contacto: z.string().optional(),
 })
 
@@ -579,14 +846,26 @@ export const EvidenciaMTSchema = ImagenReferenciaSchema.extend({
 
 // Configuración de mantención preventiva (ej. Hidropack mensual, CCTV semestral).
 export const PreventivoConfigSchema = z.object({
-  periodicidadMeses: z.number({ required_error: "La periodicidad es obligatoria." }).int().min(1, "La periodicidad debe ser al menos 1 mes."),
+  periodicidadMeses: z
+    .number({ required_error: "La periodicidad es obligatoria." })
+    .int()
+    .min(1, "La periodicidad debe ser al menos 1 mes."),
 })
 
 export const TrabajoMTSchema = z.object({
   id: IdEntidadSchema,
-  folio: z.string({ required_error: "El folio es obligatorio." }).min(1, "El folio es obligatorio."),
-  titulo: z.string({ required_error: "El título del trabajo es obligatorio." }).min(1, "El título del trabajo es obligatorio."),
-  descripcion: z.string({ required_error: "La descripción técnica es obligatoria." }).min(20, "La descripción técnica debe detallar el trabajo (mínimo 20 caracteres)."),
+  folio: z
+    .string({ required_error: "El folio es obligatorio." })
+    .min(1, "El folio es obligatorio."),
+  titulo: z
+    .string({ required_error: "El título del trabajo es obligatorio." })
+    .min(1, "El título del trabajo es obligatorio."),
+  descripcion: z
+    .string({ required_error: "La descripción técnica es obligatoria." })
+    .min(
+      20,
+      "La descripción técnica debe detallar el trabajo (mínimo 20 caracteres)."
+    ),
   // Ubicación EF (al menos una) + equipo crítico IR opcional.
   unidadId: IdEntidadSchema.optional(),
   microSectorId: IdEntidadSchema.optional(),
@@ -599,27 +878,43 @@ export const TrabajoMTSchema = z.object({
   fechaProgramada: FechaISOSchema.optional(),
   fechaInicio: FechaISOSchema.optional(),
   fechaTermino: FechaISOSchema.optional(),
-  costoTotal: z.number({ required_error: "El costo es obligatorio." }).min(0, "El costo no puede ser negativo."),
+  costoTotal: z
+    .number({ required_error: "El costo es obligatorio." })
+    .min(0, "El costo no puede ser negativo."),
   origenFondos: OrigenFondosMTSchema,
   estadoPago: EstadoPagoMTSchema,
   garantiaInicio: FechaISOSchema.optional(),
   garantiaFin: FechaISOSchema.optional(),
-  alertaGarantiaEnviada: z.boolean({ required_error: "El flag de alerta de garantía es obligatorio." }),
+  alertaGarantiaEnviada: z.boolean({
+    required_error: "El flag de alerta de garantía es obligatorio.",
+  }),
   evidencias: z.array(EvidenciaMTSchema),
-   preventivo: PreventivoConfigSchema.optional(),
-   cargoFIReferencia: z.string().optional(),
+  preventivo: PreventivoConfigSchema.optional(),
+  cargoFIReferencia: z.string().optional(),
 })
 
-export const ESTADOS_PROYECTO_MT = ["planificado", "en_ejecucion", "completado", "descartado"] as const
+export const ESTADOS_PROYECTO_MT = [
+  "planificado",
+  "en_ejecucion",
+  "completado",
+  "descartado",
+] as const
 export const EstadoProyectoMTSchema = z.enum(ESTADOS_PROYECTO_MT)
 
 // Proyecto a largo plazo: cuota sugerida derivable = presupuesto / plazo.
 export const ProyectoMTSchema = z.object({
   id: IdEntidadSchema,
-  nombre: z.string({ required_error: "El nombre del proyecto es obligatorio." }).min(1, "El nombre del proyecto es obligatorio."),
+  nombre: z
+    .string({ required_error: "El nombre del proyecto es obligatorio." })
+    .min(1, "El nombre del proyecto es obligatorio."),
   descripcion: z.string().optional(),
-  presupuestoEstimado: z.number({ required_error: "El presupuesto estimado es obligatorio." }).positive("El presupuesto debe ser mayor a cero."),
-  plazoMeses: z.number({ required_error: "El plazo es obligatorio." }).int().positive("El plazo debe ser mayor a cero."),
+  presupuestoEstimado: z
+    .number({ required_error: "El presupuesto estimado es obligatorio." })
+    .positive("El presupuesto debe ser mayor a cero."),
+  plazoMeses: z
+    .number({ required_error: "El plazo es obligatorio." })
+    .int()
+    .positive("El plazo debe ser mayor a cero."),
   fechaObjetivo: FechaISOSchema.optional(),
   estado: EstadoProyectoMTSchema,
   fondoFinanciamientoId: IdEntidadSchema.optional(),
@@ -627,7 +922,10 @@ export const ProyectoMTSchema = z.object({
 
 // --- Reservas y Amenities (RA) ---
 
-export const TIPOS_ELEMENTO_RA = ["espacio_fisico", "activo_mobiliario"] as const
+export const TIPOS_ELEMENTO_RA = [
+  "espacio_fisico",
+  "activo_mobiliario",
+] as const
 export const TipoElementoRASchema = z.enum(TIPOS_ELEMENTO_RA)
 
 export const FRANJAS_RA = ["bloques_horas", "dia_completo"] as const
@@ -637,38 +935,72 @@ export const FranjaRASchema = z.enum(FRANJAS_RA)
 export const ElementoRASchema = z
   .object({
     id: IdEntidadSchema,
-    nombre: z.string({ required_error: "El nombre del elemento es obligatorio." }).min(1, "El nombre del elemento es obligatorio."),
+    nombre: z
+      .string({ required_error: "El nombre del elemento es obligatorio." })
+      .min(1, "El nombre del elemento es obligatorio."),
     tipo: TipoElementoRASchema,
     // Ubicación por referencia: micro sector EF o activo del catálogo IR.
     microSectorId: IdEntidadSchema.optional(),
     activoIRId: IdEntidadSchema.optional(),
     franja: FranjaRASchema,
-    duracionBloqueHoras: z.number().int().min(1, "El bloque debe durar al menos 1 hora.").max(24, "El bloque no puede superar 24 horas.").optional(),
-    tarifaUso: z.number({ required_error: "La tarifa de uso es obligatoria." }).min(0, "La tarifa no puede ser negativa."),
-    garantiaRequerida: z.number({ required_error: "La garantía requerida es obligatoria." }).min(0, "La garantía no puede ser negativa."),
-    aforo: z.number().int().positive("El aforo debe ser mayor a cero.").optional(),
-    stock: z.number().int().min(1, "El stock debe ser de al menos 1 unidad.").optional(),
+    duracionBloqueHoras: z
+      .number()
+      .int()
+      .min(1, "El bloque debe durar al menos 1 hora.")
+      .max(24, "El bloque no puede superar 24 horas.")
+      .optional(),
+    tarifaUso: z
+      .number({ required_error: "La tarifa de uso es obligatoria." })
+      .min(0, "La tarifa no puede ser negativa."),
+    garantiaRequerida: z
+      .number({ required_error: "La garantía requerida es obligatoria." })
+      .min(0, "La garantía no puede ser negativa."),
+    aforo: z
+      .number()
+      .int()
+      .positive("El aforo debe ser mayor a cero.")
+      .optional(),
+    stock: z
+      .number()
+      .int()
+      .min(1, "El stock debe ser de al menos 1 unidad.")
+      .optional(),
     anticipacionMinimaDias: z.number().int().min(0).optional(),
     cancelacionTardiaDias: z.number().int().min(0).optional(),
-    penalizacionTardiaMonto: z.number().positive("La penalización debe ser mayor a cero.").optional(),
+    penalizacionTardiaMonto: z
+      .number()
+      .positive("La penalización debe ser mayor a cero.")
+      .optional(),
     activo: z.boolean({ required_error: "El estado activo es obligatorio." }),
   })
-  .refine((e) => e.franja === "dia_completo" || (e.duracionBloqueHoras ?? 0) >= 1, {
-    message: "Los bloques horarios exigen una duración de bloque en horas.",
-  })
+  .refine(
+    (e) => e.franja === "dia_completo" || (e.duracionBloqueHoras ?? 0) >= 1,
+    {
+      message: "Los bloques horarios exigen una duración de bloque en horas.",
+    }
+  )
 
 export const ESTADOS_RESERVA_RA = ["confirmada", "cancelada"] as const
 export const EstadoReservaRASchema = z.enum(ESTADOS_RESERVA_RA)
 
 export const CancelacionRASchema = z.object({
   fecha: FechaISOSchema,
-  tardia: z.boolean({ required_error: "El flag de cancelación tardía es obligatorio." }),
-  penalizacion: z.number().min(0, "La penalización no puede ser negativa.").optional(),
+  tardia: z.boolean({
+    required_error: "El flag de cancelación tardía es obligatorio.",
+  }),
+  penalizacion: z
+    .number()
+    .min(0, "La penalización no puede ser negativa.")
+    .optional(),
 })
 
 export const RetencionGarantiaRASchema = z.object({
-  monto: z.number({ required_error: "El monto retenido es obligatorio." }).positive("El monto retenido debe ser mayor a cero."),
-  motivo: z.string({ required_error: "El motivo de la retención es obligatorio." }).min(1, "El motivo de la retención es obligatorio."),
+  monto: z
+    .number({ required_error: "El monto retenido es obligatorio." })
+    .positive("El monto retenido debe ser mayor a cero."),
+  motivo: z
+    .string({ required_error: "El motivo de la retención es obligatorio." })
+    .min(1, "El motivo de la retención es obligatorio."),
 })
 
 const HoraRASchema = z
@@ -677,7 +1009,9 @@ const HoraRASchema = z
 
 export const ReservaRASchema = z.object({
   id: IdEntidadSchema,
-  folio: z.string({ required_error: "El folio es obligatorio." }).min(1, "El folio es obligatorio."),
+  folio: z
+    .string({ required_error: "El folio es obligatorio." })
+    .min(1, "El folio es obligatorio."),
   elementoId: IdEntidadSchema,
   solicitantePersonaId: IdEntidadSchema,
   unidadId: IdEntidadSchema.optional(),
@@ -687,8 +1021,12 @@ export const ReservaRASchema = z.object({
   horaFin: HoraRASchema,
   estado: EstadoReservaRASchema,
   // Snapshots tarifarios vigentes al confirmar la reserva.
-  montoTarifa: z.number({ required_error: "El monto de tarifa es obligatorio." }).min(0, "La tarifa no puede ser negativa."),
-  montoGarantia: z.number({ required_error: "El monto de garantía es obligatorio." }).min(0, "La garantía no puede ser negativa."),
+  montoTarifa: z
+    .number({ required_error: "El monto de tarifa es obligatorio." })
+    .min(0, "La tarifa no puede ser negativa."),
+  montoGarantia: z
+    .number({ required_error: "El monto de garantía es obligatorio." })
+    .min(0, "La garantía no puede ser negativa."),
   cancelacion: CancelacionRASchema.optional(),
   garantiaRetenida: RetencionGarantiaRASchema.optional(),
   // Cobros al Fondo de Amenities: id del cobro FI materializado
@@ -700,31 +1038,56 @@ export const ReservaRASchema = z.object({
 
 export const ModoCalculoGCSchema = z.enum(["fijo", "variable"])
 
-export const TIPOS_FONDO_FI = ["gasto_comun", "reserva", "especial", "amenities"] as const
+export const TIPOS_FONDO_FI = [
+  "gasto_comun",
+  "reserva",
+  "especial",
+  "amenities",
+] as const
 export const TipoFondoFISchema = z.enum(TIPOS_FONDO_FI)
 
 export const FondoFISchema = z.object({
   id: IdEntidadSchema,
-  nombre: z.string({ required_error: "El nombre del fondo es obligatorio." }).min(1, "El nombre del fondo es obligatorio."),
+  nombre: z
+    .string({ required_error: "El nombre del fondo es obligatorio." })
+    .min(1, "El nombre del fondo es obligatorio."),
   tipo: TipoFondoFISchema,
   descripcion: z.string().optional(),
   // Solo relevante para fondos de reserva: % aplicado sobre el total emitido.
-  porcentajeAporte: z.number().min(0, "El porcentaje no puede ser negativo.").max(100, "El porcentaje no puede superar 100.").optional(),
+  porcentajeAporte: z
+    .number()
+    .min(0, "El porcentaje no puede ser negativo.")
+    .max(100, "El porcentaje no puede superar 100.")
+    .optional(),
   activo: z.boolean({ required_error: "El estado activo es obligatorio." }),
   // Saldo de apertura versátil (P1): 0 = fiel al flujo, ajustado = cuadra con el libro.
-  saldoInicial: z.number().min(0, "El saldo inicial no puede ser negativo.").optional(),
+  saldoInicial: z
+    .number()
+    .min(0, "El saldo inicial no puede ser negativo.")
+    .optional(),
 })
 
 export const IngresoFISchema = z.object({
   id: IdEntidadSchema,
   fecha: FechaISOSchema,
-  monto: z.number({ required_error: "El monto es obligatorio." }).positive("El monto debe ser mayor a cero."),
-  concepto: z.string({ required_error: "El concepto es obligatorio." }).min(1, "El concepto es obligatorio."),
+  monto: z
+    .number({ required_error: "El monto es obligatorio." })
+    .positive("El monto debe ser mayor a cero."),
+  concepto: z
+    .string({ required_error: "El concepto es obligatorio." })
+    .min(1, "El concepto es obligatorio."),
   fondoId: IdEntidadSchema,
   familia: z.string().optional(),
 })
 
-export const CATEGORIAS_EGRESO_FI = ["sueldos", "mantencion", "servicios", "administracion", "uso_de_fondo", "otro"] as const
+export const CATEGORIAS_EGRESO_FI = [
+  "sueldos",
+  "mantencion",
+  "servicios",
+  "administracion",
+  "uso_de_fondo",
+  "otro",
+] as const
 export const CategoriaEgresoFISchema = z.enum(CATEGORIAS_EGRESO_FI)
 
 export const EgresoFISchema = z.object({
@@ -733,11 +1096,17 @@ export const EgresoFISchema = z.object({
   folio: z.string().min(1, "El folio es obligatorio.").optional(),
   fecha: FechaISOSchema,
   categoria: CategoriaEgresoFISchema,
-  descripcion: z.string({ required_error: "La descripción del gasto es obligatoria." }).min(1, "La descripción del gasto es obligatoria."),
-  monto: z.number({ required_error: "El monto es obligatorio." }).positive("El monto debe ser mayor a cero."),
+  descripcion: z
+    .string({ required_error: "La descripción del gasto es obligatoria." })
+    .min(1, "La descripción del gasto es obligatoria."),
+  monto: z
+    .number({ required_error: "El monto es obligatorio." })
+    .positive("El monto debe ser mayor a cero."),
   // Imputación obligatoria al fondo de origen del dinero.
   fondoId: IdEntidadSchema,
-  esRecurrente: z.boolean({ required_error: "El flag recurrente/fijo es obligatorio." }),
+  esRecurrente: z.boolean({
+    required_error: "El flag recurrente/fijo es obligatorio.",
+  }),
   comprobante: ImagenReferenciaSchema.optional(),
   microSectoresIds: z.array(IdEntidadSchema).optional(),
   proveedor: z.string().optional(),
@@ -764,7 +1133,9 @@ export const EmisionGCSchema = z.object({
     .regex(/^\d{4}-\d{2}$/, "El periodo debe tener formato AAAA-MM."),
   modo: ModoCalculoGCSchema,
   gastoTotal: z.number().min(0),
-  lineas: z.array(LineaEmisionGCSchema).min(1, "La emisión exige al menos una unidad."),
+  lineas: z
+    .array(LineaEmisionGCSchema)
+    .min(1, "La emisión exige al menos una unidad."),
   fondoReservaAporte: AporteFondoReservaSchema.optional(),
   fechaEmision: FechaISOSchema,
 })
@@ -794,7 +1165,9 @@ export const PagoCobroFISchema = z.object({
   id: IdEntidadSchema,
   monto: z.number().positive("El pago debe ser mayor a cero."),
   fecha: FechaISOSchema,
-  medio: z.string({ required_error: "El medio de pago es obligatorio." }).min(1, "El medio de pago es obligatorio."),
+  medio: z
+    .string({ required_error: "El medio de pago es obligatorio." })
+    .min(1, "El medio de pago es obligatorio."),
 })
 
 export const DiferenciaPagoFISchema = z.object({
@@ -805,7 +1178,10 @@ export const DiferenciaPagoFISchema = z.object({
   diferencia: z.number().positive("La diferencia debe ser mayor a cero."),
   justificacion: z
     .string({ required_error: "La justificación del ajuste es obligatoria." })
-    .min(10, "La justificación debe explicar el motivo del ajuste (mínimo 10 caracteres)."),
+    .min(
+      10,
+      "La justificación debe explicar el motivo del ajuste (mínimo 10 caracteres)."
+    ),
   fecha: FechaISOSchema,
 })
 
@@ -819,8 +1195,12 @@ export const CobroFISchema = z.object({
   origenModulo: OrigenModuloCobroFISchema,
   origenRef: IdEntidadSchema.optional(),
   fondoId: IdEntidadSchema,
-  descripcion: z.string({ required_error: "La descripción del cobro es obligatoria." }).min(1, "La descripción del cobro es obligatoria."),
-  montoBase: z.number({ required_error: "El monto base es obligatorio." }).positive("El monto base debe ser mayor a cero."),
+  descripcion: z
+    .string({ required_error: "La descripción del cobro es obligatoria." })
+    .min(1, "La descripción del cobro es obligatoria."),
+  montoBase: z
+    .number({ required_error: "El monto base es obligatorio." })
+    .positive("El monto base debe ser mayor a cero."),
   fechaCargo: FechaISOSchema,
   fechaVencimiento: FechaISOSchema.optional(),
   moras: z.array(MoraCobroFISchema),
@@ -838,8 +1218,12 @@ const HoraPESchema = z
 export const BitacoraVisitaPESchema = z.object({
   id: IdEntidadSchema,
   fecha: FechaISOSchema,
-  nombre: z.string({ required_error: "El nombre de la visita es obligatorio." }).min(1, "El nombre de la visita es obligatorio."),
-  dni: z.string({ required_error: "El DNI de la visita es obligatorio." }).min(1, "El DNI de la visita es obligatorio."),
+  nombre: z
+    .string({ required_error: "El nombre de la visita es obligatorio." })
+    .min(1, "El nombre de la visita es obligatorio."),
+  dni: z
+    .string({ required_error: "El DNI de la visita es obligatorio." })
+    .min(1, "El DNI de la visita es obligatorio."),
   patente: z.string().optional(),
   unidadId: IdEntidadSchema.optional(),
   destinoPersonaId: IdEntidadSchema.optional(),
@@ -861,18 +1245,27 @@ export const EncomiendaPESchema = z.object({
   evidencia: ImagenReferenciaSchema.optional(),
   fechaRecepcion: FechaISOSchema,
   estado: z.enum(["recibida", "retirada"]),
-  retiro: z.object({
-    retiradoPor: z.string({ required_error: "El nombre de quien retira es obligatorio." }).min(1, "El nombre de quien retira es obligatorio."),
-    fechaRetiro: FechaISOSchema,
-    relacion: z.string().optional(),
-  }).optional(),
+  retiro: z
+    .object({
+      retiradoPor: z
+        .string({ required_error: "El nombre de quien retira es obligatorio." })
+        .min(1, "El nombre de quien retira es obligatorio."),
+      fechaRetiro: FechaISOSchema,
+      relacion: z.string().optional(),
+    })
+    .optional(),
 })
 
 // Contratistas: ingreso con motivo específico obligatorio.
 export const IngresoContratistaPESchema = z.object({
   id: IdEntidadSchema,
   contratistaId: IdEntidadSchema,
-  motivo: z.string({ required_error: "El motivo del ingreso es obligatorio." }).min(5, "Debe detallar el motivo específico del ingreso (mínimo 5 caracteres)."),
+  motivo: z
+    .string({ required_error: "El motivo del ingreso es obligatorio." })
+    .min(
+      5,
+      "Debe detallar el motivo específico del ingreso (mínimo 5 caracteres)."
+    ),
   unidadId: IdEntidadSchema.optional(),
   fecha: FechaISOSchema,
   jornadaId: IdEntidadSchema,
@@ -887,12 +1280,24 @@ export const IngresoContratistaPESchema = z.object({
 export const ProveedorPESchema = z.object({
   id: IdEntidadSchema,
   rut: DocumentoIdentidadSchema,
-  nombre: z.string({ required_error: "El nombre del proveedor es obligatorio." }).min(1, "El nombre del proveedor es obligatorio."),
-  rubro: z.string({ required_error: "El rubro del servicio es obligatorio." }).min(1, "El rubro del servicio es obligatorio."),
+  nombre: z
+    .string({ required_error: "El nombre del proveedor es obligatorio." })
+    .min(1, "El nombre del proveedor es obligatorio."),
+  rubro: z
+    .string({ required_error: "El rubro del servicio es obligatorio." })
+    .min(1, "El rubro del servicio es obligatorio."),
   contacto: z.string().optional(),
   telefono: z.string().optional(),
-  email: z.string().email("El correo electrónico no es válido.").or(z.literal("")).optional(),
-  sitioWeb: z.string().url("La URL del sitio no es válida.").or(z.literal("")).optional(),
+  email: z
+    .string()
+    .email("El correo electrónico no es válido.")
+    .or(z.literal(""))
+    .optional(),
+  sitioWeb: z
+    .string()
+    .url("La URL del sitio no es válida.")
+    .or(z.literal(""))
+    .optional(),
   activo: z.boolean({ required_error: "El estado activo es obligatorio." }),
 })
 
@@ -900,10 +1305,18 @@ export const ProveedorPESchema = z.object({
 export const MantencionPreventivaPESchema = z.object({
   id: IdEntidadSchema,
   proveedorId: IdEntidadSchema,
-  descripcion: z.string({ required_error: "La descripción del servicio es obligatoria." }).min(1, "La descripción del servicio es obligatoria."),
-  periodicidadMeses: z.number({ required_error: "La periodicidad es obligatoria." }).int().min(1, "La periodicidad debe ser al menos 1 mes."),
+  descripcion: z
+    .string({ required_error: "La descripción del servicio es obligatoria." })
+    .min(1, "La descripción del servicio es obligatoria."),
+  periodicidadMeses: z
+    .number({ required_error: "La periodicidad es obligatoria." })
+    .int()
+    .min(1, "La periodicidad debe ser al menos 1 mes."),
   proximaFecha: FechaISOSchema,
-  alertaDiasAntes: z.number({ required_error: "El horizonte de alerta es obligatorio." }).int().min(0),
+  alertaDiasAntes: z
+    .number({ required_error: "El horizonte de alerta es obligatorio." })
+    .int()
+    .min(0),
   activo: z.boolean({ required_error: "El estado activo es obligatorio." }),
 })
 
@@ -912,9 +1325,13 @@ export const VisitaTecnicaPESchema = z.object({
   id: IdEntidadSchema,
   proveedorId: IdEntidadSchema,
   mantencionId: IdEntidadSchema.optional(),
-  tecnicoNombre: z.string({ required_error: "El nombre del técnico es obligatorio." }).min(1, "El nombre del técnico es obligatorio."),
+  tecnicoNombre: z
+    .string({ required_error: "El nombre del técnico es obligatorio." })
+    .min(1, "El nombre del técnico es obligatorio."),
   fecha: FechaISOSchema,
-  trabajoRealizado: z.string({ required_error: "El trabajo realizado es obligatorio." }).min(5, "Debe describir el trabajo realizado (mínimo 5 caracteres)."),
+  trabajoRealizado: z
+    .string({ required_error: "El trabajo realizado es obligatorio." })
+    .min(5, "Debe describir el trabajo realizado (mínimo 5 caracteres)."),
   supervisorPersonaId: IdEntidadSchema.optional(),
   unidadId: IdEntidadSchema.optional(),
 })
@@ -935,17 +1352,28 @@ export const CierreTurnoPESchema = z.object({
   trabajadorPersonaId: IdEntidadSchema,
   novedadesGenerales: z.string().optional(),
   incidencias: z.object({
-    hubo: z.boolean({ required_error: "El flag de incidencias es obligatorio." }),
+    hubo: z.boolean({
+      required_error: "El flag de incidencias es obligatorio.",
+    }),
     descripcion: z.string().max(2000).optional(),
     evidencias: z.array(ImagenReferenciaSchema).optional(),
   }),
   checklistInstalaciones: z.array(ChecklistItemTurnoSchema),
   checklistEquipamiento: z.array(ChecklistItemTurnoSchema),
-  historialCambios: z.array(z.object({
-    fecha: FechaISOSchema,
-    resumen: z.string({ required_error: "El resumen del cambio es obligatorio." }).min(5, "El resumen del cambio debe detallar la modificación (mínimo 5 caracteres)."),
-  })),
-  notificadoAAdmin: z.boolean({ required_error: "El flag de notificación es obligatorio." }),
+  historialCambios: z.array(
+    z.object({
+      fecha: FechaISOSchema,
+      resumen: z
+        .string({ required_error: "El resumen del cambio es obligatorio." })
+        .min(
+          5,
+          "El resumen del cambio debe detallar la modificación (mínimo 5 caracteres)."
+        ),
+    })
+  ),
+  notificadoAAdmin: z.boolean({
+    required_error: "El flag de notificación es obligatorio.",
+  }),
 })
 
 // Proyección operativa de feriados enviada a Finanzas; PL materializa la
@@ -955,12 +1383,14 @@ export const ProyeccionPESchema = z.object({
   mesAnio: z
     .string({ required_error: "El mes de proyección es obligatorio." })
     .regex(/^\d{4}-\d{2}$/, "El mes debe tener formato AAAA-MM."),
-  feriados: z.array(z.object({
-    id: IdEntidadSchema,
-    fecha: FechaISOSchema,
-    nombre: z.string().min(1),
-    irrenunciable: z.boolean(),
-  })),
+  feriados: z.array(
+    z.object({
+      id: IdEntidadSchema,
+      fecha: FechaISOSchema,
+      nombre: z.string().min(1),
+      irrenunciable: z.boolean(),
+    })
+  ),
   diasFeriados: z.number().int().min(0),
   reemplazosNecesarios: z.number().int().min(0),
   costoEstimado: z.number().min(0),
@@ -969,13 +1399,20 @@ export const ProyeccionPESchema = z.object({
     costoParche: z.number().min(0),
     costoDiaExtra: z.number().min(0),
   }),
-  enviadoAFI: z.boolean({ required_error: "El flag de envío a FI es obligatorio." }),
+  enviadoAFI: z.boolean({
+    required_error: "El flag de envío a FI es obligatorio.",
+  }),
   liquidacionPLReferencia: z.string().optional(),
 })
 
 // --- Visor de Mensajes (CV) ---
 
-export const TIPOLOGIAS_CV = ["info", "exito", "advertencia", "peligro"] as const
+export const TIPOLOGIAS_CV = [
+  "info",
+  "exito",
+  "advertencia",
+  "peligro",
+] as const
 export const TipologiaCVSchema = z.enum(TIPOLOGIAS_CV)
 
 export const ESTADOS_AVISO_CV = ["borrador", "publicado", "archivado"] as const
@@ -989,29 +1426,44 @@ const ImagenUrlCVSchema = z
   .string()
   .max(2048, "La URL excede el largo permitido.")
   .refine((valor) => !/^data:/i.test(valor) && !/^blob:/i.test(valor), {
-    message: "Media por referencia (D1): la imagen debe ser una URL remota, no contenido embebido.",
+    message:
+      "Media por referencia (D1): la imagen debe ser una URL remota, no contenido embebido.",
   })
 
 // Video: solo enlaces YouTube (watch, Shorts o youtu.be).
 const VideoUrlCVSchema = z
   .string()
   .max(2048, "La URL excede el largo permitido.")
-  .regex(/^https:\/\/(www\.)?(youtube\.com\/(watch\?v=|shorts\/)|youtu\.be\/)\S+$/, "El video debe ser un enlace de YouTube (watch, Shorts o youtu.be).")
+  .regex(
+    /^https:\/\/(www\.)?(youtube\.com\/(watch\?v=|shorts\/)|youtu\.be\/)\S+$/,
+    "El video debe ser un enlace de YouTube (watch, Shorts o youtu.be)."
+  )
 
 export const AvisoCVSchema = z
   .object({
     id: IdEntidadSchema,
-    titulo: z.string({ required_error: "El título del aviso es obligatorio." }).min(1, "El título del aviso es obligatorio."),
-    cuerpo: z.string({ required_error: "El cuerpo del aviso es obligatorio." }).min(1, "El cuerpo del aviso es obligatorio."),
+    titulo: z
+      .string({ required_error: "El título del aviso es obligatorio." })
+      .min(1, "El título del aviso es obligatorio."),
+    cuerpo: z
+      .string({ required_error: "El cuerpo del aviso es obligatorio." })
+      .min(1, "El cuerpo del aviso es obligatorio."),
     tipologia: TipologiaCVSchema,
-    duracionSegundos: z.number({ required_error: "La duración en pantalla es obligatoria." }).int().min(3, "La duración debe ser de al menos 3 segundos."),
+    duracionSegundos: z
+      .number({ required_error: "La duración en pantalla es obligatoria." })
+      .int()
+      .min(3, "La duración debe ser de al menos 3 segundos."),
     imagenUrl: ImagenUrlCVSchema.optional(),
     videoUrl: VideoUrlCVSchema.optional(),
-    pantallaCompleta: z.boolean({ required_error: "El flag de pantalla completa es obligatorio." }),
+    pantallaCompleta: z.boolean({
+      required_error: "El flag de pantalla completa es obligatorio.",
+    }),
     expiresAt: FechaISOSchema.optional(),
     tags: z.array(z.string()),
     estado: EstadoAvisoCVSchema,
-    requiereVistoBueno: z.boolean({ required_error: "El flag de visto bueno es obligatorio." }),
+    requiereVistoBueno: z.boolean({
+      required_error: "El flag de visto bueno es obligatorio.",
+    }),
     creadoPorPersonaId: IdEntidadSchema.optional(),
     origen: OrigenAvisoCVSchema,
     plantillaId: IdEntidadSchema.optional(),
@@ -1023,23 +1475,35 @@ export const AvisoCVSchema = z
   .refine((a) => !(a.imagenUrl && a.videoUrl), {
     message: "Multimedia excluyente: el aviso admite imagen o video, no ambos.",
   })
-  .refine((a) => !a.imagenUrl || !/^data:/i.test(a.imagenUrl), { message: "Media por referencia (D1): sin base64." })
+  .refine((a) => !a.imagenUrl || !/^data:/i.test(a.imagenUrl), {
+    message: "Media por referencia (D1): sin base64.",
+  })
 
 export const PlantillaCVSchema = z
   .object({
     id: IdEntidadSchema,
-    titulo: z.string({ required_error: "El título de la plantilla es obligatorio." }).min(1, "El título de la plantilla es obligatorio."),
-    cuerpo: z.string({ required_error: "El cuerpo de la plantilla es obligatorio." }).min(1, "El cuerpo de la plantilla es obligatorio."),
+    titulo: z
+      .string({ required_error: "El título de la plantilla es obligatorio." })
+      .min(1, "El título de la plantilla es obligatorio."),
+    cuerpo: z
+      .string({ required_error: "El cuerpo de la plantilla es obligatorio." })
+      .min(1, "El cuerpo de la plantilla es obligatorio."),
     tipologia: TipologiaCVSchema,
-    duracionSegundosSugerida: z.number({ required_error: "La duración sugerida es obligatoria." }).int().min(3, "La duración sugerida debe ser de al menos 3 segundos."),
+    duracionSegundosSugerida: z
+      .number({ required_error: "La duración sugerida es obligatoria." })
+      .int()
+      .min(3, "La duración sugerida debe ser de al menos 3 segundos."),
     imagenUrl: ImagenUrlCVSchema.optional(),
     videoUrl: VideoUrlCVSchema.optional(),
-    pantallaCompleta: z.boolean({ required_error: "El flag de pantalla completa es obligatorio." }),
+    pantallaCompleta: z.boolean({
+      required_error: "El flag de pantalla completa es obligatorio.",
+    }),
     tags: z.array(z.string()),
     activa: z.boolean({ required_error: "El estado activo es obligatorio." }),
   })
   .refine((p) => !(p.imagenUrl && p.videoUrl), {
-    message: "Multimedia excluyente: la plantilla admite imagen o video, no ambos.",
+    message:
+      "Multimedia excluyente: la plantilla admite imagen o video, no ambos.",
   })
 
 // --- Administración: Maestros (MA) ---
@@ -1047,7 +1511,9 @@ export const PlantillaCVSchema = z
 export const AfpSchema = z.object({
   id: IdEntidadSchema,
   nombre: z.string().min(1, "El nombre es obligatorio."),
-  tasaCotizacion: z.number().min(0, "La tasa de cotización no puede ser negativa."),
+  tasaCotizacion: z
+    .number()
+    .min(0, "La tasa de cotización no puede ser negativa."),
 })
 
 export const PrevisionSaludSchema = z.object({
@@ -1167,24 +1633,41 @@ export const SeguridadSMTPSchema = z.enum(["ssl", "tls", "none"])
 
 export const ConfiguracionGlobalSchema = z.object({
   // 1. Identidad y Representación Legal
-  nombreComunidad: z.string().min(1, "El nombre de la comunidad es obligatorio."),
+  nombreComunidad: z
+    .string()
+    .min(1, "El nombre de la comunidad es obligatorio."),
   logoUrl: z.string().optional(),
   faviconUrl: z.string().optional(),
-  rutCondominio: DocumentoIdentidadSchema,
+  rutComunidad: DocumentoIdentidadSchema,
   direccionOficial: z.string().min(1, "La dirección oficial es obligatoria."),
-  administradorResponsable: z.string().min(1, "El administrador responsable es obligatorio."),
+  administradorResponsable: z
+    .string()
+    .min(1, "El administrador responsable es obligatorio."),
   rutAdministrador: DocumentoIdentidadSchema,
-  telefonoAdmin: z.string().min(1, "El teléfono del administrador es obligatorio."),
+  telefonoAdmin: z
+    .string()
+    .min(1, "El teléfono del administrador es obligatorio."),
   firmaDigitalizadaUrl: z.string().optional(),
 
   // 2. Parametrización del Gasto Común
   modoCalculoGC: ModoCalculoGCSchema,
-  diaCortePago: z.number().int().min(1, "El día de corte debe estar entre 1 y 31.").max(31, "El día de corte debe estar entre 1 y 31."),
-  limiteMesesAvisoCorte: z.number().int().min(1, "El límite de meses debe ser mayor a 0."),
+  diaCortePago: z
+    .number()
+    .int()
+    .min(1, "El día de corte debe estar entre 1 y 31.")
+    .max(31, "El día de corte debe estar entre 1 y 31."),
+  limiteMesesAvisoCorte: z
+    .number()
+    .int()
+    .min(1, "El límite de meses debe ser mayor a 0."),
 
   // 3. Configuración de Correo Electrónico (SMTP) — C2-final: smtpPassword vive solo en env servidor (SMTP_PASSWORD), no en schema cliente
   smtpHost: z.string().min(1, "El servidor SMTP es obligatorio."),
-  smtpPort: z.number().int().min(1, "El puerto SMTP es inválido.").max(65535, "El puerto SMTP es inválido."),
+  smtpPort: z
+    .number()
+    .int()
+    .min(1, "El puerto SMTP es inválido.")
+    .max(65535, "El puerto SMTP es inválido."),
   smtpUser: z.string().min(1, "El usuario SMTP es obligatorio."),
   smtpSecurity: SeguridadSMTPSchema,
   smtpFrom: z.string().min(1, "El remitente SMTP es obligatorio."),
@@ -1201,9 +1684,19 @@ export const ConfiguracionGlobalSchema = z.object({
   notificarSugerenciasReclamos: z.boolean(),
 
   // 5. Parámetros Operativos y Seguridad — C2-final: claveEliminacionMaestro vive solo en env servidor (CLAVE_ELIMINACION_MAESTRO), no en schema cliente
-  diasMesComercial: z.number().int().min(1, "Los días mes comercial deben estar entre 1 y 31.").max(31, "Los días mes comercial deben estar entre 1 y 31."),
-  diasVacacionesMes: z.number().positive("Los días de vacaciones deben ser mayores a 0."),
-  jornadaSemanalEstandar: z.number().int().min(1, "La jornada semanal debe ser mayor a 0.").max(80, "La jornada semanal no puede superar 80 horas."),
+  diasMesComercial: z
+    .number()
+    .int()
+    .min(1, "Los días mes comercial deben estar entre 1 y 31.")
+    .max(31, "Los días mes comercial deben estar entre 1 y 31."),
+  diasVacacionesMes: z
+    .number()
+    .positive("Los días de vacaciones deben ser mayores a 0."),
+  jornadaSemanalEstandar: z
+    .number()
+    .int()
+    .min(1, "La jornada semanal debe ser mayor a 0.")
+    .max(80, "La jornada semanal no puede superar 80 horas."),
 
   // 6. Portal Inmobiliario (PI): opcional para compatibilidad con stores previos.
   // Ausente = modo "residentes" (por defecto, según spec PI).
@@ -1215,10 +1708,23 @@ export const ConfiguracionGlobalSchema = z.object({
 
   // 8. Parámetros Legales Chile para Remuneraciones (PL): opcionales para
   // compatibilidad; su ausencia bloquea la generación de liquidaciones.
-  ufMensual: z.number().positive("El valor UF debe ser mayor a cero.").optional(),
-  ingresoMinimoMensual: z.number().positive("El ingreso mínimo debe ser mayor a cero.").optional(),
-  topeGratificacionLegal: z.number().positive("El tope de gratificación debe ser mayor a cero.").optional(),
-  tasaSIS: z.number().min(0, "La tasa SIS no puede ser negativa.").max(100, "La tasa SIS no puede superar 100.").optional(),
+  ufMensual: z
+    .number()
+    .positive("El valor UF debe ser mayor a cero.")
+    .optional(),
+  ingresoMinimoMensual: z
+    .number()
+    .positive("El ingreso mínimo debe ser mayor a cero.")
+    .optional(),
+  topeGratificacionLegal: z
+    .number()
+    .positive("El tope de gratificación debe ser mayor a cero.")
+    .optional(),
+  tasaSIS: z
+    .number()
+    .min(0, "La tasa SIS no puede ser negativa.")
+    .max(100, "La tasa SIS no puede superar 100.")
+    .optional(),
 })
 
 // --- Auditoría interna del store ---
@@ -1292,7 +1798,9 @@ export type ComodinIR = z.infer<typeof ComodinIRSchema>
 export type EntregaEPP = z.infer<typeof EntregaEPPSchema>
 export type CategoriaRecursoIR = z.infer<typeof CategoriaRecursoIRSchema>
 export type EstadoActivoIR = z.infer<typeof EstadoActivoIRSchema>
-export type EstadoSolicitudInsumoIR = z.infer<typeof EstadoSolicitudInsumoIRSchema>
+export type EstadoSolicitudInsumoIR = z.infer<
+  typeof EstadoSolicitudInsumoIRSchema
+>
 export type EstadoComodinIR = z.infer<typeof EstadoComodinIRSchema>
 export type EstadoEPPIR = z.infer<typeof EstadoEPPIRSchema>
 export type TipoInfraccionIN = z.infer<typeof TipoInfraccionINSchema>
@@ -1337,7 +1845,9 @@ export type BitacoraVisitaPE = z.infer<typeof BitacoraVisitaPESchema>
 export type EncomiendaPE = z.infer<typeof EncomiendaPESchema>
 export type IngresoContratistaPE = z.infer<typeof IngresoContratistaPESchema>
 export type ProveedorPE = z.infer<typeof ProveedorPESchema>
-export type MantencionPreventivaPE = z.infer<typeof MantencionPreventivaPESchema>
+export type MantencionPreventivaPE = z.infer<
+  typeof MantencionPreventivaPESchema
+>
 export type VisitaTecnicaPE = z.infer<typeof VisitaTecnicaPESchema>
 export type ChecklistItemTurno = z.infer<typeof ChecklistItemTurnoSchema>
 export type CierreTurnoPE = z.infer<typeof CierreTurnoPESchema>
@@ -1367,15 +1877,21 @@ export const AdelantoPLSchema = z.object({
   folio: z.string().min(1, "El folio del adelanto es obligatorio."),
   trabajadorPersonaId: IdEntidadSchema,
   fecha: FechaISOSchema,
-  monto: z.number({ required_error: "El monto es obligatorio." }).positive("El monto del adelanto debe ser mayor a cero."),
-  glosa: z.string({ required_error: "La glosa explicativa es obligatoria." }).min(5, "Debe describir el motivo del adelanto (mínimo 5 caracteres)."),
+  monto: z
+    .number({ required_error: "El monto es obligatorio." })
+    .positive("El monto del adelanto debe ser mayor a cero."),
+  glosa: z
+    .string({ required_error: "La glosa explicativa es obligatoria." })
+    .min(5, "Debe describir el motivo del adelanto (mínimo 5 caracteres)."),
   estado: EstadoAdelantoPLSchema,
   liquidacionId: IdEntidadSchema.optional(),
 })
 
 const BonoLiquidacionSchema = z.object({
   id: IdEntidadSchema,
-  glosa: z.string({ required_error: "La glosa del bono es obligatoria." }).min(1, "La glosa del bono es obligatoria."),
+  glosa: z
+    .string({ required_error: "La glosa del bono es obligatoria." })
+    .min(1, "La glosa del bono es obligatoria."),
   monto: z.number().min(0, "El monto no puede ser negativo."),
   imponible: z.boolean({ required_error: "El flag imponible es obligatorio." }),
 })
@@ -1390,7 +1906,11 @@ export const LiquidacionPLSchema = z.object({
     .string({ required_error: "El periodo es obligatorio." })
     .regex(/^\d{4}-\d{2}$/, "El periodo debe tener formato AAAA-MM."),
   fechaGeneracion: FechaISOSchema,
-  diasTrabajados: z.number().int().min(0, "Los días trabajados no pueden ser negativos.").max(31, "Los días trabajados no pueden superar 31."),
+  diasTrabajados: z
+    .number()
+    .int()
+    .min(0, "Los días trabajados no pueden ser negativos.")
+    .max(31, "Los días trabajados no pueden superar 31."),
   // Snapshot contractual y paramétrico usado en el cálculo.
   sueldoBaseContrato: z.number().min(0),
   diasMesComercial: z.number().int().min(28).max(31),
@@ -1440,7 +1960,12 @@ export const LiquidacionPLSchema = z.object({
 
 // --- Certificados (CT) ---
 
-export const TIPOS_CERTIFICADO_CT = ["residencia", "estado_cuenta", "liquidacion_sueldo", "al_dia"] as const
+export const TIPOS_CERTIFICADO_CT = [
+  "residencia",
+  "estado_cuenta",
+  "liquidacion_sueldo",
+  "al_dia",
+] as const
 export const TipoCertificadoCTSchema = z.enum(TIPOS_CERTIFICADO_CT)
 
 // Certificado oficial emitido: snapshot inmutable del contenido usado al
@@ -1448,24 +1973,33 @@ export const TipoCertificadoCTSchema = z.enum(TIPOS_CERTIFICADO_CT)
 export const CertificadoCTSchema = z.object({
   id: IdEntidadSchema,
   folio: z.string().min(1, "El folio es obligatorio."),
-  codigoVerificacion: z.string({ required_error: "El código de verificación es obligatorio." }).min(6, "El código de verificación debe tener al menos 6 caracteres."),
+  codigoVerificacion: z
+    .string({ required_error: "El código de verificación es obligatorio." })
+    .min(6, "El código de verificación debe tener al menos 6 caracteres."),
   tipo: TipoCertificadoCTSchema,
   unidadId: IdEntidadSchema.optional(),
   personaId: IdEntidadSchema.optional(),
   // Fuente del dato según tipología (vínculo VU, libro FI o liquidación PL).
   origenRef: IdEntidadSchema.optional(),
-  solicitanteNombre: z.string({ required_error: "El solicitante es obligatorio." }).min(1, "Debe identificar al solicitante."),
-  resumen: z.string({ required_error: "El resumen del certificado es obligatorio." }).min(1, "El resumen del certificado es obligatorio."),
-  detalle: z.array(z.object({
-    clave: z.string().min(1, "La clave del detalle es obligatoria."),
-    valor: z.string().min(1, "El valor del detalle es obligatorio."),
-  })),
+  solicitanteNombre: z
+    .string({ required_error: "El solicitante es obligatorio." })
+    .min(1, "Debe identificar al solicitante."),
+  resumen: z
+    .string({ required_error: "El resumen del certificado es obligatorio." })
+    .min(1, "El resumen del certificado es obligatorio."),
+  detalle: z.array(
+    z.object({
+      clave: z.string().min(1, "La clave del detalle es obligatoria."),
+      valor: z.string().min(1, "El valor del detalle es obligatorio."),
+    })
+  ),
   // Firma digitalizada usada: SOLO referencia (D1), jamás binario embebido.
   firmaUrl: z
     .string()
     .max(2048, "La URL excede el largo permitido.")
     .refine((valor) => !/^data:/i.test(valor) && !/^blob:/i.test(valor), {
-      message: "Media por referencia (D1): la firma debe ser una URL, no contenido embebido.",
+      message:
+        "Media por referencia (D1): la firma debe ser una URL, no contenido embebido.",
     })
     .optional(),
   fechaEmision: FechaISOSchema,
@@ -1473,29 +2007,44 @@ export const CertificadoCTSchema = z.object({
 
 // --- Reportería y Dashboards (RE) ---
 
-export const BLOQUES_REPORTE_RE = ["gastos_mes", "bitacora_seguridad", "morosidad", "consumo_insumos"] as const
+export const BLOQUES_REPORTE_RE = [
+  "gastos_mes",
+  "bitacora_seguridad",
+  "morosidad",
+  "consumo_insumos",
+] as const
 export const BloqueReporteRESchema = z.enum(BLOQUES_REPORTE_RE)
 
 // Reporte personalizado: bloques snapshot inmutables al generar + segmento
 // declarado (EF+MP+tenencia). Los destinatarios se resuelven al distribuir.
 export const ReporteRESchema = z.object({
   id: IdEntidadSchema,
-  titulo: z.string({ required_error: "El título del reporte es obligatorio." }).min(3, "El título debe tener al menos 3 caracteres."),
-  bloques: z.array(BloqueReporteRESchema).min(1, "Selecciona al menos un bloque de información."),
+  titulo: z
+    .string({ required_error: "El título del reporte es obligatorio." })
+    .min(3, "El título debe tener al menos 3 caracteres."),
+  bloques: z
+    .array(BloqueReporteRESchema)
+    .min(1, "Selecciona al menos un bloque de información."),
   segmento: z.object({
     macroSectorIds: z.array(IdEntidadSchema),
     microSectorIds: z.array(IdEntidadSchema),
     unidadIds: z.array(IdEntidadSchema),
-    perfiles: z.array(z.enum(["administracion", "personal", "propietario", "residente"])),
+    perfiles: z.array(
+      z.enum(["administracion", "personal", "propietario", "residente"])
+    ),
     tenencias: z.array(z.enum(["propietarios", "arrendatarios"])),
   }),
-  payloadSnapshot: z.array(z.object({
-    bloque: BloqueReporteRESchema,
-    lineas: z.array(z.object({
-      etiqueta: z.string().min(1),
-      valor: z.string().min(1),
-    })),
-  })),
+  payloadSnapshot: z.array(
+    z.object({
+      bloque: BloqueReporteRESchema,
+      lineas: z.array(
+        z.object({
+          etiqueta: z.string().min(1),
+          valor: z.string().min(1),
+        })
+      ),
+    })
+  ),
   fechaGeneracion: FechaISOSchema,
   destinatariosPersonaId: z.array(IdEntidadSchema),
   distribuidoA: z.number().int().min(0),
@@ -1509,20 +2058,26 @@ export type ResultadoValidacion<T> =
   | { ok: false; error: string }
 
 export function formatoErrorZod(error: z.ZodError): string {
-  const detalles = error.issues.map(issue => {
+  const detalles = error.issues.map((issue) => {
     const campo = issue.path.join(".")
     return campo ? `${campo}: ${issue.message}` : issue.message
   })
   return `Datos inválidos: ${detalles.slice(0, 3).join("; ")}${detalles.length > 3 ? "…" : ""}`
 }
 
-export function validarConEsquema<S extends z.ZodTypeAny>(schema: S, input: unknown): ResultadoValidacion<z.infer<S>> {
+export function validarConEsquema<S extends z.ZodTypeAny>(
+  schema: S,
+  input: unknown
+): ResultadoValidacion<z.infer<S>> {
   const resultado = schema.safeParse(input)
   if (resultado.success) return { ok: true, data: resultado.data }
   return { ok: false, error: formatoErrorZod(resultado.error) }
 }
 
-export function validarMaestro(key: string, item: unknown): ResultadoValidacion<unknown> {
+export function validarMaestro(
+  key: string,
+  item: unknown
+): ResultadoValidacion<unknown> {
   const schema = MAESTRO_SCHEMAS[key as keyof typeof MAESTRO_SCHEMAS]
   if (!schema) return { ok: false, error: `Maestro "${key}" no soportado.` }
   return validarConEsquema(schema, item)

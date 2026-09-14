@@ -6,8 +6,12 @@
 // para trazabilidad; la matriz definitiva con storageStates llega en P2).
 import { test } from "@playwright/test"
 
-test.describe.skip("roles-descubrimiento — gap historico (P1 evidencia temporal, skip)", () => {
-  test.skip(true, "Evidencia temporal pre-fix: residente veia grupos admin por currentRole='admin' hardcodeado. Ahora corregido via union de membresias en sesion (lib/auth.ts) + sidebar conectado. Dejar en skip para trazabilidad; matriz definitiva en auth/roles-menu.spec.ts y P2.")
+test.describe
+  .skip("roles-descubrimiento — gap historico (P1 evidencia temporal, skip)", () => {
+  test.skip(
+    true,
+    "Evidencia temporal pre-fix: residente veia grupos admin por currentRole='admin' hardcodeado. Ahora corregido via union de membresias en sesion (lib/auth.ts) + sidebar conectado. Dejar en skip para trazabilidad; matriz definitiva en auth/roles-menu.spec.ts y P2."
+  )
   test("placeholder skip", async () => {
     // no-op: el bloque describe esta en skip
   })

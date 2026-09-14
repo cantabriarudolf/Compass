@@ -5,7 +5,11 @@ import bcrypt from "bcryptjs"
 import { prisma } from "@/lib/prisma"
 import { authConfig } from "@/lib/auth.config"
 import { AdapterPrismaCompass } from "@/lib/auth-adapter"
-import { excedeIntentos, registrarFallo, limpiarIntentos } from "@/lib/rate-limit"
+import {
+  excedeIntentos,
+  registrarFallo,
+  limpiarIntentos,
+} from "@/lib/rate-limit"
 import { validarPassword } from "@/lib/password-policy"
 
 /** Credenciales inválidas (password errónea, usuario inexistente/inactivo/sin hash). Mensaje genérico para no enumerar emails. */
@@ -36,7 +40,8 @@ export class Requiere2FA extends CredentialsSignin {
  * dummy cuando el usuario no existe, para igualar el tiempo de respuesta y no
  * filtrar existencia de emails por timing (SEC-012, D-iv).
  */
-const HASH_DUMMY = "$2a$10$7EqJtq98hPqEX7fNZaFWoOhi5B0G1S3kQvPzEmg8BkSxTQhxnWJmK"
+const HASH_DUMMY =
+  "$2a$10$7EqJtq98hPqEX7fNZaFWoOhi5B0G1S3kQvPzEmg8BkSxTQhxnWJmK"
 
 function claveIp(request: Request): string {
   const bruto = request.headers.get("x-forwarded-for") ?? "local"
@@ -62,7 +67,8 @@ export async function verificarCredenciales(
   passwordBruto: unknown,
   clavesRateLimit: string[]
 ): Promise<CredencialesVerificadas> {
-  const email = typeof emailBruto === "string" ? emailBruto.trim().toLowerCase() : ""
+  const email =
+    typeof emailBruto === "string" ? emailBruto.trim().toLowerCase() : ""
   const password = typeof passwordBruto === "string" ? passwordBruto : ""
   if (!email || !password) throw new CredencialesInvalidas()
 
@@ -88,7 +94,11 @@ export async function verificarCredenciales(
   for (const clave of clavesRateLimit) {
     await limpiarIntentos(clave)
   }
-  return { id: usuario.id, email: usuario.email, twoFactorEnabled: usuario.twoFactorEnabled }
+  return {
+    id: usuario.id,
+    email: usuario.email,
+    twoFactorEnabled: usuario.twoFactorEnabled,
+  }
 }
 
 /**
@@ -103,9 +113,15 @@ async function autorizarCredenciales(
   request: Request
 ): Promise<{ id: string; email: string } | null> {
   const email =
-    typeof credentials.email === "string" ? credentials.email.trim().toLowerCase() : ""
+    typeof credentials.email === "string"
+      ? credentials.email.trim().toLowerCase()
+      : ""
   const claves = [claveIp(request), `email:${email}`]
-  const usuario = await verificarCredenciales(credentials.email, credentials.password, claves)
+  const usuario = await verificarCredenciales(
+    credentials.email,
+    credentials.password,
+    claves
+  )
   if (usuario.twoFactorEnabled) throw new Requiere2FA()
   return { id: usuario.id, email: usuario.email }
 }
@@ -116,14 +132,27 @@ export const { handlers, auth, signIn, signOut }: any = NextAuth({
   adapter: AdapterPrismaCompass(prisma),
   providers: [
     Credentials({
-      credentials: { email: { label: "Correo electrónico" }, password: { label: "Contraseña" } },
+      credentials: {
+        email: { label: "Correo electrónico" },
+        password: { label: "Contraseña" },
+      },
       authorize: autorizarCredenciales,
     }),
   ],
   callbacks: {
-    async jwt({ token, trigger }: { token: Record<string, unknown> & { roles?: string[]; tokenVersion?: number }; trigger?: string }) {
+    async jwt({
+      token,
+      trigger,
+    }: {
+      token: Record<string, unknown> & {
+        roles?: string[]
+        tokenVersion?: number
+      }
+      trigger?: string
+    }) {
       if (token.sub) {
-        const necesitaRefresh = !Array.isArray(token.roles) || trigger === "update"
+        const necesitaRefresh =
+          !Array.isArray(token.roles) || trigger === "update"
         if (necesitaRefresh) {
           try {
             const usuario = await prisma.usuario.findUnique({
@@ -132,7 +161,10 @@ export const { handlers, auth, signIn, signOut }: any = NextAuth({
             })
             // P2: invalidar sesión si tokenVersion cambió
             if (usuario && typeof usuario.tokenVersion === "number") {
-              if (token.tokenVersion !== undefined && token.tokenVersion !== usuario.tokenVersion) {
+              if (
+                token.tokenVersion !== undefined &&
+                token.tokenVersion !== usuario.tokenVersion
+              ) {
                 // Sesión invalidada — retornar token vacío para forzar re-login
                 return { sub: "" } as JWT
               }

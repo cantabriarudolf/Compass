@@ -28,8 +28,12 @@ describe("calcularDigitoVerificador (módulo 11)", () => {
     const cuerpo = "11111111"
     expect(calcularDigitoVerificador(cuerpo)).toBe(
       (() => {
-        let s = 0, f = 2
-        for (const d of "11111111".split("").reverse()) { s += Number(d) * f; f = f === 7 ? 2 : f + 1 }
+        let s = 0,
+          f = 2
+        for (const d of "11111111".split("").reverse()) {
+          s += Number(d) * f
+          f = f === 7 ? 2 : f + 1
+        }
         const r = s % 11
         return String(11 - r)
       })()
@@ -90,12 +94,14 @@ describe("validarDocumentoIdentidad", () => {
 
 describe("barrido de seeds: todos los RUT sembrados son válidos", () => {
   it("personas del seed cumplen módulo 11 o son pasaporte", () => {
-    const invalidos = seedPersonas.filter((p) => !validarDocumentoIdentidad(p.rut))
+    const invalidos = seedPersonas.filter(
+      (p) => !validarDocumentoIdentidad(p.rut)
+    )
     expect(invalidos.map((p) => `${p.id}:${p.rut}`)).toEqual([])
   })
 
   it("configuración global cumple módulo 11", () => {
-    expect(validarRut(seedConfiguracion.rutCondominio)).toBe(true)
+    expect(validarRut(seedConfiguracion.rutComunidad)).toBe(true)
     expect(validarRut(seedConfiguracion.rutAdministrador)).toBe(true)
   })
 })

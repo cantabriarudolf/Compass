@@ -34,8 +34,8 @@ async function crearSesion(
   email: string,
   archivo: string
 ) {
-      await page.goto("/ingresar")
-      const hayFormulario = await correoOFormulario(page)
+  await page.goto("/ingresar")
+  const hayFormulario = await correoOFormulario(page)
   if (hayFormulario) {
     await page.getByLabel("Correo electrónico").fill(email)
     await page.getByLabel("Contraseña").fill(PASSWORD_TEST)
@@ -44,25 +44,27 @@ async function crearSesion(
   } else {
     await expect(page).toHaveURL(/\/admin/, { timeout: 30_000 })
   }
-      // El banner de cookies (fijo abajo) tapa botones al fondo del viewport e
-      // intercepta los clics: se acepta una vez al final (ya hidratado) para que
-      // el consentimiento quede en localStorage y se persista en el
-      // storageState que heredan los specs.
-      const bannerCookies = page
-        .locator("div")
-        .filter({ hasText: "Utilizamos cookies" })
-        .first()
-      await bannerCookies.waitFor({ state: "visible", timeout: 5_000 }).catch(() => {})
-      if (await bannerCookies.isVisible().catch(() => false)) {
-        try {
-          await bannerCookies
-            .getByRole("button", { name: "Aceptar" })
-            .click({ force: true, noWaitAfter: true })
-        } catch {
-          // Si el banner ya se ocultó, no hay nada que hacer.
-        }
-      }
-      await page.context().storageState({ path: archivo })
+  // El banner de cookies (fijo abajo) tapa botones al fondo del viewport e
+  // intercepta los clics: se acepta una vez al final (ya hidratado) para que
+  // el consentimiento quede en localStorage y se persista en el
+  // storageState que heredan los specs.
+  const bannerCookies = page
+    .locator("div")
+    .filter({ hasText: "Utilizamos cookies" })
+    .first()
+  await bannerCookies
+    .waitFor({ state: "visible", timeout: 5_000 })
+    .catch(() => {})
+  if (await bannerCookies.isVisible().catch(() => false)) {
+    try {
+      await bannerCookies
+        .getByRole("button", { name: "Aceptar" })
+        .click({ force: true, noWaitAfter: true })
+    } catch {
+      // Si el banner ya se ocultó, no hay nada que hacer.
+    }
+  }
+  await page.context().storageState({ path: archivo })
 }
 
 for (const { email, archivo } of CUENTAS) {

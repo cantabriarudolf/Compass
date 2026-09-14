@@ -36,7 +36,14 @@ const MATRIZ: Matriz = {
   },
   "conserjeria@test.cl": {
     visibles: ["Inicio", "Operaciones"],
-    ocultos: ["Finanzas", "Comunidad", "Inventario", "Personas", "Desarrollo AI", "Sistema"],
+    ocultos: [
+      "Finanzas",
+      "Comunidad",
+      "Inventario",
+      "Personas",
+      "Desarrollo AI",
+      "Sistema",
+    ],
   },
   "residente@test.cl": {
     visibles: ["Inicio", "Operaciones", "Finanzas", "Comunidad"],
@@ -54,7 +61,9 @@ async function loginAs(page: import("@playwright/test").Page, email: string) {
   // forzar goto estable a /admin/gestion para sidebar consistente (ver debugClean2)
   await page.goto("/admin/gestion")
   await expect(page).toHaveURL(/\/admin\/gestion/, { timeout: 30_000 })
-  await page.waitForLoadState("networkidle", { timeout: 15_000 }).catch(() => {})
+  await page
+    .waitForLoadState("networkidle", { timeout: 15_000 })
+    .catch(() => {})
   // dar tiempo a hidratacion del sidebar (client)
   await page.waitForTimeout(1500)
   // capturar errores de consola
@@ -64,7 +73,9 @@ async function loginAs(page: import("@playwright/test").Page, email: string) {
 }
 
 for (const [email, { visibles, ocultos }] of Object.entries(MATRIZ)) {
-  test(`matriz rol×grupos — ${email} visibles [${visibles.join(", ")}] ocultos [${ocultos.join(", ")}]`, async ({ page }) => {
+  test(`matriz rol×grupos — ${email} visibles [${visibles.join(", ")}] ocultos [${ocultos.join(", ")}]`, async ({
+    page,
+  }) => {
     const pageErrors: string[] = []
     page.on("pageerror", (e) => pageErrors.push(e.message))
 
@@ -72,27 +83,41 @@ for (const [email, { visibles, ocultos }] of Object.entries(MATRIZ)) {
 
     // Sidebar groups — usar SidebarGroupLabel texto (scoping estricto)
     for (const grupo of visibles) {
-      await expect(page.getByText(grupo, { exact: true }).first()).toBeVisible({ timeout: 10_000 })
+      await expect(page.getByText(grupo, { exact: true }).first()).toBeVisible({
+        timeout: 10_000,
+      })
     }
     for (const grupo of ocultos) {
-      await expect(page.getByText(grupo, { exact: true })).toBeHidden({ timeout: 10_000 })
+      await expect(page.getByText(grupo, { exact: true })).toBeHidden({
+        timeout: 10_000,
+      })
     }
 
     // Item granular: Remuneraciones solo admin (dentro de Finanzas collapsible)
     if (email === "admin@test.cl") {
       // Expandir Finanzas para ver subitems (boton collapsible, no label)
-      await page.getByRole("button", { name: "Finanzas" }).click().catch(() => {})
+      await page
+        .getByRole("button", { name: "Finanzas" })
+        .click()
+        .catch(() => {})
       await page.waitForTimeout(800)
-      await expect(page.getByText("Remuneraciones", { exact: true })).toBeVisible({ timeout: 10_000 })
+      await expect(
+        page.getByText("Remuneraciones", { exact: true })
+      ).toBeVisible({ timeout: 10_000 })
     } else {
       // Residente y conserjeria no deben ver Remuneraciones
       // Si Finanzas oculto para conserjeria, item tampoco; para residente, Finanzas visible pero item filtrado
       // Solo intentar expandir si Finanzas visible
       if (visibles.includes("Finanzas")) {
-        await page.getByRole("button", { name: "Finanzas" }).click().catch(() => {})
+        await page
+          .getByRole("button", { name: "Finanzas" })
+          .click()
+          .catch(() => {})
         await page.waitForTimeout(800)
       }
-      await expect(page.getByText("Remuneraciones", { exact: true })).toBeHidden({ timeout: 10_000 })
+      await expect(
+        page.getByText("Remuneraciones", { exact: true })
+      ).toBeHidden({ timeout: 10_000 })
     }
 
     expect(pageErrors, `0 pageerror para ${email}`).toEqual([])
@@ -100,14 +125,23 @@ for (const [email, { visibles, ocultos }] of Object.entries(MATRIZ)) {
 }
 
 test.describe("residente — item sin roles hereda visibilidad del grupo", () => {
-  test("Gastos Comunes visible para residente (item sin roles, grupo Finanzas visible)", async ({ page }) => {
+  test("Gastos Comunes visible para residente (item sin roles, grupo Finanzas visible)", async ({
+    page,
+  }) => {
     const errors: string[] = []
     page.on("pageerror", (e) => errors.push(e.message))
     await loginAs(page, "residente@test.cl")
-    await page.getByRole("button", { name: "Finanzas" }).click().catch(() => {})
+    await page
+      .getByRole("button", { name: "Finanzas" })
+      .click()
+      .catch(() => {})
     await page.waitForTimeout(800)
-    await expect(page.getByText("Gastos Comunes", { exact: true })).toBeVisible({ timeout: 10_000 })
-    await expect(page.getByText("Recaudación", { exact: true })).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByText("Gastos Comunes", { exact: true })).toBeVisible(
+      { timeout: 10_000 }
+    )
+    await expect(page.getByText("Recaudación", { exact: true })).toBeVisible({
+      timeout: 10_000,
+    })
     expect(errors).toEqual([])
   })
 })

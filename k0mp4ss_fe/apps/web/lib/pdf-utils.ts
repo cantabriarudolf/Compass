@@ -25,7 +25,10 @@ async function cargarPdfMake(): Promise<any> {
   return pdfMakePromise
 }
 
-export async function descargarPdf(docDefinition: Record<string, unknown>, fileName: string): Promise<void> {
+export async function descargarPdf(
+  docDefinition: Record<string, unknown>,
+  fileName: string
+): Promise<void> {
   const pdfMake = await cargarPdfMake()
   pdfMake.createPdf(docDefinition).download(fileName)
 }
@@ -34,8 +37,9 @@ export async function descargarPdf(docDefinition: Record<string, unknown>, fileN
 // Devuelve null si no es cargable (CORS/ausente): el documento sale con línea
 // de firma en blanco.
 export async function urlADataUrl(url: string): Promise<string | null> {
-  if (!url || /^data:/i.test(url) === false && !/^https?:/i.test(url)) return null
-  return new Promise(resolve => {
+  if (!url || (/^data:/i.test(url) === false && !/^https?:/i.test(url)))
+    return null
+  return new Promise((resolve) => {
     try {
       const img = new Image()
       img.crossOrigin = "anonymous"
@@ -65,7 +69,7 @@ const CLP = (n: number): string => `$${Math.round(n).toLocaleString("es-CL")}`
 function encabezadoInstitucional(config: ConfiguracionGlobal) {
   return [
     { text: config.nombreComunidad, style: "titulo" },
-    `${config.direccionOficial} · RUT ${config.rutCondominio}`,
+    `${config.direccionOficial} · RUT ${config.rutComunidad}`,
     `Administrador responsable: ${config.administradorResponsable} (${config.rutAdministrador})`,
   ]
 }
@@ -83,8 +87,16 @@ function bloqueFirma({ config, firmaDataUrl }: FirmaPdfInput) {
     linea.push({ text: " ", marginBottom: 40 })
   }
   linea.push({ text: "_______________________________", alignment: "center" })
-  linea.push({ text: `${config.administradorResponsable}`, alignment: "center", bold: true })
-  linea.push({ text: "Administrador — Firma digitalizada", alignment: "center", fontSize: 9 })
+  linea.push({
+    text: `${config.administradorResponsable}`,
+    alignment: "center",
+    bold: true,
+  })
+  linea.push({
+    text: "Administrador — Firma digitalizada",
+    alignment: "center",
+    fontSize: 9,
+  })
   return linea
 }
 
@@ -95,9 +107,20 @@ export async function documentoLiquidacionPDF(
   rutTrabajador: string,
   config: ConfiguracionGlobal
 ): Promise<Record<string, unknown>> {
-  const firmaDataUrl = config.firmaDigitalizadaUrl ? await urlADataUrl(config.firmaDigitalizadaUrl) : null
-  const fila = (a: string, b: string): any[] => [{ text: a }, { text: b, alignment: "right" }]
-  const seccion = (t: string): any => ({ text: t, bold: true, marginTop: 10, marginBottom: 4, fontSize: 11 })
+  const firmaDataUrl = config.firmaDigitalizadaUrl
+    ? await urlADataUrl(config.firmaDigitalizadaUrl)
+    : null
+  const fila = (a: string, b: string): any[] => [
+    { text: a },
+    { text: b, alignment: "right" },
+  ]
+  const seccion = (t: string): any => ({
+    text: t,
+    bold: true,
+    marginTop: 10,
+    marginBottom: 4,
+    fontSize: 11,
+  })
 
   const doc = {
     header: encabezadoInstitucional(config),
@@ -116,17 +139,51 @@ export async function documentoLiquidacionPDF(
         table: {
           widths: ["*", "auto"],
           body: [
-            fila(`Sueldo base (${liq.diasTrabajados} días × ${CLP(liq.sueldoBaseContrato)})`, CLP(liq.sueldoBaseProporcional)),
+            fila(
+              `Sueldo base (${liq.diasTrabajados} días × ${CLP(liq.sueldoBaseContrato)})`,
+              CLP(liq.sueldoBaseProporcional)
+            ),
             ...(liq.horasExtrasHoras > 0
-              ? [fila(`Horas extras (${liq.horasExtrasHoras} h × ${CLP(liq.valorHoraOrdinaria)} × 1.5)`, CLP(liq.montoHorasExtras))]
+              ? [
+                  fila(
+                    `Horas extras (${liq.horasExtrasHoras} h × ${CLP(liq.valorHoraOrdinaria)} × 1.5)`,
+                    CLP(liq.montoHorasExtras)
+                  ),
+                ]
               : []),
-            ...(liq.bonos.map(b => fila(`${b.glosa}${b.imponible ? " (imp.)" : ""}`, CLP(b.monto)))),
-            ...(liq.gratificacionLegal > 0 ? [fila("Gratificación legal", CLP(liq.gratificacionLegal))] : []),
-            ...(liq.asignacionMovilizacion > 0 ? [fila("Asignación de movilización", CLP(liq.asignacionMovilizacion))] : []),
-            ...(liq.asignacionColacion > 0 ? [fila("Asignación de colación", CLP(liq.asignacionColacion))] : []),
-            ...(liq.montoAsignacionFamiliar > 0 ? [fila(`Asignación familiar (${liq.cargas} carga(s))`, CLP(liq.montoAsignacionFamiliar))] : []),
-            [{ text: "Total Haberes", bold: true }, { text: CLP(liq.totalHaberes), bold: true, alignment: "right" }],
-            [{ text: "Total Imponible", bold: true }, { text: CLP(liq.totalImponible), bold: true, alignment: "right" }],
+            ...liq.bonos.map((b) =>
+              fila(`${b.glosa}${b.imponible ? " (imp.)" : ""}`, CLP(b.monto))
+            ),
+            ...(liq.gratificacionLegal > 0
+              ? [fila("Gratificación legal", CLP(liq.gratificacionLegal))]
+              : []),
+            ...(liq.asignacionMovilizacion > 0
+              ? [
+                  fila(
+                    "Asignación de movilización",
+                    CLP(liq.asignacionMovilizacion)
+                  ),
+                ]
+              : []),
+            ...(liq.asignacionColacion > 0
+              ? [fila("Asignación de colación", CLP(liq.asignacionColacion))]
+              : []),
+            ...(liq.montoAsignacionFamiliar > 0
+              ? [
+                  fila(
+                    `Asignación familiar (${liq.cargas} carga(s))`,
+                    CLP(liq.montoAsignacionFamiliar)
+                  ),
+                ]
+              : []),
+            [
+              { text: "Total Haberes", bold: true },
+              { text: CLP(liq.totalHaberes), bold: true, alignment: "right" },
+            ],
+            [
+              { text: "Total Imponible", bold: true },
+              { text: CLP(liq.totalImponible), bold: true, alignment: "right" },
+            ],
           ],
         },
       },
@@ -135,7 +192,9 @@ export async function documentoLiquidacionPDF(
         table: {
           widths: ["*", "auto"],
           body: [
-            ...(liq.montoAFP > 0 ? [fila(`${liq.nombreAfp} (${liq.tasaAFP}%)`, CLP(liq.montoAFP))] : []),
+            ...(liq.montoAFP > 0
+              ? [fila(`${liq.nombreAfp} (${liq.tasaAFP}%)`, CLP(liq.montoAFP))]
+              : []),
             ...(liq.montoSalud > 0
               ? [
                   fila(
@@ -144,11 +203,26 @@ export async function documentoLiquidacionPDF(
                   ),
                 ]
               : []),
-            ...(liq.montoSIS > 0 ? [fila(`SIS (${liq.tasaSIS}%)`, CLP(liq.montoSIS))] : []),
-            ...(liq.montoSeguroCesantia > 0 ? [fila("Seguro de cesantía", CLP(liq.montoSeguroCesantia))] : []),
-            ...(liq.montoAPV > 0 ? [fila("APV / Ahorro voluntario", CLP(liq.montoAPV))] : []),
-            ...(liq.descuentoAnticipos > 0 ? [fila("Descuento de anticipos", CLP(liq.descuentoAnticipos))] : []),
-            [{ text: "Total Descuentos", bold: true }, { text: CLP(liq.totalDescuentos + liq.descuentoAnticipos), bold: true, alignment: "right" }],
+            ...(liq.montoSIS > 0
+              ? [fila(`SIS (${liq.tasaSIS}%)`, CLP(liq.montoSIS))]
+              : []),
+            ...(liq.montoSeguroCesantia > 0
+              ? [fila("Seguro de cesantía", CLP(liq.montoSeguroCesantia))]
+              : []),
+            ...(liq.montoAPV > 0
+              ? [fila("APV / Ahorro voluntario", CLP(liq.montoAPV))]
+              : []),
+            ...(liq.descuentoAnticipos > 0
+              ? [fila("Descuento de anticipos", CLP(liq.descuentoAnticipos))]
+              : []),
+            [
+              { text: "Total Descuentos", bold: true },
+              {
+                text: CLP(liq.totalDescuentos + liq.descuentoAnticipos),
+                bold: true,
+                alignment: "right",
+              },
+            ],
           ],
         },
       },
@@ -158,7 +232,19 @@ export async function documentoLiquidacionPDF(
           widths: ["*", "auto"],
           body: [
             fila("Alcance líquido", CLP(liq.alcanceLiquido)),
-            [{ text: "TOTAL LÍQUIDO A PAGAR", bold: true, fillColor: "#eeeeee" }, { text: CLP(liq.liquidoAPagar), bold: true, alignment: "right", fillColor: "#eeeeee" }],
+            [
+              {
+                text: "TOTAL LÍQUIDO A PAGAR",
+                bold: true,
+                fillColor: "#eeeeee",
+              },
+              {
+                text: CLP(liq.liquidoAPagar),
+                bold: true,
+                alignment: "right",
+                fillColor: "#eeeeee",
+              },
+            ],
           ],
         },
       },
@@ -183,26 +269,42 @@ export async function documentoCertificadoPDF(input: {
   config: ConfiguracionGlobal
 }): Promise<Record<string, unknown>> {
   const { config } = input
-  const firmaDataUrl = config.firmaDigitalizadaUrl ? await urlADataUrl(config.firmaDigitalizadaUrl) : null
+  const firmaDataUrl = config.firmaDigitalizadaUrl
+    ? await urlADataUrl(config.firmaDigitalizadaUrl)
+    : null
   const doc = {
     header: encabezadoInstitucional(config),
     content: [
-      { text: input.titulo.toUpperCase(), style: "titulo", alignment: "center" },
+      {
+        text: input.titulo.toUpperCase(),
+        style: "titulo",
+        alignment: "center",
+      },
       `Folio ${input.folio} · Código de verificación: ${input.codigoVerificacion}`,
       `Emitido el ${input.fechaEmision} por la administración de ${config.nombreComunidad}.`,
       { text: "", margin: [0, 8] as [number, number] },
-      ...input.parrafos.map(p => ({ text: p, alignment: "justify", marginBottom: 8 })),
+      ...input.parrafos.map((p) => ({
+        text: p,
+        alignment: "justify",
+        marginBottom: 8,
+      })),
       ...(input.detalle.length > 0
         ? [
             {
               table: {
                 widths: ["*", "auto"],
-                body: input.detalle.map(([k, v]) => [k, { text: v, alignment: "right" }]),
+                body: input.detalle.map(([k, v]) => [
+                  k,
+                  { text: v, alignment: "right" },
+                ]),
               },
             },
           ]
         : []),
-      { text: `Se extiende el presente ${input.tipo} a solicitud de ${input.solicitanteNombre}, para los fines que estime convenientes.`, marginTop: 12 },
+      {
+        text: `Se extiende el presente ${input.tipo} a solicitud de ${input.solicitanteNombre}, para los fines que estime convenientes.`,
+        marginTop: 12,
+      },
       { ...bloqueFirma({ config, firmaDataUrl }), marginTop: 30 },
     ],
     styles: { titulo: { fontSize: 14, bold: true } },
