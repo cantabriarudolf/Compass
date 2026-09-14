@@ -63,7 +63,10 @@ describe("Capa de validación en escrituras del store", () => {
   it("savePersona rechaza email inválido sin mutar el store", () => {
     const antes = getState().personas.length
 
-    const result = getState().savePersona({ ...personaValida, email: "no-es-un-correo" })
+    const result = getState().savePersona({
+      ...personaValida,
+      email: "no-es-un-correo",
+    })
 
     expect(result.ok).toBe(false)
     expect(getState().personas.length).toBe(antes)
@@ -98,7 +101,10 @@ describe("Capa de validación en escrituras del store", () => {
   it("saveConfiguracion rechaza día de corte fuera de rango", () => {
     const original = getState().configuracion
 
-    const result = getState().saveConfiguracion({ ...original, diaCortePago: 99 })
+    const result = getState().saveConfiguracion({
+      ...original,
+      diaCortePago: 99,
+    })
 
     expect(result.ok).toBe(false)
     expect(getState().configuracion).toEqual(original)
@@ -124,12 +130,22 @@ describe("validateSeedOrder — EF orden interno macro→micro→unidad", () => 
     const seed = seedData()
     const result = validateSeedOrder({
       macroSectores: seed.macroSectores,
-      microSectores: [...seed.microSectores, { id: "ms-fake", macroSectorId: "macro-fantasma", nombre: "Fake", etiqueta: "F" }],
+      microSectores: [
+        ...seed.microSectores,
+        {
+          id: "ms-fake",
+          macroSectorId: "macro-fantasma",
+          nombre: "Fake",
+          etiqueta: "F",
+        },
+      ],
       unidades: seed.unidades,
       tiposUnidad: seed.tiposUnidad,
     })
     expect(result.ok).toBe(false)
-    expect(result.violations.some(v => v.includes("macroSectorId inexistente"))).toBe(true)
+    expect(
+      result.violations.some((v) => v.includes("macroSectorId inexistente"))
+    ).toBe(true)
   })
 
   it("detecta unidad con microSectorId inexistente", () => {
@@ -137,11 +153,16 @@ describe("validateSeedOrder — EF orden interno macro→micro→unidad", () => 
     const result = validateSeedOrder({
       macroSectores: seed.macroSectores,
       microSectores: seed.microSectores,
-      unidades: [...seed.unidades, buildUnidad({ id: "u-fake", microSectorId: "ms-fantasma" })],
+      unidades: [
+        ...seed.unidades,
+        buildUnidad({ id: "u-fake", microSectorId: "ms-fantasma" }),
+      ],
       tiposUnidad: seed.tiposUnidad,
     })
     expect(result.ok).toBe(false)
-    expect(result.violations.some(v => v.includes("microSectorId inexistente"))).toBe(true)
+    expect(
+      result.violations.some((v) => v.includes("microSectorId inexistente"))
+    ).toBe(true)
   })
 
   it("detecta unidad con tipoUnidadId inexistente", () => {
@@ -149,10 +170,15 @@ describe("validateSeedOrder — EF orden interno macro→micro→unidad", () => 
     const result = validateSeedOrder({
       macroSectores: seed.macroSectores,
       microSectores: seed.microSectores,
-      unidades: [...seed.unidades, buildUnidad({ id: "u-fake2", tipoUnidadId: "tipo-fantasma" })],
+      unidades: [
+        ...seed.unidades,
+        buildUnidad({ id: "u-fake2", tipoUnidadId: "tipo-fantasma" }),
+      ],
       tiposUnidad: seed.tiposUnidad,
     })
     expect(result.ok).toBe(false)
-    expect(result.violations.some(v => v.includes("tipoUnidadId inexistente"))).toBe(true)
+    expect(
+      result.violations.some((v) => v.includes("tipoUnidadId inexistente"))
+    ).toBe(true)
   })
 })

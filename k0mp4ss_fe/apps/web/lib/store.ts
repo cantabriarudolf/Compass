@@ -787,15 +787,20 @@ function upsert<T extends { id: string }>(list: T[], item: T): T[] {
 
 const ESTADO_NOMBRE_A_ID: Record<string, string> = {
   Vacante: "vacante",
-      "En Uso": "en-uso",
-      "En Arriendo": "en-arriendo",
-      "En Venta": "en-venta",
-      "En Mantención": "en-mantencion",
-    }
+  "En Uso": "en-uso",
+  "En Arriendo": "en-arriendo",
+  "En Venta": "en-venta",
+  "En Mantención": "en-mantencion",
+}
 
 // EF §Dependencias ST — validateSeedOrder reporta rank internal violation.
 // Orden interno obligatorio: macroSectores → microSectores (macroSectorId) → unidades (microSectorId, tipoUnidadId)
-export function validateSeedOrder(data: { macroSectores: MacroSector[]; microSectores: MicroSector[]; unidades: Unidad[]; tiposUnidad: TipoUnidad[] }): { ok: boolean; violations: string[] } {
+export function validateSeedOrder(data: {
+  macroSectores: MacroSector[]
+  microSectores: MicroSector[]
+  unidades: Unidad[]
+  tiposUnidad: TipoUnidad[]
+}): { ok: boolean; violations: string[] } {
   const violations: string[] = []
   const macroIds = new Set(data.macroSectores.map((m) => m.id))
   const microIds = new Set(data.microSectores.map((m) => m.id))
@@ -803,15 +808,21 @@ export function validateSeedOrder(data: { macroSectores: MacroSector[]; microSec
 
   for (const micro of data.microSectores) {
     if (!macroIds.has(micro.macroSectorId)) {
-      violations.push(`microSector ${micro.id} referencia macroSectorId inexistente: ${micro.macroSectorId}`)
+      violations.push(
+        `microSector ${micro.id} referencia macroSectorId inexistente: ${micro.macroSectorId}`
+      )
     }
   }
   for (const unidad of data.unidades) {
     if (!microIds.has(unidad.microSectorId)) {
-      violations.push(`unidad ${unidad.id} referencia microSectorId inexistente: ${unidad.microSectorId}`)
+      violations.push(
+        `unidad ${unidad.id} referencia microSectorId inexistente: ${unidad.microSectorId}`
+      )
     }
     if (!tipoUnidadIds.has(unidad.tipoUnidadId)) {
-      violations.push(`unidad ${unidad.id} referencia tipoUnidadId inexistente: ${unidad.tipoUnidadId}`)
+      violations.push(
+        `unidad ${unidad.id} referencia tipoUnidadId inexistente: ${unidad.tipoUnidadId}`
+      )
     }
   }
   return { ok: violations.length === 0, violations }
@@ -8127,7 +8138,7 @@ export const useCompassStore = create<CompassStore>()(
               categoriasMacro: mergeById(
                 (prev.maestros?.categoriasMacro ?? []) as { id: string }[],
                 seed.maestros.categoriasMacro as unknown as { id: string }[]
-          ) as never,
+              ) as never,
             } as never,
           }
           // Eliminar estacionamientos legacy del persistido si existe
