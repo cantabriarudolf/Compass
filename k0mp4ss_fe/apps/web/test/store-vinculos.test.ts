@@ -187,12 +187,6 @@ describe("removeVinculo", () => {
       unidadId: "u-A-101",
       personaId: "p-1",
       solicitanteNombre: "Juan Pérez González",
-      resumen: "Certificado de residencia",
-      detalle: [
-        { clave: "unidad", valor: "A-101" },
-        { clave: "residente", valor: "Juan Pérez González" },
-      ],
-      fechaEmision: "2026-08-01",
     })
 
     const result = getState().removeVinculo("v-1")

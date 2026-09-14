@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest"
-import { useCompassStore } from "@/lib/store"
+import { useCompassStore, validateSeedOrder, seedData } from "@/lib/store"
 import type { Unidad } from "@/data/inventario/estructura"
 import type { Persona } from "@/data/comunidad/personas"
 import { resetStore } from "./helpers"
@@ -30,6 +30,22 @@ const unidadValida: Unidad = {
   rolSii: "123-A105",
   estadoId: "vacante",
   servicios: {},
+}
+
+function buildUnidad(overrides: Partial<Unidad> = {}): Unidad {
+  return {
+    id: "u-test",
+    microSectorId: "piso-torre-a-1",
+    numero: "105",
+    etiqueta: "Depto",
+    tipoUnidadId: "tipo-a",
+    metraje: 55.5,
+    prorrateo: 0.0125,
+    rolSii: "123-A105",
+    estadoId: "vacante",
+    servicios: {},
+    ...overrides,
+  }
 }
 
 describe("Capa de validación en escrituras del store", () => {
@@ -86,5 +102,57 @@ describe("Capa de validación en escrituras del store", () => {
 
     expect(result.ok).toBe(false)
     expect(getState().configuracion).toEqual(original)
+  })
+})
+
+describe("validateSeedOrder — EF orden interno macro→micro→unidad", () => {
+  beforeEach(resetStore)
+
+  it("semilla NSGC pasa validación de orden interno", () => {
+    const seed = seedData()
+    const result = validateSeedOrder({
+      macroSectores: seed.macroSectores,
+      microSectores: seed.microSectores,
+      unidades: seed.unidades,
+      tiposUnidad: seed.tiposUnidad,
+    })
+    expect(result.ok).toBe(true)
+    expect(result.violations).toHaveLength(0)
+  })
+
+  it("detecta microSector con macroSectorId inexistente", () => {
+    const seed = seedData()
+    const result = validateSeedOrder({
+      macroSectores: seed.macroSectores,
+      microSectores: [...seed.microSectores, { id: "ms-fake", macroSectorId: "macro-fantasma", nombre: "Fake", etiqueta: "F" }],
+      unidades: seed.unidades,
+      tiposUnidad: seed.tiposUnidad,
+    })
+    expect(result.ok).toBe(false)
+    expect(result.violations.some(v => v.includes("macroSectorId inexistente"))).toBe(true)
+  })
+
+  it("detecta unidad con microSectorId inexistente", () => {
+    const seed = seedData()
+    const result = validateSeedOrder({
+      macroSectores: seed.macroSectores,
+      microSectores: seed.microSectores,
+      unidades: [...seed.unidades, buildUnidad({ id: "u-fake", microSectorId: "ms-fantasma" })],
+      tiposUnidad: seed.tiposUnidad,
+    })
+    expect(result.ok).toBe(false)
+    expect(result.violations.some(v => v.includes("microSectorId inexistente"))).toBe(true)
+  })
+
+  it("detecta unidad con tipoUnidadId inexistente", () => {
+    const seed = seedData()
+    const result = validateSeedOrder({
+      macroSectores: seed.macroSectores,
+      microSectores: seed.microSectores,
+      unidades: [...seed.unidades, buildUnidad({ id: "u-fake2", tipoUnidadId: "tipo-fantasma" })],
+      tiposUnidad: seed.tiposUnidad,
+    })
+    expect(result.ok).toBe(false)
+    expect(result.violations.some(v => v.includes("tipoUnidadId inexistente"))).toBe(true)
   })
 })
