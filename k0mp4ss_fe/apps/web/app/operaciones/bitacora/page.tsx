@@ -267,7 +267,7 @@ export default function BitacoraPage() {
                       <p className="font-medium">{nombrePersona(c.trabajadorPersonaId)} · Jornada {jornadas.find(j => j.id === c.jornadaReportadaId)?.nombre}</p>
                       <p className="text-xs text-muted-foreground">{c.fecha} {c.hora}</p>
                     </div>
-                    <Badge variant={c.incidencias.hubo ? "destructive" : "secondary"}>{c.incidencias.hubo ? "Con incidencias" : "Sin incidencias"}</Badge>
+                    <Badge variant={c.incidencias.hubo ? "destructive" : "outline"}>{c.incidencias.hubo ? "Con incidencias" : "Sin incidencias"}</Badge>
                   </div>
                   {c.novedadesGenerales && <p className="mt-1 text-muted-foreground">{c.novedadesGenerales}</p>}
                   <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs">

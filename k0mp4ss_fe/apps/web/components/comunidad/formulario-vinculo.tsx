@@ -143,7 +143,7 @@ export function FormularioVinculoUnidad({ vinculo, unidadesVinculadasIds, onSave
                 />
               </div>
               <Select value={unidadId} onValueChange={(v) => { setUnidadId(v); setErrores(prev => ({ ...prev, unidadId: "" })) }}>
-                <SelectTrigger className="w-full" aria-invalid={!!errores.unidadId}>
+                <SelectTrigger className="w-full" aria-invalid={errores.unidadId ? "true" : "false"}>
                   <SelectValue placeholder="Selecciona una unidad..." />
                 </SelectTrigger>
                 <SelectContent>
@@ -173,7 +173,7 @@ export function FormularioVinculoUnidad({ vinculo, unidadesVinculadasIds, onSave
             <div className="space-y-2">
               <Label>Rol *</Label>
               <Select value={rol} onValueChange={(v) => { setRol(v as RolVinculo); setErrores(prev => ({ ...prev, rol: "" })) }}>
-                <SelectTrigger className="w-full" aria-invalid={!!errores.rol}>
+                <SelectTrigger className="w-full" aria-invalid={errores.rol ? "true" : "false"}>
                   <SelectValue placeholder="Selecciona el rol..." />
                 </SelectTrigger>
                 <SelectContent>
@@ -196,7 +196,7 @@ export function FormularioVinculoUnidad({ vinculo, unidadesVinculadasIds, onSave
                   type="date"
                   value={fechaInicio}
                   onChange={e => setFechaInicio(e.target.value)}
-                  aria-invalid={!!errores.fechaInicio}
+                  aria-invalid={errores.fechaInicio ? "true" : "false"}
                   required
                 />
                 {errores.fechaInicio && <p className="text-xs text-destructive">{errores.fechaInicio}</p>}
@@ -208,7 +208,7 @@ export function FormularioVinculoUnidad({ vinculo, unidadesVinculadasIds, onSave
                   type="date"
                   value={fechaFin}
                   onChange={e => setFechaFin(e.target.value)}
-                  aria-invalid={!!errores.fechaFin}
+                  aria-invalid={errores.fechaFin ? "true" : "false"}
                   placeholder="Solo para registros históricos"
                 />
                 {errores.fechaFin && <p className="text-xs text-destructive">{errores.fechaFin}</p>}

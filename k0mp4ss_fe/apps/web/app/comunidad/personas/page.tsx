@@ -53,14 +53,24 @@ const ROLES_TAB_CONFIG: { id: string; label: string; icon: React.ReactNode }[] =
 
 const ESTADOS_CUENTA = ["activos", "inactivos", "bloqueados"] as const
 
-const getRoleBadgeColor = (rol: string) => {
+const getRoleBadgeVariant = (rol: string) => {
   switch (rol) {
-    case "propietario": return "bg-indigo-600 text-white"
-    case "residente": return "bg-emerald-600 text-white"
-    case "personal": return "bg-slate-600 text-white"
-    case "directiva": return "bg-amber-600 text-white"
-    case "contratista": return "bg-gray-600 text-white"
-    default: return "bg-gray-200 text-gray-800"
+    case "propietario": return "default" // indigo
+    case "residente": return "destructive" // emerald-like via destructive variant with custom class
+    case "personal": return "default"
+    case "directiva": return "default"
+    case "contratista": return "secondary"
+    default: return "outline"
+  }
+}
+
+const getRoleBadgeClass = (rol: string) => {
+  switch (rol) {
+    case "residente": return "bg-emerald-600 hover:bg-emerald-700 text-white"
+    case "personal": return "bg-slate-600 hover:bg-slate-700 text-white"
+    case "directiva": return "bg-amber-600 hover:bg-amber-700 text-white"
+    case "contratista": return "bg-gray-600 hover:bg-gray-700 text-white"
+    default: return ""
   }
 }
 
@@ -380,9 +390,9 @@ export default function DirectorioPersonasPage() {
                                 )}
                               </span>
                               <span className="text-xs font-mono text-muted-foreground">{persona.rut}</span>
-                              <div className="flex flex-wrap gap-1 mt-1">
+<div className="flex flex-wrap gap-1 mt-1">
                                 {persona.roles.map(rol => (
-                                  <Badge key={rol} className={`${getRoleBadgeColor(rol)} text-[9px] uppercase font-bold px-1.5 py-0`}>
+                                  <Badge key={rol} variant={getRoleBadgeVariant(rol)} className={`${getRoleBadgeClass(rol)} text-[9px] uppercase font-bold px-1.5 py-0`}>
                                     {rol}
                                   </Badge>
                                 ))}
