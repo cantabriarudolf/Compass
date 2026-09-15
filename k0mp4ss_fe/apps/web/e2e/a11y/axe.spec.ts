@@ -28,7 +28,9 @@ test.describe("Accesibilidad (axe-core) — módulos principales", () => {
   ]
 
   for (const ruta of rutas) {
-    test(`a11y: ${ruta} sin violaciones críticas/serias nuevas`, async ({ page }) => {
+    test(`a11y: ${ruta} sin violaciones críticas/serias nuevas`, async ({
+      page,
+    }) => {
       await page.goto(ruta)
       // Layouts anidan <main> (strict mode) — espera el heading de página.
       await expect(page.locator("h1").first()).toBeVisible({ timeout: 30_000 })
@@ -38,7 +40,7 @@ test.describe("Accesibilidad (axe-core) — módulos principales", () => {
         .analyze()
 
       const graves = resultados.violations.filter(
-        (v) => v.impact === "critical" || v.impact === "serious",
+        (v) => v.impact === "critical" || v.impact === "serious"
       )
       const deuda = DEUDA_CONOCIDA[ruta] ?? []
       const nuevas = graves.filter((v) => !deuda.includes(v.id))
@@ -46,26 +48,31 @@ test.describe("Accesibilidad (axe-core) — módulos principales", () => {
       if (graves.length > 0) {
         console.log(
           `[axe] ${ruta}: graves →`,
-          graves.map((v) => `${v.id} (${v.impact}, ${v.nodes.length} nodos)`).join(", "),
+          graves
+            .map((v) => `${v.id} (${v.impact}, ${v.nodes.length} nodos)`)
+            .join(", ")
         )
         // Debug de deuda: HTML de los primeros nodos por regla
         for (const v of graves) {
-          console.log(`[axe-html] ${ruta} | ${v.id} |`, v.nodes.slice(0, 3).map((n) => (n.html || "").slice(0, 140)))
+          console.log(
+            `[axe-html] ${ruta} | ${v.id} |`,
+            v.nodes.slice(0, 3).map((n) => (n.html || "").slice(0, 140))
+          )
         }
       }
       const moderadas = resultados.violations.filter(
-        (v) => v.impact === "moderate" || v.impact === "minor",
+        (v) => v.impact === "moderate" || v.impact === "minor"
       )
       if (moderadas.length > 0) {
         console.log(
           `[axe] ${ruta}: moderadas/menores (deuda conocida) →`,
-          moderadas.map((v) => `${v.id}×${v.nodes.length}`).join(", "),
+          moderadas.map((v) => `${v.id}×${v.nodes.length}`).join(", ")
         )
       }
 
       expect(
         nuevas.map((v) => `${v.id} (${v.impact})`),
-        `${ruta}: violaciones de accesibilidad graves NUEVAS (no en deuda conocida)`,
+        `${ruta}: violaciones de accesibilidad graves NUEVAS (no en deuda conocida)`
       ).toEqual([])
     })
   }
