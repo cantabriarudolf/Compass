@@ -9,8 +9,10 @@ import AxeBuilder from "@axe-core/playwright"
  * NO está en la lista, el test falla (gate contra regresiones nuevas).
  */
 const DEUDA_CONOCIDA: Record<string, string[]> = {
-  "/comunidad/personas": ["aria-valid-attr-value", "color-contrast"],
-  "/operaciones/bitacora": ["color-contrast"],
+  // Todas las violaciones graves/serias previas resueltas:
+  // - color-contrast en /comunidad/personas (role badges) → FIXED
+  // - color-contrast en /operaciones/bitacora (badge Sin incidencias) → FIXED
+  // - aria-valid-attr-value en /comunidad/personas (formulario-vinculo) → FIXED
 }
 
 test.describe("Accesibilidad (axe-core) — módulos principales", () => {

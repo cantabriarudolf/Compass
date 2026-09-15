@@ -32,46 +32,73 @@ function etiquetaUnidad(u: Unidad) {
   return `${u.etiqueta} ${u.numero}`
 }
 
-function nombreSector(unidad: Unidad, microPorId: Map<string, MicroSector>, macroPorId: Map<string, MacroSector>) {
+function nombreSector(
+  unidad: Unidad,
+  microPorId: Map<string, MicroSector>,
+  macroPorId: Map<string, MacroSector>
+) {
   const micro = microPorId.get(unidad.microSectorId)
   const macro = micro ? macroPorId.get(micro.macroSectorId) : undefined
   return macro ? `${macro.etiqueta} ${macro.nombre}`.trim() : "Otros"
 }
 
 interface FormularioVinculoUnidadProps {
-  vinculo?: VinculoUnidad;
+  vinculo?: VinculoUnidad
   // IDs de unidades con vínculo ACTIVO de la persona (excluir el propio vínculo en modo edición)
-  unidadesVinculadasIds: string[];
-  onSave: (data: Omit<VinculoUnidad, "id" | "personaId">) => StoreResult;
-  onCancel: () => void;
+  unidadesVinculadasIds: string[]
+  onSave: (data: Omit<VinculoUnidad, "id" | "personaId">) => StoreResult
+  onCancel: () => void
 }
 
-export function FormularioVinculoUnidad({ vinculo, unidadesVinculadasIds, onSave, onCancel }: FormularioVinculoUnidadProps) {
+export function FormularioVinculoUnidad({
+  vinculo,
+  unidadesVinculadasIds,
+  onSave,
+  onCancel,
+}: FormularioVinculoUnidadProps) {
   const isEditing = !!vinculo
-  const unidades = useCompassStore(s => s.unidades)
-  const microSectores = useCompassStore(s => s.microSectores)
-  const macroSectores = useCompassStore(s => s.macroSectores)
-  const estadosInmobiliarios = useCompassStore(s => s.maestros.estadosInmobiliarios)
-  const microPorId = React.useMemo(() => new Map(microSectores.map(m => [m.id, m])), [microSectores])
-  const macroPorId = React.useMemo(() => new Map(macroSectores.map(m => [m.id, m])), [macroSectores])
+  const unidades = useCompassStore((s) => s.unidades)
+  const microSectores = useCompassStore((s) => s.microSectores)
+  const macroSectores = useCompassStore((s) => s.macroSectores)
+  const estadosInmobiliarios = useCompassStore(
+    (s) => s.maestros.estadosInmobiliarios
+  )
+  const microPorId = React.useMemo(
+    () => new Map(microSectores.map((m) => [m.id, m])),
+    [microSectores]
+  )
+  const macroPorId = React.useMemo(
+    () => new Map(macroSectores.map((m) => [m.id, m])),
+    [macroSectores]
+  )
 
   const [busqueda, setBusqueda] = React.useState("")
   const [unidadId, setUnidadId] = React.useState(vinculo?.unidadId ?? "")
   const [rol, setRol] = React.useState<RolVinculo | "">(vinculo?.rol ?? "")
-  const [fechaInicio, setFechaInicio] = React.useState(vinculo?.fechaInicio ?? "")
+  const [fechaInicio, setFechaInicio] = React.useState(
+    vinculo?.fechaInicio ?? ""
+  )
   const [fechaFin, setFechaFin] = React.useState(vinculo?.fechaFin ?? "")
-  const [permiteVerFinanzas, setPermiteVerFinanzas] = React.useState(vinculo?.permiteVerFinanzas ?? false)
-  const [estadoOcupacionPropiedad, setEstadoOcupacionPropiedad] = React.useState<VinculoUnidad["estadoOcupacionPropiedad"]>(vinculo?.estadoOcupacionPropiedad ?? "habitada")
-  const [cerrarAnterior, setCerrarAnterior] = React.useState(vinculo?.cerrarAnterior !== false)
+  const [permiteVerFinanzas, setPermiteVerFinanzas] = React.useState(
+    vinculo?.permiteVerFinanzas ?? false
+  )
+  const [estadoOcupacionPropiedad, setEstadoOcupacionPropiedad] =
+    React.useState<VinculoUnidad["estadoOcupacionPropiedad"]>(
+      vinculo?.estadoOcupacionPropiedad ?? "habitada"
+    )
+  const [cerrarAnterior, setCerrarAnterior] = React.useState(
+    vinculo?.cerrarAnterior !== false
+  )
   const [errores, setErrores] = React.useState<Record<string, string>>({})
 
   const unidadesDisponibles = React.useMemo(() => {
     const q = busqueda.trim().toLowerCase()
-    const base = unidades.filter(u => !unidadesVinculadasIds.includes(u.id))
+    const base = unidades.filter((u) => !unidadesVinculadasIds.includes(u.id))
     if (!q) return base
-    return base.filter(u =>
-      etiquetaUnidad(u).toLowerCase().includes(q) ||
-      u.id.toLowerCase().includes(q)
+    return base.filter(
+      (u) =>
+        etiquetaUnidad(u).toLowerCase().includes(q) ||
+        u.id.toLowerCase().includes(q)
     )
   }, [busqueda, unidades, unidadesVinculadasIds])
 
@@ -91,12 +118,15 @@ export function FormularioVinculoUnidad({ vinculo, unidadesVinculadasIds, onSave
     const nuevosErrores: Record<string, string> = {}
     if (!unidadId) nuevosErrores.unidadId = "Debes seleccionar una unidad."
     if (!rol) nuevosErrores.rol = "Debes seleccionar un rol."
-    if (!fechaInicio) nuevosErrores.fechaInicio = "La fecha de inicio es obligatoria."
+    if (!fechaInicio)
+      nuevosErrores.fechaInicio = "La fecha de inicio es obligatoria."
     if (fechaInicio && fechaFin && fechaFin < fechaInicio) {
-      nuevosErrores.fechaFin = "La fecha de fin no puede ser anterior a la fecha de inicio."
+      nuevosErrores.fechaFin =
+        "La fecha de fin no puede ser anterior a la fecha de inicio."
     }
     if (unidadId && unidadesVinculadasIds.includes(unidadId)) {
-      nuevosErrores.unidadId = "Esta persona ya posee un vínculo activo con esta unidad."
+      nuevosErrores.unidadId =
+        "Esta persona ya posee un vínculo activo con esta unidad."
     }
 
     setErrores(nuevosErrores)
@@ -108,42 +138,59 @@ export function FormularioVinculoUnidad({ vinculo, unidadesVinculadasIds, onSave
       fechaInicio,
       ...(fechaFin ? { fechaFin } : {}),
       ...(rol === "propietario"
-        ? { estadoOcupacionPropiedad: estadoOcupacionPropiedad ?? "habitada", permiteVerFinanzas }
+        ? {
+            estadoOcupacionPropiedad: estadoOcupacionPropiedad ?? "habitada",
+            permiteVerFinanzas,
+          }
         : { permiteVerFinanzas: false }),
-      ...(rol === "propietario" || rol === "arrendatario" ? { cerrarAnterior } : {}),
+      ...(rol === "propietario" || rol === "arrendatario"
+        ? { cerrarAnterior }
+        : {}),
     })
     if (resultado && !resultado.ok) {
-      setErrores({ global: resultado.error ?? "No se pudo guardar el vínculo." })
+      setErrores({
+        global: resultado.error ?? "No se pudo guardar el vínculo.",
+      })
     }
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col h-full max-h-[80vh]">
+    <form onSubmit={handleSubmit} className="flex h-full max-h-[80vh] flex-col">
       <ScrollArea className="flex-1 pr-4">
         <div className="grid gap-6 py-4">
-
           {errores.global && (
-            <div className="bg-destructive/10 border border-destructive/30 rounded-md p-3 text-sm text-destructive font-medium">
+            <div className="rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm font-medium text-destructive">
               {errores.global}
             </div>
           )}
 
           <div className="space-y-4">
-            <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-widest border-b pb-2">Unidad Física</h3>
+            <h3 className="border-b pb-2 text-sm font-semibold tracking-widest text-muted-foreground uppercase">
+              Unidad Física
+            </h3>
             <div className="space-y-2">
               <Label>Unidad del Inventario *</Label>
               <div className="relative">
-                <IconSearch className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
+                <IconSearch className="absolute top-2.5 left-2.5 size-4 text-muted-foreground" />
                 <Input
                   type="search"
                   placeholder="Buscar por etiqueta o código (Depto 101, u-A-101...)"
                   className="pl-8"
                   value={busqueda}
-                  onChange={e => setBusqueda(e.target.value)}
+                  onChange={(e) => setBusqueda(e.target.value)}
                 />
               </div>
-              <Select value={unidadId} onValueChange={(v) => { setUnidadId(v); setErrores(prev => ({ ...prev, unidadId: "" })) }}>
-                <SelectTrigger className="w-full" aria-invalid={errores.unidadId ? "true" : "false"}>
+              <Select
+                value={unidadId}
+                onValueChange={(v) => {
+                  setUnidadId(v)
+                  setErrores((prev) => ({ ...prev, unidadId: "" }))
+                }}
+              >
+                <SelectTrigger
+                  className="w-full"
+                  aria-invalid={errores.unidadId ? "true" : "false"}
+                >
                   <SelectValue placeholder="Selecciona una unidad..." />
                 </SelectTrigger>
                 <SelectContent>
@@ -154,8 +201,10 @@ export function FormularioVinculoUnidad({ vinculo, unidadesVinculadasIds, onSave
                   )}
                   {unidadesPorSector.map(([sector, unidadesSector]) => (
                     <SelectGroup key={sector}>
-                      <SelectLabel className="uppercase text-xs text-muted-foreground">{sector}</SelectLabel>
-                      {unidadesSector.map(u => (
+                      <SelectLabel className="text-xs text-muted-foreground uppercase">
+                        {sector}
+                      </SelectLabel>
+                      {unidadesSector.map((u) => (
                         <SelectItem key={u.id} value={u.id}>
                           {etiquetaUnidad(u)}
                         </SelectItem>
@@ -164,42 +213,65 @@ export function FormularioVinculoUnidad({ vinculo, unidadesVinculadasIds, onSave
                   ))}
                 </SelectContent>
               </Select>
-              {errores.unidadId && <p className="text-xs text-destructive">{errores.unidadId}</p>}
+              {errores.unidadId && (
+                <p className="text-xs text-destructive">{errores.unidadId}</p>
+              )}
             </div>
           </div>
 
           <div className="space-y-4">
-            <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-widest border-b pb-2">Rol de Vinculación</h3>
+            <h3 className="border-b pb-2 text-sm font-semibold tracking-widest text-muted-foreground uppercase">
+              Rol de Vinculación
+            </h3>
             <div className="space-y-2">
               <Label>Rol *</Label>
-              <Select value={rol} onValueChange={(v) => { setRol(v as RolVinculo); setErrores(prev => ({ ...prev, rol: "" })) }}>
-                <SelectTrigger className="w-full" aria-invalid={errores.rol ? "true" : "false"}>
+              <Select
+                value={rol}
+                onValueChange={(v) => {
+                  setRol(v as RolVinculo)
+                  setErrores((prev) => ({ ...prev, rol: "" }))
+                }}
+              >
+                <SelectTrigger
+                  className="w-full"
+                  aria-invalid={errores.rol ? "true" : "false"}
+                >
                   <SelectValue placeholder="Selecciona el rol..." />
                 </SelectTrigger>
                 <SelectContent>
-                  {ROLES_VINCULO.map(r => (
-                    <SelectItem key={r.id} value={r.id}>{r.nombre}</SelectItem>
+                  {ROLES_VINCULO.map((r) => (
+                    <SelectItem key={r.id} value={r.id}>
+                      {r.nombre}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-              {errores.rol && <p className="text-xs text-destructive">{errores.rol}</p>}
+              {errores.rol && (
+                <p className="text-xs text-destructive">{errores.rol}</p>
+              )}
             </div>
           </div>
 
           <div className="space-y-4">
-            <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-widest border-b pb-2">Vigencia</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <h3 className="border-b pb-2 text-sm font-semibold tracking-widest text-muted-foreground uppercase">
+              Vigencia
+            </h3>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="fecha-inicio">Fecha de Inicio *</Label>
                 <Input
                   id="fecha-inicio"
                   type="date"
                   value={fechaInicio}
-                  onChange={e => setFechaInicio(e.target.value)}
+                  onChange={(e) => setFechaInicio(e.target.value)}
                   aria-invalid={errores.fechaInicio ? "true" : "false"}
                   required
                 />
-                {errores.fechaInicio && <p className="text-xs text-destructive">{errores.fechaInicio}</p>}
+                {errores.fechaInicio && (
+                  <p className="text-xs text-destructive">
+                    {errores.fechaInicio}
+                  </p>
+                )}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="fecha-fin">Fecha de Fin</Label>
@@ -207,23 +279,31 @@ export function FormularioVinculoUnidad({ vinculo, unidadesVinculadasIds, onSave
                   id="fecha-fin"
                   type="date"
                   value={fechaFin}
-                  onChange={e => setFechaFin(e.target.value)}
+                  onChange={(e) => setFechaFin(e.target.value)}
                   aria-invalid={errores.fechaFin ? "true" : "false"}
                   placeholder="Solo para registros históricos"
                 />
-                {errores.fechaFin && <p className="text-xs text-destructive">{errores.fechaFin}</p>}
+                {errores.fechaFin && (
+                  <p className="text-xs text-destructive">{errores.fechaFin}</p>
+                )}
               </div>
             </div>
           </div>
 
           {(rol === "propietario" || rol === "arrendatario") && (
             <div className="space-y-4">
-              <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-widest border-b pb-2">Cierre Automático</h3>
+              <h3 className="border-b pb-2 text-sm font-semibold tracking-widest text-muted-foreground uppercase">
+                Cierre Automático
+              </h3>
               <div className="flex items-center justify-between gap-4 rounded-lg border p-4">
                 <div>
-                  <Label htmlFor="cerrar-anterior">Cerrar vínculo activo anterior</Label>
+                  <Label htmlFor="cerrar-anterior">
+                    Cerrar vínculo activo anterior
+                  </Label>
                   <p className="text-xs text-muted-foreground">
-                    Cierra automáticamente el {rol === "propietario" ? "propietario" : "arrendatario"} activo actual al guardar uno nuevo.
+                    Cierra automáticamente el{" "}
+                    {rol === "propietario" ? "propietario" : "arrendatario"}{" "}
+                    activo actual al guardar uno nuevo.
                   </p>
                 </div>
                 <Switch
@@ -233,10 +313,12 @@ export function FormularioVinculoUnidad({ vinculo, unidadesVinculadasIds, onSave
                 />
               </div>
               {cerrarAnterior && !fechaFin && (
-                <div className="flex items-start gap-2 rounded-md bg-amber-50 border border-amber-200 p-3 text-xs text-amber-800">
-                  <IconAlertTriangle className="size-4 mt-0.5 shrink-0" />
+                <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+                  <IconAlertTriangle className="mt-0.5 size-4 shrink-0" />
                   <span>
-                    Se cerrará automáticamente el vínculo vigente de este rol en la unidad, asignándole como fecha de fin el día anterior al inicio del nuevo.
+                    Se cerrará automáticamente el vínculo vigente de este rol en
+                    la unidad, asignándole como fecha de fin el día anterior al
+                    inicio del nuevo.
                   </span>
                 </div>
               )}
@@ -245,12 +327,19 @@ export function FormularioVinculoUnidad({ vinculo, unidadesVinculadasIds, onSave
 
           {rol === "propietario" && (
             <div className="space-y-4">
-              <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-widest border-b pb-2">Configuración Inmobiliaria</h3>
+              <h3 className="border-b pb-2 text-sm font-semibold tracking-widest text-muted-foreground uppercase">
+                Configuración Inmobiliaria
+              </h3>
 
               <div className="flex items-center justify-between gap-4 rounded-lg border p-4">
                 <div>
-                  <Label htmlFor="permite-ver-finanzas">Privacidad Financiera</Label>
-                  <p className="text-xs text-muted-foreground">Permite que los residentes de la unidad vean los gastos comunes asociados.</p>
+                  <Label htmlFor="permite-ver-finanzas">
+                    Privacidad Financiera
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    Permite que los residentes de la unidad vean los gastos
+                    comunes asociados.
+                  </p>
                 </div>
                 <Switch
                   id="permite-ver-finanzas"
@@ -261,26 +350,34 @@ export function FormularioVinculoUnidad({ vinculo, unidadesVinculadasIds, onSave
 
               <div className="space-y-2">
                 <Label>Estado Ocupación de la Propiedad</Label>
-                <Select value={estadoOcupacionPropiedad} onValueChange={(v) => setEstadoOcupacionPropiedad(v)}>
+                <Select
+                  value={estadoOcupacionPropiedad}
+                  onValueChange={(v) => setEstadoOcupacionPropiedad(v)}
+                >
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="Selecciona el estado..." />
                   </SelectTrigger>
                   <SelectContent>
-                    {estadosInmobiliarios.map(e => (
-                      <SelectItem key={e.id} value={e.id}>{e.nombre}</SelectItem>
+                    {estadosInmobiliarios.map((e) => (
+                      <SelectItem key={e.id} value={e.id}>
+                        {e.nombre}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
             </div>
           )}
-
         </div>
       </ScrollArea>
 
-      <div className="flex justify-end gap-2 pt-4 border-t mt-4">
-        <Button type="button" variant="outline" onClick={onCancel}>Cancelar</Button>
-        <Button type="submit">{isEditing ? "Guardar Cambios" : "Vincular Unidad"}</Button>
+      <div className="mt-4 flex justify-end gap-2 border-t pt-4">
+        <Button type="button" variant="outline" onClick={onCancel}>
+          Cancelar
+        </Button>
+        <Button type="submit">
+          {isEditing ? "Guardar Cambios" : "Vincular Unidad"}
+        </Button>
       </div>
     </form>
   )
