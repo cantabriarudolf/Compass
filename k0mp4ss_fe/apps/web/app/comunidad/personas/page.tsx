@@ -10,7 +10,6 @@ import {
   CardTitle,
   CardDescription,
 } from "@workspace/ui/components/card"
-import { Tabs, TabsList, TabsTrigger } from "@workspace/ui/components/tabs"
 import { Input } from "@workspace/ui/components/input"
 import { Button } from "@workspace/ui/components/button"
 import { Badge } from "@workspace/ui/components/badge"
@@ -100,11 +99,11 @@ const getRoleBadgeVariant = (rol: string) => {
 const getRoleBadgeClass = (rol: string) => {
   switch (rol) {
     case "residente":
-      return "bg-emerald-600 hover:bg-emerald-700 text-white"
+      return "bg-emerald-700 hover:bg-emerald-800 text-white"
     case "personal":
       return "bg-slate-600 hover:bg-slate-700 text-white"
     case "directiva":
-      return "bg-amber-600 hover:bg-amber-700 text-white"
+      return "bg-amber-700 hover:bg-amber-800 text-white"
     case "contratista":
       return "bg-gray-600 hover:bg-gray-700 text-white"
     default:
@@ -290,18 +289,22 @@ export default function DirectorioPersonasPage() {
 
       {/* TABS SCROLLABLES POR ROL */}
       {listaPersonas.length > 0 && (
-        <Tabs
-          value={selectedRole}
-          onValueChange={handleRoleTabChange}
-          className="w-full"
-        >
+        <div className="flex w-full flex-col gap-2">
           <ScrollArea className="mb-2 w-full rounded-md border bg-muted/50 p-1 whitespace-nowrap">
-            <TabsList className="inline-flex w-max">
+            <div
+              role="group"
+              aria-label="Filtrar personas por rol"
+              className="inline-flex w-max items-center justify-center rounded-lg bg-muted p-[3px] text-muted-foreground"
+            >
               {ROLES_TAB_CONFIG.map((tab) => (
-                <TabsTrigger
+                <button
                   key={tab.id}
-                  value={tab.id}
-                  className="gap-2 text-[10px] font-bold uppercase"
+                  type="button"
+                  aria-pressed={selectedRole === tab.id}
+                  onClick={() => handleRoleTabChange(tab.id)}
+                  className={`relative inline-flex h-[calc(100%-1px)] flex-1 items-center justify-center gap-1.5 rounded-md border border-transparent px-1.5 py-0.5 text-sm font-medium whitespace-nowrap text-foreground transition-all hover:text-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-1 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-50 dark:text-muted-foreground dark:hover:text-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 gap-2 text-[10px] font-bold uppercase ${
+                    selectedRole === tab.id ? "bg-background shadow-sm" : ""
+                  }`}
                 >
                   {tab.icon}
                   {tab.label}
@@ -313,9 +316,9 @@ export default function DirectorioPersonasPage() {
                       {countByRole[tab.id] || 0}
                     </Badge>
                   )}
-                </TabsTrigger>
+                </button>
               ))}
-            </TabsList>
+            </div>
             <ScrollBar orientation="horizontal" />
           </ScrollArea>
 
@@ -350,7 +353,7 @@ export default function DirectorioPersonasPage() {
                     }`}
                   >
                     VER TODOS
-                    <span className="text-[9px] font-bold text-muted-foreground tabular-nums">
+                    <span className="text-[9px] font-bold text-foreground tabular-nums">
                       {countByEstado.todos}
                     </span>
                   </button>
@@ -365,7 +368,7 @@ export default function DirectorioPersonasPage() {
                       }`}
                     >
                       {estado.toUpperCase()}
-                      <span className="text-[9px] font-bold text-muted-foreground tabular-nums">
+                      <span className="text-[9px] font-bold text-foreground tabular-nums">
                         {countByEstado[estado] || 0}
                       </span>
                     </button>
@@ -495,7 +498,11 @@ export default function DirectorioPersonasPage() {
                                 ? "outline"
                                 : "destructive"
                             }
-                            className="text-[10px] font-bold uppercase"
+                            className={
+                              persona.estadoCuenta === "activa"
+                                ? "text-[10px] font-bold uppercase"
+                                : "bg-red-700 text-[10px] font-bold uppercase text-white"
+                            }
                           >
                             {persona.estadoCuenta}
                           </Badge>
@@ -561,7 +568,7 @@ export default function DirectorioPersonasPage() {
               </CardContent>
             </Card>
           </div>
-        </Tabs>
+        </div>
       )}
 
       {/* EMPTY STATE: Sin personas creadas */}

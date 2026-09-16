@@ -233,8 +233,8 @@ export default function BitacoraPage() {
                   <CardTitle
                     className={
                       estadoDia[j.id]
-                        ? "text-emerald-600 dark:text-emerald-400"
-                        : "text-amber-600 dark:text-amber-400"
+                        ? "text-emerald-700 dark:text-emerald-400"
+                        : "text-amber-700 dark:text-amber-400"
                     }
                   >
                     {estadoDia[j.id] ? "Informado" : "No Informado"}
