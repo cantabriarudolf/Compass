@@ -1299,29 +1299,33 @@ export default function QaLabPage() {
     }))
     const rPub = s.removePublicacionPortal("test-pub-pi-e999")
     if (!rPub.ok) errores.push(rPub.error || "pub")
+    // Limpieza idempotente: un TEST-* ya ausente cuenta como limpio; solo se
+    // reporta bloqueo si la entidad existe y el remove la rechaza (p. ej. FK
+    // inversa). Regresión 2026-09-14 (5e9b689): removeVinculo devuelve !ok
+    // cuando el id no existe. Mismo patrón del bloque IR de este limpiar().
     for (const id of ["test-v-arr-999", "test-v-prop-e999", "test-v-prop-999"]) {
       const r = s.removeVinculo(id)
-      if (!r.ok) errores.push(r.error || id)
+      if (!r.ok && s.vinculos.some(v => v.id === id)) errores.push(r.error || id)
     }
     for (const id of ["test-u-e-999", "test-u-999"]) {
       const r = s.removeUnidad(id)
-      if (!r.ok) errores.push(r.error || id)
+      if (!r.ok && s.unidades.some(u => u.id === id)) errores.push(r.error || id)
     }
     for (const id of ["test-est-sup-qa", "test-micro-piso99"]) {
       const r = s.removeMicroSector(id)
-      if (!r.ok) errores.push(r.error || id)
+      if (!r.ok && s.microSectores.some(m => m.id === id)) errores.push(r.error || id)
     }
     for (const id of ["test-macro-sectortest"]) {
       const r = s.removeMacroSector(id)
-      if (!r.ok) errores.push(r.error || id)
+      if (!r.ok && s.macroSectores.some(m => m.id === id)) errores.push(r.error || id)
     }
     for (const id of ["test-p-99", "test-p-88"]) {
       const r = s.removePersona(id)
-      if (!r.ok) errores.push(r.error || id)
+      if (!r.ok && s.personas.some(p => p.id === id)) errores.push(r.error || id)
     }
     for (const id of ["test-tu-loftqa"]) {
       const r = s.removeTipoUnidad(id)
-      if (!r.ok) errores.push(r.error || id)
+      if (!r.ok && s.tiposUnidad.some(t => t.id === id)) errores.push(r.error || id)
     }
     const maestros: [keyof typeof s.maestros, string][] = [
       ["bancos", "test-banco-bancoqa"],
@@ -1335,7 +1339,7 @@ export default function QaLabPage() {
     ]
     for (const [k, id] of maestros) {
       const r = (s.removeMaestro as any)(k, id)
-      if (!r.ok) errores.push(r.error || `${String(k)}:${id}`)
+      if (!r.ok && (s.maestros[k] as { id: string }[]).some(m => m.id === id)) errores.push(r.error || `${String(k)}:${id}`)
     }
     // Purga final de eventos TEST huérfanos generados por los remove* (VU genera VU_ASSIGN_RELEASED/DELETE con id test-*)
     useCompassStore.setState(st => ({
