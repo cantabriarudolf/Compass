@@ -6,6 +6,27 @@ import { Button } from "@workspace/ui/components/button"
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
 
+/**
+ * Destino post-login por defecto cuando ?next= está ausente o inseguro.
+ */
+const DESTINO_POR_DEFECTO = "/admin"
+
+/**
+ * Guardia same-origin para el destino post-login (?next=). Acepta solo rutas
+ * relativas al origen: rechaza URLs absolutas (https://evil.com), destinos
+ * protocol-relative (//evil.com → navegación externa en router.push) y
+ * backslashes (\\evil.com, que los browsers normalizan a slash). Con eso se
+ * impide el open redirect / phishing post-autenticación.
+ */
+function esDestinoSeguro(destino: string | null): destino is string {
+  return (
+    destino !== null &&
+    destino.startsWith("/") &&
+    !destino.startsWith("//") &&
+    !destino.includes("\\")
+  )
+}
+
 interface RespuestaLogin {
   ok: boolean
   error?:
@@ -166,11 +187,11 @@ function IngresarForm() {
     setCargando(true)
     try {
       const destino = searchParams.get("next")
-      const urlDestino = destino && destino.startsWith("/") ? destino : "/admin"
+      const destinoSeguro = esDestinoSeguro(destino) ? destino : DESTINO_POR_DEFECTO
       const resultado = await iniciarSesion(
         email,
         password,
-        new URL(urlDestino, window.location.origin).href
+        new URL(destinoSeguro, window.location.origin).href
       )
       if (!resultado.ok) {
         if (resultado.error === "requiere_2fa") {
@@ -198,7 +219,7 @@ function IngresarForm() {
         }
         return
       }
-      router.push(destino && destino.startsWith("/") ? destino : "/admin")
+      router.push(destinoSeguro)
     } catch {
       setError("Error de conexión con el servidor.")
     } finally {
@@ -208,7 +229,7 @@ function IngresarForm() {
 
   function destinoActual(): string {
     const destino = searchParams.get("next")
-    return destino && destino.startsWith("/") ? destino : "/admin"
+    return esDestinoSeguro(destino) ? destino : DESTINO_POR_DEFECTO
   }
 
   async function verificar2fa(e: React.FormEvent) {

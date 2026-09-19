@@ -165,7 +165,22 @@ describe("app/ingresar/page.tsx (Auth.js)", () => {
     await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/admin"))
   })
 
-  it("login exitoso respeta ?next= con query", async () => {
+      it("login exitoso ignora ?next= protocol-relative (//evil.com) y va a /admin", async () => {
+        mockNextParam = "//evil.com/phish"
+        mockCsrfOk()
+        mockCallbackSuccess()
+        const user = userEvent.setup()
+        render(<PaginaIngresar />)
+        await user.type(
+          screen.getByLabelText(/correo electrónico/i),
+          "admin@test.cl"
+        )
+        await user.type(screen.getByLabelText(/contraseña/i), "Test1234!")
+        await user.click(screen.getByRole("button", { name: /ingresar/i }))
+        await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/admin"))
+      })
+
+      it("login exitoso respeta ?next= con query", async () => {
     mockNextParam = "/admin/configuracion?tab=maestros"
     mockCsrfOk()
     mockCallbackSuccess()
