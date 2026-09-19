@@ -4,15 +4,15 @@
 - [ ] Ninguna — la serie no descubrió vulnerabilidades críticas activas.
 
 ## High
-- [ ] **Adoptar `generarId()`** en `lib/store.ts` (reemplazar 27+ repeticiones). Change: `refactor-id-utils`.
-- [ ] **Unificar `hoyISO*`** en un único helper `lib/date-utils.ts`. Change: `refactor-date-utils`.
+- [x] **Adoptar `generarId()`** en `lib/store.ts` — HECHO SERIE-PRODUCCION P1 (`39f3cdc`, 28 usos verificados 2026-09-19).
+- [x] **Unificar `hoyISO*`** en `lib/date-utils.ts` — HECHO SERIE-PRODUCCION P1 (store importa `hoyISO`/`ahoraISO`, sin defs locales, verificado 2026-09-19).
 
 ## Medium
-- [ ] **CSP enforcement**: revisar telemetría de violations, plan de activación.
-- [ ] **Coverage extendido**: añadir `lib/authz.ts`, `lib/schemas.ts`, y route handlers al tracking de coverage.
-- [ ] **Auth en dev endpoints QA**: `/api/qa-estado` y `/api/qa-roadmap` ahora requieren auth; verificar que el QA Lab no se rompe (ya verificado en tests).
+- [ ] **CSP enforcement**: sigue en Report-Only (ver `proxy.ts` + `sg-predeploy-headers/design.md`) — BLOQUEADO owner (requiere dominio real + 7 días telemetría).
+- [x] **Coverage extendido** — HECHO SERIE-PRODUCCION P4 (8 archivos: store, date-utils, id-utils, env-guard, logger, authz, schemas, api routes).
+- [x] **Auth en dev endpoints QA** — HECHO SERIE-REVISION (`/api/qa-estado` exige `auth()`, QA Lab verificado en tests).
 
 ## Low
-- [ ] **Documentar F1/F2** en fixture punto-cero + tests de semántica.
-- [ ] **proxy.ts types**: reemplazar `any` por tipos correctos de NextAuth/NextRequest.
-- [ ] **Store split**: spike de extracción por dominio (bajo riesgo, alto esfuerzo).
+- [x] **Documentar F1/F2** — HECHO 2026-09-19 (semántica en `lib/store.ts` + 2 tests en `test/store-punto-cero.test.ts`; serie `saldoCC` declarada no materializada).
+- [x] **proxy.ts types** — HECHO 2026-09-19 (el `any` estaba en `lib/auth.ts:130`; reemplazo por `NextAuthResult`-safe: `resultadoAuth` + `auth: () => Promise<Session \| null>` explícito; tsc 0, 76 tests auth verdes).
+- [ ] **Store split**: spike HECHO 2026-09-19 (`spike-store-split.md`, 3 fases / 7–8 ventanas) — implementación pendiente de calendarizar por el owner.
