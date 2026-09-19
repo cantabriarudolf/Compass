@@ -1,5 +1,5 @@
 import type { JWT } from "next-auth/jwt"
-import NextAuth, { CredentialsSignin } from "next-auth"
+import NextAuth, { CredentialsSignin, type Session } from "next-auth"
 import Credentials from "next-auth/providers/credentials"
 import bcrypt from "bcryptjs"
 import { prisma } from "@/lib/prisma"
@@ -126,8 +126,7 @@ async function autorizarCredenciales(
   return { id: usuario.id, email: usuario.email }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const { handlers, auth, signIn, signOut }: any = NextAuth({
+const resultadoAuth = NextAuth({
   ...authConfig,
   adapter: AdapterPrismaCompass(prisma),
   providers: [
@@ -192,3 +191,10 @@ export const { handlers, auth, signIn, signOut }: any = NextAuth({
     },
   },
 })
+
+export const { handlers, signIn, signOut } = resultadoAuth
+// `auth` solo se usa como getter de sesión (17 usos `auth()` en app/); la
+// sobrecarga wrapper de middleware vive en proxy.ts con instancia propia.
+// Anotación explícita y portable: evita TS2742 (exigido por `declaration: true`
+// del tsconfig base) sin recurrir a `any`.
+export const auth: () => Promise<Session | null> = resultadoAuth.auth
