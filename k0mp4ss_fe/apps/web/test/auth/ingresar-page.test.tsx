@@ -60,6 +60,40 @@ function mockCallbackError(code: string) {
   )
 }
 
+function mockChallenge(responder: () => Promise<Response>) {
+  const previo = manejadorFetch
+  manejadorFetch = (url) => {
+    if (url === "/api/auth/2fa/challenge") return responder()
+    return previo(url)
+  }
+}
+
+function mock2fa(endpoint: string, responder: () => Promise<Response>) {
+  const previo = manejadorFetch
+  manejadorFetch = (url) => {
+    if (url === endpoint) return responder()
+    return previo(url)
+  }
+}
+
+// Configura el flujo completo hasta el paso 2: Auth.js responde
+// code=requiere_2fa y el challenge entrega un tempToken válido.
+function configurarFlujo2fa() {
+  mockCsrfOk()
+  mockCallbackError("requiere_2fa")
+  mockChallenge(() =>
+    Promise.resolve(respJson({ requires2FA: true, tempToken: "tmp-token" }))
+  )
+}
+
+async function llegarAPaso2(user: ReturnType<typeof userEvent.setup>) {
+  render(<PaginaIngresar />)
+  await user.type(screen.getByLabelText(/correo electrónico/i), "admin@test.cl")
+  await user.type(screen.getByLabelText(/contraseña/i), "Test1234!")
+  await user.click(screen.getByRole("button", { name: /ingresar/i }))
+  await screen.findByLabelText(/código de verificación/i)
+}
+
 describe("app/ingresar/page.tsx (Auth.js)", () => {
   beforeEach(() => {
     mockPush.mockClear()
@@ -244,5 +278,112 @@ describe("app/ingresar/page.tsx (Auth.js)", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(
       /No fue posible iniciar sesión/i
     )
+  })
+
+  it("requiere_2fa muestra el paso 2 de verificación en dos pasos", async () => {
+    configurarFlujo2fa()
+    const user = userEvent.setup()
+    await llegarAPaso2(user)
+    expect(
+      screen.getByRole("heading", { name: /verificación en dos pasos/i })
+    ).toBeInTheDocument()
+    expect(screen.queryByLabelText(/correo electrónico/i)).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(/contraseña/i)).not.toBeInTheDocument()
+    expect(mockPush).not.toHaveBeenCalled()
+  })
+
+  it("paso 2 con verify OK redirige al destino ?next=", async () => {
+    mockNextParam = "/admin/qa-lab"
+    configurarFlujo2fa()
+    mock2fa("/api/auth/2fa/verify", () => Promise.resolve(respJson({ ok: true })))
+    const user = userEvent.setup()
+    await llegarAPaso2(user)
+    await user.type(screen.getByLabelText(/código de verificación/i), "123456")
+    await user.click(screen.getByRole("button", { name: /verificar/i }))
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/admin/qa-lab"))
+  })
+
+  it("paso 2 con código inválido muestra error sin avanzar", async () => {
+    configurarFlujo2fa()
+    mock2fa(
+      "/api/auth/2fa/verify",
+      () => Promise.resolve(respJson({ error: "Código inválido." }, 401))
+    )
+    const user = userEvent.setup()
+    await llegarAPaso2(user)
+    await user.type(screen.getByLabelText(/código de verificación/i), "000000")
+    await user.click(screen.getByRole("button", { name: /verificar/i }))
+    expect(await screen.findByRole("alert")).toHaveTextContent("Código inválido")
+    expect(mockPush).not.toHaveBeenCalled()
+    expect(
+      screen.getByLabelText(/código de verificación/i)
+    ).toBeInTheDocument()
+  })
+
+  it("paso 2 rechaza input malformado sin llamar al endpoint", async () => {
+    configurarFlujo2fa()
+    mock2fa(
+      "/api/auth/2fa/verify",
+      () => Promise.resolve(respJson({ error: "Código inválido." }, 401))
+    )
+    const user = userEvent.setup()
+    await llegarAPaso2(user)
+    await user.type(screen.getByLabelText(/código de verificación/i), "12ab")
+    await user.click(screen.getByRole("button", { name: /verificar/i }))
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      /6 dígitos/i
+    )
+    expect(mockPush).not.toHaveBeenCalled()
+  })
+
+  it("código de respaldo OK muestra códigos restantes y advertencia", async () => {
+    configurarFlujo2fa()
+    mock2fa(
+      "/api/auth/2fa/backup",
+      () =>
+        Promise.resolve(
+          respJson({ ok: true, codigosRestantes: 7, advertencia: "Quedan pocos códigos." })
+        )
+    )
+    const user = userEvent.setup()
+    await llegarAPaso2(user)
+    await user.click(
+      screen.getByRole("button", { name: /usar código de respaldo/i })
+    )
+    await user.type(screen.getByLabelText(/código de respaldo/i), "ABCD1234")
+    await user.click(screen.getByRole("button", { name: /verificar/i }))
+    expect(
+      await screen.findByText(/códigos de respaldo restantes: 7/i)
+    ).toBeInTheDocument()
+    expect(screen.getByText("Quedan pocos códigos.")).toBeInTheDocument()
+    expect(mockPush).not.toHaveBeenCalled()
+    await user.click(screen.getByRole("button", { name: /continuar/i }))
+    await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/admin"))
+  })
+
+  it("desafío expirado vuelve al paso 1 con mensaje de reingreso", async () => {
+    configurarFlujo2fa()
+    mock2fa(
+      "/api/auth/2fa/verify",
+      () =>
+        Promise.resolve(
+          respJson(
+            { error: "Desafío expirado. Ingresa tus credenciales nuevamente." },
+            401
+          )
+        )
+    )
+    const user = userEvent.setup()
+    await llegarAPaso2(user)
+    await user.type(screen.getByLabelText(/código de verificación/i), "123456")
+    await user.click(screen.getByRole("button", { name: /verificar/i }))
+    expect(await screen.findByRole("alert")).toHaveTextContent(/expiró/i)
+    expect(
+      screen.getByLabelText(/correo electrónico/i)
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByLabelText(/código de verificación/i)
+    ).not.toBeInTheDocument()
+    expect(mockPush).not.toHaveBeenCalled()
   })
 })
