@@ -144,4 +144,42 @@ describe("FI - Punto cero histórico 2023-2024 (migración v27)", () => {
     })
     expect(saldoCC).toBe(0)
   })
+
+  it("F1: saldoInicial es DERIVADO (egresos − ingresos del fixture), no proviene del libro", () => {
+    // La apertura 17.082.694 = total egresos − total ingresos del propio JSON.
+    // El "saldo 0" del fondo CC es tautológico por construcción, no una
+    // reconciliación contra fuente externa. Ver BACKLOG-100 §Punto cero (F1).
+    const egresos = puntoCero.egresos as { monto: number }[]
+    const ingresos = puntoCero.ingresos as { monto: number }[]
+    const totalE = egresos.reduce((a, e) => a + e.monto, 0)
+    const totalI = ingresos.reduce((a, i) => a + i.monto, 0)
+    const fondo = getState().fondosFI.find(f => f.id === "fondo-cc-punto-cero")
+    expect(fondo).toBeDefined()
+    expect(fondo!.saldoInicial).toBe(totalE - totalI)
+    expect(fondo!.saldoInicial).toBe(17082694)
+  })
+
+  it("F2: serie saldoCC del fixture es la cuenta bancaria del libro y NO se materializa", () => {
+    // El fixture trae 24 saldos mensuales de la cuenta bancaria (fuente: libro).
+    // Seed y migración v27 solo consumen egresos/ingresos; saldoCC no se lee en
+    // producción y no reconcilia mes a mes con la derivada (difiere en 23/24
+    // meses; solo coincide 2024-12 porque ambos cierran en 0). Ver BACKLOG-100 (F2).
+    const saldoCC = puntoCero.saldoCC as { monto: number }[]
+    expect(saldoCC).toHaveLength(24)
+    const mov: Record<string, number> = {}
+    for (const e of puntoCero.egresos as { fecha: string; monto: number }[])
+      mov[e.fecha.slice(0, 7)] = (mov[e.fecha.slice(0, 7)] ?? 0) - e.monto
+    for (const i of puntoCero.ingresos as { fecha: string; monto: number }[])
+      mov[i.fecha.slice(0, 7)] = (mov[i.fecha.slice(0, 7)] ?? 0) + i.monto
+    const meses = Object.keys(mov).sort()
+    expect(meses).toHaveLength(24)
+    let acum = 17082694
+    let iguales = 0
+    meses.forEach((m, idx) => {
+      acum += mov[m] ?? 0
+      if (acum === saldoCC[idx]!.monto) iguales++
+    })
+    expect(acum).toBe(0) // cierre cuadrado
+    expect(iguales).toBe(1) // solo 2024-12 coincide (cierre en 0)
+  })
 })

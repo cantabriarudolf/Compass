@@ -348,8 +348,16 @@ const FONDOS_FI_SEED: FondoFI[] = [
 ]
 
 // P2 — Punto cero histórico 2023-2024 (fixture canónico). Se importa el JSON
-// versionado y se deriva seed + migración. El fondo CC cuadra el libro
-// (saldoInicial 17.082.694) y deja saldo 0 tras cargar 186 egresos + 45 ingresos.
+// versionado y se deriva seed + migración: 182 egresos (FE-0001..0182) + 44
+// ingresos sobre el fondo CC, dejando saldo 0.
+// Semántica (BACKLOG-100 §Punto cero, hallazgos F1/F2 del dry-run @revisor-fin):
+// - F1: `saldoInicial` 17.082.694 es DERIVADO (total egresos − total ingresos del
+//   propio fixture), NO proviene del libro. El "saldo 0" es tautológico por
+//   construcción, no una reconciliación contra fuente externa.
+// - F2: la serie `saldoCC` del JSON (24 saldos mensuales) es la cuenta bancaria
+//   del libro y NO se materializa: seed y migración v27 solo consumen
+//   egresos/ingresos. No reconcilia mes a mes con la derivada (difiere en 23/24
+//   meses; solo coincide 2024-12 porque ambos cierran en 0).
 const PUNTO_CERO_FONDO: FondoFI = {
   id: (puntoCeroData as { fondoCC: { id: string } }).fondoCC.id as string,
   nombre: (puntoCeroData as { fondoCC: { nombre: string } }).fondoCC.nombre,
@@ -8336,9 +8344,14 @@ export const useCompassStore = create<CompassStore>()(
         }
         // FI v27: punto cero histórico 2023-2024. Aditivo e idempotente por IDs
         // deterministas. Crea fondo Cuenta Corriente con saldoInicial 17082694 e
-        // inyecta 186 egresos (folio FE-#### continuo sin chocar) + 45 ingresos.
+        // inyecta 182 egresos (folio FE-#### continuo sin chocar) + 44 ingresos.
         // Documentado: históricos usan rango siguiente a max(FE) existente.
+        // Semántica F1/F2: ver comentario en PUNTO_CERO_FONDO (saldoInicial
+        // derivado, serie saldoCC del libro no materializada).
         if ((version ?? 0) < 27) {
+          // SAFETY: `prev` es el estado persistido sin tipar (versión anterior);
+          // el acceso indexado con fallback `??` lo trata como parcial y cada
+          // colección se valida por forma antes de inyectar (filtros por id/folio).
           const prevFondos = (prev as unknown as Record<string, unknown>)[
             "fondosFI"
           ] as FondoFI[] | undefined
