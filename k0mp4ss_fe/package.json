@@ -12,6 +12,7 @@
   "devDependencies": {
     "@workspace/eslint-config": "*",
     "@workspace/typescript-config": "*",
+    "better-sqlite3": "^13.0.3",
     "pg": "^8.23.0",
     "prettier": "^3.8.1",
     "prettier-plugin-tailwindcss": "^0.7.2",

@@ -15,10 +15,9 @@
  * Requiere: schema PostgreSQL ya creado (prisma migrate deploy)
  */
 
-import { PrismaClient } from "@prisma/client"
 import { Client } from "pg"
+import Database from "better-sqlite3"
 import fs from "fs"
-import path from "path"
 
 const SQLITE_URL = process.env.SQLITE_URL || "file:./prisma/dev.db"
 const POSTGRES_URL =
@@ -40,21 +39,24 @@ if (fs.existsSync(dbPath)) {
   console.log(`💾 Backup SQLite: ${backupPath.replace(/:/g, "-")}`)
 }
 
-const prisma = new PrismaClient({ datasourceUrl: SQLITE_URL })
+const sqlite = new Database(dbPath)
+sqlite.pragma("journal_mode = WAL")
 const pg = new Client({ connectionString: POSTGRES_URL })
 
 /**
  * Obtiene lista de tablas de SQLite, excluyo _prisma_migrations.
  * Comunidad va primero (raíz del tenant), luego orden alfabético.
  */
-async function getTables() {
-  const rows = await prisma.$queryRaw`
-    SELECT name FROM sqlite_master
-    WHERE type = 'table'
-      AND name NOT LIKE 'sqlite_%'
-      AND name != '_prisma_migrations'
-    ORDER BY name
-  `
+function getTables() {
+  const rows = sqlite
+    .prepare(
+      `SELECT name FROM sqlite_master
+       WHERE type = 'table'
+         AND name NOT LIKE 'sqlite_%'
+         AND name != '_prisma_migrations'
+       ORDER BY name`
+    )
+    .all()
   const names = rows.map((r) => r.name)
   // Mover Comunidad al principio
   const idx = names.indexOf("Comunidad")
@@ -71,7 +73,7 @@ async function getTables() {
  */
 async function migrateTable(tableName, pendingRows = null) {
   const rows =
-    pendingRows || (await prisma.$queryRawUnsafe(`SELECT * FROM "${tableName}"`))
+    pendingRows || sqlite.prepare(`SELECT * FROM "${tableName}"`).all()
 
   if (rows.length === 0) {
     return { inserted: 0, failed: 0, errors: [], remaining: [] }
@@ -88,35 +90,71 @@ async function migrateTable(tableName, pendingRows = null) {
     ON CONFLICT ("id") DO UPDATE SET ${updates}
   `
 
-  let inserted = 0
-  let failed = 0
-  const errors = []
-  const remaining = []
+      let inserted = 0
+      let failed = 0
+      const errors = []
+      const remaining = []
 
-  for (const row of rows) {
-    const values = columns.map((col) => {
-      const v = row[col]
-      // Prisma parsea JSON automáticamente; para PostgreSQL pasamos el objeto
-      // y pg lo serializa según el tipo de columna
-      if (v instanceof Date) return v.toISOString()
-      return v ?? null
-    })
+      const BATCH_SIZE = 100
 
-    try {
-      await pg.query(insertSql, values)
-      inserted++
-    } catch (err) {
-      // Si es FK violation, guardar para reintento
-      if (err.code === "23503") {
-        remaining.push(row)
-      } else {
-        failed++
-        errors.push({ row: row.id || "?", code: err.code, message: err.message })
+      function convertRow(row) {
+        return columns.map((col) => {
+          const v = row[col]
+          if (v == null) return null
+          if (v instanceof Date) return v.toISOString()
+          if (typeof v === "number" && v > 1_000_000_000_000 && v < 3_000_000_000_000) {
+            return new Date(v).toISOString()
+          }
+          if (typeof v === "object") return JSON.stringify(v)
+          return v
+        })
       }
-    }
-  }
 
-  return { inserted, failed, errors, remaining }
+      // Procesar en batches para velocidad
+      for (let i = 0; i < rows.length; i += BATCH_SIZE) {
+        const batch = rows.slice(i, i + BATCH_SIZE)
+        const batchValues = []
+        const placeholders = []
+        let paramIdx = 1
+
+        for (const row of batch) {
+          const rowValues = convertRow(row)
+          const rowPlaceholders = rowValues.map(() => `$${paramIdx++}`).join(", ")
+          placeholders.push(`(${rowPlaceholders})`)
+          batchValues.push(...rowValues)
+        }
+
+        const batchSql = `
+          INSERT INTO "${tableName}" (${columnList})
+          VALUES ${placeholders.join(", ")}
+          ON CONFLICT ("id") DO UPDATE SET ${updates}
+        `
+
+        try {
+          await pg.query(batchSql, batchValues)
+          inserted += batch.length
+        } catch (err) {
+          // Batch falló: fallback fila por fila para identificar problema
+          for (const row of batch) {
+            const values = convertRow(row)
+            try {
+              await pg.query(insertSql, values)
+              inserted++
+            } catch (err2) {
+              if (err2.code === "23503") {
+                remaining.push(row)
+              } else {
+                failed++
+                if (errors.length < 3) {
+                  errors.push({ row: row.id || "?", code: err2.code, message: err2.message })
+                }
+              }
+            }
+          }
+        }
+      }
+
+      return { inserted, failed, errors, remaining }
 }
 
 async function main() {
@@ -127,7 +165,7 @@ async function main() {
   const pgVersion = await pg.query("SELECT version()")
   console.log(`✅ PostgreSQL: ${pgVersion.rows[0].version.split(" ")[0]}...`)
 
-  const tables = await getTables()
+  const tables = getTables()
   console.log(`📋 Tablas a migrar: ${tables.length}`)
   console.log(`   ${tables.join(", ")}\n`)
 
@@ -141,6 +179,8 @@ async function main() {
     stats[table] = { ...result, total: result.inserted + result.failed + result.remaining.length }
     if (result.remaining.length > 0) {
       globalRemaining[table] = result.remaining
+    } else {
+      delete globalRemaining[table]
     }
     console.log(
       `${result.inserted} OK` +
@@ -178,15 +218,16 @@ async function main() {
 
   let totalInserted = 0
   let totalFailed = 0
-  let totalRemaining = 0
 
   for (const [table, s] of Object.entries(stats)) {
     totalInserted += s.inserted
     totalFailed += s.failed
-    totalRemaining += s.remaining?.length || 0
-    const status = s.failed === 0 && (!s.remaining || s.remaining.length === 0) ? "✅" : "⚠️"
+    const hasRemaining = globalRemaining[table]?.length > 0
+    const status = s.failed === 0 && !hasRemaining ? "✅" : "⚠️"
     console.log(`${status} ${table.padEnd(30)} ${String(s.inserted).padStart(6)} / ${String(s.total).padStart(6)}`)
   }
+
+  const totalRemaining = Object.values(globalRemaining).reduce((sum, rows) => sum + rows.length, 0)
 
   console.log("-".repeat(60))
   console.log(`   Total: ${totalInserted} insertadas, ${totalFailed} fallidas, ${totalRemaining} FK pendientes`)
@@ -199,18 +240,16 @@ async function main() {
   // Verificación: conteos por tabla
   console.log("\n🔍 Verificación de conteos:")
   for (const table of tables) {
-    const sqliteCount = await prisma.$queryRawUnsafe(
-      `SELECT COUNT(*) as c FROM "${table}"`
-    )
-    const pgCount = await pg.query(`SELECT COUNT(*) as c FROM "${table}"`)
-    const sCount = Number(sqliteCount[0].c)
+    const sqliteCount = sqlite.prepare(`SELECT COUNT(*) as c FROM "${table}"`).get()
+    const pgCount = await pg.query({ text: "SELECT COUNT(*) as c FROM " + pg.escapeIdentifier(table) })
+    const sCount = Number(sqliteCount.c)
     const pCount = Number(pgCount.rows[0].c)
     const ok = sCount === pCount ? "✅" : "❌"
     console.log(`   ${ok} ${table.padEnd(30)} SQLite: ${String(sCount).padStart(4)}  PG: ${String(pCount).padStart(4)}`)
   }
 
+  sqlite.close()
   await pg.end()
-  await prisma.$disconnect()
   console.log("\n🏁 Migración completada.")
 
   if (totalFailed > 0 || totalRemaining > 0) {
@@ -221,6 +260,6 @@ async function main() {
 main().catch((err) => {
   console.error("\n💥 Error fatal:", err.message)
   pg.end().catch(() => {})
-  prisma.$disconnect().catch(() => {})
+  sqlite.close()
   process.exit(1)
 })

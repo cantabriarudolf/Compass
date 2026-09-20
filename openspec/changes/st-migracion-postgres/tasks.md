@@ -15,7 +15,7 @@
 - [x] 2.3 Upsert por ID (idempotente)
 - [x] 2.4 Verificación: conteos de filas por tabla
 - [x] 2.5 Backup automático de SQLite antes de migrar
-- [ ] 2.6 Test con instancia PostgreSQL real (pendiente: requiere PostgreSQL local o cloud)
+- [x] 2.6 Test con instancia PostgreSQL real (Neon) — ✅ 8354 filas migradas, 70/70 tablas verificadas, 0 fallidas
 
 ## Fase 3: CI/CD y producción
 - [ ] 3.1 GitHub Actions: job con PostgreSQL service container
