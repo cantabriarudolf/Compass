@@ -82,15 +82,15 @@ export async function GET(request: NextRequest) {
     comunidadId: cid,
     comunidadNombre: comunidad.nombre,
     total: membresias.length,
-    membresias: membresias.map((m) => ({
+    membresias: membresias.map((m: (typeof membresias)[number]) => ({
       id: m.id,
       rol: m.rol,
       comunidadId: m.comunidadId,
       usuario: {
-        id: (m as unknown as { usuario: { id: string; email: string; personaId: string | null; activo: boolean } }).usuario.id,
-        email: (m as unknown as { usuario: { email: string } }).usuario.email,
-        personaId: (m as unknown as { usuario: { personaId: string | null } }).usuario.personaId,
-        activo: (m as unknown as { usuario: { activo: boolean } }).usuario.activo,
+        id: m.usuario.id,
+        email: m.usuario.email,
+        personaId: m.usuario.personaId,
+        activo: m.usuario.activo,
       },
     })),
   })
