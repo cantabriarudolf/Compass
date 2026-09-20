@@ -9,9 +9,11 @@ Autenticar usuarios por email + contraseña, mantener sesión segura y limitar i
 ## 🛠️ Secciones
 
 - **Login `/ingresar`** (AU §3 P5): formulario email + contraseña. Flujo estándar Auth.js: `GET /api/auth/csrf` → `POST /api/auth/callback/credentials` (form-urlencoded con `csrfToken`, `email`, `password`, `callbackUrl`; header `X-Auth-Return-Redirect: 1`). Respuesta `{url}`: éxito → `url = callbackUrl` (cookie `authjs.session-token` seteada); fallo → `url` con `?error=CredentialsSignin&code=credentials|rate_limited`. Mensajes: "Credenciales inválidas." (genérico, no enumera emails), "Demasiados intentos. Espere unos minutos." (D-v), "Error de conexión…" y "No fue posible iniciar sesión.".
+  - **Paso 2 con 2FA** (2026-09-19): si el usuario tiene 2FA activo, `authorize` devuelve `code=requiere_2fa` y la UI muestra un segundo paso: campo de 6 dígitos TOTP + modo alterno de backup code (8 caracteres, muestra restantes/advertencia). El desafío JWE expira en 5 min; si vence, vuelve automáticamente al paso 1. 17/17 tests.
 
 - **Sesión Auth.js (JWT)** (AU §3): `lib/auth.ts` instancia Node (`NextAuth` con provider `Credentials` + adapter Prisma sobre `Usuario` `lib/auth-adapter.ts`; exporta `handlers`/`auth`/`signIn`/`signOut`). Estrategia `jwt` (30 días, `AUTH_SECRET` firma/cifra JWE `A256CBC-HS512`), `pages.signIn = "/ingresar"`, `trustHost: true` (deploy self-hosted). `sub` = `Usuario.id` en BD (vinculable a MP vía `personaId`). `lib/auth.config.ts` edge-safe expone `session.user.id = token.sub` para `proxy.ts` sin Prisma.
 - **Aterrizaje post-login** (P8): tras éxito, `/ingresar` empuja al destino de `?next=` o por defecto a `/admin`; `app/admin/page.tsx` redirige a `/admin/gestion` (panel administrativo). Sin sesión, `proxy.ts` devuelve a `/ingresar?next=%2Fadmin`.
+  - **Open redirect fix** (2026-09-19, HIGH): helper `esDestinoSeguro` valida el parámetro `?next=` antes de navegar — rechaza URLs con `//` (protocol-relative) y backslash (`\`) que podrían redirigir a dominios externos. 18/18 tests.
 
 - **Guardia de borde `proxy.ts`** (edge): `NextAuth(authConfig).auth()` verifica JWT sin BD. Mismo matcher `/admin/:path*` + `/api/:path*`, públicas `/ingresar` y `/api/auth/*`, resto 401 JSON para `/api` y redirect `/ingresar?next=` para páginas.
 

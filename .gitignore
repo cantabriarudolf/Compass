@@ -46,3 +46,4 @@ arnes-opencode/
 .opencode/backup-pre-arnes/
 # Local Pi runtime state
 .atl/
+.codegraph/
