@@ -1,6 +1,7 @@
 import type { JWT } from "next-auth/jwt"
 import NextAuth, { CredentialsSignin, type Session } from "next-auth"
 import Credentials from "next-auth/providers/credentials"
+import Google from "next-auth/providers/google"
 import bcrypt from "bcryptjs"
 import { prisma } from "@/lib/prisma"
 import { authConfig } from "@/lib/auth.config"
@@ -137,18 +138,43 @@ const resultadoAuth = NextAuth({
       },
       authorize: autorizarCredenciales,
     }),
+    Google({
+      clientId: process.env.GOOGLE_CLIENT_ID ?? "",
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET ?? "",
+      allowDangerousEmailAccountLinking: false,
+    }),
   ],
   callbacks: {
-    async jwt({
-      token,
-      trigger,
-    }: {
-      token: Record<string, unknown> & {
-        roles?: string[]
-        tokenVersion?: number
+    async signIn({ user, account }) {
+      if (account?.provider === "google") {
+        const email = user.email?.toLowerCase()
+        if (!email) return false
+        const clave = `google:${email}`
+        if (await excedeIntentos(clave)) return false
+        const usuario = await prisma.usuario.findUnique({ where: { email } })
+        if (!usuario || !usuario.activo) {
+          await registrarFallo(clave)
+          return false
+        }
+        await limpiarIntentos(clave)
       }
-      trigger?: string
-    }) {
+      return true
+    },
+            async jwt(params) {
+              const { token, trigger, account, user } = params
+      // Google SSO: mapear sub al Usuario.id de BD en el primer login
+      if (account?.provider === "google" && user?.email) {
+        const u = await prisma.usuario.findUnique({
+          where: { email: user.email.toLowerCase() },
+          select: { id: true, tokenVersion: true },
+        })
+            if (u) {
+              token.sub = u.id
+              if (typeof u.tokenVersion === "number") {
+                token.tokenVersion = u.tokenVersion
+              }
+            }
+      }
       if (token.sub) {
         const necesitaRefresh =
           !Array.isArray(token.roles) || trigger === "update"
@@ -158,13 +184,11 @@ const resultadoAuth = NextAuth({
               where: { id: token.sub as string },
               select: { tokenVersion: true },
             })
-            // P2: invalidar sesión si tokenVersion cambió
             if (usuario && typeof usuario.tokenVersion === "number") {
               if (
                 token.tokenVersion !== undefined &&
                 token.tokenVersion !== usuario.tokenVersion
               ) {
-                // Sesión invalidada — retornar token vacío para forzar re-login
                 return { sub: "" } as JWT
               }
               token.tokenVersion = usuario.tokenVersion

@@ -27,7 +27,16 @@ Autenticar usuarios por email + contraseña, mantener sesión segura y limitar i
 
     - **Password policy + sesiones 24h** (FASE2 P2): `lib/password-policy.ts` exige 8+ chars con mayúscula, minúscula y número (login rechaza débiles sin enumerar). `auth.config.ts`: `maxAge` 24h + sliding `updateAge` 1h (antes 30 días). `Usuario.tokenVersion` + check en callback `jwt`: admin puede invalidar sesiones (`PATCH /api/admin/usuarios`).
 
-    - **2FA/TOTP + backup codes** (FASE2 P3): enrolamiento en `POST /api/auth/2fa/setup` (QR para Google Authenticator) → `verify-setup` (activa + entrega 10 backup codes bcrypt, un solo uso) → `disable` (pide contraseña e invalida sesiones). Login en dos fases: `challenge` (valida credenciales, devuelve JWE de 5 min) → `verify`/`backup` (acuña cookie de sesión real). `authorize` rechaza login directo con 2FA (`code=requiere_2fa`, sin bypass). Secretos cifrados en reposo (ver SG cifrado).
+        - **2FA/TOTP + backup codes** (FASE2 P3): enrolamiento en `POST /api/auth/2fa/setup` (QR para Google Authenticator) → `verify-setup` (activa + entrega 10 backup codes bcrypt, un solo uso) → `disable` (pide contraseña e invalida sesiones). Login en dos fases: `challenge` (valida credenciales, devuelve JWE de 5 min) → `verify`/`backup` (acuña cookie de sesión real). `authorize` rechaza login directo con 2FA (`code=requiere_2fa`, sin bypass). Secretos cifrados en reposo (ver SG cifrado).
+
+    - **Google SSO** (2026-09-20): provider OAuth 2.0 opcional en `lib/auth.ts` (`next-auth/providers/google`). Botón "Continuar con Google" en `/ingresar` debajo del form credentials. Flujo:
+      1. Usuario hace click → Auth.js redirige a Google consent screen.
+      2. Google callback → `signIn` callback verifica: email existe en BD + `activo=true` + rate limit por email.
+      3. `jwt` callback mapea `token.sub` al `Usuario.id` de BD (no al Google sub), para que authz/sesión funcionen sin cambios.
+      4. Sin creación automática de cuentas: usuario no existente → login rechazado silenciosamente (fail-closed, anti-enumeración).
+      - **Variables**: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` en `.env`.
+      - **Redirect URIs** (Google Cloud Console): `http://localhost:3000/api/auth/callback/google` (dev) + `https://<dominio>/api/auth/callback/google` (prod).
+      - **Credentials sigue como fallback**: si Google SSO falla o no está configurado, el login por email+password funciona igual.
 
 ## 💡 Tips de Oro
 

@@ -1,16 +1,22 @@
 # Tareas — Google SSO
 
-## Pendientes (requieren credenciales del owner)
-- [ ] 1.1 Obtener `GOOGLE_CLIENT_ID` y `GOOGLE_CLIENT_SECRET` de Google Cloud Console
-- [ ] 1.2 Configurar redirect URIs en Google Cloud Console
-- [ ] 1.3 Implementar provider Google en `lib/auth.ts`
-- [ ] 1.4 Callback `signIn` para validar email existente + activo + rate limit
-- [ ] 1.5 Callback `jwt` para mapear `sub` → `Usuario.id`
-- [ ] 1.6 UI botón Google en `/ingresar`
-- [ ] 1.7 Tests de integración (`test/auth/google-sso.test.ts`)
-- [ ] 1.8 Actualizar `.env.example`
-- [ ] 1.9 Manual AU y avance NSGC
+## ✅ HECHO (código listo, pendiente solo credenciales)
+- [x] 1.1 Implementar provider Google en `lib/auth.ts`
+- [x] 1.2 Callback `signIn` para validar email existente + activo + rate limit
+- [x] 1.3 Callback `jwt` para mapear `sub` → `Usuario.id`
+- [x] 1.4 UI botón Google en `/ingresar`
+- [x] 1.5 Tests de integración (`test/auth/google-sso.test.tsx` — 2/2 verdes)
+- [x] 1.6 Actualizar `.env.example`
+- [x] 1.7 Manual AU actualizado
+
+## ⏳ Pendientes (requieren acción del owner)
+- [ ] 2.1 Obtener `GOOGLE_CLIENT_ID` y `GOOGLE_CLIENT_SECRET` de Google Cloud Console
+- [ ] 2.2 Configurar redirect URIs en Google Cloud Console:
+  - Dev: `http://localhost:3000/api/auth/callback/google`
+  - Prod: `https://<tu-dominio>/api/auth/callback/google`
+- [ ] 2.3 Pegar credenciales en `.env` (local) y Vercel dashboard (prod)
+- [ ] 2.4 Probar login Google con cuenta de usuario existente y activo
 
 ## Decisiones del owner
 - [ ] ¿Rol por defecto al vincular cuenta Google? (sugerencia: `residente`)
-- [ ] ¿Migrar usuarios existientes o solo nuevos?
+- [ ] ¿Migrar usuarios existentes o solo nuevos?
