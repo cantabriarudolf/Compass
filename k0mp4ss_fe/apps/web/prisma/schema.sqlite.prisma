@@ -1,0 +1,1433 @@
+// GENERATED FILE — Do not edit manually.
+// Source: prisma/schema.prisma
+// Run: node scripts/sync-schema.mjs
+//
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// Raíz tenant (D3)
+model Comunidad {
+  id        String   @id @default(cuid())
+  nombre    String
+  slug      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // back-relations (opcional, ayudan a Prisma)
+  tiposUnidad              TipoUnidad[]
+  macroSectores            MacroSector[]
+  microSectores            MicroSector[]
+  unidades                 Unidad[]
+  personas                 Persona[]
+  vinculos                 VinculoUnidad[]
+  eventos                  EventoAuditoria[]
+  configuraciones          ConfiguracionGlobal[]
+  publicacionesPortal      PublicacionPortal[]
+  leadsPortal              LeadPortal[]
+  notificaciones           Notificacion[]
+  controlesPropiedades     ControlPropiedad[]
+  actasGD                  ActaGD[]
+  plantillasCO             PlantillaCO[]
+  enviosCO                 EnvioCO[]
+  mensajesBuzonCO          MensajeBuzonCO[]
+  documentosCO             DocumentoCO[]
+  solicitudesGE            SolicitudGE[]
+  activosIR                RecursoIR[]
+  solicitudesInsumoIR      SolicitudInsumoIR[]
+  entregasEPP              EntregaEPP[]
+  tiposInfraccionIN        TipoInfraccionIN[]
+  infraccionesIN           InfraccionIN[]
+  trabajosMT               TrabajoMT[]
+  proyectosMT              ProyectoMT[]
+  elementosRA              ElementoRA[]
+  reservasRA               ReservaRA[]
+  avisosCV                 AvisoCV[]
+  plantillasCV             PlantillaCV[]
+  fondosFI                 FondoFI[]
+  egresosFI                EgresoFI[]
+  ingresosFI               IngresoFI[]
+  emisionesGC              EmisionGC[]
+  cobrosFI                 CobroFI[]
+  bitacoraVisitasPE        BitacoraVisitaPE[]
+  encomiendasPE            EncomiendaPE[]
+  ingresosContratistasPE   IngresoContratistaPE[]
+  proveedoresPE            ProveedorPE[]
+  mantencionesPreventivasPE MantencionPreventivaPE[]
+  visitasTecnicasPE        VisitaTecnicaPE[]
+  cierresTurnoPE           CierreTurnoPE[]
+  proyeccionesPE           ProyeccionPE[]
+  liquidacionesPL          LiquidacionPL[]
+  adelantosPL              AdelantoPL[]
+  certificadosCT           CertificadoCT[]
+  reportesRE               ReporteRE[]
+  membresias               Membresia[]
+  // maestros
+  afps                     Afp[]
+  previsionesSalud         PrevisionSalud[]
+  mutualesCajas            MutualCaja[]
+  feriados                 Feriado[]
+  bancos                   Banco[]
+  indicesAjuste            IndiceAjuste[]
+  cajasFondos              CajaFondo[]
+  categoriasInsumos        CategoriaInsumo[]
+  unidadesMedida           UnidadMedida[]
+  contactosEmergencia      ContactoEmergencia[]
+  condicionesEspeciales    CondicionEspecial[]
+  estadosOcupacion         EstadoOcupacion[]
+  categoriasMacro          CategoriaMacro[]
+  categoriasMicro          CategoriaMicro[]
+  categoriasUnidad         CategoriaUnidad[]
+  estadosInmobiliarios     EstadoInmobiliario[]
+  asignacionesFamiliar     AsignacionFamiliar[]
+  jornadas                 Jornada[]
+  couriers                 Courier[]
+  contratistas             Contratista[]
+}
+
+// Autenticación y Autorización (B3 — AU §4, RP, D3; P5 — AU §3 Auth.js + SG D-v)
+model Usuario {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  personaId    String? // 0..1 hacia MP.Persona.id (no FK estricta para desacoplar)
+  activo       Boolean  @default(true)
+  passwordHash String? // bcrypt (AU §3: login contra BD vía Auth.js credentials)
+  tokenVersion Int      @default(0) // SERIE-PRODUCCION-FASE2 P2: invalidación de sesiones
+  twoFactorSecret      String?   // SERIE-PRODUCCION-FASE2 P3: secreto TOTP Base32 (pendiente hasta verify-setup)
+  twoFactorEnabled     Boolean   @default(false) // SERIE-PRODUCCION-FASE2 P3: 2FA activo
+  twoFactorBackupCodes String?   // SERIE-PRODUCCION-FASE2 P3: JSON array de hashes bcrypt de códigos de respaldo
+  solicitudEliminacion   Boolean   @default(false) // SERIE-PRODUCCION-FASE2 P6: derecho a olvido (Ley 21.719)
+  solicitudEliminacionAt DateTime? // SERIE-PRODUCCION-FASE2 P6: fecha de la solicitud
+  membresias   Membresia[]
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("usuarios")
+}
+
+model Membresia {
+  id          String   @id @default(cuid())
+  usuarioId   String
+  usuario     Usuario   @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  comunidadId String
+  comunidad   Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  rol         String
+  createdAt   DateTime @default(now())
+
+  @@unique([usuarioId, comunidadId])
+  @@index([comunidadId])
+  @@index([usuarioId])
+  @@map("membresias")
+}
+
+// SG D-v: rate limit persistente (10 fallos/15 min por clave IP) — reemplaza el Map en memoria
+model RateLimitAttempt {
+  id        String   @id @default(cuid())
+  clave     String
+  createdAt DateTime @default(now())
+
+  @@index([clave, createdAt])
+  @@map("rate_limit_attempts")
+}
+
+// Estructura Física — Inventario
+model TipoUnidad {
+  id               String   @id
+  comunidadId      String
+  comunidad        Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  nombre           String
+  categoria        String
+  metraje          Float
+  montoBaseGc      Float
+  descripcion      String?
+  activo           Boolean
+  historialTarifas Json     // TarifaHistorica[]
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([comunidadId])
+  @@unique([comunidadId, nombre])
+  @@map("tipos_unidad")
+}
+
+model MacroSector {
+  id          String   @id
+  comunidadId String
+  comunidad   Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  nombre      String
+  etiqueta    String
+  descripcion String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([comunidadId])
+  @@unique([comunidadId, nombre])
+  @@map("macro_sectores")
+}
+
+model MicroSector {
+  id            String   @id
+  comunidadId   String
+  comunidad     Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  macroSectorId String
+  nombre        String
+  etiqueta      String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([comunidadId])
+  @@index([macroSectorId])
+  @@map("micro_sectores")
+}
+
+model Unidad {
+  id           String   @id
+  comunidadId  String
+  comunidad    Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  microSectorId String
+  numero       String
+  etiqueta     String
+  tipoUnidadId String
+  metraje      Float
+  prorrateo    Float
+  rolSii       String
+  estadoId     String
+  servicios    Json // ServiciosUnidad
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([comunidadId])
+  @@index([microSectorId])
+  @@index([tipoUnidadId])
+  // No unique on [comunidadId, numero] per C3b (D5) — número repetible en distintos microsectores
+  @@map("unidades")
+}
+
+model Persona {
+  id                         String   @id
+  comunidadId                String
+  comunidad                  Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  rut                        String
+  nombreCompleto             String
+  nombres                    String
+  apellidos                  String
+  email                      String
+  telefonoMovil              String
+  telefonoFijo               String?
+  fotografiaUrl              String?
+  estadoCuenta               String   // activa | inactiva | bloqueada
+  condicionesEspecialesIds   Json     // string[]
+  roles                      Json     // ROLES_PERSONA[]
+  datosLaborales             Json?    // ExtensionLaboral
+  datosGobernanza            Json?    // ExtensionGobernanza
+  permiteCreacionManualCV    Boolean?
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
+
+  @@index([comunidadId])
+  @@index([rut])
+  // No unique on rut per C3b — RUT puede repetirse en otro tenant si la persona pertenece a dos comunidades
+  @@map("personas")
+}
+
+model VinculoUnidad {
+  id                          String   @id
+  comunidadId                 String
+  comunidad                   Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  personaId                   String
+  unidadId                    String
+  rol                         String   // propietario | arrendatario | copropietario | ocupante
+  fechaInicio                 String   // FechaISO
+  fechaFin                    String?
+  estadoOcupacionPropiedad    String?
+  permiteVerFinanzas          Boolean
+  cerrarAnterior              Boolean?
+  createdAt                   DateTime @default(now())
+  updatedAt                   DateTime @updatedAt
+
+  @@index([comunidadId])
+  @@index([personaId])
+  @@index([unidadId])
+  @@map("vinculos")
+}
+
+model EventoAuditoria {
+  id           String   @id
+  comunidadId  String
+  comunidad    Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  timestamp    String
+  usuario      String
+  categoria    String
+  tipoAccion   String
+  referenciaId String
+  descripcion  String
+  createdAt    DateTime @default(now())
+
+  @@index([comunidadId])
+  @@index([categoria])
+  @@map("eventos_auditoria")
+}
+
+model ConfiguracionGlobal {
+  id                            String   @id
+  comunidadId                   String   @unique
+  comunidad                     Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  nombreComunidad               String
+  logoUrl                       String?
+  faviconUrl                    String?
+  rutCondominio                 String
+  direccionOficial              String
+  administradorResponsable      String
+  rutAdministrador              String
+  telefonoAdmin                 String
+  firmaDigitalizadaUrl          String?
+  modoCalculoGC                 String
+  diaCortePago                  Int
+  limiteMesesAvisoCorte         Int
+  smtpHost                      String
+  smtpPort                      Int
+  smtpUser                      String
+  smtpPassword                  String   @default("")
+  smtpSecurity                  String
+  smtpFrom                      String
+  smtpFromName                  String
+  smtpBcc                       String?
+  smtpRecepcion                 String?
+  notificarEmisionGC            Boolean
+  notificarRegistroVisitas      Boolean
+  notificarEncomiendas          Boolean
+  notificarReservas             Boolean
+  notificarAvisosSistema        Boolean
+  notificarSugerenciasReclamos  Boolean
+  diasMesComercial              Int
+  diasVacacionesMes             Float
+  jornadaSemanalEstandar        Int
+  claveEliminacionMaestro       String   @default("")
+  visibilidadPortalInmobiliario String?
+  cvRequiereVistoBueno          Boolean?
+  ufMensual                     Float?
+  ingresoMinimoMensual          Float?
+  topeGratificacionLegal        Float?
+  tasaSIS                       Float?
+  createdAt                     DateTime @default(now())
+  updatedAt                     DateTime @updatedAt
+
+  @@index([comunidadId])
+  @@map("configuracion_global")
+}
+
+// Portal Inmobiliario (PI)
+model PublicacionPortal {
+  id                        String   @id
+  comunidadId               String
+  comunidad                 Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  unidadId                  String
+  operacion                 String   // venta | arriendo
+  precio                    Float
+  moneda                    String?
+  dormitorios               Int?
+  banos                     Int?
+  etiquetaEstado            String?
+  descripcion               String?
+  urlMapa                   String?
+  condicionesContractuales  String?
+  imagenes                  Json     // ImagenReferencia[]
+  activa                    Boolean
+  fechaPublicacion          String
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+
+  @@index([comunidadId])
+  @@index([unidadId])
+  @@map("publicaciones_portal")
+}
+
+model LeadPortal {
+  id              String   @id
+  comunidadId     String
+  comunidad       Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  publicacionId   String
+  nombreContacto  String
+  contacto        String
+  mensaje         String?
+  fecha           String
+  atendido        Boolean
+  createdAt       DateTime @default(now())
+
+  @@index([comunidadId])
+  @@index([publicacionId])
+  @@map("leads_portal")
+}
+
+model Notificacion {
+  id                    String   @id
+  comunidadId           String
+  comunidad             Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  destinatarioRol       String
+  destinatarioPersonaId String?
+  asunto                String
+  cuerpo                String
+  canal                 String   @default("email_simulado")
+  moduloOrigen          String
+  fecha                 String
+  leida                 Boolean  @default(false)
+  createdAt             DateTime @default(now())
+
+  @@index([comunidadId])
+  @@index([destinatarioRol])
+  @@map("notificaciones")
+}
+
+// Gestión Administrativa (AD) / Directiva (GD)
+model ControlPropiedad {
+  id                        String   @id
+  comunidadId               String
+  comunidad                 Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  unidadId                  String
+  residenteVeMorosidad      Boolean
+  residenteVeActas          Boolean
+  alertasResidentesActivas  Boolean
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+
+  @@index([comunidadId])
+  @@index([unidadId])
+  @@map("controles_propiedad")
+}
+
+model ActaGD {
+  id                String   @id
+  comunidadId       String
+  comunidad         Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  fecha             String
+  hora              String
+  lugar             String
+  tablaTemas        Json     // string[]
+  presentes         Json     // string[]
+  ausentes          Json     // string[]
+  invitados         Json     // string[]
+  minuta            String
+  adjuntos          Json     // ImagenReferencia[]
+  estado            String   // borrador | publicada
+  aprobaciones      Json     // string[]
+  fechaPublicacion  String?
+  avisoCVReferencia String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([comunidadId])
+  @@map("actas_gd")
+}
+
+// Comunicación con Vecinos (CO)
+model PlantillaCO {
+  id          String   @id
+  comunidadId String
+  comunidad   Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  nombre      String
+  categoria   String
+  asunto      String
+  cuerpo      String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([comunidadId])
+  @@map("plantillas_co")
+}
+
+model EnvioCO {
+  id            String   @id
+  comunidadId   String
+  comunidad     Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  asunto        String
+  cuerpo        String
+  plantillaId   String?
+  destinatarios Json     // DestinatarioEnvio[]
+  fechaEnvio    String
+  lecturas      Json     // string[]
+  createdAt     DateTime @default(now())
+
+  @@index([comunidadId])
+  @@map("envios_co")
+}
+
+model MensajeBuzonCO {
+  id                   String   @id
+  comunidadId          String
+  comunidad            Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  folio                String
+  clasificacion        String
+  reportantePersonaId  String?
+  reportanteNombre     String
+  unidadId             String?
+  asunto               String
+  cuerpo               String
+  visibilidadComite    Boolean
+  fechaIngreso         String
+  estado               String
+  respuestas           Json     // RespuestaBuzonCO[]
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@index([comunidadId])
+  @@map("mensajes_buzon_co")
+}
+
+model DocumentoCO {
+  id          String   @id
+  comunidadId String
+  comunidad   Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  nombre      String
+  tipoMime    String
+  tamanoKB    Float
+  url         String
+  categoria   String
+  createdAt   DateTime @default(now())
+
+  @@index([comunidadId])
+  @@map("documentos_co")
+}
+
+// Gestión de Solicitudes (GE)
+model SolicitudGE {
+  id                 String   @id
+  comunidadId        String
+  comunidad          Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  folio              String
+  tipo               String
+  titulo             String
+  descripcion        String
+  solicitantePersonaId String?
+  unidadId           String?
+  estado             String
+  fechaCreacion      String
+  comentarios        Json     // ComentarioGE[]
+  detalleGrabaciones Json?
+  detalleInsumos     Json?
+  mensajeBuzonId     String?
+  resolucion         String?
+  fechaCierre        String?
+  historialEstados   Json     // CambioEstadoGE[]
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([comunidadId])
+  @@map("solicitudes_ge")
+}
+
+// Inventario y Recursos (IR)
+model RecursoIR {
+  id                String   @id
+  comunidadId       String
+  comunidad         Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  codigo            String?
+  nombre            String
+  categoria         String
+  marca             String?
+  modelo            String?
+  descripcion       String?
+  fichaTecnicaUrl   String?
+  microSectorId     String?
+  unidadId          String?
+  responsablePersonaId String?
+  estadoActivo      String
+  unidadMedidaId    String?
+  stock             Float
+  esCritico         Boolean
+  umbralCritico     Float?
+  proveedor         String?
+  numeroFactura     String?
+  facturaUrl        String?
+  garantiaHasta     String?
+  talla             String?
+  renovacionMeses   Int?
+  asignacionActual  Json?
+  cargoFIReferencia String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([comunidadId])
+  @@index([categoria])
+  @@map("recursos_ir")
+}
+
+model SolicitudInsumoIR {
+  id                  String   @id
+  comunidadId         String
+  comunidad           Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  folio               String
+  solicitantePersonaId String
+  recursoInsumoId     String?
+  comodin             Json?
+  recursoSustitutoId  String?
+  estadoComodin       String
+  cantidad            Float
+  areaDestino         String
+  estado              String
+  fechaSolicitud      String
+  entregaFecha        String?
+  rechazoJustificacion String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@index([comunidadId])
+  @@map("solicitudes_insumo_ir")
+}
+
+model EntregaEPP {
+  id               String   @id
+  comunidadId      String
+  comunidad        Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  recursoId        String
+  personaId        String
+  fechaEntrega     String
+  talla            String?
+  estado           String
+  proximaRenovacion String?
+  createdAt        DateTime @default(now())
+
+  @@index([comunidadId])
+  @@index([personaId])
+  @@map("entregas_epp")
+}
+
+// Infracciones y Multas (IN)
+model TipoInfraccionIN {
+  id          String   @id
+  comunidadId String
+  comunidad   Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  nombre      String
+  categoria   String
+  tipoSancion String
+  valor       Float
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([comunidadId])
+  @@map("tipos_infraccion_in")
+}
+
+model InfraccionIN {
+  id                        String   @id
+  comunidadId               String
+  comunidad                 Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  folio                     String
+  tipoInfraccionId          String?
+  danoDirecto               Json?
+  unidadId                  String
+  reportantePersonaId       String?
+  mensajeBuzonId            String?
+  fechaSuceso               String
+  horaSuceso                String
+  antecedentes              String
+  evidencias                Json     // ImagenReferencia[]
+  estado                    String
+  fechaRegistro             String
+  montoAplicado             Float?
+  comentariosDirectiva      Json     // ComentarioInternoIN[]
+  respaldosDirectiva        Json     // string[]
+  apelacion                 Json?
+  desestimacionJustificacion String?
+  cargoFIReferencia         String?
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+
+  @@index([comunidadId])
+  @@index([unidadId])
+  @@map("infracciones_in")
+}
+
+// Mantenimiento y Proyectos (MT)
+model TrabajoMT {
+  id                    String   @id
+  comunidadId           String
+  comunidad             Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  folio                 String
+  titulo                String
+  descripcion           String
+  unidadId              String?
+  microSectorId         String?
+  activoIRId            String?
+  responsablePersonaId  String?
+  proveedor             Json?    // ProveedorMT
+  prioridad             String
+  estado                String
+  fechaProgramada       String?
+  fechaInicio           String?
+  fechaTermino          String?
+  costoTotal            Float
+  origenFondos          String
+  estadoPago            String
+  garantiaInicio        String?
+  garantiaFin           String?
+  alertaGarantiaEnviada Boolean
+  evidencias            Json     // EvidenciaMT[]
+  preventivo            Json?
+  cargoFIReferencia     String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([comunidadId])
+  @@map("trabajos_mt")
+}
+
+model ProyectoMT {
+  id                    String   @id
+  comunidadId           String
+  comunidad             Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  nombre                String
+  descripcion           String?
+  presupuestoEstimado   Float
+  plazoMeses            Int
+  fechaObjetivo         String?
+  estado                String
+  fondoFinanciamientoId String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([comunidadId])
+  @@map("proyectos_mt")
+}
+
+// Reservas y Amenities (RA)
+model ElementoRA {
+  id                       String   @id
+  comunidadId              String
+  comunidad                Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  nombre                   String
+  tipo                     String
+  microSectorId            String?
+  activoIRId               String?
+  franja                   String
+  duracionBloqueHoras      Int?
+  tarifaUso                Float
+  garantiaRequerida        Float
+  aforo                    Int?
+  stock                    Int?
+  anticipacionMinimaDias   Int?
+  cancelacionTardiaDias    Int?
+  penalizacionTardiaMonto  Float?
+  activo                   Boolean
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  @@index([comunidadId])
+  @@map("elementos_ra")
+}
+
+model ReservaRA {
+  id                String   @id
+  comunidadId       String
+  comunidad         Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  folio             String
+  elementoId        String
+  solicitantePersonaId String
+  unidadId          String?
+  fecha             String
+  horaInicio        String
+  horaFin           String
+  estado            String
+  montoTarifa       Float
+  montoGarantia     Float
+  cancelacion       Json?
+  garantiaRetenida  Json?
+  cargoFIReferencia String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([comunidadId])
+  @@index([elementoId])
+  @@map("reservas_ra")
+}
+
+// Visor de Mensajes (CV)
+model AvisoCV {
+  id                  String   @id
+  comunidadId         String
+  comunidad           Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  titulo              String
+  cuerpo              String
+  tipologia           String
+  duracionSegundos    Int
+  imagenUrl           String?
+  videoUrl            String?
+  pantallaCompleta    Boolean
+  expiresAt           String?
+  tags                Json     // string[]
+  estado              String
+  requiereVistoBueno  Boolean
+  creadoPorPersonaId  String?
+  origen              String
+  plantillaId         String?
+  actaId              String?
+  fechaCreacion       String
+  fechaPublicacion    String?
+  fechaArchivado      String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@index([comunidadId])
+  @@map("avisos_cv")
+}
+
+model PlantillaCV {
+  id                        String   @id
+  comunidadId               String
+  comunidad                 Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  titulo                    String
+  cuerpo                    String
+  tipologia                 String
+  duracionSegundosSugerida  Int
+  imagenUrl                 String?
+  videoUrl                  String?
+  pantallaCompleta          Boolean
+  tags                      Json
+  activa                    Boolean
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+
+  @@index([comunidadId])
+  @@map("plantillas_cv")
+}
+
+// Finanzas y Morosidad (FI)
+model FondoFI {
+  id               String   @id
+  comunidadId      String
+  comunidad        Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  nombre           String
+  tipo             String
+  descripcion      String?
+  porcentajeAporte Float?
+  activo           Boolean
+  saldoInicial     Float?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([comunidadId])
+  @@unique([comunidadId, nombre])
+  @@map("fondos_fi")
+}
+
+// Espejo FI del store (fi-sync-bd): ingresos manuales a fondo incl. punto cero
+model IngresoFI {
+  id          String   @id
+  comunidadId String
+  comunidad   Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  fondoId     String
+  fecha       String
+  monto       Float
+  concepto    String
+  familia     String?
+  createdAt   DateTime @default(now())
+
+  @@index([comunidadId])
+  @@index([fondoId])
+  @@map("ingresos_fi")
+}
+
+model EgresoFI {
+  id                    String   @id
+  comunidadId           String
+  comunidad             Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  folio                 String?
+  fecha                 String
+  categoria             String
+  descripcion           String
+  monto                 Float
+  fondoId               String
+  esRecurrente          Boolean
+  comprobante           Json?
+  microSectoresIds      Json?
+  proveedor             String?
+  unidadId              String?
+  aprobacionActaGDId    String?
+  createdAt             DateTime @default(now())
+
+  @@index([comunidadId])
+  @@index([fondoId])
+  @@map("egresos_fi")
+}
+
+model EmisionGC {
+  id                  String   @id
+  comunidadId         String
+  comunidad           Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  periodo             String
+  modo                String
+  gastoTotal          Float
+  lineas              Json     // LineaEmisionGC[]
+  fondoReservaAporte  Json?
+  fechaEmision        String
+  createdAt           DateTime @default(now())
+
+  @@index([comunidadId])
+  @@index([periodo])
+  @@map("emisiones_gc")
+}
+
+model CobroFI {
+  id               String   @id
+  comunidadId      String
+  comunidad        Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  unidadId         String
+  periodo          String
+  concepto         String
+  origenModulo     String
+  origenRef        String?
+  fondoId          String
+  descripcion      String
+  montoBase        Float
+  fechaCargo       String
+  fechaVencimiento String?
+  moras            Json     // MoraCobroFI[]
+  pagos            Json     // PagoCobroFI[]
+  diferencias      Json     // DiferenciaPagoFI[]
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([comunidadId])
+  @@index([unidadId])
+  @@index([periodo])
+  @@map("cobros_fi")
+}
+
+// Personal y Servicios (PE)
+model BitacoraVisitaPE {
+  id                   String   @id
+  comunidadId          String
+  comunidad            Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  fecha                String
+  nombre               String
+  dni                  String
+  patente              String?
+  unidadId             String?
+  destinoPersonaId     String?
+  jornadaId            String
+  origenAgenda         String
+  agendadaPorPersonaId String?
+  estado               String
+  horaIngreso          String?
+  notas                String?
+  createdAt            DateTime @default(now())
+
+  @@index([comunidadId])
+  @@map("bitacora_visitas_pe")
+}
+
+model EncomiendaPE {
+  id                    String   @id
+  comunidadId           String
+  comunidad             Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  courierId             String
+  destinatarioPersonaId String?
+  unidadId              String?
+  descripcionPaquete    String?
+  evidencia             Json?
+  fechaRecepcion        String
+  estado                String
+  retiro                Json?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([comunidadId])
+  @@map("encomiendas_pe")
+}
+
+model IngresoContratistaPE {
+  id              String   @id
+  comunidadId     String
+  comunidad       Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  contratistaId   String
+  motivo          String
+  unidadId        String?
+  fecha           String
+  jornadaId       String
+  agendadoPor     String
+  personaAgendaId String?
+  estado          String
+  horaIngreso     String?
+  notas           String?
+  createdAt       DateTime @default(now())
+
+  @@index([comunidadId])
+  @@map("ingresos_contratista_pe")
+}
+
+model ProveedorPE {
+  id        String   @id
+  comunidadId String
+  comunidad Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  rut       String
+  nombre    String
+  rubro     String
+  contacto  String?
+  telefono  String?
+  email     String?
+  sitioWeb  String?
+  activo    Boolean
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([comunidadId])
+  @@unique([comunidadId, rut])
+  @@map("proveedores_pe")
+}
+
+model MantencionPreventivaPE {
+  id            String   @id
+  comunidadId   String
+  comunidad     Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  proveedorId   String
+  descripcion   String
+  periodicidadMeses Int
+  proximaFecha  String
+  alertaDiasAntes Int
+  activo        Boolean
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([comunidadId])
+  @@index([proveedorId])
+  @@map("mantenciones_preventivas_pe")
+}
+
+model VisitaTecnicaPE {
+  id                  String   @id
+  comunidadId         String
+  comunidad           Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  proveedorId         String
+  mantencionId        String?
+  tecnicoNombre       String
+  fecha               String
+  trabajoRealizado    String
+  supervisorPersonaId String?
+  unidadId            String?
+  createdAt           DateTime @default(now())
+
+  @@index([comunidadId])
+  @@index([proveedorId])
+  @@map("visitas_tecnicas_pe")
+}
+
+model CierreTurnoPE {
+  id                      String   @id
+  comunidadId             String
+  comunidad               Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  fecha                   String
+  hora                    String
+  jornadaReportadaId      String
+  trabajadorPersonaId     String
+  novedadesGenerales      String?
+  incidencias             Json
+  checklistInstalaciones  Json
+  checklistEquipamiento   Json
+  historialCambios        Json
+  notificadoAAdmin        Boolean
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  @@index([comunidadId])
+  @@map("cierres_turno_pe")
+}
+
+model ProyeccionPE {
+  id                       String   @id
+  comunidadId              String
+  comunidad                Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  mesAnio                  String
+  feriados                 Json
+  diasFeriados             Int
+  reemplazosNecesarios     Int
+  costoEstimado            Float
+  detalleCosto             Json
+  enviadoAFI               Boolean
+  liquidacionPLReferencia  String?
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  @@index([comunidadId])
+  @@map("proyecciones_pe")
+}
+
+// Liquidaciones y Remuneraciones (PL)
+model LiquidacionPL {
+  id                       String   @id
+  comunidadId              String
+  comunidad                Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  folio                    String
+  trabajadorPersonaId      String
+  periodo                  String
+  fechaGeneracion          String
+  diasTrabajados           Int
+  sueldoBaseContrato       Float
+  diasMesComercial         Int
+  jornadaSemanal           Float
+  sueldoBaseProporcional   Float
+  horasExtrasHoras         Float
+  valorHoraOrdinaria       Float
+  montoHorasExtras         Float
+  bonos                    Json
+  gratificacionLegal       Float
+  totalImponible           Float
+  asignacionMovilizacion   Float
+  asignacionColacion       Float
+  asignacionFamiliarTramoId String?
+  cargas                   Int
+  montoAsignacionFamiliar  Float
+  totalHaberes             Float
+  afpId                    String?
+  nombreAfp                String
+  tasaAFP                  Float
+  montoAFP                 Float
+  saludId                  String?
+  nombreSalud              String
+  saludTipo                String
+  saludPorcentaje          Float?
+  saludValorUF             Float?
+  ufAplicada               Float?
+  montoSalud               Float
+  tasaSIS                  Float
+  montoSIS                 Float
+  montoSeguroCesantia      Float
+  montoAPV                 Float
+  totalDescuentos          Float
+  descuentoAnticipos       Float
+  adelantosIds             Json
+  alcanceLiquido           Float
+  liquidoAPagar            Float
+  estado                   String
+  egresoFIReferencia       String?
+  proyeccionPEReferencia   String?
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  @@index([comunidadId])
+  @@index([trabajadorPersonaId])
+  @@map("liquidaciones_pl")
+}
+
+model AdelantoPL {
+  id                  String   @id
+  comunidadId         String
+  comunidad           Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  folio               String
+  trabajadorPersonaId String
+  fecha               String
+  monto               Float
+  glosa               String
+  estado              String
+  liquidacionId       String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@index([comunidadId])
+  @@index([trabajadorPersonaId])
+  @@map("adelantos_pl")
+}
+
+// Certificados (CT)
+model CertificadoCT {
+  id                String   @id
+  comunidadId       String
+  comunidad         Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  folio             String
+  codigoVerificacion String
+  tipo              String
+  unidadId          String?
+  personaId         String?
+  origenRef         String?
+  solicitanteNombre String
+  resumen           String
+  detalle           Json
+  firmaUrl          String?
+  fechaEmision      String
+  createdAt         DateTime @default(now())
+
+  @@index([comunidadId])
+  @@map("certificados_ct")
+}
+
+// Reportería y Dashboards (RE)
+model ReporteRE {
+  id                     String   @id
+  comunidadId            String
+  comunidad              Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  titulo                 String
+  bloques                Json
+  segmento               Json
+  payloadSnapshot        Json
+  fechaGeneracion        String
+  destinatariosPersonaId Json
+  distribuidoA           Int
+  fechaDistribucion      String?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  @@index([comunidadId])
+  @@map("reportes_re")
+}
+
+// Maestros Administrativos y Legales (MA)
+model Afp {
+  id            String   @id
+  comunidadId   String
+  comunidad     Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  nombre        String
+  tasaCotizacion Float
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([comunidadId])
+  @@map("maestros_afp")
+}
+
+model PrevisionSalud {
+  id          String   @id
+  comunidadId String
+  comunidad   Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  nombre      String
+  tipo        String // fonasa | isapre
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([comunidadId])
+  @@map("maestros_prevision_salud")
+}
+
+model MutualCaja {
+  id          String   @id
+  comunidadId String
+  comunidad   Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  nombre      String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([comunidadId])
+  @@map("maestros_mutual_caja")
+}
+
+model Feriado {
+  id          String   @id
+  comunidadId String
+  comunidad   Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  fecha       String
+  nombre      String
+  irrenunciable Boolean
+  createdAt   DateTime @default(now())
+
+  @@index([comunidadId])
+  @@map("maestros_feriado")
+}
+
+model Banco {
+  id          String   @id
+  comunidadId String
+  comunidad   Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  nombre      String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([comunidadId])
+  @@map("maestros_banco")
+}
+
+model IndiceAjuste {
+  id          String   @id
+  comunidadId String
+  comunidad   Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  nombre      String
+  codigo      String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([comunidadId])
+  @@map("maestros_indice_ajuste")
+}
+
+model CajaFondo {
+  id          String   @id
+  comunidadId String
+  comunidad   Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  nombre      String
+  tipo        String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([comunidadId])
+  @@map("maestros_caja_fondo")
+}
+
+model CategoriaInsumo {
+  id          String   @id
+  comunidadId String
+  comunidad   Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  nombre      String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([comunidadId])
+  @@map("maestros_categoria_insumo")
+}
+
+model UnidadMedida {
+  id          String   @id
+  comunidadId String
+  comunidad   Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  nombre      String
+  abreviatura String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([comunidadId])
+  @@map("maestros_unidad_medida")
+}
+
+model ContactoEmergencia {
+  id          String   @id
+  comunidadId String
+  comunidad   Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  categoria   String?
+  nombre      String
+  telefono    String
+  sitioWeb    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([comunidadId])
+  @@map("maestros_contacto_emergencia")
+}
+
+model CondicionEspecial {
+  id          String   @id
+  comunidadId String
+  comunidad   Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  nombre      String
+  color       String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([comunidadId])
+  @@map("maestros_condicion_especial")
+}
+
+model EstadoOcupacion {
+  id          String   @id
+  comunidadId String
+  comunidad   Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  nombre      String
+  color       String
+  hex         String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([comunidadId])
+  @@map("maestros_estado_ocupacion")
+}
+
+model CategoriaMacro {
+  id          String   @id
+  comunidadId String
+  comunidad   Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  nombre      String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([comunidadId])
+  @@map("maestros_categoria_macro")
+}
+
+model CategoriaMicro {
+  id          String   @id
+  comunidadId String
+  comunidad   Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  nombre      String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([comunidadId])
+  @@map("maestros_categoria_micro")
+}
+
+model CategoriaUnidad {
+  id          String   @id
+  comunidadId String
+  comunidad   Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  nombre      String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([comunidadId])
+  @@map("maestros_categoria_unidad")
+}
+
+model EstadoInmobiliario {
+  id          String   @id
+  comunidadId String
+  comunidad   Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  nombre      String
+  color       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([comunidadId])
+  @@map("maestros_estado_inmobiliario")
+}
+
+model AsignacionFamiliar {
+  id          String   @id
+  comunidadId String
+  comunidad   Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  nombre      String
+  monto       Float
+  rangoRentas String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([comunidadId])
+  @@map("maestros_asignacion_familiar")
+}
+
+model Jornada {
+  id          String   @id
+  comunidadId String
+  comunidad   Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  nombre      String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([comunidadId])
+  @@map("maestros_jornada")
+}
+
+model Courier {
+  id          String   @id
+  comunidadId String
+  comunidad   Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  nombre      String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([comunidadId])
+  @@map("maestros_courier")
+}
+
+model Contratista {
+  id          String   @id
+  comunidadId String
+  comunidad   Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  nombre      String
+  rubro       String?
+  telefono    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([comunidadId])
+  @@map("maestros_contratista")
+}

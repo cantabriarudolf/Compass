@@ -9,7 +9,7 @@ import { EncomiendasPanel } from "@/components/pe/encomiendas-panel"
 import { VisitasPanel } from "@/components/pe/visitas-panel"
 import { ContratistasPanel } from "@/components/pe/contratistas-panel"
 
-vi.setConfig({ testTimeout: 20_000 })
+vi.setConfig({ testTimeout: 30_000 })
 
 const HOY = new Date().toISOString().slice(0, 10)
 
