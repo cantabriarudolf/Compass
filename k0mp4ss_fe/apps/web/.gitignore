@@ -6,5 +6,8 @@ prisma/dev.db.backup-*
 .env
 .env.local
 .env.*.local
+
+# Documentos de deploy con secretos — NUNCA commitear
+DEPLOY-VERCEL.md
 *.db-shm
 *.db-wal

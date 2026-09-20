@@ -40,9 +40,9 @@ export async function GET(request: NextRequest) {
       orderBy: { createdAt: "asc" },
     })
     return NextResponse.json({
-      comunidades: propias.map((m) => ({
+      comunidades: propias.map((m: (typeof propias)[number]) => ({
         id: m.comunidadId,
-        nombre: (m as unknown as { comunidad: { nombre: string } }).comunidad.nombre,
+        nombre: m.comunidad.nombre,
         rol: m.rol,
       })),
     })
