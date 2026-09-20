@@ -1,3 +1,10 @@
 # Transitorio del roadmap QA en vivo (reporter F2) — nunca commitear
 qa-roadmap-live.json
 prisma/dev.db.backup-*
+
+# Secretos y entorno local — NUNCA commitear
+.env
+.env.local
+.env.*.local
+*.db-shm
+*.db-wal

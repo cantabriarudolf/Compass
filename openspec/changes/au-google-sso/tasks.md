@@ -9,13 +9,16 @@
 - [x] 1.6 Actualizar `.env.example`
 - [x] 1.7 Manual AU actualizado
 
-## ⏳ Pendientes (requieren acción del owner)
-- [ ] 2.1 Obtener `GOOGLE_CLIENT_ID` y `GOOGLE_CLIENT_SECRET` de Google Cloud Console
-- [ ] 2.2 Configurar redirect URIs en Google Cloud Console:
+## ✅ HECHO
+- [x] 2.1 Obtener `GOOGLE_CLIENT_ID` y `GOOGLE_CLIENT_SECRET` de Google Cloud Console
+- [x] 2.2 Configurar redirect URIs en Google Cloud Console:
   - Dev: `http://localhost:3000/api/auth/callback/google`
   - Prod: `https://<tu-dominio>/api/auth/callback/google`
-- [ ] 2.3 Pegar credenciales en `.env` (local) y Vercel dashboard (prod)
-- [ ] 2.4 Probar login Google con cuenta de usuario existente y activo
+- [x] 2.3 Pegar credenciales en `.env.local` (local)
+- [x] 2.4 Probar login Google con cuenta de usuario existente y activo
+
+## ⏳ Pendiente producción
+- [ ] 3.1 Agregar `GOOGLE_CLIENT_ID` y `GOOGLE_CLIENT_SECRET` en Vercel dashboard (Environment Variables)
 
 ## Decisiones del owner
 - [ ] ¿Rol por defecto al vincular cuenta Google? (sugerencia: `residente`)
