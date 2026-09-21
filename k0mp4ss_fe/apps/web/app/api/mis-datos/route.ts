@@ -96,7 +96,7 @@ export async function GET() {
       solicitudEliminacionAt: usuario.solicitudEliminacionAt,
     },
     persona,
-    membresias: membresias.map((m) => ({
+    membresias: membresias.map((m: (typeof membresias)[number]) => ({
       comunidad: m.comunidad,
       rol: m.rol,
       desde: m.createdAt,

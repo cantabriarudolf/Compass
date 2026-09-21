@@ -97,9 +97,9 @@ export async function GET(request: Request) {
     prisma.ingresoFI.groupBy({ by: ["fondoId"], _count: { _all: true }, _sum: { monto: true }, where: { comunidadId } as never }),
   ])
 
-  const mapaEgresos = new Map(agrupEgresos.map((g) => [g.fondoId, g]))
-  const mapaIngresos = new Map(agrupIngresos.map((g) => [g.fondoId, g]))
-  const totalesPorFondo = fondos.map((f) => {
+  const mapaEgresos = new Map(agrupEgresos.map((g: (typeof agrupEgresos)[number]) => [g.fondoId, g]))
+  const mapaIngresos = new Map(agrupIngresos.map((g: (typeof agrupIngresos)[number]) => [g.fondoId, g]))
+  const totalesPorFondo = fondos.map((f: (typeof fondos)[number]) => {
     const ge = mapaEgresos.get(f.id)
     const gi = mapaIngresos.get(f.id)
     const saldoInicial = f.saldoInicial ?? 0

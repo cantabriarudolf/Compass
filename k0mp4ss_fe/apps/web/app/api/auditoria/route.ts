@@ -108,8 +108,8 @@ export async function GET(request: Request) {
     pageSize,
     eventos,
     facetas: {
-      categorias: facetaCategorias.map(f => f.categoria),
-      tiposAccion: facetaTipos.map(f => f.tipoAccion),
+      categorias: facetaCategorias.map((f: { categoria: string }) => f.categoria),
+      tiposAccion: facetaTipos.map((f: { tipoAccion: string }) => f.tipoAccion),
     },
   })
 }
