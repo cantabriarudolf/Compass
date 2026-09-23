@@ -32,7 +32,8 @@ import {
   IconLock,
 } from "@tabler/icons-react"
 import { puedeContextual } from "@/lib/authz"
-import type { ActaGD } from "@/lib/schemas"
+import type { ActaGD, PeriodoDirectiva } from "@/lib/schemas"
+import { periodoDirectivaVigente, esMiembroDirectivaVigente } from "@/lib/store"
 
 type Vista = "administrador" | "propietario" | "residente"
 
@@ -43,10 +44,36 @@ const CARGO_LABEL: Record<string, string> = {
   director: "Director",
 }
 
+// GD-períodos: art. 17 Ley 21.442 — máximo 36 meses fijados por asamblea.
+function sumarMesesISO(fecha: string, meses: number): string {
+  const partes = fecha.split("-")
+  const y = Number(partes[0] ?? "1970")
+  const m = Number(partes[1] ?? "01")
+  const d = Number(partes[2] ?? "01")
+  const total = y * 12 + (m - 1) + meses
+  const ny = Math.floor(total / 12)
+  const nm = (total % 12) + 1
+  const lastDay = new Date(ny, nm, 0).getDate()
+  const nd = Math.min(d, lastDay)
+  return `${ny}-${String(nm).padStart(2, "0")}-${String(nd).padStart(2, "0")}`
+}
+function diasHasta(fecha: string): number {
+  const hoy = new Date()
+  hoy.setHours(0, 0, 0, 0)
+  const partes = fecha.split("-")
+  const fin = new Date(Number(partes[0]), Number(partes[1]) - 1, Number(partes[2]))
+  return Math.round((fin.getTime() - hoy.getTime()) / 86400000)
+}
+function finPeriodo(p: PeriodoDirectiva): string {
+  return p.fechaFin ?? sumarMesesISO(p.fechaInicio, p.duracionMeses)
+}
+
 export default function DirectivaPage() {
   useStoreRehydrated()
   const hasHydrated = useCompassStore(s => s.hasHydrated)
   const personas = useCompassStore(s => s.personas)
+  const periodos = useCompassStore(s => s.periodosDirectiva)
+  const savePeriodoDirectiva = useCompassStore(s => s.savePeriodoDirectiva)
   const actas = useCompassStore(s => s.actasGD)
   const controlesPropiedades = useCompassStore(s => s.controlesPropiedades)
   const saveActaGD = useCompassStore(s => s.saveActaGD)
@@ -58,10 +85,17 @@ export default function DirectivaPage() {
   const [vista, setVista] = React.useState<Vista>("propietario")
   const [error, setError] = React.useState<string | null>(null)
   const [editando, setEditando] = React.useState<ActaGD | null>(null)
+  const [periodoDialogo, setPeriodoDialogo] = React.useState(false)
+  const [perInicio, setPerInicio] = React.useState("")
+  const [perDuracion, setPerDuracion] = React.useState("36")
+  const [perInscripcion, setPerInscripcion] = React.useState("")
+  const [perReferencia, setPerReferencia] = React.useState("")
+  const [selMiembros, setSelMiembros] = React.useState<Record<string, string>>({})
   const [tablaTemasTexto, setTablaTemasTexto] = React.useState("")
   const [invitadosTexto, setInvitadosTexto] = React.useState("")
 
-  const directivaVigente = personas.filter(p => p.datosGobernanza && p.estadoCuenta === "activa")
+  const periodoVigente = periodoDirectivaVigente({ periodosDirectiva: periodos })
+  const directivaVigente = personas.filter(p => esMiembroDirectivaVigente(p, periodoVigente?.id))
   const nombrePersona = (id: string) => {
     const p = personas.find(x => x.id === id)
     return p ? `${p.nombres} ${p.apellidos}` : id
@@ -158,6 +192,68 @@ export default function DirectivaPage() {
       )}
 
       {error && <p className="text-sm text-destructive">{error}</p>}
+
+      {/* GD-períodos: libro de directivas (vigente + históricos, nunca se borra) */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0">
+          <div>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <IconGavel className="size-4" /> Período de directiva vigente
+            </CardTitle>
+            <CardDescription>Inscripción y vigencia (art. 17 Ley 21.442: máximo 36 meses). El historial nunca se elimina.</CardDescription>
+          </div>
+          {vista === "administrador" && (
+            <Button variant="outline" size="sm" onClick={() => { setPeriodoDialogo(true); setError(null) }} className="gap-1">
+              <IconPlus className="size-4" /> Registrar período
+            </Button>
+          )}
+        </CardHeader>
+        <CardContent className="flex flex-col gap-3">
+          {!periodoVigente ? (
+            <p className="text-sm text-muted-foreground">Sin período vigente registrado. Registrá el período designado por la asamblea para activar quórum y trazabilidad.</p>
+          ) : (() => {
+            const fin = finPeriodo(periodoVigente)
+            const dias = diasHasta(fin)
+            const alerta = dias < 0 ? { texto: `Vencido hace ${-dias} días`, clase: "bg-red-600 text-white" }
+              : dias <= 30 ? { texto: `Vence en ${dias} días`, clase: "bg-amber-600 text-white" }
+              : dias <= 90 ? { texto: `Vence en ${dias} días`, clase: "bg-yellow-500 text-black" }
+              : { texto: "Vigente", clase: "bg-emerald-600 text-white" }
+            return (
+              <div className="flex flex-col gap-2">
+                <div className="flex flex-wrap items-center gap-2 text-sm">
+                  <span><strong>Inicio:</strong> {periodoVigente.fechaInicio}</span>
+                  <span><strong>Fin:</strong> {fin}</span>
+                  <span><strong>Inscripción:</strong> {periodoVigente.fechaInscripcion}</span>
+                  <Badge className={alerta.clase}>{alerta.texto}</Badge>
+                  {periodoVigente.fechasEstimadas && <Badge variant="secondary">Fechas estimadas — actualizar desde el libro</Badge>}
+                </div>
+                <p className="text-xs text-muted-foreground">Respaldo: {periodoVigente.referenciaInscripcion}</p>
+                <div className="flex flex-wrap gap-2">
+                  {directivaVigente.map(d => (
+                    <span key={d.id} className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-xs">
+                      {d.datosGobernanza ? CARGO_LABEL[d.datosGobernanza.cargoDirectiva] : "Miembro"}: {d.nombres} {d.apellidos}
+                    </span>
+                  ))}
+                  {directivaVigente.length === 0 && <span className="text-xs text-muted-foreground">Sin miembros con ficha en este período.</span>}
+                </div>
+              </div>
+            )
+          })()}
+          {periodos.filter(p => p.estado === "cerrado").length > 0 && (
+            <div className="border-t pt-3">
+              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">Históricos (libro)</p>
+              <div className="flex flex-col gap-2">
+                {periodos.filter(p => p.estado === "cerrado").map(p => (
+                  <div key={p.id} className="rounded-md border p-2 text-xs">
+                    <p><strong>{p.fechaInicio}</strong> → {p.fechaFin ?? "—"} · {p.miembros.length} miembros · Inscrito {p.fechaInscripcion}</p>
+                    <p className="text-muted-foreground">{p.miembros.map(m => `${m.nombre} (${CARGO_LABEL[m.cargo] ?? m.cargo})`).join(", ")}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {(vista === "administrador") && (
         <Button variant="outline" size="sm" className="self-start" onClick={abrirNueva}>
@@ -280,7 +376,91 @@ export default function DirectivaPage() {
         </div>
       )}
 
-      {/* Formulario de acta (solo administrador/directiva) */}
+          {/* GD-períodos: diálogo de registro (cierra el vigente archivando su nómina) */}
+          <Dialog open={periodoDialogo} onOpenChange={setPeriodoDialogo}>
+            <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
+              <DialogHeader>
+                <DialogTitle>Registrar período de directiva</DialogTitle>
+                <DialogDescription>Lo fijado por la asamblea (máximo 36 meses). Al guardar, el período vigente se cierra y su nómina queda archivada.</DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Inicio *</Label>
+                    <Input type="date" value={perInicio} onChange={e => setPerInicio(e.target.value)} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Duración (meses, máx 36) *</Label>
+                    <Input type="number" min={1} max={36} value={perDuracion} onChange={e => setPerDuracion(e.target.value)} />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Fecha de inscripción *</Label>
+                    <Input type="date" value={perInscripcion} onChange={e => setPerInscripcion(e.target.value)} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Referencia (acta/escritura) *</Label>
+                    <Input value={perReferencia} onChange={e => setPerReferencia(e.target.value)} placeholder="Acta asamblea 2026-03-01" />
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Nómina (impar de 3 a 5) *</Label>
+                  <div className="flex max-h-48 flex-col gap-1 overflow-y-auto rounded-md border p-2">
+                    {personas.filter(p => p.estadoCuenta === "activa").map(p => {
+                      const sel = selMiembros[p.id] !== undefined
+                      return (
+                        <div key={p.id} className="flex items-center gap-2 text-xs">
+                          <input
+                            type="checkbox"
+                            checked={sel}
+                            onChange={() => setSelMiembros(prev => {
+                              const next = { ...prev }
+                              if (sel) delete next[p.id]
+                              else next[p.id] = p.datosGobernanza?.cargoDirectiva ?? ""
+                              return next
+                            })}
+                          />
+                          <span className="flex-1">{p.nombres} {p.apellidos}</span>
+                          {sel && (
+                            <Select value={selMiembros[p.id] ?? ""} onValueChange={v => setSelMiembros(prev => ({ ...prev, [p.id]: v }))}>
+                              <SelectTrigger className="h-7 w-32"><SelectValue placeholder="Cargo" /></SelectTrigger>
+                              <SelectContent>
+                                {Object.entries(CARGO_LABEL).map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}
+                              </SelectContent>
+                            </Select>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setPeriodoDialogo(false)}>Cancelar</Button>
+                <Button onClick={() => {
+                  const miembros = Object.entries(selMiembros)
+                    .filter(([, c]) => !!c)
+                    .map(([personaId, cargo]) => ({ personaId, cargo: cargo as "presidente" | "tesorero" | "secretario" | "director", fechaAsuncion: perInicio }))
+                  const r = savePeriodoDirectiva({
+                    id: `periodo-${Date.now().toString(36)}`,
+                    fechaInicio: perInicio,
+                    duracionMeses: Number(perDuracion),
+                    fechaInscripcion: perInscripcion || perInicio,
+                    referenciaInscripcion: perReferencia.trim(),
+                    estado: "vigente",
+                    miembros: [],
+                  }, miembros)
+                  if (!r.ok) { setError(r.error ?? "No se pudo registrar."); return }
+                  setError(null)
+                  setPeriodoDialogo(false)
+                  setPerInicio(""); setPerDuracion("36"); setPerInscripcion(""); setPerReferencia(""); setSelMiembros({})
+                }}>Registrar período</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          {/* Formulario de acta (solo administrador/directiva) */}
       <Dialog open={!!editando} onOpenChange={v => { if (!v) { setEditando(null); setError(null) } }}>
         <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
           {editando && (

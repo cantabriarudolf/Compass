@@ -221,17 +221,56 @@ export const ExtensionGobernanzaSchema = z
     ]),
     firmaDigital: z.string().optional(),
     fechaAsuncion: FechaISOSchema,
+    // Período al que pertenece la ficha (GD-períodos). Ausente = legado pre-períodos (cuenta como vigente).
+    periodoId: IdEntidadSchema.optional(),
+    fechaTermino: FechaISOSchema.optional(),
+    motivoTermino: z.enum(["renuncia", "remocion", "fin_periodo"]).optional(),
   })
   .refine(
     (e) =>
       !e.firmaDigital ||
       (!/^data:/i.test(e.firmaDigital) && !/^blob:/i.test(e.firmaDigital)),
     {
-      message:
-        "Media por referencia (D1): la firma debe ser una URL, no contenido embebido.",
-      path: ["firmaDigital"],
-    }
-  )
+          message:
+            "Media por referencia (D1): la firma debe ser una URL, no contenido embebido.",
+          path: ["firmaDigital"],
+        }
+      )
+
+    // GD-períodos: cada período archiva su nómina al cerrarse (libro: nunca se borra).
+    export const PeriodoDirectivaSchema = z.object({
+      id: IdEntidadSchema,
+      fechaInicio: FechaISOSchema,
+      // Lo fijado por la asamblea; art. 17 Ley 21.442: no excede 3 años.
+      duracionMeses: z
+        .number({ required_error: "La duración es obligatoria." })
+        .int()
+        .min(1, "La duración mínima es 1 mes.")
+        .max(36, "El período no puede exceder 36 meses (art. 17 Ley 21.442)."),
+      fechaFin: FechaISOSchema.optional(),
+      fechaInscripcion: FechaISOSchema,
+      referenciaInscripcion: z
+        .string({ required_error: "La referencia de inscripción es obligatoria." })
+        .min(1, "Indicá el acta, escritura o inscripción de respaldo.")
+        .max(280, "La referencia excede el largo permitido."),
+      // true = fechas estimadas pendientes de actualizar desde el libro físico.
+      fechasEstimadas: z.boolean().optional(),
+      estado: z.enum(["vigente", "cerrado"]),
+      actaOrigenId: IdEntidadSchema.optional(),
+      // Nómina congelada al cerrar (historia del libro).
+      miembros: z.array(
+        z.object({
+          personaId: IdEntidadSchema,
+          nombre: z.string().min(1),
+          cargo: z.enum(["presidente", "tesorero", "secretario", "director"]),
+          fechaAsuncion: FechaISOSchema,
+          fechaTermino: FechaISOSchema.optional(),
+          motivoTermino: z.enum(["renuncia", "remocion", "fin_periodo"]).optional(),
+        })
+      ),
+    })
+
+    export type PeriodoDirectiva = z.infer<typeof PeriodoDirectivaSchema>
 
 export const ROLES_PERSONA = [
   "propietario",
@@ -457,6 +496,8 @@ export const ActaGDSchema = z.object({
   // Referencia de publicación en el Visor de Mensajes (CV): "pendiente" hasta
   // publicar el aviso; luego el id del aviso creado (materializado por CV).
   avisoCVReferencia: z.string().optional(),
+  // Período vigente al crear el acta (trazabilidad del libro).
+  periodoId: IdEntidadSchema.optional(),
 })
 
 export const MensajeDocumentoInvalido =
@@ -2009,17 +2050,30 @@ export const CertificadoCTSchema = z.object({
       valor: z.string().min(1, "El valor del detalle es obligatorio."),
     })
   ),
-  // Firma digitalizada usada: SOLO referencia (D1), jamás binario embebido.
-  firmaUrl: z
-    .string()
-    .max(2048, "La URL excede el largo permitido.")
-    .refine((valor) => !/^data:/i.test(valor) && !/^blob:/i.test(valor), {
-      message:
-        "Media por referencia (D1): la firma debe ser una URL, no contenido embebido.",
+      // Firma digitalizada usada: SOLO referencia (D1), jamás binario embebido.
+      firmaUrl: z
+        .string()
+        .max(2048, "La URL excede el largo permitido.")
+        .refine((valor) => !/^data:/i.test(valor) && !/^blob:/i.test(valor), {
+          message:
+            "Media por referencia (D1): la firma debe ser una URL, no contenido embebido.",
+        })
+        .optional(),
+      // Snapshot de la directiva vigente al emitir (trazabilidad histórica, no bloqueante).
+      directivaRef: z
+        .object({
+          periodoId: IdEntidadSchema,
+          firmantes: z.array(
+            z.object({
+              personaId: IdEntidadSchema,
+              nombre: z.string().min(1),
+              cargo: z.string().min(1),
+            })
+          ),
+        })
+        .optional(),
+      fechaEmision: FechaISOSchema,
     })
-    .optional(),
-  fechaEmision: FechaISOSchema,
-})
 
 // --- Reportería y Dashboards (RE) ---
 

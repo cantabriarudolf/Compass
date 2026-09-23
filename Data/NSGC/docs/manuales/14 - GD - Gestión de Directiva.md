@@ -13,6 +13,8 @@ Llevar el ciclo completo del acta: se crea como borrador, los miembros de la dir
 - **Flujo de Aprobación**: monitor de firmas pendientes; el acta pasa de "Borrador" a "Publicada" solo cuando aprueba el 100% de la directiva vigente.
 - **Adjuntos**: soporte documental por referencia (acta escaneada, imágenes) sin incrustar archivos (decisión D1).
 - **Privacidad**: actas visibles para propietarios y administración; los residentes acceden solo si el dueño activó `residenteVeActas` en **AD - Gestión Administrativa**.
+- **Ficha de Gobernanza**: en el perfil de cada directivo (pestaña Gobernanza) se registra cargo, fecha de asunción y firma por URL; sin rol `directiva` la ficha se depura sola.
+- **Períodos de Directiva** (`/comunidad/directiva`, sección Períodos): la vigencia que fija la asamblea (art. 17 Ley 21.442, máximo 36 meses, reelegible). Un solo período vigente; al registrar uno nuevo el anterior se **cierra archivando su nómina** (libro: nunca se borra). Composición al activar: impar de 3 a 5 (bloqueo con fundamento). Alertas informativas de vencimiento (90/30 días) + badge de fechas estimadas cuando falta pasar el libro físico.
 
 ## 💡 Tips de Oro
 

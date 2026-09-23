@@ -104,6 +104,7 @@ import {
   LiquidacionPLSchema,
   AdelantoPLSchema,
   CertificadoCTSchema,
+  PeriodoDirectivaSchema,
   ReporteRESchema,
   MAESTRO_SCHEMAS,
   validarConEsquema,
@@ -158,6 +159,7 @@ import {
   type LiquidacionPL,
   type AdelantoPL,
   type CertificadoCT,
+  type PeriodoDirectiva,
   type ReporteRE,
 } from "@/lib/schemas"
 import {
@@ -344,7 +346,27 @@ function buildPuntoCeroIngresos(): IngresoFI[] {
 const PUNTO_CERO_EGRESOS_SEED: EgresoFI[] = buildPuntoCeroEgresos(1)
 const PUNTO_CERO_INGRESOS_SEED: IngresoFI[] = buildPuntoCeroIngresos()
 
-export const STORE_VERSION = 27
+export const STORE_VERSION = 28
+
+// GD-períodos: helpers de vigencia (libro: la directiva vigente = período
+// vigente + fichas sin término; fichas sin periodoId = legado pre-períodos).
+export const periodoDirectivaVigente = (s: {
+  periodosDirectiva: PeriodoDirectiva[]
+}): PeriodoDirectiva | undefined =>
+  s.periodosDirectiva.find((p) => p.estado === "vigente")
+
+export const esMiembroDirectivaVigente = (
+  persona: Persona,
+  vigenteId: string | undefined
+): boolean => {
+  const ficha = persona.datosGobernanza
+  if (!ficha || persona.estadoCuenta !== "activa" || ficha.fechaTermino)
+    return false
+  // Legado pre-períodos: cuenta solo si aún no hay período registrado;
+  // al activar un período, el quórum se acota a su nómina.
+  if (!ficha.periodoId) return vigenteId === undefined
+  return ficha.periodoId === vigenteId
+}
 
 export interface MaestroCollections {
   afps: Afp[]
@@ -394,6 +416,7 @@ export interface CompassData {
   controlesPropiedades: ControlPropiedad[]
   // Gestión de Directiva (GD)
   actasGD: ActaGD[]
+  periodosDirectiva: PeriodoDirectiva[]
   // Comunicación con Vecinos (CO)
   plantillasCO: PlantillaCO[]
   enviosCO: EnvioCO[]
@@ -493,6 +516,15 @@ export interface CompassStore extends CompassData {
   saveActaGD: (acta: ActaGD) => StoreResult
   removeActaGD: (id: string) => StoreResult
   aprobarActaGD: (id: string, personaId: string) => StoreResult
+  periodoDirectivaVigente: () => PeriodoDirectiva | undefined
+  savePeriodoDirectiva: (
+    periodo: PeriodoDirectiva,
+    miembros: {
+      personaId: string
+      cargo: "presidente" | "tesorero" | "secretario" | "director"
+      fechaAsuncion: string
+    }[]
+  ) => StoreResult
   // Comunicación con Vecinos (CO)
   savePlantillaCO: (plantilla: PlantillaCO) => StoreResult
   removePlantillaCO: (id: string) => StoreResult
@@ -788,6 +820,7 @@ export const seedData = (): CompassData => ({
   notificaciones: [],
   controlesPropiedades: [],
   actasGD: [],
+  periodosDirectiva: [],
   plantillasCO: seedPlantillasCO,
   enviosCO: [],
   mensajesBuzonCO: [],
@@ -862,6 +895,7 @@ const ESQUEMAS_COLECCION = {
   notificaciones: z.array(NotificacionSchema),
   controlesPropiedades: z.array(ControlPropiedadSchema),
   actasGD: z.array(ActaGDSchema),
+  periodosDirectiva: z.array(PeriodoDirectivaSchema),
   plantillasCO: z.array(PlantillaCOSchema),
   enviosCO: z.array(EnvioCOSchema),
   mensajesBuzonCO: z.array(MensajeBuzonCOSchema),
@@ -1190,9 +1224,35 @@ export const useCompassStore = create<CompassStore>()(
               "Media por referencia (D1): la firma digitalizada debe ser una URL, no contenido embebido.",
           }
         }
-        const validacion = validarConEsquema(PersonaSchema, persona)
-        if (!validacion.ok) return validacion
-        // PE: FKs de la ficha laboral contra los maestros legales de MA (RG escritura).
+            const validacion = validarConEsquema(PersonaSchema, persona)
+            if (!validacion.ok) return validacion
+            // GD: coherencia rol↔ficha — sin rol directiva no hay miembro vigente
+            // (la directiva se deriva de datosGobernanza; evita fantasmas en el quórum).
+            if (!validacion.data.roles.includes("directiva") && validacion.data.datosGobernanza) {
+              const nombre = `${validacion.data.nombres} ${validacion.data.apellidos}`
+              validacion.data.datosGobernanza = undefined
+              registrarEvento(
+                set,
+                "AD_DIRECTIVA_DESVINCULADA",
+                persona.id,
+                `Ficha de gobernanza depurada de ${nombre}: rol directiva removido.`,
+                "AD"
+              )
+            }
+            // GD-períodos: la ficha sin período hereda el vigente (alta espejo del libro).
+            const vigenteFicha = periodoDirectivaVigente(get())
+            if (
+              vigenteFicha &&
+              validacion.data.roles.includes("directiva") &&
+              validacion.data.datosGobernanza &&
+              !validacion.data.datosGobernanza.periodoId
+            ) {
+              validacion.data.datosGobernanza = {
+                ...validacion.data.datosGobernanza,
+                periodoId: vigenteFicha.id,
+              }
+            }
+            // PE: FKs de la ficha laboral contra los maestros legales de MA (RG escritura).
         const dl = validacion.data.datosLaborales
         if (dl) {
           const m = get().maestros
@@ -2102,15 +2162,20 @@ export const useCompassStore = create<CompassStore>()(
               error: `No se puede guardar el acta: el asistente "${idAsistente}" no existe en el Maestro de Personas.`,
             }
           }
-          if (!persona.datosGobernanza) {
+          const vigenteActa = periodoDirectivaVigente(get())
+          if (!esMiembroDirectivaVigente(persona, vigenteActa?.id)) {
             return {
               ok: false,
               error: `No se puede guardar el acta: ${persona.nombres} ${persona.apellidos} no es miembro de la directiva (sin extensión de gobernanza).`,
             }
           }
         }
-        const esNueva = !get().actasGD.some((a) => a.id === validacion.data.id)
-        set((s) => ({ actasGD: upsert(s.actasGD, validacion.data) }))
+            const esNueva = !get().actasGD.some((a) => a.id === validacion.data.id)
+            if (!validacion.data.periodoId) {
+              const vigenteActa = periodoDirectivaVigente(get())
+              if (vigenteActa) validacion.data.periodoId = vigenteActa.id
+            }
+            set((s) => ({ actasGD: upsert(s.actasGD, validacion.data) }))
         if (esNueva) {
           registrarEvento(
             set,
@@ -2156,7 +2221,11 @@ export const useCompassStore = create<CompassStore>()(
         if (acta.estado === "publicada")
           return { ok: false, error: "El acta ya está publicada." }
         const firmante = get().personas.find((p) => p.id === personaId)
-        if (!firmante?.datosGobernanza || firmante.estadoCuenta !== "activa") {
+        const vigenteFirma = periodoDirectivaVigente(get())
+        if (
+          !firmante ||
+          !esMiembroDirectivaVigente(firmante, vigenteFirma?.id)
+        ) {
           return {
             ok: false,
             error:
@@ -2167,10 +2236,11 @@ export const useCompassStore = create<CompassStore>()(
           return { ok: false, error: "Esta directiva ya aprobó el acta." }
         }
         const aprobaciones = [...acta.aprobaciones, personaId]
-        // Quórum 100% de la directiva vigente (personas activas con extensión de gobernanza).
+        // Quórum 100% de la directiva vigente (fichas del período vigente; legado sin período incluido).
+        const vigenteQuorum = periodoDirectivaVigente(get())
         const directivaVigente = get()
-          .personas.filter(
-            (p) => p.datosGobernanza && p.estadoCuenta === "activa"
+          .personas.filter((p) =>
+            esMiembroDirectivaVigente(p, vigenteQuorum?.id)
           )
           .map((p) => p.id)
         const quorumCompleto = directivaVigente.every((idMiembro) =>
@@ -2227,7 +2297,121 @@ export const useCompassStore = create<CompassStore>()(
         return { ok: true }
       },
 
-      // --- CO: Comunicación con Vecinos ---
+          // GD-períodos: registra un período (libro: archiva, nunca borra).
+          periodoDirectivaVigente: () => periodoDirectivaVigente(get()),
+          savePeriodoDirectiva: (periodo, miembros) => {
+            if (!get().hasHydrated)
+              return {
+                ok: false,
+                error:
+                  "El almacenamiento aún se está hidratando. Intenta de nuevo.",
+              }
+            const validacion = validarConEsquema(PeriodoDirectivaSchema, periodo)
+            if (!validacion.ok) return validacion
+            const CARGOS = ["presidente", "tesorero", "secretario", "director"]
+            for (const m of miembros) {
+              if (!CARGOS.includes(m.cargo))
+                return { ok: false, error: `Cargo inválido en la nómina: ${m.cargo}.` }
+              if (!/^\d{4}-\d{2}-\d{2}$/.test(m.fechaAsuncion))
+                return { ok: false, error: `Fecha de asunción inválida en la nómina: ${m.fechaAsuncion}.` }
+              const persona = get().personas.find((p) => p.id === m.personaId)
+              if (!persona)
+                return { ok: false, error: `No se puede activar: la persona "${m.personaId}" no existe.` }
+              if (persona.estadoCuenta !== "activa")
+                return {
+                  ok: false,
+                  error: `No se puede activar: ${persona.nombres} ${persona.apellidos} no tiene cuenta activa.`,
+                }
+            }
+            if (validacion.data.estado === "vigente") {
+              // Composición art. 17 Ley 21.442: impar de 3 a 5 (bloqueo con fundamento).
+              const n = miembros.length
+              if (n < 3 || n > 5 || n % 2 === 0) {
+                return {
+                  ok: false,
+                  error: `No se puede activar el período: la nómina debe ser impar de 3 a 5 miembros (art. 17 Ley 21.442). Recibidos: ${n}.`,
+                }
+              }
+            }
+            const vigentePrevio = periodoDirectivaVigente(get())
+            let periodos = upsert(get().periodosDirectiva, validacion.data)
+            let personas = get().personas
+            // Cierra el vigente previo archivando su nómina (libro físico).
+            if (
+              validacion.data.estado === "vigente" &&
+              vigentePrevio &&
+              vigentePrevio.id !== validacion.data.id
+            ) {
+              const rosterPrevio = personas.flatMap((p) =>
+                p.datosGobernanza &&
+                p.datosGobernanza.periodoId === vigentePrevio.id
+                  ? [
+                      {
+                        personaId: p.id,
+                        nombre: p.nombreCompleto,
+                        cargo: p.datosGobernanza.cargoDirectiva,
+                        fechaAsuncion: p.datosGobernanza.fechaAsuncion,
+                        ...(p.datosGobernanza.fechaTermino
+                          ? { fechaTermino: p.datosGobernanza.fechaTermino }
+                          : {}),
+                        ...(p.datosGobernanza.motivoTermino
+                          ? { motivoTermino: p.datosGobernanza.motivoTermino }
+                          : {}),
+                      },
+                    ]
+                  : []
+              )
+              // SAFETY: roster validado por forma al cerrar; se persiste tal cual para archivo histórico.
+              const cerrado: PeriodoDirectiva = {
+                ...vigentePrevio,
+                estado: "cerrado",
+                fechaFin: validacion.data.fechaInicio,
+                miembros: rosterPrevio,
+              }
+              periodos = upsert(periodos, cerrado)
+              // Las fichas del período cerrado quedan archivadas en la nómina; se depuran de las personas.
+              const idsNuevos = new Set(miembros.map((m) => m.personaId))
+              personas = personas.map((p) => {
+                const fid = p.datosGobernanza?.periodoId
+                if (p.datosGobernanza && fid === vigentePrevio.id && !idsNuevos.has(p.id)) {
+                  const resto = { ...p }
+                  delete resto.datosGobernanza
+                  return resto
+                }
+                return p
+              })
+            }
+            // Asigna las fichas de la nómina entrante (conserva id estable por persona).
+            for (const m of miembros) {
+              const persona = personas.find((p) => p.id === m.personaId)
+              if (!persona) continue
+              const roles = persona.roles.includes("directiva")
+                ? persona.roles
+                : [...persona.roles, "directiva"]
+              personas = upsert(personas, {
+                ...persona,
+                // SAFETY: roles extiende el union de ROLES_PERSONA con "directiva" ya validado por schema.
+                roles: roles as Persona["roles"],
+                datosGobernanza: {
+                  id: persona.datosGobernanza?.id ?? `g-${persona.id}`,
+                  cargoDirectiva: m.cargo,
+                  fechaAsuncion: m.fechaAsuncion,
+                  periodoId: validacion.data.id,
+                },
+              })
+            }
+            set(() => ({ periodosDirectiva: periodos, personas }))
+            registrarEvento(
+              set,
+              "GD_PERIODO_REGISTRADO",
+              validacion.data.id,
+              `Período de directiva ${validacion.data.fechaInicio} registrado (${miembros.length} miembros).`,
+              "GD"
+            )
+            return { ok: true }
+          },
+
+          // --- CO: Comunicación con Vecinos ---
       savePlantillaCO: (plantilla) => {
         if (!get().hasHydrated)
           return {
@@ -7561,7 +7745,26 @@ export const useCompassStore = create<CompassStore>()(
           codigoVerificacion = `VC-${Math.random().toString(36).slice(2, 10).toUpperCase()}`
         }
 
-        const registro: CertificadoCT = {
+            // Snapshot de la directiva vigente al emitir (trazabilidad histórica, no bloqueante).
+            const vigenteCT = periodoDirectivaVigente(get())
+            const firmantesCT = vigenteCT
+              ? get()
+                  .personas.filter((p) =>
+                    esMiembroDirectivaVigente(p, vigenteCT.id)
+                  )
+                  .flatMap((p) =>
+                    p.datosGobernanza
+                      ? [
+                          {
+                            personaId: p.id,
+                            nombre: p.nombreCompleto,
+                            cargo: p.datosGobernanza.cargoDirectiva,
+                          },
+                        ]
+                      : []
+                  )
+              : []
+            const registro: CertificadoCT = {
           id: input.id ?? generarId("ct"),
           folio,
           codigoVerificacion,
@@ -7572,9 +7775,17 @@ export const useCompassStore = create<CompassStore>()(
           solicitanteNombre: input.solicitanteNombre.trim(),
           resumen,
           detalle: detalle.map(([clave, valor]) => ({ clave, valor })),
-          ...(firmaUrl ? { firmaUrl } : {}),
-          fechaEmision: hoyISO(),
-        }
+              ...(firmaUrl ? { firmaUrl } : {}),
+              ...(vigenteCT
+                ? {
+                    directivaRef: {
+                      periodoId: vigenteCT.id,
+                      firmantes: firmantesCT,
+                    },
+                  }
+                : {}),
+              fechaEmision: hoyISO(),
+            }
         const validacion = validarConEsquema(CertificadoCTSchema, registro)
         if (!validacion.ok) return validacion
         set((s) => ({ certificadosCT: [...s.certificadosCT, validacion.data] }))
@@ -7944,6 +8155,7 @@ export const useCompassStore = create<CompassStore>()(
         notificaciones: state.notificaciones,
         controlesPropiedades: state.controlesPropiedades,
         actasGD: state.actasGD,
+        periodosDirectiva: state.periodosDirectiva,
         plantillasCO: state.plantillasCO,
         enviosCO: state.enviosCO,
         mensajesBuzonCO: state.mensajesBuzonCO,
@@ -8104,6 +8316,7 @@ export const useCompassStore = create<CompassStore>()(
           result = {
             ...result,
             actasGD: prev.actasGD ?? [],
+            periodosDirectiva: prev.periodosDirectiva ?? [],
           }
         }
         // CO (v14): maestro de plantillas (sembrado si ausente), envíos masivos,
@@ -8274,9 +8487,11 @@ export const useCompassStore = create<CompassStore>()(
           const prevFondos = (prev as unknown as Record<string, unknown>)[
             "fondosFI"
           ] as FondoFI[] | undefined
+          // SAFETY: igual que prevFondos — prev sin tipar, acceso indexado con fallback.
           const prevEgresos = (prev as unknown as Record<string, unknown>)[
             "egresosFI"
           ] as EgresoFI[] | undefined
+          // SAFETY: igual que prevFondos — prev sin tipar, acceso indexado con fallback.
           const prevIngresos = (prev as unknown as Record<string, unknown>)[
             "ingresosFI"
           ] as IngresoFI[] | undefined
@@ -8341,7 +8556,62 @@ export const useCompassStore = create<CompassStore>()(
             ingresosFI: ingresosNext,
           }
         }
-        // TST-002: los stores que ya quedaron en v8 con unidades dañadas por este
+            // GD-períodos v28: período inicial estimado (actualizar desde el libro
+            // físico) + periodoId en fichas existentes. Idempotente por id.
+            if ((version ?? 0) < 28) {
+              // SAFETY: `result` es el estado migrado sin tipar estricto; se lee por
+              // forma con fallback y el período se valida por schema antes de inyectar.
+              const personasPrev = (result.personas as Persona[] | undefined) ?? []
+              const periodosPrev = (result.periodosDirectiva as
+                | PeriodoDirectiva[]
+                | undefined) ?? []
+              const fichasPrev = personasPrev.filter((p) => p.datosGobernanza)
+              const inicioInicial =
+                fichasPrev[0]?.datosGobernanza?.fechaAsuncion ?? "2025-03-01"
+              const periodoInicial = {
+                id: "periodo-1",
+                fechaInicio: inicioInicial,
+                duracionMeses: 36,
+                fechaInscripcion: inicioInicial,
+                referenciaInscripcion:
+                  "Período inicial estimado desde fichas seed — actualizar fechas desde el libro físico.",
+                fechasEstimadas: true,
+                estado: "vigente",
+                miembros: fichasPrev.flatMap((p) =>
+                  p.datosGobernanza
+                    ? [
+                        {
+                          personaId: p.id,
+                          nombre: p.nombreCompleto,
+                          cargo: p.datosGobernanza.cargoDirectiva,
+                          fechaAsuncion: p.datosGobernanza.fechaAsuncion,
+                        },
+                      ]
+                    : []
+                ),
+              }
+              const parsed = PeriodoDirectivaSchema.safeParse(periodoInicial)
+              if (parsed.success) {
+                result = {
+                  ...result,
+                  periodosDirectiva: periodosPrev.some((p) => p.id === periodoInicial.id)
+                    ? periodosPrev
+                    : [...periodosPrev, parsed.data],
+                  personas: personasPrev.map((p) =>
+                    p.datosGobernanza && !p.datosGobernanza.periodoId
+                      ? {
+                          ...p,
+                          datosGobernanza: {
+                            ...p.datosGobernanza,
+                            periodoId: periodoInicial.id,
+                          },
+                        }
+                      : p
+                  ),
+                }
+              }
+            }
+            // TST-002: los stores que ya quedaron en v8 con unidades dañadas por este
         // bug (estado sin estadoId) se rescatan aquí en el salto a v9.
         if ((version ?? 0) < STORE_VERSION && Array.isArray(result.unidades)) {
           result = {

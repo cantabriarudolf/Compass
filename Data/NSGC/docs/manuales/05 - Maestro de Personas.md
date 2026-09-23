@@ -33,7 +33,14 @@ Directorio **solo lectura** de residentes y propietarios con vínculo vigente. N
 - **Skeleton**: `animate-pulse` mientras `!hasHydrated`; empty state "Sin residentes con vínculo vigente" si no calza nada.
 - **Navegación**: el item "Personas → Residentes" ya no es "Próximamente" — quitado de `RUTAS_PENDIENTES` en `AppSidebar`.
 
+## 🗳️ Ficha de Gobernanza (perfil → pestaña Gobernanza)
+    
+Si la persona tiene rol `directiva`, su perfil muestra la pestaña **Gobernanza**: cargo (presidente/tesorero/secretario/director), fecha de asunción y firma por URL. Botón **Registrar ficha** si falta, **Editar ficha** si existe (diálogo, cierra solo si guarda bien).
+    
+- **Coherencia automática**: al quitar el rol `directiva` la ficha se depura sola (evento `AD_DIRECTIVA_DESVINCULADA`) para no dejar miembros fantasmas en el quórum de actas.
+- La ficha pertenece al **período de directiva vigente** (ver **14 - GD**); sin período registrado, cuenta como legado hasta regularizar.
+    
 ## ⚠️ Privacidad
 Recuerda que estos son datos sensibles. El acceso a este maestro debe estar limitado solo a personal de confianza de la administración.
-
-*Actualizado: 31/08/2026 — P2 MENU-100 Vista Residentes read-only (MP-maestro-personas ADDED) + P3 D5*
+    
+*Actualizado: 23/09/2026 — ficha de gobernanza editable + coherencia rol↔ficha (GD) + P2 MENU-100 + P3 D5*

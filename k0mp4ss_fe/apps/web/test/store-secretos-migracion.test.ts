@@ -9,8 +9,8 @@ const migrate = useCompassStore.persist.getOptions().migrate!
 describe("Migración v25 → v26 C2-final limpieza secretos", () => {
   beforeEach(resetStore)
 
-  it("STORE_VERSION es 27", () => {
-    expect(STORE_VERSION).toBe(27)
+  it("STORE_VERSION es 28", () => {
+    expect(STORE_VERSION).toBe(28)
   })
 
   it("migrate v25 elimina smtpPassword y claveEliminacionMaestro sin romper resto", () => {

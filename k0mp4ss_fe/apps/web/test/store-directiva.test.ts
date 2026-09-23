@@ -161,4 +161,182 @@ describe("GD - Gestión de Directiva en el store", () => {
       expect(getState().aprobarActaGD("acta-2", directivaVigente[0]!).error).toContain("ya está publicada")
     })
   })
+    
+describe("períodos de directiva", () => {
+  const tresActivos = () =>
+    getState()
+      .personas.filter((p) => p.estadoCuenta === "activa")
+      .slice(0, 3)
+      .map((p) => p.id)
+
+  function activarPeriodo(id = "periodo-t1") {
+    const [a, b, c] = tresActivos()
+    const r = getState().savePeriodoDirectiva(
+      {
+id,
+fechaInicio: "2026-01-01",
+duracionMeses: 36,
+fechaInscripcion: "2026-01-02",
+referenciaInscripcion: "Acta asamblea 2026-01-01",
+estado: "vigente",
+miembros: [],
+      },
+      [
+{ personaId: a!, cargo: "presidente", fechaAsuncion: "2026-01-01" },
+{ personaId: b!, cargo: "tesorero", fechaAsuncion: "2026-01-01" },
+{ personaId: c!, cargo: "secretario", fechaAsuncion: "2026-01-01" },
+      ]
+    )
+    expect(r.ok).toBe(true)
+    return { a: a!, b: b!, c: c! }
+  }
+
+  it("activa un período y asigna periodoId a las fichas", () => {
+    const { a } = activarPeriodo()
+    const p = getState().personas.find((x) => x.id === a)!
+    expect(p.datosGobernanza?.periodoId).toBe("periodo-t1")
+    expect(p.roles).toContain("directiva")
+    expect(getState().eventos.map((e) => e.tipoAccion)).toContain("GD_PERIODO_REGISTRADO")
+  })
+
+  it("rechaza nómina par o fuera de 3–5 (art. 17)", () => {
+    const ids = tresActivos()
+    const r = getState().savePeriodoDirectiva(
+      {
+id: "periodo-par",
+fechaInicio: "2026-01-01",
+duracionMeses: 36,
+fechaInscripcion: "2026-01-02",
+referenciaInscripcion: "Acta",
+estado: "vigente",
+miembros: [],
+      },
+      ids
+.slice(0, 2)
+.map((personaId) => ({ personaId: personaId!, cargo: "director" as const, fechaAsuncion: "2026-01-01" }))
+    )
+    expect(r.ok).toBe(false)
+    expect(r.error).toContain("art. 17")
+  })
+
+  it("rechaza duración mayor a 36 meses", () => {
+    const ids = tresActivos()
+    const r = getState().savePeriodoDirectiva(
+      {
+id: "periodo-largo",
+fechaInicio: "2026-01-01",
+duracionMeses: 48,
+fechaInscripcion: "2026-01-02",
+referenciaInscripcion: "Acta",
+estado: "vigente",
+miembros: [],
+      },
+      ids.map((personaId) => ({ personaId: personaId!, cargo: "director" as const, fechaAsuncion: "2026-01-01" }))
+    )
+    expect(r.ok).toBe(false)
+  })
+
+  it("el segundo vigente cierra el anterior archivando su nómina", () => {
+        const { a } = activarPeriodo("periodo-t1")
+        const otros = getState()
+          .personas.filter((p) => p.estadoCuenta === "activa" && p.id !== a)
+          .slice(0, 3)
+          .map((p) => p.id)
+    const r = getState().savePeriodoDirectiva(
+      {
+id: "periodo-t2",
+fechaInicio: "2027-01-01",
+duracionMeses: 36,
+fechaInscripcion: "2027-01-02",
+referenciaInscripcion: "Acta 2027",
+estado: "vigente",
+miembros: [],
+      },
+      [
+{ personaId: otros[0]!, cargo: "presidente", fechaAsuncion: "2027-01-01" },
+{ personaId: otros[1]!, cargo: "tesorero", fechaAsuncion: "2027-01-01" },
+{ personaId: otros[2]!, cargo: "secretario", fechaAsuncion: "2027-01-01" },
+      ]
+    )
+    expect(r.ok).toBe(true)
+    const cerrado = getState().periodosDirectiva.find((p) => p.id === "periodo-t1")!
+    expect(cerrado.estado).toBe("cerrado")
+    expect(cerrado.miembros).toHaveLength(3)
+    // 'a' salió: ficha depurada (archivada en la nómina del cerrado).
+    expect(getState().personas.find((x) => x.id === a)!.datosGobernanza).toBeUndefined()
+  })
+
+  it("saveActaGD adjunta el periodoId vigente", () => {
+    activarPeriodo()
+    prepararDirectiva()
+    const r = getState().saveActaGD(actaBase({ presentes: ["p-dir-1"] }))
+    expect(r.ok).toBe(true)
+    expect(getState().actasGD.find((a) => a.id === "acta-gd-1")!.periodoId).toBe("periodo-t1")
+  })
+
+  it("generarCertificadoCT adjunta directivaRef del vigente", () => {
+    activarPeriodo()
+    const v = getState().vinculos.find((x) => !x.fechaFin)!
+    const r = getState().generarCertificadoCT({
+      tipo: "residencia",
+      personaId: v.personaId,
+      unidadId: v.unidadId,
+      solicitanteNombre: "Solicitante Test",
+    })
+    expect(r.ok).toBe(true)
+    const cert = getState().certificadosCT[0]!
+    expect(cert.directivaRef?.periodoId).toBe("periodo-t1")
+    expect(cert.directivaRef?.firmantes).toHaveLength(3)
+  })
+})
+
+describe("ficha de gobernanza", () => {
+  it("savePersona acepta ficha válida con cargo y fecha ISO", () => {
+    const r = getState().savePersona(
+      directivoBase({ id: "p-dir-ficha", datosGobernanza: { id: "gob-ficha", cargoDirectiva: "director", fechaAsuncion: "2026-03-01" } })
+    )
+    expect(r.ok).toBe(true)
+    const guardada = getState().personas.find(p => p.id === "p-dir-ficha")!
+    expect(guardada.datosGobernanza?.cargoDirectiva).toBe("director")
+  })
+
+  it("rechaza cargo fuera del enum", () => {
+    const r = getState().savePersona(
+      directivoBase({
+id: "p-dir-mala",
+// SAFETY: cast intencional para probar el rechazo del schema ante un cargo inválido.
+datosGobernanza: { id: "gob-mala", cargoDirectiva: "cacique", fechaAsuncion: "2026-03-01" } as unknown as Persona["datosGobernanza"],
+      })
+    )
+    expect(r.ok).toBe(false)
+  })
+
+  it("rechaza firma digitalizada embebida (D1)", () => {
+    const r = getState().savePersona(
+      directivoBase({
+id: "p-dir-firma",
+datosGobernanza: { id: "gob-firma", cargoDirectiva: "director", fechaAsuncion: "2026-03-01", firmaDigital: "data:image/png;base64,iVBORw0=" },
+      })
+    )
+    expect(r.ok).toBe(false)
+    expect(r.error).toContain("Media por referencia")
+  })
+
+  it("depurar ficha y audita al quitar el rol directiva", () => {
+    prepararDirectiva()
+    const r = getState().savePersona(directivoBase({ roles: ["propietario"] }))
+    expect(r.ok).toBe(true)
+    const guardada = getState().personas.find(p => p.id === "p-dir-1")!
+    expect(guardada.datosGobernanza).toBeUndefined()
+    expect(getState().eventos.map(e => e.tipoAccion)).toContain("AD_DIRECTIVA_DESVINCULADA")
+  })
+
+  it("preserva la ficha cuando el rol directiva se mantiene", () => {
+    prepararDirectiva()
+    const r = getState().savePersona(directivoBase({ email: "nuevo@test.cl" }))
+    expect(r.ok).toBe(true)
+    const guardada = getState().personas.find(p => p.id === "p-dir-1")!
+    expect(guardada.datosGobernanza?.cargoDirectiva).toBe("presidente")
+  })
+})
 })

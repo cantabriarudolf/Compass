@@ -14,7 +14,7 @@ Cada tipología valida sus requisitos **antes** de emitir (gates por fuente): si
     - *Estado de Cuenta*: snapshot de cobros, pagos y saldo pendiente de la unidad desde el libro FI.
     - *Liquidación de Sueldo*: solo sobre liquidaciones PL **confirmadas** (control tras cierre de mes); arrastra folio LIQ e imponibles/descuentos/líquido.
     - *"Al Día"*: rechazado automáticamente si la unidad mantiene saldo pendiente (> 0), citando el monto.
-  - **Historial de Emisión**: folio **CT-####**, código de verificación **VC-XXXXXXXX**, solicitante, fecha y re-descarga del PDF firmado. El historial es **inmutable**: los certificados emitidos no se eliminan.
+  - **Historial de Emisión**: folio **CT-####**, código de verificación **VC-XXXXXXXX**, solicitante, fecha y re-descarga del PDF firmado. El historial es **inmutable**: los certificados emitidos no se eliminan. Cada emisión adjunta automáticamente el snapshot de la directiva vigente (`directivaRef`: período + firmantes con cargo) como trazabilidad histórica, sin bloquear.
 - **PDF firmado**: encabezado institucional de CF (nombre, RUT, dirección, administrador), cuerpo desde el snapshot, línea de firma con imagen incrustada y pie con código de verificación.
 
 ## 💡 Tips de Oro

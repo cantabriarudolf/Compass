@@ -43,6 +43,7 @@ import {
   AlertDialogTrigger,
 } from "@workspace/ui/components/alert-dialog"
 import { FormularioVinculoUnidad } from "@/components/comunidad/formulario-vinculo"
+import { FormularioGobernanza } from "@/components/comunidad/formulario-gobernanza"
 import {
   IconArrowLeft,
   IconUserCircle,
@@ -79,6 +80,7 @@ export default function PersonaPerfilPage() {
   // Vínculos de la persona leídos del store
   const vinculosUnidad = vinculosStore.filter(v => v.personaId === id)
   const [dialogoAbierto, setDialogoAbierto] = React.useState(false)
+  const [fichaAbierta, setFichaAbierta] = React.useState(false)
   const [vinculoEditando, setVinculoEditando] = React.useState<VinculoUnidad | null>(null)
   const [historialVinculo, setHistorialVinculo] = React.useState<VinculoUnidad | null>(null)
   const [errorVinculos, setErrorVinculos] = React.useState("")
@@ -421,30 +423,69 @@ export default function PersonaPerfilPage() {
           </TabsContent>
         )}
 
-        {persona.roles.includes("directiva") && (
-          <TabsContent value="gobernanza" className="mt-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Comité de Administración</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-sm font-bold text-muted-foreground uppercase">Cargo Directivo</p>
-                    <p className="font-medium capitalize">{persona.datosGobernanza?.cargoDirectiva}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm font-bold text-muted-foreground uppercase">Fecha de Asunción</p>
-                    <p className="font-medium">{persona.datosGobernanza?.fechaAsuncion}</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-        )}
+            {persona.roles.includes("directiva") && (
+              <TabsContent value="gobernanza" className="mt-6">
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0">
+                    <CardTitle>Comité de Administración</CardTitle>
+                    <Button variant="outline" size="sm" onClick={() => setFichaAbierta(true)} className="gap-1">
+                      {persona.datosGobernanza ? (
+                        <><IconPencil className="size-4" /> Editar ficha</>
+                      ) : (
+                        <><IconPlus className="size-4" /> Registrar ficha</>
+                      )}
+                    </Button>
+                  </CardHeader>
+                  <CardContent>
+                    {persona.datosGobernanza ? (
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <p className="text-sm font-bold text-muted-foreground uppercase">Cargo Directivo</p>
+                          <p className="font-medium capitalize">{persona.datosGobernanza?.cargoDirectiva}</p>
+                        </div>
+                        <div>
+                          <p className="text-sm font-bold text-muted-foreground uppercase">Fecha de Asunción</p>
+                          <p className="font-medium">{persona.datosGobernanza?.fechaAsuncion}</p>
+                        </div>
+                        <div className="col-span-2">
+                          <p className="text-sm font-bold text-muted-foreground uppercase">Firma digitalizada</p>
+                          <p className="font-medium break-all">{persona.datosGobernanza?.firmaDigital ?? "—"}</p>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">
+                        Sin ficha de gobernanza: registrá el cargo y la fecha de asunción para que esta persona cuente en el quórum de actas.
+                      </p>
+                    )}
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            )}
       </Tabs>
 
-      {/* TAREA 4.2: Dialog modal Creación/Edición de Vínculo */}
+          {/* GD: Dialog Creación/Edición de Ficha de Gobernanza */}
+          <Dialog open={fichaAbierta} onOpenChange={setFichaAbierta}>
+            <DialogContent className="sm:max-w-[600px]">
+              <DialogHeader>
+                <DialogTitle>{persona.datosGobernanza ? "Editar Ficha de Gobernanza" : "Registrar Ficha de Gobernanza"}</DialogTitle>
+                <DialogDescription>
+                  Cargo y fecha de asunción. Solo los miembros con ficha cuentan para el quórum de actas.
+                </DialogDescription>
+              </DialogHeader>
+              <FormularioGobernanza
+                key={persona.datosGobernanza?.id ?? "nueva"}
+                persona={persona}
+                onSave={(p) => {
+                  const r = savePersona(p)
+                  if (r.ok) setFichaAbierta(false)
+                  return r
+                }}
+                onCancel={() => setFichaAbierta(false)}
+              />
+            </DialogContent>
+          </Dialog>
+
+          {/* TAREA 4.2: Dialog modal Creación/Edición de Vínculo */}
       <Dialog open={dialogoAbierto} onOpenChange={(open) => {
         setDialogoAbierto(open)
         if (!open) setVinculoEditando(null)
@@ -470,7 +511,7 @@ export default function PersonaPerfilPage() {
 
       {/* MODAL DE HISTORIAL DEL VÍNCULO (TIMELINE) */}
       <Dialog open={!!historialVinculo} onOpenChange={() => setHistorialVinculo(null)}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <IconHistory className="size-5 text-primary" />

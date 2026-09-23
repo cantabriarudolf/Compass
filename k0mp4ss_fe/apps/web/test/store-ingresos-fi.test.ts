@@ -9,8 +9,8 @@ const migrate = useCompassStore.persist.getOptions().migrate
 describe("FI - Ingreso manual a fondo y saldoInicial", () => {
   beforeEach(resetStore)
 
-  it("usa STORE_VERSION 27", () => {
-    expect(STORE_VERSION).toBe(27)
+  it("usa STORE_VERSION 28", () => {
+    expect(STORE_VERSION).toBe(28)
   })
 
   it("registrar ingreso OK persiste y saldoFondo refleja (con punto cero)", () => {

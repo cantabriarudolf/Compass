@@ -46,7 +46,7 @@ describe("Seed inicial desde apps/web/data/", () => {
   })
 
   it(`usa versión de store ${STORE_VERSION} y exige hidratación para operar`, () => {
-    expect(STORE_VERSION).toBe(27)
+    expect(STORE_VERSION).toBe(28)
     useCompassStore.setState({ hasHydrated: false })
     const result = getState().saveVinculo({
       id: "x", personaId: "p-1", unidadId: "u-A-302", rol: "ocupante",
@@ -107,8 +107,19 @@ describe("Migración v7 → v8 (función migrate)", () => {
       maestros: { afps: typeof AFPS }
     }
 
-    expect(result.personas).toEqual([{ ...personas[0], id: "p-previa" }, personas[1]])
-    expect(result.vinculos).toEqual([vinculos[0]])
+        // GD-períodos v28: las fichas heredan periodoId del período inicial estimado.
+        expect(result.personas).toEqual([
+          {
+            ...personas[0],
+            id: "p-previa",
+            datosGobernanza: { ...personas[0].datosGobernanza, periodoId: "periodo-1" },
+          },
+          personas[1],
+        ])
+        expect(result.vinculos).toEqual([vinculos[0]])
+        expect(result.periodosDirectiva).toEqual([
+          expect.objectContaining({ id: "periodo-1", estado: "vigente", fechasEstimadas: true }),
+        ])
     expect(result.maestros.afps).toEqual(AFPS)
   })
 })

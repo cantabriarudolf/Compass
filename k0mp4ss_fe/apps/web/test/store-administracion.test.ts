@@ -93,11 +93,12 @@ describe("AD - Gestión Administrativa en el store", () => {
     })
 
     it("acepta firma por URL y audita AD_DIRECTIVA_SIGN_UPLOAD al cargarla", () => {
-      // Primero existe la persona sin firma
-      getState().savePersona(personaBase({ datosGobernanza: { id: "gob-1", cargoDirectiva: "secretario", fechaAsuncion: "2026-01-01" } }))
+      // Primero existe la persona sin firma (con rol directiva: ficha coherente, GD-períodos)
+      getState().savePersona(personaBase({ roles: ["directiva"], datosGobernanza: { id: "gob-1", cargoDirectiva: "secretario", fechaAsuncion: "2026-01-01" } }))
 
       const r = getState().savePersona(
         personaBase({
+          roles: ["directiva"],
           datosGobernanza: { id: "gob-1", cargoDirectiva: "secretario", firmaDigital: "https://cdn.example.com/firma.png", fechaAsuncion: "2026-01-01" },
         })
       )
