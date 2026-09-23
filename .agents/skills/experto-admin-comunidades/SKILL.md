@@ -1,6 +1,6 @@
 ---
 name: experto-admin-comunidades
-description: "Trigger: ley 21442, ley de copropiedad, comité de administración, vigencia directiva, quién firma, edipro, normativa comunidades, asamblea, quórum. Experto consultor en administración legal chilena de comunidades: investiga normas y doctrina con fuentes verificadas y emite recomendación aplicable al proyecto."
+description: "Trigger: ley 21442, ley de copropiedad, comité de administración, vigencia directiva, quién firma, edipro, normativa comunidades, asamblea, quórum, ley 21719, datos personales, ARCO, privacidad, seguridad de la información. Experto consultor en administración legal chilena de comunidades: investiga normas y doctrina con fuentes verificadas y emite recomendación aplicable al proyecto."
 license: MIT
 ---
 
@@ -25,6 +25,11 @@ el criterio del modelo.
    se oculta.
 5. Prohibido inventar números de artículo, duraciones o quórums. Lo no
    verificado va en "Preguntas abiertas".
+6. Protección de datos = Ley 19.628 (vigente) + Ley 21.719 (publicada
+   13/12/2024, crea la Agencia; su entrada en vigencia efectiva estaba en
+   discusión legislativa a 09/2026 — verificar fecha actual, jamás hardcodearla).
+   Mapear siempre contra los activos del proyecto: API/UI ARCO, banner de
+   consentimiento, cifrado en reposo, redacción PII en logs.
 
 ## Research Lanes (open-web: los 4 tools)
 
@@ -33,6 +38,9 @@ el criterio del modelo.
   del comité vs bastan del administrador, conservación de libros y actas.
 - Fuentes esperadas: LeyChile (texto de la ley), Edipro (blog y centro de
   ayuda), administradores y estudios (doctrina), jurisprudencia cuando aplique.
+- Carril datos personales: LeyChile (21.719 y 19.628), Agencia de Protección
+  de Datos, guías digital.gob.cl, doctrina de estudios (conservación,
+  minimización, bases de licitud, cámaras y control de acceso).
 - `fetch_content` sobre LeyChile y artículos Edipro; `get_search_content` para
   pasajes exactos y claim→source IDs.
 
@@ -46,6 +54,10 @@ el criterio del modelo.
   constitución y de acuerdos.
 - Documentos: qué certificados y actas exigen firma del comité; conservación
   histórica (libro físico ↔ espejo digital: nunca se arrancan hojas).
+- Datos personales: quién es responsable/encargado del tratamiento (comunidad
+  vs administrador externo), bases de licitud del padrón y morosidad, flujo
+  ARCO y plazos, conservación mínima vs histórica, cámaras y datos sensibles,
+  registro de actividades y reporte de brechas.
 
 ## Output Contract
 
