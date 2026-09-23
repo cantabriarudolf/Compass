@@ -507,7 +507,7 @@ export default function VisorPanelPage() {
 
       {/* Vista previa fiel al visor */}
       <Dialog open={!!preview} onOpenChange={o => { if (!o) setPreview(null) }}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>Vista previa en visor</DialogTitle>
             <DialogDescription>Render aproximado de cómo se proyectará el aviso.</DialogDescription>

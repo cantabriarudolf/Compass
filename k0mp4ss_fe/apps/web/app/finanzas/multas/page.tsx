@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import { useCompassStore, useStoreRehydrated } from "@/lib/store"
+import { aTituloCaso, aOracion } from "@/lib/normalizacion"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
@@ -133,7 +134,7 @@ export default function MultasPage() {
     setError(null)
     const r = useCompassStore.getState().saveTipoInfraccionIN({
       id: editandoTipoId ?? `tipo-in-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
-      nombre: formTipo.nombre,
+      nombre: aTituloCaso(formTipo.nombre),
       categoria: formTipo.categoria,
       tipoSancion: formTipo.tipoSancion,
       valor: Number(formTipo.valor),
@@ -152,13 +153,13 @@ export default function MultasPage() {
       folio: "",
       ...(nueva.origen === "catalogo"
         ? { tipoInfraccionId: nueva.tipoInfraccionId }
-        : { danoDirecto: { descripcionDaño: nueva.descripcionDaño, costoReparacion: Number(nueva.costoReparacion) }, evidencias: nueva.evidenciaUrl ? [{ nombre: "respaldo-dano", tipoMime: "application/pdf", tamanoKB: 120, url: nueva.evidenciaUrl }] : [] }),
+        : { danoDirecto: { descripcionDaño: aOracion(nueva.descripcionDaño), costoReparacion: Number(nueva.costoReparacion) }, evidencias: nueva.evidenciaUrl ? [{ nombre: "respaldo-dano", tipoMime: "application/pdf", tamanoKB: 120, url: nueva.evidenciaUrl.trim() }] : [] }),
       unidadId: nueva.unidadId,
       ...(nueva.reportantePersonaId ? { reportantePersonaId: nueva.reportantePersonaId } : {}),
       ...(nueva.mensajeBuzonId ? { mensajeBuzonId: nueva.mensajeBuzonId } : {}),
       fechaSuceso: nueva.fechaSuceso,
       horaSuceso: nueva.horaSuceso,
-      antecedentes: nueva.antecedentes || (mensaje ? `[Reclamo ${mensaje.folio}] ${mensaje.asunto}: ${mensaje.cuerpo}` : ""),
+      antecedentes: aOracion(nueva.antecedentes) || (mensaje ? `[Reclamo ${mensaje.folio}] ${mensaje.asunto}: ${mensaje.cuerpo}` : ""),
       evidencias: nueva.origen === "catalogo" && nueva.evidenciaUrl
         ? [{ nombre: "evidencia", tipoMime: "image/jpeg", tamanoKB: 90, url: nueva.evidenciaUrl }]
         : nueva.origen === "dano" && nueva.evidenciaUrl
@@ -456,7 +457,7 @@ export default function MultasPage() {
               <div className="grid gap-3">
                 <div className="space-y-1">
                   <Label className="text-xs">Nombre *</Label>
-                  <Input value={formTipo.nombre} onChange={e => setFormTipo({ ...formTipo, nombre: e.target.value })} placeholder="Ej: Ruidos Molestos" />
+                  <Input value={formTipo.nombre} onChange={e => setFormTipo({ ...formTipo, nombre: e.target.value })} onBlur={() => setFormTipo((f) => (f ? { ...f, nombre: aTituloCaso(f.nombre) } : f))} placeholder="Ej: Ruidos Molestos" />
                 </div>
                 <div className="grid gap-3 md:grid-cols-2">
                   <div className="space-y-1">
@@ -548,7 +549,7 @@ export default function MultasPage() {
                   <>
                     <div className="space-y-1">
                       <Label className="text-xs">Descripción del daño *</Label>
-                      <Input value={nueva.descripcionDaño} onChange={e => setNueva({ ...nueva, descripcionDaño: e.target.value })} placeholder="Ej: Rotura de espejo del ascensor" />
+                      <Input value={nueva.descripcionDaño} onChange={e => setNueva({ ...nueva, descripcionDaño: e.target.value })} onBlur={() => setNueva((n) => (n ? { ...n, descripcionDaño: aOracion(n.descripcionDaño) } : n))} placeholder="Ej: Rotura de espejo del ascensor" />
                     </div>
                     <div className="space-y-1">
                       <Label className="text-xs">Costo de reparación ($) *</Label>
@@ -594,12 +595,13 @@ export default function MultasPage() {
                     className="flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                     value={nueva.antecedentes}
                     onChange={e => setNueva({ ...nueva, antecedentes: e.target.value })}
+                    onBlur={() => setNueva((n) => (n ? { ...n, antecedentes: aOracion(n.antecedentes) } : n))}
                     placeholder="Descripción detallada de los hechos…"
                   />
                 </div>
                 <div className="space-y-1">
                   <Label className="text-xs">Evidencia (URL D1){nueva.origen === "dano" ? " * cotización/factura/foto" : ""}</Label>
-                  <Input value={nueva.evidenciaUrl} onChange={e => setNueva({ ...nueva, evidenciaUrl: e.target.value })} placeholder="https://…" />
+                  <Input value={nueva.evidenciaUrl} onChange={e => setNueva({ ...nueva, evidenciaUrl: e.target.value })} onBlur={() => setNueva((n) => (n ? { ...n, evidenciaUrl: n.evidenciaUrl.trim() } : n))} placeholder="https://…" />
                 </div>
               </div>
               <DialogFooter>

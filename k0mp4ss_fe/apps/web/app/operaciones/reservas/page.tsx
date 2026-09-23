@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import { generarId } from "@/lib/id-utils"
+import { aTituloCaso, aOracion } from "@/lib/normalizacion"
 import { useCompassStore, useStoreRehydrated } from "@/lib/store"
 import {
   Card,
@@ -175,7 +176,7 @@ export default function ReservasPage() {
     setError(null)
     const payload: ElementoRA = {
       id: editandoElId ?? generarId("ra-el"),
-      nombre: formEl.nombre,
+      nombre: aTituloCaso(formEl.nombre),
       tipo: formEl.tipo,
       franja: formEl.franja,
       tarifaUso: Number(formEl.tarifaUso || 0),
@@ -771,6 +772,9 @@ export default function ReservasPage() {
                       onChange={(e) =>
                         setFormEl({ ...formEl, nombre: e.target.value })
                       }
+                      onBlur={() =>
+                        setFormEl((f) => (f ? { ...f, nombre: aTituloCaso(f.nombre) } : f))
+                      }
                       placeholder="Ej: Quincho central"
                     />
                   </div>
@@ -1044,6 +1048,9 @@ export default function ReservasPage() {
                   onChange={(e) =>
                     setRetencion({ ...retencion, motivo: e.target.value })
                   }
+                  onBlur={() =>
+                    setRetencion((r) => (r ? { ...r, motivo: aOracion(r.motivo) } : r))
+                  }
                   placeholder="Ej: manguera de alta presión fracturada al devolver el equipo"
                 />
               </div>
@@ -1056,7 +1063,7 @@ export default function ReservasPage() {
                   onClick={() => {
                     const r = useCompassStore
                       .getState()
-                      .retenerGarantiaRA(retencion.reserva.id, retencion.motivo)
+                      .retenerGarantiaRA(retencion.reserva.id, aOracion(retencion.motivo))
                     if (!r.ok) {
                       setError(r.error ?? "")
                       return

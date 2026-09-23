@@ -669,7 +669,7 @@ export default function BitacoraPage() {
         open={!!editandoCierre}
         onOpenChange={(open) => !open && setEditandoCierre(null)}
       >
-        <DialogContent className="max-w-md">
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Editar cierre de turno</DialogTitle>
             <DialogDescription>

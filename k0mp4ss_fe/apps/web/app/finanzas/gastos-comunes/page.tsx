@@ -616,7 +616,7 @@ export default function GastosComunesPage() {
       </Dialog>
 
       <Dialog open={formEgreso !== null} onOpenChange={open => !open && setFormEgreso(null)}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Registrar gasto</DialogTitle>
             <DialogDescription>El dinero sale siempre desde un fondo (imputación obligatoria).</DialogDescription>
@@ -691,7 +691,7 @@ export default function GastosComunesPage() {
       </Dialog>
 
       <Dialog open={formIngreso !== null} onOpenChange={open => !open && setFormIngreso(null)}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Registrar ingreso a fondo</DialogTitle>
             <DialogDescription>El dinero entra directo al fondo sin origen en cobros.</DialogDescription>

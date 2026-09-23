@@ -31,7 +31,7 @@ import {
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@workspace/ui/components/select"
-import { IconBuilding, IconPlus, IconChevronRight, IconPencil, IconStack2, IconEdit, IconHistory, IconCalendarEvent } from "@tabler/icons-react"
+import { IconBuilding, IconPlus, IconChevronRight, IconPencil, IconStack2, IconEdit, IconHistory, IconCalendarEvent, IconSearch } from "@tabler/icons-react"
 import { FormularioUnidad } from "@/components/inventario/formulario-unidad"
 import { EstadosDonut } from "@/components/inventario/estados-donut"
 
@@ -62,6 +62,9 @@ export default function EstructuraFisicaPage() {
   const [filterStatus, setFilterStatus] = React.useState("todos")
   const [historialSelect, setHistorialSelect] = React.useState<Unidad | null>(null)
   const [errorDialogo, setErrorDialogo] = React.useState<string | null>(null)
+  const [busqueda, setBusqueda] = React.useState("")
+  const [pagina, setPagina] = React.useState(1)
+  const POR_PAGINA = 20
 
   // LÓGICA DE FILTRADO MULTI-ESCALA
   const filteredUnidades = unidades.filter(u => {
@@ -71,6 +74,29 @@ export default function EstructuraFisicaPage() {
     
     return matchesMacro && matchesMicro;
   })
+
+  // Búsqueda por N°/etiqueta + estado, con paginación (evita scroll infinito)
+  const textoBusqueda = busqueda.trim().toLowerCase()
+  const unidadesVisibles = filteredUnidades.filter(u => {
+    const matchesEstado = filterStatus === "todos" || u.estadoId === filterStatus
+    const matchesTexto = textoBusqueda === "" ||
+      `${u.etiqueta} ${u.numero}`.toLowerCase().includes(textoBusqueda)
+    return matchesEstado && matchesTexto
+  })
+  const totalPaginas = Math.max(1, Math.ceil(unidadesVisibles.length / POR_PAGINA))
+  const paginaSegura = Math.min(pagina, totalPaginas)
+  const unidadesPagina = unidadesVisibles.slice((paginaSegura - 1) * POR_PAGINA, paginaSegura * POR_PAGINA)
+  const desde = unidadesVisibles.length === 0 ? 0 : (paginaSegura - 1) * POR_PAGINA + 1
+  const hasta = Math.min(paginaSegura * POR_PAGINA, unidadesVisibles.length)
+
+  // Al cambiar cualquier filtro, volver a la primera página (ajuste durante el
+  // render — patrón React "storing information from previous renders").
+  const firmaFiltros = `${selectedMacro}|${selectedMicro}|${filterStatus}|${textoBusqueda}`
+  const [firmaPrevia, setFirmaPrevia] = React.useState(firmaFiltros)
+  if (firmaPrevia !== firmaFiltros) {
+    setFirmaPrevia(firmaFiltros)
+    setPagina(1)
+  }
 
   const selectedMicroObj = microSectores.find(m => m.id === selectedMicro)
   const scopeLabel = selectedMacro === "todos"
@@ -405,7 +431,7 @@ export default function EstructuraFisicaPage() {
                   <div>
                     <CardTitle>Unidades</CardTitle>
                     <CardDescription>
-                      {filteredUnidades.length} unidades en este sector.
+                      {unidadesVisibles.length} unidades en este sector.
                     </CardDescription>
                   </div>
                   <FormularioUnidad
@@ -415,8 +441,24 @@ export default function EstructuraFisicaPage() {
                   />
                 </CardHeader>
                 <CardContent>
-                  <div className="flex items-center gap-2 mb-4 bg-muted/30 p-2 rounded-md border border-dashed overflow-x-auto no-scrollbar">
-                    <span className="text-[9px] font-black text-muted-foreground uppercase px-2 shrink-0">Filtro Rápido:</span>
+                      <div className="flex items-center gap-2 mb-2">
+                        <div className="relative max-w-xs flex-1">
+                          <IconSearch className="absolute left-2 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                          <Input
+                            value={busqueda}
+                            onChange={(e) => setBusqueda(e.target.value)}
+                            placeholder="Buscar por N° de unidad…"
+                            className="h-8 pl-8 text-xs"
+                          />
+                        </div>
+                        {busqueda && (
+                          <Button variant="ghost" size="sm" className="h-8 text-[10px]" onClick={() => setBusqueda("")}>
+                            Limpiar
+                          </Button>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 mb-4 bg-muted/30 p-2 rounded-md border border-dashed overflow-x-auto no-scrollbar">
+                        <span className="text-[9px] font-black text-muted-foreground uppercase px-2 shrink-0">Filtro Rápido:</span>
                     <Button 
                       variant={filterStatus === "todos" ? "default" : "ghost"} 
                       size="sm" 
@@ -454,9 +496,14 @@ export default function EstructuraFisicaPage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filteredUnidades
-                        .filter(u => filterStatus === "todos" || u.estadoId === filterStatus)
-                        .map((unidad) => {
+                          {unidadesPagina.length === 0 && (
+                            <TableRow>
+                              <TableCell colSpan={7} className="text-center text-xs text-muted-foreground py-8">
+                                Sin unidades para este filtro.
+                              </TableCell>
+                            </TableRow>
+                          )}
+                          {unidadesPagina.map((unidad) => {
                           const configEstado = estadosOcupacion.find(e => e.id === unidad.estadoId);
                           const customClasses = configEstado?.color || "bg-zinc-100 text-zinc-800";
                           
@@ -502,9 +549,27 @@ export default function EstructuraFisicaPage() {
                           </TableRow>
                         )
                       })}
-                    </TableBody>
-                  </Table>
-                </CardContent>
+                        </TableBody>
+                      </Table>
+                      {unidadesVisibles.length > POR_PAGINA && (
+                        <div className="flex items-center justify-between gap-2 mt-3 flex-wrap">
+                          <span className="text-[10px] text-muted-foreground">
+                            Mostrando {desde}–{hasta} de {unidadesVisibles.length} unidades
+                          </span>
+                          <div className="flex items-center gap-1">
+                            <Button variant="outline" size="sm" className="h-7 text-[10px]" disabled={paginaSegura <= 1} onClick={() => setPagina(paginaSegura - 1)}>
+                              Anterior
+                            </Button>
+                            <span className="text-[10px] text-muted-foreground px-2">
+                              Página {paginaSegura} de {totalPaginas}
+                            </span>
+                            <Button variant="outline" size="sm" className="h-7 text-[10px]" disabled={paginaSegura >= totalPaginas} onClick={() => setPagina(paginaSegura + 1)}>
+                              Siguiente
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                    </CardContent>
               </Card>
             </div>
       </Tabs>
@@ -512,7 +577,7 @@ export default function EstructuraFisicaPage() {
 
       {/* MODAL DE HISTORIAL (TRAZABILIDAD DE UNIDADES) */}
       <Dialog open={!!historialSelect} onOpenChange={() => setHistorialSelect(null)}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <IconHistory className="size-5 text-primary" />

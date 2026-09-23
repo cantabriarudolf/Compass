@@ -6,6 +6,7 @@ import { Button } from "@workspace/ui/components/button"
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
 import { Card, CardContent } from "@workspace/ui/components/card"
+import { emailNormalizado, telefonoNormalizado } from "@/lib/normalizacion"
 
 /**
  * SERIE-PRODUCCION-FASE2 P6 — "Mis datos personales" (derechos ARCO, Ley 21.719).
@@ -105,7 +106,7 @@ export default function MisDatosPage() {
       const res = await fetch("/api/mis-datos", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, telefonoMovil: movil, telefonoFijo: fijo || null }),
+        body: JSON.stringify({ email: emailNormalizado(email), telefonoMovil: telefonoNormalizado(movil), telefonoFijo: fijo.trim() === "" ? null : telefonoNormalizado(fijo) }),
       })
       const j = (await res.json().catch(() => null)) as { ok?: boolean; error?: string; cambios?: string[] } | null
       if (!res.ok || !j?.ok) {
@@ -175,15 +176,15 @@ export default function MisDatosPage() {
           <form onSubmit={(e) => void guardarCambios(e)} className="space-y-3">
             <div className="space-y-2">
               <Label htmlFor="arco-email">Correo electrónico</Label>
-              <Input id="arco-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+              <Input id="arco-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} onBlur={() => setEmail(emailNormalizado(email))} required />
             </div>
             <div className="space-y-2">
               <Label htmlFor="arco-movil">Teléfono móvil</Label>
-              <Input id="arco-movil" value={movil} onChange={(e) => setMovil(e.target.value)} required />
+              <Input id="arco-movil" value={movil} onChange={(e) => setMovil(e.target.value)} onBlur={() => setMovil(telefonoNormalizado(movil))} required />
             </div>
             <div className="space-y-2">
               <Label htmlFor="arco-fijo">Teléfono fijo (opcional)</Label>
-              <Input id="arco-fijo" value={fijo} onChange={(e) => setFijo(e.target.value)} />
+              <Input id="arco-fijo" value={fijo} onChange={(e) => setFijo(e.target.value)} onBlur={() => setFijo(telefonoNormalizado(fijo))} />
             </div>
             <Button type="submit">Guardar cambios</Button>
           </form>

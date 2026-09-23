@@ -3,6 +3,8 @@
 import * as React from "react"
 import { Persona } from "@/data/comunidad/personas"
 import { ROLES_PERSONA } from "@/lib/schemas"
+import { formatearRut, validarDocumentoIdentidad, claveDocumento } from "@/lib/rut"
+import { aTituloCaso, emailNormalizado, telefonoNormalizado } from "@/lib/normalizacion"
 import { useCompassStore, StoreResult } from "@/lib/store"
 import { Button } from "@workspace/ui/components/button"
 import { Input } from "@workspace/ui/components/input"
@@ -40,17 +42,37 @@ export function FormularioPersona({ persona, onSave, onCancel }: FormularioPerso
   const [roles, setRoles] = React.useState<string[]>(persona?.roles || [])
   const [condiciones, setCondiciones] = React.useState<string[]>(persona?.condicionesEspecialesIds || [])
   const [errores, setErrores] = React.useState<Record<string, string>>({})
+  const [rutTocado, setRutTocado] = React.useState(false)
 
   const toggleRole = (role: string) => {
     setRoles(prev => prev.includes(role) ? prev.filter(r => r !== role) : [...prev, role])
   }
 
-  const toggleCondicion = (id: string) => {
-    setCondiciones(prev => prev.includes(id) ? prev.filter(c => c !== id) : [...prev, id])
-  }
+    const toggleCondicion = (id: string) => {
+      setCondiciones(prev => prev.includes(id) ? prev.filter(c => c !== id) : [...prev, id])
+    }
+
+    const manejarCambioRut = (valor: string) => {
+      setRut(/^[0-9]/.test(valor.trim()) ? formatearRut(valor) : valor.toUpperCase())
+      setRutTocado(false)
+    }
+
+    const rutNormalizado = rut.trim()
+    const rutValido = rutNormalizado === "" || validarDocumentoIdentidad(rutNormalizado)
+    const rutDuplicadoDe = rutNormalizado === "" ? undefined : personas.find(
+      (p) => p.id !== (persona?.id ?? "") && claveDocumento(p.rut || "") !== "" && claveDocumento(p.rut || "") === claveDocumento(rutNormalizado)
+    )
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
+    setRutTocado(true)
+
+    if (rutNormalizado === "" || !validarDocumentoIdentidad(rutNormalizado)) {
+    return
+    }
+    if (rutDuplicadoDe) {
+    return
+    }
 
     const nombreCompleto = `${nombres} ${apellidos}`.trim()
     const nombreCompletoNorm = nombreCompleto.toLowerCase()
@@ -78,6 +100,8 @@ export function FormularioPersona({ persona, onSave, onCancel }: FormularioPerso
       email,
       telefonoMovil,
       estadoCuenta: estadoCuenta as "activa" | "inactiva" | "bloqueada",
+      // SAFETY: los checkboxes solo ofrecen valores de ROLES_PERSONA (misma fuente
+      // que el schema); el cast alinea el string[] del estado con el tipo del dominio.
       roles: roles as unknown as (typeof ROLES_PERSONA[number])[],
       condicionesEspecialesIds: condiciones,
       vinculosUnidad: persona?.vinculosUnidad || []
@@ -90,8 +114,8 @@ export function FormularioPersona({ persona, onSave, onCancel }: FormularioPerso
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col h-full max-h-[80vh]">
-      <ScrollArea className="flex-1 pr-4">
+    <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+      <ScrollArea className="min-h-0 flex-1 overflow-y-auto pr-4 max-h-[60vh]">
         <div className="grid gap-6 py-4">
 
           {errores.global && (
@@ -104,8 +128,14 @@ export function FormularioPersona({ persona, onSave, onCancel }: FormularioPerso
             <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-widest border-b pb-2">Identidad Base</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="rut">RUT o Pasaporte *</Label>
-                <Input id="rut" value={rut} onChange={e => setRut(e.target.value)} placeholder="Ej: 15.123.456-7" required />
+                    <Label htmlFor="rut">RUT o Pasaporte *</Label>
+                    <Input id="rut" value={rut} onChange={e => manejarCambioRut(e.target.value)} onBlur={() => setRutTocado(true)} placeholder="Ej: 15.123.456-7" required aria-invalid={rutTocado && rutNormalizado !== "" && (!rutValido || rutDuplicadoDe !== undefined)} />
+                    {rutTocado && rutNormalizado !== "" && !rutValido && (
+                      <p className="text-xs text-destructive font-medium">RUT inválido: revisá el dígito verificador.</p>
+                    )}
+                    {rutTocado && rutValido && rutDuplicadoDe && (
+                      <p className="text-xs text-destructive font-medium">Este RUT ya está registrado.</p>
+                    )}
               </div>
               <div className="space-y-2">
                 <Label>Estado de la Cuenta</Label>
@@ -120,11 +150,11 @@ export function FormularioPersona({ persona, onSave, onCancel }: FormularioPerso
               </div>
               <div className="space-y-2">
                 <Label htmlFor="nombres">Nombres *</Label>
-                <Input id="nombres" value={nombres} onChange={e => setNombres(e.target.value)} required />
+                <Input id="nombres" value={nombres} onChange={e => setNombres(e.target.value)} onBlur={() => setNombres(aTituloCaso(nombres))} required />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="apellidos">Apellidos *</Label>
-                <Input id="apellidos" value={apellidos} onChange={e => setApellidos(e.target.value)} required />
+                <Input id="apellidos" value={apellidos} onChange={e => setApellidos(e.target.value)} onBlur={() => setApellidos(aTituloCaso(apellidos))} required />
               </div>
             </div>
           </div>
@@ -134,11 +164,11 @@ export function FormularioPersona({ persona, onSave, onCancel }: FormularioPerso
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="email">Correo Electrónico *</Label>
-                <Input id="email" type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="correo@ejemplo.com" required />
+                <Input id="email" type="email" value={email} onChange={e => setEmail(e.target.value)} onBlur={() => setEmail(emailNormalizado(email))} placeholder="correo@ejemplo.com" required />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="tel">Teléfono Móvil *</Label>
-                <Input id="tel" value={telefonoMovil} onChange={e => setTelefonoMovil(e.target.value)} placeholder="+56 9 0000 0000" required />
+                <Input id="tel" value={telefonoMovil} onChange={e => setTelefonoMovil(e.target.value)} onBlur={() => setTelefonoMovil(telefonoNormalizado(telefonoMovil))} placeholder="+56 9 0000 0000" required />
               </div>
             </div>
           </div>
@@ -179,7 +209,7 @@ export function FormularioPersona({ persona, onSave, onCancel }: FormularioPerso
         </div>
       </ScrollArea>
       
-      <div className="flex justify-end gap-2 pt-4 border-t mt-4">
+      <div className="flex shrink-0 justify-end gap-2 pt-4 border-t mt-4 bg-popover">
         <Button type="button" variant="outline" onClick={onCancel}>Cancelar</Button>
         <Button type="submit">{isEditing ? "Guardar Cambios" : "Crear Persona"}</Button>
       </div>

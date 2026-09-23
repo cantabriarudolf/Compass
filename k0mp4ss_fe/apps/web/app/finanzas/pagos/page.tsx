@@ -245,7 +245,7 @@ export default function PagosPage() {
       </Tabs>
 
       <Dialog open={detalle !== null} onOpenChange={open => !open && setDetalle(null)}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Detalle del cobro</DialogTitle>
             <DialogDescription>{refUnidad(detalle?.unidadId)}</DialogDescription>

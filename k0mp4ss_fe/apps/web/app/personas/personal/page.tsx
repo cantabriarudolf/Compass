@@ -3,6 +3,7 @@
 import * as React from "react"
 import Link from "next/link"
 import { useCompassStore, useStoreRehydrated } from "@/lib/store"
+import { aTituloCaso, aOracion } from "@/lib/normalizacion"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
@@ -123,7 +124,7 @@ function personaDesdeFicha(p: Persona, form: FormFicha): Persona {
     ...p,
     datosLaborales: {
       id: previa?.id ?? `dl-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      cargo: form.cargo.trim(),
+      cargo: aTituloCaso(form.cargo),
       afp: previa?.afp ?? "—",
       prevision: previa?.prevision ?? "—",
       fechaIngreso: form.fechaIngreso || previa?.fechaIngreso || new Date().toISOString().slice(0, 10),
@@ -136,13 +137,13 @@ function personaDesdeFicha(p: Persona, form: FormFicha): Persona {
       ...(form.bancoId ? { bancoId: form.bancoId } : {}),
       ...(form.numeroCuenta.trim() ? { numeroCuenta: form.numeroCuenta.trim() } : {}),
       ...(form.tipoCuenta ? { tipoCuenta: form.tipoCuenta as "corriente" | "vista" | "ahorro" } : {}),
-      ...(form.seguroComplementario.trim() ? { seguroComplementario: form.seguroComplementario.trim() } : {}),
+      ...(form.seguroComplementario.trim() ? { seguroComplementario: aTituloCaso(form.seguroComplementario) } : {}),
       apv: form.apv,
       ...((form.medicamentos || form.alergias || form.condiciones)
-        ? { fichaMedica: { medicamentos: form.medicamentos || undefined, alergias: form.alergias || undefined, condiciones: form.condiciones || undefined } }
+        ? { fichaMedica: { medicamentos: aOracion(form.medicamentos) || undefined, alergias: aOracion(form.alergias) || undefined, condiciones: aOracion(form.condiciones) || undefined } }
         : {}),
       ...(form.contactos.length > 0
-        ? { contactosEmergencia: form.contactos.map((c, i) => ({ id: `ce-${Date.now()}-${i}`, nombre: c.nombre.trim(), telefono: c.telefono.trim(), relacion: c.relacion.trim() || undefined })) }
+        ? { contactosEmergencia: form.contactos.map((c, i) => ({ id: `ce-${Date.now()}-${i}`, nombre: aTituloCaso(c.nombre), telefono: c.telefono.trim(), relacion: aTituloCaso(c.relacion) || undefined })) }
         : {}),
       ...(form.jornadaBaseHoras !== "" ? { jornadaBaseHoras: Number(form.jornadaBaseHoras) } : {}),
       horasExtras: previa?.horasExtras ?? [],
@@ -567,7 +568,7 @@ export default function PersonalPage() {
 
       {/* Diálogo de ficha integral */}
       <Dialog open={!!editando} onOpenChange={open => !open && setEditandoId(null)}>
-        <DialogContent className="max-h-[85vh] max-w-3xl overflow-y-auto">
+        <DialogContent className="max-h-[85vh] sm:max-w-3xl overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Ficha Integral — {editando?.nombreCompleto}</DialogTitle>
             <DialogDescription>RUT {editando?.rut} · {editando?.email}. Los campos con * son obligatorios.</DialogDescription>
@@ -579,7 +580,7 @@ export default function PersonalPage() {
                 <div className="grid gap-3 sm:grid-cols-3">
                   <div className="flex flex-col gap-1.5">
                     <Label htmlFor="f-cargo">Cargo *</Label>
-                    <Input id="f-cargo" value={form.cargo} onChange={e => setForm({ ...form, cargo: e.target.value })} />
+                    <Input id="f-cargo" value={form.cargo} onChange={e => setForm({ ...form, cargo: e.target.value })} onBlur={() => setForm((f) => ({ ...f, cargo: aTituloCaso(f.cargo) }))} />
                   </div>
                   <div className="flex flex-col gap-1.5">
                     <Label htmlFor="f-ingreso">Fecha ingreso *</Label>
@@ -646,7 +647,7 @@ export default function PersonalPage() {
                   </div>
                   <div className="flex flex-col gap-1.5 sm:col-span-2">
                     <Label htmlFor="f-seguro">Seguro complementario</Label>
-                    <Input id="f-seguro" value={form.seguroComplementario} onChange={e => setForm({ ...form, seguroComplementario: e.target.value })} placeholder="Compañía y póliza" />
+                    <Input id="f-seguro" value={form.seguroComplementario} onChange={e => setForm({ ...form, seguroComplementario: e.target.value })} onBlur={() => setForm((f) => ({ ...f, seguroComplementario: aTituloCaso(f.seguroComplementario) }))} placeholder="Compañía y póliza" />
                   </div>
                 </div>
               </section>
@@ -685,22 +686,22 @@ export default function PersonalPage() {
                 <div className="grid gap-3 sm:grid-cols-3">
                   <div className="flex flex-col gap-1.5">
                     <Label htmlFor="f-med">Medicamentos</Label>
-                    <Input id="f-med" value={form.medicamentos} onChange={e => setForm({ ...form, medicamentos: e.target.value })} />
+                    <Input id="f-med" value={form.medicamentos} onChange={e => setForm({ ...form, medicamentos: e.target.value })} onBlur={() => setForm((f) => ({ ...f, medicamentos: aOracion(f.medicamentos) }))} />
                   </div>
                   <div className="flex flex-col gap-1.5">
                     <Label htmlFor="f-alerg">Alergias</Label>
-                    <Input id="f-alerg" value={form.alergias} onChange={e => setForm({ ...form, alergias: e.target.value })} />
+                    <Input id="f-alerg" value={form.alergias} onChange={e => setForm({ ...form, alergias: e.target.value })} onBlur={() => setForm((f) => ({ ...f, alergias: aOracion(f.alergias) }))} />
                   </div>
                   <div className="flex flex-col gap-1.5">
                     <Label htmlFor="f-cond">Condiciones médicas</Label>
-                    <Input id="f-cond" value={form.condiciones} onChange={e => setForm({ ...form, condiciones: e.target.value })} />
+                    <Input id="f-cond" value={form.condiciones} onChange={e => setForm({ ...form, condiciones: e.target.value })} onBlur={() => setForm((f) => ({ ...f, condiciones: aOracion(f.condiciones) }))} />
                   </div>
                 </div>
                 <div className="mt-3 flex flex-col gap-2">
                   <Label>Contactos de emergencia</Label>
                   {form.contactos.map((c, i) => (
                     <div key={i} className="flex gap-2">
-                      <Input placeholder="Nombre *" value={c.nombre} onChange={e => setForm({ ...form, contactos: form.contactos.map((x, xi) => xi === i ? { ...x, nombre: e.target.value } : x) })} />
+                      <Input placeholder="Nombre *" value={c.nombre} onChange={e => setForm({ ...form, contactos: form.contactos.map((x, xi) => xi === i ? { ...x, nombre: e.target.value } : x) })} onBlur={() => setForm((f) => ({ ...f, contactos: f.contactos.map((x, xi) => xi === i ? { ...x, nombre: aTituloCaso(x.nombre), relacion: aTituloCaso(x.relacion) } : x) }))} />
                       <Input placeholder="Teléfono *" value={c.telefono} onChange={e => setForm({ ...form, contactos: form.contactos.map((x, xi) => xi === i ? { ...x, telefono: e.target.value } : x) })} />
                       <Input placeholder="Relación" value={c.relacion} onChange={e => setForm({ ...form, contactos: form.contactos.map((x, xi) => xi === i ? { ...x, relacion: e.target.value } : x) })} />
                       <Button size="icon" variant="ghost" onClick={() => setForm({ ...form, contactos: form.contactos.filter((_, xi) => xi !== i) })}><IconX className="size-4" /></Button>
@@ -756,7 +757,7 @@ export default function PersonalPage() {
 
       {/* Diálogo de feriado */}
       <Dialog open={!!formFeriado} onOpenChange={open => !open && setFormFeriado(null)}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>{formFeriado?.id ? "Editar" : "Nuevo"} feriado</DialogTitle>
             <DialogDescription>Alimenta la proyección de cobertura operativa.</DialogDescription>

@@ -1838,7 +1838,7 @@ export default function QaLabPage() {
       </Dialog>
 
       <Dialog open={!!detalle} onOpenChange={(o) => !o && setDetalle(null)}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>Detalle: {detalle?.label}</DialogTitle>
             <DialogDescription>Rank {detalle?.rank} · estado {detalle?.status} · count {detalle?.count}</DialogDescription>

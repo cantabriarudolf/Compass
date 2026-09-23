@@ -2,6 +2,8 @@
 
 import * as React from "react"
 import { generarId } from "@/lib/id-utils"
+import { formatearRut, validarDocumentoIdentidad, claveDocumento } from "@/lib/rut"
+import { aTituloCaso, emailNormalizado, telefonoNormalizado, sitioNormalizado } from "@/lib/normalizacion"
 import { useCompassStore, useStoreRehydrated } from "@/lib/store"
 import {
   Card,
@@ -95,6 +97,18 @@ export default function ProveedoresPage() {
   const [error, setError] = React.useState<string | null>(null)
   const [okMsg, setOkMsg] = React.useState<string | null>(null)
   const [formProv, setFormProv] = React.useState<FormProveedor | null>(null)
+  const [rutProvTocado, setRutProvTocado] = React.useState(false)
+
+  const rutProv = formProv?.rut.trim() ?? ""
+  const rutProvValido = rutProv === "" || validarDocumentoIdentidad(rutProv)
+  const rutProvDuplicado =
+    rutProv !== "" &&
+    proveedores.some(
+      (p) =>
+        p.id !== (editandoProvId ?? "") &&
+        claveDocumento(p.rut) !== "" &&
+        claveDocumento(p.rut) === claveDocumento(rutProv)
+    )
   const [editandoProvId, setEditandoProvId] = React.useState<string | null>(
     null
   )
@@ -132,15 +146,24 @@ export default function ProveedoresPage() {
       setError("RUT, nombre y rubro son obligatorios.")
       return
     }
+    setRutProvTocado(true)
+    if (!validarDocumentoIdentidad(formProv.rut.trim())) {
+      setError("RUT de empresa inválido: revisá el dígito verificador.")
+      return
+    }
+    if (rutProvDuplicado) {
+      setError("Este RUT ya está registrado en otro proveedor.")
+      return
+    }
     const r = saveProveedorPE({
       id: editandoProvId ?? generarId("prov"),
-      rut: formProv.rut.trim(),
-      nombre: formProv.nombre.trim(),
-      rubro: formProv.rubro.trim(),
-      contacto: formProv.contacto.trim() || undefined,
-      telefono: formProv.telefono.trim() || undefined,
-      email: formProv.email.trim(),
-      sitioWeb: formProv.sitioWeb.trim(),
+      rut: formatearRut(formProv.rut.trim()),
+      nombre: aTituloCaso(formProv.nombre),
+      rubro: aTituloCaso(formProv.rubro),
+      contacto: formProv.contacto.trim() === "" ? undefined : aTituloCaso(formProv.contacto),
+      telefono: formProv.telefono.trim() === "" ? undefined : telefonoNormalizado(formProv.telefono),
+      email: emailNormalizado(formProv.email),
+      sitioWeb: sitioNormalizado(formProv.sitioWeb),
       activo: formProv.activo,
     })
     if (!r.ok) {
@@ -888,7 +911,7 @@ export default function ProveedoresPage() {
         open={!!formProv}
         onOpenChange={(open) => !open && setFormProv(null)}
       >
-        <DialogContent className="max-w-lg">
+        <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>
               {editandoProvId ? "Editar" : "Nuevo"} proveedor
@@ -904,11 +927,21 @@ export default function ProveedoresPage() {
                 <Input
                   id="pv-rut"
                   value={formProv.rut}
-                  onChange={(e) =>
-                    setFormProv({ ...formProv, rut: e.target.value })
-                  }
+                  onChange={(e) => {
+                    const v = e.target.value
+                    setFormProv({ ...formProv, rut: /^[0-9]/.test(v.trim()) ? formatearRut(v) : v.toUpperCase() })
+                    setRutProvTocado(false)
+                  }}
+                  onBlur={() => setRutProvTocado(true)}
                   placeholder="76.543.210-K"
+                  aria-invalid={rutProvTocado && rutProv !== "" && (!rutProvValido || rutProvDuplicado)}
                 />
+                {rutProvTocado && rutProv !== "" && !rutProvValido && (
+                  <p className="text-xs text-destructive font-medium">RUT inválido: revisá el dígito verificador.</p>
+                )}
+                {rutProvTocado && rutProvValido && rutProvDuplicado && (
+                  <p className="text-xs text-destructive font-medium">Este RUT ya está registrado en otro proveedor.</p>
+                )}
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="pv-nombre">Nombre *</Label>
@@ -917,6 +950,9 @@ export default function ProveedoresPage() {
                   value={formProv.nombre}
                   onChange={(e) =>
                     setFormProv({ ...formProv, nombre: e.target.value })
+                  }
+                  onBlur={() =>
+                    setFormProv((f) => (f ? { ...f, nombre: aTituloCaso(f.nombre) } : f))
                   }
                 />
               </div>
@@ -927,6 +963,9 @@ export default function ProveedoresPage() {
                   value={formProv.rubro}
                   onChange={(e) =>
                     setFormProv({ ...formProv, rubro: e.target.value })
+                  }
+                  onBlur={() =>
+                    setFormProv((f) => (f ? { ...f, rubro: aTituloCaso(f.rubro) } : f))
                   }
                   placeholder="Ascensores / Bombas / CCTV"
                 />
@@ -939,6 +978,9 @@ export default function ProveedoresPage() {
                   onChange={(e) =>
                     setFormProv({ ...formProv, contacto: e.target.value })
                   }
+                  onBlur={() =>
+                    setFormProv((f) => (f ? { ...f, contacto: aTituloCaso(f.contacto) } : f))
+                  }
                 />
               </div>
               <div className="flex flex-col gap-1.5">
@@ -948,6 +990,9 @@ export default function ProveedoresPage() {
                   value={formProv.telefono}
                   onChange={(e) =>
                     setFormProv({ ...formProv, telefono: e.target.value })
+                  }
+                  onBlur={() =>
+                    setFormProv((f) => (f ? { ...f, telefono: telefonoNormalizado(f.telefono) } : f))
                   }
                 />
               </div>
@@ -960,6 +1005,9 @@ export default function ProveedoresPage() {
                   onChange={(e) =>
                     setFormProv({ ...formProv, email: e.target.value })
                   }
+                  onBlur={() =>
+                    setFormProv((f) => (f ? { ...f, email: emailNormalizado(f.email) } : f))
+                  }
                 />
               </div>
               <div className="flex flex-col gap-1.5 sm:col-span-2">
@@ -969,6 +1017,9 @@ export default function ProveedoresPage() {
                   value={formProv.sitioWeb}
                   onChange={(e) =>
                     setFormProv({ ...formProv, sitioWeb: e.target.value })
+                  }
+                  onBlur={() =>
+                    setFormProv((f) => (f ? { ...f, sitioWeb: sitioNormalizado(f.sitioWeb) } : f))
                   }
                   placeholder="https://…"
                 />

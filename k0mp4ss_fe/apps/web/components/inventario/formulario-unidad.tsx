@@ -3,6 +3,7 @@
 import * as React from "react"
 import { Unidad } from "@/data/inventario/estructura"
 import { useCompassStore, StoreResult } from "@/lib/store"
+import { identificadorNormalizado } from "@/lib/normalizacion"
 import { 
   Dialog, 
   DialogContent, 
@@ -118,15 +119,15 @@ function FormularioUnidadContent({ unidad, macroSectorId, microSectorId, onSave,
       microSectorId: microId,
       tipoUnidadId: tipoId,
       etiqueta: categoria,
-      numero: formData.get("numero") as string,
+      numero: identificadorNormalizado(formData.get("numero") as string),
       metraje: Number(metraje),
       prorrateo: Number(prorrateo) / 100,
-      rolSii: formData.get("rolSii") as string,
+      rolSii: identificadorNormalizado(formData.get("rolSii") as string),
       estadoId: formData.get("estadoId") as string,
       servicios: {
-        agua: { cliente: formData.get("agua_cliente") as string, medidor: formData.get("agua_medidor") as string },
-        luz: { cliente: formData.get("luz_cliente") as string, medidor: formData.get("luz_medidor") as string },
-        gas: { cliente: formData.get("gas_cliente") as string, medidor: formData.get("gas_medidor") as string },
+        agua: { cliente: identificadorNormalizado(formData.get("agua_cliente") as string), medidor: identificadorNormalizado(formData.get("agua_medidor") as string) },
+        luz: { cliente: identificadorNormalizado(formData.get("luz_cliente") as string), medidor: identificadorNormalizado(formData.get("luz_medidor") as string) },
+        gas: { cliente: identificadorNormalizado(formData.get("gas_cliente") as string), medidor: identificadorNormalizado(formData.get("gas_medidor") as string) },
       }
     }
     const resultado = onSave?.(data)
@@ -212,7 +213,7 @@ function FormularioUnidadContent({ unidad, macroSectorId, microSectorId, onSave,
           </div>
           <div className="space-y-2">
             <Label className="text-xs font-bold">Número / Identificador</Label>
-            <Input name="numero" defaultValue={unidad?.numero} placeholder="Ej: 101, 14-B" required />
+            <Input name="numero" defaultValue={unidad?.numero} placeholder="Ej: 101, 14-B" required onBlur={(e) => { e.currentTarget.value = identificadorNormalizado(e.currentTarget.value) }} />
           </div>
         </div>
 
@@ -236,7 +237,7 @@ function FormularioUnidadContent({ unidad, macroSectorId, microSectorId, onSave,
           </div>
           <div className="space-y-2">
             <Label className="text-xs font-bold">Rol Avalúo (SII)</Label>
-            <Input name="rolSii" defaultValue={unidad?.rolSii} placeholder="123-45" />
+            <Input name="rolSii" defaultValue={unidad?.rolSii} placeholder="123-45" onBlur={(e) => { e.currentTarget.value = identificadorNormalizado(e.currentTarget.value) }} />
           </div>
         </div>
 

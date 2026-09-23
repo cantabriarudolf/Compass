@@ -370,7 +370,7 @@ export default function TiposUnidadPage() {
       </Tabs>
 
       <Dialog open={!!historialSelect} onOpenChange={() => setHistorialSelect(null)}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <IconHistory className="size-5 text-primary" />
@@ -403,7 +403,7 @@ export default function TiposUnidadPage() {
       </Dialog>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="sm:max-w-2xl">
           <form onSubmit={handleSave}>
             <DialogHeader>
               <DialogTitle>{editingItem ? `Editar: ${editingItem.nombre}` : "Nuevo Tipo de Unidad"}</DialogTitle>

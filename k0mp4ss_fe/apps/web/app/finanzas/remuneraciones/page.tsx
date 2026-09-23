@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import { useCompassStore, useStoreRehydrated } from "@/lib/store"
+import { aOracion } from "@/lib/normalizacion"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
@@ -201,7 +202,7 @@ export default function RemuneracionesPage() {
       trabajadorPersonaId: adelantoTrabajadorId,
       fecha: new Date().toISOString().slice(0, 10),
       monto: Number(adelantoMonto) || 0,
-      glosa: adelantoGlosa,
+      glosa: aOracion(adelantoGlosa),
       estado: "pendiente",
     }
     const r = saveAdelantoPL(nuevo)
@@ -302,7 +303,7 @@ export default function RemuneracionesPage() {
                   {bonos.map((b, i) => (
                     <div key={i} className="flex flex-wrap items-end gap-2">
                       <div className="min-w-48 grow">
-                        <Input placeholder="Glosa (ej. Aguinaldo Fiestas Patrias)" value={b.glosa} onChange={e => setBonos(bonos.map((x, j) => j === i ? { ...x, glosa: e.target.value } : x))} />
+                        <Input placeholder="Glosa (ej. Aguinaldo Fiestas Patrias)" value={b.glosa} onChange={e => setBonos(bonos.map((x, j) => j === i ? { ...x, glosa: e.target.value } : x))} onBlur={() => setBonos(bonos.map((x, j) => j === i ? { ...x, glosa: aOracion(x.glosa) } : x))} />
                       </div>
                       <div className="w-36">
                         <Input type="number" min={0} placeholder="Monto" value={b.monto} onChange={e => setBonos(bonos.map((x, j) => j === i ? { ...x, monto: e.target.value } : x))} />
@@ -433,7 +434,7 @@ export default function RemuneracionesPage() {
               </div>
               <div className="flex flex-col gap-1.5 md:col-span-1">
                 <Label>Glosa explicativa *</Label>
-                <Input value={adelantoGlosa} placeholder="Motivo del adelanto" onChange={e => setAdelantoGlosa(e.target.value)} />
+                <Input value={adelantoGlosa} placeholder="Motivo del adelanto" onChange={e => setAdelantoGlosa(e.target.value)} onBlur={() => setAdelantoGlosa(aOracion(adelantoGlosa))} />
               </div>
               <div>
                 <Button onClick={registrarAdelanto} disabled={!adelantoTrabajadorId}>

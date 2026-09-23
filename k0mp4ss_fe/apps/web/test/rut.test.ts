@@ -5,6 +5,8 @@ import {
   validarRut,
   esPasaporte,
   validarDocumentoIdentidad,
+  formatearRut,
+  claveDocumento,
 } from "@/lib/rut"
 import { personas as seedPersonas } from "@/data/comunidad/personas"
 import { configuracionDefault as seedConfiguracion } from "@/data/admin/configuracion"
@@ -89,6 +91,34 @@ describe("validarDocumentoIdentidad", () => {
 
   it("rechaza RUT con DV errado aunque parezca pasaporte no lo salve", () => {
     expect(validarDocumentoIdentidad("15.123.456-7")).toBe(false)
+  })
+})
+
+describe("formatearRut (bonito chileno XX.XXX.XXX-X)", () => {
+  it("formatea cuerpo+DV sin puntos ni guion", () => {
+    expect(formatearRut("151234569")).toBe("15.123.456-9")
+  })
+
+  it("es idempotente con entrada ya formateada", () => {
+    expect(formatearRut("15.123.456-9")).toBe("15.123.456-9")
+  })
+
+  it("pasa DV k a K y agrupa de a 3", () => {
+    expect(formatearRut("10000013k")).toBe("10.000.013-K")
+  })
+
+  it("con un solo dígito no inventa guion", () => {
+    expect(formatearRut("1")).toBe("1")
+  })
+})
+
+describe("claveDocumento (comparación de duplicados)", () => {
+  it("iguala formateado y sin formato", () => {
+    expect(claveDocumento("15.123.456-9")).toBe(claveDocumento("15123456-9"))
+  })
+
+  it("distingue DV distinto", () => {
+    expect(claveDocumento("15.123.456-9")).not.toBe(claveDocumento("15.123.456-7"))
   })
 })
 

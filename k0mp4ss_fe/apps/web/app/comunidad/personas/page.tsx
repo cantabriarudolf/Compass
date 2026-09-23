@@ -253,7 +253,7 @@ export default function DirectorioPersonasPage() {
           </p>
         </div>
         <Button className="gap-2" onClick={abrirCrear}>
-          <IconPlus className="size-4" /> Nuevo Registro
+          <IconPlus className="size-4" /> Crear Nueva Persona
         </Button>
       </div>
 
@@ -265,7 +265,7 @@ export default function DirectorioPersonasPage() {
           if (!open) setEditingPersona(null)
         }}
       >
-        <DialogContent className="sm:max-w-[700px]">
+        <DialogContent className="sm:max-w-[700px] flex max-h-[90vh] flex-col overflow-hidden">
           <DialogHeader>
             <DialogTitle>
               {editingPersona ? "Editar Identidad" : "Nueva Identidad"}
@@ -373,17 +373,6 @@ export default function DirectorioPersonasPage() {
                       </span>
                     </button>
                   ))}
-                  <div className="border-t p-3">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="w-full text-[10px] font-bold uppercase"
-                      onClick={abrirCrear}
-                    >
-                      <IconPlus className="mr-1 size-3" />
-                      Crear Nueva Persona
-                    </Button>
-                  </div>
                 </div>
               </CardContent>
             </Card>
