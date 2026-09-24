@@ -56,9 +56,10 @@ async function loginAs(page: import("@playwright/test").Page, email: string) {
   await page.getByLabel("Correo electrónico").fill(email)
   await page.getByLabel("Contraseña").fill(PASSWORD_TEST)
   await page.getByRole("button", { name: "Ingresar" }).click()
-  await expect(page).toHaveURL(/\/admin/, { timeout: 60_000 })
-  // /admin redirige a /admin/gestion pero la navegacion client puede quedar en /admin:
-  // forzar goto estable a /admin/gestion para sidebar consistente (ver debugClean2)
+  await expect(page).toHaveURL(/\/dashboard/, { timeout: 60_000 })
+  // Tras el login se aterriza en /dashboard (lugar central); el chequeo del
+  // sidebar se hace en /admin/gestion con navegacion completa para que el
+  // RootLayout server re-ejecute auth() con la cookie ya fijada.
   await page.goto("/admin/gestion")
   await expect(page).toHaveURL(/\/admin\/gestion/, { timeout: 30_000 })
   await page

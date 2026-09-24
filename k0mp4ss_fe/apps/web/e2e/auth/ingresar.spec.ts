@@ -16,12 +16,12 @@ test.describe("Ingresar", () => {
     )
   })
 
-  test("login exitoso redirige a /admin", async ({ page }) => {
+  test("login exitoso redirige a /dashboard", async ({ page }) => {
     await page.goto("/ingresar")
     await page.getByLabel("Correo electrónico").fill("admin@test.cl")
     await page.getByLabel("Contraseña").fill("Test1234!")
     await page.getByRole("button", { name: "Ingresar" }).click()
-    await expect(page).toHaveURL(/\/admin/)
+    await expect(page).toHaveURL(/\/dashboard/)
   })
 
   test("usuario sin sesión que visita /admin es redirigido a /ingresar", async ({

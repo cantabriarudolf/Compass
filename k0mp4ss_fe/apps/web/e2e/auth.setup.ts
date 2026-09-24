@@ -1,7 +1,7 @@
 // Login real contra /ingresar (NextAuth credentials) — multi-cuenta P2.
 // Para cada uno de los 5 roles del seed (PASSWORD_TEST=Test1234!) guarda
 // e2e/.auth/<rol>.json via test.use({ storageState }) por spec.
-// Si la sesión previa sigue vigente, /ingresar redirige a /admin → se guarda
+// Si la sesión previa sigue vigente, /ingresar redirige a /dashboard → se guarda
 // el storageState existente sin reloggear. Patrón sin 5 proyectos en config.
 import { expect, test as setup } from "@playwright/test"
 
@@ -39,11 +39,11 @@ async function crearSesion(
   if (hayFormulario) {
     await page.getByLabel("Correo electrónico").fill(email)
     await page.getByLabel("Contraseña").fill(PASSWORD_TEST)
-    await page.getByRole("button", { name: "Ingresar" }).click()
-    await expect(page).toHaveURL(/\/admin/, { timeout: 60_000 })
-  } else {
-    await expect(page).toHaveURL(/\/admin/, { timeout: 30_000 })
-  }
+      await page.getByRole("button", { name: "Ingresar" }).click()
+        await expect(page).toHaveURL(/\/dashboard/, { timeout: 60_000 })
+      } else {
+        await expect(page).toHaveURL(/\/dashboard/, { timeout: 30_000 })
+      }
   // El banner de cookies (fijo abajo) tapa botones al fondo del viewport e
   // intercepta los clics: se acepta una vez al final (ya hidratado) para que
   // el consentimiento quede en localStorage y se persista en el

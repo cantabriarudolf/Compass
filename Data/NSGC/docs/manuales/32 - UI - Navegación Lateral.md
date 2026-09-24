@@ -27,6 +27,7 @@ Navegar rápidamente entre módulos, identificar la página activa y plegar la b
   - **Mantención** (`mantencion@test.cl`): ve Inicio, Operaciones (Bitácora), Inventario (Recursos/Mantenimiento, no Estructura/Tipos) — 3/8.
   - **Personas**: solo `administrador` (menor privilegio: `mp:propios` es contextual con `personaId`, no habilita listado global).
   - Sesión sin roles = 0 grupos. Vía técnica: `app/layout.tsx` (server, `auth()`) pasa `roles` por props a `AppSidebar` (client) — opción (a) elegida por menor fricción vs `SessionProvider`/`fetch`. Infra: `e2e/auth.setup.ts` genera 5 `storageStates` (`e2e/.auth/<rol>.json`, `test1234`) y specs usan `test.use({ storageState })` sin 5 proyectos.
+  - **Navegación post-login dura** (2026-09-23): `/ingresar` navega con recarga completa tras login exitoso para que el layout server re-ejecute `auth()` con la cookie ya fijada — el `router.push` client dejaba el menú vacío (roles `[]` cacheados). Destino por defecto: `/dashboard`.
 
 ## 💡 Tips de Oro
 

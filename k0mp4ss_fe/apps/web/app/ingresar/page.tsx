@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { useRouter, useSearchParams } from "next/navigation"
+import { useSearchParams } from "next/navigation"
 import { Button } from "@workspace/ui/components/button"
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
@@ -9,8 +9,21 @@ import { signIn as signInNextAuth } from "next-auth/react"
 
 /**
  * Destino post-login por defecto cuando ?next= está ausente o inseguro.
+ * Lugar central: /dashboard (Resumen con KPIs + accesos rápidos a todos los
+ * módulos). Antes era /admin → /admin/gestion, un cajón lateral sin contexto.
  */
-const DESTINO_POR_DEFECTO = "/admin"
+const DESTINO_POR_DEFECTO = "/dashboard"
+
+/**
+ * Navegación post-login con recarga completa (no router.push client).
+ * Motivo: los roles del sidebar vienen del RootLayout server (auth() una vez
+ * por carga). Un push client reutiliza el layout cacheado con roles=[] y el
+ * menú queda vacío hasta recargar. La navegación dura re-ejecuta el layout
+ * con la cookie de sesión ya fijada y el menú se filtra correctamente.
+ */
+function navegarPostLogin(destino: string) {
+  window.location.assign(destino)
+}
 
 /**
  * Guardia same-origin para el destino post-login (?next=). Acepta solo rutas
@@ -165,7 +178,6 @@ async function verificarCodigo(
 }
 
 function IngresarForm() {
-  const router = useRouter()
   const searchParams = useSearchParams()
   const [email, setEmail] = React.useState("")
   const [password, setPassword] = React.useState("")
@@ -220,7 +232,7 @@ function IngresarForm() {
         }
         return
       }
-      router.push(destinoSeguro)
+      navegarPostLogin(destinoSeguro)
     } catch {
       setError("Error de conexión con el servidor.")
     } finally {
@@ -273,7 +285,7 @@ function IngresarForm() {
         })
         return
       }
-      router.push(destinoActual())
+      navegarPostLogin(destinoActual())
     } catch {
       setError2fa("Error de conexión con el servidor.")
     } finally {
@@ -289,7 +301,7 @@ function IngresarForm() {
   }
 
   function continuarTrasBackup() {
-    router.push(destinoActual())
+    navegarPostLogin(destinoActual())
   }
 
   if (paso === 2) {
