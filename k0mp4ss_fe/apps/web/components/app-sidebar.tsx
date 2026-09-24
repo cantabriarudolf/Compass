@@ -173,7 +173,7 @@ export function AppSidebar({ roles = [], ...props }: React.ComponentProps<typeof
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton size="lg" asChild>
-              <Link href="/">
+              <Link href="/dashboard">
                 <div className="flex aspect-square size-8 items-center justify-center overflow-hidden rounded-lg bg-primary text-primary-foreground">
                   {hasHydrated && configuracion.logoUrl ? (
                     <Image

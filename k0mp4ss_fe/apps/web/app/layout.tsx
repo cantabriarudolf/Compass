@@ -10,6 +10,7 @@ import { SidebarToggle } from "@/components/sidebar-toggle";
 import { CommunityHeader } from "@/components/community-header";
 import { Separator } from "@workspace/ui/components/separator";
 import { ModeToggle } from "@/components/mode-toggle";
+import { CerrarSesion } from "@/components/cerrar-sesion";
 import { TooltipProvider } from "@workspace/ui/components/tooltip";
 import { AuditoriaSyncInit } from "@/components/auditoria-sync-init";
 import { ConsentBanner } from "@/components/consent-banner";
@@ -40,6 +41,7 @@ export default async function RootLayout({
 }>) {
   const session = await auth().catch(() => null)
   const roles: string[] = Array.isArray(session?.user?.roles) ? session.user.roles : []
+  const logueado = Boolean(session?.user?.id)
   return (
     <html
       lang="es"
@@ -51,17 +53,22 @@ export default async function RootLayout({
         <FISyncInit />
         <ThemeProvider>
           <TooltipProvider>
-            <SidebarProvider>
-              <AppSidebar roles={roles} />
-              <SidebarInset>
-                <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
-                  <SidebarToggle />
-                  <Separator orientation="vertical" className="mr-2 h-4" />
-                  <div className="flex-1">
-                    <CommunityHeader />
-                  </div>
-                  <ModeToggle />
-                </header>
+                <SidebarProvider>
+                  {logueado && <AppSidebar roles={roles} />}
+                  <SidebarInset>
+                    <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
+                      {logueado && (
+                        <>
+                          <SidebarToggle />
+                          <Separator orientation="vertical" className="mr-2 h-4" />
+                        </>
+                      )}
+                      <div className="flex-1">
+                        <CommunityHeader />
+                      </div>
+                      <ModeToggle />
+                      {logueado && <CerrarSesion />}
+                    </header>
                 <main className="flex-1 overflow-auto p-4">
                   {children}
                 </main>
