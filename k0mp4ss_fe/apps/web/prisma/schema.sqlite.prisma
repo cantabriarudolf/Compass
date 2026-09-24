@@ -33,6 +33,7 @@ model Comunidad {
   leadsPortal              LeadPortal[]
   notificaciones           Notificacion[]
   controlesPropiedades     ControlPropiedad[]
+  periodosDirectiva        PeriodoDirectiva[]
   actasGD                  ActaGD[]
   plantillasCO             PlantillaCO[]
   enviosCO                 EnvioCO[]
@@ -1430,4 +1431,26 @@ model Contratista {
 
   @@index([comunidadId])
   @@map("maestros_contratista")
+}
+
+// GD — Períodos de directiva (libro de actas; fuente de verdad en servidor)
+model PeriodoDirectiva {
+  id                    String    @id
+  comunidadId           String
+  comunidad             Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  fechaInicio           String
+  duracionMeses         Int
+  fechaFin              String?
+  fechaInscripcion      String
+  referenciaInscripcion String
+  fechasEstimadas       Boolean   @default(false)
+  estado                String    // vigente | cerrado
+  actaOrigenId          String?
+  miembros              Json      // MiembroPeriodoDirectiva[]
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([comunidadId])
+  @@index([estado])
+  @@map("periodos_directiva")
 }
