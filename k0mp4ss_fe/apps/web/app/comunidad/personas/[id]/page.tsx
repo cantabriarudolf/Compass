@@ -4,7 +4,10 @@ import * as React from "react"
 import { useParams, useRouter } from "next/navigation"
 import { Persona } from "@/data/comunidad/personas"
 import { VinculoUnidad, RolVinculo } from "@/data/comunidad/vinculos"
-import { useCompassStore, useStoreRehydrated, StoreResult } from "@/lib/store"
+import type { StoreResult } from "@/lib/store"
+import { useCompassStore } from "@/lib/store"
+import { usePersona } from "@/lib/api/use-personas"
+import { useVinculos } from "@/lib/api/use-vinculos"
 
 const NOMBRE_ROL: Record<RolVinculo, string> = {
   propietario: "Propietario",
@@ -61,24 +64,20 @@ import {
 } from "@tabler/icons-react"
 
 export default function PersonaPerfilPage() {
-  useStoreRehydrated()
-  const hasHydrated = useCompassStore(s => s.hasHydrated)
   const params = useParams()
   const router = useRouter()
   const id = params.id as string
 
-  const personas = useCompassStore(s => s.personas)
-  const vinculosStore = useCompassStore(s => s.vinculos)
+  const { persona, isLoading, error, update: actualizarPersona } = usePersona(id)
+  const { vinculos: vinculosTodos, create: crearVinculo, update: actualizarVinculo, remove: removeVinculoApi } = useVinculos()
   const unidades = useCompassStore(s => s.unidades)
   const condicionesEspeciales = useCompassStore(s => s.maestros.condicionesEspeciales)
-  const savePersona = useCompassStore(s => s.savePersona)
-  const saveVinculo = useCompassStore(s => s.saveVinculo)
-  const removeVinculo = useCompassStore(s => s.removeVinculo)
 
-  const persona = personas.find(p => p.id === id)
-
-  // Vínculos de la persona leídos del store
-  const vinculosUnidad = vinculosStore.filter(v => v.personaId === id)
+  // Vínculos de la persona, filtrados en cliente desde la colección VU completa
+  const vinculosUnidad = React.useMemo(
+() => vinculosTodos.filter(v => v.personaId === id),
+[vinculosTodos, id]
+  )
   const [dialogoAbierto, setDialogoAbierto] = React.useState(false)
   const [fichaAbierta, setFichaAbierta] = React.useState(false)
   const [vinculoEditando, setVinculoEditando] = React.useState<VinculoUnidad | null>(null)
@@ -98,7 +97,7 @@ export default function PersonaPerfilPage() {
     }
   }, [persona])
 
-  if (!hasHydrated) {
+  if (isLoading) {
     return (
       <div className="flex flex-col gap-6 animate-pulse">
         <div className="h-9 w-72 rounded bg-muted/40" />
@@ -108,7 +107,7 @@ export default function PersonaPerfilPage() {
     )
   }
 
-  if (!persona) {
+  if (error || !persona) {
     return (
       <div className="flex flex-col items-center justify-center h-64 gap-4">
         <h2 className="text-xl font-bold">Persona no encontrada</h2>
@@ -149,15 +148,19 @@ export default function PersonaPerfilPage() {
   }
 
   const actualizarRolesPersona = (vinculos: VinculoUnidad[]) => {
-    savePersona({ ...persona, roles: sincronizarRoles(vinculos, persona.roles) })
+    // La sincronización de roles es best-effort: se reporta el error de la
+    // mutación de vínculo, y el fallo del sync queda en errorVinculos.
+    void actualizarPersona({ roles: sincronizarRoles(vinculos, persona.roles) })
   }
 
-  const guardarVinculo = (data: Omit<VinculoUnidad, "id" | "personaId">): StoreResult => {
+  const guardarVinculo = async (data: Omit<VinculoUnidad, "id" | "personaId">): Promise<StoreResult> => {
     const vinculoGuardado: VinculoUnidad = vinculoEditando
       ? { ...vinculoEditando, ...data }
       // eslint-disable-next-line react-hooks/purity -- id generado en primer render del formulario nuevo; estable hasta guardar (avance 2026-09-02)
       : { id: `v-${Date.now()}`, personaId: persona.id, ...data }
-    const resultado = saveVinculo(vinculoGuardado)
+    const resultado = vinculoEditando
+      ? await actualizarVinculo(vinculoEditando.id, vinculoGuardado)
+      : await crearVinculo(vinculoGuardado)
     if (!resultado.ok) return resultado
     const nuevos = vinculoEditando
       ? vinculosUnidad.map(v => v.id === vinculoEditando.id ? vinculoGuardado : v)
@@ -168,8 +171,8 @@ export default function PersonaPerfilPage() {
     return resultado
   }
 
-  const eliminarVinculo = (vinculoId: string) => {
-    const resultado = removeVinculo(vinculoId)
+  const eliminarVinculo = async (vinculoId: string) => {
+    const resultado = await removeVinculoApi(vinculoId)
     if (!resultado.ok) {
       setErrorVinculos(resultado.error ?? "No se pudo eliminar el vínculo.")
       return
@@ -378,7 +381,7 @@ export default function PersonaPerfilPage() {
                           </AlertDialogHeader>
                           <AlertDialogFooter>
                             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                            <AlertDialogAction variant="destructive" onClick={() => eliminarVinculo(v.id)}>
+                            <AlertDialogAction variant="destructive" onClick={() => { void eliminarVinculo(v.id) }}>
                               Desvincular
                             </AlertDialogAction>
                           </AlertDialogFooter>
@@ -475,8 +478,8 @@ export default function PersonaPerfilPage() {
               <FormularioGobernanza
                 key={persona.datosGobernanza?.id ?? "nueva"}
                 persona={persona}
-                onSave={(p) => {
-                  const r = savePersona(p)
+                onSave={async (p) => {
+                  const r = await actualizarPersona(p)
                   if (r.ok) setFichaAbierta(false)
                   return r
                 }}

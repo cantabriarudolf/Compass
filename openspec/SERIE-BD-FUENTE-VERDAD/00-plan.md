@@ -71,7 +71,7 @@ Las 48 pruebas unitarias (`test/*.test.ts`) y 43 e2e (`e2e/*.spec.ts`) están ma
 | Fase | Qué se hace | Modelo recomendado | Complejidad |
 |---|---|---|---|
 | **0** | Infra: factory API + hook cliente + `PeriodoDirectiva` en Prisma — ✅ `bbfba14` | Kimi (contexto largo) | Media |
-| **1** | MP + Maestros: personas, vínculos, maestros admin | Kimi (grafo de dependencias) | Alta |
+| **1** | MP + Maestros: personas, vínculos, maestros admin — ✅ HECHA | Kimi (grafo de dependencias) | Alta |
 | **2** | GD + AD: actas, períodos, controles de propiedad | Muse Spark 1.3 | Media |
 | **3** | FI + EF: fondos, egresos, ingresos, estructura física | Muse Spark 1.3 | Alta |
 | **4** | Operativos: PE, RA, CV, CO, GE, IR, IN, MT | Muse Spark 1.3 | Alta |
@@ -497,7 +497,7 @@ Sos el arquitecto senior de Compass. Las Fases 0-4 migraron todo el dominio a pe
 | Fase | Estado | Commit | Tests | Notas |
 |---|---|---|---|---|
 | 0 — Infra | ⏳ PENDIENTE | | | |
-| 1 — MP + Maestros | ⏳ PENDIENTE | | | |
+| 1 — MP + Maestros | ✅ HECHA | Ver commit actual | 21/21 pass | API routes + hooks + UI adaptada; tsc 0 errores |
 | 2 — GD + AD | ⏳ PENDIENTE | | | |
 | 3 — FI + EF | ⏳ PENDIENTE | | | |
 | 4 — Operativos | ⏳ PENDIENTE | | | |

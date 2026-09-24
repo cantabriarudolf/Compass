@@ -1,7 +1,8 @@
 "use client"
 
 import * as React from "react"
-import { useCompassStore, useStoreRehydrated, StoreResult } from "@/lib/store"
+import type { StoreResult } from "@/lib/store"
+import { usePersonas } from "@/lib/api/use-personas"
 
 import {
   Card,
@@ -112,12 +113,10 @@ const getRoleBadgeClass = (rol: string) => {
 }
 
 export default function DirectorioPersonasPage() {
-  useStoreRehydrated()
-  const hasHydrated = useCompassStore((s) => s.hasHydrated)
-  const listaPersonas = useCompassStore((s) => s.personas)
-  const savePersona = useCompassStore((s) => s.savePersona)
-
   const [searchTerm, setSearchTerm] = React.useState("")
+  const { personas: listaPersonas, isLoading, error, create, update } =
+usePersonas(searchTerm)
+
   const [isModalOpen, setIsModalOpen] = React.useState(false)
   const [editingPersona, setEditingPersona] = React.useState<Persona | null>(
     null
@@ -211,21 +210,34 @@ export default function DirectorioPersonasPage() {
     setIsModalOpen(true)
   }
 
-  const abrirCrear = () => {
-    setEditingPersona(null)
-    setIsModalOpen(true)
-  }
+      const abrirCrear = () => {
+        setEditingPersona(null)
+        setIsModalOpen(true)
+      }
 
-  const handleSave = (data: Partial<Persona>): StoreResult => {
-    const resultado = savePersona(data as Persona)
-    if (resultado.ok) {
-      setIsModalOpen(false)
-      setEditingPersona(null)
-    }
-    return resultado
-  }
+      const handleSave = async (data: Partial<Persona>): Promise<StoreResult> => {
+        const resultado = editingPersona
+          ? await update(editingPersona.id, data)
+          : await create(data)
+        if (resultado.ok) {
+          setIsModalOpen(false)
+          setEditingPersona(null)
+        }
+        return resultado
+      }
 
-  if (!hasHydrated) {
+      if (error) {
+        return (
+          <div className="flex flex-col items-center justify-center h-64 gap-4">
+            <h2 className="text-xl font-bold text-destructive">
+              No se pudo cargar el directorio
+            </h2>
+            <p className="text-sm text-muted-foreground">{error.message}</p>
+          </div>
+        )
+      }
+
+      if (isLoading) {
     return (
       <div className="flex animate-pulse flex-col gap-6">
         <div className="h-9 w-72 rounded bg-muted/40" />
@@ -278,6 +290,7 @@ export default function DirectorioPersonasPage() {
           </DialogHeader>
           <FormularioPersona
             persona={editingPersona ?? undefined}
+            personas={listaPersonas}
             onSave={handleSave}
             onCancel={() => {
               setIsModalOpen(false)

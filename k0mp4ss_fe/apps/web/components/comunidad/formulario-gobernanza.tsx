@@ -18,7 +18,7 @@ import { ScrollArea } from "@workspace/ui/components/scroll-area"
 
 interface FormularioGobernanzaProps {
   persona: Persona
-  onSave: (persona: Persona) => StoreResult
+  onSave: (persona: Persona) => Promise<StoreResult>
   onCancel: () => void
 }
 
@@ -40,7 +40,7 @@ export function FormularioGobernanza({ persona, onSave, onCancel }: FormularioGo
   const [firmaDigital, setFirmaDigital] = React.useState(ficha?.firmaDigital ?? "")
   const [error, setError] = React.useState("")
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError("")
 
@@ -62,7 +62,7 @@ export function FormularioGobernanza({ persona, onSave, onCancel }: FormularioGo
       ? persona.roles
       : ([...persona.roles, "directiva"] as unknown as (typeof ROLES_PERSONA[number])[])
 
-    const resultado = onSave({ ...persona, roles, datosGobernanza: validacion.data })
+    const resultado = await onSave({ ...persona, roles, datosGobernanza: validacion.data })
     if (resultado && !resultado.ok) {
       setError(resultado.error ?? "No se pudo guardar la ficha.")
     }

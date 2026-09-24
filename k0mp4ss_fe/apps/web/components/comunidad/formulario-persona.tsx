@@ -21,14 +21,15 @@ import { ScrollArea } from "@workspace/ui/components/scroll-area"
 
 interface FormularioPersonaProps {
   persona?: Persona;
-  onSave: (personaData: Partial<Persona>) => StoreResult;
+  // Listado leído por el padre (hook SWR) para las validaciones de duplicados en cliente
+  personas: Persona[];
+  onSave: (personaData: Partial<Persona>) => Promise<StoreResult>;
   onCancel: () => void;
 }
 
-export function FormularioPersona({ persona, onSave, onCancel }: FormularioPersonaProps) {
+export function FormularioPersona({ persona, personas, onSave, onCancel }: FormularioPersonaProps) {
   const isEditing = !!persona
   const condicionesEspeciales = useCompassStore(s => s.maestros.condicionesEspeciales)
-  const personas = useCompassStore(s => s.personas)
 
   // Estados del formulario
   const [rut, setRut] = React.useState(persona?.rut || "")
@@ -63,7 +64,7 @@ export function FormularioPersona({ persona, onSave, onCancel }: FormularioPerso
       (p) => p.id !== (persona?.id ?? "") && claveDocumento(p.rut || "") !== "" && claveDocumento(p.rut || "") === claveDocumento(rutNormalizado)
     )
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setRutTocado(true)
 
@@ -107,7 +108,7 @@ export function FormularioPersona({ persona, onSave, onCancel }: FormularioPerso
       vinculosUnidad: persona?.vinculosUnidad || []
     }
 
-    const resultado = onSave(nuevaPersona)
+    const resultado = await onSave(nuevaPersona)
     if (resultado && !resultado.ok) {
       setErrores({ global: resultado.error ?? "No se pudo guardar la persona." })
     }

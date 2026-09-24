@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { useCompassStore, useStoreRehydrated } from "@/lib/store"
+import { useMaestros } from "@/lib/api/use-maestros"
 import { hexDesdeId } from "@/lib/colors"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@workspace/ui/components/tabs"
@@ -67,18 +67,6 @@ function normalizeBadgeColor(color?: string): string {
 
 
 export default function MaestrosPage() {
-  useStoreRehydrated()
-  const hasHydrated = useCompassStore(s => s.hasHydrated)
-  const estados = useCompassStore(s => s.maestros.estadosOcupacion)
-  const macros = useCompassStore(s => s.maestros.categoriasMacro)
-  const micros = useCompassStore(s => s.maestros.categoriasMicro)
-  const tiposPropiedad = useCompassStore(s => s.maestros.categoriasUnidad)
-  const estadosInmobiliarios = useCompassStore(s => s.maestros.estadosInmobiliarios)
-  const condiciones = useCompassStore(s => s.maestros.condicionesEspeciales)
-  const bancos = useCompassStore(s => s.maestros.bancos)
-  const emergencias = useCompassStore(s => s.maestros.contactosEmergencia)
-  const saveMaestro = useCompassStore(s => s.saveMaestro)
-  
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- item editable polimórfico según sub-tab (unión de 30+ maestros)
   const [editingItem, setEditingItem] = React.useState<any>(null)
   const [isDialogOpen, setIsDialogOpen] = React.useState(false)
@@ -93,6 +81,29 @@ export default function MaestrosPage() {
   }
   const isValidSubTab = TAB_SUBTABS[activeTab]?.includes(subTab ?? "")
 
+  // subTab → tipo kebab-case de la API /api/maestros/[tipo]
+  const TIPO_POR_SUBTAB: Record<string, string> = {
+    estados: "estados-ocupacion",
+    macros: "categorias-macro",
+    micros: "categorias-micro",
+    tipos: "categorias-unidad",
+    condiciones: "condiciones-especiales",
+    estadosInmobiliarios: "estados-inmobiliarios",
+    bancos: "bancos",
+    emergencias: "contactos-emergencia",
+  }
+  const tipoActivo = subTab ? TIPO_POR_SUBTAB[subTab] ?? null : null
+
+  interface RegistroMaestro {
+    id: string
+    nombre: string
+    color?: string
+    hex?: string
+    telefono?: string
+  }
+  const { data: registros, isLoading, error, create: crearRegistro, update: actualizarRegistro } =
+    useMaestros<RegistroMaestro>(tipoActivo)
+
   const handleTabChange = (tab: string) => {
     setActiveTab(tab)
     setSubTab(null)
@@ -103,7 +114,7 @@ export default function MaestrosPage() {
     setDuplicateError(null)
   }
 
-  const handleSave = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSave = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
     const nombre = (formData.get("nombre") as string)?.trim()
@@ -112,66 +123,71 @@ export default function MaestrosPage() {
 
     if (!nombre || !subTab) return
 
-    const collections: Record<string, { nombre: string; id: string }[]> = {
-      estados, macros, micros, tipos: tiposPropiedad,
-      condiciones, estadosInmobiliarios, bancos, emergencias,
-    }
-    const currentCollection = collections[subTab] ?? []
-    const duplicate = currentCollection.find(
-      (item: { nombre: string; id: string }) => item.nombre.toLowerCase() === nombre.toLowerCase() && item.id !== editingItem?.id
+    const duplicate = (registros ?? []).find(
+      (item) => item.nombre.toLowerCase() === nombre.toLowerCase() && item.id !== editingItem?.id
     )
     if (duplicate) {
       setDuplicateError(`Ya existe un registro con el nombre "${nombre}".`)
       return
     }
     setDuplicateError(null)
-    
+
+    let resultado: { ok: boolean; error?: string }
     if (subTab === "estados") {
       const id = editingItem?.id ?? `est-${Date.now()}`
-      const resultado = saveMaestro("estadosOcupacion", { id, nombre, color, hex: editingItem?.hex ?? hexDesdeId(id) })
-      if (!resultado.ok) { setDuplicateError(resultado.error ?? "No se pudo guardar el registro."); return }
+      resultado = editingItem
+        ? await actualizarRegistro(id, { nombre })
+        : await crearRegistro({ id, nombre, color, hex: hexDesdeId(id) })
     } else if (subTab === "macros") {
-      const resultado = editingItem
-        ? saveMaestro("categoriasMacro", { ...editingItem, nombre })
-        : saveMaestro("categoriasMacro", { id: Date.now().toString(), nombre })
-      if (!resultado.ok) { setDuplicateError(resultado.error ?? "No se pudo guardar el registro."); return }
+      resultado = editingItem
+        ? await actualizarRegistro(editingItem.id, { nombre })
+        : await crearRegistro({ id: Date.now().toString(), nombre })
     } else if (subTab === "micros") {
-      const resultado = editingItem
-        ? saveMaestro("categoriasMicro", { ...editingItem, nombre })
-        : saveMaestro("categoriasMicro", { id: Date.now().toString(), nombre })
-      if (!resultado.ok) { setDuplicateError(resultado.error ?? "No se pudo guardar el registro."); return }
+      resultado = editingItem
+        ? await actualizarRegistro(editingItem.id, { nombre })
+        : await crearRegistro({ id: Date.now().toString(), nombre })
     } else if (subTab === "tipos") {
-      const resultado = editingItem
-        ? saveMaestro("categoriasUnidad", { ...editingItem, nombre })
-        : saveMaestro("categoriasUnidad", { id: Date.now().toString(), nombre })
-      if (!resultado.ok) { setDuplicateError(resultado.error ?? "No se pudo guardar el registro."); return }
+      resultado = editingItem
+        ? await actualizarRegistro(editingItem.id, { nombre })
+        : await crearRegistro({ id: Date.now().toString(), nombre })
     } else if (subTab === "estadosInmobiliarios") {
-      const resultado = editingItem
-        ? saveMaestro("estadosInmobiliarios", { ...editingItem, nombre, color })
-        : saveMaestro("estadosInmobiliarios", { id: Date.now().toString(), nombre, color })
-      if (!resultado.ok) { setDuplicateError(resultado.error ?? "No se pudo guardar el registro."); return }
+      resultado = editingItem
+        ? await actualizarRegistro(editingItem.id, { nombre, color })
+        : await crearRegistro({ id: Date.now().toString(), nombre, color })
     } else if (subTab === "condiciones") {
-      const resultado = editingItem
-        ? saveMaestro("condicionesEspeciales", { ...editingItem, nombre, color })
-        : saveMaestro("condicionesEspeciales", { id: Date.now().toString(), nombre, color })
-      if (!resultado.ok) { setDuplicateError(resultado.error ?? "No se pudo guardar el registro."); return }
+      resultado = editingItem
+        ? await actualizarRegistro(editingItem.id, { nombre, color })
+        : await crearRegistro({ id: Date.now().toString(), nombre, color })
     } else if (subTab === "bancos") {
-      const resultado = editingItem
-        ? saveMaestro("bancos", { ...editingItem, nombre })
-        : saveMaestro("bancos", { id: Date.now().toString(), nombre })
-      if (!resultado.ok) { setDuplicateError(resultado.error ?? "No se pudo guardar el registro."); return }
+      resultado = editingItem
+        ? await actualizarRegistro(editingItem.id, { nombre })
+        : await crearRegistro({ id: Date.now().toString(), nombre })
     } else if (subTab === "emergencias") {
-      const resultado = editingItem
-        ? saveMaestro("contactosEmergencia", { ...editingItem, nombre, telefono: valor })
-        : saveMaestro("contactosEmergencia", { id: Date.now().toString(), nombre, telefono: valor })
-      if (!resultado.ok) { setDuplicateError(resultado.error ?? "No se pudo guardar el registro."); return }
+      resultado = editingItem
+        ? await actualizarRegistro(editingItem.id, { nombre, telefono: valor })
+        : await crearRegistro({ id: Date.now().toString(), nombre, telefono: valor })
+    } else {
+      return
     }
-    
+
+    if (!resultado.ok) {
+      setDuplicateError(resultado.error ?? "No se pudo guardar el registro.")
+      return
+    }
     setIsDialogOpen(false)
     setEditingItem(null)
   }
 
-  if (!hasHydrated) {
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 gap-4">
+        <h2 className="text-xl font-bold text-destructive">No se pudo cargar el maestro</h2>
+        <p className="text-sm text-muted-foreground">{error.message}</p>
+      </div>
+    )
+  }
+
+  if (subTab && isLoading) {
     return (
       <div className="flex flex-col gap-6 animate-pulse">
         <div className="h-9 w-72 rounded bg-muted/40" />
@@ -267,14 +283,7 @@ export default function MaestrosPage() {
                           Seleccioná una categoría de la izquierda para ver los registros.
                         </TableCell>
                       </TableRow>
-                    ) : (subTab === "estados"
-                      ? estados
-                      : subTab === "micros"
-                        ? micros
-                        : subTab === "tipos"
-                          ? tiposPropiedad
-                          : macros
-                    ).map((item) => (
+                    ) : registros.map((item) => (
                       <TableRow key={item.id}>
                         <TableCell className="font-bold">{item.nombre}</TableCell>
                         {subTab === "estados" && (
@@ -342,7 +351,7 @@ export default function MaestrosPage() {
                           Seleccioná una categoría de la izquierda para ver los registros.
                         </TableCell>
                       </TableRow>
-                    ) : (subTab === "condiciones" ? condiciones : subTab === "estadosInmobiliarios" ? estadosInmobiliarios : emergencias).map((item) => (
+                    ) : registros.map((item) => (
                       <TableRow key={item.id}>
                         <TableCell className="font-bold">{item.nombre}</TableCell>
                         <TableCell>
@@ -396,7 +405,7 @@ export default function MaestrosPage() {
                           Seleccioná una categoría de la izquierda para ver los registros.
                         </TableCell>
                       </TableRow>
-                    ) : bancos.map((item) => (
+                    ) : registros.map((item) => (
                       <TableRow key={item.id}>
                         <TableCell className="font-bold">{item.nombre}</TableCell>
                         <TableCell className="text-right">

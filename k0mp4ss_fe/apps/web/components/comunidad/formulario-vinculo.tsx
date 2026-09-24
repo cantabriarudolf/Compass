@@ -46,7 +46,7 @@ interface FormularioVinculoUnidadProps {
   vinculo?: VinculoUnidad
   // IDs de unidades con vínculo ACTIVO de la persona (excluir el propio vínculo en modo edición)
   unidadesVinculadasIds: string[]
-  onSave: (data: Omit<VinculoUnidad, "id" | "personaId">) => StoreResult
+  onSave: (data: Omit<VinculoUnidad, "id" | "personaId">) => Promise<StoreResult>
   onCancel: () => void
 }
 
@@ -112,7 +112,7 @@ export function FormularioVinculoUnidad({
     return [...grupos.entries()]
   }, [unidadesDisponibles, microPorId, macroPorId])
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
     const nuevosErrores: Record<string, string> = {}
@@ -132,7 +132,7 @@ export function FormularioVinculoUnidad({
     setErrores(nuevosErrores)
     if (Object.keys(nuevosErrores).length > 0) return
 
-    const resultado = onSave({
+    const resultado = await onSave({
       unidadId,
       rol: rol as RolVinculo,
       fechaInicio,
