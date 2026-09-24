@@ -38,12 +38,6 @@ Data/NSGC/backups/test-*.json
 
 # Sesiones e2e (cookies — nunca commitear)
 k0mp4ss_fe/apps/web/e2e/.auth/
-
-# Arnés opencode — kit portable con repo propio (linaje: github.com/cantabriarudolf/arnes-opencode)
-arnes-opencode/
-
-# Snapshots de rollback del arnés (locales, no viajan)
-.opencode/backup-pre-arnes/
 # Local Pi runtime state
 .atl/
 .codegraph/

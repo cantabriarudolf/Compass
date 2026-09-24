@@ -25,7 +25,7 @@ formato legacy, no se replican en series nuevas.
 |---|---|
 | **Chat orquestador** (carga esta skill) | Diseña la serie, MATERIALIZA `00-plan.md` + los `prompt-NN.md`, y audita al final. NO participa ventana por ventana ni ejecuta alcances él mismo. |
 | **Ventanas de trabajo** (chat nuevo por ventana, o subagente en modo delegado) | Ejecutan su `prompt-NN.md` con método openspec, se autovalidan contra la ventana anterior, documentan y pushean. |
-| **Subagente ejecutor** (opcional, modo delegado) | Agente `.opencode/agent/ejecutor-ventana.md` (modelo fijo configurable) que el orquestador lanza una ventana a la vez vía Task: lee el prompt del repo, lo ejecuta y devuelve el Reporte Final Estandarizado. |
+| **Subagente ejecutor** (opcional, modo delegado) | Subagente del harness activo (Pi/Gentleman) que el orquestador lanza una ventana a la vez: lee el prompt del repo, lo ejecuta y devuelve el Reporte Final Estandarizado. |
 | **Estado durable** | `openspec/SERIE-<slug>/` + avances/manuales/specs en el repo. Única fuente de verdad entre ventanas. |
 | **Owner** | Modo manual: pega la línea de handoff por ventana. Modo delegado: solo aprueba permisos. En ambos trae el reporte al orquestador AL CIERRE (o emergencias) — o solo dice "ya terminó prompt N". |
 
@@ -146,8 +146,8 @@ en su prompt; ese patrón solo se usa si el owner retoma una serie de ese format
 
 ## Modo delegado — subagente ejecutor (opcional)
 
-Requisito: agente definido en `.opencode/agent/ejecutor-ventana.md` (mode: subagent,
-tools completos, modelo fijo — p. ej. `opencode-go/muse-spark-1.2-contributor`).
+Requisito: el harness activo debe exponer subagentes con acceso total al repo
+(en Pi/Gentleman: delegación estándar del orquestador).
 
 Protocolo del orquestador:
 1. Por cada ventana EN ORDEN: lanzar el subagente con "Ejecuta de principio a fin
@@ -164,7 +164,7 @@ Protocolo del orquestador:
 
 Guardrails extra en delegado: nunca lanzar la ventana N+1 sin verificar la N; prohibido
 que el orquestador ejecute él mismo el alcance de una ventana (su rol es diseñar/auditar);
-los permisos de escritura/commit del subagente quedan sujetos a las reglas de opencode.
+los permisos de escritura/commit del subagente quedan sujetos a las reglas del harness activo.
 
 ## Fase 4 — Cierre o reanudación de la serie (orquestador)
 

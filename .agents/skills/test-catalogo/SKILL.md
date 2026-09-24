@@ -31,9 +31,8 @@ Recomendación: qué correr según el caso (cambio chico → archivo puntual; ve
 - This skill owns INFORMAR (inventory, costs, visual flags). It never executes suites.
 - If the owner chooses to run: hand off execution + result recording to the
   `pruebas` skill (owns EJECUTAR: load-aware estimates, staged runs, baselines).
-- Known debt (2026-09-11): `pruebas` predates Pi, its `.opencode/qa-config.json`
-  is missing and its two copies differ. Do not duplicate its logic here; flag
-  maintenance instead.
+- Nota (2026-09-23): el arnés opencode fue retirado del repo (incluía `qa-config.json`
+  y la skill `pruebas`); el handoff de ejecución queda pendiente de redefinir en el harness activo.
 
 ## Hard Rules
 

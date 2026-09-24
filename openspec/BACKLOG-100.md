@@ -179,7 +179,7 @@ aclaración documental, 0 errores de cálculo.
 - [ ] **Registro como encargado de datos (Ley 21.719)**
 - [ ] **Migración de datos SQLite → PostgreSQL** (pendiente: script de migración, backup/restore, CI, cambio de provider)
 - [ ] **Configurar `DATABASE_URL` en Vercel dashboard** cuando exista el proyecto
-- [ ] **Mantenimiento skill `pruebas`** (era opencode): falta `.opencode/qa-config.json`, dos copias difieren, conteos viejos (~400 vs 606+43). `test-catalogo` (Pi) informa; `pruebas` ejecuta — ver handoff en el skill
+- [x] **Mantenimiento skill `pruebas`** — SUPERSEDED 2026-09-23: arnés opencode retirado del repo (`.opencode/` eliminado); el handoff de ejecución queda pendiente de redefinir en el harness activo
 - [ ] **Store split Fase 1** — HECHO `eff32c3` 2026-09-19 (9 helpers a `lib/store/helpers.ts`, tsc 0, 32/32 tests). Fase 2 pendiente calendarización.
 - [ ] **Open redirect fix** — HECHO `1c23f5d` 2026-09-19 (HIGH, `esDestinoSeguro` en `/ingresar`).
 - [ ] **NextAuth tipado sin any** — HECHO `e3b7861` 2026-09-19 (TS2742-safe exports).
