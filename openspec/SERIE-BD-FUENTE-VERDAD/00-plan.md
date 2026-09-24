@@ -498,7 +498,7 @@ Sos el arquitecto senior de Compass. Las Fases 0-4 migraron todo el dominio a pe
 |---|---|---|---|---|
 | 0 — Infra | ⏳ PENDIENTE | | | |
 | 1 — MP + Maestros | ✅ HECHA | Ver commit actual | 21/21 pass | API routes + hooks + UI adaptada; tsc 0 errores |
-| 2 — GD + AD | ⏳ PENDIENTE | | | |
+| 2 — GD + AD | ✅ HECHA | actas GD + períodos (rotación/cierre) + controles AD; 32/32 tests API | tsc 0 | UI directiva/visor/gestión por API; `periodoId` en ActaGD (migración) |
 | 3 — FI + EF | ⏳ PENDIENTE | | | |
 | 4 — Operativos | ⏳ PENDIENTE | | | |
 | 5 — RE/CF/CT + Deprecación | ⏳ PENDIENTE | | | |

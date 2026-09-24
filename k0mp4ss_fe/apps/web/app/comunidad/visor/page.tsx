@@ -34,6 +34,7 @@ import {
   IconExternalLink,
 } from "@tabler/icons-react"
 import type { AvisoCV, TipologiaCV } from "@/lib/schemas"
+import { useActasGD } from "@/lib/api/use-actas-gd"
 
 const TIPOLOGIA_CLASE: Record<TipologiaCV, string> = {
   info: "bg-sky-600 hover:bg-sky-700 text-white",
@@ -86,7 +87,8 @@ export default function VisorPanelPage() {
   const hasHydrated = useCompassStore(s => s.hasHydrated)
   const avisosCV = useCompassStore(s => s.avisosCV)
   const plantillasCV = useCompassStore(s => s.plantillasCV)
-  const actasGD = useCompassStore(s => s.actasGD)
+  // Actas GD desde el servidor (BD-FUENTE-VERDAD Fase 2); publicarActaEnCV sigue en el store hasta la Fase 4 (CV).
+  const { actas: actasGD } = useActasGD()
   const configuracion = useCompassStore(s => s.configuracion)
   const personas = useCompassStore(s => s.personas)
 

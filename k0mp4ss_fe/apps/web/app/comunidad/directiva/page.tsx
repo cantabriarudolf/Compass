@@ -34,6 +34,9 @@ import {
 import { puedeContextual } from "@/lib/authz"
 import type { ActaGD, PeriodoDirectiva } from "@/lib/schemas"
 import { periodoDirectivaVigente, esMiembroDirectivaVigente } from "@/lib/store"
+import { useActasGD } from "@/lib/api/use-actas-gd"
+import { usePeriodosDirectiva } from "@/lib/api/use-periodos-directiva"
+import { useControlesPropiedad } from "@/lib/api/use-controles-propiedad"
 
 type Vista = "administrador" | "propietario" | "residente"
 
@@ -72,13 +75,13 @@ export default function DirectivaPage() {
   useStoreRehydrated()
   const hasHydrated = useCompassStore(s => s.hasHydrated)
   const personas = useCompassStore(s => s.personas)
-  const periodos = useCompassStore(s => s.periodosDirectiva)
-  const savePeriodoDirectiva = useCompassStore(s => s.savePeriodoDirectiva)
-  const actas = useCompassStore(s => s.actasGD)
-  const controlesPropiedades = useCompassStore(s => s.controlesPropiedades)
-  const saveActaGD = useCompassStore(s => s.saveActaGD)
-  const removeActaGD = useCompassStore(s => s.removeActaGD)
-  const aprobarActaGD = useCompassStore(s => s.aprobarActaGD)
+  const savePersona = useCompassStore(s => s.savePersona)
+  // GD/AD desde el servidor (BD-FUENTE-VERDAD Fase 2): actas, períodos y
+  // controles de privacidad se leen y escriben por API; el store queda como
+  // caché de lectura para personas.
+  const { actas, isLoading: cargandoActas, create: crearActa, update: actualizarActa, remove: eliminarActa, aprobar: firmarActa } = useActasGD()
+  const { periodos, isLoading: cargandoPeriodos, create: crearPeriodo, cerrar: cerrarPeriodo } = usePeriodosDirectiva()
+  const { controles: controlesPropiedades, isLoading: cargandoControles } = useControlesPropiedad()
 
   // Mock-first: sin mapeo sesión→persona se ofrece una vista simulada por rol
   // para demostrar la privacidad de la spec GD §3.
@@ -136,20 +139,21 @@ export default function DirectivaPage() {
     setError(null)
   }
 
-  const guardarActa = () => {
+  const guardarActa = async () => {
     if (!editando) return
     const acta: ActaGD = {
       ...editando,
       tablaTemas: tablaTemasTexto.split("\n").map(t => t.trim()).filter(Boolean),
       invitados: invitadosTexto.split(",").map(t => t.trim()).filter(Boolean),
     }
-    const r = saveActaGD(acta)
+    const existe = actas.some(a => a.id === acta.id)
+    const r = existe ? await actualizarActa(acta.id, acta) : await crearActa(acta)
     if (!r.ok) { setError(r.error ?? "No se pudo guardar el acta."); return }
     setError(null)
     setEditando(null)
   }
 
-  if (!hasHydrated) {
+  if (!hasHydrated || cargandoActas || cargandoPeriodos || cargandoControles) {
     return (
       <div className="flex flex-col gap-6 animate-pulse">
         <div className="h-9 w-72 rounded bg-muted/40" />
@@ -234,8 +238,19 @@ export default function DirectivaPage() {
                       {d.datosGobernanza ? CARGO_LABEL[d.datosGobernanza.cargoDirectiva] : "Miembro"}: {d.nombres} {d.apellidos}
                     </span>
                   ))}
-                  {directivaVigente.length === 0 && <span className="text-xs text-muted-foreground">Sin miembros con ficha en este período.</span>}
-                </div>
+                      {directivaVigente.length === 0 && <span className="text-xs text-muted-foreground">Sin miembros con ficha en este período.</span>}
+                    </div>
+                    {vista === "administrador" && (
+                      <div>
+                        <Button variant="outline" size="sm" onClick={async () => {
+                          const r = await cerrarPeriodo(periodoVigente.id)
+                          if (!r.ok) setError(r.error ?? "No se pudo cerrar el período.")
+                          else setError(null)
+                        }}>
+                          Cerrar período (archiva nómina)
+                        </Button>
+                      </div>
+                    )}
               </div>
             )
           })()}
@@ -291,8 +306,8 @@ export default function DirectivaPage() {
                         <IconPencil className="size-4" />
                       </Button>
                       <Button variant="ghost" size="icon" aria-label="Eliminar acta"
-                        onClick={() => {
-                          const r = removeActaGD(acta.id)
+                        onClick={async () => {
+                          const r = await eliminarActa(acta.id)
                           if (!r.ok) setError(r.error ?? "No se pudo eliminar.")
                         }}
                       >
@@ -356,8 +371,8 @@ export default function DirectivaPage() {
                     {pendientesDe(acta).length > 0 && vista === "administrador" && (
                       <div className="mt-3 flex flex-wrap gap-2">
                         {pendientesDe(acta).map(d => (
-                          <Button key={d.id} size="sm" onClick={() => {
-                            const r = aprobarActaGD(acta.id, d.id)
+                          <Button key={d.id} size="sm" onClick={async () => {
+                            const r = await firmarActa(acta.id, d.id)
                             if (!r.ok) setError(r.error ?? "No se pudo aprobar.")
                           }}>
                             <IconCheck className="size-4 mr-1" /> Aprobar como {CARGO_LABEL[d.datosGobernanza!.cargoDirectiva]}
@@ -438,24 +453,52 @@ export default function DirectivaPage() {
               </div>
               <DialogFooter>
                 <Button variant="outline" onClick={() => setPeriodoDialogo(false)}>Cancelar</Button>
-                <Button onClick={() => {
-                  const miembros = Object.entries(selMiembros)
-                    .filter(([, c]) => !!c)
-                    .map(([personaId, cargo]) => ({ personaId, cargo: cargo as "presidente" | "tesorero" | "secretario" | "director", fechaAsuncion: perInicio }))
-                  const r = savePeriodoDirectiva({
-                    id: `periodo-${Date.now().toString(36)}`,
-                    fechaInicio: perInicio,
-                    duracionMeses: Number(perDuracion),
-                    fechaInscripcion: perInscripcion || perInicio,
-                    referenciaInscripcion: perReferencia.trim(),
-                    estado: "vigente",
-                    miembros: [],
-                  }, miembros)
-                  if (!r.ok) { setError(r.error ?? "No se pudo registrar."); return }
-                  setError(null)
-                  setPeriodoDialogo(false)
-                  setPerInicio(""); setPerDuracion("36"); setPerInscripcion(""); setPerReferencia(""); setSelMiembros({})
-                }}>Registrar período</Button>
+                    <Button onClick={async () => {
+                      const miembros = Object.entries(selMiembros)
+                        .filter(([, c]) => !!c)
+                        .map(([personaId, cargo]) => ({
+                          personaId,
+                          nombre: personas.find(p => p.id === personaId)?.nombreCompleto ?? personaId,
+                          cargo: cargo as "presidente" | "tesorero" | "secretario" | "director",
+                          fechaAsuncion: perInicio,
+                        }))
+                      const id = `periodo-${Date.now().toString(36)}`
+                      const r = await crearPeriodo({
+                        id,
+                        fechaInicio: perInicio,
+                        duracionMeses: Number(perDuracion),
+                        fechaInscripcion: perInscripcion || perInicio,
+                        referenciaInscripcion: perReferencia.trim(),
+                        estado: "vigente",
+                        miembros,
+                      })
+                      if (!r.ok) { setError(r.error ?? "No se pudo registrar."); return }
+                      // Caché local de lectura: el servidor ya persistió y asignó
+                      // fichas en BD; se espeja en el store para la vista.
+                      const idsNuevos = new Set(miembros.map(m => m.personaId))
+                      for (const p of personas) {
+                        const m = miembros.find(x => x.personaId === p.id)
+                        if (m) {
+                          savePersona({
+                            ...p,
+                            roles: p.roles.includes("directiva") ? p.roles : [...p.roles, "directiva"],
+                            datosGobernanza: {
+                              id: p.datosGobernanza?.id ?? `g-${p.id}`,
+                              cargoDirectiva: m.cargo,
+                              fechaAsuncion: m.fechaAsuncion,
+                              periodoId: id,
+                            },
+                          })
+                        } else if (p.datosGobernanza?.periodoId === periodoVigente?.id && !idsNuevos.has(p.id)) {
+                          const resto = { ...p }
+                          delete resto.datosGobernanza
+                          savePersona(resto)
+                        }
+                      }
+                      setError(null)
+                      setPeriodoDialogo(false)
+                      setPerInicio(""); setPerDuracion("36"); setPerInscripcion(""); setPerReferencia(""); setSelMiembros({})
+                    }}>Registrar período</Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>

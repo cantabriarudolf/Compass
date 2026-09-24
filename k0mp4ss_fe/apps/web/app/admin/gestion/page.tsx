@@ -19,6 +19,7 @@ import {
 } from "@workspace/ui/components/dialog"
 import { IconPhotoOff, IconPencil, IconUsers, IconHome, IconGavel, IconBriefcase, IconCheck } from "@tabler/icons-react"
 import type { Persona, ControlPropiedad, ExtensionGobernanza } from "@/lib/schemas"
+import { useControlesPropiedad } from "@/lib/api/use-controles-propiedad"
 
 const CARGO_LABEL: Record<string, string> = {
   presidente: "Presidente",
@@ -52,10 +53,11 @@ export default function GestionAdministrativaPage() {
   const personas = useCompassStore(s => s.personas)
   const vinculos = useCompassStore(s => s.vinculos)
   const unidades = useCompassStore(s => s.unidades)
-  const controlesPropiedades = useCompassStore(s => s.controlesPropiedades)
+  // Controles AD desde el servidor (BD-FUENTE-VERDAD Fase 2); personas y
+  // unidades siguen en el store como caché de lectura hasta la Fase 5.
+  const { controles: controlesPropiedades, save: guardarControlApi } = useControlesPropiedad()
   const savePersona = useCompassStore(s => s.savePersona)
   const saveControlPropiedad = useCompassStore(s => s.saveControlPropiedad)
-
   const [error, setError] = React.useState<string | null>(null)
   const [editandoFirma, setEditandoFirma] = React.useState<Persona | null>(null)
   const [firmaUrl, setFirmaUrl] = React.useState("")
@@ -84,7 +86,7 @@ export default function GestionAdministrativaPage() {
   const controlDeUnidad = (unidadId: string): ControlPropiedad | undefined =>
     controlesPropiedades.find(c => c.unidadId === unidadId)
 
-  const actualizarControl = (unidadId: string, cambios: Partial<ControlPropiedad>) => {
+  const actualizarControl = async (unidadId: string, cambios: Partial<ControlPropiedad>) => {
     const existente = controlDeUnidad(unidadId)
     const base: ControlPropiedad = existente ?? {
       id: `ctrl-${unidadId}`,
@@ -93,9 +95,13 @@ export default function GestionAdministrativaPage() {
       residenteVeActas: false,
       alertasResidentesActivas: true,
     }
-    const r = saveControlPropiedad({ ...base, ...cambios })
+    // Servidor primero (fuente de verdad); espejo local para la vista.
+    const r = await guardarControlApi({ ...base, ...cambios })
     if (!r.ok) setError(r.error ?? "No se pudo guardar el control.")
-    else setError(null)
+    else {
+      setError(null)
+      saveControlPropiedad({ ...base, ...cambios })
+    }
   }
 
   const guardarFirma = () => {

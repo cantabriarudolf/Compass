@@ -419,6 +419,8 @@ model ActaGD {
   aprobaciones      Json     // string[]
   fechaPublicacion  String?
   avisoCVReferencia String?
+  // Período vigente al crear el acta (trazabilidad del libro GD).
+  periodoId         String?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 

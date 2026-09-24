@@ -27,11 +27,25 @@ function periodoValido(overrides: Record<string, unknown> = {}): Record<string, 
     fechaInscripcion: "2026-02-01",
     referenciaInscripcion: "Acta asamblea N° 4/2026, CBR Santiago",
     estado: "vigente",
+    // Fase 2: la nómina vigente es impar de 3 a 5 con personas reales
+    // (art. 17 Ley 21.442; el servidor valida existencia y cuenta activa).
     miembros: [
       {
         personaId: "persona-1",
         nombre: "Miembro Uno",
         cargo: "presidente",
+        fechaAsuncion: "2026-01-15",
+      },
+      {
+        personaId: "persona-2",
+        nombre: "Miembro Dos",
+        cargo: "tesorero",
+        fechaAsuncion: "2026-01-15",
+      },
+      {
+        personaId: "persona-3",
+        nombre: "Miembro Tres",
+        cargo: "secretario",
         fechaAsuncion: "2026-01-15",
       },
     ],
@@ -67,14 +81,37 @@ describe("/api/periodos-directiva — GD períodos con BD real (Fase 0)", () => 
     await prisma.membresia.deleteMany({
       where: { usuarioId: { in: ["gd-usuario-admin", "gd-usuario-residente"] } },
     })
-    await prisma.membresia.create({ data: { usuarioId: "gd-usuario-admin", comunidadId: comunidadA, rol: "administrador" } })
-    await prisma.membresia.create({ data: { usuarioId: "gd-usuario-residente", comunidadId: comunidadA, rol: "residente" } })
-  }, 30_000)
+        await prisma.membresia.create({ data: { usuarioId: "gd-usuario-admin", comunidadId: comunidadA, rol: "administrador" } })
+        await prisma.membresia.create({ data: { usuarioId: "gd-usuario-residente", comunidadId: comunidadA, rol: "residente" } })
+        // Fase 2: la nómina del fixture exige personas activas reales en MP.
+        const nombres = ["Uno", "Dos", "Tres"]
+        for (const [i, pid] of ["persona-1", "persona-2", "persona-3"].entries()) {
+          await prisma.persona.upsert({
+            where: { id: pid },
+            update: {},
+            create: {
+              id: pid,
+              comunidadId: comunidadA,
+              rut: `6000000${i}-0`,
+              nombreCompleto: `Miembro ${nombres[i]}`,
+              nombres: "Miembro",
+              apellidos: nombres[i]!,
+              email: `${pid}@test.cl`,
+              telefonoMovil: "+56900000000",
+              estadoCuenta: "activa",
+              condicionesEspecialesIds: [],
+              roles: ["propietario"],
+            },
+          })
+        }
+      }, 30_000)
 
   afterAll(async () => {
     try {
       state.cookie = ""
       await prisma.periodoDirectiva.deleteMany({ where: { comunidadId: { in: [comunidadA, comunidadB] } } })
+      await prisma.actaGD.deleteMany({ where: { comunidadId: { in: [comunidadA, comunidadB] } } })
+      await prisma.persona.deleteMany({ where: { comunidadId: comunidadA } })
       await prisma.membresia.deleteMany({
         where: { usuarioId: { in: ["gd-usuario-admin", "gd-usuario-residente"] } },
       })
@@ -160,7 +197,8 @@ describe("/api/periodos-directiva — GD períodos con BD real (Fase 0)", () => 
       expect(enBd?.estado).toBe("vigente")
       const miembros = enBd?.miembros as unknown[]
       expect(Array.isArray(miembros)).toBe(true)
-      expect(miembros.length).toBe(1)
+      // Fase 2: nómina completa de 3 (impar art. 17 Ley 21.442).
+      expect(miembros.length).toBe(3)
     })
   })
 
@@ -262,10 +300,147 @@ describe("/api/periodos-directiva — GD períodos con BD real (Fase 0)", () => 
         miembros: [],
       },
     })
-    await conSesion(emailAdmin, async () => {
-      const res = await DELETE("gd-per-cerrado")
-      expect(res.status).toBe(200)
-      expect(await prisma.periodoDirectiva.findUnique({ where: { id: "gd-per-cerrado" } })).toBeNull()
+        await conSesion(emailAdmin, async () => {
+          const res = await DELETE("gd-per-cerrado")
+          expect(res.status).toBe(200)
+          expect(await prisma.periodoDirectiva.findUnique({ where: { id: "gd-per-cerrado" } })).toBeNull()
+        })
+      })
+
+      describe("Fase 2 — rotación del vigente, nómina, congelamiento y cierre", () => {
+      const idsPersonas = ["gd-nom-1", "gd-nom-2", "gd-nom-3"]
+
+      const cargaCerrar = async () => (await import("@/app/api/periodos-directiva/[id]/cerrar/route"))
+
+      async function CERRAR(id: string, body: unknown = {}): Promise<Response> {
+        const cerrar = await cargaCerrar()
+        return cerrar.POST(
+          new NextRequest(`http://localhost/api/periodos-directiva/${id}/cerrar`, {
+            method: "POST",
+            body: JSON.stringify(body),
+            headers: { "content-type": "application/json" },
+          }),
+          { params: Promise.resolve({ id }) }
+        )
+      }
+
+      function nomina(ids: string[]): Record<string, unknown>[] {
+        const cargos = ["presidente", "tesorero", "secretario"]
+        return ids.map((personaId, i) => ({
+          personaId,
+          nombre: `Nómina ${personaId}`,
+          cargo: cargos[i % cargos.length],
+          fechaAsuncion: "2026-05-01",
+        }))
+      }
+
+      it("prepara 3 personas activas para la nómina", async () => {
+        // Limpieza de corridas previas (un cerrado no se reabre por upsert).
+        await prisma.actaGD.deleteMany({ where: { id: { in: ["gd-per-acta-ref"] } } })
+        await prisma.periodoDirectiva.deleteMany({ where: { id: { in: ["gd-per-2", "gd-per-par", "gd-per-fantasma"] } } })
+        for (const [i, id] of idsPersonas.entries()) {
+          await prisma.persona.upsert({
+            where: { id },
+            update: {},
+            create: {
+              id,
+              comunidadId: comunidadA,
+              rut: `9000000${i}-0`,
+              nombreCompleto: `Nómina ${id}`,
+              nombres: "Nómina",
+              apellidos: id,
+              email: `${id}@test.cl`,
+              telefonoMovil: "+56900000000",
+              estadoCuenta: "activa",
+              condicionesEspecialesIds: [],
+              roles: ["propietario"],
+            },
+          })
+        }
+        expect(await prisma.persona.count({ where: { id: { in: idsPersonas } } })).toBe(3)
+      })
+
+      it("nómina par o con persona inexistente → 400", async () => {
+        await conSesion(emailAdmin, async () => {
+          const par = await POST(periodoValido({ id: "gd-per-par", miembros: nomina(["gd-nom-1", "gd-nom-2"]) }))
+          expect(par.status).toBe(400)
+          const fantasma = await POST(
+            periodoValido({ id: "gd-per-fantasma", miembros: nomina(["gd-nom-1", "gd-nom-2", "gd-no-existe"]) })
+          )
+          expect(fantasma.status).toBe(400)
+        })
+      })
+
+      it("activar segundo vigente rota: previo cerrado con nómina archivada", async () => {
+        await conSesion(emailAdmin, async () => {
+          const res = await POST(
+            periodoValido({ id: "gd-per-2", fechaInicio: "2026-05-01", miembros: nomina(idsPersonas) })
+          )
+          expect(res.status).toBe(201)
+          // Solo un vigente por comunidad.
+          const vigentes = await prisma.periodoDirectiva.findMany({
+            where: { comunidadId: comunidadA, estado: "vigente" },
+          })
+          expect(vigentes.map((p) => p.id)).toEqual(["gd-per-2"])
+          // El previo quedó cerrado con su nómina archivada.
+          const previo = await prisma.periodoDirectiva.findUnique({ where: { id: "gd-per-1" } })
+          expect(previo?.estado).toBe("cerrado")
+          expect(previo?.fechaFin).toBe("2026-05-01")
+          expect(Array.isArray(previo?.miembros)).toBe(true)
+          // Las fichas de la nómina entrante apuntan al nuevo período.
+          const m1 = await prisma.persona.findUnique({ where: { id: "gd-nom-1" } })
+          expect((m1?.datosGobernanza as unknown as { periodoId?: string } | null)?.periodoId).toBe("gd-per-2")
+        })
+      })
+
+      it("PUT con miembros sobre cerrado → 409 (nómina congelada); reabrir → 409", async () => {
+        await conSesion(emailAdmin, async () => {
+          expect((await PUT("gd-per-1", { miembros: [] })).status).toBe(409)
+          expect((await PUT("gd-per-1", { estado: "vigente" })).status).toBe(409)
+          const enBd = await prisma.periodoDirectiva.findUnique({ where: { id: "gd-per-1" } })
+          expect(enBd?.estado).toBe("cerrado")
+        })
+      })
+
+      it("cerrar el vigente archiva la nómina desde MP y congela", async () => {
+        await conSesion(emailAdmin, async () => {
+          const res = await CERRAR("gd-per-2", { fechaFin: "2026-09-01" })
+          expect(res.status).toBe(200)
+          const enBd = await prisma.periodoDirectiva.findUnique({ where: { id: "gd-per-2" } })
+          expect(enBd?.estado).toBe("cerrado")
+          expect(enBd?.fechaFin).toBe("2026-09-01")
+          const miembros = enBd?.miembros as unknown as { personaId: string }[]
+          expect(miembros.map((m) => m.personaId).sort()).toEqual([...idsPersonas].sort())
+          // Cerrar dos veces → 409.
+          expect((await CERRAR("gd-per-2")).status).toBe(409)
+        })
+      })
+
+      it("DELETE de cerrado con actas asociadas → 409", async () => {
+        await prisma.actaGD.create({
+          data: {
+            id: "gd-per-acta-ref",
+            comunidadId: comunidadA,
+            fecha: "2026-06-01",
+            hora: "19:00",
+            lugar: "Sede",
+            tablaTemas: [],
+            presentes: [],
+            ausentes: [],
+            invitados: [],
+            minuta: "Acta que referencia al período.",
+            adjuntos: [],
+            estado: "borrador",
+            aprobaciones: [],
+            periodoId: "gd-per-2",
+          },
+        })
+        await conSesion(emailAdmin, async () => {
+          const res = await DELETE("gd-per-2")
+          expect(res.status).toBe(409)
+          expect(await prisma.periodoDirectiva.findUnique({ where: { id: "gd-per-2" } })).not.toBeNull()
+        })
+        await prisma.actaGD.delete({ where: { id: "gd-per-acta-ref" } }).catch(() => {})
+      })
     })
-  })
 })
