@@ -3,6 +3,9 @@
 import * as React from "react"
 import { Unidad } from "@/data/inventario/estructura"
 import { useCompassStore, StoreResult } from "@/lib/store"
+import { useTiposUnidad } from "@/lib/api/use-tipos-unidad"
+import { useMacroSectores } from "@/lib/api/use-macro-sectores"
+import { useMicroSectores } from "@/lib/api/use-micro-sectores"
 import { identificadorNormalizado } from "@/lib/normalizacion"
 import { 
   Dialog, 
@@ -30,23 +33,24 @@ interface FormularioUnidadProps {
   macroSectorId?: string;
   microSectorId?: string;
   trigger?: React.ReactNode;
-  onSave?: (data: Partial<Unidad>) => StoreResult | void;
+  onSave?: (data: Partial<Unidad>) => StoreResult | Promise<StoreResult> | void;
 }
-
+    
 interface FormularioUnidadContentProps {
   unidad?: Unidad;
   macroSectorId?: string;
   microSectorId?: string;
-  onSave?: (data: Partial<Unidad>) => StoreResult | void;
+  onSave?: (data: Partial<Unidad>) => StoreResult | Promise<StoreResult> | void;
   onCancel?: () => void;
 }
 
 function FormularioUnidadContent({ unidad, macroSectorId, microSectorId, onSave, onCancel }: FormularioUnidadContentProps) {
-  const tiposUnidad = useCompassStore(s => s.tiposUnidad)
+  // EF vía API REST (BD fuente de verdad); maestros siguen en el store.
+  const { items: tiposUnidad } = useTiposUnidad()
+  const { items: macroSectores } = useMacroSectores()
+  const { items: microSectores } = useMicroSectores()
   const estadosOcupacion = useCompassStore(s => s.maestros.estadosOcupacion)
   const categoriasUnidad = useCompassStore(s => s.maestros.categoriasUnidad)
-  const macroSectores = useCompassStore(s => s.macroSectores)
-  const microSectores = useCompassStore(s => s.microSectores)
   const isEditing = !!unidad;
 
   const initialMacroId = React.useMemo(() => {
@@ -108,7 +112,7 @@ function FormularioUnidadContent({ unidad, macroSectorId, microSectorId, onSave,
 
   const [errorGuardado, setErrorGuardado] = React.useState<string | null>(null)
 
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     if (!microId) return
     setErrorGuardado(null)
@@ -130,7 +134,7 @@ function FormularioUnidadContent({ unidad, macroSectorId, microSectorId, onSave,
         gas: { cliente: identificadorNormalizado(formData.get("gas_cliente") as string), medidor: identificadorNormalizado(formData.get("gas_medidor") as string) },
       }
     }
-    const resultado = onSave?.(data)
+    const resultado = await onSave?.(data)
     if (resultado && !resultado.ok) {
       setErrorGuardado(resultado.error ?? "No se pudo guardar la unidad.")
       return

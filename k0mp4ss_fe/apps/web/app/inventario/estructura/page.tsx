@@ -7,6 +7,10 @@ import {
   Unidad,
 } from "@/data/inventario/estructura"
 import { useCompassStore, useStoreRehydrated, StoreResult } from "@/lib/store"
+import { generarId } from "@/lib/id-utils"
+import { useMacroSectores } from "@/lib/api/use-macro-sectores"
+import { useMicroSectores } from "@/lib/api/use-micro-sectores"
+import { useUnidades } from "@/lib/api/use-unidades"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import { Tabs, TabsList, TabsTrigger } from "@workspace/ui/components/tabs"
 import { Badge } from "@workspace/ui/components/badge"
@@ -38,12 +42,11 @@ import { EstadosDonut } from "@/components/inventario/estados-donut"
 export default function EstructuraFisicaPage() {
   useStoreRehydrated()
   const hasHydrated = useCompassStore(s => s.hasHydrated)
-  const macroSectores = useCompassStore(s => s.macroSectores)
-  const microSectores = useCompassStore(s => s.microSectores)
-  const unidades = useCompassStore(s => s.unidades)
-  const saveMacroSector = useCompassStore(s => s.saveMacroSector)
-  const saveMicroSector = useCompassStore(s => s.saveMicroSector)
-  const saveUnidad = useCompassStore(s => s.saveUnidad)
+  // EF vía API REST (BD fuente de verdad); maestros/vínculos/personas siguen en el store.
+  const { items: macroSectores, isLoading: cargandoMacro, create: crearMacro, update: editarMacro } = useMacroSectores()
+  const { items: microSectores, isLoading: cargandoMicro, create: crearMicro } = useMicroSectores()
+  const { items: unidades, isLoading: cargandoUnidades, create: crearUnidad, update: editarUnidad } = useUnidades()
+  const cargandoEF = cargandoMacro || cargandoMicro || cargandoUnidades
   const categoriasMacro = useCompassStore(s => s.maestros.categoriasMacro)
   const estadosOcupacion = useCompassStore(s => s.maestros.estadosOcupacion)
   const categoriasMicro = useCompassStore(s => s.maestros.categoriasMicro)
@@ -116,7 +119,7 @@ export default function EstructuraFisicaPage() {
     if (!microValido) setSelectedMicro("todos")
   }
 
-  const handleSaveMacro = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSaveMacro = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
     const data = {
@@ -145,10 +148,10 @@ export default function EstructuraFisicaPage() {
     }
     let resultado: { ok: boolean; error?: string }
     if (editingMacro) {
-      resultado = saveMacroSector({ ...editingMacro, ...data })
+      resultado = await editarMacro(editingMacro.id, data)
     } else {
-      const nuevoId = `ms-${Date.now()}`
-      resultado = saveMacroSector({ id: nuevoId, ...data })
+      const nuevoId = generarId("ms")
+      resultado = await crearMacro({ id: nuevoId, ...data })
       if (!resultado.ok) {
         setErrorDialogo(resultado.error ?? "No se pudo guardar el macro sector.")
         return
@@ -165,11 +168,11 @@ export default function EstructuraFisicaPage() {
     setEditingMacro(null)
   }
 
-  const handleSaveMicro = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSaveMicro = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
     const nuevo: MicroSector = {
-      id: `mic-${Date.now()}`,
+      id: generarId("mic"),
       macroSectorId: selectedMacro,
       etiqueta: formData.get("etiqueta") as string,
       nombre: formData.get("nombre") as string,
@@ -193,7 +196,7 @@ export default function EstructuraFisicaPage() {
         }
       }
     }
-    const resultado = saveMicroSector(nuevo)
+    const resultado = await crearMicro(nuevo)
     if (!resultado.ok) {
       setErrorDialogo(resultado.error ?? "No se pudo guardar el sub-sector.")
       return
@@ -203,11 +206,11 @@ export default function EstructuraFisicaPage() {
     setIsMicroDialogOpen(false)
   }
 
-  const handleSaveUnidad = (data: Partial<Unidad>, existingId?: string): StoreResult => {
+  const handleSaveUnidad = async (data: Partial<Unidad>, existingId?: string): Promise<StoreResult> => {
     if (existingId) {
-      // Edición: Fusión profunda para no perder datos
+      // Edición: fusión profunda para no perder datos
       const existente = unidades.find(u => u.id === existingId)
-      if (existente) return saveUnidad({ ...existente, ...data })
+      if (existente) return editarUnidad(existingId, { ...existente, ...data })
       return { ok: false, error: "La unidad a editar no existe en el inventario." }
     } else {
       // Creación: exigir asociación a un sub-sector válido
@@ -220,7 +223,7 @@ export default function EstructuraFisicaPage() {
       }
 
       const nueva: Unidad = {
-        id: `u-${Date.now()}`,
+        id: generarId("u"),
         microSectorId,
         etiqueta: data.etiqueta || categoriasUnidad[0]?.nombre || "",
         numero: data.numero || "",
@@ -231,11 +234,11 @@ export default function EstructuraFisicaPage() {
         estadoId: data.estadoId || "vacante",
         servicios: data.servicios || {},
       }
-      return saveUnidad(nueva)
+      return crearUnidad(nueva)
     }
   }
 
-  if (!hasHydrated) {
+  if (!hasHydrated || cargandoEF) {
     return (
       <div className="flex flex-col gap-6 animate-pulse">
         <div className="h-9 w-72 rounded bg-muted/40" />

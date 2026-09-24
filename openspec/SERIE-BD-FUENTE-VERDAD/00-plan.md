@@ -499,9 +499,21 @@ Sos el arquitecto senior de Compass. Las Fases 0-4 migraron todo el dominio a pe
 | 0 — Infra | ⏳ PENDIENTE | | | |
 | 1 — MP + Maestros | ✅ HECHA | Ver commit actual | 21/21 pass | API routes + hooks + UI adaptada; tsc 0 errores |
 | 2 — GD + AD | ✅ HECHA | actas GD + períodos (rotación/cierre) + controles AD; 32/32 tests API | tsc 0 | UI directiva/visor/gestión por API; `periodoId` en ActaGD (migración) |
-| 3 — FI + EF | ⏳ PENDIENTE | | | |
+| 3 — FI + EF | ✅ HECHA | 18 API routes + 10 hooks + UI FI/EF por API; 22/22 tests nuevos | tsc 0 | Ver Bitácora 2026-09-24 |
 | 4 — Operativos | ⏳ PENDIENTE | | | |
 | 5 — RE/CF/CT + Deprecación | ⏳ PENDIENTE | | | |
+
+## Bitácora Fase 3 (2026-09-24) — ✅ HECHA
+
+- **ARRANQUE**: Fase 2 cerrada en `dd47640`. Baseline: tsc 0; suite 702/710 con 8 fallos en `test/auth/ingresar-page.test.tsx` (tests obsoletos: esperaban `router.push` a `/admin`; la página usa `location.assign` a `/dashboard` desde `1c23f5d`/`c2980ec`) → reparado en esta ventana (18/18, commit `1adb18e`). `lib/repos/*.test.ts` fallan por entorno (requieren Neon `DATABASE_URL`) — fuera de alcance, sin cambios.
+- **APIs FI (10 routes)**: `fondos-fi`, `egresos-fi` (folio FE-#### auto), `ingresos-fi`, `emisiones-gc` (emisión server-side + cobros en transacción), `cobros-fi` (ABAC residente: solo sus unidades). Authz matriz: escritura solo administrador; lectura admin/comité; residente 403 salvo cobros propios (desvío documentado vs prompt: pedía escritura para directiva, la matriz RP no la otorga).
+- **APIs EF (8 routes)**: `tipos-unidad`, `macro-sectores`, `micro-sectores`, `unidades` vía factory + guards 409 e integridad de FKs en POST/PUT. Authz recurso `mp` (precedente maestros Fase 1).
+- **Punto cero**: `lib/fi/punto-cero-migracion.ts` (mapper puro, mismos ids que el seed) + `scripts/migrate-punto-cero-a-db.ts` (`--comunidad-id`, idempotente). Migrado a `dev.db` en `comunidad-a`: 1 fondo + 182 egresos + 44 ingresos (2 corridas, sin duplicar).
+- **Hooks (10)**: `use-crud-collection` factory + 9 hooks (`use-emisiones-gc` expone `emitir()`; `use-cobros-fi` filtra por período/unidad).
+- **UI**: `gastos-comunes` (fondos/egresos/ingresos/emisión/mora/pagos por API; vínculos/config/cobranza siguen en store), `pagos` (pago con diferencia inmutable vía PUT), `inventario/estructura` + `formulario-unidad` (macro/micro/unidades por API; `onSave` acepta promesa). `multas`/`remuneraciones` no tocan FI/EF (módulos IN/PE, Fase 4). `/finanzas` (panel espejo) sin cambios.
+- **Tests nuevos 22/22**: `fi-completo` (12), `ef-completo` (7), `migracion-punto-cero` (3, incl. idempotencia en BD).
+- **Suite total**: 732 passed + 14 skipped, 0 fallos (solo 2 archivos PG ambientales). tsc 0, eslint 0 errores.
+- **Desvíos vs prompt-03**: (1) escritura FI solo admin (matriz, no directiva); (2) vencimiento emisión por defecto +30 días (sin `diaCortePago` de CF, pendiente Fase 5); (3) adaptadas las rutas UI reales (no existen las del prompt); (4) sin subagentes (harness no disponible: 1 timeout + 1 error) → implementación inline.
 
 ---
 

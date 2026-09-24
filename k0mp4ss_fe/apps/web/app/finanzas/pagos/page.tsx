@@ -30,7 +30,18 @@ import {
   IconLock,
 } from "@tabler/icons-react"
 import type { CobroFI, ConceptoCobroFI } from "@/lib/schemas"
-import { estadoDeCobro, saldoPendiente, type EstadoCobroFI } from "@/lib/finanzas-utils"
+import {
+  estadoDeCobro,
+  exigibleTotal,
+  hoyISO,
+  saldoPendiente,
+  totalPagado,
+  type EstadoCobroFI,
+} from "@/lib/finanzas-utils"
+import { generarId } from "@/lib/id-utils"
+import { useCobrosFI } from "@/lib/api/use-cobros-fi"
+import { useUnidades } from "@/lib/api/use-unidades"
+import { useFondosFI } from "@/lib/api/use-fondos-fi"
 
 const CONCEPTO_LABEL: Record<ConceptoCobroFI, string> = {
   gasto_comun: "Gasto Común",
@@ -58,10 +69,11 @@ interface FormPago {
 export default function PagosPage() {
   useStoreRehydrated()
   const hasHydrated = useCompassStore(s => s.hasHydrated)
-  const cobros = useCompassStore(s => s.cobrosFI)
-  const unidades = useCompassStore(s => s.unidades)
-  const fondos = useCompassStore(s => s.fondosFI)
-  const registrarPagoFI = useCompassStore(s => s.registrarPagoFI)
+  // Cobros, unidades y fondos vía API REST (BD fuente de verdad).
+  const { items: cobros, isLoading: cargandoCobros, update: editarCobro } = useCobrosFI()
+  const { items: unidades, isLoading: cargandoUnidades } = useUnidades()
+  const { items: fondos, isLoading: cargandoFondos } = useFondosFI()
+  const cargandoAPI = cargandoCobros || cargandoUnidades || cargandoFondos
 
   const [error, setError] = React.useState<string | null>(null)
   const [okMsg, setOkMsg] = React.useState<string | null>(null)
@@ -92,28 +104,67 @@ export default function PagosPage() {
     setFormPago({ monto: String(pendiente), medio: "transferencia", ajusteJustificacion: "" })
   }
 
-  const confirmarPago = () => {
+  /** Pago espejo de registrarPagoFI: validación local + PUT del cobro. */
+  const confirmarPago = async () => {
     if (!pagoObjetivo) return
     const pendiente = saldoPendiente(pagoObjetivo)
     const monto = Number.parseFloat(formPago.monto.replace(/\./g, "").replace(",", ".")) || 0
-    const r = registrarPagoFI(pagoObjetivo.id, {
-      monto,
-      medio: formPago.medio.trim(),
-      ...(monto !== pendiente && formPago.ajusteJustificacion.trim() ? { ajusteJustificacion: formPago.ajusteJustificacion.trim() } : {}),
+    const medio = formPago.medio.trim()
+    if (!(monto > 0)) {
+      setError("El monto del pago debe ser mayor a cero.")
+      return
+    }
+    if (medio.length === 0) {
+      setError("Debe indicar el medio de pago.")
+      return
+    }
+    if (pendiente <= 0) {
+      setError("El cobro ya está completamente pagado.")
+      return
+    }
+    const hoy = hoyISO()
+    const difiere = monto !== pendiente
+    let diferencia: CobroFI["diferencias"][number] | undefined
+    if (difiere) {
+      const justificacion = formPago.ajusteJustificacion.trim()
+      if (!justificacion) {
+        setError("El ajuste manual exige una justificación obligatoria para generar el informe de diferencia.")
+        return
+      }
+      if (justificacion.length < 10) {
+        setError("La justificación debe explicar el motivo del ajuste (mínimo 10 caracteres).")
+        return
+      }
+      diferencia = {
+        id: generarId("dif"),
+        tipo: monto < pendiente ? "descuento" : "recargo",
+        esperado: exigibleTotal(pagoObjetivo),
+        recibido: totalPagado(pagoObjetivo) + monto,
+        diferencia: Math.abs(monto - pendiente),
+        justificacion,
+        fecha: hoy,
+      }
+    }
+    const r = await editarCobro(pagoObjetivo.id, {
+      pagos: [
+        ...pagoObjetivo.pagos,
+        { id: generarId("pag"), monto, fecha: hoy, medio },
+      ],
+      ...(diferencia ? { diferencias: [...pagoObjetivo.diferencias, diferencia] } : {}),
     })
     if (!r.ok) {
       setError(r.error ?? "No se pudo registrar el pago.")
       return
     }
     setOkMsg(
-      monto !== pendiente
+      difiere
         ? `Pago procesado con ajuste manual; informe de diferencia generado e inmutable.`
         : `Pago registrado por $${monto.toLocaleString("es-CL")}.`
     )
     setPagoObjetivo(null)
   }
 
-  if (!hasHydrated) {
+  if (!hasHydrated || cargandoAPI) {
     return <div className="h-64 w-full animate-pulse rounded-lg bg-muted" />
   }
 

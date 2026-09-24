@@ -35,8 +35,23 @@ import {
   IconTrendingUp,
   IconWallet,
 } from "@tabler/icons-react"
-import type { CategoriaEgresoFI, TipoFondoFI } from "@/lib/schemas"
-import { morosidadPorUnidad, saldoFondo, estadoDeCobro, hoyISO } from "@/lib/finanzas-utils"
+import type { CategoriaEgresoFI, CobroFI, TipoFondoFI } from "@/lib/schemas"
+import {
+  estadoDeCobro,
+  hoyISO,
+  montoMoraPropuesta,
+  morosidadPorUnidad,
+  saldoFondo,
+  saldoPendiente,
+} from "@/lib/finanzas-utils"
+import { generarId } from "@/lib/id-utils"
+import { useFondosFI } from "@/lib/api/use-fondos-fi"
+import { useEgresosFI } from "@/lib/api/use-egresos-fi"
+import { useIngresosFI } from "@/lib/api/use-ingresos-fi"
+import { useEmisionesGC } from "@/lib/api/use-emisiones-gc"
+import { useCobrosFI } from "@/lib/api/use-cobros-fi"
+import { useUnidades } from "@/lib/api/use-unidades"
+import { useTiposUnidad } from "@/lib/api/use-tipos-unidad"
 
 const TIPO_FONDO_LABEL: Record<TipoFondoFI, string> = {
   gasto_comun: "Gasto Común",
@@ -89,24 +104,25 @@ function periodoSugerido(): string {
 
 export default function GastosComunesPage() {
   useStoreRehydrated()
-  const hasHydrated = useCompassStore(s => s.hasHydrated)
-  const fondos = useCompassStore(s => s.fondosFI)
-  const egresos = useCompassStore(s => s.egresosFI)
-  const ingresosFI = useCompassStore(s => s.ingresosFI)
-  const emisionesGC = useCompassStore(s => s.emisionesGC)
-  const cobros = useCompassStore(s => s.cobrosFI)
-  const unidades = useCompassStore(s => s.unidades)
+      const hasHydrated = useCompassStore(s => s.hasHydrated)
+      // FI vía API REST (BD fuente de verdad); vínculos/config/cobranza siguen en el store.
+      const { items: fondos, isLoading: cargandoFondos, create: crearFondo, update: editarFondo, remove: eliminarFondo } = useFondosFI()
+      const { items: egresos, isLoading: cargandoEgresos, create: crearEgreso, remove: eliminarEgreso } = useEgresosFI()
+      const { items: ingresosFI, isLoading: cargandoIngresos, create: crearIngreso, remove: eliminarIngreso } = useIngresosFI()
+      const { items: emisionesGC, isLoading: cargandoEmisiones, emitir: emitirGC } = useEmisionesGC()
+      const { items: cobros, isLoading: cargandoCobros, update: editarCobro } = useCobrosFI()
+      const { items: unidades, isLoading: cargandoUnidades } = useUnidades()
+      const { items: tiposUnidad, isLoading: cargandoTipos } = useTiposUnidad()
+      const cargandoAPI =
+        cargandoFondos ||
+        cargandoEgresos ||
+        cargandoIngresos ||
+        cargandoEmisiones ||
+        cargandoCobros ||
+        cargandoUnidades ||
+        cargandoTipos
   const vinculos = useCompassStore(s => s.vinculos)
-  const tiposUnidad = useCompassStore(s => s.tiposUnidad)
   const configuracion = useCompassStore(s => s.configuracion)
-  const saveFondoFI = useCompassStore(s => s.saveFondoFI)
-  const removeFondoFI = useCompassStore(s => s.removeFondoFI)
-  const saveEgresoFI = useCompassStore(s => s.saveEgresoFI)
-  const removeEgresoFI = useCompassStore(s => s.removeEgresoFI)
-  const registrarIngresoFI = useCompassStore(s => s.registrarIngresoFI)
-  const removeIngresoFI = useCompassStore(s => s.removeIngresoFI)
-  const emitirGastoComun = useCompassStore(s => s.emitirGastoComun)
-  const aplicarMoraFI = useCompassStore(s => s.aplicarMoraFI)
   const enviarCobranzaFI = useCompassStore(s => s.enviarCobranzaFI)
 
   const [error, setError] = React.useState<string | null>(null)
@@ -173,13 +189,11 @@ export default function GastosComunesPage() {
   const cobrosVencidosPorUnidad = (unidadId: string) =>
     cobros.filter(c => c.unidadId === unidadId && estadoDeCobro(c) === "vencido")
 
-  const guardarFondo = () => {
+  const guardarFondo = async () => {
     if (!formFondo) return
     setError(null)
-    const existente = editandoFondoId ? fondos.find(f => f.id === editandoFondoId) : undefined
     const saldoInicialNum = Number.parseFloat(formFondo.saldoInicial.replace(/\./g, "").replace(",", ".")) || 0
-    const r = saveFondoFI({
-      id: existente?.id ?? `fondo-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    const payload = {
       nombre: formFondo.nombre.trim(),
       tipo: formFondo.tipo,
       ...(formFondo.descripcion.trim() ? { descripcion: formFondo.descripcion.trim() } : {}),
@@ -188,7 +202,10 @@ export default function GastosComunesPage() {
         : {}),
       activo: formFondo.activo,
       ...(saldoInicialNum > 0 ? { saldoInicial: saldoInicialNum } : {}),
-    })
+    }
+    const r = editandoFondoId
+      ? await editarFondo(editandoFondoId, payload)
+      : await crearFondo({ ...payload, id: generarId("fondo") })
     if (!r.ok) setError(r.error ?? "No se pudo guardar el fondo.")
     else {
       setOkMsg(`Fondo "${formFondo.nombre}" guardado.`)
@@ -197,11 +214,12 @@ export default function GastosComunesPage() {
     }
   }
 
-  const guardarEgreso = () => {
+  const guardarEgreso = async () => {
     if (!formEgreso) return
     setError(null)
-    const r = saveEgresoFI({
-      id: `egr-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    // El folio FE-#### lo genera el servidor al alta.
+    const r = await crearEgreso({
+      id: generarId("egr"),
       fecha: formEgreso.fecha,
       categoria: formEgreso.categoria,
       descripcion: formEgreso.descripcion.trim(),
@@ -227,10 +245,11 @@ export default function GastosComunesPage() {
     }
   }
 
-  const guardarIngreso = () => {
-    if (!formIngreso) return
-    setError(null)
-    const r = registrarIngresoFI({
+      const guardarIngreso = async () => {
+        if (!formIngreso) return
+        setError(null)
+        const r = await crearIngreso({
+          id: generarId("fi-ing"),
       fecha: formIngreso.fecha,
       monto: Number.parseFloat(formIngreso.monto.replace(/\./g, "").replace(",", ".")) || 0,
       concepto: formIngreso.concepto.trim(),
@@ -244,11 +263,12 @@ export default function GastosComunesPage() {
     }
   }
 
-  const ejecutarEmision = () => {
+  const ejecutarEmision = async () => {
     setError(null)
     setOkMsg(null)
-    const r = emitirGastoComun({
+    const r = await emitirGC({
       periodo,
+      modo: configuracion.modoCalculoGC,
       ...(configuracion.modoCalculoGC === "variable"
         ? { gastoTotal: Number.parseFloat(gastoTotal.replace(/\./g, "").replace(",", ".")) || 0 }
         : {}),
@@ -258,14 +278,70 @@ export default function GastosComunesPage() {
     })
     if (!r.ok) setError(r.error ?? "La emisión falló.")
     else {
-      const emision = useCompassStore.getState().emisionesGC.find(e => e.periodo === periodo)
+      const datos = r.data as { emision: { lineas: { monto: number }[] } } | undefined
+      const lineas = datos?.emision.lineas ?? []
       setOkMsg(
-        `Periodo ${periodo} emitido: $${(emision?.lineas.reduce((a, l) => a + l.monto, 0) ?? 0).toLocaleString("es-CL")} a ${emision?.lineas.length ?? 0} unidad(es).`
+        `Periodo ${periodo} emitido: $${lineas.reduce((a, l) => a + l.monto, 0).toLocaleString("es-CL")} a ${lineas.length} unidad(es).`
       )
     }
   }
 
-  if (!hasHydrated) {
+      const eliminarFondoClick = async (id: string) => {
+        const r = await eliminarFondo(id)
+        if (!r.ok) setError(r.error ?? "")
+        else setOkMsg("Fondo eliminado.")
+      }
+
+      const eliminarEgresoClick = async (id: string) => {
+        const r = await eliminarEgreso(id)
+        if (!r.ok) setError(r.error ?? "No se pudo eliminar el gasto.")
+      }
+
+      const eliminarIngresoClick = async (id: string) => {
+        const r = await eliminarIngreso(id)
+        if (!r.ok) setError(r.error ?? "No se pudo eliminar el ingreso.")
+      }
+
+      /** Mora espejo de aplicarMoraFI: cálculo local + PUT del cobro. */
+      const aplicarMoraClick = async (cobro: CobroFI, tasa: number) => {
+        if (!cobro.fechaVencimiento) {
+          setError("El cobro no tiene fecha de vencimiento registrada.")
+          return
+        }
+        const hoy = hoyISO()
+        const dias = Math.max(
+          0,
+          Math.floor(
+            (new Date(`${hoy}T00:00:00`).getTime() -
+              new Date(`${cobro.fechaVencimiento}T00:00:00`).getTime()) /
+              86400000
+          )
+        )
+        if (dias <= 0) {
+          setError("El cobro aún no está vencido: no procede aplicar mora.")
+          return
+        }
+        const pendiente = saldoPendiente(cobro)
+        if (pendiente <= 0) {
+          setError("El cobro ya está completamente pagado.")
+          return
+        }
+        if (cobro.moras.some(m => m.fecha === hoy)) return
+        const monto = montoMoraPropuesta(pendiente, dias, tasa)
+        if (monto <= 0) {
+          setError("El cálculo no arrojó mora aplicable.")
+          return
+        }
+        const r = await editarCobro(cobro.id, {
+          moras: [
+            ...cobro.moras,
+            { id: generarId("mora"), monto, diasAtraso: dias, tasaMensualPct: tasa, fecha: hoy },
+          ],
+        })
+        if (!r.ok) setError(r.error ?? "No se pudo aplicar la mora.")
+      }
+
+      if (!hasHydrated || cargandoAPI) {
     return <div className="h-64 w-full animate-pulse rounded-lg bg-muted" />
   }
 
@@ -313,7 +389,7 @@ export default function GastosComunesPage() {
                     <Button size="sm" variant="outline" onClick={() => { setEditandoFondoId(f.id); setFormFondo({ nombre: f.nombre, tipo: f.tipo, descripcion: f.descripcion ?? "", porcentajeAporte: f.porcentajeAporte?.toString() ?? "", activo: f.activo, saldoInicial: f.saldoInicial?.toString() ?? "" }) }}>
                       <IconPencil className="size-3.5 mr-1" /> Editar
                     </Button>
-                    <Button size="sm" variant="ghost" className="text-destructive" onClick={() => { const r = removeFondoFI(f.id); if (!r.ok) setError(r.error ?? ""); else setOkMsg("Fondo eliminado.") }}>
+                    <Button size="sm" variant="ghost" className="text-destructive" onClick={() => void eliminarFondoClick(f.id)}>
                       <IconTrash className="size-3.5 mr-1" /> Eliminar
                     </Button>
                   </div>
@@ -353,7 +429,7 @@ export default function GastosComunesPage() {
                       <td className="px-4 py-2">{fondos.find(f => f.id === e.fondoId)?.nombre ?? e.fondoId}</td>
                       <td className="px-4 py-2 text-right tabular-nums">${e.monto.toLocaleString("es-CL")}</td>
                       <td className="px-4 py-2 text-right">
-                        <Button size="sm" variant="ghost" className="text-destructive" onClick={() => removeEgresoFI(e.id)}>
+                        <Button size="sm" variant="ghost" className="text-destructive" onClick={() => void eliminarEgresoClick(e.id)}>
                           <IconTrash className="size-3.5" />
                         </Button>
                       </td>
@@ -394,7 +470,7 @@ export default function GastosComunesPage() {
                       <td className="px-4 py-2">{fondos.find(f => f.id === i.fondoId)?.nombre ?? i.fondoId}</td>
                       <td className="px-4 py-2 text-right tabular-nums">${i.monto.toLocaleString("es-CL")}</td>
                       <td className="px-4 py-2 text-right">
-                        <Button size="sm" variant="ghost" className="text-destructive" onClick={() => removeIngresoFI(i.id)}>
+                        <Button size="sm" variant="ghost" className="text-destructive" onClick={() => void eliminarIngresoClick(i.id)}>
                           <IconTrash className="size-3.5" />
                         </Button>
                       </td>
@@ -546,7 +622,7 @@ export default function GastosComunesPage() {
                       {pendientes.slice(0, 3).map(c => (
                         <div key={c.id} className="flex items-center justify-between gap-2 pl-2 text-xs text-muted-foreground">
                           <span>{c.descripcion} · vence {c.fechaVencimiento}</span>
-                          <Button size="sm" variant="outline" className="h-6 text-[11px]" onClick={() => { const rr = aplicarMoraFI(c.id, Number.parseFloat(moraTasa) || 1); if (!rr.ok) setError(rr.error ?? "") }}>
+                          <Button size="sm" variant="outline" className="h-6 text-[11px]" onClick={() => void aplicarMoraClick(c, Number.parseFloat(moraTasa) || 1)}>
                             Aplicar mora
                           </Button>
                         </div>
