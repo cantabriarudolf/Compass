@@ -4,7 +4,34 @@ import { render, screen, waitFor, cleanup } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 
 const mockPush = vi.fn()
+const mockAssign = vi.fn()
 let mockNextParam: string | null = null
+
+// La página navega con window.location.assign (recarga completa post-login),
+// no con router.push: se finge assign preservando origin (la página lo lee
+// para construir URLs absolutas del callback Auth.js).
+const UBICACION_ORIGINAL = window.location
+const ORIGEN_TEST = window.location.origin
+
+function fingirLocationAssign() {
+  Object.defineProperty(window, "location", {
+    configurable: true,
+    enumerable: true,
+    value: {
+      href: UBICACION_ORIGINAL.href,
+      origin: ORIGEN_TEST,
+      assign: mockAssign,
+    },
+  })
+}
+
+function restaurarLocation() {
+  Object.defineProperty(window, "location", {
+    configurable: true,
+    enumerable: true,
+    value: UBICACION_ORIGINAL,
+  })
+}
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: mockPush }),
@@ -97,13 +124,16 @@ async function llegarAPaso2(user: ReturnType<typeof userEvent.setup>) {
 describe("app/ingresar/page.tsx (Auth.js)", () => {
   beforeEach(() => {
     mockPush.mockClear()
+    mockAssign.mockClear()
     mockNextParam = null
+    fingirLocationAssign()
     manejadorFetch = () =>
       Promise.reject(new Error("fetch no mockeado en este test"))
     vi.stubGlobal("fetch", (url: unknown) => manejadorFetch(String(url)))
   })
   afterEach(() => {
     cleanup()
+    restaurarLocation()
     vi.unstubAllGlobals()
   })
 
@@ -121,7 +151,7 @@ describe("app/ingresar/page.tsx (Auth.js)", () => {
     expect(screen.getByLabelText(/contraseña/i)).toBeRequired()
   })
 
-  it("login exitoso navega a /admin (sin next)", async () => {
+  it("login exitoso navega a /dashboard (sin next)", async () => {
     mockCsrfOk()
     mockCallbackSuccess()
     const user = userEvent.setup()
@@ -132,7 +162,7 @@ describe("app/ingresar/page.tsx (Auth.js)", () => {
     )
     await user.type(screen.getByLabelText(/contraseña/i), "Test1234!")
     await user.click(screen.getByRole("button", { name: /ingresar/i }))
-    await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/admin"))
+    await waitFor(() => expect(mockAssign).toHaveBeenCalledWith("/dashboard"))
   })
 
   it("login exitoso respeta ?next= interno", async () => {
@@ -147,10 +177,10 @@ describe("app/ingresar/page.tsx (Auth.js)", () => {
     )
     await user.type(screen.getByLabelText(/contraseña/i), "Test1234!")
     await user.click(screen.getByRole("button", { name: /ingresar/i }))
-    await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/admin/qa-lab"))
+    await waitFor(() => expect(mockAssign).toHaveBeenCalledWith("/admin/qa-lab"))
   })
 
-  it("login exitoso ignora ?next= externo y va a /admin", async () => {
+  it("login exitoso ignora ?next= externo y va a /dashboard", async () => {
     mockNextParam = "https://evil.com/phish"
     mockCsrfOk()
     mockCallbackSuccess()
@@ -162,10 +192,10 @@ describe("app/ingresar/page.tsx (Auth.js)", () => {
     )
     await user.type(screen.getByLabelText(/contraseña/i), "Test1234!")
     await user.click(screen.getByRole("button", { name: /ingresar/i }))
-    await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/admin"))
+    await waitFor(() => expect(mockAssign).toHaveBeenCalledWith("/dashboard"))
   })
 
-      it("login exitoso ignora ?next= protocol-relative (//evil.com) y va a /admin", async () => {
+      it("login exitoso ignora ?next= protocol-relative (//evil.com) y va a /dashboard", async () => {
         mockNextParam = "//evil.com/phish"
         mockCsrfOk()
         mockCallbackSuccess()
@@ -177,7 +207,7 @@ describe("app/ingresar/page.tsx (Auth.js)", () => {
         )
         await user.type(screen.getByLabelText(/contraseña/i), "Test1234!")
         await user.click(screen.getByRole("button", { name: /ingresar/i }))
-        await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/admin"))
+        await waitFor(() => expect(mockAssign).toHaveBeenCalledWith("/dashboard"))
       })
 
       it("login exitoso respeta ?next= con query", async () => {
@@ -190,7 +220,7 @@ describe("app/ingresar/page.tsx (Auth.js)", () => {
     await user.type(screen.getByLabelText(/contraseña/i), "x")
     await user.click(screen.getByRole("button", { name: /ingresar/i }))
     await waitFor(() =>
-      expect(mockPush).toHaveBeenCalledWith("/admin/configuracion?tab=maestros")
+      expect(mockAssign).toHaveBeenCalledWith("/admin/configuracion?tab=maestros")
     )
   })
 
@@ -208,7 +238,7 @@ describe("app/ingresar/page.tsx (Auth.js)", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "Credenciales inválidas"
     )
-    expect(mockPush).not.toHaveBeenCalled()
+    expect(mockAssign).not.toHaveBeenCalled()
   })
 
   it("login fallido rate_limited muestra mensaje de rate limit", async () => {
@@ -276,8 +306,7 @@ describe("app/ingresar/page.tsx (Auth.js)", () => {
 
     mockCallbackSuccess()
     await user.click(screen.getByRole("button", { name: /ingresar/i }))
-    await waitFor(() => expect(mockPush).toHaveBeenCalled())
-    await waitFor(() => expect(mockPush).toHaveBeenCalled())
+    await waitFor(() => expect(mockAssign).toHaveBeenCalled())
   })
 
   it("maneja respuesta sin JSON (fallback mensaje)", async () => {
@@ -304,7 +333,7 @@ describe("app/ingresar/page.tsx (Auth.js)", () => {
     ).toBeInTheDocument()
     expect(screen.queryByLabelText(/correo electrónico/i)).not.toBeInTheDocument()
     expect(screen.queryByLabelText(/contraseña/i)).not.toBeInTheDocument()
-    expect(mockPush).not.toHaveBeenCalled()
+    expect(mockAssign).not.toHaveBeenCalled()
   })
 
   it("paso 2 con verify OK redirige al destino ?next=", async () => {
@@ -315,7 +344,7 @@ describe("app/ingresar/page.tsx (Auth.js)", () => {
     await llegarAPaso2(user)
     await user.type(screen.getByLabelText(/código de verificación/i), "123456")
     await user.click(screen.getByRole("button", { name: /verificar/i }))
-    await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/admin/qa-lab"))
+    await waitFor(() => expect(mockAssign).toHaveBeenCalledWith("/admin/qa-lab"))
   })
 
   it("paso 2 con código inválido muestra error sin avanzar", async () => {
@@ -329,7 +358,7 @@ describe("app/ingresar/page.tsx (Auth.js)", () => {
     await user.type(screen.getByLabelText(/código de verificación/i), "000000")
     await user.click(screen.getByRole("button", { name: /verificar/i }))
     expect(await screen.findByRole("alert")).toHaveTextContent("Código inválido")
-    expect(mockPush).not.toHaveBeenCalled()
+    expect(mockAssign).not.toHaveBeenCalled()
     expect(
       screen.getByLabelText(/código de verificación/i)
     ).toBeInTheDocument()
@@ -348,7 +377,7 @@ describe("app/ingresar/page.tsx (Auth.js)", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(
       /6 dígitos/i
     )
-    expect(mockPush).not.toHaveBeenCalled()
+    expect(mockAssign).not.toHaveBeenCalled()
   })
 
   it("código de respaldo OK muestra códigos restantes y advertencia", async () => {
@@ -371,9 +400,9 @@ describe("app/ingresar/page.tsx (Auth.js)", () => {
       await screen.findByText(/códigos de respaldo restantes: 7/i)
     ).toBeInTheDocument()
     expect(screen.getByText("Quedan pocos códigos.")).toBeInTheDocument()
-    expect(mockPush).not.toHaveBeenCalled()
+    expect(mockAssign).not.toHaveBeenCalled()
     await user.click(screen.getByRole("button", { name: /continuar/i }))
-    await waitFor(() => expect(mockPush).toHaveBeenCalledWith("/admin"))
+    await waitFor(() => expect(mockAssign).toHaveBeenCalledWith("/dashboard"))
   })
 
   it("desafío expirado vuelve al paso 1 con mensaje de reingreso", async () => {
@@ -399,6 +428,6 @@ describe("app/ingresar/page.tsx (Auth.js)", () => {
     expect(
       screen.queryByLabelText(/código de verificación/i)
     ).not.toBeInTheDocument()
-    expect(mockPush).not.toHaveBeenCalled()
+    expect(mockAssign).not.toHaveBeenCalled()
   })
 })
