@@ -95,8 +95,10 @@ describe("Migración v7 → v8 (función migrate)", () => {
   })
 
   it("conserva vínculos y personas previas sin duplicarlas contra el seed", () => {
+    const primera = personas[0]
+    if (!primera) throw new Error("seed de personas vacío para el test")
     const prev = estadoPersistido({
-      personas: [{ ...personas[0], id: "p-previa" }, personas[1]],
+      personas: [{ ...primera, id: "p-previa" }, personas[1]],
       vinculos: [vinculos[0]],
       maestros: {},
     })
@@ -105,14 +107,15 @@ describe("Migración v7 → v8 (función migrate)", () => {
       personas: typeof personas
       vinculos: typeof vinculos
       maestros: { afps: typeof AFPS }
+      periodosDirectiva?: Array<{ id: string; estado: string; fechasEstimadas?: boolean }>
     }
 
         // GD-períodos v28: las fichas heredan periodoId del período inicial estimado.
         expect(result.personas).toEqual([
           {
-            ...personas[0],
+            ...primera,
             id: "p-previa",
-            datosGobernanza: { ...personas[0].datosGobernanza, periodoId: "periodo-1" },
+            datosGobernanza: { ...primera.datosGobernanza, periodoId: "periodo-1" },
           },
           personas[1],
         ])
