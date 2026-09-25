@@ -6,11 +6,14 @@ import {
   MicroSector, 
   Unidad,
 } from "@/data/inventario/estructura"
-import { useCompassStore, useStoreRehydrated, StoreResult } from "@/lib/store"
+import type { StoreResult } from "@/lib/store"
 import { generarId } from "@/lib/id-utils"
 import { useMacroSectores } from "@/lib/api/use-macro-sectores"
 import { useMicroSectores } from "@/lib/api/use-micro-sectores"
 import { useUnidades } from "@/lib/api/use-unidades"
+import { usePersonas } from "@/lib/api/use-personas"
+import { useVinculos } from "@/lib/api/use-vinculos"
+import { useMaestros } from "@/lib/api/use-maestros"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import { Tabs, TabsList, TabsTrigger } from "@workspace/ui/components/tabs"
 import { Badge } from "@workspace/ui/components/badge"
@@ -39,18 +42,38 @@ import { IconBuilding, IconPlus, IconChevronRight, IconPencil, IconStack2, IconE
 import { FormularioUnidad } from "@/components/inventario/formulario-unidad"
 import { EstadosDonut } from "@/components/inventario/estados-donut"
 
+/** Maestro nombre simple (MA): id + nombre para selects de categoría. */
+interface MaestroNombre {
+  id: string
+  nombre: string
+}
+
+/** Maestro con color de badge (estados de ocupación). */
+interface MaestroConColor extends MaestroNombre {
+  color: string
+}
+
 export default function EstructuraFisicaPage() {
-  useStoreRehydrated()
-  const hasHydrated = useCompassStore(s => s.hasHydrated)
-  // EF vía API REST (BD fuente de verdad); maestros/vínculos/personas siguen en el store.
+  // EF vía API REST (BD fuente de verdad); maestros/vínculos/personas vía hooks SWR.
   const { items: macroSectores, isLoading: cargandoMacro, create: crearMacro, update: editarMacro } = useMacroSectores()
   const { items: microSectores, isLoading: cargandoMicro, create: crearMicro } = useMicroSectores()
   const { items: unidades, isLoading: cargandoUnidades, create: crearUnidad, update: editarUnidad } = useUnidades()
-  const cargandoEF = cargandoMacro || cargandoMicro || cargandoUnidades
-  const categoriasMacro = useCompassStore(s => s.maestros.categoriasMacro)
-  const estadosOcupacion = useCompassStore(s => s.maestros.estadosOcupacion)
-  const categoriasMicro = useCompassStore(s => s.maestros.categoriasMicro)
-  const categoriasUnidad = useCompassStore(s => s.maestros.categoriasUnidad)
+  const { personas, isLoading: cargandoPersonas } = usePersonas()
+  const { vinculos, isLoading: cargandoVinculos } = useVinculos()
+  const { data: categoriasMacro, isLoading: cCategoriasMacro } = useMaestros<MaestroNombre>("categorias-macro")
+  const { data: categoriasMicro, isLoading: cCategoriasMicro } = useMaestros<MaestroNombre>("categorias-micro")
+  const { data: categoriasUnidad, isLoading: cCategoriasUnidad } = useMaestros<MaestroNombre>("categorias-unidad")
+  const { data: estadosOcupacion, isLoading: cEstadosOcupacion } = useMaestros<MaestroConColor>("estados-ocupacion")
+  const cargandoEF =
+    cargandoMacro ||
+    cargandoMicro ||
+    cargandoUnidades ||
+    cargandoPersonas ||
+    cargandoVinculos ||
+    cCategoriasMacro ||
+    cCategoriasMicro ||
+    cCategoriasUnidad ||
+    cEstadosOcupacion
   
   const [selectedMacro, setSelectedMacro] = React.useState<string>("todos")
   const currentMacro = macroSectores.find(m => m.id === selectedMacro)
@@ -58,11 +81,9 @@ export default function EstructuraFisicaPage() {
   
   const [selectedMicro, setSelectedMicro] = React.useState<string>("todos")
   const [isMacroDialogOpen, setIsMacroDialogOpen] = React.useState(false)
-  const [isMicroDialogOpen, setIsMicroDialogOpen] = React.useState(false)
   const [editingMacro, setEditingMacro] = React.useState<MacroSector | null>(null)
-  const vinculos = useCompassStore(s => s.vinculos)
-  const personas = useCompassStore(s => s.personas)
   const [filterStatus, setFilterStatus] = React.useState("todos")
+  const [isMicroDialogOpen, setIsMicroDialogOpen] = React.useState(false)
   const [historialSelect, setHistorialSelect] = React.useState<Unidad | null>(null)
   const [errorDialogo, setErrorDialogo] = React.useState<string | null>(null)
   const [busqueda, setBusqueda] = React.useState("")
@@ -238,7 +259,7 @@ export default function EstructuraFisicaPage() {
     }
   }
 
-  if (!hasHydrated || cargandoEF) {
+  if (cargandoEF) {
     return (
       <div className="flex flex-col gap-6 animate-pulse">
         <div className="h-9 w-72 rounded bg-muted/40" />

@@ -1,7 +1,12 @@
 "use client"
 
 import * as React from "react"
-import { useCompassStore, useStoreRehydrated } from "@/lib/store"
+import { useCompassStore } from "@/lib/store"
+import { useTrabajosMT, useProyectosMT } from "@/lib/api/use-mt"
+import { useRecursosIR } from "@/lib/api/use-ir"
+import { usePersonas } from "@/lib/api/use-personas"
+import { useUnidades } from "@/lib/api/use-unidades"
+import { useMicroSectores } from "@/lib/api/use-micro-sectores"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
@@ -119,14 +124,14 @@ const FORM_TRABAJO: FormTrabajo = {
 const hoy = () => new Date().toISOString().slice(0, 10)
 
 export default function ProyectosPage() {
-  useStoreRehydrated()
-  const hasHydrated = useCompassStore(s => s.hasHydrated)
-  const trabajosMT = useCompassStore(s => s.trabajosMT)
-  const proyectosMT = useCompassStore(s => s.proyectosMT)
-  const personas = useCompassStore(s => s.personas)
-  const unidades = useCompassStore(s => s.unidades)
-  const microSectores = useCompassStore(s => s.microSectores)
-  const activosIR = useCompassStore(s => s.activosIR)
+  // Lecturas de dominio vía hooks SWR (BD fuente de verdad).
+  const { items: trabajosMT, isLoading: cargandoTrabajos, create: crearTrabajo, update: actualizarTrabajo } = useTrabajosMT()
+  const { items: proyectosMT, isLoading: cargandoProyectos, create: crearProyecto, remove: eliminarProyecto } = useProyectosMT()
+  const { personas, isLoading: cargandoPersonas } = usePersonas()
+  const { items: unidades, isLoading: cargandoUnidades } = useUnidades()
+  const { items: microSectores, isLoading: cargandoMicro } = useMicroSectores()
+  const { items: activosIR, isLoading: cargandoRecursos } = useRecursosIR()
+  const cargando = cargandoTrabajos || cargandoProyectos || cargandoPersonas || cargandoUnidades || cargandoMicro || cargandoRecursos
 
   const [error, setError] = React.useState<string | null>(null)
   const [msg, setMsg] = React.useState<string | null>(null)
@@ -153,7 +158,7 @@ export default function ProyectosPage() {
     .filter(t => t.preventivo && ["planificado", "en_curso"].includes(t.estado))
     .sort((a, b) => (a.fechaProgramada ?? "9999").localeCompare(b.fechaProgramada ?? "9999"))
 
-  const guardarTrabajo = () => {
+  const guardarTrabajo = async (): Promise<void> => {
     if (!form) return
     setError(null)
     const payload: TrabajoMT = {
@@ -179,13 +184,15 @@ export default function ProyectosPage() {
       ...(form.garantiaFin ? { garantiaFin: form.garantiaFin } : {}),
       ...(form.esPreventivo && form.periodicidadMeses !== "" ? { preventivo: { periodicidadMeses: Number(form.periodicidadMeses) } } : {}),
     }
-    const r = useCompassStore.getState().saveTrabajoMT(payload)
+    const r = editandoId
+      ? await actualizarTrabajo(editandoId, payload)
+      : await crearTrabajo({ ...payload, id: `mt-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}` })
     if (!r.ok) { setError(r.error ?? "No se pudo guardar el trabajo."); return }
     setForm(null)
     setEditandoId(null)
   }
 
-  if (!hasHydrated) {
+  if (cargando) {
     return (
       <div className="flex flex-col gap-6 animate-pulse">
         <div className="h-9 w-72 rounded bg-muted/40" />
@@ -257,24 +264,32 @@ export default function ProyectosPage() {
                             <div className="flex flex-wrap gap-1">
                               {t.estado === "planificado" && (
                                 <Button size="sm" variant="outline" onClick={() => {
-                                  const r = useCompassStore.getState().iniciarTrabajoMT(t.id)
+                                  // TODO: migrar iniciarTrabajoMT a API REST
+                                  const iniciarTrabajoMT = useCompassStore.getState().iniciarTrabajoMT
+                                  const r = iniciarTrabajoMT(t.id)
                                   if (!r.ok) setError(r.error ?? "")
                                 }}>Iniciar</Button>
                               )}
                               {t.estado === "en_curso" && (
                                 <Button size="sm" onClick={() => {
-                                  const r = useCompassStore.getState().finalizarTrabajoMT(t.id)
+                                  // TODO: migrar finalizarTrabajoMT a API REST
+                                  const finalizarTrabajoMT = useCompassStore.getState().finalizarTrabajoMT
+                                  const r = finalizarTrabajoMT(t.id)
                                   if (!r.ok) setError(r.error ?? "")
                                 }}>Finalizar</Button>
                               )}
                               {["planificado", "en_curso"].includes(t.estado) && (
                                 <Button size="sm" variant="ghost" onClick={() => {
-                                  const r = useCompassStore.getState().cancelarTrabajoMT(t.id)
+                                  // TODO: migrar cancelarTrabajoMT a API REST
+                                  const cancelarTrabajoMT = useCompassStore.getState().cancelarTrabajoMT
+                                  const r = cancelarTrabajoMT(t.id)
                                   if (!r.ok) setError(r.error ?? "")
                                 }}>Cancelar</Button>
                               )}
                               <Select value={t.estadoPago} onValueChange={v => {
-                                const r = useCompassStore.getState().actualizarPagoTrabajoMT(t.id, v as EstadoPagoMT)
+                                // TODO: migrar actualizarPagoTrabajoMT a API REST (podría mapearse a update(id, { estadoPago }))
+                                const actualizarPagoTrabajoMT = useCompassStore.getState().actualizarPagoTrabajoMT
+                                const r = actualizarPagoTrabajoMT(t.id, v as EstadoPagoMT)
                                 if (!r.ok) setError(r.error ?? "")
                               }}>
                                 <SelectTrigger className="h-8 w-28 text-xs"><SelectValue /></SelectTrigger>
@@ -301,7 +316,9 @@ export default function ProyectosPage() {
         <TabsContent value="prevencion" className="flex flex-col gap-3">
           <div className="flex flex-wrap items-end gap-2">
             <Button variant="outline" onClick={() => {
-              const r = useCompassStore.getState().verificarGarantiasMT()
+              // TODO: migrar verificarGarantiasMT a API REST
+              const verificarGarantiasMT = useCompassStore.getState().verificarGarantiasMT
+              const r = verificarGarantiasMT()
               if (!r.ok) setError(r.error ?? "")
               else setMsg("Garantías verificadas: alertas nuevas notificadas a administración.")
             }}>
@@ -550,8 +567,8 @@ export default function ProyectosPage() {
                       <td className="py-2 pr-3">{p.plazoMeses} meses{p.fechaObjetivo ? ` · objetivo ${p.fechaObjetivo}` : ""}</td>
                       <td className="py-2 pr-3 font-medium">${Math.round(p.presupuestoEstimado / p.plazoMeses).toLocaleString("es-CL")}</td>
                       <td className="py-2">
-                        <Button size="sm" variant="ghost" onClick={() => {
-                          const r = useCompassStore.getState().removeProyectoMT(p.id)
+                        <Button size="sm" variant="ghost" onClick={async () => {
+                          const r = await eliminarProyecto(p.id)
                           if (!r.ok) setError(r.error ?? "")
                         }}>Eliminar</Button>
                       </td>
@@ -589,8 +606,8 @@ export default function ProyectosPage() {
                 </div>
                 <DialogFooter>
                   <Button variant="outline" onClick={() => setNuevoProyecto(null)}>Cancelar</Button>
-                  <Button onClick={() => {
-                    const r = useCompassStore.getState().saveProyectoMT({
+                  <Button onClick={async () => {
+                    const r = await crearProyecto({
                       id: `py-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
                       nombre: nuevoProyecto.nombre,
                       presupuestoEstimado: Number(nuevoProyecto.presupuesto),

@@ -2,7 +2,12 @@
 
 import * as React from "react"
 import { TipoUnidad } from "@/data/inventario/estructura"
-import { useCompassStore, useStoreRehydrated } from "@/lib/store"
+import type { StoreResult } from "@/lib/store"
+import { useTiposUnidad } from "@/lib/api/use-tipos-unidad"
+import { useUnidades } from "@/lib/api/use-unidades"
+import { useMicroSectores } from "@/lib/api/use-micro-sectores"
+import { useMacroSectores } from "@/lib/api/use-macro-sectores"
+import { useMaestros } from "@/lib/api/use-maestros"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import { Tabs, TabsList, TabsTrigger } from "@workspace/ui/components/tabs"
 import { ScrollArea, ScrollBar } from "@workspace/ui/components/scroll-area"
@@ -31,17 +36,39 @@ import {
 } from "@tabler/icons-react"
 import { EstadosDonut } from "@/components/inventario/estados-donut"
 
+/** Maestro nombre simple (MA): id + nombre para selects de categoría. */
+interface MaestroNombre {
+  id: string
+  nombre: string
+}
+
+/** Maestro con color de badge (estados de ocupación). */
+interface MaestroConColor extends MaestroNombre {
+  color: string
+}
+
 export default function TiposUnidadPage() {
-  useStoreRehydrated()
-  const hasHydrated = useCompassStore(s => s.hasHydrated)
-  const data = useCompassStore(s => s.tiposUnidad)
-  const unidades = useCompassStore(s => s.unidades)
-  const microSectores = useCompassStore(s => s.microSectores)
-  const macroSectores = useCompassStore(s => s.macroSectores)
-  const estadosOcupacion = useCompassStore(s => s.maestros.estadosOcupacion)
-  const saveTipoUnidad = useCompassStore(s => s.saveTipoUnidad)
-  const toggleActivoTipoUnidad = useCompassStore(s => s.toggleActivoTipoUnidad)
-  const categoriasUnidad = useCompassStore(s => s.maestros.categoriasUnidad)
+  // Lectura de dominio vía hooks SWR (BD fuente de verdad).
+  const { items: data, isLoading: cargandoTipos, create: crearTipo, update: editarTipo } = useTiposUnidad()
+  const { items: unidades, isLoading: cargandoUnidades } = useUnidades()
+  const { items: microSectores, isLoading: cargandoMicro } = useMicroSectores()
+  const { items: macroSectores, isLoading: cargandoMacro } = useMacroSectores()
+  const { data: categoriasUnidad, isLoading: cCategoriasUnidad } = useMaestros<MaestroNombre>("categorias-unidad")
+  const { data: estadosOcupacion, isLoading: cEstadosOcupacion } = useMaestros<MaestroConColor>("estados-ocupacion")
+  const cargando = cargandoTipos || cargandoUnidades || cargandoMicro || cargandoMacro || cCategoriasUnidad || cEstadosOcupacion
+
+  // Upsert (creación/edición) y toggle de activo vía API REST, con el mismo
+  // contrato StoreResult que las acciones legacy del store.
+  const guardarTipo = async (cuerpo: Omit<TipoUnidad, "id"> & { id?: string }): Promise<StoreResult> => {
+    if (cuerpo.id) {
+      return editarTipo(cuerpo.id, cuerpo)
+    }
+    return crearTipo({ ...cuerpo, id: `tipo-${Date.now()}` })
+  }
+
+  const toggleActivo = (item: TipoUnidad) => {
+    void editarTipo(item.id, { activo: !item.activo })
+  }
 
   const [selectedTipo, setSelectedTipo] = React.useState<string>("todos")
   const [filtroEstado, setFiltroEstado] = React.useState<string>("todos")
@@ -83,7 +110,7 @@ export default function TiposUnidadPage() {
     setIsDialogOpen(true)
   }
 
-  const handleSave = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSave = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
     const nuevoMonto = Number(formData.get("montoBaseGc"))
@@ -104,11 +131,11 @@ export default function TiposUnidadPage() {
       }
     }
 
-    let resultado: { ok: boolean; error?: string } | null = null
+    let resultado: StoreResult | null = null
     if (editingItem) {
       const actualizoMonto = nuevoMonto !== editingItem.montoBaseGc
       const nuevoHistorial = [...editingItem.historialTarifas]
-      
+          
       if (actualizoMonto) {
         nuevoHistorial.push({
           id: `t-${Date.now()}`,
@@ -118,7 +145,7 @@ export default function TiposUnidadPage() {
         })
       }
 
-      resultado = saveTipoUnidad({
+      resultado = await guardarTipo({
         ...editingItem,
         nombre: formData.get("nombre") as string,
         categoria,
@@ -128,8 +155,9 @@ export default function TiposUnidadPage() {
         historialTarifas: nuevoHistorial
       })
     } else {
+      const nuevoId = `tipo-${Date.now()}`
       const nuevoTipo: TipoUnidad = {
-        id: `tipo-${Date.now()}`,
+        id: nuevoId,
         nombre: formData.get("nombre") as string,
         categoria: categoria,
         metraje: Number(formData.get("metraje")),
@@ -143,7 +171,7 @@ export default function TiposUnidadPage() {
           creadoEn: new Date().toISOString().split('T')[0] || ""
         }]
       }
-      resultado = saveTipoUnidad(nuevoTipo)
+      resultado = await guardarTipo(nuevoTipo)
     }
     if (!resultado.ok) {
       setErrorGuardado(resultado.error ?? "No se pudo guardar el tipo de unidad.")
@@ -153,11 +181,7 @@ export default function TiposUnidadPage() {
     setIsDialogOpen(false)
   }
 
-  const toggleActivo = (id: string) => {
-    toggleActivoTipoUnidad(id)
-  }
-
-  if (!hasHydrated) {
+  if (cargando) {
     return (
       <div className="flex flex-col gap-6 animate-pulse">
         <div className="h-9 w-72 rounded bg-muted/40" />
@@ -289,7 +313,7 @@ export default function TiposUnidadPage() {
                               <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleOpenEdit(item)}>
                                 <IconPencil className="size-4" />
                               </Button>
-                              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => toggleActivo(item.id)}>
+                              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => toggleActivo(item)}>
                                 {item.activo ? <IconEyeOff className="size-4 text-amber-600" /> : <IconEye className="size-4 text-green-600" />}
                               </Button>
                             </div>

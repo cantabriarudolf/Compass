@@ -1,7 +1,12 @@
 "use client"
 
 import * as React from "react"
-import { useCompassStore, useStoreRehydrated } from "@/lib/store"
+import { useCompassStore } from "@/lib/store"
+import { useRecursosIR, useSolicitudesInsumoIR, useEntregasEPP } from "@/lib/api/use-ir"
+import { usePersonas } from "@/lib/api/use-personas"
+import { useUnidades } from "@/lib/api/use-unidades"
+import { useMicroSectores } from "@/lib/api/use-micro-sectores"
+import { useMaestros } from "@/lib/api/use-maestros"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
@@ -38,6 +43,7 @@ import type {
   EstadoComodinIR,
   EstadoSolicitudInsumoIR,
   RecursoIR,
+  UnidadMedida,
 } from "@/lib/schemas"
 
 const CATEGORIA_LABEL: Record<CategoriaRecursoIR, string> = {
@@ -123,15 +129,15 @@ const FORM_RECURSO: FormRecurso = {
 const hoy = () => new Date().toISOString().slice(0, 10)
 
 export default function RecursosPage() {
-  useStoreRehydrated()
-  const hasHydrated = useCompassStore(s => s.hasHydrated)
-  const activosIR = useCompassStore(s => s.activosIR)
-  const solicitudesInsumoIR = useCompassStore(s => s.solicitudesInsumoIR)
-  const entregasEPP = useCompassStore(s => s.entregasEPP)
-  const personas = useCompassStore(s => s.personas)
-  const unidades = useCompassStore(s => s.unidades)
-  const microSectores = useCompassStore(s => s.microSectores)
-  const unidadesMedida = useCompassStore(s => s.maestros.unidadesMedida)
+  // Lecturas de dominio vía hooks SWR (BD fuente de verdad).
+  const { items: activosIR, isLoading: cargandoRecursos, create: crearRecurso, update: actualizarRecurso } = useRecursosIR()
+  const { items: solicitudesInsumoIR, isLoading: cargandoSolicitudes, create: crearSolicitudInsumo } = useSolicitudesInsumoIR()
+  const { items: entregasEPP, isLoading: cargandoEntregas, create: crearEntregaEPP } = useEntregasEPP()
+  const { personas, isLoading: cargandoPersonas } = usePersonas()
+  const { items: unidades, isLoading: cargandoUnidades } = useUnidades()
+  const { items: microSectores, isLoading: cargandoMicro } = useMicroSectores()
+  const { data: unidadesMedida, isLoading: cUnidadesMedida } = useMaestros<UnidadMedida>("unidades-medida")
+  const cargando = cargandoRecursos || cargandoSolicitudes || cargandoEntregas || cargandoPersonas || cargandoUnidades || cargandoMicro || cUnidadesMedida
 
   const [error, setError] = React.useState<string | null>(null)
   const [fCategoria, setFCategoria] = React.useState<"todas" | CategoriaRecursoIR>("todas")
@@ -177,7 +183,7 @@ export default function RecursosPage() {
   const pendientes = solicitudesInsumoIR.filter(s => s.estado === "pendiente")
   const comodinesPendientes = pendientes.filter(s => s.estadoComodin === "pendiente")
 
-  const guardarRecurso = () => {
+  const guardarRecurso = async (): Promise<void> => {
     if (!formRecurso) return
     setError(null)
     const payload: RecursoIR = {
@@ -207,7 +213,9 @@ export default function RecursosPage() {
       ...(formRecurso.talla ? { talla: formRecurso.talla } : {}),
       ...(formRecurso.renovacionMeses !== "" ? { renovacionMeses: Number(formRecurso.renovacionMeses) } : {}),
     }
-    const r = useCompassStore.getState().saveRecursoIR(payload)
+    const r = editandoId
+      ? await actualizarRecurso(editandoId, payload)
+      : await crearRecurso({ ...payload, id: `ir-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}` })
     if (!r.ok) { setError(r.error ?? "No se pudo guardar el recurso."); return }
     setFormRecurso(null)
     setEditandoId(null)
@@ -240,10 +248,10 @@ export default function RecursosPage() {
     })
   }
 
-  const crearSolicitud = () => {
+  const crearSolicitud = async (): Promise<void> => {
     if (!nuevaSol) return
     setError(null)
-    const r = useCompassStore.getState().saveSolicitudInsumoIR({
+    const r = await crearSolicitudInsumo({
       id: `si-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
       folio: "",
       solicitantePersonaId: nuevaSol.solicitantePersonaId,
@@ -261,7 +269,7 @@ export default function RecursosPage() {
     setNuevaSol(null)
   }
 
-  if (!hasHydrated) {
+  if (cargando) {
     return (
       <div className="flex flex-col gap-6 animate-pulse">
         <div className="h-9 w-72 rounded bg-muted/40" />
@@ -362,7 +370,7 @@ export default function RecursosPage() {
                           <td className="py-2 pr-3"><Badge className={`${ESTADO_ACTIVO_BADGE[r.estadoActivo]} text-[10px]`}>{ESTADO_ACTIVO_LABEL[r.estadoActivo]}</Badge></td>
                           <td className="py-2">
                             <div className="flex flex-wrap gap-1">
-                              <Select value={r.estadoActivo} onValueChange={v => useCompassStore.getState().cambiarEstadoRecursoIR(r.id, v as EstadoActivoIR)}>
+                              <Select value={r.estadoActivo} onValueChange={v => { void actualizarRecurso(r.id, { estadoActivo: v as EstadoActivoIR }) }}>
                                 <SelectTrigger className="h-8 w-32 text-xs"><SelectValue /></SelectTrigger>
                                 <SelectContent>
                                   {(Object.keys(ESTADO_ACTIVO_LABEL) as EstadoActivoIR[]).map(e => (
@@ -434,7 +442,9 @@ export default function RecursosPage() {
                             <td className="py-2">
                               {s.estado === "pendiente" && s.recursoInsumoId && (
                                 <Button size="sm" variant="outline" onClick={() => {
-                                  const r = useCompassStore.getState().entregarSolicitudInsumoIR(s.id)
+                                  // TODO: migrar entregarSolicitudInsumoIR a API REST
+                                  const entregarSolicitudInsumoIR = useCompassStore.getState().entregarSolicitudInsumoIR
+                                  const r = entregarSolicitudInsumoIR(s.id)
                                   if (!r.ok) setError(r.error ?? "No se pudo entregar.")
                                 }}>
                                   <IconClipboardCheck className="size-4 mr-1" /> Entregar
@@ -462,11 +472,15 @@ export default function RecursosPage() {
               </CardHeader>
               <CardContent className="flex flex-wrap items-center gap-2 pt-0">
                 <Button size="sm" onClick={() => {
-                  const r = useCompassStore.getState().resolverComodinIR(s.id, "aprobar_crear")
+                  // TODO: migrar resolverComodinIR a API REST
+                  const resolverComodinIR = useCompassStore.getState().resolverComodinIR
+                  const r = resolverComodinIR(s.id, "aprobar_crear")
                   if (!r.ok) setError(r.error ?? "No se pudo aprobar.")
                 }}>Aprobar y crear en catálogo</Button>
                 <Select onValueChange={v => {
-                  const r = useCompassStore.getState().resolverComodinIR(s.id, "sustituir", { recursoSustitutoId: v })
+                  // TODO: migrar resolverComodinIR a API REST
+                  const resolverComodinIR = useCompassStore.getState().resolverComodinIR
+                  const r = resolverComodinIR(s.id, "sustituir", { recursoSustitutoId: v })
                   if (!r.ok) setError(r.error ?? "No se pudo sustituir.")
                 }}>
                   <SelectTrigger className="w-64"><SelectValue placeholder="Sustituir por artículo similar…" /></SelectTrigger>
@@ -479,7 +493,9 @@ export default function RecursosPage() {
                 <Button size="sm" variant="outline" onClick={() => {
                   const justificacion = window.prompt("Justificación del rechazo (obligatoria):")
                   if (!justificacion?.trim()) { setError("El rechazo exige justificación obligatoria."); return }
-                  const r = useCompassStore.getState().resolverComodinIR(s.id, "rechazar", { justificacion })
+                  // TODO: migrar resolverComodinIR a API REST
+                  const resolverComodinIR = useCompassStore.getState().resolverComodinIR
+                  const r = resolverComodinIR(s.id, "rechazar", { justificacion })
                   if (!r.ok) setError(r.error ?? "No se pudo rechazar.")
                 }}>Rechazar</Button>
               </CardContent>
@@ -567,14 +583,14 @@ export default function RecursosPage() {
                           <td className="py-2 pr-3">{a.asignacionActual?.fecha ?? "—"}</td>
                           <td className="py-2">
                             {a.asignacionActual ? (
-                              <Button size="sm" variant="outline" onClick={() => {
-                                const r = useCompassStore.getState().devolverAccesoIR(a.id)
+                              <Button size="sm" variant="outline" onClick={async () => {
+                                const r = await actualizarRecurso(a.id, { asignacionActual: undefined })
                                 if (!r.ok) setError(r.error ?? "No se pudo devolver.")
                               }}>Registrar devolución</Button>
                             ) : (
                               <Select onValueChange={v => {
-                                const r = useCompassStore.getState().asignarAccesoIR(a.id, v)
-                                if (!r.ok) setError(r.error ?? "No se pudo asignar.")
+                                void actualizarRecurso(a.id, { asignacionActual: { personaId: v, fecha: hoy() } })
+                                      .then(r => { if (!r.ok) setError(r.error ?? "No se pudo asignar.") })
                               }}>
                                 <SelectTrigger className="h-8 w-48 text-xs"><SelectValue placeholder="Asignar a…" /></SelectTrigger>
                                 <SelectContent>
@@ -863,9 +879,9 @@ export default function RecursosPage() {
               </div>
               <DialogFooter>
                 <Button variant="outline" onClick={() => setNuevaEntrega(null)}>Cancelar</Button>
-                <Button onClick={() => {
+                <Button onClick={async () => {
                   if (!nuevaEntrega.recursoId || !nuevaEntrega.personaId) { setError("Selecciona elemento EPP y receptor."); return }
-                  const r = useCompassStore.getState().registrarEntregaEPP({
+                  const r = await crearEntregaEPP({
                     id: `epp-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
                     recursoId: nuevaEntrega.recursoId,
                     personaId: nuevaEntrega.personaId,
