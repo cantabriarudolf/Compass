@@ -1,96 +1,138 @@
 > **Este archivo ES tu prompt.** Ventana P5 de la serie `SERIE-UI-MIGRACION-BD`.
-> Léelo completo (incluido `openspec/SERIE-UI-MIGRACION-BD/00-plan.md`) y ejecuta sus bloques en orden.
+> Abrí este archivo, leelo completo, y ejecuta cada bloque en orden.
 
 ---
 
-## Contexto común (válido para TODA la serie UI-Migración-BD)
+## Estado del repo al iniciar P5
 
-**Estado previo:** La serie `SERIE-BD-FUENTE-VERDAD` creó la infraestructura completa de persistencia servidora: 107 API routes, ~30 hooks SWR en `lib/api/`, tests de API 151/151 pasando. El store legacy (`lib/store.ts`, 8.600 líneas) está marcado `@deprecated` con `STORE_VERSION = 28` congelado. Pero 28 páginas de la app aún leen/escriben datos de dominio desde `useCompassStore`.
+**Commits previos de la serie:**
+- P1: `d4f8d13` — Dashboard + Admin
+- P2: `cd56d02` + `da40ab8` + `b691dfe` — Comunidad
+- P3: `17605dc` — Operaciones
+- P4: `<hash de P4>` — Inventario
 
-**Método del proyecto:** Por cada cambio → openspec-propose → implementar con openspec-apply-change → validar → commitear (conventional español) → sincronizar specs mains y archivar con openspec-archive-change → skill nsgc-prepush antes de cualquier push.
+**Base de datos poblada:** `prisma/dev.db` tiene datos de seed.
 
-**Reglas permanentes:**
-- Dato de dominio solo vía hooks SWR (`lib/api/use-*.ts`) o API REST directa; el store legacy (`useCompassStore` para datos de dominio) está deprecado.
-- Mocks de `data/` son solo seed; no son fuente de verdad en runtime.
-- D1 media por referencia (sin base64/Blob).
-- Secretos jamás en localStorage ni código.
-- Terminología "comunidad" (jamás "condominio").
-- No commitear Untitled.md.
-
-**Verificación por ventana:**
+**Verificación inicial:**
 ```bash
-cd k0mp4ss_fe/apps/web && npx tsc --noEmit && npm run lint (0 errores) && npm test (suite completa verde)
+cd k0mp4ss_fe/apps/web && npx tsx -e "
+import { prisma } from './lib/prisma';
+async function main() {
+  console.log('personas:', await prisma.persona.count());
+  console.log('unidades:', await prisma.unidad.count());
+}
+main();
+"
 ```
 
-`next build` puede fallar por red (Google Fonts): ignóralo salvo ventana de deploy.
-Si tu contexto se agota: cierra la tarea en curso + commit + deja el estado exacto en `openspec/SERIE-UI-MIGRACION-BD/00-plan.md`.
+---
+
+## Hooks disponibles (YA EXISTEN, no crear)
+
+### Infracciones (IN)
+- `useTiposInfraccionIN()` → `{ items, isLoading, create, update, remove }` — `/api/in/tipos`
+- `useInfraccionesIN()` → `{ items, isLoading, create, update, remove }` — `/api/in/infracciones`
+
+### Personal y Servicios (PE)
+- `useBitacoraVisitasPE()` → `{ items, isLoading, create, update, remove }`
+- `useEncomiendasPE()` → `{ items, isLoading, create, update, remove }`
+- `useIngresosContratistasPE()` → `{ items, isLoading, create, update, remove }`
+- `useProveedoresPE()` → `{ items, isLoading, create, update, remove }`
+- `useMantencionesPE()` → `{ items, isLoading, create, update, remove }`
+- `useVisitasTecnicasPE()` → `{ items, isLoading, create, update, remove }`
+- `useCierresTurnoPE()` → `{ items, isLoading, create, update, remove }`
+- `useProyeccionesPE()` → `{ items, isLoading, create, update, remove }`
+
+**NOTA:** Las liquidaciones PL y adelantos PL **NO tienen hooks dedicados todavía**. Están dentro del store legacy. Para `finanzas/remuneraciones/page.tsx`, dejar fallback con `// TODO`.
+
+### Personas (MP)
+- `usePersonas()` → `{ personas, isLoading }` — `/api/personas`
+- `useVinculos()` → `{ vinculos, isLoading }` — `/api/vinculos`
+
+### Maestros
+- `useMaestros<T>("afps")` → `{ data, isLoading }` — `/api/maestros/afps`
+- `useMaestros<T>("previsiones-salud")` → `{ data, isLoading }`
+- `useMaestros<T>("jornadas")` → `{ data, isLoading }`
+- `useMaestros<T>("asignaciones-familiar")` → `{ data, isLoading }`
 
 ---
 
-## Arranque: verificación de la ventana anterior (antes de tu alcance)
+## Alcance: 4 páginas
 
-1. `git status` (tree limpio) y `git status -sb` (sin "ahead": todo pusheado) y `git log --oneline -8`.
-2. `openspec validate --all` → sin fallos.
-3. `cd k0mp4ss_fe/apps/web && npm test` → suite completa verde.
-4. Contrastar con `openspec/SERIE-UI-MIGRACION-BD/00-plan.md`:
-   - Fila P4 HECHA y todo OK → marca tu fila P5 EN CURSO y continúa.
-   - HECHA pero algo falla → ARREGLA primero (change fix pequeño + test), anótalo en la Bitácora, y solo después empieza tu alcance.
-   - PARCIAL o repo a medias → completa ESE alcance antes del tuyo.
-5. Nunca marques tu fila EN CURSO si lo anterior no está cerrado.
+### 1. `app/finanzas/multas/page.tsx`
+
+**Usos actuales del store:**
+- `useCompassStore(s => s.tiposInfraccionIN)` → `useTiposInfraccionIN().items`
+- `useCompassStore(s => s.infraccionesIN)` → `useInfraccionesIN().items`
+- `useCompassStore(s => s.personas)` → `usePersonas().personas`
+- `useCompassStore(s => s.unidades)` → `useUnidades().items`
+- `useCompassStore(s => s.saveTipoInfraccionIN)` → `useTiposInfraccionIN().create/update`
+- `useCompassStore(s => s.saveInfraccionIN)` → `useInfraccionesIN().create/update`
+- `useCompassStore(s => s.removeTipoInfraccionIN)` → `useTiposInfraccionIN().remove`
+- `useCompassStore(s => s.removeInfraccionIN)` → `useInfraccionesIN().remove`
+- Acciones complejas (`apelarInfraccionIN`, `comentarInfraccionIN`, `respaldarInfraccionIN`, `aplicarInfraccionIN`, `desestimarInfraccionIN`) → mapear a `update(id, { ... })` si es posible, o dejar TODO.
+
+### 2. `app/finanzas/remuneraciones/page.tsx` ⚠️ No tiene hooks PL
+
+**Usos actuales del store:**
+- `useCompassStore(s => s.liquidacionesPL)` → **NO HAY HOOK.** Dejar TODO.
+- `useCompassStore(s => s.adelantosPL)` → **NO HAY HOOK.** Dejar TODO.
+- `useCompassStore(s => s.personas)` → `usePersonas().personas`
+- `useCompassStore(s => s.generarLiquidacionPL)` → **NO HAY HOOK.** Dejar TODO.
+- `useCompassStore(s => s.confirmarLiquidacionPL)` → **NO HAY HOOK.** Dejar TODO.
+- `useCompassStore(s => s.removeLiquidacionPL)` → **NO HAY HOOK.** Dejar TODO.
+- `useCompassStore(s => s.saveAdelantoPL)` → **NO HAY HOOK.** Dejar TODO.
+
+**Decisión:** Esta página queda como **excepción documentada**. No migrar liquidaciones ni adelantos porque no hay hooks/API para PL. Solo migrar la lectura de `personas` si se usa para selects.
+
+### 3. `app/personas/personal/page.tsx`
+
+**Usos actuales del store:**
+- `useCompassStore(s => s.personas)` → `usePersonas().personas`
+- `useCompassStore(s => s.trabajosMT)` → `useTrabajosMT().items`
+- Acciones de personal (`registrarHoraExtraPE`, `registrarEvaluacionPE`, `iniciarTurnoPE`, etc.) → **NO TIENEN HOOKS DIRECTOS.** Mapear a `update` si es posible, o dejar TODO.
+
+**Decisión:** Migrar lecturas (`personas`, `trabajosMT`). Las acciones complejas de personal quedan como TODO.
+
+### 4. `app/personas/residentes/page.tsx`
+
+**Usos actuales del store:**
+- `useCompassStore(s => s.personas)` → `usePersonas().personas`
+- `useCompassStore(s => s.vinculos)` → `useVinculos().vinculos`
+
+**Esta página es simple.** Solo lee personas y vinculos para filtrar residentes.
 
 ---
 
-## Alcance de esta ventana (P5): Finanzas restantes + Personas
-
-Migrar las siguientes páginas de `useCompassStore` (datos de dominio) a hooks SWR:
-
-### Páginas objetivo
-
-1. **`app/finanzas/multas/page.tsx`** → `useIN`
-   - Reemplazar lectura de tipos de infracción e infracciones.
-
-2. **`app/finanzas/remuneraciones/page.tsx`** → `usePE`
-   - Reemplazar lectura de liquidaciones PL y adelantos PL.
-   - Nota: `usePE` es el hook de Personal y Servicios; verificar si expone liquidaciones o si necesita extensión.
-
-3. **`app/personas/personal/page.tsx`** → `usePE`
-   - Reemplazar lectura de personal (turnos, evaluaciones, horas extras).
-
-4. **`app/personas/residentes/page.tsx`** → `usePersonas`
-   - Reemplazar lectura de residentes (subconjunto de personas).
-
-### Patrón de migración
+## Patrón de migración
 
 ```typescript
 // ANTES
-import { useCompassStore } from "@/lib/store"
-const infracciones = useCompassStore((s) => s.infraccionesIN)
+import { useCompassStore, useStoreRehydrated } from "@/lib/store"
+useStoreRehydrated()
+const hasHydrated = useCompassStore(s => s.hasHydrated)
+const items = useCompassStore(s => s.items)
 
 // DESPUÉS
-import { useIN } from "@/lib/api/use-in"
-const { infracciones, isLoading } = useIN()
+import { useItems } from "@/lib/api/use-items"
+const { items, isLoading } = useItems()
 ```
-
-**Reglas específicas:**
-- `hasHydrated` → `isLoading` del hook.
-- Skeletons con `isLoading`.
-- **NO tocar** estado de UI puro.
-
-### Criterios de aceptación
-
-- [ ] Las 4 páginas migradas no usan `useCompassStore` para datos de dominio.
-- [ ] `tsc` 0 errores.
-- [ ] `npm test` suite completa verde.
-- [ ] Commitear: `git commit -m "feat(ui): P5 migración Finanzas restantes + Personas a hooks SWR/BD"`
 
 ---
 
-## Reporte final estandarizado (OBLIGATORIO)
+## Criterios de aceptación
 
-1. **Ventana y estado:** P5 HECHA/PARCIAL + motivo.
-2. **Commits:** hash + subject y push sí/no.
-3. **Specs:** ninguna.
-4. **Números:** tests X/Y pass, tsc/eslint OK, páginas migradas N/4.
-5. **Desviaciones vs el prompt:** documentar.
-6. **Pendientes heredados:** páginas con fallback.
-7. **Última línea exacta:** `BITACORA_ENTRY: P5 — Finanzas restantes + Personas migrados a hooks SWR (N/4 páginas), commit <hash>, tests X/Y.`
+- [ ] `tsc --noEmit` 0 errores nuevos
+- [ ] `cd k0mp4ss_fe/apps/web && npx vitest run test/api/` → 151/151 pass
+- [ ] `finanzas/remuneraciones` documentada como excepción (sin hooks PL)
+- [ ] Commitear: `git add -A && git commit -m "feat(ui): P5 migración Finanzas restantes + Personas a hooks SWR/BD"`
+- [ ] Actualizar `openspec/SERIE-UI-MIGRACION-BD/00-plan.md`: marcar P5 como HECHA
+
+---
+
+## Reporte final
+
+```
+BITACORA_ENTRY: P5 — Finanzas restantes + Personas migrados a hooks SWR (N/4 páginas), commit <hash>, tests X/Y.
+Excepciones: <páginas que quedaron sin migrar y por qué>
+```

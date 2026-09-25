@@ -1,115 +1,134 @@
 > **Este archivo ES tu prompt.** Ventana P6 de la serie `SERIE-UI-MIGRACION-BD`.
-> Léelo completo (incluido `openspec/SERIE-UI-MIGRACION-BD/00-plan.md`) y ejecuta sus bloques en orden.
+> Abrí este archivo, leelo completo, y ejecuta cada bloque en orden.
 
 ---
 
-## Contexto común (válido para TODA la serie UI-Migración-BD)
+## Estado del repo al iniciar P6
 
-**Estado previo:** La serie `SERIE-BD-FUENTE-VERDAD` creó la infraestructura completa de persistencia servidora: 107 API routes, ~30 hooks SWR en `lib/api/`, tests de API 151/151 pasando. El store legacy (`lib/store.ts`, 8.600 líneas) está marcado `@deprecated` con `STORE_VERSION = 28` congelado. Pero 28 páginas de la app aún leen/escriben datos de dominio desde `useCompassStore`.
+**Commits previos de la serie:**
+- P1: `d4f8d13` — Dashboard + Admin
+- P2: `cd56d02` + `da40ab8` + `b691dfe` — Comunidad
+- P3: `17605dc` — Operaciones
+- P4: `<hash>` — Inventario
+- P5: `<hash>` — Finanzas + Personas
 
-**Método del proyecto:** Por cada cambio → openspec-propose → implementar con openspec-apply-change → validar → commitear (conventional español) → sincronizar specs mains y archivar con openspec-archive-change → skill nsgc-prepush antes de cualquier push.
+**Base de datos poblada:** `prisma/dev.db` tiene datos de seed.
 
-**Reglas permanentes:**
-- Dato de dominio solo vía hooks SWR (`lib/api/use-*.ts`) o API REST directa; el store legacy (`useCompassStore` para datos de dominio) está deprecado.
-- Mocks de `data/` son solo seed; no son fuente de verdad en runtime.
-- D1 media por referencia (sin base64/Blob).
-- Secretos jamás en localStorage ni código.
-- Terminología "comunidad" (jamás "condominio").
-- No commitear Untitled.md.
+---
 
-**Verificación por ventana:**
+## Hooks disponibles (YA EXISTEN, no crear)
+
+### Visor de Mensajes (CV)
+- `useAvisosCV()` → `{ items, isLoading, create, update, remove }` — `/api/cv/avisos`
+- `usePlantillasCV()` → `{ items, isLoading, create, update, remove }` — `/api/cv/plantillas`
+
+### Reportes (RE)
+- `useReportesRE()` → `{ items, isLoading, create, update, remove }` — `/api/reportes-re`
+
+### Configuración (CF)
+- `useConfiguracion()` → `{ config, isLoading, update }` — `/api/configuracion`
+
+### Notificaciones
+- `useNotificaciones()` → `{ items, isLoading, update }` — `/api/notificaciones`
+
+### Personas, Unidades, Vinculos
+- `usePersonas()`, `useUnidades()`, `useVinculos()` — ya conocidos
+
+---
+
+## Alcance: 4 páginas + cierre de serie
+
+### 1. `app/visor-mensajes/page.tsx`
+
+**Usos actuales del store:**
+- `useCompassStore(s => s.avisosCV)` → `useAvisosCV().items`
+- `useCompassStore(s => s.reservasRA)` → `useReservasRA().items`
+- `hasHydrated` → `isLoading`
+
+### 2. `app/admin/qa-lab/page.tsx` ⚠️ Excepción probable
+
+**Esta página usa el store de forma intensiva:**
+- Seed de datos (`seedData`)
+- `STORE_VERSION`
+- Migraciones del store
+- Estado de QA (poblado, tests, etc.)
+
+**Decisión:** Si la página usa el store para **gestionar datos de QA** (seed, migraciones, etc.), eso es funcionalidad específica de QA Lab que no tiene equivalente en API REST. **Documentar como excepción** con `// TODO: QA-Lab requiere API de gestión de seed/migraciones`.
+
+Si solo lee datos de dominio para mostrarlos, migrar esas lecturas.
+
+### 3. `app/admin/mantenimiento/page.tsx`
+
+**Revisar qué lee del store.** Probablemente:
+- Datos de mantenciones (`useMantencionesPE()`)
+- Proveedores (`useProveedoresPE()`)
+- Visitas técnicas (`useVisitasTecnicasPE()`)
+
+Migrar lo que tenga hook. El resto, TODO.
+
+### 4. `app/admin/dev-dashboard/page.tsx` ⚠️ Excepción probable
+
+**Similar a QA-Lab:** usa el store para funciones de desarrollo (logs, estado del sistema, etc.). Migrar solo lecturas de datos de dominio si las hay. El resto, documentar como excepción.
+
+---
+
+## Tareas de cierre de serie (OBLIGATORIAS)
+
+Después de migrar las páginas, ejecutar estas verificaciones:
+
+### 1. Conteo de usos restantes del store legacy
 ```bash
-cd k0mp4ss_fe/apps/web && npx tsc --noEmit && npm run lint (0 errores) && npm test (suite completa verde)
+cd k0mp4ss_fe/apps/web
+echo "=== Usos de useCompassStore en app/ ==="
+grep -r "useCompassStore\|useStoreRehydrated" app/ --include="*.tsx" | grep -v "store-ui" | grep -v "TODO" | wc -l
+echo "=== Archivos que aún usan el store ==="
+grep -rl "useCompassStore\|useStoreRehydrated" app/ --include="*.tsx" | grep -v "store-ui" | sort
 ```
 
-`next build` puede fallar por red (Google Fonts): ignóralo salvo ventana de deploy.
-Si tu contexto se agota: cierra la tarea en curso + commit + deja el estado exacto en `openspec/SERIE-UI-MIGRACION-BD/00-plan.md`.
+**Documentar en el reporte:**
+- Número total de usos restantes
+- Lista de archivos que aún usan el store
+- Por qué cada uno quedó (excepción documentada, TODO pendiente, etc.)
+
+### 2. Tests finales
+```bash
+cd k0mp4ss_fe/apps/web
+npx tsc --noEmit
+npx vitest run test/api/
+npm run lint
+```
+
+### 3. Actualizar `00-plan.md`
+- Marcar P6 como HECHA
+- Escribir resumen final en la Bitácora
+- Listar excepciones/TODOs pendientes
+
+### 4. Commitear y push
+```bash
+git add -A
+git commit -m "feat(ui): P6 cierre serie UI-Migración-BD — visor + qa/dev + verificación"
+```
+
+### 5. Archivar serie
+Crear change en openspec si aplica, o actualizar BACKLOG-100.md.
 
 ---
 
-## Arranque: verificación de la ventana anterior (antes de tu alcance)
+## Criterios de aceptación
 
-1. `git status` (tree limpio) y `git status -sb` (sin "ahead": todo pusheado) y `git log --oneline -8`.
-2. `openspec validate --all` → sin fallos.
-3. `cd k0mp4ss_fe/apps/web && npm test` → suite completa verde.
-4. Contrastar con `openspec/SERIE-UI-MIGRACION-BD/00-plan.md`:
-   - Fila P5 HECHA y todo OK → marca tu fila P6 EN CURSO y continúa.
-   - HECHA pero algo falla → ARREGLA primero (change fix pequeño + test), anótalo en la Bitácora, y solo después empieza tu alcance.
-   - PARCIAL o repo a medias → completa ESE alcance antes del tuyo.
-5. Nunca marques tu fila EN CURSO si lo anterior no está cerrado.
+- [ ] Páginas migradas (o documentadas como excepción)
+- [ ] Conteo de usos restantes documentado
+- [ ] `tsc --noEmit` 0 errores nuevos
+- [ ] `npx vitest run test/api/` 151/151 pass
+- [ ] `00-plan.md` actualizado con bitácora completa
+- [ ] Commitear y pushear
 
 ---
 
-## Alcance de esta ventana (P6): Visor-mensajes + QA/Dev + Cierre
+## Reporte final
 
-### Páginas objetivo
-
-1. **`app/visor-mensajes/page.tsx`** → `useCV`
-   - Reemplazar lectura de avisos del visor de mensajes.
-
-2. **`app/admin/qa-lab/page.tsx`**
-   - Esta página probablemente usa el store de forma intensiva (seed, migraciones, etc.).
-   - Revisar si puede usar hooks SWR o si necesita datos agregados que no tienen API.
-   - Si es demasiado compleja, dejar como excepción documentada con `// TODO`.
-
-3. **`app/admin/mantenimiento/page.tsx`**
-   - Revisar qué datos lee del store.
-   - Migrar lo que tenga hook disponible.
-
-4. **`app/admin/dev-dashboard/page.tsx`**
-   - Similar a qa-lab: puede ser compleja. Migrar lo posible, documentar el resto.
-
-### Tareas de cierre de serie
-
-Después de migrar las páginas, ejecutar estas verificaciones finales:
-
-1. **Conteo de usos de store legacy:**
-   ```bash
-   cd k0mp4ss_fe/apps/web && grep -r "useCompassStore\|useStore" app/ --include="*.tsx" | grep -v "store-ui" | wc -l
-   ```
-   - Documentar el número restante en la bitácora.
-   - Si es 0 (ideal), celebrar.
-   - Si es >0, listar qué páginas quedan y por qué.
-
-2. **Verificar que las páginas migradas no regresan al store:**
-   ```bash
-   grep -r "useCompassStore" app/ --include="*.tsx" | grep -v "store-ui" | cut -d: -f1 | sort | uniq
-   ```
-
-3. **Tests finales:**
-   - `npm test` completo.
-   - `npx tsc --noEmit`.
-   - `npm run lint`.
-
-4. **Actualizar `00-plan.md`:**
-   - Marcar todas las filas P1-P6 como HECHAS con sus commits.
-   - Escribir resumen final en la Bitácora.
-
-5. **Commitear y push:**
-   - `git add -A && git commit -m "feat(ui): P6 cierre serie UI-Migración-BD — visor + qa/dev + verificación"`
-   - Si hay cosas pendientes, documentarlas en el commit message.
-
-6. **Archivar serie en openspec:**
-   - Crear change `ui-migracion-bd` en `openspec/changes/` si aplica.
-   - Actualizar `openspec/BACKLOG-100.md` si es relevante.
-
-### Criterios de aceptación
-
-- [ ] Las 4 páginas migradas (o documentadas como excepción) no usan `useCompassStore` para datos de dominio.
-- [ ] Conteo de usos restantes documentado.
-- [ ] `tsc` 0 errores.
-- [ ] `npm test` suite completa verde.
-- [ ] `00-plan.md` actualizado con bitácora completa.
-- [ ] Commitear y pushear.
-
----
-
-## Reporte final estandarizado (OBLIGATORIO)
-
-1. **Ventana y estado:** P6 HECHA/PARCIAL + motivo.
-2. **Commits:** hash + subject y push sí/no.
-3. **Specs:** ninguna o las del cierre.
-4. **Números:** tests X/Y pass, tsc/eslint OK, páginas migradas N/4, usos de store restantes Z.
-5. **Desviaciones vs el prompt:** documentar.
-6. **Pendientes heredados:** ninguno (es la última ventana).
-7. **Última línea exacta:** `BITACORA_ENTRY: P6 — Serie UI-Migración-BD CERRADA. Visor + QA/Dev migrados. Usos de store restantes: Z. Commit <hash>, tests X/Y.`
+```
+BITACORA_ENTRY: P6 — Serie UI-Migración-BD CERRADA. Visor + QA/Dev migrados.
+Usos de store restantes: Z (listar archivos y razones).
+Commit <hash>, tests X/Y.
+```
