@@ -21,7 +21,7 @@
 | Ventana | Alcance | Estado | Commit final |
 |---|---|---|---|
 | P1 | Dashboard + Admin base (configuración, métricas, reportería, gestión, logs) | HECHA | d4f8d13 |
-| P2 | Comunidad restante (ficha persona, portal, visor, certificados, comunicación) | HECHA parcial (3/5 páginas) | — |
+| P2 | Comunidad restante (ficha persona, portal, visor, certificados, comunicación) | ✅ HECHA | b691dfe |
 | P3 | Operaciones (bitácora, paquetería, accesos, proveedores, reservas, solicitudes) | pendiente | — |
 | P4 | Inventario (estructura, tipos, recursos, proyectos) | pendiente | — |
 | P5 | Finanzas restantes (multas, remuneraciones) + Personas (personal, residentes) | pendiente | — |

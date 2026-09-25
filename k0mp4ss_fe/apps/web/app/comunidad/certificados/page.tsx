@@ -1,7 +1,17 @@
 "use client"
 
 import * as React from "react"
-import { useCompassStore, useStoreRehydrated } from "@/lib/store"
+// Lecturas legacy restantes: liquidacionesPL y cobrosFI aún sin hook.
+import { useCompassStore, esMiembroDirectivaVigente, useStoreRehydrated } from "@/lib/store"
+import { useCertificadosCT } from "@/lib/api/use-certificados-ct"
+import { usePersonas } from "@/lib/api/use-personas"
+import { useUnidades } from "@/lib/api/use-unidades"
+import { useVinculos } from "@/lib/api/use-vinculos"
+import { useConfiguracion } from "@/lib/api/use-configuracion"
+import { usePeriodosDirectiva } from "@/lib/api/use-periodos-directiva"
+import { generarId } from "@/lib/id-utils"
+import { hoyISO } from "@/lib/date-utils"
+import { exigibleTotal, saldoPendiente } from "@/lib/finanzas-utils"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
@@ -17,8 +27,8 @@ import {
 } from "@workspace/ui/components/select"
 import { IconCertificate, IconFileText, IconTrash } from "@tabler/icons-react"
 import type { CertificadoCT, ConfiguracionGlobal } from "@/lib/schemas"
+import { CertificadoCTSchema } from "@/lib/schemas"
 import { documentoCertificadoPDF } from "@/lib/pdf-utils"
-import { saldoPendiente } from "@/lib/finanzas-utils"
 
 const TIPO_LABEL: Record<CertificadoCT["tipo"], string> = {
   residencia: "Certificado de Residencia",
@@ -29,16 +39,18 @@ const TIPO_LABEL: Record<CertificadoCT["tipo"], string> = {
 
 export default function CertificadosPage() {
   useStoreRehydrated()
-  const hasHydrated = useCompassStore(s => s.hasHydrated)
-  const certificados = useCompassStore(s => s.certificadosCT)
-  const personas = useCompassStore(s => s.personas)
-  const unidades = useCompassStore(s => s.unidades)
-  const vinculos = useCompassStore(s => s.vinculos)
+  const { items: certificados, isLoading: cCertificados, create: crearCertificadoApi, remove: removeCertificadoApi } = useCertificadosCT()
+  const { personas, isLoading: cPersonas } = usePersonas()
+  const { items: unidades, isLoading: cUnidades } = useUnidades()
+  const { vinculos, isLoading: cVinculos } = useVinculos()
+  const { config, isLoading: cConfig } = useConfiguracion()
+  const { vigente: periodoVigente, isLoading: cPeriodosDirectiva } = usePeriodosDirectiva()
+  // TODO: migrar a usePE cuando exista endpoint /api/pl/liquidaciones (PL).
   const liquidacionesPL = useCompassStore(s => s.liquidacionesPL)
+  // TODO: migrar a useCobrosFI.
   const cobrosFI = useCompassStore(s => s.cobrosFI)
-  const configuracion = useCompassStore(s => s.configuracion)
-  const generarCertificadoCT = useCompassStore(s => s.generarCertificadoCT)
-  const removeCertificadoCT = useCompassStore(s => s.removeCertificadoCT)
+  const hasHydrated = useCompassStore(s => s.hasHydrated)
+  const configuracion = config
 
   const [tipo, setTipo] = React.useState<CertificadoCT["tipo"]>("residencia")
   const [personaId, setPersonaId] = React.useState("")
@@ -49,7 +61,8 @@ export default function CertificadosPage() {
   const [okMsg, setOkMsg] = React.useState<string | null>(null)
   const [pdfBusy, setPdfBusy] = React.useState<string | null>(null)
 
-  if (!hasHydrated) {
+  const cargando = !hasHydrated || cCertificados || cPersonas || cUnidades || cVinculos || cConfig || cPeriodosDirectiva
+  if (cargando) {
     return <div className="h-64 w-full animate-pulse rounded-lg bg-muted" />
   }
 
@@ -73,24 +86,144 @@ export default function CertificadosPage() {
   const liquidacionesConfirmadas = liquidacionesPL.filter(l => l.estado === "confirmada")
   const gateAlDia = tipo === "al_dia" && unidadId ? saldoUnidad(unidadId) : null
 
+  /**
+   * Construye el registro CertificadoCT con la misma lógica de negocio que la
+   * acción legacy `generarCertificadoCT` del store (folio correlativo, resumen,
+   * detalle por tipología, snapshot de directiva vigente) usando los datos de
+   * las colecciones SWR; luego persiste vía POST /api/certificados-ct.
+   */
+  const construirRegistro = (tipoActual: CertificadoCT["tipo"]): CertificadoCT => {
+    let unidadIdDestino = tipoActual !== "liquidacion_sueldo" && unidadId ? unidadId : undefined
+    let personaIdDestino = tipoActual === "residencia" && personaId ? personaId : undefined
+    let origenRef = unidadIdDestino ?? personaIdDestino ?? (tipoActual === "liquidacion_sueldo" ? liquidacionId : undefined)
+    let resumen = ""
+    let detalle: [string, string][] = []
+
+    if (tipoActual === "residencia") {
+      const persona = personas.find(p => p.id === personaId)
+      const vinculoVigente = vinculos.find(v => v.personaId === personaId && v.unidadId === unidadId && !v.fechaFin)
+      if (!persona || !unidadId) throw new Error("El certificado de residencia exige persona y unidad.")
+      if (!vinculoVigente) throw new Error("No se puede emitir: el solicitante no mantiene un vínculo activo en la unidad (VU).")
+      origenRef = vinculoVigente.id
+      resumen = `Se certifica que ${persona.nombres} ${persona.apellidos} (RUT ${persona.rut}) reside actualmente en ${refUnidadUI(unidadId)} según los registros de vinculación vigentes.`
+      detalle = [
+        ["Residente", `${persona.nombres} ${persona.apellidos}`],
+        ["RUT", persona.rut],
+        ["Unidad", refUnidadUI(unidadId)],
+        ["Rol", vinculoVigente.rol],
+      ]
+    } else if (tipoActual === "estado_cuenta" || tipoActual === "al_dia") {
+      if (!unidadId) throw new Error(`El certificado de ${tipoActual === "al_dia" ? "unidad al día" : "estado de cuenta"} exige una unidad.`)
+      const cobros = cobrosFI.filter(c => c.unidadId === unidadId)
+      const totalCargado = cobros.reduce((acc, c) => acc + exigibleTotal(c), 0)
+      const saldoPendienteTotal = cobros.reduce((acc, c) => acc + saldoPendiente(c), 0)
+      if (tipoActual === "al_dia" && saldoPendienteTotal > 0) {
+        throw new Error(`No se puede emitir: la unidad mantiene $${saldoPendienteTotal.toLocaleString("es-CL")} pendiente(s). El certificado Al Día exige saldo <= 0.`)
+      }
+      const propietario = vinculos.find(v => v.unidadId === unidadId && v.rol === "propietario" && !v.fechaFin)
+      const nombreProp = propietario ? nombrePersona(propietario.personaId) : "—"
+      if (tipoActual === "estado_cuenta") {
+        resumen = `Estado de cuenta oficial de ${refUnidadUI(unidadId)}: detalle de gastos comunes pagados, cuotas extraordinarias y fondos pendientes según el libro de Finanzas.`
+      } else {
+        resumen = `Se certifica que la unidad ${refUnidadUI(unidadId)} NO registra deudas pendientes con la comunidad a la fecha de emisión.`
+      }
+      detalle = [
+        ["Unidad", refUnidadUI(unidadId)],
+        ["Propietario", nombreProp],
+        ["Cobros registrados", String(cobros.length)],
+        ["Total cargado", `$${totalCargado.toLocaleString("es-CL")}`],
+        ["Saldo pendiente", `$${saldoPendienteTotal.toLocaleString("es-CL")}`],
+      ]
+    } else {
+      const liq = liquidacionesPL.find(l => l.id === liquidacionId)
+      if (!liq) throw new Error("El certificado de liquidación exige una liquidación de PL.")
+      if (liq.estado !== "confirmada") {
+        throw new Error("Solo liquidaciones confirmadas admiten certificado oficial (control tras cierre del mes).")
+      }
+      unidadIdDestino = undefined
+      personaIdDestino = liq.trabajadorPersonaId
+      origenRef = liq.id
+      const nombreTrabajador = nombrePersona(liq.trabajadorPersonaId)
+      resumen = `Se certifica la remuneración, descuentos legales y haberes de ${nombreTrabajador} correspondientes al periodo ${liq.periodo}, según la liquidación folio ${liq.folio} emitida por la administración.`
+      detalle = [
+        ["Trabajador", nombreTrabajador],
+        ["Periodo", liq.periodo],
+        ["Folio liquidación", liq.folio],
+        ["Total imponible", `$${liq.totalImponible.toLocaleString("es-CL")}`],
+        ["Total haberes", `$${liq.totalHaberes.toLocaleString("es-CL")}`],
+        ["Total descuentos legales", `$${liq.totalDescuentos.toLocaleString("es-CL")}`],
+        ["Líquido a pagar", `$${liq.liquidoAPagar.toLocaleString("es-CL")}`],
+      ]
+    }
+
+    // Folio CT correlativo + código de verificación único.
+    const numeros = certificados
+      .map(c => Number.parseInt(c.folio.replace(/^CT-/, ""), 10))
+      .filter(n => Number.isFinite(n))
+    const folio = `CT-${String((numeros.length > 0 ? Math.max(...numeros) : 0) + 1).padStart(4, "0")}`
+    let codigoVerificacion = `VC-${Math.random().toString(36).slice(2, 10).toUpperCase()}`
+    while (certificados.some(c => c.codigoVerificacion === codigoVerificacion)) {
+      codigoVerificacion = `VC-${Math.random().toString(36).slice(2, 10).toUpperCase()}`
+    }
+
+    // Snapshot de la directiva vigente al emitir (trazabilidad histórica, no bloqueante).
+    const firmantes = periodoVigente
+      ? personas
+          .filter(p => esMiembroDirectivaVigente(p, periodoVigente.id))
+          .flatMap(p =>
+            p.datosGobernanza
+              ? [{ personaId: p.id, nombre: p.nombreCompleto, cargo: p.datosGobernanza.cargoDirectiva }]
+              : []
+          )
+      : []
+
+    return {
+      id: generarId("ct"),
+      folio,
+      codigoVerificacion,
+      tipo: tipoActual,
+      ...(unidadIdDestino ? { unidadId: unidadIdDestino } : {}),
+      ...(personaIdDestino ? { personaId: personaIdDestino } : {}),
+      ...(origenRef ? { origenRef } : {}),
+      solicitanteNombre: solicitanteNombre.trim(),
+      resumen,
+      detalle: detalle.map(([clave, valor]) => ({ clave, valor })),
+      ...(configuracion?.firmaDigitalizadaUrl ? { firmaUrl: configuracion.firmaDigitalizadaUrl } : {}),
+      ...(periodoVigente ? { directivaRef: { periodoId: periodoVigente.id, firmantes } } : {}),
+      fechaEmision: hoyISO(),
+    }
+  }
+
   const generarYDescargar = async () => {
     setError(null); setOkMsg(null)
-    const r = generarCertificadoCT({
-      tipo,
-      ...(tipo !== "liquidacion_sueldo" && unidadId ? { unidadId } : {}),
-      ...(tipo === "residencia" && personaId ? { personaId } : {}),
-      ...(tipo === "liquidacion_sueldo" ? { liquidacionId } : {}),
-      solicitanteNombre,
-    })
+    if (!solicitanteNombre.trim()) {
+      setError("Debe identificar al solicitante del certificado.")
+      return
+    }
+    const firmaUrl = configuracion?.firmaDigitalizadaUrl
+    if (firmaUrl && (/^data:/i.test(firmaUrl) || /^blob:/i.test(firmaUrl))) {
+      setError("Media por referencia (D1): la firma digitalizada configurada en CF no puede estar embebida como base64/Blob.")
+      return
+    }
+    let registro: CertificadoCT
+    try {
+      registro = construirRegistro(tipo)
+    } catch (e) {
+      setError(String(e instanceof Error ? e.message : e))
+      return
+    }
+    const validacion = CertificadoCTSchema.safeParse(registro)
+    if (!validacion.success) {
+      setError(`Datos del certificado inválidos: ${validacion.error.issues[0]?.message ?? ""}`)
+      return
+    }
+    const r = await crearCertificadoApi(registro)
     if (!r.ok) {
       setError(r.error ?? "No se pudo emitir el certificado")
       return
     }
-    const registro = useCompassStore.getState().certificadosCT[useCompassStore.getState().certificadosCT.length - 1]
-    if (registro) {
-      await descargar(registro)
-      setOkMsg(`Certificado ${registro.folio} emitido y firmado. Código de verificación: ${registro.codigoVerificacion}`)
-    }
+    await descargar(registro)
+    setOkMsg(`Certificado ${registro.folio} emitido y firmado. Código de verificación: ${registro.codigoVerificacion}`)
     setSolicitanteNombre("")
   }
 
@@ -271,8 +404,8 @@ export default function CertificadosPage() {
                               <Button size="sm" variant="outline" disabled={pdfBusy === c.id} onClick={() => { void descargar(c) }}>
                                 <IconFileText className="size-4 mr-1" /> PDF
                               </Button>
-                              {c.id.startsWith("test-") && (
-                                <Button size="sm" variant="ghost" onClick={() => removeCertificadoCT(c.id)}><IconTrash className="size-4" /></Button>
+                                {c.id.startsWith("test-") && (
+                                <Button size="sm" variant="ghost" onClick={() => { void removeCertificadoApi(c.id) }}><IconTrash className="size-4" /></Button>
                               )}
                             </div>
                           </td>

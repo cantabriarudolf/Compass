@@ -1,7 +1,12 @@
 "use client"
 
 import * as React from "react"
-import { useCompassStore, useStoreRehydrated } from "@/lib/store"
+import { usePlantillasCO, useEnviosCO, useMensajesBuzonCO, useDocumentosCO } from "@/lib/api/use-co"
+import { usePersonas } from "@/lib/api/use-personas"
+import { useUnidades } from "@/lib/api/use-unidades"
+import { useVinculos } from "@/lib/api/use-vinculos"
+import { useMacroSectores } from "@/lib/api/use-macro-sectores"
+import { useMicroSectores } from "@/lib/api/use-micro-sectores"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
@@ -37,6 +42,8 @@ import {
   IconLock,
 } from "@tabler/icons-react"
 import type { EnvioCO, EstadoBuzonCO, MensajeBuzonCO, PlantillaCO } from "@/lib/schemas"
+import { generarId } from "@/lib/id-utils"
+import { hoyISO } from "@/lib/date-utils"
 
 type Vista = "administrador" | "directiva" | "vecino"
 
@@ -62,17 +69,16 @@ const CATEGORIA_LABEL: Record<string, string> = {
 }
 
 export default function ComunicacionPage() {
-  useStoreRehydrated()
-  const hasHydrated = useCompassStore(s => s.hasHydrated)
-  const personas = useCompassStore(s => s.personas)
-  const vinculos = useCompassStore(s => s.vinculos)
-  const unidades = useCompassStore(s => s.unidades)
-  const macroSectores = useCompassStore(s => s.macroSectores)
-  const microSectores = useCompassStore(s => s.microSectores)
-  const plantillasCO = useCompassStore(s => s.plantillasCO)
-  const enviosCO = useCompassStore(s => s.enviosCO)
-  const mensajesBuzonCO = useCompassStore(s => s.mensajesBuzonCO)
-  const documentosCO = useCompassStore(s => s.documentosCO)
+  const { personas, isLoading: cPersonas } = usePersonas()
+  const { vinculos, isLoading: cVinculos } = useVinculos()
+  const { items: unidades, isLoading: cUnidades } = useUnidades()
+  const { items: macroSectores, isLoading: cMacro } = useMacroSectores()
+  const { items: microSectores, isLoading: cMicro } = useMicroSectores()
+  const { items: plantillasCO, isLoading: cPlantillas, create: crearPlantillaApi, update: actualizarPlantillaApi, remove: eliminarPlantillaApi } = usePlantillasCO()
+  const { items: enviosCO, isLoading: cEnvios, create: crearEnvioApi, update: actualizarEnvioApi } = useEnviosCO()
+  const { items: mensajesBuzonCO, isLoading: cBuzon, create: crearMensajeApi, update: actualizarMensajeApi, remove: eliminarMensajeApi } = useMensajesBuzonCO()
+  const { items: documentosCO, isLoading: cDocs, create: crearDocumentoApi, update: actualizarDocumentoApi, remove: eliminarDocumentoApi } = useDocumentosCO()
+  // TODO: migrar eventos de auditoría (lecturas de envío, descargas de docs, notificaciones email_simulado) a endpoints de API en próxima fase.
 
   const [vista, setVista] = React.useState<Vista>("administrador")
   const [error, setError] = React.useState<string | null>(null)
@@ -100,150 +106,201 @@ export default function ComunicacionPage() {
   // --- Plantillas ---
   const [editandoPlantilla, setEditandoPlantilla] = React.useState<PlantillaCO | null>(null)
 
-  // --- Biblioteca ---
-  const [editandoDoc, setEditandoDoc] = React.useState<{ id: string; nombre: string; categoria: string; tipoMime: string; tamanoKB: number; url: string } | null>(null)
+      // --- Biblioteca ---
+      const [editandoDoc, setEditandoDoc] = React.useState<{ id: string; nombre: string; categoria: string; tipoMime: string; tamanoKB: number; url: string } | null>(null)
 
-  const nombrePersona = (id: string) => {
-    const p = personas.find(x => x.id === id)
-    return p ? `${p.nombres} ${p.apellidos}` : id
-  }
+      const cargando = cPersonas || cVinculos || cUnidades || cMacro || cMicro || cPlantillas || cEnvios || cBuzon || cDocs
 
-  const esAdmin = vista === "administrador"
-  const esDirectiva = vista === "directiva"
-
-  const microsVisibles = macroSel === "todos" ? microSectores : microSectores.filter(m => m.macroSectorId === macroSel)
-  const unidadesVisibles = microSel === "todos" ? unidades : unidades.filter(u => u.microSectorId === microSel)
-
-  const destinatarios = React.useMemo(() => {
-    const rolPersona = (personaId: string): string[] => {
-      const vigs = vinculos.filter(v => v.personaId === personaId && !v.fechaFin).map(v => v.rol)
-      if (vigs.length > 0) return vigs
-      const p = personas.find(x => x.id === personaId)
-      return p?.roles.filter(r => r !== "directiva") ?? []
-    }
-    const base = new Map<string, string | undefined>()
-    for (const p of personas) {
-      if (p.estadoCuenta !== "activa") continue
-      const roles = rolPersona(p.id)
-      if (roles.includes("personal")) {
-        if (rolesFiltro.includes("personal")) base.set(p.id, undefined)
-        continue
+      const nombrePersona = (id: string) => {
+        const p = personas.find(x => x.id === id)
+        return p ? `${p.nombres} ${p.apellidos}` : id
       }
-      const vigs = vinculos.filter(v => v.personaId === p.id && !v.fechaFin)
-      if (vigs.length === 0) continue
-      for (const v of vigs) {
-        if (!rolesFiltro.includes(v.rol)) continue
-        if (!base.has(p.id)) base.set(p.id, v.unidadId)
+
+      const esAdmin = vista === "administrador"
+      const esDirectiva = vista === "directiva"
+
+      const microsVisibles = macroSel === "todos" ? microSectores : microSectores.filter(m => m.macroSectorId === macroSel)
+      const unidadesVisibles = microSel === "todos" ? unidades : unidades.filter(u => u.microSectorId === microSel)
+
+      const destinatarios = React.useMemo(() => {
+        const rolPersona = (personaId: string): string[] => {
+          const vigs = vinculos.filter(v => v.personaId === personaId && !v.fechaFin).map(v => v.rol)
+          if (vigs.length > 0) return vigs
+          const p = personas.find(x => x.id === personaId)
+          return p?.roles.filter(r => r !== "directiva") ?? []
+        }
+        const base = new Map<string, string | undefined>()
+        for (const p of personas) {
+          if (p.estadoCuenta !== "activa") continue
+          const roles = rolPersona(p.id)
+          if (roles.includes("personal")) {
+            if (rolesFiltro.includes("personal")) base.set(p.id, undefined)
+            continue
+          }
+          const vigs = vinculos.filter(v => v.personaId === p.id && !v.fechaFin)
+          if (vigs.length === 0) continue
+          for (const v of vigs) {
+            if (!rolesFiltro.includes(v.rol)) continue
+            if (!base.has(p.id)) base.set(p.id, v.unidadId)
+          }
+        }
+        let lista = Array.from(base.entries()).map(([personaId, unidadId]) => ({ personaId, unidadId }))
+        if (macroSel !== "todos" || microSel !== "todos" || unidadSel !== "todas") {
+          const idsUnidades = new Set(unidadesVisibles.map(u => u.id))
+          lista = lista.filter(d => d.unidadId && idsUnidades.has(d.unidadId))
+        }
+        return lista
+      }, [personas, vinculos, rolesFiltro, macroSel, microSel, unidadSel, unidadesVisibles])
+
+      const cargarPlantilla = (id: string) => {
+        setPlantillaSel(id)
+        const pl = plantillasCO.find(p => p.id === id)
+        if (pl) {
+          setAsunto(pl.asunto)
+          setCuerpo(pl.cuerpo)
+        }
       }
-    }
-    let lista = Array.from(base.entries()).map(([personaId, unidadId]) => ({ personaId, unidadId }))
-    if (macroSel !== "todos" || microSel !== "todos" || unidadSel !== "todas") {
-      const idsUnidades = new Set(unidadesVisibles.map(u => u.id))
-      lista = lista.filter(d => d.unidadId && idsUnidades.has(d.unidadId))
-    }
-    return lista
-  }, [personas, vinculos, rolesFiltro, macroSel, microSel, unidadSel, unidadesVisibles])
 
-  const cargarPlantilla = (id: string) => {
-    setPlantillaSel(id)
-    const pl = plantillasCO.find(p => p.id === id)
-    if (pl) {
-      setAsunto(pl.asunto)
-      setCuerpo(pl.cuerpo)
-    }
-  }
+      const enviarMasivo = async () => {
+        setError(null); setExito(null)
+        if (!asunto.trim() || !cuerpo.trim()) { setError("El asunto y el cuerpo son obligatorios."); return }
+        if (destinatarios.length === 0) { setError("Los filtros no resuelven ningún destinatario."); return }
+        const r = await crearEnvioApi({
+          id: generarId("env"),
+          asunto,
+          cuerpo,
+          plantillaId: plantillaSel || undefined,
+          destinatarios,
+          fechaEnvio: new Date().toISOString().slice(0, 10),
+          lecturas: [],
+        })
+        if (!r.ok) { setError(r.error ?? "No se pudo enviar."); return }
+        setExito(`Envío masivo a ${destinatarios.length} destinatario(s) materializado en bandeja email_simulado.`)
+      }
 
-  const enviarMasivo = () => {
-    setError(null); setExito(null)
-    if (!asunto.trim() || !cuerpo.trim()) { setError("El asunto y el cuerpo son obligatorios."); return }
-    if (destinatarios.length === 0) { setError("Los filtros no resuelven ningún destinatario."); return }
-    const r = useCompassStore.getState().saveEnvioCO({
-      id: `env-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
-      asunto,
-      cuerpo,
-      plantillaId: plantillaSel || undefined,
-      destinatarios,
-      fechaEnvio: new Date().toISOString().slice(0, 10),
-      lecturas: [],
-    })
-    if (!r.ok) { setError(r.error ?? "No se pudo enviar."); return }
-    setExito(`Envío masivo a ${destinatarios.length} destinatario(s) materializado en bandeja email_simulado.`)
-  }
+      const simularLectura = async (envio: EnvioCO) => {
+        const pendiente = envio.destinatarios.find(d => !envio.lecturas.includes(d.personaId))
+        if (!pendiente) return
+        const r = await actualizarEnvioApi(envio.id, { lecturas: [...envio.lecturas, pendiente.personaId] })
+        if (!r.ok) setError(r.error ?? "No se pudo confirmar la lectura.")
+      }
 
-  const simularLectura = (envio: EnvioCO) => {
-    const pendiente = envio.destinatarios.find(d => !envio.lecturas.includes(d.personaId))
-    if (!pendiente) return
-    useCompassStore.getState().registrarLecturaEnvioCO(envio.id, pendiente.personaId)
-  }
+      const enviarBuzon = async () => {
+        setError(null); setExito(null)
+        if (!buzonAsunto.trim() || !buzonCuerpo.trim()) { setError("Asunto y mensaje son obligatorios."); return }
+        const reportante = reportanteId || personas[0]?.id
+        const persona = personas.find(p => p.id === reportante)
+        // Folio BUZ-#### único por construcción (misma regla que la acción legacy del store).
+        const numeros = mensajesBuzonCO
+          .map(m => Number.parseInt(m.folio.replace(/^BUZ-/, ""), 10))
+          .filter(n => Number.isFinite(n))
+        const siguiente = (numeros.length > 0 ? Math.max(...numeros) : 0) + 1
+        const r = await crearMensajeApi({
+          id: generarId("buz"),
+          folio: `BUZ-${String(siguiente).padStart(4, "0")}`,
+          clasificacion,
+          ...(reportante ? { reportantePersonaId: reportante } : {}),
+          reportanteNombre: persona ? `${persona.nombres} ${persona.apellidos}` : "Vecino/a",
+          asunto: buzonAsunto,
+          cuerpo: buzonCuerpo,
+          visibilidadComite,
+          fechaIngreso: new Date().toISOString().slice(0, 10),
+          estado: "recibido",
+          respuestas: [],
+        })
+        if (!r.ok) { setError(r.error ?? "No se pudo registrar."); return }
+        setBuzonAsunto(""); setBuzonCuerpo(""); setVisibilidadComite(false)
+        setExito("Mensaje ingresado al buzón con folio de seguimiento.")
+      }
 
-  const enviarBuzon = () => {
-    setError(null); setExito(null)
-    if (!buzonAsunto.trim() || !buzonCuerpo.trim()) { setError("Asunto y mensaje son obligatorios."); return }
-    const reportante = reportanteId || personas[0]?.id
-    const persona = personas.find(p => p.id === reportante)
-    const r = useCompassStore.getState().saveMensajeBuzonCO({
-      id: `buz-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
-      folio: "",
-      clasificacion,
-      reportantePersonaId: reportante,
-      reportanteNombre: persona ? `${persona.nombres} ${persona.apellidos}` : "Vecino/a",
-      asunto: buzonAsunto,
-      cuerpo: buzonCuerpo,
-      visibilidadComite,
-      fechaIngreso: new Date().toISOString().slice(0, 10),
-      estado: "recibido",
-      respuestas: [],
-    })
-    if (!r.ok) { setError(r.error ?? "No se pudo registrar."); return }
-    setBuzonAsunto(""); setBuzonCuerpo(""); setVisibilidadComite(false)
-    setExito("Mensaje ingresado al buzón con folio de seguimiento.")
-  }
+      const responderTicket = async () => {
+        if (!respondiendo) return
+        if (!respuestaTexto.trim()) { setError("La respuesta no puede estar vacía."); return }
+        // Push a respuestas + auto-transición recibido→en_gestion (paridad con responderMensajeBuzonCO del store).
+        const r = await actualizarMensajeApi(respondiendo.id, {
+          estado: respondiendo.estado === "recibido" ? "en_gestion" : respondiendo.estado,
+          respuestas: [
+            ...respondiendo.respuestas,
+            {
+              id: generarId("resp"),
+              autor: "Administración",
+              texto: respuestaTexto,
+              compromisos: respuestaCompromiso || undefined,
+              fecha: hoyISO(),
+            },
+          ],
+        })
+        if (!r.ok) setError(r.error ?? "No se pudo responder.")
+        else setRespondiendo(null)
+        setRespuestaTexto(""); setRespuestaCompromiso("")
+      }
 
-  const responderTicket = () => {
-    if (!respondiendo) return
-    const r = useCompassStore.getState().responderMensajeBuzonCO(respondiendo.id, {
-      autor: "Administración",
-      texto: respuestaTexto,
-      compromisos: respuestaCompromiso || undefined,
-    })
-    if (!r.ok) setError(r.error ?? "No se pudo responder.")
-    else setRespondiendo(null)
-    setRespuestaTexto(""); setRespuestaCompromiso("")
-  }
+      // Transiciones válidas del ciclo del ticket (paridad con cambiarEstadoBuzonCO del store).
+      const TRANSICIONES_BUZON: Record<string, EstadoBuzonCO[]> = {
+        recibido: ["en_gestion"],
+        en_gestion: ["resuelto", "cerrado"],
+        resuelto: ["cerrado"],
+        cerrado: [],
+      }
 
-  const cambiarEstado = (id: string, estado: EstadoBuzonCO) => {
-    const r = useCompassStore.getState().cambiarEstadoBuzonCO(id, estado)
-    if (!r.ok) setError(r.error ?? "No se pudo cambiar el estado.")
-  }
+      const cambiarEstado = async (id: string, estado: EstadoBuzonCO) => {
+        const mensaje = mensajesBuzonCO.find(m => m.id === id)
+        if (mensaje && !TRANSICIONES_BUZON[mensaje.estado]?.includes(estado)) {
+          setError(`Transición inválida: un ticket ${mensaje.estado} no puede pasar a ${estado}.`)
+          return
+        }
+        const r = await actualizarMensajeApi(id, { estado })
+        if (!r.ok) setError(r.error ?? "No se pudo cambiar el estado.")
+      }
 
-  const guardarPlantilla = () => {
-    if (!editandoPlantilla) return
-    const r = useCompassStore.getState().savePlantillaCO(editandoPlantilla)
-    if (!r.ok) { setError(r.error ?? "No se pudo guardar la plantilla."); return }
-    setEditandoPlantilla(null)
-  }
+      const guardarPlantilla = async () => {
+        if (!editandoPlantilla) return
+        const existente = plantillasCO.some(p => p.id === editandoPlantilla.id)
+        const r = existente
+          ? await actualizarPlantillaApi(editandoPlantilla.id, { nombre: editandoPlantilla.nombre, categoria: editandoPlantilla.categoria, asunto: editandoPlantilla.asunto, cuerpo: editandoPlantilla.cuerpo })
+          : await crearPlantillaApi(editandoPlantilla)
+        if (!r.ok) { setError(r.error ?? "No se pudo guardar la plantilla."); return }
+        setEditandoPlantilla(null)
+      }
 
-  const guardarDoc = () => {
-    if (!editandoDoc) return
-    const r = useCompassStore.getState().saveDocumentoCO(editandoDoc)
-    if (!r.ok) { setError(r.error ?? "No se pudo guardar el documento."); return }
-    setEditandoDoc(null)
-  }
+      const guardarDoc = async () => {
+        if (!editandoDoc) return
+        const existente = documentosCO.some(d => d.id === editandoDoc.id)
+        const r = existente
+          ? await actualizarDocumentoApi(editandoDoc.id, { nombre: editandoDoc.nombre, categoria: editandoDoc.categoria, tipoMime: editandoDoc.tipoMime, tamanoKB: editandoDoc.tamanoKB, url: editandoDoc.url })
+          : await crearDocumentoApi(editandoDoc)
+        if (!r.ok) { setError(r.error ?? "No se pudo guardar el documento."); return }
+        setEditandoDoc(null)
+      }
 
-  const abrirDocumento = (docId: string, url: string) => {
-    useCompassStore.getState().registrarDescargaDocCO(docId)
-    window.open(url, "_blank", "noopener,noreferrer")
-  }
+      // D1 media por referencia: solo http(s); se rechazan esquemas peligrosos.
+      const esUrlSegura = (url: string): boolean => {
+        try {
+          const u = new URL(url)
+          return u.protocol === "http:" || u.protocol === "https:"
+        } catch {
+          return false
+        }
+      }
 
-  // Privacidad del buzón: admin todo; directiva solo lo visible al Comité;
-  // vecino solo sus propios mensajes.
-  const buzonVisible = mensajesBuzonCO.filter(m => {
-    if (esAdmin) return true
-    if (esDirectiva) return m.visibilidadComite
-    return m.reportantePersonaId === (reportanteId || personas[0]?.id)
-  })
+      const abrirDocumento = (docId: string, url: string) => {
+        // TODO: registrarDescargaDocCO (evento de auditoría) aún viaja vía API en fase posterior.
+        if (!esUrlSegura(url)) {
+          setError("URL del documento inválida: solo http(s) por referencia (D1).")
+          return
+        }
+        window.open(url, "_blank", "noopener,noreferrer")
+      }
 
-  if (!hasHydrated) {
+      // Privacidad del buzón: admin todo; directiva solo lo visible al Comité;
+      // vecino solo sus propios mensajes.
+      const buzonVisible = mensajesBuzonCO.filter(m => {
+        if (esAdmin) return true
+        if (esDirectiva) return m.visibilidadComite
+        return m.reportantePersonaId === (reportanteId || personas[0]?.id)
+      })
+
+      if (cargando) {
     return (
       <div className="flex flex-col gap-6 animate-pulse">
         <div className="h-9 w-72 rounded bg-muted/40" />
@@ -432,10 +489,10 @@ export default function ComunicacionPage() {
                       </div>
                       <div className="flex gap-1">
                         <Button variant="ghost" size="icon" aria-label="Editar plantilla" onClick={() => setEditandoPlantilla({ ...pl })}><IconPencil className="size-4" /></Button>
-                        <Button variant="ghost" size="icon" aria-label="Eliminar plantilla" onClick={() => {
-                          const r = useCompassStore.getState().removePlantillaCO(pl.id)
+                        <Button variant="ghost" size="icon" aria-label="Eliminar plantilla" onClick={() => { void (async () => {
+                          const r = await eliminarPlantillaApi(pl.id)
                           if (!r.ok) setError(r.error ?? "No se pudo eliminar.")
-                        }}><IconTrash className="size-4" /></Button>
+                        })() }}><IconTrash className="size-4" /></Button>
                       </div>
                     </div>
                   </CardHeader>
@@ -571,7 +628,7 @@ export default function ComunicacionPage() {
                       <IconExternalLink className="size-3 mr-1" /> Abrir
                     </Button>
                     {esAdmin && (
-                      <Button variant="ghost" size="icon" aria-label="Eliminar documento" onClick={() => { useCompassStore.getState().removeDocumentoCO(doc.id) }}><IconTrash className="size-4" /></Button>
+                      <Button variant="ghost" size="icon" aria-label="Eliminar documento" onClick={() => { void eliminarDocumentoApi(doc.id) }}><IconTrash className="size-4" /></Button>
                     )}
                   </div>
                 </CardContent>
