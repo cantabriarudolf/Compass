@@ -1,7 +1,14 @@
 "use client"
 
 import * as React from "react"
-import { useCompassStore, useStoreRehydrated } from "@/lib/store"
+// Datos de dominio vía API REST (BD fuente de verdad); store legacy deprecado.
+import { usePersonas } from "@/lib/api/use-personas"
+import { useVinculos } from "@/lib/api/use-vinculos"
+import { useUnidades } from "@/lib/api/use-unidades"
+import { useSolicitudesGE } from "@/lib/api/use-ge"
+import { useMensajesBuzonCO } from "@/lib/api/use-co"
+import { generarId } from "@/lib/id-utils"
+import { ahoraISO, hoyISO } from "@/lib/date-utils"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
@@ -87,13 +94,17 @@ const FORM_NUEVA: FormNueva = {
 }
 
 export default function SolicitudesPage() {
-  useStoreRehydrated()
-  const hasHydrated = useCompassStore(s => s.hasHydrated)
-  const personas = useCompassStore(s => s.personas)
-  const vinculos = useCompassStore(s => s.vinculos)
-  const unidades = useCompassStore(s => s.unidades)
-  const solicitudesGE = useCompassStore(s => s.solicitudesGE)
-  const mensajesBuzonCO = useCompassStore(s => s.mensajesBuzonCO)
+  const { personas, isLoading: cPersonas } = usePersonas()
+  const { vinculos, isLoading: cVinculos } = useVinculos()
+  const { items: unidades, isLoading: cUnidades } = useUnidades()
+  const {
+items: solicitudesGE,
+isLoading: cSolicitudes,
+create: crearSolicitudApi,
+update: actualizarSolicitudApi,
+  } = useSolicitudesGE()
+  const { items: mensajesBuzonCO, isLoading: cBuzon } = useMensajesBuzonCO()
+  const cargandoAPI = cPersonas || cVinculos || cUnidades || cSolicitudes || cBuzon
 
   // Mock-first: sin mapeo sesión→persona se simula quién opera (conserje/residente) o administración.
   const [vista, setVista] = React.useState<"administrador" | "vecino">("administrador")
@@ -107,9 +118,16 @@ export default function SolicitudesPage() {
   const [fSolicitante, setFSolicitante] = React.useState("")
   const [fTipo, setFTipo] = React.useState<"todas" | TipoSolicitudGE>("todas")
 
-  const [detalle, setDetalle] = React.useState<SolicitudGE | null>(null)
-  const [comentarioTexto, setComentarioTexto] = React.useState("")
-  const [nueva, setNueva] = React.useState<FormNueva | null>(null)
+      const [detalleId, setDetalleId] = React.useState<string | null>(null)
+      const [comentarioTexto, setComentarioTexto] = React.useState("")
+      const [nueva, setNueva] = React.useState<FormNueva | null>(null)
+
+      // El detalle se deriva de la colección SWR: cada PUT revalida y el diálogo
+      // refleja el ticket actualizado sin estado duplicado.
+      const detalle = React.useMemo(
+        () => solicitudesGE.find(s => s.id === detalleId) ?? null,
+        [solicitudesGE, detalleId]
+      )
 
   const nombrePersona = (id?: string) => {
     if (!id) return "—"
@@ -165,56 +183,134 @@ export default function SolicitudesPage() {
     return horas.reduce((a, b) => a + b, 0) / horas.length
   }, [solicitudesGE])
 
-  const abrirDetalle = (ticket: SolicitudGE) => {
-    setError(null)
-    setDetalle(ticket)
-    setComentarioTexto("")
-    // Workflow automático: primera lectura de administración → En Revisión.
-    if (vista === "administrador") {
-      useCompassStore.getState().abrirSolicitudGE(ticket.id)
-    }
-  }
+      const abrirDetalle = async (ticket: SolicitudGE) => {
+        setError(null)
+        setDetalleId(ticket.id)
+        setComentarioTexto("")
+        // Workflow automático: primera lectura de administración → En Revisión.
+        if (vista === "administrador" && ticket.estado === "nuevo") {
+          const r = await actualizarSolicitudApi(ticket.id, {
+            estado: "en_revision",
+            historialEstados: [
+              ...ticket.historialEstados,
+              { de: ticket.estado, a: "en_revision", fecha: ahoraISO() },
+            ],
+          })
+          if (!r.ok) setError(r.error ?? "No se pudo abrir el ticket.")
+        }
+      }
 
-  const enviarComentario = (autorRol: "administracion" | "solicitante") => {
-    if (!detalle) return
-    const r = useCompassStore.getState().responderSolicitudGE(detalle.id, { autorRol, texto: comentarioTexto })
-    if (!r.ok) { setError(r.error ?? "No se pudo comentar."); return }
-    setDetalle(useCompassStore.getState().solicitudesGE.find(s => s.id === detalle.id) ?? null)
-    setComentarioTexto("")
-  }
+      /** Comentario + transición automática de estado (espejo de responderSolicitudGE legacy) vía PUT parcial. */
+      const enviarComentario = async (autorRol: "administracion" | "solicitante") => {
+        if (!detalle) return
+        if (comentarioTexto.trim().length === 0) {
+          setError("El comentario no puede estar vacío.")
+          return
+        }
+        if (["resuelto", "cerrado"].includes(detalle.estado)) {
+          setError(`No se puede comentar un ticket ${detalle.estado}.`)
+          return
+        }
+        let nuevoEstado: EstadoSolicitudGE = detalle.estado
+        if (
+          autorRol === "administracion" &&
+          ["en_revision", "en_proceso"].includes(detalle.estado)
+        ) {
+          nuevoEstado = "requiere_accion_vecino"
+        } else if (
+          autorRol === "solicitante" &&
+          detalle.estado === "requiere_accion_vecino"
+        ) {
+          nuevoEstado = "en_proceso"
+        }
+        const r = await actualizarSolicitudApi(detalle.id, {
+          estado: nuevoEstado,
+          comentarios: [
+            ...detalle.comentarios,
+            {
+              id: generarId("com"),
+              autorRol,
+              texto: comentarioTexto.trim(),
+              fecha: ahoraISO(),
+            },
+          ],
+          ...(nuevoEstado !== detalle.estado
+            ? {
+                historialEstados: [
+                  ...detalle.historialEstados,
+                  { de: detalle.estado, a: nuevoEstado, fecha: ahoraISO() },
+                ],
+              }
+            : {}),
+        })
+        if (!r.ok) { setError(r.error ?? "No se pudo comentar."); return }
+        setComentarioTexto("")
+      }
 
-  const resolver = () => {
-    if (!detalle) return
-    const r = useCompassStore.getState().resolverSolicitudGE(detalle.id, comentarioTexto)
-    if (!r.ok) { setError(r.error ?? "No se pudo resolver."); return }
-    setDetalle(null)
-    setComentarioTexto("")
-  }
+      const resolver = async () => {
+        if (!detalle) return
+        if (comentarioTexto.trim().length === 0) {
+          setError("La resolución es obligatoria para resolver el ticket.")
+          return
+        }
+        if (detalle.estado === "cerrado") {
+          setError("El ticket ya está cerrado.")
+          return
+        }
+        const r = await actualizarSolicitudApi(detalle.id, {
+          estado: "resuelto",
+          resolucion: comentarioTexto.trim(),
+          historialEstados: [
+            ...detalle.historialEstados,
+            { de: detalle.estado, a: "resuelto", fecha: ahoraISO() },
+          ],
+        })
+        if (!r.ok) { setError(r.error ?? "No se pudo resolver."); return }
+        setDetalleId(null)
+        setComentarioTexto("")
+      }
 
-  const cerrar = () => {
-    if (!detalle) return
-    const r = useCompassStore.getState().cerrarSolicitudGE(detalle.id)
-    if (!r.ok) { setError(r.error ?? "No se pudo cerrar."); return }
-    setDetalle(null)
-  }
+      const cerrar = async () => {
+        if (!detalle) return
+        if (detalle.estado !== "resuelto") {
+          setError("Solo un ticket Resuelto puede pasar a Cerrado.")
+          return
+        }
+        const r = await actualizarSolicitudApi(detalle.id, {
+          estado: "cerrado",
+          fechaCierre: hoyISO(),
+          historialEstados: [
+            ...detalle.historialEstados,
+            { de: "resuelto", a: "cerrado", fecha: ahoraISO() },
+          ],
+        })
+        if (!r.ok) { setError(r.error ?? "No se pudo cerrar."); return }
+        setDetalleId(null)
+      }
 
-  const crearSolicitud = () => {
+  const crearSolicitud = async () => {
     if (!nueva) return
     setError(null)
     const solicitante = nueva.solicitantePersonaId || (vista === "vecino" ? (actuandoComo || personas[0]?.id) : undefined)
     const unidadAuto = solicitante ? unidadVigenteDe(solicitante) : ""
     const unidadFinal = nueva.registradoPorConserje ? nueva.unidadId : (unidadAuto || nueva.unidadId || undefined)
 
-    const r = useCompassStore.getState().saveSolicitudGE({
-      id: `sol-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
-      folio: "",
+    // Folio GE-#### calculado en cliente (misma regla que la acción legacy del store).
+    const numeros = solicitudesGE
+      .map(s => Number.parseInt(s.folio.replace(/^GE-/, ""), 10))
+      .filter((n) => Number.isFinite(n))
+    const siguiente = (numeros.length > 0 ? Math.max(...numeros) : 0) + 1
+
+    const r = await crearSolicitudApi({
+      id: generarId("sol"),
+      folio: `GE-${String(siguiente).padStart(4, "0")}`,
       tipo: nueva.tipo,
       titulo: nueva.titulo,
       descripcion: nueva.descripcion,
       solicitantePersonaId: solicitante,
       unidadId: unidadFinal || undefined,
       estado: "nuevo",
-      fechaCreacion: new Date().toISOString().slice(0, 10),
+      fechaCreacion: hoyISO(),
       comentarios: [],
       detalleGrabaciones: nueva.tipo === "grabaciones"
         ? { fechaSuceso: nueva.fechaSuceso, horaSuceso: nueva.horaSuceso, justificacion: nueva.justificacion }
@@ -229,7 +325,7 @@ export default function SolicitudesPage() {
     setNueva(null)
   }
 
-  if (!hasHydrated) {
+  if (cargandoAPI) {
     return (
       <div className="flex flex-col gap-6 animate-pulse">
         <div className="h-9 w-72 rounded bg-muted/40" />
@@ -377,7 +473,7 @@ export default function SolicitudesPage() {
       </Card>
 
       {/* Detalle del ticket */}
-      <Dialog open={!!detalle} onOpenChange={v => { if (!v) { setDetalle(null); setComentarioTexto("") } }}>
+      <Dialog open={!!detalle} onOpenChange={v => { if (!v) { setDetalleId(null); setComentarioTexto("") } }}>
         <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-xl">
           {detalle && (
             <>

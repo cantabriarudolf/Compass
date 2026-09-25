@@ -1,7 +1,18 @@
 "use client"
 
 import * as React from "react"
-import { useCompassStore, useStoreRehydrated } from "@/lib/store"
+// Datos de dominio vía API REST (BD fuente de verdad); store legacy deprecado.
+import { usePersonas } from "@/lib/api/use-personas"
+import { useMaestros } from "@/lib/api/use-maestros"
+import {
+  useBitacoraVisitasPE,
+  useEncomiendasPE,
+  useIngresosContratistasPE,
+  useCierresTurnoPE,
+} from "@/lib/api/use-pe"
+import { generarId } from "@/lib/id-utils"
+import { hoyISO } from "@/lib/date-utils"
+import type { CierreTurnoPE } from "@/lib/schemas"
 import {
   Card,
   CardContent,
@@ -49,29 +60,31 @@ import { VisitasPanel } from "@/components/pe/visitas-panel"
 import { ContratistasPanel } from "@/components/pe/contratistas-panel"
 import { EncomiendasPanel } from "@/components/pe/encomiendas-panel"
 
-function hoyISO(): string {
-  return new Date().toISOString().slice(0, 10)
+function hoy(): string {
+  return hoyISO()
 }
-
+    
 export default function BitacoraPage() {
-  useStoreRehydrated()
-  const hasHydrated = useCompassStore((s) => s.hasHydrated)
-  const personas = useCompassStore((s) => s.personas)
-  const maestros = useCompassStore((s) => s.maestros)
-  const visitas = useCompassStore((s) => s.bitacoraVisitasPE)
-  const encomiendas = useCompassStore((s) => s.encomiendasPE)
-  const ingresosContratistas = useCompassStore((s) => s.ingresosContratistasPE)
-  const cierresTurnoPE = useCompassStore((s) => s.cierresTurnoPE)
-  const cerrarTurnoPE = useCompassStore((s) => s.cerrarTurnoPE)
-  const editarCierreTurnoPE = useCompassStore((s) => s.editarCierreTurnoPE)
+  const { personas, isLoading: cPersonas } = usePersonas()
+  const { data: jornadasData, isLoading: cJornadas } = useMaestros<{ id: string; nombre: string }>("jornadas")
+  const { items: visitas, isLoading: cVisitas } = useBitacoraVisitasPE()
+  const { items: encomiendas, isLoading: cEncomiendas } = useEncomiendasPE()
+  const { items: ingresosContratistas, isLoading: cContratistas } = useIngresosContratistasPE()
+  const {
+items: cierresTurnoPE,
+isLoading: cCierres,
+create: crearCierreApi,
+update: actualizarCierreApi,
+  } = useCierresTurnoPE()
+  const cargandoAPI = cPersonas || cJornadas || cVisitas || cEncomiendas || cContratistas || cCierres
 
   const [error, setError] = React.useState<string | null>(null)
   const [okMsg, setOkMsg] = React.useState<string | null>(null)
-  const [diaReporte, setDiaReporte] = React.useState(hoyISO())
+  const [diaReporte, setDiaReporte] = React.useState(hoy())
   const [formCierre, setFormCierre] = React.useState({
     trabajadorPersonaId: "",
     jornadaReportadaId: "j-manana",
-    fecha: hoyISO(),
+    fecha: hoy(),
     hora: new Date().toTimeString().slice(0, 5),
     novedadesGenerales: "",
     huboIncidencias: true,
@@ -89,7 +102,7 @@ export default function BitacoraPage() {
   const personal = personas.filter(
     (p) => p.datosLaborales !== undefined && p.estadoCuenta === "activa"
   )
-  const jornadas = maestros.jornadas
+  const jornadas = jornadasData ?? []
   const estadoDia = estadoReporteDiario(cierresTurnoPE, diaReporte)
   const visitasDelDia = (fecha: string) =>
     visitas.filter((v) => v.fecha === fecha)
@@ -108,9 +121,19 @@ export default function BitacoraPage() {
   const toggleIncidencias = (hubo: boolean) =>
     setFormCierre((f) => ({ ...f, huboIncidencias: hubo }))
 
-  const enviarCierre = () => {
+  /** Cierre de turno vía POST /api/pe/cierres-turno (validaciones de negocio locales, paridad con la acción legacy). */
+  const enviarCierre = async () => {
     if (!formCierre.trabajadorPersonaId) {
       setError("Identifique al trabajador que cierra el turno.")
+      return
+    }
+    const trabajador = personas.find((p) => p.id === formCierre.trabajadorPersonaId)
+    if (!trabajador || !trabajador.datosLaborales) {
+      setError("El trabajador no existe o no tiene ficha laboral de PE.")
+      return
+    }
+    if (!jornadas.some((j) => j.id === formCierre.jornadaReportadaId)) {
+      setError("jornadaReportadaId no existe en el maestro de jornadas.")
       return
     }
     const incidencias = {
@@ -130,7 +153,37 @@ export default function BitacoraPage() {
             ]
           : [],
     }
-    const r = cerrarTurnoPE({
+    // Anti-negligencia (espejo de la regla legacy): incidencias exigen descripción ≥20 y evidencia.
+    if (
+      incidencias.hubo &&
+      (!incidencias.descripcion || incidencias.descripcion.length < 20)
+    ) {
+      setError("Con incidencias marcadas debe describir lo ocurrido (mínimo 20 caracteres).")
+      return
+    }
+    if (incidencias.hubo && (!incidencias.evidencias || incidencias.evidencias.length === 0)) {
+      setError("Con incidencias marcadas debe adjuntar al menos una evidencia por referencia (URL).")
+      return
+    }
+    if (
+      formCierre.instalaciones.length === 0 ||
+      formCierre.equipamiento.length === 0
+    ) {
+      setError("El cierre exige los checklist de instalaciones y equipamiento.")
+      return
+    }
+    const duplicado = cierresTurnoPE.some(
+      (c) =>
+        c.fecha === formCierre.fecha &&
+        c.jornadaReportadaId === formCierre.jornadaReportadaId &&
+        c.trabajadorPersonaId === formCierre.trabajadorPersonaId
+    )
+    if (duplicado) {
+      setError("Este trabajador ya registró un cierre para esa fecha y jornada.")
+      return
+    }
+    const cierre: CierreTurnoPE = {
+      id: generarId("pe-cierre"),
       fecha: formCierre.fecha,
       hora: formCierre.hora,
       jornadaReportadaId: formCierre.jornadaReportadaId,
@@ -139,7 +192,10 @@ export default function BitacoraPage() {
       incidencias,
       checklistInstalaciones: formCierre.instalaciones,
       checklistEquipamiento: formCierre.equipamiento,
-    })
+      historialCambios: [],
+      notificadoAAdmin: true,
+    }
+    const r = await crearCierreApi(cierre)
     if (!r.ok) {
       setError(r.error ?? "No se pudo enviar el cierre de turno.")
       return
@@ -156,13 +212,32 @@ export default function BitacoraPage() {
     }))
   }
 
-  const aplicarEdicionCierre = () => {
+  /** Edición de cierre vía PUT parcial (put-merge valida el objeto fusionado); el resumen queda en el historial inmutable. */
+  const aplicarEdicionCierre = async () => {
     if (!editandoCierre) return
-    const r = editarCierreTurnoPE(
-      editandoCierre.id,
-      { novedadesGenerales: editandoCierre.novedadesGenerales },
-      editandoCierre.resumen
-    )
+    if (editandoCierre.resumen.trim().length < 5) {
+      setError("Cada edición exige un resumen del cambio (mínimo 5 caracteres).")
+      return
+    }
+    const cierre = cierresTurnoPE.find((c) => c.id === editandoCierre.id)
+    if (!cierre) {
+      setError("El cierre de turno no existe.")
+      return
+    }
+    if (
+      cierre.incidencias.hubo &&
+      (!cierre.incidencias.evidencias || cierre.incidencias.evidencias.length === 0)
+    ) {
+      setError("Con incidencias marcadas debe adjuntar al menos una evidencia por referencia (URL).")
+      return
+    }
+    const r = await actualizarCierreApi(editandoCierre.id, {
+      novedadesGenerales: editandoCierre.novedadesGenerales,
+      historialCambios: [
+        ...cierre.historialCambios,
+        { fecha: hoy(), resumen: editandoCierre.resumen.trim() },
+      ],
+    })
     if (!r.ok) {
       setError(r.error ?? "No se pudo editar el cierre.")
       return
@@ -171,7 +246,7 @@ export default function BitacoraPage() {
     setOkMsg("Cierre editado con registro histórico.")
   }
 
-  if (!hasHydrated) {
+  if (cargandoAPI) {
     return (
       <div className="flex min-h-[60vh] animate-pulse flex-col gap-4">
         <div className="h-9 w-72 rounded bg-muted/40" />

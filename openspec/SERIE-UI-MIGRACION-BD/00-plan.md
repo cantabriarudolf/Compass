@@ -22,8 +22,8 @@
 |---|---|---|---|
 | P1 | Dashboard + Admin base (configuración, métricas, reportería, gestión, logs) | HECHA | d4f8d13 |
 | P2 | Comunidad restante (ficha persona, portal, visor, certificados, comunicación) | ✅ HECHA | b691dfe |
-| P3 | Operaciones (bitácora, paquetería, accesos, proveedores, reservas, solicitudes) | pendiente | — |
-| P4 | Inventario (estructura, tipos, recursos, proyectos) | pendiente | — |
+| P3 | Operaciones (bitácora, paquetería, accesos, proveedores, reservas, solicitudes) | ✅ HECHA | 4fa8f7f |
+| P4 | Inventario (estructura, tipos, recursos, proyectos) | 🟡 EN CURSO | — |
 | P5 | Finanzas restantes (multas, remuneraciones) + Personas (personal, residentes) | pendiente | — |
 | P6 | Visor-mensajes + QA-Lab + Mantenimiento + Dev-dashboard + cierre | pendiente | — |
 

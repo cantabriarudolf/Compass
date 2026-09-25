@@ -3,7 +3,12 @@
 import * as React from "react"
 import { generarId } from "@/lib/id-utils"
 import { aTituloCaso, aOracion } from "@/lib/normalizacion"
-import { useCompassStore, useStoreRehydrated } from "@/lib/store"
+// Datos de dominio vía API REST (BD fuente de verdad); store legacy deprecado.
+import { usePersonas } from "@/lib/api/use-personas"
+import { useUnidades } from "@/lib/api/use-unidades"
+import { useMicroSectores } from "@/lib/api/use-micro-sectores"
+import { useRecursosIR } from "@/lib/api/use-ir"
+import { useElementosRA, useReservasRA } from "@/lib/api/use-ra"
 import {
   Card,
   CardContent,
@@ -114,14 +119,23 @@ const FORM_ELEMENTO: FormElemento = {
 }
 
 export default function ReservasPage() {
-  useStoreRehydrated()
-  const hasHydrated = useCompassStore((s) => s.hasHydrated)
-  const elementosRA = useCompassStore((s) => s.elementosRA)
-  const reservasRA = useCompassStore((s) => s.reservasRA)
-  const personas = useCompassStore((s) => s.personas)
-  const unidades = useCompassStore((s) => s.unidades)
-  const microSectores = useCompassStore((s) => s.microSectores)
-  const activosIR = useCompassStore((s) => s.activosIR)
+  const {
+items: elementosRA,
+isLoading: cElementos,
+create: crearElementoApi,
+remove: eliminarElementoApi,
+  } = useElementosRA()
+  const {
+items: reservasRA,
+isLoading: cReservas,
+create: crearReservaApi,
+update: actualizarReservaApi,
+  } = useReservasRA()
+  const { personas, isLoading: cPersonas } = usePersonas()
+  const { items: unidades, isLoading: cUnidades } = useUnidades()
+  const { items: microSectores, isLoading: cMicro } = useMicroSectores()
+  const { items: activosIR, isLoading: cActivosIR } = useRecursosIR()
+  const cargandoAPI = cElementos || cReservas || cPersonas || cUnidades || cMicro || cActivosIR
 
   const [error, setError] = React.useState<string | null>(null)
   const [msg, setMsg] = React.useState<string | null>(null)
@@ -171,7 +185,7 @@ export default function ReservasPage() {
     )
     .reverse()
 
-  const guardarElemento = () => {
+  const guardarElemento = async () => {
     if (!formEl) return
     setError(null)
     const payload: ElementoRA = {
@@ -199,7 +213,7 @@ export default function ReservasPage() {
         ? { penalizacionTardiaMonto: Number(formEl.penalizacionTardiaMonto) }
         : {}),
     }
-    const r = useCompassStore.getState().saveElementoRA(payload)
+    const r = await crearElementoApi(payload)
     if (!r.ok) {
       setError(r.error ?? "")
       return
@@ -208,17 +222,22 @@ export default function ReservasPage() {
     setEditandoElId(null)
   }
 
-  const confirmarReserva = () => {
+  /** Reserva vía POST /api/ra/reservas: el servidor valida solape, elemento activo y tramo (transacción). */
+  const confirmarReserva = async () => {
     setError(null)
     const slot = slots[Number(slotIdx)]
     if (!elementoSeleccionado || !slot || !rPersonaId || !rFecha) {
       setError("Completa elemento, solicitante, fecha y tramo horario.")
       return
     }
-    const r = useCompassStore.getState().saveReservaRA({
-      // eslint-disable-next-line react-hooks/purity -- id generado en primer render del formulario nuevo; estable hasta guardar (avance 2026-09-02)
+    // Folio RA-#### calculado en cliente (misma regla que la acción legacy del store).
+    const numeros = reservasRA
+      .map((x) => Number.parseInt(x.folio.replace(/^RA-/, ""), 10))
+      .filter((n) => Number.isFinite(n))
+    const siguiente = (numeros.length > 0 ? Math.max(...numeros) : 0) + 1
+    const r = await crearReservaApi({
       id: generarId("ra-rs"),
-      folio: "",
+      folio: `RA-${String(siguiente).padStart(4, "0")}`,
       elementoId: elementoSeleccionado.id,
       solicitantePersonaId: rPersonaId,
       ...(rUnidadId ? { unidadId: rUnidadId } : {}),
@@ -226,8 +245,9 @@ export default function ReservasPage() {
       horaInicio: slot.inicio,
       horaFin: slot.fin,
       estado: "confirmada",
-      montoTarifa: 0,
-      montoGarantia: 0,
+      // Snapshots tarifarios vigentes al confirmar (paridad con la acción legacy).
+      montoTarifa: elementoSeleccionado.tarifaUso,
+      montoGarantia: elementoSeleccionado.garantiaRequerida,
     })
     if (!r.ok) {
       setError(r.error ?? "")
@@ -261,7 +281,7 @@ export default function ReservasPage() {
     })
   }
 
-  if (!hasHydrated) {
+  if (cargandoAPI) {
     return (
       <div className="flex animate-pulse flex-col gap-6">
         <div className="h-9 w-72 rounded bg-muted/40" />
@@ -447,12 +467,31 @@ export default function ReservasPage() {
                                   <Button
                                     size="sm"
                                     variant="ghost"
-                                    onClick={() => {
-                                      const res = useCompassStore
-                                        .getState()
-                                        .cancelarReservaRA(r.id)
-                                      if (!res.ok) setError(res.error ?? "")
-                                    }}
+                                        onClick={async () => {
+                                          // Cancelación vía PUT parcial; la ventana tardía y la penalización se derivan del elemento (paridad con la acción legacy).
+                                          const diasRestantes = Math.round(
+                                            (new Date(`${r.fecha}T00:00:00`).getTime() -
+                                              new Date(`${hoyStr()}T00:00:00`).getTime()) /
+                                              86400000
+                                          )
+                                          const tardia =
+                                            el?.cancelacionTardiaDias !== undefined &&
+                                            diasRestantes <= el.cancelacionTardiaDias
+                                          const penalizacion =
+                                            tardia && el?.penalizacionTardiaMonto
+                                              ? el.penalizacionTardiaMonto
+                                              : undefined
+                                          const res = await actualizarReservaApi(r.id, {
+                                            estado: "cancelada",
+                                            cancelacion: {
+                                              fecha: hoyStr(),
+                                              tardia,
+                                              ...(penalizacion ? { penalizacion } : {}),
+                                            },
+                                          })
+                                          // Nota: el cargo FI por penalización (legacy) queda pendiente de materialización server-side.
+                                          if (!res.ok) setError(res.error ?? "")
+                                        }}
                                   >
                                     <IconBan className="mr-1 size-3.5" />{" "}
                                     Cancelar
@@ -576,11 +615,9 @@ export default function ReservasPage() {
                               size="sm"
                               variant="ghost"
                               className="text-destructive"
-                              onClick={() => {
-                                const r = useCompassStore
-                                  .getState()
-                                  .removeElementoRA(e.id)
-                                if (!r.ok) setError(r.error ?? "")
+                              onClick={async () => {
+                                const r2 = await eliminarElementoApi(e.id)
+                                if (!r2.ok) setError(r2.error ?? "")
                               }}
                             >
                               Eliminar
@@ -1058,20 +1095,29 @@ export default function ReservasPage() {
                 <Button variant="outline" onClick={() => setRetencion(null)}>
                   Volver
                 </Button>
-                <Button
-                  variant="destructive"
-                  onClick={() => {
-                    const r = useCompassStore
-                      .getState()
-                      .retenerGarantiaRA(retencion.reserva.id, aOracion(retencion.motivo))
-                    if (!r.ok) {
-                      setError(r.error ?? "")
-                      return
-                    }
-                    setMsg(`Garantía retenida en ${retencion.reserva.folio}.`)
-                    setRetencion(null)
-                  }}
-                >
+                    <Button
+                      variant="destructive"
+                      onClick={async () => {
+                        const motivo = aOracion(retencion.motivo)
+                        if (motivo.trim().length === 0) {
+                          setError("La retención exige describir el daño o motivo.")
+                          return
+                        }
+                        const r = await actualizarReservaApi(retencion.reserva.id, {
+                          garantiaRetenida: {
+                            monto: retencion.reserva.montoGarantia,
+                            motivo: motivo.trim(),
+                          },
+                        })
+                        // Nota: el cargo FI por la garantía retenida (legacy) queda pendiente de materialización server-side.
+                        if (!r.ok) {
+                          setError(r.error ?? "")
+                          return
+                        }
+                        setMsg(`Garantía retenida en ${retencion.reserva.folio}.`)
+                        setRetencion(null)
+                      }}
+                    >
                   Retener garantía
                 </Button>
               </DialogFooter>

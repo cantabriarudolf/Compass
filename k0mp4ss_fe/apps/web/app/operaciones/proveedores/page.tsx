@@ -4,7 +4,18 @@ import * as React from "react"
 import { generarId } from "@/lib/id-utils"
 import { formatearRut, validarDocumentoIdentidad, claveDocumento } from "@/lib/rut"
 import { aTituloCaso, emailNormalizado, telefonoNormalizado, sitioNormalizado } from "@/lib/normalizacion"
-import { useCompassStore, useStoreRehydrated } from "@/lib/store"
+// Datos de dominio vía API REST (BD fuente de verdad); store legacy deprecado.
+import { usePersonas } from "@/lib/api/use-personas"
+import { useUnidades } from "@/lib/api/use-unidades"
+import { useMaestros } from "@/lib/api/use-maestros"
+import {
+  useProveedoresPE,
+  useMantencionesPE,
+  useVisitasTecnicasPE,
+} from "@/lib/api/use-pe"
+import { hoyISO } from "@/lib/date-utils"
+import { proximaFechaPreventiva } from "@/lib/personal-utils"
+import type { ContactoEmergencia } from "@/lib/schemas"
 import {
   Card,
   CardContent,
@@ -51,10 +62,6 @@ import {
 import type { VisitaTecnicaPE } from "@/lib/schemas"
 import { alertasMantencionesVencidas } from "@/lib/personal-utils"
 
-function hoyISO(): string {
-  return new Date().toISOString().slice(0, 10)
-}
-
 interface FormProveedor {
   rut: string
   nombre: string
@@ -78,21 +85,28 @@ const PROVEEDOR_VACIO: FormProveedor = {
 }
 
 export default function ProveedoresPage() {
-  useStoreRehydrated()
-  const hasHydrated = useCompassStore((s) => s.hasHydrated)
-  const personas = useCompassStore((s) => s.personas)
-  const unidades = useCompassStore((s) => s.unidades)
-  const maestros = useCompassStore((s) => s.maestros)
-  const proveedores = useCompassStore((s) => s.proveedoresPE)
-  const mantenciones = useCompassStore((s) => s.mantencionesPreventivasPE)
-  const visitasTecnicas = useCompassStore((s) => s.visitasTecnicasPE)
-  const saveProveedorPE = useCompassStore((s) => s.saveProveedorPE)
-  const removeProveedorPE = useCompassStore((s) => s.removeProveedorPE)
-  const saveMantencionPE = useCompassStore((s) => s.saveMantencionPE)
-  const removeMantencionPE = useCompassStore((s) => s.removeMantencionPE)
-  const registrarVisitaTecnicaPE = useCompassStore(
-    (s) => s.registrarVisitaTecnicaPE
-  )
+  const { personas, isLoading: cPersonas } = usePersonas()
+  const { items: unidades, isLoading: cUnidades } = useUnidades()
+  const { data: contactosEmergencia, isLoading: cContactos } = useMaestros<ContactoEmergencia>("contactos-emergencia")
+  const {
+    items: proveedores,
+    isLoading: cProveedores,
+    create: crearProveedorApi,
+    remove: eliminarProveedorApi,
+  } = useProveedoresPE()
+  const {
+    items: mantenciones,
+    isLoading: cMantenciones,
+    create: crearMantencionApi,
+    update: actualizarMantencionApi,
+    remove: eliminarMantencionApi,
+  } = useMantencionesPE()
+  const {
+    items: visitasTecnicas,
+    isLoading: cVisitasTec,
+    create: crearVisitaTecnicaApi,
+  } = useVisitasTecnicasPE()
+  const cargandoAPI = cPersonas || cUnidades || cContactos || cProveedores || cMantenciones || cVisitasTec
 
   const [error, setError] = React.useState<string | null>(null)
   const [okMsg, setOkMsg] = React.useState<string | null>(null)
@@ -136,7 +150,7 @@ export default function ProveedoresPage() {
   const hoy = hoyISO()
   const alertas = alertasMantencionesVencidas(mantenciones, hoy)
 
-  const guardarProveedor = () => {
+  const guardarProveedor = async () => {
     if (!formProv) return
     if (
       !formProv.nombre.trim() ||
@@ -155,7 +169,7 @@ export default function ProveedoresPage() {
       setError("Este RUT ya está registrado en otro proveedor.")
       return
     }
-    const r = saveProveedorPE({
+    const r = await crearProveedorApi({
       id: editandoProvId ?? generarId("prov"),
       rut: formatearRut(formProv.rut.trim()),
       nombre: aTituloCaso(formProv.nombre),
@@ -176,7 +190,7 @@ export default function ProveedoresPage() {
     setOkMsg("Proveedor guardado.")
   }
 
-  const guardarMantencion = () => {
+  const guardarMantencion = async () => {
     if (!formMant) return
     if (
       !formMant.proveedorId ||
@@ -186,7 +200,7 @@ export default function ProveedoresPage() {
       setError("Proveedor, descripción y próxima fecha son obligatorios.")
       return
     }
-    const r = saveMantencionPE({
+    const r = await crearMantencionApi({
       id: editandoMantId ?? generarId("mant"),
       proveedorId: formMant.proveedorId,
       descripcion: formMant.descripcion.trim(),
@@ -205,7 +219,7 @@ export default function ProveedoresPage() {
     setOkMsg("Calendario preventivo actualizado.")
   }
 
-  const guardarVisitaTecnica = () => {
+  const guardarVisitaTecnica = async () => {
     if (!formVisita) return
     if (
       !formVisita.proveedorId ||
@@ -228,17 +242,25 @@ export default function ProveedoresPage() {
       supervisorPersonaId: formVisita.supervisorPersonaId || undefined,
       unidadId: formVisita.unidadId || undefined,
     }
-    const r = registrarVisitaTecnicaPE(visita)
+    const r = await crearVisitaTecnicaApi(visita)
     if (!r.ok) {
       setError(r.error ?? "No se pudo registrar la visita técnica.")
       return
+    }
+    // Ciclo preventivo cerrado: la próxima fecha avanza según periodicidad (paridad con la acción legacy).
+    if (visita.mantencionId) {
+      const mantencion = mantenciones.find((m) => m.id === visita.mantencionId)
+      if (mantencion) {
+    const proxima = proximaFechaPreventiva(visita.fecha, mantencion.periodicidadMeses)
+    await actualizarMantencionApi(mantencion.id, { proximaFecha: proxima })
+      }
     }
     setFormVisita(null)
     setError(null)
     setOkMsg("Visita técnica registrada en el libro (PE_VISITA_TECNICA).")
   }
 
-  if (!hasHydrated) {
+  if (cargandoAPI) {
     return (
       <div className="flex min-h-[60vh] animate-pulse flex-col gap-4">
         <div className="h-9 w-72 rounded bg-muted/40" />
@@ -375,11 +397,18 @@ export default function ProveedoresPage() {
                           <Button
                             size="icon"
                             variant="ghost"
-                            onClick={() => {
-                              const r = removeProveedorPE(p.id)
-                              if (!r.ok) setError(r.error ?? "")
-                              else setOkMsg("Proveedor eliminado.")
-                            }}
+                                onClick={async () => {
+                                  // Paridad con la regla legacy: no se elimina un proveedor con mantenciones o visitas asociadas.
+                                  const mant = mantenciones.filter((m) => m.proveedorId === p.id).length
+                                  const vis = visitasTecnicas.filter((v) => v.proveedorId === p.id).length
+                                  if (mant > 0 || vis > 0) {
+                                    setError(`No se puede eliminar el proveedor: ${mant} mantención(es) y ${vis} visita(s) técnica(s) asociadas.`)
+                                    return
+                                  }
+                                  const r = await eliminarProveedorApi(p.id)
+                                  if (!r.ok) setError(r.error ?? "")
+                                  else setOkMsg("Proveedor eliminado.")
+                                }}
                           >
                             <IconTrash className="size-4" />
                           </Button>
@@ -600,11 +629,17 @@ export default function ProveedoresPage() {
                               <Button
                                 size="icon"
                                 variant="ghost"
-                                onClick={() => {
-                                  const r = removeMantencionPE(m.id)
-                                  if (!r.ok) setError(r.error ?? "")
-                                  else setOkMsg("Mantención eliminada.")
-                                }}
+                                    onClick={async () => {
+                                      // Paridad con la regla legacy: no se elimina una mantención con visitas técnicas asociadas.
+                                      const vinculadas = visitasTecnicas.filter((v) => v.mantencionId === m.id).length
+                                      if (vinculadas > 0) {
+                                        setError(`No se puede eliminar la mantención: ${vinculadas} visita(s) técnica(s) asociadas.`)
+                                        return
+                                      }
+                                      const r = await eliminarMantencionApi(m.id)
+                                      if (!r.ok) setError(r.error ?? "")
+                                      else setOkMsg("Mantención eliminada.")
+                                    }}
                               >
                                 <IconTrash className="size-4" />
                               </Button>
@@ -876,7 +911,7 @@ export default function ProveedoresPage() {
                       : "Servicios Técnicos de Urgencia"}
                   </h3>
                   <ul className="flex flex-col divide-y rounded-lg border">
-                    {maestros.contactosEmergencia
+                    {(contactosEmergencia ?? [])
                       .filter((c) => c.categoria === categoria)
                       .map((c) => (
                         <li

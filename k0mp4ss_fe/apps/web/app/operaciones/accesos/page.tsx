@@ -1,7 +1,8 @@
 "use client"
 
 import * as React from "react"
-import { useCompassStore, useStoreRehydrated } from "@/lib/store"
+// Datos de dominio (visitas y contratistas PE) viven en VisitasPanel/
+// ContratistasPanel vía hooks SWR; esta página solo compone UI y vista local.
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
 import { IconBook2 } from "@tabler/icons-react"
@@ -13,20 +14,9 @@ function hoyISO(): string {
 }
 
 export default function AccesosPage() {
-  useStoreRehydrated()
-  const hasHydrated = useCompassStore((s) => s.hasHydrated)
   const [diaReporte, setDiaReporte] = React.useState(hoyISO())
   const [error, setError] = React.useState<string | null>(null)
   const [okMsg, setOkMsg] = React.useState<string | null>(null)
-
-  if (!hasHydrated) {
-    return (
-      <div className="flex min-h-[60vh] flex-col gap-4 animate-pulse">
-        <div className="h-9 w-72 rounded bg-muted/40" />
-        <div className="h-64 w-full rounded-lg bg-muted" />
-      </div>
-    )
-  }
 
   return (
     <div className="flex flex-col gap-6">
