@@ -1,7 +1,19 @@
 "use client"
 
 import * as React from "react"
-import { useCompassStore, useStoreRehydrated } from "@/lib/store"
+import { useCompassStore } from "@/lib/store"
+import { useUnidades } from "@/lib/api/use-unidades"
+import { useVinculos } from "@/lib/api/use-vinculos"
+import { usePersonas } from "@/lib/api/use-personas"
+import { useCierresTurnoPE, useBitacoraVisitasPE } from "@/lib/api/use-pe"
+import { useMaestros } from "@/lib/api/use-maestros"
+import { useSolicitudesGE } from "@/lib/api/use-ge"
+import { useCobrosFI } from "@/lib/api/use-cobros-fi"
+import { useEgresosFI } from "@/lib/api/use-egresos-fi"
+import { useFondosFI } from "@/lib/api/use-fondos-fi"
+import { useMacroSectores } from "@/lib/api/use-macro-sectores"
+import { useMicroSectores } from "@/lib/api/use-micro-sectores"
+import { useReportesRE } from "@/lib/api/use-reportes-re"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
@@ -44,13 +56,35 @@ function Metrica({ etiqueta, valor, detalle }: { etiqueta: string; valor: string
 }
 
 export default function ReporteriaPage() {
-  useStoreRehydrated()
-  const hasHydrated = useCompassStore(s => s.hasHydrated)
-  const store = useCompassStore()
+  const { items: unidades, isLoading: cUnidades } = useUnidades()
+  const { vinculos, isLoading: cVinculos } = useVinculos()
+  const { personas, isLoading: cPersonas } = usePersonas()
+  const { items: cierresTurnoPE, isLoading: cCierres } = useCierresTurnoPE()
+  const { items: bitacoraVisitasPE, isLoading: cBitacora } = useBitacoraVisitasPE()
+  const { data: jornadas, isLoading: cJornadas } = useMaestros<{ id: string }>("jornadas")
+  const { items: solicitudesGE, isLoading: cSolicitudes } = useSolicitudesGE()
+  const { items: cobrosFI, isLoading: cCobros } = useCobrosFI()
+  const { items: egresosFI, isLoading: cEgresos } = useEgresosFI()
+  const { items: fondosFI, isLoading: cFondos } = useFondosFI()
+  const { items: macroSectores, isLoading: cMacro } = useMacroSectores()
+  const { items: microSectores, isLoading: cMicro } = useMicroSectores()
+  const { items: reportesRE, isLoading: cReportes, remove } = useReportesRE()
+  const isLoading =
+cUnidades || cVinculos || cPersonas || cCierres || cBitacora || cJornadas ||
+cSolicitudes || cCobros || cEgresos || cFondos || cMacro || cMicro || cReportes
+  // TODO(P-futura): migrar a endpoints dedicados cuando existan (generar con
+  // snapshot servidor, distribuir y registrar vista hoy solo viven en el store).
   const registrarVistaDashboardRE = useCompassStore(s => s.registrarVistaDashboardRE)
   const generarReporteRE = useCompassStore(s => s.generarReporteRE)
   const distribuirReporteRE = useCompassStore(s => s.distribuirReporteRE)
-  const removeReporteRE = useCompassStore(s => s.removeReporteRE)
+  // Shim de lectura: misma forma que el store para no tocar la lógica de mando/generador.
+  const store = {
+unidades, vinculos, personas,
+cierresTurnoPE, bitacoraVisitasPE, solicitudesGE,
+cobrosFI, egresosFI, fondosFI,
+macroSectores, microSectores, reportesRE,
+maestros: { jornadas },
+  }
 
   const [tab, setTab] = React.useState("mando")
   const [error, setError] = React.useState<string | null>(null)
@@ -66,10 +100,10 @@ export default function ReporteriaPage() {
   const [tenencias, setTenencias] = React.useState<string[]>([])
 
   React.useEffect(() => {
-    if (hasHydrated && tab === "mando") registrarVistaDashboardRE("demografico")
-  }, [hasHydrated, tab, registrarVistaDashboardRE])
-
-  if (!hasHydrated) {
+    if (!isLoading && tab === "mando") registrarVistaDashboardRE("demografico")
+  }, [isLoading, tab, registrarVistaDashboardRE])
+    
+  if (isLoading) {
     return <div className="h-64 w-full animate-pulse rounded-lg bg-muted" />
   }
 
@@ -344,7 +378,7 @@ export default function ReporteriaPage() {
                           <>
                             <Button size="sm" onClick={() => distribuir(r.id)}><IconSend className="size-4 mr-1" /> Distribuir</Button>
                             {r.id.startsWith("test-") && (
-                              <Button size="sm" variant="ghost" onClick={() => removeReporteRE(r.id)}><IconTrash className="size-4" /></Button>
+                              <Button size="sm" variant="ghost" onClick={() => { void remove(r.id) }}><IconTrash className="size-4" /></Button>
                             )}
                           </>
                         )}

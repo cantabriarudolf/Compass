@@ -1,7 +1,9 @@
 "use client"
 
 import * as React from "react"
-import { useCompassStore, useStoreRehydrated } from "@/lib/store"
+import { usePersonas } from "@/lib/api/use-personas"
+import { useVinculos } from "@/lib/api/use-vinculos"
+import { useUnidades } from "@/lib/api/use-unidades"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@workspace/ui/components/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@workspace/ui/components/tabs"
 import { Input } from "@workspace/ui/components/input"
@@ -48,16 +50,11 @@ function FotoReferencia({ url, nombre }: { url?: string; nombre: string }) {
 }
 
 export default function GestionAdministrativaPage() {
-  useStoreRehydrated()
-  const hasHydrated = useCompassStore(s => s.hasHydrated)
-  const personas = useCompassStore(s => s.personas)
-  const vinculos = useCompassStore(s => s.vinculos)
-  const unidades = useCompassStore(s => s.unidades)
-  // Controles AD desde el servidor (BD-FUENTE-VERDAD Fase 2); personas y
-  // unidades siguen en el store como caché de lectura hasta la Fase 5.
-  const { controles: controlesPropiedades, save: guardarControlApi } = useControlesPropiedad()
-  const savePersona = useCompassStore(s => s.savePersona)
-  const saveControlPropiedad = useCompassStore(s => s.saveControlPropiedad)
+  const { personas, isLoading: cPersonas, update: updatePersona } = usePersonas()
+  const { vinculos, isLoading: cVinculos } = useVinculos()
+  const { items: unidades, isLoading: cUnidades } = useUnidades()
+  const { controles: controlesPropiedades, isLoading: cControles, save: guardarControlApi } = useControlesPropiedad()
+  const isLoading = cPersonas || cVinculos || cUnidades || cControles
   const [error, setError] = React.useState<string | null>(null)
   const [editandoFirma, setEditandoFirma] = React.useState<Persona | null>(null)
   const [firmaUrl, setFirmaUrl] = React.useState("")
@@ -95,20 +92,17 @@ export default function GestionAdministrativaPage() {
       residenteVeActas: false,
       alertasResidentesActivas: true,
     }
-    // Servidor primero (fuente de verdad); espejo local para la vista.
+    // Servidor como única fuente (el hook revalida la lista al guardar).
     const r = await guardarControlApi({ ...base, ...cambios })
     if (!r.ok) setError(r.error ?? "No se pudo guardar el control.")
-    else {
-      setError(null)
-      saveControlPropiedad({ ...base, ...cambios })
-    }
+    else setError(null)
   }
 
-  const guardarFirma = () => {
+  const guardarFirma = async () => {
     if (!editandoFirma || !editandoFirma.datosGobernanza) return
     const url = firmaUrl.trim()
     const extension: ExtensionGobernanza = { ...editandoFirma.datosGobernanza, firmaDigital: url || undefined }
-    const r = savePersona({ ...editandoFirma, datosGobernanza: extension })
+    const r = await updatePersona(editandoFirma.id, { datosGobernanza: extension })
     if (!r.ok) {
       setError(r.error ?? "No se pudo guardar la firma.")
       return
@@ -117,8 +111,8 @@ export default function GestionAdministrativaPage() {
     setEditandoFirma(null)
     setFirmaUrl("")
   }
-
-  if (!hasHydrated) {
+    
+  if (isLoading) {
     return (
       <div className="flex flex-col gap-6 animate-pulse">
         <div className="h-9 w-80 rounded bg-muted/40" />

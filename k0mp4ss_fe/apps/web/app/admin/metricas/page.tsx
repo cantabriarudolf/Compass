@@ -1,7 +1,9 @@
 "use client"
 
 import * as React from "react"
-import { useCompassStore, useStoreRehydrated } from "@/lib/store"
+import { useUnidades } from "@/lib/api/use-unidades"
+import { useTiposUnidad } from "@/lib/api/use-tipos-unidad"
+import { useMaestros } from "@/lib/api/use-maestros"
 import { Card, CardContent } from "@workspace/ui/components/card"
 import { Badge } from "@workspace/ui/components/badge"
 import { 
@@ -13,13 +15,17 @@ import {
 } from "@tabler/icons-react"
 
 export default function MetricasPage() {
-  useStoreRehydrated()
-  const hasHydrated = useCompassStore(s => s.hasHydrated)
-  const unidades = useCompassStore(s => s.unidades)
-  const tiposUnidad = useCompassStore(s => s.tiposUnidad)
-  const estadosOcupacion = useCompassStore(s => s.maestros.estadosOcupacion)
-  const categoriasMacro = useCompassStore(s => s.maestros.categoriasMacro)
-  const categoriasMicro = useCompassStore(s => s.maestros.categoriasMicro)
+  const { items: unidades, isLoading: cargandoUnidades } = useUnidades()
+  const { items: tiposUnidad, isLoading: cargandoTipos } = useTiposUnidad()
+  const { data: estadosOcupacion, isLoading: cargandoEstados } = useMaestros("estados-ocupacion")
+  const { data: categoriasMacro, isLoading: cargandoMacro } = useMaestros("categorias-macro")
+  const { data: categoriasMicro, isLoading: cargandoMicro } = useMaestros("categorias-micro")
+  const isLoading =
+    cargandoUnidades ||
+    cargandoTipos ||
+    cargandoEstados ||
+    cargandoMacro ||
+    cargandoMicro
 
   // CÁLCULOS POR MÓDULO
   
@@ -43,7 +49,7 @@ export default function MetricasPage() {
   const totalEstados = estadosOcupacion.length;
   const totalCategorias = categoriasMacro.length + categoriasMicro.length;
 
-  if (!hasHydrated) {
+  if (isLoading) {
     return (
       <div className="flex flex-col gap-6 animate-pulse">
         <div className="h-9 w-72 rounded bg-muted/40" />

@@ -2,7 +2,14 @@
 
 import * as React from "react"
 import Link from "next/link"
-import { useCompassStore, useStoreRehydrated } from "@/lib/store"
+import { useUnidades } from "@/lib/api/use-unidades"
+import { usePersonas } from "@/lib/api/use-personas"
+import { useVinculos } from "@/lib/api/use-vinculos"
+import { useTiposUnidad } from "@/lib/api/use-tipos-unidad"
+import { useMacroSectores } from "@/lib/api/use-macro-sectores"
+import { useMicroSectores } from "@/lib/api/use-micro-sectores"
+import { useMaestros } from "@/lib/api/use-maestros"
+import { useFondosFI } from "@/lib/api/use-fondos-fi"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@workspace/ui/components/card"
 import { Badge } from "@workspace/ui/components/badge"
 import {
@@ -81,16 +88,23 @@ function QuickLink({
 }
 
 export default function DashboardPage() {
-  useStoreRehydrated()
-  const hasHydrated = useCompassStore((s) => s.hasHydrated)
-  const unidades = useCompassStore((s) => s.unidades)
-  const personas = useCompassStore((s) => s.personas)
-  const vinculos = useCompassStore((s) => s.vinculos)
-  const tiposUnidad = useCompassStore((s) => s.tiposUnidad)
-  const macroSectores = useCompassStore((s) => s.macroSectores)
-  const microSectores = useCompassStore((s) => s.microSectores)
-  const maestros = useCompassStore((s) => s.maestros)
-  const fondosFI = useCompassStore((s) => s.fondosFI)
+  const { items: unidades, isLoading: cargandoUnidades } = useUnidades()
+  const { personas, isLoading: cargandoPersonas } = usePersonas()
+  const { vinculos, isLoading: cargandoVinculos } = useVinculos()
+  const { items: tiposUnidad, isLoading: cargandoTipos } = useTiposUnidad()
+  const { items: macroSectores, isLoading: cargandoMacro } = useMacroSectores()
+  const { items: microSectores, isLoading: cargandoMicro } = useMicroSectores()
+  const { data: estadosOcupacion, isLoading: cargandoEstados } = useMaestros("estados-ocupacion")
+  const { items: fondosFI, isLoading: cargandoFondos } = useFondosFI()
+  const isLoading =
+    cargandoUnidades ||
+    cargandoPersonas ||
+    cargandoVinculos ||
+    cargandoTipos ||
+    cargandoMacro ||
+    cargandoMicro ||
+    cargandoEstados ||
+    cargandoFondos
 
   const vinculosVigentes = React.useMemo(
     () => vinculos.filter((v) => !v.fechaFin && (v.rol === "propietario" || v.rol === "arrendatario")),
@@ -112,7 +126,7 @@ export default function DashboardPage() {
     [unidades]
   )
 
-  if (!hasHydrated) {
+  if (isLoading) {
     return (
       <div className="flex flex-col gap-6 animate-pulse">
         <div className="h-9 w-72 rounded bg-muted/40" />
@@ -183,7 +197,7 @@ export default function DashboardPage() {
         />
         <KpiCard
           label="Estados ocupación"
-          value={maestros.estadosOcupacion.length}
+          value={estadosOcupacion.length}
           sub="Parámetros MA configurados"
           href="/admin/maestros"
           icon={IconSettings}

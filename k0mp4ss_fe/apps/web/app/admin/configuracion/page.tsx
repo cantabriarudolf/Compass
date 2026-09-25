@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { ConfiguracionGlobal } from "@/data/admin/configuracion"
-import { useCompassStore, useStoreRehydrated } from "@/lib/store"
+import { useConfiguracion } from "@/lib/api/use-configuracion"
 import {
   Card,
   CardContent,
@@ -37,36 +37,36 @@ import {
 import { LogoUploader } from "@/components/admin/logo-uploader"
 
 export default function ConfiguracionPage() {
-  useStoreRehydrated()
-  const hasHydrated = useCompassStore((s) => s.hasHydrated)
-  const configuracion = useCompassStore((s) => s.configuracion)
-  const saveConfiguracion = useCompassStore((s) => s.saveConfiguracion)
-  const [config, setConfig] = React.useState<ConfiguracionGlobal>(configuracion)
+  const { config: configuracionRemota, isLoading, updateConfig } = useConfiguracion()
+  const [config, setConfig] = React.useState<ConfiguracionGlobal | null>(null)
 
   React.useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- reset intencional del mensaje al cambiar inputs (avance 2026-09-02)
-    setConfig(configuracion)
-  }, [configuracion])
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- reset intencional al llegar la config del servidor
+    if (configuracionRemota) setConfig(configuracionRemota as unknown as ConfiguracionGlobal)
+  }, [configuracionRemota])
 
   const updateField = <K extends keyof ConfiguracionGlobal>(
     field: K,
     value: ConfiguracionGlobal[K]
   ) => {
-    setConfig((prev) => ({ ...prev, [field]: value }))
+    setConfig((prev) => (prev ? { ...prev, [field]: value } : prev))
   }
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
-    const resultado = saveConfiguracion(config)
+    if (!config) return
+    // SAFETY: el formulario edita el shape de data/admin (seed); la API valida
+    // por schema y rechaza campos inválidos con error visible.
+    const resultado = await updateConfig(config as unknown as Parameters<typeof updateConfig>[0])
     if (!resultado.ok) {
       alert(`No se pudo guardar la configuración: ${resultado.error}`)
       return
     }
     console.log("[AM] CF_UPDATE_PARAM", config)
-    alert("Configuración guardada (persistida en el store)")
+    alert("Configuración guardada en la base de datos")
   }
 
-  if (!hasHydrated) {
+  if (isLoading || !config) {
     return (
       <div className="flex animate-pulse flex-col gap-6">
         <div className="h-9 w-72 rounded bg-muted/40" />
