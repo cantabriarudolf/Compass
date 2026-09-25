@@ -1,3 +1,12 @@
+/**
+ * lib/store.ts — Store monolito LEGACY (BD-FUENTE-VERDAD Fase 5A).
+ *
+ * ⚠️ DEPRECADO: este store ya NO es la fuente de verdad.
+ * Todos los datos de dominio persisten en el servidor vía API REST.
+ * Las acciones de dominio están marcadas @deprecated.
+ * Para estado de UI puro (modales, filtros, toasts) usar `lib/store-ui.ts`.
+ * STORE_VERSION está congelado en 28; no se migran más datos de dominio.
+ */
 "use client"
 
 import { useEffect } from "react"
@@ -346,6 +355,7 @@ function buildPuntoCeroIngresos(): IngresoFI[] {
 const PUNTO_CERO_EGRESOS_SEED: EgresoFI[] = buildPuntoCeroEgresos(1)
 const PUNTO_CERO_INGRESOS_SEED: IngresoFI[] = buildPuntoCeroIngresos()
 
+/** STORE_VERSION congelado: las migraciones de dominio están descontinuadas. */
 export const STORE_VERSION = 28
 
 // GD-períodos: helpers de vigencia (libro: la directiva vigente = período
@@ -467,38 +477,57 @@ export interface CompassData {
 export interface CompassStore extends CompassData {
   hasHydrated: boolean
   // Tipos de Unidad (TU)
+    /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
   saveTipoUnidad: (tipo: TipoUnidad) => StoreResult
+    /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
   toggleActivoTipoUnidad: (id: string) => void
+    /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
   removeTipoUnidad: (id: string) => StoreResult
   // Macro Sectores (EF)
+    /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
   saveMacroSector: (macro: MacroSector) => StoreResult
+    /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
   removeMacroSector: (id: string) => StoreResult
   // Micro Sectores (EF)
+    /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
   saveMicroSector: (micro: MicroSector) => StoreResult
+    /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
   removeMicroSector: (id: string) => StoreResult
   // Unidades (EF)
+    /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
   saveUnidad: (unidad: Unidad) => StoreResult
+    /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
   removeUnidad: (id: string) => StoreResult
   // Personas (MP)
+    /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
   savePersona: (persona: Persona) => StoreResult
+    /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
   removePersona: (id: string) => StoreResult
   // Vínculos (VU)
+    /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
   saveVinculo: (vinculo: VinculoUnidad) => StoreResult
+    /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
   removeVinculo: (id: string) => StoreResult
   // Maestros Administrativos (MA)
+    /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
   saveMaestro: <K extends keyof MaestroCollections>(
     key: K,
     item: MaestroCollections[K][number]
   ) => StoreResult
+    /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
   removeMaestro: <K extends keyof MaestroCollections>(
     key: K,
     id: string
   ) => StoreResult
   // Configuración Global (CF)
+    /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
   saveConfiguracion: (config: ConfiguracionGlobal) => StoreResult
   // Portal Inmobiliario (PI)
+    /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
   savePublicacionPortal: (publicacion: PublicacionPortal) => StoreResult
+    /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
   removePublicacionPortal: (id: string) => StoreResult
+    /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
   saveLeadPortal: (lead: LeadPortal) => StoreResult
   syncPublicacionesDesdeVinculos: (unidadId: string) => void
   // Notificaciones simuladas (D3)
@@ -510,13 +539,19 @@ export interface CompassStore extends CompassData {
   ) => void
   marcarNotificacionLeida: (id: string) => void
   // Gestión Administrativa (AD)
+    /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
   saveControlPropiedad: (control: ControlPropiedad) => StoreResult
+    /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
   removeControlPropiedad: (id: string) => StoreResult
   // Gestión de Directiva (GD)
+    /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
   saveActaGD: (acta: ActaGD) => StoreResult
+    /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
   removeActaGD: (id: string) => StoreResult
+    /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
   aprobarActaGD: (id: string, personaId: string) => StoreResult
   periodoDirectivaVigente: () => PeriodoDirectiva | undefined
+    /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
   savePeriodoDirectiva: (
     periodo: PeriodoDirectiva,
     miembros: {
@@ -526,10 +561,14 @@ export interface CompassStore extends CompassData {
     }[]
   ) => StoreResult
   // Comunicación con Vecinos (CO)
+    /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
   savePlantillaCO: (plantilla: PlantillaCO) => StoreResult
+    /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
   removePlantillaCO: (id: string) => StoreResult
+    /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
   saveEnvioCO: (envio: EnvioCO) => StoreResult
   registrarLecturaEnvioCO: (id: string, personaId: string) => StoreResult
+    /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
   saveMensajeBuzonCO: (mensaje: MensajeBuzonCO) => StoreResult
   responderMensajeBuzonCO: (
     id: string,
@@ -537,10 +576,13 @@ export interface CompassStore extends CompassData {
   ) => StoreResult
   cambiarEstadoBuzonCO: (id: string, estado: EstadoBuzonCO) => StoreResult
   removeMensajeBuzonCO: (id: string) => StoreResult
+    /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
   saveDocumentoCO: (documento: DocumentoCO) => StoreResult
+    /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
   removeDocumentoCO: (id: string) => StoreResult
   registrarDescargaDocCO: (id: string) => StoreResult
   // Gestión de Solicitudes (GE)
+    /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
   saveSolicitudGE: (solicitud: SolicitudGE) => StoreResult
   abrirSolicitudGE: (id: string) => StoreResult
   responderSolicitudGE: (
@@ -549,11 +591,15 @@ export interface CompassStore extends CompassData {
   ) => StoreResult
   resolverSolicitudGE: (id: string, resolucion: string) => StoreResult
   cerrarSolicitudGE: (id: string) => StoreResult
+    /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
   removeSolicitudGE: (id: string) => StoreResult
   // Inventario y Recursos (IR)
+    /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
   saveRecursoIR: (recurso: RecursoIR) => StoreResult
+    /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
   removeRecursoIR: (id: string) => StoreResult
   cambiarEstadoRecursoIR: (id: string, estado: EstadoActivoIR) => StoreResult
+    /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
   saveSolicitudInsumoIR: (solicitud: SolicitudInsumoIR) => StoreResult
   resolverComodinIR: (
     id: string,
@@ -565,8 +611,11 @@ export interface CompassStore extends CompassData {
   asignarAccesoIR: (recursoId: string, personaId: string) => StoreResult
   devolverAccesoIR: (recursoId: string) => StoreResult
   // Infracciones y Multas (IN)
+    /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
   saveTipoInfraccionIN: (tipo: TipoInfraccionIN) => StoreResult
+    /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
   removeTipoInfraccionIN: (id: string) => StoreResult
+    /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
   saveInfraccionIN: (infraccion: InfraccionIN) => StoreResult
   apelarInfraccionIN: (id: string, descargos: string) => StoreResult
   comentarInfraccionIN: (
@@ -576,9 +625,12 @@ export interface CompassStore extends CompassData {
   respaldarInfraccionIN: (id: string, personaId: string) => StoreResult
   aplicarInfraccionIN: (id: string) => StoreResult
   desestimarInfraccionIN: (id: string, justificacion: string) => StoreResult
+    /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
   removeInfraccionIN: (id: string) => StoreResult
   // Mantenimiento y Proyectos (MT)
+    /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
   saveTrabajoMT: (trabajo: TrabajoMT) => StoreResult
+    /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
   removeTrabajoMT: (id: string) => StoreResult
   iniciarTrabajoMT: (id: string) => StoreResult
   finalizarTrabajoMT: (
@@ -588,28 +640,41 @@ export interface CompassStore extends CompassData {
   cancelarTrabajoMT: (id: string) => StoreResult
   actualizarPagoTrabajoMT: (id: string, estadoPago: EstadoPagoMT) => StoreResult
   verificarGarantiasMT: () => StoreResult
+    /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
   saveProyectoMT: (proyecto: ProyectoMT) => StoreResult
+    /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
   removeProyectoMT: (id: string) => StoreResult
   // Reservas y Amenities (RA)
+    /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
   saveElementoRA: (elemento: ElementoRA) => StoreResult
+    /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
   removeElementoRA: (id: string) => StoreResult
+    /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
   saveReservaRA: (reserva: ReservaRA) => StoreResult
   cancelarReservaRA: (id: string) => StoreResult
   retenerGarantiaRA: (id: string, motivo: string) => StoreResult
   // Visor de Mensajes (CV)
+    /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
   saveAvisoCV: (aviso: AvisoCV, creadoPorPersonaId?: string) => StoreResult
+    /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
   removeAvisoCV: (id: string) => StoreResult
   publicarAvisoCV: (id: string) => StoreResult
   archivarAvisoCV: (id: string) => StoreResult
   caducarAvisosCV: () => StoreResult
+    /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
   savePlantillaCV: (plantilla: PlantillaCV) => StoreResult
+    /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
   removePlantillaCV: (id: string) => StoreResult
   activarPlantillaCV: (id: string) => StoreResult
   publicarActaEnCV: (actaId: string) => StoreResult
   // Finanzas y Morosidad (FI)
+    /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
   saveFondoFI: (fondo: FondoFI) => StoreResult
+    /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
   removeFondoFI: (id: string) => StoreResult
+    /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
   saveEgresoFI: (egreso: EgresoFI) => StoreResult
+    /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
   removeEgresoFI: (id: string) => StoreResult
   registrarIngresoFI: (input: {
     id?: string
@@ -649,22 +714,32 @@ export interface CompassStore extends CompassData {
   ) => StoreResult
   iniciarTurnoPE: (personaId: string, jornadaId: string) => StoreResult
   completarTareaMonitoreoPE: (trabajoMTId: string) => StoreResult
+    /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
   saveBitacoraVisitaPE: (visita: BitacoraVisitaPE) => StoreResult
   ingresarBitacoraVisitaPE: (id: string) => StoreResult
+    /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
   removeBitacoraVisitaPE: (id: string) => StoreResult
+    /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
   saveEncomiendaPE: (encomienda: EncomiendaPE) => StoreResult
   registrarRetiroEncomiendaPE: (
     id: string,
     retiradoPor: string,
     relacion?: string
   ) => StoreResult
+    /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
   removeEncomiendaPE: (id: string) => StoreResult
+    /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
   saveIngresoContratistaPE: (ingreso: IngresoContratistaPE) => StoreResult
   confirmarIngresoContratistaPE: (id: string) => StoreResult
+    /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
   removeIngresoContratistaPE: (id: string) => StoreResult
+    /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
   saveProveedorPE: (proveedor: ProveedorPE) => StoreResult
+    /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
   removeProveedorPE: (id: string) => StoreResult
+    /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
   saveMantencionPE: (mantencion: MantencionPreventivaPE) => StoreResult
+    /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
   removeMantencionPE: (id: string) => StoreResult
   registrarVisitaTecnicaPE: (visita: VisitaTecnicaPE) => StoreResult
   cerrarTurnoPE: (
@@ -707,9 +782,12 @@ export interface CompassStore extends CompassData {
   }) => StoreResult
   confirmarLiquidacionPL: (id: string) => StoreResult
   removeLiquidacionPL: (id: string) => StoreResult
+    /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
   saveAdelantoPL: (adelanto: AdelantoPL) => StoreResult
+    /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
   removeAdelantoPL: (id: string) => StoreResult
   // Certificados (CT)
+    /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
   generarCertificadoCT: (input: {
     tipo: "residencia" | "estado_cuenta" | "liquidacion_sueldo" | "al_dia"
     unidadId?: string
@@ -718,11 +796,13 @@ export interface CompassStore extends CompassData {
     solicitanteNombre: string
     id?: string
   }) => StoreResult
+    /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
   removeCertificadoCT: (id: string) => StoreResult
   // Reportería y Dashboards (RE)
   registrarVistaDashboardRE: (
     vista: "demografico" | "operativo" | "gestiones" | "financiero"
   ) => void
+    /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
   generarReporteRE: (input: {
     titulo: string
     bloques: (
@@ -741,6 +821,7 @@ export interface CompassStore extends CompassData {
     id?: string
   }) => StoreResult
   distribuirReporteRE: (id: string) => StoreResult
+    /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
   removeReporteRE: (id: string) => StoreResult
 }
 
@@ -754,6 +835,7 @@ const ESTADO_NOMBRE_A_ID: Record<string, string> = {
 
 // EF §Dependencias ST — validateSeedOrder reporta rank internal violation.
 // Orden interno obligatorio: macroSectores → microSectores (macroSectorId) → unidades (microSectorId, tipoUnidadId)
+/** @deprecated Las migraciones de dominio del store están congeladas en STORE_VERSION 28. */
 export function validateSeedOrder(data: {
   macroSectores: MacroSector[]
   microSectores: MicroSector[]
@@ -787,6 +869,7 @@ export function validateSeedOrder(data: {
   return { ok: violations.length === 0, violations }
 }
 
+/** @deprecated Las migraciones de dominio del store están congeladas en STORE_VERSION 28. */
 function migrarEstadoUnidades(unidades: Unidad[]): Unidad[] {
   return unidades.map((u) => {
     const legacy = u as Unidad & { estado?: string }
@@ -934,6 +1017,7 @@ const ESQUEMAS_COLECCION = {
 type ClaveColeccion = keyof typeof ESQUEMAS_COLECCION
 type ClaveMaestro = keyof MaestroCollections
 
+/** @deprecated Las migraciones de dominio del store están congeladas en STORE_VERSION 28. */
 function sanitizarColecciones(
   prev: Partial<CompassData> | undefined | null
 ): Partial<CompassData> | null {
@@ -995,6 +1079,7 @@ export function repararRut(rut: string): string {
   return `${cuerpoConFormato}-${calcularDigitoVerificador(cuerpo)}`
 }
 
+/** @deprecated Las migraciones de dominio del store están congeladas en STORE_VERSION 28. */
 function repararDocumentos(result: Partial<CompassData>): Partial<CompassData> {
   let personas = result.personas
   if (Array.isArray(personas)) {
@@ -1033,6 +1118,7 @@ export const useCompassStore = create<CompassStore>()(
       hasHydrated: false,
 
       // --- TU: Tipos de Unidad ---
+        /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
       saveTipoUnidad: (tipo) => {
         if (!get().hasHydrated)
           return {
@@ -1046,6 +1132,8 @@ export const useCompassStore = create<CompassStore>()(
         return { ok: true }
       },
 
+        /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
+
       toggleActivoTipoUnidad: (id) => {
         if (!get().hasHydrated) return
         set((s) => ({
@@ -1054,6 +1142,8 @@ export const useCompassStore = create<CompassStore>()(
           ),
         }))
       },
+
+        /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
 
       removeTipoUnidad: (id) => {
         if (!get().hasHydrated)
@@ -1074,6 +1164,7 @@ export const useCompassStore = create<CompassStore>()(
       },
 
       // --- EF: Macro Sectores ---
+        /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
       saveMacroSector: (macro) => {
         if (!get().hasHydrated)
           return {
@@ -1088,6 +1179,8 @@ export const useCompassStore = create<CompassStore>()(
         }))
         return { ok: true }
       },
+
+        /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
 
       removeMacroSector: (id) => {
         if (!get().hasHydrated)
@@ -1110,6 +1203,7 @@ export const useCompassStore = create<CompassStore>()(
       },
 
       // --- EF: Micro Sectores ---
+        /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
       saveMicroSector: (micro) => {
         if (!get().hasHydrated)
           return {
@@ -1124,6 +1218,8 @@ export const useCompassStore = create<CompassStore>()(
         }))
         return { ok: true }
       },
+
+        /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
 
       removeMicroSector: (id) => {
         if (!get().hasHydrated)
@@ -1146,6 +1242,7 @@ export const useCompassStore = create<CompassStore>()(
       },
 
       // --- EF: Unidades ---
+        /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
       saveUnidad: (unidad) => {
         if (!get().hasHydrated)
           return {
@@ -1177,6 +1274,8 @@ export const useCompassStore = create<CompassStore>()(
         return { ok: true }
       },
 
+        /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
+
       removeUnidad: (id) => {
         if (!get().hasHydrated)
           return {
@@ -1196,6 +1295,7 @@ export const useCompassStore = create<CompassStore>()(
       },
 
       // --- MP: Personas ---
+        /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
       savePersona: (persona) => {
         if (!get().hasHydrated)
           return {
@@ -1323,6 +1423,8 @@ export const useCompassStore = create<CompassStore>()(
         return { ok: true }
       },
 
+        /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
+
       removePersona: (id) => {
         if (!get().hasHydrated)
           return {
@@ -1342,6 +1444,7 @@ export const useCompassStore = create<CompassStore>()(
       },
 
       // --- VU: Vínculos ---
+        /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
       saveVinculo: (vinculo) => {
         if (!get().hasHydrated)
           return {
@@ -1498,6 +1601,8 @@ export const useCompassStore = create<CompassStore>()(
         return { ok: true }
       },
 
+        /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
+
       removeVinculo: (id) => {
         if (!get().hasHydrated)
           return {
@@ -1568,6 +1673,7 @@ export const useCompassStore = create<CompassStore>()(
       },
 
       // --- MA: Maestros Administrativos ---
+        /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
       saveMaestro: (key, item) => {
         if (!get().hasHydrated)
           return {
@@ -1585,6 +1691,8 @@ export const useCompassStore = create<CompassStore>()(
         }))
         return { ok: true }
       },
+
+        /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
 
       removeMaestro: (key, id) => {
         if (!get().hasHydrated)
@@ -1748,6 +1856,7 @@ export const useCompassStore = create<CompassStore>()(
       },
 
       // --- CF: Configuración Global ---
+        /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
       saveConfiguracion: (config) => {
         if (!get().hasHydrated)
           return {
@@ -1783,6 +1892,7 @@ export const useCompassStore = create<CompassStore>()(
       },
 
       // --- PI: Portal Inmobiliario ---
+        /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
       savePublicacionPortal: (publicacion) => {
         if (!get().hasHydrated)
           return {
@@ -1835,6 +1945,8 @@ export const useCompassStore = create<CompassStore>()(
         return { ok: true }
       },
 
+        /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
+
       removePublicacionPortal: (id) => {
         if (!get().hasHydrated)
           return {
@@ -1854,6 +1966,8 @@ export const useCompassStore = create<CompassStore>()(
         }))
         return { ok: true }
       },
+
+        /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
 
       saveLeadPortal: (lead) => {
         if (!get().hasHydrated)
@@ -2048,6 +2162,7 @@ export const useCompassStore = create<CompassStore>()(
       },
 
       // --- AD: Gestión Administrativa ---
+        /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
       saveControlPropiedad: (control) => {
         if (!get().hasHydrated)
           return {
@@ -2125,6 +2240,8 @@ export const useCompassStore = create<CompassStore>()(
         return { ok: true }
       },
 
+        /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
+
       removeControlPropiedad: (id) => {
         if (!get().hasHydrated)
           return {
@@ -2141,6 +2258,7 @@ export const useCompassStore = create<CompassStore>()(
       },
 
       // --- GD: Gestión de Directiva ---
+        /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
       saveActaGD: (acta) => {
         if (!get().hasHydrated)
           return {
@@ -2197,6 +2315,8 @@ export const useCompassStore = create<CompassStore>()(
         return { ok: true }
       },
 
+        /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
+
       removeActaGD: (id) => {
         if (!get().hasHydrated)
           return {
@@ -2207,6 +2327,8 @@ export const useCompassStore = create<CompassStore>()(
         set((s) => ({ actasGD: s.actasGD.filter((a) => a.id !== id) }))
         return { ok: true }
       },
+
+        /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
 
       aprobarActaGD: (id, personaId) => {
         if (!get().hasHydrated)
@@ -2299,6 +2421,7 @@ export const useCompassStore = create<CompassStore>()(
 
           // GD-períodos: registra un período (libro: archiva, nunca borra).
           periodoDirectivaVigente: () => periodoDirectivaVigente(get()),
+            /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
           savePeriodoDirectiva: (periodo, miembros) => {
             if (!get().hasHydrated)
               return {
@@ -2412,6 +2535,7 @@ export const useCompassStore = create<CompassStore>()(
           },
 
           // --- CO: Comunicación con Vecinos ---
+        /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
       savePlantillaCO: (plantilla) => {
         if (!get().hasHydrated)
           return {
@@ -2424,6 +2548,8 @@ export const useCompassStore = create<CompassStore>()(
         set((s) => ({ plantillasCO: upsert(s.plantillasCO, validacion.data) }))
         return { ok: true }
       },
+
+        /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
 
       removePlantillaCO: (id) => {
         if (!get().hasHydrated)
@@ -2444,6 +2570,8 @@ export const useCompassStore = create<CompassStore>()(
         }))
         return { ok: true }
       },
+
+        /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
 
       saveEnvioCO: (envio) => {
         if (!get().hasHydrated)
@@ -2536,6 +2664,8 @@ export const useCompassStore = create<CompassStore>()(
         }))
         return { ok: true }
       },
+
+        /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
 
       saveMensajeBuzonCO: (mensaje) => {
         if (!get().hasHydrated)
@@ -2711,6 +2841,8 @@ export const useCompassStore = create<CompassStore>()(
         return { ok: true }
       },
 
+        /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
+
       saveDocumentoCO: (documento) => {
         if (!get().hasHydrated)
           return {
@@ -2723,6 +2855,8 @@ export const useCompassStore = create<CompassStore>()(
         set((s) => ({ documentosCO: upsert(s.documentosCO, validacion.data) }))
         return { ok: true }
       },
+
+        /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
 
       removeDocumentoCO: (id) => {
         if (!get().hasHydrated)
@@ -2761,6 +2895,7 @@ export const useCompassStore = create<CompassStore>()(
       },
 
       // --- GE: Gestión de Solicitudes ---
+        /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
       saveSolicitudGE: (solicitud) => {
         if (!get().hasHydrated)
           return {
@@ -3123,6 +3258,8 @@ export const useCompassStore = create<CompassStore>()(
         return { ok: true }
       },
 
+        /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
+
       removeSolicitudGE: (id) => {
         if (!get().hasHydrated)
           return {
@@ -3137,6 +3274,7 @@ export const useCompassStore = create<CompassStore>()(
       },
 
       // --- IR: Inventario y Recursos ---
+        /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
       saveRecursoIR: (recurso) => {
         if (!get().hasHydrated)
           return {
@@ -3243,6 +3381,8 @@ export const useCompassStore = create<CompassStore>()(
         return { ok: true }
       },
 
+        /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
+
       removeRecursoIR: (id) => {
         if (!get().hasHydrated)
           return {
@@ -3309,6 +3449,8 @@ export const useCompassStore = create<CompassStore>()(
         }
         return { ok: true }
       },
+
+        /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
 
       saveSolicitudInsumoIR: (solicitud) => {
         if (!get().hasHydrated)
@@ -3775,6 +3917,7 @@ export const useCompassStore = create<CompassStore>()(
       },
 
       // --- IN: Infracciones y Multas ---
+        /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
       saveTipoInfraccionIN: (tipo) => {
         if (!get().hasHydrated)
           return {
@@ -3789,6 +3932,8 @@ export const useCompassStore = create<CompassStore>()(
         }))
         return { ok: true }
       },
+
+        /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
 
       removeTipoInfraccionIN: (id) => {
         if (!get().hasHydrated)
@@ -3811,6 +3956,8 @@ export const useCompassStore = create<CompassStore>()(
         }))
         return { ok: true }
       },
+
+        /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
 
       saveInfraccionIN: (infraccion) => {
         if (!get().hasHydrated)
@@ -4269,6 +4416,8 @@ export const useCompassStore = create<CompassStore>()(
         return { ok: true }
       },
 
+        /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
+
       removeInfraccionIN: (id) => {
         if (!get().hasHydrated)
           return {
@@ -4283,6 +4432,7 @@ export const useCompassStore = create<CompassStore>()(
       },
 
       // --- MT: Mantenimiento y Proyectos ---
+        /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
       saveTrabajoMT: (trabajo) => {
         if (!get().hasHydrated)
           return {
@@ -4388,6 +4538,8 @@ export const useCompassStore = create<CompassStore>()(
         }
         return { ok: true }
       },
+
+        /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
 
       removeTrabajoMT: (id) => {
         if (!get().hasHydrated)
@@ -4645,6 +4797,8 @@ export const useCompassStore = create<CompassStore>()(
         return { ok: true }
       },
 
+        /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
+
       saveProyectoMT: (proyecto) => {
         if (!get().hasHydrated)
           return {
@@ -4686,6 +4840,8 @@ export const useCompassStore = create<CompassStore>()(
         return { ok: true }
       },
 
+        /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
+
       removeProyectoMT: (id) => {
         if (!get().hasHydrated)
           return {
@@ -4698,6 +4854,7 @@ export const useCompassStore = create<CompassStore>()(
       },
 
       // --- RA: Reservas y Amenities ---
+        /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
       saveElementoRA: (elemento) => {
         if (!get().hasHydrated)
           return {
@@ -4739,6 +4896,8 @@ export const useCompassStore = create<CompassStore>()(
         return { ok: true }
       },
 
+        /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
+
       removeElementoRA: (id) => {
         if (!get().hasHydrated)
           return {
@@ -4758,6 +4917,8 @@ export const useCompassStore = create<CompassStore>()(
         set((s) => ({ elementosRA: s.elementosRA.filter((e) => e.id !== id) }))
         return { ok: true }
       },
+
+        /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
 
       saveReservaRA: (reserva) => {
         if (!get().hasHydrated)
@@ -5117,6 +5278,7 @@ export const useCompassStore = create<CompassStore>()(
       },
 
       // --- CV: Visor de Mensajes ---
+        /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
       saveAvisoCV: (aviso, creadoPorPersonaId) => {
         if (!get().hasHydrated)
           return {
@@ -5197,6 +5359,8 @@ export const useCompassStore = create<CompassStore>()(
         }
         return { ok: true }
       },
+
+        /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
 
       removeAvisoCV: (id) => {
         if (!get().hasHydrated)
@@ -5325,6 +5489,8 @@ export const useCompassStore = create<CompassStore>()(
         return { ok: true }
       },
 
+        /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
+
       savePlantillaCV: (plantilla) => {
         if (!get().hasHydrated)
           return {
@@ -5337,6 +5503,8 @@ export const useCompassStore = create<CompassStore>()(
         set((s) => ({ plantillasCV: upsert(s.plantillasCV, validacion.data) }))
         return { ok: true }
       },
+
+        /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
 
       removePlantillaCV: (id) => {
         if (!get().hasHydrated)
@@ -5476,6 +5644,7 @@ export const useCompassStore = create<CompassStore>()(
       },
 
       // --- FI: Finanzas y Morosidad ---
+        /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
       saveFondoFI: (fondo) => {
         if (!get().hasHydrated)
           return {
@@ -5498,6 +5667,8 @@ export const useCompassStore = create<CompassStore>()(
         set((s) => ({ fondosFI: upsert(s.fondosFI, validacion.data) }))
         return { ok: true }
       },
+
+        /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
 
       removeFondoFI: (id) => {
         if (!get().hasHydrated)
@@ -5522,6 +5693,8 @@ export const useCompassStore = create<CompassStore>()(
         set((s) => ({ fondosFI: s.fondosFI.filter((f) => f.id !== id) }))
         return { ok: true }
       },
+
+        /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
 
       saveEgresoFI: (egreso) => {
         if (!get().hasHydrated)
@@ -5589,6 +5762,8 @@ export const useCompassStore = create<CompassStore>()(
         }
         return { ok: true }
       },
+
+        /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
 
       removeEgresoFI: (id) => {
         if (!get().hasHydrated)
@@ -6303,6 +6478,8 @@ export const useCompassStore = create<CompassStore>()(
         return { ok: true }
       },
 
+        /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
+
       saveBitacoraVisitaPE: (visita) => {
         if (!get().hasHydrated)
           return {
@@ -6406,6 +6583,8 @@ export const useCompassStore = create<CompassStore>()(
         return { ok: true }
       },
 
+        /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
+
       removeBitacoraVisitaPE: (id) => {
         if (!get().hasHydrated)
           return {
@@ -6426,6 +6605,8 @@ export const useCompassStore = create<CompassStore>()(
         }))
         return { ok: true }
       },
+
+        /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
 
       saveEncomiendaPE: (encomienda) => {
         if (!get().hasHydrated)
@@ -6518,6 +6699,8 @@ export const useCompassStore = create<CompassStore>()(
         return { ok: true }
       },
 
+        /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
+
       removeEncomiendaPE: (id) => {
         if (!get().hasHydrated)
           return {
@@ -6538,6 +6721,8 @@ export const useCompassStore = create<CompassStore>()(
         }))
         return { ok: true }
       },
+
+        /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
 
       saveIngresoContratistaPE: (ingreso) => {
         if (!get().hasHydrated)
@@ -6621,6 +6806,8 @@ export const useCompassStore = create<CompassStore>()(
         return { ok: true }
       },
 
+        /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
+
       removeIngresoContratistaPE: (id) => {
         if (!get().hasHydrated)
           return {
@@ -6643,6 +6830,8 @@ export const useCompassStore = create<CompassStore>()(
         }))
         return { ok: true }
       },
+
+        /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
 
       saveProveedorPE: (proveedor) => {
         if (!get().hasHydrated)
@@ -6676,6 +6865,8 @@ export const useCompassStore = create<CompassStore>()(
         return { ok: true }
       },
 
+        /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
+
       removeProveedorPE: (id) => {
         if (!get().hasHydrated)
           return {
@@ -6700,6 +6891,8 @@ export const useCompassStore = create<CompassStore>()(
         }))
         return { ok: true }
       },
+
+        /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
 
       saveMantencionPE: (mantencion) => {
         if (!get().hasHydrated)
@@ -6741,6 +6934,8 @@ export const useCompassStore = create<CompassStore>()(
         )
         return { ok: true }
       },
+
+        /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
 
       removeMantencionPE: (id) => {
         if (!get().hasHydrated)
@@ -7470,6 +7665,8 @@ export const useCompassStore = create<CompassStore>()(
         return { ok: true }
       },
 
+        /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
+
       saveAdelantoPL: (adelanto) => {
         if (!get().hasHydrated)
           return {
@@ -7529,6 +7726,8 @@ export const useCompassStore = create<CompassStore>()(
         return { ok: true }
       },
 
+        /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
+
       removeAdelantoPL: (id) => {
         if (!get().hasHydrated)
           return {
@@ -7554,6 +7753,8 @@ export const useCompassStore = create<CompassStore>()(
       },
 
       // --- CT: Certificados ---
+
+        /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
 
       generarCertificadoCT: (input) => {
         if (!get().hasHydrated)
@@ -7799,6 +8000,8 @@ export const useCompassStore = create<CompassStore>()(
         return { ok: true }
       },
 
+        /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
+
       removeCertificadoCT: (id) => {
         if (!get().hasHydrated)
           return {
@@ -7838,6 +8041,8 @@ export const useCompassStore = create<CompassStore>()(
           "RE"
         )
       },
+
+        /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
 
       generarReporteRE: (input) => {
         if (!get().hasHydrated)
@@ -8108,6 +8313,8 @@ export const useCompassStore = create<CompassStore>()(
         )
         return { ok: true }
       },
+
+        /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
 
       removeReporteRE: (id) => {
         if (!get().hasHydrated)
