@@ -20,11 +20,13 @@ describe("Aislamiento A/B con membresías por comunidad (B3, D3)", () => {
     tmpDbPath = path.join(tmpDir, `test-authz-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.db`)
     const databaseUrl = `file:${tmpDbPath}`
     const tryPaths = [
+      path.resolve("prisma/schema.sqlite.prisma"),
+      path.resolve(__dirname, "../../prisma/schema.sqlite.prisma"),
       path.resolve("prisma/schema.prisma"),
       path.resolve(__dirname, "../../prisma/schema.prisma"),
     ]
     let sp = tryPaths.find(p => fs.existsSync(p))
-    if (!sp) sp = "k0mp4ss_fe/apps/web/prisma/schema.prisma"
+    if (!sp) sp = "k0mp4ss_fe/apps/web/prisma/schema.sqlite.prisma"
     try {
       execSync(`npx prisma migrate deploy --schema=${sp}`, {
         env: { ...process.env, DATABASE_URL: databaseUrl },

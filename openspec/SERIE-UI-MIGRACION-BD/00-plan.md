@@ -21,7 +21,7 @@
 | Ventana | Alcance | Estado | Commit final |
 |---|---|---|---|
 | P1 | Dashboard + Admin base (configuración, métricas, reportería, gestión, logs) | HECHA | d4f8d13 |
-| P2 | Comunidad restante (ficha persona, portal, visor, certificados, comunicación) | pendiente | — |
+| P2 | Comunidad restante (ficha persona, portal, visor, certificados, comunicación) | EN CURSO | — |
 | P3 | Operaciones (bitácora, paquetería, accesos, proveedores, reservas, solicitudes) | pendiente | — |
 | P4 | Inventario (estructura, tipos, recursos, proyectos) | pendiente | — |
 | P5 | Finanzas restantes (multas, remuneraciones) + Personas (personal, residentes) | pendiente | — |
@@ -78,6 +78,7 @@
 ## Bitácora
 
 - [2026-09-25] P1 HECHA: Dashboard + Admin base migrados a hooks SWR (6/6 páginas: dashboard, configuracion, metricas, reporteria, gestion, logs verificado), commit 8b8dffa, tests 795 pass.
+- [2026-09-25] P2 arranque: suite base 4 fallos. Fix real: lib/repos/*.test.ts usaban schema.prisma (postgres) con BD file: → ahora prefieren schema.sqlite.prisma (14/14 verdes). Otros 3 (lib-auth, pe-panels, migracion-punto-cero) eran timeouts bajo carga: verdes aislados (15/15, 3/3). openspec validate: 5 fallos pre-existentes en change archivado au-google-sso (sin deltas, no toca P1/P2). P2 EN CURSO.
 
 (cada ventana añade antes del push: `- [fecha] P<n> HECHA: resumen (commit hash)`)
 

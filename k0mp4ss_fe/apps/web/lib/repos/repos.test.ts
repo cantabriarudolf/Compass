@@ -22,12 +22,14 @@ describe("Repositorios con scoping obligatorio por comunidadId (C1b)", () => {
     const databaseUrl = `file:${tmpDbPath}`
     const schemaPath = path.resolve(process.cwd(), "k0mp4ss_fe/apps/web/prisma/schema.prisma")
     const tryPaths = [
+      path.resolve("prisma/schema.sqlite.prisma"),
+      path.resolve(__dirname, "../../prisma/schema.sqlite.prisma"),
       path.resolve("prisma/schema.prisma"),
       schemaPath,
       path.resolve(__dirname, "../../prisma/schema.prisma"),
     ]
     let sp = tryPaths.find(p => fs.existsSync(p))
-    if (!sp) sp = "k0mp4ss_fe/apps/web/prisma/schema.prisma"
+    if (!sp) sp = "k0mp4ss_fe/apps/web/prisma/schema.sqlite.prisma"
     try {
       execSync(`npx prisma migrate deploy --schema=${sp}`, {
         env: { ...process.env, DATABASE_URL: databaseUrl },
