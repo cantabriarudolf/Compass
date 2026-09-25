@@ -1,8 +1,16 @@
-"use client"
-
-import * as React from "react"
-import { useCompassStore, useStoreRehydrated } from "@/lib/store"
-import { aOracion } from "@/lib/normalizacion"
+    "use client"
+    
+    // EXCEPCIÓN P5: liquidacionesPL y adelantosPL no tienen hooks/API todavía.
+    // Se migran solo personas, maestros y configuración; el resto queda en store legacy.
+    
+    import * as React from "react"
+    // Datos de dominio vía API REST (BD fuente de verdad); store legacy deprecado.
+    import { useCompassStore } from "@/lib/store"
+    import { usePersonas } from "@/lib/api/use-personas"
+    import { useConfiguracion } from "@/lib/api/use-configuracion"
+    import { useMaestros as useMaestroAfps, useMaestros as useMaestroPrevisiones, useMaestros as useMaestroAsignaciones } from "@/lib/api/use-maestros"
+    import type { Afp, AsignacionFamiliar, PrevisionSalud, Persona as PersonaFull } from "@/lib/schemas"
+    import { aOracion } from "@/lib/normalizacion"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
@@ -41,18 +49,23 @@ function periodoActual(): string {
 const CLP = (n: number) => `$${Math.round(n).toLocaleString("es-CL")}`
 
 export default function RemuneracionesPage() {
-  useStoreRehydrated()
-  const hasHydrated = useCompassStore(s => s.hasHydrated)
+  // TODO: migrar liquidacionesPL y adelantosPL a hook SWR cuando exista API PL (EXCEPCIÓN P5)
   const liquidaciones = useCompassStore(s => s.liquidacionesPL)
   const adelantos = useCompassStore(s => s.adelantosPL)
-  const personas = useCompassStore(s => s.personas)
-  const maestros = useCompassStore(s => s.maestros)
-  const configuracion = useCompassStore(s => s.configuracion)
   const generarLiquidacionPL = useCompassStore(s => s.generarLiquidacionPL)
   const confirmarLiquidacionPL = useCompassStore(s => s.confirmarLiquidacionPL)
   const removeLiquidacionPL = useCompassStore(s => s.removeLiquidacionPL)
   const saveAdelantoPL = useCompassStore(s => s.saveAdelantoPL)
   const removeAdelantoPL = useCompassStore(s => s.removeAdelantoPL)
+  const { personas: personasApi, isLoading: cPersonas } = usePersonas()
+  // SAFETY: la API /api/personas serializa el schema completo (MP con ficha integral);
+  // el hook tipa la variante resumida de los mocks. El cast adapta tipos sin cambiar valores.
+  const personas = personasApi as unknown as PersonaFull[]
+  const { data: afps, isLoading: cAfps } = useMaestroAfps<Afp>("afps")
+  const { data: previsionesSalud, isLoading: cPrevisiones } = useMaestroPrevisiones<PrevisionSalud>("previsiones-salud")
+  const { data: asignacionFamiliar, isLoading: cAsignaciones } = useMaestroAsignaciones<AsignacionFamiliar>("asignaciones-familiar")
+  const { config: configuracion, isLoading: cConfig, updateConfig } = useConfiguracion()
+  const isLoading = cPersonas || cAfps || cPrevisiones || cAsignaciones || cConfig
 
   const [error, setError] = React.useState<string | null>(null)
   const [okMsg, setOkMsg] = React.useState<string | null>(null)
@@ -74,11 +87,21 @@ export default function RemuneracionesPage() {
   const [adelantoMonto, setAdelantoMonto] = React.useState("")
   const [adelantoGlosa, setAdelantoGlosa] = React.useState("")
 
-  // Parámetros legales CF
-  const [ufMensual, setUfMensual] = React.useState(configuracion.ufMensual?.toString() ?? "")
-  const [ingresoMinimo, setIngresoMinimo] = React.useState(configuracion.ingresoMinimoMensual?.toString() ?? "")
-  const [topeGrat, setTopeGrat] = React.useState(configuracion.topeGratificacionLegal?.toString() ?? "")
-  const [tasaSIS, setTasaSIS] = React.useState(configuracion.tasaSIS?.toString() ?? "")
+      // Parámetros legales CF (se re-sincronizan cuando llega la config del servidor)
+      const [ufMensual, setUfMensual] = React.useState("")
+      const [ingresoMinimo, setIngresoMinimo] = React.useState("")
+      const [topeGrat, setTopeGrat] = React.useState("")
+      const [tasaSIS, setTasaSIS] = React.useState("")
+
+      React.useEffect(() => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- re-sincronización intencional al llegar la config del servidor (paridad con admin/configuracion)
+        if (configuracion) {
+          setUfMensual(v => v || (configuracion.ufMensual?.toString() ?? ""))
+          setIngresoMinimo(v => v || (configuracion.ingresoMinimoMensual?.toString() ?? ""))
+          setTopeGrat(v => v || (configuracion.topeGratificacionLegal?.toString() ?? ""))
+          setTasaSIS(v => v || (configuracion.tasaSIS?.toString() ?? ""))
+        }
+      }, [configuracion])
 
   const trabajadores = personas.filter(p => p.datosLaborales && p.estadoCuenta === "activa")
 
@@ -92,6 +115,7 @@ export default function RemuneracionesPage() {
   const ficha = trabajadorSel?.datosLaborales
 
   const paramsLegalesCargados =
+    !!configuracion &&
     configuracion.ufMensual !== undefined &&
     configuracion.ingresoMinimoMensual !== undefined &&
     configuracion.topeGratificacionLegal !== undefined &&
@@ -101,8 +125,8 @@ export default function RemuneracionesPage() {
     ? calcularLiquidacion({
       sueldoBaseContrato: ficha.sueldoBase!,
       diasTrabajados: Number(diasTrabajados) || 0,
-      diasMesComercial: configuracion.diasMesComercial ?? 30,
-      jornadaSemanal: ficha.jornadaBaseHoras ?? configuracion.jornadaSemanalEstandar,
+      diasMesComercial: configuracion?.diasMesComercial ?? 30,
+      jornadaSemanal: ficha.jornadaBaseHoras ?? configuracion?.jornadaSemanalEstandar,
       horasExtrasHoras: (ficha.horasExtras ?? [])
         .filter(h => h.fecha.startsWith(`${periodo}-`))
         .reduce((acc, h) => acc + h.horas, 0),
@@ -110,19 +134,19 @@ export default function RemuneracionesPage() {
       asignacionMovilizacion: Number(movilizacion) || 0,
       asignacionColacion: Number(colacion) || 0,
       montoAsignacionFamiliar:
-        (maestros.asignacionFamiliar.find(a => a.id === ficha.asignacionFamiliarId)?.monto ?? 0) *
+        (asignacionFamiliar.find(a => a.id === ficha.asignacionFamiliarId)?.monto ?? 0) *
         Math.max(0, ficha.cargas ?? 0),
-      tasaAFP: maestros.afps.find(a => a.id === ficha.afpId)?.tasaCotizacion ?? 0,
+      tasaAFP: afps.find(a => a.id === ficha.afpId)?.tasaCotizacion ?? 0,
       saludPlan: {
-        tipo: maestros.previsionesSalud.find(s => s.id === ficha.saludId)?.tipo ?? "fonasa",
+        tipo: previsionesSalud.find(s => s.id === ficha.saludId)?.tipo ?? "fonasa",
         porcentaje: saludPorcentaje ? Number(saludPorcentaje) : undefined,
         valorUF: saludValorUF ? Number(saludValorUF) : undefined,
-        ufVigente: configuracion.ufMensual!,
+        ufVigente: configuracion!.ufMensual!,
       },
-      ufVigente: configuracion.ufMensual!,
-      ingresoMinimoMensual: configuracion.ingresoMinimoMensual!,
-      topeGratificacionLegal: configuracion.topeGratificacionLegal!,
-      tasaSIS: configuracion.tasaSIS!,
+      ufVigente: configuracion!.ufMensual!,
+      ingresoMinimoMensual: configuracion!.ingresoMinimoMensual!,
+      topeGratificacionLegal: configuracion!.topeGratificacionLegal!,
+      tasaSIS: configuracion!.tasaSIS!,
       tasaSeguroCesantia: 0.6,
       esHonorarios: ficha.tipoContrato === "honorarios",
       montoAPV: Number(apv) || 0,
@@ -132,7 +156,7 @@ export default function RemuneracionesPage() {
     })
   : null
 
-  if (!hasHydrated) {
+  if (isLoading) {
     return <div className="h-64 w-full animate-pulse rounded-lg bg-muted" />
   }
 
@@ -167,6 +191,7 @@ export default function RemuneracionesPage() {
 
   const descargarPdf = async (liq: LiquidacionPL) => {
     setError(null); setOkMsg(null)
+    if (!configuracion) { setError("La configuración aún no está cargada."); return }
     setPdfBusy(liq.id)
     try {
       const doc = await documentoLiquidacionPDF(liq, nombrePersona(liq.trabajadorPersonaId), rutPersona(liq.trabajadorPersonaId), configuracion)
@@ -180,8 +205,9 @@ export default function RemuneracionesPage() {
     }
   }
 
-  const guardarParametrosLegales = () => {
+  const guardarParametrosLegales = async () => {
     setError(null); setOkMsg(null)
+    if (!configuracion) { setError("La configuración aún no está cargada."); return }
     const cfg = {
       ...configuracion,
       ...(ufMensual ? { ufMensual: Number(ufMensual) } : {}),
@@ -189,7 +215,7 @@ export default function RemuneracionesPage() {
       ...(topeGrat ? { topeGratificacionLegal: Number(topeGrat) } : {}),
       ...(tasaSIS !== "" ? { tasaSIS: Number(tasaSIS) } : {}),
     }
-    const r = useCompassStore.getState().saveConfiguracion(cfg)
+    const r = await updateConfig(cfg as unknown as Parameters<typeof updateConfig>[0])
     if (!r.ok) setError(r.error ?? "Error al guardar parámetros")
     else setOkMsg("Parámetros legales guardados y auditados (CF_UPDATE_PARAM).")
   }
@@ -256,7 +282,7 @@ export default function RemuneracionesPage() {
                 </Select>
                 {ficha && (
                   <p className="text-xs text-muted-foreground">
-                    Sueldo base {CLP(ficha.sueldoBase ?? 0)} · Jornada {ficha.jornadaBaseHoras ?? configuracion.jornadaSemanalEstandar} h · AFP {maestros.afps.find(a => a.id === ficha.afpId)?.nombre ?? "—"} · {(ficha.horasExtras ?? []).filter(h => h.fecha.startsWith(`${periodo}-`)).reduce((acc, h) => acc + h.horas, 0)} h extra en el periodo
+                    Sueldo base {CLP(ficha.sueldoBase ?? 0)} · Jornada {ficha.jornadaBaseHoras ?? configuracion?.jornadaSemanalEstandar} h · AFP {afps.find(a => a.id === ficha.afpId)?.nombre ?? "—"} · {(ficha.horasExtras ?? []).filter(h => h.fecha.startsWith(`${periodo}-`)).reduce((acc, h) => acc + h.horas, 0)} h extra en el periodo
                   </p>
                 )}
               </div>
@@ -280,7 +306,7 @@ export default function RemuneracionesPage() {
                 <Label>APV / Ahorro voluntario ($)</Label>
                 <Input type="number" min={0} value={apv} onChange={e => setApv(e.target.value)} />
               </div>
-              {ficha && maestros.previsionesSalud.find(s => s.id === ficha.saludId)?.tipo === "isapre" && (
+              {ficha && previsionesSalud.find(s => s.id === ficha.saludId)?.tipo === "isapre" && (
                 <>
                   <div className="flex flex-col gap-1.5">
                     <Label>Isapre: % sobre imponible</Label>

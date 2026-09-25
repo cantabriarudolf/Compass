@@ -1,7 +1,11 @@
 "use client"
 
 import * as React from "react"
-import { useCompassStore, useStoreRehydrated } from "@/lib/store"
+// Datos de dominio vía API REST (BD fuente de verdad); store legacy deprecado.
+import { usePersonas } from "@/lib/api/use-personas"
+import { useUnidades } from "@/lib/api/use-unidades"
+import { useInfraccionesIN, useTiposInfraccionIN } from "@/lib/api/use-in"
+import { useCompassStore } from "@/lib/store"
 import { aTituloCaso, aOracion } from "@/lib/normalizacion"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import { Input } from "@workspace/ui/components/input"
@@ -89,13 +93,17 @@ interface FormInfraccion {
 }
 
 export default function MultasPage() {
-  useStoreRehydrated()
-  const hasHydrated = useCompassStore(s => s.hasHydrated)
-  const tipos = useCompassStore(s => s.tiposInfraccionIN)
-  const infracciones = useCompassStore(s => s.infraccionesIN)
-  const personas = useCompassStore(s => s.personas)
-  const unidades = useCompassStore(s => s.unidades)
+  const {
+items: tipos, isLoading: cTipos, create: crearTipoApi, update: actualizarTipoApi, remove: eliminarTipoApi,
+  } = useTiposInfraccionIN()
+  const {
+items: infracciones, isLoading: cInfracciones, create: crearInfraccionApi, update: actualizarInfraccionApi, remove: eliminarInfraccionApi,
+  } = useInfraccionesIN()
+  const { personas, isLoading: cPersonas } = usePersonas()
+  const { items: unidades, isLoading: cUnidades } = useUnidades()
+  // TODO: migrar mensajesBuzonCO a hook SWR cuando exista (módulo CO sin hooks aún)
   const mensajesBuzonCO = useCompassStore(s => s.mensajesBuzonCO)
+  const isLoading = cTipos || cInfracciones || cPersonas || cUnidades
 
   const [error, setError] = React.useState<string | null>(null)
   const [detalle, setDetalle] = React.useState<InfraccionIN | null>(null)
@@ -129,28 +137,33 @@ export default function MultasPage() {
     }).length,
   }))
 
-  const guardarTipo = () => {
+  const guardarTipo = async () => {
     if (!formTipo) return
     setError(null)
-    const r = useCompassStore.getState().saveTipoInfraccionIN({
-      id: editandoTipoId ?? `tipo-in-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+    const payload = {
       nombre: aTituloCaso(formTipo.nombre),
       categoria: formTipo.categoria,
       tipoSancion: formTipo.tipoSancion,
       valor: Number(formTipo.valor),
-    })
+    }
+    const r = editandoTipoId
+      ? await actualizarTipoApi(editandoTipoId, payload)
+      : await crearTipoApi(payload)
     if (!r.ok) { setError(r.error ?? "No se pudo guardar el tipo."); return }
     setFormTipo(null)
     setEditandoTipoId(null)
   }
 
-  const registrarInfraccion = () => {
+  const registrarInfraccion = async () => {
     if (!nueva) return
     setError(null)
     const mensaje = mensajesBuzonCO.find(m => m.id === nueva.mensajeBuzonId)
-    const r = useCompassStore.getState().saveInfraccionIN({
+    // Folio IN-#### correlativo: el POST upsert exige id y folio desde el cliente.
+    const numeros = infracciones.map(i => Number.parseInt(i.folio.replace(/^IN-/, ""), 10)).filter(n => Number.isFinite(n))
+    const folio = `IN-${String((numeros.length > 0 ? Math.max(...numeros) : 0) + 1).padStart(4, "0")}`
+    const r = await crearInfraccionApi({
       id: `in-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
-      folio: "",
+      folio,
       ...(nueva.origen === "catalogo"
         ? { tipoInfraccionId: nueva.tipoInfraccionId }
         : { danoDirecto: { descripcionDaño: aOracion(nueva.descripcionDaño), costoReparacion: Number(nueva.costoReparacion) }, evidencias: nueva.evidenciaUrl ? [{ nombre: "respaldo-dano", tipoMime: "application/pdf", tamanoKB: 120, url: nueva.evidenciaUrl.trim() }] : [] }),
@@ -169,12 +182,12 @@ export default function MultasPage() {
       fechaRegistro: new Date().toISOString().slice(0, 10),
       comentariosDirectiva: [],
       respaldosDirectiva: [],
-    })
+    } as Partial<InfraccionIN>)
     if (!r.ok) { setError(r.error ?? "No se pudo registrar."); return }
     setNueva(null)
   }
 
-  if (!hasHydrated) {
+  if (isLoading) {
     return (
       <div className="flex flex-col gap-6 animate-pulse">
         <div className="h-9 w-72 rounded bg-muted/40" />
@@ -340,8 +353,8 @@ export default function MultasPage() {
                             setEditandoTipoId(t.id)
                             setFormTipo({ nombre: t.nombre, categoria: t.categoria, tipoSancion: t.tipoSancion, valor: t.valor.toString() })
                           }}>Editar</Button>
-                          <Button size="sm" variant="ghost" onClick={() => {
-                            const r = useCompassStore.getState().removeTipoInfraccionIN(t.id)
+                          <Button size="sm" variant="ghost" onClick={async () => {
+                            const r = await eliminarTipoApi(t.id)
                             if (!r.ok) setError(r.error ?? "No se pudo eliminar.")
                           }}>Eliminar</Button>
                         </div>
@@ -417,6 +430,7 @@ export default function MultasPage() {
                 {["en_revision", "apelada"].includes(detalle.estado) && (
                   <div className="flex flex-wrap gap-2 rounded-md border p-3">
                     <Button size="sm" onClick={() => {
+                      // TODO: migrar a API REST (workflow del expediente IN sin endpoint dedicado todavía; fallback legacy al store)
                       const r = useCompassStore.getState().aplicarInfraccionIN(detalle.id)
                       if (!r.ok) { setError(r.error ?? "No se pudo aplicar."); return }
                       setDetalle(useCompassStore.getState().infraccionesIN.find(x => x.id === detalle.id) ?? null)
@@ -424,6 +438,7 @@ export default function MultasPage() {
                     <Button size="sm" variant="outline" onClick={() => {
                       const justificacion = window.prompt("Justificación de la desestimación (obligatoria):")
                       if (!justificacion?.trim()) { setError("La desestimación exige justificación obligatoria."); return }
+                      // TODO: migrar a API REST (workflow del expediente IN sin endpoint dedicado todavía; fallback legacy al store)
                       const r = useCompassStore.getState().desestimarInfraccionIN(detalle.id, justificacion)
                       if (!r.ok) { setError(r.error ?? "No se pudo desestimar."); return }
                       setDetalle(null)
@@ -432,6 +447,7 @@ export default function MultasPage() {
                       <Button size="sm" variant="outline" onClick={() => {
                         const descargos = window.prompt("Descargos del vecino:")
                         if (!descargos?.trim()) return
+                        // TODO: migrar a API REST (workflow del expediente IN sin endpoint dedicado todavía; fallback legacy al store)
                         const r = useCompassStore.getState().apelarInfraccionIN(detalle.id, descargos)
                         if (!r.ok) { setError(r.error ?? "No se pudieron registrar los descargos."); return }
                         setDetalle(useCompassStore.getState().infraccionesIN.find(x => x.id === detalle.id) ?? null)

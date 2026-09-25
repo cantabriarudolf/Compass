@@ -23,7 +23,7 @@
 | P1 | Dashboard + Admin base (configuración, métricas, reportería, gestión, logs) | HECHA | d4f8d13 |
 | P2 | Comunidad restante (ficha persona, portal, visor, certificados, comunicación) | ✅ HECHA | b691dfe |
 | P3 | Operaciones (bitácora, paquetería, accesos, proveedores, reservas, solicitudes) | ✅ HECHA | 4fa8f7f |
-| P4 | Inventario (estructura, tipos, recursos, proyectos) | 🟡 EN CURSO | — |
+| P4 | Inventario (estructura, tipos, recursos, proyectos) | ✅ HECHA | 0b62897 |
 | P5 | Finanzas restantes (multas, remuneraciones) + Personas (personal, residentes) | pendiente | — |
 | P6 | Visor-mensajes + QA-Lab + Mantenimiento + Dev-dashboard + cierre | pendiente | — |
 
@@ -79,6 +79,7 @@
 
 - [2026-09-25] P1 HECHA: Dashboard + Admin base migrados a hooks SWR (6/6 páginas: dashboard, configuracion, metricas, reporteria, gestion, logs verificado), commit 8b8dffa, tests 795 pass.
 - [2026-09-25] P2 arranque: suite base 4 fallos. Fix real: lib/repos/*.test.ts usaban schema.prisma (postgres) con BD file: → ahora prefieren schema.sqlite.prisma (14/14 verdes). Otros 3 (lib-auth, pe-panels, migracion-punto-cero) eran timeouts bajo carga: verdes aislados (15/15, 3/3). openspec validate: 5 fallos pre-existentes en change archivado au-google-sso (sin deltas, no toca P1/P2). P2 EN CURSO.
+- [2026-09-25] P4 HECHA: Inventario migrado a hooks SWR (4/4 páginas: estructura, tipos, recursos, proyectos), commit 0b62897, tests 151/151 pass, 9 acciones quedaron como TODO con fallback al store (entregarSolicitudInsumoIR, resolverComodinIR×3, iniciarTrabajoMT, finalizarTrabajoMT, cancelarTrabajoMT, actualizarPagoTrabajoMT, verificarGarantiasMT).
 - [2026-09-25] P2 PAUSADA por hallazgo bloqueante: tablas de dominio vacías en dev.db. Seed creado y ejecutado (commit 68c07f2): 55 personas, 166 unidades, 51 vínculos, 182 egresos, 44 ingresos. P2 retomada parcial: personas/[id], portal, visor migrados. Certificados y comunicación pendientes (follow-up P2b).
 - [2026-09-25] Seed ejecutado: `scripts/seed-db-from-mocks.ts` pobló dev.db con datos de mocks. BD ahora tiene datos para todas las páginas migradas.
 

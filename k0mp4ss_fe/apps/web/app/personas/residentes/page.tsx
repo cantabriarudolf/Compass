@@ -2,7 +2,10 @@
 
 import * as React from "react"
 import Link from "next/link"
-import { useCompassStore, useStoreRehydrated } from "@/lib/store"
+// Datos de dominio vía API REST (BD fuente de verdad); store legacy deprecado.
+import { usePersonas } from "@/lib/api/use-personas"
+import { useVinculos } from "@/lib/api/use-vinculos"
+import { useUnidades } from "@/lib/api/use-unidades"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import { Input } from "@workspace/ui/components/input"
 import { Badge } from "@workspace/ui/components/badge"
@@ -37,11 +40,10 @@ const getVinculoBadgeColor = (rol: string) => {
 }
 
 export default function ResidentesPage() {
-  useStoreRehydrated()
-  const hasHydrated = useCompassStore(s => s.hasHydrated)
-  const personas = useCompassStore(s => s.personas)
-  const vinculos = useCompassStore(s => s.vinculos)
-  const unidades = useCompassStore(s => s.unidades)
+  const { personas, isLoading: cPersonas } = usePersonas()
+  const { vinculos, isLoading: cVinculos } = useVinculos()
+  const { items: unidades, isLoading: cUnidades } = useUnidades()
+  const isLoading = cPersonas || cVinculos || cUnidades
 
   const [searchTerm, setSearchTerm] = React.useState("")
 
@@ -72,7 +74,7 @@ export default function ResidentesPage() {
     return u ? `${u.etiqueta} ${u.numero}` : unidadId
   }, [unidades])
 
-  if (!hasHydrated) {
+  if (isLoading) {
     return (
       <div className="flex flex-col gap-6 animate-pulse">
         <div className="h-9 w-72 rounded bg-muted/40" />

@@ -1,8 +1,24 @@
-"use client"
-
-import * as React from "react"
-import Link from "next/link"
-import { useCompassStore, useStoreRehydrated } from "@/lib/store"
+    "use client"
+    
+    import * as React from "react"
+    import Link from "next/link"
+    // Datos de dominio vía API REST (BD fuente de verdad); store legacy deprecado.
+    import { useCompassStore } from "@/lib/store"
+    import { usePersonas } from "@/lib/api/use-personas"
+    import { useConfiguracion } from "@/lib/api/use-configuracion"
+    import { useMaestros } from "@/lib/api/use-maestros"
+    import { useTrabajosMT } from "@/lib/api/use-mt"
+    import { useCierresTurnoPE, useProyeccionesPE } from "@/lib/api/use-pe"
+    import type {
+      Afp,
+      AsignacionFamiliar,
+      Banco,
+      Feriado,
+      Jornada,
+      MutualCaja,
+      Persona as PersonaFull,
+      PrevisionSalud,
+    } from "@/lib/schemas"
 import { aTituloCaso, aOracion } from "@/lib/normalizacion"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import { Input } from "@workspace/ui/components/input"
@@ -158,22 +174,33 @@ function mesSugerido(): string {
 }
 
 export default function PersonalPage() {
-  useStoreRehydrated()
-  const hasHydrated = useCompassStore(s => s.hasHydrated)
-  const personas = useCompassStore(s => s.personas)
-  const trabajosMT = useCompassStore(s => s.trabajosMT)
-  const cierresTurnoPE = useCompassStore(s => s.cierresTurnoPE)
-  const proyeccionesPE = useCompassStore(s => s.proyeccionesPE)
+  // Datos de dominio vía API REST; fallbacks legacy del store solo donde no hay hook.
+  const { personas: personasApi, isLoading: cPersonas, create: crearPersonaApi } = usePersonas()
+  // SAFETY: la API /api/personas serializa el schema completo (MP con ficha integral);
+  // el hook tipa la variante resumida de los mocks. El cast adapta tipos sin cambiar valores.
+  const personas = personasApi as unknown as PersonaFull[]
+  const { items: trabajosMT, isLoading: cTrabajos } = useTrabajosMT()
+  const { items: cierresTurnoPE, isLoading: cCierres } = useCierresTurnoPE()
+  const { items: proyeccionesPE, isLoading: cProyecciones } = useProyeccionesPE()
+  const { data: jornadas, isLoading: cJornadas } = useMaestros<Jornada>("jornadas")
+  const { data: afps, isLoading: cAfps } = useMaestros<Afp>("afps")
+  const { data: previsionesSalud, isLoading: cPrevisiones } = useMaestros<PrevisionSalud>("previsiones-salud")
+  const { data: mutualesCajas, isLoading: cMutuales } = useMaestros<MutualCaja>("mutuales-cajas")
+  const { data: asignacionFamiliar, isLoading: cAsignaciones } = useMaestros<AsignacionFamiliar>("asignaciones-familiar")
+  const { data: bancos, isLoading: cBancos } = useMaestros<Banco>("bancos")
+  const { data: feriados, isLoading: cFeriados, create: crearFeriadoApi, update: actualizarFeriadoApi, remove: eliminarFeriadoApi } = useMaestros<Feriado>("feriados")
+  const { config: configuracion } = useConfiguracion()
+  // TODO: migrar eventos a hook SWR cuando exista
   const eventos = useCompassStore(s => s.eventos)
-  const maestros = useCompassStore(s => s.maestros)
-  const savePersona = useCompassStore(s => s.savePersona)
+  // TODO: migrar estas acciones PE/maestros a API REST cuando existan endpoints de transición:
+  // registrarHoraExtraPE, registrarEvaluacionPE, iniciarTurnoPE, completarTareaMonitoreoPE,
+  // enviarProyeccionCostoFI (fallback legacy al store hasta entonces).
   const registrarHoraExtraPE = useCompassStore(s => s.registrarHoraExtraPE)
   const registrarEvaluacionPE = useCompassStore(s => s.registrarEvaluacionPE)
-  const saveMaestro = useCompassStore(s => s.saveMaestro)
-  const removeMaestro = useCompassStore(s => s.removeMaestro)
   const iniciarTurnoPE = useCompassStore(s => s.iniciarTurnoPE)
   const completarTareaMonitoreoPE = useCompassStore(s => s.completarTareaMonitoreoPE)
   const enviarProyeccionCostoFI = useCompassStore(s => s.enviarProyeccionCostoFI)
+  const isLoading = cPersonas || cTrabajos || cCierres || cProyecciones || cJornadas || cAfps || cPrevisiones || cMutuales || cAsignaciones || cBancos || cFeriados
 
   const [error, setError] = React.useState<string | null>(null)
   const [okMsg, setOkMsg] = React.useState<string | null>(null)
@@ -193,7 +220,6 @@ export default function PersonalPage() {
   )
   const editando = editandoId ? personas.find(p => p.id === editandoId) : undefined
   const hoy = new Date().toISOString().slice(0, 10)
-  const jornadas = maestros.jornadas
 
   const abrirFicha = (p: Persona) => {
     setEditandoId(p.id)
@@ -202,7 +228,7 @@ export default function PersonalPage() {
     setOkMsg(null)
   }
 
-  const guardarFicha = () => {
+  const guardarFicha = async () => {
     if (!editando) return
     if (!form.cargo.trim()) {
       setError("El cargo es obligatorio.")
@@ -216,7 +242,7 @@ export default function PersonalPage() {
       setError("Seleccione AFP, previsión de salud y banco de los maestros legales.")
       return
     }
-    const r = savePersona(personaDesdeFicha(editando, form))
+    const r = await crearPersonaApi(personaDesdeFicha(editando, form) as unknown as Parameters<typeof crearPersonaApi>[0])
     if (!r.ok) {
       setError(r.error ?? "No se pudo guardar la ficha.")
       return
@@ -260,18 +286,24 @@ export default function PersonalPage() {
     setOkMsg("Evaluación registrada.")
   }
 
-  const guardarFeriado = () => {
+  const guardarFeriado = async () => {
     if (!formFeriado) return
     if (!formFeriado.fecha || !formFeriado.nombre.trim()) {
       setError("El feriado exige fecha y nombre.")
       return
     }
-    const r = saveMaestro("feriados", {
-      id: formFeriado.id ?? `f-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      fecha: formFeriado.fecha,
-      nombre: formFeriado.nombre.trim(),
-      irrenunciable: formFeriado.irrenunciable,
-    })
+    const r = formFeriado.id
+      ? await actualizarFeriadoApi(formFeriado.id, {
+    fecha: formFeriado.fecha,
+    nombre: formFeriado.nombre.trim(),
+    irrenunciable: formFeriado.irrenunciable,
+      })
+      : await crearFeriadoApi({
+    id: `f-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    fecha: formFeriado.fecha,
+    nombre: formFeriado.nombre.trim(),
+    irrenunciable: formFeriado.irrenunciable,
+      })
     if (!r.ok) {
       setError(r.error ?? "No se pudo guardar el feriado.")
       return
@@ -280,7 +312,7 @@ export default function PersonalPage() {
     setOkMsg("Feriado guardado.")
   }
 
-  const importarCalendarioAnual = () => {
+  const importarCalendarioAnual = async () => {
     const anio = Number(mesProyeccion.slice(0, 4))
     const base: Array<[string, string, boolean]> = [
       [`${anio}-01-01`, "Año Nuevo", true],
@@ -294,17 +326,17 @@ export default function PersonalPage() {
       [`${anio}-10-12`, "Encuentro de Dos Mundos", false],
       [`${anio}-12-25`, "Navidad", true],
     ]
-    const existentes = new Set(maestros.feriados.map(f => f.fecha))
+    const existentes = new Set(feriados.map(f => f.fecha))
     let agregados = 0
     for (const [fecha, nombre, irr] of base) {
       if (existentes.has(fecha)) continue
-      const r = saveMaestro("feriados", { id: `f-${fecha}`, fecha, nombre, irrenunciable: irr })
+      const r = await crearFeriadoApi({ id: `f-${fecha}`, fecha, nombre, irrenunciable: irr })
       if (r.ok) agregados += 1
     }
     setOkMsg(agregados > 0 ? `Calendario ${anio}: ${agregados} feriado(s) importados.` : `El calendario ${anio} ya estaba completo.`)
   }
 
-  const proyeccion = calcularProyeccionCobertura({ feriados: maestros.feriados, mesAnio: mesProyeccion })
+  const proyeccion = calcularProyeccionCobertura({ feriados, mesAnio: mesProyeccion })
   const costoEstimado = costoProyeccionPE(
     proyeccion.reemplazosNecesarios,
     personal.filter(p => p.estadoCuenta === "activa").length,
@@ -343,7 +375,7 @@ export default function PersonalPage() {
   const tareasAbiertas = trabajosMT.filter(t => (t.estado === "planificado" || t.estado === "en_curso") && t.responsablePersonaId && personal.some(p => p.id === t.responsablePersonaId))
 
 
-  if (!hasHydrated) {
+  if (isLoading) {
     return <div className="flex min-h-[60vh] flex-col gap-4 animate-pulse"><div className="h-9 w-72 rounded bg-muted/40" /><div className="h-64 w-full rounded-lg bg-muted" /></div>
   }
 
@@ -388,7 +420,7 @@ export default function PersonalPage() {
                         {p.datosLaborales ? `${p.datosLaborales.cargo} · desde ${p.datosLaborales.fechaIngreso}` : "Sin ficha laboral"}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        AFP: {p.datosLaborales?.afpId ? maestros.afps.find(a => a.id === p.datosLaborales!.afpId)?.nombre ?? "—" : p.datosLaborales?.afp ?? "—"} · Salud: {p.datosLaborales?.saludId ? maestros.previsionesSalud.find(x => x.id === p.datosLaborales!.saludId)?.nombre ?? "—" : p.datosLaborales?.prevision ?? "—"}
+                        AFP: {p.datosLaborales?.afpId ? afps.find(a => a.id === p.datosLaborales!.afpId)?.nombre ?? "—" : p.datosLaborales?.afp ?? "—"} · Salud: {p.datosLaborales?.saludId ? previsionesSalud.find(x => x.id === p.datosLaborales!.saludId)?.nombre ?? "—" : p.datosLaborales?.prevision ?? "—"}
                       </p>
                     </div>
                   </div>
@@ -417,14 +449,14 @@ export default function PersonalPage() {
               <table className="w-full text-sm">
                 <thead><tr className="border-b text-left text-muted-foreground"><th className="p-3">Fecha</th><th className="p-3">Nombre</th><th className="p-3">Irrenunciable</th><th className="p-3 w-24">Acciones</th></tr></thead>
                 <tbody>
-                  {[...maestros.feriados].sort((a, b) => b.fecha.localeCompare(a.fecha)).map(f => (
+                  {[...feriados].sort((a, b) => b.fecha.localeCompare(a.fecha)).map(f => (
                     <tr key={f.id} className="border-b last:border-0">
                       <td className="p-3 font-mono">{f.fecha}</td>
                       <td className="p-3">{f.nombre}</td>
                       <td className="p-3">{f.irrenunciable ? <Badge variant="destructive">Irrenunciable</Badge> : <Badge variant="secondary">Legal</Badge>}</td>
                       <td className="p-3 flex gap-1">
                         <Button size="icon" variant="ghost" onClick={() => setFormFeriado({ id: f.id, fecha: f.fecha, nombre: f.nombre, irrenunciable: f.irrenunciable })}><IconPencil className="size-4" /></Button>
-                        <Button size="icon" variant="ghost" onClick={() => { const r = removeMaestro("feriados", f.id); if (!r.ok) setError(r.error ?? ""); else setOkMsg("Feriado eliminado.") }}><IconTrash className="size-4" /></Button>
+                        <Button size="icon" variant="ghost" onClick={async () => { const r = await eliminarFeriadoApi(f.id); if (!r.ok) setError(r.error ?? ""); else setOkMsg("Feriado eliminado.") }}><IconTrash className="size-4" /></Button>
                       </td>
                     </tr>
                   ))}
@@ -608,14 +640,14 @@ export default function PersonalPage() {
                     <Label>AFP</Label>
                     <Select value={form.afpId || undefined} onValueChange={v => setForm({ ...form, afpId: v === "__none" ? "" : v })}>
                       <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
-                      <SelectContent>{maestros.afps.map(a => <SelectItem key={a.id} value={a.id}>{a.nombre} ({a.tasaCotizacion}%)</SelectItem>)}</SelectContent>
+                      <SelectContent>{afps.map(a => <SelectItem key={a.id} value={a.id}>{a.nombre} ({a.tasaCotizacion}%)</SelectItem>)}</SelectContent>
                     </Select>
                   </div>
                   <div className="flex flex-col gap-1.5">
                     <Label>Fonasa / Isapre</Label>
                     <Select value={form.saludId || undefined} onValueChange={v => setForm({ ...form, saludId: v === "__none" ? "" : v })}>
                       <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
-                      <SelectContent>{maestros.previsionesSalud.map(a => <SelectItem key={a.id} value={a.id}>{a.nombre}</SelectItem>)}</SelectContent>
+                      <SelectContent>{previsionesSalud.map(a => <SelectItem key={a.id} value={a.id}>{a.nombre}</SelectItem>)}</SelectContent>
                     </Select>
                   </div>
                   <div className="flex flex-col gap-1.5">
@@ -624,7 +656,7 @@ export default function PersonalPage() {
                       <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="__none">Sin especificar</SelectItem>
-                        {maestros.mutualesCajas.map(a => <SelectItem key={a.id} value={a.id}>{a.nombre}</SelectItem>)}
+                        {mutualesCajas.map(a => <SelectItem key={a.id} value={a.id}>{a.nombre}</SelectItem>)}
                       </SelectContent>
                     </Select>
                   </div>
@@ -634,7 +666,7 @@ export default function PersonalPage() {
                       <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="__none">Sin cargas</SelectItem>
-                        {maestros.asignacionFamiliar.map(a => <SelectItem key={a.id} value={a.id}>{a.nombre} — ${a.monto.toLocaleString("es-CL")}</SelectItem>)}
+                        {asignacionFamiliar.map(a => <SelectItem key={a.id} value={a.id}>{a.nombre} — ${a.monto.toLocaleString("es-CL")}</SelectItem>)}
                       </SelectContent>
                     </Select>
                   </div>
@@ -659,7 +691,7 @@ export default function PersonalPage() {
                     <Label>Banco (maestro)</Label>
                     <Select value={form.bancoId || undefined} onValueChange={v => setForm({ ...form, bancoId: v === "__none" ? "" : v })}>
                       <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
-                      <SelectContent>{maestros.bancos.map(b => <SelectItem key={b.id} value={b.id}>{b.nombre}</SelectItem>)}</SelectContent>
+                      <SelectContent>{bancos.map(b => <SelectItem key={b.id} value={b.id}>{b.nombre}</SelectItem>)}</SelectContent>
                     </Select>
                   </div>
                   <div className="flex flex-col gap-1.5">
@@ -715,7 +747,7 @@ export default function PersonalPage() {
                 <h3 className="mb-2 text-sm font-semibold">Control de Asistencia y Desempeño</h3>
                 <div className="flex flex-col gap-1.5 sm:w-56">
                   <Label htmlFor="f-jornada">Jornada base (horas semanales)</Label>
-                  <Input id="f-jornada" type="number" min={1} max={80} value={form.jornadaBaseHoras} onChange={e => setForm({ ...form, jornadaBaseHoras: e.target.value })} placeholder={`Ej.: ${useCompassStore.getState().configuracion.jornadaSemanalEstandar}`} />
+                  <Input id="f-jornada" type="number" min={1} max={80} value={form.jornadaBaseHoras} onChange={e => setForm({ ...form, jornadaBaseHoras: e.target.value })} placeholder={`Ej.: ${configuracion?.jornadaSemanalEstandar ?? 45}`} />
                 </div>
                 {(editando.datosLaborales?.horasExtras?.length ?? 0) > 0 && (
                   <div className="mt-3">
