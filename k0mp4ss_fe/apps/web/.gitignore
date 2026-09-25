@@ -11,3 +11,6 @@ prisma/dev.db.backup-*
 DEPLOY-VERCEL.md
 *.db-shm
 *.db-wal
+.vercel
+# Local Pi runtime state
+.atl/
