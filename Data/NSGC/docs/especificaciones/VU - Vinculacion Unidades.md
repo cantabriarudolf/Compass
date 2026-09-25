@@ -1,5 +1,7 @@
 # VU - Vinculación de Unidades
 
+> 🔌 **Datos:** este módulo persiste en la base de datos vía API REST; ver endpoints `/api/vinculos`, `/api/personas`. La fuente de verdad es Prisma/Servidor.
+
 Este módulo gestiona la relación entre las Unidades y las Personas (Maestro).
 
 ## 1. Lógica de Responsabilidad

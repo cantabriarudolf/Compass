@@ -1,6 +1,6 @@
 # RA - Reservas y Amenities
 
-> 🔌 **Datos:** este módulo persiste en la capa de datos (ST) — ver [ST - Capa de Datos Persistente](<ST - Capa de Datos Persistente.md>).
+> 🔌 **Datos:** este módulo persiste en la base de datos vía API REST; ver endpoints `/api/ra`. La fuente de verdad es Prisma/Servidor.
 
 Este módulo gestiona el motor de agendamiento para espacios comunes y activos compartidos de la comunidad, evitando conflictos de uso y controlando la rentabilidad de cada elemento.
 

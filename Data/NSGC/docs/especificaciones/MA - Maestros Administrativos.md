@@ -1,6 +1,6 @@
 # MA - Maestros Administrativos (Tablas de Referencia)
 
-> 🔌 **Datos:** este módulo persiste en la capa de datos (ST) — ver [ST - Capa de Datos Persistente](<ST - Capa de Datos Persistente.md>).
+> 🔌 **Datos:** este módulo persiste en la base de datos vía API REST; ver endpoints `/api/maestros`. La fuente de verdad es Prisma/Servidor.
 
 Este módulo centraliza la gestión de todas las tablas base y parámetros técnicos que alimentan la lógica de los demás módulos del sistema. Solo usuarios con el rol de **Administrador Maestro** tienen acceso de escritura aquí.
 

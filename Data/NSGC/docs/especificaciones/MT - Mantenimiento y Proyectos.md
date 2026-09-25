@@ -1,6 +1,6 @@
 # MT - Mantenimiento y Proyectos
 
-> 🔌 **Datos:** este módulo persiste en la capa de datos (ST) — ver [ST - Capa de Datos Persistente](<ST - Capa de Datos Persistente.md>).
+> 🔌 **Datos:** este módulo persiste en la base de datos vía API REST; ver endpoints `/api/mt`. La fuente de verdad es Prisma/Servidor.
 
 Este módulo centraliza el registro, seguimiento y planificación financiera de todos los trabajos de mantenimiento, reparaciones y proyectos de infraestructura dentro del condominio.
 

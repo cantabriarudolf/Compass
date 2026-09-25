@@ -1,5 +1,7 @@
 # EF - Estructura Física (Edificios, Pisos y Unidades)
 
+> 🔌 **Datos:** este módulo persiste en la base de datos vía API REST; ver endpoints `/api/macro-sectores`, `/api/micro-sectores`, `/api/unidades`. La fuente de verdad es Prisma/Servidor.
+
 Este módulo centraliza la configuración de la infraestructura del condominio, manteniendo la jerarquía necesaria para la operación.
 
 ## 1. Jerarquía de Datos (Agnóstica Vertical/Horizontal)

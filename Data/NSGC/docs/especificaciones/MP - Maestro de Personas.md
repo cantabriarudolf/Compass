@@ -1,5 +1,7 @@
 # MP - Maestro de Personas
 
+> 🔌 **Datos:** este módulo persiste en la base de datos vía API REST; ver endpoints `/api/personas`, `/api/vinculos`. La fuente de verdad es Prisma/Servidor.
+
 Este módulo centraliza la información de todas las personas naturales relacionadas con el condominio, permitiendo su reutilización en distintos roles (vecinos, personal, proveedores).
 
 ## 1. Atributos del Maestro de Personas

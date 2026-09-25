@@ -1,6 +1,6 @@
 # CT - Certificados
 
-> 🔌 **Datos:** este módulo persiste en la capa de datos (ST) — ver [ST - Capa de Datos Persistente](<ST - Capa de Datos Persistente.md>).
+> 🔌 **Datos:** este módulo persiste en la base de datos vía API REST; ver endpoints `/api/certificados-ct`. La fuente de verdad es Prisma/Servidor.
 
 Este módulo permite la generación automatizada de documentación oficial y acreditaciones tanto para residentes como para el personal, garantizando la validez de la información mediante la firma digital del administrador.
 

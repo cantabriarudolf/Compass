@@ -1,6 +1,6 @@
 # GE - Gestión de Solicitudes
 
-> 🔌 **Datos:** este módulo persiste en la capa de datos (ST) — ver [ST - Capa de Datos Persistente](<ST - Capa de Datos Persistente.md>).
+> 🔌 **Datos:** este módulo persiste en la base de datos vía API REST; ver endpoints `/api/ge`. La fuente de verdad es Prisma/Servidor.
 
 Este módulo centraliza y tipifica todos los requerimientos formales (Tickets) que fluyen hacia la administración, ya sea desde el personal o desde los residentes, asegurando que nada quede en el aire.
 

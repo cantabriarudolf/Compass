@@ -1,6 +1,6 @@
 # IN - Infracciones y Multas (CRUD)
 
-> 🔌 **Datos:** este módulo persiste en la capa de datos (ST) — ver [ST - Capa de Datos Persistente](<ST - Capa de Datos Persistente.md>).
+> 🔌 **Datos:** este módulo persiste en la base de datos vía API REST; ver endpoints `/api/in`. La fuente de verdad es Prisma/Servidor.
 
 Este módulo permite la gestión y registro de faltas al Reglamento de Copropiedad y la aplicación de sus respectivas sanciones económicas.
 

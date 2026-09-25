@@ -1,6 +1,6 @@
 # AM - Auditoría y Métricas
 
-> 🔌 **Datos:** este módulo persiste en la capa de datos (ST) — ver [ST - Capa de Datos Persistente](<ST - Capa de Datos Persistente.md>).
+> 🔌 **Datos:** este módulo persiste en la base de datos vía API REST; ver endpoints `/api/auditoria`. La fuente de verdad es Prisma/Servidor.
 
 Este módulo tiene como objetivo centralizar el registro de todas las acciones significativas realizadas en el sistema, permitiendo la generación de reportes, KPIs de gestión y trazabilidad completa de la operación.
 

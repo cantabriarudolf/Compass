@@ -1,6 +1,6 @@
 # IR - Inventario y Recursos
 
-> 🔌 **Datos:** este módulo persiste en la capa de datos (ST) — ver [ST - Capa de Datos Persistente](<ST - Capa de Datos Persistente.md>).
+> 🔌 **Datos:** este módulo persiste en la base de datos vía API REST; ver endpoints `/api/ir`. La fuente de verdad es Prisma/Servidor.
 
 Este módulo gestiona todos los activos, insumos y recursos necesarios para la operación del condominio, vinculando la [Estructura Física (EF)](<EF - Estructura Fisica.md>) con el [Personal (PE)](<PE - Personal y Servicios.md>).
 

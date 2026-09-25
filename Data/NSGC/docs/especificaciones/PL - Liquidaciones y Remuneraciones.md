@@ -1,6 +1,6 @@
 # PL - Liquidaciones y Remuneraciones
 
-> 🔌 **Datos:** este módulo persiste en la capa de datos (ST) — ver [ST - Capa de Datos Persistente](<ST - Capa de Datos Persistente.md>).
+> 🔌 **Datos:** este módulo persiste en la base de datos vía API REST; ver endpoints `/api/pl`. La fuente de verdad es Prisma/Servidor.
 
 El objetivo de este módulo es automatizar el cálculo de haberes, descuentos y pagos del personal, integrando la asistencia reportada con las condiciones contractuales para generar documentos legales y registros contables precisos.
 

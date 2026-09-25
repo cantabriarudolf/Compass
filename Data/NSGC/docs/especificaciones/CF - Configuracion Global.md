@@ -1,6 +1,6 @@
 # CF - Configuración Global de la Aplicación
 
-> 🔌 **Datos:** este módulo persiste en la capa de datos (ST) — ver [ST - Capa de Datos Persistente](<ST - Capa de Datos Persistente.md>).
+> 🔌 **Datos:** este módulo persiste en la base de datos vía API REST; ver endpoints `/api/configuracion`. La fuente de verdad es Prisma/Servidor.
 
 Este módulo define los parámetros base que rigen el comportamiento de todo el sistema de gestión.
 
