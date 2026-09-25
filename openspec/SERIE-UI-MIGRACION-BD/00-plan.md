@@ -20,7 +20,7 @@
 
 | Ventana | Alcance | Estado | Commit final |
 |---|---|---|---|
-| P1 | Dashboard + Admin base (configuración, métricas, reportería, gestión, logs) | EN CURSO (ventana P1 aceptada) | — |
+| P1 | Dashboard + Admin base (configuración, métricas, reportería, gestión, logs) | HECHA | d4f8d13 |
 | P2 | Comunidad restante (ficha persona, portal, visor, certificados, comunicación) | pendiente | — |
 | P3 | Operaciones (bitácora, paquetería, accesos, proveedores, reservas, solicitudes) | pendiente | — |
 | P4 | Inventario (estructura, tipos, recursos, proyectos) | pendiente | — |
