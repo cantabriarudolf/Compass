@@ -183,3 +183,31 @@ aclaración documental, 0 errores de cálculo.
 - [ ] **Store split Fase 1** — HECHO `eff32c3` 2026-09-19 (9 helpers a `lib/store/helpers.ts`, tsc 0, 32/32 tests). Fase 2 pendiente calendarización.
 - [ ] **Open redirect fix** — HECHO `1c23f5d` 2026-09-19 (HIGH, `esDestinoSeguro` en `/ingresar`).
 - [ ] **NextAuth tipado sin any** — HECHO `e3b7861` 2026-09-19 (TS2742-safe exports).
+
+## Migración fuente de verdad localStorage → Base de Datos (SERIE-BD-FUENTE-VERDAD Fase 0–5B) — ✅ COMPLETA 2026-09-25
+
+> Cambia la fuente de verdad de la aplicación de `localStorage` (zustand persist) a Prisma/SQLite(dev) → PostgreSQL/Neon(prod).
+> Detalle por fase: `openspec/SERIE-BD-FUENTE-VERDAD/00-plan.md`.
+
+| Fase | Qué se hizo | Commit |
+|---|---|---|
+| 0 | Infra: factory API + hook cliente + `PeriodoDirectiva` en Prisma | `bbfba14` |
+| 1 | MP + Maestros: personas, vínculos, maestros admin | (varios) |
+| 2 | GD + AD: actas, períodos, controles de propiedad | (varios) |
+| 3 | FI + EF: fondos, egresos, ingresos, estructura física | (varios) |
+| 4 | Operativos: PE, RA, CV, CO, GE, IR, IN, MT | `cae733f` |
+| 5A | APIs RE/CF/CT/Notif + Store-UI + Deprecación inicial store | `2a1a9f2` |
+| 5B | Specs NSGC + tests finales + script verificación | `0164873` |
+
+**Métricas post-serie:**
+- API routes: 30+ endpoints REST (GET/POST/PUT/DELETE) con scoping `comunidadId`
+- Hooks cliente: 20+ hooks `use-*.ts` basados en SWR
+- `lib/store-ui.ts`: estado de UI puro (modales, filtros, vistas, sidebar, toasts), `UI_STORE_VERSION=1`
+- `lib/store.ts`: `STORE_VERSION=28` congelado, acciones de dominio `@deprecated`
+- Specs NSGC: `ST - Capa de Datos Persistente.md` reescrito + 21 specs de módulo con bloque "🔌 Datos" actualizado
+- Script: `scripts/verificar-persistencia-db.ts` — verifica fuente de verdad Prisma
+- Tests: 795 passed + 14 skipped, tsc 0 errores
+
+**Post-serie:**
+- Las páginas UI legacy aún leen datos de dominio desde `useCompassStore` (localStorage); su migración a hooks SWR es follow-up gradual.
+- `lib/store.ts` permanece como legacy hasta que todas las páginas migren a los hooks.

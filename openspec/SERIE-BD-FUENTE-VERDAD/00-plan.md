@@ -501,8 +501,8 @@ Sos el arquitecto senior de Compass. Las Fases 0-4 migraron todo el dominio a pe
 | 2 — GD + AD | ✅ HECHA | actas GD + períodos (rotación/cierre) + controles AD; 32/32 tests API | tsc 0 | UI directiva/visor/gestión por API; `periodoId` en ActaGD (migración) |
 | 3 — FI + EF | ✅ HECHA | 18 API routes + 10 hooks + UI FI/EF por API; 22/22 tests nuevos | tsc 0 | Ver Bitácora 2026-09-24 |
 | 4 — Operativos | ✅ HECHA | 48 API routes + put-merge + 8 hooks + 42/42 tests nuevos | tsc 0, suite 774 passed | Ver Bitácora 2026-09-25 (UI por API en follow-up) |
-| 5A — APIs RE/CF/CT/Notif + Store-UI + Deprecación inicial | EN CURSO | — | — | |
-| 5B — Specs NSGC + Tests finales + Script + Archivo | pendiente | — | — | |
+| 5A — APIs RE/CF/CT/Notif + Store-UI + Deprecación inicial | ✅ HECHA | `2a1a9f2` | 21/21 pass | 7 API routes + 4 hooks + store-ui.ts + @deprecated store + STORE_VERSION 28 congelado |
+| 5B — Specs NSGC + Tests finales + Script + Archivo | ✅ HECHA | `0164873` | tsc 0, 795 passed | ST reescrito + 21 specs bloque Datos + RG + script verificación Prisma |
 
 ## Bitácora Fase 3 (2026-09-24) — ✅ HECHA
 
