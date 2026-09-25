@@ -1,7 +1,10 @@
 "use client"
 
 import * as React from "react"
-import { useCompassStore, useStoreRehydrated } from "@/lib/store"
+import { useCompassStore } from "@/lib/store"
+import { useAvisosCV, usePlantillasCV } from "@/lib/api/use-cv"
+import { usePersonas } from "@/lib/api/use-personas"
+import { useConfiguracion } from "@/lib/api/use-configuracion"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
@@ -83,14 +86,14 @@ const FORM_AVISO: FormAviso = {
 }
 
 export default function VisorPanelPage() {
-  useStoreRehydrated()
-  const hasHydrated = useCompassStore(s => s.hasHydrated)
-  const avisosCV = useCompassStore(s => s.avisosCV)
-  const plantillasCV = useCompassStore(s => s.plantillasCV)
+  const { items: avisosCV, isLoading: cAvisos, create: crearAvisoApi, update: actualizarAvisoApi, remove: eliminarAvisoApi } = useAvisosCV()
+  const { items: plantillasCV, isLoading: cPlantillas, update: actualizarPlantillaApi } = usePlantillasCV()
   // Actas GD desde el servidor (BD-FUENTE-VERDAD Fase 2); publicarActaEnCV sigue en el store hasta la Fase 4 (CV).
   const { actas: actasGD } = useActasGD()
-  const configuracion = useCompassStore(s => s.configuracion)
-  const personas = useCompassStore(s => s.personas)
+  const { config: configuracion, isLoading: cConfig, updateConfig } = useConfiguracion()
+  const { personas, isLoading: cPersonas } = usePersonas()
+  const caducadosRef = React.useRef(false)
+  const cargando = cAvisos || cPlantillas || cConfig || cPersonas
 
   const [error, setError] = React.useState<string | null>(null)
   const [msg, setMsg] = React.useState<string | null>(null)
@@ -101,11 +104,17 @@ export default function VisorPanelPage() {
   // Alta manual por tercero habilitado (simulación de autoría no administrativa).
   const [autorPersonaId, setAutorPersonaId] = React.useState("")
 
+  // Caducidad de avisos vencidos (antes caducarAvisosCV del store): se archivan vía API una vez cargada la lista.
   React.useEffect(() => {
-    useCompassStore.getState().caducarAvisosCV()
-  }, [])
+    if (caducadosRef.current || cAvisos) return
+    caducadosRef.current = true
+    const hoy = hoyStr()
+    const vencidos = avisosCV.filter(a => a.estado === "publicado" && a.expiresAt && a.expiresAt < hoy)
+    if (vencidos.length === 0) return
+    void Promise.all(vencidos.map(v => actualizarAvisoApi(v.id, { estado: "archivado", fechaArchivado: hoy })))
+  }, [cAvisos, avisosCV, actualizarAvisoApi])
 
-  const guardarAviso = () => {
+  const guardarAviso = async () => {
     if (!form) return
     setError(null)
     const existente = editandoId ? avisosCV.find(a => a.id === editandoId) : undefined
@@ -129,7 +138,8 @@ export default function VisorPanelPage() {
       ...(existente?.fechaPublicacion ? { fechaPublicacion: existente.fechaPublicacion } : {}),
       ...(existente?.fechaArchivado ? { fechaArchivado: existente.fechaArchivado } : {}),
     }
-    const r = useCompassStore.getState().saveAvisoCV(payload, !editandoId && autorPersonaId ? autorPersonaId : undefined)
+    const conAutor = !editandoId && autorPersonaId ? { ...payload, creadoPorPersonaId: autorPersonaId } : payload
+    const r = editandoId ? await actualizarAvisoApi(editandoId, conAutor) : await crearAvisoApi(conAutor)
     if (!r.ok) { setError(r.error ?? ""); return }
     setMsg(editandoId ? `Aviso "${form.titulo}" actualizado.` : `Borrador "${form.titulo}" creado.`)
     setForm(null)
@@ -137,7 +147,52 @@ export default function VisorPanelPage() {
     setAutorPersonaId("")
   }
 
-  function editar(a: AvisoCV) {
+      const publicarAviso = async (id: string) => {
+        const actual = avisosCV.find(x => x.id === id)
+        if (!actual) { setError("No se puede publicar: el aviso no existe."); return }
+        if (actual.estado !== "borrador") { setError(`Solo un aviso Borrador puede publicarse (estado actual: ${actual.estado}).`); return }
+        const r = await actualizarAvisoApi(id, { estado: "publicado", requiereVistoBueno: false, fechaPublicacion: hoyStr() })
+        if (!r.ok) setError(r.error ?? "")
+      }
+
+      const archivarAviso = async (id: string) => {
+        const actual = avisosCV.find(x => x.id === id)
+        if (!actual) { setError("No se puede archivar: el aviso no existe."); return }
+        if (actual.estado !== "publicado") { setError(`Solo un aviso Publicado puede archivarse (estado actual: ${actual.estado}).`); return }
+        const r = await actualizarAvisoApi(id, { estado: "archivado", fechaArchivado: hoyStr() })
+        if (!r.ok) setError(r.error ?? "")
+      }
+
+      const eliminarAviso = async (id: string) => {
+        const r = await eliminarAvisoApi(id)
+        if (!r.ok) setError(r.error ?? "")
+      }
+
+      const activarPlantilla = async (id: string) => {
+        const plantilla = plantillasCV.find(p => p.id === id)
+        if (!plantilla) { setError("No se puede activar: la plantilla no existe."); return }
+        if (!plantilla.activa) { setError("La plantilla está desactivada por administración."); return }
+        const r = await crearAvisoApi({
+          id: `cv-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          titulo: plantilla.titulo,
+          cuerpo: plantilla.cuerpo,
+          tipologia: plantilla.tipologia,
+          duracionSegundos: plantilla.duracionSegundosSugerida,
+          ...(plantilla.imagenUrl ? { imagenUrl: plantilla.imagenUrl } : {}),
+          ...(plantilla.videoUrl ? { videoUrl: plantilla.videoUrl } : {}),
+          pantallaCompleta: plantilla.pantallaCompleta,
+          tags: [...plantilla.tags],
+          estado: "publicado",
+          requiereVistoBueno: false,
+          origen: "plantilla",
+          fechaCreacion: hoyStr(),
+          fechaPublicacion: hoyStr(),
+        })
+        if (!r.ok) setError(r.error ?? "")
+        else setMsg(`Plantilla "${plantilla.titulo}" activada: aviso publicado en el carrusel.`)
+      }
+
+      function editar(a: AvisoCV) {
     setError(null)
     setEditandoId(a.id)
     setAutorPersonaId(a.creadoPorPersonaId ?? "")
@@ -154,7 +209,7 @@ export default function VisorPanelPage() {
     })
   }
 
-  if (!hasHydrated) {
+  if (cargando) {
     return (
       <div className="flex flex-col gap-6 animate-pulse">
         <div className="h-9 w-72 rounded bg-muted/40" />
@@ -247,26 +302,17 @@ export default function VisorPanelPage() {
                                 <Button size="sm" variant="ghost" onClick={() => editar(a)}>Editar</Button>
                               )}
                               {a.estado === "borrador" && (
-                                <Button size="sm" onClick={() => {
-                                  const r = useCompassStore.getState().publicarAvisoCV(a.id)
-                                  if (!r.ok) setError(r.error ?? "")
-                                }}>
+                                <Button size="sm" onClick={() => { void publicarAviso(a.id) }}>
                                   <IconSend className="size-3.5 mr-1" /> Publicar
                                 </Button>
                               )}
                               {a.estado === "publicado" && (
-                                <Button size="sm" variant="outline" onClick={() => {
-                                  const r = useCompassStore.getState().archivarAvisoCV(a.id)
-                                  if (!r.ok) setError(r.error ?? "")
-                                }}>
+                                <Button size="sm" variant="outline" onClick={() => { void archivarAviso(a.id) }}>
                                   <IconArchive className="size-3.5 mr-1" /> Archivar
                                 </Button>
                               )}
                               {a.estado === "borrador" && (
-                                <Button size="sm" variant="ghost" className="text-destructive" onClick={() => {
-                                  const r = useCompassStore.getState().removeAvisoCV(a.id)
-                                  if (!r.ok) setError(r.error ?? "")
-                                }}>
+                                <Button size="sm" variant="ghost" className="text-destructive" onClick={() => { void eliminarAviso(a.id) }}>
                                   <IconTrash className="size-3.5 mr-1" /> Eliminar
                                 </Button>
                               )}
@@ -311,20 +357,18 @@ export default function VisorPanelPage() {
                           <input
                             type="checkbox"
                             checked={p.activa}
-                            onChange={e => {
-                              const r = useCompassStore.getState().savePlantillaCV({ ...p, activa: e.target.checked })
-                              if (!r.ok) setError(r.error ?? "")
-                            }}
+                                onChange={e => {
+                                  void (async () => {
+                                    const r = await actualizarPlantillaApi(p.id, { activa: e.target.checked })
+                                    if (!r.ok) setError(r.error ?? "")
+                                  })()
+                                }}
                           />
                           {p.activa ? "activa" : "desactivada"}
                         </label>
                       </td>
                       <td className="py-2">
-                        <Button size="sm" onClick={() => {
-                          const r = useCompassStore.getState().activarPlantillaCV(p.id)
-                          if (!r.ok) setError(r.error ?? "")
-                          else setMsg(`Plantilla "${p.titulo}" activada: aviso publicado en el carrusel.`)
-                        }} disabled={!p.activa}>Activar ahora</Button>
+                        <Button size="sm" onClick={() => { void activarPlantilla(p.id) }} disabled={!p.activa}>Activar ahora</Button>
                       </td>
                     </tr>
                   ))}
@@ -397,12 +441,14 @@ export default function VisorPanelPage() {
                 <input
                   type="checkbox"
                   className="mt-1"
-                  checked={configuracion.cvRequiereVistoBueno ?? true}
-                  onChange={e => {
-                    const r = useCompassStore.getState().saveConfiguracion({ ...configuracion, cvRequiereVistoBueno: e.target.checked })
-                    if (!r.ok) setError(r.error ?? "")
-                    else setMsg(e.target.checked ? "Visto bueno obligatorio activado." : "VB desactivado: asumes la responsabilidad operativa de los contenidos de terceros.")
-                  }}
+                      checked={configuracion?.cvRequiereVistoBueno ?? true}
+                      onChange={e => {
+                        void (async () => {
+                          const r = await updateConfig({ cvRequiereVistoBueno: e.target.checked })
+                          if (!r.ok) setError(r.error ?? "")
+                          else setMsg(e.target.checked ? "Visto bueno obligatorio activado." : "VB desactivado: asumes la responsabilidad operativa de los contenidos de terceros.")
+                        })()
+                      }}
                 />
                 <span>
                   Exigir visto bueno de administración para publicar mensajes de terceros

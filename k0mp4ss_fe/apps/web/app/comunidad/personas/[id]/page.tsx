@@ -5,9 +5,11 @@ import { useParams, useRouter } from "next/navigation"
 import { Persona } from "@/data/comunidad/personas"
 import { VinculoUnidad, RolVinculo } from "@/data/comunidad/vinculos"
 import type { StoreResult } from "@/lib/store"
-import { useCompassStore } from "@/lib/store"
 import { usePersona } from "@/lib/api/use-personas"
 import { useVinculos } from "@/lib/api/use-vinculos"
+import { useUnidades } from "@/lib/api/use-unidades"
+import { useMaestros } from "@/lib/api/use-maestros"
+import type { CondicionEspecial } from "@/data/admin/maestros"
 
 const NOMBRE_ROL: Record<RolVinculo, string> = {
   propietario: "Propietario",
@@ -69,9 +71,10 @@ export default function PersonaPerfilPage() {
   const id = params.id as string
 
   const { persona, isLoading, error, update: actualizarPersona } = usePersona(id)
-  const { vinculos: vinculosTodos, create: crearVinculo, update: actualizarVinculo, remove: removeVinculoApi } = useVinculos()
-  const unidades = useCompassStore(s => s.unidades)
-  const condicionesEspeciales = useCompassStore(s => s.maestros.condicionesEspeciales)
+  const { vinculos: vinculosTodos, isLoading: cVinculos, create: crearVinculo, update: actualizarVinculo, remove: removeVinculoApi } = useVinculos()
+  const { items: unidades, isLoading: cUnidades } = useUnidades()
+  const { data: condicionesEspeciales, isLoading: cMaestros } = useMaestros<CondicionEspecial>("condiciones-especiales")
+  const cargando = isLoading || cVinculos || cUnidades || cMaestros
 
   // Vínculos de la persona, filtrados en cliente desde la colección VU completa
   const vinculosUnidad = React.useMemo(
@@ -97,7 +100,7 @@ export default function PersonaPerfilPage() {
     }
   }, [persona])
 
-  if (isLoading) {
+  if (cargando) {
     return (
       <div className="flex flex-col gap-6 animate-pulse">
         <div className="h-9 w-72 rounded bg-muted/40" />

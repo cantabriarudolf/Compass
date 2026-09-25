@@ -1,7 +1,12 @@
 "use client"
 
 import * as React from "react"
-import { useCompassStore, useStoreRehydrated } from "@/lib/store"
+import { useCompassStore } from "@/lib/store"
+import { usePersonas } from "@/lib/api/use-personas"
+import { useVinculos } from "@/lib/api/use-vinculos"
+import { useUnidades } from "@/lib/api/use-unidades"
+import { useNotificaciones } from "@/lib/api/use-notificaciones"
+import { useConfiguracion } from "@/lib/api/use-configuracion"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@workspace/ui/components/card"
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
@@ -53,20 +58,19 @@ function PlaceholderFoto({ tipo }: { tipo?: string }) {
 }
 
 export default function PortalInmobiliarioPage() {
-  useStoreRehydrated()
-  const hasHydrated = useCompassStore(s => s.hasHydrated)
-  const unidades = useCompassStore(s => s.unidades)
-  const vinculos = useCompassStore(s => s.vinculos)
-  const personas = useCompassStore(s => s.personas)
+  const { personas, isLoading: cPersonas } = usePersonas()
+  const { vinculos, isLoading: cVinculos } = useVinculos()
+  const { items: unidades, isLoading: cUnidades } = useUnidades()
+  // TODO: migrar a hooks PI cuando existan (sin API de publicaciones/leads)
   const publicaciones = useCompassStore(s => s.publicacionesPortal)
   const leads = useCompassStore(s => s.leadsPortal)
-  const notificaciones = useCompassStore(s => s.notificaciones)
-  const configuracion = useCompassStore(s => s.configuracion)
   const savePublicacionPortal = useCompassStore(s => s.savePublicacionPortal)
   const removePublicacionPortal = useCompassStore(s => s.removePublicacionPortal)
   const saveLeadPortal = useCompassStore(s => s.saveLeadPortal)
-  const marcarNotificacionLeida = useCompassStore(s => s.marcarNotificacionLeida)
-  const saveConfiguracion = useCompassStore(s => s.saveConfiguracion)
+  const { items: notificaciones, isLoading: cNotif, marcarLeida } = useNotificaciones()
+  const { config, isLoading: cConfig, updateConfig } = useConfiguracion()
+  const configuracion = config ?? { visibilidadPortalInmobiliario: "residentes" as const }
+  const cargando = cPersonas || cVinculos || cUnidades || cNotif || cConfig
 
   // Sesión (cookie httpOnly de Auth.js): se consulta al servidor tras montar.
   // AU §3 P5: /api/auth/session de Auth.js responde { user, expires } | null.
@@ -166,8 +170,8 @@ export default function PortalInmobiliarioPage() {
     setEditando(null)
   }
 
-  const cambiarVisibilidad = (valor: string) => {
-    const r = saveConfiguracion({ ...configuracion, visibilidadPortalInmobiliario: valor === "publica" ? "publica" : "residentes" })
+  const cambiarVisibilidad = async (valor: string) => {
+    const r = await updateConfig({ visibilidadPortalInmobiliario: valor === "publica" ? "publica" : "residentes" })
     if (!r.ok) setErrorGestion(r.error ?? "No se pudo cambiar la visibilidad.")
   }
 
@@ -194,7 +198,7 @@ export default function PortalInmobiliarioPage() {
   }
 
   // --- Gates de acceso ---
-  if (!hasHydrated || autenticado === null) {
+  if (cargando || autenticado === null) {
     return (
       <div className="flex flex-col gap-6 animate-pulse">
         <div className="h-9 w-72 rounded bg-muted/40" />
@@ -592,7 +596,7 @@ export default function PortalInmobiliarioPage() {
               <button
                 key={n.id}
                 className={`rounded-md border p-3 text-left text-sm transition-colors hover:bg-muted/50 ${n.leida ? "opacity-60" : ""}`}
-                onClick={() => marcarNotificacionLeida(n.id)}
+                onClick={() => { void marcarLeida(n.id) }}
               >
                 <div className="flex items-center justify-between gap-2">
                   <span className="font-medium">{n.asunto}</span>

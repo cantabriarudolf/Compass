@@ -2,7 +2,12 @@
 
 import * as React from "react"
 import { Unidad, MicroSector, MacroSector } from "@/data/inventario/estructura"
-import { useCompassStore, StoreResult } from "@/lib/store"
+import type { StoreResult } from "@/lib/store"
+import { useUnidades } from "@/lib/api/use-unidades"
+import { useMicroSectores } from "@/lib/api/use-micro-sectores"
+import { useMacroSectores } from "@/lib/api/use-macro-sectores"
+import { useMaestros } from "@/lib/api/use-maestros"
+import type { EstadoInmobiliario } from "@/lib/schemas"
 import { RolVinculo, VinculoUnidad } from "@/data/comunidad/vinculos"
 
 import { Button } from "@workspace/ui/components/button"
@@ -57,12 +62,10 @@ export function FormularioVinculoUnidad({
   onCancel,
 }: FormularioVinculoUnidadProps) {
   const isEditing = !!vinculo
-  const unidades = useCompassStore((s) => s.unidades)
-  const microSectores = useCompassStore((s) => s.microSectores)
-  const macroSectores = useCompassStore((s) => s.macroSectores)
-  const estadosInmobiliarios = useCompassStore(
-    (s) => s.maestros.estadosInmobiliarios
-  )
+  const { items: unidades } = useUnidades()
+  const { items: microSectores } = useMicroSectores()
+  const { items: macroSectores } = useMacroSectores()
+  const { data: estadosInmobiliarios } = useMaestros<EstadoInmobiliario>("estados-inmobiliarios")
   const microPorId = React.useMemo(
     () => new Map(microSectores.map((m) => [m.id, m])),
     [microSectores]
