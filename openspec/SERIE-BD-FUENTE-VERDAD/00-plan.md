@@ -500,7 +500,7 @@ Sos el arquitecto senior de Compass. Las Fases 0-4 migraron todo el dominio a pe
 | 1 — MP + Maestros | ✅ HECHA | Ver commit actual | 21/21 pass | API routes + hooks + UI adaptada; tsc 0 errores |
 | 2 — GD + AD | ✅ HECHA | actas GD + períodos (rotación/cierre) + controles AD; 32/32 tests API | tsc 0 | UI directiva/visor/gestión por API; `periodoId` en ActaGD (migración) |
 | 3 — FI + EF | ✅ HECHA | 18 API routes + 10 hooks + UI FI/EF por API; 22/22 tests nuevos | tsc 0 | Ver Bitácora 2026-09-24 |
-| 4 — Operativos | ⏳ PENDIENTE | | | |
+| 4 — Operativos | ✅ HECHA | 48 API routes + put-merge + 8 hooks + 42/42 tests nuevos | tsc 0, suite 774 passed | Ver Bitácora 2026-09-25 (UI por API en follow-up) |
 | 5 — RE/CF/CT + Deprecación | ⏳ PENDIENTE | | | |
 
 ## Bitácora Fase 3 (2026-09-24) — ✅ HECHA
@@ -514,6 +514,19 @@ Sos el arquitecto senior de Compass. Las Fases 0-4 migraron todo el dominio a pe
 - **Tests nuevos 22/22**: `fi-completo` (12), `ef-completo` (7), `migracion-punto-cero` (3, incl. idempotencia en BD).
 - **Suite total**: 732 passed + 14 skipped, 0 fallos (solo 2 archivos PG ambientales). tsc 0, eslint 0 errores.
 - **Desvíos vs prompt-03**: (1) escritura FI solo admin (matriz, no directiva); (2) vencimiento emisión por defecto +30 días (sin `diaCortePago` de CF, pendiente Fase 5); (3) adaptadas las rutas UI reales (no existen las del prompt); (4) sin subagentes (harness no disponible: 1 timeout + 1 error) → implementación inline.
+
+## Bitácora Fase 4 (2026-09-25) — ✅ HECHA (persistencia; UI por API en follow-up)
+
+- **ARRANQUE**: Fase 3 cerrada en `6bf0eb1`. Baseline: tsc 0. Alcance de la ventana: capa de persistencia completa (APIs + hooks + tests); la migración de páginas UI a los hooks queda como follow-up (18 páginas store-driven, excede una ventana).
+- **Infra**: `lib/api/crud-factory.ts` exporta `delegado()` (adaptador Prisma→factory con SAFETY, precede fondos-fi/maestros) + nuevo `lib/api/put-merge.ts` (PUT parcial por fusión + validación completa: los schemas ZodEffects con `.refine` — ElementoRA, AvisoCV, PlantillaCV — no admiten `.partial()` de la factory; además poda NULLs de BD a ausente porque `optional()` no acepta `null`).
+- **APIs (48 routes)**: PE 8 (`pe/bitacora-visitas|encomiendas|ingresos-contratistas|proveedores|mantenciones|visitas-tecnicas|cierres-turno|proyecciones`), RA 2, CV 2, CO 4, GE 1, IR 3, IN 2, MT 2 — colección + `[id]`, scoping inescapable, validación Zod, idempotencia por id, 404 cross-comunidad. GET siempre paginado (PE bitácoras y CO envíos incluidos).
+- **RA concurrencia**: `POST ra/reservas` transaccional — verifica elemento activo, tramo válido y ausencia de solape `[horaInicio,horaFin)` con reservas no canceladas (las canceladas no bloquean; adyacentes fin==inicio no solapan); upsert revalida excluyéndose.
+- **Authz**: `pe` (conserjería opera), `ra`/`ge`/`co` (residente crea), `mt` (mantención opera), `ir:mantenimiento`; `cv` e `in` sin entradas en la matriz → solo admin hasta que RP los otorgue (testeado como 403, mismo precedente que FI Fase 3).
+- **Hooks (8)**: `use-pe|ra|cv|co|ge|ir|in|mt.ts` sobre `useCrudCollection` (contrato StoreResult).
+- **Tests nuevos 42/42**: `fase4-{pe,ra,cv,co,ge,ir,in,mt}.test.ts` con BD real (POST→assert Prisma, paginación, 401/403/404/409, refines, solape RA, RUT proveedor duplicado).
+- **Suite total**: 774 passed + 14 skipped, 0 fallos (solo 2 archivos PG ambientales preexistentes). tsc 0, eslint 0 en 66 archivos nuevos.
+- **Desvíos vs prompt-04**: (1) folio cliente-proveído (schemas lo exigen; auto-folio con contador queda para Fase 5); (2) PUT de reservas no revalida solape (cancelar + re-crear, como el store); (3) UI sin migrar — follow-up explícito; (4) sin subagentes → inline.
+- **Follow-up**: migrar las 18 páginas (operaciones/*, comunidad/visor|comunicacion, inventario/recursos|proyectos, finanzas/multas|remuneraciones, admin/mantenimiento, visor-mensajes) a los hooks y retirar las acciones PE/RA/CV/CO/GE/IR/IN/MT del store (Fase 5 o change dedicado).
 
 ---
 

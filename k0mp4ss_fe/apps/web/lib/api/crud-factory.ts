@@ -36,6 +36,19 @@ export interface CrudDelegate {
   delete(args: { where: { id: string } }): Promise<unknown>
 }
 
+/**
+ * Adaptador de delegate Prisma a la factory.
+ *
+ * SAFETY: los delegates generados por Prisma exponen findMany/findUnique/
+ * count/upsert/update/delete con firmas específicas por modelo que son
+ * estructuralmente compatibles con CrudDelegate (los errores de forma se
+ * detectan en runtime vía mapearError y en build vía tsc del modelo); el
+ * cast solo borra los genéricos del modelo, nunca cambia valores.
+ */
+export function delegado(modelo: unknown): CrudDelegate {
+  return modelo as CrudDelegate
+}
+
 export type AuthzCheck = (rol: string, accion: Accion) => boolean
 
 /** Guardia previa al borrado: devuelve un Response para cortar, o null para seguir. */
