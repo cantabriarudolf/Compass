@@ -1,9 +1,14 @@
+# ATENCIÓN: el matcher de Vercel es CASE-INSENSITIVE y los patrones sin '/'
+# aplican a CUALQUIER profundidad. `Data/` excluía también `apps/web/data/`
+# (seeds de la app) y rompía el build con `Can't resolve '@/data/...'`
+# (hotfix: change fix-vercel-data-ignore). Todo patrón para una carpeta de la
+# raíz debe ir anclado con `/` inicial.
 .git/
 .gitignore
 .env*
 *.db
 *.db-journal
-Data/
+/Data/
 openspec/
 .agents/
 .pi/

@@ -42,6 +42,10 @@ export interface Persona {
   vinculosUnidad?: VinculoUnidad[];
   datosLaborales?: ExtensionLaboral;
   datosGobernanza?: ExtensionGobernanza;
+  // CV: autoriza a la persona como firmante de comunicaciones vecinales.
+  // Contrato compartido con PersonaSchema (opcional), API /api/personas y
+  // Prisma (Boolean?). Opcional para no obligar a todos los seeds.
+  permiteCreacionManualCV?: boolean;
 }
 
 // --- MOCK DATA ---
