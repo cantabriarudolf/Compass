@@ -29,6 +29,10 @@ const MATRIZ: Matriz = {
     visibles: ["Inicio","Operaciones","Finanzas","Comunidad"],
     ocultos: ["Inventario","Personas","Desarrollo AI","Sistema"],
   },
+  "arrendatario@test.cl": {
+    visibles: ["Inicio","Operaciones","Finanzas","Comunidad"],
+    ocultos: ["Inventario","Personas","Desarrollo AI","Sistema"],
+  },
   "mantencion@test.cl": {
     visibles: ["Inicio","Operaciones","Inventario"],
     ocultos: ["Finanzas","Comunidad","Personas","Desarrollo AI","Sistema"],
@@ -128,6 +132,29 @@ test.describe("mantencion@test.cl — matriz + 403 + granular Inventario", () =>
     await expect(page.getByText("Mantenimiento",{exact:true})).toBeVisible({timeout:10_000})
     await expect(page.getByText("Recursos y EPP",{exact:true})).toBeVisible({timeout:10_000})
     await expect(page.getByText("Tipos de Unidad",{exact:true})).toBeHidden({timeout:10_000})
+    const status = await page.evaluate(async () => {
+      const r = await fetch("/api/admin/usuarios?comunidadId=comunidad-a")
+      return r.status
+    })
+    expect(status).toBe(403)
+    expect(errores).toEqual([])
+  })
+})
+
+test.describe("arrendatario@test.cl — matriz + 403", () => {
+  test.use({ storageState: "e2e/.auth/arrendatario.json" })
+  test("menu + 403 admin:usuarios + Gastos Comunes visible", async ({ page }) => {
+    const errores: string[] = []
+    page.on("pageerror", e=>errores.push(e.message))
+    await gotoEstable(page)
+    const { visibles, ocultos } = MATRIZ["arrendatario@test.cl"]!
+    for (const g of visibles) await expect(page.getByText(g,{exact:true}).first()).toBeVisible({timeout:10_000})
+    for (const g of ocultos) await expect(page.getByText(g,{exact:true})).toBeHidden({timeout:10_000})
+    // Gastos Comunes hereda Finanzas visible (igual que residente: login rol residente)
+    await page.getByRole("button",{name:"Finanzas"}).click().catch(()=>{})
+    await page.waitForTimeout(600)
+    await expect(page.getByText("Gastos Comunes",{exact:true})).toBeVisible({timeout:10_000})
+    await expect(page.getByText("Remuneraciones",{exact:true})).toBeHidden({timeout:10_000})
     const status = await page.evaluate(async () => {
       const r = await fetch("/api/admin/usuarios?comunidadId=comunidad-a")
       return r.status

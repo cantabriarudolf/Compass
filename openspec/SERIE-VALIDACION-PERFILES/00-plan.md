@@ -7,7 +7,7 @@
 | Ventana | Alcance | Estado | Commit final |
 | --- | --- | --- | --- | --- |
 | P1 | Transversales: unit full + tsc/eslint + e2e lane auth + matriz sidebar 4 roles + 403 | HECHA (verify-only, rojos heredados a P2) | s/cambios código |
-| P2 | Propias por perfil: specs nuevas (maestros-datos, ficha residente, límite arrendatario, denegación ABAC) + 7ma cuenta en setup | pendiente | — |
+| P2 | Propias por perfil: specs nuevas (maestros-datos, ficha residente, límite arrendatario, denegación ABAC) + 7ma cuenta en setup | HECHA | (este commit) |
 | P3 | Integral: full e2e 43 + checklist manual §4 del owner + archivo de changes + push | pendiente | — |
 
 MÁXIMO: 3 ventanas. Post-serie (fuera): super-admin global (diseño pendiente),
@@ -41,4 +41,4 @@ migración SQLite→PostgreSQL, resto de BACKLOG-100.
   no visible) · validate 33/40 (7 changes en draft fallan) · STORE_VERSION 28. Sin fixes por diseño
   (van por ARRANQUE P2). Checklist §4 queda tarea del owner. Dev server apagado post-ventana.
 
-(vacía — cada ventana añade antes del push: `- [fecha] P<n> HECHA: resumen (commit hash)`)
+- [2026-09-26] P2 HECHA: 4 specs nuevos verdes + sesión/MATRIZ arrendatario + fix ARRANQUE null-guard gestion (cierra rojos P1: lane auth 19/19) + seed admin-a última (scope A real) + delta GD. tsc 0, lint 0 errores, validate change OK (34/41: 7 drafts viejos a P3). Dev server apagado post-ventana.

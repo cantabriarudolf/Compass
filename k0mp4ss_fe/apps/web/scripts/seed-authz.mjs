@@ -18,7 +18,10 @@ const comunidadesData = [
 ]
 
 const membresiasData = [
-  { usuarioId: "usuario-admin", comunidadId: "comunidad-a", rol: "administrador" },
+  // Orden intencional: el scope es la ÚLTIMA membresía por createdAt
+  // (withComunidadScope, take:1). admin-a va ÚLTIMA para que el scope del
+  // admin sea comunidad-a (diseño cuentas-funcionales.md §3.4). No reordenar
+  // sin actualizar ese documento.
   { usuarioId: "usuario-admin", comunidadId: "comunidad-b", rol: "administrador" },
   { usuarioId: "usuario-comite", comunidadId: "comunidad-a", rol: "comite" },
   { usuarioId: "usuario-conserjeria", comunidadId: "comunidad-a", rol: "conserjeria" },
@@ -26,6 +29,7 @@ const membresiasData = [
   { usuarioId: "usuario-mantencion", comunidadId: "comunidad-a", rol: "mantencion" },
   // Inquilino: login rol residente (sin rol login propio), alcance comunidad-a.
   { usuarioId: "usuario-arrendatario", comunidadId: "comunidad-a", rol: "residente" },
+  { usuarioId: "usuario-admin", comunidadId: "comunidad-a", rol: "administrador" },
 ]
 
 async function main() {

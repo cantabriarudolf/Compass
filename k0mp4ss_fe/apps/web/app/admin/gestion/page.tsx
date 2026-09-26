@@ -73,8 +73,8 @@ export default function GestionAdministrativaPage() {
   const residentes = personas.filter(
     p => vinculos.some(v => v.personaId === p.id && v.rol === "arrendatario" && !v.fechaFin) || (p.roles.includes("residente") && !p.roles.includes("propietario"))
   )
-  const directiva = personas.filter(p => p.datosGobernanza !== undefined)
-  const personal = personas.filter(p => p.datosLaborales !== undefined)
+  const directiva = personas.filter(p => p.datosGobernanza != null)
+  const personal = personas.filter(p => p.datosLaborales != null)
 
   const unidadesDePropietario = (personaId: string) =>
     vinculos.filter(v => v.personaId === personaId && v.rol === "propietario" && !v.fechaFin).map(v => v.unidadId)

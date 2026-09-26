@@ -1,5 +1,5 @@
 // Login real contra /ingresar (NextAuth credentials) — multi-cuenta P2.
-// Para cada uno de los 5 roles del seed (PASSWORD_TEST=Test1234!) guarda
+// Para cada una de las 6 cuentas del seed (PASSWORD_TEST=Test1234!) guarda
 // e2e/.auth/<rol>.json via test.use({ storageState }) por spec.
 // Si la sesión previa sigue vigente, /ingresar redirige a /dashboard → se guarda
 // el storageState existente sin reloggear. Patrón sin 5 proyectos en config.
@@ -15,6 +15,7 @@ const CUENTAS: Cuenta[] = [
   { email: "conserjeria@test.cl", archivo: "e2e/.auth/conserjeria.json" },
   { email: "residente@test.cl", archivo: "e2e/.auth/residente.json" },
   { email: "mantencion@test.cl", archivo: "e2e/.auth/mantencion.json" },
+  { email: "arrendatario@test.cl", archivo: "e2e/.auth/arrendatario.json" },
 ]
 
 async function correoOFormulario(

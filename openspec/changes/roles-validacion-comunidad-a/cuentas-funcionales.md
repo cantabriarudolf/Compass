@@ -65,7 +65,12 @@ Login verificado por HTTP (redirect `/dashboard` sin error).
    gates que todos: scope + `puede`. Nada se salta salvo lo diseñado.
 4. **Fijación actual:** admin → scope `comunidad-a` (membresía más reciente;
    verificar con `SELECT comunidadId FROM membresias WHERE usuarioId='usuario-admin'
-   ORDER BY createdAt DESC LIMIT 1` si algo se ve raro).
+   ORDER BY createdAt DESC LIMIT 1` si algo se ve raro). El orden de
+   `membresiasData` en `scripts/seed-authz.mjs` es intencional: admin-a va
+   ÚLTIMA para que A sea la más reciente (P2 roles-specs-perfil). En BDs
+   creadas antes de ese orden, recrear la membresía admin-a (borrar +
+   `npm run seed:authz`) para alinear el scope. No reordenar sin actualizar
+   este documento.
 
 ## 4. Qué valida cada perfil (checklist manual, ~15 min)
 
