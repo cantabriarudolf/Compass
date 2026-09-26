@@ -32,4 +32,8 @@ migración SQLite→PostgreSQL, resto de BACKLOG-100.
 
 ## Bitácora
 
+- [2026-09-26] P1 delegada FALLIDA: `gentle-ai-verify` timed out (stall 4 min + web-access
+  del harness pide Pi ≥0.86.1). Sin cambios en el repo (tree limpio, dev server OK).
+  Se pasa a modo manual con la misma línea de handoff. ( начало serie, sin tocar filas.)
+
 (vacía — cada ventana añade antes del push: `- [fecha] P<n> HECHA: resumen (commit hash)`)
