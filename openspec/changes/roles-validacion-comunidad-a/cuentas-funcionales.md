@@ -27,6 +27,7 @@ Si el owner quiere revertir esta decisión: 1 fila en `membresias` (reversible).
 | `conserjeria@test.cl` | conserjeria | A | p-4 · Ana María Silva · 19.111.222-9 | Inicio, Operaciones | Finanzas, Comunidad, Inventario, Personas, Desarrollo AI, Sistema |
 | `residente@test.cl` | residente | A | p-3 · Roberto Gómez Bolaños · 12.345.678-5 | Inicio, Operaciones, Finanzas, Comunidad | Inventario, Personas, Desarrollo AI, Sistema |
 | `mantencion@test.cl` | mantencion | A | p-7 · Pedro Valdés Orellana · 17.444.555-9 | Inicio, Operaciones, Inventario | Finanzas, Comunidad, Personas, Desarrollo AI, Sistema |
+| `arrendatario@test.cl` | residente (login) | A | p-arrendatario-1 · Daniela Fuenzalida Soto · 11.111.111-1 | Inicio, Operaciones, Finanzas, Comunidad (igual que residente) | Inventario, Personas, Desarrollo AI, Sistema |
 
 Fuente matriz sidebar: `e2e/auth/roles-accesos.spec.ts` (MATRIZ) + `components/app-sidebar.tsx`.
 Detalle granular: Finanzas/Remuneraciones solo admin; Inventario Estructura/Tipos
@@ -42,6 +43,12 @@ lógica de dueño vs ocupante. La ficha p-3 ya es `propietario` con 3 unidades
 vigentes (u-B-201, u-C-301, u-LC-01): entrando como `residente@test.cl` se validan
 los casos de propietario (pago GC, votación, certificado de su unidad). No se crea
 cuenta separada de propietario.
+
+**Inquilino (agregado 2026-09-26):** `arrendatario@test.cl` valida el sombrero
+arrendatario con login rol `residente` (no existe rol login propio: ROLES son 5).
+Ficha p-arrendatario-1 con vínculo `arrendatario` vigente en u-A-101 (`arrendada`,
+`permiteVerFinanzas: false`, alcance limitado a validar). Ver `scripts/seed-authz.mjs`.
+Login verificado por HTTP (redirect `/dashboard` sin error).
 
 ## 3. Para que la cuenta "no salte": mecánica de scope (fijada, no negociable sin spec)
 

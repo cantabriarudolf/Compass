@@ -1,6 +1,10 @@
-// Bootstrap AU §3 P5: seed dev de 2 comunidades + 5 usuarios TEST con passwordHash.
+// Bootstrap AU §3 P5: seed dev de 2 comunidades + 6 usuarios TEST con passwordHash.
 // Se usa en el PRIMER arranque (BD sin usuarios → Auth.js no permite login →
 // fail-closed intencional). Idempotente; espejo de lib/seed-authz.ts.
+// El 6to (arrendatario@test.cl) valida el perfil inquilino: login rol "residente"
+// (no existe rol login arrendatario: ROLES son 5) + ficha propia con vínculo
+// arrendatario vigente en comunidad-a (u-A-101, arrendada). Ver
+// openspec/changes/roles-validacion-comunidad-a/cuentas-funcionales.md §2.
 // Uso: npm run seed:authz   (lee .env vía --env-file-if-exists)
 /* global process */
 import { PrismaClient } from "@prisma/client"
@@ -20,6 +24,8 @@ const membresiasData = [
   { usuarioId: "usuario-conserjeria", comunidadId: "comunidad-a", rol: "conserjeria" },
   { usuarioId: "usuario-residente", comunidadId: "comunidad-a", rol: "residente" },
   { usuarioId: "usuario-mantencion", comunidadId: "comunidad-a", rol: "mantencion" },
+  // Inquilino: login rol residente (sin rol login propio), alcance comunidad-a.
+  { usuarioId: "usuario-arrendatario", comunidadId: "comunidad-a", rol: "residente" },
 ]
 
 async function main() {
@@ -46,6 +52,7 @@ async function main() {
       { id: "usuario-conserjeria", email: "conserjeria@test.cl", personaId: "p-4", activo: true, passwordHash },
       { id: "usuario-residente", email: "residente@test.cl", personaId: "p-3", activo: true, passwordHash },
       { id: "usuario-mantencion", email: "mantencion@test.cl", personaId: "p-7", activo: true, passwordHash },
+      { id: "usuario-arrendatario", email: "arrendatario@test.cl", personaId: "p-arrendatario-1", activo: true, passwordHash },
     ]
     for (const u of usuariosData) {
       await prisma.usuario.upsert({
@@ -66,7 +73,45 @@ async function main() {
       }
     }
 
-    const comunidades = await prisma.comunidad.count()
+        // Ficha del inquilino + vínculo arrendatario vigente (first-wins: no se pisa
+        // si ya existe, para no clobberar ediciones manuales de validación).
+        const personaArr = await prisma.persona.findUnique({ where: { id: "p-arrendatario-1" } })
+        if (!personaArr) {
+          await prisma.persona.create({
+            data: {
+              id: "p-arrendatario-1",
+              comunidadId: "comunidad-a",
+              rut: "11.111.111-1",
+              nombreCompleto: "Daniela Fuenzalida Soto",
+              nombres: "Daniela",
+              apellidos: "Fuenzalida Soto",
+              email: "arrendatario@test.cl",
+              telefonoMovil: "+56 9 5555 1212",
+              estadoCuenta: "activa",
+              condicionesEspecialesIds: [],
+              roles: ["residente"],
+              permiteCreacionManualCV: false,
+            },
+          })
+        }
+        const vincArr = await prisma.vinculoUnidad.findUnique({ where: { id: "v-arrendatario-1" } })
+        if (!vincArr) {
+          await prisma.vinculoUnidad.create({
+            data: {
+              id: "v-arrendatario-1",
+              comunidadId: "comunidad-a",
+              personaId: "p-arrendatario-1",
+              unidadId: "u-A-101",
+              rol: "arrendatario",
+              fechaInicio: "2024-03-01",
+              fechaFin: null,
+              estadoOcupacionPropiedad: "arrendada",
+              permiteVerFinanzas: false,
+            },
+          })
+        }
+
+        const comunidades = await prisma.comunidad.count()
     const usuarios = await prisma.usuario.count()
     const membresias = await prisma.membresia.count()
     console.log(`Seed AU OK: ${comunidades} comunidades, ${usuarios} usuarios, ${membresias} membresías.`)
