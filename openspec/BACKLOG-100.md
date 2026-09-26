@@ -208,6 +208,9 @@ aclaración documental, 0 errores de cálculo.
 - Script: `scripts/verificar-persistencia-db.ts` — verifica fuente de verdad Prisma
 - Tests: 795 passed + 14 skipped, tsc 0 errores
 
-**Post-serie:**
-- Las páginas UI legacy aún leen datos de dominio desde `useCompassStore` (localStorage); su migración a hooks SWR es follow-up gradual.
-- `lib/store.ts` permanece como legacy hasta que todas las páginas migren a los hooks.
+**Follow-up: SERIE-UI-MIGRACION-BD (P1-P6, cerrada 2026-09-25)**
+- 22/28 páginas migradas de `useCompassStore` a hooks SWR/BD (commits `d4f8d13` a `9450c14`).
+- 6 páginas quedan como excepciones/TODO por falta de hooks/API: `admin/qa-lab`, `admin/mantenimiento`, `admin/dev-dashboard`, `admin/reporteria`, `finanzas/remuneraciones` (liquidacionesPL/adelantosPL sin hooks), y acciones complejas sueltas en `multas`, `recursos`, `proyectos`, `personal`, `gastos-comunes`, `visor-mensajes`.
+- Usos restantes del store legacy: 168 líneas en 14 archivos (todos documentados como TODO o excepción).
+- Tests: 151/151 API pass, tsc 0 errores nuevos.
+- `lib/store.ts` permanece como legacy `@deprecated` (STORE_VERSION=28 congelado); las acciones que ya nadie usa se eliminarán en un change futuro `store-cleanup`.
