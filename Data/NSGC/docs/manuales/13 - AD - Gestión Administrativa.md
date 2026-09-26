@@ -21,6 +21,7 @@ Centralizar la gestión de personas bajo dos cajones — Comunidad y Recursos Hu
 - **Alertas silenciables**: si el propietario apaga `alertasResidentesActivas`, el sistema registra pero no notifica (decisión D3).
 - **Auditoría**: cambios de configuración y firmas generan eventos `AD_OWNER_CONFIG_CHANGE` y `AD_DIRECTIVA_SIGN_UPLOAD`.
 - **Alcance actual**: lo contractual/previsional del personal vive en PE (módulo futuro); acá solo hay acceso a fichas.
+- **Robustez ante extensiones nulas**: las listas de Directiva y Personal excluyen fichas con `datosGobernanza`/`datosLaborales` en `null` (igual que ausente); la página nunca revienta por eso.
 
 ## 🔗 Dependencias
 
