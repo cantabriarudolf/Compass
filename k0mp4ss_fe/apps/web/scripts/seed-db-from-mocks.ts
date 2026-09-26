@@ -97,7 +97,8 @@ async function sembrarFila<T extends FilaMock>(
   fila: T,
   comunidadId: string,
 ): Promise<void> {
-  const datos = fila as unknown as Record<string, unknown> // SAFETY: mock tipado → filas Prisma unchecked; el runtime valida el modelo.
+  // SAFETY: mock tipado → filas Prisma unchecked; el runtime valida el modelo.
+  const datos = fila as unknown as Record<string, unknown>
   await modelo.upsert({
     where: { id: fila.id },
     update: { ...datos, comunidadId },
@@ -161,10 +162,13 @@ async function main(): Promise<void> {
       diasVacacionesMes: configuracionDefault.diasVacacionesMes,
       jornadaSemanalEstandar: configuracionDefault.jornadaSemanalEstandar,
     }
+    // Id determinista por comunidad: el id fijo "cfg-mocks" colisionaba (P2002)
+    // cuando otra comunidad ya tenía su fila (misma PK global). Así el seed es
+    // re-ejecutable por comunidad sin pisarse entre comunidades.
     await prisma.configuracionGlobal.upsert({
       where: { comunidadId },
       update: configRow,
-      create: { id: "cfg-mocks", ...configRow, comunidadId },
+      create: { id: `cfg-mocks-${comunidadId}`, ...configRow, comunidadId },
     })
 
     // --- EF: estructura física (orden: tipos → macro → micro → unidades) ---

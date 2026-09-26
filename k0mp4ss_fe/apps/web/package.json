@@ -15,6 +15,7 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "seed:authz": "node --env-file-if-exists=.env scripts/seed-authz.mjs",
+    "seed:mocks": "vite-node scripts/seed-db-from-mocks.ts",
     "cifrar:datos": "node --env-file-if-exists=.env scripts/cifrar-datos-existentes.mjs",
     "backup:db": "node scripts/backup-db.mjs",
     "restore:db": "node scripts/restore-db.mjs",
