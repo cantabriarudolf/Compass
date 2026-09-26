@@ -6,7 +6,7 @@
 
 | Ventana | Alcance | Estado | Commit final |
 | --- | --- | --- | --- | --- |
-| P1 | Transversales: unit full + tsc/eslint + e2e lane auth + matriz sidebar 4 roles + 403 | pendiente | — |
+| P1 | Transversales: unit full + tsc/eslint + e2e lane auth + matriz sidebar 4 roles + 403 | HECHA (verify-only, rojos heredados a P2) | s/cambios código |
 | P2 | Propias por perfil: specs nuevas (maestros-datos, ficha residente, límite arrendatario, denegación ABAC) + 7ma cuenta en setup | pendiente | — |
 | P3 | Integral: full e2e 43 + checklist manual §4 del owner + archivo de changes + push | pendiente | — |
 
@@ -35,5 +35,10 @@ migración SQLite→PostgreSQL, resto de BACKLOG-100.
 - [2026-09-26] P1 delegada FALLIDA: `gentle-ai-verify` timed out (stall 4 min + web-access
   del harness pide Pi ≥0.86.1). Sin cambios en el repo (tree limpio, dev server OK).
   Se pasa a modo manual con la misma línea de handoff. ( начало serie, sin tocar filas.)
+- [2026-09-26] P1 HECHA (modo manual, verify-only): tsc 0 errores · lint 0 errores (6634 warnings) ·
+  unit 809/809 pass (EXIT 1 solo por coverage lines 79.67%/90% + branches 74.28%/75%) ·
+  e2e-auth 13 pass/4 fail/2 skip (comite+residente: `getByText('Inicio')` not found; Gastos Comunes
+  no visible) · validate 33/40 (7 changes en draft fallan) · STORE_VERSION 28. Sin fixes por diseño
+  (van por ARRANQUE P2). Checklist §4 queda tarea del owner. Dev server apagado post-ventana.
 
 (vacía — cada ventana añade antes del push: `- [fecha] P<n> HECHA: resumen (commit hash)`)
