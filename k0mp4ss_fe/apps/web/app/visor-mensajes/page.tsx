@@ -1,8 +1,11 @@
 "use client"
 
 import * as React from "react"
-import { useCompassStore, useStoreRehydrated } from "@/lib/store"
+import { useCompassStore } from "@/lib/store"
 import type { AvisoCV, TipologiaCV } from "@/lib/schemas"
+import { useAvisosCV } from "@/lib/api/use-cv"
+import { useReservasRA, useElementosRA } from "@/lib/api/use-ra"
+import { useConfiguracion } from "@/lib/api/use-configuracion"
 import { IconClock, IconCalendarEvent } from "@tabler/icons-react"
 
 const TIPOLOGIA_ACENTO: Record<TipologiaCV, string> = {
@@ -25,21 +28,23 @@ function youtubeEmbed(url: string): string | null {
 }
 
 export default function VisorMensajesPage() {
-  useStoreRehydrated()
-  const hasHydrated = useCompassStore(s => s.hasHydrated)
-  const avisosCV = useCompassStore(s => s.avisosCV)
-  const reservasRA = useCompassStore(s => s.reservasRA)
-  const elementosRA = useCompassStore(s => s.elementosRA)
-  const configuracion = useCompassStore(s => s.configuracion)
+  const { items: avisosCV, isLoading: cAvisos } = useAvisosCV()
+  const { items: reservasRA, isLoading: cReservas } = useReservasRA()
+  const { items: elementosRA, isLoading: cElementos } = useElementosRA()
+  const { config: configuracion, isLoading: cConfig } = useConfiguracion()
+  const cargando = cAvisos || cReservas || cElementos || cConfig
+
+  // TODO: migrar caducarAvisosCV a API REST
+  const caducarAvisosCV = useCompassStore.getState().caducarAvisosCV
 
   const [indice, setIndice] = React.useState(0)
   const [ahora, setAhora] = React.useState(() => new Date())
 
   React.useEffect(() => {
-    useCompassStore.getState().caducarAvisosCV()
+    caducarAvisosCV()
     const reloj = setInterval(() => setAhora(new Date()), 1000)
     // Sincronización simulada: refresco de caducidad y estado cada 30s.
-    const sync = setInterval(() => useCompassStore.getState().caducarAvisosCV(), 30000)
+    const sync = setInterval(() => caducarAvisosCV(), 30000)
     return () => { clearInterval(reloj); clearInterval(sync) }
   }, [])
 
@@ -56,7 +61,7 @@ export default function VisorMensajesPage() {
     return () => clearTimeout(t)
   }, [indice, cola])
 
-  if (!hasHydrated) {
+  if (cargando) {
     return (
       <div className="fixed inset-0 z-[999] flex items-center justify-center bg-black">
         <p className="animate-pulse text-lg text-white/60">Conectando con el visor…</p>
@@ -86,14 +91,14 @@ export default function VisorMensajesPage() {
       {/* Identidad + widgets */}
       <header className="absolute left-0 right-0 top-0 z-10 flex items-center justify-between px-10 py-6 backdrop-blur-sm">
         <div className="flex items-center gap-4">
-          {configuracion.logoUrl ? (
+          {configuracion?.logoUrl ? (
             // eslint-disable-next-line @next/next/no-img-element -- URL de imagen provista por el usuario (D1), no optimizable por next/image
             <img src={configuracion.logoUrl} alt="Logo" className="h-12 w-auto rounded bg-white/95 object-contain p-1" />
           ) : (
             <div className="flex size-12 items-center justify-center rounded-xl bg-white/10 text-2xl font-black">K</div>
           )}
           <div>
-            <p className="text-lg font-bold tracking-tight">{configuracion.nombreComunidad}</p>
+            <p className="text-lg font-bold tracking-tight">{configuracion?.nombreComunidad ?? "Comunidad"}</p>
             <p className="text-xs uppercase tracking-widest text-white/50">Visor de mensajes</p>
           </div>
         </div>

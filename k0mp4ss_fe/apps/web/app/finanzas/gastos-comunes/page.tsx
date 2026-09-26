@@ -1,7 +1,10 @@
 "use client"
 
 import * as React from "react"
-import { useCompassStore, useStoreRehydrated } from "@/lib/store"
+import { useCompassStore } from "@/lib/store"
+import { useVinculos } from "@/lib/api/use-vinculos"
+import { useConfiguracion } from "@/lib/api/use-configuracion"
+import { configuracionDefault } from "@/data/admin/configuracion"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
@@ -103,9 +106,7 @@ function periodoSugerido(): string {
 }
 
 export default function GastosComunesPage() {
-  useStoreRehydrated()
-      const hasHydrated = useCompassStore(s => s.hasHydrated)
-      // FI vía API REST (BD fuente de verdad); vínculos/config/cobranza siguen en el store.
+      // FI, vínculos y config vía API REST (BD fuente de verdad).
       const { items: fondos, isLoading: cargandoFondos, create: crearFondo, update: editarFondo, remove: eliminarFondo } = useFondosFI()
       const { items: egresos, isLoading: cargandoEgresos, create: crearEgreso, remove: eliminarEgreso } = useEgresosFI()
       const { items: ingresosFI, isLoading: cargandoIngresos, create: crearIngreso, remove: eliminarIngreso } = useIngresosFI()
@@ -113,7 +114,14 @@ export default function GastosComunesPage() {
       const { items: cobros, isLoading: cargandoCobros, update: editarCobro } = useCobrosFI()
       const { items: unidades, isLoading: cargandoUnidades } = useUnidades()
       const { items: tiposUnidad, isLoading: cargandoTipos } = useTiposUnidad()
+      const vinculos = useVinculos().vinculos
+      const { config: configRemota, isLoading: cConfig } = useConfiguracion()
+      // Fallback a la config semilla mientras arriba la del servidor (paridad con admin/configuracion).
+      const configuracion = configRemota ?? configuracionDefault
+      // TODO: migrar enviarCobranzaFI a API REST
+      const enviarCobranzaFI = useCompassStore.getState().enviarCobranzaFI
       const cargandoAPI =
+        cConfig ||
         cargandoFondos ||
         cargandoEgresos ||
         cargandoIngresos ||
@@ -121,9 +129,6 @@ export default function GastosComunesPage() {
         cargandoCobros ||
         cargandoUnidades ||
         cargandoTipos
-  const vinculos = useCompassStore(s => s.vinculos)
-  const configuracion = useCompassStore(s => s.configuracion)
-  const enviarCobranzaFI = useCompassStore(s => s.enviarCobranzaFI)
 
   const [error, setError] = React.useState<string | null>(null)
   const [okMsg, setOkMsg] = React.useState<string | null>(null)
@@ -341,7 +346,7 @@ export default function GastosComunesPage() {
         if (!r.ok) setError(r.error ?? "No se pudo aplicar la mora.")
       }
 
-      if (!hasHydrated || cargandoAPI) {
+      if (cargandoAPI) {
     return <div className="h-64 w-full animate-pulse rounded-lg bg-muted" />
   }
 

@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { useCompassStore, useStoreRehydrated } from "@/lib/store"
+import { usePersonas } from "@/lib/api/use-personas"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@workspace/ui/components/card"
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
@@ -32,13 +32,17 @@ import {
   IconLock,
 } from "@tabler/icons-react"
 import { puedeContextual } from "@/lib/authz"
-import type { ActaGD, PeriodoDirectiva } from "@/lib/schemas"
+import type { ActaGD, ExtensionGobernanza, PeriodoDirectiva } from "@/lib/schemas"
 import { periodoDirectivaVigente, esMiembroDirectivaVigente } from "@/lib/store"
 import { useActasGD } from "@/lib/api/use-actas-gd"
 import { usePeriodosDirectiva } from "@/lib/api/use-periodos-directiva"
 import { useControlesPropiedad } from "@/lib/api/use-controles-propiedad"
 
 type Vista = "administrador" | "propietario" | "residente"
+
+// La ficha de gobernanza en BD lleva el período (GD-períodos); el tipo legacy de
+// data/comunidad no lo declara, así que se extiende a nivel de página.
+type ExtensionGobernanzaPeriodo = ExtensionGobernanza & { periodoId?: string }
 
 const CARGO_LABEL: Record<string, string> = {
   presidente: "Presidente",
@@ -72,16 +76,12 @@ function finPeriodo(p: PeriodoDirectiva): string {
 }
 
 export default function DirectivaPage() {
-  useStoreRehydrated()
-  const hasHydrated = useCompassStore(s => s.hasHydrated)
-  const personas = useCompassStore(s => s.personas)
-  const savePersona = useCompassStore(s => s.savePersona)
-  // GD/AD desde el servidor (BD-FUENTE-VERDAD Fase 2): actas, períodos y
-  // controles de privacidad se leen y escriben por API; el store queda como
-  // caché de lectura para personas.
+  // Personas y GD/AD desde el servidor (BD-FUENTE-VERDAD Fase 2).
   const { actas, isLoading: cargandoActas, create: crearActa, update: actualizarActa, remove: eliminarActa, aprobar: firmarActa } = useActasGD()
   const { periodos, isLoading: cargandoPeriodos, create: crearPeriodo, cerrar: cerrarPeriodo } = usePeriodosDirectiva()
   const { controles: controlesPropiedades, isLoading: cargandoControles } = useControlesPropiedad()
+  const { personas, isLoading: cargandoPersonas, update: actualizarPersona } = usePersonas()
+  const cargando = cargandoActas || cargandoPeriodos || cargandoControles || cargandoPersonas
 
   // Mock-first: sin mapeo sesión→persona se ofrece una vista simulada por rol
   // para demostrar la privacidad de la spec GD §3.
@@ -153,7 +153,7 @@ export default function DirectivaPage() {
     setEditando(null)
   }
 
-  if (!hasHydrated || cargandoActas || cargandoPeriodos || cargandoControles) {
+  if (cargando) {
     return (
       <div className="flex flex-col gap-6 animate-pulse">
         <div className="h-9 w-72 rounded bg-muted/40" />
@@ -473,26 +473,36 @@ export default function DirectivaPage() {
                         miembros,
                       })
                       if (!r.ok) { setError(r.error ?? "No se pudo registrar."); return }
-                      // Caché local de lectura: el servidor ya persistió y asignó
-                      // fichas en BD; se espeja en el store para la vista.
+                      // El servidor ya registró el período en BD; se actualizan
+                      // las fichas de personas por API (rol/cargo en gobernanza).
                       const idsNuevos = new Set(miembros.map(m => m.personaId))
                       for (const p of personas) {
                         const m = miembros.find(x => x.personaId === p.id)
                         if (m) {
-                          savePersona({
-                            ...p,
+                          // La ficha de gobernanza en BD sí lleva período (GD-períodos);
+                          // el tipo legacy de data/comunidad no lo declara.
+                          const fichaGob: ExtensionGobernanzaPeriodo = {
+                            id: p.datosGobernanza?.id ?? `g-${p.id}`,
+                            cargoDirectiva: m.cargo,
+                            fechaAsuncion: m.fechaAsuncion,
+                            periodoId: id,
+                          }
+                          await actualizarPersona(p.id, {
+                            // null de BD (fotografiaUrl etc.) rompe el merge del PUT
+                            // (esReferenciaValida no tolera null) → se envían strings para neutralizar.
+                            fotografiaUrl: "",
                             roles: p.roles.includes("directiva") ? p.roles : [...p.roles, "directiva"],
-                            datosGobernanza: {
-                              id: p.datosGobernanza?.id ?? `g-${p.id}`,
-                              cargoDirectiva: m.cargo,
-                              fechaAsuncion: m.fechaAsuncion,
-                              periodoId: id,
-                            },
+                            datosGobernanza: fichaGob,
                           })
-                        } else if (p.datosGobernanza?.periodoId === periodoVigente?.id && !idsNuevos.has(p.id)) {
-                          const resto = { ...p }
-                          delete resto.datosGobernanza
-                          savePersona(resto)
+                        } else if (
+                          (p.datosGobernanza as ExtensionGobernanzaPeriodo | undefined)?.periodoId === periodoVigente?.id &&
+                          !idsNuevos.has(p.id)
+                        ) {
+                          await actualizarPersona(p.id, {
+                            fotografiaUrl: "",
+                            roles: p.roles.filter(r => r !== "directiva"),
+                            datosGobernanza: null as never,
+                          })
                         }
                       }
                       setError(null)

@@ -1,7 +1,6 @@
 "use client"
 
 import * as React from "react"
-import { useCompassStore, useStoreRehydrated } from "@/lib/store"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
@@ -67,8 +66,6 @@ interface FormPago {
 }
 
 export default function PagosPage() {
-  useStoreRehydrated()
-  const hasHydrated = useCompassStore(s => s.hasHydrated)
   // Cobros, unidades y fondos vía API REST (BD fuente de verdad).
   const { items: cobros, isLoading: cargandoCobros, update: editarCobro } = useCobrosFI()
   const { items: unidades, isLoading: cargandoUnidades } = useUnidades()
@@ -164,7 +161,7 @@ export default function PagosPage() {
     setPagoObjetivo(null)
   }
 
-  if (!hasHydrated || cargandoAPI) {
+  if (cargandoAPI) {
     return <div className="h-64 w-full animate-pulse rounded-lg bg-muted" />
   }
 
