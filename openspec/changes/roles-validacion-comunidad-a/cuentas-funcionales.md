@@ -33,6 +33,16 @@ Detalle granular: Finanzas/Remuneraciones solo admin; Inventario Estructura/Tipo
 solo admin (Recursos/Mantenimiento admin+mantencion); Sistema Reportería admin+comité,
 resto admin; Personas y Desarrollo AI solo admin.
 
+**Residente y propietario (aclaración 2026-09-26):** la cuenta `residente@test.cl`
+SÍ existe (está en la tabla). `propietario` NO es un rol de login — `ROLES` tiene 5
+valores y el spec RP define "Propietario / Residente" como un único rol estándar.
+La distinción vive en la ficha (`roles[]`) y en `vinculos` (`rol: propietario |
+arrendatario`), que usan gastos-comunes, gestión, reportería y actas-GD para la
+lógica de dueño vs ocupante. La ficha p-3 ya es `propietario` con 3 unidades
+vigentes (u-B-201, u-C-301, u-LC-01): entrando como `residente@test.cl` se validan
+los casos de propietario (pago GC, votación, certificado de su unidad). No se crea
+cuenta separada de propietario.
+
 ## 3. Para que la cuenta "no salte": mecánica de scope (fijada, no negociable sin spec)
 
 1. **Un request = una comunidad.** `withComunidadScope` toma la ÚLTIMA membresía
