@@ -6,7 +6,7 @@
 
 | Ventana | Alcance | Estado | Commit final |
 | --- | --- | --- | --- |
-| P1 | Higiene y determinismo: fix orden seed-authz + convención TEST-*/cleanup + estrategia GATED + receta reseed scope A | pendiente | — |
+| P1 | Higiene y determinismo: fix orden seed-authz + convención TEST-*/cleanup + estrategia GATED + receta reseed scope A | HECHA | — |
 | P2 | Rojos CRUD (~17): admin-configuracion, permisos, tipos, personal, proyectos, reservas, gestion, logs, reporteria, punto-cero + 4 GATED | pendiente | — |
 | P3 | Rojos flujo/a11y/smoke (6): poblamiento ×2, flujo/personas, a11y ×2, smoke-mobile | pendiente | — |
 | P4 | Integral y cierre: full e2e verde + checklist §4 owner + archivo 2 changes + nsgc-prepush + push + VALIDACION-PERFILES COMPLETA | pendiente | — |
@@ -62,3 +62,10 @@ manual §4 de `openspec/changes/roles-validacion-comunidad-a/cuentas-funcionales
 - [2026-09-27] Delegado FALLIDO: `gentle-ai-worker` timed out (stall 4 min, mismo
   infra-stall que P1 anterior: harness pide Pi ≥0.86.1). Owner eligió modo manual.
   Handoff: `Corre el archivo openspec/SERIE-E2E-FULL-VERDE/prompt-01.md`.
+- [2026-09-27] P1 HECHA (manual): change `e2e-higiene-determinismo` válido;
+  seed-authz determinista (pasada `createdAt` admin-a última en `.mjs` + espejo
+  `lib`, test 6/6) verificado restore P3 + 2 seeds → scope A sin receta manual;
+  convención TEST-*/cleanup + GATED (orden no-GATED→GATED, `e2e:full-orden`)
+  en deltas ST/DEV; `admin-configuracion` finally intacto. Números: vitest
+  83/815, tsc 0, lint 0 errores, auth 19 pass/2 skip. Lección: reiniciar dev
+  server tras `restore:db` (handle stale → login 0/6). Push: no (serie en curso).

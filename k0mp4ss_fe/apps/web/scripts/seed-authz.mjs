@@ -66,16 +66,36 @@ async function main() {
       })
     }
 
-    for (const m of membresiasData) {
-      const existing = await prisma.membresia.findFirst({
-        where: { usuarioId: m.usuarioId, comunidadId: m.comunidadId },
-      })
-      if (!existing) {
-        await prisma.membresia.create({ data: m })
-      } else if (existing.rol !== m.rol) {
-        await prisma.membresia.update({ where: { id: existing.id }, data: { rol: m.rol } })
-      }
-    }
+        for (const m of membresiasData) {
+          const existing = await prisma.membresia.findFirst({
+            where: { usuarioId: m.usuarioId, comunidadId: m.comunidadId },
+          })
+          if (!existing) {
+            await prisma.membresia.create({ data: m })
+          } else if (existing.rol !== m.rol) {
+            await prisma.membresia.update({ where: { id: existing.id }, data: { rol: m.rol } })
+          }
+        }
+
+        // Determinismo P1 (SERIE-E2E-FULL-VERDE): el scope es la ÚLTIMA
+        // membresía por createdAt (withComunidadScope, take:1). El upsert de
+        // arriba NO reordena filas existentes, así que restore+seed perdía
+        // scope A. Esta pasada reescribe createdAt en orden canónico
+        // (timestamps escalonados +1s, admin-a ÚLTIMA) — idempotente,
+        // conserva id, y el desempate `id desc` nunca decide.
+        const baseTs = Date.now()
+        for (let i = 0; i < membresiasData.length; i++) {
+          const m = membresiasData[i]
+          const row = await prisma.membresia.findFirst({
+            where: { usuarioId: m.usuarioId, comunidadId: m.comunidadId },
+          })
+          if (row) {
+            await prisma.membresia.update({
+              where: { id: row.id },
+              data: { createdAt: new Date(baseTs + i * 1000) },
+            })
+          }
+        }
 
         // Ficha del inquilino + vínculo arrendatario vigente (first-wins: no se pisa
         // si ya existe, para no clobberar ediciones manuales de validación).

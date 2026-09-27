@@ -17,18 +17,24 @@ export interface SeedAuthzResult {
 }
 
 /**
- * seedUsuariosMembresias — crea 2 comunidades + 5 usuarios TEST con membresías
+ * seedUsuariosMembresias — crea 2 comunidades + 6 usuarios TEST con membresías
  * y passwordHash bcrypt (login vía Auth.js credentials, AU §3 P5).
  * Idempotente: upsert por id/slug/email y membresia unique.
+ * Orden canónico de membresías idéntico a scripts/seed-authz.mjs: admin-a
+ * ÚLTIMA por createdAt para scope comunidad-a (withComunidadScope, take:1).
+ * Usuarios: admin@test.cl (admin A+B), comite/conserjeria/residente/
+ * mantencion@test.cl (solo A), arrendatario@test.cl (login rol residente,
+ * ficha p-arrendatario-1 + vínculo v-arrendatario-1 en comunidad-a).
  * Comunidad A: comunidad-a (Comunidad Los Aromos TEST)
  * Comunidad B: comunidad-b (Comunidad Las Palmas TEST)
- * Usuarios: admin@test.cl (admin A+B), comite@test.cl (comite A), conserjeria@test.cl, residente@test.cl, mantencion@test.cl
  * Cada usuario queda vinculado por membresia a su comunidad; admin en ambas para probar aislamiento A/B.
  * Llamado desde qa-lab (fase AU, requiere sesión admin) y desde tests con client temporal.
  * Primer arranque sin usuarios: `npm run seed:authz` (scripts/seed-authz.mjs).
  */
 export async function seedUsuariosMembresias(client?: PrismaClient): Promise<SeedAuthzResult> {
   const { prisma: defaultPrisma } = await import("./prisma")
+  // SAFETY: el client opcional de tests expone el mismo delegate Prisma;
+  // el cast solo relaja el tipado porque los modelos se acceden vía `as any`.
   const prisma = (client ?? defaultPrisma) as unknown as PrismaClient
 
   // comunidades
@@ -63,6 +69,7 @@ export async function seedUsuariosMembresias(client?: PrismaClient): Promise<See
     { id: "usuario-conserjeria", email: "conserjeria@test.cl", personaId: "p-4", activo: true, passwordHash },
     { id: "usuario-residente", email: "residente@test.cl", personaId: "p-3", activo: true, passwordHash },
     { id: "usuario-mantencion", email: "mantencion@test.cl", personaId: "p-7", activo: true, passwordHash },
+    { id: "usuario-arrendatario", email: "arrendatario@test.cl", personaId: "p-arrendatario-1", activo: true, passwordHash },
   ]
 
   for (const u of usuariosData) {
@@ -73,16 +80,18 @@ export async function seedUsuariosMembresias(client?: PrismaClient): Promise<See
     })
   }
 
-  // Membresías: admin en ambas, resto solo en A
+  // Membresías: orden canónico idéntico a scripts/seed-authz.mjs — el scope
+  // es la ÚLTIMA membresía por createdAt (withComunidadScope, take:1),
+  // admin-a va ÚLTIMA para scope comunidad-a (cuentas-funcionales.md §3.4).
+  // No reordenar sin actualizar ese documento.
   const membresiasData = [
-    { usuarioId: "usuario-admin", comunidadId: "comunidad-a", rol: "administrador" },
     { usuarioId: "usuario-admin", comunidadId: "comunidad-b", rol: "administrador" },
     { usuarioId: "usuario-comite", comunidadId: "comunidad-a", rol: "comite" },
     { usuarioId: "usuario-conserjeria", comunidadId: "comunidad-a", rol: "conserjeria" },
     { usuarioId: "usuario-residente", comunidadId: "comunidad-a", rol: "residente" },
     { usuarioId: "usuario-mantencion", comunidadId: "comunidad-a", rol: "mantencion" },
-    // Para probar que admin B no ve A: admin también en B ya cubierto
-    // Añade residente también en B para test cross: residente@test.cl solo en A, no en B
+    { usuarioId: "usuario-arrendatario", comunidadId: "comunidad-a", rol: "residente" },
+    { usuarioId: "usuario-admin", comunidadId: "comunidad-a", rol: "administrador" },
   ]
 
   for (const m of membresiasData) {
@@ -95,6 +104,59 @@ export async function seedUsuariosMembresias(client?: PrismaClient): Promise<See
     } else if (existing.rol !== m.rol) {
       await (prisma as any).membresia.update({ where: { id: existing.id }, data: { rol: m.rol } })
     }
+  }
+
+  // Determinismo P1 (SERIE-E2E-FULL-VERDE): reescribir createdAt en orden
+  // canónico (admin-a ÚLTIMA) — espejo del fix en scripts/seed-authz.mjs.
+  const baseTs = Date.now()
+  for (const [i, m] of membresiasData.entries()) {
+    const row = await (prisma as any).membresia.findFirst({
+      where: { usuarioId: m.usuarioId, comunidadId: m.comunidadId },
+    })
+    if (row) {
+      await (prisma as any).membresia.update({
+    where: { id: row.id },
+    data: { createdAt: new Date(baseTs + i * 1000) },
+      })
+    }
+  }
+
+  // Ficha del inquilino + vínculo arrendatario vigente (first-wins, espejo
+  // de scripts/seed-authz.mjs: no se pisa si ya existe).
+  const personaArr = await (prisma as any).persona.findUnique({ where: { id: "p-arrendatario-1" } })
+  if (!personaArr) {
+    await (prisma as any).persona.create({
+      data: {
+    id: "p-arrendatario-1",
+    comunidadId: "comunidad-a",
+    rut: "11.111.111-1",
+    nombreCompleto: "Daniela Fuenzalida Soto",
+    nombres: "Daniela",
+    apellidos: "Fuenzalida Soto",
+    email: "arrendatario@test.cl",
+    telefonoMovil: "+56 9 5555 1212",
+    estadoCuenta: "activa",
+    condicionesEspecialesIds: [],
+    roles: ["residente"],
+    permiteCreacionManualCV: false,
+      },
+    })
+  }
+  const vincArr = await (prisma as any).vinculoUnidad.findUnique({ where: { id: "v-arrendatario-1" } })
+  if (!vincArr) {
+    await (prisma as any).vinculoUnidad.create({
+      data: {
+    id: "v-arrendatario-1",
+    comunidadId: "comunidad-a",
+    personaId: "p-arrendatario-1",
+    unidadId: "u-A-101",
+    rol: "arrendatario",
+    fechaInicio: "2024-03-01",
+    fechaFin: null,
+    estadoOcupacionPropiedad: "arrendada",
+    permiteVerFinanzas: false,
+      },
+    })
   }
 
   const comunidades = await (prisma as any).comunidad.findMany({
