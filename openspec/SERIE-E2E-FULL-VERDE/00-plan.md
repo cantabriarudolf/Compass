@@ -59,3 +59,6 @@ manual §4 de `openspec/changes/roles-validacion-comunidad-a/cuentas-funcionales
 
 - [2026-09-27] Serie materializada por orquestador (4 ventanas, cap duro). Base:
   reporte P3 VALIDACION-PERFILES (PARCIAL, `1a08b6d`).
+- [2026-09-27] Delegado FALLIDO: `gentle-ai-worker` timed out (stall 4 min, mismo
+  infra-stall que P1 anterior: harness pide Pi ≥0.86.1). Owner eligió modo manual.
+  Handoff: `Corre el archivo openspec/SERIE-E2E-FULL-VERDE/prompt-01.md`.
