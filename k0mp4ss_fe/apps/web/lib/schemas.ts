@@ -1693,8 +1693,8 @@ export const ConfiguracionGlobalSchema = z.object({
   nombreComunidad: z
     .string()
     .min(1, "El nombre de la comunidad es obligatorio."),
-  logoUrl: z.string().optional(),
-  faviconUrl: z.string().optional(),
+  logoUrl: z.string().nullable().optional(),
+  faviconUrl: z.string().nullable().optional(),
   rutComunidad: DocumentoIdentidadSchema,
   direccionOficial: z.string().min(1, "La dirección oficial es obligatoria."),
   administradorResponsable: z
@@ -1704,7 +1704,7 @@ export const ConfiguracionGlobalSchema = z.object({
   telefonoAdmin: z
     .string()
     .min(1, "El teléfono del administrador es obligatorio."),
-  firmaDigitalizadaUrl: z.string().optional(),
+  firmaDigitalizadaUrl: z.string().nullable().optional(),
 
   // 2. Parametrización del Gasto Común
   modoCalculoGC: ModoCalculoGCSchema,
@@ -1729,8 +1729,8 @@ export const ConfiguracionGlobalSchema = z.object({
   smtpSecurity: SeguridadSMTPSchema,
   smtpFrom: z.string().min(1, "El remitente SMTP es obligatorio."),
   smtpFromName: z.string().min(1, "El nombre del remitente es obligatorio."),
-  smtpBcc: z.string().optional(),
-  smtpRecepcion: z.string().optional(),
+  smtpBcc: z.string().nullable().optional(),
+  smtpRecepcion: z.string().nullable().optional(),
 
   // 4. Reglas y Opt-in de Módulos
   notificarEmisionGC: z.boolean(),
@@ -1757,30 +1757,34 @@ export const ConfiguracionGlobalSchema = z.object({
 
   // 6. Portal Inmobiliario (PI): opcional para compatibilidad con stores previos.
   // Ausente = modo "residentes" (por defecto, según spec PI).
-  visibilidadPortalInmobiliario: z.enum(["residentes", "publica"]).optional(),
+  visibilidadPortalInmobiliario: z.enum(["residentes", "publica"]).nullable().optional(),
 
   // 7. Visor de Mensajes (CV): visto bueno obligatorio de administración para
   // mensajes creados por terceros habilitados. Ausente = true (por defecto).
-  cvRequiereVistoBueno: z.boolean().optional(),
+  cvRequiereVistoBueno: z.boolean().nullable().optional(),
 
   // 8. Parámetros Legales Chile para Remuneraciones (PL): opcionales para
   // compatibilidad; su ausencia bloquea la generación de liquidaciones.
   ufMensual: z
     .number()
     .positive("El valor UF debe ser mayor a cero.")
+    .nullable()
     .optional(),
   ingresoMinimoMensual: z
     .number()
     .positive("El ingreso mínimo debe ser mayor a cero.")
+    .nullable()
     .optional(),
   topeGratificacionLegal: z
     .number()
     .positive("El tope de gratificación debe ser mayor a cero.")
+    .nullable()
     .optional(),
   tasaSIS: z
     .number()
     .min(0, "La tasa SIS no puede ser negativa.")
     .max(100, "La tasa SIS no puede superar 100.")
+    .nullable()
     .optional(),
 })
 
