@@ -8,7 +8,7 @@
 | --- | --- | --- | --- | --- |
 | P1 | Transversales: unit full + tsc/eslint + e2e lane auth + matriz sidebar 4 roles + 403 | HECHA (verify-only, rojos heredados a P2) | s/cambios código |
 | P2 | Propias por perfil: specs nuevas (maestros-datos, ficha residente, límite arrendatario, denegación ABAC) + 7ma cuenta en setup | HECHA | (este commit) |
-| P3 | Integral: full e2e 43 + checklist manual §4 del owner + archivo de changes + push | pendiente | — |
+| P3 | Integral: full e2e 43 + checklist manual §4 del owner + archivo de changes + push | EN CURSO (2026-09-27) | — |
 
 MÁXIMO: 3 ventanas. Post-serie (fuera): super-admin global (diseño pendiente),
 migración SQLite→PostgreSQL, resto de BACKLOG-100.
