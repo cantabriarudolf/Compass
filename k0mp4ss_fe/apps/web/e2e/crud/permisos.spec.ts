@@ -56,14 +56,15 @@ test.describe("Permisos y Roles (RP) — vista read-only en /admin/permisos", ()
     await selector.click({ force: true, noWaitAfter: true })
     await page.getByRole("option", { name: /Los Aromos/ }).click()
 
-    // 4) Tabla de membresías scoping por comunidad A (seed: 5 roles)
-    await expect(page.getByText(/5 membresía\(s\)/)).toBeVisible({ timeout: 30_000 })
+    // 4) Tabla de membresías scoping por comunidad A (seed: 6 con arrendatario P2)
+    await expect(page.getByText(/6 membresía\(s\)/)).toBeVisible({ timeout: 30_000 })
     for (const email of [
       "admin@test.cl",
       "comite@test.cl",
       "conserjeria@test.cl",
       "residente@test.cl",
       "mantencion@test.cl",
+      "arrendatario@test.cl",
     ]) {
       await expect(page.getByRole("cell").filter({ hasText: email })).toBeVisible()
     }

@@ -271,7 +271,7 @@ items: infracciones, isLoading: cInfracciones, create: crearInfraccionApi, updat
                           <td className="py-2 pr-3">{refUnidad(i.unidadId)}</td>
                           <td className="py-2 pr-3">{i.fechaSuceso} {i.horaSuceso}</td>
                           <td className="py-2 pr-3"><Badge className={`${ESTADO_BADGE[i.estado]} text-[10px]`}>{ESTADO_LABEL[i.estado]}</Badge></td>
-                          <td className="py-2 pr-3">{i.montoAplicado !== undefined ? `$${i.montoAplicado.toLocaleString("es-CL")}` : "—"}</td>
+                          <td className="py-2 pr-3">{i.montoAplicado != null ? `$${i.montoAplicado.toLocaleString("es-CL")}` : "—"}</td>
                           <td className="py-2">
                             <Button size="sm" variant="ghost" onClick={() => setDetalle(i)}><IconEye className="size-4 mr-1" /> Ver</Button>
                           </td>

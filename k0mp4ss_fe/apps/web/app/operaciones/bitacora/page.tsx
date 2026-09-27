@@ -100,7 +100,7 @@ update: actualizarCierreApi,
   } | null>(null)
 
   const personal = personas.filter(
-    (p) => p.datosLaborales !== undefined && p.estadoCuenta === "activa"
+    (p) => p.datosLaborales != null && p.estadoCuenta === "activa"
   )
   const jornadas = jornadasData ?? []
   const estadoDia = estadoReporteDiario(cierresTurnoPE, diaReporte)

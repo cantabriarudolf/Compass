@@ -19,6 +19,11 @@ test.describe("CRUD — Admin/Configuracion", () => {
     // Fallback: primer textbox de Identidad Legal si el anterior no se resuelve
     const targetInput = (await inputNombre.count()) > 0 ? inputNombre : page.getByRole("textbox").first()
     await expect(targetInput).toBeVisible({ timeout: 15_000 })
+    // Higiene de suite: la suite comparte una sola BD dev; restaurar el nombre
+    // original al final para no romper specs que dependen del nombre seed
+    // (p. ej. permisos busca la opción /Los Aromos/).
+    const nombreOriginal = await targetInput.inputValue()
+    try {
     await targetInput.fill(nuevoNombre)
 
     // Click header "Guardar Cambios" (fuera del form, asociado a form#config-form)
@@ -32,8 +37,16 @@ test.describe("CRUD — Admin/Configuracion", () => {
     await page.goto("/admin/configuracion")
     const inputRecheck = page.getByText("Nombre de la Comunidad *").locator("..").getByRole("textbox").first()
     const recheckTarget = (await inputRecheck.count()) > 0 ? inputRecheck : page.getByRole("textbox").first()
-    await expect(recheckTarget).toHaveValue(nuevoNombre, { timeout: 10_000 })
+        await expect(recheckTarget).toHaveValue(nuevoNombre, { timeout: 10_000 })
+        } finally {
+          await page.goto("/admin/configuracion")
+          const inputRestore = page.getByText("Nombre de la Comunidad *").locator("..").getByRole("textbox").first()
+          const restoreTarget = (await inputRestore.count()) > 0 ? inputRestore : page.getByRole("textbox").first()
+          await restoreTarget.fill(nombreOriginal).catch(() => {})
+          await page.getByRole("button", { name: "Guardar Cambios" }).click({ force: true, noWaitAfter: true }).catch(() => {})
+          await page.waitForTimeout(800)
+        }
 
-    expect(errores, "Excepciones no capturadas en admin/configuracion").toEqual([])
+        expect(errores, "Excepciones no capturadas en admin/configuracion").toEqual([])
   })
 })

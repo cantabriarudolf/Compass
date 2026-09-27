@@ -10,3 +10,6 @@
 - [x] Fix ARRANQUE (rojo P1): null-guard `datosGobernanza/datosLaborales` en `/admin/gestion` + orden seed admin-a última (scope A)
 - [x] Verde: nuevos specs + lane auth + `npx tsc --noEmit` + lint + `openspec validate roles-specs-perfil`
 - [ ] Commit (conventional español) + fila P2 y Bitácora en `00-plan.md`
+- [x] Fix P3 (misma familia P2): null-guard `datosLaborales` en `/operaciones/bitacora` (desbloquea journey conserjería) + null-guard `montoAplicado` en `/finanzas/multas` + delta OP-bitacora-nullguards
+- [x] Fix P3 specs: `permisos` 5→6 membresías (7ma cuenta P2) + `admin-configuracion` restaura nombre original en finally (higiene suite compartida)
+- [ ] Commit P3 + fila P3 y Bitácora en `00-plan.md`

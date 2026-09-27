@@ -8,7 +8,7 @@
 | --- | --- | --- | --- | --- |
 | P1 | Transversales: unit full + tsc/eslint + e2e lane auth + matriz sidebar 4 roles + 403 | HECHA (verify-only, rojos heredados a P2) | s/cambios código |
 | P2 | Propias por perfil: specs nuevas (maestros-datos, ficha residente, límite arrendatario, denegación ABAC) + 7ma cuenta en setup | HECHA | (este commit) |
-| P3 | Integral: full e2e 43 + checklist manual §4 del owner + archivo de changes + push | EN CURSO (2026-09-27) | — |
+| P3 | Integral: full e2e 43 + checklist manual §4 del owner + archivo de changes + push | PARCIAL (2026-09-27, ver Bitácora) | — |
 
 MÁXIMO: 3 ventanas. Post-serie (fuera): super-admin global (diseño pendiente),
 migración SQLite→PostgreSQL, resto de BACKLOG-100.
@@ -42,3 +42,4 @@ migración SQLite→PostgreSQL, resto de BACKLOG-100.
   (van por ARRANQUE P2). Checklist §4 queda tarea del owner. Dev server apagado post-ventana.
 
 - [2026-09-26] P2 HECHA: 4 specs nuevos verdes + sesión/MATRIZ arrendatario + fix ARRANQUE null-guard gestion (cierra rojos P1: lane auth 19/19) + seed admin-a última (scope A real) + delta GD. tsc 0, lint 0 errores, validate change OK (34/41: 7 drafts viejos a P3). Dev server apagado post-ventana.
+- [2026-09-27] P3 PARCIAL: unit 809/809 (82 arch) · tsc 0 · lint 0 errores · validate 34/41 (7 drafts viejos, incl. roles-validacion sin deltas por diseño) · e2e full 70 pass/23 fail/2 skip (95 tests, scope A válido). Serie-scope VERDE: lane auth 19/19 + 5 specs P2 + bitacora + multas. Fixes P3 (change roles-specs-perfil, delta OP-bitacora-nullguards): null-guard datosLaborales en bitacora (desbloquea journey conserjería) + null-guard montoAplicado en multas + permisos 5→6 membresías + admin-config restore en finally. NO archivado (gate verde no cumplido), NO push (falta checklist §4 del owner). Rojos fuera de alcance (nueva serie): CRUD/GATED/a11y/flujo (higiene suite: admin-config renombra sin restore —mitigado—, QA-Lab Poblar destruye seed, TEST-* sin cleanup) + permisos selector Los Aromos vs nombre mock + admin-config persistencia muestra default. GAP seed-authz: upsert no reordena membresías; restore+seed pierde scope A (receta: delete+create admin-a, aplicada 2 veces). BD dev queda resedeada + scope A. Dev server apagado post-ventana.
