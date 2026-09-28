@@ -34,9 +34,9 @@ async function usuarioAutenticado() {
   return usuario
 }
 
-/** Comunidad para anclar eventos de auditoría (primera membresía; null si no hay). */
+/** Comunidad para anclar eventos de auditoría (scope canónico: ÚLTIMA membresía; null si no hay). */
 async function comunidadAncla(usuarioId: string): Promise<string | null> {
-  const m = await prisma.membresia.findFirst({ where: { usuarioId }, orderBy: { createdAt: "asc" } })
+  const m = await prisma.membresia.findFirst({ where: { usuarioId }, orderBy: [{ createdAt: "desc" }, { id: "desc" }] })
   return m?.comunidadId ?? null
 }
 

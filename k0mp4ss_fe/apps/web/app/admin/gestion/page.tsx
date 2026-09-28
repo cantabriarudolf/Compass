@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { mutate as mutateGlobal } from "swr"
 import { usePersonas } from "@/lib/api/use-personas"
 import { useVinculos } from "@/lib/api/use-vinculos"
 import { useUnidades } from "@/lib/api/use-unidades"
@@ -80,8 +81,16 @@ export default function GestionAdministrativaPage() {
     vinculos.filter(v => v.personaId === personaId && v.rol === "propietario" && !v.fechaFin).map(v => v.unidadId)
 
   // Defaults de lectura según spec AD: actas/morosidad ocultas, alertas activas.
-  const controlDeUnidad = (unidadId: string): ControlPropiedad | undefined =>
-    controlesPropiedades.find(c => c.unidadId === unidadId)
+  // P2: override optimista — el Switch es controlado y la revalidación SWR
+  // tarda segundos bajo carga dev; se refleja al instante y se concilia al
+  // revalidar.
+  const [overrideControles, setOverrideControles] = React.useState<Record<string, Partial<ControlPropiedad>>>({})
+  const controlDeUnidad = (unidadId: string): ControlPropiedad | undefined => {
+    const base = controlesPropiedades.find(c => c.unidadId === unidadId)
+    const over = overrideControles[unidadId]
+    if (!over) return base
+    return { ...(base ?? { id: `ctrl-${unidadId}`, unidadId, residenteVeMorosidad: false, residenteVeActas: false, alertasResidentesActivas: true }), ...over }
+  }
 
   const actualizarControl = async (unidadId: string, cambios: Partial<ControlPropiedad>) => {
     const existente = controlDeUnidad(unidadId)
@@ -93,9 +102,20 @@ export default function GestionAdministrativaPage() {
       alertasResidentesActivas: true,
     }
     // Servidor como única fuente (el hook revalida la lista al guardar).
+    // P2: se espera la revalidación para que el switch refleje el valor sin
+    // race (el GET tarda segundos bajo carga dev).
+    setOverrideControles((prev) => ({ ...prev, [unidadId]: { ...prev[unidadId], ...cambios } }))
     const r = await guardarControlApi({ ...base, ...cambios })
     if (!r.ok) setError(r.error ?? "No se pudo guardar el control.")
-    else setError(null)
+    else {
+      setError(null)
+      await mutateGlobal("/api/controles-propiedad?pageSize=100")
+    }
+    setOverrideControles((prev) => {
+      const resto = { ...prev }
+      delete resto[unidadId]
+      return resto
+    })
   }
 
   const guardarFirma = async () => {

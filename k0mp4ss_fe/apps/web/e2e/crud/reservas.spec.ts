@@ -122,53 +122,74 @@ test.describe("CRUD — Operaciones/Reservas", () => {
     // Helper para picks de Select via label vecino
     async function pickByLabel(dialog: import("@playwright/test").Locator, labelExact: string, optionName?: RegExp | string) {
       const label = dialog.getByText(labelExact, { exact: true }).first()
-      let trigger = label.locator("..").getByRole("combobox").first()
-      const vis = await trigger.isVisible().catch(() => false)
-      if (!vis) {
-        const c = dialog.locator("div").filter({ has: label }).first()
-        trigger = c.getByRole("combobox").first()
+    // P2 E2E-FULL-VERDE: click atómico (el force a veces no completa el
+    // handler bajo carga dev). Un solo click + espera larga: re-clicar hace
+    // toggle y cierra el popper.
+    const opts = page.getByRole("option")
+    const localizarTrigger = async () => {
+      let t = label.locator("..").getByRole("combobox").first()
+      if (!await t.isVisible().catch(() => false)) {
+        t = dialog.locator("div").filter({ has: label }).first().getByRole("combobox").first()
       }
-      await expect(trigger).toBeVisible({ timeout: 10_000 })
-      await trigger.click({ force: true, noWaitAfter: true })
-      await page.waitForTimeout(350)
-      const opts = page.getByRole("option")
+      return t
+    }
+    await expect(await localizarTrigger()).toBeVisible({ timeout: 10_000 })
+    await (await localizarTrigger()).evaluate((el) => (el as HTMLElement).click()).catch(() => {})
+    try {
       await expect(opts.first()).toBeVisible({ timeout: 10_000 })
+    } catch {
+      // Solo si sigue sin options (popper no abrió): reintentar una vez.
+      await (await localizarTrigger()).evaluate((el) => (el as HTMLElement).click()).catch(() => {})
+      await expect(opts.first()).toBeVisible({ timeout: 10_000 })
+    }
       if (optionName) {
-        const target = typeof optionName === "string" ? page.getByRole("option", { name: optionName }) : page.getByRole("option", { name: optionName })
-        if (await target.first().isVisible().catch(() => false)) {
-          await target.first().click({ force: true, noWaitAfter: true })
-        } else {
-          // fallback: por texto contenido
-          let picked = false
+        // P2: clicar por texto + verificar que el trigger tomó el valor
+        // (el click a veces no completa bajo carga dev) → reintentar.
+        const patron = optionName instanceof RegExp ? optionName : new RegExp(optionName as string)
+        let elegido = false
+        for (let r = 0; r < 3 && !elegido; r++) {
           const cnt = await opts.count()
           for (let i = 0; i < cnt; i++) {
             const txt = (await opts.nth(i).textContent())?.trim() ?? ""
-            if (optionName instanceof RegExp ? optionName.test(txt) : txt.includes(optionName as string)) {
-              await opts.nth(i).click({ force: true, noWaitAfter: true })
-              picked = true
-              break
-            }
+            if (!patron.test(txt)) continue
+            await opts.nth(i).evaluate((el) => (el as HTMLElement).click()).catch(() => {})
+            await page.waitForTimeout(500)
+            break
           }
-          if (!picked) await opts.first().click({ force: true, noWaitAfter: true })
+          const trigTxt = ((await (await localizarTrigger()).textContent().catch(() => "")) ?? "").trim()
+          elegido = patron.test(trigTxt)
+          if (!elegido) {
+            await (await localizarTrigger()).evaluate((el) => (el as HTMLElement).click()).catch(() => {})
+            await page.waitForTimeout(600)
+          }
         }
       } else {
-        // primera opción real saltando placeholder
-        let picked = false
-        const cnt = await opts.count()
-        for (let i = 0; i < cnt; i++) {
-          const txt = (await opts.nth(i).textContent())?.trim() ?? ""
-          if (!txt || txt === "Selecciona…" || txt === "—") continue
-          await opts.nth(i).click({ force: true, noWaitAfter: true })
-          picked = true
-          break
+        // Primera opción real saltando placeholder + verificación (misma race).
+        const esPlaceholder = (t: string) => !t || t === "Selecciona…" || t === "—" || t === "Ninguna" || t === "Ninguno"
+        let elegido = false
+        for (let r = 0; r < 3 && !elegido; r++) {
+          const cnt = await opts.count()
+          for (let i = 0; i < cnt; i++) {
+            const txt = (await opts.nth(i).textContent())?.trim() ?? ""
+            if (esPlaceholder(txt)) continue
+            await opts.nth(i).evaluate((el) => (el as HTMLElement).click()).catch(() => {})
+            await page.waitForTimeout(500)
+            break
+          }
+          const trigTxt = ((await (await localizarTrigger()).textContent().catch(() => "")) ?? "").trim()
+          elegido = !esPlaceholder(trigTxt)
+          if (!elegido) {
+            await (await localizarTrigger()).evaluate((el) => (el as HTMLElement).click()).catch(() => {})
+            await page.waitForTimeout(600)
+          }
         }
-        if (!picked) await opts.first().click({ force: true, noWaitAfter: true })
       }
       await page.waitForTimeout(300)
     }
 
-    // Elemento reservable * = el creado
-    await pickByLabel(dialogRes, "Elemento reservable *", new RegExp(tituloElemento))
+    // Elemento reservable * = el creado (regex insensible a caso: el trigger
+    // muestra el nombre normalizado a Título Caso, no el QA-SALA original).
+    await pickByLabel(dialogRes, "Elemento reservable *", new RegExp(tituloElemento, "i"))
 
     // Solicitante (MP) * = primera persona activa
     await pickByLabel(dialogRes, "Solicitante (MP) *")

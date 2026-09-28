@@ -11,20 +11,27 @@ async function gotoStable(page: import("@playwright/test").Page, url: string) {
 }
 
 // Helpers UI picks — reused from bitacora/reservas flows
+// P2 E2E-FULL-VERDE: click atómico + espera larga (el force a veces no
+// completa el handler bajo carga dev; re-clicar hace toggle).
 async function pickFirstOption(page: import("@playwright/test").Page, trigger: import("@playwright/test").Locator) {
   await expect(trigger).toBeVisible({ timeout: 10_000 })
-  await trigger.click({ force: true, noWaitAfter: true })
-  await page.waitForTimeout(350)
+  await trigger.evaluate((el) => (el as HTMLElement).click()).catch(() => {})
   const opts = page.getByRole("option")
-  await expect(opts.first()).toBeVisible({ timeout: 10_000 })
+  try {
+    await expect(opts.first()).toBeVisible({ timeout: 10_000 })
+  } catch {
+    await trigger.evaluate((el) => (el as HTMLElement).click()).catch(() => {})
+    await expect(opts.first()).toBeVisible({ timeout: 10_000 })
+  }
   const cnt = await opts.count()
   for (let i=0;i<cnt;i++) {
     const txt = (await opts.nth(i).textContent())?.trim() ?? ""
     if (!txt || txt==="Sin unidad" || txt==="Ninguno" || txt==="Selecciona…" || txt==="—") continue
-    await opts.nth(i).click({ force: true, noWaitAfter: true })
+    await opts.nth(i).evaluate((el) => (el as HTMLElement).click()).catch(() => {})
+    await page.waitForTimeout(400)
     return
   }
-  await opts.first().click({ force: true, noWaitAfter: true })
+  await opts.first().evaluate((el) => (el as HTMLElement).click()).catch(() => {})
 }
 
 test.describe("conserjeria — registra visita bitácora", () => {
@@ -36,8 +43,22 @@ test.describe("conserjeria — registra visita bitácora", () => {
     const nombre = `TEST-CONSERJERIA-${ts}`
     await gotoStable(page, "/operaciones/bitacora")
     await expect(page.getByRole("heading", { name: /Bitácora/i }).first()).toBeVisible({ timeout: 15_000 })
+    // P2: dar tiempo a que los chunks/queries del tabpanel asienten bajo carga.
+    await page.waitForTimeout(3000)
     const tab = page.getByRole("tab", { name: "Visitas" })
-    if (await tab.isVisible().catch(()=>false)) { await tab.click({force:true,noWaitAfter:true}); await page.waitForTimeout(400) }
+    // P2: activación por secuencia pointer completa (ni click Playwright ni
+    // .click() sintético activan el TabsTrigger bajo carga dev; la secuencia
+    // atómica sí). Se verifica por el panel, no por aria-selected.
+    for (let intento = 0; intento < 3; intento++) {
+      if (await tab.isVisible().catch(()=>false)) {
+        await tab.dispatchEvent("pointerdown").catch(()=>{})
+        await tab.dispatchEvent("mousedown").catch(()=>{})
+        await tab.dispatchEvent("mouseup").catch(()=>{})
+        await tab.dispatchEvent("click").catch(()=>{})
+        await page.waitForTimeout(600)
+      }
+      if (await page.getByLabel("Nombre *").isVisible().catch(()=>false)) break
+    }
     await page.getByLabel("Nombre *").fill(nombre)
     await page.getByLabel("DNI *").fill("16.444.555-0")
     // Unidad destino
@@ -46,11 +67,18 @@ test.describe("conserjeria — registra visita bitácora", () => {
     if (!(await triggerU.isVisible().catch(()=>false))) triggerU = page.locator("div").filter({has:labelU}).first().getByRole("combobox").first()
     await pickFirstOption(page, triggerU)
     await page.waitForTimeout(300)
-    // Pre-agendada ON
+    // Pre-agendada ON (P2: click atómico + verificación, igual que tabs/combos)
     const sw = page.getByRole("switch").first()
     if (await sw.isVisible().catch(()=>false)) {
       const checked = await sw.isChecked().catch(()=>false)
-      if (!checked) await sw.click({force:true,noWaitAfter:true})
+      if (!checked) {
+        await sw.evaluate((el) => (el as HTMLElement).click()).catch(()=>{})
+        await page.waitForTimeout(500)
+        if (!await sw.isChecked().catch(()=>false)) {
+          await sw.evaluate((el) => (el as HTMLElement).click()).catch(()=>{})
+          await page.waitForTimeout(500)
+        }
+      }
     }
     const btn = page.getByRole("button",{name:"Registrar visita"})
     await expect(btn).toBeVisible({timeout:10_000})

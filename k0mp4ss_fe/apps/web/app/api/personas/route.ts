@@ -91,8 +91,10 @@ export async function validarYLimpiarPersona(
   const comunidadId = scope.comunidadId
 
   // AD (D1): foto y firma digitalizada solo por referencia; jamás base64/Blob.
-  const esReferenciaValida = (valor?: string): boolean =>
-    valor === undefined ||
+  // P2 E2E-FULL-VERDE: null de BD equivale a ausente (filas Prisma traen null
+  // en opcionales; sin esto el PUT de firma revienta con TypeError → 500).
+  const esReferenciaValida = (valor?: string | null): boolean =>
+    valor == null ||
     (!/^data:/i.test(valor) &&
       !/^blob:/i.test(valor) &&
       valor.length <= 2048)

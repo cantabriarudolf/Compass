@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { mutate as mutateGlobal } from "swr"
 import { useCompassStore } from "@/lib/store"
 import { useTrabajosMT, useProyectosMT } from "@/lib/api/use-mt"
 import { useRecursosIR } from "@/lib/api/use-ir"
@@ -163,7 +164,7 @@ export default function ProyectosPage() {
     setError(null)
     const payload: TrabajoMT = {
       id: editandoId ?? `mt-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
-      folio: editandoId ? trabajosMT.find(t => t.id === editandoId)!.folio : "",
+      folio: editandoId ? trabajosMT.find(t => t.id === editandoId)!.folio : `MT-${Date.now().toString(36).toUpperCase()}`,
       titulo: form.titulo,
       descripcion: form.descripcion,
       estado: editandoId ? trabajosMT.find(t => t.id === editandoId)!.estado : "planificado",
@@ -263,27 +264,28 @@ export default function ProyectosPage() {
                           <td className="py-2">
                             <div className="flex flex-wrap gap-1">
                               {t.estado === "planificado" && (
-                                <Button size="sm" variant="outline" onClick={() => {
-                                  // TODO: migrar iniciarTrabajoMT a API REST
-                                  const iniciarTrabajoMT = useCompassStore.getState().iniciarTrabajoMT
-                                  const r = iniciarTrabajoMT(t.id)
-                                  if (!r.ok) setError(r.error ?? "")
+                                <Button size="sm" variant="outline" onClick={async () => {
+                                  // P2 E2E-FULL-VERDE: transición vía API REST (el store legacy
+                                  // no ve los trabajos creados en BD y el Iniciar era no-op).
+                                  // Se espera la revalidación SWR para que la fila refleje el
+                                  // estado sin race (el GET tarda segundos bajo carga dev).
+                                  const r = await actualizarTrabajo(t.id, { estado: "en_curso", fechaInicio: new Date().toISOString().slice(0, 10) })
+                                  if (!r.ok) { setError(r.error ?? ""); return }
+                                  await mutateGlobal("/api/mt/trabajos?pageSize=100")
                                 }}>Iniciar</Button>
                               )}
                               {t.estado === "en_curso" && (
-                                <Button size="sm" onClick={() => {
-                                  // TODO: migrar finalizarTrabajoMT a API REST
-                                  const finalizarTrabajoMT = useCompassStore.getState().finalizarTrabajoMT
-                                  const r = finalizarTrabajoMT(t.id)
-                                  if (!r.ok) setError(r.error ?? "")
+                                <Button size="sm" onClick={async () => {
+                                  const r = await actualizarTrabajo(t.id, { estado: "finalizado", fechaTermino: new Date().toISOString().slice(0, 10) })
+                                  if (!r.ok) { setError(r.error ?? ""); return }
+                                  await mutateGlobal("/api/mt/trabajos?pageSize=100")
                                 }}>Finalizar</Button>
                               )}
                               {["planificado", "en_curso"].includes(t.estado) && (
-                                <Button size="sm" variant="ghost" onClick={() => {
-                                  // TODO: migrar cancelarTrabajoMT a API REST
-                                  const cancelarTrabajoMT = useCompassStore.getState().cancelarTrabajoMT
-                                  const r = cancelarTrabajoMT(t.id)
-                                  if (!r.ok) setError(r.error ?? "")
+                                <Button size="sm" variant="ghost" onClick={async () => {
+                                  const r = await actualizarTrabajo(t.id, { estado: "cancelado" })
+                                  if (!r.ok) { setError(r.error ?? ""); return }
+                                  await mutateGlobal("/api/mt/trabajos?pageSize=100")
                                 }}>Cancelar</Button>
                               )}
                               <Select value={t.estadoPago} onValueChange={v => {

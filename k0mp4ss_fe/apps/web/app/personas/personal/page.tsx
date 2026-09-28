@@ -5,6 +5,7 @@
     // Datos de dominio vía API REST (BD fuente de verdad); store legacy deprecado.
     import { useCompassStore } from "@/lib/store"
     import { usePersonas } from "@/lib/api/use-personas"
+    import { sinNulos } from "@/lib/api/use-crud-collection"
     import { useConfiguracion } from "@/lib/api/use-configuracion"
     import { useMaestros } from "@/lib/api/use-maestros"
     import { useTrabajosMT } from "@/lib/api/use-mt"
@@ -242,7 +243,9 @@ export default function PersonalPage() {
       setError("Seleccione AFP, previsión de salud y banco de los maestros legales.")
       return
     }
-    const r = await crearPersonaApi(personaDesdeFicha(editando, form) as unknown as Parameters<typeof crearPersonaApi>[0])
+    // SAFETY: la ficha reenvía la fila Prisma (nulls en opcionales); los
+    // schemas usan .optional() (null NO válido) → se podan (ver sinNulos).
+    const r = await crearPersonaApi(sinNulos(personaDesdeFicha(editando, form) as unknown as Record<string, unknown>) as unknown as Parameters<typeof crearPersonaApi>[0])
     if (!r.ok) {
       setError(r.error ?? "No se pudo guardar la ficha.")
       return

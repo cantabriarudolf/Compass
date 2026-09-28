@@ -38,7 +38,7 @@ export async function GET(request: Request) {
     comunidadId = cid
     rol = mem.rol
   } else {
-    const mem = await prisma.membresia.findFirst({ where: { usuarioId: usuario.id }, orderBy: { createdAt: "asc" } })
+    const mem = await prisma.membresia.findFirst({ where: { usuarioId: usuario.id }, orderBy: [{ createdAt: "desc" }, { id: "desc" }] })
     if (!mem) return NextResponse.json({ error: "Sin pertenencia a la comunidad" }, { status: 403 })
     comunidadId = mem.comunidadId
     rol = mem.rol

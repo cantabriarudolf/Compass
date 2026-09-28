@@ -45,8 +45,8 @@ async function resolverComunidadId(request: Request, usuarioId: string): Promise
     if (!mem) return { comunidadId: null, error: { status: 403, body: { error: "Sin pertenencia a la comunidad" } } }
     return { comunidadId: cid, rol: mem.rol }
   }
-  // Sin comunidadId explícito: primera membresía del usuario (orden creación)
-  const mem = await prisma.membresia.findFirst({ where: { usuarioId }, orderBy: { createdAt: "asc" } })
+  // Sin comunidadId explícito: scope canónico = ÚLTIMA membresía (P2).
+  const mem = await prisma.membresia.findFirst({ where: { usuarioId }, orderBy: [{ createdAt: "desc" }, { id: "desc" }] })
   if (!mem) return { comunidadId: null, error: { status: 403, body: { error: "Sin pertenencia a la comunidad" } } }
   return { comunidadId: mem.comunidadId, rol: mem.rol }
 }

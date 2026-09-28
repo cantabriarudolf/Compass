@@ -59,11 +59,17 @@ export default function TiposUnidadPage() {
 
   // Upsert (creación/edición) y toggle de activo vía API REST, con el mismo
   // contrato StoreResult que las acciones legacy del store.
-  const guardarTipo = async (cuerpo: Omit<TipoUnidad, "id"> & { id?: string }): Promise<StoreResult> => {
-    if (cuerpo.id) {
+  // NOTA: el discriminador es el modo edición (editingItem), NO la presencia
+  // de id: el alta pre-genera id y un `if (cuerpo.id)` siempre caería en PUT
+  // contra un registro inexistente (404, dialog que no cierra).
+  const guardarTipo = async (
+    cuerpo: Omit<TipoUnidad, "id"> & { id?: string },
+    esEdicion: boolean
+  ): Promise<StoreResult> => {
+    if (esEdicion && cuerpo.id) {
       return editarTipo(cuerpo.id, cuerpo)
     }
-    return crearTipo({ ...cuerpo, id: `tipo-${Date.now()}` })
+    return crearTipo({ ...cuerpo, id: cuerpo.id ?? `tipo-${Date.now()}` })
   }
 
   const toggleActivo = (item: TipoUnidad) => {
@@ -153,7 +159,7 @@ export default function TiposUnidadPage() {
         montoBaseGc: nuevoMonto,
         descripcion: formData.get("descripcion") as string,
         historialTarifas: nuevoHistorial
-      })
+      }, true)
     } else {
       const nuevoId = `tipo-${Date.now()}`
       const nuevoTipo: TipoUnidad = {
@@ -171,7 +177,7 @@ export default function TiposUnidadPage() {
           creadoEn: new Date().toISOString().split('T')[0] || ""
         }]
       }
-      resultado = await guardarTipo(nuevoTipo)
+      resultado = await guardarTipo(nuevoTipo, false)
     }
     if (!resultado.ok) {
       setErrorGuardado(resultado.error ?? "No se pudo guardar el tipo de unidad.")

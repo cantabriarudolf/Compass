@@ -39,7 +39,18 @@ test.describe("CRUD — Admin/Reporteria", () => {
     // Verificar que al menos uno quedó marcado (el botón Generar se habilita)
     const btnGenerar = page.getByRole("button", { name: "Generar reporte (snapshot)" })
     await expect(btnGenerar).toBeEnabled({ timeout: 10_000 })
-    await btnGenerar.click({ force: true, noWaitAfter: true })
+    // P2 E2E-FULL-VERDE: el click Playwright force a veces no completa el
+    // ciclo mousedown/mouseup en el mismo nodo (re-render bajo carga dev) y
+    // React no dispara el handler → click programático atómico + verificación.
+    let generado = false
+    for (let intento = 0; intento < 3 && !generado; intento++) {
+      await page.evaluate(() => {
+        const b = Array.from(document.querySelectorAll("button")).find((x) => x.textContent?.includes("Generar reporte (snapshot)"))
+        ;(b as HTMLElement)?.click()
+      })
+      await page.waitForTimeout(1500)
+      generado = await page.getByText("Reporte generado con snapshot inmutable").first().isVisible().catch(() => false)
+    }
 
     // Afirmar card con el título en "Historial de reportes" — el heading es CardTitle (div), no role heading → usar getByText
     const historialHeading = page.getByText("Historial de reportes").first()

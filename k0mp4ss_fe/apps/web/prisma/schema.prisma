@@ -277,7 +277,7 @@ model ConfiguracionGlobal {
   nombreComunidad               String
   logoUrl                       String?
   faviconUrl                    String?
-  rutCondominio                 String
+  rutComunidad                  String
   direccionOficial              String
   administradorResponsable      String
   rutAdministrador              String

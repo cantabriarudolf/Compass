@@ -7520,7 +7520,7 @@ export const useCompassStore = create<CompassStore>()(
           saludTipo: salud?.tipo ?? "fonasa",
           saludPorcentaje: input.saludPorcentaje,
           saludValorUF: input.saludValorUF,
-          ufAplicada: cfg.ufMensual,
+          ufAplicada: cfg.ufMensual ?? undefined,
           montoSalud: calculo.montoSalud,
           tasaSIS: cfg.tasaSIS!,
           montoSIS: calculo.montoSIS,

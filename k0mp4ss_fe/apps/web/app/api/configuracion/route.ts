@@ -9,6 +9,7 @@
  * No POST ni DELETE: solo hay una config por comunidad.
  */
 import { ConfiguracionGlobalSchema } from "@/lib/schemas"
+import { configuracionDefault } from "@/data/admin/configuracion"
 import { puede } from "@/lib/authz"
 import { prisma } from "@/lib/prisma"
 import {
@@ -82,35 +83,15 @@ export async function PUT(req: Request): Promise<Response> {
       return Response.json(actualizado)
     }
 
-    // Creación inicial: valores por defecto para campos obligatorios no enviados
+    // Creación inicial: defaults del seed (válidos según schema, de modo que
+    // el form puede reenviar la fila completa sin 400).
     const defaults: Omit<
       Prisma.ConfiguracionGlobalCreateInput,
       "id" | "comunidadId" | "comunidad"
     > = {
-      nombreComunidad: "",
-      rutCondominio: "",
-      direccionOficial: "",
-      administradorResponsable: "",
-      rutAdministrador: "",
-      telefonoAdmin: "",
-      modoCalculoGC: "prorrateo",
-      diaCortePago: 1,
-      limiteMesesAvisoCorte: 1,
-      smtpHost: "",
-      smtpPort: 587,
-      smtpUser: "",
-      smtpSecurity: "tls",
-      smtpFrom: "",
-      smtpFromName: "",
-      notificarEmisionGC: false,
-      notificarRegistroVisitas: false,
-      notificarEncomiendas: false,
-      notificarReservas: false,
-      notificarAvisosSistema: false,
-      notificarSugerenciasReclamos: false,
-      diasMesComercial: 30,
-      diasVacacionesMes: 1.25,
-      jornadaSemanalEstandar: 45,
+      ...configuracionDefault,
+      smtpPassword: "",
+      claveEliminacionMaestro: "",
     }
 
     const creado = await prisma.configuracionGlobal.create({

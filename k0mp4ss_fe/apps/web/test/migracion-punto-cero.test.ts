@@ -77,6 +77,7 @@ describe("migración punto cero 2023-2024 (Fase 3)", () => {
       }
     }
 
+    // P2: 454 upserts secuenciales contra dev.db; 5s es frágil bajo carga.
     it("aplicar 2× no duplica (1 fondo + 182 egresos + 44 ingresos)", async () => {
       await aplicar()
       await aplicar()
@@ -93,6 +94,6 @@ describe("migración punto cero 2023-2024 (Fase 3)", () => {
       expect(
         await prisma.fondoFI.findUnique({ where: { id: fondo.id } })
       ).not.toBeNull()
-    })
+    }, 20_000)
   })
 })

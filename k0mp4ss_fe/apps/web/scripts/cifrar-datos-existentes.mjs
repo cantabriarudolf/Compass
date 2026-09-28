@@ -20,7 +20,7 @@ const CAMPOS = {
   personas: ["rut", "email", "telefonoMovil", "telefonoFijo", "datosLaborales"],
   proveedores_pe: ["rut", "telefono", "email"],
   configuracion_global: [
-    "rutCondominio",
+    "rutComunidad",
     "rutAdministrador",
     "direccionOficial",
     "telefonoAdmin",

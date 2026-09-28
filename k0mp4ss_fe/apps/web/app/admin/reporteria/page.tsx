@@ -68,7 +68,7 @@ export default function ReporteriaPage() {
   const { items: fondosFI, isLoading: cFondos } = useFondosFI()
   const { items: macroSectores, isLoading: cMacro } = useMacroSectores()
   const { items: microSectores, isLoading: cMicro } = useMicroSectores()
-  const { items: reportesRE, isLoading: cReportes, remove } = useReportesRE()
+  const { items: reportesRE, isLoading: cReportes, create: crearReporteBD, update: editarReporteBD, remove } = useReportesRE()
   const isLoading =
 cUnidades || cVinculos || cPersonas || cCierres || cBitacora || cJornadas ||
 cSolicitudes || cCobros || cEgresos || cFondos || cMacro || cMicro || cReportes
@@ -139,7 +139,7 @@ maestros: { jornadas },
     setter(lista.includes(valor) ? lista.filter(x => x !== valor) : [...lista, valor])
   }
 
-  const generar = () => {
+  const generar = async () => {
     setError(null); setOkMsg(null)
     const r = generarReporteRE({
       titulo,
@@ -154,16 +154,29 @@ maestros: { jornadas },
     })
     if (!r.ok) setError(r.error ?? "No se pudo generar el reporte")
     else {
+      // P2 E2E-FULL-VERDE: el historial lee de BD — persistir el creado para
+      // que aparezca (el store legacy solo calcula el snapshot).
+      const tituloGen = titulo.trim()
+      const creado = useCompassStore.getState().reportesRE.find((x) => x.titulo === tituloGen)
+      if (creado) {
+        const rb = await crearReporteBD(creado)
+        if (!rb.ok) setError(rb.error ?? "Se generó local pero no quedó en el historial.")
+      }
       setOkMsg("Reporte generado con snapshot inmutable. Revísalo y distribúyelo.")
       setTitulo(""); setBloquesSel([])
     }
   }
 
-  const distribuir = (id: string) => {
+  const distribuir = async (id: string) => {
     setError(null); setOkMsg(null)
     const r = distribuirReporteRE(id)
     if (!r.ok) setError(r.error ?? "No se pudo distribuir")
-    else setOkMsg("Distribución enviada a la bandeja simulada de cada destinatario resuelto.")
+    else {
+      // Espejar distribución en BD para que el badge del historial la refleje.
+      const actual = useCompassStore.getState().reportesRE.find((x) => x.id === id)
+      if (actual) await editarReporteBD(id, { fechaDistribucion: actual.fechaDistribucion, distribuidoA: actual.distribuidoA, destinatariosPersonaId: actual.destinatariosPersonaId })
+      setOkMsg("Distribución enviada a la bandeja simulada de cada destinatario resuelto.")
+    }
   }
 
   return (

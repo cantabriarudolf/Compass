@@ -113,6 +113,19 @@ export function useCrudCollection<T extends { id: string }>(
   }
 }
 
+/**
+ * sinNulos — poda claves con valor null (primer nivel).
+ *
+ * Las filas Prisma traen null en opcionales y los forms reenvían el objeto
+ * completo; los schemas Zod usan `.optional()` (ausente OK, null NO).
+ * Misma semántica que put-merge: null de BD equivale a "ausente".
+ * Uso: páginas que reenvían registros leídos (personal, tipos…).
+ */
+export function sinNulos<T extends Record<string, unknown>>(obj: T): T {
+  return Object.fromEntries(
+    Object.entries(obj).filter(([, v]) => v !== null)
+  ) as T
+}
 /** POST arbitrario contra `base` con revalidación (para acciones custom). */
 export async function postAccion(
   base: string,

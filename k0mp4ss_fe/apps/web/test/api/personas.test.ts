@@ -136,6 +136,18 @@ describe("/api/personas — MP con BD real (BD-FUENTE-VERDAD)", () => {
     )
   }
 
+  async function PUT(id: string, body: unknown): Promise<Response> {
+    const { item } = await cargaModulos()
+    return item.PUT(
+      new NextRequest(`http://localhost/api/personas/${id}`, {
+        method: "PUT",
+        body: JSON.stringify(body),
+        headers: { "content-type": "application/json" },
+      }),
+      { params: Promise.resolve({ id }) }
+    )
+  }
+
   it("401 sin sesión (GET y POST)", async () => {
     state.cookie = ""
     const res = await GET()
@@ -265,8 +277,7 @@ describe("/api/personas — MP con BD real (BD-FUENTE-VERDAD)", () => {
     })
   })
 
-  it("DELETE persona sin vínculos → 200 y desaparece de la BD", async () => {
-    await prisma.persona.create({
+  it("DELETE persona sin vínculos → 200 y desaparece de la BD", async () => {    await prisma.persona.create({
       data: {
         id: "mp-pers-2",
         comunidadId: comunidadA,
@@ -286,5 +297,35 @@ describe("/api/personas — MP con BD real (BD-FUENTE-VERDAD)", () => {
       expect(res.status).toBe(200)
       expect(await prisma.persona.findUnique({ where: { id: "mp-pers-2" } })).toBeNull()
     })
+  })
+
+  it("PUT firma digital sobre fila con nulls Prisma → 200 (P2 E2E-FULL-VERDE)", async () => {
+    await prisma.persona.create({
+      data: {
+        id: "mp-pers-firma",
+        comunidadId: comunidadA,
+        rut: "22222222-2",
+        nombreCompleto: "Dir Firma",
+        nombres: "Dir",
+        apellidos: "Firma",
+        email: "dir-firma@test.cl",
+        telefonoMovil: "+56933333333",
+        telefonoFijo: null,
+        fotografiaUrl: null,
+        estadoCuenta: "activa",
+        condicionesEspecialesIds: [],
+        roles: ["propietario", "directiva"],
+        datosGobernanza: { id: "g-f", cargoDirectiva: "presidente", fechaAsuncion: "2025-03-01" },
+      },
+    })
+    await conSesion(emailAdmin, async () => {
+      const res = await PUT("mp-pers-firma", {
+        datosGobernanza: { id: "g-f", cargoDirectiva: "presidente", fechaAsuncion: "2025-03-01", firmaDigital: "https://x/f.png" },
+      })
+      expect(res.status).toBe(200)
+      const enBd = await prisma.persona.findUnique({ where: { id: "mp-pers-firma" } })
+      expect((enBd?.datosGobernanza as { firmaDigital?: string })?.firmaDigital).toBe("https://x/f.png")
+    })
+    await prisma.persona.delete({ where: { id: "mp-pers-firma" } }).catch(() => {})
   })
 })

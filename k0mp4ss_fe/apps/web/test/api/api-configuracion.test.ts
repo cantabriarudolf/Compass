@@ -123,4 +123,23 @@ describe("/api/configuracion — CF singleton con BD real (BD-FUENTE-VERDAD)", (
       expect(enBd?.diaCortePago).toBe(15)
     })
   })
+
+  it("PUT objeto completo estilo Prisma (rutComunidad + nulls) → 200 y persiste nombre (P2 E2E-FULL-VERDE)", async () => {
+    await conSesion(emailAdmin, async () => {
+      const { configuracionDefault } = await import("@/data/admin/configuracion")
+      // Parte de una fila válida completa (como la que deja el seed en dev).
+      const seed = await PUT({ ...configuracionDefault })
+      expect(seed.status).toBe(200)
+      const get = await GET()
+      expect(get.status).toBe(200)
+      const actual = await get.json()
+      // El GET expone rutComunidad (columna renombrada RG §4), nunca legacy.
+      expect(actual.rutComunidad).toBe(configuracionDefault.rutComunidad)
+      expect(actual.rutCondominio).toBeUndefined()
+      const res = await PUT({ ...actual, nombreComunidad: "QA-Comunidad-Persistida" })
+      expect(res.status).toBe(200)
+      const reget = await (await cargaModulo()).GET()
+      expect((await reget.json()).nombreComunidad).toBe("QA-Comunidad-Persistida")
+    })
+  })
 })

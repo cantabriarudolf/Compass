@@ -134,7 +134,7 @@ async function main(): Promise<void> {
     // --- CF: Configuración Global (1 fila por comunidad) ---
     const configRow = {
       nombreComunidad: configuracionDefault.nombreComunidad,
-      rutCondominio: configuracionDefault.rutComunidad,
+      rutComunidad: configuracionDefault.rutComunidad,
       direccionOficial: configuracionDefault.direccionOficial,
       administradorResponsable: configuracionDefault.administradorResponsable,
       rutAdministrador: configuracionDefault.rutAdministrador,

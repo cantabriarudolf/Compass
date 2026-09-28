@@ -48,7 +48,7 @@ export const CAMPOS_CIFRADOS: Record<string, string[]> = {
   Persona: ["rut", "email", "telefonoMovil", "telefonoFijo", "datosLaborales"],
   ProveedorPE: ["rut", "telefono", "email"],
   ConfiguracionGlobal: [
-    "rutCondominio",
+    "rutComunidad",
     "rutAdministrador",
     "direccionOficial",
     "telefonoAdmin",

@@ -7,7 +7,7 @@
 | Ventana | Alcance | Estado | Commit final |
 | --- | --- | --- | --- |
 | P1 | Higiene y determinismo: fix orden seed-authz + convención TEST-*/cleanup + estrategia GATED + receta reseed scope A | HECHA | — |
-| P2 | Rojos CRUD (~17): admin-configuracion, permisos, tipos, personal, proyectos, reservas, gestion, logs, reporteria, punto-cero + 4 GATED | EN CURSO | — |
+| P2 | Rojos CRUD (~17): admin-configuracion, permisos, tipos, personal, proyectos, reservas, gestion, logs, reporteria, punto-cero + 4 GATED | HECHA | — |
 | P3 | Rojos flujo/a11y/smoke (6): poblamiento ×2, flujo/personas, a11y ×2, smoke-mobile | pendiente | — |
 | P4 | Integral y cierre: full e2e verde + checklist §4 owner + archivo 2 changes + nsgc-prepush + push + VALIDACION-PERFILES COMPLETA | pendiente | — |
 
@@ -69,3 +69,20 @@ manual §4 de `openspec/changes/roles-validacion-comunidad-a/cuentas-funcionales
   en deltas ST/DEV; `admin-configuracion` finally intacto. Números: vitest
   83/815, tsc 0, lint 0 errores, auth 19 pass/2 skip. Lección: reiniciar dev
   server tras `restore:db` (handle stale → login 0/6). Push: no (serie en curso).
+- [2026-09-28] P2 HECHA (manual): change `e2e-rojos-crud` válido (8 deltas:
+  CF/TU/PE/MT/MP/FI/RE/AD + GATED-parcial). Baseline 12 pass/9 fail → final
+  20 pass + 1 flaky (conserjería, verde en retry) en una corrida
+  (`--retries=1`). Fixes con test: rename Prisma `rutCondominio`→`rutComunidad`
+  (+migración, seed, cifrado, defaults válidos); tipos PUT-vs-POST por id
+  pregenerado; personal `sinNulos`; proyectos folio MT-* + transiciones API +
+  espera revalidación; gestión `esReferenciaValida` null (500→200); punto-cero
+  scope canónico desc en 5 resolvers + historia a comunidad-a; reporteria
+  persistir/distribuir en BD; switches/controles optimistic; specs estabilizados
+  (clicks atómicos, verificación de selección, regex-i). GATED (4) PARCIAL
+  estructural → P4: QA-Lab escribe store legacy, páginas leen BD. Números:
+  vitest 83/817, tsc 0, lint 0 errores, e2e no-GATED 15/15 specs. Lecciones:
+  reiniciar dev tras regenerar cliente Prisma; no levantar servidor manual
+  (dejar que Playwright lo gestione); next-server dev fuga ~700MB/h (reiniciar
+  ante flakes por saturación); restore revive columna vieja (re-ALTER en receta).
+  Receta reseed P2: restore P3 + ALTER rename + 2 seeds + punto-cero a A +
+  higiene QA/TEST. Push: no (serie en curso).

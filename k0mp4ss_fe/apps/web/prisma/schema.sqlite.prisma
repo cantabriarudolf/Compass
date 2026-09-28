@@ -282,7 +282,7 @@ model ConfiguracionGlobal {
   nombreComunidad               String
   logoUrl                       String?
   faviconUrl                    String?
-  rutCondominio                 String
+  rutComunidad                  String
   direccionOficial              String
   administradorResponsable      String
   rutAdministrador              String
@@ -420,7 +420,7 @@ model ActaGD {
   fechaPublicacion  String?
   avisoCVReferencia String?
   // Período vigente al crear el acta (trazabilidad del libro GD).
-  periodoId         String?
+  periodoId           String?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 

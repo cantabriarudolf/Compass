@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { mutate as mutateGlobal } from "swr"
 import { generarId } from "@/lib/id-utils"
 import { aTituloCaso, aOracion } from "@/lib/normalizacion"
 // Datos de dominio vía API REST (BD fuente de verdad); store legacy deprecado.
@@ -218,6 +219,9 @@ update: actualizarReservaApi,
       setError(r.error ?? "")
       return
     }
+    // P2 E2E-FULL-VERDE: esperar la revalidación para que el combo de
+    // "Elemento reservable" incluya el recién creado sin race.
+    await mutateGlobal("/api/ra/elementos?pageSize=100")
     setFormEl(null)
     setEditandoElId(null)
   }

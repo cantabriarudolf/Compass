@@ -52,9 +52,17 @@ test.describe("Permisos y Roles (RP) — vista read-only en /admin/permisos", ()
     await expect(page.locator("section", { hasText: "Permisos contextuales" }).getByRole("button")).toHaveCount(0)
 
     // 3) Selector de comunidad: membresías propias del admin (comunidades TEST A y B)
+    // P2 E2E-FULL-VERDE: apertura lenta bajo carga dev → click + espera larga,
+    // un solo reintento si no abre.
     const selector = page.getByRole("combobox", { name: "Elegir comunidad" })
-    await selector.click({ force: true, noWaitAfter: true })
-    await page.getByRole("option", { name: /Los Aromos/ }).click()
+    await selector.evaluate((el) => (el as HTMLElement).click()).catch(() => {})
+    try {
+      await expect(page.getByRole("option", { name: /Los Aromos/ }).first()).toBeVisible({ timeout: 10_000 })
+    } catch {
+      await selector.evaluate((el) => (el as HTMLElement).click()).catch(() => {})
+      await expect(page.getByRole("option", { name: /Los Aromos/ }).first()).toBeVisible({ timeout: 10_000 })
+    }
+    await page.getByRole("option", { name: /Los Aromos/ }).evaluate((el) => (el as HTMLElement).click()).catch(() => {})
 
     // 4) Tabla de membresías scoping por comunidad A (seed: 6 con arrendatario P2)
     await expect(page.getByText(/6 membresía\(s\)/)).toBeVisible({ timeout: 30_000 })
