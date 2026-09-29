@@ -9,7 +9,7 @@
 | P1 | GATED FI/CT vía API: pagos + certificados independizados de QA-Lab (setup TEST vía POST + cleanup), sin cambios de app | HECHA | 61b4daf |
 | P2 | API PI + migración portal: routes publicaciones/leads + hooks SWR + page a BD + spec independizado | HECHA | f4d40d7 |
 | P3 | API PL + migración remuneraciones: routes liquidaciones/adelantos + hooks SWR + page a BD + spec independizado | HECHA | — |
-| P4 | QA-Lab coherente + lane GATED verde: poblar vía API donde exista, higiene, GATED 10/10 | pendiente | — |
+| P4 | QA-Lab coherente + lane GATED verde: poblar vía API donde exista, higiene, GATED 10/10 | HECHA | — |
 | P5 | Cierre integral: full verde + checklist §4 owner + archivo 5+ changes + nsgc-prepush + push + VALIDACION-PERFILES COMPLETA | pendiente | — |
 
 MÁXIMO: 5 ventanas. Post-serie (fuera): super-admin global, migración
@@ -85,7 +85,24 @@ SQLite→PostgreSQL, resto de BACKLOG-100.
   pagos + certificados verdes (1ª corrida remuneraciones flake por compilación
   fría Turbopack, verde al rerun), unit 85/834, tsc 0, lint 0 errores,
   validate 40 pass / 7 sin-deltas pre-existentes. Residuo honesto: 1
-  liquidación confirmada TEST (periodo 2027-11, inmutable por diseño);
-  persona+egreso TEST eliminados. Change `pl-api-remuneraciones` abierto
-  (archiva P5). Alcance recortado por prompt: sin `/api/adelantos` (pestaña y
-  preview siguen en store). Sin push (serie en curso).
+   liquidación confirmada TEST (periodo 2027-11, inmutable por diseño);
+   persona+egreso TEST eliminados. Change `pl-api-remuneraciones` abierto
+   (archiva P5). Alcance recortado por prompt: sin `/api/adelantos` (pestaña y
+   preview siguen en store). Sin push (serie en curso).
+- [2026-09-29] P4 HECHA: QA-Lab coherente — fase PI vía API (upsert pub
+  `test-pub-pi-qa` con unidad del seed + lead `test-lead-pi-qa`, vitrina
+  visible) y fase PL vía API (PUT CF + upsert trabajador `test-qa-pl-trab`
+  RUT 77.777.777-7 + generar en periodo libre rotativo 2027–2031 + confirmar
+  con egreso espejo en BD; sin descuento por adelanto —sin `/api/adelantos`—;
+  espejo store transitorio para CT-4/certificados/huérfanos; adelanto
+  `test-ade-1` legacy en store documentado) + "Borrar todo" purga BD vía API
+  (lead→pub, notif PI, borradores, espejo, persona) + guard clean-first en
+  ambos mundos (`tieneDatosTest(state, bd?)`) + manual 34 actualizado. Hallazgo
+  debug: confirmar responde `{ ok, egresoId }` (no la liquidación) — la
+  verificación relee la entidad. GATED 10/10 (2 corridas), poblado-idempotente
+  8/8, poblamiento 9/9 (huérfanos 0), ciclo 9/9, unit 85/835, tsc 0, lint 0,
+  validate 41 pass / 7 sin-deltas pre-existentes. Residuo honesto: confirmadas
+  QA rotativas inmutables (las purga `e2e:higiene` en cada reseed) + 8 egresos
+  "TEST Persona QA Uno" pre-existentes de series anteriores (higiene no toca
+  egresos por regla punto-cero). Change `qa-lab-poblar-api` abierto (archiva
+  P5). Sin push (serie en curso).

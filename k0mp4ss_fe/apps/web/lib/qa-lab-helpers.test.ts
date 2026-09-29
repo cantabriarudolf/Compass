@@ -90,6 +90,21 @@ describe("qa-lab-helpers — P2 ownership-scoped", () => {
     expect(tieneDatosTest({ ...vacio, personas: [{ id: "p-real" }], unidades: [{ id: "u-real" }] })).toBe(false)
   })
 
+  it("P4 GATED-API-BD: el resumen BD bloquea el guard en ambos mundos", () => {
+    const vacio = { personas: [], unidades: [], vinculos: [], actasGD: [], cobrosFI: [], reservasRA: [], liquidacionesPL: [], certificadosCT: [], avisosCV: [], fondosFI: [], egresosFI: [] }
+    // Sin resumen BD: comportamiento legacy intacto
+    expect(tieneDatosTest(vacio)).toBe(false)
+    expect(tieneDatosTest(vacio, {})).toBe(false)
+    // Cada colección BD bloqueante dispara el guard
+    expect(tieneDatosTest(vacio, { publicacionesPortal: [{ id: "test-pub-pi-qa" }] })).toBe(true)
+    expect(tieneDatosTest(vacio, { leadsPortal: [{ id: "test-lead-pi-qa" }] })).toBe(true)
+    expect(tieneDatosTest(vacio, { personas: [{ id: "test-qa-pl-trab" }] })).toBe(true)
+    expect(tieneDatosTest(vacio, { liquidacionesBorrador: [{ id: "test-liq-pl-qa-202711", estado: "borrador" }] })).toBe(true)
+    // Filas reales en BD no bloquean; las confirmadas no van en el resumen (no bloquean por diseño)
+    expect(tieneDatosTest(vacio, { publicacionesPortal: [{ id: "pub-real-1" }] })).toBe(false)
+    expect(tieneDatosTest(vacio, { liquidacionesBorrador: [] })).toBe(false)
+  })
+
   it("egresos PL con id aleatorio se purgan vía liquidación", () => {
     const state = {
       liquidacionesPL: [{ id: "test-liq-pl", egresoFIReferencia: "egr-aleatorio-1" }, { id: "liq-real", egresoFIReferencia: "egr-real-1" }],

@@ -25,6 +25,7 @@ import {
   isTestNotificacion,
   getConfiguracionLimpiaOwnershipScoped,
   tieneDatosTest,
+  type ResumenTestBD,
   obtenerIdsEgresosPLTest,
   esCertificadoTest,
   esCobroTest,
@@ -64,7 +65,7 @@ const PLAN: Record<string, string[]> = {
   "ef-micro": ["Crear Piso: Piso99-TEST (etiqueta TEST-MICRO-PisoQA) dentro de SectorTEST"],
   "ef-unidad": ["Crear Depto: 999 (tipo LoftQA, estado EnLimpieza, en Piso99-TEST)", "Crear Estacionamiento: E-999 (en Superficie TEST, tipo Estacionamiento)"],
   vu: ["Amarrar Propietario: 99.999.999-9 → Depto 999 (estado PreReservaQA)", "Amarrar Propietario: 99.999.999-9 → Estacionamiento E-999", "Amarrar Arrendatario: 88.888.888-8 → Depto 999 (2026-08-20 a 2027-08-20)"],
-  pi: ["Publicar en vitrina: E-999 en venta ($8.500.000) con imagen por referencia", "Registrar lead TEST Lead QA → notificación email_simulado al propietario"],
+  pi: ["Publicar en vitrina vía API: unidad del seed en venta ($8.500.000) con imagen por referencia", "Registrar lead TEST Lead QA vía API → notificación email_simulado al propietario"],
   ad: ["Registrar controles de privacidad para E-999 (morosidad visible, actas ocultas, alertas activas)", "Verificar defaults de lectura sin registro"],
   gd: ["Extender a TEST Persona QA Uno como Presidente de directiva", "Registrar acta TEST con asistencia y minuta", "Firmar hasta quórum 100% → publicada + notificación email_simulado"],
   co: ["Crear plantilla TEST de cobranza con variable [Nombre_Usuario]", "Enviar masivo TEST a los 2 residentes TEST (notificaciones email_simulado)", "Simular lectura del envío (tasa apertura)", "Agregar documento TEST a la biblioteca (referencia D1)", "Ingresar reclamo TEST al buzón (folio BUZ)", "Responder y resolver el ticket TEST"],
@@ -76,7 +77,7 @@ const PLAN: Record<string, string[]> = {
   cv: ["Activar plantilla rápida Portón TEST (advertencia) → aviso publicado al instante", "Aviso manual TEST con imagen URL remota → borrador → publicar", "Aviso vencido ayer → caducidad automática lo archiva", "Publicar el acta GD TEST en el visor → avisoCVReferencia materializada con el id del aviso", "Cola del carrusel: avisos publicados vigentes con duraciones individuales"],
   fi: ["Crear Fondo Extraordinario Pintura TEST (especial) junto al seed GC/Reserva/Amenities", "Egreso recurrente TEST imputado al Fondo de Gasto Común con comprobante D1", "Emisión GC variable sobre unidades TEST ($450.000) → cobros prorrateados + aporte 5% reserva", "Emisión sin alcance sobre toda la comunidad → rechazada por unidades sin responsable", "Pago exacto del cobro GC del depto TEST → estado pagado", "Mora al 1% sobre el periodo vencido (mes anterior) e idempotencia diaria", "Pago con descuento justificado en la multa TEST → informe de diferencia inmutable", "Multa grave aplicada tiene cobro multa_in materializado (conexión IN)", "Tarifa del quincho reservado quedó como cobro del fondo amenities (conexión RA)", "Proyecto MT de $12M financiado por fondo GC sin saldo → rechazado (conexión MT)", "Retiro del fondo reserva exige acta publicada → rechazado sin aprobación"],
   pe: ["Ficha integral TEST: 99.999.999-9 con AFP/FONASA/BancoEstado por FK + jornada base y contacto de emergencia", "Hora extra + evaluación de desempeño sobre la ficha TEST (eventos AM)", "Feriado TEST irrenunciable del próximo año → proyección de cobertura calcula reemplazos", "Enviar proyección de costos a Finanzas → registro TEST con liquidación PL pendiente y notificación", "Visita TEST pre-agendada al Depto 999 → marcar Ingresada sella hora y notifica", "Encomienda Chilexpress TEST con evidencia URL (D1) → retiro registrado", "Contratista Gasfitería Don Pedro agendado por residente TEST → confirmar ingreso sella hora", "Proveedor Ascensores TEST + mantención mensual vencida → alerta preventiva visible", "Visita técnica TEST vinculada a la mantención → próxima fecha reprogramada un ciclo", "Cierre de turno nocturno TEST con incidencias → notify administración + copia al trabajador"],
-  pl: ["Parámetros legales CF TEST (UF, IMM, tope gratificación 4.75, SIS) → auditados CF_UPDATE_PARAM", "Sueldo base en la ficha TEST + adelanto ADE TEST notificado al trabajador", "Generar liquidación LIQ TEST del mes: hora extra §1.1 + gratificación tope + AFP/salud/familiar + anticipo descontado", "Confirmar LIQ → egreso FI categoría Sueldos materializado y anticipo Descontado"],
+  pl: ["Parámetros legales CF TEST vía API (UF, IMM, tope gratificación 4.75, SIS)", "Ficha con sueldo base vía API + adelanto ADE TEST legacy en store (sin API)", "Generar liquidación LIQ TEST vía API en periodo libre: cálculo completo sin anticipo descontado", "Confirmar LIQ vía API → egreso FI Sueldos en BD + espejo store para CT"],
   ct: ["Certificado Residencia TEST (vínculo activo Depto 999) → PDF firmado con código VC", "Certificado Al Día sobre unidad con deuda → rechazado citando saldo", "Pagar el cobro vencido TEST → Al Día emitido con snapshot de saldo 0", "Certificado Liquidación sobre la LIQ confirmada → folio CT e historial inmutable"],
   re: ["Abrir Centro de Mando → vista auditada RE_DASHBOARD_VIEW", "Reporte TEST con bloques Gastos+Morosidad segmentado a SectorTEST × Residentes × Propietarios", "Distribuir → destinatarios resueltos vigentes y notificaciones email_simulado", "Segunda distribución rechazada (idempotente); tasa huérfanos 0 en el mando"],
 }
@@ -114,7 +115,7 @@ const COMO_LLEGAR: Record<string, string> = {
   "ef-micro": "Inventario → Estructura Física → abre SectorTEST → verás Piso99-TEST",
   "ef-unidad": "Inventario → Estructura Física → tabla filtra 999 y E-999",
   vu: "Comunidad → Directorio de Personas → abre 99.999.999-9 → pestaña Unidades Vinculadas",
-  pi: "Comunidad → Portal Inmobiliario → tarjeta E-999",
+  pi: "Comunidad → Portal Inmobiliario → catálogo con la publicación TEST (vía API)",
   ad: "Admin → Gestión Administrativa → controles E-999",
   gd: "Comunidad → Directiva → acta del 2026-08-24 publicada",
   co: "Comunidad → Comunicación → envío TEST, buzón folio BUZ y biblioteca",
@@ -161,6 +162,66 @@ interface SeedReport {
   modulos: ModReport[]
   historia: { capitulo: string; estado: ModuleState; rank: number }[]
   erroresGlobales: string[]
+}
+
+// SERIE-GATED-API-BD P4 — QA-Lab coherente: PI/PL poblan vía API REST (BD
+// fuente de verdad, igual que las pages). Ids fijos para idempotencia
+// (upsert) y limpieza determinista.
+const QA_PI_PUB_ID = "test-pub-pi-qa"
+const QA_PI_LEAD_ID = "test-lead-pi-qa"
+const QA_PL_TRAB_ID = "test-qa-pl-trab"
+const QA_PL_RUT = "77.777.777-7"
+const QA_PL_EMAIL = "test-qa-pl-trab@test.cl"
+// La confirmada es inmutable por diseño: cada corrida consume el primer
+// periodo libre de esta ventana rotativa (60 corridas entre reseeds).
+const QA_PL_PERIODOS: string[] = (() => {
+  const lista: string[] = []
+  for (let anio = 2027; anio <= 2031; anio++) {
+    for (let mes = 1; mes <= 12; mes++) lista.push(`${anio}-${String(mes).padStart(2, "0")}`)
+  }
+  return lista
+})()
+
+type RespuestaQA = { ok: boolean; status: number; cuerpo: any }
+
+async function apiQA(path: string, init?: RequestInit): Promise<RespuestaQA> {
+  const res = await fetch(path, {
+    ...init,
+    headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
+  })
+  const cuerpo: any = await res.json().catch(() => null)
+  return { ok: res.ok, status: res.status, cuerpo }
+}
+
+async function listaQA(path: string): Promise<any[]> {
+  const r = await apiQA(`${path}?pageSize=100`).catch(() => null)
+  const datos = (r?.cuerpo as { data?: any[] } | null)?.data
+  return Array.isArray(datos) ? datos : []
+}
+
+/** Resumen TEST del mundo BD para el guard clean-first (best-effort: si la BD no responde, solo rige el store). */
+async function resumenTestBD(): Promise<{ ok: boolean; resumen: ResumenTestBD }> {
+  try {
+    const [pubs, leads, personas, liqs] = await Promise.all([
+      listaQA("/api/publicaciones-portal"),
+      listaQA("/api/leads-portal"),
+      listaQA("/api/personas"),
+      listaQA("/api/liquidaciones"),
+    ])
+    const esTest = (id: unknown) => typeof id === "string" && id.startsWith("test-")
+    return {
+      ok: true,
+      resumen: {
+        publicacionesPortal: pubs.filter(p => esTest(p.id)),
+        leadsPortal: leads.filter(l => esTest(l.id)),
+        personas: personas.filter(p => esTest(p.id)),
+        // Solo borradores: las confirmadas son documentos inmutables y el periodo rotativo evita colisiones.
+        liquidacionesBorrador: liqs.filter(l => l.estado === "borrador" && esTest(l.id)),
+      },
+    }
+  } catch {
+    return { ok: false, resumen: {} }
+  }
 }
 
 const HISTORIA = [
@@ -361,13 +422,54 @@ export default function QaLabPage() {
     return { id: "vu", label: TITULOS["vu"]!, rank: 3, status: errores.length ? "error" : "ok", count: 3, errores, pasos }
   }, [])
 
+  // P4 SERIE-GATED-API-BD: la vitrina lee BD vía API (P2), así que la fase
+  // pobla vía API REST (upsert idempotente con ids fijos QA). El reporte
+  // mantiene 2 pasos para no romper el 22/22 de poblado-idempotente.
   const cargarFase4PI = React.useCallback(async (): Promise<ModReport> => {
-    const s = useCompassStore.getState()
     const pasos: Paso[] = (PLAN["pi"]! as string[]).map(desc => ({ desc, estado: "pendiente" as ModuleState }))
-    const r1 = s.savePublicacionPortal({ id: "test-pub-pi-e999", unidadId: "test-u-e-999", operacion: "venta", precio: 8500000, moneda: "CLP", descripcion: "Estacionamiento TEST publicado en vitrina", urlMapa: "", imagenes: [{ nombre: "test-foto-e999.jpg", tipoMime: "image/jpeg", tamanoKB: 120, url: "https://placeholder.supabase.co/test-foto-e999.jpg" }], activa: true, fechaPublicacion: "2026-08-24" } as any)
-    if (!r1.ok) { pasos[0]!.estado = "error"; pasos[0]!.error = r1.error } else pasos[0]!.estado = "ok"
-    const r2 = s.saveLeadPortal({ id: "test-lead-pi-1", publicacionId: "test-pub-pi-e999", nombreContacto: "TEST Lead QA", contacto: "+56 9 0000 0001", mensaje: "Interesado en E-999, ¿acepta oferta?", fecha: "2026-08-24", atendido: false } as any)
-    if (!r2.ok) { pasos[1]!.estado = "error"; pasos[1]!.error = r2.error } else pasos[1]!.estado = "ok"
+    const hoy = new Date().toISOString().slice(0, 10)
+    // 1) Unidad del seed vía API (misma receta que el GATED portal P2).
+    const pubs = await listaQA("/api/unidades")
+    const unidad = pubs[0] as { id: string } | undefined
+    if (!unidad) {
+      pasos[0]!.estado = "error"; pasos[0]!.error = "Sin unidades en BD (ejecuta el reseed)"
+    } else {
+      const rPub = await apiQA("/api/publicaciones-portal", {
+        method: "POST",
+        body: JSON.stringify({
+          id: QA_PI_PUB_ID,
+          unidadId: unidad.id,
+          operacion: "venta",
+          precio: 8500000,
+          moneda: "CLP",
+          descripcion: "Publicación TEST del QA-Lab (vía API, visible en la vitrina)",
+          imagenes: [{ nombre: "test-foto-qa.jpg", tipoMime: "image/jpeg", tamanoKB: 120, url: "https://placeholder.supabase.co/test-foto-qa.jpg" }],
+          activa: true,
+          fechaPublicacion: hoy,
+        }),
+      })
+      if (!rPub.ok) { pasos[0]!.estado = "error"; pasos[0]!.error = `POST publicación ${rPub.status}: ${(rPub.cuerpo as any)?.error ?? "sin detalle"}` }
+      else pasos[0]!.estado = "ok"
+    }
+    // 2) Lead TEST vía API (upsert; la notificación al propietario solo se genera al alta).
+    if (pasos[0]!.estado === "ok") {
+      const rLead = await apiQA("/api/leads-portal", {
+        method: "POST",
+        body: JSON.stringify({
+          id: QA_PI_LEAD_ID,
+          publicacionId: QA_PI_PUB_ID,
+          nombreContacto: "TEST Lead QA",
+          contacto: "+56 9 0000 0001",
+          mensaje: "Interesado TEST del QA-Lab (vía API)",
+          fecha: hoy,
+          atendido: false,
+        }),
+      })
+      if (!rLead.ok) { pasos[1]!.estado = "error"; pasos[1]!.error = `POST lead ${rLead.status}: ${(rLead.cuerpo as any)?.error ?? "sin detalle"}` }
+      else pasos[1]!.estado = "ok"
+    } else {
+      pasos[1]!.estado = "error"; pasos[1]!.error = "Sin publicación TEST (paso previo)"
+    }
     const errores = pasos.filter(p => p.estado === "error").map(p => p.error || p.desc)
     return { id: "pi", label: TITULOS["pi"]!, rank: 4, status: errores.length ? "error" : "ok", count: 2, errores, pasos }
   }, [])
@@ -839,45 +941,122 @@ export default function QaLabPage() {
     return { id: "pe", label: TITULOS["pe"]!, rank: 4, status: errores.length ? "error" : "ok", count: 1, errores, pasos }
   }, [])
 
+  // P4 SERIE-GATED-API-BD: Remuneraciones lee BD vía API (P3), así que la
+  // fase pobla vía API REST. El adelanto demo sigue en store legacy
+  // documentado (sin /api/adelantos por alcance P3; la pestaña Adelantos lo
+  // muestra) y la confirmada BD se refleja al store como espejo transitorio
+  // (consumidores legacy: dropdown en Certificados, paso CT-4, huérfanos 0).
   const cargarFase15PL = React.useCallback(async (): Promise<ModReport> => {
     const s = useCompassStore.getState()
     const pasos: Paso[] = (PLAN["pl"]! as string[]).map(desc => ({ desc, estado: "pendiente" as ModuleState }))
-    const hoyMes = new Date().toISOString().slice(0, 7)
-    // 1) Parámetros legales CF auditados
-    const cfg = s.configuracion
-    const r1 = s.saveConfiguracion({ ...cfg, ufMensual: cfg.ufMensual ?? 39000, ingresoMinimoMensual: cfg.ingresoMinimoMensual ?? 500000, topeGratificacionLegal: cfg.topeGratificacionLegal ?? 4.75, tasaSIS: cfg.tasaSIS ?? 1.48 })
-    if (!r1.ok || !useCompassStore.getState().eventos.some(e => e.tipoAccion === "CF_UPDATE_PARAM")) { pasos[0]!.estado = "error"; pasos[0]!.error = r1.error ?? "Sin evento CF_UPDATE_PARAM" } else pasos[0]!.estado = "ok"
-    // 2) Sueldo base en la ficha TEST + adelanto notificado
-    const p99 = useCompassStore.getState().personas.find(p => p.id === "test-p-99")
-    if (!p99?.datosLaborales) { pasos[1]!.estado = "error"; pasos[1]!.error = "Falta ficha PE de test-p-99 (ejecuta fase PE)" } else {
-      const r2a = s.savePersona({ ...p99, datosLaborales: { ...p99.datosLaborales, sueldoBase: 600000 } } as any)
-      const r2b = s.saveAdelantoPL({ id: "test-ade-1", folio: "", trabajadorPersonaId: "test-p-99", fecha: new Date().toISOString().slice(0, 10), monto: 80000, glosa: "Adelanto quincena TEST", estado: "pendiente" })
-      const ade = useCompassStore.getState().adelantosPL.find(a => a.id === "test-ade-1")
-      if (!r2a.ok || !r2b.ok || !ade?.folio.startsWith("ADE-")) { pasos[1]!.estado = "error"; pasos[1]!.error = r2a.error ?? r2b.error ?? "Sin folio ADE" } else pasos[1]!.estado = "ok"
-    }
-    // 3) Liquidación LIQ TEST con cálculo completo
-    let liqId = ""
-    const r3 = s.generarLiquidacionPL({
-      id: "test-liq-pl",
-      trabajadorPersonaId: "test-p-99",
-      periodo: hoyMes,
-      diasTrabajados: 30,
-      asignacionMovilizacion: 30000,
+    const hoy = new Date().toISOString().slice(0, 10)
+    // 1) Parámetros legales CF vía API (idempotentes, reseed-proof).
+    const rCfg = await apiQA("/api/configuracion", {
+      method: "PUT",
+      body: JSON.stringify({ ufMensual: 39000, ingresoMinimoMensual: 500000, topeGratificacionLegal: 4.75, tasaSIS: 1.48 }),
     })
-    const liq = useCompassStore.getState().liquidacionesPL.find(l => l.id === "test-liq-pl")
-    liqId = liq?.id ?? ""
-    if (!r3.ok || !liq || !liq.folio.startsWith("LIQ-") || liq.descuentoAnticipos !== 80000 || liq.valorHoraOrdinaria <= 0 || !(liq.gratificacionLegal > 0)) {
-      pasos[2]!.estado = "error"; pasos[2]!.error = r3.error ?? `Cálculo LIQ incompleto (${liq?.folio}/${liq?.descuentoAnticipos})`
-    } else pasos[2]!.estado = "ok"
-    // 4) Confirmar → egreso FI Sueldos + anticipo Descontado
-    const egresosAntes = useCompassStore.getState().egresosFI.length
-    const r4 = liqId ? s.confirmarLiquidacionPL(liqId) : { ok: false, error: "Sin liquidación TEST" }
-    const liqConf = useCompassStore.getState().liquidacionesPL.find(l => l.id === liqId)
-    const egresoSueldos = useCompassStore.getState().egresosFI.slice(egresosAntes).find(e => e.categoria === "sueldos")
-    const adeDescontado = useCompassStore.getState().adelantosPL.find(a => a.id === "test-ade-1")
-    if (!r4.ok || liqConf?.estado !== "confirmada" || !String(liqConf.egresoFIReferencia).startsWith("egr-") || !egresoSueldos || adeDescontado?.estado !== "descontado") {
-      pasos[3]!.estado = "error"; pasos[3]!.error = r4.ok ? "Egreso/anticipo no materializados" : r4.error
-    } else pasos[3]!.estado = "ok"
+    if (!rCfg.ok) { pasos[0]!.estado = "error"; pasos[0]!.error = `PUT configuración ${rCfg.status}: ${(rCfg.cuerpo as any)?.error ?? "sin detalle"}` }
+    else pasos[0]!.estado = "ok"
+    // 2) Trabajador QA con ficha vía API (upsert) + adelanto legacy en store.
+    const maestros = async (tipo: string): Promise<{ id: string }[]> => {
+      const r = await apiQA(`/api/maestros/${tipo}?pageSize=100`).catch(() => null)
+      return ((r?.cuerpo as any)?.data ?? []) as { id: string }[]
+    }
+    const [afps, salud, tramos] = await Promise.all([
+      maestros("afps"), maestros("previsiones-salud"), maestros("asignaciones-familiar"),
+    ])
+    if (!afps[0] || !salud[0] || !tramos[0]) {
+      pasos[1]!.estado = "error"; pasos[1]!.error = "Maestros legales sin seed (ejecuta el reseed)"
+    } else {
+      const rTrab = await apiQA("/api/personas", {
+        method: "POST",
+        body: JSON.stringify({
+          id: QA_PL_TRAB_ID,
+          rut: QA_PL_RUT,
+          nombreCompleto: "TEST Trabajador QA",
+          nombres: "TEST Trabajador",
+          apellidos: "QA",
+          email: QA_PL_EMAIL,
+          telefonoMovil: "+56900000999",
+          estadoCuenta: "activa",
+          condicionesEspecialesIds: [],
+          roles: ["personal"],
+          datosLaborales: {
+            id: "lab-qa-pl",
+            cargo: "Conserje Turno Noche TEST",
+            afp: "AFP Habitat",
+            prevision: "FONASA",
+            fechaIngreso: "2026-01-05",
+            tipoContrato: "indefinido",
+            afpId: afps[0]!.id,
+            saludId: (salud.find(x => (x as any).tipo === "fonasa") ?? salud[0])!.id,
+            asignacionFamiliarId: tramos[0]!.id,
+            cargas: 1,
+            jornadaBaseHoras: 45,
+            sueldoBase: 600000,
+          },
+        }),
+      })
+      // Adelanto demo legacy en store (visible en la pestaña Adelantos; sin contraparte API).
+      const rAde = s.saveAdelantoPL({ id: "test-ade-1", folio: "", trabajadorPersonaId: "test-p-99", fecha: hoy, monto: 80000, glosa: "Adelanto quincena TEST (legacy store, sin API)", estado: "pendiente" })
+      const ade = useCompassStore.getState().adelantosPL.find(a => a.id === "test-ade-1")
+      if (!rTrab.ok || !rAde.ok || !ade?.folio.startsWith("ADE-")) {
+        pasos[1]!.estado = "error"; pasos[1]!.error = !rTrab.ok ? `POST persona ${rTrab.status}: ${(rTrab.cuerpo as any)?.error ?? "sin detalle"}` : (rAde.error ?? "Sin folio ADE")
+      } else pasos[1]!.estado = "ok"
+    }
+    // 3) Generar liquidación vía API en el primer periodo libre (la confirmada es inmutable: rota).
+    let liqId = ""
+    if (pasos[1]!.estado === "ok") {
+      const liqs = await listaQA("/api/liquidaciones")
+      const tomadas = new Set(liqs.filter(l => l.trabajadorPersonaId === QA_PL_TRAB_ID).map(l => l.periodo))
+      const periodo = QA_PL_PERIODOS.find(p => !tomadas.has(p))
+      if (!periodo) {
+        pasos[2]!.estado = "error"; pasos[2]!.error = "Sin periodos libres en la ventana rotativa (ejecuta reseed+higiene)"
+      } else {
+        liqId = `test-liq-pl-qa-${periodo.replace("-", "")}`
+        const rGen = await apiQA("/api/liquidaciones", {
+          method: "POST",
+          body: JSON.stringify({ id: liqId, trabajadorPersonaId: QA_PL_TRAB_ID, periodo, diasTrabajados: 30, asignacionMovilizacion: 30000 }),
+        })
+        // Sin descuento por adelanto: no hay /api/adelantos y el servidor solo descuenta pendientes de BD.
+        const liq = rGen.cuerpo as any
+        if (!rGen.ok || !liq?.folio?.startsWith("LIQ-") || !(liq.valorHoraOrdinaria > 0) || !(liq.gratificacionLegal > 0)) {
+          pasos[2]!.estado = "error"; pasos[2]!.error = !rGen.ok ? `POST liquidaciones ${rGen.status}: ${(rGen.cuerpo as any)?.error ?? "sin detalle"}` : `Cálculo LIQ incompleto (${liq?.folio})`
+        } else pasos[2]!.estado = "ok"
+      }
+    } else {
+      pasos[2]!.estado = "error"; pasos[2]!.error = "Sin trabajador TEST (paso previo)"
+    }
+    // 4) Confirmar vía API → egreso FI Sueldos en BD + espejo store transitorio para CT/certificados/huérfanos.
+    // El confirmar responde { ok, egresoId } (no la liquidación): se verifica
+    // el egreso y se relee la liquidación para afirmar el estado.
+    if (pasos[2]!.estado === "ok" && liqId) {
+      const rConf = await apiQA(`/api/liquidaciones/${liqId}/confirmar`, { method: "POST" })
+      const egrRef = (rConf.cuerpo as any)?.egresoId as string | undefined
+      const rEgr = egrRef ? await apiQA(`/api/egresos-fi/${egrRef}`).catch(() => null) : null
+      const rLiq = await apiQA(`/api/liquidaciones/${liqId}`).catch(() => null)
+      const conf = (rLiq?.cuerpo as any) ?? (rConf.cuerpo as any)
+      if (!rConf.ok || !egrRef?.startsWith("egr-") || !rEgr?.ok || conf?.estado !== "confirmada") {
+        pasos[3]!.estado = "error"; pasos[3]!.error = !rConf.ok ? `POST confirmar ${rConf.status}: ${(rConf.cuerpo as any)?.error ?? "sin detalle"}` : "Egreso espejo no materializado en BD"
+      } else {
+        // Espejo store: misma liquidación (trabajador del relato store) + egreso, para CT-4 y validación.
+        const espejoLiq: any = { ...(conf as any), trabajadorPersonaId: "test-p-99", adelantosIds: [] }
+        delete espejoLiq.comunidadId
+        const espejoEgr: any = { ...((rEgr!.cuerpo as any) ?? {}), id: egrRef, fondoId: "fondo-gc" }
+        delete espejoEgr.comunidadId
+        useCompassStore.setState(st => ({
+          liquidacionesPL: ((st.liquidacionesPL as any[]).some(l => l.id === liqId)
+            ? (st.liquidacionesPL as any[]).map(l => l.id === liqId ? espejoLiq : l)
+            : [...(st.liquidacionesPL as any[]), espejoLiq]) as typeof st.liquidacionesPL,
+          egresosFI: ((st.egresosFI as any[]).some(e => e.id === egrRef)
+            ? st.egresosFI
+            : [...(st.egresosFI as any[]), espejoEgr]) as typeof st.egresosFI,
+        }))
+        pasos[3]!.estado = "ok"
+      }
+    } else if (pasos[2]!.estado !== "ok") {
+      pasos[3]!.estado = "error"; pasos[3]!.error = "Sin liquidación TEST (paso previo)"
+    }
     const errores = pasos.filter(p => p.estado === "error").map(p => p.error || p.desc)
     return { id: "pl", label: TITULOS["pl"]!, rank: 6, status: errores.length ? "error" : "ok", count: 1, errores, pasos }
   }, [])
@@ -971,8 +1150,11 @@ export default function QaLabPage() {
 
   const runFase = React.useCallback(async (fase: string) => {
     if (!ensureHydrated()) return
-    // Guard idempotente: si hay datos TEST-* ofrece confirmación "Limpiar y poblar de una vez"
-    if (tieneDatosTest(useCompassStore.getState() as unknown as Record<string, unknown>)) {
+    // Guard idempotente: si hay datos TEST-* ofrece confirmación "Limpiar y poblar de una vez".
+    // P4: cubre ambos mundos (store + BD vía API); las confirmadas inmutables no bloquean por diseño.
+    const estadoStore = useCompassStore.getState() as unknown as Record<string, unknown>
+    const bd = await resumenTestBD()
+    if (tieneDatosTest(estadoStore) || (bd.ok && tieneDatosTest(estadoStore, bd.resumen))) {
       setPendingFase(fase)
       setConfirmOpen(true)
       return
@@ -1293,12 +1475,14 @@ export default function QaLabPage() {
     const rCtrl = s.removeControlPropiedad("test-ctrl-e999")
     if (!rCtrl.ok) errores.push(rCtrl.error || "ctrl")
     // PI no define removeLeadPortal (los leads son histórico); se purgan por filtro.
+    // P4: el store PI ya no se puebla (la fase escribe BD vía API); el remove es
+    // idempotente (ausente = limpio) y la purga BD va al final del limpiar().
     useCompassStore.setState(st => ({
       leadsPortal: st.leadsPortal.filter(l => l.id !== "test-lead-pi-1"),
       notificaciones: (st.notificaciones as unknown as Parameters<typeof isTestNotificacion>[0][]).filter(n => !isTestNotificacion(n as unknown as Parameters<typeof isTestNotificacion>[0])) as unknown as typeof st.notificaciones,
     }))
     const rPub = s.removePublicacionPortal("test-pub-pi-e999")
-    if (!rPub.ok) errores.push(rPub.error || "pub")
+    if (!rPub.ok && s.publicacionesPortal.some(p => p.id === "test-pub-pi-e999")) errores.push(rPub.error || "pub")
     // Limpieza idempotente: un TEST-* ya ausente cuenta como limpio; solo se
     // reporta bloqueo si la entidad existe y el remove la rechaza (p. ej. FK
     // inversa). Regresión 2026-09-14 (5e9b689): removeVinculo devuelve !ok
@@ -1345,6 +1529,40 @@ export default function QaLabPage() {
     useCompassStore.setState(st => ({
       eventos: st.eventos.filter(e => !(e.referenciaId && String(e.referenciaId).startsWith("test-"))),
     }))
+    // P4 SERIE-GATED-API-BD: purga BD vía API (fases PI/PL poblan BD). Orden
+    // hijos→padres por el guard 409. Best-effort idempotente: ausente = limpio;
+    // solo bloquea si la entidad existe y el DELETE la rechaza. La confirmada
+    // QA es inmutable por diseño y se salta (residuo honesto con periodo
+    // rotativo que no colisiona; `e2e:higiene` la purga en cada reseed).
+    const borrarSiExiste = async (path: string, etiqueta: string) => {
+      try {
+        const r = await fetch(path, { method: "DELETE" })
+        if (r.ok || r.status === 404) return
+        const v = await fetch(path).catch(() => null)
+        if (v?.ok) errores.push(`${etiqueta}: DELETE ${r.status}`)
+      } catch (e) { errores.push(`${etiqueta}: ${String(e)}`) }
+    }
+    try {
+      await borrarSiExiste(`/api/leads-portal/${QA_PI_LEAD_ID}`, "lead-qa")
+      await borrarSiExiste(`/api/publicaciones-portal/${QA_PI_PUB_ID}`, "pub-qa")
+      // Notificaciones PI TEST generadas por el lead (cuerpo con marca TEST).
+      const notifs = await listaQA("/api/notificaciones")
+      for (const n of notifs.filter(n => n.moduloOrigen === "PI" && /TEST/.test(`${n.asunto ?? ""} ${n.cuerpo ?? ""}`))) {
+        await borrarSiExiste(`/api/notificaciones/${n.id}`, "notif-pi-qa")
+      }
+      // Liquidaciones QA: borradores se eliminan; confirmadas se saltan (inmutables).
+      const liqsQA = (await listaQA("/api/liquidaciones")).filter(l => l.trabajadorPersonaId === QA_PL_TRAB_ID || (typeof l.id === "string" && l.id.startsWith("test-liq-pl-qa-")))
+      for (const l of liqsQA.filter(l => l.estado === "borrador")) {
+        await borrarSiExiste(`/api/liquidaciones/${l.id}`, "liq-borrador-qa")
+      }
+      // Egresos espejo QA (de borradores y confirmadas): eliminables vía API.
+      for (const l of liqsQA) {
+        if (typeof l.egresoFIReferencia === "string" && l.egresoFIReferencia.startsWith("egr-")) {
+          await borrarSiExiste(`/api/egresos-fi/${l.egresoFIReferencia}`, "egreso-espejo-qa")
+        }
+      }
+      await borrarSiExiste(`/api/personas/${QA_PL_TRAB_ID}`, "persona-qa-pl")
+    } catch (e) { errores.push(`purga BD: ${String(e)}`) }
     setLoading(false)
     if (errores.length) setMsg({ type: "error", text: `Limpieza con ${errores.length} bloqueos (dependencias): ${errores.slice(0,2).join("; ")}` })
     else {

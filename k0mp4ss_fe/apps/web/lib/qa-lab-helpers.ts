@@ -47,7 +47,22 @@ export function getConfiguracionLimpiaOwnershipScoped(
 
 // --- Guard clean-first ---
 
-export function tieneDatosTest(state: Record<string, unknown>): boolean {
+/**
+ * Resumen TEST del mundo BD para el guard clean-first (SERIE-GATED-API-BD
+ * P4). La página QA-Lab lo arma vía API y lo pasa como segundo parámetro.
+ * Solo filas bloqueantes: las liquidaciones confirmadas son inmutables por
+ * diseño (documentos de auditoría) y no colisionan gracias al periodo
+ * rotativo, así que no bloquean (van en `liquidacionesBorrador` solo los
+ * borradores).
+ */
+export interface ResumenTestBD {
+  publicacionesPortal?: { id: string }[]
+  leadsPortal?: { id: string }[]
+  personas?: { id: string }[]
+  liquidacionesBorrador?: { id: string; estado?: string }[]
+}
+
+export function tieneDatosTest(state: Record<string, unknown>, bd?: ResumenTestBD): boolean {
   const personas = (state.personas as { id: string }[] | undefined) ?? []
   if (personas.some((p) => isTestId(p.id))) return true
 
@@ -86,6 +101,12 @@ export function tieneDatosTest(state: Record<string, unknown>): boolean {
   if (egresosFI.some((e) => isTestId(e.id))) return true
 
   // Si existe liquidación TEST, sus egresos aleatorios también cuentan, pero ya retorna true por liquidaciones
+  if (bd) {
+    if ((bd.publicacionesPortal ?? []).some((p) => isTestId(p.id))) return true
+    if ((bd.leadsPortal ?? []).some((l) => isTestId(l.id))) return true
+    if ((bd.personas ?? []).some((p) => isTestId(p.id))) return true
+    if ((bd.liquidacionesBorrador ?? []).some((l) => isTestId(l.id))) return true
+  }
   return false
 }
 

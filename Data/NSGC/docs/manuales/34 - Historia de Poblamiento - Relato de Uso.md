@@ -191,4 +191,30 @@ Toda spec nueva SHALL copiar bloque `## N. Dependencias de Carga y Seed (ST)` de
 
 ---
 
-*Última actualización: 2026-08-20 - Change `enhance-rg-st-seed-gears`. Próximo: `qa-lab` (`/admin/qa-lab`) que automatiza esta historia con un click.*
+## 9. Nota P4 SERIE-GATED-API-BD — fases PI/PL vía API (2026-09-29)
+
+Las fases "Poblar todo" de **Vitrina (Paso 8, PI)** y **Remuneraciones
+(Paso 20, PL)** poblan vía API REST (BD fuente de verdad, igual que las
+pages `/comunidad/portal` y `/finanzas/remuneraciones`):
+
+- **PI**: publicación fija `test-pub-pi-qa` (unidad del seed vía
+  `GET /api/unidades`, upsert) + lead fijo `test-lead-pi-qa` (upsert; la
+  notificación al propietario solo se genera al alta). La vitrina muestra la
+  publicación tras poblar.
+- **PL**: params CF vía `PUT /api/configuracion` + trabajador fijo
+  `test-qa-pl-trab` (RUT 77.777.777-7, ficha con sueldo base, upsert) +
+  liquidación vía `POST /api/liquidaciones` en el primer periodo libre de la
+  ventana rotativa 2027–2031 + `POST …/confirmar` (egreso FI Sueldos en BD).
+  La liquidación **no descuenta anticipo** (no existe `/api/adelantos`; el
+  servidor solo descuenta pendientes de BD). El adelanto demo `test-ade-1`
+  sigue en store legacy documentado (la pestaña Adelantos lo muestra).
+- **Espejo store transitorio**: la confirmada BD se refleja al store para los
+  consumidores legacy (dropdown en Certificados, paso CT-4, validación de
+  huérfanos 0).
+- **Residuo honesto**: la confirmada QA es inmutable por diseño y persiste
+  tras "Borrar todo" (borradores, espejo, persona, pub/lead y notificaciones
+  PI sí se purgan vía API); la siguiente corrida usa otro periodo libre sin
+  colisionar. `e2e:higiene` la purga en cada reseed.
+
+*Última actualización: 2026-09-29 - Change `qa-lab-poblar-api` (P4
+GATED-API-BD).*
