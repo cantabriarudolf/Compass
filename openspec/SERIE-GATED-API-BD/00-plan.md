@@ -6,8 +6,8 @@
 
 | Ventana | Alcance | Estado | Commit final |
 | --- | --- | --- | --- |
-| P1 | GATED FI/CT vía API: pagos + certificados independizados de QA-Lab (setup TEST vía POST + cleanup), sin cambios de app | HECHA | — |
-| P2 | API PI + migración portal: routes publicaciones/leads + hooks SWR + page a BD + spec independizado | pendiente | — |
+| P1 | GATED FI/CT vía API: pagos + certificados independizados de QA-Lab (setup TEST vía POST + cleanup), sin cambios de app | HECHA | 61b4daf |
+| P2 | API PI + migración portal: routes publicaciones/leads + hooks SWR + page a BD + spec independizado | HECHA | 1bc2570 |
 | P3 | API PL + migración remuneraciones: routes liquidaciones/adelantos + hooks SWR + page a BD + spec independizado | pendiente | — |
 | P4 | QA-Lab coherente + lane GATED verde: poblar vía API donde exista, higiene, GATED 10/10 | pendiente | — |
 | P5 | Cierre integral: full verde + checklist §4 owner + archivo 5+ changes + nsgc-prepush + push + VALIDACION-PERFILES COMPLETA | pendiente | — |
@@ -63,3 +63,14 @@ SQLite→PostgreSQL, resto de BACKLOG-100.
   tsc 0, lint 0 errores, validate 38 pass / 7 sin-deltas pre-existentes,
   spot-check no-GATED 2/2, 0 residuos test-p1 en BD. Change
   `e2e-gated-fi-ct-api` abierto (archiva P5). Sin push (serie en curso).
+- [2026-09-29] P2 HECHA: API PI (`/api/publicaciones-portal` factory + 409 con
+  leads, `/api/leads-portal` POST custom con notify+`PI_LEAD_CONTACT`, resto
+  factory; authz lectura abierta / escritura admin / crear-lead abierto) +
+  hooks SWR + page portal a BD (UX intacta) + spec patrón P3 sin QA-Lab.
+  Investigación previa: portal estaba verde sin tocar (STORE+QA-Lab coherentes
+  en este reseed); igual se migró (el acoplo store era el riesgo que P4 debe
+  eliminar). Sin migración Prisma (1:1). GATED portal+vecinos verdes,
+  unit 84/824, tsc 0, lint 0 errores, validate 39 pass / 7 sin-deltas
+  pre-existentes, 0 residuos. Change `pi-api-portal` abierto (archiva P5).
+  Desvío motivado: leads API incluido (spec no lo exigía) para no romper "Me
+  interesa". Sin push (serie en curso).

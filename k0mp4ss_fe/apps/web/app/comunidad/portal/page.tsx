@@ -1,10 +1,12 @@
 "use client"
 
 import * as React from "react"
-import { useCompassStore } from "@/lib/store"
 import { usePersonas } from "@/lib/api/use-personas"
 import { useVinculos } from "@/lib/api/use-vinculos"
 import { useUnidades } from "@/lib/api/use-unidades"
+import { usePublicacionesPortal } from "@/lib/api/use-publicaciones-portal"
+import { useLeadsPortal } from "@/lib/api/use-leads-portal"
+import { sinNulos } from "@/lib/api/use-crud-collection"
 import { useNotificaciones } from "@/lib/api/use-notificaciones"
 import { useConfiguracion } from "@/lib/api/use-configuracion"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@workspace/ui/components/card"
@@ -41,7 +43,7 @@ import {
   IconCheck,
 } from "@tabler/icons-react"
 import Link from "next/link"
-import type { PublicacionPortal, LeadPortal, ImagenReferencia } from "@/lib/schemas"
+import type { PublicacionPortal, ImagenReferencia } from "@/lib/schemas"
 
 const formatoPrecio = (precio: number, moneda?: string) => {
   if (moneda === "UF") return `${precio.toLocaleString("es-CL")} UF`
@@ -61,16 +63,13 @@ export default function PortalInmobiliarioPage() {
   const { personas, isLoading: cPersonas } = usePersonas()
   const { vinculos, isLoading: cVinculos } = useVinculos()
   const { items: unidades, isLoading: cUnidades } = useUnidades()
-  // TODO: migrar a hooks PI cuando existan (sin API de publicaciones/leads)
-  const publicaciones = useCompassStore(s => s.publicacionesPortal)
-  const leads = useCompassStore(s => s.leadsPortal)
-  const savePublicacionPortal = useCompassStore(s => s.savePublicacionPortal)
-  const removePublicacionPortal = useCompassStore(s => s.removePublicacionPortal)
-  const saveLeadPortal = useCompassStore(s => s.saveLeadPortal)
+  // PI vía API REST (SERIE-GATED-API-BD P2): publicaciones y leads persisten en BD.
+  const { items: publicaciones, isLoading: cPublicaciones, create: crearPublicacion, update: actualizarPublicacion, remove: eliminarPublicacion } = usePublicacionesPortal()
+  const { items: leads, isLoading: cLeads, create: crearLead } = useLeadsPortal()
   const { items: notificaciones, isLoading: cNotif, marcarLeida } = useNotificaciones()
   const { config, isLoading: cConfig, updateConfig } = useConfiguracion()
   const configuracion = config ?? { visibilidadPortalInmobiliario: "residentes" as const }
-  const cargando = cPersonas || cVinculos || cUnidades || cNotif || cConfig
+  const cargando = cPersonas || cVinculos || cUnidades || cNotif || cConfig || cPublicaciones || cLeads
 
   // Sesión (cookie httpOnly de Auth.js): se consulta al servidor tras montar.
   // AU §3 P5: /api/auth/session de Auth.js responde { user, expires } | null.
@@ -136,13 +135,13 @@ export default function PortalInmobiliarioPage() {
   const notificacionesPI = notificaciones.filter(n => n.destinatarioRol === "propietario")
   const noLeidas = notificacionesPI.filter(n => !n.leida).length
 
-  const enviarLead = () => {
+  const enviarLead = async () => {
     if (!pubFicha) return
     if (!leadNombre.trim() || !leadContacto.trim()) {
       setLeadMsg({ ok: false, text: "Nombre y contacto son obligatorios." })
       return
     }
-    const r = saveLeadPortal({
+    const r = await crearLead(sinNulos({
       id: `lead-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       publicacionId: pubFicha.id,
       nombreContacto: leadNombre.trim(),
@@ -150,7 +149,7 @@ export default function PortalInmobiliarioPage() {
       mensaje: leadMensaje.trim() || undefined,
       fecha: new Date().toISOString().slice(0, 10),
       atendido: false,
-    } as LeadPortal)
+    }))
     if (r.ok) {
       setLeadMsg({ ok: true, text: "¡Gracias! El propietario recibirá tu interés por la bandeja interna." })
       setLeadNombre(""); setLeadContacto(""); setLeadMensaje("")
@@ -159,9 +158,10 @@ export default function PortalInmobiliarioPage() {
     }
   }
 
-  const guardarEdicion = () => {
+  const guardarEdicion = async () => {
     if (!editando) return
-    const r = savePublicacionPortal(editando)
+    const { id, ...resto } = sinNulos(editando)
+    const r = await actualizarPublicacion(id, resto)
     if (!r.ok) {
       setErrorGestion(r.error ?? "Error al guardar la publicación.")
       return
@@ -175,7 +175,7 @@ export default function PortalInmobiliarioPage() {
     if (!r.ok) setErrorGestion(r.error ?? "No se pudo cambiar la visibilidad.")
   }
 
-  const crearPublicacionManual = () => {
+  const crearPublicacionManual = async () => {
     const conPub = new Set(publicaciones.map(p => p.unidadId))
     const disponible = unidades.find(u => !conPub.has(u.id))
     if (!disponible) {
@@ -191,7 +191,7 @@ export default function PortalInmobiliarioPage() {
       activa: false,
       fechaPublicacion: new Date().toISOString().slice(0, 10),
     }
-    const r = savePublicacionPortal(nueva)
+    const r = await crearPublicacion(sinNulos(nueva))
     if (!r.ok) { setErrorGestion(r.error ?? "No se pudo crear."); return }
     setErrorGestion(null)
     setEditando(nueva)
@@ -338,15 +338,16 @@ export default function PortalInmobiliarioPage() {
                           <Switch
                             checked={p.activa}
                             aria-label={`Activar publicación ${refUnidad(p.unidadId)}`}
-                            onCheckedChange={v => savePublicacionPortal({ ...p, activa: v })}
+                            onCheckedChange={v => { void actualizarPublicacion(p.id, { activa: v }) }}
                           />
                           <Button variant="ghost" size="icon" aria-label="Editar" onClick={() => { setEditando({ ...p }); setNuevaUrlImagen(""); }}>
                             <IconPencil className="size-4" />
                           </Button>
                           <Button variant="ghost" size="icon" aria-label="Eliminar"
                             onClick={() => {
-                              const r = removePublicacionPortal(p.id)
-                              if (!r.ok) setErrorGestion(r.error ?? "No se pudo eliminar.")
+                              void eliminarPublicacion(p.id).then(r => {
+                                if (!r.ok) setErrorGestion(r.error ?? "No se pudo eliminar.")
+                              })
                             }}
                           >
                             <IconTrash className="size-4" />
