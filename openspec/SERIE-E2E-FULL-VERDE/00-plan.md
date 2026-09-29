@@ -9,7 +9,7 @@
 | P1 | Higiene y determinismo: fix orden seed-authz + convención TEST-*/cleanup + estrategia GATED + receta reseed scope A | HECHA | — |
 | P2 | Rojos CRUD (~17): admin-configuracion, permisos, tipos, personal, proyectos, reservas, gestion, logs, reporteria, punto-cero + 4 GATED | HECHA | — |
 | P3 | Rojos flujo/a11y/smoke (6): poblamiento ×2, flujo/personas, a11y ×2, smoke-mobile | HECHA | — |
-| P4 | Integral y cierre: full e2e verde + checklist §4 owner + archivo 2 changes + nsgc-prepush + push + VALIDACION-PERFILES COMPLETA | pendiente | — |
+| P4 | Integral y cierre: full e2e verde + checklist §4 owner + archivo 2 changes + nsgc-prepush + push + VALIDACION-PERFILES COMPLETA | PARCIAL | — |
 
 MÁXIMO: 4 ventanas. Post-serie (fuera): super-admin global (diseño pendiente),
 migración SQLite→PostgreSQL, resto de BACKLOG-100.
@@ -99,5 +99,24 @@ manual §4 de `openspec/changes/roles-validacion-comunidad-a/cuentas-funcionales
   ×2 independizados de QA-Lab (datos TEST propios vía API + cleanup; gap
   relato→P4), flujo/personas (botón renombrado + email único + cleanup),
   a11y 8/8 y smoke 8/8+desktop verdes SIN fix (null-guards bastaron). Números:
-  vitest 83/817, tsc 0, lint 0 errores, lanes flujo+a11y+smoke 37/37 en una
-  corrida. Push: no (serie en curso, archiva P4).
+   vitest 83/817, tsc 0, lint 0 errores, lanes flujo+a11y+smoke 37/37 en una
+   corrida. Push: no (serie en curso, archiva P4).
+- [2026-09-29] P4 PARCIAL (manual): ARRANQUE OK (ahead 8 sin push = serie en
+  curso; validate 37 pass/7 fail, los 7 sin-deltas pre-existentes incl.
+  `roles-validacion-comunidad-a` por diseño; 3 changes serie + roles-specs-perfil
+  válidos). Reseed sin restore (BD ya trae `rutComunidad`): `e2e:reseed-base` +
+  `e2e:higiene -- --apply` (1 fila purgada), scope A verificado (admin-a última).
+  Integral: vitest 83/817 (exit 1 solo por thresholds coverage pre-existentes:
+  líneas 79.95% vs 90%, ramas 74.18% vs 75%), tsc 0, lint 0 errores, no-GATED
+  89 pass/2 skip en una corrida, GATED 6 pass/4 fail (certificados, pagos, portal,
+  remuneraciones). Gap GATED confirmado estructural con evidencia: QA-Lab puebla
+  el store legacy (`save*` @deprecated fallback, `ensureHydrated`) mientras las
+  páginas leen BD vía API REST → combos/cobros/publicaciones/botón vacíos. Fix
+  real = migrar poblamiento QA-Lab a API (serie nueva, fuera del cap P4).
+  Desviaciones: `e2e:full-orden` en vez de `npx playwright test` único (P1 lo
+  prohíbe: GATED destruye seed); `npm test` exit 1 por coverage (no por tests).
+  Sin checklist §4 del owner → NO archiva, NO pushea. Hereda a próxima serie:
+  (1) migrar poblamiento QA-Lab fases FI/PL/CT/PI a API REST; (2) checklist §4
+  manual 7 cuentas; (3) archivar `e2e-higiene-determinismo`, `e2e-rojos-crud`,
+  `e2e-rojos-flujo-a11y-smoke`, `roles-specs-perfil`, `roles-validacion-comunidad-a`
+  + nsgc-prepush + push (main ahead 8+1). Servidor dev queda vivo.
