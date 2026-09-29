@@ -113,6 +113,9 @@ export default function ProveedoresPage() {
   const [formProv, setFormProv] = React.useState<FormProveedor | null>(null)
   const [rutProvTocado, setRutProvTocado] = React.useState(false)
 
+  const [editandoProvId, setEditandoProvId] = React.useState<string | null>(
+    null
+  )
   const rutProv = formProv?.rut.trim() ?? ""
   const rutProvValido = rutProv === "" || validarDocumentoIdentidad(rutProv)
   const rutProvDuplicado =
@@ -123,9 +126,6 @@ export default function ProveedoresPage() {
         claveDocumento(p.rut) !== "" &&
         claveDocumento(p.rut) === claveDocumento(rutProv)
     )
-  const [editandoProvId, setEditandoProvId] = React.useState<string | null>(
-    null
-  )
   const [formMant, setFormMant] = React.useState<{
     proveedorId: string
     descripcion: string

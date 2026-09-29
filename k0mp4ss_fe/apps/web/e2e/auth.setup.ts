@@ -49,21 +49,35 @@ async function crearSesion(
   // intercepta los clics: se acepta una vez al final (ya hidratado) para que
   // el consentimiento quede en localStorage y se persista en el
   // storageState que heredan los specs.
-  const bannerCookies = page
-    .locator("div")
-    .filter({ hasText: "Utilizamos cookies" })
-    .first()
-  await bannerCookies
-    .waitFor({ state: "visible", timeout: 5_000 })
-    .catch(() => {})
-  if (await bannerCookies.isVisible().catch(() => false)) {
-    try {
-      await bannerCookies
-        .getByRole("button", { name: "Aceptar" })
-        .click({ force: true, noWaitAfter: true })
-    } catch {
-      // Si el banner ya se ocultó, no hay nada que hacer.
+  // P3 E2E-FULL-VERDE: el click pre-hidratación se pierde (sin listener) y el
+  // flag no persistía (verificado: admin.json sin la clave) → reintentar con
+  // verificación del flag (máx 3), esperando hidratación entre intentos.
+  const CLAVE = "compass-consentimiento-privacidad"
+  for (let intento = 0; intento < 3; intento++) {
+    const flag = await page
+      .evaluate((k) => window.localStorage.getItem(k), CLAVE)
+      .catch(() => null)
+    if (flag === "aceptado") break
+    // Espera hidratación: el botón Aceptar debe estar operativo.
+    await page
+      .getByRole("button", { name: "Aceptar" })
+      .first()
+      .waitFor({ state: "visible", timeout: 10_000 })
+      .catch(() => {})
+    const bannerCookies = page
+      .locator("div")
+      .filter({ hasText: "Utilizamos cookies" })
+      .first()
+    if (await bannerCookies.isVisible().catch(() => false)) {
+      try {
+        await bannerCookies
+          .getByRole("button", { name: "Aceptar" })
+          .click({ timeout: 10_000 })
+      } catch {
+        // Reintenta en la siguiente vuelta (post-hidratación).
+      }
     }
+    await page.waitForTimeout(500)
   }
   await page.context().storageState({ path: archivo })
 }

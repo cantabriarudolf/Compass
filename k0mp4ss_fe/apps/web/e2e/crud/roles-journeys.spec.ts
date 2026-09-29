@@ -45,46 +45,65 @@ test.describe("conserjeria — registra visita bitácora", () => {
     await expect(page.getByRole("heading", { name: /Bitácora/i }).first()).toBeVisible({ timeout: 15_000 })
     // P2: dar tiempo a que los chunks/queries del tabpanel asienten bajo carga.
     await page.waitForTimeout(3000)
-    const tab = page.getByRole("tab", { name: "Visitas" })
-    // P2: activación por secuencia pointer completa (ni click Playwright ni
-    // .click() sintético activan el TabsTrigger bajo carga dev; la secuencia
-    // atómica sí). Se verifica por el panel, no por aria-selected.
-    for (let intento = 0; intento < 3; intento++) {
-      if (await tab.isVisible().catch(()=>false)) {
-        await tab.dispatchEvent("pointerdown").catch(()=>{})
-        await tab.dispatchEvent("mousedown").catch(()=>{})
-        await tab.dispatchEvent("mouseup").catch(()=>{})
-        await tab.dispatchEvent("click").catch(()=>{})
-        await page.waitForTimeout(600)
+    // P3 E2E-FULL-VERDE: el Tabs es no-controlado y la página antepone un
+    // skeleton a `cargandoAPI` — si una query revalida tarde, el árbol se
+    // re-monta y el tab vuelve a "Reporte Diario" (probado: form lleno y al
+    // final tab reseteado). Re-activar antes de cada paso que lo exige.
+    async function activarTabVisitas(): Promise<boolean> {
+      const tab = page.getByRole("tab", { name: "Visitas" })
+      // P2: activación por secuencia pointer completa (ni click Playwright ni
+      // .click() sintético activan el TabsTrigger bajo carga dev; la secuencia
+      // atómica sí). Se verifica por el panel, no por aria-selected.
+      for (let intento = 0; intento < 3; intento++) {
+        if (await tab.isVisible().catch(()=>false)) {
+          await tab.dispatchEvent("pointerdown").catch(()=>{})
+          await tab.dispatchEvent("mousedown").catch(()=>{})
+          await tab.dispatchEvent("mouseup").catch(()=>{})
+          await tab.dispatchEvent("click").catch(()=>{})
+          await page.waitForTimeout(600)
+        }
+        if (await page.getByLabel("Nombre *").isVisible().catch(()=>false)) return true
       }
-      if (await page.getByLabel("Nombre *").isVisible().catch(()=>false)) break
+      return page.getByLabel("Nombre *").isVisible().catch(()=>false)
     }
-    await page.getByLabel("Nombre *").fill(nombre)
-    await page.getByLabel("DNI *").fill("16.444.555-0")
-    // Unidad destino
-    const labelU = page.getByText("Unidad destino",{exact:true}).first()
-    let triggerU = labelU.locator("..").getByRole("combobox").first()
-    if (!(await triggerU.isVisible().catch(()=>false))) triggerU = page.locator("div").filter({has:labelU}).first().getByRole("combobox").first()
-    await pickFirstOption(page, triggerU)
-    await page.waitForTimeout(300)
-    // Pre-agendada ON (P2: click atómico + verificación, igual que tabs/combos)
-    const sw = page.getByRole("switch").first()
-    if (await sw.isVisible().catch(()=>false)) {
-      const checked = await sw.isChecked().catch(()=>false)
-      if (!checked) {
-        await sw.evaluate((el) => (el as HTMLElement).click()).catch(()=>{})
-        await page.waitForTimeout(500)
-        if (!await sw.isChecked().catch(()=>false)) {
+    await activarTabVisitas()
+    // El formulario vive en el panel: si hubo re-mount se vacía junto con el
+    // tab → (re)llenar y verificar el botón en la misma pasada, hasta 2 veces.
+    let lista = false
+    for (let pasada = 0; pasada < 2 && !lista; pasada++) {
+      await page.getByLabel("Nombre *").fill(nombre)
+      await page.getByLabel("DNI *").fill("16.444.555-0")
+      // Unidad destino
+      const labelU = page.getByText("Unidad destino",{exact:true}).first()
+      let triggerU = labelU.locator("..").getByRole("combobox").first()
+      if (!(await triggerU.isVisible().catch(()=>false))) triggerU = page.locator("div").filter({has:labelU}).first().getByRole("combobox").first()
+      await pickFirstOption(page, triggerU)
+      await page.waitForTimeout(300)
+      // Pre-agendada ON (P2: click atómico + verificación, igual que tabs/combos)
+      const sw = page.getByRole("switch").first()
+      if (await sw.isVisible().catch(()=>false)) {
+        const checked = await sw.isChecked().catch(()=>false)
+        if (!checked) {
           await sw.evaluate((el) => (el as HTMLElement).click()).catch(()=>{})
           await page.waitForTimeout(500)
+          if (!await sw.isChecked().catch(()=>false)) {
+            await sw.evaluate((el) => (el as HTMLElement).click()).catch(()=>{})
+            await page.waitForTimeout(500)
+          }
         }
       }
+      const btnAqui = page.getByRole("button",{name:"Registrar visita"})
+      lista = await btnAqui.isVisible().catch(()=>false)
+      if (!lista) await activarTabVisitas()
     }
     const btn = page.getByRole("button",{name:"Registrar visita"})
     await expect(btn).toBeVisible({timeout:10_000})
     await btn.click({force:true,noWaitAfter:true})
     await page.waitForTimeout(800)
     const row = page.getByRole("row").filter({hasText:nombre})
+    // La visita persiste en BD: si un re-mount reseteó el tab tras el click,
+    // re-activar antes de afirmar (el Remount no borra lo guardado).
+    if (!(await row.isVisible().catch(()=>false))) await activarTabVisitas()
     await expect(row).toBeVisible({timeout:15_000})
     await expect(row.getByText("Agendada")).toBeVisible({timeout:10_000})
     expect(errores).toEqual([])

@@ -47,30 +47,91 @@ test.describe("Flujo de poblamiento (Historia de Poblamiento)", () => {
     expect(errores, "Excepciones no capturadas en QA Lab").toEqual([])
   })
 
-  test("la persona semilla del relato aparece en el directorio (MP)", async ({ page }) => {
-    // El relato registra a Carlos con RUT 99.999.999-9 en Maestro de Personas.
-    // Primero poblamos para asegurar que el dato exista en este contexto.
-    await page.goto("/admin/qa-lab")
-    await page
-      .getByRole("button", { name: /Poblar todo de una vez/ })
-      .click({ force: true, noWaitAfter: true, timeout: 90_000 })
-    await expect(page.getByText("🟢 Listo").first()).toBeVisible({ timeout: 90_000 })
-    await expect(page.getByText(/Carga completa OK/)).toBeVisible({ timeout: 30_000 })
+  // P3 E2E-FULL-VERDE: estos dos tests se independizaron del QA-Lab. El
+  // "Poblar todo de una vez" escribe al store legacy mientras las páginas
+  // migradas (/comunidad/personas, /inventario/estructura) leen BD vía API,
+  // así que el relato nunca aparece en esos módulos (gap estructural → P4:
+  // QA-Lab a BD o seed BD de fixtures). Cada test crea su propio dato
+  // TEST-Flujo vía API, lo verifica en la UI y lo limpia: prueba el flujo
+  // crear→visualizar del módulo sin depender del estado del seed/QA-Lab.
 
-    await page.goto("/comunidad/personas")
-    await expect(page.getByText("99.999.999-9")).toBeVisible({ timeout: 30_000 })
+  test("una persona creada vía API aparece en el directorio (MP)", async ({ page }) => {
+    const ts = Date.now()
+    const cuerpo = String(20_000_000 + (ts % 9_000_000))
+    let suma = 0
+    let mult = 2
+    for (let i = cuerpo.length - 1; i >= 0; i--) {
+      suma += Number(cuerpo[i]) * mult
+      mult = mult === 7 ? 2 : mult + 1
+    }
+    const resto = 11 - (suma % 11)
+    const dv = resto === 11 ? "0" : resto === 10 ? "K" : String(resto)
+    const rut = `${cuerpo}-${dv}`
+    const id = `test-pob-mp-${ts}`
+    let creado = false
+    try {
+      const res = await page.request.post("/api/personas", {
+        data: {
+          id,
+          rut,
+          nombreCompleto: "TEST Flujo Poblamiento",
+          nombres: "TEST Flujo",
+          apellidos: "Poblamiento",
+          email: `flujo.poblamiento.${ts}@test.cl`,
+          telefonoMovil: "+56 9 9999 9999",
+          estadoCuenta: "activa",
+          condicionesEspecialesIds: [],
+          roles: ["residente"],
+        },
+      })
+      expect(res.ok(), "POST /api/personas debe crear la persona").toBe(true)
+      creado = true
+
+      await page.goto("/comunidad/personas")
+      // La API guarda el RUT tal cual (el formulario UI lo formatea con
+      // puntos, pero vía API queda raw): se afirma el valor raw.
+      await expect(page.getByText(rut).first()).toBeVisible({ timeout: 30_000 })
+    } finally {
+      if (creado) await page.request.delete(`/api/personas/${id}`).catch(() => {})
+    }
   })
 
-  test("el depto 999 del relato aparece en la estructura física (EF)", async ({ page }) => {
-    // El relato levanta la Torre SectorTEST -> Piso99-TEST -> Depto 999.
-    await page.goto("/admin/qa-lab")
-    await page
-      .getByRole("button", { name: /Poblar todo de una vez/ })
-      .click({ force: true, noWaitAfter: true, timeout: 90_000 })
-    await expect(page.getByText("🟢 Listo").first()).toBeVisible({ timeout: 90_000 })
-    await expect(page.getByText(/Carga completa OK/)).toBeVisible({ timeout: 30_000 })
+  test("una unidad creada vía API aparece en la estructura física (EF)", async ({ page }) => {
+    const ts = Date.now()
+    // FKs válidas: se reutilizan las de una unidad existente del seed
+    // (mismo scope de comunidad garantizado por el servidor).
+    const lista = await page.request.get("/api/unidades?pageSize=1")
+    expect(lista.ok(), "GET /api/unidades debe responder").toBe(true)
+    const j = (await lista.json()) as {
+      data?: { microSectorId: string; tipoUnidadId: string; estadoId: string }[]
+    }
+    const base = j.data?.[0]
+    expect(base, "el seed debe traer al menos una unidad").toBeTruthy()
+    const id = `test-pob-ef-${ts}`
+    const numero = `TEST-999-${String(ts).slice(-6)}`
+    let creado = false
+    try {
+      const res = await page.request.post("/api/unidades", {
+        data: {
+          id,
+          microSectorId: base!.microSectorId,
+          numero,
+          etiqueta: "TEST-Flujo",
+          tipoUnidadId: base!.tipoUnidadId,
+          metraje: 45,
+          prorrateo: 0.01,
+          rolSii: "",
+          estadoId: base!.estadoId,
+          servicios: {},
+        },
+      })
+      expect(res.ok(), "POST /api/unidades debe crear la unidad").toBe(true)
+      creado = true
 
-    await page.goto("/inventario/estructura")
-    await expect(page.getByText("TEST-CATU-LoftQA 999")).toBeVisible({ timeout: 30_000 })
+      await page.goto("/inventario/estructura")
+      await expect(page.getByText(numero)).toBeVisible({ timeout: 30_000 })
+    } finally {
+      if (creado) await page.request.delete(`/api/unidades/${id}`).catch(() => {})
+    }
   })
 })

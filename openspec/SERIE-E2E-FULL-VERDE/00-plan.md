@@ -8,7 +8,7 @@
 | --- | --- | --- | --- |
 | P1 | Higiene y determinismo: fix orden seed-authz + convención TEST-*/cleanup + estrategia GATED + receta reseed scope A | HECHA | — |
 | P2 | Rojos CRUD (~17): admin-configuracion, permisos, tipos, personal, proyectos, reservas, gestion, logs, reporteria, punto-cero + 4 GATED | HECHA | — |
-| P3 | Rojos flujo/a11y/smoke (6): poblamiento ×2, flujo/personas, a11y ×2, smoke-mobile | pendiente | — |
+| P3 | Rojos flujo/a11y/smoke (6): poblamiento ×2, flujo/personas, a11y ×2, smoke-mobile | HECHA | — |
 | P4 | Integral y cierre: full e2e verde + checklist §4 owner + archivo 2 changes + nsgc-prepush + push + VALIDACION-PERFILES COMPLETA | pendiente | — |
 
 MÁXIMO: 4 ventanas. Post-serie (fuera): super-admin global (diseño pendiente),
@@ -86,3 +86,18 @@ manual §4 de `openspec/changes/roles-validacion-comunidad-a/cuentas-funcionales
   ante flakes por saturación); restore revive columna vieja (re-ALTER en receta).
   Receta reseed P2: restore P3 + ALTER rename + 2 seeds + punto-cero a A +
   higiene QA/TEST. Push: no (serie en curso).
+- [2026-09-28] P3 HECHA (manual): change `e2e-rojos-flujo-a11y-smoke` válido
+  (5 deltas: MP/EF/PE-bitacora/PE-proveedores/DEV-harness). ARRANQUE: mi
+  primera corrida intercaló GATED (error mío: viola estrategia P1) → re-reseed
+  + lane no-GATED 40 pass / 4 fail reales vs P2: TDZ `editandoProvId` en
+  proveedores (crash al tipear RUT con lista no-vacía, fix: useState arriba);
+  banner cookies tapaba trigger B de permisos (fix: setup verifica flag con
+  reintento + evaluate-click en spec); leftovers TEST del backup (fix: script
+  `e2e:higiene`, 34 filas) que rompían solicitudes (fila stale) y ocultaban
+  los otros; conserjería flaky por re-mount skeleton (fix: tab controlado en
+  bitácora + re-activación en spec, nivel P2 flaky→verde). Alcance: poblamiento
+  ×2 independizados de QA-Lab (datos TEST propios vía API + cleanup; gap
+  relato→P4), flujo/personas (botón renombrado + email único + cleanup),
+  a11y 8/8 y smoke 8/8+desktop verdes SIN fix (null-guards bastaron). Números:
+  vitest 83/817, tsc 0, lint 0 errores, lanes flujo+a11y+smoke 37/37 en una
+  corrida. Push: no (serie en curso, archiva P4).

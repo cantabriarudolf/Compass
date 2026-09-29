@@ -81,6 +81,12 @@ update: actualizarCierreApi,
   const [error, setError] = React.useState<string | null>(null)
   const [okMsg, setOkMsg] = React.useState<string | null>(null)
   const [diaReporte, setDiaReporte] = React.useState(hoy())
+  // P3 E2E-FULL-VERDE: tab controlado en la página (no defaultValue): el
+  // skeleton antepuesto a `cargandoAPI` desmonta el árbol y un Tabs
+  // no-controlado pierde la selección en cada revalidación tardía (el usuario
+  // vuelve a "Reporte Diario" sin aviso). El estado vive en la página, que no
+  // se desmonta, y sobrevive a los swaps del skeleton.
+  const [tabActivo, setTabActivo] = React.useState("reporte")
   const [formCierre, setFormCierre] = React.useState({
     trabajadorPersonaId: "",
     jornadaReportadaId: "j-manana",
@@ -278,7 +284,7 @@ update: actualizarCierreApi,
         </div>
       )}
 
-      <Tabs defaultValue="reporte">
+      <Tabs value={tabActivo} onValueChange={setTabActivo}>
         <TabsList>
           <TabsTrigger value="reporte">Reporte Diario</TabsTrigger>
           <TabsTrigger value="visitas">Visitas</TabsTrigger>

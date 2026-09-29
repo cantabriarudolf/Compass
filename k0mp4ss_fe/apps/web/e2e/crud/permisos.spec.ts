@@ -79,8 +79,19 @@ test.describe("Permisos y Roles (RP) — vista read-only en /admin/permisos", ()
     await expect(page.getByText("activo").first()).toBeVisible()
 
     // 5) Scoping: cambiar a comunidad B (solo admin)
-    await selector.click({ force: true, noWaitAfter: true })
-    await page.getByRole("option", { name: /Las Palmas/ }).click()
+    // P3 E2E-FULL-VERDE: el banner de cookies (fijo abajo) puede tapar el
+    // trigger al fondo del viewport e interceptar el click confiado (el
+    // dropdown nunca abre). Mismo patrón que el paso 3: evaluate-click +
+    // reintento, y scroll previo para exponer el trigger.
+    await selector.scrollIntoViewIfNeeded().catch(() => {})
+    await selector.evaluate((el) => (el as HTMLElement).click()).catch(() => {})
+    try {
+      await expect(page.getByRole("option", { name: /Las Palmas/ }).first()).toBeVisible({ timeout: 10_000 })
+    } catch {
+      await selector.evaluate((el) => (el as HTMLElement).click()).catch(() => {})
+      await expect(page.getByRole("option", { name: /Las Palmas/ }).first()).toBeVisible({ timeout: 10_000 })
+    }
+    await page.getByRole("option", { name: /Las Palmas/ }).first().evaluate((el) => (el as HTMLElement).click()).catch(() => {})
     await expect(page.getByText(/1 membresía\(s\)/)).toBeVisible({ timeout: 30_000 })
     await expect(page.getByRole("cell").filter({ hasText: "comite@test.cl" })).toHaveCount(0)
 
