@@ -7,7 +7,7 @@
 | Ventana | Alcance | Estado | Commit final |
 | --- | --- | --- | --- |
 | P1 | GATED FI/CT vía API: pagos + certificados independizados de QA-Lab (setup TEST vía POST + cleanup), sin cambios de app | HECHA | 61b4daf |
-| P2 | API PI + migración portal: routes publicaciones/leads + hooks SWR + page a BD + spec independizado | HECHA | 1bc2570 |
+| P2 | API PI + migración portal: routes publicaciones/leads + hooks SWR + page a BD + spec independizado | HECHA | f4d40d7 |
 | P3 | API PL + migración remuneraciones: routes liquidaciones/adelantos + hooks SWR + page a BD + spec independizado | pendiente | — |
 | P4 | QA-Lab coherente + lane GATED verde: poblar vía API donde exista, higiene, GATED 10/10 | pendiente | — |
 | P5 | Cierre integral: full verde + checklist §4 owner + archivo 5+ changes + nsgc-prepush + push + VALIDACION-PERFILES COMPLETA | pendiente | — |
