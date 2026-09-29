@@ -6,7 +6,7 @@
 
 | Ventana | Alcance | Estado | Commit final |
 | --- | --- | --- | --- |
-| P1 | GATED FI/CT vía API: pagos + certificados independizados de QA-Lab (setup TEST vía POST + cleanup), sin cambios de app | pendiente | — |
+| P1 | GATED FI/CT vía API: pagos + certificados independizados de QA-Lab (setup TEST vía POST + cleanup), sin cambios de app | HECHA | — |
 | P2 | API PI + migración portal: routes publicaciones/leads + hooks SWR + page a BD + spec independizado | pendiente | — |
 | P3 | API PL + migración remuneraciones: routes liquidaciones/adelantos + hooks SWR + page a BD + spec independizado | pendiente | — |
 | P4 | QA-Lab coherente + lane GATED verde: poblar vía API donde exista, higiene, GATED 10/10 | pendiente | — |
@@ -57,3 +57,9 @@ SQLite→PostgreSQL, resto de BACKLOG-100.
   P4 E2E-FULL-VERDE PARCIAL (`18bdef4`): GATED estructural confirmado + checklist
   §4 en manos del owner. Estrategia: P1 sin app (FI/CT ya tienen API), P2/P3 con
   API+page (PI/PL store-only), P4 coherencia QA-Lab, P5 cierre de ambas series.
+- [2026-09-29] P1 HECHA: pagos + certificados reescritos con dato TEST propio
+  vía API + cleanup (sin QA-Lab; pagos sin fallback localStorage). GATED 3/4
+  (pagos, certificados, portal verdes; remuneraciones rojo heredado a P3).
+  tsc 0, lint 0 errores, validate 38 pass / 7 sin-deltas pre-existentes,
+  spot-check no-GATED 2/2, 0 residuos test-p1 en BD. Change
+  `e2e-gated-fi-ct-api` abierto (archiva P5). Sin push (serie en curso).
