@@ -1,11 +1,13 @@
     "use client"
-    
-    // EXCEPCIÓN P5: liquidacionesPL y adelantosPL no tienen hooks/API todavía.
-    // Se migran solo personas, maestros y configuración; el resto queda en store legacy.
-    
+
+    // SERIE-GATED-API-BD P3: liquidacionesPL migradas a API REST (BD fuente de
+    // verdad). adelantosPL sigue en store legacy (sin API por alcance P3; el
+    // servidor lee adelantos pendientes de BD al generar/confirmar).
+
     import * as React from "react"
     // Datos de dominio vía API REST (BD fuente de verdad); store legacy deprecado.
     import { useCompassStore } from "@/lib/store"
+    import { useLiquidaciones } from "@/lib/api/use-liquidaciones"
     import { usePersonas } from "@/lib/api/use-personas"
     import { useConfiguracion } from "@/lib/api/use-configuracion"
     import { useMaestros as useMaestroAfps, useMaestros as useMaestroPrevisiones, useMaestros as useMaestroAsignaciones } from "@/lib/api/use-maestros"
@@ -49,12 +51,9 @@ function periodoActual(): string {
 const CLP = (n: number) => `$${Math.round(n).toLocaleString("es-CL")}`
 
 export default function RemuneracionesPage() {
-  // TODO: migrar liquidacionesPL y adelantosPL a hook SWR cuando exista API PL (EXCEPCIÓN P5)
-  const liquidaciones = useCompassStore(s => s.liquidacionesPL)
+  // Liquidaciones vía API REST (BD); adelantos sigue en store legacy (sin API P3).
+  const { liquidaciones, isLoading: cLiquidaciones, generar: generarApi, confirmar: confirmarApi, remove: removeApi } = useLiquidaciones()
   const adelantos = useCompassStore(s => s.adelantosPL)
-  const generarLiquidacionPL = useCompassStore(s => s.generarLiquidacionPL)
-  const confirmarLiquidacionPL = useCompassStore(s => s.confirmarLiquidacionPL)
-  const removeLiquidacionPL = useCompassStore(s => s.removeLiquidacionPL)
   const saveAdelantoPL = useCompassStore(s => s.saveAdelantoPL)
   const removeAdelantoPL = useCompassStore(s => s.removeAdelantoPL)
   const { personas: personasApi, isLoading: cPersonas } = usePersonas()
@@ -65,7 +64,7 @@ export default function RemuneracionesPage() {
   const { data: previsionesSalud, isLoading: cPrevisiones } = useMaestroPrevisiones<PrevisionSalud>("previsiones-salud")
   const { data: asignacionFamiliar, isLoading: cAsignaciones } = useMaestroAsignaciones<AsignacionFamiliar>("asignaciones-familiar")
   const { config: configuracion, isLoading: cConfig, updateConfig } = useConfiguracion()
-  const isLoading = cPersonas || cAfps || cPrevisiones || cAsignaciones || cConfig
+  const isLoading = cPersonas || cAfps || cPrevisiones || cAsignaciones || cConfig || cLiquidaciones
 
   const [error, setError] = React.useState<string | null>(null)
   const [okMsg, setOkMsg] = React.useState<string | null>(null)
@@ -160,9 +159,9 @@ export default function RemuneracionesPage() {
     return <div className="h-64 w-full animate-pulse rounded-lg bg-muted" />
   }
 
-  const generar = () => {
+  const generar = async () => {
     setError(null); setOkMsg(null)
-    const r = generarLiquidacionPL({
+    const r = await generarApi({
       trabajadorPersonaId: trabajadorId,
       periodo,
       diasTrabajados: Number(diasTrabajados) || 0,
@@ -182,11 +181,17 @@ export default function RemuneracionesPage() {
     }
   }
 
-  const confirmar = (id: string) => {
+  const confirmar = async (id: string) => {
     setError(null); setOkMsg(null)
-    const r = confirmarLiquidacionPL(id)
+    const r = await confirmarApi(id)
     if (!r.ok) setError(r.error ?? "Error al confirmar")
     else setOkMsg("Liquidación confirmada: egreso de sueldos sincronizado en Finanzas.")
+  }
+
+  const eliminar = async (id: string) => {
+    setError(null); setOkMsg(null)
+    const r = await removeApi(id)
+    if (!r.ok) setError(r.error ?? "Error al eliminar")
   }
 
   const descargarPdf = async (liq: LiquidacionPL) => {
@@ -414,8 +419,8 @@ export default function RemuneracionesPage() {
                             <div className="flex justify-end gap-1">
                               {l.estado === "borrador" && (
                                 <>
-                                  <Button size="sm" variant="outline" onClick={() => confirmar(l.id)}>Confirmar</Button>
-                                  <Button size="sm" variant="ghost" onClick={() => { removeLiquidacionPL(l.id) }}><IconTrash className="size-4" /></Button>
+                                  <Button size="sm" variant="outline" onClick={() => { void confirmar(l.id) }}>Confirmar</Button>
+                                  <Button size="sm" variant="ghost" onClick={() => { void eliminar(l.id) }}><IconTrash className="size-4" /></Button>
                                 </>
                               )}
                               {l.estado === "confirmada" && l.proyeccionPEReferencia && (

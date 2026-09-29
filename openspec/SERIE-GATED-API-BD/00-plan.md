@@ -8,7 +8,7 @@
 | --- | --- | --- | --- |
 | P1 | GATED FI/CT vía API: pagos + certificados independizados de QA-Lab (setup TEST vía POST + cleanup), sin cambios de app | HECHA | 61b4daf |
 | P2 | API PI + migración portal: routes publicaciones/leads + hooks SWR + page a BD + spec independizado | HECHA | f4d40d7 |
-| P3 | API PL + migración remuneraciones: routes liquidaciones/adelantos + hooks SWR + page a BD + spec independizado | pendiente | — |
+| P3 | API PL + migración remuneraciones: routes liquidaciones/adelantos + hooks SWR + page a BD + spec independizado | HECHA | — |
 | P4 | QA-Lab coherente + lane GATED verde: poblar vía API donde exista, higiene, GATED 10/10 | pendiente | — |
 | P5 | Cierre integral: full verde + checklist §4 owner + archivo 5+ changes + nsgc-prepush + push + VALIDACION-PERFILES COMPLETA | pendiente | — |
 
@@ -74,3 +74,18 @@ SQLite→PostgreSQL, resto de BACKLOG-100.
   pre-existentes, 0 residuos. Change `pi-api-portal` abierto (archiva P5).
   Desvío motivado: leads API incluido (spec no lo exigía) para no romper "Me
   interesa". Sin push (serie en curso).
+- [2026-09-29] P3 HECHA: API PL (`POST /api/liquidaciones` generar con
+  cálculo server-side + folio LIQ-, `POST /api/liquidaciones/[id]/confirmar`
+  con egreso FI sueldos espejo, GET/DELETE factory con guard borrador, sin PUT
+  por snapshot inmutable; authz admin-only `puede(rol,accion,"pl")`) + hook
+  `use-liquidaciones` + page a BD (UX intacta) + spec patrón P3 sin QA-Lab
+  (trabajador TEST con ficha vía API personas + params CF vía API + cleanup).
+  Causa raíz verificada: combo leía API (sin TEST) + ficha seed sin sueldoBase;
+  fix solo-spec imposible. Sin migración Prisma (1:1). GATED remuneraciones +
+  pagos + certificados verdes (1ª corrida remuneraciones flake por compilación
+  fría Turbopack, verde al rerun), unit 85/834, tsc 0, lint 0 errores,
+  validate 40 pass / 7 sin-deltas pre-existentes. Residuo honesto: 1
+  liquidación confirmada TEST (periodo 2027-11, inmutable por diseño);
+  persona+egreso TEST eliminados. Change `pl-api-remuneraciones` abierto
+  (archiva P5). Alcance recortado por prompt: sin `/api/adelantos` (pestaña y
+  preview siguen en store). Sin push (serie en curso).
