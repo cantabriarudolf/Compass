@@ -9,13 +9,40 @@ async function gotoStable(page: import("@playwright/test").Page, url: string) {
   await page.waitForTimeout(800)
 }
 
+/**
+ * abrirSelect — click con reintento hasta que el menú Radix abre.
+ * Con el servidor bajo carga (compilación Turbopack + hidratación lenta),
+ * un click puede caer antes de que los listeners hidraten: se re-clickEA
+ * hasta ver options o agotar intentos. NUNCA presiona Escape (cerraría el
+ * diálogo que contiene al select). Solo-spec, sin cambios de app.
+ */
+async function abrirSelect(
+  page: import("@playwright/test").Page,
+  trigger: import("@playwright/test").Locator
+) {
+  await expect(trigger).toBeVisible({ timeout: 10_000 })
+  for (let i = 0; i < 4; i++) {
+    await trigger.click({ force: true, noWaitAfter: true })
+    try {
+      await expect(page.getByRole("option").first()).toBeVisible({
+        timeout: 3_000,
+      })
+      return
+    } catch {
+      // Sin Escape: solo espera y re-clickEA (el diálogo debe seguir abierto).
+      await page.waitForTimeout(800)
+      await expect(trigger).toBeVisible({ timeout: 10_000 })
+    }
+  }
+  await trigger.click({ force: true, noWaitAfter: true })
+}
+
 async function pickFirstOption(
   page: import("@playwright/test").Page,
   trigger: import("@playwright/test").Locator
 ) {
   await expect(trigger).toBeVisible({ timeout: 10_000 })
-  await trigger.click({ force: true, noWaitAfter: true })
-  await page.waitForTimeout(350)
+  await abrirSelect(page, trigger)
   const opts = page.getByRole("option")
   await expect(opts.first()).toBeVisible({ timeout: 10_000 })
   const cnt = await opts.count()
@@ -94,6 +121,14 @@ test.describe("residente — SU ficha p-3 en Mis datos + RA + CT", () => {
     await expect(
       page.getByRole("heading", { name: /Reservas y Amenities/ }).first()
     ).toBeVisible({ timeout: 15_000 })
+    // La hidratación + carga SWR van detrás del heading: esperar datos
+    // ("Sin reservas" o una fila) antes del primer click, o el click cae
+    // en vacío con el servidor bajo carga.
+    await expect(
+      page
+        .getByText(/Sin reservas registradas|Confirmadas bloquean/)
+        .first()
+    ).toBeVisible({ timeout: 30_000 })
     await page
       .getByRole("button", { name: "Nueva reserva" })
       .click({ force: true, noWaitAfter: true })
@@ -102,13 +137,8 @@ test.describe("residente — SU ficha p-3 en Mis datos + RA + CT", () => {
 
     // Elemento: el TEST-* recién creado.
     const labelEl = dialogRA.getByText(/Elemento reservable/).first()
-    let triggerEl = labelEl.locator("..").getByRole("combobox").first()
-    if (!(await triggerEl.isVisible().catch(() => false))) {
-      triggerEl = dialogRA.getByRole("combobox").first()
-    }
-    await expect(triggerEl).toBeVisible({ timeout: 10_000 })
-    await triggerEl.click({ force: true, noWaitAfter: true })
-    await page.waitForTimeout(350)
+    const triggerEl = labelEl.locator("..").getByRole("combobox").first()
+    await abrirSelect(page, triggerEl)
     const optEl = page
       .getByRole("option")
       .filter({ hasText: nombreAmenity })
@@ -118,14 +148,9 @@ test.describe("residente — SU ficha p-3 en Mis datos + RA + CT", () => {
 
     // Solicitante: su propia ficha.
     const labelSol = dialogRA.getByText(/Solicitante/).first()
-    let triggerSol = labelSol.locator("..").getByRole("combobox").first()
-    if (!(await triggerSol.isVisible().catch(() => false))) {
-      const c = dialogRA.locator("div").filter({ has: labelSol }).first()
-      triggerSol = c.getByRole("combobox").first()
-    }
+    const triggerSol = labelSol.locator("..").getByRole("combobox").first()
     await expect(triggerSol).toBeVisible({ timeout: 10_000 })
-    await triggerSol.click({ force: true, noWaitAfter: true })
-    await page.waitForTimeout(350)
+    await abrirSelect(page, triggerSol)
     const optPropia = page
       .getByRole("option")
       .filter({ hasText: /Gómez|Roberto/ })
@@ -149,22 +174,35 @@ test.describe("residente — SU ficha p-3 en Mis datos + RA + CT", () => {
     // Tramo horario: primer slot del elemento (requiere elemento elegido).
     const labelTramo = dialogRA.getByText(/Tramo horario/).first()
     await expect(labelTramo).toBeVisible({ timeout: 10_000 })
-    let triggerT = labelTramo.locator("..").getByRole("combobox").first()
-    if (!(await triggerT.isVisible().catch(() => false))) {
-      const c = dialogRA.locator("div").filter({ has: labelTramo }).first()
-      triggerT = c.getByRole("combobox").first()
-    }
+    const triggerT = labelTramo.locator("..").getByRole("combobox").first()
     await pickFirstOption(page, triggerT)
 
     const btnConfirmar = dialogRA
       .getByRole("button", { name: /Confirmar disponibilidad/ })
       .first()
     await expect(btnConfirmar).toBeVisible({ timeout: 10_000 })
-    await btnConfirmar.click({ force: true, noWaitAfter: true })
-    await page.waitForTimeout(1000)
-    await expect(
-      page.getByText(/Reserva confirmada/).first()
-    ).toBeVisible({ timeout: 15_000 })
+    // Reintento: el click puede caer pre-hidratación bajo carga; se verifica
+    // por el efecto (diálogo cerrado o mensaje visible), no por el click.
+    let confirmado = false
+    for (let i = 0; i < 3 && !confirmado; i++) {
+      await btnConfirmar.click({ force: true, noWaitAfter: true })
+      try {
+        await expect(
+          page.getByText(/Reserva confirmada/).first()
+        ).toBeVisible({ timeout: 5_000 })
+        confirmado = true
+      } catch {
+        if (!(await dialogRA.isVisible().catch(() => true))) {
+          await expect(
+            page.getByText(/Reserva confirmada/).first()
+          ).toBeVisible({ timeout: 15_000 })
+          confirmado = true
+        }
+      }
+    }
+    await expect(page.getByText(/Reserva confirmada/).first()).toBeVisible({
+      timeout: 15_000,
+    })
 
     // 4. CT: solicita certificado de residencia de su unidad (u-B-201).
     // La UI no puede elegir unidad (combo vacío: /api/unidades 403 para el
@@ -206,9 +244,14 @@ test.describe("residente — SU ficha p-3 en Mis datos + RA + CT", () => {
       page.getByRole("heading", { name: /Certificados/ }).first()
     ).toBeVisible({ timeout: 20_000 })
     const tabHist = page.getByRole("tab", { name: "Historial" })
-    if (await tabHist.isVisible().catch(() => false)) {
-      await tabHist.click({ force: true, noWaitAfter: true })
-      await page.waitForTimeout(600)
+    // Reintento: el click al tab puede caer pre-hidratación; se verifica por
+    // el estado seleccionado antes de buscar el folio.
+    for (let i = 0; i < 3; i++) {
+      if (await tabHist.getAttribute("aria-selected").catch(() => null) === "true") break
+      if (await tabHist.isVisible().catch(() => false)) {
+        await tabHist.click({ force: true, noWaitAfter: true })
+        await page.waitForTimeout(800)
+      } else break
     }
     await expect(page.getByText(folioCT).first()).toBeVisible({
       timeout: 15_000,

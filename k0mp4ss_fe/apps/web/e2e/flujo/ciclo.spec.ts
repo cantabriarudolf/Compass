@@ -20,10 +20,42 @@ async function clickBorrar(page: import("@playwright/test").Page) {
 async function clickPoblar(page: import("@playwright/test").Page) {
   const btn = page.getByRole("button", { name: /Poblar todo de una vez/ })
   await expect(btn).toBeVisible({ timeout: 15_000 })
-  // bypass settle check del dev server (loop pesado bloquea hilo)
-  await btn.evaluate((b: HTMLElement) => b.click()).catch(async () => {
-    await btn.click({ force: true, noWaitAfter: true }).catch(() => {})
-  })
+  const dialogo = page.getByRole("dialog")
+  const clic = () =>
+    btn.evaluate((b: HTMLElement) => b.click()).catch(async () => {
+      await btn.click({ force: true, noWaitAfter: true }).catch(() => {})
+    })
+  // Estado del Lab leído del DOM: el aviso previo solo se va al COMPLETAR,
+  // así que NO sirve como señal de arranque. Señales de efecto: diálogo del
+  // guard, botón deshabilitado (loading), insignia de carga o de listo.
+  const conEfecto = () =>
+    dialogo.isVisible().catch(() => false).then(async (hayDialogo) => {
+      if (hayDialogo) return true
+      if (await btn.isDisabled().catch(() => false)) return true
+      const txt = await page.evaluate(() => document.body.innerText).catch(() => "")
+      return txt.includes("Cargando") || txt.includes("🟢 Listo")
+    })
+  // Un solo click efectivo: los re-clicks durante un poblar en curso
+  // re-disparan runFase y abren el diálogo del guard (fondo inerte),
+  // bloqueando los pasos siguientes. Solo se re-clickEA si NADA cambió
+  // (click caído pre-hidratación).
+  for (let i = 0; i < 3; i++) {
+    await clic()
+    let efecto = false
+    for (let j = 0; j < 16; j++) {
+      await page.waitForTimeout(500)
+      if (await conEfecto()) { efecto = true; break }
+    }
+    if (efecto) break
+  }
+  // Si el guard abrió el diálogo (restos de una corrida caída), usar su
+  // acción idempotente en vez de dejarlo abierto bloqueando el fondo.
+  if (await dialogo.isVisible().catch(() => false)) {
+    const btnLimpiarPoblar = page.getByRole("button", { name: /Limpiar y poblar/ })
+    if (await btnLimpiarPoblar.isVisible().catch(() => false)) {
+      await btnLimpiarPoblar.click({ force: true, noWaitAfter: true }).catch(() => {})
+    }
+  }
 }
 
 async function clickRevisar(page: import("@playwright/test").Page) {
