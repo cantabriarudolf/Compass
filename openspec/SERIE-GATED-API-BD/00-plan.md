@@ -10,7 +10,7 @@
 | P2 | API PI + migración portal: routes publicaciones/leads + hooks SWR + page a BD + spec independizado | HECHA | f4d40d7 |
 | P3 | API PL + migración remuneraciones: routes liquidaciones/adelantos + hooks SWR + page a BD + spec independizado | HECHA | — |
 | P4 | QA-Lab coherente + lane GATED verde: poblar vía API donde exista, higiene, GATED 10/10 | HECHA | — |
-| P5 | Cierre integral: full verde + checklist §4 owner + archivo 5+ changes + nsgc-prepush + push + VALIDACION-PERFILES COMPLETA | pendiente | — |
+| P5 | Cierre integral: full verde + checklist §4 owner + archivo 5+ changes + nsgc-prepush + push + VALIDACION-PERFILES COMPLETA | PARCIAL | — |
 
 MÁXIMO: 5 ventanas. Post-serie (fuera): super-admin global, migración
 SQLite→PostgreSQL, resto de BACKLOG-100.
@@ -104,5 +104,19 @@ SQLite→PostgreSQL, resto de BACKLOG-100.
   validate 41 pass / 7 sin-deltas pre-existentes. Residuo honesto: confirmadas
   QA rotativas inmutables (las purga `e2e:higiene` en cada reseed) + 8 egresos
   "TEST Persona QA Uno" pre-existentes de series anteriores (higiene no toca
-  egresos por regla punto-cero). Change `qa-lab-poblar-api` abierto (archiva
-  P5). Sin push (serie en curso).
+   egresos por regla punto-cero). Change `qa-lab-poblar-api` abierto (archiva
+   P5). Sin push (serie en curso).
+- [2026-09-29] P5 PARCIAL (inline, sin delegado: el harness rechazó 2
+  lanzamientos por red/backend saturado; un intento previo marcó P5 EN CURSO y
+  dejó 2 specs sin commitear). ARRANQUE: P4 cerrada OK (validate 41/7).
+  Hallazgo con trace: el `clickPoblar` con re-clicks heredado abría el diálogo
+  del guard a mitad del poblar (fondo inerte → clickBorrar final imposible);
+  fix `315cd70` (un solo click efectivo + acción idempotente si hay diálogo) y
+  `7121ff9` (apertura idempotente de selects Radix por data-state/aria-expanded
+  para el flake de slots RA). Verificado: ciclo 9/9, residente-ficha 7/7.
+  Integral: unit 85/835 (3 flake en 1ra corrida, verde al rerun), tsc 0, lint
+  0 errores, no-GATED 88 pass/1 fail(residente flake, fixeado y verificado)/2
+  skip, GATED 10/10, validate 41/7 sin-deltas. Sin checklist §4 del owner
+  (dijo "aún no lo hago") → NO archiva, NO pushea (main ahead 17). Hereda:
+  (1) checklist §4 Ricardo; (2) archivar 9 changes + nsgc-prepush + push;
+  (3) marcar GATED-API-BD y VALIDACION-PERFILES COMPLETAS.
