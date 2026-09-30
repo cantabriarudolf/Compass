@@ -10,31 +10,49 @@ async function gotoStable(page: import("@playwright/test").Page, url: string) {
 }
 
 /**
- * abrirSelect — click con reintento hasta que el menú Radix abre.
- * Con el servidor bajo carga (compilación Turbopack + hidratación lenta),
- * un click puede caer antes de que los listeners hidraten: se re-clickEA
- * hasta ver options o agotar intentos. NUNCA presiona Escape (cerraría el
- * diálogo que contiene al select). Solo-spec, sin cambios de app.
+ * menuAbierto — estado real del Select Radix (data-state/aria-expanded).
+ * Sin esto, los re-clicks a ciegas alternan abrir/cerrar y pueden dejar el
+ * menú cerrado (flake bajo carga cuando los options computan lento).
+ */
+async function menuAbierto(
+  trigger: import("@playwright/test").Locator
+): Promise<boolean> {
+  const estado = await trigger.getAttribute("data-state").catch(() => null)
+  if (estado) return estado === "open"
+  const expandido = await trigger
+    .getAttribute("aria-expanded")
+    .catch(() => null)
+  return expandido === "true"
+}
+
+/**
+ * abrirSelect — apertura idempotente: solo clickEA si está cerrado.
+ * NUNCA presiona Escape (cerraría el diálogo que contiene al select).
+ * Solo-spec, sin cambios de app.
  */
 async function abrirSelect(
   page: import("@playwright/test").Page,
   trigger: import("@playwright/test").Locator
 ) {
   await expect(trigger).toBeVisible({ timeout: 10_000 })
-  for (let i = 0; i < 4; i++) {
-    await trigger.click({ force: true, noWaitAfter: true })
+  for (let i = 0; i < 6; i++) {
+    if (!(await menuAbierto(trigger))) {
+      await trigger.click({ force: true, noWaitAfter: true }).catch(() => {})
+      await page.waitForTimeout(800)
+    }
     try {
       await expect(page.getByRole("option").first()).toBeVisible({
-        timeout: 3_000,
+        timeout: 2_000,
       })
       return
     } catch {
-      // Sin Escape: solo espera y re-clickEA (el diálogo debe seguir abierto).
-      await page.waitForTimeout(800)
-      await expect(trigger).toBeVisible({ timeout: 10_000 })
+      // Menú aún sin options (slots RA computan async bajo carga): reintentar.
+      await page.waitForTimeout(500)
     }
   }
-  await trigger.click({ force: true, noWaitAfter: true })
+  await expect(page.getByRole("option").first()).toBeVisible({
+    timeout: 15_000,
+  })
 }
 
 async function pickFirstOption(
