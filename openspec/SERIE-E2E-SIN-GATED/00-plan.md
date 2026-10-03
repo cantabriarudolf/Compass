@@ -6,7 +6,7 @@
 
 | Ventana | Alcance | Estado | Commit final |
 | --- | --- | --- | --- |
-| P1 | Helper `e2e/helpers/datos-test.ts` + migrar los 5 specs con setup API propio (pagos, certificados, portal, remuneraciones, poblamiento) | HECHA | — |
+| P1 | Helper `e2e/helpers/datos-test.ts` + migrar los 5 specs con setup API propio (pagos, certificados, portal, remuneraciones, poblamiento) | HECHA | `e4c2a10` |
 | P2 | Quitar tag GATED + scripts + CI a corrida única con seed completo + verificación verde | pendiente | — |
 
 MÁXIMO: 2 ventanas. Post-serie (fuera): checklist §4 owner + archivo de 9+4
@@ -59,4 +59,4 @@ super-admin global, migración SQLite→PostgreSQL, resto de BACKLOG-100.
   poblamiento MP/EF; master QA-Lab intacto). Change `e2e-helper-datos-test`
   abierto con 6 deltas. Validación: unit 85/835, tsc 0, lint 0 errores,
   validate 42/7 (7 sin-deltas pre-existentes), 0 residuos TEST en BD (5 filas
-  QA-Lab del master purgadas vía higiene). Sin push (commit hash al cerrar).
+  QA-Lab del master purgadas vía higiene). Sin push (commit `e4c2a10`).
