@@ -1,26 +1,17 @@
 import { expect, test } from "@playwright/test"
+import {
+  crearTrioCertificadoTEST,
+  limpiarTrioCertificadoTEST,
+} from "../helpers/datos-test"
 
 test.use({ actionTimeout: 30_000 })
 test.setTimeout(300_000)
 
-// P1 SERIE-GATED-API-BD: independizado de QA-Lab. El trío TEST propio
-// (persona + unidad + vínculo activo) se crea vía API REST y se limpia al
-// final (vínculo → persona → unidad, en ese orden por los guards 409).
-// La página /comunidad/certificados lee BD vía usePersonas/useUnidades.
-
-function rutUnico(): string {
-  const numero = 20_000_000 + (Date.now() % 9_000_000)
-  const cuerpo = numero.toString()
-  let suma = 0
-  let mult = 2
-  for (let i = cuerpo.length - 1; i >= 0; i--) {
-    suma += Number(cuerpo[i]) * mult
-    mult = mult === 7 ? 2 : mult + 1
-  }
-  const resto = 11 - (suma % 11)
-  const dv = resto === 11 ? "0" : resto === 10 ? "K" : String(resto)
-  return `${cuerpo}-${dv}`
-}
+// P1 SERIE-E2E-SIN-GATED: setup vía helper compartido `e2e/helpers/datos-test`.
+// El trío TEST propio (persona + unidad + vínculo activo) se crea vía API REST
+// y se limpia al final (vínculo → persona → unidad, en ese orden por los
+// guards 409). La página /comunidad/certificados lee BD vía
+// usePersonas/useUnidades.
 
 test.describe("CRUD — Comunidad/Certificados (GATED)", () => {
   test("persona+unidad TEST vía API y generar certificado residencia PDF + historial", async ({ page }) => {
@@ -32,66 +23,12 @@ test.describe("CRUD — Comunidad/Certificados (GATED)", () => {
     })
 
     const ts = Date.now()
-    const personaId = `test-p1-cert-p-${ts}`
-    const unidadId = `test-p1-cert-u-${ts}`
-    const vinculoId = `test-p1-cert-v-${ts}`
-    const numeroUnidad = `T1C-${String(ts).slice(-6)}`
-    const nombrePersona = `TEST Cert P1 ${ts}`
-    const emailPersona = `cert.p1.${ts}@test.cl`
-    const hoy = new Date().toISOString().slice(0, 10)
-
-    // Setup vía API: FKs de una unidad real del seed (mismo scope garantizado).
-    const lista = await page.request.get("/api/unidades?pageSize=1")
-    expect(lista.ok(), "GET /api/unidades debe responder").toBe(true)
-    const ju = (await lista.json()) as {
-      data?: { microSectorId: string; tipoUnidadId: string; estadoId: string }[]
-    }
-    const base = ju.data?.[0]
-    expect(base, "el seed debe traer al menos una unidad").toBeTruthy()
-
-    const resUnidad = await page.request.post("/api/unidades", {
-      data: {
-        id: unidadId,
-        microSectorId: base!.microSectorId,
-        numero: numeroUnidad,
-        etiqueta: "TEST-P1",
-        tipoUnidadId: base!.tipoUnidadId,
-        metraje: 45,
-        prorrateo: 0.01,
-        rolSii: "",
-        estadoId: base!.estadoId,
-        servicios: {},
-      },
-    })
-    expect(resUnidad.ok(), "POST /api/unidades debe crear la unidad TEST").toBe(true)
-
-    const resPersona = await page.request.post("/api/personas", {
-      data: {
-        id: personaId,
-        rut: rutUnico(),
-        nombreCompleto: nombrePersona,
-        nombres: "TEST Cert",
-        apellidos: `P1 ${String(ts).slice(-6)}`,
-        email: emailPersona,
-        telefonoMovil: "+56 9 9999 9999",
-        estadoCuenta: "activa",
-        condicionesEspecialesIds: [],
-        roles: ["residente"],
-      },
-    })
-    expect(resPersona.ok(), "POST /api/personas debe crear la persona TEST").toBe(true)
-
-    const resVinculo = await page.request.post("/api/vinculos", {
-      data: {
-        id: vinculoId,
-        personaId,
-        unidadId,
-        rol: "propietario",
-        fechaInicio: hoy,
-        permiteVerFinanzas: true,
-      },
-    })
-    expect(resVinculo.ok(), "POST /api/vinculos debe crear el vínculo TEST").toBe(true)
+    const trio = await crearTrioCertificadoTEST(page.request, "p1", ts)
+    const personaId = trio.personaId
+    const unidadId = trio.unidadId
+    const vinculoId = trio.vinculoId
+    const numeroUnidad = trio.numeroUnidad
+    const nombrePersona = trio.nombrePersona
 
     try {
       // Ir a Certificados — ruta con pdf-utils puede tardar en turbopack
@@ -251,10 +188,8 @@ test.describe("CRUD — Comunidad/Certificados (GATED)", () => {
 
       expect(errores, "Excepciones no capturadas en comunidad/certificados").toEqual([])
     } finally {
-      // Cleanup en orden (guards 409): vínculo → persona → unidad.
-      await page.request.delete(`/api/vinculos/${vinculoId}`).catch(() => {})
-      await page.request.delete(`/api/personas/${personaId}`).catch(() => {})
-      await page.request.delete(`/api/unidades/${unidadId}`).catch(() => {})
+      // Cleanup en orden vía helper (guards 409): vínculo → persona → unidad.
+      await limpiarTrioCertificadoTEST(page.request, { personaId, unidadId, vinculoId })
     }
   })
 })

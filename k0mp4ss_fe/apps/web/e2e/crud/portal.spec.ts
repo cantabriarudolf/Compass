@@ -1,13 +1,18 @@
 import { expect, test } from "@playwright/test"
+import {
+  crearPublicacionTEST,
+  limpiarPublicacionTEST,
+  limpiarPublicacionesNuevasTEST,
+  snapshotPublicacionesTEST,
+} from "../helpers/datos-test"
 
 test.use({ actionTimeout: 30_000 })
 test.setTimeout(300_000)
 
-// P2 SERIE-GATED-API-BD: independizado de QA-Lab. La publicación TEST propia
-// se crea vía API REST (POST /api/publicaciones-portal con una unidad del
-// seed vía GET /api/unidades) y se limpia al final (DELETE + las manuales que
-// cree la UI). La página /comunidad/portal lee BD vía hooks SWR: sin
-// "Poblar todo" previo.
+// P1 SERIE-E2E-SIN-GATED: setup vía helper compartido `e2e/helpers/datos-test`.
+// La publicación TEST propia se crea vía API REST y se limpia al final
+// (DELETE + las manuales que cree la UI). La página /comunidad/portal lee BD
+// vía hooks SWR: sin "Poblar todo" previo.
 
 test.describe("CRUD — Comunidad/Portal (GATED)", () => {
   test("vitrina TEST vía API y gestión con nueva publicación manual", async ({ page }) => {
@@ -15,37 +20,12 @@ test.describe("CRUD — Comunidad/Portal (GATED)", () => {
     page.on("pageerror", (err) => errores.push(err.message))
 
     const ts = Date.now()
-    const pubId = `test-p2-portal-pub-${ts}`
-    const hoy = new Date().toISOString().slice(0, 10)
 
-    // Setup vía API: unidad real del seed (mismo scope garantizado).
-    const lista = await page.request.get("/api/unidades?pageSize=1")
-    expect(lista.ok(), "GET /api/unidades debe responder").toBe(true)
-    const ju = (await lista.json()) as {
-      data?: { id: string; etiqueta: string; numero: string }[]
-    }
-    const unidad = ju.data?.[0]
-    expect(unidad, "el seed debe traer al menos una unidad").toBeTruthy()
-    const refUnidad = `${unidad!.etiqueta} ${unidad!.numero}`
-
-    const antes = await page.request.get("/api/publicaciones-portal?pageSize=100")
-    const jAntes = (await antes.json().catch(() => ({ data: [] }))) as { data?: { id: string }[] }
-    const idsAntes = new Set((jAntes.data ?? []).map((p) => p.id))
-
-    const resPub = await page.request.post("/api/publicaciones-portal", {
-      data: {
-        id: pubId,
-        unidadId: unidad!.id,
-        operacion: "venta",
-        precio: 8500000,
-        moneda: "CLP",
-        descripcion: `Publicación TEST P2 portal ${ts}`,
-        imagenes: [],
-        activa: true,
-        fechaPublicacion: hoy,
-      },
-    })
-    expect(resPub.ok(), "POST /api/publicaciones-portal debe crear la publicación TEST").toBe(true)
+    // Setup vía helper: snapshot previo + publicación TEST (unidad del seed).
+    const idsAntes = await snapshotPublicacionesTEST(page.request)
+    const pub = await crearPublicacionTEST(page.request, "p2-portal", ts)
+    const pubId = pub.id
+    const refUnidad = pub.unidadRef
 
     try {
       // Ir a Portal (admin logueado vía storageState)
@@ -146,16 +126,9 @@ test.describe("CRUD — Comunidad/Portal (GATED)", () => {
 
       expect(errores, "Excepciones no capturadas en comunidad/portal").toEqual([])
     } finally {
-      // Cleanup: la manual creada por la UI tiene id aleatorio → se detecta
-      // por diferencia contra el listado previo; la TEST se borra directo.
-      const despues = await page.request.get("/api/publicaciones-portal?pageSize=100").catch(() => null)
-      const jDespues = (await despues?.json().catch(() => ({ data: [] }))) as { data?: { id: string }[] }
-      for (const p of jDespues.data ?? []) {
-        if (!idsAntes.has(p.id)) {
-          await page.request.delete(`/api/publicaciones-portal/${p.id}`).catch(() => {})
-        }
-      }
-      await page.request.delete(`/api/publicaciones-portal/${pubId}`).catch(() => {})
+      // Cleanup vía helper: manuales creadas por la UI por diferencia + la TEST.
+      await limpiarPublicacionesNuevasTEST(page.request, idsAntes)
+      await limpiarPublicacionTEST(page.request, pubId)
     }
   })
 })

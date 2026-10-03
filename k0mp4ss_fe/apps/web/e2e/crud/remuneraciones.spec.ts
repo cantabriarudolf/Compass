@@ -1,27 +1,18 @@
 import { expect, test } from "@playwright/test"
+import {
+  crearTrabajadorTEST,
+  limpiarTrabajadorTEST,
+} from "../helpers/datos-test"
 
 test.use({ actionTimeout: 30_000 })
 test.setTimeout(300_000)
 
-// P3 SERIE-GATED-API-BD: independizado de QA-Lab. El trabajador TEST con ficha
-// completa se crea vía API REST (POST /api/personas con FKs desde
-// /api/maestros/* + PUT /api/configuracion para params legales) y la
-// liquidación se genera+confirma vía UI contra POST /api/liquidaciones +
-// /confirmar (BD fuente de verdad). Cleanup: borradores TEST + egreso espejo +
-// persona (la confirmada es inmutable por diseño y queda como documento de
-// auditoría con periodo TEST futuro que no interfiere).
-
-/** Dígito verificador chileno (módulo 11) para RUTs TEST únicos por corrida. */
-function dvRut(cuerpo: string): string {
-  let suma = 0
-  let mult = 2
-  for (let i = cuerpo.length - 1; i >= 0; i--) {
-    suma += Number(cuerpo[i]) * mult
-    mult = mult === 7 ? 2 : mult + 1
-  }
-  const resto = 11 - (suma % 11)
-  return resto === 11 ? "0" : resto === 10 ? "K" : String(resto)
-}
+// P1 SERIE-E2E-SIN-GATED: setup vía helper compartido `e2e/helpers/datos-test`.
+// El trabajador TEST con ficha completa se crea vía API REST y la liquidación
+// se genera+confirma vía UI contra POST /api/liquidaciones + /confirmar (BD
+// fuente de verdad). Cleanup: borradores TEST + egreso espejo + persona (la
+// confirmada es inmutable por diseño y queda como documento de auditoría con
+// periodo TEST futuro que no interfiere).
 
 test.describe("CRUD — Finanzas/Remuneraciones (GATED)", () => {
   test("trabajador TEST vía API y generar + confirmar liquidación", async ({ page }) => {
@@ -29,11 +20,10 @@ test.describe("CRUD — Finanzas/Remuneraciones (GATED)", () => {
     page.on("pageerror", (err) => errores.push(err.message))
 
     const ts = Date.now()
-    const trabId = `test-p3-pl-trab-${ts}`
-    const cuerpoRut = String(ts).slice(-8).padStart(8, "1")
-    const rutTest = `${cuerpoRut}-${dvRut(cuerpoRut)}`
-    const emailTest = `test-p3-pl-${ts}@test.cl`
-    const nombreTest = `Trabajador P3 ${String(ts).slice(-6)}`
+    // Setup vía helper: maestros + params legales + trabajador con ficha.
+    const trab = await crearTrabajadorTEST(page.request, "p3-pl", ts)
+    const trabId = trab.id
+    const nombreTest = trab.nombre
     // Periodos TEST futuros (rotan con ts para no colisionar entre corridas).
     const mesBase = (ts % 12) + 1
     const candidatos = [0, 1, 2].map((k) => {
@@ -41,64 +31,7 @@ test.describe("CRUD — Finanzas/Remuneraciones (GATED)", () => {
       return `2027-${String(m).padStart(2, "0")}`
     })
 
-    // Setup vía API: FKs legales desde los maestros del seed (mismo scope).
-    const maestros = async (tipo: string): Promise<{ id: string; tipo?: string }[]> => {
-      const r = await page.request.get(`/api/maestros/${tipo}?pageSize=100`)
-      expect(r.ok(), `GET /api/maestros/${tipo} debe responder`).toBe(true)
-      const j = (await r.json()) as { data?: { id: string; tipo?: string }[] }
-      return j.data ?? []
-    }
-    const afps = await maestros("afps")
-    const salud = await maestros("previsiones-salud")
-    const tramos = await maestros("asignaciones-familiar")
-    expect(afps.length > 0, "el seed debe traer AFPs").toBe(true)
-    const afpId = afps[0]!.id
-    const saludId = (salud.find((s) => s.tipo === "fonasa") ?? salud[0])?.id
-    expect(saludId, "el seed debe traer previsión de salud").toBeTruthy()
-    const tramoId = tramos[0]?.id
-    expect(tramoId, "el seed debe traer tramos de asignación familiar").toBeTruthy()
-
-    // Params legales CF idempotentes (reseed-proof).
-    const resCfg = await page.request.put("/api/configuracion", {
-      data: {
-        ufMensual: 39000,
-        ingresoMinimoMensual: 500000,
-        topeGratificacionLegal: 4.75,
-        tasaSIS: 1.48,
-      },
-    })
-    expect(resCfg.ok(), "PUT /api/configuracion debe asegurar params legales").toBe(true)
-
-    // Trabajador TEST con ficha completa (sueldo base + FKs + jornada).
-    const resTrab = await page.request.post("/api/personas", {
-      data: {
-        id: trabId,
-        rut: rutTest,
-        nombreCompleto: `${nombreTest} TEST`,
-        nombres: nombreTest,
-        apellidos: "TEST",
-        email: emailTest,
-        telefonoMovil: "+56900000009",
-        estadoCuenta: "activa",
-        condicionesEspecialesIds: [],
-        roles: ["personal"],
-        datosLaborales: {
-          id: `lab-${ts}`,
-          cargo: "Conserje Turno Día",
-          afp: "AFP Habitat",
-          prevision: "FONASA",
-          fechaIngreso: "2021-06-15",
-          tipoContrato: "indefinido",
-          afpId,
-          saludId,
-          asignacionFamiliarId: tramoId,
-          cargas: 1,
-          jornadaBaseHoras: 44,
-          sueldoBase: 650000,
-        },
-      },
-    })
-    expect(resTrab.ok(), "POST /api/personas debe crear el trabajador TEST").toBe(true)
+    // (Setup ya hecho vía helper: trabajador con ficha completa.)
 
     let periodoUsado = ""
     let folioLiq = ""
@@ -187,24 +120,10 @@ test.describe("CRUD — Finanzas/Remuneraciones (GATED)", () => {
 
       expect(errores, "Excepciones no capturadas en finanzas/remuneraciones").toEqual([])
     } finally {
-      // Cleanup: borradores TEST del trabajador + egreso espejo + persona.
+      // Cleanup vía helper: borradores TEST + egreso espejo + persona.
       // (La confirmada es inmutable por diseño: queda el documento con periodo
       // TEST futuro; no interfiere porque el periodo es único por corrida.)
-      try {
-        const lista = await page.request.get("/api/liquidaciones?pageSize=100").catch(() => null)
-        const j = (await lista?.json().catch(() => ({ data: [] }))) as {
-          data?: { id: string; trabajadorPersonaId: string; estado: string; egresoFIReferencia?: string; folio: string }[]
-        }
-        for (const l of j.data ?? []) {
-          if (l.trabajadorPersonaId !== trabId) continue
-          if (l.estado === "borrador") {
-            await page.request.delete(`/api/liquidaciones/${l.id}`).catch(() => {})
-          } else if (l.egresoFIReferencia && l.egresoFIReferencia !== "pendiente") {
-            await page.request.delete(`/api/egresos-fi/${l.egresoFIReferencia}`).catch(() => {})
-          }
-        }
-      } catch { /* best-effort */ }
-      await page.request.delete(`/api/personas/${trabId}`).catch(() => {})
+      await limpiarTrabajadorTEST(page.request, trabId)
       // Verificación de higiene: persona TEST eliminada.
       const check = await page.request.get(`/api/personas/${trabId}`).catch(() => null)
       expect(check?.status(), "la persona TEST debe quedar eliminada").toBe(404)

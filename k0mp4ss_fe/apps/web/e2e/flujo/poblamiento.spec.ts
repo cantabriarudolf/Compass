@@ -1,4 +1,10 @@
 import { expect, test } from "@playwright/test"
+import {
+  crearPersonaTEST,
+  crearUnidadTEST,
+  limpiarPersonaTEST,
+  limpiarUnidadTEST,
+} from "../helpers/datos-test"
 
 // Flujo maestro: recorre la "Historia de Poblamiento" documentada en
 // Data/NSGC/docs/manuales/34 - Historia de Poblamiento - Relato de Uso.md
@@ -57,81 +63,35 @@ test.describe("Flujo de poblamiento (Historia de Poblamiento)", () => {
 
   test("una persona creada vía API aparece en el directorio (MP)", async ({ page }) => {
     const ts = Date.now()
-    const cuerpo = String(20_000_000 + (ts % 9_000_000))
-    let suma = 0
-    let mult = 2
-    for (let i = cuerpo.length - 1; i >= 0; i--) {
-      suma += Number(cuerpo[i]) * mult
-      mult = mult === 7 ? 2 : mult + 1
-    }
-    const resto = 11 - (suma % 11)
-    const dv = resto === 11 ? "0" : resto === 10 ? "K" : String(resto)
-    const rut = `${cuerpo}-${dv}`
-    const id = `test-pob-mp-${ts}`
-    let creado = false
+    const persona = await crearPersonaTEST(page.request, "pob-mp", ts, {
+      nombreCompleto: "TEST Flujo Poblamiento",
+      nombres: "TEST Flujo",
+      apellidos: "Poblamiento",
+      email: `flujo.poblamiento.${ts}@test.cl`,
+    })
+    const id = persona.id
+    const rut = persona.rut
     try {
-      const res = await page.request.post("/api/personas", {
-        data: {
-          id,
-          rut,
-          nombreCompleto: "TEST Flujo Poblamiento",
-          nombres: "TEST Flujo",
-          apellidos: "Poblamiento",
-          email: `flujo.poblamiento.${ts}@test.cl`,
-          telefonoMovil: "+56 9 9999 9999",
-          estadoCuenta: "activa",
-          condicionesEspecialesIds: [],
-          roles: ["residente"],
-        },
-      })
-      expect(res.ok(), "POST /api/personas debe crear la persona").toBe(true)
-      creado = true
-
       await page.goto("/comunidad/personas")
       // La API guarda el RUT tal cual (el formulario UI lo formatea con
       // puntos, pero vía API queda raw): se afirma el valor raw.
       await expect(page.getByText(rut).first()).toBeVisible({ timeout: 30_000 })
     } finally {
-      if (creado) await page.request.delete(`/api/personas/${id}`).catch(() => {})
+      await limpiarPersonaTEST(page.request, id)
     }
   })
 
   test("una unidad creada vía API aparece en la estructura física (EF)", async ({ page }) => {
     const ts = Date.now()
-    // FKs válidas: se reutilizan las de una unidad existente del seed
-    // (mismo scope de comunidad garantizado por el servidor).
-    const lista = await page.request.get("/api/unidades?pageSize=1")
-    expect(lista.ok(), "GET /api/unidades debe responder").toBe(true)
-    const j = (await lista.json()) as {
-      data?: { microSectorId: string; tipoUnidadId: string; estadoId: string }[]
-    }
-    const base = j.data?.[0]
-    expect(base, "el seed debe traer al menos una unidad").toBeTruthy()
-    const id = `test-pob-ef-${ts}`
-    const numero = `TEST-999-${String(ts).slice(-6)}`
-    let creado = false
+    // Setup vía helper (FKs del seed, mismo scope garantizado).
+    const unidad = await crearUnidadTEST(page.request, "pob-ef", ts, "TEST-Flujo")
+    const id = unidad.id
+    const numero = unidad.numero
     try {
-      const res = await page.request.post("/api/unidades", {
-        data: {
-          id,
-          microSectorId: base!.microSectorId,
-          numero,
-          etiqueta: "TEST-Flujo",
-          tipoUnidadId: base!.tipoUnidadId,
-          metraje: 45,
-          prorrateo: 0.01,
-          rolSii: "",
-          estadoId: base!.estadoId,
-          servicios: {},
-        },
-      })
-      expect(res.ok(), "POST /api/unidades debe crear la unidad").toBe(true)
-      creado = true
-
       await page.goto("/inventario/estructura")
       await expect(page.getByText(numero)).toBeVisible({ timeout: 30_000 })
     } finally {
-      if (creado) await page.request.delete(`/api/unidades/${id}`).catch(() => {})
+      await limpiarUnidadTEST(page.request, id)
     }
   })
 })

@@ -1,11 +1,17 @@
 import { expect, test } from "@playwright/test"
+import {
+  crearCobroTEST,
+  crearUnidadTEST,
+  limpiarCobroTEST,
+  limpiarUnidadTEST,
+} from "../helpers/datos-test"
 
 test.use({ actionTimeout: 30_000 })
 test.setTimeout(300_000)
 
-// P1 SERIE-GATED-API-BD: independizado de QA-Lab. El dato TEST propio se crea
-// vía API REST (POST /api/unidades + POST /api/cobros-fi, upsert por id) y se
-// limpia al final (PUT reset de pagos + DELETE, la unidad TEST no deja residuos).
+// P1 SERIE-E2E-SIN-GATED: setup vía helper compartido `e2e/helpers/datos-test`.
+// El dato TEST propio se crea vía API REST y se limpia al final (PUT reset de
+// pagos + DELETE, la unidad TEST no deja residuos).
 // La página /finanzas/pagos lee BD vía useCobrosFI: sin "Poblar todo" previo.
 
 test.describe("CRUD — Finanzas/Pagos (GATED)", () => {
@@ -14,65 +20,11 @@ test.describe("CRUD — Finanzas/Pagos (GATED)", () => {
     page.on("pageerror", (err) => errores.push(err.message))
 
     const ts = Date.now()
-    const unidadId = `test-p1-pagos-u-${ts}`
-    const cobroId = `test-p1-pagos-c-${ts}`
-    const numeroUnidad = `T1P-${String(ts).slice(-6)}`
-    const descripcion = `TEST P1 pagos ${ts}`
-    const hoy = new Date().toISOString().slice(0, 10)
-
-    // Setup vía API: FKs de una unidad real del seed (mismo scope garantizado).
-    const lista = await page.request.get("/api/unidades?pageSize=1")
-    expect(lista.ok(), "GET /api/unidades debe responder").toBe(true)
-    const ju = (await lista.json()) as {
-      data?: { microSectorId: string; tipoUnidadId: string; estadoId: string }[]
-    }
-    const base = ju.data?.[0]
-    expect(base, "el seed debe traer al menos una unidad").toBeTruthy()
-
-    const resUnidad = await page.request.post("/api/unidades", {
-      data: {
-        id: unidadId,
-        microSectorId: base!.microSectorId,
-        numero: numeroUnidad,
-        etiqueta: "TEST-P1",
-        tipoUnidadId: base!.tipoUnidadId,
-        metraje: 45,
-        prorrateo: 0.01,
-        rolSii: "",
-        estadoId: base!.estadoId,
-        servicios: {},
-      },
-    })
-    expect(resUnidad.ok(), "POST /api/unidades debe crear la unidad TEST").toBe(true)
-
-    // Fondo: uno del seed vía GET (gasto_comun preferido).
-    const resFondos = await page.request.get("/api/fondos-fi?pageSize=100")
-    expect(resFondos.ok(), "GET /api/fondos-fi debe responder").toBe(true)
-    const jf = (await resFondos.json()) as {
-      data?: { id: string; tipo: string }[]
-    }
-    const fondos = jf.data ?? []
-    expect(fondos.length > 0, "el seed debe traer al menos un fondo FI").toBe(true)
-    const fondoId = fondos.find((f) => f.tipo === "gasto_comun")?.id ?? fondos[0]!.id
-
-    const resCobro = await page.request.post("/api/cobros-fi", {
-      data: {
-        id: cobroId,
-        unidadId,
-        periodo: "2026-11",
-        concepto: "gasto_comun",
-        origenModulo: "FI",
-        fondoId,
-        descripcion,
-        montoBase: 120000,
-        fechaCargo: hoy,
-        fechaVencimiento: "2026-12-10",
-        moras: [],
-        pagos: [],
-        diferencias: [],
-      },
-    })
-    expect(resCobro.ok(), "POST /api/cobros-fi debe crear el cobro TEST").toBe(true)
+    const unidad = await crearUnidadTEST(page.request, "p1-pagos", ts)
+    const unidadId = unidad.id
+    const cobro = await crearCobroTEST(page.request, unidadId, "p1-pagos", ts)
+    const cobroId = cobro.id
+    const descripcion = cobro.descripcion
 
     try {
       // Ir a Recaudación
@@ -137,12 +89,9 @@ test.describe("CRUD — Finanzas/Pagos (GATED)", () => {
 
       expect(errores, "Excepciones no capturadas en finanzas/pagos").toEqual([])
     } finally {
-      // Cleanup: DELETE del cobro bloquea con pagos (409) → reset vía PUT y luego DELETE.
-      await page.request.put(`/api/cobros-fi/${cobroId}`, {
-        data: { pagos: [], moras: [], diferencias: [] },
-      }).catch(() => {})
-      await page.request.delete(`/api/cobros-fi/${cobroId}`).catch(() => {})
-      await page.request.delete(`/api/unidades/${unidadId}`).catch(() => {})
+      // Cleanup idempotente vía helper (reset vía PUT si tiene pagos + DELETEs).
+      await limpiarCobroTEST(page.request, cobroId)
+      await limpiarUnidadTEST(page.request, unidadId)
     }
   })
 })

@@ -6,7 +6,7 @@
 
 | Ventana | Alcance | Estado | Commit final |
 | --- | --- | --- | --- |
-| P1 | Helper `e2e/helpers/datos-test.ts` + migrar los 5 specs con setup API propio (pagos, certificados, portal, remuneraciones, poblamiento) | pendiente | — |
+| P1 | Helper `e2e/helpers/datos-test.ts` + migrar los 5 specs con setup API propio (pagos, certificados, portal, remuneraciones, poblamiento) | HECHA | — |
 | P2 | Quitar tag GATED + scripts + CI a corrida única con seed completo + verificación verde | pendiente | — |
 
 MÁXIMO: 2 ventanas. Post-serie (fuera): checklist §4 owner + archivo de 9+4
@@ -53,3 +53,10 @@ super-admin global, migración SQLite→PostgreSQL, resto de BACKLOG-100.
 - [2026-09-30] Serie materializada por orquestador (2 ventanas, cap duro). Base:
   GATED-API-BD P5 PARCIAL con resguardo remoto. Objetivo: eliminar la
   complejidad de orden (helper + fin del tag) dejando los lanes intactos.
+- [2026-10-03] P1 HECHA: helper `e2e/helpers/datos-test.ts` (crear/limpiar por
+  entidad, RUT/DV, maestros + params legales) + 5 specs migrados con corridas
+  verdes individuales (pagos, certificados, portal, remuneraciones,
+  poblamiento MP/EF; master QA-Lab intacto). Change `e2e-helper-datos-test`
+  abierto con 6 deltas. Validación: unit 85/835, tsc 0, lint 0 errores,
+  validate 42/7 (7 sin-deltas pre-existentes), 0 residuos TEST en BD (5 filas
+  QA-Lab del master purgadas vía higiene). Sin push (commit hash al cerrar).
