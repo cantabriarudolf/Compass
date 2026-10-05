@@ -1,4 +1,5 @@
-## MODIFIED Requirements
+## ADDED Requirements
+<!-- P2 ROJOS-CRUD: era MODIFIED sin target; el spec nunca lo tuvo -->
 
 ### Requirement: Scope canónico único (última membresía) en resolvers legacy
 Los resolvers que no usan `withComunidadScope` SHALL resolver la ÚLTIMA

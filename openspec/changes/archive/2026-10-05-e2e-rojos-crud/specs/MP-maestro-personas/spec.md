@@ -1,4 +1,5 @@
-## MODIFIED Requirements
+## ADDED Requirements
+<!-- P2 ROJOS-CRUD: era MODIFIED sin target; el spec nunca lo tuvo -->
 
 ### Requirement: Validación de referencias tolerante a null de BD
 `esReferenciaValida` SHALL tratar null como ausente: las filas Prisma traen

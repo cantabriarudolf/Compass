@@ -3,9 +3,7 @@
 ## Purpose
 
 Consolidar la información de todos los subsistemas (Finanzas, Operaciones, Estructura) para presentarla de forma digerible, permitiendo la toma de decisiones y la transparencia hacia la comunidad. Fuente de verdad: `Data/NSGC/docs/especificaciones/RE - Reporteria y Dashboards.md`.
-
 ## Requirements
-
 ### Requirement: Dashboards por Perfil
 El sistema SHALL presentar vistas consolidadas según el rol del usuario:
 - **Dashboard de Operaciones (Personal de Servicio)**: tarjetas de jornadas (Mañana/Tarde/Noche) con estados Informado/No Informado, historial y acceso al detalle del Cierre de Turno (ubicado en PE Reporte Diario).
@@ -77,3 +75,15 @@ Todo acceso a información sensible y cada distribución SHALL quedar registrado
 #### Scenario: Ciclo de reportería trazado
 - **WHEN** se abre el mando, se genera un reporte y se distribuye
 - **THEN** los eventos `RE_DASHBOARD_VIEW`, `RE_REPORT_GENERATED` y `RE_REPORT_DISTRIBUTED` quedan registrados como inmutables con su data cuantificable
+
+### Requirement: Historial de reportes con fuente BD
+Generar SHALL persistir el reporte en BD (`POST /api/reportes-re`) y
+distribuir SHALL espejar `fechaDistribucion`/`distribuidoA`/
+`destinatariosPersonaId` (PUT): el historial lee de BD pero la generación
+vivía solo en el store legacy y el título nunca aparecía.
+
+#### Scenario: Generar, ver en historial y distribuir
+- **WHEN** se genera un reporte y se distribuye en `/admin/reporteria`
+- **THEN** la card con el título aparece en el historial y tras distribuir
+  muestra el badge `N destinatario(s)`.
+

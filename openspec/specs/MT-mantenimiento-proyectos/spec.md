@@ -2,9 +2,7 @@
 
 ## Purpose
 Registro de trabajos y obras con garantías y pagos, mantención preventiva con generación automática de ciclos, tablero de próximos vencimientos y proyectos de largo plazo con cuota sugerida. Fuente de verdad: `Data/NSGC/docs/especificaciones/MT - Mantenimiento y Proyectos.md`.
-
 ## Requirements
-
 ### Requirement: Registro de Trabajos y Obras con Ubicación EF
 El sistema MUST documentar intervenciones técnicas y mejoras mediante `saveTrabajoMT` retornando `StoreResult`, con descripción técnica detallada, vinculación directa con la infraestructura (unidad del maestro EF, micro sector o activo del catálogo IR como Hidropack/ascensores), responsable (empresa externa proveedora o personal interno MP), estado (Planificado, En Curso, Finalizado, Cancelado), prioridad (Baja, Media, Alta, Emergencia/Crítico) y repositorio de evidencia (fotos antes/después, presupuestos y facturas digitalizadas) como metadatos D1. Todo trabajo nuevo audita `MT_WORK_CREATED`; el histórico de mantenimiento por cada zona o equipo crítico MUST ser derivable filtrando por unidad/micro sector/activo.
 
@@ -81,3 +79,14 @@ El módulo SHALL emitir `MT_WORK_CREATED`, `MT_WORK_FINISHED`, `MT_GUARANTEE_EXP
 #### Scenario: Auditoría completa
 - **WHEN** ocurre creación, término, alerta de garantía o generación preventiva
 - **THEN** el evento registra folio, título y descripción legible sin mutar colecciones históricas
+
+### Requirement: Alta de trabajo con folio único y transiciones vía API
+El alta SHALL generar folio `MT-*` único (el schema lo exige; `""` daba 400
+con dialog que no cierra). Iniciar/Finalizar/Cancelar SHALL usar
+`actualizarTrabajo` (PUT REST): las acciones del store legacy eran no-op
+sobre registros BD.
+
+#### Scenario: Crear trabajo y transitar a En Curso
+- **WHEN** se crea un trabajo en `/inventario/proyectos` y se pulsa Iniciar
+- **THEN** la fila muestra el badge "En Curso".
+

@@ -7,7 +7,7 @@
 | Ventana | Alcance | Estado | Commit final |
 | --- | --- | --- | --- |
 | P1 | Revisar 5 deltas vs código y remapear carpetas: TU-tipos-unidad (exacta), CF-configuracion→CF-configuracion-global, RE-reporteria→RE-reporteria-dashboards, MT-proyectos→MT-mantenimiento-proyectos, PE-personal→PE-personal-servicios | HECHA | c16b978 |
-| P2 | Revisar 3 deltas (AD-gestion→AD-gestion-administrativa, FI-espejo→FI-finanzas-morosidad, MP-personas→MP-maestro-personas) + eliminar delta muerto GATED-qa-lab + `openspec archive e2e-rojos-crud` + validar + commit | pendiente | — |
+| P2 | Revisar 3 deltas (AD-gestion→AD-gestion-administrativa, FI-espejo→FI-finanzas-morosidad, MP-personas→MP-maestro-personas) + eliminar delta muerto GATED-qa-lab + `openspec archive e2e-rojos-crud` + validar + commit | HECHA (commit local pendiente del parent) | pendiente-parent |
 
 MÁXIMO: 2 ventanas. Post-serie (fuera): resto de changes abiertos (au-google-sso en pausa, e2e-higiene-determinismo, e2e-rojos-flujo-a11y-smoke, fix-vercel-data-ignore, gd-*, st-*), checklist §4 owner, super-admin global, SQLite→PostgreSQL, BACKLOG-100.
 
@@ -29,3 +29,4 @@ MÁXIMO: 2 ventanas. Post-serie (fuera): resto de changes abiertos (au-google-ss
 
 - [2026-10-05] Serie materializada por orquestador (2 ventanas, cap duro). Motivo: `openspec archive e2e-rojos-crud` aborta (dirs cortos + MODIFIEDs sin target + delta GATED muerto); owner eligió serie propia (opción B) en vez de remapeo ciego.
 - [2026-10-05] P1 HECHA: 5/5 deltas verificados vs código y remapeados (4 git mv + TU exacta; 4 MODIFIED→ADDED con razón P1; PE ya era ADDED). 0 descartados. Valids: change e2e-rojos-crud válido + validate --all 37/6 (= base). Sin tocar código app; tsc N/A. Sin archivar (lo hace P2).
+- [2026-10-05] P2 HECHA: ARRANQUE OK (tree tracked limpio, validate 37/6 = declarado P1). 3/3 deltas verificados vs código (esReferenciaValida en lib/store.ts, orderBy createdAt desc en api/fi, switch morosidad en gestion.spec.ts/authz.ts) y remapeados con git mv + MODIFIED→ADDED (0 duplicados en mains). Delta GATED-qa-lab eliminado con git rm -r (0 GATED vivos en describes e2e; solo menciones en comentarios). `openspec archive e2e-rojos-crud -y` OK: 8 deltas fusionados (+8/-0) a mains, change archivado en `archive/2026-10-05-e2e-rojos-crud`. Valids: validate --all 36/6 (mismos 6 pre-existentes de otras series), tsc exit 0, lint N/A (solo markdown). Commit local pendiente del parent (worker no commitea: git actions son del orquestador).

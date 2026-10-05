@@ -2,9 +2,7 @@
 
 ## Purpose
 Centralizar el panel de administración: perfiles comunitarios, controles de privacidad/comunicación por unidad, gobernanza con firma digitalizada y acceso de lectura al personal (RRHH). Fuente de verdad: `Data/NSGC/docs/especificaciones/AD - Gestión Administrativa.md`.
-
 ## Requirements
-
 ### Requirement: Perfiles de Identidad Comunitarios
 El panel del administrador SHALL presentar los perfiles de propietarios, residentes y directiva a partir de `personas` y sus vínculos (VU), mostrando nombre, apellidos, RUT, teléfono, email y fotografía. La fotografía SHALL manejarse por referencia (metadatos + URL) conforme a ST; el panel NO SHALL duplicar datos de identidad fuera del store.
 
@@ -57,3 +55,14 @@ El módulo SHALL emitir `AD_OWNER_CONFIG_CHANGE` y `AD_DIRECTIVA_SIGN_UPLOAD` co
 #### Scenario: Métrica de rotación de cargos
 - **WHEN** la reportería consulta gobernanza
 - **THEN** puede derivar rotación de cargos de directiva a partir de `datosGobernanza.fechaAsuncion` y los eventos AM
+
+### Requirement: Switch de privacidad con reflejo inmediato
+El switch de morosidad es controlado por la lista SWR y la revalidación
+tarda segundos bajo carga dev (el assert a 600ms fallaba). SHALL aplicar
+override optimista local al instante, esperar la revalidación tras el PUT y
+conciliar después (igual que proyectos/reservas con `mutateGlobal`).
+
+#### Scenario: Toggle flippea y persiste
+- **WHEN** se clickea el switch y se recarga
+- **THEN** `aria-checked` cambia al instante y persiste tras reload.
+

@@ -1,4 +1,5 @@
-## MODIFIED Requirements
+## ADDED Requirements
+<!-- P2 ROJOS-CRUD: era MODIFIED sin target; el spec nunca lo tuvo -->
 
 ### Requirement: Switch de privacidad con reflejo inmediato
 El switch de morosidad es controlado por la lista SWR y la revalidación

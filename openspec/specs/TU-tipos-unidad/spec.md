@@ -2,9 +2,7 @@
 
 ## Purpose
 Gestionar el maestro de tipos de unidad que estandariza las características de las unidades de la comunidad, permitiendo la creación masiva y asegurando la consistencia en los cobros. Fuente de verdad: `Data/NSGC/docs/especificaciones/TU - Tipos de Unidad.md`.
-
 ## Requirements
-
 ### Requirement: Type Attributes
 Every "Tipo de Unidad" MUST define the base attributes of a unit model, including a descriptive name, metraje (m2), a base gasto común amount in pesos, and an optional description.
 
@@ -86,3 +84,14 @@ Entidad `CompassData.tiposUnidad` `k0mp4ss_fe/apps/web/lib/store.ts:77`, seed `d
 #### Scenario: Bulk TU auditado
 - **WHEN** se cargan 5 tipos
 - **THEN** `AM` registra `valorCuantificable:5` y `métrica: recaudación teórica = sum(montoBase)`.
+
+### Requirement: Discriminador crear vs editar por modo, no por id
+`guardarTipo` SHALL decidir por el modo edición (`editingItem`), no por la
+presencia de `id`: el alta pre-genera id y un `if (cuerpo.id)` caía siempre
+en PUT contra registro inexistente (404, dialog que no cierra).
+
+#### Scenario: Crear tipo cierra el dialog y muestra la fila
+- **WHEN** se crea un tipo en `/inventario/tipos`
+- **THEN** el POST responde 201, el dialog cierra y la fila aparece en
+  Plantillas Técnicas.
+
