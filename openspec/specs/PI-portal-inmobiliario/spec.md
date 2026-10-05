@@ -2,9 +2,7 @@
 
 ## Purpose
 Publicar la oferta inmobiliaria de la comunidad (arriendo/venta) en una vitrina con catálogo visual, filtros de búsqueda y contacto seguro mediante leads, sincronizada con el estado de ocupación declarado en VU. Fuente de verdad: `Data/NSGC/docs/especificaciones/PI - Portal Inmobiliario.md`.
-
 ## Requirements
-
 ### Requirement: Publicación Automática por Trigger de Estado (VU)
 El sistema MUST publicar automáticamente una unidad en la vitrina cuando el vínculo del propietario (`vinculos.rol = "propietario"`) marca `estadoOcupacionPropiedad` con un estado inmobiliario de oferta ("En Arriendo" o "En Venta" de `maestros.estadosInmobiliarios`), y MUST retirarla (desactivar) cuando el estado cambia a uno sin oferta. La publicación se gestiona con `savePublicacionPortal`/`removePublicacionPortal` retornando `StoreResult`.
 
@@ -73,3 +71,17 @@ El módulo SHALL emitir eventos `PI_PROPERTY_LISTED`, `PI_PROPERTY_UNLISTED` y `
 #### Scenario: Métricas de vacancia
 - **WHEN** la reportería consulta el movimiento inmobiliario
 - **THEN** puede calcular días de publicación por unidad y leads generados a partir de los eventos AM y las fechas de las publicaciones
+
+### Requirement: Setup de portal TEST vía helper compartido
+El spec de portal SHALL crear su publicación TEST vía
+`e2e/helpers/datos-test` (`crearPublicacionTEST` con unidad del seed +
+`snapshotPublicacionesTEST` previo) y limpiarla al final
+(`limpiarPublicacionesNuevasTEST` por diferencia + `limpiarPublicacionTEST`),
+sin setup inline duplicado. El flujo UI (catálogo, Gestionar vitrina, Nueva
+publicación manual) queda idéntico.
+
+#### Scenario: Vitrina TEST y gestión con manual del helper
+- **WHEN** existe una publicación TEST creada vía el helper
+- **THEN** el catálogo la muestra y la manual creada por la UI se limpia por
+  diferencia sin dejar residuos TEST.
+

@@ -3,9 +3,7 @@
 ## Purpose
 
 Automatizar el cálculo de haberes, descuentos y pagos del personal integrando la asistencia reportada con las condiciones contractuales para generar documentos legales y registros contables precisos. Fuente de verdad: `Data/NSGC/docs/especificaciones/PL - Liquidaciones y Remuneraciones.md`.
-
 ## Requirements
-
 ### Requirement: Generación de Liquidaciones con estructura estándar chilena
 El sistema SHALL generar liquidaciones de sueldo calculando en tiempo real, a partir de la ficha del trabajador (PE) y los parámetros vigentes:
 - **Sueldo Base** proporcional a los días trabajados sobre el mes comercial de CF (`diasMesComercial`).
@@ -81,3 +79,18 @@ Toda operación del ciclo de remuneraciones SHALL emitir eventos inmutables con 
 #### Scenario: Ciclo de remuneración trazado
 - **WHEN** se registra un adelanto, se genera una liquidación en borrador y se confirma
 - **THEN** los eventos `PL_ADD_ADVANCE`, `PL_GENERATE_PAYSLIP` y `PL_EXPENSE_SYNC` quedan registrados como inmutables con su data cuantificable
+
+### Requirement: Setup de remuneraciones TEST vía helper compartido
+El spec de remuneraciones SHALL crear su trabajador TEST vía
+`e2e/helpers/datos-test` (`crearTrabajadorTEST`: maestros legales + params
+CF + persona con ficha completa) y limpiarlo al final
+(`limpiarTrabajadorTEST`: borradores + egreso espejo + persona), sin setup
+inline duplicado. El flujo UI (generar borrador, confirmar, folio LIQ-)
+queda idéntico. La liquidada confirmada sigue inmutable por diseño (documento
+de auditoría con periodo TEST futuro).
+
+#### Scenario: Trabajador TEST del helper genera y confirma liquidación
+- **WHEN** existe un trabajador TEST creado vía el helper
+- **THEN** el flujo genera el borrador con folio LIQ-, lo confirma y el
+  cleanup elimina borradores, egreso espejo y persona sin residuos TEST.
+

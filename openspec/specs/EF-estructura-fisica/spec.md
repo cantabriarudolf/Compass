@@ -2,9 +2,7 @@
 
 ## Purpose
 Establecer la infraestructura física y lógica de las propiedades de la comunidad, permitiendo una gestión jerárquica, auditable y basada en plantillas técnicas.
-
 ## Requirements
-
 ### Requirement: Flexible Hierarchy
 The system MUST support a 3-level hierarchy (Macro-Sector > Micro-Sector > Unit) where the Micro-Sector level MUST be optional.
 
@@ -113,3 +111,14 @@ Bulk de `macroSectores/microSectores/unidades` SHALL emitir `EF_SEED_LOADED` y m
 #### Scenario: Bulk EF auditado
 - **WHEN** se cargan 166 unidades
 - **THEN** `AM` registra `valorCuantificable:166` y `métrica: ratio ocupación = ocupadas/total`.
+
+### Requirement: Setup EF TEST vía helper compartido
+El test EF de poblamiento SHALL crear su unidad TEST vía
+`e2e/helpers/datos-test` (`crearUnidadTEST` + `limpiarUnidadTEST` con FKs del
+seed), sin setup inline duplicado. La afirmación (número visible en la
+estructura) queda idéntica.
+
+#### Scenario: Unidad TEST del helper aparece en la estructura
+- **WHEN** existe una unidad TEST creada vía el helper
+- **THEN** la estructura la muestra y el cleanup no deja residuos TEST.
+

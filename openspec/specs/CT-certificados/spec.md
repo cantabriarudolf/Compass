@@ -3,9 +3,7 @@
 ## Purpose
 
 Generar la documentación oficial y acreditaciones para residentes y personal, garantizando la validez de la información mediante la firma digital del administrador, folios verificables e historial de emisión. Fuente de verdad: `Data/NSGC/docs/especificaciones/CT - Certificados.md`.
-
 ## Requirements
-
 ### Requirement: Tipologías de Certificados con gates por fuente
 El sistema SHALL ofrecer 4 tipologías que se nutren de datos reales del store, validando antes de emitir:
 - **Certificado de Residencia**: el solicitante DEBE tener vínculo vigente (sin `fechaFin`) en la unidad indicada.
@@ -67,3 +65,17 @@ Cada documento generado SHALL quedar auditado como evento legal rastreable:
 #### Scenario: Emisión por tipología trazada
 - **WHEN** se emiten certificados de residencia, estado de cuenta, liquidación y al día
 - **THEN** cada emisión genera su evento inmutable correspondiente referenciando el registro CT
+
+### Requirement: Setup de certificados TEST vía helper compartido
+El spec de certificados SHALL crear su trío TEST vía
+`e2e/helpers/datos-test` (`crearTrioCertificadoTEST`: persona + unidad +
+vínculo propietario activo) y limpiarlo al final
+(`limpiarTrioCertificadoTEST` en orden vínculo → persona → unidad, guards
+409), sin setup inline duplicado. El flujo UI (generar PDF, folio CT-,
+historial, VC-) queda idéntico.
+
+#### Scenario: Certificado residencia con trío TEST del helper
+- **WHEN** el trío TEST existe vía el helper
+- **THEN** el flujo genera el PDF con folio CT-, el historial lo muestra con
+  código VC- y el cleanup no deja residuos TEST.
+
