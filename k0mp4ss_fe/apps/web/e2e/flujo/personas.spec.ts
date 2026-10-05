@@ -31,8 +31,14 @@ test.describe("Mini flujo — Maestro de Personas (MP)", () => {
     const errores: string[] = []
     page.on("pageerror", (err) => errores.push(err.message))
 
+    const ts = Date.now()
     const RUT = rutUnico()
-    const email = `ana.bodeguera.${Date.now()}@test.cl`
+    const email = `ana.bodeguera.${ts}@test.cl`
+    // Nombre único por corrida: la app confirma (D5) si el nombre completo ya
+    // existe y Playwright auto-descarta el confirm → "Guardado cancelado".
+    // (P2 E2E-SIN-GATED: independizado — el nombre fijo "Ana Bodeguera"
+    // colisionaba con residuos de corridas previas cuyo cleanup no resolvió id.)
+    const apellidos = `Bodeguera ${String(ts).slice(-6)}`
     let creadaId: string | null = null
     try {
       await page.goto("/comunidad/personas")
@@ -45,7 +51,7 @@ test.describe("Mini flujo — Maestro de Personas (MP)", () => {
       // El formulario expone labels accesibles
       await page.getByLabel("RUT o Pasaporte *").fill(RUT)
       await page.getByLabel("Nombres *").fill("Ana")
-      await page.getByLabel("Apellidos *").fill("Bodeguera")
+      await page.getByLabel("Apellidos *").fill(apellidos)
       await page.getByLabel("Correo Electrónico *").fill(email)
       await page.getByLabel("Teléfono Móvil *").fill("+56 9 1111 2222")
 
@@ -62,12 +68,26 @@ test.describe("Mini flujo — Maestro de Personas (MP)", () => {
       await expect(page.getByText(rutFormateado).first()).toBeVisible({ timeout: 15_000 })
 
       // Resolver el id para el cleanup (la grilla no lo expone).
+      // Fallback por email si la búsqueda por RUT no resuelve (el cleanup
+      // debe ser total: un id no resuelto deja un residuo con id de servidor
+      // que sobrevive a reseed e higiene y envenena las corridas siguientes).
       const res = await page.request.get(
         `/api/personas?q=${encodeURIComponent(RUT)}&pageSize=5`,
       )
       if (res.ok()) {
         const j = (await res.json()) as { data?: { id: string }[] }
         creadaId = j.data?.[0]?.id ?? null
+      }
+      if (!creadaId) {
+        const porEmail = await page.request
+          .get(`/api/personas?q=${encodeURIComponent(email)}&pageSize=5`)
+          .catch(() => null)
+        if (porEmail?.ok()) {
+          const j = (await porEmail.json().catch(() => ({ data: [] }))) as {
+            data?: { id: string }[]
+          }
+          creadaId = j.data?.[0]?.id ?? null
+        }
       }
 
       expect(errores, "Excepciones no capturadas en Maestro de Personas").toEqual([])

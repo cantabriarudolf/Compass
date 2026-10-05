@@ -13,7 +13,7 @@ test.setTimeout(300_000)
 // guards 409). La página /comunidad/certificados lee BD vía
 // usePersonas/useUnidades.
 
-test.describe("CRUD — Comunidad/Certificados (GATED)", () => {
+test.describe("CRUD — Comunidad/Certificados", () => {
   test("persona+unidad TEST vía API y generar certificado residencia PDF + historial", async ({ page }) => {
     const errores: string[] = []
     page.on("pageerror", (err) => {

@@ -14,7 +14,7 @@ test.setTimeout(300_000)
 // pagos + DELETE, la unidad TEST no deja residuos).
 // La página /finanzas/pagos lee BD vía useCobrosFI: sin "Poblar todo" previo.
 
-test.describe("CRUD — Finanzas/Pagos (GATED)", () => {
+test.describe("CRUD — Finanzas/Pagos", () => {
   test("cobro pendiente TEST vía API y registrar pago", async ({ page }) => {
     const errores: string[] = []
     page.on("pageerror", (err) => errores.push(err.message))

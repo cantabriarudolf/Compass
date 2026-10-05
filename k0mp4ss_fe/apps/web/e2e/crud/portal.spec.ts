@@ -14,7 +14,7 @@ test.setTimeout(300_000)
 // (DELETE + las manuales que cree la UI). La página /comunidad/portal lee BD
 // vía hooks SWR: sin "Poblar todo" previo.
 
-test.describe("CRUD — Comunidad/Portal (GATED)", () => {
+test.describe("CRUD — Comunidad/Portal", () => {
   test("vitrina TEST vía API y gestión con nueva publicación manual", async ({ page }) => {
     const errores: string[] = []
     page.on("pageerror", (err) => errores.push(err.message))

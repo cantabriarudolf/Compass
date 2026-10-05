@@ -7,7 +7,7 @@
 | Ventana | Alcance | Estado | Commit final |
 | --- | --- | --- | --- |
 | P1 | Helper `e2e/helpers/datos-test.ts` + migrar los 5 specs con setup API propio (pagos, certificados, portal, remuneraciones, poblamiento) | HECHA | `e4c2a10` |
-| P2 | Quitar tag GATED + scripts + CI a corrida única con seed completo + verificación verde | pendiente | — |
+| P2 | Quitar tag GATED + scripts + CI a corrida única con seed completo + verificación verde | HECHA | — |
 
 MÁXIMO: 2 ventanas. Post-serie (fuera): checklist §4 owner + archivo de 9+4
 changes + push a main + GATED-API-BD y VALIDACION-PERFILES COMPLETAS;
@@ -60,3 +60,14 @@ super-admin global, migración SQLite→PostgreSQL, resto de BACKLOG-100.
   abierto con 6 deltas. Validación: unit 85/835, tsc 0, lint 0 errores,
   validate 42/7 (7 sin-deltas pre-existentes), 0 residuos TEST en BD (5 filas
   QA-Lab del master purgadas vía higiene). Sin push (commit `e4c2a10`).
+- [2026-10-03] P2 HECHA: tag `(GATED)` eliminado de los 4 describes +
+  scripts `e2e:nongated/gated/full-orden` eliminados (`test:e2e` alias
+  canónico; CI ya usaba `npx playwright test` directo) + CI job `e2e` con
+  seed completo `e2e:reseed-base` y timeout 25→60 min (rate-limit y deploy
+  intactos). Interferencia real hallada y reparada sin tag: `personas.spec`
+  (nombre fijo → confirm D5; nombre único + fallback por email) y
+  `admin-maestros.spec` (re-submit duplicaba fila; un envío + cleanup API).
+  Confirmatoria secuencial (paridad CI): 93 passed + 2 skipped, 0 failed.
+  Change `e2e-fin-gated` abierto (skip_specs). Validación: unit 85/835, tsc 0,
+  lint 0, validate 43/7 (7 sin-deltas pre-existentes), 0 residuos TEST.
+  Sin push.

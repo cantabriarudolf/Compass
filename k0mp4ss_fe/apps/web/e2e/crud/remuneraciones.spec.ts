@@ -14,7 +14,7 @@ test.setTimeout(300_000)
 // confirmada es inmutable por diseño y queda como documento de auditoría con
 // periodo TEST futuro que no interfiere).
 
-test.describe("CRUD — Finanzas/Remuneraciones (GATED)", () => {
+test.describe("CRUD — Finanzas/Remuneraciones", () => {
   test("trabajador TEST vía API y generar + confirmar liquidación", async ({ page }) => {
     const errores: string[] = []
     page.on("pageerror", (err) => errores.push(err.message))
