@@ -7,7 +7,7 @@
 | Ventana | Alcance | Estado | Commit final |
 | --- | --- | --- | --- |
 | P1 | Helper `e2e/helpers/datos-test.ts` + migrar los 5 specs con setup API propio (pagos, certificados, portal, remuneraciones, poblamiento) | HECHA | `e4c2a10` |
-| P2 | Quitar tag GATED + scripts + CI a corrida única con seed completo + verificación verde | HECHA | — |
+| P2 | Quitar tag GATED + scripts + CI a corrida única con seed completo + verificación verde | HECHA | `b7e88a8` |
 
 MÁXIMO: 2 ventanas. Post-serie (fuera): checklist §4 owner + archivo de 9+4
 changes + push a main + GATED-API-BD y VALIDACION-PERFILES COMPLETAS;
