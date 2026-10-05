@@ -37,11 +37,54 @@ jobs:
           cache-dependency-path: k0mp4ss_fe/package-lock.json
       - run: npm ci
         working-directory: k0mp4ss_fe
-      - run: npx prisma generate
+      # Dual SQLite/PG (st-migracion-postgres): schema.prisma fuente es
+      # postgresql; el job SQLite usa el generado schema.sqlite.prisma.
+      - run: npx prisma generate --schema=prisma/schema.sqlite.prisma
       # Algunos tests endpoint (api-admin-usuarios, api-backup-authz) usan
       # Prisma real: necesitan el esquema. Local pasaba porque dev.db existe.
-      - run: npx prisma migrate deploy
+      - run: npx prisma migrate deploy --schema=prisma/schema.sqlite.prisma
       - run: npx tsc --noEmit
+      - run: npm test
+
+  unit-pg:
+    name: Unit + integración contra PostgreSQL (Vitest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: compass
+          POSTGRES_PASSWORD: compass_ci
+          POSTGRES_DB: compass_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U compass -d compass_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+    defaults:
+      run:
+        working-directory: k0mp4ss_fe/apps/web
+    env:
+      # PostgreSQL efímero del service container (sin secretos reales).
+      DATABASE_URL: postgresql://compass:compass_ci@localhost:5432/compass_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          # Node 24: mismo runtime de desarrollo. En Node 22 la intercepción
+          # fetch de MSW 2 en jsdom rompe las rutas de éxito (push no llega).
+          node-version: 24
+          cache: npm
+          cache-dependency-path: k0mp4ss_fe/package-lock.json
+      - run: npm ci
+        working-directory: k0mp4ss_fe
+      # schema.prisma fuente ya es postgresql: generate + db push crean el
+      # esquema PG sin migraciones (la baseline PG es tarea 3.2, ventana P2).
+      - run: npx prisma generate
+      - run: npx prisma db push
       - run: npm test
 
   e2e:

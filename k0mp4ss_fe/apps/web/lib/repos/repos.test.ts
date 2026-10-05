@@ -2,65 +2,48 @@
  * @vitest-environment node
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest"
-import { execSync } from "node:child_process"
-import fs from "node:fs"
-import path from "node:path"
-import os from "node:os"
 import { PrismaClient } from "@prisma/client"
 import { crearRepositorio } from "./index"
+import { prepararBdTest, limpiarBdTest, sufijoCorrida } from "./bd-test"
 
 // C1b: Tests de aislamiento A/B con SQLite archivo temporal
 describe("Repositorios con scoping obligatorio por comunidadId (C1b)", () => {
-  let tmpDbPath: string
+  let tmpDbPath: string | null
   let prismaTest: PrismaClient
   let comunidadAId: string
   let comunidadBId: string
+  // P1 st-migracion-postgres: en PG los ids se sufijan (BD compartida).
+  const SFX = sufijoCorrida("repos")
 
   beforeAll(async () => {
-    const tmpDir = os.tmpdir()
-    tmpDbPath = path.join(tmpDir, `test-p2-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.db`)
-    const databaseUrl = `file:${tmpDbPath}`
-    const schemaPath = path.resolve(process.cwd(), "k0mp4ss_fe/apps/web/prisma/schema.prisma")
-    const tryPaths = [
-      path.resolve("prisma/schema.sqlite.prisma"),
-      path.resolve(__dirname, "../../prisma/schema.sqlite.prisma"),
-      path.resolve("prisma/schema.prisma"),
-      schemaPath,
-      path.resolve(__dirname, "../../prisma/schema.prisma"),
-    ]
-    let sp = tryPaths.find(p => fs.existsSync(p))
-    if (!sp) sp = "k0mp4ss_fe/apps/web/prisma/schema.sqlite.prisma"
-    try {
-      execSync(`npx prisma migrate deploy --schema=${sp}`, {
-        env: { ...process.env, DATABASE_URL: databaseUrl },
-        stdio: "pipe",
-      })
-    } catch {
-      execSync(`npx prisma db push --schema=${sp} --skip-generate --accept-data-loss`, {
-        env: { ...process.env, DATABASE_URL: databaseUrl },
-        stdio: "pipe",
-      })
-    }
+    const prep = prepararBdTest("test-p2")
+    tmpDbPath = prep.tmpDbPath
+    const databaseUrl = prep.databaseUrl
 
     prismaTest = new PrismaClient({ datasourceUrl: databaseUrl })
     await prismaTest.$connect()
 
     const comunidadA = await prismaTest.comunidad.create({
-      data: { id: "comunidad-a", nombre: "Comunidad A", slug: "comunidad-a" },
+      data: { id: `comunidad-a${SFX}`, nombre: "Comunidad A", slug: `comunidad-a${SFX}` },
     })
     const comunidadB = await prismaTest.comunidad.create({
-      data: { id: "comunidad-b", nombre: "Comunidad B", slug: "comunidad-b" },
+      data: { id: `comunidad-b${SFX}`, nombre: "Comunidad B", slug: `comunidad-b${SFX}` },
     })
     comunidadAId = comunidadA.id
     comunidadBId = comunidadB.id
   }, 60_000)
 
   afterAll(async () => {
-    if (prismaTest) await prismaTest.$disconnect().catch(() => {})
-    if (tmpDbPath && fs.existsSync(tmpDbPath)) {
-      try { fs.unlinkSync(tmpDbPath) } catch { /* intencional */ }
-      try { fs.unlinkSync(`${tmpDbPath}-journal`) } catch { /* intencional */ }
+    try {
+      // Solo PG (BD compartida): borra las comunidades, Cascade limpia hijos.
+      if (tmpDbPath === null && comunidadAId && comunidadBId) {
+        await prismaTest.comunidad.deleteMany({ where: { id: { in: [comunidadAId, comunidadBId] } } })
+      }
+    } catch {
+      /* intencional */
     }
+    if (prismaTest) await prismaTest.$disconnect().catch(() => {})
+    limpiarBdTest(tmpDbPath)
   })
 
   it("factory exige comunidadId no vacío", () => {
@@ -75,7 +58,7 @@ describe("Repositorios con scoping obligatorio por comunidadId (C1b)", () => {
     const repoB = crearRepositorio(comunidadBId, prismaTest)
 
     await repoA.tiposUnidad.create({
-      id: "tu-a1",
+      id: `tu-a1${SFX}`,
       nombre: "Tipo A1",
       categoria: "Depto",
       metraje: 70,
@@ -88,8 +71,8 @@ describe("Repositorios con scoping obligatorio por comunidadId (C1b)", () => {
     const listA = (await repoA.tiposUnidad.findMany()) as unknown as { id: string }[]
     const listB = (await repoB.tiposUnidad.findMany()) as unknown as { id: string }[]
 
-    expect(listA.some((x) => x.id === "tu-a1")).toBe(true)
-    expect(listB.some((x) => x.id === "tu-a1")).toBe(false)
+    expect(listA.some((x) => x.id === `tu-a1${SFX}`)).toBe(true)
+    expect(listB.some((x) => x.id === `tu-a1${SFX}`)).toBe(false)
     expect(listB.length).toBe(0)
   })
 
@@ -98,7 +81,7 @@ describe("Repositorios con scoping obligatorio por comunidadId (C1b)", () => {
     const repoB = crearRepositorio(comunidadBId, prismaTest)
 
     await repoA.personas.create({
-      id: "persona-a1",
+      id: `persona-a1${SFX}`,
       rut: "11.111.111-1",
       nombreCompleto: "Ana Alpha",
       nombres: "Ana",
@@ -110,11 +93,11 @@ describe("Repositorios con scoping obligatorio por comunidadId (C1b)", () => {
       roles: ["propietario"],
     })
 
-    const foundInA = await repoA.personas.findById("persona-a1")
-    const foundInB = await repoB.personas.findById("persona-a1")
+    const foundInA = await repoA.personas.findById(`persona-a1${SFX}`)
+    const foundInB = await repoB.personas.findById(`persona-a1${SFX}`)
 
     expect(foundInA).not.toBeNull()
-    expect((foundInA as { id: string }).id).toBe("persona-a1")
+    expect((foundInA as { id: string }).id).toBe(`persona-a1${SFX}`)
     expect(foundInB).toBeNull()
   })
 
@@ -123,16 +106,16 @@ describe("Repositorios con scoping obligatorio por comunidadId (C1b)", () => {
     const repoB = crearRepositorio(comunidadBId, prismaTest)
 
     await repoA.macroSectores.create({
-      id: "macro-a1",
+      id: `macro-a1${SFX}`,
       nombre: "Macro A1",
       etiqueta: "MA1",
       descripcion: "desc",
     })
 
-    const updatedByB = await repoB.macroSectores.update("macro-a1", { nombre: "Hacked" })
+    const updatedByB = await repoB.macroSectores.update(`macro-a1${SFX}`, { nombre: "Hacked" })
     expect(updatedByB).toBeNull()
 
-    const stillInA = (await repoA.macroSectores.findById("macro-a1")) as unknown as { nombre: string }
+    const stillInA = (await repoA.macroSectores.findById(`macro-a1${SFX}`)) as unknown as { nombre: string }
     expect(stillInA.nombre).toBe("Macro A1")
   })
 
@@ -141,11 +124,11 @@ describe("Repositorios con scoping obligatorio por comunidadId (C1b)", () => {
     const repoB = crearRepositorio(comunidadBId, prismaTest)
 
     await repoA.unidades.create({
-      id: "unidad-a1",
+      id: `unidad-a1${SFX}`,
       microSectorId: "micro-x",
       numero: "101",
       etiqueta: "Depto",
-      tipoUnidadId: "tu-a1",
+      tipoUnidadId: `tu-a1${SFX}`,
       metraje: 70,
       prorrateo: 1.5,
       rolSii: "001",
@@ -153,10 +136,10 @@ describe("Repositorios con scoping obligatorio por comunidadId (C1b)", () => {
       servicios: {},
     })
 
-    const deletedByB = await repoB.unidades.delete("unidad-a1")
+    const deletedByB = await repoB.unidades.delete(`unidad-a1${SFX}`)
     expect(deletedByB).toBeNull()
 
-    const stillExists = await repoA.unidades.findById("unidad-a1")
+    const stillExists = await repoA.unidades.findById(`unidad-a1${SFX}`)
     expect(stillExists).not.toBeNull()
   })
 
@@ -165,22 +148,22 @@ describe("Repositorios con scoping obligatorio por comunidadId (C1b)", () => {
     const repoB = crearRepositorio(comunidadBId, prismaTest)
 
     await repoA.fondosFI.create({
-      id: "fondo-a1",
+      id: `fondo-a1${SFX}`,
       nombre: "Fondo A1",
       tipo: "gasto_comun",
       descripcion: "fondo test",
       activo: true,
     })
     await repoA.proveedoresPE.create({
-      id: "prov-a1",
+      id: `prov-a1${SFX}`,
       rut: "76.111.111-1",
       nombre: "Proveedor A",
       rubro: "Mantención",
       activo: true,
     })
 
-    expect(await repoB.fondosFI.findById("fondo-a1")).toBeNull()
-    expect(await repoB.proveedoresPE.findById("prov-a1")).toBeNull()
+    expect(await repoB.fondosFI.findById(`fondo-a1${SFX}`)).toBeNull()
+    expect(await repoB.proveedoresPE.findById(`prov-a1${SFX}`)).toBeNull()
     expect(((await repoA.fondosFI.findMany()) as unknown as { id: string }[]).length).toBeGreaterThan(0)
     expect(((await repoB.fondosFI.findMany()) as unknown as { id: string }[]).length).toBe(0)
   })
@@ -190,7 +173,7 @@ describe("Repositorios con scoping obligatorio por comunidadId (C1b)", () => {
     const repoB = crearRepositorio(comunidadBId, prismaTest)
 
     await repoA.tiposUnidad.create({
-      id: "tu-shared-a",
+      id: `tu-shared-a${SFX}`,
       nombre: "Tipo Compartido",
       categoria: "Depto",
       metraje: 60,
@@ -200,7 +183,7 @@ describe("Repositorios con scoping obligatorio por comunidadId (C1b)", () => {
     })
     await expect(
       repoB.tiposUnidad.create({
-        id: "tu-shared-b",
+        id: `tu-shared-b${SFX}`,
         nombre: "Tipo Compartido",
         categoria: "Depto",
         metraje: 60,
@@ -219,14 +202,14 @@ describe("Repositorios con scoping obligatorio por comunidadId (C1b)", () => {
   it("duplicado dentro de la misma comunidad falla por constraint (C3b)", async () => {
     const repoA = crearRepositorio(comunidadAId, prismaTest)
     await repoA.fondosFI.create({
-      id: "fondo-dup-1",
+      id: `fondo-dup-1${SFX}`,
       nombre: "Fondo Unico",
       tipo: "reserva",
       activo: true,
     })
     await expect(
       repoA.fondosFI.create({
-        id: "fondo-dup-2",
+        id: `fondo-dup-2${SFX}`,
         nombre: "Fondo Unico",
         tipo: "reserva",
         activo: true,
