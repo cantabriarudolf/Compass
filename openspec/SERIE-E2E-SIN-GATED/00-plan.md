@@ -77,3 +77,6 @@ super-admin global, migración SQLite→PostgreSQL, resto de BACKLOG-100.
   + git mv con diff-r vacío). Validate 41/7 (mismos 7 pre-existentes).
   Commit `3a9ec35`. SERIE COMPLETA 2/2 — resto post-serie en manos del owner
   (otros changes abiertos, push a main, GATED-API-BD/VALIDACION-PERFILES).
+- [2026-10-05] PUSH OK a origin/main (reintento con red: `5bd4be4..345f435`).
+  Local en sync con remoto. Solo quedan untracked ajenos (backups DB, fuera
+  del push por convención).
