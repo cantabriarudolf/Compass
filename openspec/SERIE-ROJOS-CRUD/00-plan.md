@@ -6,7 +6,7 @@
 
 | Ventana | Alcance | Estado | Commit final |
 | --- | --- | --- | --- |
-| P1 | Revisar 5 deltas vs código y remapear carpetas: TU-tipos-unidad (exacta), CF-configuracion→CF-configuracion-global, RE-reporteria→RE-reporteria-dashboards, MT-proyectos→MT-mantenimiento-proyectos, PE-personal→PE-personal-servicios | HECHA | 11b4d26 |
+| P1 | Revisar 5 deltas vs código y remapear carpetas: TU-tipos-unidad (exacta), CF-configuracion→CF-configuracion-global, RE-reporteria→RE-reporteria-dashboards, MT-proyectos→MT-mantenimiento-proyectos, PE-personal→PE-personal-servicios | HECHA | c16b978 |
 | P2 | Revisar 3 deltas (AD-gestion→AD-gestion-administrativa, FI-espejo→FI-finanzas-morosidad, MP-personas→MP-maestro-personas) + eliminar delta muerto GATED-qa-lab + `openspec archive e2e-rojos-crud` + validar + commit | pendiente | — |
 
 MÁXIMO: 2 ventanas. Post-serie (fuera): resto de changes abiertos (au-google-sso en pausa, e2e-higiene-determinismo, e2e-rojos-flujo-a11y-smoke, fix-vercel-data-ignore, gd-*, st-*), checklist §4 owner, super-admin global, SQLite→PostgreSQL, BACKLOG-100.
