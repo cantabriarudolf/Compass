@@ -18,7 +18,7 @@ Ser la fuente de verdad temporal del frontend mientras no haya backend. Toda ent
 - **Inventario**: tipos de unidad, macro sectores, micro sectores, unidades y estacionamientos.
 - **Comunidad**: personas y vínculos de unidad.
 - **Maestros**: AFP, bancos, previsiones, feriados, categorías, estados, etc.
-- **Configuración Global**: parámetros del condominio.
+- **Configuración Global**: parámetros de la comunidad.
 
 ## ⚠️ Reglas de Integridad
 
@@ -30,7 +30,7 @@ Las eliminaciones validan dependencias. No podés borrar:
 - Un estacionamiento con asignación activa.
 - Una persona con vínculos de unidad.
 
-- **Producción: Neon PostgreSQL** (FASE2 P1, parcial intencional): `lib/prisma.ts` usa `datasourceUrl: process.env.DATABASE_URL` (SQLite en dev/test, Neon en prod vía dashboard Vercel) + `@prisma/extension-accelerate` para pooling. Migraciones SQLite respaldadas en `prisma/migrations-sqlite-backup/`. Pendiente: script de datos SQLite→PG, backup/restore para PG y cambio de provider al desplegar.
+- **Producción: Neon PostgreSQL + dual SQLite/PG** (st-migracion-postgres, cerrada 2026-10-05): `lib/prisma.ts` usa `datasourceUrl: process.env.DATABASE_URL` (SQLite en dev/test, Neon en prod vía dashboard Vercel) + `@prisma/extension-accelerate` para pooling. Un solo schema fuente (`prisma/schema.prisma`, provider `postgresql`); `scripts/sync-schema.mjs` genera `prisma/schema.sqlite.prisma` para dev (`npm run db:dev/generate/push`, migraciones SQLite históricas en `prisma/migrations/`, respaldo en `prisma/migrations-sqlite-backup/`). CI corre la suite unit en ambos motores (job `unit` SQLite + job `unit-pg` con service postgres:16). Corte de datos: `npm run db:prod:migrar-datos` (→ `scripts/deploy-migrar-datos.mjs`: valida `DATABASE_URL` PG, crea el esquema baseline con `db push` y migra con `scripts/migrate-sqlite-to-postgres.mjs`, idempotente upsert por ID — probado: 23087 filas, 71/71 tablas, 0 fallidas) y recién después el build. Pendiente del owner: `DATABASE_URL` de Neon en Vercel + corrida real + primera migración PG versionada post-corte.
 
 ## 💡 Tips de Oro
 

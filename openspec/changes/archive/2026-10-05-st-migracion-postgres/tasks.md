@@ -19,12 +19,12 @@
 
 ## Fase 3: CI/CD y producción
 - [x] 3.1 GitHub Actions: job con PostgreSQL service container — ✅ P1 PG-FASE3 (2026-10-05): nuevo job `unit-pg` (postgres:16-alpine, `prisma db push` + `npm test` contra PG); job `unit` fijado a `schema.sqlite.prisma` (en main fallaba con P1012: schema fuente ya es postgresql)
-- [ ] 3.2 Script de deploy: migrar datos antes del build
-- [ ] 3.3 Documentar en manuales (AU, ST)
+- [x] 3.2 Script de deploy: migrar datos antes del build — ✅ P2 PG-FASE3 (2026-10-05): `scripts/deploy-migrar-datos.mjs` + `npm run db:prod:migrar-datos` (valida DATABASE_URL PG fail-closed sin imprimir secretos → `prisma db push` baseline → `migrate-sqlite-to-postgres.mjs` idempotente; build después). Probado contra PG local: 23087 filas, 71/71 tablas, 0 fallidas, rerun idempotente limpio. `deploy-vercel.mjs` solo migra con `MIGRAR_DATOS_DESDE_SQLITE=1`; job `deploy` de CI NO tocado
+- [x] 3.3 Documentar en manuales (AU, ST) — ✅ P2 PG-FASE3 (2026-10-05): dual + corte en ST (33), runbook de corte en SG, nota dual en AU; fix "condominio"→"comunidad" (RG §4) en ST
 - [x] 3.4 Actualizar `.env.example` con ambos providers — ✅ P1 PG-FASE3 (2026-10-05): SQLite dev local + PG Docker local + Neon prod, con comentarios, sin secretos
 
 ## Verificaciones finales
 - [x] tsc 0 errores — ✅ P1 PG-FASE3 (2026-10-05): `npx tsc --noEmit` exit 0
 - [x] Tests unit 835/835 verdes (con SQLite) — ✅ P1 PG-FASE3 (2026-10-05): 85/85 archivos, 835/835 tests (`npx vitest run` exit 0; `npm test` con coverage sale 1 SOLO por thresholds pre-existentes: líneas 80.17%<90%, ramas 73.88%<75% — ningún archivo del include tocado por P1)
 - [x] Tests unit pasan con PostgreSQL en CI — ✅ P1 PG-FASE3 (2026-10-05, verificado local con Docker en vez de CI): 85/85 archivos, 835/835 tests contra PG local (`db push` + suite). 2 archivos asumían SQLite (`lib/repos/repos.test.ts`, `repos.authz.test.ts` con `file:` temporal) → adaptados con helper `lib/repos/bd-test.ts` (sufijo por corrida + limpieza Cascade en PG; SQLite intacto)
-- [ ] Suite e2e 86/88 verdes
+- [x] Suite e2e 93 passed + 2 skipped, 0 failed (corrida única secuencial 2026-10-05; el "86/88" original estaba desactualizado)

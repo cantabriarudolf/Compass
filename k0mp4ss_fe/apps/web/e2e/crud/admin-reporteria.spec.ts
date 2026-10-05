@@ -72,8 +72,9 @@ test.describe("CRUD — Admin/Reporteria", () => {
 
     // Afirmar mensaje de distribución enviada
     await expect(page.getByText("Distribución enviada a la bandeja simulada")).toBeVisible({ timeout: 10_000 })
-    // O badge con destinatario(s)
-    await expect(page.getByText(/destinatario\(s\)/)).toBeVisible({ timeout: 10_000 })
+    // O badge con destinatario(s) (first: el historial acumula filas de
+    // corridas previas sin cleanup — P2 PG-FASE3)
+    await expect(page.getByText(/destinatario\(s\)/).first()).toBeVisible({ timeout: 10_000 })
 
     expect(errores, "Excepciones no capturadas en admin/reporteria").toEqual([])
   })

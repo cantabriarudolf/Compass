@@ -45,6 +45,7 @@ Autenticar usuarios por email + contraseña, mantener sesión segura y limitar i
 - **Rate limit por IP**: detrás del proxy del owner, `x-forwarded-for` trae la IP real; en dev cae a `local`.
 - **Cookie** `authjs.session-token` (dev http) / `__Secure-authjs.session-token` (prod https), httpOnly, lax, JWE cifrado con `AUTH_SECRET`. Tests mintan cookies reales vía `@auth/core/jwt.encode` (`test/helpers/sesion-authjs.ts`).
 - **Bootstrap**: si `prisma/dev.db` está vacío, el login es imposible por diseño → correr `npm run seed:authz` una vez, luego `admin@test.cl / test1234`.
+- **Dual SQLite/PG** (st-migracion-postgres, cerrada 2026-10-05): las tablas de auth (`Usuario`, `Membresia`, `RateLimitAttempt`) viajan al corte como el resto (upsert por ID, verificación por conteos). En prod (Neon) el rate limit y las sesiones siguen funcionando sin cambios porque todo el acceso es vía Prisma. Detalle del motor dual en **ST - Capa de Datos Persistente** y runbook de corte en **SG - Hardening y Despliegue**.
 
 ## 🔗 Dependencias
 

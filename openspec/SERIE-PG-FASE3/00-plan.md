@@ -7,7 +7,7 @@
 | Ventana | Alcance | Estado | Commit final |
 | --- | --- | --- | --- |
 | P1 | CI: job unit contra PostgreSQL (service container) + `.env.example` con ambos providers + unit verdes en PG | HECHA | 807c493 |
-| P2 | Deploy: script migrar-datos-antes-del-build + docs en manuales AU/ST + verificaciones finales (tsc, unit SQLite+PG, e2e) + archivar `st-migracion-postgres` + commit | pendiente | — |
+| P2 | Deploy: script migrar-datos-antes-del-build + docs en manuales AU/ST + verificaciones finales (tsc, unit SQLite+PG, e2e) + archivar `st-migracion-postgres` + commit | HECHA | — |
 
 MÁXIMO: 2 ventanas. Post-serie (fuera): corte real a producción (DATABASE_URL de Neon en Vercel + corrida de migración con datos reales — decisión y credenciales del owner), super-admin global, resto de BACKLOG-100.
 
@@ -25,3 +25,4 @@ MÁXIMO: 2 ventanas. Post-serie (fuera): corte real a producción (DATABASE_URL 
 
 - [2026-10-05] Serie materializada por orquestador (2 ventanas, cap duro). Motivo: owner recordó (vía Engram) que la migración de datos ya estaba probada; solo falta el corte a producción (Fase 3 del change).
 - [2026-10-05] P1 HECHA. CI: nuevo job `unit-pg` (postgres:16-alpine service, `prisma db push` + `npm test` contra `postgresql://compass:compass_ci@localhost:5432/compass_test`); job `unit` fijado a `--schema=prisma/schema.sqlite.prisma` (en main su `migrate deploy` fallaba con P1012 porque el schema fuente ya es postgresql). `.env.example` documenta SQLite local + PG Docker + Neon. Docker SÍ disponible: PG local levantado con compose, suite unit 85/85 archivos y 835/835 tests en PG y en SQLite; tsc 0 errores; lint 0 errores. 2 tests asumían SQLite (`lib/repos/repos*.test.ts` con `file:` temporal) → helper nuevo `lib/repos/bd-test.ts` (cambio mínimo). Pre-existente y fuera de alcance: `npm test` con coverage sale 1 por thresholds (líneas 80.17%<90%) sin tocar P1 ningún archivo del include; e2e y resto Fase 3 (3.2, 3.3) para P2. Sin push.
+- [2026-10-05] P2 HECHA (continuada tras reinicio): deploy `scripts/deploy-migrar-datos.mjs` + `db:prod:migrar-datos` (fail-closed PG, idempotente; `deploy-vercel.mjs` solo migra con `MIGRAR_DATOS_DESDE_SQLITE=1`, job `deploy` NO tocado) + docs dual en manuales ST/AU/SG + 4 specs e2e independizados (roles-journeys bitácora anti-remount, proveedores RUT único+cleanup, solicitudes folio propio, reportería first()) + higiene 70 purgas. Verificación: tsc 0, lint 0 errores, e2e única secuencial 93+2 skip 0 failed, `st-migracion-postgres` archivado. Validate 36/5 (5 sin-deltas de otras series). Sin push (lo decide el owner).

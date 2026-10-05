@@ -28,6 +28,13 @@ if (ENV === "development" && process.argv.includes("--prod")) {
 }
 
 try {
+  // Corte SQLite → PostgreSQL (st-migracion-postgres 3.2, opt-in): solo cuando el
+  // owner lo pide explícito para el corte real. Por defecto el deploy NO toca datos.
+  if (process.env.MIGRAR_DATOS_DESDE_SQLITE === "1") {
+    console.log("🗄️ Migración de datos previa al build (MIGRAR_DATOS_DESDE_SQLITE=1)...")
+    execSync("node scripts/deploy-migrar-datos.mjs", { stdio: "inherit" })
+  }
+
   console.log("📦 Pull de variables de entorno desde Vercel...")
   execSync("npx vercel pull --yes --environment=production", { stdio: "inherit" })
 

@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test"
+import { rutUnicoTEST } from "../helpers/datos-test"
 
 test.use({ actionTimeout: 30_000 })
 
@@ -9,7 +10,15 @@ test.describe("CRUD — Operaciones/Proveedores", () => {
 
     const ts = Date.now()
     const nombreProveedor = `QA-Servicios-${ts}`
+    // RUT único por corrida con DV válido: el fijo "76.543.210-3" colisionaba
+    // con residuos de corridas previas (el spec no limpiaba) y el submit se
+    // rechazaba dejando el dialog abierto. (P2 PG-FASE3: independizado.)
+    const rutProveedor = rutUnicoTEST()
+    // La UI formatea el RUT con puntos de miles: se afirma el valor formateado.
+    const [cuerpoRut, dvRut] = rutProveedor.split("-")
+    const rutFormateado = `${cuerpoRut!.replace(/\B(?=(\d{3})+(?!\d))/g, ".")}-${dvRut}`
 
+    try {
     await page.goto("/operaciones/proveedores")
     await expect(page.getByRole("heading", { name: /Proveedores y Servicios/ })).toBeVisible({ timeout: 15_000 })
 
@@ -30,7 +39,7 @@ test.describe("CRUD — Operaciones/Proveedores", () => {
     // RUT empresa * — id pv-rut
     const inputRut = dialog.getByLabel("RUT empresa *")
     await expect(inputRut).toBeVisible({ timeout: 10_000 })
-    await inputRut.fill("76.543.210-3")
+    await inputRut.fill(rutProveedor)
 
     // Nombre *
     const inputNombre = dialog.getByLabel("Nombre *")
@@ -58,9 +67,27 @@ test.describe("CRUD — Operaciones/Proveedores", () => {
     await expect(page.getByRole("cell", { name: nombreProveedor }).first()).toBeVisible({ timeout: 15_000 })
     const row = page.getByRole("row").filter({ hasText: nombreProveedor })
     await expect(row).toBeVisible({ timeout: 10_000 })
-    await expect(row.getByText("76.543.210-3")).toBeVisible({ timeout: 10_000 })
+    await expect(row.getByText(rutFormateado).first()).toBeVisible({ timeout: 10_000 })
     await expect(row.getByText("Ascensores")).toBeVisible({ timeout: 10_000 })
 
     expect(errores, "Excepciones no capturadas en operaciones/proveedores").toEqual([])
+    } finally {
+      // Cleanup propio vía API: borra las filas con el nombre exacto.
+      try {
+        const lista = await page.request
+          .get("/api/pe/proveedores?pageSize=100")
+          .catch(() => null)
+        const j = (await lista?.json().catch(() => ({ data: [] }))) as {
+          data?: { id: string; nombre?: string }[]
+        }
+        for (const p of j.data ?? []) {
+          if (p.nombre === nombreProveedor) {
+            await page.request.delete(`/api/pe/proveedores/${p.id}`).catch(() => {})
+          }
+        }
+      } catch {
+        /* best-effort */
+      }
+    }
   })
 })

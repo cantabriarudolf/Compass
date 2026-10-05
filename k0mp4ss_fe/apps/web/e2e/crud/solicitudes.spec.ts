@@ -103,22 +103,40 @@ test.describe("CRUD — Operaciones/Solicitudes", () => {
     }
     await expect(dialog).toBeHidden({ timeout: 10_000 })
 
+    // Recargar para lista fresca + resolver NUESTRO folio vía API (la bandeja
+    // muestra las 10 más recientes pero el "Ver" primero abría otro ticket si
+    // SWR aún no revalidaba tras el POST. (P2 PG-FASE3: independizado.)
+    let folio = ""
+    for (let i = 0; i < 15 && !folio; i++) {
+      const lr = await page.request
+        .get("/api/ge/solicitudes?pageSize=100")
+        .catch(() => null)
+      const lj = (await lr?.json().catch(() => ({ data: [] }))) as {
+        data?: { id: string; titulo?: string; folio?: string }[]
+      }
+      folio = lj.data?.find((t) => t.titulo === titulo)?.folio ?? ""
+      if (!folio) await page.waitForTimeout(1000)
+    }
+    expect(folio, "la API debe exponer el ticket recién creado").not.toBe("")
+
+    await page.reload()
+    await expect(page.getByRole("heading", { name: "Solicitudes" })).toBeVisible({ timeout: 15_000 })
+
     // Afirmar fila nueva en la Bandeja (muestra las 10 más recientes)
     // La tabla muestra Tipo "Insumos y Materiales" y título no visible en lista, pero verificamos por Tipo y folios recientes
     // Mejor buscar row que contenga "Insumos" y luego abrir detalle para transición
     // Como el título no se muestra en la tabla de bandeja, verificamos que existe una fila con el Tipo y estado Nuevo y luego la abrimos
     const tbody = page.locator("table").first()
     await expect(tbody).toBeVisible({ timeout: 10_000 })
-    // Buscar la fila más reciente: primera fila después del header que tenga Insumos
-    // Click Ver de la primera fila que corresponde a insumos (la más reciente es nuestro ticket)
-    // La bandeja muestra reversa 10 recientes, así que nuestro ticket está primero si filtramos por insumos
-    // Usamos el botón Ver del primer row
-    const btnVer = page.getByRole("button", { name: "Ver" }).first()
-    await expect(btnVer).toBeVisible({ timeout: 10_000 })
-    // Antes de abrir, asegurar que la fila contiene Insumos
+    // Antes de abrir, asegurar que hay filas con Insumos
     await expect(page.getByRole("cell", { name: "Insumos y Materiales" }).first()).toBeVisible({ timeout: 15_000 })
 
-    // Abrir detalle — transición automática a En Revisión (store actualiza, detalle local queda en Nuevo)
+    // Abrir detalle de NUESTRA fila (por folio propio, no el primer Ver) —
+    // transición automática a En Revisión (store actualiza, detalle local queda en Nuevo)
+    const filaPropia = page.getByRole("row").filter({ hasText: folio }).first()
+    await expect(filaPropia).toBeVisible({ timeout: 15_000 })
+    const btnVer = filaPropia.getByRole("button", { name: "Ver" })
+    await expect(btnVer).toBeVisible({ timeout: 10_000 })
     await btnVer.click({ force: true, noWaitAfter: true })
     const dialogDetalle = page.getByRole("dialog")
     await expect(dialogDetalle).toBeVisible({ timeout: 10_000 })
