@@ -71,3 +71,9 @@ super-admin global, migración SQLite→PostgreSQL, resto de BACKLOG-100.
   Change `e2e-fin-gated` abierto (skip_specs). Validación: unit 85/835, tsc 0,
   lint 0, validate 43/7 (7 sin-deltas pre-existentes), 0 residuos TEST.
   Sin push.
+- [2026-10-05] CIERRE: archivados `e2e-helper-datos-test` (6 deltas → mains
+  FI/CT/PI/PL/MP/EF vía `openspec archive`; `sdd-archive-compose` inexistente
+  en gentle-ai 4.0.0, documentado) y `e2e-fin-gated` (skip_specs, vía worker
+  + git mv con diff-r vacío). Validate 41/7 (mismos 7 pre-existentes).
+  Commit `3a9ec35`. SERIE COMPLETA 2/2 — resto post-serie en manos del owner
+  (otros changes abiertos, push a main, GATED-API-BD/VALIDACION-PERFILES).
