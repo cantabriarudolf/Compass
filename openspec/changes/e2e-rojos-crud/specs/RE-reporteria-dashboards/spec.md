@@ -1,4 +1,5 @@
-## MODIFIED Requirements
+## ADDED Requirements
+<!-- P1 ROJOS-CRUD: era MODIFIED sin target; el spec nunca lo tuvo -->
 
 ### Requirement: Historial de reportes con fuente BD
 Generar SHALL persistir el reporte en BD (`POST /api/reportes-re`) y

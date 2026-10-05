@@ -1,4 +1,5 @@
-## MODIFIED Requirements
+## ADDED Requirements
+<!-- P1 ROJOS-CRUD: era MODIFIED sin target; el spec nunca lo tuvo -->
 
 ### Requirement: Discriminador crear vs editar por modo, no por id
 `guardarTipo` SHALL decidir por el modo edición (`editingItem`), no por la

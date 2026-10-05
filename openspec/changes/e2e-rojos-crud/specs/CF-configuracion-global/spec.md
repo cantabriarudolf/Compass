@@ -1,4 +1,5 @@
-## MODIFIED Requirements
+## ADDED Requirements
+<!-- P1 ROJOS-CRUD: era MODIFIED sin target; el spec nunca lo tuvo -->
 
 ### Requirement: Columna RUT de la comunidad con nombre canónico
 La columna Prisma SHALL llamarse `rutComunidad` (terminología RG §4), no

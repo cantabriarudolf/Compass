@@ -1,4 +1,5 @@
-## MODIFIED Requirements
+## ADDED Requirements
+<!-- P1 ROJOS-CRUD: era MODIFIED sin target; el spec nunca lo tuvo -->
 
 ### Requirement: Alta de trabajo con folio único y transiciones vía API
 El alta SHALL generar folio `MT-*` único (el schema lo exige; `""` daba 400
