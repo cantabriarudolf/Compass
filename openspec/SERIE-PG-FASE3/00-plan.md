@@ -7,7 +7,7 @@
 | Ventana | Alcance | Estado | Commit final |
 | --- | --- | --- | --- |
 | P1 | CI: job unit contra PostgreSQL (service container) + `.env.example` con ambos providers + unit verdes en PG | HECHA | 807c493 |
-| P2 | Deploy: script migrar-datos-antes-del-build + docs en manuales AU/ST + verificaciones finales (tsc, unit SQLite+PG, e2e) + archivar `st-migracion-postgres` + commit | HECHA | — |
+| P2 | Deploy: script migrar-datos-antes-del-build + docs en manuales AU/ST + verificaciones finales (tsc, unit SQLite+PG, e2e) + archivar `st-migracion-postgres` + commit | HECHA | `28510cd` |
 
 MÁXIMO: 2 ventanas. Post-serie (fuera): corte real a producción (DATABASE_URL de Neon en Vercel + corrida de migración con datos reales — decisión y credenciales del owner), super-admin global, resto de BACKLOG-100.
 
