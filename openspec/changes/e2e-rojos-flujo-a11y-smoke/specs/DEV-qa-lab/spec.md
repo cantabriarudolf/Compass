@@ -1,4 +1,4 @@
-## MODIFIED Requirements
+## ADDED Requirements
 
 ### Requirement: Consentimiento persistido en el setup e2e
 `e2e/auth.setup.ts` SHALL aceptar el banner de cookies con verificación

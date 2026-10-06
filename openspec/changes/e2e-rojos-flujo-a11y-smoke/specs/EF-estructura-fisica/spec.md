@@ -1,4 +1,4 @@
-## MODIFIED Requirements
+## ADDED Requirements
 
 ### Requirement: Unidad TEST propia visible en estructura (flujo EF)
 El spec de poblamiento EF SHALL crear su unidad vía `POST /api/unidades`

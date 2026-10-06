@@ -1,0 +1,6 @@
+schema: spec-driven
+
+# Change de tooling/deploy: ancla `Data/` a la raíz para que Vercel deje de leer la
+# documentación pesada, más un ajuste de tipos sin cambio de comportamiento.
+# No modifica ninguna spec. Ver openspec/CONVENCION-DELTAS.md
+skip_specs: true

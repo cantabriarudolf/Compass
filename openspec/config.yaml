@@ -1,32 +1,33 @@
 schema: spec-driven
 
-# Project context (optional)
-# This is shown to AI when creating artifacts.
-# Add your tech stack, conventions, style guides, domain knowledge, etc.
-# Example:
-#   context: |
-#     Tech stack: TypeScript, React, Node.js
-#     We use conventional commits
-#     Domain: e-commerce platform
+# Contexto del proyecto. openspec lo muestra a la IA al crear artefactos, así que este es
+# el lugar donde viven las reglas de formato. Ver también `openspec/CONVENCION-DELTAS.md`.
+context: |
+  Proyecto: Compass — plataforma web de gestión para comunidades edificadas.
 
-# Per-artifact rules (optional)
-# Add custom rules for specific artifacts.
-# Example:
-#   rules:
-#     proposal:
-#       - Keep proposals under 500 words
-#       - Always include a "Non-goals" section
-#     tasks:
-#       - Break tasks into chunks of max 2 hours
+  Stack: Next.js 16 (App Router, Turbopack) + TypeScript estricto + Prisma, en el monorepo
+  `k0mp4ss_fe/` (app en `apps/web`, UI compartida en `packages/ui`). Tests: Vitest en `test/`
+  y Playwright en `e2e/`. Todo comando de build/test se corre con workdir `k0mp4ss_fe/apps/web`.
 
-# Per-operation guidance (optional)
-# Add advisory guidance for how apply and archive work should be conducted.
-# This is separate from artifact rules above.
-# Example:
-#   operations:
-#     apply:
-#       guidance:
-#         - Keep test summaries concise
-#     archive:
-#       guidance:
-#         - Summarize the archive outcome before finishing
+  Terminología (RG §4): el término oficial es **"comunidad"**. "Condominio" está en desuso y
+  no debe introducirse en ningún archivo.
+
+  Formato de deltas de spec — leer `openspec/CONVENCION-DELTAS.md` antes de escribir `specs/`.
+  Reglas duras:
+  - El archivo va en `specs/<CAPABILITY>/spec.md`, y `<CAPABILITY>` debe existir ya como
+    `openspec/specs/<CAPABILITY>/spec.md`. Nunca inventar una capacidad.
+  - Secciones válidas: `## ADDED Requirements`, `## MODIFIED Requirements`,
+    `## REMOVED Requirements`, `## RENAMED Requirements`. Cada requirement es
+    `### Requirement: <Nombre>` con prosa que use SHALL y al menos un `#### Scenario:` con
+    viñetas WHEN/THEN.
+  - Un MODIFIED reemplaza el requirement COMPLETO: todo escenario que ya vive en la spec debe
+    viajar en el delta con el mismo nombre exacto, o el archive aborta.
+  - Para renombrar un requirement no se cambia el header del MODIFIED: se usa
+    `## RENAMED Requirements` con FROM/TO, y el MODIFIED referencia el nombre nuevo.
+    Orden de aplicación: RENAMED -> REMOVED -> MODIFIED -> ADDED.
+  - Si dos changes tocan el mismo requirement, ambos bloques MODIFIED deben llevar la UNIÓN
+    de escenarios y la misma prosa: gana el último archive.
+  - `openspec validate` (incluso con `--strict`) NO detecta ninguno de esos errores. Antes de
+    archivar, correr `node openspec/scripts/check-delta-coverage.mjs`.
+  - Si el change no modifica specs (docs, tooling, refactor puro): `skip_specs: true` en su
+    `.openspec.yaml`. No inventar capacidades para llenar el directorio `specs/`.

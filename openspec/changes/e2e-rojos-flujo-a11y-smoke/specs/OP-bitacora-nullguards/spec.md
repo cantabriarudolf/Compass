@@ -1,4 +1,4 @@
-## MODIFIED Requirements
+## ADDED Requirements
 
 ### Requirement: Tab de bitácora controlado (sobrevive al skeleton)
 `app/operaciones/bitacora/page.tsx` SHALL usar `<Tabs value>` controlado

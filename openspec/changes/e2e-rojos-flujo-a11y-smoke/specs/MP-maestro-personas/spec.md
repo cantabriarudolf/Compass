@@ -1,4 +1,4 @@
-## MODIFIED Requirements
+## ADDED Requirements
 
 ### Requirement: Specs de flujo independientes del QA-Lab
 Los specs `e2e/flujo/poblamiento` (MP/EF) y `e2e/flujo/personas` SHALL crear

@@ -1,4 +1,4 @@
-## MODIFIED Requirements
+## ADDED Requirements
 
 ### Requirement: Sin TDZ en el formulario de proveedores
 `app/operaciones/proveedores/page.tsx` SHALL declarar `editandoProvId`

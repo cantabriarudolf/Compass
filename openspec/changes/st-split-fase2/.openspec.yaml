@@ -1,0 +1,6 @@
+schema: spec-driven
+
+# Refactor puro: extrae slices del store como factories zustand sin cambiar persistencia,
+# STORE_VERSION ni comportamiento observable. No modifica ninguna spec.
+# Ver openspec/CONVENCION-DELTAS.md
+skip_specs: true
