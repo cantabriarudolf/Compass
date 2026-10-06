@@ -26,6 +26,7 @@ Autenticar usuarios por email + contraseña, mantener sesión segura y limitar i
 - **Seed dev / QA Lab** (B3 + P5): `lib/seed-authz.ts:seedUsuariosMembresias()` idempotente crea 2 comunidades (`comunidad-a` Los Aromos TEST, `comunidad-b` Las Palmas TEST) + 5 usuarios TEST (`admin@test.cl` admin en A+B, `comite`/`conserjeria`/`residente`/`mantencion` en A) con `passwordHash` bcrypt (`test1234`, dato de demo documentado). Botón "👥 Crear usuarios TEST" en `/admin/qa-lab` (requiere sesión admin) invoca `POST /api/admin/seed-authz`. **Primer arranque sin usuarios**: `npm run seed:authz` (`scripts/seed-authz.mjs`, PrismaClient+bcryptjs directo, idempotente, lee `.env`).
 
     - **Password policy + sesiones 24h** (FASE2 P2): `lib/password-policy.ts` exige 8+ chars con mayúscula, minúscula y número (login rechaza débiles sin enumerar). `auth.config.ts`: `maxAge` 24h + sliding `updateAge` 1h (antes 30 días). `Usuario.tokenVersion` + check en callback `jwt`: admin puede invalidar sesiones (`PATCH /api/admin/usuarios`).
+        - **Verificación JWT 24h/1h** (sg-jwt-maxage-verify, 2026-10-06): confirmado `authConfig.session.maxAge = 86400` y `updateAge = 3600` en `lib/auth.config.ts:26`. Test Vitest (`test/auth/session-maxage.test.ts`) decodifica JWT vía `encode`/`decode` de Auth.js y verifica `exp - iat === 86400` (±2s) + sliding refresh opcional.
 
         - **2FA/TOTP + backup codes** (FASE2 P3): enrolamiento en `POST /api/auth/2fa/setup` (QR para Google Authenticator) → `verify-setup` (activa + entrega 10 backup codes bcrypt, un solo uso) → `disable` (pide contraseña e invalida sesiones). Login en dos fases: `challenge` (valida credenciales, devuelve JWE de 5 min) → `verify`/`backup` (acuña cookie de sesión real). `authorize` rechaza login directo con 2FA (`code=requiere_2fa`, sin bypass). Secretos cifrados en reposo (ver SG cifrado).
 
@@ -37,6 +38,7 @@ Autenticar usuarios por email + contraseña, mantener sesión segura y limitar i
       - **Variables**: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` en `.env`.
       - **Redirect URIs** (Google Cloud Console): `http://localhost:3000/api/auth/callback/google` (dev) + `https://<dominio>/api/auth/callback/google` (prod).
       - **Credentials sigue como fallback**: si Google SSO falla o no está configurado, el login por email+password funciona igual.
+      - **Fail-fast en producción** (sg-google-provider-prod-guard, 2026-10-06): en `NODE_ENV=production` la app **no arranca** si faltan `GOOGLE_CLIENT_ID` o `GOOGLE_CLIENT_SECRET` (lanza `Error` descriptivo en `lib/auth.ts` al cargar el módulo). Dev/test preservan fallback vacío. Test: 5 casos Vitest (`test/lib/auth.prod-guard.test.ts`).
 
 ## 💡 Tips de Oro
 
