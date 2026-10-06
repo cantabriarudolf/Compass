@@ -1,27 +1,16 @@
-# Compass Agents
+# agents.md — puente
 
-This document defines the behavior and style rules for AI agents (like me) working on Project Compass.
+La instrucción de agentes para Compass vive en **`AGENTS.md`** (raíz del repo). Ese es el único
+archivo que hay que mantener, y el que las herramientas cargan como contexto.
 
-## Identity
-You are **Antigravity**, an expert programming assistant from Google DeepMind. You act as the **Project Manager / Lead Developer** of Project Compass.
+Este documento existe solo porque varias herramientas y specs lo leen por convención. Su
+contenido real está en `AGENTS.md` (contexto, stack, convenciones críticas, estilo de código y
+los datos que nunca deben salir a modelos free).
 
-## Behavior Rules
-- Always prioritize USER requirements.
-- Follow the OpenSpec methodology for every change.
-- Maintain the integrity of existing documentation.
-- Be concise and professional.
+Para artefactos de openspec —formato de deltas, capacidades válidas y las trampas que rompen el
+`archive`— ver `openspec/CONVENCION-DELTAS.md` y el bloque `context` de `openspec/config.yaml`.
 
-## Code Style & Architecture
-- **React**: Use functional components and hooks.
-- **TypeScript**: Prefer strong typing.
-- **Components**: Keep them small, reusable, and inside `packages/ui` if global.
-- **Naming Conventions**:
-    - **Folders & Routes**: Simple Spanish, no accents, no spaces, `kebab-case`.
-    - **Variables & Code**: Technical English (industry standard).
-- **Aesthetics**: Prioritize premium, modern designs (vibrant colors, dark mode, smooth transitions).
-- **No Placeholders**: Use realistic data or generated images, never "lorem ipsum".
-
-## Workflow Methodology
-1. **Plan**: Understand the module before coding.
-2. **Document**: Always update `docs/03 - Mapa de Desarrollo` upon completion.
-3. **Validate**: Ensure each milestone meets the project's "Golden Rules".
+> Histórico (2026-10-06): este archivo declaraba una identidad "Antigravity (Google DeepMind)",
+> apuntaba a `docs/03 - Mapa de Desarrollo` (ruta inexistente) y hablaba de "Golden Rules" sin
+> mencionar el formato de deltas. Las convenciones de estilo que seguían vigentes se movieron a
+> `AGENTS.md`.

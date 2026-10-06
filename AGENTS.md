@@ -7,7 +7,7 @@ monorepos — no usarlo como base fundacional).
 ## Dónde está la verdad del proyecto
 
 - **Estado vivo / frontera**: `openspec/BACKLOG-100.md` — léelo PRIMERO en cualquier ventana nueva
-- **Especificaciones por capacidad**: `openspec/specs/` (31 módulos; `project.md` y `agents.md` son contexto maestro)
+- **Especificaciones por capacidad**: `openspec/specs/` (31 módulos; `project.md` y `agents.md` son transversales, no módulos). **La instrucción de agentes vive SOLO en este `AGENTS.md`**: `openspec/specs/agents.md` y `HERMES.md` son puentes que apuntan acá para no duplicar reglas
 - **Changes activos/archivados**: `openspec/changes/` (workflow openspec: propose → apply → archive)
 - **Ventana nueva**: leer `openspec/BACKLOG-100.md` + `git status -sb` + `git log --oneline -5` y presentar dónde estamos
 - **Documentación NSGC**: `Data/NSGC/docs/` (manuales por módulo, avances de desarrollo, trazabilidad)
@@ -30,6 +30,14 @@ monorepos — no usarlo como base fundacional).
 - **STORE_VERSION**: cambios al store llevan bump + migración idempotente + tests
 - **Commits**: automáticos al cerrar cada trabajo, sin pedir confirmación; estilo convencional en español (ver `git log`). Commitear solo los archivos del cambio; la suciedad ajena del worktree queda fuera
 - **Delegación pesada**: implementaciones grandes → subagente (no inline) para preservar la ventana; orquestador verifica contra el change
+
+## Estilo y convenciones de código
+
+- **React**: componentes funcionales y hooks. **TypeScript**: tipado fuerte.
+- **Componentes**: chicos y reutilizables; si son globales van en `packages/ui`.
+- **Nombres**: carpetas y rutas en español, sin acentos ni espacios, `kebab-case`; variables y código en inglés técnico.
+- **Estética**: diseño moderno (colores vivos, dark mode, transiciones suaves).
+- **Sin placeholders**: datos realistas o generados, nunca "lorem ipsum".
 
 ## Datos que NUNCA deben salir a modelos free
 

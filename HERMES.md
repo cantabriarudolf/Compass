@@ -1,22 +1,18 @@
-# 🧭 HERMES Agent Configuration - Compass (NSGC)
+# 🧭 HERMES — puente
 
-This file instructs Hermes / OpenCode agents on how to execute tasks autonomously in this repository.
+La instrucción de agentes para Compass vive en **`AGENTS.md`** (raíz del repo). Ese es el único
+archivo que hay que mantener y el que las herramientas cargan como contexto.
 
-## 🏗️ Project Architecture & Stack
-- **Monorepo**: Located inside `k0mp4ss_fe/` (Turborepo).
-- **Frontend App**: `k0mp4ss_fe/apps/web/` (Next.js 14+ App Router, TypeScript, Tailwind CSS).
-- **UI Components**: `k0mp4ss_fe/packages/ui/` (shadcn/ui component library).
-- **Data & Mocks**: `k0mp4ss_fe/apps/web/data/` (TypeScript typed mock models).
+Este archivo existe porque Hermes / OpenCode lo buscan por convención en la raíz. Su contenido
+real está en `AGENTS.md`.
 
-## 📚 Documentation & Specifications
-- **Root Documentation**: `docs/` (refer to `docs/00-index.md` for index).
-- **System Specs**: `Data/NSGC/docs/manuales/`.
-- **Active OpenSpec Changes**: `openspec/changes/`.
+Puntos de entrada útiles para trabajo autónomo:
 
-## 🔄 Autonomous Execution Protocol (OpenSpec Workflow)
-1. **Identify Tasks**: Inspect `openspec/changes/<active-change>/tasks.md`.
-2. **Read Contracts & Specs**: Read relevant specifications in `docs/` (e.g. `docs/05 - CRUD Vinculacion de Unidades.md` and `docs/06 - Interfaces TypeScript FormularioVinculoUnidad.md`).
-3. **Implement Code**: Edit files inside `k0mp4ss_fe/apps/web/` and `packages/ui/`.
-4. **Validation**: Check for TypeScript errors or missing imports.
-5. **Mark Progress**: Update `tasks.md` by changing `- [ ]` to `- [x]` as tasks are completed.
-6. **Documentation Rule**: If generating `.md` files in `docs/`, write in Chilean Spanish and maintain `00-index.md` with notation `AA - Herramienta.md`.
+- **Estado vivo del proyecto**: `openspec/BACKLOG-100.md`
+- **Formato de specs y deltas**: `openspec/CONVENCION-DELTAS.md`
+- **Documentación operativa (manuales NSGC)**: `Data/NSGC/docs/manuales/` (índice en `00-index.md`)
+- **Código**: monorepo en `k0mp4ss_fe/` (`apps/web`, `packages/ui`); build y tests con workdir
+  `k0mp4ss_fe/apps/web`
+
+> Histórico (2026-10-06): este archivo decía "Next.js 14+" (el proyecto está en Next 16), mandaba a
+> documentación raíz en `docs/` (la real vive en `Data/NSGC/docs/`) y listaba rutas de otra máquina.
