@@ -3,7 +3,9 @@
 ## Purpose
 
 Generar la documentación oficial y acreditaciones para residentes y personal, garantizando la validez de la información mediante la firma digital del administrador, folios verificables e historial de emisión. Fuente de verdad: `Data/NSGC/docs/especificaciones/CT - Certificados.md`.
+
 ## Requirements
+
 ### Requirement: Tipologías de Certificados con gates por fuente
 El sistema SHALL ofrecer 4 tipologías que se nutren de datos reales del store, validando antes de emitir:
 - **Certificado de Residencia**: el solicitante DEBE tener vínculo vigente (sin `fechaFin`) en la unidad indicada.
@@ -20,7 +22,7 @@ El sistema SHALL ofrecer 4 tipologías que se nutren de datos reales del store, 
 - **THEN** la emisión es rechazada citando VU
 
 ### Requirement: Historial de Emisión con código de verificación
-Cada certificado emitido SHALL registrarse en `certificadosCT` con folio CT-#### correlativo, código de verificación único, fecha, solicitante, tipología y snapshot inmutable del payload usado. El historial es auditablemente inmutable: solo registros TEST son eliminables.
+Cada certificado emitido SHALL registrarse en `certificadosCT` con folio CT-#### correlativo, código de verificación único, fecha, solicitante, tipología y snapshot inmutable del payload usado. El historial es auditablemente inmutable: solo registros TEST son eliminables. Cuando exista un período de directiva vigente al momento de emitir, el registro SHALL incluir además `directivaRef` como snapshot no bloqueante: el `periodoId` del período vigente y sus `firmantes` (`personaId`, `nombre` y `cargo` de los miembros vigentes de ese período). La ausencia de período vigente NO SHALL bloquear la emisión: en ese caso `directivaRef` queda ausente.
 
 #### Scenario: Código único verificable
 - **WHEN** se generan varios certificados
@@ -29,6 +31,14 @@ Cada certificado emitido SHALL registrarse en `certificadosCT` con folio CT-####
 #### Scenario: Historial inmutable
 - **WHEN** se intenta eliminar un certificado emitido no TEST
 - **THEN** la acción retorna `{ok:false}` preservando la trazabilidad documental
+
+#### Scenario: Snapshot de la directiva vigente
+- **WHEN** se emite un certificado existiendo un período de directiva vigente
+- **THEN** el registro guarda `directivaRef.periodoId` con la lista de `firmantes` (persona, nombre y cargo) de la nómina vigente de ese período
+
+#### Scenario: Emisión sin período vigente
+- **WHEN** se emite un certificado sin período de directiva vigente registrado
+- **THEN** la emisión se completa igual y el registro queda sin `directivaRef`
 
 ### Requirement: Firma digitalizada embebida solo en el documento
 El PDF SHALL generarse con pdfmake incluyendo la firma digitalizada configurada en CF (`firmaDigitalizadaUrl`) como imagen embebida en el documento. El store MUST persistir únicamente la referencia (URL/metadatos D1); jamás el binario ni data-URLs del PDF o de la firma.
@@ -89,4 +99,3 @@ unidad, guards 409), sin depender de QA-Lab "Poblar todo".
 - **WHEN** persona + unidad + vínculo activo TEST existen vía API
 - **THEN** el flujo genera el PDF con folio CT-, el historial lo muestra con
   código VC- y el cleanup no deja residuos TEST.
-

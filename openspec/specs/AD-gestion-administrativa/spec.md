@@ -2,7 +2,9 @@
 
 ## Purpose
 Centralizar el panel de administración: perfiles comunitarios, controles de privacidad/comunicación por unidad, gobernanza con firma digitalizada y acceso de lectura al personal (RRHH). Fuente de verdad: `Data/NSGC/docs/especificaciones/AD - Gestión Administrativa.md`.
+
 ## Requirements
+
 ### Requirement: Perfiles de Identidad Comunitarios
 El panel del administrador SHALL presentar los perfiles de propietarios, residentes y directiva a partir de `personas` y sus vínculos (VU), mostrando nombre, apellidos, RUT, teléfono, email y fotografía. La fotografía SHALL manejarse por referencia (metadatos + URL) conforme a ST; el panel NO SHALL duplicar datos de identidad fuera del store.
 
@@ -31,7 +33,7 @@ El sistema MUST mantener una colección `controlesPropiedad` por unidad con los 
 - **THEN** AM registra `AD_OWNER_CONFIG_CHANGE` con el estado anterior y nuevo
 
 ### Requirement: Directiva y Firma Digitalizada
-El panel SHALL administrar los miembros de la directiva con cargo (`presidente|tesorero|secretario|director` vía `datosGobernanza`) y firma digitalizada cargada como referencia (URL/metadata, sin payload binario). Cada carga o reemplazo de firma emite `AD_DIRECTIVA_SIGN_UPLOAD`. La firma queda disponible para la aprobación formal de actas de GD.
+El panel SHALL administrar los miembros de la directiva con cargo (`presidente|tesorero|secretario|director` vía `datosGobernanza`) y firma digitalizada cargada como referencia (URL/metadata, sin payload binario). Cada carga o reemplazo de firma emite `AD_DIRECTIVA_SIGN_UPLOAD`. La firma queda disponible para la aprobación formal de actas de GD. La ficha `datosGobernanza` SHALL declarar además, de forma opcional, el `periodoId` del período de directiva al que pertenece el miembro y `fechaTermino`/`motivoTermino` (`renuncia|remocion|fin_periodo`) para dejar constancia del término del cargo. Al guardar una persona con rol `directiva` cuya ficha no declara `periodoId`, `savePersona` SHALL heredar automáticamente el `periodoId` del período vigente registrado.
 
 #### Scenario: Carga de firma por referencia (D1)
 - **WHEN** un miembro de la directiva (o administración) sube su firma digitalizada
@@ -41,6 +43,10 @@ El panel SHALL administrar los miembros de la directiva con cargo (`presidente|t
 #### Scenario: Intento de firma embebida rechazado
 - **WHEN** una acción recibe la firma como data-URL/base64
 - **THEN** retorna `{ok:false}` con error D1 y no muta el estado
+
+#### Scenario: Ficha de directiva hereda el período vigente
+- **WHEN** `savePersona` recibe una persona con rol `directiva` y `datosGobernanza` sin `periodoId`, existiendo un período de directiva vigente
+- **THEN** la ficha persistida guarda el `periodoId` de ese período vigente sin alterar su cargo ni su firma
 
 ### Requirement: Acceso Centralizado al Personal (RRHH)
 El panel SHALL ofrecer un Cajón de Recursos Humanos que liste las fichas de trabajadores desde `personas.datosLaborales` (conserjes, aseoo, seguridad, mantención). Es un acceso de lectura centralizado: los requerimientos contractuales y previsionales detallados pertenecen a PE y NO SHALL duplicarse aquí.
@@ -65,4 +71,3 @@ conciliar después (igual que proyectos/reservas con `mutateGlobal`).
 #### Scenario: Toggle flippea y persiste
 - **WHEN** se clickea el switch y se recarga
 - **THEN** `aria-checked` cambia al instante y persiste tras reload.
-
