@@ -13,6 +13,21 @@ import {
 } from "@/lib/rate-limit"
 import { validarPassword } from "@/lib/password-policy"
 
+/**
+ * Fail-fast validation for Google OAuth provider in production.
+ * Runs at module load before NextAuth() initializes.
+ * In development (NODE_ENV !== 'production'), empty-string fallback is allowed
+ * so local dev works without Google Cloud credentials.
+ */
+if (process.env.NODE_ENV === 'production') {
+  if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
+    throw new Error(
+      'GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET are required in production. ' +
+      'Set them in your environment or disable the Google provider.'
+    )
+  }
+}
+
 /** Credenciales inválidas (password errónea, usuario inexistente/inactivo/sin hash). Mensaje genérico para no enumerar emails. */
 export class CredencialesInvalidas extends CredentialsSignin {
   code = "credentials"
