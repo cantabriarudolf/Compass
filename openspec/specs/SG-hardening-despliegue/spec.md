@@ -37,7 +37,22 @@ El sistema MAY definir constraints de unicidad compuesta `@@unique([comunidadId,
 - **THEN** `design.md` justifica la omisión (número repetible en distintos microsectores, D5) y la app lo permite.
 
 ### Requirement: Secretos de configuración por variables de entorno (C2-final)
-Los campos sensibles `smtpPassword` y `claveEliminacionMaestro` SHALL dejar de existir en `ConfiguracionGlobalSchema` (`lib/schemas.ts`) y en `data/admin/configuracion.ts` (seed `configuracionDefault`). El store cliente SHALL persistir `STORE_VERSION = 26` y su `migrate` SHALL eliminar ambos campos del `configuracion` persistido v25 sin romper el resto del estado (patrón v8 limpieza legacy). El `partialize` SHALL simplificarse para no vaciar secretos (ya no existen). La UI `/admin/configuracion` SHALL mostrar ambos secretos como "gestionados por el servidor (variables de entorno SMTP_PASSWORD / CLAVE_ELIMINACION_MAESTRO)" sin input editable. `.env.example` SHALL documentar `SMTP_PASSWORD` y `CLAVE_ELIMINACION_MAESTRO`.
+
+Los campos sensibles `smtpPassword` y `claveEliminacionMaestro` SHALL dejar de existir en `ConfiguracionGlobalSchema` (`lib/schemas.ts`) y en `data/admin/configuracion.ts` (seed `configuracionDefault`). El store cliente SHALL persistir `STORE_VERSION = 28` y su `migrate` SHALL eliminar ambos campos del `configuracion` de un estado persistido anterior a v26 sin romper el resto del estado (patrón v8 limpieza legacy). El `partialize` SHALL simplificarse para no vaciar secretos (ya no existen). La UI `/admin/configuracion` SHALL mostrar ambos secretos como "gestionados por el servidor (variables de entorno SMTP_PASSWORD / CLAVE_ELIMINACION_MAESTRO)" sin input editable. `.env.example` SHALL documentar `SMTP_PASSWORD` y `CLAVE_ELIMINACION_MAESTRO`.
+
+**Extensión a credenciales Google OAuth**: Adicionalmente, `.env.example` SHALL documentar `GOOGLE_CLIENT_ID` y `GOOGLE_CLIENT_SECRET` como variables requeridas en producción y opcionales en desarrollo, con comentarios claros indicando su propósito y procedencia (Google Cloud Console > APIs & Services > Credentials). La validación fail-fast de estas variables en producción se implementa en `lib/auth.ts` (ver `AU-autenticacion-sesion` delta spec) y SHALL estar documentada en `.env.example` de forma consistente.
+
+#### Scenario: .env.example documenta GOOGLE_CLIENT_ID y GOOGLE_CLIENT_SECRET
+- **GIVEN** se lee `k0mp4ss_fe/apps/web/.env.example`
+- **THEN** contiene las líneas:
+  ```dotenv
+  # Google SSO (OAuth 2.0) — opcional en dev, REQUERIDO en producción.
+  # Requiere credenciales de Google Cloud Console (APIs & Services > Credentials).
+  # En producción, la app NO arrancará sin estas variables.
+  GOOGLE_CLIENT_ID=
+  GOOGLE_CLIENT_SECRET=
+  ```
+  Y las variables `SMTP_PASSWORD` y `CLAVE_ELIMINACION_MAESTRO` siguen documentadas como antes.
 
 #### Scenario: Schema sin secretos
 - **WHEN** se inspecciona `lib/schemas.ts` y `data/admin/configuracion.ts`
@@ -45,7 +60,7 @@ Los campos sensibles `smtpPassword` y `claveEliminacionMaestro` SHALL dejar de e
 
 #### Scenario: Migrate v25→v26 limpia secretos
 - **WHEN** existe un persistido v25 con `configuracion: { smtpPassword: "x", claveEliminacionMaestro: "y", nombreComunidad: "...", ... }`
-- **THEN** al hidratar con `STORE_VERSION=26` el migrate elimina `smtpPassword` y `claveEliminacionMaestro` del estado resultante y preserva todos los demás campos y colecciones
+- **THEN** al hidratar con `STORE_VERSION = 28` el migrate ejecuta la rama de limpieza v26 (`version < 26`) y elimina `smtpPassword` y `claveEliminacionMaestro` del estado resultante, preservando todos los demás campos y colecciones
 
 #### Scenario: UI informativa sin inputs
 - **WHEN** el administrador abre `/admin/configuracion` tabs SMTP y Operación y Seguridad
@@ -58,21 +73,6 @@ Los campos sensibles `smtpPassword` y `claveEliminacionMaestro` SHALL dejar de e
 #### Scenario: .env.example documenta vars
 - **WHEN** se lee `k0mp4ss_fe/apps/web/.env.example`
 - **THEN** contiene `SMTP_PASSWORD` y `CLAVE_ELIMINACION_MAESTRO` con comentarios indicando que son secretos servidor
-
-### Requirement: CSP estricta en modo report-only con nonce (D-i)
-El sistema SHALL emitir `Content-Security-Policy-Report-Only` (y SHALL NOT emitir `Content-Security-Policy` enforcement en esta ventana) por cada respuesta vía `k0mp4ss_fe/apps/web/proxy.ts` (edge) con nonce único por request (Web Crypto `randomUUID`/`getRandomValues` base64, expuesto como `x-nonce`/`x-csp-nonce`). La política SHALL auditar orígenes mínimos necesarios: `default-src 'self'`; `script-src 'self' 'nonce-{x}' 'strict-dynamic' 'unsafe-inline' 'unsafe-eval' https:` (Next inline/HMR tolerados en report-only); `style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com`; `font-src 'self' data: https://fonts.gstatic.com https://fonts.googleapis.com`; `img-src 'self' data: blob: https:` (logo/aviso CV remotos); `connect-src 'self'`; `frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com` (visor CV YouTube embeds); `media-src 'self' https: data: blob:`; `object-src 'none'`; `base-uri 'self'`; `form-action 'self'`; `frame-ancestors 'none'`. El dominio real aún no existe (decisión owner): ningún dominio SHALL hardcodearse; orígenes configurables por env. El plan de activación enforcement (telemetría a revisar, criterio 0 violations 7 días, cuándo quitar `unsafe-*` y forzar) SHALL estar documentado en `openspec/changes/sg-predeploy-headers/design.md` y no se fuerza enforcement en esta ventana.
-
-#### Scenario: CSP report-only presente con nonce por request
-- **WHEN** se hace `GET /` o `/ingresar` (o cualquier ruta) vía `proxy.ts` y se inspecciona la respuesta
-- **THEN** existe header `content-security-policy-report-only` con `default-src 'self'` y `script-src` conteniendo `'nonce-` + valor base64/hex único por request, `frame-src` contiene `youtube.com`, `img-src` contiene `https:` y `data:`, y **no** existe header `content-security-policy` (enforcement).
-
-#### Scenario: Orígenes auditados cubren visor y fonts
-- **WHEN** se auditan `app/visor-mensajes/page.tsx` (youtubeEmbed + `<img src={...}>` + `<iframe>`) y `app/layout.tsx` (`next/font/google` Inter/Geist)
-- **THEN** la política `frame-src` lista `www.youtube.com` y `www.youtube-nocookie.com`, `img-src` lista `https:`/`data:`/`blob:` y `font-src`/`style-src` listan `fonts.googleapis.com`/`fonts.gstatic.com` conforme a `design.md`.
-
-#### Scenario: Enforcement no forzado documentado
-- **WHEN** se lee `design.md` sección "Plan de activación enforcement CSP"
-- **THEN** describe qué telemetría revisar (DevTools CSP violations, `content-security-policy-report-only` header, opcional `/api/csp-report` sink), métricas y criterio de 0 violations 7 días antes de pasar de Report-Only a `Content-Security-Policy` quitando `unsafe-inline`/`unsafe-eval`.
 
 ### Requirement: Headers contra dominio configurable y script de verificación (D-ii)
 El sistema SHALL documentar `PUBLIC_DOMAIN` en `k0mp4ss_fe/apps/web/.env.example` como variable vacía por defecto (dominio definitivo configurable por env, aún no existe; no hardcodeado). Los headers de seguridad en `k0mp4ss_fe/apps/web/next.config.mjs` SHALL verificarse y complementarse: `Strict-Transport-Security: max-age=63072000; includeSubDomains` **sin** `preload` mientras no haya dominio real (documentado que `preload` se activa solo con dominio), `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy: camera=(), microphone=(), geolocation=()` SHALL permanecer, y SHALL añadirse `X-DNS-Prefetch-Control: on`, `X-Permitted-Cross-Domain-Policies: none`, `Cross-Origin-Opener-Policy: same-origin`, `Cross-Origin-Resource-Policy: same-origin` (y `Cross-Origin-Embedder-Policy: credentialless` si no rompe `next dev` HMR). El sistema SHALL proveer `npm run check:headers` (`k0mp4ss_fe/apps/web/scripts/check-headers.mjs` o test) que imprima los headers para verificación: lectura estática de `next.config.mjs`+`proxy.ts` CSP y, si `next dev` corre, `fetch` vivo contra `http://localhost:3000` mostrando headers reales y validando HSTS sin `preload` y CSP-Report-Only presente. La limitación `next build` por Google Fonts sin red SHALL estar documentada (usar `next dev`+`curl`).
@@ -115,4 +115,49 @@ El sistema SHALL proveer re-chequeos convertidos en script repetible: `k0mp4ss_f
 #### Scenario: API sin sesión → 401
 - **WHEN** `proxy` o handler `GET /api/admin/usuarios?comunidadId=x` recibe request sin cookie de sesión Auth.js
 - **THEN** responde `401` JSON `error: "No autenticado."`.
+
+### Requirement: CSP con nonce por request y toggle report-only/enforcement (D-i)
+El sistema SHALL emitir `Content-Security-Policy-Report-Only` por defecto (cuando `CSP_ENFORCEMENT=false` o no está definido) y `Content-Security-Policy` en modo enforcement (cuando `CSP_ENFORCEMENT=true`) por cada respuesta vía `k0mp4ss_fe/apps/web/proxy.ts` (edge) con nonce único por request (Web Crypto `randomUUID`/`getRandomValues` base64, expuesto como `x-nonce`/`x-csp-nonce`). La política SHALL auditar orígenes mínimos necesarios: `default-src 'self'`; `script-src 'self' 'nonce-{x}' 'strict-dynamic' 'unsafe-inline' 'unsafe-eval' https:` (Next inline/HMR tolerados); `style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com`; `font-src 'self' data: https://fonts.gstatic.com https://fonts.googleapis.com`; `img-src 'self' data: blob: https:` (logo/aviso CV remotos); `connect-src 'self'`; `frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com` (visor CV YouTube embeds); `media-src 'self' https: data: blob:`; `object-src 'none'`; `base-uri 'self'`; `form-action 'self'`; `frame-ancestors 'none'`. El dominio real aún no existe (decisión owner): ningún dominio SHALL hardcodearse; orígenes configurables por env. El plan de activación enforcement requiere 7 días consecutivos con **cero violaciones** en telemetría vía `/api/csp-report` antes de pasar de Report-Only a `Content-Security-Policy` (configurando `CSP_ENFORCEMENT=true`). El rollback inmediato se logra configurando `CSP_ENFORCEMENT=false`.
+
+#### Scenario: CSP report-only presente con nonce por request
+- **WHEN** se hace `GET /` o `/ingresar` (o cualquier ruta) vía `proxy.ts` con `CSP_ENFORCEMENT=false` o sin definir y se inspecciona la respuesta
+- **THEN** existe header `content-security-policy-report-only` con `default-src 'self'` y `script-src` conteniendo `'nonce-` + valor base64/hex único por request, `frame-src` contiene `youtube.com`, `img-src` contiene `https:` y `data:`, y **no** existe header `content-security-policy` (enforcement).
+
+#### Scenario: CSP enforcement presente con nonce por request (tras telemetría limpia)
+- **WHEN** se hace `GET /` o `/ingresar` (o cualquier ruta) vía `proxy.ts` con `CSP_ENFORCEMENT=true` y se inspecciona la respuesta
+- **THEN** existe header `content-security-policy` con `default-src 'self'` y `script-src` conteniendo `'nonce-` + valor base64/hex único por request, `frame-src` contiene `youtube.com`, `img-src` contiene `https:` y `data:`, y **no** existe header `content-security-policy-report-only`.
+
+#### Scenario: Orígenes auditados cubren visor y fonts
+- **WHEN** se auditan `app/visor-mensajes/page.tsx` (youtubeEmbed + `<img src={...}>` + `<iframe>`) y `app/layout.tsx` (`next/font/google` Inter/Geist)
+- **THEN** la política `frame-src` lista `www.youtube.com` y `www.youtube-nocookie.com`, `img-src` lista `https:`/`data:`/`blob:` y `font-src`/`style-src` listan `fonts.googleapis.com`/`fonts.gstatic.com` conforme a `design.md`.
+
+#### Scenario: Telemetría 7 días cero violaciones antes de enforcement
+- **WHEN** `CSP_ENFORCEMENT=false` ha estado activo en staging/producción por 7+ días consecutivos
+- **AND** el endpoint `/api/csp-report` registra **cero violaciones** durante todo el período
+- **THEN** el equipo PUEDE activar enforcement configurando `CSP_ENFORCEMENT=true` en variables de entorno de producción
+- **AND** el próximo despliegue o hot-reload emite `Content-Security-Policy` en lugar de `Content-Security-Policy-Report-Only`.
+
+#### Scenario: Rollback inmediato a report-only
+- **WHEN** `CSP_ENFORCEMENT=true` está activo y se detecta un problema
+- **AND** el operador configura `CSP_ENFORCEMENT=false`
+- **THEN** la **próxima respuesta** emite `content-security-policy-report-only` en lugar de `content-security-policy`
+- **AND** todas las directivas CSP, generación de nonce y `strict-dynamic` permanecen idénticas
+- **AND** no se requiere cambio de código, git revert, ni build.
+
+#### Scenario: Enforcement no forzado sin telemetría limpia
+- **WHEN** no se ha completado la ventana de 7 días con cero violaciones
+- **THEN** `CSP_ENFORCEMENT` DEBE permanecer en `false` (Report-Only)
+- **AND** cualquier intento de activar enforcement sin cumplir el criterio SHALL ser bloqueado por proceso operativo.
+
+#### Scenario: Enforcement no forzado documentado
+- **WHEN** se lee `design.md` (sección "Migration / Rollout" y la decisión "7-day zero-violations criterion as operational gate") y `runbook.md` (fases 2–4)
+- **THEN** describen qué telemetría revisar (violaciones CSP en DevTools, header `content-security-policy-report-only`, el sink `/api/csp-report`), el criterio de cero violaciones por 7 días consecutivos y el procedimiento de flip/rollback antes de pasar de Report-Only a `Content-Security-Policy`.
+
+### Requirement: CSP_ENFORCEMENT documentado en `.env.example` con default false
+
+`k0mp4ss_fe/apps/web/.env.example` SHALL documentar `CSP_ENFORCEMENT=false` con comentarios que expliquen: (1) controla el modo Report-Only vs enforcement de la CSP; (2) `false` es el default seguro para la ventana de telemetría de 7 días; (3) SHALL ponerse en `true` únicamente tras 7 días consecutivos de telemetría con cero violaciones registradas vía `/api/csp-report`; y (4) volver a `false` revierte a Report-Only de inmediato, sin cambio de código ni redeploy.
+
+#### Scenario: `.env.example` contiene CSP_ENFORCEMENT con su documentación
+- **WHEN** se lee `k0mp4ss_fe/apps/web/.env.example`
+- **THEN** contiene `CSP_ENFORCEMENT=false` con comentarios que explican que controla el modo Report-Only/enforcement, que `false` es el default seguro de la ventana de telemetría de 7 días y que volver a `false` revierte de inmediato sin cambio de código.
 
