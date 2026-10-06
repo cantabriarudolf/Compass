@@ -8,4 +8,7 @@
 - [x] Verificar restore P3 + 2 seeds → scope admin = comunidad-a sin receta manual
 - [x] Verificar `finally` de `admin-configuracion` sigue compatible con la estrategia
 - [x] Verde: `e2e/auth` + `tsc` + lint + `openspec validate e2e-higiene-determinismo`
-- [ ] Commit (conventional español) + fila P1 y Bitácora en `00-plan.md` de la serie
+- [x] Commit (conventional español) + fila P1 y Bitácora en `00-plan.md` de la serie
+  (fila P1 con `7ba3247`; entrada de Bitácora del 2026-09-27 ya existente. El archive de este
+  change sigue **deferido** por decisión de serie: checklist §4 del owner + migración del
+  poblamiento QA-Lab a API REST primero — ver Bitácora del plan)

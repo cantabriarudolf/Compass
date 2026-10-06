@@ -14,6 +14,7 @@
   tenía el campo que sí tienen PersonaSchema, la whitelist de /api/personas,
   Prisma (`Boolean?`) y el store legacy. Fix: campo opcional en la interfaz —
   `tsc` 0 errores.
-- [ ] Tests afectados en verde
-- [ ] Commit del fix (solo archivos del cambio)
+- [x] Tests afectados en verde (2026-10-06: `store-migracion-seed`, `store-fase-a`, `rut`,
+  `store-validacion` → 61/61 pass)
+- [x] Commit del fix (solo archivos del cambio) → `52b26b9`
 - [ ] Owner: redeploy en Vercel y archivar este change tras CI verde
