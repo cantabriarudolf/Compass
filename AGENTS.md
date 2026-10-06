@@ -25,6 +25,7 @@ monorepos — no usarlo como base fundacional).
 
 - **Terminología RG §4**: el término oficial es **"comunidad"**; "condominio" está en desuso y no debe introducirse en ningún archivo
 - **Workflow openspec**: toda feature/fix → change openspec con proposal/specs/design/tasks; archivar tras CI verde
+- **Deltas de spec**: formato canónico y las 3 trampas que rompen el archive → `openspec/CONVENCION-DELTAS.md`. Antes de archivar correr `node openspec/scripts/check-delta-coverage.mjs` (el `validate`, incluso `--strict`, NO detecta esos errores)
 - **NSGC pre-push**: antes de pushear, skill `nsgc-prepush` (manuales de módulo + avance + mocks si toca)
 - **STORE_VERSION**: cambios al store llevan bump + migración idempotente + tests
 - **Commits**: automáticos al cerrar cada trabajo, sin pedir confirmación; estilo convencional en español (ver `git log`). Commitear solo los archivos del cambio; la suciedad ajena del worktree queda fuera
