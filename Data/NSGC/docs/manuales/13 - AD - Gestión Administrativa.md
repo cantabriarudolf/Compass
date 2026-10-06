@@ -22,6 +22,7 @@ Centralizar la gestión de personas bajo dos cajones — Comunidad y Recursos Hu
 - **Auditoría**: cambios de configuración y firmas generan eventos `AD_OWNER_CONFIG_CHANGE` y `AD_DIRECTIVA_SIGN_UPLOAD`.
 - **Alcance actual**: lo contractual/previsional del personal vive en PE (módulo futuro); acá solo hay acceso a fichas.
 - **Robustez ante extensiones nulas**: las listas de Directiva y Personal excluyen fichas con `datosGobernanza`/`datosLaborales` en `null` (igual que ausente); la página nunca revienta por eso.
+- **Ficha atada al período vigente**: la ficha de gobernanza guarda `periodoId`; al guardarla hereda el período de directiva **vigente** (si existe), para que la trazabilidad de quién firmó qué sobreviva a la rotación. Los períodos se gestionan en **GD - Gestión de Directiva**.
 
 ## 🔗 Dependencias
 
