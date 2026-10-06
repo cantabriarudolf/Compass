@@ -2,7 +2,9 @@
 
 ## Purpose
 Centralizar el registro de acciones significativas del sistema, permitir la generación de reportes, KPIs de gestión y trazabilidad completa de la operación. Fuente de verdad: `Data/NSGC/docs/especificaciones/AM - Auditoria y Metricas.md`.
+
 ## Requirements
+
 ### Requirement: Registro Universal de Eventos
 Every action triggered by a user or by the system automatically MUST generate an immutable audit event.
 
@@ -183,3 +185,13 @@ El sistema SHALL persistir los eventos de auditoría generados en el cliente hac
 - **WHEN** un evento ha sido persistido
 - **THEN** el sistema SHALL no exponer ni ejecutar operaciones de borrado o edición sobre `EventoAuditoria` (solo upsert idempotente y lectura).
 
+### Requirement: Eventos de Gobernanza (AD)
+El catálogo de eventos MUST incluir `AD_DIRECTIVA_DESVINCULADA` (ficha de gobernanza depurada al guardar una persona sin el rol `directiva`), junto a los ya vigentes `AD_DIRECTIVA_SIGN_UPLOAD` (carga o reemplazo de firma) y `AD_OWNER_CONFIG_CHANGE`. Los eventos del módulo AD SHALL registrarse como inmutables con su `referenciaId` (persona o unidad afectada) y `categoria` `AD`, y alimentar las métricas de gobernanza (rotación de cargos y fichas desvinculadas).
+
+#### Scenario: Ficha de gobernanza depurada auditada
+- **WHEN** `savePersona` depura `datosGobernanza` de una persona cuyos `roles` ya no incluyen `directiva`
+- **THEN** AM registra el evento `AD_DIRECTIVA_DESVINCULADA` con `categoria` `AD` y `referenciaId` igual al id de esa persona
+
+#### Scenario: Eventos de directiva como data cuantificable
+- **WHEN** la reportería consulta los eventos de gobernanza
+- **THEN** puede derivar la rotación de cargos de directiva a partir de `AD_DIRECTIVA_SIGN_UPLOAD` y las fichas desvinculadas a partir de `AD_DIRECTIVA_DESVINCULADA`
