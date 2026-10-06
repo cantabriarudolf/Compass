@@ -109,10 +109,14 @@ export default (
   } catch {
     // Respuesta inmutable en este runtime: se continúa sin inyectar nonce.
   }
-  res.headers.set("Content-Security-Policy-Report-Only", csp)
-  // D-i: Report-Only mode. Plan de activación enforcement documentado en
-  // openspec/changes/sg-predeploy-headers/design.md (telemetría, 0 violations 7 días).
-  // HSTS ya viene de next.config.mjs; CSP-RO es dinámico por request
+  // Phase 1 (sg-csp-enforcement): conditional header name via CSP_ENFORCEMENT env var
+  // true  -> Content-Security-Policy (enforcement)
+  // false/unset -> Content-Security-Policy-Report-Only (default, safe for telemetry)
+  const cspHeaderName =
+    process.env.CSP_ENFORCEMENT === "true"
+      ? "Content-Security-Policy"
+      : "Content-Security-Policy-Report-Only"
+  res.headers.set(cspHeaderName, csp)
   return res
 })
 
