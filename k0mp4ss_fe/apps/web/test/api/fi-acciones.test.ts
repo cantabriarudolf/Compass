@@ -1,8 +1,9 @@
 /**
  * @vitest-environment node
  *
- * Acciones FI sobre un cobro: registrar pago y aplicar mora.
- * Paridad server-side con `registrarPagoFI` / `aplicarMoraFI` legacy.
+ * Acciones FI sobre cobros y fondos: registrar pago, aplicar mora y retirar
+ * fondo. Paridad server-side con `registrarPagoFI` / `aplicarMoraFI` /
+ * `retirarFondoFI` legacy.
  */
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest"
 import { NextRequest } from "next/server"
@@ -30,6 +31,7 @@ const usuarioAdmin = "fi-acc-usuario-admin"
 const cargaModulos = async () => ({
   pagar: await import("@/app/api/cobros-fi/[id]/pagar/route"),
   mora: await import("@/app/api/cobros-fi/[id]/mora/route"),
+  retirar: await import("@/app/api/fondos-fi/[id]/retirar/route"),
 })
 
 type Ctx = { params: Promise<{ id: string }> }
@@ -75,7 +77,63 @@ async function nuevoCobro(opts: {
   })
 }
 
-describe("/api/cobros-fi/[id] acciones — pagar y mora (BD real)", () => {
+async function nuevoFondo(opts: {
+  id: string
+  comunidadId?: string
+  tipo?: string
+  nombre?: string
+  activo?: boolean
+  saldoInicial?: number
+}): Promise<void> {
+  await prisma.fondoFI.create({
+    data: {
+      id: opts.id,
+      comunidadId: opts.comunidadId ?? comunidad,
+      nombre: opts.nombre ?? `Fondo ${opts.id}`,
+      tipo: opts.tipo ?? "gasto_comun",
+      activo: opts.activo ?? true,
+      saldoInicial: opts.saldoInicial ?? 0,
+    },
+  })
+}
+
+/** Saldo del fondo leído de BD: saldoInicial + ingresos manuales - egresos. */
+async function saldoEnBd(fondoId: string): Promise<number> {
+  const fondo = await prisma.fondoFI.findUnique({ where: { id: fondoId } })
+  const ingresos = await prisma.ingresoFI.findMany({ where: { fondoId } })
+  const egresos = await prisma.egresoFI.findMany({ where: { fondoId } })
+  return (
+    (fondo?.saldoInicial ?? 0) +
+    ingresos.reduce((acc, i) => acc + i.monto, 0) -
+    egresos.reduce((acc, e) => acc + e.monto, 0)
+  )
+}
+
+async function nuevaActa(opts: {
+  id: string
+  estado: string
+  comunidadId?: string
+}): Promise<void> {
+  await prisma.actaGD.create({
+    data: {
+      id: opts.id,
+      comunidadId: opts.comunidadId ?? comunidad,
+      fecha: "2026-03-05",
+      hora: "19:00",
+      lugar: "Sede comunitaria",
+      tablaTemas: ["Retiro de fondo"],
+      presentes: [],
+      ausentes: [],
+      invitados: [],
+      minuta: "Se aprueba el retiro de fondos.",
+      adjuntos: [],
+      estado: opts.estado,
+      aprobaciones: [],
+    },
+  })
+}
+
+describe("/api/cobros-fi y /api/fondos-fi acciones — pagar, mora y retiro (BD real)", () => {
   beforeAll(async () => {
     process.env.AUTH_SECRET = AUTH_SECRET
     for (const [id, nombre, slug] of [
@@ -101,6 +159,10 @@ describe("/api/cobros-fi/[id] acciones — pagar y mora (BD real)", () => {
     await prisma.eventoAuditoria.deleteMany({
       where: { comunidadId: { in: [comunidad, comunidadB] } },
     })
+    await prisma.egresoFI.deleteMany({ where: { comunidadId: { in: [comunidad, comunidadB] } } })
+    await prisma.ingresoFI.deleteMany({ where: { comunidadId: { in: [comunidad, comunidadB] } } })
+    await prisma.fondoFI.deleteMany({ where: { comunidadId: { in: [comunidad, comunidadB] } } })
+    await prisma.actaGD.deleteMany({ where: { comunidadId: { in: [comunidad, comunidadB] } } })
   }, 30_000)
 
   afterAll(async () => {
@@ -110,6 +172,10 @@ describe("/api/cobros-fi/[id] acciones — pagar y mora (BD real)", () => {
       await prisma.eventoAuditoria.deleteMany({
         where: { comunidadId: { in: [comunidad, comunidadB] } },
       })
+      await prisma.egresoFI.deleteMany({ where: { comunidadId: { in: [comunidad, comunidadB] } } })
+      await prisma.ingresoFI.deleteMany({ where: { comunidadId: { in: [comunidad, comunidadB] } } })
+      await prisma.fondoFI.deleteMany({ where: { comunidadId: { in: [comunidad, comunidadB] } } })
+      await prisma.actaGD.deleteMany({ where: { comunidadId: { in: [comunidad, comunidadB] } } })
       await prisma.membresia.deleteMany({ where: { usuarioId: usuarioAdmin } })
       await prisma.usuario.delete({ where: { id: usuarioAdmin } }).catch(() => {})
       await prisma.comunidad.delete({ where: { id: comunidadB } }).catch(() => {})
@@ -257,5 +323,211 @@ describe("/api/cobros-fi/[id] acciones — pagar y mora (BD real)", () => {
       expect((cobro?.pagos as unknown as unknown[]).length).toBe(0)
       expect((cobro?.moras as unknown as unknown[]).length).toBe(0)
     })
+  })
+
+  describe("retiro de fondo FI", () => {
+    it("retiro ok: crea egreso uso_de_fondo, UN evento y el saldo decrece", async () => {
+      const { retirar } = await cargaModulos()
+      await nuevoFondo({ id: "fi-acc-fondo-retiro", saldoInicial: 500_000 })
+      await prisma.ingresoFI.create({
+        data: {
+          id: "fi-acc-ing-retiro",
+          comunidadId: comunidad,
+          fondoId: "fi-acc-fondo-retiro",
+          fecha: "2026-03-02",
+          monto: 50_000,
+          concepto: "Aporte extraordinario",
+        },
+      })
+      await conSesion(async () => {
+        const res = await retirar.POST(
+          pedir("fondos-fi/fi-acc-fondo-retiro/retirar", {
+            monto: 120_000,
+            descripcion: "Compra de ampolletas LED para pasillos",
+          }),
+          { params: Promise.resolve({ id: "fi-acc-fondo-retiro" }) } as Ctx
+        )
+        expect(res.status).toBe(200)
+        const json = (await res.json()) as { ok: boolean; egresoId: string }
+        expect(json.ok).toBe(true)
+
+        const egreso = await prisma.egresoFI.findUnique({
+          where: { id: json.egresoId },
+        })
+        expect(egreso?.categoria).toBe("uso_de_fondo")
+        expect(egreso?.fondoId).toBe("fi-acc-fondo-retiro")
+        expect(egreso?.monto).toBe(120_000)
+        expect(egreso?.esRecurrente).toBe(false)
+        expect(egreso?.folio).toMatch(/^FE-\d{4}$/)
+        expect(await contarEventos(json.egresoId, "FI_FUND_WITHDRAWN")).toBe(1)
+        expect(await saldoEnBd("fi-acc-fondo-retiro")).toBe(430_000)
+      })
+    }, 20_000)
+
+    it("retiro con monto mayor al saldo → 400 sin efectos", async () => {
+      const { retirar } = await cargaModulos()
+      await nuevoFondo({ id: "fi-acc-fondo-sin-saldo", saldoInicial: 100_000 })
+      const egresosAntes = await prisma.egresoFI.count({
+        where: { comunidadId: comunidad },
+      })
+      const eventosAntes = await prisma.eventoAuditoria.count({
+        where: { comunidadId: comunidad, tipoAccion: "FI_FUND_WITHDRAWN" },
+      })
+      await conSesion(async () => {
+        const res = await retirar.POST(
+          pedir("fondos-fi/fi-acc-fondo-sin-saldo/retirar", {
+            monto: 150_000,
+            descripcion: "Retiro por sobre el saldo disponible",
+          }),
+          { params: Promise.resolve({ id: "fi-acc-fondo-sin-saldo" }) } as Ctx
+        )
+        expect(res.status).toBe(400)
+        expect(
+          await prisma.egresoFI.count({ where: { fondoId: "fi-acc-fondo-sin-saldo" } })
+        ).toBe(0)
+        expect(
+          await prisma.egresoFI.count({ where: { comunidadId: comunidad } })
+        ).toBe(egresosAntes)
+        expect(
+          await prisma.eventoAuditoria.count({
+            where: { comunidadId: comunidad, tipoAccion: "FI_FUND_WITHDRAWN" },
+          })
+        ).toBe(eventosAntes)
+      })
+    }, 20_000)
+
+    it("retiro con descripción vacía o fondo inactivo → 400 sin egreso", async () => {
+      const { retirar } = await cargaModulos()
+      await nuevoFondo({ id: "fi-acc-fondo-desc-vacia", saldoInicial: 100_000 })
+      await nuevoFondo({
+        id: "fi-acc-fondo-inactivo",
+        nombre: "Fondo Inactivo",
+        activo: false,
+        saldoInicial: 100_000,
+      })
+      await conSesion(async () => {
+        const rVacia = await retirar.POST(
+          pedir("fondos-fi/fi-acc-fondo-desc-vacia/retirar", {
+            monto: 10_000,
+            descripcion: "   ",
+          }),
+          { params: Promise.resolve({ id: "fi-acc-fondo-desc-vacia" }) } as Ctx
+        )
+        const rInactivo = await retirar.POST(
+          pedir("fondos-fi/fi-acc-fondo-inactivo/retirar", {
+            monto: 10_000,
+            descripcion: "Retiro sobre fondo inactivo",
+          }),
+          { params: Promise.resolve({ id: "fi-acc-fondo-inactivo" }) } as Ctx
+        )
+        expect(rVacia.status).toBe(400)
+        expect(rInactivo.status).toBe(400)
+        expect(
+          await prisma.egresoFI.count({
+            where: {
+              fondoId: { in: ["fi-acc-fondo-desc-vacia", "fi-acc-fondo-inactivo"] },
+            },
+          })
+        ).toBe(0)
+      })
+    }, 20_000)
+
+    it("retiro de fondo de reserva sin acta → 400 sin egreso", async () => {
+      const { retirar } = await cargaModulos()
+      await nuevoFondo({
+        id: "fi-acc-fondo-reserva",
+        tipo: "reserva",
+        nombre: "Fondo de Reserva",
+        saldoInicial: 400_000,
+      })
+      await conSesion(async () => {
+        const res = await retirar.POST(
+          pedir("fondos-fi/fi-acc-fondo-reserva/retirar", {
+            monto: 50_000,
+            descripcion: "Reparación de ascensor sin respaldo",
+          }),
+          { params: Promise.resolve({ id: "fi-acc-fondo-reserva" }) } as Ctx
+        )
+        expect(res.status).toBe(400)
+        expect(
+          await prisma.egresoFI.count({ where: { fondoId: "fi-acc-fondo-reserva" } })
+        ).toBe(0)
+      })
+    }, 20_000)
+
+    it("retiro de fondo de reserva con acta publicada → 200 y acta referenciada", async () => {
+      const { retirar } = await cargaModulos()
+      await nuevoFondo({
+        id: "fi-acc-fondo-reserva-ok",
+        tipo: "reserva",
+        nombre: "Fondo de Reserva Aprobado",
+        saldoInicial: 400_000,
+      })
+      await nuevaActa({ id: "fi-acc-acta-pub", estado: "publicada" })
+      await conSesion(async () => {
+        const res = await retirar.POST(
+          pedir("fondos-fi/fi-acc-fondo-reserva-ok/retirar", {
+            monto: 50_000,
+            descripcion: "Reparación de ascensor aprobada en asamblea",
+            aprobacionActaGDId: "fi-acc-acta-pub",
+          }),
+          { params: Promise.resolve({ id: "fi-acc-fondo-reserva-ok" }) } as Ctx
+        )
+        expect(res.status).toBe(200)
+        const json = (await res.json()) as { egresoId: string }
+        const egreso = await prisma.egresoFI.findUnique({ where: { id: json.egresoId } })
+        expect(egreso?.aprobacionActaGDId).toBe("fi-acc-acta-pub")
+        expect(await contarEventos(json.egresoId, "FI_FUND_WITHDRAWN")).toBe(1)
+      })
+    }, 20_000)
+
+    it("retiro de fondo de reserva con acta en borrador → 400 sin egreso", async () => {
+      const { retirar } = await cargaModulos()
+      await nuevoFondo({
+        id: "fi-acc-fondo-reserva-borrador",
+        tipo: "reserva",
+        nombre: "Fondo de Reserva Borrador",
+        saldoInicial: 400_000,
+      })
+      await nuevaActa({ id: "fi-acc-acta-borrador", estado: "borrador" })
+      await conSesion(async () => {
+        const res = await retirar.POST(
+          pedir("fondos-fi/fi-acc-fondo-reserva-borrador/retirar", {
+            monto: 50_000,
+            descripcion: "Retiro con acta no publicada",
+            aprobacionActaGDId: "fi-acc-acta-borrador",
+          }),
+          { params: Promise.resolve({ id: "fi-acc-fondo-reserva-borrador" }) } as Ctx
+        )
+        expect(res.status).toBe(400)
+        expect(
+          await prisma.egresoFI.count({
+            where: { fondoId: "fi-acc-fondo-reserva-borrador" },
+          })
+        ).toBe(0)
+      })
+    }, 20_000)
+
+    it("fondo de otra comunidad → 404 sin egreso", async () => {
+      const { retirar } = await cargaModulos()
+      await nuevoFondo({
+        id: "fi-acc-fondo-otra",
+        comunidadId: comunidadB,
+        saldoInicial: 300_000,
+      })
+      await conSesion(async () => {
+        const res = await retirar.POST(
+          pedir("fondos-fi/fi-acc-fondo-otra/retirar", {
+            monto: 10_000,
+            descripcion: "Retiro cross-comunidad",
+          }),
+          { params: Promise.resolve({ id: "fi-acc-fondo-otra" }) } as Ctx
+        )
+        expect(res.status).toBe(404)
+        expect(
+          await prisma.egresoFI.count({ where: { fondoId: "fi-acc-fondo-otra" } })
+        ).toBe(0)
+      })
+    }, 20_000)
   })
 })
