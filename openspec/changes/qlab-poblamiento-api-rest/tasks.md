@@ -5,10 +5,13 @@
 
 ## Fase 1 — FI (ventana 1)
 
-- [ ] 1.1 RED: test de las acciones nuevas de API (pago, mora, retiro de fondo) con el patrón
+- [x] 1.1 RED: test de las acciones nuevas de API (pago, mora, retiro de fondo) con el patrón
       de `test/api/` (evento de auditoría post-write, uno por request, scoping por comunidad).
-- [ ] 1.2 GREEN: `POST /api/cobros-fi/[id]/pagar`, `POST /api/cobros-fi/[id]/mora`,
+      **HECHO**: `test/api/fi-acciones.test.ts`, **13 tests**.
+- [x] 1.2 GREEN: `POST /api/cobros-fi/[id]/pagar`, `POST /api/cobros-fi/[id]/mora`,
       `POST /api/fondos-fi/[id]/retirar` (patrón `liquidaciones/[id]/confirmar`).
+      **HECHO**: commits `feat(api): acciones REST de pago y mora sobre cobros FI` y
+      `feat(api): acción REST de retiro de fondo FI`. Suite **891/891**, tsc 0, eslint 0.
 - [ ] 1.3 Migrar `cargarFase13FI` (`app/admin/qa-lab/page.tsx:781`, 11 pasos) a API REST con
       ids `test-*-fi` e upsert.
 - [ ] 1.4 Materializar las 3 conexiones cross-módulo (IN, RA, MT) vía API.
