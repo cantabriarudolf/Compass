@@ -90,12 +90,23 @@ export async function limpiarUnidadTEST(
   await request.delete(`/api/unidades/${id}`).catch(() => {})
 }
 
+export type DatosGobernanzaTEST = {
+  id: string
+  cargoDirectiva: "presidente" | "tesorero" | "secretario" | "director"
+  fechaAsuncion: string
+  firmaDigital?: string
+  periodoId?: string
+}
+
 export type CrearPersonaTESTOptions = {
   roles?: string[]
   nombreCompleto?: string
   nombres?: string
   apellidos?: string
   email?: string
+  // AD/personas-gobernanza: ficha de gobernanza real (no null: el schema la
+  // declara `.optional()`, no nullable, así que la fixture siempre envía objeto).
+  datosGobernanza?: DatosGobernanzaTEST
 }
 
 /** Crea una persona residente TEST propia. */
@@ -122,6 +133,7 @@ export async function crearPersonaTEST(
       estadoCuenta: "activa",
       condicionesEspecialesIds: [],
       roles: opts.roles ?? ["residente"],
+      ...(opts.datosGobernanza ? { datosGobernanza: opts.datosGobernanza } : {}),
     },
   })
   expect(res.ok(), "POST /api/personas debe crear la persona TEST").toBe(true)
