@@ -199,6 +199,42 @@ async function listaQA(path: string): Promise<any[]> {
   return Array.isArray(datos) ? datos : []
 }
 
+/** POST JSON de colección para el espejo de estructura (Fase 0). */
+function postQA(path: string, body: unknown): Promise<RespuestaQA> {
+  return apiQA(path, { method: "POST", body: JSON.stringify(body) })
+}
+
+/**
+ * Fase 0 — espejo transitorio (design Decisión 7): la escritura al store sigue
+ * siendo la validación original; sólo si pasó se espeja a BD vía API REST. Un
+ * 409 se interpreta como "ya presente" (idempotencia del upsert). El paso queda
+ * `ok` sólo si ambos mundos lo están; si la API falla, el error suma store + API.
+ */
+async function espejarQA(
+  pasos: Paso[],
+  idx: number,
+  store: { ok: boolean; error?: string },
+  llamada: () => Promise<RespuestaQA>
+): Promise<void> {
+  if (!store.ok) {
+    pasos[idx]!.estado = "error"
+    pasos[idx]!.error = store.error
+    return
+  }
+  try {
+    const r = await llamada()
+    if (r.ok || r.status === 409) {
+      pasos[idx]!.estado = "ok"
+      return
+    }
+    pasos[idx]!.estado = "error"
+    pasos[idx]!.error = `${store.error ?? ""} / API ${r.status}: ${(r.cuerpo as any)?.error}`
+  } catch (e) {
+    pasos[idx]!.estado = "error"
+    pasos[idx]!.error = `${store.error ?? ""} / API error: ${String(e)}`
+  }
+}
+
 /** Resumen TEST del mundo BD para el guard clean-first (best-effort: si la BD no responde, solo rige el store). */
 async function resumenTestBD(): Promise<{ ok: boolean; resumen: ResumenTestBD }> {
   try {
@@ -347,17 +383,21 @@ export default function QaLabPage() {
   const cargarFase0 = React.useCallback(async (): Promise<ModReport> => {
     const s = useCompassStore.getState()
     const pasos: Paso[] = (PLAN["ma"]! as string[]).map(desc => ({ desc, estado: "pendiente" as ModuleState }))
-    const run = (idx: number, fn: () => { ok: boolean; error?: string }) => {
-      try { const r = fn(); if (!r.ok) { pasos[idx]!.estado = "error"; pasos[idx]!.error = r.error } else pasos[idx]!.estado = "ok" } catch (e) { pasos[idx]!.estado = "error"; pasos[idx]!.error = String(e) }
+    // Fase 0 espejo (design D7): cada maestro conserva su escritura al store y
+    // además se persiste en BD vía POST /api/maestros/<tipo> (upsert idempotente).
+    const run = async (idx: number, key: string, tipo: string, item: Record<string, unknown>) => {
+      let store: { ok: boolean; error?: string }
+      try { store = s.saveMaestro(key as any, item as any) } catch (e) { store = { ok: false, error: String(e) } }
+      await espejarQA(pasos, idx, store, () => postQA(`/api/maestros/${tipo}`, item))
     }
-    run(0, () => s.saveMaestro("estadosOcupacion", { id: "test-edo-enlimpieza", nombre: "TEST-EdO-EnLimpieza", color: "destructive", hex: "#ef4444" } as any))
-    run(1, () => s.saveMaestro("categoriasMacro", { id: "test-macro-torreqa", nombre: "TEST-MACRO-TorreQA" } as any))
-    run(2, () => s.saveMaestro("categoriasMicro", { id: "test-micro-pisoqa", nombre: "TEST-MICRO-PisoQA" } as any))
-    run(3, () => s.saveMaestro("categoriasUnidad", { id: "test-catu-loftqa", nombre: "TEST-CATU-LoftQA" } as any))
-    run(4, () => s.saveMaestro("condicionesEspeciales", { id: "test-vuln-electroqa", nombre: "TEST-VULN-ElectroQA", color: "bg-blue-500 text-white" } as any))
-    run(5, () => s.saveMaestro("estadosInmobiliarios", { id: "test-einm-prereservaqa", nombre: "TEST-EINM-PreReservaQA" } as any))
-    run(6, () => s.saveMaestro("contactosEmergencia", { id: "test-emer-cerrajeroqa", nombre: "TEST-EMER-CerrajeroQA", telefono: "+56 9 9999 0001", categoria: "tecnico" } as any))
-    run(7, () => s.saveMaestro("bancos", { id: "test-banco-bancoqa", nombre: "TEST-BANCO-BancoQA" } as any))
+    await run(0, "estadosOcupacion", "estados-ocupacion", { id: "test-edo-enlimpieza", nombre: "TEST-EdO-EnLimpieza", color: "destructive", hex: "#ef4444" })
+    await run(1, "categoriasMacro", "categorias-macro", { id: "test-macro-torreqa", nombre: "TEST-MACRO-TorreQA" })
+    await run(2, "categoriasMicro", "categorias-micro", { id: "test-micro-pisoqa", nombre: "TEST-MICRO-PisoQA" })
+    await run(3, "categoriasUnidad", "categorias-unidad", { id: "test-catu-loftqa", nombre: "TEST-CATU-LoftQA" })
+    await run(4, "condicionesEspeciales", "condiciones-especiales", { id: "test-vuln-electroqa", nombre: "TEST-VULN-ElectroQA", color: "bg-blue-500 text-white" })
+    await run(5, "estadosInmobiliarios", "estados-inmobiliarios", { id: "test-einm-prereservaqa", nombre: "TEST-EINM-PreReservaQA" })
+    await run(6, "contactosEmergencia", "contactos-emergencia", { id: "test-emer-cerrajeroqa", nombre: "TEST-EMER-CerrajeroQA", telefono: "+56 9 9999 0001", categoria: "tecnico" })
+    await run(7, "bancos", "bancos", { id: "test-banco-bancoqa", nombre: "TEST-BANCO-BancoQA" })
     const errores = pasos.filter(p => p.estado === "error").map(p => p.error || p.desc)
     return { id: "ma", label: TITULOS["ma"]!, rank: 0, status: errores.length ? "error" : "ok", count: 8, errores, pasos }
   }, [])
@@ -365,7 +405,10 @@ export default function QaLabPage() {
   const cargarFase1TU = React.useCallback(async (): Promise<ModReport> => {
     const s = useCompassStore.getState()
     const pasos: Paso[] = (PLAN["tu"]! as string[]).map(desc => ({ desc, estado: "pendiente" as ModuleState }))
-    try { s.saveTipoUnidad({ id: "test-tu-loftqa", nombre: "TU-TEST-LoftQA", categoria: "TEST-CATU-LoftQA", metraje: 45, montoBaseGc: 120000, descripcion: "DescLoftTEST", activo: true, historialTarifas: [{ id: "t-test-loftqa", monto: 120000, fechaVigencia: "2026-08-20", creadoEn: "2026-08-20" }] } as any); pasos[0]!.estado = "ok" } catch (e) { pasos[0]!.estado = "error"; pasos[0]!.error = String(e) }
+    const tu = { id: "test-tu-loftqa", nombre: "TU-TEST-LoftQA", categoria: "TEST-CATU-LoftQA", metraje: 45, montoBaseGc: 120000, descripcion: "DescLoftTEST", activo: true, historialTarifas: [{ id: "t-test-loftqa", monto: 120000, fechaVigencia: "2026-08-20", creadoEn: "2026-08-20" }] }
+    let store: { ok: boolean; error?: string }
+    try { store = s.saveTipoUnidad(tu as any) } catch (e) { store = { ok: false, error: String(e) } }
+    await espejarQA(pasos, 0, store, () => postQA("/api/tipos-unidad", tu))
     const errores = pasos.filter(p => p.estado === "error").map(p => p.error || p.desc)
     return { id: "tu", label: TITULOS["tu"]!, rank: 1, status: errores.length ? "error" : "ok", count: 1, errores, pasos }
   }, [])
@@ -373,8 +416,14 @@ export default function QaLabPage() {
   const cargarFase1MP = React.useCallback(async (): Promise<ModReport> => {
     const s = useCompassStore.getState()
     const pasos: Paso[] = (PLAN["mp"]! as string[]).map(desc => ({ desc, estado: "pendiente" as ModuleState }))
-    try { const r = s.savePersona({ id: "test-p-99", rut: "99.999.999-9", nombreCompleto: "TEST Persona QA Uno", nombres: "TEST", apellidos: "Persona QA Uno", email: "test.qa@compass.cl", telefonoMovil: "+56 9 9999 9999", estadoCuenta: "activa", condicionesEspecialesIds: ["test-vuln-electroqa"], roles: ["residente"] } as any); if (!r.ok) { pasos[0]!.estado = "error"; pasos[0]!.error = r.error } else pasos[0]!.estado = "ok" } catch (e) { pasos[0]!.estado = "error"; pasos[0]!.error = String(e) }
-    try { const r = s.savePersona({ id: "test-p-88", rut: "88.888.888-8", nombreCompleto: "TEST Persona QA Dos", nombres: "TEST", apellidos: "Persona QA Dos", email: "test.qa2@compass.cl", telefonoMovil: "+56 9 8888 8888", estadoCuenta: "activa", condicionesEspecialesIds: [], roles: ["residente"] } as any); if (!r.ok) { pasos[1]!.estado = "error"; pasos[1]!.error = r.error } else pasos[1]!.estado = "ok" } catch (e) { pasos[1]!.estado = "error"; pasos[1]!.error = String(e) }
+    const p99 = { id: "test-p-99", rut: "99.999.999-9", nombreCompleto: "TEST Persona QA Uno", nombres: "TEST", apellidos: "Persona QA Uno", email: "test.qa@compass.cl", telefonoMovil: "+56 9 9999 9999", estadoCuenta: "activa", condicionesEspecialesIds: ["test-vuln-electroqa"], roles: ["residente"] }
+    let store0: { ok: boolean; error?: string }
+    try { store0 = s.savePersona(p99 as any) } catch (e) { store0 = { ok: false, error: String(e) } }
+    await espejarQA(pasos, 0, store0, () => postQA("/api/personas", p99))
+    const p88 = { id: "test-p-88", rut: "88.888.888-8", nombreCompleto: "TEST Persona QA Dos", nombres: "TEST", apellidos: "Persona QA Dos", email: "test.qa2@compass.cl", telefonoMovil: "+56 9 8888 8888", estadoCuenta: "activa", condicionesEspecialesIds: [], roles: ["residente"] }
+    let store1: { ok: boolean; error?: string }
+    try { store1 = s.savePersona(p88 as any) } catch (e) { store1 = { ok: false, error: String(e) } }
+    await espejarQA(pasos, 1, store1, () => postQA("/api/personas", p88))
     const errores = pasos.filter(p => p.estado === "error").map(p => p.error || p.desc)
     return { id: "mp", label: TITULOS["mp"]!, rank: 1, status: errores.length ? "error" : "ok", count: 2, errores, pasos }
   }, [])
@@ -382,7 +431,10 @@ export default function QaLabPage() {
   const cargarFase2Macro = React.useCallback(async (): Promise<ModReport> => {
     const s = useCompassStore.getState()
     const pasos: Paso[] = (PLAN["ef-macro"]! as string[]).map(desc => ({ desc, estado: "pendiente" as ModuleState }))
-    try { s.saveMacroSector({ id: "test-macro-sectortest", nombre: "SectorTEST", etiqueta: "TEST-MACRO-TorreQA", descripcion: "DescripMSectorTEST" } as any); pasos[0]!.estado = "ok" } catch (e) { pasos[0]!.estado = "error"; pasos[0]!.error = String(e) }
+    const macro = { id: "test-macro-sectortest", nombre: "SectorTEST", etiqueta: "TEST-MACRO-TorreQA", descripcion: "DescripMSectorTEST" }
+    let store: { ok: boolean; error?: string }
+    try { store = s.saveMacroSector(macro as any) } catch (e) { store = { ok: false, error: String(e) } }
+    await espejarQA(pasos, 0, store, () => postQA("/api/macro-sectores", macro))
     const errores = pasos.filter(p => p.estado === "error").map(p => p.error || p.desc)
     return { id: "ef-macro", label: TITULOS["ef-macro"]!, rank: 2, status: errores.length ? "error" : "ok", count: 1, errores, pasos }
   }, [])
@@ -390,7 +442,10 @@ export default function QaLabPage() {
   const cargarFase2Micro = React.useCallback(async (): Promise<ModReport> => {
     const s = useCompassStore.getState()
     const pasos: Paso[] = (PLAN["ef-micro"]! as string[]).map(desc => ({ desc, estado: "pendiente" as ModuleState }))
-    try { s.saveMicroSector({ id: "test-micro-piso99", nombre: "Piso99-TEST", etiqueta: "TEST-MICRO-PisoQA", macroSectorId: "test-macro-sectortest" } as any); pasos[0]!.estado = "ok" } catch (e) { pasos[0]!.estado = "error"; pasos[0]!.error = String(e) }
+    const micro = { id: "test-micro-piso99", nombre: "Piso99-TEST", etiqueta: "TEST-MICRO-PisoQA", macroSectorId: "test-macro-sectortest" }
+    let store: { ok: boolean; error?: string }
+    try { store = s.saveMicroSector(micro as any) } catch (e) { store = { ok: false, error: String(e) } }
+    await espejarQA(pasos, 0, store, () => postQA("/api/micro-sectores", micro))
     const errores = pasos.filter(p => p.estado === "error").map(p => p.error || p.desc)
     return { id: "ef-micro", label: TITULOS["ef-micro"]!, rank: 2, status: errores.length ? "error" : "ok", count: 1, errores, pasos }
   }, [])
@@ -398,12 +453,21 @@ export default function QaLabPage() {
   const cargarFase2Unidad = React.useCallback(async (): Promise<ModReport> => {
     const s = useCompassStore.getState()
     const pasos: Paso[] = (PLAN["ef-unidad"]! as string[]).map(desc => ({ desc, estado: "pendiente" as ModuleState }))
-    try { s.saveUnidad({ id: "test-u-999", numero: "999", etiqueta: "TEST-CATU-LoftQA", microSectorId: "test-micro-piso99", tipoUnidadId: "test-tu-loftqa", estadoId: "test-edo-enlimpieza", rolSii: "999-99", metraje: 45, prorrateo: 0.01, servicios: {} } as any); pasos[0]!.estado = "ok" } catch (e) { pasos[0]!.estado = "error"; pasos[0]!.error = String(e) }
+    const u999 = { id: "test-u-999", numero: "999", etiqueta: "TEST-CATU-LoftQA", microSectorId: "test-micro-piso99", tipoUnidadId: "test-tu-loftqa", estadoId: "test-edo-enlimpieza", rolSii: "999-99", metraje: 45, prorrateo: 0.01, servicios: {} }
+    let store0: { ok: boolean; error?: string }
+    try { store0 = s.saveUnidad(u999 as any) } catch (e) { store0 = { ok: false, error: String(e) } }
+    await espejarQA(pasos, 0, store0, () => postQA("/api/unidades", u999))
+    const microEst = { id: "test-est-sup-qa", nombre: "Superficie TEST", etiqueta: "Piso", macroSectorId: "estacionamientos" }
+    const uE999 = { id: "test-u-e-999", numero: "E-999", etiqueta: "Estacionamiento", microSectorId: "test-est-sup-qa", tipoUnidadId: "tipo-es-1", estadoId: "vacante", rolSii: "", metraje: 12.5, prorrateo: 0.005, servicios: {} }
     try {
       const estMacro = s.macroSectores.find(m => m.id === "estacionamientos")
       const microExist = s.microSectores.find(m => m.id === "test-est-sup-qa")
-      if (!microExist && estMacro) s.saveMicroSector({ id: "test-est-sup-qa", nombre: "Superficie TEST", etiqueta: "Piso", macroSectorId: "estacionamientos" } as any)
-      s.saveUnidad({ id: "test-u-e-999", numero: "E-999", etiqueta: "Estacionamiento", microSectorId: "test-est-sup-qa", tipoUnidadId: "tipo-es-1", estadoId: "vacante", rolSii: "", metraje: 12.5, prorrateo: 0.005, servicios: {} } as any); pasos[1]!.estado = "ok"
+      if (!microExist && estMacro) s.saveMicroSector(microEst as any)
+      const store1 = s.saveUnidad(uE999 as any)
+      // Espejo BD: el sub-sector de estacionamientos también debe existir en BD
+      // (FK de la unidad); el POST es idempotente por id.
+      if (store1.ok) await postQA("/api/micro-sectores", microEst).catch(() => null)
+      await espejarQA(pasos, 1, store1, () => postQA("/api/unidades", uE999))
     } catch (e) { pasos[1]!.estado = "error"; pasos[1]!.error = String(e) }
     const errores = pasos.filter(p => p.estado === "error").map(p => p.error || p.desc)
     return { id: "ef-unidad", label: TITULOS["ef-unidad"]!, rank: 2, status: errores.length ? "error" : "ok", count: 2, errores, pasos }
@@ -412,12 +476,18 @@ export default function QaLabPage() {
   const cargarFase3VU = React.useCallback(async (): Promise<ModReport> => {
     const s = useCompassStore.getState()
     const pasos: Paso[] = (PLAN["vu"]! as string[]).map(desc => ({ desc, estado: "pendiente" as ModuleState }))
-    const r1 = s.saveVinculo({ id: "test-v-prop-999", personaId: "test-p-99", unidadId: "test-u-999", rol: "propietario", fechaInicio: "2026-08-20", estadoOcupacionPropiedad: "test-einm-prereservaqa", permiteVerFinanzas: true } as any)
-    if (!r1.ok) { pasos[0]!.estado = "error"; pasos[0]!.error = r1.error } else pasos[0]!.estado = "ok"
-    const r2 = s.saveVinculo({ id: "test-v-prop-e999", personaId: "test-p-99", unidadId: "test-u-e-999", rol: "propietario", fechaInicio: "2026-08-20", permiteVerFinanzas: false } as any)
-    if (!r2.ok) { pasos[1]!.estado = "error"; pasos[1]!.error = r2.error } else pasos[1]!.estado = "ok"
-    const r3 = s.saveVinculo({ id: "test-v-arr-999", personaId: "test-p-88", unidadId: "test-u-999", rol: "arrendatario", fechaInicio: "2026-08-20", fechaFin: "2027-08-20", permiteVerFinanzas: false } as any)
-    if (!r3.ok) { pasos[2]!.estado = "error"; pasos[2]!.error = r3.error } else pasos[2]!.estado = "ok"
+    const v1 = { id: "test-v-prop-999", personaId: "test-p-99", unidadId: "test-u-999", rol: "propietario", fechaInicio: "2026-08-20", estadoOcupacionPropiedad: "test-einm-prereservaqa", permiteVerFinanzas: true }
+    let r1: { ok: boolean; error?: string }
+    try { r1 = s.saveVinculo(v1 as any) } catch (e) { r1 = { ok: false, error: String(e) } }
+    await espejarQA(pasos, 0, r1, () => postQA("/api/vinculos", v1))
+    const v2 = { id: "test-v-prop-e999", personaId: "test-p-99", unidadId: "test-u-e-999", rol: "propietario", fechaInicio: "2026-08-20", permiteVerFinanzas: false }
+    let r2: { ok: boolean; error?: string }
+    try { r2 = s.saveVinculo(v2 as any) } catch (e) { r2 = { ok: false, error: String(e) } }
+    await espejarQA(pasos, 1, r2, () => postQA("/api/vinculos", v2))
+    const v3 = { id: "test-v-arr-999", personaId: "test-p-88", unidadId: "test-u-999", rol: "arrendatario", fechaInicio: "2026-08-20", fechaFin: "2027-08-20", permiteVerFinanzas: false }
+    let r3: { ok: boolean; error?: string }
+    try { r3 = s.saveVinculo(v3 as any) } catch (e) { r3 = { ok: false, error: String(e) } }
+    await espejarQA(pasos, 2, r3, () => postQA("/api/vinculos", v3))
     const errores = pasos.filter(p => p.estado === "error").map(p => p.error || p.desc)
     return { id: "vu", label: TITULOS["vu"]!, rank: 3, status: errores.length ? "error" : "ok", count: 3, errores, pasos }
   }, [])

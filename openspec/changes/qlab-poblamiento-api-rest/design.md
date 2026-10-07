@@ -139,3 +139,29 @@ EF/VU (unidades + vinculos + personas TEST a BD)  →  FI  →  CT
 > Lección de método: propuse “FI primero” leyendo **escrituras** de la fase FI. Las escrituras se
 > migran fácil; lo que **rompe** es lo que la fase **lee** (unidades, vinculos, actas, cobros de
 > otras fases). El orden correcto se deriva de las **lecturas**, no de las escrituras.
+
+## Decisión 7 — Fase 0 escribe API **y** store (espejo transitorio, con criterio de retiro)
+
+**Pregunta que apareció al implementar**: si las fases de estructura (maestros, tipos, sectores,
+unidades, personas, vínculos) escriben **sólo** a la API, los **~13 pasos siguientes** del lab que
+siguen leyendo el store (FI, AD, GD, CO, GE, IR, IN, MT, RA, PE, PL, CT, RE) se rompen: leen un store
+vacío. 
+
+**Decisión: espejo transitorio — escribir a la API *y* mantener la escritura al store** durante la
+migración. Motivos:
+
+1. Es el patrón que **este mismo repo ya adoptó** para PL (`openspec/specs/LAB-mejoras/spec.md`:
+   “La liquidación BD se refleja al store como espejo transitorio … para los consumidores legacy”).
+   No se inventa una regla nueva.
+2. Migrar de abajo hacia arriba (estructura → FI → CT) exige que los consumidores de arriba sigan
+   funcionando **mientras** se migran. El espejo es lo que permite migrar en incrementos verdes.
+3. La alternativa (API-only) tiene un costo medible: **regresión de ~13 fases** del lab y del e2e
+   `poblado-idempotente`.
+
+**El espejo es transitorio y tiene criterio de retiro explícito**: una escritura al store sólo puede
+borrarse cuando **todos** los lectores de ese dato ya leen BD. El `tasks.md` registra la
+verificación de cada retiro.
+
+> Riesgo aceptado y visible: el espejo mantiene la doble fuente durante la transición. Es un estado
+> **temporal y declarado**, no el estado final; el objetivo del change sigue siendo que BD sea la
+> única fuente, y el retiro del espejo es parte de la Fase 3 de cierre.
