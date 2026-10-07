@@ -1632,6 +1632,34 @@ export default function QaLabPage() {
         }
       }
       await borrarSiExiste(`/api/personas/${QA_PL_TRAB_ID}`, "persona-qa-pl")
+      // Fase 0 (qlab-poblamiento-api-rest): la estructura EF/VU/MP/TU/MA también
+      // vive en BD (espejo transitorio), así que el guard clean-first la vería
+      // residual y abriría el dialog en vez de poblar. Orden hijos→padres por
+      // los guards 409 de las rutas; solo ids test-* (idempotente: 404 = limpio).
+      const purgarColeccionBD = async (base: string, etiqueta: string, ids: string[]) => {
+        for (const id of ids) {
+          if (id.startsWith("test-")) await borrarSiExiste(`${base}/${id}`, etiqueta)
+        }
+      }
+      await purgarColeccionBD("/api/vinculos", "vinculo", ["test-v-prop-999", "test-v-prop-e999", "test-v-arr-999"])
+      await purgarColeccionBD("/api/unidades", "unidad", ["test-u-999", "test-u-e-999"])
+      await purgarColeccionBD("/api/micro-sectores", "micro", ["test-micro-piso99", "test-est-sup-qa"])
+      await purgarColeccionBD("/api/macro-sectores", "macro", ["test-macro-sectortest"])
+      await purgarColeccionBD("/api/personas", "persona", ["test-p-99", "test-p-88"])
+      await purgarColeccionBD("/api/tipos-unidad", "tipo-unidad", ["test-tu-loftqa"])
+      const maestrosBD: [string, string][] = [
+        ["estados-ocupacion", "test-edo-enlimpieza"],
+        ["categorias-macro", "test-macro-torreqa"],
+        ["categorias-micro", "test-micro-pisoqa"],
+        ["categorias-unidad", "test-catu-loftqa"],
+        ["condiciones-especiales", "test-vuln-electroqa"],
+        ["estados-inmobiliarios", "test-einm-prereservaqa"],
+        ["contactos-emergencia", "test-emer-cerrajeroqa"],
+        ["bancos", "test-banco-bancoqa"],
+      ]
+      for (const [tipo, id] of maestrosBD) {
+        if (id.startsWith("test-")) await borrarSiExiste(`/api/maestros/${tipo}/${id}`, `${tipo}:${id}`)
+      }
     } catch (e) { errores.push(`purga BD: ${String(e)}`) }
     setLoading(false)
     if (errores.length) setMsg({ type: "error", text: `Limpieza con ${errores.length} bloqueos (dependencias): ${errores.slice(0,2).join("; ")}` })
