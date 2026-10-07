@@ -1,0 +1,7 @@
+schema: spec-driven
+
+# Fix de accesibilidad (contraste y nombre accesible) en dos páginas. No cambia
+# comportamiento observable ni contrato de datos: solo clases de estilo y un
+# aria-label. No modifica ninguna spec.
+# Ver openspec/CONVENCION-DELTAS.md
+skip_specs: true
