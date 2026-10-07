@@ -14,6 +14,7 @@ import { PersonaSchema } from "@/lib/schemas"
 import { puede } from "@/lib/authz"
 import { prisma } from "@/lib/prisma"
 import { logger } from "@/lib/logger"
+import { randomUUID } from "node:crypto"
 import {
   jsonError,
   withComunidadScope,
@@ -222,6 +223,54 @@ export async function validarYLimpiarPersona(
   return { ok: true, datos }
 }
 
+/** Fila mínima (Prisma/dominio) para decidir la poda de gobernanza. */
+type FilaGobernanza = {
+  id: string
+  nombreCompleto: string
+  roles: unknown
+  datosGobernanza: unknown
+}
+
+/**
+ * AD: audita la poda efectiva de la ficha de gobernanza
+ * (`AD_DIRECTIVA_DESVINCULADA`). Se invoca DESPUÉS de la escritura, con la fila
+ * persistida: solo emite si la fila anterior tenía ficha y la persistida ya no
+ * la tiene con `roles` sin `directiva`. Así no se audita una poda que la
+ * escritura no llegó a persistir, y una misma request que toca el helper de
+ * validación y el epílogo del PUT emite un único evento.
+ *
+ * Patrón server-side (no `registrarEvento` de zustand, client-only): la
+ * auditoría nunca bloquea la respuesta de la ruta — espejo de
+ * `app/api/mis-datos/route.ts`.
+ */
+export async function auditarPodaGobernanza(
+  scope: ComunidadScope,
+  anterior: FilaGobernanza | null,
+  actual: FilaGobernanza
+): Promise<void> {
+  if (anterior?.datosGobernanza == null || actual.datosGobernanza != null) return
+  const roles = Array.isArray(actual.roles) ? (actual.roles as string[]) : []
+  if (roles.includes("directiva")) return
+
+  try {
+    await prisma.eventoAuditoria.create({
+      data: {
+        id: randomUUID(),
+        comunidadId: scope.comunidadId,
+        timestamp: new Date().toISOString(),
+        usuario: scope.usuarioId,
+        categoria: "AD",
+        tipoAccion: "AD_DIRECTIVA_DESVINCULADA",
+        referenciaId: actual.id,
+        descripcion: `Ficha de gobernanza depurada de ${actual.nombreCompleto}: rol directiva removido.`,
+      },
+    })
+  } catch (e) {
+    // intencional: la auditoría nunca bloquea la escritura (patrón mis-datos).
+    logger.error({ err: e }, "[api/personas] fallo al auditar la poda de gobernanza")
+  }
+}
+
 function denegar(rol: string, accion: "ver" | "crear" | "editar" | "eliminar"): Response | null {
   if (puede(rol, accion, "mp")) return null
   return jsonError(403, "Permiso denegado.")
@@ -305,21 +354,36 @@ export async function POST(req: Request): Promise<Response> {
     if (denegado) return denegado
 
     const validado = await validarYLimpiarPersona(
+      // SAFETY: parsed.data ya pasó PersonaSchema; el helper opera sobre un
+      // Record genérico y no conoce el tipo Zod (solo lee/escribe claves).
       parsed.data as unknown as Record<string, unknown>,
       scope,
       id
     )
     if (!validado.ok) return validado.response
 
+    const datos = limpiarPayloadPersona(validado.datos)
+    // GD: mismo criterio que el PUT. En el alta el helper ya descarta la ficha
+    // entrante sin rol `directiva` (poda silenciosa, espejo del store legacy);
+    // en el upsert sobre una fila existente hay que fijar la columna en null,
+    // porque si no Prisma la salta y la ficha vieja sobrevive como fantasma.
+    const roles = Array.isArray(validado.datos.roles) ? (validado.datos.roles as string[]) : []
+    if (!roles.includes("directiva") && existente?.datosGobernanza != null) {
+      datos.datosGobernanza = null
+    }
+
     const record = await prisma.persona.upsert({
       where: { id },
       create: {
-        ...limpiarPayloadPersona(validado.datos),
+        ...datos,
         id,
         comunidadId: scope.comunidadId,
       } as never,
-      update: limpiarPayloadPersona(validado.datos) as never,
+      update: datos as never,
     })
+    // AD: la poda efectiva se audita recién cuando la escritura quedó
+    // persistida (en el alta no hay ficha anterior, así que no emite).
+    await auditarPodaGobernanza(scope, existente, record)
     return Response.json(record, { status: existente ? 200 : 201 })
   } catch (e) {
     return errorGenerico(e)

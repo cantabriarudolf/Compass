@@ -11,6 +11,7 @@ import { puede } from "@/lib/authz"
 import { prisma } from "@/lib/prisma"
 import { jsonError, withComunidadScope } from "@/lib/api/with-comunidad-scope"
 import {
+  auditarPodaGobernanza,
   errorGenerico,
   limpiarPayloadPersona,
   personaIdDelUsuario,
@@ -91,6 +92,8 @@ export async function PUT(req: Request, ctx: CtxTipo): Promise<Response> {
       return jsonError(400, "Datos inválidos.", { detalles: parcial.error.flatten() })
     }
 
+    // SAFETY: la fila Prisma y el parche Zod validado se funden como Record
+    // genérico para el helper de validación (que lee/escribe claves sueltas).
     const mergeado = limpiarPayloadPersona({
       ...(existente as unknown as Record<string, unknown>),
       ...(parcial.data as Record<string, unknown>),
@@ -99,21 +102,30 @@ export async function PUT(req: Request, ctx: CtxTipo): Promise<Response> {
     if (!validado.ok) return validado.response
 
     const datos = limpiarPayloadPersona(parcial.data as Record<string, unknown>)
-    // GD: si el merge pierde la coherencia directiva, la ficha de gobernanza
-    // se depura silenciosamente (espejo del store).
-    if ("datosGobernanza" in datos) {
-      const rolesMerge = Array.isArray(validado.datos.roles)
-        ? (validado.datos.roles as string[])
-        : []
-      if (!rolesMerge.includes("directiva") && validado.datos.datosGobernanza === undefined) {
-        datos.datosGobernanza = null
-      }
+    // GD: la poda se decide contra la fila PERSISTIDA (más la clave entrante),
+    // no contra la mera presencia de `datosGobernanza` en el payload. Si la fila
+    // ya tenía ficha —o llega una— y los roles resultantes del merge pierden
+    // `directiva`, la columna se fija en null en esta misma escritura. Sin esto
+    // Prisma salta la columna y la ficha vieja sobrevive sin poda ni auditoría
+    // (es el camino real del formulario de persona).
+    const rolesMerge = Array.isArray(validado.datos.roles)
+      ? (validado.datos.roles as string[])
+      : []
+    if (
+      !rolesMerge.includes("directiva") &&
+      (existente.datosGobernanza != null || datos.datosGobernanza != null)
+    ) {
+      datos.datosGobernanza = null
     }
 
     const record = await prisma.persona.update({
       where: { id },
       data: datos as never,
     })
+    // AD: la poda de gobernanza se audita recién cuando la escritura quedó
+    // persistida. Una única emisión aunque el helper de validación y el
+    // epílogo hayan coincidido en la misma request.
+    await auditarPodaGobernanza(scope, existente, record)
     return Response.json(record)
   } catch (e) {
     return errorGenerico(e)

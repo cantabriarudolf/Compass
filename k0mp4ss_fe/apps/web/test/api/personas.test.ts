@@ -74,6 +74,7 @@ describe("/api/personas — MP con BD real (BD-FUENTE-VERDAD)", () => {
     // Estado limpio de las entidades bajo test.
     await prisma.vinculoUnidad.deleteMany({ where: { comunidadId: comunidadA } })
     await prisma.persona.deleteMany({ where: { comunidadId: comunidadA } })
+    await prisma.eventoAuditoria.deleteMany({ where: { comunidadId: comunidadA } })
   }, 30_000)
 
   afterAll(async () => {
@@ -81,6 +82,7 @@ describe("/api/personas — MP con BD real (BD-FUENTE-VERDAD)", () => {
       state.cookie = ""
       await prisma.vinculoUnidad.deleteMany({ where: { comunidadId: comunidadA } })
       await prisma.persona.deleteMany({ where: { comunidadId: comunidadA } })
+      await prisma.eventoAuditoria.deleteMany({ where: { comunidadId: comunidadA } })
       await prisma.membresia.deleteMany({
         where: { usuarioId: { in: ["mp-usuario-admin", "mp-usuario-residente"] } },
       })
@@ -327,5 +329,244 @@ describe("/api/personas — MP con BD real (BD-FUENTE-VERDAD)", () => {
       expect((enBd?.datosGobernanza as { firmaDigital?: string })?.firmaDigital).toBe("https://x/f.png")
     })
     await prisma.persona.delete({ where: { id: "mp-pers-firma" } }).catch(() => {})
+  })
+
+  // --- AD: la poda de gobernanza se audita en el camino real de la API ---
+
+  it("PUT sin rol directiva portando ficha → poda la ficha y audita AD_DIRECTIVA_DESVINCULADA una sola vez", async () => {
+    const ficha = { id: "g-dora", cargoDirectiva: "presidente", fechaAsuncion: "2025-03-01" }
+    await prisma.persona.create({
+      data: {
+        id: "mp-pers-dora",
+        comunidadId: comunidadA,
+        rut: "33333333-3",
+        nombreCompleto: "Dora Directiva",
+        nombres: "Dora",
+        apellidos: "Directiva",
+        email: "dora@test.cl",
+        telefonoMovil: "+56944444444",
+        estadoCuenta: "activa",
+        condicionesEspecialesIds: [],
+        roles: ["propietario", "directiva"],
+        datosGobernanza: ficha,
+      },
+    })
+    // El PUT porta la ficha y pierde el rol: la misma request toca el helper
+    // (poda del merge) y el epílogo del PUT (fuerza null). Debe emitir UN evento.
+    await conSesion(emailAdmin, async () => {
+      const res = await PUT("mp-pers-dora", { roles: ["propietario"], datosGobernanza: ficha })
+      expect(res.status).toBe(200)
+    })
+
+    const enBd = await prisma.persona.findUnique({ where: { id: "mp-pers-dora" } })
+    expect(enBd?.datosGobernanza).toBeNull()
+
+    const eventos = await prisma.eventoAuditoria.findMany({ where: { referenciaId: "mp-pers-dora" } })
+    expect(eventos).toHaveLength(1)
+    const [evento] = eventos
+    expect(evento?.tipoAccion).toBe("AD_DIRECTIVA_DESVINCULADA")
+    expect(evento?.categoria).toBe("AD")
+    expect(evento?.comunidadId).toBe(comunidadA)
+    expect(evento?.usuario).toBe("mp-usuario-admin")
+    expect(evento?.descripcion.length).toBeGreaterThan(0)
+
+    await prisma.persona.delete({ where: { id: "mp-pers-dora" } })
+    await prisma.eventoAuditoria.deleteMany({ where: { referenciaId: "mp-pers-dora" } })
+  })
+
+  it("PUT que conserva el rol directiva no emite AD_DIRECTIVA_DESVINCULADA (T4.1)", async () => {
+    await prisma.persona.create({
+      data: {
+        id: "mp-pers-eva",
+        comunidadId: comunidadA,
+        rut: "44444444-4",
+        nombreCompleto: "Eva Directiva",
+        nombres: "Eva",
+        apellidos: "Directiva",
+        email: "eva@test.cl",
+        telefonoMovil: "+56955555555",
+        estadoCuenta: "activa",
+        condicionesEspecialesIds: [],
+        roles: ["directiva"],
+        datosGobernanza: { id: "g-eva", cargoDirectiva: "secretario", fechaAsuncion: "2025-04-01" },
+      },
+    })
+    await conSesion(emailAdmin, async () => {
+      const res = await PUT("mp-pers-eva", {
+        roles: ["directiva"],
+        datosGobernanza: { id: "g-eva", cargoDirectiva: "tesorero", fechaAsuncion: "2025-04-01" },
+      })
+      expect(res.status).toBe(200)
+    })
+
+    const enBd = await prisma.persona.findUnique({ where: { id: "mp-pers-eva" } })
+    expect((enBd?.datosGobernanza as { cargoDirectiva?: string })?.cargoDirectiva).toBe("tesorero")
+    expect(
+      await prisma.eventoAuditoria.count({ where: { referenciaId: "mp-pers-eva" } })
+    ).toBe(0)
+
+    await prisma.persona.delete({ where: { id: "mp-pers-eva" } })
+  })
+
+  it("PUT que no toca la ficha no emite AD_DIRECTIVA_DESVINCULADA (negativo)", async () => {
+    const ficha = { id: "g-noa", cargoDirectiva: "director", fechaAsuncion: "2025-05-01" }
+    await prisma.persona.create({
+      data: {
+        id: "mp-pers-noa",
+        comunidadId: comunidadA,
+        rut: "55555555-5",
+        nombreCompleto: "Noa Directiva",
+        nombres: "Noa",
+        apellidos: "Directiva",
+        email: "noa@test.cl",
+        telefonoMovil: "+56966666666",
+        estadoCuenta: "activa",
+        condicionesEspecialesIds: [],
+        roles: ["propietario", "directiva"],
+        datosGobernanza: ficha,
+      },
+    })
+    await conSesion(emailAdmin, async () => {
+      const res = await PUT("mp-pers-noa", { telefonoMovil: "+56977777777" })
+      expect(res.status).toBe(200)
+    })
+
+    const enBd = await prisma.persona.findUnique({ where: { id: "mp-pers-noa" } })
+    expect((enBd?.datosGobernanza as { id?: string })?.id).toBe("g-noa")
+    expect(enBd?.telefonoMovil).toBe("+56977777777")
+    expect(
+      await prisma.eventoAuditoria.count({ where: { referenciaId: "mp-pers-noa" } })
+    ).toBe(0)
+
+    await prisma.persona.delete({ where: { id: "mp-pers-noa" } })
+  })
+
+  it("PUT que quita el rol directiva SIN la clave datosGobernanza → poda la ficha persistida y audita (camino real UI)", async () => {
+    const ficha = { id: "g-luisa", cargoDirectiva: "presidente", fechaAsuncion: "2025-03-01" }
+    await prisma.persona.create({
+      data: {
+        id: "mp-pers-luisa",
+        comunidadId: comunidadA,
+        rut: "66666666-6",
+        nombreCompleto: "Luisa Directiva",
+        nombres: "Luisa",
+        apellidos: "Directiva",
+        email: "luisa@test.cl",
+        telefonoMovil: "+56988888888",
+        estadoCuenta: "activa",
+        condicionesEspecialesIds: [],
+        roles: ["propietario", "directiva"],
+        datosGobernanza: ficha,
+      },
+    })
+    // Camino real de la UI: el formulario de persona reenvía los roles sin la
+    // clave `datosGobernanza` (FormularioPersona no conoce la ficha).
+    await conSesion(emailAdmin, async () => {
+      const res = await PUT("mp-pers-luisa", { roles: ["propietario"] })
+      expect(res.status).toBe(200)
+    })
+
+    const enBd = await prisma.persona.findUnique({ where: { id: "mp-pers-luisa" } })
+    expect(enBd?.datosGobernanza).toBeNull()
+
+    const eventos = await prisma.eventoAuditoria.findMany({
+      where: { referenciaId: "mp-pers-luisa" },
+    })
+    expect(eventos).toHaveLength(1)
+    expect(eventos[0]?.tipoAccion).toBe("AD_DIRECTIVA_DESVINCULADA")
+    expect(eventos[0]?.categoria).toBe("AD")
+    expect(eventos[0]?.comunidadId).toBe(comunidadA)
+
+    await prisma.persona.delete({ where: { id: "mp-pers-luisa" } })
+    await prisma.eventoAuditoria.deleteMany({ where: { referenciaId: "mp-pers-luisa" } })
+  })
+
+  it("PUT sin `roles` en el payload conserva la directiva de la fila y persiste la ficha sin evento", async () => {
+    await prisma.persona.create({
+      data: {
+        id: "mp-pers-cons",
+        comunidadId: comunidadA,
+        rut: "77777777-7",
+        nombreCompleto: "Cons Directiva",
+        nombres: "Cons",
+        apellidos: "Directiva",
+        email: "cons@test.cl",
+        telefonoMovil: "+56999999999",
+        estadoCuenta: "activa",
+        condicionesEspecialesIds: [],
+        roles: ["directiva"],
+        datosGobernanza: { id: "g-cons", cargoDirectiva: "secretario", fechaAsuncion: "2025-07-01" },
+      },
+    })
+    await conSesion(emailAdmin, async () => {
+      const res = await PUT("mp-pers-cons", {
+        datosGobernanza: { id: "g-cons", cargoDirectiva: "tesorero", fechaAsuncion: "2025-07-01" },
+      })
+      expect(res.status).toBe(200)
+    })
+
+    const enBd = await prisma.persona.findUnique({ where: { id: "mp-pers-cons" } })
+    expect((enBd?.datosGobernanza as { cargoDirectiva?: string })?.cargoDirectiva).toBe("tesorero")
+    expect(await prisma.eventoAuditoria.count({ where: { referenciaId: "mp-pers-cons" } })).toBe(0)
+
+    await prisma.persona.delete({ where: { id: "mp-pers-cons" } })
+  })
+
+  it("POST con ficha y roles sin directiva no persiste ficha fantasma (se depura en silencio)", async () => {
+    await conSesion(emailAdmin, async () => {
+      const res = await POST(
+        personaValida({
+          id: "mp-pers-post-fantasma",
+          rut: "88888888-8",
+          email: "post-fantasma@test.cl",
+          roles: ["propietario"],
+          datosGobernanza: { id: "g-pf", cargoDirectiva: "director", fechaAsuncion: "2025-06-01" },
+        })
+      )
+      expect(res.status).toBe(201)
+    })
+    const enBd = await prisma.persona.findUnique({ where: { id: "mp-pers-post-fantasma" } })
+    expect(enBd?.datosGobernanza).toBeNull()
+
+    await prisma.persona.delete({ where: { id: "mp-pers-post-fantasma" } }).catch(() => {})
+  })
+
+  it("POST sobre una fila existente con ficha y roles sin directiva tampoco deja ficha fantasma (upsert)", async () => {
+    await prisma.persona.create({
+      data: {
+        id: "mp-pers-post-upsert",
+        comunidadId: comunidadA,
+        rut: "99999999-9",
+        nombreCompleto: "Upsi Directiva",
+        nombres: "Upsi",
+        apellidos: "Directiva",
+        email: "upsi@test.cl",
+        telefonoMovil: "+56910101010",
+        estadoCuenta: "activa",
+        condicionesEspecialesIds: [],
+        roles: ["propietario", "directiva"],
+        datosGobernanza: { id: "g-upsi", cargoDirectiva: "presidente", fechaAsuncion: "2025-08-01" },
+      },
+    })
+    await conSesion(emailAdmin, async () => {
+      const res = await POST(
+        personaValida({
+          id: "mp-pers-post-upsert",
+          rut: "99999999-9",
+          email: "upsi@test.cl",
+          nombreCompleto: "Upsi Directiva",
+          nombres: "Upsi",
+          apellidos: "Directiva",
+          telefonoMovil: "+56910101010",
+          roles: ["propietario"],
+        })
+      )
+      expect(res.status).toBe(200)
+    })
+    const enBd = await prisma.persona.findUnique({ where: { id: "mp-pers-post-upsert" } })
+    expect(enBd?.datosGobernanza).toBeNull()
+
+    await prisma.persona.delete({ where: { id: "mp-pers-post-upsert" } })
+    await prisma.eventoAuditoria.deleteMany({ where: { referenciaId: "mp-pers-post-upsert" } })
   })
 })
