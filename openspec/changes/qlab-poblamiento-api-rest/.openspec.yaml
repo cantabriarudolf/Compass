@@ -1,0 +1,6 @@
+schema: spec-driven
+
+# Migra el poblamiento de las fases FI y CT del QA-Lab del store legacy a la API
+# REST (mismo patrón ya aplicado y documentado para PI y PL en LAB-mejoras).
+# Añade 2 requirements en openspec/specs/LAB-mejoras/spec.md.
+# Ver openspec/CONVENCION-DELTAS.md
