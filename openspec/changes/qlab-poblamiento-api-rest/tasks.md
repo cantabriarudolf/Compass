@@ -7,12 +7,36 @@
 
 ## Fase 0 — Estructura (EF/VU) a BD — **PRIMERA, desbloquea todo**
 
-- [ ] 0.1 Migrar `cargarFase12EF`/`VU` (`app/admin/qa-lab/page.tsx:320-403`) a API REST: maestros,
+- [x] 0.1 Migrar `cargarFase12EF`/`VU` (`app/admin/qa-lab/page.tsx:320-403`) a API REST: maestros,
       tipos de unidad, macro/micro sectores, **unidades** y **vinculos** (incluidas `test-u-999` y
-      su propietario). Es lo que hace que `test-u-999` **exista en BD**.
-- [ ] 0.2 Verificar en BD: `unidad.count({ where: { id: { startsWith: "test-" } } }) > 0` y un
-      `vinculoUnidad` `propietario` sobre ella.
-- [ ] 0.3 Gate: suite + tsc + eslint; unidades TEST visibles en `/inventario/estructura`.
+      su propietario). **HECHO con espejo transitorio (design.md Decisión 7)**: escribe a la API **y**
+      al store, porque ~13 fases siguientes leen el store. Commit `c758115`.
+- [x] 0.2 Verificar en BD: **medido** → `unidad` id `test-*` = 2 (incluye `test-u-999`),
+      `vinculoUnidad` con `unidadId` `test-*` = 3, `persona` `test-*` = 3, 8/8 maestros + TU +
+      macro + 2 micro-sectores persistidos. Suite **891/891**, tsc 0, eslint 0.
+- [ ] 0.3 Gate: unidades TEST visibles en `/inventario/estructura`. **Pendiente**.
+- [ ] 0.4 **Purga BD de la estructura en `limpiar()`** — *bloqueante, intento fallido*.
+      `limpiar()` ya tiene el bloque (commit `db9b933`, WIP) con el orden correcto
+      (vinculos → unidades → micro → macro → personas → TU → maestros) y los ids correctos,
+      **pero `e2e/crud/poblado-idempotente.spec.ts` sigue ROJO (2 failed / 6 passed)**.
+
+      **Diagnóstico medido (no resuelto)**:
+      - El guard `tieneDatosTest(store, bd)` mira, para BD, `bd.personas`
+        (`lib/qa-lab-helpers.ts:105-110`); con la estructura espejada, `personas` TEST en BD hacen
+        que abra el dialog "¿Limpiar y poblar?" en vez de poblar → "Carga completa OK" nunca aparece.
+      - Los `DELETE` tienen guards de referencia que devuelven **409**:
+        `macro-sectores/test-macro-sectortest` → `409 (1 sub-sector asociado)`;
+        `unidades/test-u-999` → `409 (tiene vínculos asociados)`;
+        `personas/test-p-99` → `409 (1 vínculo de unidad asociado)`.
+        `vinculos/test-v-prop-999`, `maestros/estados-ocupacion/test-edo-enlimpieza` → 200.
+      - Residuo medido tras la corrida fallida: `tipos_unidad=1, macro_sectores=1, micro_sectores=2,
+        unidades=2, personas=3, vinculos=3, fondos_fi=1, egresos_fi=1, liquidaciones_pl=8,
+        publicaciones_portal=1, leads_portal=1` + los 8 maestros → **el bloque de purga no llegó a
+        ejecutarse completo** (ni siquiera los maestro, que sí se borran sueltos). Hay que aislar por
+        qué el `try` de `limpiar()` no alcanza el bloque nuevo; el candidato más probable es una
+        excepción previa en la zona PL.
+      - **Descartado como fix**: subir la ventana del expect a 90s (el intento del agente no arregló
+        nada y enmascaraba la causa; revertido).
 
 ## Fase 1 — FI (ventana 1) — acciones API + pasos FI puros
 
