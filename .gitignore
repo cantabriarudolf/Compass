@@ -36,6 +36,13 @@ Thumbs.db
 # Artefactos de tests (los snapshots manuales sí se versionan)
 Data/NSGC/backups/test-*.json
 
+# Respaldos de la base de datos (nunca versionar)
+Data/NSGC/backups/
+
+# Artefactos de orquestación y de tests
+odd/
+test-results/
+
 # Sesiones e2e (cookies — nunca commitear)
 k0mp4ss_fe/apps/web/e2e/.auth/
 # Local Pi runtime state
