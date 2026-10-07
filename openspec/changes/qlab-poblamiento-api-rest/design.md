@@ -53,3 +53,50 @@ que un consumidor distinto del lab no pueda saltarla. El gate deuda/saldo de
   una ventana). PI/PL ya están; este change cubre FI y CT.
 - **Escribir a BD y espejar al store** (lo que hace PL de forma transitoria): se acepta sólo
   donde un consumidor legacy todavía lo exige; para FI/CT el objetivo es no espejar.
+
+## Decisión 6 — Dependencias descubiertas al implementar la Fase 1.3 (2026-10-07)
+
+Al intentar migrar `cargarFase13FI` aparecieron **dos dependencias duras** que el plan original no
+había declarado. Se documentan acá y se re-ordenan las fases; **no** se implementa a medias.
+
+### D6.1 — Los pasos 7, 8, 9 y 10 dependen de otras fases todavía en store
+
+Evidencia (`app/admin/qa-lab/page.tsx:781-855`):
+
+| Paso | Qué hace | Depende de |
+| --- | --- | --- |
+| 7 (`:826-835`) | paga la multa TEST `concepto === "multa_in"` con descuento justificado | cobro creado por la fase **IN** (`:647`: `cargoFIReferencia` → `cobrosFI` del store) |
+| 8 (`:837-841`) | assert de conexión IN: `infraccionesIN` + cobro `origenRef === "test-in-grave"` | fase **IN** |
+| 9 (`:842-846`) | assert de conexión RA: `reservasRA["test-ra-rs-1"]` + cobro `origenRef === "test-ra-rs-1"` | fase **RA** |
+| 10 (`:847-849`) | `saveProyectoMT` rechazado por saldo insuficiente | fase **MT** (store) |
+
+Mientras IN y RA sigan escribiendo al store, migrar los cobros de FI a BD deja las assertes 7-9
+leyendo un mundo y escribiendo otro: el reporte del lab **seguiría en verde mintiendo**, que es
+exactamente el defecto que este change existe para cerrar.
+
+**Decisión**: los pasos 7-9 pasan a una fase propia (**Fase 1.5**) que arranca después de migrar IN y
+RA; el paso 10 va con MT. La Fase 1.3 migra sólo los pasos FI puros (1, 2, 3, 4, 5, 6 y 11).
+
+### D6.2 — No existe hoy una purga BD segura para FI
+
+- `app/admin/qa-lab/page.tsx:1372-1377`: el bloque FI de `limpiar()` purga **sólo el store**.
+- `scripts/higiene-qa-test.mjs:15-17`: la regla de seguridad vigente es **"NUNCA toca:
+  personas (seed real), fondos/egresos/ingresos (punto cero)"**, y el purgado por modelo no
+  incluye `cobroFI` ni `emisionGC`.
+
+Si FI pasa a escribir BD sin extender la higiene, cada corrida del lab **deja residuo TEST en BD**
+y el gate `e2e/flujo/poblamiento.spec.ts` (que hoy falla justamente por higiene de dos mundos)
+empeora en vez de mejorar.
+
+**Decisión**: la purga BD de FI es una unidad propia (**Fase 1.4**) y **exige ampliar una regla de
+seguridad deliberadamente conservadora**. Reglas que debe cumplir, en este orden:
+
+1. Purga **por API** (delete dedicado o `DELETE` existente), no por script de BD, para que el guard
+   de integridad y el scoping por comunidad sigan aplicando.
+2. Allowlist explícita de ids TEST (`test-fondo-*`, `test-egr-*`, `cob-*` de origen TEST,
+   emisiones TEST) — nunca por patrón laxo sobre `fondoFI`/`egresoFI`.
+3. Si un `DELETE` de la API no existe, se crea con guard de referencias (mismo criterio que
+   `fondos-fi/[id]:beforeDelete`), y el script `e2e:higiene` **no** se relaja.
+
+Consecuencia: la Fase 1.3 **no** cierra el 30/30 del lane P3 por sí sola; el verde llega con
+1.4 + 1.5 + CT (Fase 2). El `tasks.md` refleja este orden.
