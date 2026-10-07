@@ -100,3 +100,42 @@ seguridad deliberadamente conservadora**. Reglas que debe cumplir, en este orden
 
 Consecuencia: la Fase 1.3 **no** cierra el 30/30 del lane P3 por sí sola; el verde llega con
 1.4 + 1.5 + CT (Fase 2). El `tasks.md` refleja este orden.
+
+### D6.3 — FI depende de EF/VU: la unidad TEST no existe en BD (la dependencia decisiva)
+
+**Evidencia medida contra `prisma/dev.db` (2026-10-07):**
+
+```text
+unidades BD: 167 | con prefijo test-*: 0
+muestra ids: u-1791231835354-7hmzld/QA-9999, u-A-101/101, u-A-102/102, …
+vinculos propietario: 34 | sobre unidades test-*: 0
+test-u-999 existe: false
+```
+
+`POST /api/emisiones-gc` lee las unidades **de BD** (`app/api/emisiones-gc/route.ts:88-101`) y las
+filtra por `parsed.data.unidadIds`. Como `test-u-999` —la unidad que usa el paso 3 de
+`cargarFase13FI` (`app/admin/qa-lab/page.tsx:792-798`)— **no existe en BD**, la petición cae en
+
+```text
+if (elegibles.length === 0) return jsonError(400, "No hay unidades elegibles para la emisión.")
+```
+
+Es decir: **migrar el paso 3 a la API lo pone en rojo**, no en verde. Y los pasos 5 y 6 (pago y
+mora) dependen de que la emisión haya creado cobros en BD. El paso 4 “pasaría” por el motivo
+equivocado (bloqueo global en vez del responsable de `test-u-999`).
+
+Causa: las fases **EF/VU** (estructura física y unidades) siguen escribiendo al store
+(`page.tsx:320-403`: `saveMaestro`, `saveTipoUnidad`, `savePersona`, `saveMacroSector`,
+`saveMicroSector`, `saveUnidad`, `saveVinculo`) y **nunca** crean la unidad TEST en BD.
+
+**Decisión (invierte el orden del plan)**: la migración arranca por la **estructura**, no por FI.
+El grafo de dependencias real es:
+
+```text
+EF/VU (unidades + vinculos + personas TEST a BD)  →  FI  →  CT
+                                          ↘  IN / RA / MT  →  conexiones (1.5)
+```
+
+> Lección de método: propuse “FI primero” leyendo **escrituras** de la fase FI. Las escrituras se
+> migran fácil; lo que **rompe** es lo que la fase **lee** (unidades, vinculos, actas, cobros de
+> otras fases). El orden correcto se deriva de las **lecturas**, no de las escrituras.

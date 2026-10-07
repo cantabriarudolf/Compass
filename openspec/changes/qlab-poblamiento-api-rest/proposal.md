@@ -36,6 +36,11 @@ FI/CT.
 
 Dentro (por fases, ver `tasks.md`):
 
+0. **Estructura (EF/VU) — PRERREQUISITO** (dependencia D6.3 descubierta al implementar): migrar
+   unidades y vínculos a BD. `POST /api/emisiones-gc` lee las unidades **de BD** y hoy hay **0
+   unidades `test-*`** en ella (`test-u-999` no existe), así que FI **no puede** migrarse antes que
+   EF/VU. El grafo real de dependencias es `EF/VU → FI → CT`, con IN/RA/MT antes de las conexiones.
+
 1. **FI (Estructura Física / fondos e ingresos)** — migrar `cargarFase13FI` (11 pasos) y las
    3 conexiones cross-módulo (IN/RA/MT) a API REST. Reusar `app/api/fondos-fi/route.ts`,
    `app/api/egresos-fi/route.ts`, `app/api/cobros-fi/route.ts`,

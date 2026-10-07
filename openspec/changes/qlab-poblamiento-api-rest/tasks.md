@@ -2,7 +2,17 @@
 
 > Change grande: **4 ventanas**. Un escritor por vez. Test-first donde haya runner
 > determinista (rutas API + helpers); el e2e del poblamiento es la verificación de cierre.
-> **Orden re-escopado el 2026-10-07** por las dependencias D6.1/D6.2 del `design.md`.
+> **Orden re-escopado el 2026-10-07** por las dependencias D6.1/D6.2/D6.3 del `design.md`. El grafo
+> real es `EF/VU → FI → CT`, con IN/RA/MT antes de las conexiones.
+
+## Fase 0 — Estructura (EF/VU) a BD — **PRIMERA, desbloquea todo**
+
+- [ ] 0.1 Migrar `cargarFase12EF`/`VU` (`app/admin/qa-lab/page.tsx:320-403`) a API REST: maestros,
+      tipos de unidad, macro/micro sectores, **unidades** y **vinculos** (incluidas `test-u-999` y
+      su propietario). Es lo que hace que `test-u-999` **exista en BD**.
+- [ ] 0.2 Verificar en BD: `unidad.count({ where: { id: { startsWith: "test-" } } }) > 0` y un
+      `vinculoUnidad` `propietario` sobre ella.
+- [ ] 0.3 Gate: suite + tsc + eslint; unidades TEST visibles en `/inventario/estructura`.
 
 ## Fase 1 — FI (ventana 1) — acciones API + pasos FI puros
 
@@ -13,15 +23,20 @@
       `POST /api/fondos-fi/[id]/retirar` (patrón `liquidaciones/[id]/confirmar`).
       **HECHO**: commits `feat(api): acciones REST de pago y mora sobre cobros FI` y
       `feat(api): acción REST de retiro de fondo FI`. Suite **891/891**, tsc 0, eslint 0.
-- [ ] 1.3a Migrar a API REST **sólo los pasos FI puros** de `cargarFase13FI`
-      (`app/admin/qa-lab/page.tsx:781`): 1 (fondo), 2 (egreso), 3 (emisión GC + aporte),
-      4 (emisión sin alcance → 400), 5 (pago), 6 (mora idempotente), 11 (retiro sin acta → 400).
-      Las lecturas de verificación pasan a GET por API (`/api/cobros-fi?periodo=…`,
-      `/api/egresos-fi`, `/api/emisiones-gc`), no al store.
+- [ ] 1.3a Migrar a API REST los pasos FI puros de `cargarFase13FI` (`page.tsx:781`):
+      1 (fondo), 2 (egreso), 3 (emisión GC + aporte), 4 (emisión sin alcance → 400),
+      5 (pago), 6 (mora idempotente), 11 (retiro sin acta → 400).
+      **BLOQUEADA por la Fase 0** (D6.3): sin `test-u-999` en BD, el paso 3 cae en
+      `400 "No hay unidades elegibles para la emisión."` y el paso 4 pasaría por el motivo
+      equivocado. Las lecturas de verificación pasan a GET por API (`/api/cobros-fi?periodo=…` con
+      `pageSize`, `listaQA("/api/egresos-fi")`, `listaQA("/api/emisiones-gc")`).
 - [ ] 1.3b Los pasos 7, 8, 9 y 10 quedan **explícitamente sin migrar** con comentario
       `// TODO Fase 1.5 — depende de migrar IN/RA/MT` (ver D6.1). No se disfrazan de verde.
 - [ ] 1.4 Purga BD de FI en "Borrar todo" (ver D6.2): por API + allowlist de ids TEST.
-      **Bloqueante de diseño**: no relajar `scripts/higiene-qa-test.mjs`.
+      **PARKEADA por decisión del owner**: `DELETE /api/cobros-fi/[id]` devuelve **409 si el cobro
+      tiene pagos** (`app/api/cobros-fi/[id]/route.ts:68`), y el poblamiento FI **paga** sus cobros
+      (pasos 5 y 7). Cerrar la purga exige decidir si se relaja un guard de integridad financiera,
+      se acepta residuo honesto o se crea una purga TEST-scoped. **No decide el agente.**
 - [ ] 1.5 Conexiones cross-módulo (pasos 7-10): migrar **después** de las fases IN, RA y MT.
 - [ ] 1.6 Gate de fase: suite unitaria + `tsc` + `eslint` verdes; FI visible en las páginas reales.
 
