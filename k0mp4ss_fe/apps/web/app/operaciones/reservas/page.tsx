@@ -373,7 +373,7 @@ update: actualizarReservaApi,
                         return (
                           <tr
                             key={r.id}
-                            className={`border-b align-top last:border-0 ${vencida && r.estado === "confirmada" ? "opacity-70" : ""}`}
+                            className="border-b align-top last:border-0"
                           >
                             <td className="py-2 pr-3 font-mono text-xs">
                               {r.folio}
@@ -421,9 +421,19 @@ update: actualizarReservaApi,
                             </td>
                             <td className="py-2 pr-3">
                               {r.estado === "confirmada" ? (
-                                <Badge className="bg-sky-600 text-[10px] text-white hover:bg-sky-700">
-                                  Confirmada
-                                </Badge>
+                                <>
+                                  <Badge className="bg-sky-700 text-[10px] text-white hover:bg-sky-800">
+                                    Confirmada
+                                  </Badge>
+                                  {vencida && (
+                                    <Badge
+                                      variant="outline"
+                                      className="ml-1 text-[10px]"
+                                    >
+                                      vencida
+                                    </Badge>
+                                  )}
+                                </>
                               ) : (
                                 <div className="space-y-1">
                                   <Badge variant="outline">Cancelada</Badge>

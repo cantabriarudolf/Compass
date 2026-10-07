@@ -62,10 +62,10 @@ const ESTADO_ACTIVO_LABEL: Record<EstadoActivoIR, string> = {
 }
 
 const ESTADO_ACTIVO_BADGE: Record<EstadoActivoIR, string> = {
-  disponible: "bg-emerald-600 hover:bg-emerald-700 text-white",
-  en_uso: "bg-sky-600 hover:bg-sky-700 text-white",
-  reparacion: "bg-amber-500 hover:bg-amber-600 text-white",
-  baja: "bg-muted text-muted-foreground",
+  disponible: "bg-emerald-700 hover:bg-emerald-800 text-white",
+  en_uso: "bg-sky-700 hover:bg-sky-800 text-white",
+  reparacion: "bg-amber-700 hover:bg-amber-800 text-white",
+  baja: "bg-muted text-foreground",
 }
 
 const ESTADO_SOLICITUD_LABEL: Record<EstadoSolicitudInsumoIR, string> = {
@@ -371,7 +371,7 @@ export default function RecursosPage() {
                           <td className="py-2">
                             <div className="flex flex-wrap gap-1">
                               <Select value={r.estadoActivo} onValueChange={v => { void actualizarRecurso(r.id, { estadoActivo: v as EstadoActivoIR }) }}>
-                                <SelectTrigger className="h-8 w-32 text-xs"><SelectValue /></SelectTrigger>
+                                <SelectTrigger className="h-8 w-32 text-xs" aria-label="Cambiar estado del recurso"><SelectValue /></SelectTrigger>
                                 <SelectContent>
                                   {(Object.keys(ESTADO_ACTIVO_LABEL) as EstadoActivoIR[]).map(e => (
                                     <SelectItem key={e} value={e}>{ESTADO_ACTIVO_LABEL[e]}</SelectItem>
