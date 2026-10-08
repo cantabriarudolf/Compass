@@ -14,29 +14,28 @@
 - [x] 0.2 Verificar en BD: **medido** → `unidad` id `test-*` = 2 (incluye `test-u-999`),
       `vinculoUnidad` con `unidadId` `test-*` = 3, `persona` `test-*` = 3, 8/8 maestros + TU +
       macro + 2 micro-sectores persistidos. Suite **891/891**, tsc 0, eslint 0.
-- [ ] 0.3 Gate: unidades TEST visibles en `/inventario/estructura`. **Pendiente**.
-- [ ] 0.4 **Purga BD de la estructura en `limpiar()`** — *bloqueante, intento fallido*.
-      `limpiar()` ya tiene el bloque (commit `db9b933`, WIP) con el orden correcto
-      (vinculos → unidades → micro → macro → personas → TU → maestros) y los ids correctos,
-      **pero `e2e/crud/poblado-idempotente.spec.ts` sigue ROJO (2 failed / 6 passed)**.
-
-      **Diagnóstico medido (no resuelto)**:
-      - El guard `tieneDatosTest(store, bd)` mira, para BD, `bd.personas`
-        (`lib/qa-lab-helpers.ts:105-110`); con la estructura espejada, `personas` TEST en BD hacen
-        que abra el dialog "¿Limpiar y poblar?" en vez de poblar → "Carga completa OK" nunca aparece.
-      - Los `DELETE` tienen guards de referencia que devuelven **409**:
-        `macro-sectores/test-macro-sectortest` → `409 (1 sub-sector asociado)`;
-        `unidades/test-u-999` → `409 (tiene vínculos asociados)`;
-        `personas/test-p-99` → `409 (1 vínculo de unidad asociado)`.
-        `vinculos/test-v-prop-999`, `maestros/estados-ocupacion/test-edo-enlimpieza` → 200.
-      - Residuo medido tras la corrida fallida: `tipos_unidad=1, macro_sectores=1, micro_sectores=2,
-        unidades=2, personas=3, vinculos=3, fondos_fi=1, egresos_fi=1, liquidaciones_pl=8,
-        publicaciones_portal=1, leads_portal=1` + los 8 maestros → **el bloque de purga no llegó a
-        ejecutarse completo** (ni siquiera los maestro, que sí se borran sueltos). Hay que aislar por
-        qué el `try` de `limpiar()` no alcanza el bloque nuevo; el candidato más probable es una
-        excepción previa en la zona PL.
-      - **Descartado como fix**: subir la ventana del expect a 90s (el intento del agente no arregló
-        nada y enmascaraba la causa; revertido).
+- [x] 0.3 Gate: unidades TEST visibles en `/inventario/estructura`. **VERIFICADO 2026-10-07**:
+      `GET /api/unidades` devuelve `test-u-999` en la primera página (total 168, pageSize 100,
+      orden `createdAt desc`) y la página real renderiza "999"/"TEST" (20 filas visibles).
+      Nota de método: la página carga 100 unidades por API y pagina de a 20; el gate exige esperar
+      la carga de las 9 colecciones (una pasada con 4s de espera dio falso negativo).
+- [x] 0.4 **Purga BD de la estructura en `limpiar()`** — **RESUELTO 2026-10-07**.
+      **Causa raíz real (medida)**: no era la excepción PL ni los guards 409, sino una **carrera de
+      hidratación**. `limpiar()` arrancaba con `if (!ensureHydrated()) return`; el click quirúrgico
+      del e2e llega antes de que zustand-persist rehidrate el fixture grande de `localStorage`,
+      así que el handler abortaba con "aún se está hidratando" y la purga nunca corría.
+      **Fix**: `waitForStoreHydration()` en `lib/store.ts` (espera acotada, 10s) + `ensureHydrated()`
+      async que la espera; `runFase`/`limpiar`/`validar` la aguardan (3 call sites).
+      **Evidencia**: `test/lib/wait-for-store-hydration.test.ts` (3/3, RED→GREEN); e2e
+      `e2e/crud/poblado-idempotente.spec.ts` **8 passed / 0 failed** (6 auth setup + 2 spec);
+      purga medida: 22 DELETEs en orden hijos→padres, mensaje verde a 27s (rutas calientes) y
+      67.9s (cold-compile de Turbopack, log del server: `compile: 7.9s-11.5s` por ruta);
+      poblamiento de 22 fases: 12.1s caliente. Los guards 409 no bloquean: el orden de purga los
+      evita (hijos primero). Timeouts del spec recalibrados 30s→120s en las aserciones de purga y
+      de carga completa, **después** del fix real y con la medición de arriba (tolerancia al
+      cold-compile del dev server; el intento previo de subir la ventana sin arreglar la causa
+      seguía revertido). Suite 894/894 · tsc 0 · eslint 0.
+      Residuo FI (cobros con pagos, guard 409) sigue parkeado por decisión del owner → Fase 1.4.
 
 ## Fase 1 — FI (ventana 1) — acciones API + pasos FI puros
 
