@@ -35,12 +35,18 @@ test.describe("CRUD — QA Lab poblado idempotente (P1 C2)", () => {
 
     // 0) Estado limpio determinista
     await clickBorrar(page)
-    await expect(page.getByText(/TEST-\* limpio correctamente/)).toBeVisible({ timeout: 30_000 })
+    // 120s (no 30s): la purga BD es secuencial (~22 DELETEs) y en dev cada ruta
+    // API se compila en frío la primera vez (~8-12s por ruta). Medido: mensaje
+    // verde a los 67.9s con server frío, ~13s con rutas calientes. El timeout
+    // es tolerancia al cold-compile del dev server, no al comportamiento.
+    await expect(page.getByText(/TEST-\* limpio correctamente/)).toBeVisible({ timeout: 120_000 })
 
     // 1) Primera corrida completa
     await clickPoblar(page)
     await expect(page.getByText("🟢 Listo").first()).toBeVisible({ timeout: 120_000 })
-    await expect(page.getByText(/Carga completa OK/)).toBeVisible({ timeout: 30_000 })
+    // 120s (no 30s): poblamiento de 22 fases medido en 12.1s con rutas calientes;
+    // en dev el cold-compile de Turbopack suma segundos por ruta nueva (~30 rutas).
+    await expect(page.getByText(/Carga completa OK/)).toBeVisible({ timeout: 120_000 })
     const tarjetas = page.locator('[id^="mod-"]')
     await expect(tarjetas).toHaveCount(22, { timeout: 30_000 } as any)
     await expect(tarjetas.getByText("🟢 Listo")).toHaveCount(22, { timeout: 10_000 } as any)
@@ -72,7 +78,7 @@ test.describe("CRUD — QA Lab poblado idempotente (P1 C2)", () => {
 
     // Limpieza para no contaminar siguiente test
     await clickBorrar(page)
-    await expect(page.getByText(/TEST-\* limpio correctamente/)).toBeVisible({ timeout: 30_000 })
+    await expect(page.getByText(/TEST-\* limpio correctamente/)).toBeVisible({ timeout: 120_000 })
 
     expect(errores, "Excepciones no capturadas en poblado idempotente confirmar").toEqual([])
   })
@@ -85,11 +91,11 @@ test.describe("CRUD — QA Lab poblado idempotente (P1 C2)", () => {
     await expect(page.getByRole("heading", { name: /Laboratorio QA/ })).toBeVisible({ timeout: 15_000 })
 
     await clickBorrar(page)
-    await expect(page.getByText(/TEST-\* limpio correctamente/)).toBeVisible({ timeout: 30_000 })
+    await expect(page.getByText(/TEST-\* limpio correctamente/)).toBeVisible({ timeout: 120_000 })
 
     await clickPoblar(page)
     await expect(page.getByText("🟢 Listo").first()).toBeVisible({ timeout: 120_000 })
-    await expect(page.getByText(/Carga completa OK/)).toBeVisible({ timeout: 30_000 })
+    await expect(page.getByText(/Carga completa OK/)).toBeVisible({ timeout: 120_000 })
     await expect(page.locator('[id^="mod-"]')).toHaveCount(22, { timeout: 30_000 } as any)
     await expect(page.locator('[id^="mod-"]').getByText("🟢 Listo")).toHaveCount(22)
 

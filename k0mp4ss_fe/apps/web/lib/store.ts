@@ -8855,6 +8855,33 @@ export function rehydrateStore(): void {
   if (typeof window !== "undefined") useCompassStore.persist.rehydrate()
 }
 
+// Espera acotada a que zustand-persist marque `hasHydrated`. El store usa
+// `skipHydration: true`, así que la hidratación arranca en el mount de cada
+// página (useStoreRehydrated) y un click inmediato puede llegar antes de que
+// termine: en vez de abortar, se espera. Resuelve false solo si el timeout
+// vence sin hidratar (comportamiento previo de los guards del QA-Lab).
+export function waitForStoreHydration(timeoutMs = 10_000): Promise<boolean> {
+  if (typeof window === "undefined") return Promise.resolve(false)
+  if (useCompassStore.getState().hasHydrated) return Promise.resolve(true)
+  return new Promise<boolean>((resolve) => {
+    let settled = false
+    const finish = (value: boolean) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      unsubscribe()
+      resolve(value)
+    }
+    const timer = setTimeout(() => finish(useCompassStore.getState().hasHydrated), timeoutMs)
+    const unsubscribe = useCompassStore.subscribe((state) => {
+      if (state.hasHydrated) finish(true)
+    })
+    // Carrera: si la hidratación terminó entre el chequeo y la suscripción, el
+    // listener ya no recibe el cambio; se re-chequea una vez.
+    if (useCompassStore.getState().hasHydrated) finish(true)
+  })
+}
+
 export function useStoreRehydrated(): void {
   useEffect(() => {
     rehydrateStore()

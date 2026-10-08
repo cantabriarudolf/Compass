@@ -3,7 +3,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- seeds TEST del QA Lab: literales complejos cross-módulo validados en runtime por zod (462 pruebas); tiparlos duplicaría los schemas sin valor en esta capa */
 
 import * as React from "react"
-import { useCompassStore, useStoreRehydrated, STORE_VERSION } from "@/lib/store"
+import { useCompassStore, useStoreRehydrated, STORE_VERSION, waitForStoreHydration } from "@/lib/store"
 import { STORE_KEY } from "@/lib/store-backup"
 import { calcularProyeccionCobertura } from "@/lib/personal-utils"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
@@ -372,8 +372,14 @@ export default function QaLabPage() {
     return "pendiente"
   }, [report])
 
-  const ensureHydrated = React.useCallback(() => {
-    if (!hasHydrated) {
+  // P1 C2 fix: espera la hidratación en vez de abortar. Un click inmediato
+  // (o el click quirúrgico del e2e) puede llegar antes de que zustand-persist
+  // rehidrate; antes se mostraba "aún se está hidratando" y limpiar() salía
+  // temprano sin purgar. Ahora se espera acotado y se informa solo si vence.
+  const ensureHydrated = React.useCallback(async (): Promise<boolean> => {
+    if (hasHydrated) return true
+    const hidratado = await waitForStoreHydration()
+    if (!hidratado) {
       setMsg({ type: "error", text: "El almacenamiento aún se está hidratando. Intenta de nuevo." })
       return false
     }
@@ -1219,7 +1225,7 @@ export default function QaLabPage() {
   }, [])
 
   const runFase = React.useCallback(async (fase: string) => {
-    if (!ensureHydrated()) return
+    if (!(await ensureHydrated())) return
     // Guard idempotente: si hay datos TEST-* ofrece confirmación "Limpiar y poblar de una vez".
     // P4: cubre ambos mundos (store + BD vía API); las confirmadas inmutables no bloquean por diseño.
     const estadoStore = useCompassStore.getState() as unknown as Record<string, unknown>
@@ -1433,7 +1439,7 @@ export default function QaLabPage() {
   }, [cargarFase0, cargarFase1MP, cargarFase1TU, cargarFase2Macro, cargarFase2Micro, cargarFase2Unidad, cargarFase3VU, cargarFase4PI, cargarFase5AD, cargarFase6GD, cargarFase7CO, cargarFase8GE, cargarFase9IR, cargarFase10IN, cargarFase11MT, cargarFase12RA, cargarFase12CV, cargarFase13FI, cargarFase14PE, cargarFase15PL, cargarFase15CT, cargarFase15RE, buildHistoria, ensureHydrated])
 
   const limpiar = React.useCallback(async () => {
-    if (!ensureHydrated()) return
+    if (!(await ensureHydrated())) return
     setLoading(true)
     const errores: string[] = []
     const s = useCompassStore.getState()
@@ -1719,8 +1725,8 @@ export default function QaLabPage() {
     }
   }, [report, getHistoriaEstado])
 
-  const validar = React.useCallback(() => {
-    if (!ensureHydrated()) return
+  const validar = React.useCallback(async () => {
+    if (!(await ensureHydrated())) return
     const s = useCompassStore.getState() as unknown as Record<string, unknown>
     const resultado = validarEstadoCompleto(s)
     const tasa = resultado.total === 0 ? 0 : resultado.total / (Number(((s as unknown as { unidades: unknown[] }).unidades.length)) + Number(((s as unknown as { vinculos: unknown[] }).vinculos.length)) || 1)
