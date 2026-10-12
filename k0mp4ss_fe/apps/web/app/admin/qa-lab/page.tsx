@@ -865,32 +865,108 @@ export default function QaLabPage() {
   const cargarFase12RA = React.useCallback(async (): Promise<ModReport> => {
     const s = useCompassStore.getState()
     const pasos: Paso[] = (PLAN["ra"]! as string[]).map(desc => ({ desc, estado: "pendiente" as ModuleState }))
-    // 1) Quincho TEST con reglas completas (tarifa/garantía/tardía)
-    const r1 = s.saveElementoRA({ id: "test-ra-quincho", nombre: "Quincho central TEST", tipo: "espacio_fisico", microSectorId: "test-micro-piso99", franja: "bloques_horas", duracionBloqueHoras: 3, tarifaUso: 15000, garantiaRequerida: 20000, aforo: 20, anticipacionMinimaDias: 0, cancelacionTardiaDias: 1, penalizacionTardiaMonto: 5000, activo: true } as any)
-    if (!r1.ok) { pasos[0]!.estado = "error"; pasos[0]!.error = r1.error } else pasos[0]!.estado = "ok"
-    // 2) Reserva confirmada mañana 19:00–22:00
-    const r2 = s.saveReservaRA({ id: "test-ra-rs-1", folio: "", elementoId: "test-ra-quincho", solicitantePersonaId: "test-p-99", unidadId: "test-u-999", fecha: mananaStr(), horaInicio: "19:00", horaFin: "22:00", estado: "confirmada", montoTarifa: 0, montoGarantia: 0 } as any)
-    const rs1 = useCompassStore.getState().reservasRA.find(x => x.id === "test-ra-rs-1")
-    if (!r2.ok || !/^RA-\d{4}$/.test(rs1?.folio ?? "") || !String(rs1?.cargoFIReferencia ?? "").startsWith("cob-")) { pasos[1]!.estado = "error"; pasos[1]!.error = r2.error ?? `Folio/cargo: ${rs1?.folio}/${rs1?.cargoFIReferencia}` } else pasos[1]!.estado = "ok"
-    // 3) Solapamiento rechazado
-    const r3 = s.saveReservaRA({ id: "test-ra-rs-x", folio: "", elementoId: "test-ra-quincho", solicitantePersonaId: "test-p-88", fecha: mananaStr(), horaInicio: "20:00", horaFin: "23:00", estado: "confirmada", montoTarifa: 0, montoGarantia: 0 } as any)
-    if (r3.ok || !String(r3.error).includes("Conflicto horario")) { pasos[2]!.estado = "error"; pasos[2]!.error = r3.ok ? "El solapamiento pasó" : String(r3.error) } else pasos[2]!.estado = "ok"
-    // 4) Hidrolavadora stock 2 → 2 paralelas OK, tercera rechazada
-    const r4 = s.saveElementoRA({ id: "test-ra-hidro", nombre: "Hidrolavadora TEST", tipo: "activo_mobiliario", microSectorId: "test-micro-piso99", franja: "dia_completo", tarifaUso: 5000, garantiaRequerida: 30000, stock: 2, activo: true } as any)
-    if (!r4.ok) { pasos[3]!.estado = "error"; pasos[3]!.error = r4.error } else {
-      const a = s.saveReservaRA({ id: "test-ra-rs-2", folio: "", elementoId: "test-ra-hidro", solicitantePersonaId: "test-p-88", unidadId: "test-u-999", fecha: mananaStr(), horaInicio: "00:00", horaFin: "23:59", estado: "confirmada", montoTarifa: 0, montoGarantia: 0 } as any)
-      const b = s.saveReservaRA({ id: "test-ra-rs-3", folio: "", elementoId: "test-ra-hidro", solicitantePersonaId: "test-p-99", fecha: mananaStr(), horaInicio: "00:00", horaFin: "23:59", estado: "confirmada", montoTarifa: 0, montoGarantia: 0 } as any)
-      const c = s.saveReservaRA({ id: "test-ra-rs-y", folio: "", elementoId: "test-ra-hidro", solicitantePersonaId: "test-p-88", fecha: mananaStr(), horaInicio: "00:00", horaFin: "23:59", estado: "confirmada", montoTarifa: 0, montoGarantia: 0 } as any)
-      if (!a.ok || !b.ok || c.ok || !String(c.error).includes("Conflicto horario")) { pasos[3]!.estado = "error"; pasos[3]!.error = c.ok ? "Tercera reserva paralela pasó el control de stock" : a.error ?? b.error ?? String(c.error) } else pasos[3]!.estado = "ok"
+    const mesTEST = new Date().toISOString().slice(0, 7)
+    /** Cobros RA TEST del mes en la unidad TEST (filtro exacto por período + unidad). */
+    const cobrosRABD = async (origenRef: string, concepto: string) =>
+      (await listaQA(`/api/cobros-fi?periodo=${mesTEST}&unidadId=test-u-999`))
+        .filter(c => c.origenRef === origenRef && c.concepto === concepto)
+    // 1) Quincho TEST con reglas completas (tarifa/garantía/tardía) — espejo D7:
+    // store + POST /api/ra/elementos, con verificación leída de BD.
+    const quinchoTEST = { id: "test-ra-quincho", nombre: "Quincho central TEST", tipo: "espacio_fisico", microSectorId: "test-micro-piso99", franja: "bloques_horas", duracionBloqueHoras: 3, tarifaUso: 15000, garantiaRequerida: 20000, aforo: 20, anticipacionMinimaDias: 0, cancelacionTardiaDias: 1, penalizacionTardiaMonto: 5000, activo: true }
+    const r1 = s.saveElementoRA(quinchoTEST as any)
+    await espejarQA(pasos, 0, r1, () => postQA("/api/ra/elementos", quinchoTEST))
+    if (pasos[0]!.estado === "ok") {
+      const rqBD = await apiQA("/api/ra/elementos/test-ra-quincho")
+      const qBD = rqBD.ok ? rqBD.cuerpo as { tarifaUso?: number; penalizacionTardiaMonto?: number } | null : null
+      if (!qBD || qBD.tarifaUso !== 15000 || qBD.penalizacionTardiaMonto !== 5000) {
+        pasos[0]!.estado = "error"; pasos[0]!.error = `BD: tarifa=${qBD?.tarifaUso ?? "ausente"}, penalización=${qBD?.penalizacionTardiaMonto ?? "ausente"}`
+      }
     }
-    // 5) Cancelación tardía con penalización
+    // 2) Reserva confirmada mañana 19:00–22:00 — espejo: store + POST /api/ra/reservas.
+    // Folio RA-####, snapshot tarifario y cargo `reserva_ra` los deriva el servidor;
+    // el store los deriva igual, así que el paso exige ambos mundos coherentes.
+    const borrador1 = { id: "test-ra-rs-1", elementoId: "test-ra-quincho", solicitantePersonaId: "test-p-99", unidadId: "test-u-999", fecha: mananaStr(), horaInicio: "19:00", horaFin: "22:00", estado: "confirmada" }
+    const r2 = s.saveReservaRA({ ...borrador1, folio: "", montoTarifa: 0, montoGarantia: 0 } as any)
+    const rs1 = useCompassStore.getState().reservasRA.find(x => x.id === "test-ra-rs-1")
+    const store1Ok = r2.ok && /^RA-\d{4}$/.test(rs1?.folio ?? "") && String(rs1?.cargoFIReferencia ?? "").startsWith("cob-")
+    await espejarQA(pasos, 1, { ok: store1Ok, error: store1Ok ? undefined : (r2.error ?? `Folio/cargo: ${rs1?.folio}/${rs1?.cargoFIReferencia}`) }, () => postQA("/api/ra/reservas", borrador1))
+    if (pasos[1]!.estado === "ok") {
+      const rRSBD = await apiQA("/api/ra/reservas/test-ra-rs-1")
+      const rs1BD = rRSBD.ok ? rRSBD.cuerpo as { folio?: string; montoTarifa?: number; cargoFIReferencia?: string } | null : null
+      const cobros1BD = await cobrosRABD("test-ra-rs-1", "reserva_ra")
+      if (!rs1BD || !/^RA-\d{4}$/.test(rs1BD.folio ?? "") || rs1BD.montoTarifa !== 15000 || !rs1BD.cargoFIReferencia || cobros1BD.length !== 1 || cobros1BD[0]?.id !== rs1BD.cargoFIReferencia) {
+        pasos[1]!.estado = "error"; pasos[1]!.error = `BD: folio=${rs1BD?.folio ?? "ausente"}, tarifa=${rs1BD?.montoTarifa ?? "ausente"}, cobros reserva_ra=${cobros1BD.length}`
+      }
+    }
+    // 3) Solicitud solapada 20:00–23:00 → rechazada por conflicto horario.
+    // Resultado CORRECTO = rechazo (store y API 409); no es un fallo del paso.
+    const borradorX = { id: "test-ra-rs-x", elementoId: "test-ra-quincho", solicitantePersonaId: "test-p-88", unidadId: "test-u-999", fecha: mananaStr(), horaInicio: "20:00", horaFin: "23:00", estado: "confirmada" }
+    const r3 = s.saveReservaRA({ ...borradorX, folio: "", montoTarifa: 0, montoGarantia: 0 } as any)
+    await espejarRechazoQA(pasos, 2, r3, "Conflicto horario", 409, () => postQA("/api/ra/reservas", borradorX))
+    // 4) Hidrolavadora stock 2 → 2 paralelas OK, la tercera rechazada por cupo
+    // agotado. El espejo exige que las DOS paralelas queden vivas en BD y que la
+    // tercera sea el rechazo declarado (409).
+    const hidroTEST = { id: "test-ra-hidro", nombre: "Hidrolavadora TEST", tipo: "activo_mobiliario", microSectorId: "test-micro-piso99", franja: "dia_completo", tarifaUso: 5000, garantiaRequerida: 30000, stock: 2, activo: true }
+    const r4 = s.saveElementoRA(hidroTEST as any)
+    const tramoHidro = { elementoId: "test-ra-hidro", fecha: mananaStr(), horaInicio: "00:00", horaFin: "23:59", estado: "confirmada" }
+    const rA = s.saveReservaRA({ ...tramoHidro, id: "test-ra-rs-2", solicitantePersonaId: "test-p-88", unidadId: "test-u-999", folio: "", montoTarifa: 0, montoGarantia: 0 } as any)
+    const rB = s.saveReservaRA({ ...tramoHidro, id: "test-ra-rs-3", solicitantePersonaId: "test-p-99", unidadId: "test-u-999", folio: "", montoTarifa: 0, montoGarantia: 0 } as any)
+    const rC = s.saveReservaRA({ ...tramoHidro, id: "test-ra-rs-y", solicitantePersonaId: "test-p-88", unidadId: "test-u-999", folio: "", montoTarifa: 0, montoGarantia: 0 } as any)
+    const store4Ok = r4.ok && rA.ok && rB.ok && !rC.ok && String(rC.error).includes("Conflicto horario")
+    if (!store4Ok) {
+      pasos[3]!.estado = "error"
+      pasos[3]!.error = rC.ok ? "Tercera reserva paralela pasó el control de stock" : (r4.error ?? rA.error ?? rB.error ?? String(rC.error))
+    } else {
+      await espejarQA(pasos, 3, r4, () => postQA("/api/ra/elementos", hidroTEST))
+      const borradorA = { id: "test-ra-rs-2", solicitantePersonaId: "test-p-88", unidadId: "test-u-999", ...tramoHidro }
+      const borradorB = { id: "test-ra-rs-3", solicitantePersonaId: "test-p-99", unidadId: "test-u-999", ...tramoHidro }
+      const borradorY = { id: "test-ra-rs-y", solicitantePersonaId: "test-p-88", unidadId: "test-u-999", ...tramoHidro }
+      if (pasos[3]!.estado === "ok") await espejarQA(pasos, 3, rA, () => postQA("/api/ra/reservas", borradorA))
+      if (pasos[3]!.estado === "ok") await espejarQA(pasos, 3, rB, () => postQA("/api/ra/reservas", borradorB))
+      if (pasos[3]!.estado === "ok") await espejarRechazoQA(pasos, 3, rC, "Conflicto horario", 409, () => postQA("/api/ra/reservas", borradorY))
+      // Verificación leída de BD: dos paralelas vivas y la tercera ausente.
+      if (pasos[3]!.estado === "ok") {
+        const [bd2, bd3, bdY] = await Promise.all([
+          apiQA("/api/ra/reservas/test-ra-rs-2"),
+          apiQA("/api/ra/reservas/test-ra-rs-3"),
+          apiQA("/api/ra/reservas/test-ra-rs-y"),
+        ])
+        const estado2 = (bd2.cuerpo as { estado?: string } | null)?.estado
+        const estado3 = (bd3.cuerpo as { estado?: string } | null)?.estado
+        if (estado2 !== "confirmada" || estado3 !== "confirmada" || bdY.status !== 404) {
+          pasos[3]!.estado = "error"; pasos[3]!.error = `BD: rs-2=${estado2 ?? "ausente"}, rs-3=${estado3 ?? "ausente"}, rs-y=${bdY.status}`
+        }
+      }
+    }
+    // 5) Cancelación tardía con penalización — espejo: store + POST
+    // /api/ra/reservas/test-ra-rs-1/cancelar (penalización $5.000 → penalizacion_ra).
     const r5 = s.cancelarReservaRA("test-ra-rs-1")
     const cancelada = useCompassStore.getState().reservasRA.find(x => x.id === "test-ra-rs-1")
-    if (!r5.ok || cancelada?.cancelacion?.tardia !== true || cancelada.cancelacion.penalizacion !== 5000) { pasos[4]!.estado = "error"; pasos[4]!.error = r5.error ?? `Cancelación: ${JSON.stringify(cancelada?.cancelacion)}` } else pasos[4]!.estado = "ok"
-    // 6) Retención de garantía por daño
-    const r6 = s.retenerGarantiaRA("test-ra-rs-2", "Manguera fracturada al devolver el equipo TEST.")
+    const store5Ok = r5.ok && cancelada?.cancelacion?.tardia === true && cancelada.cancelacion.penalizacion === 5000
+    await espejarQA(pasos, 4, { ok: store5Ok, error: store5Ok ? undefined : (r5.error ?? `Cancelación: ${JSON.stringify(cancelada?.cancelacion)}`) }, () => postQA("/api/ra/reservas/test-ra-rs-1/cancelar", {}))
+    if (pasos[4]!.estado === "ok") {
+      const rrs1 = await apiQA("/api/ra/reservas/test-ra-rs-1")
+      const rs1CancelBD = rrs1.ok ? rrs1.cuerpo as { estado?: string; cancelacion?: { tardia?: boolean; penalizacion?: number } } | null : null
+      const penalesBD = await cobrosRABD("test-ra-rs-1", "penalizacion_ra")
+      if (!rs1CancelBD || rs1CancelBD.estado !== "cancelada" || rs1CancelBD.cancelacion?.tardia !== true || rs1CancelBD.cancelacion.penalizacion !== 5000 || penalesBD.length !== 1) {
+        pasos[4]!.estado = "error"; pasos[4]!.error = `BD: estado=${rs1CancelBD?.estado ?? "ausente"}, tardía=${rs1CancelBD?.cancelacion?.tardia ?? "ausente"}, cobros penalizacion_ra=${penalesBD.length}`
+      }
+    }
+    // 6) Retención de garantía por daño — espejo: store + POST
+    // /api/ra/reservas/test-ra-rs-2/retener (monto = garantía de la reserva).
+    const motivoGarantia = "Manguera fracturada al devolver el equipo TEST."
+    const r6 = s.retenerGarantiaRA("test-ra-rs-2", motivoGarantia)
     const retenida = useCompassStore.getState().reservasRA.find(x => x.id === "test-ra-rs-2")?.garantiaRetenida
-    if (!r6.ok || retenida?.monto !== 30000) { pasos[5]!.estado = "error"; pasos[5]!.error = r6.error ?? JSON.stringify(retenida) } else pasos[5]!.estado = "ok"
+    const store6Ok = r6.ok && retenida?.monto === 30000
+    await espejarQA(pasos, 5, { ok: store6Ok, error: store6Ok ? undefined : (r6.error ?? JSON.stringify(retenida)) }, () => postQA("/api/ra/reservas/test-ra-rs-2/retener", { motivo: motivoGarantia, monto: 30000 }))
+    if (pasos[5]!.estado === "ok") {
+      const rrs2 = await apiQA("/api/ra/reservas/test-ra-rs-2")
+      const rs2BD = rrs2.ok ? rrs2.cuerpo as { garantiaRetenida?: { monto?: number } } | null : null
+      const garantiaBD = await cobrosRABD("test-ra-rs-2", "garantia_ra")
+      if (rs2BD?.garantiaRetenida?.monto !== 30000 || garantiaBD.length !== 1) {
+        pasos[5]!.estado = "error"; pasos[5]!.error = `BD: garantía=${rs2BD?.garantiaRetenida?.monto ?? "ausente"}, cobros garantia_ra=${garantiaBD.length}`
+      }
+    }
     const errores = pasos.filter(p => p.estado === "error").map(p => p.error || p.desc)
     return { id: "ra", label: TITULOS["ra"]!, rank: 8, status: errores.length ? "error" : "ok", count: 1, errores, pasos }
   }, [])
@@ -1917,6 +1993,11 @@ export default function QaLabPage() {
       for (const e of emisionesTEST) await borrarSiExiste(`/api/emisiones-gc/${e.id}`, "emision-gc-qa")
       await borrarSiExiste("/api/fondos-fi/test-fondo-pintura", "fondo-fi-qa")
       await borrarSiExiste("/api/egresos-fi/test-egr-1", "egreso-fi-qa")
+      // Fase 1.5 (RA): las reservas y elementos RA TEST también viven en BD;
+      // hijos→padres (los cobros RA `reserva_ra`/`penalizacion_ra`/`garantia_ra`
+      // ya se barrieron por procedencia en el bloque FI de arriba).
+      await purgarColeccionBD("/api/ra/reservas", "reserva-ra", ["test-ra-rs-1", "test-ra-rs-2", "test-ra-rs-3", "test-ra-rs-y"])
+      await purgarColeccionBD("/api/ra/elementos", "elemento-ra", ["test-ra-quincho", "test-ra-hidro"])
     } catch (e) { errores.push(`purga BD: ${String(e)}`) }
     setLoading(false)
     if (errores.length) setMsg({ type: "error", text: `Limpieza con ${errores.length} bloqueos (dependencias): ${errores.slice(0,2).join("; ")}` })
