@@ -200,3 +200,25 @@ entorno donde el QA-Lab existe.**
 **Secuencia**: la Fase 1.4 se implementa **después de 1.3a** (hasta que la migración FI escriba BD no
 hay filas FI TEST que purgar; los tests de ruta fabrican las suyas). Con esta decisión, la Fase 1.4
 queda desbloqueada y sin dependencia del owner.
+
+## Decisión 9 — Períodos TEST-scoped para FI (y la purga como prerrequisito de re-ejecución)
+
+**Pregunta que apareció al verificar 1.3a**: el e2e quedó rojo con "No existe el cobro GC del período
+(store=true, BD=false)". Medición: `POST /api/emisiones-gc` sí crea emisión + cobros en BD (201,
+probe aislado), pero el lab usaba el **mes corriente** y el **mes-2** como períodos; en la BD ya
+existían emisiones de esos períodos (de corridas previas), así que el POST devolvía **409**
+(correcto: el período ya está emitido) y el cobro TEST nunca existía → los pasos 5/6, que ahora
+verifican contra BD, fallaban de forma irrecuperable en cada re-corrida.
+
+**Decisión**: la fase FI usa **períodos dedicados TEST** (`2019-03` para la emisión, `2019-01` para
+el vencido) que no colisionan con el calendario del seed ni con datos reales, y la **purga BD de FI
+(Fase 1.4)** es su prerrequisito de re-ejecución: al limpiar antes de poblar, la corrida siguiente
+vuelve a emitir con 201 y los pasos 5/6 encuentran su cobro.
+
+Alternativa descartada: reusar la emisión existente cuando el POST da 409. Detecta la colisión pero
+no la resuelve: si la emisión es real, el cobro TEST no existe y el paso debe fallar; si es de una
+corrida previa ya pagada, la aserción de "exactamente un pago" queda insatisfacible.
+
+Riesgo aceptado: un residuo FI anterior a esta decisión (p. ej. un cobro TEST de un período viejo)
+no lo limpia la purga nueva, que solo mira los períodos TEST. No afecta el guard clean-first
+(`resumenTestBD` mira PI/PL) y se puede limpiar a mano si molesta.

@@ -46,23 +46,30 @@
       `POST /api/fondos-fi/[id]/retirar` (patrón `liquidaciones/[id]/confirmar`).
       **HECHO**: commits `feat(api): acciones REST de pago y mora sobre cobros FI` y
       `feat(api): acción REST de retiro de fondo FI`. Suite **891/891**, tsc 0, eslint 0.
-- [ ] 1.3a Migrar a API REST los pasos FI puros de `cargarFase13FI` (`page.tsx:781`):
-      1 (fondo), 2 (egreso), 3 (emisión GC + aporte), 4 (emisión sin alcance → 400),
-      5 (pago), 6 (mora idempotente), 11 (retiro sin acta → 400).
-      **BLOQUEADA por la Fase 0** (D6.3): sin `test-u-999` en BD, el paso 3 cae en
-      `400 "No hay unidades elegibles para la emisión."` y el paso 4 pasaría por el motivo
-      equivocado. Las lecturas de verificación pasan a GET por API (`/api/cobros-fi?periodo=…` con
-      `pageSize`, `listaQA("/api/egresos-fi")`, `listaQA("/api/emisiones-gc")`).
-- [ ] 1.3b Los pasos 7, 8, 9 y 10 quedan **explícitamente sin migrar** con comentario
-      `// TODO Fase 1.5 — depende de migrar IN/RA/MT` (ver D6.1). No se disfrazan de verde.
-- [ ] 1.4 Purga BD de FI en "Borrar todo" (ver D6.2 + **Decisión 8**): por API + allowlist de ids TEST.
-      **DESBLOQUEADA (2026-10-07)**: el owner delegó la decisión y quedó registrada en el `design.md`
-      (Decisión 8) — excepción de procedencia TEST en `DELETE /api/cobros-fi/[id]` reutilizando
-      `esCobroTest()` y gateada a `getAppEnv() === "development"`; fuera de ese entorno 409 siempre.
-      Tests de ruta obligatorios (TEST con pagos → 200; real con pagos → 409; production → 409).
-      Se implementa **después de 1.3a** (antes no hay filas FI TEST que purgar).
+- [x] 1.3a Migrar a API REST los pasos FI puros de `cargarFase13FI`: **HECHO 2026-10-07**.
+      Los pasos 1, 2, 3, 4, 5, 6 y 11 escriben API + store (espejo D7) con el patrón
+      `espejarQA`/`espejarRechazoQA` (los rechazos esperados — 400 del paso 4 y del paso 11 —
+      cuentan como ok sin debilitar los demás). Las verificaciones se leen de BD: egreso por id
+      (`GET /api/egresos-fi/[id]`, no listado paginado), emisión por período, cobro por id devuelto
+      por la API. **Períodos TEST-scoped** (2019-03 / 2019-01) en vez del mes corriente: los
+      períodos reales ya tenían emisión de corridas previas → 409 → sin cobro TEST → pasos 5/6 en
+      falso rojo irrecuperable (medido). Evidencia: e2e `poblado-idempotente` 8/8 y
+      `flujo/poblamiento` 9/9 (último rojo del lane P3), suite 897/897, tsc 0, eslint 0.
+- [x] 1.3b Los pasos 7, 8, 9 y 10 quedan **explícitamente sin migrar** con comentario
+      `// TODO Fase 1.5 — depende de migrar IN/RA/MT` (ver D6.1). **HECHO**: los cuatro pasos lo
+      llevan y no se disfrazan de verde (el e2e los reporta ok por el store, que sigue siendo su
+      fuente hasta la Fase 1.5).
+- [x] 1.4 Purga BD de FI en "Borrar todo" (D6.2 + **Decisión 8**): **HECHA 2026-10-07**.
+      `DELETE /api/cobros-fi/[id]` permite dar de baja un cobro TEST con pagos en desarrollo
+      (`esCobroTest()` + `getAppEnv() === "development"`); el guard 409 queda intacto para filas
+      reales (test-first: 3 tests de ruta, RED→GREEN con triangulación real/TEST/production).
+      `limpiar()` purga por API, TEST-scoped, hijos→padres: cobros de los períodos TEST → emisiones
+      TEST de esos períodos → fondos/egresos TEST; idempotente (404 = limpio) y solo bloqueante si
+      la entidad existe y el DELETE la rechaza.
 - [ ] 1.5 Conexiones cross-módulo (pasos 7-10): migrar **después** de las fases IN, RA y MT.
-- [ ] 1.6 Gate de fase: suite unitaria + `tsc` + `eslint` verdes; FI visible en las páginas reales.
+- [x] 1.6 Gate de fase: **VERDE 2026-10-07** — suite **897/897** · tsc 0 · eslint 0 · e2e
+      `poblado-idempotente` **8/8** · e2e `flujo/poblamiento` **9/9** (esto último satisface también
+      el criterio de cierre 3.1 del change: el último rojo del lane P3 cayó con 1.3a + 1.4).
 
 ## Fase 2 — CT + higiene de dos mundos (ventana 2)
 
