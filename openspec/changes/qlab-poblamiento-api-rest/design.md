@@ -165,3 +165,38 @@ verificación de cada retiro.
 > Riesgo aceptado y visible: el espejo mantiene la doble fuente durante la transición. Es un estado
 > **temporal y declarado**, no el estado final; el objetivo del change sigue siendo que BD sea la
 > única fuente, y el retiro del espejo es parte de la Fase 3 de cierre.
+
+## Decisión 8 — Guard 409 de FI: excepción TEST acotada al entorno del QA-Lab (2026-10-07)
+
+**Pregunta abierta en T9**: `DELETE /api/cobros-fi/[id]` devuelve **409 si el cobro tiene pagos**
+(`app/api/cobros-fi/[id]/route.ts:68`) y el poblamiento FI **paga** sus cobros. D6.2 exige purga
+**por API** (guard y scoping por comunidad aplicando) y prohíbe relajar `e2e:higiene`. ¿Cómo cierra
+la Fase 1.4? El owner delegó la decisión al agente (2026-10-07).
+
+**Decisión: excepción de procedencia TEST, con el predicado compartido ya existente y acotada al
+entorno donde el QA-Lab existe.**
+
+1. **Predicado único, ya existente**: `esCobroTest()` (`lib/qa-lab-helpers.ts:130`) =
+   `id | unidadId | origenRef` con prefijo `test-`. Es el mismo predicado que usa la purga del lab:
+   una sola definición de "cobro TEST", sin patrones nuevos que auditar.
+2. **Gate de entorno**: la excepción sólo está activa con `getAppEnv() === "development"`
+   (`lib/env-guard.ts`), el mismo criterio que hace visible el QA-Lab (`page.tsx`, `isDev`). Fuera de
+   ese entorno el endpoint es idéntico al de hoy: **409 siempre**. El build prod de CI e2e corre con
+   `APP_ENV=development`, así que el lane conserva la capacidad de purgar.
+3. **Nada más cambia**: el guard sigue aplicando para filas reales (cobro con pagos sin procedencia
+   TEST → 409), el scoping por comunidad se evalúa antes y el orden de purga hijos→padres evita los
+   guards de referencias.
+4. **Tests de ruta obligatorios**: TEST con pagos → 200 en dev; real con pagos → 409; TEST con pagos
+   en entorno production → 409 (excepción inerte).
+
+**Alternativas rechazadas**:
+- *Purga por script* (`e2e:higiene`): viola D6.2 regla 1 — perdería el scoping por comunidad y el
+  guard de integridad, y la regla 3 prohíbe relajar el script.
+- *Residuo honesto*: deja la BD dev sucia entre corridas y contradice el objetivo del change (punto
+  de partida determinista para el lane).
+- *Ruta destructiva nueva TEST-scoped*: segunda vía de borrado financiero; más superficie que un
+  predicado acotado en la ruta existente.
+
+**Secuencia**: la Fase 1.4 se implementa **después de 1.3a** (hasta que la migración FI escriba BD no
+hay filas FI TEST que purgar; los tests de ruta fabrican las suyas). Con esta decisión, la Fase 1.4
+queda desbloqueada y sin dependencia del owner.

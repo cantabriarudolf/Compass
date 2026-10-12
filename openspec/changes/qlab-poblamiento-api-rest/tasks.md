@@ -55,11 +55,12 @@
       `pageSize`, `listaQA("/api/egresos-fi")`, `listaQA("/api/emisiones-gc")`).
 - [ ] 1.3b Los pasos 7, 8, 9 y 10 quedan **explícitamente sin migrar** con comentario
       `// TODO Fase 1.5 — depende de migrar IN/RA/MT` (ver D6.1). No se disfrazan de verde.
-- [ ] 1.4 Purga BD de FI en "Borrar todo" (ver D6.2): por API + allowlist de ids TEST.
-      **PARKEADA por decisión del owner**: `DELETE /api/cobros-fi/[id]` devuelve **409 si el cobro
-      tiene pagos** (`app/api/cobros-fi/[id]/route.ts:68`), y el poblamiento FI **paga** sus cobros
-      (pasos 5 y 7). Cerrar la purga exige decidir si se relaja un guard de integridad financiera,
-      se acepta residuo honesto o se crea una purga TEST-scoped. **No decide el agente.**
+- [ ] 1.4 Purga BD de FI en "Borrar todo" (ver D6.2 + **Decisión 8**): por API + allowlist de ids TEST.
+      **DESBLOQUEADA (2026-10-07)**: el owner delegó la decisión y quedó registrada en el `design.md`
+      (Decisión 8) — excepción de procedencia TEST en `DELETE /api/cobros-fi/[id]` reutilizando
+      `esCobroTest()` y gateada a `getAppEnv() === "development"`; fuera de ese entorno 409 siempre.
+      Tests de ruta obligatorios (TEST con pagos → 200; real con pagos → 409; production → 409).
+      Se implementa **después de 1.3a** (antes no hay filas FI TEST que purgar).
 - [ ] 1.5 Conexiones cross-módulo (pasos 7-10): migrar **después** de las fases IN, RA y MT.
 - [ ] 1.6 Gate de fase: suite unitaria + `tsc` + `eslint` verdes; FI visible en las páginas reales.
 
