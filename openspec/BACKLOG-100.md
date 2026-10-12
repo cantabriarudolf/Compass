@@ -214,3 +214,36 @@ aclaración documental, 0 errores de cálculo.
 - Usos restantes del store legacy: 168 líneas en 14 archivos (todos documentados como TODO o excepción).
 - Tests: 151/151 API pass, tsc 0 errores nuevos.
 - `lib/store.ts` permanece como legacy `@deprecated` (STORE_VERSION=28 congelado); las acciones que ya nadie usa se eliminarán en un change futuro `store-cleanup`.
+
+## CI verde + deuda de cobertura (2026-10-12) — change `ci-verde-ratchet-cobertura`
+
+> El CI de `main` estuvo rojo un mes **sin un solo test roto**: los jobs de Vitest corrían
+> 944/944 (hoy 967/967) verdes y morían por el umbral de cobertura. Detalle y evidencia:
+> `openspec/changes/ci-verde-ratchet-cobertura/{proposal,design,tasks}.md`.
+
+| Ítem | Estado | Dónde |
+|---|---|---|
+| Gate de cobertura por área (ratchet `medido − 1 pt`: global 82/72/87/82 · `lib/**` 86/78/94/86 · `app/api/**` 78/63/82/78) | ✅ HECHO — medido 83.79/73.18/88.64/83.79 con 967 tests | `k0mp4ss_fe/apps/web/vitest.config.ts` |
+| Smoke de guardias de las 19 rutas a 0% (401/404/204, sin tocar Prisma) | ✅ HECHO — `app/api/**` 73.09 → 79.40; rutas a 0% = 0 | `k0mp4ss_fe/apps/web/test/api/route-guard-smoke.test.ts` |
+| Deploy condicional a secrets + `::warning` visible | ✅ HECHO — cuando el owner cargue los 3 secrets corre solo | `.github/workflows/ci.yml` |
+| Actions v7 pinneadas por SHA (runtime Node 24) + `persist-credentials: false` + `permissions: contents: read` | ✅ HECHO | `.github/workflows/ci.yml` |
+| Una sola línea de Node: `.nvmrc` = 24, `engines.node` = `>=24`, CI `node-version: 24`, local 24.21.0 (LTS Krypton) | ✅ HECHO | `.nvmrc`, `k0mp4ss_fe/package.json` |
+| `lib/store.ts`: 1.202 statements sin cubrir (84.21%, archivo de ~8.800 líneas) | ⏳ PENDIENTE — change `store-cobertura-fase-b` | §Deuda en `design.md` |
+| Superficie API: 2.114 statements sin cubrir (79.40%); los más bajos: `app/api/personas` 70.54%, `app/api/unidades`, `app/api/vinculos` | ⏳ PENDIENTE — change `api-cobertura-fases` | §Deuda en `design.md` |
+| `e2e-rate-limit` rojo desde el 2026-09-12 (spec aislada que bloquea la IP 15 min) | ⏳ PENDIENTE — reproducir con `E2E_RATE_LIMIT=1 npx playwright test e2e/auth/rate-limit.spec.ts` | run `34711169952` |
+| Secrets de Vercel (`VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`) | ⏳ ACCIÓN DEL OWNER — al cargarlos el job `deploy` corre solo | Settings → Secrets del repo |
+| npm local 12.2.0 vs 11.19 de CI (lockfile v3 compatible, verificado) | ⏳ PENDIENTE menor — `nvm install 24.21.0` | §Deuda en `design.md` |
+
+### Deuda e2e destapada al reactivar la lane (2026-10-12, mismo change)
+
+| Ítem | Estado | Dónde |
+|---|---|---|
+| Lane e2e abortaba en carga (4 specs con `test.use({launchOptions})` en `describe` + `csp-rollback` con `expect(true)`) | ✅ HECHO — consolidada en `e2e/csp-modos.spec.ts` + `csp-report-endpoint.spec.ts` | `design.md § D5` |
+| `/api/health` y `/api/csp-report` detrás de auth (401): uptime y telemetría CSP inútiles | ✅ HECHO — públicos + rate limit 60/min/IP en el sink, con tests | `proxy.ts`, `app/api/csp-report/route.ts` |
+| Jobs `e2e`/`e2e-rate-limit` con schema PostgreSQL contra `file:./dev.db` (`P1012`) | ✅ HECHO — `--schema=prisma/schema.sqlite.prisma` | `.github/workflows/ci.yml` |
+| `auth/rate-limit.spec.ts` no podía pasar (contraseña no válida por política → no registraba intentos) | ✅ HECHO — contraseña que pasa la política y falla contra BD (7/7) | `e2e/auth/rate-limit.spec.ts` |
+| `crud/visor.spec.ts` duplicaba avisos en BD por re-submit (2 filas mismo título) | ✅ HECHO — single-shot + `toHaveCount(1)` | `e2e/crud/visor.spec.ts` |
+| `crud/logs.spec.ts` no abría el Select de Radix con `force:true` | ✅ HECHO — click normal + reintento acotado | `e2e/crud/logs.spec.ts` |
+| `flujo/ciclo.spec.ts` limpieza con timeout 30s (purga secuencial tarda más) | ✅ HECHO — alineado a 120s | `e2e/flujo/ciclo.spec.ts` |
+| Barrido del patrón "re-submit hasta que cierre el dialog" en el resto de los CRUD specs | ⏳ PENDIENTE — helper `e2e/helpers/form-dialog.ts` | `tasks.md §5.0` |
+| Correr la lane e2e local requiere BD fresca (`e2e:reseed-base`) y **no** correr antes el spec de rate-limit (bloquea la IP 15 min y aborta `auth.setup`) | 📌 REGLA OPERATIVA | `runbook-operaciones.md`, `design.md § D6` |

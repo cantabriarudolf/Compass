@@ -7,7 +7,15 @@ import { authConfig } from "@/lib/auth.config"
 // Spread para que los defaults de Auth.js no muten la config compartida.
 const { auth } = NextAuth({ ...authConfig })
 
-const RUTAS_PUBLICAS = ["/ingresar", "/api/auth"]
+// `/api/health`: monitoreo sin sesión (uptime checks externos).
+// `/api/csp-report`: sink anónimo del navegador (report-uri) usado como
+// telemetría del gate de enforcement CSP (0 violaciones por 7 días).
+const RUTAS_PUBLICAS = [
+  "/ingresar",
+  "/api/auth",
+  "/api/health",
+  "/api/csp-report",
+]
 
 type GlobalConCripto = typeof globalThis & {
   crypto?: {

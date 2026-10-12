@@ -31,11 +31,38 @@ test.describe("Logs de Auditoría (AM) — vista read-only en /admin/logs (BD)",
     await expect(page.getByText(/de [\d.]+ eventos en BD/)).toBeVisible({ timeout: 30_000 })
 
     // 3) Filtrar por tipo de acción primero (acota a los 2 eventos generados) con poll generoso
-    //    Debounce 2s + POST sync puede tardar; poll hasta ≥2 filas AD_OWNER_CONFIG_CHANGE.
-    await page
-      .getByRole("combobox", { name: "Filtrar por tipo de acción" })
-      .click({ force: true, noWaitAfter: true })
-    await page.getByRole("option", { name: "AD_OWNER_CONFIG_CHANGE" }).click()
+    //    Debounce 2s + POST sync puede tardar. Los facets de tipo se cargan al montar la
+    //    página, así que una BD recién sembrada puede renderizar la lista antes de que
+    //    existan los eventos: reintentamos (máx. 5) recargando hasta ver la opción visible.
+    const comboTipo = page.getByRole("combobox", { name: "Filtrar por tipo de acción" })
+    const opcionTipo = page.getByRole("option", { name: "AD_OWNER_CONFIG_CHANGE" })
+    let opcionTipoVisible = false
+    for (let intento = 1; intento <= 5 && !opcionTipoVisible; intento++) {
+      // Radix Select abre con el pointer real: con `force: true` + `noWaitAfter`
+      // el menú no se despliega (medido 2026-10-12) y el spec quedaba esperando
+      // una opción que nunca aparecía.
+      await comboTipo.click()
+      opcionTipoVisible = await opcionTipo
+        .waitFor({ state: "visible", timeout: 4_000 })
+        .then(() => true)
+        .catch(() => false)
+      if (opcionTipoVisible) {
+        await opcionTipo.click()
+        break
+      }
+      await page.keyboard.press("Escape")
+      if (intento < 5) {
+        await page.reload()
+        await expect(page.getByRole("heading", { name: "Logs de Auditoría" })).toBeVisible({
+          timeout: 30_000,
+        })
+      }
+    }
+    if (!opcionTipoVisible) {
+      throw new Error(
+        "No se pudo filtrar por AD_OWNER_CONFIG_CHANGE: la opción no apareció tras 5 intentos (facet de tipos no sincronizado con los eventos generados).",
+      )
+    }
     await expect
       .poll(
         async () =>
@@ -47,9 +74,7 @@ test.describe("Logs de Auditoría (AM) — vista read-only en /admin/logs (BD)",
     await expect(page.getByText(/[\d.]+ de [\d.]+ eventos en BD/)).toBeVisible({ timeout: 10_000 })
 
     // 4) Filtrar por categoría AD (mantiene tipoAccion ya filtrado)
-    await page
-      .getByRole("combobox", { name: "Filtrar por categoría" })
-      .click({ force: true, noWaitAfter: true })
+    await page.getByRole("combobox", { name: "Filtrar por categoría" }).click()
     // AD puede no estar en la lista si la página no lo contiene — intentar click si existe
     const opcionAD = page.getByRole("option", { name: "AD", exact: true })
     if (await opcionAD.count()) {

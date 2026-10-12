@@ -42,6 +42,10 @@ Configura estos secrets en GitHub → Settings → Secrets:
 - `VERCEL_ORG_ID` — ID de organización
 - `VERCEL_PROJECT_ID` — ID del proyecto
 
+> El job `deploy` es **condicional a los secrets**: si no están cargados, el workflow lo saltea con
+> un `warning` visible (`Deploy omitido`) y el resto del CI queda verde. Al cargarlos, el job
+> corre solo en el próximo push a `main`, sin tocar el workflow.
+
 ## Deploy manual (fallback)
 
 ```bash

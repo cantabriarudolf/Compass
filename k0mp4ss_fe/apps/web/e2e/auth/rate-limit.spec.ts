@@ -5,6 +5,10 @@
 import { expect, test } from "@playwright/test"
 
 const CORREO_DESCONOCIDO = "rate-limit-e2e@noexiste.cl"
+// Debe pasar la política de password (mayúscula + número): si no, el flujo
+// corta en `PasswordDebil` ANTES del rate limit y no registra ningún intento
+// (bug detectado 2026-10-12: con "incorrecta" el spec no podía pasar nunca).
+const PASSWORD_INCORRECTA_VALIDA = "Incorrecta1!"
 
 test.use({ storageState: { cookies: [], origins: [] } })
 
@@ -15,13 +19,13 @@ test("bloquea la IP tras MAX_INTENTOS intentos fallidos", async ({ page }) => {
   const alerta = page.locator("form").getByRole("alert")
   for (let i = 0; i < 10; i++) {
     await page.getByLabel("Correo electrónico").fill(CORREO_DESCONOCIDO)
-    await page.getByLabel("Contraseña").fill("incorrecta")
+    await page.getByLabel("Contraseña").fill(PASSWORD_INCORRECTA_VALIDA)
     await page.getByRole("button", { name: "Ingresar" }).click()
     await expect(alerta).toBeVisible()
   }
 
   await page.getByLabel("Correo electrónico").fill("rate-limit-e2e@noexiste.cl")
-  await page.getByLabel("Contraseña").fill("incorrecta")
+  await page.getByLabel("Contraseña").fill(PASSWORD_INCORRECTA_VALIDA)
   await page.getByRole("button", { name: "Ingresar" }).click()
   await expect(alerta).toContainText("Demasiados intentos")
 })

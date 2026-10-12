@@ -78,7 +78,8 @@ test.describe("QA Lab — ciclo completo y guard clean-first (Serie QA-LAB P3)",
 
     // 1) Limpiar residuo previo
     await clickBorrar(page)
-    await expect(page.getByText(/TEST-\* limpio correctamente/)).toBeVisible({ timeout: 30_000 })
+    // 120s (no 30s): tolerancia a la purga BD secuencial (~22 DELETEs) y al cold-compile del dev server, igual que poblado-idempotente.spec.ts.
+    await expect(page.getByText(/TEST-\* limpio correctamente/)).toBeVisible({ timeout: 120_000 })
 
     // 2) Poblar todo
     await clickPoblar(page)
@@ -99,7 +100,8 @@ test.describe("QA Lab — ciclo completo y guard clean-first (Serie QA-LAB P3)",
 
     // 4) Limpieza final deja estado limpio para siguiente test del suite
     await clickBorrar(page)
-    await expect(page.getByText(/TEST-\* limpio correctamente/)).toBeVisible({ timeout: 30_000 })
+    // 120s (no 30s): tolerancia a la purga BD secuencial (~22 DELETEs) y al cold-compile del dev server, igual que poblado-idempotente.spec.ts.
+    await expect(page.getByText(/TEST-\* limpio correctamente/)).toBeVisible({ timeout: 120_000 })
 
     expect(errores, "Excepciones no capturadas en QA Lab ciclo feliz").toEqual([])
   })
@@ -113,7 +115,8 @@ test.describe("QA Lab — ciclo completo y guard clean-first (Serie QA-LAB P3)",
 
     // Precondición: store limpio
     await clickBorrar(page)
-    await expect(page.getByText(/TEST-\* limpio correctamente/)).toBeVisible({ timeout: 30_000 })
+    // 120s (no 30s): tolerancia a la purga BD secuencial (~22 DELETEs) y al cold-compile del dev server, igual que poblado-idempotente.spec.ts.
+    await expect(page.getByText(/TEST-\* limpio correctamente/)).toBeVisible({ timeout: 120_000 })
 
     // Primera corrida OK
     await clickPoblar(page)
@@ -143,7 +146,8 @@ test.describe("QA Lab — ciclo completo y guard clean-first (Serie QA-LAB P3)",
 
     // Dejar limpio para no contaminar siguiente test
     await clickBorrar(page)
-    await expect(page.getByText(/TEST-\* limpio correctamente/)).toBeVisible({ timeout: 30_000 })
+    // 120s (no 30s): tolerancia a la purga BD secuencial (~22 DELETEs) y al cold-compile del dev server, igual que poblado-idempotente.spec.ts.
+    await expect(page.getByText(/TEST-\* limpio correctamente/)).toBeVisible({ timeout: 120_000 })
 
     expect(errores, "Excepciones no capturadas en guard clean-first").toEqual([])
   })
@@ -157,14 +161,16 @@ test.describe("QA Lab — ciclo completo y guard clean-first (Serie QA-LAB P3)",
 
     // Asegurar limpio, poblar
     await clickBorrar(page)
-    await expect(page.getByText(/TEST-\* limpio correctamente/)).toBeVisible({ timeout: 30_000 })
+    // 120s (no 30s): tolerancia a la purga BD secuencial (~22 DELETEs) y al cold-compile del dev server, igual que poblado-idempotente.spec.ts.
+    await expect(page.getByText(/TEST-\* limpio correctamente/)).toBeVisible({ timeout: 120_000 })
     await clickPoblar(page)
     await expect(page.getByText("🟢 Listo").first()).toBeVisible({ timeout: 120_000 })
     await expect(page.getByText(/Carga completa OK/)).toBeVisible({ timeout: 30_000 })
 
     // Borrar todo
     await clickBorrar(page)
-    await expect(page.getByText(/TEST-\* limpio correctamente/)).toBeVisible({ timeout: 30_000 })
+    // 120s (no 30s): tolerancia a la purga BD secuencial (~22 DELETEs) y al cold-compile del dev server, igual que poblado-idempotente.spec.ts.
+    await expect(page.getByText(/TEST-\* limpio correctamente/)).toBeVisible({ timeout: 120_000 })
 
     // Validar que tras limpiar no quedan huérfanos (store sin TEST-* debe seguir coherente)
     await clickRevisar(page)

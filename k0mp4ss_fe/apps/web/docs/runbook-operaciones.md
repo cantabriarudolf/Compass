@@ -27,10 +27,13 @@
 
 ## Escenario: Deploy falló
 
-1. Revisa GitHub Actions → tab de tu workflow → logs del job `deploy`
-2. Verifica secrets configurados (`VERCEL_TOKEN`, etc.)
-3. Si es timeout: el build puede ser muy grande; considera `output: standalone`
-4. Rollback manual: Vercel dashboard → deployments → promote anterior
+1. Míralo en GitHub Actions → job `deploy` del workflow CI
+2. Si el run muestra `Deploy omitido` (warning), **no es una falla**: faltan los secrets de
+   Vercel (`VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`) y el job se saltea a propósito.
+   Cárgalos en Settings → Secrets y el job corre solo en el próximo push a `main`.
+3. Si el job corrió y falló, revisa el error del CLI (`vercel pull|build|deploy`) en el log
+4. Si es timeout: el build puede ser muy grande; considera `output: standalone`
+5. Rollback manual: Vercel dashboard → deployments → promote el anterior
 
 ## Escenario: Backup urgente
 

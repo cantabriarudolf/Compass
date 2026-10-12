@@ -33,6 +33,23 @@ describe("proxy (middleware Auth.js)", () => {
     expect(r3?.status).not.toBe(401)
   })
 
+  it("permite /api/health y /api/csp-report sin sesión (endpoints anónimos)", async () => {
+    const health = await proxy(mkReq("/api/health"), undefined as never)
+    expect(health?.status).not.toBe(401)
+    expect(health?.status ?? 500).toBeLessThan(400)
+
+    const csp = await proxy(mkReq("/api/csp-report"), undefined as never)
+    expect(csp?.status).not.toBe(401)
+    expect(csp?.status ?? 500).toBeLessThan(400)
+  })
+
+  it("mantiene el 401 en un /api protegido sin sesión", async () => {
+    const r = await proxy(mkReq("/api/personas"), undefined as never)
+    expect(r?.status).toBe(401)
+    const j = await r?.json()
+    expect(j.error).toMatch(/No autenticado/i)
+  })
+
   it("permite ruta no protegida sin sesión", async () => {
     const r = await proxy(mkReq("/"), undefined as never)
     expect(r?.status).not.toBe(401)

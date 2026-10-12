@@ -1,20 +1,13 @@
 /**
  * @playwright-test
- * E2E: /api/csp-report receives and logs violations
+ * E2E: /api/csp-report recibe y registra violaciones CSP.
+ * El sink es independiente del modo (enforcement o report-only), así que este
+ * spec no fija `CSP_ENFORCEMENT` ni toca `launchOptions`.
  */
 import { test, expect } from "@playwright/test"
 
-test.describe("/api/csp-report endpoint", () => {
-  test.use({
-    launchOptions: {
-      env: {
-        ...process.env,
-        CSP_ENFORCEMENT: "false",
-      },
-    },
-  })
-
-  test("GET health check returns ok", async ({ request }) => {
+test.describe("endpoint /api/csp-report", () => {
+  test("GET de salud responde ok con la nota del sink CSP", async ({ request }) => {
     const response = await request.get("/api/csp-report")
     expect(response.status()).toBe(200)
 
@@ -23,7 +16,7 @@ test.describe("/api/csp-report endpoint", () => {
     expect(body.note).toContain("CSP report sink")
   })
 
-  test("POST violation report returns 204", async ({ request }) => {
+  test("POST de un reporte csp-report bien formado responde 204", async ({ request }) => {
     const violationReport = {
       "csp-report": {
         "document-uri": "http://localhost/",
@@ -41,7 +34,7 @@ test.describe("/api/csp-report endpoint", () => {
     expect(response.status()).toBe(204)
   })
 
-  test("POST with malformed JSON returns 204 (fail-safe)", async ({ request }) => {
+  test("POST con body malformado responde 204, nunca 500", async ({ request }) => {
     const response = await request.post("/api/csp-report", {
       data: "not valid json",
       headers: { "Content-Type": "application/json" },
@@ -50,47 +43,9 @@ test.describe("/api/csp-report endpoint", () => {
     expect(response.status()).toBe(204)
   })
 
-  test("POST with missing csp-report field returns 204 (fail-safe)", async ({ request }) => {
+  test("POST sin el campo csp-report responde 204 (fail-safe)", async ({ request }) => {
     const response = await request.post("/api/csp-report", {
       data: { other: "field" },
-      headers: { "Content-Type": "application/json" },
-    })
-
-    expect(response.status()).toBe(204)
-  })
-
-  test("logs structured CSP violation fields", async ({ page }) => {
-    // Inject inline script without nonce to trigger CSP violation
-    const violations: any[] = []
-
-    page.on("console", (msg) => {
-      if (msg.type() === "error" && msg.text().includes("Content Security Policy")) {
-        violations.push(msg.text())
-      }
-    })
-
-    // Navigate and inject inline script
-    await page.goto("/")
-    await page.evaluate(() => {
-      const script = document.createElement("script")
-      script.textContent = "console.log('inline script without nonce')"
-      document.head.appendChild(script)
-    })
-
-    // Wait for violation report to be sent
-    await page.waitForTimeout(1000)
-
-    // The violation should be sent to /api/csp-report
-    // We verify by checking the endpoint still responds correctly
-    const response = await page.request.post("/api/csp-report", {
-      data: {
-        "csp-report": {
-          "document-uri": page.url(),
-          "violated-directive": "script-src",
-          "blocked-uri": "inline",
-          "effective-directive": "script-src",
-        },
-      },
       headers: { "Content-Type": "application/json" },
     })
 

@@ -1,0 +1,7 @@
+schema: spec-driven
+
+# Change de tooling/CI: re-baselinea el gate de cobertura de Vitest por área
+# (ratchet), suma el smoke de guardias de 19 route handlers y saca el ruido de
+# infra del workflow (deploy condicional a secrets, actions al día).
+# No modifica ninguna spec de producto. Ver openspec/CONVENCION-DELTAS.md
+skip_specs: true
