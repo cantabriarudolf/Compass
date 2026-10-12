@@ -87,14 +87,25 @@
       Commit `34f1d2a`. **No portado y declarado**: gate de morosidad FI y `anticipacionMinimaDias`
       (inactivos en el lab) y la notificación de retención (mismo criterio que las rutas IN).
 
-      **MT — PENDIENTE** (`cargarFase11MT` + `test-py-techos`): `POST /api/mt/trabajos` y
-      `/api/mt/proyectos` existen como CRUD pero **falta** la máquina de estados (iniciar/finalizar +
-      preventivo automático, `verificarGarantiasMT`) y el guard `saldoFondo` en proyectos. Riesgo: el
-      saldo GC depende de FI migrada — el paso 10 (“$12M sin saldo → rechazado”) necesita un período/monto
-      deterministas para no ser flaky.
+      **MT — HECHA (2026-10-07)**: `POST /api/mt/trabajos` deriva folio `MT-####`; nuevas
+      `POST /api/mt/trabajos/[id]/{iniciar,finalizar}` (exactly-once, preventivo automático con id
+      determinista, evento por transición) y `POST /api/mt/garantias/verificar` (`MT_GUARANTEE_EXPIRED`
+      una vez por trabajo, flag en BD); `POST /api/mt/proyectos` con el guard `saldoFondo` del store
+      (409 "Saldo insuficiente", misma fórmula sobre BD). `cargarFase11MT` por API + espejo con
+      verificación en BD y purga de `test-*` MT. Test-first: 13 tests (`test/api/mt-acciones.test.ts`)
+      con borde de saldo $800.000. Evidencia: suite **944/944**, tsc 0, eslint 0, e2e 8/8 + 9/9.
+      Commit `79dc8a8`.
+      **Declarado y no portado**: `notify()` de finalizar/verificar, el paso IR del FORM (IR sin migrar)
+      y los chequeos de existencia cross-collection sin FK en BD.
+      **Divergencia preexistente detectada (no corregida, anotada)**: el saldo del store en
+      `saveProyectoMT` **no** incluye `saldoInicial`/`ingresosFI` mientras `/api/fondos-fi/[id]/retirar`
+      **sí**; el guard MT usa la fórmula del store para mantener paridad. Decisión de unificación:
+      pendiente del owner (cambia semántica financiera).
 
-      **FI 7-10** (pasos con `// TODO Fase 1.5` en `cargarFase13FI`): migrar después de RA y MT; hoy leen
-      el store y el espejo los mantiene verdes (no se disfrazan).
+      **FI 7-10** (pasos con `// TODO Fase 1.5` en `cargarFase13FI`): **DESBLOQUEADOS** — RA y MT ya
+      están en BD (IN también), así que las conexiones (descuento sobre `multa_in`, cobro de la multa
+      grave, tarifa del quincho en el fondo amenities y proyecto MT rechazado por saldo) pueden leerse de
+      BD. Es la unidad siguiente; hoy leen el store y el espejo los mantiene verdes (no se disfrazan).
 - [x] 1.6 Gate de fase: **VERDE 2026-10-07** — suite **897/897** · tsc 0 · eslint 0 · e2e
       `poblado-idempotente` **8/8** · e2e `flujo/poblamiento` **9/9** (esto último satisface también
       el criterio de cierre 3.1 del change: el último rojo del lane P3 cayó con 1.3a + 1.4).
