@@ -140,8 +140,16 @@
 
 ## Fase 3 — Cierre (ventana 3)
 
-- [ ] 3.1 `e2e/flujo/poblamiento.spec.ts` **3/3** verde (una corrida, sin bucle).
-- [ ] 3.2 Verificación de idempotencia: "Poblar todo" ×2 con limpieza intermedia, sin duplicados.
-- [ ] 3.3 NSGC: manuales de FI/CT + avance.
-- [ ] 3.4 `check-delta-coverage` + `openspec validate --all` en verde.
-- [ ] 3.5 Commit(s) y archivar tras CI verde (el push lo decide el owner).
+- [x] 3.1 `e2e/flujo/poblamiento.spec.ts` **3/3** verde (una corrida, sin bucle): **HECHO** — 9/9 con
+      los 6 setup de auth; corrida estable en las últimas 4 verificaciones de la Fase 1.5.
+- [x] 3.2 Verificación de idempotencia: **HECHA** — `e2e/crud/poblado-idempotente.spec.ts` pobla dos
+      veces (directo y por el dialog "Limpiar y poblar") y exige 22/22 🟢 y 0 🔴, con la purga entre
+      medio; 8/8 en cada verificación de 1.5 y Fase 2.
+- [x] 3.3 NSGC: **HECHO** — manuales FI/CT/IN/RA/MT + spec LAB-mejoras + manual 34 (sección 10) +
+      nota de trazabilidad y avance de la sesión (`Data/NSGC/docs/`). Sin mocks nuevos: la condición
+      del skill (cambio en `apps/web/data/**`) no aplica; las fixtures nacen por API en BD.
+- [x] 3.4 `check-delta-coverage` (**1 ok, 0 que romperían el archive**) + `openspec validate --all`
+      (**41 passed / 0 failed**): **VERDE 2026-10-07**.
+- [ ] 3.5 Commit(s) y archivar tras CI verde (el push lo decide el owner): **PARCIAL** — todos los
+      work-unit commits están hechos y locales (`main` ~27 adelante, sin push). El archivo del change
+      queda pendiente del push y del CI del owner.
