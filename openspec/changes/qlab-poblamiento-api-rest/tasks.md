@@ -71,16 +71,25 @@
       `poblado-idempotente` **8/8** · e2e `flujo/poblamiento` **9/9** (esto último satisface también
       el criterio de cierre 3.1 del change: el último rojo del lane P3 cayó con 1.3a + 1.4).
 
-## Fase 2 — CT + higiene de dos mundos (ventana 2)
+## Fase 2 — CT + higiene de dos mundos (ventana 2) — **CERRADA 2026-10-07**
 
-- [ ] 2.1 RED: test del gate deuda/saldo y de la inmutabilidad en la capa API
-      (`app/api/certificados-ct/route.ts`).
-- [ ] 2.2 GREEN: portar el gate deuda/saldo y el rechazo de borrado inmutable a la ruta.
-- [ ] 2.3 Migrar `cargarFase15CT` (`app/admin/qa-lab/page.tsx:1064`) a `POST /api/certificados-ct`
-      con id `test-*-ct`.
-- [ ] 2.4 `tieneDatosTest(state, bd?)` / `runFase` / "Borrar todo" cubriendo store + BD sin
-      residuos TEST bloqueantes.
-- [ ] 2.5 Gate de fase: unit + `tsc` + `eslint`; `e2e:higiene` sin residuos.
+- [x] 2.1 RED: **HECHO** — 3 tests del gate deuda/saldo en `test/api/api-certificados-ct.test.ts`
+      (al_día con deuda → 409, al_día sin deuda → ok, estado_cuenta con deuda) + el test de `DELETE`
+      actualizado a 409 inmutable. RED observado antes de cada implementación.
+- [x] 2.2 GREEN: **HECHO** — gate server-side en `POST /api/certificados-ct` (409 con el saldo
+      pendiente de la unidad, scoped por comunidad) y `DELETE /api/certificados-ct/[id]` con rechazo
+      explícito **409 documento inmutable** (Decisión 5). Sin purga por API: el residuo TEST lo purga
+      `e2e:higiene`.
+- [x] 2.3 Migrar `cargarFase15CT` a la API con espejo transitorio (D7) e ids `test-*-ct`: **HECHO** —
+      los 4 pasos escriben store + API y verifican en BD (folio `CT-`, tipo, saldo 0).
+      Nota medida: el paso de inmutabilidad comprueba el guard del store **solo si existe un
+      certificado real** (el guard del store exime a los `test-*`: es su vía de purga) y siempre el
+      **409 de la API** (que no exime a nadie).
+- [x] 2.4 `tieneDatosTest(state, bd?)` / `runFase` / "Borrar todo": **HECHO en lo bloqueante** — FI
+      se purga por API (1.4); CT queda declarado como residuo no bloqueante (lo limpia
+      `e2e:higiene`, que ya purga `certificadoCT`), y el guard clean-first solo mira PI/PL.
+- [x] 2.5 Gate de fase: **VERDE** — suite **900/900** · tsc 0 · eslint 0 · `e2e:higiene --apply` sin
+      residuos bloqueantes · e2e `poblado-idempotente` **8/8** y `flujo/poblamiento` **9/9**.
 
 ## Fase 3 — Cierre (ventana 3)
 

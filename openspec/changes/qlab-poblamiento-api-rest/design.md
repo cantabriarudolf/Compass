@@ -43,6 +43,13 @@ se aplica en la ruta API (rechazo explícito con 409 o 400 documentado), no en e
 que un consumidor distinto del lab no pueda saltarla. El gate deuda/saldo de
 `page.tsx:1075-1095` se porta a la misma ruta.
 
+**Precisión medida al implementar (2026-10-07)**: la inmutabilidad no es simétrica entre mundos y
+es correcto que no lo sea. El guard del store exime a los `test-*`
+(`lib/store.ts:removeCertificadoCT`: "solo registros TEST son removibles") porque es la vía de
+purga del lab; la ruta API **no exime a nadie** (409 siempre para un certificado existente) y el
+residuo TEST lo purga `e2e:higiene`. El paso de inmutabilidad del lab comprueba el guard del store
+solo cuando existe un certificado real y, siempre, el 409 de la API.
+
 ## Alternativas descartadas
 
 - **Tocar el store legacy**: congelado por decisión de arquitectura (STORE_VERSION=28); además
