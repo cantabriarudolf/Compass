@@ -11,6 +11,16 @@ Dos pilares: el **Maestro de Elementos** define qué se puede reservar (espacio 
 - **Calendario**: grilla cronológica de reservas confirmadas/canceladas; alta guiada (elemento → solicitante MP → fecha → tramo según bloques); acciones Cancelar y Retener garantía (con motivo). Cada reserva guarda snapshot de tarifa y garantía vigentes al confirmar.
 - **Elementos**: CRUD del maestro — tipo (Espacio Físico / Activo Mobiliario), ubicación EF (sub-sector) o IR (activo del catálogo), franja bloques_horas|dia_completo con duración, tarifa, garantía, aforo (piscina) o stock (2 quinchos idénticos → 2), anticipación mínima, ventana de cancelación tardía y penalización.
 
+## 🔌 Ciclo de vida en la capa de datos (API)
+
+La reserva y sus cobros se materializan en el servidor, dentro de la misma transacción:
+
+- **Alta (`POST /api/ra/reservas`)**: deriva el folio `RA-####` cuando no viene, congela el snapshot de tarifa y garantía del elemento, valida el solape respetando el **stock** (capacidad) y crea el cargo `reserva_ra` al Fondo de Amenities cuando la tarifa es > 0 (idempotente por procedencia, `origenRef` = id de la reserva). Un `RA_BOOKING_CREATED` solo en el alta.
+- **Cancelar (`POST …/[id]/cancelar`)**: solo Confirmada; si faltan ≤ `cancelacionTardiaDias`, la cancelación es tardía y cobra `penalizacion_ra`, liberando el cupo. Exactly-once (`RA_BOOKING_CANCELLED`).
+- **Retener (`POST …/[id]/retener`)**: solo Confirmada y sin retención previa; el monto es siempre `montoGarantia` de la reserva y se materializa como `garantia_ra` una sola vez (`RA_WARRANTY_RETAINED`).
+
+**Declarado y no portado**: el gate de morosidad FI y `anticipacionMinimaDias` (inactivos en el laboratorio) y la notificación de la retención.
+
 ## 💡 Tips de Oro
 
 - **Overbooking imposible**: dos tramos se solapan si `inicioA < finB && inicioB < finA`; día completo ocupa 00:00–23:59. Con stock N caben N reservas paralelas; la N+1 es rechazada con "Conflicto horario".

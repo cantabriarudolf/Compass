@@ -12,6 +12,17 @@ Cada intervención es un registro `MT-####` con descripción técnica, ubicació
 - **Prevención**: tablero de próximos vencimientos ordenado por fecha programada (vencidos destacados); al finalizar un preventivo el sistema genera automáticamente la próxima mantención Planificada (+periodicidad) y avisa a administración. Botón *Verificar garantías*: alerta garantías ≤30 días o vencidas, una sola vez por trabajo.
 - **Proyectos**: planes futuros (ej. "Mantención de techos") con presupuesto estimado y plazo; cuota sugerida mensual derivable = presupuesto ÷ meses.
 
+## 🔌 Acciones en la capa de datos (API)
+
+La bitácora técnica quedó también en el servidor, con transiciones exactly-once:
+
+- **Alta (`POST /api/mt/trabajos`)**: deriva el folio `MT-####` cuando viene vacío y aplica los defaults (Planificado, pago Pendiente, alerta de garantía sin enviar). Un `MT_WORK_CREATED` solo en el alta.
+- **Iniciar / Finalizar (`POST …/[id]/iniciar|finalizar`)**: Planificado → En Curso (sella `fechaInicio`) y → Finalizado con `fechaTermino`/`costoFinal` por update condicional; si el trabajo es preventivo, el próximo Planificado (+periodicidad) nace en la misma transacción e idempotente por procedencia (no se duplica al reintentar).
+- **Garantías (`POST /api/mt/garantias/verificar`)**: alerta una sola vez por trabajo (bandera en BD) para garantías vencidas o a ≤30 días.
+- **Proyectos (`POST /api/mt/proyectos`)**: si declara fondo de financiamiento, exige fondo activo y saldo suficiente → **409 "Saldo insuficiente"**.
+
+**Divergencia anotada (decisión pendiente del owner)**: el guard de saldo usa la fórmula del store (cobros, egresos y aportes de emisiones de BD), que **no** incluye `saldoInicial` ni ingresos manuales, mientras el retiro de fondo de FI sí los considera.
+
 ## 💡 Tips de Oro
 
 - **Preventivo sin manos**: Hidropack mensual, CCTV semestral — configura la periodicidad una vez y cada finalización crea el siguiente registro con su fecha programada.

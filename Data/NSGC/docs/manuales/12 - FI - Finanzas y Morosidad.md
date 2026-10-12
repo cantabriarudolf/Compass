@@ -18,6 +18,16 @@ Dos pilares: el **Libro Financiero** concentra todo el movimiento en cobros (`co
 - **Recaudación (`/finanzas/pagos`)**: libro unificado filtrable por concepto/estado con KPIs recaudado vs por cobrar; detalle por cobro (moras, pagos, diferencias) y registro de pago con exigible exacto (base + moras − pagos previos). Si el monto difiere, la justificación es obligatoria y nace un **informe de diferencia inmutable**.
 - **Espejo BD (ST) (`/finanzas`)**: panel read-only de verificación del espejo en la capa de datos persistente (change `fi-sync-bd`). El cliente sync (`lib/fi-sync.ts`) envía a `POST /api/fi/sync` el delta de fondos (con saldo de apertura), egresos e ingresos 2s después del último cambio (debounce, batch ≤500, upsert idempotente, sin delete); el panel consulta `GET /api/fi` y muestra por fondo los totales BD vs Store con badge **Cuadrado/Pendiente-Divergente**. Con BD limpia, el fondo Cuenta Corriente del punto cero cuadra exacto ($17.082.694 apertura / $62.491.011 egresos / $45.408.317 ingresos / saldo $0). El store sigue siendo la fuente de la UI — la BD es espejo de retención/consulta.
 
+## 🔌 Acciones en la capa de datos (API)
+
+El poblamiento del QA-Lab escribe BD vía API REST y lo poblado se ve en las páginas reales (mismo patrón que PI/PL). Tres operaciones quedaron además en el servidor con las reglas del libro:
+
+- **Pago (`POST /api/cobros-fi/[id]/pagar`)**: exige monto > 0, medio de pago y saldo pendiente > 0; si el monto no coincide con el exigible, exige justificación (≥10 caracteres) y agrega la diferencia. Un evento `FI_RECEIVE_PAYMENT` por request.
+- **Mora (`POST /api/cobros-fi/[id]/mora`)**: exige vencimiento, tasa > 0, atraso y saldo; **idempotente por día** (repetirla el mismo día no duplica) y un `FI_MORA_APPLIED` solo al aplicar.
+- **Retiro de fondo (`POST /api/fondos-fi/[id]/retirar`)**: exige fondo activo, monto > 0, descripción, acta GD publicada cuando se declara (obligatoria en el Fondo de Reserva) y saldo suficiente **calculado contra BD**; crea el egreso `uso_de_fondo` con folio `FE-####` y un `FI_FUND_WITHDRAWN`.
+
+**Higiene TEST**: un cobro `test-*` con pagos puede darse de baja en desarrollo (`DELETE /api/cobros-fi/[id]`), mientras las filas reales siguen bloqueadas con 409. El poblamiento usa períodos dedicados `2019-03` (emisión) y `2019-01` (mora) para no chocar con emisiones reales. Las páginas de FI conservan su cálculo local + `PUT` del cobro: las acciones dedicadas son la vía del servidor y del laboratorio.
+
 ## 💡 Tips de Oro
 
 - **Todo pasa por un fondo**: si el gasto o cobro no declara fondo activo, el store lo rechaza; sin Fondo de Gasto Común activo no hay emisión posible.

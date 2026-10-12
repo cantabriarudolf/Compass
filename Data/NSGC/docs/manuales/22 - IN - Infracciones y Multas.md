@@ -12,6 +12,17 @@ Cada infracción nace con folio único `IN-####` en estado En Revisión, amarrad
 - **Panel Directiva**: incidentes en curso con contadores por estado/categoría, montos comprometidos, comentarios internos privados y votos de respaldo.
 - **Catálogo de faltas**: parametrizable con nombre, categoría (Leve/Grave/Gravísima) y sanción base (Monto Fijo $ o Porcentaje % del Gasto Común); seed NSGC incluido (ruidos molestos, mascotas, basura, áreas comunes, obras sin autorización).
 
+## 🔌 Máquina de estados en la capa de datos (API)
+
+El expediente se resuelve también en el servidor, con **un evento de auditoría por request**:
+
+- **Apelar (`POST /api/in/infracciones/[id]/apelar`)**: solo desde En Revisión y con descargos ≥10 caracteres → Apelada (`IN_APELACION`).
+- **Respaldar (`POST …/[id]/respaldar`)**: exige miembro vigente de la directiva y que la infracción siga sin resolución final (`IN_RESPALDO_DIRECTIVA`).
+- **Aplicar (`POST …/[id]/aplicar`)**: mismo cálculo del store (monto fijo, costo por daños o % GC sobre el último cargo GC emitido, leído de BD), respaldo obligatorio en Grave/Gravísima, y materializa el cobro `multa_in` al Fondo de Gasto Común **en la misma transacción** e **idempotente por procedencia** (`origenRef`): reaplicar o recrear la infracción con el mismo id no duplica (`IN_APPLY_FINE`).
+- **Desestimar (`POST …/[id]/desestimar`)**: justificación obligatoria → Desestimada (`IN_DESESTIMADA`).
+
+**Higiene TEST**: la purga del laboratorio barre los cobros por procedencia (`test-*`), sin depender del período. **Nota declarada**: la ruta resuelve el Fondo de Gasto Común como el primer fondo `gasto_comun` activo; el laboratorio valida por tipo, no por id.
+
 ## 💡 Tips de Oro
 
 - **Estados estrictos**: En Revisión → Apelada (descargos del vecino) → Aplicada o Desestimada; ya resueltas no admiten segunda resolución.

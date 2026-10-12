@@ -216,5 +216,16 @@ pages `/comunidad/portal` y `/finanzas/remuneraciones`):
   PI sí se purgan vía API); la siguiente corrida usa otro periodo libre sin
   colisionar. `e2e:higiene` la purga en cada reseed.
 
-*Última actualización: 2026-09-29 - Change `qa-lab-poblar-api` (P4
-GATED-API-BD).*
+## 10. Nota `qlab-poblamiento-api-rest` — Fases EF/VU, FI, CT, IN, RA y MT vía API (2026-10-12)
+
+Cierra el gap "el laboratorio escribe el store legacy, las páginas leen BD" para las fases que quedaban. Ahora **poblar escribe BD vía API REST** y lo poblado se ve en las páginas reales (`/inventario/estructura`, `/finanzas/gastos-comunes`, `/comunidad/certificados`, `/operaciones/reservas`, `/finanzas/multas`, `/inventario/proyectos`).
+
+- **Orden real del grafo**: `EF/VU → FI → CT`, con IN/RA/MT antes de las conexiones FI 7-10. FI no podía migrar antes que la estructura, porque la emisión de Gasto Común lee las unidades de BD.
+- **Espejo transitorio (Decisión 7)**: durante la transición cada paso escribe **API y store**, porque las fases siguientes del laboratorio todavía leen el store. El criterio de retiro queda declarado; el laboratorio ya verifica sus resultados en BD.
+- **Ids fijos `test-*` + upsert**: repoblar es idempotente. FI usa períodos dedicados TEST (`2019-03` emisión, `2019-01` mora) porque los períodos corrientes ya tienen emisión de corridas previas y respondían 409.
+- **Acciones nuevas en el servidor**: FI pago/mora/retiro de fondo; CT gate de deuda/saldo + inmutabilidad (409); IN apelar/respaldar/aplicar/desestimar con `multa_in` idempotente por procedencia; RA folio `RA-####`, snapshot de tarifa/garantía y cobros `reserva_ra`/`penalizacion_ra`/`garantia_ra`; MT folio `MT-####`, iniciar/finalizar con preventivo automático, verificación de garantías y guard de saldo en proyectos.
+- **Higiene de dos mundos**: `limpiar()` purga la BD por API, TEST-scoped, hijos→padres. La carrera de hidratación del store que abortaba la purga se resolvió esperando la hidratación antes de limpiar/poblar/validar. Un cobro TEST con pagos puede darse de baja en desarrollo (409 intacto para filas reales); el certificado CT es inmutable → **residuo honesto** que purga `e2e:higiene`.
+- **Declarado y no portado**: gate de morosidad y `anticipacionMinimaDias` de RA, notificaciones de RA/MT, el paso IR del formulario MT y los chequeos de existencia cross-collection sin FK.
+- **Verificación**: e2e `poblado-idempotente` 8/8 y `flujo/poblamiento` 9/9 · suite 944/944 · tsc 0 · eslint 0.
+
+*Última actualización: 2026-10-12 - Change `qlab-poblamiento-api-rest` (gap P4 FI/CT + Fase 1.5 IN/RA/MT y conexiones FI 7-10).*

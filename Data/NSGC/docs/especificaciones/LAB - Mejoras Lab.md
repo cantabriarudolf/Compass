@@ -18,11 +18,23 @@ Cada fila de `Cómo va quedando` y cada tarjeta de `Qué se probó` en `k0mp4ss_
 
 Automatizar captura de pantallas de cada opción del lab mediante **Playwright + GitHub Actions**: al guardar `Data/NSGC/backups/compass-seed-report-*.json`, una Action levanta `pnpm dev`, captura `/admin/maestros`, `/inventario/tipos`, `/inventario/estructura`, `/comunidad/personas`, `/comunidad/personas/[id]` y deja las imágenes en `Data/NSGC/backups/screenshots/` para mostrar miniatura en el lab y ampliar al pinchar. Este requisito es `SHOULD` hasta implementarse.
 
+### 2.3 Poblamiento de Estructura, FI, CT, IN, RA y MT por API REST
+
+Desde el change `qlab-poblamiento-api-rest` (2026-10), las fases del laboratorio que quedaban escribiendo el store legacy poblan **BD vía API REST** (fuente de verdad), con ids fijos `test-*` para que repoblar sea idempotente y espejo transitorio al store mientras los consumidores legacy del propio laboratorio no migren:
+
+- **Estructura (EF/VU)** — prerrequisito: la emisión de Gasto Común lee las unidades de BD, así que FI no puede migrar antes. Unidades y vínculos `test-*` quedan visibles en `/inventario/estructura`.
+- **FI** — fondos, egresos, emisiones GC y cobros por API, más las acciones dedicadas de pago, mora y retiro de fondo; períodos TEST dedicados y purga BD TEST-scoped en "Borrar todo".
+- **CT** — emisión por API con el gate de deuda/saldo en servidor e historial inmutable (el borrado responde 409 y lo purga la higiene e2e).
+- **IN / RA / MT** — máquina de estados de infracciones con multa materializada, ciclo de vida de reservas con folio y cobros, y trabajos/proyectos con folio, preventivo y guard de saldo; las conexiones FI 7-10 leen BD.
+
+Lo poblado se ve en las páginas reales. La verificación de cierre son los e2e `poblado-idempotente` y `flujo/poblamiento`, además de la suite unitaria.
+
 ## 3. Reglas de Negocio
 
 - `Fase 5` no bloquea `Fase 0..4`; un change en `LAB` no exige bump de `STORE_VERSION`.
 - Los vínculos no alteran datos, solo navegan; no requieren validación `ST`.
 - Los screenshots son opcionales (`SHOULD`); si no existen, el lab muestra solo el vínculo.
+- El poblamiento de fases por API escribe BD (fuente de verdad) con ids `test-*` fijos: repoblar debe ser idempotente y no debe duplicar filas. El espejo al store es transitorio y tiene criterio de retiro declarado.
 
 ## 4. Dependencias de Carga y Seed (ST)
 
