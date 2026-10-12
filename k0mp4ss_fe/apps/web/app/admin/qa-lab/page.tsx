@@ -1183,39 +1183,101 @@ export default function QaLabPage() {
       pasos[5]!.estado = "error"
       pasos[5]!.error = moraStoreOk ? moraApiDetalle : (r6a.error ?? "Mora store no aplicada")
     } else pasos[5]!.estado = "ok"
-    // 7)-10) Conexiones cross-módulo: permanecen store-only a propósito.
-    // TODO Fase 1.5 — depende de migrar IN/RA/MT (design D6.1). Migrar los cobros FI
-    // antes dejaría estas aserciones leyendo un mundo y escribiendo otro.
-    // 7) Pago con descuento justificado sobre la multa TEST → informe de diferencia inmutable.
+    // 7)-10) Conexiones cross-módulo (Fase 1.5): IN/RA/MT ya escriben BD, así
+    // que el lab escribe store + API (espejo D7) y VERIFICA leyendo de BD.
+    // 7) Pago con descuento justificado sobre la multa TEST → informe de diferencia
+    // inmutable + evento `FI_MANUAL_DISCOUNT`. El cobro `multa_in` lo materializó
+    // la conexión IN en BD; el pago se espeja a la API y se lee de vuelta.
     // El descuento es proporcional (10%, mínimo $1) porque una multa % GC sin emisión
     // previa cae al valor nominal del catálogo (ej. $50) y un descuento fijo de $1000
-    // daría un monto negativo que el store rechaza siempre.
-    const cobroMulta = useCompassStore.getState().cobrosFI.find(c => c.concepto === "multa_in")
-    if (!cobroMulta) { pasos[6]!.estado = "error"; pasos[6]!.error = "No existe el cobro multa_in (ejecuta la fase IN)" } else {
-      const pendienteMulta = cobroMulta.montoBase + cobroMulta.moras.reduce((a, m) => a + m.monto, 0) - cobroMulta.pagos.reduce((a, p) => a + p.monto, 0)
-      const descuento = Math.max(1, Math.round(pendienteMulta * 0.1))
-      const montoConDescuento = pendienteMulta - descuento
-      const sinJustificacion = s.registrarPagoFI(cobroMulta.id, { monto: montoConDescuento, medio: "efectivo" })
-      const conJustificacion = s.registrarPagoFI(cobroMulta.id, { monto: montoConDescuento, medio: "efectivo", ajusteJustificacion: "Condonación parcial autorizada por la directiva TEST." })
-      const dif = useCompassStore.getState().cobrosFI.find(c => c.id === cobroMulta.id)?.diferencias.length === 1
-      if (!sinJustificacion.ok && conJustificacion.ok && dif && useCompassStore.getState().eventos.some(e => e.tipoAccion === "FI_MANUAL_DISCOUNT")) pasos[6]!.estado = "ok"
-      else { pasos[6]!.estado = "error"; pasos[6]!.error = conJustificacion.error ?? `Diferencias: ${useCompassStore.getState().cobrosFI.find(c => c.id === cobroMulta.id)?.diferencias.length}` }
+    // daría un monto negativo que ambas capas rechazan.
+    const justificacionMulta = "Condonación parcial autorizada por la directiva TEST."
+    const inf7BD = ((await apiQA("/api/in/infracciones/test-in-grave").catch(() => null))?.cuerpo as { cargoFIReferencia?: string } | null)
+    const cobroMultaBDId = inf7BD?.cargoFIReferencia ?? ""
+    const cobroMulta = useCompassStore.getState().cobrosFI.find(c => c.concepto === "multa_in" && c.origenRef === "test-in-grave")
+    const cobroMultaBD = cobroMultaBDId ? ((await apiQA(`/api/cobros-fi/${cobroMultaBDId}`).catch(() => null))?.cuerpo as { montoBase: number; moras: { monto: number }[]; pagos: { monto: number }[] } | null) : null
+    if (!cobroMulta || !cobroMultaBD) {
+      pasos[6]!.estado = "error"; pasos[6]!.error = `No existe el cobro multa_in (store=${Boolean(cobroMulta)}, id BD=${cobroMultaBDId || "ausente"}; ejecuta la fase IN)`
+    } else {
+      const pendiente = (c: { montoBase: number; moras: { monto: number }[]; pagos: { monto: number }[] }) => c.montoBase + c.moras.reduce((a, m) => a + m.monto, 0) - c.pagos.reduce((a, p) => a + p.monto, 0)
+      const montoMulta = pendiente(cobroMulta) - Math.max(1, Math.round(pendiente(cobroMulta) * 0.1))
+      const montoMultaBD = pendiente(cobroMultaBD) - Math.max(1, Math.round(pendiente(cobroMultaBD) * 0.1))
+      // Sin justificación → rechazo en ambos mundos (store + API 400).
+      const sinJustificacion = s.registrarPagoFI(cobroMulta.id, { monto: montoMulta, medio: "efectivo" })
+      await espejarRechazoQA(pasos, 6, sinJustificacion, "justificación obligatoria", 400, () => apiQA(`/api/cobros-fi/${cobroMultaBDId}/pagar`, { method: "POST", body: JSON.stringify({ monto: montoMultaBD, medio: "efectivo" }) }))
+      // Con justificación → pago + UNA diferencia, espejo store + API.
+      if (pasos[6]!.estado === "ok") {
+        const conJustificacion = s.registrarPagoFI(cobroMulta.id, { monto: montoMulta, medio: "efectivo", ajusteJustificacion: justificacionMulta })
+        await espejarQA(pasos, 6, conJustificacion, () => apiQA(`/api/cobros-fi/${cobroMultaBDId}/pagar`, { method: "POST", body: JSON.stringify({ monto: montoMultaBD, medio: "efectivo", ajusteJustificacion: justificacionMulta }) }))
+      }
+      // Verificación leída de BD: exactamente UNA diferencia. El evento
+      // `FI_MANUAL_DISCOUNT` solo lo emite el store (la ruta /pagar emite
+      // `FI_RECEIVE_PAYMENT`), por eso se conserva la lectura del espejo.
+      if (pasos[6]!.estado === "ok") {
+        const tras7 = await apiQA(`/api/cobros-fi/${cobroMultaBDId}`)
+        const difBD = ((tras7.cuerpo as { diferencias?: unknown[] } | null)?.diferencias ?? []).length
+        const difStore = useCompassStore.getState().cobrosFI.find(c => c.id === cobroMulta.id)?.diferencias.length
+        const eventoStore = useCompassStore.getState().eventos.some(e => e.tipoAccion === "FI_MANUAL_DISCOUNT")
+        if (difBD !== 1 || difStore !== 1 || !eventoStore) {
+          pasos[6]!.estado = "error"; pasos[6]!.error = `Diferencias BD/store=${difBD}/${difStore}, evento FI_MANUAL_DISCOUNT store=${eventoStore}`
+        }
+      }
     }
-    // 8) Conexión IN: la multa grave aplicada vive como cobro real imputado
+    // 8) Conexión IN: la multa grave aplicada tiene cobro `multa_in`
+    // materializado. Store: infracción + `cargoFIReferencia` del espejo. BD: la
+    // infracción aplicada y el cobro apuntado por su `cargoFIReferencia`, con el
+    // concepto/origenRef correctos y fondo GC activo. El fondo se valida por
+    // TIPO (no por id) porque la ruta IN resuelve el primer `gasto_comun` activo
+    // de BD y puede convivir con más de uno (p. ej. el fondo del punto cero).
     const grave = s.infraccionesIN.find(i => i.id === "test-in-grave")
     const cobroGrave = useCompassStore.getState().cobrosFI.find(c => c.origenRef === "test-in-grave" && c.concepto === "multa_in")
-    if (!grave || !String(grave.cargoFIReferencia ?? "").startsWith("cob-") || !cobroGrave || cobroGrave.fondoId !== "fondo-gc") {
-      pasos[7]!.estado = "error"; pasos[7]!.error = "Cobro multa_in no materializado (ejecuta la fase IN)"
+    const inf8BD = ((await apiQA("/api/in/infracciones/test-in-grave").catch(() => null))?.cuerpo as { estado?: string; cargoFIReferencia?: string } | null)
+    const cobroGraveBD = inf8BD?.cargoFIReferencia ? ((await apiQA(`/api/cobros-fi/${inf8BD.cargoFIReferencia}`).catch(() => null))?.cuerpo as { concepto?: string; origenRef?: string; fondoId?: string } | null) : null
+    const fondoGraveBD = cobroGraveBD?.fondoId ? ((await apiQA(`/api/fondos-fi/${cobroGraveBD.fondoId}`).catch(() => null))?.cuerpo as { tipo?: string; activo?: boolean } | null) : null
+    const store8Ok = Boolean(grave && String(grave.cargoFIReferencia ?? "").startsWith("cob-") && cobroGrave && cobroGrave.fondoId === "fondo-gc")
+    const bd8Ok = inf8BD?.estado === "aplicada" && cobroGraveBD?.concepto === "multa_in" && cobroGraveBD?.origenRef === "test-in-grave" && fondoGraveBD?.tipo === "gasto_comun" && fondoGraveBD?.activo === true
+    if (!store8Ok || !bd8Ok) {
+      pasos[7]!.estado = "error"
+      pasos[7]!.error = `Cobro multa_in no materializado (store=${store8Ok}, BD estado=${inf8BD?.estado ?? "ausente"}, concepto=${cobroGraveBD?.concepto ?? "ausente"}, fondo=${fondoGraveBD?.tipo ?? cobroGraveBD?.fondoId ?? "ausente"}; ejecuta la fase IN)`
     } else pasos[7]!.estado = "ok"
-    // 9) Conexión RA: la tarifa del quincho quedó como cobro del fondo amenities (cargo puede ser penalización tras cancelación)
+    // 9) Conexión RA: la tarifa del quincho quedó como cobro del fondo amenities.
+    // Tras la cancelación tardía de la fase RA, el cargo vivo apuntado por la
+    // reserva es `penalizacion_ra`; se acepta `reserva_ra` o `penalizacion_ra`.
+    // Store: reserva + cobro; BD: reserva y el cobro de su `cargoFIReferencia`
+    // con fondo amenities activo (validado por tipo).
     const reservaQuincho = useCompassStore.getState().reservasRA.find(r => r.id === "test-ra-rs-1")
     const cobroTarifa = useCompassStore.getState().cobrosFI.find(c => c.origenRef === "test-ra-rs-1" && c.concepto === "reserva_ra")
-    if (!reservaQuincho || !cobroTarifa || cobroTarifa.fondoId !== "fondo-amenities") {
-      pasos[8]!.estado = "error"; pasos[8]!.error = "Cobro reserva_ra no materializado (ejecuta la fase RA)"
+    const rs9BD = ((await apiQA("/api/ra/reservas/test-ra-rs-1").catch(() => null))?.cuerpo as { cargoFIReferencia?: string } | null)
+    const cobroTarifaBD = rs9BD?.cargoFIReferencia ? ((await apiQA(`/api/cobros-fi/${rs9BD.cargoFIReferencia}`).catch(() => null))?.cuerpo as { concepto?: string; origenRef?: string; fondoId?: string } | null) : null
+    const fondoTarifaBD = cobroTarifaBD?.fondoId ? ((await apiQA(`/api/fondos-fi/${cobroTarifaBD.fondoId}`).catch(() => null))?.cuerpo as { tipo?: string; activo?: boolean } | null) : null
+    const store9Ok = Boolean(reservaQuincho && cobroTarifa && cobroTarifa.fondoId === "fondo-amenities")
+    const bd9Ok = (cobroTarifaBD?.concepto === "reserva_ra" || cobroTarifaBD?.concepto === "penalizacion_ra") && cobroTarifaBD?.origenRef === "test-ra-rs-1" && fondoTarifaBD?.tipo === "amenities" && fondoTarifaBD?.activo === true
+    if (!store9Ok || !bd9Ok) {
+      pasos[8]!.estado = "error"
+      pasos[8]!.error = `Cobro reserva_ra no materializado (store=${store9Ok}, BD concepto=${cobroTarifaBD?.concepto ?? "ausente"}, fondo=${fondoTarifaBD?.tipo ?? cobroTarifaBD?.fondoId ?? "ausente"}; ejecuta la fase RA)`
     } else pasos[8]!.estado = "ok"
-    // 10) Conexión MT: proyecto financiado por fondo GC sin saldo → rechazado
-    const r10 = s.saveProyectoMT({ id: "test-py-financiado", nombre: "Repintado fachada TEST", presupuestoEstimado: 12000000, plazoMeses: 120, estado: "planificado", fondoFinanciamientoId: "fondo-gc" } as any)
-    if (r10.ok || !String(r10.error).includes("Saldo insuficiente")) { pasos[9]!.estado = "error"; pasos[9]!.error = r10.ok ? "El proyecto pasó sin saldo suficiente" : String(r10.error) } else pasos[9]!.estado = "ok"
+    // 10) Conexión MT: proyecto de $12M financiado por el fondo GC sin saldo →
+    // rechazado. Store: guard del espejo; API: 409 "Saldo insuficiente" con el
+    // saldo LEÍDO de BD. Se verifica además que el fondo existe/activo en BD (el
+    // 400 sería "fondo inexistente/inactivo") y que el proyecto NO quedó creado.
+    const borrador10 = { id: "test-py-financiado", nombre: "Repintado fachada TEST", presupuestoEstimado: 12000000, plazoMeses: 120, estado: "planificado", fondoFinanciamientoId: "fondo-gc" }
+    const r10 = s.saveProyectoMT(borrador10 as any)
+    const captura10: { bd?: RespuestaQA } = {}
+    await espejarRechazoQA(pasos, 9, r10, "Saldo insuficiente", 409, async () => {
+      const r = await postQA("/api/mt/proyectos", borrador10)
+      captura10.bd = r
+      return r
+    })
+    if (pasos[9]!.estado === "ok") {
+      const errorSaldoBD = String((captura10.bd?.cuerpo as { error?: string } | null)?.error ?? "")
+      const disponible = Number((errorSaldoBD.match(/disponible \$(-?[\d.]+)/)?.[1] ?? "NaN").replace(/\./g, ""))
+      const fondoGCBD = ((await apiQA("/api/fondos-fi/fondo-gc").catch(() => null))?.cuerpo as { activo?: boolean } | null)
+      const rProyectoBD = await apiQA("/api/mt/proyectos/test-py-financiado")
+      if (!errorSaldoBD.includes("Saldo insuficiente") || !(disponible < 12000000) || fondoGCBD?.activo !== true || rProyectoBD.status !== 404) {
+        pasos[9]!.estado = "error"
+        pasos[9]!.error = `BD: saldo=${errorSaldoBD || "sin mensaje"}, fondo activo=${fondoGCBD?.activo ?? "ausente"}, proyecto=${rProyectoBD.status}`
+      }
+    }
     // 11) Retiro del fondo de reserva sin acta publicada → rechazado.
     // Resultado CORRECTO = rechazo (store y API 400); no es un fallo del paso.
     let r11: { ok: boolean; error?: string }
