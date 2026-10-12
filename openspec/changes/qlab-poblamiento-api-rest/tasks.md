@@ -66,9 +66,9 @@
       `limpiar()` purga por API, TEST-scoped, hijos→padres: cobros de los períodos TEST → emisiones
       TEST de esos períodos → fondos/egresos TEST; idempotente (404 = limpio) y solo bloqueante si
       la entidad existe y el DELETE la rechaza.
-- [~] 1.5 Conexiones cross-módulo (pasos 7-10): **EN CURSO — unidad IN HECHA (2026-10-07)**, RA y MT
-      pendientes. El recon (2026-10-07) fijó el alcance real: no basta migrar el lab, faltan **acciones
-      server-side** por módulo.
+- [x] 1.5 Conexiones cross-módulo (pasos 7-10): **FASE COMPLETA (2026-10-07)** — las tres fases
+      (IN, RA, MT) escriben BD por API y las conexiones FI se leen de BD. El recon (2026-10-07) fijó el
+      alcance real: no bastaba migrar el lab, faltaban **acciones server-side** por módulo.
 
       **IN — HECHA**: `POST /api/in/infracciones/[id]/{apelar,respaldar,aplicar,desestimar}`
       (máquina de estados + eventos de auditoría; `aplicar` materializa `multa_in` transaccional e
@@ -102,10 +102,18 @@
       **sí**; el guard MT usa la fórmula del store para mantener paridad. Decisión de unificación:
       pendiente del owner (cambia semántica financiera).
 
-      **FI 7-10** (pasos con `// TODO Fase 1.5` en `cargarFase13FI`): **DESBLOQUEADOS** — RA y MT ya
-      están en BD (IN también), así que las conexiones (descuento sobre `multa_in`, cobro de la multa
-      grave, tarifa del quincho en el fondo amenities y proyecto MT rechazado por saldo) pueden leerse de
-      BD. Es la unidad siguiente; hoy leen el store y el espejo los mantiene verdes (no se disfrazan).
+      **FI 7-10 — HECHOS (2026-10-07)**: los cuatro pasos escriben API + store y verifican desde BD.
+      7) descuento justificado sobre `multa_in` (400 sin justificación, una `diferencia` en ambos mundos,
+      evento `FI_MANUAL_DISCOUNT` del store; la ruta emite `FI_RECEIVE_PAYMENT` — diferencia declarada);
+      8) conexión IN (infracción y cobro leídos por id, `multa_in`/`origenRef`/fondo activo);
+      9) conexión RA (reserva leída por id; cobro `reserva_ra` o `penalizacion_ra` tras la cancelación,
+      fondo amenities activo); 10) conexión MT (`POST /api/mt/proyectos` → 409 "Saldo insuficiente" con el
+      disponible parseado de BD y `disponible < 12.000.000`; el proyecto no queda creado).
+      Evidencia: suite **944/944**, tsc 0, eslint 0, e2e `poblado-idempotente` 8/8 y `flujo/poblamiento` 9/9.
+      Commit `757cc97`.
+      **Divergencia detectada y no corregida (decisión del owner)**: la ruta IN resuelve el fondo GC como
+      el primer `gasto_comun` activo por `id asc` (puede ser `fondo-cc-punto-cero`) mientras el store fija
+      `fondo-gc`; el lab valida por **tipo** + activo, no por id.
 - [x] 1.6 Gate de fase: **VERDE 2026-10-07** — suite **897/897** · tsc 0 · eslint 0 · e2e
       `poblado-idempotente` **8/8** · e2e `flujo/poblamiento` **9/9** (esto último satisface también
       el criterio de cierre 3.1 del change: el último rojo del lane P3 cayó con 1.3a + 1.4).
