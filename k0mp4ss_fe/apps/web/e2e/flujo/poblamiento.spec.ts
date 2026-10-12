@@ -40,7 +40,11 @@ test.describe("Flujo de poblamiento (Historia de Poblamiento)", () => {
     const tarjetasListas = page.getByText("🟢 Listo")
     await expect(tarjetasListas.first()).toBeVisible({ timeout: 90_000 })
     expect(await tarjetasListas.count()).toBeGreaterThan(0)
-    await expect(page.getByText(/Carga completa OK/)).toBeVisible({ timeout: 30_000 })
+    // 120s (no 30s): el poblamiento completo es más pesado desde que FI/IN/CT escriben
+    // BD por API (22 fases, ~30 rutas) y en dev cada ruta nueva compila en frío 5-12s.
+    // Medido: ~12s con rutas calientes, >30s con la primera compilación. Mismo criterio
+    // que e2e/crud/poblado-idempotente.spec.ts.
+    await expect(page.getByText(/Carga completa OK/)).toBeVisible({ timeout: 120_000 })
 
     // 2) Revisar que nada quedó suelto -> validación de FKs (tasa huérfanos = 0)
     await page

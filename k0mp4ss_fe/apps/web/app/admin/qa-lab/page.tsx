@@ -744,35 +744,81 @@ export default function QaLabPage() {
     const s = useCompassStore.getState()
     const pasos: Paso[] = (PLAN["in"]! as string[]).map(desc => ({ desc, estado: "pendiente" as ModuleState }))
     // Directiva TEST vigente (requisito de respaldo; reusa extensión GD si existe).
+    // Espejo D7: `respaldar` valida la persona contra BD, así que además de la
+    // extensión en store se asegura la gobernanza en BD (best-effort).
     const p99 = s.personas.find(x => x.id === "test-p-99")
     if (!p99?.datosGobernanza) {
       const rAux = s.savePersona({ ...s.personas.find(x => x.id === "test-p-99")!, roles: Array.from(new Set([...(p99?.roles ?? []), "directiva"])), datosGobernanza: { id: "gob-test-1", cargoDirectiva: "presidente", fechaAsuncion: "2026-08-24" } } as any)
       if (!rAux.ok) { pasos[0]!.estado = "error"; pasos[0]!.error = rAux.error }
     }
-    // 1) Tipo de falta TEST monto fijo
-    const r1 = s.saveTipoInfraccionIN({ id: "test-tipo-in", nombre: "Falta TEST Reglamento", categoria: "leve", tipoSancion: "monto_fijo", valor: 25000 } as any)
-    if (!r1.ok) { pasos[0]!.estado = "error"; pasos[0]!.error = r1.error } else pasos[0]!.estado = "ok"
-    // 2) Infracción leve con evidencia D1
+    const directiva = useCompassStore.getState().personas.find(x => x.id === "test-p-99")
+    if (directiva) {
+      const p99BD = await apiQA("/api/personas/test-p-99").catch(() => null)
+      if (!(p99BD?.cuerpo as { datosGobernanza?: unknown } | null)?.datosGobernanza) {
+        const directivaPlana = { ...(directiva as Record<string, unknown>) }
+        delete directivaPlana.vinculosUnidad
+        await postQA("/api/personas", directivaPlana).catch(() => null)
+      }
+    }
+    // 1) Tipo de falta TEST monto fijo — espejo transitorio (D7): store + POST /api/in/tipos.
+    const tipoTEST = { id: "test-tipo-in", nombre: "Falta TEST Reglamento", categoria: "leve", tipoSancion: "monto_fijo", valor: 25000 }
+    const r1 = s.saveTipoInfraccionIN(tipoTEST as any)
+    await espejarQA(pasos, 0, r1, () => postQA("/api/in/tipos", tipoTEST))
+    if (pasos[0]!.estado === "ok") {
+      const tipoBD = await apiQA("/api/in/tipos/test-tipo-in")
+      const valorBD = (tipoBD.cuerpo as { valor?: number } | null)?.valor
+      if (!tipoBD.ok || valorBD !== 25000) { pasos[0]!.estado = "error"; pasos[0]!.error = `Tipo BD valor=${valorBD ?? "ausente"}` }
+    }
+    // 2) Infracción leve con evidencia D1 — espejo: store + POST /api/in/infracciones.
     const r2 = s.saveInfraccionIN({ id: "test-in-leve", folio: "", tipoInfraccionId: "test-tipo-in", unidadId: "test-u-999", reportantePersonaId: undefined, fechaSuceso: "2026-08-24", horaSuceso: "21:30", antecedentes: "Basura depositada fuera de horario en contenedor central TEST.", evidencias: [{ nombre: "test-evidencia.jpg", tipoMime: "image/jpeg", tamanoKB: 80, url: "https://placeholder.supabase.co/test-evidencia.jpg" }], estado: "en_revision", fechaRegistro: "2026-08-25", comentariosDirectiva: [], respaldosDirectiva: [] } as any)
-    if (!r2.ok) { pasos[1]!.estado = "error"; pasos[1]!.error = r2.error } else pasos[1]!.estado = "ok"
-    // 3) Apelación con descargos
-    const r3 = s.apelarInfraccionIN("test-in-leve", "Los desechos eran del servicio de mudanza contratado por el vecino vecino.")
-    if (!r3.ok) { pasos[2]!.estado = "error"; pasos[2]!.error = r3.error } else pasos[2]!.estado = "ok"
-    // 4) Infracción grave nacida desde el reclamo TEST de CO
+    const leveGuardada = useCompassStore.getState().infraccionesIN.find(i => i.id === "test-in-leve")
+    await espejarQA(pasos, 1, r2, () => postQA("/api/in/infracciones", leveGuardada))
+    // 3) Apelación con descargos — espejo: store + POST .../apelar.
+    const descargosLeve = "Los desechos eran del servicio de mudanza contratado por el vecino vecino."
+    const r3 = s.apelarInfraccionIN("test-in-leve", descargosLeve)
+    await espejarQA(pasos, 2, r3, () => postQA("/api/in/infracciones/test-in-leve/apelar", { descargos: descargosLeve }))
+    if (pasos[2]!.estado === "ok") {
+      const infBD = await apiQA("/api/in/infracciones/test-in-leve")
+      const estadoBD = (infBD.cuerpo as { estado?: string } | null)?.estado
+      if (!infBD.ok || estadoBD !== "apelada") { pasos[2]!.estado = "error"; pasos[2]!.error = `BD: estado=${estadoBD ?? "ausente"}` }
+    }
+    // 4) Infracción grave nacida desde el reclamo TEST de CO — espejo.
     const r4 = s.saveInfraccionIN({ id: "test-in-grave", folio: "", tipoInfraccionId: "tipo-in-ruidos", unidadId: "test-u-999", mensajeBuzonId: "test-buz-co-1", fechaSuceso: "2026-08-24", horaSuceso: "23:45", antecedentes: "Ruidos molestos reiterados verificados mediante revisión de cámaras CCTV.", evidencias: [], estado: "en_revision", fechaRegistro: "2026-08-25", comentariosDirectiva: [], respaldosDirectiva: [] } as any)
-    if (!r4.ok) { pasos[3]!.estado = "error"; pasos[3]!.error = r4.error } else pasos[3]!.estado = "ok"
-    // 5) Respaldo directiva sobre la grave
+    const graveGuardada = useCompassStore.getState().infraccionesIN.find(i => i.id === "test-in-grave")
+    await espejarQA(pasos, 3, r4, () => postQA("/api/in/infracciones", graveGuardada))
+    // 5) Respaldo directiva sobre la grave — espejo: store + POST .../respaldar.
     const r5 = s.respaldarInfraccionIN("test-in-grave", "test-p-99")
-    if (!r5.ok) { pasos[4]!.estado = "error"; pasos[4]!.error = r5.error } else pasos[4]!.estado = "ok"
-    // 6) Aplicar grave → % GC + cobro FI materializado
+    await espejarQA(pasos, 4, r5, () => postQA("/api/in/infracciones/test-in-grave/respaldar", { personaId: "test-p-99" }))
+    if (pasos[4]!.estado === "ok") {
+      const infBD = await apiQA("/api/in/infracciones/test-in-grave")
+      const respaldosBD = (infBD.cuerpo as { respaldosDirectiva?: string[] } | null)?.respaldosDirectiva ?? []
+      if (!infBD.ok || !respaldosBD.includes("test-p-99")) { pasos[4]!.estado = "error"; pasos[4]!.error = `BD: respaldos=${respaldosBD.join(",") || "vacíos"}` }
+    }
+    // 6) Aplicar grave → % GC + cobro FI materializado. La verificación del store
+    // (estado + cargoFIReferencia) se conserva como validación original del paso.
     const r6 = s.aplicarInfraccionIN("test-in-grave")
     const grave = useCompassStore.getState().infraccionesIN.find(i => i.id === "test-in-grave")
-    if (!r6.ok || grave?.estado !== "aplicada" || !String(grave.cargoFIReferencia ?? "").startsWith("cob-") || !useCompassStore.getState().cobrosFI.some(c => c.id === grave.cargoFIReferencia && c.concepto === "multa_in")) {
-      pasos[5]!.estado = "error"; pasos[5]!.error = r6.error ?? `Estado/cargo: ${grave?.estado}/${grave?.cargoFIReferencia}`
-    } else pasos[5]!.estado = "ok"
-    // 7) Desestimar la leve apelada con justificación
-    const r7 = s.desestimarInfraccionIN("test-in-leve", "Descargos verificados: los residuos corresponden a mudanza autorizada.")
-    if (!r7.ok) { pasos[6]!.estado = "error"; pasos[6]!.error = r7.error } else pasos[6]!.estado = "ok"
+    const storeAplicarOk = r6.ok && grave?.estado === "aplicada" && String(grave.cargoFIReferencia ?? "").startsWith("cob-") && useCompassStore.getState().cobrosFI.some(c => c.id === grave.cargoFIReferencia && c.concepto === "multa_in")
+    if (!storeAplicarOk) { pasos[5]!.estado = "error"; pasos[5]!.error = r6.error ?? `Estado/cargo: ${grave?.estado}/${grave?.cargoFIReferencia}` }
+    await espejarQA(pasos, 5, { ok: storeAplicarOk, error: pasos[5]!.error }, () => postQA("/api/in/infracciones/test-in-grave/aplicar", {}))
+    // Verificación leída de BD: estado Aplicada y exactamente UN cobro multa_in materializado.
+    if (pasos[5]!.estado === "ok") {
+      const infBD = await apiQA("/api/in/infracciones/test-in-grave")
+      const infBData = infBD.ok ? infBD.cuerpo as { estado?: string } | null : null
+      const cobrosBD = (await listaQA("/api/cobros-fi")).filter(c => c.origenModulo === "IN" && c.origenRef === "test-in-grave" && c.concepto === "multa_in")
+      if (!infBData || infBData.estado !== "aplicada" || cobrosBD.length !== 1) {
+        pasos[5]!.estado = "error"; pasos[5]!.error = `BD: estado=${infBData?.estado ?? "ausente"}, cobros multa_in=${cobrosBD.length}`
+      }
+    }
+    // 7) Desestimar la leve apelada con justificación — espejo: store + POST .../desestimar.
+    const justificacionLeve = "Descargos verificados: los residuos corresponden a mudanza autorizada."
+    const r7 = s.desestimarInfraccionIN("test-in-leve", justificacionLeve)
+    await espejarQA(pasos, 6, r7, () => postQA("/api/in/infracciones/test-in-leve/desestimar", { justificacion: justificacionLeve }))
+    if (pasos[6]!.estado === "ok") {
+      const infBD = await apiQA("/api/in/infracciones/test-in-leve")
+      const estadoBD = (infBD.cuerpo as { estado?: string } | null)?.estado
+      if (!infBD.ok || estadoBD !== "desestimada") { pasos[6]!.estado = "error"; pasos[6]!.error = `BD: estado=${estadoBD ?? "ausente"}` }
+    }
     const errores = pasos.filter(p => p.estado === "error").map(p => p.error || p.desc)
     return { id: "in", label: TITULOS["in"]!, rank: 7, status: errores.length ? "error" : "ok", count: 1, errores, pasos }
   }, [])
@@ -1848,6 +1894,22 @@ export default function QaLabPage() {
           .filter(c => esCobroTest({ id: c.id, unidadId: c.unidadId, origenRef: c.origenRef ?? undefined }))
         for (const c of cobrosTEST) await borrarSiExiste(`/api/cobros-fi/${c.id}`, "cobro-fi-qa")
       }
+      // Bugfix e2e: el cobro `multa_in` de una infracción TEST (origenRef
+      // `test-*`) se materializa en el período del mes en curso, no en los
+      // períodos TEST, así que el barrido por período no lo alcanza y se
+      // acumula en cada corrida. Se recorren las páginas del listado FI
+      // (máx. 10 × 100, acotado para no colgar la UI) y se purga todo cobro de
+      // provenance TEST, independiente del período.
+      const idsCobrosTEST = new Set<string>()
+      for (let page = 1; page <= 10; page++) {
+        const lote = await listaQA(`/api/cobros-fi?page=${page}`)
+        if (lote.length === 0) break
+        for (const c of lote) {
+          if (esCobroTest({ id: c.id, unidadId: c.unidadId, origenRef: c.origenRef ?? undefined })) idsCobrosTEST.add(c.id)
+        }
+        if (lote.length < 100) break
+      }
+      for (const id of idsCobrosTEST) await borrarSiExiste(`/api/cobros-fi/${id}`, "cobro-fi-qa")
       const emisionesTEST = (await listaQA("/api/emisiones-gc")).filter(e =>
         periodosFITEST.includes(e.periodo) &&
         (e.lineas ?? []).some((l: { unidadId?: string }) => typeof l.unidadId === "string" && l.unidadId.startsWith("test-"))
