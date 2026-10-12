@@ -83,11 +83,11 @@ tocar el workflow.
   12 sigue escribiendo `lockfileVersion: 3`, así que `npm ci` en CI sigue leyendo el lockfile.
   Alinear con `nvm install 24.21.0` (trae npm 11.19) — deuda menor.
 
-## D5 — Cuatro defectos latentes que el CI rojo tapaba
+## D5 — Cinco defectos latentes que el CI rojo tapaba
 
 Con `unit` rojo desde el 2026-09-09, ningún job posterior volvió a correr: `e2e`,
 `e2e-rate-limit` y `deploy` quedaban `skipped` en cada push y el polvo se acumuló sin señal. Al
-reactivar la lane e2e aparecieron cuatro defectos reales, todos arreglados en este change:
+reactivar la lane e2e aparecieron cinco defectos reales, todos arreglados en este change:
 
 1. **La lane e2e abortaba en carga.** `Cannot use({ launchOptions }) in a describe group,
    because it forces a new worker.` en `csp-enforcement.spec.ts`, `csp-report-only.spec.ts`,
@@ -116,6 +116,15 @@ reactivar la lane e2e aparecieron cuatro defectos reales, todos arreglados en es
    `DATABASE_URL=file:./dev.db` → `P1012: the URL must start with postgresql://`. Reproducido en
    local; corregido con `--schema=prisma/schema.sqlite.prisma` en ambos jobs (el unit job SQLite
    ya lo hacía).
+5. **Los jobs `e2e` no podían ni construir.** `npm run build` fija `NODE_ENV=production`, y el guard
+   de `AU-autenticacion-sesion` (la spec lo obliga) exige `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`
+   presentes en producción → `Error: GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET are required in
+   production` al recolectar datos de `/_not-found`. En CI se cargan **credenciales dummy**
+   (ningún spec e2e usa Google; el build sólo valida presencia). Verificado en local con el env de
+   CI exacto y `.env.local` fuera: build exit 0, 91/91 páginas.
+   Deuda anotada: el mensaje del guard ofrece *"or disable the Google provider"* pero **no existe
+   esa bandera** (el spec sólo exige el throw); un `GOOGLE_PROVIDER_DISABLED` documentado
+   permitiría builds de producción sin credenciales. Es tarea de la serie SG/AU, no bloquea acá.
 
 ## Efecto del cambio en el gate
 
@@ -127,6 +136,7 @@ reactivar la lane e2e aparecieron cuatro defectos reales, todos arreglados en es
 | Specs CSP e2e | 5 archivos, lane abortada en carga + 3 placeholders | 2 archivos honestos (`csp-modos` + `csp-report-endpoint`), lane carga |
 | Endpoints anónimos | `/api/health` y `/api/csp-report` → 401 | 200 (con rate limit 60/min/IP en el sink) |
 | Jobs e2e | schema PG contra BD SQLite (P1012) | `--schema=prisma/schema.sqlite.prisma` |
+| Build e2e en CI | fallaba por el guard Google sin credenciales | credenciales dummy en el job (nadie usa el provider) |
 | Deploy | rojo por secrets ausentes | condicional + warning visible |
 | Actions | v4 (Node 20 deprecado) | v7 pinneadas por SHA |
 
@@ -144,8 +154,8 @@ reactivar la lane e2e aparecieron cuatro defectos reales, todos arreglados en es
 ## D6 — Defectos de la lane e2e que sólo aparecen al correrla (arreglados)
 
 La lane completa se corrió **cuatro veces** en local durante este change (BD sucia, BD fresca,
-specs aislados, lane final). Además de los cuatro defectos de D5 aparecieron cinco más, todos
-del propio arnés de pruebas, ninguno del producto:
+specs aislados, lane final). Además de los cinco defectos de D5 aparecieron **cinco** más, todos
+del propio arnés de pruebas.
 
 1. **`e2e/auth/rate-limit.spec.ts` no podía pasar nunca.** Usaba la contraseña `incorrecta`, que
    **no pasa la política** (`validarPassword` exige mayúscula + número): `verificarCredenciales`

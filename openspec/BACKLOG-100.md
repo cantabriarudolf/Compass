@@ -247,3 +247,4 @@ aclaración documental, 0 errores de cálculo.
 | `flujo/ciclo.spec.ts` limpieza con timeout 30s (purga secuencial tarda más) | ✅ HECHO — alineado a 120s | `e2e/flujo/ciclo.spec.ts` |
 | Barrido del patrón "re-submit hasta que cierre el dialog" en el resto de los CRUD specs | ⏳ PENDIENTE — helper `e2e/helpers/form-dialog.ts` | `tasks.md §5.0` |
 | Correr la lane e2e local requiere BD fresca (`e2e:reseed-base`) y **no** correr antes el spec de rate-limit (bloquea la IP 15 min y aborta `auth.setup`) | 📌 REGLA OPERATIVA | `runbook-operaciones.md`, `design.md § D6` |
+| El guard de Google (`AU-autenticacion-sesion`) exige credenciales en producción y su mensaje ofrece "disable the Google provider", pero **esa bandera no existe**: en CI se usan credenciales dummy para poder construir | ⏳ PENDIENTE (serie SG/AU) — agregar `GOOGLE_PROVIDER_DISABLED` documentado | `design.md § D5.5` |

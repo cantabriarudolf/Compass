@@ -114,6 +114,11 @@ jobs:
       # Importante: en development las APIs de escritura están habilitadas
       # (lib/env-guard.ts isWriteApiEnabled); next start pondría NODE_ENV=production.
       NEXT_PUBLIC_APP_ENV: development
+      # El guard de AU-autenticacion-sesion exige GOOGLE_CLIENT_ID/SECRET cuando
+      # NODE_ENV=production (lo que fija `next build`). En CI son de mentira: el
+      # provider no se usa en ningún spec e2e y el build sólo valida presencia.
+      GOOGLE_CLIENT_ID: ci-dummy-client-id
+      GOOGLE_CLIENT_SECRET: ci-dummy-client-secret
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -161,6 +166,9 @@ jobs:
       DATABASE_URL: file:./dev.db
       AUTH_SECRET: ci-e2e-secret-no-produccion
       NEXT_PUBLIC_APP_ENV: development
+      # Ver nota del job e2e: el build en CI necesita credenciales Google presentes.
+      GOOGLE_CLIENT_ID: ci-dummy-client-id
+      GOOGLE_CLIENT_SECRET: ci-dummy-client-secret
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
