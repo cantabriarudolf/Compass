@@ -184,6 +184,15 @@ Los tres fallos que quedaban en la lane final (99/104) fueron exactamente estos 
 quedaron verdes en la re-corrida dirigida (`logs` 7/7, `visor` + `ciclo` + `poblado-idempotente`
 12/13 → con el fix del Select, 7/7 en aislado; `avisos_cv` sin duplicados).
 
+6. **La purga del QA-Lab era demasiado lenta para la lane completa.** `/admin/qa-lab` → *Borrar
+   todo lo de prueba* borraba cada entidad TEST con una request secuencial. Con la BD acumulada por
+   las specs previas (cientos de cobros TEST) superaba los 120s en el runner y los specs
+   `crud/poblado-idempotente` y `flujo/ciclo` fallaban **en su limpieza final** (captura: las 22
+   tarjetas seguían "🟢 Listo" y el mensaje seguía siendo "Carga completa OK": no había bloqueo ni
+   error de página, sólo tiempo). Se paraleliza en **lotes de 6** (`borrarEnLote`) conservando el
+   orden por fases y sin tocar guards ni semántica. Medido local con build de producción y BD
+   fresca: **11.1s → 5.6s**, con el mensaje verde (sin fallos transitorios de los lotes).
+
 ## Rollback
 
 `git revert` del commit del change: el workflow y los umbrales vuelven al estado anterior (CI

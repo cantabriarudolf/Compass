@@ -2051,10 +2051,22 @@ export default function QaLabPage() {
       // vive en BD (espejo transitorio), así que el guard clean-first la vería
       // residual y abriría el dialog en vez de poblar. Orden hijos→padres por
       // los guards 409 de las rutas; solo ids test-* (idempotente: 404 = limpio).
-      const purgarColeccionBD = async (base: string, etiqueta: string, ids: string[]) => {
-        for (const id of ids) {
-          if (id.startsWith("test-")) await borrarSiExiste(`${base}/${id}`, etiqueta)
+      // Purga concurrente por lotes. Cada DELETE es una request independiente y
+      // en la lane completa (BD acumulada por las specs previas) hay cientos de
+      // entidades TEST: secuencial tardaba >120s en el runner de CI (medido 11.1s
+      // local con BD recién sembrada y ~30s de poblamiento) y los specs de
+      // limpieza fallaban por timeout, no por bloqueo. Lote chico para no
+      // saturar las escrituras de SQLite.
+      const LOTE_PURGA = 6
+      const borrarEnLote = async (tareas: Array<() => Promise<void>>) => {
+        for (let i = 0; i < tareas.length; i += LOTE_PURGA) {
+          await Promise.all(tareas.slice(i, i + LOTE_PURGA).map((t) => t()))
         }
+      }
+      const purgarColeccionBD = async (base: string, etiqueta: string, ids: string[]) => {
+        await borrarEnLote(
+          ids.filter((id) => id.startsWith("test-")).map((id) => () => borrarSiExiste(`${base}/${id}`, etiqueta))
+        )
       }
       await purgarColeccionBD("/api/vinculos", "vinculo", ["test-v-prop-999", "test-v-prop-e999", "test-v-arr-999"])
       await purgarColeccionBD("/api/unidades", "unidad", ["test-u-999", "test-u-e-999"])
@@ -2072,9 +2084,11 @@ export default function QaLabPage() {
         ["contactos-emergencia", "test-emer-cerrajeroqa"],
         ["bancos", "test-banco-bancoqa"],
       ]
-      for (const [tipo, id] of maestrosBD) {
-        if (id.startsWith("test-")) await borrarSiExiste(`/api/maestros/${tipo}/${id}`, `${tipo}:${id}`)
-      }
+      await borrarEnLote(
+        maestrosBD
+          .filter(([, id]) => id.startsWith("test-"))
+          .map(([tipo, id]) => () => borrarSiExiste(`/api/maestros/${tipo}/${id}`, `${tipo}:${id}`))
+      )
       // Fase 1.4 (Decisión 8): residuo FI de la fase 13 en BD. Cobros TEST de los
       // periodos TEST primero (hijos; el DELETE /api/cobros-fi/[id] permite un
       // TEST con pagos en desarrollo), luego sus emisiones y al final fondos y
@@ -2084,7 +2098,7 @@ export default function QaLabPage() {
       for (const periodo of periodosFITEST) {
         const cobrosTEST = (await listaQA(`/api/cobros-fi?periodo=${periodo}`))
           .filter(c => esCobroTest({ id: c.id, unidadId: c.unidadId, origenRef: c.origenRef ?? undefined }))
-        for (const c of cobrosTEST) await borrarSiExiste(`/api/cobros-fi/${c.id}`, "cobro-fi-qa")
+        await borrarEnLote(cobrosTEST.map((c) => () => borrarSiExiste(`/api/cobros-fi/${c.id}`, "cobro-fi-qa")))
       }
       // Bugfix e2e: el cobro `multa_in` de una infracción TEST (origenRef
       // `test-*`) se materializa en el período del mes en curso, no en los
@@ -2101,7 +2115,7 @@ export default function QaLabPage() {
         }
         if (lote.length < 100) break
       }
-      for (const id of idsCobrosTEST) await borrarSiExiste(`/api/cobros-fi/${id}`, "cobro-fi-qa")
+      await borrarEnLote([...idsCobrosTEST].map((id) => () => borrarSiExiste(`/api/cobros-fi/${id}`, "cobro-fi-qa")))
       const emisionesTEST = (await listaQA("/api/emisiones-gc")).filter(e =>
         periodosFITEST.includes(e.periodo) &&
         (e.lineas ?? []).some((l: { unidadId?: string }) => typeof l.unidadId === "string" && l.unidadId.startsWith("test-"))
