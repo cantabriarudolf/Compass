@@ -826,32 +826,86 @@ export default function QaLabPage() {
   const cargarFase11MT = React.useCallback(async (): Promise<ModReport> => {
     const s = useCompassStore.getState()
     const pasos: Paso[] = (PLAN["mt"]! as string[]).map(desc => ({ desc, estado: "pendiente" as ModuleState }))
-    // 1) Activo de infraestructura IR para vincular el trabajo
+    // 1) Activo de infraestructura IR para vincular el trabajo. El módulo IR
+    // sigue store-only (no migrado): el `activoIRId` viaja como referencia y el
+    // POST de MT no lo revalida contra BD.
     const r0 = s.saveRecursoIR({ id: "test-ir-hidro", nombre: "Hidropack TEST", categoria: "infraestructura", marca: "Grundfos TEST", estadoActivo: "disponible", stock: 0, esCritico: false, microSectorId: "test-micro-piso99" } as any)
     if (!r0.ok) { pasos[0]!.estado = "error"; pasos[0]!.error = r0.error } else pasos[0]!.estado = "ok"
-    // 2) Trabajo preventivo mensual con proveedor externo
-    const r1 = s.saveTrabajoMT({ id: "test-mt-1", folio: "", titulo: "Mantención mensual Hidropack TEST", descripcion: "Revisión de presiones, sellos y tablero de control del hidropack del recinto.", activoIRId: "test-ir-hidro", microSectorId: "test-micro-piso99", proveedor: { nombre: "AquaServicio TEST", contacto: "+56 9 8888 0000" }, prioridad: "alta", costoTotal: 180000, origenFondos: "gasto_comun", estadoPago: "pendiente", alertaGarantiaEnviada: false, evidencias: [], preventivo: { periodicidadMeses: 1 }, cargoFIReferencia: "pendiente" } as any)
-    if (!r1.ok) { pasos[1]!.estado = "error"; pasos[1]!.error = r1.error } else pasos[1]!.estado = "ok"
-    // 3) Iniciar → En Curso
+    // 2) Trabajo preventivo mensual con proveedor externo — espejo D7: store +
+    // POST /api/mt/trabajos (el folio MT-#### lo deriva el servidor cuando va vacío).
+    const trabajoPreventivoTEST = { id: "test-mt-1", folio: "", titulo: "Mantención mensual Hidropack TEST", descripcion: "Revisión de presiones, sellos y tablero de control del hidropack del recinto.", activoIRId: "test-ir-hidro", microSectorId: "test-micro-piso99", proveedor: { nombre: "AquaServicio TEST", contacto: "+56 9 8888 0000" }, prioridad: "alta", costoTotal: 180000, origenFondos: "gasto_comun", estadoPago: "pendiente", alertaGarantiaEnviada: false, evidencias: [], preventivo: { periodicidadMeses: 1 }, cargoFIReferencia: "pendiente" }
+    const r1 = s.saveTrabajoMT(trabajoPreventivoTEST as any)
+    await espejarQA(pasos, 1, r1, () => postQA("/api/mt/trabajos", trabajoPreventivoTEST))
+    if (pasos[1]!.estado === "ok") {
+      const rBD = await apiQA("/api/mt/trabajos/test-mt-1")
+      const trBD = rBD.ok ? rBD.cuerpo as { folio?: string; estado?: string; preventivo?: { periodicidadMeses?: number } } | null : null
+      if (!trBD || !/^MT-\d{4}$/.test(trBD.folio ?? "") || trBD.estado !== "planificado" || trBD.preventivo?.periodicidadMeses !== 1) {
+        pasos[1]!.estado = "error"; pasos[1]!.error = `BD: folio=${trBD?.folio ?? "ausente"}, estado=${trBD?.estado ?? "ausente"}, preventivo=${trBD?.preventivo?.periodicidadMeses ?? "ausente"}`
+      }
+    }
+    // 3) Iniciar → En Curso — espejo: store + POST /api/mt/trabajos/test-mt-1/iniciar.
     const r2 = s.iniciarTrabajoMT("test-mt-1")
     const enCurso = useCompassStore.getState().trabajosMT.find(t => t.id === "test-mt-1")?.estado === "en_curso"
-    if (!r2.ok || !enCurso) { pasos[2]!.estado = "error"; pasos[2]!.error = r2.error ?? "No quedó En Curso" } else pasos[2]!.estado = "ok"
-    // 4) Finalizar → genera próximo preventivo (+1 mes)
+    const store2Ok = r2.ok && enCurso
+    await espejarQA(pasos, 2, { ok: store2Ok, error: store2Ok ? undefined : (r2.error ?? "No quedó En Curso") }, () => postQA("/api/mt/trabajos/test-mt-1/iniciar", {}))
+    if (pasos[2]!.estado === "ok") {
+      const rBD = await apiQA("/api/mt/trabajos/test-mt-1")
+      const trBD = rBD.ok ? rBD.cuerpo as { estado?: string; fechaInicio?: string } | null : null
+      if (trBD?.estado !== "en_curso" || !/^\d{4}-\d{2}-\d{2}$/.test(trBD?.fechaInicio ?? "")) {
+        pasos[2]!.estado = "error"; pasos[2]!.error = `BD: estado=${trBD?.estado ?? "ausente"}, inicio=${trBD?.fechaInicio ?? "ausente"}`
+      }
+    }
+    // 4) Finalizar → genera próximo preventivo (+1 mes) — espejo: store + POST
+    // /api/mt/trabajos/test-mt-1/finalizar. Se suma el rechazo esperado de un
+    // segundo finalizado (400) como triangulación del guard exactly-once.
     const r3 = s.finalizarTrabajoMT("test-mt-1", { fechaTermino: "2026-08-25", costoFinal: 185000 })
     const generado = useCompassStore.getState().trabajosMT.find(t => t.estado === "planificado" && t.preventivo && t.id !== "test-mt-1")
-    if (!r3.ok || !generado || generado.fechaProgramada !== "2026-09-25") {
-      pasos[3]!.estado = "error"; pasos[3]!.error = r3.error ?? `Próximo preventivo: ${generado?.fechaProgramada}`
-    } else pasos[3]!.estado = "ok"
-    // 5) Correctivo con garantía vencida → verificar alerta única
-    const r4 = s.saveTrabajoMT({ id: "test-mt-2", folio: "", titulo: "Impermeabilización losa TEST", descripcion: "Sellado de losas y muros perimetrales del estanque de agua potable.", microSectorId: "test-micro-piso99", proveedor: { nombre: "WaterProof TEST" }, prioridad: "media", costoTotal: 950000, origenFondos: "fondo_reserva", estadoPago: "parcial", estado: "finalizado", fechaTermino: "2026-01-10", garantiaInicio: "2026-01-10", garantiaFin: "2026-07-01", alertaGarantiaEnviada: false, evidencias: [{ tipo: "factura", nombre: "test-factura.pdf", tipoMime: "application/pdf", tamanoKB: 210, url: "https://placeholder.supabase.co/test-factura.pdf" }] } as any)
-    if (r4.ok) {
+    const store3Ok = r3.ok && generado?.fechaProgramada === "2026-09-25"
+    await espejarQA(pasos, 3, { ok: store3Ok, error: store3Ok ? undefined : (r3.error ?? `Próximo preventivo: ${generado?.fechaProgramada}`) }, () => postQA("/api/mt/trabajos/test-mt-1/finalizar", { fechaTermino: "2026-08-25", costoFinal: 185000 }))
+    const r3b = s.finalizarTrabajoMT("test-mt-1", { fechaTermino: "2026-08-25", costoFinal: 185000 })
+    await espejarRechazoQA(pasos, 3, r3b, "ya está finalizado", 400, () => postQA("/api/mt/trabajos/test-mt-1/finalizar", { fechaTermino: "2026-08-25", costoFinal: 185000 }))
+    if (pasos[3]!.estado === "ok") {
+      const rPadre = await apiQA("/api/mt/trabajos/test-mt-1")
+      const padreBD = rPadre.ok ? rPadre.cuerpo as { estado?: string; fechaTermino?: string; costoTotal?: number } | null : null
+      const hijoBD = (await listaQA("/api/mt/trabajos")).find(t => t.id !== "test-mt-1" && t.titulo === trabajoPreventivoTEST.titulo && t.fechaProgramada === "2026-09-25")
+      if (padreBD?.estado !== "finalizado" || padreBD.fechaTermino !== "2026-08-25" || padreBD.costoTotal !== 185000 || !hijoBD || hijoBD.estado !== "planificado") {
+        pasos[3]!.estado = "error"; pasos[3]!.error = `BD: padre=${padreBD?.estado ?? "ausente"}/${padreBD?.fechaTermino ?? "-"}/${padreBD?.costoTotal ?? "-"}, preventivo=${hijoBD ? hijoBD.fechaProgramada : "ausente"}`
+      }
+    }
+    // 5) Correctivo con garantía vencida → verificar alerta única — espejo: store
+    // + POST /api/mt/trabajos y POST /api/mt/garantias/verificar, con el evento
+    // `MT_GUARANTEE_EXPIRED` verificado en BD (auditoría, categoría MT).
+    const trabajoCorrectivoTEST = { id: "test-mt-2", folio: "", titulo: "Impermeabilización losa TEST", descripcion: "Sellado de losas y muros perimetrales del estanque de agua potable.", microSectorId: "test-micro-piso99", proveedor: { nombre: "WaterProof TEST" }, prioridad: "media", costoTotal: 950000, origenFondos: "fondo_reserva", estadoPago: "parcial", estado: "finalizado", fechaTermino: "2026-01-10", garantiaInicio: "2026-01-10", garantiaFin: "2026-07-01", alertaGarantiaEnviada: false, evidencias: [{ tipo: "factura", nombre: "test-factura.pdf", tipoMime: "application/pdf", tamanoKB: 210, url: "https://placeholder.supabase.co/test-factura.pdf" }] }
+    const r4 = s.saveTrabajoMT(trabajoCorrectivoTEST as any)
+    await espejarQA(pasos, 4, r4, () => postQA("/api/mt/trabajos", trabajoCorrectivoTEST))
+    if (pasos[4]!.estado === "ok") {
       s.verificarGarantiasMT()
       const eventosGarantia = useCompassStore.getState().eventos.filter(e => e.tipoAccion === "MT_GUARANTEE_EXPIRED" && e.referenciaId === "test-mt-2")
-      if (eventosGarantia.length !== 1) { pasos[4]!.estado = "error"; pasos[4]!.error = `Alertas garantía: ${eventosGarantia.length}` } else pasos[4]!.estado = "ok"
-    } else { pasos[4]!.estado = "error"; pasos[4]!.error = r4.error }
-    // 6) Proyecto largo plazo con cuota derivable ($12M / 120m = $100.000)
-    const r5 = s.saveProyectoMT({ id: "test-py-techos", nombre: "Mantención de techos TEST", presupuestoEstimado: 12000000, plazoMeses: 120, estado: "planificado" } as any)
-    if (!r5.ok) { pasos[5]!.estado = "error"; pasos[5]!.error = r5.error } else pasos[5]!.estado = "ok"
+      const apiGarantias = await apiQA("/api/mt/garantias/verificar", { method: "POST", body: JSON.stringify({}) })
+      const rBD = await apiQA("/api/mt/trabajos/test-mt-2")
+      const trBD = rBD.ok ? rBD.cuerpo as { alertaGarantiaEnviada?: boolean } | null : null
+      const rEv = await apiQA("/api/auditoria?categoria=MT&tipoAccion=MT_GUARANTEE_EXPIRED&q=test-mt-2&pageSize=100")
+      const eventosBD = ((rEv.cuerpo as { eventos?: unknown[] } | null)?.eventos ?? []).length
+      // `eventosBD` es historia append-only y el lab re-crea el trabajo en cada
+      // corrida (alertaGarantiaEnviada=false), así que el barrido vuelve a emitir: se
+      // exige AL MENOS un evento del TEST (y el flag en BD), no exactamente uno entre
+      // corridas. La unicidad por corrida se verifica en el store (limpio cada vez).
+      if (eventosGarantia.length !== 1 || !apiGarantias.ok || trBD?.alertaGarantiaEnviada !== true || eventosBD < 1) {
+        pasos[4]!.estado = "error"; pasos[4]!.error = `Garantía: store=${eventosGarantia.length}, API=${apiGarantias.status}, flag BD=${trBD?.alertaGarantiaEnviada ?? "ausente"}, eventos BD=${eventosBD}`
+      }
+    }
+    // 6) Proyecto largo plazo con cuota derivable ($12M / 120m = $100.000) —
+    // espejo: store + POST /api/mt/proyectos (sin fondo, el guard de saldo no aplica).
+    const proyectoTEST = { id: "test-py-techos", nombre: "Mantención de techos TEST", presupuestoEstimado: 12000000, plazoMeses: 120, estado: "planificado" }
+    const r5 = s.saveProyectoMT(proyectoTEST as any)
+    await espejarQA(pasos, 5, r5, () => postQA("/api/mt/proyectos", proyectoTEST))
+    if (pasos[5]!.estado === "ok") {
+      const rBD = await apiQA("/api/mt/proyectos/test-py-techos")
+      const pyBD = rBD.ok ? rBD.cuerpo as { presupuestoEstimado?: number; plazoMeses?: number } | null : null
+      if (pyBD?.presupuestoEstimado !== 12000000 || pyBD?.plazoMeses !== 120) {
+        pasos[5]!.estado = "error"; pasos[5]!.error = `BD: presupuesto=${pyBD?.presupuestoEstimado ?? "ausente"}, plazo=${pyBD?.plazoMeses ?? "ausente"}`
+      }
+    }
     const errores = pasos.filter(p => p.estado === "error").map(p => p.error || p.desc)
     return { id: "mt", label: TITULOS["mt"]!, rank: 7, status: errores.length ? "error" : "ok", count: 1, errores, pasos }
   }, [])
@@ -1998,6 +2052,12 @@ export default function QaLabPage() {
       // ya se barrieron por procedencia en el bloque FI de arriba).
       await purgarColeccionBD("/api/ra/reservas", "reserva-ra", ["test-ra-rs-1", "test-ra-rs-2", "test-ra-rs-3", "test-ra-rs-y"])
       await purgarColeccionBD("/api/ra/elementos", "elemento-ra", ["test-ra-quincho", "test-ra-hidro"])
+      // Fase 1.5 (MT): trabajos TEST (incluye el preventivo autogenerado, cuyo id
+      // `test-mt-1-prev-*` también empieza con test-) y proyectos TEST.
+      const trabajosMTTEST = (await listaQA("/api/mt/trabajos")).map(t => t.id).filter((id: unknown): id is string => typeof id === "string" && id.startsWith("test-"))
+      await purgarColeccionBD("/api/mt/trabajos", "trabajo-mt", trabajosMTTEST)
+      const proyectosMTTEST = (await listaQA("/api/mt/proyectos")).map(p => p.id).filter((id: unknown): id is string => typeof id === "string" && id.startsWith("test-"))
+      await purgarColeccionBD("/api/mt/proyectos", "proyecto-mt", proyectosMTTEST)
     } catch (e) { errores.push(`purga BD: ${String(e)}`) }
     setLoading(false)
     if (errores.length) setMsg({ type: "error", text: `Limpieza con ${errores.length} bloqueos (dependencias): ${errores.slice(0,2).join("; ")}` })
