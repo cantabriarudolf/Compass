@@ -77,11 +77,15 @@
       Test-first: 18 tests (`test/api/in-acciones.test.ts`). Evidencia: suite **918/918**, tsc 0, eslint 0,
       e2e `poblado-idempotente` 8/8 y `flujo/poblamiento` 9/9. Commit `47b9ea7`.
 
-      **RA — PENDIENTE** (`cargarFase12RA` + `test-ra-rs-*`): `POST /api/ra/reservas` ya hace el check de
-      solape 409, pero **falta** folio `RA-####`, materialización del cobro `reserva_ra` (fondo amenities),
-      `cancelarReservaRA` (penalización `penalizacion_ra` tardía) y `retenerGarantiaRA`. Cruce: `POST
-      /api/cobros-fi` existe para componerlos. Riesgo: la ventana tardía y el stock dependen de fechas y
-      de la deuda FI vigente (difícil de paritar en servidor).
+      **RA — HECHA (2026-10-07)**: `POST /api/ra/reservas` deriva folio `RA-####`, hace snapshot de
+      tarifa/garantía y materializa el cobro `reserva_ra` (fondo amenities) en la misma transacción,
+      idempotente por `origenRef`; el 409 de solape ahora respeta la capacidad por stock. Nuevas
+      `POST /api/ra/reservas/[id]/cancelar` (penalización tardía `penalizacion_ra`, libera el cupo) y
+      `/[id]/retener` (`garantia_ra`), ambas exactly-once con evento de auditoría. `cargarFase12RA` por
+      API + espejo con verificación en BD y purga de `test-ra-*` en `limpiar()`. Test-first: 13 tests
+      (`test/api/ra-acciones.test.ts`). Evidencia: suite **931/931**, tsc 0, eslint 0, e2e 8/8 + 9/9.
+      Commit `34f1d2a`. **No portado y declarado**: gate de morosidad FI y `anticipacionMinimaDias`
+      (inactivos en el lab) y la notificación de retención (mismo criterio que las rutas IN).
 
       **MT — PENDIENTE** (`cargarFase11MT` + `test-py-techos`): `POST /api/mt/trabajos` y
       `/api/mt/proyectos` existen como CRUD pero **falta** la máquina de estados (iniciar/finalizar +
