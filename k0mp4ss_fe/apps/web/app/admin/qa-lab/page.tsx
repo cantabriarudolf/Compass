@@ -188,6 +188,13 @@ const QA_PL_PERIODOS: string[] = (() => {
 const QA_FI_PERIODO_TEST = "2019-03"
 const QA_FI_PERIODO_VENCIDO = "2019-01"
 
+// Fase CT (15): ids deterministas `test-*-ct` para el espejo (D7) y para la
+// verificación leída de BD. El certificado emitido es inmutable (Decisión 5):
+// limpiar() NO los purga; el residuo TEST lo retira `e2e:higiene`.
+const QA_CT_RESIDENCIA_ID = "test-residencia-ct"
+const QA_CT_AL_DIA_ID = "test-alday-ct"
+const QA_CT_LIQ_ID = "test-liq-ct"
+
 type RespuestaQA = { ok: boolean; status: number; cuerpo: any }
 
 async function apiQA(path: string, init?: RequestInit): Promise<RespuestaQA> {
@@ -1247,45 +1254,99 @@ export default function QaLabPage() {
     return { id: "pl", label: TITULOS["pl"]!, rank: 6, status: errores.length ? "error" : "ok", count: 1, errores, pasos }
   }, [])
 
+  // P4/CT: la fase escribe API + store (espejo transitorio, design Decisión 7)
+  // con ids `test-*-ct`; los snapshots los genera el store y se persisten tal
+  // cual en BD, y las verificaciones se LEEN de BD vía GET. El gate deuda/saldo
+  // vive en la ruta API (Decisión 5), no en el cliente, para que ningún
+  // consumidor distinto del lab pueda saltarlo. No se agrega purga CT a
+  // `limpiar()`: el documento emitido es inmutable (Decisión 5).
   const cargarFase15CT = React.useCallback(async (): Promise<ModReport> => {
     const s = useCompassStore.getState()
     const pasos: Paso[] = (PLAN["ct"]! as string[]).map(desc => ({ desc, estado: "pendiente" as ModuleState }))
     const unidadTest = "test-u-999"
+    const pendienteDe = (c: { montoBase: number; moras?: { monto: number }[]; pagos?: { monto: number }[] }) =>
+      Math.max(0, c.montoBase + (c.moras ?? []).reduce((a, m) => a + m.monto, 0) - (c.pagos ?? []).reduce((a, p) => a + p.monto, 0))
+    // Verificación de BD: el certificado se lee por id (mismo criterio que el
+    // egreso FI: los listados están paginados y el registro TEST puede quedar fuera).
+    const certBD = async (id: string) => {
+      const r = await apiQA(`/api/certificados-ct/${id}`).catch(() => null)
+      return (r?.ok ? r.cuerpo : null) as { folio?: string; codigoVerificacion?: string; tipo?: string; unidadId?: string } | null
+    }
     // 1) Residencia TEST sobre vínculo activo del depto TEST. Se usa el
     // propietario porque su vínculo no tiene fechaFin; el arrendatario TEST
     // tiene contrato a plazo y el store exige vínculo sin fechaFin (vigente).
-    const r1 = s.generarCertificadoCT({ tipo: "residencia", personaId: "test-p-99", unidadId: unidadTest, solicitanteNombre: "TEST Persona QA Uno" })
-    const certRes = useCompassStore.getState().certificadosCT.find(c => c.tipo === "residencia" && c.personaId === "test-p-99")
-    if (!r1.ok || !certRes || !certRes.folio.startsWith("CT-") || !certRes.codigoVerificacion.startsWith("VC-")) {
-      pasos[0]!.estado = "error"; pasos[0]!.error = r1.error ?? "Certificado residencia sin folio/código"
-    } else pasos[0]!.estado = "ok"
-    // 2) Al Día con deuda → rechazado citando saldo
-    const tieneDeuda = s.cobrosFI.some(c => c.unidadId === unidadTest && c.fechaVencimiento && c.fechaVencimiento < new Date().toISOString().slice(0, 10))
-    if (!tieneDeuda) {
-      // Sin deuda previa el paso se valida como gate no disparado (unidad al día).
+    const r1 = s.generarCertificadoCT({ id: QA_CT_RESIDENCIA_ID, tipo: "residencia", personaId: "test-p-99", unidadId: unidadTest, solicitanteNombre: "TEST Persona QA Uno" })
+    const certRes = useCompassStore.getState().certificadosCT.find(c => c.id === QA_CT_RESIDENCIA_ID)
+    await espejarQA(pasos, 0, r1, () => postQA("/api/certificados-ct", certRes))
+    if (pasos[0]!.estado === "ok") {
+      const enBD = await certBD(QA_CT_RESIDENCIA_ID)
+      if (!enBD?.folio?.startsWith("CT-") || !enBD.codigoVerificacion?.startsWith("VC-") || enBD.unidadId !== unidadTest) {
+        pasos[0]!.estado = "error"
+        pasos[0]!.error = enBD ? `BD: folio ${enBD.folio}/código ${enBD.codigoVerificacion}/unidad ${enBD.unidadId}` : "Certificado residencia ausente en BD"
+      }
+    }
+    // 2) Al Día con deuda → rechazado citando saldo. El gate se evalúa en ambos
+    // mundos con el MISMO veredicto: store (espejo) y ruta API (409, lee BD).
+    const cuerpoAlDia = { id: QA_CT_AL_DIA_ID, folio: "CT-QA-ALDIA", codigoVerificacion: "TESTQAAL", tipo: "al_dia", unidadId: unidadTest, solicitanteNombre: "TEST QA", resumen: "Se certifica que la unidad TEST no registra deudas pendientes con la comunidad a la fecha de emisión.", detalle: [{ clave: "Unidad", valor: "Depto 999" }], fechaEmision: new Date().toISOString().slice(0, 10) }
+    const pendienteStoreUnidad = s.cobrosFI.filter(c => c.unidadId === unidadTest).reduce((a, c) => a + pendienteDe(c), 0)
+    const deudaBd = (await listaQA(`/api/cobros-fi?unidadId=${unidadTest}`)).reduce((a, c) => a + pendienteDe(c), 0)
+    if (pendienteStoreUnidad <= 0 && deudaBd <= 0) {
+      // Sin deuda en ningún mundo (fase CT standalone): el gate no se dispara.
       pasos[1]!.estado = "ok"
+    } else if ((pendienteStoreUnidad <= 0) !== (deudaBd <= 0)) {
+      pasos[1]!.estado = "error"
+      pasos[1]!.error = `Deuda divergente entre mundos (store $${pendienteStoreUnidad} / BD $${deudaBd})`
     } else {
-      const r2 = s.generarCertificadoCT({ tipo: "al_dia", unidadId: unidadTest, solicitanteNombre: "TEST QA" })
-      if (r2.ok || !String(r2.error).includes("saldo")) { pasos[1]!.estado = "error"; pasos[1]!.error = r2.ok ? "El Al Día pasó con deuda" : String(r2.error) } else pasos[1]!.estado = "ok"
+      const r2 = s.generarCertificadoCT({ id: QA_CT_AL_DIA_ID, tipo: "al_dia", unidadId: unidadTest, solicitanteNombre: "TEST QA" })
+      await espejarRechazoQA(pasos, 1, r2, "saldo", 409, () => postQA("/api/certificados-ct", cuerpoAlDia))
     }
     // 3) Pagar TODOS los cargos pendientes TEST (GC, multa IN, tarifas/penalizaciones
     // RA y garantía retenida) → Al Día emitido. El certificado exige saldo total <= 0
     // de la unidad; pagar solo gasto_comun deja cargos cross-módulo vivos y lo bloquea.
-    const pendientesUnidad = s.cobrosFI.filter(c => c.unidadId === unidadTest)
-    for (const c of pendientesUnidad) {
-      const pendiente = c.montoBase + c.moras.reduce((a, m) => a + m.monto, 0) - c.pagos.reduce((a, p) => a + p.monto, 0)
+    // El pago se aplica en AMBOS mundos: el gate vigente lee los cobros de BD.
+    for (const c of s.cobrosFI.filter(c => c.unidadId === unidadTest)) {
+      const pendiente = pendienteDe(c)
       if (pendiente > 0) s.registrarPagoFI(c.id, { monto: pendiente, medio: "transferencia TEST" })
     }
-    const r3 = s.generarCertificadoCT({ id: "test-ct-alday", tipo: "al_dia", unidadId: unidadTest, solicitanteNombre: "TEST QA" })
-    if (!r3.ok) { pasos[2]!.estado = "error"; pasos[2]!.error = r3.error ?? "Al Día no emitido tras pagar" } else pasos[2]!.estado = "ok"
-    // 4) Certificado de la liquidación confirmada PL + historial inmutable
+    for (const c of await listaQA(`/api/cobros-fi?unidadId=${unidadTest}`)) {
+      const pendiente = pendienteDe(c)
+      if (pendiente > 0) await apiQA(`/api/cobros-fi/${c.id}/pagar`, { method: "POST", body: JSON.stringify({ monto: pendiente, medio: "transferencia TEST" }) })
+    }
+    const r3 = s.generarCertificadoCT({ id: QA_CT_AL_DIA_ID, tipo: "al_dia", unidadId: unidadTest, solicitanteNombre: "TEST QA" })
+    const certAlDia = useCompassStore.getState().certificadosCT.find(c => c.id === QA_CT_AL_DIA_ID)
+    await espejarQA(pasos, 2, r3, () => postQA("/api/certificados-ct", certAlDia))
+    if (pasos[2]!.estado === "ok") {
+      const enBD = await certBD(QA_CT_AL_DIA_ID)
+      const deudaTras = (await listaQA(`/api/cobros-fi?unidadId=${unidadTest}`)).reduce((a, c) => a + pendienteDe(c), 0)
+      if (!enBD?.folio?.startsWith("CT-") || enBD.tipo !== "al_dia" || deudaTras > 0) {
+        pasos[2]!.estado = "error"
+        pasos[2]!.error = `Al Día BD: ${enBD?.folio ?? "ausente"}/${enBD?.tipo ?? "-"}, saldo BD $${deudaTras}`
+      }
+    }
+    // 4) Certificado de la liquidación confirmada PL + historial inmutable.
+    // La ruta API no expone DELETE (Decisión 5): el rechazo de borrado sigue
+    // siendo del store legacy y el residuo TEST lo purga `e2e:higiene`.
     const liqConf = useCompassStore.getState().liquidacionesPL.find(l => l.estado === "confirmada")
     if (!liqConf) { pasos[3]!.estado = "error"; pasos[3]!.error = "Falta liquidación confirmada (ejecuta fase PL)" } else {
-      const r4 = s.generarCertificadoCT({ id: "test-ct-liq", tipo: "liquidacion_sueldo", liquidacionId: liqConf.id, solicitanteNombre: "TEST QA" })
-      const bloqueoHistorial = s.removeCertificadoCT(useCompassStore.getState().certificadosCT.find(c => !c.id.startsWith("test-"))?.id ?? "ct-nadie")
-      if (!r4.ok || bloqueoHistorial.ok || !String(bloqueoHistorial.error).includes("inmutable")) {
-        pasos[3]!.estado = "error"; pasos[3]!.error = r4.error ?? "El historial permitió eliminar un certificado real"
-      } else pasos[3]!.estado = "ok"
+      const r4 = s.generarCertificadoCT({ id: QA_CT_LIQ_ID, tipo: "liquidacion_sueldo", liquidacionId: liqConf.id, solicitanteNombre: "TEST QA" })
+      const certLiq = useCompassStore.getState().certificadosCT.find(c => c.id === QA_CT_LIQ_ID)
+      await espejarQA(pasos, 3, r4, () => postQA("/api/certificados-ct", certLiq))
+      // Inmutabilidad en ambos mundos (Decisión 5): la ruta API rechaza con 409 y el
+      // store legacy rechaza los ids reales con "inmutable" (los TEST son su vía de
+      // purga legítima, por eso el guard del store se comprueba solo si hay uno real).
+      const certReal = useCompassStore.getState().certificadosCT.find(c => !c.id.startsWith("test-"))?.id
+      const bloqueoHistorial = certReal ? s.removeCertificadoCT(certReal) : null
+      const bloqueoAPI = await apiQA(`/api/certificados-ct/${QA_CT_LIQ_ID}`, { method: "DELETE" })
+      if (pasos[3]!.estado === "ok") {
+        const enBD = await certBD(QA_CT_LIQ_ID)
+        if (!enBD?.folio?.startsWith("CT-") || enBD.tipo !== "liquidacion_sueldo") {
+          pasos[3]!.estado = "error"; pasos[3]!.error = `Liquidación BD: ${enBD?.folio ?? "ausente"}/${enBD?.tipo ?? "-"}`
+        } else if (bloqueoHistorial && (bloqueoHistorial.ok || !String(bloqueoHistorial.error).includes("inmutable"))) {
+          pasos[3]!.estado = "error"; pasos[3]!.error = `El historial del store permitió eliminar un certificado real (${certReal})`
+        } else if (bloqueoAPI.status !== 409) {
+          pasos[3]!.estado = "error"; pasos[3]!.error = `La API permitió eliminar el certificado (${bloqueoAPI.status})`
+        }
+      }
     }
     const errores = pasos.filter(p => p.estado === "error").map(p => p.error || p.desc)
     return { id: "ct", label: TITULOS["ct"]!, rank: 6, status: errores.length ? "error" : "ok", count: 1, errores, pasos }
