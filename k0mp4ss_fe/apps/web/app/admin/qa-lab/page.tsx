@@ -182,6 +182,12 @@ const QA_PL_PERIODOS: string[] = (() => {
   return lista
 })()
 
+// Fase FI (13): periodos TEST dedicados y fuera de todo calendario real. Hacen
+// la fase re-ejecutable (nunca colisionan con emisiones reales) y permiten que
+// limpiar() purgue su residuo BD (Fase 1.4, Decisión 8).
+const QA_FI_PERIODO_TEST = "2019-03"
+const QA_FI_PERIODO_VENCIDO = "2019-01"
+
 type RespuestaQA = { ok: boolean; status: number; cuerpo: any }
 
 async function apiQA(path: string, init?: RequestInit): Promise<RespuestaQA> {
@@ -194,7 +200,8 @@ async function apiQA(path: string, init?: RequestInit): Promise<RespuestaQA> {
 }
 
 async function listaQA(path: string): Promise<any[]> {
-  const r = await apiQA(`${path}?pageSize=100`).catch(() => null)
+  const sep = path.includes("?") ? "&" : "?"
+  const r = await apiQA(`${path}${sep}pageSize=100`).catch(() => null)
   const datos = (r?.cuerpo as { data?: any[] } | null)?.data
   return Array.isArray(datos) ? datos : []
 }
@@ -232,6 +239,39 @@ async function espejarQA(
   } catch (e) {
     pasos[idx]!.estado = "error"
     pasos[idx]!.error = `${store.error ?? ""} / API error: ${String(e)}`
+  }
+}
+
+/**
+ * Variante acotada de espejo para pasos cuyo resultado CORRECTO es un rechazo.
+ * Mantiene la validación del store (debe fallar citando el fragmento esperado)
+ * y exige que la API responda con el status esperado (p. ej. 400). Solo la usan
+ * los pasos de rechazo declarados; no relaja el `espejarQA` normal.
+ */
+async function espejarRechazoQA(
+  pasos: Paso[],
+  idx: number,
+  store: { ok: boolean; error?: string },
+  fragmentoStore: string,
+  statusEsperado: number,
+  llamada: () => Promise<RespuestaQA>
+): Promise<void> {
+  if (store.ok || !String(store.error).includes(fragmentoStore)) {
+    pasos[idx]!.estado = "error"
+    pasos[idx]!.error = store.ok ? "La operación pasó (se esperaba rechazo)" : store.error
+    return
+  }
+  try {
+    const r = await llamada()
+    if (r.status === statusEsperado) {
+      pasos[idx]!.estado = "ok"
+      return
+    }
+    pasos[idx]!.estado = "error"
+    pasos[idx]!.error = `API esperaba ${statusEsperado}, recibió ${r.status}: ${(r.cuerpo as any)?.error}`
+  } catch (e) {
+    pasos[idx]!.estado = "error"
+    pasos[idx]!.error = `API error: ${String(e)}`
   }
 }
 
@@ -847,54 +887,122 @@ export default function QaLabPage() {
     return { id: "cv", label: TITULOS["cv"]!, rank: 8, status: errores.length ? "error" : "ok", count: 1, errores, pasos }
   }, [])
 
-  const periodoMesesAtrasFI = (meses: number): string => {
-    const d = new Date()
-    d.setDate(1)
-    d.setMonth(d.getMonth() - meses)
-    return d.toISOString().slice(0, 7)
-  }
-
   const cargarFase13FI = React.useCallback(async (): Promise<ModReport> => {
     const s = useCompassStore.getState()
     const pasos: Paso[] = (PLAN["fi"]! as string[]).map(desc => ({ desc, estado: "pendiente" as ModuleState }))
-    // 1) Fondo extraordinario TEST junto al seed de fondos NSGC
-    const r1 = s.saveFondoFI({ id: "test-fondo-pintura", nombre: "Fondo Cuota Extraordinaria Pintura TEST", tipo: "especial", descripcion: "Cuota aprobada en asamblea para pintura de fachadas.", activo: true } as any)
-    if (!r1.ok) { pasos[0]!.estado = "error"; pasos[0]!.error = r1.error } else pasos[0]!.estado = "ok"
-    // 2) Egreso recurrente imputado con comprobante D1
-    const r2 = s.saveEgresoFI({ id: "test-egr-1", fecha: new Date().toISOString().slice(0, 10), categoria: "sueldos", descripcion: "Sueldo conserje TEST", monto: 350000, fondoId: "fondo-gc", esRecurrente: true, comprobante: { nombre: "test-boleta.pdf", tipoMime: "application/pdf", tamanoKB: 90, url: "https://placeholder.supabase.co/test-boleta.pdf" } } as any)
-    if (!r2.ok || !useCompassStore.getState().egresosFI.find(e => e.id === "test-egr-1")?.folio?.startsWith("FE-")) { pasos[1]!.estado = "error"; pasos[1]!.error = r2.error ?? "Sin folio FE" } else pasos[1]!.estado = "ok"
-    // 3) Emisión GC variable sobre unidades TEST con aporte al fondo de reserva
+    const periodoTest = QA_FI_PERIODO_TEST
     const unidadTest = "test-u-999"
-    const uTest = s.unidades.find(u => u.id === unidadTest)
-    const montoEsperado = Math.round(450000 * (uTest?.prorrateo ?? 0))
-    const r3 = s.emitirGastoComun({ periodo: new Date().toISOString().slice(0, 7), gastoTotal: 450000, unidadIds: [unidadTest] })
-    const emision = useCompassStore.getState().emisionesGC.find(e => e.periodo === new Date().toISOString().slice(0, 7))
-    const aporteEsperado = Math.round(montoEsperado * 5 / 100)
-    if (!r3.ok || !emision || emision.lineas[0]?.monto !== montoEsperado || emision.fondoReservaAporte?.monto !== aporteEsperado) {
-      pasos[2]!.estado = "error"; pasos[2]!.error = r3.error ?? `Monto/aporte: ${emision?.lineas[0]?.monto}/${emision?.fondoReservaAporte?.monto} (esperado ${montoEsperado}/${aporteEsperado})`
-    } else pasos[2]!.estado = "ok"
-    // 4) Emisión sin alcance → bloqueada por unidades sin responsable
-    const r4 = s.emitirGastoComun({ periodo: "2025-12", gastoTotal: 1000000 })
-    if (r4.ok || !String(r4.error).includes("responsable de cobro")) { pasos[3]!.estado = "error"; pasos[3]!.error = r4.ok ? "La emisión completa pasó sin responsables" : String(r4.error) } else pasos[3]!.estado = "ok"
-    // 5) Pago exacto del cobro GC del depto TEST
-    const cobroGC = useCompassStore.getState().cobrosFI.find(c => c.concepto === "gasto_comun" && c.periodo === new Date().toISOString().slice(0, 7))
-    if (!cobroGC) { pasos[4]!.estado = "error"; pasos[4]!.error = "No existe el cobro GC del periodo" } else {
-      const exigibleGC = cobroGC.montoBase + cobroGC.moras.reduce((a, m) => a + m.monto, 0) - cobroGC.pagos.reduce((a, p) => a + p.monto, 0)
-      const r5 = s.registrarPagoFI(cobroGC.id, { monto: exigibleGC, medio: "transferencia" })
-      const pagadoOk = useCompassStore.getState().cobrosFI.find(c => c.id === cobroGC.id)?.pagos.length === 1
-      if (!r5.ok || !pagadoOk) { pasos[4]!.estado = "error"; pasos[4]!.error = r5.error ?? "Pago no registrado" } else pasos[4]!.estado = "ok"
+    // 1) Fondo extraordinario TEST — espejo transitorio (D7): store + POST /api/fondos-fi.
+    const fondoTEST = { id: "test-fondo-pintura", nombre: "Fondo Cuota Extraordinaria Pintura TEST", tipo: "especial", descripcion: "Cuota aprobada en asamblea para pintura de fachadas.", activo: true }
+    let rFondo: { ok: boolean; error?: string }
+    try { rFondo = s.saveFondoFI(fondoTEST as any) } catch (e) { rFondo = { ok: false, error: String(e) } }
+    await espejarQA(pasos, 0, rFondo, () => postQA("/api/fondos-fi", fondoTEST))
+    // 2) Egreso recurrente imputado con comprobante D1 — espejo: store + POST /api/egresos-fi.
+    const egresoTEST = { id: "test-egr-1", fecha: new Date().toISOString().slice(0, 10), categoria: "sueldos", descripcion: "Sueldo conserje TEST", monto: 350000, fondoId: "fondo-gc", esRecurrente: true, comprobante: { nombre: "test-boleta.pdf", tipoMime: "application/pdf", tamanoKB: 90, url: "https://placeholder.supabase.co/test-boleta.pdf" } }
+    let rEgreso: { ok: boolean; error?: string }
+    try { rEgreso = s.saveEgresoFI(egresoTEST as any) } catch (e) { rEgreso = { ok: false, error: String(e) } }
+    await espejarQA(pasos, 1, rEgreso, () => postQA("/api/egresos-fi", egresoTEST))
+    // Verificación leída de BD: folio FE- autogenerado por la ruta.
+    // Se lee el egreso POR ID (GET /api/egresos-fi/[id]) y no vía listado: la
+    // colección está paginada (tope 100, orderBy createdAt desc) y el egreso TEST
+    // puede quedar fuera de la primera página → folio undefined espurio.
+    if (pasos[1]!.estado === "ok") {
+      const rEgrBD = await apiQA(`/api/egresos-fi/${egresoTEST.id}`)
+      const egrBD = rEgrBD.ok ? rEgrBD.cuerpo as { folio?: string } | null : null
+      if (!egrBD?.folio?.startsWith("FE-")) {
+        pasos[1]!.estado = "error"
+        pasos[1]!.error = rEgrBD.ok ? `Folio BD: ${egrBD?.folio}` : `Egreso TEST ausente en BD (API ${rEgrBD.status}): ${(rEgrBD.cuerpo as { error?: string } | null)?.error}`
+      }
     }
-    // 6) Mora sobre el periodo vencido (2 meses atrás garantiza vencimiento aunque hoy sea día 1), idempotente por día
-    const r6a = s.emitirGastoComun({ periodo: periodoMesesAtrasFI(2), gastoTotal: 200000, unidadIds: [unidadTest] })
-    const cobroVencido = useCompassStore.getState().cobrosFI.find(c => c.concepto === "gasto_comun" && c.periodo === periodoMesesAtrasFI(2))
-    let moraOk = false
-    if (r6a.ok && cobroVencido) {
-      s.aplicarMoraFI(cobroVencido.id, 1)
-      moraOk = (useCompassStore.getState().cobrosFI.find(c => c.id === cobroVencido.id)?.moras.length ?? 0) >= 1
-      s.aplicarMoraFI(cobroVencido.id, 1)
-      moraOk = moraOk && (useCompassStore.getState().cobrosFI.find(c => c.id === cobroVencido.id)?.moras.length ?? 0) >= 1
+    // 3) Emisión GC variable sobre unidades TEST con aporte al fondo de reserva.
+    // El prorrateo se lee de la unidad en BD (fuente de verdad EF/VU desde Fase 0).
+    const rUnidadBD = await apiQA(`/api/unidades/${unidadTest}`).catch(() => null)
+    const prorrateoBD = Number(((rUnidadBD?.cuerpo as { prorrateo?: number } | null)?.prorrateo) ?? 0)
+    const montoEsperado = Math.round(450000 * prorrateoBD)
+    let rEmision: { ok: boolean; error?: string }
+    try { rEmision = s.emitirGastoComun({ periodo: periodoTest, gastoTotal: 450000, unidadIds: [unidadTest] } as any) } catch (e) { rEmision = { ok: false, error: String(e) } }
+    const capturaEmision: { bd?: RespuestaQA } = {}
+    await espejarQA(pasos, 2, rEmision, async () => {
+      const r = await apiQA("/api/emisiones-gc", { method: "POST", body: JSON.stringify({ periodo: periodoTest, modo: "variable", gastoTotal: 450000, unidadIds: [unidadTest] }) })
+      capturaEmision.bd = r
+      return r
+    })
+    // Verificación leída de BD: monto prorrateado y aporte 5% al fondo de reserva.
+    if (pasos[2]!.estado === "ok") {
+      const emisionBD = (await listaQA("/api/emisiones-gc")).find(e => e.periodo === periodoTest)
+      const aporteEsperado = Math.round(montoEsperado * 5 / 100)
+      const montoBD = (emisionBD?.lineas ?? [])[0]?.monto
+      const aporteBD = emisionBD?.fondoReservaAporte?.monto
+      if (!emisionBD || montoBD !== montoEsperado || aporteBD !== aporteEsperado) {
+        pasos[2]!.estado = "error"; pasos[2]!.error = `Monto/aporte BD: ${montoBD}/${aporteBD} (esperado ${montoEsperado}/${aporteEsperado})`
+      }
     }
-    if (!moraOk) { pasos[5]!.estado = "error"; pasos[5]!.error = r6a.error ?? "Mora no aplicada" } else pasos[5]!.estado = "ok"
+    // 4) Emisión sin alcance → bloqueada por unidades sin responsable.
+    // Resultado CORRECTO = rechazo (store y API 400); no es un fallo del paso.
+    let r4: { ok: boolean; error?: string }
+    try { r4 = s.emitirGastoComun({ periodo: "2025-12", gastoTotal: 1000000 } as any) } catch (e) { r4 = { ok: false, error: String(e) } }
+    await espejarRechazoQA(pasos, 3, r4, "responsable de cobro", 400, () => apiQA("/api/emisiones-gc", { method: "POST", body: JSON.stringify({ periodo: "2025-12", modo: "variable", gastoTotal: 1000000 }) }))
+    // 5) Pago exacto del cobro GC del depto TEST. El id usado contra la API es
+    // SIEMPRE el de BD: primero el `cobros[].id` de la respuesta del POST (201)
+    // y, si la emisión ya existía (409), el listado del periodo TEST. El id del
+    // store sólo alimenta la acción del store.
+    const cobroGCStore = useCompassStore.getState().cobrosFI.find(c => c.concepto === "gasto_comun" && c.periodo === periodoTest && c.unidadId === unidadTest)
+    const cobroGCBD =
+      ((capturaEmision.bd?.cuerpo as { cobros?: { id: string; unidadId: string }[] } | null)?.cobros ?? []).find(c => c.unidadId === unidadTest) ??
+      (await listaQA(`/api/cobros-fi?periodo=${periodoTest}`)).find(c => c.concepto === "gasto_comun" && c.unidadId === unidadTest)
+    if (!cobroGCStore || !cobroGCBD?.id) {
+      pasos[4]!.estado = "error"; pasos[4]!.error = `No existe el cobro GC del periodo TEST (store=${Boolean(cobroGCStore)}, id BD=${cobroGCBD?.id ?? "ausente"})`
+    } else {
+      const pendiente = (c: any) => c.montoBase + (c.moras ?? []).reduce((a: number, m: any) => a + m.monto, 0) - (c.pagos ?? []).reduce((a: number, p: any) => a + p.monto, 0)
+      let rp: { ok: boolean; error?: string }
+      try { rp = s.registrarPagoFI(cobroGCStore.id, { monto: pendiente(cobroGCStore), medio: "transferencia" }) } catch (e) { rp = { ok: false, error: String(e) } }
+      await espejarQA(pasos, 4, rp, () => apiQA(`/api/cobros-fi/${cobroGCBD.id}/pagar`, { method: "POST", body: JSON.stringify({ monto: pendiente(cobroGCBD), medio: "transferencia" }) }))
+      // Verificación leída de BD: exactamente un pago registrado.
+      if (pasos[4]!.estado === "ok") {
+        const tras = (await listaQA(`/api/cobros-fi?periodo=${periodoTest}`)).find(c => c.id === cobroGCBD.id)
+        if ((tras?.pagos ?? []).length !== 1) { pasos[4]!.estado = "error"; pasos[4]!.error = `Pagos BD: ${(tras?.pagos ?? []).length}` }
+      }
+    }
+    // 6) Mora sobre el periodo TEST vencido (QA_FI_PERIODO_VENCIDO, siempre en el
+    // pasado), idempotente por día.
+    // La ruta API calcula el vencimiento desde hoy; se declara explícito para forzar el atraso.
+    const periodoVencido = QA_FI_PERIODO_VENCIDO
+    const r6a = s.emitirGastoComun({ periodo: periodoVencido, gastoTotal: 200000, unidadIds: [unidadTest] } as any)
+    const cobroVencidoStore = useCompassStore.getState().cobrosFI.find(c => c.concepto === "gasto_comun" && c.periodo === periodoVencido && c.unidadId === unidadTest)
+    let moraStoreOk = false
+    if (r6a.ok && cobroVencidoStore) {
+      s.aplicarMoraFI(cobroVencidoStore.id, 1)
+      const n1 = (useCompassStore.getState().cobrosFI.find(c => c.id === cobroVencidoStore.id)?.moras ?? []).length
+      s.aplicarMoraFI(cobroVencidoStore.id, 1)
+      const n2 = (useCompassStore.getState().cobrosFI.find(c => c.id === cobroVencidoStore.id)?.moras ?? []).length
+      moraStoreOk = n1 >= 1 && n2 === n1
+    }
+    const rEmisionVencida = await apiQA("/api/emisiones-gc", { method: "POST", body: JSON.stringify({ periodo: periodoVencido, modo: "variable", gastoTotal: 200000, unidadIds: [unidadTest], fechaVencimiento: `${periodoVencido}-05` }) })
+    let moraApiOk = false
+    let moraApiDetalle = `Cobro BD ausente para el periodo TEST ${periodoVencido}`
+    if (rEmisionVencida.ok || rEmisionVencida.status === 409) {
+      // Igual que el paso 5: el id contra la API es el de BD (`cobros[].id` del
+      // POST, o el listado del periodo TEST si la emisión ya existía).
+      const cobroVencidoBD =
+        ((rEmisionVencida.cuerpo as { cobros?: { id: string; unidadId: string }[] } | null)?.cobros ?? []).find(c => c.unidadId === unidadTest) ??
+        (await listaQA(`/api/cobros-fi?periodo=${periodoVencido}`)).find(c => c.concepto === "gasto_comun" && c.unidadId === unidadTest)
+      if (cobroVencidoBD?.id) {
+        const m1 = await apiQA(`/api/cobros-fi/${cobroVencidoBD.id}/mora`, { method: "POST", body: JSON.stringify({ tasaMensualPct: 1 }) })
+        const m2 = await apiQA(`/api/cobros-fi/${cobroVencidoBD.id}/mora`, { method: "POST", body: JSON.stringify({ tasaMensualPct: 1 }) })
+        const tras = (await listaQA(`/api/cobros-fi?periodo=${periodoVencido}`)).find(c => c.id === cobroVencidoBD.id)
+        moraApiOk = m1.ok && m2.ok && (tras?.moras ?? []).length >= 1
+        if (!moraApiOk) moraApiDetalle = `Mora BD no aplicada (mora ${m1.status}/${m2.status}, moras ${(tras?.moras ?? []).length})`
+      }
+    } else {
+      moraApiDetalle = `Emisión TEST ${periodoVencido} falló: API ${rEmisionVencida.status}`
+    }
+    if (!moraStoreOk || !moraApiOk) {
+      pasos[5]!.estado = "error"
+      pasos[5]!.error = moraStoreOk ? moraApiDetalle : (r6a.error ?? "Mora store no aplicada")
+    } else pasos[5]!.estado = "ok"
+    // 7)-10) Conexiones cross-módulo: permanecen store-only a propósito.
+    // TODO Fase 1.5 — depende de migrar IN/RA/MT (design D6.1). Migrar los cobros FI
+    // antes dejaría estas aserciones leyendo un mundo y escribiendo otro.
     // 7) Pago con descuento justificado sobre la multa TEST → informe de diferencia inmutable.
     // El descuento es proporcional (10%, mínimo $1) porque una multa % GC sin emisión
     // previa cae al valor nominal del catálogo (ej. $50) y un descuento fijo de $1000
@@ -925,9 +1033,11 @@ export default function QaLabPage() {
     // 10) Conexión MT: proyecto financiado por fondo GC sin saldo → rechazado
     const r10 = s.saveProyectoMT({ id: "test-py-financiado", nombre: "Repintado fachada TEST", presupuestoEstimado: 12000000, plazoMeses: 120, estado: "planificado", fondoFinanciamientoId: "fondo-gc" } as any)
     if (r10.ok || !String(r10.error).includes("Saldo insuficiente")) { pasos[9]!.estado = "error"; pasos[9]!.error = r10.ok ? "El proyecto pasó sin saldo suficiente" : String(r10.error) } else pasos[9]!.estado = "ok"
-    // 11) Retiro del fondo de reserva sin acta publicada → rechazado
-    const r11 = s.retirarFondoFI({ fondoId: "fondo-reserva", monto: 50000, descripcion: "Retiro sin respaldo TEST" })
-    if (r11.ok || !String(r11.error).includes("acta")) { pasos[10]!.estado = "error"; pasos[10]!.error = r11.ok ? "El retiro sin acta pasó" : String(r11.error) } else pasos[10]!.estado = "ok"
+    // 11) Retiro del fondo de reserva sin acta publicada → rechazado.
+    // Resultado CORRECTO = rechazo (store y API 400); no es un fallo del paso.
+    let r11: { ok: boolean; error?: string }
+    try { r11 = s.retirarFondoFI({ fondoId: "fondo-reserva", monto: 50000, descripcion: "Retiro sin respaldo TEST" } as any) } catch (e) { r11 = { ok: false, error: String(e) } }
+    await espejarRechazoQA(pasos, 10, r11, "acta", 400, () => apiQA("/api/fondos-fi/fondo-reserva/retirar", { method: "POST", body: JSON.stringify({ monto: 50000, descripcion: "Retiro sin respaldo TEST" }) }))
     const errores = pasos.filter(p => p.estado === "error").map(p => p.error || p.desc)
     return { id: "fi", label: TITULOS["fi"]!, rank: 9, status: errores.length ? "error" : "ok", count: 1, errores, pasos }
   }, [])
@@ -1666,6 +1776,24 @@ export default function QaLabPage() {
       for (const [tipo, id] of maestrosBD) {
         if (id.startsWith("test-")) await borrarSiExiste(`/api/maestros/${tipo}/${id}`, `${tipo}:${id}`)
       }
+      // Fase 1.4 (Decisión 8): residuo FI de la fase 13 en BD. Cobros TEST de los
+      // periodos TEST primero (hijos; el DELETE /api/cobros-fi/[id] permite un
+      // TEST con pagos en desarrollo), luego sus emisiones y al final fondos y
+      // egresos TEST. Best-effort idempotente: 404 = limpio; sólo bloquea si la
+      // entidad existe y el DELETE la rechaza.
+      const periodosFITEST = [QA_FI_PERIODO_TEST, QA_FI_PERIODO_VENCIDO]
+      for (const periodo of periodosFITEST) {
+        const cobrosTEST = (await listaQA(`/api/cobros-fi?periodo=${periodo}`))
+          .filter(c => esCobroTest({ id: c.id, unidadId: c.unidadId, origenRef: c.origenRef ?? undefined }))
+        for (const c of cobrosTEST) await borrarSiExiste(`/api/cobros-fi/${c.id}`, "cobro-fi-qa")
+      }
+      const emisionesTEST = (await listaQA("/api/emisiones-gc")).filter(e =>
+        periodosFITEST.includes(e.periodo) &&
+        (e.lineas ?? []).some((l: { unidadId?: string }) => typeof l.unidadId === "string" && l.unidadId.startsWith("test-"))
+      )
+      for (const e of emisionesTEST) await borrarSiExiste(`/api/emisiones-gc/${e.id}`, "emision-gc-qa")
+      await borrarSiExiste("/api/fondos-fi/test-fondo-pintura", "fondo-fi-qa")
+      await borrarSiExiste("/api/egresos-fi/test-egr-1", "egreso-fi-qa")
     } catch (e) { errores.push(`purga BD: ${String(e)}`) }
     setLoading(false)
     if (errores.length) setMsg({ type: "error", text: `Limpieza con ${errores.length} bloqueos (dependencias): ${errores.slice(0,2).join("; ")}` })

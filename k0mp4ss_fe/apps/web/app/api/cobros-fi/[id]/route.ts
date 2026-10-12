@@ -2,11 +2,15 @@
  * /api/cobros-fi/[id] — detalle/actualización parcial/baja de un cobro FI.
  *
  * GET_ONE con ABAC residente (solo sus unidades). PUT vía factory (solo
- * administrador). DELETE bloqueado (409) si el cobro tiene pagos.
+ * administrador). DELETE bloqueado (409) si el cobro tiene pagos, salvo
+ * Decisión 8: un cobro TEST con pagos puede darse de baja en desarrollo para
+ * que el limpiar() del QA-Lab purgue el residuo FI en BD.
  */
 import { puede } from "@/lib/authz"
 import { prisma } from "@/lib/prisma"
 import { logger } from "@/lib/logger"
+import { getAppEnv } from "@/lib/env-guard"
+import { esCobroTest } from "@/lib/qa-lab-helpers"
 import {
   jsonError,
   withComunidadScope,
@@ -66,10 +70,20 @@ export async function DELETE(_req: Request, ctx: Ctx): Promise<Response> {
     // SAFETY: pagos es Json con shape PagoCobroFI[] según CobroFISchema.
     const pagos = (record.pagos as unknown as unknown[]) ?? []
     if (pagos.length > 0) {
-      return jsonError(
-        409,
-        "No se puede eliminar el cobro: tiene pagos registrados."
-      )
+      // Decisión 8: en desarrollo, un cobro TEST (id/unidadId/origenRef test-*)
+      // se puede borrar aunque tenga pagos para que el QA-Lab pueda purgar su
+      // residuo FI. El guard 409 sigue intacto para cualquier cobro real.
+      const cobroTest = esCobroTest({
+        id: record.id,
+        unidadId: record.unidadId,
+        origenRef: record.origenRef ?? undefined,
+      })
+      if (!(cobroTest && getAppEnv() === "development")) {
+        return jsonError(
+          409,
+          "No se puede eliminar el cobro: tiene pagos registrados."
+        )
+      }
     }
     await prisma.cobroFI.delete({ where: { id } })
     return Response.json({ ok: true })

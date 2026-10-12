@@ -51,6 +51,7 @@ function pedir(
 async function nuevoCobro(opts: {
   id: string
   comunidadId?: string
+  unidadId?: string
   montoBase?: number
   fechaVencimiento?: string | null
   pagos?: unknown[]
@@ -60,7 +61,7 @@ async function nuevoCobro(opts: {
     data: {
       id: opts.id,
       comunidadId: opts.comunidadId ?? comunidad,
-      unidadId: "fi-acc-u-1",
+      unidadId: opts.unidadId ?? "fi-acc-u-1",
       periodo: "2026-03",
       concepto: "gasto_comun",
       origenModulo: "manual",
@@ -527,6 +528,70 @@ describe("/api/cobros-fi y /api/fondos-fi acciones — pagar, mora y retiro (BD 
         expect(
           await prisma.egresoFI.count({ where: { fondoId: "fi-acc-fondo-otra" } })
         ).toBe(0)
+      })
+    }, 20_000)
+  })
+
+  describe("DELETE /api/cobros-fi/[id] — Decisión 8 (bypass TEST sólo en desarrollo)", () => {
+    const pagos = [
+      { id: "fi-acc-pago-1", monto: 5_000, medio: "efectivo", fecha: "2026-03-01" },
+    ]
+
+    async function borrar(id: string): Promise<Response> {
+      const { DELETE } = await import("@/app/api/cobros-fi/[id]/route")
+      return DELETE(
+        new NextRequest(`http://localhost/api/cobros-fi/${id}`, { method: "DELETE" }),
+        { params: Promise.resolve({ id }) } as Ctx
+      )
+    }
+
+    async function conAppEnv(env: string, fn: () => Promise<void>): Promise<void> {
+      const original = process.env.NEXT_PUBLIC_APP_ENV
+      process.env.NEXT_PUBLIC_APP_ENV = env
+      try {
+        await fn()
+      } finally {
+        if (original === undefined) delete process.env.NEXT_PUBLIC_APP_ENV
+        else process.env.NEXT_PUBLIC_APP_ENV = original
+      }
+    }
+
+    it("cobro TEST con pagos en desarrollo → 200 y se elimina", async () => {
+      await nuevoCobro({ id: "fi-acc-cobro-test-del", unidadId: "test-u-999", pagos })
+      await conAppEnv("development", async () => {
+        await conSesion(async () => {
+          const res = await borrar("fi-acc-cobro-test-del")
+          expect(res.status).toBe(200)
+          expect(
+            await prisma.cobroFI.findUnique({ where: { id: "fi-acc-cobro-test-del" } })
+          ).toBeNull()
+        })
+      })
+    }, 20_000)
+
+    it("cobro real con pagos → 409 y se conserva", async () => {
+      await nuevoCobro({ id: "fi-acc-cobro-real-del", pagos })
+      await conAppEnv("development", async () => {
+        await conSesion(async () => {
+          const res = await borrar("fi-acc-cobro-real-del")
+          expect(res.status).toBe(409)
+          expect(
+            await prisma.cobroFI.findUnique({ where: { id: "fi-acc-cobro-real-del" } })
+          ).not.toBeNull()
+        })
+      })
+    }, 20_000)
+
+    it("cobro TEST con pagos en producción → 409 y se conserva", async () => {
+      await nuevoCobro({ id: "fi-acc-cobro-test-prod", unidadId: "test-u-999", pagos })
+      await conAppEnv("production", async () => {
+        await conSesion(async () => {
+          const res = await borrar("fi-acc-cobro-test-prod")
+          expect(res.status).toBe(409)
+          expect(
+            await prisma.cobroFI.findUnique({ where: { id: "fi-acc-cobro-test-prod" } })
+          ).not.toBeNull()
+        })
       })
     }, 20_000)
   })
