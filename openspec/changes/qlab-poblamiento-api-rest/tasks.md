@@ -66,7 +66,31 @@
       `limpiar()` purga por API, TEST-scoped, hijos→padres: cobros de los períodos TEST → emisiones
       TEST de esos períodos → fondos/egresos TEST; idempotente (404 = limpio) y solo bloqueante si
       la entidad existe y el DELETE la rechaza.
-- [ ] 1.5 Conexiones cross-módulo (pasos 7-10): migrar **después** de las fases IN, RA y MT.
+- [~] 1.5 Conexiones cross-módulo (pasos 7-10): **EN CURSO — unidad IN HECHA (2026-10-07)**, RA y MT
+      pendientes. El recon (2026-10-07) fijó el alcance real: no basta migrar el lab, faltan **acciones
+      server-side** por módulo.
+
+      **IN — HECHA**: `POST /api/in/infracciones/[id]/{apelar,respaldar,aplicar,desestimar}`
+      (máquina de estados + eventos de auditoría; `aplicar` materializa `multa_in` transaccional e
+      **idempotente por `origenRef`**), `cargarFase10IN` por API + espejo con verificación en BD, y la
+      purga de cobros TEST del lab ahora barre por procedencia (`esCobroTest`) sin depender del período.
+      Test-first: 18 tests (`test/api/in-acciones.test.ts`). Evidencia: suite **918/918**, tsc 0, eslint 0,
+      e2e `poblado-idempotente` 8/8 y `flujo/poblamiento` 9/9. Commit `47b9ea7`.
+
+      **RA — PENDIENTE** (`cargarFase12RA` + `test-ra-rs-*`): `POST /api/ra/reservas` ya hace el check de
+      solape 409, pero **falta** folio `RA-####`, materialización del cobro `reserva_ra` (fondo amenities),
+      `cancelarReservaRA` (penalización `penalizacion_ra` tardía) y `retenerGarantiaRA`. Cruce: `POST
+      /api/cobros-fi` existe para componerlos. Riesgo: la ventana tardía y el stock dependen de fechas y
+      de la deuda FI vigente (difícil de paritar en servidor).
+
+      **MT — PENDIENTE** (`cargarFase11MT` + `test-py-techos`): `POST /api/mt/trabajos` y
+      `/api/mt/proyectos` existen como CRUD pero **falta** la máquina de estados (iniciar/finalizar +
+      preventivo automático, `verificarGarantiasMT`) y el guard `saldoFondo` en proyectos. Riesgo: el
+      saldo GC depende de FI migrada — el paso 10 (“$12M sin saldo → rechazado”) necesita un período/monto
+      deterministas para no ser flaky.
+
+      **FI 7-10** (pasos con `// TODO Fase 1.5` en `cargarFase13FI`): migrar después de RA y MT; hoy leen
+      el store y el espejo los mantiene verdes (no se disfrazan).
 - [x] 1.6 Gate de fase: **VERDE 2026-10-07** — suite **897/897** · tsc 0 · eslint 0 · e2e
       `poblado-idempotente` **8/8** · e2e `flujo/poblamiento` **9/9** (esto último satisface también
       el criterio de cierre 3.1 del change: el último rojo del lane P3 cayó con 1.3a + 1.4).
