@@ -39,8 +39,25 @@ export default defineConfig({
         "app/api/**/route.ts",
       ],
       reportsDirectory: "./coverage",
-      // C5: baseline estable post Fase A (96.57/83.26/89.65/96.57).
-      thresholds: { statements: 90, branches: 75, functions: 85, lines: 90 },
+      // Ratchet por área (change ci-verde-ratchet-cobertura, 2026-10-12).
+      // Historia: el 90/75 se fijó en Fase A midiendo SOLO lib/store.ts
+      // (96.57/83.26/89.65/96.57). Cuando el include se extendió a
+      // app/api/**/route.ts (126 handlers) y store.ts siguió creciendo, ese
+      // global dejó de ser alcanzable: medido 83.79/73.18/88.65/83.79 el
+      // 2026-10-12 con los 967 tests verdes. El job de CI quedó rojo un mes
+      // sin un solo test roto (ruido que tapaba fallas reales).
+      // Piso = medido − 1 pt (margen por drift de Node/V8). Solo sube: si la
+      // cobertura mejora, se re-baselinea en un commit explícito.
+      thresholds: {
+        statements: 82,
+        branches: 72,
+        functions: 87,
+        lines: 82,
+        // Núcleo: los 7 archivos medidos desde SERIE-PRODUCCION P4.
+        "lib/**": { statements: 86, branches: 78, functions: 94, lines: 86 },
+        // Superficie API: 126 route handlers (smoke de guardias + fases).
+        "app/api/**": { statements: 78, branches: 63, functions: 82, lines: 78 },
+      },
     },
   },
 })

@@ -9,6 +9,10 @@ on:
     branches: [main]
   pull_request:
 
+# Token mínimo: el workflow solo lee el repo (checkout) y sube artifacts.
+permissions:
+  contents: read
+
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
@@ -27,8 +31,11 @@ jobs:
       # tests auth fijan el suyo en beforeAll (paridad con el entorno local).
       DATABASE_URL: file:./dev.db
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # No dejamos el token del repo en el .git/config: ningún job pushea.
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           # Node 24: mismo runtime de desarrollo. En Node 22 la intercepción
           # fetch de MSW 2 en jsdom rompe las rutas de éxito (push no llega).
@@ -71,8 +78,11 @@ jobs:
       # PostgreSQL efímero del service container (sin secretos reales).
       DATABASE_URL: postgresql://compass:compass_ci@localhost:5432/compass_test
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # No dejamos el token del repo en el .git/config: ningún job pushea.
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           # Node 24: mismo runtime de desarrollo. En Node 22 la intercepción
           # fetch de MSW 2 en jsdom rompe las rutas de éxito (push no llega).
@@ -105,23 +115,30 @@ jobs:
       # (lib/env-guard.ts isWriteApiEnabled); next start pondría NODE_ENV=production.
       NEXT_PUBLIC_APP_ENV: development
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # No dejamos el token del repo en el .git/config: ningún job pushea.
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
           cache: npm
           cache-dependency-path: k0mp4ss_fe/package-lock.json
       - run: npm ci
         working-directory: k0mp4ss_fe
-      - run: npx prisma generate
+      # Dual SQLite/PG (st-migracion-postgres): schema.prisma fuente es
+      # postgresql; los jobs con DATABASE_URL file: usan el generado
+      # schema.sqlite.prisma. Sin --schema el CLI lee el schema PG y muere con
+      # P1012 ("URL must start with postgresql://").
+      - run: npx prisma generate --schema=prisma/schema.sqlite.prisma
       - run: npx playwright install --with-deps chromium
       - name: BD desde cero + seed completo (usuarios TEST + mocks)
         run: |
-          npx prisma migrate deploy
+          npx prisma migrate deploy --schema=prisma/schema.sqlite.prisma
           npm run e2e:reseed-base
       - run: npm run build
       - run: npx playwright test
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: failure()
         with:
           name: playwright-report-e2e
@@ -145,23 +162,26 @@ jobs:
       AUTH_SECRET: ci-e2e-secret-no-produccion
       NEXT_PUBLIC_APP_ENV: development
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # No dejamos el token del repo en el .git/config: ningún job pushea.
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
           cache: npm
           cache-dependency-path: k0mp4ss_fe/package-lock.json
       - run: npm ci
         working-directory: k0mp4ss_fe
-      - run: npx prisma generate
+      - run: npx prisma generate --schema=prisma/schema.sqlite.prisma
       - run: npx playwright install --with-deps chromium
       - name: BD desde cero + seed usuarios TEST
         run: |
-          npx prisma migrate deploy
+          npx prisma migrate deploy --schema=prisma/schema.sqlite.prisma
           npm run seed:authz
       - run: npm run build
       - run: npx playwright test e2e/auth/rate-limit.spec.ts
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: failure()
         with:
           name: playwright-report-rate-limit
@@ -183,8 +203,11 @@ jobs:
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
       VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # No dejamos el token del repo en el .git/config: ningún job pushea.
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
           cache: npm
@@ -192,10 +215,28 @@ jobs:
       - run: npm ci
         working-directory: k0mp4ss_fe
       - run: npx prisma generate
-      - run: npm i -g vercel
+      # Los secrets de Vercel son opcionales: si faltan, el deploy se omite con
+      # warning (el workflow queda verde) y cuando el owner los carga corre solo.
+      # Antes fallaba con `--token=` vacío, dejando CI rojo por infra ausente.
+      - name: Chequear secrets de Vercel
+        id: vercel_secrets
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          if [ -n "$VERCEL_TOKEN" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::warning title=Deploy omitido::Faltan secrets de Vercel (VERCEL_TOKEN / VERCEL_ORG_ID / VERCEL_PROJECT_ID). Cargalos en Settings -> Secrets; este job corre solo."
+          fi
+      - run: npm i -g vercel@59.16.0
+        if: steps.vercel_secrets.outputs.present == 'true'
       - run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+        if: steps.vercel_secrets.outputs.present == 'true'
         working-directory: k0mp4ss_fe/apps/web
       - run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+        if: steps.vercel_secrets.outputs.present == 'true'
         working-directory: k0mp4ss_fe/apps/web
       - run: vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
+        if: steps.vercel_secrets.outputs.present == 'true'
         working-directory: k0mp4ss_fe/apps/web
