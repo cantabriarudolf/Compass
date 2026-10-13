@@ -136,8 +136,9 @@ reportar el certificado inmutable como residuo honesto, no como error.
 El sistema SHALL purgar el residuo TEST de BD del QA-Lab con un único endpoint
 `POST /api/qa-lab/purga-test` (runtime Node) que, para la comunidad de la sesión, borre solo
 entidades TEST —ids con prefijo `test-` más la procedencia TEST documentada (cobros FI por
-`unidadId`/`origenRef` `test-`, emisiones GC de los periodos TEST dedicados, notificaciones PI
-con marca `TEST`)— en orden hijos→padres, y devuelva
+`unidadId`/`origenRef` `test-`, emisiones GC de los periodos TEST dedicados **solo con rastro
+TEST real: id `test-*` o al menos una línea con `unidadId` `test-`**, notificaciones PI con
+marca `TEST`)— en orden hijos→padres, y devuelva
 `{ borrados: Record<string, number>, bloqueos: string[] }` con los conflictos reales y su
 motivo. El endpoint SHALL responder 404 fuera de dev/test (`isWriteApiEnabled()`), 401 sin
 sesión, 403 sin membresía o sin permiso de administración de la comunidad, y SHALL ser
@@ -173,3 +174,11 @@ ser estrictas otra vez (mensaje verde visible con timeout de 120 s).
 - **WHEN** la lane e2e corre `poblado-idempotente.spec.ts` y `ciclo.spec.ts` con paridad CI
 - **THEN** cada "Borrar todo lo de prueba" muestra `TEST-* limpio correctamente` dentro de los
   120 s, sin tolerancia best-effort.
+
+#### Scenario: Emisiones GC de periodo TEST sin rastro TEST sobreviven (R3-001)
+
+- **WHEN** hay una emisión real (id sin prefijo `test-`) en un periodo TEST dedicado
+  (`2019-01`/`2019-03`) cuyas líneas no apuntan a ninguna unidad `test-*`, y se llama
+  `POST /api/qa-lab/purga-test`
+- **THEN** la emisión NO se borra; solo se borran las emisiones con id `test-*` o con al
+  menos una línea de unidad `test-*` en esos mismos periodos.
