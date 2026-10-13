@@ -42,6 +42,19 @@ function mensajeError(e: unknown): string {
   return String(e).slice(0, 120)
 }
 
+/** ¿Alguna línea JSON de la emisión apunta a una unidad TEST? (semántica del bucle legado). */
+function tieneLineaUnidadTest(lineas: unknown): boolean {
+  if (!Array.isArray(lineas)) return false
+  return lineas.some(
+    (linea) =>
+      typeof linea === "object" &&
+      linea !== null &&
+      "unidadId" in linea &&
+      typeof linea.unidadId === "string" &&
+      linea.unidadId.startsWith(PREFIJO_TEST)
+  )
+}
+
 export async function POST() {
   if (!isWriteApiEnabled()) {
     return NextResponse.json({ error: "Not Found" }, { status: 404 })
@@ -80,14 +93,24 @@ export async function POST() {
     return r.count
   })
 
-  // 2) Emisiones GC: id test-* o periodo TEST dedicado (lineas es JSON y SQLite
-  //    no lo filtra; esos periodos nunca son reales por diseño del lab).
+  // 2) Emisiones GC: id test-* o periodo TEST dedicado con rastro TEST en sus
+  //    líneas (misma semántica que el bucle legado: `lineas.some(unidadId test-)`).
+  //    `lineas` es JSON y SQLite no lo filtra, así que el filtro por líneas se
+  //    evalúa en memoria: una emisión sin unidades test-* nunca se destruye.
   await borrar("emisiones-gc", async () => {
-    const r = await prisma.emisionGC.deleteMany({
+    const candidatas = await prisma.emisionGC.findMany({
       where: {
         comunidadId,
         OR: [{ id: porIdTest }, { periodo: { in: PERIODOS_FI_TEST } }],
       },
+      select: { id: true, lineas: true },
+    })
+    const ids = candidatas
+      .filter((e) => e.id.startsWith(PREFIJO_TEST) || tieneLineaUnidadTest(e.lineas))
+      .map((e) => e.id)
+    if (ids.length === 0) return 0
+    const r = await prisma.emisionGC.deleteMany({
+      where: { comunidadId, id: { in: ids } },
     })
     return r.count
   })

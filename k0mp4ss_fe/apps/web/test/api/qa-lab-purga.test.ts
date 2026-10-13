@@ -239,6 +239,10 @@ describe("/api/qa-lab/purga-test — purga bulk TEST con BD real (qlab-purga-bul
     await prisma.emisionGC.createMany({
       data: [
         { id: "test-em-gc", comunidadId: COMUNIDAD, periodo: "2019-03", modo: "proporcional", gastoTotal: 100000, lineas: [], fechaEmision: "2019-03-01" },
+        // R3-001: periodo TEST dedicado pero SIN líneas de unidades test- → NO se borra.
+        { id: "purga-em-periodo-real", comunidadId: COMUNIDAD, periodo: "2019-03", modo: "proporcional", gastoTotal: 150000, lineas: [{ unidadId: "purga-u-real", responsablePersonaId: "purga-p-real", monto: 150000, cobroId: "purga-cob-real" }], fechaEmision: "2019-03-01" },
+        // Procedencia TEST por línea: id sin prefijo + periodo TEST + unidad test- → SÍ se borra.
+        { id: "purga-em-proc-test", comunidadId: COMUNIDAD, periodo: "2019-01", modo: "proporcional", gastoTotal: 120000, lineas: [{ unidadId: "test-u-999", responsablePersonaId: "test-p-99", monto: 120000, cobroId: "test-cobro-gc" }], fechaEmision: "2019-01-01" },
         { id: "purga-em-real", comunidadId: COMUNIDAD, periodo: "2026-10", modo: "proporcional", gastoTotal: 200000, lineas: [], fechaEmision: "2026-10-01" },
       ],
     })
@@ -439,7 +443,7 @@ describe("/api/qa-lab/purga-test — purga bulk TEST con BD real (qlab-purga-bul
       expect(cuerpo.bloqueos).toEqual([])
       expect(cuerpo.borrados).toEqual({
         "cobros-fi": 2, // test-cobro-gc (id) + purga-cob-multain (origenRef test-in-grave)
-        "emisiones-gc": 1, // periodo TEST 2019-03
+        "emisiones-gc": 2, // test-em-gc (id) + purga-em-proc-test (periodo TEST con línea de unidad test-)
         liquidaciones: 1, // solo borrador; la confirmada es inmutable
         "egresos-fi": 3, // test-egr-1 + espejo borrador + espejo confirmada
         "fondos-fi": 1,
@@ -474,6 +478,11 @@ describe("/api/qa-lab/purga-test — purga bulk TEST con BD real (qlab-purga-bul
       expect(await prisma.unidad.findUnique({ where: { id: "purga-u-real" } })).not.toBeNull()
       expect(await prisma.persona.findUnique({ where: { id: "purga-p-real" } })).not.toBeNull()
       expect(await prisma.emisionGC.findUnique({ where: { id: "purga-em-real" } })).not.toBeNull()
+      // R3-001: una emisión de periodo TEST sin líneas de unidades test- sobrevive
+      // (antes se destruía por el solo criterio de periodo).
+      expect(await prisma.emisionGC.findUnique({ where: { id: "purga-em-periodo-real" } })).not.toBeNull()
+      // La procedencia TEST por línea sí se purga.
+      expect(await prisma.emisionGC.findUnique({ where: { id: "purga-em-proc-test" } })).toBeNull()
       expect(await prisma.fondoFI.findUnique({ where: { id: "purga-fondo-real" } })).not.toBeNull()
       expect(await prisma.egresoFI.findUnique({ where: { id: "purga-egr-real" } })).not.toBeNull()
       expect(await prisma.reservaRA.findUnique({ where: { id: "purga-ra-rs-real" } })).not.toBeNull()
