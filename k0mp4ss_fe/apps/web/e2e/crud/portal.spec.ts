@@ -5,6 +5,7 @@ import {
   limpiarPublicacionesNuevasTEST,
   snapshotPublicacionesTEST,
 } from "../helpers/datos-test"
+import { guardarDialogo } from "../helpers/form-dialog"
 
 test.use({ actionTimeout: 30_000 })
 test.setTimeout(300_000)
@@ -75,24 +76,12 @@ test.describe("CRUD — Comunidad/Portal", () => {
         if (!cur || cur === "0") await inputPrecio.fill("9500000")
       }
 
-      // Guardar
+      // Guardar — single-shot idempotente (helper form-dialog): UN envío; sin
+      // `fila` (la tabla se afirma por unidad/precio más abajo) no se reenvía
+      // a ciegas: el re-submit ciego era el que duplicaba publicaciones.
       const btnGuardar = dialog.getByRole("button", { name: "Guardar" })
       await expect(btnGuardar).toBeVisible({ timeout: 10_000 })
-      await btnGuardar.scrollIntoViewIfNeeded().catch(() => {})
-      try {
-        await btnGuardar.click({ force: true, noWaitAfter: true, timeout: 5_000 })
-      } catch {
-        await dialog.locator("form").evaluate((f) => (f as HTMLFormElement).requestSubmit()).catch(() => {})
-      }
-      await page.waitForTimeout(800)
-      if (await dialog.isVisible().catch(() => false)) {
-        await dialog.evaluate(() => {
-          const f = document.querySelector('[role="dialog"] form') as HTMLFormElement | null
-          if (f) f.requestSubmit()
-        }).catch(() => {})
-        await page.waitForTimeout(800)
-      }
-      await expect(dialog).toBeHidden({ timeout: 15_000 })
+      await guardarDialogo(page, { boton: btnGuardar, dialogo: dialog })
 
       // Afirmar fila nueva en la tabla de gestión (dentro de Gestión de la vitrina)
       // La tabla tiene columnas Unidad / Operación / Precio / Estado / Leads / Acciones

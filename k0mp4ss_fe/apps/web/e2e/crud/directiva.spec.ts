@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test"
+import { guardarDialogo } from "../helpers/form-dialog"
 
 test.use({ actionTimeout: 30_000 })
 
@@ -71,29 +72,12 @@ test.describe("CRUD — Comunidad/Directiva", () => {
     await expect(textareaMinuta).toBeVisible({ timeout: 10_000 })
     await textareaMinuta.fill(`QA Minuta ${ts} — acuerdos de prueba con quórum pendiente`)
 
-    // Guardar borrador
+    // Guardar borrador — single-shot idempotente (helper form-dialog): UN
+    // envío; sin `fila` (no hay llave única de unicidad para el borrador)
+    // no se reenvía a ciegas si el diálogo tarda en cerrar.
     const btnGuardar = dialog.getByRole("button", { name: "Guardar borrador" })
     await expect(btnGuardar).toBeVisible({ timeout: 10_000 })
-    await btnGuardar.scrollIntoViewIfNeeded().catch(() => {})
-    try {
-      await btnGuardar.click({ force: true, noWaitAfter: true, timeout: 5_000 })
-    } catch {
-      await dialog.evaluate(() => {
-        const f = document.querySelector('[role="dialog"] form') as HTMLFormElement | null
-        if (f) f.requestSubmit()
-      }).catch(() => {})
-    }
-    await page.waitForTimeout(600)
-    if (await dialog.isVisible().catch(() => false)) {
-      await btnGuardar.click({ force: true, noWaitAfter: true }).catch(() => {})
-      await page.waitForTimeout(600)
-    }
-    // Fallback requestSubmit si sigue visible
-    if (await dialog.isVisible().catch(() => false)) {
-      await dialog.locator("form").evaluate((f) => (f as HTMLFormElement).requestSubmit()).catch(() => {})
-      await page.waitForTimeout(600)
-    }
-    await expect(dialog).toBeHidden({ timeout: 15_000 })
+    await guardarDialogo(page, { boton: btnGuardar, dialogo: dialog })
 
     // Afirmar card de borrador visible — badge Borrador de Directiva + lugar Sede QA
     await expect(page.getByText("Borrador de Directiva").first()).toBeVisible({ timeout: 15_000 })
