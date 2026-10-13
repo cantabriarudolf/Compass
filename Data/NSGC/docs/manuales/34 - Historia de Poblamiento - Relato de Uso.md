@@ -238,7 +238,8 @@ maestros):
 
 - **Solo TEST, nunca datos reales**: ids con prefijo `test-` más procedencia TEST imposible
   en producción (cobros FI por `unidadId`/`origenRef` `test-` — la multa IN materializa un
-  `cob-*` —, emisiones de los períodos TEST `2019-03`/`2019-01`, notificaciones PI con la
+  `cob-*` —, emisiones de los períodos TEST `2019-03`/`2019-01` **que además tienen rastro
+  TEST real: id `test-*` o al menos una línea con `unidadId` `test-`** —, notificaciones PI con la
   marca `TEST`).
 - **Respuesta `{ borrados, bloqueos }`**: conteo por colección y conflictos reales con su
   motivo (no se inventan). **Idempotente**: segunda corrida = 0 borrados, sin errores.
@@ -257,4 +258,5 @@ maestros):
   `e2e/flujo/ciclo.spec.ts` vuelven a exigir `TEST-* limpio correctamente` en ≤120 s (sin
   tolerancia best-effort de 90 s).
 
-*Última actualización: 2026-10-13 - Change `qlab-purga-bulk` (SERIE-NOCHE-2 P1).*
+*Última actualización: 2026-10-13 - Change `qlab-purga-emisiones-r3-001` (endurece la nota 11
+sobre emisiones GC).*
