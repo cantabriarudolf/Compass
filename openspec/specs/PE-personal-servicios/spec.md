@@ -2,7 +2,9 @@
 
 ## Purpose
 Supervisar los recursos humanos y técnicos que mantienen la operativa diaria de la comunidad: ficha integral del trabajador con FKs a maestros legales, proyección operativa sobre feriados con costos enviados a FI, proveedores externos con mantenciones preventivas y visitas técnicas, directorio de emergencias, bitácora digital de conserjería (visitas/encomiendas/contratistas), reporte diario y protocolo de cierre de turno notificado. Fuente de verdad: `Data/NSGC/docs/especificaciones/PE - Personal y Servicios.md`.
+
 ## Requirements
+
 ### Requirement: Ficha Integral del Trabajador
 El sistema SHALL actuar como repositorio maestro de identidad y condiciones laborales del personal interno, profundizando `datosLaborales` sin duplicar la extensión mínima consumida por AD (`cargo`, `afp`, `prevision`, `fechaIngreso` se preservan). La ficha SHALL gestionarse mediante `savePersona` e SHALL incluir: tipología contractual (`indefinido`|`plazo_fijo`|`honorarios`), configuración previsional referenciando por id los maestros legales de MA (`afpId` → `maestros.afps`, `saludId` → `maestros.previsionesSalud`, tramo opcional `asignacionFamiliarId` → `maestros.asignacionFamiliar` con número de cargas), gestión bancaria (`bancoId` → `maestros.bancos`, número y tipo de cuenta), seguridad y salud (ficha médica con medicamentos/alergias/condiciones y contactos de emergencia propios del trabajador), control de asistencia y desempeño (jornada base asociada en horas, registro de horas extras y evaluaciones periódicas). La identidad (nombres, RUT, email, teléfono, dirección, fotografía) proviene del Maestro de Personas (MP) y no se duplica. Toda FK legal SHALL validarse en escritura y bloquear la eliminación del maestro referenciado mientras esté en uso.
 
@@ -197,3 +199,14 @@ usarlo: el POST con `telefonoFijo`/`fotografiaUrl`/`datosGobernanza`/
 - **WHEN** se edita cargo/fecha/FKs en `/personas/personal` y se guarda
 - **THEN** el POST responde 200 y aparece "Ficha de … guardada".
 
+### Requirement: Sin TDZ en el formulario de proveedores
+`app/operaciones/proveedores/page.tsx` SHALL declarar `editandoProvId`
+(useState) ANTES de `rutProvDuplicado`: el `.some()` de duplicados lo
+referencia y con lista no-vacía + RUT tipeado lanzaba ReferenceError
+(crash de la página; latente con lista vacía porque `.some()` no ejecuta
+el callback). Test de regresión: e2e `proveedores` (llena RUT con datos).
+
+#### Scenario: Llenar RUT con proveedores existentes no crashea
+- **WHEN** se abre "Nuevo proveedor" y se tipea un RUT con la lista no-vacía
+- **THEN** no hay pageerror, el formulario sigue visible y el guardado
+  funciona (e2e en verde).
