@@ -3,6 +3,11 @@
 // Afirma contra seedData previo (verificado en lib/store.ts).
 import { expect, test } from "@playwright/test"
 
+// Journey por rol con varios waits de UI: el default de CI (30s) queda corto en
+// la primera pasada (medido 2026-10-12: `page.waitForTimeout` expiraba en el
+// journey de conserjería). 120s alinea con el default local.
+test.setTimeout(120_000)
+
 
 async function gotoStable(page: import("@playwright/test").Page, url: string) {
   await page.goto(url)

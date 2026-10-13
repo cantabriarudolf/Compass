@@ -11,18 +11,30 @@ test.describe("Logs de Auditoría (AM) — vista read-only en /admin/logs (BD)",
     const errores: string[] = []
     page.on("pageerror", (err) => errores.push(err.message))
 
-    // 1) Generar 2 eventos reales vía acción de módulo: flip + flip de vuelta
-    //    del primer switch de privacidad en /admin/gestion (AD_OWNER_CONFIG_CHANGE).
-    await page.goto("/admin/gestion")
-    const primerSwitch = page.getByRole("switch").first()
-    await primerSwitch.waitFor({ state: "visible", timeout: 30_000 })
-    await primerSwitch.click({ force: true, noWaitAfter: true })
-    await expect(primerSwitch).toBeEnabled({ timeout: 30_000 })
-    await primerSwitch.click({ force: true, noWaitAfter: true })
-
-    // 2) Vista /admin/logs: header read-only — la BD puede tener eventos previos,
-    //    esperar con poll hasta ver los 2 eventos recién generados via filtro acotado.
+    // 1) Precondición determinista: 2 eventos reales del tipo que expone la vista,
+    //    insertados por el endpoint real de ingesta (misma capa que usa la UI:
+    //    upsert idempotente scoped por membresía). NO se flipa el switch de
+    //    privacidad de /admin/gestion: su presencia depende de datos que crean
+    //    otras specs y con BD fresca hay 0 (medido 2026-10-12: 0 switches, 0
+    //    eventos en `eventos_auditoria` y por lo tanto faceta de tipos ausente).
     await page.goto("/admin/logs")
+    const sufijo = Date.now()
+    const eventosTest = [1, 2].map((n) => ({
+      id: `test-am-logs-${sufijo}-${n}`,
+      timestamp: new Date().toISOString(),
+      usuario: "Admin",
+      categoria: "AD",
+      tipoAccion: "AD_OWNER_CONFIG_CHANGE",
+      referenciaId: `test-am-logs-${sufijo}-${n}`,
+      descripcion: `RESIDENTE_VE_MOROSIDAD: morosidad=${n} (evento TEST de auditoría)`,
+    }))
+    const sync = await page.request.post(new URL("/api/auditoria/sync", page.url()).toString(), {
+      data: { eventos: eventosTest },
+    })
+    expect(sync.ok(), `POST /api/auditoria/sync -> ${sync.status()}`).toBe(true)
+
+    // 2) Vista /admin/logs: header read-only + contador BD (los 2 eventos ya están en BD)
+    await page.reload()
     await expect(page.getByRole("heading", { name: "Logs de Auditoría" })).toBeVisible({
       timeout: 30_000,
     })
@@ -30,39 +42,15 @@ test.describe("Logs de Auditoría (AM) — vista read-only en /admin/logs (BD)",
     // Contador BD: "X de Y eventos en BD" — números con separador "." es-CL (1.815)
     await expect(page.getByText(/de [\d.]+ eventos en BD/)).toBeVisible({ timeout: 30_000 })
 
-    // 3) Filtrar por tipo de acción primero (acota a los 2 eventos generados) con poll generoso
-    //    Debounce 2s + POST sync puede tardar. Los facets de tipo se cargan al montar la
-    //    página, así que una BD recién sembrada puede renderizar la lista antes de que
-    //    existan los eventos: reintentamos (máx. 5) recargando hasta ver la opción visible.
+    // 3) Filtrar por tipo de acción: la faceta se calcula sobre toda la BD, así que
+    //    con los eventos ya sembrados la opción está en la lista (assert directo).
+    //    El Select de Radix necesita click real: con `force: true` + `noWaitAfter`
+    //    el menú no se despliega (medido 2026-10-12).
     const comboTipo = page.getByRole("combobox", { name: "Filtrar por tipo de acción" })
     const opcionTipo = page.getByRole("option", { name: "AD_OWNER_CONFIG_CHANGE" })
-    let opcionTipoVisible = false
-    for (let intento = 1; intento <= 5 && !opcionTipoVisible; intento++) {
-      // Radix Select abre con el pointer real: con `force: true` + `noWaitAfter`
-      // el menú no se despliega (medido 2026-10-12) y el spec quedaba esperando
-      // una opción que nunca aparecía.
-      await comboTipo.click()
-      opcionTipoVisible = await opcionTipo
-        .waitFor({ state: "visible", timeout: 4_000 })
-        .then(() => true)
-        .catch(() => false)
-      if (opcionTipoVisible) {
-        await opcionTipo.click()
-        break
-      }
-      await page.keyboard.press("Escape")
-      if (intento < 5) {
-        await page.reload()
-        await expect(page.getByRole("heading", { name: "Logs de Auditoría" })).toBeVisible({
-          timeout: 30_000,
-        })
-      }
-    }
-    if (!opcionTipoVisible) {
-      throw new Error(
-        "No se pudo filtrar por AD_OWNER_CONFIG_CHANGE: la opción no apareció tras 5 intentos (facet de tipos no sincronizado con los eventos generados).",
-      )
-    }
+    await comboTipo.click()
+    await expect(opcionTipo).toBeVisible({ timeout: 15_000 })
+    await opcionTipo.click()
     await expect
       .poll(
         async () =>

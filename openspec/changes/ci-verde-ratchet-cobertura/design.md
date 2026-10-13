@@ -167,11 +167,17 @@ del propio arnés de pruebas.
    visible" creaba **dos filas** en `avisos_cv` con el mismo título (verificado en BD:
    `cv-1791834049113-67sra2` y `cv-1791834049909-v10a6b`), y el locator estricto reventaba con
    `resolved to 2 elements`. Ahora es single-shot idempotente + `toHaveCount(1)`.
-3. **`e2e/crud/logs.spec.ts` no abría el Select de Radix.** Con `click({ force: true,
-   noWaitAfter: true })` el menú no se despliega (medido con un probe propio: con click normal
-   abre con 60 opciones y `AD_OWNER_CONFIG_CHANGE` presente; la API ya devolvía la faceta entre
-   sus 59 tipos). Ahora usa click normal + reintento acotado con `reload()` para el caso de una
-   BD recién sembrada.
+3. **`e2e/crud/logs.spec.ts` dependía de datos de otras specs.** Generaba sus eventos
+   flipando el primer switch de privacidad de `/admin/gestion`, pero con **BD fresca hay 0
+   switches** (medido: 0 y `eventos_auditoria` en 0), así que no había eventos ni faceta de
+   tipos; en la lane completa el switch existía (lo crea el trabajo de otras specs) y el fallo
+   aparecía más tarde, esperando la faceta. Falso verde incluido: en una BD acumulada pasaba
+   aunque el spec no generara nada. Ahora siembra los 2 eventos por el **endpoint real de
+   ingesta** (`POST /api/auditoria/sync`, upsert idempotente scoped por membresía) y asserta
+   la faceta de forma directa; el Select se abre con click real (con `force: true` +
+   `noWaitAfter` Radix no despliega el menú: hallazgo secundario del mismo spec).
+   `e2e/crud/roles-journeys.spec.ts` además llevaba el timeout de CI por defecto (30s) para un
+   journey con varios waits → `test.setTimeout(120_000)` (medido: expiraba en conserjería).
 4. **`e2e/flujo/ciclo.spec.ts` con timeout insuficiente.** La confirmación de limpieza usaba 30s
    mientras `poblado-idempotente.spec.ts` usa 120s **con el motivo escrito** (purga secuencial de
    ~22 DELETEs con cascadas, ~13s caliente y hasta ~68s frío). Alineado a 120s.
