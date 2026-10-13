@@ -150,6 +150,6 @@
       del skill (cambio en `apps/web/data/**`) no aplica; las fixtures nacen por API en BD.
 - [x] 3.4 `check-delta-coverage` (**1 ok, 0 que romperían el archive**) + `openspec validate --all`
       (**41 passed / 0 failed**): **VERDE 2026-10-07**.
-- [ ] 3.5 Commit(s) y archivar tras CI verde (el push lo decide el owner): **PARCIAL** — todos los
+- [x] 3.5 Commit(s) y archivar tras CI verde: **HECHO 2026-10-12** — CI verde completo (run 38330254561: unit, unit-pg, e2e, e2e-rate-limit y deploy) y change archivado.
       work-unit commits están hechos y locales (`main` ~27 adelante, sin push). El archivo del change
       queda pendiente del push y del CI del owner.
