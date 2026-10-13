@@ -9,7 +9,7 @@
 |---|---|---|---|
 | P1 | `qlab-purga-bulk`: endpoint bulk de purga TEST + re-endurecer las 2 limpiezas de cola | HECHA | d080434 |
 | P2 | Helper compartido `e2e/helpers/form-dialog.ts` + migrar el patrón re-submit de los CRUD specs | HECHA | 77fadd5 |
-| P3 | Higiene chica: `tsc` en `unit-pg`, npm local vs CI, script `e2e:fresh` documentado | pendiente | — |
+| P3 | Higiene chica: `tsc` en `unit-pg`, npm local vs CI, script `e2e:fresh` documentado | EN CURSO | — |
 | P4 | Triage de los 6 changes activos viejos (cerrar/archivar o estado explícito) | pendiente | — |
 | P5 | Cierre de la serie: gates completos, push, CI de la rama, bitácora y deuda restante | pendiente | — |
 
