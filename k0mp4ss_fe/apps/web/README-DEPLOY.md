@@ -4,10 +4,27 @@
 
 ## Requisitos previos
 
-- Node.js 20+
+- Node.js 24+ (`.nvmrc` = 24; `engines.node` = `>=24`)
+- npm 11+ (`engines.npm` = `>=11`; ver más abajo)
 - Cuenta en [Vercel](https://vercel.com)
 - Base de datos PostgreSQL (cuando migres desde SQLite; ver post-serie)
 - Dominio propio (opcional, recomendado para producción)
+
+## Toolchain: Node y npm
+
+Regla de npm local vs CI (SERIE-NOCHE-2 P3):
+
+- `k0mp4ss_fe/package.json` declara `engines`: `node >=24` y `npm >=11`. npm solo
+  avisa (`EBADENGINE`) si no calza; no falla salvo `engine-strict` (no está activo:
+  el `.npmrc` del monorepo está vacío).
+- Node 24.21.0 trae npm 11.19.0 (local) y el CI usa Node 24 → mismo npm 11. Un
+  npm 12 futuro es compatible: `package-lock.json` usa `lockfileVersion: 3`
+  (formato estable desde npm 9).
+- **Nunca regenerar el lockfile** por diferencia de npm: CI corre `npm ci` sobre
+  el lock existente; si un npm más nuevo lo toca, descartar el cambio.
+- El campo `packageManager: "npm@10.8.2"` es un pin histórico del commit inicial:
+  npm no lo interpreta (no hay shim de corepack para npm), la regla efectiva es
+  `engines.npm`.
 
 ## Variables de entorno obligatorias
 
