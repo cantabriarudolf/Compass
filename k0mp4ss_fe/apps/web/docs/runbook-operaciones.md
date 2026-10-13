@@ -62,6 +62,9 @@ npm run e2e:fresh            # base prisma/perf-fresh.db desde cero + seed compl
 
 El script hace paridad con el job `e2e` del CI: `prisma migrate deploy
 --schema=prisma/schema.sqlite.prisma` con `DATABASE_URL=file:./<nombre>.db`, luego
+`npx prisma generate --schema=prisma/schema.sqlite.prisma` (regenera el client Prisma
+para SQLite: si el último generate fue el default PostgreSQL — p. ej. tras el job
+`unit-pg` — el seed fallaría con exit 1; fix R3-missing-prisma-generate), luego
 `npm run e2e:reseed-base` (usuarios TEST + mocks), y termina imprimiendo las advertencias
 y el comando Playwright exacto con paridad CI (`CI=1 … npx playwright test <specs>
 --reporter=list`). **Nunca toca `prisma/dev.db`** (el nombre se valida y `DATABASE_URL` se

@@ -4,8 +4,11 @@
  *
  * Paridad con el job `e2e` de .github/workflows/ci.yml:
  *   1) npx prisma migrate deploy --schema=prisma/schema.sqlite.prisma (con DATABASE_URL propio)
- *   2) npm run e2e:reseed-base (usuarios TEST vía API/authz + seed de mocks)
- *   3) imprime las advertencias operativas y el comando Playwright exacto con paridad CI.
+ *   2) npx prisma generate --schema=prisma/schema.sqlite.prisma (el client debe apuntar a
+ *      SQLite: si el último generate fue el default PostgreSQL — p. ej. tras el job
+ *      unit-pg — el seed correría con el client equivocado)
+ *   3) npm run e2e:reseed-base (usuarios TEST vía API/authz + seed de mocks)
+ *   4) imprime las advertencias operativas y el comando Playwright exacto con paridad CI.
  *
  * La base vive en prisma/<nombre>.db (gitignored vía `*.db`). NUNCA toca
  * prisma/dev.db: el nombre se valida y DATABASE_URL se fija explícitamente para
@@ -99,6 +102,13 @@ console.log(
   `[e2e-fresh] Base creada: ${path.relative(webDir, dbPath)} (${statSync(dbPath).size} bytes) — ` +
     `DATABASE_URL=${databaseUrl}`,
 );
+
+// (a.2) Cliente Prisma del schema SQLite: si el último `prisma generate` fue el
+// default (PostgreSQL, p. ej. tras correr el job unit-pg), el seed de abajo
+// fallaría contra esta base descartable. Regenerar acá fija el client correcto.
+correr("npx", ["prisma", "generate", "--schema=prisma/schema.sqlite.prisma"], {
+  DATABASE_URL: databaseUrl,
+});
 
 // (b) Seed completo contra ESA base (process.env DATABASE_URL pisa al .env).
 correr("npm", ["run", "e2e:reseed-base"], { DATABASE_URL: databaseUrl });
