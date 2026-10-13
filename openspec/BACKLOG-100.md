@@ -47,6 +47,11 @@
 
 ## C3 — Google SSO — ⏸ EN PAUSA (pendiente de credenciales del owner)
 
+> **Actualización NOCHE-2 P4 (2026-10-13):** el código del change `au-google-sso` ya está
+> en main (provider + fail-fast + UI + tests + credenciales dummy en CI); sigue **ACTIVO**
+> por las env vars reales de Vercel y las decisiones de owner de este checklist.
+> Fila detallada en §Changes activos (final del archivo).
+
 - **Spec:** `openspec/specs/AU-autenticacion-sesion/spec.md` §Autenticación Futura (Scenario
   Google SSO). El proyecto hoy: Auth.js credentials + JWT + rate limit persistente (Serie
   Plataforma P5/P4, ver `project.md`).
@@ -252,3 +257,20 @@ aclaración documental, 0 errores de cálculo.
 | `crud/logs.spec.ts` dependía del switch de privacidad de `/admin/gestion` (con BD fresca hay 0 switches → 0 eventos → sin faceta): falso verde con BD acumulada y rojo real en CI | ✅ HECHO — siembra 2 eventos por `POST /api/auditoria/sync` y asserta la faceta directo | `e2e/crud/logs.spec.ts` |
 | `crud/roles-journeys.spec.ts` con el timeout de CI por defecto (30s) para un journey con varios waits | ✅ HECHO — `test.setTimeout(120_000)` | `e2e/crud/roles-journeys.spec.ts` |
 | Purga QA-Lab sin endpoint bulk: borra una entidad TEST por request, así que tras un poblamiento completo excede los 120s en el runner de CI (5-11s local) | ✅ HECHA — `qlab-purga-bulk` (SERIE-NOCHE-2 P1): `POST /api/qa-lab/purga-test` bulk + fallback en `limpiar()`; 63 requests → 1 (916 ms server-side) | `app/admin/qa-lab/page.tsx`, `design.md § D6` |
+
+## Changes activos — triage SERIE-NOCHE-2 P4 (2026-10-13)
+
+Ventana P4 decidió **por evidencia** el destino de los 6 changes activos viejos: 3
+archivados (coverage ok + implementación verificada en repo + CI verde run `38330292787`)
+y 3 dejados activos con estado explícito. Descartados por "ya no aplica": **ninguno**.
+`qlab-purga-bulk` queda fuera de alcance (es el change de la P1 de esta serie; su archive
+va en P5, tras CI verde de la rama).
+
+| Change | Decisión 2026-10-13 | Evidencia / qué falta |
+|---|---|---|
+| `a11y-p3-reservas-recursos` | ✅ ARCHIVADO (`6093381`) | fix en main desde `1f41ca3`: `opacity-70` fuera + badge "vencida" + `bg-sky-700` en reservas; `aria-label` del selector de estado y badges 700 en recursos; `skip_specs: true`, coverage ok |
+| `fix-vercel-data-ignore` | ✅ ARCHIVADO (`7510059`) | `.vercelignore:11` = `/Data/` anclado + comentario desde `52b26b9`; `skip_specs: true`, coverage ok. Al owner: redeploy en Vercel |
+| `e2e-rojos-flujo-a11y-smoke` | ✅ ARCHIVADO (`17fd892`) | lanes `e2e/flujo`+`e2e/a11y`+`e2e/smoke` 37/37 (Bitácora SERIE-E2E-FULL-VERDE P3, commit `d9a8ad7`); TDZ proveedores, banner cookies, tab controlado de bitácora y `e2e:higiene` verificados en código; deltas aplicados: +4 requirements y ~2 modificados en 5 specs |
+| `e2e-higiene-determinismo` | ⏳ ACTIVO | seed authz determinista implementado y testeado (`seed-authz-orden.test.ts` 6/6), PERO el delta `DEV-qa-lab` "Specs GATED al final de la corrida (`e2e:full-orden`)" quedó obsoleto: `b7e88a8` eliminó el tag GATED y esos scripts; falta refrescar ese delta + aplicar el delta ST. Detalle en su `tasks.md` |
+| `au-google-sso` | ⏸ ACTIVO (owner) | código y tests en main; falta 3.1 env vars reales en Vercel + login Google en producción + 2 decisiones de rol/migración. Ver §C3 |
+| `st-split-fase2` | ⏳ ACTIVO | 0/19 tasks; no existe `lib/store/slices/` y `lib/store.ts` sigue monolito (8.889 líneas); alcance pendiente = 7 slices hoja (IR, MT, AD, PI/D3, CO, GE, CV) en el orden del proposal |

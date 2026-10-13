@@ -29,3 +29,14 @@
 ## Post-Fase 2
 - [ ] 5.1 Documentar en manual de arquitectura
 - [ ] 5.2 Avance NSGC
+
+> Estado 2026-10-13 (NOCHE-2 P4): **sigue activo — parcial en 0%, alcance sin tocar.**
+> 0/19 tasks: no existe `lib/store/slices/` (solo `helpers.ts` de la Fase 1 `eff32c3`) y
+> `lib/store.ts` sigue monolito con **8.889 líneas**. Qué falta (alcance explícito):
+> extraer los 7 slices hoja en el orden del proposal — IR (~350 líneas/9 acciones), MT
+> (~350/6), AD (~400/5, con `publicarActaEnCV` mutando CV permitido en Fase 2), PI/D3
+> (~350/6), CO (~700/8), GE (~200/4), CV (~320/5) — como factories `StateCreator` con
+> spread en `lib/store.ts`, 1-2 slices por ventana, verificación por slice (tsc 0 + tests
+> del dominio + e2e CRUD + `STORE_VERSION` solo si cambia el schema de persistencia) y
+> Post-Fase 2 (manual de arquitectura + avance NSGC). Las escrituras cruzadas quedan para
+> Fase 3.
