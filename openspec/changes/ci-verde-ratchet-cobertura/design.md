@@ -199,6 +199,18 @@ quedaron verdes en la re-corrida dirigida (`logs` 7/7, `visor` + `ciclo` + `pobl
    orden por fases y sin tocar guards ni semántica. Medido local con build de producción y BD
    fresca: **11.1s → 5.6s**, con el mensaje verde (sin fallos transitorios de los lotes).
 
+6. **La purga del QA-Lab sigue siendo O(n) requests (deuda declarada, no resuelta).** Se paralelizó
+   en lotes de 6 y la limpieza inicial de cada spec sigue estricta, pero **tras un poblamiento
+   completo** el runner tarda más de 120s en terminar de borrar (5-11s local con la misma
+   secuencia): no hay endpoint bulk y cada entidad TEST se borra con su propia request. Con la
+   purga por id, ninguna tolerancia elimina el costo. Por eso la **limpieza de cola** de
+   `crud/poblado-idempotente` y `flujo/ciclo` pasó a best-effort documentado (espera 90s y acepta
+   seguir en curso; el residuo lo absorbe el `clickBorrar` del spec siguiente —idempotente por
+   diseño, C2— o `npm run e2e:higiene --apply`), mientras el sujeto de cada spec (guard,
+   idempotencia, limpieza conservadora) y su limpieza inicial siguen estrictos.
+   **Deuda para una ventana propia**: `qlab-purga-bulk` (`DELETE` por colección/periodo
+   server-side + tests) y recién entonces volver a endurecer esas limpiezas de cola.
+
 ## Rollback
 
 `git revert` del commit del change: el workflow y los umbrales vuelven al estado anterior (CI
