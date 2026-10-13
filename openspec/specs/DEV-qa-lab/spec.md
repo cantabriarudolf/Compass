@@ -153,7 +153,13 @@ la receta `npm run e2e:reseed-base` + `npm run e2e:higiene --apply` SHALL
 restaurar el estado base (detalle en el requirement `Higiene BD repetible
 (e2e:higiene)`). El restore del nombre de `admin-configuracion` en `finally`
 SHALL mantenerse compatible: restaura el nombre original del seed para que
-`permisos` siga encontrando `/Los Aromos/`.
+`permisos` siga encontrando `/Los Aromos/`. `npm run e2e:fresh`
+(`scripts/e2e-fresh.mjs`) SHALL regenerar el cliente Prisma del schema SQLite
+(`npx prisma generate --schema=prisma/schema.sqlite.prisma`, con el
+`DATABASE_URL` propio de la base descartable) entre el `migrate deploy` y el
+`e2e:reseed-base`, de modo que el seed y la corrida no dependan de cuál fue el
+último `prisma generate` de la máquina (p. ej. el default PostgreSQL tras el job
+`unit-pg`), que rompía el seed con exit 1 (R3-missing-prisma-generate).
 
 #### Scenario: Corrida única sin tag GATED ni scripts de orden
 - **WHEN** se corre `npx playwright test` (local o job `e2e` del CI)
@@ -172,3 +178,11 @@ SHALL mantenerse compatible: restaura el nombre original del seed para que
   (su dry-run por defecto reporta las filas TEST/QA a purgar)
 - **THEN** la BD vuelve al estado base y la corrida siguiente parte determinista,
   sin receta manual de membresías
+
+#### Scenario: e2e:fresh fija el cliente Prisma SQLite antes del seed (R3-missing-prisma-generate)
+- **WHEN** el último `prisma generate` de la máquina fue el default PostgreSQL
+  (p. ej. tras correr `npx prisma generate` a secas como el job `unit-pg`) y se
+  ejecuta `npm run e2e:fresh`
+- **THEN** el script corre `npx prisma generate --schema=prisma/schema.sqlite.prisma`
+  con el `DATABASE_URL` de la base descartable antes de `npm run e2e:reseed-base`,
+  el seed termina completo y el script cierra con "Lista: base fresca + seed completo"
