@@ -235,9 +235,9 @@ aclaración documental, 0 errores de cálculo.
 | Una sola línea de Node: `.nvmrc` = 24, `engines.node` = `>=24`, CI `node-version: 24`, local 24.21.0 (LTS Krypton) | ✅ HECHO | `.nvmrc`, `k0mp4ss_fe/package.json` |
 | `lib/store.ts`: 1.202 statements sin cubrir (84.21%, archivo de ~8.800 líneas) | ⏳ PENDIENTE — change `store-cobertura-fase-b` | §Deuda en `design.md` |
 | Superficie API: 2.114 statements sin cubrir (79.40%); los más bajos: `app/api/personas` 70.54%, `app/api/unidades`, `app/api/vinculos` | ⏳ PENDIENTE — change `api-cobertura-fases` | §Deuda en `design.md` |
-| `e2e-rate-limit` rojo desde el 2026-09-12 (spec aislada que bloquea la IP 15 min) | ⏳ PENDIENTE — reproducir con `E2E_RATE_LIMIT=1 npx playwright test e2e/auth/rate-limit.spec.ts` | run `34711169952` |
+| `e2e-rate-limit` rojo desde el 2026-09-12 (spec aislada que bloquea la IP 15 min) | ✅ HECHO — 7/7 local y job CI verde en el run `38396862941` (2m16s), SERIE-NOCHE-2 P5 | run `38396862941` |
 | Secrets de Vercel (`VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`) | ⏳ ACCIÓN DEL OWNER — al cargarlos el job `deploy` corre solo | Settings → Secrets del repo |
-| npm local 12.2.0 vs 11.19 de CI (lockfile v3 compatible, verificado) | ⏳ PENDIENTE menor — `nvm install 24.21.0` | §Deuda en `design.md` |
+| npm local 12.2.0 vs 11.19 de CI (lockfile v3 compatible, verificado) | ✅ RESUELTO — `engines.npm: ">=11"` en `k0mp4ss_fe/package.json` + regla documentada en `README-DEPLOY.md` (SERIE-NOCHE-2 P3, `c20d59c`); lockfile v3 compatible | `k0mp4ss_fe/package.json`, `README-DEPLOY.md` |
 
 ### Deuda e2e destapada al reactivar la lane (2026-10-12, mismo change)
 
@@ -252,7 +252,7 @@ aclaración documental, 0 errores de cálculo.
 | `flujo/ciclo.spec.ts` limpieza con timeout 30s (purga secuencial tarda más) | ✅ HECHO — alineado a 120s | `e2e/flujo/ciclo.spec.ts` |
 | Barrido del patrón "re-submit hasta que cierre el dialog" en el resto de los CRUD specs | ✅ HECHO — helper `e2e/helpers/form-dialog.ts` (single-shot idempotente) + 11 CRUD specs migrados y verdes en paridad CI (SERIE-NOCHE-2 P2) | `tasks.md §5.0` |
 | Correr la lane e2e local requiere BD fresca (`e2e:reseed-base`) y **no** correr antes el spec de rate-limit (bloquea la IP 15 min y aborta `auth.setup`) | 📌 REGLA OPERATIVA | `runbook-operaciones.md`, `design.md § D6` |
-| El guard de Google (`AU-autenticacion-sesion`) exige credenciales en producción y su mensaje ofrece "disable the Google provider", pero **esa bandera no existe**: en CI se usan credenciales dummy para poder construir | ⏳ PENDIENTE (serie SG/AU) — agregar `GOOGLE_PROVIDER_DISABLED` documentado | `design.md § D5.5` |
+| El guard de Google (`AU-autenticacion-sesion`) exige credenciales en producción y su mensaje ofrece "disable the Google provider", pero **esa bandera no existe**: en CI se usan credenciales dummy para poder construir | ✅ HECHA — `GOOGLE_PROVIDER_DISABLED=1`: (a) salta el fail-fast de producción y (b) no registra el provider Google (solo Credentials); mensaje que nombra la bandera, tests TDD 6/6, `.env.example` + runbook, change `au-google-provider-disabled` (S3 saneamiento, `9fba97d`) | `lib/auth.ts`, `design.md § D5.5` |
 | Purga QA-Lab secuencial (1 request por entidad) tardaba >120s en CI con la BD acumulada y hacía fallar `poblado-idempotente`/`flujo/ciclo` en su limpieza final | ✅ HECHO — lotes de 6 (`borrarEnLote`) manteniendo el orden por fases; medido 11.1s → 5.6s local | `app/admin/qa-lab/page.tsx` |
 | `crud/logs.spec.ts` dependía del switch de privacidad de `/admin/gestion` (con BD fresca hay 0 switches → 0 eventos → sin faceta): falso verde con BD acumulada y rojo real en CI | ✅ HECHO — siembra 2 eventos por `POST /api/auditoria/sync` y asserta la faceta directo | `e2e/crud/logs.spec.ts` |
 | `crud/roles-journeys.spec.ts` con el timeout de CI por defecto (30s) para un journey con varios waits | ✅ HECHO — `test.setTimeout(120_000)` | `e2e/crud/roles-journeys.spec.ts` |
@@ -274,3 +274,23 @@ va en P5, tras CI verde de la rama).
 | `e2e-higiene-determinismo` | ✅ ARCHIVADO (`2026-10-13-e2e-higiene-determinismo`) | Saneamiento S4: delta `DEV-qa-lab` refrescado al diseño actual (corrida única `npx playwright test` sin tag GATED, specs autónomos vía `e2e/helpers/datos-test.ts`, receta `e2e:reseed-base` + `e2e:higiene --apply`) en vez de la estrategia muerta de `b7e88a8`; delta ST (seed determinista) aplicado a la spec viva; `check-delta-coverage` 0 → archive → `validate --all` 39/39 |
 | `au-google-sso` | ⏸ ACTIVO (owner) | código y tests en main; falta 3.1 env vars reales en Vercel + login Google en producción + 2 decisiones de rol/migración. Ver §C3 |
 | `st-split-fase2` | ⏳ ACTIVO | 0/19 tasks; no existe `lib/store/slices/` y `lib/store.ts` sigue monolito (8.889 líneas); alcance pendiente = 7 slices hoja (IR, MT, AD, PI/D3, CO, GE, CV) en el orden del proposal |
+
+## Saneamiento pre-pruebas (2026-10-13)
+
+Unidad de trabajo fuera de serie (rama `noche/serie-noche-2`) para saldar deuda
+accionable antes de las pruebas manuales del owner. Sin push propio: el orquestador
+agrupa el push y corre el CI.
+
+| Unidad | Qué quedó hecho | Evidencia |
+|---|---|---|
+| S1 | Opt-in `E2E_ALLOW_WRITE_APIS=1` en `isWriteApiEnabled()` con doble candado (solo lane e2e del CI) + tests TDD + delta `SG-hardening-despliegue` + runbook | `7d0d6e3`, `c781182`, `e13297f`, `a889384` |
+| S3 | Bandera `GOOGLE_PROVIDER_DISABLED=1`: (a) no corre el fail-fast de producción y (b) no registra el provider Google (queda solo Credentials); mensaje de error que nombra la bandera; tests TDD 6/6; `.env.example` + `docs/runbook-operaciones.md`; change `au-google-provider-disabled` (propose → apply, **no archivado**) | `9fba97d` |
+| S4 | `e2e-higiene-determinismo` **archivado**: delta `DEV-qa-lab` refrescado al diseño actual (corrida única `npx playwright test` sin tag GATED, specs autónomos, `e2e:higiene`) y delta ST (seed determinista) aplicado a la spec viva | `04eb1cf` |
+| S5 | Este archivo al día (filas `e2e-rate-limit`, npm local/CI, `GOOGLE_PROVIDER_DISABLED`, rojos de UI) + Bitácora de `SERIE-VALIDACION-PERFILES` | (commit de S5) |
+
+- **Rojos de UI de la validación (SERIE-VALIDACION-PERFILES P3)**: el selector
+  "Los Aromos" de `permisos` y la persistencia de `admin-config` quedaron **cubiertos**
+  por `e2e/crud/permisos.spec.ts` y `e2e/crud/admin-configuracion.spec.ts` (lane verde);
+  dejan de ser rojos abiertos.
+- **Cierre**: el CI verde de la rama + el archive de `qlab-purga-bulk` los cierra el
+  orquestador (S2 del saneamiento).
