@@ -278,12 +278,13 @@ va en P5, tras CI verde de la rama).
 ## Saneamiento pre-pruebas (2026-10-13)
 
 Unidad de trabajo fuera de serie (rama `noche/serie-noche-2`) para saldar deuda
-accionable antes de las pruebas manuales del owner. Sin push propio: el orquestador
-agrupa el push y corre el CI.
+accionable antes de las pruebas manuales del owner. **Cerrada**: push realizado, CI del
+PR #1 verde (run `38444800307`) y `qlab-purga-bulk` archivado.
 
 | Unidad | Qué quedó hecho | Evidencia |
 |---|---|---|
 | S1 | Opt-in `E2E_ALLOW_WRITE_APIS=1` en `isWriteApiEnabled()` con doble candado (solo lane e2e del CI) + tests TDD + delta `SG-hardening-despliegue` + runbook | `7d0d6e3`, `c781182`, `e13297f`, `a889384` |
+| S2 ✅ | **CI verde + archive**: push de la rama (docs pre-push `53b777b`), run `38444800307` verde (unit ✅ · unit-pg ✅ · e2e build producción con `E2E_ALLOW_WRITE_APIS=1` ✅ · rate-limit aislado ✅ · deploy skipped), `qlab-purga-bulk` **archivado** (`0f10d47`, delta `LAB-mejoras` +1, validate 38/38), fila P5 → HECHA | run `38444800307`, `0f10d47` |
 | S3 | Bandera `GOOGLE_PROVIDER_DISABLED=1`: (a) no corre el fail-fast de producción y (b) no registra el provider Google (queda solo Credentials); mensaje de error que nombra la bandera; tests TDD 6/6; `.env.example` + `docs/runbook-operaciones.md`; change `au-google-provider-disabled` (propose → apply, **no archivado**) | `9fba97d` |
 | S4 | `e2e-higiene-determinismo` **archivado**: delta `DEV-qa-lab` refrescado al diseño actual (corrida única `npx playwright test` sin tag GATED, specs autónomos, `e2e:higiene`) y delta ST (seed determinista) aplicado a la spec viva | `04eb1cf` |
 | S5 | Este archivo al día (filas `e2e-rate-limit`, npm local/CI, `GOOGLE_PROVIDER_DISABLED`, rojos de UI) + Bitácora de `SERIE-VALIDACION-PERFILES` | (commit de S5) |
@@ -292,5 +293,6 @@ agrupa el push y corre el CI.
   "Los Aromos" de `permisos` y la persistencia de `admin-config` quedaron **cubiertos**
   por `e2e/crud/permisos.spec.ts` y `e2e/crud/admin-configuracion.spec.ts` (lane verde);
   dejan de ser rojos abiertos.
-- **Cierre**: el CI verde de la rama + el archive de `qlab-purga-bulk` los cierra el
-  orquestador (S2 del saneamiento).
+- **Cierre (S2, hecho)**: CI verde del PR #1 en el run `38444800307` + archive de
+  `qlab-purga-bulk` (`0f10d47`); el saneamiento quedó **cerrado** con P5 → HECHA en
+  `openspec/SERIE-NOCHE-2/00-plan.md`.

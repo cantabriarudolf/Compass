@@ -11,7 +11,7 @@
 | P2 | Helper compartido `e2e/helpers/form-dialog.ts` + migrar el patrón re-submit de los CRUD specs | HECHA | 77fadd5 |
 | P3 | Higiene chica: `tsc` en `unit-pg`, npm local vs CI, script `e2e:fresh` documentado | HECHA | 60bf48d |
 | P4 | Triage de los 6 changes activos viejos (cerrar/archivar o estado explícito) | HECHA | 83842d6 |
-| P5 | Cierre de la serie: gates completos, push, CI de la rama, bitácora y deuda restante | BLOQUEADO (CI e2e) | b676da8 |
+| P5 | Cierre de la serie: gates completos, push, CI de la rama, bitácora y deuda restante | HECHA | 0f10d47 |
 
 MÁXIMO: 5 ventanas. **Post-serie (otra noche)**: `SERIE-NOCHE-3` = cobertura real
 (`lib/store.ts` 1.202 statements + `app/api/**` 2.114 statements sin cubrir).
@@ -57,47 +57,47 @@ MÁXIMO: 5 ventanas. **Post-serie (otra noche)**: `SERIE-NOCHE-3` = cobertura re
 - [2026-10-13] P3 HECHA: higiene chica — `npx tsc --noEmit` agregado al job `unit-pg` (paridad con el job SQLite, YAML validado); `engines.npm: ">=11"` en `k0mp4ss_fe/package.json` + regla npm local vs CI documentada en `README-DEPLOY.md` (lockfile v3 compatible con npm 11 y 12, lockfile no se regenera, `packageManager: npm@10.8.2` es pin histórico inerte); `npm run e2e:fresh` (`scripts/e2e-fresh.mjs`) recrea base descartable `prisma/perf*.db` desde `migrate deploy --schema=prisma/schema.sqlite.prisma`, siembra con `e2e:reseed-base`, imprime en grande las 2 advertencias (base fresca por corrida; nunca rate-limit primero) y el comando Playwright con paridad CI, con guard anti-`dev.db` (nombre + `DATABASE_URL` fijo que pisa al `.env`, verificado con `node --env-file-if-exists` y `vite-node`). Documentado en `runbook-operaciones.md`. Gates: tsc 0 · 981/981 (pisos cumplidos) · validate 41/0 · delta coverage ok · `e2e:fresh` exit 0 ×2 corridas (base 1.085.440 bytes, siembra usuarios=6/membresias=7/Comunidad=2/unidades=166/personas=55, `dev.db` intacto) · e2e dirigida smoke paridad CI 22/22 en 1.2 min sobre `perf-fresh.db`. Commits ffb6dec, c20d59c, 0a5073d, 60bf48d (avance). Nota: `next-env.d.ts` lo regeneró `npm run build` (ref `.next/types` en vez de `.next/dev/types`) y se restauró al contenido commiteado; no forma parte del cambio.
 - [2026-10-13] P4 HECHA: triage de los 6 changes activos viejos **por evidencia**, sin tocar código de producto. Archivados: `a11y-p3-reservas-recursos` (commit 6093381; fix en main desde 1f41ca3 — `opacity-70` fuera + badge "vencida" + `bg-sky-700` en reservas, `aria-label` y badges 700 en recursos; `skip_specs: true`), `fix-vercel-data-ignore` (7510059; `.vercelignore:11` = `/Data/` anclado + comentario desde 52b26b9, ancestro del CI verde 38330292787; al owner el redeploy en Vercel) y `e2e-rojos-flujo-a11y-smoke` (17fd892; lanes flujo/a11y/smoke 37/37 en d9a8ad7 + fixes verificados en código: `editandoProvId` antes que `rutProvDuplicado`, banner cookies con reintento, tabs controlados de bitácora, `e2e:higiene` y helper `datos-test`; coverage ok → +4 requirements y ~2 modificados aplicados en 5 specs: DEV-qa-lab, EF, MP, OP-bitacora-nullguards, PE). Activos con estado explícito en su `tasks.md` + fila en BACKLOG (commit 62d062c): `e2e-higiene-determinismo` (seed determinista implementado y testeado 6/6, pero el delta DEV-qa-lab "Specs GATED al final / e2e:full-orden" quedó obsoleto tras b7e88a8 —>tag GATED y scripts eliminados— y el delta ST no está en la spec viva; refrescar deltas antes de archivar), `au-google-sso` (código + tests en main; bloqueo owner: env vars reales en Vercel + decisiones de rol/migración; §C3 actualizado) y `st-split-fase2` (0/19 tasks, sin `lib/store/slices/`, monolito 8.889 líneas; alcance = 7 slices hoja escrito en su tasks.md). Ninguno descartado; `qlab-purga-bulk` fuera de alcance (archive en P5 tras CI). Gates: tsc 0 · 981/981 · `validate --all` 38/38 (41 −3 archives) · coverage global y por change 0 conflictos · RG §4 sin términos obsoletos. Commits 6093381, 7510059, 17fd892, 62d062c, 83842d6 (avance).
 
-## Cierre de la serie (auditoría del orquestador, 2026-10-13)
+- [2026-10-13] P5 resuelta (unidad S2 del saneamiento pre-pruebas, fuera de serie): push de los commits del saneamiento + docs pre-push (`53b777b`), CI del PR #1 **verde** en el run `38444800307` (unit ✅ · unit-pg ✅ · e2e build producción con `E2E_ALLOW_WRITE_APIS=1` ✅ · rate-limit aislado ✅ · deploy skipped), archive de `qlab-purga-bulk` (`0f10d47`, delta `LAB-mejoras` +1, validate 38/38). Fila P5 → HECHA.
 
-**Estado: CERRADA con P5 BLOQUEADA en CI.** P1–P4 HECHAS y pusheadas; P5 hizo gates
-locales, fix de `crud/recursos`, push y PR draft, pero el job `E2E Playwright (build
-producción)` del CI del PR quedó **rojo** y su causa raíz es una decisión del owner.
+## Cierre de la serie (auditoría del orquestador, 2026-10-13; resolución del bloqueo el mismo día, unidad S2 del saneamiento pre-pruebas)
+
+**Estado: CERRADA, P5 HECHA.** P1–P4 HECHAS; P5 quedó BLOQUEADA en CI (ver nota histórica
+abajo) y el bloqueo se resolvió con el saneamiento pre-pruebas (unidad fuera de serie): el
+owner autorizó el **opt-in `E2E_ALLOW_WRITE_APIS=1`** en `isWriteApiEnabled()` con doble
+candado (`NEXT_PUBLIC_APP_ENV=development` además del opt-in; cableado SOLO en el job `e2e`
+de `.github/workflows/ci.yml`), commits `7d0d6e3` (guard + tests TDD), `c781182` (specs de
+lane sincronizados con el camino bulk), `e13297f` (env del job CI) y `a889384` (runbook).
+Producción/Vercel queda intacta (doble candado bloquea aunque el opt-in esté seteado).
 
 **PR #1**: `https://github.com/cantabriarudolf/Compass/pull/1` (draft, OPEN, rama
-`noche/serie-noche-2`, HEAD `b676da8`). **No se mergeó y no se pusheó a `main`.**
+`noche/serie-noche-2`). **No se mergeó y no se pusheó a `main`.**
 
-| Job CI (run `38396862941`) | Resultado |
+| Job CI (run `38444800307`, el verde definitivo) | Resultado |
 |---|---|
-| Unit + integración (Vitest SQLite) | ✅ 2m23s |
-| Unit + integración PostgreSQL | ✅ 3m33s |
-| E2E Playwright (build producción) | ❌ 18m31s |
-| E2E rate-limit (aislado) | ✅ 2m16s |
-| Deploy a Vercel (producción) | ⏭️ skipped (draft PR) |
+| Unit + integración (Vitest SQLite) | ✅ success |
+| Unit + integración PostgreSQL | ✅ success |
+| E2E Playwright (build producción, `E2E_ALLOW_WRITE_APIS=1`) | ✅ success (bulk real, sin caer al fallback O(n)) |
+| E2E rate-limit (aislado) | ✅ success |
+| Deploy a Vercel (producción) | ⏭️ skipped (draft PR, esperado) |
 
-**Fallo (determinista, 3/3 intentos)**: `e2e/crud/poblado-idempotente.spec.ts:84` —
-"segunda corrida via dialog confirmar → limpiar+poblar con 22/22 🟢":
-`getByText(/TEST-\* limpio correctamente/)` no aparece dentro de 120 s (1 solo testcase
-fallado de 104; `flujo/ciclo » sin limpiar queda BLOQUEADA` pasó recién en retry #1).
+**Archive**: con CI verde corrió el pre-gate `node openspec/scripts/check-delta-coverage.mjs
+qlab-purga-bulk` (1 ok · **0 que romperían el archive**) → `openspec archive
+qlab-purga-bulk --yes` (delta `LAB-mejoras` aplicado: +1 requisito, el endpoint
+`POST /api/qa-lab/purga-test`) → `openspec validate --all` **38/38**. Change archivado como
+`openspec/changes/archive/2026-10-13-qlab-purga-bulk/` en el commit `0f10d47`.
 
-**Causa raíz** (el riesgo que P1 dejó anotado): la lane de CI sirve el build de producción
-(`playwright.config.ts` webServer CI = `npm run start` → `NODE_ENV=production`) y
-`isWriteApiEnabled()` exige `NODE_ENV=development|test` (endurecimiento de
-SERIE-PRODUCCION P2). Con el guard apagado, `limpiar()` cae al fallback O(n) por entidad y
-en el runner ese fallback supera los 120 s estrictos que P1 volvió a exigir. El camino bulk
-(1 request / ~4 s) solo se ejerce en dev/test, donde el guard está ON.
+**Nota histórica — por qué P5 estuvo BLOQUEADA**: el job `E2E Playwright (build producción)`
+del run `38396862941` quedó rojo de forma determinista (3/3 intentos):
+`e2e/crud/poblado-idempotente.spec.ts:84` no ve `TEST-* limpio correctamente` en 120 s
+porque la lane sirve el build de producción (`NODE_ENV=production` → guard
+`isWriteApiEnabled()` off) y `limpiar()` caía al fallback O(n), que en el runner supera los
+120 s estrictos. La causa raíz es la decisión derivada al owner (habilitar el camino bulk en
+la lane) y se resolvió con el opt-in de arriba; los runs intermedios previos al fix también
+fueron rojos por esta misma causa.
 
-**Decisión del owner** (no se tomó de madrugada; P1 ya la había derivado): habilitar el
-camino bulk en la lane e2e, eligiendo una opción:
-1. servir la lane con `next dev` (guard ON; se pierde la paridad de runtime del build);
-2. opt-in explícito del guard para CI (p. ej. `E2E_ALLOW_WRITE_APIS=1`; cambio
-   security-adjacent, requiere revisión);
-3. aceptar el fallback y relajar el timeout estricto (regresión del objetivo de P1).
-
-**`qlab-purga-bulk` NO se archivó** (P1/P4 condicionaron el archive a CI verde); sigue
-activo en `openspec/changes/qlab-purga-bulk/` con su implementación y tests completos.
-
-**RDD (review nativo)**: pendiente — candidate = slice del PR #1; se retoma después de la
-decisión de CI para no revisar un candidato que va a recibir ese fix.
+**RDD (review nativo)**: pendiente con el owner — candidate = slice del PR #1; fuera del
+alcance de la serie (regla: la serie no usa herramientas de review).
 
 **Deuda viva**: `SERIE-NOCHE-3` (cobertura `lib/store.ts` + `app/api/**`), secrets de Vercel
-del owner, `GOOGLE_PROVIDER_DISABLED`, y la decisión guard/lane de arriba.
+del owner (checklist §C3), `au-google-provider-disabled` (propose→apply; archivar cuando el
+CI de su change corra verde en su propia ventana) y `st-split-fase2` (0/19 tasks).
