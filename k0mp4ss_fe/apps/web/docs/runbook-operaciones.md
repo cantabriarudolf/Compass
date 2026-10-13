@@ -49,6 +49,31 @@ Usa el mecanismo de backups de tu proveedor:
 - Supabase: backups automáticos diarios
 - Neon: branches + point-in-time restore
 
+## Escenario: Lane e2e local (base fresca)
+
+La lane e2e **siempre** arranca con una base descartable fresca: datos viejos de corridas
+anteriores producen falsos positivos (duplicados, estados residuales).
+
+```bash
+cd k0mp4ss_fe/apps/web
+npm run e2e:fresh            # base prisma/perf-fresh.db desde cero + seed completo
+# npm run e2e:fresh -- perf-noche.db   # nombre propio (siempre prefijo perf*.db)
+```
+
+El script hace paridad con el job `e2e` del CI: `prisma migrate deploy
+--schema=prisma/schema.sqlite.prisma` con `DATABASE_URL=file:./<nombre>.db`, luego
+`npm run e2e:reseed-base` (usuarios TEST + mocks), y termina imprimiendo las advertencias
+y el comando Playwright exacto con paridad CI (`CI=1 … npx playwright test <specs>
+--reporter=list`). **Nunca toca `prisma/dev.db`** (el nombre se valida y `DATABASE_URL` se
+fija explícitamente para los subprocesos).
+
+Dos reglas duras de la lane:
+
+1. **Base fresca por corrida**: recreá la base con `npm run e2e:fresh` antes de cada lane.
+2. **Nunca correr primero el spec de rate-limit** (`e2e/auth/rate-limit.spec.ts` con
+   `E2E_RATE_LIMIT=1`): bloquea la IP 15 minutos y aborta `auth.setup`. Corre SOLO al final
+   y aislado, después de la lane normal.
+
 ## Contactos y escalación
 
 - **Owner del proyecto**: (agregar)
