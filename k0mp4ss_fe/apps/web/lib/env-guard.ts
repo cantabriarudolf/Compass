@@ -24,11 +24,23 @@ export function getAppEnv(): AppEnv {
  * `NODE_ENV=test` (valor que usa vitest) cuenta como desarrollo: nunca existe
  * en un deploy real (Next solo produce `development` o `production`), pero
  * permite que los tests de las rutas authz sigan ejerciendo la lógica interna.
+ *
+ * Opt-in de la lane e2e (e2e-guard-optin-ci, doble candado): la lane e2e
+ * sirve el build de producción (`next start` → `NODE_ENV=production`) y sin
+ * escrituras `limpiar()` del QA-Lab cae al fallback O(n) y revienta los 120 s
+ * estrictos de las limpiezas de cola. `E2E_ALLOW_WRITE_APIS=1` (cableado SOLO
+ * en el job `e2e` del CI) habilita las APIs en ese caso, PERO solo si además
+ * `getAppEnv() === "development"`: un deploy con `NEXT_PUBLIC_APP_ENV=production`
+ * sigue bloqueado aunque el opt-in esté seteado (producción/Vercel intacta).
+ * El valor debe ser exactamente `"1"`; cualquier otro valor no cuenta.
  */
 export function isWriteApiEnabled(): boolean {
   const nodeEnv = process.env.NODE_ENV ?? ""
   const runtimeDev = nodeEnv === "development" || nodeEnv === "test"
-  return runtimeDev && getAppEnv() === "development"
+  if (runtimeDev && getAppEnv() === "development") return true
+  // Doble candado del opt-in e2e: el opt-in NO basta; el entorno efectivo de
+  // la app debe seguir siendo development.
+  return process.env.E2E_ALLOW_WRITE_APIS === "1" && getAppEnv() === "development"
 }
 
 /** true si el entorno efectivo de la app es producción. */
