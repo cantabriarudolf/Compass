@@ -7,7 +7,7 @@
 
 | Ventana | Alcance | Estado | Commit final |
 |---|---|---|---|
-| P1 | `qlab-purga-bulk`: endpoint bulk de purga TEST + re-endurecer las 2 limpiezas de cola | EN CURSO | — |
+| P1 | `qlab-purga-bulk`: endpoint bulk de purga TEST + re-endurecer las 2 limpiezas de cola | HECHA | d080434 |
 | P2 | Helper compartido `e2e/helpers/form-dialog.ts` + migrar el patrón re-submit de los CRUD specs | pendiente | — |
 | P3 | Higiene chica: `tsc` en `unit-pg`, npm local vs CI, script `e2e:fresh` documentado | pendiente | — |
 | P4 | Triage de los 6 changes activos viejos (cerrar/archivar o estado explícito) | pendiente | — |
@@ -51,4 +51,5 @@ MÁXIMO: 5 ventanas. **Post-serie (otra noche)**: `SERIE-NOCHE-3` = cobertura re
   `CI=1 DATABASE_URL=file:./perfN.db AUTH_SECRET=ci-e2e-secret-no-produccion NEXT_PUBLIC_APP_ENV=development GOOGLE_CLIENT_ID=ci-dummy GOOGLE_CLIENT_SECRET=ci-dummy npx playwright test <specs> --reporter=list`
 
 ## Bitácora
-(vacía — cada ventana añade antes del push: `- [fecha] P<n> HECHA: resumen (commit hash)`)
+- [2026-10-13] P1 HECHA: `qlab-purga-bulk` — endpoint `POST /api/qa-lab/purga-test` (guard 404/401/403, solo TEST + procedencia, idempotente) y `limpiar()` con el bucle como fallback; limpiezas de cola de `poblado-idempotente` y `ciclo` estrictas otra vez (120 s). Gates: tsc 0 · 981/981 · validate 41/0 · delta coverage ok · e2e paridad CI 14/14 sin flaky sobre `perf-noche.db` (commits aa4fd3b, f2a7179, d080434).
+- [2026-10-13] P1 (detalle): medición ad-hoc sobre poblamiento completo (44 filas/25 colecciones): antes ≈63 requests de purga y 59.011 ms (dev) / >120 s CI → después 1 request y 3.917 ms wall (916 ms server-side). PUSH de la rama NO realizado en esta ventana: instrucción de proyecto vigente "NO hacer push (el orquestador lo decide)". Pendiente P5: en build de producción `isWriteApiEnabled()` es falso (NODE_ENV=production) y el cliente cae al fallback (3.1 s local) — verificar en el runner de GitHub que las limpiezas estrictas caben en 120 s.
