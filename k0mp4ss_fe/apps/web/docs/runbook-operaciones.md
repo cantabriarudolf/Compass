@@ -74,6 +74,27 @@ Dos reglas duras de la lane:
    `E2E_RATE_LIMIT=1`): bloquea la IP 15 minutos y aborta `auth.setup`. Corre SOLO al final
    y aislado, después de la lane normal.
 
+## Escenario: APIs de escritura bloqueadas (env-guard)
+
+Las APIs de escritura (`/api/qa-lab/purga-test`, `/api/backup`, `/api/dev-dashboard`, …)
+las controla `isWriteApiEnabled()` (`lib/env-guard.ts`). En un build de producción
+(`next start`, `NODE_ENV=production`) están **bloqueadas por defecto** (404), incluso con
+`NEXT_PUBLIC_APP_ENV=development`.
+
+Existe un opt-in explícito **solo para el entorno de pruebas/e2e**:
+
+```bash
+E2E_ALLOW_WRITE_APIS=1   # solo lane e2e (job `e2e` del CI)
+```
+
+Tiene **doble candado**: habilita escrituras solo si además
+`NEXT_PUBLIC_APP_ENV=development`. Un entorno con `NEXT_PUBLIC_APP_ENV=production` (como
+Vercel/producción) sigue bloqueado aunque el opt-in esté seteado.
+
+**Producción NO debe setear `E2E_ALLOW_WRITE_APIS`** (change `e2e-guard-optin-ci`): es
+exclusivo de la lane e2e, donde sin él la limpieza bulk del QA-Lab cae al fallback O(n) y
+revienta los 120 s estrictos de las limpiezas de cola.
+
 ## Contactos y escalación
 
 - **Owner del proyecto**: (agregar)
