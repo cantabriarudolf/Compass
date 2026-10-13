@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test"
+import { guardarDialogo } from "../helpers/form-dialog"
 
 test.use({ actionTimeout: 30_000 })
 
@@ -70,18 +71,10 @@ test.describe("CRUD — Inventario/Estructura", () => {
     await expect(btnRegistrar).toBeEnabled({ timeout: 10_000 })
     await btnRegistrar.scrollIntoViewIfNeeded().catch(() => {})
 
-    const form = dialog.locator("form")
-    try {
-      await btnRegistrar.click({ force: true, noWaitAfter: true, timeout: 5_000 })
-    } catch {
-      await form.evaluate((f) => (f as HTMLFormElement).requestSubmit())
-    }
-    await page.waitForTimeout(400)
-    if (await dialog.isVisible().catch(() => false)) {
-      await form.evaluate((f) => (f as HTMLFormElement).requestSubmit())
-    }
-
-    await expect(dialog).toBeHidden({ timeout: 10_000 })
+    // Single-shot idempotente (helper form-dialog): sin `fila` no hay reenvío
+    // a ciegas — QA-9999 es fijo entre intentos y no sirve como llave de
+    // unicidad; un diálogo abierto tras 10 s falla con la causa real.
+    await guardarDialogo(page, { boton: btnRegistrar, dialogo: dialog, timeoutMs: 10_000 })
 
     // Afirmar fila QA-9999 en la Table "Unidades"
     await expect(page.getByRole("cell", { name: titulo }).first()).toBeVisible({ timeout: 15_000 })

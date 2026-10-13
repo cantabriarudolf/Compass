@@ -3,6 +3,7 @@
 // estadosInmobiliarios, emergencias, bancos) muestran filas del seed;
 // además crea 1 registro TEST-* y verifica su fila. Sin conteos frágiles.
 import { expect, test } from "@playwright/test"
+import { guardarDialogo } from "../helpers/form-dialog"
 
 test.use({ actionTimeout: 30_000 })
 
@@ -64,20 +65,14 @@ test.describe("CRUD — Maestros con datos por perfil admin", () => {
     ).toBeVisible({ timeout: 10_000 })
     await dialog.locator('input[name="nombre"]').fill(titulo)
     const btnGuardar = dialog.getByRole("button", { name: "Guardar" })
-    try {
-      await btnGuardar.click({ force: true, noWaitAfter: true, timeout: 5_000 })
-    } catch {
-      await dialog
-        .locator("form")
-        .evaluate((f) => (f as HTMLFormElement).requestSubmit())
-    }
-    await page.waitForTimeout(400)
-    if (await dialog.isVisible().catch(() => false)) {
-      await dialog
-        .locator("form")
-        .evaluate((f) => (f as HTMLFormElement).requestSubmit())
-    }
-    await expect(dialog).toBeHidden({ timeout: 10_000 })
+    // Single-shot idempotente (helper form-dialog): UN envío, y la fila
+    // recién creada se afirma única (un duplicado falla ruidoso acá).
+    await guardarDialogo(page, {
+      boton: btnGuardar,
+      dialogo: dialog,
+      fila: page.getByRole("row").filter({ hasText: titulo }),
+      timeoutMs: 10_000,
+    })
     await expect(page.getByRole("cell", { name: titulo }).first()).toBeVisible({
       timeout: 15_000,
     })
