@@ -245,7 +245,7 @@ aclaración documental, 0 errores de cálculo.
 | `crud/visor.spec.ts` duplicaba avisos en BD por re-submit (2 filas mismo título) | ✅ HECHO — single-shot + `toHaveCount(1)` | `e2e/crud/visor.spec.ts` |
 | `crud/logs.spec.ts` no abría el Select de Radix con `force:true` | ✅ HECHO — click normal + reintento acotado | `e2e/crud/logs.spec.ts` |
 | `flujo/ciclo.spec.ts` limpieza con timeout 30s (purga secuencial tarda más) | ✅ HECHO — alineado a 120s | `e2e/flujo/ciclo.spec.ts` |
-| Barrido del patrón "re-submit hasta que cierre el dialog" en el resto de los CRUD specs | ⏳ PENDIENTE — helper `e2e/helpers/form-dialog.ts` | `tasks.md §5.0` |
+| Barrido del patrón "re-submit hasta que cierre el dialog" en el resto de los CRUD specs | ✅ HECHO — helper `e2e/helpers/form-dialog.ts` (single-shot idempotente) + 11 CRUD specs migrados y verdes en paridad CI (SERIE-NOCHE-2 P2) | `tasks.md §5.0` |
 | Correr la lane e2e local requiere BD fresca (`e2e:reseed-base`) y **no** correr antes el spec de rate-limit (bloquea la IP 15 min y aborta `auth.setup`) | 📌 REGLA OPERATIVA | `runbook-operaciones.md`, `design.md § D6` |
 | El guard de Google (`AU-autenticacion-sesion`) exige credenciales en producción y su mensaje ofrece "disable the Google provider", pero **esa bandera no existe**: en CI se usan credenciales dummy para poder construir | ⏳ PENDIENTE (serie SG/AU) — agregar `GOOGLE_PROVIDER_DISABLED` documentado | `design.md § D5.5` |
 | Purga QA-Lab secuencial (1 request por entidad) tardaba >120s en CI con la BD acumulada y hacía fallar `poblado-idempotente`/`flujo/ciclo` en su limpieza final | ✅ HECHO — lotes de 6 (`borrarEnLote`) manteniendo el orden por fases; medido 11.1s → 5.6s local | `app/admin/qa-lab/page.tsx` |
