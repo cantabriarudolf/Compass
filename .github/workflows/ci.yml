@@ -113,9 +113,17 @@ jobs:
       # BD efímera del runner + secret efímero de CI (no es producción).
       DATABASE_URL: file:./dev.db
       AUTH_SECRET: ci-e2e-secret-no-produccion
-      # Importante: en development las APIs de escritura están habilitadas
-      # (lib/env-guard.ts isWriteApiEnabled); next start pondría NODE_ENV=production.
+      # Importante: el entorno efectivo development desbloquea las APIs de
+      # escritura (lib/env-guard.ts isWriteApiEnabled) vía el doble candado del
+      # opt-in; next start fija NODE_ENV=production y solo NEXT_PUBLIC_APP_ENV
+      # no basta desde el endurecimiento de SERIE-PRODUCCION P2.
       NEXT_PUBLIC_APP_ENV: development
+      # Opt-in explícito (e2e-guard-optin-ci): EXCLUSIVO de esta lane de
+      # pruebas. Sin él, limpiar() del QA-Lab cae al fallback O(n) por entidad
+      # y la limpieza de cola (120 s estrictos) revienta en el runner. Solo
+      # habilita escrituras si además NEXT_PUBLIC_APP_ENV=development (doble
+      # candado): producción/Vercel sigue bloqueada aunque esté seteado.
+      E2E_ALLOW_WRITE_APIS: "1"
       # El guard de AU-autenticacion-sesion exige GOOGLE_CLIENT_ID/SECRET cuando
       # NODE_ENV=production (lo que fija `next build`). En CI son de mentira: el
       # provider no se usa en ningún spec e2e y el build sólo valida presencia.
