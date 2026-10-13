@@ -95,6 +95,8 @@ jobs:
       # esquema PG sin migraciones (la baseline PG es tarea 3.2, ventana P2).
       - run: npx prisma generate
       - run: npx prisma db push
+      # Paridad con el job SQLite: typecheck también contra el esquema PG.
+      - run: npx tsc --noEmit
       - run: npm test
 
   e2e:
