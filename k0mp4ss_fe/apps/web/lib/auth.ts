@@ -14,16 +14,27 @@ import {
 import { validarPassword } from "@/lib/password-policy"
 
 /**
+ * `GOOGLE_PROVIDER_DISABLED=1` (change au-google-provider-disabled): opt-out
+ * total del provider Google — (a) salta el fail-fast de credenciales de
+ * producción y (b) no registra el provider `Google` (solo Credentials; los
+ * callbacks signIn/jwt quedan inertes porque ningún provider los dispara).
+ * Pensado para builds sin credenciales Google reales (p. ej. CI). Cualquier
+ * otro valor (incluido vacío/ausente) deja el comportamiento actual intacto.
+ */
+const googleProviderDisabled = process.env.GOOGLE_PROVIDER_DISABLED === '1'
+
+/**
  * Fail-fast validation for Google OAuth provider in production.
  * Runs at module load before NextAuth() initializes.
  * In development (NODE_ENV !== 'production'), empty-string fallback is allowed
  * so local dev works without Google Cloud credentials.
+ * Con GOOGLE_PROVIDER_DISABLED=1 el fail-fast no corre (ver arriba).
  */
-if (process.env.NODE_ENV === 'production') {
+if (process.env.NODE_ENV === 'production' && !googleProviderDisabled) {
   if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
     throw new Error(
       'GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET are required in production. ' +
-      'Set them in your environment or disable the Google provider.'
+      'Set them in your environment or set GOOGLE_PROVIDER_DISABLED=1 to disable the Google provider.'
     )
   }
 }
@@ -153,11 +164,16 @@ const resultadoAuth = NextAuth({
       },
       authorize: autorizarCredenciales,
     }),
-    Google({
-      clientId: process.env.GOOGLE_CLIENT_ID ?? "",
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET ?? "",
-      allowDangerousEmailAccountLinking: false,
-    }),
+    // GOOGLE_PROVIDER_DISABLED=1 → solo Credentials (au-google-provider-disabled)
+    ...(googleProviderDisabled
+      ? []
+      : [
+          Google({
+            clientId: process.env.GOOGLE_CLIENT_ID ?? "",
+            clientSecret: process.env.GOOGLE_CLIENT_SECRET ?? "",
+            allowDangerousEmailAccountLinking: false,
+          }),
+        ]),
   ],
   callbacks: {
     async signIn({ user, account }) {

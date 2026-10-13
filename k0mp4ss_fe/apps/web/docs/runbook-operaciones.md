@@ -95,6 +95,28 @@ Vercel/producción) sigue bloqueado aunque el opt-in esté seteado.
 exclusivo de la lane e2e, donde sin él la limpieza bulk del QA-Lab cae al fallback O(n) y
 revienta los 120 s estrictos de las limpiezas de cola.
 
+## Escenario: Build sin credenciales Google (GOOGLE_PROVIDER_DISABLED)
+
+El guard de `lib/auth.ts` es fail-fast en producción: sin `GOOGLE_CLIENT_ID` /
+`GOOGLE_CLIENT_SECRET` la app **no arranca**. La bandera
+`GOOGLE_PROVIDER_DISABLED=1` es el opt-out documentado en su propio mensaje de
+error (change `au-google-provider-disabled`):
+
+```bash
+GOOGLE_PROVIDER_DISABLED=1   # (a) salta el fail-fast de producción
+                             # (b) NO registra el provider Google (solo Credentials)
+```
+
+- **Aplicación exacta**: solo el valor `1` activa la bandera; vacío, ausente o
+  cualquier otro valor dejan el comportamiento normal (dev permite credenciales
+  vacías; producción las exige).
+- **Cuándo usarla**: builds/entornos sin credenciales Google reales (p. ej. CI,
+  donde históricamente se usaban `ci-dummy` solo para poder construir).
+- **Cuándo NO usarla**: cualquier entorno de producción con SSO Google activo —
+  con la bandera el botón "Continuar con Google" deja de existir porque el
+  provider no está registrado.
+- Documentada también en `.env.example` (junto a `GOOGLE_CLIENT_ID`/`SECRET`).
+
 ## Contactos y escalación
 
 - **Owner del proyecto**: (agregar)

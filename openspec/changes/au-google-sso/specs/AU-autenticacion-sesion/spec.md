@@ -4,9 +4,9 @@
 
 El sistema SHALL usar Auth.js (`next-auth@beta`, v5) para emisión y verificación de sesión, reemplazando el scaffold propio de §1: instancia Node en `k0mp4ss_fe/apps/web/lib/auth.ts` (`NextAuth` con providers credentials y Google, y adapter Prisma sobre `Usuario`) exportando `handlers`/`auth`/`signIn`/`signOut`, y configuración edge-safe en `lib/auth.config.ts` (estrategia JWT, **maxAge 24 horas (86400 segundos), updateAge 1 hora (3600 segundos)**, `pages.signIn = "/ingresar"`, callback session que expone `user.id = token.sub`). Las rutas Auth.js SHALL vivir en `app/api/auth/[...nextauth]/route.ts` (`/api/auth/*`: csrf, session, signin, signout, callback, providers, error) y la cookie de sesión SHALL ser la de Auth.js (`authjs.session-token`, JWE con `AUTH_SECRET`; `__Secure-` en https). `proxy.ts` SHALL verificar con `auth()` (instancia edge-safe sin Prisma) sobre el matcher amplio `/((?!_next/static|_next/image|favicon.ico).*)` que emite CSP en toda respuesta, manteniendo el scoping de autenticación a `/admin` y `/api` dentro del handler, las mismas rutas públicas (`/ingresar`, `/api/auth`), 401 JSON para `/api` y redirect `/ingresar?next=` para páginas. El sistema SHALL NOT contener `ADMIN_EMAIL`, `ADMIN_PASSWORD`, credenciales hardcodeadas ni fallback dev de secreto; `AUTH_SECRET` SHALL mantenerse como variable de entorno usada por Auth.js.
 
-**Fail-fast de credenciales Google en producción**: El módulo `lib/auth.ts` SHALL validar la presencia y no-vacío de `GOOGLE_CLIENT_ID` y `GOOGLE_CLIENT_SECRET` **antes** de invocar `NextAuth()` cuando `process.env.NODE_ENV === 'production'`. Si cualquiera de las dos variables falta o está vacía, el módulo SHALL lanzar un `Error` descriptivo que indique: "GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET are required in production. Set them in your environment or disable the Google provider." En desarrollo (`NODE_ENV !== 'production'`), el comportamiento actual con fallback a string vacío (`""`) se SHALL mantener para permitir desarrollo local sin credenciales Google.
+**Fail-fast de credenciales Google en producción**: El módulo `lib/auth.ts` SHALL validar la presencia y no-vacío de `GOOGLE_CLIENT_ID` y `GOOGLE_CLIENT_SECRET` **antes** de invocar `NextAuth()` cuando `process.env.NODE_ENV === 'production'` y `process.env.GOOGLE_PROVIDER_DISABLED !== '1'`. Si cualquiera de las dos variables falta o está vacía (con la bandera apagada), el módulo SHALL lanzar un `Error` descriptivo que indique: "GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET are required in production. Set them in your environment or set GOOGLE_PROVIDER_DISABLED=1 to disable the Google provider." Con `GOOGLE_PROVIDER_DISABLED=1` el fail-fast SHALL no ejecutarse y el módulo SHALL cargar igualmente. En desarrollo (`NODE_ENV !== 'production'`), el comportamiento actual con fallback a string vacío (`""`) se SHALL mantener para permitir desarrollo local sin credenciales Google.
 
-**Google como provider OAuth 2.0 adicional**: `lib/auth.ts` SHALL registrar el provider `Google` (`next-auth/providers/google`) en el array `providers` junto a `Credentials`, con `clientId: process.env.GOOGLE_CLIENT_ID ?? ""`, `clientSecret: process.env.GOOGLE_CLIENT_SECRET ?? ""` y `allowDangerousEmailAccountLinking: false`. Habilitar Google SHALL NOT introducir modelos, campos ni migraciones: el schema Prisma SHALL seguir sin tablas `Account`/`Session` y `AdapterPrismaCompass` SHALL mantener `getUserByAccount` en `null` y `linkAccount`/`unlinkAccount` como no-op, de modo que el vínculo con la cuenta Google no se persiste en BD. `k0mp4ss_fe/apps/web/.env.example` SHALL documentar `GOOGLE_CLIENT_ID=` y `GOOGLE_CLIENT_SECRET=` como opcionales en dev y requeridas en producción.
+**Google como provider OAuth 2.0 adicional**: `lib/auth.ts` SHALL registrar el provider `Google` (`next-auth/providers/google`) en el array `providers` junto a `Credentials`, con `clientId: process.env.GOOGLE_CLIENT_ID ?? ""`, `clientSecret: process.env.GOOGLE_CLIENT_SECRET ?? ""` y `allowDangerousEmailAccountLinking: false`, **salvo** que `GOOGLE_PROVIDER_DISABLED === '1'`, en cuyo caso solo se SHALL registrar `Credentials` (change `au-google-provider-disabled`). Habilitar Google SHALL NOT introducir modelos, campos ni migraciones: el schema Prisma SHALL seguir sin tablas `Account`/`Session` y `AdapterPrismaCompass` SHALL mantener `getUserByAccount` en `null` y `linkAccount`/`unlinkAccount` como no-op, de modo que el vínculo con la cuenta Google no se persiste en BD. `k0mp4ss_fe/apps/web/.env.example` SHALL documentar `GOOGLE_CLIENT_ID=` y `GOOGLE_CLIENT_SECRET=` como opcionales en dev y requeridas en producción.
 
 #### Scenario: Autenticación contra Auth.js sin credenciales de entorno
 
@@ -30,15 +30,15 @@ El sistema SHALL usar Auth.js (`next-auth@beta`, v5) para emisión y verificaci�
 
 #### Scenario: Build/startup en producción falla sin GOOGLE_CLIENT_ID
 
-- **GIVEN** `process.env.NODE_ENV === 'production'` y `process.env.GOOGLE_CLIENT_ID` no está definido o es string vacío
+- **GIVEN** `process.env.NODE_ENV === 'production'`, `process.env.GOOGLE_PROVIDER_DISABLED` distinto de `'1'` y `process.env.GOOGLE_CLIENT_ID` no está definido o es string vacío
 - **WHEN** se carga el módulo `lib/auth.ts` (import o require)
-- **THEN** se lanza `Error` con mensaje "GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET are required in production. Set them in your environment or disable the Google provider." y la app NO inicia
+- **THEN** se lanza `Error` con mensaje "GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET are required in production. Set them in your environment or set GOOGLE_PROVIDER_DISABLED=1 to disable the Google provider." y la app NO inicia
 
 #### Scenario: Build/startup en producción falla sin GOOGLE_CLIENT_SECRET
 
-- **GIVEN** `process.env.NODE_ENV === 'production'` y `process.env.GOOGLE_CLIENT_SECRET` no está definido o es string vacío
+- **GIVEN** `process.env.NODE_ENV === 'production'`, `process.env.GOOGLE_PROVIDER_DISABLED` distinto de `'1'` y `process.env.GOOGLE_CLIENT_SECRET` no está definido o es string vacío
 - **WHEN** se carga el módulo `lib/auth.ts`
-- **THEN** se lanza `Error` con el mismo mensaje descriptivo y la app NO inicia
+- **THEN** se lanza `Error` con el mismo mensaje descriptivo (que nombra `GOOGLE_PROVIDER_DISABLED=1`) y la app NO inicia
 
 #### Scenario: Build/startup en producción exitoso con ambas credenciales
 
@@ -77,6 +77,7 @@ El sistema SHALL usar Auth.js (`next-auth@beta`, v5) para emisión y verificaci�
 
 #### Scenario: Provider Google registrado sin persistencia de cuenta
 
+- **GIVEN** `GOOGLE_PROVIDER_DISABLED` no está seteada en `'1'`
 - **WHEN** se inspecciona `k0mp4ss_fe/apps/web/lib/auth.ts`, `k0mp4ss_fe/apps/web/lib/auth-adapter.ts` y `k0mp4ss_fe/apps/web/prisma/schema.prisma`
 - **THEN** el array `providers` contiene `Credentials` y `Google({clientId: process.env.GOOGLE_CLIENT_ID ?? "", clientSecret: process.env.GOOGLE_CLIENT_SECRET ?? "", allowDangerousEmailAccountLinking: false})`, el schema no tiene modelos `Account`/`Session` ni campos Google, y el adapter sigue con `getUserByAccount` → `null` y `linkAccount` no-op (sin migración asociada)
 
