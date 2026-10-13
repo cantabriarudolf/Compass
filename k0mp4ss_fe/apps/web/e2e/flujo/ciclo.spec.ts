@@ -144,14 +144,11 @@ test.describe("QA Lab — ciclo completo y guard clean-first (Serie QA-LAB P3)",
     await expect(page.locator('[id^="mod-"]').getByText("🟢 Listo")).toHaveCount(22)
     await expect(page.getByText("🔴 Con error")).toHaveCount(0)
 
-    // Limpieza de cola: best-effort por el mismo motivo documentado en
-    // poblado-idempotente.spec.ts (purga O(n) requests; >120s en CI tras un
-    // poblamiento completo). El sujeto de este test es el guard clean-first.
+    // Limpieza de cola estricta de nuevo (qlab-purga-bulk): la purga BD es
+    // O(1) requests contra POST /api/qa-lab/purga-test; ver comentario de
+    // poblado-idempotente.spec.ts.
     await clickBorrar(page)
-    await page
-      .getByText(/TEST-\* limpio correctamente|Limpieza con \d+ bloqueos/)
-      .waitFor({ state: "visible", timeout: 90_000 })
-      .catch(() => {})
+    await expect(page.getByText(/TEST-\* limpio correctamente/)).toBeVisible({ timeout: 120_000 })
 
     expect(errores, "Excepciones no capturadas en guard clean-first").toEqual([])
   })
