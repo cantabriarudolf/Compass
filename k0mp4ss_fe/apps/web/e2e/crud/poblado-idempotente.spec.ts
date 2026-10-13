@@ -66,13 +66,19 @@ test.describe("CRUD — QA Lab poblado idempotente (P1 C2)", () => {
       await btnConfirmar.click({ force: true, noWaitAfter: true }).catch(() => {})
     })
 
-    // La secuencia incluye el mensaje de limpieza y luego la carga completa.
-    // Debido a que runFase hace setMsg(null) al iniciar, el mensaje intermedio
-    // puede ser breve; esperamos directamente la carga final con timeout generoso.
+    // Sincronizar con la secuencia de fondo: limpiar() resetea el reporte
+    // (tarjetas → 0) y recién ahí arranca runFase("todo"). Sin este punto de
+    // sincronía, "Carga completa OK" y las tarjetas pueden matchear el estado
+    // STALE de la corrida 1 mientras limpiar() los resetea en segundo plano
+    // (carrera que el camino bulk de qlab-purga-bulk expone: ~4s vs ~60s del
+    // fallback O(n)). Una vez vistas las tarjetas en 0, el msg stale ya fue
+    // reemplazado en el mismo commit de React, así que el próximo
+    // "Carga completa OK" es el fresco de la corrida 2.
+    await expect(page.locator('[id^="mod-"]')).toHaveCount(0, { timeout: 30_000 } as any)
     await expect(page.getByText(/Carga completa OK/)).toBeVisible({ timeout: 120_000 })
 
-    // 4) Afirmar via UI del lab que las 22 tarjetas están 🟢 y 0 🔴
-    await expect(page.locator('[id^="mod-"]')).toHaveCount(22, { timeout: 30_000 } as any)
+    // 4) Afirmar via UI del lab que las 22 tarjetas están 🟢 y 0 🔴 (corrida 2)
+    await expect(page.locator('[id^="mod-"]')).toHaveCount(22, { timeout: 60_000 } as any)
     await expect(page.locator('[id^="mod-"]').getByText("🟢 Listo")).toHaveCount(22, { timeout: 10_000 } as any)
     await expect(page.getByText("🔴 Con error")).toHaveCount(0, { timeout: 5_000 } as any)
 
@@ -102,8 +108,14 @@ test.describe("CRUD — QA Lab poblado idempotente (P1 C2)", () => {
     await expect(page.locator('[id^="mod-"]')).toHaveCount(22, { timeout: 30_000 } as any)
     await expect(page.locator('[id^="mod-"]').getByText("🟢 Listo")).toHaveCount(22)
 
-    // Segunda corrida → dialog
-    await clickPoblar(page)
+    // Segunda corrida → dialog. Click crudo (SIN el helper clickPoblar): el
+    // helper auto-confirma el diálogo ("restos de una corrida caída") y aquí el
+    // test necesita el diálogo VIVO para probar Cancelar. El detector de efecto
+    // del helper también se engaña porque la corrida 1 ya dejó "🟢 Listo" en la
+    // página, lo que puede hacer que confirme por accidente.
+    const btnPoblar2 = page.getByRole("button", { name: /Poblar todo de una vez/ })
+    await expect(btnPoblar2).toBeEnabled({ timeout: 15_000 })
+    await btnPoblar2.evaluate((b: HTMLElement) => b.click())
     await expect(page.getByRole("dialog")).toBeVisible({ timeout: 30_000 })
     await expect(page.getByText(/¿Limpiar y poblar de una vez\?/)).toBeVisible({ timeout: 10_000 })
 
