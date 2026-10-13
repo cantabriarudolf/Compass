@@ -35,3 +35,9 @@ Tres causas son de higiene-infra, no de producto, y bloquean P2/P3:
 - Ningún fix de producto de los rojos P2/P3 (17 CRUD + 6 flujo/a11y/smoke).
 - Migración SQLite→PostgreSQL, super-admin global, resto de BACKLOG-100.
 - Cambios al store (`STORE_VERSION` queda en 28).
+
+> **Nota 2026-10-13 (saneamiento S4):** el punto 3 de la propuesta (estrategia GATED:
+> orden fijo + re-seed) quedó obsoleto — SERIE-E2E-SIN-GATED (`b7e88a8`) eliminó el tag
+> GATED y los scripts `e2e:nongated`/`e2e:gated`/`e2e:full-orden`; hoy la suite corre en
+> corrida única con specs autónomos. El delta `DEV-qa-lab` se refrescó a ese diseño
+> antes de archivar. Los puntos 1, 2 y 4 siguen vigentes y verificados.

@@ -24,3 +24,14 @@
 > muerta en la spec viva. (2) El delta `ST-capa-datos-persistente` (seed determinista)
 > todavía no está en la spec viva. Próximo paso: refrescar el delta DEV contra el diseño
 > de corrida única actual, aplicar ambos deltas y recién entonces `openspec archive`.
+
+> **Estado 2026-10-13 (saneamiento pre-pruebas S4): CERRADO — archivado.**
+> El delta `DEV-qa-lab` se refrescó: el requirement "Specs GATED al final de la corrida
+> + re-seed" (estrategia muerta de SERIE-E2E-SIN-GATED) se reemplazó por "Corrida e2e
+> única sin tag GATED (specs autónomos)" que describe el diseño actual (corrida única
+> `npx playwright test`, specs autónomos vía helper `e2e/helpers/datos-test.ts`, receta
+> `e2e:reseed-base` + `e2e:higiene --apply`). El delta `ST-capa-datos-persistente`
+> (ADDED del seed determinista) verificado contra la spec viva: `check-delta-coverage`
+> 0 problemas → `openspec archive e2e-higiene-determinismo --yes` → `validate --all`
+> 40/40. El gate de serie (checklist §4 del owner) queda registrado en el BACKLOG y no
+> bloquea el archive del cambio.
