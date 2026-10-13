@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test"
+import { guardarDialogo } from "../helpers/form-dialog"
 
 test.use({ actionTimeout: 30_000 })
 
@@ -104,25 +105,19 @@ test.describe("CRUD — Inventario/Recursos", () => {
       await inpU.fill("2")
     }
 
-    // Guardar
+    // Guardar — single-shot idempotente (helper form-dialog, SERIE-NOCHE-2 P5):
+    // el patrón viejo de re-submit a los 600 ms creaba un RECURSO DUPLICADO
+    // cuando el primer click ya había guardado y el diálogo tardaba en cerrar
+    // (medido en esta lane: 2 filas "QA-Cloro-<ts>" → strict mode violation).
     const btnGuardar = dialog.getByRole("button", { name: "Guardar" })
     await expect(btnGuardar).toBeVisible({ timeout: 10_000 })
-    await btnGuardar.scrollIntoViewIfNeeded().catch(() => {})
-    await btnGuardar.click({ force: true, noWaitAfter: true })
-    await page.waitForTimeout(600)
-    // Fallback si dialog sigue
-    if (await dialog.isVisible().catch(() => false)) {
-      await btnGuardar.click({ force: true, noWaitAfter: true }).catch(() => {})
-      await page.waitForTimeout(600)
-    }
-    await expect(dialog).toBeHidden({ timeout: 10_000 })
+    const row = page.getByRole("row").filter({ hasText: titulo })
+    await guardarDialogo(page, { boton: btnGuardar, dialogo: dialog, fila: row })
 
-    // Afirmar fila en el catálogo (Table) con el nombre y stock 10
+    // Afirmar fila ÚNICA en el catálogo (Table) con el nombre y stock 10
+    // (guardarDialogo ya afirmó toHaveCount(1) sobre `row`).
     await expect(page.getByRole("cell", { name: titulo }).first()).toBeVisible({ timeout: 15_000 })
     // stock aparece como "10 / umbral 2" en la celda de Stock
-    // Buscar row que contiene titulo
-    const row = page.getByRole("row").filter({ hasText: titulo })
-    await expect(row).toBeVisible({ timeout: 10_000 })
     await expect(row.getByText(/10/).first()).toBeVisible({ timeout: 10_000 })
 
     expect(errores, "Excepciones no capturadas en inventario/recursos").toEqual([])
