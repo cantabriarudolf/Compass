@@ -252,3 +252,20 @@ aclaración documental, 0 errores de cálculo.
 | `crud/logs.spec.ts` dependía del switch de privacidad de `/admin/gestion` (con BD fresca hay 0 switches → 0 eventos → sin faceta): falso verde con BD acumulada y rojo real en CI | ✅ HECHO — siembra 2 eventos por `POST /api/auditoria/sync` y asserta la faceta directo | `e2e/crud/logs.spec.ts` |
 | `crud/roles-journeys.spec.ts` con el timeout de CI por defecto (30s) para un journey con varios waits | ✅ HECHO — `test.setTimeout(120_000)` | `e2e/crud/roles-journeys.spec.ts` |
 | Purga QA-Lab sin endpoint bulk: borra una entidad TEST por request, así que tras un poblamiento completo excede los 120s en el runner de CI (5-11s local) | ⏳ PENDIENTE — change `qlab-purga-bulk`: `DELETE` por colección/periodo server-side + tests | `app/admin/qa-lab/page.tsx`, `design.md § D6` |
+
+## SERIE-NOCHE-3 — deuda del store (materializada 2026-10-14) — rama `noche/serie-noche-3`
+
+El owner pidió saldar la deuda viva ("punto 4") en modo autónomo y sobre una rama nueva desde
+`main`. Queda materializada como serie de ventanas en `openspec/SERIE-NOCHE-3/`
+(`00-plan.md` + `prompt-01.md`…`prompt-09.md`, cap duro **9 ventanas**):
+
+| Deuda | Cómo se salda |
+|---|---|
+| `store-cleanup` (no existía como change) | **P1** — censo fino por miembro (incluye uso intra-store) + borrado de lo muerto/solo-test. Censo 2026-10-14: 182 miembros → 107 app · 4 solo-QA-Lab · 21 solo-test · 1 muerto (`toggleActivoTipoUnidad`) |
+| `st-split-fase2` (0/19) | **P2–P5** — los 7 slices hoja en `lib/store/slices/**`: IR+MT, AD+PI/D3, CO, GE+CV (movimiento puro, `STORE_VERSION` intacto) |
+| `api-cobertura-fases` (2.114 statements API sin cubrir) | **P6–P7** — las rutas más bajas + ratchet de `app/api/**` (regla medido − 1 pt) |
+| `store-cobertura-fase-b` (1.202 statements del store sin cubrir) | **P8** — tests comportamentales sobre `lib/store/**` + ratchet de `lib/**` |
+| Cierre y auditoría | **P9** — gates completos de la serie, archives, PR draft y deuda post-serie declarada |
+
+Estado: **materializada, pendiente de ejecutar** (se corre con "corré la serie noche-3" en modo
+delegado, o ventana por ventana con `Corré el archivo openspec/SERIE-NOCHE-3/prompt-NN.md`).
