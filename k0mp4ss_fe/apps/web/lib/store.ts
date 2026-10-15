@@ -480,8 +480,6 @@ export interface CompassStore extends CompassData {
     /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
   saveTipoUnidad: (tipo: TipoUnidad) => StoreResult
     /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
-  toggleActivoTipoUnidad: (id: string) => void
-    /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
   removeTipoUnidad: (id: string) => StoreResult
   // Macro Sectores (EF)
     /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
@@ -519,16 +517,8 @@ export interface CompassStore extends CompassData {
     key: K,
     id: string
   ) => StoreResult
-  // Configuración Global (CF)
-    /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
-  saveConfiguracion: (config: ConfiguracionGlobal) => StoreResult
-  // Portal Inmobiliario (PI)
-    /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
-  savePublicacionPortal: (publicacion: PublicacionPortal) => StoreResult
     /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
   removePublicacionPortal: (id: string) => StoreResult
-    /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
-  saveLeadPortal: (lead: LeadPortal) => StoreResult
   syncPublicacionesDesdeVinculos: (unidadId: string) => void
   // Notificaciones simuladas (D3)
   notify: (
@@ -537,7 +527,6 @@ export interface CompassStore extends CompassData {
       unidadId?: string
     }
   ) => void
-  marcarNotificacionLeida: (id: string) => void
   // Gestión Administrativa (AD)
     /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
   saveControlPropiedad: (control: ControlPropiedad) => StoreResult
@@ -551,15 +540,6 @@ export interface CompassStore extends CompassData {
     /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
   aprobarActaGD: (id: string, personaId: string) => StoreResult
   periodoDirectivaVigente: () => PeriodoDirectiva | undefined
-    /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
-  savePeriodoDirectiva: (
-    periodo: PeriodoDirectiva,
-    miembros: {
-      personaId: string
-      cargo: "presidente" | "tesorero" | "secretario" | "director"
-      fechaAsuncion: string
-    }[]
-  ) => StoreResult
   // Comunicación con Vecinos (CO)
     /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
   savePlantillaCO: (plantilla: PlantillaCO) => StoreResult
@@ -580,7 +560,6 @@ export interface CompassStore extends CompassData {
   saveDocumentoCO: (documento: DocumentoCO) => StoreResult
     /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
   removeDocumentoCO: (id: string) => StoreResult
-  registrarDescargaDocCO: (id: string) => StoreResult
   // Gestión de Solicitudes (GE)
     /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
   saveSolicitudGE: (solicitud: SolicitudGE) => StoreResult
@@ -598,7 +577,6 @@ export interface CompassStore extends CompassData {
   saveRecursoIR: (recurso: RecursoIR) => StoreResult
     /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
   removeRecursoIR: (id: string) => StoreResult
-  cambiarEstadoRecursoIR: (id: string, estado: EstadoActivoIR) => StoreResult
     /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
   saveSolicitudInsumoIR: (solicitud: SolicitudInsumoIR) => StoreResult
   resolverComodinIR: (
@@ -618,10 +596,6 @@ export interface CompassStore extends CompassData {
     /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
   saveInfraccionIN: (infraccion: InfraccionIN) => StoreResult
   apelarInfraccionIN: (id: string, descargos: string) => StoreResult
-  comentarInfraccionIN: (
-    id: string,
-    comentario: { autorPersonaId: string; texto: string }
-  ) => StoreResult
   respaldarInfraccionIN: (id: string, personaId: string) => StoreResult
   aplicarInfraccionIN: (id: string) => StoreResult
   desestimarInfraccionIN: (id: string, justificacion: string) => StoreResult
@@ -637,18 +611,13 @@ export interface CompassStore extends CompassData {
     id: string,
     cierre?: { fechaTermino?: string; costoFinal?: number }
   ) => StoreResult
-  cancelarTrabajoMT: (id: string) => StoreResult
   actualizarPagoTrabajoMT: (id: string, estadoPago: EstadoPagoMT) => StoreResult
   verificarGarantiasMT: () => StoreResult
     /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
   saveProyectoMT: (proyecto: ProyectoMT) => StoreResult
-    /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
-  removeProyectoMT: (id: string) => StoreResult
   // Reservas y Amenities (RA)
     /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
   saveElementoRA: (elemento: ElementoRA) => StoreResult
-    /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
-  removeElementoRA: (id: string) => StoreResult
     /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
   saveReservaRA: (reserva: ReservaRA) => StoreResult
   cancelarReservaRA: (id: string) => StoreResult
@@ -656,35 +625,15 @@ export interface CompassStore extends CompassData {
   // Visor de Mensajes (CV)
     /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
   saveAvisoCV: (aviso: AvisoCV, creadoPorPersonaId?: string) => StoreResult
-    /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
-  removeAvisoCV: (id: string) => StoreResult
   publicarAvisoCV: (id: string) => StoreResult
-  archivarAvisoCV: (id: string) => StoreResult
   caducarAvisosCV: () => StoreResult
-    /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
-  savePlantillaCV: (plantilla: PlantillaCV) => StoreResult
-    /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
-  removePlantillaCV: (id: string) => StoreResult
   activarPlantillaCV: (id: string) => StoreResult
   publicarActaEnCV: (actaId: string) => StoreResult
   // Finanzas y Morosidad (FI)
     /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
   saveFondoFI: (fondo: FondoFI) => StoreResult
     /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
-  removeFondoFI: (id: string) => StoreResult
-    /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
   saveEgresoFI: (egreso: EgresoFI) => StoreResult
-    /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
-  removeEgresoFI: (id: string) => StoreResult
-  registrarIngresoFI: (input: {
-    id?: string
-    fecha: string
-    monto: number
-    concepto: string
-    fondoId: string
-    familia?: string
-  }) => StoreResult
-  removeIngresoFI: (id: string) => StoreResult
   emitirGastoComun: (input: {
     periodo: string
     gastoTotal?: number
@@ -736,11 +685,7 @@ export interface CompassStore extends CompassData {
     /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
   saveProveedorPE: (proveedor: ProveedorPE) => StoreResult
     /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
-  removeProveedorPE: (id: string) => StoreResult
-    /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
   saveMantencionPE: (mantencion: MantencionPreventivaPE) => StoreResult
-    /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
-  removeMantencionPE: (id: string) => StoreResult
   registrarVisitaTecnicaPE: (visita: VisitaTecnicaPE) => StoreResult
   cerrarTurnoPE: (
     input: Omit<
@@ -748,40 +693,10 @@ export interface CompassStore extends CompassData {
       "id" | "historialCambios" | "notificadoAAdmin"
     > & { id?: string }
   ) => StoreResult
-  editarCierreTurnoPE: (
-    id: string,
-    cambios: Partial<
-      Pick<
-        CierreTurnoPE,
-        | "jornadaReportadaId"
-        | "novedadesGenerales"
-        | "incidencias"
-        | "checklistInstalaciones"
-        | "checklistEquipamiento"
-      >
-    >,
-    resumen: string
-  ) => StoreResult
-  removeCierreTurnoPE: (id: string) => StoreResult
   enviarProyeccionCostoFI: (
     mesAnio: string,
     params: { costoParche: number; costoDiaExtra: number; id?: string }
   ) => StoreResult
-  // Liquidaciones y Remuneraciones (PL)
-  generarLiquidacionPL: (input: {
-    trabajadorPersonaId: string
-    periodo: string
-    diasTrabajados: number
-    asignacionMovilizacion?: number
-    asignacionColacion?: number
-    montoAPV?: number
-    saludPorcentaje?: number
-    saludValorUF?: number
-    bonos?: { id?: string; glosa: string; monto: number; imponible: boolean }[]
-    id?: string
-  }) => StoreResult
-  confirmarLiquidacionPL: (id: string) => StoreResult
-  removeLiquidacionPL: (id: string) => StoreResult
     /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
   saveAdelantoPL: (adelanto: AdelantoPL) => StoreResult
     /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
@@ -821,8 +736,6 @@ export interface CompassStore extends CompassData {
     id?: string
   }) => StoreResult
   distribuirReporteRE: (id: string) => StoreResult
-    /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
-  removeReporteRE: (id: string) => StoreResult
 }
 
 const ESTADO_NOMBRE_A_ID: Record<string, string> = {
@@ -1130,17 +1043,6 @@ export const useCompassStore = create<CompassStore>()(
         if (!validacion.ok) return validacion
         set((s) => ({ tiposUnidad: upsert(s.tiposUnidad, validacion.data) }))
         return { ok: true }
-      },
-
-        /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
-
-      toggleActivoTipoUnidad: (id) => {
-        if (!get().hasHydrated) return
-        set((s) => ({
-          tiposUnidad: s.tiposUnidad.map((t) =>
-            t.id === id ? { ...t, activo: !t.activo } : t
-          ),
-        }))
       },
 
         /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
@@ -1855,96 +1757,6 @@ export const useCompassStore = create<CompassStore>()(
         return { ok: true }
       },
 
-      // --- CF: Configuración Global ---
-        /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
-      saveConfiguracion: (config) => {
-        if (!get().hasHydrated)
-          return {
-            ok: false,
-            error:
-              "El almacenamiento aún se está hidratando. Intenta de nuevo.",
-          }
-        const validacion = validarConEsquema(ConfiguracionGlobalSchema, config)
-        if (!validacion.ok) return validacion
-        const anterior = get().configuracion
-        set(() => ({ configuracion: validacion.data }))
-        // PL: cambios de parámetros legales de remuneraciones quedan auditados.
-        const CAMPOS_LEGALES = [
-          "ufMensual",
-          "ingresoMinimoMensual",
-          "topeGratificacionLegal",
-          "tasaSIS",
-        ] as const
-        for (const campo of CAMPOS_LEGALES) {
-          const viejo = anterior?.[campo]
-          const nuevo = validacion.data[campo]
-          if (JSON.stringify(viejo) !== JSON.stringify(nuevo)) {
-            registrarEvento(
-              set,
-              "CF_UPDATE_PARAM",
-              campo,
-              `Parámetro legal ${campo} actualizado (${JSON.stringify(viejo ?? null)} → ${JSON.stringify(nuevo ?? null)}).`,
-              "CF"
-            )
-          }
-        }
-        return { ok: true }
-      },
-
-      // --- PI: Portal Inmobiliario ---
-        /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
-      savePublicacionPortal: (publicacion) => {
-        if (!get().hasHydrated)
-          return {
-            ok: false,
-            error:
-              "El almacenamiento aún se está hidratando. Intenta de nuevo.",
-          }
-        const validacion = validarConEsquema(
-          PublicacionPortalSchema,
-          publicacion
-        )
-        if (!validacion.ok) return validacion
-        const unidad = get().unidades.find(
-          (u) => u.id === validacion.data.unidadId
-        )
-        if (!unidad) {
-          return {
-            ok: false,
-            error:
-              "No se puede guardar la publicación: la unidad no existe en el inventario.",
-          }
-        }
-        const existente = get().publicacionesPortal.find(
-          (p) => p.id === validacion.data.id
-        )
-        set((s) => ({
-          publicacionesPortal: upsert(s.publicacionesPortal, validacion.data),
-        }))
-
-        // Eventos AM según transición de visibilidad en la vitrina.
-        const ref = refUnidad(get, validacion.data.unidadId)
-        if ((!existente || !existente.activa) && validacion.data.activa) {
-          registrarEvento(
-            set,
-            "PI_PROPERTY_LISTED",
-            validacion.data.id,
-            `Publicación ${validacion.data.operacion} activada para ${ref}.`,
-            "PI"
-          )
-        }
-        if (existente?.activa && !validacion.data.activa) {
-          registrarEvento(
-            set,
-            "PI_PROPERTY_UNLISTED",
-            validacion.data.id,
-            `Publicación retirada de la vitrina (${ref}).`,
-            "PI"
-          )
-        }
-        return { ok: true }
-      },
-
         /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
 
       removePublicacionPortal: (id) => {
@@ -1964,65 +1776,6 @@ export const useCompassStore = create<CompassStore>()(
         set((s) => ({
           publicacionesPortal: s.publicacionesPortal.filter((p) => p.id !== id),
         }))
-        return { ok: true }
-      },
-
-        /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
-
-      saveLeadPortal: (lead) => {
-        if (!get().hasHydrated)
-          return {
-            ok: false,
-            error:
-              "El almacenamiento aún se está hidratando. Intenta de nuevo.",
-          }
-        const validacion = validarConEsquema(LeadPortalSchema, lead)
-        if (!validacion.ok) return validacion
-        const publicacion = get().publicacionesPortal.find(
-          (p) => p.id === validacion.data.publicacionId
-        )
-        if (!publicacion) {
-          return {
-            ok: false,
-            error:
-              "No se puede registrar el interés: la publicación no existe.",
-          }
-        }
-        if (!publicacion.activa) {
-          return {
-            ok: false,
-            error:
-              "No se puede registrar el interés: la publicación no está activa.",
-          }
-        }
-        // Idempotencia bulk: solo el alta nueva genera notificación y evento.
-        const esNueva = !get().leadsPortal.some(
-          (l) => l.id === validacion.data.id
-        )
-        set((s) => ({ leadsPortal: upsert(s.leadsPortal, validacion.data) }))
-        if (!esNueva) return { ok: true }
-
-        // Contacto seguro (D3): notifica al propietario vigente sin exponer sus datos.
-        const propietario = get().vinculos.find(
-          (v) =>
-            v.unidadId === publicacion.unidadId &&
-            v.rol === "propietario" &&
-            !v.fechaFin
-        )
-        get().notify({
-          destinatarioRol: "propietario",
-          destinatarioPersonaId: propietario?.personaId,
-          asunto: "Nuevo interesado en tu propiedad",
-          cuerpo: `${validacion.data.nombreContacto} mostró interés en ${refUnidad(get, publicacion.unidadId)} (${publicacion.operacion}). Contacto: ${validacion.data.contacto}`,
-          moduloOrigen: "PI",
-        })
-        registrarEvento(
-          set,
-          "PI_LEAD_CONTACT",
-          validacion.data.id,
-          `Lead de ${validacion.data.nombreContacto} sobre ${refUnidad(get, publicacion.unidadId)}.`,
-          "PI"
-        )
         return { ok: true }
       },
 
@@ -2149,15 +1902,6 @@ export const useCompassStore = create<CompassStore>()(
             ...s.notificaciones.slice(-(MAX_EVENTOS - 1)),
             validacion.data,
           ],
-        }))
-      },
-
-      marcarNotificacionLeida: (id) => {
-        if (!get().hasHydrated) return
-        set((s) => ({
-          notificaciones: s.notificaciones.map((n) =>
-            n.id === id ? { ...n, leida: true } : n
-          ),
         }))
       },
 
@@ -2421,118 +2165,6 @@ export const useCompassStore = create<CompassStore>()(
 
           // GD-períodos: registra un período (libro: archiva, nunca borra).
           periodoDirectivaVigente: () => periodoDirectivaVigente(get()),
-            /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
-          savePeriodoDirectiva: (periodo, miembros) => {
-            if (!get().hasHydrated)
-              return {
-                ok: false,
-                error:
-                  "El almacenamiento aún se está hidratando. Intenta de nuevo.",
-              }
-            const validacion = validarConEsquema(PeriodoDirectivaSchema, periodo)
-            if (!validacion.ok) return validacion
-            const CARGOS = ["presidente", "tesorero", "secretario", "director"]
-            for (const m of miembros) {
-              if (!CARGOS.includes(m.cargo))
-                return { ok: false, error: `Cargo inválido en la nómina: ${m.cargo}.` }
-              if (!/^\d{4}-\d{2}-\d{2}$/.test(m.fechaAsuncion))
-                return { ok: false, error: `Fecha de asunción inválida en la nómina: ${m.fechaAsuncion}.` }
-              const persona = get().personas.find((p) => p.id === m.personaId)
-              if (!persona)
-                return { ok: false, error: `No se puede activar: la persona "${m.personaId}" no existe.` }
-              if (persona.estadoCuenta !== "activa")
-                return {
-                  ok: false,
-                  error: `No se puede activar: ${persona.nombres} ${persona.apellidos} no tiene cuenta activa.`,
-                }
-            }
-            if (validacion.data.estado === "vigente") {
-              // Composición art. 17 Ley 21.442: impar de 3 a 5 (bloqueo con fundamento).
-              const n = miembros.length
-              if (n < 3 || n > 5 || n % 2 === 0) {
-                return {
-                  ok: false,
-                  error: `No se puede activar el período: la nómina debe ser impar de 3 a 5 miembros (art. 17 Ley 21.442). Recibidos: ${n}.`,
-                }
-              }
-            }
-            const vigentePrevio = periodoDirectivaVigente(get())
-            let periodos = upsert(get().periodosDirectiva, validacion.data)
-            let personas = get().personas
-            // Cierra el vigente previo archivando su nómina (libro físico).
-            if (
-              validacion.data.estado === "vigente" &&
-              vigentePrevio &&
-              vigentePrevio.id !== validacion.data.id
-            ) {
-              const rosterPrevio = personas.flatMap((p) =>
-                p.datosGobernanza &&
-                p.datosGobernanza.periodoId === vigentePrevio.id
-                  ? [
-                      {
-                        personaId: p.id,
-                        nombre: p.nombreCompleto,
-                        cargo: p.datosGobernanza.cargoDirectiva,
-                        fechaAsuncion: p.datosGobernanza.fechaAsuncion,
-                        ...(p.datosGobernanza.fechaTermino
-                          ? { fechaTermino: p.datosGobernanza.fechaTermino }
-                          : {}),
-                        ...(p.datosGobernanza.motivoTermino
-                          ? { motivoTermino: p.datosGobernanza.motivoTermino }
-                          : {}),
-                      },
-                    ]
-                  : []
-              )
-              // SAFETY: roster validado por forma al cerrar; se persiste tal cual para archivo histórico.
-              const cerrado: PeriodoDirectiva = {
-                ...vigentePrevio,
-                estado: "cerrado",
-                fechaFin: validacion.data.fechaInicio,
-                miembros: rosterPrevio,
-              }
-              periodos = upsert(periodos, cerrado)
-              // Las fichas del período cerrado quedan archivadas en la nómina; se depuran de las personas.
-              const idsNuevos = new Set(miembros.map((m) => m.personaId))
-              personas = personas.map((p) => {
-                const fid = p.datosGobernanza?.periodoId
-                if (p.datosGobernanza && fid === vigentePrevio.id && !idsNuevos.has(p.id)) {
-                  const resto = { ...p }
-                  delete resto.datosGobernanza
-                  return resto
-                }
-                return p
-              })
-            }
-            // Asigna las fichas de la nómina entrante (conserva id estable por persona).
-            for (const m of miembros) {
-              const persona = personas.find((p) => p.id === m.personaId)
-              if (!persona) continue
-              const roles = persona.roles.includes("directiva")
-                ? persona.roles
-                : [...persona.roles, "directiva"]
-              personas = upsert(personas, {
-                ...persona,
-                // SAFETY: roles extiende el union de ROLES_PERSONA con "directiva" ya validado por schema.
-                roles: roles as Persona["roles"],
-                datosGobernanza: {
-                  id: persona.datosGobernanza?.id ?? `g-${persona.id}`,
-                  cargoDirectiva: m.cargo,
-                  fechaAsuncion: m.fechaAsuncion,
-                  periodoId: validacion.data.id,
-                },
-              })
-            }
-            set(() => ({ periodosDirectiva: periodos, personas }))
-            registrarEvento(
-              set,
-              "GD_PERIODO_REGISTRADO",
-              validacion.data.id,
-              `Período de directiva ${validacion.data.fechaInicio} registrado (${miembros.length} miembros).`,
-              "GD"
-            )
-            return { ok: true }
-          },
 
           // --- CO: Comunicación con Vecinos ---
         /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
@@ -2868,29 +2500,6 @@ export const useCompassStore = create<CompassStore>()(
         set((s) => ({
           documentosCO: s.documentosCO.filter((d) => d.id !== id),
         }))
-        return { ok: true }
-      },
-
-      registrarDescargaDocCO: (id) => {
-        if (!get().hasHydrated)
-          return {
-            ok: false,
-            error:
-              "El almacenamiento aún se está hidratando. Intenta de nuevo.",
-          }
-        const doc = get().documentosCO.find((d) => d.id === id)
-        if (!doc)
-          return {
-            ok: false,
-            error: "No se puede registrar la descarga: el documento no existe.",
-          }
-        registrarEvento(
-          set,
-          "CO_DOC_DOWNLOAD",
-          id,
-          `Descarga registrada: ${doc.nombre} (${doc.categoria}).`,
-          "CO"
-        )
         return { ok: true }
       },
 
@@ -3407,46 +3016,6 @@ export const useCompassStore = create<CompassStore>()(
           }
         }
         set((s) => ({ activosIR: s.activosIR.filter((r) => r.id !== id) }))
-        return { ok: true }
-      },
-
-      cambiarEstadoRecursoIR: (id, estado) => {
-        if (!get().hasHydrated)
-          return {
-            ok: false,
-            error:
-              "El almacenamiento aún se está hidratando. Intenta de nuevo.",
-          }
-        const recurso = get().activosIR.find((r) => r.id === id)
-        if (!recurso)
-          return {
-            ok: false,
-            error: "No se puede actualizar: el recurso no existe.",
-          }
-        if (recurso.estadoActivo === estado) return { ok: true }
-        set((s) => ({
-          activosIR: s.activosIR.map((r) =>
-            r.id === id ? { ...r, estadoActivo: estado } : r
-          ),
-        }))
-        if (estado === "reparacion") {
-          registrarEvento(
-            set,
-            "IR_ASSET_REPAIR",
-            id,
-            `${recurso.nombre} (${recurso.categoria}) entra a Reparación.`,
-            "IR"
-          )
-        }
-        if (estado === "baja") {
-          registrarEvento(
-            set,
-            "IR_ASSET_BAJA",
-            id,
-            `${recurso.nombre} marcado como Baja (pérdida/robo/fin de vida útil).`,
-            "IR"
-          )
-        }
         return { ok: true }
       },
 
@@ -4123,59 +3692,6 @@ export const useCompassStore = create<CompassStore>()(
         return { ok: true }
       },
 
-      comentarInfraccionIN: (id, comentario) => {
-        if (!get().hasHydrated)
-          return {
-            ok: false,
-            error:
-              "El almacenamiento aún se está hidratando. Intenta de nuevo.",
-          }
-        const infraccion = get().infraccionesIN.find((i) => i.id === id)
-        if (!infraccion)
-          return {
-            ok: false,
-            error: "No se puede comentar: la infracción no existe.",
-          }
-        if (comentario.texto.trim().length === 0)
-          return { ok: false, error: "El comentario no puede estar vacío." }
-        const autor = get().personas.find(
-          (p) => p.id === comentario.autorPersonaId
-        )
-        if (!autor?.datosGobernanza || autor.estadoCuenta !== "activa") {
-          return {
-            ok: false,
-            error:
-              "Solo administración y directiva pueden dejar comentarios internos.",
-          }
-        }
-        set((s) => ({
-          infraccionesIN: s.infraccionesIN.map((x) =>
-            x.id === id
-              ? {
-                  ...x,
-                  comentariosDirectiva: [
-                    ...x.comentariosDirectiva,
-                    {
-                      id: generarId("com-in"),
-                      autorPersonaId: comentario.autorPersonaId,
-                      texto: comentario.texto.trim(),
-                      fecha: ahoraISO(),
-                    },
-                  ],
-                }
-              : x
-          ),
-        }))
-        registrarEvento(
-          set,
-          "IN_COMENTARIO_DIRECTIVA",
-          id,
-          `Comentario interno de ${nombrePersona(get, comentario.autorPersonaId)} en ${infraccion.folio}.`,
-          "IN"
-        )
-        return { ok: true }
-      },
-
       respaldarInfraccionIN: (id, personaId) => {
         if (!get().hasHydrated)
           return {
@@ -4674,40 +4190,6 @@ export const useCompassStore = create<CompassStore>()(
         return { ok: true }
       },
 
-      cancelarTrabajoMT: (id) => {
-        if (!get().hasHydrated)
-          return {
-            ok: false,
-            error:
-              "El almacenamiento aún se está hidratando. Intenta de nuevo.",
-          }
-        const trabajo = get().trabajosMT.find((t) => t.id === id)
-        if (!trabajo)
-          return {
-            ok: false,
-            error: "No se puede cancelar: el trabajo no existe.",
-          }
-        if (["finalizado", "cancelado"].includes(trabajo.estado)) {
-          return {
-            ok: false,
-            error: `Un trabajo ${trabajo.estado} no puede cancelarse.`,
-          }
-        }
-        set((s) => ({
-          trabajosMT: s.trabajosMT.map((t) =>
-            t.id === id ? { ...t, estado: "cancelado" } : t
-          ),
-        }))
-        registrarEvento(
-          set,
-          "MT_WORK_CANCELLED",
-          id,
-          `Trabajo ${trabajo.folio} "${trabajo.titulo}" cancelado.`,
-          "MT"
-        )
-        return { ok: true }
-      },
-
       actualizarPagoTrabajoMT: (id, estadoPago) => {
         if (!get().hasHydrated)
           return {
@@ -4840,19 +4322,6 @@ export const useCompassStore = create<CompassStore>()(
         return { ok: true }
       },
 
-        /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
-
-      removeProyectoMT: (id) => {
-        if (!get().hasHydrated)
-          return {
-            ok: false,
-            error:
-              "El almacenamiento aún se está hidratando. Intenta de nuevo.",
-          }
-        set((s) => ({ proyectosMT: s.proyectosMT.filter((p) => p.id !== id) }))
-        return { ok: true }
-      },
-
       // --- RA: Reservas y Amenities ---
         /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
       saveElementoRA: (elemento) => {
@@ -4893,28 +4362,6 @@ export const useCompassStore = create<CompassStore>()(
           }
         }
         set((s) => ({ elementosRA: upsert(s.elementosRA, registro) }))
-        return { ok: true }
-      },
-
-        /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
-
-      removeElementoRA: (id) => {
-        if (!get().hasHydrated)
-          return {
-            ok: false,
-            error:
-              "El almacenamiento aún se está hidratando. Intenta de nuevo.",
-          }
-        const vigentes = get().reservasRA.filter(
-          (r) => r.elementoId === id && r.estado !== "cancelada"
-        )
-        if (vigentes.length > 0) {
-          return {
-            ok: false,
-            error: `No se puede eliminar el elemento: ${vigentes.length} reserva(s) sin cancelar lo referencian.`,
-          }
-        }
-        set((s) => ({ elementosRA: s.elementosRA.filter((e) => e.id !== id) }))
         return { ok: true }
       },
 
@@ -5360,32 +4807,6 @@ export const useCompassStore = create<CompassStore>()(
         return { ok: true }
       },
 
-        /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
-
-      removeAvisoCV: (id) => {
-        if (!get().hasHydrated)
-          return {
-            ok: false,
-            error:
-              "El almacenamiento aún se está hidratando. Intenta de nuevo.",
-          }
-        const aviso = get().avisosCV.find((a) => a.id === id)
-        if (!aviso)
-          return {
-            ok: false,
-            error: "No se puede eliminar: el aviso no existe.",
-          }
-        if (aviso.estado !== "borrador") {
-          return {
-            ok: false,
-            error:
-              "Solo un aviso Borrador admite eliminación; los publicados se archivan.",
-          }
-        }
-        set((s) => ({ avisosCV: s.avisosCV.filter((a) => a.id !== id) }))
-        return { ok: true }
-      },
-
       publicarAvisoCV: (id) => {
         if (!get().hasHydrated)
           return {
@@ -5422,42 +4843,6 @@ export const useCompassStore = create<CompassStore>()(
         return { ok: true }
       },
 
-      archivarAvisoCV: (id) => {
-        if (!get().hasHydrated)
-          return {
-            ok: false,
-            error:
-              "El almacenamiento aún se está hidratando. Intenta de nuevo.",
-          }
-        const aviso = get().avisosCV.find((a) => a.id === id)
-        if (!aviso)
-          return {
-            ok: false,
-            error: "No se puede archivar: el aviso no existe.",
-          }
-        if (aviso.estado !== "publicado") {
-          return {
-            ok: false,
-            error: `Solo un aviso Publicado puede archivarse (estado actual: ${aviso.estado}).`,
-          }
-        }
-        set((s) => ({
-          avisosCV: s.avisosCV.map((a) =>
-            a.id === id
-              ? { ...a, estado: "archivado", fechaArchivado: hoyISO() }
-              : a
-          ),
-        }))
-        registrarEvento(
-          set,
-          "CV_ARCHIVED",
-          id,
-          `Aviso "${aviso.titulo}" ARCHIVADO (retirado del carrusel; data conservada para auditoría).`,
-          "CV"
-        )
-        return { ok: true }
-      },
-
       caducarAvisosCV: () => {
         if (!get().hasHydrated)
           return {
@@ -5486,43 +4871,6 @@ export const useCompassStore = create<CompassStore>()(
             "CV"
           )
         }
-        return { ok: true }
-      },
-
-        /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
-
-      savePlantillaCV: (plantilla) => {
-        if (!get().hasHydrated)
-          return {
-            ok: false,
-            error:
-              "El almacenamiento aún se está hidratando. Intenta de nuevo.",
-          }
-        const validacion = validarConEsquema(PlantillaCVSchema, plantilla)
-        if (!validacion.ok) return validacion
-        set((s) => ({ plantillasCV: upsert(s.plantillasCV, validacion.data) }))
-        return { ok: true }
-      },
-
-        /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
-
-      removePlantillaCV: (id) => {
-        if (!get().hasHydrated)
-          return {
-            ok: false,
-            error:
-              "El almacenamiento aún se está hidratando. Intenta de nuevo.",
-          }
-        const enUso = get().avisosCV.filter((a) => a.plantillaId === id)
-        if (enUso.length > 0) {
-          return {
-            ok: false,
-            error: `No se puede eliminar la plantilla: ${enUso.length} aviso(es) fueron activados desde ella.`,
-          }
-        }
-        set((s) => ({
-          plantillasCV: s.plantillasCV.filter((p) => p.id !== id),
-        }))
         return { ok: true }
       },
 
@@ -5670,32 +5018,6 @@ export const useCompassStore = create<CompassStore>()(
 
         /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
 
-      removeFondoFI: (id) => {
-        if (!get().hasHydrated)
-          return {
-            ok: false,
-            error:
-              "El almacenamiento aún se está hidratando. Intenta de nuevo.",
-          }
-        const egresos = get().egresosFI.filter((e) => e.fondoId === id).length
-        const ingresos = get().ingresosFI.filter((i) => i.fondoId === id).length
-        const cobros = get().cobrosFI.filter((c) => c.fondoId === id).length
-        const aportes = get().emisionesGC.filter(
-          (e) => e.fondoReservaAporte?.fondoId === id
-        ).length
-        const total = egresos + ingresos + cobros + aportes
-        if (total > 0) {
-          return {
-            ok: false,
-            error: `No se puede eliminar el fondo: ${total} movimiento(s) financiero(s) lo imputan.`,
-          }
-        }
-        set((s) => ({ fondosFI: s.fondosFI.filter((f) => f.id !== id) }))
-        return { ok: true }
-      },
-
-        /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
-
       saveEgresoFI: (egreso) => {
         if (!get().hasHydrated)
           return {
@@ -5760,72 +5082,6 @@ export const useCompassStore = create<CompassStore>()(
             "FI"
           )
         }
-        return { ok: true }
-      },
-
-        /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
-
-      removeEgresoFI: (id) => {
-        if (!get().hasHydrated)
-          return {
-            ok: false,
-            error:
-              "El almacenamiento aún se está hidratando. Intenta de nuevo.",
-          }
-        set((s) => ({ egresosFI: s.egresosFI.filter((e) => e.id !== id) }))
-        return { ok: true }
-      },
-
-      registrarIngresoFI: (input) => {
-        if (!get().hasHydrated)
-          return {
-            ok: false,
-            error:
-              "El almacenamiento aún se está hidratando. Intenta de nuevo.",
-          }
-        const candidato: IngresoFI = {
-          id: input.id ?? generarId("fi-ing"),
-          fecha: input.fecha,
-          monto: input.monto,
-          concepto: input.concepto,
-          fondoId: input.fondoId,
-          ...(input.familia ? { familia: input.familia } : {}),
-        }
-        const validacion = validarConEsquema(IngresoFISchema, candidato)
-        if (!validacion.ok) return validacion
-        const fondo = get().fondosFI.find(
-          (f) => f.id === validacion.data.fondoId
-        )
-        if (!fondo)
-          return {
-            ok: false,
-            error:
-              "No se puede registrar el ingreso: el fondo de imputación no existe.",
-          }
-        if (!fondo.activo)
-          return {
-            ok: false,
-            error: `No se puede registrar el ingreso: el fondo "${fondo.nombre}" está inactivo.`,
-          }
-        set((s) => ({ ingresosFI: upsert(s.ingresosFI, validacion.data) }))
-        registrarEvento(
-          set,
-          "FI_INGRESO_REGISTRADO",
-          validacion.data.id,
-          `Ingreso "${validacion.data.concepto}" por $${validacion.data.monto.toLocaleString("es-CL")} a ${fondo.nombre}.`,
-          "FI"
-        )
-        return { ok: true }
-      },
-
-      removeIngresoFI: (id) => {
-        if (!get().hasHydrated)
-          return {
-            ok: false,
-            error:
-              "El almacenamiento aún se está hidratando. Intenta de nuevo.",
-          }
-        set((s) => ({ ingresosFI: s.ingresosFI.filter((i) => i.id !== id) }))
         return { ok: true }
       },
 
@@ -6867,33 +6123,6 @@ export const useCompassStore = create<CompassStore>()(
 
         /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
 
-      removeProveedorPE: (id) => {
-        if (!get().hasHydrated)
-          return {
-            ok: false,
-            error:
-              "El almacenamiento aún se está hidratando. Intenta de nuevo.",
-          }
-        const mantenciones = get().mantencionesPreventivasPE.filter(
-          (m) => m.proveedorId === id
-        )
-        const visitas = get().visitasTecnicasPE.filter(
-          (v) => v.proveedorId === id
-        )
-        if (mantenciones.length > 0 || visitas.length > 0) {
-          return {
-            ok: false,
-            error: `No se puede eliminar el proveedor: ${mantenciones.length} mantención(es) y ${visitas.length} visita(s) técnica(s) asociadas.`,
-          }
-        }
-        set((s) => ({
-          proveedoresPE: s.proveedoresPE.filter((p) => p.id !== id),
-        }))
-        return { ok: true }
-      },
-
-        /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
-
       saveMantencionPE: (mantencion) => {
         if (!get().hasHydrated)
           return {
@@ -6932,32 +6161,6 @@ export const useCompassStore = create<CompassStore>()(
           `Mantención preventiva "${validacion.data.descripcion}" programada para ${validacion.data.proximaFecha}.`,
           "PE"
         )
-        return { ok: true }
-      },
-
-        /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
-
-      removeMantencionPE: (id) => {
-        if (!get().hasHydrated)
-          return {
-            ok: false,
-            error:
-              "El almacenamiento aún se está hidratando. Intenta de nuevo.",
-          }
-        const vinculadas = get().visitasTecnicasPE.filter(
-          (v) => v.mantencionId === id
-        )
-        if (vinculadas.length > 0) {
-          return {
-            ok: false,
-            error: `No se puede eliminar la mantención: ${vinculadas.length} visita(s) técnica(s) asociadas.`,
-          }
-        }
-        set((s) => ({
-          mantencionesPreventivasPE: s.mantencionesPreventivasPE.filter(
-            (m) => m.id !== id
-          ),
-        }))
         return { ok: true }
       },
 
@@ -7150,122 +6353,6 @@ export const useCompassStore = create<CompassStore>()(
         return { ok: true }
       },
 
-      editarCierreTurnoPE: (id, cambios, resumen) => {
-        if (!get().hasHydrated)
-          return {
-            ok: false,
-            error:
-              "El almacenamiento aún se está hidratando. Intenta de nuevo.",
-          }
-        const cierre = get().cierresTurnoPE.find((c) => c.id === id)
-        if (!cierre)
-          return { ok: false, error: "El cierre de turno no existe." }
-        if (!resumen || resumen.trim().length < 5) {
-          return {
-            ok: false,
-            error:
-              "Cada edición exige un resumen del cambio (mínimo 5 caracteres).",
-          }
-        }
-        const fusionado: CierreTurnoPE = {
-          ...cierre,
-          ...cambios,
-          incidencias: cambios.incidencias ?? cierre.incidencias,
-          checklistInstalaciones:
-            cambios.checklistInstalaciones ?? cierre.checklistInstalaciones,
-          checklistEquipamiento:
-            cambios.checklistEquipamiento ?? cierre.checklistEquipamiento,
-          jornadaReportadaId:
-            cambios.jornadaReportadaId ?? cierre.jornadaReportadaId,
-          novedadesGenerales:
-            cambios.novedadesGenerales ?? cierre.novedadesGenerales,
-        }
-        if (fusionado.incidencias.hubo) {
-          if (
-            !fusionado.incidencias.descripcion ||
-            fusionado.incidencias.descripcion.trim().length < 20
-          ) {
-            return {
-              ok: false,
-              error:
-                "Con incidencias marcadas debe describir lo ocurrido (mínimo 20 caracteres).",
-            }
-          }
-          if (
-            !fusionado.incidencias.evidencias ||
-            fusionado.incidencias.evidencias.length === 0
-          ) {
-            return {
-              ok: false,
-              error:
-                "Con incidencias marcadas debe adjuntar al menos una evidencia por referencia (URL).",
-            }
-          }
-        }
-        if (
-          fusionado.jornadaReportadaId &&
-          !get().maestros.jornadas.some(
-            (j) => j.id === fusionado.jornadaReportadaId
-          )
-        ) {
-          return {
-            ok: false,
-            error: "jornadaReportadaId no existe en el maestro de jornadas.",
-          }
-        }
-        const editado: CierreTurnoPE = {
-          ...fusionado,
-          historialCambios: [
-            ...cierre.historialCambios,
-            { fecha: hoyISO(), resumen: resumen.trim() },
-          ],
-        }
-        const validacion = validarConEsquema(CierreTurnoPESchema, editado)
-        if (!validacion.ok) return validacion
-        set((s) => ({
-          cierresTurnoPE: upsert(s.cierresTurnoPE, validacion.data),
-        }))
-        registrarEvento(
-          set,
-          "PE_CIERRE_EDITADO",
-          id,
-          `Cierre de turno editado: ${resumen.trim()}`,
-          "PE"
-        )
-        return { ok: true }
-      },
-
-      removeCierreTurnoPE: (id) => {
-        if (!get().hasHydrated)
-          return {
-            ok: false,
-            error:
-              "El almacenamiento aún se está hidratando. Intenta de nuevo.",
-          }
-        const cierre = get().cierresTurnoPE.find((c) => c.id === id)
-        if (!cierre)
-          return { ok: false, error: "El cierre de turno no existe." }
-        // Auditoría: solo cierres TEST o del día en curso son removibles.
-        if (!id.startsWith("test-") && cierre.fecha !== hoyISO()) {
-          return {
-            ok: false,
-            error:
-              "Solo pueden eliminarse cierres del día en curso (los históricos son auditablemente inmutables).",
-          }
-        }
-        set((s) => ({
-          cierresTurnoPE: s.cierresTurnoPE.filter((c) => c.id !== id),
-        }))
-        registrarEvento(
-          set,
-          "PE_CIERRE_ELIMINADO",
-          id,
-          `Cierre de turno del ${cierre.fecha} eliminado por administración.`,
-          "PE"
-        )
-        return { ok: true }
-      },
-
       enviarProyeccionCostoFI: (mesAnio, params) => {
         if (!get().hasHydrated)
           return {
@@ -7332,335 +6419,6 @@ export const useCompassStore = create<CompassStore>()(
           validacion.data.id,
           `Proyección ${mesAnio}: ${proyeccionBase.diasFeriados} feriado(s), ${proyeccionBase.reemplazosNecesarios} reemplazo(s), costo estimado $${costoEstimado.toLocaleString("es-CL")} (liquidación pendiente en PL).`,
           "PE"
-        )
-        return { ok: true }
-      },
-
-      // --- PL: Liquidaciones y Remuneraciones ---
-
-      generarLiquidacionPL: (input) => {
-        if (!get().hasHydrated)
-          return {
-            ok: false,
-            error:
-              "El almacenamiento aún se está hidratando. Intenta de nuevo.",
-          }
-        if (!/^\d{4}-\d{2}$/.test(input.periodo))
-          return { ok: false, error: "El periodo debe tener formato AAAA-MM." }
-        const trabajador = get().personas.find(
-          (p) => p.id === input.trabajadorPersonaId
-        )
-        if (!trabajador)
-          return {
-            ok: false,
-            error: "El trabajador no existe en el Maestro de Personas.",
-          }
-        const dl = trabajador.datosLaborales
-        if (!dl)
-          return {
-            ok: false,
-            error: "La persona no tiene ficha laboral de PE.",
-          }
-        const sueldoBase = dl.sueldoBase ?? 0
-        if (!(sueldoBase > 0))
-          return {
-            ok: false,
-            error:
-              "La ficha del trabajador no registra sueldo base contractual (PE).",
-          }
-        // FKs legales vigentes contra los maestros (RG escritura).
-        const m = get().maestros
-        if (dl.afpId && !m.afps.some((a) => a.id === dl.afpId))
-          return { ok: false, error: "afpId no existe en el maestro de AFPs." }
-        if (dl.saludId && !m.previsionesSalud.some((s) => s.id === dl.saludId))
-          return {
-            ok: false,
-            error: "saludId no existe en el maestro de previsiones de salud.",
-          }
-        if (
-          dl.asignacionFamiliarId &&
-          !m.asignacionFamiliar.some((a) => a.id === dl.asignacionFamiliarId)
-        ) {
-          return {
-            ok: false,
-            error:
-              "asignacionFamiliarId no existe en el maestro de tramos legales.",
-          }
-        }
-        // CF sin parámetros legales bloquea la generación.
-        const cfg = get().configuracion
-        const diasMesComercial = cfg.diasMesComercial ?? 30
-        if (
-          cfg.ufMensual === undefined ||
-          cfg.ingresoMinimoMensual === undefined ||
-          cfg.topeGratificacionLegal === undefined ||
-          cfg.tasaSIS === undefined
-        ) {
-          return {
-            ok: false,
-            error:
-              "CF no cargado: faltan parámetros legales de remuneraciones (UF mensual, ingreso mínimo, tope gratificación o tasa SIS).",
-          }
-        }
-        // Un solo documento por trabajador y periodo.
-        const duplicado = get().liquidacionesPL.some(
-          (l) =>
-            l.trabajadorPersonaId === input.trabajadorPersonaId &&
-            l.periodo === input.periodo
-        )
-        if (duplicado) {
-          return {
-            ok: false,
-            error: `Ya existe una liquidación ${input.periodo} para este trabajador.`,
-          }
-        }
-
-        const esHonorarios = dl.tipoContrato === "honorarios"
-        const afp = dl.afpId ? m.afps.find((a) => a.id === dl.afpId) : undefined
-        const salud = dl.saludId
-          ? m.previsionesSalud.find((s) => s.id === dl.saludId)
-          : undefined
-        const tramo = dl.asignacionFamiliarId
-          ? m.asignacionFamiliar.find((a) => a.id === dl.asignacionFamiliarId)
-          : undefined
-        const bonos = (input.bonos ?? []).map((b, idx) => ({
-          id:
-            b.id ??
-            `bono-${Date.now()}-${idx}-${Math.random().toString(36).slice(2, 6)}`,
-          glosa: b.glosa,
-          monto: b.monto,
-          imponible: b.imponible,
-        }))
-        const anticiposPendientes = get().adelantosPL.filter(
-          (a) =>
-            a.trabajadorPersonaId === input.trabajadorPersonaId &&
-            a.estado === "pendiente"
-        )
-
-        const calculo = calcularLiquidacion({
-          sueldoBaseContrato: sueldoBase,
-          diasTrabajados: input.diasTrabajados,
-          diasMesComercial,
-          jornadaSemanal: dl.jornadaBaseHoras ?? cfg.jornadaSemanalEstandar,
-          horasExtrasHoras: (dl.horasExtras ?? [])
-            .filter((h) => h.fecha.startsWith(`${input.periodo}-`))
-            .reduce((acc, h) => acc + h.horas, 0),
-          bonos,
-          asignacionMovilizacion: input.asignacionMovilizacion ?? 0,
-          asignacionColacion: input.asignacionColacion ?? 0,
-          montoAsignacionFamiliar: tramo
-            ? tramo.monto * Math.max(0, dl.cargas ?? 0)
-            : 0,
-          tasaAFP: afp?.tasaCotizacion ?? 0,
-          saludPlan: {
-            tipo: salud?.tipo ?? "fonasa",
-            porcentaje: input.saludPorcentaje,
-            valorUF: input.saludValorUF,
-            ufVigente: cfg.ufMensual!,
-          },
-          ufVigente: cfg.ufMensual!,
-          ingresoMinimoMensual: cfg.ingresoMinimoMensual!,
-          topeGratificacionLegal: cfg.topeGratificacionLegal!,
-          tasaSIS: cfg.tasaSIS!,
-          tasaSeguroCesantia: 0.6,
-          esHonorarios,
-          montoAPV: input.montoAPV ?? (dl.apv ? 0 : 0),
-          anticiposPendientes: anticiposPendientes.map((a) => ({
-            id: a.id,
-            monto: a.monto,
-          })),
-        })
-
-        // Folio LIQ correlativo.
-        const numeros = get()
-          .liquidacionesPL.map((l) =>
-            Number.parseInt(l.folio.replace(/^LIQ-/, ""), 10)
-          )
-          .filter((n) => Number.isFinite(n))
-        const folio = `LIQ-${String((numeros.length > 0 ? Math.max(...numeros) : 0) + 1).padStart(4, "0")}`
-
-        // Referencia a la proyección PE del periodo si existe.
-        const proyeccion = get().proyeccionesPE.find(
-          (p) => p.mesAnio === input.periodo
-        )
-
-        const liquidacion: LiquidacionPL = {
-          id: input.id ?? generarId("pl-liq"),
-          folio,
-          trabajadorPersonaId: input.trabajadorPersonaId,
-          periodo: input.periodo,
-          fechaGeneracion: hoyISO(),
-          diasTrabajados: input.diasTrabajados,
-          sueldoBaseContrato: sueldoBase,
-          diasMesComercial,
-          jornadaSemanal: dl.jornadaBaseHoras ?? cfg.jornadaSemanalEstandar,
-          sueldoBaseProporcional: calculo.sueldoBaseProporcional,
-          horasExtrasHoras: (dl.horasExtras ?? [])
-            .filter((h) => h.fecha.startsWith(`${input.periodo}-`))
-            .reduce((acc, h) => acc + h.horas, 0),
-          valorHoraOrdinaria: calculo.valorHoraOrdinaria,
-          montoHorasExtras: calculo.montoHorasExtras,
-          bonos,
-          gratificacionLegal: calculo.gratificacionLegal,
-          totalImponible: calculo.totalImponible,
-          asignacionMovilizacion: input.asignacionMovilizacion ?? 0,
-          asignacionColacion: input.asignacionColacion ?? 0,
-          asignacionFamiliarTramoId: dl.asignacionFamiliarId,
-          cargas: Math.max(0, dl.cargas ?? 0),
-          montoAsignacionFamiliar: tramo
-            ? tramo.monto * Math.max(0, dl.cargas ?? 0)
-            : 0,
-          totalHaberes: calculo.totalHaberes,
-          afpId: dl.afpId,
-          nombreAfp: afp?.nombre ?? (esHonorarios ? "Boleta honorarios" : ""),
-          tasaAFP: afp?.tasaCotizacion ?? 0,
-          montoAFP: calculo.montoAFP,
-          saludId: dl.saludId,
-          nombreSalud: salud?.nombre ?? "",
-          saludTipo: salud?.tipo ?? "fonasa",
-          saludPorcentaje: input.saludPorcentaje,
-          saludValorUF: input.saludValorUF,
-          ufAplicada: cfg.ufMensual ?? undefined,
-          montoSalud: calculo.montoSalud,
-          tasaSIS: cfg.tasaSIS!,
-          montoSIS: calculo.montoSIS,
-          montoSeguroCesantia: calculo.montoSeguroCesantia,
-          montoAPV: input.montoAPV ?? 0,
-          totalDescuentos: calculo.totalDescuentos,
-          descuentoAnticipos: calculo.descuentoAnticipos,
-          adelantosIds: calculo.adelantosIds,
-          alcanceLiquido: calculo.alcanceLiquido,
-          liquidoAPagar: calculo.liquidoAPagar,
-          estado: "borrador",
-          egresoFIReferencia: "pendiente",
-          ...(proyeccion ? { proyeccionPEReferencia: proyeccion.id } : {}),
-        }
-        const validacion = validarConEsquema(LiquidacionPLSchema, liquidacion)
-        if (!validacion.ok) return validacion
-
-        set((s) => ({
-          liquidacionesPL: upsert(s.liquidacionesPL, validacion.data),
-          proyeccionesPE: s.proyeccionesPE.map((p) =>
-            p.mesAnio === input.periodo &&
-            p.liquidacionPLReferencia === "pendiente"
-              ? { ...p, liquidacionPLReferencia: validacion.data.id }
-              : p
-          ),
-        }))
-        registrarEvento(
-          set,
-          "PL_GENERATE_PAYSLIP",
-          validacion.data.id,
-          `Liquidación ${folio} generada para ${trabajador.nombres} ${trabajador.apellidos} (${input.periodo}): haberes $${calculo.totalHaberes.toLocaleString("es-CL")}, líquido a pagar $${calculo.liquidoAPagar.toLocaleString("es-CL")}.`,
-          "PL"
-        )
-        return { ok: true }
-      },
-
-      confirmarLiquidacionPL: (id) => {
-        if (!get().hasHydrated)
-          return {
-            ok: false,
-            error:
-              "El almacenamiento aún se está hidratando. Intenta de nuevo.",
-          }
-        const liquidacion = get().liquidacionesPL.find((l) => l.id === id)
-        if (!liquidacion)
-          return {
-            ok: false,
-            error: "No se puede confirmar: la liquidación no existe.",
-          }
-        if (liquidacion.estado !== "borrador")
-          return { ok: false, error: "La liquidación ya está confirmada." }
-        const fondoGC = get().fondosFI.find(
-          (f) => f.tipo === "gasto_comun" && f.activo
-        )
-        if (!fondoGC)
-          return {
-            ok: false,
-            error:
-              "No existe un Fondo de Gasto Común activo para imputar el egreso de sueldos.",
-          }
-        const trabajador = get().personas.find(
-          (p) => p.id === liquidacion.trabajadorPersonaId
-        )
-        const nombreCompleto = trabajador
-          ? `${trabajador.nombres} ${trabajador.apellidos}`
-          : liquidacion.trabajadorPersonaId
-
-        const egreso: EgresoFI = {
-          id: generarId("egr"),
-          folio: siguienteFolioFE(get),
-          fecha: hoyISO(),
-          categoria: "sueldos",
-          descripcion: `Liquidación ${liquidacion.folio} ${nombreCompleto} (${liquidacion.periodo})`,
-          monto: Math.max(1, liquidacion.liquidoAPagar),
-          fondoId: fondoGC.id,
-          esRecurrente: false,
-        }
-        const validacionEgreso = validarConEsquema(EgresoFISchema, egreso)
-        if (!validacionEgreso.ok) return validacionEgreso
-
-        set((s) => ({
-          liquidacionesPL: s.liquidacionesPL.map((l) =>
-            l.id === id
-              ? {
-                  ...l,
-                  estado: "confirmada" as const,
-                  egresoFIReferencia: validacionEgreso.data.id,
-                }
-              : l
-          ),
-          adelantosPL: s.adelantosPL.map((a) =>
-            a.estado === "pendiente" && liquidacion.adelantosIds.includes(a.id)
-              ? { ...a, estado: "descontado" as const, liquidacionId: id }
-              : a
-          ),
-          egresosFI: [...s.egresosFI, validacionEgreso.data],
-        }))
-        registrarEvento(
-          set,
-          "PL_EXPENSE_SYNC",
-          id,
-          `Liquidación ${liquidacion.folio} CONFIRMADA: egreso ${validacionEgreso.data.folio} de $${egreso.monto.toLocaleString("es-CL")} imputado a ${fondoGC.nombre} (categoría Sueldos); ${liquidacion.adelantosIds.length} anticipo(s) descontado(s).`,
-          "PL"
-        )
-        return { ok: true }
-      },
-
-      removeLiquidacionPL: (id) => {
-        if (!get().hasHydrated)
-          return {
-            ok: false,
-            error:
-              "El almacenamiento aún se está hidratando. Intenta de nuevo.",
-          }
-        const liquidacion = get().liquidacionesPL.find((l) => l.id === id)
-        if (!liquidacion)
-          return {
-            ok: false,
-            error: "No se puede eliminar: la liquidación no existe.",
-          }
-        if (
-          liquidacion.estado !== "borrador" ||
-          (liquidacion.egresoFIReferencia &&
-            liquidacion.egresoFIReferencia !== "pendiente")
-        ) {
-          return {
-            ok: false,
-            error:
-              "Solo una liquidación en borrador sin egreso sincronizado puede eliminarse.",
-          }
-        }
-        set((s) => ({
-          liquidacionesPL: s.liquidacionesPL.filter((l) => l.id !== id),
-        }))
-        registrarEvento(
-          set,
-          "PL_DELETE_PAYSLIP",
-          id,
-          `Liquidación borrador ${liquidacion.folio} (${liquidacion.periodo}) eliminada por administración.`,
-          "PL"
         )
         return { ok: true }
       },
@@ -8311,32 +7069,6 @@ export const useCompassStore = create<CompassStore>()(
           `Reporte "${reporte.titulo}" distribuido a ${destinatarios.length} destinatario(s) vía bandeja simulada (segmentación EF+MP+tenencia).`,
           "RE"
         )
-        return { ok: true }
-      },
-
-        /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
-
-      removeReporteRE: (id) => {
-        if (!get().hasHydrated)
-          return {
-            ok: false,
-            error:
-              "El almacenamiento aún se está hidratando. Intenta de nuevo.",
-          }
-        const reporte = get().reportesRE.find((r) => r.id === id)
-        if (!reporte)
-          return {
-            ok: false,
-            error: "No se puede eliminar: el reporte no existe.",
-          }
-        if (!id.startsWith("test-")) {
-          return {
-            ok: false,
-            error:
-              "Solo los reportes TEST pueden eliminarse; los emitidos quedan trazados en AM.",
-          }
-        }
-        set((s) => ({ reportesRE: s.reportesRE.filter((r) => r.id !== id) }))
         return { ok: true }
       },
     }),

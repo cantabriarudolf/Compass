@@ -60,16 +60,17 @@ describe("CV - Visor de Mensajes en el store", () => {
       expect(getState().eventos.filter(e => e.tipoAccion === "CV_PUBLISHED")).toHaveLength(1)
     })
 
-    it("solo borradores se eliminan; publicado solo se archiva; archivado inmutable", () => {
+    it("aviso archivado no admite edición tardía (auditoría)", () => {
       getState().saveAvisoCV(avisoBase({}))
       expect(getState().publicarAvisoCV("cv-1").ok).toBe(true)
-      expect(getState().removeAvisoCV("cv-1").ok).toBe(false)
 
-      expect(getState().archivarAvisoCV("cv-1").ok).toBe(true)
-      expect(getState().avisosCV[0]!.fechaArchivado).toBeTruthy()
-      expect(getState().eventos.filter(e => e.tipoAccion === "CV_ARCHIVED")).toHaveLength(1)
+      // El archivado se siembra directo: `archivarAvisoCV` (legacy) se eliminó en store-cleanup.
+      useCompassStore.setState((s) => ({
+        avisosCV: s.avisosCV.map((a) =>
+          a.id === "cv-1" ? { ...a, estado: "archivado" as const, fechaArchivado: "2026-08-30" } : a
+        ),
+      }))
 
-      expect(getState().removeAvisoCV("cv-1").ok).toBe(false)
       const edicionTardia = getState().saveAvisoCV({ ...getState().avisosCV[0]!, titulo: "Hack" })
       expect(edicionTardia.ok).toBe(false)
       expect(edicionTardia.error).toContain("auditoría")
@@ -144,8 +145,10 @@ describe("CV - Visor de Mensajes en el store", () => {
     })
 
     it("con check global desactivado el tercero habilitado publica directo", () => {
-      const config = getState().configuracion
-      getState().saveConfiguracion({ ...config, cvRequiereVistoBueno: false })
+      // Se siembra la configuración directo: `saveConfiguracion` (legacy) se eliminó en store-cleanup.
+      useCompassStore.setState((s) => ({
+        configuracion: { ...s.configuracion, cvRequiereVistoBueno: false },
+      }))
       const p = getState().personas.find(x => x.id === personaId())!
       getState().savePersona({ ...p, permiteCreacionManualCV: true })
 
@@ -157,10 +160,7 @@ describe("CV - Visor de Mensajes en el store", () => {
   })
 
   describe("plantillas rápidas", () => {
-    it("CRUD y activación instantánea por personal de servicio", () => {
-      expect(getState().savePlantillaCV(plantillaBase({ id: "plant-cv-x" })).ok).toBe(true)
-      expect(getState().removePlantillaCV("plant-cv-x").ok).toBe(true)
-
+    it("activación instantánea por personal de servicio", () => {
       expect(getState().activarPlantillaCV("plant-cv-porton").ok).toBe(true)
       const aviso = getState().avisosCV.find(a => a.plantillaId === "plant-cv-porton")!
       expect(aviso.estado).toBe("publicado")
@@ -169,16 +169,11 @@ describe("CV - Visor de Mensajes en el store", () => {
       expect(aviso.requiereVistoBueno).toBe(false)
       expect(getState().eventos.filter(e => e.tipoAccion === "CV_PUBLISHED")).toHaveLength(1)
 
-      // Plantilla desactivada no activa.
-      getState().savePlantillaCV(plantillaBase({ id: "plant-cv-off", activa: false }))
+      // Plantilla desactivada no activa (se siembra directo: `savePlantillaCV` se eliminó en store-cleanup).
+      useCompassStore.setState((s) => ({
+        plantillasCV: [...s.plantillasCV, plantillaBase({ id: "plant-cv-off", activa: false })],
+      }))
       expect(getState().activarPlantillaCV("plant-cv-off").ok).toBe(false)
-    })
-
-    it("plantilla usada por avisos no eliminable", () => {
-      getState().activarPlantillaCV("plant-cv-porton")
-      const r = getState().removePlantillaCV("plant-cv-porton")
-      expect(r.ok).toBe(false)
-      expect(r.error).toContain("aviso")
     })
   })
 

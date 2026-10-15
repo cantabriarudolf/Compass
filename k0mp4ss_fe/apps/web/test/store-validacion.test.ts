@@ -98,17 +98,6 @@ describe("Capa de validación en escrituras del store", () => {
     expect(getState().vinculos.length).toBe(antes)
   })
 
-  it("saveConfiguracion rechaza día de corte fuera de rango", () => {
-    const original = getState().configuracion
-
-    const result = getState().saveConfiguracion({
-      ...original,
-      diaCortePago: 99,
-    })
-
-    expect(result.ok).toBe(false)
-    expect(getState().configuracion).toEqual(original)
-  })
 })
 
 describe("validateSeedOrder — EF orden interno macro→micro→unidad", () => {

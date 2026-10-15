@@ -199,14 +199,6 @@ describe("RE - store y acciones", () => {
     expect(dup.error).toContain("ya fue distribuido")
   })
 
-  it("eliminación restringida a reportes TEST; inexistentes bloqueados", () => {
-    expect(getState().removeReporteRE("re-nadie").error).toContain("no existe")
-    expect(getState().generarReporteRE({ titulo: "Permanente TEST", bloques: ["morosidad"], segmento: {} }).ok).toBe(true)
-    const idReal = getState().reportesRE[0]!.id
-    const bloqueado = getState().removeReporteRE(idReal)
-    expect(bloqueado.ok).toBe(false)
-    expect(bloqueado.error).toContain("TEST")
-  })
 
   it(`usa versión ${STORE_VERSION} y migrate v25 siembra reportesRE`, async () => {
     expect(STORE_VERSION).toBeGreaterThanOrEqual(25)

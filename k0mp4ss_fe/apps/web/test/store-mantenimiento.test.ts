@@ -130,10 +130,6 @@ describe("MT - Mantenimiento y Proyectos en el store", () => {
       expect(getState().trabajosMT.filter(t => t.estado === "planificado")).toHaveLength(1) // solo mt-prev
     })
 
-    it("cancelar solo desde planificado/en_curso", () => {
-      expect(getState().cancelarTrabajoMT("mt-prev").ok).toBe(true)
-      expect(getState().cancelarTrabajoMT("mt-prev").ok).toBe(false)
-    })
   })
 
   describe("pagos y garantías", () => {
@@ -186,7 +182,7 @@ describe("MT - Mantenimiento y Proyectos en el store", () => {
   })
 
   describe("proyectos", () => {
-    it("alta con cuota sugerida derivable y eliminación", () => {
+    it("alta con cuota sugerida derivable y plazo inválido rechazado", () => {
       const r = getState().saveProyectoMT(proyectoBase({}))
       expect(r.ok).toBe(true)
       const proyecto = getState().proyectosMT[0]!
@@ -194,9 +190,6 @@ describe("MT - Mantenimiento y Proyectos en el store", () => {
 
       const invalido = getState().saveProyectoMT(proyectoBase({ id: "py-2", plazoMeses: 0 }))
       expect(invalido.ok).toBe(false)
-
-      expect(getState().removeProyectoMT("py-1").ok).toBe(true)
-      expect(getState().proyectosMT).toHaveLength(0)
     })
   })
 })

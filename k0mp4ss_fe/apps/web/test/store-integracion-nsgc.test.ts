@@ -2,7 +2,6 @@ import { describe, it, expect, beforeEach } from "vitest"
 import { useCompassStore } from "@/lib/store"
 import { calcularProyeccionCobertura } from "@/lib/personal-utils"
 import { tasaHuerfanosRE } from "@/lib/reporteria-utils"
-import { documentoLiquidacionPDF, documentoCertificadoPDF } from "@/lib/pdf-utils"
 import { resetStore } from "./helpers"
 
 // Ventana 9 — QA integral de la serie NSGC.
@@ -71,10 +70,14 @@ describe("Engranaje 2 — QA Lab 'Cargar Todo': cadena completa MA→RE", () => 
     expect(getState().saveVinculo({ id: "test-v-prop-e999", personaId: "test-p-99", unidadId: "test-u-e-999", rol: "propietario", fechaInicio: "2026-08-20", permiteVerFinanzas: false } as never).ok).toBe(true)
     expect(getState().saveVinculo({ id: "test-v-arr-999", personaId: "test-p-88", unidadId: "test-u-999", rol: "arrendatario", fechaInicio: "2026-08-20", fechaFin: "2027-08-20", permiteVerFinanzas: false } as never).ok).toBe(true)
 
-    expect(getState().savePublicacionPortal({ id: "test-pub-pi-e999", unidadId: "test-u-e-999", operacion: "venta", precio: 8500000, moneda: "CLP", descripcion: "Estacionamiento TEST publicado en vitrina", urlMapa: "", imagenes: [{ nombre: "test-foto-e999.jpg", tipoMime: "image/jpeg", tamanoKB: 120, url: "https://placeholder.supabase.co/test-foto-e999.jpg" }], activa: true, fechaPublicacion: "2026-08-24" } as never).ok).toBe(true)
-    expect(getState().saveLeadPortal({ id: "test-lead-pi-1", publicacionId: "test-pub-pi-e999", nombreContacto: "TEST Lead QA", contacto: "+56 9 0000 0001", mensaje: "Interesado en E-999", fecha: "2026-08-24", atendido: false } as never).ok).toBe(true)
-    // Cadena a: el lead notifica al propietario vigente de la unidad publicada.
-    expect(getState().notificaciones.some(n => n.moduloOrigen === "PI" && n.destinatarioRol === "propietario" && n.destinatarioPersonaId === "test-p-99")).toBe(true)
+    // La vitrina PI se siembra directo: `savePublicacionPortal`/`saveLeadPortal` (legacy) se
+    // eliminaron en store-cleanup (la cadena publicación→lead→notificación vive en la API REST).
+    useCompassStore.setState((s) => ({
+      publicacionesPortal: [
+        ...s.publicacionesPortal,
+        { id: "test-pub-pi-e999", unidadId: "test-u-e-999", operacion: "venta", precio: 8500000, moneda: "CLP", descripcion: "Estacionamiento TEST publicado en vitrina", urlMapa: "", imagenes: [{ nombre: "test-foto-e999.jpg", tipoMime: "image/jpeg", tamanoKB: 120, url: "https://placeholder.supabase.co/test-foto-e999.jpg" }], activa: true, fechaPublicacion: "2026-08-24" },
+      ],
+    }))
 
     expect(getState().saveControlPropiedad({ id: "test-ctrl-e999", unidadId: "test-u-e-999", residenteVeMorosidad: true, residenteVeActas: false, alertasResidentesActivas: true } as never).ok).toBe(true)
 
@@ -298,29 +301,18 @@ describe("Engranaje 2 — QA Lab 'Cargar Todo': cadena completa MA→RE", () => 
     expect(notifPE.some(n => n.destinatarioRol === "personal" && n.destinatarioPersonaId === "test-p-99")).toBe(true)
 
     // --- Fase 15: PL → CT → RE ---
-    const cfg = getState().configuracion
-    expect(getState().saveConfiguracion({ ...cfg, ufMensual: 39000, ingresoMinimoMensual: 500000, topeGratificacionLegal: 4.75, tasaSIS: 1.48 }).ok).toBe(true)
-    expect(getState().eventos.some(e => e.tipoAccion === "CF_UPDATE_PARAM")).toBe(true)
+    // CF se siembra directo: `saveConfiguracion` (legacy) se eliminó en store-cleanup; su
+    // auditoría CF_UPDATE_PARAM vive hoy en la ruta API de configuración.
+    useCompassStore.setState((s) => ({
+      configuracion: { ...s.configuracion, ufMensual: 39000, ingresoMinimoMensual: 500000, topeGratificacionLegal: 4.75, tasaSIS: 1.48 },
+    }))
     const p99c = getState().personas.find(p => p.id === "test-p-99")!
     expect(getState().savePersona({ ...p99c, datosLaborales: { ...p99c.datosLaborales!, sueldoBase: 600000 } } as never).ok).toBe(true)
     expect(getState().saveAdelantoPL({ id: "test-ade-1", folio: "", trabajadorPersonaId: "test-p-99", fecha: hoy(), monto: 80000, glosa: "Adelanto quincena TEST", estado: "pendiente" }).ok).toBe(true)
     expect(getState().adelantosPL.find(a => a.id === "test-ade-1")?.folio).toMatch(/^ADE-/)
-    // Cadena f: la LIQ consume horas extra registradas en PE durante el periodo.
-    expect(getState().generarLiquidacionPL({ id: "test-liq-pl", trabajadorPersonaId: "test-p-99", periodo: periodoActual, diasTrabajados: 30, asignacionMovilizacion: 30000 }).ok).toBe(true)
-    const liq = getState().liquidacionesPL.find(l => l.id === "test-liq-pl")!
-    expect(liq.folio).toMatch(/^LIQ-/)
-    expect(liq.horasExtrasHoras).toBe(2)
-    expect(liq.montoHorasExtras).toBeGreaterThan(0)
-    expect(liq.gratificacionLegal).toBeGreaterThan(0)
-    expect(liq.descuentoAnticipos).toBe(80000)
-    const egresosAntesPL = getState().egresosFI.length
-    expect(getState().confirmarLiquidacionPL("test-liq-pl").ok).toBe(true)
-    const liqConf = getState().liquidacionesPL.find(l => l.id === "test-liq-pl")!
-    expect(liqConf.estado).toBe("confirmada")
-    expect(String(liqConf.egresoFIReferencia)).toMatch(/^egr-/)
-    const egresoSueldos = getState().egresosFI.slice(egresosAntesPL).find(e => e.categoria === "sueldos")
-    expect(egresoSueldos).toBeTruthy()
-    expect(getState().adelantosPL.find(a => a.id === "test-ade-1")?.estado).toBe("descontado")
+    // La cadena de liquidación (generar → confirmar → egreso FI → descuento de adelanto) se retiró
+    // del store en store-cleanup: vive en `app/api/liquidaciones/**` y se cubre en
+    // `test/api/api-liquidaciones.test.ts`.
 
     // CT (cadena g): residencia sobre vínculo activo (propietario sin fechaFin;
     // el arrendatario TEST tiene contrato a plazo y no califica como vigente);
@@ -341,6 +333,24 @@ describe("Engranaje 2 — QA Lab 'Cargar Todo': cadena completa MA→RE", () => 
       if (debe > 0) expect(getState().registrarPagoFI(c.id, { monto: debe, medio: "transferencia TEST" }).ok).toBe(true)
     }
     expect(getState().generarCertificadoCT({ id: "test-ct-alday", tipo: "al_dia", unidadId: "test-u-999", solicitanteNombre: "TEST QA" }).ok).toBe(true)
+    // La liquidación se siembra directo (confirmada): generar/confirmar liquidaciones viven en la
+    // API REST desde store-cleanup, y `generarCertificadoCT` sigue siendo acción viva del store.
+    useCompassStore.setState((s) => ({
+      liquidacionesPL: [
+        ...s.liquidacionesPL,
+        {
+          id: "test-liq-pl",
+          folio: "LIQ-TEST-0001",
+          trabajadorPersonaId: "test-p-99",
+          periodo: periodoActual,
+          estado: "confirmada",
+          totalImponible: 600000,
+          totalHaberes: 600000,
+          totalDescuentos: 100000,
+          liquidoAPagar: 500000,
+        } as never,
+      ],
+    }))
     expect(getState().generarCertificadoCT({ id: "test-ct-liq", tipo: "liquidacion_sueldo", liquidacionId: "test-liq-pl", solicitanteNombre: "TEST QA" }).ok).toBe(true)
     const primerReal = getState().certificadosCT.find(c => !c.id.startsWith("test-"))
     const bloqueoHistorial = getState().removeCertificadoCT(primerReal?.id ?? "ct-nadie")
@@ -423,37 +433,7 @@ describe("Engranaje a) VU estado En Arriendo/En Venta → PI → lead → notifi
     expect(getState().eventos.some(e => e.tipoAccion === "PI_PROPERTY_UNLISTED")).toBe(true)
   })
 
-  it("unidad con estado En Arriendo (u-B-201) publica operación arriendo; lead notifica al propietario p-3", () => {
-    const s = getState()
-    // "Arrendada" es ocupación; el estado que dispara la vitrina es "En Arriendo".
-    useCompassStore.setState(st => ({
-      vinculos: st.vinculos.map(v => (v.id === "v-3" ? { ...v, estadoOcupacionPropiedad: "en_arriendo" } : v)),
-    }))
-    s.syncPublicacionesDesdeVinculos("u-B-201")
-    const pub = getState().publicacionesPortal.find(p => p.unidadId === "u-B-201")!
-    expect(pub.operacion).toBe("arriendo")
-    const rLead = getState().saveLeadPortal({
-      id: "lead-int-1", publicacionId: pub.id, nombreContacto: "Interesado TEST Arriendo",
-      contacto: "+56 9 5555 0001", mensaje: "¿Está disponible?", fecha: hoy(), atendido: false,
-    })
-    expect(rLead.ok).toBe(true)
-    const notif = getState().notificaciones.find(n => n.moduloOrigen === "PI" && n.destinatarioPersonaId === "p-3")!
-    expect(notif.destinatarioRol).toBe("propietario")
-    expect(notif.canal).toBe("email_simulado")
-    expect(notif.cuerpo).toContain("Interesado TEST Arriendo")
-  })
 
-  it("lead sobre publicación inactiva es rechazado", () => {
-    const s = getState()
-    s.syncPublicacionesDesdeVinculos("u-A-104")
-    const pub = getState().publicacionesPortal.find(p => p.unidadId === "u-A-104")!
-    useCompassStore.setState(st => ({
-      publicacionesPortal: st.publicacionesPortal.map(p => (p.id === pub.id ? { ...p, activa: false } : p)),
-    }))
-    const r = getState().saveLeadPortal({ id: "lead-off", publicacionId: pub.id, nombreContacto: "X", contacto: "+56 9 0000 0000", mensaje: "hola", fecha: hoy(), atendido: false })
-    expect(r.ok).toBe(false)
-    expect(String(r.error)).toContain("no está activa")
-  })
 })
 
 describe("Engranaje b) GD quórum 100% → publicada + notificación formal + aviso CV", () => {
@@ -618,54 +598,6 @@ describe("Engranaje e) PE cierre turno → administración · feriados MA → pr
   })
 })
 
-describe("Engranaje f) PL ← horas extra PE + CF + maestros MA · PDF generado", () => {
-  beforeEach(resetStore)
-
-  function ficha(idPersona: string) {
-    const base = getState().personas.find(p => p.id === idPersona)!
-    return { ...base, datosLaborales: { id: "l-chainf", cargo: "Conserje QA", afp: "Habitat", prevision: "FONASA", fechaIngreso: "2025-01-01", tipoContrato: "indefinido" as const, afpId: "afp-habitat", saludId: "fonasa", bancoId: "banco-estado", jornadaBaseHoras: 45, sueldoBase: 600000, cargas: 1 } }
-  }
-
-  it("la liquidación integra horas extra del fichero PE, tramos MA y parámetros CF", () => {
-    const s = getState()
-    const cfg = s.configuracion
-    expect(s.saveConfiguracion({ ...cfg, ufMensual: 39000, ingresoMinimoMensual: 500000, topeGratificacionLegal: 4.75, tasaSIS: 1.48 }).ok).toBe(true)
-    expect(s.savePersona(ficha("p-9")).ok).toBe(true)
-    const periodo = hoy().slice(0, 7)
-    // Horas extra registradas vía PE entran al periodo de la LIQ.
-    expect(s.registrarHoraExtraPE("p-9", { fecha: hoy(), horas: 3, motivo: "Cobertura feriado TEST" }).ok).toBe(true)
-    expect(s.generarLiquidacionPL({ id: "liq-chainf", trabajadorPersonaId: "p-9", periodo, diasTrabajados: 30, asignacionMovilizacion: 25000 }).ok).toBe(true)
-    const liq = getState().liquidacionesPL.find(l => l.id === "liq-chainf")!
-    expect(liq.horasExtrasHoras).toBe(3)
-    expect(liq.valorHoraOrdinaria).toBe(3111)
-    expect(liq.nombreAfp).toContain("Habitat")
-    expect(liq.ufAplicada).toBe(39000)
-    expect(liq.gratificacionLegal).toBeGreaterThan(0)
-    expect(lastEventType()).toBe("PL_GENERATE_PAYSLIP")
-  })
-
-  it("documento PDF de liquidación y certificado se generan con firma por referencia", async () => {
-    const s = getState()
-    const cfg = s.configuracion
-    expect(s.saveConfiguracion({ ...cfg, ufMensual: 39000, ingresoMinimoMensual: 500000, topeGratificacionLegal: 4.75, tasaSIS: 1.48 }).ok).toBe(true)
-    expect(s.savePersona(ficha("p-9")).ok).toBe(true)
-    expect(s.generarLiquidacionPL({ id: "liq-pdf", trabajadorPersonaId: "p-9", periodo: hoy().slice(0, 7), diasTrabajados: 30 }).ok).toBe(true)
-    const liq = getState().liquidacionesPL.find(l => l.id === "liq-pdf")!
-    const docLiq = await documentoLiquidacionPDF(liq, "Rosa Meléndez", "11.234.567-1", getState().configuracion)
-    expect(JSON.stringify(docLiq)).toContain("LIQUIDACIÓN DE SUELDO")
-    expect(JSON.stringify(docLiq)).toContain(liq.folio)
-    const docCert = await documentoCertificadoPDF({
-      tipo: "residencia", titulo: "Certificado de Residencia", folio: "CT-9999",
-      codigoVerificacion: "VC-TEST1234", fechaEmision: hoy(),
-      parrafos: ["Se certifica la residencia TEST."], detalle: [["Unidad", "Torre A · 101"]],
-      solicitanteNombre: "TEST QA", config: getState().configuracion,
-    })
-    const certStr = JSON.stringify(docCert)
-    expect(certStr).toContain("VC-TEST1234")
-    expect(certStr).toContain("CT-9999")
-  })
-})
-
 describe("Engranaje g) CT firma por referencia · RE métricas AM post-carga", () => {
   beforeEach(resetStore)
 
@@ -701,8 +633,3 @@ describe("Engranaje g) CT firma por referencia · RE métricas AM post-carga", (
     expect(res.tasaPct).toBeGreaterThan(0)
   })
 })
-
-function lastEventType(): string | undefined {
-  const eventos = getState().eventos
-  return eventos[eventos.length - 1]?.tipoAccion
-}

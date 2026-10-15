@@ -13,14 +13,20 @@ describe("FI - Ingreso manual a fondo y saldoInicial", () => {
     expect(STORE_VERSION).toBe(28)
   })
 
-  it("registrar ingreso OK persiste y saldoFondo refleja (con punto cero)", () => {
+  it("ingresosFI del punto cero alimentan saldoFondo", () => {
     const antes = getState().ingresosFI.length // 44 del punto cero (1 con monto 0 filtrado)
     expect(antes).toBe(44)
-    const r = getState().registrarIngresoFI({ fecha: "2026-09-01", monto: 50000, concepto: "Aporte extraordinario", fondoId: "fondo-gc" })
-    expect(r.ok).toBe(true)
+
+    // Se siembra el estado directo: `registrarIngresoFI` (legacy) se eliminó en store-cleanup.
+    useCompassStore.setState((s) => ({
+      ingresosFI: [
+        ...s.ingresosFI,
+        { id: "fi-ing-test-extra", fecha: "2026-09-01", monto: 50000, concepto: "Aporte extraordinario", fondoId: "fondo-gc" },
+      ],
+    }))
+
     expect(getState().ingresosFI).toHaveLength(45)
     expect(getState().ingresosFI.some(i => i.concepto === "Aporte extraordinario")).toBe(true)
-    expect(getState().eventos.some(e => e.tipoAccion === "FI_INGRESO_REGISTRADO")).toBe(true)
     const saldo = saldoFondo("fondo-gc", {
       cobros: getState().cobrosFI.filter(c => c.fondoId === "fondo-gc"),
       egresos: getState().egresosFI.filter(e => e.fondoId === "fondo-gc"),
@@ -32,35 +38,9 @@ describe("FI - Ingreso manual a fondo y saldoInicial", () => {
     expect(saldo).toBe(50000)
   })
 
-  it("fondo inexistente → error y no muta", () => {
-    const antes = getState().ingresosFI.length
-    const r = getState().registrarIngresoFI({ fecha: "2026-09-01", monto: 1000, concepto: "X", fondoId: "fondo-fantasma" })
-    expect(r.ok).toBe(false)
-    expect(r.error).toContain("fondo")
-    expect(getState().ingresosFI).toHaveLength(antes)
-  })
 
-  it("monto ≤0 → error zod y no muta (mantiene punto cero)", () => {
-    const antes = getState().ingresosFI.length
-    expect(antes).toBe(44)
-    const r1 = getState().registrarIngresoFI({ fecha: "2026-09-01", monto: 0, concepto: "X", fondoId: "fondo-gc" })
-    expect(r1.ok).toBe(false)
-    const r2 = getState().registrarIngresoFI({ fecha: "2026-09-01", monto: -100, concepto: "X", fondoId: "fondo-gc" })
-    expect(r2.ok).toBe(false)
-    expect(getState().ingresosFI).toHaveLength(44)
-  })
 
-  it("concepto vacío → error zod", () => {
-    const r = getState().registrarIngresoFI({ fecha: "2026-09-01", monto: 1000, concepto: "", fondoId: "fondo-gc" })
-    expect(r.ok).toBe(false)
-  })
 
-  it("evento FI_INGRESO_REGISTRADO queda auditado", () => {
-    getState().registrarIngresoFI({ fecha: "2026-09-02", monto: 75000, concepto: "Multa", fondoId: "fondo-gc", familia: "Multas" })
-    const ev = getState().eventos.find(e => e.tipoAccion === "FI_INGRESO_REGISTRADO")
-    expect(ev).toBeDefined()
-    expect(ev!.categoria).toBe("FI")
-  })
 
   it("saldoInicial suma al saldo sin romper compatibilidad", () => {
     // Fondo con apertura 17082694 y movimientos netos 0 debería dar 17082694
@@ -110,15 +90,6 @@ describe("FI - Ingreso manual a fondo y saldoInicial", () => {
     expect(saldo).toBe(12345)
   })
 
-  it("removeIngresoFI paridad con removeEgresoFI (con punto cero)", () => {
-    const base = getState().ingresosFI.length // 44
-    getState().registrarIngresoFI({ fecha: "2026-09-01", monto: 1000, concepto: "A", fondoId: "fondo-gc" })
-    expect(getState().ingresosFI).toHaveLength(45)
-    const nuevoId = getState().ingresosFI.find(i => i.concepto === "A")!.id
-    expect(getState().removeIngresoFI(nuevoId).ok).toBe(true)
-    expect(getState().ingresosFI).toHaveLength(44)
-    expect(base).toBe(44)
-  })
 
   it("migración v26→v27 idempotente asegura punto cero inyectado (182+44) y preserva saldoInicial", () => {
     const prev = { fondosFI: getState().fondosFI.filter(f=> f.id !== "fondo-cc-punto-cero"), egresosFI: [], ingresosFI: [] }
@@ -137,11 +108,4 @@ describe("FI - Ingreso manual a fondo y saldoInicial", () => {
     expect(r3.fondosFI.some(f=> f.id==="fondo-cc-punto-cero")).toBe(true)
   })
 
-  it("hydrated gate en registrarIngresoFI", () => {
-    useCompassStore.setState({ hasHydrated: false })
-    const r = getState().registrarIngresoFI({ fecha: "2026-09-01", monto: 1000, concepto: "X", fondoId: "fondo-gc" })
-    expect(r.ok).toBe(false)
-    expect(r.error).toContain("hidratando")
-    useCompassStore.setState({ hasHydrated: true })
-  })
 })
