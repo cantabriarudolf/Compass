@@ -3,7 +3,8 @@
 // needs by argument. The CompassStore type is imported type-only, so there is
 // no runtime cycle with lib/store.ts.
 import type { CompassStore } from "../store"
-import { hoyISO } from "@/lib/date-utils"
+import { ahoraISO, hoyISO } from "@/lib/date-utils"
+import { generarId } from "@/lib/id-utils"
 import { saldoPendiente } from "@/lib/finanzas-utils"
 
 export function upsert<T extends { id: string }>(list: T[], item: T): T[] {
@@ -108,4 +109,40 @@ export function siguienteFolioFE(get: () => CompassStore): string {
     .filter((n) => Number.isFinite(n))
   const siguiente = (numeros.length > 0 ? Math.max(...numeros) : 0) + 1
   return `FE-${String(siguiente).padStart(4, "0")}`
+}
+
+// Máximo de eventos de auditoría retenidos en el store (movido desde lib/store.ts en
+// Store Split Fase 2 para que los slices puedan emitir eventos sin importar el store
+// en runtime).
+export const MAX_EVENTOS = 500
+
+// Firma mínima de `set` que necesita `registrarEvento` (movida junto al helper).
+export type SetStateFn = (
+  partial:
+    | Partial<CompassStore>
+    | ((state: CompassStore) => Partial<CompassStore>)
+) => void
+
+/** Emite un evento de auditoría AM recortando la cola a MAX_EVENTOS. */
+export function registrarEvento(
+  set: SetStateFn,
+  tipoAccion: string,
+  referenciaId: string,
+  descripcion: string,
+  categoria = "VU"
+): void {
+  set((s) => ({
+    eventos: [
+      ...s.eventos.slice(-(MAX_EVENTOS - 1)),
+      {
+        id: generarId("ev"),
+        timestamp: ahoraISO(),
+        usuario: "Admin",
+        categoria,
+        tipoAccion,
+        referenciaId,
+        descripcion,
+      },
+    ],
+  }))
 }
