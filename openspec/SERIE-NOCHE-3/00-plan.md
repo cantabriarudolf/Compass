@@ -13,7 +13,7 @@
 | P2 | `st-split-fase2` slices **IR + MT** | HECHA (e2e MT: defecto API preexistente, ver Bitácora) | — |
 | P3 | `st-split-fase2` slices **AD + PI/D3** | HECHA (e2e 9/9 con paridad CI; ver Bitácora) | `327b7af` |
 | P4 | `st-split-fase2` slice **CO** | HECHA (e2e 8/8 con paridad CI) | `e140cbe` |
-| P5 | `st-split-fase2` slices **GE + CV** (+ cierre de tasks del change: manual de arquitectura + avance) | pendiente | — |
+| P5 | `st-split-fase2` slices **GE + CV** (+ cierre de tasks del change: manual de arquitectura + avance) | HECHA (e2e 9/9 con paridad CI; el ejecutor delegado falló 2 veces y la ventana se completó inline) | `dc24e33` |
 | P6 | `api-cobertura-fases` fase 1 — rutas API más bajas + subir el piso `app/api/**` | pendiente | — |
 | P7 | `api-cobertura-fases` fase 2 — resto de rutas bajas + subir el piso otra vez | pendiente | — |
 | P8 | `store-cobertura-fase-b` — cobertura de `lib/store/**` (slices) + subir los pisos `lib/**` y global | pendiente | — |
@@ -208,3 +208,28 @@ deuda post-serie en P9 (replanteo con el owner), no se improvisa.
   estaba ocupado por un `next-server` huérfano (pid 444789, leftover de la lane de P3) — terminado
   antes de la lane. Pendientes para P5: slices GE y CV, cierre del change (manual de arquitectura
   + avance); `e2e:fresh` sigue como deuda a P9. Commits: `e140cbe` (código) + cierre documental.
+
+- [2026-10-15] **P5 HECHA** (`st-split-fase2` slices GE + CV + cierre del change): GE movió
+  `solicitudesGE` + **6 acciones** (el prompt contaba 4) a `lib/store/slices/ge-slice.ts` (409
+  líneas) y CV movió `avisosCV` + `plantillasCV` + **4 acciones** (contaba 5; P1 ya había podado
+  `removeAvisoCV`, `archivarAvisoCV`, `savePlantillaCV` y `removePlantillaCV`) a `cv-slice.ts` (228
+  líneas). `lib/store.ts` **5.795 → 5.219 líneas** (−576); `STORE_VERSION` sigue **28** y el shape
+  persistido quedó intacto. **Cierre del split**: 7 slices en `lib/store/slices/`
+  (`ir`/`mt`/`ad`/`pi`/`co`/`ge`/`cv`), ninguna acción de los dominios movidos queda implementada
+  en el monolito y la serie completa bajó el store de **8.889 a 5.219 líneas** (−41%).
+  **Cross-write verificado**: `publicarActaEnCV` (slice AD) sigue escribiendo `avisosCV` (ahora en
+  el slice CV) sobre el store combinado → tests dedicados **36/36** (`store-directiva`,
+  `store-visor`, `store-solicitudes`) más el e2e de directiva (paso "Publicar acta"). **Movimiento
+  puro**: **GE 6/6 y CV 4/4 cuerpos de acción byte-idénticos a HEAD** y 0 residuos. Gates: `tsc` 0,
+  `eslint` 0, suite **936/936 exit 0** (global 84.59/72.18/87.92/84.59; `lib`
+  90.86/81.72/98.21/90.86; `store.ts` 87.11/80.51/98.71/87.11), `validate --all` 40/0,
+  `check-delta-coverage` 0 que romperían el archive y **e2e con paridad CI 9/9** (`auth.setup` 6/6 +
+  `directiva` + `solicitudes` + `visor`) con build de producción sobre `prisma/perf-p5.db` (puerto
+  3000 liberado al cerrar, sin huérfanos). **Incidente de ejecución**: el subagente `serie-executor`
+  falló **dos veces** a mitad de turno ("assistant reported an error") *después* de escribir los dos
+  slices y re-cablear el monolito; el orquestador verificó el estado parcial (byte-identidad, `tsc`
+  0, 0 residuos) y completó la ventana **inline** — el código del split es de la corrida delegada,
+  los gates y el cierre son del orquestador. Manual de arquitectura documentado
+  (`33 - ST - Capa de Datos Persistente.md`) y tasks 4.3–4.5 + 5.1–5.2 cerradas: el change queda
+  **19/19** y lo archiva el ARRANQUE de P6 con la CI verde de este push. Commits: `dc24e33` (código)
+  + cierre documental.

@@ -8,7 +8,11 @@ Ser la fuente de verdad temporal del frontend mientras no haya backend. Toda ent
 
 ## 🛠️ Arquitectura
 
-- **Store Global**: implementado con Zustand en `apps/web/lib/store.ts`.
+- **Store Global**: implementado con Zustand. `apps/web/lib/store.ts` es la fábrica que combina por spread el estado de dominio con **7 slices hoja** en `apps/web/lib/store/slices/`: `ir-slice.ts` (Inventario y Recursos), `mt-slice.ts` (Mantenimiento y Proyectos), `ad-slice.ts` (Gestión Administrativa), `pi-slice.ts` (Portal Inmobiliario), `co-slice.ts` (Comunicación Vecinos), `ge-slice.ts` (Gestión de Solicitudes) y `cv-slice.ts` (Visor de Mensajes).
+- **Cómo se combina**: dentro de la factory va primero `...seedData()` y después `...irSlice(set, get, api)`, `...mtSlice(set, get, api)`, `...adSlice(...)`, `...piSlice(...)`, `...coSlice(...)`, `...geSlice(...)`, `...cvSlice(...)`. Cada slice recibe los mismos `(set, get, api)` y declara **sólo** su estado y sus acciones; las interfaces de todos los miembros siguen en `CompassStore` (en `lib/store.ts`), así que `useCompassStore` y `@/lib/store` no cambian para la app.
+- **Helpers puros**: sin estado y sin ciclo runtime viven en `apps/web/lib/store/helpers.ts` (`registrarEvento`, `periodoDirectivaVigente`, `esMiembroDirectivaVigente`, `resolverVariablesCO`, `upsert`, …); `lib/store.ts` los re-exporta.
+- **Cross-writes**: una acción puede mutar estado de otro dominio con `get()`/`set()` (p. ej. `publicarActaEnCV` de AD escribe `avisosCV` de CV); como todo se combina en un único objeto final, funciona igual que en el monolito.
+- **Movimiento puro (change `st-split-fase2`)**: el split sólo cambió **dónde** se declaran el estado y las acciones. `STORE_VERSION` está congelada en **28** y el shape persistido (`CompassData`, `seedData`, `partialize`, migraciones) no cambió.
 - **Persistencia**: `localStorage` con key `compass-store`, versión de esquema y función `migrate`.
 - **Patrón Repository**: las páginas no mutan el estado directamente; usan acciones como `saveUnidad`, `removePersona`, `saveConfiguracion`, etc.
 - **Seed Inicial**: la primera carga siembra datos desde `apps/web/data/`.
