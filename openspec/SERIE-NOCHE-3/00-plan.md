@@ -10,7 +10,7 @@
 | Ventana | Alcance | Estado | Commit final |
 |---|---|---|---|
 | P1 | `store-cleanup` — censo fino por miembro (incluye uso intra-store) + borrado de lo muerto/solo-test + tests | HECHA (e2e: 1 caso preexistente, ver Bitácora) | — |
-| P2 | `st-split-fase2` slices **IR + MT** | pendiente | — |
+| P2 | `st-split-fase2` slices **IR + MT** | HECHA (e2e MT: defecto API preexistente, ver Bitácora) | — |
 | P3 | `st-split-fase2` slices **AD + PI/D3** | pendiente | — |
 | P4 | `st-split-fase2` slice **CO** | pendiente | — |
 | P5 | `st-split-fase2` slices **GE + CV** (+ cierre de tasks del change: manual de arquitectura + avance) | pendiente | — |
@@ -104,3 +104,22 @@ deuda post-serie en P9 (replanteo con el owner), no se improvisa.
   flujo API/Prisma que **no depende del store** (el QA-Lab no usa ninguno de los 28 miembros, no
   hay acceso dinámico y ninguna ruta `app/api/**` importa `lib/store.ts`). Deuda accionable:
   subir esa espera a 120 s. Commit: ver fila P1.
+
+- [2026-10-14] **P2 HECHA** (`st-split-fase2` slices IR + MT): movimiento puro del monolito a
+  factories zustand en `lib/store/slices/{ir,mt}-slice.ts` (649 y 411 líneas). `lib/store.ts`
+  **7.621 → 6.618 líneas** (−1.003); `STORE_VERSION` sigue **28** y el shape persistido no cambia.
+  Verificación de movimiento puro: **15/15 cuerpos de acción byte-idénticos a HEAD** (comparados
+  por script), `tsc` 0 errores, `eslint` 0, suite completa **exit 0** (cobertura `lib` sube a
+  89.78/81.16/96.57/89.78 y `store.ts` a 86.5/80.17/96.42/86.5), `openspec validate --all` 41/0.
+  `registrarEvento` (+`MAX_EVENTOS`, `SetStateFn`) se movió a `lib/store/helpers.ts` para que los
+  slices lo importen sin ciclo runtime; `CompassStore`/`StoreResult` entran type-only.
+  **ARRANQUE**: la API de GitHub no responde (reintento incluido) y, además, el workflow sólo
+  dispara en `push` a `main` o `pull_request`, así que **el push de P1 no generó run de CI** y no
+  hay PR para esta rama → por la regla "nunca archivar sin CI verde observada", `store-cleanup`
+  **quedó sin archivar** (pendiente del ARRANQUE de P3 o de que exista un PR).
+  **e2e**: `e2e/crud/recursos.spec.ts` (IR) **verde** sobre base descartable fresca
+  (`prisma/perf-p2.db`); `e2e/crud/proyectos.spec.ts` (MT) falla en el paso "Iniciar" porque el
+  `PUT` de la página (`/api/mt/trabajos/[id]`) responde **404 "Registro no encontrado"** por el
+  chequeo de scope de `lib/api/put-merge.ts:53-57` aunque la fila existe en la base — defecto
+  **preexistente de la capa API**, fuera del camino del store (la página usa sólo hooks de API) y
+  fuera del alcance de archivos de la ventana. Queda registrado como deuda accionable.
