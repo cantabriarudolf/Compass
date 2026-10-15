@@ -9,7 +9,7 @@
 
 | Ventana | Alcance | Estado | Commit final |
 |---|---|---|---|
-| P1 | `store-cleanup` — censo fino por miembro (incluye uso intra-store) + borrado de lo muerto/solo-test + tests | pendiente | — |
+| P1 | `store-cleanup` — censo fino por miembro (incluye uso intra-store) + borrado de lo muerto/solo-test + tests | HECHA (e2e: 1 caso preexistente, ver Bitácora) | — |
 | P2 | `st-split-fase2` slices **IR + MT** | pendiente | — |
 | P3 | `st-split-fase2` slices **AD + PI/D3** | pendiente | — |
 | P4 | `st-split-fase2` slice **CO** | pendiente | — |
@@ -83,3 +83,24 @@ deuda post-serie en P9 (replanteo con el owner), no se improvisa.
 
 ## Bitácora
 (cada ventana agrega su entrada ANTES del push final: `- [fecha] P<n> HECHA: resumen (commits)`)
+
+- [2026-10-14] **P1 HECHA** (`store-cleanup`): censo fino por miembro con la API de TS en 5 zonas
+  (intra-store / app catch-all / QA-Lab / tests / e2e) → 180 miembros = 79 app · 71 QA-Lab ·
+  26 solo-test · 2 muerto · 2 intra-store. Poda de **28 acciones** sin consumidor
+  (2 muerto + 26 solo-test sin uso intra-store): `lib/store.ts` 8.890 → 7.621 líneas; 473 líneas de
+  test removidas en 16 archivos (casos con sujeto podado) y 10 archivos con *setup* adaptado a
+  siembra directa de estado. Guardas: `STORE_VERSION` **28**, `CompassData` y `partialize`
+  **idénticos**, `tsc` 0 errores, `eslint` 0 errores, `npm test` **936 tests verdes** con cobertura
+  84/73.12/88.39/84 sobre pisos 82/72/87/82, `openspec validate --all` 41 passed / 0 failed,
+  `check-delta-coverage` **0 que romperían el archive** (3 MODIFIED en ST).
+  **Incidente**: la v1 del censo dejó `components/**` fuera de la zona app → el `tsc` destapó 3
+  acciones con consumidor real en `components/pe/*`; la lista se corrigió de 31 a 28 y el censo v2
+  usa zona catch-all. **Deriva declarada** (fuera del alcance de la ventana): 11 specs vivas +
+  `ST` ya cubierta por delta, y 4 manuales NSGC nombran acciones podadas; el evento
+  `CF_UPDATE_PARAM` queda sin emisor (gap preexistente de la migración CF→API). **e2e dirigida**:
+  `auth.setup` 6/6 y el test principal de `poblado-idempotente.spec.ts` **verde** sobre base
+  descartable fresca (`prisma/perf-e2e.db`); el caso "cancelar" (`:96`) falla en su espera de
+  30 s — la purga completa mide **38,7 s** en el log del dev server (el test hermano usa 120 s) —
+  flujo API/Prisma que **no depende del store** (el QA-Lab no usa ninguno de los 28 miembros, no
+  hay acceso dinámico y ninguna ruta `app/api/**` importa `lib/store.ts`). Deuda accionable:
+  subir esa espera a 120 s. Commit: ver fila P1.

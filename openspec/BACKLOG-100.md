@@ -213,7 +213,7 @@ aclaración documental, 0 errores de cálculo.
 - 6 páginas quedan como excepciones/TODO por falta de hooks/API: `admin/qa-lab`, `admin/mantenimiento`, `admin/dev-dashboard`, `admin/reporteria`, `finanzas/remuneraciones` (liquidacionesPL/adelantosPL sin hooks), y acciones complejas sueltas en `multas`, `recursos`, `proyectos`, `personal`, `gastos-comunes`, `visor-mensajes`.
 - Usos restantes del store legacy: 168 líneas en 14 archivos (todos documentados como TODO o excepción).
 - Tests: 151/151 API pass, tsc 0 errores nuevos.
-- `lib/store.ts` permanece como legacy `@deprecated` (STORE_VERSION=28 congelado); las acciones que ya nadie usa se eliminarán en un change futuro `store-cleanup`.
+- `lib/store.ts` permanece como legacy `@deprecated` (STORE_VERSION=28 congelado); las acciones que ya nadie usa se eliminaron en `store-cleanup` (P1 de la Serie NOCHE-3).
 
 ## CI verde + deuda de cobertura (2026-10-12) — change `ci-verde-ratchet-cobertura`
 
@@ -261,11 +261,19 @@ El owner pidió saldar la deuda viva ("punto 4") en modo autónomo y sobre una r
 
 | Deuda | Cómo se salda |
 |---|---|
-| `store-cleanup` (no existía como change) | **P1** — censo fino por miembro (incluye uso intra-store) + borrado de lo muerto/solo-test. Censo 2026-10-14: 182 miembros → 107 app · 4 solo-QA-Lab · 21 solo-test · 1 muerto (`toggleActivoTipoUnidad`) |
+| `store-cleanup` (no existía como change) | **P1 HECHA (2026-10-14)** — censo fino por miembro (incluye uso intra-store) + poda de 28 acciones sin consumidor. Censo v2: 180 miembros → 79 app · 71 QA-Lab · 26 solo-test · 2 muerto · 2 intra-store. `lib/store.ts` 8.890 → 7.621 líneas; `STORE_VERSION` 28 intacto. Evidencia: `openspec/changes/store-cleanup/design.md` y `Data/NSGC/docs/avances/avance - 2026-10-14 20-00.md` |
 | `st-split-fase2` (0/19) | **P2–P5** — los 7 slices hoja en `lib/store/slices/**`: IR+MT, AD+PI/D3, CO, GE+CV (movimiento puro, `STORE_VERSION` intacto) |
 | `api-cobertura-fases` (2.114 statements API sin cubrir) | **P6–P7** — las rutas más bajas + ratchet de `app/api/**` (regla medido − 1 pt) |
 | `store-cobertura-fase-b` (1.202 statements del store sin cubrir) | **P8** — tests comportamentales sobre `lib/store/**` + ratchet de `lib/**` |
 | Cierre y auditoría | **P9** — gates completos de la serie, archives, PR draft y deuda post-serie declarada |
 
-Estado: **materializada, pendiente de ejecutar** (se corre con "corré la serie noche-3" en modo
-delegado, o ventana por ventana con `Corré el archivo openspec/SERIE-NOCHE-3/prompt-NN.md`).
+Estado: **en ejecución** — P1 cerrada el 2026-10-14 (censo + poda del store legacy); P2–P9 pendientes.
+
+### Deuda descubierta por `store-cleanup` (2026-10-14)
+
+| Deuda | Detalle |
+|---|---|
+| **Deriva de prosa en 11 specs vivas** | `FI-finanzas-morosidad`, `CV-visor-mensajes`, `PI-portal-inmobiliario`, `GD-gestion-directiva`, `PL-liquidaciones-remuneraciones`, `CF-configuracion-global`, `PE-personal-servicios`, `MT-mantenimiento-proyectos`, `IR-inventario-recursos`, `IN-infracciones-multas`, `CO-comunicacion-vecinos` y `RA-reservas-amenities` nombran en prosa normativa acciones que P1 podó. El delta de P1 cubre las 3 requirements afectadas de `ST-capa-datos-persistente`; cerrar el resto exige deltas en esas 11 capabilities (fuera del alcance declarado de P1). Inventario exacto: `openspec/changes/store-cleanup/design.md` §Deriva de prosa |
+| **`CF_UPDATE_PARAM` sin emisor** | El evento no tiene emisor en el código: su único emisor era `saveConfiguracion` (poda de P1), que la app ya no llamaba, y `app/api/configuracion/route.ts` no lo emite. Gap **preexistente** de la migración CF→API. Requiere decisión del owner: re-implementar la auditoría server-side o retirar el requirement |
+| **Deriva en docs NSGC** | `manuales/28 - MK - Catálogo de Mocks.md` (24 acciones), `manuales/33 - ST - Capa de Datos Persistente.md`, `manuales/36 - MK - Data Dump Comunicación y Solicitudes.md` y `manuales/40 - MK - Data Dump Remuneraciones, Certificados y Reportería.md` nombran acciones podadas por P1. P1 solo puede tocar `Data/NSGC/docs/avances/**` (alcance declarado); sincronizar esos manuales requiere una ventana con alcance NSGC. Los avances y auditorías históricos no se corrigen |
+| **e2e `poblado-idempotente.spec.ts:96` (caso "cancelar")** | Espera **30 s** el mensaje de purga, pero una purga completa suma **38,7 s** de DELETEs secuenciales medidos en el log del dev server (el test hermano `:29` usa 120 s para la misma espera y documenta la purga como lenta). Falla en este entorno con y sin el cambio de P1 (el flujo es API REST + Prisma, no depende del store). Acción: subir esa espera a 120 s |
