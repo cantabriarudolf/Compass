@@ -12,7 +12,7 @@
 | P1 | `store-cleanup` — censo fino por miembro (incluye uso intra-store) + borrado de lo muerto/solo-test + tests | HECHA (e2e: 1 caso preexistente, ver Bitácora) | `8e19565` (archive) |
 | P2 | `st-split-fase2` slices **IR + MT** | HECHA (e2e MT: defecto API preexistente, ver Bitácora) | — |
 | P3 | `st-split-fase2` slices **AD + PI/D3** | HECHA (e2e 9/9 con paridad CI; ver Bitácora) | `327b7af` |
-| P4 | `st-split-fase2` slice **CO** | pendiente | — |
+| P4 | `st-split-fase2` slice **CO** | HECHA (e2e 8/8 con paridad CI) | `e140cbe` |
 | P5 | `st-split-fase2` slices **GE + CV** (+ cierre de tasks del change: manual de arquitectura + avance) | pendiente | — |
 | P6 | `api-cobertura-fases` fase 1 — rutas API más bajas + subir el piso `app/api/**` | pendiente | — |
 | P7 | `api-cobertura-fases` fase 2 — resto de rutas bajas + subir el piso otra vez | pendiente | — |
@@ -188,3 +188,23 @@ deuda post-serie en P9 (replanteo con el owner), no se improvisa.
   diferida a P9) y queda escrita la receta real con paridad CI (`migrate deploy` + `reseed-base` +
   `npm run build` + `npm run start` + Playwright), porque contra `next dev` la lane es
   *latency-bound* y da falsos rojos por compilación en frío.
+
+- [2026-10-15] **P4 HECHA** (`st-split-fase2` slice CO): movimiento puro del bloque
+  **Comunicación con Vecinos** a `lib/store/slices/co-slice.ts` (397 líneas): estado
+  `plantillasCO`/`enviosCO`/`mensajesBuzonCO`/`documentosCO` + sus **10 acciones** (el proposal
+  contaba 8; el bloque real tenía 10 y las 10 se movieron). `plantillasCO` se siembra en el slice
+  con el mismo módulo seed que `seedData()`; `resolverVariablesCO`/`rolDestinatarioCO` se importan
+  desde `lib/store/helpers.ts` sin duplicarlos; CO **no tiene cross-write** (sólo lee otros
+  dominios por `get()`). `lib/store.ts` **6.130 → 5.795 líneas** (−335); `STORE_VERSION` sigue
+  **28** y `CompassData`/`seedData`/`partialize`/migraciones quedaron intactos. Verificación:
+  **10/10 cuerpos de acción byte-idénticos a HEAD** (script sobre la API de TS) y 0 acciones CO
+  implementadas en el monolito; `tsc` 0, `eslint` 0, suite **936/936 exit 0** (cobertura global
+  84.65/72.28/88.23/84.65, `lib` 90.49/81.1/98.36/90.49, `store.ts` 87/79.94/98.86/87), `openspec
+  validate --all` 40/0, `check-delta-coverage` **0 que romperían el archive**. **e2e con paridad
+  CI**: `comunicacion.spec.ts` + `visor.spec.ts` + `auth.setup` = **8/8 verdes** sobre base
+  fresca `prisma/perf-p4.db` con `CI=1` (webServer `npm run start` tras build de producción); el
+  intento 1 de comunicacion cayó por `Test timeout of 30000ms` en el primer render de ruta fría y
+  quedó verde en retry (retries=2 en CI, aceptado). **Incidente de entorno**: el puerto 3000
+  estaba ocupado por un `next-server` huérfano (pid 444789, leftover de la lane de P3) — terminado
+  antes de la lane. Pendientes para P5: slices GE y CV, cierre del change (manual de arquitectura
+  + avance); `e2e:fresh` sigue como deuda a P9. Commits: `e140cbe` (código) + cierre documental.

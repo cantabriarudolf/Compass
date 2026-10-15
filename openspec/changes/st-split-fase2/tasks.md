@@ -26,7 +26,7 @@
 
 ## Slices PI/D3, CO, GE, CV (resto de Fase 2)
 - [x] 4.1 PI: `lib/store/slices/pi-slice.ts`
-- [ ] 4.2 CO: `lib/store/slices/co-slice.ts`
+- [x] 4.2 CO: `lib/store/slices/co-slice.ts`
 - [ ] 4.3 GE: `lib/store/slices/ge-slice.ts`
 - [ ] 4.4 CV: `lib/store/slices/cv-slice.ts`
 - [ ] 4.5 Verificación completa: tsc, tests, e2e
@@ -69,3 +69,25 @@
   inicializan** las acciones, no el shape persistido. `STORE_VERSION` sigue **28**.
 - **Limpieza de arrastre**: se removieron de `lib/store.ts` dos imports que quedaron sin uso al
   mover los bloques (`OperacionPortal`, `MAX_EVENTOS`).
+
+## Notas de ejecución de P4 (2026-10-15)
+
+- **Alcance real post-P1**: el proposal contaba 8 acciones para CO; el bloque real del monolito
+  tenía **10** (`savePlantillaCO`, `removePlantillaCO`, `saveEnvioCO`, `registrarLecturaEnvioCO`,
+  `saveMensajeBuzonCO`, `responderMensajeBuzonCO`, `cambiarEstadoBuzonCO`, `removeMensajeBuzonCO`,
+  `saveDocumentoCO`, `removeDocumentoCO`) y las 10 se movieron. El slice pesa **397 líneas** (no
+  ~700: el proposal estimaba sobre el código pre-poda de P1).
+- **Helpers CO sin duplicar**: `resolverVariablesCO` y `rolDestinatarioCO` ya vivían en
+  `lib/store/helpers.ts` (Fase 1) → el slice los importa desde `../helpers`; ninguna acción de CO
+  necesita estado de otros dominios que mover: `personas`, `unidades`, `vinculos`, `notify` y
+  `configuracion` se leen por `get()` como antes.
+- **Seed de plantillas**: `plantillasCO` se inicializa en el slice con el mismo módulo seed que
+  `seedData()` (`@/data/comunidad/plantillas-co`) — idéntico comportamiento al monolito.
+- **Cross-write**: CO no muta estado de otros dominios (sólo lee vía `get()`); los otros dominios
+  que usan helpers CO (`IR`, `IN`) siguen en `lib/store.ts` sin cambios.
+- **Verificación**: **10/10 cuerpos de acción byte-idénticos a HEAD** (script sobre la API de TS,
+  `prop.getStart()..prop.end`) y 0 acciones CO implementadas en `lib/store.ts` (sólo quedan sus
+  declaraciones en `CompassStore`, igual que IR/MT/AD/PI). `lib/store.ts` 6.130 → **5.795**
+  (−335). e2e con paridad CI **8/8** (`auth.setup` 6/6 + `comunicacion` + `visor`) sobre
+  `prisma/perf-p4.db`; `comunicacion` falló el intento 1 por `Test timeout of 30000ms` en el
+  primer render de ruta fría y quedó verde en el retry (retries=2 en CI, aceptado).
