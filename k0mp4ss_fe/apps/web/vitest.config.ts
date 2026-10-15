@@ -56,7 +56,10 @@ export default defineConfig({
         // Núcleo: los 7 archivos medidos desde SERIE-PRODUCCION P4.
         "lib/**": { statements: 86, branches: 78, functions: 94, lines: 86 },
         // Superficie API: 126 route handlers (smoke de guardias + fases).
-        "app/api/**": { statements: 78, branches: 63, functions: 82, lines: 78 },
+        // Re-baseline 2026-10-15 (SERIE-NOCHE-3 P6, medido sobre 283dddc):
+        // 81.53/66.20/85.13/81.53 tras cubrir dev-dashboard, qa-estado y
+        // admin/usuarios → piso = medido − 1 pt. Nunca se baja.
+        "app/api/**": { statements: 80, branches: 65, functions: 84, lines: 80 },
       },
     },
   },
