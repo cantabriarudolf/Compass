@@ -19,12 +19,13 @@
 - [x] 1.7 `check-delta-coverage` + `openspec validate --all` + cierre de la ventana
       (fila P6 HECHA en el plan + Bitácora).
 
-## Fase 2 (declarada — ventana P7 de la serie)
+## Fase 2 (SERIE-NOCHE-3 P7) — segundo re-baseline
 
-- [ ] 2.1 Re-medir `app/api/**` y elegir las próximas carpetas más bajas
-      (candidatas de hoy: `micro-sectores` 58.44%, `ingresos-fi` 54.07%,
-      `egresos-fi` 57.81%, `emisiones-gc` 66.89%, `vinculos` 69.20%).
-- [ ] 2.2 Tests reales por carpeta elegida (mismo molde que la fase 1).
-- [ ] 2.3 Segundo re-baseline del piso `app/api/**` + avance NSGC.
-- [ ] 2.4 Cierre del change (archive con CI verde observada) o fase 3 si el salto no
-      alcanza el objetivo de la serie.
+- [x] 2.1 Re-medir `app/api/**` (81.53 tras la fase 1) y elegir las 3 carpetas más bajas:
+      `ingresos-fi` 54.07%, `egresos-fi` 57.81% y `micro-sectores` 58.44%.
+- [x] 2.2 Tests reales por carpeta (3 archivos nuevos, 51 tests, mismo molde que la fase 1:
+      camino feliz, 400 de validación, 401/403 por rol y 404 de scope, Prisma real sin mocks).
+- [x] 2.3 Segundo re-baseline del piso `app/api/**`: medido 83.69/68.70/86.99/83.69 → piso
+      **82/67/85/82**; avance NSGC con la cobertura antes/después.
+- [ ] 2.4 Cierre del change: **no hace falta fase 3** (el objetivo de la serie se cumple con las
+      fases 1–2); lo archiva el ARRANQUE de P8 con la CI verde **observada** del push de P7.
