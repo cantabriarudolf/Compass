@@ -9,7 +9,7 @@
 
 | Ventana | Alcance | Estado | Commit final |
 |---|---|---|---|
-| P1 | `store-cleanup` — censo fino por miembro (incluye uso intra-store) + borrado de lo muerto/solo-test + tests | HECHA (e2e: 1 caso preexistente, ver Bitácora) | — |
+| P1 | `store-cleanup` — censo fino por miembro (incluye uso intra-store) + borrado de lo muerto/solo-test + tests | HECHA (e2e: 1 caso preexistente, ver Bitácora) | `8e19565` (archive) |
 | P2 | `st-split-fase2` slices **IR + MT** | HECHA (e2e MT: defecto API preexistente, ver Bitácora) | — |
 | P3 | `st-split-fase2` slices **AD + PI/D3** | HECHA (e2e 9/9 con paridad CI; ver Bitácora) | `327b7af` |
 | P4 | `st-split-fase2` slice **CO** | pendiente | — |
@@ -77,9 +77,24 @@ deuda post-serie en P9 (replanteo con el owner), no se improvisa.
   `app/api/vinculos`). Fuente: `openspec/changes/archive/2026-10-12-ci-verde-ratchet-cobertura/design.md` (§Deuda).
 - Node: `.nvmrc` = 24 · `engines.node` = `>=24` · local 24.21.0 →
   `export PATH="$HOME/.nvm/versions/node/v24.21.0/bin:$PATH"`.
-- Lane e2e: `npm run e2e:fresh` crea la base descartable, siembra e imprime el comando Playwright
-  exacto con paridad CI. **Nunca** correr el spec de rate-limit antes de la lane (bloquea la IP
-  15 min y aborta `auth.setup`).
+- Lane e2e: **`npm run e2e:fresh` NO existe todavía** (lo prometía P3 de `SERIE-NOCHE-2` y nunca
+  se creó; queda como deuda explícita para P9 — ver más abajo). Receta equivalente, verificada en
+  P3, dentro de `k0mp4ss_fe/apps/web`:
+  ```bash
+  export DATABASE_URL="file:./perf-<ventana>.db"
+  npx prisma migrate deploy --schema=prisma/schema.sqlite.prisma
+  npm run e2e:reseed-base            # seed:authz + seed:mocks --comunidad-id=comunidad-a
+  npm run build && npm run start     # paridad CI: rutas calientes
+  npx playwright test <specs de la ventana>
+  ```
+  El shell env gana sobre `.env` (Next sólo setea variables ausentes de `process.env`), las bases
+  son descartables (`prisma/perf*.db`, gitignored) y nunca se toca `prisma/dev.db`.
+  **Contra `next dev` el gate es poco fiable**: es *latency-bound* y los primeros renders/requests
+  de rutas frías se pasan de los 15 s de `expect` y de los 30 s de `APIRequestContext` (medido en
+  P3: 6/9 y 8/9 con dev vs **9/9** con build + `next start`). Si una ventana corre igual contra
+  `next dev`, no marque BLOQUEADO por esos timeouts: repita con paridad CI.
+  **Nunca** correr el spec de rate-limit antes de la lane (bloquea la IP 15 min y aborta
+  `auth.setup`).
 
 ## Bitácora
 (cada ventana agrega su entrada ANTES del push final: `- [fecha] P<n> HECHA: resumen (commits)`)
@@ -160,3 +175,16 @@ deuda post-serie en P9 (replanteo con el owner), no se improvisa.
   y `.next/dev/types/routes.d.ts` truncado); movidos a `/tmp`, `tsc` volvió a 0 — en CI el
   checkout no tiene `.next`. Deuda declarada en el avance: script `e2e:fresh`, archive de P1 y
   CO/GE/CV pendientes (P4/P5).
+
+- [2026-10-15] **Archive pendiente saldado (post-P3)**: se abrió el **PR #2 (draft)** de
+  `noche/serie-noche-3` — el workflow sólo dispara en `push` a `main` o `pull_request`, así que era
+  la única forma de tener un run observable. Su run **38750846445** quedó **verde**: unit Vitest,
+  unit PostgreSQL, **e2e completo con build de producción** y e2e rate-limit en `success` (deploy
+  `skipped` por falta de secrets, esperado). Con esa CI **observada** se archivó `store-cleanup` →
+  `openspec/changes/archive/2026-10-15-store-cleanup` (commit `8e19565`), aplicando sus 3
+  requirements MODIFIED a `ST-capa-datos-persistente` (`check-delta-coverage` 3 ok;
+  `openspec validate --all` 40 passed / 0 failed). Esto **anula** el "sin archivar" que registraron
+  P2 y P3. Además se corrigió en este plan la lane e2e: **`npm run e2e:fresh` no existe** (deuda
+  diferida a P9) y queda escrita la receta real con paridad CI (`migrate deploy` + `reseed-base` +
+  `npm run build` + `npm run start` + Playwright), porque contra `next dev` la lane es
+  *latency-bound* y da falsos rojos por compilación en frío.
