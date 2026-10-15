@@ -128,7 +128,6 @@ import {
   type PublicacionPortal,
   type LeadPortal,
   type Notificacion,
-  type OperacionPortal,
   type ControlPropiedad,
   type ActaGD,
   type PlantillaCO,
@@ -187,9 +186,10 @@ import {
 } from "@/lib/finanzas-utils"
 import { ahoraISO, hoyISO } from "@/lib/date-utils"
 import {
+  esMiembroDirectivaVigente,
   getDeudaVigenteFI,
-  MAX_EVENTOS,
   nombrePersona,
+  periodoDirectivaVigente,
   refUnidad,
   registrarEvento,
   resolverVariablesCO,
@@ -201,10 +201,14 @@ import {
 } from "./store/helpers"
 import { irSlice } from "./store/slices/ir-slice"
 import { mtSlice } from "./store/slices/mt-slice"
+import { adSlice } from "./store/slices/ad-slice"
+import { piSlice } from "./store/slices/pi-slice"
 
 export {
+  esMiembroDirectivaVigente,
   getDeudaVigenteFI,
   nombrePersona,
+  periodoDirectivaVigente,
   refUnidad,
   resolverVariablesCO,
   rolDestinatarioCO,
@@ -328,26 +332,6 @@ const PUNTO_CERO_INGRESOS_SEED: IngresoFI[] = buildPuntoCeroIngresos()
 
 /** STORE_VERSION congelado: las migraciones de dominio están descontinuadas. */
 export const STORE_VERSION = 28
-
-// GD-períodos: helpers de vigencia (libro: la directiva vigente = período
-// vigente + fichas sin término; fichas sin periodoId = legado pre-períodos).
-export const periodoDirectivaVigente = (s: {
-  periodosDirectiva: PeriodoDirectiva[]
-}): PeriodoDirectiva | undefined =>
-  s.periodosDirectiva.find((p) => p.estado === "vigente")
-
-export const esMiembroDirectivaVigente = (
-  persona: Persona,
-  vigenteId: string | undefined
-): boolean => {
-  const ficha = persona.datosGobernanza
-  if (!ficha || persona.estadoCuenta !== "activa" || ficha.fechaTermino)
-    return false
-  // Legado pre-períodos: cuenta solo si aún no hay período registrado;
-  // al activar un período, el quórum se acota a su nómina.
-  if (!ficha.periodoId) return vigenteId === undefined
-  return ficha.periodoId === vigenteId
-}
 
 export interface MaestroCollections {
   afps: Afp[]
@@ -1002,6 +986,8 @@ export const useCompassStore = create<CompassStore>()(
       hasHydrated: false,
       ...irSlice(set, get, api),
       ...mtSlice(set, get, api),
+      ...adSlice(set, get, api),
+      ...piSlice(set, get, api),
 
       // --- TU: Tipos de Unidad ---
         /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
@@ -1727,412 +1713,6 @@ export const useCompassStore = create<CompassStore>()(
             ),
           },
         }))
-        return { ok: true }
-      },
-
-        /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
-
-      removePublicacionPortal: (id) => {
-        if (!get().hasHydrated)
-          return {
-            ok: false,
-            error:
-              "El almacenamiento aún se está hidratando. Intenta de nuevo.",
-          }
-        const leads = get().leadsPortal.filter((l) => l.publicacionId === id)
-        if (leads.length > 0) {
-          return {
-            ok: false,
-            error: `No se puede eliminar la publicación: tiene ${leads.length} lead(s) asociado(s).`,
-          }
-        }
-        set((s) => ({
-          publicacionesPortal: s.publicacionesPortal.filter((p) => p.id !== id),
-        }))
-        return { ok: true }
-      },
-
-      syncPublicacionesDesdeVinculos: (unidadId) => {
-        const s = get()
-        const claveEstado = (estadoId?: string): string => {
-          if (!estadoId) return ""
-          const e = s.maestros.estadosInmobiliarios.find(
-            (x) => x.id === estadoId
-          )
-          if (!e) return ""
-          return `${e.id} ${e.nombre}`
-            .toLowerCase()
-            .normalize("NFD")
-            .replace(/[\u0300-\u036f]/g, "")
-        }
-        const esOferta = (clave: string): boolean =>
-          clave.includes("arriendo") || clave.includes("venta")
-
-        const vigente = s.vinculos.find(
-          (v) =>
-            v.unidadId === unidadId &&
-            v.rol === "propietario" &&
-            !v.fechaFin &&
-            esOferta(claveEstado(v.estadoOcupacionPropiedad))
-        )
-        const existente = s.publicacionesPortal.find(
-          (p) => p.unidadId === unidadId
-        )
-
-        if (vigente) {
-          const operacion: OperacionPortal = claveEstado(
-            vigente.estadoOcupacionPropiedad
-          ).includes("venta")
-            ? "venta"
-            : "arriendo"
-          if (!existente) {
-            const nueva: PublicacionPortal = {
-              id: generarId("pub"),
-              unidadId,
-              operacion,
-              precio: 0,
-              imagenes: [],
-              activa: true,
-              fechaPublicacion: hoyISO(),
-            }
-            set((st) => ({
-              publicacionesPortal: upsert(st.publicacionesPortal, nueva),
-            }))
-            registrarEvento(
-              set,
-              "PI_PROPERTY_LISTED",
-              nueva.id,
-              `Trigger inmobiliario: ${refUnidad(get, unidadId)} publicada como ${operacion}.`,
-              "PI"
-            )
-          } else {
-            const cambios: Partial<PublicacionPortal> = {}
-            if (!existente.activa) cambios.activa = true
-            if (existente.operacion !== operacion) cambios.operacion = operacion
-            if (Object.keys(cambios).length > 0) {
-              set((st) => ({
-                publicacionesPortal: st.publicacionesPortal.map((p) =>
-                  p.id === existente.id ? { ...p, ...cambios } : p
-                ),
-              }))
-              if (cambios.activa) {
-                registrarEvento(
-                  set,
-                  "PI_PROPERTY_LISTED",
-                  existente.id,
-                  `Trigger inmobiliario: ${refUnidad(get, unidadId)} vuelve a la vitrina como ${operacion}.`,
-                  "PI"
-                )
-              }
-            }
-          }
-        } else if (existente?.activa) {
-          set((st) => ({
-            publicacionesPortal: st.publicacionesPortal.map((p) =>
-              p.id === existente.id ? { ...p, activa: false } : p
-            ),
-          }))
-          registrarEvento(
-            set,
-            "PI_PROPERTY_UNLISTED",
-            existente.id,
-            `Trigger inmobiliario: ${refUnidad(get, unidadId)} retirada de la vitrina.`,
-            "PI"
-          )
-        }
-      },
-
-      // --- Notificaciones simuladas (D3) ---
-      notify: (notificacion) => {
-        if (!get().hasHydrated) return
-        // AD: el propietario puede silenciar las alertas automáticas hacia los
-        // residentes de su unidad ("Gestión de Alertas Residentes"). Los actos
-        // formales de gobernanza (GD) no pasan por este gate.
-        if (
-          notificacion.destinatarioRol === "residente" &&
-          notificacion.unidadId
-        ) {
-          const control = get().controlesPropiedades.find(
-            (c) => c.unidadId === notificacion.unidadId
-          )
-          if (control && !control.alertasResidentesActivas) return
-        }
-        const completa: Notificacion = {
-          id: generarId("notif"),
-          destinatarioRol: notificacion.destinatarioRol,
-          destinatarioPersonaId: notificacion.destinatarioPersonaId,
-          asunto: notificacion.asunto,
-          cuerpo: notificacion.cuerpo,
-          canal: notificacion.canal ?? "email_simulado",
-          moduloOrigen: notificacion.moduloOrigen,
-          fecha: hoyISO(),
-          leida: false,
-        }
-        const validacion = validarConEsquema(NotificacionSchema, completa)
-        if (!validacion.ok) return
-        set((s) => ({
-          notificaciones: [
-            ...s.notificaciones.slice(-(MAX_EVENTOS - 1)),
-            validacion.data,
-          ],
-        }))
-      },
-
-      // --- AD: Gestión Administrativa ---
-        /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
-      saveControlPropiedad: (control) => {
-        if (!get().hasHydrated)
-          return {
-            ok: false,
-            error:
-              "El almacenamiento aún se está hidratando. Intenta de nuevo.",
-          }
-        const validacion = validarConEsquema(ControlPropiedadSchema, control)
-        if (!validacion.ok) return validacion
-        if (!get().unidades.some((u) => u.id === validacion.data.unidadId)) {
-          return {
-            ok: false,
-            error:
-              "No se puede guardar el control: la unidad no existe en el inventario.",
-          }
-        }
-        // Unicidad: un solo registro de controles por unidad.
-        const duplicado = get().controlesPropiedades.find(
-          (c) =>
-            c.unidadId === validacion.data.unidadId &&
-            c.id !== validacion.data.id
-        )
-        if (duplicado) {
-          return {
-            ok: false,
-            error: `La unidad ya tiene controles registrados (${duplicado.id}).`,
-          }
-        }
-        const anterior = get().controlesPropiedades.find(
-          (c) => c.id === validacion.data.id
-        )
-        set((s) => ({
-          controlesPropiedades: upsert(s.controlesPropiedades, validacion.data),
-        }))
-
-        const ref = refUnidad(get, validacion.data.unidadId)
-        if (!anterior) {
-          registrarEvento(
-            set,
-            "AD_OWNER_CONFIG_CHANGE",
-            validacion.data.id,
-            `Controles de privacidad creados para ${ref}.`,
-            "AD"
-          )
-        } else {
-          const cambios: string[] = []
-          if (
-            anterior.residenteVeMorosidad !==
-            validacion.data.residenteVeMorosidad
-          )
-            cambios.push(
-              `morosidad=${validacion.data.residenteVeMorosidad ? "visible" : "oculta"}`
-            )
-          if (anterior.residenteVeActas !== validacion.data.residenteVeActas)
-            cambios.push(
-              `actas=${validacion.data.residenteVeActas ? "visibles" : "ocultas"}`
-            )
-          if (
-            anterior.alertasResidentesActivas !==
-            validacion.data.alertasResidentesActivas
-          )
-            cambios.push(
-              `alertas=${validacion.data.alertasResidentesActivas ? "activas" : "silenciadas"}`
-            )
-          if (cambios.length > 0) {
-            registrarEvento(
-              set,
-              "AD_OWNER_CONFIG_CHANGE",
-              validacion.data.id,
-              `Controles de ${ref} actualizados: ${cambios.join("; ")}.`,
-              "AD"
-            )
-          }
-        }
-        return { ok: true }
-      },
-
-        /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
-
-      removeControlPropiedad: (id) => {
-        if (!get().hasHydrated)
-          return {
-            ok: false,
-            error:
-              "El almacenamiento aún se está hidratando. Intenta de nuevo.",
-          }
-        set((s) => ({
-          controlesPropiedades: s.controlesPropiedades.filter(
-            (c) => c.id !== id
-          ),
-        }))
-        return { ok: true }
-      },
-
-      // --- GD: Gestión de Directiva ---
-        /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
-      saveActaGD: (acta) => {
-        if (!get().hasHydrated)
-          return {
-            ok: false,
-            error:
-              "El almacenamiento aún se está hidratando. Intenta de nuevo.",
-          }
-        const validacion = validarConEsquema(ActaGDSchema, acta)
-        if (!validacion.ok) return validacion
-        // Integridad referencial: presentes/ausentes deben ser miembros de directiva vigentes.
-        for (const idAsistente of [
-          ...validacion.data.presentes,
-          ...validacion.data.ausentes,
-        ]) {
-          const persona = get().personas.find((p) => p.id === idAsistente)
-          if (!persona) {
-            return {
-              ok: false,
-              error: `No se puede guardar el acta: el asistente "${idAsistente}" no existe en el Maestro de Personas.`,
-            }
-          }
-          const vigenteActa = periodoDirectivaVigente(get())
-          if (!esMiembroDirectivaVigente(persona, vigenteActa?.id)) {
-            return {
-              ok: false,
-              error: `No se puede guardar el acta: ${persona.nombres} ${persona.apellidos} no es miembro de la directiva (sin extensión de gobernanza).`,
-            }
-          }
-        }
-            const esNueva = !get().actasGD.some((a) => a.id === validacion.data.id)
-            if (!validacion.data.periodoId) {
-              const vigenteActa = periodoDirectivaVigente(get())
-              if (vigenteActa) validacion.data.periodoId = vigenteActa.id
-            }
-            set((s) => ({ actasGD: upsert(s.actasGD, validacion.data) }))
-        if (esNueva) {
-          registrarEvento(
-            set,
-            "GD_ACTA_CREATED",
-            validacion.data.id,
-            `Acta de reunión del ${validacion.data.fecha} registrada (${validacion.data.lugar}).`,
-            "GD"
-          )
-          for (const presenteId of validacion.data.presentes) {
-            registrarEvento(
-              set,
-              "GD_ASISTENCIA_REG",
-              presenteId,
-              `Asistencia registrada (${nombrePersona(get, presenteId)}) en acta ${validacion.data.id}.`,
-              "GD"
-            )
-          }
-        }
-        return { ok: true }
-      },
-
-        /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
-
-      removeActaGD: (id) => {
-        if (!get().hasHydrated)
-          return {
-            ok: false,
-            error:
-              "El almacenamiento aún se está hidratando. Intenta de nuevo.",
-          }
-        set((s) => ({ actasGD: s.actasGD.filter((a) => a.id !== id) }))
-        return { ok: true }
-      },
-
-        /** @deprecated Los datos de dominio ahora persisten en el servidor vía API REST. Usar los hooks de `lib/api/use-*.ts` en código nuevo. Esta acción queda como fallback legacy. */
-
-      aprobarActaGD: (id, personaId) => {
-        if (!get().hasHydrated)
-          return {
-            ok: false,
-            error:
-              "El almacenamiento aún se está hidratando. Intenta de nuevo.",
-          }
-        const acta = get().actasGD.find((a) => a.id === id)
-        if (!acta)
-          return { ok: false, error: "No se puede aprobar: el acta no existe." }
-        if (acta.estado === "publicada")
-          return { ok: false, error: "El acta ya está publicada." }
-        const firmante = get().personas.find((p) => p.id === personaId)
-        const vigenteFirma = periodoDirectivaVigente(get())
-        if (
-          !firmante ||
-          !esMiembroDirectivaVigente(firmante, vigenteFirma?.id)
-        ) {
-          return {
-            ok: false,
-            error:
-              "Solo un miembro vigente de la directiva puede aprobar el acta.",
-          }
-        }
-        if (acta.aprobaciones.includes(personaId)) {
-          return { ok: false, error: "Esta directiva ya aprobó el acta." }
-        }
-        const aprobaciones = [...acta.aprobaciones, personaId]
-        // Quórum 100% de la directiva vigente (fichas del período vigente; legado sin período incluido).
-        const vigenteQuorum = periodoDirectivaVigente(get())
-        const directivaVigente = get()
-          .personas.filter((p) =>
-            esMiembroDirectivaVigente(p, vigenteQuorum?.id)
-          )
-          .map((p) => p.id)
-        const quorumCompleto = directivaVigente.every((idMiembro) =>
-          aprobaciones.includes(idMiembro)
-        )
-        if (quorumCompleto) {
-          const publicada: ActaGD = {
-            ...acta,
-            aprobaciones,
-            estado: "publicada",
-            fechaPublicacion: hoyISO(),
-            avisoCVReferencia: "pendiente",
-          }
-          set((s) => ({ actasGD: upsert(s.actasGD, publicada) }))
-
-          registrarEvento(
-            set,
-            "GD_ACTA_APPROVED",
-            id,
-            `Acta ${id} aprobada por ${nombrePersona(get, personaId)} y PUBLICADA (quórum 100%).`,
-            "GD"
-          )
-
-          // Publicación automática: notificación formal a todos los propietarios
-          // (acto de gobernanza; no pasa por el gate de alertas operativas).
-          const propietarios = new Set(
-            get()
-              .vinculos.filter((v) => v.rol === "propietario" && !v.fechaFin)
-              .map((v) => v.personaId)
-          )
-          for (const idPropietario of propietarios) {
-            get().notify({
-              destinatarioRol: "propietario",
-              destinatarioPersonaId: idPropietario,
-              asunto: `Nueva acta publicada (${publicada.fecha})`,
-              cuerpo: `Ya está disponible el acta de la reunión del ${publicada.fecha} en ${publicada.lugar}. Revisa el repositorio de actas.`,
-              moduloOrigen: "GD",
-            })
-          }
-        } else {
-          set((s) => ({
-            actasGD: s.actasGD.map((a) =>
-              a.id === id ? { ...a, aprobaciones } : a
-            ),
-          }))
-          registrarEvento(
-            set,
-            "GD_ACTA_APPROVED",
-            id,
-            `${nombrePersona(get, personaId)} aprobó el acta ${id}. Pendientes: ${directivaVigente.filter((x) => !aprobaciones.includes(x)).length}.`,
-            "GD"
-          )
-        }
         return { ok: true }
       },
 
@@ -3915,74 +3495,6 @@ export const useCompassStore = create<CompassStore>()(
           "CV_PUBLISHED",
           validacion.data.id,
           `Plantilla "${plantilla.titulo}" activada por personal de servicio: aviso PUBLICADO (${aviso.duracionSegundos}s).`,
-          "CV"
-        )
-        return { ok: true }
-      },
-
-      publicarActaEnCV: (actaId) => {
-        if (!get().hasHydrated)
-          return {
-            ok: false,
-            error:
-              "El almacenamiento aún se está hidratando. Intenta de nuevo.",
-          }
-        const acta = get().actasGD.find((a) => a.id === actaId)
-        if (!acta)
-          return {
-            ok: false,
-            error: "No se puede publicar: el acta no existe.",
-          }
-        if (acta.estado !== "publicada") {
-          return {
-            ok: false,
-            error:
-              "Solo un acta Publicada por quórum puede difundirse en el visor.",
-          }
-        }
-        if (acta.avisoCVReferencia && acta.avisoCVReferencia !== "pendiente") {
-          return {
-            ok: false,
-            error: `El acta ya fue publicada en el visor (aviso ${acta.avisoCVReferencia}).`,
-          }
-        }
-        const hoyStr = hoyISO()
-        const temas =
-          acta.tablaTemas.length > 0
-            ? `Temas: ${acta.tablaTemas.join("; ")}. `
-            : ""
-        const minuta = acta.minuta ? acta.minuta.slice(0, 240) : ""
-        const aviso: AvisoCV = {
-          id: generarId("cv"),
-          titulo: `Acta de reunión del ${acta.fecha}`,
-          cuerpo:
-            `Reunión de directiva en ${acta.lugar}. ${temas}${minuta}`.trim(),
-          tipologia: "info",
-          duracionSegundos: 15,
-          pantallaCompleta: false,
-          tags: ["directiva", "acta"],
-          estado: "publicado",
-          requiereVistoBueno: false,
-          origen: "acta_gd",
-          actaId: acta.id,
-          fechaCreacion: hoyStr,
-          fechaPublicacion: hoyStr,
-        }
-        const validacion = validarConEsquema(AvisoCVSchema, aviso)
-        if (!validacion.ok) return validacion
-        set((s) => ({
-          avisosCV: upsert(s.avisosCV, validacion.data),
-          actasGD: s.actasGD.map((a) =>
-            a.id === actaId
-              ? { ...a, avisoCVReferencia: validacion.data.id }
-              : a
-          ),
-        }))
-        registrarEvento(
-          set,
-          "CV_PUBLISHED",
-          validacion.data.id,
-          `Aviso "${aviso.titulo}" PUBLICADO desde acta ${acta.id}; referencia avisoCVReferencia materializada.`,
           "CV"
         )
         return { ok: true }

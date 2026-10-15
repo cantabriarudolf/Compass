@@ -20,12 +20,12 @@
 - [x] 2.3 Verificar tests + tsc + e2e
 
 ## Slice AD — Gestión Administrativa
-- [ ] 3.1 Crear `lib/store/slices/ad-slice.ts` (incluye actasGD)
-- [ ] 3.2 Nota: `publicarActaEnCV` muta `avisosCV` — permitido en Fase 2
-- [ ] 3.3 Verificar tests + tsc + e2e
+- [x] 3.1 Crear `lib/store/slices/ad-slice.ts` (incluye actasGD)
+- [x] 3.2 Nota: `publicarActaEnCV` muta `avisosCV` — permitido en Fase 2
+- [x] 3.3 Verificar tests + tsc + e2e
 
 ## Slices PI/D3, CO, GE, CV (resto de Fase 2)
-- [ ] 4.1 PI: `lib/store/slices/pi-slice.ts`
+- [x] 4.1 PI: `lib/store/slices/pi-slice.ts`
 - [ ] 4.2 CO: `lib/store/slices/co-slice.ts`
 - [ ] 4.3 GE: `lib/store/slices/ge-slice.ts`
 - [ ] 4.4 CV: `lib/store/slices/cv-slice.ts`
@@ -47,3 +47,25 @@
   (`completarTareaMonitoreoPE`) o `activosIR` siguen en `lib/store.ts` y funcionan porque `set`
   sigue tipado contra `CompassStore` (la factory ahora recibe `(set, get, api)` y pasa los mismos
   args a cada slice).
+
+## Notas de ejecución de P3 (2026-10-14)
+
+- **Alcance real post-P1**: el proposal contaba 5 acciones para AD y 6 para PI/D3, pero P1 podó
+  `savePublicacionPortal`, `saveLeadPortal` y `marcarNotificacionLeida`, así que PI/D3 movió
+  **3 acciones** (`removePublicacionPortal`, `syncPublicacionesDesdeVinculos`, `notify`). AD movió
+  **6**: las 5 del bloque AD/GD (`saveControlPropiedad`, `removeControlPropiedad`, `saveActaGD`,
+  `removeActaGD`, `aprobarActaGD`) más `publicarActaEnCV` (task 3.2), que en `lib/store.ts` vivía
+  dentro del bloque CV.
+- **`publicarActaEnCV` (cross-write)**: el slice AD la implementa con `get()`/`set()` igual que
+  antes y muta `avisosCV` (dominio CV, todavía en el monolito -> P5). Lleva un comentario en el
+  slice que declara el cross-write para que P5 lo respete al extraer CV.
+- **Helpers GD movidos**: `periodoDirectivaVigente` y `esMiembroDirectivaVigente` se movieron de
+  `lib/store.ts` a `lib/store/helpers.ts` por la misma razón que `registrarEvento` en P2 (el slice
+  AD los necesita y un import runtime slice→store crearía un ciclo). `lib/store.ts` los re-exporta,
+  así que la puerta pública `@/lib/store` no cambia para los consumidores
+  (`app/comunidad/directiva`, `app/comunidad/certificados`).
+- **Estado persistido intacto**: `CompassData`, `seedData()` y el esquema zod del `persist`
+  conservan los campos movidos (igual que IR/MT en P2): el split cambia **dónde se declaran e
+  inicializan** las acciones, no el shape persistido. `STORE_VERSION` sigue **28**.
+- **Limpieza de arrastre**: se removieron de `lib/store.ts` dos imports que quedaron sin uso al
+  mover los bloques (`OperacionPortal`, `MAX_EVENTOS`).

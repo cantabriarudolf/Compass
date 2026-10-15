@@ -3,6 +3,7 @@
 // needs by argument. The CompassStore type is imported type-only, so there is
 // no runtime cycle with lib/store.ts.
 import type { CompassStore } from "../store"
+import type { PeriodoDirectiva, Persona } from "@/lib/schemas"
 import { ahoraISO, hoyISO } from "@/lib/date-utils"
 import { generarId } from "@/lib/id-utils"
 import { saldoPendiente } from "@/lib/finanzas-utils"
@@ -109,6 +110,29 @@ export function siguienteFolioFE(get: () => CompassStore): string {
     .filter((n) => Number.isFinite(n))
   const siguiente = (numeros.length > 0 ? Math.max(...numeros) : 0) + 1
   return `FE-${String(siguiente).padStart(4, "0")}`
+}
+
+// GD-períodos: helpers de vigencia (libro: la directiva vigente = período
+// vigente + fichas sin término; fichas sin periodoId = legado pre-períodos),
+// movidos desde lib/store.ts en Store Split Fase 2 (P3) porque el slice AD los
+// necesita y un import runtime slice→store crearía un ciclo. lib/store.ts los
+// re-exporta: `@/lib/store` sigue siendo la puerta pública.
+export const periodoDirectivaVigente = (s: {
+  periodosDirectiva: PeriodoDirectiva[]
+}): PeriodoDirectiva | undefined =>
+  s.periodosDirectiva.find((p) => p.estado === "vigente")
+
+export const esMiembroDirectivaVigente = (
+  persona: Persona,
+  vigenteId: string | undefined
+): boolean => {
+  const ficha = persona.datosGobernanza
+  if (!ficha || persona.estadoCuenta !== "activa" || ficha.fechaTermino)
+    return false
+  // Legado pre-períodos: cuenta solo si aún no hay período registrado;
+  // al activar un período, el quórum se acota a su nómina.
+  if (!ficha.periodoId) return vigenteId === undefined
+  return ficha.periodoId === vigenteId
 }
 
 // Máximo de eventos de auditoría retenidos en el store (movido desde lib/store.ts en
