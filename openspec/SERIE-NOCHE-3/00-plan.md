@@ -11,7 +11,7 @@
 |---|---|---|---|
 | P1 | `store-cleanup` — censo fino por miembro (incluye uso intra-store) + borrado de lo muerto/solo-test + tests | HECHA (e2e: 1 caso preexistente, ver Bitácora) | — |
 | P2 | `st-split-fase2` slices **IR + MT** | HECHA (e2e MT: defecto API preexistente, ver Bitácora) | — |
-| P3 | `st-split-fase2` slices **AD + PI/D3** | pendiente | — |
+| P3 | `st-split-fase2` slices **AD + PI/D3** | HECHA (e2e 9/9 con paridad CI; ver Bitácora) | `327b7af` |
 | P4 | `st-split-fase2` slice **CO** | pendiente | — |
 | P5 | `st-split-fase2` slices **GE + CV** (+ cierre de tasks del change: manual de arquitectura + avance) | pendiente | — |
 | P6 | `api-cobertura-fases` fase 1 — rutas API más bajas + subir el piso `app/api/**` | pendiente | — |
@@ -123,3 +123,40 @@ deuda post-serie en P9 (replanteo con el owner), no se improvisa.
   chequeo de scope de `lib/api/put-merge.ts:53-57` aunque la fila existe en la base — defecto
   **preexistente de la capa API**, fuera del camino del store (la página usa sólo hooks de API) y
   fuera del alcance de archivos de la ventana. Queda registrado como deuda accionable.
+
+- [2026-10-15] **P3 HECHA** (`st-split-fase2` slices AD + PI/D3): AD movió
+  `controlesPropiedades` + `actasGD` + **6 acciones** (`saveControlPropiedad`,
+  `removeControlPropiedad`, `saveActaGD`, `removeActaGD`, `aprobarActaGD` y `publicarActaEnCV`,
+  que en el monolito vivía en el bloque CV) a `lib/store/slices/ad-slice.ts` (369 líneas);
+  PI/D3 movió `publicacionesPortal`, `leadsPortal` y `notificaciones` + **3 acciones**
+  (`removePublicacionPortal`, `syncPublicacionesDesdeVinculos`, `notify`) a `pi-slice.ts`
+  (183 líneas). Son 3 y no 6 porque P1 podó `savePublicacionPortal`, `saveLeadPortal` y
+  `marcarNotificacionLeida`. `lib/store.ts` **6.618 → 6.130 líneas** (−488); `STORE_VERSION`
+  sigue **28** y `CompassData`/`seedData`/`partialize`/migraciones quedaron intactos.
+  **Cross-write declarado**: `publicarActaEnCV` muta `avisosCV` (dominio CV, todavía en el
+  monolito) con `get()`/`set()` y un comentario en el slice para que P5 lo respete.
+  **Helpers GD movidos**: `periodoDirectivaVigente` y `esMiembroDirectivaVigente` pasaron a
+  `lib/store/helpers.ts` (misma razón que `registrarEvento` en P2: evitar el ciclo runtime
+  slice→store) y `lib/store.ts` los re-exporta, así que `@/lib/store` no cambia para la app.
+  **Verificación de movimiento puro**: **9/9 cuerpos de acción byte-idénticos a HEAD** (script
+  sobre la API de TS) y 0 acciones movidas que sigan en el monolito; `tsc` 0, `eslint` 0 (se
+  removieron 2 imports de arrastre: `OperacionPortal`, `MAX_EVENTOS`), suite **936/936 exit 0**
+  (cobertura `lib` 90.1/80.9/97.74/90.1 y `store.ts` 86.67/79.78/97.97/86.67), `openspec validate
+  --all` 41/0, `check-delta-coverage` 1 ok · 0 que romperían el archive.
+  **ARRANQUE**: la API de GitHub volvió a caer (dos intentos, `dial tcp` timeout) y el workflow
+  sigue disparándose sólo en `push` a `main` o `pull_request`, así que **no hay run de CI
+  observable** para esta rama y `store-cleanup` (P1) **sigue sin archivar** (regla: nunca archivar
+  sin CI verde observada). **`npm run e2e:fresh` no existe**: P3 de NOCHE-2 nunca creó
+  `scripts/e2e-fresh.mjs`, así que se replicó el procedimiento a mano (`migrate deploy` +
+  `e2e:reseed-base` sobre `prisma/perf-p3.db`). **e2e**: los tres specs de la ventana
+  (`directiva`, `gestion`, `portal`) dieron **9/9 verdes con paridad CI** (build de producción +
+  `next start`, el camino del job `e2e`) sobre base fresca; las dos corridas previas contra
+  `next dev` fallaron (6/9 y 8/9) por **latencia de compilación en frío**, siempre en el primer
+  render/primera request de una ruta fría (heading no visible en 15 s con sólo el shell de la app
+  en el snapshot, y `Timeout 30000ms` en el `GET /api/publicaciones-portal?pageSize=100` del
+  helper de setup — ruta que **no importa el store**: usa `createCrudHandlers` + Prisma).
+  **Incidente de entorno** (preexistente, no del cambio): `tsc --noEmit` fallaba en local por
+  artefactos `.next` obsoletos (`.next/types/validator.ts` referenciando `app/api/qa-lab/purga-test`
+  y `.next/dev/types/routes.d.ts` truncado); movidos a `/tmp`, `tsc` volvió a 0 — en CI el
+  checkout no tiene `.next`. Deuda declarada en el avance: script `e2e:fresh`, archive de P1 y
+  CO/GE/CV pendientes (P4/P5).
