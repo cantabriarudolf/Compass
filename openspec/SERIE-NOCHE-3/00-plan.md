@@ -14,7 +14,7 @@
 | P3 | `st-split-fase2` slices **AD + PI/D3** | HECHA (e2e 9/9 con paridad CI; ver Bitácora) | `327b7af` |
 | P4 | `st-split-fase2` slice **CO** | HECHA (e2e 8/8 con paridad CI) | `e140cbe` |
 | P5 | `st-split-fase2` slices **GE + CV** (+ cierre de tasks del change: manual de arquitectura + avance) | HECHA (e2e 9/9 con paridad CI; el ejecutor delegado falló 2 veces y la ventana se completó inline) | `dc24e33` |
-| P6 | `api-cobertura-fases` fase 1 — rutas API más bajas + subir el piso `app/api/**` | pendiente | — |
+| P6 | `api-cobertura-fases` fase 1 — rutas API más bajas + subir el piso `app/api/**` | HECHA (973/973 con los pisos nuevos; el ejecutor delegado falló y la ventana se completó inline) | `377abc2` |
 | P7 | `api-cobertura-fases` fase 2 — resto de rutas bajas + subir el piso otra vez | pendiente | — |
 | P8 | `store-cobertura-fase-b` — cobertura de `lib/store/**` (slices) + subir los pisos `lib/**` y global | pendiente | — |
 | P9 | Cierre de la serie: cobertura pendiente, gates completos, auditoría integral, PR draft, deuda restante | pendiente | — |
@@ -233,3 +233,27 @@ deuda post-serie en P9 (replanteo con el owner), no se improvisa.
   (`33 - ST - Capa de Datos Persistente.md`) y tasks 4.3–4.5 + 5.1–5.2 cerradas: el change queda
   **19/19** y lo archiva el ARRANQUE de P6 con la CI verde de este push. Commits: `dc24e33` (código)
   + cierre documental.
+
+- [2026-10-15] **P6 HECHA** (`api-cobertura-fases` fase 1): se propuso el change (delta `ADDED` en
+  la capability viva del ratchet, `DEV-qa-lab`) y se cubrieron con tests reales las **3 carpetas
+  API más bajas** medidas sobre la suite verde: `admin/usuarios` (51.53% → **96.92%** statements),
+  `qa-estado` (45.65% → **95.65%**) y `dev-dashboard` (31.25% → **88.54%**), con **37 tests nuevos**
+  (936 → **973**) contra la interfaz pública de los handlers (camino feliz, 400 de validación y
+  guardias 401/403/404), Prisma real contra la BD de test, sin mocks de Prisma y sin tocar ningún
+  handler. `app/api/**` (126 handlers) subió de **79.45/64.31/83.64/79.45** a
+  **81.53/66.20/85.13/81.53** y el **piso del área** pasó de 78/63/82/78 a **80/65/84/80**
+  (medido − 1 pt, con la fecha y el commit de medición documentados en `vitest.config.ts`); los
+  pisos global y `lib/**` quedaron **intactos** (sus re-baselines son P8). Gates: `tsc` 0, `eslint` 0
+  (tests nuevos + config), suite **973/973 exit 0 CON los pisos nuevos aplicados**, `openspec
+  validate --all` 40/0 y `check-delta-coverage api-cobertura-fases` ok. **ARRANQUE**: se archivó
+  `st-split-fase2` (19/19) con la CI verde **observada** del push de P5 (run 38780510532) →
+  `openspec/changes/archive/2026-10-15-st-split-fase2`. **Incidente de ejecución**: el subagente
+  `serie-executor` falló por **tercera vez consecutiva** (P5 ×2 y P6 ×1) a mitad de turno — acá
+  *después* de archivar el split, proponer el change y escribir los 3 archivos de tests, pero
+  *antes* de correrlos, medir, subir el piso y commitear; el orquestador verificó ese estado (37/37
+  en corrida aislada), completó la medición, aplicó el ratchet, documentó y cerró la ventana
+  **inline**. El subagente queda reportado como **indisponible** (no como bloqueo de la serie).
+  Commits: `2dbfa47` (archive) · `1110f02` (proposal) · `377abc2` (tests + pisos) + cierre
+  documental. Pendiente para P7: la **fase 2** ya declarada en `tasks.md` (candidatas de hoy:
+  `micro-sectores` 58.44%, `ingresos-fi` 54.07%, `egresos-fi` 57.81%, `emisiones-gc` 66.89%,
+  `vinculos` 69.20%).
