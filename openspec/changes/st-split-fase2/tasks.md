@@ -27,13 +27,13 @@
 ## Slices PI/D3, CO, GE, CV (resto de Fase 2)
 - [x] 4.1 PI: `lib/store/slices/pi-slice.ts`
 - [x] 4.2 CO: `lib/store/slices/co-slice.ts`
-- [ ] 4.3 GE: `lib/store/slices/ge-slice.ts`
-- [ ] 4.4 CV: `lib/store/slices/cv-slice.ts`
-- [ ] 4.5 Verificación completa: tsc, tests, e2e
+- [x] 4.3 GE: `lib/store/slices/ge-slice.ts`
+- [x] 4.4 CV: `lib/store/slices/cv-slice.ts`
+- [x] 4.5 Verificación completa: tsc, tests, e2e
 
 ## Post-Fase 2
-- [ ] 5.1 Documentar en manual de arquitectura
-- [ ] 5.2 Avance NSGC
+- [x] 5.1 Documentar en manual de arquitectura
+- [x] 5.2 Avance NSGC
 
 ## Notas de ejecución de P2 (2026-10-14)
 
@@ -91,3 +91,25 @@
   (−335). e2e con paridad CI **8/8** (`auth.setup` 6/6 + `comunicacion` + `visor`) sobre
   `prisma/perf-p4.db`; `comunicacion` falló el intento 1 por `Test timeout of 30000ms` en el
   primer render de ruta fría y quedó verde en el retry (retries=2 en CI, aceptado).
+
+## Notas de ejecución de P5 (2026-10-15)
+
+- **Alcance real post-P1**: el prompt contaba 4 acciones para GE y 5 para CV; los bloques reales
+  tenían **6** (`saveSolicitudGE`, `abrirSolicitudGE`, `responderSolicitudGE`, `resolverSolicitudGE`,
+  `cerrarSolicitudGE`, `removeSolicitudGE`) y **4** (`saveAvisoCV`, `publicarAvisoCV`,
+  `caducarAvisosCV`, `activarPlantillaCV`). Las 10 se movieron; P1 había podado las CV que faltan
+  (`removeAvisoCV`, `archivarAvisoCV`, `savePlantillaCV`, `removePlantillaCV`).
+- **Seeds**: `plantillasCV` se inicializa en el slice con `plantillasCVSeed` de
+  `@/data/comunidad/plantillas-cv`, igual que el monolito; `solicitudesGE` arranca vacío.
+- **Cross-write verificado**: `publicarActaEnCV` (slice AD, P3) sigue escribiendo `avisosCV` con
+  `set()` sobre el store combinado; cubierto por `test/store-directiva.test.ts` y por
+  `e2e/crud/directiva.spec.ts` (paso "Publicar acta").
+- **Verificación estructural final (4.5)**: `lib/store/slices/` = **7 slices**; ninguna acción de
+  los slices movidos queda implementada en `lib/store.ts` (sólo sus declaraciones en
+  `CompassStore` y el shape persistido, como en P2–P4); `lib/store.ts` **5.795 → 5.219** (−576).
+- **Continuidad de la ventana**: el ejecutor delegado falló dos veces a mitad de turno
+  ("assistant reported an error") *después* de escribir los dos slices y re-cablear el monolito; el
+  orquestador verificó el estado parcial (GE 6/6 y CV 4/4 byte-idénticos a HEAD, `tsc` 0, 0
+  residuos) y completó la ventana **inline** en lugar de rehacer el split. Queda registrado por
+  transparencia: el código del split es de la corrida delegada, los gates y el cierre son del
+  orquestador.
