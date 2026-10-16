@@ -1,0 +1,123 @@
+# Serie Deuda 1 — Cierre de la deuda viva post-noche-3
+
+> Toda ventana DEBE leer este archivo al iniciar (bloque ARRANQUE), marcar su fila **EN CURSO**
+> y actualizarla antes del push final. La Bitácora es el registro durable de la serie.
+> **Modo de ejecución**: manual (un chat nuevo por ventana con
+> `Corré el archivo openspec/SERIE-DEUDA-1/prompt-NN.md`) o **delegado con workers** (un solo
+> chat nuevo: *"corré la serie deuda-1"* — el orquestador lanza una ventana a la vez con el
+> subagente `serie-executor` y audita cada retorno contra el repo). Ver § Modo delegado.
+
+| Ventana | Alcance | Estado | Commit final |
+|---|---|---|---|
+| P1 | `e2e-fresh` — script `npm run e2e:fresh` + timeout de `poblado-idempotente` a 120 s | pendiente | — |
+| P2 | `fix-put-merge-scope` — reproducir y arreglar el 404 de MT en `lib/api/put-merge.ts` | pendiente | — |
+| P3 | `api-cobertura-fase3` — 3 carpetas API más bajas (fase 3) + ratchet `app/api/**` | pendiente | — |
+| P4 | `api-cobertura-fase4` — siguientes 3 carpetas API (fase 4) + ratchet `app/api/**` | pendiente | — |
+| P5 | `store-cobertura-fase-c` — 168 statements legacy de `lib/store.ts` + bordes + ratchet `lib/**` y global | pendiente | — |
+| P6 | `higiene-prosa-store-cleanup` — prosa de specs/manuales que nombra acciones podadas + `CF_UPDATE_PARAM` | pendiente | — |
+| P7 | Cierre de la serie: auditoría integral, e2e final, PR draft y deuda post-serie | pendiente | — |
+
+**MÁXIMO: 7 ventanas.** Prohibido abrir ventanas fuera del cap: lo que no entre se declara como
+deuda post-serie en el cierre (P7), no se improvisa.
+
+## Prerrequisito de base
+
+- **Recomendado**: PR #2 (noche-3) mergeado a `main`. La rama `serie/deuda-1` está cortada del tip
+  de noche-3 (`1b23219`), así que el trabajo es compatible; si el PR #2 no está mergeado al
+  arrancar, la serie trabaja apilada sobre ese tip y su PR final se abrirá contra `main` mostrando
+  también los commits de noche-3 hasta que aquel se mergee (ruido de diff, no bloqueo).
+- **Fingerprint de base** (lo verifica el ARRANQUE de cada ventana): pisos `lib/**` **96/90/98/96**
+  y global **90/80/90/90** en `vitest.config.ts`, **7 slices** en `lib/store/slices/`, suite
+  ≥ **1078** tests.
+
+## Reglas duras de la serie
+
+1. **Rama de trabajo `serie/deuda-1`**. Prohibido pushear a `main`; prohibido mergear (mergear los
+   PRs es decisión del owner). El PR #1 (`noche/serie-noche-2`, draft) es del ciclo anterior: **no
+   se toca**.
+2. **Un commit por work-unit**, estilo convencional en español, automático al cerrar cada trabajo,
+   commiteando **solo** los archivos del cambio.
+3. **Método openspec**: todo cambio va por `propose → apply → archive`. Para cada delta: leer
+   `openspec/CONVENCION-DELTAS.md` y correr `node openspec/scripts/check-delta-coverage.mjs <change>`
+   hasta que dé `0 que romperían el archive`.
+4. **`nsgc-prepush` obligatorio antes de cada push** (avance en `Data/NSGC/docs/avances/`, manual de
+   módulo si cambia comportamiento o estructura, Trazabilidad si cambia un estado).
+5. **CI antes de archive**: cada ventana pushea y **no espera** el CI; la ventana siguiente
+   (ARRANQUE) verifica el run anterior y, con CI verde **observada**, archiva lo que quedó completo.
+   **Nunca se archiva sin CI verde observada.** Si la API de GitHub no responde: reintentar una vez y,
+   si sigue caída, dejar constancia en la Bitácora y seguir.
+6. **`STORE_VERSION = 28` congelado**: ningún cambio de la serie toca el shape persistido. Si algo lo
+   exigiera, se marca BLOQUEADO en la tabla y se sigue.
+7. **Nunca** tocar `k0mp4ss_fe/apps/web/prisma/dev.db` ni `Data/NSGC/backups/`: las corridas e2e usan
+   bases descartables `prisma/perf*.db` (cubiertas por `*.db` en `.gitignore`).
+8. **Nunca secretos** en código, docs ni commits.
+9. **Gate por ventana**: `cd k0mp4ss_fe/apps/web && npx tsc --noEmit && npm run lint && npm test`
+   (pisos por área), `openspec validate --all` sin fallos, `check-delta-coverage` del change tocado y
+   la e2e dirigida de la ventana con paridad CI (usar `npm run e2e:fresh` desde P1).
+10. **Si un gate falla dos veces**: marcar la ventana BLOQUEADO (tabla + Bitácora con la evidencia
+    exacta), commitear lo que quede sano (o revertir lo roto) y **seguir** con la próxima ventana.
+    Nunca quedarse reintentando ni pedir intervención al owner.
+11. **Si el contexto se agota**: cerrar la tarea en curso, commitear, actualizar esta Bitácora con el
+    estado exacto y avisar en una línea.
+12. **Alcance cerrado**: cada ventana toca solo los archivos que declara su prompt.
+
+## Modo de ejecución
+
+### Manual (un chat por ventana)
+El owner pega en un chat nuevo, en orden estricto:
+`Corré el archivo openspec/SERIE-DEUDA-1/prompt-01.md`, luego 02 → 07. Al terminar cada ventana
+copia su Reporte Final al chat orquestador (o alcanza con decir *"ya terminó prompt N"*: el
+orquestador lee el estado del repo).
+
+### Delegado con workers (recomendado — control en un solo chat)
+En **un chat nuevo** el owner dice *"corré la serie deuda-1"* y no vuelve a intervenir hasta el
+cierre (solo aprueba permisos si el harness los pide). El chat orquestador:
+
+1. Carga la skill `serie-ventanas`, lee este `00-plan.md` y verifica el repo (rama, fingerprint,
+   `git log`, suite).
+2. Por cada ventana **EN ORDEN** lanza el subagente `serie-executor` con:
+   *"Ejecutá de principio a fin `openspec/SERIE-DEUDA-1/prompt-NN.md` y devolvé el Reporte Final
+   Estandarizado"*. **Una ventana a la vez; jamás en paralelo.**
+3. Al retornar cada ventana **audita contra el repo** (no contra el reporte): `git log`/`git status`,
+   fila y Bitácora del plan, gates de la ventana. Si falta algo menor, relanza la MISMA ventana con
+   la corrección puntual; si el worker murió a mitad, verifica el estado parcial y completa lo que
+   falte (precedente noche-3: el orquestador completó ventanas inline tras la muerte del ejecutor).
+4. Nunca lanza la ventana N+1 sin verificar la N. No ejecuta alcances él mismo salvo el rescate
+   descrito.
+5. Al llegar a P7 presenta el cierre: estado por ventana con commits reales, números finales,
+   evidencia de archives y **deuda post-serie**.
+6. **Fallback**: si el subagente es inutilizable, el owner pasa a modo manual con las mismas líneas
+   de handoff (los `prompt-NN.md` son idénticos para ambos modos).
+
+## Base de hechos (arranque de la serie)
+
+- Suite **1078 verdes** (107 archivos) con pisos por área en `vitest.config.ts`: global
+  **90/80/90/90** · `lib/**` **96/90/98/96** · `app/api/**` **82/67/85/82**. Regla del ratchet:
+  piso = **medido − 1 punto**, y **nunca se baja**.
+- Cobertura de cierre de noche-3: global **91.09/81.40/91.94/91.09** · `lib/**`
+  **97.63/91.11/99.44/97.63** (`lib/store.ts` legacy **96.06**, slices **99.78**) · `app/api/**`
+  **83.69/68.70/86.99/83.69**.
+- Deuda de cobertura exacta por ventana:
+  - **API** (declarada al cierre de noche-3): `qa-roadmap` 62.5%, `emisiones-gc` 66.89%,
+    `vinculos` 69.2%, `fondos-fi` 71.16%, `personas` 72.82% y el resto de carpetas bajo el promedio.
+    Rige la **medición real** de cada fase (P3 y P4 miden primero y eligen las 3 más bajas).
+  - **Store**: `lib/store.ts` **168 statements** sin cubrir (ramas de validación puntuales de
+    acciones legacy + arranque/migraciones); `lib/store/helpers.ts` 5 (líneas 40, 98, 101-103);
+    slices 5 (`ad-slice` 332/357; `ge-slice` 162/234/318).
+- Deuda de tooling e2e: **`npm run e2e:fresh` no existe**. La receta manual verificada está en
+  `openspec/SERIE-NOCHE-3/00-plan.md` § Base de hechos (migrate + `e2e:reseed-base` + build +
+  `CI=1 npx playwright test`). El caso "cancelar" de `e2e/crud/poblado-idempotente.spec.ts:96`
+  espera 30 s cuando la purga mide **38,7 s**.
+- Defecto pendiente: el `PUT` de la página de MT (`/api/mt/trabajos/[id]`) responde **404 "Registro
+  no encontrado"** por el chequeo de scope de `lib/api/put-merge.ts:53-57` aunque la fila exista
+  (detectado en P2 de noche-3; el split lo sacó del camino del store, el defecto sigue vivo).
+- Deriva documental: 11 specs vivas + 4 manuales NSGC nombran acciones podadas en `store-cleanup`
+  (P1 de noche-3) y el evento `CF_UPDATE_PARAM` quedó **sin emisor** (gap preexistente de la
+  migración CF→API).
+- Node: `.nvmrc` = 24 · `engines.node` = `>=24` · local 24.21.0 →
+  `export PATH="$HOME/.nvm/versions/node/v24.21.0/bin:$PATH"`.
+- **Nunca** correr el spec de rate-limit antes de la lane e2e (bloquea la IP 15 min y aborta
+  `auth.setup`).
+
+## Bitácora
+(cada ventana agrega su entrada ANTES del push final: `- [fecha] P<n> HECHA: resumen (commits)`)
