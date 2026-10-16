@@ -111,6 +111,13 @@ explícito que deje la fecha de medición documentada. La superficie `app/api/**
 SHALL crecer su cobertura por fases con tests reales escritos contra la interfaz
 pública de los route handlers (camino feliz, validación 400 y guardias
 401/403/404), sin mocks de Prisma y sin editar handlers para hacerlos testeables.
+El área `lib/**` SHALL medir el interior de `lib/store/**` (los slices de
+`lib/store/slices/**` y `lib/store/helpers.ts`) además de `lib/store.ts`, con
+`coverage.include` explícito en `vitest.config.ts`; su cobertura SHALL crecer con
+tests comportamentales escritos contra la interfaz pública del store
+(`useCompassStore`: acciones y selectores), afirmando el efecto observable
+(estado resultante, `StoreResult`, validaciones y errores) y nunca detalles
+internos, y sin cambiar el shape persistido (`STORE_VERSION` congelado).
 
 #### Scenario: Re-baseline solo hacia arriba
 - **WHEN** una medición de la suite verde completa reporta cobertura de un área
@@ -130,3 +137,13 @@ pública de los route handlers (camino feliz, validación 400 y guardias
 - **THEN** se agregan tests contra los handlers exportados (401 sin sesión, 403
   sin permiso, 404 por guard de entorno o scope de comunidad, 400 por validación y
   camino feliz) y el piso de `app/api/**` sube según la regla del ratchet
+
+#### Scenario: Fase de cobertura del store sin tocar el shape persistido
+- **WHEN** se ejecuta una fase de `store-cobertura-fase-b` sobre `lib/store/**`
+  con el include de cobertura extendido a `lib/store/slices/**` y
+  `lib/store/helpers.ts`
+- **THEN** se agregan tests comportamentales contra `useCompassStore` (acciones y
+  selectores, con el estado resultante, el `StoreResult` y los errores
+  observados), el piso de `lib/**` y el global se re-baselinean con la regla del
+  ratchet sin bajar ninguno, y el shape persistido del store queda intacto
+  (`STORE_VERSION` sin cambios)

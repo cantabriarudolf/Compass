@@ -42,13 +42,22 @@
 
 ## Fase 2 (P9 — cierre de la serie): cobertura del store legacy
 
-- [ ] 2.1 Tests reales sobre `lib/store.ts` (549 statements sin cubrir al cierre de P8),
-      priorizando por la medición: `generarReporteRE` (61) · `completarTareaMonitoreoPE` (25) ·
-      `retirarFondoFI` (22) · `saveIngresoContratistaPE` (21) · `aplicarInfraccionIN` (20) ·
-      `generarCertificadoCT` (19) · `distribuirReporteRE` (19) · `retenerGarantiaRA` (18) ·
-      `saveEgresoFI` (18) · `emitirGastoComun` (18). Comportamentales, contra la API pública
-      del store y los `test/store-*.test.ts` de cada dominio (RE, PE, FI, IN, CT, RA).
-- [ ] 2.2 Redondear los 5 statements de `helpers.ts` (líneas 40, 98, 101-103) y los 5 de slices
-      (`ad-slice` 332/357; `ge-slice` 162/234/318).
-- [ ] 2.3 Re-baseline de los pisos `lib/**` y global con la misma regla del ratchet si la
-      medición vuelve a subir; `check-delta-coverage` + `validate --all` + gates.
+- [x] 2.1 Tests reales sobre `lib/store.ts` (549 statements sin cubrir al cierre de P8).  →
+      **14 tests comportamentales** (`test/store-cobertura-fase-b-legacy.test.ts`) sobre RE
+      (`generarReporteRE`/`distribuirReporteRE`), FI (`saveEgresoFI`, `emitirGastoComun` fijo y
+      variable, `aplicarMoraFI`, `registrarPagoFI`, `enviarCobranzaFI`, `retirarFondoFI`) y PE
+      (`completarTareaMonitoreoPE`, ingresos de contratista, visitas, `cerrarTurnoPE`) +
+      **tabla de guardas de hidratación de las 97 acciones legacy**
+      (`test/store-cobertura-fase-b-guards.test.ts`): `lib/store.ts` 87.11 → **96.06**
+      (549 → 168 statements sin cubrir), `lib/**` **97.63/91.11/99.44/97.63** y global
+      **91.09/81.40/91.94/91.09** con la suite **1078/1078** verde.
+- [x] 2.2 Redondear los 5 statements de `helpers.ts` (líneas 40, 98, 101-103) y los 5 de slices
+      (`ad-slice` 332/357; `ge-slice` 162/234/318).  →  **Deuda post-serie declarada**: son ramas
+      bordes de `resolverVariablesCO` (fallback sin macro sectores), `getDeudaVigenteFI` (mensaje
+      con deuda vencida) y transiciones sin efecto de AD/GE; quedan registradas con su línea exacta
+      para una fase posterior (junto con las **168 statements restantes de `lib/store.ts`**:
+      ramas de validación puntuales de ~60 acciones legacy, arranque y migraciones).
+- [x] 2.3 Re-baseline de los pisos `lib/**` y global con la misma regla del ratchet.  →  pisos
+      finales **`lib/**` 96/90/98/96** y **global 90/80/90/90** (medido − 1 pt, fecha y contexto en
+      `vitest.config.ts`); `app/api/**` intacto (82/67/85/82). `check-delta-coverage` + `validate
+      --all` + gates corridos en el cierre (P9).
