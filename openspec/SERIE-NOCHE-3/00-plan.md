@@ -15,7 +15,7 @@
 | P4 | `st-split-fase2` slice **CO** | HECHA (e2e 8/8 con paridad CI) | `e140cbe` |
 | P5 | `st-split-fase2` slices **GE + CV** (+ cierre de tasks del change: manual de arquitectura + avance) | HECHA (e2e 9/9 con paridad CI; el ejecutor delegado falló 2 veces y la ventana se completó inline) | `dc24e33` |
 | P6 | `api-cobertura-fases` fase 1 — rutas API más bajas + subir el piso `app/api/**` | HECHA (973/973 con los pisos nuevos; el ejecutor delegado falló y la ventana se completó inline) | `377abc2` |
-| P7 | `api-cobertura-fases` fase 2 — resto de rutas bajas + subir el piso otra vez | pendiente | — |
+| P7 | `api-cobertura-fases` fase 2 — resto de rutas bajas + subir el piso otra vez | HECHA (1024/1024 con los pisos nuevos; el escritor delegado falló y la ventana se completó inline) | `eebde6d` |
 | P8 | `store-cobertura-fase-b` — cobertura de `lib/store/**` (slices) + subir los pisos `lib/**` y global | pendiente | — |
 | P9 | Cierre de la serie: cobertura pendiente, gates completos, auditoría integral, PR draft, deuda restante | pendiente | — |
 
@@ -257,3 +257,29 @@ deuda post-serie en P9 (replanteo con el owner), no se improvisa.
   documental. Pendiente para P7: la **fase 2** ya declarada en `tasks.md` (candidatas de hoy:
   `micro-sectores` 58.44%, `ingresos-fi` 54.07%, `egresos-fi` 57.81%, `emisiones-gc` 66.89%,
   `vinculos` 69.20%).
+
+- [2026-10-15] **P7 HECHA** (`api-cobertura-fases` fase 2): re-medición real de `app/api/**`
+  (81.53 tras la fase 1) y elección de las 3 carpetas más bajas → `ingresos-fi` 54.07%,
+  `egresos-fi` 57.81% y `micro-sectores` 58.44%. Se cubrieron con **51 tests reales** (3 archivos,
+  1075 líneas) contra la interfaz pública de los handlers, con Prisma real contra la BD de test,
+  único mock `next/headers` y sin tocar handlers: camino feliz, 400 de validación, 401 sin sesión,
+  403 por rol y 404 por scope, más bordes del dominio FI (folio correlativo `FE-0001`/`FE-0002`,
+  fondo inexistente o **inactivo**, macro sector inexistente y **409** al borrar un sub-sector con
+  unidad asociada). Cobertura por carpeta: `ingresos-fi` → **92.59%**, `egresos-fi` → **93.75%**,
+  `micro-sectores` → **88.31%**. `app/api/**` (126 handlers) subió de 81.53/66.20/85.13/81.53 a
+  **83.69/68.70/86.99/83.69** (+4.29 pts sobre el 79.40% de la deuda original) y el **piso del
+  área** pasó de 80/65/84/80 a **82/67/85/82** (medido − 1 pt, con fecha y carpetas cubiertas
+  documentadas en `vitest.config.ts`); los pisos global y `lib/**` quedaron **intactos** (su
+  re-baseline es P8). Gates: `tsc` 0, `eslint` 0 (tests nuevos + config), suite **1024/1024 exit 0
+  CON los pisos nuevos aplicados** (104 archivos), `openspec validate --all` 40/0 y
+  `check-delta-coverage` ok. **Defecto de autoría corregido**: el test de paginación de
+  micro-sectores asertaba un `total` exacto sobre una **BD de test compartida** (falló con 3 en
+  lugar de 2) → se reemplazó por lo que la regla exige, verificación de **scope por comunidad**
+  (las filas propias presentes con `arrayContaining` y la de otra comunidad ausente). **Fallback de
+  delegación**: el escritor `gentle-ai-worker` murió *después* de escribir los 3 archivos y *antes*
+  de correrlos y medir; el orquestador completó gates, medición, ratchet y cierre **inline**. Con
+  esto la delegación queda **indisponible** en la sesión (`serie-executor` ×3 + `gentle-ai-worker`
+  ×1, siempre el mismo error del asistente y siempre con el trabajo pesado ya en disco). Commits:
+  `eebde6d` (tests + piso) + cierre documental. Pendiente para P8: **archivar
+  `api-cobertura-fases`** en su ARRANQUE (con CI verde observada) y la cobertura de
+  `lib/store/**` con re-baseline de los pisos `lib/**` y global.
