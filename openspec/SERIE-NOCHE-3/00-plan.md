@@ -16,7 +16,7 @@
 | P5 | `st-split-fase2` slices **GE + CV** (+ cierre de tasks del change: manual de arquitectura + avance) | HECHA (e2e 9/9 con paridad CI; el ejecutor delegado falló 2 veces y la ventana se completó inline) | `dc24e33` |
 | P6 | `api-cobertura-fases` fase 1 — rutas API más bajas + subir el piso `app/api/**` | HECHA (973/973 con los pisos nuevos; el ejecutor delegado falló y la ventana se completó inline) | `377abc2` |
 | P7 | `api-cobertura-fases` fase 2 — resto de rutas bajas + subir el piso otra vez | HECHA (1024/1024 con los pisos nuevos; el escritor delegado falló y la ventana se completó inline) | `eebde6d` |
-| P8 | `store-cobertura-fase-b` — cobertura de `lib/store/**` (slices) + subir los pisos `lib/**` y global | EN CURSO | — |
+| P8 | `store-cobertura-fase-b` — cobertura de `lib/store/**` (slices) + subir los pisos `lib/**` y global | HECHA (slices 80.65 → 99.78 st; pisos `lib/**` 92/85/98/92 y global 87/77/90/87; e2e no aplica: sin cambio de runtime) | `3123111` |
 | P9 | Cierre de la serie: cobertura pendiente, gates completos, auditoría integral, PR draft, deuda restante | pendiente | — |
 
 **MÁXIMO: 9 ventanas.** Prohibido abrir ventanas fuera del cap: si algo no cabe, se declara como
@@ -293,3 +293,35 @@ deuda post-serie en P9 (replanteo con el owner), no se improvisa.
   --noEmit` **0** y los 3 archivos **51/51**. **Lección para P8/P9**: el gate de cada ventana corre
   `npx tsc --noEmit` **después** de agregar archivos — no se hereda el verde de la ventana
   anterior.
+
+- [2026-10-16] **P8 HECHA** (`store-cobertura-fase-b` fase 1): el `coverage.include` sólo
+  instrumentaba `lib/store.ts`, así que los **7 slices** de `lib/store/slices/**` y
+  `lib/store/helpers.ts` (el interior del store tras el split) quedaban **fuera del gate**. Se
+  extendió el include a `lib/store/**/*.ts` y se **midió primero**: `lib/**` completo bajó de
+  90.86/81.72/98.21/90.86 (foto vieja, 7 archivos) a **88.27/80.54/96.63/88.27** (15 archivos, con
+  slices en 80.65/77.67/92.59/80.65 y 444/2.295 statements sin cubrir) — **nunca bajo el piso 86**,
+  así que no se bajó ningún piso. Ranking real por statements sin cubrir: `store.ts` 549 ·
+  `ir-slice` 169 · `mt-slice` 73 · `co-slice` 57 · `ad-slice` 45 · `ge-slice` 45 · `cv-slice` 31 ·
+  `pi-slice` 24 · `helpers.ts` 5. **39 tests comportamentales nuevos**
+  (`test/store-cobertura-fase-b.test.ts`, ~1.190 líneas) contra la API pública `useCompassStore`:
+  guardas de hidratación de los 7 slices (tabla por slice: mensaje exacto y sin mutación) +
+  comodines IR (alerta crítica, rechazo con justificación, sustitución, aprobación con alta en
+  catálogo), **alarma `IR_STOCK_LOW`** al cruzar el umbral crítico, accesos quién-tiene-qué, MT
+  (FKs, folio, pagos, garantías por vencer idempotentes, fondos de proyecto), buzón CO con
+  transiciones, quórum AD por **período vigente** (nómina congelada + herencia de `periodoId`),
+  `publicarActaEnCV`, GE abrir/responder/resolver/cerrar, CV publicar/plantillas y PI reactivación
+  de vitrina. Resultado: slices **99.78/94.43/100/99.78**, `lib/**` **93.28/86.12/99.44/93.28** y
+  global **88.78/78.18/91.94/88.78**; **ratchet** documentado en `vitest.config.ts`: `lib/**`
+  86/78/94/86 → **92/85/98/92** y global 82/72/87/82 → **87/77/90/87** (`app/api/**` intacto).
+  Spec viva `DEV-qa-lab` con `MODIFIED` del requirement del gate (`check-delta-coverage` 1 ok).
+  Gates: `tsc` 0 (corrido **después** de agregar los tests), `eslint` 0, suite **1063/1063 exit 0
+  CON los pisos nuevos aplicados** (105 archivos), `validate --all` 40/0 y `check-delta-coverage`
+  ok. **ARRANQUE**: se archivó `api-cobertura-fases` (fases 1+2 completas) con la CI verde
+  **observada** del push de P7 (run **38842160060**) →
+  `openspec/changes/archive/2026-10-16-api-cobertura-fases`; `store-cleanup` y `st-split-fase2` ya
+  estaban archivados. **e2e no aplica**: el alcance es tests + configuración de cobertura, sin
+  cambio de comportamiento ni estructura del store. **Fase 2 escrita para el cierre (P9)**:
+  `lib/store.ts` legacy con 549 statements sin cubrir, priorizado por la medición
+  (`generarReporteRE` 61, `completarTareaMonitoreoPE` 25, `retirarFondoFI` 22,
+  `saveIngresoContratistaPE` 21, `aplicarInfraccionIN` 20, …). Commits: `3123111` (tests + pisos) +
+  cierre documental.

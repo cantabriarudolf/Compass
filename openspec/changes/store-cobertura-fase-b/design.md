@@ -8,8 +8,18 @@ deuda (1.202 statements sin cubrir al 2026-10-12) **no incluye** los slices: el 
 `k0mp4ss_fe/apps/web/vitest.config.ts` a `lib/store/**` (los 7 slices + `helpers.ts`) y
 midiendo la suite verde completa antes de escribir un solo test.
 
-> Tabla de medición de arranque (2026-10-16, suite verde, `coverage-final.json`):
-> se completa en `tasks.md` 1.1 y en el avance NSGC con el ranking por archivo.
+Medición de arranque (2026-10-16, suite verde, `coverage/coverage-final.json`):
+
+| Foto | `lib/**` completo | Slices | Global |
+|---|---|---|---|
+| Antes (include solo `lib/store.ts`, 7 archivos) | 90.86/81.72/98.21/90.86 | no se medía | 86.92/74.27/90.28/86.92 |
+| Include extendido, sin tests nuevos (15 archivos) | **88.27/80.54/96.63/88.27** | 80.65/77.67/92.59/80.65 | 86.12/74.92/90.82/86.12 |
+| Después de los 39 tests de la fase b | **93.28/86.12/99.44/93.28** | **99.78/94.43/100/99.78** | **88.78/78.18/91.94/88.78** |
+
+Ranking de statements sin cubrir al medir (agenda de la fase b): `store.ts` 549 · `ir-slice` 169 ·
+`mt-slice` 73 · `co-slice` 57 · `ad-slice` 45 · `ge-slice` 45 · `cv-slice` 31 · `pi-slice` 24 ·
+`helpers.ts` 5. El include extendido **no dejó `lib/**` bajo su piso 86** en ninguna foto (mínimo
+88.27), así que no se bajó ningún piso.
 
 ## D2 — Molde de tests: API pública, estado observable, ni un detalle interno
 
