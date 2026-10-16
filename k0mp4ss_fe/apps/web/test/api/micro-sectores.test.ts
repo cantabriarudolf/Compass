@@ -146,7 +146,9 @@ describe("/api/micro-sectores — sub-sectores EF con BD real", () => {
     // propio handler con la misma firma.
     const sink: Record<string, (req: NextRequest, ctx?: { params: Promise<{ id: string }> }) => Promise<Response>> =
       ruta as unknown as Record<string, (req: NextRequest, ctx?: { params: Promise<{ id: string }> }) => Promise<Response>>
-    return sink[metodo](req, esItem ? { params: Promise.resolve({ id }) } : undefined)
+    const handler = sink[metodo]
+    if (!handler) throw new Error(`método no soportado: ${metodo}`)
+    return handler(req, esItem ? { params: Promise.resolve({ id }) } : undefined)
   }
 
   it("guardia de sesión: 401 sin cookie en GET y POST", async () => {

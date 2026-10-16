@@ -151,8 +151,14 @@ describe("/api/ingresos-fi — ingresos a fondo FI con BD real", () => {
             }),
       }
     )
-    if (esItem) return (ruta as unknown as Record<string, (req: NextRequest, ctx: { params: Promise<{ id: string }> }) => Promise<Response>>)[metodo](req, { params: Promise.resolve({ id }) })
-    return (ruta as unknown as Record<string, (req: NextRequest) => Promise<Response>>)[metodo](req)
+    if (esItem) {
+      const handler = (ruta as unknown as Record<string, (req: NextRequest, ctx: { params: Promise<{ id: string }> }) => Promise<Response>>)[metodo]
+      if (!handler) throw new Error(`método no soportado: ${metodo}`)
+      return handler(req, { params: Promise.resolve({ id }) })
+    }
+    const handler = (ruta as unknown as Record<string, (req: NextRequest) => Promise<Response>>)[metodo]
+    if (!handler) throw new Error(`método no soportado: ${metodo}`)
+    return handler(req)
   }
 
   it("guardia de sesión: 401 sin cookie en GET y POST", async () => {
