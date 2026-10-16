@@ -11,7 +11,7 @@
 |---|---|---|---|
 | P1 | `e2e-fresh` — script `npm run e2e:fresh` + timeout de `poblado-idempotente` a 120 s | HECHA (lane dirigida 24/24 con paridad CI; ver Bitácora) | `adf932e` |
 | P2 | `fix-put-merge-scope` — el 404 de MT **no se reproduce** (guard correcto): red de seguridad + deuda e2e reasignada a P7 | BLOQUEADO (gate e2e: timeout del spec, fuera de alcance — ver Bitácora) | `fa9196d` |
-| P3 | `api-cobertura-fase3` — 3 carpetas API más bajas (fase 3) + ratchet `app/api/**` | EN CURSO | — |
+| P3 | `api-cobertura-fase3` — 3 carpetas API más bajas (fase 3) + ratchet `app/api/**` | HECHA (`qa-roadmap` 62.5 → 91.67, `emisiones-gc` 66.89 → 94.26, `vinculos` 69.2 → 94.93; `app/api/**` 83.69 → 85.75 con piso 84/70/87/84) | `03a7cdd` |
 | P4 | `api-cobertura-fase4` — siguientes 3 carpetas API (fase 4) + ratchet `app/api/**` | pendiente | — |
 | P5 | `store-cobertura-fase-c` — 168 statements legacy de `lib/store.ts` + bordes + ratchet `lib/**` y global | pendiente | — |
 | P6 | `higiene-prosa-store-cleanup` — prosa de specs/manuales que nombra acciones podadas + `CF_UPDATE_PARAM` | pendiente | — |
@@ -167,3 +167,31 @@ cierre (solo aprueba permisos si el harness los pide). El chat orquestador:
   (`capacity quarantined`) dejando el trabajo sin commitear; el orquestador lo auditó contra el repo
   y completó el cierre (avance, fila, Bitácora y commits). El intento anterior de la misma ventana
   había muerto a los 30 turnos esperando el CI: el ARRANQUE con espera larga quema la ventana.
+
+- [2026-10-16] **P3 HECHA** (`api-cobertura-fase3`): fase 3 del ratchet API sobre las **3 carpetas
+  más bajas de la medición real** (arranque: suite **1082/1082** verdes, 108 archivos; `app/api/**`
+  **83.69/68.70/86.99/83.69** con 1.260 statements sin cubrir de 7.726). El ranking agregado por
+  carpeta confirmó las candidatas declaradas: `qa-roadmap` 62.5%, `emisiones-gc` 66.89% y
+  `vinculos` 69.2%. Se agregaron **49 tests** en 3 archivos nuevos con el molde de `test/api/`
+  (interfaz pública de los handlers exportados, Prisma real contra la BD de test, **único mock
+  `next/headers`**, sin mocks de Prisma y sin editar handlers): `qa-roadmap` (guard 404 de entorno,
+  401, 400 de alcance, 200 con alcance explícito y default), `emisiones-gc` (GET factory + POST de
+  emisión GC con 400 de validación y de reglas, 409 de período duplicado y 201 en modo fijo y
+  variable con la transacción de cobros + aporte al fondo de reserva; GET_ONE / PUT con
+  revalidación del merge / DELETE con 409 por cobros pagados y 200 borrando cobros + emisión) y
+  `vinculos` (GET paginado scoped, POST sobre `ejecutarUpsertVinculo` con persona inactiva/bloqueada
+  —D6—, duplicado, exclusividad de propietario y arrendatario, anti-autosolapamiento y cierre del
+  tramo anterior; GET / PUT / DELETE con la guarda 409 de ControlPropiedad). **Salto medido**:
+  `qa-roadmap` 62.5 → **91.67**, `emisiones-gc` 66.89 → **94.26**, `vinculos` 69.2 → **94.93**
+  (statements). **Re-baseline**: `app/api/**` 83.69/68.70/86.99/83.69 →
+  **85.75/71.50/88.48/85.75** ⇒ piso **84/70/87/84** (sube de 82/67/85/82; ninguna métrica baja),
+  con fecha y carpetas documentadas en `vitest.config.ts`. **Gates**: `tsc --noEmit` 0 · `npm run
+  lint` 0 errores · `npm test` **1131/1131** (111 archivos = 1082 + 49) **con los pisos nuevos
+  aplicados** · `openspec validate --all` 41 passed / 0 failed · `check-delta-coverage
+  api-cobertura-fase3` 1 ok · **0 que romperían el archive**. Change `api-cobertura-fase3`
+  (proposal/design/tasks + delta `MODIFIED` del requirement "Gate de cobertura por área" en
+  `DEV-qa-lab` con los 4 escenarios vivos + el de la fase) queda 🔵 En Proceso hasta archivarlo con
+  CI verde observada (ARRANQUE de P4). Commits: `693943b` (change) · `d902f0f` (qa-roadmap) ·
+  `cc4f49b` (emisiones-gc) · `a955e0f` (vinculos) · `03a7cdd` (ratchet) · cierre documental en el
+  mismo push. *Nota*: e2e no aplica (tests + thresholds, sin cambio de comportamiento); la rama
+  queda **sin pushear** (el push lo hace el orquestador).
