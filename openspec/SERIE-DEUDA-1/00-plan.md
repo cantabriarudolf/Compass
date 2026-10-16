@@ -10,7 +10,7 @@
 | Ventana | Alcance | Estado | Commit final |
 |---|---|---|---|
 | P1 | `e2e-fresh` — script `npm run e2e:fresh` + timeout de `poblado-idempotente` a 120 s | HECHA (lane dirigida 24/24 con paridad CI; ver Bitácora) | `adf932e` |
-| P2 | `fix-put-merge-scope` — reproducir y arreglar el 404 de MT en `lib/api/put-merge.ts` | pendiente | — |
+| P2 | `fix-put-merge-scope` — el 404 de MT **no se reproduce** (guard correcto): red de seguridad + deuda e2e reasignada a P7 | BLOQUEADO (gate e2e: timeout del spec, fuera de alcance — ver Bitácora) | `fa9196d` |
 | P3 | `api-cobertura-fase3` — 3 carpetas API más bajas (fase 3) + ratchet `app/api/**` | pendiente | — |
 | P4 | `api-cobertura-fase4` — siguientes 3 carpetas API (fase 4) + ratchet `app/api/**` | pendiente | — |
 | P5 | `store-cobertura-fase-c` — 168 statements legacy de `lib/store.ts` + bordes + ratchet `lib/**` y global | pendiente | — |
@@ -142,3 +142,28 @@ cierre (solo aprueba permisos si el harness los pide). El chat orquestador:
   `smoke/modulos` 8 · `smoke/modulos-mobile` 8; `prisma/dev.db` intacta (mtime anterior a la lane).
   Change `e2e-fresh` (tooling puro, `skip_specs: true`) queda 🔵 En Proceso hasta archivarlo con CI
   verde observada (commits: `adf932e` tooling + spec · cierre documental en el mismo push).
+
+- [2026-10-16] **P2 BLOQUEADA** (`fix-put-merge-scope`): el defecto declarado al cierre de NOCHE-3
+  ("el `PUT` de `/api/mt/trabajos/[id]` responde 404 aunque la fila exista, por el scope de
+  `lib/api/put-merge.ts:53-57`") **no se reproduce**: con fila propia y sesión de esa comunidad el
+  `PUT` responde **200** y muta la fila. Las tres hipótesis quedaron refutadas — comunidad (H1),
+  param (H2) y fila (H3): los **24** modelos detrás de `createPutMerge` declaran `id` +
+  `comunidadId` (24/24 OK). **Decisión: no se toca `lib/api/put-merge.ts`** — el guard es correcto y
+  necesario, y "arreglarlo" para que no devuelva 404 degradaría el aislamiento multi-tenant (fuga
+  cross-comunidad). Se entrega red de seguridad `test/api/put-merge-scope.test.ts` (4 casos, Prisma
+  real: propia → 200 con mutación en BD · ajena → 404 mismo mensaje que id inexistente y sin mutar ·
+  rol sin `mt:editar` → 403 sin mutar · id inexistente → 404) y el change `fix-put-merge-scope` con
+  `skip_specs: true` justificado. **Causa real del rojo**: `playwright.config.ts` fija
+  `timeout: CI ? 30_000 : 120_000` y `e2e:fresh` corre con `CI=1` ⇒ **30 s** de presupuesto para el
+  test entero, mientras el spec hace ~40 interacciones de UI; muere rellenando el formulario,
+  **antes** del paso "Iniciar" (el `PUT` que la deuda señalaba). **Gate e2e NO cumplido**:
+  `e2e/crud/proyectos.spec.ts` rojo 3/3 por timeout de test, archivo **fuera del alcance declarado**
+  de P2 (regla 12) ⇒ por **regla 10** la ventana queda BLOQUEADA con la evidencia y la deuda
+  **reasignada a P7**: agregar `test.use({ timeout: 120_000 })` en `proyectos.spec.ts` o alinear el
+  `timeout` de CI en `playwright.config.ts`. **Gates que sí pasaron**: `tsc` 0 · `lint` 0 errores ·
+  `npm test` **1082/1082** (108 archivos = 1078 de base + los 4 nuevos) con los pisos vigentes ·
+  `openspec validate --all` 39/0 · `check-delta-coverage fix-put-merge-scope` 0 que romperían el
+  archive. Commit `fa9196d`. *Nota de ejecución*: el ejecutor delegado murió a los 82 turnos
+  (`capacity quarantined`) dejando el trabajo sin commitear; el orquestador lo auditó contra el repo
+  y completó el cierre (avance, fila, Bitácora y commits). El intento anterior de la misma ventana
+  había muerto a los 30 turnos esperando el CI: el ARRANQUE con espera larga quema la ventana.
