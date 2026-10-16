@@ -9,7 +9,7 @@
 
 | Ventana | Alcance | Estado | Commit final |
 |---|---|---|---|
-| P1 | `e2e-fresh` — script `npm run e2e:fresh` + timeout de `poblado-idempotente` a 120 s | EN CURSO | — |
+| P1 | `e2e-fresh` — script `npm run e2e:fresh` + timeout de `poblado-idempotente` a 120 s | HECHA (lane dirigida 24/24 con paridad CI; ver Bitácora) | `adf932e` |
 | P2 | `fix-put-merge-scope` — reproducir y arreglar el 404 de MT en `lib/api/put-merge.ts` | pendiente | — |
 | P3 | `api-cobertura-fase3` — 3 carpetas API más bajas (fase 3) + ratchet `app/api/**` | pendiente | — |
 | P4 | `api-cobertura-fase4` — siguientes 3 carpetas API (fase 4) + ratchet `app/api/**` | pendiente | — |
@@ -121,3 +121,24 @@ cierre (solo aprueba permisos si el harness los pide). El chat orquestador:
 
 ## Bitácora
 (cada ventana agrega su entrada ANTES del push final: `- [fecha] P<n> HECHA: resumen (commits)`)
+
+- [2026-10-16] **P1 HECHA** (`e2e-fresh`): la receta e2e con paridad CI que se replicaba a mano
+  queda como script reproducible `npm run e2e:fresh` (`scripts/e2e-fresh.mjs`, Node ESM sin
+  dependencias nuevas): base descartable por defecto `prisma/perf-e2e.db` (`--db`, `--keep-db`),
+  **guarda dura** que aborta si el destino es `prisma/dev.db`, saneo del puerto 3000 (mata el
+  `next-server` huérfano del incidente P4 de NOCHE-3), `migrate deploy` + `e2e:reseed-base` +
+  `build` (`--no-build`), banner con el comando Playwright exacto y aviso de no correr el spec de
+  rate-limit antes de la lane; el passthrough tras `--` se pasa tal cual a Playwright y dispara la
+  corrida. Además la purga del caso "cancelar" de `poblado-idempotente` sube de 30 s a **120 s**.
+  **Ventana reanudada** sobre el estado parcial de un intento muerto por reinicio de máquina: se
+  auditó contra el prompt y se corrigió un defecto real — la corrida de Playwright no exportaba
+  `CI=1` (habría usado `next dev` + `reuseExistingServer` + Chrome del sistema, sin paridad CI).
+  **Gates**: `tsc` 0 · `lint` 0 · `npm test` **1078/1078** (107 archivos) con los pisos vigentes
+  (global 90/80/90/90 · `lib/**` 96/90/98/96 · `app/api/**` 82/67/85/82) · `openspec validate --all`
+  40 passed / 0 failed · `check-delta-coverage e2e-fresh` 1 ok · **0 que romperían el archive**.
+  **Lane dirigida** (`npm run e2e:fresh -- -- e2e/crud/poblado-idempotente.spec.ts e2e/smoke`) sobre
+  `prisma/perf-e2e.db`: **24/24 verdes** (JUnit `tests="24" failures="0" errors="0" skipped="0"`,
+  `.last-run.json` `passed`, **0 reintentos**) = `auth.setup` 6 · `crud/poblado-idempotente` 2 ·
+  `smoke/modulos` 8 · `smoke/modulos-mobile` 8; `prisma/dev.db` intacta (mtime anterior a la lane).
+  Change `e2e-fresh` (tooling puro, `skip_specs: true`) queda 🔵 En Proceso hasta archivarlo con CI
+  verde observada (commits: `adf932e` tooling + spec · cierre documental en el mismo push).

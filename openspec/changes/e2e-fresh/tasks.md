@@ -17,9 +17,15 @@
 - [x] Agregar `"e2e:fresh": "node scripts/e2e-fresh.mjs"` a `k0mp4ss_fe/apps/web/package.json`.
 - [x] Subir la espera de la purga en el caso "cancelar" de
   `e2e/crud/poblado-idempotente.spec.ts` de 30 s a **120 s** (el caso hermano ya usa 120 s).
-- [ ] Verificación real: `npm run e2e:fresh` completo con `e2e/crud/poblado-idempotente.spec.ts`
+- [x] Verificación real: `npm run e2e:fresh` completo con `e2e/crud/poblado-idempotente.spec.ts`
   y `e2e/smoke` sobre base descartable, dejando el X/X registrado.
-- [ ] Gates: `npx tsc --noEmit` 0 · `npm run lint` 0 · `npm test` verde con los pisos vigentes ·
-  `openspec validate --all` sin fallos · `check-delta-coverage e2e-fresh` ok.
-- [ ] Avance NSGC de la ventana (no hay manual de módulo: no cambia comportamiento ni estructura).
-- [ ] Commit + push con `nsgc-prepush`; fila **P1 HECHA** + entrada en la Bitácora del `00-plan.md`.
+  **24/24 verdes** (JUnit `tests="24" failures="0" skipped="0" errors="0"`, `.last-run.json`
+  `passed`, sin reintentos): `auth.setup` 6 · `crud/poblado-idempotente` 2 · `smoke/modulos` 8 ·
+  `smoke/modulos-mobile` 8. Base `prisma/perf-e2e.db`, `prisma/dev.db` intacta (mtime previo a la lane).
+- [x] Gates: `npx tsc --noEmit` 0 · `npm run lint` 0 · `npm test` verde con los pisos vigentes
+  (**1078/1078**, 107 archivos, con los pisos global 90/80/90/90 y `lib/**` 96/90/98/96) ·
+  `openspec validate --all` 40 passed / 0 failed · `check-delta-coverage e2e-fresh`
+  (1 ok · 0 que romperían el archive).
+- [x] Avance NSGC de la ventana (no hay manual de módulo: no cambia comportamiento ni estructura).
+  `Data/NSGC/docs/avances/avance - 2026-10-16 13-09.md`.
+- [x] Commit + push con `nsgc-prepush`; fila **P1 HECHA** + entrada en la Bitácora del `00-plan.md`.
