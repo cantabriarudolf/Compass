@@ -16,7 +16,7 @@
 | P5 | `st-split-fase2` slices **GE + CV** (+ cierre de tasks del change: manual de arquitectura + avance) | HECHA (e2e 9/9 con paridad CI; el ejecutor delegado falló 2 veces y la ventana se completó inline) | `dc24e33` |
 | P6 | `api-cobertura-fases` fase 1 — rutas API más bajas + subir el piso `app/api/**` | HECHA (973/973 con los pisos nuevos; el ejecutor delegado falló y la ventana se completó inline) | `377abc2` |
 | P7 | `api-cobertura-fases` fase 2 — resto de rutas bajas + subir el piso otra vez | HECHA (1024/1024 con los pisos nuevos; el escritor delegado falló y la ventana se completó inline) | `eebde6d` |
-| P8 | `store-cobertura-fase-b` — cobertura de `lib/store/**` (slices) + subir los pisos `lib/**` y global | pendiente | — |
+| P8 | `store-cobertura-fase-b` — cobertura de `lib/store/**` (slices) + subir los pisos `lib/**` y global | EN CURSO | — |
 | P9 | Cierre de la serie: cobertura pendiente, gates completos, auditoría integral, PR draft, deuda restante | pendiente | — |
 
 **MÁXIMO: 9 ventanas.** Prohibido abrir ventanas fuera del cap: si algo no cabe, se declara como
