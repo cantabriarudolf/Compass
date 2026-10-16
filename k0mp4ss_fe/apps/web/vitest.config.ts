@@ -64,11 +64,12 @@ export default defineConfig({
         // (venía de 87.11 al abrir la serie) → piso = medido − 1 pt. Nunca se baja.
         "lib/**": { statements: 96, branches: 90, functions: 98, lines: 96 },
         // Superficie API: 126 route handlers (smoke de guardias + fases).
-        // Re-baseline 2026-10-15 (SERIE-NOCHE-3 P7, medido tras la fase 1):
-        // 83.69/68.70/86.99/83.69 con ingresos-fi (54.07 → 92.59), egresos-fi
-        // (57.81 → 93.75) y micro-sectores (58.44 → 88.31) cubiertos
-        // → piso = medido − 1 pt. Nunca se baja.
-        "app/api/**": { statements: 82, branches: 67, functions: 85, lines: 82 },
+        // Re-baseline 2026-10-16 (SERIE-DEUDA-1 P3, change `api-cobertura-fase3`):
+        // medido 83.69/68.70/86.99/83.69 → 85.75/71.50/88.48/85.75 con las 3
+        // carpetas más bajas de la medición cubiertas — `qa-roadmap`
+        // (62.5 → 91.67 st), `emisiones-gc` (66.89 → 94.26) y `vinculos`
+        // (69.2 → 94.93) → piso = medido − 1 pt. Nunca se baja.
+        "app/api/**": { statements: 84, branches: 70, functions: 87, lines: 84 },
       },
     },
   },
