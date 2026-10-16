@@ -283,3 +283,13 @@ deuda post-serie en P9 (replanteo con el owner), no se improvisa.
   `eebde6d` (tests + piso) + cierre documental. Pendiente para P8: **archivar
   `api-cobertura-fases`** en su ARRANQUE (con CI verde observada) y la cobertura de
   `lib/store/**` con re-baseline de los pisos `lib/**` y global.
+  **Incidente post-cierre (CI rojo y su fix)**: el push de P7 generó el run **38835851841**, que
+  falló en el job "Unit + integración (Vitest)" al correr `npx tsc --noEmit`: **TS2722** en los 3
+  tests nuevos (las invocaciones dinámicas `record[metodo](...)` de los helpers `llamar` tipan
+  `T | undefined` bajo `noUncheckedIndexedAccess`). Causa raíz **de proceso**, no de diseño: la
+  ventana corrió `eslint` y los tests pero **no** `tsc --noEmit` después de agregar los 3 archivos
+  (venía verde de P6 y lo dio por heredado). Fix: `4e8fbc5` (`fix(test): ...`) reemplaza las
+  invocaciones por un lookup explícito con guard en los 3 archivos; verificado en local con `tsc
+  --noEmit` **0** y los 3 archivos **51/51**. **Lección para P8/P9**: el gate de cada ventana corre
+  `npx tsc --noEmit` **después** de agregar archivos — no se hereda el verde de la ventana
+  anterior.
