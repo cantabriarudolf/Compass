@@ -17,7 +17,7 @@
 | P6 | `api-cobertura-fases` fase 1 — rutas API más bajas + subir el piso `app/api/**` | HECHA (973/973 con los pisos nuevos; el ejecutor delegado falló y la ventana se completó inline) | `377abc2` |
 | P7 | `api-cobertura-fases` fase 2 — resto de rutas bajas + subir el piso otra vez | HECHA (1024/1024 con los pisos nuevos; el escritor delegado falló y la ventana se completó inline) | `eebde6d` |
 | P8 | `store-cobertura-fase-b` — cobertura de `lib/store/**` (slices) + subir los pisos `lib/**` y global | HECHA (slices 80.65 → 99.78 st; pisos `lib/**` 92/85/98/92 y global 87/77/90/87; e2e no aplica: sin cambio de runtime) | `3123111` |
-| P9 | Cierre de la serie: cobertura pendiente, gates completos, auditoría integral, PR draft, deuda restante | pendiente | — |
+| P9 | Cierre de la serie: cobertura pendiente, gates completos, auditoría integral, PR draft, deuda restante | HECHA (store.ts 96.06; suite 1078/1078; e2e 32/32 con paridad CI; 4/4 changes archivados; PR draft #2) | `bb7fc48` |
 
 **MÁXIMO: 9 ventanas.** Prohibido abrir ventanas fuera del cap: si algo no cabe, se declara como
 deuda post-serie en P9 (replanteo con el owner), no se improvisa.
@@ -325,3 +325,82 @@ deuda post-serie en P9 (replanteo con el owner), no se improvisa.
   (`generarReporteRE` 61, `completarTareaMonitoreoPE` 25, `retirarFondoFI` 22,
   `saveIngresoContratistaPE` 21, `aplicarInfraccionIN` 20, …). Commits: `3123111` (tests + pisos) +
   cierre documental.
+
+- [2026-10-16] **P9 HECHA — CIERRE DE LA SERIE** (`store-cobertura-fase-b` fase 2): se completó la
+  cobertura pendiente del store legacy con **15 tests nuevos** en 2 archivos: 14 comportamentales
+  (`test/store-cobertura-fase-b-legacy.test.ts`: RE, FI —emisión fija/variable con aporte de
+  reserva, mora idempotente, pagos con ajuste justificado, cobranza, retiros de fondo— y PE
+  —monitoreo, contratistas, visitas, cierre de turno—) + **1 tabla de guardas de las 97 acciones**
+  (`store-cobertura-fase-b-guards.test.ts`). `lib/store.ts` **87.11 → 96.06** (549 → 168
+  statements sin cubrir), `lib/**` **97.63/91.11/99.44/97.63** y global
+  **91.09/81.40/91.94/91.09**; ratchet final: pisos `lib/**` **96/90/98/96** y global
+  **90/80/90/90**. Gates completos: `tsc` 0, `npm run lint` 0, suite **1078/1078 exit 0 CON los
+  pisos nuevos aplicados** (107 archivos), `validate --all` 40/0 y `check-delta-coverage` ok.
+  **e2e de la serie con paridad CI** sobre `prisma/perf-p9.db` (migrate + reseed + build +
+  `next start`): smoke completo + los 9 crud refactorizados + `auth.setup` = **32/32 verdes**
+  (JUnit 0 failures / 0 skipped; 2 primeros intentos cayeron por timeout de 30 s de primer render
+  y pasaron en retry, tolerado por `retries=2`, mismo precedente de P4). **Auditoría integral**:
+  hashes del log vs filas del plan OK, `STORE_VERSION = 28`, 7 slices, `prisma/dev.db` y
+  `backups/` intactos, ningún change propio de la serie activo al cerrar. **ARRANQUE**: CI del
+  push de P8 (run **38879976368**) verde observada. **Archive de cierre**: con la CI verde del
+  push de la fase 2 (run **38898541279**) se archivó `store-cobertura-fase-b` →
+  `openspec/changes/archive/2026-10-16-store-cobertura-fase-b`; los cuatro changes de la serie
+  quedan archivados. **PR draft #2** actualizado con el resumen de la serie (merge = decisión del
+  owner). Deuda post-serie declarada en la sección "Cierre de la serie" (168 statements legacy
+  restantes, 10 de bordes, tail API, `e2e:fresh`, timeout de poblado-idempotente, 404 de
+  put-merge MT, deriva de prosa). Commits: `bb7fc48` (tests + pisos) + archive + cierre
+  documental. **Incidente**: durante la ventana la API de GitHub cayó dos veces (dial tcp
+  i/o timeout); los reintentos resolvieron y no bloquearon la observación del CI. La delegación
+  siguió indisponible en la sesión y la ventana se ejecutó **inline**.
+
+## Cierre de la serie (P9 — 2026-10-16)
+
+**Estado: COMPLETA (9/9 ventanas HECHA).** Rama `noche/serie-noche-3`; PR draft
+[#2](https://github.com/cantabriarudolf/Compass/pull/2) (merge = decisión del owner).
+
+### Ventanas
+
+| V | Change | Resultado | Commit final |
+|---|---|---|---|
+| P1 | `store-cleanup` | censo de 180 miembros; 28 acciones podadas; `lib/store.ts` 8.889 → 7.621; suite 936 | `8e19565` (archive) |
+| P2 | `st-split-fase2` IR + MT | 7.621 → 6.618; 15/15 cuerpos byte-idénticos | — |
+| P3 | `st-split-fase2` AD + PI | 6.618 → 6.130; 9/9 cuerpos | `327b7af` |
+| P4 | `st-split-fase2` CO | 6.130 → 5.795; 10/10 cuerpos | `e140cbe` |
+| P5 | `st-split-fase2` GE + CV + cierre | 5.795 → 5.219 (−41% de la serie); 7 slices | `dc24e33` |
+| P6 | `api-cobertura-fases` 1 | 3 carpetas API más bajas; piso api 80/65/84/80; 973 tests | `377abc2` |
+| P7 | `api-cobertura-fases` 2 | +3 carpetas; piso api 82/67/85/82; 1024 tests | `eebde6d` |
+| P8 | `store-cobertura-fase-b` 1 | include `lib/store/**`; slices 80.65 → 99.78; pisos lib 92/85/98/92 y global 87/77/90/87; 1063 tests | `3123111` |
+| P9 | `store-cobertura-fase-b` 2 + cierre | `store.ts` 87.11 → 96.06; `lib/**` 97.63; global 91.09; pisos 96/90/98/96 y 90/80/90/90; 1078 tests; e2e 32/32; PR draft | `bb7fc48` |
+
+### Archives con CI verde observada
+
+- `store-cleanup` → `openspec/changes/archive/2026-10-15-store-cleanup` (run 38750846445)
+- `st-split-fase2` → `openspec/changes/archive/2026-10-15-st-split-fase2` (run 38780510532)
+- `api-cobertura-fases` → `openspec/changes/archive/2026-10-16-api-cobertura-fases` (run 38842160060)
+- `store-cobertura-fase-b` → `openspec/changes/archive/2026-10-16-store-cobertura-fase-b` (run 38898541279)
+
+### Números finales
+
+- `lib/store.ts` **8.889 → 5.219 líneas** (−41%); **7 slices** en `lib/store/slices/`;
+  `STORE_VERSION = 28` y el shape persistido intactos en toda la serie.
+- Tests **993 → 1078** (107 archivos); cobertura **global 91.09/81.40/91.94/91.09**,
+  **`lib/**` 97.63/91.11/99.44/97.63** (`store.ts` legacy 96.06, slices 99.78),
+  **`app/api/**` 83.69/68.70/86.99/83.69**.
+- Pisos finales: **global 90/80/90/90 · `lib/**` 96/90/98/96 · `app/api/**` 82/67/85/82**
+  (ningún piso bajó en la serie).
+- e2e con paridad CI: **32/32 verdes** (smoke completo + 9 crud de módulos refactorizados +
+  `auth.setup`; JUnit 0 failures / 0 skipped) sobre base descartable `prisma/perf-p9.db`; 2
+  primeros intentos cayeron por timeout de 30 s de primer render y pasaron en retry (tolerado
+  por `retries=2`).
+
+### Deuda post-serie (declarada, fuera del cap)
+
+- **168 statements** de `lib/store.ts`: ramas de validación puntuales de acciones legacy,
+  arranque y migraciones.
+- **5 statements** de `lib/store/helpers.ts` (40, 98, 101-103) y **5** de slices
+  (`ad-slice` 332/357; `ge-slice` 162/234/318).
+- Cobertura API restante: `qa-roadmap` 62.5%, `emisiones-gc` 66.89%, `vinculos` 69.2%,
+  `fondos-fi` 71.16%, `personas` 72.82%.
+- `npm run e2e:fresh` sigue sin existir; `e2e/crud/poblado-idempotente.spec.ts:96` mantiene
+  su espera de 30 s; 404 preexistente de MT en `lib/api/put-merge.ts`; `CF_UPDATE_PARAM` sin
+  emisor; deriva de prosa en 11 specs vivas + 4 manuales NSGC.
