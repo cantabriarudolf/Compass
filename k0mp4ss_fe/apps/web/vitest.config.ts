@@ -50,19 +50,19 @@ export default defineConfig({
       // Piso = medido − 1 pt (margen por drift de Node/V8). Solo sube: si la
       // cobertura mejora, se re-baselinea en un commit explícito.
       thresholds: {
-        // Re-baseline 2026-10-16 (SERIE-NOCHE-3 P8, medido con `lib/store/**` en el
-        // include y los tests de `store-cobertura-fase-b`): 88.78/78.18/91.94/88.78
-        // → piso = medido − 1 pt. Nunca se baja.
-        statements: 87,
-        branches: 77,
+        // Re-baseline 2026-10-16 (SERIE-NOCHE-3 P9, cierre: fase 2 de
+        // `store-cobertura-fase-b` — 14 tests legacy RE/FI/PE + la tabla de
+        // guardas de las 97 acciones): 91.09/81.40/91.94/91.09 → piso =
+        // medido − 1 pt. Nunca se baja.
+        statements: 90,
+        branches: 80,
         functions: 90,
-        lines: 87,
+        lines: 90,
         // Núcleo: los 7 archivos desde SERIE-PRODUCCION P4 + el interior de
-        // `lib/store/**` (slices + helpers), incorporado al include en P8.
-        // Re-baseline 2026-10-16: 93.28/86.12/99.44/93.28, con los slices de
-        // 80.65 a 99.78 stmts por los tests comportamentales de la fase b
-        // → piso = medido − 1 pt. Nunca se baja.
-        "lib/**": { statements: 92, branches: 85, functions: 98, lines: 92 },
+        // `lib/store/**` (slices + helpers + `lib/store.ts` legacy). Re-baseline
+        // 2026-10-16 (P9): 97.63/91.11/99.44/97.63, con `lib/store.ts` en 96.06
+        // (venía de 87.11 al abrir la serie) → piso = medido − 1 pt. Nunca se baja.
+        "lib/**": { statements: 96, branches: 90, functions: 98, lines: 96 },
         // Superficie API: 126 route handlers (smoke de guardias + fases).
         // Re-baseline 2026-10-15 (SERIE-NOCHE-3 P7, medido tras la fase 1):
         // 83.69/68.70/86.99/83.69 con ingresos-fi (54.07 → 92.59), egresos-fi
