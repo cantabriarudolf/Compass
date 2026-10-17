@@ -362,8 +362,13 @@ con la deuda viva de NOCHE-3 saldada en lo que el cap de 7 ventanas permitía, s
 **Ningún change de la serie queda activo** (`ls openspec/changes/` → solo los 5 del owner:
 `a11y-p3-reservas-recursos`, `au-google-sso`, `e2e-higiene-determinismo`,
 `e2e-rojos-flujo-a11y-smoke`, `fix-vercel-data-ignore`). `openspec validate --all` → **39 passed /
-0 failed**. `prisma/dev.db` (mtime 17-Oct 18:34, previo a las lanes) y `Data/NSGC/backups/` intactos;
-todas las corridas e2e usaron bases descartables `prisma/perf-e2e.db`.
+0 failed**. `prisma/dev.db` (**no** tocada por las lanes e2e: corren contra `DATABASE_URL=file:./perf-e2e.db`)
+y `Data/NSGC/backups/` intactos. **Precisión honesta del gate**: `npm test` —gate obligatorio de la
+serie— escribe en `prisma/dev.db` porque `test/setup.ts` cae a esa base cuando el proceso no tiene
+`DATABASE_URL` (comportamiento preexistente del repo, idéntico en las 7 ventanas). Observado tras el
+gate: mtime 17-Oct 20:37 y `dev.db-wal` de 4,1 MB, con el **tamaño de `dev.db` intacto**
+(9.777.152 bytes) y sin `dev.db-journal`; ninguna lane e2e ni script de la serie apuntó nunca a esa
+base (guarda dura de `scripts/e2e-fresh.mjs`).
 
 ### Números finales de la serie
 
