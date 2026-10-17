@@ -1,6 +1,9 @@
 import { expect, test } from "@playwright/test"
 
-test.use({ actionTimeout: 30_000 })
+// Presupuesto del test entero: en CI `playwright.config.ts` fija `timeout: 30_000` y este
+// spec encadena ~40 interacciones de UI, así que moría rellenando el formulario (antes del
+// paso "Iniciar"). Mismo criterio de presupuesto explícito que `poblado-idempotente`.
+test.use({ actionTimeout: 30_000, timeout: 120_000 })
 
 test.describe("CRUD — Inventario/Proyectos", () => {
   test("crear nuevo trabajo, verificar fila y transitar a En Curso", async ({ page }) => {
