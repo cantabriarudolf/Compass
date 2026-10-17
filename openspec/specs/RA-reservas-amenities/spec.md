@@ -6,7 +6,7 @@ Maestro de elementos reservables (espacios comunes y activos mobiliarios) con mo
 ## Requirements
 
 ### Requirement: Maestro de Elementos Reservables
-El sistema MUST permitir a la administración configurar qué se puede reservar mediante `saveElementoRA`/`removeElementoRA` retornando `StoreResult`, con tipo (Espacio Físico o Activo Mobiliario), ubicación por referencia al micro sector EF o al activo del catálogo IR, lógica de franjas horarias (bloques de N horas o día completo), tarifa de uso por bloque/día ($0 = gratis), garantía requerida, aforo para espacios o stock de unidades idénticas, y reglas especiales de anticipación mínima y penalización por cancelación tardía. La eliminación MUST bloquearse si el elemento tiene reservas no canceladas.
+El sistema MUST permitir a la administración configurar qué se puede reservar mediante `saveElementoRA` (store) y la API REST `/api/ra/elementos` (POST upsert idempotente; PUT/DELETE en `/[id]`), con tipo (Espacio Físico o Activo Mobiliario), ubicación por referencia al micro sector EF o al activo del catálogo IR, lógica de franjas horarias (bloques de N horas o día completo), tarifa de uso por bloque/día ($0 = gratis), garantía requerida, aforo para espacios o stock de unidades idénticas, y reglas especiales de anticipación mínima y penalización por cancelación tardía. La eliminación MUST bloquearse si el elemento tiene reservas no canceladas.
 
 #### Scenario: Quincho con bloques y garantía
 - **WHEN** se crea "Quincho TEST" (espacio físico, bloques de 3 horas, tarifa $15.000, garantía $20.000) vinculado a un micro sector EF
@@ -18,7 +18,7 @@ El sistema MUST permitir a la administración configurar qué se puede reservar 
 
 #### Scenario: Elemento con reservas no eliminable
 - **WHEN** se intenta eliminar un elemento con reservas confirmadas
-- **THEN** retorna `{ok:false}` citando la cantidad de reservas vinculadas
+- **THEN** la eliminación se rechaza (409 en la API y `{ok:false}` en el store) citando la cantidad de reservas vinculadas
 
 ### Requirement: Motor de Calendario y Prevención de Overbooking
 El sistema MUST confirmar reservas mediante `saveReservaRA` retornando `StoreResult`, validando existencia y vigencia del elemento y del solicitante en MP, horario coherente (horaInicio < horaFin) y anticipación mínima según la regla del elemento. La confirmación MUST rechazar todo solapamiento horario sobre la misma fecha cuando las reservas confirmadas concurrentes alcanzan el stock del elemento (`inicioA < finB && inicioB < finA`; día completo ocupa 00:00–23:59). Toda reserva confirmada audita `RA_BOOKING_CREATED` con snapshot de tarifa y garantía vigentes.
