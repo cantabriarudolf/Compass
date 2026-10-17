@@ -54,15 +54,21 @@ export default defineConfig({
         // `store-cobertura-fase-b` — 14 tests legacy RE/FI/PE + la tabla de
         // guardas de las 97 acciones): 91.09/81.40/91.94/91.09 → piso =
         // medido − 1 pt. Nunca se baja.
-        statements: 90,
-        branches: 80,
-        functions: 90,
-        lines: 90,
+        // Re-baseline 2026-10-17 (SERIE-DEUDA-1 P5, change `store-cobertura-fase-c`):
+        // medido 93.70/84.77/93.28/93.70 (el global subió con las fases API de P3/P4
+        // y la fase C del store) → piso = medido − 1 pt. Nunca se baja.
+        statements: 92,
+        branches: 83,
+        functions: 92,
+        lines: 92,
         // Núcleo: los 7 archivos desde SERIE-PRODUCCION P4 + el interior de
         // `lib/store/**` (slices + helpers + `lib/store.ts` legacy). Re-baseline
         // 2026-10-16 (P9): 97.63/91.11/99.44/97.63, con `lib/store.ts` en 96.06
         // (venía de 87.11 al abrir la serie) → piso = medido − 1 pt. Nunca se baja.
-        "lib/**": { statements: 96, branches: 90, functions: 98, lines: 96 },
+        // Re-baseline 2026-10-17 (SERIE-DEUDA-1 P5): medido 98.39/92.19/99.43/98.39,
+        // con `lib/store.ts` en 97.39, `lib/store/helpers.ts` y los 7 slices en
+        // 100 % de statements → piso = medido − 1 pt. Nunca se baja.
+        "lib/**": { statements: 97, branches: 91, functions: 98, lines: 97 },
         // Superficie API: 126 route handlers (smoke de guardias + fases).
         // Re-baseline 2026-10-16 (SERIE-DEUDA-1 P3, change `api-cobertura-fase3`):
         // medido 83.69/68.70/86.99/83.69 → 85.75/71.50/88.48/85.75 con las 3

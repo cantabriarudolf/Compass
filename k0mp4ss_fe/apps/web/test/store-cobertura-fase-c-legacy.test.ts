@@ -12,7 +12,7 @@ import { resetStore } from "./helpers"
  */
 const getState = () => useCompassStore.getState()
 
-const unidadSeed = (): Unidad => ({ ...seedData().unidades[0] })
+const unidadSeed = (): Unidad => ({ ...seedData().unidades[0]! })
 
 const infraccionBase = (partial: Partial<InfraccionIN>): InfraccionIN =>
   ({
@@ -155,15 +155,18 @@ describe("aplicarInfraccionIN — ramas de rechazo y sanción", () => {
 
   it("resuelve la sanción % GC contra el último gasto común de la unidad", () => {
     const unidadId = unidadSeed().id
+    const personaBase = {
+      ...seedData().personas[0],
+    } as unknown as Record<string, unknown>
     getState().savePersona({
-      ...(seedData().personas[0] as never),
+      ...personaBase,
       id: "p-p5-directivo",
       roles: ["directiva"],
       datosGobernanza: {
         id: "gob-p5",
         cargoDirectiva: "tesorero",
         fechaAsuncion: "2026-08-01",
-      } as never,
+      },
     } as never)
     getState().saveInfraccionIN(
       infraccionBase({ id: "in-p5-gc", tipoInfraccionId: "tipo-in-ruidos", unidadId })
@@ -225,11 +228,15 @@ describe("generarReporteRE — bloques de bitácora, morosidad e insumos", () =>
 
   it("genera un reporte con los 3 bloques operativos y captura el snapshot", () => {
     const seed = seedData()
-    const unidadId = seed.unidades[0].id
+    const unidadId = seed.unidades[0]!.id
+    const cierreBase = (seed.cierresTurnoPE[0] ?? {}) as unknown as Record<
+      string,
+      unknown
+    >
     useCompassStore.setState({
       cierresTurnoPE: [
         {
-          ...(seed.cierresTurnoPE[0] ?? ({} as never)),
+          ...cierreBase,
           fecha: "2026-10-01",
           trabajadorPersonaId: seed.personas[0]?.id ?? "p-x",
           incidencias: { hubo: true, descripcion: "Portón forzado en torre A" },
@@ -255,7 +262,7 @@ describe("generarReporteRE — bloques de bitácora, morosidad e insumos", () =>
     })
 
     expect(r.ok).toBe(true)
-    const reporte = getState().reportesRE[getState().reportesRE.length - 1]
+    const reporte = getState().reportesRE[getState().reportesRE.length - 1]!
     expect(reporte.titulo).toBe("Cierre operativo de octubre")
     expect(reporte.bloques).toHaveLength(3)
     expect(reporte.payloadSnapshot).toHaveLength(3)
@@ -278,14 +285,14 @@ describe("removeMaestro — integridad referencial por colección", () => {
   beforeEach(() => resetStore())
 
   it("bloquea estadosOcupacion en uso por unidades", () => {
-    const estadoId = getState().unidades[0].estadoId
+    const estadoId = getState().unidades[0]!.estadoId
     const r = getState().removeMaestro("estadosOcupacion", estadoId)
     expect(r.ok).toBe(false)
     expect(r.ok === false && r.error).toContain("estado de ocupación")
   })
 
   it("bloquea categoriasUnidad en uso por tipos de unidad", () => {
-    const cat = getState().maestros.categoriasUnidad[0]
+    const cat = getState().maestros.categoriasUnidad[0]!
     const tipos = getState().tiposUnidad.map((t, i) =>
       i === 0 ? { ...t, categoria: cat.nombre } : t
     )
@@ -296,7 +303,7 @@ describe("removeMaestro — integridad referencial por colección", () => {
   })
 
   it("bloquea categoriasMacro usada como etiqueta de un macroSector", () => {
-    const cat = getState().maestros.categoriasMacro[0]
+    const cat = getState().maestros.categoriasMacro[0]!
     const macros = getState().macroSectores.map((m, i) =>
       i === 0 ? { ...m, etiqueta: cat.nombre } : m
     )
@@ -307,7 +314,7 @@ describe("removeMaestro — integridad referencial por colección", () => {
   })
 
   it("bloquea categoriasMicro usada como etiqueta de un microSector", () => {
-    const cat = getState().maestros.categoriasMicro[0]
+    const cat = getState().maestros.categoriasMicro[0]!
     const micros = getState().microSectores.map((m, i) =>
       i === 0 ? { ...m, etiqueta: cat.nombre } : m
     )
@@ -318,7 +325,7 @@ describe("removeMaestro — integridad referencial por colección", () => {
   })
 
   it("bloquea estadosInmobiliarios referenciados por vínculos", () => {
-    const estado = getState().maestros.estadosInmobiliarios[0]
+    const estado = getState().maestros.estadosInmobiliarios[0]!
     const vinculos = getState().vinculos.map((v, i) =>
       i === 0 ? { ...v, estadoOcupacionPropiedad: estado.id } : v
     )
