@@ -273,3 +273,133 @@ describe("generarReporteRE — bloques de bitácora, morosidad e insumos", () =>
     expect(insumos.lineas.some((l) => l.valor === "4 ítem(s)")).toBe(true)
   })
 })
+
+describe("removeMaestro — integridad referencial por colección", () => {
+  beforeEach(() => resetStore())
+
+  it("bloquea estadosOcupacion en uso por unidades", () => {
+    const estadoId = getState().unidades[0].estadoId
+    const r = getState().removeMaestro("estadosOcupacion", estadoId)
+    expect(r.ok).toBe(false)
+    expect(r.ok === false && r.error).toContain("estado de ocupación")
+  })
+
+  it("bloquea categoriasUnidad en uso por tipos de unidad", () => {
+    const cat = getState().maestros.categoriasUnidad[0]
+    const tipos = getState().tiposUnidad.map((t, i) =>
+      i === 0 ? { ...t, categoria: cat.nombre } : t
+    )
+    useCompassStore.setState({ tiposUnidad: tipos })
+    const r = getState().removeMaestro("categoriasUnidad", cat.id)
+    expect(r.ok).toBe(false)
+    expect(r.ok === false && r.error).toContain("está en uso")
+  })
+
+  it("bloquea categoriasMacro usada como etiqueta de un macroSector", () => {
+    const cat = getState().maestros.categoriasMacro[0]
+    const macros = getState().macroSectores.map((m, i) =>
+      i === 0 ? { ...m, etiqueta: cat.nombre } : m
+    )
+    useCompassStore.setState({ macroSectores: macros })
+    const r = getState().removeMaestro("categoriasMacro", cat.id)
+    expect(r.ok).toBe(false)
+    expect(r.ok === false && r.error).toContain("categoría macro")
+  })
+
+  it("bloquea categoriasMicro usada como etiqueta de un microSector", () => {
+    const cat = getState().maestros.categoriasMicro[0]
+    const micros = getState().microSectores.map((m, i) =>
+      i === 0 ? { ...m, etiqueta: cat.nombre } : m
+    )
+    useCompassStore.setState({ microSectores: micros })
+    const r = getState().removeMaestro("categoriasMicro", cat.id)
+    expect(r.ok).toBe(false)
+    expect(r.ok === false && r.error).toContain("categoría micro")
+  })
+
+  it("bloquea estadosInmobiliarios referenciados por vínculos", () => {
+    const estado = getState().maestros.estadosInmobiliarios[0]
+    const vinculos = getState().vinculos.map((v, i) =>
+      i === 0 ? { ...v, estadoOcupacionPropiedad: estado.id } : v
+    )
+    useCompassStore.setState({ vinculos })
+    const r = getState().removeMaestro("estadosInmobiliarios", estado.id)
+    expect(r.ok).toBe(false)
+  })
+})
+
+describe("retenerGarantiaRA — rechazos y cargo al fondo de amenities", () => {
+  beforeEach(() => resetStore())
+
+  const reserva = (partial: Record<string, unknown>) =>
+    ({
+      id: "ra-p5",
+      folio: "RA-0001",
+      estado: "confirmada",
+      montoGarantia: 20000,
+      unidadId: unidadSeed().id,
+      solicitantePersonaId: "p-p5",
+      garantiaRetenida: undefined,
+      ...partial,
+    }) as never
+
+  const conReserva = (r: unknown) =>
+    useCompassStore.setState({ reservasRA: [r as never] })
+
+  it("rechaza una reserva inexistente", () => {
+    const r = getState().retenerGarantiaRA("ra-no-existe", "daño")
+    expect(r.ok).toBe(false)
+    expect(r.ok === false && r.error).toContain("la reserva no existe")
+  })
+
+  it("rechaza si la reserva no está confirmada", () => {
+    conReserva(reserva({ estado: "pendiente" }))
+    const r = getState().retenerGarantiaRA("ra-p5", "daño")
+    expect(r.ok).toBe(false)
+    expect(r.ok === false && r.error).toContain("Confirmada")
+  })
+
+  it("rechaza una segunda retención", () => {
+    conReserva(reserva({ garantiaRetenida: { monto: 1, motivo: "x" } }))
+    const r = getState().retenerGarantiaRA("ra-p5", "daño")
+    expect(r.ok).toBe(false)
+    expect(r.ok === false && r.error).toContain("ya fue retenida")
+  })
+
+  it("exige describir el motivo", () => {
+    conReserva(reserva({}))
+    const r = getState().retenerGarantiaRA("ra-p5", "   ")
+    expect(r.ok).toBe(false)
+    expect(r.ok === false && r.error).toContain("describir el daño")
+  })
+
+  it("rechaza si el elemento no exige garantía", () => {
+    conReserva(reserva({ montoGarantia: 0 }))
+    const r = getState().retenerGarantiaRA("ra-p5", "daño leve")
+    expect(r.ok).toBe(false)
+    expect(r.ok === false && r.error).toContain("nada que retener")
+  })
+
+  it("retiene y materializa el cobro en el fondo de amenities", () => {
+    conReserva(reserva({}))
+    useCompassStore.setState({
+      fondosFI: [
+        {
+          id: "fondo-am-p5",
+          nombre: "Amenities",
+          tipo: "amenities",
+          activo: true,
+          saldo: 0,
+        } as never,
+      ],
+    })
+    const r = getState().retenerGarantiaRA("ra-p5", "Rotura de mesa del quincho")
+    expect(r.ok).toBe(true)
+    const res = getState().reservasRA.find((x) => x.id === "ra-p5")!
+    expect(res.garantiaRetenida?.monto).toBe(20000)
+    expect(String(res.cargoFIReferencia)).toMatch(/^cob-/)
+    const cobro = getState().cobrosFI.find((c) => c.id === res.cargoFIReferencia)!
+    expect(cobro.concepto).toBe("garantia_ra")
+    expect(cobro.montoBase).toBe(20000)
+  })
+})
