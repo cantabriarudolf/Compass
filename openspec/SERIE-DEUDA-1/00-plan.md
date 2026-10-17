@@ -15,7 +15,7 @@
 | P4 | `api-cobertura-fase4` — siguientes 3 carpetas API (fase 4) + ratchet `app/api/**` | HECHA (`fondos-fi` 71.16 → 89.66, `personas` 72.82 → 93.45, `cobros-fi` 74.43 → 91.48; `app/api/**` 85.75 → 88.39 con piso **87/74/88/87**) | `8c5a1e4` |
 | P5 | `store-cobertura-fase-c` — fase C del store legacy: bordes + acciones más descubiertas + ratchet `lib/**`/global | **PARCIAL** (57 de 168 statements de `lib/store.ts` + los 10 bordes; `helpers.ts` y slices al 100 % de statements; pisos global **92/83/92/92** y `lib/**` **97/91/98/97**; remanente de 111 declarado para P7) | `85ed548` |
 | P6 | `higiene-prosa-store-cleanup` — prosa de specs/manuales que nombra acciones podadas + `CF_UPDATE_PARAM` | HECHA (13 specs / 21 requirements reescritos · 4 manuales · `CF_UPDATE_PARAM` como deuda declarada; ver Bitácora) | `dbd9d1b` |
-| P7 | Cierre de la serie: auditoría integral, e2e final (**con el fix del timeout de `e2e/crud/proyectos.spec.ts`**), **verificación** del PR #3 ya abierto y deuda post-serie (**111 statements** de P5) | pendiente | — |
+| P7 | Cierre de la serie: auditoría integral, e2e final (**con el fix del timeout de `e2e/crud/proyectos.spec.ts`**), **verificación** del PR #3 ya abierto y deuda post-serie (**111 statements** de P5) | **HECHA** (e2e de la serie **25/25** · `tsc` 0 · `lint` 0 errores · `npm test` **1208/1208** · `validate --all` 39/0 · auditoría y deuda en § Cierre de la serie) | `092c0a8` · `e9d161d` · `6ecad84` |
 
 **MÁXIMO: 7 ventanas.** Prohibido abrir ventanas fuera del cap: lo que no entre se declara como
 deuda post-serie en el cierre (P7), no se improvisa.
@@ -293,6 +293,21 @@ cierre (solo aprueba permisos si el harness los pide). El chat orquestador:
   rojo intermedio (`39058811790`, 3m44s) sobre un commit anterior, superado por los verdes
   posteriores del mismo rango.
 
+- [2026-10-17] **P7 HECHA** (cierre de la serie): ver § Cierre de la serie. La deuda heredada de P2
+  se saldó con **3 commits** sobre `e2e/crud/proyectos.spec.ts`: `092c0a8` (presupuesto explícito
+  del test), `e9d161d` (deja de reintentar a ciegas el botón Guardar —creaba **dos** trabajos con el
+  mismo título— y la fila pasa a `.first()`: el strict mode resolvía 2 rows) y `6ecad84`
+  (`test.use({ timeout })` **no es un fixture válido** — `tsc` lo rechazó con TS2353 y Playwright lo
+  ignoraba—, se reemplaza por `test.setTimeout(120_000)`, el patrón que ya usaba
+  `poblado-idempotente`). **e2e de la serie** (`e2e:fresh`, base descartable fresca, paridad CI):
+  **25/25 verdes**, 0 fallos, 0 reintentos, 261 s (`auth.setup` 6 · `poblado-idempotente` 2 ·
+  `proyectos` 1 · `smoke/modulos` 8 · `smoke/modulos-mobile` 8) y la **lane dirigida** de
+  `proyectos` **7/7** (62,7 s, spec de 9,6 s). **Gates**: `tsc --noEmit` 0 · `npm run lint` 0 errores
+  · `npm test` **1208/1208 en 116 archivos** (global 93.7/84.76/93.28/93.7 · `lib/**`
+  98.39/92.18/99.44/98.39 · `app/api/**` 88.39/75.82/89.22/88.39, todos sobre los pisos vigentes)
+  · `openspec validate --all` **39 passed / 0 failed**. **Sin push y sin tocar el PR #3** (van por el
+  orquestador).
+
 - [2026-10-17] **P6 HECHA** (`higiene-prosa-store-cleanup`): higiene de prosa, cero código. El
   diagnóstico real (censo `rg` de las 28 acciones podadas) dio **21 requirements en 13 specs vivas**
   —no 11— y **4 manuales NSGC con 24 acciones** —no 17 en el manual 28—; todos reescritos al estado
@@ -314,3 +329,83 @@ cierre (solo aprueba permisos si el harness los pide). El chat orquestador:
   `70b3510` (GD/IN/IR) · `1837362` (PE/PL/RA) · `dbd9d1b` (manuales NSGC) + cierre documental.
   Avance: `avance - 2026-10-17 18-23.md`. Fila P6 con `dbd9d1b`. **Sin push** (lo maneja el
   orquestador). Queda solo P7 para cerrar la serie.
+
+## Cierre de la serie (2026-10-17)
+
+Estado final: **6 de 7 ventanas HECHA · 1 BLOQUEADA (P2, causa saldada en P7) · 1 PARCIAL (P5,
+remanente declarado como deuda post-serie por decisión del owner)**. La rama `serie/deuda-1` cierra
+con la deuda viva de NOCHE-3 saldada en lo que el cap de 7 ventanas permitía, sin abrir una octava.
+
+### Estado por ventana (commits reales)
+
+| Ventana | Resultado | Commits |
+|---|---|---|
+| P1 | HECHA — `npm run e2e:fresh` (base descartable + paridad CI) y timeout de purga a 120 s; lane dirigida 24/24 | `16c0546` (plan) · `adf932e` · `ddf1c4f` |
+| P2 | **BLOQUEADA** — el "404 de MT" **no existe** (el guard de scope es correcto: 24/24 modelos con `comunidadId`; propia → 200, ajena → 404 sin mutar); red de seguridad `test/api/put-merge-scope.test.ts` (4 casos). Causa real del rojo: presupuesto de 30 s del test e2e | `fa9196d` · `ab70e73` |
+| P3 | HECHA — fase 3 API (`qa-roadmap` 62.5 → 91.67 · `emisiones-gc` 66.89 → 94.26 · `vinculos` 69.2 → 94.93); `app/api/**` 83.69 → 85.75, piso 84/70/87/84 | `693943b` · `d902f0f` · `cc4f49b` · `a955e0f` · `03a7cdd` · `e9f8327` |
+| P4 | HECHA — fase 4 API (`fondos-fi` 71.16 → 89.66 · `personas` 72.82 → 93.45 · `cobros-fi` 74.43 → 91.48); `app/api/**` 85.75 → 88.39, piso **87/74/88/87** | `2dec53b` · `3c5f006` · `ddba331` · `92ae766` · `8c5a1e4` · `48ad2fb` |
+| P5 | **PARCIAL** — fase C del store legacy: 57 de 168 statements de `lib/store.ts` + los 10 bordes (helpers y slices a 100 % de statements); pisos global **92/83/92/92** y `lib/**` **97/91/98/97**. Remanente de **111 statements** declarado | `6bf0d9e` · `3b127d2` · `3950f49` · `85ed548` · `9557b2d` |
+| P6 | HECHA — higiene de prosa: 21 requirements en 13 specs + 4 manuales NSGC reescritos al estado REST; `CF_UPDATE_PARAM` como deuda declarada | `bc35411` · `463baf3` · `1d08475` · `70b3510` · `1837362` · `dbd9d1b` · `f1ba2dd` |
+| P7 | HECHA — fix del spec e2e de `proyectos` (presupuesto + doble submit + strict mode), e2e de la serie 25/25, gates completos, auditoría integral y deuda post-serie | `092c0a8` · `e9d161d` · `6ecad84` + cierre documental |
+
+### Evidencia de los archives (CI verde observada)
+
+| Change | Archive | Commit del archive | Run de CI |
+|---|---|---|---|
+| `e2e-fresh` | `2026-10-16-e2e-fresh` | `47d78cc` | `38947976513` success |
+| `fix-put-merge-scope` | `2026-10-16-fix-put-merge-scope` | `63e630a` | `38965811313` success |
+| `api-cobertura-fase3` | `2026-10-16-api-cobertura-fase3` | `48ad2fb` | verde observado (P4) |
+| `api-cobertura-fase4` | `2026-10-17-api-cobertura-fase4` | `5d85782` | `38993186216` success |
+| `store-cobertura-fase-c` | `2026-10-17-store-cobertura-fase-c` | `f071782` | `39067837617` success |
+| `higiene-prosa-store-cleanup` | `2026-10-17-higiene-prosa-store-cleanup` | `2984174` | `39072632908` success |
+
+**Ningún change de la serie queda activo** (`ls openspec/changes/` → solo los 5 del owner:
+`a11y-p3-reservas-recursos`, `au-google-sso`, `e2e-higiene-determinismo`,
+`e2e-rojos-flujo-a11y-smoke`, `fix-vercel-data-ignore`). `openspec validate --all` → **39 passed /
+0 failed**. `prisma/dev.db` (mtime 17-Oct 18:34, previo a las lanes) y `Data/NSGC/backups/` intactos;
+todas las corridas e2e usaron bases descartables `prisma/perf-e2e.db`.
+
+### Números finales de la serie
+
+- `STORE_VERSION = 28` (congelado, ningún cambio de la serie tocó el shape persistido) · `lib/store/slices/` con **7 slices**.
+- Suite: **1208/1208 tests en 116 archivos** (base de la serie: 1078/107 en 107; **+130 tests**, 9 archivos nuevos).
+- Cobertura (medida de cierre, 17-Oct):
+
+| Área | Medido (stmt/branch/func/lines) | Piso vigente |
+|---|---|---|
+| global | **93.70 / 84.76 / 93.28 / 93.70** | 92 / 83 / 92 / 92 |
+| `lib/**` | **98.39 / 92.18 / 99.44 / 98.39** | 97 / 91 / 98 / 97 |
+| `app/api/**` (126 handlers) | **88.39 / 75.82 / 89.22 / 88.39** | 87 / 74 / 88 / 87 |
+
+  (arranque de la serie: global 91.09/81.40/91.94/91.09 · `lib/**` 97.63/91.11/99.44/97.63 ·
+  `app/api/**` 83.69/68.70/86.99/83.69 · `lib/store.ts` 96.06 → **97.40**)
+- e2e de cierre (`npm run e2e:fresh -- --no-build -- e2e/smoke e2e/crud/poblado-idempotente.spec.ts e2e/crud/proyectos.spec.ts`): **25/25 verdes**, 0 fallos, 0 reintentos, 261 s. Lane dirigida de `proyectos`: **7/7**.
+- PR **draft #3** `serie/deuda-1` → `main`: https://github.com/cantabriarudolf/Compass/pull/3 (abierto desde P2; **el merge es decisión del owner**).
+
+### Deuda post-serie (no se paga en la serie; queda para decisión del owner)
+
+1. **111 statements sin cubrir en `lib/store.ts`** (de 168; P5 cubrió 57). Decisión explícita del
+   owner: no se paga con una octava ventana. Tabla de acciones, líneas y causa en
+   `Data/NSGC/docs/avances/avance - 2026-10-17 16-05.md` § "Remanente declarado"
+   (`generarCertificadoCT` 15 · `distribuirReporteRE` 13 · `respaldarInfraccionIN` 8 ·
+   `desestimarInfraccionIN` 8 · `saveElementoRA` 7 · `saveAdelantoPL` 6 · ramas de arranque de
+   `migrate` 4940-4941/5127 · ramas sueltas de 14 acciones más).
+2. **Eventos AM sin emisor server-side**: `CF_UPDATE_PARAM`, `FI_INGRESO_REGISTRADO`,
+   `IR_ASSET_REPAIR`, `CO_DOC_DOWNLOAD`, `GD_PERIODO_REGISTRADO`, `PE_CIERRE_EDITADO` (detectados
+   en P6). Los eventos nacen en el store cliente y se sincronizan por `/api/auditoria/sync`;
+   cablearlos server-side es comportamiento nuevo. Referencias ya relevadas:
+   `app/api/configuracion/route.ts` (PUT) y `openspec/BACKLOG-100.md:277`.
+3. **P2 quedó BLOQUEADA por su gate e2e**, no por producto: el defecto declarado (404 de MT) no se
+   reproduce y el guard de `lib/api/put-merge.ts` queda como está (red de seguridad en
+   `test/api/put-merge-scope.test.ts`). La causa del rojo —presupuesto de 30 s del test de
+   `proyectos`— **queda saldada en P7** (`092c0a8` · `e9d161d` · `6ecad84` + lane 25/25).
+4. **Desviaciones vs el plan de la serie**: el plan asumía que el rojo de `proyectos` era un bug de
+   scope de MT (no lo era); asumía cerrar los 168 statements del store (se cerraron 57, el resto
+   declarado); y asumía abrir el PR en P7 (se abrió en P2 porque `ci.yml` solo dispara en `push` a
+   `main` y en `pull_request`). Las tres se absorbieron sin abrir ventanas extra.
+
+### Nota de ejecución
+
+P7 delegada: se completó íntegramente en esta ventana, **sin push** y **sin tocar el PR #3** (los
+maneja el orquestador). `npm run lint` sigue con **0 errores** y ~6.700 warnings preexistentes
+(`no-explicit-any` en tests y artefactos `.vercel/`), ajenos a la serie.
