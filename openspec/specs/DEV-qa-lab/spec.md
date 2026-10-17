@@ -147,3 +147,14 @@ internos, y sin cambiar el shape persistido (`STORE_VERSION` congelado).
   observados), el piso de `lib/**` y el global se re-baselinean con la regla del
   ratchet sin bajar ninguno, y el shape persistido del store queda intacto
   (`STORE_VERSION` sin cambios)
+
+#### Scenario: Fase 3 de cobertura API sobre las 3 carpetas más bajas medidas
+- **WHEN** se ejecuta la fase 3 del ratchet de cobertura API (`api-cobertura-fase3`)
+  sobre las 3 carpetas de `app/api/**` con menor cobertura de statements de la
+  medición vigente de la ventana (P3: `qa-roadmap` 62.5%, `emisiones-gc` 66.89% y
+  `vinculos` 69.2%)
+- **THEN** se agregan tests contra la interfaz pública de los handlers exportados
+  (camino feliz, validación 400, 401 sin sesión, 403 por rol y 404 por scope de
+  comunidad) con Prisma real y sin editar handlers, y el piso de `app/api/**` se
+  re-baselinea con la regla del ratchet (medido − 1 pt, nunca baja), dejando la
+  fecha de medición y las carpetas cubiertas documentadas en el commit explícito
