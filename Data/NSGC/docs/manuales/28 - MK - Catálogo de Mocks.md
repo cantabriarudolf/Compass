@@ -177,7 +177,7 @@ Estas colecciones **no viven en `data/`**: nacen en `lib/store.ts` con seeds vac
 | `activa` | boolean | |
 | `fechaPublicacion` | ISO date | |
 
-Consumidor: `app/comunidad/portal/page.tsx`. Acciones: `savePublicacionPortal`, `removePublicacionPortal`, `syncPublicacionesDesdeVinculos`.
+Consumidor: `app/comunidad/portal/page.tsx`. Acciones: `removePublicacionPortal`, `syncPublicacionesDesdeVinculos`; alta/edición/baja server-side vía API REST `/api/publicaciones-portal`.
 
 #### 5.2 `leadsPortal` (PI, store v11)
 
@@ -190,7 +190,7 @@ Consumidor: `app/comunidad/portal/page.tsx`. Acciones: `savePublicacionPortal`, 
 | `fecha` | ISO date | |
 | `atendido` | boolean | |
 
-Acción: `saveLeadPortal` → dispara `notify()` (D3) al propietario.
+Acción: `POST /api/leads-portal` → crea la notificación D3 (`email_simulado`) al propietario.
 
 #### 5.3 `notificaciones` (D3, transversal, store v11+)
 
@@ -205,7 +205,7 @@ Acción: `saveLeadPortal` → dispara `notify()` (D3) al propietario.
 | `fecha` | ISO date | |
 | `leida` | boolean | |
 
-Acciones: `notify()`, `marcarNotificacionLeida`. Tope: 500 eventos.
+Acciones: `notify()` (store); lectura vía API REST `/api/notificaciones/[id]`. Tope: 500 eventos.
 
 #### 5.4 `controlesPropiedades` (AD, store v12)
 
@@ -258,7 +258,7 @@ Consumido por: `lib/store.ts` (seedData). Dump completo en `36 - MK - Data Dump 
 | `plantillasCO` | v14 | 5 plantillas seed (arriba); CRUD libre | `savePlantillaCO`, `removePlantillaCO` (bloqueo si envíos la usan) |
 | `enviosCO` | v14 | Snapshot inmutable `{personaId, unidadId?}[]` + lecturas[] | `saveEnvioCO` (loop `notify()` + `CO_SEND_MASSIVE`), `registrarLecturaEnvioCO` (idempotente) |
 | `mensajesBuzonCO` | v14 | Folio `BUZ-####`, clasificación felicitacion/sugerencia/reclamo, estado recibido→en_gestion→resuelto→cerrado, respuestas[], `visibilidadComite` | `saveMensajeBuzonCO`, `responderMensajeBuzonCO` (auto En Gestión), `cambiarEstadoBuzonCO` (matriz estricta), `removeMensajeBuzonCO` |
-| `documentosCO` | v14 | Referencias D1 {nombre, tipoMime, tamanoKB, url, categoria} | `saveDocumentoCO` (rechaza data:/blob:), `removeDocumentoCO`, `registrarDescargaDocCO` |
+| `documentosCO` | v14 | Referencias D1 {nombre, tipoMime, tamanoKB, url, categoria} | `saveDocumentoCO` (rechaza data:/blob:), `removeDocumentoCO`, API REST `/api/co/documentos` (la descarga audita `CO_DOC_DOWNLOAD`) |
 | `solicitudesGE` | v15 | Folio `GE-####`, tipo insumos/grabaciones/buzon, estado workflow NSGC §1.4, comentarios[], historialEstados[] con timestamps SLA | `saveSolicitudGE`, `abrirSolicitudGE` (auto En Revisión), `responderSolicitudGE`, `resolverSolicitudGE`, `cerrarSolicitudGE`, `removeSolicitudGE` |
 
 Consumidores: `app/comunidad/comunicacion/page.tsx` (CO), `app/operaciones/solicitudes/page.tsx` (GE). Eventos AM: `CO_SEND_MASSIVE`, `CO_TICKET_CREATED/RESPONDIDO/ESTADO`, `CO_DOC_DOWNLOAD`; `GE_TICKET_CREATED/STATE_CHANGE/RESOLVED`.
@@ -279,13 +279,13 @@ Consumido por: `lib/store.ts` (seedData). Dump completo en `37 - MK - Data Dump 
 
 | Colección | Store | Contenido | Acciones repository |
 |-----------|-------|-----------|---------------------|
-| `activosIR` | v16 | Código `IR-A-####`, categoria infraestructura/mobiliario/insumo/epp/acceso, ubicación EF (microSectorId/unidadId), stock+umbral crítico, proveedor/factura D1, asignación vigente de accesos | `saveRecursoIR`, `removeRecursoIR` (integridad), `cambiarEstadoRecursoIR` (`IR_ASSET_REPAIR`/baja), `asignarAccesoIR`, `devolverAccesoIR` |
+| `activosIR` | v16 | Código `IR-A-####`, categoria infraestructura/mobiliario/insumo/epp/acceso, ubicación EF (microSectorId/unidadId), stock+umbral crítico, proveedor/factura D1, asignación vigente de accesos | `saveRecursoIR`, `removeRecursoIR` (integridad), cambio de estado/baja vía API REST `/api/ir/recursos/[id]` (`IR_ASSET_REPAIR`/baja), `asignarAccesoIR`, `devolverAccesoIR` |
 | `solicitudesInsumoIR` | v16 | Folio `SI-####`, quién×qué×área destino, comodín con 3 salidas admin, entrega con descuento de stock | `saveSolicitudInsumoIR` (alerta comodín), `resolverComodinIR` (aprobar_crear/sustituir/rechazar), `entregarSolicitudInsumoIR` (`IR_STOCK_LOW` al cruzar umbral) |
 | `entregasEPP` | v16 | Entregas individuales {recursoId, personaId, talla, estado, proximaRenovacion} | `registrarEntregaEPP` (`IR_DELIVERY_EPP`) |
 | `tiposInfraccionIN` | v17 | Seed NSGC (arriba); CRUD libre | `saveTipoInfraccionIN`, `removeTipoInfraccionIN` (bloqueo si usada) |
 | `infraccionesIN` | v17 | Folio `IN-####`, tipo catálogo XOR daño directo, unidad infractora, evidencias D1, estado en_revision/apelada/aplicada/desestimada, comentariosDirectiva[], respaldosDirectiva[], `cargoFIReferencia` = id del cobro multa_in al aplicar (v21; `"pendiente"` solo legacy) | `saveInfraccionIN` (`IN_REG_EVENT`), `apelarInfraccionIN` (`IN_APELACION`), `respaldarInfraccionIN`, `aplicarInfraccionIN` (grave exige respaldo; `IN_APPLY_FINE`; crea cobro FI), `desestimarInfraccionIN`, `removeInfraccionIN` |
-| `trabajosMT` | v18 | Folio `MT-####`, ubicación EF/equipo IR, responsable interno o proveedor, prioridad, costo+origenFondos+estadoPago, garantías, evidencias D1 tipadas, preventivo{periodicidadMeses} | `saveTrabajoMT`, `iniciarTrabajoMT`, `finalizarTrabajoMT` (genera próximo preventivo), `cancelarTrabajoMT`, `actualizarPagoTrabajoMT`, `verificarGarantiasMT` (idempotente), `removeTrabajoMT` |
-| `proyectosMT` | v18→v21 | Planes largo plazo {presupuestoEstimado, plazoMeses → cuota sugerida derivable, `fondoFinanciamientoId?`} | `saveProyectoMT` (v21: valida fondo FI activo con saldo ≥ presupuesto), `removeProyectoMT` |
+| `trabajosMT` | v18 | Folio `MT-####`, ubicación EF/equipo IR, responsable interno o proveedor, prioridad, costo+origenFondos+estadoPago, garantías, evidencias D1 tipadas, preventivo{periodicidadMeses} | `saveTrabajoMT`, `iniciarTrabajoMT`, `finalizarTrabajoMT` (genera próximo preventivo), cancelación vía API REST `/api/mt/trabajos/[id]`, `actualizarPagoTrabajoMT`, `verificarGarantiasMT` (idempotente), `removeTrabajoMT` |
+| `proyectosMT` | v18→v21 | Planes largo plazo {presupuestoEstimado, plazoMeses → cuota sugerida derivable, `fondoFinanciamientoId?`} | `saveProyectoMT` (v21: valida fondo FI activo con saldo ≥ presupuesto); alta/baja vía API REST `/api/mt/proyectos` y `/[id]` |
 
 Consumidores: `app/inventario/recursos/page.tsx` (IR), `app/finanzas/multas/page.tsx` (IN), `app/inventario/proyectos/page.tsx` (MT). Eventos AM: `IR_STOCK_LOW/DELIVERY_EPP/ASSET_REPAIR/COMODIN_ALERTA`; `IN_REG_EVENT/APPLY_FINE/APELACION`; `MT_WORK_CREATED/STARTED/FINISHED/PREVENTIVE_GENERATED/GUARANTEE_EXPIRED`.
 
@@ -305,10 +305,10 @@ Consumido por: `lib/store.ts` (seedData). Dump completo en `36 - MK - Data Dump 
 
 | Colección | Store | Contenido | Acciones repository |
 |-----------|-------|-----------|---------------------|
-| `elementosRA` | v19 | Tipo espacio_fisico/activo_mobiliario, ubicación EF (microSectorId) o IR (activoIRId), franja bloques_horas/dia_completo, tarifa ($0 gratis), garantía, aforo/stock, reglas anticipación/tardía+penalización | `saveElementoRA`, `removeElementoRA` (bloqueado con reservas vigentes) |
+| `elementosRA` | v19 | Tipo espacio_fisico/activo_mobiliario, ubicación EF (microSectorId) o IR (activoIRId), franja bloques_horas/dia_completo, tarifa ($0 gratis), garantía, aforo/stock, reglas anticipación/tardía+penalización | `saveElementoRA`; baja vía API REST `/api/ra/elementos/[id]` (bloqueada con reservas vigentes) |
 | `reservasRA` | v19→v21 | Folio `RA-####`, solicitante MP, fecha + tramo HH:MM, snapshots tarifa/garantía, cancelación {tardia, penalizacion}, retención de garantía, `cargoFIReferencia` = id del cobro del fondo amenities (v21; `"pendiente"` solo legacy) | `saveReservaRA` (overbooking por solape con stock concurrente; gate morosidad FI activo desde v21), `cancelarReservaRA` (crea cobro penalización), `retenerGarantiaRA` (crea cobro garantía) |
-| `avisosCV` | v20 | Tipología info/exito/advertencia/peligro, duración ≥3s, expiresAt caducidad, imagen URL D1 XOR video YouTube, pantallaCompleta, tags, ciclo borrador/publicado/archivado, origen manual/plantilla/acta_gd | `saveAvisoCV` (`CV_DRAFT_CREATED`/`CV_EDITED`), `removeAvisoCV` (solo borrador), `publicarAvisoCV` (VB), `archivarAvisoCV`, `caducarAvisosCV` (idempotente) |
-| `plantillasCV` | v20 | Seed NSGC (arriba); CRUD administración | `savePlantillaCV`, `removePlantillaCV` (bloqueo si avisos la usan), `activarPlantillaCV` (aviso publicado instantáneo) |
+| `avisosCV` | v20 | Tipología info/exito/advertencia/peligro, duración ≥3s, expiresAt caducidad, imagen URL D1 XOR video YouTube, pantallaCompleta, tags, ciclo borrador/publicado/archivado, origen manual/plantilla/acta_gd | `saveAvisoCV` (`CV_DRAFT_CREATED`/`CV_EDITED`), `publicarAvisoCV` (VB), `caducarAvisosCV` (idempotente); baja/archivado vía API REST `/api/cv/avisos/[id]` |
+| `plantillasCV` | v20 | Seed NSGC (arriba); CRUD administración | API REST `/api/cv/plantillas` (baja bloqueada si avisos la usan), `activarPlantillaCV` (aviso publicado instantáneo) |
 
 Integraciones: `publicarActaEnCV(actaId)` consume `actasGD.avisoCVReferencia === "pendiente"`, crea el aviso origen `acta_gd` y marca la referencia con el id del aviso. Flags de soporte: `permiteCreacionManualCV` (MP) y `cvRequiereVistoBueno` (CF, default true). Consumidores: `app/operaciones/reservas/page.tsx` (RA), `app/comunidad/visor/page.tsx` (panel CV), `app/visor-mensajes/page.tsx` (carrusel público con próximas reservas RA). Eventos AM: `RA_BOOKING_CREATED/CANCELLED/WARRANTY_RETAINED`; `CV_DRAFT_CREATED/PUBLISHED/EDITED/ARCHIVED`.
 
@@ -328,9 +328,9 @@ Dump completo en `38 - MK - Data Dump Finanzas.md`.
 
 | Colección | Store | Contenido | Acciones repository |
 |-----------|-------|-----------|---------------------|
-| `fondosFI` | v21→v27 | Maestro de cajas {nombre, tipo gasto_comun/reserva/especial/amenities, porcentajeAporte? para reserva, activo, **saldoInicial?**}; saldo derivable `saldoInicial + ingresosCobros + aportes − egresos`. **P2** añade 4º fondo `fondo-cc-punto-cero` (Cuenta Corriente, saldoInicial 17082694) | `saveFondoFI` (unicidad nombre, saldoInicial validado), `removeFondoFI` (bloqueado con movimientos imputados incluye ingresos manuales) |
-| `egresosFI` | v21→v27 | Folio `FE-####` continuo (respetando max existente), categoría sueldos/mantencion/servicios/administracion/uso_de_fondo/otro, fondo obligatorio, recurrente flag, comprobante D1, microSectoresIds, aprobacionActaGDId. **P2**: 182 históricos `fi-egr-hist-001..182` desde `data/finanzas/punto-cero-2324.json` (4 con monto 0 filtrados del libro) | `saveEgresoFI` (`FI_EGRESS_CREATED`), `removeEgresoFI`, `retirarFondoFI` |
-| `ingresosFI` | v27 | Ingreso manual a fondo {fecha ISO, monto>0, concepto, fondoId FK, familia?}; **P2**: 44 históricos `fi-ing-hist-001..044` (1 con monto 0 filtrado) imputados a Cuenta Corriente | `registrarIngresoFI` (`FI_INGRESO_REGISTRADO`), `removeIngresoFI` |
+| `fondosFI` | v21→v27 | Maestro de cajas {nombre, tipo gasto_comun/reserva/especial/amenities, porcentajeAporte? para reserva, activo, **saldoInicial?**}; saldo derivable `saldoInicial + ingresosCobros + aportes − egresos`. **P2** añade 4º fondo `fondo-cc-punto-cero` (Cuenta Corriente, saldoInicial 17082694) | `saveFondoFI` (unicidad nombre, saldoInicial validado); baja vía API REST `/api/fondos-fi/[id]` (bloqueada con movimientos imputados, incluye ingresos manuales) |
+| `egresosFI` | v21→v27 | Folio `FE-####` continuo (respetando max existente), categoría sueldos/mantencion/servicios/administracion/uso_de_fondo/otro, fondo obligatorio, recurrente flag, comprobante D1, microSectoresIds, aprobacionActaGDId. **P2**: 182 históricos `fi-egr-hist-001..182` desde `data/finanzas/punto-cero-2324.json` (4 con monto 0 filtrados del libro) | `saveEgresoFI` (`FI_EGRESS_CREATED`), `retirarFondoFI`; alta/baja vía API REST `/api/egresos-fi` y `/[id]` |
+| `ingresosFI` | v27 | Ingreso manual a fondo {fecha ISO, monto>0, concepto, fondoId FK, familia?}; **P2**: 44 históricos `fi-ing-hist-001..044` (1 con monto 0 filtrado) imputados a Cuenta Corriente | API REST `/api/ingresos-fi` (`FI_INGRESO_REGISTRADO`) |
 | `emisionesGC` | v21 | Periodo `AAAA-MM` único, modo snapshot fijo/variable, gastoTotal, líneas {unidadId, responsablePersonaId, monto, cobroId}, fondoReservaAporte {fondoId, monto} | `emitirGastoComun` (gate "CF no cargado", responsable por unidad, prorrateo = round(gastoTotal × coeficiente), aporte % reserva, `FI_EMISION_GC`) |
 | `cobrosFI` | v21 | Libro unificado: concepto gc/cuota_extraordinaria/multa_in/consumo/reserva_ra/penalizacion_ra/garantia_ra, origenModulo FI/IN/RA + origenRef, fondo, montoBase, fechaVencimiento desde diaCortePago, moras[] idempotentes por día, pagos[], diferencias[] inmutables | `aplicarMoraFI` (pro-rata, `FI_MORA_APPLIED`), `registrarPagoFI` (`FI_RECEIVE_PAYMENT` + `FI_MANUAL_DISCOUNT` si ajusta), `enviarCobranzaFI` (`FI_COBRANZA_SENT`) |
 
@@ -358,10 +358,10 @@ Cierra el pendiente D3/MA: la colección legal `asignacionFamiliar` ya referenci
 | `bitacoraVisitasPE` | v22 | Visitas con jornada FK, pre-agenda o sin aviso, hora sellada al ingresar | `saveBitacoraVisitaPE`, `ingresarBitacoraVisitaPE`, `removeBitacoraVisitaPE` (bloquea ingresadas) |
 | `encomiendasPE` | v22 | Courier FK + evidencia D1 + retiro registrado | `saveEncomiendaPE` (`PE_ENCOMIENDA_RECIBIDA`), `registrarRetiroEncomiendaPE`, `removeEncomiendaPE` |
 | `ingresosContratistasPE` | v22 | Contratista FK, motivo obligatorio ≥5, agendadoPor residente/admin | `saveIngresoContratistaPE`, `confirmarIngresoContratistaPE`, `removeIngresoContratistaPE` |
-| `proveedoresPE` | v22 | RUT validado, nombre único, rubro, activo | `saveProveedorPE` (dedupe), `removeProveedorPE` (bloqueado con historial) |
-| `mantencionesPreventivasPE` | v22 | Ciclo {periodicidadMeses, proximaFecha, alertaDiasAntes} | `saveMantencionPE`, `removeMantencionPE` |
+| `proveedoresPE` | v22 | RUT validado, nombre único, rubro, activo | `saveProveedorPE` (dedupe); baja vía API REST `/api/pe/proveedores/[id]` (bloqueada con historial) |
+| `mantencionesPreventivasPE` | v22 | Ciclo {periodicidadMeses, proximaFecha, alertaDiasAntes} | `saveMantencionPE`; baja vía API REST `/api/pe/mantenciones/[id]` |
 | `visitasTecnicasPE` | v22 | Libro inmutable; reprograma la mantención vinculada | `registrarVisitaTecnicaPE` (`PE_VISITA_TECNICA`) |
-| `cierresTurnoPE` | v22 | Protocolo anti-negligencia, checklist snapshot por jornada, historialCambios inmutable | `cerrarTurnoPE` (notify admin + copia trabajador), `editarCierreTurnoPE` (`PE_CIERRE_EDITADO`), `removeCierreTurnoPE` (solo día en curso o TEST) |
+| `cierresTurnoPE` | v22 | Protocolo anti-negligencia, checklist snapshot por jornada, historialCambios inmutable | `cerrarTurnoPE` (notify admin + copia trabajador); edición vía API REST `PUT /api/pe/cierres-turno/[id]` (`PE_CIERRE_EDITADO`); baja vía `DELETE /api/pe/cierres-turno/[id]` (solo día en curso o TEST) |
 | `proyeccionesPE` | v22 | Proyección feriados→costos enviada a FI con `liquidacionPLReferencia:"pendiente"` | `enviarProyeccionCostoFI` (`PE_PROYECCION_ENVIADA`) |
 
 Profundización aditiva de `ExtensionLaboralSchema` dentro de `personas` (FKs legales validadas en `savePersona`; evento `PE_FICHA_SAVED`). Helpers puros en `lib/personal-utils.ts`. Consumidores: `/personas/personal`, `/operaciones/bitacora`, `/operaciones/proveedores`. Dump completo en `39 - MK - Data Dump Personal y Servicios.md`.
@@ -426,10 +426,10 @@ Colecciones transaccionales nuevas (nacen vacías, sin seeds estáticos). Bumps 
 
 | Colección | Store | Contenido | Acciones repository |
 |-----------|-------|-----------|---------------------|
-| `liquidacionesPL` | v23 | Snapshot LIQ: haberes §1.1, gratificación tope, descuentos AFP/salud/SIS/cesantía/APV, totales de control, `egresoFIReferencia`, `proyeccionPEReferencia` | `generarLiquidacionPL`, `confirmarLiquidacionPL` (egreso FI sueldos), `removeLiquidacionPL` (solo borrador) |
+| `liquidacionesPL` | v23 | Snapshot LIQ: haberes §1.1, gratificación tope, descuentos AFP/salud/SIS/cesantía/APV, totales de control, `egresoFIReferencia`, `proyeccionPEReferencia` | API REST `/api/liquidaciones`: `POST` genera, `POST /[id]/confirmar` crea el egreso FI sueldos y `DELETE /[id]` elimina solo borrador |
 | `adelantosPL` | v23 | Folio `ADE-####`, glosa obligatoria, ciclo pendiente→descontado amarrado a LIQ | `saveAdelantoPL` (notify trabajador), `removeAdelantoPL` |
 | `certificadosCT` | v24 | Folio `CT-####` + código `VC-XXXXXXXX`, 4 tipologías con gates, snapshot del PDF emitido, firma por referencia D1 | `generarCertificadoCT`, `removeCertificadoCT` (historial inmutable salvo TEST) |
-| `reportesRE` | v25 | Bloques gastos_mes/bitacora_seguridad/morosidad/consumo_insumos con payloadSnapshot inmutable; segmento EF+MP+tenencia; distribución idempotente | `registrarVistaDashboardRE`, `generarReporteRE`, `distribuirReporteRE` (resuelve destinatarios vigentes), `removeReporteRE` |
+| `reportesRE` | v25 | Bloques gastos_mes/bitacora_seguridad/morosidad/consumo_insumos con payloadSnapshot inmutable; segmento EF+MP+tenencia; distribución idempotente | `registrarVistaDashboardRE`, `generarReporteRE`, `distribuirReporteRE` (resuelve destinatarios vigentes); baja vía API REST `/api/reportes-re/[id]` |
 
 Extensión aditiva CF: parámetros legales `ufMensual/ingresoMinimoMensual/topeGratificacionLegal/tasaSIS` (opcionales, auditados `CF_UPDATE_PARAM`). Extensión aditiva PE: `datosLaborales.sueldoBase`. Motor documental **pdfmake** instalado (`lib/pdf-utils.ts`): el binario PDF y la firma viven solo en memoria del documento (D1). Helpers puros en `lib/pl-utils.ts` y `lib/reporteria-utils.ts`. Consumidores: `/finanzas/remuneraciones`, `/comunidad/certificados`, `/admin/reporteria`. Dump completo en `40 - MK - Data Dump Remuneraciones, Certificados y Reportería.md`.
 

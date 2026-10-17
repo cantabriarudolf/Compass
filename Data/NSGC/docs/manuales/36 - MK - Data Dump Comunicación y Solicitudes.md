@@ -69,7 +69,7 @@ El ciclo operativo del ticket vive en `solicitudesGE` (tipo `buzon`) vía `mensa
 | `tamanoKB` | number ≥ 0 | ✅ | Solo metadato |
 | `url` | string ≤2048 | ✅ | D1: http(s); rechaza `data:` y `blob:` |
 
-Descarga auditada con `registrarDescargaDocCO` → evento `CO_DOC_DOWNLOAD`.
+Descarga auditada → evento `CO_DOC_DOWNLOAD` (servida por `/api/co/documentos/[id]`).
 
 ---
 

@@ -14,7 +14,7 @@ Ser la fuente de verdad temporal del frontend mientras no haya backend. Toda ent
 - **Cross-writes**: una acción puede mutar estado de otro dominio con `get()`/`set()` (p. ej. `publicarActaEnCV` de AD escribe `avisosCV` de CV); como todo se combina en un único objeto final, funciona igual que en el monolito.
 - **Movimiento puro (change `st-split-fase2`)**: el split sólo cambió **dónde** se declaran el estado y las acciones. `STORE_VERSION` está congelada en **28** y el shape persistido (`CompassData`, `seedData`, `partialize`, migraciones) no cambió.
 - **Persistencia**: `localStorage` con key `compass-store`, versión de esquema y función `migrate`.
-- **Patrón Repository**: las páginas no mutan el estado directamente; usan acciones como `saveUnidad`, `removePersona`, `saveConfiguracion`, etc.
+- **Patrón Repository**: las páginas no mutan el estado directamente; usan acciones como `saveUnidad`, `removePersona`, o la API REST server-side (`PUT /api/configuracion`), etc.
 - **Seed Inicial**: la primera carga siembra datos desde `apps/web/data/`.
 
 ## 🛠️ Entidades Cubiertas
