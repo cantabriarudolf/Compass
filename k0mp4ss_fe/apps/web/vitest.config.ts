@@ -69,7 +69,12 @@ export default defineConfig({
         // carpetas más bajas de la medición cubiertas — `qa-roadmap`
         // (62.5 → 91.67 st), `emisiones-gc` (66.89 → 94.26) y `vinculos`
         // (69.2 → 94.93) → piso = medido − 1 pt. Nunca se baja.
-        "app/api/**": { statements: 84, branches: 70, functions: 87, lines: 84 },
+        // Re-baseline 2026-10-16 (SERIE-DEUDA-1 P4, change `api-cobertura-fase4`):
+        // medido 85.75/71.50/88.48/85.75 → 88.39/75.83/89.22/88.39 con las 3
+        // carpetas más bajas de la medición cubiertas — `fondos-fi`
+        // (71.16 → 89.66 st), `personas` (72.82 → 93.45) y `cobros-fi`
+        // (74.43 → 91.48) → piso = medido − 1 pt. Nunca se baja.
+        "app/api/**": { statements: 87, branches: 74, functions: 88, lines: 87 },
       },
     },
   },

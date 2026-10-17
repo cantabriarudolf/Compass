@@ -275,6 +275,7 @@ describe("/api/cobros-fi — cobros FI con BD real", () => {
           }),
     })
     const handler = (ruta as unknown as Record<string, (req: NextRequest, ctx: { params: Promise<{ id: string }> }) => Promise<Response>>)[metodo]
+    if (!handler) throw new Error(`método no soportado: ${metodo}`)
     return handler(req, { params: Promise.resolve({ id }) })
   }
 
