@@ -112,18 +112,21 @@ test.describe("CRUD — Inventario/Proyectos", () => {
     await expect(btnGuardar).toBeVisible({ timeout: 10_000 })
     await btnGuardar.scrollIntoViewIfNeeded().catch(() => {})
     await btnGuardar.click({ force: true, noWaitAfter: true })
-    await page.waitForTimeout(600)
-    if (await dialog.isVisible().catch(() => false)) {
-      await btnGuardar.click({ force: true, noWaitAfter: true }).catch(() => {})
-      await page.waitForTimeout(600)
-    }
+    // El guardado puede tardar en cerrar el diálogo; reintentar a ciegas creaba DOS trabajos
+    // con el mismo título (el row de abajo queda ambiguo por strict mode).
+    await dialog
+      .waitFor({ state: "hidden", timeout: 8_000 })
+      .catch(async () => {
+        await btnGuardar.click({ force: true, noWaitAfter: true }).catch(() => {})
+        await page.waitForTimeout(600)
+      })
     await expect(dialog).toBeHidden({ timeout: 10_000 })
 
     // Afirmar fila con el título
     await expect(page.getByText(titulo).first()).toBeVisible({ timeout: 15_000 })
 
     // Click "Iniciar" en la fila (el primer trabajo es el recién creado reverse order)
-    const row = page.getByRole("row").filter({ hasText: titulo })
+    const row = page.getByRole("row").filter({ hasText: titulo }).first()
     await expect(row).toBeVisible({ timeout: 10_000 })
     const btnIniciar = row.getByRole("button", { name: "Iniciar" })
     if (await btnIniciar.isVisible().catch(() => false)) {
