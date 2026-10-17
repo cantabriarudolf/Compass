@@ -12,7 +12,7 @@
 | P1 | `e2e-fresh` — script `npm run e2e:fresh` + timeout de `poblado-idempotente` a 120 s | HECHA (lane dirigida 24/24 con paridad CI; ver Bitácora) | `adf932e` |
 | P2 | `fix-put-merge-scope` — el 404 de MT **no se reproduce** (guard correcto): red de seguridad + deuda e2e reasignada a P7 | BLOQUEADO (gate e2e: timeout del spec, fuera de alcance — ver Bitácora) | `fa9196d` |
 | P3 | `api-cobertura-fase3` — 3 carpetas API más bajas (fase 3) + ratchet `app/api/**` | HECHA (`qa-roadmap` 62.5 → 91.67, `emisiones-gc` 66.89 → 94.26, `vinculos` 69.2 → 94.93; `app/api/**` 83.69 → 85.75 con piso 84/70/87/84) | `03a7cdd` |
-| P4 | `api-cobertura-fase4` — siguientes 3 carpetas API (fase 4) + ratchet `app/api/**` | EN CURSO | — |
+| P4 | `api-cobertura-fase4` — siguientes 3 carpetas API (fase 4) + ratchet `app/api/**` | HECHA (`fondos-fi` 71.16 → 89.66, `personas` 72.82 → 93.45, `cobros-fi` 74.43 → 91.48; `app/api/**` 85.75 → 88.39 con piso **87/74/88/87**) | `8c5a1e4` |
 | P5 | `store-cobertura-fase-c` — 168 statements legacy de `lib/store.ts` + bordes + ratchet `lib/**` y global | pendiente | — |
 | P6 | `higiene-prosa-store-cleanup` — prosa de specs/manuales que nombra acciones podadas + `CF_UPDATE_PARAM` | pendiente | — |
 | P7 | Cierre de la serie: auditoría integral, e2e final, PR draft y deuda post-serie | pendiente | — |
@@ -195,3 +195,21 @@ cierre (solo aprueba permisos si el harness los pide). El chat orquestador:
   `cc4f49b` (emisiones-gc) · `a955e0f` (vinculos) · `03a7cdd` (ratchet) · cierre documental en el
   mismo push. *Nota*: e2e no aplica (tests + thresholds, sin cambio de comportamiento); la rama
   queda **sin pushear** (el push lo hace el orquestador).
+
+- [2026-10-16] **P4 HECHA** (`api-cobertura-fase4`): fase 4 de la superficie API. Medición real de
+  arranque (1131/1131): `app/api/**` **85.75/71.50/88.48/85.75** con 1.101 statements sin cubrir;
+  ranking de carpetas más bajas `fondos-fi` 71.16 · `personas` 72.82 · `cobros-fi` 74.43 · `backup`
+  75 · `controles-propiedad` 75.4. Se cubrieron las 3 más bajas con **50 tests nuevos** en 3
+  archivos contra la interfaz pública de los handlers (Prisma real, sin mocks de Prisma, único mock
+  `next/headers`, sin editar handlers): `fondos-fi` **71.16 → 89.66** · `personas` **72.82 → 93.45**
+  · `cobros-fi` **74.43 → 91.48**. `app/api/**` queda **88.39/75.82/89.22/88.39** (297 statements
+  sin cubrir menos: 1.101 → **897** de 7.726) y el piso se re-baselinea a **87/74/88/87** (medido −
+  1 pt, sube desde 84/70/87/84, ninguna métrica baja). Change con delta `MODIFIED` del requirement
+  "Gate de cobertura por área" que cubre **los 5 escenarios vivos** de `DEV-qa-lab`.
+  **Gates**: `tsc` 0 · `lint` 0 errores · `npm test` **1181/1181** (114 archivos = 1131 + 50
+  nuevos) **con los pisos nuevos aplicados** · `openspec validate --all` 40/0 ·
+  `check-delta-coverage` 0 que romperían el archive. e2e no aplica. Commits `2dec53b` (propuesta) +
+  `3c5f006` (fondos-fi) + `ddba331` (personas) + `92ae766` (cobros-fi) + `8c5a1e4` (ratchet).
+  *Nota de ejecución*: el ejecutor delegado murió a los **90 turnos / 107 tool calls** después de
+  commitear el alcance pero antes del cierre documental y del gate final; el orquestador auditó,
+  corrió la suite completa con los pisos nuevos (exit 0) y completó el cierre.
