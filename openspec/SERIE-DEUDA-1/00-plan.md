@@ -12,7 +12,7 @@
 | P1 | `e2e-fresh` — script `npm run e2e:fresh` + timeout de `poblado-idempotente` a 120 s | HECHA (lane dirigida 24/24 con paridad CI; ver Bitácora) | `adf932e` |
 | P2 | `fix-put-merge-scope` — el 404 de MT **no se reproduce** (guard correcto): red de seguridad + deuda e2e reasignada a P7 | BLOQUEADO (gate e2e: timeout del spec, fuera de alcance — ver Bitácora) | `fa9196d` |
 | P3 | `api-cobertura-fase3` — 3 carpetas API más bajas (fase 3) + ratchet `app/api/**` | HECHA (`qa-roadmap` 62.5 → 91.67, `emisiones-gc` 66.89 → 94.26, `vinculos` 69.2 → 94.93; `app/api/**` 83.69 → 85.75 con piso 84/70/87/84) | `03a7cdd` |
-| P4 | `api-cobertura-fase4` — siguientes 3 carpetas API (fase 4) + ratchet `app/api/**` | pendiente | — |
+| P4 | `api-cobertura-fase4` — siguientes 3 carpetas API (fase 4) + ratchet `app/api/**` | EN CURSO | — |
 | P5 | `store-cobertura-fase-c` — 168 statements legacy de `lib/store.ts` + bordes + ratchet `lib/**` y global | pendiente | — |
 | P6 | `higiene-prosa-store-cleanup` — prosa de specs/manuales que nombra acciones podadas + `CF_UPDATE_PARAM` | pendiente | — |
 | P7 | Cierre de la serie: auditoría integral, e2e final, PR draft y deuda post-serie | pendiente | — |
