@@ -14,7 +14,7 @@
 | P3 | `api-cobertura-fase3` — 3 carpetas API más bajas (fase 3) + ratchet `app/api/**` | HECHA (`qa-roadmap` 62.5 → 91.67, `emisiones-gc` 66.89 → 94.26, `vinculos` 69.2 → 94.93; `app/api/**` 83.69 → 85.75 con piso 84/70/87/84) | `03a7cdd` |
 | P4 | `api-cobertura-fase4` — siguientes 3 carpetas API (fase 4) + ratchet `app/api/**` | HECHA (`fondos-fi` 71.16 → 89.66, `personas` 72.82 → 93.45, `cobros-fi` 74.43 → 91.48; `app/api/**` 85.75 → 88.39 con piso **87/74/88/87**) | `8c5a1e4` |
 | P5 | `store-cobertura-fase-c` — fase C del store legacy: bordes + acciones más descubiertas + ratchet `lib/**`/global | **PARCIAL** (57 de 168 statements de `lib/store.ts` + los 10 bordes; `helpers.ts` y slices al 100 % de statements; pisos global **92/83/92/92** y `lib/**` **97/91/98/97**; remanente de 111 declarado para P7) | `85ed548` |
-| P6 | `higiene-prosa-store-cleanup` — prosa de specs/manuales que nombra acciones podadas + `CF_UPDATE_PARAM` | pendiente | — |
+| P6 | `higiene-prosa-store-cleanup` — prosa de specs/manuales que nombra acciones podadas + `CF_UPDATE_PARAM` | HECHA (13 specs / 21 requirements reescritos · 4 manuales · `CF_UPDATE_PARAM` como deuda declarada; ver Bitácora) | `dbd9d1b` |
 | P7 | Cierre de la serie: auditoría integral, e2e final (**con el fix del timeout de `e2e/crud/proyectos.spec.ts`**), **verificación** del PR #3 ya abierto y deuda post-serie (**111 statements** de P5) | pendiente | — |
 
 **MÁXIMO: 7 ventanas.** Prohibido abrir ventanas fuera del cap: lo que no entre se declara como
@@ -292,3 +292,25 @@ cierre (solo aprueba permisos si el harness los pide). El chat orquestador:
   ejecutada; solo puede seguir activo `higiene-prosa-store-cleanup` (P6). **Nota de CI**: hubo un run
   rojo intermedio (`39058811790`, 3m44s) sobre un commit anterior, superado por los verdes
   posteriores del mismo rango.
+
+- [2026-10-17] **P6 HECHA** (`higiene-prosa-store-cleanup`): higiene de prosa, cero código. El
+  diagnóstico real (censo `rg` de las 28 acciones podadas) dio **21 requirements en 13 specs vivas**
+  —no 11— y **4 manuales NSGC con 24 acciones** —no 17 en el manual 28—; todos reescritos al estado
+  actual (API REST server-side, conservando las acciones de store vivas) y verificados con
+  **0 apariciones** de acciones podadas en `openspec/specs/**` y `Data/NSGC/docs/manuales/**`. Change
+  con **21 bloques `MODIFIED`**, cada uno con **todos** los escenarios vivos y sus nombres exactos:
+  `check-delta-coverage` → **21 ok · 0 que romperían el archive**. **`CF_UPDATE_PARAM`: deuda
+  declarada, no cableada** — la ruta `app/api/configuracion/route.ts` (PUT) no emite el evento y el
+  proyecto no tiene emisor AM server-side (los eventos nacen en el store cliente y se sincronizan por
+  `/api/auditoria/sync`); cablearlo sería comportamiento nuevo. Referencias: `app/api/configuracion/route.ts`
+  PUT · `openspec/BACKLOG-100.md:277` · requirement de `ST-capa-datos-persistente`. Deuda nueva
+  detectada (para P7/BACKLOG, no declarada acá por alcance): otros eventos AM de acciones podadas
+  tampoco tienen emisor server-side (`FI_INGRESO_REGISTRADO`, `IR_ASSET_REPAIR`, `CO_DOC_DOWNLOAD`,
+  `GD_PERIODO_REGISTRADO`, `PE_CIERRE_EDITADO`). **Gates**: `openspec validate --all` **40/0** ·
+  `check-delta-coverage` **0 que romperían el archive** · `tsc --noEmit` **0** · `lint` **0 errores**
+  · `npm test` **1208/1208 en 116 archivos** con los pisos vigentes (global 93.7/84.76/93.28/93.7 vs
+  92/83/92/92 · `lib/**` 97/91/98/97 · `app/api/**` 87/74/88/87): **sin cambios de cobertura, sin
+  re-baseline**. Commits: `bc35411` (change + CF/CO/ST) · `463baf3` (CV/PI) · `1d08475` (FI/MT) ·
+  `70b3510` (GD/IN/IR) · `1837362` (PE/PL/RA) · `dbd9d1b` (manuales NSGC) + cierre documental.
+  Avance: `avance - 2026-10-17 18-23.md`. Fila P6 con `dbd9d1b`. **Sin push** (lo maneja el
+  orquestador). Queda solo P7 para cerrar la serie.
