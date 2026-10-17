@@ -158,3 +158,14 @@ internos, y sin cambiar el shape persistido (`STORE_VERSION` congelado).
   comunidad) con Prisma real y sin editar handlers, y el piso de `app/api/**` se
   re-baselinea con la regla del ratchet (medido − 1 pt, nunca baja), dejando la
   fecha de medición y las carpetas cubiertas documentadas en el commit explícito
+
+#### Scenario: Fase 4 de cobertura API sobre las 3 carpetas más bajas medidas
+- **WHEN** se ejecuta la fase 4 del ratchet de cobertura API (`api-cobertura-fase4`)
+  sobre las 3 carpetas de `app/api/**` con menor cobertura de statements de la
+  medición vigente de la ventana (P4: `fondos-fi` 71.16%, `personas` 72.82% y
+  `cobros-fi` 74.43%)
+- **THEN** se agregan tests contra la interfaz pública de los handlers exportados
+  (camino feliz, validación 400, 401 sin sesión, 403 por rol y 404 por scope de
+  comunidad) con Prisma real y sin editar handlers, y el piso de `app/api/**` se
+  re-baselinea con la regla del ratchet (medido − 1 pt, nunca baja), dejando la
+  fecha de medición y las carpetas cubiertas documentadas en el commit explícito
