@@ -13,7 +13,7 @@
 | P2 | `fix-put-merge-scope` — el 404 de MT **no se reproduce** (guard correcto): red de seguridad + deuda e2e reasignada a P7 | BLOQUEADO (gate e2e: timeout del spec, fuera de alcance — ver Bitácora) | `fa9196d` |
 | P3 | `api-cobertura-fase3` — 3 carpetas API más bajas (fase 3) + ratchet `app/api/**` | HECHA (`qa-roadmap` 62.5 → 91.67, `emisiones-gc` 66.89 → 94.26, `vinculos` 69.2 → 94.93; `app/api/**` 83.69 → 85.75 con piso 84/70/87/84) | `03a7cdd` |
 | P4 | `api-cobertura-fase4` — siguientes 3 carpetas API (fase 4) + ratchet `app/api/**` | HECHA (`fondos-fi` 71.16 → 89.66, `personas` 72.82 → 93.45, `cobros-fi` 74.43 → 91.48; `app/api/**` 85.75 → 88.39 con piso **87/74/88/87**) | `8c5a1e4` |
-| P5 | `store-cobertura-fase-c` — 168 statements legacy de `lib/store.ts` + bordes + ratchet `lib/**` y global | pendiente | — |
+| P5 | `store-cobertura-fase-c` — fase C del store legacy: bordes + acciones más descubiertas + ratchet `lib/**`/global | **PARCIAL** (57 de 168 statements de `lib/store.ts` + los 10 bordes; `helpers.ts` y slices al 100 % de statements; pisos global **92/83/92/92** y `lib/**` **97/91/98/97**; remanente de 111 declarado para P7) | `85ed548` |
 | P6 | `higiene-prosa-store-cleanup` — prosa de specs/manuales que nombra acciones podadas + `CF_UPDATE_PARAM` | pendiente | — |
 | P7 | Cierre de la serie: auditoría integral, e2e final, PR draft y deuda post-serie | pendiente | — |
 
@@ -213,3 +213,28 @@ cierre (solo aprueba permisos si el harness los pide). El chat orquestador:
   *Nota de ejecución*: el ejecutor delegado murió a los **90 turnos / 107 tool calls** después de
   commitear el alcance pero antes del cierre documental y del gate final; el orquestador auditó,
   corrió la suite completa con los pisos nuevos (exit 0) y completó el cierre.
+
+- [2026-10-17] **P5 PARCIAL** (`store-cobertura-fase-c`): fase C del store legacy. Se cubrieron
+  **57 de los 168** statements de `lib/store.ts` y los **10** bordes de `lib/store/helpers.ts` y de
+  los slices (líneas 40, 98, 101-103 · `ad-slice` 332/357 · `ge-slice` 162/234/318), con **27 tests
+  comportamentales** contra `useCompassStore` y el `StoreResult` observable: `saveUnidad` (3 FKs de
+  RG escritura), `aplicarInfraccionIN` (inexistente · ya resuelta · tipo podado · daño directo ·
+  sanción **% GC contra el último gasto común** con cobro material en el libro FI · cargo
+  `"pendiente"` sin fondo activo), `generarReporteRE` (bloques bitácora de seguridad, morosidad y
+  consumo de insumos con su `payloadSnapshot`), `removeMaestro` (integridad referencial de las 5
+  colecciones) y `retenerGarantiaRA` (5 rechazos + retención con cargo `garantia_ra` al fondo de
+  amenities). **Cobertura antes → después**: `lib/store.ts` 96.05 → **97.39** · `helpers.ts` 96.03 →
+  **100/87.14** · slices 99.78 → **100/95.56** · `lib/**` 97.63 → **98.39/92.19/99.43/98.39** ·
+  global 91.09 → **93.70/84.77/93.28/93.70**. **Ratchet** (medido − 1 pt, ningún piso baja):
+  global 90/80/90/90 → **92/83/92/92** · `lib/**` 96/90/98/96 → **97/91/98/97** · `app/api/**` sin
+  cambios. Change con delta `MODIFIED` del requirement "Gate de cobertura por área" que cubre los
+  **6 escenarios vivos** de `DEV-qa-lab`. **Gates**: `tsc` 0 (detectó y se corrigieron 8 accesos a
+  índice opcional en el test nuevo) · `lint` 0 errores · `npm test` verde **con los pisos nuevos
+  aplicados** · `openspec validate --all` 40/0 · `check-delta-coverage` 0 que romperían el archive.
+  Commit `85ed548`. **Remanente declarado para P7**: 111 statements de `lib/store.ts`
+  (`generarCertificadoCT` 15, `distribuirReporteRE` 13, `respaldarInfraccionIN` 8,
+  `desestimarInfraccionIN` 8, `saveElementoRA` 7, `saveAdelantoPL` 6, ramas de arranque de `migrate`
+  4940-4941/5127 y ramas sueltas de 12 acciones más), con su línea y causa en el avance NSGC.
+  *Nota de ejecución*: los **tres** intentos del ejecutor delegado murieron por infraestructura
+  (51 y 12 turnos, sin archivos; el subsistema llegó a fallar con un brief de 10 statements), así
+  que la ventana se completó **inline** — el rescate previsto por el plan.
