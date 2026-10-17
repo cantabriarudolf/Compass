@@ -41,9 +41,10 @@ y aborta `auth.setup`).
    tu alcance. Si la API de GitHub no responde, reintentá una vez; si sigue caída, dejá constancia
    en la Bitácora y seguí.
 4. **Archives pendientes (obligatorio)**: `e2e-fresh`, `fix-put-merge-scope`,
-   `api-cobertura-fase3`, `api-cobertura-fase4`, `store-cobertura-fase-c` y
-   `higiene-prosa-store-cleanup` deben quedar archivados con CI verde observada. Por cada uno que
-   siga activo y completo: `check-delta-coverage` → `openspec archive <change> --yes` →
+   `api-cobertura-fase3`, `api-cobertura-fase4` y `store-cobertura-fase-c` **ya quedaron
+   archivados por el orquestador con CI verde observado** (ver la Bitácora del plan). Solo puede
+   seguir activo `higiene-prosa-store-cleanup` (P6). Por cada uno que siga activo y completo:
+   `check-delta-coverage` → `openspec archive <change> --yes` →
    `openspec validate --all` → commit `docs(openspec): archiva <change> (CI verde <run>)` + push.
    **Nunca archives sin CI verde observada**; si un change quedó incompleto, no lo archives:
    declaralo como deuda post-serie con su estado exacto.
@@ -57,7 +58,10 @@ y aborta `auth.setup`).
 **Tareas**:
 
 1. **Terminar lo pendiente** de P1–P6 si alguna ventana dejó fase abierta (mismo estándar y sin
-   comprimir).
+   comprimir). **Excepción explícita y decidida por el owner**: los **111 statements** que P5 dejó
+   sin cubrir en `lib/store.ts` **NO se pagan en esta ventana**. Se declaran como deuda post-serie
+   citando `Data/NSGC/docs/avances/avance - 2026-10-17 16-05.md` § "Remanente declarado" (tabla de
+   acciones y líneas). No abras una octava ventana ni comprimas este alcance.
 2. **Gates completos de la serie**:
    - `cd k0mp4ss_fe/apps/web && npx tsc --noEmit` (0) y `npm run lint` (0).
    - `npm test` con los pisos finales: anotá tests X/Y y la cobertura final por área
@@ -67,6 +71,13 @@ y aborta `auth.setup`).
      serie (`poblado-idempotente`, `proyectos` y los que las ventanas hayan tocado) sobre base
      descartable fresca. Si algo falla: arreglalo antes de cerrar (es la única causa admitida para
      no cerrar).
+   - **Deuda heredada de P2 — arreglar en esta ventana**: `e2e/crud/proyectos.spec.ts` necesita
+     `test.use({ timeout: 120_000 })`. Con `CI=1` el presupuesto del test es de **30 s** para ~40
+     interacciones de UI, así que muere rellenando el formulario, **antes** del paso "Iniciar". Es
+     el mismo tipo de arreglo que P1 hizo en `poblado-idempotente` (y es la causa real del rojo que
+     P2 reportó como "404 de MT": ese 404 no existe, ver la Bitácora de P2). Estás autorizado a
+     tocar ese spec: después corré `npm run e2e:fresh -- --no-build -- e2e/crud/proyectos.spec.ts`
+     y registrá el X/X.
 3. **Auditoría integral desde el repo** (la verdad es el repo, no la Bitácora):
    - `git log --oneline -40` vs las filas de `00-plan.md` (hashes reales) y corregí el plan si algo
      discrepa; `git status -sb` sin "ahead".
@@ -74,7 +85,10 @@ y aborta `auth.setup`).
      sí pueden quedar).
    - Confirmá los invariantes: `STORE_VERSION = 28`, `lib/store/slices/` con 7 slices,
      `prisma/dev.db` y `Data/NSGC/backups/` intactos.
-4. **PR**: creá (o actualizá) el PR **draft** `serie/deuda-1` → `main` con un resumen honesto: qué
+4. **PR**: el PR **draft #3** `serie/deuda-1` → `main` **ya está abierto** (lo abrió el orquestador
+   en P2, porque `ci.yml` solo dispara en `push` a `main` y en `pull_request`: sin PR, los pushes
+   de la serie no generaban CI y la regla dura 5 quedaba insatisfacible). **No lo crees**: verificá
+   con `gh pr view 3` y **actualizá su descripción** con un resumen honesto: qué
    cambió (tooling e2e, fix del 404 MT, cobertura API y del store, prosa), números (tests,
    cobertura por área, pisos), qué quedó fuera y la nota de que **el merge es decisión del owner**.
    No mergees, no pushees a `main`.

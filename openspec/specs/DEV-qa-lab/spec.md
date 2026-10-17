@@ -169,3 +169,17 @@ internos, y sin cambiar el shape persistido (`STORE_VERSION` congelado).
   comunidad) con Prisma real y sin editar handlers, y el piso de `app/api/**` se
   re-baselinea con la regla del ratchet (medido − 1 pt, nunca baja), dejando la
   fecha de medición y las carpetas cubiertas documentadas en el commit explícito
+
+#### Scenario: Fase C de cobertura del store legacy sobre las acciones más descubiertas
+- **WHEN** se ejecuta la fase C del ratchet de cobertura del store
+  (`store-cobertura-fase-c`) sobre las acciones legacy de `lib/store.ts` con más
+  statements sin cubrir de la medición vigente, más los bordes de
+  `lib/store/helpers.ts` y de `lib/store/slices/**`
+- **THEN** se agregan tests comportamentales contra `useCompassStore` que afirman
+  el `StoreResult` y el efecto observable de cada rama (rechazos de validación,
+  mutación del estado y cargos materiales en el libro FI), sin editar el código
+  del store ni cambiar el shape persistido (`STORE_VERSION = 28`), los pisos de
+  `lib/**` y global se re-baselinean con la regla del ratchet (medido − 1 pt,
+  nunca bajan) con la fecha de medición documentada, y el remanente que no puede
+  alcanzarse por la API pública queda declarado con su línea y su causa en el
+  avance NSGC de la ventana

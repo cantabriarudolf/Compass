@@ -15,7 +15,7 @@
 | P4 | `api-cobertura-fase4` — siguientes 3 carpetas API (fase 4) + ratchet `app/api/**` | HECHA (`fondos-fi` 71.16 → 89.66, `personas` 72.82 → 93.45, `cobros-fi` 74.43 → 91.48; `app/api/**` 85.75 → 88.39 con piso **87/74/88/87**) | `8c5a1e4` |
 | P5 | `store-cobertura-fase-c` — fase C del store legacy: bordes + acciones más descubiertas + ratchet `lib/**`/global | **PARCIAL** (57 de 168 statements de `lib/store.ts` + los 10 bordes; `helpers.ts` y slices al 100 % de statements; pisos global **92/83/92/92** y `lib/**` **97/91/98/97**; remanente de 111 declarado para P7) | `85ed548` |
 | P6 | `higiene-prosa-store-cleanup` — prosa de specs/manuales que nombra acciones podadas + `CF_UPDATE_PARAM` | pendiente | — |
-| P7 | Cierre de la serie: auditoría integral, e2e final, PR draft y deuda post-serie | pendiente | — |
+| P7 | Cierre de la serie: auditoría integral, e2e final (**con el fix del timeout de `e2e/crud/proyectos.spec.ts`**), **verificación** del PR #3 ya abierto y deuda post-serie (**111 statements** de P5) | pendiente | — |
 
 **MÁXIMO: 7 ventanas.** Prohibido abrir ventanas fuera del cap: lo que no entre se declara como
 deuda post-serie en el cierre (P7), no se improvisa.
@@ -273,3 +273,22 @@ cierre (solo aprueba permisos si el harness los pide). El chat orquestador:
     existe) · P3 HECHA · P4 HECHA · **P5 PARCIAL** (57/168 + bordes) · P6 diagnóstico listo · P7
     pendiente. Deuda viva para P7: timeout de test en `e2e/crud/proyectos.spec.ts` (desde P2) y los
     111 statements de `lib/store.ts` (desde P5). PR draft #3 abierto, disparando CI por push.
+
+- [2026-10-17] **Alcance de P7 replanteado con el owner** (decisión explícita) y **cierre de
+  archives**. La serie se materializó el 16-Oct con tres supuestos que la ejecución desmintió, así
+  que `prompt-07.md` se parcheó para que el cierre los absorba en vez de descubrirlos tarde:
+  1. **Timeout de `e2e/crud/proyectos.spec.ts`** → ahora es tarea explícita de P7
+     (`test.use({ timeout: 120_000 })`, mismo arreglo que P1 hizo en `poblado-idempotente`), con la
+     lane `proyectos` verde registrada. El plan suponía que ese rojo era un bug de scope de MT; no
+     lo era.
+  2. **Los 111 statements de `lib/store.ts`** que P5 dejó sin cubrir → **no se pagan**: quedan
+     declarados como deuda post-serie citando el avance de P5 (decisión del owner: no abrir una
+     octava ventana).
+  3. **PR draft #3** → P7 lo **verifica y actualiza su descripción**, no lo crea: ya se abrió en P2
+     porque `ci.yml` solo dispara en `push` a `main` y en `pull_request`.
+  **Archives**: `store-cobertura-fase-c` archivado como `2026-10-17-store-cobertura-fase-c` con CI
+  verde observado (run `39067837617`, `success`, sobre `1886871` = HEAD), y su delta sincronizó la
+  spec viva `DEV-qa-lab` (`validate --all` 39/0). Quedan archivados los 5 changes de la serie
+  ejecutada; solo puede seguir activo `higiene-prosa-store-cleanup` (P6). **Nota de CI**: hubo un run
+  rojo intermedio (`39058811790`, 3m44s) sobre un commit anterior, superado por los verdes
+  posteriores del mismo rango.
