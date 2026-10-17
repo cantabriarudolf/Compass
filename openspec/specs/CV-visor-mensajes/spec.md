@@ -6,7 +6,7 @@ Carrusel público proyectable con rotación automática para pantallas de áreas
 ## Requirements
 
 ### Requirement: Gestor de Avisos con Ciclo de Vida
-El sistema MUST gestionar avisos mediante `saveAvisoCV`/`removeAvisoCV`/`publicarAvisoCV`/`archivarAvisoCV` retornando `StoreResult`, con clasificación tipológica (Información/Azul, Éxito/Verde, Advertencia/Naranja, Peligro/Rojo), duración individual en segundos (≥3), caducidad automática opcional (`expiresAt`), tags de organización interna y ciclo estricto: el alta nace Borrador (`CV_DRAFT_CREATED`) editable y eliminable; Publicado no admite eliminación directa y solo pasa a Archivado por expiración o finalización anticipada (`CV_ARCHIVED`); Archivado conserva la data para auditoría y ya no es editable.
+El sistema MUST gestionar avisos mediante `saveAvisoCV`/`publicarAvisoCV` (store) y la API REST `/api/cv/avisos` (GET paginado, POST upsert idempotente; detalle/PUT/DELETE en `/[id]`), retornando `StoreResult` cuando aplica, con clasificación tipológica (Información/Azul, Éxito/Verde, Advertencia/Naranja, Peligro/Rojo), duración individual en segundos (≥3), caducidad automática opcional (`expiresAt`), tags de organización interna y ciclo estricto: el alta nace Borrador (`CV_DRAFT_CREATED`) editable y eliminable; Publicado no admite eliminación directa y solo pasa a Archivado por expiración o finalización anticipada (`CV_ARCHIVED`); Archivado conserva la data para auditoría y ya no es editable.
 
 #### Scenario: Alta como borrador y publicación
 - **WHEN** la administración crea un aviso y luego lo publica
@@ -14,7 +14,7 @@ El sistema MUST gestionar avisos mediante `saveAvisoCV`/`removeAvisoCV`/`publica
 
 #### Scenario: Publicado no eliminable
 - **WHEN** se intenta eliminar un aviso publicado o archivado
-- **THEN** retorna `{ok:false}`; la única salida del carrusel es archivar
+- **THEN** la eliminación se rechaza (la API responde error al DELETE y el store retorna `{ok:false}`); la única salida del carrusel es archivar
 
 #### Scenario: Edición auditada
 - **WHEN** se edita un aviso borrador o publicado
@@ -43,7 +43,7 @@ El sistema MUST respetar la duración individual de cada aviso en la rotación y
 - **THEN** pasa a Archivado una sola vez con descripción de expiración
 
 ### Requirement: Plantillas Rápidas Operativas
-El sistema MUST mantener plantillas maestras creadas únicamente por administración (`savePlantillaCV`/`removePlantillaCV`) con tipología, duración sugerida y multimedia opcionales; el personal de servicio MUST poder activarlas mediante `activarPlantillaCV` generando un aviso publicado al instante (aprobación implícita del maestro) con origen trazable a la plantilla.
+El sistema MUST mantener plantillas maestras creadas únicamente por administración mediante la API REST `/api/cv/plantillas` (GET paginado, POST upsert idempotente; detalle/PUT/DELETE en `/[id]`) con tipología, duración sugerida y multimedia opcionales; el personal de servicio MUST poder activarlas mediante `activarPlantillaCV` generando un aviso publicado al instante (aprobación implícita del maestro) con origen trazable a la plantilla.
 
 #### Scenario: Activación ante emergencia
 - **WHEN** conserjería activa la plantilla "Portón en mantención" (Advertencia)
