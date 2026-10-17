@@ -238,3 +238,38 @@ cierre (solo aprueba permisos si el harness los pide). El chat orquestador:
   *Nota de ejecución*: los **tres** intentos del ejecutor delegado murieron por infraestructura
   (51 y 12 turnos, sin archivos; el subsistema llegó a fallar con un brief de 10 statements), así
   que la ventana se completó **inline** — el rescate previsto por el plan.
+
+- [2026-10-17] **P6 NO INICIADA — diagnóstico listo** (`higiene-prosa-store-cleanup`). El orquestador
+  cerró la sesión por contexto agotado (5 ventanas ejecutadas, 3 rescates de ejecutores caídos, 2
+  cortes de red y 1 reinicio de máquina) **antes** de abrir la ventana, para no dejar 11 deltas de
+  spec a medio escribir. El diagnóstico real ya está hecho y queda acá para que la próxima ventana
+  no lo repita:
+  - **19 menciones obsoletas en 11 specs vivas** (no las 11 del enunciado, y solo `ST-capa-datos`
+    ya está anotada como podada). Lista exacta — spec :: acción podada nombrada:
+    `CF-configuracion-global :: saveConfiguracion` · `CO-comunicacion-vecinos ::
+    registrarDescargaDocCO` · `CV-visor-mensajes :: archivarAvisoCV, removeAvisoCV,
+    removePlantillaCV, savePlantillaCV` · `FI-finanzas-morosidad :: registrarIngresoFI,
+    removeEgresoFI, removeFondoFI` · `GD-gestion-directiva :: savePeriodoDirectiva` ·
+    `IN-infracciones-multas :: comentarInfraccionIN` · `IR-inventario-recursos ::
+    cambiarEstadoRecursoIR` · `MT-mantenimiento-proyectos :: removeProyectoMT` ·
+    `PE-personal-servicios :: editarCierreTurnoPE, removeProveedorPE` · `PI-portal-inmobiliario ::
+    saveLeadPortal, savePublicacionPortal` · `PL-liquidaciones-remuneraciones ::
+    generarLiquidacionPL` · `RA-reservas-amenities :: removeElementoRA`.
+    La forma típica es prosa normativa del tipo "El sistema SHALL ... mediante
+    `registrarIngresoFI(input)` retornando `StoreResult`" — hay que reescribirla al estado actual
+    (ruta REST server-side) sin notas históricas en el cuerpo, y cada delta `MODIFIED` debe llevar
+    **todos** los escenarios existentes con sus nombres exactos (trampa 1 de
+    `CONVENCION-DELTAS.md`).
+  - **4 manuales NSGC** afectados: `28 - MK - Catálogo de Mocks.md` (17 acciones), `33 - ST - Capa
+    de Datos Persistente.md` (`saveConfiguracion`), `36 - MK - Data Dump Comunicación y
+    Solicitudes.md` y `40 - MK - Data Dump Remuneraciones, Certificados y Reportería.md`
+    (`registrarDescargaDocCO`, `generarLiquidacionPL`, `removeLiquidacionPL`, `removeReporteRE`).
+  - **`CF_UPDATE_PARAM`**: el requirement "Auditoría CF_UPDATE_PARAM de parámetros legales" de
+    `ST-capa-datos-persistente` **ya documenta el gap correctamente** (acción podada + la ruta
+    `app/api/configuracion/route.ts` todavía no emite el evento + registro en `BACKLOG-100.md`).
+    Falta decidir si en P6 se cablea la emisión server-side (con su test) o se deja como deuda
+    declarada; el prompt-06 permite ambas, con la referencia exacta.
+  - **Estado de la serie al cerrar esta sesión**: P1 HECHA · P2 BLOQUEADA (el 404 declarado no
+    existe) · P3 HECHA · P4 HECHA · **P5 PARCIAL** (57/168 + bordes) · P6 diagnóstico listo · P7
+    pendiente. Deuda viva para P7: timeout de test en `e2e/crud/proyectos.spec.ts` (desde P2) y los
+    111 statements de `lib/store.ts` (desde P5). PR draft #3 abierto, disparando CI por push.
