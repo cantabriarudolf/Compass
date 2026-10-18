@@ -9,7 +9,7 @@
 | Ventana | Alcance                                                                                                        | Estado    | Commit final                |
 | ------- | -------------------------------------------------------------------------------------------------------------- | --------- | --------------------------- |
 | D1      | `test-db-descartable` — la suite deja de escribir `prisma/dev.db` (base descartable + guarda dura)             | HECHA     | 4e818de · 6eff24f · c20989d |
-| D2      | `am-emisores-1` — emisores server-side de `CF_UPDATE_PARAM`, `FI_INGRESO_REGISTRADO` y `GD_PERIODO_REGISTRADO` | EN CURSO  | —                           |
+| D2      | `am-emisores-1` — emisores server-side de `CF_UPDATE_PARAM`, `FI_INGRESO_REGISTRADO` y `GD_PERIODO_REGISTRADO` | HECHA     | `aca0ba1` · `823c245` · `87dc021` · `11039bf` |
 | D3      | `am-emisores-2` — emisores de `IR_ASSET_REPAIR`, `CO_DOC_DOWNLOAD` y `PE_CIERRE_EDITADO`                       | pendiente | —                           |
 | D4      | `store-cobertura-fase-d` — las 6 acciones más descubiertas de `lib/store.ts` (~57 statements)                  | pendiente | —                           |
 | D5      | `store-cobertura-fase-e` — remanente del store + ratchet final de `lib/**` y global                            | pendiente | —                           |
@@ -113,3 +113,21 @@ verifica el estado parcial y completa lo que falte.
   archivos de la ventana; el orquestador puede cerrarlo cambiando ese valor a la base descartable.
   Commits: `4e818de` (change openspec + fila EN CURSO) · `6eff24f` (base descartable + guarda +
   cableado) · `c20989d` (contrato) · commit documental de cierre (avance + Bitácora). Sin pushear.
+
+- [2026-10-17] **D2 HECHA**: `am-emisores-1` — los tres primeros emisores server-side de auditoría
+  quedaron cableados con el patrón vigente (13 rutas): `CF_UPDATE_PARAM` en `PUT /api/configuracion`
+  (`app/api/configuracion/route.ts:112-140`) **solo por delta real** de los cuatro parámetros legales, con old/new en la
+  descripción y categoría `CF`; `FI_INGRESO_REGISTRADO` en `POST /api/ingresos-fi` (`app/api/ingresos-fi/route.ts:105-125`,
+  categoría `FI`) y `GD_PERIODO_REGISTRADO` en `POST /api/periodos-directiva` (`app/api/periodos-directiva/route.ts:330-352`,
+  categoría `GD`). La emisión va después de la escritura y en `try/catch` propio (la auditoría nunca
+  bloquea la mutación, patrón de `personas`/`mis-datos`). Hallazgo: los specs vivos de
+  `FI-finanzas-morosidad` y `GD-gestion-directiva` **ya exigían** la emisión (el código estaba en
+  mora), así que el delta se limita a `ST-capa-datos-persistente` y `CF-configuracion-global` (los
+  dos únicos que declaraban el gap en prosa). 10 tests nuevos (4 CF · 3 FI · 3 GD) que afirman
+  categoría/`tipoAccion`/referencia y la **no emisión** en los caminos rojos (403/400/404). **Gate**:
+  `tsc` 0 · `lint` 0 errores (6.702 warnings preexistentes) · `npm test` **1230/1230** en 117
+  archivos · cobertura global 93.71/84.77/93.28/93.71 · `lib` 97.77/90.63/99.10/97.77 · pisos sin
+  re-baseline · `openspec validate --all` 41/0 · `check-delta-coverage` 3 ok/0 · `prisma/dev.db`
+  mtime 1792288536 intacta. Commits: `aca0ba1` (change openspec + fila EN CURSO) · `823c245`
+  (`CF_UPDATE_PARAM`) · `87dc021` (`FI_INGRESO_REGISTRADO`) · `11039bf` (`GD_PERIODO_REGISTRADO`) ·
+  commit documental de cierre (avance + Bitácora). Sin pushear.
