@@ -1,12 +1,10 @@
 import "@testing-library/jest-dom/vitest"
+// La base de la suite se resuelve ACÁ antes que nada (y antes de cualquier import de
+// `@/lib/prisma`): base descartable por defecto + guarda dura contra `prisma/dev.db`.
+// Ver openspec/changes/test-db-descartable/ y test/db-descartable.setup.ts.
+import "./db-descartable.setup"
 import { beforeAll, afterAll, afterEach, beforeEach } from "vitest"
 import { setupServer } from "msw/node"
-import path from "node:path"
-
-// B3: asegura DATABASE_URL para tests que tocan prisma (endpoint authz)
-if (!process.env.DATABASE_URL) {
-  process.env.DATABASE_URL = `file:${path.resolve(__dirname, "../prisma/dev.db")}`
-}
 
 // P5 (AU §3): NextAuth() captura AUTH_SECRET al cargar el módulo; se fija un
 // default para tests antes de cualquier import de lib/auth o proxy.
@@ -19,5 +17,6 @@ afterEach(() => server.resetHandlers())
 afterAll(() => server.close())
 
 beforeEach(() => {
-  if (typeof window !== "undefined" && window.localStorage) window.localStorage.clear()
+  if (typeof window !== "undefined" && window.localStorage)
+    window.localStorage.clear()
 })

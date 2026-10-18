@@ -7,18 +7,40 @@ export default defineConfig({
   resolve: {
     alias: [
       { find: "@", replacement: path.resolve(__dirname, ".") },
-      { find: "@workspace/ui", replacement: path.resolve(__dirname, "../../packages/ui/src") },
+      {
+        find: "@workspace/ui",
+        replacement: path.resolve(__dirname, "../../packages/ui/src"),
+      },
       { find: /^next\/server$/, replacement: path.join(nextRoot, "server.js") },
-      { find: /^next\/server\.js$/, replacement: path.join(nextRoot, "server.js") },
-      { find: /^next\/headers$/, replacement: path.join(nextRoot, "headers.js") },
-      { find: /^next\/headers\.js$/, replacement: path.join(nextRoot, "headers.js") },
-      { find: /^next\/navigation$/, replacement: path.join(nextRoot, "dist/client/components/navigation.js") },
+      {
+        find: /^next\/server\.js$/,
+        replacement: path.join(nextRoot, "server.js"),
+      },
+      {
+        find: /^next\/headers$/,
+        replacement: path.join(nextRoot, "headers.js"),
+      },
+      {
+        find: /^next\/headers\.js$/,
+        replacement: path.join(nextRoot, "headers.js"),
+      },
+      {
+        find: /^next\/navigation$/,
+        replacement: path.join(
+          nextRoot,
+          "dist/client/components/navigation.js"
+        ),
+      },
     ],
   },
   test: {
     environment: "jsdom",
     globals: false,
-    setupFiles: ["./test/setup.ts"],
+    // La base de la suite (change `test-db-descartable`): el setup resuelve la base
+    // descartable (`prisma/perf-test.db`) y aborta si el destino fuera `prisma/dev.db`;
+    // el globalSetup la recrea y la migra de cero antes del primer archivo de test.
+    setupFiles: ["./test/db-descartable.setup.ts", "./test/setup.ts"],
+    globalSetup: ["./test/db-descartable-global.setup.ts"],
     include: ["lib/**/*.test.{ts,tsx}", "test/**/*.test.{ts,tsx}"],
     server: {
       deps: {
@@ -80,7 +102,12 @@ export default defineConfig({
         // carpetas más bajas de la medición cubiertas — `fondos-fi`
         // (71.16 → 89.66 st), `personas` (72.82 → 93.45) y `cobros-fi`
         // (74.43 → 91.48) → piso = medido − 1 pt. Nunca se baja.
-        "app/api/**": { statements: 87, branches: 74, functions: 88, lines: 87 },
+        "app/api/**": {
+          statements: 87,
+          branches: 74,
+          functions: 88,
+          lines: 87,
+        },
       },
     },
   },
