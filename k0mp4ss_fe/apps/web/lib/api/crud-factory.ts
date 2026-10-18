@@ -104,7 +104,11 @@ function mapearError(e: unknown): Response {
 
 /** El cliente nunca decide comunidad ni id en el payload de update. */
 function limpiarPayload(data: Record<string, unknown>): Record<string, unknown> {
-  const { id: _id, comunidadId: _comunidadId, ...resto } = data
+  // Copia sin `id` ni `comunidadId`: mismo resultado que el rest-destructuring
+  // previo, sin declarar bindings que nadie usa (payloads vienen de JSON.parse).
+  const resto = { ...data }
+  delete resto.id
+  delete resto.comunidadId
   return resto
 }
 

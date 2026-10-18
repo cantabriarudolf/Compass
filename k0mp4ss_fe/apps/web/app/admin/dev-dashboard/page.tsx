@@ -66,7 +66,6 @@ import type {
 } from "@/lib/dev-dashboard"
 import {
   useCompassStore,
-  useStoreRehydrated,
   STORE_VERSION,
   seedData,
 } from "@/lib/store"
