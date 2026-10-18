@@ -11,7 +11,7 @@
 | D1      | `test-db-descartable` — la suite deja de escribir `prisma/dev.db` (base descartable + guarda dura)             | HECHA     | 4e818de · 6eff24f · c20989d |
 | D2      | `am-emisores-1` — emisores server-side de `CF_UPDATE_PARAM`, `FI_INGRESO_REGISTRADO` y `GD_PERIODO_REGISTRADO` | HECHA     | `aca0ba1` · `823c245` · `87dc021` · `11039bf` |
 | D3      | `am-emisores-2` — emisores de `IR_ASSET_REPAIR`, `CO_DOC_DOWNLOAD` y `PE_CIERRE_EDITADO`                       | HECHA     | `edf18c9` · `1ca7963` · `40a7cfb` · `736f59e` |
-| D4      | `store-cobertura-fase-d` — las 6 acciones más descubiertas de `lib/store.ts` (~57 statements)                  | EN CURSO  | —                           |
+| D4      | `store-cobertura-fase-d` — las 6 acciones más descubiertas de `lib/store.ts` (~57 statements)                  | HECHA     | `c45d034` · `d79ccae` · `ee9c19d` · `6afd3b9` |
 | D5      | `store-cobertura-fase-e` — remanente del store + ratchet final de `lib/**` y global                            | pendiente | —                           |
 | D6      | `lint-higiene` — bajar los ~6.700 warnings de ESLint (zona generada, producto y tests)                         | pendiente | —                           |
 | D7      | Cierre de la serie: auditoría integral, e2e final, PR y deuda post-serie                                       | pendiente | —                           |
@@ -154,3 +154,25 @@ verifica el estado parcial y completa lo que falte.
   `prisma/dev.db` mtime 1792288536 intacta. Commits: `edf18c9` (change openspec + fila EN CURSO) ·
   `1ca7963` (`IR_ASSET_REPAIR`) · `40a7cfb` (`CO_DOC_DOWNLOAD`) · `736f59e` (`PE_CIERRE_EDITADO`) ·
   commit documental de cierre (avance + Bitácora). Sin pushear.
+
+- [2026-10-18] **D4 HECHA**: `store-cobertura-fase-d` — la mitad grande de la deuda de cobertura del
+  store quedó pagada: las **6 acciones con más statements sin cubrir** de `lib/store.ts`
+  (`generarCertificadoCT`, `distribuirReporteRE`, `respaldarInfraccionIN`, `desestimarInfraccionIN`,
+  `saveElementoRA`, `saveAdelantoPL`) pasaron de **56 → 1** statements sin cubrir (medido dentro de
+  los rangos de cada acción; el prompt declaraba 57 y el mapeo grueso sumaba la línea 971, de otro
+  helper `CF`, y 13 a RE cuando en su rango eran 12). La única línea que queda (`lib/store.ts:4321`)
+  es **inalcanzable por la API pública** y quedó declarada con su causa: `: []` del `flatMap` de
+  `directivaRef.firmantes`, cuyo filtro previo (`esMiembroDirectivaVigente`) ya exige
+  `datosGobernanza`. 30 tests comportamentales nuevos en 3 archivos por par de acciones (11 CT+RE ·
+  9 IN · 10 RA+PL), todos contra `useCompassStore` afirmando `StoreResult`, estado resultante,
+  validaciones, folios correlativos y eventos. `lib/store.ts` 111 → **56** statements sin cubrir
+  (97.39 → **98.68** %); `lib` 97.77/90.57 → **98.64/91.77**; global 93.67/84.57 → **94/85.03**; sin
+  tocar `vitest.config.ts` ni el shape persistido (`STORE_VERSION = 28` intacto). **Gate**: `tsc` 0 ·
+  `lint` 0 errores (6.702 warnings preexistentes) · `npm test` **1276/1276** en 123 archivos (1246 +
+  30) con los pisos vigentes sin fallo ni re-baseline · `openspec validate --all` 42/0 ·
+  `check-delta-coverage store-cobertura-fase-d` 1 ok/0 · delta `MODIFIED` con los 7 escenarios vivos
+  + el de la fase D · `prisma/dev.db` mtime 1792288536 intacta. Flaky preexistente observado y no del
+  alcance: `pe-panels` (timeout 30 s bajo carga; pasó en las corridas siguientes). Commits: `c45d034`
+  (change openspec + fila EN CURSO) · `d79ccae` (`generarCertificadoCT`+`distribuirReporteRE`) ·
+  `ee9c19d` (`respaldarInfraccionIN`+`desestimarInfraccionIN`) · `6afd3b9` (`saveElementoRA`+
+  `saveAdelantoPL`) · commit documental de cierre (avance + Bitácora). Sin pushear.
