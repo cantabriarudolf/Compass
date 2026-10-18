@@ -1,0 +1,8 @@
+schema: spec-driven
+
+# Change de tooling de tests: el setup de Vitest deja de caer a `prisma/dev.db` y
+# usa una base descartable recreada y migrada de cero, más una guarda dura contra
+# `dev.db`. No cambia comportamiento de producto, contratos de API ni shape
+# persistido (STORE_VERSION = 28 intacto): no hay delta de spec que aplicar.
+# Ver openspec/CONVENCION-DELTAS.md § "Changes que no modifican specs".
+skip_specs: true
