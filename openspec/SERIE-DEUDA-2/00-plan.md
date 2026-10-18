@@ -14,7 +14,7 @@
 | D4      | `store-cobertura-fase-d` — las 6 acciones más descubiertas de `lib/store.ts` (~57 statements)                  | HECHA     | `c45d034` · `d79ccae` · `ee9c19d` · `6afd3b9` |
 | D5      | `store-cobertura-fase-e` — remanente del store + ratchet final de `lib/**` y global                            | HECHA     | `40b5934` · `da5207f` · `e81db25` · `1dca20e` + ratchet y cierre |
 | D6      | `lint-higiene` — bajar los ~6.700 warnings de ESLint (zona generada, producto y tests)                         | HECHA     | `0a3ce55` · `8bb12b0` · `384532c` · `616d845` + cierre |
-| D7      | Cierre de la serie: auditoría integral, e2e final, PR y deuda post-serie                                       | EN CURSO  | —                           |
+| D7      | Cierre de la serie: auditoría integral, e2e final, PR y deuda post-serie                                       | HECHA     | `9674f1f` + commit de cierre |
 
 **MÁXIMO: 7 ventanas.** Prohibido abrir ventanas fuera del cap: lo que no entre se declara como
 deuda post-serie en el cierre (D7), no se improvisa.
@@ -229,3 +229,119 @@ verifica el estado parcial y completa lo que falte.
   `prisma/dev.db` mtime 1792288536 intacta. Commits: `0a3ce55` (change openspec + fila EN CURSO) ·
   `8bb12b0` (ignore de `.vercel`) · `384532c` (app + lib) · `616d845` (tests) · commit documental de
   cierre (avance + Bitácora). Sin pushear.
+
+- [2026-10-18] **D7 HECHA**: cierre de la serie — auditoría integral contra el repo, gates finales y
+  e2e de paridad CI, sin tocar código de producto (`test/**`, `vitest.config.ts`, `openspec/**` y
+  `Data/NSGC/docs/avances/**` intactos salvo la documentación de cierre). **Gates**: `npx tsc
+  --noEmit` **0** · `npm run lint` **exit 0 · 0 errores · 35 warnings** · `npm test`
+  **1299/1299 en 126 archivos** (`exit 0`, 625,89 s) con los pisos finales (global **93/84/92/93** ·
+  `lib/**` **98/93/98/98** · `app/api/**` **87/74/88/87**) y cobertura medida **94.32/85.71/93.77/
+  94.32** global · **99.63/94.04/99.44/99.63** `lib/**` · **88.44/75.68/90.07/88.44** `app/api/**`
+  (agregado por glob sobre `coverage-summary.json`) · `openspec validate --all` **40 passed / 0
+  failed**. **e2e** (`npm run e2e:fresh -- --no-build -- e2e/smoke e2e/crud/poblado-idempotente.spec.ts`):
+  **24/24 verdes, 0 fallos, 0 skipped, `exit 0`** en 284,25 s — `auth.setup` 6, `crud/poblado-idempotente`
+  2, `smoke/modulos` 8, `smoke/modulos-mobile` 8 — con `test-results/junit.xml`
+  (`tests="24" failures="0" skipped="0" errors="0"`) y `.last-run.json` (`{"status":"passed",
+  "failedTests":[]}`) como evidencia. **Integridad**: `prisma/dev.db` mtime **1792288536** intacta
+  antes y después de la suite y de la lane e2e · `Data/NSGC/backups/` 906 archivos / 113.614.407
+  bytes, sin cambios · `STORE_VERSION = 28` · 7 slices en `lib/store/slices/` · ningún change de esta
+  serie activo salvo `lint-higiene` (los 5 restantes de `openspec/changes/` son anteriores a la serie
+  y creados el 2026-10-14: `a11y-p3-reservas-recursos`, `au-google-sso`,
+  `e2e-higiene-determinismo`, `e2e-rojos-flujo-a11y-smoke`, `fix-vercel-data-ignore`). Commit:
+  `9674f1f` (fila D7 EN CURSO) + el commit documental de cierre.
+  Sin pushear (el push, el archive de `lint-higiene` y la descripción del PR #3 los hace el
+  orquestador).
+
+## Cierre de la serie deuda-2
+
+> Serie completa: 7 ventanas (D1–D7), 33 commits sobre `serie/deuda-1`, apertura en `9002680` y
+> cierre documental en este commit. La rama **no** se mergea: el merge de los PR es decisión del
+> owner.
+
+### 1. Estado por ventana (hashes reales del repo)
+
+| Ventana | Change | Commits (en orden) | Resultado |
+| --- | --- | --- | --- |
+| D1 | `test-db-descartable` | `4e818de` · `6eff24f` · `c20989d` · `ede8ac0` | La suite deja de escribir `prisma/dev.db`: base descartable `prisma/perf-test.db` recreada por `globalSetup` + guarda dura. 1208 → 1220 tests. |
+| D2 | `am-emisores-1` | `aca0ba1` · `823c245` · `87dc021` · `11039bf` · `b042548` | Emisores server-side `CF_UPDATE_PARAM`, `FI_INGRESO_REGISTRADO`, `GD_PERIODO_REGISTRADO`. +10 tests (1230). |
+| D3 | `am-emisores-2` | `edf18c9` · `1ca7963` · `40a7cfb` · `736f59e` · `d0d81f9` | Emisores `IR_ASSET_REPAIR`, `CO_DOC_DOWNLOAD`, `PE_CIERRE_EDITADO` (sin deltas: los specs ya los exigían). +16 tests (1246). |
+| D4 | `store-cobertura-fase-d` | `c45d034` · `d79ccae` · `ee9c19d` · `6afd3b9` · `45e2d6c` | Las 6 acciones más descubiertas del store: 56 → 1 statements sin cubrir. +30 tests (1276). |
+| D5 | `store-cobertura-fase-e` | `40b5934` · `da5207f` · `e81db25` · `1dca20e` · `e89fa15` | Remanente del store (14 acciones + arranque de `migrate`) y ratchet de pisos. +23 tests (1299). `lib/store.ts` 99.95 %. |
+| D6 | `lint-higiene` | `0a3ce55` · `8bb12b0` · `384532c` · `616d845` · `08d41cb` | ESLint 6.702 → **35** warnings, 0 errores (−99,48 %). Sin cambio de comportamiento. |
+| D7 | — (cierre) | `9674f1f` + commit documental | Auditoría integral, gates finales, e2e 24/24 y este cierre. |
+
+Commits del orquestador dentro de la serie: `9002680` (materializa `SERIE-DEUDA-2`) y los tres
+archives del punto 3.
+
+### 2. Números finales (apertura → cierre)
+
+| Métrica | Apertura (tip de deuda-1, `afe142a`) | Cierre (D7) |
+| --- | --- | --- |
+| Tests | 1208 en 116 archivos | **1299 en 126 archivos** (+91 tests, +10 archivos) |
+| Cobertura global (st/br/fn/ln) | 93.70 / 84.76 / 93.28 / 93.70 | **94.32 / 85.71 / 93.77 / 94.32** |
+| Cobertura `lib/**` | 98.39 / 92.18 / 99.44 / 98.39 | **99.63 / 94.04 / 99.44 / 99.63** |
+| Cobertura `app/api/**` | 88.39 / 75.82 / 89.22 / 88.39 | **88.44 / 75.68 / 90.07 / 88.44** |
+| `lib/store.ts` (st) | 97.39 (111 statements sin cubrir) | **99.95** (2 sin cubrir, ambos inalcanzables por la API pública) |
+| Pisos (`vitest.config.ts`) | global 92/83/92/92 · lib 97/91/98/97 · api 87/74/88/87 | **global 93/84/92/93 · lib 98/93/98/98 · api 87/74/88/87** (ninguno bajó) |
+| Warnings de ESLint | 6.702 (exit 0) | **35** (exit 0, 0 errores) |
+| Eventos AM sin emisor server-side | 6 | **0** |
+| `npx tsc --noEmit` | 0 | **0** |
+| `openspec validate --all` | sin fallos | **40 passed / 0 failed** |
+| e2e (paridad CI) | — | **24/24 verdes, 0 fallos, 0 skipped** |
+
+`STORE_VERSION = 28` **congelado** durante las 7 ventanas: ningún change tocó el shape persistido.
+
+### 3. Evidencia de los archives
+
+| Commit | Changes archivados | Evidencia |
+| --- | --- | --- |
+| `c2dcfed` | `test-db-descartable` | CI verde **39090208473** |
+| `afabf77` | `am-emisores-1`, `am-emisores-2` | CI verde **39121387608** |
+| `494b499` | `store-cobertura-fase-d`, `store-cobertura-fase-e` | CI verde **39132587349** |
+| pendiente (orquestador) | `lint-higiene` | archivado por el orquestador **con CI verde observada**; D7 no archiva |
+
+Estado de `openspec/changes/` al cerrar: **6 changes activos**, de los cuales solo `lint-higiene`
+es de esta serie; los otros cinco (`a11y-p3-reservas-recursos`, `au-google-sso`,
+`e2e-higiene-determinismo`, `e2e-rojos-flujo-a11y-smoke`, `fix-vercel-data-ignore`) son anteriores
+(2026-10-14) y ajenos a deuda-2.
+
+### 4. Gates de cierre (D7, textual)
+
+- `npx tsc --noEmit` → `TSC_EXIT=0`.
+- `npm run lint` → `LINT_EXIT=0`, `✖ 35 problems (0 errors, 35 warnings)`.
+- `npm test` → `TEST_EXIT=0`, `Test Files 126 passed (126)` · `Tests 1299 passed (1299)` ·
+  `Duration 625.89s`; cobertura `All files 94.32 | 85.71 | 93.77 | 94.32`.
+- `openspec validate --all` → `Totals: 40 passed, 0 failed (40 items)`.
+- `npm run e2e:fresh -- --no-build -- e2e/smoke e2e/crud/poblado-idempotente.spec.ts` → `E2E_EXIT=0`,
+  JUnit `tests="24" failures="0" skipped="0" errors="0" time="284.246"`, `.last-run.json`
+  `{"status":"passed","failedTests":[]}`.
+- Integridad: `prisma/dev.db` mtime `1792288536` (2026-10-17 22:55:36) idéntica antes y después de
+  `npm test` y de la lane e2e · `Data/NSGC/backups/` 906 archivos / 113.614.407 bytes sin cambios ·
+  7 slices · `STORE_VERSION = 28`.
+
+### 5. Deuda post-serie (declarada, NO pagada)
+
+1. **35 warnings de ESLint** (D6 los clasificó y los dejó declarados): **21**
+   `turbo/no-undeclared-env-vars` — se matan declarando `CSP_ENFORCEMENT`, `SQLITE_URL`,
+   `POSTGRES_URL`, `DATABASE_URL_POSTGRES`, `COMUNIDAD_ID` y `SKIP_DATOS` en `turbo.json`, que está
+   fuera del alcance de la serie; **13** en `scripts/*.mjs` (11 `no-undef` + 1 `no-redeclare` + 1
+   `no-unused-vars` de globals de Node — el intento de arreglarlos en `eslint.config.js` fue un
+   anti-fix: 8 `no-redeclare` nuevos y 2 directivas obsoletas, y se revirtió); **1**
+   `react-hooks/exhaustive-deps` en `app/visor-mensajes/page.tsx`, cuyo arreglo cambiaría el ciclo de
+   vida de los `setInterval` de caducidad (cambio de comportamiento, prohibido en la serie).
+2. **2 statements inalcanzables** en `lib/store.ts` (`:4321`, declarada en D4, y `:5127`, declarada
+   en D5): ambas ramas exigen un estado que la API pública no puede producir, así que son el **techo
+   real** de la cobertura del store. No se fuerza cobertura artificial ni se excluyen del reporte.
+3. **Flaky preexistente** `test/componentes/pe-panels.test.tsx` (`EncomiendasPanel` / retiro de
+   encomienda): timeout de 30 s bajo carga; pasa en aislamiento y en re-corridas. Candidato a
+   presupuesto explícito (`test.setTimeout`), no a "fix" de producto.
+4. **CI**: el job `unit` de `.github/workflows/ci.yml` exporta `DATABASE_URL: file:./dev.db`; la
+   guarda de D1 redirige ese caso a la base descartable, pero el valor del workflow puede alinearse
+   en una ventana de CI (fuera del alcance de la serie).
+5. **PR #3** (`serie/deuda-1` → `main`): la descripción la actualiza el orquestador con el texto
+   propuesto en el avance de D7; el **merge es decisión del owner**.
+
+### 6. Texto propuesto para la descripción del PR draft #3
+
+Vive en `Data/NSGC/docs/avances/avance - 2026-10-18 11-53.md` (§ "Texto propuesto para el PR #3"),
+listo para copiar/pegar. D7 **no** creó ni editó el PR.
