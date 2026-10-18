@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-/* eslint-disable no-undef -- Node.js runtime file, process/env are global */
 /**
  * deploy-migrar-datos.mjs — Corte SQLite → PostgreSQL ANTES del build (Fase 3, task 3.2).
  *

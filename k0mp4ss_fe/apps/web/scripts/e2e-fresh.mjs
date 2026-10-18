@@ -31,7 +31,6 @@
  *
  * NUNCA toca `prisma/dev.db` (guarda dura) ni `Data/NSGC/backups/`.
  */
-/* global process, console */
 import { execFileSync, spawnSync } from "node:child_process"
 import { existsSync, readFileSync, rmSync } from "node:fs"
 import path from "node:path"

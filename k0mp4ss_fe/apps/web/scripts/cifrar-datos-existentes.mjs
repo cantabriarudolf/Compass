@@ -8,7 +8,6 @@
 //
 // Espejo autocontenido de lib/crypto.ts (.mjs no puede importar TS).
 // Campos cubiertos: espejo de CAMPOS_CIFRADOS en lib/prisma-cifrado.ts.
-/* global process, Buffer */
 import { PrismaClient } from "@prisma/client"
 import { createCipheriv, createHash, randomBytes } from "node:crypto"
 

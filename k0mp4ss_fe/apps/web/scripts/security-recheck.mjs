@@ -15,7 +15,6 @@
  * Límite documentado: `next build` falla por Google Fonts sin red; por defecto usa handlers directos,
  * no `next start`. Con `CHECK_RECHECK_LIVE=1` levanta `next dev --port 0` efímero.
  */
-/* global process */
 import { readFileSync, existsSync } from "node:fs"
 import path from "node:path"
 

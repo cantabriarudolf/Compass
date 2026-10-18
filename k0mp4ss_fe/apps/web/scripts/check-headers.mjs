@@ -7,7 +7,6 @@
  *
  * Límite documentado: `next build` rompe por Google Fonts sin red, por eso se usa `next dev` + curl/fetch.
  */
-/* global process */
 import { readFileSync, existsSync } from "node:fs"
 import path from "node:path"
 import { pathToFileURL } from "node:url"

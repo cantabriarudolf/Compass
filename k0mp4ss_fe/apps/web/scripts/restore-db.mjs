@@ -13,7 +13,6 @@
  *   npm run restore:db -- latest                  (backup más reciente)
  *   npm run restore:db -- latest --yes
  */
-/* global process */
 import { copyFileSync, existsSync, readFileSync, readdirSync, rmSync } from "node:fs"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
