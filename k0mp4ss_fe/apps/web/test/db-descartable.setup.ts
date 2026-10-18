@@ -11,14 +11,14 @@
  *   1. Sin `DATABASE_URL` en el entorno → base descartable `prisma/perf-test.db`
  *      (recreada y migrada de cero por `test/db-descartable-global.setup.ts`).
  *   2. Con `DATABASE_URL` en el entorno → se respeta tal cual (incluido PostgreSQL).
- *   3. Si el destino resuelve a `dev.db` por cualquier vía → **aborta** con mensaje
- *      explícito, con el mismo criterio que la guarda de `scripts/e2e-fresh.mjs`.
+ *   3. Si el destino resuelve a `dev.db` por cualquier vía → **aborta siempre**, con
+ *      mensaje explícito y sin importar si corre en un runner de CI o local. Es la
+ *      misma guarda dura que la de `scripts/e2e-fresh.mjs`.
  *
- * Excepción única y documentada de (3): un runner efímero de CI (`CI`/`GITHUB_ACTIONS`
- * verdadero), donde el job `unit` de `ci.yml` exporta `DATABASE_URL: file:./dev.db`
- * sobre un checkout desechable. Ahí `prisma/dev.db` no es la base del owner, pero
- * tampoco se escribe: la suite lo **redirige** a la base descartable y avisa. Ver
- * openspec/changes/test-db-descartable/design.md.
+ * Historia: D1 dejó una excepción para el job `unit` de `ci.yml`, que exportaba
+ * `DATABASE_URL: file:./dev.db`; la ventana E4 de SERIE-DEUDA-3 alineó los 3 valores
+ * del workflow a `file:./perf-test.db` y **quitó la excepción**, así que la guarda
+ * vuelve a ser absoluta. Ver openspec/changes/ci-db-descartable/proposal.md.
  */
 import path from "node:path"
 
@@ -36,11 +36,10 @@ export const SCHEMA_SQLITE = "prisma/schema.sqlite.prisma"
 
 /**
  * De dónde salió el destino:
- * - `default`    → nadie exportó `DATABASE_URL`; base descartable.
- * - `entorno`    → `DATABASE_URL` del entorno, respetada.
- * - `redirigido` → el entorno pedía `dev.db` en un runner efímero: se usa la descartable.
+ * - `default` → nadie exportó `DATABASE_URL`; base descartable.
+ * - `entorno` → `DATABASE_URL` del entorno, respetada.
  */
-export type OrigenDestino = "default" | "entorno" | "redirigido"
+export type OrigenDestino = "default" | "entorno"
 
 /** Entorno de proceso (`process.env` lo satisface); los tests pasan literales. */
 export type Entorno = Record<string, string | undefined>
@@ -54,14 +53,6 @@ export interface DestinoBase {
   origen: OrigenDestino
   /** `true` si el destino es la base de desarrollo (`dev.db`, backups incluidos). */
   esDevDb: boolean
-}
-
-/**
- * ¿Corremos en un runner efímero? Es la única excepción de la guarda, y sólo aplica
- * cuando quien orquesta el CI ya fijó `DATABASE_URL` a un `dev.db` desechable.
- */
-export function esEntornoEfimero(env: Entorno = process.env): boolean {
-  return env.CI === "true" || env.CI === "1" || env.GITHUB_ACTIONS === "true"
 }
 
 /** Ruta absoluta de una URL `file:`; `null` si no es un archivo. */
@@ -99,21 +90,6 @@ function urlDescartablePorDefecto(appDir: string): string {
   return `file:${path.join(appDir, "prisma", DB_DESCARTABLE_POR_DEFECTO)}`
 }
 
-/** Destino con la guarda aplicada: el de la corrida. Nunca resuelve a `dev.db`. */
-export function resolverDestinoSuite(
-  env: Entorno = process.env,
-  appDir: string = APP_DIR
-): DestinoBase {
-  const destino = resolverDestinoBaseDescartable(env, appDir)
-  if (!destino.esDevDb) return destino
-  const descartable = resolverDestinoBaseDescartable({}, appDir)
-  if (destino.origen === "entorno" && esEntornoEfimero(env)) {
-    // Runner efímero: el `dev.db` del checkout es desechable, pero igual no se escribe.
-    return { ...descartable, origen: "redirigido" }
-  }
-  return destino
-}
-
 /** Texto del aborto si el destino es la base de desarrollo; `null` si es aceptable. */
 export function mensajeDeAborto(destino: DestinoBase): string | null {
   if (!destino.esDevDb) return null
@@ -134,16 +110,6 @@ export function mensajeDeAborto(destino: DestinoBase): string | null {
   ].join("\n")
 }
 
-/** Aviso de la redirección en un runner efímero (no hay aborto, pero se informa). */
-export function avisoRedireccion(destino: DestinoBase): string | null {
-  if (destino.origen !== "redirigido") return null
-  return (
-    "test-db-descartable — entorno efímero (CI): DATABASE_URL apuntaba a la base de " +
-    `desarrollo del checkout; la suite usa la base descartable ${destino.url}. ` +
-    "La guarda aborta fuera de un runner efímero."
-  )
-}
-
 /**
  * Aplica el contrato sobre `env` (fija `DATABASE_URL` salvo cuando respeta el entorno)
  * y aborta si el destino es la base de desarrollo. Devuelve el destino de la corrida
@@ -153,7 +119,7 @@ export function aplicarDestinoBaseDescartable(
   env: Entorno = process.env,
   appDir: string = APP_DIR
 ): DestinoBase {
-  const destino = resolverDestinoSuite(env, appDir)
+  const destino = resolverDestinoBaseDescartable(env, appDir)
   const aborto = mensajeDeAborto(destino)
   if (aborto) {
     console.error(aborto)
@@ -161,8 +127,6 @@ export function aplicarDestinoBaseDescartable(
       `test-db-descartable: ABORTADO — la suite resolvería a ${destino.archivo ?? destino.url}`
     )
   }
-  const aviso = avisoRedireccion(destino)
-  if (aviso) console.warn(aviso)
   if (destino.origen !== "entorno") env.DATABASE_URL = destino.url
   return destino
 }
