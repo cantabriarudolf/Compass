@@ -1,0 +1,7 @@
+schema: spec-driven
+
+# Change que modifica el requirement "Gate de cobertura por área (ratchet de
+# Vitest)" de la capability viva DEV-qa-lab: la fase E paga el remanente de
+# statements de `lib/store.ts` que dejó la fase D y aplica el ratchet final de
+# `lib/**` y global sobre la medición verde. Ver el delta en
+# specs/DEV-qa-lab/spec.md.

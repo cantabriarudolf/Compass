@@ -12,7 +12,7 @@
 | D2      | `am-emisores-1` — emisores server-side de `CF_UPDATE_PARAM`, `FI_INGRESO_REGISTRADO` y `GD_PERIODO_REGISTRADO` | HECHA     | `aca0ba1` · `823c245` · `87dc021` · `11039bf` |
 | D3      | `am-emisores-2` — emisores de `IR_ASSET_REPAIR`, `CO_DOC_DOWNLOAD` y `PE_CIERRE_EDITADO`                       | HECHA     | `edf18c9` · `1ca7963` · `40a7cfb` · `736f59e` |
 | D4      | `store-cobertura-fase-d` — las 6 acciones más descubiertas de `lib/store.ts` (~57 statements)                  | HECHA     | `c45d034` · `d79ccae` · `ee9c19d` · `6afd3b9` |
-| D5      | `store-cobertura-fase-e` — remanente del store + ratchet final de `lib/**` y global                            | pendiente | —                           |
+| D5      | `store-cobertura-fase-e` — remanente del store + ratchet final de `lib/**` y global                            | EN CURSO  | —                           |
 | D6      | `lint-higiene` — bajar los ~6.700 warnings de ESLint (zona generada, producto y tests)                         | pendiente | —                           |
 | D7      | Cierre de la serie: auditoría integral, e2e final, PR y deuda post-serie                                       | pendiente | —                           |
 
