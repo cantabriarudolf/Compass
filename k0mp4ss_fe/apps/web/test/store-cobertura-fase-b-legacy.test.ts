@@ -11,7 +11,6 @@ import type {
   FondoFI,
   IngresoContratistaPE,
   Persona,
-  ReporteRE,
   TrabajoMT,
 } from "@/lib/schemas"
 import { resetStore } from "./helpers"

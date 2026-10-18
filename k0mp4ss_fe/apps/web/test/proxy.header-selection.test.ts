@@ -5,6 +5,16 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import { NextRequest } from "next/server"
 
+/** Invoca el middleware por defecto de `@/proxy` con la petición mínima del test. */
+async function pedirProxy(): Promise<Response> {
+  const proxy = (await import("@/proxy")).default
+  return proxy(
+    new NextRequest("http://localhost/", {
+      headers: { "x-forwarded-proto": "http" },
+    })
+  )
+}
+
 describe("proxy: CSP header selection via CSP_ENFORCEMENT", () => {
   const originalEnforcement = process.env.CSP_ENFORCEMENT
 
@@ -23,12 +33,7 @@ describe("proxy: CSP header selection via CSP_ENFORCEMENT", () => {
     process.env.CSP_ENFORCEMENT = "true"
     vi.resetModules()
 
-    const proxy = (await import("@/proxy")).default
-
-    const r = await (proxy as any)(
-      new NextRequest("http://localhost/", { headers: { "x-forwarded-proto": "http" } }) as any,
-      undefined as never
-    )
+    const r = await pedirProxy()
 
     const enforceHeader = r.headers.get("content-security-policy")
     const reportOnlyHeader = r.headers.get("content-security-policy-report-only")
@@ -42,12 +47,7 @@ describe("proxy: CSP header selection via CSP_ENFORCEMENT", () => {
     process.env.CSP_ENFORCEMENT = "false"
     vi.resetModules()
 
-    const proxy = (await import("@/proxy")).default
-
-    const r = await (proxy as any)(
-      new NextRequest("http://localhost/", { headers: { "x-forwarded-proto": "http" } }) as any,
-      undefined as never
-    )
+    const r = await pedirProxy()
 
     const enforceHeader = r.headers.get("content-security-policy")
     const reportOnlyHeader = r.headers.get("content-security-policy-report-only")
@@ -62,12 +62,7 @@ describe("proxy: CSP header selection via CSP_ENFORCEMENT", () => {
     delete process.env.CSP_ENFORCEMENT
     vi.resetModules()
 
-    const proxy = (await import("@/proxy")).default
-
-    const r = await (proxy as any)(
-      new NextRequest("http://localhost/", { headers: { "x-forwarded-proto": "http" } }) as any,
-      undefined as never
-    )
+    const r = await pedirProxy()
 
     const enforceHeader = r.headers.get("content-security-policy")
     const reportOnlyHeader = r.headers.get("content-security-policy-report-only")
@@ -81,12 +76,7 @@ describe("proxy: CSP header selection via CSP_ENFORCEMENT", () => {
     process.env.CSP_ENFORCEMENT = "true"
     vi.resetModules()
 
-    const proxy = (await import("@/proxy")).default
-
-    const r = await (proxy as any)(
-      new NextRequest("http://localhost/", { headers: { "x-forwarded-proto": "http" } }) as any,
-      undefined as never
-    )
+    const r = await pedirProxy()
 
     const enforceHeader = r.headers.get("content-security-policy")
     const reportOnlyHeader = r.headers.get("content-security-policy-report-only")
@@ -97,12 +87,7 @@ describe("proxy: CSP header selection via CSP_ENFORCEMENT", () => {
     // Switch to false
     process.env.CSP_ENFORCEMENT = "false"
     vi.resetModules()
-
-    const proxy2 = (await import("@/proxy")).default
-    const r2 = await (proxy2 as any)(
-      new NextRequest("http://localhost/", { headers: { "x-forwarded-proto": "http" } }) as any,
-      undefined as never
-    )
+    const r2 = await pedirProxy()
 
     const enforceHeader2 = r2.headers.get("content-security-policy")
     const reportOnlyHeader2 = r2.headers.get("content-security-policy-report-only")
@@ -115,12 +100,7 @@ describe("proxy: CSP header selection via CSP_ENFORCEMENT", () => {
     // Test enforcement mode
     process.env.CSP_ENFORCEMENT = "true"
     vi.resetModules()
-
-    const proxy1 = (await import("@/proxy")).default
-    const r1 = await (proxy1 as any)(
-      new NextRequest("http://localhost/", { headers: { "x-forwarded-proto": "http" } }) as any,
-      undefined as never
-    )
+    const r1 = await pedirProxy()
 
     const csp1 = r1.headers.get("content-security-policy") ?? ""
     const nonce1 = r1.headers.get("x-nonce")
@@ -128,12 +108,7 @@ describe("proxy: CSP header selection via CSP_ENFORCEMENT", () => {
     // Test report-only mode
     process.env.CSP_ENFORCEMENT = "false"
     vi.resetModules()
-
-    const proxy2 = (await import("@/proxy")).default
-    const r2 = await (proxy2 as any)(
-      new NextRequest("http://localhost/", { headers: { "x-forwarded-proto": "http" } }) as any,
-      undefined as never
-    )
+    const r2 = await pedirProxy()
 
     const csp2 = r2.headers.get("content-security-policy-report-only") ?? ""
     const nonce2 = r2.headers.get("x-nonce")

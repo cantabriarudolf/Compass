@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest"
 import { useCompassStore, seedData } from "@/lib/store"
-import type { InfraccionIN, TipoInfraccionIN, Unidad } from "@/lib/schemas"
+import type { InfraccionIN, Unidad } from "@/lib/schemas"
 import { resetStore } from "./helpers"
 
 /**

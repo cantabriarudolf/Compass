@@ -29,10 +29,6 @@ const SchemaSimple = z.object({
   nombre: z.string().min(1),
 })
 
-function url(path = ""): string {
-  return `http://localhost/api/factory-test${path}`
-}
-
 async function main(req: Request, handler: (r: Request) => Promise<Response>) {
   return handler(req)
 }
