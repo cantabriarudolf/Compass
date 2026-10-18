@@ -10,7 +10,7 @@
 | ------- | -------------------------------------------------------------------------------------------------------------- | --------- | --------------------------- |
 | D1      | `test-db-descartable` — la suite deja de escribir `prisma/dev.db` (base descartable + guarda dura)             | HECHA     | 4e818de · 6eff24f · c20989d |
 | D2      | `am-emisores-1` — emisores server-side de `CF_UPDATE_PARAM`, `FI_INGRESO_REGISTRADO` y `GD_PERIODO_REGISTRADO` | HECHA     | `aca0ba1` · `823c245` · `87dc021` · `11039bf` |
-| D3      | `am-emisores-2` — emisores de `IR_ASSET_REPAIR`, `CO_DOC_DOWNLOAD` y `PE_CIERRE_EDITADO`                       | EN CURSO  | —                           |
+| D3      | `am-emisores-2` — emisores de `IR_ASSET_REPAIR`, `CO_DOC_DOWNLOAD` y `PE_CIERRE_EDITADO`                       | HECHA     | `edf18c9` · `1ca7963` · `40a7cfb` · `736f59e` |
 | D4      | `store-cobertura-fase-d` — las 6 acciones más descubiertas de `lib/store.ts` (~57 statements)                  | pendiente | —                           |
 | D5      | `store-cobertura-fase-e` — remanente del store + ratchet final de `lib/**` y global                            | pendiente | —                           |
 | D6      | `lint-higiene` — bajar los ~6.700 warnings de ESLint (zona generada, producto y tests)                         | pendiente | —                           |
@@ -130,4 +130,27 @@ verifica el estado parcial y completa lo que falte.
   re-baseline · `openspec validate --all` 41/0 · `check-delta-coverage` 3 ok/0 · `prisma/dev.db`
   mtime 1792288536 intacta. Commits: `aca0ba1` (change openspec + fila EN CURSO) · `823c245`
   (`CF_UPDATE_PARAM`) · `87dc021` (`FI_INGRESO_REGISTRADO`) · `11039bf` (`GD_PERIODO_REGISTRADO`) ·
+  commit documental de cierre (avance + Bitácora). Sin pushear.
+
+- [2026-10-18] **D3 HECHA**: `am-emisores-2` — los tres emisores AM que quedaban sin emisor
+  server-side quedaron cableados con el patrón vigente: `IR_ASSET_REPAIR` en `PUT /api/ir/recursos/[id]`
+  (`app/api/ir/recursos/[id]/route.ts:52-101`, **solo transición real** a `reparacion`, con el estado
+  anterior en la descripción), `CO_DOC_DOWNLOAD` en `GET /api/co/documentos/[id]`
+  (`app/api/co/documentos/[id]/route.ts:34-75`; el documento CO es metadatos + URL D1 y no hay endpoint
+  de descarga, así que abrir el documento es este GET; el listado paginado no emite) y
+  `PE_CIERRE_EDITADO` en `PUT /api/pe/cierres-turno/[id]` (`app/api/pe/cierres-turno/[id]/route.ts:36-84`,
+  con las novedades y el tamaño del historial preservado en la descripción). Las tres rutas son
+  envoltorios genéricos (factory / put-merge) sin hook post-escritura, así que cada `route.ts` envuelve
+  su handler y emite después, en `try/catch` con `logger.error` (la auditoría nunca bloquea la
+  operación) y solo con `res.ok`. Hallazgo: los specs vivos de `IR-inventario-recursos`,
+  `CO-comunicacion-vecinos` y `PE-personal-servicios` **ya exigían** las tres emisiones (el código
+  estaba en mora) y `AM-auditoria-metricas` no declara emisores faltantes → **sin deltas**
+  (`skip_specs: true` en `openspec/changes/am-emisores-2/.openspec.yaml`). 16 tests nuevos (6 IR · 6 CO
+  · 4 PE) que afirman categoría/`tipoAccion`/referencia/usuario y la **no emisión** en los caminos
+  rojos (400/403/404), en el re-guardado sin transición y en el listado paginado. **Gate**: `tsc` 0 ·
+  `lint` 0 errores (6.702 warnings preexistentes) · `npm test` **1246/1246** en 120 archivos ·
+  cobertura global 93.67/84.56/93.77/93.67 · `lib` 97.77/90.57/99.1/97.77 · pisos sin re-baseline ni
+  fallo de umbral · `openspec validate --all` 41/0 · `check-delta-coverage` 1 ok/1 info/0 ·
+  `prisma/dev.db` mtime 1792288536 intacta. Commits: `edf18c9` (change openspec + fila EN CURSO) ·
+  `1ca7963` (`IR_ASSET_REPAIR`) · `40a7cfb` (`CO_DOC_DOWNLOAD`) · `736f59e` (`PE_CIERRE_EDITADO`) ·
   commit documental de cierre (avance + Bitácora). Sin pushear.
