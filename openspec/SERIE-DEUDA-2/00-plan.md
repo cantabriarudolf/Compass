@@ -9,7 +9,7 @@
 | Ventana | Alcance                                                                                                        | Estado    | Commit final                |
 | ------- | -------------------------------------------------------------------------------------------------------------- | --------- | --------------------------- |
 | D1      | `test-db-descartable` — la suite deja de escribir `prisma/dev.db` (base descartable + guarda dura)             | HECHA     | 4e818de · 6eff24f · c20989d |
-| D2      | `am-emisores-1` — emisores server-side de `CF_UPDATE_PARAM`, `FI_INGRESO_REGISTRADO` y `GD_PERIODO_REGISTRADO` | pendiente | —                           |
+| D2      | `am-emisores-1` — emisores server-side de `CF_UPDATE_PARAM`, `FI_INGRESO_REGISTRADO` y `GD_PERIODO_REGISTRADO` | EN CURSO  | —                           |
 | D3      | `am-emisores-2` — emisores de `IR_ASSET_REPAIR`, `CO_DOC_DOWNLOAD` y `PE_CIERRE_EDITADO`                       | pendiente | —                           |
 | D4      | `store-cobertura-fase-d` — las 6 acciones más descubiertas de `lib/store.ts` (~57 statements)                  | pendiente | —                           |
 | D5      | `store-cobertura-fase-e` — remanente del store + ratchet final de `lib/**` y global                            | pendiente | —                           |
