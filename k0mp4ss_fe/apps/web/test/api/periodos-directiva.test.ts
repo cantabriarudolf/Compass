@@ -109,6 +109,7 @@ describe("/api/periodos-directiva — GD períodos con BD real (Fase 0)", () => 
   afterAll(async () => {
     try {
       state.cookie = ""
+      await prisma.eventoAuditoria.deleteMany({ where: { comunidadId: { in: [comunidadA, comunidadB] } } })
       await prisma.periodoDirectiva.deleteMany({ where: { comunidadId: { in: [comunidadA, comunidadB] } } })
       await prisma.actaGD.deleteMany({ where: { comunidadId: { in: [comunidadA, comunidadB] } } })
       await prisma.persona.deleteMany({ where: { comunidadId: comunidadA } })
@@ -443,4 +444,60 @@ describe("/api/periodos-directiva — GD períodos con BD real (Fase 0)", () => 
         await prisma.actaGD.delete({ where: { id: "gd-per-acta-ref" } }).catch(() => {})
       })
     })
+
+  describe("Auditoría GD_PERIODO_REGISTRADO (am-emisores-1)", () => {
+    const limpiarEventos = async (): Promise<void> => {
+      await prisma.eventoAuditoria.deleteMany({
+        where: { comunidadId: comunidadA, tipoAccion: "GD_PERIODO_REGISTRADO" },
+      })
+    }
+
+    it("POST admin exitoso emite UN evento categoría GD con la referencia del período", async () => {
+      await conSesion(emailAdmin, async () => {
+        await limpiarEventos()
+        const res = await POST(periodoValido({ id: "gd-per-audit", estado: "cerrado" }))
+        expect(res.status).toBe(201)
+
+        const eventos = await prisma.eventoAuditoria.findMany({
+          where: { comunidadId: comunidadA, tipoAccion: "GD_PERIODO_REGISTRADO" },
+        })
+        expect(eventos).toHaveLength(1)
+        const evento = eventos[0]!
+        expect(evento.categoria).toBe("GD")
+        expect(evento.tipoAccion).toBe("GD_PERIODO_REGISTRADO")
+        expect(evento.referenciaId).toBe("gd-per-audit")
+        expect(evento.usuario).toBe("gd-usuario-admin")
+        expect(evento.descripcion).toContain("cerrado")
+        expect(evento.descripcion).toContain("2026-01-15")
+      })
+    })
+
+    it("POST 403 (residente no crea) no emite evento", async () => {
+      await conSesion(emailResidente, async () => {
+        await limpiarEventos()
+        const res = await POST(periodoValido({ id: "gd-per-audit-403" }))
+        expect(res.status).toBe(403)
+        expect(
+          await prisma.eventoAuditoria.count({
+            where: { comunidadId: comunidadA, tipoAccion: "GD_PERIODO_REGISTRADO" },
+          })
+        ).toBe(0)
+      })
+    })
+
+    it("POST 400 (schema inválido) y 404 (id de otra comunidad) no emiten evento", async () => {
+      await conSesion(emailAdmin, async () => {
+        await limpiarEventos()
+        const invalido = await POST(periodoValido({ id: "gd-per-audit-mal", duracionMeses: 48 }))
+        expect(invalido.status).toBe(400)
+        const ajeno = await POST(periodoValido({ id: "gd-per-b-1", estado: "cerrado" }))
+        expect(ajeno.status).toBe(404)
+        expect(
+          await prisma.eventoAuditoria.count({
+            where: { comunidadId: comunidadA, tipoAccion: "GD_PERIODO_REGISTRADO" },
+          })
+        ).toBe(0)
+      })
+    })
+  })
 })
