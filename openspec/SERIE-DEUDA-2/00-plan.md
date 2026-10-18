@@ -14,7 +14,7 @@
 | D4      | `store-cobertura-fase-d` — las 6 acciones más descubiertas de `lib/store.ts` (~57 statements)                  | HECHA     | `c45d034` · `d79ccae` · `ee9c19d` · `6afd3b9` |
 | D5      | `store-cobertura-fase-e` — remanente del store + ratchet final de `lib/**` y global                            | HECHA     | `40b5934` · `da5207f` · `e81db25` · `1dca20e` + ratchet y cierre |
 | D6      | `lint-higiene` — bajar los ~6.700 warnings de ESLint (zona generada, producto y tests)                         | HECHA     | `0a3ce55` · `8bb12b0` · `384532c` · `616d845` + cierre |
-| D7      | Cierre de la serie: auditoría integral, e2e final, PR y deuda post-serie                                       | pendiente | —                           |
+| D7      | Cierre de la serie: auditoría integral, e2e final, PR y deuda post-serie                                       | EN CURSO  | —                           |
 
 **MÁXIMO: 7 ventanas.** Prohibido abrir ventanas fuera del cap: lo que no entre se declara como
 deuda post-serie en el cierre (D7), no se improvisa.
