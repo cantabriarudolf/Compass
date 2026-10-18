@@ -12,7 +12,7 @@
 | D2      | `am-emisores-1` — emisores server-side de `CF_UPDATE_PARAM`, `FI_INGRESO_REGISTRADO` y `GD_PERIODO_REGISTRADO` | HECHA     | `aca0ba1` · `823c245` · `87dc021` · `11039bf` |
 | D3      | `am-emisores-2` — emisores de `IR_ASSET_REPAIR`, `CO_DOC_DOWNLOAD` y `PE_CIERRE_EDITADO`                       | HECHA     | `edf18c9` · `1ca7963` · `40a7cfb` · `736f59e` |
 | D4      | `store-cobertura-fase-d` — las 6 acciones más descubiertas de `lib/store.ts` (~57 statements)                  | HECHA     | `c45d034` · `d79ccae` · `ee9c19d` · `6afd3b9` |
-| D5      | `store-cobertura-fase-e` — remanente del store + ratchet final de `lib/**` y global                            | EN CURSO  | —                           |
+| D5      | `store-cobertura-fase-e` — remanente del store + ratchet final de `lib/**` y global                            | HECHA     | `40b5934` · `da5207f` · `e81db25` · `1dca20e` + ratchet y cierre |
 | D6      | `lint-higiene` — bajar los ~6.700 warnings de ESLint (zona generada, producto y tests)                         | pendiente | —                           |
 | D7      | Cierre de la serie: auditoría integral, e2e final, PR y deuda post-serie                                       | pendiente | —                           |
 
@@ -176,3 +176,24 @@ verifica el estado parcial y completa lo que falte.
   (change openspec + fila EN CURSO) · `d79ccae` (`generarCertificadoCT`+`distribuirReporteRE`) ·
   `ee9c19d` (`respaldarInfraccionIN`+`desestimarInfraccionIN`) · `6afd3b9` (`saveElementoRA`+
   `saveAdelantoPL`) · commit documental de cierre (avance + Bitácora). Sin pushear.
+
+- [2026-10-18] **D5 HECHA**: `store-cobertura-fase-e` — cerró el remanente de cobertura del store:
+  las ramas sueltas de 14 acciones (`saveMaestro`, `savePersona`, `saveVinculo`, `removeMaestro`,
+  `apelarInfraccionIN`, `respaldarInfraccionIN`, `desestimarInfraccionIN`, `removeTipoInfraccionIN`,
+  `saveReservaRA`, `removeCertificadoCT`, `removeElementoRA`, `removeAdelantoPL` y las de personal,
+  reportería y remuneraciones) y las de arranque de `migrate` (4940-4941), con **23 tests
+  comportamentales** nuevos en 3 archivos por bloque. **`lib/store.ts` 98.68 → 99.95**: solo quedan
+  dos statements, **ambos inalcanzables por la API pública y declarados con su causa** — `:4321`
+  (declarada en D4) y `:5127` (declarada acá). `lib/**` 98.64/91.77/99.1/98.64 →
+  **99.63/94.03/99.43/99.63** y global 94/85.03/93.77/94 → **94.32/85.70/93.77/94.32**.
+  **Ratchet** (medido − 1 pt, ningún piso baja): global 92/83/92/92 → **93/84/92/93** y `lib/**`
+  97/91/98/97 → **98/93/98/98**; `app/api/**` sin cambios. **Gate verificado por el orquestador**
+  (el worker no alcanzó a correrlo): `npm test` **1299/1299 en 126 archivos**, **exit 0**, con los
+  pisos nuevos aplicados · `tsc` 0 · `lint` 0 errores · `openspec validate --all` 40/0 ·
+  `check-delta-coverage store-cobertura-fase-e` 1 ok/0 · `prisma/dev.db` mtime 1792288536 intacta.
+  Commits: `40b5934` (change openspec + fila EN CURSO) · `da5207f` · `e81db25` · `1dca20e` (los 3
+  bloques de tests) + el commit del ratchet y del cierre documental. *Nota de ejecución*: el worker
+  **se colgó** (`stalled for 4 min after: edit`) justo **después de escribir** `vitest.config.ts` y
+  **antes** de commitearlo, documentar y correr el gate; el orquestador auditó el estado, verificó el
+  ratchet contra una corrida completa (exit 0) y completó el cierre. Es el quinto corte de ejecutor
+  de la serie: lo commiteado sobrevive, y lo que falta lo cierra el orquestador.
