@@ -9,7 +9,7 @@
 | Ventana | Alcance | Estado | Commit final |
 |---|---|---|---|
 | E1 | `lint-warnings-cero` — los 35 warnings de ESLint a cero (3 causas raíz) | HECHA | `6c05489` · `86e92cf` · `8db0f7a` · docs |
-| E2 | `store-ramas-defensivas` — documentar los 2 fallbacks defensivos y declarar el techo del 99.95 % | pendiente | — |
+| E2 | `store-ramas-defensivas` — documentar los 2 fallbacks defensivos y declarar el techo del 99.95 % | HECHA | `3088318` · `8f51307` · `8dc103d` · docs |
 | E3 | `flaky-pe-panels` — presupuesto explícito para el test flaky de retiro de encomienda | pendiente | — |
 | E4 | `ci-db-descartable` — alinear los 3 `DATABASE_URL` de `ci.yml` y quitar la excepción de la guarda | pendiente | — |
 | E5 | Cierre de la serie: auditoría integral, e2e final, PR y deuda post-serie | pendiente | — |
@@ -92,3 +92,14 @@ deuda post-serie en el cierre (E5), no se improvisa.
   declarado: **1** warning en `packages/ui/src/hooks/use-mobile.ts:14` (`set-state-in-effect`, fuera de
   `apps/web` y fuera de los 35 medidos; su arreglo cambia comportamiento). Commits `6c05489`, `86e92cf`,
   `8db0f7a` + docs. **Sin pushear** (el orquestador pushea, archiva y observa el CI).
+- [2026-10-18] **E2 HECHA**: `store-ramas-defensivas` declaró el **techo de 99.95 %** de cobertura de
+  `lib/store.ts` **por API pública**: los 2 statements sin cubrir son los `: []` de dos `flatMap`
+  filtrados (`lib/store.ts:4323` firmantes del CT y `:5131` miembros del período inicial),
+  inalcanzables con el invariante actual (`esMiembroDirectivaVigente` / `filter(datosGobernanza)`) y
+  **conservados como defensa**; se documentaron con un comentario breve y se fijó el invariante con
+  `test/store-ramas-defensivas.test.ts` (4 tests: firmantes poblados, filtro aguas arriba, período
+  inicial poblado y caso sin fichas). Gates: `tsc` 0 · `npm run lint` **0 problemas** · `npm test`
+  **1304/1304 en 128 archivos** (574.86 s) con cobertura 94.32/85.70/93.77/94.32 (global igual que E1,
+  sin caída), `lib` 99.49 y `lib/store.ts` **99.95** con `4323,5131` sin cubrir · `openspec validate
+  --all` 41/0 · `check-delta-coverage` 0 que romperían el archive. `vitest.config.ts` **sin tocar**.
+  Commits `3088318`, `8f51307`, `8dc103d` + docs. **Sin pushear**.
