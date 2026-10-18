@@ -35,16 +35,19 @@ export default function VisorMensajesPage() {
   const cargando = cAvisos || cReservas || cElementos || cConfig
 
   // TODO: migrar caducarAvisosCV a API REST
-  const caducarAvisosCV = useCompassStore.getState().caducarAvisosCV
+  // Ref: los intervalos de caducidad se montan una sola vez (deps `[]`) y llaman la
+  // acción del store a través del ref, así el ciclo de vida de los `setInterval`
+  // no depende de la identidad que devuelva `getState()` en cada render.
+  const caducarAvisosCV = React.useRef(useCompassStore.getState().caducarAvisosCV)
 
   const [indice, setIndice] = React.useState(0)
   const [ahora, setAhora] = React.useState(() => new Date())
 
   React.useEffect(() => {
-    caducarAvisosCV()
+    caducarAvisosCV.current()
     const reloj = setInterval(() => setAhora(new Date()), 1000)
     // Sincronización simulada: refresco de caducidad y estado cada 30s.
-    const sync = setInterval(() => caducarAvisosCV(), 30000)
+    const sync = setInterval(() => caducarAvisosCV.current(), 30000)
     return () => { clearInterval(reloj); clearInterval(sync) }
   }, [])
 
