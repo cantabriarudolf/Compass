@@ -1,0 +1,9 @@
+schema: spec-driven
+
+# Change de higiene de tooling: deja `npm run lint` de la app en 0 errores y 0
+# warnings declarando env vars en `turbo.json`, acotando globales de Node a los
+# `.mjs` y estabilizando una acción del store con un `ref`. Ninguna capacidad
+# viva declara la higiene del linter ni la forma de una dependencia de hook, y
+# no hay comportamiento observable nuevo: por eso NO lleva delta.
+# Ver openspec/CONVENCION-DELTAS.md
+skip_specs: true
