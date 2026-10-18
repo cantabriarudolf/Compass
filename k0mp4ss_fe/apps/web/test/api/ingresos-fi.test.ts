@@ -116,6 +116,7 @@ describe("/api/ingresos-fi — ingresos a fondo FI con BD real", () => {
   })
 
   async function limpiarEntidades(): Promise<void> {
+    await prisma.eventoAuditoria.deleteMany({ where: { comunidadId: { in: [comunidadA, comunidadB] } } })
     await prisma.ingresoFI.deleteMany({ where: { comunidadId: { in: [comunidadA, comunidadB] } } })
     await prisma.fondoFI.deleteMany({ where: { comunidadId: { in: [comunidadA, comunidadB] } } })
   }
@@ -344,6 +345,72 @@ describe("/api/ingresos-fi — ingresos a fondo FI con BD real", () => {
       const ajeno = await llamar("DELETE", ingresoAjeno)
       expect(ajeno.status).toBe(404)
       expect(await prisma.ingresoFI.findUnique({ where: { id: ingresoAjeno } })).not.toBeNull()
+    })
+  })
+
+  describe("Auditoría FI_INGRESO_REGISTRADO (am-emisores-1)", () => {
+    const idAuditado = "ingfi-ing-audit"
+
+    const limpiarEventos = async (): Promise<void> => {
+      await prisma.eventoAuditoria.deleteMany({
+        where: { comunidadId: comunidadA, tipoAccion: "FI_INGRESO_REGISTRADO" },
+      })
+    }
+
+    it("POST admin exitoso emite UN evento categoría FI con la referencia del ingreso", async () => {
+      await conSesion(emailAdmin, async () => {
+        await limpiarEventos()
+        const res = await llamar("POST", undefined, ingresoValido({ id: idAuditado }))
+        expect(res.status).toBe(201)
+
+        const eventos = await prisma.eventoAuditoria.findMany({
+          where: { comunidadId: comunidadA, tipoAccion: "FI_INGRESO_REGISTRADO" },
+        })
+        expect(eventos).toHaveLength(1)
+        const evento = eventos[0]!
+        expect(evento.categoria).toBe("FI")
+        expect(evento.tipoAccion).toBe("FI_INGRESO_REGISTRADO")
+        expect(evento.referenciaId).toBe(idAuditado)
+        expect(evento.usuario).toBe("ingfi-user-admin")
+        expect(evento.descripcion).toContain("500.000")
+        expect(evento.descripcion).toContain("Cuota extraordinaria")
+      })
+    })
+
+    it("POST 403 (comité no crea) no emite evento", async () => {
+      await conSesion(emailComite, async () => {
+        await limpiarEventos()
+        const res = await llamar("POST", undefined, ingresoValido({ id: "ingfi-ing-audit-403" }))
+        expect(res.status).toBe(403)
+        expect(
+          await prisma.eventoAuditoria.count({
+            where: { comunidadId: comunidadA, tipoAccion: "FI_INGRESO_REGISTRADO" },
+          })
+        ).toBe(0)
+      })
+    })
+
+    it("POST 400 (fondo inexistente o schema inválido) no emite evento", async () => {
+      await conSesion(emailAdmin, async () => {
+        await limpiarEventos()
+        const sinFondo = await llamar(
+          "POST",
+          undefined,
+          ingresoValido({ id: "ingfi-ing-audit-400", fondoId: "ingfi-no-existe" })
+        )
+        expect(sinFondo.status).toBe(400)
+        const invalido = await llamar(
+          "POST",
+          undefined,
+          ingresoValido({ id: "ingfi-ing-audit-mal", monto: 0 })
+        )
+        expect(invalido.status).toBe(400)
+        expect(
+          await prisma.eventoAuditoria.count({
+            where: { comunidadId: comunidadA, tipoAccion: "FI_INGRESO_REGISTRADO" },
+          })
+        ).toBe(0)
+      })
     })
   })
 })
