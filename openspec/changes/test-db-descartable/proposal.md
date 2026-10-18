@@ -6,7 +6,7 @@
 
 ```ts
 if (!process.env.DATABASE_URL) {
-  process.env.DATABASE_URL = `file:${path.resolve(__dirname, "../prisma/dev.db")}`
+  process.env.DATABASE_URL = `file:${path.resolve(__dirname, "../prisma/dev.db")}`;
 }
 ```
 

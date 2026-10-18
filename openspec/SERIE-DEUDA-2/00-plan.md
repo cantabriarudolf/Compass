@@ -6,15 +6,15 @@
 > ventana a la vez, con auditoría contra el repo al volver cada una. El orquestador hace los pushes,
 > los archives y la observación del CI.
 
-| Ventana | Alcance | Estado | Commit final |
-|---|---|---|---|
-| D1 | `test-db-descartable` — la suite deja de escribir `prisma/dev.db` (base descartable + guarda dura) | EN CURSO | — |
-| D2 | `am-emisores-1` — emisores server-side de `CF_UPDATE_PARAM`, `FI_INGRESO_REGISTRADO` y `GD_PERIODO_REGISTRADO` | pendiente | — |
-| D3 | `am-emisores-2` — emisores de `IR_ASSET_REPAIR`, `CO_DOC_DOWNLOAD` y `PE_CIERRE_EDITADO` | pendiente | — |
-| D4 | `store-cobertura-fase-d` — las 6 acciones más descubiertas de `lib/store.ts` (~57 statements) | pendiente | — |
-| D5 | `store-cobertura-fase-e` — remanente del store + ratchet final de `lib/**` y global | pendiente | — |
-| D6 | `lint-higiene` — bajar los ~6.700 warnings de ESLint (zona generada, producto y tests) | pendiente | — |
-| D7 | Cierre de la serie: auditoría integral, e2e final, PR y deuda post-serie | pendiente | — |
+| Ventana | Alcance                                                                                                        | Estado    | Commit final                |
+| ------- | -------------------------------------------------------------------------------------------------------------- | --------- | --------------------------- |
+| D1      | `test-db-descartable` — la suite deja de escribir `prisma/dev.db` (base descartable + guarda dura)             | HECHA     | 4e818de · 6eff24f · c20989d |
+| D2      | `am-emisores-1` — emisores server-side de `CF_UPDATE_PARAM`, `FI_INGRESO_REGISTRADO` y `GD_PERIODO_REGISTRADO` | pendiente | —                           |
+| D3      | `am-emisores-2` — emisores de `IR_ASSET_REPAIR`, `CO_DOC_DOWNLOAD` y `PE_CIERRE_EDITADO`                       | pendiente | —                           |
+| D4      | `store-cobertura-fase-d` — las 6 acciones más descubiertas de `lib/store.ts` (~57 statements)                  | pendiente | —                           |
+| D5      | `store-cobertura-fase-e` — remanente del store + ratchet final de `lib/**` y global                            | pendiente | —                           |
+| D6      | `lint-higiene` — bajar los ~6.700 warnings de ESLint (zona generada, producto y tests)                         | pendiente | —                           |
+| D7      | Cierre de la serie: auditoría integral, e2e final, PR y deuda post-serie                                       | pendiente | —                           |
 
 **MÁXIMO: 7 ventanas.** Prohibido abrir ventanas fuera del cap: lo que no entre se declara como
 deuda post-serie en el cierre (D7), no se improvisa.
@@ -68,8 +68,8 @@ deuda post-serie en el cierre (D7), no se improvisa.
 ## Modo de ejecución (delegado con workers)
 
 El orquestador lanza **una ventana a la vez** con el subagente `serie-executor`:
-*"Ejecutá de principio a fin `openspec/SERIE-DEUDA-2/prompt-NN.md` y devolvé el Reporte Final
-Estandarizado"*, con el ARRANQUE pre-resuelto (git, fingerprint, CI, archives) para que el worker no
+_"Ejecutá de principio a fin `openspec/SERIE-DEUDA-2/prompt-NN.md` y devolvé el Reporte Final
+Estandarizado"_, con el ARRANQUE pre-resuelto (git, fingerprint, CI, archives) para que el worker no
 gaste turnos ahí. Al volver cada ventana el orquestador **audita contra el repo** (no contra el
 reporte): `git log`/`git status`, la fila y la Bitácora del plan, y los gates de la ventana. Si
 falta algo menor, relanza la MISMA ventana con la corrección puntual; si el worker murió a mitad,
@@ -96,4 +96,20 @@ verifica el estado parcial y completa lo que falte.
   en `test/api/put-merge-scope.test.ts`).
 
 ## Bitácora
+
 (cada ventana agrega su entrada ANTES de que el orquestador pushee: `- [fecha] D<n> HECHA: resumen (commits)`)
+
+- [2026-10-17] **D1 HECHA**: `test-db-descartable` — el defecto quedó reproducido con evidencia
+  (`prisma/dev.db` mtime 20:37:08 → 22:55:36 tras `npm test`) y saldado: la suite usa por defecto la
+  base descartable `prisma/perf-test.db`, recreada y migrada de cero por un `globalSetup`
+  (`prisma migrate deploy`), con guarda dura que aborta si el destino resuelve a `dev.db` por
+  cualquier vía y 12 tests que fijan el contrato. Gate con `prisma/dev.db` **intacta** (mtime
+  1792288536 antes y después): `tsc` 0 · `lint` 0 errores · `npm test` **1220/1220** en 117 archivos
+  (los 1208 previos + 12 nuevos) · `openspec validate --all` 40/0 · `check-delta-coverage` 1 ok/0.
+  Cobertura sin re-baseline (global 93.70/84.76/93.28/93.70 · `lib/**` 98.39/92.18/99.44/98.39 ·
+  `app/api/**` 88.39/75.82/89.22/88.39). Elegido **HECHA** con un desvío declarado: la guarda
+  redirige (en vez de abortar) cuando `dev.db` viene del entorno de un runner efímero de CI, porque
+  el job `unit` de `ci.yml` exporta `DATABASE_URL: file:./dev.db` y `ci.yml` está fuera de los
+  archivos de la ventana; el orquestador puede cerrarlo cambiando ese valor a la base descartable.
+  Commits: `4e818de` (change openspec + fila EN CURSO) · `6eff24f` (base descartable + guarda +
+  cableado) · `c20989d` (contrato) · commit documental de cierre (avance + Bitácora). Sin pushear.

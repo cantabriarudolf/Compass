@@ -29,13 +29,13 @@ morirían con `no such table`. Es el mismo par de pasos que el job `unit` de CI 
 `resolverDestinoBaseDescartable(env, { appDir })` devuelve
 `{ url, archivo, origen, esDevDb }`:
 
-| Entrada `DATABASE_URL`            | Resultado                                                       |
-| --------------------------------- | --------------------------------------------------------------- |
-| ausente / vacía                   | `file:<appDir>/prisma/perf-test.db`, `origen: "default"`         |
-| `file:./perf-test.db`             | respetada; se resuelve a `prisma/perf-test.db` (base del schema) |
-| `file:/abs/perf-x.db`             | respetada tal cual                                               |
-| `postgresql://…` (job `unit-pg`)  | respetada; **sin** preparación (no es una base `file:`)           |
-| cualquier ruta con `dev.db`       | `esDevDb: true` → aborta (salvo runner efímero, ver abajo)        |
+| Entrada `DATABASE_URL`           | Resultado                                                        |
+| -------------------------------- | ---------------------------------------------------------------- |
+| ausente / vacía                  | `file:<appDir>/prisma/perf-test.db`, `origen: "default"`         |
+| `file:./perf-test.db`            | respetada; se resuelve a `prisma/perf-test.db` (base del schema) |
+| `file:/abs/perf-x.db`            | respetada tal cual                                               |
+| `postgresql://…` (job `unit-pg`) | respetada; **sin** preparación (no es una base `file:`)          |
+| cualquier ruta con `dev.db`      | `esDevDb: true` → aborta (salvo runner efímero, ver abajo)       |
 
 La resolución de rutas relativas usa el directorio de `prisma/` porque así lo hace Prisma
 (CLI y cliente resuelven `file:` relativo contra el directorio del schema).
