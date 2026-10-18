@@ -8,7 +8,7 @@
 
 | Ventana | Alcance | Estado | Commit final |
 |---|---|---|---|
-| E1 | `lint-warnings-cero` — los 35 warnings de ESLint a cero (3 causas raíz) | pendiente | — |
+| E1 | `lint-warnings-cero` — los 35 warnings de ESLint a cero (3 causas raíz) | HECHA | `6c05489` · `86e92cf` · `8db0f7a` · docs |
 | E2 | `store-ramas-defensivas` — documentar los 2 fallbacks defensivos y declarar el techo del 99.95 % | pendiente | — |
 | E3 | `flaky-pe-panels` — presupuesto explícito para el test flaky de retiro de encomienda | pendiente | — |
 | E4 | `ci-db-descartable` — alinear los 3 `DATABASE_URL` de `ci.yml` y quitar la excepción de la guarda | pendiente | — |
@@ -80,3 +80,15 @@ deuda post-serie en el cierre (E5), no se improvisa.
 
 ## Bitácora
 (cada ventana agrega su entrada ANTES de que el orquestador pushee: `- [fecha] E<n> HECHA: resumen (commits)`)
+
+- [2026-10-18] **E1 HECHA**: `lint-warnings-cero` dejó `npx eslint` de la app en **exit 0 · 0 problems**
+  (antes 35 warnings) cerrando las 3 causas raíz: 21 `turbo/no-undeclared-env-vars` con las 6 env vars en
+  `globalEnv` de `turbo.json`; 13 de `scripts/*.mjs` con `globals.node` acotado a `files: ["**/*.mjs"]`
+  (más el retiro de las 10 directivas que quedaban redundantes y del `catch (err)`); y 1
+  `react-hooks/exhaustive-deps` en `app/visor-mensajes/page.tsx` estabilizado con `ref` y fijado por test
+  (1 llamada al montar, +1 cada 30 s, 0 tras desmontar). Gates: `tsc` 0 · `npm test` **1300/1300 en 127
+  archivos** (662 s) con cobertura 94.32/85.70/93.77/94.32 · `turbo run lint/typecheck/build` 2/2, 2/2, 1/1
+  (7m42s) · `openspec validate --all` 40/0 · `check-delta-coverage` 0 que romperían el archive. Remanente
+  declarado: **1** warning en `packages/ui/src/hooks/use-mobile.ts:14` (`set-state-in-effect`, fuera de
+  `apps/web` y fuera de los 35 medidos; su arreglo cambia comportamiento). Commits `6c05489`, `86e92cf`,
+  `8db0f7a` + docs. **Sin pushear** (el orquestador pushea, archiva y observa el CI).
