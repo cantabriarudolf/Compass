@@ -4309,6 +4309,8 @@ export const useCompassStore = create<CompassStore>()(
                   .personas.filter((p) =>
                     esMiembroDirectivaVigente(p, vigenteCT.id)
                   )
+                  // Defensa ante un cambio del filtro: `esMiembroDirectivaVigente`
+                  // ya exige ficha de gobernanza, así que hoy `: []` no aporta nada.
                   .flatMap((p) =>
                     p.datosGobernanza
                       ? [
@@ -5114,6 +5116,8 @@ export const useCompassStore = create<CompassStore>()(
                   "Período inicial estimado desde fichas seed — actualizar fechas desde el libro físico.",
                 fechasEstimadas: true,
                 estado: "vigente",
+                // Defensa ante un cambio del filtro: `fichasPrev` ya filtra por
+                // `datosGobernanza`, así que hoy su `: []` no aporta nada.
                 miembros: fichasPrev.flatMap((p) =>
                   p.datosGobernanza
                     ? [
