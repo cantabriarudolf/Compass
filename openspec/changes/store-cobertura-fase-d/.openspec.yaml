@@ -1,0 +1,7 @@
+schema: spec-driven
+
+# Change que modifica el requirement "Gate de cobertura por área (ratchet de
+# Vitest)" de la capability viva DEV-qa-lab: la fase D del store suma tests
+# comportamentales sobre las 6 acciones más descubiertas de `lib/store.ts`,
+# sin tocar los thresholds (el ratchet lo hace D5). Ver el delta en
+# specs/DEV-qa-lab/spec.md.
