@@ -2,7 +2,9 @@
 
 ## Purpose
 Centralizar los parámetros base que rigen el comportamiento de GECOS: identidad legal de la comunidad, imagen corporativa, cálculo de gastos comunes, servidor de correo (SMTP), reglas de notificación y parámetros operativos/seguridad. Fuente de verdad: `Data/NSGC/docs/especificaciones/CF - Configuracion Global.md`.
+
 ## Requirements
+
 ### Requirement: Identidad y Representación Legal
 The system MUST store and display the community's legal identity and visual branding.
 
@@ -91,7 +93,7 @@ The system MUST store operational constants and security-critical settings. La c
 - **AND** the absence of `claveEliminacionMaestro` SHALL NOT cause a validation error
 
 ### Requirement: Persistencia y Auditoría
-All changes to Configuración Global MUST be persisted server-side in the `configuracion_global` table via `PUT /api/configuracion` (upsert por `comunidadId`) and remain traceable. La emisión del evento `CF_UPDATE_PARAM` no tiene emisor en el código actual (la ruta `app/api/configuracion/route.ts` no lo emite): el gap está declarado como deuda en `openspec/BACKLOG-100.md:277` y detallado en `ST-capa-datos-persistente`.
+All changes to Configuración Global MUST be persisted server-side in the `configuracion_global` table via `PUT /api/configuracion` (upsert por `comunidadId`) and remain traceable. La ruta emite el evento `CF_UPDATE_PARAM` (categoría `CF`, old/new en la descripción) cuando el PUT cambia alguno de los parámetros legales de remuneraciones; el resto de las escrituras queda trazada en la tabla sin evento.
 
 #### Scenario: Save Configuration
 - **WHEN** the admin clicks "Guardar Cambios"
@@ -135,11 +137,11 @@ La configuración global MUST incluir parámetros legales editables solo por adm
 - **THEN** el sistema rechaza la operación según RP
 
 ### Requirement: Parámetros Legales Chile para Remuneraciones (implementación)
-La configuración global SHALL incluir los campos `ufMensual` (valor UF vigente del mes, positivo), `ingresoMinimoMensual` (positivo), `topeGratificacionLegal` (factor sobre el ingreso mínimo mensual, positivo; estándar 4.75) y `tasaSIS` (porcentaje 0–100) usados por PL. Los cuatro campos son opcionales en el schema para compatibilidad con stores previos, pero su ausencia bloquea la generación de liquidaciones ("CF no cargado"). Su edición queda restringida a administración y todo cambio SHALL auditarse como `CF_UPDATE_PARAM` con old/new.
+La configuración global SHALL incluir los campos `ufMensual` (valor UF vigente del mes, positivo), `ingresoMinimoMensual` (positivo), `topeGratificacionLegal` (factor sobre el ingreso mínimo mensual, positivo; estándar 4.75) y `tasaSIS` (porcentaje 0–100) usados por PL. Los cuatro campos son opcionales en el schema para compatibilidad con stores previos, pero su ausencia bloquea la generación de liquidaciones ("CF no cargado"). Su edición queda restringida a administración y todo cambio SHALL auditarse como `CF_UPDATE_PARAM` con old/new, emitido por `PUT /api/configuracion`.
 
 #### Scenario: Edición desde Parámetros Legales
 - **WHEN** la administración actualiza la UF o el tope de gratificación desde `/finanzas/remuneraciones`
-- **THEN** `PUT /api/configuracion` persiste el valor; la emisión de `CF_UPDATE_PARAM` (old/new) queda pendiente server-side (gap declarado en `openspec/BACKLOG-100.md:277`)
+- **THEN** `PUT /api/configuracion` persiste el valor y emite `CF_UPDATE_PARAM` con el valor anterior y el nuevo
 
 #### Scenario: Rango inválido rechazado
 - **WHEN** se intenta guardar `tasaSIS` fuera de 0–100 o valores negativos
@@ -161,4 +163,3 @@ parcial mínimo puede reenviarse completa sin 400).
 - **WHEN** se envía el objeto completo del GET (con `rutComunidad` + nulls
   en opcionales)
 - **THEN** el PUT responde 200 (test `api-configuracion.test.ts`).
-
