@@ -10,7 +10,7 @@
 |---|---|---|---|
 | E1 | `lint-warnings-cero` — los 35 warnings de ESLint a cero (3 causas raíz) | HECHA | `6c05489` · `86e92cf` · `8db0f7a` · docs |
 | E2 | `store-ramas-defensivas` — documentar los 2 fallbacks defensivos y declarar el techo del 99.95 % | HECHA | `3088318` · `8f51307` · `8dc103d` · docs |
-| E3 | `flaky-pe-panels` — presupuesto explícito para el test flaky de retiro de encomienda | pendiente | — |
+| E3 | `flaky-pe-panels` — presupuesto explícito para el test flaky de retiro de encomienda | HECHA | `ceef821` · `8656835` · `224f406` + cierre |
 | E4 | `ci-db-descartable` — alinear los 3 `DATABASE_URL` de `ci.yml` y quitar la excepción de la guarda | pendiente | — |
 | E5 | Cierre de la serie: auditoría integral, e2e final, PR y deuda post-serie | pendiente | — |
 
@@ -103,3 +103,19 @@ deuda post-serie en el cierre (E5), no se improvisa.
   sin caída), `lib` 99.49 y `lib/store.ts` **99.95** con `4323,5131` sin cubrir · `openspec validate
   --all` 41/0 · `check-delta-coverage` 0 que romperían el archive. `vitest.config.ts` **sin tocar**.
   Commits `3088318`, `8f51307`, `8dc103d` + docs. **Sin pushear**.
+- [2026-10-18] **E3 HECHA**: `flaky-pe-panels` cerró el flaky preexistente de
+  `test/componentes/pe-panels.test.tsx > retiro de encomienda` con un presupuesto explícito por caso:
+  `PRESUPUESTO_CARGA = 120_000` en el objeto de opciones de los **7** casos del archivo (el hermano
+  que tenía `{ timeout: 20_000 }` pasa a la misma constante, así que criterio y valor quedan
+  alineados; **no** se usó `test.use({ timeout })`, que Vitest ignora en silencio). Reproducción: en
+  aislamiento el caso mide **4.90 s** y pasa; con carga media (`2× yes`) sube a **26.81 s**; con carga
+  alta (`16× yes`) se provoca el rojo con **`Error: Test timed out in 30000ms.`** (31.09 s) y 5 fallos
+  de 7. Diagnóstico confirmado: **presupuesto, no comportamiento** — el componente y los paneles no se
+  tocaron y `vitest.config.ts` tampoco. Verificación con **3 corridas 7/7 verdes**: aislado **5.25 s**,
+  carga alta **67.67 s** (antes timeout) y aislado **4.97 s**; sin procesos huérfanos (`pgrep -x yes`
+  → 0). Gates: `tsc` 0 · `npm run lint` **0 problemas** · `npm test` **1304/1304 en 128 archivos**
+  (482.07 s) con cobertura global 94.32/85.71/93.77/94.32, `lib` 99.49 y `lib/store.ts` **99.95** con
+  `4323,5131` sin cubrir · `openspec validate --all` **41/0** · `check-delta-coverage flaky-pe-panels`
+  0 que romperían el archive. Commits `ceef821`, `8656835`, `224f406` + cierre. **Sin pushear**.
+  Remanente declarado: un `console.log("DBG onError:"…)` de depuración en el caso de visitas del mismo
+  archivo (fuera del alcance de presupuesto), candidato a limpieza en E5.
