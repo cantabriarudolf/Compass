@@ -13,7 +13,7 @@
 | D3      | `am-emisores-2` — emisores de `IR_ASSET_REPAIR`, `CO_DOC_DOWNLOAD` y `PE_CIERRE_EDITADO`                       | HECHA     | `edf18c9` · `1ca7963` · `40a7cfb` · `736f59e` |
 | D4      | `store-cobertura-fase-d` — las 6 acciones más descubiertas de `lib/store.ts` (~57 statements)                  | HECHA     | `c45d034` · `d79ccae` · `ee9c19d` · `6afd3b9` |
 | D5      | `store-cobertura-fase-e` — remanente del store + ratchet final de `lib/**` y global                            | HECHA     | `40b5934` · `da5207f` · `e81db25` · `1dca20e` + ratchet y cierre |
-| D6      | `lint-higiene` — bajar los ~6.700 warnings de ESLint (zona generada, producto y tests)                         | EN CURSO  | —                           |
+| D6      | `lint-higiene` — bajar los ~6.700 warnings de ESLint (zona generada, producto y tests)                         | HECHA     | `0a3ce55` · `8bb12b0` · `384532c` · `616d845` + cierre |
 | D7      | Cierre de la serie: auditoría integral, e2e final, PR y deuda post-serie                                       | pendiente | —                           |
 
 **MÁXIMO: 7 ventanas.** Prohibido abrir ventanas fuera del cap: lo que no entre se declara como
@@ -197,3 +197,35 @@ verifica el estado parcial y completa lo que falte.
   **antes** de commitearlo, documentar y correr el gate; el orquestador auditó el estado, verificó el
   ratchet contra una corrida completa (exit 0) y completó el cierre. Es el quinto corte de ejecutor
   de la serie: lo commiteado sobrevive, y lo que falta lo cierra el orquestador.
+
+- [2026-10-18] **D6 HECHA**: `lint-higiene` — los warnings de ESLint bajaron de **6.702 a 35**
+  (−99,48 %, **0 errores**, `exit 0`). La medición de apertura (`eslint --format json`: 97 archivos
+  con mensajes) mostró que **6.602 de los 6.702 (98,5 %) eran ruido de un artefacto generado**: el
+  bundle de deploy que Vercel deja en `.vercel/` (`.vercel/node` + 7,5 M de `output/`), que el ignore
+  compartido (`dist/**`, `.next/**`, `**/.turbo/**`, `**/coverage/**`) **no** cubría → una línea de
+  config en `apps/web/eslint.config.js` (`ignores: [".vercel/**"]`) borró 6.602 warnings sin tocar
+  código. Después, **código de producto** (11 `no-unused-vars` + 2 directivas `eslint-disable`
+  obsoletas, sin cambio de comportamiento: imports/destructures/parámetros muertos en
+  `dev-dashboard`, `liquidaciones`, `reportes-re/[id]`, `vinculos`, `comunicacion`, `multas` y
+  `lib/api/crud-factory.ts` — `limpiarPayload` copia y borra `id`/`comunidadId` en vez de destructurar
+  bindings muertos —, más la directiva `set-state-in-effect` de `remuneraciones` **movida** a la línea
+  que reporta la regla, sin supresión nueva, y la `react-hooks/purity` obsoleta de
+  `personas/[id]` eliminada). **Tests**: 47 → **0** `no-explicit-any` (los tres tests de `proxy`
+  invocaban el default export con `(proxy as any)(req as any, undefined as never)`; la firma real ya
+  es `(req: NextRequest, evento?: unknown) => Response | Promise<Response>`, así que se reemplazó por
+  un helper `pedirProxy()` tipado) y 6 `no-unused-vars` menos (helper `url()` muerto, `decoded`/`iat`
+  en `session-maxage` — el `encode()` de Auth.js re-emite `exp` desde `maxAge`, así que el boundary se
+  afirma aritméticamente —, imports de tipo muertos en las fases B y C). **Declarado y no forzado**
+  (los 35 restantes): 21 `turbo/no-undeclared-env-vars` (la solución honesta es declarar
+  `CSP_ENFORCEMENT`, `SQLITE_URL`, `POSTGRES_URL`, `DATABASE_URL_POSTGRES`, `COMUNIDAD_ID` y
+  `SKIP_DATOS` en `turbo.json`, fuera de los archivos de la ventana), 11 `no-undef` + 1 `no-redeclare`
+  + 1 `no-unused-vars` en `scripts/*.mjs` (se probó darles `globals.node` en el config y el efecto fue
+  neutro/peor: 8 `no-redeclare` nuevos y 2 directivas obsoletas → revertido) y 1
+  `react-hooks/exhaustive-deps` en `visor-mensajes` (agregar `caducarAvisosCV` a las deps cambiaría el
+  ciclo de vida de los `setInterval` de caducidad). **Gate**: `tsc` 0 · `lint` **exit 0 con 35
+  warnings** · `npm test` **1299/1299 en 126 archivos** con los pisos vigentes (cobertura
+  94.32/85.70/93.77/94.32, idéntica a D5: `vitest.config.ts` sin tocar) · `openspec validate --all`
+  42/0 · `check-delta-coverage lint-higiene` 1 ok/1 info/0 (`skip_specs: true`) ·
+  `prisma/dev.db` mtime 1792288536 intacta. Commits: `0a3ce55` (change openspec + fila EN CURSO) ·
+  `8bb12b0` (ignore de `.vercel`) · `384532c` (app + lib) · `616d845` (tests) · commit documental de
+  cierre (avance + Bitácora). Sin pushear.
