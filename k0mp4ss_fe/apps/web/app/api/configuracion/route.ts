@@ -17,8 +17,17 @@ import {
   withComunidadScope,
 } from "@/lib/api/with-comunidad-scope"
 import { logger } from "@/lib/logger"
+import { generarId } from "@/lib/id-utils"
 import crypto from "node:crypto"
 import type { Prisma } from "@prisma/client"
+
+/** Parámetros legales de remuneraciones (PL) auditados con `CF_UPDATE_PARAM`. */
+const PARAMETROS_LEGALES = [
+  "ufMensual",
+  "ingresoMinimoMensual",
+  "topeGratificacionLegal",
+  "tasaSIS",
+] as const
 
 export async function GET(): Promise<Response> {
   const resultado = await withComunidadScope()
@@ -75,14 +84,6 @@ export async function PUT(req: Request): Promise<Response> {
       where: { comunidadId: scope.comunidadId },
     })
 
-    if (configActual) {
-      const actualizado = await prisma.configuracionGlobal.update({
-        where: { comunidadId: scope.comunidadId },
-        data: datos as Prisma.ConfiguracionGlobalUpdateInput,
-      })
-      return Response.json(actualizado)
-    }
-
     // Creación inicial: defaults del seed (válidos según schema, de modo que
     // el form puede reenviar la fila completa sin 400).
     const defaults: Omit<
@@ -94,15 +95,52 @@ export async function PUT(req: Request): Promise<Response> {
       claveEliminacionMaestro: "",
     }
 
-    const creado = await prisma.configuracionGlobal.create({
-      data: {
-        ...defaults,
-        ...datos,
-        id: crypto.randomUUID(),
-        comunidadId: scope.comunidadId,
-      },
+    const registro = configActual
+      ? await prisma.configuracionGlobal.update({
+          where: { comunidadId: scope.comunidadId },
+          data: datos as Prisma.ConfiguracionGlobalUpdateInput,
+        })
+      : await prisma.configuracionGlobal.create({
+          data: {
+            ...defaults,
+            ...datos,
+            id: crypto.randomUUID(),
+            comunidadId: scope.comunidadId,
+          },
+        })
+
+    // Auditoría `CF_UPDATE_PARAM` (certificado por PL): solo los parámetros
+    // legales cuyo valor cambia, con old/new. Patrón de las rutas que emiten
+    // evento a mano; la emisión no bloquea una escritura ya persistida.
+    const anteriores = (configActual ?? {}) as Record<string, unknown>
+    const cambios = PARAMETROS_LEGALES.flatMap((campo) => {
+      if (!(campo in datos)) return []
+      const anterior = anteriores[campo] ?? null
+      const nuevo = datos[campo] ?? null
+      return anterior === nuevo
+        ? []
+        : [`${campo}: ${anterior ?? "(sin valor)"} → ${nuevo ?? "(sin valor)"}`]
     })
-    return Response.json(creado, { status: 201 })
+    if (cambios.length > 0) {
+      try {
+        await prisma.eventoAuditoria.create({
+          data: {
+            id: generarId("ev"),
+            comunidadId: scope.comunidadId,
+            timestamp: new Date().toISOString(),
+            usuario: scope.usuarioId,
+            categoria: "CF",
+            tipoAccion: "CF_UPDATE_PARAM",
+            referenciaId: registro.id,
+            descripcion: `Parámetros legales de remuneraciones actualizados: ${cambios.join("; ")}.`,
+          },
+        })
+      } catch (e) {
+        logger.error({ err: e }, "[configuracion] no se pudo registrar CF_UPDATE_PARAM")
+      }
+    }
+
+    return Response.json(registro, { status: configActual ? 200 : 201 })
   } catch (e) {
     logger.error({ err: e }, "[configuracion] error PUT")
     return jsonError(500, "Error interno del servidor.")

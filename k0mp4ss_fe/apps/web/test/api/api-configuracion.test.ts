@@ -22,6 +22,7 @@ const AUTH_SECRET = "test-secret-12345678"
 describe("/api/configuracion — CF singleton con BD real (BD-FUENTE-VERDAD)", () => {
   const comunidadA = "cf-comunidad-a"
   const emailAdmin = "cf-admin@test.cl"
+  const emailResidente = "cf-residente@test.cl"
 
   const cargaModulo = async () => import("@/app/api/configuracion/route")
 
@@ -37,9 +38,22 @@ describe("/api/configuracion — CF singleton con BD real (BD-FUENTE-VERDAD)", (
       update: {},
       create: { id: "cf-usuario-admin", email: emailAdmin, activo: true },
     })
-    await prisma.membresia.deleteMany({ where: { usuarioId: "cf-usuario-admin" } })
+    await prisma.usuario.upsert({
+      where: { email: emailResidente },
+      update: {},
+      create: { id: "cf-usuario-residente", email: emailResidente, activo: true },
+    })
+    await prisma.membresia.deleteMany({
+      where: { usuarioId: { in: ["cf-usuario-admin", "cf-usuario-residente"] } },
+    })
     await prisma.membresia.create({
       data: { usuarioId: "cf-usuario-admin", comunidadId: comunidadA, rol: "administrador" },
+    })
+    await prisma.membresia.create({
+      data: { usuarioId: "cf-usuario-residente", comunidadId: comunidadA, rol: "residente" },
+    })
+    await prisma.eventoAuditoria.deleteMany({
+      where: { comunidadId: comunidadA, tipoAccion: "CF_UPDATE_PARAM" },
     })
     await prisma.configuracionGlobal.deleteMany({ where: { comunidadId: comunidadA } })
   }, 30_000)
@@ -47,9 +61,14 @@ describe("/api/configuracion — CF singleton con BD real (BD-FUENTE-VERDAD)", (
   afterAll(async () => {
     try {
       state.cookie = ""
+      await prisma.eventoAuditoria.deleteMany({ where: { comunidadId: comunidadA } })
       await prisma.configuracionGlobal.deleteMany({ where: { comunidadId: comunidadA } })
-      await prisma.membresia.deleteMany({ where: { usuarioId: "cf-usuario-admin" } })
-      await prisma.usuario.delete({ where: { id: "cf-usuario-admin" } }).catch(() => {})
+      await prisma.membresia.deleteMany({
+        where: { usuarioId: { in: ["cf-usuario-admin", "cf-usuario-residente"] } },
+      })
+      for (const id of ["cf-usuario-admin", "cf-usuario-residente"]) {
+        await prisma.usuario.delete({ where: { id } }).catch(() => {})
+      }
       await prisma.comunidad.delete({ where: { id: comunidadA } }).catch(() => {})
     } catch { /* best-effort */ }
   })
@@ -140,6 +159,96 @@ describe("/api/configuracion — CF singleton con BD real (BD-FUENTE-VERDAD)", (
       expect(res.status).toBe(200)
       const reget = await (await cargaModulo()).GET()
       expect((await reget.json()).nombreComunidad).toBe("QA-Comunidad-Persistida")
+    })
+  })
+
+  describe("Auditoría CF_UPDATE_PARAM (am-emisores-1)", () => {
+    const limpiarEventos = async (): Promise<void> => {
+      await prisma.eventoAuditoria.deleteMany({
+        where: { comunidadId: comunidadA, tipoAccion: "CF_UPDATE_PARAM" },
+      })
+    }
+
+    it("PUT que cambia un parámetro legal emite UN evento con old/new", async () => {
+      await conSesion(emailAdmin, async () => {
+        // Fila base con los cuatro parámetros legales cargados.
+        const base = await PUT({
+          ufMensual: 39500,
+          ingresoMinimoMensual: 500000,
+          topeGratificacionLegal: 4.75,
+          tasaSIS: 1.88,
+        })
+        expect([200, 201]).toContain(base.status)
+        await limpiarEventos()
+
+        const res = await PUT({ ufMensual: 39800 })
+        expect(res.status).toBe(200)
+
+        const eventos = await prisma.eventoAuditoria.findMany({
+          where: { comunidadId: comunidadA, tipoAccion: "CF_UPDATE_PARAM" },
+        })
+        expect(eventos).toHaveLength(1)
+        const evento = eventos[0]!
+        expect(evento.categoria).toBe("CF")
+        expect(evento.tipoAccion).toBe("CF_UPDATE_PARAM")
+        expect(evento.usuario).toBe("cf-usuario-admin")
+        expect(evento.descripcion).toContain("ufMensual: 39500 → 39800")
+        // Nunca viajan secretos al evento.
+        expect(evento.descripcion).not.toMatch(/smtp|claveEliminacion/i)
+        const cfg = await prisma.configuracionGlobal.findUnique({
+          where: { comunidadId: comunidadA },
+        })
+        expect(evento.referenciaId).toBe(cfg?.id)
+      })
+    })
+
+    it("PUT que reenvía los parámetros legales sin cambio no emite evento", async () => {
+      await conSesion(emailAdmin, async () => {
+        await limpiarEventos()
+        const fila = await prisma.configuracionGlobal.findUnique({
+          where: { comunidadId: comunidadA },
+        })
+        const res = await PUT({
+          ...(fila as unknown as Record<string, unknown>),
+          nombreComunidad: "Sin cambio legal",
+        })
+        expect(res.status).toBe(200)
+        expect(
+          await prisma.eventoAuditoria.count({
+            where: { comunidadId: comunidadA, tipoAccion: "CF_UPDATE_PARAM" },
+          })
+        ).toBe(0)
+      })
+    })
+
+    it("PUT con parámetro legal fuera de rango → 400 y no emite evento", async () => {
+      await conSesion(emailAdmin, async () => {
+        await limpiarEventos()
+        const res = await PUT({ tasaSIS: 150 })
+        expect(res.status).toBe(400)
+        expect(
+          await prisma.eventoAuditoria.count({
+            where: { comunidadId: comunidadA, tipoAccion: "CF_UPDATE_PARAM" },
+          })
+        ).toBe(0)
+      })
+    })
+
+    it("residente (sin permiso de edición) → 403 y no emite evento", async () => {
+      await conSesion(emailResidente, async () => {
+        await limpiarEventos()
+        const res = await PUT({ ufMensual: 41000 })
+        expect(res.status).toBe(403)
+        expect(
+          await prisma.eventoAuditoria.count({
+            where: { comunidadId: comunidadA, tipoAccion: "CF_UPDATE_PARAM" },
+          })
+        ).toBe(0)
+        const cfg = await prisma.configuracionGlobal.findUnique({
+          where: { comunidadId: comunidadA },
+        })
+        expect(cfg?.ufMensual).not.toBe(41000)
+      })
     })
   })
 })
