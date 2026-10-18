@@ -183,3 +183,31 @@ internos, y sin cambiar el shape persistido (`STORE_VERSION` congelado).
   nunca bajan) con la fecha de medición documentada, y el remanente que no puede
   alcanzarse por la API pública queda declarado con su línea y su causa en el
   avance NSGC de la ventana
+
+#### Scenario: Fase D de cobertura del store legacy sobre las 6 acciones más descubiertas
+- **WHEN** se ejecuta la fase D del ratchet de cobertura del store
+  (`store-cobertura-fase-d`) sobre las 6 acciones legacy de `lib/store.ts` con más
+  statements sin cubrir de la medición vigente de la ventana
+- **THEN** se agregan tests comportamentales contra `useCompassStore` que afirman
+  el `StoreResult` y el efecto observable de cada rama (rechazos de validación,
+  mutación del estado, folios correlativos y cargos materiales en el libro FI),
+  sin editar el código del store ni cambiar el shape persistido
+  (`STORE_VERSION = 28`), sin tocar los `thresholds` de `vitest.config.ts` (el
+  ratchet lo aplica la ventana siguiente con la medición acumulada), y el
+  remanente que no puede alcanzarse por la API pública queda declarado con su
+  línea y su causa en el avance NSGC de la ventana
+
+#### Scenario: Fase E de cobertura del store legacy sobre el remanente y ratchet final
+- **WHEN** se ejecuta la fase E del ratchet de cobertura del store
+  (`store-cobertura-fase-e`) sobre el remanente de statements sin cubrir de
+  `lib/store.ts` que dejó la fase D (guardas de hidratación, ramas de integridad
+  referencial de `removeMaestro`, ramas sin match de los `map` de estado, emisión
+  de Gasto Común sin aporte al fondo de reserva, `retenerGarantiaRA` sin fondo de
+  amenities y las ramas de arranque de `migrate`)
+- **THEN** se agregan tests comportamentales contra `useCompassStore` que afirman
+  el `StoreResult` y el efecto observable de cada rama, sin editar el código del
+  store ni cambiar el shape persistido (`STORE_VERSION = 28`), los pisos de
+  `lib/**` y global se re-baselinean con la regla del ratchet (medido − 1 pt,
+  nunca bajan) con la fecha de medición documentada en `vitest.config.ts`, y el
+  remanente que no puede alcanzarse por la API pública queda declarado con su
+  línea y su causa en el avance NSGC de la ventana
