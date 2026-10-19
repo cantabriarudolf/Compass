@@ -143,7 +143,6 @@ describe("VisitasPanel (componente, RTL)", () => {
     await user.click(screen.getByRole("button", { name: /Registrar visita/ }))
 
     expect(onError.mock.calls.filter((c) => c[0]).map((c) => JSON.stringify(c[0]))).toEqual([])
-    console.log("DBG onError:", JSON.stringify(onError.mock.calls), "onSuccess:", JSON.stringify(onSuccess.mock.calls), "last:", JSON.stringify(lastEvent()), "len:", useCompassStore.getState().visitasTecnicasPE.length, "antes:", antes)
     await waitFor(() => expect(useCompassStore.getState().bitacoraVisitasPE.length).toBe(antes + 1))
     expect(screen.getByText("Visitante TEST-RTL")).toBeTruthy()
     expect(lastEvent()?.tipoAccion).toBe("PE_VISITA_INGRESADA")
