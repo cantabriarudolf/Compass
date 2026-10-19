@@ -11,7 +11,7 @@
 | E1 | `lint-warnings-cero` — los 35 warnings de ESLint a cero (3 causas raíz) | HECHA | `6c05489` · `86e92cf` · `8db0f7a` · docs |
 | E2 | `store-ramas-defensivas` — documentar los 2 fallbacks defensivos y declarar el techo del 99.95 % | HECHA | `3088318` · `8f51307` · `8dc103d` · docs |
 | E3 | `flaky-pe-panels` — presupuesto explícito para el test flaky de retiro de encomienda | HECHA | `ceef821` · `8656835` · `224f406` + cierre |
-| E4 | `ci-db-descartable` — alinear los 3 `DATABASE_URL` de `ci.yml` y quitar la excepción de la guarda | EN CURSO | — |
+| E4 | `ci-db-descartable` — alinear los 3 `DATABASE_URL` de `ci.yml` y quitar la excepción de la guarda | HECHA | `3b3147f` · `2a8dcb0` · `fc5b74e` · docs |
 | E5 | Cierre de la serie: auditoría integral, e2e final, PR y deuda post-serie | pendiente | — |
 
 **MÁXIMO: 5 ventanas.** Prohibido abrir ventanas fuera del cap: lo que no entre se declara como
@@ -119,3 +119,18 @@ deuda post-serie en el cierre (E5), no se improvisa.
   0 que romperían el archive. Commits `ceef821`, `8656835`, `224f406` + cierre. **Sin pushear**.
   Remanente declarado: un `console.log("DBG onError:"…)` de depuración en el caso de visitas del mismo
   archivo (fuera del alcance de presupuesto), candidato a limpieza en E5.
+- [2026-10-18] **E4 HECHA**: `ci-db-descartable` alineó los **3** `DATABASE_URL: file:./dev.db` del
+  workflow a `file:./perf-test.db` (job `unit` línea ~32, `e2e` línea ~112, `e2e-rate-limit` línea
+  ~166) y quitó la **excepción** de la guarda dura, que vuelve a ser **absoluta** (aborta siempre ante
+  un destino `dev.db`, también con `CI=true`). Lectura job por job: los **3 jobs tocados migran su
+  base antes de usarla** (`prisma migrate deploy` / `db push` + seed antes de los tests), así que el
+  nombre es intercambiable; `unit-pg` (PostgreSQL) y `deploy` quedaron intactos. Grep de control en
+  `.github/`: `dev.db` solo en comentarios. Evidencia de la guarda:
+  `DATABASE_URL="file:./dev.db" npx vitest run test/health.test.ts` → **exit 1** con el banner
+  `test-db-descartable — ABORTADO: la suite escribiría la base de desarrollo.` y `mtime` de
+  `prisma/dev.db` idéntico antes/después (`2026-10-17 22:55:36.837707123 -0300`). Gates: `tsc` 0 ·
+  `npm run lint` **0 problemas** · `npm test` **1304/1304 en 128 archivos** (579.80 s) con cobertura
+  global 94.32/85.70/93.77/94.32, `lib` 99.49 y `lib/store.ts` **99.95** con `4323,5131` sin cubrir ·
+  `openspec validate --all` **40/0** · `check-delta-coverage ci-db-descartable` `1 ok · 1 info · 0 que
+  romperían el archive`. Commits `3b3147f`, `2a8dcb0`, `fc5b74e` + avance. **Sin pushear** (el
+  orquestador pushea, archiva tras CI verde y observa el workflow).
