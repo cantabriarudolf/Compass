@@ -7,7 +7,7 @@
 
 | Ventana | Alcance | Estado | Commit final |
 |---|---|---|---|
-| F1 | `fix-vercel-data-ignore` — corregir el `.vercelignore` (bloqueante del deploy y del merge) | pendiente | — |
+| F1 | `fix-vercel-data-ignore` — corregir el `.vercelignore` (bloqueante del deploy y del merge) | HECHA | `6585f48` + `5e938f2` + doc |
 | F2 | `deuda-menor` — el último warning de lint (`packages/ui`) + robustez de 4 CLIs | pendiente | — |
 | F3 | Cierre de la serie + readiness del merge | pendiente | — |
 
@@ -66,3 +66,14 @@
 
 ## Bitácora
 (cada ventana agrega su entrada ANTES de que el orquestador pushee: `- [fecha] F<n> HECHA: resumen (commits)`)
+
+- 2026-10-19 **F1 HECHA**: `fix-vercel-data-ignore` cerrado en causa raíz. El
+  `.vercelignore` de la raíz ya estaba anclado (`/Data/`, `52b26b9`); el que faltaba era
+  **`k0mp4ss_fe/.vercelignore`** (Root Directory, creado en `1406277`), con el mismo `Data/` sin
+  anclar → excluía `apps/web/data/**` y rompía el build. Fix `/Data/` + comentario de advertencia,
+  verificado con `ignore@7.0.5` (`ignorecase: true`): seeds **INCLUIDO**, `Data/NSGC/backups/` y
+  `openspec/` **EXCLUIDO**; mismo archivo con el patrón viejo los excluía (reproducción del bug).
+  Gates: `tsc` 0 · `lint` 0 problemas · `npm test` 1304/1304 (128 archivos, 506.52 s) ·
+  `openspec validate --all` 39/39 · `check-delta-coverage` 0 que romperían el archive ·
+  `npm run build` ✓ (91/91 páginas). Commits `6585f48` (ignores), `5e938f2` (change) y el de docs
+  (avance + este plan). **Sin pushear**: el redeploy de Vercel y el archive los hace el orquestador.
