@@ -81,7 +81,21 @@ async function main() {
   const backupDir = elegirBackup(backupsDir, arg)
 
   const manifestPath = path.join(backupDir, "manifest.json")
-  const manifest = JSON.parse(readFileSync(manifestPath, "utf8"))
+  let manifest
+  try {
+    manifest = JSON.parse(readFileSync(manifestPath, "utf8"))
+  } catch (err) {
+    throw new Error(
+      `Manifest ilegible en ${path.relative(repoRoot, manifestPath)}: ${err.message}. ` +
+        "Regenerá el backup con `npm run backup:db` antes de restaurar.",
+    )
+  }
+  if (typeof manifest?.databaseUrlFile !== "string" || typeof manifest?.counts !== "object" || manifest.counts === null) {
+    throw new Error(
+      `Manifest incompleto en ${path.relative(repoRoot, manifestPath)}: falta "databaseUrlFile" y/o "counts". ` +
+        "¿El backup lo generó `npm run backup:db`?",
+    )
+  }
   const dbSource = path.join(backupDir, "sqlite", manifest.databaseUrlFile)
   if (!existsSync(dbSource)) throw new Error(`Copia SQLite faltante en el backup: ${dbSource}`)
 
