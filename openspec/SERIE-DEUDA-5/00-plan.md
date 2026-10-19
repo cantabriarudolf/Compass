@@ -7,7 +7,7 @@
 | Ventana | Alcance | Estado | Commit final |
 |---|---|---|---|
 | G1 | `noche-2-conflictos` — traer `main` a `noche/serie-noche-2` y resolver los conflictos preservando ambos lados | HECHA | `2561e2f` (merge) |
-| G2 | `higiene-final` — auditar los 4 changes activos del owner y cerrar la serie | pendiente | — |
+| G2 | `higiene-final` — auditar el change activo del owner (`au-google-sso`; tras G1 queda **1**, no 4) y cerrar la serie | HECHA | `a280c1f` (runbook) + `este commit de cierre` (cierre) |
 
 **MÁXIMO: 2 ventanas.** Lo que no entre se declara como deuda post-serie en G2.
 
@@ -76,3 +76,104 @@
   Deuda menor declarada: el runbook de operaciones describe `e2e:fresh` con la base/flags de noche-2
   (`perf-fresh.db`) mientras la implementación integrada usa los de main (`perf-e2e.db`, `--db`); fuera del
   alcance cerrado de G1.
+
+## Cierre de la serie deuda-5
+
+**SERIE COMPLETA 2/2** (G1 + G2). Resultado: la rama `noche/serie-noche-2` queda con `main` integrado,
+sin conflictos, con la suite y los gates verdes y **un solo** change activo del owner (heredado, ajeno a
+la serie). Nada de esta serie creó changes nuevos: fueron merge, higiene y documentación.
+
+### Estado por ventana
+
+| Ventana | Alcance | Estado | Commits | Qué dejó |
+|---|---|---|---|---|
+| G1 | `noche-2-conflictos` — traer `main` a `noche/serie-noche-2` | **HECHA** | `2561e2f` (merge) · `332d5e3` (avance + bitácora) | `origin/main` (`70004d8`, 145 commits) integrado con **8 conflictos** resueltos preservando ambos lados; 0 marcadores; 0 reapariciones de las 28 acciones podadas |
+| G2 | `higiene-final` — auditar el change activo y cerrar | **HECHA** | `a280c1f` (runbook) · `este commit de cierre` (cierre + avance) | Informe de `au-google-sso` (**VIVO**), runbook de `e2e:fresh` alineado al script integrado, gates finales y este cierre |
+
+### Números finales de la serie
+
+| Métrica | Valor medido (G2, corrida única) | Piso requerido |
+|---|---|---|
+| Suite completa (`npm test`, `vitest run --coverage`) | **1327 casos en 131 archivos**, `exit 0` | ≥ 1309 casos · 129 archivos |
+| Cobertura global | **94.31 / 85.82 / 93.61 / 94.31** | 93 / 84 / 92 / 93 |
+| Cobertura `lib/**` | **99.63 / 94.08 / 99.44 / 99.63** | 98 / 93 / 98 / 98 |
+| Cobertura `app/api/**` | **88.57 / 76.05 / 89.86 / 88.57** | 87 / 74 / 88 / 87 |
+| `npx tsc --noEmit` | **0 errores** | 0 |
+| `npm run lint` (`apps/web`) | **0 errores** · 2 warnings preexistentes `turbo/no-undeclared-env-vars` | 0 problemas |
+| `npm run lint` (`packages/ui`) | **0 problemas** | 0 |
+| `openspec validate --all` | **35 passed / 0 failed** | 0 fallos |
+| `check-delta-coverage au-google-sso` | **3 ok · 0 info · 0 que romperían el archive** | 0 a romper |
+| `STORE_VERSION` | **28** (congelado, sin cambios en toda la serie) | 28 |
+| `prisma/dev.db` / `Data/NSGC/backups/` | **intactos** (la suite usa `prisma/perf-test.db`) | intactos |
+
+Nota de medición: G1 declaró **1330 casos en 134 archivos**; el árbol solo tiene **131** archivos de test
+(`git ls-files test lib | grep -c '\.test\.tsx\?$'` → 131) y esta corrida midió **1327**. La cobertura por
+área es **idéntica** a la de G1 (global y `lib/**` al dígito), no se borró ni se modificó ningún test
+(`git diff main...HEAD -- test lib` sin entradas `D`/`R`), así que la diferencia es de conteo/reporting en
+la bitácora de G1, no una regresión.
+
+### Informe del change activo: `au-google-sso` — **VIVO**
+
+Único change activo que queda (`ls openspec/changes` → `archive/` + `au-google-sso`). Es **del owner**:
+no se archivó ni se modificó. Clasificación y evidencia:
+
+**VIVO** (código 100 % implementado; bloqueo **operativo del owner**, no de código). Nada de lo hecho por
+las series de deuda lo dejó obsoleto: el problema que resuelve (login Google opcional para usuarios ya
+activados) sigue vigente y su implementación está en el árbol.
+
+| Requisito del change | Evidencia en el código actual |
+|---|---|
+| Provider `Google` en Auth.js (opcional) | `k0mp4ss_fe/apps/web/lib/auth.ts:4` (import) y `:167-177` (registro condicional `googleProviderDisabled ? [] : [Google({...})]`) |
+| Solo usuarios activados, sin alta automática | `lib/auth.ts:180-190` (`signIn`: `findUnique` por email + `usuario.activo`, `allowDangerousEmailAccountLinking: false` en `:174`) |
+| Rate limit por email también en Google | `lib/auth.ts:183-189` (`excedeIntentos` / `registrarFallo` / `limpiarIntentos` con clave `google:<email>`) |
+| JWT `sub` = `Usuario.id` de BD | `lib/auth.ts:196-207` (callback `jwt`, mapea `sub` y `tokenVersion`) |
+| UI "Continuar con Google" | `k0mp4ss_fe/apps/web/app/ingresar/page.tsx:415` (`signInNextAuth("google", ...)`) y `:436` (texto del botón) |
+| Env vars documentadas | `k0mp4ss_fe/apps/web/.env.example:56-57` (`GOOGLE_CLIENT_ID=`, `GOOGLE_CLIENT_SECRET=`) |
+| Tests de integración | `test/auth/google-sso.test.tsx` y `test/auth/google-sso-callbacks.test.ts` (ambos en la suite: 1327 verdes) |
+| Opt-out de CI sin credenciales | `lib/auth.ts:17-38` (`GOOGLE_PROVIDER_DISABLED=1`, change `au-google-provider-disabled` de noche-2) |
+| Deltas de spec válidos | `check-delta-coverage au-google-sso` → 3 requirements MODIFIED cubren los 13 escenarios, 0 a romper |
+
+**Qué falta** (todo del owner, ningún agente puede cerrarlo):
+
+1. `tasks.md` 3.1: cargar `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` **reales** en Vercel (Environment
+   Variables) y verificar el login Google en producción.
+2. Las 2 decisiones de owner: rol por defecto al vincular (sugerencia `residente`) y si se migran usuarios
+   existentes o solo nuevos (ver `BACKLOG-100.md §C3` y la fila `au-google-sso` del triage).
+
+**No archivar todavía.** El comando queda listo para cuando el owner cierre esos 3 puntos **y** los deltas
+ya estén mergeados en `openspec/specs/`:
+
+```bash
+openspec archive au-google-sso --yes
+```
+
+(Tras el archive: `node openspec/scripts/check-delta-coverage.mjs` no aplica — el change deja de existir — y
+`openspec validate --all` debe seguir en 0 fallos. Hacerlo **después** del merge de la rama a `main`, nunca
+antes.)
+
+### Deuda menor saldada en G2
+
+- **Runbook de operaciones** (`k0mp4ss_fe/apps/web/docs/runbook-operaciones.md`, commit `a280c1f`): el
+  escenario "Lane e2e local (base fresca)" describía la base `prisma/perf-fresh.db` y la forma
+  `npm run e2e:fresh -- <nombre>.db`, heredadas de noche-2, mientras el script integrado
+  (`scripts/e2e-fresh.mjs`, implementación de `main`) usa **`perf-e2e.db`** por defecto y el flag
+  **`--db <archivo>`**. Se corrigieron las **2 ocurrencias** (comando por defecto y ejemplo de nombre
+  propio) y se agregó el bloque de flags propios (`--db` / `--keep-db` / `--no-build` / `--help`, siempre
+  antes del separador `--`). **El script no se tocó.**
+
+### Deuda post-serie declarada (no se paga, decisión de diseño)
+
+1. **Techo del 99.95 % de cobertura de `lib/store.ts`** por API pública: quedan **2 statements
+   inalcanzables por diseño** (`lib/store.ts:4323` y `lib/store.ts:5131`), declarados en deuda-2 (D4) y
+   deuda-3 (D5) y visibles en el reporte de cobertura. No se fuerza cobertura con tests artificiales.
+2. **Falso positivo de análisis estático en `app/comunidad/comunicacion/page.tsx:292`**: el
+   `window.open(url, "_blank", "noopener,noreferrer")` está guardado por `esUrlSegura(url)`
+   (`page.tsx:277`, solo `http`/`https`). Código **preexistente e idéntico en `main`**; tocarlo es decisión
+   de producto (allowlist de dominios) y queda **fuera de alcance**. No se modificó.
+3. **2 warnings de `turbo/no-undeclared-env-vars`** (`lib/auth.ts:24` → `GOOGLE_PROVIDER_DISABLED`,
+   `lib/env-guard.ts:43` → `E2E_ALLOW_WRITE_APIS`): las dos banderas las introdujo noche-2 y no están
+   declaradas en `k0mp4ss_fe/turbo.json:3` (`globalEnv`). Declararlas es deuda de higiene de 5 minutos,
+   fuera del alcance cerrado de esta ventana; el gate de lint es **0 errores**.
+4. **`au-google-sso`** sigue activo por bloqueo operativo del owner (ver informe arriba): es la única
+   deuda abierta que la serie no puede saldar por diseño.
+5. **CI / push / merge / archive** de esta serie los ejecuta el orquestador (los workers nunca pushean).
