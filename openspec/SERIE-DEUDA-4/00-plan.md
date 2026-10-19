@@ -8,7 +8,7 @@
 | Ventana | Alcance | Estado | Commit final |
 |---|---|---|---|
 | F1 | `fix-vercel-data-ignore` — corregir el `.vercelignore` (bloqueante del deploy y del merge) | HECHA | `6585f48` + `5e938f2` + doc |
-| F2 | `deuda-menor` — el último warning de lint (`packages/ui`) + robustez de 4 CLIs | pendiente | — |
+| F2 | `deuda-menor` — el último warning de lint (`packages/ui`) + robustez de 4 CLIs | HECHA | `4203b01` + `b31fdab` + `88a1f9e` + `89c1a2a` + `c5bcbeb` + doc |
 | F3 | Cierre de la serie + readiness del merge | pendiente | — |
 
 **MÁXIMO: 3 ventanas.** Lo que no entre se declara como deuda post-serie en F3.
@@ -77,3 +77,18 @@
   `openspec validate --all` 39/39 · `check-delta-coverage` 0 que romperían el archive ·
   `npm run build` ✓ (91/91 páginas). Commits `6585f48` (ignores), `5e938f2` (change) y el de docs
   (avance + este plan). **Sin pushear**: el redeploy de Vercel y el archive los hace el orquestador.
+- 2026-10-19 **F2 HECHA**: `deuda-menor` cerrado en las dos deudas declaradas por deuda-3. El último
+  warning del monorepo (`react-hooks/set-state-in-effect` en `packages/ui/src/hooks/use-mobile.ts`)
+  murió reescribiendo el hook con `useSyncExternalStore` (sin `eslint-disable`, con snapshot de
+  servidor `false` = el valor inicial histórico; mismo cálculo, misma suscripción, mismo cleanup) y
+  un test de fijación de 5 casos en `apps/web/test/use-mobile.test.tsx`. Los 4 CLIs de `scripts/`
+  pasaron a **mismo contrato, mejor error**: `restore-db` nombra el manifest ilegible/incompleto,
+  `deploy-migrar-datos` agrega qué paso del corte falló sin tapar el output real de la herramienta
+  (`stdio: "inherit"`) y `security-recheck`/`check-headers` resuelven `WEB_ROOT` con
+  `fileURLToPath` + guarda que aborta claro (antes: 5 FAIL engañosos y un **falso verde exit 0** con
+  un espacio en la ruta, por el `%20` de `new URL().pathname`). Gates: `tsc` 0 (app y packages/ui) ·
+  `eslint` **0 problemas** en app y packages/ui (antes 1 warning) · `npm test` **1309/1309 en 129
+  archivos** (563.05 s) con global 94.32/85.71/93.77/94.32 · `openspec validate --all` 40/40 ·
+  `check-delta-coverage` 0 que romperían el archive. Commits `4203b01`, `b31fdab`, `88a1f9e`,
+  `89c1a2a`, `c5bcbeb` y el de docs. **Sin pushear**: el push, el CI y el archive los hace el
+  orquestador.
