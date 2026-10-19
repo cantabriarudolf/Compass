@@ -32,3 +32,36 @@ de la raíz debe ir anclado (`/Nombre/`).
   con `ignore@7.0.5` demuestra que `k0mp4ss_fe/apps/web/data/**` se conserva y
   que `Data/`, `openspec/`, `test/`, `e2e/`, `scripts/` siguen excluidos.
   La verificación final es el redeploy en Vercel (a cargo del owner).
+
+## Addendum F1 (SERIE-DEUDA-4, 2026-10-19): también `k0mp4ss_fe/.vercelignore`
+
+El párrafo de "Alternativas descartadas" afirma que Vercel lee el `.vercelignore` desde la raíz del
+repo "sin que exista uno en `k0mp4ss_fe/`". Eso era cierto cuando se escribió, pero **ya no**: el
+commit `1406277` agregó `k0mp4ss_fe/.vercelignore` (37 líneas) y ese archivo tenía **el mismo bug** —
+`Data/` sin anclar en la línea 6, que con el matcher *case-insensitive* y *a cualquier profundidad*
+también excluye `apps/web/data/**`.
+
+El `Root Directory` del proyecto es `k0mp4ss_fe`, así que ése es el `.vercelignore` que Vercel aplica
+a la subida del directorio del proyecto; el de la raíz cubre la subida del repo completo. Como el fix
+de ambos es idéntico y de riesgo nulo (`/Data/` no ancla a nada existente dentro de `k0mp4ss_fe/`,
+porque ahí no hay carpeta `Data/`), se aplica en **los dos** archivos para que el resultado no dependa
+de cuál lea Vercel:
+
+```diff
+-Data/
++# ATENCIÓN: matcher case-insensitive, patrones sin '/' matchean a cualquier profundidad…
++/Data/
+```
+
+Evidencia (misma simulación, `ignore@7.0.5`, `ignorecase: true`, base `k0mp4ss_fe/`):
+
+```text
+=== FE previo (Data/ sin anclar) ===
+EXCLUIDO | apps/web/data/comunidad/personas.ts
+EXCLUIDO | apps/web/data/maestros.ts
+=== FE actual (/Data/ anclado) ===
+INCLUIDO | apps/web/data/comunidad/personas.ts
+INCLUIDO | apps/web/data/maestros.ts
+EXCLUIDO | Data/NSGC/backups/dev-2026-10-01.db
+EXCLUIDO | openspec/BACKLOG-100.md
+```
