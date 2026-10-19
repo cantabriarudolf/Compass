@@ -56,9 +56,14 @@ anteriores producen falsos positivos (duplicados, estados residuales).
 
 ```bash
 cd k0mp4ss_fe/apps/web
-npm run e2e:fresh            # base prisma/perf-fresh.db desde cero + seed completo
-# npm run e2e:fresh -- perf-noche.db   # nombre propio (siempre prefijo perf*.db)
+npm run e2e:fresh                       # base prisma/perf-e2e.db desde cero + seed completo
+# npm run e2e:fresh -- --db perf-noche.db   # nombre propio (convención perf*.db, gitignored)
+# npm run e2e:fresh -- --keep-db --no-build # reusar la base y saltear el build
 ```
+
+Flags propios (siempre **antes** del separador `--`): `--db <archivo>` (base descartable relativa a
+`prisma/`, default `perf-e2e.db`), `--keep-db` (no recrear la base), `--no-build` (saltear el build)
+y `--help`. Lo que siga al separador `--` se pasa tal cual a Playwright y dispara la corrida.
 
 El script hace paridad con el job `e2e` del CI: `prisma migrate deploy
 --schema=prisma/schema.sqlite.prisma` con `DATABASE_URL=file:./<nombre>.db`, luego
