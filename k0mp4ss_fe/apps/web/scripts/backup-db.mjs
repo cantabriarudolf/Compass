@@ -7,7 +7,6 @@
  *   db-<ts>/manifest.json            meta + conteos + sha256 del archivo
  * Uso: npm run backup:db [-- --label=pre-restore]
  */
-/* global process */
 import { createHash } from "node:crypto"
 import { copyFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs"
 import path from "node:path"

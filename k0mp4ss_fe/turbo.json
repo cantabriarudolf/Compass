@@ -20,7 +20,13 @@
     "CI",
     "ANALYZE",
     "NEXT_RUNTIME",
-    "LOG_LEVEL"
+    "LOG_LEVEL",
+    "CSP_ENFORCEMENT",
+    "SQLITE_URL",
+    "POSTGRES_URL",
+    "DATABASE_URL_POSTGRES",
+    "COMUNIDAD_ID",
+    "SKIP_DATOS"
   ],
   "ui": "tui",
   "tasks": {

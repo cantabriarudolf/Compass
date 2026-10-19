@@ -5,14 +5,20 @@
 import { describe, it, expect } from "vitest"
 import { NextRequest } from "next/server"
 
+/** Invoca el middleware por defecto de `@/proxy` con la petición mínima del test. */
+async function pedirProxy(): Promise<Response> {
+  const proxy = (await import("@/proxy")).default
+  return proxy(
+    new NextRequest("http://localhost/", {
+      headers: { "x-forwarded-proto": "http" },
+    })
+  )
+}
+
 describe("proxy: cspEnforce(nonce) directive string", () => {
   it("returns full CSP directive string with all 13 directives", async () => {
-    const proxy = (await import("@/proxy")).default
 
-    const r = await (proxy as any)(
-      new NextRequest("http://localhost/", { headers: { "x-forwarded-proto": "http" } }) as any,
-      undefined as never
-    )
+    const r = await pedirProxy()
 
     const csp = r.headers.get("content-security-policy-report-only") ?? ""
     const directives = csp.split("; ").map((d: string) => d.trim())
@@ -36,12 +42,8 @@ describe("proxy: cspEnforce(nonce) directive string", () => {
   })
 
   it("interpolates nonce correctly in script-src", async () => {
-    const proxy = (await import("@/proxy")).default
 
-    const r = await (proxy as any)(
-      new NextRequest("http://localhost/", { headers: { "x-forwarded-proto": "http" } }) as any,
-      undefined as never
-    )
+    const r = await pedirProxy()
 
     const csp = r.headers.get("content-security-policy-report-only") ?? ""
     const nonce = r.headers.get("x-nonce")
@@ -51,25 +53,15 @@ describe("proxy: cspEnforce(nonce) directive string", () => {
   })
 
   it("includes strict-dynamic in script-src", async () => {
-    const proxy = (await import("@/proxy")).default
 
-    const r = await (proxy as any)(
-      new NextRequest("http://localhost/", { headers: { "x-forwarded-proto": "http" } }) as any,
-      undefined as never
-    )
+    const r = await pedirProxy()
 
     const csp = r.headers.get("content-security-policy-report-only") ?? ""
     expect(csp).toContain("'strict-dynamic'")
   })
 
   it("includes unsafe-inline and unsafe-eval in script-src (Next.js compat)", async () => {
-    const proxy = (await import("@/proxy")).default
-
-    const r = await (await import("@/proxy")).default
-    const r2 = await (proxy as any)(
-      new NextRequest("http://localhost/", { headers: { "x-forwarded-proto": "http" } }) as any,
-      undefined as never
-    )
+    const r2 = await pedirProxy()
 
     const csp = r2.headers.get("content-security-policy-report-only") ?? ""
     expect(csp).toContain("'unsafe-inline'")
@@ -77,12 +69,8 @@ describe("proxy: cspEnforce(nonce) directive string", () => {
   })
 
   it("includes youtube.com and youtube-nocookie.com in frame-src", async () => {
-    const proxy = (await import("@/proxy")).default
 
-    const r = await (proxy as any)(
-      new NextRequest("http://localhost/", { headers: { "x-forwarded-proto": "http" } }) as any,
-      undefined as never
-    )
+    const r = await pedirProxy()
 
     const csp = r.headers.get("content-security-policy-report-only") ?? ""
     expect(csp).toContain("https://www.youtube.com")
@@ -90,12 +78,8 @@ describe("proxy: cspEnforce(nonce) directive string", () => {
   })
 
   it("includes fonts.googleapis.com and fonts.gstatic.com in style-src and font-src", async () => {
-    const proxy = (await import("@/proxy")).default
 
-    const r = await (proxy as any)(
-      new NextRequest("http://localhost/", { headers: { "x-forwarded-proto": "http" } }) as any,
-      undefined as never
-    )
+    const r = await pedirProxy()
 
     const csp = r.headers.get("content-security-policy-report-only") ?? ""
     expect(csp).toContain("https://fonts.googleapis.com")
@@ -103,28 +87,17 @@ describe("proxy: cspEnforce(nonce) directive string", () => {
   })
 
   it("includes https: in img-src for remote logos/avisos", async () => {
-    const proxy = (await import("@/proxy")).default
 
-    const r = await (proxy as any)(
-      new NextRequest("http://localhost/", { headers: { "x-forwarded-proto": "http" } }) as any,
-      undefined as never
-    )
+    const r = await pedirProxy()
 
     const csp = r.headers.get("content-security-policy-report-only") ?? ""
     expect(csp).toContain("img-src 'self' data: blob: https:")
   })
 
   it("produces identical directive string across requests (only nonce differs)", async () => {
-    const proxy = (await import("@/proxy")).default
 
-    const r1 = await (proxy as any)(
-      new NextRequest("http://localhost/", { headers: { "x-forwarded-proto": "http" } }) as any,
-      undefined as never
-    )
-    const r2 = await (proxy as any)(
-      new NextRequest("http://localhost/", { headers: { "x-forwarded-proto": "http" } }) as any,
-      undefined as never
-    )
+    const r1 = await pedirProxy()
+    const r2 = await pedirProxy()
 
     const csp1 = r1.headers.get("content-security-policy-report-only") ?? ""
     const csp2 = r2.headers.get("content-security-policy-report-only") ?? ""

@@ -15,6 +15,7 @@ import { PeriodoDirectivaSchema } from "@/lib/schemas"
 import { puede } from "@/lib/authz"
 import { prisma } from "@/lib/prisma"
 import { logger } from "@/lib/logger"
+import { generarId } from "@/lib/id-utils"
 import {
   jsonError,
   withComunidadScope,
@@ -164,10 +165,18 @@ export async function rotarVigente(
           ]
         : []
     })
+    // SAFETY: roster validado miembro por miembro (cargos/fechas/personas); el
+    // round-trip JSON elimina `undefined` para InputJsonValue.
+    let miembrosArchivados: unknown
+    try {
+      miembrosArchivados = JSON.parse(JSON.stringify(roster))
+    } catch (e) {
+      logger.error({ err: e }, "[api/periodos-directiva] nómina archivada no serializable")
+      throw e
+    }
     await prisma.periodoDirectiva.update({
       where: { id: previo.id },
-      // SAFETY: roster validado miembro por miembro (cargos/fechas/personas); JSON round-trip elimina undefined para InputJsonValue.
-      data: { estado: "cerrado", fechaFin: fechaInicioNuevo, miembros: JSON.parse(JSON.stringify(roster)) as never },
+      data: { estado: "cerrado", fechaFin: fechaInicioNuevo, miembros: miembrosArchivados as never },
     })
     // Las fichas del período cerrado quedan archivadas en la nómina; se
     // depuran de las personas que no continúan.
@@ -317,6 +326,26 @@ export async function POST(req: Request): Promise<Response> {
       } as never,
       update: limpiarPayloadPeriodo(datos) as never,
     })
+
+    // Auditoría `GD_PERIODO_REGISTRADO` (categoría GD): se emite después de la
+    // escritura y nunca la bloquea (patrón de las rutas que auditan a mano).
+    try {
+      await prisma.eventoAuditoria.create({
+        data: {
+          id: generarId("ev"),
+          comunidadId: scope.comunidadId,
+          timestamp: new Date().toISOString(),
+          usuario: scope.usuarioId,
+          categoria: "GD",
+          tipoAccion: "GD_PERIODO_REGISTRADO",
+          referenciaId: record.id,
+          descripcion: `Período de directiva registrado (${record.estado}) desde ${record.fechaInicio}, ${record.duracionMeses} meses, nómina de ${nomina.length} miembros.`,
+        },
+      })
+    } catch (e) {
+      logger.error({ err: e }, "[api/periodos-directiva] no se pudo registrar GD_PERIODO_REGISTRADO")
+    }
+
     return Response.json(record, { status: existente ? 200 : 201 })
   } catch (e) {
     return errorPeriodos(e)

@@ -1,0 +1,10 @@
+schema: spec-driven
+
+# Change de higiene y robustez de tooling (ventana F2 de SERIE-DEUDA-4): elimina
+# el último warning de lint del monorepo (`react-hooks/set-state-in-effect` en el
+# hook `useIsMobile` de `@workspace/ui`) y endurece el manejo de errores de 4
+# CLIs de `apps/web/scripts/`. Ninguna capacidad viva declara la higiene del
+# linter ni la forma de un hook de UI; los CLIs son tooling de operación, fuera
+# del alcance de las specs de la plataforma (no hay comportamiento nuevo cuando
+# todo está bien). Ver openspec/CONVENCION-DELTAS.md
+skip_specs: true

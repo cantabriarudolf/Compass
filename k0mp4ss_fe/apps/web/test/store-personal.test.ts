@@ -183,26 +183,7 @@ describe("PE - Personal y Servicios en el store", () => {
       expect(r.error).toContain("ya registró un cierre")
     })
 
-    it("edición preserva historial de cambios inmutable y audita PE_CIERRE_EDITADO", () => {
-      expect(getState().cerrarTurnoPE(cierreValido()).ok).toBe(true)
-      const id = getState().cierresTurnoPE[0]!.id
-      const r = getState().editarCierreTurnoPE(id, { novedadesGenerales: "Se agrega hallazgo de luminaria." }, "Corrige omisión de hallazgo")
-      expect(r.ok).toBe(true)
-      const editado = getState().cierresTurnoPE.find(c => c.id === id)!
-      expect(editado.historialCambios).toHaveLength(1)
-      expect(editado.historialCambios[0]!.resumen).toContain("omisión")
-      expect(lastEvent()?.tipoAccion).toBe("PE_CIERRE_EDITADO")
-    })
 
-    it("no permite eliminar cierres históricos fuera del día en curso (salvo test-)", () => {
-      expect(getState().cerrarTurnoPE(cierreValido()).ok).toBe(true)
-      const id = getState().cierresTurnoPE[0]!.id
-      expect(getState().removeCierreTurnoPE(id).ok).toBe(false)
-      useCompassStore.setState(s => ({
-        cierresTurnoPE: [...s.cierresTurnoPE, { ...cierreValido(), id: "test-pe-cierre-x", historialCambios: [], notificadoAAdmin: false }],
-      }))
-      expect(getState().removeCierreTurnoPE("test-pe-cierre-x").ok).toBe(true)
-    })
 
     it("valida FKs de trabajador y jornada", () => {
       const malTrabajador = cierreValido()
@@ -241,8 +222,10 @@ describe("PE - Personal y Servicios en el store", () => {
     })
 
     it("visita respeta flag CF de notificación apagado", () => {
-      const cfg = { ...getState().configuracion, notificarRegistroVisitas: false }
-      expect(getState().saveConfiguracion(cfg).ok).toBe(true)
+      // Se siembra la configuración directo: `saveConfiguracion` (legacy) se eliminó en store-cleanup.
+      useCompassStore.setState((s) => ({
+        configuracion: { ...s.configuracion, notificarRegistroVisitas: false },
+      }))
       const directa = { ...visitaAgendada(), origenAgenda: "sin_aviso" as const, estado: "ingresada" as const }
       expect(getState().saveBitacoraVisitaPE(directa).ok).toBe(true)
       expect(getState().notificaciones.some(n => n.asunto.startsWith("Visita"))).toBe(false)
@@ -330,20 +313,6 @@ describe("PE - Personal y Servicios en el store", () => {
       expect(getState().mantencionesPreventivasPE.find(m => m.id === "mant-test")!.proximaFecha).toBe("2026-09-04")
     })
 
-    it("bloquea eliminación de proveedor con historial y de mantención con visitas", () => {
-      expect(getState().saveProveedorPE(proveedorBase()).ok).toBe(true)
-      expect(getState().saveMantencionPE(mantencionBase()).ok).toBe(true)
-      expect(getState().removeProveedorPE("prov-test").ok).toBe(false)
-      expect(getState().registrarVisitaTecnicaPE({
-        id: "vt-test2",
-        proveedorId: "prov-test",
-        mantencionId: "mant-test",
-        tecnicoNombre: "Luis Soto",
-        fecha: "2026-08-05",
-        trabajoRealizado: "Ajuste de puertas",
-      }).ok).toBe(true)
-      expect(getState().removeMantencionPE("mant-test").ok).toBe(false)
-    })
   })
 
   describe("panel de monitoreo", () => {
@@ -456,20 +425,6 @@ describe("PE - Personal y Servicios en el store", () => {
       expect(r.error).toContain("checklist")
     })
 
-    it("editarCierreTurnoPE valida existencia, resumen y jornada; removeCierreTurnoPE valida existencia", () => {
-      expect(getState().editarCierreTurnoPE("pe-cierre-nadie", {}, "Resumen válido").ok).toBe(false)
-      expect(getState().removeCierreTurnoPE("pe-cierre-nadie").ok).toBe(false)
-      expect(getState().cerrarTurnoPE({
-        fecha: "2026-08-25", hora: "08:00", jornadaReportadaId: "j-manana", trabajadorPersonaId: "p-4",
-        incidencias: { hubo: false },
-        checklistInstalaciones: checklistInstalacionesParaJornada("j-manana"),
-        checklistEquipamiento: checklistEquipamientoBase(),
-      }).ok).toBe(true)
-      const id = getState().cierresTurnoPE[0]!.id
-      expect(getState().editarCierreTurnoPE(id, {}, "cort").ok).toBe(false)
-      expect(getState().editarCierreTurnoPE(id, { jornadaReportadaId: "j-nadie" }, "Cambia jornada inválida").ok).toBe(false)
-      expect(getState().editarCierreTurnoPE(id, { jornadaReportadaId: "j-tarde" }, "Reemplazo de jornada reportada").ok).toBe(true)
-    })
 
     it("enviarProyeccionCostoFI valida formato y costos negativos", () => {
       expect(getState().enviarProyeccionCostoFI("septiembre", { costoParche: 0, costoDiaExtra: 0 }).error).toContain("AAAA-MM")

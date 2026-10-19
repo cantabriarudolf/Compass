@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest"
 import { useCompassStore } from "@/lib/store"
-import type { ActaGD, Persona } from "@/lib/schemas"
+import type { ActaGD, PeriodoDirectiva, Persona } from "@/lib/schemas"
 import { resetStore } from "./helpers"
 
 const getState = () => useCompassStore.getState()
@@ -171,100 +171,51 @@ describe("períodos de directiva", () => {
 
   function activarPeriodo(id = "periodo-t1") {
     const [a, b, c] = tresActivos()
-    const r = getState().savePeriodoDirectiva(
-      {
-id,
-fechaInicio: "2026-01-01",
-duracionMeses: 36,
-fechaInscripcion: "2026-01-02",
-referenciaInscripcion: "Acta asamblea 2026-01-01",
-estado: "vigente",
-miembros: [],
-      },
-      [
-{ personaId: a!, cargo: "presidente", fechaAsuncion: "2026-01-01" },
-{ personaId: b!, cargo: "tesorero", fechaAsuncion: "2026-01-01" },
-{ personaId: c!, cargo: "secretario", fechaAsuncion: "2026-01-01" },
-      ]
-    )
-    expect(r.ok).toBe(true)
+    // Se siembra el estado directo: `savePeriodoDirectiva` (legacy) se eliminó en store-cleanup.
+    // Se replican sus efectos observables (período vigente + fichas de gobernanza + rol directiva)
+    // para que los casos vivos que dependen de la directiva vigente sigan cubiertos.
+    const nomina = [
+      { personaId: a!, cargo: "presidente" as const, fechaAsuncion: "2026-01-01" },
+      { personaId: b!, cargo: "tesorero" as const, fechaAsuncion: "2026-01-01" },
+      { personaId: c!, cargo: "secretario" as const, fechaAsuncion: "2026-01-01" },
+    ]
+    useCompassStore.setState((s) => {
+      const periodo: PeriodoDirectiva = {
+        id,
+        fechaInicio: "2026-01-01",
+        duracionMeses: 36,
+        fechaInscripcion: "2026-01-02",
+        referenciaInscripcion: "Acta asamblea 2026-01-01",
+        estado: "vigente",
+        miembros: nomina.map((m) => ({
+          personaId: m.personaId,
+          nombre: s.personas.find((p) => p.id === m.personaId)?.nombreCompleto ?? m.personaId,
+          cargo: m.cargo,
+          fechaAsuncion: m.fechaAsuncion,
+        })),
+      }
+      const personas = s.personas.map((p) => {
+        const m = nomina.find((n) => n.personaId === p.id)
+        if (!m) return p
+        const roles = p.roles.includes("directiva") ? p.roles : [...p.roles, "directiva"]
+        return {
+          ...p,
+          roles: roles as Persona["roles"],
+          datosGobernanza: {
+            id: p.datosGobernanza?.id ?? `g-${p.id}`,
+            cargoDirectiva: m.cargo,
+            fechaAsuncion: m.fechaAsuncion,
+            periodoId: id,
+          },
+        }
+      })
+      return {
+        periodosDirectiva: [...s.periodosDirectiva.filter((x) => x.id !== id), periodo],
+        personas,
+      }
+    })
     return { a: a!, b: b!, c: c! }
   }
-
-  it("activa un período y asigna periodoId a las fichas", () => {
-    const { a } = activarPeriodo()
-    const p = getState().personas.find((x) => x.id === a)!
-    expect(p.datosGobernanza?.periodoId).toBe("periodo-t1")
-    expect(p.roles).toContain("directiva")
-    expect(getState().eventos.map((e) => e.tipoAccion)).toContain("GD_PERIODO_REGISTRADO")
-  })
-
-  it("rechaza nómina par o fuera de 3–5 (art. 17)", () => {
-    const ids = tresActivos()
-    const r = getState().savePeriodoDirectiva(
-      {
-id: "periodo-par",
-fechaInicio: "2026-01-01",
-duracionMeses: 36,
-fechaInscripcion: "2026-01-02",
-referenciaInscripcion: "Acta",
-estado: "vigente",
-miembros: [],
-      },
-      ids
-.slice(0, 2)
-.map((personaId) => ({ personaId: personaId!, cargo: "director" as const, fechaAsuncion: "2026-01-01" }))
-    )
-    expect(r.ok).toBe(false)
-    expect(r.error).toContain("art. 17")
-  })
-
-  it("rechaza duración mayor a 36 meses", () => {
-    const ids = tresActivos()
-    const r = getState().savePeriodoDirectiva(
-      {
-id: "periodo-largo",
-fechaInicio: "2026-01-01",
-duracionMeses: 48,
-fechaInscripcion: "2026-01-02",
-referenciaInscripcion: "Acta",
-estado: "vigente",
-miembros: [],
-      },
-      ids.map((personaId) => ({ personaId: personaId!, cargo: "director" as const, fechaAsuncion: "2026-01-01" }))
-    )
-    expect(r.ok).toBe(false)
-  })
-
-  it("el segundo vigente cierra el anterior archivando su nómina", () => {
-        const { a } = activarPeriodo("periodo-t1")
-        const otros = getState()
-          .personas.filter((p) => p.estadoCuenta === "activa" && p.id !== a)
-          .slice(0, 3)
-          .map((p) => p.id)
-    const r = getState().savePeriodoDirectiva(
-      {
-id: "periodo-t2",
-fechaInicio: "2027-01-01",
-duracionMeses: 36,
-fechaInscripcion: "2027-01-02",
-referenciaInscripcion: "Acta 2027",
-estado: "vigente",
-miembros: [],
-      },
-      [
-{ personaId: otros[0]!, cargo: "presidente", fechaAsuncion: "2027-01-01" },
-{ personaId: otros[1]!, cargo: "tesorero", fechaAsuncion: "2027-01-01" },
-{ personaId: otros[2]!, cargo: "secretario", fechaAsuncion: "2027-01-01" },
-      ]
-    )
-    expect(r.ok).toBe(true)
-    const cerrado = getState().periodosDirectiva.find((p) => p.id === "periodo-t1")!
-    expect(cerrado.estado).toBe("cerrado")
-    expect(cerrado.miembros).toHaveLength(3)
-    // 'a' salió: ficha depurada (archivada en la nómina del cerrado).
-    expect(getState().personas.find((x) => x.id === a)!.datosGobernanza).toBeUndefined()
-  })
 
   it("saveActaGD adjunta el periodoId vigente", () => {
     activarPeriodo()

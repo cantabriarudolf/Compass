@@ -1,0 +1,9 @@
+schema: spec-driven
+
+# Change de presupuesto de test: `test/componentes/pe-panels.test.tsx` era flaky
+# (timeout de 30 s bajo carga, verde en aislamiento) y pasa a declarar un
+# presupuesto explícito por caso. No hay comportamiento observable nuevo ni
+# capacidad viva que declare el presupuesto de un test de componente, así que
+# NO lleva delta.
+# Ver openspec/CONVENCION-DELTAS.md
+skip_specs: true

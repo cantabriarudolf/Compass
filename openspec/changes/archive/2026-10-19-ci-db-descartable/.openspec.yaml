@@ -1,0 +1,12 @@
+schema: spec-driven
+
+# Change de config de CI + tooling de tests: alinea los 3 `DATABASE_URL` de
+# `.github/workflows/ci.yml` a la base descartable (`file:./perf-test.db`) y quita
+# la excepción de la guarda dura de `test/db-descartable.setup.ts`, que vuelve a
+# abortar siempre ante un destino `dev.db`. No cambia comportamiento de producto,
+# contratos de API ni shape persistido (STORE_VERSION = 28 intacto) y ninguna
+# capacidad viva declara el nombre de la base del workflow ni la política de la
+# guarda (las menciones a `dev.db` de ST/SG son del setup local de Prisma), así que
+# no hay delta de spec que aplicar.
+# Ver openspec/CONVENCION-DELTAS.md § "Changes que no modifican specs".
+skip_specs: true

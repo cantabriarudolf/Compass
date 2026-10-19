@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-/* eslint-disable no-undef -- Node.js runtime file, process is global */
 /* eslint-disable turbo/no-undeclared-env-vars -- VERCEL_TOKEN is required env var */
 /**
  * Script de deploy manual a Vercel (fallback cuando CD no está configurado).

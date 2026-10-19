@@ -7,12 +7,33 @@
  *
  * Límite documentado: `next build` rompe por Google Fonts sin red, por eso se usa `next dev` + curl/fetch.
  */
-/* global process */
 import { readFileSync, existsSync } from "node:fs"
 import path from "node:path"
-import { pathToFileURL } from "node:url"
+import { fileURLToPath, pathToFileURL } from "node:url"
 
-const WEB_ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..")
+/**
+ * Raíz de la app resuelta desde la ubicación del script. `fileURLToPath` decodifica los
+ * caracteres escapados de la URL (un `%20` por un espacio en la ruta, p. ej.) y, si la
+ * resolución falla o el directorio no es la app, aborta con un mensaje claro en vez de
+ * seguir con una ruta inválida y terminar reportando checks engañosos.
+ */
+function raizDeLaApp() {
+  let dir
+  try {
+    dir = path.dirname(fileURLToPath(import.meta.url))
+  } catch (err) {
+    console.error(`check:headers ABORTADO: no pude resolver la ruta del script (import.meta.url): ${err.message}`)
+    process.exit(1)
+  }
+  const root = path.resolve(dir, "..")
+  if (!existsSync(path.join(root, "package.json"))) {
+    console.error(`check:headers ABORTADO: no encuentro package.json en ${root}. Ejecutalo con workdir k0mp4ss_fe/apps/web.`)
+    process.exit(1)
+  }
+  return root
+}
+
+const WEB_ROOT = raizDeLaApp()
 const NEXT_CONFIG = path.join(WEB_ROOT, "next.config.mjs")
 const PROXY_TS = path.join(WEB_ROOT, "proxy.ts")
 

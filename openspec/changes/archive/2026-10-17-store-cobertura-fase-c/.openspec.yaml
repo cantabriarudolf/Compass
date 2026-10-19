@@ -1,0 +1,5 @@
+schema: spec-driven
+
+# El change modifica el requirement "Gate de cobertura por área (ratchet de
+# Vitest)" de la capability viva DEV-qa-lab: la fase C del store sube los pisos
+# de `lib/**` y global. Ver el delta en specs/DEV-qa-lab/spec.md.

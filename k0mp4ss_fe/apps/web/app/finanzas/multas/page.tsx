@@ -97,7 +97,7 @@ export default function MultasPage() {
 items: tipos, isLoading: cTipos, create: crearTipoApi, update: actualizarTipoApi, remove: eliminarTipoApi,
   } = useTiposInfraccionIN()
   const {
-items: infracciones, isLoading: cInfracciones, create: crearInfraccionApi, update: actualizarInfraccionApi, remove: eliminarInfraccionApi,
+items: infracciones, isLoading: cInfracciones, create: crearInfraccionApi,
   } = useInfraccionesIN()
   const { personas, isLoading: cPersonas } = usePersonas()
   const { items: unidades, isLoading: cUnidades } = useUnidades()

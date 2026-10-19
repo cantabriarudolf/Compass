@@ -1,0 +1,7 @@
+schema: spec-driven
+
+# Change de tooling puro (script `npm run e2e:fresh` + espera de la purga en un
+# spec e2e): no cambia comportamiento de producto, contratos de API ni shape
+# persistido, así que no hay delta de spec que aplicar. Ver
+# openspec/CONVENCION-DELTAS.md § "Changes que no modifican specs".
+skip_specs: true

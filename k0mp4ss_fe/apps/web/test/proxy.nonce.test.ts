@@ -5,6 +5,16 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import { NextRequest } from "next/server"
 
+/** Invoca el middleware por defecto de `@/proxy` con la petición mínima del test. */
+async function pedirProxy(): Promise<Response> {
+  const proxy = (await import("@/proxy")).default
+  return proxy(
+    new NextRequest("http://localhost/", {
+      headers: { "x-forwarded-proto": "http" },
+    })
+  )
+}
+
 // Helper to create a mock crypto object
 function createMockCrypto(overrides: Partial<Crypto> = {}): Crypto {
   const baseCrypto: Crypto = {
@@ -13,7 +23,8 @@ function createMockCrypto(overrides: Partial<Crypto> = {}): Crypto {
       for (let i = 0; i < arr.length; i++) arr[i] = i + 1
       return arr
     },
-    subtle: undefined as any,
+    // Fixture: el mock no ejercita WebCrypto, pero el tipo `Crypto` exige la propiedad.
+    subtle: undefined as unknown as SubtleCrypto,
   }
   return {
     ...baseCrypto,
@@ -48,16 +59,8 @@ describe("proxy: generarNonce() uniqueness", () => {
   it("generates unique nonce per request via proxy middleware", async () => {
     setMockCrypto(createMockCrypto())
 
-    const proxy = (await import("@/proxy")).default
-
-    const r1 = await (proxy as any)(
-      new NextRequest("http://localhost/", { headers: { "x-forwarded-proto": "http" } }) as any,
-      undefined as never
-    )
-    const r2 = await (proxy as any)(
-      new NextRequest("http://localhost/", { headers: { "x-forwarded-proto": "http" } }) as any,
-      undefined as never
-    )
+    const r1 = await pedirProxy()
+    const r2 = await pedirProxy()
 
     const nonce1 = r1.headers.get("x-nonce")
     const nonce2 = r2.headers.get("x-csp-nonce")
@@ -80,16 +83,8 @@ describe("proxy: generarNonce() uniqueness", () => {
     })
     setMockCrypto(createMockCrypto({ randomUUID: randomUUIDMock as () => `${string}-${string}-${string}-${string}-${string}` }))
 
-    const proxy = (await import("@/proxy")).default
-
-    const r1 = await (proxy as any)(
-      new NextRequest("http://localhost/", { headers: { "x-forwarded-proto": "http" } }) as any,
-      undefined as never
-    )
-    const r2 = await (proxy as any)(
-      new NextRequest("http://localhost/", { headers: { "x-forwarded-proto": "http" } }) as any,
-      undefined as never
-    )
+    const r1 = await pedirProxy()
+    const r2 = await pedirProxy()
 
     const nonce1 = r1.headers.get("x-nonce")
     const nonce2 = r2.headers.get("x-nonce")
@@ -100,12 +95,7 @@ describe("proxy: generarNonce() uniqueness", () => {
   it("uses crypto.randomUUID when available", async () => {
     const randomUUIDMock = vi.fn((): string => "12345678-1234-1234-1234-123456789012")
     setMockCrypto(createMockCrypto({ randomUUID: randomUUIDMock as () => `${string}-${string}-${string}-${string}-${string}` }))
-
-    const proxy = (await import("@/proxy")).default
-    const r = await (proxy as any)(
-      new NextRequest("http://localhost/", { headers: { "x-forwarded-proto": "http" } }) as any,
-      undefined as never
-    )
+    const r = await pedirProxy()
 
     expect(randomUUIDMock).toHaveBeenCalled()
     const nonce = r.headers.get("x-nonce")
@@ -119,12 +109,7 @@ describe("proxy: generarNonce() uniqueness", () => {
       return arr
     })
     setMockCrypto(createMockCrypto({ randomUUID: undefined, getRandomValues: getRandomValuesMock }))
-
-    const proxy = (await import("@/proxy")).default
-    const r = await (proxy as any)(
-      new NextRequest("http://localhost/", { headers: { "x-forwarded-proto": "http" } }) as any,
-      undefined as never
-    )
+    const r = await pedirProxy()
 
     expect(getRandomValuesMock).toHaveBeenCalled()
     const nonce = r.headers.get("x-nonce")
@@ -139,12 +124,7 @@ describe("proxy: generarNonce() uniqueness", () => {
       writable: true,
       configurable: true,
     })
-
-    const proxy = (await import("@/proxy")).default
-    const r = await (proxy as any)(
-      new NextRequest("http://localhost/", { headers: { "x-forwarded-proto": "http" } }) as any,
-      undefined as never
-    )
+    const r = await pedirProxy()
 
     const nonce = r.headers.get("x-nonce")
     expect(nonce).toBeDefined()

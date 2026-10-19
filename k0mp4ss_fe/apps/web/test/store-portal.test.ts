@@ -104,51 +104,17 @@ describe("PI - Portal Inmobiliario en el store", () => {
     })
   })
 
-  describe("savePublicacionPortal", () => {
-    it("rechaza unidad inexistente sin mutar el store", () => {
-      const antes = getState().publicacionesPortal.length
-
-      const r = getState().savePublicacionPortal(publicacionBase({ unidadId: "u-999" }))
-
-      expect(r.ok).toBe(false)
-      expect(r.error).toContain("unidad no existe")
-      expect(getState().publicacionesPortal.length).toBe(antes)
-    })
-
-    it("rechaza imágenes embebidas en base64/data-URL (D1)", () => {
-      const antes = getState().publicacionesPortal.length
-
-      const r = getState().savePublicacionPortal(
-        publicacionBase({
-          imagenes: [{ nombre: "foto.jpg", tipoMime: "image/jpeg", tamanoKB: 500, url: "data:image/jpeg;base64,/9j/4AAQ" }],
-        })
-      )
-
-      expect(r.ok).toBe(false)
-      expect(r.error).toContain("Media por referencia")
-      expect(getState().publicacionesPortal.length).toBe(antes)
-    })
-
-    it("acepta imagen por URL y registra PI_PROPERTY_LISTED al crearla activa", () => {
-      const antesListed = getState().eventos.filter(e => e.tipoAccion === "PI_PROPERTY_LISTED").length
-
-      const r = getState().savePublicacionPortal(
-        publicacionBase({
-          imagenes: [{ nombre: "foto.jpg", tipoMime: "image/jpeg", tamanoKB: 120, url: "https://cdn.example.com/foto.jpg" }],
-        })
-      )
-
-      expect(r.ok).toBe(true)
-      const despuesListed = getState().eventos.filter(e => e.tipoAccion === "PI_PROPERTY_LISTED").length
-      expect(despuesListed).toBe(antesListed + 1)
-      expect(lastEvent()?.categoria).toBe("PI")
-    })
-  })
-
   describe("removePublicacionPortal", () => {
     it("bloquea eliminar publicación con leads asociados", () => {
-      getState().savePublicacionPortal(publicacionBase({}))
-      getState().saveLeadPortal({ id: "lead-test", publicacionId: "pub-test", nombreContacto: "Interesado", contacto: "+56 9 1111 1111", fecha: "2026-08-24", atendido: false })
+      // Se siembra el estado directo: `savePublicacionPortal`/`saveLeadPortal` (legacy) se
+      // eliminaron en store-cleanup y el sujeto de este caso es `removePublicacionPortal`.
+      useCompassStore.setState((s) => ({
+        publicacionesPortal: [...s.publicacionesPortal, publicacionBase({})],
+        leadsPortal: [
+          ...s.leadsPortal,
+          { id: "lead-test", publicacionId: "pub-test", nombreContacto: "Interesado", contacto: "+56 9 1111 1111", fecha: "2026-08-24", atendido: false },
+        ],
+      }))
 
       const r = getState().removePublicacionPortal("pub-test")
 
@@ -158,7 +124,9 @@ describe("PI - Portal Inmobiliario en el store", () => {
     })
 
     it("elimina publicación sin leads", () => {
-      getState().savePublicacionPortal(publicacionBase({}))
+      useCompassStore.setState((s) => ({
+        publicacionesPortal: [...s.publicacionesPortal, publicacionBase({})],
+      }))
 
       const r = getState().removePublicacionPortal("pub-test")
 
@@ -167,51 +135,9 @@ describe("PI - Portal Inmobiliario en el store", () => {
     })
   })
 
-  describe("saveLeadPortal y contacto seguro", () => {
-    beforeEach(() => {
-      getState().savePublicacionPortal(publicacionBase({}))
-    })
-
-    it("rechaza lead sobre publicación inexistente o inactiva", () => {
-      const antes = getState().leadsPortal.length
-
-      expect(getState().saveLeadPortal({ id: "l1", publicacionId: "no-existe", nombreContacto: "X", contacto: "y", fecha: "2026-08-24", atendido: false }).ok).toBe(false)
-
-      getState().savePublicacionPortal(publicacionBase({ activa: false }))
-      expect(getState().saveLeadPortal({ id: "l2", publicacionId: "pub-test", nombreContacto: "X", contacto: "y", fecha: "2026-08-24", atendido: false }).ok).toBe(false)
-
-      expect(getState().leadsPortal.length).toBe(antes)
-    })
-
-    it("registra lead, notifica al propietario vía email_simulado y audita PI_LEAD_CONTACT", () => {
-      // Propietario vigente para u-A-302 (seed de vínculos)
-      const propietario = getState().vinculos.find(v => v.unidadId === "u-A-302" && v.rol === "propietario" && !v.fechaFin)
-      const notificacionesAntes = getState().notificaciones.length
-
-      const r = getState().saveLeadPortal({ id: "lead-ok", publicacionId: "pub-test", nombreContacto: "Ana Interesada", contacto: "+56 9 2222 2222", mensaje: "¿Disponible?", fecha: "2026-08-24", atendido: false })
-
-      expect(r.ok).toBe(true)
-      expect(lastEvent()?.tipoAccion).toBe("PI_LEAD_CONTACT")
-
-      const notif = getState().notificaciones[getState().notificaciones.length - 1]!
-      expect(getState().notificaciones.length).toBe(notificacionesAntes + 1)
-      expect(notif.canal).toBe("email_simulado")
-      expect(notif.destinatarioRol).toBe("propietario")
-      if (propietario) expect(notif.destinatarioPersonaId).toBe(propietario.personaId)
-    })
-
-    it("re-ejecución del mismo lead no duplica notificación (idempotencia bulk)", () => {
-      getState().saveLeadPortal({ id: "lead-idem", publicacionId: "pub-test", nombreContacto: "B", contacto: "c", fecha: "2026-08-24", atendido: false })
-      const notificacionesTrasPrimera = getState().notificaciones.length
-
-      getState().saveLeadPortal({ id: "lead-idem", publicacionId: "pub-test", nombreContacto: "B", contacto: "c", fecha: "2026-08-24", atendido: false })
-
-      expect(getState().notificaciones.length).toBe(notificacionesTrasPrimera)
-    })
-  })
 
   describe("Centro de notificaciones simulado (D3)", () => {
-    it("notify() agrega a la bandeja y marcarNotificacionLeida la marca", () => {
+    it("notify() agrega a la bandeja como no leída con canal email_simulado", () => {
       const antes = getState().notificaciones.length
 
       getState().notify({ destinatarioRol: "administracion", asunto: "Prueba", cuerpo: "Cuerpo de prueba", moduloOrigen: "PI" })
@@ -220,9 +146,6 @@ describe("PI - Portal Inmobiliario en el store", () => {
       expect(getState().notificaciones.length).toBe(antes + 1)
       expect(creada.canal).toBe("email_simulado")
       expect(creada.leida).toBe(false)
-
-      getState().marcarNotificacionLeida(creada.id)
-      expect(getState().notificaciones.find(n => n.id === creada.id)?.leida).toBe(true)
     })
   })
 })

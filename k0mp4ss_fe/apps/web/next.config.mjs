@@ -52,7 +52,6 @@ let nextConfig = {
 // SERIE-PRODUCCION P2 — bundle analyzer solo en `npm run build:analyze`.
 // Import dinámico condicional: si ANALYZE != true nunca se carga el paquete,
 // por lo que los builds normales no requieren la devDependency instalada.
-/* eslint-disable no-undef -- process es global en Node.js */
 if (process.env.ANALYZE === "true") {
   const { default: withBundleAnalyzer } = await import("@next/bundle-analyzer")
   nextConfig = withBundleAnalyzer({ enabled: true })(nextConfig)

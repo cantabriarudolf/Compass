@@ -93,8 +93,8 @@ export default function RemuneracionesPage() {
       const [tasaSIS, setTasaSIS] = React.useState("")
 
       React.useEffect(() => {
-        // eslint-disable-next-line react-hooks/set-state-in-effect -- re-sincronización intencional al llegar la config del servidor (paridad con admin/configuracion)
         if (configuracion) {
+          // eslint-disable-next-line react-hooks/set-state-in-effect -- re-sincronización intencional al llegar la config del servidor (paridad con admin/configuracion)
           setUfMensual(v => v || (configuracion.ufMensual?.toString() ?? ""))
           setIngresoMinimo(v => v || (configuracion.ingresoMinimoMensual?.toString() ?? ""))
           setTopeGrat(v => v || (configuracion.topeGratificacionLegal?.toString() ?? ""))
@@ -220,6 +220,9 @@ export default function RemuneracionesPage() {
       ...(topeGrat ? { topeGratificacionLegal: Number(topeGrat) } : {}),
       ...(tasaSIS !== "" ? { tasaSIS: Number(tasaSIS) } : {}),
     }
+    // SAFETY: `cfg` es la configuración vigente con los parámetros legales
+    // sobrescritos por los valores del formulario; el cast solo fija la firma
+    // que espera `updateConfig` (no cambia el objeto en runtime).
     const r = await updateConfig(cfg as unknown as Parameters<typeof updateConfig>[0])
     if (!r.ok) setError(r.error ?? "Error al guardar parámetros")
     else setOkMsg("Parámetros legales guardados y auditados (CF_UPDATE_PARAM).")

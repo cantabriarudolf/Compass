@@ -220,14 +220,6 @@ describe("IN - Infracciones y Multas en el store", () => {
       expect(getState().aplicarInfraccionIN("in-1").ok).toBe(false)
     })
 
-    it("comentarios internos solo para directiva vigente", () => {
-      const noDirectivo = getState().comentarInfraccionIN("in-1", { autorPersonaId: "p-in-1", texto: "opino" })
-      expect(noDirectivo.ok).toBe(false)
-
-      const r = getState().comentarInfraccionIN("in-1", { autorPersonaId: "p-in-directivo", texto: "Verificar registro de visitas antes de aplicar." })
-      expect(r.ok).toBe(true)
-      expect(getState().infraccionesIN.find(i => i.id === "in-1")!.comentariosDirectiva).toHaveLength(1)
-    })
 
     it("removeInfraccionIN elimina el registro", () => {
       expect(getState().removeInfraccionIN("in-1").ok).toBe(true)

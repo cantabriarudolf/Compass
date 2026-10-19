@@ -26,7 +26,6 @@ import { createCrudHandlers, type CrudDelegate } from "@/lib/api/crud-factory"
 import {
   jsonError,
   withComunidadScope,
-  type ComunidadScope,
 } from "@/lib/api/with-comunidad-scope"
 
 function delegado(modelo: unknown): CrudDelegate {
@@ -34,10 +33,7 @@ function delegado(modelo: unknown): CrudDelegate {
 }
 
 /** Guard de borrado: solo borrador sin egreso sincronizado (paridad store). */
-async function guardBorrador(
-  record: unknown,
-  _scope: ComunidadScope
-): Promise<Response | null> {
+async function guardBorrador(record: unknown): Promise<Response | null> {
   const liq = record as {
     estado?: string
     egresoFIReferencia?: string | null

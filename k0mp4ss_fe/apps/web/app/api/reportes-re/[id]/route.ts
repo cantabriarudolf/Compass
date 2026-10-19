@@ -3,8 +3,6 @@
  */
 import { reportesHandlers } from "../route"
 
-type Ctx = { params: Promise<{ id: string }> }
-
 export const GET = reportesHandlers.GET_ONE
 export const PUT = reportesHandlers.PUT
 export const DELETE = reportesHandlers.DELETE

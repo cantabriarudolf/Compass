@@ -1,0 +1,9 @@
+schema: spec-driven
+
+# Change de higiene de tooling: baja los warnings preexistentes de ESLint sin
+# cambiar comportamiento observable ni ninguna capacidad viva. El único efecto
+# normativo es de configuración del linter (ignore de artefactos generados y
+# globales de Node para los scripts), que ninguna spec de capacidad declara.
+# Por eso NO lleva delta: no hay requirement vivo que modificar.
+# Ver openspec/CONVENCION-DELTAS.md
+skip_specs: true

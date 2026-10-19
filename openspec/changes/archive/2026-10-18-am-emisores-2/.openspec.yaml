@@ -1,0 +1,8 @@
+schema: spec-driven
+
+# Change de emisores de auditoría: los tres eventos restantes sin emisor server-side
+# (`IR_ASSET_REPAIR`, `CO_DOC_DOWNLOAD`, `PE_CIERRE_EDITADO`) pasan a emitirse desde las rutas
+# que ya persisten/leen la acción. Las specs vivas de IR/CO/PE **ya exigen** la emisión (el código
+# estaba en mora) y `AM-auditoria-metricas` no declara emisores faltantes: no hay prosa que
+# corregir, así que el change no modifica specs. Ver openspec/CONVENCION-DELTAS.md y design.md.
+skip_specs: true

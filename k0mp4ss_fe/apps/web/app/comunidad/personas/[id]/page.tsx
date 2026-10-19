@@ -159,7 +159,6 @@ export default function PersonaPerfilPage() {
   const guardarVinculo = async (data: Omit<VinculoUnidad, "id" | "personaId">): Promise<StoreResult> => {
     const vinculoGuardado: VinculoUnidad = vinculoEditando
       ? { ...vinculoEditando, ...data }
-      // eslint-disable-next-line react-hooks/purity -- id generado en primer render del formulario nuevo; estable hasta guardar (avance 2026-09-02)
       : { id: `v-${Date.now()}`, personaId: persona.id, ...data }
     const resultado = vinculoEditando
       ? await actualizarVinculo(vinculoEditando.id, vinculoGuardado)

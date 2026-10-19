@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-/* eslint-disable no-undef -- Node.js runtime file, process/env are global */
 /**
  * deploy-migrar-datos.mjs — Corte SQLite → PostgreSQL ANTES del build (Fase 3, task 3.2).
  *
@@ -62,10 +61,16 @@ console.log(`🎯 Destino PG: ${redactarUrl(DATABASE_URL)}`)
 console.log(`📂 Origen SQLite: ${SQLITE_URL}`)
 
 function correr(cmd, envExtra = {}) {
-  execSync(cmd, {
-    stdio: "inherit",
-    env: { ...process.env, ...envExtra },
-  })
+  try {
+    execSync(cmd, {
+      stdio: "inherit",
+      env: { ...process.env, ...envExtra },
+    })
+  } catch (err) {
+    // `stdio: "inherit"` ya mostró el output real de la herramienta (incluido el motivo del
+    // fallo). Se agrega solo el contexto que aporta: qué paso del corte se rompió.
+    throw new Error(`Falló el paso del corte: \`${cmd}\`\n   ${err.message}`)
+  }
 }
 
 try {
@@ -86,6 +91,7 @@ try {
   console.log("✅ Datos migrados. Siguiente paso: `npm run build` y deploy a Vercel.")
 } catch (err) {
   console.error("❌ Corte fallido:", err.message)
-  console.error("   La BD SQLite local queda intacta (el script de datos hace backup antes de migrar).")
+  console.error("   Revisá el output de la herramienta de arriba. La BD SQLite local queda intacta")
+  console.error("   (el script de datos hace backup antes de migrar).")
   process.exit(1)
 }

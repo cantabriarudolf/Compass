@@ -107,22 +107,15 @@ describe("FI - Finanzas y Morosidad en el store", () => {
       expect(tipos).toContain("amenities")
     })
 
-    it("CRUD con unicidad de nombre y limpieza si no tiene movimientos", () => {
+    it("CRUD con unicidad de nombre de fondo", () => {
       expect(getState().saveFondoFI(fondoBase({})).ok).toBe(true)
 
       const duplicado = getState().saveFondoFI(fondoBase({ id: "fondo-test-2", nombre: "FONDO CUOTA PINTURA test" }))
       expect(duplicado.ok).toBe(false)
 
       expect(getState().saveFondoFI(fondoBase({ id: "fondo-test-2", nombre: "Otro TEST" })).ok).toBe(true)
-      expect(getState().removeFondoFI("fondo-test-2").ok).toBe(true)
     })
 
-    it("no elimina fondos con movimientos imputados", () => {
-      expect(getState().saveEgresoFI(egresoBase({})).ok).toBe(true)
-      const r = getState().removeFondoFI("fondo-gc")
-      expect(r.ok).toBe(false)
-      expect(r.error).toContain("movimiento")
-    })
   })
 
   describe("egresos con imputación", () => {
