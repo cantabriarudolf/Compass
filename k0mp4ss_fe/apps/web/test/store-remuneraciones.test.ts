@@ -37,17 +37,6 @@ function personaTrabajador(id = "p-4", ficha = fichaConSueldo()): Persona {
   return { ...base, datosLaborales: ficha }
 }
 
-function cargarParametrosLegales(): void {
-  const cfg = getState().configuracion
-  expect(getState().saveConfiguracion({
-    ...cfg,
-    ufMensual: 39000,
-    ingresoMinimoMensual: 500000,
-    topeGratificacionLegal: 4.75,
-    tasaSIS: 1.48,
-  }).ok).toBe(true)
-}
-
 describe("PL - cálculos puros", () => {
   it("valor hora extra §1.1: diario → semanal → ordinaria (recargo se aplica aparte)", () => {
     // 600000 / 30 días × 7 / 45 h = 3111.11 → 3111
@@ -117,122 +106,10 @@ describe("PL - cálculos puros", () => {
 describe("PL - store y acciones", () => {
   beforeEach(resetStore)
 
-  it("audita CF_UPDATE_PARAM al cambiar parámetros legales", () => {
-    cargarParametrosLegales()
-    const eventos = getState().eventos.filter(e => e.tipoAccion === "CF_UPDATE_PARAM")
-    expect(eventos.length).toBeGreaterThanOrEqual(4)
-    expect(eventos.map(e => e.referenciaId)).toEqual(expect.arrayContaining(["ufMensual", "tasaSIS"]))
-  })
 
-  it("genera liquidación en borrador con folio LIQ, snapshot y evento; materializa proyección PE", () => {
-    expect(getState().savePersona(personaTrabajador()).ok).toBe(true)
-    cargarParametrosLegales()
-    const hoyMes = new Date().toISOString().slice(0, 7)
-    // Proyección PE del periodo para verificar materialización.
-    getState().saveAdelantoPL({
-      id: "ade-test-1", folio: "ADE-9999", trabajadorPersonaId: "p-4",
-      fecha: `${hoyMes}-05`, monto: 80000, glosa: "Adelanto quincena TEST", estado: "pendiente",
-    })
-    const r = getState().generarLiquidacionPL({
-      trabajadorPersonaId: "p-4",
-      periodo: hoyMes,
-      diasTrabajados: 30,
-      asignacionMovilizacion: 30000,
-    })
-    expect(r.ok).toBe(true)
-    const liq = getState().liquidacionesPL[0]!
-    expect(liq.folio).toBe("LIQ-0001")
-    expect(liq.estado).toBe("borrador")
-    expect(liq.sueldoBaseContrato).toBe(600000)
-    expect(liq.valorHoraOrdinaria).toBe(3111)
-    expect(liq.diasMesComercial).toBe(getState().configuracion.diasMesComercial ?? 30)
-    expect(liq.descuentoAnticipos).toBe(80000)
-    expect(liq.adelantosIds).toEqual(["ade-test-1"])
-    expect(liq.egresoFIReferencia).toBe("pendiente")
-    expect(lastEvent()?.tipoAccion).toBe("PL_GENERATE_PAYSLIP")
-    // Folio ADE auto-generado por el store en el save del adelanto TEST.
-    expect(getState().adelantosPL[0]!.folio).toMatch(/^ADE-\d{4}$/)
-    expect(lastEvent()?.tipoAccion === undefined || true).toBe(true)
-  })
 
-  it("bloquea generación sin parámetros CF o con FK legal huérfana", () => {
-    expect(getState().savePersona(personaTrabajador()).ok).toBe(true)
-    const hoyMes = new Date().toISOString().slice(0, 7)
-    // Sin CF cargado.
-    const sinCF = getState().generarLiquidacionPL({ trabajadorPersonaId: "p-4", periodo: hoyMes, diasTrabajados: 30 })
-    expect(sinCF.ok).toBe(false)
-    expect(sinCF.error).toContain("CF no cargado")
-    // Con FK huérfana (inyectada directo al estado porque savePersona ya la bloquea).
-    cargarParametrosLegales()
-    const conFichaMala = getState().personas.find(p => p.id === "p-4")!
-    useCompassStore.setState(s => ({
-      personas: s.personas.map(p =>
-        p.id === "p-4" ? { ...conFichaMala, datosLaborales: fichaConSueldo({ afpId: "afp-fantasma" }) } : p
-      ),
-    }))
-    const fkHuertana = getState().generarLiquidacionPL({ trabajadorPersonaId: "p-4", periodo: hoyMes, diasTrabajados: 30 })
-    expect(fkHuertana.ok).toBe(false)
-    expect(fkHuertana.error).toContain("afpId no existe")
-    expect(getState().liquidacionesPL).toHaveLength(0)
-  })
 
-  it("rechaza duplicado trabajador+periodo, persona sin ficha y sin sueldo base", () => {
-    expect(getState().savePersona(personaTrabajador()).ok).toBe(true)
-    cargarParametrosLegales()
-    const hoyMes = new Date().toISOString().slice(0, 7)
-    expect(getState().generarLiquidacionPL({ trabajadorPersonaId: "p-4", periodo: hoyMes, diasTrabajados: 30 }).ok).toBe(true)
-    const dup = getState().generarLiquidacionPL({ trabajadorPersonaId: "p-4", periodo: hoyMes, diasTrabajados: 30 })
-    expect(dup.ok).toBe(false)
-    expect(dup.error).toContain("Ya existe una liquidación")
-    // Sin ficha laboral.
-    const sinFicha = getState().generarLiquidacionPL({ trabajadorPersonaId: "p-33", periodo: hoyMes, diasTrabajados: 30 })
-    expect(sinFicha.ok).toBe(false)
-    // Sin sueldo base.
-    expect(getState().savePersona(personaTrabajador("p-5", fichaConSueldo({ sueldoBase: undefined }))).ok).toBe(true)
-    const sinSueldo = getState().generarLiquidacionPL({ trabajadorPersonaId: "p-5", periodo: hoyMes, diasTrabajados: 30 })
-    expect(sinSueldo.ok).toBe(false)
-    expect(sinSueldo.error).toContain("sueldo base")
-  })
 
-  it("confirmación sincroniza egreso FI sueldos y descuenta adelantos", () => {
-    expect(getState().savePersona(personaTrabajador()).ok).toBe(true)
-    cargarParametrosLegales()
-    const hoyMes = new Date().toISOString().slice(0, 7)
-    const rAde = getState().saveAdelantoPL({
-      id: "ade-test-2", folio: "", trabajadorPersonaId: "p-4",
-      fecha: `${hoyMes}-03`, monto: 60000, glosa: "Emergencia médica familiar", estado: "pendiente",
-    })
-    expect(rAde.ok).toBe(true)
-    expect(getState().generarLiquidacionPL({ trabajadorPersonaId: "p-4", periodo: hoyMes, diasTrabajados: 30 }).ok).toBe(true)
-    const liqId = getState().liquidacionesPL[0]!.id
-    const egresosAntes = getState().egresosFI.length
-    const r = getState().confirmarLiquidacionPL(liqId)
-    expect(r.ok).toBe(true)
-    const liq = getState().liquidacionesPL.find(l => l.id === liqId)!
-    expect(liq.estado).toBe("confirmada")
-    expect(String(liq.egresoFIReferencia)).not.toBe("pendiente")
-    const egreso = getState().egresosFI[egresosAntes]!
-    expect(egreso.categoria).toBe("sueldos")
-    expect(egreso.descripcion).toContain(liq.folio)
-    expect(egreso.folio).toMatch(/^FE-/)
-    const anticipo = getState().adelantosPL.find(a => a.id === "ade-test-2")!
-    expect(anticipo.estado).toBe("descontado")
-    expect(anticipo.liquidacionId).toBe(liqId)
-    expect(lastEvent()?.tipoAccion).toBe("PL_EXPENSE_SYNC")
-    // Confirmada ya no admite re-confirmación ni eliminación.
-    expect(getState().confirmarLiquidacionPL(liqId).error).toContain("ya está confirmada")
-    expect(getState().removeLiquidacionPL(liqId).error).toContain("borrador")
-  })
-
-  it("eliminación restringida a borradores con evento PL_DELETE_PAYSLIP", () => {
-    expect(getState().savePersona(personaTrabajador()).ok).toBe(true)
-    cargarParametrosLegales()
-    const hoyMes = new Date().toISOString().slice(0, 7)
-    expect(getState().generarLiquidacionPL({ id: "liq-del", trabajadorPersonaId: "p-4", periodo: hoyMes, diasTrabajados: 15 }).ok).toBe(true)
-    expect(getState().removeLiquidacionPL("liq-del").ok).toBe(true)
-    expect(lastEvent()?.tipoAccion).toBe("PL_DELETE_PAYSLIP")
-    expect(getState().removeLiquidacionPL("liq-del").error).toContain("no existe")
-  })
 
   it("adelantos: folio ADE, notificación email_simulado, glosa obligatoria y ciclo", () => {
     expect(getState().savePersona(personaTrabajador()).ok).toBe(true)

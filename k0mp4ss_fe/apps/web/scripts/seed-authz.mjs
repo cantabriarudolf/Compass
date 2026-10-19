@@ -6,7 +6,6 @@
 // arrendatario vigente en comunidad-a (u-A-101, arrendada). Ver
 // openspec/changes/roles-validacion-comunidad-a/cuentas-funcionales.md §2.
 // Uso: npm run seed:authz   (lee .env vía --env-file-if-exists)
-/* global process */
 import { PrismaClient } from "@prisma/client"
 import bcrypt from "bcryptjs"
 

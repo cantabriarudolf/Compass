@@ -59,7 +59,7 @@ El sistema MUST presentar un tablero donde la administración visualice las mant
 - **THEN** ve los trabajos preventivos planificados ordenados por fecha con los vencidos destacados
 
 ### Requirement: Proyectos y Proyecciones a Largo Plazo
-El sistema MUST mantener planes de trabajo futuros mediante `saveProyectoMT`/`removeProyectoMT` retornando `StoreResult`, con presupuesto estimado y plazo (meses/años); el sistema MUST derivar el monto sugerido de cuota extraordinaria o incremento de fondo de reserva (presupuesto/plazo) sin cálculos externos, y la fecha objetivo alimenta las alarmas por vida útil de componentes. Un proyecto MAY declarar el fondo FI que lo financia (`fondoFinanciamientoId`): al guardarlo, el sistema MUST validar que el fondo exista, esté activo y disponga de saldo suficiente (≥ presupuesto estimado) según el libro de Finanzas.
+El sistema MUST mantener planes de trabajo futuros mediante `saveProyectoMT` (store) y la API REST `/api/mt/proyectos` (POST upsert idempotente; PUT/DELETE en `/[id]`), con presupuesto estimado y plazo (meses/años); el sistema MUST derivar el monto sugerido de cuota extraordinaria o incremento de fondo de reserva (presupuesto/plazo) sin cálculos externos, y la fecha objetivo alimenta las alarmas por vida útil de componentes. Un proyecto MAY declarar el fondo FI que lo financia (`fondoFinanciamientoId`): al guardarlo, el sistema MUST validar que el fondo exista, esté activo y disponga de saldo suficiente (≥ presupuesto estimado) según el libro de Finanzas.
 
 #### Scenario: Cuota sugerida derivable
 - **WHEN** se crea "Mantención de techos" con $12.000.000 a 120 meses
@@ -67,7 +67,7 @@ El sistema MUST mantener planes de trabajo futuros mediante `saveProyectoMT`/`re
 
 #### Scenario: Proyecto con fondos insuficientes rechazado
 - **WHEN** se crea un proyecto de $5.000.000 declarando un fondo con saldo $2.000.000
-- **THEN** `saveProyectoMT` retorna `{ok:false}` por saldo insuficiente sin crear el proyecto
+- **THEN** la operación se rechaza por saldo insuficiente (error en la API y `{ok:false}` en el store) sin crear el proyecto
 
 #### Scenario: Proyecto con trabajos no eliminable en uso real
 - **WHEN** se descarta un proyecto aún sin ejecución

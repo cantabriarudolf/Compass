@@ -76,7 +76,7 @@ El sistema MUST gestionar llaves físicas vinculadas a unidades de EF y credenci
 - **THEN** la vista de accesos la lista como no devuelta
 
 ### Requirement: Estados del Activo y Baja Documentada
-Los activos mobiliarios e infraestructura MUST transicionar entre Disponible, En Uso, Reparación y Baja mediante `cambiarEstadoRecursoIR`. El paso a Reparación MUST auditarse como `IR_ASSET_REPAIR` y el paso a Baja (pérdida, robo o fin de vida útil) MUST quedar registrado para alimentar el ratio de pérdida/daño de herramientas.
+Los activos mobiliarios e infraestructura MUST transicionar entre Disponible, En Uso, Reparación y Baja mediante la API REST `PUT /api/ir/recursos/[id]`. El paso a Reparación MUST auditarse como `IR_ASSET_REPAIR` y el paso a Baja (pérdida, robo o fin de vida útil) MUST quedar registrado para alimentar el ratio de pérdida/daño de herramientas.
 
 #### Scenario: Reparación auditada
 - **WHEN** una cortadora de arbustos pasa a Reparación

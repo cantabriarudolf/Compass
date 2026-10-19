@@ -35,9 +35,10 @@ describe("session maxAge / updateAge (Auth.js v5)", () => {
     const now = Math.floor(Date.now() / 1000)
     const iat = now - 23 * 60 * 60
     const exp = iat + maxAge
-    const nearExpiryToken = await encode({ secret, salt, maxAge, token: { sub: "user-1", iat, exp } })
-    const decoded = await decode({ secret, salt, token: nearExpiryToken })
+    // `encode()` re-emite `exp` a partir de `maxAge` (ignora el `exp` recibido), así que el
+    // boundary se simula aritméticamente: exp - now === updateAge.
     // Auth.js v5: if (exp - now) < updateAge, it refreshes on next use
+    expect(exp - now).toBe(updateAge)
     // We verify the refresh would produce a new 24h token
     const refreshed = await encode({ secret, salt, maxAge, token: { sub: "user-1" } })
     const refreshedDecoded = await decode({ secret, salt, token: refreshed })

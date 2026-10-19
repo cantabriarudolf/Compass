@@ -1,0 +1,9 @@
+schema: spec-driven
+
+# Change de documentación + fijación de invariante: `lib/store.ts` queda en
+# 99.95 % de statements porque dos `: []` de `flatMap` filtrados son
+# inalcanzables con el invariante actual y se conservan como defensa. No hay
+# comportamiento observable nuevo ni capacidad viva que declare el techo de
+# cobertura del store por API pública, así que NO lleva delta.
+# Ver openspec/CONVENCION-DELTAS.md
+skip_specs: true

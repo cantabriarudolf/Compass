@@ -108,23 +108,6 @@ describe("IR - Inventario y Recursos en el store", () => {
     })
   })
 
-  describe("cambiarEstadoRecursoIR", () => {
-    beforeEach(() => {
-      getState().saveRecursoIR(recursoBase({ id: "ir-cortadora", nombre: "Cortadora arbustos", categoria: "mobiliario" }))
-    })
-
-    it("reparación audita IR_ASSET_REPAIR y baja queda registrada", () => {
-      const r = getState().cambiarEstadoRecursoIR("ir-cortadora", "reparacion")
-      expect(r.ok).toBe(true)
-      expect(getState().eventos.filter(e => e.tipoAccion === "IR_ASSET_REPAIR")).toHaveLength(1)
-
-      const rBaja = getState().cambiarEstadoRecursoIR("ir-cortadora", "baja")
-      expect(rBaja.ok).toBe(true)
-      expect(getState().activosIR[0]!.estadoActivo).toBe("baja")
-      expect(getState().eventos.some(e => e.tipoAccion === "IR_ASSET_BAJA")).toBe(true)
-    })
-  })
-
   describe("flujo de solicitudes de insumo", () => {
     beforeEach(() => {
       getState().savePersona(personaBase({}))

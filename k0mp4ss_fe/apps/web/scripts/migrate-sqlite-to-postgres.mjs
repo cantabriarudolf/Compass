@@ -133,7 +133,7 @@ async function migrateTable(tableName, pendingRows = null) {
         try {
           await pg.query(batchSql, batchValues)
           inserted += batch.length
-        } catch (err) {
+        } catch {
           // Batch falló: fallback fila por fila para identificar problema
           for (const row of batch) {
             const values = convertRow(row)

@@ -170,12 +170,6 @@ describe("CO - Comunicación con Vecinos en el store", () => {
       expect(getState().saveDocumentoCO(docBase({ url: "blob:https://x/y" })).ok).toBe(false)
     })
 
-    it("registrarDescargaDocCO audita CO_DOC_DOWNLOAD solo si existe", () => {
-      getState().saveDocumentoCO(docBase({}))
-      expect(getState().registrarDescargaDocCO("doc-test-1").ok).toBe(true)
-      expect(getState().registrarDescargaDocCO("doc-fantasma").ok).toBe(false)
-      expect(getState().eventos.filter(e => e.tipoAccion === "CO_DOC_DOWNLOAD")).toHaveLength(1)
-    })
   })
 
   describe("buzón ciudadano", () => {

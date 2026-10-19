@@ -11,6 +11,20 @@ import { ContratistasPanel } from "@/components/pe/contratistas-panel"
 
 vi.setConfig({ testTimeout: 30_000 })
 
+/**
+ * Presupuesto explícito por caso para los paneles PE (Radix Select/Dialog en jsdom).
+ *
+ * Los casos que abren comboboxes tardan ~5 s en aislamiento, pero la misma máquina bajo carga
+ * (suite completa en paralelo, CI compartido) los estira por encima de los 30 s del default:
+ * medido 26.8 s con 2 núcleos cargados y "Test timed out in 30000ms" con carga alta (E3 de la
+ * serie deuda-3). Es presupuesto insuficiente, no comportamiento: el presupuesto global de
+ * `vi.setConfig` no alcanza, así que se fija uno por caso con el objeto de opciones.
+ *
+ * NO usar `test.use({ timeout })`: no es un fixture válido en Vitest y se ignora en silencio
+ * (lección de la corrección de `e2e/crud/proyectos.spec.ts`).
+ */
+const PRESUPUESTO_CARGA = 120_000
+
 const HOY = new Date().toISOString().slice(0, 10)
 
 beforeAll(() => {
@@ -58,14 +72,14 @@ async function elegirOpcion(user: ReturnType<typeof userEvent.setup>, comboIndex
 }
 
 describe("EncomiendasPanel (componente, RTL)", () => {
-  it("renderiza el form y la tabla vacía del día", { timeout: 20_000 }, () => {
+  it("renderiza el form y la tabla vacía del día", { timeout: PRESUPUESTO_CARGA }, () => {
     render(<EncomiendasPanel diaReporte={HOY} onError={vi.fn()} onSuccess={vi.fn()} />)
     expect(screen.getByText(/Encomiendas del día/)).toBeTruthy()
     expect(screen.getByText("Sin encomiendas para esta fecha.")).toBeTruthy()
     expect(screen.getByLabelText("Descripción del paquete")).toBeTruthy()
   })
 
-  it("recibe una encomienda TEST: fila + store + evento auditado", async () => {
+  it("recibe una encomienda TEST: fila + store + evento auditado", { timeout: PRESUPUESTO_CARGA }, async () => {
     const user = userEvent.setup()
     const onSuccess = vi.fn()
     const onError = vi.fn()
@@ -88,7 +102,7 @@ describe("EncomiendasPanel (componente, RTL)", () => {
     expect(lastEvent()?.tipoAccion).toBe("PE_ENCOMIENDA_RECIBIDA")
   })
 
-  it("retiro de encomienda: dialog exige retiradoPor y marca Retirada", async () => {
+  it("retiro de encomienda: dialog exige retiradoPor y marca Retirada", { timeout: PRESUPUESTO_CARGA }, async () => {
     const user = userEvent.setup()
     const onSuccess = vi.fn()
     render(<EncomiendasPanel diaReporte={HOY} onError={vi.fn()} onSuccess={onSuccess} />)
@@ -114,7 +128,7 @@ describe("EncomiendasPanel (componente, RTL)", () => {
 })
 
 describe("VisitasPanel (componente, RTL)", () => {
-  it("registrar visita sin aviso: fila + store + evento", async () => {
+  it("registrar visita sin aviso: fila + store + evento", { timeout: PRESUPUESTO_CARGA }, async () => {
     const user = userEvent.setup()
     const onError = vi.fn()
     const onSuccess = vi.fn()
@@ -129,13 +143,12 @@ describe("VisitasPanel (componente, RTL)", () => {
     await user.click(screen.getByRole("button", { name: /Registrar visita/ }))
 
     expect(onError.mock.calls.filter((c) => c[0]).map((c) => JSON.stringify(c[0]))).toEqual([])
-    console.log("DBG onError:", JSON.stringify(onError.mock.calls), "onSuccess:", JSON.stringify(onSuccess.mock.calls), "last:", JSON.stringify(lastEvent()), "len:", useCompassStore.getState().visitasTecnicasPE.length, "antes:", antes)
     await waitFor(() => expect(useCompassStore.getState().bitacoraVisitasPE.length).toBe(antes + 1))
     expect(screen.getByText("Visitante TEST-RTL")).toBeTruthy()
     expect(lastEvent()?.tipoAccion).toBe("PE_VISITA_INGRESADA")
   })
 
-  it("pre-agendada: estado Agendada hasta confirmar ingreso", async () => {
+  it("pre-agendada: estado Agendada hasta confirmar ingreso", { timeout: PRESUPUESTO_CARGA }, async () => {
     const user = userEvent.setup()
     const antes = useCompassStore.getState().visitasTecnicasPE.length
 
@@ -156,7 +169,7 @@ describe("VisitasPanel (componente, RTL)", () => {
 })
 
 describe("ContratistasPanel (componente, RTL)", () => {
-  it("valida motivo corto con onError y sin mutar store", async () => {
+  it("valida motivo corto con onError y sin mutar store", { timeout: PRESUPUESTO_CARGA }, async () => {
     const user = userEvent.setup()
     const onError = vi.fn()
     const antes = useCompassStore.getState().ingresosContratistasPE.length
@@ -168,7 +181,7 @@ describe("ContratistasPanel (componente, RTL)", () => {
     expect(useCompassStore.getState().ingresosContratistasPE.length).toBe(antes)
   })
 
-  it("agendar ingreso TEST: fila + store + evento", async () => {
+  it("agendar ingreso TEST: fila + store + evento", { timeout: PRESUPUESTO_CARGA }, async () => {
     const user = userEvent.setup()
     const onError = vi.fn()
     const antes = useCompassStore.getState().ingresosContratistasPE.length

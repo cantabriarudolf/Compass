@@ -25,7 +25,7 @@ Snapshot inmutable de cada liquidación generada. Un documento por trabajador+pe
 | Totales de control | `totalHaberes`, `descuentoAnticipos`, `adelantosIds[]`, `alcanceLiquido`, `liquidoAPagar` | alcance = haberes − descuentos |
 | Estado y referencias | `estado` borrador/confirmada · `egresoFIReferencia` `"pendiente"` → id egreso FE al confirmar · `proyeccionPEReferencia?` | materializa la referencia de PE |
 
-Acciones: `generarLiquidacionPL` (`PL_GENERATE_PAYSLIP`, gate "CF no cargado"), `confirmarLiquidacionPL` (egreso FI categoría **sueldos** + adelantos→Descontado; `PL_EXPENSE_SYNC`), `removeLiquidacionPL` (solo borrador; `PL_DELETE_PAYSLIP`).
+API REST: `POST /api/liquidaciones` (`PL_GENERATE_PAYSLIP`, gate "CF no cargado"), `POST /api/liquidaciones/[id]/confirmar` (egreso FI categoría **sueldos** + adelantos→Descontado; `PL_EXPENSE_SYNC`), `DELETE /api/liquidaciones/[id]` (solo borrador; `PL_DELETE_PAYSLIP`).
 
 ### `adelantosPL` (store v23)
 
@@ -75,7 +75,7 @@ Reportes personalizados con snapshot de bloques y segmentación declarada. Rank 
 | `payloadSnapshot[]` | `{bloque, lineas[{etiqueta, valor}]}` | contenido congelado al generar |
 | `destinatariosPersonaId[]` + `distribuidoA` + `fechaDistribucion?` | resueltos **al distribuir** (no al generar) | distribución única e idempotente |
 
-Acciones: `registrarVistaDashboardRE` (`RE_DASHBOARD_VIEW` por vista del mando), `generarReporteRE` (`RE_REPORT_GENERATED`), `distribuirReporteRE` (notify masivo con gate AD; `RE_REPORT_DISTRIBUTED`), `removeReporteRE` (solo TEST).
+Acciones: `registrarVistaDashboardRE` (`RE_DASHBOARD_VIEW` por vista del mando), `generarReporteRE` (`RE_REPORT_GENERATED`), `distribuirReporteRE` (notify masivo con gate AD; `RE_REPORT_DISTRIBUTED`), baja vía API REST `DELETE /api/reportes-re/[id]` (solo TEST).
 
 ---
 *Sesión 7 NSGC (2026-08-26): ventana 8 serie NSGC — PL + CT + RE completos, store v25.*

@@ -76,7 +76,7 @@ export default function ComunicacionPage() {
   const { items: microSectores, isLoading: cMicro } = useMicroSectores()
   const { items: plantillasCO, isLoading: cPlantillas, create: crearPlantillaApi, update: actualizarPlantillaApi, remove: eliminarPlantillaApi } = usePlantillasCO()
   const { items: enviosCO, isLoading: cEnvios, create: crearEnvioApi, update: actualizarEnvioApi } = useEnviosCO()
-  const { items: mensajesBuzonCO, isLoading: cBuzon, create: crearMensajeApi, update: actualizarMensajeApi, remove: eliminarMensajeApi } = useMensajesBuzonCO()
+  const { items: mensajesBuzonCO, isLoading: cBuzon, create: crearMensajeApi, update: actualizarMensajeApi } = useMensajesBuzonCO()
   const { items: documentosCO, isLoading: cDocs, create: crearDocumentoApi, update: actualizarDocumentoApi, remove: eliminarDocumentoApi } = useDocumentosCO()
   // TODO: migrar eventos de auditoría (lecturas de envío, descargas de docs, notificaciones email_simulado) a endpoints de API en próxima fase.
 

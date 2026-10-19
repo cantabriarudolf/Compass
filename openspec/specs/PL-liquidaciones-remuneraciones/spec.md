@@ -67,8 +67,8 @@ PL SHALL declarar sus entidades ST con el orden canónico de carga:
 - **THEN** las colecciones PL aparecen disponibles vacías sin pérdida de datos previos
 
 #### Scenario: Escritura con FK legal huérfana
-- **WHEN** `generarLiquidacionPL` recibe un trabajador cuyo `afpId` ya no existe en el maestro
-- **THEN** retorna `{ok:false}` citando la FK huérfana y no muta `liquidacionesPL`
+- **WHEN** el `POST /api/liquidaciones` recibe un trabajador cuyo `afpId` ya no existe en el maestro
+- **THEN** responde 400 citando la FK huérfana y no crea la liquidación
 
 ### Requirement: Integración con Auditoría y Métricas (AM)
 Toda operación del ciclo de remuneraciones SHALL emitir eventos inmutables con data cuantificable:

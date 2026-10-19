@@ -67,17 +67,6 @@ describe("RA - Reservas y Amenities en el store", () => {
       expect(stockCero.ok).toBe(false)
     })
 
-    it("removeElementoRA bloqueado con reservas no canceladas", () => {
-      const microSectorId = getState().microSectores[0]!.id
-      getState().saveElementoRA(elementoBase({ microSectorId }))
-      getState().saveReservaRA(reservaBase({}))
-      const r = getState().removeElementoRA("ra-el-1")
-      expect(r.ok).toBe(false)
-      expect(r.error).toContain("reserva")
-
-      getState().cancelarReservaRA("ra-rs-1")
-      expect(getState().removeElementoRA("ra-el-1").ok).toBe(true)
-    })
   })
 
   describe("saveReservaRA", () => {

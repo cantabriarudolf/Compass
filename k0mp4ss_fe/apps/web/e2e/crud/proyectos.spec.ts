@@ -4,6 +4,10 @@ test.use({ actionTimeout: 30_000 })
 
 test.describe("CRUD — Inventario/Proyectos", () => {
   test("crear nuevo trabajo, verificar fila y transitar a En Curso", async ({ page }) => {
+    // Presupuesto del test entero: en CI `playwright.config.ts` fija `timeout: 30_000` y este
+    // spec encadena ~40 interacciones de UI, así que puede morir rellenando el formulario
+    // (antes del paso "Iniciar"). Mismo criterio que `poblado-idempotente`.
+    test.setTimeout(120_000)
     const errores: string[] = []
     page.on("pageerror", (err) => errores.push(err.message))
 
@@ -109,18 +113,21 @@ test.describe("CRUD — Inventario/Proyectos", () => {
     await expect(btnGuardar).toBeVisible({ timeout: 10_000 })
     await btnGuardar.scrollIntoViewIfNeeded().catch(() => {})
     await btnGuardar.click({ force: true, noWaitAfter: true })
-    await page.waitForTimeout(600)
-    if (await dialog.isVisible().catch(() => false)) {
-      await btnGuardar.click({ force: true, noWaitAfter: true }).catch(() => {})
-      await page.waitForTimeout(600)
-    }
+    // El guardado puede tardar en cerrar el diálogo; reintentar a ciegas creaba DOS trabajos
+    // con el mismo título (el row de abajo queda ambiguo por strict mode).
+    await dialog
+      .waitFor({ state: "hidden", timeout: 8_000 })
+      .catch(async () => {
+        await btnGuardar.click({ force: true, noWaitAfter: true }).catch(() => {})
+        await page.waitForTimeout(600)
+      })
     await expect(dialog).toBeHidden({ timeout: 10_000 })
 
     // Afirmar fila con el título
     await expect(page.getByText(titulo).first()).toBeVisible({ timeout: 15_000 })
 
     // Click "Iniciar" en la fila (el primer trabajo es el recién creado reverse order)
-    const row = page.getByRole("row").filter({ hasText: titulo })
+    const row = page.getByRole("row").filter({ hasText: titulo }).first()
     await expect(row).toBeVisible({ timeout: 10_000 })
     const btnIniciar = row.getByRole("button", { name: "Iniciar" })
     if (await btnIniciar.isVisible().catch(() => false)) {

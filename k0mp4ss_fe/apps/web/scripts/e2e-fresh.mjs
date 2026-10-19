@@ -1,159 +1,303 @@
 #!/usr/bin/env node
 /**
- * e2e-fresh — prepara una base descartable y sembrada para la lane e2e.
+ * e2e:fresh — prepara una base descartable y deja lista la lane e2e con paridad CI.
  *
- * Paridad con el job `e2e` de .github/workflows/ci.yml:
- *   1) npx prisma migrate deploy --schema=prisma/schema.sqlite.prisma (con DATABASE_URL propio)
- *   2) npx prisma generate --schema=prisma/schema.sqlite.prisma (el client debe apuntar a
- *      SQLite: si el último generate fue el default PostgreSQL — p. ej. tras el job
- *      unit-pg — el seed correría con el client equivocado)
- *   3) npm run e2e:reseed-base (usuarios TEST vía API/authz + seed de mocks)
- *   4) imprime las advertencias operativas y el comando Playwright exacto con paridad CI.
+ * Por qué existe: la receta e2e (`migrate deploy` + `prisma generate` del schema SQLite
+ * + `e2e:reseed-base` + `build` +
+ * `CI=1 npx playwright test`) se replicó a mano 4 veces en SERIE-NOCHE-3, con dos
+ * trampas ya sufridas:
+ *   1. `CI=1` fija `reuseExistingServer: false` en `playwright.config.ts`: si queda un
+ *      `next-server` huérfano en :3000 la lane muere antes de empezar (incidente P4
+ *      de NOCHE-3).
+ *   2. Olvidar exportar `DATABASE_URL` termina corriendo la lane contra `prisma/dev.db`,
+ *      que las reglas duras de la serie prohíben tocar.
  *
- * La base vive en prisma/<nombre>.db (gitignored vía `*.db`). NUNCA toca
- * prisma/dev.db: el nombre se valida y DATABASE_URL se fija explícitamente para
- * los subprocesos (process.env tiene prioridad sobre --env-file / .env de Vite,
- * comprobado con Node 24 y vite-node).
+ * El shell env gana sobre `.env` (Next y dotenv sólo setean variables ausentes de
+ * `process.env`), así que exportar `DATABASE_URL` acá es suficiente para la lane entera.
  *
- * Uso: npm run e2e:fresh [-- <nombre>.db]   (default: perf-fresh.db)
+ * Uso (desde k0mp4ss_fe/apps/web):
+ *   npm run e2e:fresh                                  # prepara la base e imprime el comando
+ *   npm run e2e:fresh -- --no-build --db perf-x.db      # reusa otra base, sin build
+ *   npm run e2e:fresh -- -- e2e/smoke --grep "mobile"   # prepara Y corre Playwright
+ *
+ * Flags:
+ *   --db <archivo>   base descartable a usar (default `perf-e2e.db`, relativa a prisma/)
+ *   --keep-db        no recrear la base (por defecto se borra: "fresh" de verdad)
+ *   --no-build       saltea `npm run build` (sólo válido si ya hay build reciente)
+ *   --help           esta ayuda
+ *
+ * Todo lo que siga a `--` se pasa tal cual a Playwright y, además, hace que el script
+ * corra el comando en vez de sólo imprimirlo. Con npm el primer `--` lo consume npm,
+ * así que la invocación real lleva doble separador: `npm run e2e:fresh -- -- <specs>`.
+ *
+ * NUNCA toca `prisma/dev.db` (guarda dura) ni `Data/NSGC/backups/`.
  */
-import { spawnSync } from "node:child_process";
-import { existsSync, rmSync, statSync } from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { execFileSync, spawnSync } from "node:child_process"
+import { existsSync, readFileSync, rmSync } from "node:fs"
+import path from "node:path"
+import { fileURLToPath } from "node:url"
 
-const webDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const prismaDir = path.join(webDir, "prisma");
-const nombreBase = process.argv[2] ?? "perf-fresh.db";
-const dbPath = path.join(prismaDir, nombreBase);
+const APP_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
+const PRISMA_DIR = path.join(APP_DIR, "prisma")
+const SCHEMA = "prisma/schema.sqlite.prisma"
+const PUERTO = 3000
+const DB_POR_DEFECTO = "perf-e2e.db"
 
-// Guard 1: solo nombres tipo perf*.db, sin separadores de ruta y jamás dev.db.
-if (!/^perf[A-Za-z0-9._-]*\.db$/.test(nombreBase) || dbPath === path.join(prismaDir, "dev.db")) {
-  console.error(
-    `[e2e-fresh] Nombre inválido: "${nombreBase}". Debe ser perf<algo>.db (p. ej. perf-fresh.db). ` +
-      `prisma/dev.db jamás se usa ni se borra en esta lane.`,
-  );
-  process.exit(1);
-}
+// Specs canónicos de la serie: smoke completo + los 9 crud refactorizados de NOCHE-3.
+const SPECS_CANONICOS = [
+  "e2e/smoke",
+  "e2e/crud/recursos.spec.ts",
+  "e2e/crud/proyectos.spec.ts",
+  "e2e/crud/directiva.spec.ts",
+  "e2e/crud/gestion.spec.ts",
+  "e2e/crud/portal.spec.ts",
+  "e2e/crud/comunicacion.spec.ts",
+  "e2e/crud/solicitudes.spec.ts",
+  "e2e/crud/visor.spec.ts",
+  "e2e/crud/poblado-idempotente.spec.ts",
+]
 
-const databaseUrl = `file:./${nombreBase}`;
+const AYUDA = `e2e:fresh — base descartable + lane e2e con paridad CI
 
-function caja(titulo, lineas = []) {
-  const ancho = Math.max(titulo.length, ...lineas.map((l) => l.length), 62) + 4;
-  const barra = "!".repeat(ancho);
-  const centrar = (t) => {
-    const restante = ancho - 2 - t.length;
-    const izq = Math.floor(restante / 2);
-    return `!${" ".repeat(izq)}${t}${" ".repeat(restante - izq)}!`;
-  };
-  console.log("\n" + barra);
-  console.log(centrar(titulo));
-  for (const l of lineas) console.log(centrar(l));
-  console.log(barra + "\n");
-}
+  npm run e2e:fresh                                 prepara la base e imprime el comando
+  npm run e2e:fresh -- --db perf-x.db --no-build     reusa otra base, sin build
+  npm run e2e:fresh -- -- e2e/smoke                  prepara y corre Playwright
 
-function advertencias() {
-  caja("ADVERTENCIAS OPERATIVAS DE LA LANE E2E", [
-    "1) BASE FRESCA POR CADA CORRIDA: recrea la base descartable con `npm run e2e:fresh`",
-    "   antes de cada lane. Nunca reutilices una base de una corrida anterior.",
-    "2) NO CORRAS PRIMERO EL SPEC DE RATE-LIMIT: bloquea la IP 15 minutos.",
-    "   (E2E_RATE_LIMIT=1 ... e2e/auth/rate-limit.spec.ts corre SOLO al final y aislado;",
-    "   si corre primero aborta auth.setup y la lane entera queda inutilizable 15 min.)",
-  ]);
-}
+Flag       Descripción
+--db       Base descartable relativa a prisma/ (default ${DB_POR_DEFECTO})
+--keep-db  No recrear la base (por defecto se borra para garantizar "fresh")
+--no-build Saltear \`npm run build\` (sólo si hay un build reciente)
+--help     Esta ayuda
 
-function correr(cmd, args, extraEnv) {
-  console.log(`\n$ ${cmd} ${args.join(" ")}`);
-  const res = spawnSync(cmd, args, {
-    cwd: webDir,
-    stdio: "inherit",
-    shell: process.platform === "win32",
-    env: { ...process.env, ...extraEnv },
-  });
-  if (res.error) {
-    console.error(`[e2e-fresh] No se pudo ejecutar ${cmd}: ${res.error.message}`);
-    process.exit(1);
-  }
-  if (res.status !== 0) {
-    console.error(`[e2e-fresh] Falló "${cmd} ${args.join(" ")}" (exit ${res.status}).`);
-    process.exit(res.status ?? 1);
-  }
-}
+Lo que siga a \`--\` se pasa tal cual a Playwright y dispara la corrida. Con npm el
+primer \`--\` lo consume npm, por eso se escribe doble: \`npm run e2e:fresh -- -- <specs>\`.`
 
-advertencias();
+/* ---------- argumentos ---------- */
 
-// (a) Base descartable desde cero con el schema SQLite.
-for (const sufijo of ["", "-wal", "-shm", "-journal"]) {
-  const p = dbPath + sufijo;
-  if (existsSync(p)) {
-    rmSync(p);
-    console.log(`[e2e-fresh] Eliminada base anterior: ${path.relative(webDir, p)}`);
-  }
-}
-correr("npx", ["prisma", "migrate", "deploy", "--schema=prisma/schema.sqlite.prisma"], {
-  DATABASE_URL: databaseUrl,
-});
+const argv = process.argv.slice(2)
+const separador = argv.indexOf("--")
+const propios = separador === -1 ? argv : argv.slice(0, separador)
+const argsPlaywright = separador === -1 ? [] : argv.slice(separador + 1)
 
-if (!existsSync(dbPath)) {
-  console.error(`[e2e-fresh] migrate deploy terminó pero no creó ${path.relative(webDir, dbPath)}.`);
-  process.exit(1);
-}
-console.log(
-  `[e2e-fresh] Base creada: ${path.relative(webDir, dbPath)} (${statSync(dbPath).size} bytes) — ` +
-    `DATABASE_URL=${databaseUrl}`,
-);
+let dbArg = DB_POR_DEFECTO
+let recrearBase = true
+let correrBuild = true
 
-// (a.2) Cliente Prisma del schema SQLite: si el último `prisma generate` fue el
-// default (PostgreSQL, p. ej. tras correr el job unit-pg), el seed de abajo
-// fallaría contra esta base descartable. Regenerar acá fija el client correcto.
-correr("npx", ["prisma", "generate", "--schema=prisma/schema.sqlite.prisma"], {
-  DATABASE_URL: databaseUrl,
-});
-
-// (b) Seed completo contra ESA base (process.env DATABASE_URL pisa al .env).
-correr("npm", ["run", "e2e:reseed-base"], { DATABASE_URL: databaseUrl });
-
-// Verificación ligera de siembra (mejor esfuerzo: si better-sqlite3 no está, se omite).
-try {
-  const { default: Database } = await import("better-sqlite3");
-  const db = new Database(dbPath, { readonly: true });
-  const contar = (tabla) => {
-    try {
-      return db.prepare(`SELECT COUNT(*) AS n FROM ${tabla}`).get().n;
-    } catch {
-      return "n/d";
+for (let i = 0; i < propios.length; i++) {
+  const arg = propios[i]
+  if (arg === "--help" || arg === "-h") {
+    console.log(AYUDA)
+    process.exit(0)
+  } else if (arg === "--db") {
+    dbArg = propios[++i]
+    if (!dbArg) {
+      console.error("e2e:fresh — --db necesita un archivo (ej: --db perf-x.db)")
+      process.exit(2)
     }
-  };
-  console.log(
-    `[e2e-fresh] Verificación de siembra: usuarios=${contar("usuarios")} · ` +
-      `membresias=${contar("membresias")} · Comunidad=${contar("Comunidad")} · ` +
-      `unidades=${contar("unidades")} · personas=${contar("personas")}`,
-  );
-  db.close();
-} catch {
-  console.log("[e2e-fresh] better-sqlite3 no disponible: siembra verificada por la salida del seed.");
+  } else if (arg === "--keep-db") {
+    recrearBase = false
+  } else if (arg === "--no-build") {
+    correrBuild = false
+  } else {
+    console.error(
+      `e2e:fresh — argumento desconocido: ${arg}\n\n` +
+        "Los flags propios van antes: --db, --keep-db, --no-build, --help.\n" +
+        "Para pasarle argumentos a Playwright usá el separador `--`. Con npm, npm se queda\n" +
+        "con el primer `--`, así que va doble:\n\n" +
+        "  npm run e2e:fresh -- -- e2e/crud/poblado-idempotente.spec.ts e2e/smoke\n",
+    )
+    process.exit(2)
+  }
 }
 
-// (c) Las dos advertencias, de nuevo, en grande, antes del comando.
-advertencias();
+/* ---------- base descartable (guarda dura contra dev.db) ---------- */
 
-// (d) Comando Playwright exacto con paridad CI (job e2e de ci.yml).
-console.log("Corré la lane desde k0mp4ss_fe/apps/web con este comando (paridad CI):");
-console.log(
-  [
-    "CI=1",
-    `DATABASE_URL=${databaseUrl}`,
-    "AUTH_SECRET=ci-e2e-secret-no-produccion",
-    "NEXT_PUBLIC_APP_ENV=development",
-    "GOOGLE_CLIENT_ID=ci-dummy",
-    "GOOGLE_CLIENT_SECRET=ci-dummy",
-    "npx playwright test <specs> --reporter=list",
-  ].join(" "),
-);
-console.log("  # <specs> = rutas a correr, p. ej. e2e/crud e2e/flujo e2e/smoke");
-console.log("  # CI=1 usa webServer `npm run start`: exige `npm run build` previo.");
-console.log("  # El spec de rate-limit SOLO al final y aislado:");
-console.log(
-  "  # CI=1 E2E_RATE_LIMIT=1 DATABASE_URL=... npx playwright test e2e/auth/rate-limit.spec.ts --reporter=list",
-);
-console.log("\n[e2e-fresh] Lista: base fresca + seed completo. Buena lane.");
+const dbPath = path.resolve(PRISMA_DIR, dbArg)
+const dbNombre = path.basename(dbPath)
+
+if (dbNombre.includes("dev.db")) {
+  console.error(
+    `e2e:fresh — ABORTADO: "${dbPath}" es la base de desarrollo.\n` +
+      "Las corridas e2e usan bases descartables; `prisma/dev.db` no se toca nunca.",
+  )
+  process.exit(1)
+}
+if (!/^perf[\w.-]*\.db$/.test(dbNombre)) {
+  console.warn(
+    `e2e:fresh — aviso: "${dbNombre}" no sigue la convención de bases descartables ` +
+      `perf*.db (gitignored). Sigo con esa base sólo porque no es dev.db.`,
+  )
+}
+
+const urlRelativa = path.dirname(dbPath) === PRISMA_DIR
+const databaseUrl = urlRelativa ? `file:./${dbNombre}` : `file:${dbPath}`
+process.env.DATABASE_URL = databaseUrl
+
+/* ---------- helpers ---------- */
+
+function correr(comando, args, { permitirFallo = false, env = process.env } = {}) {
+  console.log(`\n$ ${comando} ${args.join(" ")}`)
+  const r = spawnSync(comando, args, {
+    cwd: APP_DIR,
+    stdio: "inherit",
+    env,
+  })
+  const codigo = r.status ?? 1
+  if (r.error || (codigo !== 0 && !permitirFallo)) {
+    const detalle = r.error ? r.error.message : `exit ${codigo}`
+    throw new Error(`"${comando} ${args.join(" ")}" falló (${detalle})`)
+  }
+  return codigo
+}
+
+function pidEnPuerto(puerto) {
+  try {
+    return execFileSync("lsof", ["-ti", `tcp:${puerto}`], { encoding: "utf8" })
+      .split("\n")
+      .map((s) => s.trim())
+      .filter(Boolean)
+  } catch (err) {
+    // lsof sin resultados sale 1; si no existe, se cae a `ss`.
+    if (err.status === 1) return []
+    try {
+      const salida = execFileSync("ss", ["-lptnH", `sport = :${puerto}`], {
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "ignore"],
+      })
+      return [...salida.matchAll(/pid=(\d+)/g)].map((m) => m[1])
+    } catch {
+      return []
+    }
+  }
+}
+
+function cmdline(pid) {
+  try {
+    return readFileSync(`/proc/${pid}/cmdline`, "utf8").replace(/\0/g, " ").trim()
+  } catch {
+    return ""
+  }
+}
+
+function sigueVivo(pid) {
+  try {
+    process.kill(Number(pid), 0)
+    return true
+  } catch {
+    return false
+  }
+}
+
+/** Saneo del puerto 3000: con CI=1 Playwright no reusa un server ya levantado. */
+function sanearPuerto() {
+  const pids = pidEnPuerto(PUERTO)
+  if (pids.length === 0) {
+    console.log(`e2e:fresh — puerto ${PUERTO} libre.`)
+    return
+  }
+  for (const pid of pids) {
+    const cmd = cmdline(pid)
+    if (/next-server|next start/.test(cmd)) {
+      console.log(`e2e:fresh — terminando next-server huérfano (pid ${pid}, :${PUERTO})`)
+      try {
+        process.kill(Number(pid), "SIGTERM")
+      } catch {
+        /* ya murió */
+      }
+      const limite = Date.now() + 5_000
+      while (sigueVivo(pid) && Date.now() < limite) {
+        execFileSync("sleep", ["0.1"])
+      }
+      if (sigueVivo(pid)) {
+        try {
+          process.kill(Number(pid), "SIGKILL")
+        } catch {
+          /* ya murió */
+        }
+      }
+    } else {
+      console.warn(
+        `e2e:fresh — aviso: el puerto ${PUERTO} lo ocupa otro proceso (pid ${pid}: ` +
+          `"${cmd || "desconocido"}"). Con CI=1 Playwright no reusa server: detenelo ` +
+          "antes de correr la lane.",
+      )
+    }
+  }
+}
+
+function banner() {
+  const linea = "=".repeat(76)
+  console.log(`\n${linea}`)
+  console.log(" e2e:fresh — base descartable lista para la lane con paridad CI")
+  console.log(linea)
+  console.log(` Base (DATABASE_URL) : ${databaseUrl}`)
+  console.log(` Archivo SQLite      : ${dbPath}`)
+  console.log(` Base recreada       : ${recrearBase ? "sí (borrada y migrada de cero)" : "no (--keep-db)"}`)
+  console.log(` Build de producción : ${correrBuild ? "hecha (next build)" : "salteada (--no-build)"}`)
+  console.log("----------------------------------------------------------------------------")
+  console.log(" Comando Playwright exacto (paridad CI):")
+  console.log(
+    argsPlaywright.length === 0
+      ? `   CI=1 npx playwright test ${SPECS_CANONICOS.join(" ")}`
+      : `   CI=1 npx playwright test ${argsPlaywright.join(" ")}`,
+  )
+  if (argsPlaywright.length === 0) {
+    console.log("   (specs canónicos de la serie: smoke + los 9 crud de NOCHE-3)")
+    console.log("   Sin `--` el script sólo imprime el comando; agregalo para que lo corra:")
+    console.log(
+      "   npm run e2e:fresh -- -- e2e/crud/poblado-idempotente.spec.ts e2e/smoke",
+    )
+  }
+  console.log("----------------------------------------------------------------------------")
+  console.log(" AVISO: NO corras e2e/auth/rate-limit.spec.ts antes de la lane:")
+  console.log("        bloquea la IP 15 min y aborta `auth.setup`.")
+  console.log(`${linea}\n`)
+}
+
+/* ---------- receta ---------- */
+
+function main() {
+  console.log("e2e:fresh — preparando base descartable (nunca prisma/dev.db)")
+
+  if (recrearBase) {
+    for (const sufijo of ["", "-journal", "-shm", "-wal"]) {
+      const archivo = `${dbPath}${sufijo}`
+      if (existsSync(archivo)) {
+        rmSync(archivo, { force: true })
+        console.log(`e2e:fresh — borrado ${path.relative(APP_DIR, archivo)}`)
+      }
+    }
+  } else if (!existsSync(dbPath)) {
+    console.warn(`e2e:fresh — aviso: --keep-db pero ${dbPath} no existe; se migra de cero.`)
+  }
+
+  sanearPuerto()
+
+  correr("npx", ["prisma", "migrate", "deploy", `--schema=${SCHEMA}`])
+  // Cliente Prisma del schema SQLite (R3-missing-prisma-generate): si el último
+  // `prisma generate` de la máquina fue el default PostgreSQL (p. ej. tras el job
+  // `unit-pg`), el seed de abajo corre con el client equivocado y muere con exit 1
+  // contra la base descartable. Regenerar acá fija el client correcto.
+  correr("npx", ["prisma", "generate", `--schema=${SCHEMA}`])
+  correr("npm", ["run", "e2e:reseed-base"])
+  if (correrBuild) correr("npm", ["run", "build"])
+  else console.log("\ne2e:fresh — build salteado (--no-build)")
+
+  banner()
+
+  if (argsPlaywright.length > 0) {
+    // Paridad CI de verdad: sin `CI=1` Playwright usa `next dev`, `reuseExistingServer:
+    // true` y Chrome del sistema en vez del chromium embebido. El banner imprime el
+    // comando con `CI=1`, así que la corrida tiene que llevar exactamente ese entorno.
+    const envPlaywright = { ...process.env, CI: "1" }
+    console.log("e2e:fresh — corriendo Playwright con CI=1 (paridad CI)")
+    correr("npx", ["playwright", "test", ...argsPlaywright], { env: envPlaywright })
+  }
+}
+
+try {
+  main()
+} catch (err) {
+  console.error(`\ne2e:fresh — ABORTADO: ${err.message}`)
+  process.exit(1)
+}

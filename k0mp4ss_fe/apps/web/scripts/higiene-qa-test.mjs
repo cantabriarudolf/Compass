@@ -19,7 +19,6 @@
  *
  * Uso: npm run e2e:higiene [-- --apply]
  */
-/* global process */
 import { PrismaClient } from "@prisma/client"
 
 const APPLY = process.argv.includes("--apply")

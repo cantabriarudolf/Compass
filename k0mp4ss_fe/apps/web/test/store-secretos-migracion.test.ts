@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest"
 import { useCompassStore, STORE_VERSION } from "@/lib/store"
 import { configuracionDefault } from "@/data/admin/configuracion"
+import { ConfiguracionGlobalSchema } from "@/lib/schemas"
 import { resetStore } from "./helpers"
 
 const getState = () => useCompassStore.getState()
@@ -109,21 +110,20 @@ describe("Migración v25 → v26 C2-final limpieza secretos", () => {
     expect((configuracionDefault as unknown as Record<string, unknown>)["claveEliminacionMaestro"]).toBeUndefined()
   })
 
-  it("saveConfiguracion persiste sin secretos y no falla con payload v25 legacy", () => {
-    useCompassStore.setState({ hasHydrated: true })
+  it("el schema de configuración ignora secretos de un payload v25 legacy", () => {
     const payloadLegacy = {
       ...configuracionDefault,
       smtpPassword: "deberia-ser-ignorado",
       claveEliminacionMaestro: "tambien-ignorado",
     } as unknown as typeof configuracionDefault
 
-    // Zod strip unknown keys: el schema v26 no define esos campos, así que safeParse los ignora
-    const resultado = getState().saveConfiguracion(payloadLegacy)
-    expect(resultado.ok).toBe(true)
-    const cfgGuardada = getState().configuracion as unknown as Record<string, unknown>
-    // Si Zod stripUnknown, no deberían aparecer; si aparecen, al menos no rompe
-    // Lo importante es que el store no persiste secretos como claves editables
-    // y que la validación no falla por campos extra.
-    expect(cfgGuardada["nombreComunidad"]).toBe(configuracionDefault.nombreComunidad)
+    // Zod strip unknown keys: el schema v26 no define esos campos, así que safeParse los ignora.
+    // `saveConfiguracion` (legacy) se eliminó en store-cleanup: la garantía vive en el schema.
+    const parsed = ConfiguracionGlobalSchema.safeParse(payloadLegacy)
+    expect(parsed.success).toBe(true)
+    const cfg = (parsed.success ? parsed.data : {}) as unknown as Record<string, unknown>
+    expect(cfg["smtpPassword"]).toBeUndefined()
+    expect(cfg["claveEliminacionMaestro"]).toBeUndefined()
+    expect(cfg["nombreComunidad"]).toBe(configuracionDefault.nombreComunidad)
   })
 })

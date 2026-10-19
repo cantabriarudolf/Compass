@@ -136,7 +136,10 @@ test.describe("CRUD — QA Lab poblado idempotente (P1 C2)", () => {
     await expect(page.getByText(/Carga completa OK/)).toBeVisible({ timeout: 10_000 })
 
     await clickBorrar(page)
-    await expect(page.getByText(/TEST-\* limpio correctamente/)).toBeVisible({ timeout: 30_000 })
+    // 120s (no 30s): es la MISMA purga del test hermano, que ya espera 120s. Medida
+    // en 38,7s local y >120s en el runner de CI; con 30s el caso caía por timeout de
+    // la purga, no por comportamiento (el dialog de confirmación se cancela igual).
+    await expect(page.getByText(/TEST-\* limpio correctamente/)).toBeVisible({ timeout: 120_000 })
 
     expect(errores, "Excepciones no capturadas en poblado idempotente cancelar").toEqual([])
   })

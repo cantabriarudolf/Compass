@@ -13,7 +13,6 @@
 import { VinculoUnidadSchema } from "@/lib/schemas"
 import { puede } from "@/lib/authz"
 import { prisma } from "@/lib/prisma"
-import { logger } from "@/lib/logger"
 import {
   jsonError,
   withComunidadScope,

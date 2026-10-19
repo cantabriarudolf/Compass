@@ -1,0 +1,9 @@
+schema: spec-driven
+
+# Change de diagnóstico + red de seguridad (test de contrato en `test/api/` y
+# reasignación de la deuda real). El guard de scope de `lib/api/put-merge.ts` NO
+# se modifica: el defecto documentado ("PUT 404 con la fila existente") no se
+# reproduce. Ninguna spec viva describe la regla de scope de los PUT parciales
+# (la de MT describe la transición de UI, que no cambia), así que no hay delta
+# que aplicar. Ver openspec/CONVENCION-DELTAS.md § "Changes que no modifican specs".
+skip_specs: true
