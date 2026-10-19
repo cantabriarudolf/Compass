@@ -6,7 +6,7 @@
 
 | Ventana | Alcance | Estado | Commit final |
 |---|---|---|---|
-| G1 | `noche-2-conflictos` — traer `main` a `noche/serie-noche-2` y resolver los conflictos preservando ambos lados | pendiente | — |
+| G1 | `noche-2-conflictos` — traer `main` a `noche/serie-noche-2` y resolver los conflictos preservando ambos lados | HECHA | `2561e2f` (merge) |
 | G2 | `higiene-final` — auditar los 4 changes activos del owner y cerrar la serie | pendiente | — |
 
 **MÁXIMO: 2 ventanas.** Lo que no entre se declara como deuda post-serie en G2.
@@ -61,3 +61,18 @@
 
 ## Bitácora
 (cada ventana agrega su entrada ANTES de que el orquestador pushee: `- [fecha] G<n> HECHA: resumen (commits)`)
+
+- [2026-10-19] **G1 HECHA**: `origin/main` (`70004d8`, 145 commits) mergeado **en** `noche/serie-noche-2` con
+  **8 conflictos resueltos** preservando ambos lados — `ci.yml` (base descartable `perf-test.db` en 3 jobs +
+  pasos propios), `poblado-idempotente` (purga 120 s + higiene noche-2), `scripts/e2e-fresh.mjs` add/add
+  (implementación de main + `prisma generate` SQLite de noche-2), `BACKLOG-100.md` (unión de filas y
+  secciones), `DEV-qa-lab` (unión de requirements), `ST` (seed authz determinista), archives
+  `fix-vercel-data-ignore` (gana el canónico de main `2026-10-19`) y `st-split-fase2/tasks.md` (aceptado el
+  borrado: ya archivado y ejecutado en main). Verificado: **0 marcadores** de conflicto y **0 apariciones**
+  de las 28 acciones podadas en `openspec/specs/`. Gates: `tsc` 0 · `eslint` 0 problemas (app y ui) · suite
+  verde **1330** casos en **134** archivos con global **94.31/85.82/93.61/94.31**, `lib/**` 99.63/94.08/99.44/99.63,
+  `app/api/**` 88.57/76.06/89.86/88.57 · `validate --all` 35/35 · `check-delta-coverage` 0 a romper. Queda **1**
+  change activo (`au-google-sso`) para G2. **Sin pushear.** Commits `2561e2f` (merge) + documental.
+  Deuda menor declarada: el runbook de operaciones describe `e2e:fresh` con la base/flags de noche-2
+  (`perf-fresh.db`) mientras la implementación integrada usa los de main (`perf-e2e.db`, `--db`); fuera del
+  alcance cerrado de G1.
