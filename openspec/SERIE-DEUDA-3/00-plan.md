@@ -11,7 +11,7 @@
 | E1 | `lint-warnings-cero` — los 35 warnings de ESLint a cero (3 causas raíz) | HECHA | `6c05489` · `86e92cf` · `8db0f7a` · docs |
 | E2 | `store-ramas-defensivas` — documentar los 2 fallbacks defensivos y declarar el techo del 99.95 % | HECHA | `3088318` · `8f51307` · `8dc103d` · docs |
 | E3 | `flaky-pe-panels` — presupuesto explícito para el test flaky de retiro de encomienda | HECHA | `ceef821` · `8656835` · `224f406` + cierre |
-| E4 | `ci-db-descartable` — alinear los 3 `DATABASE_URL` de `ci.yml` y quitar la excepción de la guarda | pendiente | — |
+| E4 | `ci-db-descartable` — alinear los 3 `DATABASE_URL` de `ci.yml` y quitar la excepción de la guarda | EN CURSO | — |
 | E5 | Cierre de la serie: auditoría integral, e2e final, PR y deuda post-serie | pendiente | — |
 
 **MÁXIMO: 5 ventanas.** Prohibido abrir ventanas fuera del cap: lo que no entre se declara como
