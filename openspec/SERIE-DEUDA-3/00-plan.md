@@ -12,7 +12,7 @@
 | E2 | `store-ramas-defensivas` — documentar los 2 fallbacks defensivos y declarar el techo del 99.95 % | HECHA | `3088318` · `8f51307` · `8dc103d` · docs |
 | E3 | `flaky-pe-panels` — presupuesto explícito para el test flaky de retiro de encomienda | HECHA | `ceef821` · `8656835` · `224f406` + cierre |
 | E4 | `ci-db-descartable` — alinear los 3 `DATABASE_URL` de `ci.yml` y quitar la excepción de la guarda | HECHA | `3b3147f` · `2a8dcb0` · `fc5b74e` · docs |
-| E5 | Cierre de la serie: auditoría integral, e2e final, PR y deuda post-serie | pendiente | — |
+| E5 | Cierre de la serie: auditoría integral, e2e final, PR y deuda post-serie | HECHA | `6cfbc26` + docs |
 
 **MÁXIMO: 5 ventanas.** Prohibido abrir ventanas fuera del cap: lo que no entre se declara como
 deuda post-serie en el cierre (E5), no se improvisa.
@@ -134,3 +134,88 @@ deuda post-serie en el cierre (E5), no se improvisa.
   `openspec validate --all` **40/0** · `check-delta-coverage ci-db-descartable` `1 ok · 1 info · 0 que
   romperían el archive`. Commits `3b3147f`, `2a8dcb0`, `fc5b74e` + avance. **Sin pushear** (el
   orquestador pushea, archiva tras CI verde y observa el workflow).
+- [2026-10-19] **E5 HECHA**: cierre de la serie. Auditoría desde el repo: los hashes de la tabla
+  coinciden con `git log` (E1 `6c05489`/`86e92cf`/`8db0f7a`+`5642e88`/`a125055`, E2
+  `3088318`/`8f51307`/`8dc103d`+`4c0df28`, E3 `ceef821`/`8656835`/`224f406`+`6587605`, E4
+  `3b3147f`/`2a8dcb0`/`fc5b74e`+`7cdc9c5`/`deb6bcb`); fingerprint intacto (`STORE_VERSION = 28`, **7**
+  slices); `prisma/dev.db` con `mtime` idéntico (`2026-10-17 22:55:36.837707123 -0300`),
+  `Data/NSGC/backups/` sin cambios (`2026-10-12 15:05:29`). De esta serie **solo queda activo
+  `ci-db-descartable`** (lo archiva el orquestador con CI verde; el run de `deb6bcb` ya está
+  `success`); ningún otro change activo pertenece a deuda-3. **Gate pendiente pagado**: se quitó el
+  `console.log("DBG onError:"…)` que E3 dejó en `test/componentes/pe-panels.test.tsx` y el archivo
+  siguió **7/7 verde** (`npx vitest run test/componentes/pe-panels.test.tsx`, 59.69 s) — commit
+  `6cfbc26`. Gates de cierre: `npx tsc --noEmit` **0** · `npm run lint` **exit 0 · 0 problemas** ·
+  `npm test` **1304/1304 en 128 archivos** (497.67 s) con cobertura global **94.33/85.70/93.78/94.33**,
+  `lib/**` **99.63/94.03/99.44/99.63**, `app/api/**` **88.44/75.67/90.07/88.44** y `lib/store.ts`
+  **99.95** (`4323,5131` sin cubrir) · `openspec validate --all` **40/0** · e2e
+  `npm run e2e:fresh -- --no-build -- e2e/smoke e2e/crud/poblado-idempotente.spec.ts` →
+  **24/24 verdes, 0 fallos, 0 saltados (149.93 s)** con JUnit `test-results/junit.xml` y
+  `.last-run.json` (`status: passed`, `failedTests: []`) como evidencia. `vitest.config.ts` **sin
+  tocar** (pisos sin cambios). Commits `6cfbc26` + cierre documental. **Sin pushear**.
+
+---
+
+## Cierre de la serie deuda-3
+
+**Serie cerrada el 2026-10-19 con 5 de 5 ventanas (cap respetado)**: E1–E5 HECHA.
+
+### Estado por ventana
+
+| Ventana | Change | Commits de código / propuesta | Cierre y docs | Archive + CI |
+|---|---|---|---|---|
+| E1 | `lint-warnings-cero` | `6c05489` · `86e92cf` · `8db0f7a` / `5642e88` | `a125055` | archivado `dda718c` — **run 39147226971 success** |
+| E2 | `store-ramas-defensivas` | `3088318` · `8f51307` / `8dc103d` | `4c0df28` | archivado `35f6be6` — **CI verde en `dda718c`** |
+| E3 | `flaky-pe-panels` | `ceef821` / `8656835` | `224f406` · `6587605` | archivado `35f6be6` — **CI verde en `6587605`** |
+| E4 | `ci-db-descartable` | `3b3147f` · `2a8dcb0` / `fc5b74e` | `7cdc9c5` · `deb6bcb` | **activo** (archive pendiente del orquestador; run de `deb6bcb` = **success**) |
+| E5 | cierre de la serie | `6cfbc26` | este cierre + avance NSGC | — |
+
+Evidencia de CI: `gh run list --branch serie/deuda-1` devuelve `conclusion: success` para
+`deb6bcb`, `35f6be6`, `6587605`, `dda718c` y `a125055` (workflow `CI`). Ningún change de la serie
+quedó activo salvo `ci-db-descartable`; los otros 5 changes activos del repo
+(`a11y-p3-reservas-recursos`, `au-google-sso`, `e2e-higiene-determinismo`, `e2e-rojos-flujo-a11y-smoke`,
+`fix-vercel-data-ignore`) son de otras series y no se tocaron.
+
+### Números finales (corrida única de E5)
+
+| Métrica | Valor |
+|---|---|
+| `npm test` | **1304/1304 en 128 archivos** · 497.67 s |
+| Cobertura global | **94.33/85.70/93.78/94.33** (texto v8: 94.32/85.69/93.77/94.32) |
+| `lib/**` | **99.63/94.03/99.44/99.63** (piso 98/93/98/98) |
+| `app/api/**` | **88.44/75.67/90.07/88.44** (piso 87/74/88/87) |
+| `lib/store.ts` | **99.95** (sin cubrir `4323,5131`, defensa por diseño) |
+| `npx tsc --noEmit` | 0 errores |
+| `npm run lint` | exit 0 · **0 problemas** (0 errores, 0 warnings en `apps/web`) |
+| `openspec validate --all` | **40 passed, 0 failed (40 items)** |
+| e2e de la serie | **24/24 verdes · 0 fallos · 0 saltados · 149.93 s** |
+| Pisos `vitest.config.ts` | **sin cambios** (93/84/92/93 · 98/93/98/98 · 87/74/88/87) |
+| Guardas de base | `STORE_VERSION = 28` · 7 slices · `dev.db` y `backups/` intactos · los 3 `DATABASE_URL` de `ci.yml` en `perf-test.db` y guarda **absoluta** |
+
+### Evidencia e2e
+
+```text
+$ npm run e2e:fresh -- --no-build -- e2e/smoke e2e/crud/poblado-idempotente.spec.ts
+ Base (DATABASE_URL) : file:./perf-e2e.db
+ Comando Playwright  : CI=1 npx playwright test e2e/smoke e2e/crud/poblado-idempotente.spec.ts
+
+$ cat test-results/.last-run.json
+{ "status": "passed", "failedTests": [] }
+
+$ grep -o 'tests="24" failures="0" ...' test-results/junit.xml
+24 tests · 0 failures · 0 skipped · 0 errors · 149.93 s
+  auth.setup.ts 6 · crud/poblado-idempotente.spec.ts 2 · smoke/modulos-mobile.spec.ts 8 · smoke/modulos.spec.ts 8
+```
+
+### Deuda post-serie (declarada, no pagada)
+
+1. **1 warning de lint fuera de `apps/web`: `packages/ui/src/hooks/use-mobile.ts:14`
+   (`react-hooks/set-state-in-effect`)**. Precedente declarado en E1; su arreglo cambia comportamiento
+   observable del hook compartido, así que no se pagó dentro de esta serie.
+2. **Techo de cobertura del store por API pública: 99.95 %** (`lib/store.ts:4323` y `:5131`, los dos
+   `: []` de `flatMap` filtrados que E2 documentó como defensa a propósito). Bajar de ese techo exigiría
+   romper el invariante actual o exponer ramas muertas; se conserva como diseño.
+3. **Avisos de pi-lens sobre los CLIs de `scripts/`** que E1 dejó conscientemente sin tocar
+   (preexistentes): envolverlos cambiaría el comportamiento de las herramientas de migración/backup.
+4. **Merge del PR draft #3** (`deuda-1` → `main`) y el de PR #2 (`noche-3`): decisión del owner.
+   El texto propuesto para actualizar la descripción del PR #3 quedó en el avance de cierre
+   `Data/NSGC/docs/avances/avance - 2026-10-19 00-15.md`.
