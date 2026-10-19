@@ -18,6 +18,7 @@ import {
   hoyISOTEST,
   limpiarPersonaTEST,
 } from "../helpers/datos-test"
+import { guardarDialogo } from "../helpers/form-dialog"
 
 test.use({ actionTimeout: 30_000 })
 
@@ -138,20 +139,10 @@ test.describe("MP — quitar rol directiva poda la gobernanza y audita (AD)", ()
       await expect(chkDirectiva).not.toBeChecked()
 
       const btnGuardar = dialog.getByRole("button", { name: "Guardar Cambios" })
-      await btnGuardar.scrollIntoViewIfNeeded().catch(() => {})
-      try {
-        await btnGuardar.click({ force: true, noWaitAfter: true, timeout: 5_000 })
-      } catch {
-        await dialog
-          .locator("form")
-          .evaluate((f) => (f as HTMLFormElement).requestSubmit())
-      }
-      if (await dialog.isVisible().catch(() => false)) {
-        await dialog
-          .locator("form")
-          .evaluate((f) => (f as HTMLFormElement).requestSubmit())
-      }
-      await expect(dialog).toBeHidden({ timeout: 20_000 })
+      // Single-shot idempotente (helper form-dialog): la edición se verifica
+      // out-of-band vía API (poda en BD), no por fila; sin `fila` no hay
+      // reenvío a ciegas.
+      await guardarDialogo(page, { boton: btnGuardar, dialogo: dialog, timeoutMs: 20_000 })
 
       // 4a) Poda en BD (out-of-band: la pestaña se oculta con el rol).
       await expect
@@ -245,24 +236,13 @@ test.describe("MP — quitar rol directiva poda la gobernanza y audita (AD)", ()
       const btnGuardarConserva = dialogConserva.getByRole("button", {
         name: "Guardar Cambios",
       })
-      await btnGuardarConserva.scrollIntoViewIfNeeded().catch(() => {})
-      try {
-        await btnGuardarConserva.click({
-          force: true,
-          noWaitAfter: true,
-          timeout: 5_000,
-        })
-      } catch {
-        await dialogConserva
-          .locator("form")
-          .evaluate((f) => (f as HTMLFormElement).requestSubmit())
-      }
-      if (await dialogConserva.isVisible().catch(() => false)) {
-        await dialogConserva
-          .locator("form")
-          .evaluate((f) => (f as HTMLFormElement).requestSubmit())
-      }
-      await expect(dialogConserva).toBeHidden({ timeout: 20_000 })
+      // Single-shot idempotente (helper form-dialog): conservar el rol se
+      // verifica out-of-band vía API; sin `fila` no hay reenvío a ciegas.
+      await guardarDialogo(page, {
+        boton: btnGuardarConserva,
+        dialogo: dialogConserva,
+        timeoutMs: 20_000,
+      })
 
       // Ficha intacta en BD.
       await expect

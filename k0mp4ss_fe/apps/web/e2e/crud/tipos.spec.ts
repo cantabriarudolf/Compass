@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test"
+import { guardarDialogo } from "../helpers/form-dialog"
 
 test.use({ actionTimeout: 30_000 })
 
@@ -64,22 +65,17 @@ test.describe("CRUD — Inventario/Tipos", () => {
     const inputFecha = dialog.locator('input[name="fechaVigencia"]')
     await expect(inputFecha).toBeVisible({ timeout: 10_000 })
 
-    // Submit "Actualizar Tarifario" — puede quedar fuera de viewport en dialog
-    const form = dialog.locator("form")
+    // Submit "Actualizar Tarifario" — puede quedar fuera de viewport en dialog.
+    // Single-shot idempotente (helper form-dialog): UN envío + unicidad de la
+    // fila creada (un duplicado falla ruidoso acá).
     const btnSubmit = dialog.getByRole("button", { name: "Actualizar Tarifario" })
     await expect(btnSubmit).toBeVisible({ timeout: 10_000 })
-    await btnSubmit.scrollIntoViewIfNeeded().catch(() => {})
-    try {
-      await btnSubmit.click({ force: true, noWaitAfter: true, timeout: 5_000 })
-    } catch {
-      await form.evaluate((f) => (f as HTMLFormElement).requestSubmit())
-    }
-    await page.waitForTimeout(400)
-    if (await dialog.isVisible().catch(() => false)) {
-      await form.evaluate((f) => (f as HTMLFormElement).requestSubmit())
-    }
-
-    await expect(dialog).toBeHidden({ timeout: 10_000 })
+    await guardarDialogo(page, {
+      boton: btnSubmit,
+      dialogo: dialog,
+      fila: page.getByRole("row").filter({ hasText: titulo }),
+      timeoutMs: 10_000,
+    })
 
     // Afirmar fila con el nombre en la Table "Plantillas Técnicas"
     // Tabla header "Tipo", "Metraje Base" etc.

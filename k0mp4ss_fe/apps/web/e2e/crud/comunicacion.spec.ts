@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test"
+import { guardarDialogo } from "../helpers/form-dialog"
 
 test.use({ actionTimeout: 30_000 })
 
@@ -84,23 +85,11 @@ test.describe("CRUD — Comunidad/Comunicacion", () => {
     await expect(textarea).toBeVisible({ timeout: 10_000 })
     await textarea.fill(cuerpo)
 
-    // Guardar
+    // Guardar — single-shot idempotente (helper form-dialog): UN envío; sin
+    // `fila` (la card se afirma más abajo con getByText) no se reenvía a ciegas.
     const btnGuardar = dialog.getByRole("button", { name: "Guardar" })
     await expect(btnGuardar).toBeVisible({ timeout: 10_000 })
-    await btnGuardar.scrollIntoViewIfNeeded().catch(() => {})
-    try {
-      await btnGuardar.click({ force: true, noWaitAfter: true, timeout: 5_000 })
-    } catch {
-      await dialog.locator("form").evaluate((f) => (f as HTMLFormElement).requestSubmit()).catch(() => {})
-    }
-    await page.waitForTimeout(600)
-    if (await dialog.isVisible().catch(() => false)) {
-      await dialog.locator("form").evaluate((f) => (f as HTMLFormElement).requestSubmit()).catch(async () => {
-        await btnGuardar.click({ force: true, noWaitAfter: true }).catch(() => {})
-      })
-      await page.waitForTimeout(600)
-    }
-    await expect(dialog).toBeHidden({ timeout: 10_000 })
+    await guardarDialogo(page, { boton: btnGuardar, dialogo: dialog, timeoutMs: 10_000 })
 
     // Afirmar card de plantilla visible — el nombre aparece como CardTitle
     await expect(page.getByText(nombre).first()).toBeVisible({ timeout: 15_000 })

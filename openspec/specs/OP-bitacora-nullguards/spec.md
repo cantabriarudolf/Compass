@@ -2,7 +2,9 @@
 
 ## Purpose
 TBD - created by archiving change roles-specs-perfil. Update Purpose after archive.
+
 ## Requirements
+
 ### Requirement: Bitácora y Multas robustas ante nulos del seed
 Las vistas `/operaciones/bitacora` y `/finanzas/multas` MUST NOT reventar
 (`Application error`) cuando el seed deja JSON en `null`: personal sin
@@ -25,3 +27,15 @@ excepciones de cliente.
 - **THEN** la celda SHALL mostrar "—" sin excepciones, igual que con monto
   ausente.
 
+### Requirement: Tab de bitácora controlado (sobrevive al skeleton)
+`app/operaciones/bitacora/page.tsx` SHALL usar `<Tabs value>` controlado
+con estado en la página: el skeleton antepuesto a `cargandoAPI` desmonta el
+árbol y un Tabs no-controlado pierde la selección en cada revalidación
+tardía (el usuario vuelve a "Reporte Diario" sin aviso). El estado vive en
+la página, que no se desmonta, y sobrevive a los swaps del skeleton.
+
+#### Scenario: El tab sobrevive a una revalidación tardía
+- **WHEN** el usuario está en "Visitas" y una query revalida (skeleton
+  intermedio)
+- **THEN** al volver el contenido sigue seleccionado "Visitas" (e2e
+  `roles-journeys` conserjería).

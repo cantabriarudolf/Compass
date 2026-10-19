@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test"
+import { guardarDialogo } from "../helpers/form-dialog"
 
 test.use({ actionTimeout: 30_000 })
 
@@ -104,21 +105,9 @@ test.describe("CRUD — Finanzas/Gastos Comunes", () => {
 
     const btnGuardarFondo = dialogFondo.getByRole("button", { name: "Guardar" })
     await expect(btnGuardarFondo).toBeVisible({ timeout: 10_000 })
-    await btnGuardarFondo.scrollIntoViewIfNeeded().catch(() => {})
-    try {
-      await btnGuardarFondo.click({ force: true, noWaitAfter: true, timeout: 5_000 })
-    } catch {
-      await dialogFondo.locator("form").evaluate((f) => (f as HTMLFormElement).requestSubmit()).catch(() => {})
-    }
-    await page.waitForTimeout(700)
-    if (await dialogFondo.isVisible().catch(() => false)) {
-      await dialogFondo.evaluate(() => {
-        const f = document.querySelector('[role="dialog"] form') as HTMLFormElement | null
-        if (f) f.requestSubmit()
-      }).catch(() => {})
-      await page.waitForTimeout(700)
-    }
-    await expect(dialogFondo).toBeHidden({ timeout: 15_000 })
+    // Single-shot idempotente (helper form-dialog): UN envío; sin `fila` (la
+    // card del fondo se afirma por texto más abajo) no se reenvía a ciegas.
+    await guardarDialogo(page, { boton: btnGuardarFondo, dialogo: dialogFondo })
 
     // Afirmar card del fondo visible (CardTitle)
     await expect(page.getByText(nombreFondo).first()).toBeVisible({ timeout: 15_000 })
@@ -254,21 +243,13 @@ test.describe("CRUD — Finanzas/Gastos Comunes", () => {
 
     const btnRegistrar = dialogEgreso.getByRole("button", { name: "Registrar gasto" })
     await expect(btnRegistrar).toBeVisible({ timeout: 10_000 })
-    await btnRegistrar.scrollIntoViewIfNeeded().catch(() => {})
-    try {
-      await btnRegistrar.click({ force: true, noWaitAfter: true, timeout: 5_000 })
-    } catch {
-      await dialogEgreso.locator("form").evaluate((f) => (f as HTMLFormElement).requestSubmit()).catch(() => {})
-    }
-    await page.waitForTimeout(700)
-    if (await dialogEgreso.isVisible().catch(() => false)) {
-      await dialogEgreso.evaluate(() => {
-        const f = document.querySelector('[role="dialog"] form') as HTMLFormElement | null
-        if (f) f.requestSubmit()
-      }).catch(() => {})
-      await page.waitForTimeout(700)
-    }
-    await expect(dialogEgreso).toBeHidden({ timeout: 15_000 })
+    // Single-shot idempotente (helper form-dialog): UN envío + unicidad de la
+    // fila de egresos (descEgreso lleva timestamp: 1 fila = sin duplicado).
+    await guardarDialogo(page, {
+      boton: btnRegistrar,
+      dialogo: dialogEgreso,
+      fila: page.getByRole("row").filter({ hasText: descEgreso }),
+    })
 
     // Afirmar fila en Table de egresos con descripción y monto y folio FE-
     const row = page.getByRole("row").filter({ hasText: descEgreso })

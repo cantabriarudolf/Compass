@@ -47,6 +47,11 @@
 
 ## C3 — Google SSO — ⏸ EN PAUSA (pendiente de credenciales del owner)
 
+> **Actualización NOCHE-2 P4 (2026-10-13):** el código del change `au-google-sso` ya está
+> en main (provider + fail-fast + UI + tests + credenciales dummy en CI); sigue **ACTIVO**
+> por las env vars reales de Vercel y las decisiones de owner de este checklist.
+> Fila detallada en §Changes activos (final del archivo).
+
 - **Spec:** `openspec/specs/AU-autenticacion-sesion/spec.md` §Autenticación Futura (Scenario
   Google SSO). El proyecto hoy: Auth.js credentials + JWT + rate limit persistente (Serie
   Plataforma P5/P4, ver `project.md`).
@@ -230,9 +235,9 @@ aclaración documental, 0 errores de cálculo.
 | Una sola línea de Node: `.nvmrc` = 24, `engines.node` = `>=24`, CI `node-version: 24`, local 24.21.0 (LTS Krypton) | ✅ HECHO | `.nvmrc`, `k0mp4ss_fe/package.json` |
 | `lib/store.ts`: 1.202 statements sin cubrir (84.21%, archivo de ~8.800 líneas) | ⏳ PENDIENTE — change `store-cobertura-fase-b` | §Deuda en `design.md` |
 | Superficie API: 2.114 statements sin cubrir (79.40%); los más bajos: `app/api/personas` 70.54%, `app/api/unidades`, `app/api/vinculos` | ⏳ PENDIENTE — change `api-cobertura-fases` | §Deuda en `design.md` |
-| `e2e-rate-limit` rojo desde el 2026-09-12 (spec aislada que bloquea la IP 15 min) | ⏳ PENDIENTE — reproducir con `E2E_RATE_LIMIT=1 npx playwright test e2e/auth/rate-limit.spec.ts` | run `34711169952` |
+| `e2e-rate-limit` rojo desde el 2026-09-12 (spec aislada que bloquea la IP 15 min) | ✅ HECHO — 7/7 local y job CI verde en el run `38396862941` (2m16s), SERIE-NOCHE-2 P5 | run `38396862941` |
 | Secrets de Vercel (`VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`) | ⏳ ACCIÓN DEL OWNER — al cargarlos el job `deploy` corre solo | Settings → Secrets del repo |
-| npm local 12.2.0 vs 11.19 de CI (lockfile v3 compatible, verificado) | ⏳ PENDIENTE menor — `nvm install 24.21.0` | §Deuda en `design.md` |
+| npm local 12.2.0 vs 11.19 de CI (lockfile v3 compatible, verificado) | ✅ RESUELTO — `engines.npm: ">=11"` en `k0mp4ss_fe/package.json` + regla documentada en `README-DEPLOY.md` (SERIE-NOCHE-2 P3, `c20d59c`); lockfile v3 compatible | `k0mp4ss_fe/package.json`, `README-DEPLOY.md` |
 
 ### Deuda e2e destapada al reactivar la lane (2026-10-12, mismo change)
 
@@ -245,13 +250,57 @@ aclaración documental, 0 errores de cálculo.
 | `crud/visor.spec.ts` duplicaba avisos en BD por re-submit (2 filas mismo título) | ✅ HECHO — single-shot + `toHaveCount(1)` | `e2e/crud/visor.spec.ts` |
 | `crud/logs.spec.ts` no abría el Select de Radix con `force:true` | ✅ HECHO — click normal + reintento acotado | `e2e/crud/logs.spec.ts` |
 | `flujo/ciclo.spec.ts` limpieza con timeout 30s (purga secuencial tarda más) | ✅ HECHO — alineado a 120s | `e2e/flujo/ciclo.spec.ts` |
-| Barrido del patrón "re-submit hasta que cierre el dialog" en el resto de los CRUD specs | ⏳ PENDIENTE — helper `e2e/helpers/form-dialog.ts` | `tasks.md §5.0` |
+| Barrido del patrón "re-submit hasta que cierre el dialog" en el resto de los CRUD specs | ✅ HECHO — helper `e2e/helpers/form-dialog.ts` (single-shot idempotente) + 11 CRUD specs migrados y verdes en paridad CI (SERIE-NOCHE-2 P2) | `tasks.md §5.0` |
 | Correr la lane e2e local requiere BD fresca (`e2e:reseed-base`) y **no** correr antes el spec de rate-limit (bloquea la IP 15 min y aborta `auth.setup`) | 📌 REGLA OPERATIVA | `runbook-operaciones.md`, `design.md § D6` |
-| El guard de Google (`AU-autenticacion-sesion`) exige credenciales en producción y su mensaje ofrece "disable the Google provider", pero **esa bandera no existe**: en CI se usan credenciales dummy para poder construir | ⏳ PENDIENTE (serie SG/AU) — agregar `GOOGLE_PROVIDER_DISABLED` documentado | `design.md § D5.5` |
+| El guard de Google (`AU-autenticacion-sesion`) exige credenciales en producción y su mensaje ofrece "disable the Google provider", pero **esa bandera no existe**: en CI se usan credenciales dummy para poder construir | ✅ HECHA — `GOOGLE_PROVIDER_DISABLED=1`: (a) salta el fail-fast de producción y (b) no registra el provider Google (solo Credentials); mensaje que nombra la bandera, tests TDD 6/6, `.env.example` + runbook, change `au-google-provider-disabled` (S3 saneamiento, `9fba97d`) | `lib/auth.ts`, `design.md § D5.5` |
 | Purga QA-Lab secuencial (1 request por entidad) tardaba >120s en CI con la BD acumulada y hacía fallar `poblado-idempotente`/`flujo/ciclo` en su limpieza final | ✅ HECHO — lotes de 6 (`borrarEnLote`) manteniendo el orden por fases; medido 11.1s → 5.6s local | `app/admin/qa-lab/page.tsx` |
 | `crud/logs.spec.ts` dependía del switch de privacidad de `/admin/gestion` (con BD fresca hay 0 switches → 0 eventos → sin faceta): falso verde con BD acumulada y rojo real en CI | ✅ HECHO — siembra 2 eventos por `POST /api/auditoria/sync` y asserta la faceta directo | `e2e/crud/logs.spec.ts` |
 | `crud/roles-journeys.spec.ts` con el timeout de CI por defecto (30s) para un journey con varios waits | ✅ HECHO — `test.setTimeout(120_000)` | `e2e/crud/roles-journeys.spec.ts` |
-| Purga QA-Lab sin endpoint bulk: borra una entidad TEST por request, así que tras un poblamiento completo excede los 120s en el runner de CI (5-11s local) | ⏳ PENDIENTE — change `qlab-purga-bulk`: `DELETE` por colección/periodo server-side + tests | `app/admin/qa-lab/page.tsx`, `design.md § D6` |
+| Purga QA-Lab sin endpoint bulk: borra una entidad TEST por request, así que tras un poblamiento completo excede los 120s en el runner de CI (5-11s local) | ✅ HECHA — `qlab-purga-bulk` (SERIE-NOCHE-2 P1): `POST /api/qa-lab/purga-test` bulk + fallback en `limpiar()`; 63 requests → 1 (916 ms server-side) | `app/admin/qa-lab/page.tsx`, `design.md § D6` |
+
+## Changes activos — triage SERIE-NOCHE-2 P4 (2026-10-13)
+
+Ventana P4 decidió **por evidencia** el destino de los 6 changes activos viejos: 3
+archivados (coverage ok + implementación verificada en repo + CI verde run `38330292787`)
+y 3 dejados activos con estado explícito. Descartados por "ya no aplica": **ninguno**.
+`qlab-purga-bulk` queda fuera de alcance (es el change de la P1 de esta serie; su archive
+va en P5, tras CI verde de la rama).
+
+| Change | Decisión 2026-10-13 | Evidencia / qué falta |
+|---|---|---|
+| `a11y-p3-reservas-recursos` | ✅ ARCHIVADO (`6093381`) | fix en main desde `1f41ca3`: `opacity-70` fuera + badge "vencida" + `bg-sky-700` en reservas; `aria-label` del selector de estado y badges 700 en recursos; `skip_specs: true`, coverage ok |
+| `fix-vercel-data-ignore` | ✅ ARCHIVADO (`7510059`) | `.vercelignore:11` = `/Data/` anclado + comentario desde `52b26b9`; `skip_specs: true`, coverage ok. Al owner: redeploy en Vercel |
+| `e2e-rojos-flujo-a11y-smoke` | ✅ ARCHIVADO (`17fd892`) | lanes `e2e/flujo`+`e2e/a11y`+`e2e/smoke` 37/37 (Bitácora SERIE-E2E-FULL-VERDE P3, commit `d9a8ad7`); TDZ proveedores, banner cookies, tab controlado de bitácora y `e2e:higiene` verificados en código; deltas aplicados: +4 requirements y ~2 modificados en 5 specs |
+| `e2e-higiene-determinismo` | ✅ ARCHIVADO (`2026-10-13-e2e-higiene-determinismo`) | Saneamiento S4: delta `DEV-qa-lab` refrescado al diseño actual (corrida única `npx playwright test` sin tag GATED, specs autónomos vía `e2e/helpers/datos-test.ts`, receta `e2e:reseed-base` + `e2e:higiene --apply`) en vez de la estrategia muerta de `b7e88a8`; delta ST (seed determinista) aplicado a la spec viva; `check-delta-coverage` 0 → archive → `validate --all` 39/39 |
+| `au-google-sso` | ⏸ ACTIVO (owner) | código y tests en main; falta 3.1 env vars reales en Vercel + login Google en producción + 2 decisiones de rol/migración. Ver §C3 |
+| `st-split-fase2` | ⏳ ACTIVO | 0/19 tasks; no existe `lib/store/slices/` y `lib/store.ts` sigue monolito (8.889 líneas); alcance pendiente = 7 slices hoja (IR, MT, AD, PI/D3, CO, GE, CV) en el orden del proposal |
+
+## Saneamiento pre-pruebas (2026-10-13)
+
+Unidad de trabajo fuera de serie (rama `noche/serie-noche-2`) para saldar deuda
+accionable antes de las pruebas manuales del owner. **Cerrada**: push realizado, CI del
+PR #1 verde (run `38444800307`) y `qlab-purga-bulk` archivado.
+
+| Unidad | Qué quedó hecho | Evidencia |
+|---|---|---|
+| S1 | Opt-in `E2E_ALLOW_WRITE_APIS=1` en `isWriteApiEnabled()` con doble candado (solo lane e2e del CI) + tests TDD + delta `SG-hardening-despliegue` + runbook | `7d0d6e3`, `c781182`, `e13297f`, `a889384` · change `e2e-guard-optin-ci` **ARCHIVADO 2026-10-14** (`280d37f`) |
+| S2 ✅ | **CI verde + archive**: push de la rama (docs pre-push `53b777b`), run `38444800307` verde (unit ✅ · unit-pg ✅ · e2e build producción con `E2E_ALLOW_WRITE_APIS=1` ✅ · rate-limit aislado ✅ · deploy skipped), `qlab-purga-bulk` **archivado** (`0f10d47`, delta `LAB-mejoras` +1, validate 38/38), fila P5 → HECHA | run `38444800307`, `0f10d47` |
+| S3 | Bandera `GOOGLE_PROVIDER_DISABLED=1`: (a) no corre el fail-fast de producción y (b) no registra el provider Google (queda solo Credentials); mensaje de error que nombra la bandera; tests TDD 6/6; `.env.example` + `docs/runbook-operaciones.md`; change `au-google-provider-disabled` (propose → apply → **ARCHIVADO 2026-10-14**, `b5a9f42`) | `9fba97d` |
+| S4 | `e2e-higiene-determinismo` **archivado**: delta `DEV-qa-lab` refrescado al diseño actual (corrida única `npx playwright test` sin tag GATED, specs autónomos, `e2e:higiene`) y delta ST (seed determinista) aplicado a la spec viva | `04eb1cf` |
+| S5 | Este archivo al día (filas `e2e-rate-limit`, npm local/CI, `GOOGLE_PROVIDER_DISABLED`, rojos de UI) + Bitácora de `SERIE-VALIDACION-PERFILES` | (commit de S5) |
+
+- **Rojos de UI de la validación (SERIE-VALIDACION-PERFILES P3)**: el selector
+  "Los Aromos" de `permisos` y la persistencia de `admin-config` quedaron **cubiertos**
+  por `e2e/crud/permisos.spec.ts` y `e2e/crud/admin-configuracion.spec.ts` (lane verde);
+  dejan de ser rojos abiertos.
+- **Cierre (S2, hecho)**: CI verde del PR #1 en el run `38444800307` + archive de
+  `qlab-purga-bulk` (`0f10d47`); el saneamiento quedó **cerrado** con P5 → HECHA en
+  `openspec/SERIE-NOCHE-2/00-plan.md`.
+- **Archives 2026-10-14 (punto 4, administrativo)**: los dos changes que quedaban aplicados
+  sin archivar quedaron archivados — `e2e-guard-optin-ci` (`280d37f`) y
+  `au-google-provider-disabled` (`b5a9f42`); gate de deltas 1 ok · 0 a romper en cada uno y
+  `openspec validate --all` **36/36**. Deltas verificados tras aplicar: AU scaffold con 13
+  escenarios + cláusula de la bandera; SG D-iii con los 3 escenarios del opt-in.
 
 ## SERIE-NOCHE-3 — deuda del store (materializada 2026-10-14) — rama `noche/serie-noche-3`
 

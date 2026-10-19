@@ -23,3 +23,14 @@
 ## Decisiones del owner
 - [ ] ¿Rol por defecto al vincular cuenta Google? (sugerencia: `residente`)
 - [ ] ¿Migrar usuarios existentes o solo nuevos?
+
+> Estado 2026-10-13 (NOCHE-2 P4): **sigue activo — código en main, bloqueo operativo del
+> owner.** Implementado y verificado en repo: provider `Google` + fail-fast en producción
+> (`lib/auth.ts:156`, guard líneas 17-26), botón "Continuar con Google" en
+> `app/ingresar/page.tsx:415/436`, tests `test/auth/google-sso.test.tsx` y
+> `google-sso-callbacks.test.ts`, credenciales dummy en CI (`5ea6c51`). Qué falta: 3.1
+> `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` reales en Vercel (Environment Variables) +
+> verificación del login Google en producción, y las 2 decisiones de owner de arriba
+> (rol por defecto al vincular; tratamiento de usuarios existentes). No se archiva hasta
+> que el login Google funcione en producción y las decisiones queden escritas; ver también
+> `BACKLOG-100.md §C3`.

@@ -2,7 +2,9 @@
 
 ## Purpose
 Checklist técnico de seguridad para completar la Fase C restante (pre-Base de Datos) y ejecutar íntegramente la Fase D (pre-deploy a producción). Derivado del consolidado de auditorías `Data/NSGC/docs/auditorias/consolidado - 2026-08-24-b.md` y de `Data/NSGC/docs/especificaciones/SG - Hardening y Despliegue.md`. Esta capability cubre SG §1 Fase C pendiente al migrar a BD: C1 modelo Prisma con `comunidadId` indexado, C1b repositorios con scoping obligatorio + tests de aislamiento A/B, y C3b constraints de unicidad compuesta opcionales documentadas.
+
 ## Requirements
+
 ### Requirement: Modelo Prisma con comunidadId en toda entidad de dominio (C1)
 El sistema SHALL proveer `k0mp4ss_fe/apps/web/prisma/schema.prisma` con `datasource db { provider = "sqlite" url = env("DATABASE_URL") }` y `generator client { provider = "prisma-client-js" }`, que modele el inventario definitivo de colecciones derivado de `CompassData` en `lib/store.ts` (v26: estructura, comunidad, portal, notificaciones, controles, actas, CO/GE/IR/IN/MT/RA/CV/FI/PE/PL/CT/RE, eventos, configuración sin secretos) y de `lib/schemas.ts`, incluyendo los 20 maestros de `MaestroCollections`. Toda entidad de dominio SHALL llevar `comunidadId String` con `@@index([comunidadId])` y relación a `Comunidad` (D3 tenant compartido). `DATABASE_URL` SHALL vivir en `.env.local` (gitignored) y estar documentado en `.env.example`; archivos `*.db` SHALL estar gitignored y `prisma/migrations` commiteada. `prisma migrate dev` SHALL correr limpio.
 
@@ -90,7 +92,10 @@ El sistema SHALL documentar `PUBLIC_DOMAIN` en `k0mp4ss_fe/apps/web/.env.example
 - **THEN** imprime la lista de `securityHeaders` de `next.config.mjs` con OK por header esperado, indica si `Content-Security-Policy-Report-Only` con nonce está presente en `proxy.ts`, y si hay servidor vivo hace `fetch` a `/` e imprime headers reales con OK/FAIL por `strict-transport-security` (max-age sin preload) y `content-security-policy-report-only`; exit 0 si estáticos OK.
 
 ### Requirement: Re-chequeos D-iii scripted repetibles 5/5 (D-iii)
-El sistema SHALL proveer re-chequeos convertidos en script repetible: `k0mp4ss_fe/apps/web/scripts/security-recheck.mjs` (node, invocación handlers directa sin requerir `next start` en puerto efímero) y `k0mp4ss_fe/apps/web/test/security-rechecks.test.ts` (vitest integración) que verifican 5 casos imprimiendo `OK`/`FAIL` por check y fallando el proceso si alguno no pasa (exit 1 o `expect` fallido). Los checks SHALL ser: (1) `POST /api/backup` con payload >10 MB → `413`; (2) APIs escritura (`POST /api/backup`, `GET`/`POST`/`PUT`/`PATCH /api/dev-dashboard`) con `APP_ENV=production` (`NEXT_PUBLIC_APP_ENV=production`/`APP_ENV=production` → `isWriteApiEnabled()=false`) → `404`; (3) path traversal `changeId` en `toggleTask`/dev-dashboard (`"../../etc/passwd"`, `"..%2F..%2Fetc/passwd"`) → `404`/sanitizado via `SAFE_CHANGE_ID`/`readProjectFile` allowlist; (4) `proxy` `GET /admin/*` sin cookie de sesión → redirect `307`/`308` a `/ingresar?next={ruta}`; (5) `proxy`/`GET /api/admin/usuarios` (o `/api/*`) sin sesión → `401` JSON `No autenticado`. El script SHALL usar `NextRequest`/`Request` reales y helper `test/helpers/sesion-authjs.ts` donde aplique, y el límite `next build` por Fonts SHALL estar documentado (alternativa `next dev` en puerto efímero o handlers directos descrita en `design.md`).
+
+El sistema SHALL proveer re-chequeos convertidos en script repetible: `k0mp4ss_fe/apps/web/scripts/security-recheck.mjs` (node, invocación handlers directa sin requerir `next start` en puerto efímero) y `k0mp4ss_fe/apps/web/test/security-rechecks.test.ts` (vitest integración) que verifican 5 casos imprimiendo `OK`/`FAIL` por check y fallando el proceso si alguno no pasa (exit 1 o `expect` fallido). Los checks SHALL ser: (1) `POST /api/backup` con payload >10 MB → `413`; (2) APIs escritura (`POST /api/backup`, `GET`/`POST`/`PUT`/`PATCH /api/dev-dashboard`) con `APP_ENV=production` (`NEXT_PUBLIC_APP_ENV=production`/`APP_ENV=production` → `isWriteApiEnabled()=false`) → `404`; (3) path traversal `changeId` en `toggleTask`/dev-dashboard (`"../../etc/passwd"`, `"..%2F..%2Fetc%2Fpasswd"`) → `404`/sanitizado via `SAFE_CHANGE_ID`/`readProjectFile` allowlist; (4) `proxy` `GET /admin/*` sin cookie de sesión → redirect `307`/`308` a `/ingresar?next={ruta}`; (5) `proxy`/`GET /api/admin/usuarios` (o `/api/*`) sin sesión → `401` JSON `No autenticado`. El script SHALL usar `NextRequest`/`Request` reales y helper `test/helpers/sesion-authjs.ts` donde aplique, y el límite `next build` por Fonts SHALL estar documentado (alternativa `next dev` en puerto efímero o handlers directos descrita en `design.md`).
+
+**Opt-in de la lane e2e con doble candado**: `isWriteApiEnabled()` (`lib/env-guard.ts`) SHALL aceptar un opt-in explícito `E2E_ALLOW_WRITE_APIS=1` que habilita las APIs de escritura cuando `NODE_ENV=production` (el build de producción que sirve la lane e2e) **únicamente si** el entorno efectivo de la app es desarrollo (`getAppEnv() === "development"`). El opt-in por sí solo SHALL NO habilitar nada: un entorno con `NEXT_PUBLIC_APP_ENV=production`/`APP_ENV=production` sigue respondiendo `404` en APIs de escritura aunque `E2E_ALLOW_WRITE_APIS` esté seteado (producción/Vercel intacta). El valor del opt-in SHALL ser exactamente `"1"`. El opt-in SHALL cablearse SOLO en el env del job `e2e` de `.github/workflows/ci.yml` y SHALL documentarse en `docs/runbook-operaciones.md` como exclusivo del entorno de pruebas/e2e.
 
 #### Scenario: 5/5 re-chequeos OK
 - **WHEN** se ejecuta `node scripts/security-recheck.mjs` (o `npm run check:rechecks`/`npm test` incluye `security-rechecks`)
@@ -115,6 +120,18 @@ El sistema SHALL proveer re-chequeos convertidos en script repetible: `k0mp4ss_f
 #### Scenario: API sin sesión → 401
 - **WHEN** `proxy` o handler `GET /api/admin/usuarios?comunidadId=x` recibe request sin cookie de sesión Auth.js
 - **THEN** responde `401` JSON `error: "No autenticado."`.
+
+#### Scenario: Opt-in E2E_ALLOW_WRITE_APIS con doble candado habilita la lane e2e
+- **WHEN** `NODE_ENV=production` (build servido por la lane e2e), `NEXT_PUBLIC_APP_ENV=development` y `E2E_ALLOW_WRITE_APIS=1`
+- **THEN** `isWriteApiEnabled()` retorna `true` y la limpieza bulk del QA-Lab (`POST /api/qa-lab/purga-test`) responde 200, permitiendo que la limpieza de cola estricta de 120 s pase por el camino bulk.
+
+#### Scenario: Sin opt-in el comportamiento es el de hoy (bloqueado)
+- **WHEN** `NODE_ENV=production` y `NEXT_PUBLIC_APP_ENV=development` sin `E2E_ALLOW_WRITE_APIS` (o con valor distinto de `"1"`)
+- **THEN** `isWriteApiEnabled()` retorna `false` y las APIs de escritura responden `404`, igual que antes del opt-in.
+
+#### Scenario: Producción bloqueada aunque el opt-in esté seteado
+- **WHEN** `NEXT_PUBLIC_APP_ENV=production` (o `APP_ENV=production`) y `E2E_ALLOW_WRITE_APIS=1`, con o sin `NODE_ENV=production`
+- **THEN** `isWriteApiEnabled()` retorna `false` y las APIs de escritura responden `404` antes de auth.
 
 ### Requirement: CSP con nonce por request y toggle report-only/enforcement (D-i)
 El sistema SHALL emitir `Content-Security-Policy-Report-Only` por defecto (cuando `CSP_ENFORCEMENT=false` o no está definido) y `Content-Security-Policy` en modo enforcement (cuando `CSP_ENFORCEMENT=true`) por cada respuesta vía `k0mp4ss_fe/apps/web/proxy.ts` (edge) con nonce único por request (Web Crypto `randomUUID`/`getRandomValues` base64, expuesto como `x-nonce`/`x-csp-nonce`). La política SHALL auditar orígenes mínimos necesarios: `default-src 'self'`; `script-src 'self' 'nonce-{x}' 'strict-dynamic' 'unsafe-inline' 'unsafe-eval' https:` (Next inline/HMR tolerados); `style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com`; `font-src 'self' data: https://fonts.gstatic.com https://fonts.googleapis.com`; `img-src 'self' data: blob: https:` (logo/aviso CV remotos); `connect-src 'self'`; `frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com` (visor CV YouTube embeds); `media-src 'self' https: data: blob:`; `object-src 'none'`; `base-uri 'self'`; `form-action 'self'`; `frame-ancestors 'none'`. El dominio real aún no existe (decisión owner): ningún dominio SHALL hardcodearse; orígenes configurables por env. El plan de activación enforcement requiere 7 días consecutivos con **cero violaciones** en telemetría vía `/api/csp-report` antes de pasar de Report-Only a `Content-Security-Policy` (configurando `CSP_ENFORCEMENT=true`). El rollback inmediato se logra configurando `CSP_ENFORCEMENT=false`.
@@ -160,4 +177,3 @@ El sistema SHALL emitir `Content-Security-Policy-Report-Only` por defecto (cuand
 #### Scenario: `.env.example` contiene CSP_ENFORCEMENT con su documentación
 - **WHEN** se lee `k0mp4ss_fe/apps/web/.env.example`
 - **THEN** contiene `CSP_ENFORCEMENT=false` con comentarios que explican que controla el modo Report-Only/enforcement, que `false` es el default seguro de la ventana de telemetría de 7 días y que volver a `false` revierte de inmediato sin cambio de código.
-

@@ -51,3 +51,12 @@
 - `npx playwright test e2e/auth` verde sobre ese estado.
 - `npx tsc --noEmit`, lint 0 errores, `openspec validate e2e-higiene-determinismo`.
 - Full e2e NO se exige en P1 (es criterio de P4); solo lane auth.
+
+> **Nota 2026-10-13 (saneamiento S4):** la estrategia GATED de las decisiones 3 y 4
+> (orden fijo no-GATED → GATED + scripts `e2e:nongated` / `e2e:gated` / `e2e:full-orden`)
+> fue reemplazada por SERIE-E2E-SIN-GATED (`b7e88a8`): tag `(GATED)` eliminado de los
+> describes, esos scripts ya no existen en `package.json` y CI/local corren
+> `npx playwright test` en corrida única con specs autónomos (helper
+> `e2e/helpers/datos-test.ts` + cleanup propio). El delta `DEV-qa-lab` se refrescó a ese
+> diseño antes de archivar. El resto del design (seed determinista por `createdAt`
+> escalonado, convención `TEST-*`) sigue vigente.

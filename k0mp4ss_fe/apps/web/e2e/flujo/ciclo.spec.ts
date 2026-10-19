@@ -125,9 +125,14 @@ test.describe("QA Lab — ciclo completo y guard clean-first (Serie QA-LAB P3)",
     // Capturar snapshot del contador antes del guard (scoped a tarjetas)
     const listasAntes = await page.locator('[id^="mod-"]').count()
 
-    // Segunda corrida SIN limpiar → ahora abre Dialog de confirmación (idempotente P1 C2)
-    // El guard ya no bloquea con error, sino que ofrece "Limpiar y poblar"
-    await clickPoblar(page)
+    // Segunda corrida SIN limpiar → ahora abre Dialog de confirmación (idempotente P1 C2).
+    // Click crudo (SIN el helper clickPoblar): el helper auto-confirma el
+    // diálogo ("restos de una corrida caída") y su detector de efecto se engaña
+    // porque la corrida 1 ya dejó "🟢 Listo" en la página — aquí el diálogo
+    // debe quedar VIVO para probar Cancelar.
+    const btnPoblar2 = page.getByRole("button", { name: /Poblar todo de una vez/ })
+    await expect(btnPoblar2).toBeEnabled({ timeout: 15_000 })
+    await btnPoblar2.evaluate((b: HTMLElement) => b.click())
     await expect(page.getByRole("dialog")).toBeVisible({ timeout: 30_000 })
     await expect(page.getByText(/¿Limpiar y poblar de una vez\?/)).toBeVisible({ timeout: 10_000 })
     // Cancelar para no mutar — el estado no debe haber cambiado
@@ -144,14 +149,11 @@ test.describe("QA Lab — ciclo completo y guard clean-first (Serie QA-LAB P3)",
     await expect(page.locator('[id^="mod-"]').getByText("🟢 Listo")).toHaveCount(22)
     await expect(page.getByText("🔴 Con error")).toHaveCount(0)
 
-    // Limpieza de cola: best-effort por el mismo motivo documentado en
-    // poblado-idempotente.spec.ts (purga O(n) requests; >120s en CI tras un
-    // poblamiento completo). El sujeto de este test es el guard clean-first.
+    // Limpieza de cola estricta de nuevo (qlab-purga-bulk): la purga BD es
+    // O(1) requests contra POST /api/qa-lab/purga-test; ver comentario de
+    // poblado-idempotente.spec.ts.
     await clickBorrar(page)
-    await page
-      .getByText(/TEST-\* limpio correctamente|Limpieza con \d+ bloqueos/)
-      .waitFor({ state: "visible", timeout: 90_000 })
-      .catch(() => {})
+    await expect(page.getByText(/TEST-\* limpio correctamente/)).toBeVisible({ timeout: 120_000 })
 
     expect(errores, "Excepciones no capturadas en guard clean-first").toEqual([])
   })

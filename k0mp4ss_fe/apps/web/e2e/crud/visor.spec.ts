@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test"
+import { guardarDialogo } from "../helpers/form-dialog"
 
 test.use({ actionTimeout: 30_000 })
 
@@ -93,32 +94,16 @@ test.describe("CRUD — Comunidad/Visor", () => {
     await expect(inputDuracion).toBeVisible({ timeout: 10_000 })
     await inputDuracion.fill("8")
 
-    // Guardar borrador — single-shot idempotente: un solo submit basta. Reenviar
-    // mientras el diálogo sigue visible genera avisos DUPLICADOS en la BD.
+    // Guardar borrador — single-shot idempotente vía helper compartido
+    // (misma semántica que este bloque tenía arreglado a mano): UN envío;
+    // si el diálogo sigue abierto, reenviar SOLO cuando la fila no existe.
     const btnGuardar = dialog.getByRole("button", { name: "Guardar borrador" })
     await expect(btnGuardar).toBeVisible({ timeout: 10_000 })
-    await btnGuardar.scrollIntoViewIfNeeded().catch(() => {})
-    try {
-      await btnGuardar.click({ force: true, noWaitAfter: true, timeout: 5_000 })
-    } catch {
-      await dialog.locator("form").evaluate((f) => (f as HTMLFormElement).requestSubmit()).catch(() => {})
-    }
-    // 1) Esperar el cierre del diálogo (confirmación del guardado).
-    await expect(dialog).toBeHidden({ timeout: 15_000 }).catch(() => {})
-    // 2) Solo si SIGUE visible: reintentar UNA vez si aún no hay fila; nunca
-    //    reenviar cuando la fila ya existe (evita el duplicado).
-    if (await dialog.isVisible().catch(() => false)) {
-      const filasExistentes = await page.getByRole("row").filter({ hasText: titulo }).count()
-      if (filasExistentes === 0) {
-        await dialog.locator("form").evaluate((f) => (f as HTMLFormElement).requestSubmit()).catch(() => {})
-        await expect(dialog).toBeHidden({ timeout: 15_000 })
-      }
-    }
+    const filaAviso = page.getByRole("row").filter({ hasText: titulo })
+    await guardarDialogo(page, { boton: btnGuardar, dialogo: dialog, fila: filaAviso })
 
     // Fila en gestor de avisos con el título — exactamente una (sin duplicados)
-    await expect(page.getByRole("row").filter({ hasText: titulo })).toHaveCount(1, {
-      timeout: 15_000,
-    })
+    await expect(filaAviso).toHaveCount(1, { timeout: 15_000 })
     const row = page.getByRole("row").filter({ hasText: titulo }).first()
     await expect(row).toBeVisible({ timeout: 15_000 })
     // Estado borrador inicialmente

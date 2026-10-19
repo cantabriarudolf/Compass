@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test"
+import { guardarDialogo } from "../helpers/form-dialog"
 
 test.use({ actionTimeout: 30_000 })
 
@@ -183,24 +184,12 @@ test.describe("CRUD — Finanzas/Multas", () => {
     await expect(textarea).toBeVisible({ timeout: 10_000 })
     await textarea.fill(antecedentes)
 
-    // Submit Registrar
+    // Submit Registrar — single-shot idempotente (helper form-dialog): UN
+    // envío; sin `fila` (la tabla se afirma por fecha con .first() más abajo)
+    // no se reenvía a ciegas.
     const btnSubmit = dialog.getByRole("button", { name: "Registrar" })
     await expect(btnSubmit).toBeVisible({ timeout: 10_000 })
-    await btnSubmit.scrollIntoViewIfNeeded().catch(() => {})
-    try {
-      await btnSubmit.click({ force: true, noWaitAfter: true, timeout: 5_000 })
-    } catch {
-      await dialog.locator("form").evaluate((f) => (f as HTMLFormElement).requestSubmit()).catch(() => {})
-    }
-    await page.waitForTimeout(700)
-    if (await dialog.isVisible().catch(() => false)) {
-      await dialog.evaluate(() => {
-        const f = document.querySelector('[role="dialog"] form') as HTMLFormElement | null
-        if (f) f.requestSubmit()
-      }).catch(() => {})
-      await page.waitForTimeout(700)
-    }
-    await expect(dialog).toBeHidden({ timeout: 15_000 })
+    await guardarDialogo(page, { boton: btnSubmit, dialogo: dialog })
 
     // Afirmar fila en registro (Table) — buscar row con antecedentes texto corto o unidad?
     // La tabla muestra Folio, Falta/Daño, Unidad, Fecha suceso, Estado, Monto

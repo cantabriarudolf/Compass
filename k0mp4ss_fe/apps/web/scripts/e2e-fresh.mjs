@@ -2,7 +2,8 @@
 /**
  * e2e:fresh — prepara una base descartable y deja lista la lane e2e con paridad CI.
  *
- * Por qué existe: la receta e2e (`migrate deploy` + `e2e:reseed-base` + `build` +
+ * Por qué existe: la receta e2e (`migrate deploy` + `prisma generate` del schema SQLite
+ * + `e2e:reseed-base` + `build` +
  * `CI=1 npx playwright test`) se replicó a mano 4 veces en SERIE-NOCHE-3, con dos
  * trampas ya sufridas:
  *   1. `CI=1` fija `reuseExistingServer: false` en `playwright.config.ts`: si queda un
@@ -273,6 +274,11 @@ function main() {
   sanearPuerto()
 
   correr("npx", ["prisma", "migrate", "deploy", `--schema=${SCHEMA}`])
+  // Cliente Prisma del schema SQLite (R3-missing-prisma-generate): si el último
+  // `prisma generate` de la máquina fue el default PostgreSQL (p. ej. tras el job
+  // `unit-pg`), el seed de abajo corre con el client equivocado y muere con exit 1
+  // contra la base descartable. Regenerar acá fija el client correcto.
+  correr("npx", ["prisma", "generate", `--schema=${SCHEMA}`])
   correr("npm", ["run", "e2e:reseed-base"])
   if (correrBuild) correr("npm", ["run", "build"])
   else console.log("\ne2e:fresh — build salteado (--no-build)")

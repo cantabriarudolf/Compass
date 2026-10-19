@@ -2014,127 +2014,147 @@ export default function QaLabPage() {
     useCompassStore.setState(st => ({
       eventos: st.eventos.filter(e => !(e.referenciaId && String(e.referenciaId).startsWith("test-"))),
     }))
-    // P4 SERIE-GATED-API-BD: purga BD vía API (fases PI/PL poblan BD). Orden
-    // hijos→padres por el guard 409. Best-effort idempotente: ausente = limpio;
-    // solo bloquea si la entidad existe y el DELETE la rechaza. La confirmada
-    // QA es inmutable por diseño y se salta (residuo honesto con periodo
-    // rotativo que no colisiona; `e2e:higiene` la purga en cada reseed).
-    const borrarSiExiste = async (path: string, etiqueta: string) => {
+    // P1 SERIE-NOCHE-2 (qlab-purga-bulk): la purga BD ahora es O(1) requests —
+    // `POST /api/qa-lab/purga-test` borra el residuo TEST de la comunidad en una
+    // sola llamada (orden hijos→padres server-side; sus `bloqueos` alimentan el
+    // mismo mensaje rojo de siempre). Fallback documentado: si el endpoint
+    // responde error o la red falla, se usa el bucle por entidad histórico
+    // (O(n) requests, cuerpo de abajo sin cambios de comportamiento).
+    const purgarBDFallback = async () => {
+      // P4 SERIE-GATED-API-BD: purga BD vía API (fases PI/PL poblan BD). Orden
+      // hijos→padres por el guard 409. Best-effort idempotente: ausente = limpio;
+      // solo bloquea si la entidad existe y el DELETE la rechaza. La confirmada
+      // QA es inmutable por diseño y se salta (residuo honesto con periodo
+      // rotativo que no colisiona; `e2e:higiene` la purga en cada reseed).
+      const borrarSiExiste = async (path: string, etiqueta: string) => {
+        try {
+          const r = await fetch(path, { method: "DELETE" })
+          if (r.ok || r.status === 404) return
+          const v = await fetch(path).catch(() => null)
+          if (v?.ok) errores.push(`${etiqueta}: DELETE ${r.status}`)
+        } catch (e) { errores.push(`${etiqueta}: ${String(e)}`) }
+      }
       try {
-        const r = await fetch(path, { method: "DELETE" })
-        if (r.ok || r.status === 404) return
-        const v = await fetch(path).catch(() => null)
-        if (v?.ok) errores.push(`${etiqueta}: DELETE ${r.status}`)
-      } catch (e) { errores.push(`${etiqueta}: ${String(e)}`) }
-    }
-    try {
-      await borrarSiExiste(`/api/leads-portal/${QA_PI_LEAD_ID}`, "lead-qa")
-      await borrarSiExiste(`/api/publicaciones-portal/${QA_PI_PUB_ID}`, "pub-qa")
-      // Notificaciones PI TEST generadas por el lead (cuerpo con marca TEST).
-      const notifs = await listaQA("/api/notificaciones")
-      for (const n of notifs.filter(n => n.moduloOrigen === "PI" && /TEST/.test(`${n.asunto ?? ""} ${n.cuerpo ?? ""}`))) {
-        await borrarSiExiste(`/api/notificaciones/${n.id}`, "notif-pi-qa")
-      }
-      // Liquidaciones QA: borradores se eliminan; confirmadas se saltan (inmutables).
-      const liqsQA = (await listaQA("/api/liquidaciones")).filter(l => l.trabajadorPersonaId === QA_PL_TRAB_ID || (typeof l.id === "string" && l.id.startsWith("test-liq-pl-qa-")))
-      for (const l of liqsQA.filter(l => l.estado === "borrador")) {
-        await borrarSiExiste(`/api/liquidaciones/${l.id}`, "liq-borrador-qa")
-      }
-      // Egresos espejo QA (de borradores y confirmadas): eliminables vía API.
-      for (const l of liqsQA) {
-        if (typeof l.egresoFIReferencia === "string" && l.egresoFIReferencia.startsWith("egr-")) {
-          await borrarSiExiste(`/api/egresos-fi/${l.egresoFIReferencia}`, "egreso-espejo-qa")
+        await borrarSiExiste(`/api/leads-portal/${QA_PI_LEAD_ID}`, "lead-qa")
+        await borrarSiExiste(`/api/publicaciones-portal/${QA_PI_PUB_ID}`, "pub-qa")
+        // Notificaciones PI TEST generadas por el lead (cuerpo con marca TEST).
+        const notifs = await listaQA("/api/notificaciones")
+        for (const n of notifs.filter(n => n.moduloOrigen === "PI" && /TEST/.test(`${n.asunto ?? ""} ${n.cuerpo ?? ""}`))) {
+          await borrarSiExiste(`/api/notificaciones/${n.id}`, "notif-pi-qa")
         }
-      }
-      await borrarSiExiste(`/api/personas/${QA_PL_TRAB_ID}`, "persona-qa-pl")
-      // Fase 0 (qlab-poblamiento-api-rest): la estructura EF/VU/MP/TU/MA también
-      // vive en BD (espejo transitorio), así que el guard clean-first la vería
-      // residual y abriría el dialog en vez de poblar. Orden hijos→padres por
-      // los guards 409 de las rutas; solo ids test-* (idempotente: 404 = limpio).
-      // Purga concurrente por lotes. Cada DELETE es una request independiente y
-      // en la lane completa (BD acumulada por las specs previas) hay cientos de
-      // entidades TEST: secuencial tardaba >120s en el runner de CI (medido 11.1s
-      // local con BD recién sembrada y ~30s de poblamiento) y los specs de
-      // limpieza fallaban por timeout, no por bloqueo. Lote chico para no
-      // saturar las escrituras de SQLite.
-      const LOTE_PURGA = 6
-      const borrarEnLote = async (tareas: Array<() => Promise<void>>) => {
-        for (let i = 0; i < tareas.length; i += LOTE_PURGA) {
-          await Promise.all(tareas.slice(i, i + LOTE_PURGA).map((t) => t()))
+        // Liquidaciones QA: borradores se eliminan; confirmadas se saltan (inmutables).
+        const liqsQA = (await listaQA("/api/liquidaciones")).filter(l => l.trabajadorPersonaId === QA_PL_TRAB_ID || (typeof l.id === "string" && l.id.startsWith("test-liq-pl-qa-")))
+        for (const l of liqsQA.filter(l => l.estado === "borrador")) {
+          await borrarSiExiste(`/api/liquidaciones/${l.id}`, "liq-borrador-qa")
         }
-      }
-      const purgarColeccionBD = async (base: string, etiqueta: string, ids: string[]) => {
+        // Egresos espejo QA (de borradores y confirmadas): eliminables vía API.
+        for (const l of liqsQA) {
+          if (typeof l.egresoFIReferencia === "string" && l.egresoFIReferencia.startsWith("egr-")) {
+            await borrarSiExiste(`/api/egresos-fi/${l.egresoFIReferencia}`, "egreso-espejo-qa")
+          }
+        }
+        await borrarSiExiste(`/api/personas/${QA_PL_TRAB_ID}`, "persona-qa-pl")
+        // Fase 0 (qlab-poblamiento-api-rest): la estructura EF/VU/MP/TU/MA también
+        // vive en BD (espejo transitorio), así que el guard clean-first la vería
+        // residual y abriría el dialog en vez de poblar. Orden hijos→padres por
+        // los guards 409 de las rutas; solo ids test-* (idempotente: 404 = limpio).
+        // Purga concurrente por lotes. Cada DELETE es una request independiente y
+        // en la lane completa (BD acumulada por las specs previas) hay cientos de
+        // entidades TEST: secuencial tardaba >120s en el runner de CI (medido 11.1s
+        // local con BD recién sembrada y ~30s de poblamiento) y los specs de
+        // limpieza fallaban por timeout, no por bloqueo. Lote chico para no
+        // saturar las escrituras de SQLite.
+        const LOTE_PURGA = 6
+        const borrarEnLote = async (tareas: Array<() => Promise<void>>) => {
+          for (let i = 0; i < tareas.length; i += LOTE_PURGA) {
+            await Promise.all(tareas.slice(i, i + LOTE_PURGA).map((t) => t()))
+          }
+        }
+        const purgarColeccionBD = async (base: string, etiqueta: string, ids: string[]) => {
+          await borrarEnLote(
+            ids.filter((id) => id.startsWith("test-")).map((id) => () => borrarSiExiste(`${base}/${id}`, etiqueta))
+          )
+        }
+        await purgarColeccionBD("/api/vinculos", "vinculo", ["test-v-prop-999", "test-v-prop-e999", "test-v-arr-999"])
+        await purgarColeccionBD("/api/unidades", "unidad", ["test-u-999", "test-u-e-999"])
+        await purgarColeccionBD("/api/micro-sectores", "micro", ["test-micro-piso99", "test-est-sup-qa"])
+        await purgarColeccionBD("/api/macro-sectores", "macro", ["test-macro-sectortest"])
+        await purgarColeccionBD("/api/personas", "persona", ["test-p-99", "test-p-88"])
+        await purgarColeccionBD("/api/tipos-unidad", "tipo-unidad", ["test-tu-loftqa"])
+        const maestrosBD: [string, string][] = [
+          ["estados-ocupacion", "test-edo-enlimpieza"],
+          ["categorias-macro", "test-macro-torreqa"],
+          ["categorias-micro", "test-micro-pisoqa"],
+          ["categorias-unidad", "test-catu-loftqa"],
+          ["condiciones-especiales", "test-vuln-electroqa"],
+          ["estados-inmobiliarios", "test-einm-prereservaqa"],
+          ["contactos-emergencia", "test-emer-cerrajeroqa"],
+          ["bancos", "test-banco-bancoqa"],
+        ]
         await borrarEnLote(
-          ids.filter((id) => id.startsWith("test-")).map((id) => () => borrarSiExiste(`${base}/${id}`, etiqueta))
+          maestrosBD
+            .filter(([, id]) => id.startsWith("test-"))
+            .map(([tipo, id]) => () => borrarSiExiste(`/api/maestros/${tipo}/${id}`, `${tipo}:${id}`))
         )
-      }
-      await purgarColeccionBD("/api/vinculos", "vinculo", ["test-v-prop-999", "test-v-prop-e999", "test-v-arr-999"])
-      await purgarColeccionBD("/api/unidades", "unidad", ["test-u-999", "test-u-e-999"])
-      await purgarColeccionBD("/api/micro-sectores", "micro", ["test-micro-piso99", "test-est-sup-qa"])
-      await purgarColeccionBD("/api/macro-sectores", "macro", ["test-macro-sectortest"])
-      await purgarColeccionBD("/api/personas", "persona", ["test-p-99", "test-p-88"])
-      await purgarColeccionBD("/api/tipos-unidad", "tipo-unidad", ["test-tu-loftqa"])
-      const maestrosBD: [string, string][] = [
-        ["estados-ocupacion", "test-edo-enlimpieza"],
-        ["categorias-macro", "test-macro-torreqa"],
-        ["categorias-micro", "test-micro-pisoqa"],
-        ["categorias-unidad", "test-catu-loftqa"],
-        ["condiciones-especiales", "test-vuln-electroqa"],
-        ["estados-inmobiliarios", "test-einm-prereservaqa"],
-        ["contactos-emergencia", "test-emer-cerrajeroqa"],
-        ["bancos", "test-banco-bancoqa"],
-      ]
-      await borrarEnLote(
-        maestrosBD
-          .filter(([, id]) => id.startsWith("test-"))
-          .map(([tipo, id]) => () => borrarSiExiste(`/api/maestros/${tipo}/${id}`, `${tipo}:${id}`))
-      )
-      // Fase 1.4 (Decisión 8): residuo FI de la fase 13 en BD. Cobros TEST de los
-      // periodos TEST primero (hijos; el DELETE /api/cobros-fi/[id] permite un
-      // TEST con pagos en desarrollo), luego sus emisiones y al final fondos y
-      // egresos TEST. Best-effort idempotente: 404 = limpio; sólo bloquea si la
-      // entidad existe y el DELETE la rechaza.
-      const periodosFITEST = [QA_FI_PERIODO_TEST, QA_FI_PERIODO_VENCIDO]
-      for (const periodo of periodosFITEST) {
-        const cobrosTEST = (await listaQA(`/api/cobros-fi?periodo=${periodo}`))
-          .filter(c => esCobroTest({ id: c.id, unidadId: c.unidadId, origenRef: c.origenRef ?? undefined }))
-        await borrarEnLote(cobrosTEST.map((c) => () => borrarSiExiste(`/api/cobros-fi/${c.id}`, "cobro-fi-qa")))
-      }
-      // Bugfix e2e: el cobro `multa_in` de una infracción TEST (origenRef
-      // `test-*`) se materializa en el período del mes en curso, no en los
-      // períodos TEST, así que el barrido por período no lo alcanza y se
-      // acumula en cada corrida. Se recorren las páginas del listado FI
-      // (máx. 10 × 100, acotado para no colgar la UI) y se purga todo cobro de
-      // provenance TEST, independiente del período.
-      const idsCobrosTEST = new Set<string>()
-      for (let page = 1; page <= 10; page++) {
-        const lote = await listaQA(`/api/cobros-fi?page=${page}`)
-        if (lote.length === 0) break
-        for (const c of lote) {
-          if (esCobroTest({ id: c.id, unidadId: c.unidadId, origenRef: c.origenRef ?? undefined })) idsCobrosTEST.add(c.id)
+        // Fase 1.4 (Decisión 8): residuo FI de la fase 13 en BD. Cobros TEST de los
+        // periodos TEST primero (hijos; el DELETE /api/cobros-fi/[id] permite un
+        // TEST con pagos en desarrollo), luego sus emisiones y al final fondos y
+        // egresos TEST. Best-effort idempotente: 404 = limpio; sólo bloquea si la
+        // entidad existe y el DELETE la rechaza.
+        const periodosFITEST = [QA_FI_PERIODO_TEST, QA_FI_PERIODO_VENCIDO]
+        for (const periodo of periodosFITEST) {
+          const cobrosTEST = (await listaQA(`/api/cobros-fi?periodo=${periodo}`))
+            .filter(c => esCobroTest({ id: c.id, unidadId: c.unidadId, origenRef: c.origenRef ?? undefined }))
+          await borrarEnLote(cobrosTEST.map((c) => () => borrarSiExiste(`/api/cobros-fi/${c.id}`, "cobro-fi-qa")))
         }
-        if (lote.length < 100) break
+        // Bugfix e2e: el cobro `multa_in` de una infracción TEST (origenRef
+        // `test-*`) se materializa en el período del mes en curso, no en los
+        // períodos TEST, así que el barrido por período no lo alcanza y se
+        // acumula en cada corrida. Se recorren las páginas del listado FI
+        // (máx. 10 × 100, acotado para no colgar la UI) y se purga todo cobro de
+        // provenance TEST, independiente del período.
+        const idsCobrosTEST = new Set<string>()
+        for (let page = 1; page <= 10; page++) {
+          const lote = await listaQA(`/api/cobros-fi?page=${page}`)
+          if (lote.length === 0) break
+          for (const c of lote) {
+            if (esCobroTest({ id: c.id, unidadId: c.unidadId, origenRef: c.origenRef ?? undefined })) idsCobrosTEST.add(c.id)
+          }
+          if (lote.length < 100) break
+        }
+        await borrarEnLote([...idsCobrosTEST].map((id) => () => borrarSiExiste(`/api/cobros-fi/${id}`, "cobro-fi-qa")))
+        const emisionesTEST = (await listaQA("/api/emisiones-gc")).filter(e =>
+          periodosFITEST.includes(e.periodo) &&
+          (e.lineas ?? []).some((l: { unidadId?: string }) => typeof l.unidadId === "string" && l.unidadId.startsWith("test-"))
+        )
+        for (const e of emisionesTEST) await borrarSiExiste(`/api/emisiones-gc/${e.id}`, "emision-gc-qa")
+        await borrarSiExiste("/api/fondos-fi/test-fondo-pintura", "fondo-fi-qa")
+        await borrarSiExiste("/api/egresos-fi/test-egr-1", "egreso-fi-qa")
+        // Fase 1.5 (RA): las reservas y elementos RA TEST también viven en BD;
+        // hijos→padres (los cobros RA `reserva_ra`/`penalizacion_ra`/`garantia_ra`
+        // ya se barrieron por procedencia en el bloque FI de arriba).
+        await purgarColeccionBD("/api/ra/reservas", "reserva-ra", ["test-ra-rs-1", "test-ra-rs-2", "test-ra-rs-3", "test-ra-rs-y"])
+        await purgarColeccionBD("/api/ra/elementos", "elemento-ra", ["test-ra-quincho", "test-ra-hidro"])
+        // Fase 1.5 (MT): trabajos TEST (incluye el preventivo autogenerado, cuyo id
+        // `test-mt-1-prev-*` también empieza con test-) y proyectos TEST.
+        const trabajosMTTEST = (await listaQA("/api/mt/trabajos")).map(t => t.id).filter((id: unknown): id is string => typeof id === "string" && id.startsWith("test-"))
+        await purgarColeccionBD("/api/mt/trabajos", "trabajo-mt", trabajosMTTEST)
+        const proyectosMTTEST = (await listaQA("/api/mt/proyectos")).map(p => p.id).filter((id: unknown): id is string => typeof id === "string" && id.startsWith("test-"))
+        await purgarColeccionBD("/api/mt/proyectos", "proyecto-mt", proyectosMTTEST)
+      } catch (e) { errores.push(`purga BD: ${String(e)}`) }
+    }
+    let purgaBulkOk = false
+    try {
+      const r = await fetch("/api/qa-lab/purga-test", { method: "POST" })
+      if (r.ok) {
+        const v = (await r.json().catch(() => null)) as { bloqueos?: string[] } | null
+        for (const b of v?.bloqueos ?? []) errores.push(b)
+        purgaBulkOk = true
       }
-      await borrarEnLote([...idsCobrosTEST].map((id) => () => borrarSiExiste(`/api/cobros-fi/${id}`, "cobro-fi-qa")))
-      const emisionesTEST = (await listaQA("/api/emisiones-gc")).filter(e =>
-        periodosFITEST.includes(e.periodo) &&
-        (e.lineas ?? []).some((l: { unidadId?: string }) => typeof l.unidadId === "string" && l.unidadId.startsWith("test-"))
-      )
-      for (const e of emisionesTEST) await borrarSiExiste(`/api/emisiones-gc/${e.id}`, "emision-gc-qa")
-      await borrarSiExiste("/api/fondos-fi/test-fondo-pintura", "fondo-fi-qa")
-      await borrarSiExiste("/api/egresos-fi/test-egr-1", "egreso-fi-qa")
-      // Fase 1.5 (RA): las reservas y elementos RA TEST también viven en BD;
-      // hijos→padres (los cobros RA `reserva_ra`/`penalizacion_ra`/`garantia_ra`
-      // ya se barrieron por procedencia en el bloque FI de arriba).
-      await purgarColeccionBD("/api/ra/reservas", "reserva-ra", ["test-ra-rs-1", "test-ra-rs-2", "test-ra-rs-3", "test-ra-rs-y"])
-      await purgarColeccionBD("/api/ra/elementos", "elemento-ra", ["test-ra-quincho", "test-ra-hidro"])
-      // Fase 1.5 (MT): trabajos TEST (incluye el preventivo autogenerado, cuyo id
-      // `test-mt-1-prev-*` también empieza con test-) y proyectos TEST.
-      const trabajosMTTEST = (await listaQA("/api/mt/trabajos")).map(t => t.id).filter((id: unknown): id is string => typeof id === "string" && id.startsWith("test-"))
-      await purgarColeccionBD("/api/mt/trabajos", "trabajo-mt", trabajosMTTEST)
-      const proyectosMTTEST = (await listaQA("/api/mt/proyectos")).map(p => p.id).filter((id: unknown): id is string => typeof id === "string" && id.startsWith("test-"))
-      await purgarColeccionBD("/api/mt/proyectos", "proyecto-mt", proyectosMTTEST)
-    } catch (e) { errores.push(`purga BD: ${String(e)}`) }
+    } catch {
+      // Endpoint inalcanzable (red o cuerpo ilegible) → fallback del bucle.
+    }
+    if (!purgaBulkOk) await purgarBDFallback()
     setLoading(false)
     if (errores.length) setMsg({ type: "error", text: `Limpieza con ${errores.length} bloqueos (dependencias): ${errores.slice(0,2).join("; ")}` })
     else {

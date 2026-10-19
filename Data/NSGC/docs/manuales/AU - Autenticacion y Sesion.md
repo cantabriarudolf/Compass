@@ -39,6 +39,7 @@ Autenticar usuarios por email + contraseña, mantener sesión segura y limitar i
       - **Redirect URIs** (Google Cloud Console): `http://localhost:3000/api/auth/callback/google` (dev) + `https://<dominio>/api/auth/callback/google` (prod).
       - **Credentials sigue como fallback**: si Google SSO falla o no está configurado, el login por email+password funciona igual.
       - **Fail-fast en producción** (sg-google-provider-prod-guard, 2026-10-06): en `NODE_ENV=production` la app **no arranca** si faltan `GOOGLE_CLIENT_ID` o `GOOGLE_CLIENT_SECRET` (lanza `Error` descriptivo en `lib/auth.ts` al cargar el módulo). Dev/test preservan fallback vacío. Test: 5 casos Vitest (`test/lib/auth.prod-guard.test.ts`).
+      - **Opt-out `GOOGLE_PROVIDER_DISABLED=1`** (au-google-provider-disabled, 2026-10-13): bandera que (a) salta el fail-fast de producción y (b) no registra el provider Google (queda solo Credentials; los callbacks signIn/jwt quedan inertes porque ningún provider los dispara). Pensada para builds sin credenciales Google reales (p. ej. CI). Cualquier otro valor (incluido vacío/ausente) deja el comportamiento actual intacto. Tests: 6 casos Vitest (`test/auth-google-provider.test.ts`); documentada en `.env.example` y en el runbook de operaciones.
 
 ## 💡 Tips de Oro
 

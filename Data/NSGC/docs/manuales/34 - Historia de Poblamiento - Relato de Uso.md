@@ -228,4 +228,35 @@ Cierra el gap "el laboratorio escribe el store legacy, las páginas leen BD" par
 - **Declarado y no portado**: gate de morosidad y `anticipacionMinimaDias` de RA, notificaciones de RA/MT, el paso IR del formulario MT y los chequeos de existencia cross-collection sin FK.
 - **Verificación**: e2e `poblado-idempotente` 8/8 y `flujo/poblamiento` 9/9 · suite 944/944 · tsc 0 · eslint 0.
 
-*Última actualización: 2026-10-12 - Change `qlab-poblamiento-api-rest` (gap P4 FI/CT + Fase 1.5 IN/RA/MT y conexiones FI 7-10).*
+## 11. Nota `qlab-purga-bulk` — purga bulk del residuo TEST (2026-10-13)
+
+La limpieza **"Borrar todo lo de prueba"** ya no recorre entidad por entidad desde el
+navegador. Un endpoint server-side `POST /api/qa-lab/purga-test` purga todo el residuo TEST
+de la comunidad en **una sola request**, en orden hijos→padres (cobros/emisiones →
+egresos/fondos → reservas/elementos → trabajos/proyectos → unidades/vínculos → personas →
+maestros):
+
+- **Solo TEST, nunca datos reales**: ids con prefijo `test-` más procedencia TEST imposible
+  en producción (cobros FI por `unidadId`/`origenRef` `test-` — la multa IN materializa un
+  `cob-*` —, emisiones de los períodos TEST `2019-03`/`2019-01` **que además tienen rastro
+  TEST real: id `test-*` o al menos una línea con `unidadId` `test-`** —, notificaciones PI con la
+  marca `TEST`).
+- **Respuesta `{ borrados, bloqueos }`**: conteo por colección y conflictos reales con su
+  motivo (no se inventan). **Idempotente**: segunda corrida = 0 borrados, sin errores.
+- **Guard y permisos**: 404 fuera de dev/test (`isWriteApiEnabled`), 401 sin sesión, 403 sin
+  membresía o sin permiso de administración de la comunidad.
+- **Fallback documentado**: si el endpoint responde error, `limpiar()` usa el bucle por
+  entidad histórico (O(n) requests) sin cambiar los mensajes verde/rojo.
+- **Residuo honesto intacto**: las liquidaciones PL confirmadas y los certificados CT
+  inmutables no se borran ni se reportan como bloqueo; `e2e:higiene` sigue retirándolos en
+  cada reseed.
+- **Medición** (sobre poblamiento completo: 44 filas / 25 colecciones): antes ≈ **61 requests**
+  de purga (53 DELETE + 8 GET paginados) y >120 s en el runner de CI (5-11 s local); ahora
+  **1 request** con purga server-side de **916 ms** (wall del cliente ≈ 3.9 s incluyendo la
+  purga del store).
+- **Limpiezas de cola estrictas otra vez**: `e2e/crud/poblado-idempotente.spec.ts` y
+  `e2e/flujo/ciclo.spec.ts` vuelven a exigir `TEST-* limpio correctamente` en ≤120 s (sin
+  tolerancia best-effort de 90 s).
+
+*Última actualización: 2026-10-13 - Change `qlab-purga-emisiones-r3-001` (endurece la nota 11
+sobre emisiones GC).*
