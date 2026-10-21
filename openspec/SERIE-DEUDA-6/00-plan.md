@@ -25,7 +25,7 @@ solicitud IR, reportes RE (generar/distribuir/vista), adelantos PL, cobranza FI,
 | V3 | `finanzas/multas` — cablear `use-in`: aplicar/desestimar/apelar (rutas ya existen) y migrar la página | HECHA | `412e9a7` |
 | V3b | **Permisos**: `cv` (reparado) + `in`, `notificaciones` (con filtro por destinatario) y `cf` en la matriz; filtro de apelación propia en `in` | HECHA | `f1cac65` |
 | V4 | `inventario/proyectos` — cablear `use-mt`: verificar garantías + actualizar pago de trabajo (rutas ya existen) y migrar la página | HECHA | `7b2bbad` |
-| V5 | Cierre: gates completos, `BACKLOG-100.md`, avance NSGC, deuda restante declarada, informe | PENDIENTE | — |
+| V5 | Cierre: gates completos, `BACKLOG-100.md`, avance NSGC, deuda restante declarada, informe | HECHA | `este commit de cierre` (documentación) |
 
 **MÁXIMO: 6 ventanas.** Lo que no entre se declara como deuda fase 2 en V5; no se improvisa.
 
@@ -178,3 +178,64 @@ El orquestador audita (`git diff`, gates si hace falta) antes de lanzar la sigui
   ventana (antes la lectura también era 403, así que la sección del portal estaba muerta; ahora se
   puebla y el botón de leída responde 403). Decidir si el residente marca sus propias notificaciones
   requiere una acción granular análoga a `in:apelar` y queda para la decisión del owner en V5.
+- **2026-10-21 · V4 HECHA** — `app/inventario/proyectos/page.tsx` (3 usos → 0) y `lib/api/use-mt.ts`.
+  *Bitácora reconstruida en V5*: el ejecutor de V4 fue matado por el arnés (`stalled`, 4 min de
+  inactividad sin imprimir mientras corría `npm test` completo) **después** de implementar y antes de
+  escribir su cierre; el orquestador commiteó el código (`7b2bbad`) con la suite completa observada en
+  background y ajustó la regla 6 del plan en `c5d05d1`. Contrato real: `POST
+  /api/mt/garantias/verificar` **no lee body** (`route.ts:18`), recorre los trabajos finalizados con
+  garantía vencida, marca la alerta de forma idempotente y responde `{ ok: true, alertadas }`
+  (`route.ts:64`); el pago de trabajo se resuelve con el `PUT` parcial que ya existía
+  (`app/api/mt/trabajos/[id]/route.ts`, authz `mt`) vía `update(id, { estadoPago })` de
+  `useTrabajosMT`, sin duplicar lógica ni invalidación. `verificarGarantiasMT()` se agregó a
+  `lib/api/use-mt.ts` con `postAccion(..., {})` y revalida `/api/mt/trabajos` porque el servidor
+  escribe `alertaGarantiaEnviada`. Paridad estricta: mismos textos (`Garantías verificadas: alertas
+  nuevas notificadas a administración.`) y mismo manejo de error (`r.error ?? ""`). Test nuevo
+  `test/api/use-mt-acciones.test.ts` (4 casos: POST sin payload, `alertadas` propagado, error 500 del
+  servidor sin inventar texto y caída de red). Gate declarado en `7b2bbad`: `npx tsc --noEmit` exit 0 ·
+  `npm run lint` **0 problems** · suite completa **1388 tests** con cobertura `lib/**` **99.63** y
+  `lib/store.ts` **99.95**. En V5 se re-corrieron los focalizados: `use-mt-acciones.test.ts`
+  **4/4 passed** (dentro de la corrida de 10 archivos / 109 tests). Sin push. **Delta declarado**: la
+  verificación de garantías deja de existir solo en el cliente y pasa a exigir sesión con `mt`
+  (operación de administración/comité según la matriz), misma clase de delta que V2 y V3.
+- **2026-10-21 · V5 HECHA** — Cierre documental, sin código de producto. **Auditoría de la serie**
+  (`git log --oneline main..HEAD` → 17 commits; `git diff --stat main...HEAD` → 35 archivos, 3109
+  inserciones, 113 borrados): solo se tocaron los archivos de las ventanas (4 páginas migradas, 4 rutas
+  API y 2 módulos de `lib/api` en V3b, `lib/authz.ts` + su test, 9 archivos de test, el change
+  `ui-legacy-store-fase1` y `SERIE-DEUDA-6/**`). **Cero** cambios en `prisma/**`, `prisma/dev.db`,
+  `Data/NSGC/backups/`, `.env*` (verificado con `git diff --name-only main...HEAD | grep -Ei
+  "prisma|\.env|backups|dev\.db"` → sin coincidencias) y `lib/store.ts` sin tocar
+  (`STORE_VERSION = 28` en `lib/store.ts:336`). **Censo final** (`grep -rn "useCompassStore" app/ | wc
+  -l` → **131**): 9 archivos / 131 usos contra los 13 / 147 de la auditoría base → **−4 archivos, −16
+  usos** (`certificados` 4→0, `visor-mensajes` 2→0, `finanzas/multas` 7→0, `inventario/proyectos` 3→0).
+  Sin migrar (fase 2): `personas/personal` 7, `admin/reporteria` 6, `inventario/recursos` 5,
+  `finanzas/remuneraciones` 4, `finanzas/gastos-comunes` 2, `comunidad/visor` 2 = **26 usos**; las 3
+  excepciones siguen intactas (`admin/qa-lab` 99, `admin/mantenimiento` 4, `admin/dev-dashboard` 2 =
+  105 usos). Nota de auditoría: la tabla base anotó 9 usos en `admin/reporteria`, el conteo real en
+  `main` es **6** (el total de 147 sí cuadra con los 13 archivos). **Gates de V5** (corridos acá, una
+  vez cada uno): `npx tsc --noEmit` exit **0** · `npm run lint` exit **0**, log de 4 líneas sin
+  "problem" · focalizados `npx vitest run lib/authz.test.ts test/api/fase4-cv.test.ts
+  test/api/fase4-in.test.ts test/api/in-apelacion-propia.test.ts test/api/notificaciones-filtro.test.ts
+  test/api/use-in-acciones.test.tsx test/api/use-mt-acciones.test.ts
+  test/componentes/certificados-fuente-hooks.test.tsx test/componentes/multas-acciones-hooks.test.tsx
+  test/componentes/visor-mensajes-caducidad.test.tsx` → **10 archivos / 109 tests passed** (44.59 s,
+  `VITEST_EXIT=0`) · `node openspec/scripts/check-delta-coverage.mjs ui-legacy-store-fase1` → `1 ok · 1
+  info · 0 que romperían el archive` · `openspec validate --all` → **Totals: 36 passed, 0 failed**.
+  **Suite completa**: **no** la corrió esta ventana (el plan la asigna al orquestador en background); el
+  veredicto vigente es el observado por el orquestador en `7b2bbad` → `SUITE_EXIT=0`, 8m07s, **1388
+  tests en 136 archivos**, cobertura global **94.39 / 85.84 / 93.85**, `lib/**` 99.63, `lib/store.ts`
+  99.95 (sin cubrir solo `:4323` y `:5131`). **Documentación**: `openspec/BACKLOG-100.md` (§Deuda viva
+  verificada → deltas por archivo + deuda fase 2 con motivo + gates del cierre), avance
+  `Data/NSGC/docs/avances/avance - 2026-10-21 11-40.md`, tareas V4/V5 de
+  `openspec/changes/ui-legacy-store-fase1/tasks.md` marcadas. Trazabilidad NSGC: **sin cambio** (no
+  cambió ninguna fila de estado; los módulos afectados siguen 🟢 Completado). **No se archivó** el
+  change (exige CI verde observado y esta serie no pushea) y **no se pusheó**. **Nota de auditoría (V3b)**: la
+  entrada de V3b dice que `lib/authz.test.ts` pasa “de 49 a 76 casos”; el archivo tiene **37 bloques
+  `it(`/`test(` en `main` y 49 ahora** (+12), vitest reporta **49 tests** en el archivo y no hay
+  `it.each`, así que el “76” cuenta aserciones/casos internos, no tests. No se reescribe la entrada
+  histórica; queda la medición exacta acá.
+- **2026-10-21 · SERIE CERRADA 6/6** — V1 `5e6a373` · V2 `dc0f583` · V3 `412e9a7` · V3b `f1cac65` ·
+  V4 `7b2bbad` · V5 (este cierre). **Deuda fase 2**: 26 usos en 6 archivos, todos con endpoint nuevo
+  pendiente (PE ×5 + auditoría, IR entregar/resolver, RE reportes, PL adelantos, FI cobranza, CV
+  publicar acta) + 3 deudas menores (`pageSize=100` del hook paginado, `Notificacion` sin `unidadId`,
+  marcar leída propia). Detalle en `openspec/BACKLOG-100.md` §"Store legacy: cierre de la fase 1".

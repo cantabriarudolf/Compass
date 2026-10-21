@@ -203,14 +203,14 @@ cerrado por rol. Test-first en `lib/authz.test.ts` (RED: 5 casos rojos antes de 
 
 ## V4 — `inventario/proyectos`: cablear `use-mt.ts` y migrar la página
 
-- [ ] Verificar garantías + actualizar pago de trabajo contra las rutas ya existentes.
-- [ ] Migrar la página (3 usos) y test de fijación.
+- [x] Verificar garantías + actualizar pago de trabajo contra las rutas ya existentes.
+- [x] Migrar la página (3 usos) y test de fijación.
 
 ## V5 — Cierre de la serie
 
-- [ ] Gates completos (tsc/lint/test) + `openspec validate --all` + `check-delta-coverage`.
-- [ ] `BACKLOG-100.md`: mapa de migración actualizado con lo hecho y la deuda fase 2 declarada.
-- [ ] Avance NSGC (skill `nsgc-prepush`) + informe final de la serie.
+- [x] Gates completos (tsc/lint/test) + `openspec validate --all` + `check-delta-coverage`.
+- [x] `BACKLOG-100.md`: mapa de migración actualizado con lo hecho y la deuda fase 2 declarada.
+- [x] Avance NSGC (skill `nsgc-prepush`) + informe final de la serie.
 
 ## Evidencia de shapes (V1)
 
