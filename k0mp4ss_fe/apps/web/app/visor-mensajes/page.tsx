@@ -1,9 +1,9 @@
 "use client"
 
 import * as React from "react"
-import { useCompassStore } from "@/lib/store"
 import type { AvisoCV, TipologiaCV } from "@/lib/schemas"
-import { useAvisosCV } from "@/lib/api/use-cv"
+import { useAvisosCV, avisosVencidos } from "@/lib/api/use-cv"
+import { hoyISO } from "@/lib/date-utils"
 import { useReservasRA, useElementosRA } from "@/lib/api/use-ra"
 import { useConfiguracion } from "@/lib/api/use-configuracion"
 import { IconClock, IconCalendarEvent } from "@tabler/icons-react"
@@ -28,28 +28,48 @@ function youtubeEmbed(url: string): string | null {
 }
 
 export default function VisorMensajesPage() {
-  const { items: avisosCV, isLoading: cAvisos } = useAvisosCV()
+  const { items: avisosCV, isLoading: cAvisos, update: actualizarAvisoApi } = useAvisosCV()
   const { items: reservasRA, isLoading: cReservas } = useReservasRA()
   const { items: elementosRA, isLoading: cElementos } = useElementosRA()
   const { config: configuracion, isLoading: cConfig } = useConfiguracion()
   const cargando = cAvisos || cReservas || cElementos || cConfig
 
-  // TODO: migrar caducarAvisosCV a API REST
-  // Ref: los intervalos de caducidad se montan una sola vez (deps `[]`) y llaman la
-  // acción del store a través del ref, así el ciclo de vida de los `setInterval`
-  // no depende de la identidad que devuelva `getState()` en cada render.
-  const caducarAvisosCV = React.useRef(useCompassStore.getState().caducarAvisosCV)
+  // Caducidad vía API (antes `caducarAvisosCV` del store): los avisos publicados
+  // con `expiresAt` vencido se archivan con el contrato ya existente
+  // (`PUT /api/cv/avisos/[id]`, el mismo que usa `comunidad/visor`).
+  // El ref conserva la última lista y la última función del hook para que los
+  // `setInterval` (deps `[]`) no dependan de la identidad que devuelve SWR en
+  // cada render; el ref se refresca en el efecto declarado justo debajo.
+  const caducidad = React.useRef({ items: avisosCV, cargando: cAvisos, update: actualizarAvisoApi })
 
   const [indice, setIndice] = React.useState(0)
   const [ahora, setAhora] = React.useState(() => new Date())
 
   React.useEffect(() => {
-    caducarAvisosCV.current()
-    const reloj = setInterval(() => setAhora(new Date()), 1000)
-    // Sincronización simulada: refresco de caducidad y estado cada 30s.
-    const sync = setInterval(() => caducarAvisosCV.current(), 30000)
-    return () => { clearInterval(reloj); clearInterval(sync) }
+    caducidad.current = { items: avisosCV, cargando: cAvisos, update: actualizarAvisoApi }
+  }, [avisosCV, cAvisos, actualizarAvisoApi])
+
+  const caducar = React.useCallback(() => {
+    const { items, cargando: cargandoLista, update } = caducidad.current
+    if (cargandoLista) return
+    const hoy = hoyISO()
+    for (const aviso of avisosVencidos(items, hoy)) {
+      void update(aviso.id, { estado: "archivado", fechaArchivado: hoy })
+    }
   }, [])
+
+  React.useEffect(() => {
+    const reloj = setInterval(() => setAhora(new Date()), 1000)
+    // Sincronización de caducidad cada 30s (mismo ciclo que el visor legacy).
+    const sync = setInterval(caducar, 30000)
+    return () => { clearInterval(reloj); clearInterval(sync) }
+  }, [caducar])
+
+  // Primera pasada en cuanto la lista del servidor está disponible.
+  React.useEffect(() => {
+    if (cAvisos) return
+    caducar()
+  }, [cAvisos, caducar])
 
   const cola = React.useMemo(
     () => avisosCV.filter(a => a.estado === "publicado").sort((a, b) => (a.fechaPublicacion ?? "").localeCompare(b.fechaPublicacion ?? "")),
