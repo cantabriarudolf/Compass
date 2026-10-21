@@ -23,7 +23,7 @@ solicitud IR, reportes RE (generar/distribuir/vista), adelantos PL, cobranza FI,
 | V1 | `comunidad/certificados` — `liquidacionesPL` + `cobrosFI` del store → `useLiquidaciones` + `useCobrosFI` | HECHA | `5e6a373` |
 | V2 | `visor-mensajes` — quitar `caducarAvisosCV` del store: caducidad vía API (acción mínima reutilizando el contrato existente) | HECHA | `dc0f583` |
 | V3 | `finanzas/multas` — cablear `use-in`: aplicar/desestimar/apelar (rutas ya existen) y migrar la página | HECHA | `412e9a7` |
-| V3b | **Permisos**: `cv` (reparado) + `in`, `notificaciones` (con filtro por destinatario) y `cf` en la matriz; filtro de apelación propia en `in` | PENDIENTE | — |
+| V3b | **Permisos**: `cv` (reparado) + `in`, `notificaciones` (con filtro por destinatario) y `cf` en la matriz; filtro de apelación propia en `in` | HECHA | `f1cac65` |
 | V4 | `inventario/proyectos` — cablear `use-mt`: verificar garantías + actualizar pago de trabajo (rutas ya existen) y migrar la página | PENDIENTE | — |
 | V5 | Cierre: gates completos, `BACKLOG-100.md`, avance NSGC, deuda restante declarada, informe | PENDIENTE | — |
 
@@ -133,3 +133,39 @@ El orquestador audita (`git diff`, gates si hace falta) antes de lanzar la sigui
   `app/api/in/infracciones/route.ts:14`). Antes el botón “funcionaba” para esos roles porque escribía
   en `localStorage` sin authz y sin tocar la fuente de verdad; con la API el 403 es visible en el
   toast de error. Requiere decisión del owner sobre la matriz.
+- **2026-10-21 · V3b HECHA** — Cierre de la deuda de permisos con las decisiones del owner del
+  2026-10-21. **Matriz** (`lib/authz.ts`): `comite` → `in` ver/crear/editar, `notificaciones` ver, `cf`
+  ver; `conserjeria` → `in` ver/crear, `notificaciones` ver; `residente` → `in:apelar` crear,
+  `notificaciones` ver; `mantencion` → `notificaciones` ver. Test-first: `lib/authz.test.ts` pasa de 49
+  a 76 casos (5 rojos antes de tocar la matriz). Detalle fino: `in:apelar` se declara **vacío** en
+  comité y conserjería porque `puede()` cae al prefijo `in` cuando la clave granular no existe — sin el
+  vacío explícito, abrir `in` habría habilitado la apelación para ambos. **La parte crítica**:
+  `GET /api/notificaciones` deja de usar la factory y arma su propio `where` con
+  `filtroNotificaciones()` (`lib/api/notificaciones-scope.ts:50`), así que `ver` nunca se abre sin
+  recorte por destinatario: admin y comité ven toda la comunidad, y conserjería/residente/mantención
+  solo lo dirigido a su `personaId` o a su rol **sin destinatario puntual**; el `GET` por id también
+  queda acotado (ajena → 404). El contrato de `createCrudHandlers` no se tocó: GET propio con el mismo
+  shape `{ data, page, pageSize, total }` y `POST`/`PUT`/`DELETE` en la factory. **`in`**: la apelación
+  pasa a `in:apelar` con pertenencia validada server-side
+  (`app/api/in/infracciones/[id]/apelar/route.ts:45`: unidades con vínculo vigente, ajena → 404); el
+  comité y la conserjería no apelan (gestionan el caso) y el residente nunca obtiene `editar` sobre
+  `in`. `personaIdDelUsuarioDb`/`unidadesVinculadasDb` se movieron a `lib/api/sesion-persona.ts`
+  (`gd-guard` los reexporta). Tests nuevos: `test/api/notificaciones-filtro.test.ts` (16 casos, 6 puros
+  del `where` + 10 con sesiones reales: un residente **no** ve la de otro residente),
+  `test/api/in-apelacion-propia.test.ts` (10) y `test/api/fase4-in.test.ts` actualizado al
+  comportamiento decidido (suma comité/conserjería y renombra el test “(desvío: solo admin hasta RP)”).
+  **Verificación HTTP real** (dev server + `/tmp/ck_*.txt`): `in` → 200 admin/comité/conserjería y 403
+  residente/mantención; `notificaciones` → 200 los cinco; `configuracion` → 200 admin/comité y 403 el
+  resto; `POST apelar` → residente 404 (pasa authz y cae en pertenencia), comité/conserjería/mantención
+  403, admin 404 con id inexistente. Gate: `npx tsc --noEmit` exit 0 · `npm run lint` **0 problems** ·
+  `npm test` **136 archivos / 1384 tests passed** con cobertura global **94.39 / 85.84 / 93.85** y
+  `lib/store.ts` **99.95** (los cuatro ≥ fingerprint 94.31 / 85.82 / 93.61; pisos de `vitest.config.ts`
+  sin tocar) · `openspec validate --all` **36 passed, 0 failed** · `check-delta-coverage` **0 que
+  romperían el archive**. Commits: `0e160ab` (matriz + tests), `36aa85b` (filtro de notificaciones),
+  `f1cac65` (apelación propia) y el de cierre de documentación. Sin push. **Deltas declarados**:
+  (1) el comité pierde la apelación — antes era 403 de todos modos por la matriz incompleta, ahora es
+  una decisión explícita y no un efecto colateral de `editar` sobre `in`; (2) el comité ve todas las
+  notificaciones de su comunidad (órgano de gobierno, criterio del prompt); (3) el residente ve también
+  las difusiones a `propietario` porque en RP es el mismo rol y el portal ya filtra así
+  (`app/comunidad/portal/page.tsx:135`); (4) `Notificacion` no tiene `unidadId`, así que una difusión al
+  rol la ve toda la comunidad con ese rol — limitación de schema, deuda declarada para fase 2.

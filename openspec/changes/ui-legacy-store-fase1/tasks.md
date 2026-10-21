@@ -111,6 +111,91 @@ Otras notas de paridad: mismos textos de `window.prompt` ("Justificación de la 
 desestimar." / "No se pudieron registrar los descargos."), mismo cierre del diálogo al desestimar y
 misma permanencia con estado actualizado al aplicar/apelar.
 
+## V3b — Permisos: `in`, `notificaciones`, `cf` + filtro por destinatario
+
+Decisiones del owner del 2026-10-21 (`openspec/SERIE-DEUDA-6/prompt-03b.md`), mínimo privilegio
+cerrado por rol. Test-first en `lib/authz.test.ts` (RED: 5 casos rojos antes de tocar la matriz).
+
+- [x] **Matriz** (`lib/authz.ts`): `comite` → `in` ver/crear/editar, `notificaciones` ver, `cf` ver;
+  `conserjeria` → `in` ver/crear, `notificaciones` ver; `residente` → `in:apelar` crear,
+  `notificaciones` ver; `mantencion` → `notificaciones` ver. `administrador` sigue por wildcard.
+  `in:apelar` se declara **vacío** para comité y conserjería a propósito: `puede()` cae al prefijo
+  `in` cuando la clave granular no existe, así que el vacío explícito es lo que impide que
+  “gestionar el expediente” habilite la apelación. `RECURSOS_CONOCIDOS` suma `cv` (faltaba desde V3b
+  de `cv`), `in`, `in:apelar`, `notificaciones` y `cf`; se exporta `normalizaRol` para que las rutas
+  ABAC razonen con el mismo rol que el motor.
+- [x] **Tests de matriz** (`lib/authz.test.ts`, +27 casos en 3 `describe`): comité edita `in` pero no
+  elimina; conserjería crea `in` pero no edita; residente no ve/crea/edita `in` y solo tiene
+  `in:apelar`; comité/conserjería/mantención no apelan; los 5 roles ven `notificaciones` y solo el
+  admin escribe; comité ve `cf` pero no edita; mantención no ve `cf`.
+- [x] **Notificaciones: filtro server-side ANTES de abrir `ver`** — `GET` propio en el route
+  (`app/api/notificaciones/route.ts:41`) con el mismo shape y paginación que la factory
+  (`{ data, page, pageSize, total }`), `where` acotado por `filtroNotificaciones()`
+  (`lib/api/notificaciones-scope.ts:50`): admin y comité toda la comunidad; conserjería, residente y
+  mantención solo lo dirigido a su `personaId` o a su rol **sin destinatario puntual**. El `GET` por
+  id también queda acotado (`app/api/notificaciones/[id]/route.ts:27`, ajeno → 404, no revela
+  existencia). El contrato de `createCrudHandlers` **no** se tocó: `POST`/`DELETE`/`PUT` siguen en la
+  factory.
+- [x] **`in`: apelación propia** — `contextoApelacionIN()` (`app/api/in/infracciones/_acciones.ts:40`)
+  exige `in:apelar` (NO `editar` sobre `in`) y devuelve las unidades con vínculo vigente del usuario;
+  la ruta valida pertenencia antes de escribir (`app/api/in/infracciones/[id]/apelar/route.ts:45`,
+  404 si la infracción es de otra unidad). El administrador sigue registrando descargos sin acotar por
+  unidad; comité y conserjería reciben **403** (no apelan: gestionan el caso).
+- [x] `lib/api/sesion-persona.ts`: `personaIdDelUsuarioDb` y `unidadesVinculadasDb` salen de
+  `gd-guard` a un módulo transversal (misma implementación, `gd-guard` las reexporta) porque ahora las
+  comparten notificaciones, apelaciones IN y los llamadores históricos de AD/GD.
+- [x] Tests con BD real: `test/api/notificaciones-filtro.test.ts` (16 casos: 6 puros del `where` + 10
+  con sesiones reales — un residente **no** ve la de otro residente, ve la suya y las de su rol, el
+  admin y el comité ven todas, GET por id ajeno 404, rol fuera de la matriz 403, fallo de BD 500) y
+  `test/api/in-apelacion-propia.test.ts` (10 casos: propia 200 + evento, ajena 404 sin evento, comité y
+  conserjería 403, admin 200, descargos cortos/sin campo/JSON roto 400, sin vínculo 404, fallo de BD
+  500). `test/api/fase4-in.test.ts` actualizado al comportamiento decidido (el test
+  “(desvío: solo admin hasta RP)” pasa a nombrar la decisión del owner y suma comité/conserjería:
+  `GET` 200 para ambos, comité edita 200 / conserjería 403, conserjería reporta 201 / residente 403).
+- [x] **Verificación HTTP real** (dev server en `http://localhost:3000`, cookies `/tmp/ck_*.txt`):
+
+| Ruta | admin | comité | conserjería | residente | mantención |
+| --- | --- | --- | --- | --- | --- |
+| `GET /api/in/infracciones` | 200 | 200 | 200 | 403 | 403 |
+| `GET /api/notificaciones` | 200 | 200 | 200 | 200 | 200 |
+| `GET /api/configuracion` | 200 | 200 | 403 | 403 | 403 |
+
+  `POST /api/in/infracciones/<id>/apelar` en vivo: residente 404 (`Registro no encontrado.` — pasa
+  authz, cae en pertenencia), comité/conserjería/mantención 403 (`Permiso denegado.`), admin 404 con
+  id inexistente. La tabla por sí sola no demuestra el filtro: `prisma/dev.db` no tiene filas en
+  `notificaciones` (verificado con un `groupBy` read-only), así que la prueba del recorte vive en los
+  tests con BD real.
+
+- [x] **Gate V3b** (workdir `k0mp4ss_fe/apps/web`): `npx tsc --noEmit` → exit 0 · `npm run lint` →
+  exit 0 (**0 problems**) · `npm test` → **136 archivos / 1384 tests passed** (V3: 1343) con cobertura
+  global **94.39 / 85.84 / 93.85** y `lib/store.ts` **99.95** (los cuatro por encima del fingerprint
+  de base 94.31 / 85.82 / 93.61; pisos de `vitest.config.ts` 93/84/92/93 sin tocar) ·
+  `openspec validate --all` → **36 passed, 0 failed** · `check-delta-coverage` → **0 que romperían el
+  archive**. e2e no se corre en esta máquina (2 cores; flakes documentados).
+
+### Deltas declarados en V3b
+
+1. **La apelación deja de estar disponible para el comité**: antes la ruta exigía `editar` sobre `in`
+   y el comité no tenía `in` (403 de todos modos), pero al abrirle `in` ver/crear/editar el `editar`
+   habría habilitado apelar. La decisión del owner es explícita (“la apelación es acto propio del
+   residente”), así que la ruta ahora pide `in:apelar` y el comité recibe 403 en esa acción mientras
+   aplica/desestima/respalda sin problema. Si la administración necesita que el comité registre
+   descargos, es una decisión de matriz para V5.
+2. **El comité ve todas las notificaciones de su comunidad** (criterio de órgano de gobierno indicado
+   en el prompt). Es el único rol con `ver` total además del administrador; queda escrito en el
+   comentario de `lib/api/notificaciones-scope.ts`.
+3. **`residente` ve también las difusiones a `propietario`**: en RP “Propietario/Residente” es un solo
+   rol y el portal de residentes filtra hoy `destinatarioRol === "propietario"`
+   (`app/comunidad/portal/page.tsx:135`); sin esa equivalencia la bandeja del portal quedaría vacía.
+   Las de rol se exigen además **sin destinatario puntual**, para no filtrar avisos dirigidos a otro
+   vecino.
+4. El `GET` de notificaciones deja de usar la factory para poder acotar el `where`. El shape y la
+   paginación (`page`/`pageSize`, tope 100, `orderBy createdAt desc`) son idénticos; `POST`, `PUT` y
+   `DELETE` no cambian.
+5. La bandeja de un residente no puede acotarse por unidad: el modelo `Notificacion` no tiene
+   `unidadId`, así que una difusión al rol “residente” la ven todos los residentes de la comunidad.
+   Es una limitación del schema, declarada para fase 2 (no se toca el schema en esta serie).
+
 ## V4 — `inventario/proyectos`: cablear `use-mt.ts` y migrar la página
 
 - [ ] Verificar garantías + actualizar pago de trabajo contra las rutas ya existentes.
