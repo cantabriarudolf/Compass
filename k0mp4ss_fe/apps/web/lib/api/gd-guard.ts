@@ -120,24 +120,7 @@ export async function residentesVenActas(comunidadId: string): Promise<boolean> 
 }
 
 /** personaId (MP) del usuario de sesión, o null. */
-export async function personaIdDelUsuarioDb(
-  usuarioId: string
-): Promise<string | null> {
-  const usuario = await prisma.usuario.findUnique({
-    where: { id: usuarioId },
-    select: { personaId: true },
-  })
-  return usuario?.personaId ?? null
-}
-
-/** Unidades con vínculo vigente del usuario (ABAC residente para AD). */
-export async function unidadesVinculadasDb(
-  personaId: string,
-  comunidadId: string
-): Promise<string[]> {
-  const vinculos = await prisma.vinculoUnidad.findMany({
-    where: { personaId, comunidadId, fechaFin: null },
-    select: { unidadId: true },
-  })
-  return [...new Set(vinculos.map((v) => v.unidadId))]
-}
+// Identidad y vínculos del usuario de sesión: implementados en `sesion-persona`
+// porque los comparten notificaciones, apelaciones IN, certificados y controles.
+// Se reexportan acá para no tocar a los llamadores históricos de gd-guard.
+export { personaIdDelUsuarioDb, unidadesVinculadasDb } from "./sesion-persona"
