@@ -26,10 +26,39 @@ sin `openspec archive`** (el archive exige CI verde observado y esta serie no pu
 
 ## V2 — `visor-mensajes`: `caducarAvisosCV` fuera del store
 
-- [ ] Reemplazar la acción legacy del `setInterval` por caducidad vía API reutilizando el contrato
-  existente (`PUT /api/cv/avisos/[id]`); sin endpoint nuevo, sin cambio de comportamiento visible.
-- [ ] Test de fijación del ciclo (el actual `test/componentes/visor-mensajes-caducidad.test.tsx`
-  migra su espía del store al hook/endpoint).
+- [x] **Semántica legacy documentada** (`lib/store/slices/cv-slice.ts:149-181`): filtra
+  `estado === "publicado" && expiresAt && expiresAt < hoyISO()` (comparación lexicográfica ISO;
+  vencer hoy NO caduca), los pasa a `estado: "archivado"` con `fechaArchivado = hoyISO()` y emite un
+  evento `CV_ARCHIVED` por aviso al ledger local del store (`Aviso "<titulo>" expiró automáticamente
+  (<expiresAt>) y salió del carrusel.`). No-op silencioso (`{ ok: true }`) si no hay vencidos; exige
+  `hasHydrated`.
+- [x] Reemplazar la acción legacy del `setInterval` por caducidad vía API reutilizando el contrato
+  existente (`PUT /api/cv/avisos/[id]`, el mismo que usa `app/comunidad/visor/page.tsx:107-114`);
+  **sin endpoint nuevo** y sin cambio de comportamiento visible. La regla de negocio queda en un
+  helper puro compartido `avisosVencidos()` en `lib/api/use-cv.ts:31`; el archivado lo hace el
+  `update` de `useAvisosCV` (SWR invalida la lista → el carrusel deja de mostrar el aviso).
+- [x] Test de fijación del ciclo (`test/componentes/visor-mensajes-caducidad.test.tsx`): espía del
+  endpoint/hook en vez del store — 1 pasada al montar, 1 cada 30 s, corte al desmontar, solo el aviso
+  publicado con `expiresAt` anterior a hoy, args `{ estado: "archivado", fechaArchivado }`, y
+  `caducarAvisosCV` del store **nunca** invocado (el store queda vacío).
+- [x] **Gate V2** (workdir `k0mp4ss_fe/apps/web`): `npx tsc --noEmit` → exit 0 · `npm run lint` →
+  exit 0 (**0 problems**) · `npm test` → **132 archivos / 1332 tests passed** (V1: 1331, +1 caso
+  nuevo), cobertura global **94.31 / 85.82 / 93.61** y `lib/store.ts` **99.95** (sin cubrir solo
+  `:4323` y `:5131`, igual al fingerprint) · `openspec validate ui-legacy-store-fase1 --strict` →
+  *is valid* · `check-delta-coverage` → **0 que romperían el archive**. e2e no se corre en esta
+  máquina (2 cores; flakes documentados).
+
+### Evidencia de la ventana V2
+
+| Punto | Dato |
+| --- | --- |
+| `caducarAvisosCV` legacy (a eliminar del ciclo) | `lib/store/slices/cv-slice.ts:149` (firma `lib/store/slices/cv-slice.ts:22`) |
+| Uso en la página | `app/visor-mensajes/page.tsx:41` (ref `getState()`) + `:47` (montar) + `:50` (cada 30 s) — **eliminado** |
+| Contrato reutilizado | `PUT /api/cv/avisos/[id]` → `app/api/cv/avisos/[id]/route.ts:24` (`createPutMerge`, `comunidadId` desde sesión, `editar` sobre `cv`, ajeno → 404) |
+| Precedente de archivado por API | `app/comunidad/visor/page.tsx:107-114` (misma regla: publicado + `expiresAt < hoy`) |
+| Hook usado (sin contrato nuevo de hooks) | `useAvisosCV().update` → `lib/api/use-crud-collection.ts:106` (invalida la colección al `ok`) |
+| Helper puro nuevo | `avisosVencidos()` — `lib/api/use-cv.ts:31` |
+| Deltas declarados | (1) El evento `CV_ARCHIVED` ya no se emite desde esta página: el ledger `eventos` es local del store y la API no escribe ledger — mismo precedente que `comunidad/visor` desde su migración; la acción del store sigue viva para `admin/qa-lab`. (2) La caducidad pasa a exigir sesión con `editar` sobre `cv` (authz de la ruta); antes era puramente cliente sobre `localStorage` y **no afectaba a la fuente de verdad**: el carrusel ya leía de la API desde la migración de `useAvisosCV`, así que el efecto visible es el previsto (el aviso vencido sale del carrusel). |
 
 ## V3 — `finanzas/multas`: cablear `use-in.ts` y migrar la página
 

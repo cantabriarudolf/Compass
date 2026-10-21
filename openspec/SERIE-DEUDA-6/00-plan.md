@@ -21,7 +21,7 @@ solicitud IR, reportes RE (generar/distribuir/vista), adelantos PL, cobranza FI,
 | Ventana | Alcance | Estado | Commit final |
 |---|---|---|---|
 | V1 | `comunidad/certificados` — `liquidacionesPL` + `cobrosFI` del store → `useLiquidaciones` + `useCobrosFI` | HECHA | `5e6a373` |
-| V2 | `visor-mensajes` — quitar `caducarAvisosCV` del store: caducidad vía API (acción mínima reutilizando el contrato existente) | PENDIENTE | — |
+| V2 | `visor-mensajes` — quitar `caducarAvisosCV` del store: caducidad vía API (acción mínima reutilizando el contrato existente) | HECHA | `dc0f583` |
 | V3 | `finanzas/multas` — cablear `use-in`: aplicar/desestimar/apelar (rutas ya existen) y migrar la página | PENDIENTE | — |
 | V4 | `inventario/proyectos` — cablear `use-mt`: verificar garantías + actualizar pago de trabajo (rutas ya existen) y migrar la página | PENDIENTE | — |
 | V5 | Cierre: gates completos, `BACKLOG-100.md`, avance NSGC, deuda restante declarada, informe | PENDIENTE | — |
@@ -77,3 +77,25 @@ El orquestador audita (`git diff`, gates si hace falta) antes de lanzar la sigui
   `pageSize=100` (`lib/api/use-crud-collection.ts:98`) — límite preexistente compartido con
   `finanzas/pagos`, `finanzas/gastos-comunes` y `admin/reporteria`; no se toca (contrato del hook
   congelado), queda para fase 2.
+- **2026-10-21 · V2 HECHA** — `app/visor-mensajes/page.tsx`: fuera el ref a
+  `useCompassStore.getState().caducarAvisosCV` y su `setInterval` de 30 s. Opción (a) del prompt:
+  **no hizo falta endpoint nuevo** — el contrato ya existe (`PUT /api/cv/avisos/[id]`, authz
+  `editar`/`cv` con scoping de comunidad por sesión) y ya lo usa `app/comunidad/visor/page.tsx:107`.
+  La página usa `useAvisosCV().update` (que invalida la colección → el carrusel deja de pintar el
+  aviso vencido) y la regla de negocio queda en el helper puro `avisosVencidos()`
+  (`lib/api/use-cv.ts:31`): `estado === "publicado" && expiresAt && expiresAt < hoyISO()` — la misma
+  semántica de `lib/store/slices/cv-slice.ts:149`, incluido que vencer **hoy** no caduca. Ciclo
+  conservado: 1 pasada al montar (cuando la lista del servidor ya cargó) + 1 cada 30 s, corte al
+  desmontar, reloj de 1 s intacto. Test de fijación reescrito
+  (`test/componentes/visor-mensajes-caducidad.test.tsx`, 2 casos) espía el hook en vez del store y
+  comprueba que `caducarAvisosCV` nunca se invoca y que el store queda vacío. Gate: `npx tsc
+  --noEmit` exit 0 · `npm run lint` **0 problems** · `npm test` **132 archivos / 1332 tests passed**
+  con cobertura **94.31/85.82/93.61** y `lib/store.ts` **99.95** (igual al fingerprint) ·
+  `openspec validate ... --strict` *is valid* · `check-delta-coverage` **0 que romperían el archive**.
+  Commits: `dc0f583` (migración + test) y el de cierre de documentación. Sin push. **Deltas
+  declarados**: (1) esta página ya no emite el evento `CV_ARCHIVED` (el ledger `eventos` es local del
+  store y la API no escribe ledger; mismo precedente que `comunidad/visor` desde su migración — la
+  acción del store sigue viva para `admin/qa-lab`); (2) la caducidad pasa a exigir sesión con
+  `editar` sobre `cv`, mientras antes era puramente cliente sobre `localStorage` y **no tocaba la
+  fuente de verdad** (el carrusel ya leía de la API), así que el efecto visible es el previsto.
+  `useCompassStore` ya no aparece en la página.
