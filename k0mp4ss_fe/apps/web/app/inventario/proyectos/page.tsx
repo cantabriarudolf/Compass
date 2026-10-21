@@ -2,8 +2,7 @@
 
 import * as React from "react"
 import { mutate as mutateGlobal } from "swr"
-import { useCompassStore } from "@/lib/store"
-import { useTrabajosMT, useProyectosMT } from "@/lib/api/use-mt"
+import { useTrabajosMT, useProyectosMT, verificarGarantiasMT } from "@/lib/api/use-mt"
 import { useRecursosIR } from "@/lib/api/use-ir"
 import { usePersonas } from "@/lib/api/use-personas"
 import { useUnidades } from "@/lib/api/use-unidades"
@@ -289,10 +288,11 @@ export default function ProyectosPage() {
                                 }}>Cancelar</Button>
                               )}
                               <Select value={t.estadoPago} onValueChange={v => {
-                                // TODO: migrar actualizarPagoTrabajoMT a API REST (podría mapearse a update(id, { estadoPago }))
-                                const actualizarPagoTrabajoMT = useCompassStore.getState().actualizarPagoTrabajoMT
-                                const r = actualizarPagoTrabajoMT(t.id, v as EstadoPagoMT)
-                                if (!r.ok) setError(r.error ?? "")
+                                // Paridad con actualizarPagoTrabajoMT legacy: PUT parcial del trabajo.
+                                void (async () => {
+                                  const r = await actualizarTrabajo(t.id, { estadoPago: v as EstadoPagoMT })
+                                  if (!r.ok) setError(r.error ?? "")
+                                })()
                               }}>
                                 <SelectTrigger className="h-8 w-28 text-xs"><SelectValue /></SelectTrigger>
                                 <SelectContent>
@@ -318,11 +318,11 @@ export default function ProyectosPage() {
         <TabsContent value="prevencion" className="flex flex-col gap-3">
           <div className="flex flex-wrap items-end gap-2">
             <Button variant="outline" onClick={() => {
-              // TODO: migrar verificarGarantiasMT a API REST
-              const verificarGarantiasMT = useCompassStore.getState().verificarGarantiasMT
-              const r = verificarGarantiasMT()
-              if (!r.ok) setError(r.error ?? "")
-              else setMsg("Garantías verificadas: alertas nuevas notificadas a administración.")
+              void (async () => {
+                const r = await verificarGarantiasMT()
+                if (!r.ok) setError(r.error ?? "")
+                else setMsg("Garantías verificadas: alertas nuevas notificadas a administración.")
+              })()
             }}>
               <IconShieldCheck className="size-4 mr-1" /> Verificar garantías
             </Button>
