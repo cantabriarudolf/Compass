@@ -10,7 +10,8 @@ Centralizar la gestión de personas bajo dos cajones — Comunidad y Recursos Hu
 
 - **Cajón de Comunidad**: directorio de propietarios, residentes y miembros de directiva, con sus vínculos a unidades y roles.
 - **Cajón de Recursos Humanos**: acceso a fichas del personal (conserjería, aseo, administración).
-- **Controles por Unidad**: por cada propiedad definís `residenteVeMorosidad`, `residenteVeActas` y `alertasResidentesActivas`. Si la unidad no tiene registro, aplican los valores por defecto (morosidad oculta, actas ocultas, alertas activas).
+- **Controles por Unidad**: por cada propiedad definís `residenteVeMorosidad`, `residenteVeActas` y `alertasResidentesActivas`. Si la unidad no tiene registro, aplican los valores por defecto (morosidad oculta, actas ocultas, alertas activas). Cada control tiene un estado: `vigente` o `desestimada`. El administrador o el comité pueden desestimar un control, pero **nada se borra**: se copia a la tabla de archivo (`ControlPropiedadArchivada`, con quién y cuándo) y se emite `AD_CONTROL_DESESTIMADO`. El listado excluye los desestimados y al desestimar la unidad queda **liberada** para volver a registrar sus controles.
+- **Desestimado no da permisos ni bloquea**: un control desestimado deja de contar — `residenteVeActas` solo suma controles **vigentes** (el archivo no hace visible un acta) y no bloquea eliminar un vínculo de propietario (el bloqueo pasó a mirar solo vigentes).
 - **Notificar a Residentes / Gestión de Alertas**: envío de alertas respetando el opt-out del propietario.
 - **Firma Digitalizada**: los cargos de directiva registran su firma como referencia (URL/metadata) para alimentar el flujo de actas de GD.
 
@@ -19,7 +20,7 @@ Centralizar la gestión de personas bajo dos cajones — Comunidad y Recursos Hu
 - **Privacidad primero**: aunque el residente tenga vínculo vigente, solo ve morosidad o actas si el dueño lo autorizó acá.
 - **Firma por referencia**: la firma es una URL/metadato, jamás una imagen incrustada (decisión D1).
 - **Alertas silenciables**: si el propietario apaga `alertasResidentesActivas`, el sistema registra pero no notifica (decisión D3).
-- **Auditoría**: cambios de configuración y firmas generan eventos `AD_OWNER_CONFIG_CHANGE` y `AD_DIRECTIVA_SIGN_UPLOAD`; la depuración de una ficha de gobernanza al perder el rol `directiva` queda auditada con `AD_DIRECTIVA_DESVINCULADA` por cualquier vía de escritura (API incluida).
+- **Auditoría**: cambios de configuración, firmas y desestimaciones de controles generan eventos `AD_OWNER_CONFIG_CHANGE`, `AD_DIRECTIVA_SIGN_UPLOAD` y `AD_CONTROL_DESESTIMADO`; la depuración de una ficha de gobernanza al perder el rol `directiva` queda auditada con `AD_DIRECTIVA_DESVINCULADA` por cualquier vía de escritura (API incluida).
 - **Alcance actual**: lo contractual/previsional del personal vive en PE (módulo futuro); acá solo hay acceso a fichas.
 - **Robustez ante extensiones nulas**: las listas de Directiva y Personal excluyen fichas con `datosGobernanza`/`datosLaborales` en `null` (igual que ausente); la página nunca revienta por eso.
 - **Ficha atada al período vigente**: la ficha de gobernanza guarda `periodoId`; al guardarla hereda el período de directiva **vigente** (si existe), para que la trazabilidad de quién firmó qué sobreviva a la rotación. Los períodos se gestionan en **GD - Gestión de Directiva**.

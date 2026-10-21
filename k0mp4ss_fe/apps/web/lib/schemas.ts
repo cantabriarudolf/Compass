@@ -351,6 +351,8 @@ export const NotificacionSchema = z.object({
   moduloOrigen: z.string().min(1),
   fecha: FechaISOSchema,
   leida: z.boolean(),
+  // ISO de la primera lectura; ausente = no leída (métrica enviados/leídos, sin tasa de apertura).
+  fechaLectura: FechaISOSchema.optional(),
 })
 
 // --- Comunicación con Vecinos (CO) ---
@@ -466,11 +468,17 @@ export const ControlPropiedadSchema = z.object({
   alertasResidentesActivas: z.boolean({
     required_error: "El flag de alertas es obligatorio.",
   }),
+  // Borrado lógico (decisión owner 2026-10-21): al ausentarse se asume "vigente";
+  // "desestimada" solo lo escribe el DELETE (borrado lógico con archivo).
+  estado: z
+    .enum(["vigente", "desestimada"])
+    .default("vigente")
+    .optional(),
 })
 
 // --- Gestión de Directiva (GD) ---
 
-export const EstadoActaSchema = z.enum(["borrador", "publicada"])
+export const EstadoActaSchema = z.enum(["borrador", "publicada", "desestimada"])
 
 export const ActaGDSchema = z.object({
   id: IdEntidadSchema,

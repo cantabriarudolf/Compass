@@ -151,6 +151,7 @@ export async function GET(req: Request): Promise<Response> {
   )
   const where: Record<string, unknown> = { comunidadId: scope.comunidadId }
   if (esResidente) where.estado = "publicada"
+  else where.estado = { not: "desestimada" } // desestimadas solo en el archivo
 
   try {
     const [data, total] = await Promise.all([
@@ -197,6 +198,14 @@ export async function POST(req: Request): Promise<Response> {
 
     // SAFETY: ActaGDSchema es un z.object plano; el parse validado se trata como mapa para herencia de período y lista blanca.
     const datos = parsed.data as unknown as Record<string, unknown>
+    // El estado `desestimada` solo lo escribe el DELETE (borrado lógico con
+    // copia de archivo y auditoría); un POST no puede crearlo ni forzarlo.
+    if (datos.estado === "desestimada" || existente?.estado === "desestimada") {
+      return jsonError(
+        400,
+        "El estado desestimada solo se establece al eliminar el acta (borrado lógico)."
+      )
+    }
     const negocio = await validarAsistentesYPeriodo(datos, scope)
     if (!negocio.ok) return negocio.response
 

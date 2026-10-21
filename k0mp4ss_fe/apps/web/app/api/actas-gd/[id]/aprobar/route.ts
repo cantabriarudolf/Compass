@@ -60,6 +60,11 @@ export async function POST(req: Request, ctx: CtxTipo): Promise<Response> {
     if (acta.estado === "publicada") {
       return jsonError(409, "El acta ya está publicada.")
     }
+    // Borrado lógico (decisión owner 2026-10-21): una acta desestimada no se
+    // reactiva por la puerta de firmas; vive archivada en ActaGDArchivada.
+    if (acta.estado === "desestimada") {
+      return jsonError(409, "El acta fue desestimada: no se puede firmar ni reactivar.")
+    }
 
     const vigente = await periodoVigenteDb(scope.comunidadId)
     const firmante = await prisma.persona.findUnique({
