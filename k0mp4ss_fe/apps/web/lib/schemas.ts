@@ -741,6 +741,29 @@ export const ComodinIRSchema = z.object({
     ),
 })
 
+// Decisiones de resolución de un comodín (las mismas tres del store legacy).
+export const ACCIONES_RESOLUCION_COMODIN_IR = [
+  "aprobar_crear",
+  "sustituir",
+  "rechazar",
+] as const
+export const AccionResolucionComodinIRSchema = z.enum(
+  ACCIONES_RESOLUCION_COMODIN_IR
+)
+
+/**
+ * Body de `POST /api/ir/solicitudes-insumo/[id]/resolver-comodin`.
+ *
+ * Solo valida la FORMA: las reglas de negocio (sustituto obligatorio en
+ * `sustituir`, justificación obligatoria en `rechazar`) viven en la ruta para
+ * devolver el mensaje legacy exacto de cada caso.
+ */
+export const ResolverComodinIRSchema = z.object({
+  accion: AccionResolucionComodinIRSchema,
+  recursoSustitutoId: IdEntidadSchema.optional(),
+  justificacion: z.string().trim().optional(),
+})
+
 export const SolicitudInsumoIRSchema = z.object({
   id: IdEntidadSchema,
   folio: z
@@ -1871,6 +1894,10 @@ export type EstadoSolicitudInsumoIR = z.infer<
   typeof EstadoSolicitudInsumoIRSchema
 >
 export type EstadoComodinIR = z.infer<typeof EstadoComodinIRSchema>
+export type AccionResolucionComodinIR = z.infer<
+  typeof AccionResolucionComodinIRSchema
+>
+export type ResolverComodinIR = z.infer<typeof ResolverComodinIRSchema>
 export type EstadoEPPIR = z.infer<typeof EstadoEPPIRSchema>
 export type TipoInfraccionIN = z.infer<typeof TipoInfraccionINSchema>
 export type DanoDirectoIN = z.infer<typeof DanoDirectoINSchema>
