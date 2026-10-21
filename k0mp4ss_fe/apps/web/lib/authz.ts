@@ -35,6 +35,8 @@ const MATRIZ: Record<Rol, Record<string, Set<Accion>>> = {
     "ct": new Set<Accion>(["ver"]),
     "ct:historial": new Set<Accion>(["ver"]),
     "pe:directorio": new Set<Accion>(["ver"]),
+    // cv: visor de avisos — comité publica y edita; el resto solo ve (decisión owner 2026-10-21)
+    "cv": new Set<Accion>(["ver", "crear", "editar"]),
     "ir:mantenimiento": new Set<Accion>(["ver", "crear"]),
     // explícitamente sin permisos: FI crear/editar/eliminar, PE bitacora, PL, IR:interno, admin:usuarios, backup
   },
@@ -53,6 +55,7 @@ const MATRIZ: Record<Rol, Record<string, Set<Accion>>> = {
     "re:reporte_diario": new Set<Accion>(["ver"]),
     "ir:mantenimiento": new Set<Accion>(["ver", "crear"]),
     "ir:interno": new Set<Accion>(["ver", "crear"]), // personal servicio sí
+    "cv": new Set<Accion>(["ver"]), // visor de avisos: solo lectura (decisión owner 2026-10-21)
   },
   // Propietario / Residente: estado cuenta propio, pago GC, reserva amenities, reclamos, votos, certificados propios, directorio, IR mantenimiento solo
   residente: {
@@ -70,6 +73,7 @@ const MATRIZ: Record<Rol, Record<string, Set<Accion>>> = {
     "ge": new Set<Accion>(["ver", "crear"]),
     "co": new Set<Accion>(["ver", "crear"]),
     "gd": new Set<Accion>(["ver"]), // actas según residenteVeActas (ABAC)
+    "cv": new Set<Accion>(["ver"]), // visor de avisos: solo lectura (decisión owner 2026-10-21)
   },
   // Personal de Mantención: lista tareas asignadas + reporte incidentes físicos, IR mantenimiento + interno
   mantencion: {
@@ -81,6 +85,7 @@ const MATRIZ: Record<Rol, Record<string, Set<Accion>>> = {
     "ir:mantenimiento": new Set<Accion>(["ver", "crear"]),
     "ir:interno": new Set<Accion>(["ver", "crear"]),
     "pe:bitacora": new Set<Accion>(["ver"]),
+    "cv": new Set<Accion>(["ver"]), // visor de avisos: solo lectura (decisión owner 2026-10-21)
   },
 }
 

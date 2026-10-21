@@ -365,3 +365,20 @@ describe("lib/authz — reglasContextuales() snapshot ABAC para /admin/permisos"
     }
   })
 })
+
+describe("lib/authz — recurso cv (visor de avisos)", () => {
+  it("comité publica y edita; residente, conserjería y mantención solo ven (decisión owner 2026-10-21)", () => {
+    expect(puede("comite", "ver", "cv")).toBe(true)
+    expect(puede("comite", "crear", "cv")).toBe(true)
+    expect(puede("comite", "editar", "cv")).toBe(true)
+    expect(puede("comite", "eliminar", "cv")).toBe(false)
+
+    for (const rol of ["residente", "conserjeria", "mantencion"] as const) {
+      expect(puede(rol, "ver", "cv")).toBe(true)
+      expect(puede(rol, "crear", "cv")).toBe(false)
+      expect(puede(rol, "editar", "cv")).toBe(false)
+    }
+
+    expect(puede("administrador", "eliminar", "cv")).toBe(true)
+  })
+})
