@@ -23,10 +23,17 @@ solicitud IR, reportes RE (generar/distribuir/vista), adelantos PL, cobranza FI,
 | V1 | `comunidad/certificados` — `liquidacionesPL` + `cobrosFI` del store → `useLiquidaciones` + `useCobrosFI` | HECHA | `5e6a373` |
 | V2 | `visor-mensajes` — quitar `caducarAvisosCV` del store: caducidad vía API (acción mínima reutilizando el contrato existente) | HECHA | `dc0f583` |
 | V3 | `finanzas/multas` — cablear `use-in`: aplicar/desestimar/apelar (rutas ya existen) y migrar la página | HECHA | `412e9a7` |
+| V3b | **Permisos**: `cv` (reparado) + `in`, `notificaciones` (con filtro por destinatario) y `cf` en la matriz; filtro de apelación propia en `in` | PENDIENTE | — |
 | V4 | `inventario/proyectos` — cablear `use-mt`: verificar garantías + actualizar pago de trabajo (rutas ya existen) y migrar la página | PENDIENTE | — |
 | V5 | Cierre: gates completos, `BACKLOG-100.md`, avance NSGC, deuda restante declarada, informe | PENDIENTE | — |
 
-**MÁXIMO: 5 ventanas.** Lo que no entre se declara como deuda fase 2 en V5; no se improvisa.
+**MÁXIMO: 6 ventanas.** Lo que no entre se declara como deuda fase 2 en V5; no se improvisa.
+
+> **Por qué V3b existe**: al migrar V2 y V3 a la API se destapó que la `MATRIZ` de `lib/authz.ts` no
+declara varios recursos que las rutas usan (`cv`, `in`, `notificaciones`, `cf`). Solo el administrador los
+obtenía por wildcard, así que los botones "funcionaban" escribiendo en `localStorage` y, migrados a la API,
+responden 403. `cv` se reparó con test-first el 2026-10-21 (comité ver/crear/editar; residente, conserjería
+y mantención ver). El resto de las decisiones del owner está en `prompt-03b.md`.
 
 ## Prerrequisito de base
 
