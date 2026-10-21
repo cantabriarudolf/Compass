@@ -19,6 +19,7 @@ La bitácora técnica quedó también en el servidor, con transiciones exactly-o
 - **Alta (`POST /api/mt/trabajos`)**: deriva el folio `MT-####` cuando viene vacío y aplica los defaults (Planificado, pago Pendiente, alerta de garantía sin enviar). Un `MT_WORK_CREATED` solo en el alta.
 - **Iniciar / Finalizar (`POST …/[id]/iniciar|finalizar`)**: Planificado → En Curso (sella `fechaInicio`) y → Finalizado con `fechaTermino`/`costoFinal` por update condicional; si el trabajo es preventivo, el próximo Planificado (+periodicidad) nace en la misma transacción e idempotente por procedencia (no se duplica al reintentar).
 - **Garantías (`POST /api/mt/garantias/verificar`)**: alerta una sola vez por trabajo (bandera en BD) para garantías vencidas o a ≤30 días.
+- **Botones conectados a la API**: los botones *Verificar garantías* y la actualización del estado de pago de un trabajo operan desde la página contra la API (`POST /api/mt/garantias/verificar` y `PUT /api/mt/trabajos/[id]`), no contra el almacenamiento local del navegador; el resultado visible es el mismo de siempre (alerta idempotente por trabajo; transición de pago Pendiente → Parcial → Pagado validada).
 - **Proyectos (`POST /api/mt/proyectos`)**: si declara fondo de financiamiento, exige fondo activo y saldo suficiente → **409 "Saldo insuficiente"**.
 
 **Divergencia anotada (decisión pendiente del owner)**: el guard de saldo usa la fórmula del store (cobros, egresos y aportes de emisiones de BD), que **no** incluye `saldoInicial` ni ingresos manuales, mientras el retiro de fondo de FI sí los considera.

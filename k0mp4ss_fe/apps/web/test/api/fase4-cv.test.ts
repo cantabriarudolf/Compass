@@ -199,13 +199,13 @@ describe("/api CV — visor de mensajes con BD real (Fase 4)", () => {
     })
   })
 
-  it("residente sin recurso cv en matriz → 403 (desvío: solo admin hasta RP)", async () => {
+  it("residente con cv:ver → lee avisos (200) pero no publica (403) — decisión owner 2026-10-21", async () => {
     const { avisos } = await cargaModulos()
     await conSesion(emailResidente, async () => {
       const post = await llamar(Promise.resolve(avisos), "POST", "cv/avisos", avisoValido({ id: "cv-av-r" }))
       expect(post.status).toBe(403)
       const get = await llamar(Promise.resolve(avisos), "GET", "cv/avisos")
-      expect(get.status).toBe(403)
+      expect(get.status).toBe(200)
     })
   })
 })

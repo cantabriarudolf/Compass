@@ -36,10 +36,12 @@ function notificacionValida(overrides: Record<string, unknown> = {}): Record<str
 describe("/api/notificaciones — Notificaciones con BD real (BD-FUENTE-VERDAD)", () => {
   const comunidadA = "not-comunidad-a"
   const emailAdmin = "not-admin@test.cl"
+  const emailResidente = "not-residente@test.cl"
 
   const cargaModulos = async () => ({
     coleccion: await import("@/app/api/notificaciones/route"),
     item: await import("@/app/api/notificaciones/[id]/route"),
+    leer: await import("@/app/api/notificaciones/[id]/leer/route"),
   })
 
   beforeAll(async () => {
@@ -58,7 +60,25 @@ describe("/api/notificaciones — Notificaciones con BD real (BD-FUENTE-VERDAD)"
     await prisma.membresia.create({
       data: { usuarioId: "not-usuario-admin", comunidadId: comunidadA, rol: "administrador" },
     })
+    // residente con persona: destinatario legítimo de una notificación (H7)
+    await prisma.usuario.upsert({
+      where: { email: emailResidente },
+      update: { personaId: "not-persona-residente" },
+      create: { id: "not-usuario-residente", email: emailResidente, activo: true, personaId: "not-persona-residente" },
+    })
+    await prisma.membresia.deleteMany({ where: { usuarioId: "not-usuario-residente" } })
+    await prisma.membresia.create({
+      data: { usuarioId: "not-usuario-residente", comunidadId: comunidadA, rol: "residente" },
+    })
     await prisma.notificacion.deleteMany({ where: { comunidadId: comunidadA } })
+    await prisma.notificacion.create({
+      data: {
+        ...notificacionValida({ id: "notif-propia-res" }),
+        destinatarioRol: "residente",
+        destinatarioPersonaId: "not-persona-residente",
+        comunidadId: comunidadA,
+      } as never,
+    })
   }, 30_000)
 
   afterAll(async () => {
@@ -67,6 +87,8 @@ describe("/api/notificaciones — Notificaciones con BD real (BD-FUENTE-VERDAD)"
       await prisma.notificacion.deleteMany({ where: { comunidadId: comunidadA } })
       await prisma.membresia.deleteMany({ where: { usuarioId: "not-usuario-admin" } })
       await prisma.usuario.delete({ where: { id: "not-usuario-admin" } }).catch(() => {})
+      await prisma.membresia.deleteMany({ where: { usuarioId: "not-usuario-residente" } })
+      await prisma.usuario.delete({ where: { id: "not-usuario-residente" } }).catch(() => {})
       await prisma.comunidad.delete({ where: { id: comunidadA } }).catch(() => {})
     } catch { /* best-effort */ }
   })
@@ -135,11 +157,25 @@ describe("/api/notificaciones — Notificaciones con BD real (BD-FUENTE-VERDAD)"
     })
   })
 
-  it("PUT marca como leída → 200 y refleja en BD", async () => {
-    await conSesion(emailAdmin, async () => {
-      const res = await PUT("notif-1", { leida: true })
+  it("H7: el PUT del admin no firma la lectura de otro; el destinatario marca por POST /leer", async () => {
+    const { leer } = await cargaModulos()
+    // el destinatario marca la SUYA por el endpoint nuevo → 200 y queda en BD
+    await conSesion(emailResidente, async () => {
+      const res = await leer.POST(
+        new NextRequest("http://localhost/api/notificaciones/notif-propia-res/leer", {
+          method: "POST",
+        }),
+        { params: Promise.resolve({ id: "notif-propia-res" }) }
+      )
       expect(res.status).toBe(200)
-      const enBd = await prisma.notificacion.findUnique({ where: { id: "notif-1" } })
+      const enBd = await prisma.notificacion.findUnique({ where: { id: "notif-propia-res" } })
+      expect(enBd?.leida).toBe(true)
+    })
+    // el admin ya NO puede des-marcar/firmar por otro: el PUT descarta `leida`
+    await conSesion(emailAdmin, async () => {
+      const res = await PUT("notif-propia-res", { leida: false })
+      expect(res.status).toBe(200)
+      const enBd = await prisma.notificacion.findUnique({ where: { id: "notif-propia-res" } })
       expect(enBd?.leida).toBe(true)
     })
   })

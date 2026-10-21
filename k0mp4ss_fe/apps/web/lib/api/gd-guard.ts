@@ -1,6 +1,11 @@
 /**
  * gd-guard — reglas de negocio GD/AD compartidas por las API routes (servidor).
  *
+ * La autorización de actas (`gd`) y controles de propiedad (`ad`) vive en la
+ * MATRIZ de `lib/authz.ts` (H5: sin bypass). Estas funciones son solo lectores
+ * de `puede()`; los refinamientos ABAC (residenteVeActas, unidad vinculada)
+ * siguen aplicándose en cada ruta.
+ *
  * Espejo intencional de `lib/store.ts` (esMiembroDirectivaVigente,
  * periodoDirectivaVigente, saveActaGD, aprobarActaGD, savePeriodoDirectiva,
  * saveControlPropiedad), reimplementado contra Prisma en lugar de zustand.
@@ -84,30 +89,19 @@ export async function idsDirectivaVigenteDb(
 }
 
 /**
- * Authz de actas GD: administrador full (matriz), directiva (comité) puede
- * ver/crear/editar, residente solo ver (refinado por residenteVeActas en ruta).
- * El comité no tiene entrada "gd" en la matriz RBAC, así que se declara aquí
- * explícitamente en lugar de tocar la matriz (paridad con tests authz).
+ * Authz de actas GD: delega en la MATRIZ (recurso `gd` de lib/authz.ts).
+ * Los refinamientos ABAC (residenteVeActas) aplican en la ruta.
  */
 export function puedeGestionarActas(rol: string, accion: Accion): boolean {
-  if (puede(rol, accion, "gd")) return true
-  const n = rol.trim().toLowerCase()
-  if (n === "comite" || n === "comité" || n === "directiva") {
-    return accion === "ver" || accion === "crear" || accion === "editar"
-  }
-  return false
+  return puede(rol, accion, "gd")
 }
 
 /**
- * Authz de controles AD: administrador y directiva gestionan; residente solo
- * lee los de su unidad (filtrado por unidad en ruta); resto denegado.
+ * Authz de controles AD: delega en la MATRIZ (recurso `ad` de lib/authz.ts).
+ * El filtrado por unidad del residente aplica en la ruta.
  */
 export function puedeGestionarControles(rol: string, accion: Accion): boolean {
-  if (puede(rol, accion, "ad")) return true // admin (wildcard); matriz sin "ad" hoy
-  const n = rol.trim().toLowerCase()
-  if (n === "comite" || n === "comité" || n === "directiva") return true
-  if (n === "residente" || n === "propietario") return accion === "ver"
-  return false
+  return puede(rol, accion, "ad")
 }
 
 /** ¿Algún control de la comunidad autoriza a residentes a ver actas? */
@@ -120,24 +114,7 @@ export async function residentesVenActas(comunidadId: string): Promise<boolean> 
 }
 
 /** personaId (MP) del usuario de sesión, o null. */
-export async function personaIdDelUsuarioDb(
-  usuarioId: string
-): Promise<string | null> {
-  const usuario = await prisma.usuario.findUnique({
-    where: { id: usuarioId },
-    select: { personaId: true },
-  })
-  return usuario?.personaId ?? null
-}
-
-/** Unidades con vínculo vigente del usuario (ABAC residente para AD). */
-export async function unidadesVinculadasDb(
-  personaId: string,
-  comunidadId: string
-): Promise<string[]> {
-  const vinculos = await prisma.vinculoUnidad.findMany({
-    where: { personaId, comunidadId, fechaFin: null },
-    select: { unidadId: true },
-  })
-  return [...new Set(vinculos.map((v) => v.unidadId))]
-}
+// Identidad y vínculos del usuario de sesión: implementados en `sesion-persona`
+// porque los comparten notificaciones, apelaciones IN, certificados y controles.
+// Se reexportan acá para no tocar a los llamadores históricos de gd-guard.
+export { personaIdDelUsuarioDb, unidadesVinculadasDb } from "./sesion-persona"

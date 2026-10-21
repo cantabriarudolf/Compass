@@ -365,3 +365,172 @@ describe("lib/authz — reglasContextuales() snapshot ABAC para /admin/permisos"
     }
   })
 })
+
+describe("lib/authz — recurso cv (visor de avisos)", () => {
+  it("comité publica y edita; residente, conserjería y mantención solo ven (decisión owner 2026-10-21)", () => {
+    expect(puede("comite", "ver", "cv")).toBe(true)
+    expect(puede("comite", "crear", "cv")).toBe(true)
+    expect(puede("comite", "editar", "cv")).toBe(true)
+    expect(puede("comite", "eliminar", "cv")).toBe(false)
+
+    for (const rol of ["residente", "conserjeria", "mantencion"] as const) {
+      expect(puede(rol, "ver", "cv")).toBe(true)
+      expect(puede(rol, "crear", "cv")).toBe(false)
+      expect(puede(rol, "editar", "cv")).toBe(false)
+    }
+
+    expect(puede("administrador", "eliminar", "cv")).toBe(true)
+  })
+})
+
+describe("lib/authz — recurso in (infracciones y multas)", () => {
+  it("administrador tiene las cinco acciones (wildcard)", () => {
+    for (const accion of ["ver", "crear", "editar", "eliminar", "ejecutar"] as const) {
+      expect(puede("administrador", accion, "in")).toBe(true)
+    }
+  })
+
+  it("comité ve, crea y edita el expediente, pero no elimina (decisión owner 2026-10-21)", () => {
+    expect(puede("comite", "ver", "in")).toBe(true)
+    expect(puede("comite", "crear", "in")).toBe(true)
+    expect(puede("comite", "editar", "in")).toBe(true)
+    expect(puede("comite", "eliminar", "in")).toBe(false)
+    expect(puede("comite", "ejecutar", "in")).toBe(false)
+    // alias RP: directiva == comité
+    expect(puede("directiva", "editar", "in")).toBe(true)
+  })
+
+  it("conserjería ve y crea, pero no edita ni elimina", () => {
+    expect(puede("conserjeria", "ver", "in")).toBe(true)
+    expect(puede("conserjeria", "crear", "in")).toBe(true)
+    expect(puede("conserjeria", "editar", "in")).toBe(false)
+    expect(puede("conserjeria", "eliminar", "in")).toBe(false)
+  })
+
+  it("residente no ve, no crea y no edita: solo apela las propias (in:apelar)", () => {
+    expect(puede("residente", "ver", "in")).toBe(false)
+    expect(puede("residente", "crear", "in")).toBe(false)
+    expect(puede("residente", "editar", "in")).toBe(false)
+    expect(puede("residente", "eliminar", "in")).toBe(false)
+    expect(puede("residente", "crear", "in:apelar")).toBe(true)
+    expect(puede("residente", "ver", "in:apelar")).toBe(false)
+    expect(puede("residente", "editar", "in:apelar")).toBe(false)
+  })
+
+  it("comité y conserjería no apelan: la apelación es acto propio del residente", () => {
+    expect(puede("comite", "crear", "in:apelar")).toBe(false)
+    expect(puede("conserjeria", "crear", "in:apelar")).toBe(false)
+    expect(puede("mantencion", "crear", "in:apelar")).toBe(false)
+    // el administrador sí (wildcard): registra descargos por el vecino
+    expect(puede("administrador", "crear", "in:apelar")).toBe(true)
+  })
+
+  it("mantención no tiene acceso al expediente IN", () => {
+    for (const accion of ["ver", "crear", "editar", "eliminar"] as const) {
+      expect(puede("mantencion", accion, "in")).toBe(false)
+    }
+  })
+})
+
+describe("lib/authz — recursos gd y ad (gobernanza, H5)", () => {
+  // Paridad con el antiguo bypass de lib/api/gd-guard.ts: comité gestiona actas
+  // y controles; residente solo ve. La acción `eliminar` del comité se conserva
+  // por paridad con el `return true` del guard de controles y queda como
+  // PREGUNTA ABIERTA para el owner (ver hallazgo H5).
+  it("comité gestiona gd y ad (ver/crear/editar/eliminar/ejecutar)", () => {
+    for (const accion of ["ver", "crear", "editar", "eliminar", "ejecutar"] as const) {
+      expect(puede("comite", accion, "gd")).toBe(true)
+      expect(puede("comite", accion, "ad")).toBe(true)
+    }
+    // alias RP: directiva == comité
+    expect(puede("directiva", "ver", "gd")).toBe(true)
+    expect(puede("directiva", "ver", "ad")).toBe(true)
+  })
+
+  it("residente solo ve gd y ad (ABAC de privacidad/unidad va en la ruta)", () => {
+    expect(puede("residente", "ver", "gd")).toBe(true)
+    expect(puede("residente", "ver", "ad")).toBe(true)
+    for (const accion of ["crear", "editar", "eliminar", "ejecutar"] as const) {
+      expect(puede("residente", accion, "gd")).toBe(false)
+      expect(puede("residente", accion, "ad")).toBe(false)
+    }
+  })
+
+  it("conserjería y mantención denegados en gd y ad", () => {
+    for (const rol of ["conserjeria", "mantencion"] as const) {
+      for (const accion of ["ver", "crear", "editar", "eliminar", "ejecutar"] as const) {
+        expect(puede(rol, accion, "gd")).toBe(false)
+        expect(puede(rol, accion, "ad")).toBe(false)
+      }
+    }
+  })
+
+  it("administrador wildcard — full access a gd y ad", () => {
+    for (const accion of ["ver", "crear", "editar", "eliminar", "ejecutar"] as const) {
+      expect(puede("administrador", accion, "gd")).toBe(true)
+      expect(puede("administrador", accion, "ad")).toBe(true)
+    }
+  })
+})
+
+describe("lib/authz — recurso notificaciones:propias (H7)", () => {
+  it("los cinco roles pueden editar (marcar leída) SOLO la propia", () => {
+    for (const rol of ROLES) {
+      expect(puede(rol, "editar", "notificaciones:propias")).toBe(true)
+    }
+  })
+
+  it("menor privilegio: solo editar — crear/eliminar/ver/ejecutar no aplican al granular", () => {
+    for (const rol of ["comite", "conserjeria", "residente", "mantencion"] as const) {
+      expect(puede(rol, "crear", "notificaciones:propias")).toBe(false)
+      expect(puede(rol, "eliminar", "notificaciones:propias")).toBe(false)
+      expect(puede(rol, "ejecutar", "notificaciones:propias")).toBe(false)
+    }
+  })
+
+  it("el recurso base `notificaciones` no hereda escritura del granular", () => {
+    for (const rol of ["comite", "conserjeria", "residente", "mantencion"] as const) {
+      expect(puede(rol, "editar", "notificaciones")).toBe(false)
+      expect(puede(rol, "ver", "notificaciones")).toBe(true)
+    }
+  })
+})
+
+describe("lib/authz — recurso notificaciones", () => {
+  it("los cinco roles ven notificaciones (decisión owner 2026-10-21)", () => {
+    for (const rol of ROLES) {
+      expect(puede(rol, "ver", "notificaciones")).toBe(true)
+    }
+  })
+
+  it("solo el administrador escribe o elimina (wildcard); el resto es lectura", () => {
+    for (const rol of ["comite", "conserjeria", "residente", "mantencion"] as const) {
+      expect(puede(rol, "crear", "notificaciones")).toBe(false)
+      expect(puede(rol, "editar", "notificaciones")).toBe(false)
+      expect(puede(rol, "eliminar", "notificaciones")).toBe(false)
+    }
+    expect(puede("administrador", "crear", "notificaciones")).toBe(true)
+    expect(puede("administrador", "eliminar", "notificaciones")).toBe(true)
+  })
+})
+
+describe("lib/authz — recurso cf (configuración global)", () => {
+  it("comité ve la configuración pero no la edita (decisión owner 2026-10-21)", () => {
+    expect(puede("comite", "ver", "cf")).toBe(true)
+    expect(puede("comite", "editar", "cf")).toBe(false)
+    expect(puede("comite", "crear", "cf")).toBe(false)
+    expect(puede("comite", "eliminar", "cf")).toBe(false)
+  })
+
+  it("conserjería, residente y mantención no ven la configuración", () => {
+    for (const rol of ["conserjeria", "residente", "mantencion"] as const) {
+      expect(puede(rol, "ver", "cf")).toBe(false)
+      expect(puede(rol, "editar", "cf")).toBe(false)
+    }
+  })
+
+  it("administrador lee y edita la configuración", () => {
+    expect(puede("administrador", "ver", "cf")).toBe(true)
+    expect(puede("administrador", "editar", "cf")).toBe(true)
+  })
+})

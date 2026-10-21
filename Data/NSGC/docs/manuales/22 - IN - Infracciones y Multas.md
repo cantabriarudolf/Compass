@@ -12,6 +12,15 @@ Cada infracción nace con folio único `IN-####` en estado En Revisión, amarrad
 - **Panel Directiva**: incidentes en curso con contadores por estado/categoría, montos comprometidos, comentarios internos privados y votos de respaldo.
 - **Catálogo de faltas**: parametrizable con nombre, categoría (Leve/Grave/Gravísima) y sanción base (Monto Fijo $ o Porcentaje % del Gasto Común); seed NSGC incluido (ruidos molestos, mascotas, basura, áreas comunes, obras sin autorización).
 
+## 👥 Flujo por rol
+
+Cada parte juega un rol distinto en el expediente (permiso `in` y su granular `in:apelar`):
+
+- **Conserjería reporta**: ve el expediente y registra la falta (crear), pero no la resuelve — ni aplicar, ni desestimar, ni apelar.
+- **Comité resuelve**: ve, crea y edita el caso (respaldar, aplicar, desestimar). No apela: quien gestiona no presenta descargos.
+- **Residente apela solo lo propio**: puede apelar únicamente SU infracción (descargos ≥10 caracteres); la pertenencia a la unidad se valida en el servidor y una infracción ajena responde "no encontrada" (404), sin revelar que existe. El residente nunca edita el expediente.
+- **Aplicar materializa el cobro**: aplicar la sanción genera de verdad el cobro `multa_in` en **FI - Finanzas y Morosidad** en la misma transacción, idempotente por procedencia (reaplicar no duplica).
+
 ## 🔌 Máquina de estados en la capa de datos (API)
 
 El expediente se resuelve también en el servidor, con **un evento de auditoría por request**:

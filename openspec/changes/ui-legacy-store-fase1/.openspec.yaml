@@ -1,0 +1,12 @@
+schema: spec-driven
+
+# Change de migración de la UI al store servidor (SERIE-DEUDA-6, ventanas V1–V5):
+# reemplaza lecturas/acciones del store zustand legacy (`useCompassStore`,
+# `@deprecated`) por los hooks SWR de `lib/api/**` que ya existen o por el
+# cableado de rutas REST ya existentes. Es un refactor de **paridad estricta**:
+# mismos textos, mismas columnas, mismo orden, mismos permisos, mismo shape
+# persistido (`STORE_VERSION = 28` congelado). Ninguna capacidad viva declara
+# de dónde lee la UI ni la forma de sus hooks; el contrato observable de la
+# plataforma no cambia (verificado por gates + tests de fijación por página).
+# Ver openspec/CONVENCION-DELTAS.md
+skip_specs: true

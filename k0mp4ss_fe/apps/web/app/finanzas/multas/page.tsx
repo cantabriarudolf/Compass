@@ -5,7 +5,7 @@ import * as React from "react"
 import { usePersonas } from "@/lib/api/use-personas"
 import { useUnidades } from "@/lib/api/use-unidades"
 import { useInfraccionesIN, useTiposInfraccionIN } from "@/lib/api/use-in"
-import { useCompassStore } from "@/lib/store"
+import { useMensajesBuzonCO } from "@/lib/api/use-co"
 import { aTituloCaso, aOracion } from "@/lib/normalizacion"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import { Input } from "@workspace/ui/components/input"
@@ -98,15 +98,25 @@ items: tipos, isLoading: cTipos, create: crearTipoApi, update: actualizarTipoApi
   } = useTiposInfraccionIN()
   const {
 items: infracciones, isLoading: cInfracciones, create: crearInfraccionApi,
+    aplicar: aplicarInfraccionApi, desestimar: desestimarInfraccionApi, apelar: apelarInfraccionApi,
   } = useInfraccionesIN()
   const { personas, isLoading: cPersonas } = usePersonas()
   const { items: unidades, isLoading: cUnidades } = useUnidades()
-  // TODO: migrar mensajesBuzonCO a hook SWR cuando exista (módulo CO sin hooks aún)
-  const mensajesBuzonCO = useCompassStore(s => s.mensajesBuzonCO)
-  const isLoading = cTipos || cInfracciones || cPersonas || cUnidades
+  // Buzón CO: el hook del módulo (`/api/co/mensajes-buzon`) reemplaza la lectura
+  // legacy del store; mismos campos usados acá (id, folio, asunto, cuerpo).
+  const { items: mensajesBuzonCO, isLoading: cMensajesBuzon } = useMensajesBuzonCO()
+  const isLoading = cTipos || cInfracciones || cPersonas || cUnidades || cMensajesBuzon
 
   const [error, setError] = React.useState<string | null>(null)
-  const [detalle, setDetalle] = React.useState<InfraccionIN | null>(null)
+  // El expediente abierto se referencia por id y se resuelve contra la
+  // colección SWR en cada render: aplicar/apelar cambian el estado en el
+  // servidor y `postAccion` invalida la colección, así que el diálogo se
+  // re-pinta con la fila fresca sin copiar el objeto a un estado local (el
+  // store legacy devolvía la fila nueva en el acto).
+  const [detalleId, setDetalleId] = React.useState<string | null>(null)
+  const detalle = detalleId
+    ? infracciones.find(i => i.id === detalleId) ?? null
+    : null
   const [formTipo, setFormTipo] = React.useState<FormTipo | null>(null)
   const [editandoTipoId, setEditandoTipoId] = React.useState<string | null>(null)
   const [nueva, setNueva] = React.useState<FormInfraccion | null>(null)
@@ -273,7 +283,7 @@ items: infracciones, isLoading: cInfracciones, create: crearInfraccionApi,
                           <td className="py-2 pr-3"><Badge className={`${ESTADO_BADGE[i.estado]} text-[10px]`}>{ESTADO_LABEL[i.estado]}</Badge></td>
                           <td className="py-2 pr-3">{i.montoAplicado != null ? `$${i.montoAplicado.toLocaleString("es-CL")}` : "—"}</td>
                           <td className="py-2">
-                            <Button size="sm" variant="ghost" onClick={() => setDetalle(i)}><IconEye className="size-4 mr-1" /> Ver</Button>
+                            <Button size="sm" variant="ghost" onClick={() => setDetalleId(i.id)}><IconEye className="size-4 mr-1" /> Ver</Button>
                           </td>
                         </tr>
                       ))}
@@ -313,7 +323,7 @@ items: infracciones, isLoading: cInfracciones, create: crearInfraccionApi,
                         <td className="py-2 pr-3">{i.danoDirecto?.descripcionDaño ?? tipos.find(t => t.id === i.tipoInfraccionId)?.nombre}</td>
                         <td className="py-2 pr-3"><Badge className={`${ESTADO_BADGE[i.estado]} text-[10px]`}>{ESTADO_LABEL[i.estado]}</Badge></td>
                         <td className="py-2 pr-3">{i.respaldosDirectiva.length > 0 ? `${i.respaldosDirectiva.length} respaldo(s)` : "—"}</td>
-                        <td className="py-2"><Button size="sm" variant="ghost" onClick={() => setDetalle(i)}><IconEye className="size-4 mr-1" /> Expediente</Button></td>
+                        <td className="py-2"><Button size="sm" variant="ghost" onClick={() => setDetalleId(i.id)}><IconEye className="size-4 mr-1" /> Expediente</Button></td>
                       </tr>
                     ))}
                   </tbody>
@@ -369,7 +379,7 @@ items: infracciones, isLoading: cInfracciones, create: crearInfraccionApi,
       </Tabs>
 
       {/* Detalle / expediente */}
-      <Dialog open={!!detalle} onOpenChange={v => { if (!v) setDetalle(null) }}>
+      <Dialog open={!!detalle} onOpenChange={v => { if (!v) setDetalleId(null) }}>
         <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-xl">
           {detalle && (
             <>
@@ -429,28 +439,23 @@ items: infracciones, isLoading: cInfracciones, create: crearInfraccionApi,
 
                 {["en_revision", "apelada"].includes(detalle.estado) && (
                   <div className="flex flex-wrap gap-2 rounded-md border p-3">
-                    <Button size="sm" onClick={() => {
-                      // TODO: migrar a API REST (workflow del expediente IN sin endpoint dedicado todavía; fallback legacy al store)
-                      const r = useCompassStore.getState().aplicarInfraccionIN(detalle.id)
+                    <Button size="sm" onClick={async () => {
+                      const r = await aplicarInfraccionApi(detalle.id)
                       if (!r.ok) { setError(r.error ?? "No se pudo aplicar."); return }
-                      setDetalle(useCompassStore.getState().infraccionesIN.find(x => x.id === detalle.id) ?? null)
                     }}>Aplicar multa</Button>
-                    <Button size="sm" variant="outline" onClick={() => {
+                    <Button size="sm" variant="outline" onClick={async () => {
                       const justificacion = window.prompt("Justificación de la desestimación (obligatoria):")
                       if (!justificacion?.trim()) { setError("La desestimación exige justificación obligatoria."); return }
-                      // TODO: migrar a API REST (workflow del expediente IN sin endpoint dedicado todavía; fallback legacy al store)
-                      const r = useCompassStore.getState().desestimarInfraccionIN(detalle.id, justificacion)
+                      const r = await desestimarInfraccionApi(detalle.id, justificacion)
                       if (!r.ok) { setError(r.error ?? "No se pudo desestimar."); return }
-                      setDetalle(null)
+                      setDetalleId(null)
                     }}>Desestimar</Button>
                     {detalle.estado === "en_revision" && (
-                      <Button size="sm" variant="outline" onClick={() => {
+                      <Button size="sm" variant="outline" onClick={async () => {
                         const descargos = window.prompt("Descargos del vecino:")
                         if (!descargos?.trim()) return
-                        // TODO: migrar a API REST (workflow del expediente IN sin endpoint dedicado todavía; fallback legacy al store)
-                        const r = useCompassStore.getState().apelarInfraccionIN(detalle.id, descargos)
+                        const r = await apelarInfraccionApi(detalle.id, descargos)
                         if (!r.ok) { setError(r.error ?? "No se pudieron registrar los descargos."); return }
-                        setDetalle(useCompassStore.getState().infraccionesIN.find(x => x.id === detalle.id) ?? null)
                       }}>Registrar apelación</Button>
                     )}
                   </div>

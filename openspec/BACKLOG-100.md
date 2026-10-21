@@ -316,7 +316,7 @@ El owner pidió saldar la deuda viva ("punto 4") en modo autónomo y sobre una r
 | `store-cobertura-fase-b` (1.202 statements del store sin cubrir) | **P8** — tests comportamentales sobre `lib/store/**` + ratchet de `lib/**` |
 | Cierre y auditoría | **P9** — gates completos de la serie, archives, PR draft y deuda post-serie declarada |
 
-Estado: **en ejecución** — P1 cerrada el 2026-10-14 (censo + poda del store legacy); P2–P9 pendientes.
+Estado: **COMPLETA 9/9** — P2–P9 cerradas; PR **#2 mergeado** el 2026-10-15. Detalle por ventana en `openspec/SERIE-NOCHE-3/00-plan.md` (Bitácora).
 
 ### Deuda descubierta por `store-cleanup` (2026-10-14)
 
@@ -326,3 +326,101 @@ Estado: **en ejecución** — P1 cerrada el 2026-10-14 (censo + poda del store l
 | **`CF_UPDATE_PARAM` sin emisor** | El evento no tiene emisor en el código: su único emisor era `saveConfiguracion` (poda de P1), que la app ya no llamaba, y `app/api/configuracion/route.ts` no lo emite. Gap **preexistente** de la migración CF→API. Requiere decisión del owner: re-implementar la auditoría server-side o retirar el requirement |
 | **Deriva en docs NSGC** | `manuales/28 - MK - Catálogo de Mocks.md` (24 acciones), `manuales/33 - ST - Capa de Datos Persistente.md`, `manuales/36 - MK - Data Dump Comunicación y Solicitudes.md` y `manuales/40 - MK - Data Dump Remuneraciones, Certificados y Reportería.md` nombran acciones podadas por P1. P1 solo puede tocar `Data/NSGC/docs/avances/**` (alcance declarado); sincronizar esos manuales requiere una ventana con alcance NSGC. Los avances y auditorías históricos no se corrigen |
 | **e2e `poblado-idempotente.spec.ts:96` (caso "cancelar")** | Espera **30 s** el mensaje de purga, pero una purga completa suma **38,7 s** de DELETEs secuenciales medidos en el log del dev server (el test hermano `:29` usa 120 s para la misma espera y documenta la purga como lenta). Falla en este entorno con y sin el cambio de P1 (el flujo es API REST + Prisma, no depende del store). Acción: subir esa espera a 120 s |
+
+> **Cierre verificado 2026-10-21**: las 4 deudas de esta tabla están saldadas. Deriva de prosa y deriva NSGC → 0 menciones de las acciones podadas en `openspec/specs/**` y `Data/NSGC/docs/manuales/**`; `CF_UPDATE_PARAM` → emisor server-side (DEUDA-2 D2); e2e `:96` → espera a 120 s (DEUDA-1 P1). Ver §Deuda viva verificada (2026-10-21) al final del archivo.
+
+## Deuda viva verificada (2026-10-21)
+
+Auditoría contra el árbol de trabajo (no contra las filas históricas de este archivo), después del
+merge de DEUDA-5. Series cerradas: NOCHE-3 → PR **#2** merged (2026-10-15) · DEUDA-1 → PR **#3**
+merged (2026-10-16) · DEUDA-2/3/4/5 → en `main`.
+
+| Frente | Estado | Desbloquea |
+|---|---|---|
+| Store legacy en la UI (`useCompassStore`) | **Fase 1 saldada** (SERIE-DEUDA-6, rama `noche/deuda-6`, 2026-10-21): **13 archivos / 147 usos → 9 archivos / 131 usos**. Quedan 6 archivos migrables (26 usos) y las 3 excepciones justificadas (105 usos). **Fase 2** = 7 frentes que exigen endpoint nuevo con contrato de negocio (ver abajo) | Fase 2: worker por lote, un endpoint por vez |
+| `au-google-sso` | ⏸ Bloqueado (código 100 % listo) | Owner: `GOOGLE_CLIENT_ID`/`SECRET` en Vercel + 2 decisiones de rol/migración |
+| Decisiones de producción (Sentry DSN, pen-test, Ley 21.719, proveedor Postgres, privacidad/abogado, CSP con dominio real, secrets Vercel) | ⏸ Pendientes | Owner |
+| Falso positivo `window.open` (`app/comunidad/comunicacion/page.tsx:292`) | Decisión de producto | Owner (allowlist de dominios) |
+| Techo 99.95 % de `lib/store.ts` (2 statements inalcanzables) | Aceptado (deuda-2 D4 / deuda-3 D5) | Nadie: por diseño |
+| Deriva de prosa (12 specs + 4 manuales NSGC), 2 warnings turbo, `CF_UPDATE_PARAM`, e2e `poblado-idempotente:96` | ✅ Saldado y verificado | — |
+
+**Gates de la verificación (2026-10-21)**: `tsc --noEmit` 0 errores · `eslint` exit 0 ·
+`openspec validate --all` 35 passed / 0 failed · 0 menciones de las 20 acciones podadas en
+`openspec/specs/**` y `Data/NSGC/docs/manuales/**`.
+
+### Store legacy: mapa de migración (auditoría read-only 2026-10-21)
+
+Casos por archivo (clases: **a** lectura con hook SWR existente · **b** acción con endpoint ya
+existente falta cablear hook · **c** acción sin endpoint):
+
+| Archivo | Usos | Clases | Veredicto |
+|---|---|---|---|
+| `app/comunidad/certificados/page.tsx` | 4 | a (`useLiquidaciones`, `useCobrosFI`) | **MIGRABLE YA** (solo lectura) |
+| `app/visor-mensajes/page.tsx` | 2 | c (`caducarAvisosCV` en `setInterval`) | MIGRABLE CON ENDPOINT (o reusar `PUT /api/cv/avisos/[id]`) |
+| `app/comunidad/visor/page.tsx` | 2 | c (`publicarActaEnCV`) | MIGRABLE CON ENDPOINT |
+| `app/finanzas/gastos-comunes/page.tsx` | 2 | c (`enviarCobranzaFI`) | MIGRABLE CON ENDPOINT |
+| `app/inventario/proyectos/page.tsx` | 3 | b (`actualizarPagoTrabajoMT`, `verificarGarantiasMT`: rutas ya existen) | MIGRABLE (cablear hooks) |
+| `app/inventario/recursos/page.tsx` | 5 | b/c (entregar solicitud, resolver comodín) | MIGRABLE CON ENDPOINT |
+| `app/personas/personal/page.tsx` | 7 | b/c (5 transiciones PE + auditoría) | MIGRABLE CON ENDPOINT |
+| `app/admin/reporteria/page.tsx` | 9 | b (generar/distribuir/vista dashboard) | MIGRABLE CON ENDPOINT |
+| `app/finanzas/multas/page.tsx` | 7 | b (aplicar/desestimar/apelar IN: rutas ya existen, faltan en `use-in.ts`) | MIGRABLE (cablear hooks) |
+| `app/finanzas/remuneraciones/page.tsx` | 4 | a (`useLiquidaciones`) + c (`adelantosPL`) | MIGRABLE CON ENDPOINT |
+| `app/admin/qa-lab/page.tsx` | ~100+ | semillas/test/`STORE_VERSION` | **EXCEPCIÓN — NO MIGRAR** |
+| `app/admin/dev-dashboard/page.tsx` | ≥2 | diagnóstico sobre `getState()` | **EXCEPCIÓN — NO MIGRAR** |
+| `app/admin/mantenimiento/page.tsx` | 4 | backup/seed de localStorage | **EXCEPCIÓN — NO MIGRAR** |
+
+**Endpoints faltantes (8)**: adelantos PL · cobranza FI · caducar avisos CV · publicar acta en CV ·
+5 transiciones PE · entregar/resolver solicitud IR (+comodín) · reportes RE generar/distribuir/vista ·
+(auditoría PE y eventos). Rutas que **ya existen** y solo requieren hook: IN aplicar/desestimar/apelar,
+MT verificar garantías y actualizar pago de trabajo.
+
+**Lotes (riesgo creciente)**: **L1** lectura pura (`certificados`, `visor-mensajes`) → **L2** escritura
+no-dinero (`comunidad/visor`, `personal`, `inventario/*`, `reporteria`) → **L3** dinero
+(`remuneraciones`, `multas` → cargo FI, `gastos-comunes` → cobranza).
+
+### Store legacy: cierre de la fase 1 (SERIE-DEUDA-6, 2026-10-21)
+
+La serie se ejecutó en **6 ventanas** sobre la rama `noche/deuda-6` (sin push, sin merge, change
+`ui-legacy-store-fase1` **aplicado y validado, no archivado**). Censo final medido con
+`grep -rno "useCompassStore" app/ | wc -l` en el árbol de la rama: **9 archivos / 131 usos** (base:
+`main` en `e8d74d5` → 13 archivos / 147 usos). **Delta real: −4 archivos y −16 usos.**
+
+| Archivo | Usos en `main` | Usos ahora | Ventana | Qué se hizo |
+|---|---|---|---|---|
+| `app/comunidad/certificados/page.tsx` | 4 | **0** | V1 | Lecturas pasan a `useLiquidaciones()` + `useCobrosFI()` |
+| `app/visor-mensajes/page.tsx` | 2 | **0** | V2 | Caducidad por `useAvisosCV().update` + helper puro `avisosVencidos()`; **no hizo falta endpoint nuevo** (reusa `PUT /api/cv/avisos/[id]`) |
+| `app/finanzas/multas/page.tsx` | 7 | **0** | V3 | `useInfraccionesIN()` cableado con `aplicar`/`desestimar`/`apelar` (rutas ya existentes) + `useMensajesBuzonCO()` |
+| `app/inventario/proyectos/page.tsx` | 3 | **0** | V4 | `verificarGarantiasMT()` nuevo en `lib/api/use-mt.ts` + `update(id, { estadoPago })` de `useTrabajosMT` |
+| `app/admin/qa-lab/page.tsx` | 99 | 99 | — | **Excepción justificada** (semillas, `STORE_VERSION`, laboratorio sobre `localStorage`) |
+| `app/personas/personal/page.tsx` | 7 | 7 | — | Pendiente fase 2 (5 transiciones PE + auditoría) |
+| `app/admin/reporteria/page.tsx` | 6 | 6 | — | Pendiente fase 2 (reportes RE). *La auditoría anotó 9 usos; el conteo real en `main` es 6* |
+| `app/inventario/recursos/page.tsx` | 5 | 5 | — | Pendiente fase 2 (entregar/resolver solicitud IR) |
+| `app/finanzas/remuneraciones/page.tsx` | 4 | 4 | — | Pendiente fase 2 (adelantos PL) |
+| `app/admin/mantenimiento/page.tsx` | 4 | 4 | — | **Excepción justificada** (backup/seed de `localStorage`) |
+| `app/finanzas/gastos-comunes/page.tsx` | 2 | 2 | — | Pendiente fase 2 (cobranza FI) |
+| `app/comunidad/visor/page.tsx` | 2 | 2 | — | Pendiente fase 2 (publicar acta en CV) |
+| `app/admin/dev-dashboard/page.tsx` | 2 | 2 | — | **Excepción justificada** (diagnóstico sobre `getState()`) |
+
+**Deuda fase 2 declarada (26 usos en 6 archivos)** — todos exigen **endpoint nuevo con contrato de
+negocio**, por eso no entraron en la fase 1 (que solo cableó rutas ya existentes):
+
+| Frente | Archivo | Qué falta |
+|---|---|---|
+| Transiciones PE (5) + auditoría PE | `app/personas/personal/page.tsx` | Rutas de transición de estado del personal y su ledger de auditoría |
+| Entregar / resolver solicitud IR (+ comodín) | `app/inventario/recursos/page.tsx` | Endpoint de entrega/resolución con descarga de stock transaccional |
+| Reportes RE (generar / distribuir / vista dashboard) | `app/admin/reporteria/page.tsx` | Generación y distribución server-side; hoy el listado CRUD ya es API |
+| Adelantos PL | `app/finanzas/remuneraciones/page.tsx` | Contrato de adelanto sobre liquidación (impacto en haberes) |
+| Cobranza FI | `app/finanzas/gastos-comunes/page.tsx` | Emisión de cobranza con cargo FI (dinero: requiere contrato y authz propios) |
+| Publicar acta en CV | `app/comunidad/visor/page.tsx` | Publicación de acta en el visor (genera aviso y evento) |
+
+Deudas menores arrastradas, también fase 2: (1) `useCrudCollection` pagina con `pageSize=100`
+(`lib/api/use-crud-collection.ts:98`), límite preexistente compartido con `finanzas/pagos`,
+`finanzas/gastos-comunes` y `admin/reporteria`; (2) `Notificacion` no tiene `unidadId`, así que una
+difusión al rol la ve toda la comunidad con ese rol; (3) decidir si el residente puede **marcar como
+leída** su propia notificación (hoy `PUT /api/notificaciones/[id]` exige `editar`, solo admin).
+
+**Gates del cierre (2026-10-21)**: `npx tsc --noEmit` 0 errores · `npm run lint` 0 problemas ·
+suite completa **1388 tests / 136 archivos** con cobertura **94.39 / 85.84 / 93.85** (`lib/**` 99.63,
+`lib/store.ts` 99.95) · `openspec validate --all` **36 passed / 0 failed** ·
+`check-delta-coverage ui-legacy-store-fase1` **0 que romperían el archive** · `STORE_VERSION = 28`
+sin tocar · `prisma/dev.db` y `Data/NSGC/backups/` intactos.
