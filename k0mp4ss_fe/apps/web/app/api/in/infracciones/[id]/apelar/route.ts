@@ -1,9 +1,15 @@
 /**
  * /api/in/infracciones/[id]/apelar — descargos de apelación de una infracción IN.
  *
- * POST custom (solo administración): paridad server-side con
- * `apelarInfraccionIN` legacy. Exige estado "en_revision" y descargos de al
- * menos 10 caracteres; transiciona a "apelada" y emite UN evento `IN_APELACION`.
+ * POST custom: paridad server-side con `apelarInfraccionIN` legacy. Exige estado
+ * "en_revision" y descargos de al menos 10 caracteres; transiciona a "apelada" y
+ * emite UN evento `IN_APELACION`.
+ *
+ * Authz (decisión owner 2026-10-21): `in:apelar` — la apelación es acto propio del
+ * residente sobre SU infracción. El administrador registra descargos sin acotar
+ * por unidad; cualquier otro rol solo dentro de sus unidades con vínculo vigente
+ * (una infracción ajena responde 404, sin revelar que existe). El comité y la
+ * conserjería no apelan: ellos gestionan el caso (aplicar/desestimar/respaldar).
  */
 import { hoyISO } from "@/lib/date-utils"
 import { prisma } from "@/lib/prisma"
@@ -11,7 +17,7 @@ import { logger } from "@/lib/logger"
 import { jsonError } from "@/lib/api/with-comunidad-scope"
 import {
   cargarInfraccion,
-  contextoAccionIN,
+  contextoApelacionIN,
   leerCuerpo,
   registrarEventoIN,
 } from "../../_acciones"
@@ -20,9 +26,9 @@ type Ctx = { params: Promise<{ id: string }> }
 
 /** POST registra los descargos y pasa la infracción a Apelada. */
 export async function POST(req: Request, ctx: Ctx): Promise<Response> {
-  const contexto = await contextoAccionIN()
+  const contexto = await contextoApelacionIN()
   if (!contexto.ok) return contexto.response
-  const { scope } = contexto
+  const { scope, unidadesVinculadas } = contexto
   const { id } = await ctx.params
 
   const body = await leerCuerpo(req)
@@ -33,6 +39,11 @@ export async function POST(req: Request, ctx: Ctx): Promise<Response> {
   try {
     const infraccion = await cargarInfraccion(id, scope)
     if (!infraccion) return jsonError(404, "Registro no encontrado.")
+    // Pertenencia: fuera de la vía administración, la infracción debe ser de una
+    // unidad con vínculo vigente del usuario (404, igual que inexistente).
+    if (unidadesVinculadas && !unidadesVinculadas.includes(infraccion.unidadId)) {
+      return jsonError(404, "Registro no encontrado.")
+    }
     if (infraccion.estado !== "en_revision") {
       return jsonError(
         400,
