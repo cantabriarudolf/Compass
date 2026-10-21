@@ -4,8 +4,10 @@
  * GET: detalle acotado al destinatario de la sesión (V3b de SERIE-DEUDA-6). Una
  * notificación de otro vecino responde 404, igual que una inexistente, para no
  * filtrar su existencia. DELETE usa la factory (solo administrador: `eliminar`).
- * PUT: admite actualización parcial estándar + también un shortcut para marcar
- * como leída vía `{ leida: true }` (solo administrador: `editar`).
+ * PUT: admite actualización parcial estándar. El shortcut `{ leida: true }` de
+ * la lectura quedó en POST ../leer (H7): el estado de lectura SOLO lo escribe
+ * el destinatario, así que acá el campo `leida` del body se descarta si el
+ * actor no es el destinatario (decisión owner 2026-10-21).
  */
 import { NotificacionSchema } from "@/lib/schemas"
 import { puede } from "@/lib/authz"
@@ -16,6 +18,7 @@ import {
 } from "@/lib/api/with-comunidad-scope"
 import { filtroNotificaciones } from "@/lib/api/notificaciones-scope"
 import { personaIdDelUsuarioDb } from "@/lib/api/sesion-persona"
+import { esDestinatarioDeNotificacion } from "./leer/route"
 import { notificacionesHandlers } from "../route"
 import { logger } from "@/lib/logger"
 
@@ -79,9 +82,18 @@ export async function PUT(req: Request, ctx: Ctx): Promise<Response> {
       return jsonError(404, "Registro no encontrado.")
     }
 
+    // H7: el estado de lectura solo lo escribe el destinatario (POST ../leer).
+    // Si el actor no es el destinatario, se descarta `leida` antes de la fusión
+    // para que nadie —ni el administrador— firme la lectura de otro.
+    const personaIdActor = await personaIdDelUsuarioDb(scope.usuarioId)
+    const esDestinatario = esDestinatarioDeNotificacion(existente, scope.rol, personaIdActor)
+
     const datos = { ...(parsed.data as Record<string, unknown>) }
     delete datos.id
     delete datos.comunidadId
+    if ("leida" in datos && !esDestinatario) {
+      delete datos.leida
+    }
 
     const actualizado = await prisma.notificacion.update({
       where: { id },

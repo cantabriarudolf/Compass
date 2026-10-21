@@ -29,8 +29,18 @@ import type { ComunidadScope } from "./with-comunidad-scope"
 /** Roles con visión completa de la bandeja de su comunidad. */
 const VE_TODA_LA_COMUNIDAD = new Set(["administrador", "comite"])
 
-/** `destinatarioRol` que corresponde a cada rol de sesión (mínimo privilegio). */
-const DESTINATARIOS_POR_ROL: Record<string, readonly string[]> = {
+/**
+ * `destinatarioRol` que corresponde a cada rol de sesión (mínimo privilegio).
+ * Exportado: también lo consume el POST /leer (H7) para validar quién es el
+ * destinatario de una notificación. `comite → ["directiva"]` existe porque el
+ * enum `destinatarioRol` de `NotificacionSchema` usa "directiva" para las
+ * difusiones de rol al comité (el filtro de bandeja no lo necesita: el comité
+ * ve toda la comunidad, pero sí lo necesita el chequeo de destinatario).
+ * El administrador no tiene difusión de rol: solo le llega lo dirigido a su
+ * `personaId`.
+ */
+export const DESTINATARIOS_POR_ROL: Record<string, readonly string[]> = {
+  comite: ["directiva"],
   residente: ["residente", "propietario"],
   conserjeria: ["personal"],
   mantencion: ["personal"],

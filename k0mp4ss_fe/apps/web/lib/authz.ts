@@ -20,6 +20,9 @@ const MATRIZ: Record<Rol, Record<string, Set<Accion>>> = {
   // Administrador Maestro: full access a todos los módulos, config global y finanzas
   administrador: {
     "*": new Set<Accion>(["ver", "crear", "editar", "eliminar", "ejecutar"]),
+    // H7 — declarado por claridad: el wildcard ya lo cubre, pero el granular deja
+    // visible la regla "marcar leída es acto propio del destinatario"
+    "notificaciones:propias": new Set<Accion>(["editar"]),
   },
   // Miembro del Comité: lectura financiera + auditoría; aprueba gastos; RE centro de mando lectura; CT historial lectura
   comite: {
@@ -45,9 +48,18 @@ const MATRIZ: Record<Rol, Record<string, Set<Accion>>> = {
     "in:apelar": new Set<Accion>([]),
     // notificaciones: bandeja de la comunidad; el filtro por destinatario es ABAC en la ruta
     "notificaciones": new Set<Accion>(["ver"]),
+    // H7 — marcar leída es acto propio del destinatario: solo la propia (ABAC en la ruta)
+    "notificaciones:propias": new Set<Accion>(["editar"]),
     // cf: configuración global — el comité la lee para auditar; editarla es solo del administrador
     "cf": new Set<Accion>(["ver"]),
     "ir:mantenimiento": new Set<Accion>(["ver", "crear"]),
+    // H5 — gobernanza movida a la matriz (antes decidía lib/api/gd-guard.ts):
+    // gd = actas, ad = controles de propiedad. El comité gestiona ambas con las 5
+    // acciones por paridad con el `return true` del guard; la acción `eliminar`
+    // del comité se conserva por paridad y queda como PREGUNTA ABIERTA para el
+    // owner (hoy ninguna ruta la solicita sobre gd).
+    "gd": new Set<Accion>(["ver", "crear", "editar", "eliminar", "ejecutar"]),
+    "ad": new Set<Accion>(["ver", "crear", "editar", "eliminar", "ejecutar"]),
     // explícitamente sin permisos: FI crear/editar/eliminar, PE bitacora, PL, IR:interno, admin:usuarios, backup
   },
   // Conserjería / Seguridad: bitácora, visitas, encomiendas, iniciar/cerrar turno, directorio, reporte diario PE, IR mantenimiento
@@ -71,6 +83,8 @@ const MATRIZ: Record<Rol, Record<string, Set<Accion>>> = {
     "in": new Set<Accion>(["ver", "crear"]),
     "in:apelar": new Set<Accion>([]),
     "notificaciones": new Set<Accion>(["ver"]),
+    // H7 — marcar leída es acto propio del destinatario: solo la propia (ABAC en la ruta)
+    "notificaciones:propias": new Set<Accion>(["editar"]),
   },
   // Propietario / Residente: estado cuenta propio, pago GC, reserva amenities, reclamos, votos, certificados propios, directorio, IR mantenimiento solo
   residente: {
@@ -94,6 +108,10 @@ const MATRIZ: Record<Rol, Record<string, Set<Accion>>> = {
     // (decisión owner 2026-10-21)
     "in:apelar": new Set<Accion>(["crear"]),
     "notificaciones": new Set<Accion>(["ver"]),
+    // H7 — marcar leída es acto propio del destinatario: solo la propia (ABAC en la ruta)
+    "notificaciones:propias": new Set<Accion>(["editar"]),
+    // H5 — controles de propiedad: residente solo lee los de su unidad (ABAC en la ruta)
+    "ad": new Set<Accion>(["ver"]),
   },
   // Personal de Mantención: lista tareas asignadas + reporte incidentes físicos, IR mantenimiento + interno
   mantencion: {
@@ -107,6 +125,8 @@ const MATRIZ: Record<Rol, Record<string, Set<Accion>>> = {
     "pe:bitacora": new Set<Accion>(["ver"]),
     "cv": new Set<Accion>(["ver"]), // visor de avisos: solo lectura (decisión owner 2026-10-21)
     "notificaciones": new Set<Accion>(["ver"]),
+    // H7 — marcar leída es acto propio del destinatario: solo la propia (ABAC en la ruta)
+    "notificaciones:propias": new Set<Accion>(["editar"]),
   },
 }
 

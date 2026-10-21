@@ -432,6 +432,70 @@ describe("lib/authz — recurso in (infracciones y multas)", () => {
   })
 })
 
+describe("lib/authz — recursos gd y ad (gobernanza, H5)", () => {
+  // Paridad con el antiguo bypass de lib/api/gd-guard.ts: comité gestiona actas
+  // y controles; residente solo ve. La acción `eliminar` del comité se conserva
+  // por paridad con el `return true` del guard de controles y queda como
+  // PREGUNTA ABIERTA para el owner (ver hallazgo H5).
+  it("comité gestiona gd y ad (ver/crear/editar/eliminar/ejecutar)", () => {
+    for (const accion of ["ver", "crear", "editar", "eliminar", "ejecutar"] as const) {
+      expect(puede("comite", accion, "gd")).toBe(true)
+      expect(puede("comite", accion, "ad")).toBe(true)
+    }
+    // alias RP: directiva == comité
+    expect(puede("directiva", "ver", "gd")).toBe(true)
+    expect(puede("directiva", "ver", "ad")).toBe(true)
+  })
+
+  it("residente solo ve gd y ad (ABAC de privacidad/unidad va en la ruta)", () => {
+    expect(puede("residente", "ver", "gd")).toBe(true)
+    expect(puede("residente", "ver", "ad")).toBe(true)
+    for (const accion of ["crear", "editar", "eliminar", "ejecutar"] as const) {
+      expect(puede("residente", accion, "gd")).toBe(false)
+      expect(puede("residente", accion, "ad")).toBe(false)
+    }
+  })
+
+  it("conserjería y mantención denegados en gd y ad", () => {
+    for (const rol of ["conserjeria", "mantencion"] as const) {
+      for (const accion of ["ver", "crear", "editar", "eliminar", "ejecutar"] as const) {
+        expect(puede(rol, accion, "gd")).toBe(false)
+        expect(puede(rol, accion, "ad")).toBe(false)
+      }
+    }
+  })
+
+  it("administrador wildcard — full access a gd y ad", () => {
+    for (const accion of ["ver", "crear", "editar", "eliminar", "ejecutar"] as const) {
+      expect(puede("administrador", accion, "gd")).toBe(true)
+      expect(puede("administrador", accion, "ad")).toBe(true)
+    }
+  })
+})
+
+describe("lib/authz — recurso notificaciones:propias (H7)", () => {
+  it("los cinco roles pueden editar (marcar leída) SOLO la propia", () => {
+    for (const rol of ROLES) {
+      expect(puede(rol, "editar", "notificaciones:propias")).toBe(true)
+    }
+  })
+
+  it("menor privilegio: solo editar — crear/eliminar/ver/ejecutar no aplican al granular", () => {
+    for (const rol of ["comite", "conserjeria", "residente", "mantencion"] as const) {
+      expect(puede(rol, "crear", "notificaciones:propias")).toBe(false)
+      expect(puede(rol, "eliminar", "notificaciones:propias")).toBe(false)
+      expect(puede(rol, "ejecutar", "notificaciones:propias")).toBe(false)
+    }
+  })
+
+  it("el recurso base `notificaciones` no hereda escritura del granular", () => {
+    for (const rol of ["comite", "conserjeria", "residente", "mantencion"] as const) {
+      expect(puede(rol, "editar", "notificaciones")).toBe(false)
+      expect(puede(rol, "ver", "notificaciones")).toBe(true)
+    }
+  })
+})
+
 describe("lib/authz — recurso notificaciones", () => {
   it("los cinco roles ven notificaciones (decisión owner 2026-10-21)", () => {
     for (const rol of ROLES) {
