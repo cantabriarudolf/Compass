@@ -129,16 +129,16 @@ cerrado por rol. Test-first en `lib/authz.test.ts` (RED: 5 casos rojos antes de 
   `in:apelar`; comité/conserjería/mantención no apelan; los 5 roles ven `notificaciones` y solo el
   admin escribe; comité ve `cf` pero no edita; mantención no ve `cf`.
 - [x] **Notificaciones: filtro server-side ANTES de abrir `ver`** — `GET` propio en el route
-  (`app/api/notificaciones/route.ts:41`) con el mismo shape y paginación que la factory
+  (`app/api/notificaciones/route.ts:40`, `where` acotado en `:63`) con el mismo shape y paginación que la factory
   (`{ data, page, pageSize, total }`), `where` acotado por `filtroNotificaciones()`
-  (`lib/api/notificaciones-scope.ts:50`): admin y comité toda la comunidad; conserjería, residente y
+  (`lib/api/notificaciones-scope.ts:44`, `OR` por persona/rol en `:56-64`): admin y comité toda la comunidad; conserjería, residente y
   mantención solo lo dirigido a su `personaId` o a su rol **sin destinatario puntual**. El `GET` por
-  id también queda acotado (`app/api/notificaciones/[id]/route.ts:27`, ajeno → 404, no revela
+  id también queda acotado (`app/api/notificaciones/[id]/route.ts:25`, where en `:38`, ajeno → 404, no revela
   existencia). El contrato de `createCrudHandlers` **no** se tocó: `POST`/`DELETE`/`PUT` siguen en la
   factory.
-- [x] **`in`: apelación propia** — `contextoApelacionIN()` (`app/api/in/infracciones/_acciones.ts:40`)
+- [x] **`in`: apelación propia** — `contextoApelacionIN()` (`app/api/in/infracciones/_acciones.ts:50`)
   exige `in:apelar` (NO `editar` sobre `in`) y devuelve las unidades con vínculo vigente del usuario;
-  la ruta valida pertenencia antes de escribir (`app/api/in/infracciones/[id]/apelar/route.ts:45`,
+  la ruta valida pertenencia antes de escribir (`app/api/in/infracciones/[id]/apelar/route.ts:44`,
   404 si la infracción es de otra unidad). El administrador sigue registrando descargos sin acotar por
   unidad; comité y conserjería reciben **403** (no apelan: gestionan el caso).
 - [x] `lib/api/sesion-persona.ts`: `personaIdDelUsuarioDb` y `unidadesVinculadasDb` salen de

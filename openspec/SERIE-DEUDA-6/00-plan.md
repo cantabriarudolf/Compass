@@ -141,13 +141,13 @@ El orquestador audita (`git diff`, gates si hace falta) antes de lanzar la sigui
   comité y conserjería porque `puede()` cae al prefijo `in` cuando la clave granular no existe — sin el
   vacío explícito, abrir `in` habría habilitado la apelación para ambos. **La parte crítica**:
   `GET /api/notificaciones` deja de usar la factory y arma su propio `where` con
-  `filtroNotificaciones()` (`lib/api/notificaciones-scope.ts:50`), así que `ver` nunca se abre sin
+  `filtroNotificaciones()` (`lib/api/notificaciones-scope.ts:44`), así que `ver` nunca se abre sin
   recorte por destinatario: admin y comité ven toda la comunidad, y conserjería/residente/mantención
   solo lo dirigido a su `personaId` o a su rol **sin destinatario puntual**; el `GET` por id también
   queda acotado (ajena → 404). El contrato de `createCrudHandlers` no se tocó: GET propio con el mismo
   shape `{ data, page, pageSize, total }` y `POST`/`PUT`/`DELETE` en la factory. **`in`**: la apelación
   pasa a `in:apelar` con pertenencia validada server-side
-  (`app/api/in/infracciones/[id]/apelar/route.ts:45`: unidades con vínculo vigente, ajena → 404); el
+  (`app/api/in/infracciones/[id]/apelar/route.ts:44`: unidades con vínculo vigente, ajena → 404); el
   comité y la conserjería no apelan (gestionan el caso) y el residente nunca obtiene `editar` sobre
   `in`. `personaIdDelUsuarioDb`/`unidadesVinculadasDb` se movieron a `lib/api/sesion-persona.ts`
   (`gd-guard` los reexporta). Tests nuevos: `test/api/notificaciones-filtro.test.ts` (16 casos, 6 puros
