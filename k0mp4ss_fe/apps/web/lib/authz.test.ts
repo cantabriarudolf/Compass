@@ -382,3 +382,91 @@ describe("lib/authz — recurso cv (visor de avisos)", () => {
     expect(puede("administrador", "eliminar", "cv")).toBe(true)
   })
 })
+
+describe("lib/authz — recurso in (infracciones y multas)", () => {
+  it("administrador tiene las cinco acciones (wildcard)", () => {
+    for (const accion of ["ver", "crear", "editar", "eliminar", "ejecutar"] as const) {
+      expect(puede("administrador", accion, "in")).toBe(true)
+    }
+  })
+
+  it("comité ve, crea y edita el expediente, pero no elimina (decisión owner 2026-10-21)", () => {
+    expect(puede("comite", "ver", "in")).toBe(true)
+    expect(puede("comite", "crear", "in")).toBe(true)
+    expect(puede("comite", "editar", "in")).toBe(true)
+    expect(puede("comite", "eliminar", "in")).toBe(false)
+    expect(puede("comite", "ejecutar", "in")).toBe(false)
+    // alias RP: directiva == comité
+    expect(puede("directiva", "editar", "in")).toBe(true)
+  })
+
+  it("conserjería ve y crea, pero no edita ni elimina", () => {
+    expect(puede("conserjeria", "ver", "in")).toBe(true)
+    expect(puede("conserjeria", "crear", "in")).toBe(true)
+    expect(puede("conserjeria", "editar", "in")).toBe(false)
+    expect(puede("conserjeria", "eliminar", "in")).toBe(false)
+  })
+
+  it("residente no ve, no crea y no edita: solo apela las propias (in:apelar)", () => {
+    expect(puede("residente", "ver", "in")).toBe(false)
+    expect(puede("residente", "crear", "in")).toBe(false)
+    expect(puede("residente", "editar", "in")).toBe(false)
+    expect(puede("residente", "eliminar", "in")).toBe(false)
+    expect(puede("residente", "crear", "in:apelar")).toBe(true)
+    expect(puede("residente", "ver", "in:apelar")).toBe(false)
+    expect(puede("residente", "editar", "in:apelar")).toBe(false)
+  })
+
+  it("comité y conserjería no apelan: la apelación es acto propio del residente", () => {
+    expect(puede("comite", "crear", "in:apelar")).toBe(false)
+    expect(puede("conserjeria", "crear", "in:apelar")).toBe(false)
+    expect(puede("mantencion", "crear", "in:apelar")).toBe(false)
+    // el administrador sí (wildcard): registra descargos por el vecino
+    expect(puede("administrador", "crear", "in:apelar")).toBe(true)
+  })
+
+  it("mantención no tiene acceso al expediente IN", () => {
+    for (const accion of ["ver", "crear", "editar", "eliminar"] as const) {
+      expect(puede("mantencion", accion, "in")).toBe(false)
+    }
+  })
+})
+
+describe("lib/authz — recurso notificaciones", () => {
+  it("los cinco roles ven notificaciones (decisión owner 2026-10-21)", () => {
+    for (const rol of ROLES) {
+      expect(puede(rol, "ver", "notificaciones")).toBe(true)
+    }
+  })
+
+  it("solo el administrador escribe o elimina (wildcard); el resto es lectura", () => {
+    for (const rol of ["comite", "conserjeria", "residente", "mantencion"] as const) {
+      expect(puede(rol, "crear", "notificaciones")).toBe(false)
+      expect(puede(rol, "editar", "notificaciones")).toBe(false)
+      expect(puede(rol, "eliminar", "notificaciones")).toBe(false)
+    }
+    expect(puede("administrador", "crear", "notificaciones")).toBe(true)
+    expect(puede("administrador", "eliminar", "notificaciones")).toBe(true)
+  })
+})
+
+describe("lib/authz — recurso cf (configuración global)", () => {
+  it("comité ve la configuración pero no la edita (decisión owner 2026-10-21)", () => {
+    expect(puede("comite", "ver", "cf")).toBe(true)
+    expect(puede("comite", "editar", "cf")).toBe(false)
+    expect(puede("comite", "crear", "cf")).toBe(false)
+    expect(puede("comite", "eliminar", "cf")).toBe(false)
+  })
+
+  it("conserjería, residente y mantención no ven la configuración", () => {
+    for (const rol of ["conserjeria", "residente", "mantencion"] as const) {
+      expect(puede(rol, "ver", "cf")).toBe(false)
+      expect(puede(rol, "editar", "cf")).toBe(false)
+    }
+  })
+
+  it("administrador lee y edita la configuración", () => {
+    expect(puede("administrador", "ver", "cf")).toBe(true)
+    expect(puede("administrador", "editar", "cf")).toBe(true)
+  })
+})

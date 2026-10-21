@@ -37,6 +37,16 @@ const MATRIZ: Record<Rol, Record<string, Set<Accion>>> = {
     "pe:directorio": new Set<Accion>(["ver"]),
     // cv: visor de avisos — comité publica y edita; el resto solo ve (decisión owner 2026-10-21)
     "cv": new Set<Accion>(["ver", "crear", "editar"]),
+    // in: expediente de infracciones y multas — el comité gestiona el caso (ve, crea, edita =
+    // aplicar/desestimar/respaldar) pero no lo elimina. "in:apelar" se declara VACÍO a propósito:
+    // la apelación es acto propio del residente y el vacío explícito corta el fallback de prefijo
+    // de puede() (decisión owner 2026-10-21)
+    "in": new Set<Accion>(["ver", "crear", "editar"]),
+    "in:apelar": new Set<Accion>([]),
+    // notificaciones: bandeja de la comunidad; el filtro por destinatario es ABAC en la ruta
+    "notificaciones": new Set<Accion>(["ver"]),
+    // cf: configuración global — el comité la lee para auditar; editarla es solo del administrador
+    "cf": new Set<Accion>(["ver"]),
     "ir:mantenimiento": new Set<Accion>(["ver", "crear"]),
     // explícitamente sin permisos: FI crear/editar/eliminar, PE bitacora, PL, IR:interno, admin:usuarios, backup
   },
@@ -56,6 +66,11 @@ const MATRIZ: Record<Rol, Record<string, Set<Accion>>> = {
     "ir:mantenimiento": new Set<Accion>(["ver", "crear"]),
     "ir:interno": new Set<Accion>(["ver", "crear"]), // personal servicio sí
     "cv": new Set<Accion>(["ver"]), // visor de avisos: solo lectura (decisión owner 2026-10-21)
+    // in: conserjería reporta la infracción (ver + crear) pero no resuelve el caso; "in:apelar"
+    // vacío corta el fallback de prefijo de puede() (la apelación no es de conserjería)
+    "in": new Set<Accion>(["ver", "crear"]),
+    "in:apelar": new Set<Accion>([]),
+    "notificaciones": new Set<Accion>(["ver"]),
   },
   // Propietario / Residente: estado cuenta propio, pago GC, reserva amenities, reclamos, votos, certificados propios, directorio, IR mantenimiento solo
   residente: {
@@ -74,6 +89,11 @@ const MATRIZ: Record<Rol, Record<string, Set<Accion>>> = {
     "co": new Set<Accion>(["ver", "crear"]),
     "gd": new Set<Accion>(["ver"]), // actas según residenteVeActas (ABAC)
     "cv": new Set<Accion>(["ver"]), // visor de avisos: solo lectura (decisión owner 2026-10-21)
+    // in: el residente no ve ni edita el expediente; solo presenta los descargos de SU propia
+    // infracción ("in:apelar":crear), con pertenencia a la unidad validada server-side en la ruta
+    // (decisión owner 2026-10-21)
+    "in:apelar": new Set<Accion>(["crear"]),
+    "notificaciones": new Set<Accion>(["ver"]),
   },
   // Personal de Mantención: lista tareas asignadas + reporte incidentes físicos, IR mantenimiento + interno
   mantencion: {
@@ -86,6 +106,7 @@ const MATRIZ: Record<Rol, Record<string, Set<Accion>>> = {
     "ir:interno": new Set<Accion>(["ver", "crear"]),
     "pe:bitacora": new Set<Accion>(["ver"]),
     "cv": new Set<Accion>(["ver"]), // visor de avisos: solo lectura (decisión owner 2026-10-21)
+    "notificaciones": new Set<Accion>(["ver"]),
   },
 }
 
@@ -94,7 +115,11 @@ const ACCIONES_VALIDAS = new Set<Accion>(["ver", "crear", "editar", "eliminar", 
 function normalizaRecurso(r: string): string {
   return r.trim().toLowerCase()
 }
-function normalizaRol(r: string): Rol | null {
+/**
+ * normalizaRol — resuelve un rol (o alias RP) al rol estándar, o null si no existe.
+ * Exportada para que las rutas ABAC razonen sobre el mismo rol que el motor RBAC.
+ */
+export function normalizaRol(r: string): Rol | null {
   const n = r.trim().toLowerCase()
   // alias compat: "admin" -> administrador, "personal" -> conserjeria, "directiva" -> comite
   const alias: Record<string, Rol> = {
@@ -274,6 +299,11 @@ export const RECURSOS_CONOCIDOS = [
   "ge",
   "co",
   "gd",
+  "cv",
+  "in",
+  "in:apelar",
+  "notificaciones",
+  "cf",
   "admin:usuarios",
   "backup",
 ] as const
