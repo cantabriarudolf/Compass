@@ -24,7 +24,7 @@ solicitud IR, reportes RE (generar/distribuir/vista), adelantos PL, cobranza FI,
 | V2 | `visor-mensajes` — quitar `caducarAvisosCV` del store: caducidad vía API (acción mínima reutilizando el contrato existente) | HECHA | `dc0f583` |
 | V3 | `finanzas/multas` — cablear `use-in`: aplicar/desestimar/apelar (rutas ya existen) y migrar la página | HECHA | `412e9a7` |
 | V3b | **Permisos**: `cv` (reparado) + `in`, `notificaciones` (con filtro por destinatario) y `cf` en la matriz; filtro de apelación propia en `in` | HECHA | `f1cac65` |
-| V4 | `inventario/proyectos` — cablear `use-mt`: verificar garantías + actualizar pago de trabajo (rutas ya existen) y migrar la página | PENDIENTE | — |
+| V4 | `inventario/proyectos` — cablear `use-mt`: verificar garantías + actualizar pago de trabajo (rutas ya existen) y migrar la página | HECHA | `7b2bbad` |
 | V5 | Cierre: gates completos, `BACKLOG-100.md`, avance NSGC, deuda restante declarada, informe | PENDIENTE | — |
 
 **MÁXIMO: 6 ventanas.** Lo que no entre se declara como deuda fase 2 en V5; no se improvisa.
@@ -55,7 +55,11 @@ y mantención ver). El resto de las decisiones del owner está en `prompt-03b.md
    debe dar `0 que romperían el archive`. **No archivar**: el archive exige CI verde observado y esta
    serie no pushea.
 6. **Gate por ventana**: `npx tsc --noEmit` 0 · `npm run lint` 0 problemas · `npm test` verde con los
-   pisos vigentes. e2e **no** se corre en esta máquina (2 cores; flakes documentados en `qa-estado.json`).
+   pisos vigentes. **La suite completa la corre el orquestador en background, no el worker**: en esta
+   máquina tarda ~8 min sin imprimir un solo byte y el arnés mata al subagente por inactividad a los 4
+   min (`stalled`). El worker corre tests **focalizados** y reporta su salida; el orquestador corre la
+   suite y commitea con ese veredicto. e2e **no** se corre en esta máquina (2 cores; flakes documentados
+   en `qa-estado.json`).
 7. **Paridad estricta**: mismos textos, mismos permisos, mismas columnas, mismo orden. Si la migración
    exige decidir un contrato nuevo o cambiar comportamiento visible → **BLOQUEADO** con la evidencia
    exacta en la Bitácora; no se improvisa.

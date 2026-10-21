@@ -13,11 +13,13 @@ Cierre documental y verificación. **No implementa funcionalidad nueva.**
 
 1. **Auditoría de la serie**: `git log --oneline main..HEAD` y `git diff --stat main...HEAD`. Confirmá
    que solo se tocaron los archivos de las ventanas y que no hay cambios fuera de alcance.
-2. **Gates completos** (una corrida cada uno, salidas exactas en el retorno):
+2. **Gates** (una corrida cada uno, salidas exactas en el retorno):
    - `npx tsc --noEmit` → 0 errores
    - `npm run lint` → 0 problemas
-   - `npm test` → verde con los pisos vigentes; reportá la cobertura global, `lib/**` y `app/api/**`
-     comparada con la base (94.31 / 85.99 aprox. → reportá los números reales, no los copies)
+   - `npx vitest run <archivos tocados por la serie>` → verde y salida exacta
+   - **NO corras `npm test` completo**: en esta máquina tarda ~8 min sin imprimir y el arnés mata al
+     subagente por inactividad a los 4 min (eso hizo fallar la V4). La suite completa la corre el
+     orquestador en background; vos reportá los focalizados y dejá constancia de que falta ese veredicto.
    - `node openspec/scripts/check-delta-coverage.mjs ui-legacy-store-fase1` → `0 que romperían el archive`
    - `npx openspec validate --all` → passed/total
 3. **Censo final del store legacy**: `grep -rn "useCompassStore" app/ | wc -l` y la lista de archivos.
