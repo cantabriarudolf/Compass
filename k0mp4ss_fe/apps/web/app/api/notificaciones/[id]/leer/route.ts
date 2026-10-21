@@ -19,6 +19,7 @@ import {
 import { DESTINATARIOS_POR_ROL } from "@/lib/api/notificaciones-scope"
 import { personaIdDelUsuarioDb } from "@/lib/api/sesion-persona"
 import { logger } from "@/lib/logger"
+import { hoyISO } from "@/lib/date-utils"
 
 type Ctx = { params: Promise<{ id: string }> }
 
@@ -63,11 +64,14 @@ export async function POST(_req: Request, ctx: Ctx): Promise<Response> {
       return jsonError(404, "Registro no encontrado.")
     }
 
+    // Primera lectura: la fecha se fija una sola vez. Marcar de nuevo no la mueve,
+    // así el dato sirve como métrica auditable (enviados / fallidos / leídos).
+    const fechaLectura = record.fechaLectura ?? hoyISO()
     await prisma.notificacion.update({
       where: { id },
-      data: { leida: true },
+      data: { leida: true, fechaLectura },
     })
-    return Response.json({ ok: true })
+    return Response.json({ ok: true, fechaLectura })
   } catch (e) {
     logger.error({ err: e }, "[notificaciones] error POST leer")
     return jsonError(500, "Error interno del servidor.")

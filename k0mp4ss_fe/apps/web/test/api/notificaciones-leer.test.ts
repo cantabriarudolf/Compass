@@ -144,18 +144,24 @@ describe("POST /api/notificaciones/[id]/leer — el destinatario marca (H7)", ()
     await conSesion(usuarios.residenteA.email, async () => {
       const res = await postLeer("nl-propia-a")
       expect(res.status).toBe(200)
-      expect((await res.json()) as { ok: boolean }).toEqual({ ok: true })
+      const cuerpo = (await res.json()) as { ok: boolean; fechaLectura?: string }
+      expect(cuerpo.ok).toBe(true)
+      expect(cuerpo.fechaLectura).toMatch(/^\d{4}-\d{2}-\d{2}$/)
       const enBd = await prisma.notificacion.findUnique({ where: { id: "nl-propia-a" } })
       expect(enBd?.leida).toBe(true)
+      expect(enBd?.fechaLectura).toBe(cuerpo.fechaLectura)
     })
   })
 
-  it("idempotente: marcar dos veces no falla", async () => {
+  it("idempotente: la segunda lectura no mueve la fecha de la primera", async () => {
+    const primera = await prisma.notificacion.findUnique({ where: { id: "nl-propia-a" } })
     await conSesion(usuarios.residenteA.email, async () => {
       const res = await postLeer("nl-propia-a")
       expect(res.status).toBe(200)
       const enBd = await prisma.notificacion.findUnique({ where: { id: "nl-propia-a" } })
       expect(enBd?.leida).toBe(true)
+      // El contrato es "no se recalcula": se conserva la fecha de la primera lectura.
+      expect(enBd?.fechaLectura).toBe(primera?.fechaLectura)
     })
   })
 
@@ -179,9 +185,10 @@ describe("POST /api/notificaciones/[id]/leer — el destinatario marca (H7)", ()
       expect(ajena.status).toBe(404)
       const inexistente = await postLeer("nl-inexistente")
       expect(inexistente.status).toBe(404)
-      // quedó sin marcar
+      // quedó sin marcar y sin fecha de lectura
       const enBd = await prisma.notificacion.findUnique({ where: { id: "nl-ajena-b" } })
       expect(enBd?.leida).toBe(false)
+      expect(enBd?.fechaLectura).toBeNull()
     })
   })
 

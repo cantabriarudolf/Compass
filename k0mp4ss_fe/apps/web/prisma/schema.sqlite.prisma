@@ -378,6 +378,7 @@ model Notificacion {
   moduloOrigen          String
   fecha                 String
   leida                 Boolean  @default(false)
+  fechaLectura          String?  // ISO de la primera lectura (métrica enviados/leídos); null = no leída
   createdAt             DateTime @default(now())
 
   @@index([comunidadId])

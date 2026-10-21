@@ -351,6 +351,8 @@ export const NotificacionSchema = z.object({
   moduloOrigen: z.string().min(1),
   fecha: FechaISOSchema,
   leida: z.boolean(),
+  // ISO de la primera lectura; ausente = no leída (métrica enviados/leídos, sin tasa de apertura).
+  fechaLectura: FechaISOSchema.optional(),
 })
 
 // --- Comunicación con Vecinos (CO) ---
