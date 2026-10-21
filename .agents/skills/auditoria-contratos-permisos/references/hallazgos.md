@@ -42,14 +42,16 @@ comentarios o tests pero nunca implementados en el motor.
 - **Decisión del owner**: comité `ver`, sin `editar` (parámetros financieros); admin wildcard.
 - **Cierre**: `0e160ab`. Verificado: 200 a admin y comité; 403 al resto.
 
-### H5 · Bypass de la matriz en `gd-guard` — **decidido, pendiente de implementación**
+### H5 · Bypass de la matriz en `gd-guard` — **cerrado**
 
-- **Evidencia**: `lib/api/gd-guard.ts` decide permisos de actas (`gd`) y controles de propiedad (`ad`)
-  con lógica propia; la matriz no le da `gd` al comité y **no existe `ad`**.
-- **Decisión del owner (2026-10-21)**: "esto no debe suceder ni ahí ni en ningún lado". Mover a la matriz
-  y eliminar el bypass.
-- **Pendiente**: declarar `gd` y `ad` con el mínimo privilegio (propuesta a confirmar al implementar) y
-  convertir el guard en lector de `puede()` con el contexto como parámetro.
+- **Evidencia**: `lib/api/gd-guard.ts` decidía permisos de actas (`gd`) y controles de propiedad (`ad`)
+  con lógica propia; la matriz no le daba `gd` al comité y **no existía `ad`**.
+- **Decisión del owner (2026-10-21)**: "esto no debe suceder ni ahí ni en ningún lado".
+- **Cierre**: commit `5226db6`. La `MATRIZ` declara `gd` y `ad` para comité (5 acciones, paridad exacta
+  con el guard viejo) y `ad:ver` para residente; ambas funciones quedaron como delegación de una línea
+  en `puede()`. Test de paridad `test/api/gd-guard-paridad.test.ts` (5 roles × 5 acciones).
+- **Pregunta abierta**: el comité conserva `eliminar` sobre actas y controles por paridad. Recortarlo es
+  una decisión de producto posterior, no un efecto del refactor.
 
 ### H6 · Herramientas internas sin gate (`qa-estado`, `qa-roadmap`, `dev-dashboard`) — **aceptado**
 
@@ -57,15 +59,19 @@ comentarios o tests pero nunca implementados en el motor.
 - **Decisión del owner (2026-10-21)**: mantener por ahora, con conciencia de que **el módulo debe salir
   o aislarse antes de producción**; no es deuda de permisos sino de alcance del producto.
 
-### H7 · Rol invertido en `marcarLeida` de notificaciones — **decidido, pendiente de implementación**
+### H7 · Rol invertido en `marcarLeida` de notificaciones — **cerrado**
 
-- **Evidencia**: `PUT /api/notificaciones/[id]` exige `editar` (solo admin). El residente ve sus
-  notificaciones pero no puede marcarlas leídas; el admin puede marcarlas por él (falsificación).
+- **Evidencia**: `PUT /api/notificaciones/[id]` exigía `editar` (solo admin). El residente veía sus
+  notificaciones pero no podía marcarlas leídas; el admin podía marcarlas por él (falsificación).
 - **Decisión del owner (2026-10-21)**: la gracia es **alertar al admin de que se leyó**; el que marca es
-  el destinatario, el admin ve el estado y la fecha.
-- **Pendiente**: acción granular `notificaciones:propias` (marcar solo la propia, filtrada por
-  `destinatarioPersonaId`) y quitar la capacidad de escribir el estado por otro rol. Tests: residente
-  marca la suya (200), ajena (404), admin no puede marcar por otro.
+  el destinatario, el admin ve el estado.
+- **Cierre**: commit `5226db6`. Nuevo `POST /api/notificaciones/[id]/leer` con `notificaciones:propias`
+  (5 roles), pertenencia server-side (ajena → 404) e idempotencia; el `PUT` del admin descarta `leida`
+  cuando el actor no es el destinatario. Mapa rol→destinatarioRol con fuente única en
+  `lib/api/notificaciones-scope.ts`. El test que consagraba la falsificación
+  (`api-notificaciones.test.ts`) se reescribió al comportamiento decidido.
+- **Deuda declarada**: `Notificacion` no tiene `fechaLectura`; "se leyó" es solo `leida: Boolean`.
+  Agregar la fecha exige migración de esquema.
 
 ### H8 · Scoping de auditoría entre comunidades — **cerrado sin defecto**
 
