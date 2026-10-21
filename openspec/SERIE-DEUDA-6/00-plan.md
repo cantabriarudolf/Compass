@@ -20,7 +20,7 @@ solicitud IR, reportes RE (generar/distribuir/vista), adelantos PL, cobranza FI,
 
 | Ventana | Alcance | Estado | Commit final |
 |---|---|---|---|
-| V1 | `comunidad/certificados` — `liquidacionesPL` + `cobrosFI` del store → `useLiquidaciones` + `useCobrosFI` | EN CURSO | — |
+| V1 | `comunidad/certificados` — `liquidacionesPL` + `cobrosFI` del store → `useLiquidaciones` + `useCobrosFI` | HECHA | `5e6a373` |
 | V2 | `visor-mensajes` — quitar `caducarAvisosCV` del store: caducidad vía API (acción mínima reutilizando el contrato existente) | PENDIENTE | — |
 | V3 | `finanzas/multas` — cablear `use-in`: aplicar/desestimar/apelar (rutas ya existen) y migrar la página | PENDIENTE | — |
 | V4 | `inventario/proyectos` — cablear `use-mt`: verificar garantías + actualizar pago de trabajo (rutas ya existen) y migrar la página | PENDIENTE | — |
@@ -64,3 +64,16 @@ El orquestador audita (`git diff`, gates si hace falta) antes de lanzar la sigui
 
 - **2026-10-21** — Serie materializada tras la auditoría de la deuda. Base: `main` en `e8d74d5`
   (BACKLOG al día, sin push). Rama `noche/deuda-6`.
+- **2026-10-21 · V1 HECHA** — `app/comunidad/certificados/page.tsx`: las 4 lecturas legacy
+  (`liquidacionesPL`, `cobrosFI` + `hasHydrated` + `useStoreRehydrated`) pasan a
+  `useLiquidaciones()` / `useCobrosFI()`; la página ya no importa `useCompassStore` (solo el helper
+  puro `esMiembroDirectivaVigente`). Paridad estricta verificada por shapes+filtros
+  (`estado === "confirmada"`, saldo Al Día por unidad) y por el test nuevo
+  `test/componentes/certificados-fuente-hooks.test.tsx` (4 casos con señuelos en el store legacy).
+  Gate: `npx tsc --noEmit` exit 0 · `npm run lint` **0 problems** · `npm test` **132/1331 pass** con
+  cobertura **94.31/85.82/93.61** (igual al fingerprint) · `openspec validate --all` **36/36** ·
+  `check-delta-coverage` **0 que romperían el archive**. Commits: `48e5418` (change openspec) y
+  `5e6a373` (migración + test). Sin push. **Deuda declarada**: `useCrudCollection` pagina con
+  `pageSize=100` (`lib/api/use-crud-collection.ts:98`) — límite preexistente compartido con
+  `finanzas/pagos`, `finanzas/gastos-comunes` y `admin/reporteria`; no se toca (contrato del hook
+  congelado), queda para fase 2.
