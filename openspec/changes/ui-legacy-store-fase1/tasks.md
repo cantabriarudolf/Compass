@@ -195,6 +195,11 @@ cerrado por rol. Test-first en `lib/authz.test.ts` (RED: 5 casos rojos antes de 
 5. La bandeja de un residente no puede acotarse por unidad: el modelo `Notificacion` no tiene
    `unidadId`, así que una difusión al rol “residente” la ven todos los residentes de la comunidad.
    Es una limitación del schema, declarada para fase 2 (no se toca el schema en esta serie).
+6. **`marcarLeida` sigue siendo solo del administrador**: `PUT /api/notificaciones/[id]` exige
+   `editar`, que esta ventana no abrió (habría permitido editar cualquier notificación de la
+   comunidad). Antes la lectura también era 403, así que la sección de notificaciones del portal
+   estaba muerta; ahora se puebla con lo propio, pero el botón de “leída” responde 403. Abrirlo
+   requiere una acción granular del estilo `notificaciones:propias` y una decisión del owner (V5).
 
 ## V4 — `inventario/proyectos`: cablear `use-mt.ts` y migrar la página
 

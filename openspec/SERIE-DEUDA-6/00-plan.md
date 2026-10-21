@@ -168,4 +168,9 @@ El orquestador audita (`git diff`, gates si hace falta) antes de lanzar la sigui
   notificaciones de su comunidad (órgano de gobierno, criterio del prompt); (3) el residente ve también
   las difusiones a `propietario` porque en RP es el mismo rol y el portal ya filtra así
   (`app/comunidad/portal/page.tsx:135`); (4) `Notificacion` no tiene `unidadId`, así que una difusión al
-  rol la ve toda la comunidad con ese rol — limitación de schema, deuda declarada para fase 2.
+  rol la ve toda la comunidad con ese rol — limitación de schema, deuda declarada para fase 2;
+  (5) el residente ya puede **leer** su bandeja, pero "marcar como leída" sigue siendo del
+  administrador: `PUT /api/notificaciones/[id]` exige `editar`, que no se abrió a propósito en esta
+  ventana (antes la lectura también era 403, así que la sección del portal estaba muerta; ahora se
+  puebla y el botón de leída responde 403). Decidir si el residente marca sus propias notificaciones
+  requiere una acción granular análoga a `in:apelar` y queda para la decisión del owner en V5.
