@@ -1,9 +1,10 @@
 "use client"
 
 import * as React from "react"
-// Lecturas legacy restantes: liquidacionesPL y cobrosFI aún sin hook.
-import { useCompassStore, esMiembroDirectivaVigente, useStoreRehydrated } from "@/lib/store"
+import { esMiembroDirectivaVigente } from "@/lib/store"
 import { useCertificadosCT } from "@/lib/api/use-certificados-ct"
+import { useCobrosFI } from "@/lib/api/use-cobros-fi"
+import { useLiquidaciones } from "@/lib/api/use-liquidaciones"
 import { usePersonas } from "@/lib/api/use-personas"
 import { useUnidades } from "@/lib/api/use-unidades"
 import { useVinculos } from "@/lib/api/use-vinculos"
@@ -38,18 +39,14 @@ const TIPO_LABEL: Record<CertificadoCT["tipo"], string> = {
 }
 
 export default function CertificadosPage() {
-  useStoreRehydrated()
   const { items: certificados, isLoading: cCertificados, create: crearCertificadoApi, remove: removeCertificadoApi } = useCertificadosCT()
   const { personas, isLoading: cPersonas } = usePersonas()
   const { items: unidades, isLoading: cUnidades } = useUnidades()
   const { vinculos, isLoading: cVinculos } = useVinculos()
   const { config, isLoading: cConfig } = useConfiguracion()
   const { vigente: periodoVigente, isLoading: cPeriodosDirectiva } = usePeriodosDirectiva()
-  // TODO: migrar a usePE cuando exista endpoint /api/pl/liquidaciones (PL).
-  const liquidacionesPL = useCompassStore(s => s.liquidacionesPL)
-  // TODO: migrar a useCobrosFI.
-  const cobrosFI = useCompassStore(s => s.cobrosFI)
-  const hasHydrated = useCompassStore(s => s.hasHydrated)
+  const { liquidaciones: liquidacionesPL, isLoading: cLiquidaciones } = useLiquidaciones()
+  const { items: cobrosFI, isLoading: cCobrosFI } = useCobrosFI()
   const configuracion = config
 
   const [tipo, setTipo] = React.useState<CertificadoCT["tipo"]>("residencia")
@@ -61,7 +58,7 @@ export default function CertificadosPage() {
   const [okMsg, setOkMsg] = React.useState<string | null>(null)
   const [pdfBusy, setPdfBusy] = React.useState<string | null>(null)
 
-  const cargando = !hasHydrated || cCertificados || cPersonas || cUnidades || cVinculos || cConfig || cPeriodosDirectiva
+  const cargando = cCertificados || cPersonas || cUnidades || cVinculos || cConfig || cPeriodosDirectiva || cLiquidaciones || cCobrosFI
   if (cargando) {
     return <div className="h-64 w-full animate-pulse rounded-lg bg-muted" />
   }
