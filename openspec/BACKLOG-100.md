@@ -316,7 +316,7 @@ El owner pidió saldar la deuda viva ("punto 4") en modo autónomo y sobre una r
 | `store-cobertura-fase-b` (1.202 statements del store sin cubrir) | **P8** — tests comportamentales sobre `lib/store/**` + ratchet de `lib/**` |
 | Cierre y auditoría | **P9** — gates completos de la serie, archives, PR draft y deuda post-serie declarada |
 
-Estado: **en ejecución** — P1 cerrada el 2026-10-14 (censo + poda del store legacy); P2–P9 pendientes.
+Estado: **COMPLETA 9/9** — P2–P9 cerradas; PR **#2 mergeado** el 2026-10-15. Detalle por ventana en `openspec/SERIE-NOCHE-3/00-plan.md` (Bitácora).
 
 ### Deuda descubierta por `store-cleanup` (2026-10-14)
 
@@ -326,3 +326,54 @@ Estado: **en ejecución** — P1 cerrada el 2026-10-14 (censo + poda del store l
 | **`CF_UPDATE_PARAM` sin emisor** | El evento no tiene emisor en el código: su único emisor era `saveConfiguracion` (poda de P1), que la app ya no llamaba, y `app/api/configuracion/route.ts` no lo emite. Gap **preexistente** de la migración CF→API. Requiere decisión del owner: re-implementar la auditoría server-side o retirar el requirement |
 | **Deriva en docs NSGC** | `manuales/28 - MK - Catálogo de Mocks.md` (24 acciones), `manuales/33 - ST - Capa de Datos Persistente.md`, `manuales/36 - MK - Data Dump Comunicación y Solicitudes.md` y `manuales/40 - MK - Data Dump Remuneraciones, Certificados y Reportería.md` nombran acciones podadas por P1. P1 solo puede tocar `Data/NSGC/docs/avances/**` (alcance declarado); sincronizar esos manuales requiere una ventana con alcance NSGC. Los avances y auditorías históricos no se corrigen |
 | **e2e `poblado-idempotente.spec.ts:96` (caso "cancelar")** | Espera **30 s** el mensaje de purga, pero una purga completa suma **38,7 s** de DELETEs secuenciales medidos en el log del dev server (el test hermano `:29` usa 120 s para la misma espera y documenta la purga como lenta). Falla en este entorno con y sin el cambio de P1 (el flujo es API REST + Prisma, no depende del store). Acción: subir esa espera a 120 s |
+
+> **Cierre verificado 2026-10-21**: las 4 deudas de esta tabla están saldadas. Deriva de prosa y deriva NSGC → 0 menciones de las acciones podadas en `openspec/specs/**` y `Data/NSGC/docs/manuales/**`; `CF_UPDATE_PARAM` → emisor server-side (DEUDA-2 D2); e2e `:96` → espera a 120 s (DEUDA-1 P1). Ver §Deuda viva verificada (2026-10-21) al final del archivo.
+
+## Deuda viva verificada (2026-10-21)
+
+Auditoría contra el árbol de trabajo (no contra las filas históricas de este archivo), después del
+merge de DEUDA-5. Series cerradas: NOCHE-3 → PR **#2** merged (2026-10-15) · DEUDA-1 → PR **#3**
+merged (2026-10-16) · DEUDA-2/3/4/5 → en `main`.
+
+| Frente | Estado | Desbloquea |
+|---|---|---|
+| Store legacy en la UI (`useCompassStore`) | **ÚNICO accionable** — 13 archivos / 147 usos; 3 son excepciones justificadas, 10 migrables; 8 endpoints faltantes | Worker en lotes por riesgo (ver abajo) |
+| `au-google-sso` | ⏸ Bloqueado (código 100 % listo) | Owner: `GOOGLE_CLIENT_ID`/`SECRET` en Vercel + 2 decisiones de rol/migración |
+| Decisiones de producción (Sentry DSN, pen-test, Ley 21.719, proveedor Postgres, privacidad/abogado, CSP con dominio real, secrets Vercel) | ⏸ Pendientes | Owner |
+| Falso positivo `window.open` (`app/comunidad/comunicacion/page.tsx:292`) | Decisión de producto | Owner (allowlist de dominios) |
+| Techo 99.95 % de `lib/store.ts` (2 statements inalcanzables) | Aceptado (deuda-2 D4 / deuda-3 D5) | Nadie: por diseño |
+| Deriva de prosa (12 specs + 4 manuales NSGC), 2 warnings turbo, `CF_UPDATE_PARAM`, e2e `poblado-idempotente:96` | ✅ Saldado y verificado | — |
+
+**Gates de la verificación (2026-10-21)**: `tsc --noEmit` 0 errores · `eslint` exit 0 ·
+`openspec validate --all` 35 passed / 0 failed · 0 menciones de las 20 acciones podadas en
+`openspec/specs/**` y `Data/NSGC/docs/manuales/**`.
+
+### Store legacy: mapa de migración (auditoría read-only 2026-10-21)
+
+Casos por archivo (clases: **a** lectura con hook SWR existente · **b** acción con endpoint ya
+existente falta cablear hook · **c** acción sin endpoint):
+
+| Archivo | Usos | Clases | Veredicto |
+|---|---|---|---|
+| `app/comunidad/certificados/page.tsx` | 4 | a (`useLiquidaciones`, `useCobrosFI`) | **MIGRABLE YA** (solo lectura) |
+| `app/visor-mensajes/page.tsx` | 2 | c (`caducarAvisosCV` en `setInterval`) | MIGRABLE CON ENDPOINT (o reusar `PUT /api/cv/avisos/[id]`) |
+| `app/comunidad/visor/page.tsx` | 2 | c (`publicarActaEnCV`) | MIGRABLE CON ENDPOINT |
+| `app/finanzas/gastos-comunes/page.tsx` | 2 | c (`enviarCobranzaFI`) | MIGRABLE CON ENDPOINT |
+| `app/inventario/proyectos/page.tsx` | 3 | b (`actualizarPagoTrabajoMT`, `verificarGarantiasMT`: rutas ya existen) | MIGRABLE (cablear hooks) |
+| `app/inventario/recursos/page.tsx` | 5 | b/c (entregar solicitud, resolver comodín) | MIGRABLE CON ENDPOINT |
+| `app/personas/personal/page.tsx` | 7 | b/c (5 transiciones PE + auditoría) | MIGRABLE CON ENDPOINT |
+| `app/admin/reporteria/page.tsx` | 9 | b (generar/distribuir/vista dashboard) | MIGRABLE CON ENDPOINT |
+| `app/finanzas/multas/page.tsx` | 7 | b (aplicar/desestimar/apelar IN: rutas ya existen, faltan en `use-in.ts`) | MIGRABLE (cablear hooks) |
+| `app/finanzas/remuneraciones/page.tsx` | 4 | a (`useLiquidaciones`) + c (`adelantosPL`) | MIGRABLE CON ENDPOINT |
+| `app/admin/qa-lab/page.tsx` | ~100+ | semillas/test/`STORE_VERSION` | **EXCEPCIÓN — NO MIGRAR** |
+| `app/admin/dev-dashboard/page.tsx` | ≥2 | diagnóstico sobre `getState()` | **EXCEPCIÓN — NO MIGRAR** |
+| `app/admin/mantenimiento/page.tsx` | 4 | backup/seed de localStorage | **EXCEPCIÓN — NO MIGRAR** |
+
+**Endpoints faltantes (8)**: adelantos PL · cobranza FI · caducar avisos CV · publicar acta en CV ·
+5 transiciones PE · entregar/resolver solicitud IR (+comodín) · reportes RE generar/distribuir/vista ·
+(auditoría PE y eventos). Rutas que **ya existen** y solo requieren hook: IN aplicar/desestimar/apelar,
+MT verificar garantías y actualizar pago de trabajo.
+
+**Lotes (riesgo creciente)**: **L1** lectura pura (`certificados`, `visor-mensajes`) → **L2** escritura
+no-dinero (`comunidad/visor`, `personal`, `inventario/*`, `reporteria`) → **L3** dinero
+(`remuneraciones`, `multas` → cargo FI, `gastos-comunes` → cobranza).
