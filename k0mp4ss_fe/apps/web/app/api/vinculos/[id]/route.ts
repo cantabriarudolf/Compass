@@ -88,7 +88,12 @@ export async function DELETE(req: Request, ctx: CtxTipo): Promise<Response> {
     }
     if (existente.fechaFin === null && existente.rol === "propietario") {
       const controles = await prisma.controlPropiedad.count({
-        where: { comunidadId: scope.comunidadId, unidadId: existente.unidadId },
+        // Solo los vigentes bloquean: un control desestimado ya no aplica.
+        where: {
+          comunidadId: scope.comunidadId,
+          unidadId: existente.unidadId,
+          estado: "vigente",
+        },
       })
       if (controles > 0) {
         return jsonError(

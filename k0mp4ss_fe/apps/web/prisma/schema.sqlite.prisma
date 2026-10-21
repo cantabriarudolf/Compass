@@ -395,12 +395,33 @@ model ControlPropiedad {
   residenteVeMorosidad      Boolean
   residenteVeActas          Boolean
   alertasResidentesActivas  Boolean
+  // Borrado lógico (decisión owner 2026-10-21): vigente | desestimada.
+  estado                    String   @default("vigente")
   createdAt                 DateTime @default(now())
   updatedAt                 DateTime @updatedAt
 
   @@index([comunidadId])
   @@index([unidadId])
   @@map("controles_propiedad")
+}
+
+// Archivo de borrado lógico AD: copia íntegra del control al momento de
+// desestimarlo; la fila original nunca se borra y queda como "desestimada".
+model ControlPropiedadArchivada {
+  id                       String   @id
+  comunidadId              String
+  unidadId                 String
+  residenteVeMorosidad     Boolean
+  residenteVeActas         Boolean
+  alertasResidentesActivas Boolean
+  motivo                   String?  // razón opcional declarada por quien desestima
+  actorUsuarioId           String   // usuario de sesión que ejecutó el borrado lógico
+  archivadaEn              DateTime @default(now())
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  @@index([comunidadId])
+  @@map("controles_propiedad_archivados")
 }
 
 model ActaGD {
@@ -416,7 +437,8 @@ model ActaGD {
   invitados         Json     // string[]
   minuta            String
   adjuntos          Json     // ImagenReferencia[]
-  estado            String   // borrador | publicada
+  // Borrado lógico (decisión owner 2026-10-21): borrador | publicada | desestimada.
+  estado            String
   aprobaciones      Json     // string[]
   fechaPublicacion  String?
   avisoCVReferencia String?
@@ -427,6 +449,35 @@ model ActaGD {
 
   @@index([comunidadId])
   @@map("actas_gd")
+}
+
+// Archivo de borrado lógico GD: copia íntegra del acta al momento de
+// desestimarla; la fila original nunca se borra y queda como "desestimada".
+model ActaGDArchivada {
+  id                String   @id
+  comunidadId       String
+  fecha             String
+  hora              String
+  lugar             String
+  tablaTemas        Json     // string[]
+  presentes         Json     // string[]
+  ausentes          Json     // string[]
+  invitados         Json     // string[]
+  minuta            String
+  adjuntos          Json     // ImagenReferencia[]
+  estado            String   // estado del acta al momento de archivar
+  aprobaciones      Json     // string[]
+  fechaPublicacion  String?
+  avisoCVReferencia String?
+  periodoId         String?
+  motivo            String?  // razón opcional declarada por quien desestima
+  actorUsuarioId    String   // usuario de sesión que ejecutó el borrado lógico
+  archivadaEn       DateTime @default(now())
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([comunidadId])
+  @@map("actas_gd_archivadas")
 }
 
 // Comunicación con Vecinos (CO)

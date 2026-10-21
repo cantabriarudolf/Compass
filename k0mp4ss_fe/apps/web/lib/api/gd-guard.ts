@@ -104,10 +104,11 @@ export function puedeGestionarControles(rol: string, accion: Accion): boolean {
   return puede(rol, accion, "ad")
 }
 
-/** ¿Algún control de la comunidad autoriza a residentes a ver actas? */
+/** ¿Algún control VIGENTE de la comunidad autoriza a residentes a ver actas? */
 export async function residentesVenActas(comunidadId: string): Promise<boolean> {
   const control = await prisma.controlPropiedad.findFirst({
-    where: { comunidadId, residenteVeActas: true },
+    // Los desestimados (borrado lógico) no habilitan nada: el archivo no da permisos.
+    where: { comunidadId, residenteVeActas: true, estado: "vigente" },
     select: { id: true },
   })
   return control !== null

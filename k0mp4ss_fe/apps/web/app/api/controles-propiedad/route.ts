@@ -93,7 +93,10 @@ export async function GET(req: Request): Promise<Response> {
     100,
     Math.max(1, Number.parseInt(url.searchParams.get("pageSize") ?? "50", 10) || 50)
   )
-  const where: Record<string, unknown> = { comunidadId: scope.comunidadId }
+  const where: Record<string, unknown> = {
+    comunidadId: scope.comunidadId,
+    estado: "vigente", // desestimados solo en el archivo (borrado lógico)
+  }
   if (visibles !== "todas") where.unidadId = { in: visibles }
 
   try {
@@ -150,11 +153,14 @@ export async function POST(req: Request): Promise<Response> {
         "No se puede guardar el control: la unidad no existe en el inventario."
       )
     }
-    // Unicidad: un solo registro de controles por unidad.
+    // Unicidad: un solo registro de controles por unidad. Los desestimados
+    // (borrado lógico) no cuentan: desestimar libera la unidad para
+    // re-registrar sus controles.
     const duplicado = await prisma.controlPropiedad.findFirst({
       where: {
         comunidadId: scope.comunidadId,
         unidadId: parsed.data.unidadId,
+        estado: "vigente",
         NOT: { id },
       },
       select: { id: true },
