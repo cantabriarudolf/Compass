@@ -62,8 +62,54 @@ sin `openspec archive`** (el archive exige CI verde observado y esta serie no pu
 
 ## V3 — `finanzas/multas`: cablear `use-in.ts` y migrar la página
 
-- [ ] Aplicar/desestimar/apelar en `lib/api/use-in.ts` contra las rutas ya existentes.
-- [ ] Migrar la página (7 usos) y test de fijación.
+- [x] **Contrato real de las 3 rutas leído antes de cablear** (§"Evidencia de la ventana V3"): las
+  tres son `POST` custom sobre `[id]`, pasan por `contextoAccionIN()` (sesión + membresía +
+  `editar` sobre `in`) y responden `Response.json({ ok: true })`; los errores viajan como
+  `{ error }` con 400/403/404/500 y `postAccion` los propaga tal cual.
+- [x] `lib/api/use-in.ts`: `useInfraccionesIN()` devuelve la colección + `aplicar(id)` (POST **sin
+  body**: la ruta no lee `req`), `desestimar(id, justificacion)` y `apelar(id, descargos)`. Las tres
+  con `postAccion` (patrón de `use-liquidaciones.ts`) devolviendo `StoreResult`; invalidan la
+  colección IN y, solo `aplicar`, también `/api/cobros-fi` porque materializa el `cargoFI`.
+- [x] Página migrada (7 usos → 0): las 3 acciones del expediente van por el hook, el buzón CO pasa a
+  `useMensajesBuzonCO()` (`/api/co/mensajes-buzon`, mismos campos `id`/`folio`/`asunto`/`cuerpo`) y se
+  elimina el import de `useCompassStore`. El expediente abierto se referencia por id (`detalleId`) y
+  se resuelve contra la colección SWR, así que tras aplicar/apelar el diálogo pinta la fila fresca
+  sin copiar el objeto a un estado local ni usar un `useEffect` con `setState`.
+- [x] `grep -n "useCompassStore" app/finanzas/multas/page.tsx` → **0 coincidencias**.
+- [x] Tests: `test/api/use-in-acciones.test.tsx` (6 casos — éxito + error de servidor por acción, con
+  URL, método y body exactos) y `test/componentes/multas-acciones-hooks.test.tsx` (5 casos — aplicar
+  con el error del servidor tal cual, desestimar con el prompt + cierre del diálogo, apelar, cero
+  llamadas a las acciones legacy y buzón CO leído del hook).
+- [x] **Gate V3** (workdir `k0mp4ss_fe/apps/web`): `npx tsc --noEmit` → exit 0 · `npm run lint` →
+  exit 0 (**0 problems**) · `npm test` → **134 archivos / 1343 tests passed** (V2: 1332, +11 casos),
+  cobertura global **94.31 / 85.82 / 93.61** y `lib/store.ts` **99.95** (igual al fingerprint) ·
+  `openspec validate ui-legacy-store-fase1 --strict` → *is valid* · `check-delta-coverage` → **0 que
+  romperían el archive**. e2e no se corre en esta máquina (2 cores; flakes documentados).
+
+### Evidencia de la ventana V3
+
+Payload real de cada ruta (leído del `route.ts`, no inferido):
+
+| Acción | Ruta (`path:line`) | Body que lee | Respuesta | Errores |
+| --- | --- | --- | --- | --- |
+| Aplicar | `POST` — `app/api/in/infracciones/[id]/aplicar/route.ts:30` | **ninguno** (el handler recibe `_req` y no lo lee) | `{ ok: true }` — `:212` | 403 (authz), 404, 400 por estado / tipo inexistente / respaldo de directiva / datos inválidos, 500 |
+| Desestimar | `POST` — `app/api/in/infracciones/[id]/desestimar/route.ts:22` | `{ justificacion: string }` — `leerCuerpo` `:28`, extracción `:30` (trim; vacío → 400) | `{ ok: true }` — `:58` | 403, 404, 400 (resolución final / sin justificación), 500 |
+| Apelar | `POST` — `app/api/in/infracciones/[id]/apelar/route.ts:22` | `{ descargos: string }` — `leerCuerpo` `:28`, extracción `:30` (trim; <10 chars → 400) | `{ ok: true }` — `:64` | 403, 404, 400 (estado ≠ `en_revision` / descargos cortos), 500 |
+| Authz compartida | `app/api/in/infracciones/_acciones.ts:25` | — | — | `puede(rol, "editar", "in")` → si no, `jsonError(403, "Permiso denegado.")` `:26` |
+
+**Hallazgo de permisos (fuera de alcance, no se toca `lib/authz.ts`)**: la matriz no declara el
+recurso `"in"` para ningún rol salvo el wildcard de `administrador` (`lib/authz.ts:22-95`). Consecuencia
+observable: `comite` ("directiva" en la UI del expediente) recibe **403** en las tres acciones
+—y ya lo recibía en el `GET` de la colección (`app/api/in/infracciones/route.ts:14`), porque el `GET`
+exige el mismo `ver`/`in`—, igual que `conserjeria`, `residente` y `mantencion`. Antes de esta ventana
+el botón sí “funcionaba” para esos roles porque la acción escribía en `localStorage` **sin** authz y
+sin tocar la fuente de verdad; con la API el 403 es visible en el toast de error. Queda declarado para
+la decisión del owner sobre la matriz (no se modifica acá).
+
+Otras notas de paridad: mismos textos de `window.prompt` ("Justificación de la desestimación
+(obligatoria):" / "Descargos del vecino:"), mismos fallbacks ("No se pudo aplicar." / "No se pudo
+desestimar." / "No se pudieron registrar los descargos."), mismo cierre del diálogo al desestimar y
+misma permanencia con estado actualizado al aplicar/apelar.
 
 ## V4 — `inventario/proyectos`: cablear `use-mt.ts` y migrar la página
 

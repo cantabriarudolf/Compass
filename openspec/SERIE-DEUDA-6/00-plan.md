@@ -22,7 +22,7 @@ solicitud IR, reportes RE (generar/distribuir/vista), adelantos PL, cobranza FI,
 |---|---|---|---|
 | V1 | `comunidad/certificados` — `liquidacionesPL` + `cobrosFI` del store → `useLiquidaciones` + `useCobrosFI` | HECHA | `5e6a373` |
 | V2 | `visor-mensajes` — quitar `caducarAvisosCV` del store: caducidad vía API (acción mínima reutilizando el contrato existente) | HECHA | `dc0f583` |
-| V3 | `finanzas/multas` — cablear `use-in`: aplicar/desestimar/apelar (rutas ya existen) y migrar la página | PENDIENTE | — |
+| V3 | `finanzas/multas` — cablear `use-in`: aplicar/desestimar/apelar (rutas ya existen) y migrar la página | HECHA | `412e9a7` |
 | V4 | `inventario/proyectos` — cablear `use-mt`: verificar garantías + actualizar pago de trabajo (rutas ya existen) y migrar la página | PENDIENTE | — |
 | V5 | Cierre: gates completos, `BACKLOG-100.md`, avance NSGC, deuda restante declarada, informe | PENDIENTE | — |
 
@@ -99,3 +99,30 @@ El orquestador audita (`git diff`, gates si hace falta) antes de lanzar la sigui
   `editar` sobre `cv`, mientras antes era puramente cliente sobre `localStorage` y **no tocaba la
   fuente de verdad** (el carrusel ya leía de la API), así que el efecto visible es el previsto.
   `useCompassStore` ya no aparece en la página.
+- **2026-10-21 · V3 HECHA** — `app/finanzas/multas/page.tsx` (7 usos → 0) y `lib/api/use-in.ts`.
+  Contrato real leído antes de cablear: las tres rutas son `POST` sobre `[id]`, pasan por
+  `contextoAccionIN()` (`_acciones.ts:25`, `editar` sobre `in`) y responden `{ ok: true }`
+  (`aplicar/route.ts:212`, `desestimar/route.ts:58`, `apelar/route.ts:64`); **aplicar no lee body**
+  (`POST(_req, ctx)` en `aplicar/route.ts:30`), desestimar lee `{ justificacion }`
+  (`desestimar/route.ts:28-30`) y apelar `{ descargos }` (`apelar/route.ts:28-30`).
+  `useInfraccionesIN()` ahora devuelve la colección + `aplicar(id)`, `desestimar(id, justificacion)`,
+  `apelar(id, descargos)` con `postAccion` y `StoreResult` (patrón `use-liquidaciones`),
+  invalidando IN y —solo aplicar— `/api/cobros-fi`. `mensajesBuzonCO` pasa a `useMensajesBuzonCO()`.
+  El expediente abierto se referencia por id (`detalleId`) y se resuelve contra la colección SWR:
+  tras aplicar/apelar pinta la fila fresca sin copiar el objeto a estado local ni usar un
+  `useEffect` con `setState` (el lint de React 19 los marca). Paridad estricta de textos: mismos
+  `window.prompt`, mismos fallbacks (`No se pudo aplicar.` / `No se pudo desestimar.` / `No se
+  pudieron registrar los descargos.`), mismo cierre al desestimar, misma permanencia al aplicar o
+  apelar. Tests: `test/api/use-in-acciones.test.tsx` (6 casos: éxito + error de servidor por acción,
+  con URL/método/body exactos) y `test/componentes/multas-acciones-hooks.test.tsx` (5 casos, incluye
+  que las acciones legacy del store nunca se invocan y que el buzón CO sale del hook). Gate:
+  `npx tsc --noEmit` exit 0 · `npm run lint` **0 problems** · `npm test` **134 archivos / 1343 tests
+  passed** con cobertura **94.31/85.82/93.61** y `lib/store.ts` **99.95** (igual al fingerprint) ·
+  `openspec validate ... --strict` *is valid* · `check-delta-coverage` **0 que romperían el archive**.
+  Commits: `412e9a7` (hook + página + tests) y el de cierre de documentación. Sin push.
+  **Hallazgo de permisos (no se toca `lib/authz.ts`)**: la matriz no declara el recurso `"in"` para
+  ningún rol salvo el wildcard de `administrador` → `comite` (directiva), `conserjeria`, `residente` y
+  `mantencion` reciben **403** en `aplicar`/`desestimar`/`apelar` (y ya lo recibían en el `GET` de
+  `app/api/in/infracciones/route.ts:14`). Antes el botón “funcionaba” para esos roles porque escribía
+  en `localStorage` sin authz y sin tocar la fuente de verdad; con la API el 403 es visible en el
+  toast de error. Requiere decisión del owner sobre la matriz.
