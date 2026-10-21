@@ -232,13 +232,19 @@ describe("/api/controles-propiedad — AD con BD real (Fase 2)", () => {
     })
   })
 
-  it("PUT parcial persiste; DELETE elimina (admin)", async () => {
+  it("PUT parcial persiste; DELETE desestima con archivo (admin)", async () => {
     await conSesion(emailAdmin, async () => {
       const put = await PUT("ad-ctrl-1", { residenteVeMorosidad: true })
       expect(put.status).toBe(200)
       expect((await prisma.controlPropiedad.findUnique({ where: { id: "ad-ctrl-1" } }))?.residenteVeMorosidad).toBe(true)
       expect((await DELETE("ad-ctrl-2")).status).toBe(200)
-      expect(await prisma.controlPropiedad.findUnique({ where: { id: "ad-ctrl-2" } })).toBeNull()
+      // Borrado lógico: la fila NO desaparece, queda desestimada y con copia.
+      const enBd = await prisma.controlPropiedad.findUnique({ where: { id: "ad-ctrl-2" } })
+      expect(enBd).not.toBeNull()
+      expect(enBd?.estado).toBe("desestimada")
+      expect(
+        await prisma.controlPropiedadArchivada.findUnique({ where: { id: "ad-ctrl-2" } })
+      ).not.toBeNull()
     })
   })
 

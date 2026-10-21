@@ -169,6 +169,11 @@ export async function DELETE(req: Request, ctx: CtxTipo): Promise<Response> {
       if (record.estado === "desestimada") {
         return null
       }
+      // Paridad con la regla previa: un acta publicada forma parte del libro y no
+      // se desestima por DELETE.
+      if (record.estado === "publicada") {
+        return "publicada"
+      }
       // Copia íntegra ANTES de marcar; si el archivo falla no se marca nada.
       // SAFETY: la fila tiene exactamente los campos del modelo de archivo.
       await tx.actaGDArchivada.create({
@@ -207,6 +212,9 @@ export async function DELETE(req: Request, ctx: CtxTipo): Promise<Response> {
       return record
     })
     if (archivada === "denegado") return jsonError(403, "Permiso denegado.")
+    if (archivada === "publicada") {
+      return jsonError(409, "El acta está publicada: no se puede desestimar.")
+    }
     if (!archivada) return jsonError(404, "Registro no encontrado.")
     return Response.json({ ok: true })
   } catch (e) {

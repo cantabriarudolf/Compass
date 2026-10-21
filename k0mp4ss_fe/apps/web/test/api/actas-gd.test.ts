@@ -339,10 +339,16 @@ describe("/api/actas-gd — GD actas con BD real (Fase 2)", () => {
     })
   })
 
-  it("DELETE borrador → 200; publicada → 409 y sigue en BD", async () => {
+  it("DELETE borrador → 200 (borrado lógico + archivo); publicada → 409 y sigue en BD", async () => {
     await conSesion(emailAdmin, async () => {
       expect((await DELETE("gd2-acta-comite")).status).toBe(200)
-      expect(await prisma.actaGD.findUnique({ where: { id: "gd2-acta-comite" } })).toBeNull()
+      // Borrado lógico: la fila NO desaparece, queda desestimada y con copia.
+      const enBd = await prisma.actaGD.findUnique({ where: { id: "gd2-acta-comite" } })
+      expect(enBd).not.toBeNull()
+      expect(enBd?.estado).toBe("desestimada")
+      expect(
+        await prisma.actaGDArchivada.findUnique({ where: { id: "gd2-acta-comite" } })
+      ).not.toBeNull()
       const pub = await DELETE("gd2-acta-pub")
       expect(pub.status).toBe(409)
       expect(await prisma.actaGD.findUnique({ where: { id: "gd2-acta-pub" } })).not.toBeNull()
