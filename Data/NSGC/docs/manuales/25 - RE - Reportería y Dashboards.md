@@ -4,7 +4,7 @@ El centro de mando de la comunidad: consolida demografía, operación, gestiones
 
 ## 🚀 Funcionalidad Principal
 
-Cada vista abierta del mando queda auditada (`RE_DASHBOARD_VIEW`). Los reportes se generan con **snapshot inmutable** (lo que se capturó no cambia aunque la mora o los gastos evolucionen) y la distribución resuelve los destinatarios **vigentes al momento de enviar**, nunca los congelados.
+Cada vista abierta del mando queda auditada (`RE_DASHBOARD_VIEW`). **Emitir congela** el informe: número correlativo, autor y fecha quedan fijados y el histórico **no cambia** aunque los datos de origen cambien después. La distribución resuelve los destinatarios **vigentes al momento de enviar**, nunca los congelados.
 
 ## 🛠️ Secciones
 
@@ -17,13 +17,16 @@ Cada vista abierta del mando queda auditada (`RE_DASHBOARD_VIEW`). Los reportes 
   - **Reportes y Segmentación**:
     - Bloques extraíbles: Resumen de Gastos del Mes, Novedades de Bitácora, Estado de Morosidad General y Consumo de Insumos (IR).
     - Segmentación granular: edificio/piso/unidad (**EF**) + perfil administración/personal/propietario/residente (**MP/RP**) + tenencia propietarios/arrendatarios (**VU**). Vista previa del alcance antes de distribuir.
-    - Distribución idempotente: cada reporte se envía una vez; llega como notificación simulada a cada destinatario resuelto y el alcance queda registrado.
+    - **Emitir congela**: el snapshot se calcula al emitir (número, autor y fecha incluidos) y nunca se recalcula al abrirlo; reemitir el mismo informe devuelve el congelado, no un duplicado.
+    - **Distribuir**: lo publica en el **visor interno** y, si hay servidor de correo disponible, lo deja en cola de envío. Sin correo configurado, el envío queda **pendiente** — nunca aparece como "enviado".
+    - **Métrica del ciclo**: **emitidos / distribuidos / leídos**. No existe "tasa de apertura".
 
 ## 💡 Tips de Oro
 
 - **Ejemplo canónico**: "Fallas de ascensores Torre A" → segmenta `[Torre A] + [Residentes] + [Propietarios]`; reciben exactamente quienes tienen vínculo vigente hoy en esa torre, sin duplicados.
 - **El personal no siempre vive en la comunidad**: los perfiles Administración y Personal se resuelven desde MP aunque no tengan unidad vinculada; Propietarios/Residentes sí pasan por VU+EF.
-- **Snapshot ≠ distribución**: el contenido se congela al generar; los destinatarios se calculan al distribuir (si vendieron/dejaron la unidad después de generar, no les llegará).
+- **Snapshot ≠ distribución**: el contenido se congela al emitir; los destinatarios se calculan al distribuir (si vendieron/dejaron la unidad después de emitir, no les llegará).
+- **Pendiente es honesto**: sin servidor de correo el envío queda marcado pendiente; el informe ya está distribuido en el visor aunque el email no haya partido.
 - **Termómetro rojo**: significa que los gastos fijos recurrentes superan la caja disponible proyectada — revisar sueldos y servicios antes de comprometer gastos nuevos.
 - **Tasa huérfanos**: debe ser 0% tras la carga técnica; un valor > 0 indica FK colgante que hay que limpiar en qa-lab.
 - **Auditoría**: `RE_DASHBOARD_VIEW`, `RE_REPORT_GENERATED`, `RE_REPORT_DISTRIBUTED`.
