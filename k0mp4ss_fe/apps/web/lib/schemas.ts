@@ -1973,11 +1973,47 @@ export type CanalEnvioRE = (typeof CANALES_ENVIO_RE)[number]
 
 // --- Liquidaciones y Remuneraciones (PL) ---
 
-export const ESTADOS_ADELANTO_PL = ["pendiente", "descontado"] as const
+export const ESTADOS_ADELANTO_PL = [
+  "pendiente",
+  "descontado_parcial",
+  "saldado",
+  // legado (pre §V4): el store antiguo marcaba "descontado" al pie de la letra.
+  // Se conserva en el enum para que el estado persistido del store legacy siga
+  // validando; la API escribe los tres estados canónicos de la doctrina DT.
+  "descontado",
+  // desestimado = baja con historia (no se borra el registro, se anula).
+  "desestimado",
+] as const
 export const EstadoAdelantoPLSchema = z.enum(ESTADOS_ADELANTO_PL)
 
+// SERIE-FASE2 §V4 — dos naturalezas, nunca una sola (DT ORD 2676/140):
+// - anticipo_regular: pago anticipado de lo devengado, se descuenta 100% en la
+//   liquidación siguiente y NO es descuento del art. 58 (sin tope 15%).
+// - prestamo: deuda con acuerdo escrito adjunto, topada al 15% mensual de la
+//   remuneración bruta y al 45% conjunto (art. 58 inc. 3 y 4).
+export const PACTOS_ADELANTO_PL = ["anticipo_regular", "prestamo"] as const
+export const PactoAdelantoPLSchema = z.enum(PACTOS_ADELANTO_PL)
+export type PactoAdelantoPL = (typeof PACTOS_ADELANTO_PL)[number]
+
+// Cada deducción aplicada queda ligada a la liquidación que la descontó
+// (auditoría documental: qué mes, cuánto y con qué saldo resultante).
+export const DeduccionAdelantoPLSchema = z.object({
+  liquidacionId: IdEntidadSchema,
+  folio: z.string(),
+  periodo: z.string(),
+  fecha: FechaISOSchema,
+  monto: z.number().min(0, "El monto descontado no puede ser negativo."),
+  saldoResultante: z.number().min(0, "El saldo no puede ser negativo."),
+  estado: EstadoAdelantoPLSchema,
+})
+export type DeduccionAdelantoPL = z.infer<typeof DeduccionAdelantoPLSchema>
+
 // Adelanto de sueldo: glosa explicativa obligatoria y folio ADE auto-generado
-// como comprobante de entrega. Ciclo: pendiente → descontado en liquidación.
+// como comprobante de entrega. Ciclo: pendiente → descontado_parcial → saldado.
+//
+// Los campos de la §V4 van `.optional()` a propósito: el estado persistido del
+// store legacy (y sus adelantos ya registrados) no los tiene, y exigirlos
+// invalidaría la rehidratación. La API los pide en su propio esquema de entrada.
 export const AdelantoPLSchema = z.object({
   id: IdEntidadSchema,
   folio: z.string().min(1, "El folio del adelanto es obligatorio."),
@@ -1991,6 +2027,17 @@ export const AdelantoPLSchema = z.object({
     .min(5, "Debe describir el motivo del adelanto (mínimo 5 caracteres)."),
   estado: EstadoAdelantoPLSchema,
   liquidacionId: IdEntidadSchema.optional(),
+  pacto: PactoAdelantoPLSchema.optional(),
+  saldo: z.number().min(0, "El saldo no puede ser negativo.").optional(),
+  periodoImputacion: z
+    .string()
+    .regex(/^(?:\d{4}-\d{2})?$/, "El período de imputación debe ser AAAA-MM.")
+    .optional(),
+  acuerdoEscritoRef: z.string().optional(),
+  creadoPor: z.string().optional(),
+  aprobadoPor: z.string().optional(),
+  comprobante: z.string().optional(),
+  deducciones: z.array(DeduccionAdelantoPLSchema).optional(),
 })
 
 const BonoLiquidacionSchema = z.object({

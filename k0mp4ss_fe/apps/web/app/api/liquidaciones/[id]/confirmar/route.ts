@@ -102,21 +102,67 @@ export async function POST(
         comunidadId: scope.comunidadId,
       } as never,
     })
-    // SAFETY: adelantosIds es Json (string[]); el cast solo tipa la lectura.
+    // SAFETY: adelantosIds / adelantosDetalle son Json; los casts solo tipan la lectura.
     const adelantosIds = (liquidacion.adelantosIds ?? []) as unknown as string[]
+    const detalle = (liquidacion.adelantosDetalle ?? null) as unknown as
+      | {
+          id: string
+          monto: number
+          saldoResultante: number
+          estado: string
+        }[]
+      | null
     await prisma.liquidacionPL.update({
       where: { id },
       data: { estado: "confirmada", egresoFIReferencia: egreso.id },
     })
-    if (adelantosIds.length > 0) {
-      await prisma.adelantoPL.updateMany({
+    let adelantosAplicados = 0
+    if (detalle && detalle.length > 0) {
+      // SERIE-FASE2 §V4 — el plan calculado al generar dice cuánto se descuenta de
+      // cada adelanto (100% del anticipo, hasta 15% del préstamo). Acá se
+      // materializa: saldo, estado y la deducción ligada a esta liquidación.
+      for (const d of detalle) {
+        if (!(d.monto > 0)) continue
+        const adelanto = await prisma.adelantoPL.findUnique({ where: { id: d.id } })
+        if (!adelanto || adelanto.comunidadId !== scope.comunidadId) continue
+        // SAFETY: deducciones es Json (DeduccionAdelantoPL[]); el cast solo tipa.
+        const previas = Array.isArray(adelanto.deducciones)
+          ? (adelanto.deducciones as unknown as unknown[])
+          : []
+        await prisma.adelantoPL.update({
+          where: { id: adelanto.id },
+          data: {
+            saldo: Math.max(0, Math.round(d.saldoResultante)),
+            estado: d.estado,
+            liquidacionId: id,
+            deducciones: [
+              ...previas,
+              {
+                liquidacionId: id,
+                folio: liquidacion.folio,
+                periodo: liquidacion.periodo,
+                fecha: hoyISO(),
+                monto: Math.round(d.monto),
+                saldoResultante: Math.max(0, Math.round(d.saldoResultante)),
+                estado: d.estado,
+              },
+            ] as never,
+          },
+        })
+        adelantosAplicados += 1
+      }
+    } else if (adelantosIds.length > 0) {
+      // Liquidaciones generadas antes de §V4 (sin plan por adelanto): se saldan
+      // completas, que es la única información que traía el registro legado.
+      const legado = await prisma.adelantoPL.updateMany({
         where: {
           comunidadId: scope.comunidadId,
           id: { in: adelantosIds },
-          estado: "pendiente",
+          estado: { in: ["pendiente", "descontado_parcial"] },
         },
-        data: { estado: "descontado", liquidacionId: id },
+        data: { estado: "saldado", saldo: 0, liquidacionId: id },
       })
+      adelantosAplicados = legado.count
     }
     await prisma.eventoAuditoria.create({
       data: {
@@ -127,7 +173,7 @@ export async function POST(
         categoria: "PL",
         tipoAccion: "PL_EXPENSE_SYNC",
         referenciaId: id,
-        descripcion: `Liquidación ${liquidacion.folio} CONFIRMADA: egreso ${egreso.folio} de $${egreso.monto.toLocaleString("es-CL")} imputado a ${fondoGC.nombre} (categoría Sueldos); ${adelantosIds.length} anticipo(s) descontado(s).`,
+        descripcion: `Liquidación ${liquidacion.folio} CONFIRMADA: egreso ${egreso.folio} de $${egreso.monto.toLocaleString("es-CL")} imputado a ${fondoGC.nombre} (categoría Sueldos); ${adelantosAplicados} adelanto(s) descontado(s).`,
       },
     })
     return Response.json({ ok: true, egresoId: egreso.id })

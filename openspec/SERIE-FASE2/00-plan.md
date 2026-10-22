@@ -80,7 +80,7 @@ Dos naturalezas, nunca una sola:
 | V1 | Inventario de insumos (IR) — entregar + comodín, folio, authz | HECHA |
 | V2 | Personal (PE) — 5 transiciones | HECHA |
 | V3 | Reportería (RE) — snapshot + distribución | HECHA |
-| V4 | Adelantos PL — anticipo vs préstamo | PENDIENTE |
+| V4 | Adelantos PL — anticipo vs préstamo | HECHA |
 | V5 | Cobranza FI — multicanal con interruptores | PENDIENTE |
 | V6 | Publicar acta en CV — por referencia | PENDIENTE |
 | V7 | Cierre: gates, censo del store, BACKLOG, avance, deuda | PENDIENTE |

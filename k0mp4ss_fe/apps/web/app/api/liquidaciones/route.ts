@@ -22,6 +22,12 @@ import { puede } from "@/lib/authz"
 import { prisma } from "@/lib/prisma"
 import { logger } from "@/lib/logger"
 import { calcularLiquidacion } from "@/lib/pl-utils"
+import {
+  adelantoImputableAlPeriodo,
+  calcularDeduccionAdelantos,
+  pactoDeAdelanto,
+  saldoVivoAdelanto,
+} from "./adelantos/_calculo"
 import { createCrudHandlers, type CrudDelegate } from "@/lib/api/crud-factory"
 import {
   jsonError,
@@ -225,9 +231,17 @@ export async function POST(req: Request): Promise<Response> {
         where: {
           comunidadId: scope.comunidadId,
           trabajadorPersonaId: input.trabajadorPersonaId,
-          estado: "pendiente",
+          // §V4: también los descontados a medias (saldo arrastrado).
+          estado: { in: ["pendiente", "descontado_parcial"] },
         },
-        select: { id: true, monto: true },
+        select: {
+          id: true,
+          monto: true,
+          saldo: true,
+          estado: true,
+          pacto: true,
+          periodoImputacion: true,
+        },
       }),
     ])
 
@@ -267,9 +281,27 @@ export async function POST(req: Request): Promise<Response> {
       tasaSeguroCesantia: 0.6,
       esHonorarios,
       montoAPV: input.montoAPV ?? 0,
-      anticiposPendientes: anticiposPendientes.map((a) => ({
+      // El cálculo base NO descuenta adelantos: la doctrina §V4 se aplica abajo
+      // sobre el líquido disponible (anticipo 100% sin tope 15%; préstamo 15%
+      // con tope conjunto 45%; lo que no cabe arrastra saldo).
+      anticiposPendientes: [],
+    })
+
+    // §V4 — plan de deducción por adelanto (módulo puro, testeado aparte).
+    const adelantosVigentes = anticiposPendientes.filter(
+      (a) =>
+        adelantoImputableAlPeriodo(a, input.periodo) &&
+        saldoVivoAdelanto(a) > 0
+    )
+    const planAdelantos = calcularDeduccionAdelantos({
+      remuneracionBruta: calculo.totalHaberes,
+      deduccionesLegales: calculo.totalDescuentos,
+      alcanceLiquido: calculo.alcanceLiquido,
+      adelantos: adelantosVigentes.map((a) => ({
         id: a.id,
-        monto: a.monto,
+        pacto: pactoDeAdelanto(a.pacto),
+        saldo: saldoVivoAdelanto(a),
+        periodoImputacion: a.periodoImputacion,
       })),
     })
 
@@ -329,10 +361,11 @@ export async function POST(req: Request): Promise<Response> {
       montoSeguroCesantia: calculo.montoSeguroCesantia,
       montoAPV: input.montoAPV ?? 0,
       totalDescuentos: calculo.totalDescuentos,
-      descuentoAnticipos: calculo.descuentoAnticipos,
-      adelantosIds: calculo.adelantosIds,
+      descuentoAnticipos: planAdelantos.descuentoTotal,
+      adelantosIds: planAdelantos.adelantosIds,
+      adelantosDetalle: planAdelantos.deducciones,
       alcanceLiquido: calculo.alcanceLiquido,
-      liquidoAPagar: calculo.liquidoAPagar,
+      liquidoAPagar: calculo.alcanceLiquido - planAdelantos.descuentoTotal,
       estado: "borrador",
       egresoFIReferencia: "pendiente",
       ...(proyeccion ? { proyeccionPEReferencia: proyeccion.id } : {}),
@@ -366,7 +399,7 @@ export async function POST(req: Request): Promise<Response> {
         categoria: "PL",
         tipoAccion: "PL_GENERATE_PAYSLIP",
         referenciaId: id,
-        descripcion: `Liquidación ${folio} generada para ${trabajador.nombres} ${trabajador.apellidos} (${input.periodo}): haberes $${calculo.totalHaberes.toLocaleString("es-CL")}, líquido a pagar $${calculo.liquidoAPagar.toLocaleString("es-CL")}.`,
+        descripcion: `Liquidación ${folio} generada para ${trabajador.nombres} ${trabajador.apellidos} (${input.periodo}): haberes $${calculo.totalHaberes.toLocaleString("es-CL")}, líquido a pagar $${(calculo.alcanceLiquido - planAdelantos.descuentoTotal).toLocaleString("es-CL")}.${planAdelantos.descuentoTotal > 0 ? ` Adelantos descontados: $${planAdelantos.descuentoTotal.toLocaleString("es-CL")} (anticipo $${planAdelantos.descuentoAnticipo.toLocaleString("es-CL")}, préstamo $${planAdelantos.descuentoPrestamo.toLocaleString("es-CL")}; topes 15% $${planAdelantos.topePrestamo.toLocaleString("es-CL")} / 45% $${planAdelantos.topeConjunto.toLocaleString("es-CL")}).` : ""}${planAdelantos.arrastreTotal > 0 ? ` ALERTA: arrastra $${planAdelantos.arrastreTotal.toLocaleString("es-CL")} al período siguiente.` : ""}`,
       },
     })
     return Response.json(record, { status: 201 })

@@ -35,6 +35,10 @@ const MATRIZ: Record<Rol, Record<string, Set<Accion>>> = {
     "mp:morosidad": new Set<Accion>(["ver"]),
     "re": new Set<Accion>(["ver"]),
     "re:centro_mando": new Set<Accion>(["ver"]),
+    // SERIE-FASE2 §V4 (decisión del plan): el comité LEE los adelantos PL
+    // (`pl:adelantos` ver) pero no los crea ni los desestima — eso es del
+    // administrador. Recurso propio para no abrir `pl` (sueldos sensibles).
+    "pl:adelantos": new Set<Accion>(["ver"]),
     "ct": new Set<Accion>(["ver"]),
     "ct:historial": new Set<Accion>(["ver"]),
     // SERIE-FASE2 §V2 (decisión del plan): el comité LEE Personal (`pe` ver);
@@ -86,6 +90,9 @@ const MATRIZ: Record<Rol, Record<string, Set<Accion>>> = {
     "pe:evaluacion": new Set<Accion>([]),
     "pl": new Set<Accion>([]),
     "pl:propia": new Set<Accion>(["ver"]), // solo propia liquidación (ABAC filtro)
+    // Vacío explícito: no hay auto-servicio del trabajador sobre adelantos
+    // (SERIE-FASE2 §V4). Corta el fallback de prefijo hacia `pl`.
+    "pl:adelantos": new Set<Accion>([]),
     "ct:propia": new Set<Accion>(["ver"]),
     "re:reporte_diario": new Set<Accion>(["ver"]),
     // Decisión owner 2026-10-21: conserjería entrega insumos y resuelve
@@ -336,6 +343,7 @@ export const RECURSOS_CONOCIDOS = [
   "pe:contratista",
   "pl",
   "pl:propia",
+  "pl:adelantos",
   "ct",
   "ct:propio",
   "ct:historial",

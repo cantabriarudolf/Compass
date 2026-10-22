@@ -4,6 +4,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+  // pi-lens-ignore: Prisma:unknown — el repo está pinneado a Prisma 6.19.3: `url` en el datasource es obligatoria (`prisma validate` falla sin ella); Prisma 7 la movió a prisma.config.ts.
   url      = env("DATABASE_URL")
 }
 
@@ -1150,6 +1151,10 @@ model LiquidacionPL {
   totalDescuentos          Float
   descuentoAnticipos       Float
   adelantosIds             Json
+  // SERIE-FASE2 §V4 — plan de deducción por adelanto con su tope aplicado y el
+  // arrastre resultante; lo calcula el servidor al generar (nunca el cliente) y lo
+  // consume la confirmación para actualizar saldo/estado sin recalcular.
+  adelantosDetalle         Json?
   alcanceLiquido           Float
   liquidoAPagar            Float
   estado                   String
@@ -1174,11 +1179,29 @@ model AdelantoPL {
   glosa               String
   estado              String
   liquidacionId       String?
+  // SERIE-FASE2 §V4 — dos naturalezas, nunca una sola (doctrina DT ORD 2676/140):
+  // `anticipo_regular` = pago anticipado de lo devengado (se descuenta 100% en la
+  // liquidación siguiente, sin tope 15%); `prestamo` = deuda con acuerdo escrito,
+  // topada al 15% mensual de la remuneración bruta y al 45% conjunto (art. 58 inc. 3-4).
+  pacto               String   @default("anticipo_regular")
+  // Saldo vivo: el arrastre cuando el líquido del período no alcanza.
+  saldo               Float    @default(0)
+  // Período en que corresponde imputar el descuento (AAAA-MM); "" = legado
+  // (se imputa en la liquidación siguiente que se genere).
+  periodoImputacion   String   @default("")
+  // Referencia al acuerdo escrito/firmado del préstamo (obligatoria si pacto = prestamo).
+  acuerdoEscritoRef   String?
+  creadoPor           String?
+  aprobadoPor         String?
+  comprobante         String?
+  // Auditoría de cada deducción aplicada, ligada a su liquidación.
+  deducciones         Json?
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
   @@index([comunidadId])
   @@index([trabajadorPersonaId])
+  @@index([comunidadId, trabajadorPersonaId, estado])
   @@map("adelantos_pl")
 }
 
