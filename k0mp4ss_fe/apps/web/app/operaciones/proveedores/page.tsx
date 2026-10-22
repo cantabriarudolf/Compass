@@ -7,6 +7,7 @@ import { aTituloCaso, emailNormalizado, telefonoNormalizado, sitioNormalizado } 
 // Datos de dominio vía API REST (BD fuente de verdad); store legacy deprecado.
 import { usePersonas } from "@/lib/api/use-personas"
 import { useUnidades } from "@/lib/api/use-unidades"
+import { AvisoTruncamiento, LIMITE_SELECT } from "@/components/pe/aviso-truncamiento"
 import { useMaestros } from "@/lib/api/use-maestros"
 import {
   useProveedoresPE,
@@ -85,8 +86,8 @@ const PROVEEDOR_VACIO: FormProveedor = {
 }
 
 export default function ProveedoresPage() {
-  const { personas, isLoading: cPersonas } = usePersonas()
-  const { items: unidades, isLoading: cUnidades } = useUnidades()
+  const { personas, isLoading: cPersonas, total: totalPersonas } = usePersonas()
+  const { items: unidades, isLoading: cUnidades, total: totalUnidades } = useUnidades()
   const { data: contactosEmergencia, isLoading: cContactos } = useMaestros<ContactoEmergencia>("contactos-emergencia")
   const {
     items: proveedores,
@@ -107,6 +108,19 @@ export default function ProveedoresPage() {
     create: crearVisitaTecnicaApi,
   } = useVisitasTecnicasPE()
   const cargandoAPI = cPersonas || cUnidades || cContactos || cProveedores || cMantenciones || cVisitasTec
+
+  // Selects de personas y unidades: se recortan a LIMITE_SELECT y el recorte se
+  // declara en pantalla (saneamiento de truncamientos silenciosos). Acá el
+  // recorte no es solo el slice local: `usePersonas` y `useUnidades` piden
+  // `pageSize=100` al servidor, así que el `total` de la API es el que manda.
+  const unidadesElegibles = unidades.filter((u) => !u.id.startsWith("u-E-"))
+  const unidadesVisibles = unidadesElegibles.slice(0, LIMITE_SELECT)
+  const personasVisibles = personas.slice(0, LIMITE_SELECT)
+  const totalPersonasOpciones = Math.max(totalPersonas, personasVisibles.length)
+  // Si el servidor reporta más unidades de las cargadas, se declara su total
+  // (cota superior: no se pueden descontar las excluidas que no se cargaron).
+  const totalUnidadesOpciones =
+    totalUnidades > unidades.length ? totalUnidades : unidadesElegibles.length
 
   const [error, setError] = React.useState<string | null>(null)
   const [okMsg, setOkMsg] = React.useState<string | null>(null)
@@ -759,13 +773,17 @@ export default function ProveedoresPage() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="__none">Sin supervisor</SelectItem>
-                        {personas.slice(0, 100).map((p) => (
+                        {personasVisibles.map((p) => (
                           <SelectItem key={p.id} value={p.id}>
                             {p.nombreCompleto}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
+                    <AvisoTruncamiento
+                      mostrados={personasVisibles.length}
+                      total={totalPersonasOpciones}
+                    />
                   </div>
                   <div className="flex flex-col gap-1.5">
                     <Label>Unidad / ubicación</Label>
@@ -782,16 +800,17 @@ export default function ProveedoresPage() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="__none">Áreas comunes</SelectItem>
-                        {unidades
-                          .filter((u) => !u.id.startsWith("u-E-"))
-                          .slice(0, 100)
-                          .map((u) => (
-                            <SelectItem key={u.id} value={u.id}>
-                              {u.etiqueta} {u.numero}
-                            </SelectItem>
-                          ))}
+                        {unidadesVisibles.map((u) => (
+                          <SelectItem key={u.id} value={u.id}>
+                            {u.etiqueta} {u.numero}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
+                    <AvisoTruncamiento
+                      mostrados={unidadesVisibles.length}
+                      total={totalUnidadesOpciones}
+                    />
                   </div>
                 </div>
                 <div className="flex flex-col gap-1.5">

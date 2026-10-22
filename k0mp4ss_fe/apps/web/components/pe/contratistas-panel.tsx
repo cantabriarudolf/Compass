@@ -15,6 +15,7 @@ import {
   SelectValue,
 } from "@workspace/ui/components/select"
 import { IconCheck, IconTrash } from "@tabler/icons-react"
+import { AvisoTruncamiento, LIMITE_SELECT } from "@/components/pe/aviso-truncamiento"
 import type { IngresoContratistaPE } from "@/lib/schemas"
 
 interface FormContratista {
@@ -53,6 +54,12 @@ export function ContratistasPanel({
   })
 
   const jornadas = maestros.jornadas
+
+  // Listas de opciones: se recortan a LIMITE_SELECT para no montar cientos de
+  // SelectItem, y el recorte se declara en pantalla (nunca en silencio).
+  const unidadesDestino = unidades.filter((u) => !u.id.startsWith("u-E-"))
+  const unidadesVisibles = unidadesDestino.slice(0, LIMITE_SELECT)
+  const personasVisibles = personas.slice(0, LIMITE_SELECT)
 
   const refUnidad = (id?: string) => {
     if (!id) return "—"
@@ -160,13 +167,14 @@ export function ContratistasPanel({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__none">Sin identificar</SelectItem>
-                  {personas.slice(0, 100).map((p) => (
+                  {personasVisibles.map((p) => (
                     <SelectItem key={p.id} value={p.id}>
                       {p.nombreCompleto}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+              <AvisoTruncamiento mostrados={personasVisibles.length} total={personas.length} />
             </div>
           )}
           <div className="flex flex-col gap-1.5">
@@ -177,16 +185,14 @@ export function ContratistasPanel({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="__none">Áreas comunes</SelectItem>
-                {unidades
-                  .filter((u) => !u.id.startsWith("u-E-"))
-                  .slice(0, 100)
-                  .map((u) => (
-                    <SelectItem key={u.id} value={u.id}>
-                      {u.etiqueta} {u.numero}
-                    </SelectItem>
-                  ))}
+                {unidadesVisibles.map((u) => (
+                  <SelectItem key={u.id} value={u.id}>
+                    {u.etiqueta} {u.numero}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
+            <AvisoTruncamiento mostrados={unidadesVisibles.length} total={unidadesDestino.length} />
           </div>
           <Button onClick={guardarContratista}>
             <IconCheck className="mr-1 size-4" /> Agendar ingreso

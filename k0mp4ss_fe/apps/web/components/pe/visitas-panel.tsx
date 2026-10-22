@@ -16,6 +16,7 @@ import {
   SelectValue,
 } from "@workspace/ui/components/select"
 import { IconCheck, IconScan, IconTrash } from "@tabler/icons-react"
+import { AvisoTruncamiento, LIMITE_SELECT } from "@/components/pe/aviso-truncamiento"
 import type { BitacoraVisitaPE } from "@/lib/schemas"
 
 function escaneoDNISimulado(): { nombre: string; dni: string } {
@@ -72,6 +73,12 @@ export function VisitasPanel({
   })
 
   const jornadas = maestros.jornadas
+
+  // Listas de opciones: se recortan a LIMITE_SELECT para no montar cientos de
+  // SelectItem, y el recorte se declara en pantalla (nunca en silencio).
+  const unidadesDestino = unidades.filter((u) => !u.id.startsWith("u-E-"))
+  const unidadesVisibles = unidadesDestino.slice(0, LIMITE_SELECT)
+  const personasVisibles = personas.slice(0, LIMITE_SELECT)
 
   const refUnidad = (id?: string) => {
     if (!id) return "—"
@@ -175,16 +182,14 @@ export function VisitasPanel({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__none">Sin unidad</SelectItem>
-                  {unidades
-                    .filter((u) => !u.id.startsWith("u-E-"))
-                    .slice(0, 100)
-                    .map((u) => (
-                      <SelectItem key={u.id} value={u.id}>
-                        {u.etiqueta} {u.numero}
-                      </SelectItem>
-                    ))}
+                  {unidadesVisibles.map((u) => (
+                    <SelectItem key={u.id} value={u.id}>
+                      {u.etiqueta} {u.numero}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
+              <AvisoTruncamiento mostrados={unidadesVisibles.length} total={unidadesDestino.length} />
             </div>
             <div className="flex flex-col gap-1.5">
               <Label>Residente destino</Label>
@@ -194,13 +199,14 @@ export function VisitasPanel({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__none">Sin residente</SelectItem>
-                  {personas.slice(0, 100).map((p) => (
+                  {personasVisibles.map((p) => (
                     <SelectItem key={p.id} value={p.id}>
                       {p.nombreCompleto}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+              <AvisoTruncamiento mostrados={personasVisibles.length} total={personas.length} />
             </div>
           </div>
           <label className="flex items-center gap-2 text-sm">
