@@ -78,7 +78,7 @@ Dos naturalezas, nunca una sola:
 | Ventana | Alcance | Estado |
 |---|---|---|
 | V1 | Inventario de insumos (IR) — entregar + comodín, folio, authz | HECHA |
-| V2 | Personal (PE) — 5 transiciones | PENDIENTE |
+| V2 | Personal (PE) — 5 transiciones | HECHA |
 | V3 | Reportería (RE) — snapshot + distribución | PENDIENTE |
 | V4 | Adelantos PL — anticipo vs préstamo | PENDIENTE |
 | V5 | Cobranza FI — multicanal con interruptores | PENDIENTE |
@@ -90,3 +90,15 @@ Dos naturalezas, nunca una sola:
 ## Bitácora
 
 - **2026-10-21** — Serie materializada tras cerrar la V1 (IR). Modo nocturno sin owner.
+- **2026-10-21 — V2 (PE) HECHA.** Las 5 transiciones tienen ruta propia y la página dejó el store
+  (0 usos de `useCompassStore`, verificado con grep). Rutas: `POST /api/pe/turnos/iniciar` +
+  `GET /api/pe/turnos` (inicio de turno y contador del día, recurso `pe:cierre_turno`),
+  `POST /api/pe/personas/[id]/horas-extras` (`pe` editar), `POST /api/pe/personas/[id]/evaluaciones`
+  (`pe:evaluacion` **solo admin**, inmutable: reintento con el mismo `id` → 409 y la entrada no se
+  toca), `POST /api/pe/tareas-monitoreo/[id]/completar` (`pe` editar) y
+  `POST /api/pe/proyecciones/enviar` (`pe` editar, **sin** `EgresoFI`: solo `ProyeccionPE` +
+  notificación a administración + evento). **Sin migración:** horas extra y evaluaciones ya tenían
+  dónde persistir (`Persona.datosLaborales`, columna Json) y la regla del plan prohíbe inventar
+  columnas a ciegas; el historial solo se amplía (append), nunca se reescribe. Matriz RBAC:
+  `pe` ver/crear/editar para conserjería y mantención, `pe` ver para comité, `pe:evaluacion` vacío
+  para el resto de los roles, `pe:cierre_turno` vacío para mantención (corta el fallback de prefijo).
