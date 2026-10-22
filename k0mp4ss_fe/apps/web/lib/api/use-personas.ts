@@ -12,6 +12,7 @@
 import useSWR, { mutate as mutateGlobal } from "swr"
 import type { Persona } from "@/data/comunidad/personas"
 import type { StoreResult } from "@/lib/store"
+import { normalizarRun } from "@/lib/validacion-rut"
 
 const LISTA = "/api/personas"
 
@@ -156,4 +157,25 @@ export function usePersona(id: string): UsePersonaResultado {
     update,
     remove,
   }
+}
+
+/**
+ * Resuelve una persona del padrón por RUN (PE-visitas, escaneo del QR de la
+ * cédula).
+ *
+ * Pide el filtro exacto `?rut=` de la ruta (scoping de comunidad y ABAC del
+ * residente siguen viviendo en el servidor) y confirma en cliente el match
+ * normalizado, porque el RUN puede estar guardado con puntos o sin ellos.
+ *
+ * Devuelve `null` si el padrón no tiene ese RUN; propaga el error de red/HTTP
+ * para que el panel de visitas pueda caer al padrón local en vez de bloquear
+ * la operación.
+ */
+export async function buscarPersonaPorRun(run: string): Promise<Persona | null> {
+  const canonico = normalizarRun(run)
+  if (!canonico) return null
+  const coleccion = await fetcher<ColeccionPersonas>(
+    `${LISTA}?rut=${encodeURIComponent(canonico)}&pageSize=10`
+  )
+  return coleccion.data.find((p) => normalizarRun(p.rut) === canonico) ?? null
 }

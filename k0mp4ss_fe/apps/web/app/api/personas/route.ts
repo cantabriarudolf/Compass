@@ -9,11 +9,14 @@
  * - PE: FKs laborales contra los maestros legales de MA.
  * - MP: RUT y email únicos por comunidad (409).
  * - ABAC residente: en colección GET ve únicamente su propia ficha.
+ * - PE-visitas: `?rut=` resuelve la identidad leída del QR de la cédula
+ *   (match exacto sobre las grafías normalizadas del RUN).
  */
 import { PersonaSchema } from "@/lib/schemas"
 import { puede } from "@/lib/authz"
 import { prisma } from "@/lib/prisma"
 import { logger } from "@/lib/logger"
+import { variantesRun } from "@/lib/validacion-rut"
 import { randomUUID } from "node:crypto"
 import {
   jsonError,
@@ -299,6 +302,7 @@ export async function GET(req: Request): Promise<Response> {
     Math.max(1, Number.parseInt(url.searchParams.get("pageSize") ?? "50", 10) || 50)
   )
   const q = url.searchParams.get("q")?.trim()
+  const rut = url.searchParams.get("rut")?.trim()
 
   const where: Record<string, unknown> = { comunidadId: scope.comunidadId }
   if (residente) {
@@ -311,6 +315,16 @@ export async function GET(req: Request): Promise<Response> {
       { rut: { contains: q } },
       { email: { contains: q } },
     ]
+  }
+  if (rut) {
+    // Filtro exacto por RUT (PE-visitas): el mismo RUN puede estar guardado con
+    // puntos o sin ellos, así que se buscan todas sus grafías canónicas. El
+    // alcance sigue siendo el del scope: nunca se consulta otra comunidad.
+    const variantes = variantesRun(rut)
+    if (variantes.length === 0) {
+      return jsonError(400, "El RUT informado no es válido.")
+    }
+    where.rut = { in: variantes }
   }
 
   try {
