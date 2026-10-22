@@ -70,8 +70,12 @@ test.describe("CRUD — Admin/Reporteria", () => {
       await page.getByRole("button", { name: "Distribuir" }).first().click({ force: true, noWaitAfter: true })
     }
 
-    // Afirmar mensaje de distribución enviada
-    await expect(page.getByText("Distribución enviada a la bandeja simulada")).toBeVisible({ timeout: 10_000 })
+    // Afirmar mensaje de distribución (SERIE-FASE2 §V3): el reporte se publica en el visor
+    // interno y el email queda en cola como pendiente porque la plataforma no tiene SMTP.
+    // Se cambió el texto que esperaba el flujo viejo ("bandeja simulada").
+    await expect(
+      page.getByText("El email quedó como pendiente en la cola de salida")
+    ).toBeVisible({ timeout: 10_000 })
     // O badge con destinatario(s) (first: el historial acumula filas de
     // corridas previas sin cleanup — P2 PG-FASE3)
     await expect(page.getByText(/destinatario\(s\)/).first()).toBeVisible({ timeout: 10_000 })

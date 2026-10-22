@@ -3,13 +3,12 @@
     import * as React from "react"
     import Link from "next/link"
     // Datos de dominio vía API REST (BD fuente de verdad); store legacy deprecado.
-    import { useCompassStore } from "@/lib/store"
     import { usePersonas } from "@/lib/api/use-personas"
     import { sinNulos } from "@/lib/api/use-crud-collection"
     import { useConfiguracion } from "@/lib/api/use-configuracion"
     import { useMaestros } from "@/lib/api/use-maestros"
     import { useTrabajosMT } from "@/lib/api/use-mt"
-    import { useCierresTurnoPE, useProyeccionesPE } from "@/lib/api/use-pe"
+    import { useCierresTurnoPE, useProyeccionesPE, useAccionesPE, useTurnosIniciadosPE } from "@/lib/api/use-pe"
     import type {
       Afp,
       AsignacionFamiliar,
@@ -191,17 +190,18 @@ export default function PersonalPage() {
   const { data: bancos, isLoading: cBancos } = useMaestros<Banco>("bancos")
   const { data: feriados, isLoading: cFeriados, create: crearFeriadoApi, update: actualizarFeriadoApi, remove: eliminarFeriadoApi } = useMaestros<Feriado>("feriados")
   const { config: configuracion } = useConfiguracion()
-  // TODO: migrar eventos a hook SWR cuando exista
-  const eventos = useCompassStore(s => s.eventos)
-  // TODO: migrar estas acciones PE/maestros a API REST cuando existan endpoints de transición:
-  // registrarHoraExtraPE, registrarEvaluacionPE, iniciarTurnoPE, completarTareaMonitoreoPE,
-  // enviarProyeccionCostoFI (fallback legacy al store hasta entonces).
-  const registrarHoraExtraPE = useCompassStore(s => s.registrarHoraExtraPE)
-  const registrarEvaluacionPE = useCompassStore(s => s.registrarEvaluacionPE)
-  const iniciarTurnoPE = useCompassStore(s => s.iniciarTurnoPE)
-  const completarTareaMonitoreoPE = useCompassStore(s => s.completarTareaMonitoreoPE)
-  const enviarProyeccionCostoFI = useCompassStore(s => s.enviarProyeccionCostoFI)
-  const isLoading = cPersonas || cTrabajos || cCierres || cProyecciones || cJornadas || cAfps || cPrevisiones || cMutuales || cAsignaciones || cBancos || cFeriados
+  // SERIE-FASE2 §V2: los turnos del día salen de `/api/pe/turnos` (eventos
+  // `PE_START_SHIFT`) y las cinco transiciones tienen ruta propia en
+  // `/api/pe/**`. El store legacy ya no se usa en esta página.
+  const { items: turnosIniciadosHoy, isLoading: cTurnos } = useTurnosIniciadosPE()
+  const {
+    iniciarTurno: iniciarTurnoApi,
+    registrarHoraExtra: registrarHoraExtraApi,
+    registrarEvaluacion: registrarEvaluacionApi,
+    completarTareaMonitoreo: completarTareaMonitoreoApi,
+    enviarProyeccionCosto: enviarProyeccionCostoApi,
+  } = useAccionesPE()
+  const isLoading = cPersonas || cTrabajos || cCierres || cProyecciones || cJornadas || cAfps || cPrevisiones || cMutuales || cAsignaciones || cBancos || cFeriados || cTurnos
 
   const [error, setError] = React.useState<string | null>(null)
   const [okMsg, setOkMsg] = React.useState<string | null>(null)
@@ -254,13 +254,13 @@ export default function PersonalPage() {
     setOkMsg(`Ficha de ${editando.nombres} ${editando.apellidos} guardada.`)
   }
 
-  const agregarHoraExtra = () => {
+  const agregarHoraExtra = async () => {
     if (!editandoId) return
     if (!horaExtra.fecha || !horaExtra.horas || !horaExtra.motivo.trim()) {
       setError("Complete fecha, horas y motivo de la hora extra.")
       return
     }
-    const r = registrarHoraExtraPE(editandoId, { fecha: horaExtra.fecha, horas: Number(horaExtra.horas), motivo: horaExtra.motivo.trim() })
+    const r = await registrarHoraExtraApi(editandoId, { fecha: horaExtra.fecha, horas: Number(horaExtra.horas), motivo: horaExtra.motivo.trim() })
     if (!r.ok) {
       setError(r.error ?? "No se pudo registrar la hora extra.")
       return
@@ -269,7 +269,7 @@ export default function PersonalPage() {
     setOkMsg("Hora extra registrada.")
   }
 
-  const agregarEvaluacion = () => {
+  const agregarEvaluacion = async () => {
     if (!editandoId) return
     if (!evaluacion.fecha || !evaluacion.puntaje) {
       setError("Complete fecha y puntaje de la evaluación (1 a 7).")
@@ -280,7 +280,7 @@ export default function PersonalPage() {
       setError("El puntaje debe ir de 1 a 7.")
       return
     }
-    const r = registrarEvaluacionPE(editandoId, { fecha: evaluacion.fecha, puntaje, comentarios: evaluacion.comentarios.trim() || undefined })
+    const r = await registrarEvaluacionApi(editandoId, { fecha: evaluacion.fecha, puntaje, comentarios: evaluacion.comentarios.trim() || undefined })
     if (!r.ok) {
       setError(r.error ?? "No se pudo registrar la evaluación.")
       return
@@ -347,8 +347,8 @@ export default function PersonalPage() {
     Math.max(0, Number(costoDiaExtra) || 0)
   )
 
-  const enviarProyeccion = () => {
-    const r = enviarProyeccionCostoFI(mesProyeccion, { costoParche: Math.max(0, Number(costoParche) || 0), costoDiaExtra: Math.max(0, Number(costoDiaExtra) || 0) })
+  const enviarProyeccion = async () => {
+    const r = await enviarProyeccionCostoApi(mesProyeccion, { costoParche: Math.max(0, Number(costoParche) || 0), costoDiaExtra: Math.max(0, Number(costoDiaExtra) || 0) })
     if (!r.ok) {
       setError(r.error ?? "No se pudo enviar la proyección.")
       return
@@ -357,12 +357,12 @@ export default function PersonalPage() {
     setOkMsg(`Proyección de ${mesProyeccion} enviada a Finanzas (liquidación pendiente en PL).`)
   }
 
-  const iniciarTurno = () => {
+  const iniciarTurno = async () => {
     if (!turnoPersona || !turnoJornada) {
       setError("Seleccione trabajador y jornada para iniciar el turno.")
       return
     }
-    const r = iniciarTurnoPE(turnoPersona, turnoJornada)
+    const r = await iniciarTurnoApi(turnoPersona, turnoJornada)
     if (!r.ok) {
       setError(r.error ?? "No se pudo iniciar el turno.")
       return
@@ -372,9 +372,6 @@ export default function PersonalPage() {
   }
 
   const estadoHoy = estadoReporteDiario(cierresTurnoPE, hoy)
-  const turnosIniciadosHoy = eventos.filter(
-    e => e.tipoAccion === "PE_START_SHIFT" && e.timestamp.slice(0, 10) === hoy
-  )
   const tareasAbiertas = trabajosMT.filter(t => (t.estado === "planificado" || t.estado === "en_curso") && t.responsablePersonaId && personal.some(p => p.id === t.responsablePersonaId))
 
 
@@ -589,7 +586,7 @@ export default function PersonalPage() {
                         <td className="p-3">{personal.find(p => p.id === t.responsablePersonaId)?.nombreCompleto ?? "—"}</td>
                         <td className="p-3"><Badge variant="secondary">{t.estado}</Badge></td>
                         <td className="p-3">
-                          <Button size="sm" variant="outline" onClick={() => { const r = completarTareaMonitoreoPE(t.id); if (!r.ok) setError(r.error ?? ""); else setOkMsg(`Tarea "${t.titulo}" completada (PE_TASK_DONE).`) }}>Completar</Button>
+                          <Button size="sm" variant="outline" onClick={async () => { const r = await completarTareaMonitoreoApi(t.id); if (!r.ok) setError(r.error ?? ""); else setOkMsg(`Tarea "${t.titulo}" completada (PE_TASK_DONE).`) }}>Completar</Button>
                         </td>
                       </tr>
                     ))}

@@ -63,7 +63,10 @@ describe("lib/authz — matriz RP (pure, sin IO)", () => {
     expect(puede("residente", "ver", "PE:directorio")).toBe(true)
     expect(puede("residente", "crear", "PE:visita")).toBe(true)
     expect(puede("residente", "ver", "IR:mantenimiento")).toBe(true)
-    expect(puede("residente", "crear", "IR:mantenimiento")).toBe(true)
+    // Decisión owner 2026-10-21: el residente solo consulta el inventario
+    // (ya no crea solicitudes de insumo ni entrega).
+    expect(puede("residente", "crear", "IR:mantenimiento")).toBe(false)
+    expect(puede("residente", "editar", "IR:mantenimiento")).toBe(false)
     expect(puede("residente", "crear", "IR:interno")).toBe(false)
     expect(puede("residente", "ver", "FI")).toBe(false)
     expect(puede("residente", "ver", "admin:usuarios")).toBe(false)
@@ -82,16 +85,58 @@ describe("lib/authz — matriz RP (pure, sin IO)", () => {
     expect(puede("mantencion", "ver", "FI")).toBe(false)
   })
 
+  // SERIE-FASE2 §V2 — transiciones de Personal (PE). Fija en el motor los tres
+  // permisos que usan las rutas de `/api/pe/**`: `pe` para conserjería y
+  // mantención, `pe:cierre_turno` para quien inicia/cierra turno y
+  // `pe:evaluacion` SOLO para el administrador.
+  it("PE transiciones — `pe` lo operan conserjería y mantención; comité solo lee", () => {
+    for (const rol of ["conserjeria", "mantencion"]) {
+      expect(puede(rol, "ver", "PE")).toBe(true)
+      expect(puede(rol, "crear", "PE")).toBe(true)
+      expect(puede(rol, "editar", "PE")).toBe(true)
+    }
+    expect(puede("comite", "ver", "PE")).toBe(true)
+    expect(puede("comite", "crear", "PE")).toBe(false)
+    expect(puede("comite", "editar", "PE")).toBe(false)
+    expect(puede("residente", "ver", "PE")).toBe(false)
+    expect(puede("residente", "crear", "PE")).toBe(false)
+    expect(puede("administrador", "editar", "PE")).toBe(true)
+    // El comité lee PE pero no el dato previsional/bancario (pe:ficha vacío).
+    expect(puede("comite", "ver", "PE:ficha")).toBe(false)
+    expect(puede("mantencion", "ver", "PE:ficha")).toBe(false)
+  })
+
+  it("PE cierre de turno — conserjería inicia/cierra; mantención y residente no", () => {
+    expect(puede("conserjeria", "crear", "PE:cierre_turno")).toBe(true)
+    expect(puede("conserjeria", "ejecutar", "PE:cierre_turno")).toBe(true)
+    expect(puede("mantencion", "crear", "PE:cierre_turno")).toBe(false)
+    expect(puede("comite", "crear", "PE:cierre_turno")).toBe(false)
+    expect(puede("residente", "crear", "PE:cierre_turno")).toBe(false)
+    expect(puede("administrador", "crear", "PE:cierre_turno")).toBe(true)
+  })
+
+  it("PE evaluación — solo administrador; el resto de los roles la tiene bloqueada", () => {
+    expect(puede("administrador", "crear", "PE:evaluacion")).toBe(true)
+    expect(puede("administrador", "editar", "PE:evaluacion")).toBe(true)
+    for (const rol of ["comite", "conserjeria", "residente", "mantencion"]) {
+      expect(puede(rol, "ver", "PE:evaluacion")).toBe(false)
+      expect(puede(rol, "crear", "PE:evaluacion")).toBe(false)
+      expect(puede(rol, "editar", "PE:evaluacion")).toBe(false)
+    }
+  })
+
   it("ABAC IR — interno solo personal servicio (conserjeria/mantencion + admin)", () => {
     expect(puede("residente", "crear", "IR:interno")).toBe(false)
     expect(puede("comite", "crear", "IR:interno")).toBe(false)
     expect(puede("conserjeria", "crear", "IR:interno")).toBe(true)
     expect(puede("mantencion", "crear", "IR:interno")).toBe(true)
     expect(puede("administrador", "crear", "IR:interno")).toBe(true)
-    // mantenimiento sí para todos
-    expect(puede("residente", "crear", "IR:mantenimiento")).toBe(true)
-    expect(puede("comite", "crear", "IR:mantenimiento")).toBe(true)
+    // mantenimiento: quien opera el inventario (decisión owner 2026-10-21);
+    // el comité y el residente solo leen desde esa decisión.
+    expect(puede("residente", "crear", "IR:mantenimiento")).toBe(false)
+    expect(puede("comite", "crear", "IR:mantenimiento")).toBe(false)
     expect(puede("conserjeria", "crear", "IR:mantenimiento")).toBe(true)
+    expect(puede("mantencion", "crear", "IR:mantenimiento")).toBe(true)
   })
 
   it("alias de roles normaliza", () => {
@@ -135,6 +180,34 @@ describe("lib/authz — matriz RP (pure, sin IO)", () => {
     expect(puede("administrador", "ejecutar", "backup")).toBe(true)
     expect(puede("comite", "ejecutar", "backup")).toBe(false)
     expect(puede("conserjeria", "ejecutar", "backup")).toBe(false)
+  })
+
+  // Decisión owner 2026-10-21: "se están pasando insumos básicos, no es controlar
+  // el stock de uranio". Quien opera el inventario cierra el ciclo (entrega y
+  // resuelve comodines) con `editar`: conserjería y mantención. El comité y el
+  // residente dejan de crear solicitudes (solo leen); el administrador conserva
+  // el wildcard.
+  it("ir:mantenimiento — conserjería y mantención editan (entregan insumos)", () => {
+    for (const rol of ["conserjeria", "mantencion"] as const) {
+      expect(puede(rol, "ver", "ir:mantenimiento")).toBe(true)
+      expect(puede(rol, "crear", "ir:mantenimiento")).toBe(true)
+      expect(puede(rol, "editar", "ir:mantenimiento")).toBe(true)
+    }
+    // wildcard del administrador sin cambios (incluye `editar`)
+    expect(puede("administrador", "editar", "ir:mantenimiento")).toBe(true)
+  })
+
+  it("ir:mantenimiento — comité y residente solo leen: no crean ni editan", () => {
+    for (const rol of ["comite", "residente"] as const) {
+      expect(puede(rol, "ver", "ir:mantenimiento")).toBe(true)
+      expect(puede(rol, "crear", "ir:mantenimiento")).toBe(false)
+      expect(puede(rol, "editar", "ir:mantenimiento")).toBe(false)
+    }
+    // menor privilegio intacto: nadie elimina y `ir:interno` conserva su matriz.
+    for (const rol of ["comite", "conserjeria", "residente", "mantencion"] as const) {
+      expect(puede(rol, "eliminar", "ir:mantenimiento")).toBe(false)
+    }
+    expect(puede("residente", "ver", "ir:interno")).toBe(false)
   })
 })
 
@@ -532,5 +605,44 @@ describe("lib/authz — recurso cf (configuración global)", () => {
   it("administrador lee y edita la configuración", () => {
     expect(puede("administrador", "ver", "cf")).toBe(true)
     expect(puede("administrador", "editar", "cf")).toBe(true)
+  })
+})
+
+describe("lib/authz — recurso fi:cobranza (cobranza FI multicanal, SERIE-FASE2 §V5)", () => {
+  it("administrador ejecuta la cobranza (único rol con ejecutar)", () => {
+    expect(puede("administrador", "ver", "fi:cobranza")).toBe(true)
+    expect(puede("administrador", "ejecutar", "fi:cobranza")).toBe(true)
+    expect(puede("administrador", "editar", "fi:cobranza")).toBe(true)
+  })
+
+  it("comité solo ver: no ejecuta aunque tenga `fi` ejecutar (aprobar gasto)", () => {
+    expect(puede("comite", "ver", "fi:cobranza")).toBe(true)
+    // La entrada exacta corta el fallback de prefijo hacia `fi` (que sí tiene ejecutar):
+    // sin esta guarda el comité podría enviar cobranzas a los residentes.
+    expect(puede("comite", "ejecutar", "fi")).toBe(true)
+    expect(puede("comite", "ejecutar", "fi:cobranza")).toBe(false)
+    expect(puede("comite", "editar", "fi:cobranza")).toBe(false)
+    expect(puede("comite", "crear", "fi:cobranza")).toBe(false)
+  })
+
+  it("conserjería, residente y mantención no ven ni ejecutan la cobranza", () => {
+    for (const rol of ["conserjeria", "residente", "mantencion"] as const) {
+      expect(puede(rol, "ver", "fi:cobranza")).toBe(false)
+      expect(puede(rol, "ejecutar", "fi:cobranza")).toBe(false)
+      expect(puede(rol, "editar", "fi:cobranza")).toBe(false)
+    }
+  })
+
+  it("fi:cobranza:propia — el residente decide su canal (ver+editar); nadie más", () => {
+    expect(puede("residente", "ver", "fi:cobranza:propia")).toBe(true)
+    expect(puede("residente", "editar", "fi:cobranza:propia")).toBe(true)
+    // El residente sigue sin poder ejecutar la cobranza de su unidad.
+    expect(puede("residente", "ejecutar", "fi:cobranza:propia")).toBe(false)
+    for (const rol of ["comite", "conserjeria", "mantencion"] as const) {
+      expect(puede(rol, "ver", "fi:cobranza:propia")).toBe(false)
+      expect(puede(rol, "editar", "fi:cobranza:propia")).toBe(false)
+    }
+    // El administrador ve el wildcard y puede tocar la preferencia de cualquiera.
+    expect(puede("administrador", "editar", "fi:cobranza:propia")).toBe(true)
   })
 })

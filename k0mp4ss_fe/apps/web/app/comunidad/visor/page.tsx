@@ -1,8 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { useCompassStore } from "@/lib/store"
-import { useAvisosCV, usePlantillasCV } from "@/lib/api/use-cv"
+import { useAvisosCV, usePlantillasCV, useActasPublicadasCV } from "@/lib/api/use-cv"
 import { usePersonas } from "@/lib/api/use-personas"
 import { useConfiguracion } from "@/lib/api/use-configuracion"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
@@ -88,12 +87,21 @@ const FORM_AVISO: FormAviso = {
 export default function VisorPanelPage() {
   const { items: avisosCV, isLoading: cAvisos, create: crearAvisoApi, update: actualizarAvisoApi, remove: eliminarAvisoApi } = useAvisosCV()
   const { items: plantillasCV, isLoading: cPlantillas, update: actualizarPlantillaApi } = usePlantillasCV()
-  // Actas GD desde el servidor (BD-FUENTE-VERDAD Fase 2); publicarActaEnCV sigue en el store hasta la Fase 4 (CV).
+  // Actas GD desde el servidor (BD-FUENTE-VERDAD Fase 2). La publicación en el
+  // visor es POR REFERENCIA (SERIE-FASE2 §V6): CV guarda actaId + visibilidad y
+  // resuelve el contenido desde GD; la página ya no usa el store legacy.
   const { actas: actasGD } = useActasGD()
+  const {
+    publicaciones: actasPublicadas,
+    textoInformativo: textoActaInformativa,
+    isLoading: cActasPublicadas,
+    publicar: publicarActaEnVisor,
+    despublicar: despublicarActaDelVisor,
+  } = useActasPublicadasCV()
   const { config: configuracion, isLoading: cConfig, updateConfig } = useConfiguracion()
   const { personas, isLoading: cPersonas } = usePersonas()
   const caducadosRef = React.useRef(false)
-  const cargando = cAvisos || cPlantillas || cConfig || cPersonas
+  const cargando = cAvisos || cPlantillas || cConfig || cPersonas || cActasPublicadas
 
   const [error, setError] = React.useState<string | null>(null)
   const [msg, setMsg] = React.useState<string | null>(null)
@@ -207,6 +215,22 @@ export default function VisorPanelPage() {
       expiresAt: a.expiresAt ?? "",
       tags: a.tags.join(", "),
     })
+  }
+
+  // Publicación del acta en el visor POR REFERENCIA (SERIE-FASE2 §V6): la ruta
+  // valida que el acta esté publicada por quórum y audita quién y cuándo.
+  const publicarActa = async (actaId: string) => {
+    setError(null)
+    const r = await publicarActaEnVisor(actaId)
+    if (!r.ok) setError(r.error ?? "")
+    else setMsg("Acta publicada en el visor por referencia; el documento oficial sigue siendo el libro de actas.")
+  }
+
+  const despublicarActa = async (actaId: string) => {
+    setError(null)
+    const r = await despublicarActaDelVisor(actaId)
+    if (!r.ok) setError(r.error ?? "")
+    else setMsg("Acta despublicada del visor. Queda registrado quién y cuándo.")
   }
 
   if (cargando) {
@@ -378,11 +402,56 @@ export default function VisorPanelPage() {
           </Card>
         </TabsContent>
 
-        {/* Actas GD */}
+        {/* Actas GD — publicadas en el visor POR REFERENCIA (SERIE-FASE2 §V6) */}
         <TabsContent value="actas" className="flex flex-col gap-3">
-          <p className="text-xs text-muted-foreground">Difunde en el visor las actas aprobadas por quórum. Publicar marca la referencia del acta con el id del aviso.</p>
+          <p className="text-xs text-muted-foreground">El visor no copia el acta: publica su referencia y resuelve el contenido al leer desde GD. Publicar y despublicar queda auditado (quién y cuándo).</p>
           <Card>
-            <CardContent className="pt-4">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">Actas publicadas en el visor</CardTitle>
+              <CardDescription>{textoActaInformativa}</CardDescription>
+            </CardHeader>
+            <CardContent className="pt-0">
+              {actasPublicadas.length === 0 ? (
+                <p className="py-6 text-center text-sm text-muted-foreground">Ninguna acta publicada en el visor.</p>
+              ) : (
+                <ul className="flex flex-col gap-2">
+                  {actasPublicadas.map(publicacion => (
+                    <li key={publicacion.id} className="rounded-md border p-3 text-sm">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="font-medium">
+                          Acta del {publicacion.acta?.fecha ?? publicacion.actaId}
+                          <span className="block font-mono text-[11px] font-normal text-muted-foreground">referencia {publicacion.actaId}</span>
+                        </span>
+                        <Badge className="bg-emerald-600 hover:bg-emerald-700 text-white text-[10px]">publicada</Badge>
+                      </div>
+                      {publicacion.acta && (
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {publicacion.acta.lugar} · {publicacion.acta.hora} · {publicacion.acta.temas} tema(s) · {publicacion.acta.asistentes.length} asistente(s)
+                        </p>
+                      )}
+                      {publicacion.acta && publicacion.acta.asistentes.length > 0 && (
+                        <p className="mt-1 text-[11px] text-muted-foreground">
+                          Asistentes (documento enmascarado): {publicacion.acta.asistentes.map(a => `${a.nombre} (${a.documento})`).join(" · ")}
+                        </p>
+                      )}
+                      <p className="mt-2 text-[11px] font-medium">{textoActaInformativa}</p>
+                      <div className="mt-2">
+                        <Button size="sm" variant="outline" onClick={() => { void despublicarActa(publicacion.actaId) }}>
+                          <IconArchive className="size-3.5 mr-1" /> Despublicar
+                        </Button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base">Actas del libro GD</CardTitle>
+              <CardDescription>Solo un acta Publicada por quórum puede difundirse en el visor; el libro de actas sigue siendo el documento oficial.</CardDescription>
+            </CardHeader>
+            <CardContent className="pt-0">
               {actasGD.length === 0 ? (
                 <p className="py-6 text-center text-sm text-muted-foreground">Sin actas registradas en GD.</p>
               ) : (
@@ -392,36 +461,35 @@ export default function VisorPanelPage() {
                       <th className="py-2 pr-3 font-medium">Acta</th>
                       <th className="py-2 pr-3 font-medium">Lugar</th>
                       <th className="py-2 pr-3 font-medium">Estado</th>
-                      <th className="py-2 pr-3 font-medium">Aviso CV</th>
+                      <th className="py-2 pr-3 font-medium">Visor CV</th>
                       <th className="py-2"></th>
                     </tr>
                   </thead>
                   <tbody>
-                    {actasGD.map(acta => (
-                      <tr key={acta.id} className="border-b last:border-0">
-                        <td className="py-2 pr-3 font-mono text-xs">{acta.id}<span className="block font-sans">{acta.fecha}</span></td>
-                        <td className="py-2 pr-3">{acta.lugar}</td>
-                        <td className="py-2 pr-3">{acta.estado}</td>
-                        <td className="py-2 pr-3">
-                          {!acta.avisoCVReferencia || acta.avisoCVReferencia === "pendiente" ? (
-                            <Badge variant="outline" className="text-[10px]">pendiente</Badge>
-                          ) : (
-                            <Badge className="bg-emerald-600 hover:bg-emerald-700 text-white text-[10px]">{acta.avisoCVReferencia}</Badge>
-                          )}
-                        </td>
-                        <td className="py-2">
-                          {acta.estado === "publicada" && (!acta.avisoCVReferencia || acta.avisoCVReferencia === "pendiente") && (
-                            <Button size="sm" onClick={() => {
-                              const r = useCompassStore.getState().publicarActaEnCV(acta.id)
-                              if (!r.ok) setError(r.error ?? "")
-                              else setMsg("Acta publicada en el visor con su aviso correspondiente.")
-                            }}>
-                              <IconGavel className="size-3.5 mr-1" /> Publicar en Visor
-                            </Button>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
+                    {actasGD.map(acta => {
+                      const publicada = actasPublicadas.some(p => p.actaId === acta.id)
+                      return (
+                        <tr key={acta.id} className="border-b last:border-0">
+                          <td className="py-2 pr-3 font-mono text-xs">{acta.id}<span className="block font-sans">{acta.fecha}</span></td>
+                          <td className="py-2 pr-3">{acta.lugar}</td>
+                          <td className="py-2 pr-3">{acta.estado}</td>
+                          <td className="py-2 pr-3">
+                            {publicada ? (
+                              <Badge className="bg-emerald-600 hover:bg-emerald-700 text-white text-[10px]">publicada</Badge>
+                            ) : (
+                              <Badge variant="outline" className="text-[10px]">no publicada</Badge>
+                            )}
+                          </td>
+                          <td className="py-2">
+                            {acta.estado === "publicada" && !publicada && (
+                              <Button size="sm" onClick={() => { void publicarActa(acta.id) }}>
+                                <IconGavel className="size-3.5 mr-1" /> Publicar en Visor
+                              </Button>
+                            )}
+                          </td>
+                        </tr>
+                      )
+                    })}
                   </tbody>
                 </table>
               )}

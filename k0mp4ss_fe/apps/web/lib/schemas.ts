@@ -126,6 +126,37 @@ export const VinculoUnidadSchema = z.object({
   cerrarAnterior: z.boolean().optional(),
 })
 
+// PE (SERIE-FASE2 V2): las dos transiciones con historial propio dentro de la
+// ficha laboral. Se declaran como schemas exportados para que las rutas
+// (`/api/pe/personas/[id]/{horas-extras,evaluaciones}`) validen EXACTAMENTE la
+// misma forma que la ficha integral y para dejar la inmutabilidad de la
+// evaluación testimoniada en un solo lugar.
+export const HoraExtraPESchema = z.object({
+  id: IdEntidadSchema,
+  fecha: FechaISOSchema,
+  horas: z
+    .number({ invalid_type_error: "Las horas deben ser un número." })
+    .positive("Las horas extra deben ser mayores a cero."),
+  motivo: z
+    .string({
+      required_error: "El motivo de la hora extra es obligatorio.",
+    })
+    .min(1, "El motivo de la hora extra es obligatorio."),
+})
+
+// La evaluación es HISTÓRICA E INMUTABLE (plan FASE2 §V2): se agrega otra, no se
+// edita la existente. El schema no admite campos de edición y la ruta rechaza
+// cualquier intento de reescribir un id ya registrado.
+export const EvaluacionPESchema = z.object({
+  id: IdEntidadSchema,
+  fecha: FechaISOSchema,
+  puntaje: z
+    .number()
+    .min(1, "El puntaje va de 1 a 7.")
+    .max(7, "El puntaje va de 1 a 7."),
+  comentarios: z.string().optional(),
+})
+
 export const ExtensionLaboralSchema = z.object({
   id: IdEntidadSchema,
   cargo: z.string().min(1, "El cargo es obligatorio."),
@@ -179,35 +210,8 @@ export const ExtensionLaboralSchema = z.object({
     .number()
     .min(0, "El sueldo base no puede ser negativo.")
     .optional(),
-  horasExtras: z
-    .array(
-      z.object({
-        id: IdEntidadSchema,
-        fecha: FechaISOSchema,
-        horas: z
-          .number({ invalid_type_error: "Las horas deben ser un número." })
-          .positive("Las horas extra deben ser mayores a cero."),
-        motivo: z
-          .string({
-            required_error: "El motivo de la hora extra es obligatorio.",
-          })
-          .min(1, "El motivo de la hora extra es obligatorio."),
-      })
-    )
-    .optional(),
-  evaluaciones: z
-    .array(
-      z.object({
-        id: IdEntidadSchema,
-        fecha: FechaISOSchema,
-        puntaje: z
-          .number()
-          .min(1, "El puntaje va de 1 a 7.")
-          .max(7, "El puntaje va de 1 a 7."),
-        comentarios: z.string().optional(),
-      })
-    )
-    .optional(),
+  horasExtras: z.array(HoraExtraPESchema).optional(),
+  evaluaciones: z.array(EvaluacionPESchema).optional(),
 })
 
 export const ExtensionGobernanzaSchema = z
@@ -739,6 +743,29 @@ export const ComodinIRSchema = z.object({
       20,
       "La justificación debe detallar el motivo (mínimo 20 caracteres)."
     ),
+})
+
+// Decisiones de resolución de un comodín (las mismas tres del store legacy).
+export const ACCIONES_RESOLUCION_COMODIN_IR = [
+  "aprobar_crear",
+  "sustituir",
+  "rechazar",
+] as const
+export const AccionResolucionComodinIRSchema = z.enum(
+  ACCIONES_RESOLUCION_COMODIN_IR
+)
+
+/**
+ * Body de `POST /api/ir/solicitudes-insumo/[id]/resolver-comodin`.
+ *
+ * Solo valida la FORMA: las reglas de negocio (sustituto obligatorio en
+ * `sustituir`, justificación obligatoria en `rechazar`) viven en la ruta para
+ * devolver el mensaje legacy exacto de cada caso.
+ */
+export const ResolverComodinIRSchema = z.object({
+  accion: AccionResolucionComodinIRSchema,
+  recursoSustitutoId: IdEntidadSchema.optional(),
+  justificacion: z.string().trim().optional(),
 })
 
 export const SolicitudInsumoIRSchema = z.object({
@@ -1273,6 +1300,57 @@ export const CobroFISchema = z.object({
   diferencias: z.array(DiferenciaPagoFISchema),
 })
 
+// --- Cobranza FI multicanal (SERIE-FASE2 §V5) ---
+//
+// Canales fijos de la cobranza: visor interno (notificación en la app) y email
+// (outbox). Sin emisor SMTP el email queda `pendiente` y NUNCA se reporta como
+// enviado. El estado `fallido` exige motivo; `pendiente` lo usa para explicar
+// por qué todavía no salió.
+
+export const CANALES_COBRANZA_FI = ["visor", "email"] as const
+export const CanalCobranzaFISchema = z.enum(CANALES_COBRANZA_FI)
+export type CanalCobranzaFI = (typeof CANALES_COBRANZA_FI)[number]
+
+export const ESTADOS_ENVIO_COBRANZA_FI = [
+  "pendiente",
+  "enviado",
+  "fallido",
+] as const
+export const EstadoEnvioCobranzaFISchema = z.enum(ESTADOS_ENVIO_COBRANZA_FI)
+export type EstadoEnvioCobranzaFI =
+  (typeof ESTADOS_ENVIO_COBRANZA_FI)[number]
+
+/** Registro de un envío: canal, fecha, destinatario, estado y motivo. */
+export const EnvioCobranzaFISchema = z.object({
+  id: IdEntidadSchema,
+  cobroId: IdEntidadSchema,
+  unidadId: IdEntidadSchema,
+  personaId: IdEntidadSchema.nullable().optional(),
+  canal: CanalCobranzaFISchema,
+  estado: EstadoEnvioCobranzaFISchema,
+  fecha: FechaISOSchema,
+  motivo: z.string().nullable().optional(),
+  montoTotal: z.number().min(0),
+  cobrosIncluidos: z.array(IdEntidadSchema),
+  claveEnvio: z.string().min(1),
+  reenvio: z.boolean(),
+})
+
+/** Interruptor global de la comunidad (singleton). */
+export const ConfiguracionCobranzaFISchema = z.object({
+  canalVisor: z.boolean(),
+  canalEmail: z.boolean(),
+  actualizadoPor: z.string().nullable().optional(),
+})
+
+/** Interruptor por residente (una preferencia por persona). */
+export const PreferenciaCanalCobranzaFISchema = z.object({
+  personaId: IdEntidadSchema,
+  canalVisor: z.boolean(),
+  canalEmail: z.boolean(),
+  actualizadoPor: z.string().nullable().optional(),
+})
+
 // --- Personal y Servicios (PE) ---
 
 const HoraPESchema = z
@@ -1570,6 +1648,66 @@ export const PlantillaCVSchema = z
     message:
       "Multimedia excluyente: la plantilla admite imagen o video, no ambos.",
   })
+
+// --- Visor CV: actas publicadas POR REFERENCIA (SERIE-FASE2 §V6) ---
+//
+// El visor NO copia el acta: guarda `actaId` + visibilidad y resuelve el
+// contenido al leer. El acta canónica sigue siendo el documento inmutable de GD.
+
+export const ESTADOS_PUBLICACION_ACTA_CV = ["publicado", "despublicado"] as const
+export const EstadoPublicacionActaCVSchema = z.enum(
+  ESTADOS_PUBLICACION_ACTA_CV
+)
+export type EstadoPublicacionActaCV = z.infer<
+  typeof EstadoPublicacionActaCVSchema
+>
+
+/** Texto obligatorio de la vista general del visor (Ley 19.628 / libro de actas). */
+export const TEXTO_ACTA_INFORMATIVA_CV =
+  "Versión informativa — el documento oficial es el libro de actas"
+
+/** Entrada de POST /api/cv/actas: solo la referencia, nunca el contenido. */
+export const PublicarActaCVSchema = z.object({
+  actaId: IdEntidadSchema,
+})
+
+export const ActaPublicadaCVSchema = z.object({
+  id: IdEntidadSchema,
+  actaId: IdEntidadSchema,
+  estado: EstadoPublicacionActaCVSchema,
+  publicadoEn: z.string(),
+  publicadoPorUsuarioId: IdEntidadSchema,
+  despublicadoEn: z.string().optional(),
+  despublicadoPorUsuarioId: IdEntidadSchema.optional(),
+})
+export type ActaPublicadaCV = z.infer<typeof ActaPublicadaCVSchema>
+
+/** Asistente de la vista general: nombre + documento YA enmascarado. */
+export const AsistenteActaCVSchema = z.object({
+  nombre: z.string(),
+  documento: z.string(),
+})
+
+/**
+ * Entrada de la vista general del visor: SOLO datos informativos del acta
+ * (fecha, hora, lugar y asistentes con documento enmascarado). Nunca minuta,
+ * morosidad ni sanciones individualizadas.
+ */
+export const ActaInformativaCVSchema = z.object({
+  actaId: IdEntidadSchema,
+  fecha: z.string(),
+  hora: z.string(),
+  lugar: z.string(),
+  temas: z.number().int().nonnegative(),
+  asistentes: z.array(AsistenteActaCVSchema),
+})
+export type ActaInformativaCV = z.infer<typeof ActaInformativaCVSchema>
+
+/** Publicación + referencia informativa del acta (lo que consume el visor). */
+export const PublicacionActaCVSchema = ActaPublicadaCVSchema.extend({
+  acta: ActaInformativaCVSchema.nullable(),
+})
+export type PublicacionActaCV = z.infer<typeof PublicacionActaCVSchema>
 
 // --- Administración: Maestros (MA) ---
 
@@ -1871,6 +2009,10 @@ export type EstadoSolicitudInsumoIR = z.infer<
   typeof EstadoSolicitudInsumoIRSchema
 >
 export type EstadoComodinIR = z.infer<typeof EstadoComodinIRSchema>
+export type AccionResolucionComodinIR = z.infer<
+  typeof AccionResolucionComodinIRSchema
+>
+export type ResolverComodinIR = z.infer<typeof ResolverComodinIRSchema>
 export type EstadoEPPIR = z.infer<typeof EstadoEPPIRSchema>
 export type TipoInfraccionIN = z.infer<typeof TipoInfraccionINSchema>
 export type DanoDirectoIN = z.infer<typeof DanoDirectoINSchema>
@@ -1910,6 +2052,13 @@ export type MoraCobroFI = z.infer<typeof MoraCobroFISchema>
 export type PagoCobroFI = z.infer<typeof PagoCobroFISchema>
 export type DiferenciaPagoFI = z.infer<typeof DiferenciaPagoFISchema>
 export type CobroFI = z.infer<typeof CobroFISchema>
+export type EnvioCobranzaFI = z.infer<typeof EnvioCobranzaFISchema>
+export type ConfiguracionCobranzaFI = z.infer<
+  typeof ConfiguracionCobranzaFISchema
+>
+export type PreferenciaCanalCobranzaFI = z.infer<
+  typeof PreferenciaCanalCobranzaFISchema
+>
 export type BitacoraVisitaPE = z.infer<typeof BitacoraVisitaPESchema>
 export type EncomiendaPE = z.infer<typeof EncomiendaPESchema>
 export type IngresoContratistaPE = z.infer<typeof IngresoContratistaPESchema>
@@ -1921,6 +2070,8 @@ export type VisitaTecnicaPE = z.infer<typeof VisitaTecnicaPESchema>
 export type ChecklistItemTurno = z.infer<typeof ChecklistItemTurnoSchema>
 export type CierreTurnoPE = z.infer<typeof CierreTurnoPESchema>
 export type ProyeccionPE = z.infer<typeof ProyeccionPESchema>
+export type HoraExtraPE = z.infer<typeof HoraExtraPESchema>
+export type EvaluacionPE = z.infer<typeof EvaluacionPESchema>
 export type AsignacionFamiliar = z.infer<typeof AsignacionFamiliarSchema>
 export type ContratistaMA = z.infer<typeof ContratistaSchema>
 export type Jornada = z.infer<typeof JornadaSchema>
@@ -1933,14 +2084,54 @@ export type TipoCertificadoCT = z.infer<typeof TipoCertificadoCTSchema>
 export type CertificadoCT = z.infer<typeof CertificadoCTSchema>
 export type BloqueReporteRE = z.infer<typeof BloqueReporteRESchema>
 export type ReporteRE = z.infer<typeof ReporteRESchema>
+export type EnvioReporteRE = z.infer<typeof EnvioReporteRESchema>
+export type LecturaReporteRE = z.infer<typeof LecturaReporteRESchema>
+export type EstadoEnvioRE = (typeof ESTADOS_ENVIO_RE)[number]
+export type CanalEnvioRE = (typeof CANALES_ENVIO_RE)[number]
 
 // --- Liquidaciones y Remuneraciones (PL) ---
 
-export const ESTADOS_ADELANTO_PL = ["pendiente", "descontado"] as const
+export const ESTADOS_ADELANTO_PL = [
+  "pendiente",
+  "descontado_parcial",
+  "saldado",
+  // legado (pre §V4): el store antiguo marcaba "descontado" al pie de la letra.
+  // Se conserva en el enum para que el estado persistido del store legacy siga
+  // validando; la API escribe los tres estados canónicos de la doctrina DT.
+  "descontado",
+  // desestimado = baja con historia (no se borra el registro, se anula).
+  "desestimado",
+] as const
 export const EstadoAdelantoPLSchema = z.enum(ESTADOS_ADELANTO_PL)
 
+// SERIE-FASE2 §V4 — dos naturalezas, nunca una sola (DT ORD 2676/140):
+// - anticipo_regular: pago anticipado de lo devengado, se descuenta 100% en la
+//   liquidación siguiente y NO es descuento del art. 58 (sin tope 15%).
+// - prestamo: deuda con acuerdo escrito adjunto, topada al 15% mensual de la
+//   remuneración bruta y al 45% conjunto (art. 58 inc. 3 y 4).
+export const PACTOS_ADELANTO_PL = ["anticipo_regular", "prestamo"] as const
+export const PactoAdelantoPLSchema = z.enum(PACTOS_ADELANTO_PL)
+export type PactoAdelantoPL = (typeof PACTOS_ADELANTO_PL)[number]
+
+// Cada deducción aplicada queda ligada a la liquidación que la descontó
+// (auditoría documental: qué mes, cuánto y con qué saldo resultante).
+export const DeduccionAdelantoPLSchema = z.object({
+  liquidacionId: IdEntidadSchema,
+  folio: z.string(),
+  periodo: z.string(),
+  fecha: FechaISOSchema,
+  monto: z.number().min(0, "El monto descontado no puede ser negativo."),
+  saldoResultante: z.number().min(0, "El saldo no puede ser negativo."),
+  estado: EstadoAdelantoPLSchema,
+})
+export type DeduccionAdelantoPL = z.infer<typeof DeduccionAdelantoPLSchema>
+
 // Adelanto de sueldo: glosa explicativa obligatoria y folio ADE auto-generado
-// como comprobante de entrega. Ciclo: pendiente → descontado en liquidación.
+// como comprobante de entrega. Ciclo: pendiente → descontado_parcial → saldado.
+//
+// Los campos de la §V4 van `.optional()` a propósito: el estado persistido del
+// store legacy (y sus adelantos ya registrados) no los tiene, y exigirlos
+// invalidaría la rehidratación. La API los pide en su propio esquema de entrada.
 export const AdelantoPLSchema = z.object({
   id: IdEntidadSchema,
   folio: z.string().min(1, "El folio del adelanto es obligatorio."),
@@ -1954,6 +2145,17 @@ export const AdelantoPLSchema = z.object({
     .min(5, "Debe describir el motivo del adelanto (mínimo 5 caracteres)."),
   estado: EstadoAdelantoPLSchema,
   liquidacionId: IdEntidadSchema.optional(),
+  pacto: PactoAdelantoPLSchema.optional(),
+  saldo: z.number().min(0, "El saldo no puede ser negativo.").optional(),
+  periodoImputacion: z
+    .string()
+    .regex(/^(?:\d{4}-\d{2})?$/, "El período de imputación debe ser AAAA-MM.")
+    .optional(),
+  acuerdoEscritoRef: z.string().optional(),
+  creadoPor: z.string().optional(),
+  aprobadoPor: z.string().optional(),
+  comprobante: z.string().optional(),
+  deducciones: z.array(DeduccionAdelantoPLSchema).optional(),
 })
 
 const BonoLiquidacionSchema = z.object({
@@ -2097,8 +2299,37 @@ export const BLOQUES_REPORTE_RE = [
 ] as const
 export const BloqueReporteRESchema = z.enum(BLOQUES_REPORTE_RE)
 
+// SERIE-FASE2 §V3 — distribución del reporte: el visor interno siempre se
+// publica; el email se encola como canal aparte. `pendiente` es el estado
+// honesto de un envío que todavía no salió (sin SMTP el correo NO se envió).
+export const CANALES_ENVIO_RE = ["visor", "email"] as const
+export const ESTADOS_ENVIO_RE = [
+  "publicado",
+  "pendiente",
+  "enviado",
+  "fallido",
+] as const
+export const EnvioReporteRESchema = z.object({
+  canal: z.enum(CANALES_ENVIO_RE),
+  destinatarioPersonaId: IdEntidadSchema.optional(),
+  fecha: FechaISOSchema,
+  estado: z.enum(ESTADOS_ENVIO_RE),
+})
+
+// Lectura del informe por un usuario: base de la métrica "leídos en la app".
+// No hay tasa de apertura (decisión del plan): solo emitidos/distribuidos/leídos.
+export const LecturaReporteRESchema = z.object({
+  usuarioId: IdEntidadSchema,
+  rol: z.string().min(1),
+  fecha: FechaISOSchema,
+})
+
 // Reporte personalizado: bloques snapshot inmutables al generar + segmento
 // declarado (EF+MP+tenencia). Los destinatarios se resuelven al distribuir.
+//
+// SERIE-FASE2 §V3: los campos de emisión (número, periodo, autor) y de
+// distribución (estado, envíos, lecturas) son OPCIONALES para no romper los
+// reportes históricos, que solo tienen payloadSnapshot + fechaGeneracion.
 export const ReporteRESchema = z.object({
   id: IdEntidadSchema,
   titulo: z
@@ -2131,6 +2362,17 @@ export const ReporteRESchema = z.object({
   destinatariosPersonaId: z.array(IdEntidadSchema),
   distribuidoA: z.number().int().min(0),
   fechaDistribucion: FechaISOSchema.optional(),
+  // Snapshot de emisión (V3): congelado al emitir, nunca se recalcula.
+  numero: z.number().int().positive().optional(),
+  periodo: z
+    .string()
+    .regex(/^\d{4}-\d{2}$/, "El periodo debe tener formato AAAA-MM.")
+    .optional(),
+  autorUsuarioId: IdEntidadSchema.optional(),
+  autorNombre: z.string().min(1).optional(),
+  estadoDistribucion: z.enum(ESTADOS_ENVIO_RE).optional(),
+  envios: z.array(EnvioReporteRESchema).optional(),
+  lecturas: z.array(LecturaReporteRESchema).optional(),
 })
 
 // --- Utilidades de validación para el store ---

@@ -1,7 +1,6 @@
 "use client"
 
 import * as React from "react"
-import { useCompassStore } from "@/lib/store"
 import { useUnidades } from "@/lib/api/use-unidades"
 import { useVinculos } from "@/lib/api/use-vinculos"
 import { usePersonas } from "@/lib/api/use-personas"
@@ -13,7 +12,7 @@ import { useEgresosFI } from "@/lib/api/use-egresos-fi"
 import { useFondosFI } from "@/lib/api/use-fondos-fi"
 import { useMacroSectores } from "@/lib/api/use-macro-sectores"
 import { useMicroSectores } from "@/lib/api/use-micro-sectores"
-import { useReportesRE } from "@/lib/api/use-reportes-re"
+import { useReportesRE, useAccionesRE } from "@/lib/api/use-reportes-re"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
@@ -68,15 +67,13 @@ export default function ReporteriaPage() {
   const { items: fondosFI, isLoading: cFondos } = useFondosFI()
   const { items: macroSectores, isLoading: cMacro } = useMacroSectores()
   const { items: microSectores, isLoading: cMicro } = useMicroSectores()
-  const { items: reportesRE, isLoading: cReportes, create: crearReporteBD, update: editarReporteBD, remove } = useReportesRE()
+  const { items: reportesRE, isLoading: cReportes, remove } = useReportesRE()
+  const { emitirReporte, distribuirReporte, registrarVistaReporte, registrarVistaCentroMando } = useAccionesRE()
   const isLoading =
 cUnidades || cVinculos || cPersonas || cCierres || cBitacora || cJornadas ||
 cSolicitudes || cCobros || cEgresos || cFondos || cMacro || cMicro || cReportes
-  // TODO(P-futura): migrar a endpoints dedicados cuando existan (generar con
-  // snapshot servidor, distribuir y registrar vista hoy solo viven en el store).
-  const registrarVistaDashboardRE = useCompassStore(s => s.registrarVistaDashboardRE)
-  const generarReporteRE = useCompassStore(s => s.generarReporteRE)
-  const distribuirReporteRE = useCompassStore(s => s.distribuirReporteRE)
+  // SERIE-FASE2 §V3: emitir/distribuir/registrar vista viven en la API
+  // (`use-acciones-re`). El store legacy ya no participa de reportería.
   // Shim de lectura: misma forma que el store para no tocar la lógica de mando/generador.
   const store = {
 unidades, vinculos, personas,
@@ -89,6 +86,9 @@ maestros: { jornadas },
   const [tab, setTab] = React.useState("mando")
   const [error, setError] = React.useState<string | null>(null)
   const [okMsg, setOkMsg] = React.useState<string | null>(null)
+  // Informe abierto: muestra el snapshot CONGELADO (no se recalcula) y marca la
+  // lectura del usuario, que es la base de la métrica "leídos en la app".
+  const [detalleId, setDetalleId] = React.useState<string | null>(null)
 
   // Generador
   const [titulo, setTitulo] = React.useState("")
@@ -99,9 +99,14 @@ maestros: { jornadas },
   const [perfiles, setPerfiles] = React.useState<string[]>([])
   const [tenencias, setTenencias] = React.useState<string[]>([])
 
+  // Vista del Centro de Mando: una por montaje (el store legacy la emitía
+  // también en cada revalidación de SWR, lo que solo agregaba ruido de auditoría).
+  const vistaCentroMandoRegistrada = React.useRef(false)
   React.useEffect(() => {
-    if (!isLoading && tab === "mando") registrarVistaDashboardRE("demografico")
-  }, [isLoading, tab, registrarVistaDashboardRE])
+    if (isLoading || tab !== "mando" || vistaCentroMandoRegistrada.current) return
+    vistaCentroMandoRegistrada.current = true
+    void registrarVistaCentroMando("demografico")
+  }, [isLoading, tab, registrarVistaCentroMando])
     
   if (isLoading) {
     return <div className="h-64 w-full animate-pulse rounded-lg bg-muted" />
@@ -135,13 +140,25 @@ maestros: { jornadas },
 
   const CLP = (n: number) => `$${Math.round(n).toLocaleString("es-CL")}`
 
+  // Métrica de reportería (V3): emitidos / distribuidos / leídos en la app.
+  // No hay tasa de apertura: una lectura es un usuario abriendo el informe.
+  const emitidos = reportesRE.length
+  const distribuidos = reportesRE.filter(r => Boolean(r.fechaDistribucion)).length
+  const leidos = reportesRE.filter(r => (r.lecturas?.length ?? 0) > 0).length
+
   const toggleArray = (lista: string[], valor: string, setter: (v: string[]) => void) => {
     setter(lista.includes(valor) ? lista.filter(x => x !== valor) : [...lista, valor])
   }
 
+  const abrirInforme = (id: string) => {
+    const abriendo = detalleId !== id
+    setDetalleId(abriendo ? id : null)
+    if (abriendo) void registrarVistaReporte(id)
+  }
+
   const generar = async () => {
     setError(null); setOkMsg(null)
-    const r = generarReporteRE({
+    const r = await emitirReporte({
       titulo,
       bloques: bloquesSel as ReporteRE["bloques"],
       segmento: {
@@ -154,14 +171,6 @@ maestros: { jornadas },
     })
     if (!r.ok) setError(r.error ?? "No se pudo generar el reporte")
     else {
-      // P2 E2E-FULL-VERDE: el historial lee de BD — persistir el creado para
-      // que aparezca (el store legacy solo calcula el snapshot).
-      const tituloGen = titulo.trim()
-      const creado = useCompassStore.getState().reportesRE.find((x) => x.titulo === tituloGen)
-      if (creado) {
-        const rb = await crearReporteBD(creado)
-        if (!rb.ok) setError(rb.error ?? "Se generó local pero no quedó en el historial.")
-      }
       setOkMsg("Reporte generado con snapshot inmutable. Revísalo y distribúyelo.")
       setTitulo(""); setBloquesSel([])
     }
@@ -169,13 +178,12 @@ maestros: { jornadas },
 
   const distribuir = async (id: string) => {
     setError(null); setOkMsg(null)
-    const r = distribuirReporteRE(id)
+    const r = await distribuirReporte(id)
     if (!r.ok) setError(r.error ?? "No se pudo distribuir")
     else {
-      // Espejar distribución en BD para que el badge del historial la refleje.
-      const actual = useCompassStore.getState().reportesRE.find((x) => x.id === id)
-      if (actual) await editarReporteBD(id, { fechaDistribucion: actual.fechaDistribucion, distribuidoA: actual.distribuidoA, destinatariosPersonaId: actual.destinatariosPersonaId })
-      setOkMsg("Distribución enviada a la bandeja simulada de cada destinatario resuelto.")
+      // El servidor publica en el visor y deja el email en la cola de salida:
+      // sin SMTP configurado el correo NO se envió, así que no se reporta como enviado.
+      setOkMsg("Reporte publicado en el visor interno con permiso. El email quedó como pendiente en la cola de salida (sin SMTP configurado): no se ha enviado.")
     }
   }
 
@@ -360,8 +368,20 @@ maestros: { jornadas },
 
           <Card>
             <CardHeader>
+              <CardTitle className="text-base">Métrica de reportería</CardTitle>
+              <CardDescription>Emitidos, distribuidos y leídos en la app. No existe tasa de apertura.</CardDescription>
+            </CardHeader>
+            <CardContent className="grid grid-cols-3 gap-3">
+              <Metrica etiqueta="Emitidos" valor={String(emitidos)} detalle="snapshots congelados" />
+              <Metrica etiqueta="Distribuidos" valor={String(distribuidos)} detalle="publicados en el visor" />
+              <Metrica etiqueta="Leídos" valor={String(leidos)} detalle="abiertos en la app" />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
               <CardTitle className="text-base">Historial de reportes</CardTitle>
-              <CardDescription>Distribución idempotente: los destinatarios se resuelven al momento de enviar.</CardDescription>
+              <CardDescription>Distribución idempotente: los destinatarios se resuelven al momento de distribuir.</CardDescription>
             </CardHeader>
             <CardContent>
               {store.reportesRE.length === 0 ? (
@@ -369,33 +389,66 @@ maestros: { jornadas },
               ) : (
                 <div className="flex flex-col gap-2">
                   {store.reportesRE.map(r => (
-                    <div key={r.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border p-3">
-                      <div className="min-w-0">
-                        <p className="font-semibold text-sm">{r.titulo}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {r.bloques.map(b => BLOQUE_LABEL[b]).join(" · ")} · generado {r.fechaGeneracion}
-                          {r.fechaDistribucion ? ` · distribuido ${r.fechaDistribucion}` : ""}
-                        </p>
-                        <div className="mt-1 flex flex-wrap gap-1">
-                          {r.segmento.macroSectorIds.length > 0 && <Badge variant="secondary" className="text-[10px]">EF macros ×{r.segmento.macroSectorIds.length}</Badge>}
-                          {r.segmento.microSectorIds.length > 0 && <Badge variant="secondary" className="text-[10px]">pisos ×{r.segmento.microSectorIds.length}</Badge>}
-                          {r.segmento.unidadIds.length > 0 && <Badge variant="secondary" className="text-[10px]">unidades ×{r.segmento.unidadIds.length}</Badge>}
-                          {r.segmento.perfiles.map(p => <Badge key={p} variant="outline" className="text-[10px]">{p}</Badge>)}
-                          {r.segmento.tenencias.map(t => <Badge key={t} variant="outline" className="text-[10px]">{t}</Badge>)}
+                    <div key={r.id} className="flex flex-col gap-2 rounded-md border p-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="font-semibold text-sm">
+                            {r.numero ? <span className="text-muted-foreground">N.º {r.numero} · </span> : null}
+                            {r.titulo}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {r.bloques.map(b => BLOQUE_LABEL[b]).join(" · ")} · generado {r.fechaGeneracion}
+                            {r.autorNombre ? ` por ${r.autorNombre}` : ""}
+                            {r.fechaDistribucion ? ` · distribuido ${r.fechaDistribucion}` : ""}
+                            {r.lecturas && r.lecturas.length > 0 ? ` · ${r.lecturas.length} lectura(s)` : ""}
+                          </p>
+                          <div className="mt-1 flex flex-wrap gap-1">
+                            {r.segmento.macroSectorIds.length > 0 && <Badge variant="secondary" className="text-[10px]">EF macros ×{r.segmento.macroSectorIds.length}</Badge>}
+                            {r.segmento.microSectorIds.length > 0 && <Badge variant="secondary" className="text-[10px]">pisos ×{r.segmento.microSectorIds.length}</Badge>}
+                            {r.segmento.unidadIds.length > 0 && <Badge variant="secondary" className="text-[10px]">unidades ×{r.segmento.unidadIds.length}</Badge>}
+                            {r.segmento.perfiles.map(p => <Badge key={p} variant="outline" className="text-[10px]">{p}</Badge>)}
+                            {r.segmento.tenencias.map(t => <Badge key={t} variant="outline" className="text-[10px]">{t}</Badge>)}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {r.distribuidoA > 0 ? (
+                            <>
+                              <Badge className="bg-emerald-600 hover:bg-emerald-700 text-white">{r.distribuidoA} destinatario(s)</Badge>
+                              {r.estadoDistribucion === "pendiente" && (
+                                <Badge variant="outline" className="border-amber-500 text-[10px] text-amber-700 dark:text-amber-400">email pendiente</Badge>
+                              )}
+                            </>
+                          ) : (
+                            <Button size="sm" onClick={() => distribuir(r.id)}><IconSend className="size-4 mr-1" /> Distribuir</Button>
+                          )}
+                          <Button size="sm" variant="outline" onClick={() => abrirInforme(r.id)}>
+                            {detalleId === r.id ? "Cerrar" : "Abrir informe"}
+                          </Button>
+                          {r.id.startsWith("test-") && r.distribuidoA === 0 && (
+                            <Button size="sm" variant="ghost" onClick={() => { void remove(r.id) }}><IconTrash className="size-4" /></Button>
+                          )}
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        {r.distribuidoA > 0 ? (
-                          <Badge className="bg-emerald-600 hover:bg-emerald-700 text-white">{r.distribuidoA} destinatario(s)</Badge>
-                        ) : (
-                          <>
-                            <Button size="sm" onClick={() => distribuir(r.id)}><IconSend className="size-4 mr-1" /> Distribuir</Button>
-                            {r.id.startsWith("test-") && (
-                              <Button size="sm" variant="ghost" onClick={() => { void remove(r.id) }}><IconTrash className="size-4" /></Button>
-                            )}
-                          </>
-                        )}
-                      </div>
+                      {detalleId === r.id && (
+                        <div className="rounded-md border bg-muted/30 p-3">
+                          <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                            Snapshot congelado al emitir — no se recalcula al abrirlo
+                          </p>
+                          {(r.payloadSnapshot ?? []).map(b => (
+                            <div key={b.bloque} className="mt-2">
+                              <p className="text-xs font-semibold">{BLOQUE_LABEL[b.bloque]}</p>
+                              <ul className="mt-1 flex flex-col gap-0.5">
+                                {b.lineas.map((l, i) => (
+                                  <li key={`${b.bloque}-${i}`} className="flex justify-between gap-3 text-xs">
+                                    <span className="text-muted-foreground">{l.etiqueta}</span>
+                                    <span className="font-medium">{l.valor}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>

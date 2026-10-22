@@ -4,13 +4,18 @@ El motor de remuneraciones del personal: calcula haberes y descuentos con están
 
 ## 🚀 Funcionalidad Principal
 
-Cada liquidación es un **snapshot inmutable**: al generarla el sistema congela valor hora, gratificación, descuentos y totales para que ningún cambio posterior de parámetros reescriba un documento histórico. La confirmación materializa el egreso contable en FI bajo la categoría **Sueldos** y descuenta los anticipos pendientes del trabajador.
+Cada liquidación es un **snapshot inmutable**: al generarla el sistema congela valor hora, gratificación, descuentos y totales para que ningún cambio posterior de parámetros reescriba un documento histórico. La confirmación materializa el egreso contable en FI bajo la categoría **Sueldos** y descuenta los adelantos pendientes del trabajador según su naturaleza (anticipo completo, préstamo con tope y saldo), arrastrando al mes siguiente lo que no alcanzó el líquido.
 
 ## 🛠️ Secciones
 
 - **Remuneraciones (`/finanzas/remuneraciones`)**:
   - **Liquidaciones**: selector de trabajador con ficha PE (exige `sueldoBase`), periodo y días trabajados; bonos/aguinaldos manuales con flag imponible; movilización y colación como no imponibles; vista previa en vivo del cálculo antes de generar. Folio correlativo **LIQ-####**.
-  - **Adelantos**: registro con glosa explicativa obligatoria → comprobante **ADE-####** notificado al trabajador (`email_simulado`). Ciclo Pendiente → Descontado en la próxima liquidación confirmada; un adelanto descontado no es eliminable.
+  - **Adelantos**: registro con glosa explicativa obligatoria → comprobante **ADE-####** notificado al trabajador (`email_simulado`). Hay **dos naturalezas distintas**, nunca una sola:
+    - **Anticipo de sueldo**: pago anticipado de lo ya devengado. Se descuenta **completo** en la liquidación siguiente, **sin tope**.
+    - **Préstamo o deuda**: exige **acuerdo escrito adjunto**; el descuento se topa al **15% mensual** de la remuneración y al **45% en conjunto** con las otras deducciones.
+    - Si el líquido no alcanza, el **saldo arrastra** al mes siguiente (con alerta, y nunca dejando el líquido en negativo).
+    - Lo que **nunca** se puede descontar: arriendo, luz, agua, herramientas, medicinas, multas no autorizadas y mermas sin responsabilidad acreditada.
+    Ciclo Pendiente → Descontado en la próxima liquidación confirmada; un adelanto descontado no es eliminable.
   - **Parámetros Legales**: edición restringida a administración del valor **UF mensual**, ingreso mínimo mensual, tope de gratificación legal (factor 4.75 sobre IMM) y tasa SIS. Cada cambio queda auditado como `CF_UPDATE_PARAM`.
   - **PDF**: botón por fila regenera la liquidación con pdfmake e incrusta la firma del administrador dentro del documento (nunca se guarda base64 en el sistema).
 
@@ -25,6 +30,7 @@ Cada liquidación es un **snapshot inmutable**: al generarla el sistema congela 
 ## 💡 Tips de Oro
 
 - **"CF no cargado"**: sin los cuatro parámetros legales configurados no se genera ninguna liquidación; llénalos primero en Parámetros Legales.
+- **Anticipo ≠ préstamo**: el anticipo de sueldo no es descuento del art. 58 y corre sin tope; el préstamo sí exige acuerdo escrito y respeta el 15% mensual / 45% conjunto. Elige bien la naturaleza al registrar el adelanto.
 - **Un documento por periodo**: la misma persona no puede tener dos liquidaciones del mismo mes.
 - **Solo borradores se borran**: una vez confirmada, la liquidación queda amarrada al egreso FE de Finanzas y al historial.
 - **Proyección conectada**: si existía una proyección de feriados PE del periodo, la liquidación deja su referencia materializada (ya no dice "pendiente").

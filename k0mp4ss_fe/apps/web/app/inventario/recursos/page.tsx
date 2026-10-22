@@ -1,7 +1,6 @@
 "use client"
 
 import * as React from "react"
-import { useCompassStore } from "@/lib/store"
 import { useRecursosIR, useSolicitudesInsumoIR, useEntregasEPP } from "@/lib/api/use-ir"
 import { usePersonas } from "@/lib/api/use-personas"
 import { useUnidades } from "@/lib/api/use-unidades"
@@ -131,7 +130,7 @@ const hoy = () => new Date().toISOString().slice(0, 10)
 export default function RecursosPage() {
   // Lecturas de dominio vía hooks SWR (BD fuente de verdad).
   const { items: activosIR, isLoading: cargandoRecursos, create: crearRecurso, update: actualizarRecurso } = useRecursosIR()
-  const { items: solicitudesInsumoIR, isLoading: cargandoSolicitudes, create: crearSolicitudInsumo } = useSolicitudesInsumoIR()
+  const { items: solicitudesInsumoIR, isLoading: cargandoSolicitudes, create: crearSolicitudInsumo, entregar: entregarSolicitudInsumo, resolverComodin: resolverComodinInsumo } = useSolicitudesInsumoIR()
   const { items: entregasEPP, isLoading: cargandoEntregas, create: crearEntregaEPP } = useEntregasEPP()
   const { personas, isLoading: cargandoPersonas } = usePersonas()
   const { items: unidades, isLoading: cargandoUnidades } = useUnidades()
@@ -441,10 +440,8 @@ export default function RecursosPage() {
                             </td>
                             <td className="py-2">
                               {s.estado === "pendiente" && s.recursoInsumoId && (
-                                <Button size="sm" variant="outline" onClick={() => {
-                                  // TODO: migrar entregarSolicitudInsumoIR a API REST
-                                  const entregarSolicitudInsumoIR = useCompassStore.getState().entregarSolicitudInsumoIR
-                                  const r = entregarSolicitudInsumoIR(s.id)
+                                <Button size="sm" variant="outline" onClick={async () => {
+                                  const r = await entregarSolicitudInsumo(s.id)
                                   if (!r.ok) setError(r.error ?? "No se pudo entregar.")
                                 }}>
                                   <IconClipboardCheck className="size-4 mr-1" /> Entregar
@@ -471,16 +468,12 @@ export default function RecursosPage() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="flex flex-wrap items-center gap-2 pt-0">
-                <Button size="sm" onClick={() => {
-                  // TODO: migrar resolverComodinIR a API REST
-                  const resolverComodinIR = useCompassStore.getState().resolverComodinIR
-                  const r = resolverComodinIR(s.id, "aprobar_crear")
+                <Button size="sm" onClick={async () => {
+                  const r = await resolverComodinInsumo(s.id, "aprobar_crear")
                   if (!r.ok) setError(r.error ?? "No se pudo aprobar.")
                 }}>Aprobar y crear en catálogo</Button>
-                <Select onValueChange={v => {
-                  // TODO: migrar resolverComodinIR a API REST
-                  const resolverComodinIR = useCompassStore.getState().resolverComodinIR
-                  const r = resolverComodinIR(s.id, "sustituir", { recursoSustitutoId: v })
+                <Select onValueChange={async v => {
+                  const r = await resolverComodinInsumo(s.id, "sustituir", { recursoSustitutoId: v })
                   if (!r.ok) setError(r.error ?? "No se pudo sustituir.")
                 }}>
                   <SelectTrigger className="w-64"><SelectValue placeholder="Sustituir por artículo similar…" /></SelectTrigger>
@@ -490,12 +483,10 @@ export default function RecursosPage() {
                     ))}
                   </SelectContent>
                 </Select>
-                <Button size="sm" variant="outline" onClick={() => {
+                <Button size="sm" variant="outline" onClick={async () => {
                   const justificacion = window.prompt("Justificación del rechazo (obligatoria):")
                   if (!justificacion?.trim()) { setError("El rechazo exige justificación obligatoria."); return }
-                  // TODO: migrar resolverComodinIR a API REST
-                  const resolverComodinIR = useCompassStore.getState().resolverComodinIR
-                  const r = resolverComodinIR(s.id, "rechazar", { justificacion })
+                  const r = await resolverComodinInsumo(s.id, "rechazar", { justificacion })
                   if (!r.ok) setError(r.error ?? "No se pudo rechazar.")
                 }}>Rechazar</Button>
               </CardContent>

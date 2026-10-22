@@ -29,14 +29,32 @@ const MATRIZ: Record<Rol, Record<string, Set<Accion>>> = {
     "fi": new Set<Accion>(["ver", "ejecutar"]), // ver balance, ejecutar aprobar gasto
     "fi:balance": new Set<Accion>(["ver"]),
     "fi:gasto_comun": new Set<Accion>(["ver", "ejecutar"]),
+    // SERIE-FASE2 §V5: el comité AUDITA la cobranza (ver) pero no la ejecuta.
+    // Sin esta entrada explícita `puede()` caería al prefijo `fi`, donde el
+    // comité sí tiene `ejecutar` (aprobar gasto), y podría enviar cobranzas.
+    "fi:cobranza": new Set<Accion>(["ver"]),
+    // Vacío explícito: la preferencia de canal es del residente, no del comité.
+    "fi:cobranza:propia": new Set<Accion>([]),
     "am": new Set<Accion>(["ver"]), // RP §Roles Estándar: comité lee auditorías (P2 security audit); crear/editar solo admin
     "mp": new Set<Accion>(["ver", "editar"]), // editar propios + ver morosidad (filtrado abajo)
     "mp:propios": new Set<Accion>(["ver", "editar"]),
     "mp:morosidad": new Set<Accion>(["ver"]),
     "re": new Set<Accion>(["ver"]),
     "re:centro_mando": new Set<Accion>(["ver"]),
+    // SERIE-FASE2 §V4 (decisión del plan): el comité LEE los adelantos PL
+    // (`pl:adelantos` ver) pero no los crea ni los desestima — eso es del
+    // administrador. Recurso propio para no abrir `pl` (sueldos sensibles).
+    "pl:adelantos": new Set<Accion>(["ver"]),
     "ct": new Set<Accion>(["ver"]),
     "ct:historial": new Set<Accion>(["ver"]),
+    // SERIE-FASE2 §V2 (decisión del plan): el comité LEE Personal (`pe` ver);
+    // registrar/editar transiciones es de quien las opera. Las evaluaciones de
+    // desempeño se declaran VACÍAS a propósito (solo administrador las registra).
+    "pe": new Set<Accion>(["ver"]),
+    "pe:evaluacion": new Set<Accion>([]),
+    // `pe:ficha` (previsional/bancario) queda VACÍO explícito: el comité lee PE
+    // pero no el dato previsional, igual que conserjería.
+    "pe:ficha": new Set<Accion>([]),
     "pe:directorio": new Set<Accion>(["ver"]),
     // cv: visor de avisos — comité publica y edita; el resto solo ve (decisión owner 2026-10-21)
     "cv": new Set<Accion>(["ver", "crear", "editar"]),
@@ -52,7 +70,9 @@ const MATRIZ: Record<Rol, Record<string, Set<Accion>>> = {
     "notificaciones:propias": new Set<Accion>(["editar"]),
     // cf: configuración global — el comité la lee para auditar; editarla es solo del administrador
     "cf": new Set<Accion>(["ver"]),
-    "ir:mantenimiento": new Set<Accion>(["ver", "crear"]),
+    // Decisión owner 2026-10-21: quien opera el inventario cierra el ciclo de
+    // insumos con `editar` (conserjería y mantención); el comité solo lee.
+    "ir:mantenimiento": new Set<Accion>(["ver"]),
     // H5 — gobernanza movida a la matriz (antes decidía lib/api/gd-guard.ts):
     // gd = actas, ad = controles de propiedad. El comité gestiona ambas con las 5
     // acciones por paridad con el `return true` del guard; la acción `eliminar`
@@ -67,15 +87,23 @@ const MATRIZ: Record<Rol, Record<string, Set<Accion>>> = {
     "mp:propios": new Set<Accion>(["ver", "editar"]),
     "pe": new Set<Accion>(["ver", "crear", "editar"]),
     "pe:bitacora": new Set<Accion>(["ver", "crear", "editar"]),
-    "pe:cierre_turno": new Set<Accion>(["ver", "crear", "ejecutar"]),
+    "pe:cierre_turno": new Set<Accion>(["ver", "crear", "editar", "ejecutar"]),
     "pe:reporte_diario": new Set<Accion>(["ver"]),
     "pe:directorio": new Set<Accion>(["ver"]),
     "pe:ficha": new Set<Accion>([]), // sin dato previsional/bancario
+    // SERIE-FASE2 §V2: evaluar el desempeño del personal es acto del
+    // administrador; conserjería no registra evaluaciones (Set vacío explícito).
+    "pe:evaluacion": new Set<Accion>([]),
     "pl": new Set<Accion>([]),
     "pl:propia": new Set<Accion>(["ver"]), // solo propia liquidación (ABAC filtro)
+    // Vacío explícito: no hay auto-servicio del trabajador sobre adelantos
+    // (SERIE-FASE2 §V4). Corta el fallback de prefijo hacia `pl`.
+    "pl:adelantos": new Set<Accion>([]),
     "ct:propia": new Set<Accion>(["ver"]),
     "re:reporte_diario": new Set<Accion>(["ver"]),
-    "ir:mantenimiento": new Set<Accion>(["ver", "crear"]),
+    // Decisión owner 2026-10-21: conserjería entrega insumos y resuelve
+    // comodines en un click (`editar` = POST .../entregar y .../resolver-comodin).
+    "ir:mantenimiento": new Set<Accion>(["ver", "crear", "editar"]),
     "ir:interno": new Set<Accion>(["ver", "crear"]), // personal servicio sí
     "cv": new Set<Accion>(["ver"]), // visor de avisos: solo lectura (decisión owner 2026-10-21)
     // in: conserjería reporta la infracción (ver + crear) pero no resuelve el caso; "in:apelar"
@@ -85,6 +113,11 @@ const MATRIZ: Record<Rol, Record<string, Set<Accion>>> = {
     "notificaciones": new Set<Accion>(["ver"]),
     // H7 — marcar leída es acto propio del destinatario: solo la propia (ABAC en la ruta)
     "notificaciones:propias": new Set<Accion>(["editar"]),
+    // SERIE-FASE2 §V5: la cobranza FI es del administrador; conserjería no la
+    // ejecuta ni ve las preferencias de canal (vacío explícito: corta el
+    // fallback de prefijo hacia `fi`, que tampoco tiene).
+    "fi:cobranza": new Set<Accion>([]),
+    "fi:cobranza:propia": new Set<Accion>([]),
   },
   // Propietario / Residente: estado cuenta propio, pago GC, reserva amenities, reclamos, votos, certificados propios, directorio, IR mantenimiento solo
   residente: {
@@ -96,7 +129,11 @@ const MATRIZ: Record<Rol, Record<string, Set<Accion>>> = {
     "pe:directorio": new Set<Accion>(["ver"]),
     "pe:visita": new Set<Accion>(["ver", "crear"]), // agenda visitas/contratistas a su unidad
     "pe:contratista": new Set<Accion>(["ver", "crear"]),
-    "ir:mantenimiento": new Set<Accion>(["ver", "crear"]),
+    // SERIE-FASE2 §V2: el residente no registra evaluaciones de desempeño.
+    "pe:evaluacion": new Set<Accion>([]),
+    // Decisión owner 2026-10-21: el residente solo consulta el inventario de
+    // insumos; ya no crea solicitudes ni cierra el ciclo.
+    "ir:mantenimiento": new Set<Accion>(["ver"]),
     "ir:interno": new Set<Accion>([]), // bloqueado
     "ra": new Set<Accion>(["ver", "crear"]), // reserva amenities (ABAC propia)
     "ge": new Set<Accion>(["ver", "crear"]),
@@ -112,6 +149,12 @@ const MATRIZ: Record<Rol, Record<string, Set<Accion>>> = {
     "notificaciones:propias": new Set<Accion>(["editar"]),
     // H5 — controles de propiedad: residente solo lee los de su unidad (ABAC en la ruta)
     "ad": new Set<Accion>(["ver"]),
+    // SERIE-FASE2 §V5: el residente no ejecuta la cobranza (vacío explícito: ya
+    // no tenía `fi`), pero SÍ decide por qué canal quiere ser notificado:
+    // `fi:cobranza:propia` ver+editar, con pertenencia validada en la ruta (la
+    // preferencia solo puede tocar su propia persona).
+    "fi:cobranza": new Set<Accion>([]),
+    "fi:cobranza:propia": new Set<Accion>(["ver", "editar"]),
   },
   // Personal de Mantención: lista tareas asignadas + reporte incidentes físicos, IR mantenimiento + interno
   mantencion: {
@@ -119,14 +162,28 @@ const MATRIZ: Record<Rol, Record<string, Set<Accion>>> = {
     "mt": new Set<Accion>(["ver", "crear", "editar", "ejecutar"]),
     "mt:tarea": new Set<Accion>(["ver", "ejecutar"]),
     "mt:incidente": new Set<Accion>(["ver", "crear"]),
+    // SERIE-FASE2 §V2: mantención opera las transiciones de Personal (horas
+    // extra, completar tarea de monitoreo, enviar proyección de costo) pero NO
+    // inicia/cierra turno (eso es `pe:cierre_turno`, conserjería) ni evalúa.
+    "pe": new Set<Accion>(["ver", "crear", "editar"]),
+    "pe:evaluacion": new Set<Accion>([]),
+    // Vacío explícito: cortan el fallback de prefijo de `puede()` hacia `pe`.
+    // Iniciar/cerrar turno es de conserjería; la ficha previsional no aplica acá.
+    "pe:cierre_turno": new Set<Accion>([]),
+    "pe:ficha": new Set<Accion>([]), // sin dato previsional/bancario
     "pe:directorio": new Set<Accion>(["ver"]),
-    "ir:mantenimiento": new Set<Accion>(["ver", "crear"]),
+    // Decisión owner 2026-10-21: mantención entrega insumos y resuelve
+    // comodines en un click (`editar` = POST .../entregar y .../resolver-comodin).
+    "ir:mantenimiento": new Set<Accion>(["ver", "crear", "editar"]),
     "ir:interno": new Set<Accion>(["ver", "crear"]),
     "pe:bitacora": new Set<Accion>(["ver"]),
     "cv": new Set<Accion>(["ver"]), // visor de avisos: solo lectura (decisión owner 2026-10-21)
     "notificaciones": new Set<Accion>(["ver"]),
     // H7 — marcar leída es acto propio del destinatario: solo la propia (ABAC en la ruta)
     "notificaciones:propias": new Set<Accion>(["editar"]),
+    // SERIE-FASE2 §V5: la cobranza FI no es tarea de mantención (vacío explícito).
+    "fi:cobranza": new Set<Accion>([]),
+    "fi:cobranza:propia": new Set<Accion>([]),
   },
 }
 
@@ -290,12 +347,15 @@ export const RECURSOS_CONOCIDOS = [
   "fi",
   "fi:balance",
   "fi:gasto_comun",
+  "fi:cobranza",
+  "fi:cobranza:propia",
   "mp",
   "mp:propios",
   "mp:morosidad",
   "ef",
   "es:estacionamiento",
   "pe",
+  "pe:evaluacion",
   "pe:bitacora",
   "pe:cierre_turno",
   "pe:ficha",
@@ -305,6 +365,7 @@ export const RECURSOS_CONOCIDOS = [
   "pe:contratista",
   "pl",
   "pl:propia",
+  "pl:adelantos",
   "ct",
   "ct:propio",
   "ct:historial",

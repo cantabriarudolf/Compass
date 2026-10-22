@@ -4,6 +4,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+  // pi-lens-ignore: Prisma:unknown — el repo está pinneado a Prisma 6.19.3: `url` en el datasource es obligatoria (`prisma validate` falla sin ella); Prisma 7 la movió a prisma.config.ts.
   url      = env("DATABASE_URL")
 }
 
@@ -30,6 +31,8 @@ model Comunidad {
   controlesPropiedades     ControlPropiedad[]
   periodosDirectiva        PeriodoDirectiva[]
   actasGD                  ActaGD[]
+  // SERIE-FASE2 §V6 — actas GD publicadas en el visor CV (por referencia).
+  actasPublicadasCV        ActaPublicadaCV[]
   plantillasCO             PlantillaCO[]
   enviosCO                 EnvioCO[]
   mensajesBuzonCO          MensajeBuzonCO[]
@@ -51,6 +54,11 @@ model Comunidad {
   ingresosFI               IngresoFI[]
   emisionesGC              EmisionGC[]
   cobrosFI                 CobroFI[]
+  // SERIE-FASE2 §V5 — cobranza FI multicanal (interruptor global, preferencia
+  // por residente y registro de cada envío).
+  configuracionCobranzaFI  ConfiguracionCobranzaFI?
+  preferenciasCanalCobranzaFI PreferenciaCanalCobranzaFI[]
+  enviosCobranzaFI         EnvioCobranzaFI[]
   bitacoraVisitasPE        BitacoraVisitaPE[]
   encomiendasPE            EncomiendaPE[]
   ingresosContratistasPE   IngresoContratistaPE[]
@@ -797,6 +805,29 @@ model ReservaRA {
 }
 
 // Visor de Mensajes (CV)
+
+/// SERIE-FASE2 §V6 — referencia de un acta GD publicada en el visor CV.
+/// El visor NO copia el acta: guarda `actaId` + visibilidad y resuelve el
+/// contenido y los permisos al leer. El documento canónico (inmutable) sigue
+/// siendo la fila de `actas_gd`; acá solo hay estado de publicación y actor.
+model ActaPublicadaCV {
+  id                       String   @id
+  comunidadId              String
+  comunidad                Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  actaId                   String
+  estado                   String   // publicado | despublicado
+  publicadoEn              DateTime
+  publicadoPorUsuarioId    String
+  despublicadoEn           DateTime?
+  despublicadoPorUsuarioId String?
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  @@unique([comunidadId, actaId])
+  @@index([comunidadId])
+  @@map("actas_publicadas_cv")
+}
+
 model AvisoCV {
   id                  String   @id
   comunidadId         String
@@ -946,6 +977,77 @@ model CobroFI {
   @@index([unidadId])
   @@index([periodo])
   @@map("cobros_fi")
+}
+
+// Cobranza FI multicanal (SERIE-FASE2 §V5): visor interno + email, con
+// interruptor por residente y global de la comunidad.
+//
+// Tres piezas, ninguna duplica `Notificacion`: la notificación interna sigue
+// siendo el canal visor real (la crea la ruta de cobranza), mientras que estas
+// tablas guardan los INTERRUPTORES y el REGISTRO auditable de cada envío
+// (canal, fecha, destinatario, estado y motivo), que `Notificacion` no modela.
+
+/// Interruptor global de la comunidad (singleton por comunidad).
+model ConfiguracionCobranzaFI {
+  id             String   @id
+  comunidadId    String   @unique
+  comunidad      Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  canalVisor     Boolean  @default(true)
+  canalEmail     Boolean  @default(true)
+  actualizadoPor String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([comunidadId])
+  @@map("configuracion_cobranza_fi")
+}
+
+/// Preferencia de canal del residente (una por persona y comunidad).
+model PreferenciaCanalCobranzaFI {
+  id             String   @id
+  comunidadId    String
+  comunidad      Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  personaId      String
+  canalVisor     Boolean  @default(true)
+  canalEmail     Boolean  @default(true)
+  actualizadoPor String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([comunidadId, personaId])
+  @@index([comunidadId])
+  @@map("preferencias_canal_cobranza_fi")
+}
+
+///
+/// Registro de UN envío de cobranza (por canal y destinatario).
+///
+/// `estado`: pendiente (en la cola de salida, sin emisor SMTP) | enviado (el
+/// visor interno quedó publicado) | fallido (intento con error, con `motivo`).
+/// `claveEnvio` es la idempotencia: unidad + destinatario + canal, con sufijo de
+/// timestamp cuando el administrador pide un reenvío explícito.
+model EnvioCobranzaFI {
+  id              String   @id
+  comunidadId     String
+  comunidad       Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  cobroId         String
+  unidadId        String
+  personaId       String?
+  canal           String
+  estado          String
+  fecha           String
+  motivo          String?
+  montoTotal      Float    @default(0)
+  cobrosIncluidos Json // string[] de cobros vencidos cubiertos por la gestión
+  claveEnvio      String
+  reenvio         Boolean  @default(false)
+  createdAt       DateTime @default(now())
+
+  @@unique([comunidadId, claveEnvio])
+  @@index([comunidadId])
+  @@index([cobroId])
+  @@index([unidadId])
+  @@map("envios_cobranza_fi")
 }
 
 // Personal y Servicios (PE)
@@ -1150,6 +1252,10 @@ model LiquidacionPL {
   totalDescuentos          Float
   descuentoAnticipos       Float
   adelantosIds             Json
+  // SERIE-FASE2 §V4 — plan de deducción por adelanto con su tope aplicado y el
+  // arrastre resultante; lo calcula el servidor al generar (nunca el cliente) y lo
+  // consume la confirmación para actualizar saldo/estado sin recalcular.
+  adelantosDetalle         Json?
   alcanceLiquido           Float
   liquidoAPagar            Float
   estado                   String
@@ -1174,11 +1280,29 @@ model AdelantoPL {
   glosa               String
   estado              String
   liquidacionId       String?
+  // SERIE-FASE2 §V4 — dos naturalezas, nunca una sola (doctrina DT ORD 2676/140):
+  // `anticipo_regular` = pago anticipado de lo devengado (se descuenta 100% en la
+  // liquidación siguiente, sin tope 15%); `prestamo` = deuda con acuerdo escrito,
+  // topada al 15% mensual de la remuneración bruta y al 45% conjunto (art. 58 inc. 3-4).
+  pacto               String   @default("anticipo_regular")
+  // Saldo vivo: el arrastre cuando el líquido del período no alcanza.
+  saldo               Float    @default(0)
+  // Período en que corresponde imputar el descuento (AAAA-MM); "" = legado
+  // (se imputa en la liquidación siguiente que se genere).
+  periodoImputacion   String   @default("")
+  // Referencia al acuerdo escrito/firmado del préstamo (obligatoria si pacto = prestamo).
+  acuerdoEscritoRef   String?
+  creadoPor           String?
+  aprobadoPor         String?
+  comprobante         String?
+  // Auditoría de cada deducción aplicada, ligada a su liquidación.
+  deducciones         Json?
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
   @@index([comunidadId])
   @@index([trabajadorPersonaId])
+  @@index([comunidadId, trabajadorPersonaId, estado])
   @@map("adelantos_pl")
 }
 
@@ -1217,9 +1341,20 @@ model ReporteRE {
   destinatariosPersonaId Json
   distribuidoA           Int
   fechaDistribucion      String?
+  // SERIE-FASE2 §V3 — snapshot de emisión: número correlativo por comunidad
+  numero                 Int?
+  periodo                String?
+  autorUsuarioId         String?
+  autorNombre            String?
+  // SERIE-FASE2 §V3 — distribución: estado del envío (publicado | pendiente) y
+  // el detalle por canal (visor interno + email en outbox), más las lecturas.
+  estadoDistribucion     String?
+  envios                 Json?
+  lecturas               Json?
   createdAt              DateTime @default(now())
   updatedAt              DateTime @updatedAt
 
+  @@unique([comunidadId, numero])
   @@index([comunidadId])
   @@map("reportes_re")
 }

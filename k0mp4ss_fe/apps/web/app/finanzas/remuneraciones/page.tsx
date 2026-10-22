@@ -1,12 +1,12 @@
     "use client"
 
     // SERIE-GATED-API-BD P3: liquidacionesPL migradas a API REST (BD fuente de
-    // verdad). adelantosPL sigue en store legacy (sin API por alcance P3; el
-    // servidor lee adelantos pendientes de BD al generar/confirmar).
+    // verdad). SERIE-FASE2 §V4: adelantosPL también dejó el store legacy — la
+    // página ya no habla con `useCompassStore` para adelantos.
 
     import * as React from "react"
     // Datos de dominio vía API REST (BD fuente de verdad); store legacy deprecado.
-    import { useCompassStore } from "@/lib/store"
+    import { useAdelantosPL } from "@/lib/api/use-adelantos-pl"
     import { useLiquidaciones } from "@/lib/api/use-liquidaciones"
     import { usePersonas } from "@/lib/api/use-personas"
     import { useConfiguracion } from "@/lib/api/use-configuracion"
@@ -34,8 +34,16 @@ import {
   IconReceipt2,
   IconCheck,
 } from "@tabler/icons-react"
-import type { AdelantoPL, LiquidacionPL } from "@/lib/schemas"
+import type { LiquidacionPL, PactoAdelantoPL } from "@/lib/schemas"
 import { calcularLiquidacion } from "@/lib/pl-utils"
+// Doctrina de adelantos §V4 (módulo puro): el preview usa el mismo cálculo que el
+// servidor — anticipo 100% sin tope 15%, préstamo al 15% con tope conjunto 45%.
+import {
+  adelantoImputableAlPeriodo,
+  calcularDeduccionAdelantos,
+  pactoDeAdelanto,
+  saldoVivoAdelanto,
+} from "@/app/api/liquidaciones/adelantos/_calculo"
 import { documentoLiquidacionPDF } from "@/lib/pdf-utils"
 
 interface BonoForm {
@@ -51,11 +59,9 @@ function periodoActual(): string {
 const CLP = (n: number) => `$${Math.round(n).toLocaleString("es-CL")}`
 
 export default function RemuneracionesPage() {
-  // Liquidaciones vía API REST (BD); adelantos sigue en store legacy (sin API P3).
+  // Liquidaciones y adelantos vía API REST (BD fuente de verdad).
   const { liquidaciones, isLoading: cLiquidaciones, generar: generarApi, confirmar: confirmarApi, remove: removeApi } = useLiquidaciones()
-  const adelantos = useCompassStore(s => s.adelantosPL)
-  const saveAdelantoPL = useCompassStore(s => s.saveAdelantoPL)
-  const removeAdelantoPL = useCompassStore(s => s.removeAdelantoPL)
+  const { adelantos, isLoading: cAdelantos, crear: crearAdelantoApi, desestimar: desestimarAdelantoApi } = useAdelantosPL()
   const { personas: personasApi, isLoading: cPersonas } = usePersonas()
   // SAFETY: la API /api/personas serializa el schema completo (MP con ficha integral);
   // el hook tipa la variante resumida de los mocks. El cast adapta tipos sin cambiar valores.
@@ -64,7 +70,7 @@ export default function RemuneracionesPage() {
   const { data: previsionesSalud, isLoading: cPrevisiones } = useMaestroPrevisiones<PrevisionSalud>("previsiones-salud")
   const { data: asignacionFamiliar, isLoading: cAsignaciones } = useMaestroAsignaciones<AsignacionFamiliar>("asignaciones-familiar")
   const { config: configuracion, isLoading: cConfig, updateConfig } = useConfiguracion()
-  const isLoading = cPersonas || cAfps || cPrevisiones || cAsignaciones || cConfig || cLiquidaciones
+  const isLoading = cPersonas || cAfps || cPrevisiones || cAsignaciones || cConfig || cLiquidaciones || cAdelantos
 
   const [error, setError] = React.useState<string | null>(null)
   const [okMsg, setOkMsg] = React.useState<string | null>(null)
@@ -85,6 +91,10 @@ export default function RemuneracionesPage() {
   const [adelantoTrabajadorId, setAdelantoTrabajadorId] = React.useState("")
   const [adelantoMonto, setAdelantoMonto] = React.useState("")
   const [adelantoGlosa, setAdelantoGlosa] = React.useState("")
+  // §V4 — naturaleza del adelanto y período de imputación.
+  const [adelantoPacto, setAdelantoPacto] = React.useState<PactoAdelantoPL>("anticipo_regular")
+  const [adelantoPeriodo, setAdelantoPeriodo] = React.useState(periodoActual())
+  const [adelantoAcuerdoRef, setAdelantoAcuerdoRef] = React.useState("")
 
       // Parámetros legales CF (se re-sincronizan cuando llega la config del servidor)
       const [ufMensual, setUfMensual] = React.useState("")
@@ -120,7 +130,7 @@ export default function RemuneracionesPage() {
     configuracion.topeGratificacionLegal !== undefined &&
     configuracion.tasaSIS !== undefined
 
-  const preview = trabajadorSel && ficha && (ficha.sueldoBase ?? 0) > 0 && paramsLegalesCargados
+  const previewBase = trabajadorSel && ficha && (ficha.sueldoBase ?? 0) > 0 && paramsLegalesCargados
     ? calcularLiquidacion({
       sueldoBaseContrato: ficha.sueldoBase!,
       diasTrabajados: Number(diasTrabajados) || 0,
@@ -149,11 +159,39 @@ export default function RemuneracionesPage() {
       tasaSeguroCesantia: 0.6,
       esHonorarios: ficha.tipoContrato === "honorarios",
       montoAPV: Number(apv) || 0,
-      anticiposPendientes: adelantos
-        .filter(a => a.trabajadorPersonaId === trabajadorSel.id && a.estado === "pendiente")
-        .map(a => ({ id: a.id, monto: a.monto })),
+      // El cálculo base NO descuenta adelantos: la doctrina §V4 (tope 15% del
+      // préstamo, 45% conjunto y arrastre del saldo) se aplica abajo sobre el
+      // líquido disponible, en el mismo orden que usa el servidor.
+      anticiposPendientes: [],
     })
-  : null
+    : null
+
+  const previewPlan = previewBase && trabajadorSel
+    ? calcularDeduccionAdelantos({
+      remuneracionBruta: previewBase.totalHaberes,
+      deduccionesLegales: previewBase.totalDescuentos,
+      alcanceLiquido: previewBase.alcanceLiquido,
+      adelantos: adelantos
+        .filter(a => a.trabajadorPersonaId === trabajadorSel.id
+          && adelantoImputableAlPeriodo(a, periodo)
+          && saldoVivoAdelanto(a) > 0)
+        .map(a => ({
+          id: a.id,
+          pacto: pactoDeAdelanto(a.pacto),
+          saldo: saldoVivoAdelanto(a),
+          periodoImputacion: a.periodoImputacion,
+        })),
+    })
+    : null
+
+  const preview = previewBase
+    ? {
+      ...previewBase,
+      descuentoAnticipos: previewPlan?.descuentoTotal ?? 0,
+      adelantosIds: previewPlan?.adelantosIds ?? [],
+      liquidoAPagar: previewBase.alcanceLiquido - (previewPlan?.descuentoTotal ?? 0),
+    }
+    : null
 
   if (isLoading) {
     return <div className="h-64 w-full animate-pulse rounded-lg bg-muted" />
@@ -228,23 +266,35 @@ export default function RemuneracionesPage() {
     else setOkMsg("Parámetros legales guardados y auditados (CF_UPDATE_PARAM).")
   }
 
-  const registrarAdelanto = () => {
+  const registrarAdelanto = async () => {
     setError(null); setOkMsg(null)
-    const nuevo: AdelantoPL = {
-      id: `pl-ade-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      folio: "",
+    // El servidor decide folio ADE, saldo y estado; acá solo van los datos de negocio.
+    const r = await crearAdelantoApi({
       trabajadorPersonaId: adelantoTrabajadorId,
-      fecha: new Date().toISOString().slice(0, 10),
       monto: Number(adelantoMonto) || 0,
       glosa: aOracion(adelantoGlosa),
-      estado: "pendiente",
-    }
-    const r = saveAdelantoPL(nuevo)
+      pacto: adelantoPacto,
+      periodoImputacion: adelantoPeriodo,
+      ...(adelantoPacto === "prestamo" && adelantoAcuerdoRef.trim()
+        ? { acuerdoEscritoRef: adelantoAcuerdoRef.trim() }
+        : {}),
+    })
     if (!r.ok) setError(r.error ?? "Error al registrar adelanto")
     else {
-      setOkMsg("Adelanto registrado con comprobante ADE.")
-      setAdelantoMonto(""); setAdelantoGlosa("")
+      setOkMsg(
+        adelantoPacto === "prestamo"
+          ? "Préstamo registrado con comprobante ADE: se descontará hasta el 15% de la remuneración bruta del período."
+          : "Anticipo registrado con comprobante ADE: se descontará completo en la liquidación del período."
+      )
+      setAdelantoMonto(""); setAdelantoGlosa(""); setAdelantoAcuerdoRef("")
     }
+  }
+
+  const desestimarAdelanto = async (id: string) => {
+    setError(null); setOkMsg(null)
+    const r = await desestimarAdelantoApi(id)
+    if (!r.ok) setError(r.error ?? "Error al desestimar el adelanto")
+    else setOkMsg("Adelanto desestimado: se anuló el saldo vivo sin borrar el registro.")
   }
 
   return (
@@ -365,6 +415,14 @@ export default function RemuneracionesPage() {
                     <span>SIS + cesantía: <b>{CLP(preview.montoSIS + preview.montoSeguroCesantia)}</b></span>
                     <span>Total descuentos legales: <b>{CLP(preview.totalDescuentos)}</b></span>
                     <span>Anticipos a descontar: <b>{CLP(preview.descuentoAnticipos)}</b></span>
+                    {previewPlan && previewPlan.descuentoPrestamo > 0 && (
+                      <span>Préstamos a descontar (tope 15%): <b>{CLP(previewPlan.descuentoPrestamo)}</b></span>
+                    )}
+                    {previewPlan && previewPlan.arrastreTotal > 0 && (
+                      <span className="text-amber-700 dark:text-amber-400">
+                        Alerta: arrastra <b>{CLP(previewPlan.arrastreTotal)}</b> al período siguiente (el líquido no alcanza).
+                      </span>
+                    )}
                     <span>Alcance líquido: <b>{CLP(preview.alcanceLiquido)}</b></span>
                     <span>Líquido a pagar: <b className="text-emerald-700 dark:text-emerald-400">{CLP(preview.liquidoAPagar)}</b></span>
                   </div>
@@ -447,8 +505,12 @@ export default function RemuneracionesPage() {
         <TabsContent value="adelantos" className="flex flex-col gap-4">
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Registrar anticipo</CardTitle>
-              <CardDescription>Glosa explicativa obligatoria; emite comprobante ADE notificado al trabajador.</CardDescription>
+              <CardTitle className="text-base">Registrar adelanto</CardTitle>
+              <CardDescription>
+                Dos naturalezas: <b>anticipo regular</b> (pago de lo devengado, se descuenta 100% en la
+                liquidación del período, sin tope 15%) y <b>préstamo</b> (exige acuerdo escrito y topa 15%
+                de la remuneración bruta, con tope conjunto 45% — art. 58).
+              </CardDescription>
             </CardHeader>
             <CardContent className="grid gap-4 md:grid-cols-3">
               <div className="flex flex-col gap-1.5">
@@ -463,25 +525,61 @@ export default function RemuneracionesPage() {
                 </Select>
               </div>
               <div className="flex flex-col gap-1.5">
+                <Label>Naturaleza *</Label>
+                <Select value={adelantoPacto} onValueChange={v => setAdelantoPacto(v as PactoAdelantoPL)}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="anticipo_regular">Anticipo regular (sin tope)</SelectItem>
+                    <SelectItem value="prestamo">Préstamo / deuda (tope 15%)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label>Período de imputación *</Label>
+                <Input type="month" value={adelantoPeriodo} onChange={e => setAdelantoPeriodo(e.target.value)} />
+              </div>
+              <div className="flex flex-col gap-1.5">
                 <Label>Monto ($) *</Label>
                 <Input type="number" min={1} value={adelantoMonto} onChange={e => setAdelantoMonto(e.target.value)} />
               </div>
-              <div className="flex flex-col gap-1.5 md:col-span-1">
+              <div className="flex flex-col gap-1.5">
                 <Label>Glosa explicativa *</Label>
                 <Input value={adelantoGlosa} placeholder="Motivo del adelanto" onChange={e => setAdelantoGlosa(e.target.value)} onBlur={() => setAdelantoGlosa(aOracion(adelantoGlosa))} />
               </div>
-              <div>
-                <Button onClick={registrarAdelanto} disabled={!adelantoTrabajadorId}>
+              <div className="flex flex-col gap-1.5">
+                <Label>Acuerdo escrito {adelantoPacto === "prestamo" ? "*" : "(no aplica al anticipo)"}</Label>
+                <Input
+                  value={adelantoAcuerdoRef}
+                  disabled={adelantoPacto !== "prestamo"}
+                  placeholder="Ej.: acuerdo de mutuo 2026-04 firmado"
+                  onChange={e => setAdelantoAcuerdoRef(e.target.value)}
+                />
+              </div>
+              <div className="md:col-span-3">
+                <Button
+                  onClick={registrarAdelanto}
+                  disabled={
+                    !adelantoTrabajadorId ||
+                    !adelantoPeriodo ||
+                    (adelantoPacto === "prestamo" && adelantoAcuerdoRef.trim().length < 3)
+                  }
+                >
                   <IconPlus className="size-4 mr-1" /> Registrar y emitir comprobante
                 </Button>
               </div>
+              <p className="text-xs text-muted-foreground md:col-span-3">
+                Prohibido descontar arriendo, luz, agua, herramientas, medicinas, multas no autorizadas en el
+                reglamento interno ni mermas sin responsabilidad acreditada.
+              </p>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Control de estado</CardTitle>
-              <CardDescription>Ciclo Pendiente → Descontado en liquidación.</CardDescription>
+              <CardDescription>
+                Ciclo Pendiente → Descontado parcial → Saldado (o Desestimado, que anula el saldo sin borrar el registro).
+              </CardDescription>
             </CardHeader>
             <CardContent>
               {adelantos.length === 0 ? (
@@ -493,9 +591,12 @@ export default function RemuneracionesPage() {
                       <tr>
                         <th className="px-3 py-2">Folio</th>
                         <th className="px-3 py-2">Trabajador</th>
+                        <th className="px-3 py-2">Naturaleza</th>
                         <th className="px-3 py-2">Fecha</th>
+                        <th className="px-3 py-2">Imputación</th>
                         <th className="px-3 py-2">Glosa</th>
                         <th className="px-3 py-2 text-right">Monto</th>
+                        <th className="px-3 py-2 text-right">Saldo</th>
                         <th className="px-3 py-2">Estado</th>
                         <th className="px-3 py-2"></th>
                       </tr>
@@ -505,17 +606,30 @@ export default function RemuneracionesPage() {
                         <tr key={a.id} className="border-t">
                           <td className="px-3 py-2 font-mono text-xs">{a.folio}</td>
                           <td className="px-3 py-2">{nombrePersona(a.trabajadorPersonaId)}</td>
+                          <td className="px-3 py-2 text-xs">
+                            {pactoDeAdelanto(a.pacto) === "prestamo"
+                              ? <Badge variant="secondary">Préstamo</Badge>
+                              : <Badge variant="outline">Anticipo</Badge>}
+                          </td>
                           <td className="px-3 py-2">{a.fecha}</td>
+                          <td className="px-3 py-2">{a.periodoImputacion || "siguiente"}</td>
                           <td className="px-3 py-2 max-w-64 truncate">{a.glosa}</td>
                           <td className="px-3 py-2 text-right">{CLP(a.monto)}</td>
+                          <td className="px-3 py-2 text-right">{CLP(saldoVivoAdelanto(a))}</td>
                           <td className="px-3 py-2">
-                            {a.estado === "descontado"
-                              ? <Badge className="bg-emerald-600 hover:bg-emerald-700 text-white">Descontado</Badge>
-                              : <Badge variant="outline">Pendiente</Badge>}
+                            {a.estado === "saldado" || a.estado === "descontado"
+                              ? <Badge className="bg-emerald-600 hover:bg-emerald-700 text-white">Saldado</Badge>
+                              : a.estado === "descontado_parcial"
+                                ? <Badge className="bg-amber-600 hover:bg-amber-700 text-white">Descontado parcial</Badge>
+                                : a.estado === "desestimado"
+                                  ? <Badge variant="secondary">Desestimado</Badge>
+                                  : <Badge variant="outline">Pendiente</Badge>}
                           </td>
                           <td className="px-3 py-2 text-right">
-                            {a.estado === "pendiente" && (
-                              <Button size="sm" variant="ghost" onClick={() => removeAdelantoPL(a.id)}><IconTrash className="size-4" /></Button>
+                            {(a.estado === "pendiente" || a.estado === "descontado_parcial") && (
+                              <Button size="sm" variant="ghost" onClick={() => desestimarAdelanto(a.id)}>
+                                <IconTrash className="size-4" />
+                              </Button>
                             )}
                           </td>
                         </tr>

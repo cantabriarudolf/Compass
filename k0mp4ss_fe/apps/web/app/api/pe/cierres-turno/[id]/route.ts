@@ -1,9 +1,13 @@
 /**
  * /api/pe/cierres-turno/[id] — detalle/actualización parcial/baja.
  *
- * GET_ONE y DELETE vía factory. PUT parcial vía put-merge sobre "pe".
+ * GET_ONE y DELETE vía factory. PUT parcial vía put-merge sobre "pe:cierre_turno".
  * La edición de un cierre ya registrado emite `PE_CIERRE_EDITADO`
  * (categoría PE) después de la escritura.
+ *
+ * OJO: el recurso es `pe:cierre_turno`, no el `pe` genérico. Con `pe` (que V2 abrió con
+ * `editar` a mantención para las transiciones de personal) cualquier rol operativo podía
+ * editar cierres de turno ajenos; el test preexistente lo fijaba como 403 y lo destapó.
  */
 import { CierreTurnoPESchema } from "@/lib/schemas"
 import { puede } from "@/lib/authz"
@@ -16,7 +20,7 @@ import { withComunidadScope } from "@/lib/api/with-comunidad-scope"
 
 const modelo = delegado(prisma.cierreTurnoPE)
 const authzCheck = (rol: string, accion: "ver" | "crear" | "editar" | "eliminar" | "ejecutar") =>
-  puede(rol, accion, "pe")
+  puede(rol, accion, "pe:cierre_turno")
 
 const handlers = createCrudHandlers({
   model: modelo,

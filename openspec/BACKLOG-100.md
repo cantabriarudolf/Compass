@@ -337,7 +337,7 @@ merged (2026-10-16) · DEUDA-2/3/4/5 → en `main`.
 
 | Frente | Estado | Desbloquea |
 |---|---|---|
-| Store legacy en la UI (`useCompassStore`) | **Fase 1 saldada** (SERIE-DEUDA-6, rama `noche/deuda-6`, 2026-10-21): **13 archivos / 147 usos → 9 archivos / 131 usos**. Quedan 6 archivos migrables (26 usos) y las 3 excepciones justificadas (105 usos). **Fase 2** = 7 frentes que exigen endpoint nuevo con contrato de negocio (ver abajo) | Fase 2: worker por lote, un endpoint por vez |
+| Store legacy en la UI (`useCompassStore`) | **SALDADO** — Fase 1 (SERIE-DEUDA-6, 2026-10-21): 13 archivos / 147 usos → 9 / 131. **Fase 2 (SERIE-FASE2, rama `fase2/inventario-insumos`, 2026-10-22): 9 archivos / 131 usos → 4 / 106, de los cuales 1 es un comentario → uso real 3 archivos / 105 usos = las 3 excepciones justificadas** (QA-Lab, dev-dashboard, mantenimiento). Delta fase 2: −6 archivos / −25 usos (ver §Store legacy: cierre de la fase 2) | Nadie: solo queda retirar el módulo QA/dev antes de producción |
 | `au-google-sso` | ⏸ Bloqueado (código 100 % listo) | Owner: `GOOGLE_CLIENT_ID`/`SECRET` en Vercel + 2 decisiones de rol/migración |
 | Decisiones de producción (Sentry DSN, pen-test, Ley 21.719, proveedor Postgres, privacidad/abogado, CSP con dominio real, secrets Vercel) | ⏸ Pendientes | Owner |
 | Falso positivo `window.open` (`app/comunidad/comunicacion/page.tsx:292`) | Decisión de producto | Owner (allowlist de dominios) |
@@ -424,3 +424,50 @@ suite completa **1388 tests / 136 archivos** con cobertura **94.39 / 85.84 / 93.
 `lib/store.ts` 99.95) · `openspec validate --all` **36 passed / 0 failed** ·
 `check-delta-coverage ui-legacy-store-fase1` **0 que romperían el archive** · `STORE_VERSION = 28`
 sin tocar · `prisma/dev.db` y `Data/NSGC/backups/` intactos.
+
+### Store legacy: cierre de la fase 2 (SERIE-FASE2, 2026-10-22)
+
+La fase 2 se ejecutó en **7 ventanas** sobre la rama `fase2/inventario-insumos` (sin push, sin PR, sin
+merge; el change `ui-legacy-store-fase1` sigue **aplicado y validado, no archivado**). Ceró la deuda
+que la fase 1 declaró: los **6 frentes / 26 usos** que exigían **endpoint nuevo con contrato de
+negocio**. Resultado: **9 archivos / 131 usos → 4 archivos / 106 usos**, de los cuales **1 es un
+comentario** (`app/finanzas/remuneraciones/page.tsx:5`), es decir **3 archivos / 105 usos = las 3
+excepciones justificadas**. **Delta real: −6 archivos / −25 usos** (−26 usos migrados, +1 comentario).
+
+| Archivo | `main` | Ahora | Ventana | Qué se hizo |
+|---|---|---|---|---|
+| `app/inventario/recursos/page.tsx` | 5 | **0** | V1 (IR) | `POST …/solicitudes-insumo/[id]/entregar` y `…/resolver-comodin`, con descuento de stock en la misma `$transaction`, folio `IR-A-####` server-side e idempotencia por update condicional |
+| `app/personas/personal/page.tsx` | 7 | **0** | V2 (PE) | 5 transiciones por API (turno, horas extra, evaluación inmutable, tarea de monitoreo, proyección como aviso sin `EgresoFI`); recursos `pe:cierre_turno` y `pe:evaluacion` |
+| `app/admin/reporteria/page.tsx` | 6 | **0** | V3 (RE) | `generar` congela snapshot con número/autor/fecha, `distribuir` publica en el visor con email en outbox, `lectura` y `vistas`; métrica emitidos/distribuidos/leídos |
+| `app/finanzas/remuneraciones/page.tsx` | 4 | **1** (comentario) | V4 (PL) | Adelantos con **dos naturalezas** (`anticipo_regular` 100 % sin tope vs `prestamo` 15 % / 45 % conjunto, DT ORD 2676/140), saldo arrastrado y deducción ligada a su liquidación; recurso `pl:adelantos` |
+| `app/finanzas/gastos-comunes/page.tsx` | 2 | **0** | V5 (FI) | Cobranza multicanal (visor + email) con interruptor global y por residente, registro auditable por envío e idempotencia `claveEnvio`; recursos `fi:cobranza` y `fi:cobranza:propia` |
+| `app/comunidad/visor/page.tsx` | 2 | **0** | V6 (CV) | Acta **por referencia** (`actaId` + visibilidad), despublicable y auditada, con documento enmascarado y texto informativo obligatorio |
+| `app/admin/qa-lab/page.tsx` | 99 | 99 | — | **Excepción justificada** (semillas, `STORE_VERSION`, laboratorio sobre `localStorage`) |
+| `app/admin/mantenimiento/page.tsx` | 4 | 4 | — | **Excepción justificada** (backup/seed de `localStorage`) |
+| `app/admin/dev-dashboard/page.tsx` | 2 | 2 | — | **Excepción justificada** (diagnóstico sobre `getState()`) |
+
+**Los 8 endpoints/contratos declarados faltantes quedaron cerrados**: adelantos PL · cobranza FI ·
+publicar acta en CV · 5 transiciones PE (+ auditoría PE) · entregar/resolver solicitud IR (+ comodín) ·
+reportes RE generar/distribuir/vista/lectura · y «caducar avisos CV», que la fase 1 ya había resuelto
+reusando `PUT /api/cv/avisos/[id]`. Materializados en **19 rutas nuevas** (IR 2, PE 6, RE 4, PL 3,
+FI 2, CV 2), 4 rutas existentes modificadas y **4 migraciones aditivas** (RE snapshot, PL adelantos,
+FI cobranza multicanal, CV actas por referencia). 106 tests nuevos en 6 archivos.
+
+**Deuda restante declarada al cierre de la fase 2**:
+
+| Frente | Estado | Qué falta |
+|---|---|---|
+| **SMTP real** | **Decisión tomada**: SMTP propio del dominio | Faltan las **credenciales**. Hoy `CF` tiene los campos (`smtpHost`, `smtpPort`, `smtpUser`, `smtpSecurity`, `smtpFrom`, `smtpFromName`, `smtpBcc`) y **no existe emisor** (0 referencias a `nodemailer`/`sendMail` en `app/` y `lib/`). Todo correo queda en outbox `pendiente` (RE `envios[]`, FI `envios_cobranza_fi`) y **nunca** se reporta como enviado |
+| `Notificacion` sin envío real | Abierto | El canal real es el visor interno; no hay push ni correo saliente |
+| Módulo QA/dev a retirar antes de producción | Abierto | `admin/qa-lab`, `admin/dev-dashboard` y `admin/mantenimiento` operan sobre `localStorage`; se retiran antes de producción, no se migran |
+| Paginación `useCrudCollection` | Arrastrada de fase 1 | `pageSize=100` fijo (`lib/api/use-crud-collection.ts:98`) |
+| `Notificacion` sin `unidadId` | Arrastrada de fase 1 | Una difusión al rol la ve toda la comunidad con ese rol |
+| Manuales NSGC IR/PE/RE + trazabilidad | Documental | `21 - IR`, `18 - PE`, `19 - PE`, `25 - RE`, `03 - Mapa de Desarrollo y Trazabilidad` y `00-index` no describen aún los contratos nuevos (V7 solo actualizó `12 - FI` y `16 - CO`) |
+
+**Ninguna ventana se marcó BLOQUEADA**: no hubo gate fallido ni decisión faltante; el único fix del
+orquestador fue `d10279c` (el cierre de turno se gobierna por `pe:cierre_turno`, no por `pe`).
+
+**Gates del cierre de la fase 2 (2026-10-22, commit `d10279c`)**: `npx tsc --noEmit` **0** ·
+`npm run lint` **0 problemas** · `openspec validate --all` **36 passed / 0 failed** · suite completa
+observada por el orquestador **146 archivos / 1538 tests / `SUITE_EXIT=0` / 8m50s** ·
+`STORE_VERSION = 28` sin tocar · `prisma/dev.db`, `.env*` y `Data/NSGC/backups/` intactos.
