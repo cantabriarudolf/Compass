@@ -1649,6 +1649,66 @@ export const PlantillaCVSchema = z
       "Multimedia excluyente: la plantilla admite imagen o video, no ambos.",
   })
 
+// --- Visor CV: actas publicadas POR REFERENCIA (SERIE-FASE2 §V6) ---
+//
+// El visor NO copia el acta: guarda `actaId` + visibilidad y resuelve el
+// contenido al leer. El acta canónica sigue siendo el documento inmutable de GD.
+
+export const ESTADOS_PUBLICACION_ACTA_CV = ["publicado", "despublicado"] as const
+export const EstadoPublicacionActaCVSchema = z.enum(
+  ESTADOS_PUBLICACION_ACTA_CV
+)
+export type EstadoPublicacionActaCV = z.infer<
+  typeof EstadoPublicacionActaCVSchema
+>
+
+/** Texto obligatorio de la vista general del visor (Ley 19.628 / libro de actas). */
+export const TEXTO_ACTA_INFORMATIVA_CV =
+  "Versión informativa — el documento oficial es el libro de actas"
+
+/** Entrada de POST /api/cv/actas: solo la referencia, nunca el contenido. */
+export const PublicarActaCVSchema = z.object({
+  actaId: IdEntidadSchema,
+})
+
+export const ActaPublicadaCVSchema = z.object({
+  id: IdEntidadSchema,
+  actaId: IdEntidadSchema,
+  estado: EstadoPublicacionActaCVSchema,
+  publicadoEn: z.string(),
+  publicadoPorUsuarioId: IdEntidadSchema,
+  despublicadoEn: z.string().optional(),
+  despublicadoPorUsuarioId: IdEntidadSchema.optional(),
+})
+export type ActaPublicadaCV = z.infer<typeof ActaPublicadaCVSchema>
+
+/** Asistente de la vista general: nombre + documento YA enmascarado. */
+export const AsistenteActaCVSchema = z.object({
+  nombre: z.string(),
+  documento: z.string(),
+})
+
+/**
+ * Entrada de la vista general del visor: SOLO datos informativos del acta
+ * (fecha, hora, lugar y asistentes con documento enmascarado). Nunca minuta,
+ * morosidad ni sanciones individualizadas.
+ */
+export const ActaInformativaCVSchema = z.object({
+  actaId: IdEntidadSchema,
+  fecha: z.string(),
+  hora: z.string(),
+  lugar: z.string(),
+  temas: z.number().int().nonnegative(),
+  asistentes: z.array(AsistenteActaCVSchema),
+})
+export type ActaInformativaCV = z.infer<typeof ActaInformativaCVSchema>
+
+/** Publicación + referencia informativa del acta (lo que consume el visor). */
+export const PublicacionActaCVSchema = ActaPublicadaCVSchema.extend({
+  acta: ActaInformativaCVSchema.nullable(),
+})
+export type PublicacionActaCV = z.infer<typeof PublicacionActaCVSchema>
+
 // --- Administración: Maestros (MA) ---
 
 export const AfpSchema = z.object({
