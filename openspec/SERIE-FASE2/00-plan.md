@@ -83,13 +83,30 @@ Dos naturalezas, nunca una sola:
 | V4 | Adelantos PL — anticipo vs préstamo | HECHA |
 | V5 | Cobranza FI — multicanal con interruptores | HECHA |
 | V6 | Publicar acta en CV — por referencia | HECHA |
-| V7 | Cierre: gates, censo del store, BACKLOG, avance, deuda | PENDIENTE |
+| V7 | Cierre: gates, censo del store, BACKLOG, avance, deuda | HECHA |
 
 **MÁXIMO: 7 ventanas.** Lo que no entre se declara como deuda en V7.
 
 ## Bitácora
 
 - **2026-10-21** — Serie materializada tras cerrar la V1 (IR). Modo nocturno sin owner.
+- **2026-10-21 — V1 (IR) HECHA.** Entregar una solicitud de insumo y resolver el comodín tienen
+  ruta propia y la página dejó el store (**0 usos** de `useCompassStore`, verificado con grep; antes
+  tenía 5: el import + `entregarSolicitudInsumoIR` y `resolverComodinIR` con sus lecturas). Rutas:
+  `POST /api/ir/solicitudes-insumo/[id]/entregar` y
+  `POST /api/ir/solicitudes-insumo/[id]/resolver-comodin`, ambas sobre el recurso RBAC que ya usaban
+  las rutas IR desplegadas (`ir:mantenimiento` con `editar`, resuelto en el módulo co-locado
+  `app/api/ir/_acciones.ts`) — **sin recurso nuevo**. Decisiones owner: marcar la entrega es el
+  único acto (sin segunda aprobación) y descuenta el stock en la **misma** `$transaction`, con el
+  guard `stock >= cantidad` dentro del `updateMany` para que dos entregas concurrentes no dejen
+  stock negativo; el comodín se resuelve en un click con tres salidas (`sustituir` asigna el
+  sustituto **y lo entrega** descontando su stock, `rechazar` exige justificación, `aprobar_crear`
+  da de alta el artículo con `stock 0`). Idempotencia por update condicional (`estado: "pendiente"`
+  y `estadoComodin: "pendiente"`): re-entregar responde `200 { ok: true, yaEntregada: true }` sin
+  volver a descontar ni repetir eventos; resolver dos veces → 400. Folio `IR-A-####` correlativo
+  generado en el servidor (`siguienteCodigoIR`), no en el cliente — el `fix` `d4806f5` corrigió
+  justamente el gate de entrega por rol y el folio server-side. **Sin migración**: las tablas IR ya
+  existían. Gates: `npx tsc --noEmit` 0, `npm run lint` 0, `test/api/ir-insumos.test.ts` 27/27 verde.
 - **2026-10-21 — V2 (PE) HECHA.** Las 5 transiciones tienen ruta propia y la página dejó el store
   (0 usos de `useCompassStore`, verificado con grep). Rutas: `POST /api/pe/turnos/iniciar` +
   `GET /api/pe/turnos` (inicio de turno y contador del día, recurso `pe:cierre_turno`),
@@ -122,6 +139,30 @@ Dos naturalezas, nunca una sola:
   distribuidos / leídos, sin tasa de apertura. Gates: `npx tsc --noEmit` 0, `npm run lint` 0,
   `test/api/reporteria-snapshot.test.ts` 15/15 verde (+ regresión `api-reportes-re`, `crud-factory`
   y `with-comunidad-scope` 22/22).
+- **2026-10-21 — V4 (PL) HECHA.** Los adelantos tienen **dos naturalezas** y el cálculo es un
+  módulo puro testeado. La página `app/finanzas/remuneraciones/page.tsx` dejó el store (**0 usos** de
+  `useCompassStore`, verificado con grep; antes tenía 4: el import + `addAdelantoPL`,
+  `removeAdelantoPL` y la lectura de `adelantosPL`). **Migración aditiva**
+  `20261022000000_add_adelantos_pl_pacto_saldo`: 8 columnas en `adelantos_pl` (`pacto` con default
+  `anticipo_regular`, `saldo`, `periodoImputacion`, `acuerdoEscritoRef`, `creadoPor`, `aprobadoPor`,
+  `comprobante`, `deducciones` Json) + `adelantosDetalle` Json en `liquidaciones_pl` + **backfill**
+  `saldo = monto` para los adelantos legados `pendiente` (con saldo 0 nunca se habrían descontado) +
+  índice `(comunidadId, trabajadorPersonaId, estado)`. Rutas: `GET|POST /api/liquidaciones/adelantos`
+  y `GET|PUT|DELETE /api/liquidaciones/adelantos/[id]` (recurso nuevo `pl:adelantos`: admin full,
+  comité `ver`, resto vacío explícito) y `POST /api/liquidaciones/adelantos/[id]/desestimar`
+  (`editar`; el adelanto **no se borra**: queda `desestimado` con saldo anulado y sus deducciones ya
+  aplicadas — paridad con el `removeAdelantoPL` legacy, que solo permitía borrar un `pendiente`). La
+  doctrina vive en `app/api/liquidaciones/adelantos/_calculo.ts` (`TOPE_PRESTAMO_PCT = 0.15`,
+  `TOPE_CONJUNTO_PCT = 0.45`, `saldoVivoAdelanto`, `adelantoImputableAlPeriodo`,
+  `calcularDeduccionAdelantos`) y se aplica en dos puntos: al **generar** la liquidación
+  (`/api/liquidaciones` congela el plan en `adelantosDetalle`, incluyendo los adelantos
+  `descontado_parcial` con saldo arrastrado) y al **confirmarla** (`/api/liquidaciones/[id]/confirmar`
+  materializa saldo, estado y una `DeduccionAdelantoPL` ligada a la liquidación con folio y periodo;
+  las liquidaciones anteriores a §V4, sin plan, se saldan completas como hacía el legado).
+  **Prelación propia declarada**: el préstamo va primero (es la deducción que la ley permite y topa)
+  y el anticipo regular se lleva lo que quede del líquido; si no cabe completo, arrastra saldo y
+  nunca deja el líquido en negativo. Gates: `npx tsc --noEmit` 0, `npm run lint` 0,
+  `test/api/adelantos-pl.test.ts` 17/17 verde.
 - **2026-10-21 — V5 (FI) HECHA.** La cobranza es multicanal con dos interruptores y cada envío queda
   registrado. La página `app/finanzas/gastos-comunes/page.tsx` dejó el store (**0 usos** de
   `useCompassStore`, verificado con grep; antes tenía el import del store + `getState().enviarCobranzaFI`
@@ -178,3 +219,28 @@ Dos naturalezas, nunca una sola:
   (b) republicar un acta despublicada es una transición real y vuelve a auditarse;
   (c) la lista GET vuelve a exigir
   `actas_gd.estado = "publicada"` para que un acta desestimada nunca se muestre por referencia vieja.
+
+- **2026-10-22 — V7 (CIERRE) HECHA. SERIE CERRADA 7/7.** Ventana de auditoría y documentación: **no
+  escribe código de producto**. 27 commits en la rama `fase2/inventario-insumos`, 57 archivos, +10 527
+  / −236. **19 rutas nuevas** (`git diff --name-status main...HEAD -- '*route.ts'`: 19 `A` + 4 `M`) y
+  **4 migraciones aditivas** (RE snapshot, PL adelantos, FI cobranza multicanal, CV actas por
+  referencia). Censo final de `useCompassStore` en `app/`:
+  `grep -rn "useCompassStore" app/ | wc -l` → **4 archivos / 106 usos**, de los cuales 1 es un
+  comentario (`app/finanzas/remuneraciones/page.tsx:5`), así que el uso real es **3 archivos / 105
+  usos** y los 3 son las excepciones justificadas (`admin/qa-lab` 99, `admin/mantenimiento` 4,
+  `admin/dev-dashboard` 2). Base al inicio de la fase 2 (`main` = merge-base `1bf0593`): 9 archivos /
+  131 usos → **delta real −6 archivos / −25 usos (−26 usos migrados, +1 comentario)**; contra el
+  inicio de la sesión (`13 archivos / 147 usos`, siembra de SERIE-DEUDA-6) el delta es **−10
+  archivos / −41 usos**. **Ningún archivo fuera de alcance**: `prisma/dev.db`, `.env*`,
+  `Data/NSGC/backups/`, `lib/store.ts` y `STORE_VERSION` (sigue en **28**, verificado con grep en
+  `lib/store.ts:336`) están fuera del diff. Gates: `npx tsc --noEmit` **0** · `npm run lint` **0
+  problemas** · `openspec validate --all` **36 passed / 0 failed** (`openspec validate` global, no
+  `npx`: el paquete no está en `node_modules`). La suite completa **no se corrió acá**: la observó el
+  orquestador en `d10279c` → **146 archivos, 1538 tests, `SUITE_EXIT=0`, 8m50s**. Documentación
+  escrita: `openspec/BACKLOG-100.md` (§cierre fase 2 + deuda restante), avance
+  `Data/NSGC/docs/avances/avance - 2026-10-22 03-30.md` y dos manuales que sí describían el
+  comportamiento viejo (`12 - FI`, `16 - CO`). Deuda restante declarada: **SMTP** (decisión tomada:
+  SMTP propio del dominio; faltan credenciales), `Notificacion` sin envío real, el módulo QA/dev a
+  retirar antes de producción y las deudas menores de fase 1 (paginar `useCrudCollection` con
+  `pageSize=100`, `Notificacion` sin `unidadId`). **Sin push, sin PR, sin merge, sin archive**: el
+  change `ui-legacy-store-fase1` sigue aplicado y validado, no archivado.
