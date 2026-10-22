@@ -37,6 +37,9 @@ const otraComunidad = "ir-insumos-otra-comunidad"
 const emailAdmin = "ir-admin@test.cl"
 const emailResidente = "ir-residente@test.cl"
 const emailConserjeria = "ir-conserjeria@test.cl"
+const emailComite = "ir-comite@test.cl"
+const emailMantencion = "ir-mantencion@test.cl"
+const emailAdminOtra = "ir-admin-otra@test.cl"
 
 const emailToId = (email: string): string => email.split("@")[0] ?? email
 
@@ -44,6 +47,7 @@ const emailToId = (email: string): string => email.split("@")[0] ?? email
 const hoy = (): string => new Date().toISOString().slice(0, 10)
 
 const cargaModulos = async () => ({
+  coleccion: await import("@/app/api/ir/solicitudes-insumo/route"),
   entregar: await import("@/app/api/ir/solicitudes-insumo/[id]/entregar/route"),
   resolverComodin: await import(
     "@/app/api/ir/solicitudes-insumo/[id]/resolver-comodin/route"
@@ -111,22 +115,26 @@ async function crearSolicitud(
 }
 
 async function sembrarUsuarios(): Promise<void> {
-  const roles: Array<[string, string]> = [
-    [emailAdmin, "administrador"],
-    [emailResidente, "residente"],
-    [emailConserjeria, "conserjeria"],
+  // [email, rol, comunidad]: la membresía fija la comunidad del scope server-side.
+  const roles: Array<[string, string, string]> = [
+    [emailAdmin, "administrador", comunidad],
+    [emailResidente, "residente", comunidad],
+    [emailConserjeria, "conserjeria", comunidad],
+    [emailComite, "comite", comunidad],
+    [emailMantencion, "mantencion", comunidad],
+    [emailAdminOtra, "administrador", otraComunidad],
   ]
   await prisma.membresia.deleteMany({
     where: { usuarioId: { in: roles.map(([email]) => emailToId(email)) } },
   })
-  for (const [email, rol] of roles) {
+  for (const [email, rol, comunidadId] of roles) {
     await prisma.usuario.upsert({
       where: { email },
       update: {},
       create: { id: emailToId(email), email, activo: true },
     })
     await prisma.membresia.create({
-      data: { usuarioId: emailToId(email), comunidadId: comunidad, rol },
+      data: { usuarioId: emailToId(email), comunidadId, rol },
     })
   }
 }
@@ -168,6 +176,17 @@ async function postResolverComodin(id: string, body: unknown): Promise<Response>
   )
 }
 
+async function postCrearSolicitud(body: unknown): Promise<Response> {
+  const { coleccion } = await cargaModulos()
+  return coleccion.POST(
+    new NextRequest("http://localhost/api/ir/solicitudes-insumo", {
+      method: "POST",
+      body: JSON.stringify(body),
+      headers: { "content-type": "application/json" },
+    })
+  )
+}
+
 const stockDe = async (id: string): Promise<number | undefined> =>
   (await prisma.recursoIR.findUnique({ where: { id } }))?.stock
 
@@ -201,8 +220,12 @@ beforeEach(async () => {
       tipoAccion: { in: ["IR_SOLICITUD_ENTREGADA", "IR_COMODIN_RESUELTO", "IR_STOCK_LOW"] },
     },
   })
-  await prisma.solicitudInsumoIR.deleteMany({ where: { comunidadId: comunidad } })
-  await prisma.recursoIR.deleteMany({ where: { comunidadId: comunidad } })
+  await prisma.solicitudInsumoIR.deleteMany({
+    where: { comunidadId: { in: [comunidad, otraComunidad] } },
+  })
+  await prisma.recursoIR.deleteMany({
+    where: { comunidadId: { in: [comunidad, otraComunidad] } },
+  })
 })
 
 afterAll(async () => {
@@ -217,7 +240,14 @@ afterAll(async () => {
     await prisma.recursoIR.deleteMany({
       where: { comunidadId: { in: [comunidad, otraComunidad] } },
     })
-    const ids = [emailAdmin, emailResidente, emailConserjeria].map(emailToId)
+    const ids = [
+      emailAdmin,
+      emailResidente,
+      emailConserjeria,
+      emailComite,
+      emailMantencion,
+      emailAdminOtra,
+    ].map(emailToId)
     await prisma.membresia.deleteMany({ where: { usuarioId: { in: ids } } })
     for (const id of ids) {
       await prisma.usuario.delete({ where: { id } }).catch(() => {})
@@ -241,10 +271,10 @@ describe("POST /api/ir/solicitudes-insumo/[id]/entregar", () => {
     expect((await solicitudDe(solicitudId))?.estado).toBe("pendiente")
   })
 
-  it("403 para roles sin `editar` sobre ir:mantenimiento (residente y conserjería)", async () => {
+  it("403 para roles sin `editar` sobre ir:mantenimiento (residente y comité)", async () => {
     const recursoId = await crearInsumo()
     const solicitudId = await crearSolicitud({ recursoInsumoId: recursoId })
-    for (const email of [emailResidente, emailConserjeria]) {
+    for (const email of [emailResidente, emailComite]) {
       await conSesion(email, async () => {
         const res = await postEntregar(solicitudId)
         expect(res.status).toBe(403)
@@ -253,6 +283,20 @@ describe("POST /api/ir/solicitudes-insumo/[id]/entregar", () => {
     }
     expect(await stockDe(recursoId)).toBe(10)
     expect((await solicitudDe(solicitudId))?.estado).toBe("pendiente")
+  })
+
+  it("conserjería y mantención sí entregan (decisión owner 2026-10-21)", async () => {
+    for (const email of [emailConserjeria, emailMantencion]) {
+      const recursoId = await crearInsumo({ stock: 10 })
+      const solicitudId = await crearSolicitud({ recursoInsumoId: recursoId, cantidad: 2 })
+      await conSesion(email, async () => {
+        const res = await postEntregar(solicitudId)
+        expect(res.status).toBe(200)
+        expect(await res.json()).toEqual({ ok: true, stockNuevo: 8 })
+      })
+      expect((await solicitudDe(solicitudId))?.estado).toBe("entregada")
+      expect(await stockDe(recursoId)).toBe(8)
+    }
   })
 
   it("entregar → 200, marca Entregada y descuenta el stock en la misma transacción", async () => {
@@ -618,5 +662,133 @@ describe("POST /api/ir/solicitudes-insumo/[id]/resolver-comodin", () => {
       const cuerpo = (await res.json()) as { error: string }
       expect(cuerpo.error).toBe("Datos inválidos.")
     })
+  })
+})
+
+/**
+ * Bug preexistente (bloqueaba el flujo completo): la página crea solicitudes
+ * con `folio: ""` y `SolicitudInsumoIRSchema.folio` exige `min(1)`, así que el
+ * POST del factory respondía 400 "Datos inválidos." y no se podía crear NINGUNA
+ * solicitud (entregar no tenía input). El POST propio de la colección genera el
+ * correlativo `SI-####` server-side con el patrón legacy del store.
+ */
+describe("POST /api/ir/solicitudes-insumo — folio SI-#### server-side", () => {
+  const idUnico = (): string =>
+    `ir-sol-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`
+
+  /** Body equivalente al que envía `app/inventario/recursos/page.tsx`. */
+  const solicitudBase = (overrides: Record<string, unknown> = {}) => ({
+    id: idUnico(),
+    solicitantePersonaId: "ir-p-solicitante",
+    estadoComodin: "no_comodin",
+    cantidad: 2,
+    areaDestino: "Conserjería",
+    estado: "pendiente",
+    fechaSolicitud: hoy(),
+    ...overrides,
+  })
+
+  it("sin folio → 201 con SI-0001; con `folio: \"\"` → SI-0002; con espacios → SI-0003", async () => {
+    const recursoId = await crearInsumo()
+    await conSesion(emailAdmin, async () => {
+      const primera = await postCrearSolicitud(
+        solicitudBase({ id: "ir-sol-folio-1", recursoInsumoId: recursoId })
+      )
+      expect(primera.status).toBe(201)
+      expect(((await primera.json()) as { folio: string }).folio).toBe("SI-0001")
+
+      const segunda = await postCrearSolicitud(
+        solicitudBase({ id: "ir-sol-folio-2", folio: "", recursoInsumoId: recursoId })
+      )
+      expect(segunda.status).toBe(201)
+      expect(((await segunda.json()) as { folio: string }).folio).toBe("SI-0002")
+
+      const tercera = await postCrearSolicitud(
+        solicitudBase({ id: "ir-sol-folio-3", folio: "   ", recursoInsumoId: recursoId })
+      )
+      expect(tercera.status).toBe(201)
+      expect(((await tercera.json()) as { folio: string }).folio).toBe("SI-0003")
+    })
+    // el folio quedó persistido (la página ya puede crear y entregar después)
+    expect((await solicitudDe("ir-sol-folio-1"))?.folio).toBe("SI-0001")
+    expect((await solicitudDe("ir-sol-folio-3"))?.folio).toBe("SI-0003")
+  })
+
+  it("la solicitud creada sin folio se puede entregar (flujo completo de la página)", async () => {
+    const recursoId = await crearInsumo({ stock: 5 })
+    await conSesion(emailAdmin, async () => {
+      const creada = await postCrearSolicitud(
+        solicitudBase({ id: "ir-sol-flujo-1", recursoInsumoId: recursoId, cantidad: 3 })
+      )
+      expect(creada.status).toBe(201)
+      const entrega = await postEntregar("ir-sol-flujo-1")
+      expect(entrega.status).toBe(200)
+      expect(await entrega.json()).toEqual({ ok: true, stockNuevo: 2 })
+    })
+    expect((await solicitudDe("ir-sol-flujo-1"))?.estado).toBe("entregada")
+    expect(await stockDe(recursoId)).toBe(2)
+  })
+
+  it("respeta el folio del body y continúa el correlativo desde ahí", async () => {
+    const recursoId = await crearInsumo()
+    await conSesion(emailAdmin, async () => {
+      const explicita = await postCrearSolicitud(
+        solicitudBase({ id: "ir-sol-folio-exp", folio: "SI-0042", recursoInsumoId: recursoId })
+      )
+      expect(explicita.status).toBe(201)
+      expect(((await explicita.json()) as { folio: string }).folio).toBe("SI-0042")
+
+      const generada = await postCrearSolicitud(
+        solicitudBase({ id: "ir-sol-folio-sig", folio: "", recursoInsumoId: recursoId })
+      )
+      expect(((await generada.json()) as { folio: string }).folio).toBe("SI-0043")
+    })
+  })
+
+  it("dos comunidades no comparten correlativo", async () => {
+    const recursoA = await crearInsumo()
+    const recursoB = await crearInsumo({ comunidadId: otraComunidad })
+
+    await conSesion(emailAdmin, async () => {
+      const res = await postCrearSolicitud(
+        solicitudBase({ id: "ir-sol-folio-c1", recursoInsumoId: recursoA })
+      )
+      expect(res.status).toBe(201)
+      expect(((await res.json()) as { folio: string }).folio).toBe("SI-0001")
+    })
+
+    await conSesion(emailAdminOtra, async () => {
+      const res = await postCrearSolicitud(
+        solicitudBase({ id: "ir-sol-folio-c2", recursoInsumoId: recursoB })
+      )
+      expect(res.status).toBe(201)
+      // la otra comunidad arranca su propio correlativo en 1
+      expect(((await res.json()) as { folio: string }).folio).toBe("SI-0001")
+    })
+  })
+
+  it("authz de la colección: 401 sin sesión, 403 comité/residente, 201 conserjería/mantención", async () => {
+    const recursoId = await crearInsumo()
+
+    state.cookie = ""
+    expect((await postCrearSolicitud(solicitudBase({ recursoInsumoId: recursoId }))).status).toBe(401)
+
+    for (const email of [emailComite, emailResidente]) {
+      await conSesion(email, async () => {
+        const res = await postCrearSolicitud(
+          solicitudBase({ id: idUnico(), recursoInsumoId: recursoId })
+        )
+        expect(res.status).toBe(403)
+      })
+    }
+
+    for (const email of [emailConserjeria, emailMantencion]) {
+      await conSesion(email, async () => {
+        const res = await postCrearSolicitud(
+          solicitudBase({ id: idUnico(), recursoInsumoId: recursoId })
+        )
+        expect(res.status).toBe(201)
+      })
+    }
   })
 })

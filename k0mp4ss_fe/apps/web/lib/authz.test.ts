@@ -63,7 +63,10 @@ describe("lib/authz — matriz RP (pure, sin IO)", () => {
     expect(puede("residente", "ver", "PE:directorio")).toBe(true)
     expect(puede("residente", "crear", "PE:visita")).toBe(true)
     expect(puede("residente", "ver", "IR:mantenimiento")).toBe(true)
-    expect(puede("residente", "crear", "IR:mantenimiento")).toBe(true)
+    // Decisión owner 2026-10-21: el residente solo consulta el inventario
+    // (ya no crea solicitudes de insumo ni entrega).
+    expect(puede("residente", "crear", "IR:mantenimiento")).toBe(false)
+    expect(puede("residente", "editar", "IR:mantenimiento")).toBe(false)
     expect(puede("residente", "crear", "IR:interno")).toBe(false)
     expect(puede("residente", "ver", "FI")).toBe(false)
     expect(puede("residente", "ver", "admin:usuarios")).toBe(false)
@@ -88,10 +91,12 @@ describe("lib/authz — matriz RP (pure, sin IO)", () => {
     expect(puede("conserjeria", "crear", "IR:interno")).toBe(true)
     expect(puede("mantencion", "crear", "IR:interno")).toBe(true)
     expect(puede("administrador", "crear", "IR:interno")).toBe(true)
-    // mantenimiento sí para todos
-    expect(puede("residente", "crear", "IR:mantenimiento")).toBe(true)
-    expect(puede("comite", "crear", "IR:mantenimiento")).toBe(true)
+    // mantenimiento: quien opera el inventario (decisión owner 2026-10-21);
+    // el comité y el residente solo leen desde esa decisión.
+    expect(puede("residente", "crear", "IR:mantenimiento")).toBe(false)
+    expect(puede("comite", "crear", "IR:mantenimiento")).toBe(false)
     expect(puede("conserjeria", "crear", "IR:mantenimiento")).toBe(true)
+    expect(puede("mantencion", "crear", "IR:mantenimiento")).toBe(true)
   })
 
   it("alias de roles normaliza", () => {
@@ -135,6 +140,34 @@ describe("lib/authz — matriz RP (pure, sin IO)", () => {
     expect(puede("administrador", "ejecutar", "backup")).toBe(true)
     expect(puede("comite", "ejecutar", "backup")).toBe(false)
     expect(puede("conserjeria", "ejecutar", "backup")).toBe(false)
+  })
+
+  // Decisión owner 2026-10-21: "se están pasando insumos básicos, no es controlar
+  // el stock de uranio". Quien opera el inventario cierra el ciclo (entrega y
+  // resuelve comodines) con `editar`: conserjería y mantención. El comité y el
+  // residente dejan de crear solicitudes (solo leen); el administrador conserva
+  // el wildcard.
+  it("ir:mantenimiento — conserjería y mantención editan (entregan insumos)", () => {
+    for (const rol of ["conserjeria", "mantencion"] as const) {
+      expect(puede(rol, "ver", "ir:mantenimiento")).toBe(true)
+      expect(puede(rol, "crear", "ir:mantenimiento")).toBe(true)
+      expect(puede(rol, "editar", "ir:mantenimiento")).toBe(true)
+    }
+    // wildcard del administrador sin cambios (incluye `editar`)
+    expect(puede("administrador", "editar", "ir:mantenimiento")).toBe(true)
+  })
+
+  it("ir:mantenimiento — comité y residente solo leen: no crean ni editan", () => {
+    for (const rol of ["comite", "residente"] as const) {
+      expect(puede(rol, "ver", "ir:mantenimiento")).toBe(true)
+      expect(puede(rol, "crear", "ir:mantenimiento")).toBe(false)
+      expect(puede(rol, "editar", "ir:mantenimiento")).toBe(false)
+    }
+    // menor privilegio intacto: nadie elimina y `ir:interno` conserva su matriz.
+    for (const rol of ["comite", "conserjeria", "residente", "mantencion"] as const) {
+      expect(puede(rol, "eliminar", "ir:mantenimiento")).toBe(false)
+    }
+    expect(puede("residente", "ver", "ir:interno")).toBe(false)
   })
 })
 

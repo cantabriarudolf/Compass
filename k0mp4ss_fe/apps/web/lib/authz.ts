@@ -52,7 +52,9 @@ const MATRIZ: Record<Rol, Record<string, Set<Accion>>> = {
     "notificaciones:propias": new Set<Accion>(["editar"]),
     // cf: configuración global — el comité la lee para auditar; editarla es solo del administrador
     "cf": new Set<Accion>(["ver"]),
-    "ir:mantenimiento": new Set<Accion>(["ver", "crear"]),
+    // Decisión owner 2026-10-21: quien opera el inventario cierra el ciclo de
+    // insumos con `editar` (conserjería y mantención); el comité solo lee.
+    "ir:mantenimiento": new Set<Accion>(["ver"]),
     // H5 — gobernanza movida a la matriz (antes decidía lib/api/gd-guard.ts):
     // gd = actas, ad = controles de propiedad. El comité gestiona ambas con las 5
     // acciones por paridad con el `return true` del guard; la acción `eliminar`
@@ -75,7 +77,9 @@ const MATRIZ: Record<Rol, Record<string, Set<Accion>>> = {
     "pl:propia": new Set<Accion>(["ver"]), // solo propia liquidación (ABAC filtro)
     "ct:propia": new Set<Accion>(["ver"]),
     "re:reporte_diario": new Set<Accion>(["ver"]),
-    "ir:mantenimiento": new Set<Accion>(["ver", "crear"]),
+    // Decisión owner 2026-10-21: conserjería entrega insumos y resuelve
+    // comodines en un click (`editar` = POST .../entregar y .../resolver-comodin).
+    "ir:mantenimiento": new Set<Accion>(["ver", "crear", "editar"]),
     "ir:interno": new Set<Accion>(["ver", "crear"]), // personal servicio sí
     "cv": new Set<Accion>(["ver"]), // visor de avisos: solo lectura (decisión owner 2026-10-21)
     // in: conserjería reporta la infracción (ver + crear) pero no resuelve el caso; "in:apelar"
@@ -96,7 +100,9 @@ const MATRIZ: Record<Rol, Record<string, Set<Accion>>> = {
     "pe:directorio": new Set<Accion>(["ver"]),
     "pe:visita": new Set<Accion>(["ver", "crear"]), // agenda visitas/contratistas a su unidad
     "pe:contratista": new Set<Accion>(["ver", "crear"]),
-    "ir:mantenimiento": new Set<Accion>(["ver", "crear"]),
+    // Decisión owner 2026-10-21: el residente solo consulta el inventario de
+    // insumos; ya no crea solicitudes ni cierra el ciclo.
+    "ir:mantenimiento": new Set<Accion>(["ver"]),
     "ir:interno": new Set<Accion>([]), // bloqueado
     "ra": new Set<Accion>(["ver", "crear"]), // reserva amenities (ABAC propia)
     "ge": new Set<Accion>(["ver", "crear"]),
@@ -120,7 +126,9 @@ const MATRIZ: Record<Rol, Record<string, Set<Accion>>> = {
     "mt:tarea": new Set<Accion>(["ver", "ejecutar"]),
     "mt:incidente": new Set<Accion>(["ver", "crear"]),
     "pe:directorio": new Set<Accion>(["ver"]),
-    "ir:mantenimiento": new Set<Accion>(["ver", "crear"]),
+    // Decisión owner 2026-10-21: mantención entrega insumos y resuelve
+    // comodines en un click (`editar` = POST .../entregar y .../resolver-comodin).
+    "ir:mantenimiento": new Set<Accion>(["ver", "crear", "editar"]),
     "ir:interno": new Set<Accion>(["ver", "crear"]),
     "pe:bitacora": new Set<Accion>(["ver"]),
     "cv": new Set<Accion>(["ver"]), // visor de avisos: solo lectura (decisión owner 2026-10-21)
