@@ -64,6 +64,15 @@ function invalidarPersonas(): void {
 
 export interface UsePersonasResultado {
   personas: Persona[]
+  /**
+   * Total de personas que reporta el servidor para el filtro activo.
+   *
+   * La lista se pide con `pageSize=100`, así que `personas.length` puede ser
+   * menor que `total`: el consumidor DEBE avisar en pantalla cuando
+   * `total > personas.length` en vez de truncar en silencio (ver
+   * `components/pe/aviso-truncamiento.tsx`).
+   */
+  total: number
   isLoading: boolean
   error: Error | null
   create: (persona: Partial<Persona>) => Promise<StoreResult>
@@ -101,6 +110,7 @@ export function usePersonas(q?: string): UsePersonasResultado {
 
   return {
     personas: data?.data ?? [],
+    total: data?.total ?? 0,
     isLoading,
     error: error ?? null,
     create,

@@ -23,6 +23,7 @@ import {
   DialogTitle,
 } from "@workspace/ui/components/dialog"
 import { IconCheck, IconTrash } from "@tabler/icons-react"
+import { AvisoTruncamiento, LIMITE_SELECT } from "@/components/pe/aviso-truncamiento"
 import type { EncomiendaPE } from "@/lib/schemas"
 
 interface FormEncomienda {
@@ -60,6 +61,12 @@ export function EncomiendasPanel({
     evidenciaUrl: "",
   })
   const [retiroEnc, setRetiroEnc] = React.useState<{ id: string; retiradoPor: string } | null>(null)
+
+  // Listas de opciones: se recortan a LIMITE_SELECT para no montar cientos de
+  // SelectItem, y el recorte se declara en pantalla (nunca en silencio).
+  const unidadesDestino = unidades.filter((u) => !u.id.startsWith("u-E-"))
+  const unidadesVisibles = unidadesDestino.slice(0, LIMITE_SELECT)
+  const personasVisibles = personas.slice(0, LIMITE_SELECT)
 
   const refUnidad = (id?: string) => {
     if (!id) return "—"
@@ -160,13 +167,14 @@ export function EncomiendasPanel({
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="__none">Sin destinatario</SelectItem>
-                    {personas.slice(0, 100).map((p) => (
+                    {personasVisibles.map((p) => (
                       <SelectItem key={p.id} value={p.id}>
                         {p.nombreCompleto}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
+                <AvisoTruncamiento mostrados={personasVisibles.length} total={personas.length} />
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label>Unidad</Label>
@@ -179,16 +187,14 @@ export function EncomiendasPanel({
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="__none">Sin unidad</SelectItem>
-                    {unidades
-                      .filter((u) => !u.id.startsWith("u-E-"))
-                      .slice(0, 100)
-                      .map((u) => (
-                        <SelectItem key={u.id} value={u.id}>
-                          {u.etiqueta} {u.numero}
-                        </SelectItem>
-                      ))}
+                    {unidadesVisibles.map((u) => (
+                      <SelectItem key={u.id} value={u.id}>
+                        {u.etiqueta} {u.numero}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
+                <AvisoTruncamiento mostrados={unidadesVisibles.length} total={unidadesDestino.length} />
               </div>
             </div>
             <div className="flex flex-col gap-1.5">

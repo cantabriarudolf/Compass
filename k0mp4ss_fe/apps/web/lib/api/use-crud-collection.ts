@@ -7,6 +7,13 @@
  * Lectura paginada (`{data,page,pageSize,total}`) + mutaciones create/update/
  * remove que devuelven `StoreResult`, el mismo contrato que las acciones
  * legacy del store zustand para poder intercambiarse.
+ *
+ * AVISO OBLIGATORIO AL CONSUMIDOR: sin `query`, el hook pide `pageSize=100` y
+ * por eso `items.length` puede ser menor que `total`. La colección expone
+ * `total` justamente para eso: si `total > items.length`, el consumidor DEBE
+ * avisar en pantalla que la lista está recortada (ver
+ * `components/pe/aviso-truncamiento.tsx`) en vez de truncar en silencio. Subir
+ * el `pageSize` no resuelve el problema, solo lo esconde.
  */
 import useSWR, { mutate as mutateGlobal } from "swr"
 import type { StoreResult } from "@/lib/store"
