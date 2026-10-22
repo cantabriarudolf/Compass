@@ -8,7 +8,6 @@ import { useCompassStore } from "@/lib/store"
 import { EncomiendasPanel } from "@/components/pe/encomiendas-panel"
 import { VisitasPanel } from "@/components/pe/visitas-panel"
 import { ContratistasPanel } from "@/components/pe/contratistas-panel"
-
 vi.setConfig({ testTimeout: 30_000 })
 
 /**
@@ -26,6 +25,57 @@ vi.setConfig({ testTimeout: 30_000 })
 const PRESUPUESTO_CARGA = 120_000
 
 const HOY = new Date().toISOString().slice(0, 10)
+
+/** URL del QR del anverso de la cédula de Juan Pérez González (p-1, 15.123.456-9). */
+const URL_CEDULA_P1 =
+  "https://www.registrocivil.cl/servicios-en-linea/valida-documento?RUN=15.123.456-9&type=CEDULA"
+/** RUN válido que NO está en el padrón de los mocks: fuerza la visita externa. */
+const URL_CEDULA_EXTERNA =
+  "https://www.registrocivil.cl/servicios-en-linea/valida-documento?RUN=19.876.543-0&type=CEDULA"
+
+const PERSONA_P1 = {
+  id: "p-1",
+  rut: "15.123.456-9",
+  nombreCompleto: "Juan Pérez González",
+  nombres: "Juan",
+  apellidos: "Pérez González",
+}
+
+function json(cuerpo: unknown, status = 200): Response {
+  return new Response(JSON.stringify(cuerpo), {
+    status,
+    headers: { "content-type": "application/json" },
+  })
+}
+
+/**
+ * Cámara falsa para jsdom: `getUserMedia` devuelve un stream con `stop()` espiable.
+ * La limpieza (afterEach) borra `mediaDevices` para no contaminar otros paneles.
+ */
+function instalarCamara(): void {
+  const stream = { getTracks: () => [{ stop: vi.fn() }] } as unknown as MediaStream
+  Object.defineProperty(navigator, "mediaDevices", {
+    value: { getUserMedia: vi.fn(async () => stream) },
+    configurable: true,
+  })
+}
+
+/** `BarcodeDetector` falso: devuelve el valor indicado y luego vacío. */
+function instalarDetector(valor: string): void {
+  let entregado = false
+  class DetectorFalso {
+    detect = async () => {
+      if (entregado) return []
+      entregado = true
+      return [{ rawValue: valor }]
+    }
+  }
+  Object.defineProperty(globalThis, "BarcodeDetector", {
+    value: DetectorFalso,
+    configurable: true,
+    writable: true,
+  })
+}
 
 beforeAll(() => {
   // Radix (Select/Switch/Dialog) en jsdom necesita estos stubs del prototipo:
@@ -50,6 +100,8 @@ beforeAll(() => {
     configurable: true,
     writable: true,
   })
+  // jsdom no implementa la reproducción de media: el preview del escáner la usa.
+  vi.spyOn(window.HTMLMediaElement.prototype, "play").mockResolvedValue(undefined)
 })
 
 beforeEach(() => {
@@ -58,6 +110,9 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup()
+  vi.unstubAllGlobals()
+  delete (globalThis as { BarcodeDetector?: unknown }).BarcodeDetector
+  Object.defineProperty(navigator, "mediaDevices", { value: undefined, configurable: true })
 })
 
 /** Abre el N-ésimo combobox del scope y elige la primera opción real (salta "Sin ..."). */
@@ -165,6 +220,122 @@ describe("VisitasPanel (componente, RTL)", () => {
     const visita = useCompassStore.getState().bitacoraVisitasPE.at(-1)
     expect(visita?.estado).toBe("agendada")
     expect(lastEvent()?.tipoAccion).not.toBe("PE_VISITA_INGRESADA")
+  })
+
+  it("Escanear QR de la cédula identifica al residente y NO registra la visita", { timeout: PRESUPUESTO_CARGA }, async () => {
+    const user = userEvent.setup()
+    const antes = useCompassStore.getState().bitacoraVisitasPE.length
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => json({ data: [PERSONA_P1], page: 1, pageSize: 10, total: 1 }))
+    )
+    instalarCamara()
+    instalarDetector(URL_CEDULA_P1)
+
+    render(<VisitasPanel diaReporte={HOY} onError={vi.fn()} onSuccess={vi.fn()} />)
+
+    await user.click(screen.getByRole("button", { name: /Escanear QR de la cédula/ }))
+    expect(screen.getByRole("region", { name: "Escáner de QR de la cédula" })).toBeTruthy()
+
+    const resultado = await screen.findByRole(
+      "region",
+      { name: "Resultado del escaneo" },
+      { timeout: 10_000 }
+    )
+    // Nombre, RUT enmascarado, unidad y vínculo antes de confirmar.
+    expect(within(resultado).getByText("Juan Pérez González")).toBeTruthy()
+    expect(within(resultado).getByText("15.***.***-9")).toBeTruthy()
+    expect(within(resultado).getByText("Depto 101")).toBeTruthy()
+    expect(within(resultado).getByText("Propietario")).toBeTruthy()
+    // El escaneo por sí solo NO registra nada.
+    expect(useCompassStore.getState().bitacoraVisitasPE.length).toBe(antes)
+
+    await user.click(within(resultado).getByRole("button", { name: /Confirmar identidad/ }))
+    // La confirmación completa el formulario, tampoco guarda la visita.
+    expect(useCompassStore.getState().bitacoraVisitasPE.length).toBe(antes)
+    expect((screen.getByLabelText("Nombre *") as HTMLInputElement).value).toBe("Juan Pérez González")
+    expect((screen.getByLabelText("DNI *") as HTMLInputElement).value).toBe("15123456-9")
+
+    await user.click(screen.getByRole("button", { name: /Registrar visita/ }))
+    await waitFor(() => expect(useCompassStore.getState().bitacoraVisitasPE.length).toBe(antes + 1))
+    expect(lastEvent()?.tipoAccion).toBe("PE_VISITA_INGRESADA")
+  })
+
+  it("sin coincidencia en el padrón ofrece la visita externa con el RUT leído", { timeout: PRESUPUESTO_CARGA }, async () => {
+    const user = userEvent.setup()
+    const antes = useCompassStore.getState().bitacoraVisitasPE.length
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => json({ data: [], page: 1, pageSize: 10, total: 0 }))
+    )
+    instalarCamara()
+    instalarDetector(URL_CEDULA_EXTERNA)
+
+    render(<VisitasPanel diaReporte={HOY} onError={vi.fn()} onSuccess={vi.fn()} />)
+
+    await user.click(screen.getByRole("button", { name: /Escanear QR de la cédula/ }))
+    const resultado = await screen.findByRole(
+      "region",
+      { name: "Resultado del escaneo" },
+      { timeout: 10_000 }
+    )
+    expect(within(resultado).getByText(/Sin coincidencia en el padrón/)).toBeTruthy()
+    expect(within(resultado).getByText(/19\.\*\*\*\.\*\*\*-0/)).toBeTruthy()
+
+    await user.click(within(resultado).getByRole("button", { name: /Usar el RUT leído/ }))
+    expect((screen.getByLabelText("DNI *") as HTMLInputElement).value).toBe("19876543-0")
+    // La visita externa tampoco se registra sola: falta el nombre y el botón.
+    expect(useCompassStore.getState().bitacoraVisitasPE.length).toBe(antes)
+  })
+
+  it("si el padrón del servidor no responde, busca en el padrón local sin bloquear", { timeout: PRESUPUESTO_CARGA }, async () => {
+    const user = userEvent.setup()
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new Error("sin red")
+      })
+    )
+    instalarCamara()
+    instalarDetector(URL_CEDULA_P1)
+
+    render(<VisitasPanel diaReporte={HOY} onError={vi.fn()} onSuccess={vi.fn()} />)
+
+    await user.click(screen.getByRole("button", { name: /Escanear QR de la cédula/ }))
+    const resultado = await screen.findByRole(
+      "region",
+      { name: "Resultado del escaneo" },
+      { timeout: 10_000 }
+    )
+    expect(within(resultado).getByText("Juan Pérez González")).toBeTruthy()
+    expect(screen.getByText(/se buscó en el padrón local/)).toBeTruthy()
+  })
+
+  it("búsqueda manual por RUT: completa el formulario solo al confirmar", { timeout: PRESUPUESTO_CARGA }, async () => {
+    const user = userEvent.setup()
+    const antes = useCompassStore.getState().bitacoraVisitasPE.length
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => json({ data: [], page: 1, pageSize: 10, total: 0 }))
+    )
+
+    render(<VisitasPanel diaReporte={HOY} onError={vi.fn()} onSuccess={vi.fn()} />)
+
+    // Fallback obligatorio de la cédula vieja / sin cámara: se escribe el RUT.
+    await user.type(screen.getByLabelText("DNI *"), "15.123.456-9")
+    await user.click(screen.getByRole("button", { name: /Buscar en el padrón/ }))
+
+    const resultado = await screen.findByRole(
+      "region",
+      { name: "Resultado del escaneo" },
+      { timeout: 10_000 }
+    )
+    expect(within(resultado).getByText("Juan Pérez González")).toBeTruthy()
+    expect(useCompassStore.getState().bitacoraVisitasPE.length).toBe(antes)
+
+    await user.click(within(resultado).getByRole("button", { name: /Confirmar identidad/ }))
+    expect((screen.getByLabelText("Nombre *") as HTMLInputElement).value).toBe("Juan Pérez González")
+    expect(useCompassStore.getState().bitacoraVisitasPE.length).toBe(antes)
   })
 })
 

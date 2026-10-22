@@ -15,23 +15,39 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@workspace/ui/components/select"
-import { IconCheck, IconScan, IconTrash } from "@tabler/icons-react"
+import { IconCheck, IconQrcode, IconSearch, IconTrash } from "@tabler/icons-react"
 import { AvisoTruncamiento, LIMITE_SELECT } from "@/components/pe/aviso-truncamiento"
+import { EscaneoQrCedula } from "@/components/pe/escaneo-qr-cedula"
+import { buscarPersonaPorRun } from "@/lib/api/use-personas"
+import { mascararRun, normalizarRun, validarRun } from "@/lib/validacion-rut"
 import type { BitacoraVisitaPE } from "@/lib/schemas"
 
-function escaneoDNISimulado(): { nombre: string; dni: string } {
-  const nombres = ["Camila Rojas Fuentes", "Matías Sepúlveda Muñoz", "Valentina Herrera Soto", "Diego Cifuentes Vega"]
-  const cuerpo = String(Math.floor(10000000 + Math.random() * 79999999))
-  let suma = 0
-  let factor = 2
-  for (let i = cuerpo.length - 1; i >= 0; i--) {
-    suma += Number(cuerpo[i]) * factor
-    factor = factor === 7 ? 2 : factor + 1
-  }
-  const dv = 11 - (suma % 11)
-  const dvStr = dv === 11 ? "0" : dv === 10 ? "K" : String(dv)
-  return { nombre: nombres[Math.floor(Math.random() * nombres.length)]!, dni: `${cuerpo}-${dvStr}` }
+/** Etiqueta legible del vínculo persona↔unidad (VU). */
+const ETIQUETA_VINCULO: Record<string, string> = {
+  propietario: "Propietario",
+  arrendatario: "Arrendatario",
+  copropietario: "Copropietario",
+  ocupante: "Ocupante",
 }
+
+/** Persona del padrón que corresponde al RUN leído de la cédula. */
+interface CoincidenciaPadron {
+  personaId: string
+  run: string
+  nombre: string
+  unidad: string
+  vinculo: string
+  unidadId?: string
+}
+
+/**
+ * Resultado de identificar una cédula. Escanear NUNCA registra la visita: deja
+ * este resultado a la espera de la confirmación explícita del conserje, que es
+ * la única que completa el formulario.
+ */
+type ResultadoIdentidad =
+  | { tipo: "padron"; coincidencia: CoincidenciaPadron }
+  | { tipo: "sin_coincidencia"; run: string }
 
 interface FormVisita {
   nombre: string
@@ -60,6 +76,7 @@ export function VisitasPanel({
   const saveBitacoraVisitaPE = useCompassStore((s) => s.saveBitacoraVisitaPE)
   const ingresarBitacoraVisitaPE = useCompassStore((s) => s.ingresarBitacoraVisitaPE)
   const removeBitacoraVisitaPE = useCompassStore((s) => s.removeBitacoraVisitaPE)
+  const vinculos = useCompassStore((s) => s.vinculos)
 
   const [formVisita, setFormVisita] = React.useState<FormVisita>({
     nombre: "",
@@ -73,6 +90,13 @@ export function VisitasPanel({
   })
 
   const jornadas = maestros.jornadas
+
+  // Identificación por cédula: el escaneo o la búsqueda manual SOLO proponen
+  // datos; la visita se sigue registrando con el botón de abajo.
+  const [escanerAbierto, setEscanerAbierto] = React.useState(false)
+  const [resultadoIdentidad, setResultadoIdentidad] = React.useState<ResultadoIdentidad | null>(null)
+  const [buscandoIdentidad, setBuscandoIdentidad] = React.useState(false)
+  const [avisoPadron, setAvisoPadron] = React.useState<string | null>(null)
 
   // Listas de opciones: se recortan a LIMITE_SELECT para no montar cientos de
   // SelectItem, y el recorte se declara en pantalla (nunca en silencio).
@@ -89,6 +113,107 @@ export function VisitasPanel({
     if (!id) return "—"
     const p = personas.find((x) => x.id === id)
     return p ? `${p.nombres} ${p.apellidos}` : id
+  }
+
+  /** Unidad y vínculo vigente de la persona, resueltos contra el padrón cargado. */
+  const resolverCoincidencia = (personaId: string, nombre: string, run: string): CoincidenciaPadron => {
+    const vinculo = vinculos.find((v) => v.personaId === personaId && !v.fechaFin)
+    const unidad = vinculo ? unidades.find((u) => u.id === vinculo.unidadId) : undefined
+    // Solo se preselecciona una unidad del selector del destino: las plazas de
+    // estacionamiento (`u-E-`) no son destinos de visita y dejarían el Select en
+    // blanco porque la lista de opciones las excluye.
+    const seleccionable = vinculo && !vinculo.unidadId.startsWith("u-E-") ? vinculo.unidadId : undefined
+    return {
+      personaId,
+      run,
+      nombre,
+      unidad: unidad ? `${unidad.etiqueta} ${unidad.numero}` : "Sin unidad registrada",
+      vinculo: vinculo ? (ETIQUETA_VINCULO[vinculo.rol] ?? vinculo.rol) : "Sin vínculo vigente",
+      unidadId: seleccionable,
+    }
+  }
+
+  /**
+   * Busca el RUN en el padrón de la comunidad: primero el servidor (scoping de
+   * comunidad en la ruta) y, si no responde, el padrón local para no bloquear
+   * la operación. Sin coincidencia se ofrece el alta como visita externa.
+   */
+  const buscarEnPadron = async (run: string) => {
+    setBuscandoIdentidad(true)
+    setAvisoPadron(null)
+    try {
+      const remoto = await buscarPersonaPorRun(run)
+      if (remoto) {
+        setResultadoIdentidad({
+          tipo: "padron",
+          coincidencia: resolverCoincidencia(remoto.id, remoto.nombreCompleto, run),
+        })
+        return
+      }
+    } catch {
+      setAvisoPadron("No se pudo consultar el padrón del servidor; se buscó en el padrón local.")
+    } finally {
+      setBuscandoIdentidad(false)
+    }
+
+    const local = personas.find((p) => normalizarRun(p.rut) === run)
+    if (local) {
+      const nombre = `${local.nombres} ${local.apellidos}`.trim() || local.nombreCompleto
+      setResultadoIdentidad({ tipo: "padron", coincidencia: resolverCoincidencia(local.id, nombre, run) })
+      return
+    }
+    setResultadoIdentidad({ tipo: "sin_coincidencia", run })
+  }
+
+  /** RUN validado por el escáner: cierra la cámara y propone la identidad. */
+  const manejarRunDetectado = (run: string) => {
+    setEscanerAbierto(false)
+    void buscarEnPadron(run)
+  }
+
+  /** Búsqueda manual por RUT: el fallback de la cédula vieja o sin cámara. */
+  const buscarRunManual = () => {
+    const canonico = normalizarRun(formVisita.dni)
+    if (!canonico) {
+      onError(
+        "La búsqueda en el padrón es por RUT. Si el documento es un pasaporte, escribe el nombre y la unidad y registra la visita."
+      )
+      return
+    }
+    if (!validarRun(canonico)) {
+      onError("Ese RUT no pasa la validación del dígito verificador. Revísalo antes de buscar.")
+      return
+    }
+    onError(null)
+    void buscarEnPadron(canonico)
+  }
+
+  /** Confirmación explícita: completa el formulario, no registra la visita. */
+  const confirmarIdentidad = () => {
+    if (resultadoIdentidad?.tipo !== "padron") return
+    const coincidencia = resultadoIdentidad.coincidencia
+    setFormVisita((f) => ({
+      ...f,
+      nombre: coincidencia.nombre,
+      dni: coincidencia.run,
+      unidadId: coincidencia.unidadId ?? f.unidadId,
+      destinoPersonaId: coincidencia.personaId,
+    }))
+    setResultadoIdentidad(null)
+    setAvisoPadron(null)
+    onError(null)
+    onSuccess("Identidad confirmada desde la cédula. Registra la visita para dejarla en la bitácora.")
+  }
+
+  /** Confirmación para el visitante que no está en el padrón (visita externa). */
+  const confirmarVisitaExterna = () => {
+    if (resultadoIdentidad?.tipo !== "sin_coincidencia") return
+    const run = resultadoIdentidad.run
+    setFormVisita((f) => ({ ...f, dni: run }))
+    setResultadoIdentidad(null)
+    setAvisoPadron(null)
+    onError(null)
+    onSuccess("RUT leído aplicado como visita externa. Escribe el nombre y registra la visita.")
   }
 
   const guardarVisita = () => {
@@ -125,25 +250,103 @@ export function VisitasPanel({
     onSuccess(esAgendada ? "Visita pre-agendada a la espera del ingreso." : "Visita registrada e ingresada.")
   }
 
-  const escanearDNI = () => {
-    const sim = escaneoDNISimulado()
-    setFormVisita((f) => ({ ...f, nombre: sim.nombre, dni: sim.dni }))
-    onSuccess("Escaneo DNI simulado completado: identidad autocompletada (feature local).")
-  }
-
   return (
     <div className="grid gap-4 lg:grid-cols-[420px_1fr]">
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center justify-between gap-2">
             Registro de visita
-            <Button size="sm" variant="outline" onClick={escanearDNI}>
-              <IconScan className="mr-1 size-4" /> Escanear DNI
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                setResultadoIdentidad(null)
+                setEscanerAbierto(true)
+              }}
+            >
+              <IconQrcode className="mr-1 size-4" /> Escanear QR de la cédula
             </Button>
           </CardTitle>
           <CardDescription>Pre-agendamiento o llegada sin aviso. * obligatorios.</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
+          {escanerAbierto ? (
+            <EscaneoQrCedula
+              onDetectado={manejarRunDetectado}
+              onError={onError}
+              onCancelar={() => setEscanerAbierto(false)}
+            />
+          ) : null}
+
+          {avisoPadron ? (
+            <p className="text-xs text-muted-foreground" role="status">
+              {avisoPadron}
+            </p>
+          ) : null}
+
+          {buscandoIdentidad ? (
+            <p className="text-sm text-muted-foreground" role="status">
+              Buscando el RUT en el padrón de la comunidad…
+            </p>
+          ) : null}
+
+          {resultadoIdentidad ? (
+            <div
+              role="region"
+              aria-label="Resultado del escaneo"
+              className="flex flex-col gap-2 rounded-md border border-dashed p-3"
+            >
+              {resultadoIdentidad.tipo === "padron" ? (
+                <>
+                  <p className="text-sm font-medium">Coincidencia en el padrón</p>
+                  <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
+                    <dt className="text-muted-foreground">Nombre</dt>
+                    <dd>{resultadoIdentidad.coincidencia.nombre}</dd>
+                    <dt className="text-muted-foreground">RUT</dt>
+                    <dd>{mascararRun(resultadoIdentidad.coincidencia.run) ?? resultadoIdentidad.coincidencia.run}</dd>
+                    <dt className="text-muted-foreground">Unidad</dt>
+                    <dd>{resultadoIdentidad.coincidencia.unidad}</dd>
+                    <dt className="text-muted-foreground">Vínculo</dt>
+                    <dd>{resultadoIdentidad.coincidencia.vinculo}</dd>
+                  </dl>
+                  <p className="text-xs text-muted-foreground">
+                    Confirmar solo completa el formulario: la visita queda registrada recién con «Registrar visita».
+                  </p>
+                  <div className="flex gap-2">
+                    <Button type="button" size="sm" onClick={confirmarIdentidad}>
+                      <IconCheck className="mr-1 size-4" /> Confirmar identidad
+                    </Button>
+                    <Button type="button" size="sm" variant="ghost" onClick={() => setResultadoIdentidad(null)}>
+                      Descartar
+                    </Button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm font-medium">Sin coincidencia en el padrón</p>
+                  <p className="text-sm">
+                    No hay nadie registrado con el RUT {mascararRun(resultadoIdentidad.run) ?? resultadoIdentidad.run}. Puedes
+                    registrar la visita como externa.
+                  </p>
+                  <div className="flex gap-2">
+                    <Button type="button" size="sm" onClick={confirmarVisitaExterna}>
+                      Usar el RUT leído (visita externa)
+                    </Button>
+                    <Button type="button" size="sm" variant="ghost" onClick={() => setResultadoIdentidad(null)}>
+                      Descartar
+                    </Button>
+                  </div>
+                </>
+              )}
+            </div>
+          ) : null}
+
+          <p className="text-xs text-muted-foreground">
+            Acepta el QR del anverso de la cédula nueva (electrónica). Si la cédula es antigua, no tiene QR o la cámara no está
+            disponible, escribe el RUT y usa «Buscar en el padrón»: nunca se bloquea el registro.
+          </p>
+
           <div className="grid grid-cols-2 gap-2">
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="v-nombre">Nombre *</Label>
@@ -152,6 +355,9 @@ export function VisitasPanel({
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="v-dni">DNI *</Label>
               <Input id="v-dni" value={formVisita.dni} onChange={(e) => setFormVisita({ ...formVisita, dni: e.target.value })} />
+              <Button type="button" size="sm" variant="ghost" className="justify-start px-0" onClick={buscarRunManual}>
+                <IconSearch className="mr-1 size-4" /> Buscar en el padrón
+              </Button>
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="v-patente">Patente</Label>
