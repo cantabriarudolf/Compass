@@ -1,7 +1,6 @@
 "use client"
 
 import * as React from "react"
-import { useCompassStore } from "@/lib/store"
 import { useVinculos } from "@/lib/api/use-vinculos"
 import { useConfiguracion } from "@/lib/api/use-configuracion"
 import { configuracionDefault } from "@/data/admin/configuracion"
@@ -52,7 +51,7 @@ import { useFondosFI } from "@/lib/api/use-fondos-fi"
 import { useEgresosFI } from "@/lib/api/use-egresos-fi"
 import { useIngresosFI } from "@/lib/api/use-ingresos-fi"
 import { useEmisionesGC } from "@/lib/api/use-emisiones-gc"
-import { useCobrosFI } from "@/lib/api/use-cobros-fi"
+import { useCobrosFI, useAccionesCobranzaFI, useCanalesCobranzaFI } from "@/lib/api/use-cobros-fi"
 import { useUnidades } from "@/lib/api/use-unidades"
 import { useTiposUnidad } from "@/lib/api/use-tipos-unidad"
 
@@ -112,16 +111,25 @@ export default function GastosComunesPage() {
       const { items: ingresosFI, isLoading: cargandoIngresos, create: crearIngreso, remove: eliminarIngreso } = useIngresosFI()
       const { items: emisionesGC, isLoading: cargandoEmisiones, emitir: emitirGC } = useEmisionesGC()
       const { items: cobros, isLoading: cargandoCobros, update: editarCobro } = useCobrosFI()
+      const {
+        enviarCobranza,
+        actualizarCanalesGlobal,
+        actualizarPreferenciaCanal,
+      } = useAccionesCobranzaFI()
+      const {
+        global: canalesGlobales,
+        personas: preferenciasCanal,
+        isLoading: cargandoCanales,
+      } = useCanalesCobranzaFI()
       const { items: unidades, isLoading: cargandoUnidades } = useUnidades()
       const { items: tiposUnidad, isLoading: cargandoTipos } = useTiposUnidad()
       const vinculos = useVinculos().vinculos
       const { config: configRemota, isLoading: cConfig } = useConfiguracion()
       // Fallback a la config semilla mientras arriba la del servidor (paridad con admin/configuracion).
       const configuracion = configRemota ?? configuracionDefault
-      // TODO: migrar enviarCobranzaFI a API REST
-      const enviarCobranzaFI = useCompassStore.getState().enviarCobranzaFI
       const cargandoAPI =
         cConfig ||
+        cargandoCanales ||
         cargandoFondos ||
         cargandoEgresos ||
         cargandoIngresos ||
@@ -193,6 +201,71 @@ export default function GastosComunesPage() {
 
   const cobrosVencidosPorUnidad = (unidadId: string) =>
     cobros.filter(c => c.unidadId === unidadId && estadoDeCobro(c) === "vencido")
+
+  // --- Cobranza FI multicanal (SERIE-FASE2 §V5) ------------------------------
+  // El destinatario es el propietario vigente de la unidad: es quien recibe la
+  // gestión y quien manda en el interruptor individual de canal.
+  const propietarioDe = (unidadId: string) =>
+    vinculos.find(v => v.unidadId === unidadId && v.rol === "propietario" && !v.fechaFin)
+
+  const preferenciaDe = (personaId: string) =>
+    preferenciasCanal.find(p => p.personaId === personaId)
+
+  /** Resumen por canal de lo que el servidor realmente hizo (nunca lo simula). */
+  const resumenCanales = (r: Awaited<ReturnType<typeof enviarCobranza>>) => {
+    const partes = [r.resultado?.canales?.visor, r.resultado?.canales?.email]
+      .filter((c): c is NonNullable<typeof c> => Boolean(c))
+      .map(c =>
+        c.estado === "omitido"
+          ? `${c.canal} omitido (${c.motivo ?? "sin motivo"})`
+          : `${c.canal} ${c.estado}`
+      )
+    return partes.join(" · ")
+  }
+
+  const enviarCobranzaClick = async (m: { unidadId: string; ref: string }) => {
+    setError(null)
+    setOkMsg(null)
+    const ancla = cobrosVencidosPorUnidad(m.unidadId)[0]
+    if (!ancla) {
+      setError("La unidad no registra deuda vencida: no hay nada que cobrar.")
+      return
+    }
+    const r = await enviarCobranza(ancla.id)
+    if (!r.ok) {
+      setError(r.error ?? "No se pudo enviar la cobranza.")
+      return
+    }
+    setOkMsg(`Cobranza de ${m.ref}: ${resumenCanales(r)}.`)
+  }
+
+  const cambiarCanalGlobal = async (canal: "visor" | "email", activo: boolean) => {
+    setError(null)
+    const r = await actualizarCanalesGlobal({ [canal]: activo })
+    if (!r.ok) {
+      setError(r.error ?? "No se pudo cambiar el canal de cobranza.")
+      return
+    }
+    setOkMsg(
+      `Canal ${canal} ${activo ? "encendido" : "apagado"} para toda la comunidad.`
+    )
+  }
+
+  const cambiarPreferenciaCanal = async (
+    personaId: string,
+    canal: "visor" | "email",
+    activo: boolean
+  ) => {
+    setError(null)
+    const r = await actualizarPreferenciaCanal(personaId, { [canal]: activo })
+    if (!r.ok) {
+      setError(r.error ?? "No se pudo cambiar la preferencia del residente.")
+      return
+    }
+    setOkMsg(
+      `Preferencia del residente actualizada: ${canal} ${activo ? "encendido" : "apagado"}.`
+    )
+  }
 
   const guardarFondo = async () => {
     if (!formFondo) return
@@ -615,9 +688,27 @@ export default function GastosComunesPage() {
                     <Input id="tasa-mora" value={moraTasa} onChange={ev => setMoraTasa(ev.target.value)} />
                   </div>
                 </div>
+                <div className="space-y-2 rounded border bg-muted/30 px-3 py-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-xs font-medium">Interruptor global de la comunidad</span>
+                    <span className="text-[11px] text-muted-foreground">Sin SMTP el email queda en cola (pendiente)</span>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-4 text-xs">
+                    <label className="flex items-center gap-2">
+                      <Switch checked={canalesGlobales.visor} onCheckedChange={v => void cambiarCanalGlobal("visor", v)} aria-label="Canal visor interno" />
+                      Visor interno
+                    </label>
+                    <label className="flex items-center gap-2">
+                      <Switch checked={canalesGlobales.email} onCheckedChange={v => void cambiarCanalGlobal("email", v)} aria-label="Canal email" />
+                      Email (cola de salida)
+                    </label>
+                  </div>
+                </div>
                 {unidadesAtrasadas.length === 0 && <p className="text-sm text-muted-foreground">Sin unidades atrasadas. 🎉</p>}
                 {unidadesAtrasadas.map(m => {
                   const pendientes = cobrosVencidosPorUnidad(m.unidadId)
+                  const propietario = propietarioDe(m.unidadId)
+                  const preferencia = propietario ? preferenciaDe(propietario.personaId) : undefined
                   return (
                     <div key={m.unidadId} className="space-y-1.5 rounded border px-3 py-2 text-sm">
                       <div className="flex items-center justify-between">
@@ -632,7 +723,20 @@ export default function GastosComunesPage() {
                           </Button>
                         </div>
                       ))}
-                      <Button size="sm" variant="outline" className="w-full" onClick={() => { const rr = enviarCobranzaFI(m.unidadId); if (!rr.ok) setError(rr.error ?? ""); else setOkMsg(`Gestión de cobranza enviada a ${m.ref}.`) }}>
+                      {propietario ? (
+                        <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                          <span>Email al residente (interruptor individual)</span>
+                          <Switch
+                            checked={preferencia?.canalEmail ?? true}
+                            disabled={!canalesGlobales.email}
+                            onCheckedChange={v => void cambiarPreferenciaCanal(propietario.personaId, "email", v)}
+                            aria-label={`Email de cobranza a ${m.ref}`}
+                          />
+                        </div>
+                      ) : (
+                        <p className="text-xs text-destructive">Sin responsable de cobro asignado.</p>
+                      )}
+                      <Button size="sm" variant="outline" className="w-full" onClick={() => void enviarCobranzaClick(m)} disabled={!propietario || pendientes.length === 0}>
                         <IconSend className="size-3.5 mr-1" /> Enviar gestión de cobranza
                       </Button>
                     </div>
