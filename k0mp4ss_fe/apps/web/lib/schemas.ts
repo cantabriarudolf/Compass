@@ -1300,6 +1300,57 @@ export const CobroFISchema = z.object({
   diferencias: z.array(DiferenciaPagoFISchema),
 })
 
+// --- Cobranza FI multicanal (SERIE-FASE2 §V5) ---
+//
+// Canales fijos de la cobranza: visor interno (notificación en la app) y email
+// (outbox). Sin emisor SMTP el email queda `pendiente` y NUNCA se reporta como
+// enviado. El estado `fallido` exige motivo; `pendiente` lo usa para explicar
+// por qué todavía no salió.
+
+export const CANALES_COBRANZA_FI = ["visor", "email"] as const
+export const CanalCobranzaFISchema = z.enum(CANALES_COBRANZA_FI)
+export type CanalCobranzaFI = (typeof CANALES_COBRANZA_FI)[number]
+
+export const ESTADOS_ENVIO_COBRANZA_FI = [
+  "pendiente",
+  "enviado",
+  "fallido",
+] as const
+export const EstadoEnvioCobranzaFISchema = z.enum(ESTADOS_ENVIO_COBRANZA_FI)
+export type EstadoEnvioCobranzaFI =
+  (typeof ESTADOS_ENVIO_COBRANZA_FI)[number]
+
+/** Registro de un envío: canal, fecha, destinatario, estado y motivo. */
+export const EnvioCobranzaFISchema = z.object({
+  id: IdEntidadSchema,
+  cobroId: IdEntidadSchema,
+  unidadId: IdEntidadSchema,
+  personaId: IdEntidadSchema.nullable().optional(),
+  canal: CanalCobranzaFISchema,
+  estado: EstadoEnvioCobranzaFISchema,
+  fecha: FechaISOSchema,
+  motivo: z.string().nullable().optional(),
+  montoTotal: z.number().min(0),
+  cobrosIncluidos: z.array(IdEntidadSchema),
+  claveEnvio: z.string().min(1),
+  reenvio: z.boolean(),
+})
+
+/** Interruptor global de la comunidad (singleton). */
+export const ConfiguracionCobranzaFISchema = z.object({
+  canalVisor: z.boolean(),
+  canalEmail: z.boolean(),
+  actualizadoPor: z.string().nullable().optional(),
+})
+
+/** Interruptor por residente (una preferencia por persona). */
+export const PreferenciaCanalCobranzaFISchema = z.object({
+  personaId: IdEntidadSchema,
+  canalVisor: z.boolean(),
+  canalEmail: z.boolean(),
+  actualizadoPor: z.string().nullable().optional(),
+})
+
 // --- Personal y Servicios (PE) ---
 
 const HoraPESchema = z
@@ -1941,6 +1992,13 @@ export type MoraCobroFI = z.infer<typeof MoraCobroFISchema>
 export type PagoCobroFI = z.infer<typeof PagoCobroFISchema>
 export type DiferenciaPagoFI = z.infer<typeof DiferenciaPagoFISchema>
 export type CobroFI = z.infer<typeof CobroFISchema>
+export type EnvioCobranzaFI = z.infer<typeof EnvioCobranzaFISchema>
+export type ConfiguracionCobranzaFI = z.infer<
+  typeof ConfiguracionCobranzaFISchema
+>
+export type PreferenciaCanalCobranzaFI = z.infer<
+  typeof PreferenciaCanalCobranzaFISchema
+>
 export type BitacoraVisitaPE = z.infer<typeof BitacoraVisitaPESchema>
 export type EncomiendaPE = z.infer<typeof EncomiendaPESchema>
 export type IngresoContratistaPE = z.infer<typeof IngresoContratistaPESchema>

@@ -57,6 +57,11 @@ model Comunidad {
   ingresosFI               IngresoFI[]
   emisionesGC              EmisionGC[]
   cobrosFI                 CobroFI[]
+  // SERIE-FASE2 §V5 — cobranza FI multicanal (interruptor global, preferencia
+  // por residente y registro de cada envío).
+  configuracionCobranzaFI  ConfiguracionCobranzaFI?
+  preferenciasCanalCobranzaFI PreferenciaCanalCobranzaFI[]
+  enviosCobranzaFI         EnvioCobranzaFI[]
   bitacoraVisitasPE        BitacoraVisitaPE[]
   encomiendasPE            EncomiendaPE[]
   ingresosContratistasPE   IngresoContratistaPE[]
@@ -952,6 +957,77 @@ model CobroFI {
   @@index([unidadId])
   @@index([periodo])
   @@map("cobros_fi")
+}
+
+// Cobranza FI multicanal (SERIE-FASE2 §V5): visor interno + email, con
+// interruptor por residente y global de la comunidad.
+//
+// Tres piezas, ninguna duplica `Notificacion`: la notificación interna sigue
+// siendo el canal visor real (la crea la ruta de cobranza), mientras que estas
+// tablas guardan los INTERRUPTORES y el REGISTRO auditable de cada envío
+// (canal, fecha, destinatario, estado y motivo), que `Notificacion` no modela.
+
+/// Interruptor global de la comunidad (singleton por comunidad).
+model ConfiguracionCobranzaFI {
+  id             String   @id
+  comunidadId    String   @unique
+  comunidad      Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  canalVisor     Boolean  @default(true)
+  canalEmail     Boolean  @default(true)
+  actualizadoPor String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([comunidadId])
+  @@map("configuracion_cobranza_fi")
+}
+
+/// Preferencia de canal del residente (una por persona y comunidad).
+model PreferenciaCanalCobranzaFI {
+  id             String   @id
+  comunidadId    String
+  comunidad      Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  personaId      String
+  canalVisor     Boolean  @default(true)
+  canalEmail     Boolean  @default(true)
+  actualizadoPor String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([comunidadId, personaId])
+  @@index([comunidadId])
+  @@map("preferencias_canal_cobranza_fi")
+}
+
+///
+/// Registro de UN envío de cobranza (por canal y destinatario).
+///
+/// `estado`: pendiente (en la cola de salida, sin emisor SMTP) | enviado (el
+/// visor interno quedó publicado) | fallido (intento con error, con `motivo`).
+/// `claveEnvio` es la idempotencia: unidad + destinatario + canal, con sufijo de
+/// timestamp cuando el administrador pide un reenvío explícito.
+model EnvioCobranzaFI {
+  id              String   @id
+  comunidadId     String
+  comunidad       Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  cobroId         String
+  unidadId        String
+  personaId       String?
+  canal           String
+  estado          String
+  fecha           String
+  motivo          String?
+  montoTotal      Float    @default(0)
+  cobrosIncluidos Json // string[] de cobros vencidos cubiertos por la gestión
+  claveEnvio      String
+  reenvio         Boolean  @default(false)
+  createdAt       DateTime @default(now())
+
+  @@unique([comunidadId, claveEnvio])
+  @@index([comunidadId])
+  @@index([cobroId])
+  @@index([unidadId])
+  @@map("envios_cobranza_fi")
 }
 
 // Personal y Servicios (PE)
