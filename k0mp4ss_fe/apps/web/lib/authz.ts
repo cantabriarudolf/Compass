@@ -87,7 +87,7 @@ const MATRIZ: Record<Rol, Record<string, Set<Accion>>> = {
     "mp:propios": new Set<Accion>(["ver", "editar"]),
     "pe": new Set<Accion>(["ver", "crear", "editar"]),
     "pe:bitacora": new Set<Accion>(["ver", "crear", "editar"]),
-    "pe:cierre_turno": new Set<Accion>(["ver", "crear", "ejecutar"]),
+    "pe:cierre_turno": new Set<Accion>(["ver", "crear", "editar", "ejecutar"]),
     "pe:reporte_diario": new Set<Accion>(["ver"]),
     "pe:directorio": new Set<Accion>(["ver"]),
     "pe:ficha": new Set<Accion>([]), // sin dato previsional/bancario
