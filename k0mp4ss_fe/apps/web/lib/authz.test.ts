@@ -85,6 +85,46 @@ describe("lib/authz — matriz RP (pure, sin IO)", () => {
     expect(puede("mantencion", "ver", "FI")).toBe(false)
   })
 
+  // SERIE-FASE2 §V2 — transiciones de Personal (PE). Fija en el motor los tres
+  // permisos que usan las rutas de `/api/pe/**`: `pe` para conserjería y
+  // mantención, `pe:cierre_turno` para quien inicia/cierra turno y
+  // `pe:evaluacion` SOLO para el administrador.
+  it("PE transiciones — `pe` lo operan conserjería y mantención; comité solo lee", () => {
+    for (const rol of ["conserjeria", "mantencion"]) {
+      expect(puede(rol, "ver", "PE")).toBe(true)
+      expect(puede(rol, "crear", "PE")).toBe(true)
+      expect(puede(rol, "editar", "PE")).toBe(true)
+    }
+    expect(puede("comite", "ver", "PE")).toBe(true)
+    expect(puede("comite", "crear", "PE")).toBe(false)
+    expect(puede("comite", "editar", "PE")).toBe(false)
+    expect(puede("residente", "ver", "PE")).toBe(false)
+    expect(puede("residente", "crear", "PE")).toBe(false)
+    expect(puede("administrador", "editar", "PE")).toBe(true)
+    // El comité lee PE pero no el dato previsional/bancario (pe:ficha vacío).
+    expect(puede("comite", "ver", "PE:ficha")).toBe(false)
+    expect(puede("mantencion", "ver", "PE:ficha")).toBe(false)
+  })
+
+  it("PE cierre de turno — conserjería inicia/cierra; mantención y residente no", () => {
+    expect(puede("conserjeria", "crear", "PE:cierre_turno")).toBe(true)
+    expect(puede("conserjeria", "ejecutar", "PE:cierre_turno")).toBe(true)
+    expect(puede("mantencion", "crear", "PE:cierre_turno")).toBe(false)
+    expect(puede("comite", "crear", "PE:cierre_turno")).toBe(false)
+    expect(puede("residente", "crear", "PE:cierre_turno")).toBe(false)
+    expect(puede("administrador", "crear", "PE:cierre_turno")).toBe(true)
+  })
+
+  it("PE evaluación — solo administrador; el resto de los roles la tiene bloqueada", () => {
+    expect(puede("administrador", "crear", "PE:evaluacion")).toBe(true)
+    expect(puede("administrador", "editar", "PE:evaluacion")).toBe(true)
+    for (const rol of ["comite", "conserjeria", "residente", "mantencion"]) {
+      expect(puede(rol, "ver", "PE:evaluacion")).toBe(false)
+      expect(puede(rol, "crear", "PE:evaluacion")).toBe(false)
+      expect(puede(rol, "editar", "PE:evaluacion")).toBe(false)
+    }
+  })
+
   it("ABAC IR — interno solo personal servicio (conserjeria/mantencion + admin)", () => {
     expect(puede("residente", "crear", "IR:interno")).toBe(false)
     expect(puede("comite", "crear", "IR:interno")).toBe(false)
