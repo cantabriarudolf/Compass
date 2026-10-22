@@ -81,7 +81,7 @@ Dos naturalezas, nunca una sola:
 | V2 | Personal (PE) — 5 transiciones | HECHA |
 | V3 | Reportería (RE) — snapshot + distribución | HECHA |
 | V4 | Adelantos PL — anticipo vs préstamo | HECHA |
-| V5 | Cobranza FI — multicanal con interruptores | PENDIENTE |
+| V5 | Cobranza FI — multicanal con interruptores | HECHA |
 | V6 | Publicar acta en CV — por referencia | PENDIENTE |
 | V7 | Cierre: gates, censo del store, BACKLOG, avance, deuda | PENDIENTE |
 
@@ -122,3 +122,28 @@ Dos naturalezas, nunca una sola:
   distribuidos / leídos, sin tasa de apertura. Gates: `npx tsc --noEmit` 0, `npm run lint` 0,
   `test/api/reporteria-snapshot.test.ts` 15/15 verde (+ regresión `api-reportes-re`, `crud-factory`
   y `with-comunidad-scope` 22/22).
+- **2026-10-21 — V5 (FI) HECHA.** La cobranza es multicanal con dos interruptores y cada envío queda
+  registrado. La página `app/finanzas/gastos-comunes/page.tsx` dejó el store (**0 usos** de
+  `useCompassStore`, verificado con grep; antes tenía el import del store + `getState().enviarCobranzaFI`
+  y el TODO `:121`). Rutas: `POST /api/cobros-fi/[id]/cobranza` (`fi:cobranza` **ejecutar** = solo
+  admin; el `[id]` es el cobro que ancla y la deuda cobrada es la de su unidad, igual que el legacy
+  `enviarCobranzaFI(unidadId)`), `GET /api/cobros-fi/[id]/cobranza` (`fi:cobranza` ver: historial de
+  envíos de la unidad) y `GET|PUT /api/cobros-fi/canales` (interruptor global y preferencia por
+  residente). **Migración aditiva** `20261022010000_add_cobranza_fi_multicanal`: tres tablas nuevas
+  (`configuracion_cobranza_fi` singleton con `canalVisor`/`canalEmail` default true,
+  `preferencias_canal_cobranza_fi` única por `(comunidadId, personaId)`, `envios_cobranza_fi` con
+  `canal, fecha, personaId, estado, motivo, montoTotal, cobrosIncluidos, claveEnvio, reenvio`); ninguna
+  columna existente se altera. **No se duplica `Notificacion`**: la notificación interna sigue siendo
+  el canal visor real (la crea la ruta) y las tablas nuevas guardan interruptores + registro auditable
+  del envío, que `Notificacion` no modela. Resolución de canales = **global ∧ preferencia**
+  (`app/api/cobros-fi/_cobranza.ts:resolverCanalesCobranza`), con motivo textual por canal omitido que
+  queda en la respuesta **y** en el evento `FI_COBRANZA_SENT`. Sin SMTP el email se persiste
+  `pendiente` con motivo explícito y nunca se reporta como enviado (`app/api/cobros-fi/[id]/cobranza/route.ts`, estado
+  `pendiente`). Idempotencia por `claveEnvio = unidad:persona:canal` (índice único por comunidad):
+  reenviar devuelve `duplicado` sin crear filas; `{ reenviar: true }` crea una fila nueva con
+  `reenvio: true` y sufijo `:reenvio:<epoch>` + evento `FI_COBRANZA_RESENT`. Matriz RBAC: recursos
+  nuevos `fi:cobranza` (admin full, comité `ver`, resto vacío explícito — la entrada exacta corta el
+  fallback de prefijo hacia `fi`, donde el comité sí tiene `ejecutar`) y `fi:cobranza:propia`
+  (residente `ver`+`editar` sobre **su** persona, ABAC en la ruta; resto vacío). Gates:
+  `npx tsc --noEmit` 0, `npm run lint` 0, `test/api/cobranza-fi.test.ts` 13/13 verde, `lib/authz.test.ts`
+  65/65 verde.
