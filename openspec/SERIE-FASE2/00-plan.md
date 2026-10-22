@@ -82,7 +82,7 @@ Dos naturalezas, nunca una sola:
 | V3 | Reportería (RE) — snapshot + distribución | HECHA |
 | V4 | Adelantos PL — anticipo vs préstamo | HECHA |
 | V5 | Cobranza FI — multicanal con interruptores | HECHA |
-| V6 | Publicar acta en CV — por referencia | PENDIENTE |
+| V6 | Publicar acta en CV — por referencia | HECHA |
 | V7 | Cierre: gates, censo del store, BACKLOG, avance, deuda | PENDIENTE |
 
 **MÁXIMO: 7 ventanas.** Lo que no entre se declara como deuda en V7.
@@ -149,3 +149,32 @@ Dos naturalezas, nunca una sola:
   65/65 verde (+ regresión `fi-acciones` 16/16, `cobros-fi-fase4` 18/18, `crud-factory` 12/12 y
   `with-comunidad-scope` 4/4: 128/128). Si NINGÚN canal queda habilitado no se escribe envío ni
   notificación y el intento se audita como `FI_COBRANZA_SKIPPED` con el motivo de cada interruptor.
+- **2026-10-21 — V6 (CV) HECHA.** El visor publica el acta **POR REFERENCIA**: guarda `actaId` +
+  visibilidad y resuelve el contenido al leer desde GD. La página `app/comunidad/visor/page.tsx`
+  dejó el store (**0 usos** de `useCompassStore`, verificado con grep; antes tenía 2: el import y
+  `getState().publicarActaEnCV` en el botón de actas). **Migración aditiva**
+  `20261022020000_add_actas_publicadas_cv`: una tabla nueva `actas_publicadas_cv`
+  (`id`, `comunidadId`, `actaId`, `estado`, `publicadoEn`, `publicadoPorUsuarioId`,
+  `despublicadoEn?`, `despublicadoPorUsuarioId?`) con índice único `(comunidadId, actaId)`; **no**
+  guarda minuta, cuerpo ni adjuntos y `actas_gd` no se altera (sigue siendo el documento canónico e
+  inmutable del libro de actas). Rutas: `POST /api/cv/actas` (`cv` crear = admin y comité; valida que
+  el acta exista en la comunidad y esté `publicada` → 404 cross-comunidad, 409 borrador/desestimada;
+  idempotente: republicar devuelve `duplicado: true` sin fila ni evento nuevos),
+  `GET /api/cv/actas` (`cv` ver; residente/propietario además exige `residentesVenActas` de
+  `lib/api/gd-guard.ts`, es decir control AD `residenteVeActas` con `estado: "vigente"` → 403 sin
+  él) y `POST /api/cv/actas/[actaId]/despublicar` (`cv` editar; revierte la visibilidad y audita;
+  segunda llamada → 404 porque no hay transición). Auditoría: `CV_ACTA_PUBLICADA`
+  (`app/api/cv/actas/route.ts:230`) y `CV_ACTA_DESPUBLICADA`
+  (`app/api/cv/actas/[actaId]/despublicar/route.ts:56`) con `usuario` = sesión y `referenciaId` = actaId.
+  Vista general informativa: fecha, hora, lugar, nº de temas y asistentes con documento enmascarado
+  (`app/api/cv/_actas.ts:67` `enmascararDocumento`, aplicado en `app/api/cv/actas/route.ts:147`);
+  nunca minuta, morosidad ni sanciones individualizadas. El texto obligatorio lo dicta el servidor
+  (`TEXTO_ACTA_INFORMATIVA_CV` en `lib/schemas.ts`) y se pinta en la tarjeta y en cada acta
+  (`app/comunidad/visor/page.tsx:411` y `:437`). **Sin recurso RBAC nuevo**: se reutiliza `cv`
+  (admin wildcard, comité ver/crear/editar, residente solo ver + ABAC). Gates: `npx tsc --noEmit` 0,
+  `npm run lint` 0 problemas/0 warnings, `test/api/acta-publicada-cv.test.ts` 9/9 verde (+ regresión
+  `fase4-cv` 6/6, `actas-gd` 10/10 y `borrado-logico-gd-ad` 16/16: 41/41). Decisiones propias:
+  (a) no se escribe `ActaGD.avisoCVReferencia` —la visibilidad es de CV, no del libro—;
+  (b) republicar un acta despublicada es una transición real y vuelve a auditarse;
+  (c) la lista GET vuelve a exigir
+  `actas_gd.estado = "publicada"` para que un acta desestimada nunca se muestre por referencia vieja.
