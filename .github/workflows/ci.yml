@@ -54,6 +54,12 @@ jobs:
       # Prisma real: necesitan el esquema. Local pasaba porque dev.db existe.
       - run: npx prisma migrate deploy --schema=prisma/schema.sqlite.prisma
       - run: npx tsc --noEmit
+      # Candado de procesos (scripts/audit-desvios.mjs): falla si vuelve un patrón que se
+      # descubre tarde — recurso de permisos fuera de la MATRIZ, marcador de postergación
+      # ("desvío", "por simplicidad"), test apagado sin motivo, truncamiento silencioso o
+      # catch vacío que confirma éxito. Corre antes de la suite: es barato y dice qué
+      # archivo:línea arreglar, sin esperar 15 minutos de tests.
+      - run: npm run audit:desvios
       - run: npm test
 
   unit-pg:
