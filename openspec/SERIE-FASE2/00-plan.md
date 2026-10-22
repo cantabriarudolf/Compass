@@ -145,5 +145,7 @@ Dos naturalezas, nunca una sola:
   nuevos `fi:cobranza` (admin full, comité `ver`, resto vacío explícito — la entrada exacta corta el
   fallback de prefijo hacia `fi`, donde el comité sí tiene `ejecutar`) y `fi:cobranza:propia`
   (residente `ver`+`editar` sobre **su** persona, ABAC en la ruta; resto vacío). Gates:
-  `npx tsc --noEmit` 0, `npm run lint` 0, `test/api/cobranza-fi.test.ts` 13/13 verde, `lib/authz.test.ts`
-  65/65 verde.
+  `npx tsc --noEmit` 0, `npm run lint` 0, `test/api/cobranza-fi.test.ts` 14/14 verde, `lib/authz.test.ts`
+  65/65 verde (+ regresión `fi-acciones` 16/16, `cobros-fi-fase4` 18/18, `crud-factory` 12/12 y
+  `with-comunidad-scope` 4/4: 128/128). Si NINGÚN canal queda habilitado no se escribe envío ni
+  notificación y el intento se audita como `FI_COBRANZA_SKIPPED` con el motivo de cada interruptor.

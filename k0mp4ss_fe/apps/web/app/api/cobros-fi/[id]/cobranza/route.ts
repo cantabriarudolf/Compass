@@ -304,17 +304,43 @@ export async function POST(req: Request, ctx: Ctx): Promise<Response> {
           tx
         )
       })
+    } else {
+      // Ningún envío escrito: si algún canal quedó fuera por interruptor, el
+      // intento igual queda auditado con el motivo (no se envía nada en silencio).
+      const canalesFuera = resultados.filter((r) => r.estado === "omitido")
+      if (canalesFuera.length > 0) {
+        await registrarEventoCobranza(
+          scope,
+          "FI_COBRANZA_SKIPPED",
+          ancla.id,
+          `Gestión de cobranza a ${refUnidad} no se envió: ${canalesFuera
+            .map((r) => `${r.canal}: ${r.motivo}`)
+            .join("; ")}.`
+        )
+      }
     }
 
     const creados = resultados.filter(
       (r) => r.estado === "enviado" || r.estado === "pendiente"
     )
-    const idempotente = creados.length === 0
-    const mensaje = idempotente
-      ? "La gestión ya estaba registrada: no se creó ningún envío nuevo."
-      : `Gestión de cobranza procesada para ${refUnidad}: ${creados
-          .map((r) => `${r.canal} ${r.estado}`)
-          .join(", ")}.`
+    const omitidos = resultados.filter((r) => r.estado === "omitido")
+    // `idempotente` describe lo único que importa para no duplicar: la gestión
+    // ya estaba registrada y no se creó ningún envío nuevo.
+    const todosDuplicados =
+      resultados.length > 0 && resultados.every((r) => r.estado === "duplicado")
+    const idempotente = todosDuplicados
+    let mensaje: string
+    if (todosDuplicados) {
+      mensaje = "La gestión ya estaba registrada: no se creó ningún envío nuevo."
+    } else if (creados.length > 0) {
+      mensaje = `Gestión de cobranza procesada para ${refUnidad}: ${creados
+        .map((r) => `${r.canal} ${r.estado}`)
+        .join(", ")}.`
+    } else {
+      mensaje = `No se envió nada a ${refUnidad}: ${omitidos
+        .map((r) => `${r.canal} ${r.motivo ?? "sin motivo"}`)
+        .join("; ")}.`
+    }
 
     return Response.json({
       ok: true,

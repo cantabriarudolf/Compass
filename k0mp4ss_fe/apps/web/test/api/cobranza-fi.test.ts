@@ -409,8 +409,7 @@ describe("interruptor global de la comunidad", () => {
     expect(config?.actualizadoPor).toBe(emailToId(emailAdmin))
   })
 
-  it("el interruptor global apagado también silencia el visor interno", async () => {
-    await conSesion(emailAdmin, async () => {
+  it("el interruptor global apagado también silencia el visor interno", async () => {    await conSesion(emailAdmin, async () => {
       const put = await putJson((await cargaModulos()).canales, "/api/cobros-fi/canales", {
         global: { canalVisor: false },
       })
@@ -608,5 +607,34 @@ describe("idempotencia", () => {
       expect(sinResponsable.status).toBe(400)
       expect((await sinResponsable.json()).error).toMatch(/responsable de cobro/i)
     })
+  })
+})
+
+// --- 6. Ningún canal habilitado ---------------------------------------------
+
+describe("todos los canales apagados", () => {
+  it("no envía nada y audita el motivo de cada interruptor (FI_COBRANZA_SKIPPED)", async () => {
+    await conSesion(emailAdmin, async () => {
+      await putJson((await cargaModulos()).canales, "/api/cobros-fi/canales", {
+        global: { canalVisor: false, canalEmail: false },
+      })
+      const res = await ejecutarCobranza(cobroId)
+      expect(res.status).toBe(200)
+      const json = await res.json()
+      expect(json.canales.visor.estado).toBe("omitido")
+      expect(json.canales.email.estado).toBe("omitido")
+      // No es idempotencia: no había nada registrado, simplemente no se envió.
+      expect(json.idempotente).toBe(false)
+      expect(json.mensaje).toMatch(/No se envió nada/)
+    })
+
+    expect(await enviosDe(unidadId)).toHaveLength(0)
+    expect(await notificacionesDe()).toHaveLength(0)
+    const evento = await prisma.eventoAuditoria.findFirst({
+      where: { comunidadId: comunidad, tipoAccion: "FI_COBRANZA_SKIPPED" },
+    })
+    expect(evento?.descripcion).toMatch(/no se envió/)
+    expect(evento?.descripcion).toMatch(/visor: Interruptor global/)
+    expect(evento?.descripcion).toMatch(/email: Interruptor global/)
   })
 })
