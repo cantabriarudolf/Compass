@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import { useUnidades } from "@/lib/api/use-unidades"
+import { AvisoTruncamiento, LIMITE_SELECT } from "@/components/pe/aviso-truncamiento"
 import { useVinculos } from "@/lib/api/use-vinculos"
 import { usePersonas } from "@/lib/api/use-personas"
 import { useCierresTurnoPE, useBitacoraVisitasPE } from "@/lib/api/use-pe"
@@ -96,6 +97,16 @@ maestros: { jornadas },
   const [macroId, setMacroId] = React.useState("todos")
   const [microId, setMicroId] = React.useState("todos")
   const [unidadFiltro, setUnidadFiltro] = React.useState("todas")
+
+  // Unidades del micro-sector elegido. El Select monta como máximo LIMITE_SELECT
+  // opciones y avisa cuando hay más: nunca truncar en silencio (saneamiento 2026-10-22).
+  const unidadesDelMicro = React.useMemo(
+    () =>
+      microId === "todos"
+        ? []
+        : store.unidades.filter((u) => u.microSectorId === microId),
+    [store.unidades, microId]
+  )
   const [perfiles, setPerfiles] = React.useState<string[]>([])
   const [tenencias, setTenencias] = React.useState<string[]>([])
 
@@ -333,11 +344,15 @@ maestros: { jornadas },
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="todas">Todas</SelectItem>
-                      {store.unidades.filter(u => microId !== "todos" && u.microSectorId === microId).slice(0, 100).map(u => (
+                      {unidadesDelMicro.slice(0, LIMITE_SELECT).map(u => (
                         <SelectItem key={u.id} value={u.id}>{u.etiqueta} {u.numero}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
+                  <AvisoTruncamiento
+                    mostrados={Math.min(unidadesDelMicro.length, LIMITE_SELECT)}
+                    total={unidadesDelMicro.length}
+                  />
                 </div>
               </div>
               <div className="grid gap-3 md:grid-cols-2">
