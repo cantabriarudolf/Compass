@@ -36,6 +36,8 @@ model Comunidad {
   controlesPropiedades     ControlPropiedad[]
   periodosDirectiva        PeriodoDirectiva[]
   actasGD                  ActaGD[]
+  // SERIE-FASE2 §V6 — actas GD publicadas en el visor CV (por referencia).
+  actasPublicadasCV        ActaPublicadaCV[]
   plantillasCO             PlantillaCO[]
   enviosCO                 EnvioCO[]
   mensajesBuzonCO          MensajeBuzonCO[]
@@ -808,6 +810,29 @@ model ReservaRA {
 }
 
 // Visor de Mensajes (CV)
+
+/// SERIE-FASE2 §V6 — referencia de un acta GD publicada en el visor CV.
+/// El visor NO copia el acta: guarda `actaId` + visibilidad y resuelve el
+/// contenido y los permisos al leer. El documento canónico (inmutable) sigue
+/// siendo la fila de `actas_gd`; acá solo hay estado de publicación y actor.
+model ActaPublicadaCV {
+  id                       String   @id
+  comunidadId              String
+  comunidad                Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  actaId                   String
+  estado                   String   // publicado | despublicado
+  publicadoEn              DateTime
+  publicadoPorUsuarioId    String
+  despublicadoEn           DateTime?
+  despublicadoPorUsuarioId String?
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  @@unique([comunidadId, actaId])
+  @@index([comunidadId])
+  @@map("actas_publicadas_cv")
+}
+
 model AvisoCV {
   id                  String   @id
   comunidadId         String
