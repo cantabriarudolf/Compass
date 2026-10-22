@@ -2082,6 +2082,7 @@ export type EstadoAdelantoPL = z.infer<typeof EstadoAdelantoPLSchema>
 export type LiquidacionPL = z.infer<typeof LiquidacionPLSchema>
 export type TipoCertificadoCT = z.infer<typeof TipoCertificadoCTSchema>
 export type CertificadoCT = z.infer<typeof CertificadoCTSchema>
+export type CertificadoCTAlta = z.infer<typeof CertificadoCTAltaSchema>
 export type BloqueReporteRE = z.infer<typeof BloqueReporteRESchema>
 export type ReporteRE = z.infer<typeof ReporteRESchema>
 export type EnvioReporteRE = z.infer<typeof EnvioReporteRESchema>
@@ -2288,6 +2289,22 @@ export const CertificadoCTSchema = z.object({
         .optional(),
       fechaEmision: FechaISOSchema,
     })
+
+/**
+ * Payload de ALTA de un certificado CT: el folio correlativo (`CT-####`) y el
+ * código de verificación (`VC-…`) los asigna el servidor, en una transacción
+ * por comunidad, cuando el body no los trae.
+ *
+ * Por qué existe (auditoría "funciones de palo" 2026-10-23): el cliente los
+ * calculaba con `max+1` sobre la lista cargada, así que dos pestañas emitiendo a
+ * la vez producían el mismo folio. El registro persistido sigue validando con
+ * `CertificadoCTSchema` (folio y código obligatorios): esto solo relaja el
+ * contrato de ENTRADA de la API.
+ */
+export const CertificadoCTAltaSchema = CertificadoCTSchema.partial({
+  folio: true,
+  codigoVerificacion: true,
+})
 
 // --- Reportería y Dashboards (RE) ---
 
