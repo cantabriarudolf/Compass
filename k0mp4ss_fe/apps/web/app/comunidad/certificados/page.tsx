@@ -27,8 +27,8 @@ import {
   SelectValue,
 } from "@workspace/ui/components/select"
 import { IconCertificate, IconFileText, IconTrash } from "@tabler/icons-react"
-import type { CertificadoCT, ConfiguracionGlobal } from "@/lib/schemas"
-import { CertificadoCTSchema } from "@/lib/schemas"
+import type { CertificadoCT, CertificadoCTAlta, ConfiguracionGlobal } from "@/lib/schemas"
+import { CertificadoCTAltaSchema } from "@/lib/schemas"
 import { documentoCertificadoPDF } from "@/lib/pdf-utils"
 
 const TIPO_LABEL: Record<CertificadoCT["tipo"], string> = {
@@ -84,12 +84,16 @@ export default function CertificadosPage() {
   const gateAlDia = tipo === "al_dia" && unidadId ? saldoUnidad(unidadId) : null
 
   /**
-   * Construye el registro CertificadoCT con la misma lógica de negocio que la
-   * acción legacy `generarCertificadoCT` del store (folio correlativo, resumen,
+   * Construye el payload de ALTA del CertificadoCT con la misma lógica de
+   * negocio que la acción legacy `generarCertificadoCT` del store (resumen,
    * detalle por tipología, snapshot de directiva vigente) usando los datos de
    * las colecciones SWR; luego persiste vía POST /api/certificados-ct.
+   *
+   * El folio `CT-####` y el código de verificación NO se calculan acá: los
+   * asigna el servidor en una transacción por comunidad (antes `max+1` sobre la
+   * lista del cliente duplicaba folios entre pestañas).
    */
-  const construirRegistro = (tipoActual: CertificadoCT["tipo"]): CertificadoCT => {
+  const construirRegistro = (tipoActual: CertificadoCT["tipo"]): CertificadoCTAlta => {
     let unidadIdDestino = tipoActual !== "liquidacion_sueldo" && unidadId ? unidadId : undefined
     let personaIdDestino = tipoActual === "residencia" && personaId ? personaId : undefined
     let origenRef = unidadIdDestino ?? personaIdDestino ?? (tipoActual === "liquidacion_sueldo" ? liquidacionId : undefined)
@@ -153,16 +157,6 @@ export default function CertificadosPage() {
       ]
     }
 
-    // Folio CT correlativo + código de verificación único.
-    const numeros = certificados
-      .map(c => Number.parseInt(c.folio.replace(/^CT-/, ""), 10))
-      .filter(n => Number.isFinite(n))
-    const folio = `CT-${String((numeros.length > 0 ? Math.max(...numeros) : 0) + 1).padStart(4, "0")}`
-    let codigoVerificacion = `VC-${Math.random().toString(36).slice(2, 10).toUpperCase()}`
-    while (certificados.some(c => c.codigoVerificacion === codigoVerificacion)) {
-      codigoVerificacion = `VC-${Math.random().toString(36).slice(2, 10).toUpperCase()}`
-    }
-
     // Snapshot de la directiva vigente al emitir (trazabilidad histórica, no bloqueante).
     const firmantes = periodoVigente
       ? personas
@@ -176,8 +170,6 @@ export default function CertificadosPage() {
 
     return {
       id: generarId("ct"),
-      folio,
-      codigoVerificacion,
       tipo: tipoActual,
       ...(unidadIdDestino ? { unidadId: unidadIdDestino } : {}),
       ...(personaIdDestino ? { personaId: personaIdDestino } : {}),
@@ -202,29 +194,48 @@ export default function CertificadosPage() {
       setError("Media por referencia (D1): la firma digitalizada configurada en CF no puede estar embebida como base64/Blob.")
       return
     }
-    let registro: CertificadoCT
+    let datosAlta: CertificadoCTAlta
     try {
-      registro = construirRegistro(tipo)
+      datosAlta = construirRegistro(tipo)
     } catch (e) {
       setError(String(e instanceof Error ? e.message : e))
       return
     }
-    const validacion = CertificadoCTSchema.safeParse(registro)
+    // Folio y código de verificación los pone el servidor: acá solo se valida el
+    // resto del payload antes de emitir.
+    const validacion = CertificadoCTAltaSchema.safeParse(datosAlta)
     if (!validacion.success) {
       setError(`Datos del certificado inválidos: ${validacion.error.issues[0]?.message ?? ""}`)
       return
     }
-    const r = await crearCertificadoApi(registro)
+    const r = await crearCertificadoApi(datosAlta)
     if (!r.ok) {
       setError(r.error ?? "No se pudo emitir el certificado")
       return
     }
-    await descargar(registro)
-    setOkMsg(`Certificado ${registro.folio} emitido y firmado. Código de verificación: ${registro.codigoVerificacion}`)
+    const registro = r.registro
+    if (!registro) {
+      setError("El servidor no devolvió el certificado emitido. Revisá el Historial de Emisión antes de reintentar.")
+      return
+    }
+    const descarga = await descargar(registro)
     setSolicitanteNombre("")
+    if (!descarga.ok) {
+      // El registro SÍ se emitió: se dice lo que pasó de verdad en vez de
+      // confirmar una descarga que no ocurrió (auditoría "funciones de palo").
+      setOkMsg(null)
+      setError(
+        `Certificado ${registro.folio} emitido, pero la descarga del PDF falló (${descarga.error}). Reintentá la descarga desde el Historial de Emisión.`
+      )
+      return
+    }
+    setOkMsg(`Certificado ${registro.folio} emitido y firmado. Código de verificación: ${registro.codigoVerificacion}`)
   }
 
-  const descargar = async (c: CertificadoCT) => {
+  /** Genera y descarga el PDF; devuelve si la descarga ocurrió de verdad. */
+  const descargar = async (
+    c: CertificadoCT
+  ): Promise<{ ok: boolean; error?: string }> => {
     setPdfBusy(c.id)
     try {
       const doc = await documentoCertificadoPDF({
@@ -241,8 +252,11 @@ export default function CertificadosPage() {
       const { descargarPdf: descargarArchivo } = await import("@/lib/pdf-utils")
       await descargarArchivo(doc, `certificado-${c.folio}.pdf`)
       setOkMsg(`PDF ${c.folio} generado con firma embebida.`)
+      return { ok: true }
     } catch (e) {
-      setError(`No se pudo generar el PDF: ${String(e)}`)
+      const motivo = e instanceof Error ? e.message : String(e)
+      setError(`No se pudo generar el PDF: ${motivo}`)
+      return { ok: false, error: motivo }
     } finally {
       setPdfBusy(null)
     }

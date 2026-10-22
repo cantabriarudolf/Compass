@@ -1330,6 +1330,11 @@ model CertificadoCT {
   createdAt         DateTime @default(now())
 
   @@index([comunidadId])
+  // Folio correlativo POR COMUNIDAD (CT-####): el número lo asigna el POST en
+  // una transacción, y este índice es la garantía dura contra la carrera entre
+  // dos emisiones concurrentes (sin él, `max+1` sobre una lectura permite
+  // duplicados). Aditiva: ver migración add_certificados_ct_folio_unico.
+  @@unique([comunidadId, folio])
   @@map("certificados_ct")
 }
 

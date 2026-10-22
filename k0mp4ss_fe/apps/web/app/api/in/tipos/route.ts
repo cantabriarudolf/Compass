@@ -1,8 +1,9 @@
 /**
  * /api/in/tipos — tipos de infracción IN (BD-FUENTE-VERDAD Fase 4).
  *
- * GET paginado vía factory. POST upsert idempotente por id. Authz sobre "in"
- * (solo administrador hasta que RP otorgue el recurso a comité/conserjería).
+ * GET paginado vía factory. POST upsert idempotente por id. Authz sobre "in":
+ * el recurso ya está declarado en la MATRIZ para comité y conserjería (ver/crear/editar),
+ * así que la matriz es la única fuente y la restricción previa al administrador ya no aplica.
  */
 import { TipoInfraccionINSchema } from "@/lib/schemas"
 import { puede } from "@/lib/authz"
