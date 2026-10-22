@@ -222,6 +222,9 @@ export async function POST(req: Request, ctx: Ctx): Promise<Response> {
       // porque la plataforma no tiene emisor SMTP implementado.
       const esEmail = canal === "email"
       const envioId = generarId("env-cob")
+      const motivoEnvio = esEmail
+        ? "Sin emisor SMTP configurado: el correo queda en la cola de salida (outbox) y no se reporta como enviado."
+        : undefined
       aEscribir.push({
         canal,
         estado: esEmail ? "pendiente" : "enviado",
@@ -231,14 +234,13 @@ export async function POST(req: Request, ctx: Ctx): Promise<Response> {
           canal,
           reenvioEn,
         }),
-        motivo: esEmail
-          ? "Sin emisor SMTP configurado: el correo queda en la cola de salida (outbox) y no se reporta como enviado."
-          : undefined,
+        motivo: motivoEnvio,
         envioId,
       })
       resultados.push({
         canal,
         estado: esEmail ? "pendiente" : "enviado",
+        motivo: motivoEnvio,
         envioId,
         fecha,
       })
