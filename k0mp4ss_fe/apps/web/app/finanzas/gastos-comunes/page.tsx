@@ -11,6 +11,7 @@ import { Button } from "@workspace/ui/components/button"
 import { Badge } from "@workspace/ui/components/badge"
 import { Switch } from "@workspace/ui/components/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@workspace/ui/components/tabs"
+import { AvisoTruncamiento } from "@/components/pe/aviso-truncamiento"
 import {
   Select,
   SelectContent,
@@ -559,6 +560,11 @@ export default function GastosComunesPage() {
                   )}
                 </tbody>
               </table>
+              <AvisoTruncamiento
+                mostrados={Math.min(ingresosFI.length, 20)}
+                total={ingresosFI.length}
+                className="mt-2"
+              />
             </CardContent>
           </Card>
         </TabsContent>
@@ -723,6 +729,10 @@ export default function GastosComunesPage() {
                           </Button>
                         </div>
                       ))}
+                      <AvisoTruncamiento
+                        mostrados={Math.min(pendientes.length, 3)}
+                        total={pendientes.length}
+                      />
                       {propietario ? (
                         <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
                           <span>Email al residente (interruptor individual)</span>

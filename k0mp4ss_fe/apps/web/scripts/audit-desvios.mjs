@@ -725,16 +725,20 @@ function formatear(hallazgos) {
   for (const regla of reglas) {
     const lista = porRegla.get(regla)
     lineas.push(TITULOS[regla])
-    if (lista.length === 0) {
-      const justificadas = (EXCEPCIONES[regla] ?? []).length
-      lineas.push(
-        `  ok · 0 hallazgos${justificadas > 0 ? ` (${justificadas} excepción(es) justificada(s) en la allowlist)` : ""}`
-      )
-    } else {
+    if (lista.length === 0) lineas.push("  ok · 0 hallazgos")
+    else {
       for (const h of lista) {
         lineas.push(`  ✗ ${h.archivo}:${h.linea} · ${h.detalle}`)
         lineas.push(`    → ${h.accion}`)
       }
+    }
+    // La allowlist se muestra siempre: nada queda silenciado sin decirlo.
+    const excepciones = EXCEPCIONES[regla] ?? []
+    if (excepciones.length > 0) {
+      const etiquetas = excepciones.map((e) => e.recurso ?? e.archivo)
+      lineas.push(
+        `  allowlist (${excepciones.length}): ${etiquetas.join(" · ")}`
+      )
     }
     lineas.push("")
   }
