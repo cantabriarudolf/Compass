@@ -37,6 +37,14 @@ const MATRIZ: Record<Rol, Record<string, Set<Accion>>> = {
     "re:centro_mando": new Set<Accion>(["ver"]),
     "ct": new Set<Accion>(["ver"]),
     "ct:historial": new Set<Accion>(["ver"]),
+    // SERIE-FASE2 §V2 (decisión del plan): el comité LEE Personal (`pe` ver);
+    // registrar/editar transiciones es de quien las opera. Las evaluaciones de
+    // desempeño se declaran VACÍAS a propósito (solo administrador las registra).
+    "pe": new Set<Accion>(["ver"]),
+    "pe:evaluacion": new Set<Accion>([]),
+    // `pe:ficha` (previsional/bancario) queda VACÍO explícito: el comité lee PE
+    // pero no el dato previsional, igual que conserjería.
+    "pe:ficha": new Set<Accion>([]),
     "pe:directorio": new Set<Accion>(["ver"]),
     // cv: visor de avisos — comité publica y edita; el resto solo ve (decisión owner 2026-10-21)
     "cv": new Set<Accion>(["ver", "crear", "editar"]),
@@ -73,6 +81,9 @@ const MATRIZ: Record<Rol, Record<string, Set<Accion>>> = {
     "pe:reporte_diario": new Set<Accion>(["ver"]),
     "pe:directorio": new Set<Accion>(["ver"]),
     "pe:ficha": new Set<Accion>([]), // sin dato previsional/bancario
+    // SERIE-FASE2 §V2: evaluar el desempeño del personal es acto del
+    // administrador; conserjería no registra evaluaciones (Set vacío explícito).
+    "pe:evaluacion": new Set<Accion>([]),
     "pl": new Set<Accion>([]),
     "pl:propia": new Set<Accion>(["ver"]), // solo propia liquidación (ABAC filtro)
     "ct:propia": new Set<Accion>(["ver"]),
@@ -100,6 +111,8 @@ const MATRIZ: Record<Rol, Record<string, Set<Accion>>> = {
     "pe:directorio": new Set<Accion>(["ver"]),
     "pe:visita": new Set<Accion>(["ver", "crear"]), // agenda visitas/contratistas a su unidad
     "pe:contratista": new Set<Accion>(["ver", "crear"]),
+    // SERIE-FASE2 §V2: el residente no registra evaluaciones de desempeño.
+    "pe:evaluacion": new Set<Accion>([]),
     // Decisión owner 2026-10-21: el residente solo consulta el inventario de
     // insumos; ya no crea solicitudes ni cierra el ciclo.
     "ir:mantenimiento": new Set<Accion>(["ver"]),
@@ -125,6 +138,15 @@ const MATRIZ: Record<Rol, Record<string, Set<Accion>>> = {
     "mt": new Set<Accion>(["ver", "crear", "editar", "ejecutar"]),
     "mt:tarea": new Set<Accion>(["ver", "ejecutar"]),
     "mt:incidente": new Set<Accion>(["ver", "crear"]),
+    // SERIE-FASE2 §V2: mantención opera las transiciones de Personal (horas
+    // extra, completar tarea de monitoreo, enviar proyección de costo) pero NO
+    // inicia/cierra turno (eso es `pe:cierre_turno`, conserjería) ni evalúa.
+    "pe": new Set<Accion>(["ver", "crear", "editar"]),
+    "pe:evaluacion": new Set<Accion>([]),
+    // Vacío explícito: cortan el fallback de prefijo de `puede()` hacia `pe`.
+    // Iniciar/cerrar turno es de conserjería; la ficha previsional no aplica acá.
+    "pe:cierre_turno": new Set<Accion>([]),
+    "pe:ficha": new Set<Accion>([]), // sin dato previsional/bancario
     "pe:directorio": new Set<Accion>(["ver"]),
     // Decisión owner 2026-10-21: mantención entrega insumos y resuelve
     // comodines en un click (`editar` = POST .../entregar y .../resolver-comodin).
@@ -304,6 +326,7 @@ export const RECURSOS_CONOCIDOS = [
   "ef",
   "es:estacionamiento",
   "pe",
+  "pe:evaluacion",
   "pe:bitacora",
   "pe:cierre_turno",
   "pe:ficha",

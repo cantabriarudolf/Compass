@@ -126,6 +126,37 @@ export const VinculoUnidadSchema = z.object({
   cerrarAnterior: z.boolean().optional(),
 })
 
+// PE (SERIE-FASE2 V2): las dos transiciones con historial propio dentro de la
+// ficha laboral. Se declaran como schemas exportados para que las rutas
+// (`/api/pe/personas/[id]/{horas-extras,evaluaciones}`) validen EXACTAMENTE la
+// misma forma que la ficha integral y para dejar la inmutabilidad de la
+// evaluación testimoniada en un solo lugar.
+export const HoraExtraPESchema = z.object({
+  id: IdEntidadSchema,
+  fecha: FechaISOSchema,
+  horas: z
+    .number({ invalid_type_error: "Las horas deben ser un número." })
+    .positive("Las horas extra deben ser mayores a cero."),
+  motivo: z
+    .string({
+      required_error: "El motivo de la hora extra es obligatorio.",
+    })
+    .min(1, "El motivo de la hora extra es obligatorio."),
+})
+
+// La evaluación es HISTÓRICA E INMUTABLE (plan FASE2 §V2): se agrega otra, no se
+// edita la existente. El schema no admite campos de edición y la ruta rechaza
+// cualquier intento de reescribir un id ya registrado.
+export const EvaluacionPESchema = z.object({
+  id: IdEntidadSchema,
+  fecha: FechaISOSchema,
+  puntaje: z
+    .number()
+    .min(1, "El puntaje va de 1 a 7.")
+    .max(7, "El puntaje va de 1 a 7."),
+  comentarios: z.string().optional(),
+})
+
 export const ExtensionLaboralSchema = z.object({
   id: IdEntidadSchema,
   cargo: z.string().min(1, "El cargo es obligatorio."),
@@ -179,35 +210,8 @@ export const ExtensionLaboralSchema = z.object({
     .number()
     .min(0, "El sueldo base no puede ser negativo.")
     .optional(),
-  horasExtras: z
-    .array(
-      z.object({
-        id: IdEntidadSchema,
-        fecha: FechaISOSchema,
-        horas: z
-          .number({ invalid_type_error: "Las horas deben ser un número." })
-          .positive("Las horas extra deben ser mayores a cero."),
-        motivo: z
-          .string({
-            required_error: "El motivo de la hora extra es obligatorio.",
-          })
-          .min(1, "El motivo de la hora extra es obligatorio."),
-      })
-    )
-    .optional(),
-  evaluaciones: z
-    .array(
-      z.object({
-        id: IdEntidadSchema,
-        fecha: FechaISOSchema,
-        puntaje: z
-          .number()
-          .min(1, "El puntaje va de 1 a 7.")
-          .max(7, "El puntaje va de 1 a 7."),
-        comentarios: z.string().optional(),
-      })
-    )
-    .optional(),
+  horasExtras: z.array(HoraExtraPESchema).optional(),
+  evaluaciones: z.array(EvaluacionPESchema).optional(),
 })
 
 export const ExtensionGobernanzaSchema = z
@@ -1948,6 +1952,8 @@ export type VisitaTecnicaPE = z.infer<typeof VisitaTecnicaPESchema>
 export type ChecklistItemTurno = z.infer<typeof ChecklistItemTurnoSchema>
 export type CierreTurnoPE = z.infer<typeof CierreTurnoPESchema>
 export type ProyeccionPE = z.infer<typeof ProyeccionPESchema>
+export type HoraExtraPE = z.infer<typeof HoraExtraPESchema>
+export type EvaluacionPE = z.infer<typeof EvaluacionPESchema>
 export type AsignacionFamiliar = z.infer<typeof AsignacionFamiliarSchema>
 export type ContratistaMA = z.infer<typeof ContratistaSchema>
 export type Jornada = z.infer<typeof JornadaSchema>
