@@ -79,7 +79,7 @@ Dos naturalezas, nunca una sola:
 |---|---|---|
 | V1 | Inventario de insumos (IR) — entregar + comodín, folio, authz | HECHA |
 | V2 | Personal (PE) — 5 transiciones | HECHA |
-| V3 | Reportería (RE) — snapshot + distribución | PENDIENTE |
+| V3 | Reportería (RE) — snapshot + distribución | HECHA |
 | V4 | Adelantos PL — anticipo vs préstamo | PENDIENTE |
 | V5 | Cobranza FI — multicanal con interruptores | PENDIENTE |
 | V6 | Publicar acta en CV — por referencia | PENDIENTE |
@@ -102,3 +102,23 @@ Dos naturalezas, nunca una sola:
   columnas a ciegas; el historial solo se amplía (append), nunca se reescribe. Matriz RBAC:
   `pe` ver/crear/editar para conserjería y mantención, `pe` ver para comité, `pe:evaluacion` vacío
   para el resto de los roles, `pe:cierre_turno` vacío para mantención (corta el fallback de prefijo).
+- **2026-10-21 — V3 (RE) HECHA.** Emitir congela y distribuir publica en el visor con el email en
+  outbox. La página dejó el store (**0 usos** de `useCompassStore`, verificado con grep; antes tenía
+  3 selectores + 2 `getState()`). Rutas: `POST /api/reportes-re/generar` (`re` crear = **solo
+  admin**), `POST /api/reportes-re/[id]/distribuir` (`re` editar = solo admin),
+  `POST /api/reportes-re/[id]/lectura` (`re` ver: admin y comité) y `POST /api/reportes-re/vistas`
+  (`re:centro_mando` ver). **Migración aditiva** `20261021233000_add_reporte_snapshot_emision`:
+  `numero` (correlativo por comunidad, índice único `(comunidadId, numero)`), `periodo`,
+  `autorUsuarioId`, `autorNombre`, `estadoDistribucion`, `envios` y `lecturas` (Json), todas
+  NULL-ables para no tocar el histórico. El snapshot se calcula **al emitir** con las mismas
+  etiquetas y funciones puras del legacy (`saldoPendiente`) y nunca se recalcula al abrirlo; el id
+  es determinista por (comunidad, periodo, título, bloques, segmento), así reemitir el mismo informe
+  devuelve el snapshot congelado en vez de duplicarlo. Distribuir solo al visor es el default del
+  body (`email: false`); el envío por correo queda en `envios[]` con estado `pendiente` y
+  `estadoDistribucion: "pendiente"` — **no hay emisor SMTP en la plataforma**, así que nunca se
+  reporta como enviado (la ruta responde `email: "pendiente"` y el texto de la UI lo dice). Matriz
+  RBAC: sin recursos nuevos (`re` crear/editar ya es exclusivo del administrador; el comité conserva
+  `re` ver y `re:centro_mando` ver; el residente no tiene `re`). Métrica en la página: emitidos /
+  distribuidos / leídos, sin tasa de apertura. Gates: `npx tsc --noEmit` 0, `npm run lint` 0,
+  `test/api/reporteria-snapshot.test.ts` 15/15 verde (+ regresión `api-reportes-re`, `crud-factory`
+  y `with-comunidad-scope` 22/22).
