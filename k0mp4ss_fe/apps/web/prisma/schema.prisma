@@ -1217,9 +1217,20 @@ model ReporteRE {
   destinatariosPersonaId Json
   distribuidoA           Int
   fechaDistribucion      String?
+  // SERIE-FASE2 §V3 — snapshot de emisión: número correlativo por comunidad
+  numero                 Int?
+  periodo                String?
+  autorUsuarioId         String?
+  autorNombre            String?
+  // SERIE-FASE2 §V3 — distribución: estado del envío (publicado | pendiente) y
+  // el detalle por canal (visor interno + email en outbox), más las lecturas.
+  estadoDistribucion     String?
+  envios                 Json?
+  lecturas               Json?
   createdAt              DateTime @default(now())
   updatedAt              DateTime @updatedAt
 
+  @@unique([comunidadId, numero])
   @@index([comunidadId])
   @@map("reportes_re")
 }

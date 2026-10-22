@@ -1966,6 +1966,10 @@ export type TipoCertificadoCT = z.infer<typeof TipoCertificadoCTSchema>
 export type CertificadoCT = z.infer<typeof CertificadoCTSchema>
 export type BloqueReporteRE = z.infer<typeof BloqueReporteRESchema>
 export type ReporteRE = z.infer<typeof ReporteRESchema>
+export type EnvioReporteRE = z.infer<typeof EnvioReporteRESchema>
+export type LecturaReporteRE = z.infer<typeof LecturaReporteRESchema>
+export type EstadoEnvioRE = (typeof ESTADOS_ENVIO_RE)[number]
+export type CanalEnvioRE = (typeof CANALES_ENVIO_RE)[number]
 
 // --- Liquidaciones y Remuneraciones (PL) ---
 
@@ -2130,8 +2134,37 @@ export const BLOQUES_REPORTE_RE = [
 ] as const
 export const BloqueReporteRESchema = z.enum(BLOQUES_REPORTE_RE)
 
+// SERIE-FASE2 §V3 — distribución del reporte: el visor interno siempre se
+// publica; el email se encola como canal aparte. `pendiente` es el estado
+// honesto de un envío que todavía no salió (sin SMTP el correo NO se envió).
+export const CANALES_ENVIO_RE = ["visor", "email"] as const
+export const ESTADOS_ENVIO_RE = [
+  "publicado",
+  "pendiente",
+  "enviado",
+  "fallido",
+] as const
+export const EnvioReporteRESchema = z.object({
+  canal: z.enum(CANALES_ENVIO_RE),
+  destinatarioPersonaId: IdEntidadSchema.optional(),
+  fecha: FechaISOSchema,
+  estado: z.enum(ESTADOS_ENVIO_RE),
+})
+
+// Lectura del informe por un usuario: base de la métrica "leídos en la app".
+// No hay tasa de apertura (decisión del plan): solo emitidos/distribuidos/leídos.
+export const LecturaReporteRESchema = z.object({
+  usuarioId: IdEntidadSchema,
+  rol: z.string().min(1),
+  fecha: FechaISOSchema,
+})
+
 // Reporte personalizado: bloques snapshot inmutables al generar + segmento
 // declarado (EF+MP+tenencia). Los destinatarios se resuelven al distribuir.
+//
+// SERIE-FASE2 §V3: los campos de emisión (número, periodo, autor) y de
+// distribución (estado, envíos, lecturas) son OPCIONALES para no romper los
+// reportes históricos, que solo tienen payloadSnapshot + fechaGeneracion.
 export const ReporteRESchema = z.object({
   id: IdEntidadSchema,
   titulo: z
@@ -2164,6 +2197,17 @@ export const ReporteRESchema = z.object({
   destinatariosPersonaId: z.array(IdEntidadSchema),
   distribuidoA: z.number().int().min(0),
   fechaDistribucion: FechaISOSchema.optional(),
+  // Snapshot de emisión (V3): congelado al emitir, nunca se recalcula.
+  numero: z.number().int().positive().optional(),
+  periodo: z
+    .string()
+    .regex(/^\d{4}-\d{2}$/, "El periodo debe tener formato AAAA-MM.")
+    .optional(),
+  autorUsuarioId: IdEntidadSchema.optional(),
+  autorNombre: z.string().min(1).optional(),
+  estadoDistribucion: z.enum(ESTADOS_ENVIO_RE).optional(),
+  envios: z.array(EnvioReporteRESchema).optional(),
+  lecturas: z.array(LecturaReporteRESchema).optional(),
 })
 
 // --- Utilidades de validación para el store ---
