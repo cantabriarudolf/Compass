@@ -1510,12 +1510,18 @@ export default function QaLabPage() {
       const r = await apiQA(`/api/certificados-ct/${id}`).catch(() => null)
       return (r?.ok ? r.cuerpo : null) as { folio?: string; codigoVerificacion?: string; tipo?: string; unidadId?: string } | null
     }
+    // El folio CT y el código VC los asigna el SERVIDOR (índice único por
+    // comunidad, SERIE-FASE2). Mandar el del store colisiona con un folio ya
+    // emitido y el POST responde 409 → la fase cae con "ausente en BD".
+    // Vacíos ⇒ el servidor numera; abajo se verifica el folio REAL en BD.
+    const sinFolioQA = <T extends { folio?: string; codigoVerificacion?: string }>(c: T | undefined) =>
+      c ? { ...c, folio: "", codigoVerificacion: "" } : c
     // 1) Residencia TEST sobre vínculo activo del depto TEST. Se usa el
     // propietario porque su vínculo no tiene fechaFin; el arrendatario TEST
     // tiene contrato a plazo y el store exige vínculo sin fechaFin (vigente).
     const r1 = s.generarCertificadoCT({ id: QA_CT_RESIDENCIA_ID, tipo: "residencia", personaId: "test-p-99", unidadId: unidadTest, solicitanteNombre: "TEST Persona QA Uno" })
     const certRes = useCompassStore.getState().certificadosCT.find(c => c.id === QA_CT_RESIDENCIA_ID)
-    await espejarQA(pasos, 0, r1, () => postQA("/api/certificados-ct", certRes))
+    await espejarQA(pasos, 0, r1, () => postQA("/api/certificados-ct", sinFolioQA(certRes)))
     if (pasos[0]!.estado === "ok") {
       const enBD = await certBD(QA_CT_RESIDENCIA_ID)
       if (!enBD?.folio?.startsWith("CT-") || !enBD.codigoVerificacion?.startsWith("VC-") || enBD.unidadId !== unidadTest) {
@@ -1536,7 +1542,7 @@ export default function QaLabPage() {
       pasos[1]!.error = `Deuda divergente entre mundos (store $${pendienteStoreUnidad} / BD $${deudaBd})`
     } else {
       const r2 = s.generarCertificadoCT({ id: QA_CT_AL_DIA_ID, tipo: "al_dia", unidadId: unidadTest, solicitanteNombre: "TEST QA" })
-      await espejarRechazoQA(pasos, 1, r2, "saldo", 409, () => postQA("/api/certificados-ct", cuerpoAlDia))
+      await espejarRechazoQA(pasos, 1, r2, "saldo", 409, () => postQA("/api/certificados-ct", sinFolioQA(cuerpoAlDia)))
     }
     // 3) Pagar TODOS los cargos pendientes TEST (GC, multa IN, tarifas/penalizaciones
     // RA y garantía retenida) → Al Día emitido. El certificado exige saldo total <= 0
@@ -1552,7 +1558,7 @@ export default function QaLabPage() {
     }
     const r3 = s.generarCertificadoCT({ id: QA_CT_AL_DIA_ID, tipo: "al_dia", unidadId: unidadTest, solicitanteNombre: "TEST QA" })
     const certAlDia = useCompassStore.getState().certificadosCT.find(c => c.id === QA_CT_AL_DIA_ID)
-    await espejarQA(pasos, 2, r3, () => postQA("/api/certificados-ct", certAlDia))
+    await espejarQA(pasos, 2, r3, () => postQA("/api/certificados-ct", sinFolioQA(certAlDia)))
     if (pasos[2]!.estado === "ok") {
       const enBD = await certBD(QA_CT_AL_DIA_ID)
       const deudaTras = (await listaQA(`/api/cobros-fi?unidadId=${unidadTest}`)).reduce((a, c) => a + pendienteDe(c), 0)
@@ -1568,7 +1574,7 @@ export default function QaLabPage() {
     if (!liqConf) { pasos[3]!.estado = "error"; pasos[3]!.error = "Falta liquidación confirmada (ejecuta fase PL)" } else {
       const r4 = s.generarCertificadoCT({ id: QA_CT_LIQ_ID, tipo: "liquidacion_sueldo", liquidacionId: liqConf.id, solicitanteNombre: "TEST QA" })
       const certLiq = useCompassStore.getState().certificadosCT.find(c => c.id === QA_CT_LIQ_ID)
-      await espejarQA(pasos, 3, r4, () => postQA("/api/certificados-ct", certLiq))
+      await espejarQA(pasos, 3, r4, () => postQA("/api/certificados-ct", sinFolioQA(certLiq)))
       // Inmutabilidad en ambos mundos (Decisión 5): la ruta API rechaza con 409 y el
       // store legacy rechaza los ids reales con "inmutable" (los TEST son su vía de
       // purga legítima, por eso el guard del store se comprueba solo si hay uno real).
