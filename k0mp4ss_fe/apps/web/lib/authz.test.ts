@@ -607,3 +607,42 @@ describe("lib/authz — recurso cf (configuración global)", () => {
     expect(puede("administrador", "editar", "cf")).toBe(true)
   })
 })
+
+describe("lib/authz — recurso fi:cobranza (cobranza FI multicanal, SERIE-FASE2 §V5)", () => {
+  it("administrador ejecuta la cobranza (único rol con ejecutar)", () => {
+    expect(puede("administrador", "ver", "fi:cobranza")).toBe(true)
+    expect(puede("administrador", "ejecutar", "fi:cobranza")).toBe(true)
+    expect(puede("administrador", "editar", "fi:cobranza")).toBe(true)
+  })
+
+  it("comité solo ver: no ejecuta aunque tenga `fi` ejecutar (aprobar gasto)", () => {
+    expect(puede("comite", "ver", "fi:cobranza")).toBe(true)
+    // La entrada exacta corta el fallback de prefijo hacia `fi` (que sí tiene ejecutar):
+    // sin esta guarda el comité podría enviar cobranzas a los residentes.
+    expect(puede("comite", "ejecutar", "fi")).toBe(true)
+    expect(puede("comite", "ejecutar", "fi:cobranza")).toBe(false)
+    expect(puede("comite", "editar", "fi:cobranza")).toBe(false)
+    expect(puede("comite", "crear", "fi:cobranza")).toBe(false)
+  })
+
+  it("conserjería, residente y mantención no ven ni ejecutan la cobranza", () => {
+    for (const rol of ["conserjeria", "residente", "mantencion"] as const) {
+      expect(puede(rol, "ver", "fi:cobranza")).toBe(false)
+      expect(puede(rol, "ejecutar", "fi:cobranza")).toBe(false)
+      expect(puede(rol, "editar", "fi:cobranza")).toBe(false)
+    }
+  })
+
+  it("fi:cobranza:propia — el residente decide su canal (ver+editar); nadie más", () => {
+    expect(puede("residente", "ver", "fi:cobranza:propia")).toBe(true)
+    expect(puede("residente", "editar", "fi:cobranza:propia")).toBe(true)
+    // El residente sigue sin poder ejecutar la cobranza de su unidad.
+    expect(puede("residente", "ejecutar", "fi:cobranza:propia")).toBe(false)
+    for (const rol of ["comite", "conserjeria", "mantencion"] as const) {
+      expect(puede(rol, "ver", "fi:cobranza:propia")).toBe(false)
+      expect(puede(rol, "editar", "fi:cobranza:propia")).toBe(false)
+    }
+    // El administrador ve el wildcard y puede tocar la preferencia de cualquiera.
+    expect(puede("administrador", "editar", "fi:cobranza:propia")).toBe(true)
+  })
+})

@@ -29,6 +29,12 @@ const MATRIZ: Record<Rol, Record<string, Set<Accion>>> = {
     "fi": new Set<Accion>(["ver", "ejecutar"]), // ver balance, ejecutar aprobar gasto
     "fi:balance": new Set<Accion>(["ver"]),
     "fi:gasto_comun": new Set<Accion>(["ver", "ejecutar"]),
+    // SERIE-FASE2 §V5: el comité AUDITA la cobranza (ver) pero no la ejecuta.
+    // Sin esta entrada explícita `puede()` caería al prefijo `fi`, donde el
+    // comité sí tiene `ejecutar` (aprobar gasto), y podría enviar cobranzas.
+    "fi:cobranza": new Set<Accion>(["ver"]),
+    // Vacío explícito: la preferencia de canal es del residente, no del comité.
+    "fi:cobranza:propia": new Set<Accion>([]),
     "am": new Set<Accion>(["ver"]), // RP §Roles Estándar: comité lee auditorías (P2 security audit); crear/editar solo admin
     "mp": new Set<Accion>(["ver", "editar"]), // editar propios + ver morosidad (filtrado abajo)
     "mp:propios": new Set<Accion>(["ver", "editar"]),
@@ -107,6 +113,11 @@ const MATRIZ: Record<Rol, Record<string, Set<Accion>>> = {
     "notificaciones": new Set<Accion>(["ver"]),
     // H7 — marcar leída es acto propio del destinatario: solo la propia (ABAC en la ruta)
     "notificaciones:propias": new Set<Accion>(["editar"]),
+    // SERIE-FASE2 §V5: la cobranza FI es del administrador; conserjería no la
+    // ejecuta ni ve las preferencias de canal (vacío explícito: corta el
+    // fallback de prefijo hacia `fi`, que tampoco tiene).
+    "fi:cobranza": new Set<Accion>([]),
+    "fi:cobranza:propia": new Set<Accion>([]),
   },
   // Propietario / Residente: estado cuenta propio, pago GC, reserva amenities, reclamos, votos, certificados propios, directorio, IR mantenimiento solo
   residente: {
@@ -138,6 +149,12 @@ const MATRIZ: Record<Rol, Record<string, Set<Accion>>> = {
     "notificaciones:propias": new Set<Accion>(["editar"]),
     // H5 — controles de propiedad: residente solo lee los de su unidad (ABAC en la ruta)
     "ad": new Set<Accion>(["ver"]),
+    // SERIE-FASE2 §V5: el residente no ejecuta la cobranza (vacío explícito: ya
+    // no tenía `fi`), pero SÍ decide por qué canal quiere ser notificado:
+    // `fi:cobranza:propia` ver+editar, con pertenencia validada en la ruta (la
+    // preferencia solo puede tocar su propia persona).
+    "fi:cobranza": new Set<Accion>([]),
+    "fi:cobranza:propia": new Set<Accion>(["ver", "editar"]),
   },
   // Personal de Mantención: lista tareas asignadas + reporte incidentes físicos, IR mantenimiento + interno
   mantencion: {
@@ -164,6 +181,9 @@ const MATRIZ: Record<Rol, Record<string, Set<Accion>>> = {
     "notificaciones": new Set<Accion>(["ver"]),
     // H7 — marcar leída es acto propio del destinatario: solo la propia (ABAC en la ruta)
     "notificaciones:propias": new Set<Accion>(["editar"]),
+    // SERIE-FASE2 §V5: la cobranza FI no es tarea de mantención (vacío explícito).
+    "fi:cobranza": new Set<Accion>([]),
+    "fi:cobranza:propia": new Set<Accion>([]),
   },
 }
 
@@ -327,6 +347,8 @@ export const RECURSOS_CONOCIDOS = [
   "fi",
   "fi:balance",
   "fi:gasto_comun",
+  "fi:cobranza",
+  "fi:cobranza:propia",
   "mp",
   "mp:propios",
   "mp:morosidad",
