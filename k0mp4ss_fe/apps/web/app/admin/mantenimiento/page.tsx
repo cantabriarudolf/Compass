@@ -3,7 +3,6 @@
 import React, { useCallback, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@workspace/ui/components/card';
 import { Button } from '@workspace/ui/components/button';
-import { Checkbox } from '@workspace/ui/components/checkbox';
 import { Badge } from '@workspace/ui/components/badge';
 import {
   Dialog,
@@ -31,7 +30,6 @@ export default function MantenimientoPage() {
   const store = useCompassStore();
 
   const [storeClearDialogOpen, setStoreClearDialogOpen] = useState(false);
-  const [backupToRepo, setBackupToRepo] = useState(false);
   const [storeBackupMsg, setStoreBackupMsg] = useState<{ type: 'ok' | 'error'; text: string } | null>(null);
 
   const exportStore = useCallback(async () => {
@@ -82,11 +80,21 @@ export default function MantenimientoPage() {
         version: STORE_VERSION,
       };
       const jsonStr = JSON.stringify(payload, null, 2);
-      const now = new Date();
-      const stamp = now.toISOString().replace(/[:.]/g, '-').slice(0, 19);
-      const fileName = `compass-backup-${stamp}.json`;
 
-      const blob = new Blob([jsonStr], { type: 'application/json' });
+      // El respaldo lo entrega la API como descarga: el servidor fija el nombre
+      // (fechado) y no escribe nada en su disco, que en producción es efímero.
+      const res = await fetch('/api/backup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: jsonStr }),
+      });
+      if (!res.ok) {
+        const data = (await res.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(data?.error ?? `El servidor respondió ${res.status}`);
+      }
+      const disposicion = res.headers.get('content-disposition');
+      const fileName = disposicion?.match(/filename="([^"]+)"/)?.[1] ?? 'compass-backup.json';
+      const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -94,33 +102,14 @@ export default function MantenimientoPage() {
       a.click();
       URL.revokeObjectURL(url);
 
-      let repoMsg = '';
-      if (backupToRepo) {
-        try {
-          const res = await fetch('/api/backup', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ content: jsonStr, fileName }),
-          });
-          const data = await res.json();
-          if (data.ok) {
-            repoMsg = ` | Copia en: ${data.path}`;
-          } else {
-            repoMsg = ` | Error al guardar en repo: ${data.error}`;
-          }
-        } catch {
-          repoMsg = ` | Error al conectar con el servidor`;
-        }
-      }
-
       setStoreBackupMsg({
         type: 'ok',
-        text: `Backup exportado: ${fileName} — ${totalRecords} registros en ${withData} colecciones${repoMsg}`,
+        text: `Backup descargado: ${fileName} — ${totalRecords} registros en ${withData} colecciones`,
       });
     } catch (e) {
       setStoreBackupMsg({ type: 'error', text: e instanceof Error ? e.message : String(e) });
     }
-  }, [backupToRepo]);
+  }, []);
 
   const confirmStoreClear = useCallback(() => {
     try {
@@ -196,16 +185,9 @@ export default function MantenimientoPage() {
             <Button variant="outline" onClick={exportStore}>
               <IconDownload className="size-4 mr-1" /> Exportar datos
             </Button>
-            <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer select-none">
-              <Checkbox
-                checked={backupToRepo}
-                onCheckedChange={(v) => setBackupToRepo(v === true)}
-              />
-              Guardar copia en Data/NSGC/backups/
-            </label>
           </div>
           <p className="text-xs text-muted-foreground">
-            Genera <code className="font-mono text-xs">compass-backup-YYYY-MM-DD.json</code> con <code className="font-mono text-xs">{`{ state, version }`}</code> y opcionalmente lo guarda en el repo vía <code className="font-mono text-xs">POST /api/backup</code>.
+            Descarga <code className="font-mono text-xs">compass-backup-YYYY-MM-DD_HH-mm.json</code> con <code className="font-mono text-xs">{`{ state, version }`}</code>, generado por <code className="font-mono text-xs">POST /api/backup</code>. El respaldo del servidor (base de datos) es otro: <code className="font-mono text-xs">npm run backup:db</code>.
           </p>
         </CardContent>
       </Card>

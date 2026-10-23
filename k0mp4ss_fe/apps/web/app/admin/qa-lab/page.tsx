@@ -2200,22 +2200,27 @@ export default function QaLabPage() {
       historiaDetalle: HISTORIA.map(h => ({ ...h, estado: getHistoriaEstado(h.rank) })),
     }
     const jsonStr = JSON.stringify(payload, null, 2)
-    const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19)
-    const fileName = `compass-seed-report-${stamp}.json`
-    const blob = new Blob([jsonStr], { type: "application/json" })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement("a")
-    a.href = url
-    a.download = fileName
-    a.click()
-    URL.revokeObjectURL(url)
+    // El comprobante lo entrega la API como descarga: el servidor fija el nombre
+    // (fechado) y no escribe nada en su disco, que en producción es efímero.
     try {
-      const res = await fetch("/api/backup", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ content: jsonStr, fileName }) })
-      const data = await res.json()
-      if (data.ok) setMsg({ type: "ok", text: `Exportado: ${fileName} + copia en ${data.path}` })
-      else setMsg({ type: "ok", text: `Descargado: ${fileName} (repo: ${data.error})` })
+      const res = await fetch("/api/backup", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ content: jsonStr }) })
+      if (!res.ok) {
+        const data = (await res.json().catch(() => null)) as { error?: string } | null
+        setMsg({ type: "error", text: data?.error ?? `El servidor respondió ${res.status}` })
+        return
+      }
+      const disposicion = res.headers.get("content-disposition")
+      const fileName = disposicion?.match(/filename="([^"]+)"/)?.[1] ?? "compass-backup.json"
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = fileName
+      a.click()
+      URL.revokeObjectURL(url)
+      setMsg({ type: "ok", text: `Comprobante descargado: ${fileName}` })
     } catch {
-      setMsg({ type: "ok", text: `Descargado: ${fileName}` })
+      setMsg({ type: "error", text: "Error al conectar con el servidor" })
     }
   }, [report, getHistoriaEstado])
 

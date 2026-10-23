@@ -264,7 +264,6 @@ export default function DevDashboardPage() {
     BackupSummaryItem[] | null
   >(null)
   const [backupDetailOpen, setBackupDetailOpen] = useState(false)
-  const [backupToRepo, setBackupToRepo] = useState(false)
   const [backupDiff, setBackupDiff] = useState<CompassDataDiff | null>(null)
   const storeFileInputRef = useRef<HTMLInputElement>(null)
 
@@ -337,11 +336,24 @@ export default function DevDashboardPage() {
         version: STORE_VERSION,
       }
       const jsonStr = JSON.stringify(payload, null, 2)
-      const now = new Date()
-      const stamp = now.toISOString().replace(/[:.]/g, "-").slice(0, 19)
-      const fileName = `compass-backup-${stamp}.json`
 
-      const blob = new Blob([jsonStr], { type: "application/json" })
+      // El respaldo lo entrega la API como descarga: el servidor fija el nombre
+      // (fechado) y no escribe nada en su disco, que en producción es efímero.
+      const res = await fetch("/api/backup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: jsonStr }),
+      })
+      if (!res.ok) {
+        const data = (await res.json().catch(() => null)) as {
+          error?: string
+        } | null
+        throw new Error(data?.error ?? `El servidor respondió ${res.status}`)
+      }
+      const disposicion = res.headers.get("content-disposition")
+      const fileName =
+        disposicion?.match(/filename="([^"]+)"/)?.[1] ?? "compass-backup.json"
+      const blob = await res.blob()
       const url = URL.createObjectURL(blob)
       const a = document.createElement("a")
       a.href = url
@@ -349,31 +361,12 @@ export default function DevDashboardPage() {
       a.click()
       URL.revokeObjectURL(url)
 
-      let repoMsg = ""
-      if (backupToRepo) {
-        try {
-          const res = await fetch("/api/backup", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ content: jsonStr, fileName }),
-          })
-          const data = await res.json()
-          if (data.ok) {
-            repoMsg = ` | Copia en: ${data.path}`
-          } else {
-            repoMsg = ` | Error al guardar en repo: ${data.error}`
-          }
-        } catch {
-          repoMsg = ` | Error al conectar con el servidor`
-        }
-      }
-
       setBackupSummary(items)
       setBackupDiff(diffCompassData(s, seedData()))
       setBackupDetailOpen(false)
       setStoreBackupMsg({
         type: "ok",
-        text: `Backup exportado: ${fileName} — ${totalRecords} registros en ${withData} colecciones${repoMsg}`,
+        text: `Backup descargado: ${fileName} — ${totalRecords} registros en ${withData} colecciones`,
       })
     } catch (e) {
       setStoreBackupMsg({
@@ -381,7 +374,7 @@ export default function DevDashboardPage() {
         text: e instanceof Error ? e.message : String(e),
       })
     }
-  }, [backupToRepo])
+  }, [])
 
   const onStoreFileChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -848,13 +841,6 @@ export default function DevDashboardPage() {
                 <IconUpload className="mr-1 size-4" /> Importar datos
               </Button>
             </div>
-            <label className="flex cursor-pointer items-center gap-1.5 text-xs text-muted-foreground select-none">
-              <Checkbox
-                checked={backupToRepo}
-                onCheckedChange={(v) => setBackupToRepo(v === true)}
-              />
-              Guardar copia en Data/NSGC/backups/
-            </label>
             {storeBackupMsg && (
               <span
                 className={`text-xs font-medium ${storeBackupMsg.type === "ok" ? "text-emerald-600" : "text-destructive"}`}
