@@ -20,6 +20,7 @@ Blindar la plataforma antes del deploy real del owner: CSP estricta en report-on
 
 - **Runbook de verificación** (SG §3 D-iii, P6): los 5 re-chequeos manuales ahora scripted:
   1. `POST /api/backup` >10 MB → `413` (`MAX_BACKUP_BYTES 10*1024*1024` en `app/api/backup/route.ts:11` con `content-length` + `Buffer.byteLength`).
+     El endpoint **no escribe en el disco del servidor**: responde el respaldo como adjunto `compass-backup-AAAA-MM-DD_HH-mm.json` (la fecha la fija el servidor; el cliente solo aporta el prefijo semántico, p. ej. `compass-seed-report`) con `Cache-Control: no-store`. En producción ese disco es efímero y una copia que se pierde no es un respaldo: el respaldo real de la BD son `backup:db` / `restore:db` (abajo). Guardas intactas: producción → 404, sin sesión → 401, sin rol → 403 con `RP_PERMISSION_DENIED`.
   2. APIs escritura con `APP_ENV=production` (`NEXT_PUBLIC_APP_ENV`/`APP_ENV` → `lib/env-guard.ts:10` `isWriteApiEnabled()=false`) → `404` (`/api/backup`, `/api/dev-dashboard` GET/POST/PUT/PATCH).
   3. Path traversal `changeId` → `404`/sanitizado (`lib/dev-dashboard.ts:464` `SAFE_CHANGE_ID=/^[A-Za-z0-9][A-Za-z0-9._-]*$/` + `readProjectFile` allowlist `ALLOWED_FILE_PREFIXES`). Ej. `toggleTask("../../etc/passwd")` → null.
   4. `GET /admin/*` sin cookie → `307/308` redirect a `/ingresar?next=` (`proxy.ts:65` `encodeURIComponent(pathname)`).
