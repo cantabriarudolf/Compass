@@ -407,6 +407,14 @@ export const EnvioCOSchema = z.object({
   lecturas: z.array(IdEntidadSchema),
 })
 
+// Desglose nominativo de lecturas de un envío (change co-lectura-residente, D5):
+// una pareja persona/fecha por destinatario. Reservado al administrador y sin
+// exportación; no incluye RUT, IP ni user-agent (D6).
+export const LecturaEnvioCOSchema = z.object({
+  personaId: IdEntidadSchema,
+  leidoEn: z.string().nullable(),
+})
+
 export const ClasificacionBuzonSchema = z.enum([
   "felicitacion",
   "sugerencia",
@@ -1987,6 +1995,7 @@ export type ActaGD = z.infer<typeof ActaGDSchema>
 export type PlantillaCO = z.infer<typeof PlantillaCOSchema>
 export type DestinatarioEnvio = z.infer<typeof DestinatarioEnvioSchema>
 export type EnvioCO = z.infer<typeof EnvioCOSchema>
+export type LecturaEnvioCO = z.infer<typeof LecturaEnvioCOSchema>
 export type ClasificacionBuzon = z.infer<typeof ClasificacionBuzonSchema>
 export type EstadoBuzonCO = z.infer<typeof EstadoBuzonCOSchema>
 export type RespuestaBuzonCO = z.infer<typeof RespuestaBuzonCOSchema>

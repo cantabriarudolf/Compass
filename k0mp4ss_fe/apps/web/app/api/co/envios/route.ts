@@ -6,14 +6,13 @@
  * pertenencia se resuelven acá. Cada rol recibe un shape distinto y el residente
  * solo ve los envíos donde figura en `EnvioDestinatarioCO`.
  *
- * POST sigue en la factory genérica (alta de difusión con authz `co`) hasta la
- * tarea 1.6, que la reemplaza por la escritura transaccional de la tabla.
+ * POST a medida (tarea 1.6): el alta escribe el envío, sus filas de
+ * `EnvioDestinatarioCO` y el `lecturas` derivado en una sola `$transaction`.
  */
 import { EnvioCOSchema } from "@/lib/schemas"
 import { puede } from "@/lib/authz"
 import { prisma } from "@/lib/prisma"
 import { logger } from "@/lib/logger"
-import { createCrudHandlers, delegado } from "@/lib/api/crud-factory"
 import { jsonError, withComunidadScope } from "@/lib/api/with-comunidad-scope"
 import { personaIdDelUsuarioDb } from "@/lib/api/sesion-persona"
 import {
@@ -22,12 +21,7 @@ import {
   rolProyeccion,
   whereEnvios,
 } from "../_lib/proyeccion-envio"
-
-const handlers = createCrudHandlers({
-  model: delegado(prisma.envioCO),
-  schema: EnvioCOSchema,
-  authzCheck: (rol, accion) => puede(rol, accion, "co"),
-})
+import { escribirEnvioCO } from "../_lib/escritura-envio"
 
 export async function GET(req: Request): Promise<Response> {
   const resultado = await withComunidadScope()
@@ -80,4 +74,57 @@ export async function GET(req: Request): Promise<Response> {
   }
 }
 
-export const POST = handlers.POST
+export async function POST(req: Request): Promise<Response> {
+  const resultado = await withComunidadScope()
+  if (!resultado.ok) return resultado.response
+  const { scope } = resultado
+
+  const body: unknown = await req.json().catch(() => null)
+  if (body === null || typeof body !== "object" || Array.isArray(body)) {
+    return jsonError(400, "Cuerpo JSON inválido.")
+  }
+
+  const parsed = EnvioCOSchema.safeParse(body)
+  if (!parsed.success) {
+    return jsonError(400, "Datos inválidos.", { detalles: parsed.error.flatten() })
+  }
+  const datos = parsed.data
+  const id = typeof datos.id === "string" ? datos.id : undefined
+  if (!id) return jsonError(400, "El identificador (id) es obligatorio.")
+
+  try {
+    const existente = await prisma.envioCO.findUnique({
+      where: { id },
+      select: { comunidadId: true },
+    })
+    // Upsert sobre un registro de OTRA comunidad → 404 (sin filtrar existencia)
+    if (existente && existente.comunidadId !== scope.comunidadId) {
+      return jsonError(404, "Registro no encontrado.")
+    }
+    if (!puede(scope.rol, existente ? "editar" : "crear", "co")) {
+      return jsonError(403, "Permiso denegado.")
+    }
+
+    await prisma.$transaction((tx) =>
+      escribirEnvioCO(
+        tx,
+        {
+          id,
+          comunidadId: scope.comunidadId,
+          asunto: datos.asunto,
+          cuerpo: datos.cuerpo,
+          plantillaId: datos.plantillaId ?? null,
+          fechaEnvio: datos.fechaEnvio,
+          destinatarios: datos.destinatarios,
+          lecturas: datos.lecturas,
+        },
+        { crear: !existente }
+      )
+    )
+    const record = await prisma.envioCO.findUnique({ where: { id } })
+    return Response.json(record, { status: existente ? 200 : 201 })
+  } catch (e) {
+    logger.error({ err: e }, "[api/co/envios] error en POST")
+    return jsonError(500, "Error interno del servidor.")
+  }
+}
