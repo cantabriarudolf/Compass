@@ -9,10 +9,22 @@ export const dynamic = 'force-dynamic';
 
 const MAX_BACKUP_BYTES = 10 * 1024 * 1024; // 10 MB
 
-/** Nombre del archivo fijado por el servidor (`compass-backup-YYYY-MM-DD_HH-mm.json`). */
-function nombreBackupServidor(now = new Date()): string {
+const PREFIJO_POR_DEFECTO = 'compass-backup';
+const PREFIJO_VALIDO = /^[a-zA-Z0-9-]{1,60}$/;
+
+/**
+ * Nombre del archivo: `<prefijo>-YYYY-MM-DD_HH-mm.json`.
+ *
+ * La FECHA la fija siempre el servidor: el reloj del cliente puede faltar o estar
+ * mal, y un respaldo sin fecha no sirve. El prefijo solo aporta semántica
+ * (`compass-backup` por defecto, `compass-seed-report` para el comprobante del
+ * QA-Lab); si no es válido se cae al de por defecto. `fileName` del cliente no
+ * se usa.
+ */
+function nombreBackupServidor(prefijo: string | undefined, now = new Date()): string {
+  const limpio = prefijo && PREFIJO_VALIDO.test(prefijo) ? prefijo : PREFIJO_POR_DEFECTO;
   const iso = now.toISOString(); // 2026-10-23T15:11:12.345Z
-  return `compass-backup-${iso.slice(0, 10)}_${iso.slice(11, 16).replace(':', '-')}.json`;
+  return `${limpio}-${iso.slice(0, 10)}_${iso.slice(11, 16).replace(':', '-')}.json`;
 }
 
 export async function POST(request: Request) {
@@ -34,8 +46,17 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Usuario no encontrado o inactivo' }, { status: 401 });
   }
 
-  const comunidadId =
-    request.headers.get('x-comunidad-id') ?? request.headers.get('x-comunidadId') ?? new URL(request.url).searchParams.get('comunidadId');
+  const desdeHeader =
+    request.headers.get('x-comunidad-id') ?? request.headers.get('x-comunidadId');
+  // `new URL` lanza TypeError con una request malformada: sin el resguardo el
+  // handler respondería 500 en vez de seguir su flujo normal (403 o 200).
+  let desdeQuery: string | null = null;
+  try {
+    desdeQuery = new URL(request.url).searchParams.get('comunidadId');
+  } catch {
+    desdeQuery = null;
+  }
+  const comunidadId = desdeHeader ?? desdeQuery;
   let membresia: { rol: string } | null = null;
   if (comunidadId) {
     membresia = await prisma.membresia.findFirst({ where: { usuarioId: usuario.id, comunidadId } });
@@ -69,19 +90,21 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Cuerpo JSON inválido' }, { status: 400 });
     }
 
-    // `fileName` del cliente ya no se usa: si el nombre viniera del cliente, el archivo
-    // podría quedar sin fecha o con una fecha falsa. El nombre lo fija el servidor.
-    const { content } = (body ?? {}) as Record<string, unknown>;
+    // La fecha del nombre la fija el servidor; el cliente solo aporta el prefijo
+    // semántico. `fileName` ya no se usa (un nombre del cliente podría quedar sin
+    // fecha o con una falsa).
+    const { content, prefijo } = (body ?? {}) as Record<string, unknown>;
     if (!content || typeof content !== 'string') {
       return NextResponse.json({ error: 'content es requerido' }, { status: 400 });
     }
+    const prefijoValido = typeof prefijo === 'string' ? prefijo : undefined;
 
     // El disco del servidor es efímero en producción: la copia viaja como descarga.
     return new NextResponse(content, {
       status: 200,
       headers: {
         'Content-Type': 'application/json; charset=utf-8',
-        'Content-Disposition': `attachment; filename="${nombreBackupServidor()}"`,
+        'Content-Disposition': `attachment; filename="${nombreBackupServidor(prefijoValido)}"`,
         'Cache-Control': 'no-store',
       },
     });

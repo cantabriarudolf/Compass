@@ -91,7 +91,10 @@ describe("POST /api/backup — el respaldo baja como descarga fechada", () => {
     else process.env.NEXT_PUBLIC_APP_ENV = originalAppEnv
   })
 
-  async function postBackup(content: string): Promise<Response> {
+  async function postBackup(
+    content: string,
+    extra: Record<string, unknown> = {}
+  ): Promise<Response> {
     const admin = await prisma.usuario.findUnique({ where: { email: EMAIL_ADMIN } })
     if (!admin) throw new Error("admin de prueba no encontrado")
     const { cookieSesionAuthjs } = await import("../helpers/sesion-authjs")
@@ -106,7 +109,7 @@ describe("POST /api/backup — el respaldo baja como descarga fechada", () => {
         cookie: state.cookie,
       },
       // el cliente todavía manda `fileName`: el servidor debe ignorarlo
-      body: JSON.stringify({ content, fileName: "nombre-del-cliente-sin-fecha.json" }),
+      body: JSON.stringify({ content, fileName: "nombre-del-cliente-sin-fecha.json", ...extra }),
     })
     const res = await POST(req as never)
     state.cookie = ""
@@ -143,5 +146,21 @@ describe("POST /api/backup — el respaldo baja como descarga fechada", () => {
     const res = await postBackup('{"state":{},"version":28}')
     expect(res.status).toBe(200)
     expect(listarBackups()).toEqual(backupsAntes)
+  })
+
+  it("el prefijo semántico del cliente se conserva; la fecha la sigue poniendo el servidor", async () => {
+    const res = await postBackup('{"state":{},"version":28}', { prefijo: "compass-seed-report" })
+    expect(res.status).toBe(200)
+    expect(res.headers.get("content-disposition")).toMatch(
+      /^attachment; filename="compass-seed-report-\d{4}-\d{2}-\d{2}_\d{2}-\d{2}\.json"$/
+    )
+  })
+
+  it("un prefijo inválido cae al nombre por defecto (no se cuela un path)", async () => {
+    const res = await postBackup('{"state":{},"version":28}', { prefijo: "../../etc/passwd" })
+    expect(res.status).toBe(200)
+    expect(res.headers.get("content-disposition")).toMatch(
+      /^attachment; filename="compass-backup-\d{4}-\d{2}-\d{2}_\d{2}-\d{2}\.json"$/
+    )
   })
 })

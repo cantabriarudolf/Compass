@@ -2203,7 +2203,7 @@ export default function QaLabPage() {
     // El comprobante lo entrega la API como descarga: el servidor fija el nombre
     // (fechado) y no escribe nada en su disco, que en producción es efímero.
     try {
-      const res = await fetch("/api/backup", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ content: jsonStr }) })
+      const res = await fetch("/api/backup", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ content: jsonStr, prefijo: "compass-seed-report" }) })
       if (!res.ok) {
         const data = (await res.json().catch(() => null)) as { error?: string } | null
         setMsg({ type: "error", text: data?.error ?? `El servidor respondió ${res.status}` })
