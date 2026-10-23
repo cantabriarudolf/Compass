@@ -52,6 +52,7 @@ const usuarios = {
 }
 
 const moduloLeer = () => import("@/app/api/co/envios/[id]/leer/route")
+const moduloDetalle = () => import("@/app/api/co/envios/[id]/route")
 
 const leer = (id = ENV) =>
   invocarApi(moduloLeer(), "POST", "co/envios/[id]/leer", { params: { id } })
@@ -213,7 +214,17 @@ describe("POST /api/co/envios/[id]/leer — registro en la tabla (S6)", () => {
     expect((await fila(P_A))?.leidoEn).not.toBeNull()
     expect((await fila(P_B))?.leidoEn).not.toBeNull()
 
-    const derivadas = await lecturasDerivadas()
-    expect(derivadas.sort()).toEqual([P_A, P_B].sort())
+    // La tabla es la fuente de verdad (D3). La respuesta que ve la Administración se
+    // deriva de ella, no del JSON persistido: `_lib/proyeccion-envio.ts` declara que
+    // `EnvioCO.lecturas` «se ignora por completo (está derivada y puede quedar vieja)».
+    // Con escritura concurrente ese JSON puede quedarse corto (PostgreSQL lo expone),
+    // así que se afirma el contrato observable y no la caché.
+    const detalle = await conSesion(usuarios.admin, () =>
+      invocarApi(moduloDetalle(), "GET", "co/envios/[id]", { params: { id: ENV } })
+    )
+    expect(detalle.status).toBe(200)
+    const cuerpo = await cuerpoJson<{ lecturas?: string[]; totalLecturas?: number }>(detalle)
+    expect(cuerpo.totalLecturas).toBe(2)
+    expect([...(cuerpo.lecturas ?? [])].sort()).toEqual([P_A, P_B].sort())
   })
 })
