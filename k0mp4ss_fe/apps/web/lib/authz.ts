@@ -80,6 +80,13 @@ const MATRIZ: Record<Rol, Record<string, Set<Accion>>> = {
     // owner (hoy ninguna ruta la solicita sobre gd).
     "gd": new Set<Accion>(["ver", "crear", "editar", "eliminar", "ejecutar"]),
     "ad": new Set<Accion>(["ver", "crear", "editar", "eliminar", "ejecutar"]),
+    // CO (comunicación con vecinos, change co-lectura-residente D4): el comité ve y crea
+    // difusiones y usa el buzón ciudadano, pero no edita/elimina lo ya emitido. El desglose
+    // nominativo de lecturas (`co:lecturas`) queda VACÍO explícito: sin esa entrada caería
+    // al prefijo `co` y el comité vería quién leyó cada comunicación de los vecinos.
+    "co": new Set<Accion>(["ver", "crear"]),
+    "co:buzon": new Set<Accion>(["ver", "crear"]),
+    "co:lecturas": new Set<Accion>([]),
     // explícitamente sin permisos: FI crear/editar/eliminar, PE bitacora, PL, IR:interno, admin:usuarios, backup
   },
   // Conserjería / Seguridad: bitácora, visitas, encomiendas, iniciar/cerrar turno, directorio, reporte diario PE, IR mantenimiento
@@ -137,7 +144,15 @@ const MATRIZ: Record<Rol, Record<string, Set<Accion>>> = {
     "ir:interno": new Set<Accion>([]), // bloqueado
     "ra": new Set<Accion>(["ver", "crear"]), // reserva amenities (ABAC propia)
     "ge": new Set<Accion>(["ver", "crear"]),
-    "co": new Set<Accion>(["ver", "crear"]),
+    // CO — cambio co-lectura-residente (D-3/D4): el residente LEE las comunicaciones
+    // (el alcance «solo las propias» es ABAC por destinatario en la ruta, S2/S3) y ya no
+    // emite difusiones masivas a toda la comunidad. Escribe por el buzón ciudadano,
+    // recurso propio (`co:buzon`) para que quitar `crear` de la difusión no le cierre
+    // el canal de reclamos/sugerencias. `co:lecturas` (desglose nominativo de quién leyó)
+    // es del administrador: vacío explícito para cortar el fallback de prefijo hacia `co`.
+    "co": new Set<Accion>(["ver"]),
+    "co:buzon": new Set<Accion>(["ver", "crear"]),
+    "co:lecturas": new Set<Accion>([]),
     "gd": new Set<Accion>(["ver"]), // actas según residenteVeActas (ABAC)
     "cv": new Set<Accion>(["ver"]), // visor de avisos: solo lectura (decisión owner 2026-10-21)
     // in: el residente no ve ni edita el expediente; solo presenta los descargos de SU propia
@@ -379,6 +394,8 @@ export const RECURSOS_CONOCIDOS = [
   "ra",
   "ge",
   "co",
+  "co:buzon",
+  "co:lecturas",
   "gd",
   "cv",
   "in",

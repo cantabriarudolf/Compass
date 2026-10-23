@@ -646,3 +646,57 @@ describe("lib/authz — recurso fi:cobranza (cobranza FI multicanal, SERIE-FASE2
     expect(puede("administrador", "editar", "fi:cobranza:propia")).toBe(true)
   })
 })
+
+describe("lib/authz — recursos co, co:buzon y co:lecturas (difusión vs buzón, change co-lectura-residente S5)", () => {
+  it("administrador — difunde, opera el buzón y consulta el desglose nominativo", () => {
+    for (const accion of ["ver", "crear", "editar", "eliminar"] as const) {
+      expect(puede("administrador", accion, "co")).toBe(true)
+    }
+    for (const accion of ["ver", "crear", "editar"] as const) {
+      expect(puede("administrador", accion, "co:buzon")).toBe(true)
+    }
+    expect(puede("administrador", "ver", "co:lecturas")).toBe(true)
+  })
+
+  it("comité — ve y crea difusión y buzón, pero no consulta el desglose nominativo", () => {
+    expect(puede("comite", "ver", "co")).toBe(true)
+    expect(puede("comite", "crear", "co")).toBe(true)
+    expect(puede("comite", "editar", "co")).toBe(false)
+    expect(puede("comite", "eliminar", "co")).toBe(false)
+    expect(puede("comite", "ver", "co:buzon")).toBe(true)
+    expect(puede("comite", "crear", "co:buzon")).toBe(true)
+    expect(puede("comite", "editar", "co:buzon")).toBe(false)
+    // Sin entrada explícita, `co:lecturas` caería al prefijo `co` (ver + crear) y el
+    // comité vería la lectura de los vecinos: el vacío explícito es la guarda.
+    expect(puede("comite", "ver", "co:lecturas")).toBe(false)
+  })
+
+  it("residente — NO emite difusiones (D-3); solo lee las propias y escribe por el buzón", () => {
+    expect(puede("residente", "crear", "co")).toBe(false)
+    expect(puede("residente", "editar", "co")).toBe(false)
+    expect(puede("residente", "eliminar", "co")).toBe(false)
+    // `ver` se conserva: el alcance por destinatario es ABAC en la ruta (S2/S3).
+    expect(puede("residente", "ver", "co")).toBe(true)
+    expect(puede("residente", "ver", "co:buzon")).toBe(true)
+    expect(puede("residente", "crear", "co:buzon")).toBe(true)
+    expect(puede("residente", "editar", "co:buzon")).toBe(false)
+    expect(puede("residente", "ver", "co:lecturas")).toBe(false)
+  })
+
+  it("conserjería y mantención no tocan ningún recurso CO", () => {
+    for (const rol of ["conserjeria", "mantencion"] as const) {
+      for (const recurso of ["co", "co:buzon", "co:lecturas"]) {
+        expect(puede(rol, "ver", recurso)).toBe(false)
+        expect(puede(rol, "crear", recurso)).toBe(false)
+      }
+    }
+  })
+
+  it("co:lecturas — vacío explícito corta el fallback de prefijo para todo rol no administrador", () => {
+    const matriz = matrizPermisos()
+    expect(matriz.administrador.find((e) => e.recurso === "co:lecturas")).toBeUndefined() // wildcard
+    for (const rol of ["comite", "residente"] as const) {
+      expect(matriz[rol].find((e) => e.recurso === "co:lecturas")!.acciones).toEqual([])
+    }
+  })
+})
