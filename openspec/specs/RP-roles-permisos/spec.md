@@ -2,7 +2,9 @@
 
 ## Purpose
 Gestionar quién puede ver, crear, editar, eliminar o ejecutar acciones dentro de GECOS mediante un modelo de control de acceso basado en roles (RBAC), con soporte futuro para permisos contextuales (ABAC). Fuente de verdad: `Data/NSGC/docs/especificaciones/RP - Roles y Permisos.md`.
+
 ## Requirements
+
 ### Requirement: Modelo RBAC
 The system MUST use Role-Based Access Control to authorize users.
 
@@ -243,3 +245,26 @@ El plan de pruebas MUST incluir login y journeys reales por cada rol estándar, 
 - **WHEN** se ejecuta `e2e/auth/roles-menu.spec.ts` tras la ampliación de `data.navMain`
 - **THEN** MUST seguir verde con la matriz ampliada (`comite` 4/8, `mantencion` 3/8, `conserjeria` 3/8, `residente` 4/8, `administrador` 8/8) y granularidad de items (`Remuneraciones:["administrador"]` oculto para no-admin; `Recursos y EPP`/`Mantenimiento` visibles para `mantencion`).
 
+### Requirement: Recursos de Comunicación con Vecinos
+
+La matriz de permisos MUST distinguir la difusión masiva del buzón ciudadano y MUST
+reservar el desglose nominativo de lecturas al rol administrador.
+Un residente MUST poder escribir por el buzón y MUST NOT poder emitir difusiones.
+
+#### Scenario: Difusión separada del buzón
+- **WHEN** se consulta la matriz de permisos
+- **THEN** existen los recursos `co` (difusión), `co:buzon` (buzón ciudadano) y `co:lecturas` (desglose nominativo)
+- **AND** `co` y `co:buzon` no comparten las mismas acciones por rol
+
+#### Scenario: El residente no emite difusiones
+- **WHEN** un residente intenta crear una difusión con `POST /api/co/envios`
+- **THEN** el sistema responde 403
+- **AND** emite el evento `RP_PERMISSION_DENIED`
+
+#### Scenario: El residente escribe por el buzón
+- **WHEN** un residente crea un mensaje con `POST /api/co/mensajes-buzon`
+- **THEN** el sistema acepta la creación
+
+#### Scenario: Desglose nominativo reservado
+- **WHEN** se consulta la matriz de permisos
+- **THEN** el recurso `co:lecturas` solo otorga `ver` al rol administrador
