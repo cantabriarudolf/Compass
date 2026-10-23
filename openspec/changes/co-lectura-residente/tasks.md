@@ -14,12 +14,13 @@ comportamiento. TDD: se observa RED antes de implementar.
 - **S7** — La bandeja muestra los tres textos informativos de tratamiento de datos del dictamen, literales.
 - **S8** — `EnvioDestinatarioCO` es la única fuente de pertenencia y lectura; el backfill desde las columnas JSON es idempotente y está en los dos schemas (Postgres y SQLite).
 - **S9** — El badge «X/Y leídos» del administrador sale de las lecturas reales y declara que es un dato de recepción del canal, no una notificación legal.
+- **S10** — El buzón ciudadano respeta la pertenencia y `visibilidadComite`: el residente solo recibe sus propios reportes, el comité solo los visibles, y el reportante se toma de la sesión, nunca del cuerpo del pedido.
 
 ## Tasks
 
 - [ ] 1.1 — Migración `EnvioDestinatarioCO` en `schema.prisma` y `schema.sqlite.prisma` + backfill SQL idempotente desde `destinatarios`/`lecturas` + test de conteo · Specs S8 · commit `feat(co): modelo relacional de destinatarios y lecturas`
 - [ ] 1.2 — Matriz de permisos: `co`, `co:buzon`, `co:lecturas`; `mensajes-buzon` usa `co:buzon`; tests de matriz (rojo primero: residente con `crear` en `co`) · Specs S5 · commit `feat(co): separa difusión de buzón en la matriz de permisos`
-- [ ] 1.3 — `GET /api/co/envios` y `/[id]`: filtro por pertenencia y proyección por rol; 404 indistinguible; tests de API con BD real · Specs S2, S3 · commit `feat(co): el residente solo recibe sus comunicaciones`
+- [ ] 1.3 — `GET /api/co/envios` y `/[id]`: filtro por pertenencia y proyección por rol; 404 indistinguible; **y el buzón ciudadano**: colección y `[id]` sobre `co:buzon`, residente solo sus propios reportes, comité solo `visibilidadComite`, `reportantePersonaId` derivado de la sesión. Tests de API con BD real · Specs S2, S3, S10 · commit `feat(co): el residente solo recibe sus comunicaciones`
 - [ ] 1.4 — `POST /api/co/envios/[id]/leer` sobre la tabla (update condicional, idempotente) + test de concurrencia con dos lecturas simultáneas · Specs S6, S8 · commit `fix(co): la lectura se registra sin perder lecturas concurrentes`
 - [ ] 1.5 — `GET /api/co/envios/[id]/lecturas` admin-only + evento `CO_LECTURA_CONSULTADA` + tests de 403/200/evento · Specs S4 · commit `feat(co): desglose nominativo de lecturas auditado`
 - [ ] 1.6 — `lib/api/use-co.ts`: hook de lectura y de desglose; el alta de envíos escribe tabla + snapshot en `$transaction` · Specs S6, S8 · commit `feat(co): hooks de lectura y desglose`

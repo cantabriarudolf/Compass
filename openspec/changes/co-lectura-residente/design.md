@@ -114,6 +114,18 @@ legal/consentimiento (Ley 19.628 art. 4), con aviso previo visible. No se invoca
 excepción del art. 4 inc. 5 (uso interno de personas jurídicas) como base general: cubre
 estadística interna, no seguimiento individual.
 
+### D7 — El administrador sí puede registrar un reclamo a nombre de un vecino
+
+En el buzón ciudadano, residente y comité solo pueden reportar por sí mismos: el
+`reportantePersonaId` y el `reportanteNombre` se derivan de la sesión y el cuerpo del
+pedido se ignora. El **administrador** es la excepción declarada: la consola CO registra
+reclamos recibidos en la oficina a nombre de un vecino, así que su cuerpo sí se respeta,
+validado contra la comunidad y con el nombre resuelto desde `Persona`.
+
+**Por qué:** derivarlo del admin atribuiría todos los reclamos recibidos al administrador
+y rompería el flujo real de la oficina. El escenario de la spec está redactado sobre el
+residente, que es el actor que no puede falsificar identidad.
+
 ## Textos de UI
 
 Los tres textos los fija el dictamen y se implementan literales:

@@ -80,6 +80,30 @@ para qué finalidad y que ningún vecino accede a ella.
 - **THEN** la pantalla muestra el aviso de registro de lectura y el aviso de tratamiento de datos
 - **AND** el aviso nombra la finalidad y la base de licitud
 
+### Requirement: Privacidad del Buzón Ciudadano
+
+El buzón ciudadano MUST respetar la pertenencia del reporte y la bandera `visibilidadComite`.
+El residente MUST NOT recibir reportes de otros vecinos, y el reportante MUST derivarse de la
+sesión, nunca del cuerpo del pedido.
+
+#### Scenario: El residente solo ve sus propios reportes
+- **WHEN** un residente consulta `GET /api/co/mensajes-buzon`
+- **THEN** recibe únicamente los mensajes cuyo `reportantePersonaId` es el suyo
+
+#### Scenario: Visibilidad al comité
+- **WHEN** un usuario con rol comité consulta el buzón
+- **THEN** recibe los mensajes marcados con `visibilidadComite`
+- **AND** no recibe los que no lo están
+
+#### Scenario: Detalle ajeno no filtra existencia
+- **WHEN** un residente pide `GET /api/co/mensajes-buzon/[id]` de un mensaje que no es suyo
+- **THEN** el sistema responde 404
+
+#### Scenario: El reportante sale de la sesión
+- **WHEN** un residente crea un mensaje en el buzón
+- **THEN** el `reportantePersonaId` se toma de la sesión
+- **AND** el valor enviado en el cuerpo del pedido se ignora
+
 ## MODIFIED Requirements
 
 ### Requirement: Confirmación de Lectura
