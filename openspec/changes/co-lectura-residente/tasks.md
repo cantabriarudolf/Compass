@@ -18,17 +18,17 @@ comportamiento. TDD: se observa RED antes de implementar.
 
 ## Tasks
 
-- [ ] 1.1 — Migración `EnvioDestinatarioCO` en `schema.prisma` y `schema.sqlite.prisma` + backfill SQL idempotente desde `destinatarios`/`lecturas` + test de conteo · Specs S8 · commit `feat(co): modelo relacional de destinatarios y lecturas`
-- [ ] 1.2 — Matriz de permisos: `co`, `co:buzon`, `co:lecturas`; `mensajes-buzon` usa `co:buzon`; tests de matriz (rojo primero: residente con `crear` en `co`) · Specs S5 · commit `feat(co): separa difusión de buzón en la matriz de permisos`
-- [ ] 1.3 — `GET /api/co/envios` y `/[id]`: filtro por pertenencia y proyección por rol; 404 indistinguible; **y el buzón ciudadano**: colección y `[id]` sobre `co:buzon`, residente solo sus propios reportes, comité solo `visibilidadComite`, `reportantePersonaId` derivado de la sesión. Tests de API con BD real · Specs S2, S3, S10 · commit `feat(co): el residente solo recibe sus comunicaciones`
-- [ ] 1.4 — `POST /api/co/envios/[id]/leer` sobre la tabla (update condicional, idempotente) + test de concurrencia con dos lecturas simultáneas · Specs S6, S8 · commit `fix(co): la lectura se registra sin perder lecturas concurrentes`
-- [ ] 1.5 — `GET /api/co/envios/[id]/lecturas` admin-only + evento `CO_LECTURA_CONSULTADA` + tests de 403/200/evento · Specs S4 · commit `feat(co): desglose nominativo de lecturas auditado`
-- [ ] 1.6 — `lib/api/use-co.ts`: hook de lectura y de desglose; el alta de envíos escribe tabla + snapshot en `$transaction` · Specs S6, S8 · commit `feat(co): hooks de lectura y desglose`
-- [ ] 1.7 — `app/comunidad/comunicacion/page.tsx`: elimina el selector `vista`, deriva el rol de la sesión y extrae `components/co/bandeja-residente.tsx` con los textos de S7 · Specs S1, S7 · commit `feat(co): bandeja del residente derivada del rol`
-- [ ] 1.8 — Badge «X/Y leídos» desde lecturas reales + texto de S9 · Specs S9 · commit `feat(co): el badge de lecturas mide lecturas reales`
-- [ ] 1.9 — e2e: el residente abre una comunicación y el admin ve 1/N; el residente no ve la consola del admin · Specs S1, S2, S6 · commit `test(co): e2e de lectura del residente`
+- [x] 1.1 — Migración `EnvioDestinatarioCO` en `schema.prisma` y `schema.sqlite.prisma` + backfill SQL idempotente desde `destinatarios`/`lecturas` + test de conteo · Specs S8 · commit `feat(co): modelo relacional de destinatarios y lecturas`
+- [x] 1.2 — Matriz de permisos: `co`, `co:buzon`, `co:lecturas`; `mensajes-buzon` usa `co:buzon`; tests de matriz (rojo primero: residente con `crear` en `co`) · Specs S5 · commit `feat(co): separa difusión de buzón en la matriz de permisos`
+- [x] 1.3 — `GET /api/co/envios` y `/[id]`: filtro por pertenencia y proyección por rol; 404 indistinguible; **y el buzón ciudadano**: colección y `[id]` sobre `co:buzon`, residente solo sus propios reportes, comité solo `visibilidadComite`, `reportantePersonaId` derivado de la sesión. Tests de API con BD real · Specs S2, S3, S10 · commit `feat(co): el residente solo recibe sus comunicaciones`
+- [x] 1.4 — `POST /api/co/envios/[id]/leer` sobre la tabla (update condicional, idempotente) + test de concurrencia con dos lecturas simultáneas · Specs S6, S8 · commit `fix(co): la lectura se registra sin perder lecturas concurrentes`
+- [x] 1.5 — `GET /api/co/envios/[id]/lecturas` admin-only + evento `CO_LECTURA_CONSULTADA` + tests de 403/200/evento · Specs S4 · commit `feat(co): desglose nominativo de lecturas auditado`
+- [x] 1.6 — `lib/api/use-co.ts`: hook de lectura y de desglose; el alta de envíos escribe tabla + snapshot en `$transaction` · Specs S6, S8 · commit `feat(co): hooks de lectura y desglose`
+- [x] 1.7 — `app/comunidad/comunicacion/page.tsx`: elimina el selector `vista`, deriva el rol de la sesión y extrae `components/co/bandeja-residente.tsx` con los textos de S7 · Specs S1, S7 · commit `feat(co): bandeja del residente derivada del rol`
+- [x] 1.8 — Badge «X/Y leídos» desde lecturas reales + texto de S9 · Specs S9 · commit `feat(co): el badge de lecturas mide lecturas reales`
+- [x] 1.9 — e2e: el residente abre una comunicación y el admin ve 1/N; el residente no ve la consola del admin · Specs S1, S2, S6 · commit `test(co): e2e de lectura del residente`
 - [ ] 1.10 — Gates: `tsc --noEmit`, `npm run lint`, `npm test`, lane e2e, `npm run audit:desvios`, `openspec validate --all`, `check-delta-coverage co-lectura-residente` · orquestador · commit `chore(co): gates del change`
-- [ ] 1.11 — Verificación independiente (`gentle-ai-verify`) sobre el diff: alto riesgo por autorización y migración · orquestador
+- [x] 1.11 — Verificación independiente (`gentle-ai-verify`) sobre el diff: alto riesgo por autorización y migración · orquestador
 - [ ] 1.12 — Docs: manual CO + avance NSGC, `PENDIENTES-FUNCIONALIDAD` F1 → Hecho, `BACKLOG-100` · orquestador · commit `docs(openspec): F1 cerrada y deuda actualizada`
 
 ## Orden y dependencias
