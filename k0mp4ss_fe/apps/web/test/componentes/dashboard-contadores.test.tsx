@@ -50,7 +50,7 @@ function fondo(id: string, activo: boolean): FondoFI {
   return {
     id,
     nombre: `Fondo ${id}`,
-    tipo: "gastos-comunes",
+    tipo: "gasto_comun",
     activo,
   }
 }
