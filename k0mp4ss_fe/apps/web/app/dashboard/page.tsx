@@ -126,6 +126,15 @@ export default function DashboardPage() {
     [unidades]
   )
 
+  // El KPI dice "activas", así que cuenta solo lo activo: `FondoFI.activo` existe en el
+  // modelo (prisma/schema.prisma:889) y en el contrato del cliente (lib/schemas.ts:1154).
+  // Antes era `fondosFI.length` con el rótulo "activas": el número incluía fondos dados
+  // de baja y mentía con el texto que lo acompañaba.
+  const fondosActivos = React.useMemo(
+    () => fondosFI.filter((f) => f.activo).length,
+    [fondosFI]
+  )
+
   if (isLoading) {
     return (
       <div className="flex flex-col gap-6 animate-pulse">
@@ -204,8 +213,12 @@ export default function DashboardPage() {
         />
         <KpiCard
           label="Fondos FI"
-          value={fondosFI.length}
-          sub="Cajas financieras activas"
+          value={fondosActivos}
+          sub={
+            fondosFI.length === fondosActivos
+              ? "Cajas financieras activas"
+              : `Cajas financieras activas · ${fondosFI.length - fondosActivos} dadas de baja`
+          }
           href="/finanzas/gastos-comunes"
           icon={IconReceipt}
         />
