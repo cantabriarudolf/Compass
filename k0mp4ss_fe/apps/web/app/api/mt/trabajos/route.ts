@@ -24,6 +24,7 @@ import {
 } from "@/lib/api/with-comunidad-scope"
 import { errorGenerico } from "@/app/api/personas/route"
 import { registrarEventoMT, siguienteFolioMT } from "../_acciones"
+import { verificarGarantiasAlLeer } from "../_garantias"
 
 const modelo = delegado(prisma.trabajoMT)
 
@@ -33,7 +34,15 @@ const handlers = createCrudHandlers({
   authzCheck: (rol, accion) => puede(rol, accion, "mt"),
 })
 
-export const GET = handlers.GET
+export async function GET(req: Request): Promise<Response> {
+  // Garantías resueltas al leer (decisión owner 2026-10-22): antes la alerta solo
+  // se emitía al pulsar "Verificar garantías". Best-effort: si falla, se loguea y
+  // la lista responde igual; la verificación nunca puede tumbar la lectura.
+  await withComunidadScope()
+    .then((r) => (r.ok ? verificarGarantiasAlLeer(r.scope) : 0))
+    .catch((e) => logger.error({ err: e }, "[mt/trabajos] garantías al leer"))
+  return handlers.GET(req)
+}
 
 /**
  * Entrada del POST: el folio y los defaults del store los completa el servidor

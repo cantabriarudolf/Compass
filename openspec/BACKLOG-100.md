@@ -512,12 +512,18 @@ Playwright, que nombra la fase y el motivo.
 
 **Cuatro construcciones decididas por el owner y aún no implementadas:**
 
-| Frente | Decisión tomada |
-|---|---|
-| Variación tarifaria en métricas | **Calcularla de verdad** desde las emisiones; si no hay datos, no mostrar número (hoy `+7.2%` está hardcodeado) |
-| Lectura real de mensajes | Registrar la lectura **al abrir** el mensaje y retirar el botón «simular» (hoy persiste lecturas falsas en la BD) |
-| Avisos vencidos y garantías | **Resolver al leer**: el servidor archiva/alerta al servir la lista, sin depender de que alguien abra una pantalla o pulse un botón |
-| Backup | **Descargar al navegador** con fecha; hoy escribe en el disco del servidor, que en producción es efímero |
+| Frente | Decisión tomada | Estado |
+|---|---|---|
+| Variación tarifaria en métricas | **Calcularla de verdad** desde las emisiones; si no hay datos, no mostrar número (hoy `+7.2%` está hardcodeado) | ⏳ Pendiente |
+| Lectura real de mensajes | Registrar la lectura **al abrir** el mensaje y retirar el botón «simular» (hoy persiste lecturas falsas en la BD) | 🟡 **Endpoint hecho** (`POST /api/co/envios/[id]/leer`) y simulador eliminado (PR #11). Falta decidir **dónde ve el residente sus comunicaciones**: el portal es la vitrina y el visor muestra avisos, así que hoy no hay pantalla donde abrir el mensaje |
+| Avisos vencidos y garantías | **Resolver al leer**: el servidor archiva/alerta al servir la lista, sin depender de que alguien abra una pantalla o pulse un botón | ✅ **Hecho (PR #11)**: `GET /api/cv/avisos` archiva vencidos y `GET /api/mt/trabajos` verifica garantías, ambos best-effort y sin N+1 |
+| Backup | **Descargar al navegador** con fecha; hoy escribe en el disco del servidor, que en producción es efímero | ⏳ Pendiente |
+
+**Hallazgo corregido en el PR #11 — el «falso positivo» del `window.open` no lo era del todo**: se
+validaba el esquema (`http`/`https`) pero **no el destino**, y validar el esquema no impide un redirect a
+un sitio ajeno. Se agregó **allowlist de dominios** (origen propio + `supabase.co`/`supabase.in`),
+documentada para ampliar cuando se sume otro proveedor de archivos. **Decisión del owner pendiente**: qué
+dominios adicionales permitir.
 
 **Deudas que dependen del owner (no de código):** SMTP con credenciales reales · retirar o aislar el
 módulo QA/dev antes de producción · `Notificacion` sin `unidadId` (solo si se quiere segmentar por unidad).

@@ -41,7 +41,7 @@ import {
   IconExternalLink,
   IconLock,
 } from "@tabler/icons-react"
-import type { EnvioCO, EstadoBuzonCO, MensajeBuzonCO, PlantillaCO } from "@/lib/schemas"
+import type { EstadoBuzonCO, MensajeBuzonCO, PlantillaCO } from "@/lib/schemas"
 import { generarId } from "@/lib/id-utils"
 import { hoyISO } from "@/lib/date-utils"
 
@@ -75,7 +75,7 @@ export default function ComunicacionPage() {
   const { items: macroSectores, isLoading: cMacro } = useMacroSectores()
   const { items: microSectores, isLoading: cMicro } = useMicroSectores()
   const { items: plantillasCO, isLoading: cPlantillas, create: crearPlantillaApi, update: actualizarPlantillaApi, remove: eliminarPlantillaApi } = usePlantillasCO()
-  const { items: enviosCO, isLoading: cEnvios, create: crearEnvioApi, update: actualizarEnvioApi } = useEnviosCO()
+  const { items: enviosCO, isLoading: cEnvios, create: crearEnvioApi } = useEnviosCO()
   const { items: mensajesBuzonCO, isLoading: cBuzon, create: crearMensajeApi, update: actualizarMensajeApi } = useMensajesBuzonCO()
   const { items: documentosCO, isLoading: cDocs, create: crearDocumentoApi, update: actualizarDocumentoApi, remove: eliminarDocumentoApi } = useDocumentosCO()
   // TODO: migrar eventos de auditoría (lecturas de envío, descargas de docs, notificaciones email_simulado) a endpoints de API en próxima fase.
@@ -178,12 +178,9 @@ export default function ComunicacionPage() {
         setExito(`Envío masivo a ${destinatarios.length} destinatario(s) materializado en bandeja email_simulado.`)
       }
 
-      const simularLectura = async (envio: EnvioCO) => {
-        const pendiente = envio.destinatarios.find(d => !envio.lecturas.includes(d.personaId))
-        if (!pendiente) return
-        const r = await actualizarEnvioApi(envio.id, { lecturas: [...envio.lecturas, pendiente.personaId] })
-        if (!r.ok) setError(r.error ?? "No se pudo confirmar la lectura.")
-      }
+      // La lectura la registra el DESTINATARIO al abrir el mensaje
+      // (POST /api/co/envios/[id]/leer). El administrador ya no puede
+      // "simular" lecturas: el badge cuenta solo lo que pasó de verdad.
 
       const enviarBuzon = async () => {
         setError(null); setExito(null)
@@ -273,23 +270,35 @@ export default function ComunicacionPage() {
         setEditandoDoc(null)
       }
 
-      // D1 media por referencia: solo http(s); se rechazan esquemas peligrosos.
-      const esUrlSegura = (url: string): boolean => {
-        try {
-          const u = new URL(url)
-          return u.protocol === "http:" || u.protocol === "https:"
-        } catch {
-          return false
-        }
-      }
-
       const abrirDocumento = (docId: string, url: string) => {
         // TODO: registrarDescargaDocCO (evento de auditoría) aún viaja vía API en fase posterior.
-        if (!esUrlSegura(url)) {
+        // `new URL` lanza con entrada inválida: todo el parseo va en try/catch y lo
+        // que se abre es la URL ya normalizada, nunca el string recibido.
+        let destino: URL
+        try {
+          destino = new URL(url)
+        } catch {
           setError("URL del documento inválida: solo http(s) por referencia (D1).")
           return
         }
-        window.open(url, "_blank", "noopener,noreferrer")
+        // Solo http(s): rechaza javascript:, data: y cualquier otro esquema.
+        if (destino.protocol !== "http:" && destino.protocol !== "https:") {
+          setError("URL del documento inválida: solo http(s) por referencia (D1).")
+          return
+        }
+        // Allowlist de destinos: el propio origen y el almacenamiento del proyecto.
+        // Ampliar esta lista cuando se sume otro proveedor de archivos (decisión owner).
+        const DOMINIOS_PERMITIDOS = ["supabase.co", "supabase.in"]
+        const hostPermitido =
+          destino.origin === window.location.origin ||
+          DOMINIOS_PERMITIDOS.some(
+            (d) => destino.hostname === d || destino.hostname.endsWith(`.${d}`)
+          )
+        if (!hostPermitido) {
+          setError("URL del documento no pertenece a un dominio permitido (D1).")
+          return
+        }
+        window.open(destino.toString(), "_blank", "noopener,noreferrer")
       }
 
       // Privacidad del buzón: admin todo; directiva solo lo visible al Comité;
@@ -462,9 +471,6 @@ export default function ComunicacionPage() {
                     </div>
                     <div className="flex items-center gap-2">
                       <Badge variant={envio.lecturas.length === envio.destinatarios.length ? "default" : "secondary"}>{envio.lecturas.length}/{envio.destinatarios.length} leídos</Badge>
-                      {envio.lecturas.length < envio.destinatarios.length && (
-                        <Button size="sm" variant="outline" onClick={() => simularLectura(envio)}>Simular lectura</Button>
-                      )}
                     </div>
                   </div>
                 ))}

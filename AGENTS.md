@@ -7,9 +7,10 @@ monorepos — no usarlo como base fundacional).
 ## Dónde está la verdad del proyecto
 
 - **Estado vivo / frontera**: `openspec/BACKLOG-100.md` — léelo PRIMERO en cualquier ventana nueva
+- **Qué falta y todavía no existe**: `openspec/PENDIENTES-FUNCIONALIDAD.md` — funcionalidades que el sistema **necesita** y no tiene, con qué las desbloquea (owner o nadie). Si algo «debe existir» y no existe, se anota ahí el mismo día; nunca se deja solo en un chat
 - **Especificaciones por capacidad**: `openspec/specs/` (31 módulos; `project.md` y `agents.md` son transversales, no módulos). **La instrucción de agentes vive SOLO en este `AGENTS.md`**: `openspec/specs/agents.md` y `HERMES.md` son puentes que apuntan acá para no duplicar reglas
 - **Changes activos/archivados**: `openspec/changes/` (workflow openspec: propose → apply → archive)
-- **Ventana nueva**: leer `openspec/BACKLOG-100.md` + `git status -sb` + `git log --oneline -5` y presentar dónde estamos
+- **Ventana nueva**: leer `openspec/BACKLOG-100.md` + `openspec/PENDIENTES-FUNCIONALIDAD.md` + `git status -sb` + `git log --oneline -5` y presentar dónde estamos
 - **Documentación NSGC**: `Data/NSGC/docs/` (manuales por módulo, avances de desarrollo, trazabilidad)
 
 ## Stack y rutas de código
