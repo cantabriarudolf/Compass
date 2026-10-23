@@ -27,9 +27,9 @@ comportamiento. TDD: se observa RED antes de implementar.
 - [x] 1.7 — `app/comunidad/comunicacion/page.tsx`: elimina el selector `vista`, deriva el rol de la sesión y extrae `components/co/bandeja-residente.tsx` con los textos de S7 · Specs S1, S7 · commit `feat(co): bandeja del residente derivada del rol`
 - [x] 1.8 — Badge «X/Y leídos» desde lecturas reales + texto de S9 · Specs S9 · commit `feat(co): el badge de lecturas mide lecturas reales`
 - [x] 1.9 — e2e: el residente abre una comunicación y el admin ve 1/N; el residente no ve la consola del admin · Specs S1, S2, S6 · commit `test(co): e2e de lectura del residente`
-- [ ] 1.10 — Gates: `tsc --noEmit`, `npm run lint`, `npm test`, lane e2e, `npm run audit:desvios`, `openspec validate --all`, `check-delta-coverage co-lectura-residente` · orquestador · commit `chore(co): gates del change`
+- [x] 1.10 — Gates: `tsc --noEmit`, `npm run lint`, `npm test`, lane e2e, `npm run audit:desvios`, `openspec validate --all`, `check-delta-coverage co-lectura-residente` · orquestador · commit `chore(co): gates del change`
 - [x] 1.11 — Verificación independiente (`gentle-ai-verify`) sobre el diff: alto riesgo por autorización y migración · orquestador
-- [ ] 1.12 — Docs: manual CO + avance NSGC, `PENDIENTES-FUNCIONALIDAD` F1 → Hecho, `BACKLOG-100` · orquestador · commit `docs(openspec): F1 cerrada y deuda actualizada`
+- [x] 1.12 — Docs: manual CO + avance NSGC, `PENDIENTES-FUNCIONALIDAD` F1 → Hecho, `BACKLOG-100` · orquestador · commit `docs(openspec): F1 cerrada y deuda actualizada`
 
 ## Orden y dependencias
 
