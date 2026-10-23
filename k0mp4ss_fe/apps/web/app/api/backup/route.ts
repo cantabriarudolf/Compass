@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-import { saveBackup } from '@/lib/backup';
 import { isWriteApiEnabled } from '@/lib/env-guard';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
@@ -9,6 +8,12 @@ import { logger } from '@/lib/logger';
 export const dynamic = 'force-dynamic';
 
 const MAX_BACKUP_BYTES = 10 * 1024 * 1024; // 10 MB
+
+/** Nombre del archivo fijado por el servidor (`compass-backup-YYYY-MM-DD_HH-mm.json`). */
+function nombreBackupServidor(now = new Date()): string {
+  const iso = now.toISOString(); // 2026-10-23T15:11:12.345Z
+  return `compass-backup-${iso.slice(0, 10)}_${iso.slice(11, 16).replace(':', '-')}.json`;
+}
 
 export async function POST(request: Request) {
   if (!isWriteApiEnabled()) {
@@ -64,20 +69,22 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Cuerpo JSON inválido' }, { status: 400 });
     }
 
-    const { content, fileName } = (body ?? {}) as Record<string, unknown>;
+    // `fileName` del cliente ya no se usa: si el nombre viniera del cliente, el archivo
+    // podría quedar sin fecha o con una fecha falsa. El nombre lo fija el servidor.
+    const { content } = (body ?? {}) as Record<string, unknown>;
     if (!content || typeof content !== 'string') {
       return NextResponse.json({ error: 'content es requerido' }, { status: 400 });
     }
-    if (!fileName || typeof fileName !== 'string') {
-      return NextResponse.json({ error: 'fileName es requerido' }, { status: 400 });
-    }
 
-    const result = saveBackup(content, fileName);
-    if (!result.ok) {
-      console.error('[api/backup] Error al guardar backup:', result.error);
-      return NextResponse.json({ error: 'No se pudo guardar el backup' }, { status: 500 });
-    }
-    return NextResponse.json({ ok: true, path: result.path });
+    // El disco del servidor es efímero en producción: la copia viaja como descarga.
+    return new NextResponse(content, {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Content-Disposition': `attachment; filename="${nombreBackupServidor()}"`,
+        'Cache-Control': 'no-store',
+      },
+    });
   } catch {
     return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 });
   }
