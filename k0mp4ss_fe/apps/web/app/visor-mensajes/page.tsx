@@ -8,6 +8,13 @@ import { useReservasRA, useElementosRA } from "@/lib/api/use-ra"
 import { useConfiguracion } from "@/lib/api/use-configuracion"
 import { IconClock, IconCalendarEvent } from "@tabler/icons-react"
 
+/**
+ * Reservas que entran en el pie del visor (pantalla de kiosco: no se puede hacer scroll).
+ * El recorte se declara en pantalla con el patrón "…y N más" de comunicación — antes se
+ * cortaba a 5 sin decir nada y el residente creía que esas eran todas las reservas.
+ */
+const RESERVAS_VISIBLES = 5
+
 const TIPOLOGIA_ACENTO: Record<TipologiaCV, string> = {
   info: "from-sky-900/80 via-zinc-950 to-black border-sky-700/40",
   exito: "from-emerald-900/80 via-zinc-950 to-black border-emerald-700/40",
@@ -180,12 +187,21 @@ export default function VisorMensajesPage() {
         <footer className="absolute bottom-0 left-0 right-0 z-10 border-t border-white/10 bg-black/50 px-10 py-4 backdrop-blur-md">
           <p className="mb-2 text-[11px] font-bold uppercase tracking-widest text-white/50">Próximas reservas · próximos 7 días</p>
           <div className="flex flex-wrap gap-3">
-            {proximasReservas.slice(0, 5).map(r => (
+            {proximasReservas.slice(0, RESERVAS_VISIBLES).map(r => (
               <span key={r.id} className="rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-sm">
                 <b>{nombreElemento(r.elementoId)}</b>
                 <span className="ml-2 text-white/70">{new Date(`${r.fecha}T12:00:00`).toLocaleDateString("es-CL", { weekday: "short", day: "numeric", month: "short" })} · {r.horaInicio}–{r.horaFin}</span>
               </span>
             ))}
+            {proximasReservas.length > RESERVAS_VISIBLES && (
+              <span
+                role="status"
+                aria-live="polite"
+                className="flex items-center rounded-xl border border-white/15 bg-white/10 px-4 py-2 text-sm text-white/70"
+              >
+                …y {proximasReservas.length - RESERVAS_VISIBLES} más
+              </span>
+            )}
           </div>
         </footer>
       )}
