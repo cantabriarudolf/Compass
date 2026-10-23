@@ -6,15 +6,37 @@
  * por cookie de `headers()`); estos helpers solo evitan repetir la construcción
  * del `NextRequest` y el despacho del handler con su `params`.
  */
+import { AsyncLocalStorage } from "node:async_hooks"
 import { NextRequest } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { cookieSesionAuthjs } from "./sesion-authjs"
+
+/**
+ * Cookie de sesión por invocación. Permite que dos peticiones concurrentes corran
+ * con identidades distintas (`conSesionConcurrente`) sin pisarse el estado global
+ * del mock de `next/headers`.
+ */
+export const cookiePorPeticion = new AsyncLocalStorage<string>()
+
+/** Cookie efectiva del pedido en curso: la de la invocación o la de la sesión activa. */
+export function cookieActiva(estado: { cookie: string }): string {
+  return cookiePorPeticion.getStore() ?? estado.cookie
+}
 
 /** Cookie de sesión mintada para el usuario con ese email (debe existir en BD). */
 export async function cookieDeUsuario(email: string): Promise<string> {
   const usuario = await prisma.usuario.findUnique({ where: { email } })
   if (!usuario) throw new Error(`usuario no encontrado: ${email}`)
   return cookieSesionAuthjs({ sub: usuario.id, email: usuario.email })
+}
+
+/**
+ * Corre `fn` con la cookie del usuario en el contexto de esa invocación (ALS), de
+ * modo que dos llamadas concurrentes pueden usar usuarios distintos.
+ */
+export async function conSesionConcurrente<T>(email: string, fn: () => Promise<T>): Promise<T> {
+  const cookie = await cookieDeUsuario(email)
+  return cookiePorPeticion.run(cookie, fn)
 }
 
 /** `NextRequest` para una ruta interna (`ruta` sin `/api/`, admite query). */

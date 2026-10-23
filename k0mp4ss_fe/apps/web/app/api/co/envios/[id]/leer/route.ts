@@ -6,24 +6,26 @@
  * `lecturas` sin que nadie hubiera leído nada: el badge "X/Y leídos" mentía y el
  * dato persistido era falso.
  *
- * Reglas:
- * - Solo el **destinatario** registra su lectura (validado acá, server-side).
+ * Reglas (change co-lectura-residente, tarea 1.4):
+ * - Solo el **destinatario** registra su lectura, validado contra
+ *   `EnvioDestinatarioCO` (la tabla es la fuente de verdad, no el JSON).
  * - Envío ajeno o inexistente → 404 (no filtra existencia).
- * - Idempotente: leer dos veces no duplica la entrada.
+ * - Idempotente y segura en concurrencia: `registrarLecturaDestinatario` marca la
+ *   fila con un update condicional, así dos lecturas simultáneas no se pierden.
  */
 import { puede } from "@/lib/authz"
 import { prisma } from "@/lib/prisma"
 import { jsonError, withComunidadScope } from "@/lib/api/with-comunidad-scope"
 import { personaIdDelUsuarioDb } from "@/lib/api/sesion-persona"
 import { logger } from "@/lib/logger"
-import type { DestinatarioEnvio } from "@/lib/schemas"
+import { registrarLecturaDestinatario } from "../../../_lib/registro-lectura"
 
 type Ctx = { params: Promise<{ id: string }> }
 
 export async function POST(_req: Request, ctx: Ctx): Promise<Response> {
   const resultado = await withComunidadScope()
   if (!resultado.ok) return resultado.response
-  const scope = resultado.scope
+  const { scope } = resultado
 
   if (!puede(scope.rol, "ver", "co")) {
     return jsonError(403, "Permiso denegado.")
@@ -34,26 +36,21 @@ export async function POST(_req: Request, ctx: Ctx): Promise<Response> {
     const personaId = await personaIdDelUsuarioDb(scope.usuarioId)
     const envio = await prisma.envioCO.findFirst({
       where: { id, comunidadId: scope.comunidadId },
+      select: { id: true },
     })
     if (!envio) return jsonError(404, "Registro no encontrado.")
 
-    // SAFETY: `destinatarios` es Json con shape DestinatarioEnvio[] validado por EnvioCOSchema al escribir.
-    const destinatarios = (envio.destinatarios as unknown as DestinatarioEnvio[]) ?? []
-    // SAFETY: `lecturas` es Json string[] de personaIds, validado por EnvioCOSchema al escribir.
-    const lecturas = (envio.lecturas as unknown as string[]) ?? []
+    const destino = personaId
+      ? await prisma.envioDestinatarioCO.findUnique({
+          where: { envioId_personaId: { envioId: id, personaId } },
+          select: { id: true },
+        })
+      : null
+    // No es destinatario (o el usuario no tiene persona vinculada): mismo 404.
+    if (!destino || !personaId) return jsonError(404, "Registro no encontrado.")
 
-    const esDestinatario =
-      personaId != null && destinatarios.some((d) => d.personaId === personaId)
-    if (!esDestinatario) return jsonError(404, "Registro no encontrado.")
-
-    if (!lecturas.includes(personaId)) {
-      await prisma.envioCO.update({
-        where: { id },
-        data: { lecturas: [...lecturas, personaId] as never },
-      })
-      return Response.json({ ok: true, lecturas: lecturas.length + 1 })
-    }
-    return Response.json({ ok: true, lecturas: lecturas.length })
+    const { leidos } = await registrarLecturaDestinatario(id, personaId)
+    return Response.json({ ok: true, lecturas: leidos })
   } catch (e) {
     logger.error({ err: e }, "[co/envios] error POST leer")
     return jsonError(500, "Error interno del servidor.")
