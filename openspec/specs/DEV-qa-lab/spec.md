@@ -52,11 +52,15 @@ El tab `Historia Viva` SHALL renderizar timeline de capítulos de `Data/NSGC/doc
 
 ### Requirement: Backups JSON auditables
 
-`Exportar JSON` SHALL generar `Data/NSGC/backups/compass-seed-report-YYYY-MM-DDTHH-MM-SS.json` con `{_summary, report: SeedValidationReport, historia: [{capitulo, estado, rank, count}], diff}` vía `POST /api/backup` `k0mp4ss_fe/apps/web/app/admin/dev-dashboard/page.tsx:219` y descarga local; `AM` SHALL registrar `ST_SEED_*`.
+`Exportar JSON` SHALL generar un respaldo con `{_summary, report: SeedValidationReport, historia: [{capitulo, estado, rank, count}], diff}` y SHALL entregarlo como **descarga del navegador** a través de `POST /api/backup`, que SHALL responder el contenido como adjunto con `Content-Disposition: attachment` y nombre `<prefijo>-AAAA-MM-DD_HH-mm.json`.
+La fecha del nombre SHALL fijarla el servidor; el cliente SHALL aportar solo el prefijo semántico (`compass-seed-report` para este comprobante), y un prefijo que no cumpla el formato SHALL caer al prefijo por defecto.
+El endpoint MUST NOT escribir en el disco del servidor: en producción ese disco es efímero, y un archivo que se pierde no es un respaldo.
+`AM` SHALL registrar `ST_SEED_*`.
 
 #### Scenario: Export tras Cargar Todo
 - **WHEN** el usuario pulsa `Exportar JSON`
-- **THEN** se descarga el JSON y, si `backupToRepo` activo, queda en `Data/NSGC/backups/` y `AM` registra `ST_SEED_COLLECTION_LOADED`.
+- **THEN** el navegador descarga el archivo con el nombre fechado por el servidor y `AM` registra `ST_SEED_COLLECTION_LOADED`
+- **AND** no se crea ningún archivo bajo `Data/NSGC/backups/`
 
 ### Requirement: Cobertura UI del flujo de sesión y hooks con RTL+MSW
 El laboratorio QA SHALL incluir cobertura UI del flujo de sesión y de hooks compartidos usando React Testing Library y MSW. El flujo de sesión SHALL estar cubierto: página `/ingresar` (validaciones, login exitoso con MSW sobre `POST /api/auth/login` y creación de cookie, login fallido con mensaje visible, respeto de `?next=` solo para destinos internos que empiecen con `/`), logout, verificación de `/api/auth/session`, y hook compartido `useStoreRehydrated`. El módulo SHALL exponer pruebas unitarias de `lib/auth.ts` que verifiquen `verificarToken` inválido/expirado/firma inválida, `credencialesValidas` y el guard `excedeIntentos`. La configuración `vitest.config.ts` SHALL mantener `environment: jsdom` y `setupFiles` apuntando al setup que carga `jest-dom`, y SHALL declarar umbrales UI solo si no degradan los thresholds globales existentes documentando en `design.md` el gap remanente y el plan de crecimiento hacia ≥80% componentes / ≥85% hooks.
