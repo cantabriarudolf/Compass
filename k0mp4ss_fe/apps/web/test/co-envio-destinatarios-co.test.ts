@@ -46,6 +46,19 @@ function sentenciaBackfillSqlite(): string {
     .replace(/;\s*$/u, "")
 }
 
+/**
+ * El job `unit-pg` corre esta misma suite contra PostgreSQL, donde el dialecto no acepta
+ * `INSERT OR IGNORE` (falla con `syntax error at or near "OR"`). El backfill de cada motor
+ * vive en su archivo, así que el test ejecuta el que corresponde al motor conectado. El
+ * caso de idempotencia queda así probado de verdad en los dos motores.
+ */
+function sentenciaBackfill(): string {
+  if (/^postgres(ql)?:\/\//u.test(process.env.DATABASE_URL ?? "")) {
+    return readFileSync(BACKFILL_PG, "utf8").replace(/;\s*$/u, "")
+  }
+  return sentenciaBackfillSqlite()
+}
+
 describe("S8 — schemas: el modelo existe en Postgres y en SQLite", () => {
   const schemas = [
     { nombre: "schema.prisma (Postgres)", ruta: path.join(PRISMA_DIR, "schema.prisma") },
@@ -137,7 +150,7 @@ describe("S8 — backfill desde las columnas JSON", () => {
   })
 
   it("inserta una fila por destinatario y marca leidoEn según lecturas", async () => {
-    await prisma.$executeRawUnsafe(sentenciaBackfillSqlite())
+    await prisma.$executeRawUnsafe(sentenciaBackfill())
 
     const filas = await prisma.envioDestinatarioCO.findMany({
       where: { envioId: { in: envios } },
@@ -178,7 +191,7 @@ describe("S8 — backfill desde las columnas JSON", () => {
     const antes = await prisma.envioDestinatarioCO.count({
       where: { envioId: { in: envios } },
     })
-    await prisma.$executeRawUnsafe(sentenciaBackfillSqlite())
+    await prisma.$executeRawUnsafe(sentenciaBackfill())
     const despues = await prisma.envioDestinatarioCO.count({
       where: { envioId: { in: envios } },
     })
