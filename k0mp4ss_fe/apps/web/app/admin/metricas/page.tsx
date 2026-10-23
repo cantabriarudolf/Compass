@@ -4,6 +4,8 @@ import * as React from "react"
 import { useUnidades } from "@/lib/api/use-unidades"
 import { useTiposUnidad } from "@/lib/api/use-tipos-unidad"
 import { useMaestros } from "@/lib/api/use-maestros"
+import { useEmisionesGC } from "@/lib/api/use-emisiones-gc"
+import { variacionTarifaria } from "@/lib/metricas-utils"
 import { Card, CardContent } from "@workspace/ui/components/card"
 import { Badge } from "@workspace/ui/components/badge"
 import { 
@@ -20,12 +22,14 @@ export default function MetricasPage() {
   const { data: estadosOcupacion, isLoading: cargandoEstados } = useMaestros("estados-ocupacion")
   const { data: categoriasMacro, isLoading: cargandoMacro } = useMaestros("categorias-macro")
   const { data: categoriasMicro, isLoading: cargandoMicro } = useMaestros("categorias-micro")
+  const { items: emisionesGC, isLoading: cargandoEmisiones } = useEmisionesGC()
   const isLoading =
     cargandoUnidades ||
     cargandoTipos ||
     cargandoEstados ||
     cargandoMacro ||
-    cargandoMicro
+    cargandoMicro ||
+    cargandoEmisiones
 
   // CÁLCULOS POR MÓDULO
   
@@ -48,6 +52,17 @@ export default function MetricasPage() {
   // MA - Maestros
   const totalEstados = estadosOcupacion.length;
   const totalCategorias = categoriasMacro.length + categoriasMicro.length;
+
+  // AM — Variación Tarifaria real (F2): sale de las emisiones de gasto común,
+  // comparando los dos últimos periodos con gasto. Sin datos comparables no se
+  // muestra número: antes había un `+7.2%` escrito a mano que mentía.
+  const variacion = variacionTarifaria(emisionesGC);
+  const variacionTexto = variacion
+    ? `${variacion.porcentaje > 0 ? "+" : ""}${variacion.porcentaje.toLocaleString("es-CO", {
+        minimumFractionDigits: 1,
+        maximumFractionDigits: 1,
+      })}%`
+    : "—";
 
   if (isLoading) {
     return (
@@ -84,11 +99,21 @@ export default function MetricasPage() {
             value={tiposUnidad.length} 
             sub="Modelos de cobro configurados"
           />
-          <ModuleMetric 
-            label="Variación Tarifaria" 
-            value="+7.2%" 
-            sub="Promedio alzas programadas"
-            color="text-green-600"
+          <ModuleMetric
+            label="Variación Tarifaria"
+            value={variacionTexto}
+            sub={
+              variacion
+                ? `Gasto emitido ${variacion.periodoAnterior} → ${variacion.periodoActual}`
+                : "Sin emisiones comparables todavía"
+            }
+            color={
+              variacion
+                ? variacion.porcentaje >= 0
+                  ? "text-green-600"
+                  : "text-amber-600"
+                : "text-muted-foreground"
+            }
           />
         </div>
       </section>
