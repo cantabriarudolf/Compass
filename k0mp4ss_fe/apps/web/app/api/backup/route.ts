@@ -23,8 +23,10 @@ const PREFIJO_VALIDO = /^[a-zA-Z0-9-]{1,60}$/;
  */
 function nombreBackupServidor(prefijo: string | undefined, now = new Date()): string {
   const limpio = prefijo && PREFIJO_VALIDO.test(prefijo) ? prefijo : PREFIJO_POR_DEFECTO;
-  const iso = now.toISOString(); // 2026-10-23T15:11:12.345Z
-  return `${limpio}-${iso.slice(0, 10)}_${iso.slice(11, 16).replace(':', '-')}.json`;
+  const dos = (n: number) => String(n).padStart(2, '0');
+  const fecha = `${now.getUTCFullYear()}-${dos(now.getUTCMonth() + 1)}-${dos(now.getUTCDate())}`;
+  const hora = `${dos(now.getUTCHours())}-${dos(now.getUTCMinutes())}`;
+  return `${limpio}-${fecha}_${hora}.json`;
 }
 
 export async function POST(request: Request) {
