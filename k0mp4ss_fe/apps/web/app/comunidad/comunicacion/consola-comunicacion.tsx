@@ -40,6 +40,8 @@ import {
   IconCheck,
   IconExternalLink,
 } from "@tabler/icons-react"
+import { MetricaLecturas } from "@/components/co/metrica-lecturas"
+import { totalesDeEnvio } from "@/components/co/totales-envio"
 import type { EstadoBuzonCO, MensajeBuzonCO, PlantillaCO } from "@/lib/schemas"
 import { generarId } from "@/lib/id-utils"
 import { hoyISO } from "@/lib/date-utils"
@@ -450,21 +452,28 @@ export function ConsolaComunicacionCO() {
             <Card className="w-full">
               <CardHeader className="pb-3">
                 <CardTitle className="text-base">Envíos y confirmación de lectura</CardTitle>
-                <CardDescription>Tasa de apertura derivada de lecturas confirmadas (simuladas).</CardDescription>
+                <CardDescription>Tasa de apertura derivada de las lecturas que registran los destinatarios al abrir la comunicación.</CardDescription>
               </CardHeader>
               <CardContent className="flex flex-col gap-2">
                 {enviosCO.length === 0 && <p className="py-4 text-center text-sm text-muted-foreground">Aún no hay envíos.</p>}
-                {enviosCO.slice().reverse().map(envio => (
-                  <div key={envio.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border p-2 text-xs">
-                    <div>
-                      <p className="font-medium">{envio.asunto}</p>
-                      <p className="text-muted-foreground">{envio.fechaEnvio} · {envio.destinatarios.length} destinatario(s){envio.plantillaId ? ` · plantilla ${plantillasCO.find(p => p.id === envio.plantillaId)?.nombre ?? ""}` : ""}</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Badge variant={envio.lecturas.length === envio.destinatarios.length ? "default" : "secondary"}>{envio.lecturas.length}/{envio.destinatarios.length} leídos</Badge>
-                    </div>
-                  </div>
-                ))}
+                <ul className="flex flex-col gap-2" aria-label="Envíos registrados">
+                  {enviosCO.slice().reverse().map(envio => {
+                    const totales = totalesDeEnvio(envio)
+                    return (
+                      <li key={envio.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border p-2 text-xs">
+                        <div>
+                          <p className="font-medium">{envio.asunto}</p>
+                          <p className="text-muted-foreground">{envio.fechaEnvio} · {totales ? totales.total : envio.destinatarios.length} destinatario(s){envio.plantillaId ? ` · plantilla ${plantillasCO.find(p => p.id === envio.plantillaId)?.nombre ?? ""}` : ""}</p>
+                        </div>
+                        {totales ? (
+                          <MetricaLecturas leidos={totales.leidos} total={totales.total} />
+                        ) : (
+                          <Badge variant="outline">Sin totales de lectura en la respuesta</Badge>
+                        )}
+                      </li>
+                    )
+                  })}
+                </ul>
               </CardContent>
             </Card>
           </TabsContent>
