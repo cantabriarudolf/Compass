@@ -7,10 +7,22 @@ import { logger } from "@/lib/logger"
 export const dynamic = "force-dynamic"
 
 /**
- * GET /api/auditoria?categoria=&tipoAccion=&q=&page=&pageSize=
+ * Tope de filas que devuelve `exportar=1` (el CSV de /admin/logs).
+ *
+ * El botón "Exportar CSV" exportaba solo la página visible (~50 filas) mientras el
+ * usuario creía haber exportado el resultado del filtro. Ahora el endpoint entrega el
+ * conjunto filtrado completo, con un tope explícito y declarado: la respuesta informa
+ * `exportados`, `limite` y `truncado`, y la UI + el archivo dicen cuántas filas quedaron
+ * fuera. Nunca se trunca en silencio.
+ */
+export const LIMITE_EXPORTACION = 5000
+
+/**
+ * GET /api/auditoria?categoria=&tipoAccion=&q=&page=&pageSize=&exportar=1
  * Scoping por comunidad de la membresía del usuario autenticado.
  * Filtros opcionales: categoria exacto, tipoAccion exacto, q substring en descripcion/tipoAccion/referenciaId.
  * Paginación server-side, orden timestamp desc.
+ * Con `exportar=1` devuelve el conjunto filtrado completo (tope `LIMITE_EXPORTACION`) en vez de una página.
  */
 export async function GET(request: Request) {
   const sesion = await auth()
@@ -22,7 +34,13 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Usuario no encontrado o inactivo" }, { status: 401 })
   }
 
-  const url = new URL(request.url)
+  let url: URL
+  try {
+    url = new URL(request.url)
+  } catch {
+    return NextResponse.json({ error: "URL de consulta inválida." }, { status: 400 })
+  }
+
   const headerCid =
     request.headers.get("x-comunidad-id") ??
     request.headers.get("x-comunidadId") ??
@@ -75,13 +93,21 @@ export async function GET(request: Request) {
     ]
   }
 
+  const exportar = url.searchParams.get("exportar") === "1"
+
   const total = await prisma.eventoAuditoria.count({ where } as never)
-  const eventos = await prisma.eventoAuditoria.findMany({
-    where: where as never,
-    orderBy: { timestamp: "desc" },
-    skip: (page - 1) * pageSize,
-    take: pageSize,
-  })
+  const eventos = exportar
+    ? await prisma.eventoAuditoria.findMany({
+        where: where as never,
+        orderBy: { timestamp: "desc" },
+        take: LIMITE_EXPORTACION,
+      })
+    : await prisma.eventoAuditoria.findMany({
+        where: where as never,
+        orderBy: { timestamp: "desc" },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      })
 
   // Facetas de TODA la comunidad (no solo la página): los selects de filtros
   // de /admin/logs deben ofrecer todos los valores presentes en BD — con
@@ -102,14 +128,29 @@ export async function GET(request: Request) {
     }),
   ])
 
+  const facetas = {
+    categorias: facetaCategorias.map((f: { categoria: string }) => f.categoria),
+    tiposAccion: facetaTipos.map((f: { tipoAccion: string }) => f.tipoAccion),
+  }
+
+  if (exportar) {
+    // Conjunto filtrado completo (con tope declarado): `total` es el universo, `exportados`
+    // lo que viaja en el archivo y `truncado` avisa si algo quedó fuera.
+    return NextResponse.json({
+      total,
+      exportados: eventos.length,
+      limite: LIMITE_EXPORTACION,
+      truncado: total > eventos.length,
+      eventos,
+      facetas,
+    })
+  }
+
   return NextResponse.json({
     total,
     page,
     pageSize,
     eventos,
-    facetas: {
-      categorias: facetaCategorias.map((f: { categoria: string }) => f.categoria),
-      tiposAccion: facetaTipos.map((f: { tipoAccion: string }) => f.tipoAccion),
-    },
+    facetas,
   })
 }

@@ -462,7 +462,7 @@ FI cobranza multicanal, CV actas por referencia). 106 tests nuevos en 6 archivos
 | Módulo QA/dev a retirar antes de producción | Abierto | `admin/qa-lab`, `admin/dev-dashboard` y `admin/mantenimiento` operan sobre `localStorage`; se retiran antes de producción, no se migran |
 | Paginación `useCrudCollection` | Arrastrada de fase 1 | `pageSize=100` fijo (`lib/api/use-crud-collection.ts:98`) |
 | `Notificacion` sin `unidadId` | Arrastrada de fase 1 | Una difusión al rol la ve toda la comunidad con ese rol |
-| Manuales NSGC IR/PE/RE + trazabilidad | Documental | `21 - IR`, `18 - PE`, `19 - PE`, `25 - RE`, `03 - Mapa de Desarrollo y Trazabilidad` y `00-index` no describen aún los contratos nuevos (V7 solo actualizó `12 - FI` y `16 - CO`) |
+| Manuales NSGC IR/PE/RE | ✅ **Cerrado (2026-10-22, PR #6)** | `21 - IR`, `18 - PE`, `19 - PE` y `25 - RE` se sincronizaron antes del push; `18 - PE` se volvió a corregir en el PR #9 (escaneo QR). `03 - Trazabilidad` y `00-index` no requerían cambio: no se crearon manuales nuevos |
 
 **Ninguna ventana se marcó BLOQUEADA**: no hubo gate fallido ni decisión faltante; el único fix del
 orquestador fue `d10279c` (el cierre de turno se gobierna por `pe:cierre_turno`, no por `pe`).
@@ -471,3 +471,57 @@ orquestador fue `d10279c` (el cierre de turno se gobierna por `pe:cierre_turno`,
 `npm run lint` **0 problemas** · `openspec validate --all` **36 passed / 0 failed** · suite completa
 observada por el orquestador **146 archivos / 1538 tests / `SUITE_EXIT=0` / 8m50s** ·
 `STORE_VERSION = 28` sin tocar · `prisma/dev.db`, `.env*` y `Data/NSGC/backups/` intactos.
+
+## Cierre del 2026-10-22: PRs #7–#9 (saneamiento, candado y escaneo de cédula)
+
+Tres PRs más en `main`, todos con CI verde completo observado (unit, unit-PG, e2e build producción,
+rate-limit y preview de Vercel).
+
+| PR | Qué entró |
+|---|---|
+| **#7** | **Saneamiento de truncamientos**: `components/pe/aviso-truncamiento.tsx` (`LIMITE_SELECT = 100`) aplicado en visitas, contratistas, encomiendas, proveedores y reportería. `grep -rn "slice(0, 100)" app/ components/` → **0**. En proveedores el aviso usa el `total` del **servidor**, porque el recorte venía del `pageSize` de la API, no del cliente |
+| **#8** | **Candado `npm run audit:desvios`** (5 reglas, corre en CI **antes** de la suite) + **folio `CT-####` asignado en el servidor** con índice único `(comunidadId, folio)`. En su primera corrida encontró 3 hallazgos reales (comentario de `/api/in/tipos` que declaraba un permiso ya otorgado, y dos truncamientos en gastos comunes) y se corrigieron en vez de silenciarse |
+| **#9** | **Escaneo del QR de la cédula** en la bitácora de visitas: webcam (`BarcodeDetector` nativo + `@zxing/browser` MIT como fallback), extracción del RUN, **validación de dígito verificador (módulo 11)**, búsqueda en el padrón y **confirmación del conserje** antes de completar el formulario. Elimina `escaneoDNISimulado`, que inventaba nombre y RUT y los registraba como visita real |
+
+### Candado `audit:desvios` (PR #8)
+
+Corre en cada PR; si aparece el patrón, **el PR no mergea**.
+
+| Regla | Qué caza |
+|---|---|
+| R1 | recurso de permisos usado en el código y no declarado en la MATRIZ |
+| R2 | textos que postengan algo (`desvío`, `solo admin hasta`, `por simplicidad`, `ABAC en UI`) |
+| R3 | tests apagados sin justificación (`.skip`, `.todo`, `expect(true)`) |
+| R4 | listas recortadas sin aviso (`.slice(0, N)` sin `AvisoTruncamiento`) |
+| R5 | `catch` que traga el error y aun así confirma éxito |
+
+Allowlist con **6 excepciones declaradas y motivadas** (`admin:usuarios`, `backup`, `pi`,
+`recurso_inexistente`, `notify:residente`, `qa-lab`). Ninguna silenciada.
+
+### Lección del E2E del PR #8
+
+El candado detecta patrones de texto, **no interacciones entre dos cambios correctos**. El folio
+server-side (con índice único) y el QA-Lab (que mandaba el folio del store) eran válidos por separado:
+juntos producían `409` → la fase 21 del poblamiento caía con «Certificado residencia ausente en BD» →
+los 6 tests de poblamiento esperaban «Carga completa OK» y agotaban el tiempo (32-43 min de timeouts).
+Fix: el QA-Lab manda folio y código **vacíos** y el servidor numera, igual que ya hacía mantenimiento.
+**Diagnóstico**: el log del job viene truncado; lo resolvió el `error-context.md` del artefacto de
+Playwright, que nombra la fase y el motivo.
+
+### Deuda viva al cierre del 2026-10-22
+
+**Cuatro construcciones decididas por el owner y aún no implementadas:**
+
+| Frente | Decisión tomada |
+|---|---|
+| Variación tarifaria en métricas | **Calcularla de verdad** desde las emisiones; si no hay datos, no mostrar número (hoy `+7.2%` está hardcodeado) |
+| Lectura real de mensajes | Registrar la lectura **al abrir** el mensaje y retirar el botón «simular» (hoy persiste lecturas falsas en la BD) |
+| Avisos vencidos y garantías | **Resolver al leer**: el servidor archiva/alerta al servir la lista, sin depender de que alguien abra una pantalla o pulse un botón |
+| Backup | **Descargar al navegador** con fecha; hoy escribe en el disco del servidor, que en producción es efímero |
+
+**Deudas que dependen del owner (no de código):** SMTP con credenciales reales · retirar o aislar el
+módulo QA/dev antes de producción · `Notificacion` sin `unidadId` (solo si se quiere segmentar por unidad).
+
+**Fixes menores del 2026-10-22 (rama `deuda/fixes-menores`)**: CSV de logs exporta **el filtro completo**
+con tope declarado (`LIMITE_EXPORTACION = 5000`) en vez de la página visible; el KPI «Cajas financieras
+activas» filtra por `FondoFI.activo`; el visor declara «…y N más» cuando recorta las reservas.
