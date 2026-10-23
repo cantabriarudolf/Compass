@@ -277,32 +277,38 @@ export function ConsolaComunicacionCO() {
         setEditandoDoc(null)
       }
 
-      const abrirDocumento = (docId: string, url: string) => {
-        // TODO: registrarDescargaDocCO (evento de auditoría) aún viaja vía API en fase posterior.
-        // `new URL` lanza con entrada inválida: todo el parseo va en try/catch y lo
-        // que se abre es la URL ya normalizada, nunca el string recibido.
-        let destino: URL
+      /**
+       * Destino de documento ya validado (D1): parseo, esquema http(s) y allowlist
+       * de host (origen propio + almacenamiento del proyecto). Devuelve `null` si
+       * no es seguro abrirlo, así que el `window.open` de abajo solo recibe un
+       * `URL` validado y nunca el string que vino del registro.
+       *
+       * Ampliar `DOMINIOS_PERMITIDOS` cuando se sume otro proveedor de archivos
+       * (decisión del owner, F10 de PENDIENTES-FUNCIONALIDAD).
+       */
+      const destinoDocumentoSeguro = (raw: string): URL | null => {
+        let url: URL
         try {
-          destino = new URL(url)
+          url = new URL(raw)
         } catch {
-          setError("URL del documento inválida: solo http(s) por referencia (D1).")
-          return
+          return null
         }
         // Solo http(s): rechaza javascript:, data: y cualquier otro esquema.
-        if (destino.protocol !== "http:" && destino.protocol !== "https:") {
-          setError("URL del documento inválida: solo http(s) por referencia (D1).")
-          return
-        }
-        // Allowlist de destinos: el propio origen y el almacenamiento del proyecto.
-        // Ampliar esta lista cuando se sume otro proveedor de archivos (decisión owner).
+        if (url.protocol !== "http:" && url.protocol !== "https:") return null
         const DOMINIOS_PERMITIDOS = ["supabase.co", "supabase.in"]
         const hostPermitido =
-          destino.origin === window.location.origin ||
+          url.origin === window.location.origin ||
           DOMINIOS_PERMITIDOS.some(
-            (d) => destino.hostname === d || destino.hostname.endsWith(`.${d}`)
+            (d) => url.hostname === d || url.hostname.endsWith(`.${d}`)
           )
-        if (!hostPermitido) {
-          setError("URL del documento no pertenece a un dominio permitido (D1).")
+        return hostPermitido ? url : null
+      }
+
+      const abrirDocumento = (docId: string, url: string) => {
+        // TODO: registrarDescargaDocCO (evento de auditoría) aún viaja vía API en fase posterior.
+        const destino = destinoDocumentoSeguro(url)
+        if (!destino) {
+          setError("URL del documento inválida o fuera de los dominios permitidos (D1).")
           return
         }
         window.open(destino.toString(), "_blank", "noopener,noreferrer")
@@ -463,7 +469,7 @@ export function ConsolaComunicacionCO() {
                       <li key={envio.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border p-2 text-xs">
                         <div>
                           <p className="font-medium">{envio.asunto}</p>
-                          <p className="text-muted-foreground">{envio.fechaEnvio} · {totales ? totales.total : envio.destinatarios.length} destinatario(s){envio.plantillaId ? ` · plantilla ${plantillasCO.find(p => p.id === envio.plantillaId)?.nombre ?? ""}` : ""}</p>
+                          <p className="text-muted-foreground">{envio.fechaEnvio} · {totales ? totales.total : "—"} destinatario(s){envio.plantillaId ? ` · plantilla ${plantillasCO.find(p => p.id === envio.plantillaId)?.nombre ?? ""}` : ""}</p>
                         </div>
                         {totales ? (
                           <MetricaLecturas leidos={totales.leidos} total={totales.total} />

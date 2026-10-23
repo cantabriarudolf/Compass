@@ -26,8 +26,6 @@ export interface DatosEnvioCO {
   plantillaId: string | null
   fechaEnvio: string
   destinatarios: DestinatarioEnvio[]
-  /** Lecturas que el cliente declara como ya confirmadas (solo se usan al crear). */
-  lecturas: string[]
 }
 
 /** Lecturas derivadas de la tabla, en orden estable. */
@@ -48,38 +46,28 @@ export async function derivarLecturas(tx: Tx, envioId: string): Promise<string[]
 async function sincronizarDestinatarios(
   tx: Tx,
   envioId: string,
-  destinatarios: DestinatarioEnvio[],
-  lecturasConfirmadas: string[]
+  destinatarios: DestinatarioEnvio[]
 ): Promise<void> {
   const personaIds = destinatarios.map((d) => d.personaId)
   await tx.envioDestinatarioCO.deleteMany({
     where: { envioId, personaId: { notIn: personaIds } },
   })
 
-  const ahora = new Date()
   for (const destinatario of destinatarios) {
-    const leida = lecturasConfirmadas.includes(destinatario.personaId) ? ahora : null
     await tx.envioDestinatarioCO.upsert({
       where: {
         envioId_personaId: { envioId, personaId: destinatario.personaId },
       },
+      // La fila nace SIN leer: la lectura solo la registra el destinatario
+      // (POST /api/co/envios/[id]/leer). El alta rechaza `lecturas` del cliente.
       create: {
         id: generarId("ed"),
         envioId,
         personaId: destinatario.personaId,
         unidadId: destinatario.unidadId ?? null,
-        ...(leida ? { leidoEn: leida } : {}),
       },
       // La unidad se refresca; `leidoEn` NUNCA se pisa (una lectura no se deshace).
       update: { unidadId: destinatario.unidadId ?? null },
-    })
-  }
-
-  const porMarcar = lecturasConfirmadas.filter((personaId) => personaIds.includes(personaId))
-  if (porMarcar.length > 0) {
-    await tx.envioDestinatarioCO.updateMany({
-      where: { envioId, personaId: { in: porMarcar }, leidoEn: null },
-      data: { leidoEn: ahora },
     })
   }
 }
@@ -112,10 +100,10 @@ export async function escribirEnvioCO(
         lecturas: [] as never,
       },
     })
-    await sincronizarDestinatarios(tx, datos.id, datos.destinatarios, datos.lecturas)
+    await sincronizarDestinatarios(tx, datos.id, datos.destinatarios)
   } else {
     await tx.envioCO.update({ where: { id: datos.id }, data: campos })
-    await sincronizarDestinatarios(tx, datos.id, datos.destinatarios, [])
+    await sincronizarDestinatarios(tx, datos.id, datos.destinatarios)
   }
 
   const lecturas = await derivarLecturas(tx, datos.id)

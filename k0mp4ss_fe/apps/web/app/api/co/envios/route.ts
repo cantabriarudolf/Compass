@@ -22,13 +22,17 @@ import {
   whereEnvios,
 } from "../_lib/proyeccion-envio"
 import { escribirEnvioCO } from "../_lib/escritura-envio"
+import { registrarDenegacionCo } from "../_lib/denegacion"
 
 export async function GET(req: Request): Promise<Response> {
   const resultado = await withComunidadScope()
   if (!resultado.ok) return resultado.response
   const { scope } = resultado
 
-  if (!puede(scope.rol, "ver", "co")) return jsonError(403, "Permiso denegado.")
+  if (!puede(scope.rol, "ver", "co")) {
+    registrarDenegacionCo(scope, "co", "ver")
+    return jsonError(403, "Permiso denegado.")
+  }
 
   let url: URL
   try {
@@ -92,6 +96,17 @@ export async function POST(req: Request): Promise<Response> {
   const id = typeof datos.id === "string" ? datos.id : undefined
   if (!id) return jsonError(400, "El identificador (id) es obligatorio.")
 
+  // La lectura solo la registra el destinatario: el alta no puede declarar
+  // lecturas. Aceptarlas reabriría la falsedad que el PR #11 eliminó («Simular
+  // lectura»): el badge «X/Y leídos» volvería a mentir desde la API. Se rechaza
+  // explícito en vez de ignorarlo en silencio.
+  if (datos.lecturas.length > 0) {
+    return jsonError(
+      400,
+      "La lectura solo la registra el destinatario (POST /api/co/envios/[id]/leer)."
+    )
+  }
+
   try {
     const existente = await prisma.envioCO.findUnique({
       where: { id },
@@ -101,7 +116,9 @@ export async function POST(req: Request): Promise<Response> {
     if (existente && existente.comunidadId !== scope.comunidadId) {
       return jsonError(404, "Registro no encontrado.")
     }
-    if (!puede(scope.rol, existente ? "editar" : "crear", "co")) {
+    const accion = existente ? "editar" : "crear"
+    if (!puede(scope.rol, accion, "co")) {
+      registrarDenegacionCo(scope, "co", accion)
       return jsonError(403, "Permiso denegado.")
     }
 
@@ -116,7 +133,6 @@ export async function POST(req: Request): Promise<Response> {
           plantillaId: datos.plantillaId ?? null,
           fechaEnvio: datos.fechaEnvio,
           destinatarios: datos.destinatarios,
-          lecturas: datos.lecturas,
         },
         { crear: !existente }
       )

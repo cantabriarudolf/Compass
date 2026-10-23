@@ -22,6 +22,7 @@ import {
   whereEnvioDetalle,
 } from "../../_lib/proyeccion-envio"
 import { escribirEnvioCO } from "../../_lib/escritura-envio"
+import { registrarDenegacionCo } from "../../_lib/denegacion"
 
 type Ctx = { params: Promise<{ id: string }> }
 
@@ -40,7 +41,10 @@ export async function GET(_req: Request, ctx: Ctx): Promise<Response> {
   if (!resultado.ok) return resultado.response
   const { scope } = resultado
 
-  if (!puede(scope.rol, "ver", "co")) return jsonError(403, "Permiso denegado.")
+  if (!puede(scope.rol, "ver", "co")) {
+    registrarDenegacionCo(scope, "co", "ver")
+    return jsonError(403, "Permiso denegado.")
+  }
 
   const { id } = await ctx.params
   const rol = rolProyeccion(scope.rol)
@@ -80,7 +84,10 @@ export async function PUT(req: Request, ctx: Ctx): Promise<Response> {
     if (!existente || existente.comunidadId !== scope.comunidadId) {
       return jsonError(404, "Registro no encontrado.")
     }
-    if (!puede(scope.rol, "editar", "co")) return jsonError(403, "Permiso denegado.")
+    if (!puede(scope.rol, "editar", "co")) {
+      registrarDenegacionCo(scope, "co", "editar")
+      return jsonError(403, "Permiso denegado.")
+    }
 
     const parche = body as Record<string, unknown>
     const base: Record<string, unknown> = {}
@@ -105,9 +112,6 @@ export async function PUT(req: Request, ctx: Ctx): Promise<Response> {
           plantillaId: datos.plantillaId ?? null,
           fechaEnvio: datos.fechaEnvio,
           destinatarios: datos.destinatarios,
-          // En la edición la nómina puede cambiar: las lecturas ya confirmadas se
-          // conservan por fila (ver `sincronizarDestinatarios`), no por el parche.
-          lecturas: [],
         },
         { crear: false }
       )

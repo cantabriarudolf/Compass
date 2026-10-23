@@ -18,6 +18,7 @@ import { prisma } from "@/lib/prisma"
 import { logger } from "@/lib/logger"
 import { generarId } from "@/lib/id-utils"
 import { jsonError, withComunidadScope } from "@/lib/api/with-comunidad-scope"
+import { registrarDenegacionCo } from "@/app/api/co/_lib/denegacion"
 
 type Ctx = { params: Promise<{ id: string }> }
 
@@ -27,6 +28,10 @@ export async function GET(_req: Request, ctx: Ctx): Promise<Response> {
   const { scope } = resultado
 
   if (!puede(scope.rol, "ver", "co:lecturas")) {
+    // El desglose nominativo es un acceso denegado como cualquier otro: RP exige
+    // dejarlo auditado, y sirve para acreditar quién intentó mirar la lectura
+    // de los vecinos.
+    registrarDenegacionCo(scope, "co:lecturas", "ver")
     return jsonError(403, "Permiso denegado.")
   }
 

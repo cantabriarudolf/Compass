@@ -136,20 +136,9 @@ describe("POST /api/co/envios — alta transaccional (S8)", () => {
     expect(await lecturasDerivadas()).toEqual([])
   })
 
-  it("las lecturas declaradas en el alta marcan `leidoEn` y `lecturas` sale de la tabla", async () => {
-    await limpiar()
-    await conSesion(usuarios.admin, async () => {
-      const res = await invocarApi(moduloColeccion(), "POST", "co/envios", {
-        body: envio({ lecturas: [P_B, P_C] }), // P_C no es destinatario: se descarta
-      })
-      expect(res.status).toBe(201)
-    })
-    const registradas = await filas()
-    const porPersona = new Map(registradas.map((f) => [f.personaId, f.leidoEn]))
-    expect(porPersona.get(P_B)).not.toBeNull()
-    expect(porPersona.get(P_A)).toBeNull()
-    expect(await lecturasDerivadas()).toEqual([P_B])
-  })
+  // El alta con `lecturas` declaradas por el cliente se RECHAZA con 400: la
+  // lectura solo la registra el destinatario (decisión del owner, PR #11).
+  // Cubierto en `test/api/co-endurecimiento.test.ts`.
 
   it("el upsert de un envío existente reconcilia la tabla sin perder lecturas", async () => {
     await limpiar()
