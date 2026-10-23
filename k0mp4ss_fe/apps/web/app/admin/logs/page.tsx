@@ -42,9 +42,40 @@ type EventoAuditoria = {
   descripcion: string
 }
 
+/** Respuesta de `/api/auditoria?exportar=1`: conjunto filtrado completo con su tope declarado. */
+type RespuestaExportacion = {
+  total: number
+  exportados: number
+  limite: number
+  truncado: boolean
+  eventos: EventoAuditoria[]
+}
+
 function escaparCsv(valor: string): string {
   if (/[";\n]/.test(valor)) return `"${valor.replace(/"/g, '""')}"`
   return valor
+}
+
+/**
+ * Construye el CSV de los eventos recibidos. Si el conjunto filtrado excede el tope del
+ * endpoint, el propio archivo declara cuántas filas se exportaron y cuántas quedaron fuera
+ * (nunca se trunca en silencio).
+ */
+function construirCsv(respuesta: RespuestaExportacion): string {
+  const filas = [CAMPOS_CSV.join(",")]
+  for (const e of respuesta.eventos) {
+    filas.push(
+      CAMPOS_CSV.map(c => escaparCsv(String(e[c as typeof CAMPOS_CSV[number]]))).join(","),
+    )
+  }
+  if (respuesta.truncado) {
+    const fuera = respuesta.total - respuesta.exportados
+    filas.push("")
+    filas.push(
+      `# exportadas ${respuesta.exportados} de ${respuesta.total} filas del filtro; ${fuera} quedaron fuera (tope ${respuesta.limite})`,
+    )
+  }
+  return filas.join("\n")
 }
 
 export default function LogsPage() {
@@ -62,6 +93,8 @@ export default function LogsPage() {
   })
   const [cargando, setCargando] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
+  const [exportando, setExportando] = React.useState(false)
+  const [avisoExportacion, setAvisoExportacion] = React.useState<string | null>(null)
 
   React.useEffect(() => {
     const t = setTimeout(() => setBusquedaDebounced(busqueda), 200)
@@ -73,17 +106,23 @@ export default function LogsPage() {
     setPagina(1)
   }, [busquedaDebounced, categoria, tipoAccion])
 
+  /** Filtros vigentes, compartidos por la consulta paginada y la exportación. */
+  const filtros = React.useMemo(() => {
+    const params = new URLSearchParams()
+    if (categoria !== "todas") params.set("categoria", categoria)
+    if (tipoAccion !== "todas") params.set("tipoAccion", tipoAccion)
+    const q = busquedaDebounced.trim()
+    if (q) params.set("q", q)
+    return params
+  }, [busquedaDebounced, categoria, tipoAccion])
+
   React.useEffect(() => {
     const controller = new AbortController()
     async function cargar() {
       setCargando(true)
       setError(null)
       try {
-        const params = new URLSearchParams()
-        if (categoria !== "todas") params.set("categoria", categoria)
-        if (tipoAccion !== "todas") params.set("tipoAccion", tipoAccion)
-        const q = busquedaDebounced.trim()
-        if (q) params.set("q", q)
+        const params = new URLSearchParams(filtros)
         params.set("page", String(pagina))
         params.set("pageSize", String(FILAS_POR_PAGINA))
         const res = await fetch(`/api/auditoria?${params.toString()}`, {
@@ -114,7 +153,7 @@ export default function LogsPage() {
     }
     void cargar()
     return () => controller.abort()
-  }, [busquedaDebounced, categoria, tipoAccion, pagina])
+  }, [filtros, pagina])
 
   const categorias = React.useMemo(() => [...facetas.categorias].sort(), [facetas])
   const tiposAccion = React.useMemo(() => [...facetas.tiposAccion].sort(), [facetas])
@@ -122,22 +161,45 @@ export default function LogsPage() {
   const totalPaginas = Math.max(1, Math.ceil(total / FILAS_POR_PAGINA))
   const paginaActual = Math.min(pagina, totalPaginas)
 
-  function exportarCsv() {
-    const filas = [CAMPOS_CSV.join(",")]
-    for (const e of eventos) {
-      filas.push(
-        CAMPOS_CSV.map(c => escaparCsv(String(e[c as typeof CAMPOS_CSV[number]]))).join(","),
+  /**
+   * Exporta el conjunto FILTRADO completo, no la página visible: pide `exportar=1` al
+   * endpoint y arma el CSV con todas las filas que devuelve. Si el volumen excede el tope
+   * del servidor, el aviso queda en pantalla y dentro del archivo.
+   */
+  async function exportarCsv() {
+    setExportando(true)
+    setError(null)
+    setAvisoExportacion(null)
+    try {
+      const params = new URLSearchParams(filtros)
+      params.set("exportar", "1")
+      const res = await fetch(`/api/auditoria?${params.toString()}`)
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error((body as { error?: string }).error ?? `Error ${res.status}`)
+      }
+      const data = (await res.json()) as RespuestaExportacion
+      const blob = new Blob(["\uFEFF" + construirCsv(data)], {
+        type: "text/csv;charset=utf-8;",
+      })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = `audit-logs-${new Date().toISOString().slice(0, 10)}.csv`
+      a.click()
+      URL.revokeObjectURL(url)
+
+      const fuera = data.total - data.exportados
+      setAvisoExportacion(
+        data.truncado
+          ? `CSV generado con ${data.exportados.toLocaleString("es-CL")} de ${data.total.toLocaleString("es-CL")} eventos filtrados: ${fuera.toLocaleString("es-CL")} quedaron fuera (tope ${data.limite.toLocaleString("es-CL")}). Refiná los filtros para exportar el resto.`
+          : `CSV generado con los ${data.exportados.toLocaleString("es-CL")} eventos del filtro actual.`,
       )
+    } catch (e) {
+      setError((e as Error).message)
+    } finally {
+      setExportando(false)
     }
-    const blob = new Blob(["\uFEFF" + filas.join("\n")], {
-      type: "text/csv;charset=utf-8;",
-    })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement("a")
-    a.href = url
-    a.download = `audit-logs-${new Date().toISOString().slice(0, 10)}.csv`
-    a.click()
-    URL.revokeObjectURL(url)
   }
 
   if (cargando && eventos.length === 0) {
@@ -201,8 +263,8 @@ export default function LogsPage() {
             ))}
           </SelectContent>
         </Select>
-        <Button variant="outline" onClick={exportarCsv} disabled={eventos.length === 0}>
-          <IconDownload className="size-4 mr-1" /> Exportar CSV
+        <Button variant="outline" onClick={() => void exportarCsv()} disabled={exportando || total === 0}>
+          <IconDownload className="size-4 mr-1" /> {exportando ? "Exportando…" : "Exportar CSV"}
         </Button>
         <span className="text-xs text-muted-foreground ml-auto">
           {eventos.length.toLocaleString("es-CL")} de {total.toLocaleString("es-CL")} eventos en BD
@@ -212,6 +274,16 @@ export default function LogsPage() {
       {error && (
         <p className="text-sm text-destructive" role="alert">
           {error}
+        </p>
+      )}
+
+      {avisoExportacion && (
+        <p
+          role="status"
+          aria-live="polite"
+          className="rounded-md border border-muted-foreground/20 bg-muted/40 px-3 py-2 text-xs text-muted-foreground"
+        >
+          {avisoExportacion}
         </p>
       )}
 
