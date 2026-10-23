@@ -14,6 +14,34 @@ import type {
 
 const BASE_ENVIOS = "/api/co/envios"
 
+/**
+ * Envío tal como lo ve el ADMINISTRADOR (change co-lectura-residente, D2): el
+ * snapshot de destinatarios, el `lecturas` derivado de la tabla y los totales
+ * que la API calcula server-side. `totalLecturas`/`totalDestinatarios` no están
+ * en `EnvioCOSchema` porque el residente no los recibe.
+ */
+export type EnvioConsolaCO = EnvioCO & {
+  totalDestinatarios: number
+  totalLecturas: number
+}
+
+/**
+ * Envío tal como lo ve el RESIDENTE o el COMITÉ en la bandeja (D2): sin nómina
+ * de destinatarios, sin `lecturas` de terceros y —para el residente— sin
+ * totales. `lecturaPropia` es el único dato de lectura del residente; los
+ * `total*` son los agregados que sí recibe el comité.
+ */
+export interface EnvioBandejaCO {
+  id: string
+  asunto: string
+  cuerpo: string
+  plantillaId?: string
+  fechaEnvio: string
+  lecturaPropia?: { leidoEn: string | null }
+  totalDestinatarios?: number
+  totalLecturas?: number
+}
+
 export function usePlantillasCO(): CrudCollection<PlantillaCO> {
   return useCrudCollection<PlantillaCO>("/api/co/plantillas")
 }
