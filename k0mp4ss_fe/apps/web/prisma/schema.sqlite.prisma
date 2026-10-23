@@ -511,13 +511,32 @@ model EnvioCO {
   asunto        String
   cuerpo        String
   plantillaId   String?
-  destinatarios Json     // DestinatarioEnvio[]
+  destinatarios Json     // DestinatarioEnvio[] — snapshot inmutable de lo enviado (trazabilidad)
   fechaEnvio    String
-  lecturas      Json     // string[]
+  lecturas      Json     // string[] — derivada de EnvioDestinatarioCO (no es fuente de verdad)
   createdAt     DateTime @default(now())
+
+  // Fuente de verdad de pertenencia y de estado de lectura (change co-lectura-residente D3).
+  destinatariosCO EnvioDestinatarioCO[]
 
   @@index([comunidadId])
   @@map("envios_co")
+}
+
+/// Pertenencia y lectura por destinatario de un envío CO (change co-lectura-residente, D3).
+/// Única fuente de verdad: las columnas JSON de EnvioCO quedan como snapshot/derivada.
+model EnvioDestinatarioCO {
+  id        String    @id
+  envioId   String
+  envio     EnvioCO   @relation(fields: [envioId], references: [id], onDelete: Cascade)
+  personaId String
+  unidadId  String?
+  leidoEn   DateTime?
+  createdAt DateTime  @default(now())
+
+  @@unique([envioId, personaId])
+  @@index([personaId])
+  @@map("envio_destinatarios_co")
 }
 
 model MensajeBuzonCO {
