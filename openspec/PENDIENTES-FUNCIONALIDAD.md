@@ -15,8 +15,6 @@
 
 | # | Qué debe existir | Por qué falta | Estado | Desbloquea |
 |---|---|---|---|---|
-| F2 | **Variación tarifaria real en métricas** | Hoy `/admin/metricas` muestra `+7.2%` **escrito a mano** en el código. No sale de ningún dato | Sin empezar | Nadie: decisión ya tomada (calcular de emisiones; sin datos → no mostrar número) |
-| F3 | **Backup descargable al navegador** | `lib/backup.ts` escribe en `Data/NSGC/backups/` del **disco del servidor**, que en producción es efímero: el usuario cree que tiene un resguardo y se pierde | Sin empezar | Nadie: decisión ya tomada (descargar con fecha) |
 | F4 | **Emisor SMTP real** | `CF` ya tiene los campos (`smtpHost`, `smtpPort`, `smtpUser`, `smtpSecurity`, `smtpFrom`…) pero **no existe emisor**: 0 referencias a `nodemailer`/`sendMail`. Todo correo queda en outbox `pendiente` | Bloqueado | **Owner**: credenciales SMTP |
 | F5 | **`Notificacion.unidadId`** | El modelo no tiene unidad, así que una difusión al rol la ve **toda la comunidad** con ese rol. No se puede segmentar «solo el piso 3» | Sin empezar | **Owner**: decidir si hace falta segmentar |
 | F6 | **Selector de unidad/persona con búsqueda total** | Los selects montan hasta 100 opciones y ahora **avisan** (PR #7), pero no permiten buscar más allá de lo cargado. Con 300 unidades hay que refinar por otro camino | Sin empezar | Nadie (mejora) |
@@ -31,6 +29,8 @@
 
 | # | Qué | Evidencia |
 | --- | --- | --- |
+| — | **Variación tarifaria real en métricas (F2)** | `lib/metricas-utils.ts` + 6 tests · `/admin/metricas` muestra «—» sin periodos comparables · PR #13 |
+| — | **El respaldo baja como descarga fechada, sin escribir en disco (F3)** | `POST /api/backup` sin `writeFileSync` · `lib/backup.ts` retirado · suite de seguridad del endpoint sin editar · PR #13 |
 | — | **Pantalla del residente para leer comunicaciones (F1)** | change `co-lectura-residente` · bandeja propia en `/comunidad/comunicacion` con vista derivada del rol · modelo `EnvioDestinatarioCO` · e2e `flujo/lectura-residente` 8/8 |
 | — | **El residente ya no ve quién leyó cada difusión** (fuga D-1) | `_lib/proyeccion-envio.ts` + 404 indistinguible · tests `co-envios-proyeccion` / `co-leer-404` |
 | — | **El residente ya no ve los reportes del buzón ajeno** (fuga S10) | `_lib/buzon-alcance.ts` + `visibilidadComite` · tests `co-buzon-alcance` |
