@@ -44,5 +44,5 @@ monorepos — no usarlo como base fundacional).
 
 - `apps/web/.env*` (secrets, DATABASE_URL, AUTH_SECRET)
 - `apps/web/prisma/dev.db` y backups (`Data/NSGC/backups/`)
-- La línea base financiera real del owner (xlsx fuente, montos 2023-2024, datos de personas reales)
+- Los artefactos de datos: `apps/web/.env*` (secrets, DATABASE_URL, AUTH_SECRET), `apps/web/prisma/dev.db` y backups (`Data/NSGC/backups/`), y el xlsx fuente (`Data/NSGC/ingresosvsegresos.23y24/`). **El owner declaró el 2026-10-23 que la base financiera 2023-2024 es ficticia**; hasta confirmarlo en un entorno real se sigue tratando como dato del owner y no se publica en artefactos ni en repos públicos
 - Credenciales de GitHub/Google Cloud (checklist C3 en BACKLOG-100), tokens, cualquier secret

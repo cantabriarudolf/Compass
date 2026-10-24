@@ -16,20 +16,10 @@ test.describe("CRUD — Comunidad/Comunicacion", () => {
     await page.goto("/comunidad/comunicacion")
     await expect(page.getByRole("heading", { name: /Comunicación/ })).toBeVisible({ timeout: 15_000 })
 
-    // Asegurar vista Administración (default) — si está en otra vista, cambiar a Administración
-    const vistaTrigger = page.getByRole("combobox").first()
-    if (await vistaTrigger.isVisible().catch(() => false)) {
-      const txt = (await vistaTrigger.textContent())?.trim() ?? ""
-      if (!txt.includes("Administración")) {
-        await vistaTrigger.click({ force: true, noWaitAfter: true })
-        await page.waitForTimeout(300)
-        const optAdmin = page.getByRole("option", { name: "Administración" })
-        if (await optAdmin.isVisible().catch(() => false)) {
-          await optAdmin.click({ force: true, noWaitAfter: true })
-          await page.waitForTimeout(400)
-        }
-      }
-    }
+    // La vista la decide el rol en el servidor (change co-lectura-residente, D1): la
+    // sesión es administrador, así que la consola está arriba y no hay selector de vista
+    // que manipular. Antes esta spec abría el `<Select>` «Vista», que ya no existe.
+    await expect(page.getByRole("tab", { name: /Masivos/ })).toBeVisible({ timeout: 15_000 })
 
     // Tab Plantillas
     const tabPlantillas = page.getByRole("tab", { name: /Plantillas/ })

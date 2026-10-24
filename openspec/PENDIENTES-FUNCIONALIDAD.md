@@ -15,7 +15,6 @@
 
 | # | Qué debe existir | Por qué falta | Estado | Desbloquea |
 |---|---|---|---|---|
-| F1 | **Pantalla del residente para leer comunicaciones** | El endpoint `POST /api/co/envios/[id]/leer` existe y el admin ya no puede falsificar lecturas (PR #11), pero **no hay pantalla donde el residente abra el mensaje**. Hoy el badge «X/Y leídos» siempre muestra 0 y la lectura real no ocurre | **Sin empezar**. **Instrucción del owner (2026-10-23): diseñarla junto al skill `experto-admin-comunidades`** — qué datos puede ver el residente, qué debe quedar enmascarado y con qué base legal (Ley 21.442 + 19.628/21.719). Sin ese dictamen no se implementa | **Owner**: ubicación · **Skill**: marco legal y de datos |
 | F2 | **Variación tarifaria real en métricas** | Hoy `/admin/metricas` muestra `+7.2%` **escrito a mano** en el código. No sale de ningún dato | Sin empezar | Nadie: decisión ya tomada (calcular de emisiones; sin datos → no mostrar número) |
 | F3 | **Backup descargable al navegador** | `lib/backup.ts` escribe en `Data/NSGC/backups/` del **disco del servidor**, que en producción es efímero: el usuario cree que tiene un resguardo y se pierde | Sin empezar | Nadie: decisión ya tomada (descargar con fecha) |
 | F4 | **Emisor SMTP real** | `CF` ya tiene los campos (`smtpHost`, `smtpPort`, `smtpUser`, `smtpSecurity`, `smtpFrom`…) pero **no existe emisor**: 0 referencias a `nodemailer`/`sendMail`. Todo correo queda en outbox `pendiente` | Bloqueado | **Owner**: credenciales SMTP |
@@ -31,7 +30,12 @@
 ## Hecho (para no volver a listarlo)
 
 | # | Qué | Evidencia |
-|---|---|---|
+| --- | --- | --- |
+| — | **Pantalla del residente para leer comunicaciones (F1)** | change `co-lectura-residente` · bandeja propia en `/comunidad/comunicacion` con vista derivada del rol · modelo `EnvioDestinatarioCO` · e2e `flujo/lectura-residente` 8/8 |
+| — | **El residente ya no ve quién leyó cada difusión** (fuga D-1) | `_lib/proyeccion-envio.ts` + 404 indistinguible · tests `co-envios-proyeccion` / `co-leer-404` |
+| — | **El residente ya no ve los reportes del buzón ajeno** (fuga S10) | `_lib/buzon-alcance.ts` + `visibilidadComite` · tests `co-buzon-alcance` |
+| — | **El residente ya no puede emitir difusiones masivas** (fuga D-3) | matriz `co` / `co:buzon` / `co:lecturas` · tests `authz` |
+| — | **La lectura no se puede fabricar por API** | `POST /api/co/envios` rechaza `lecturas` con 400 · `co-endurecimiento` E1 |
 | — | Lectura de un envío **por el destinatario**, no por el admin | PR #11 · `POST /api/co/envios/[id]/leer` |
 | — | Caducidad de avisos CV **al leer** (no al abrir la pantalla) | PR #11 · `GET /api/cv/avisos` |
 | — | Garantías MT verificadas **al pedir la lista** | PR #11 · `app/api/mt/_garantias.ts` |
