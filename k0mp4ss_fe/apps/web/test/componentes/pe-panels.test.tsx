@@ -126,6 +126,20 @@ async function elegirOpcion(user: ReturnType<typeof userEvent.setup>, comboIndex
   await user.click(real)
 }
 
+/**
+ * Unidad destino: desde F6 es un selector buscable (sin opciones montadas de
+ * antemano), así que se elige tipeando un término y clickeando la coincidencia.
+ */
+async function elegirUnidadBuscable(
+  user: ReturnType<typeof userEvent.setup>,
+  termino: string
+) {
+  await user.type(screen.getByLabelText("Unidad destino"), termino)
+  const listbox = await screen.findByRole("listbox", {}, { timeout: 5_000 })
+  const opciones = await within(listbox).findAllByRole("option", {}, { timeout: 5_000 })
+  await user.click(opciones[0]!)
+}
+
 describe("EncomiendasPanel (componente, RTL)", () => {
   it("renderiza el form y la tabla vacía del día", { timeout: PRESUPUESTO_CARGA }, () => {
     render(<EncomiendasPanel diaReporte={HOY} onError={vi.fn()} onSuccess={vi.fn()} />)
@@ -194,7 +208,7 @@ describe("VisitasPanel (componente, RTL)", () => {
     await user.type(screen.getByLabelText("Nombre *"), "Visitante TEST-RTL")
     await user.type(screen.getByLabelText("DNI *"), "16.444.555-0")
     await elegirOpcion(user, 0) // Jornada
-    await elegirOpcion(user, 1) // Unidad destino
+    await elegirUnidadBuscable(user, "101") // Unidad destino (buscable, F6)
     await user.click(screen.getByRole("button", { name: /Registrar visita/ }))
 
     expect(onError.mock.calls.filter((c) => c[0]).map((c) => JSON.stringify(c[0]))).toEqual([])
@@ -212,7 +226,7 @@ describe("VisitasPanel (componente, RTL)", () => {
     await user.type(screen.getByLabelText("Nombre *"), "Visita Agendada TEST")
     await user.type(screen.getByLabelText("DNI *"), "16.444.555-0")
     await elegirOpcion(user, 0) // Jornada
-    await elegirOpcion(user, 1) // Unidad destino
+    await elegirUnidadBuscable(user, "101") // Unidad destino (buscable, F6)
     await user.click(screen.getByRole("switch"))
     await user.click(screen.getByRole("button", { name: /Registrar visita/ }))
 

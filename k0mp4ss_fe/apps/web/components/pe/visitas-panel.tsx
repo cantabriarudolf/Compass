@@ -17,6 +17,7 @@ import {
 } from "@workspace/ui/components/select"
 import { IconCheck, IconQrcode, IconSearch, IconTrash } from "@tabler/icons-react"
 import { AvisoTruncamiento, LIMITE_SELECT } from "@/components/pe/aviso-truncamiento"
+import { SelectorBuscable } from "@/components/selector-buscable"
 import { EscaneoQrCedula } from "@/components/pe/escaneo-qr-cedula"
 import { buscarPersonaPorRun } from "@/lib/api/use-personas"
 import { mascararRun, normalizarRun, validarRun } from "@/lib/validacion-rut"
@@ -98,11 +99,45 @@ export function VisitasPanel({
   const [buscandoIdentidad, setBuscandoIdentidad] = React.useState(false)
   const [avisoPadron, setAvisoPadron] = React.useState<string | null>(null)
 
-  // Listas de opciones: se recortan a LIMITE_SELECT para no montar cientos de
-  // SelectItem, y el recorte se declara en pantalla (nunca en silencio).
-  const unidadesDestino = unidades.filter((u) => !u.id.startsWith("u-E-"))
-  const unidadesVisibles = unidadesDestino.slice(0, LIMITE_SELECT)
+  // Unidad destino: ya no se recorta a LIMITE_SELECT. El selector busca en el
+  // servidor (`GET /api/unidades?q=`, F6) sobre toda la comunidad y, si la API
+  // no responde (sin sesión de gestión o sin red), filtra el padrón local
+  // completo — nunca solo las 100 primeras opciones.
+  const unidadesDestino = React.useMemo(
+    () => unidades.filter((u) => !u.id.startsWith("u-E-")),
+    [unidades]
+  )
   const personasVisibles = personas.slice(0, LIMITE_SELECT)
+
+  /** Opciones de unidad para el selector buscable (etiqueta + número, igual que antes). */
+  const buscarUnidad = React.useCallback(
+    async (q: string) => {
+      const termino = q.trim()
+      try {
+        const res = await fetch(
+          `/api/unidades?q=${encodeURIComponent(termino)}&pageSize=20`,
+          { headers: { accept: "application/json" } }
+        )
+        if (!res.ok) throw new Error(`Error ${res.status}`)
+        const cuerpo = (await res.json()) as {
+          data: { id: string; etiqueta: string; numero: string }[]
+        }
+        return cuerpo.data.map((u) => ({
+          id: u.id,
+          etiqueta: `${u.etiqueta} ${u.numero}`,
+        }))
+      } catch {
+        // Fallback offline / sin permiso de API: padrón local completo.
+        const buscado = termino.toLowerCase()
+        return unidadesDestino
+          .filter((u) =>
+            `${u.etiqueta} ${u.numero}`.toLowerCase().includes(buscado)
+          )
+          .map((u) => ({ id: u.id, etiqueta: `${u.etiqueta} ${u.numero}` }))
+      }
+    },
+    [unidadesDestino]
+  )
 
   const refUnidad = (id?: string) => {
     if (!id) return "—"
@@ -381,21 +416,18 @@ export function VisitasPanel({
           </div>
           <div className="grid grid-cols-2 gap-2">
             <div className="flex flex-col gap-1.5">
-              <Label>Unidad destino</Label>
-              <Select value={formVisita.unidadId || "__none"} onValueChange={(v) => setFormVisita({ ...formVisita, unidadId: v === "__none" ? "" : v })}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Seleccionar" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none">Sin unidad</SelectItem>
-                  {unidadesVisibles.map((u) => (
-                    <SelectItem key={u.id} value={u.id}>
-                      {u.etiqueta} {u.numero}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <AvisoTruncamiento mostrados={unidadesVisibles.length} total={unidadesDestino.length} />
+              <SelectorBuscable
+                valorId={formVisita.unidadId}
+                valorEtiqueta={
+                  formVisita.unidadId ? refUnidad(formVisita.unidadId) : undefined
+                }
+                onSeleccionar={(opcion) =>
+                  setFormVisita({ ...formVisita, unidadId: opcion?.id ?? "" })
+                }
+                buscar={buscarUnidad}
+                etiqueta="Unidad destino"
+                placeholder="Buscar por número, tipo o rol SII"
+              />
             </div>
             <div className="flex flex-col gap-1.5">
               <Label>Residente destino</Label>
