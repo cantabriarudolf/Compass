@@ -109,5 +109,7 @@ comentarios o tests pero nunca implementados en el motor.
 - **Cierre**: se retiran los dos chequeos. La jornada se sigue validando porque ese maestro vive en
   el store. Los dos casos que fijaban el rechazo (`test/store-personal.test.ts`) pasan a fijar la
   aceptación de referencias del servidor.
-- **Deuda asociada**: la bitácora sigue persistiendo en el store, no en la BD. Migrarla es el paso
-  que vuelve innecesario todo este razonamiento.
+- **Deuda asociada**: **cerrada el 2026-10-25** (ventana `pe-paneles-bd`). La bitácora ya persiste
+  en la base (`POST/PUT/DELETE /api/pe/bitacora-visitas` desde `visitas-panel.tsx`, con el hook de
+  post-escritura emitiendo `PE_VISITA_INGRESADA`), así que `saveBitacoraVisitaPE` quedó como
+  código legacy sin consumidores y este razonamiento ya no hace falta para nada.
