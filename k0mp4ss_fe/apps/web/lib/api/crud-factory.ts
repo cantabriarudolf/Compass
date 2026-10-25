@@ -62,6 +62,16 @@ export interface CrudConfig {
   schema: z.ZodType
   authzCheck?: AuthzCheck
   beforeDelete?: BeforeDelete
+  /**
+   * Búsqueda por texto opt-in (F6): con `?q=` el GET suma un `OR` de
+   * `contains` sobre estos campos. Sin la opción —o sin `q`— el `where` es
+   * exactamente el de siempre, así que las rutas que no la configuran no
+   * cambian de comportamiento.
+   *
+   * `mode: "insensitive"` no se usa a propósito: SQLite (motor de dev y de la
+   * suite) no lo soporta y su `LIKE` ya es case-insensitive para ASCII.
+   */
+  busqueda?: { campos: string[] }
 }
 
 export interface CrudHandlers {
@@ -148,7 +158,17 @@ export function createCrudHandlers(config: CrudConfig): CrudHandlers {
       100,
       Math.max(1, Number.parseInt(url.searchParams.get("pageSize") ?? "50", 10) || 50)
     )
-    const where = { comunidadId: scope.comunidadId }
+    // Búsqueda por texto (opt-in): aditiva y solo cuando la colección la
+    // declara. Construye el where de siempre si no hay `q` o no hay campos.
+    let where: Record<string, unknown> = { comunidadId: scope.comunidadId }
+    const q = url.searchParams.get("q")?.trim()
+    const camposBusqueda = config.busqueda?.campos ?? []
+    if (q && camposBusqueda.length > 0) {
+      where = {
+        ...where,
+        OR: camposBusqueda.map((campo) => ({ [campo]: { contains: q } })),
+      }
+    }
     try {
       const [data, total] = await Promise.all([
         model.findMany({
