@@ -25,6 +25,10 @@ export const unidadesHandlers = createCrudHandlers({
   model: delegado(prisma.unidad),
   schema: UnidadSchema,
   authzCheck: (rol, accion) => puede(rol, accion, "mp"),
+  // F6: identificadores visibles de una unidad. `numero` (101) y `etiqueta`
+  // (Depto/Local/Oficina) son lo que el conserje tipea; `rolSii` es el otro
+  // identificador que aparece en documentos. No se buscan ids internos ni FKs.
+  busqueda: { campos: ["numero", "etiqueta", "rolSii"] },
   beforeDelete: async (record, scope) => {
     const vinculados = await prisma.vinculoUnidad.count({
       where: {
