@@ -8,7 +8,7 @@
  * sólo se achique).
  */
 import { describe, expect, it } from "vitest"
-import { evaluar, EXCEPCIONES } from "../scripts/audit-store.mjs"
+import { evaluar, verificarMarcador, EXCEPCIONES } from "../scripts/audit-store.mjs"
 
 const USO = 'const x = useCompassStore((s) => s.unidades)\n'
 const SIN_USO = 'export const nada = 1\n'
@@ -42,5 +42,19 @@ describe("audit:store", () => {
       expect(e.motivo.length, `${e.archivo} sin motivo`).toBeGreaterThan(10)
       expect(e.desde, `${e.archivo} sin fecha`).toMatch(/^\d{4}-\d{2}-\d{2}$/)
     }
+  })
+})
+
+describe("audit:store — la documentación no puede mentir", () => {
+  it("el marcador con el número real pasa", () => {
+    expect(verificarMarcador("… <!-- audit:store: archivos=13 --> …", 13)).toBeNull()
+  })
+
+  it("un número documentado distinto del real falla", () => {
+    expect(verificarMarcador("<!-- audit:store: archivos=3 -->", 13)).toContain("declara 3")
+  })
+
+  it("sin marcador falla: el número tiene que venir del comando", () => {
+    expect(verificarMarcador("texto sin marcador", 13)).toContain("falta el marcador")
   })
 })

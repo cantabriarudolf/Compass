@@ -111,6 +111,26 @@ export function evaluar(archivos, excepciones = EXCEPCIONES) {
   return { sinExcepcion, obsoletas }
 }
 
+/**
+ * Verifica que el número escrito en la documentación sea el real.
+ *
+ * El «SALDADO» de BACKLOG-100 se escribió a mano dos veces con números que la realidad desmentía.
+ * El documento lleva un marcador `<!-- audit:store: archivos=N -->` y este candado falla si N no
+ * es el tamaño de la allowlist: es la única forma de que nadie —tampoco el agente— declare un
+ * avance que el comando no respalda.
+ */
+export function verificarMarcador(texto, esperado) {
+  const m = texto.match(/<!--\s*audit:store:\s*archivos=(\d+)\s*-->/)
+  if (!m) {
+    return "falta el marcador <!-- audit:store: archivos=N --> en la documentación"
+  }
+  const documentado = Number(m[1])
+  if (documentado !== esperado) {
+    return `la documentación declara ${documentado} y la allowlist tiene ${esperado}: actualizá el número (o la allowlist)`
+  }
+  return null
+}
+
 function main() {
   const archivos = listarArchivos().map((absoluta) => ({
     ruta: relative(RAIZ, absoluta).split("\\").join("/"),
@@ -118,12 +138,25 @@ function main() {
   }))
 
   const { sinExcepcion, obsoletas } = evaluar(archivos)
+  const rutaBacklog = join(RAIZ, "../../..", "openspec", "BACKLOG-100.md")
+  let driftDoc = null
+  try {
+    driftDoc = verificarMarcador(readFileSync(rutaBacklog, "utf8"), EXCEPCIONES.length)
+  } catch {
+    driftDoc = "no se pudo leer openspec/BACKLOG-100.md"
+  }
   const conStore = archivos.filter((a) => RE_STORE.test(a.texto)).length
 
   console.log("audit:store — el store legacy no vuelve a crecer")
   console.log(`  archivos con \`useCompassStore\`: ${conStore} (allowlist: ${EXCEPCIONES.length})`)
 
-  if (sinExcepcion.length === 0 && obsoletas.length === 0) {
+  if (driftDoc) {
+    console.log(`  ✗ documentación desactualizada: ${driftDoc}`)
+  } else {
+    console.log(`  ok · la documentación declara ${EXCEPCIONES.length} (coincide)`)
+  }
+
+  if (sinExcepcion.length === 0 && obsoletas.length === 0 && !driftDoc) {
     console.log("  ok · 0 hallazgos")
     console.log("\nRESUMEN: candado en verde")
     return
@@ -138,7 +171,7 @@ function main() {
     console.log("     -> borrá la entrada de EXCEPCIONES (la lista sólo se achica)")
   }
   console.log(
-    `\nRESUMEN: ${sinExcepcion.length + obsoletas.length} hallazgo(s) · candado en rojo`
+    `\nRESUMEN: ${sinExcepcion.length + obsoletas.length + (driftDoc ? 1 : 0)} hallazgo(s) · candado en rojo`
   )
   process.exitCode = 1
 }
