@@ -4,6 +4,7 @@ import { beforeAll, beforeEach, afterEach, describe, expect, it, vi } from "vite
 import { cleanup, render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { resetStore, lastEvent } from "../helpers"
+import { instalarEntornoRadix } from "./entorno-radix"
 import { useCompassStore } from "@/lib/store"
 import { EncomiendasPanel } from "@/components/pe/encomiendas-panel"
 import { VisitasPanel } from "@/components/pe/visitas-panel"
@@ -78,28 +79,8 @@ function instalarDetector(valor: string): void {
 }
 
 beforeAll(() => {
-  // Radix (Select/Switch/Dialog) en jsdom necesita estos stubs del prototipo:
-  // ResizeObserver para el Popper del Select, scroll/pointer para la interacción.
-  window.HTMLElement.prototype.scrollIntoView = vi.fn()
-  window.HTMLElement.prototype.scrollTo = vi.fn()
-  Object.defineProperty(window.HTMLElement.prototype, "hasPointerCapture", {
-    value: () => false,
-    configurable: true,
-  })
-  Object.defineProperty(window.HTMLElement.prototype, "releasePointerCapture", {
-    value: () => {},
-    configurable: true,
-  })
-  class ResizeObserverStub {
-    observe() {}
-    unobserve() {}
-    disconnect() {}
-  }
-  Object.defineProperty(window, "ResizeObserver", {
-    value: ResizeObserverStub,
-    configurable: true,
-    writable: true,
-  })
+  // Radix (Select/Switch/Dialog) en jsdom: el bloque de stubs vive en `entorno-radix.ts`.
+  instalarEntornoRadix()
   // jsdom no implementa la reproducción de media: el preview del escáner la usa.
   vi.spyOn(window.HTMLMediaElement.prototype, "play").mockResolvedValue(undefined)
 })
@@ -124,6 +105,35 @@ async function elegirOpcion(user: ReturnType<typeof userEvent.setup>, comboIndex
   const opciones = within(listbox).getAllByRole("option")
   const real = opciones.find((o) => !/^Sin /.test(o.textContent ?? "")) ?? opciones[0]!
   await user.click(real)
+}
+
+/**
+ * Busca y elige una unidad destino del servidor (F6: «Unidad destino» es un combobox buscable).
+ *
+ * El stub responde `GET /api/unidades?q=` con una unidad del seed y deja el resto de la
+ * colección vacío, para que la búsqueda de personas del QR siga viéndose igual.
+ */
+async function elegirUnidadDestino(user: ReturnType<typeof userEvent.setup>) {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (url: string) =>
+      String(url).startsWith("/api/unidades")
+        ? json({
+            data: [{ id: "u-A-101", numero: "101", etiqueta: "Depto", rolSii: "123-A11" }],
+            page: 1,
+            pageSize: 25,
+            total: 1,
+          })
+        : json({ data: [], page: 1, pageSize: 10, total: 0 })
+    )
+  )
+  await user.type(screen.getByLabelText("Unidad destino"), "101")
+  const lista = await screen.findByRole(
+    "listbox",
+    { name: /Resultados de Unidad destino/ },
+    { timeout: 10_000 }
+  )
+  await user.click(await within(lista).findByRole("option", { name: /Depto 101/ }))
 }
 
 describe("EncomiendasPanel (componente, RTL)", () => {
@@ -194,7 +204,7 @@ describe("VisitasPanel (componente, RTL)", () => {
     await user.type(screen.getByLabelText("Nombre *"), "Visitante TEST-RTL")
     await user.type(screen.getByLabelText("DNI *"), "16.444.555-0")
     await elegirOpcion(user, 0) // Jornada
-    await elegirOpcion(user, 1) // Unidad destino
+    await elegirUnidadDestino(user)
     await user.click(screen.getByRole("button", { name: /Registrar visita/ }))
 
     expect(onError.mock.calls.filter((c) => c[0]).map((c) => JSON.stringify(c[0]))).toEqual([])
@@ -212,7 +222,7 @@ describe("VisitasPanel (componente, RTL)", () => {
     await user.type(screen.getByLabelText("Nombre *"), "Visita Agendada TEST")
     await user.type(screen.getByLabelText("DNI *"), "16.444.555-0")
     await elegirOpcion(user, 0) // Jornada
-    await elegirOpcion(user, 1) // Unidad destino
+    await elegirUnidadDestino(user)
     await user.click(screen.getByRole("switch"))
     await user.click(screen.getByRole("button", { name: /Registrar visita/ }))
 
@@ -245,7 +255,7 @@ describe("VisitasPanel (componente, RTL)", () => {
     // Nombre, RUT enmascarado, unidad y vínculo antes de confirmar.
     expect(within(resultado).getByText("Juan Pérez González")).toBeTruthy()
     expect(within(resultado).getByText("15.***.***-9")).toBeTruthy()
-    expect(within(resultado).getByText("Depto 101")).toBeTruthy()
+    expect(within(resultado).getByText("Depto 101 · 123-A11")).toBeTruthy()
     expect(within(resultado).getByText("Propietario")).toBeTruthy()
     // El escaneo por sí solo NO registra nada.
     expect(useCompassStore.getState().bitacoraVisitasPE.length).toBe(antes)
@@ -255,6 +265,8 @@ describe("VisitasPanel (componente, RTL)", () => {
     expect(useCompassStore.getState().bitacoraVisitasPE.length).toBe(antes)
     expect((screen.getByLabelText("Nombre *") as HTMLInputElement).value).toBe("Juan Pérez González")
     expect((screen.getByLabelText("DNI *") as HTMLInputElement).value).toBe("15123456-9")
+    // La unidad del vínculo queda preseleccionada y visible en el control buscable.
+    expect(screen.getByText("Depto 101 · 123-A11")).toBeTruthy()
 
     await user.click(screen.getByRole("button", { name: /Registrar visita/ }))
     await waitFor(() => expect(useCompassStore.getState().bitacoraVisitasPE.length).toBe(antes + 1))

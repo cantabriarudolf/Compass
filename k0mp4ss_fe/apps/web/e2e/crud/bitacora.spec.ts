@@ -29,31 +29,23 @@ test.describe("CRUD — Operaciones/Bitacora", () => {
     // RUT válido con DV 0 para 16444555
     await inputDni.fill("16.444.555-0")
 
-    // Unidad destino — Select "Unidad destino"
-    const labelUnidad = page.getByText("Unidad destino", { exact: true }).first()
-    let triggerUnidad = labelUnidad.locator("..").getByRole("combobox").first()
-    const visU = await triggerUnidad.isVisible().catch(() => false)
-    if (!visU) {
-      const c = page.locator("div").filter({ has: labelUnidad }).first()
-      triggerUnidad = c.getByRole("combobox").first()
-    }
-    // El form de visita tiene dos selects (unidad y residente) — asegurar que es el primero
-    await expect(triggerUnidad).toBeVisible({ timeout: 10_000 })
-    await triggerUnidad.click({ force: true, noWaitAfter: true })
-    await page.waitForTimeout(350)
-    const optsU = page.getByRole("option")
-    await expect(optsU.first()).toBeVisible({ timeout: 10_000 })
-    let picked = false
-    const cnt = await optsU.count()
-    for (let i = 0; i < cnt; i++) {
-      const txt = (await optsU.nth(i).textContent())?.trim() ?? ""
-      if (!txt || txt === "Sin unidad") continue
-      await optsU.nth(i).click({ force: true, noWaitAfter: true })
-      picked = true
-      break
-    }
-    if (!picked) await optsU.first().click({ force: true, noWaitAfter: true })
-    await page.waitForTimeout(300)
+    // Unidad destino — combobox buscable (F6): el término viaja a GET /api/unidades?q= y las
+    // opciones salen de toda la comunidad, no de las primeras 100 montadas por el store.
+    const unidad = page.getByLabel("Unidad destino")
+    await expect(unidad).toBeVisible({ timeout: 10_000 })
+    await unidad.fill("101")
+    const resultadosUnidad = page.getByRole("listbox", { name: /Resultados de Unidad destino/ })
+    const primeraUnidad = resultadosUnidad.getByRole("option").first()
+    await expect(primeraUnidad).toBeVisible({ timeout: 15_000 })
+    // Hay cinco «Depto 101» (torres A–E en el seed): el rol SII es lo que las desambigua.
+    await expect(primeraUnidad).toContainText(/Depto 101/)
+    await expect(primeraUnidad).toContainText(/123-/)
+    const etiquetaUnidad = ((await primeraUnidad.textContent()) ?? "").trim()
+    await primeraUnidad.click()
+    // La selección queda a la vista en el control: nunca se muestra el id crudo.
+    await expect(page.getByText(etiquetaUnidad, { exact: true }).first()).toBeVisible({
+      timeout: 10_000,
+    })
 
     // Pre-agendada switch ON — para que estado sea agendada y luego marcar ingresada
     const switchPre = page.getByRole("switch").first()
@@ -75,6 +67,8 @@ test.describe("CRUD — Operaciones/Bitacora", () => {
     await expect(row).toBeVisible({ timeout: 15_000 })
     // Debe contener DNI
     await expect(row.getByText("16.444.555-0")).toBeVisible({ timeout: 10_000 })
+    // Y la unidad destino con la etiqueta que se eligió, no su id
+    await expect(row.getByText(etiquetaUnidad, { exact: true })).toBeVisible({ timeout: 10_000 })
     // Estado Agendada
     await expect(row.getByText("Agendada")).toBeVisible({ timeout: 10_000 })
 
