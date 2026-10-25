@@ -3,7 +3,7 @@
  * scripts/audit-store.mjs — candado contra el store legacy como fuente de datos de dominio.
  *
  * Por qué existe: la migración a la base se declaró "saldada" dos veces (SERIE-DEUDA-6 y
- * SERIE-FASE2, con "3 excepciones justificadas"), y hoy vuelve a haber 13 archivos leyendo
+ * SERIE-FASE2, con "3 excepciones justificadas"), y hoy vuelve a haber 10 archivos leyendo
  * `useCompassStore`. Cada feature reusó el store porque era el camino corto y ningún gate se
  * quejó: el número vivía en un párrafo escrito a mano, no en un comando.
  *
@@ -36,11 +36,7 @@ const DIRS_IGNORADOS = new Set([".next", "node_modules", "playwright-report", "t
  * cablearlo contra su hook de `lib/api/`; cuando eso pasa, la entrada se BORRA de acá.
  */
 export const EXCEPCIONES = [
-  // Paneles PE: la infraestructura ya existe (12 rutas /api/pe + lib/api/use-pe.ts con 8 hooks y
-  // acciones). Falta el cableado, que es la última milla del módulo.
-  { archivo: "components/pe/visitas-panel.tsx", motivo: "lecturas/escrituras de visitas; use-pe.ts listo", desde: "2026-10-25" },
-  { archivo: "components/pe/encomiendas-panel.tsx", motivo: "encomiendas; useEncomiendasPE listo", desde: "2026-10-25" },
-  { archivo: "components/pe/contratistas-panel.tsx", motivo: "ingresos de contratistas; useIngresosContratistasPE listo", desde: "2026-10-25" },
+  // Los 3 paneles PE se cablearon el 2026-10-25 (ventana pe-paneles-bd): entradas borradas.
   // Estas tres son las excepciones justificadas históricas: operan sobre hechos del navegador y el
   // owner decidió (F9) que el módulo QA/dev se retira o aísla antes de producción.
   { archivo: "app/admin/qa-lab/page.tsx", motivo: "módulo QA/dev: se retira o aísla antes de producción (F9)", desde: "2026-10-25" },

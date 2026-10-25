@@ -1,7 +1,11 @@
 "use client"
 
 import * as React from "react"
-import { useCompassStore } from "@/lib/store"
+import { useIngresosContratistasPE, useMaestrosPE } from "@/lib/api/use-pe"
+import { usePersonasOperacion } from "@/lib/api/use-personas"
+import { useUnidadesOperacion } from "@/lib/api/use-unidades"
+import { generarId } from "@/lib/id-utils"
+import { esUnidadDestino, etiquetaUnidad } from "@/lib/unidades-destino"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
@@ -27,6 +31,11 @@ interface FormContratista {
   personaAgendaId: string
 }
 
+/** Hora local HH:MM: es lo que guarda `horaIngreso` del contrato PE. */
+function horaActual(): string {
+  return new Date().toTimeString().slice(0, 5)
+}
+
 export function ContratistasPanel({
   diaReporte,
   onError,
@@ -36,13 +45,20 @@ export function ContratistasPanel({
   onError: (msg: string | null) => void
   onSuccess: (msg: string | null) => void
 }) {
-  const unidades = useCompassStore((s) => s.unidades)
-  const personas = useCompassStore((s) => s.personas)
-  const maestros = useCompassStore((s) => s.maestros)
-  const ingresosContratistas = useCompassStore((s) => s.ingresosContratistasPE)
-  const saveIngresoContratistaPE = useCompassStore((s) => s.saveIngresoContratistaPE)
-  const confirmarIngresoContratistaPE = useCompassStore((s) => s.confirmarIngresoContratistaPE)
-  const removeIngresoContratistaPE = useCompassStore((s) => s.removeIngresoContratistaPE)
+  // Datos de dominio vía API REST (BD fuente de verdad); el store legacy ya no participa.
+  const {
+    items: ingresosContratistas,
+    isLoading: cargandoIngresos,
+    create: crearIngresoApi,
+    update: actualizarIngresoApi,
+    remove: eliminarIngresoApi,
+  } = useIngresosContratistasPE()
+  // Los padrones de la operación son las proyecciones `/api/pe/*` (permiso `pe:bitacora`):
+  // `/api/personas` y `/api/unidades` están detrás de `mp` y devuelven 403 a conserjería.
+  const { personas, total: totalPersonas } = usePersonasOperacion()
+  const { unidades, total: totalUnidades } = useUnidadesOperacion()
+  const { data: jornadas } = useMaestrosPE("jornadas")
+  const { data: contratistas } = useMaestrosPE("contratistas")
 
   const [formCont, setFormCont] = React.useState<FormContratista>({
     contratistaId: "",
@@ -53,26 +69,26 @@ export function ContratistasPanel({
     personaAgendaId: "",
   })
 
-  const jornadas = maestros.jornadas
-
   // Listas de opciones: se recortan a LIMITE_SELECT para no montar cientos de
   // SelectItem, y el recorte se declara en pantalla (nunca en silencio).
-  const unidadesDestino = unidades.filter((u) => !u.id.startsWith("u-E-"))
+  const unidadesDestino = unidades.filter(esUnidadDestino)
   const unidadesVisibles = unidadesDestino.slice(0, LIMITE_SELECT)
   const personasVisibles = personas.slice(0, LIMITE_SELECT)
 
   const refUnidad = (id?: string) => {
     if (!id) return "—"
     const u = unidades.find((x) => x.id === id)
-    return u ? `${u.etiqueta} ${u.numero}` : id
+    return u ? etiquetaUnidad(u) : id
   }
   const nombrePersona = (id?: string) => {
     if (!id) return "—"
     const p = personas.find((x) => x.id === id)
-    return p ? `${p.nombres} ${p.apellidos}` : id
+    return p ? p.nombreCompleto : id
   }
+  const nombreContratista = (id: string) =>
+    contratistas.find((c) => c.id === id)?.nombre ?? id
 
-  const guardarContratista = () => {
+  const guardarContratista = async () => {
     if (!formCont.contratistaId) {
       onError("Seleccione la empresa del maestro de contratistas.")
       return
@@ -82,7 +98,7 @@ export function ContratistasPanel({
       return
     }
     const ingreso: IngresoContratistaPE = {
-      id: `pe-cont-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      id: generarId("pe-cont"),
       contratistaId: formCont.contratistaId,
       motivo: formCont.motivo.trim(),
       unidadId: formCont.unidadId || undefined,
@@ -92,7 +108,7 @@ export function ContratistasPanel({
       personaAgendaId: formCont.agendadoPor === "residente" ? formCont.personaAgendaId || undefined : undefined,
       estado: "agendado",
     }
-    const r = saveIngresoContratistaPE(ingreso)
+    const r = await crearIngresoApi(ingreso)
     if (!r.ok) {
       onError(r.error ?? "No se pudo registrar el ingreso.")
       return
@@ -100,6 +116,18 @@ export function ContratistasPanel({
     setFormCont({ ...formCont, motivo: "" })
     onError(null)
     onSuccess("Contratista agendado. Conserjería confirma el ingreso al llegar.")
+  }
+
+  /** El sello del ingreso es del servidor: acá sólo se envía el estado y la hora. */
+  const confirmarIngreso = async (id: string) => {
+    const r = await actualizarIngresoApi(id, { estado: "ingresado", horaIngreso: horaActual() })
+    if (!r.ok) onError(r.error ?? "")
+    else onSuccess("Ingreso de contratista confirmado.")
+  }
+
+  const eliminarIngreso = async (id: string) => {
+    const r = await eliminarIngresoApi(id)
+    if (!r.ok) onError(r.error ?? "")
   }
 
   return (
@@ -117,7 +145,7 @@ export function ContratistasPanel({
                 <SelectValue placeholder="Seleccionar" />
               </SelectTrigger>
               <SelectContent>
-                {maestros.contratistas.map((c) => (
+                {contratistas.map((c) => (
                   <SelectItem key={c.id} value={c.id}>
                     {c.nombre}
                   </SelectItem>
@@ -174,7 +202,7 @@ export function ContratistasPanel({
                   ))}
                 </SelectContent>
               </Select>
-              <AvisoTruncamiento mostrados={personasVisibles.length} total={personas.length} />
+              <AvisoTruncamiento mostrados={personasVisibles.length} total={totalPersonas} />
             </div>
           )}
           <div className="flex flex-col gap-1.5">
@@ -187,14 +215,14 @@ export function ContratistasPanel({
                 <SelectItem value="__none">Áreas comunes</SelectItem>
                 {unidadesVisibles.map((u) => (
                   <SelectItem key={u.id} value={u.id}>
-                    {u.etiqueta} {u.numero}
+                    {etiquetaUnidad(u)}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
-            <AvisoTruncamiento mostrados={unidadesVisibles.length} total={unidadesDestino.length} />
+            <AvisoTruncamiento mostrados={unidadesVisibles.length} total={totalUnidades} />
           </div>
-          <Button onClick={guardarContratista}>
+          <Button onClick={() => void guardarContratista()}>
             <IconCheck className="mr-1 size-4" /> Agendar ingreso
           </Button>
         </CardContent>
@@ -205,7 +233,11 @@ export function ContratistasPanel({
           <CardTitle>Ingresos del día ({diaReporte})</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          {ingresosContratistas.filter((i) => i.fecha === diaReporte).length === 0 ? (
+          {cargandoIngresos ? (
+            <p className="p-4 text-sm text-muted-foreground" role="status">
+              Cargando los ingresos del día…
+            </p>
+          ) : ingresosContratistas.filter((i) => i.fecha === diaReporte).length === 0 ? (
             <p className="p-4 text-sm text-muted-foreground">Sin contratistas agendados para esta fecha.</p>
           ) : (
             <table className="w-full text-sm">
@@ -223,7 +255,7 @@ export function ContratistasPanel({
                   .map((i) => (
                     <tr key={i.id} className="border-b last:border-0">
                       <td className="p-3">
-                        {maestros.contratistas.find((c) => c.id === i.contratistaId)?.nombre ?? i.contratistaId}
+                        {nombreContratista(i.contratistaId)}
                         <span className="block text-xs text-muted-foreground">
                           {refUnidad(i.unidadId)} · {jornadas.find((j) => j.id === i.jornadaId)?.nombre}
                         </span>
@@ -247,21 +279,14 @@ export function ContratistasPanel({
                             <Button
                               size="sm"
                               variant="outline"
-                              onClick={() => {
-                                const r = confirmarIngresoContratistaPE(i.id)
-                                if (!r.ok) onError(r.error ?? "")
-                                else onSuccess("Ingreso de contratista confirmado.")
-                              }}
+                              onClick={() => void confirmarIngreso(i.id)}
                             >
                               Confirmar
                             </Button>
                             <Button
                               size="icon"
                               variant="ghost"
-                              onClick={() => {
-                                const r = removeIngresoContratistaPE(i.id)
-                                if (!r.ok) onError(r.error ?? "")
-                              }}
+                              onClick={() => void eliminarIngreso(i.id)}
                             >
                               <IconTrash className="size-4" />
                             </Button>

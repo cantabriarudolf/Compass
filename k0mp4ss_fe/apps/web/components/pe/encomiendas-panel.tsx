@@ -1,7 +1,12 @@
 "use client"
 
 import * as React from "react"
-import { useCompassStore } from "@/lib/store"
+import { useEncomiendasPE, useMaestrosPE } from "@/lib/api/use-pe"
+import { usePersonasOperacion } from "@/lib/api/use-personas"
+import { useUnidadesOperacion } from "@/lib/api/use-unidades"
+import { generarId } from "@/lib/id-utils"
+import { hoyISO } from "@/lib/date-utils"
+import { esUnidadDestino, etiquetaUnidad } from "@/lib/unidades-destino"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
@@ -44,13 +49,19 @@ export function EncomiendasPanel({
   onError: (msg: string | null) => void
   onSuccess: (msg: string | null) => void
 }) {
-  const unidades = useCompassStore((s) => s.unidades)
-  const personas = useCompassStore((s) => s.personas)
-  const maestros = useCompassStore((s) => s.maestros)
-  const encomiendas = useCompassStore((s) => s.encomiendasPE)
-  const saveEncomiendaPE = useCompassStore((s) => s.saveEncomiendaPE)
-  const registrarRetiroEncomiendaPE = useCompassStore((s) => s.registrarRetiroEncomiendaPE)
-  const removeEncomiendaPE = useCompassStore((s) => s.removeEncomiendaPE)
+  // Datos de dominio vía API REST (BD fuente de verdad); el store legacy ya no participa.
+  const {
+    items: encomiendas,
+    isLoading: cargandoEncomiendas,
+    create: crearEncomiendaApi,
+    update: actualizarEncomiendaApi,
+    remove: eliminarEncomiendaApi,
+  } = useEncomiendasPE()
+  // Los padrones de la operación son las proyecciones `/api/pe/*` (permiso `pe:bitacora`):
+  // `/api/personas` y `/api/unidades` están detrás de `mp` y devuelven 403 a conserjería.
+  const { personas, total: totalPersonas } = usePersonasOperacion()
+  const { unidades, total: totalUnidades } = useUnidadesOperacion()
+  const { data: couriers } = useMaestrosPE("couriers")
 
   const [formEnc, setFormEnc] = React.useState<FormEncomienda>({
     courierId: "",
@@ -64,22 +75,23 @@ export function EncomiendasPanel({
 
   // Listas de opciones: se recortan a LIMITE_SELECT para no montar cientos de
   // SelectItem, y el recorte se declara en pantalla (nunca en silencio).
-  const unidadesDestino = unidades.filter((u) => !u.id.startsWith("u-E-"))
+  const unidadesDestino = unidades.filter(esUnidadDestino)
   const unidadesVisibles = unidadesDestino.slice(0, LIMITE_SELECT)
   const personasVisibles = personas.slice(0, LIMITE_SELECT)
 
   const refUnidad = (id?: string) => {
     if (!id) return "—"
     const u = unidades.find((x) => x.id === id)
-    return u ? `${u.etiqueta} ${u.numero}` : id
+    return u ? etiquetaUnidad(u) : id
   }
   const nombrePersona = (id?: string) => {
     if (!id) return "—"
     const p = personas.find((x) => x.id === id)
-    return p ? `${p.nombres} ${p.apellidos}` : id
+    return p ? p.nombreCompleto : id
   }
+  const nombreCourier = (id: string) => couriers.find((c) => c.id === id)?.nombre ?? id
 
-  const guardarEncomienda = () => {
+  const guardarEncomienda = async () => {
     if (!formEnc.courierId) {
       onError("Seleccione el courier del maestro.")
       return
@@ -93,7 +105,7 @@ export function EncomiendasPanel({
       return
     }
     const enc: EncomiendaPE = {
-      id: `pe-enc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      id: generarId("pe-enc"),
       courierId: formEnc.courierId,
       destinatarioPersonaId: formEnc.destinatarioPersonaId || undefined,
       unidadId: formEnc.unidadId || undefined,
@@ -109,7 +121,7 @@ export function EncomiendasPanel({
       fechaRecepcion: diaReporte,
       estado: "recibida",
     }
-    const r = saveEncomiendaPE(enc)
+    const r = await crearEncomiendaApi(enc)
     if (!r.ok) {
       onError(r.error ?? "No se pudo registrar la encomienda.")
       return
@@ -124,6 +136,30 @@ export function EncomiendasPanel({
     })
     onError(null)
     onSuccess("Encomienda recibida y notificada según configuración.")
+  }
+
+  /** El retiro se sella en la encomienda de la base: estado + quién la retiró. */
+  const confirmarRetiro = async () => {
+    if (!retiroEnc) return
+    if (!retiroEnc.retiradoPor.trim()) {
+      onError("Debe identificar quién retira la encomienda.")
+      return
+    }
+    const r = await actualizarEncomiendaApi(retiroEnc.id, {
+      estado: "retirada",
+      retiro: { retiradoPor: retiroEnc.retiradoPor.trim(), fechaRetiro: hoyISO() },
+    })
+    if (!r.ok) {
+      onError(r.error ?? "")
+      return
+    }
+    setRetiroEnc(null)
+    onSuccess("Retiro registrado.")
+  }
+
+  const eliminarEncomienda = async (id: string) => {
+    const r = await eliminarEncomiendaApi(id)
+    if (!r.ok) onError(r.error ?? "")
   }
 
   return (
@@ -145,7 +181,7 @@ export function EncomiendasPanel({
                   <SelectValue placeholder="Seleccionar" />
                 </SelectTrigger>
                 <SelectContent>
-                  {maestros.couriers.map((c) => (
+                  {couriers.map((c) => (
                     <SelectItem key={c.id} value={c.id}>
                       {c.nombre}
                     </SelectItem>
@@ -174,7 +210,7 @@ export function EncomiendasPanel({
                     ))}
                   </SelectContent>
                 </Select>
-                <AvisoTruncamiento mostrados={personasVisibles.length} total={personas.length} />
+                <AvisoTruncamiento mostrados={personasVisibles.length} total={totalPersonas} />
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label>Unidad</Label>
@@ -189,12 +225,12 @@ export function EncomiendasPanel({
                     <SelectItem value="__none">Sin unidad</SelectItem>
                     {unidadesVisibles.map((u) => (
                       <SelectItem key={u.id} value={u.id}>
-                        {u.etiqueta} {u.numero}
+                        {etiquetaUnidad(u)}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
-                <AvisoTruncamiento mostrados={unidadesVisibles.length} total={unidadesDestino.length} />
+                <AvisoTruncamiento mostrados={unidadesVisibles.length} total={totalUnidades} />
               </div>
             </div>
             <div className="flex flex-col gap-1.5">
@@ -224,7 +260,7 @@ export function EncomiendasPanel({
                 />
               </div>
             </div>
-            <Button onClick={guardarEncomienda}>
+            <Button onClick={() => void guardarEncomienda()}>
               <IconCheck className="mr-1 size-4" /> Registrar recepción
             </Button>
           </CardContent>
@@ -235,7 +271,11 @@ export function EncomiendasPanel({
             <CardTitle>Encomiendas del día ({diaReporte})</CardTitle>
           </CardHeader>
           <CardContent className="p-0">
-            {encomiendas.filter((e) => e.fechaRecepcion === diaReporte).length === 0 ? (
+            {cargandoEncomiendas ? (
+              <p className="p-4 text-sm text-muted-foreground" role="status">
+                Cargando las encomiendas del día…
+              </p>
+            ) : encomiendas.filter((e) => e.fechaRecepcion === diaReporte).length === 0 ? (
               <p className="p-4 text-sm text-muted-foreground">Sin encomiendas para esta fecha.</p>
             ) : (
               <table className="w-full text-sm">
@@ -253,7 +293,7 @@ export function EncomiendasPanel({
                     .map((e) => (
                       <tr key={e.id} className="border-b last:border-0">
                         <td className="p-3">
-                          {maestros.couriers.find((c) => c.id === e.courierId)?.nombre ?? e.courierId}
+                          {nombreCourier(e.courierId)}
                           {e.descripcionPaquete ? (
                             <span className="block text-xs text-muted-foreground">{e.descripcionPaquete}</span>
                           ) : null}
@@ -279,25 +319,20 @@ export function EncomiendasPanel({
                               <Button
                                 size="sm"
                                 variant="outline"
-                                onClick={() =>
+                                onClick={() => {
+                                  const destinatario = nombrePersona(e.destinatarioPersonaId)
                                   setRetiroEnc({
                                     id: e.id,
-                                    retiradoPor:
-                                      nombrePersona(e.destinatarioPersonaId) === "—"
-                                        ? ""
-                                        : nombrePersona(e.destinatarioPersonaId),
+                                    retiradoPor: destinatario === "—" ? "" : destinatario,
                                   })
-                                }
+                                }}
                               >
                                 Registrar retiro
                               </Button>
                               <Button
                                 size="icon"
                                 variant="ghost"
-                                onClick={() => {
-                                  const r = removeEncomiendaPE(e.id)
-                                  if (!r.ok) onError(r.error ?? "")
-                                }}
+                                onClick={() => void eliminarEncomienda(e.id)}
                               >
                                 <IconTrash className="size-4" />
                               </Button>
@@ -331,20 +366,7 @@ export function EncomiendasPanel({
             <Button variant="outline" onClick={() => setRetiroEnc(null)}>
               Cancelar
             </Button>
-            <Button
-              onClick={() => {
-                if (!retiroEnc) return
-                const r = registrarRetiroEncomiendaPE(retiroEnc.id, retiroEnc.retiradoPor)
-                if (!r.ok) {
-                  onError(r.error ?? "")
-                } else {
-                  setRetiroEnc(null)
-                  onSuccess("Retiro registrado.")
-                }
-              }}
-            >
-              Confirmar retiro
-            </Button>
+            <Button onClick={() => void confirmarRetiro()}>Confirmar retiro</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

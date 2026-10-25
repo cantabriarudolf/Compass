@@ -40,6 +40,8 @@ export interface PersonaOpcion {
 
 interface ColeccionOperacion {
   data: PersonaOperacion[]
+  pageSize: number
+  total: number
 }
 
 const claveItem = (id: string) => `${LISTA}/${id}`
@@ -182,6 +184,41 @@ export function usePersona(id: string): UsePersonaResultado {
     error: error ?? null,
     update,
     remove,
+  }
+}
+
+export interface UsePersonasOperacionResultado {
+  personas: PersonaOperacion[]
+  /**
+   * Total de personas que reporta el servidor para el scope activo.
+   *
+   * La lista se pide con `pageSize=100`, así que `personas.length` puede ser menor que `total`:
+   * el consumidor DEBE avisar en pantalla cuando `total > personas.length` en vez de truncar en
+   * silencio (ver `components/pe/aviso-truncamiento.tsx`).
+   */
+  total: number
+  isLoading: boolean
+  error: Error | null
+}
+
+/**
+ * Padrón completo de personas de la operación, paginado al tope del selector.
+ *
+ * Pega en `GET /api/pe/personas?pageSize=100`, la proyección de solo lectura gobernada por
+ * `pe:bitacora` (el padrón de `mp` le devuelve 403 a la conserjería). Mismo patrón que
+ * `usePersonas`, pero sin mutaciones: los padrones de la operación son de solo lectura.
+ */
+export function usePersonasOperacion(): UsePersonasOperacionResultado {
+  const url = `${LISTA_OPERACION}?pageSize=100`
+  const { data, error, isLoading } = useSWR<ColeccionOperacion, Error>(url, fetcher, {
+    revalidateOnFocus: true,
+  })
+
+  return {
+    personas: data?.data ?? [],
+    total: data?.total ?? 0,
+    isLoading,
+    error: error ?? null,
   }
 }
 

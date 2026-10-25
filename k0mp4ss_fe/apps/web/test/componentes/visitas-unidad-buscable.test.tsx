@@ -9,15 +9,15 @@
  *
  * Estos casos fijan lo observable: el término viaja a `/api/pe/unidades?q=`, la opción muestra el
  * rol SII para desambiguar homónimas, el estacionamiento no es destino, la unidad elegida queda
- * en la visita con su id, y sin coincidencias el registro sigue disponible.
+ * en el cuerpo del `POST` a la bitácora, y sin coincidencias el registro sigue disponible vía
+ * residente destino (también buscando en el servidor).
  */
 import React from "react"
-import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest"
 import { cleanup, render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { resetStore } from "../helpers"
 import { instalarEntornoRadix } from "./entorno-radix"
-import { useCompassStore } from "@/lib/store"
+import { instalarApiPE } from "./api-pe-falsa"
 import { VisitasPanel } from "@/components/pe/visitas-panel"
 import { buscarUnidades } from "@/lib/api/use-unidades"
 import { esUnidadDestino, etiquetaUnidad } from "@/lib/unidades-destino"
@@ -33,39 +33,8 @@ const UNIDADES_API = [
   { id: "u-E-001", numero: "E-001", etiqueta: "Estacionamiento", rolSii: "" },
 ]
 
-function json(cuerpo: unknown): Response {
-  return new Response(JSON.stringify(cuerpo), {
-    status: 200,
-    headers: { "content-type": "application/json" },
-  })
-}
-
-/** Stub de fetch que registra las URLs pedidas y responde unidades / colección vacía. */
-function stubFetch(unidades: unknown[] = UNIDADES_API): string[] {
-  const urls: string[] = []
-  vi.stubGlobal(
-    "fetch",
-    vi.fn(async (url: string) => {
-      const pedida = String(url)
-      urls.push(pedida)
-      if (pedida.startsWith("/api/pe/unidades")) {
-        return json({ data: unidades, page: 1, pageSize: 25, total: unidades.length })
-      }
-      if (pedida.startsWith("/api/pe/personas")) {
-        return json({ data: [{ id: "p-residente", rut: "11111111-1", nombreCompleto: "Residente Destino" }] })
-      }
-      return json({ data: [], page: 1, pageSize: 10, total: 0 })
-    })
-  )
-  return urls
-}
-
 beforeAll(() => {
   instalarEntornoRadix()
-})
-
-beforeEach(() => {
-  resetStore()
 })
 
 afterEach(() => {
@@ -89,11 +58,10 @@ describe("unidades destino (cliente)", () => {
   })
 
   it("buscarUnidades consulta el término en el servidor y descarta el estacionamiento", async () => {
-    const urls = stubFetch()
+    instalarApiPE({ unidades: UNIDADES_API })
 
     const opciones = await buscarUnidades("101")
 
-    expect(urls.some((u) => u.startsWith("/api/pe/unidades?") && u.includes("q=101"))).toBe(true)
     expect(opciones).toEqual([
       { id: "u-A-101", etiqueta: "Depto 101 · 123-A11" },
       { id: "u-E-101", etiqueta: "Depto 101 · 123-E11" },
@@ -113,7 +81,7 @@ describe("unidades destino (cliente)", () => {
 describe("VisitasPanel — Unidad destino buscable (F6)", () => {
   it("busca en el servidor y registra la visita con la unidad elegida", async () => {
     const user = userEvent.setup()
-    const urls = stubFetch()
+    const api = instalarApiPE({ unidades: UNIDADES_API })
 
     render(<VisitasPanel diaReporte={HOY} onError={vi.fn()} onSuccess={vi.fn()} />)
 
@@ -132,9 +100,18 @@ describe("VisitasPanel — Unidad destino buscable (F6)", () => {
     await user.click(screen.getByRole("button", { name: /Registrar visita/ }))
 
     await waitFor(() =>
-      expect(useCompassStore.getState().bitacoraVisitasPE.at(-1)?.unidadId).toBe("u-E-101")
+      expect(
+        api.peticiones.filter(
+          (p) => p.metodo === "POST" && p.url === "/api/pe/bitacora-visitas"
+        )
+      ).toHaveLength(1)
     )
-    expect(urls.some((u) => u.includes("q=101"))).toBe(true)
+    const cuerpo = api.peticiones.filter(
+      (p) => p.metodo === "POST" && p.url === "/api/pe/bitacora-visitas"
+    )[0]!.cuerpo as Record<string, unknown>
+    // La unidad elegida queda en la visita con su id de la base.
+    expect(cuerpo.unidadId).toBe("u-E-101")
+    expect(api.peticiones.some((p) => p.url.includes("q=101"))).toBe(true)
 
     // La fila del día muestra la etiqueta de la unidad, no su id crudo.
     const fila = screen.getByRole("row", { name: /Visita F6/ })
@@ -143,9 +120,11 @@ describe("VisitasPanel — Unidad destino buscable (F6)", () => {
 
   it("sin coincidencias lo declara y la visita se puede registrar con residente destino", async () => {
     const user = userEvent.setup()
-    stubFetch([])
-
     const onError = vi.fn()
+    const api = instalarApiPE({
+      unidades: [],
+      personas: [{ id: "p-residente", rut: "11111111-1", nombreCompleto: "Residente Destino" }],
+    })
 
     render(<VisitasPanel diaReporte={HOY} onError={onError} onSuccess={vi.fn()} />)
 
@@ -166,12 +145,18 @@ describe("VisitasPanel — Unidad destino buscable (F6)", () => {
     await user.click(await within(lista).findByRole("option", { name: /Residente Destino/ }))
     await user.click(screen.getByRole("button", { name: /Registrar visita/ }))
 
-    await waitFor(() => {
-      // Si el panel rechazó el registro, el motivo aparece acá antes que el conteo.
-      expect(onError.mock.calls.filter((c) => c[0]).map((c) => String(c[0])).join(" | ")).toBe("")
-      const visita = useCompassStore.getState().bitacoraVisitasPE.at(-1)
-      expect(visita?.destinoPersonaId).toBeTruthy()
-      expect(visita?.unidadId).toBeUndefined()
-    })
+    await waitFor(() =>
+      expect(
+        api.peticiones.filter(
+          (p) => p.metodo === "POST" && p.url === "/api/pe/bitacora-visitas"
+        )
+      ).toHaveLength(1)
+    )
+    const cuerpo = api.peticiones.filter(
+      (p) => p.metodo === "POST" && p.url === "/api/pe/bitacora-visitas"
+    )[0]!.cuerpo as Record<string, unknown>
+    // El destino viaja como persona; la unidad queda fuera del cuerpo.
+    expect(cuerpo.destinoPersonaId).toBe("p-residente")
+    expect("unidadId" in cuerpo).toBe(false)
   })
 })

@@ -1,14 +1,21 @@
 // @vitest-environment jsdom
+/**
+ * Casos de los tres paneles PE contra el servidor REST falso (`api-pe-falsa.ts`).
+ *
+ * Los paneles ya no usan el store zustand: leen y escriben con los hooks de `lib/api/`. Cada caso
+ * refleja la fuente de verdad (la base): el cuerpo de la petición que el panel manda, la fila que
+ * se renderiza y el mensaje que recibe el usuario.
+ */
 import React from "react"
-import { beforeAll, beforeEach, afterEach, describe, expect, it, vi } from "vitest"
+import { beforeAll, afterEach, describe, expect, it, vi } from "vitest"
 import { cleanup, render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { resetStore, lastEvent } from "../helpers"
 import { instalarEntornoRadix } from "./entorno-radix"
-import { useCompassStore } from "@/lib/store"
+import { instalarApiPE } from "./api-pe-falsa"
 import { EncomiendasPanel } from "@/components/pe/encomiendas-panel"
 import { VisitasPanel } from "@/components/pe/visitas-panel"
 import { ContratistasPanel } from "@/components/pe/contratistas-panel"
+
 vi.setConfig({ testTimeout: 30_000 })
 
 /**
@@ -30,23 +37,22 @@ const HOY = new Date().toISOString().slice(0, 10)
 /** URL del QR del anverso de la cédula de Juan Pérez González (p-1, 15.123.456-9). */
 const URL_CEDULA_P1 =
   "https://www.registrocivil.cl/servicios-en-linea/valida-documento?RUN=15.123.456-9&type=CEDULA"
-/** RUN válido que NO está en el padrón de los mocks: fuerza la visita externa. */
+/** RUN válido que NO está en el padrón del servidor falso: fuerza la visita externa. */
 const URL_CEDULA_EXTERNA =
   "https://www.registrocivil.cl/servicios-en-linea/valida-documento?RUN=19.876.543-0&type=CEDULA"
 
-const PERSONA_P1 = {
-  id: "p-1",
-  rut: "15.123.456-9",
-  nombreCompleto: "Juan Pérez González",
-  nombres: "Juan",
-  apellidos: "Pérez González",
+/** Filtra el registro del servidor falso por método y prefijo de ruta. */
+function buscarPeticiones(
+  api: ReturnType<typeof instalarApiPE>,
+  metodo: string,
+  prefijoRuta: string
+) {
+  return api.peticiones.filter((p) => p.metodo === metodo && p.url.startsWith(prefijoRuta))
 }
 
-function json(cuerpo: unknown, status = 200): Response {
-  return new Response(JSON.stringify(cuerpo), {
-    status,
-    headers: { "content-type": "application/json" },
-  })
+/** Ningún onSuccess/onError recibió mensaje de error legible. */
+function sinErrores(onError: ReturnType<typeof vi.fn>): void {
+  expect(onError.mock.calls.filter((c) => c[0]).map((c) => String(c[0]))).toEqual([])
 }
 
 /**
@@ -85,10 +91,6 @@ beforeAll(() => {
   vi.spyOn(window.HTMLMediaElement.prototype, "play").mockResolvedValue(undefined)
 })
 
-beforeEach(() => {
-  resetStore()
-})
-
 afterEach(() => {
   cleanup()
   vi.unstubAllGlobals()
@@ -107,48 +109,32 @@ async function elegirOpcion(user: ReturnType<typeof userEvent.setup>, comboIndex
   await user.click(real)
 }
 
-/**
- * Busca y elige una unidad destino del servidor (F6: «Unidad destino» es un combobox buscable).
- *
- * El stub responde `GET /api/pe/unidades?q=` con una unidad del seed y deja el resto de la
- * colección vacío, para que la búsqueda de personas del QR siga viéndose igual.
- */
+/** Elige la unidad «Depto 101 · 123-A11» del seed en el selector buscable (F6). */
 async function elegirUnidadDestino(user: ReturnType<typeof userEvent.setup>) {
-  vi.stubGlobal(
-    "fetch",
-    vi.fn(async (url: string) =>
-      String(url).startsWith("/api/pe/unidades")
-        ? json({
-            data: [{ id: "u-A-101", numero: "101", etiqueta: "Depto", rolSii: "123-A11" }],
-            page: 1,
-            pageSize: 25,
-            total: 1,
-          })
-        : json({ data: [], page: 1, pageSize: 10, total: 0 })
-    )
-  )
   await user.type(screen.getByLabelText("Unidad destino"), "101")
   const lista = await screen.findByRole(
     "listbox",
     { name: /Resultados de Unidad destino/ },
     { timeout: 10_000 }
   )
-  await user.click(await within(lista).findByRole("option", { name: /Depto 101/ }))
+  await user.click(await within(lista).findByRole("option", { name: /Depto 101 · 123-A11/ }))
 }
 
 describe("EncomiendasPanel (componente, RTL)", () => {
-  it("renderiza el form y la tabla vacía del día", { timeout: PRESUPUESTO_CARGA }, () => {
+  it("renderiza el form y la tabla vacía del día", { timeout: PRESUPUESTO_CARGA }, async () => {
+    instalarApiPE()
     render(<EncomiendasPanel diaReporte={HOY} onError={vi.fn()} onSuccess={vi.fn()} />)
-    expect(screen.getByText(/Encomiendas del día/)).toBeTruthy()
-    expect(screen.getByText("Sin encomiendas para esta fecha.")).toBeTruthy()
+    // SWR arranca cargando: se espera el estado final, no el «Cargando…» transitorio.
+    expect(await screen.findByText(/Encomiendas del día/)).toBeTruthy()
+    expect(await screen.findByText("Sin encomiendas para esta fecha.")).toBeTruthy()
     expect(screen.getByLabelText("Descripción del paquete")).toBeTruthy()
   })
 
-  it("recibe una encomienda TEST: fila + store + evento auditado", { timeout: PRESUPUESTO_CARGA }, async () => {
+  it("recibe una encomienda TEST: fila + POST a la API", { timeout: PRESUPUESTO_CARGA }, async () => {
     const user = userEvent.setup()
     const onSuccess = vi.fn()
     const onError = vi.fn()
-    const antes = useCompassStore.getState().encomiendasPE.length
+    const api = instalarApiPE()
 
     render(<EncomiendasPanel diaReporte={HOY} onError={onError} onSuccess={onSuccess} />)
 
@@ -158,18 +144,26 @@ describe("EncomiendasPanel (componente, RTL)", () => {
     await user.type(screen.getByLabelText("Descripción del paquete"), "TEST-RTL paquete")
     await user.click(screen.getByRole("button", { name: /Registrar recepción/ }))
 
-    expect(onError.mock.calls.filter((c) => c[0]).map((c) => JSON.stringify(c[0]))).toEqual([])
-    const despues = useCompassStore.getState().encomiendasPE
-    expect(despues.length).toBe(antes + 1)
-    expect(screen.getByText("TEST-RTL paquete")).toBeTruthy()
+    await waitFor(() => expect(buscarPeticiones(api, "POST", "/api/pe/encomiendas")).toHaveLength(1))
+    const post = buscarPeticiones(api, "POST", "/api/pe/encomiendas")[0]!
+    expect(post.url).toBe("/api/pe/encomiendas")
+    const cuerpo = post.cuerpo as Record<string, unknown>
+    expect(cuerpo.estado).toBe("recibida")
+    expect(cuerpo.fechaRecepcion).toBe(HOY)
+    expect((cuerpo.id as string).startsWith("pe-enc-")).toBe(true)
+    expect(String(cuerpo.courierId)).toBeTruthy()
+    expect(cuerpo.descripcionPaquete).toBe("TEST-RTL paquete")
+
+    sinErrores(onError)
+    expect(await screen.findByText("TEST-RTL paquete")).toBeTruthy()
     expect(screen.getByText("Recibida")).toBeTruthy()
     expect(onSuccess).toHaveBeenCalled()
-    expect(lastEvent()?.tipoAccion).toBe("PE_ENCOMIENDA_RECIBIDA")
   })
 
   it("retiro de encomienda: dialog exige retiradoPor y marca Retirada", { timeout: PRESUPUESTO_CARGA }, async () => {
     const user = userEvent.setup()
     const onSuccess = vi.fn()
+    const api = instalarApiPE()
     render(<EncomiendasPanel diaReporte={HOY} onError={vi.fn()} onSuccess={onSuccess} />)
 
     await elegirOpcion(user, 0)
@@ -178,6 +172,7 @@ describe("EncomiendasPanel (componente, RTL)", () => {
     await user.type(screen.getByLabelText("Descripción del paquete"), "TEST-RTL retiro")
     await user.click(screen.getByRole("button", { name: /Registrar recepción/ }))
 
+    await screen.findByRole("button", { name: "Registrar retiro" })
     await user.click(screen.getByRole("button", { name: "Registrar retiro" }))
     const dialogo = screen.getByRole("dialog")
     const retPor = within(dialogo).getByLabelText("Retirado por *")
@@ -185,19 +180,46 @@ describe("EncomiendasPanel (componente, RTL)", () => {
     await user.type(retPor, "María TEST")
     await user.click(within(dialogo).getByRole("button", { name: "Confirmar retiro" }))
 
+    await waitFor(() => expect(buscarPeticiones(api, "PUT", "/api/pe/encomiendas/")).toHaveLength(1))
+    const put = buscarPeticiones(api, "PUT", "/api/pe/encomiendas/")[0]!
+    expect(/^\/api\/pe\/encomiendas\/pe-enc-/.test(put.url)).toBe(true)
+    const cuerpo = put.cuerpo as Record<string, unknown>
+    expect(cuerpo.estado).toBe("retirada")
+    expect((cuerpo.retiro as Record<string, unknown>).retiradoPor).toBe("María TEST")
     expect(onSuccess).toHaveBeenCalledWith("Retiro registrado.")
     expect(await screen.findByText(/Retirada por María TEST/)).toBeTruthy()
-    const estado = useCompassStore.getState().encomiendasPE.at(-1)?.estado
-    expect(estado).toBe("retirada")
+  })
+
+  it("el retiro sin nombre no viaja al servidor", { timeout: PRESUPUESTO_CARGA }, async () => {
+    const user = userEvent.setup()
+    const onError = vi.fn()
+    const api = instalarApiPE()
+    render(<EncomiendasPanel diaReporte={HOY} onError={onError} onSuccess={vi.fn()} />)
+
+    await elegirOpcion(user, 0)
+    await elegirOpcion(user, 1)
+    await elegirOpcion(user, 2)
+    await user.type(screen.getByLabelText("Descripción del paquete"), "TEST-RTL sin nombre")
+    await user.click(screen.getByRole("button", { name: /Registrar recepción/ }))
+    await screen.findByRole("button", { name: "Registrar retiro" })
+
+    await user.click(screen.getByRole("button", { name: "Registrar retiro" }))
+    const dialogo = screen.getByRole("dialog")
+    const retPor = within(dialogo).getByLabelText("Retirado por *")
+    await user.clear(retPor)
+    await user.click(within(dialogo).getByRole("button", { name: "Confirmar retiro" }))
+
+    expect(onError).toHaveBeenCalledWith("Debe identificar quién retira la encomienda.")
+    expect(buscarPeticiones(api, "PUT", "/api/pe/encomiendas/")).toHaveLength(0)
   })
 })
 
 describe("VisitasPanel (componente, RTL)", () => {
-  it("registrar visita sin aviso: fila + store + evento", { timeout: PRESUPUESTO_CARGA }, async () => {
+  it("registrar visita sin aviso: fila + POST", { timeout: PRESUPUESTO_CARGA }, async () => {
     const user = userEvent.setup()
-    const onError = vi.fn()
     const onSuccess = vi.fn()
-    const antes = useCompassStore.getState().bitacoraVisitasPE.length
+    const onError = vi.fn()
+    const api = instalarApiPE()
 
     render(<VisitasPanel diaReporte={HOY} onError={onError} onSuccess={onSuccess} />)
 
@@ -207,15 +229,24 @@ describe("VisitasPanel (componente, RTL)", () => {
     await elegirUnidadDestino(user)
     await user.click(screen.getByRole("button", { name: /Registrar visita/ }))
 
-    expect(onError.mock.calls.filter((c) => c[0]).map((c) => JSON.stringify(c[0]))).toEqual([])
-    await waitFor(() => expect(useCompassStore.getState().bitacoraVisitasPE.length).toBe(antes + 1))
-    expect(screen.getByText("Visitante TEST-RTL")).toBeTruthy()
-    expect(lastEvent()?.tipoAccion).toBe("PE_VISITA_INGRESADA")
+    await waitFor(() =>
+      expect(buscarPeticiones(api, "POST", "/api/pe/bitacora-visitas")).toHaveLength(1)
+    )
+    const post = buscarPeticiones(api, "POST", "/api/pe/bitacora-visitas")[0]!
+    expect(post.url).toBe("/api/pe/bitacora-visitas")
+    const cuerpo = post.cuerpo as Record<string, unknown>
+    expect(cuerpo.estado).toBe("ingresada")
+    expect(/^\d{2}:\d{2}$/.test(String(cuerpo.horaIngreso))).toBe(true)
+    expect(cuerpo.fecha).toBe(HOY)
+
+    sinErrores(onError)
+    expect(await screen.findByText("Visitante TEST-RTL")).toBeTruthy()
+    expect(onSuccess).toHaveBeenCalled()
   })
 
   it("pre-agendada: estado Agendada hasta confirmar ingreso", { timeout: PRESUPUESTO_CARGA }, async () => {
     const user = userEvent.setup()
-    const antes = useCompassStore.getState().visitasTecnicasPE.length
+    const api = instalarApiPE()
 
     render(<VisitasPanel diaReporte={HOY} onError={vi.fn()} onSuccess={vi.fn()} />)
 
@@ -226,19 +257,30 @@ describe("VisitasPanel (componente, RTL)", () => {
     await user.click(screen.getByRole("switch"))
     await user.click(screen.getByRole("button", { name: /Registrar visita/ }))
 
-    await waitFor(() => expect(useCompassStore.getState().bitacoraVisitasPE.length).toBe(antes + 1))
-    const visita = useCompassStore.getState().bitacoraVisitasPE.at(-1)
-    expect(visita?.estado).toBe("agendada")
-    expect(lastEvent()?.tipoAccion).not.toBe("PE_VISITA_INGRESADA")
+    await waitFor(() =>
+      expect(buscarPeticiones(api, "POST", "/api/pe/bitacora-visitas")).toHaveLength(1)
+    )
+    const cuerpoPost = buscarPeticiones(api, "POST", "/api/pe/bitacora-visitas")[0]!
+      .cuerpo as Record<string, unknown>
+    expect(cuerpoPost.estado).toBe("agendada")
+    expect("horaIngreso" in cuerpoPost).toBe(false)
+    expect(await screen.findByText("Agendada")).toBeTruthy()
+
+    await user.click(await screen.findByRole("button", { name: "Marcar Ingresada" }))
+    await waitFor(() =>
+      expect(buscarPeticiones(api, "PUT", "/api/pe/bitacora-visitas/")).toHaveLength(1)
+    )
+    const put = buscarPeticiones(api, "PUT", "/api/pe/bitacora-visitas/")[0]!
+    expect(/^\/api\/pe\/bitacora-visitas\/pe-vis-/.test(put.url)).toBe(true)
+    const cuerpoPut = put.cuerpo as Record<string, unknown>
+    expect(cuerpoPut.estado).toBe("ingresada")
+    expect(/^\d{2}:\d{2}$/.test(String(cuerpoPut.horaIngreso))).toBe(true)
+    expect(await screen.findByText(/Ingresada \d{2}:\d{2}/)).toBeTruthy()
   })
 
   it("Escanear QR de la cédula identifica al residente y NO registra la visita", { timeout: PRESUPUESTO_CARGA }, async () => {
     const user = userEvent.setup()
-    const antes = useCompassStore.getState().bitacoraVisitasPE.length
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => json({ data: [PERSONA_P1], page: 1, pageSize: 10, total: 1 }))
-    )
+    const api = instalarApiPE()
     instalarCamara()
     instalarDetector(URL_CEDULA_P1)
 
@@ -257,29 +299,29 @@ describe("VisitasPanel (componente, RTL)", () => {
     expect(within(resultado).getByText("15.***.***-9")).toBeTruthy()
     expect(within(resultado).getByText("Depto 101 · 123-A11")).toBeTruthy()
     expect(within(resultado).getByText("Propietario")).toBeTruthy()
-    // El escaneo por sí solo NO registra nada.
-    expect(useCompassStore.getState().bitacoraVisitasPE.length).toBe(antes)
+    // El escaneo por sí solo registra NADA en la bitácora de la base.
+    expect(buscarPeticiones(api, "POST", "/api/pe/bitacora-visitas")).toHaveLength(0)
 
     await user.click(within(resultado).getByRole("button", { name: /Confirmar identidad/ }))
-    // La confirmación completa el formulario, tampoco guarda la visita.
-    expect(useCompassStore.getState().bitacoraVisitasPE.length).toBe(antes)
+    // La confirmación solo completa el formulario: tampoco guarda la visita.
+    expect(buscarPeticiones(api, "POST", "/api/pe/bitacora-visitas")).toHaveLength(0)
     expect((screen.getByLabelText("Nombre *") as HTMLInputElement).value).toBe("Juan Pérez González")
     expect((screen.getByLabelText("DNI *") as HTMLInputElement).value).toBe("15123456-9")
     // La unidad del vínculo queda preseleccionada y visible en el control buscable.
-    expect(screen.getByText("Depto 101 · 123-A11")).toBeTruthy()
+    expect(screen.getAllByText("Depto 101 · 123-A11").length).toBeGreaterThanOrEqual(1)
 
     await user.click(screen.getByRole("button", { name: /Registrar visita/ }))
-    await waitFor(() => expect(useCompassStore.getState().bitacoraVisitasPE.length).toBe(antes + 1))
-    expect(lastEvent()?.tipoAccion).toBe("PE_VISITA_INGRESADA")
+    await waitFor(() =>
+      expect(buscarPeticiones(api, "POST", "/api/pe/bitacora-visitas")).toHaveLength(1)
+    )
+    const cuerpo = buscarPeticiones(api, "POST", "/api/pe/bitacora-visitas")[0]!
+      .cuerpo as Record<string, unknown>
+    expect(cuerpo.destinoPersonaId).toBe("p-1")
   })
 
   it("sin coincidencia en el padrón ofrece la visita externa con el RUT leído", { timeout: PRESUPUESTO_CARGA }, async () => {
     const user = userEvent.setup()
-    const antes = useCompassStore.getState().bitacoraVisitasPE.length
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => json({ data: [], page: 1, pageSize: 10, total: 0 }))
-    )
+    const api = instalarApiPE()
     instalarCamara()
     instalarDetector(URL_CEDULA_EXTERNA)
 
@@ -297,17 +339,14 @@ describe("VisitasPanel (componente, RTL)", () => {
     await user.click(within(resultado).getByRole("button", { name: /Usar el RUT leído/ }))
     expect((screen.getByLabelText("DNI *") as HTMLInputElement).value).toBe("19876543-0")
     // La visita externa tampoco se registra sola: falta el nombre y el botón.
-    expect(useCompassStore.getState().bitacoraVisitasPE.length).toBe(antes)
+    expect(buscarPeticiones(api, "POST", "/api/pe/bitacora-visitas")).toHaveLength(0)
   })
 
   it("si el padrón del servidor no responde, busca en el padrón local sin bloquear", { timeout: PRESUPUESTO_CARGA }, async () => {
     const user = userEvent.setup()
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => {
-        throw new Error("sin red")
-      })
-    )
+    // El listado del padrón responde bien, pero la consulta puntual `?rut=` falla:
+    // el panel debe resolver con el padrón ya cargado y avisarlo en pantalla.
+    instalarApiPE({ fallarRutPersona: true })
     instalarCamara()
     instalarDetector(URL_CEDULA_P1)
 
@@ -325,11 +364,7 @@ describe("VisitasPanel (componente, RTL)", () => {
 
   it("búsqueda manual por RUT: completa el formulario solo al confirmar", { timeout: PRESUPUESTO_CARGA }, async () => {
     const user = userEvent.setup()
-    const antes = useCompassStore.getState().bitacoraVisitasPE.length
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => json({ data: [], page: 1, pageSize: 10, total: 0 }))
-    )
+    const api = instalarApiPE()
 
     render(<VisitasPanel diaReporte={HOY} onError={vi.fn()} onSuccess={vi.fn()} />)
 
@@ -342,32 +377,51 @@ describe("VisitasPanel (componente, RTL)", () => {
       { name: "Resultado del escaneo" },
       { timeout: 10_000 }
     )
+    // El RUN viaja a la proyección `?rut=` (scoping de comunidad en la ruta), no al store.
+    await waitFor(() =>
+      expect(api.peticiones.some((p) => p.url.includes("/api/pe/personas?rut="))).toBe(true)
+    )
     expect(within(resultado).getByText("Juan Pérez González")).toBeTruthy()
-    expect(useCompassStore.getState().bitacoraVisitasPE.length).toBe(antes)
+    expect(buscarPeticiones(api, "POST", "/api/pe/bitacora-visitas")).toHaveLength(0)
 
     await user.click(within(resultado).getByRole("button", { name: /Confirmar identidad/ }))
     expect((screen.getByLabelText("Nombre *") as HTMLInputElement).value).toBe("Juan Pérez González")
-    expect(useCompassStore.getState().bitacoraVisitasPE.length).toBe(antes)
+    expect(buscarPeticiones(api, "POST", "/api/pe/bitacora-visitas")).toHaveLength(0)
   })
 })
 
 describe("ContratistasPanel (componente, RTL)", () => {
-  it("valida motivo corto con onError y sin mutar store", { timeout: PRESUPUESTO_CARGA }, async () => {
+  it("valida motivo corto con onError y sin mutar la base", { timeout: PRESUPUESTO_CARGA }, async () => {
     const user = userEvent.setup()
     const onError = vi.fn()
-    const antes = useCompassStore.getState().ingresosContratistasPE.length
+    const api = instalarApiPE()
 
     render(<ContratistasPanel diaReporte={HOY} onError={onError} onSuccess={vi.fn()} />)
 
     await user.click(screen.getByRole("button", { name: /Agendar ingreso/ }))
     expect(onError).toHaveBeenCalledWith("Seleccione la empresa del maestro de contratistas.")
-    expect(useCompassStore.getState().ingresosContratistasPE.length).toBe(antes)
+    expect(buscarPeticiones(api, "POST", "/api/pe/ingresos-contratistas")).toHaveLength(0)
   })
 
-  it("agendar ingreso TEST: fila + store + evento", { timeout: PRESUPUESTO_CARGA }, async () => {
+  it("el motivo corto con empresa elegida tampoco viaja al servidor", { timeout: PRESUPUESTO_CARGA }, async () => {
     const user = userEvent.setup()
     const onError = vi.fn()
-    const antes = useCompassStore.getState().ingresosContratistasPE.length
+    const api = instalarApiPE()
+
+    render(<ContratistasPanel diaReporte={HOY} onError={onError} onSuccess={vi.fn()} />)
+
+    await elegirOpcion(user, 0) // Empresa
+    await user.type(screen.getByLabelText("Motivo específico del ingreso *"), "Rep")
+    await user.click(screen.getByRole("button", { name: /Agendar ingreso/ }))
+
+    expect(onError).toHaveBeenCalledWith("Se exige detallar el motivo específico del ingreso.")
+    expect(buscarPeticiones(api, "POST", "/api/pe/ingresos-contratistas")).toHaveLength(0)
+  })
+
+  it("agendar ingreso TEST: fila + POST", { timeout: PRESUPUESTO_CARGA }, async () => {
+    const user = userEvent.setup()
+    const onError = vi.fn()
+    const api = instalarApiPE()
 
     render(<ContratistasPanel diaReporte={HOY} onError={onError} onSuccess={vi.fn()} />)
 
@@ -376,8 +430,55 @@ describe("ContratistasPanel (componente, RTL)", () => {
     await elegirOpcion(user, 1) // Jornada
     await user.click(screen.getByRole("button", { name: /Agendar ingreso/ }))
 
-    expect(onError.mock.calls.filter((c) => c[0]).map((c) => JSON.stringify(c[0]))).toEqual([])
-    expect(useCompassStore.getState().ingresosContratistasPE.length).toBe(antes + 1)
-    expect(screen.getByText(/TEST-RTL reparación/)).toBeTruthy()
+    await waitFor(() =>
+      expect(buscarPeticiones(api, "POST", "/api/pe/ingresos-contratistas")).toHaveLength(1)
+    )
+    const post = buscarPeticiones(api, "POST", "/api/pe/ingresos-contratistas")[0]!
+    const cuerpo = post.cuerpo as Record<string, unknown>
+    expect(cuerpo.estado).toBe("agendado")
+    expect(cuerpo.motivo).toBe("TEST-RTL reparación")
+    expect(cuerpo.fecha).toBe(HOY)
+    expect(cuerpo.jornadaId).toBe("j-manana")
+    expect(cuerpo.agendadoPor).toBe("administracion")
+
+    sinErrores(onError)
+    expect(await screen.findByText(/TEST-RTL reparación/)).toBeTruthy()
+  })
+
+  it("Confirmar sella el ingreso", { timeout: PRESUPUESTO_CARGA }, async () => {
+    const user = userEvent.setup()
+    const api = instalarApiPE()
+
+    render(<ContratistasPanel diaReporte={HOY} onError={vi.fn()} onSuccess={vi.fn()} />)
+
+    await elegirOpcion(user, 0) // Empresa
+    await user.type(screen.getByLabelText("Motivo específico del ingreso *"), "TEST-RTL revisión")
+    await user.click(screen.getByRole("button", { name: /Agendar ingreso/ }))
+
+    await user.click(await screen.findByRole("button", { name: "Confirmar" }))
+    await waitFor(() =>
+      expect(buscarPeticiones(api, "PUT", "/api/pe/ingresos-contratistas/")).toHaveLength(1)
+    )
+    const put = buscarPeticiones(api, "PUT", "/api/pe/ingresos-contratistas/")[0]!
+    expect(/^\/api\/pe\/ingresos-contratistas\/pe-cont-/.test(put.url)).toBe(true)
+    const cuerpo = put.cuerpo as Record<string, unknown>
+    expect(cuerpo.estado).toBe("ingresado")
+    expect(/^\d{2}:\d{2}$/.test(String(cuerpo.horaIngreso))).toBe(true)
+    expect(await screen.findByText(/Ingresado \d{2}:\d{2}/)).toBeTruthy()
+  })
+
+  it("el estacionamiento no es destino", { timeout: PRESUPUESTO_CARGA }, async () => {
+    const user = userEvent.setup()
+    // El padrón del servidor SÍ trae la plaza; el filtro `esUnidadDestino` del panel
+    // es el que no la ofrece en «Unidad destino».
+    instalarApiPE()
+    render(<ContratistasPanel diaReporte={HOY} onError={vi.fn()} onSuccess={vi.fn()} />)
+
+    const combos = screen.getAllByRole("combobox")
+    await user.click(combos[3]!) // Unidad destino
+    const listbox = await screen.findByRole("listbox", {}, { timeout: 5_000 })
+
+    expect(within(listbox).queryByText(/Estacionamiento/)).toBeNull()
+    expect(within(listbox).getByText(/Depto 101/)).toBeTruthy()
   })
 })

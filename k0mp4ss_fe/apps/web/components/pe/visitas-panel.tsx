@@ -1,7 +1,9 @@
 "use client"
 
 import * as React from "react"
-import { useCompassStore } from "@/lib/store"
+import { useBitacoraVisitasPE, useMaestrosPE } from "@/lib/api/use-pe"
+import { useVinculos } from "@/lib/api/use-vinculos"
+import { generarId } from "@/lib/id-utils"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
@@ -18,11 +20,16 @@ import {
 import { IconCheck, IconQrcode, IconSearch, IconTrash } from "@tabler/icons-react"
 import { EscaneoQrCedula } from "@/components/pe/escaneo-qr-cedula"
 import { SelectorBuscable, type Opcion } from "@/components/selector-buscable"
-import { buscarPersonaPorRun, buscarPersonas } from "@/lib/api/use-personas"
-import { buscarUnidades } from "@/lib/api/use-unidades"
+import { buscarPersonaPorRun, buscarPersonas, usePersonasOperacion } from "@/lib/api/use-personas"
+import { buscarUnidades, useUnidadesOperacion } from "@/lib/api/use-unidades"
 import { esUnidadDestino, etiquetaUnidad } from "@/lib/unidades-destino"
 import { mascararRun, normalizarRun, validarRun } from "@/lib/validacion-rut"
 import type { BitacoraVisitaPE } from "@/lib/schemas"
+
+/** Hora local HH:MM: es el formato de `horaIngreso` en el contrato PE. */
+function horaActual(): string {
+  return new Date().toTimeString().slice(0, 5)
+}
 
 /** Etiqueta legible del vínculo persona↔unidad (VU). */
 const ETIQUETA_VINCULO: Record<string, string> = {
@@ -71,14 +78,20 @@ export function VisitasPanel({
   onError: (msg: string | null) => void
   onSuccess: (msg: string | null) => void
 }) {
-  const unidades = useCompassStore((s) => s.unidades)
-  const personas = useCompassStore((s) => s.personas)
-  const maestros = useCompassStore((s) => s.maestros)
-  const visitas = useCompassStore((s) => s.bitacoraVisitasPE)
-  const saveBitacoraVisitaPE = useCompassStore((s) => s.saveBitacoraVisitaPE)
-  const ingresarBitacoraVisitaPE = useCompassStore((s) => s.ingresarBitacoraVisitaPE)
-  const removeBitacoraVisitaPE = useCompassStore((s) => s.removeBitacoraVisitaPE)
-  const vinculos = useCompassStore((s) => s.vinculos)
+  // Datos de dominio vía API REST (BD fuente de verdad); el store legacy ya no participa. Los
+  // padrones son las proyecciones `/api/pe/*` (permiso `pe:bitacora`): `/api/personas` y
+  // `/api/unidades` están detrás de `mp` y devuelven 403 al rol que registra la visita (H9).
+  const {
+    items: visitas,
+    isLoading: cargandoVisitas,
+    create: crearVisitaApi,
+    update: actualizarVisitaApi,
+    remove: eliminarVisitaApi,
+  } = useBitacoraVisitasPE()
+  const { personas } = usePersonasOperacion()
+  const { unidades } = useUnidadesOperacion()
+  const { vinculos } = useVinculos()
+  const { data: jornadas } = useMaestrosPE("jornadas")
 
   const [formVisita, setFormVisita] = React.useState<FormVisita>({
     nombre: "",
@@ -90,8 +103,6 @@ export function VisitasPanel({
     origenAgenda: "sin_aviso",
     notas: "",
   })
-
-  const jornadas = maestros.jornadas
 
   // Identificación por cédula: el escaneo o la búsqueda manual SOLO proponen
   // datos; la visita se sigue registrando con el botón de abajo.
@@ -144,7 +155,7 @@ export function VisitasPanel({
     const recordado = etiquetasPersona[id]
     if (recordado) return recordado
     const p = personas.find((x) => x.id === id)
-    return p ? `${p.nombres} ${p.apellidos}` : id
+    return p ? p.nombreCompleto : id
   }
 
   /** Selección desde la búsqueda del servidor: guarda el nombre que el usuario vio. */
@@ -201,8 +212,7 @@ export function VisitasPanel({
 
     const local = personas.find((p) => normalizarRun(p.rut) === run)
     if (local) {
-      const nombre = `${local.nombres} ${local.apellidos}`.trim() || local.nombreCompleto
-      setResultadoIdentidad({ tipo: "padron", coincidencia: resolverCoincidencia(local.id, nombre, run) })
+      setResultadoIdentidad({ tipo: "padron", coincidencia: resolverCoincidencia(local.id, local.nombreCompleto, run) })
       return
     }
     setResultadoIdentidad({ tipo: "sin_coincidencia", run })
@@ -263,7 +273,7 @@ export function VisitasPanel({
     onSuccess("RUT leído aplicado como visita externa. Escribe el nombre y registra la visita.")
   }
 
-  const guardarVisita = () => {
+  const guardarVisita = async () => {
     if (!formVisita.nombre.trim() || !formVisita.dni.trim()) {
       onError("Nombre y DNI de la visita son obligatorios.")
       return
@@ -274,7 +284,7 @@ export function VisitasPanel({
     }
     const esAgendada = formVisita.origenAgenda === "pre_agendada"
     const visita: BitacoraVisitaPE = {
-      id: `pe-vis-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      id: generarId("pe-vis"),
       fecha: diaReporte,
       nombre: formVisita.nombre.trim(),
       dni: formVisita.dni.trim(),
@@ -285,9 +295,10 @@ export function VisitasPanel({
       origenAgenda: formVisita.origenAgenda,
       agendadaPorPersonaId: undefined,
       estado: esAgendada ? "agendada" : "ingresada",
+      ...(esAgendada ? {} : { horaIngreso: horaActual() }),
       notas: formVisita.notas.trim() || undefined,
     }
-    const r = saveBitacoraVisitaPE(visita)
+    const r = await crearVisitaApi(visita)
     if (!r.ok) {
       onError(r.error ?? "No se pudo registrar la visita.")
       return
@@ -295,6 +306,21 @@ export function VisitasPanel({
     setFormVisita({ ...formVisita, nombre: "", dni: "", patente: "", notas: "" })
     onError(null)
     onSuccess(esAgendada ? "Visita pre-agendada a la espera del ingreso." : "Visita registrada e ingresada.")
+  }
+
+  /** Sello de ingreso de una visita pre-agendada: estado + hora en la bitácora de la base. */
+  const ingresarVisita = async (visita: BitacoraVisitaPE) => {
+    const r = await actualizarVisitaApi(visita.id, {
+      estado: "ingresada",
+      horaIngreso: horaActual(),
+    })
+    if (!r.ok) onError(r.error ?? "")
+    else onSuccess(`Visita ${visita.nombre} ingresada.`)
+  }
+
+  const eliminarVisita = async (id: string) => {
+    const r = await eliminarVisitaApi(id)
+    if (!r.ok) onError(r.error ?? "")
   }
 
   return (
@@ -462,7 +488,7 @@ export function VisitasPanel({
             <Label htmlFor="v-notas">Notas</Label>
             <Input id="v-notas" value={formVisita.notas} onChange={(e) => setFormVisita({ ...formVisita, notas: e.target.value })} />
           </div>
-          <Button onClick={guardarVisita}>
+          <Button onClick={() => void guardarVisita()}>
             <IconCheck className="mr-1 size-4" /> Registrar visita
           </Button>
         </CardContent>
@@ -474,7 +500,11 @@ export function VisitasPanel({
           <CardDescription>Las visitas agendadas se sellan al llegar.</CardDescription>
         </CardHeader>
         <CardContent className="p-0">
-          {visitas.filter((v) => v.fecha === diaReporte).length === 0 ? (
+          {cargandoVisitas ? (
+            <p className="p-4 text-sm text-muted-foreground" role="status">
+              Cargando la bitácora del día…
+            </p>
+          ) : visitas.filter((v) => v.fecha === diaReporte).length === 0 ? (
             <p className="p-4 text-sm text-muted-foreground">Sin visitas registradas para esta fecha.</p>
           ) : (
             <table className="w-full text-sm">
@@ -518,11 +548,7 @@ export function VisitasPanel({
                           <Button
                             size="sm"
                             variant="outline"
-                            onClick={() => {
-                              const r = ingresarBitacoraVisitaPE(v.id)
-                              if (!r.ok) onError(r.error ?? "")
-                              else onSuccess(`Visita ${v.nombre} ingresada.`)
-                            }}
+                            onClick={() => void ingresarVisita(v)}
                           >
                             Marcar Ingresada
                           </Button>
@@ -531,10 +557,7 @@ export function VisitasPanel({
                           <Button
                             size="icon"
                             variant="ghost"
-                            onClick={() => {
-                              const r = removeBitacoraVisitaPE(v.id)
-                              if (!r.ok) onError(r.error ?? "")
-                            }}
+                            onClick={() => void eliminarVisita(v.id)}
                           >
                             <IconTrash className="size-4" />
                           </Button>

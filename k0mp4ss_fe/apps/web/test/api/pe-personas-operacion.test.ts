@@ -80,6 +80,8 @@ const PERSONAS = [
 
 interface RespuestaPersonas {
   data: { id: string; rut: string; nombreCompleto: string }[]
+  pageSize?: number
+  total?: number
 }
 
 describe("GET /api/pe/personas — padrón de la operación (F6)", () => {
@@ -192,5 +194,37 @@ describe("GET /api/pe/personas — padrón de la operación (F6)", () => {
 
   it("sin sesión responde 401 antes de consultar la base", async () => {
     expect((await pedir("sin-sesion")).status).toBe(401)
+  })
+
+  it("el envelope trae el total real del scope y pageSize=100 devuelve hasta 100 filas", async () => {
+    // 105 personas extra de la propia comunidad: sin un `total` de servidor el selector
+    // truncaría en silencio y el panel no podría avisar (AvisoTruncamiento).
+    const extras = Array.from({ length: 105 }, (_, i) => ({
+      id: `f6-pep-extra-${String(i).padStart(3, "0")}`,
+      comunidadId: COMUNIDAD,
+      rut: `15${String(i).padStart(6, "0")}-9`,
+      nombreCompleto: `Persona Extra ${i}`,
+      nombres: "Persona",
+      apellidos: `Extra ${i}`,
+      email: `f6-pep-extra-${i}@test.cl`,
+      telefonoMovil: "+56911111111",
+      estadoCuenta: "activa",
+      condicionesEspecialesIds: [],
+      roles: ["residente"],
+    }))
+    await prisma.persona.createMany({ data: extras })
+    try {
+      const res = await pedir("conserjeria", "?pageSize=100")
+      expect(res.status).toBe(200)
+      const j = (await res.json()) as RespuestaPersonas
+
+      // 2 del padrón sembrado + 105 extras, y nunca las de la comunidad ajena.
+      expect(j.total).toBe(107)
+      expect(j.pageSize).toBe(100)
+      expect(j.data).toHaveLength(100)
+      expect(j.data.some((p) => p.id === "f6-pep-ajena")).toBe(false)
+    } finally {
+      await prisma.persona.deleteMany({ where: { id: { startsWith: "f6-pep-extra-" } } })
+    }
   })
 })

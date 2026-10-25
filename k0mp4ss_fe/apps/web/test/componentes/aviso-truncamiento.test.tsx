@@ -3,20 +3,18 @@
  * Saneamiento de truncamientos silenciosos.
  *
  * Regla fija: si una lista de opciones muestra menos registros de los que
- * existen, el usuario tiene que verlo. Los tests fijan (a) el comportamiento
- * del componente de aviso y (b) el contrato de los paneles: con más de
- * LIMITE_SELECT personas, el select de destinatario/residente declara el
- * recorte en pantalla en vez de callarse.
+ * existen, el usuario tiene que verlo. Estos casos fijan (a) el comportamiento
+ * del componente `AvisoTruncamiento` y (b) el pase del panel de visitas al
+ * contrato del servidor padron: el «Residente destino» ya no recorta una lista
+ * local, busca con `?q=` directamente en `/api/pe/personas`.
  */
 import React from "react"
-import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest"
 import { cleanup, render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { resetStore } from "../helpers"
-import { useCompassStore } from "@/lib/store"
+import { instalarApiPE } from "./api-pe-falsa"
 import { AvisoTruncamiento, LIMITE_SELECT } from "@/components/pe/aviso-truncamiento"
 import { VisitasPanel } from "@/components/pe/visitas-panel"
-import type { Persona } from "@/lib/schemas"
 
 vi.setConfig({ testTimeout: 60_000 })
 
@@ -40,25 +38,24 @@ beforeAll(() => {
   window.HTMLElement.prototype.scrollIntoView = vi.fn()
 })
 
-beforeEach(() => {
-  resetStore()
-})
-
 afterEach(() => {
   cleanup()
+  vi.unstubAllGlobals()
 })
 
-/** Genera N personas válidas a partir de la primera persona del seed. */
-function personasSinteticas(n: number): Persona[] {
-  const base = useCompassStore.getState().personas[0]!
+/** Base mínima para generar personas sintéticas del padrón falso. */
+const BASE_PERSONA = {
+  rut: "15.123.456-9",
+  nombreCompleto: "Juan Pérez González",
+}
+
+/** Genera N personas válidas para el padrón del servidor falso. */
+function personasSinteticas(n: number): { id: string; rut: string; nombreCompleto: string }[] {
   return Array.from({ length: n }, (_, i) => ({
-    ...base,
+    ...BASE_PERSONA,
     id: `p-test-${i + 1}`,
     rut: `${10_000_000 + i}-9`,
     nombreCompleto: `Persona Test ${i + 1}`,
-    nombres: "Persona",
-    apellidos: `Test ${i + 1}`,
-    email: `persona${i + 1}@email.com`,
   }))
 }
 
@@ -83,30 +80,22 @@ describe("AvisoTruncamiento", () => {
 })
 
 describe("Paneles PE: el residente destino ya no trunca", () => {
-  it("con más de 100 personas en el store, no hay aviso: el selector busca en el servidor", async () => {
+  it("con 137 personas en la base no hay aviso: el selector busca en el servidor", async () => {
     const user = userEvent.setup()
-    useCompassStore.setState({ personas: personasSinteticas(LIMITE_SELECT + 37) })
-    const urls: string[] = []
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (url: string) => {
-        urls.push(String(url))
-        return new Response(JSON.stringify({ data: [] }), {
-          status: 200,
-          headers: { "content-type": "application/json" },
-        })
-      })
-    )
+    // La base tiene más de `LIMITE_SELECT` personas; el padron responde `?pageSize=100`
+    // con la página recortada y el total real (137).
+    const api = instalarApiPE({
+      personas: personasSinteticas(LIMITE_SELECT + 37),
+    })
 
     render(<VisitasPanel diaReporte={HOY} onError={vi.fn()} onSuccess={vi.fn()} />)
 
-    // Sin rótulo de recorte: el campo dejó de montar opciones del padrón del store.
+    // Sin rótulo de recorte: el panel de visitas no muestra listas truncadas.
     expect(screen.queryByText(/Mostrando \d+ de \d+/)).toBeNull()
 
     await user.type(screen.getByLabelText("Residente destino"), "Persona")
     await waitFor(() =>
-      expect(urls.some((u) => u.includes("/api/pe/personas?q="))).toBe(true)
+      expect(api.peticiones.some((p) => p.url.includes("/api/pe/personas?q="))).toBe(true)
     )
-    vi.unstubAllGlobals()
   })
 })

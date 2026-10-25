@@ -13,6 +13,11 @@
  * Excluye las plazas de estacionamiento: no son destino de visita. La pertenencia la decide la
  * etiqueta y no el prefijo del id — los departamentos de la torre E comparten el prefijo `u-E-`
  * con las plazas.
+ *
+ * Envelope: `{ data, pageSize, total }`. El `total` es el count del MISMO `where` que la lista,
+ * para que el panel pueda avisar el truncamiento (AvisoTruncamiento) en vez de cortar en silencio:
+ * los selects de la operación piden el padrón completo con `pageSize=100`, mientras que las
+ * búsquedas por texto siguen pidiendo `pageSize=25`.
  */
 import type { Prisma } from "@prisma/client"
 import { puede } from "@/lib/authz"
@@ -22,7 +27,12 @@ import { jsonError, withComunidadScope } from "@/lib/api/with-comunidad-scope"
 import { ETIQUETA_NO_DESTINO } from "@/lib/unidades-destino"
 
 const PAGE_SIZE_POR_DEFECTO = 25
-const PAGE_SIZE_MAXIMO = 50
+/**
+ * Tope de página: sube de 50 a 100 porque el padrón de los selects de la operación pide
+ * `pageSize=100` (`LIMITE_SELECT` en `components/pe/aviso-truncamiento.tsx`); las búsquedas por
+ * texto siguen pidiendo el default de 25.
+ */
+const PAGE_SIZE_MAXIMO = 100
 
 export async function GET(req: Request): Promise<Response> {
   const resultado = await withComunidadScope()
@@ -67,13 +77,16 @@ export async function GET(req: Request): Promise<Response> {
   }
 
   try {
-    const data = await prisma.unidad.findMany({
-      where,
-      orderBy: [{ numero: "asc" }, { rolSii: "asc" }],
-      take: pageSize,
-      select: { id: true, numero: true, etiqueta: true, rolSii: true },
-    })
-    return Response.json({ data })
+    const [data, total] = await Promise.all([
+      prisma.unidad.findMany({
+        where,
+        orderBy: [{ numero: "asc" }, { rolSii: "asc" }],
+        take: pageSize,
+        select: { id: true, numero: true, etiqueta: true, rolSii: true },
+      }),
+      prisma.unidad.count({ where }),
+    ])
+    return Response.json({ data, pageSize, total })
   } catch (e) {
     logger.error({ err: e }, "[api/pe/unidades] error inesperado")
     return jsonError(500, "No se pudo consultar el padrón de unidades.")

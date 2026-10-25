@@ -69,6 +69,55 @@ export function useProyeccionesPE(): CrudCollection<ProyeccionPE> {
   return useCrudCollection<ProyeccionPE>("/api/pe/proyecciones")
 }
 
+/** Maestros operativos que los paneles de la bitácora montan como opciones. */
+export type TipoMaestroPE = "jornadas" | "couriers" | "contratistas"
+
+/** Fila de la proyección de maestros: solo lo que un select necesita. */
+export interface MaestroPE {
+  id: string
+  nombre: string
+}
+
+interface ColeccionMaestrosPE {
+  data: MaestroPE[]
+  total: number
+}
+
+async function fetchMaestrosPE(url: string): Promise<ColeccionMaestrosPE> {
+  const res = await fetch(url, { headers: { accept: "application/json" } })
+  if (!res.ok) {
+    const cuerpo = (await res.json().catch(() => null)) as { error?: string } | null
+    throw new Error(cuerpo?.error ?? `Error ${res.status} al consultar ${url}.`)
+  }
+  return (await res.json()) as ColeccionMaestrosPE
+}
+
+/**
+ * Maestros operativos (jornadas, couriers, contratistas) para los paneles PE.
+ *
+ * Pega en `GET /api/pe/maestros/[tipo]`, la proyección de solo lectura gobernada por
+ * `pe:bitacora`: `/api/maestros/[tipo]` gatea con `mp`, que la conserjería no tiene, así que los
+ * selects quedaban vacíos para el rol que registra la visita (H9).
+ */
+export function useMaestrosPE(tipo: TipoMaestroPE): {
+  data: MaestroPE[]
+  total: number
+  isLoading: boolean
+  error: Error | null
+} {
+  const { data, error, isLoading } = useSWR<ColeccionMaestrosPE, Error>(
+    `/api/pe/maestros/${tipo}`,
+    fetchMaestrosPE,
+    { revalidateOnFocus: true }
+  )
+  return {
+    data: data?.data ?? [],
+    total: data?.total ?? 0,
+    isLoading,
+    error: error ?? null,
+  }
+}
+
 /** Inicio de turno del día tal como lo devuelve `/api/pe/turnos` (evento PE). */
 export interface TurnoIniciadoPE {
   id: string
