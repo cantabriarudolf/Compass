@@ -545,7 +545,7 @@ activas» filtra por `FondoFI.activo`; el visor declara «…y N más» cuando r
 > quedan abiertos **F4, F5, F6, F7, F8, F9 y F10**, todos con dueño o bloqueados.
 
 | PR | Qué entró | Merge |
-|---|---|---|
+| --- | --- | --- |
 | #11 | Automatismos de CO: lectura real por el destinatario, caducidad de avisos **al leer**, garantías verificadas **al pedir la lista**, allowlist de dominios en `window.open` | `320621e` |
 | #12 | **F1 cerrada** — bandeja del residente con vista derivada del rol — **y tres fugas de datos de CO cerradas** | `ab39af8` |
 | #13 | **F2** variación tarifaria real (sale de las emisiones) · **F3** el respaldo baja como descarga fechada y deja de escribirse en el disco efímero | `a3d727c` |
@@ -558,7 +558,7 @@ activas» filtra por `FondoFI.activo`; el visor declara «…y N más» cuando r
 F1 parecía «falta una pantalla» y era un problema de privacidad. En el módulo CO:
 
 | # | Fuga |
-|---|---|
+| --- | --- |
 | D-1 | El residente recibía **todos** los envíos con `destinatarios[]` y `lecturas[]`: veía **quién leyó qué** |
 | D-2 | Aterrizaba en la consola del administrador, con el alcance gobernado por un `<Select>` de cliente |
 | D-3 | Podía **emitir difusiones masivas** a toda la comunidad (`co` le daba `crear`) |
