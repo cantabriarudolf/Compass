@@ -8,7 +8,12 @@ export default [
     // `.vercel/node` y `.vercel/output` (build output, no fuente del proyecto).
     // El ignore compartido (`dist/**`, `.next/**`, `**/.turbo/**`, `**/coverage/**`)
     // no los cubría y aportaban el 98 % de los warnings del linter.
-    ignores: [".vercel/**"],
+    //
+    // `playwright-report/**` y `test-results/**` son artefactos de la lane e2e:
+    // están en `.gitignore`, pero ESLint no lee ese archivo. El reporte HTML trae
+    // un bundle minificado que por sí solo aporta ~3.700 warnings, y sólo aparece
+    // después de correr la lane en local (el CI no los persiste).
+    ignores: [".vercel/**", "playwright-report/**", "test-results/**"],
   },
   {
     // Los `.mjs` del repo son tooling de Node (scripts de migración, seeds y
