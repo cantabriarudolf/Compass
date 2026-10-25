@@ -340,7 +340,9 @@ merged (2026-10-16) · DEUDA-2/3/4/5 → en `main`.
 
 | Frente | Estado | Desbloquea |
 |---|---|---|
-| Store legacy en la UI (`useCompassStore`) | **SALDADO** — Fase 1 (SERIE-DEUDA-6, 2026-10-21): 13 archivos / 147 usos → 9 / 131. **Fase 2 (SERIE-FASE2, rama `fase2/inventario-insumos`, 2026-10-22): 9 archivos / 131 usos → 4 / 106, de los cuales 1 es un comentario → uso real 3 archivos / 105 usos = las 3 excepciones justificadas** (QA-Lab, dev-dashboard, mantenimiento). Delta fase 2: −6 archivos / −25 usos (ver §Store legacy: cierre de la fase 2) | Nadie: solo queda retirar el módulo QA/dev antes de producción |
+| Store legacy en la UI (`useCompassStore`) | **La fase 1 y la 2 se cerraron como «saldado» y el store volvió a crecer**: al 2026-10-25 hay **13 archivos** (medido con `npm run audit:store`, no a mano): 3 paneles PE, 3 del módulo QA/dev y 7 lecturas de dominio sin cablear. Desde esta fecha el número lo dicta el candado `audit:store` (CI, job unit) y la allowlist de `scripts/audit-store.mjs` **sólo puede achicarse**: un archivo nuevo con el store falla el gate, y una excepción ya saldada también | **Nadie: slices de cableado, la allowlist marca el avance** |
+
+<!-- audit:store: archivos=13 -->
 | `au-google-sso` | ⏸ Bloqueado (código 100 % listo) | Owner: `GOOGLE_CLIENT_ID`/`SECRET` en Vercel + 2 decisiones de rol/migración |
 | Decisiones de producción (Sentry DSN, pen-test, Ley 21.719, proveedor Postgres, privacidad/abogado, CSP con dominio real, secrets Vercel) | ⏸ Pendientes | Owner |
 | Falso positivo `window.open` (`app/comunidad/comunicacion/page.tsx:292`) | Decisión de producto | Owner (allowlist de dominios) |
