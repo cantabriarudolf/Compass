@@ -60,6 +60,7 @@ jobs:
       # catch vacío que confirma éxito. Corre antes de la suite: es barato y dice qué
       # archivo:línea arreglar, sin esperar 15 minutos de tests.
       - run: npm run audit:desvios
+      - run: npm run audit:store
       - run: npm test
 
   unit-pg:
