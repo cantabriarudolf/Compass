@@ -534,3 +534,73 @@ módulo QA/dev antes de producción · `Notificacion` sin `unidadId` (solo si se
 **Fixes menores del 2026-10-22 (rama `deuda/fixes-menores`)**: CSV de logs exporta **el filtro completo**
 con tope declarado (`LIMITE_EXPORTACION = 5000`) en vez de la página visible; el KPI «Cajas financieras
 activas» filtra por `FondoFI.activo`; el visor declara «…y N más» cuando recorta las reservas.
+
+## Cierre del 2026-10-25 — PRs #12–#16 (F1, F2, F3, F11 y la capacidad de F6)
+
+> Todo en `main`, sin PRs abiertos, `openspec validate --all` **36/36**. Los dos changes de la
+> sesión (`co-lectura-residente` y `metricas-reales-backup-descarga`) están **archivados** con
+> sus deltas aplicados a las specs vivas (`CO`, `RP`, `DEV-qa-lab`).
+>
+> El ledger vivo es `openspec/PENDIENTES-FUNCIONALIDAD.md`: leelo antes que nada. Al cierre
+> quedan abiertos **F4, F5, F6, F7, F8, F9 y F10**, todos con dueño o bloqueados.
+
+| PR | Qué entró | Merge |
+|---|---|---|
+| #11 | Automatismos de CO: lectura real por el destinatario, caducidad de avisos **al leer**, garantías verificadas **al pedir la lista**, allowlist de dominios en `window.open` | `320621e` |
+| #12 | **F1 cerrada** — bandeja del residente con vista derivada del rol — **y tres fugas de datos de CO cerradas** | `ab39af8` |
+| #13 | **F2** variación tarifaria real (sale de las emisiones) · **F3** el respaldo baja como descarga fechada y deja de escribirse en el disco efímero | `a3d727c` |
+| #14 | Ledger: F2/F3 a «Hecho» | `ec5a8ae` |
+| #15 | **F11** paginación real en `useCrudCollection` (`hasMore`/`cargarMas`) · **F12 eliminada** (repo público ⇒ minutos de Actions gratis) | `1df2b96` |
+| #16 | **F6**: búsqueda por texto opt-in en el factory + `?q=` en `/api/unidades` + `components/selector-buscable.tsx`; **el cableado en visitas se revirtió** | `51c23c1` |
+
+### Las tres fugas que aparecieron al abrir F1
+
+F1 parecía «falta una pantalla» y era un problema de privacidad. En el módulo CO:
+
+| # | Fuga |
+|---|---|
+| D-1 | El residente recibía **todos** los envíos con `destinatarios[]` y `lecturas[]`: veía **quién leyó qué** |
+| D-2 | Aterrizaba en la consola del administrador, con el alcance gobernado por un `<Select>` de cliente |
+| D-3 | Podía **emitir difusiones masivas** a toda la comunidad (`co` le daba `crear`) |
+
+La solución estructural: **`EnvioDestinatarioCO`** (una fila por destinatario con `leidoEn`) pasa a
+ser la única fuente de pertenencia y lectura; el JSON queda como snapshot inmutable y `lecturas`
+como derivado. Eso además elimina la pérdida de lecturas concurrentes del read-modify-write.
+El recurso `co` se partió en `co` (difusión), `co:buzon` y `co:lecturas` (desglose nominativo,
+solo administrador y auditado con `CO_LECTURA_CONSULTADA`).
+
+### F6: la capacidad quedó, el cableado no
+
+Entregado y probado: `busqueda` opt-in en `lib/api/crud-factory.ts` (sin `busqueda` o sin `q` el
+`where` es idéntico), `?q=` en `/api/unidades` sobre `numero`/`etiqueta`/`rolSii`, y el componente
+`selector-buscable` con 20 tests entre los tres archivos.
+
+**Revertido**: el cableado en «Unidad destino» de visitas. En la lane e2e el **padrón de unidades
+del scope de la sesión está vacío** (el admin e2e tiene membresías en `comunidad-a` y
+`comunidad-b`, y B no tiene unidades), así que el selector no tenía nada que ofrecer. Seis
+corridas locales no lo resolvieron. **Antes de cablear cualquier selector de unidades hace falta
+un fixture de unidades en el scope de la sesión e2e.**
+
+Bug latente anotado en la fila F6: `visitas-panel.tsx` sólo cae al padrón local si la API
+**falla**, no si devuelve vacío.
+
+### Hallazgos que sólo el job `unit-pg` podía encontrar
+
+1. Un test ejecutaba SQL de SQLite (`INSERT OR IGNORE`) contra PostgreSQL → `42601`. Ahora el test
+detecta el motor por `DATABASE_URL` y usa el backfill de su dialecto.
+2. Un test de concurrencia esperaba que el JSON **derivado** tuviera las dos lecturas. Las dos
+filas de la tabla sí persistían: lo que se perdía era la caché, que `proyeccion-envio.ts` ya
+declara ignorada. **SQLite lo escondía porque serializa las escrituras**; el test pasó a afirmar
+`totalLecturas` desde la tabla.
+
+### Deuda declarada al cierre
+
+- Las columnas JSON de CO (`destinatarios`, `lecturas`) **no se borran**: es aditivo a propósito,
+  con ventana de verificación en producción.
+- **TTL de conservación** de comunicaciones y lecturas: sin número, porque el reglamento de la
+  Ley 21.442 no está verificado.
+- El respaldo lo sigue armando el cliente desde el store legacy; con la verdad en BD, lo correcto
+  es que lo vuelque el servidor (como `backup:db`).
+- `LAB-mejoras` §captura automática esperaba una Action disparada por un archivo en disco que ya
+  no se escribe: es `SHOULD` futuro y su texto no se tocó.
+
