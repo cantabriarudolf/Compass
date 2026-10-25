@@ -51,6 +51,7 @@ import {
   IconSearch,
   IconDownload,
   IconUpload,
+  IconTrash,
   IconChevronDown,
 } from "@tabler/icons-react"
 import {
@@ -260,6 +261,7 @@ export default function DevDashboardPage() {
   const [storeImportValidation, setStoreImportValidation] =
     useState<BackupValidation | null>(null)
   const [storeImportDialogOpen, setStoreImportDialogOpen] = useState(false)
+  const [storeClearDialogOpen, setStoreClearDialogOpen] = useState(false)
   const [backupSummary, setBackupSummary] = useState<
     BackupSummaryItem[] | null
   >(null)
@@ -436,6 +438,29 @@ export default function DevDashboardPage() {
       setStoreImportDialogOpen(false)
     }
   }, [storeImportPending, storeImportValidation])
+
+  /**
+   * Wipe del navegador: la otra mitad del reset. `npm run datos:reset` limpia la base; esto vacía
+   * el `localStorage` completo (store legacy, cachés de colecciones y la marca del banner de
+   * consentimiento) y recarga para que la app vuelva al seed. La base NO se toca desde acá.
+   */
+  const confirmStoreClear = useCallback(() => {
+    try {
+      localStorage.clear()
+      setStoreClearDialogOpen(false)
+      setStoreBackupMsg({
+        type: "ok",
+        text: "Datos locales borrados. Recargando...",
+      })
+      window.setTimeout(() => window.location.reload(), 600)
+    } catch (e) {
+      setStoreBackupMsg({
+        type: "error",
+        text: e instanceof Error ? e.message : String(e),
+      })
+      setStoreClearDialogOpen(false)
+    }
+  }, [])
 
   const refresh = useCallback(async () => {
     try {
@@ -840,6 +865,15 @@ export default function DevDashboardPage() {
               >
                 <IconUpload className="mr-1 size-4" /> Importar datos
               </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setStoreClearDialogOpen(true)}
+                title="Borrar los datos del navegador (localStorage) y recargar con el seed"
+                className="text-destructive"
+              >
+                <IconTrash className="mr-1 size-4" /> Borrar datos locales
+              </Button>
             </div>
             {storeBackupMsg && (
               <span
@@ -1136,6 +1170,36 @@ export default function DevDashboardPage() {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={storeClearDialogOpen} onOpenChange={setStoreClearDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Borrar datos locales</DialogTitle>
+            <DialogDescription>
+              Se vacía el <code className="font-mono text-xs">localStorage</code> de este
+              navegador: el store <code className="font-mono text-xs">compass-store</code>, las
+              cachés de colecciones y la marca del banner de consentimiento. La página se recarga
+              y la app vuelve a los datos de fábrica (seed).
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 text-sm">
+            <p className="font-medium">No se puede deshacer.</p>
+            <p className="text-muted-foreground">
+              La base de datos no se limpia desde acá: eso es{" "}
+              <code className="font-mono text-xs">npm run datos:reset</code>. Si querés conservar
+              una copia, usá <span className="font-semibold">Exportar datos</span> primero.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setStoreClearDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button variant="destructive" onClick={confirmStoreClear}>
+              <IconTrash className="mr-1 size-4" /> Borrar y recargar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Card>
         <CardHeader>
           <CardTitle className="text-xl">Comparativa de Cobertura</CardTitle>
@@ -1253,11 +1317,12 @@ export default function DevDashboardPage() {
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                       {capabilities.map((spec) => {
                         // SAFETY: server-side `isSpecDirtyAfterArchive` injects `dirty`/`archived` boolean flags
-                        const dirty = (spec as unknown as { dirty?: boolean })
-                          .dirty
-                        const isArchived = (
-                          spec as unknown as { archived?: boolean }
-                        ).archived
+                        const flags = spec as unknown as {
+                          dirty?: boolean
+                          archived?: boolean
+                        }
+                        const dirty = flags.dirty
+                        const isArchived = flags.archived
                         const tone = dirty
                           ? "dirty"
                           : isArchived

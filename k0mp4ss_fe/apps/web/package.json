@@ -19,6 +19,7 @@
     "e2e:higiene": "node --env-file-if-exists=.env scripts/higiene-qa-test.mjs",
     "seed:authz": "node --env-file-if-exists=.env scripts/seed-authz.mjs",
     "seed:mocks": "vite-node scripts/seed-db-from-mocks.ts",
+    "datos:reset": "node --env-file-if-exists=.env scripts/datos-reset.mjs",
     "cifrar:datos": "node --env-file-if-exists=.env scripts/cifrar-datos-existentes.mjs",
     "backup:db": "node scripts/backup-db.mjs",
     "restore:db": "node scripts/restore-db.mjs",
