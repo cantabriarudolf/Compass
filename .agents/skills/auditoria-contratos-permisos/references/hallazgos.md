@@ -98,3 +98,16 @@ comentarios o tests pero nunca implementados en el motor.
   `GET /api/personas?rut=`) también está detrás de `mp` (`app/api/personas/route.ts:278`) y para
   conserjería cae al padrón local del store con el aviso «No se pudo consultar el padrón del servidor».
   El fallback evita el bloqueo, pero el padrón real no se consulta: merece su propia proyección `pe`.
+
+### H10 · El guardado de visitas validaba contra el padrón del cliente — **cerrado**
+
+- **Evidencia**: `lib/store.ts` (`saveBitacoraVisitaPE`) exigía que `unidadId` y `destinoPersonaId`
+  existieran en el padrón del store. Con la fuente de verdad en la BD y los paneles buscando en el
+  servidor, cualquier unidad o persona creada después del snapshot se rechazaba como huérfana
+  («destinoPersonaId no existe en el Maestro de Personas»), y eso ya pasaba con el QR de la cédula
+  para el administrador, que resuelve personas contra `/api/personas`.
+- **Cierre**: se retiran los dos chequeos. La jornada se sigue validando porque ese maestro vive en
+  el store. Los dos casos que fijaban el rechazo (`test/store-personal.test.ts`) pasan a fijar la
+  aceptación de referencias del servidor.
+- **Deuda asociada**: la bitácora sigue persistiendo en el store, no en la BD. Migrarla es el paso
+  que vuelve innecesario todo este razonamiento.

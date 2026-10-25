@@ -231,11 +231,12 @@ describe("PE - Personal y Servicios en el store", () => {
       expect(getState().notificaciones.some(n => n.asunto.startsWith("Visita"))).toBe(false)
     })
 
-    it("visita rechaza jornada y unidad huérfanas", () => {
+    it("visita rechaza una jornada huérfana y acepta unidades del servidor", () => {
       const mala = { ...visitaAgendada(), jornadaId: "j-nadie" }
       expect(getState().saveBitacoraVisitaPE(mala).error).toContain("jornadaId")
-      const malaUnidad = { ...visitaAgendada(), unidadId: "u-99999" }
-      expect(getState().saveBitacoraVisitaPE(malaUnidad).error).toContain("unidadId")
+      // La unidad viene de la búsqueda en el servidor: puede no estar en el padrón del store.
+      const delServidor = { ...visitaAgendada(), id: "vis-u-servidor", unidadId: "u-99999" }
+      expect(getState().saveBitacoraVisitaPE(delServidor).ok).toBe(true)
     })
 
     it("encomienda exige courier del maestro, rechaza evidencia embebida y registra retiro", () => {
@@ -353,12 +354,14 @@ describe("PE - Personal y Servicios en el store", () => {
       }
     })
 
-    it("saveBitacoraVisitaPE valida destinoPersonaId", () => {
+    it("saveBitacoraVisitaPE acepta un destino que el padrón del store no tiene", () => {
+      // El residente destino sale del padrón del servidor (proyección pe): exigir que además
+      // exista en el snapshot del store rechazaba personas legítimas creadas después.
       const r = getState().saveBitacoraVisitaPE({
         id: "pe-vis-dst", fecha: "2026-08-25", nombre: "A B", dni: "11.111.111-1",
         destinoPersonaId: "p-nadie", jornadaId: "j-manana", origenAgenda: "sin_aviso", estado: "agendada",
       })
-      expect(r.error).toContain("destinoPersonaId")
+      expect(r.ok).toBe(true)
     })
 
     it("removeBitacoraVisitaPE/removeEncomiendaPE/removeIngresoContratistaPE eliminan pendientes", () => {

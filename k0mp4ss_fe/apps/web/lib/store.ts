@@ -3350,18 +3350,10 @@ export const useCompassStore = create<CompassStore>()(
             error: "jornadaId no existe en el maestro de jornadas.",
           }
         }
-        if (v.unidadId && !get().unidades.some((u) => u.id === v.unidadId)) {
-          return { ok: false, error: "unidadId no existe en el inventario." }
-        }
-        if (
-          v.destinoPersonaId &&
-          !get().personas.some((p) => p.id === v.destinoPersonaId)
-        ) {
-          return {
-            ok: false,
-            error: "destinoPersonaId no existe en el Maestro de Personas.",
-          }
-        }
+        // Las referencias a unidad y persona NO se validan contra el padrón del store: la fuente
+        // de verdad es la base (BD-FUENTE-VERDAD) y los paneles ya buscan en el servidor, así que
+        // una unidad o persona creada después del snapshot del store es legítima y antes se
+        // rechazaba como huérfana. La jornada sí se valida: ese maestro sigue viviendo acá.
         set((s) => ({ bitacoraVisitasPE: upsert(s.bitacoraVisitasPE, v) }))
         if (v.estado === "ingresada") {
           const hora = v.horaIngreso ?? new Date().toTimeString().slice(0, 5)

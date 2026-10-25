@@ -16,10 +16,9 @@ import {
   SelectValue,
 } from "@workspace/ui/components/select"
 import { IconCheck, IconQrcode, IconSearch, IconTrash } from "@tabler/icons-react"
-import { AvisoTruncamiento, LIMITE_SELECT } from "@/components/pe/aviso-truncamiento"
 import { EscaneoQrCedula } from "@/components/pe/escaneo-qr-cedula"
 import { SelectorBuscable, type Opcion } from "@/components/selector-buscable"
-import { buscarPersonaPorRun } from "@/lib/api/use-personas"
+import { buscarPersonaPorRun, buscarPersonas } from "@/lib/api/use-personas"
 import { buscarUnidades } from "@/lib/api/use-unidades"
 import { esUnidadDestino, etiquetaUnidad } from "@/lib/unidades-destino"
 import { mascararRun, normalizarRun, validarRun } from "@/lib/validacion-rut"
@@ -110,9 +109,11 @@ export function VisitasPanel({
     setEtiquetasUnidad((previas) => ({ ...previas, [id]: etiqueta }))
   }, [])
 
-  // Lista de residentes: se recorta a LIMITE_SELECT para no montar cientos de
-  // SelectItem, y el recorte se declara en pantalla (nunca en silencio).
-  const personasVisibles = personas.slice(0, LIMITE_SELECT)
+  /** Etiquetas de las personas elegidas en esta sesión (la búsqueda trae personas de la BD). */
+  const [etiquetasPersona, setEtiquetasPersona] = React.useState<Record<string, string>>({})
+  const recordarPersona = React.useCallback((id: string, etiqueta: string) => {
+    setEtiquetasPersona((previas) => ({ ...previas, [id]: etiqueta }))
+  }, [])
 
   /** Etiqueta conocida de una unidad: la elegida en esta sesión o el padrón del store. */
   const etiquetaDeUnidad = (id?: string): string | undefined => {
@@ -140,8 +141,20 @@ export function VisitasPanel({
 
   const nombrePersona = (id?: string) => {
     if (!id) return "—"
+    const recordado = etiquetasPersona[id]
+    if (recordado) return recordado
     const p = personas.find((x) => x.id === id)
     return p ? `${p.nombres} ${p.apellidos}` : id
+  }
+
+  /** Selección desde la búsqueda del servidor: guarda el nombre que el usuario vio. */
+  const alElegirPersona = (opcion: Opcion | null) => {
+    if (!opcion) {
+      setFormVisita((f) => ({ ...f, destinoPersonaId: "" }))
+      return
+    }
+    recordarPersona(opcion.id, opcion.etiqueta)
+    setFormVisita((f) => ({ ...f, destinoPersonaId: opcion.id }))
   }
 
   /** Unidad y vínculo vigente de la persona, resueltos contra el padrón cargado. */
@@ -222,6 +235,7 @@ export function VisitasPanel({
   const confirmarIdentidad = () => {
     if (resultadoIdentidad?.tipo !== "padron") return
     const coincidencia = resultadoIdentidad.coincidencia
+    recordarPersona(coincidencia.personaId, coincidencia.nombre)
     if (coincidencia.unidadId && coincidencia.unidad !== "Sin unidad registrada") {
       recordarUnidad(coincidencia.unidadId, coincidencia.unidad)
     }
@@ -422,23 +436,20 @@ export function VisitasPanel({
               placeholder="Número, etiqueta o rol SII…"
               vacio="Ninguna unidad coincide. Revisá el número o el rol SII."
             />
-            <div className="flex flex-col gap-1.5">
-              <Label>Residente destino</Label>
-              <Select value={formVisita.destinoPersonaId || "__none"} onValueChange={(v) => setFormVisita({ ...formVisita, destinoPersonaId: v === "__none" ? "" : v })}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Seleccionar" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none">Sin residente</SelectItem>
-                  {personasVisibles.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>
-                      {p.nombreCompleto}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <AvisoTruncamiento mostrados={personasVisibles.length} total={personas.length} />
-            </div>
+            <SelectorBuscable
+              etiqueta="Residente destino"
+              valorId={formVisita.destinoPersonaId}
+              valorEtiqueta={
+                formVisita.destinoPersonaId
+                  ? etiquetasPersona[formVisita.destinoPersonaId] ??
+                    personas.find((p) => p.id === formVisita.destinoPersonaId)?.nombreCompleto
+                  : undefined
+              }
+              onSeleccionar={alElegirPersona}
+              buscar={buscarPersonas}
+              placeholder="Nombre o RUT del residente…"
+              vacio="Ninguna persona coincide. Revisá el nombre o el RUT."
+            />
           </div>
           <label className="flex items-center gap-2 text-sm">
             <Switch

@@ -16,6 +16,32 @@ import { normalizarRun } from "@/lib/validacion-rut"
 
 const LISTA = "/api/personas"
 
+/**
+ * Proyección de solo lectura para la operación de conserjería (F6).
+ *
+ * `/api/personas` está detrás de `mp`, que la conserjería no tiene: pedirle el padrón ahí devolvía
+ * 403 y la búsqueda por RUN caía al padrón local del store. Esta ruta devuelve solo identidad y se
+ * gobierna con `pe:bitacora`.
+ */
+const LISTA_OPERACION = "/api/pe/personas"
+
+/** Identidad mínima que devuelve la proyección de operación. */
+export interface PersonaOperacion {
+  id: string
+  rut: string
+  nombreCompleto: string
+}
+
+/** Opción del selector de residente destino. */
+export interface PersonaOpcion {
+  id: string
+  etiqueta: string
+}
+
+interface ColeccionOperacion {
+  data: PersonaOperacion[]
+}
+
 const claveItem = (id: string) => `${LISTA}/${id}`
 
 async function fetcher<T>(url: string): Promise<T> {
@@ -171,11 +197,26 @@ export function usePersona(id: string): UsePersonaResultado {
  * para que el panel de visitas pueda caer al padrón local en vez de bloquear
  * la operación.
  */
-export async function buscarPersonaPorRun(run: string): Promise<Persona | null> {
+export async function buscarPersonaPorRun(run: string): Promise<PersonaOperacion | null> {
   const canonico = normalizarRun(run)
   if (!canonico) return null
-  const coleccion = await fetcher<ColeccionPersonas>(
-    `${LISTA}?rut=${encodeURIComponent(canonico)}&pageSize=10`
+  const coleccion = await fetcher<ColeccionOperacion>(
+    `${LISTA_OPERACION}?rut=${encodeURIComponent(canonico)}`
   )
   return coleccion.data.find((p) => normalizarRun(p.rut) === canonico) ?? null
+}
+
+/**
+ * Busca personas para el selector de «Residente destino» de la bitácora PE (F6).
+ *
+ * Devuelve opciones con el nombre completo como etiqueta: es lo que ve el conserje y lo que la
+ * fila del día muestra. Propaga el error para que el selector lo declare.
+ */
+export async function buscarPersonas(q: string): Promise<PersonaOpcion[]> {
+  const termino = q.trim()
+  if (!termino) return []
+  const coleccion = await fetcher<ColeccionOperacion>(
+    `${LISTA_OPERACION}?q=${encodeURIComponent(termino)}&pageSize=25`
+  )
+  return (coleccion.data ?? []).map((p) => ({ id: p.id, etiqueta: p.nombreCompleto }))
 }
