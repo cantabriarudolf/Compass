@@ -20,7 +20,8 @@ import { AvisoTruncamiento, LIMITE_SELECT } from "@/components/pe/aviso-truncami
 import { EscaneoQrCedula } from "@/components/pe/escaneo-qr-cedula"
 import { SelectorBuscable, type Opcion } from "@/components/selector-buscable"
 import { buscarPersonaPorRun } from "@/lib/api/use-personas"
-import { buscarUnidades, esUnidadDestino, etiquetaUnidad } from "@/lib/api/use-unidades"
+import { buscarUnidades } from "@/lib/api/use-unidades"
+import { esUnidadDestino, etiquetaUnidad } from "@/lib/unidades-destino"
 import { mascararRun, normalizarRun, validarRun } from "@/lib/validacion-rut"
 import type { BitacoraVisitaPE } from "@/lib/schemas"
 

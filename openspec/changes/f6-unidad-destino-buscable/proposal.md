@@ -34,25 +34,35 @@ eligió y sin que una plaza de estacionamiento pueda quedar como destino.
 ## Alcance
 
 **Dentro:**
-1. `lib/api/use-unidades.ts` — `buscarUnidades(q)` contra `GET /api/unidades?q=` (mismo patrón que
-   `buscarPersonaPorRun`), más los helpers puros `esUnidadDestino()` y `etiquetaUnidad()`.
-   La etiqueta visible incluye el **rol SII** cuando existe: hay cinco unidades llamadas
-   «Depto 101» (torres A–E) y sin el rol el conserje no puede distinguirlas.
-2. `components/pe/visitas-panel.tsx` — «Unidad destino» pasa de `Select` (100 opciones montadas,
+1. `app/api/pe/unidades/route.ts` — **proyección de solo lectura** para la operación de
+   conserjería: `puede(rol, "ver", "pe:bitacora")`, scope de la sesión y cuatro campos
+   (`id`, `numero`, `etiqueta`, `rolSii`), con el estacionamiento excluido por etiqueta.
+   Hace falta porque `GET /api/unidades` está detrás de `mp` y conserjería solo tiene
+   `mp:propios`: **la ruta le devolvía 403 al rol que registra la visita**. No se toca la matriz
+   de permisos (regla del skill de auditoría: sin decisión del owner no se toca).
+2. `lib/unidades-destino.ts` — reglas puras compartidas por ruta y panel: `esUnidadDestino()`,
+   `etiquetaUnidad()` y la constante `ETIQUETA_NO_DESTINO`. La etiqueta visible incluye el
+   **rol SII** cuando existe: hay cinco unidades llamadas «Depto 101» (torres A–E) y sin el rol
+   el conserje no puede distinguirlas.
+3. `lib/api/use-unidades.ts` — `buscarUnidades(q)` contra `GET /api/pe/unidades?q=` (mismo patrón
+   que `buscarPersonaPorRun`). El `useUnidades()` SWR que ya vivía ahí se conserva.
+4. `components/pe/visitas-panel.tsx` — «Unidad destino» pasa de `Select` (100 opciones montadas,
    recorte declarado) a `SelectorBuscable` con la búsqueda en el servidor. El panel recuerda la
    etiqueta de la unidad elegida para mostrarla en el control y en la tabla del día.
-3. Corrección del filtro de destinos: `etiqueta === "Estacionamiento"` en vez del prefijo `u-E-`.
-4. `e2e/crud/bitacora.spec.ts` — deja de tolerar «Sin unidad»: afirma opciones reales, elige una
+5. Corrección del filtro de destinos: `etiqueta === "Estacionamiento"` en vez del prefijo `u-E-`.
+6. `e2e/crud/bitacora.spec.ts` — deja de tolerar «Sin unidad»: afirma opciones reales, elige una
    buscando, y verifica que la fila de la bitácora muestre la unidad elegida.
-5. Delta `PE` (requirement nuevo, `ADDED`): búsqueda de la unidad destino sobre el padrón completo.
+7. `e2e/crud/roles-journeys.spec.ts` — el journey de conserjería usaba el mismo `Select`; pasa
+   a la búsqueda. Lo encontró el CI: la lane local con un solo spec no lo cubría.
+8. Delta `PE` (requirement nuevo, `ADDED`): búsqueda de la unidad destino sobre el padrón completo.
 
 **Fuera:**
 - «Residente destino» sigue leyendo el store con su `AvisoTruncamiento`: el padrón de personas
   tiene el mismo problema y merece su propio cableado (fila F6 del ledger, que queda abierta).
 - Persistencia de la bitácora: las visitas siguen en el store (`bitacoraVisitasPE`), no en la BD.
   Etiquetas de unidades fuera de la sesión (recarga) caen al id hasta que exista la migración.
-- Filtro de estacionamientos en el servidor: se descarta en cliente sobre la página pedida
-  (`pageSize=25`); un término que solo devuelva plazas muestra «sin resultados» honesto.
+- Permisos: no se toca `lib/authz.ts`. Si el owner quiere que conserjería lea el padrón completo
+  de personas (`mp`), es una decisión aparte y con su propia evidencia.
 
 ## Riesgo
 

@@ -15,57 +15,34 @@ async function gotoStable(page: import("@playwright/test").Page, url: string) {
   await page.waitForTimeout(800)
 }
 
-// Helpers UI picks — reused from bitacora/reservas flows
-// P2 E2E-FULL-VERDE: click atómico + espera larga (el force a veces no
-// completa el handler bajo carga dev; re-clicar hace toggle).
-// P2 PG-FASE3: apertura idempotente por data-state (patrón residente-ficha):
-// los re-clicks a ciegas alternan abrir/cerrar y dejan el menú cerrado;
-// solo se clickea si está cerrado, hasta que hay options.
-async function menuAbierto(trigger: import("@playwright/test").Locator): Promise<boolean> {
-  const estado = await trigger.getAttribute("data-state").catch(() => null)
-  if (estado) return estado === "open"
-  const expandido = await trigger.getAttribute("aria-expanded").catch(() => null)
-  return expandido === "true"
-}
-async function pickFirstOption(page: import("@playwright/test").Page, trigger: import("@playwright/test").Locator) {
-  await expect(trigger).toBeVisible({ timeout: 10_000 })
-  for (let i = 0; i < 6; i++) {
-    if (!(await menuAbierto(trigger))) {
-      await trigger.click({ force: true, noWaitAfter: true }).catch(() => {})
-      await page.waitForTimeout(800)
-    }
-    try {
-      await expect(page.getByRole("option").first()).toBeVisible({ timeout: 2_000 })
-      break
-    } catch {
-      await page.waitForTimeout(500)
-    }
-  }
-  await expect(page.getByRole("option").first()).toBeVisible({ timeout: 15_000 })
-  const opts = page.getByRole("option")
-  const cnt = await opts.count()
-  for (let i=0;i<cnt;i++) {
-    const txt = (await opts.nth(i).textContent())?.trim() ?? ""
-    if (!txt || txt==="Sin unidad" || txt==="Ninguno" || txt==="Selecciona…" || txt==="—") continue
-    // Secuencia pointer completa: el click sintético no selecciona el
-    // SelectItem Radix en este entorno (queda ✓ en "Sin unidad").
-    const opt = opts.nth(i)
-    await opt.dispatchEvent("pointerdown").catch(()=>{})
-    await opt.dispatchEvent("mousedown").catch(()=>{})
-    await opt.dispatchEvent("mouseup").catch(()=>{})
-    await opt.dispatchEvent("click").catch(()=>{})
-    await page.waitForTimeout(600)
-    if (await menuAbierto(trigger)) {
-      await opt.evaluate((el) => (el as HTMLElement).click()).catch(()=>{})
-      await page.waitForTimeout(600)
-    }
-    const trigTxt = (await trigger.textContent())?.trim() ?? ""
-    if (!trigTxt.includes("Sin unidad")) break
-    await opt.evaluate((el) => (el as HTMLElement).click()).catch(() => {})
-    await page.waitForTimeout(400)
-    return
-  }
-  await opts.first().evaluate((el) => (el as HTMLElement).click()).catch(() => {})
+/**
+ * Elige la unidad destino de la visita.
+ *
+ * «Unidad destino» es un combobox con búsqueda en el servidor (F6): las opciones solo existen
+ * después de escribir un término, porque el filtro viaja a `GET /api/unidades?q=`. El seed tiene
+ * cinco «Depto 101» (torres A–E) y el rol SII de la etiqueta es lo que las desambigua.
+ * Devuelve `false` en vez de tirar: los llamadores reintentan el formulario completo.
+ */
+async function elegirUnidadDestino(page: import("@playwright/test").Page): Promise<boolean> {
+  const buscable = page.getByLabel("Unidad destino")
+  const hayCampo = await buscable
+    .waitFor({ state: "visible", timeout: 10_000 })
+    .then(() => true)
+    .catch(() => false)
+  if (!hayCampo) return false
+  await buscable.fill("101")
+  const opcion = page
+    .getByRole("listbox", { name: /Resultados de Unidad destino/ })
+    .getByRole("option")
+    .first()
+  const hayOpcion = await opcion
+    .waitFor({ state: "visible", timeout: 15_000 })
+    .then(() => true)
+    .catch(() => false)
+  if (!hayOpcion) return false
+  await opcion.click()
+  await page.waitForTimeout(300)
+  return true
 }
 
 test.describe("conserjeria — registra visita bitácora", () => {
@@ -107,13 +84,9 @@ test.describe("conserjeria — registra visita bitácora", () => {
     for (let pasada = 0; pasada < 2 && !lista; pasada++) {
       await page.getByLabel("Nombre *").fill(nombre)
       await page.getByLabel("DNI *").fill("16.444.555-0")
-      // Unidad destino: obligatoria (o residente destino). Trigger ESTRICTO
-      // adyacente al label (sin fallback a ancestros: el fallback agarraba el
-      // combo de Jornada). Pick con apertura idempotente.
-      const labelU = page.getByText("Unidad destino",{exact:true}).first()
-      const triggerU = labelU.locator("..").getByRole("combobox").first()
-      await expect(triggerU).toBeVisible({ timeout: 10_000 })
-      await pickFirstOption(page, triggerU)
+      const unidad = page.getByLabel("Unidad destino")
+      await expect(unidad).toBeVisible({ timeout: 10_000 })
+      await elegirUnidadDestino(page)
       await page.waitForTimeout(300)
       // Pre-agendada ON (P2: click atómico + verificación, igual que tabs/combos)
       const sw = page.getByRole("switch").first()
@@ -141,13 +114,7 @@ test.describe("conserjeria — registra visita bitácora", () => {
     await activarTabVisitas()
     // Pick de unidad DENTRO del intento (activarTab puede resetear el form;
     // cada intento reconstruye todo: pick → fill → click sin esperas largas).
-    const labelU2 = page.getByText("Unidad destino",{exact:true}).first()
-    if (await labelU2.isVisible().catch(()=>false)) {
-      const triggerU2 = labelU2.locator("..").getByRole("combobox").first()
-      if (await triggerU2.isVisible().catch(()=>false)) {
-        await pickFirstOption(page, triggerU2).catch(()=>{})
-      }
-    }
+    await elegirUnidadDestino(page)
     const inputNombre = page.getByLabel("Nombre *")
     await inputNombre.fill(nombre)
     await page.getByLabel("DNI *").fill("16.444.555-0")

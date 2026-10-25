@@ -31,11 +31,19 @@ Specs numeradas del proposal:
   etiqueta del caso QR. Los stubs de Radix se extrajeron a `test/componentes/entorno-radix.ts`.
 - [x] **T5 · S1, S3, S5** — `e2e/crud/bitacora.spec.ts`: busca «101», exige que la primera opción
   sea un `Depto 101` con rol SII, la elige y afirma que la fila muestra esa unidad. Se eliminó la
-  tolerancia a «Sin unidad».
+  tolerancia a «Sin unidad». El primer run del PR puso rojo `crud/roles-journeys.spec.ts`, que
+  abría el mismo control en el journey de conserjería: se actualizó igual y se retiraron los helpers
+  Radix que quedaron sin uso (`pickFirstOption`, `menuAbierto`).
 - [x] **T6** — Gates locales.
 - [x] **T7** — Lane e2e real.
 - [x] **T8** — Ledger `openspec/PENDIENTES-FUNCIONALIDAD.md`: F6 pasa a «cableado parcial» con la
   evidencia, y el defecto del prefijo `u-E-` queda anotado como corregido en la sección Hecho.
+- [x] **T9 · S1, S3** — `app/api/pe/unidades/route.ts`: proyección de solo lectura con
+  `pe:bitacora`, scope por sesión, cuatro campos y estacionamiento excluido por etiqueta. Apareció
+  al correr el journey de conserjería: `/api/unidades` gatea con `mp` y conserjería solo tiene
+  `mp:propios`, así que la ruta le devolvía **403** — el selector del store lo ocultaba. No se tocó
+  `lib/authz.ts` (skill de auditoría, regla 5). Test `test/api/pe-unidades-operacion.test.ts` (6
+  casos: 200 conserjería, 200 admin, 403 residente, 401 sin sesión, scope y proyección).
 
 ## Evidencia
 
@@ -51,10 +59,19 @@ RED primero: `test/componentes/visitas-unidad-buscable.test.tsx` falló 6/6 ante
 | `npm run audit:desvios` | 0 hallazgos · candado en verde |
 | `openspec validate f6-unidad-destino-buscable --strict` (raíz) | *is valid* |
 | `node openspec/scripts/check-delta-coverage.mjs f6-unidad-destino-buscable` | 1 ok · 0 que romperían el archive |
+| `npx vitest run test/api/pe-unidades-operacion.test.ts` | **6/6** (códigos por rol) |
+| `npx vitest run` foco componentes (4 archivos) | **38/38** |
 | `npm run e2e:fresh -- -- e2e/crud/bitacora.spec.ts` | **7 tests, 0 failures** — `test-results/junit.xml`: `crud/bitacora.spec.ts` 1 test 0 fallos en 6.8 s |
+| `npm run e2e:fresh -- -- e2e/crud/bitacora.spec.ts e2e/crud/roles-journeys.spec.ts` | ver cierre |
 
 La lane se verificó por el artefacto (`test-results/junit.xml`), no por el log: `e2e:fresh` lo
 trunca a las últimas 45 líneas y el resumen de Playwright no siempre entra ahí.
+
+## Higiene de suite
+
+La suite completa marcó `test/componentes/certificados-descarga.test.tsx` en 5050 ms: el default de
+5 s de Vitest bajo carga, no comportamiento (pasa aislado en 2 s). Se le fijó `PRESUPUESTO_CARGA`
+explícito, igual que `pe-panels` y `certificados-fuente-hooks`.
 
 ## Entrega
 

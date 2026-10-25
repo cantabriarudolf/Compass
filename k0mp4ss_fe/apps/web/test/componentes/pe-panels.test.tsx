@@ -110,14 +110,14 @@ async function elegirOpcion(user: ReturnType<typeof userEvent.setup>, comboIndex
 /**
  * Busca y elige una unidad destino del servidor (F6: «Unidad destino» es un combobox buscable).
  *
- * El stub responde `GET /api/unidades?q=` con una unidad del seed y deja el resto de la
+ * El stub responde `GET /api/pe/unidades?q=` con una unidad del seed y deja el resto de la
  * colección vacío, para que la búsqueda de personas del QR siga viéndose igual.
  */
 async function elegirUnidadDestino(user: ReturnType<typeof userEvent.setup>) {
   vi.stubGlobal(
     "fetch",
     vi.fn(async (url: string) =>
-      String(url).startsWith("/api/unidades")
+      String(url).startsWith("/api/pe/unidades")
         ? json({
             data: [{ id: "u-A-101", numero: "101", etiqueta: "Depto", rolSii: "123-A11" }],
             page: 1,

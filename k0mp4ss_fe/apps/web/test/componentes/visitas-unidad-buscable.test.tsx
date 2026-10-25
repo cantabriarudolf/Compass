@@ -7,7 +7,7 @@
  * lista, y el filtro `!id.startsWith("u-E-")` se comía los 16 deptos de la torre E porque las
  * plazas de estacionamiento usan el mismo prefijo.
  *
- * Estos casos fijan lo observable: el término viaja a `/api/unidades?q=`, la opción muestra el
+ * Estos casos fijan lo observable: el término viaja a `/api/pe/unidades?q=`, la opción muestra el
  * rol SII para desambiguar homónimas, el estacionamiento no es destino, la unidad elegida queda
  * en la visita con su id, y sin coincidencias el registro sigue disponible.
  */
@@ -19,7 +19,8 @@ import { resetStore } from "../helpers"
 import { instalarEntornoRadix } from "./entorno-radix"
 import { useCompassStore } from "@/lib/store"
 import { VisitasPanel } from "@/components/pe/visitas-panel"
-import { buscarUnidades, esUnidadDestino, etiquetaUnidad } from "@/lib/api/use-unidades"
+import { buscarUnidades } from "@/lib/api/use-unidades"
+import { esUnidadDestino, etiquetaUnidad } from "@/lib/unidades-destino"
 
 vi.setConfig({ testTimeout: 120_000 })
 
@@ -47,7 +48,7 @@ function stubFetch(unidades: unknown[] = UNIDADES_API): string[] {
     vi.fn(async (url: string) => {
       const pedida = String(url)
       urls.push(pedida)
-      if (pedida.startsWith("/api/unidades")) {
+      if (pedida.startsWith("/api/pe/unidades")) {
         return json({ data: unidades, page: 1, pageSize: 25, total: unidades.length })
       }
       return json({ data: [], page: 1, pageSize: 10, total: 0 })
@@ -89,7 +90,7 @@ describe("unidades destino (cliente)", () => {
 
     const opciones = await buscarUnidades("101")
 
-    expect(urls.some((u) => u.startsWith("/api/unidades?") && u.includes("q=101"))).toBe(true)
+    expect(urls.some((u) => u.startsWith("/api/pe/unidades?") && u.includes("q=101"))).toBe(true)
     expect(opciones).toEqual([
       { id: "u-A-101", etiqueta: "Depto 101 · 123-A11" },
       { id: "u-E-101", etiqueta: "Depto 101 · 123-E11" },

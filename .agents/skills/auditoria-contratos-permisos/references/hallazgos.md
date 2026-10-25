@@ -78,3 +78,23 @@ comentarios o tests pero nunca implementados en el motor.
 - **Evidencia**: `app/api/auditoria/route.ts` arma `where = { comunidadId }` resuelto de la sesión; el
   `sync` filtra por la comunidad resuelta. La pertenencia se valida y `puede(rol,"ver","am")` aplica.
 - **Veredicto**: no hay cruce de comunidades. Se cierra como verificado.
+
+### H9 · Conserjería no puede leer el padrón de unidades desde el servidor (F6) — **cerrado sin tocar la matriz**
+
+- **Evidencia**: `GET /api/unidades` gatea con `puede(rol, "ver", "mp")` (`app/api/unidades/route.ts:29`).
+  El bloque `conserjeria` de `lib/authz.ts` declara `mp:propios` (ABAC del propio vínculo) y **no** `mp`,
+  así que la ruta devuelve **403** al rol que registra las visitas. El defecto no se veía porque el
+  selector de «Unidad destino» leía el padrón del **store del cliente** y nunca tocaba la API.
+- **Por qué no se resolvió con la matriz**: darle `mp` a conserjería abriría el maestro de personas y el
+  padrón completo (metraje, prorrateo, estado, servicios) para un caso de uso operativo. La regla 5 del
+  skill prohíbe tocar la matriz sin decisión del owner.
+- **Cierre**: `app/api/pe/unidades/route.ts` — **proyección de solo lectura** para la operación:
+  `puede(rol, "ver", "pe:bitacora")` (que conserjería ya tiene por la bitácora), scope por
+  `withComunidadScope`, cuatro campos (`id`, `numero`, `etiqueta`, `rolSii`), estacionamiento excluido
+  por **etiqueta** (los deptos de la torre E comparten el prefijo `u-E-` con las plazas).
+- **Códigos por rol** (`test/api/pe-unidades-operacion.test.ts`, 6 casos): conserjería 200 · administrador
+  200 (wildcard) · residente **403** · sin sesión **401** antes de consultar la base.
+- **Hallazgo abierto que este cambio no toca**: la búsqueda por RUN del QR (`buscarPersonaPorRun` →
+  `GET /api/personas?rut=`) también está detrás de `mp` (`app/api/personas/route.ts:278`) y para
+  conserjería cae al padrón local del store con el aviso «No se pudo consultar el padrón del servidor».
+  El fallback evita el bloqueo, pero el padrón real no se consulta: merece su propia proyección `pe`.
