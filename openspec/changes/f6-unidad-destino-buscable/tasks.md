@@ -55,3 +55,13 @@ RED primero: `test/componentes/visitas-unidad-buscable.test.tsx` falló 6/6 ante
 
 La lane se verificó por el artefacto (`test-results/junit.xml`), no por el log: `e2e:fresh` lo
 trunca a las últimas 45 líneas y el resumen de Playwright no siempre entra ahí.
+
+## Entrega
+
+Una sola unidad de trabajo, **624 líneas authored** (código + tests + spec del change) en el
+commit `b2767c0`, sobre la guía de ~400. No se partió a propósito: separar los tests del
+comportamiento que fijan, o el spec del change de su código, empeora la revisión en vez de
+mejorarla. El delta de `PE`, el proposal y las tareas viajan con el cambio porque el archive los
+exige juntos.
+
+PR: #17.
