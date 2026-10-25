@@ -51,6 +51,9 @@ function stubFetch(unidades: unknown[] = UNIDADES_API): string[] {
       if (pedida.startsWith("/api/pe/unidades")) {
         return json({ data: unidades, page: 1, pageSize: 25, total: unidades.length })
       }
+      if (pedida.startsWith("/api/pe/personas")) {
+        return json({ data: [{ id: "p-residente", rut: "11111111-1", nombreCompleto: "Residente Destino" }] })
+      }
       return json({ data: [], page: 1, pageSize: 10, total: 0 })
     })
   )
@@ -142,7 +145,9 @@ describe("VisitasPanel — Unidad destino buscable (F6)", () => {
     const user = userEvent.setup()
     stubFetch([])
 
-    render(<VisitasPanel diaReporte={HOY} onError={vi.fn()} onSuccess={vi.fn()} />)
+    const onError = vi.fn()
+
+    render(<VisitasPanel diaReporte={HOY} onError={onError} onSuccess={vi.fn()} />)
 
     await user.type(screen.getByLabelText("Unidad destino"), "zzz")
     expect(
@@ -152,16 +157,18 @@ describe("VisitasPanel — Unidad destino buscable (F6)", () => {
     // El registro no se bloquea: se completa el destino con el residente.
     await user.type(screen.getByLabelText("Nombre *"), "Visita sin unidad")
     await user.type(screen.getByLabelText("DNI *"), "16.444.555-0")
-    const combos = screen.getAllByRole("combobox")
-    await user.click(combos[combos.length - 1]!)
-    const lista = await screen.findByRole("listbox", {}, { timeout: 10_000 })
-    const residente = within(lista)
-      .getAllByRole("option")
-      .find((o) => !/^Sin /.test(o.textContent ?? ""))!
-    await user.click(residente)
+    await user.type(screen.getByLabelText("Residente destino"), "Residente")
+    const lista = await screen.findByRole(
+      "listbox",
+      { name: /Resultados de Residente destino/ },
+      { timeout: 10_000 }
+    )
+    await user.click(await within(lista).findByRole("option", { name: /Residente Destino/ }))
     await user.click(screen.getByRole("button", { name: /Registrar visita/ }))
 
     await waitFor(() => {
+      // Si el panel rechazó el registro, el motivo aparece acá antes que el conteo.
+      expect(onError.mock.calls.filter((c) => c[0]).map((c) => String(c[0])).join(" | ")).toBe("")
       const visita = useCompassStore.getState().bitacoraVisitasPE.at(-1)
       expect(visita?.destinoPersonaId).toBeTruthy()
       expect(visita?.unidadId).toBeUndefined()

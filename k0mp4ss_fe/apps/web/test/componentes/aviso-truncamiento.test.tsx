@@ -10,7 +10,8 @@
  */
 import React from "react"
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
-import { cleanup, render, screen } from "@testing-library/react"
+import { cleanup, render, screen, waitFor } from "@testing-library/react"
+import userEvent from "@testing-library/user-event"
 import { resetStore } from "../helpers"
 import { useCompassStore } from "@/lib/store"
 import { AvisoTruncamiento, LIMITE_SELECT } from "@/components/pe/aviso-truncamiento"
@@ -81,23 +82,31 @@ describe("AvisoTruncamiento", () => {
   })
 })
 
-describe("Paneles PE: contrato de aviso de truncamiento", () => {
-  it("con más de 100 personas, el select de residente avisa el recorte", () => {
+describe("Paneles PE: el residente destino ya no trunca", () => {
+  it("con más de 100 personas en el store, no hay aviso: el selector busca en el servidor", async () => {
+    const user = userEvent.setup()
     useCompassStore.setState({ personas: personasSinteticas(LIMITE_SELECT + 37) })
-
-    render(<VisitasPanel diaReporte={HOY} onError={vi.fn()} onSuccess={vi.fn()} />)
-
-    const avisos = screen.getAllByRole("status").map(texto)
-    expect(avisos).toContain(
-      `Mostrando ${LIMITE_SELECT} de ${LIMITE_SELECT + 37} — refiná la búsqueda para ver el resto.`
+    const urls: string[] = []
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        urls.push(String(url))
+        return new Response(JSON.stringify({ data: [] }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        })
+      })
     )
-  })
-
-  it("sin recorte (< LIMITE_SELECT personas) no hay aviso", () => {
-    useCompassStore.setState({ personas: personasSinteticas(5) })
 
     render(<VisitasPanel diaReporte={HOY} onError={vi.fn()} onSuccess={vi.fn()} />)
 
-    expect(screen.queryByRole("status")).toBeNull()
+    // Sin rótulo de recorte: el campo dejó de montar opciones del padrón del store.
+    expect(screen.queryByText(/Mostrando \d+ de \d+/)).toBeNull()
+
+    await user.type(screen.getByLabelText("Residente destino"), "Persona")
+    await waitFor(() =>
+      expect(urls.some((u) => u.includes("/api/pe/personas?q="))).toBe(true)
+    )
+    vi.unstubAllGlobals()
   })
 })
