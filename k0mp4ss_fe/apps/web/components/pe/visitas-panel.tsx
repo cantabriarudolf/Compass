@@ -18,7 +18,10 @@ import {
 import { IconCheck, IconQrcode, IconSearch, IconTrash } from "@tabler/icons-react"
 import { AvisoTruncamiento, LIMITE_SELECT } from "@/components/pe/aviso-truncamiento"
 import { EscaneoQrCedula } from "@/components/pe/escaneo-qr-cedula"
+import { SelectorBuscable, type Opcion } from "@/components/selector-buscable"
 import { buscarPersonaPorRun } from "@/lib/api/use-personas"
+import { buscarUnidades } from "@/lib/api/use-unidades"
+import { esUnidadDestino, etiquetaUnidad } from "@/lib/unidades-destino"
 import { mascararRun, normalizarRun, validarRun } from "@/lib/validacion-rut"
 import type { BitacoraVisitaPE } from "@/lib/schemas"
 
@@ -97,18 +100,44 @@ export function VisitasPanel({
   const [resultadoIdentidad, setResultadoIdentidad] = React.useState<ResultadoIdentidad | null>(null)
   const [buscandoIdentidad, setBuscandoIdentidad] = React.useState(false)
   const [avisoPadron, setAvisoPadron] = React.useState<string | null>(null)
+  /**
+   * Etiquetas de las unidades elegidas en esta sesión. La búsqueda trae unidades de la BD que
+   * el padrón del store no tiene, y la tabla del día tiene que mostrar «Depto 101 · 123-A11»
+   * en vez del id crudo.
+   */
+  const [etiquetasUnidad, setEtiquetasUnidad] = React.useState<Record<string, string>>({})
+  const recordarUnidad = React.useCallback((id: string, etiqueta: string) => {
+    setEtiquetasUnidad((previas) => ({ ...previas, [id]: etiqueta }))
+  }, [])
 
-  // Listas de opciones: se recortan a LIMITE_SELECT para no montar cientos de
+  // Lista de residentes: se recorta a LIMITE_SELECT para no montar cientos de
   // SelectItem, y el recorte se declara en pantalla (nunca en silencio).
-  const unidadesDestino = unidades.filter((u) => !u.id.startsWith("u-E-"))
-  const unidadesVisibles = unidadesDestino.slice(0, LIMITE_SELECT)
   const personasVisibles = personas.slice(0, LIMITE_SELECT)
+
+  /** Etiqueta conocida de una unidad: la elegida en esta sesión o el padrón del store. */
+  const etiquetaDeUnidad = (id?: string): string | undefined => {
+    if (!id) return undefined
+    const recordada = etiquetasUnidad[id]
+    if (recordada) return recordada
+    const u = unidades.find((x) => x.id === id)
+    return u ? etiquetaUnidad(u) : undefined
+  }
 
   const refUnidad = (id?: string) => {
     if (!id) return "—"
-    const u = unidades.find((x) => x.id === id)
-    return u ? `${u.etiqueta} ${u.numero}` : id
+    return etiquetaDeUnidad(id) ?? id
   }
+
+  /** Selección desde la búsqueda del servidor: guarda la etiqueta que el usuario vio. */
+  const alElegirUnidad = (opcion: Opcion | null) => {
+    if (!opcion) {
+      setFormVisita((f) => ({ ...f, unidadId: "" }))
+      return
+    }
+    recordarUnidad(opcion.id, opcion.etiqueta)
+    setFormVisita((f) => ({ ...f, unidadId: opcion.id }))
+  }
+
   const nombrePersona = (id?: string) => {
     if (!id) return "—"
     const p = personas.find((x) => x.id === id)
@@ -119,15 +148,16 @@ export function VisitasPanel({
   const resolverCoincidencia = (personaId: string, nombre: string, run: string): CoincidenciaPadron => {
     const vinculo = vinculos.find((v) => v.personaId === personaId && !v.fechaFin)
     const unidad = vinculo ? unidades.find((u) => u.id === vinculo.unidadId) : undefined
-    // Solo se preselecciona una unidad del selector del destino: las plazas de
-    // estacionamiento (`u-E-`) no son destinos de visita y dejarían el Select en
-    // blanco porque la lista de opciones las excluye.
-    const seleccionable = vinculo && !vinculo.unidadId.startsWith("u-E-") ? vinculo.unidadId : undefined
+    // Solo se preselecciona una unidad que pueda ser destino: una plaza de estacionamiento no
+    // lo es. Si el padrón del store no tiene la unidad, se preselecciona igual — el vínculo es
+    // la fuente, y la etiqueta se aprende al confirmar la identidad.
+    const seleccionable =
+      vinculo && (!unidad || esUnidadDestino(unidad)) ? vinculo.unidadId : undefined
     return {
       personaId,
       run,
       nombre,
-      unidad: unidad ? `${unidad.etiqueta} ${unidad.numero}` : "Sin unidad registrada",
+      unidad: unidad ? etiquetaUnidad(unidad) : "Sin unidad registrada",
       vinculo: vinculo ? (ETIQUETA_VINCULO[vinculo.rol] ?? vinculo.rol) : "Sin vínculo vigente",
       unidadId: seleccionable,
     }
@@ -192,6 +222,9 @@ export function VisitasPanel({
   const confirmarIdentidad = () => {
     if (resultadoIdentidad?.tipo !== "padron") return
     const coincidencia = resultadoIdentidad.coincidencia
+    if (coincidencia.unidadId && coincidencia.unidad !== "Sin unidad registrada") {
+      recordarUnidad(coincidencia.unidadId, coincidencia.unidad)
+    }
     setFormVisita((f) => ({
       ...f,
       nombre: coincidencia.nombre,
@@ -380,23 +413,15 @@ export function VisitasPanel({
             </div>
           </div>
           <div className="grid grid-cols-2 gap-2">
-            <div className="flex flex-col gap-1.5">
-              <Label>Unidad destino</Label>
-              <Select value={formVisita.unidadId || "__none"} onValueChange={(v) => setFormVisita({ ...formVisita, unidadId: v === "__none" ? "" : v })}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Seleccionar" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none">Sin unidad</SelectItem>
-                  {unidadesVisibles.map((u) => (
-                    <SelectItem key={u.id} value={u.id}>
-                      {u.etiqueta} {u.numero}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <AvisoTruncamiento mostrados={unidadesVisibles.length} total={unidadesDestino.length} />
-            </div>
+            <SelectorBuscable
+              etiqueta="Unidad destino"
+              valorId={formVisita.unidadId}
+              valorEtiqueta={etiquetaDeUnidad(formVisita.unidadId)}
+              onSeleccionar={alElegirUnidad}
+              buscar={buscarUnidades}
+              placeholder="Número, etiqueta o rol SII…"
+              vacio="Ninguna unidad coincide. Revisá el número o el rol SII."
+            />
             <div className="flex flex-col gap-1.5">
               <Label>Residente destino</Label>
               <Select value={formVisita.destinoPersonaId || "__none"} onValueChange={(v) => setFormVisita({ ...formVisita, destinoPersonaId: v === "__none" ? "" : v })}>

@@ -17,6 +17,13 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 import { cleanup, render, screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 
+/**
+ * Presupuesto por caso: estos casos abren comboboxes Radix en jsdom y superan el default de
+ * 5 s cuando la suite completa corre en paralelo en una máquina cargada (medido: 5050 ms, que
+ * es un timeout y no un fallo de comportamiento). Es el mismo criterio de `pe-panels`.
+ */
+const PRESUPUESTO_CARGA = 60_000
+
 /** Folio que "asigna el servidor": la página no puede haberlo calculado sola. */
 const FOLIO_SERVIDOR = "CT-0042"
 const CODIGO_SERVIDOR = "VC-ABCD1234"
@@ -214,7 +221,7 @@ async function emitir(user: ReturnType<typeof userEvent.setup>): Promise<void> {
 }
 
 describe("comunidad/certificados — emisión y descarga del PDF", () => {
-  it("descarga OK: confirma la emisión y usa el folio que asignó el servidor", async () => {
+  it("descarga OK: confirma la emisión y usa el folio que asignó el servidor", { timeout: PRESUPUESTO_CARGA }, async () => {
     const user = userEvent.setup()
     render(<CertificadosPage />)
     await emitir(user)
@@ -237,7 +244,7 @@ describe("comunidad/certificados — emisión y descarga del PDF", () => {
     expect(alta?.codigoVerificacion).toBeUndefined()
   })
 
-  it("descarga que rechaza: NO confirma el éxito, avisa que el registro sí se emitió", async () => {
+  it("descarga que rechaza: NO confirma el éxito, avisa que el registro sí se emitió", { timeout: PRESUPUESTO_CARGA }, async () => {
     fuente.descargarPdf.mockRejectedValue(new Error("permiso denegado por el navegador"))
     const user = userEvent.setup()
     render(<CertificadosPage />)
