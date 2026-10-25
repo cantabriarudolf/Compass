@@ -151,11 +151,27 @@ aclaración documental, 0 errores de cálculo.
 - [ ] **Cifrado de datos sensibles en reposo** — Estrategia: AES-256 por campo vs TDE de BD
 - [ ] **2FA/MFA** — Elige método: TOTP app (Google Authenticator), SMS, email
 - [ ] **Sentry** — Crea cuenta en https://sentry.io e integra DSN
-- [ ] **Política de privacidad y consentimiento** — Contenido legal para cumplir Ley 19.628 / 21.719
+- [ ] **Política de privacidad y consentimiento** — Asesoría normativa hecha el 2026-10-25 (ver §Privacidad y datos personales): falta la **redacción final por comunidad** (contenido a)–l) del art. 14 ter: responsable, contacto, categorías, finalidades, bases de licitud, medidas, derechos, conservación, fuente) y la revisión del abogado. **Vigencia de la 21.719: 01-12-2026** (hay un proyecto de ley en trámite para postergarla a 2027; planificar con 2026)
 - [ ] **CSP enforcement** — Requiere dominio real + 7 días de telemetría Report-Only
 - [ ] **Password policy** — Mínimo de complejidad, breach-list, rotación
 - [ ] **Reducción de sesión JWT** — De 30 días a 24h con sliding refresh
-- [ ] **Derechos ARCO** — UI/API para acceso, rectificación, cancelación de datos personales
+- [x] **Derechos ARCO** — HECHO en P6 (`c85ca2e`): `app/api/mis-datos/route.ts` + `app/admin/mis-datos/page.tsx` + `app/privacidad/page.tsx`
+
+## Privacidad y datos personales — asesoría normativa (2026-10-25)
+
+Consulta al skill `experto-admin-comunidades` sobre los pendientes que no eran de gusto sino de norma.
+**Esto es asesoría fundada, no reemplaza la revisión del abogado**, y los números de artículo de 21.719
+que no se pudieron leer en LeyChile directo (14, 14 ter, 15 bis) se citan desde transcripciones: hay
+que confirmarlos contra el texto oficial antes de fijarlos en UI o specs.
+
+| Pregunta | Respuesta |
+| --- | --- |
+| ¿La comunidad debe **verificar la autenticidad** de la cédula de un visitante? | **No.** Ni la Ley 21.442 ni su reglamento (D.S. 7, 09-01-2025) lo exigen: la verificación de identidad aparece para las **consultas escritas**, y el registro de visitas es una medida de seguridad que necesita respaldo en el reglamento interno o acuerdo de asamblea. El QR del proyecto es **captura asistida** (RUN + DV módulo 11), no autenticación documental |
+| ¿La bitácora de visitas puede avisarse a **toda la comunidad**? | **No**: minimización y finalidad (19.628 art. 9; 21.719 art. 14 b) mandan **sólo al destinatario**. Refuerza que `Notificacion.unidadId` (F5) es prerrequisito del aviso (F13), no un extra |
+| ¿El visitante debe ser informado? | **Sí**: aviso de privacidad visible en conserjería (qué se registra, finalidad, responsable, plazo y contacto ARCO). Hoy no existe → F14 |
+| ¿Cuánto se conserva la bitácora? | Sin plazo legal verificado: es **criterio del proyecto**. Recomendado 30–90 días con borrado/anonimización automática, conservando sólo el caso documentado → F15 |
+| ¿Qué rol tiene Compass? | **Encargado** (trata según instrucciones de la comunidad, que es **responsable**). Deberes: contrato art. 15 bis, política art. 14 ter, supresión/devolución al término |
+| Banner de consentimiento actual | **No cumple** 21.719: es un booleano en `localStorage` sin finalidades, sin versión de política y sin revocación equivalente → F16 |
 
 ## Seguridad y compliance de producción (SERIE-PRODUCCION-FASE2 P1-P6) — ✅ COMPLETA 2026-09-10
 
@@ -184,7 +200,7 @@ aclaración documental, 0 errores de cálculo.
 - [ ] **Rollout cifrado por módulo + blind index HMAC** para búsqueda por rut/email cifrados
 - [x] **UI login 2FA** (form 6 dígitos en `/ingresar`; API completa) — HECHO `bb96ef7` 2026-09-19
 - [ ] **Pen-test dinámico** + auditoría de seguridad externa (recomendado)
-- [ ] **Registro como encargado de datos (Ley 21.719)**
+- [ ] **Contrato responsable→encargado (Ley 21.719 art. 15 bis)** — Corrige el ítem previo «registro como encargado»: la ley **no crea un registro público de encargados** para privados. Lo exigible es el contrato con la comunidad (responsable) que fije objeto, duración, finalidad, tipos de datos, categorías de titulares y obligaciones, más la supresión/devolución al término del encargo. Compass y el administrador son **encargados**; la comunidad es **responsable**
 - [ ] **Migración de datos SQLite → PostgreSQL** (pendiente: script de migración, backup/restore, CI, cambio de provider)
 - [ ] **Configurar `DATABASE_URL` en Vercel dashboard** cuando exista el proyecto
 - [x] **Mantenimiento skill `pruebas`** — SUPERSEDED 2026-09-23: arnés opencode retirado del repo (`.opencode/` eliminado); el handoff de ejecución queda pendiente de redefinir en el harness activo
