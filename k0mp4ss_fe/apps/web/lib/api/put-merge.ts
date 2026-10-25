@@ -21,13 +21,23 @@ import {
   jsonError,
   withComunidadScope,
 } from "./with-comunidad-scope"
-import type { AuthzCheck, CrudDelegate } from "./crud-factory"
+import type { AuthzCheck, CrudDelegate, DespuesDeEscribir } from "./crud-factory"
 
 export interface PutMergeConfig {
   model: CrudDelegate
   schema: z.ZodType
   authzCheck?: AuthzCheck
   recurso?: string
+  /**
+   * Hook post-escritura (auditoría, T1c), opcional y aditivo: se invoca
+   * después del `model.update` con `accion: "editar"`, `registro` = fila
+   * actualizada y `previo` = fila existente. Si lanza, el error se registra
+   * con `logger.error` y la respuesta sigue siendo la del éxito ya confirmado:
+   * la fila ya está escrita y devolver 500 haría que el cliente reintente y
+   * duplique la escritura. La auditoría no puede romper la operación, pero
+   * tampoco puede quedar en silencio.
+   */
+  despuesDeEscribir?: DespuesDeEscribir
 }
 
 type Ctx = { params: Promise<{ id: string }> }
@@ -37,7 +47,6 @@ type Ctx = { params: Promise<{ id: string }> }
  */
 export function createPutMerge(config: PutMergeConfig) {
   const { model, schema, authzCheck, recurso } = config
-
   return async function PUT(req: Request, ctx: Ctx): Promise<Response> {
     const resultado = await withComunidadScope()
     if (!resultado.ok) return resultado.response
@@ -85,6 +94,24 @@ export function createPutMerge(config: PutMergeConfig) {
         where: { id },
         data: datos,
       })
+      // Hook post-escritura: la fila ya está confirmada y la respuesta de éxito
+      // no se toca aunque el hook lance (el error queda en logger.error; ver
+      // PutMergeConfig.despuesDeEscribir).
+      if (config.despuesDeEscribir) {
+        try {
+          await config.despuesDeEscribir({
+            accion: "editar",
+            registro: actualizado,
+            previo: existente,
+            scope,
+          })
+        } catch (e) {
+          logger.error(
+            { err: e, recurso },
+            "[api/put-merge] despuesDeEscribir falló"
+          )
+        }
+      }
       return Response.json(actualizado)
     } catch (e) {
       if (

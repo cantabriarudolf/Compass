@@ -57,11 +57,38 @@ export type BeforeDelete = (
   scope: ComunidadScope
 ) => Response | null | Promise<Response | null>
 
+export type AccionEscritura = "crear" | "editar" | "eliminar"
+
+export interface EscrituraCrud {
+  accion: AccionEscritura
+  /** Fila tal como quedó escrita (o la borrada, en "eliminar"). */
+  registro: unknown
+  /** Fila previa; `null` cuando la acción la creó. */
+  previo: unknown
+  scope: ComunidadScope
+}
+
+export type DespuesDeEscribir = (escritura: EscrituraCrud) => void | Promise<void>
+
 export interface CrudConfig {
   model: CrudDelegate
   schema: z.ZodType
   authzCheck?: AuthzCheck
   beforeDelete?: BeforeDelete
+  /**
+   * Hook post-escritura (auditoría, T1c), opcional y aditivo: sin él, el
+   * comportamiento de GET/POST/PUT/DELETE es exactamente el de siempre.
+   *
+   * Se invoca después de cada escritura CONFIRMADA: en POST con `"crear"` si
+   * la fila no existía o `"editar"` si existía (upsert idempotente), en PUT
+   * con `"editar"` y en DELETE con `"eliminar"` (ahí `previo` y `registro`
+   * son la misma fila borrada, porque la previa a un borrado ES la borrada).
+   * Si el hook lanza, el error se registra y la respuesta sigue siendo la del
+   * éxito ya confirmado: la fila ya está escrita y devolver 500 haría que el
+   * cliente reintente y duplique la escritura. La auditoría no puede romper la
+   * operación, pero tampoco puede quedar en silencio (queda en `logger.error`).
+   */
+  despuesDeEscribir?: DespuesDeEscribir
   /**
    * Búsqueda por texto opt-in (F6): con `?q=` el GET suma un `OR` de
    * `contains` sobre estos campos. Sin la opción —o sin `q`— el `where` es
@@ -132,6 +159,20 @@ async function leerJson(req: Request): Promise<unknown | null> {
 
 export function createCrudHandlers(config: CrudConfig): CrudHandlers {
   const { model, schema, authzCheck, beforeDelete } = config
+
+  async function notificarEscritura(escritura: EscrituraCrud): Promise<void> {
+    if (!config.despuesDeEscribir) return
+    try {
+      await config.despuesDeEscribir(escritura)
+    } catch (e) {
+      // Ver CrudConfig.despuesDeEscribir: la escritura ya está confirmada y la
+      // respuesta de éxito no se toca; el error de auditoría queda registrado.
+      logger.error(
+        { err: e, accion: escritura.accion },
+        "[crud-factory] despuesDeEscribir falló"
+      )
+    }
+  }
 
   function autorizar(scope: ComunidadScope, accion: Accion): Response | null {
     if (authzCheck && !authzCheck(scope.rol, accion)) {
@@ -206,7 +247,7 @@ export function createCrudHandlers(config: CrudConfig): CrudHandlers {
     try {
       const existente = (await model.findUnique({
         where: { id },
-      })) as { comunidadId?: string } | null
+      })) as Record<string, unknown> | null
       // Upsert sobre un registro de OTRA comunidad → 404 (sin filtrar existencia)
       if (existente && existente.comunidadId !== scope.comunidadId) {
         return jsonError(404, "Registro no encontrado.")
@@ -223,6 +264,13 @@ export function createCrudHandlers(config: CrudConfig): CrudHandlers {
         where: { id },
         create: payload,
         update: limpiarPayload(datos),
+      })
+      // Hook post-escritura: la fila ya está confirmada (ver CrudConfig).
+      await notificarEscritura({
+        accion: existente ? "editar" : "crear",
+        registro: record,
+        previo: existente ?? null,
+        scope,
       })
       return Response.json(record, { status: existente ? 200 : 201 })
     } catch (e) {
@@ -292,6 +340,13 @@ export function createCrudHandlers(config: CrudConfig): CrudHandlers {
         where: { id },
         data: limpiarPayload(parsed.data as Record<string, unknown>),
       })
+      // Hook post-escritura: la fila ya está confirmada (ver CrudConfig).
+      await notificarEscritura({
+        accion: "editar",
+        registro: actualizado,
+        previo: record,
+        scope,
+      })
       return Response.json(actualizado)
     } catch (e) {
       return mapearError(e)
@@ -321,6 +376,13 @@ export function createCrudHandlers(config: CrudConfig): CrudHandlers {
         if (corto) return corto
       }
       await model.delete({ where: { id } })
+      // Hook post-escritura: el borrado ya está confirmado (ver CrudConfig).
+      await notificarEscritura({
+        accion: "eliminar",
+        registro: record,
+        previo: record,
+        scope,
+      })
       return Response.json({ ok: true })
     } catch (e) {
       return mapearError(e)
