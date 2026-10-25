@@ -41,6 +41,7 @@ import { generarId } from "@/lib/id-utils"
 import { useCobrosFI } from "@/lib/api/use-cobros-fi"
 import { useUnidades } from "@/lib/api/use-unidades"
 import { useFondosFI } from "@/lib/api/use-fondos-fi"
+import { VerMas } from "@/components/ver-mas"
 
 const CONCEPTO_LABEL: Record<ConceptoCobroFI, string> = {
   gasto_comun: "Gasto Común",
@@ -67,7 +68,19 @@ interface FormPago {
 
 export default function PagosPage() {
   // Cobros, unidades y fondos vía API REST (BD fuente de verdad).
-  const { items: cobros, isLoading: cargandoCobros, update: editarCobro } = useCobrosFI()
+  // El libro de cobros es el listado que más filas acumula (una por unidad y
+  // concepto emitido), así que se pagina de verdad: `totalCobros` viene del
+  // servidor y `cargarMas` acumula la página siguiente en vez de dejar la lista
+  // recortada en las primeras 100 filas (F11).
+  const {
+    items: cobros,
+    total: totalCobros,
+    hasMore,
+    cargarMas,
+    cargandoMas,
+    isLoading: cargandoCobros,
+    update: editarCobro,
+  } = useCobrosFI()
   const { items: unidades, isLoading: cargandoUnidades } = useUnidades()
   const { items: fondos, isLoading: cargandoFondos } = useFondosFI()
   const cargandoAPI = cargandoCobros || cargandoUnidades || cargandoFondos
@@ -261,6 +274,15 @@ export default function PagosPage() {
                   )}
                 </tbody>
               </table>
+              {hasMore && (
+                <VerMas
+                  mostrados={cobros.length}
+                  total={totalCobros}
+                  cargando={cargandoMas}
+                  onCargarMas={cargarMas}
+                  className="border-t px-4"
+                />
+              )}
             </CardContent>
           </Card>
         </TabsContent>
