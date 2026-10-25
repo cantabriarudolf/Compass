@@ -22,13 +22,13 @@
 | F8 | **Verificación de autenticidad de documentos de identidad** | El escáner **identifica** al portador (RUT + padrón) pero **no certifica que el carnet sea auténtico**. Eso exige SDK comercial (Regula, BlinkID) con licencia por dominio y costo por cotización | Sin empezar | **Owner**: presupuesto |
 | F9 | **Retiro/aislamiento del módulo QA/dev antes de producción** | `admin/qa-lab`, `admin/dev-dashboard` y `admin/mantenimiento` operan sobre `localStorage` y **cualquier usuario autenticado puede acceder**. No migran: se retiran o se aíslan | Decidido, sin ejecutar | **Owner**: cuándo |
 | F10 | **Allowlist de dominios para abrir documentos** | El `window.open` de documentos ya valida destino (PR #11) con una lista: origen propio + `supabase.co`/`supabase.in`. Si se suma otro proveedor de archivos, hay que agregarlo o los documentos no abren | Funcional con el default | **Owner**: qué dominios sumar |
-| F11 | **Paginación real en `useCrudCollection`** | `pageSize=100` fijo: los listados con más filas no tienen «ver más». Hoy se mitiga avisando el recorte | Sin empezar | Nadie (mejora) |
-| F12 | **CI de GitHub condicionado por tipo de cambio** | El plan free agotó sus 2.000 minutos/mes. Hoy cada push corre 5 jobs (~15-20 min). Se puede correr E2E solo cuando el PR toca UI | Sin empezar | Nadie (proceso) |
 
 ## Hecho (para no volver a listarlo)
 
 | # | Qué | Evidencia |
 | --- | --- | --- |
+| — | **Paginación real en `useCrudCollection` (F11)** | `hasMore`/`cargarMas`/`cargandoMas` en `lib/api/use-crud-collection.ts` (aditivo, URL de página 1 intacta) · `components/ver-mas.tsx` · cableado en el libro de cobros de `/finanzas/pagos` · tests `use-crud-collection-paginacion` (3) + `ver-mas` (4) · PR de esta rama |
+| — | **CI de GitHub sin condicionar por tipo de cambio (F12, obsoleta)** | El repo pasó a **público**: GitHub Actions no cobra minutos en repos públicos, así que condicionar los jobs al tipo de cambio dejó de tener sentido |
 | — | **Variación tarifaria real en métricas (F2)** | `lib/metricas-utils.ts` + 6 tests · `/admin/metricas` muestra «—» sin periodos comparables · PR #13 |
 | — | **El respaldo baja como descarga fechada, sin escribir en disco (F3)** | `POST /api/backup` sin `writeFileSync` · `lib/backup.ts` retirado · suite de seguridad del endpoint sin editar · PR #13 |
 | — | **Pantalla del residente para leer comunicaciones (F1)** | change `co-lectura-residente` · bandeja propia en `/comunidad/comunicacion` con vista derivada del rol · modelo `EnvioDestinatarioCO` · e2e `flujo/lectura-residente` 8/8 |

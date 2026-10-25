@@ -8,13 +8,28 @@
  * remove que devuelven `StoreResult`, el mismo contrato que las acciones
  * legacy del store zustand para poder intercambiarse.
  *
- * AVISO OBLIGATORIO AL CONSUMIDOR: sin `query`, el hook pide `pageSize=100` y
- * por eso `items.length` puede ser menor que `total`. La colección expone
- * `total` justamente para eso: si `total > items.length`, el consumidor DEBE
- * avisar en pantalla que la lista está recortada (ver
- * `components/pe/aviso-truncamiento.tsx`) en vez de truncar en silencio. Subir
- * el `pageSize` no resuelve el problema, solo lo esconde.
+ * PAGINACIÓN REAL (F11): sin `query`, el hook pide `pageSize=100`, así que
+ * `items.length` puede ser menor que `total`. La forma correcta de resolver ese
+ * recorte es la paginación acumulativa que expone la colección:
+ *
+ * - `hasMore`  → `true` mientras `items.length < total`.
+ * - `cargarMas()` → pide la página siguiente (`&page=N`), la acumula al final de
+ *                   `items` y apaga `hasMore` cuando ya no queda nada. Si no hay
+ *                   más filas no dispara ninguna petición.
+ * - `cargandoMas` → la petición de página siguiente está en vuelo.
+ *
+ * Con eso, donde se use paginación el aviso de truncamiento deja de ser
+ * necesario: la lista no está recortada, está paginada y se puede completar
+ * (ver `components/ver-mas.tsx`). El aviso sigue vigente solo en los listados
+ * que NO usan `hasMore` (recortes locales de `Select`/tablas, ver
+ * `components/pe/aviso-truncamiento.tsx`). Subir el `pageSize` no resuelve el
+ * problema, solo lo esconde.
+ *
+ * La URL de la página 1 no cambia (`?pageSize=100`): es la clave de SWR y el
+ * `pageSize` que ya mandan los consumidores con `query`, así que tocarla
+ * rompería a los 25 consumidores.
  */
+import * as React from "react"
 import useSWR, { mutate as mutateGlobal } from "swr"
 import type { StoreResult } from "@/lib/store"
 
@@ -57,9 +72,16 @@ async function enviar(
 
 export interface CrudCollection<T> {
   items: T[]
+  /** Total de filas de la página 1 (lo que reporta el servidor). */
   total: number
   isLoading: boolean
   error: Error | null
+  /** `true` mientras quedan filas del `total` que no están en `items`. */
+  hasMore: boolean
+  /** Pide la página siguiente y la acumula; si no hay más, no hace nada. */
+  cargarMas: () => Promise<void>
+  /** Hay una petición de página siguiente en vuelo. */
+  cargandoMas: boolean
   create: (datos: Partial<T>) => Promise<StoreResult>
   update: (id: string, parcial: Partial<T>) => Promise<StoreResult>
   remove: (id: string) => Promise<StoreResult>
@@ -80,7 +102,51 @@ export function useCrudCollection<T extends { id: string }>(
     revalidateOnFocus: true,
   })
 
+  // Páginas pedidas con `cargarMas`, atadas a la URL que las produjo: si cambia
+  // la query, las páginas viejas dejan de aplicar sin necesidad de un efecto.
+  const [paginacion, setPaginacion] = React.useState<{
+    url: string
+    paginas: Pagina<T>[]
+  }>({ url, paginas: [] })
+  const paginasExtra = React.useMemo(
+    () => (paginacion.url === url ? paginacion.paginas : []),
+    [paginacion, url]
+  )
+  const [cargandoMas, setCargandoMas] = React.useState(false)
+
+  const items = React.useMemo(
+    () => [...(data?.data ?? []), ...paginasExtra.flatMap((p) => p.data)],
+    [data, paginasExtra]
+  )
+  const total = data?.total ?? 0
+  const hasMore = items.length < total
+
+  const urlDePagina = (page: number): string =>
+    `${url}${url.includes("?") ? "&" : "?"}page=${page}`
+
+  const cargarMas = async (): Promise<void> => {
+    if (cargandoMas || !hasMore) return
+    const siguiente = (data?.page ?? 1) + paginasExtra.length + 1
+    setCargandoMas(true)
+    try {
+      const pagina = await fetcher<Pagina<T>>(urlDePagina(siguiente))
+      setPaginacion((previa) => {
+        const base = previa.url === url ? previa.paginas : []
+        // Idempotente: una página ya acumulada no se duplica en `items`.
+        if (base.some((p) => p.page === pagina.page)) return previa
+        return { url, paginas: [...base, pagina] }
+      })
+    } catch {
+      // La página 1 sigue exponiendo su error vía SWR; acá solo se corta la
+      // carga para no dejar el botón en «Cargando…» eternamente.
+    } finally {
+      setCargandoMas(false)
+    }
+  }
+
   const invalidar = (): void => {
+    // Tras una mutación la única página fresca es la 1: se descartan las extra.
+    setPaginacion({ url, paginas: [] })
     void mutate()
     void mutateGlobal(
       (key) =>
@@ -110,10 +176,13 @@ export function useCrudCollection<T extends { id: string }>(
   }
 
   return {
-    items: data?.data ?? [],
-    total: data?.total ?? 0,
+    items,
+    total,
     isLoading,
     error: error ?? null,
+    hasMore,
+    cargarMas,
+    cargandoMas,
     create,
     update,
     remove,
