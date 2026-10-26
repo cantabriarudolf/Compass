@@ -4,6 +4,10 @@
 // Si la sesión previa sigue vigente, /ingresar redirige a /dashboard → se guarda
 // el storageState existente sin reloggear. Patrón sin 5 proyectos en config.
 import { expect, test as setup } from "@playwright/test"
+import {
+  CLAVE_ACUSE_PRIVACIDAD,
+  VERSION_POLITICA_PRIVACIDAD,
+} from "../lib/politica-privacidad"
 
 const PASSWORD_TEST = "Test1234!"
 
@@ -35,6 +39,21 @@ async function crearSesion(
   email: string,
   archivo: string
 ) {
+  // El aviso de privacidad es fijo abajo y tapa botones del viewport: se deja el
+  // acuse ya registrado antes de navegar, así no aparece en ninguna página ni en
+  // el storageState que heredan los specs. Antes esto se hacía con clicks en
+  // «Aceptar»; ese botón ya no existe (F16: el banner informa con versión y
+  // fecha) y el bucle de reintentos se comía el timeout de los seis setups.
+  await page.addInitScript(
+    ([clave, acuse]) => window.localStorage.setItem(clave, acuse),
+    [
+      CLAVE_ACUSE_PRIVACIDAD,
+      JSON.stringify({
+        version: VERSION_POLITICA_PRIVACIDAD,
+        fecha: new Date().toISOString(),
+      }),
+    ] as [string, string]
+  )
   await page.goto("/ingresar")
   const hayFormulario = await correoOFormulario(page)
   if (hayFormulario) {
@@ -52,33 +71,6 @@ async function crearSesion(
   // P3 E2E-FULL-VERDE: el click pre-hidratación se pierde (sin listener) y el
   // flag no persistía (verificado: admin.json sin la clave) → reintentar con
   // verificación del flag (máx 3), esperando hidratación entre intentos.
-  const CLAVE = "compass-consentimiento-privacidad"
-  for (let intento = 0; intento < 3; intento++) {
-    const flag = await page
-      .evaluate((k) => window.localStorage.getItem(k), CLAVE)
-      .catch(() => null)
-    if (flag === "aceptado") break
-    // Espera hidratación: el botón Aceptar debe estar operativo.
-    await page
-      .getByRole("button", { name: "Aceptar" })
-      .first()
-      .waitFor({ state: "visible", timeout: 10_000 })
-      .catch(() => {})
-    const bannerCookies = page
-      .locator("div")
-      .filter({ hasText: "Utilizamos cookies" })
-      .first()
-    if (await bannerCookies.isVisible().catch(() => false)) {
-      try {
-        await bannerCookies
-          .getByRole("button", { name: "Aceptar" })
-          .click({ timeout: 10_000 })
-      } catch {
-        // Reintenta en la siguiente vuelta (post-hidratación).
-      }
-    }
-    await page.waitForTimeout(500)
-  }
   await page.context().storageState({ path: archivo })
 }
 
