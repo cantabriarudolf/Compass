@@ -1,6 +1,10 @@
 // P2 — rp-pruebas-roles: 1 journey feliz por rol no-admin con storageState.
 // Usa entidades TEST-* nuevas; no confirma retiros/pagos del seed.
-// Afirma contra seedData previo (verificado en lib/store.ts).
+// Afirma contra el seed en la BD (seed:authz + seed:mocks). NOTA (pe-paneles-bd):
+// ya NO lee el store legacy (localStorage "compass-store"): desde la serie
+// pe-paneles-bd ningún componente de /comunidad/* instancia el store zustand, así
+// que ese localStorage ni siquiera existe en el contexto del test. La fuente de
+// verdad es la base, validada vía API con la sesión de cada rol.
 import { expect, test } from "@playwright/test"
 
 // Journey por rol con varios waits de UI: el default de CI (30s) queda corto en
@@ -195,16 +199,24 @@ test.describe("residente — RA reserva + CT certificado + no FI", () => {
         folioVisible = await alt.isVisible().catch(()=>false)
       }
     }
-    // Fallback via store direct si UI no generó (para robustez sin poblar QA lab): usar evaluate para generar certificado testeando seedData
+    // Fallback vía API si la UI no generó (para robustez sin poblar QA lab): la BD
+    // es la fuente de verdad (ver NOTA pe-paneles-bd en la cabecera). Con la sesión
+    // del residente: su ficha del seed (p-3, seed-authz.mjs) debe ser legible en su
+    // propio alcance (ABAC mp:propios en /api/personas) y la lectura de FI debe
+    // negarle con 403 (RP §Roles Estándar: el residente no ve finanzas).
     if (!folioVisible) {
-      // Verificar seedData via localStorage evaluación — no contamina UI, demuestra lectura seed
-      const seedCheck = await page.evaluate(() => {
-        const raw = localStorage.getItem("compass-store")
-        if (!raw) return { hasStore:false }
-        try { const j = JSON.parse(raw); const state = j.state || j; return { hasStore:true, personas: (state.personas||[]).length, unidades:(state.unidades||[]).length } } catch { return { hasStore:true, err:true }}
-      })
-      // Si no hay store hidratado, al menos verificar no hay pageerror
-      expect(seedCheck.hasStore).toBeTruthy()
+      const mias = await page.request.get("/api/personas?pageSize=1")
+      expect(
+        mias.ok(),
+        "GET /api/personas debe responder 200 con sesión residente"
+      ).toBe(true)
+      const seedCheck = (await mias.json()) as { total: number }
+      expect(
+        seedCheck.total,
+        "la ficha del residente del seed debe existir en la BD"
+      ).toBeGreaterThanOrEqual(1)
+      const fiResidente = await page.request.get("/api/fi?pageSize=1")
+      expect(fiResidente.status(), "el residente no debe leer FI").toBe(403)
     }
     // Verificar historial tiene algún folio CT- o VC-
     const tabHist = page.getByRole("tab",{name:"Historial"})
