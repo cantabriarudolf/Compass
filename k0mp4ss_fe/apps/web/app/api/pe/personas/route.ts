@@ -14,6 +14,10 @@
  * Filtros: `?rut=` exacto (acepta el RUN con o sin puntos, vía sus variantes canónicas) o `?q=`
  * de texto sobre nombre y RUT. `rut` gana cuando vienen los dos.
  *
+ * `?ids=<id>,<id>,…` es una lista cerrada (máximo 50): devuelve solo esas filas del scope con el
+ * mismo `select` y sin truncar por `pageSize`. `ids` gana sobre `rut` y `q`; sin ids (o con lista
+ * vacía) el comportamiento no cambia.
+ *
  * Envelope: `{ data, pageSize, total }`. El `total` es el count del MISMO `where` que la lista,
  * para que el panel pueda avisar el truncamiento (AvisoTruncamiento) en vez de cortar en silencio:
  * los selects de la operación piden el padrón completo con `pageSize=100`, mientras que las
@@ -34,6 +38,25 @@ const PAGE_SIZE_POR_DEFECTO = 25
  */
 const PAGE_SIZE_MAXIMO = 100
 
+/** Tope de la lista cerrada `?ids=`: es la cota del lote que piden los paneles del día. */
+export const MAXIMO_IDS = 50
+
+/**
+ * Lista cerrada de `?ids=`: recorta, quita vacíos y responde 400 si pasa el tope. `null` cuando
+ * el parámetro no viene, para distinguir «sin filtro» de «filtro por lista vacía».
+ */
+function idsPedidos(valor: string | null): { ids: string[] } | { error: string } | null {
+  if (valor === null) return null
+  const ids = valor
+    .split(",")
+    .map((id) => id.trim())
+    .filter(Boolean)
+  if (ids.length > MAXIMO_IDS) {
+    return { error: `Se piden más de ${MAXIMO_IDS} ids; el máximo de la lista cerrada es ${MAXIMO_IDS}.` }
+  }
+  return { ids }
+}
+
 export async function GET(req: Request): Promise<Response> {
   const resultado = await withComunidadScope()
   if (!resultado.ok) return resultado.response
@@ -51,6 +74,9 @@ export async function GET(req: Request): Promise<Response> {
     return jsonError(400, "URL de solicitud inválida.")
   }
 
+  const filtroIds = idsPedidos(url.searchParams.get("ids"))
+  if (filtroIds && "error" in filtroIds) return jsonError(400, filtroIds.error)
+
   const rut = url.searchParams.get("rut")?.trim() ?? ""
   const q = url.searchParams.get("q")?.trim() ?? ""
   const pageSize = Math.min(
@@ -65,7 +91,12 @@ export async function GET(req: Request): Promise<Response> {
   )
 
   let where: Prisma.PersonaWhereInput = { comunidadId: scope.comunidadId }
-  if (rut) {
+  if (filtroIds && filtroIds.ids.length > 0) {
+    // `ids` gana sobre `rut` y `q`: es una lista cerrada de ids concretos, no una búsqueda.
+    where = { ...where, id: { in: filtroIds.ids } }
+  } else if (filtroIds) {
+    // lista vacía: sin filtro extra, comportamiento actual
+  } else if (rut) {
     // El RUN se guarda canónico, pero puede llegar con puntos: se buscan sus variantes.
     const variantes = variantesRun(rut)
     if (variantes.length === 0) {
@@ -84,7 +115,8 @@ export async function GET(req: Request): Promise<Response> {
       prisma.persona.findMany({
         where,
         orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-        take: pageSize,
+        // Lista cerrada: sin truncar por pageSize (el panel necesita TODOS los nombres pedidos).
+        take: filtroIds && filtroIds.ids.length > 0 ? filtroIds.ids.length : pageSize,
         select: { id: true, rut: true, nombreCompleto: true },
       }),
       prisma.persona.count({ where }),

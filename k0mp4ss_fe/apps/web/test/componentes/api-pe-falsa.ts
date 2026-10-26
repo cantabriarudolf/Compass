@@ -172,12 +172,17 @@ export function instalarApiPE(opciones: OpcionesApiPE = {}): ApiPE {
     // --- Proyecciones de solo lectura de la operación (`{ data, pageSize, total }`) ---
     if (path === "/api/pe/personas" && metodo === "GET") {
       const filtroRut = search.get("rut")
+      const filtroIds = search.get("ids")
       if (filtroRut && estado.fallarRutPersona) {
         return respuestaJson({ error: "Error 500 al consultar la ruta." }, 500)
       }
       const canonico = filtroRut ? normalizarRun(filtroRut) : null
       let filas = estado.personas
-      if (canonico) {
+      if (filtroIds !== null) {
+        // Lista cerrada: solo los ids pedidos (los de la lista vacía no filtran nada).
+        const ids = filtroIds.split(",").map((s) => s.trim()).filter(Boolean)
+        filas = filas.filter((p) => ids.includes(p.id))
+      } else if (canonico) {
         filas = filas.filter((p) => normalizarRun(p.rut) === canonico)
       } else if (!filtroRut) {
         const termino = (search.get("q") ?? "").toLowerCase()
@@ -194,14 +199,24 @@ export function instalarApiPE(opciones: OpcionesApiPE = {}): ApiPE {
       })
     }
     if (path === "/api/pe/unidades" && metodo === "GET") {
-      const termino = (search.get("q") ?? "").toLowerCase()
-      const filas = termino
-        ? estado.unidades.filter((u) =>
-            `${u.numero} ${u.etiqueta} ${u.rolSii}`.toLowerCase().includes(termino)
-          )
-        : estado.unidades
+      const filtroIds = search.get("ids")
+      let candidatas = estado.unidades
+      if (filtroIds !== null) {
+        // Lista cerrada: solo los ids pedidos (los de la lista vacía no filtran nada).
+        const ids = filtroIds.split(",").map((s) => s.trim()).filter(Boolean)
+        candidatas = candidatas.filter((u) => ids.includes(u.id))
+      } else {
+        const termino = (search.get("q") ?? "").toLowerCase()
+        candidatas = termino
+          ? candidatas.filter((u) =>
+              `${u.numero} ${u.etiqueta} ${u.rolSii}`.toLowerCase().includes(termino)
+            )
+          : candidatas
+      }
+      // La lista cerrada no se trunca por pageSize: el panel necesita TODAS las etiquetas pedidas.
+      const filas = filtroIds !== null ? candidatas : candidatas.slice(0, pageSize || 100)
       return respuestaJson({
-        data: filas.slice(0, pageSize || 100),
+        data: filas,
         pageSize: pageSize || 100,
         total: filas.length,
       })

@@ -257,3 +257,38 @@ export async function buscarPersonas(q: string): Promise<PersonaOpcion[]> {
   )
   return (coleccion.data ?? []).map((p) => ({ id: p.id, etiqueta: p.nombreCompleto }))
 }
+
+/**
+ * Tope de la lista cerrada `?ids=` de la ruta (`MAXIMO_IDS` en
+ * `app/api/pe/personas/route.ts`). Lotes mayores se parten en varias peticiones.
+ */
+const LOTE_NOMBRES = 50
+
+/**
+ * Resuelve los nombres completos de una lista cerrada de personas por id (F6, rótulos del día).
+ *
+ * Pega en `GET /api/pe/personas?ids=…` y devuelve `{ id: nombreCompleto }`. Tolerante a fallos:
+ * cualquier error de red o HTTP devuelve `{}` y la fila sigue mostrando el id, como hasta hoy,
+ * en vez de romper el panel. Deduplica y parte en lotes de 50 si la lista pasa el tope.
+ */
+export async function nombresDePersonas(ids: string[]): Promise<Record<string, string>> {
+  const unicos = [...new Set(ids.map((id) => id.trim()).filter(Boolean))]
+  if (unicos.length === 0) return {}
+
+  const nombres: Record<string, string> = {}
+  for (let inicio = 0; inicio < unicos.length; inicio += LOTE_NOMBRES) {
+    const lote = unicos.slice(inicio, inicio + LOTE_NOMBRES)
+    try {
+      const coleccion = await fetcher<ColeccionOperacion>(
+        `${LISTA_OPERACION}?ids=${encodeURIComponent(lote.join(","))}`
+      )
+      for (const p of coleccion.data ?? []) {
+        nombres[p.id] = p.nombreCompleto
+      }
+    } catch {
+      // Sin red o con error HTTP: la fila sigue mostrando el id, no se rompe la pantalla.
+      return {}
+    }
+  }
+  return nombres
+}

@@ -2,8 +2,8 @@
 
 import * as React from "react"
 import { useIngresosContratistasPE, useMaestrosPE } from "@/lib/api/use-pe"
-import { usePersonasOperacion } from "@/lib/api/use-personas"
-import { useUnidadesOperacion } from "@/lib/api/use-unidades"
+import { nombresDePersonas, usePersonasOperacion } from "@/lib/api/use-personas"
+import { etiquetasDeUnidades, useUnidadesOperacion } from "@/lib/api/use-unidades"
 import { generarId } from "@/lib/id-utils"
 import { esUnidadDestino, etiquetaUnidad } from "@/lib/unidades-destino"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
@@ -75,13 +75,66 @@ export function ContratistasPanel({
   const unidadesVisibles = unidadesDestino.slice(0, LIMITE_SELECT)
   const personasVisibles = personas.slice(0, LIMITE_SELECT)
 
+  /**
+   * Etiquetas aprendidas en esta sesión: filas del día cuya unidad o persona quedó fuera de la
+   * primera página del padrón (`pageSize=100`) se resuelven contra `?ids=` de las proyecciones
+   * (dos peticiones por render como máximo, nunca una por fila) y quedan acá. Mientras llega la
+   * respuesta la tabla sigue viéndose con el id: no se bloquea ni se agregan spinners por fila.
+   */
+  const [etiquetas, setEtiquetas] = React.useState<Record<string, string>>({})
+  const idsPedidosRef = React.useRef<Set<string>>(new Set())
+  const recordar = React.useCallback((id: string, etiqueta: string) => {
+    setEtiquetas((previas) => ({ ...previas, [id]: etiqueta }))
+  }, [])
+  React.useEffect(() => {
+    const filasDia = ingresosContratistas.filter((i) => i.fecha === diaReporte)
+    const faltan = new Set<string>()
+    for (const i of filasDia) {
+      if (i.unidadId && !etiquetas[i.unidadId] && !unidades.some((u) => u.id === i.unidadId)) {
+        faltan.add(i.unidadId)
+      }
+      if (
+        i.personaAgendaId &&
+        !etiquetas[i.personaAgendaId] &&
+        !personas.some((p) => p.id === i.personaAgendaId)
+      ) {
+        faltan.add(i.personaAgendaId)
+      }
+    }
+    // Cada id se pide una sola vez por sesión, aunque el efecto se re-ejecute (fallos incluidos:
+    // si el servidor no responde, la fila sigue mostrando el id, como hasta hoy).
+    const pedir = [...faltan].filter((id) => !idsPedidosRef.current.has(id))
+    if (pedir.length === 0) return
+    for (const id of pedir) idsPedidosRef.current.add(id)
+
+    let vivo = true
+    // Unidades y personas viven en rutas distintas: la lista completa va a cada proyección y cada
+    // una devuelve las filas que le pertenecen. Nunca es una petición por fila.
+    void (async () => {
+      const [etiquetasUnidad, nombresPersona] = await Promise.all([
+        etiquetasDeUnidades(pedir),
+        nombresDePersonas(pedir),
+      ])
+      if (!vivo) return
+      for (const [id, etiqueta] of Object.entries(etiquetasUnidad)) recordar(id, etiqueta)
+      for (const [id, nombre] of Object.entries(nombresPersona)) recordar(id, nombre)
+    })()
+    return () => {
+      vivo = false
+    }
+  }, [ingresosContratistas, diaReporte, unidades, personas, etiquetas, recordar])
+
   const refUnidad = (id?: string) => {
     if (!id) return "—"
+    const recordada = etiquetas[id]
+    if (recordada) return recordada
     const u = unidades.find((x) => x.id === id)
     return u ? etiquetaUnidad(u) : id
   }
   const nombrePersona = (id?: string) => {
     if (!id) return "—"
+    const recordada = etiquetas[id]
+    if (recordada) return recordada
     const p = personas.find((x) => x.id === id)
     return p ? p.nombreCompleto : id
   }

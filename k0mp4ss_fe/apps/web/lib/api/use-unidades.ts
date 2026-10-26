@@ -12,6 +12,9 @@
  *   conserjería: cuatro campos, el scope de la sesión y el permiso `pe:bitacora`, que es el que
  *   tiene el rol que registra la visita. `/api/unidades` es el padrón completo y está detrás de
  *   `mp`, que conserjería no tiene: pedirlo ahí devolvía 403 al rol que lo necesita.
+ * - `etiquetasDeUnidades(ids)`: etiquetas de una lista cerrada de ids contra `?ids=` de la misma
+ *   proyección. Resuelve el rótulo de filas del día cuya unidad quedó fuera de la primera página
+ *   del padrón (`pageSize=100`), que hoy muestra el id crudo que el conserje no puede leer.
  *
  * Mismo patrón que `buscarPersonaPorRun` en `use-personas.ts`: función suelta que propaga el
  * error, para que el consumidor decida si lo declara o cae a un padrón local.
@@ -40,6 +43,12 @@ const PAGE_SIZE_BUSQUEDA = 25
 
 /** Tamaño de página del padrón completo: coincide con `LIMITE_SELECT` (AvisoTruncamiento). */
 const PAGE_SIZE_PADRON = 100
+
+/**
+ * Tamaño del lote por petición de etiquetas: es el tope de la lista cerrada `?ids=` de la ruta
+ * (`MAXIMO_IDS` en `app/api/pe/unidades/route.ts`). Lotes mayores se parten en varias peticiones.
+ */
+const LOTE_ETIQUETAS = 50
 
 /**
  * Fetcher SWR del padrón de la operación: lanza Error con el mensaje del cuerpo cuando el HTTP
@@ -94,6 +103,39 @@ export function useUnidadesOperacion(): UseUnidadesOperacionResultado {
     isLoading,
     error: error ?? null,
   }
+}
+
+/**
+ * Resuelve las etiquetas de una lista cerrada de unidades por id (F6, rótulos del día).
+ *
+ * Pega en `GET /api/pe/unidades?ids=…` y devuelve `{ id: etiqueta }` con la MISMA etiqueta
+ * (`etiquetaUnidad`) que muestran el selector y la tabla. Tolerante a fallos: cualquier error de
+ * red o HTTP devuelve `{}` y la fila sigue mostrando el id, como hasta hoy, en vez de romper el
+ * panel. Deduplica y parte en lotes de 50 si la lista pasa el tope de la ruta.
+ */
+export async function etiquetasDeUnidades(ids: string[]): Promise<Record<string, string>> {
+  const unicos = [...new Set(ids.map((id) => id.trim()).filter(Boolean))]
+  if (unicos.length === 0) return {}
+
+  const etiquetas: Record<string, string> = {}
+  for (let inicio = 0; inicio < unicos.length; inicio += LOTE_ETIQUETAS) {
+    const lote = unicos.slice(inicio, inicio + LOTE_ETIQUETAS)
+    try {
+      const res = await fetch(
+        `${LISTA}?ids=${encodeURIComponent(lote.join(","))}`,
+        { headers: { accept: "application/json" } }
+      )
+      if (!res.ok) return {}
+      const coleccion = (await res.json()) as { data?: UnidadBuscable[] }
+      for (const unidad of coleccion.data ?? []) {
+        etiquetas[unidad.id] = etiquetaUnidad(unidad)
+      }
+    } catch {
+      // Sin red o con error HTTP: la fila sigue mostrando el id, no se rompe la pantalla.
+      return {}
+    }
+  }
+  return etiquetas
 }
 
 /**

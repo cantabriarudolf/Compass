@@ -20,8 +20,8 @@ import {
 import { IconCheck, IconQrcode, IconSearch, IconTrash } from "@tabler/icons-react"
 import { EscaneoQrCedula } from "@/components/pe/escaneo-qr-cedula"
 import { SelectorBuscable, type Opcion } from "@/components/selector-buscable"
-import { buscarPersonaPorRun, buscarPersonas, usePersonasOperacion } from "@/lib/api/use-personas"
-import { buscarUnidades, useUnidadesOperacion } from "@/lib/api/use-unidades"
+import { buscarPersonaPorRun, buscarPersonas, nombresDePersonas, usePersonasOperacion } from "@/lib/api/use-personas"
+import { buscarUnidades, etiquetasDeUnidades, useUnidadesOperacion } from "@/lib/api/use-unidades"
 import { esUnidadDestino, etiquetaUnidad } from "@/lib/unidades-destino"
 import { mascararRun, normalizarRun, validarRun } from "@/lib/validacion-rut"
 import type { BitacoraVisitaPE } from "@/lib/schemas"
@@ -125,6 +125,62 @@ export function VisitasPanel({
   const recordarPersona = React.useCallback((id: string, etiqueta: string) => {
     setEtiquetasPersona((previas) => ({ ...previas, [id]: etiqueta }))
   }, [])
+
+  /**
+   * Filas del día cuya unidad o persona quedó fuera de la primera página del padrón
+   * (`pageSize=100`): sin esto la tabla muestra el id crudo (`u-A-101`, `p-12`), que el conserje
+   * no puede leer. Se juntan los ids faltantes de todas las filas visibles y se piden UNA vez
+   * contra `?ids=` de las proyecciones (dos peticiones por render como máximo, nunca una por
+   * fila); la respuesta entra al mismo estado de etiquetas de sesión de arriba. Mientras llega,
+   * la tabla sigue viéndose con el id: no se bloquea ni se agregan spinners por fila.
+   */
+  const idsPedidosRef = React.useRef<Set<string>>(new Set())
+  React.useEffect(() => {
+    const filasDia = visitas.filter((v) => v.fecha === diaReporte)
+    const faltanUnidades = new Set<string>()
+    const faltanPersonas = new Set<string>()
+    for (const v of filasDia) {
+      if (
+        v.unidadId &&
+        !etiquetasUnidad[v.unidadId] &&
+        !unidades.some((u) => u.id === v.unidadId)
+      ) {
+        faltanUnidades.add(v.unidadId)
+      }
+      if (
+        v.destinoPersonaId &&
+        !etiquetasPersona[v.destinoPersonaId] &&
+        !personas.some((p) => p.id === v.destinoPersonaId)
+      ) {
+        faltanPersonas.add(v.destinoPersonaId)
+      }
+    }
+    // Cada id se pide una sola vez por sesión, aunque el efecto se re-ejecute (fallos incluidos:
+    // si el servidor no responde, la fila sigue mostrando el id, como hasta hoy).
+    const pedirUnidades = [...faltanUnidades].filter((id) => !idsPedidosRef.current.has(id))
+    const pedirPersonas = [...faltanPersonas].filter((id) => !idsPedidosRef.current.has(id))
+    if (pedirUnidades.length === 0 && pedirPersonas.length === 0) return
+    for (const id of pedirUnidades) idsPedidosRef.current.add(id)
+    for (const id of pedirPersonas) idsPedidosRef.current.add(id)
+
+    let vivo = true
+    void (async () => {
+      const [etiquetas, nombres] = await Promise.all([
+        pedirUnidades.length > 0
+          ? etiquetasDeUnidades(pedirUnidades)
+          : Promise.resolve<Record<string, string>>({}),
+        pedirPersonas.length > 0
+          ? nombresDePersonas(pedirPersonas)
+          : Promise.resolve<Record<string, string>>({}),
+      ])
+      if (!vivo) return
+      for (const [id, etiqueta] of Object.entries(etiquetas)) recordarUnidad(id, etiqueta)
+      for (const [id, nombre] of Object.entries(nombres)) recordarPersona(id, nombre)
+    })()
+    return () => {
+      vivo = false
+    }
+  }, [visitas, diaReporte, unidades, personas, etiquetasUnidad, etiquetasPersona, recordarUnidad, recordarPersona])
 
   /** Etiqueta conocida de una unidad: la elegida en esta sesión o el padrón del store. */
   const etiquetaDeUnidad = (id?: string): string | undefined => {

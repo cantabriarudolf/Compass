@@ -18,6 +18,11 @@
  * para que el panel pueda avisar el truncamiento (AvisoTruncamiento) en vez de cortar en silencio:
  * los selects de la operación piden el padrón completo con `pageSize=100`, mientras que las
  * búsquedas por texto siguen pidiendo `pageSize=25`.
+ *
+ * `?ids=<id>,<id>,…` es una lista cerrada (máximo 50): devuelve solo esas filas del scope con el
+ * mismo `select` y sin truncar por `pageSize`. Es el complemento de `?q=` para resolver la
+ * etiqueta de filas del día cuya unidad quedó fuera de la primera página del padrón; `ids` gana
+ * sobre `q` cuando vienen los dos, y sin ids (o con lista vacía) el comportamiento no cambia.
  */
 import type { Prisma } from "@prisma/client"
 import { puede } from "@/lib/authz"
@@ -33,6 +38,25 @@ const PAGE_SIZE_POR_DEFECTO = 25
  * texto siguen pidiendo el default de 25.
  */
 const PAGE_SIZE_MAXIMO = 100
+
+/** Tope de la lista cerrada `?ids=`: es la cota del lote que piden los paneles del día. */
+export const MAXIMO_IDS = 50
+
+/**
+ * Lista cerrada de `?ids=`: recorta, quita vacíos y responde 400 si pasa el tope. `null` cuando
+ * el parámetro no viene, para distinguir «sin filtro» de «filtro por lista vacía».
+ */
+function idsPedidos(valor: string | null): { ids: string[] } | { error: string } | null {
+  if (valor === null) return null
+  const ids = valor
+    .split(",")
+    .map((id) => id.trim())
+    .filter(Boolean)
+  if (ids.length > MAXIMO_IDS) {
+    return { error: `Se piden más de ${MAXIMO_IDS} ids; el máximo de la lista cerrada es ${MAXIMO_IDS}.` }
+  }
+  return { ids }
+}
 
 export async function GET(req: Request): Promise<Response> {
   const resultado = await withComunidadScope()
@@ -50,6 +74,8 @@ export async function GET(req: Request): Promise<Response> {
   } catch {
     return jsonError(400, "URL de solicitud inválida.")
   }
+  const filtroIds = idsPedidos(url.searchParams.get("ids"))
+  if (filtroIds && "error" in filtroIds) return jsonError(400, filtroIds.error)
   const q = url.searchParams.get("q")?.trim() ?? ""
   const pageSize = Math.min(
     PAGE_SIZE_MAXIMO,
@@ -65,15 +91,20 @@ export async function GET(req: Request): Promise<Response> {
   const where: Prisma.UnidadWhereInput = {
     comunidadId: scope.comunidadId,
     etiqueta: { not: ETIQUETA_NO_DESTINO },
-    ...(q
-      ? {
-          OR: [
-            { numero: { contains: q } },
-            { etiqueta: { contains: q } },
-            { rolSii: { contains: q } },
-          ],
-        }
-      : {}),
+    // `ids` gana sobre `q`: es una lista cerrada de ids concretos, no una búsqueda de texto.
+    ...(filtroIds
+      ? filtroIds.ids.length > 0
+        ? { id: { in: filtroIds.ids } }
+        : {}
+      : q
+        ? {
+            OR: [
+              { numero: { contains: q } },
+              { etiqueta: { contains: q } },
+              { rolSii: { contains: q } },
+            ],
+          }
+        : {}),
   }
 
   try {
@@ -81,7 +112,8 @@ export async function GET(req: Request): Promise<Response> {
       prisma.unidad.findMany({
         where,
         orderBy: [{ numero: "asc" }, { rolSii: "asc" }],
-        take: pageSize,
+        // Lista cerrada: sin truncar por pageSize (el panel necesita TODAS las etiquetas pedidas).
+        take: filtroIds && filtroIds.ids.length > 0 ? filtroIds.ids.length : pageSize,
         select: { id: true, numero: true, etiqueta: true, rolSii: true },
       }),
       prisma.unidad.count({ where }),
