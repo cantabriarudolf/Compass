@@ -5,7 +5,10 @@
  * (BD-FUENTE-VERDAD Fase 0).
  *
  * - Lectura: GET /api/maestros/[tipo] (el `tipo` es el segmento kebab-case:
- *   "bancos", "estados-ocupacion", "condiciones-especiales", ...).
+ *   "bancos", "estados-ocupacion", "condiciones-especiales", ...). En
+ *   catálogos nacionales (F20 fase 1b) `incluirOcultos: true` pide también las
+ *   filas ocultadas con el booleano `oculto` por fila; `ocultar()` marca o
+ *   desmarca vía PUT /api/maestros/[tipo]/ocultar.
  * - Escritura: POST (upsert idempotente por id), PUT parcial por id y DELETE
  *   por id; cada mutación revalida la clave SWR de la colección.
  * - Contrato de mutación: Promise<StoreResult> ({ ok, error? }).
@@ -53,6 +56,12 @@ async function enviar(
   }
 }
 
+/** Opciones de lectura de la colección (aditivas; sin ellas, el GET es el de siempre). */
+export interface UseMaestrosOpciones {
+  /** F20 fase 1b: pedir también las filas ocultas (solo catálogos nacionales). */
+  incluirOcultos?: boolean
+}
+
 export interface UseMaestrosResultado<T> {
   data: T[]
   isLoading: boolean
@@ -60,6 +69,8 @@ export interface UseMaestrosResultado<T> {
   create: (item: T & { id: string }) => Promise<StoreResult>
   update: (id: string, parcial: Partial<T>) => Promise<StoreResult>
   remove: (id: string) => Promise<StoreResult>
+  /** F20 fase 1b: marca/desmarca el ocultamiento de una fila nacional. */
+  ocultar: (maestroId: string, oculto: boolean) => Promise<StoreResult>
 }
 
 /**
@@ -67,9 +78,13 @@ export interface UseMaestrosResultado<T> {
  * `tipo` falsy deshabilita la consulta (SWR con clave null no fetchea).
  */
 export function useMaestros<T = Record<string, unknown>>(
-  tipo: string | null | undefined
+  tipo: string | null | undefined,
+  opciones?: UseMaestrosOpciones
 ): UseMaestrosResultado<T> {
-  const url = tipo ? `${baseTipo(tipo)}?pageSize=100` : null
+  const incluirOcultos = opciones?.incluirOcultos === true
+  const url = tipo
+    ? `${baseTipo(tipo)}?pageSize=100${incluirOcultos ? "&incluirOcultos=1" : ""}`
+    : null
   const { data, error, isLoading, mutate } = useSWR<ColeccionMaestro, Error>(url, fetcher, {
     revalidateOnFocus: true,
   })
@@ -95,6 +110,19 @@ export function useMaestros<T = Record<string, unknown>>(
     return resultado
   }
 
+  const ocultar = async (
+    maestroId: string,
+    oculto: boolean
+  ): Promise<StoreResult> => {
+    if (!tipo) return { ok: false, error: "Tipo de maestro no seleccionado." }
+    const resultado = await enviar(`${baseTipo(tipo)}/ocultar`, "PUT", {
+      maestroId,
+      oculto,
+    })
+    if (resultado.ok) void mutate()
+    return resultado
+  }
+
   return {
     data: (data?.data as T[] | undefined) ?? [],
     isLoading,
@@ -102,5 +130,6 @@ export function useMaestros<T = Record<string, unknown>>(
     create,
     update,
     remove,
+    ocultar,
   }
 }

@@ -5,6 +5,12 @@
  * (scoping, upsert idempotente, paginación y errores estandarizados).
  * Baja protegida por `beforeDelete`: maestros referenciados por personas o
  * vínculos no se eliminan (409).
+ *
+ * F20 (fase 1b): `?incluirOcultos=1` en un catálogo nacional devuelve también
+ * las filas ocultadas por esta comunidad (es para pantallas de administración,
+ * no para formularios) y anota cada fila con el booleano `oculto`. Sin el
+ * parámetro el GET es el de siempre: ocultas excluidas y sin el campo; los
+ * tipos no nacionales ignoran el parámetro y no cambian su forma.
  */
 import { MAESTRO_SCHEMAS } from "@/lib/schemas"
 import { puede } from "@/lib/authz"
@@ -233,17 +239,44 @@ type CtxTipo = { params: Promise<{ tipo: string }> }
  * F20 (fase 1): en los catálogos nacionales se resuelve primero el scope de
  * comunidad para excluir del listado (y del `total`) las filas que esa
  * comunidad ocultó; el resto del comportamiento es el de la factory.
+ *
+ * F20 (fase 1b): con `?incluirOcultos=1` el delegate va SIN envoltura (las
+ * ocultas entran al listado y al `total`) y cada fila suma `oculto`, booleano
+ * según la tabla de ocultamiento de esta comunidad. La anotación se hace sobre
+ * la respuesta de la factory para no duplicar su paginación ni su where.
  */
 export async function GET(req: Request, ctx: CtxTipo): Promise<Response> {
   const { tipo } = await ctx.params
   if (!MODELOS_MAESTRO[tipo]) return jsonError(400, "Tipo de maestro desconocido.")
-  if (esTipoNacional(tipo)) {
-    const resultado = await withComunidadScope()
-    if (!resultado.ok) return resultado.response
-    const ocultos = await idsOcultos(tipo, resultado.scope.comunidadId)
-    return handlersMaestro(tipo, ocultos)!.GET(req)
+  if (!esTipoNacional(tipo)) return handlersMaestro(tipo)!.GET(req)
+  const resultado = await withComunidadScope()
+  if (!resultado.ok) return resultado.response
+  // El factory valida la URL igual (400 "URL de solicitud inválida."); acá se
+  // repite el guard para leer el parámetro antes de delegar.
+  let incluirOcultos = false
+  try {
+    incluirOcultos =
+      new URL(req.url).searchParams.get("incluirOcultos") === "1"
+  } catch {
+    return jsonError(400, "URL de solicitud inválida.")
   }
-  return handlersMaestro(tipo)!.GET(req)
+  const ocultos = await idsOcultos(tipo, resultado.scope.comunidadId)
+  const handlers = incluirOcultos
+    ? handlersMaestro(tipo)
+    : handlersMaestro(tipo, ocultos)
+  const respuesta = await handlers!.GET(req)
+  if (!incluirOcultos || !respuesta.ok) return respuesta
+  const cuerpo = (await respuesta.json()) as {
+    data: { id: unknown }[]
+  }
+  const conjunto = new Set(ocultos)
+  return Response.json({
+    ...cuerpo,
+    data: cuerpo.data.map((fila) => ({
+      ...fila,
+      oculto: conjunto.has(String(fila.id)),
+    })),
+  })
 }
 
 /** POST upsert idempotente por id.

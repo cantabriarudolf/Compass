@@ -38,8 +38,12 @@ import {
   IconBuildingSkyscraper,
   IconBuildingCottage,
   IconHome,
-  IconAlertTriangle
+  IconAlertTriangle,
+  IconEye,
+  IconEyeOff,
+  IconTrash
 } from "@tabler/icons-react"
+import { esNacional, esTipoNacional } from "@/lib/maestros-nacionales"
 
 const BADGE_OPTIONS = [
   { value: "bg-blue-500 text-white", label: "Azul" },
@@ -65,6 +69,58 @@ function normalizeBadgeColor(color?: string): string {
   return DEFAULT_BADGE_COLOR
 }
 
+interface RegistroMaestro {
+  id: string
+  nombre: string
+  color?: string
+  hex?: string
+  telefono?: string
+  /** F20 fase 1b: presente solo en catálogos nacionales (GET con incluirOcultos). */
+  oculto?: boolean
+}
+
+/** Acciones de una fila de maestro según si la fila es del catálogo nacional.
+ *
+ * F20 fase 1b: la fila nacional es de sólo lectura — sin editar ni borrar;
+ * ofrece Ocultar, o Mostrar si la comunidad ya la ocultó. La fila propia
+ * conserva el comportamiento de siempre: editar y borrar.
+ */
+function AccionesFila({
+  tipo,
+  item,
+  onEditar,
+  onBorrar,
+  onOcultar,
+}: {
+  tipo: string
+  item: RegistroMaestro
+  onEditar: (item: RegistroMaestro) => void
+  onBorrar: (item: RegistroMaestro) => void
+  onOcultar: (item: RegistroMaestro) => void
+}) {
+  if (esNacional(tipo, item.id)) {
+    return item.oculto ? (
+      <Button variant="ghost" size="sm" onClick={() => onOcultar(item)}>
+        <IconEye className="size-4" /> Mostrar
+      </Button>
+    ) : (
+      <Button variant="ghost" size="sm" onClick={() => onOcultar(item)}>
+        <IconEyeOff className="size-4" /> Ocultar
+      </Button>
+    )
+  }
+  return (
+    <>
+      <Button variant="ghost" size="icon" aria-label={`Editar ${item.nombre}`} onClick={() => onEditar(item)}>
+        <IconPencil className="size-4" />
+      </Button>
+      <Button variant="ghost" size="icon" aria-label={`Borrar ${item.nombre}`} onClick={() => onBorrar(item)}>
+        <IconTrash className="size-4" />
+      </Button>
+    </>
+  )
+}
+
 
 export default function MaestrosPage() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- item editable polimórfico según sub-tab (unión de 30+ maestros)
@@ -73,6 +129,8 @@ export default function MaestrosPage() {
   const [activeTab, setActiveTab] = React.useState("inventario")
   const [subTab, setSubTab] = React.useState<string | null>(null)
   const [duplicateError, setDuplicateError] = React.useState<string | null>(null)
+  // Mensaje de las acciones de fila (ocultar/borrar): texto exacto del servidor.
+  const [errorAccion, setErrorAccion] = React.useState<string | null>(null)
 
   const TAB_SUBTABS: Record<string, string[]> = {
     inventario: ["estados", "macros", "micros", "tipos"],
@@ -94,15 +152,23 @@ export default function MaestrosPage() {
   }
   const tipoActivo = subTab ? TIPO_POR_SUBTAB[subTab] ?? null : null
 
-  interface RegistroMaestro {
-    id: string
-    nombre: string
-    color?: string
-    hex?: string
-    telefono?: string
-  }
-  const { data: registros, isLoading, error, create: crearRegistro, update: actualizarRegistro } =
-    useMaestros<RegistroMaestro>(tipoActivo)
+  const {
+    data: registros,
+    isLoading,
+    error,
+    create: crearRegistro,
+    update: actualizarRegistro,
+    remove: borrarRegistro,
+    ocultar: ocultarRegistro,
+  } = useMaestros<RegistroMaestro>(
+    tipoActivo,
+    // F20 fase 1b: en un catálogo nacional el listado de administración trae
+    // también las filas ocultadas (con su booleano `oculto`).
+    tipoActivo && esTipoNacional(tipoActivo) ? { incluirOcultos: true } : undefined
+  )
+
+  const filaNacional = (item: RegistroMaestro): boolean =>
+    tipoActivo !== null && esNacional(tipoActivo, item.id)
 
   const handleTabChange = (tab: string) => {
     setActiveTab(tab)
@@ -112,6 +178,31 @@ export default function MaestrosPage() {
   const handleSubTabChange = (tab: string) => {
     setSubTab(tab)
     setDuplicateError(null)
+    setErrorAccion(null)
+  }
+
+  const handleEditar = (item: RegistroMaestro) => {
+    setEditingItem(item)
+    setDuplicateError(null)
+    setErrorAccion(null)
+    setIsDialogOpen(true)
+  }
+
+  /** F20 fase 1b: alterna el ocultamiento de una fila nacional (PUT ocultar). */
+  const handleOcultar = async (item: RegistroMaestro) => {
+    setErrorAccion(null)
+    const resultado = await ocultarRegistro(item.id, item.oculto !== true)
+    if (!resultado.ok) {
+      setErrorAccion(resultado.error ?? "No se pudo actualizar el catálogo.")
+    }
+  }
+
+  const handleBorrar = async (item: RegistroMaestro) => {
+    setErrorAccion(null)
+    const resultado = await borrarRegistro(item.id)
+    if (!resultado.ok) {
+      setErrorAccion(resultado.error ?? "No se pudo borrar el registro.")
+    }
   }
 
   const handleSave = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -209,6 +300,12 @@ export default function MaestrosPage() {
         </Button>
       </div>
 
+      {errorAccion && (
+        <div role="alert" className="flex items-center gap-1 text-sm text-destructive">
+          <IconAlertTriangle className="size-3.5 shrink-0" /> {errorAccion}
+        </div>
+      )}
+
       <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
         <TabsList className="bg-muted/50 p-1 mb-8">
           <TabsTrigger value="inventario" className="gap-2">
@@ -284,17 +381,25 @@ export default function MaestrosPage() {
                         </TableCell>
                       </TableRow>
                     ) : registros.map((item) => (
-                      <TableRow key={item.id}>
-                        <TableCell className="font-bold">{item.nombre}</TableCell>
+                      <TableRow key={item.id} className={filaNacional(item) && item.oculto ? "opacity-50" : undefined}>
+                        <TableCell className="font-bold">
+                          <span className="inline-flex items-center gap-2">
+                            {item.nombre}
+                            {filaNacional(item) && (
+                              <Badge variant="outline" className="text-[10px] font-semibold">Catálogo nacional</Badge>
+                            )}
+                            {filaNacional(item) && item.oculto && (
+                              <Badge variant="secondary" className="text-[10px] font-semibold">Oculto</Badge>
+                            )}
+                          </span>
+                        </TableCell>
                         {subTab === "estados" && (
                           <TableCell>
                             <Badge className={`${"color" in item && item.color ? item.color : DEFAULT_BADGE_COLOR} font-bold uppercase text-[10px]`}>{item.nombre}</Badge>
                           </TableCell>
                         )}
                         <TableCell className="text-right">
-                          <Button variant="ghost" size="icon" onClick={() => { setEditingItem(item); setDuplicateError(null); setIsDialogOpen(true); }}>
-                            <IconPencil className="size-4" />
-                          </Button>
+                          <AccionesFila tipo={tipoActivo ?? ""} item={item} onEditar={handleEditar} onBorrar={handleBorrar} onOcultar={handleOcultar} />
                         </TableCell>
                       </TableRow>
                     ))}
@@ -352,8 +457,18 @@ export default function MaestrosPage() {
                         </TableCell>
                       </TableRow>
                     ) : registros.map((item) => (
-                      <TableRow key={item.id}>
-                        <TableCell className="font-bold">{item.nombre}</TableCell>
+                      <TableRow key={item.id} className={filaNacional(item) && item.oculto ? "opacity-50" : undefined}>
+                        <TableCell className="font-bold">
+                          <span className="inline-flex items-center gap-2">
+                            {item.nombre}
+                            {filaNacional(item) && (
+                              <Badge variant="outline" className="text-[10px] font-semibold">Catálogo nacional</Badge>
+                            )}
+                            {filaNacional(item) && item.oculto && (
+                              <Badge variant="secondary" className="text-[10px] font-semibold">Oculto</Badge>
+                            )}
+                          </span>
+                        </TableCell>
                         <TableCell>
                           {subTab === "condiciones" || subTab === "estadosInmobiliarios" ? (
                             <Badge className={`${"color" in item ? item.color || DEFAULT_BADGE_COLOR : DEFAULT_BADGE_COLOR} font-black text-[9px]`}>{item.nombre.toUpperCase()}</Badge>
@@ -364,9 +479,7 @@ export default function MaestrosPage() {
                           )}
                         </TableCell>
                         <TableCell className="text-right">
-                          <Button variant="ghost" size="icon" onClick={() => { setEditingItem(item); setDuplicateError(null); setIsDialogOpen(true); }}>
-                            <IconPencil className="size-4" />
-                          </Button>
+                          <AccionesFila tipo={tipoActivo ?? ""} item={item} onEditar={handleEditar} onBorrar={handleBorrar} onOcultar={handleOcultar} />
                         </TableCell>
                       </TableRow>
                     ))}
@@ -406,12 +519,20 @@ export default function MaestrosPage() {
                         </TableCell>
                       </TableRow>
                     ) : registros.map((item) => (
-                      <TableRow key={item.id}>
-                        <TableCell className="font-bold">{item.nombre}</TableCell>
+                      <TableRow key={item.id} className={filaNacional(item) && item.oculto ? "opacity-50" : undefined}>
+                        <TableCell className="font-bold">
+                          <span className="inline-flex items-center gap-2">
+                            {item.nombre}
+                            {filaNacional(item) && (
+                              <Badge variant="outline" className="text-[10px] font-semibold">Catálogo nacional</Badge>
+                            )}
+                            {filaNacional(item) && item.oculto && (
+                              <Badge variant="secondary" className="text-[10px] font-semibold">Oculto</Badge>
+                            )}
+                          </span>
+                        </TableCell>
                         <TableCell className="text-right">
-                          <Button variant="ghost" size="icon" onClick={() => { setEditingItem(item); setDuplicateError(null); setIsDialogOpen(true); }}>
-                            <IconPencil className="size-4" />
-                          </Button>
+                          <AccionesFila tipo={tipoActivo ?? ""} item={item} onEditar={handleEditar} onBorrar={handleBorrar} onOcultar={handleOcultar} />
                         </TableCell>
                       </TableRow>
                     ))}
@@ -429,6 +550,11 @@ export default function MaestrosPage() {
             <DialogHeader>
               <DialogTitle>{editingItem ? "Editar Maestro" : "Añadir Nuevo Maestro"}</DialogTitle>
             </DialogHeader>
+            {!editingItem && tipoActivo && esTipoNacional(tipoActivo) && (
+              <p className="text-xs text-muted-foreground">
+                Este catálogo es del país: lo que agregues acá es una entrada propia de la comunidad, que podés editar y borrar. El catálogo nacional no se modifica.
+              </p>
+            )}
             <div className="grid gap-4 py-4">
               <div className="space-y-2">
                 <Label>Nombre / Categoría</Label>
