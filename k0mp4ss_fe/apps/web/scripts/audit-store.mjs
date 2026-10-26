@@ -36,26 +36,19 @@ const DIRS_IGNORADOS = new Set([".next", "node_modules", "playwright-report", "t
  * cablearlo contra su hook de `lib/api/`; cuando eso pasa, la entrada se BORRA de acá.
  */
 export const EXCEPCIONES = [
-  // Los 3 paneles PE se cablearon el 2026-10-25 (ventana pe-paneles-bd): entradas borradas.
-  // Estas tres son las excepciones justificadas históricas: operan sobre hechos del navegador y el
-  // owner decidió (F9) que el módulo QA/dev se retira o aísla antes de producción.
+  // Las 3 excepciones justificadas: módulo QA/dev (F9) que opera sobre hechos del navegador y el
+  // owner decidió que se retira o aísla antes de producción.
   { archivo: "app/admin/qa-lab/page.tsx", motivo: "módulo QA/dev: se retira o aísla antes de producción (F9)", desde: "2026-10-25" },
   { archivo: "app/admin/dev-dashboard/page.tsx", motivo: "módulo QA/dev: se retira o aísla antes de producción (F9)", desde: "2026-10-25" },
   { archivo: "app/admin/mantenimiento/page.tsx", motivo: "módulo QA/dev: se retira o aísla antes de producción (F9)", desde: "2026-10-25" },
-  // Resto: lecturas de dominio que todavía no tienen hook o que no se cablearon.
-  // El 2026-10-26 se cablearon 4 entradas más (ventana pe-paneles-bd: comentario de remuneraciones,
-  // formulario-persona vía useMaestros, formulario-unidad y estados-donut vía useMaestros):
-  // entradas borradas.
-  // app-sidebar y community-header siguen acá por decisión del owner: migrarlos a useConfiguracion()
-  // cambia el contrato de carga de la app completa — GET /api/configuracion responde 403 para
-  // conserjería/residente/mantención (en la matriz de permisos `cf: ver` es solo admin/comité) y
-  // esos roles caerían al fallback "GECOS" en vez de ver config del store. Retirarlos exige
-  // resolver primero esa brecha de permisos.
-  // El 2026-10-26 (encabezado global) también salieron app-sidebar y community-header: migrados a
-  // useComunidadActual() sobre la proyección GET /api/comunidad-actual (`{ nombre, logoUrl }`),
-  // que no exige `cf: ver` (solo admin/comité) y desbloqueaba los 403 de conserjería/residente/
-  // mantención que hoy los dejaban caer al fallback GECOS.
-  { archivo: "components/fi-espejo-bd.tsx", motivo: "espejo financiero: compara el store contra la BD", desde: "2026-10-25" },
+  // Historial de retiros (las entradas se borran, la lista sólo se achica): los 3 paneles PE
+  // (2026-10-25, ventana pe-paneles-bd), 4 lecturas de dominio (2026-10-26: comentario de
+  // remuneraciones, formulario-persona, formulario-unidad y estados-donut vía hooks de lib/api/),
+  // app-sidebar y community-header (2026-10-26, migrados a useComunidadActual() sobre la
+  // proyección GET /api/comunidad-actual) y el espejo financiero fi-espejo-bd (2026-10-26,
+  // ventana pe-paneles-bd N3: el store ya no es fuente de datos en ninguna pantalla operativa y
+  // el punto cero se siembra por script con db:punto-cero). Con eso la allowlist quedó reducida
+  // al módulo QA/dev.
 ]
 
 const RE_STORE = /\buseCompassStore\b/
