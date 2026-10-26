@@ -25,6 +25,7 @@ import {
 import { useFondosFI } from "@/lib/api/use-fondos-fi"
 import { useEgresosFI } from "@/lib/api/use-egresos-fi"
 import { useIngresosFI } from "@/lib/api/use-ingresos-fi"
+import { useResumenFI } from "@/lib/api/use-resumen-fi"
 
 function KpiCard({
   label,
@@ -117,6 +118,17 @@ export default function FinanzasPage() {
   const { items: fondos, total: totalFondos, isLoading: cargandoFondos, error: errorFondos } = useFondosFI()
   const { total: totalEgresos, isLoading: cargandoEgresos, error: errorEgresos } = useEgresosFI()
   const { total: totalIngresos, isLoading: cargandoIngresos, error: errorIngresos } = useIngresosFI()
+  // Agregados del servidor (GET /api/fi): los montos no se suman en el cliente
+  // porque los hooks de colección traen sólo la página 1 del libro.
+  const resumen = useResumenFI()
+
+  const clp = (n: number) =>
+    n.toLocaleString("es-CL", { style: "currency", currency: "CLP", maximumFractionDigits: 0 })
+  const monto = (n: number) => (resumen.isLoading || resumen.error ? "—" : clp(n))
+  const saldoTotal =
+    resumen.saldoTotal === undefined || resumen.isLoading || resumen.error
+      ? "—"
+      : clp(resumen.saldoTotal)
 
   const cargando = cargandoFondos || cargandoEgresos || cargandoIngresos
   const errores = [errorFondos, errorEgresos, errorIngresos].filter(
@@ -169,7 +181,8 @@ export default function FinanzasPage() {
             value={totalEgresos.toLocaleString("es-CL")}
             detalle={
               <>
-                Monto acumulado: <span className="font-medium">—</span> (detalle en Gastos Comunes)
+                Monto acumulado: <span className="font-medium">{monto(resumen.montoEgresos)}</span>{" "}
+                (detalle en Gastos Comunes)
               </>
             }
             href="/finanzas/gastos-comunes"
@@ -180,7 +193,8 @@ export default function FinanzasPage() {
             value={totalIngresos.toLocaleString("es-CL")}
             detalle={
               <>
-                Monto acumulado: <span className="font-medium">—</span> (detalle en Gastos Comunes)
+                Monto acumulado: <span className="font-medium">{monto(resumen.montoIngresos)}</span>{" "}
+                (detalle en Gastos Comunes)
               </>
             }
             href="/finanzas/gastos-comunes"
@@ -192,7 +206,8 @@ export default function FinanzasPage() {
             detalle={
               <>
                 De {totalFondos.toLocaleString("es-CL")} fondos · Saldo:{" "}
-                <span className="font-medium">—</span>
+                <span className="font-medium">{saldoTotal}</span>
+                {!resumen.completo && " (suma de los primeros 100 fondos)"}
               </>
             }
             href="/finanzas/gastos-comunes"
