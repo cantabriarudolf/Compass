@@ -51,10 +51,22 @@ async function abrirBancos(user: ReturnType<typeof userEvent.setup>): Promise<vo
   await user.click(screen.getByRole("button", { name: /instituciones bancarias/i }))
 }
 
+/** Navega a la sección «Catálogos del país» y abre uno de sus subtabs. */
+async function abrirCatalogoPais(
+  user: ReturnType<typeof userEvent.setup>,
+  subtab: RegExp | string
+): Promise<void> {
+  renderPagina()
+  await user.click(screen.getByRole("tab", { name: /catálogos del país/i }))
+  await user.click(screen.getByRole("button", { name: subtab }))
+}
+
 interface Fila {
   id: string
   nombre: string
   oculto?: boolean
+  tasaCotizacion?: number
+  abreviatura?: string
 }
 
 /** Stub del backend: GET colección + PUT ocultar + DELETE/PUT de fila. */
@@ -188,6 +200,56 @@ describe("pantalla Maestros — catálogo nacional (F20 fase 1b)", () => {
     })
     expect(screen.getByText("Permiso denegado.")).toBeTruthy()
     expect(screen.queryByText(/sin conexión/i)).toBeNull()
+  })
+
+  it("navegar a «AFP» lista filas con el badge nacional y sin editar ni borrar (F20 fase 2 de la pantalla)", async () => {
+    const user = userEvent.setup()
+    stubBackend([
+      { id: "afp-habitat", nombre: "AFP Habitat", tasaCotizacion: 10.58, oculto: false },
+      { id: "afp-planvital", nombre: "AFP Planvital", tasaCotizacion: 10.58, oculto: false },
+    ])
+    await abrirCatalogoPais(user, "AFP")
+
+    await waitFor(() => {
+      expect(screen.getByText("AFP Habitat")).toBeTruthy()
+    })
+    // El listado pide también las ocultas, igual que bancos.
+    const url = fetchFalso.mock.calls.map((c) => String(c[0])).find((u) => u.includes("/api/maestros/afps"))
+    expect(url).toBeTruthy()
+    expect(url).toMatch(/\/api\/maestros\/afps\?pageSize=100&incluirOcultos=1$/)
+
+    expect(screen.getByText("Tasa de cotización")).toBeTruthy()
+    const nacional = filaDe("AFP Habitat")
+    expect(nacional.getByText("Catálogo nacional")).toBeTruthy()
+    expect(nacional.getByRole("button", { name: "Ocultar" })).toBeTruthy()
+    expect(nacional.queryByRole("button", { name: "Editar AFP Habitat" })).toBeNull()
+    expect(nacional.queryByRole("button", { name: "Borrar AFP Habitat" })).toBeNull()
+  })
+
+  it("ocultar una fila de «Unidades de medida» pega a /api/maestros/unidades-medida/ocultar", async () => {
+    const user = userEvent.setup()
+    stubBackend([
+      { id: "litro", nombre: "Litro", abreviatura: "L", oculto: false },
+      { id: "kilo", nombre: "Kilogramo", abreviatura: "kg", oculto: false },
+    ])
+    await abrirCatalogoPais(user, /unidades de medida/i)
+    await waitFor(() => {
+      expect(screen.getByText("Litro")).toBeTruthy()
+    })
+
+    await user.click(filaDe("Litro").getByRole("button", { name: "Ocultar" }))
+
+    await waitFor(() => {
+      const mutacion = fetchFalso.mock.calls.find(
+        (c) => String(c[0]).endsWith("/api/maestros/unidades-medida/ocultar")
+      )
+      expect(mutacion).toBeTruthy()
+      expect((mutacion?.[1] as { method?: string } | undefined)?.method).toBe("PUT")
+      expect(JSON.parse((mutacion?.[1] as { body: string }).body)).toEqual({
+        maestroId: "litro",
+        oculto: true,
+      })
+    })
   })
 
   it("el alta en un tipo nacional explica que lo agregado es propio de la comunidad", async () => {

@@ -41,8 +41,17 @@ import {
   IconAlertTriangle,
   IconEye,
   IconEyeOff,
-  IconTrash
+  IconTrash,
+  IconFlag,
+  IconPigMoney,
+  IconHeartbeat,
+  IconShieldHeart,
+  IconCalendarEvent,
+  IconTrendingUp,
+  IconWallet,
+  IconRuler
 } from "@tabler/icons-react"
+import { Checkbox } from "@workspace/ui/components/checkbox"
 import { esNacional, esTipoNacional } from "@/lib/maestros-nacionales"
 
 const BADGE_OPTIONS = [
@@ -77,6 +86,13 @@ interface RegistroMaestro {
   telefono?: string
   /** F20 fase 1b: presente solo en catálogos nacionales (GET con incluirOcultos). */
   oculto?: boolean
+  /** F20: campos extra de los catálogos del país (exactamente los del esquema de cada tipo). */
+  tasaCotizacion?: number
+  tipo?: string
+  fecha?: string
+  irrenunciable?: boolean
+  codigo?: string
+  abreviatura?: string
 }
 
 /** Acciones de una fila de maestro según si la fila es del catálogo nacional.
@@ -122,6 +138,66 @@ function AccionesFila({
 }
 
 
+/** F20: los siete catálogos del país que se ofrecen acá (bancos vive en Finanzas). */
+const SUBTABS_NACIONAL: { subtab: string; etiqueta: string; icono: React.ComponentType<{ className?: string }> }[] = [
+  { subtab: "afps", etiqueta: "AFP", icono: IconPigMoney },
+  { subtab: "previsionesSalud", etiqueta: "Previsión de salud", icono: IconHeartbeat },
+  { subtab: "mutualesCajas", etiqueta: "Mutuales y cajas de compensación", icono: IconShieldHeart },
+  { subtab: "feriados", etiqueta: "Feriados", icono: IconCalendarEvent },
+  { subtab: "indicesAjuste", etiqueta: "Índices de ajuste", icono: IconTrendingUp },
+  { subtab: "cajasFondos", etiqueta: "Cajas de fondos", icono: IconWallet },
+  { subtab: "unidadesMedida", etiqueta: "Unidades de medida", icono: IconRuler },
+]
+
+const ETIQUETA_POR_SUBTAB_NACIONAL: Record<string, string> = Object.fromEntries(
+  SUBTABS_NACIONAL.map((s) => [s.subtab, s.etiqueta])
+)
+
+/** Etiquetas legibles del tipo de fondo del catálogo cajas de fondos. */
+const ETIQUETAS_FONDO: Record<string, string> = {
+  "gasto-comun": "Gasto común",
+  reserva: "Reserva",
+  especial: "Extraordinaria",
+  amenities: "Amenities",
+}
+
+/** Columnas extra (además del nombre) que muestra cada catálogo del país. */
+const COLUMNAS_NACIONAL: Record<
+  string,
+  { etiqueta: string; celda: (item: RegistroMaestro) => React.ReactNode }[]
+> = {
+  afps: [
+    {
+      etiqueta: "Tasa de cotización",
+      celda: (item) =>
+        item.tasaCotizacion == null ? "—" : `${item.tasaCotizacion.toLocaleString("es-CL")} %`,
+    },
+  ],
+  previsionesSalud: [
+    {
+      etiqueta: "Tipo",
+      celda: (item) => (item.tipo === "isapre" ? "ISAPRE" : "FONASA"),
+    },
+  ],
+  feriados: [
+    { etiqueta: "Fecha", celda: (item) => item.fecha ?? "—" },
+    {
+      etiqueta: "Irrenunciable",
+      celda: (item) =>
+        item.irrenunciable ? (
+          <Badge variant="secondary" className="text-[10px] font-semibold">Sí</Badge>
+        ) : (
+          <span className="text-sm text-muted-foreground">No</span>
+        ),
+    },
+  ],
+  indicesAjuste: [{ etiqueta: "Código", celda: (item) => item.codigo ?? "—" }],
+  cajasFondos: [
+    { etiqueta: "Tipo", celda: (item) => ETIQUETAS_FONDO[item.tipo ?? ""] ?? "—" },
+  ],
+  unidadesMedida: [{ etiqueta: "Abreviatura", celda: (item) => item.abreviatura ?? "—" }],
+}
+
 export default function MaestrosPage() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- item editable polimórfico según sub-tab (unión de 30+ maestros)
   const [editingItem, setEditingItem] = React.useState<any>(null)
@@ -131,11 +207,16 @@ export default function MaestrosPage() {
   const [duplicateError, setDuplicateError] = React.useState<string | null>(null)
   // Mensaje de las acciones de fila (ocultar/borrar): texto exacto del servidor.
   const [errorAccion, setErrorAccion] = React.useState<string | null>(null)
+  // F20: campos extra del diálogo para entradas propias de catálogos del país
+  // (Select y Checkbox de Radix no viajan en FormData: se llevan por estado).
+  const [tipoCatalogo, setTipoCatalogo] = React.useState("")
+  const [irrenunciable, setIrrenunciable] = React.useState(false)
 
   const TAB_SUBTABS: Record<string, string[]> = {
     inventario: ["estados", "macros", "micros", "tipos"],
     personas: ["condiciones", "estadosInmobiliarios", "emergencias"],
     finanzas: ["bancos"],
+    nacionales: ["afps", "previsionesSalud", "mutualesCajas", "feriados", "indicesAjuste", "cajasFondos", "unidadesMedida"],
   }
   const isValidSubTab = TAB_SUBTABS[activeTab]?.includes(subTab ?? "")
 
@@ -149,6 +230,13 @@ export default function MaestrosPage() {
     estadosInmobiliarios: "estados-inmobiliarios",
     bancos: "bancos",
     emergencias: "contactos-emergencia",
+    afps: "afps",
+    previsionesSalud: "previsiones-salud",
+    mutualesCajas: "mutuales-cajas",
+    feriados: "feriados",
+    indicesAjuste: "indices-ajuste",
+    cajasFondos: "cajas-fondos",
+    unidadesMedida: "unidades-medida",
   }
   const tipoActivo = subTab ? TIPO_POR_SUBTAB[subTab] ?? null : null
 
@@ -185,6 +273,17 @@ export default function MaestrosPage() {
     setEditingItem(item)
     setDuplicateError(null)
     setErrorAccion(null)
+    setTipoCatalogo(item.tipo ?? "")
+    setIrrenunciable(item.irrenunciable === true)
+    setIsDialogOpen(true)
+  }
+
+  /** F20: abre el diálogo para una entrada propia nueva del sub-tab activo. */
+  const handleNuevo = () => {
+    setEditingItem(null)
+    setDuplicateError(null)
+    setTipoCatalogo(subTab === "previsionesSalud" ? "fonasa" : subTab === "cajasFondos" ? "gasto-comun" : "")
+    setIrrenunciable(false)
     setIsDialogOpen(true)
   }
 
@@ -257,6 +356,55 @@ export default function MaestrosPage() {
       resultado = editingItem
         ? await actualizarRegistro(editingItem.id, { nombre, telefono: valor })
         : await crearRegistro({ id: Date.now().toString(), nombre, telefono: valor })
+    } else if (subTab === "afps") {
+      // F20: entradas propias del catálogo del país (misma forma que la API).
+      const tasa = Number(formData.get("tasaCotizacion"))
+      if (Number.isNaN(tasa)) {
+        setDuplicateError("La tasa de cotización debe ser un número.")
+        return
+      }
+      resultado = editingItem
+        ? await actualizarRegistro(editingItem.id, { nombre, tasaCotizacion: tasa })
+        : await crearRegistro({ id: Date.now().toString(), nombre, tasaCotizacion: tasa })
+    } else if (subTab === "previsionesSalud") {
+      resultado = editingItem
+        ? await actualizarRegistro(editingItem.id, { nombre, tipo: tipoCatalogo })
+        : await crearRegistro({ id: Date.now().toString(), nombre, tipo: tipoCatalogo })
+    } else if (subTab === "mutualesCajas") {
+      resultado = editingItem
+        ? await actualizarRegistro(editingItem.id, { nombre })
+        : await crearRegistro({ id: Date.now().toString(), nombre })
+    } else if (subTab === "feriados") {
+      const fecha = (formData.get("fecha") as string)?.trim()
+      if (!fecha) {
+        setDuplicateError("La fecha del feriado es obligatoria.")
+        return
+      }
+      resultado = editingItem
+        ? await actualizarRegistro(editingItem.id, { nombre, fecha, irrenunciable })
+        : await crearRegistro({ id: Date.now().toString(), nombre, fecha, irrenunciable })
+    } else if (subTab === "indicesAjuste") {
+      const codigo = (formData.get("codigo") as string)?.trim()
+      if (!codigo) {
+        setDuplicateError("El código del índice es obligatorio.")
+        return
+      }
+      resultado = editingItem
+        ? await actualizarRegistro(editingItem.id, { nombre, codigo })
+        : await crearRegistro({ id: Date.now().toString(), nombre, codigo })
+    } else if (subTab === "cajasFondos") {
+      resultado = editingItem
+        ? await actualizarRegistro(editingItem.id, { nombre, tipo: tipoCatalogo })
+        : await crearRegistro({ id: Date.now().toString(), nombre, tipo: tipoCatalogo })
+    } else if (subTab === "unidadesMedida") {
+      const abreviatura = (formData.get("abreviatura") as string)?.trim()
+      if (!abreviatura) {
+        setDuplicateError("La abreviatura es obligatoria.")
+        return
+      }
+      resultado = editingItem
+        ? await actualizarRegistro(editingItem.id, { nombre, abreviatura })
+        : await crearRegistro({ id: Date.now().toString(), nombre, abreviatura })
     } else {
       return
     }
@@ -295,7 +443,7 @@ export default function MaestrosPage() {
           <h1 className="text-3xl font-bold tracking-tight">Maestros Administrativos</h1>
           <p className="text-muted-foreground">Acá se cargan las categorías que el sistema usa en toda la comunidad: tipos de sectores (Torre, Piso…), categorías de unidades, estados de ocupación, etc. Lo que crees acá aparece como opción en los formularios de Inventario, Estructura Física y demás módulos.</p>
         </div>
-        <Button disabled={!isValidSubTab} onClick={() => { setEditingItem(null); setDuplicateError(null); setIsDialogOpen(true); }} className="gap-2" title={!isValidSubTab ? "Seleccioná una categoría de la izquierda primero" : undefined}>
+        <Button disabled={!isValidSubTab} onClick={handleNuevo} className="gap-2" title={!isValidSubTab ? "Seleccioná una categoría de la izquierda primero" : undefined}>
           <IconPlus className="size-4" /> Nuevo Registro
         </Button>
       </div>
@@ -316,6 +464,9 @@ export default function MaestrosPage() {
           </TabsTrigger>
           <TabsTrigger value="finanzas" className="gap-2">
             <IconReceipt2 className="size-4" /> Finanzas y RRHH
+          </TabsTrigger>
+          <TabsTrigger value="nacionales" className="gap-2">
+            <IconFlag className="size-4" /> Catálogos del país
           </TabsTrigger>
         </TabsList>
 
@@ -542,6 +693,79 @@ export default function MaestrosPage() {
             </Card>
           </div>
         </TabsContent>
+
+        {/* --- TABS DE CATÁLOGOS DEL PAÍS (F20) --- */}
+        <TabsContent value="nacionales">
+          <div className="grid grid-cols-4 gap-6">
+            <div className="flex flex-col gap-2">
+              {SUBTABS_NACIONAL.map(({ subtab, etiqueta, icono: Icono }) => (
+                <Button
+                  key={subtab}
+                  variant={subTab === subtab ? "default" : "ghost"}
+                  className="justify-start gap-2"
+                  onClick={() => handleSubTabChange(subtab)}
+                >
+                  <Icono className="size-4" /> {etiqueta}
+                </Button>
+              ))}
+            </div>
+
+            <Card className="col-span-3 border-emerald-100">
+              <CardHeader>
+                <CardTitle>
+                  {!subTab ? "Seleccioná un catálogo del país" : ETIQUETA_POR_SUBTAB_NACIONAL[subTab] ?? "Catálogo del país"}
+                </CardTitle>
+                <CardDescription>
+                  Catálogos nacionales: podés ocultar las entradas que la comunidad no usa o agregar entradas propias. Las filas del país se conservan intactas.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Nombre</TableHead>
+                      {!subTab
+                        ? null
+                        : (COLUMNAS_NACIONAL[subTab] ?? []).map((columna) => (
+                            <TableHead key={columna.etiqueta}>{columna.etiqueta}</TableHead>
+                          ))}
+                      <TableHead className="text-right">Acciones</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {!subTab ? (
+                      <TableRow>
+                        <TableCell colSpan={(COLUMNAS_NACIONAL[subTab ?? ""]?.length ?? 0) + 2} className="text-center text-muted-foreground py-8">
+                          Seleccioná un catálogo del país para ver sus registros.
+                        </TableCell>
+                      </TableRow>
+                    ) : registros.map((item) => (
+                      <TableRow key={item.id} className={filaNacional(item) && item.oculto ? "opacity-50" : undefined}>
+                        <TableCell className="font-bold">
+                          <span className="inline-flex items-center gap-2">
+                            {item.nombre}
+                            {filaNacional(item) && (
+                              <Badge variant="outline" className="text-[10px] font-semibold">Catálogo nacional</Badge>
+                            )}
+                            {filaNacional(item) && item.oculto && (
+                              <Badge variant="secondary" className="text-[10px] font-semibold">Oculto</Badge>
+                            )}
+                          </span>
+                        </TableCell>
+                        {(COLUMNAS_NACIONAL[subTab] ?? []).map((columna) => (
+                          <TableCell key={columna.etiqueta}>{columna.celda(item)}</TableCell>
+                        ))}
+                        <TableCell className="text-right">
+                          <AccionesFila tipo={tipoActivo ?? ""} item={item} onEditar={handleEditar} onBorrar={handleBorrar} onOcultar={handleOcultar} />
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
       </Tabs>
 
       <Dialog open={isDialogOpen} onOpenChange={(open) => { setIsDialogOpen(open); if (!open) setDuplicateError(null); }}>
@@ -588,6 +812,75 @@ export default function MaestrosPage() {
                 <div className="space-y-2">
                   <Label>Número / Valor</Label>
                   <Input name="telefono" defaultValue={editingItem?.telefono} required />
+                </div>
+              )}
+
+              {subTab === "afps" && (
+                <div className="space-y-2">
+                  <Label>Tasa de cotización (%)</Label>
+                  <Input name="tasaCotizacion" type="number" step="0.01" min="0" defaultValue={editingItem?.tasaCotizacion} required />
+                </div>
+              )}
+
+              {subTab === "previsionesSalud" && (
+                <div className="space-y-2">
+                  <Label>Tipo de previsión</Label>
+                  <Select value={tipoCatalogo} onValueChange={setTipoCatalogo}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Elegí el tipo" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="fonasa">FONASA</SelectItem>
+                      <SelectItem value="isapre">ISAPRE</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              {subTab === "feriados" && (
+                <>
+                  <div className="space-y-2">
+                    <Label>Fecha</Label>
+                    <Input name="fecha" type="date" defaultValue={editingItem?.fecha} required />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      checked={irrenunciable}
+                      onCheckedChange={(checked) => setIrrenunciable(checked === true)}
+                    />
+                    <span className="text-sm">Feriado irrenunciable (no se puede trabajar)</span>
+                  </div>
+                </>
+              )}
+
+              {subTab === "indicesAjuste" && (
+                <div className="space-y-2">
+                  <Label>Código</Label>
+                  <Input name="codigo" defaultValue={editingItem?.codigo} required />
+                </div>
+              )}
+
+              {subTab === "cajasFondos" && (
+                <div className="space-y-2">
+                  <Label>Tipo de fondo</Label>
+                  <Select value={tipoCatalogo} onValueChange={setTipoCatalogo}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Elegí el tipo" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="gasto-comun">Gasto común</SelectItem>
+                      <SelectItem value="reserva">Reserva</SelectItem>
+                      <SelectItem value="amenities">Amenities</SelectItem>
+                      <SelectItem value="especial">Cuota extraordinaria</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              {subTab === "unidadesMedida" && (
+                <div className="space-y-2">
+                  <Label>Abreviatura</Label>
+                  <Input name="abreviatura" defaultValue={editingItem?.abreviatura} required />
                 </div>
               )}
             </div>
