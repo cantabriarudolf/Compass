@@ -203,7 +203,7 @@ describe("/api/vinculos — VU con BD real (BD-FUENTE-VERDAD)", () => {
       const res = await POST(vinculoValido({ id: "vu-duplicado" }))
       expect(res.status).toBe(409)
       const j = (await res.json()) as { error: string }
-      expect(j.error).toMatch(/ya posee un vínculo activo/i)
+      expect(j.error).toMatch(/ya tiene un vínculo vigente/i)
     })
   })
 

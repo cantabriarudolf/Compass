@@ -340,7 +340,7 @@ describe("/api/vinculos — vínculos unidad/persona con BD real (fase 3)", () =
       const res = await llamar("POST", undefined, vinculoValido({ id: "vu3-dup", unidadId: "vu3-u-3" }))
       expect(res.status).toBe(409)
       expect(((await res.json()) as { error: string }).error).toBe(
-        "Esta persona ya posee un vínculo activo con esta unidad."
+        "Esta persona ya tiene un vínculo vigente con esta unidad y una persona no puede tener dos a la vez, sin importar el rol (propietario, arrendatario, ocupante). Termina el vínculo actual antes de registrar otro."
       )
       expect(await prisma.vinculoUnidad.findUnique({ where: { id: "vu3-dup" } })).toBeNull()
     })
@@ -477,7 +477,7 @@ describe("/api/vinculos — vínculos unidad/persona con BD real (fase 3)", () =
       })
       expect(res.status).toBe(409)
       expect(((await res.json()) as { error: string }).error).toBe(
-        "Esta persona ya posee un vínculo activo con esta unidad."
+        "Esta persona ya tiene un vínculo vigente con esta unidad y una persona no puede tener dos a la vez, sin importar el rol (propietario, arrendatario, ocupante). Termina el vínculo actual antes de registrar otro."
       )
       const despues = await prisma.vinculoUnidad.findUniqueOrThrow({ where: { id: "vu3-v-arr-vig" } })
       expect(despues.unidadId).toBe(antes.unidadId)

@@ -102,7 +102,7 @@ export async function ejecutarUpsertVinculo(
     },
   })
   if (duplicado) {
-    return jsonError(409, "Esta persona ya posee un vínculo activo con esta unidad.")
+    return jsonError(409, "Esta persona ya tiene un vínculo vigente con esta unidad y una persona no puede tener dos a la vez, sin importar el rol (propietario, arrendatario, ocupante). Termina el vínculo actual antes de registrar otro.")
   }
 
   const payload = limpiarPayloadVinculo(vinculo)
