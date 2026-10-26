@@ -1,7 +1,8 @@
 "use client"
 
 import * as React from "react"
-import { useCompassStore } from "@/lib/store"
+import { useMaestros } from "@/lib/api/use-maestros"
+import type { EstadoOcupacion } from "@/lib/schemas"
 import { hexDesdeId } from "@/lib/colors"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import { IconChartDonut } from "@tabler/icons-react"
@@ -22,7 +23,9 @@ interface EstadosDonutProps {
 }
 
 export function EstadosDonut({ estados, scopeLabel, selectedId, onSelect }: EstadosDonutProps) {
-  const estadosOcupacion = useCompassStore(s => s.maestros.estadosOcupacion)
+  // Maestro MA vía API REST (BD fuente de verdad); la derivación es la misma que
+  // sobre el store, la única diferencia es el momento de la carga del maestro.
+  const { data: estadosOcupacion } = useMaestros<EstadoOcupacion>("estados-ocupacion")
   const total = estados.length
 
   const data = estadosOcupacion.map(est => ({

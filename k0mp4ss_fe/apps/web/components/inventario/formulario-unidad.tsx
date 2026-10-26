@@ -2,7 +2,9 @@
 
 import * as React from "react"
 import { Unidad } from "@/data/inventario/estructura"
-import { useCompassStore, StoreResult } from "@/lib/store"
+import { StoreResult } from "@/lib/store"
+import { useMaestros } from "@/lib/api/use-maestros"
+import type { EstadoOcupacion } from "@/lib/schemas"
 import { useTiposUnidad } from "@/lib/api/use-tipos-unidad"
 import { useMacroSectores } from "@/lib/api/use-macro-sectores"
 import { useMicroSectores } from "@/lib/api/use-micro-sectores"
@@ -45,12 +47,12 @@ interface FormularioUnidadContentProps {
 }
 
 function FormularioUnidadContent({ unidad, macroSectorId, microSectorId, onSave, onCancel }: FormularioUnidadContentProps) {
-  // EF vía API REST (BD fuente de verdad); maestros siguen en el store.
+  // EF y maestros vía API REST (BD fuente de verdad).
   const { items: tiposUnidad } = useTiposUnidad()
   const { items: macroSectores } = useMacroSectores()
   const { items: microSectores } = useMicroSectores()
-  const estadosOcupacion = useCompassStore(s => s.maestros.estadosOcupacion)
-  const categoriasUnidad = useCompassStore(s => s.maestros.categoriasUnidad)
+  const { data: estadosOcupacion } = useMaestros<EstadoOcupacion>("estados-ocupacion")
+  const { data: categoriasUnidad } = useMaestros<{ id: string; nombre: string }>("categorias-unidad")
   const isEditing = !!unidad;
 
   const initialMacroId = React.useMemo(() => {

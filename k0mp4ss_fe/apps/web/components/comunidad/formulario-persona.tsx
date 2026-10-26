@@ -2,10 +2,11 @@
 
 import * as React from "react"
 import { Persona } from "@/data/comunidad/personas"
-import { ROLES_PERSONA } from "@/lib/schemas"
+import { ROLES_PERSONA, type CondicionEspecial } from "@/lib/schemas"
 import { formatearRut, validarDocumentoIdentidad, claveDocumento } from "@/lib/rut"
 import { aTituloCaso, emailNormalizado, telefonoNormalizado } from "@/lib/normalizacion"
-import { useCompassStore, StoreResult } from "@/lib/store"
+import { StoreResult } from "@/lib/store"
+import { useMaestros } from "@/lib/api/use-maestros"
 import { Button } from "@workspace/ui/components/button"
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
@@ -29,7 +30,8 @@ interface FormularioPersonaProps {
 
 export function FormularioPersona({ persona, personas, onSave, onCancel }: FormularioPersonaProps) {
   const isEditing = !!persona
-  const condicionesEspeciales = useCompassStore(s => s.maestros.condicionesEspeciales)
+  // Maestro MA vía API REST (BD fuente de verdad), patrón de `app/comunidad/personas/[id]`.
+  const { data: condicionesEspeciales } = useMaestros<CondicionEspecial>("condiciones-especiales")
 
   // Estados del formulario
   const [rut, setRut] = React.useState(persona?.rut || "")

@@ -356,9 +356,9 @@ merged (2026-10-16) · DEUDA-2/3/4/5 → en `main`.
 
 | Frente | Estado | Desbloquea |
 |---|---|---|
-| Store legacy en la UI (`useCompassStore`) | **La fase 1 y la 2 se cerraron como «saldado» y el store volvió a crecer**: al 2026-10-25 hay **10 archivos** (medido con `npm run audit:store`, no a mano): 3 del módulo QA/dev y 7 lecturas de dominio sin cablear. Los 3 paneles PE se cablearon el 2026-10-25 (ventana `pe-paneles-bd`: encomiendas, contratistas y bitácora escriben en la base). Desde esta fecha el número lo dicta el candado `audit:store` (CI, job unit) y la allowlist de `scripts/audit-store.mjs` **sólo puede achicarse**: un archivo nuevo con el store falla el gate, y una excepción ya saldada también | **Nadie: slices de cableado, la allowlist marca el avance** |
+| Store legacy en la UI (`useCompassStore`) | **La fase 1 y la 2 se cerraron como «saldado» y el store volvió a crecer**: al 2026-10-25 había **10 archivos** (medido con `npm run audit:store`, no a mano): 3 del módulo QA/dev y 7 lecturas de dominio sin cablear. El 2026-10-25 se cablearon los 3 paneles PE (ventana `pe-paneles-bd`: encomiendas, contratistas y bitácora escriben en la base) y el 2026-10-26 se cablearon 4 entradas más (comentario de remuneraciones, formulario-persona, formulario-unidad y estados-donut, vía hooks de `lib/api/`); `app-sidebar` y `community-header` quedan en la lista por decisión del owner (`GET /api/configuracion` responde 403 a conserjería/residente/mantención y esos componentes envuelven toda la app). Desde esta fecha el número lo dicta el candado `audit:store` (CI, job unit) y la allowlist de `scripts/audit-store.mjs` **sólo puede achicarse**: un archivo nuevo con el store falla el gate, y una excepción ya saldada también | **Nadie: slices de cableado, la allowlist marca el avance** |
 
-<!-- audit:store: archivos=10 -->
+<!-- audit:store: archivos=6 -->
 | `au-google-sso` | ⏸ Bloqueado (código 100 % listo) | Owner: `GOOGLE_CLIENT_ID`/`SECRET` en Vercel + 2 decisiones de rol/migración |
 | Decisiones de producción (Sentry DSN, pen-test, Ley 21.719, proveedor Postgres, privacidad/abogado, CSP con dominio real, secrets Vercel) | ⏸ Pendientes | Owner |
 | Falso positivo `window.open` (`app/comunidad/comunicacion/page.tsx:292`) | Decisión de producto | Owner (allowlist de dominios) |

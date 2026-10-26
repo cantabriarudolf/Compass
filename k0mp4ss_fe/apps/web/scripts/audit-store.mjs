@@ -3,8 +3,8 @@
  * scripts/audit-store.mjs — candado contra el store legacy como fuente de datos de dominio.
  *
  * Por qué existe: la migración a la base se declaró "saldada" dos veces (SERIE-DEUDA-6 y
- * SERIE-FASE2, con "3 excepciones justificadas"), y hoy vuelve a haber 10 archivos leyendo
- * `useCompassStore`. Cada feature reusó el store porque era el camino corto y ningún gate se
+ * SERIE-FASE2, con "3 excepciones justificadas"), y cuando se creó este candado había 10
+ * archivos leyendo `useCompassStore`. Cada feature reusó el store porque era el camino corto y ningún gate se
  * quejó: el número vivía en un párrafo escrito a mano, no en un comando.
  *
  * Reglas:
@@ -43,13 +43,17 @@ export const EXCEPCIONES = [
   { archivo: "app/admin/dev-dashboard/page.tsx", motivo: "módulo QA/dev: se retira o aísla antes de producción (F9)", desde: "2026-10-25" },
   { archivo: "app/admin/mantenimiento/page.tsx", motivo: "módulo QA/dev: se retira o aísla antes de producción (F9)", desde: "2026-10-25" },
   // Resto: lecturas de dominio que todavía no tienen hook o que no se cablearon.
-  { archivo: "app/finanzas/remuneraciones/page.tsx", motivo: "lecturas de PL/PE sin cablear a su hook", desde: "2026-10-25" },
-  { archivo: "components/comunidad/formulario-persona.tsx", motivo: "formulario de personas sobre el store; usePersonas() existe", desde: "2026-10-25" },
-  { archivo: "components/inventario/formulario-unidad.tsx", motivo: "formulario de unidades sobre el store; useUnidades() existe", desde: "2026-10-25" },
-  { archivo: "components/inventario/estados-donut.tsx", motivo: "deriva estados de las unidades del store; useUnidades() existe", desde: "2026-10-25" },
+  // El 2026-10-26 se cablearon 4 entradas más (ventana pe-paneles-bd: comentario de remuneraciones,
+  // formulario-persona vía useMaestros, formulario-unidad y estados-donut vía useMaestros):
+  // entradas borradas.
+  // app-sidebar y community-header siguen acá por decisión del owner: migrarlos a useConfiguracion()
+  // cambia el contrato de carga de la app completa — GET /api/configuracion responde 403 para
+  // conserjería/residente/mantención (en la matriz de permisos `cf: ver` es solo admin/comité) y
+  // esos roles caerían al fallback "GECOS" en vez de ver config del store. Retirarlos exige
+  // resolver primero esa brecha de permisos.
   { archivo: "components/fi-espejo-bd.tsx", motivo: "espejo financiero: compara el store contra la BD", desde: "2026-10-25" },
-  { archivo: "components/app-sidebar.tsx", motivo: "hidratación de sesión/rol en la navegación", desde: "2026-10-25" },
-  { archivo: "components/community-header.tsx", motivo: "hidratación de la comunidad activa en el encabezado", desde: "2026-10-25" },
+  { archivo: "components/app-sidebar.tsx", motivo: "hidratación de sesión/rol en la navegación; bloqueada 2026-10-26 por cf:ver 403 en roles no admin (decisión owner)", desde: "2026-10-25" },
+  { archivo: "components/community-header.tsx", motivo: "hidratación de la comunidad activa en el encabezado; bloqueada 2026-10-26 por cf:ver 403 en roles no admin (decisión owner)", desde: "2026-10-25" },
 ]
 
 const RE_STORE = /\buseCompassStore\b/

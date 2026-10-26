@@ -2,7 +2,7 @@
 
     // SERIE-GATED-API-BD P3: liquidacionesPL migradas a API REST (BD fuente de
     // verdad). SERIE-FASE2 §V4: adelantosPL también dejó el store legacy — la
-    // página ya no habla con `useCompassStore` para adelantos.
+    // página ya no consulta ese store para adelantos.
 
     import * as React from "react"
     // Datos de dominio vía API REST (BD fuente de verdad); store legacy deprecado.
