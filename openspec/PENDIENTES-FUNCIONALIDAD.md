@@ -52,3 +52,9 @@
 | — | Los «desvíos» no vuelven: candado `npm run audit:desvios` en CI | PR #8 |
 | — | Store legacy reducido a sus 3 excepciones justificadas | PR #6 · SERIE-FASE2 |
 | — | CSV de logs con el filtro completo · KPI de fondos activos · «…y N más» en el visor | PR #10 |
+
+> **Borrador de la política de privacidad (2026-10-26)**: `Data/NSGC/docs/privacidad/borrador-politica-privacidad-v1.0.md`.
+> Sale de la segunda consulta al skill de comunidades (la que también fijó los 90 días de la bitácora y el
+> mapa de bases de licitud). Trae las 9 secciones exigibles con cada frase marcada como criterio del proyecto
+> o pendiente del abogado. **Falta**: revisión del abogado, completar los datos del responsable y del encargado
+> (razón social, RUT, dirección, correos) y portarlo a `app/privacidad/page.tsx`.
