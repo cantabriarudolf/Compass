@@ -173,6 +173,25 @@ que confirmarlos contra el texto oficial antes de fijarlos en UI o specs.
 | ¿Qué rol tiene Compass? | **Encargado** (trata según instrucciones de la comunidad, que es **responsable**). Deberes: contrato art. 15 bis, política art. 14 ter, supresión/devolución al término |
 | Banner de consentimiento actual | **No cumple** 21.719: es un booleano en `localStorage` sin finalidades, sin versión de política y sin revocación equivalente → F16 |
 
+### Segunda consulta (2026-10-26)
+
+Dos conclusiones de la segunda asesoría (Ley 21.719 + doctrina de administración de edificios).
+Sigue siendo asesoría fundada, no reemplaza la revisión del abogado.
+
+1. **Plazos de la bitácora**: no existe plazo legal verificado para bitácoras de control de
+   acceso. La lectura correcta es **retención corta con anonimización**: la identidad del
+   visitante se retiene **90 días** y luego se anonimiza; **el registro nunca se borra** (es
+   trazabilidad). Los **5 años** quedan para la documentación administrativa (cobros, actas,
+   rendiciones). El plazo de `datos:anonimizar` pasó de 5 años a 90 días (F15).
+2. **Mapa de bases de licitud**: sólo **promocionales** y **salud/previsionales** exigen
+   **consentimiento con registro server-side**; el resto del tratamiento se sostiene
+   **informando** (art. 14 ter). La ficha laboral hoy pide salud/previsionales sin registro del
+   consentimiento → F18.
+
+Consecuencia sobre F16: el registro server-side del consentimiento por finalidad sólo hace falta
+para esas dos — y la finalidad promocional **no existe en el producto** hoy, así que el alcance
+real de F16 se acota a salud/previsionales (ficha laboral, F18).
+
 ## Seguridad y compliance de producción (SERIE-PRODUCCION-FASE2 P1-P6) — ✅ COMPLETA 2026-09-10
 
 > Lleva Compass de "infraestructura mínima" a "producto seguro y compliant".

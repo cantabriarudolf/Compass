@@ -2,11 +2,13 @@
 /**
  * scripts/anonimizar-bitacora.mjs — anonimiza al visitante de la bitácora PE vencido.
  *
- * F15 (criterio del owner 2026-10-25): la bitácora es un registro y NO se purga — pesa
- * poco en la base y da trazabilidad. Pero el visitante es un tercero y su identidad no
- * puede quedar identificada indefinidamente. A los 5 años (el precedente interno de
- * retención de logs de auditoría) se anonimiza al visitante: el registro y su contexto
- * operativo quedan, el tercero deja de estar identificado.
+ * F15 (asesoría normativa 2026-10-26 + criterio del owner): no existe plazo legal
+ * verificado para bitácoras de control de acceso; la lectura correcta es minimización.
+ * La bitácora es un registro y NO se purga — pesa poco en la base y da trazabilidad —
+ * pero el visitante es un tercero y su identidad no puede quedar identificada más de lo
+ * necesario: a los 90 días se anonimiza al visitante. Los 5 años quedan para la
+ * documentación administrativa (cobros, actas, rendiciones), no para la identificación
+ * de un tercero en un registro de acceso.
  *
  * Qué se anonimiza:  nombre → "Visitante anonimizado", dni → "", patente → null,
  *                    notas → null.
@@ -27,7 +29,8 @@
  * Uso (desde k0mp4ss_fe/apps/web):
  *   npm run datos:anonimizar
  *   npm run datos:anonimizar -- --dry-run
- *   npm run datos:anonimizar -- --anios 5 --hoy 2026-10-25
+ *   npm run datos:anonimizar -- --dias 30 --hoy 2026-10-25
+ *   npm run datos:anonimizar -- --anios 1   (atajo compatible: 1 año = 365 días)
  *   npm run datos:anonimizar -- --help
  */
 import path from "node:path"
@@ -40,8 +43,10 @@ const APP_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..")
 
 /** Nombre que reemplaza la identidad del visitante en la fila anonimizada. */
 export const NOMBRE_ANONIMO = "Visitante anonimizado"
-/** Plazo de retención de la identidad del visitante (años). */
-export const ANIOS_POR_DEFECTO = 5
+/** Plazo de retención de la identidad del visitante (días; minimización, asesoría 2026-10-26). */
+export const DIAS_POR_DEFECTO = 90
+/** Días por año, para el atajo compatible `--anios <n>`. */
+export const DIAS_POR_ANIO = 365
 /** Usuario del evento de auditoría: no hay sesión, es una corrida de script. */
 export const USUARIO_EVENTO = "anonimizador-bitacora"
 /** tipoAccion del evento de auditoría de la corrida. */
@@ -68,36 +73,37 @@ function formatearFecha({ y, m, d }) {
   return `${String(y).padStart(4, "0")}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`
 }
 
+const MS_POR_DIA = 24 * 60 * 60 * 1000
+
 /**
- * Fecha de corte: `hoy` menos `anios` años, como día calendario (`YYYY-MM-DD`).
- * El 29 de febrero que no existe en el año del corte cae al 28.
+ * Fecha de corte: `hoy` menos `dias` días, como día calendario (`YYYY-MM-DD`).
+ * Aritmética en UTC por día calendario: cruza meses y años sin sorpresas y no
+ * depende de zonas horarias ni de horarios de verano.
  */
-export function restarAnios(hoyISO, anios) {
-  if (!Number.isInteger(anios) || anios < 1) {
-    throw new Error(`anios debe ser un entero >= 1 (recibido: ${anios})`)
+export function restarDias(hoyISO, dias) {
+  if (!Number.isInteger(dias) || dias < 1) {
+    throw new Error(`dias debe ser un entero >= 1 (recibido: ${dias})`)
   }
   const { y, m, d } = partesFecha(hoyISO, "hoy")
-  const yCorte = y - anios
-  const dCorte = m === 2 && d === 29 && !esBisiesto(yCorte) ? 28 : d
-  return formatearFecha({ y: yCorte, m, d: dCorte })
-}
-
-function esBisiesto(y) {
-  return (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0
+  const corte = new Date(Date.UTC(y, m - 1, d) - dias * MS_POR_DIA)
+  return formatearFecha({
+    y: corte.getUTCFullYear(),
+    m: corte.getUTCMonth() + 1,
+    d: corte.getUTCDate(),
+  })
 }
 
 /**
- * ¿La visita con `fecha` (`YYYY-MM-DD`) ya cumplió `anios` años al `hoy`?
+ * ¿La visita con `fecha` (`YYYY-MM-DD`) ya cumple `dias` días al `hoy`?
  *
- * Comparación por DÍA, no por timestamp: el borde exacto es el aniversario. Con
- * `anios = 5`, una visita de hace exactamente 5 años (recién cumplidos) está
- * vencida; la de un día después todavía no. Léxico sobre `YYYY-MM-DD` = orden
- * calendario, sin zonas horarias de por medio.
+ * Comparación por DÍA, no por timestamp: el borde exacto es el día número `dias`.
+ * Con `dias = 90`, una visita de hace exactamente 90 días está vencida; la de 89
+ * todavía no. Léxico sobre `YYYY-MM-DD` = orden calendario, sin zonas horarias.
  */
-export function estaVencida(fechaISO, hoyISO, anios = ANIOS_POR_DEFECTO) {
+export function estaVencida(fechaISO, hoyISO, dias = DIAS_POR_DEFECTO) {
   partesFecha(fechaISO, "fecha")
   partesFecha(hoyISO, "hoy")
-  return fechaISO <= restarAnios(hoyISO, anios)
+  return fechaISO <= restarDias(hoyISO, dias)
 }
 
 /* ---------- guarda de entorno ---------- */
@@ -150,7 +156,7 @@ export function evaluarEntorno({
 const YA_ANONIMIZADA = { nombre: NOMBRE_ANONIMO, dni: "" }
 
 /**
- * Anonimiza las visitas de la bitácora PE cuya `fecha` ya cumplió `anios` años al `hoy`.
+ * Anonimiza las visitas de la bitácora PE cuya `fecha` ya cumplió `dias` días al `hoy`.
  *
  * - `prisma`: cliente Prisma (el de la app en producción, o el de la base descartable
  *   en los tests). Debe exponer `bitacoraVisitaPE` y `eventoAuditoria`.
@@ -158,15 +164,15 @@ const YA_ANONIMIZADA = { nombre: NOMBRE_ANONIMO, dni: "" }
  *   deterministas).
  * - `dryRun`: calcula y reporta, pero no escribe filas ni evento.
  *
- * Devuelve `{ corte, anios, vencidas, afectadas, eventos, dryRun }`. `vencidas` son las
+ * Devuelve `{ corte, dias, vencidas, afectadas, eventos, dryRun }`. `vencidas` son las
  * filas en rango; `afectadas` las que realmente se reescribieron (excluye las ya
  * anonimizadas en corridas previas: por eso la segunda corrida da 0).
  */
-export async function anonimizarBitacora({ prisma, hoy, anios = ANIOS_POR_DEFECTO, dryRun = false }) {
+export async function anonimizarBitacora({ prisma, hoy, dias = DIAS_POR_DEFECTO, dryRun = false }) {
   if (!prisma?.bitacoraVisitaPE) {
     throw new Error("anonimizarBitacora necesita un cliente prisma con bitacoraVisitaPE")
   }
-  const corte = restarAnios(hoy, anios)
+  const corte = restarDias(hoy, dias)
 
   const enRango = await prisma.bitacoraVisitaPE.findMany({
     where: {
@@ -177,7 +183,7 @@ export async function anonimizarBitacora({ prisma, hoy, anios = ANIOS_POR_DEFECT
     },
   })
   if (dryRun || enRango.length === 0) {
-    return { corte, anios, vencidas: enRango.length, afectadas: 0, eventos: 0, dryRun }
+    return { corte, dias, vencidas: enRango.length, afectadas: 0, eventos: 0, dryRun }
   }
 
   const resultado = await prisma.bitacoraVisitaPE.updateMany({
@@ -196,7 +202,7 @@ export async function anonimizarBitacora({ prisma, hoy, anios = ANIOS_POR_DEFECT
   for (const v of enRango) {
     porComunidad.set(v.comunidadId, (porComunidad.get(v.comunidadId) ?? 0) + 1)
   }
-  const descripcionBase = `Anonimización de visitas de la bitácora con fecha anterior a ${corte} (retención de ${anios} años).`
+  const descripcionBase = `Anonimización de visitas de la bitácora con fecha anterior a ${corte} (retención de ${dias} días).`
   for (const [comunidadId, cantidad] of porComunidad) {
     await prisma.eventoAuditoria.create({
       data: {
@@ -214,7 +220,7 @@ export async function anonimizarBitacora({ prisma, hoy, anios = ANIOS_POR_DEFECT
 
   return {
     corte,
-    anios,
+    dias,
     vencidas: enRango.length,
     afectadas: resultado.count,
     eventos: porComunidad.size,
@@ -233,14 +239,16 @@ function generarIdEvento() {
 
 const AYUDA = `datos:anonimizar — anonimiza al visitante de la bitácora PE vencido (F15)
 
-  npm run datos:anonimizar                       corrida real (corte = hoy − 5 años)
+  npm run datos:anonimizar                       corrida real (corte = hoy − 90 días)
   npm run datos:anonimizar -- --dry-run          simula y reporta, no escribe
-  npm run datos:anonimizar -- --anios 7          otro plazo de retención
+  npm run datos:anonimizar -- --dias 30          otro plazo de retención
+  npm run datos:anonimizar -- --anios 1          atajo compatible: 1 año = 365 días
   npm run datos:anonimizar -- --hoy 2026-12-31   fija el día de referencia (pruebas)
 
 Flag                  Descripción
 --dry-run             No escribe filas ni evento: sólo reporta qué afectaría
---anios <n>           Años de retención de la identidad (default ${ANIOS_POR_DEFECTO})
+--dias <n>            Días de retención de la identidad (default ${DIAS_POR_DEFECTO})
+--anios <n>           Atajo compatible: n años = n × ${DIAS_POR_ANIO} días (no usar con --dias)
 --hoy <YYYY-MM-DD>    Día de referencia para el corte (default: hoy)
 --si-produccion       Confirmación explícita del owner para correr en producción o
                       contra una base gestionada
@@ -251,7 +259,7 @@ fecha, estado, hora, jornada, unidad y destinatario (trazabilidad del hecho oper
 Emitiría un evento de auditoría PE_BITACORA_ANONIMIZADA por comunidad afectada.`
 
 function leerArgs(args) {
-  const opciones = { dryRun: false, anios: ANIOS_POR_DEFECTO, hoy: null, siProduccion: false, ayuda: false }
+  const opciones = { dryRun: false, dias: DIAS_POR_DEFECTO, diasExplicito: false, anios: null, hoy: null, siProduccion: false, ayuda: false }
   for (let i = 0; i < args.length; i++) {
     const arg = args[i]
     const conValor = (clave) => {
@@ -269,6 +277,13 @@ function leerArgs(args) {
       opciones.dryRun = true
     } else if (arg === "--si-produccion") {
       opciones.siProduccion = true
+    } else if (arg === "--dias" || arg.startsWith("--dias=")) {
+      const valor = conValor("--dias")
+      opciones.dias = Number(valor)
+      opciones.diasExplicito = true
+      if (!Number.isInteger(opciones.dias) || opciones.dias < 1) {
+        throw new Error(`--dias necesita un entero >= 1 (recibido: ${valor})`)
+      }
     } else if (arg === "--anios" || arg.startsWith("--anios=")) {
       const valor = conValor("--anios")
       opciones.anios = Number(valor)
@@ -284,16 +299,22 @@ function leerArgs(args) {
       throw new Error(`argumento desconocido: ${arg}\n\n${AYUDA}`)
     }
   }
+  if (opciones.anios !== null) {
+    if (opciones.diasExplicito) {
+      throw new Error("usar --dias o --anios, no ambos")
+    }
+    opciones.dias = opciones.anios * DIAS_POR_ANIO
+  }
   return opciones
 }
 
-function banner({ corte, anios, dryRun }) {
+function banner({ corte, dias, anios, dryRun }) {
   const linea = "=".repeat(76)
   console.log(`\n${linea}`)
   console.log(" datos:anonimizar — identidad del visitante de la bitácora PE (F15)")
   console.log(linea)
   console.log(` Corte aplicado   : visitas con fecha anterior a ${corte}`)
-  console.log(` Retención        : ${anios} años (precedente interno de logs de auditoría)`)
+  console.log(` Retención        : ${dias} días (minimización; asesoría 2026-10-26)${anios !== null ? ` (= ${anios} año${anios === 1 ? "" : "s"})` : ""}`)
   console.log(` Modo             : ${dryRun ? "dry-run (no escribe nada)" : "real"}`)
   console.log(" Qué se anonimiza : nombre, dni, patente, notas")
   console.log(" Qué se conserva  : fecha, estado, hora, jornada, unidad, destinatario")
@@ -335,15 +356,15 @@ async function main() {
       return { y: ahora.getFullYear(), m: ahora.getMonth() + 1, d: ahora.getDate() }
     })()
   )
-  const corte = restarAnios(hoyISO, opciones.anios)
-  banner({ corte, anios: opciones.anios, dryRun: opciones.dryRun })
+  const corte = restarDias(hoyISO, opciones.dias)
+  banner({ corte, dias: opciones.dias, anios: opciones.anios, dryRun: opciones.dryRun })
 
   const prisma = new PrismaClient({ datasourceUrl: databaseUrl })
   try {
     const resumen = await anonimizarBitacora({
       prisma,
       hoy: hoyISO,
-      anios: opciones.anios,
+      dias: opciones.dias,
       dryRun: opciones.dryRun,
     })
     console.log(` Filas en rango (${resumen.dryRun ? "se anonimizarían" : "anonimizadas"}) : ${resumen.dryRun ? resumen.vencidas : resumen.afectadas}`)
