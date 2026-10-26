@@ -30,6 +30,7 @@ import { createHash } from "node:crypto"
 import type { Prisma, PrismaClient } from "@prisma/client"
 import { z } from "zod"
 import { serializarCsv, type FilaCsv } from "@/lib/importar/csv"
+import { MENSAJE_FILA_EJEMPLO, columnaFilaEjemplo } from "@/lib/importar/estructura"
 import { MensajeDocumentoInvalido, RolesVinculo, ROLES_PERSONA } from "@/lib/schemas"
 import { validarDocumentoIdentidad, claveDocumento } from "@/lib/rut"
 import { ejecutarUpsertVinculo, type DatosVinculo } from "@/app/api/vinculos/route"
@@ -53,15 +54,33 @@ export const ENCABEZADOS_PERSONAS = [
 
 export type EncabezadoPersonas = (typeof ENCABEZADOS_PERSONAS)[number]
 
-/** Fila de ejemplo de la plantilla de personas (valores realistas del dominio). */
-export const FILA_EJEMPLO_PERSONAS: Record<EncabezadoPersonas, string> = {
-  rut: "12.345.678-5",
-  nombres: "María",
-  apellidos: "Rojas Soto",
-  email: "maria.rojas@ejemplo.cl",
-  telefono: "+56 9 6123 4567",
-  roles: "residente",
-}
+/** Filas de ejemplo de la plantilla de personas (valores realistas del dominio). */
+export const FILAS_EJEMPLO_PERSONAS: Record<EncabezadoPersonas, string>[] = [
+  {
+    rut: "EJEMPLO-12.345.678-5",
+    nombres: "María",
+    apellidos: "Rojas Soto",
+    email: "maria.rojas@ejemplo.cl",
+    telefono: "+56 9 6123 4567",
+    roles: "propietario|residente",
+  },
+  {
+    rut: "EJEMPLO-18.345.678-4",
+    nombres: "Rodrigo",
+    apellidos: "Fuentes Salas",
+    email: "rodrigo.fuentes@ejemplo.cl",
+    telefono: "+56 9 8765 4321",
+    roles: "residente",
+  },
+  {
+    rut: "EJEMPLO-13.987.123-5",
+    nombres: "Juan",
+    apellidos: "Pérez Díaz",
+    email: "juan.perez@ejemplo.cl",
+    telefono: "+56 9 5555 8888",
+    roles: "residente|directiva",
+  },
+]
 
 /** Encabezados canónicos del bloque vínculos: fuente única de la plantilla. */
 export const ENCABEZADOS_VINCULOS = [
@@ -74,14 +93,30 @@ export const ENCABEZADOS_VINCULOS = [
 
 export type EncabezadoVinculos = (typeof ENCABEZADOS_VINCULOS)[number]
 
-/** Fila de ejemplo de la plantilla de vínculos (valores realistas del dominio). */
-export const FILA_EJEMPLO_VINCULOS: Record<EncabezadoVinculos, string> = {
-  rut_persona: "12.345.678-5",
-  rol_sii_unidad: "12345-1101",
-  rol: "propietario",
-  fecha_inicio: "2024-03-01",
-  permite_ver_finanzas: "true",
-}
+/** Filas de ejemplo de la plantilla de vínculos (valores realistas del dominio). */
+export const FILAS_EJEMPLO_VINCULOS: Record<EncabezadoVinculos, string>[] = [
+  {
+    rut_persona: "EJEMPLO-12.345.678-5",
+    rol_sii_unidad: "EJEMPLO-12345-1101",
+    rol: "propietario",
+    fecha_inicio: "2024-03-01",
+    permite_ver_finanzas: "true",
+  },
+  {
+    rut_persona: "EJEMPLO-18.345.678-4",
+    rol_sii_unidad: "EJEMPLO-12345-1101",
+    rol: "arrendatario",
+    fecha_inicio: "2024-05-01",
+    permite_ver_finanzas: "false",
+  },
+  {
+    rut_persona: "EJEMPLO-13.987.123-5",
+    rol_sii_unidad: "EJEMPLO-999-101",
+    rol: "copropietario",
+    fecha_inicio: "2024-08-01",
+    permite_ver_finanzas: "true",
+  },
+]
 
 // --- Validación por fila (zod) ---
 
@@ -142,6 +177,16 @@ export function validarFilasPersonas(
 ): FilaValidadaDatos<DatosFilaPersona>[] {
   const rolesValidos = new Set<string>(ROLES_PERSONA)
   return filas.map((fila) => {
+    // Filas de ejemplo de la plantilla: se rechazan antes del schemario, para
+    // que nada del ejemplo se escriba.
+    const columnaEjemplo = columnaFilaEjemplo(fila.valores, ["rut"])
+    if (columnaEjemplo) {
+      return {
+        linea: fila.linea,
+        datos: null,
+        errores: [{ columna: columnaEjemplo, mensaje: MENSAJE_FILA_EJEMPLO }],
+      }
+    }
     const parsed = FilaPersonaSchema.safeParse(fila.valores)
     if (!parsed.success) {
       return {
@@ -221,6 +266,16 @@ export function validarFilasVinculos(
 ): FilaValidadaDatos<DatosFilaVinculo>[] {
   const rolesValidos = new Set<string>(RolesVinculo)
   return filas.map((fila) => {
+    // Filas de ejemplo de la plantilla: se rechazan antes del schemario, para
+    // que nada del ejemplo se escriba.
+    const columnaEjemplo = columnaFilaEjemplo(fila.valores, ["rut_persona", "rol_sii_unidad"])
+    if (columnaEjemplo) {
+      return {
+        linea: fila.linea,
+        datos: null,
+        errores: [{ columna: columnaEjemplo, mensaje: MENSAJE_FILA_EJEMPLO }],
+      }
+    }
     const parsed = FilaVinculoSchema.safeParse(fila.valores)
     if (!parsed.success) {
       return {
@@ -655,15 +710,19 @@ function armarReporte(filas: FilaConAccion[]): ReporteEstructura {
 
 // --- Plantillas descargables (encabezado + fila de ejemplo) ---
 
-/** Arma el contenido de la plantilla de personas: encabezados + fila de ejemplo. */
+/** Arma el contenido de la plantilla de personas: encabezados + filas de ejemplo. */
 export function construirPlantillaPersonas(): string {
-  const ejemplo = ENCABEZADOS_PERSONAS.map((h) => FILA_EJEMPLO_PERSONAS[h])
+  const ejemplos = FILAS_EJEMPLO_PERSONAS.map((fila) =>
+    ENCABEZADOS_PERSONAS.map((h) => fila[h])
+  )
   // BOM al inicio: Excel abre el UTF-8 sin corromper los caracteres.
-  return `\ufeff${serializarCsv([[...ENCABEZADOS_PERSONAS], ejemplo])}\r\n`
+  return `\ufeff${serializarCsv([[...ENCABEZADOS_PERSONAS], ...ejemplos])}\r\n`
 }
 
-/** Arma el contenido de la plantilla de vínculos: encabezados + fila de ejemplo. */
+/** Arma el contenido de la plantilla de vínculos: encabezados + filas de ejemplo. */
 export function construirPlantillaVinculos(): string {
-  const ejemplo = ENCABEZADOS_VINCULOS.map((h) => FILA_EJEMPLO_VINCULOS[h])
-  return `\ufeff${serializarCsv([[...ENCABEZADOS_VINCULOS], ejemplo])}\r\n`
+  const ejemplos = FILAS_EJEMPLO_VINCULOS.map((fila) =>
+    ENCABEZADOS_VINCULOS.map((h) => fila[h])
+  )
+  return `\ufeff${serializarCsv([[...ENCABEZADOS_VINCULOS], ...ejemplos])}\r\n`
 }

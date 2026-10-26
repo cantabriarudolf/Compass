@@ -19,6 +19,8 @@
  *   - `?dryRun=1` no escribe nada
  *   - residente → 403, sin sesión → 401
  *   - la plantilla trae los encabezados canónicos y exige la misma authz
+ *   - subir la plantilla tal cual: las filas de ejemplo se rechazan con su
+ *     error legible y nada se escribe
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest"
 import { NextRequest } from "next/server"
@@ -444,6 +446,63 @@ describe("POST /api/importar/vinculos — vínculos persona↔unidad (U2)", () =
     expect(j.resumen.sinCambios).toBe(2)
     expect(await contar()).toBe(antes)
   })
+
+  it("la plantilla tal cual se rechaza fila por fila y no escribe nada", async () => {
+    const antes = await contar()
+    // La plantilla completa, tal como la devuelve la ruta de plantilla.
+    state.cookie = cookies.administrador!
+    const plantillaRes = await plantillaGET()
+    const plantillaCsv = await plantillaRes.text()
+
+    state.cookie = ""
+    const res = await pedir("administrador", plantillaCsv)
+    expect(res.status).toBe(200)
+    const j = (await res.json()) as Reporte
+
+    expect(j.resumen).toEqual({
+      total: 3,
+      validas: 0,
+      conError: 3,
+      crear: 0,
+      actualizar: 0,
+      sinCambios: 0,
+    })
+    for (const fila of j.filas) {
+      expect(fila.accion).toBe("sin-cambios")
+      expect(fila.errores).toHaveLength(1)
+      expect(fila.errores[0]).toMatch(/rut_persona/)
+      expect(fila.errores[0]).toContain(
+        "Esta fila es del ejemplo de la plantilla: reemplazala por tus datos o borrala"
+      )
+    }
+    expect(await contar()).toBe(antes)
+  })
+
+  it("la plantilla con las filas de ejemplo borradas y datos propios funciona", async () => {
+    state.cookie = cookies.administrador!
+    const plantillaRes = await plantillaGET()
+    const lineas = (await plantillaRes.text()).replace(/\r/g, "").split("\n").filter(Boolean)
+
+    state.cookie = ""
+    // Luis: sin vínculo activo en la unidad B (su tramo de propietario quedó
+    // cerrado); la regla del módulo no admite dos vínculos activos de la
+    // misma persona en la misma unidad.
+    const csv = [
+      lineas[0],
+      `14.222.333-3,${ROL_SII_B},copropietario,2024-09-01,false`,
+    ].join("\n")
+    const res = await pedir("administrador", csv)
+    expect(res.status).toBe(200)
+    const j = (await res.json()) as Reporte
+
+    expect(j.resumen.conError).toBe(0)
+    expect(j.resumen.crear).toBe(1)
+    const vinculo = await prisma.vinculoUnidad.findFirst({
+      where: { comunidadId: COMUNIDAD, rol: "copropietario", fechaInicio: "2024-09-01" },
+    })
+    expect(vinculo).not.toBeNull()
+    expect(vinculo!.permiteVerFinanzas).toBe(false)
+  })
 })
 
 describe("GET /api/importar/vinculos/plantilla — plantilla descargable (S1)", () => {
@@ -464,7 +523,7 @@ describe("GET /api/importar/vinculos/plantilla — plantilla descargable (S1)", 
     GET = plantilla.GET
   })
 
-  it("devuelve text/csv con los encabezados canónicos y una fila de ejemplo", async () => {
+  it("devuelve text/csv con los encabezados canónicos y tres filas de ejemplo", async () => {
     const res = await pedir("administrador")
     expect(res.status).toBe(200)
     expect(res.headers.get("content-type")).toContain("text/csv")
@@ -472,12 +531,46 @@ describe("GET /api/importar/vinculos/plantilla — plantilla descargable (S1)", 
 
     const cuerpo = await res.text()
     const lineas = cuerpo.replace(/\r/g, "").split("\n").filter((l) => l !== "")
-    expect(lineas).toHaveLength(2)
+    expect(lineas).toHaveLength(4)
     expect(lineas[0]).toBe(
       "rut_persona,rol_sii_unidad,rol,fecha_inicio,permite_ver_finanzas"
     )
-    // La fila de ejemplo trae valores en todas las columnas (nada vacío).
+    // Las filas de ejemplo trae valores en todas las columnas (nada vacío).
     expect(lineas[1]!.split(",").every((c) => c.length > 0)).toBe(true)
+    expect(lineas).toContain(
+      "EJEMPLO-12.345.678-5,EJEMPLO-12345-1101,propietario,2024-03-01,true"
+    )
+    expect(lineas).toContain(
+      "EJEMPLO-18.345.678-4,EJEMPLO-12345-1101,arrendatario,2024-05-01,false"
+    )
+    expect(lineas).toContain(
+      "EJEMPLO-13.987.123-5,EJEMPLO-999-101,copropietario,2024-08-01,true"
+    )
+  })
+
+  it("quitando la marca EJEMPLO-, cada fila de ejemplo pasa el validador", async () => {
+    const { ENCABEZADOS_VINCULOS, FILAS_EJEMPLO_VINCULOS, validarFilasVinculos } =
+      await import("@/lib/importar/personas")
+
+    // Misma garantía que en personas: con la marca EJEMPLO- puesta nada
+    // escribe, pero el formato de cada fila (fechas ISO, rol, booleano y el
+    // RUT tras quitar la marca en rut_persona y rol_sii_unidad) es formato
+    // que el import acepta.
+    const filas = FILAS_EJEMPLO_VINCULOS.map((fila) => {
+      const valores: Record<string, string> = { ...fila }
+      for (const clave of ["rut_persona", "rol_sii_unidad"]) {
+        if (valores[clave]?.startsWith("EJEMPLO-")) {
+          valores[clave] = valores[clave]!.replace("EJEMPLO-", "")
+        }
+      }
+      return { linea: 0, valores }
+    })
+
+    const validadas = validarFilasVinculos(filas)
+    for (const fila of validadas) {
+      expect(fila.errores).toEqual([])
+      expect(fila.datos).not.toBeNull()
+    }
   })
 
   it("la misma authz que el import: residente 403, sin sesión 401", async () => {

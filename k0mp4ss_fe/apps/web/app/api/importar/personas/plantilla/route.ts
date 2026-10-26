@@ -2,7 +2,7 @@
  * /api/importar/personas/plantilla — plantilla descargable del bloque
  * personas (ODD carga-inicial-csv U2, S1).
  *
- * Devuelve `text/csv` con los encabezados canónicos + una fila de ejemplo;
+ * Devuelve `text/csv` con los encabezados canónicos + tres filas de ejemplo marcadas con el prefijo EJEMPLO- (el importador las rechaza);
  * el nombre del archivo deja claro que la fila es de ejemplo
  * (`plantilla-personas.csv`, vía content-disposition). Se sirve desde una
  * ruta (no archivos estáticos) para que los encabezados no se desincronicen

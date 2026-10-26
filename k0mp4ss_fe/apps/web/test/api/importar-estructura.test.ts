@@ -16,6 +16,8 @@
  *   - `?dryRun=1` no escribe nada
  *   - residente → 403, sin sesión → 401
  *   - la plantilla trae los encabezados canónicos y exige la misma authz
+ *   - subir la plantilla tal cual: las filas de ejemplo se rechazan con su
+ *     error legible y nada se escribe (ni siquiera sectores)
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest"
 import { NextRequest } from "next/server"
@@ -318,6 +320,65 @@ describe("POST /api/importar/estructura — carga inicial por CSV (U1)", () => {
     const j = (await res.json()) as Reporte
     expect(j.resumen.crear).toBe(2)
   })
+
+  it("la plantilla tal cual se rechaza fila por fila y no escribe nada", async () => {
+    const antes = await contar()
+    // La plantilla completa, tal como la devuelve la ruta de plantilla.
+    state.cookie = cookies.administrador!
+    const plantillaRes = await plantillaGET()
+    const plantillaCsv = await plantillaRes.text()
+
+    state.cookie = ""
+    const res = await pedir("administrador", plantillaCsv)
+    expect(res.status).toBe(200)
+    const j = (await res.json()) as Reporte
+
+    expect(j.resumen).toEqual({
+      total: 3,
+      validas: 0,
+      conError: 3,
+      crear: 0,
+      actualizar: 0,
+      sinCambios: 0,
+    })
+    for (const fila of j.filas) {
+      expect(fila.accion).toBe("sin-cambios")
+      expect(fila.errores).toHaveLength(1)
+      expect(fila.errores[0]).toMatch(/rol_sii/)
+      expect(fila.errores[0]).toContain(
+        "Esta fila es del ejemplo de la plantilla: reemplazala por tus datos o borrala"
+      )
+    }
+
+    // Nada del ejemplo se escribió: ni unidades ni sectores.
+    expect(await contar()).toEqual(antes)
+    expect(
+      await prisma.macroSector.count({
+        where: { comunidadId: COMUNIDAD, nombre: { startsWith: "EJEMPLO-" } },
+      })
+    ).toBe(0)
+  })
+
+  it("la plantilla con las filas de ejemplo borradas y datos propios funciona", async () => {
+    state.cookie = cookies.administrador!
+    const plantillaRes = await plantillaGET()
+    const lineas = (await plantillaRes.text()).replace(/\r/g, "").split("\n").filter(Boolean)
+
+    state.cookie = ""
+    const csv = [
+      lineas[0],
+      "Torre E,Piso 5,imp-u1-501,1501,Depto,Depto Tipo A,55.5,0.0125,Vacante",
+      "Torre E,Piso 5,imp-u1-502,1502,Depto,Depto Tipo A,55.5,0.0125,En Uso",
+    ].join("\n")
+    const res = await pedir("administrador", csv)
+    expect(res.status).toBe(200)
+    const j = (await res.json()) as Reporte
+
+    expect(j.resumen.conError).toBe(0)
+    expect(j.resumen.crear).toBe(2)
+    expect(await prisma.unidad.count({ where: { rolSii: "imp-u1-501" } })).toBe(1)
+    expect(await prisma.unidad.count({ where: { rolSii: "imp-u1-502" } })).toBe(1)
+  })
 })
 
 describe("GET /api/importar/estructura/plantilla — plantilla descargable (S1)", () => {
@@ -338,7 +399,7 @@ describe("GET /api/importar/estructura/plantilla — plantilla descargable (S1)"
     GET = plantilla.GET
   })
 
-  it("devuelve text/csv con los encabezados canónicos y una fila de ejemplo", async () => {
+  it("devuelve text/csv con los encabezados canónicos y tres filas de ejemplo", async () => {
     const res = await pedir("administrador")
     expect(res.status).toBe(200)
     expect(res.headers.get("content-type")).toContain("text/csv")
@@ -346,12 +407,21 @@ describe("GET /api/importar/estructura/plantilla — plantilla descargable (S1)"
 
     const cuerpo = await res.text()
     const lineas = cuerpo.replace(/\r/g, "").split("\n").filter((l) => l !== "")
-    expect(lineas).toHaveLength(2)
+    expect(lineas).toHaveLength(4)
     expect(lineas[0]).toBe(
       "macro_sector,micro_sector,rol_sii,numero,etiqueta,tipo_unidad,metraje,prorrateo,estado_ocupacion"
     )
-    // La fila de ejemplo trae valores en todas las columnas (nada vacío).
+    // Las filas de ejemplo trae valores en todas las columnas (nada vacío).
     expect(lineas[1]!.split(",").every((c) => c.length > 0)).toBe(true)
+    expect(lineas).toContain(
+      "EJEMPLO-Torre A,EJEMPLO-Piso 1,EJEMPLO-12345-1101,1101,Depto,Depto Tipo A,55.5,0.0125,Vacante"
+    )
+    expect(lineas).toContain(
+      "EJEMPLO-Estacionamientos,EJEMPLO-Subterráneo -1,EJEMPLO-12345-2105,E-021,Estacionamiento,Estacionamiento Estándar,12.5,0.005,En Uso"
+    )
+    expect(lineas).toContain(
+      "EJEMPLO-Centro Comercial,EJEMPLO-Calle,EJEMPLO-999-101,L-01,Local,Local Comercial B (Estándar),60,0.025,En Arriendo"
+    )
   })
 
   it("la misma authz que el import: residente 403, sin sesión 401", async () => {

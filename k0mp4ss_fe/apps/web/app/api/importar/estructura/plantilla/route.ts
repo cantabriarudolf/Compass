@@ -2,7 +2,7 @@
  * /api/importar/estructura/plantilla — plantilla descargable del bloque
  * estructura (ODD carga-inicial-csv U1, S1).
  *
- * Devuelve `text/csv` con los encabezados canónicos + una fila de ejemplo;
+ * Devuelve `text/csv` con los encabezados canónicos + tres filas de ejemplo marcadas con el prefijo EJEMPLO- (el importador las rechaza);
  * el nombre del archivo deja claro que la fila es de ejemplo
  * (`plantilla-estructura.csv`, vía content-disposition). Se sirve desde una
  * ruta (no archivos estáticos) para que los encabezados no se desincronicen

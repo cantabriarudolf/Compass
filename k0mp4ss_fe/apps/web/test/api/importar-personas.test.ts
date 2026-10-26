@@ -15,6 +15,8 @@
  *   - `?dryRun=1` no escribe nada
  *   - residente → 403, sin sesión → 401
  *   - la plantilla trae los encabezados canónicos y exige la misma authz
+ *   - subir la plantilla tal cual: las filas de ejemplo se rechazan con su
+ *     error legible y nada se escribe
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest"
 import { NextRequest } from "next/server"
@@ -301,6 +303,62 @@ describe("POST /api/importar/personas — carga inicial del padrón (U2)", () =>
     expect(j.resumen.actualizar).toBe(1)
     expect(j.resumen.sinCambios).toBe(1)
   })
+
+  it("la plantilla tal cual se rechaza fila por fila y no escribe nada", async () => {
+    const antes = await contar()
+    // La plantilla completa, tal como la devuelve la ruta de plantilla.
+    state.cookie = cookies.administrador!
+    const plantillaRes = await plantillaGET()
+    const plantillaCsv = await plantillaRes.text()
+
+    state.cookie = ""
+    const res = await pedir("administrador", plantillaCsv)
+    expect(res.status).toBe(200)
+    const j = (await res.json()) as Reporte
+
+    expect(j.resumen).toEqual({
+      total: 3,
+      validas: 0,
+      conError: 3,
+      crear: 0,
+      actualizar: 0,
+      sinCambios: 0,
+    })
+    for (const fila of j.filas) {
+      expect(fila.accion).toBe("sin-cambios")
+      expect(fila.errores).toHaveLength(1)
+      expect(fila.errores[0]).toMatch(/rut/)
+      expect(fila.errores[0]).toContain(
+        "Esta fila es del ejemplo de la plantilla: reemplazala por tus datos o borrala"
+      )
+    }
+    expect(await contar()).toBe(antes)
+  })
+
+  it("la plantilla con las filas de ejemplo borradas y datos propios funciona", async () => {
+    state.cookie = cookies.administrador!
+    const plantillaRes = await plantillaGET()
+    const lineas = (await plantillaRes.text()).replace(/\r/g, "").split("\n").filter(Boolean)
+
+    state.cookie = ""
+    const csv = [
+      lineas[0],
+      "19.456.789-8,Valentina,Reyes López,valentina.reyes@test.cl,+56 9 7777 1234,propietario",
+      "16.222.333-K,Sebastián,Contreras Vega,sebastian.contreras@test.cl,+56 9 7777 5678,residente|directiva",
+    ].join("\n")
+    const res = await pedir("administrador", csv)
+    expect(res.status).toBe(200)
+    const j = (await res.json()) as Reporte
+
+    expect(j.resumen.conError).toBe(0)
+    expect(j.resumen.crear).toBe(2)
+    expect(
+      await prisma.persona.count({ where: { email: "valentina.reyes@test.cl" } })
+    ).toBe(1)
+    expect(
+      await prisma.persona.count({ where: { email: "sebastian.contreras@test.cl" } })
+    ).toBe(1)
+  })
 })
 
 describe("GET /api/importar/personas/plantilla — plantilla descargable (S1)", () => {
@@ -321,7 +379,7 @@ describe("GET /api/importar/personas/plantilla — plantilla descargable (S1)", 
     GET = plantilla.GET
   })
 
-  it("devuelve text/csv con los encabezados canónicos y una fila de ejemplo", async () => {
+  it("devuelve text/csv con los encabezados canónicos y tres filas de ejemplo", async () => {
     const res = await pedir("administrador")
     expect(res.status).toBe(200)
     expect(res.headers.get("content-type")).toContain("text/csv")
@@ -329,29 +387,45 @@ describe("GET /api/importar/personas/plantilla — plantilla descargable (S1)", 
 
     const cuerpo = await res.text()
     const lineas = cuerpo.replace(/\r/g, "").split("\n").filter((l) => l !== "")
-    expect(lineas).toHaveLength(2)
+    expect(lineas).toHaveLength(4)
     expect(lineas[0]).toBe("rut,nombres,apellidos,email,telefono,roles")
-    // La fila de ejemplo trae valores en todas las columnas (nada vacío).
+    // Las filas de ejemplo trae valores en todas las columnas (nada vacío).
     expect(lineas[1]!.split(",").every((c) => c.length > 0)).toBe(true)
+    expect(lineas).toContain(
+      "EJEMPLO-12.345.678-5,María,Rojas Soto,maria.rojas@ejemplo.cl,+56 9 6123 4567,propietario|residente"
+    )
+    expect(lineas).toContain(
+      "EJEMPLO-18.345.678-4,Rodrigo,Fuentes Salas,rodrigo.fuentes@ejemplo.cl,+56 9 8765 4321,residente"
+    )
+    expect(lineas).toContain(
+      "EJEMPLO-13.987.123-5,Juan,Pérez Díaz,juan.perez@ejemplo.cl,+56 9 5555 8888,residente|directiva"
+    )
   })
 
-  it("la fila de ejemplo pasa el validador de filas del importador", async () => {
-    const { ENCABEZADOS_PERSONAS, FILA_EJEMPLO_PERSONAS, validarFilasPersonas } =
+  it("quitando la marca EJEMPLO-, cada fila de ejemplo pasa el validador", async () => {
+    const { ENCABEZADOS_PERSONAS, FILAS_EJEMPLO_PERSONAS, validarFilasPersonas } =
       await import("@/lib/importar/personas")
 
-    // La fila de ejemplo, serializada y releída por el parser, valida limpio:
-    // así la plantilla nunca enseña una fila que el import no acepta.
+    // Las filas de ejemplo, con la marca EJEMPLO- quitada del RUT, validan
+    // limpio: la plantilla enseña formato que el import acepta (el RUT
+    // marcado es lo único que activa el rechazo del ejemplo).
     const { parsearCsv } = await import("@/lib/importar/csv")
-    const ejemplo = ENCABEZADOS_PERSONAS.map((h) => FILA_EJEMPLO_PERSONAS[h])
+    const ejemplo = FILAS_EJEMPLO_PERSONAS.map((fila) =>
+      ENCABEZADOS_PERSONAS.map((h) =>
+        h === "rut" ? fila[h].replace("EJEMPLO-", "") : fila[h]
+      ).join(",")
+    )
     const primera = ENCABEZADOS_PERSONAS.join(",")
-    const filas = parsearCsv(`${primera}\n${ejemplo.join(",")}`, {
+    const filas = parsearCsv(`${primera}\n${ejemplo.join("\n")}`, {
       encabezadosEsperados: ENCABEZADOS_PERSONAS,
     }).filas
-    expect(filas).toHaveLength(1)
+    expect(filas).toHaveLength(FILAS_EJEMPLO_PERSONAS.length)
 
     const validadas = validarFilasPersonas(filas)
-    expect(validadas[0]!.errores).toEqual([])
-    expect(validadas[0]!.datos).not.toBeNull()
+    for (const fila of validadas) {
+      expect(fila.errores).toEqual([])
+      expect(fila.datos).not.toBeNull()
+    }
   })
 
   it("la misma authz que el import: residente 403, sin sesión 401", async () => {

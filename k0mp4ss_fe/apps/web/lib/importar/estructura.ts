@@ -44,18 +44,60 @@ export const ENCABEZADOS_ESTRUCTURA = [
 
 export type EncabezadoEstructura = (typeof ENCABEZADOS_ESTRUCTURA)[number]
 
-/** Fila de ejemplo de la plantilla descargable (valores realistas del dominio). */
-export const FILA_EJEMPLO_ESTRUCTURA: Record<EncabezadoEstructura, string> = {
-  macro_sector: "Torre A",
-  micro_sector: "Piso 1",
-  rol_sii: "12345-1101",
-  numero: "1101",
-  etiqueta: "Depto",
-  tipo_unidad: "Depto Tipo A",
-  metraje: "55.5",
-  prorrateo: "0.0125",
-  estado_ocupacion: "Vacante",
+/** Prefijo que marca las claves de las filas de ejemplo de la plantilla. */
+export const PREFIJO_EJEMPLO = "EJEMPLO-"
+
+/** Mensaje para una fila que llegó tal como viene de la plantilla. */
+export const MENSAJE_FILA_EJEMPLO =
+  "Esta fila es del ejemplo de la plantilla: reemplazala por tus datos o borrala."
+
+/** Devuelve la primera columna marcada con el prefijo de ejemplo, si la hay. */
+export function columnaFilaEjemplo(
+  valores: Record<string, string>,
+  columnas: readonly string[]
+): string | null {
+  for (const columna of columnas) {
+    if ((valores[columna] ?? "").trimStart().startsWith(PREFIJO_EJEMPLO)) return columna
+  }
+  return null
 }
+
+/** Filas de ejemplo de la plantilla descargable (valores realistas del dominio). */
+export const FILAS_EJEMPLO_ESTRUCTURA: Record<EncabezadoEstructura, string>[] = [
+  {
+    macro_sector: "EJEMPLO-Torre A",
+    micro_sector: "EJEMPLO-Piso 1",
+    rol_sii: "EJEMPLO-12345-1101",
+    numero: "1101",
+    etiqueta: "Depto",
+    tipo_unidad: "Depto Tipo A",
+    metraje: "55.5",
+    prorrateo: "0.0125",
+    estado_ocupacion: "Vacante",
+  },
+  {
+    macro_sector: "EJEMPLO-Estacionamientos",
+    micro_sector: "EJEMPLO-Subterráneo -1",
+    rol_sii: "EJEMPLO-12345-2105",
+    numero: "E-021",
+    etiqueta: "Estacionamiento",
+    tipo_unidad: "Estacionamiento Estándar",
+    metraje: "12.5",
+    prorrateo: "0.005",
+    estado_ocupacion: "En Uso",
+  },
+  {
+    macro_sector: "EJEMPLO-Centro Comercial",
+    micro_sector: "EJEMPLO-Calle",
+    rol_sii: "EJEMPLO-999-101",
+    numero: "L-01",
+    etiqueta: "Local",
+    tipo_unidad: "Local Comercial B (Estándar)",
+    metraje: "60",
+    prorrateo: "0.025",
+    estado_ocupacion: "En Arriendo",
+  },
+]
 
 /** Etiqueta fija de sectores nuevos (el CSV no trae la categoría visual). */
 export const ETIQUETA_SECTOR = "Sector"
@@ -110,6 +152,20 @@ export interface FilaValidada {
 /** Valida cada fila del CSV y devuelve el error con su columna. */
 export function validarFilasEstructura(filas: FilaCsv[]): FilaValidada[] {
   return filas.map((fila) => {
+    // Filas de ejemplo de la plantilla: se rechazan antes del schemario, para
+    // que nada del ejemplo se escriba (ni siquiera en sectores).
+    const columnaEjemplo = columnaFilaEjemplo(fila.valores, [
+      "rol_sii",
+      "macro_sector",
+      "micro_sector",
+    ])
+    if (columnaEjemplo) {
+      return {
+        linea: fila.linea,
+        datos: null,
+        errores: [{ columna: columnaEjemplo, mensaje: MENSAJE_FILA_EJEMPLO }],
+      }
+    }
     const parsed = FilaEstructuraSchema.safeParse(fila.valores)
     if (parsed.success) {
       return { linea: fila.linea, datos: parsed.data, errores: [] }
@@ -440,9 +496,11 @@ export async function importarEstructura({
   return { filas: reporte, resumen }
 }
 
-/** Arma el contenido de la plantilla descargable: encabezados + fila de ejemplo. */
+/** Arma el contenido de la plantilla descargable: encabezados + filas de ejemplo. */
 export function construirPlantillaEstructura(): string {
-  const ejemplo = ENCABEZADOS_ESTRUCTURA.map((h) => FILA_EJEMPLO_ESTRUCTURA[h])
+  const ejemplos = FILAS_EJEMPLO_ESTRUCTURA.map((fila) =>
+    ENCABEZADOS_ESTRUCTURA.map((h) => fila[h])
+  )
   // BOM al inicio: Excel abre el UTF-8 sin corromper los caracteres.
-  return `\ufeff${serializarCsv([[...ENCABEZADOS_ESTRUCTURA], ejemplo])}\r\n`
+  return `\ufeff${serializarCsv([[...ENCABEZADOS_ESTRUCTURA], ...ejemplos])}\r\n`
 }
