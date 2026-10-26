@@ -1,5 +1,9 @@
 import type { Metadata } from "next"
 import Link from "next/link"
+import {
+  FINALIDADES_PRIVACIDAD,
+  VERSION_POLITICA_PRIVACIDAD,
+} from "@/lib/politica-privacidad"
 
 export const metadata: Metadata = {
   title: "Política de privacidad",
@@ -7,9 +11,13 @@ export const metadata: Metadata = {
 }
 
 /**
- * SERIE-PRODUCCION-FASE2 P6 — scaffold de política de privacidad.
+ * SERIE-PRODUCCION-FASE2 P6 — política de privacidad.
  * NO es texto legal definitivo: el owner debe revisarlo con un abogado antes
  * de producción. Cubre: datos, fines, protección, derechos ARCO y contacto.
+ *
+ * F16 (asesoría normativa 2026-10-25): la versión y la tabla de finalidades
+ * con su base legal se leen de `lib/politica-privacidad.ts`, la misma fuente
+ * que usa el banner de aviso + acuse.
  */
 const SECCIONES: Array<{ titulo: string; cuerpo: string[] }> = [
   {
@@ -55,13 +63,60 @@ const SECCIONES: Array<{ titulo: string; cuerpo: string[] }> = [
   },
 ]
 
+/**
+ * Tabla de finalidades con su base legal (F16): misma fuente que el banner.
+ * Es información, no un formulario de consentimiento: la única finalidad que
+ * requeriría consentimiento (comunicaciones no operativas) hoy no está activa.
+ */
+function FinalidadesTabla() {
+  return (
+    <section className="space-y-2 rounded-lg border bg-card p-4 shadow-sm">
+      <h2 className="text-lg font-medium">Finalidades del tratamiento y base legal</h2>
+      <p className="text-sm text-muted-foreground">
+        La mayoría del tratamiento no depende de tu consentimiento: se apoya en
+        el contrato de copropiedad, en obligaciones legales o en interés
+        legítimo. El consentimiento queda reservado a finalidades opcionales.
+      </p>
+      <div className="overflow-x-auto">
+        <table className="w-full text-left text-sm">
+          <thead>
+            <tr className="border-b text-muted-foreground">
+              <th className="py-2 pr-4 font-medium">Finalidad</th>
+              <th className="py-2 pr-4 font-medium">Base legal</th>
+              <th className="py-2 pr-4 font-medium">Detalle</th>
+              <th className="py-2 font-medium">Estado</th>
+            </tr>
+          </thead>
+          <tbody>
+            {FINALIDADES_PRIVACIDAD.map((f) => (
+              <tr key={f.id} className="border-b last:border-0 align-top">
+                <td className="py-2 pr-4 font-medium">{f.nombre}</td>
+                <td className="py-2 pr-4 text-muted-foreground">{f.baseLegal}</td>
+                <td className="py-2 pr-4 text-muted-foreground">{f.detalle}</td>
+                <td className="py-2 text-muted-foreground">
+                  {f.activa
+                    ? f.requiereConsentimiento
+                      ? "Activa (requiere consentimiento)"
+                      : "Activa"
+                    : "No activa"}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  )
+}
+
 export default function PaginaPrivacidad() {
   return (
     <main className="mx-auto w-full max-w-3xl space-y-6 p-6">
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold">Política de privacidad</h1>
         <p className="text-sm text-muted-foreground">
-          Última actualización: septiembre de 2026 · Documento borrador sujeto a revisión legal.
+          Versión {VERSION_POLITICA_PRIVACIDAD} · Última actualización: octubre de 2026 ·
+          Documento borrador sujeto a revisión legal.
         </p>
       </div>
       {SECCIONES.map((s) => (
@@ -74,6 +129,7 @@ export default function PaginaPrivacidad() {
           </ul>
         </section>
       ))}
+      <FinalidadesTabla />
       <p className="text-sm">
         <Link className="underline" href="/terminos">Ver términos de uso</Link>
         {" · "}
