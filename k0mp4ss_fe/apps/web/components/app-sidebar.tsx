@@ -151,6 +151,7 @@ const data = {
         { title: "Configuración", url: "/admin/configuracion", roles: ["administrador"] },
         { title: "Permisos", url: "/admin/permisos", roles: ["administrador"] },
         { title: "Logs de Auditoría", url: "/admin/logs", roles: ["administrador"] },
+        { title: "Carga inicial", url: "/admin/carga-inicial", roles: ["administrador"] },
       ],
     },
   ],
