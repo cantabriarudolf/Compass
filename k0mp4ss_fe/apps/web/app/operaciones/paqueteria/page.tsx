@@ -7,6 +7,7 @@ import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
 import { IconPackage } from "@tabler/icons-react"
 import { EncomiendasPanel } from "@/components/pe/encomiendas-panel"
+import { AvisoPrivacidadConserjeria } from "@/components/aviso-privacidad-conserjeria"
 
 function hoyISO(): string {
   return new Date().toISOString().slice(0, 10)
@@ -27,6 +28,8 @@ export default function PaqueteriaPage() {
           Recepción y retiro de encomiendas — logística de conserjería.
         </p>
       </header>
+
+      <AvisoPrivacidadConserjeria />
 
       {error && (
         <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">

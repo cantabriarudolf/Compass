@@ -8,6 +8,7 @@ import { Label } from "@workspace/ui/components/label"
 import { IconBook2 } from "@tabler/icons-react"
 import { VisitasPanel } from "@/components/pe/visitas-panel"
 import { ContratistasPanel } from "@/components/pe/contratistas-panel"
+import { AvisoPrivacidadConserjeria } from "@/components/aviso-privacidad-conserjeria"
 
 function hoyISO(): string {
   return new Date().toISOString().slice(0, 10)
@@ -26,6 +27,8 @@ export default function AccesosPage() {
         </h1>
         <p className="text-sm text-muted-foreground">Control de visitas y contratistas — accesos diarios del edificio.</p>
       </header>
+
+      <AvisoPrivacidadConserjeria />
 
       {error && <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">{error}</div>}
       {okMsg && <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-200">{okMsg}</div>}

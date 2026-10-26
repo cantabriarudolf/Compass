@@ -59,6 +59,7 @@ import {
 import { VisitasPanel } from "@/components/pe/visitas-panel"
 import { ContratistasPanel } from "@/components/pe/contratistas-panel"
 import { EncomiendasPanel } from "@/components/pe/encomiendas-panel"
+import { AvisoPrivacidadConserjeria } from "@/components/aviso-privacidad-conserjeria"
 
 function hoy(): string {
   return hoyISO()
@@ -272,6 +273,8 @@ update: actualizarCierreApi,
           obligatorios.
         </p>
       </header>
+
+      <AvisoPrivacidadConserjeria />
 
       {error && (
         <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
