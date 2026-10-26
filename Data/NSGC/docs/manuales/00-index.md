@@ -3,6 +3,7 @@
 Bienvenido a la documentación operativa del sistema de administración de condominios **Compass**. Este índice organiza los manuales de cada herramienta según su orden de implementación y dependencia lógica.
 
 ## 🏗️ Fase 1: Infraestructura y Bases
+- [41 - Carga Inicial de una Comunidad](<41 - Carga Inicial de una Comunidad.md>): Instructivo del importador CSV para el administrador: bajar plantillas de estructura, personas y vínculos, llenarlas en Excel → CSV, revisar la vista previa fila por fila e importar sin duplicar (orden estructura → personas → vínculos).
 - [01 - Tipos de Unidad](<01 - Tipos de Unidad.md>): Gestión de plantillas y modelos base de propiedades.
 - [02 - Estructura Física](<02 - Estructura Física.md>): Configuración de torres, niveles y departamentos.
 - [03 - Estacionamientos](<03 - Estacionamientos.md>): Inventario de parking y vinculación granulada.
@@ -36,4 +37,4 @@ Bienvenido a la documentación operativa del sistema de administración de condo
 - [25 - RE - Reportería y Dashboards](<25 - RE - Reportería y Dashboards.md>): Centro de mando (censo, pulso operativo, embudo GE, salud de caja con termómetro) y distribución segmentada EF×perfil×tenencia.
 
 ---
-*Última actualización: 2026-08-27 - Plataforma P8 (cierre): serie P1–P8 COMPLETA. Engranajes verificados en vivo (sesión login→/admin→API 200→logout→401, 403 por rol, aislamiento A/B, rate limit, migrate desde cero, backup/restore 0 divergencias, re-chequeos 5/5). Fix `/admin` → `/admin/gestion` con test regresivo. 413 tests, store v26.*
+*Última actualización: 2026-10-26 - F19 carga inicial por CSV: manual 41 del importador del administrador (plantillas de estructura, personas y vínculos con vista previa e import idempotente). Anterior: 2026-08-27 - Plataforma P8 (cierre): serie P1–P8 COMPLETA. Engranajes verificados en vivo (sesión login→/admin→API 200→logout→401, 403 por rol, aislamiento A/B, rate limit, migrate desde cero, backup/restore 0 divergencias, re-chequeos 5/5). Fix `/admin` → `/admin/gestion` con test regresivo. 413 tests, store v26.*
