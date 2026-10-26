@@ -8,6 +8,11 @@
  */
 import { describe, expect, it } from "vitest"
 import { normalizarEncabezado, parsearCsv } from "@/lib/importar/csv"
+import { ENCABEZADOS_PERSONAS } from "@/lib/importar/personas"
+
+// Encabezados canónicos del bloque personas en una sola cadena (se reusa acá
+// y en el suite del import para verificar que parser y plantilla van juntos).
+const ENCABEZADOS_PERSONAS_CON_COMA = ENCABEZADOS_PERSONAS.join(",")
 
 describe("parsearCsv — filas con comillas", () => {
   it("soporta comas y saltos de línea dentro de campos entre comillas", () => {
@@ -105,6 +110,59 @@ describe("parsearCsv — encabezados", () => {
   it("un archivo sin encabezados falla con mensaje claro", () => {
     expect(() => parsearCsv("", { encabezadosEsperados: ["a"] })).toThrow(
       /vac[íi]o|encabezados/i
+    )
+  })
+})
+
+describe("parsearCsv — separador (Excel español guarda con punto y coma)", () => {
+  it("detecta el punto y coma y lo usa para separar", () => {
+    const csv = `${ENCABEZADOS_PERSONAS_CON_COMA.replaceAll(",", ";")}\n12.345.678-5;María;Rojas;maria@test.cl;+56 9 6123 4567;residente`
+    const { filas } = parsearCsv(csv, { encabezadosEsperados: ENCABEZADOS_PERSONAS })
+
+    expect(filas[0]!.valores["rut"]).toBe("12.345.678-5")
+    expect(filas[0]!.valores["nombres"]).toBe("María")
+    expect(filas[0]!.valores["email"]).toBe("maria@test.cl")
+    expect(filas[0]!.valores["roles"]).toBe("residente")
+  })
+
+  it("detecta la tabulación como separador", () => {
+    const csv = `a\tb\n1\t2`
+    const { encabezados, filas } = parsearCsv(csv)
+
+    expect(encabezados).toEqual(["a", "b"])
+    expect(filas[0]!.valores).toEqual({ a: "1", b: "2" })
+  })
+
+  it("con punto y coma respeta las comillas: un punto y coma citado queda dentro del campo", () => {
+    const csv = `a;b\n"Plaza; Central";dato`
+    const { filas } = parsearCsv(csv)
+
+    expect(filas[0]!.valores["a"]).toBe("Plaza; Central")
+    expect(filas[0]!.valores["b"]).toBe("dato")
+  })
+
+  it("un punto y coma dentro de comillas no confunde la detección de un archivo con coma", () => {
+    const csv = 'a,b\n"dice; hola",2'
+    const { filas } = parsearCsv(csv)
+
+    expect(filas[0]!.valores["a"]).toBe("dice; hola")
+    expect(filas[0]!.valores["b"]).toBe("2")
+  })
+
+  it("un separador citado en el encabezado no entra en el conteo (no produce empate)", () => {
+    // Si el «;» citado del encabezado contara para la detección, quedaría un
+    // empate contra la coma y daría error; fuera de comillas sólo hay comas.
+    const csv = 'a,"b;d"\n1,x'
+    const { encabezados, filas } = parsearCsv(csv)
+
+    expect(encabezados).toEqual(["a", "b;d"])
+    expect(filas[0]!.valores).toEqual({ a: "1", "b;d": "x" })
+  })
+
+  it("si no se puede decidir el separador falla con un mensaje que dice cuáles acepta", () => {
+    // Una sola columna sin ninguno de los separadores aceptados.
+    expect(() => parsearCsv("encabezado\nvalor")).toThrow(
+      /separador.*coma|punto y coma|tabulaci/i
     )
   })
 })

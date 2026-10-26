@@ -10,6 +10,11 @@
  *   - filas vacías ignoradas (la numeración `linea` es la real del archivo,
  *     con el encabezado en la línea 1)
  *   - con `encabezadosEsperados`, error legible si falta alguno
+ *   - separador detectado en la línea de encabezados: coma, punto y coma
+ *     (Excel en español guarda con `;`) o tabulación; si no se puede
+ *     decidir, error legible que dice cuáles acepta (U2)
+ *   - la serialización de las plantillas sigue con coma (estándar: Excel
+ *     la abre igual)
  *
  * Es un parser laxo en un solo punto: una comilla en medio de un campo sin
  * abrir comillas se conserva literal (no es un error de archivo para Excel).
@@ -42,6 +47,54 @@ export function normalizarEncabezado(texto: string): string {
     .replace(/\s+/g, "_")
 }
 
+/** Separadores que el importador acepta (U2: Excel español guarda con `;`). */
+export type SeparadorCsv = "," | ";" | "\t"
+
+/** Texto del error de detección, con la lista explícita de separadores. */
+const MENSAJE_SEPARADOR_INDETERMINADO =
+  "No se pudo detectar el separador del archivo. Revisiona la línea de " +
+  "encabezados: el separador debe ser coma (,), punto y coma (;) o " +
+  "tabulación. Si el archivo viene de Excel, usa «Guardar como» CSV."
+
+/**
+ * detectarSeparador — elige el separador contando apariciones en la línea de
+ * encabezados (fuera de comillas; un separador citado no es delimitador).
+ * Gana el más frecuente si es único; en empate o con todo en cero no se puede
+ * decidir y se lanza el error legible.
+ */
+function detectarSeparador(lineaEncabezados: string): SeparadorCsv {
+  const conteos = new Map<SeparadorCsv, number>([
+    [",", 0],
+    [";", 0],
+    ["\t", 0],
+  ])
+  let enComillas = false
+  for (const c of lineaEncabezados) {
+    if (c === '"') {
+      enComillas = !enComillas
+    } else if (!enComillas) {
+      const actual = conteos.get(c as SeparadorCsv)
+      if (actual !== undefined) conteos.set(c as SeparadorCsv, actual + 1)
+    }
+  }
+  let ganador: SeparadorCsv | null = null
+  let maximo = 0
+  let empate = false
+  for (const [sep, n] of conteos) {
+    if (n > maximo) {
+      maximo = n
+      ganador = sep
+      empate = false
+    } else if (n === maximo && n > 0) {
+      empate = true
+    }
+  }
+  if (ganador === null || empate) {
+    throw new Error(MENSAJE_SEPARADOR_INDETERMINADO)
+  }
+  return ganador
+}
+
 /** Serializa filas sueltas a CSV (usado por la plantilla descargable). */
 export function serializarCsv(filas: string[][]): string {
   const escapar = (valor: string): string =>
@@ -64,6 +117,23 @@ export function parsearCsv(texto: string, opciones: OpcionesCsv = {}): CsvParsea
   // BOM de UTF-8: Excel lo escribe al guardar como CSV; si no se quita, el
   // primer encabezado quedaría con un carácter invisible adelante.
   const contenido = texto.startsWith("\ufeff") ? texto.slice(1) : texto
+
+  // El separador se decide con la primera línea (los encabezados): después
+  // del BOM y antes de tocar nada más. Un salto de línea dentro de un
+  // encabezado citado no cierra la línea acá — cortamos en el primer \r o \n
+  // sin profundidad (la detección sólo necesita los delimitadores de nivel
+  // superior; los encabezados citados multilínea no son un formato que el
+  // importador use).
+  const corteEncabezados = (() => {
+    let enComillas = false
+    for (let i = 0; i < contenido.length; i++) {
+      const c = contenido[i]!
+      if (c === '"') enComillas = !enComillas
+      if (!enComillas && (c === "\r" || c === "\n")) return i
+    }
+    return contenido.length
+  })()
+  const separador = detectarSeparador(contenido.slice(0, corteEncabezados))
 
   const filasCrudas: FilaCruda[] = []
   let celda = ""
@@ -109,7 +179,7 @@ export function parsearCsv(texto: string, opciones: OpcionesCsv = {}): CsvParsea
       } else {
         celda += c
       }
-    } else if (c === ",") {
+    } else if (c === separador) {
       celdas.push(celda)
       celda = ""
     } else if (c === "\r" || c === "\n") {
