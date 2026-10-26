@@ -64,7 +64,7 @@ export default async function RootLayout({
                         </>
                       )}
                       <div className="flex-1">
-                        <CommunityHeader />
+                        <CommunityHeader logueado={logueado} />
                       </div>
                       <ModeToggle />
                       {logueado && <CerrarSesion />}

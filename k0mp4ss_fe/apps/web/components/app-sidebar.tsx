@@ -19,7 +19,7 @@ import Image from "next/image"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 
-import { useCompassStore, useStoreRehydrated } from "@/lib/store"
+import { useComunidadActual } from "@/lib/api/use-configuracion"
 import {
   Sidebar,
   SidebarContent,
@@ -157,10 +157,11 @@ const data = {
 }
 
 export function AppSidebar({ roles = [], ...props }: React.ComponentProps<typeof Sidebar> & { roles?: string[] }) {
-  useStoreRehydrated()
   const pathname = usePathname()
-  const hasHydrated = useCompassStore((s) => s.hasHydrated)
-  const configuracion = useCompassStore((s) => s.configuracion)
+  // Marca desde la proyección /api/comunidad-actual (cualquier rol la consulta):
+  // mientras carga o si falla, cae al fallback "GECOS" + ícono sin romper la navegación.
+  const { nombre: nombreComunidad, logoUrl } = useComunidadActual()
+  const hasBrand = Boolean(logoUrl)
 
   // Roles reales de la sesión (unión de membresías vía Auth.js jwt/session callbacks, lib/auth.ts).
   // Filtrado por intersección: grupo/item visible si algún rol del usuario está en roles declarados.
@@ -175,10 +176,10 @@ export function AppSidebar({ roles = [], ...props }: React.ComponentProps<typeof
             <SidebarMenuButton size="lg" asChild>
               <Link href="/dashboard">
                 <div className="flex aspect-square size-8 items-center justify-center overflow-hidden rounded-lg bg-primary text-primary-foreground">
-                  {hasHydrated && configuracion.logoUrl ? (
+                  {hasBrand ? (
                     <Image
-                      src={configuracion.logoUrl}
-                      alt={configuracion.nombreComunidad}
+                      src={logoUrl!}
+                      alt={nombreComunidad}
                       width={32}
                       height={32}
                       unoptimized
@@ -190,7 +191,7 @@ export function AppSidebar({ roles = [], ...props }: React.ComponentProps<typeof
                 </div>
                 <div className="grid flex-1 text-left text-sm leading-tight">
                   <span className="truncate font-semibold">
-                    {hasHydrated ? configuracion.nombreComunidad : "GECOS"}
+                    {nombreComunidad || "GECOS"}
                   </span>
                   <span className="truncate text-xs">Administración</span>
                 </div>

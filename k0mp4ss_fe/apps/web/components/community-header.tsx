@@ -3,14 +3,17 @@
 import Image from "next/image"
 import { IconCommand } from "@tabler/icons-react"
 
-import { useCompassStore, useStoreRehydrated } from "@/lib/store"
+import { useComunidadActual } from "@/lib/api/use-configuracion"
 
-export function CommunityHeader() {
-  useStoreRehydrated()
-  const hasHydrated = useCompassStore((s) => s.hasHydrated)
-  const configuracion = useCompassStore((s) => s.configuracion)
+export function CommunityHeader({ logueado = true }: { logueado?: boolean }) {
+  // Marca desde la proyección /api/comunidad-actual (cualquier rol la consulta):
+  // mientras carga o si falla, el skeleton y el fallback del ícono siguen en pie.
+  // Sin sesión no hay comunidad que pedir: clave null y el encabezado muestra la
+  // marca de la plataforma (el layout monta este header también en /ingresar y
+  // /privacidad).
+  const { nombre: nombreComunidad, logoUrl, isLoading } = useComunidadActual(logueado)
 
-  if (!hasHydrated) {
+  if (isLoading) {
     return (
       <div className="flex items-center gap-2">
         <div className="size-6 animate-pulse rounded-md bg-muted/40" />
@@ -21,10 +24,10 @@ export function CommunityHeader() {
 
   return (
     <div className="flex items-center gap-2">
-      {configuracion.logoUrl ? (
+      {logoUrl ? (
         <Image
-          src={configuracion.logoUrl}
-          alt={configuracion.nombreComunidad}
+          src={logoUrl}
+          alt={nombreComunidad}
           width={24}
           height={24}
           unoptimized
@@ -35,7 +38,7 @@ export function CommunityHeader() {
           <IconCommand className="size-4" />
         </div>
       )}
-      <h2 className="text-sm font-medium">{configuracion.nombreComunidad}</h2>
+      <h2 className="text-sm font-medium">{nombreComunidad || "GECOS"}</h2>
     </div>
   )
 }

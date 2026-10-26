@@ -51,9 +51,11 @@ export const EXCEPCIONES = [
   // conserjería/residente/mantención (en la matriz de permisos `cf: ver` es solo admin/comité) y
   // esos roles caerían al fallback "GECOS" en vez de ver config del store. Retirarlos exige
   // resolver primero esa brecha de permisos.
+  // El 2026-10-26 (encabezado global) también salieron app-sidebar y community-header: migrados a
+  // useComunidadActual() sobre la proyección GET /api/comunidad-actual (`{ nombre, logoUrl }`),
+  // que no exige `cf: ver` (solo admin/comité) y desbloqueaba los 403 de conserjería/residente/
+  // mantención que hoy los dejaban caer al fallback GECOS.
   { archivo: "components/fi-espejo-bd.tsx", motivo: "espejo financiero: compara el store contra la BD", desde: "2026-10-25" },
-  { archivo: "components/app-sidebar.tsx", motivo: "hidratación de sesión/rol en la navegación; bloqueada 2026-10-26 por cf:ver 403 en roles no admin (decisión owner)", desde: "2026-10-25" },
-  { archivo: "components/community-header.tsx", motivo: "hidratación de la comunidad activa en el encabezado; bloqueada 2026-10-26 por cf:ver 403 en roles no admin (decisión owner)", desde: "2026-10-25" },
 ]
 
 const RE_STORE = /\buseCompassStore\b/
