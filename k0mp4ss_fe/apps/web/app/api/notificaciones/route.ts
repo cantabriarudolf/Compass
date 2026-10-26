@@ -16,7 +16,10 @@ import { puede } from "@/lib/authz"
 import { prisma } from "@/lib/prisma"
 import { createCrudHandlers } from "@/lib/api/crud-factory"
 import { filtroNotificaciones } from "@/lib/api/notificaciones-scope"
-import { personaIdDelUsuarioDb } from "@/lib/api/sesion-persona"
+import {
+  personaIdDelUsuarioDb,
+  unidadesVinculadasDb,
+} from "@/lib/api/sesion-persona"
 import {
   jsonError,
   withComunidadScope,
@@ -60,7 +63,13 @@ export async function GET(req: Request): Promise<Response> {
 
   try {
     const personaId = await personaIdDelUsuarioDb(scope.usuarioId)
-    const where = filtroNotificaciones(scope, personaId)
+    // F5: las unidades con vínculo vigente salen del servidor, nunca del cliente.
+    // Solo segmenta al residente (ver notificaciones-scope); los demás roles la
+    // ignoran y conservan su visibilidad histórica.
+    const unidades = personaId
+      ? await unidadesVinculadasDb(personaId, scope.comunidadId)
+      : []
+    const where = filtroNotificaciones(scope, personaId, unidades)
     const [data, total] = await Promise.all([
       prisma.notificacion.findMany({
         where,

@@ -349,6 +349,8 @@ export const NotificacionSchema = z.object({
     "personal",
   ]),
   destinatarioPersonaId: z.string().optional(),
+  // F5: unidad del destinatario para segmentar una difusión al rol; ausente = difusión sin unidad.
+  unidadId: IdEntidadSchema.optional(),
   asunto: z.string().min(1, "El asunto es obligatorio."),
   cuerpo: z.string().min(1, "El cuerpo es obligatorio."),
   canal: z.literal("email_simulado"),

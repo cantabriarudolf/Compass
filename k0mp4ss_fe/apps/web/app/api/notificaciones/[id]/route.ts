@@ -17,7 +17,7 @@ import {
   withComunidadScope,
 } from "@/lib/api/with-comunidad-scope"
 import { filtroNotificaciones } from "@/lib/api/notificaciones-scope"
-import { personaIdDelUsuarioDb } from "@/lib/api/sesion-persona"
+import { personaIdDelUsuarioDb, unidadesVinculadasDb } from "@/lib/api/sesion-persona"
 import { esDestinatarioDeNotificacion } from "./leer/route"
 import { notificacionesHandlers } from "../route"
 import { logger } from "@/lib/logger"
@@ -37,8 +37,14 @@ export async function GET(_req: Request, ctx: Ctx): Promise<Response> {
   const { id } = await ctx.params
   try {
     const personaId = await personaIdDelUsuarioDb(scope.usuarioId)
+    // F5: la lectura por id aplica la MISMA regla que la bandeja. Sin las unidades
+    // vinculadas, una difusión de rol dirigida a otra unidad se podía leer
+    // adivinando el id (hueco declarado al implementar F5 en la bandeja).
+    const unidadesVinculadas = personaId
+      ? await unidadesVinculadasDb(personaId, scope.comunidadId)
+      : []
     const record = await prisma.notificacion.findFirst({
-      where: { ...filtroNotificaciones(scope, personaId), id },
+      where: { ...filtroNotificaciones(scope, personaId, unidadesVinculadas), id },
     })
     if (!record) return jsonError(404, "Registro no encontrado.")
     return Response.json(record)

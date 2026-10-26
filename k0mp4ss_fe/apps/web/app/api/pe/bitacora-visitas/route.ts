@@ -5,46 +5,34 @@
  * registros). POST upsert idempotente por id. Authz sobre el recurso "pe"
  * (conserjería + administrador operan; admin elimina).
  *
- * Auditoría (T1c): el store legacy emitía `PE_VISITA_INGRESADA` al guardar una
- * visita que queda `ingresada`; la factory conserva el evento vía el hook
- * post-escritura con el mismo texto. En POST no se mira el `previo` (el store
- * emitía en cada save), solo el estado final de la fila.
+ * Efectos de escritura (en `_visitas.ts`, compartidos con el PUT del detalle):
+ * - `PE_VISITA_INGRESADA` como evento auditable (mismo texto que el store).
+ * - aviso al residente destinatario (F13) con `unidadId` (F5).
+ * En POST solo cuenta el estado final de la fila; un re-save no repite nada.
  */
 import { BitacoraVisitaPESchema } from "@/lib/schemas"
 import { puede } from "@/lib/authz"
 import { prisma } from "@/lib/prisma"
 import { createCrudHandlers, delegado } from "@/lib/api/crud-factory"
-import { registrarEventoPE } from "@/app/api/pe/_acciones"
-
-interface FilaVisita {
-  id: string
-  nombre: string
-  origenAgenda: string
-  estado: string
-  horaIngreso?: string | null
-}
-
-/** Texto exacto del store legacy (`lib/store.ts` saveBitacoraVisitaPE). */
-async function emitirVisitaIngresada(
-  fila: FilaVisita,
-  scope: Parameters<typeof registrarEventoPE>[0]
-): Promise<void> {
-  if (fila.estado !== "ingresada") return
-  const hora = fila.horaIngreso ?? new Date().toTimeString().slice(0, 5)
-  await registrarEventoPE(
-    scope,
-    "PE_VISITA_INGRESADA",
-    fila.id,
-    `Visita ${fila.nombre} ingresada (${fila.origenAgenda === "pre_agendada" ? "agendada" : "sin aviso"}) a las ${hora}.`
-  )
-}
+import {
+  avisarResidenteVisita,
+  emitirVisitaIngresada,
+  horaDeIngreso,
+  type FilaVisita,
+} from "@/app/api/pe/_visitas"
 
 const handlers = createCrudHandlers({
   model: delegado(prisma.bitacoraVisitaPE),
   schema: BitacoraVisitaPESchema,
   authzCheck: (rol, accion) => puede(rol, accion, "pe"),
-  despuesDeEscribir: async ({ registro, scope }) => {
-    await emitirVisitaIngresada(registro as FilaVisita, scope)
+  despuesDeEscribir: async ({ registro, scope, accion }) => {
+    // La visita que entra es un hecho nuevo: un re-save del mismo id no vuelve a
+    // emitir evento ni a avisar al residente.
+    if (accion === "editar") return
+    const fila = registro as FilaVisita
+    const hora = horaDeIngreso(fila)
+    await emitirVisitaIngresada(fila, scope, hora)
+    await avisarResidenteVisita(fila, scope, hora)
   },
 })
 

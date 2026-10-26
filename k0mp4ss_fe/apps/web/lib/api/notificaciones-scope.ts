@@ -47,13 +47,38 @@ export const DESTINATARIOS_POR_ROL: Record<string, readonly string[]> = {
 }
 
 /**
+ * Difusión a un rol SIN destinatario puntual (y sin unidad si `acotarPorUnidad`),
+ * para no ver la de un par ni una difusión de unidad ajena.
+ */
+function difusionDeRol(
+  rolesDestinatario: readonly string[],
+  acotarPorUnidad: boolean
+): Prisma.NotificacionWhereInput {
+  const AND: Prisma.NotificacionWhereInput[] = [
+    { destinatarioRol: { in: [...rolesDestinatario] } },
+    { OR: [{ destinatarioPersonaId: null }, { destinatarioPersonaId: "" }] },
+  ]
+  if (acotarPorUnidad) AND.push({ unidadId: null })
+  return { AND }
+}
+
+/**
  * Construye el `where` de notificaciones visibles para el scope de sesión.
  * Puro: no toca BD, de modo que la regla se puede fijar con un test unitario.
  * `personaId` es el del usuario de sesión (`Usuario.personaId`), no el del body.
+ *
+ * `unidadesVinculadas` (F5): unidades con vínculo vigente del usuario, resueltas
+ * por el servidor (`unidadesVinculadasDb`, NUNCA del cliente). Solo SEGMENTA el
+ * rol `residente` — minimización y finalidad (asesoría normativa 2026-10-25:
+ * 19.628 art. 9; 21.719 art. 14 b) mandan avisar sólo al destinatario y a la
+ * unidad que corresponde. Sin el parámetro (tests unitarios, o llamadas previas
+ * a F5) la regla queda como estaba. administrador, comité, conserjería y
+ * mantención conservan su visibilidad histórica intacta.
  */
 export function filtroNotificaciones(
   scope: ComunidadScope,
-  personaId: string | null
+  personaId: string | null,
+  unidadesVinculadas?: string[]
 ): Prisma.NotificacionWhereInput {
   const rol = normalizaRol(scope.rol) ?? scope.rol.trim().toLowerCase()
   if (VE_TODA_LA_COMUNIDAD.has(rol)) return { comunidadId: scope.comunidadId }
@@ -61,18 +86,32 @@ export function filtroNotificaciones(
   const rolesDestinatario = DESTINATARIOS_POR_ROL[rol]
   if (!rolesDestinatario) return { comunidadId: scope.comunidadId, id: { in: [] } }
 
+  const acotaPorUnidad = rol === "residente" && unidadesVinculadas !== undefined
+  const difusion: Prisma.NotificacionWhereInput = acotaPorUnidad
+    ? difusionDeRol(rolesDestinatario, true)
+    : difusionDeRol(rolesDestinatario, false)
+
+  // F5 (c): difusión a mi rol CON una unidad de mis vínculos vigentes.
+  const difusionMiUnidad: Prisma.NotificacionWhereInput[] =
+    acotaPorUnidad && unidadesVinculadas.length > 0
+      ? [
+          {
+            AND: [
+              { destinatarioRol: { in: [...rolesDestinatario] } },
+              { OR: [{ destinatarioPersonaId: null }, { destinatarioPersonaId: "" }] },
+              { unidadId: { in: [...unidadesVinculadas] } },
+            ],
+          },
+        ]
+      : []
+
   return {
     comunidadId: scope.comunidadId,
     OR: [
       // Dirigida puntualmente a mi persona (cualquier rol de destinatario).
       ...(personaId ? [{ destinatarioPersonaId: personaId }] : []),
-      // Difusión a mi rol: sin destinatario puntual, para no ver la de un par.
-      {
-        AND: [
-          { destinatarioRol: { in: [...rolesDestinatario] } },
-          { OR: [{ destinatarioPersonaId: null }, { destinatarioPersonaId: "" }] },
-        ],
-      },
+      difusion,
+      ...difusionMiUnidad,
     ],
   }
 }

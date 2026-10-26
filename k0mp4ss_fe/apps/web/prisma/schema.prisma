@@ -375,6 +375,10 @@ model Notificacion {
   comunidad             Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
   destinatarioRol       String
   destinatarioPersonaId String?
+  // F5 (asesoría 2026-10-25, minimización y finalidad): unidad del destinatario
+  // para que un aviso al rol alcance SÓLO a la unidad que corresponde, no a
+  // toda la comunidad con ese rol. null = difusión de rol sin unidad (histórico).
+  unidadId              String?
   asunto                String
   cuerpo                String
   canal                 String   @default("email_simulado")
@@ -386,6 +390,7 @@ model Notificacion {
 
   @@index([comunidadId])
   @@index([destinatarioRol])
+  @@index([unidadId])
   @@map("notificaciones")
 }
 
