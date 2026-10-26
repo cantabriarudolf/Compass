@@ -93,6 +93,8 @@ model Comunidad {
   jornadas                 Jornada[]
   couriers                 Courier[]
   contratistas             Contratista[]
+  // F20 — ocultamiento por comunidad de filas de catálogos nacionales
+  maestrosOcultos          MaestroOculto[]
 }
 
 // Autenticación y Autorización (B3 — AU §4, RP, D3; P5 — AU §3 Auth.js + SG D-v)
@@ -1501,6 +1503,24 @@ model UnidadMedida {
 
   @@index([comunidadId])
   @@map("maestros_unidad_medida")
+}
+
+// F20 (fase 1) — marca de ocultamiento de una fila de catálogo nacional para
+// una comunidad: NO borra ni modifica la fila nacional (que sigue existiendo en
+// su tabla de maestro), solo la saca del listado de esa comunidad. La relación
+// con Comunidad en cascade limpia las marcas al eliminar la comunidad; el
+// nombre físico lo fija @@map("maestros_ocultos").
+model MaestroOculto {
+  id          String    @id @default(cuid())
+  comunidadId String
+  comunidad   Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  tipo        String // tipo kebab-case de la colección (bancos, afps, ...)
+  maestroId   String // id de la fila ocultada (determinista de la semilla)
+  createdAt   DateTime  @default(now())
+
+  @@unique([comunidadId, tipo, maestroId])
+  @@index([comunidadId])
+  @@map("maestros_ocultos")
 }
 
 model ContactoEmergencia {

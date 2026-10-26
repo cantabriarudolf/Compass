@@ -9,9 +9,18 @@
 import { MAESTRO_SCHEMAS } from "@/lib/schemas"
 import { puede } from "@/lib/authz"
 import { prisma } from "@/lib/prisma"
+import {
+  esNacional,
+  esTipoNacional,
+  MENSAJE_NACIONAL_PROTEGIDO,
+} from "@/lib/maestros-nacionales"
 import { createCrudHandlers, type CrudHandlers } from "@/lib/api/crud-factory"
 import type { CrudDelegate } from "@/lib/api/crud-factory"
-import { jsonError, type ComunidadScope } from "@/lib/api/with-comunidad-scope"
+import {
+  jsonError,
+  withComunidadScope,
+  type ComunidadScope,
+} from "@/lib/api/with-comunidad-scope"
 
 interface EntradaMaestro {
   delegate: CrudDelegate
@@ -167,32 +176,96 @@ async function beforeDeleteMaestro(
   return null
 }
 
-/** Handlers CRUD de un tipo resuelto, o null si el tipo es desconocido. */
-export function handlersMaestro(tipo: string): CrudHandlers | null {
+/** Handlers CRUD de un tipo resuelto, o null si el tipo es desconocido.
+ *
+ * F20 (fase 1): `ocultos` permite inyectar los ids ocultados por esta
+ * comunidad en un catálogo nacional. El delegate se envuelve para que el
+ * findMany/count de la factory excluya esas filas del listado y del `total`
+ * sin duplicar la lógica de paginación ni tocar el módulo compartido.
+ */
+export function handlersMaestro(tipo: string, ocultos: readonly string[] = []): CrudHandlers | null {
   const entrada = MODELOS_MAESTRO[tipo]
   if (!entrada) return null
   return createCrudHandlers({
-    model: entrada.delegate,
+    model: envolverOcultos(entrada.delegate, ocultos),
     schema: MAESTRO_SCHEMAS[entrada.schemaKey],
     authzCheck: (rol, accion) => puede(rol, accion, "mp"),
     beforeDelete: (record, scope) => beforeDeleteMaestro(tipo, record, scope),
   })
 }
 
-type CtxTipo = { params: Promise<{ tipo: string }> }
-
-/** GET lista paginada. */
-export async function GET(req: Request, ctx: CtxTipo): Promise<Response> {
-  const { tipo } = await ctx.params
-  const handlers = handlersMaestro(tipo)
-  if (!handlers) return jsonError(400, "Tipo de maestro desconocido.")
-  return handlers.GET(req)
+/**
+ * Envoltura aditiva del delegate: si la comunidad ocultó filas de este
+ * catálogo nacional, findMany/count agregan `id NOT IN (ocultos)` al where
+ * que la factory ya construyó (scoping por comunidad + búsqueda `q`).
+ * Las demás operaciones (upsert/update/delete) pasan intactas: el guard de
+ * nacional vive en las rutas, no acá.
+ */
+function envolverOcultos(
+  modelo: CrudDelegate,
+  ocultos: readonly string[]
+): CrudDelegate {
+  if (ocultos.length === 0) return modelo
+  const excluir = (args?: Record<string, unknown>): Record<string, unknown> => {
+    const where = (args?.where as Record<string, unknown> | undefined) ?? {}
+    return { ...(args ?? {}), where: { ...where, id: { notIn: [...ocultos] } } }
+  }
+  return {
+    ...modelo,
+    findMany: (args) => modelo.findMany(excluir(args)),
+    count: (args) => modelo.count(excluir(args)),
+  }
 }
 
-/** POST upsert idempotente por id. */
+/** Ids de catálogo nacional ocultados por esta comunidad para el tipo dado. */
+async function idsOcultos(tipo: string, comunidadId: string): Promise<string[]> {
+  const filas = await prisma.maestroOculto.findMany({
+    where: { comunidadId, tipo },
+    select: { maestroId: true },
+  })
+  return filas.map((f) => f.maestroId)
+}
+
+type CtxTipo = { params: Promise<{ tipo: string }> }
+
+/** GET lista paginada.
+ *
+ * F20 (fase 1): en los catálogos nacionales se resuelve primero el scope de
+ * comunidad para excluir del listado (y del `total`) las filas que esa
+ * comunidad ocultó; el resto del comportamiento es el de la factory.
+ */
+export async function GET(req: Request, ctx: CtxTipo): Promise<Response> {
+  const { tipo } = await ctx.params
+  if (!MODELOS_MAESTRO[tipo]) return jsonError(400, "Tipo de maestro desconocido.")
+  if (esTipoNacional(tipo)) {
+    const resultado = await withComunidadScope()
+    if (!resultado.ok) return resultado.response
+    const ocultos = await idsOcultos(tipo, resultado.scope.comunidadId)
+    return handlersMaestro(tipo, ocultos)!.GET(req)
+  }
+  return handlersMaestro(tipo)!.GET(req)
+}
+
+/** POST upsert idempotente por id.
+ *
+ * F20 (fase 1): crear sigue permitido — una entrada nueva del administrador no
+ * es nacional y puede editarse y borrarse. Pero el POST es upsert por id, así
+ * que si el id coincide con una fila nacional sería una edición encubierta del
+ * catálogo nacional: se corta con 403, igual que el PUT de la ruta [id].
+ */
 export async function POST(req: Request, ctx: CtxTipo): Promise<Response> {
   const { tipo } = await ctx.params
   const handlers = handlersMaestro(tipo)
   if (!handlers) return jsonError(400, "Tipo de maestro desconocido.")
+  if (esTipoNacional(tipo)) {
+    const cuerpo = await req.clone().json().catch(() => null)
+    const id =
+      typeof cuerpo === "object" && cuerpo !== null
+        ? (cuerpo as { id?: unknown }).id
+        : undefined
+    if (typeof id === "string" && esNacional(tipo, id)) {
+      return jsonError(403, MENSAJE_NACIONAL_PROTEGIDO)
+    }
+  }
   return handlers.POST(req)
 }
