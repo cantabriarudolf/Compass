@@ -21,6 +21,7 @@
     "seed:mocks": "vite-node scripts/seed-db-from-mocks.ts",
     "db:punto-cero": "vite-node --config vitest.config.ts scripts/migrate-punto-cero-a-db.ts",
     "datos:reset": "node --env-file-if-exists=.env scripts/datos-reset.mjs",
+    "datos:anonimizar": "node --env-file-if-exists=.env scripts/anonimizar-bitacora.mjs",
     "cifrar:datos": "node --env-file-if-exists=.env scripts/cifrar-datos-existentes.mjs",
     "backup:db": "node scripts/backup-db.mjs",
     "restore:db": "node scripts/restore-db.mjs",

@@ -8,7 +8,7 @@
  * único camino feliz, sin tocar el disco.
  */
 import { describe, expect, it } from "vitest"
-import { evaluarEntorno, resolverDatabaseUrl } from "../scripts/datos-reset.mjs"
+import { evaluarEntorno, entornoEfectivo, resolverDatabaseUrl } from "../scripts/datos-reset.mjs"
 
 const SQLITE_DEV = "file:./dev.db"
 
@@ -81,5 +81,24 @@ describe("datos:reset — de dónde sale DATABASE_URL", () => {
 
   it("sin variable ni archivo devuelve vacío (y la guarda rechaza)", () => {
     expect(resolverDatabaseUrl({}, [])).toBe("")
+  })
+})
+
+describe("datos:reset — entorno efectivo", () => {
+  it("gana la variable más restrictiva: APP_ENV=production no se deja sombrear por el .env", () => {
+    expect(
+      entornoEfectivo({ NEXT_PUBLIC_APP_ENV: "development", APP_ENV: "production" })
+    ).toBe("production")
+    expect(entornoEfectivo({ NEXT_PUBLIC_APP_ENV: "prod" })).toBe("prod")
+  })
+
+  it("sin ninguna definida devuelve vacío (y el wipe sigue permitido en local)", () => {
+    expect(entornoEfectivo({})).toBe("")
+  })
+
+  it("una variable vacía o con espacios no cuenta como entorno", () => {
+    expect(entornoEfectivo({ NEXT_PUBLIC_APP_ENV: "  ", APP_ENV: "development" })).toBe(
+      "development"
+    )
   })
 })

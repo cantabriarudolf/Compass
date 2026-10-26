@@ -74,6 +74,23 @@ export function resolverDatabaseUrl(entorno = {}, archivosEnv = []) {
 }
 
 /**
+ * Entorno efectivo de la app mirando **las dos** variables.
+ *
+ * El `??` encadenado que usaba `main()` tenía un agujero real: con
+ * `NEXT_PUBLIC_APP_ENV=development` en el `.env` y `APP_ENV=production` en el shell, el primero
+ * ganaba y la guarda de un comando destructivo quedaba abierta. Acá gana el más restrictivo.
+ *
+ * @param {Record<string, string | undefined>} [entorno]
+ */
+export function entornoEfectivo(entorno = {}) {
+  const variables = [entorno.NEXT_PUBLIC_APP_ENV, entorno.APP_ENV]
+    .map((v) => String(v ?? "").trim())
+    .filter(Boolean)
+  const produccion = variables.find((v) => /^prod/i.test(v))
+  return produccion ?? variables[0] ?? ""
+}
+
+/**
  * Decide si el reset puede correr. Devuelve `{ ok, motivo?, dbPath? }`.
  *
  * Tres rechazos, en este orden: entorno efectivo de producción (aunque la base parezca local),
@@ -186,7 +203,7 @@ function main() {
     : resolverDatabaseUrl(process.env, leerEnv())
   const veredicto = evaluarEntorno({
     databaseUrl,
-    appEnv: process.env.NEXT_PUBLIC_APP_ENV ?? process.env.APP_ENV ?? "",
+    appEnv: entornoEfectivo(process.env),
     nodeEnv: process.env.NODE_ENV ?? "",
   })
   if (!veredicto.ok) {
