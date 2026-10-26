@@ -16,8 +16,8 @@ import { cn } from "@workspace/ui/lib/utils"
  * persiste nada.
  *
  * Tono: mismo aviso inline ámbar que `components/pe/aviso-truncamiento.tsx`.
- * El plazo de conservación queda pendiente de decisión (F15), así que se remite
- * a la política de retención de la comunidad sin inventar un número.
+ * El plazo de conservación lo fija la comunidad (F15), así que el aviso se
+ * remite a su política de retención sin inventar un número.
  */
 export function AvisoPrivacidadConserjeria({ className }: { className?: string }) {
   return (
