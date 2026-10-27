@@ -304,6 +304,15 @@ describe("/api/personas (fase 4) — validaciones de negocio con BD real", () =>
         afp: "AFP Modelo",
         prevision: "Fonasa",
         fechaIngreso: "2025-01-01",
+        // F18: sin consentimiento expreso el servidor DESCARTA los campos
+        // previsionales antes de validar las FKs (ese es el contrato: la ficha
+        // se guarda igual y revocar borra). Este caso prueba la regla de FK, así
+        // que declara el consentimiento; sin él `afpId` nunca llega a validarse.
+        consentimientoDatosSensibles: {
+          otorgado: true,
+          fecha: "2025-01-01",
+          version: "v1.0",
+        },
       }
       const mala = await POST(
         personaValida({
