@@ -235,6 +235,8 @@ function main() {
   correr("npx", ["prisma", "generate", `--schema=${SCHEMA}`])
   correr("npm", ["run", "seed:authz"])
   correr("npm", ["run", "seed:mocks", "--", `--comunidad-id=${opciones.comunidadId}`])
+  correr("npm", ["run", "db:punto-cero", "--", `--comunidad-id=${opciones.comunidadId}`])
+  correr("npm", ["run", "db:fondos-fi", "--", `--comunidad-id=${opciones.comunidadId}`])
 
   console.log("\ndatos:reset — listo: base local recreada y sembrada.")
   console.log("  Cuentas TEST: admin@test.cl · comite@test.cl · conserjeria@test.cl ·")

@@ -27,6 +27,7 @@ import {
 import { plantillasComunicacion as seedPlantillasCO } from "@/data/comunidad/plantillas-co"
 import { plantillasCVSeed } from "@/data/comunidad/plantillas-cv"
 import { tiposInfraccionSeed } from "@/data/finanzas/tipos-infraccion"
+import { FONDOS_FI_SEED } from "@/data/finanzas/fondos"
 import {
   AFPS as seedAFPS,
   PREVISIONES_SALUD as seedPrevisionesSalud,
@@ -233,32 +234,6 @@ export interface EventoAuditoria {
   referenciaId: string
   descripcion: string
 }
-
-const FONDOS_FI_SEED: FondoFI[] = [
-  {
-    id: "fondo-gc",
-    nombre: "Fondo de Gasto Común",
-    tipo: "gasto_comun",
-    descripcion: "Caja principal para la operación ordinaria de la comunidad.",
-    activo: true,
-  },
-  {
-    id: "fondo-reserva",
-    nombre: "Fondo de Reserva",
-    tipo: "reserva",
-    descripcion: "Ahorro obligatorio según la Ley de Copropiedad.",
-    porcentajeAporte: 5,
-    activo: true,
-  },
-  {
-    id: "fondo-amenities",
-    nombre: "Fondo de Amenities",
-    tipo: "amenities",
-    descripcion:
-      "Centro de costos de reservas, tarifas y garantías de amenities.",
-    activo: true,
-  },
-]
 
 // P2 — Punto cero histórico 2023-2024 (fixture canónico). Se importa el JSON
 // versionado y se deriva seed + migración: 182 egresos (FE-0001..0182) + 44
