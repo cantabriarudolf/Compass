@@ -173,6 +173,19 @@ export const ExtensionLaboralSchema = z.object({
   cargas: z.number().int().min(0).optional(),
   mutualidadId: IdEntidadSchema.optional(),
   bancoId: IdEntidadSchema.optional(),
+  //
+  // F18 — consentimiento expreso para datos sensibles (salud y previsionales).
+  // La asesoría normativa del 2026-10-26 concluyó que estos datos exigen
+  // consentimiento expreso del trabajador. Es **opcional**: las fichas creadas
+  // antes de este campo siguen siendo válidas, y sin consentimiento la ficha se
+  // guarda igual (el servidor simplemente no persiste los campos sensibles).
+  consentimientoDatosSensibles: z
+    .object({
+      otorgado: z.boolean(),
+      fecha: FechaISOSchema,
+      version: z.string().min(1),
+    })
+    .optional(),
   numeroCuenta: z.string().optional(),
   tipoCuenta: z.enum(["corriente", "vista", "ahorro"]).optional(),
   seguroComplementario: z.string().optional(),

@@ -146,6 +146,37 @@ export async function validarYLimpiarPersona(
 
   // PE: FKs de la ficha laboral contra los maestros legales de MA (RG escritura).
   const dl = datos.datosLaborales as Record<string, unknown> | undefined | null
+
+  // F18 — datos sensibles sólo con consentimiento expreso vigente.
+  //
+  // La asesoría normativa del 2026-10-26: los datos previsionales y de salud del
+  // trabajador son sensibles y exigen consentimiento expreso. El consentimiento
+  // es OPCIONAL —sin él la ficha se guarda igual— pero cuando falta (o quedó
+  // revocado) el servidor DESCARTA estos campos en vez de rechazar la escritura:
+  // así el formulario nunca obliga a declararlos y revocar borra de verdad.
+  if (dl && typeof dl === "object") {
+    const consentimiento = (dl as Record<string, unknown>).consentimientoDatosSensibles as
+      | { otorgado?: unknown }
+      | undefined
+    if (consentimiento?.otorgado !== true) {
+      for (const campo of [
+        "afpId",
+        "saludId",
+        "asignacionFamiliarId",
+        "mutualidadId",
+        "bancoId",
+        "numeroCuenta",
+        "tipoCuenta",
+        "seguroComplementario",
+        "apv",
+        "fichaMedica",
+        "cargas",
+      ]) {
+        delete (dl as Record<string, unknown>)[campo]
+      }
+    }
+  }
+
   if (dl && typeof dl === "object") {
     const fks: [string, DelegateBusqueda][] = [
       ["afpId", prisma.afp],
