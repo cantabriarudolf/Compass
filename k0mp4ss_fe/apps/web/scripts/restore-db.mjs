@@ -12,6 +12,11 @@
  *   npm run restore:db -- db-20260827T163000      (dir específico)
  *   npm run restore:db -- latest                  (backup más reciente)
  *   npm run restore:db -- latest --yes
+ *
+ * `DATABASE_URL` del shell gana sobre `.env` (misma convención que
+ * `e2e-fresh.mjs`). `--dir <ruta>` cambia el directorio de origen de los
+ * backups (sin flag: `Data/NSGC/backups/`; el snapshot pre-restore se
+ * guarda en el mismo lugar).
  */
 import { copyFileSync, existsSync, readFileSync, readdirSync, rmSync } from "node:fs"
 import path from "node:path"
@@ -30,6 +35,14 @@ function findRepoRoot() {
 }
 
 function resolveDbPath() {
+  // El shell env gana sobre .env (misma convención que e2e-fresh.mjs).
+  const fromShell = process.env.DATABASE_URL?.trim()
+  if (fromShell) {
+    if (!fromShell.startsWith("file:")) {
+      throw new Error(`DATABASE_URL no-SQLite no soportado por restore:db: ${fromShell}`)
+    }
+    return path.resolve(WEB_ROOT, "prisma", fromShell.slice("file:".length))
+  }
   for (const envFile of [path.join(WEB_ROOT, ".env"), path.join(WEB_ROOT, ".env.local")]) {
     if (!existsSync(envFile)) continue
     const match = readFileSync(envFile, "utf8").match(/^DATABASE_URL=(.+)$/m)
@@ -58,7 +71,7 @@ function elegirBackup(backupsDir, arg) {
   const dirs = readdirSync(backupsDir)
     .filter((d) => d.startsWith("db-") && existsSync(path.join(backupsDir, d, "manifest.json")))
     .sort()
-  if (dirs.length === 0) throw new Error("No hay backups de BD en Data/NSGC/backups/ (corre npm run backup:db primero)")
+  if (dirs.length === 0) throw new Error(`No hay backups de BD en ${backupsDir} (corre npm run backup:db primero)`)
   if (!arg || arg === "latest") {
     console.log(`restore:db → backup más reciente: ${dirs[dirs.length - 1]}`)
     return path.join(backupsDir, dirs[dirs.length - 1])
@@ -76,7 +89,11 @@ async function main() {
   }
 
   const repoRoot = findRepoRoot()
-  const backupsDir = path.join(repoRoot, "Data", "NSGC", "backups")
+  // Origen de backups configurable (--dir <ruta> o --dir=<ruta>): el drill
+  // de restauración lee desde su tmpdir y snapshot-pre-restore ahí queda.
+  const iDir = process.argv.indexOf("--dir")
+  const rawDir = iDir !== -1 ? process.argv[iDir + 1] : process.argv.find((a) => a.startsWith("--dir="))?.slice(6)
+  const backupsDir = rawDir ? path.resolve(rawDir) : path.join(repoRoot, "Data", "NSGC", "backups")
   const arg = process.argv.find((a) => a.startsWith("db-") || a === "latest")
   const backupDir = elegirBackup(backupsDir, arg)
 
@@ -104,7 +121,8 @@ async function main() {
 
   // 1. Snapshot pre-restore del estado actual (mismo pipeline que backup:db)
   const { spawnSync } = await import("node:child_process")
-  const pre = spawnSync(process.execPath, [path.join(WEB_ROOT, "scripts", "backup-db.mjs"), "--label=pre-restore"], { stdio: "inherit" })
+  const preArgs = [path.join(WEB_ROOT, "scripts", "backup-db.mjs"), "--label=pre-restore", "--dir", backupsDir]
+  const pre = spawnSync(process.execPath, preArgs, { stdio: "inherit" })
   if (pre.status !== 0) throw new Error("Snapshot pre-restore falló — no se toca la BD actual")
 
   // 2. Copia el archivo de vuelta y elimina sidecars WAL/SHM obsoletos

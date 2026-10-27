@@ -5,7 +5,10 @@
  *   db-<ts>/sqlite/dev.db            copia consistente del archivo (WAL flusheada)
  *   db-<ts>/tables/<Model>.json      export JSON por tabla (findMany vía Prisma)
  *   db-<ts>/manifest.json            meta + conteos + sha256 del archivo
- * Uso: npm run backup:db [-- --label=pre-restore]
+ * Uso: npm run backup:db [-- --label=pre-restore] [-- --dir <ruta>]
+ *
+ * `DATABASE_URL` del shell gana sobre `.env` (misma convención que `e2e-fresh.mjs`);
+ * `--dir <ruta>` cambia el directorio destino (sin flag: `Data/NSGC/backups/`).
  */
 import { createHash } from "node:crypto"
 import { copyFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs"
@@ -25,7 +28,17 @@ function findRepoRoot() {
 }
 
 function resolveDbPath() {
-  // DATABASE_URL estilo Prisma: file:./dev.db relativo a prisma/
+  // DATABASE_URL estilo Prisma: file:./dev.db relativo a prisma/.
+  // El shell env gana sobre .env (Next y dotenv sólo setean variables
+  // ausentes de process.env): así CI exporta la BD descartable sin
+  // ensuciar el flujo manual, que sigue cayendo al .env local.
+  const fromShell = process.env.DATABASE_URL?.trim()
+  if (fromShell) {
+    if (!fromShell.startsWith("file:")) {
+      throw new Error(`DATABASE_URL no-SQLite no soportado por backup:db: ${fromShell}`)
+    }
+    return path.resolve(WEB_ROOT, "prisma", fromShell.slice("file:".length))
+  }
   for (const envFile of [path.join(WEB_ROOT, ".env"), path.join(WEB_ROOT, ".env.local")]) {
     if (!existsSync(envFile)) continue
     const match = readFileSync(envFile, "utf8").match(/^DATABASE_URL=(.+)$/m)
@@ -57,6 +70,15 @@ function timestamp() {
   return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}T${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`
 }
 
+function destinoBackups(repoRoot) {
+  // Sin flag: el comportamiento histórico (Data/NSGC/backups/). Con --dir
+  // <ruta> (o --dir=<ruta>): el respaldo va a otro lado, p. ej. el drill de
+  // restauración escribe en su tmpdir y no toca el repo.
+  const i = process.argv.indexOf("--dir")
+  const raw = i !== -1 ? process.argv[i + 1] : process.argv.find((a) => a.startsWith("--dir="))?.slice(6)
+  return raw ? path.resolve(raw) : path.join(repoRoot, "Data", "NSGC", "backups")
+}
+
 async function main() {
   const labelArg = process.argv.find((a) => a.startsWith("--label="))
   const label = labelArg ? labelArg.split("=")[1] : null
@@ -67,7 +89,7 @@ async function main() {
   const dbPath = resolveDbPath()
   if (!existsSync(dbPath)) throw new Error(`BD no existe: ${dbPath}`)
 
-  const outDir = path.join(repoRoot, "Data", "NSGC", "backups", dirName)
+  const outDir = path.join(destinoBackups(repoRoot), dirName)
   const sqliteDir = path.join(outDir, "sqlite")
   const tablesDir = path.join(outDir, "tables")
   mkdirSync(sqliteDir, { recursive: true })
@@ -113,7 +135,7 @@ async function main() {
   writeFileSync(path.join(outDir, "manifest.json"), JSON.stringify(manifest, null, 2))
   await prisma.$disconnect()
 
-  console.log(`backup:db OK → Data/NSGC/backups/${dirName}`)
+  console.log(`backup:db OK → ${outDir}`)
   console.log(`  tablas: ${manifest.tables} · filas: ${manifest.totalRows} · sha256: ${manifest.sha256.slice(0, 16)}…`)
 }
 

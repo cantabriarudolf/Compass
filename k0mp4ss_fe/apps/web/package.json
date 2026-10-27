@@ -26,6 +26,8 @@
     "cifrar:datos": "node --env-file-if-exists=.env scripts/cifrar-datos-existentes.mjs",
     "backup:db": "node scripts/backup-db.mjs",
     "restore:db": "node scripts/restore-db.mjs",
+    "db:drill": "node scripts/drill-restore.mjs",
+    "smoke:produccion": "node scripts/smoke-produccion.mjs",
     "audit:desvios": "node scripts/audit-desvios.mjs",
     "audit:store": "node scripts/audit-store.mjs",
     "check:headers": "node scripts/check-headers.mjs",
