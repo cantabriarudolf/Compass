@@ -44,6 +44,14 @@ test.describe("CRUD — Personas/Personal", () => {
     await expect(inputFecha).toBeVisible({ timeout: 10_000 })
     await inputFecha.fill(fechaIngreso)
 
+    // F18: sin consentimiento expreso el servidor descarta los datos
+    // previsionales y bancarios, y en la UI esos campos quedan deshabilitados —
+    // por eso las FKs de más abajo no se podían elegir. Este caso prueba la
+    // ficha integral completa, así que declara el consentimiento primero.
+    const consentimiento = dialog.locator("#f-consentimiento-sensible")
+    await consentimiento.click({ force: true })
+    await expect(consentimiento).toHaveAttribute("data-state", "checked", { timeout: 10_000 })
+
     // Helpers para selects con FKs obligatorias (AFPs seed)
     // El snapshot muestra que cada campo es <div><Label>X</Label><Select><Trigger combobox>… :contentReference[oaicite:0]{index=0}
     // getByLabel no aplica a Selects → localizar vía Label vecino + combobox hermano
