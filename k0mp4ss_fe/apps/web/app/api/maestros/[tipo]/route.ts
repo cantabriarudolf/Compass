@@ -18,6 +18,7 @@ import { prisma } from "@/lib/prisma"
 import {
   esNacional,
   esTipoNacional,
+  idsNacionales,
   MENSAJE_NACIONAL_PROTEGIDO,
 } from "@/lib/maestros-nacionales"
 import { createCrudHandlers, type CrudHandlers } from "@/lib/api/crud-factory"
@@ -184,16 +185,20 @@ async function beforeDeleteMaestro(
 
 /** Handlers CRUD de un tipo resuelto, o null si el tipo es desconocido.
  *
- * F20 (fase 1): `ocultos` permite inyectar los ids ocultados por esta
- * comunidad en un catálogo nacional. El delegate se envuelve para que el
- * findMany/count de la factory excluya esas filas del listado y del `total`
- * sin duplicar la lógica de paginación ni tocar el módulo compartido.
+ * F20: `ocultos` inyecta los ids ocultados por esta comunidad en un catálogo
+ * nacional y `comunidadIdLectora` activa la lectura global del catálogo del
+ * país (fase 2). El delegate se envuelve para componer ambos filtros en el
+ * findMany/count de la factory, sin duplicar su paginación ni su where.
  */
-export function handlersMaestro(tipo: string, ocultos: readonly string[] = []): CrudHandlers | null {
+export function handlersMaestro(
+  tipo: string,
+  ocultos: readonly string[] = [],
+  comunidadIdLectora?: string
+): CrudHandlers | null {
   const entrada = MODELOS_MAESTRO[tipo]
   if (!entrada) return null
   return createCrudHandlers({
-    model: envolverOcultos(entrada.delegate, ocultos),
+    model: envolverCatalogo(entrada.delegate, tipo, ocultos, comunidadIdLectora),
     schema: MAESTRO_SCHEMAS[entrada.schemaKey],
     authzCheck: (rol, accion) => puede(rol, accion, "mp"),
     beforeDelete: (record, scope) => beforeDeleteMaestro(tipo, record, scope),
@@ -201,20 +206,67 @@ export function handlersMaestro(tipo: string, ocultos: readonly string[] = []): 
 }
 
 /**
- * Envoltura aditiva del delegate: si la comunidad ocultó filas de este
- * catálogo nacional, findMany/count agregan `id NOT IN (ocultos)` al where
- * que la factory ya construyó (scoping por comunidad + búsqueda `q`).
- * Las demás operaciones (upsert/update/delete) pasan intactas: el guard de
- * nacional vive en las rutas, no acá.
+ * Envoltura del delegate para el FIND de la factory (findMany/count).
+ *
+ * F20 (fase 2, catálogo global): los catálogos nacionales se comparten por id
+ * entre todas las comunidades, porque la clave primaria del maestro es sólo
+ * `id` (el esquema ya lo hacía así; no hubo migración). El `where` que sale de
+ * la factory diría sólo `comunidadId = la mía`, así que una comunidad que
+ * no sembró los catálogos los vería vacíos. La lectura global REPLANTICA el
+ * scoping de la factory por el filtro que ya lo contiene:
+ *
+ *   where=
+ *     AND:
+ *       - OR:
+ *           - { comunidadId: la mía }            (mis filas, incluidas las propias)
+ *           - { id: { in: ids de la semilla } }  (catálogo del país, global)
+ *       - <el resto del where de la factory (búsqueda `q=`), sin el
+ *         `comunidadId` que acá ya está en el primer OR>
+ *       - { id: { notIn: ocultos } }             (sólo cuando hay ocultados)
+ *
+ * El `comunidadId` de la factory NO se conserva en este caso: ya está dentro
+ * del primer OR (merece un filtro propio, no una intersección AND —inclunda
+ * mataría las filas del país sembradas por otra comunidad—). Con `?q=` el
+ * `OR` de la búsqueda (los maestros no lo usan hoy) llega como campo aparte
+ * del where y se respeta tal cual.
+ *
+ * Las demás operaciones (upsert/update/delete/findUnique) pasan intactas: el
+ * guard de nacional vive en las rutas, no acá.
  */
-function envolverOcultos(
+function envolverCatalogo(
   modelo: CrudDelegate,
-  ocultos: readonly string[]
+  tipo: string,
+  ocultos: readonly string[],
+  comunidadIdLectora?: string
 ): CrudDelegate {
-  if (ocultos.length === 0) return modelo
+  // Catálogo global sólo en un tipo nacional y cuando se conoce la comunidad
+  // lectora (el GET; las rutas [id] llaman sin ese dato y no lo necesitan).
+  const nacionales =
+    comunidadIdLectora !== undefined ? idsNacionales(tipo) : []
+  if (nacionales.length === 0 && ocultos.length === 0) return modelo
+  const filtrosFijos: Record<string, unknown>[] = []
+  if (nacionales.length > 0 && comunidadIdLectora) {
+    filtrosFijos.push({
+      OR: [{ comunidadId: comunidadIdLectora }, { id: { in: [...nacionales] } }],
+    })
+  }
+  if (ocultos.length > 0) {
+    filtrosFijos.push({ id: { notIn: [...ocultos] } })
+  }
+  if (filtrosFijos.length === 0) return modelo
+  const reasignarScoping = filtrosFijos.length === 1 && "OR" in filtrosFijos[0]!
+  // SAFETY: where del listado de maestros es un objeto plano Prisma
+  // (campos escalares u OR de búsqueda); el shape no se valida acá porque la
+  // factory lo construye inmediatamente antes de llamar al delegate.
   const excluir = (args?: Record<string, unknown>): Record<string, unknown> => {
-    const where = (args?.where as Record<string, unknown> | undefined) ?? {}
-    return { ...(args ?? {}), where: { ...where, id: { notIn: [...ocultos] } } }
+    const where = { ...((args?.where as Record<string, unknown> | undefined) ?? {}) }
+    if (reasignarScoping) delete where.comunidadId
+    const and: Record<string, unknown>[] = [...filtrosFijos]
+    if (Object.keys(where).length > 0) and.push(where)
+    return {
+      ...(args ?? {}),
+      where: and.length === 1 ? and[0] : { AND: and },
+    }
   }
   return {
     ...modelo,
@@ -240,10 +292,11 @@ type CtxTipo = { params: Promise<{ tipo: string }> }
  * comunidad para excluir del listado (y del `total`) las filas que esa
  * comunidad ocultó; el resto del comportamiento es el de la factory.
  *
- * F20 (fase 1b): con `?incluirOcultos=1` el delegate va SIN envoltura (las
- * ocultas entran al listado y al `total`) y cada fila suma `oculto`, booleano
- * según la tabla de ocultamiento de esta comunidad. La anotación se hace sobre
- * la respuesta de la factory para no duplicar su paginación ni su where.
+ * F20 (fase 1b): con `?incluirOcultos=1` el delegate va con la envoltura de
+ * lectura global pero SIN `ocultos` (así las ocultas entran al listado y al
+ * `total`), y cada fila suma `oculto`, booleano según la tabla de
+ * ocultamiento de esta comunidad. La anotación se hace sobre la respuesta de
+ * la factory para no duplicar su paginación ni su where.
  */
 export async function GET(req: Request, ctx: CtxTipo): Promise<Response> {
   const { tipo } = await ctx.params
@@ -262,8 +315,8 @@ export async function GET(req: Request, ctx: CtxTipo): Promise<Response> {
   }
   const ocultos = await idsOcultos(tipo, resultado.scope.comunidadId)
   const handlers = incluirOcultos
-    ? handlersMaestro(tipo)
-    : handlersMaestro(tipo, ocultos)
+    ? handlersMaestro(tipo, [], resultado.scope.comunidadId)
+    : handlersMaestro(tipo, ocultos, resultado.scope.comunidadId)
   const respuesta = await handlers!.GET(req)
   if (!incluirOcultos || !respuesta.ok) return respuesta
   const cuerpo = (await respuesta.json()) as {

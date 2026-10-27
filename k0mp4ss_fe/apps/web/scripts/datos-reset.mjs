@@ -4,7 +4,7 @@
  *
  * Por qué existe: los datos cargados hoy son de PRUEBA (decisión del owner: se usan hasta cargar la
  * información real) y no hay forma corta de volver al punto de partida. La receta se hacía a mano
- * —borrar el archivo, migrar, generar el client y correr los dos seeds— y el orden importa: si el
+ * —borrar el archivo, migrar, generar el client y correr los seeds— y el orden importa: si el
  * último `prisma generate` de la máquina fue el del schema PostgreSQL (job `unit-pg`), el seed
  * corre con el client equivocado y muere contra SQLite (misma trampa que ya documenta
  * `e2e-fresh.mjs`).
@@ -235,6 +235,9 @@ function main() {
   correr("npx", ["prisma", "generate", `--schema=${SCHEMA}`])
   correr("npm", ["run", "seed:authz"])
   correr("npm", ["run", "seed:mocks", "--", `--comunidad-id=${opciones.comunidadId}`])
+  // Los catálogos nacionales corren para TODAS las comunidades: su semilla es
+  // global y el reset garantee que ninguna base quede desincronizada (F20).
+  correr("npm", ["run", "db:catalogo-nacional"])
   correr("npm", ["run", "db:punto-cero", "--", `--comunidad-id=${opciones.comunidadId}`])
   correr("npm", ["run", "db:fondos-fi", "--", `--comunidad-id=${opciones.comunidadId}`])
 

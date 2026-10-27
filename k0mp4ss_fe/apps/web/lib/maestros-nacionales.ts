@@ -70,6 +70,16 @@ export function esTipoNacional(tipo: string): tipo is TipoNacional {
 }
 
 /**
+ * Los ids de la semilla para un tipo de catálogo nacional ([] en un tipo que
+ * no lo es). El padre del catálogo es el `id`: el país es uno solo igual para
+ * todas las comunidades (ver cómo lo compone `app/api/maestros/[tipo]/route.ts`).
+ */
+export function idsNacionales(tipo: string): readonly string[] {
+  if (!esTipoNacional(tipo)) return []
+  return IDS_NACIONALES[tipo]
+}
+
+/**
  * ¿La fila (tipo, id) pertenece al catálogo nacional de la semilla?
  * Falso para tipos no nacionales y para cualquier id que la semilla no siembre:
  * una entrada creada por el administrador nunca es nacional (los ids de la
