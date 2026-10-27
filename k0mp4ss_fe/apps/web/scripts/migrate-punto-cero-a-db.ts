@@ -13,12 +13,7 @@
  * primera Comunidad de la BD (orden de creación). Sin comunidad → aborta.
  */
 /* global process */
-import { config } from "dotenv"
-import path from "node:path"
-import { fileURLToPath } from "node:url"
-
-const scriptDir = path.dirname(fileURLToPath(import.meta.url))
-config({ path: path.join(scriptDir, "..", ".env") })
+import { cargarUrlBase } from "../lib/database-url"
 
 import { PrismaClient } from "@prisma/client"
 import { mapearPuntoCero } from "../lib/fi/punto-cero-migracion"
@@ -36,7 +31,7 @@ function resolverComunidadId(): string | null {
 
 async function main(): Promise<void> {
   const prisma = new PrismaClient({
-    datasourceUrl: process.env.DATABASE_URL,
+    datasourceUrl: cargarUrlBase(),
   })
   try {
     let comunidadId = resolverComunidadId()

@@ -147,7 +147,7 @@ aclaración documental, 0 errores de cálculo.
 - Coverage extendido: 8 archivos (store.ts, date-utils.ts, id-utils.ts, env-guard.ts, logger.ts, authz.ts, schemas.ts, api routes)
 
 **Post-serie (requiere decisión del owner):**
-- [ ] **Migración SQLite → PostgreSQL** — Elige proveedor: Vercel Postgres, Supabase, Neon, AWS RDS
+- [ ] **Migración SQLite → PostgreSQL** — Proveedor **elegido: Neon**; el esquema quedó alineado el 2026-10-27 (`prisma db push --accept-data-loss`, verificado con `migrate diff` → migración vacía) y los seeds de datos ya resuelven la URL contra el proveedor del cliente generado (`lib/database-url.ts`). **Falta**: (a) `prisma migrate deploy` sigue sin servir para Postgres —`migration_lock.toml` está lockeado en `sqlite`, error P3019—, así que hoy el esquema de Neon se sincroniza a mano con `db push`: hay que decidir entre un baseline de migraciones Postgres o correr `db push` en el deploy; (b) los secrets de Vercel (`VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`) y el `DATABASE_URL` de Neon **en Vercel** para que el job `deploy` deje de omitirse
 - [ ] **Cifrado de datos sensibles en reposo** — Estrategia: AES-256 por campo vs TDE de BD
 - [ ] **2FA/MFA** — Elige método: TOTP app (Google Authenticator), SMS, email
 - [ ] **Sentry** — Crea cuenta en https://sentry.io e integra DSN

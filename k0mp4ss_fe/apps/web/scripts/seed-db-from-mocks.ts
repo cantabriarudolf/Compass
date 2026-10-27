@@ -29,12 +29,7 @@
  * por defecto). Este script no lo toca para no duplicar lógica.
  */
 /* global process */
-import { config } from "dotenv"
-import path from "node:path"
-import { fileURLToPath } from "node:url"
-
-const scriptDir = path.dirname(fileURLToPath(import.meta.url))
-config({ path: path.join(scriptDir, "..", ".env") })
+import { cargarUrlBase } from "../lib/database-url"
 
 import { PrismaClient, Prisma } from "@prisma/client"
 import { personas } from "../data/comunidad/personas"
@@ -108,7 +103,7 @@ async function sembrarFila<T extends FilaMock>(
 
 async function main(): Promise<void> {
   const prisma = new PrismaClient({
-    datasourceUrl: process.env.DATABASE_URL,
+    datasourceUrl: cargarUrlBase(),
   })
   try {
     // --- Comunidad destino ---

@@ -32,12 +32,7 @@
  * la base, sale con aviso y exit 0: no es un error que un local esté vacío.
  */
 /* global process */
-import { config } from "dotenv"
-import path from "node:path"
-import { fileURLToPath } from "node:url"
-
-const scriptDir = path.dirname(fileURLToPath(import.meta.url))
-config({ path: path.join(scriptDir, "..", ".env") })
+import { cargarUrlBase } from "../lib/database-url"
 
 import { PrismaClient } from "@prisma/client"
 import {
@@ -118,7 +113,7 @@ export async function asegurarCatalogoNacional(
 
 async function main(): Promise<void> {
   const prisma = new PrismaClient({
-    datasourceUrl: process.env.DATABASE_URL,
+    datasourceUrl: cargarUrlBase(),
   })
   try {
     const comunidadId = resolverComunidadId()
