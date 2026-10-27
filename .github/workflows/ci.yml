@@ -8,6 +8,7 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 # Token mínimo: el workflow solo lee el repo (checkout) y sube artifacts.
 permissions:
@@ -228,11 +229,45 @@ jobs:
             k0mp4ss_fe/apps/web/test-results/
           retention-days: 14
 
+  esquema:
+    name: Esquema de la base (Neon)
+    runs-on: ubuntu-latest
+    # Sólo en push a main (los PR no tocan la base real). Sin --accept-data-loss:
+    # una deriva destructiva falla acá en vez de aplicarse sola. `migrate deploy`
+    # no sirve mientras los dos schemas compartan `prisma/migrations` (P3019).
+    if: github.event_name == 'push'
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+      - run: npm ci
+        working-directory: k0mp4ss_fe
+      - name: Chequear secret DATABASE_URL
+        id: db_secret
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          if [ -n "$DATABASE_URL" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::warning title=Esquema sin sincronizar::Falta el secret DATABASE_URL (Neon). Cargalo en Settings -> Secrets."
+          fi
+      - name: Sincronizar el esquema
+        if: steps.db_secret.outputs.present == 'true'
+        working-directory: k0mp4ss_fe/apps/web
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: npx prisma db push --skip-generate
+
   deploy:
     name: Deploy a Vercel (producción)
     runs-on: ubuntu-latest
     needs: [unit, e2e]
-    if: github.ref == 'refs/heads/main'
+    # Manual a propósito: en la etapa demo producción la publica Vercel Git.
+    if: github.event_name == 'workflow_dispatch'
     timeout-minutes: 10
     defaults:
       run:
@@ -269,30 +304,8 @@ jobs:
           fi
       - run: npm i -g vercel@59.16.0
         if: steps.vercel_secrets.outputs.present == 'true'
-      # El secret DATABASE_URL es opcional por separado: sin él el deploy sigue
-      # (la base ya existe) pero el esquema no se sincroniza, y eso se avisa.
-      - name: Chequear secret DATABASE_URL
-        id: db_secret
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-        run: |
-          if [ -n "$DATABASE_URL" ]; then
-            echo "present=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "present=false" >> "$GITHUB_OUTPUT"
-            echo "::warning title=Esquema sin sincronizar::Falta el secret DATABASE_URL (Neon). Cargalo en Settings -> Secrets para que el deploy alinee el esquema antes de publicar."
-          fi
-      # Esquema productivo: `prisma migrate deploy` no sirve acá porque los dos
-      # schemas (postgres y sqlite) viven en `prisma/` y comparten
-      # `prisma/migrations`, lockeado a sqlite (error P3019). El camino es
-      # `db push` SIN --accept-data-loss: una deriva destructiva detiene el
-      # deploy en vez de aplicarse sola. Ver openspec/BACKLOG-100.md.
-      - name: Sincronizar el esquema de la base
-        if: steps.vercel_secrets.outputs.present == 'true' && steps.db_secret.outputs.present == 'true'
-        working-directory: k0mp4ss_fe/apps/web
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-        run: npx prisma db push --skip-generate
+      # El esquema lo sincroniza el job `esquema` en cada push a main
+      # (este deploy quedó manual: en la etapa demo publica Vercel Git).
       - run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
         if: steps.vercel_secrets.outputs.present == 'true'
         working-directory: k0mp4ss_fe/apps/web
