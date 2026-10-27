@@ -269,6 +269,30 @@ jobs:
           fi
       - run: npm i -g vercel@59.16.0
         if: steps.vercel_secrets.outputs.present == 'true'
+      # El secret DATABASE_URL es opcional por separado: sin él el deploy sigue
+      # (la base ya existe) pero el esquema no se sincroniza, y eso se avisa.
+      - name: Chequear secret DATABASE_URL
+        id: db_secret
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          if [ -n "$DATABASE_URL" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::warning title=Esquema sin sincronizar::Falta el secret DATABASE_URL (Neon). Cargalo en Settings -> Secrets para que el deploy alinee el esquema antes de publicar."
+          fi
+      # Esquema productivo: `prisma migrate deploy` no sirve acá porque los dos
+      # schemas (postgres y sqlite) viven en `prisma/` y comparten
+      # `prisma/migrations`, lockeado a sqlite (error P3019). El camino es
+      # `db push` SIN --accept-data-loss: una deriva destructiva detiene el
+      # deploy en vez de aplicarse sola. Ver openspec/BACKLOG-100.md.
+      - name: Sincronizar el esquema de la base
+        if: steps.vercel_secrets.outputs.present == 'true' && steps.db_secret.outputs.present == 'true'
+        working-directory: k0mp4ss_fe/apps/web
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: npx prisma db push --skip-generate
       - run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
         if: steps.vercel_secrets.outputs.present == 'true'
         working-directory: k0mp4ss_fe/apps/web
