@@ -20,6 +20,8 @@
       PrevisionSalud,
     } from "@/lib/schemas"
 import { aTituloCaso, aOracion } from "@/lib/normalizacion"
+import { VERSION_POLITICA_PRIVACIDAD } from "@/lib/politica-privacidad"
+import { ConsentimientoDatosSensibles } from "@/components/personas/consentimiento-datos-sensibles"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
@@ -134,7 +136,7 @@ function fichaDesdePersona(p: Persona): FormFicha {
   }
 }
 
-function personaDesdeFicha(p: Persona, form: FormFicha): Persona {
+function personaDesdeFicha(p: Persona, form: FormFicha, consentimiento: boolean): Persona {
   const previa = p.datosLaborales
   return {
     ...p,
@@ -154,6 +156,15 @@ function personaDesdeFicha(p: Persona, form: FormFicha): Persona {
       ...(form.numeroCuenta.trim() ? { numeroCuenta: form.numeroCuenta.trim() } : {}),
       ...(form.tipoCuenta ? { tipoCuenta: form.tipoCuenta as "corriente" | "vista" | "ahorro" } : {}),
       ...(form.seguroComplementario.trim() ? { seguroComplementario: aTituloCaso(form.seguroComplementario) } : {}),
+      // F18: el consentimiento viaja siempre (otorgado true o false) para que
+      // el servidor persista los datos sensibles sólo en el primer caso y
+      // borre al revocar. La fecha se toma al guardar; la versión es la de la
+      // política de privacidad vigente.
+      consentimientoDatosSensibles: {
+        otorgado: consentimiento,
+        fecha: new Date().toISOString().slice(0, 10),
+        version: VERSION_POLITICA_PRIVACIDAD,
+      },
       apv: form.apv,
       ...((form.medicamentos || form.alergias || form.condiciones)
         ? { fichaMedica: { medicamentos: aOracion(form.medicamentos) || undefined, alergias: aOracion(form.alergias) || undefined, condiciones: aOracion(form.condiciones) || undefined } }
@@ -207,6 +218,11 @@ export default function PersonalPage() {
   const [okMsg, setOkMsg] = React.useState<string | null>(null)
   const [editandoId, setEditandoId] = React.useState<string | null>(null)
   const [form, setForm] = React.useState<FormFicha>(FICHA_VACIA)
+  // F18: consentimiento de datos sensibles de la ficha en edición. La página
+  // es dueña del estado (el payload del guardado y el disabled de los campos
+  // dependen de él); el bloque de UI sólo lo muestra y lo reporta.
+  const [consentimiento, setConsentimiento] = React.useState(false)
+  const [consentimientoInicial, setConsentimientoInicial] = React.useState(false)
   const [horaExtra, setHoraExtra] = React.useState({ fecha: "", horas: "", motivo: "" })
   const [evaluacion, setEvaluacion] = React.useState({ fecha: "", puntaje: "", comentarios: "" })
   const [formFeriado, setFormFeriado] = React.useState<{ id?: string; fecha: string; nombre: string; irrenunciable: boolean } | null>(null)
@@ -225,8 +241,37 @@ export default function PersonalPage() {
   const abrirFicha = (p: Persona) => {
     setEditandoId(p.id)
     setForm(p.datosLaborales ? fichaDesdePersona(p) : { ...FICHA_VACIA, cargo: "", fechaIngreso: hoy })
+    // La ficha cargada puede venir con consentimiento ya otorgado: el check
+    // arranca tildado y destildarlo es revocar (el servidor borra al guardar).
+    const otorgadoPreviamente = p.datosLaborales?.consentimientoDatosSensibles?.otorgado === true
+    setConsentimiento(otorgadoPreviamente)
+    setConsentimientoInicial(otorgadoPreviamente)
     setError(null)
     setOkMsg(null)
+  }
+
+  // F18: al revocar (destildar) los campos sensibles se vacían en el formulario,
+  // de modo que el guardado los mande ausentes y el servidor los limpie.
+  const cambiarConsentimiento = (otorgado: boolean) => {
+    setConsentimiento(otorgado)
+    if (!otorgado) {
+      setForm(f => ({
+        ...f,
+        afpId: "",
+        saludId: "",
+        asignacionFamiliarId: "",
+        cargas: "",
+        mutualidadId: "",
+        bancoId: "",
+        numeroCuenta: "",
+        tipoCuenta: "",
+        seguroComplementario: "",
+        apv: false,
+        medicamentos: "",
+        alergias: "",
+        condiciones: "",
+      }))
+    }
   }
 
   const guardarFicha = async () => {
@@ -239,13 +284,16 @@ export default function PersonalPage() {
       setError("La fecha de ingreso es obligatoria.")
       return
     }
-    if (!form.afpId || !form.saludId || !form.bancoId) {
+    // Sin consentimiento los campos sensibles están deshabilitados y vacíos:
+    // el servidor los descarta igual, así que no se exigen acá. Con
+    // consentimiento otorgado siguen siendo obligatorios (liquidaciones).
+    if (consentimiento && (!form.afpId || !form.saludId || !form.bancoId)) {
       setError("Seleccione AFP, previsión de salud y banco de los maestros legales.")
       return
     }
     // SAFETY: la ficha reenvía la fila Prisma (nulls en opcionales); los
     // schemas usan .optional() (null NO válido) → se podan (ver sinNulos).
-    const r = await crearPersonaApi(sinNulos(personaDesdeFicha(editando, form) as unknown as Record<string, unknown>) as unknown as Parameters<typeof crearPersonaApi>[0])
+    const r = await crearPersonaApi(sinNulos(personaDesdeFicha(editando, form, consentimiento) as unknown as Record<string, unknown>) as unknown as Parameters<typeof crearPersonaApi>[0])
     if (!r.ok) {
       setError(r.error ?? "No se pudo guardar la ficha.")
       return
@@ -607,6 +655,11 @@ export default function PersonalPage() {
           </DialogHeader>
           {editando && (
             <div className="flex flex-col gap-4">
+              <ConsentimientoDatosSensibles
+                otorgado={consentimiento}
+                otorgadoInicial={consentimientoInicial}
+                onOtorgado={cambiarConsentimiento}
+              />
               <section className="rounded-lg border p-3">
                 <h3 className="mb-2 text-sm font-semibold">Tipología Contractual</h3>
                 <div className="grid gap-3 sm:grid-cols-3">
@@ -637,23 +690,23 @@ export default function PersonalPage() {
                 <h3 className="mb-2 text-sm font-semibold">Configuración Previsional y Salud *</h3>
                 <div className="grid gap-3 sm:grid-cols-3">
                   <div className="flex flex-col gap-1.5">
-                    <Label>AFP</Label>
+                    <Label htmlFor="f-afp">AFP</Label>
                     <Select value={form.afpId || undefined} onValueChange={v => setForm({ ...form, afpId: v === "__none" ? "" : v })}>
-                      <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
+                      <SelectTrigger id="f-afp" disabled={!consentimiento}><SelectValue placeholder="Seleccionar" /></SelectTrigger>
                       <SelectContent>{afps.map(a => <SelectItem key={a.id} value={a.id}>{a.nombre} ({a.tasaCotizacion}%)</SelectItem>)}</SelectContent>
                     </Select>
                   </div>
                   <div className="flex flex-col gap-1.5">
-                    <Label>Fonasa / Isapre</Label>
+                    <Label htmlFor="f-salud">Fonasa / Isapre</Label>
                     <Select value={form.saludId || undefined} onValueChange={v => setForm({ ...form, saludId: v === "__none" ? "" : v })}>
-                      <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
+                      <SelectTrigger id="f-salud" disabled={!consentimiento}><SelectValue placeholder="Seleccionar" /></SelectTrigger>
                       <SelectContent>{previsionesSalud.map(a => <SelectItem key={a.id} value={a.id}>{a.nombre}</SelectItem>)}</SelectContent>
                     </Select>
                   </div>
                   <div className="flex flex-col gap-1.5">
                     <Label>Mutualidad / Caja</Label>
                     <Select value={form.mutualidadId || undefined} onValueChange={v => setForm({ ...form, mutualidadId: v === "__none" ? "" : v })}>
-                      <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
+                      <SelectTrigger disabled={!consentimiento}><SelectValue placeholder="Seleccionar" /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="__none">Sin especificar</SelectItem>
                         {mutualesCajas.map(a => <SelectItem key={a.id} value={a.id}>{a.nombre}</SelectItem>)}
@@ -663,7 +716,7 @@ export default function PersonalPage() {
                   <div className="flex flex-col gap-1.5">
                     <Label>Tramo asignación familiar</Label>
                     <Select value={form.asignacionFamiliarId || undefined} onValueChange={v => setForm({ ...form, asignacionFamiliarId: v === "__none" ? "" : v })}>
-                      <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
+                      <SelectTrigger disabled={!consentimiento}><SelectValue placeholder="Seleccionar" /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="__none">Sin cargas</SelectItem>
                         {asignacionFamiliar.map(a => <SelectItem key={a.id} value={a.id}>{a.nombre} — ${a.monto.toLocaleString("es-CL")}</SelectItem>)}
@@ -672,14 +725,14 @@ export default function PersonalPage() {
                   </div>
                   <div className="flex flex-col gap-1.5">
                     <Label htmlFor="f-cargas">N° de cargas</Label>
-                    <Input id="f-cargas" type="number" min={0} value={form.cargas} onChange={e => setForm({ ...form, cargas: e.target.value })} />
+                    <Input id="f-cargas" type="number" min={0} disabled={!consentimiento} value={form.cargas} onChange={e => setForm({ ...form, cargas: e.target.value })} />
                   </div>
                   <div className="flex items-end gap-4 pb-1">
-                    <label className="flex items-center gap-2 text-sm"><Switch checked={form.apv} onCheckedChange={v => setForm({ ...form, apv: v })} /> APV</label>
+                    <label className="flex items-center gap-2 text-sm"><Switch checked={form.apv} onCheckedChange={v => setForm({ ...form, apv: v })} disabled={!consentimiento} /> APV</label>
                   </div>
                   <div className="flex flex-col gap-1.5 sm:col-span-2">
                     <Label htmlFor="f-seguro">Seguro complementario</Label>
-                    <Input id="f-seguro" value={form.seguroComplementario} onChange={e => setForm({ ...form, seguroComplementario: e.target.value })} onBlur={() => setForm((f) => ({ ...f, seguroComplementario: aTituloCaso(f.seguroComplementario) }))} placeholder="Compañía y póliza" />
+                    <Input id="f-seguro" disabled={!consentimiento} value={form.seguroComplementario} onChange={e => setForm({ ...form, seguroComplementario: e.target.value })} onBlur={() => setForm((f) => ({ ...f, seguroComplementario: aTituloCaso(f.seguroComplementario) }))} placeholder="Compañía y póliza" />
                   </div>
                 </div>
               </section>
@@ -688,20 +741,20 @@ export default function PersonalPage() {
                 <h3 className="mb-2 text-sm font-semibold">Gestión Bancaria</h3>
                 <div className="grid gap-3 sm:grid-cols-3">
                   <div className="flex flex-col gap-1.5">
-                    <Label>Banco (maestro)</Label>
+                    <Label htmlFor="f-banco">Banco (maestro)</Label>
                     <Select value={form.bancoId || undefined} onValueChange={v => setForm({ ...form, bancoId: v === "__none" ? "" : v })}>
-                      <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
+                      <SelectTrigger id="f-banco" disabled={!consentimiento}><SelectValue placeholder="Seleccionar" /></SelectTrigger>
                       <SelectContent>{bancos.map(b => <SelectItem key={b.id} value={b.id}>{b.nombre}</SelectItem>)}</SelectContent>
                     </Select>
                   </div>
                   <div className="flex flex-col gap-1.5">
                     <Label htmlFor="f-cuenta">Número de cuenta</Label>
-                    <Input id="f-cuenta" value={form.numeroCuenta} onChange={e => setForm({ ...form, numeroCuenta: e.target.value })} />
+                    <Input id="f-cuenta" disabled={!consentimiento} value={form.numeroCuenta} onChange={e => setForm({ ...form, numeroCuenta: e.target.value })} />
                   </div>
                   <div className="flex flex-col gap-1.5">
                     <Label>Tipo de cuenta</Label>
                     <Select value={form.tipoCuenta || undefined} onValueChange={v => setForm({ ...form, tipoCuenta: v === "__none" ? "" : v })}>
-                      <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
+                      <SelectTrigger disabled={!consentimiento}><SelectValue placeholder="Seleccionar" /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="__none">Sin especificar</SelectItem>
                         <SelectItem value="corriente">Corriente</SelectItem>
@@ -718,15 +771,15 @@ export default function PersonalPage() {
                 <div className="grid gap-3 sm:grid-cols-3">
                   <div className="flex flex-col gap-1.5">
                     <Label htmlFor="f-med">Medicamentos</Label>
-                    <Input id="f-med" value={form.medicamentos} onChange={e => setForm({ ...form, medicamentos: e.target.value })} onBlur={() => setForm((f) => ({ ...f, medicamentos: aOracion(f.medicamentos) }))} />
+                    <Input id="f-med" disabled={!consentimiento} value={form.medicamentos} onChange={e => setForm({ ...form, medicamentos: e.target.value })} onBlur={() => setForm((f) => ({ ...f, medicamentos: aOracion(f.medicamentos) }))} />
                   </div>
                   <div className="flex flex-col gap-1.5">
                     <Label htmlFor="f-alerg">Alergias</Label>
-                    <Input id="f-alerg" value={form.alergias} onChange={e => setForm({ ...form, alergias: e.target.value })} onBlur={() => setForm((f) => ({ ...f, alergias: aOracion(f.alergias) }))} />
+                    <Input id="f-alerg" disabled={!consentimiento} value={form.alergias} onChange={e => setForm({ ...form, alergias: e.target.value })} onBlur={() => setForm((f) => ({ ...f, alergias: aOracion(f.alergias) }))} />
                   </div>
                   <div className="flex flex-col gap-1.5">
                     <Label htmlFor="f-cond">Condiciones médicas</Label>
-                    <Input id="f-cond" value={form.condiciones} onChange={e => setForm({ ...form, condiciones: e.target.value })} onBlur={() => setForm((f) => ({ ...f, condiciones: aOracion(f.condiciones) }))} />
+                    <Input id="f-cond" disabled={!consentimiento} value={form.condiciones} onChange={e => setForm({ ...form, condiciones: e.target.value })} onBlur={() => setForm((f) => ({ ...f, condiciones: aOracion(f.condiciones) }))} />
                   </div>
                 </div>
                 <div className="mt-3 flex flex-col gap-2">
