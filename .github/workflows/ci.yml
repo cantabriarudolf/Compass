@@ -172,6 +172,35 @@ jobs:
           npm run e2e:reseed-base
       - run: npm run build
       - run: npx playwright test
+      # El reporter escribe junit y no imprime nada por stdout: sin esto, el job
+      # falla sin decir qué test rompió (fue el costo de diagnosticar el 2026-10-27).
+      - name: Resumen de los tests fallidos
+        if: failure()
+        working-directory: k0mp4ss_fe/apps/web
+        run: |
+          if [ ! -f test-results/junit.xml ]; then
+            echo "::error::la suite falló sin dejar test-results/junit.xml"
+            exit 0
+          fi
+          head -1 test-results/junit.xml | cut -c1-200
+          python3 - <<'PY'
+          import xml.etree.ElementTree as ET
+          raiz = ET.parse("test-results/junit.xml").getroot()
+          print(f"tests={raiz.get('tests')} failures={raiz.get('failures')} errors={raiz.get('errors')} skipped={raiz.get('skipped')}")
+          fallos = [tc for tc in raiz.iter("testcase")
+                    if tc.find("failure") is not None or tc.find("error") is not None]
+          for tc in fallos[:20]:
+              print(f"FALLA: {tc.get('classname')} :: {tc.get('name')}")
+          if not fallos:
+              print("sin testcases con failure/error en el junit")
+          PY
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: failure()
+        with:
+          name: junit-e2e
+          path: k0mp4ss_fe/apps/web/test-results/junit.xml
+          retention-days: 14
+          if-no-files-found: warn
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: failure()
         with:
@@ -232,6 +261,9 @@ jobs:
   esquema:
     name: Esquema de la base (Neon)
     runs-on: ubuntu-latest
+    # No se aplica esquema desde un commit cuyos tests unitarios fallen. No se
+    # incluye `e2e`: hoy está en rojo por deuda ajena y frenaría el esquema.
+    needs: [unit, unit-pg]
     # Sólo en push a main (los PR no tocan la base real). Sin --accept-data-loss:
     # una deriva destructiva falla acá en vez de aplicarse sola. `migrate deploy`
     # no sirve mientras los dos schemas compartan `prisma/migrations` (P3019).
@@ -253,7 +285,8 @@ jobs:
             echo "present=true" >> "$GITHUB_OUTPUT"
           else
             echo "present=false" >> "$GITHUB_OUTPUT"
-            echo "::warning title=Esquema sin sincronizar::Falta el secret DATABASE_URL (Neon). Cargalo en Settings -> Secrets."
+            echo "::error title=Esquema sin sincronizar::Falta el secret DATABASE_URL (Neon): la base no se va a alinear. Cargalo en Settings -> Secrets."
+            exit 1
           fi
       - name: Sincronizar el esquema
         if: steps.db_secret.outputs.present == 'true'
