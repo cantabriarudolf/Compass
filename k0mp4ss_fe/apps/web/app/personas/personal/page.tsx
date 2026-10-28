@@ -692,7 +692,7 @@ export default function PersonalPage() {
                   <div className="flex flex-col gap-1.5">
                     <Label htmlFor="f-afp">AFP</Label>
                     <Select value={form.afpId || undefined} onValueChange={v => setForm({ ...form, afpId: v === "__none" ? "" : v })}>
-                      <SelectTrigger id="f-afp" disabled={!consentimiento}><SelectValue placeholder="Seleccionar" /></SelectTrigger>
+                      <SelectTrigger id="f-afp"><SelectValue placeholder="Seleccionar" /></SelectTrigger>
                       <SelectContent>{afps.map(a => <SelectItem key={a.id} value={a.id}>{a.nombre} ({a.tasaCotizacion}%)</SelectItem>)}</SelectContent>
                     </Select>
                   </div>
@@ -706,7 +706,7 @@ export default function PersonalPage() {
                   <div className="flex flex-col gap-1.5">
                     <Label>Mutualidad / Caja</Label>
                     <Select value={form.mutualidadId || undefined} onValueChange={v => setForm({ ...form, mutualidadId: v === "__none" ? "" : v })}>
-                      <SelectTrigger disabled={!consentimiento}><SelectValue placeholder="Seleccionar" /></SelectTrigger>
+                      <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="__none">Sin especificar</SelectItem>
                         {mutualesCajas.map(a => <SelectItem key={a.id} value={a.id}>{a.nombre}</SelectItem>)}
@@ -716,7 +716,7 @@ export default function PersonalPage() {
                   <div className="flex flex-col gap-1.5">
                     <Label>Tramo asignación familiar</Label>
                     <Select value={form.asignacionFamiliarId || undefined} onValueChange={v => setForm({ ...form, asignacionFamiliarId: v === "__none" ? "" : v })}>
-                      <SelectTrigger disabled={!consentimiento}><SelectValue placeholder="Seleccionar" /></SelectTrigger>
+                      <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="__none">Sin cargas</SelectItem>
                         {asignacionFamiliar.map(a => <SelectItem key={a.id} value={a.id}>{a.nombre} — ${a.monto.toLocaleString("es-CL")}</SelectItem>)}
@@ -725,14 +725,14 @@ export default function PersonalPage() {
                   </div>
                   <div className="flex flex-col gap-1.5">
                     <Label htmlFor="f-cargas">N° de cargas</Label>
-                    <Input id="f-cargas" type="number" min={0} disabled={!consentimiento} value={form.cargas} onChange={e => setForm({ ...form, cargas: e.target.value })} />
+                    <Input id="f-cargas" type="number" min={0} value={form.cargas} onChange={e => setForm({ ...form, cargas: e.target.value })} />
                   </div>
                   <div className="flex items-end gap-4 pb-1">
-                    <label className="flex items-center gap-2 text-sm"><Switch checked={form.apv} onCheckedChange={v => setForm({ ...form, apv: v })} disabled={!consentimiento} /> APV</label>
+                    <label className="flex items-center gap-2 text-sm"><Switch checked={form.apv} onCheckedChange={v => setForm({ ...form, apv: v })} /> APV</label>
                   </div>
                   <div className="flex flex-col gap-1.5 sm:col-span-2">
                     <Label htmlFor="f-seguro">Seguro complementario</Label>
-                    <Input id="f-seguro" disabled={!consentimiento} value={form.seguroComplementario} onChange={e => setForm({ ...form, seguroComplementario: e.target.value })} onBlur={() => setForm((f) => ({ ...f, seguroComplementario: aTituloCaso(f.seguroComplementario) }))} placeholder="Compañía y póliza" />
+                    <Input id="f-seguro" value={form.seguroComplementario} onChange={e => setForm({ ...form, seguroComplementario: e.target.value })} onBlur={() => setForm((f) => ({ ...f, seguroComplementario: aTituloCaso(f.seguroComplementario) }))} placeholder="Compañía y póliza" />
                   </div>
                 </div>
               </section>
@@ -743,18 +743,18 @@ export default function PersonalPage() {
                   <div className="flex flex-col gap-1.5">
                     <Label htmlFor="f-banco">Banco (maestro)</Label>
                     <Select value={form.bancoId || undefined} onValueChange={v => setForm({ ...form, bancoId: v === "__none" ? "" : v })}>
-                      <SelectTrigger id="f-banco" disabled={!consentimiento}><SelectValue placeholder="Seleccionar" /></SelectTrigger>
+                      <SelectTrigger id="f-banco"><SelectValue placeholder="Seleccionar" /></SelectTrigger>
                       <SelectContent>{bancos.map(b => <SelectItem key={b.id} value={b.id}>{b.nombre}</SelectItem>)}</SelectContent>
                     </Select>
                   </div>
                   <div className="flex flex-col gap-1.5">
                     <Label htmlFor="f-cuenta">Número de cuenta</Label>
-                    <Input id="f-cuenta" disabled={!consentimiento} value={form.numeroCuenta} onChange={e => setForm({ ...form, numeroCuenta: e.target.value })} />
+                    <Input id="f-cuenta" value={form.numeroCuenta} onChange={e => setForm({ ...form, numeroCuenta: e.target.value })} />
                   </div>
                   <div className="flex flex-col gap-1.5">
                     <Label>Tipo de cuenta</Label>
                     <Select value={form.tipoCuenta || undefined} onValueChange={v => setForm({ ...form, tipoCuenta: v === "__none" ? "" : v })}>
-                      <SelectTrigger disabled={!consentimiento}><SelectValue placeholder="Seleccionar" /></SelectTrigger>
+                      <SelectTrigger><SelectValue placeholder="Seleccionar" /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="__none">Sin especificar</SelectItem>
                         <SelectItem value="corriente">Corriente</SelectItem>

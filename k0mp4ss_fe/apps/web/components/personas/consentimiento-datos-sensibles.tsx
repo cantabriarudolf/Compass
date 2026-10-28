@@ -39,6 +39,14 @@ export function ConsentimientoDatosSensibles({ otorgado, otorgadoInicial, onOtor
 
   const revoca = !otorgado && activadoAlgunaVez
 
+  // Un solo lugar para el texto de ayuda: sin ternarios anidados.
+  let ayuda = "Los campos de salud se habilitan al autorizar."
+  if (revoca) {
+    ayuda = "Al guardar la ficha se borrarán los datos de salud registrados."
+  } else if (otorgado) {
+    ayuda = `Los campos de salud están habilitados (política de privacidad v${VERSION_POLITICA_PRIVACIDAD}).`
+  }
+
   return (
     <div className="rounded-lg border p-3" data-otorgado={otorgado ? "true" : "false"}>
       <div className="flex items-start gap-2">
@@ -48,16 +56,10 @@ export function ConsentimientoDatosSensibles({ otorgado, otorgadoInicial, onOtor
           onCheckedChange={v => cambiar(v === true)}
         />
         <Label htmlFor="f-consentimiento-sensible" className="font-normal leading-snug">
-          Autorizo el registro de mis datos previsionales y de salud, necesarios para liquidaciones y cumplimiento laboral. Puedo revocarlo cuando quiera.
+          Autorizo el registro de mis datos de salud (previsión de salud y ficha médica). Puedo revocarlo cuando quiera.
         </Label>
       </div>
-      <p className="mt-2 text-xs text-muted-foreground">
-        {revoca
-          ? "Al guardar la ficha se borrarán los datos previsionales, bancarios y de salud registrados."
-          : otorgado
-            ? `Los campos previsionales, bancarios y de salud están habilitados (política de privacidad v${VERSION_POLITICA_PRIVACIDAD}).`
-            : "Los campos previsionales, bancarios y de salud se habilitan al autorizar."}
-      </p>
+      <p className="mt-2 text-xs text-muted-foreground">{ayuda}</p>
     </div>
   )
 }

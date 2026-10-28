@@ -27,7 +27,7 @@ import { ConsentimientoDatosSensibles } from "@/components/personas/consentimien
 import { VERSION_POLITICA_PRIVACIDAD } from "@/lib/politica-privacidad"
 import { instalarEntornoRadix } from "./entorno-radix"
 
-const TEXTO_CHECK = /Autorizo el registro de mis datos previsionales y de salud/i
+const TEXTO_CHECK = /Autorizo el registro de mis datos de salud/i
 
 /** Persona con ficha laboral ya cargada (con FKs a maestros, sin consentimiento aún). */
 function personaConFicha(consentimiento?: { otorgado: boolean; fecha: string; version: string }) {
@@ -161,39 +161,39 @@ describe("ficha laboral — bloque de consentimiento (componente)", () => {
 })
 
 describe("ficha laboral — página completa", () => {
-  it("(a) arranca sin tilde y con los campos sensibles deshabilitados", async () => {
+  it("(a) arranca sin tilde: sólo los campos de salud quedan deshabilitados", async () => {
     const check = await abrirFicha()
 
     expect(check.getAttribute("aria-checked")).toBe("false")
     expect(screen.getByText(/se habilitan al autorizar/i)).toBeTruthy()
 
-    // Campos sensibles deshabilitados: AFP, salud, banco (Selects), cargas,
-    // cuenta y ficha médica (Inputs).
-    expect(screen.getByRole("combobox", { name: "AFP" })).toHaveAttribute("disabled")
+    // Gated: previsión de salud y ficha médica (decisión del owner 2026-10-27).
     expect(screen.getByRole("combobox", { name: "Fonasa / Isapre" })).toHaveAttribute("disabled")
-    expect(screen.getByRole("combobox", { name: "Banco (maestro)" })).toHaveAttribute("disabled")
-    expect(screen.getByLabelText("N° de cargas")).toBeDisabled()
-    expect(screen.getByLabelText("Número de cuenta")).toBeDisabled()
     expect(screen.getByLabelText("Medicamentos")).toBeDisabled()
+    expect(screen.getByLabelText("Alergias")).toBeDisabled()
+    expect(screen.getByLabelText("Condiciones médicas")).toBeDisabled()
 
-    // Lo no sensible sigue operativo.
+    // Previsional, bancario y familiar operan sin consentimiento: el sistema los
+    // necesita para liquidar.
+    expect(screen.getByRole("combobox", { name: "AFP" })).not.toHaveAttribute("disabled")
+    expect(screen.getByRole("combobox", { name: "Banco (maestro)" })).not.toHaveAttribute("disabled")
+    expect(screen.getByLabelText("N° de cargas")).not.toBeDisabled()
+    expect(screen.getByLabelText("Número de cuenta")).not.toBeDisabled()
     expect(screen.getByLabelText("Cargo *")).not.toBeDisabled()
     expect(screen.getByRole("button", { name: "Guardar ficha" })).not.toBeDisabled()
   })
 
-  it("(b) al tildar se habilitan los campos sensibles", async () => {
+  it("(b) al tildar se habilitan los campos de salud", async () => {
     const user = userEvent.setup()
     const check = await abrirFicha()
 
     await user.click(check)
     expect(check.getAttribute("aria-checked")).toBe("true")
 
-    expect(screen.getByRole("combobox", { name: "AFP" })).not.toHaveAttribute("disabled")
     expect(screen.getByRole("combobox", { name: "Fonasa / Isapre" })).not.toHaveAttribute("disabled")
-    expect(screen.getByRole("combobox", { name: "Banco (maestro)" })).not.toHaveAttribute("disabled")
-    expect(screen.getByLabelText("N° de cargas")).not.toBeDisabled()
-    expect(screen.getByLabelText("Número de cuenta")).not.toBeDisabled()
     expect(screen.getByLabelText("Medicamentos")).not.toBeDisabled()
+    expect(screen.getByLabelText("Alergias")).not.toBeDisabled()
+    expect(screen.getByLabelText("Condiciones médicas")).not.toBeDisabled()
   })
 
   it("(c) el guardado incluye consentimientoDatosSensibles otorgado: true con versión y fecha", async () => {
