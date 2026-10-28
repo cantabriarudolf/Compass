@@ -28,7 +28,7 @@ import { tmpdir } from "node:os"
 import path from "node:path"
 import {
   cargarUrlBase,
-  ErrorUrlBase,
+  NOMBRE_ERROR_URL_BASE,
   normalizarValorEnv,
   proveedorDeUrl,
   proveedorDelClienteGenerado,
@@ -122,7 +122,7 @@ describe("resolverUrlBase — qué URL gana", () => {
         archivos: [...ARCHIVOS_PG, ...ARCHIVOS_SQLITE],
         proveedorEsperado: "postgresql",
       })
-    ).toThrow(ErrorUrlBase)
+    ).toThrow(/No hay una DATABASE_URL usable/i)
   })
 
   it("aborta si no hay ninguna URL", () => {
@@ -145,7 +145,7 @@ describe("resolverUrlBase — higiene del error", () => {
     } catch (e) {
       atrapado = e as Error
     }
-    expect(atrapado).toBeInstanceOf(ErrorUrlBase)
+    expect(atrapado?.name).toBe(NOMBRE_ERROR_URL_BASE)
     expect(atrapado?.message).toContain(".env")
     expect(atrapado?.message).toContain("postgresql://")
     expect(atrapado?.message).toContain("DATABASE_URL=")
@@ -164,7 +164,7 @@ describe("resolverUrlBase — higiene del error", () => {
     } catch (e) {
       atrapado = e as Error
     }
-    expect(atrapado).toBeInstanceOf(ErrorUrlBase)
+    expect(atrapado?.name).toBe(NOMBRE_ERROR_URL_BASE)
     expect(atrapado?.message).not.toContain("secreto-123")
   })
 })

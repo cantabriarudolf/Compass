@@ -54,12 +54,14 @@ export interface UrlBaseResuelta {
   descartados: string[]
 }
 
-/** Error de resolución: el mensaje está pensado para el operador, no para el log de Prisma. */
-export class ErrorUrlBase extends Error {
-  constructor(mensaje: string) {
-    super(mensaje)
-    this.name = "ErrorUrlBase"
-  }
+/** Nombre estable del error de resolución; sirve para distinguirlo sin una subclase propia. */
+export const NOMBRE_ERROR_URL_BASE = "ErrorUrlBase"
+
+/** Error de configuración de la base: el mensaje es para el operador y nunca trae el valor. */
+function errorUrlBase(mensaje: string): Error {
+  const error = new Error(mensaje)
+  error.name = NOMBRE_ERROR_URL_BASE
+  return error
 }
 
 /** Archivos de entorno que se leen, en orden de precedencia. */
@@ -121,15 +123,11 @@ export function urlDeArchivoEnv(archivo: ArchivoEnv): string | null {
 }
 
 /**
- * Elige la `DATABASE_URL` que van a usar los scripts de datos.
+ * Aplica la precedencia descrita arriba y devuelve la primera URL que sirve para el
+ * proveedor del cliente generado.
  *
- * Precedencia: entorno → `.env` → `.env.local`, filtrada por el proveedor del cliente
- * generado. El entorno **sólo cede** cuando su valor es el que declara un archivo `.env*`
- * (el default de desarrollo local): si lo exportó el arnés —CI, e2e o la suite—, una
- * discrepancia de proveedor es un error del operador, no algo que se resuelva cambiando
- * de base en silencio.
- *
- * @throws {ErrorUrlBase} cuando ningún candidato sirve.
+ * @throws cuando ningún candidato sirve: el mensaje nombra los archivos leídos y el
+ * protocolo esperado (nunca el valor) y su `name` es `ErrorUrlBase`.
  */
 export function resolverUrlBase({
   entorno,
@@ -154,7 +152,7 @@ export function resolverUrlBase({
     } else if (archivoQueLoDeclara) {
       descartados.push(`entorno (${motivo}; es el default que declara ${archivoQueLoDeclara})`)
     } else {
-      throw new ErrorUrlBase(
+      throw errorUrlBase(
         mensajeAborto({
           archivos,
           proveedorEsperado,
@@ -181,7 +179,7 @@ export function resolverUrlBase({
 
   const elegido = candidatos[0]
   if (!elegido) {
-    throw new ErrorUrlBase(
+    throw errorUrlBase(
       mensajeAborto({
         archivos,
         proveedorEsperado,
@@ -275,7 +273,7 @@ export interface OpcionesCarga {
  * `new PrismaClient()` sin `datasourceUrl` coincida) y la devuelve. Avisa por stderr, sin
  * imprimir valores, cuando descartó un candidato.
  *
- * @throws {ErrorUrlBase} con el mensaje de `resolverUrlBase`.
+ * @throws con el mensaje de `resolverUrlBase` (`name === "ErrorUrlBase"`).
  */
 export function cargarUrlBase(opciones: OpcionesCarga = {}): string {
   const dirApp = opciones.dirApp ?? DIR_APP

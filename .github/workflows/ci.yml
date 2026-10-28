@@ -267,6 +267,12 @@ jobs:
     # Sólo en push a main (los PR no tocan la base real). Sin --accept-data-loss:
     # una deriva destructiva falla acá en vez de aplicarse sola. `migrate deploy`
     # no sirve mientras los dos schemas compartan `prisma/migrations` (P3019).
+    #
+    # RIESGO ACEPTADO (decisión del owner, 2026-10-27): un cambio de esquema
+    # mergeado a main se aplica a producción sin aprobación humana. Se acepta para
+    # que el demo nunca quede con el esquema atrás; las válvulas son la falta de
+    # `--accept-data-loss` y el `needs: [unit, unit-pg]`. Al pasar a la rama
+    # paralela con gate, esto vuelve a revisarse.
     if: github.event_name == 'push'
     timeout-minutes: 10
     steps:
