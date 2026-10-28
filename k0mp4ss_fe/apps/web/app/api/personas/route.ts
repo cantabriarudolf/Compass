@@ -147,18 +147,18 @@ export async function validarYLimpiarPersona(
   // PE: FKs de la ficha laboral contra los maestros legales de MA (RG escritura).
   const dl = datos.datosLaborales as Record<string, unknown> | undefined | null
 
-  // F18 — datos de SALUD sólo con consentimiento expreso vigente.
+  // F18 — sólo la FICHA MÉDICA exige consentimiento expreso vigente.
   //
-  // Decisión del owner (2026-10-27): el consentimiento cubre **sólo salud**
-  // (previsión de salud + ficha médica). El resto de la ficha laboral —AFP,
-  // mutualidad, asignación familiar, cargas, banco, cuenta, APV y seguro
-  // complementario— se guarda siempre: es imprescindible para liquidar.
+  // Decisión del owner (2026-10-27): el consentimiento cubre **sólo la ficha
+  // médica** (medicamentos, alergias, condiciones). Todo el resto de la ficha
+  // laboral —previsión de salud incluida, sin la cual no se generan
+  // liquidaciones— se guarda siempre.
   if (dl && typeof dl === "object") {
     const consentimiento = (dl as Record<string, unknown>).consentimientoDatosSensibles as
       | { otorgado?: unknown }
       | undefined
     if (consentimiento?.otorgado !== true) {
-      for (const campo of ["saludId", "fichaMedica"]) {
+      for (const campo of ["fichaMedica"]) {
         delete (dl as Record<string, unknown>)[campo]
       }
     }

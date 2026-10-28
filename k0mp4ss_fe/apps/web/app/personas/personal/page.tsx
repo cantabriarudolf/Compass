@@ -699,7 +699,7 @@ export default function PersonalPage() {
                   <div className="flex flex-col gap-1.5">
                     <Label htmlFor="f-salud">Fonasa / Isapre</Label>
                     <Select value={form.saludId || undefined} onValueChange={v => setForm({ ...form, saludId: v === "__none" ? "" : v })}>
-                      <SelectTrigger id="f-salud" disabled={!consentimiento}><SelectValue placeholder="Seleccionar" /></SelectTrigger>
+                      <SelectTrigger id="f-salud"><SelectValue placeholder="Seleccionar" /></SelectTrigger>
                       <SelectContent>{previsionesSalud.map(a => <SelectItem key={a.id} value={a.id}>{a.nombre}</SelectItem>)}</SelectContent>
                     </Select>
                   </div>

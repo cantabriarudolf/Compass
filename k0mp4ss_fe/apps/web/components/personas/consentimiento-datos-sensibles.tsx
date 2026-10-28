@@ -40,11 +40,11 @@ export function ConsentimientoDatosSensibles({ otorgado, otorgadoInicial, onOtor
   const revoca = !otorgado && activadoAlgunaVez
 
   // Un solo lugar para el texto de ayuda: sin ternarios anidados.
-  let ayuda = "Los campos de salud se habilitan al autorizar."
+  let ayuda = "Los campos de la ficha médica se habilitan al autorizar."
   if (revoca) {
-    ayuda = "Al guardar la ficha se borrarán los datos de salud registrados."
+    ayuda = "Al guardar la ficha se borrarán los datos médicos registrados."
   } else if (otorgado) {
-    ayuda = `Los campos de salud están habilitados (política de privacidad v${VERSION_POLITICA_PRIVACIDAD}).`
+    ayuda = `Los campos de la ficha médica están habilitados (política de privacidad v${VERSION_POLITICA_PRIVACIDAD}).`
   }
 
   return (
@@ -56,7 +56,7 @@ export function ConsentimientoDatosSensibles({ otorgado, otorgadoInicial, onOtor
           onCheckedChange={v => cambiar(v === true)}
         />
         <Label htmlFor="f-consentimiento-sensible" className="font-normal leading-snug">
-          Autorizo el registro de mis datos de salud (previsión de salud y ficha médica). Puedo revocarlo cuando quiera.
+          Autorizo el registro de mi ficha médica (medicamentos, alergias y condiciones). Puedo revocarlo cuando quiera.
         </Label>
       </div>
       <p className="mt-2 text-xs text-muted-foreground">{ayuda}</p>

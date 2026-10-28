@@ -1,14 +1,14 @@
 /**
  * @vitest-environment node
  *
- * F18 — datos de SALUD de la ficha laboral sólo con consentimiento expreso.
+ * F18 — la FICHA MÉDICA de la ficha laboral sólo con consentimiento expreso.
  *
  * La asesoría normativa del 2026-10-26 marca como sensibles los datos
  * previsionales y de salud. Decisión del owner (2026-10-27): el consentimiento
- * cubre **sólo salud** (previsión + ficha médica); lo previsional, bancario y
- * familiar es imprescindible para liquidar y se guarda siempre. El
- * consentimiento es **opcional**: sin él la ficha se guarda igual y sólo se
- * descartan los campos de salud. Revocar es borrar (lo de salud).
+ * cubre **sólo la ficha médica** (medicamentos, alergias, condiciones). Todo lo
+ * demás —previsión de salud incluida, sin la cual no se generan liquidaciones—
+ * se guarda siempre. El consentimiento es **opcional**: sin él la ficha se
+ * guarda igual y sólo se descarta la ficha médica. Revocar es borrar.
  *
  * Se prueba `validarYLimpiarPersona`, que es el único camino de escritura de
  * personas (lo usan el POST de la colección y el PUT del detalle), así que fijar
@@ -54,9 +54,6 @@ describe("F18 — datos sensibles sin consentimiento", () => {
   it("sin consentimiento la ficha se guarda igual y los datos sensibles no se persisten", async () => {
     const r = await validarYLimpiarPersona(
       personaCon({
-        // La FK de salud inexistente no debe estallar: si el campo se descarta
-        // antes de validar, no hay 400. Prueba de que el descarte va primero.
-        saludId: "salud-que-no-existe",
         numeroCuenta: "12345678",
         apv: true,
         cargas: "2",
@@ -68,14 +65,23 @@ describe("F18 — datos sensibles sin consentimiento", () => {
     expect(r.ok, r.ok ? "" : JSON.stringify(r)).toBe(true)
     if (!r.ok) return
     const dl = r.datos.datosLaborales as Record<string, unknown>
-    // Sólo se descarta lo de salud (decisión del owner 2026-10-27).
-    expect(dl.saludId).toBeUndefined()
+    // Sólo se descarta la ficha médica (decisión del owner 2026-10-27).
     expect(dl.fichaMedica).toBeUndefined()
     // Lo previsional/bancario/familiar es imprescindible para liquidar: se guarda.
     expect(dl.numeroCuenta).toBe("12345678")
     expect(dl.apv).toBe(true)
     expect(dl.cargas).toBe("2")
     expect(dl.cargo).toBe("Conserje")
+  })
+
+  it("sin consentimiento la previsión de salud ya NO se descarta: su FK se valida", async () => {
+    // Prueba de contrato: si el campo se descartara (como antes), la FK
+    // inexistente pasaría sin ruido y el guardado daría ok. Ahora se valida.
+    const r = await validarYLimpiarPersona(
+      personaCon({ saludId: "salud-que-no-existe", fichaMedica: FICHA_MEDICA }),
+      SCOPE
+    )
+    expect(r.ok).toBe(false)
   })
 
   it("con consentimiento otorgado los datos sensibles se conservan", async () => {
