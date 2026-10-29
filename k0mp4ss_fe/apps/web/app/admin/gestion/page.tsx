@@ -1,11 +1,31 @@
 "use client"
 
+/**
+ * Gestión Administrativa — directorio de personas y privacidad por unidad.
+ *
+ * La vista anterior mezclaba dos trabajos en un solo eje: cuatro pestañas por rol
+ * (que se solapan: la misma persona puede ser propietaria y directiva) que además
+ * contenían, anidadas, la única configuración editable de la pantalla. Ver
+ * openspec/changes/gestion-administrativa-usabilidad/proposal.md.
+ *
+ * Forma actual: dos tareas, dos pestañas.
+ *   1. Directorio — tabla única con búsqueda server-side (`?q=`) y roles como
+ *      filtros multi-selección.
+ *   2. Privacidad por unidad — matriz de una fila por unidad, porque la unidad es
+ *      el sujeto real del control.
+ *
+ * Paridad de contrato: `actualizarControl` conserva el upsert idempotente y los
+ * defaults (morosidad y actas ocultas, alertas activas). No cambia qué se guarda
+ * ni quién lo ve.
+ */
 import * as React from "react"
 import { mutate as mutateGlobal } from "swr"
-import { usePersonas } from "@/lib/api/use-personas"
+import { nombresDePersonas, usePersonas } from "@/lib/api/use-personas"
 import { useVinculos } from "@/lib/api/use-vinculos"
 import { useUnidades } from "@/lib/api/use-unidades"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@workspace/ui/components/card"
+import { useControlesPropiedad } from "@/lib/api/use-controles-propiedad"
+import { AvisoTruncamiento } from "@/components/pe/aviso-truncamiento"
+import { Card, CardContent } from "@workspace/ui/components/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@workspace/ui/components/tabs"
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
@@ -13,16 +33,34 @@ import { Button } from "@workspace/ui/components/button"
 import { Badge } from "@workspace/ui/components/badge"
 import { Switch } from "@workspace/ui/components/switch"
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@workspace/ui/components/dialog"
-import { IconPhotoOff, IconPencil, IconUsers, IconHome, IconGavel, IconBriefcase, IconCheck } from "@tabler/icons-react"
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@workspace/ui/components/sheet"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@workspace/ui/components/table"
+import {
+  IconPhotoOff,
+  IconPencil,
+  IconSearch,
+  IconX,
+  IconUsers,
+  IconHome,
+  IconGavel,
+  IconBriefcase,
+  IconCheck,
+  IconLoader2,
+  IconLock,
+} from "@tabler/icons-react"
 import type { Persona, ControlPropiedad, ExtensionGobernanza } from "@/lib/schemas"
-import { useControlesPropiedad } from "@/lib/api/use-controles-propiedad"
 
 const CARGO_LABEL: Record<string, string> = {
   presidente: "Presidente",
@@ -31,65 +69,374 @@ const CARGO_LABEL: Record<string, string> = {
   director: "Director",
 }
 
-function FotoReferencia({ url, nombre }: { url?: string; nombre: string }) {
-  if (!url) {
+type RolDirectorio = "propietario" | "residente" | "directiva" | "personal"
+
+const ROLES_DIRECTORIO: { id: RolDirectorio; etiqueta: string; icono: React.ElementType }[] = [
+  { id: "propietario", etiqueta: "Propietario", icono: IconHome },
+  { id: "residente", etiqueta: "Residente", icono: IconUsers },
+  { id: "directiva", etiqueta: "Directiva", icono: IconGavel },
+  { id: "personal", etiqueta: "Personal", icono: IconBriefcase },
+]
+
+type Vinculo = ReturnType<typeof useVinculos>["vinculos"][number]
+type Unidad = ReturnType<typeof useUnidades>["items"][number]
+
+/** Retrasa el valor para no disparar una consulta por tecla. */
+function useDebounce<T>(valor: T, ms: number): T {
+  const [diferido, setDiferido] = React.useState(valor)
+  React.useEffect(() => {
+    const t = setTimeout(() => setDiferido(valor), ms)
+    return () => clearTimeout(t)
+  }, [valor, ms])
+  return diferido
+}
+
+function FotoReferencia({
+  url,
+  nombre,
+  className = "size-12",
+}: {
+  url?: string
+  nombre: string
+  className?: string
+}) {
+  if (!url || !url.startsWith("http")) {
     return (
-      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
-        <IconPhotoOff className="size-5" />
+      <div
+        className={`${className} flex shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground`}
+      >
+        <IconPhotoOff className="size-4" aria-hidden="true" />
       </div>
     )
   }
-  if (url.startsWith("http")) {
-    // eslint-disable-next-line @next/next/no-img-element
-    return <img src={url} alt={nombre} className="h-12 w-12 shrink-0 rounded-full object-cover" />
-  }
   return (
-    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
-      <IconPhotoOff className="size-5" />
+    // eslint-disable-next-line @next/next/no-img-element
+    <img src={url} alt={nombre} className={`${className} shrink-0 rounded-full object-cover`} />
+  )
+}
+
+function etiquetaUnidad(u?: Unidad): string {
+  if (!u) return ""
+  return `${u.etiqueta} ${u.numero}`
+}
+
+/**
+ * Ficha de detalle en panel lateral.
+ *
+ * La edición de firma vive acá adentro, inline, y no en un `Dialog`: abrir un
+ * diálogo modal sobre un `Sheet` modal encadena dos trampas de foco. El guardado
+ * es la misma llamada de antes (`updatePersona` con `ExtensionGobernanza`).
+ */
+function FichaDetalle({
+  persona,
+  roles,
+  unidadesNombres,
+  onGuardarFirma,
+}: {
+  persona: Persona
+  roles: RolDirectorio[]
+  unidadesNombres: string[]
+  onGuardarFirma: (url: string) => Promise<{ ok: boolean; error?: string }>
+}) {
+  const gob = persona.datosGobernanza
+  const lab = persona.datosLaborales
+  const [editando, setEditando] = React.useState(false)
+  const [url, setUrl] = React.useState(gob?.firmaDigital ?? "")
+  const [error, setError] = React.useState<string | null>(null)
+  const [guardando, setGuardando] = React.useState(false)
+
+  const puedePrevisualizar = /^https?:\/\//.test(url.trim())
+
+  const guardar = async () => {
+    setGuardando(true)
+    const r = await onGuardarFirma(url.trim())
+    setGuardando(false)
+    if (!r.ok) {
+      setError(r.error ?? "No se pudo guardar la firma.")
+      return
+    }
+    setError(null)
+    setEditando(false)
+  }
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div className="flex items-center gap-3">
+        <FotoReferencia url={persona.fotografiaUrl} nombre={persona.nombreCompleto} />
+        <div className="min-w-0">
+          <p className="truncate text-base font-medium">
+            {persona.nombres} {persona.apellidos}
+          </p>
+          <p className="text-xs text-muted-foreground">{persona.rut}</p>
+        </div>
+      </div>
+
+      <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
+        <dt className="text-muted-foreground">Teléfono</dt>
+        <dd className="truncate">{persona.telefonoMovil || "—"}</dd>
+        <dt className="text-muted-foreground">Email</dt>
+        <dd className="truncate">{persona.email || "—"}</dd>
+        <dt className="text-muted-foreground">Roles</dt>
+        <dd className="flex flex-wrap gap-1">
+          {roles.length === 0 ? (
+            <span className="text-muted-foreground">Sin rol asignado</span>
+          ) : (
+            roles.map(r => (
+              <Badge key={r} variant="secondary">
+                {ROLES_DIRECTORIO.find(x => x.id === r)?.etiqueta ?? r}
+              </Badge>
+            ))
+          )}
+        </dd>
+        <dt className="text-muted-foreground">Unidades</dt>
+        <dd>{unidadesNombres.length === 0 ? "Sin unidad vigente" : unidadesNombres.join(", ")}</dd>
+      </dl>
+
+      {gob && (
+        <section className="flex flex-col gap-3 border-t pt-4">
+          <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Gobernanza</h3>
+          <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
+            <dt className="text-muted-foreground">Cargo</dt>
+            <dd>{CARGO_LABEL[gob.cargoDirectiva] ?? gob.cargoDirectiva}</dd>
+            <dt className="text-muted-foreground">Asunción</dt>
+            <dd>{gob.fechaAsuncion}</dd>
+          </dl>
+
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-xs text-muted-foreground">Firma digitalizada</p>
+              {!editando && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setEditando(true)
+                    setError(null)
+                  }}
+                >
+                  <IconPencil className="size-4 mr-1" aria-hidden="true" />
+                  {gob.firmaDigital ? "Reemplazar firma" : "Cargar firma"}
+                </Button>
+              )}
+            </div>
+
+            {editando ? (
+              <div className="flex flex-col gap-2">
+                <Label className="text-xs" htmlFor="firma-url">
+                  URL de la imagen de firma
+                </Label>
+                <Input
+                  id="firma-url"
+                  value={url}
+                  onChange={e => setUrl(e.target.value)}
+                  placeholder="https://…/firma.png"
+                />
+                {puedePrevisualizar && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={url.trim()}
+                    alt={`Firma de ${persona.nombreCompleto}`}
+                    className="max-h-24 w-fit rounded-sm border bg-white object-contain p-1"
+                  />
+                )}
+                {error && (
+                  <p role="alert" className="text-xs text-destructive">
+                    {error}
+                  </p>
+                )}
+                <div className="flex gap-2">
+                  <Button size="sm" onClick={guardar} disabled={guardando}>
+                    {guardando ? (
+                      <IconLoader2 className="size-4 mr-1 animate-spin" aria-hidden="true" />
+                    ) : (
+                      <IconCheck className="size-4 mr-1" aria-hidden="true" />
+                    )}
+                    Guardar
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setEditando(false)
+                      setUrl(gob.firmaDigital ?? "")
+                      setError(null)
+                    }}
+                    disabled={guardando}
+                  >
+                    Cancelar
+                  </Button>
+                </div>
+              </div>
+            ) : gob.firmaDigital ? (
+              /^https?:\/\//.test(gob.firmaDigital) ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={gob.firmaDigital}
+                  alt={`Firma de ${persona.nombreCompleto}`}
+                  className="max-h-24 w-fit rounded-sm border bg-white object-contain p-1"
+                />
+              ) : (
+                <p className="text-xs text-muted-foreground">Referencia cargada: {gob.firmaDigital}</p>
+              )
+            ) : (
+              <p className="text-xs text-muted-foreground">Sin cargar.</p>
+            )}
+          </div>
+        </section>
+      )}
+
+      {lab && (
+        <section className="flex flex-col gap-3 border-t pt-4">
+          <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Datos laborales</h3>
+          <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
+            <dt className="text-muted-foreground">Cargo</dt>
+            <dd>{lab.cargo}</dd>
+            <dt className="text-muted-foreground">AFP</dt>
+            <dd>{lab.afp}</dd>
+            <dt className="text-muted-foreground">Previsión</dt>
+            <dd>{lab.prevision}</dd>
+            <dt className="text-muted-foreground">Ingreso</dt>
+            <dd>{lab.fechaIngreso}</dd>
+          </dl>
+        </section>
+      )}
     </div>
   )
 }
 
 export default function GestionAdministrativaPage() {
-  const { personas, isLoading: cPersonas, update: updatePersona } = usePersonas()
+  const [busqueda, setBusqueda] = React.useState("")
+  const busquedaDiferida = useDebounce(busqueda, 250)
+  const hayBusqueda = busquedaDiferida.trim().length > 0
+
+  // Dos claves SWR: la base sin filtro (nombres para la matriz y conteos) y la
+  // del buscador. Sin búsqueda apuntan a la misma URL y SWR deduplica.
+  const { personas: personasBase, total: totalBase, isLoading: cBase } = usePersonas()
+  const {
+    personas: personasBusqueda,
+    total: totalBusqueda,
+    isLoading: cBusqueda,
+    update: updatePersona,
+  } = usePersonas(busquedaDiferida)
   const { vinculos, isLoading: cVinculos } = useVinculos()
-  const { items: unidades, isLoading: cUnidades } = useUnidades()
-  const { controles: controlesPropiedades, isLoading: cControles, save: guardarControlApi } = useControlesPropiedad()
-  const isLoading = cPersonas || cVinculos || cUnidades || cControles
-  const [error, setError] = React.useState<string | null>(null)
-  const [editandoFirma, setEditandoFirma] = React.useState<Persona | null>(null)
-  const [firmaUrl, setFirmaUrl] = React.useState("")
+  const { items: unidades, total: totalUnidades, isLoading: cUnidades } = useUnidades()
+  const { controles, isLoading: cControles, save: guardarControlApi } = useControlesPropiedad()
 
-  const refUnidad = React.useCallback(
-    (unidadId: string) => {
-      const u = unidades.find(x => x.id === unidadId)
-      return u ? `${u.etiqueta} ${u.numero}` : unidadId
-    },
-    [unidades]
-  )
+  const isLoading = cBase || cBusqueda || cVinculos || cUnidades || cControles
 
-  const propietarios = personas.filter(
-    p => p.roles.includes("propietario") || vinculos.some(v => v.personaId === p.id && v.rol === "propietario")
-  )
-  const residentes = personas.filter(
-    p => vinculos.some(v => v.personaId === p.id && v.rol === "arrendatario" && !v.fechaFin) || (p.roles.includes("residente") && !p.roles.includes("propietario"))
-  )
-  const directiva = personas.filter(p => p.datosGobernanza != null)
-  const personal = personas.filter(p => p.datosLaborales != null)
-
-  const unidadesDePropietario = (personaId: string) =>
-    vinculos.filter(v => v.personaId === personaId && v.rol === "propietario" && !v.fechaFin).map(v => v.unidadId)
-
-  // Defaults de lectura según spec AD: actas/morosidad ocultas, alertas activas.
-  // P2: override optimista — el Switch es controlado y la revalidación SWR
-  // tarda segundos bajo carga dev; se refleja al instante y se concilia al
-  // revalidar.
+  const [rolesFiltro, setRolesFiltro] = React.useState<RolDirectorio[]>([])
+  const [ficha, setFicha] = React.useState<Persona | null>(null)
+  const [filtroUnidad, setFiltroUnidad] = React.useState("")
+  const [soloExplicitas, setSoloExplicitas] = React.useState(false)
+  const [pendientes, setPendientes] = React.useState<Record<string, boolean>>({})
+  const [erroresFila, setErroresFila] = React.useState<Record<string, string>>({})
   const [overrideControles, setOverrideControles] = React.useState<Record<string, Partial<ControlPropiedad>>>({})
+  const [errorFirma, setErrorFirma] = React.useState<string | null>(null)
+  const [nombresFueraDePagina, setNombresFueraDePagina] = React.useState<Record<string, string>>({})
+
+  /* ---------- índices ---------- */
+
+  const vinculosPorPersona = React.useMemo(() => {
+    const m = new Map<string, Vinculo[]>()
+    for (const v of vinculos) {
+      const lista = m.get(v.personaId)
+      if (lista) lista.push(v)
+      else m.set(v.personaId, [v])
+    }
+    return m
+  }, [vinculos])
+
+  const vinculosPorUnidad = React.useMemo(() => {
+    const m = new Map<string, Vinculo[]>()
+    for (const v of vinculos) {
+      const lista = m.get(v.unidadId)
+      if (lista) lista.push(v)
+      else m.set(v.unidadId, [v])
+    }
+    return m
+  }, [vinculos])
+
+  const personasPorId = React.useMemo(() => new Map(personasBase.map(p => [p.id, p])), [personasBase])
+  const unidadesPorId = React.useMemo(() => new Map(unidades.map(u => [u.id, u])), [unidades])
+
+  const personasDirectorio = hayBusqueda ? personasBusqueda : personasBase
+  const totalDirectorio = hayBusqueda ? totalBusqueda : totalBase
+
+  /**
+   * Predicados idénticos a la versión anterior, ahora como función: la búsqueda
+   * server-side puede devolver personas que no están en la primera página de la
+   * lista base, así que el rol se calcula por persona y no desde un mapa.
+   */
+  const rolesDe = React.useCallback(
+    (p: Persona): Set<RolDirectorio> => {
+      const vs = vinculosPorPersona.get(p.id) ?? []
+      const roles = new Set<RolDirectorio>()
+      if (p.roles.includes("propietario") || vs.some(v => v.rol === "propietario")) roles.add("propietario")
+      if (
+        vs.some(v => v.rol === "arrendatario" && !v.fechaFin) ||
+        (p.roles.includes("residente") && !p.roles.includes("propietario"))
+      ) {
+        roles.add("residente")
+      }
+      if (p.datosGobernanza != null) roles.add("directiva")
+      if (p.datosLaborales != null) roles.add("personal")
+      return roles
+    },
+    [vinculosPorPersona]
+  )
+
+  const unidadesDePropietario = React.useCallback(
+    (personaId: string) =>
+      (vinculosPorPersona.get(personaId) ?? [])
+        .filter(v => v.rol === "propietario" && !v.fechaFin)
+        .map(v => v.unidadId),
+    [vinculosPorPersona]
+  )
+
+  const unidadesDeResidente = React.useCallback(
+    (personaId: string) =>
+      (vinculosPorPersona.get(personaId) ?? [])
+        .filter(v => v.rol === "arrendatario" && !v.fechaFin)
+        .map(v => v.unidadId),
+    [vinculosPorPersona]
+  )
+
+  const filtradas = React.useMemo(() => {
+    if (rolesFiltro.length === 0) return personasDirectorio
+    return personasDirectorio.filter(p => {
+      const roles = rolesDe(p)
+      return rolesFiltro.some(r => roles.has(r))
+    })
+  }, [personasDirectorio, rolesFiltro, rolesDe])
+
+  const conteoPorRol = React.useMemo(() => {
+    const m = new Map<RolDirectorio, number>()
+    for (const r of ROLES_DIRECTORIO) m.set(r.id, 0)
+    for (const p of personasDirectorio) {
+      for (const r of rolesDe(p)) m.set(r, (m.get(r) ?? 0) + 1)
+    }
+    return m
+  }, [personasDirectorio, rolesDe])
+
+  const alternarRol = (rol: RolDirectorio) =>
+    setRolesFiltro(prev => (prev.includes(rol) ? prev.filter(r => r !== rol) : [...prev, rol]))
+
+  /* ---------- privacidad por unidad ---------- */
+
   const controlDeUnidad = (unidadId: string): ControlPropiedad | undefined => {
-    const base = controlesPropiedades.find(c => c.unidadId === unidadId)
+    const base = controles.find(c => c.unidadId === unidadId)
     const over = overrideControles[unidadId]
     if (!over) return base
-    return { ...(base ?? { id: `ctrl-${unidadId}`, unidadId, residenteVeMorosidad: false, residenteVeActas: false, alertasResidentesActivas: true }), ...over }
+    return {
+      ...(base ?? {
+        id: `ctrl-${unidadId}`,
+        unidadId,
+        residenteVeMorosidad: false,
+        residenteVeActas: false,
+        alertasResidentesActivas: true,
+      }),
+      ...over,
+    }
   }
 
   const actualizarControl = async (unidadId: string, cambios: Partial<ControlPropiedad>) => {
@@ -101,37 +448,121 @@ export default function GestionAdministrativaPage() {
       residenteVeActas: false,
       alertasResidentesActivas: true,
     }
-    // Servidor como única fuente (el hook revalida la lista al guardar).
-    // P2: se espera la revalidación para que el switch refleje el valor sin
-    // race (el GET tarda segundos bajo carga dev).
-    setOverrideControles((prev) => ({ ...prev, [unidadId]: { ...prev[unidadId], ...cambios } }))
+    setOverrideControles(prev => ({ ...prev, [unidadId]: { ...prev[unidadId], ...cambios } }))
+    setPendientes(prev => ({ ...prev, [unidadId]: true }))
+    setErroresFila(prev => {
+      const resto = { ...prev }
+      delete resto[unidadId]
+      return resto
+    })
+
+    // Servidor como única fuente: el hook revalida al guardar y acá se espera esa
+    // revalidación antes de soltar el override, para que el switch no rebote con
+    // el valor viejo mientras el GET está en vuelo bajo carga dev.
     const r = await guardarControlApi({ ...base, ...cambios })
-    if (!r.ok) setError(r.error ?? "No se pudo guardar el control.")
-    else {
-      setError(null)
+    if (!r.ok) {
+      setErroresFila(prev => ({ ...prev, [unidadId]: r.error ?? "No se pudo guardar el control." }))
+    } else {
       await mutateGlobal("/api/controles-propiedad?pageSize=100")
     }
-    setOverrideControles((prev) => {
+
+    setPendientes(prev => {
+      const resto = { ...prev }
+      delete resto[unidadId]
+      return resto
+    })
+    setOverrideControles(prev => {
       const resto = { ...prev }
       delete resto[unidadId]
       return resto
     })
   }
 
-  const guardarFirma = async () => {
-    if (!editandoFirma || !editandoFirma.datosGobernanza) return
-    const url = firmaUrl.trim()
-    const extension: ExtensionGobernanza = { ...editandoFirma.datosGobernanza, firmaDigital: url || undefined }
-    const r = await updatePersona(editandoFirma.id, { datosGobernanza: extension })
-    if (!r.ok) {
-      setError(r.error ?? "No se pudo guardar la firma.")
-      return
+  const propietarioDe = React.useCallback(
+    (unidadId: string) => {
+      const v = (vinculosPorUnidad.get(unidadId) ?? []).find(
+        x => x.rol === "propietario" && !x.fechaFin
+      )
+      if (!v) return null
+      const p = personasPorId.get(v.personaId)
+      if (p) return `${p.nombres} ${p.apellidos}`
+      // El dueño existe pero no está en la primera página del padrón: se resuelve
+      // el nombre con el lote abierto de ids (ver efecto de nombresFueraDePagina)
+      // y mientras tanto la columna muestra el fallback, no un falso «sin dueño».
+      return nombresFueraDePagina[v.personaId] ?? null
+    },
+    [vinculosPorUnidad, personasPorId, nombresFueraDePagina]
+  )
+
+  const unidadesOrdenadas = React.useMemo(
+    () =>
+      [...unidades].sort((a, b) =>
+        etiquetaUnidad(a).localeCompare(etiquetaUnidad(b), "es", { numeric: true })
+      ),
+    [unidades]
+  )
+
+  const unidadesVisibles = React.useMemo(() => {
+    const t = filtroUnidad.trim().toLowerCase()
+    return unidadesOrdenadas.filter(u => {
+      if (soloExplicitas && !controles.some(c => c.unidadId === u.id)) return false
+      if (!t) return true
+      const nombre = etiquetaUnidad(u).toLowerCase()
+      const prop = (propietarioDe(u.id) ?? "").toLowerCase()
+      return nombre.includes(t) || prop.includes(t)
+    })
+  }, [unidadesOrdenadas, filtroUnidad, soloExplicitas, controles, propietarioDe])
+
+  // Dueños que la primera página del padrón no resuelve: se piden en una sola
+  // llamada (loteda) en vez de una petición por unidad. Sin spinner: el nombre
+  // aparece cuando llega y la fila conserva el fallback mientras tanto.
+  const idsFaltantes = React.useMemo(() => {
+    const ids = new Set<string>()
+    for (const u of unidadesVisibles) {
+      const v = (vinculosPorUnidad.get(u.id) ?? []).find(x => x.rol === "propietario" && !x.fechaFin)
+      if (v && !personasPorId.has(v.personaId)) ids.add(v.personaId)
     }
-    setError(null)
-    setEditandoFirma(null)
-    setFirmaUrl("")
-  }
-    
+    return ids
+  }, [unidadesVisibles, vinculosPorUnidad, personasPorId])
+  const claveIdsFaltantes = React.useMemo(
+    () => [...idsFaltantes].sort().join(","),
+    [idsFaltantes]
+  )
+
+  React.useEffect(() => {
+    if (!claveIdsFaltantes) return
+    let vigente = true
+    void nombresDePersonas(claveIdsFaltantes.split(",")).then(nombres => {
+      if (vigente && Object.keys(nombres).length > 0) {
+        setNombresFueraDePagina(prev => ({ ...prev, ...nombres }))
+      }
+      // Con fallo ({}) se conserva lo ya resuelto y el efecto no se re-dispara:
+      // la clave de ids no cambia.
+    })
+    return () => {
+      vigente = false
+    }
+  }, [claveIdsFaltantes])
+
+  const guardarFirma = React.useCallback(
+    async (url: string): Promise<{ ok: boolean; error?: string }> => {
+      if (!ficha || !ficha.datosGobernanza) return { ok: false, error: "La persona no tiene datos de gobernanza." }
+      const extension: ExtensionGobernanza = {
+        ...ficha.datosGobernanza,
+        firmaDigital: url || undefined,
+      }
+      const r = await updatePersona(ficha.id, { datosGobernanza: extension })
+      if (!r.ok) {
+        setErrorFirma(r.error ?? "No se pudo guardar la firma.")
+        return { ok: false, error: r.error }
+      }
+      setErrorFirma(null)
+      setFicha(null)
+      return { ok: true }
+    },
+    [ficha, updatePersona]
+  )
+
   if (isLoading) {
     return (
       <div className="flex flex-col gap-6 animate-pulse">
@@ -147,213 +578,312 @@ export default function GestionAdministrativaPage() {
     <div className="flex flex-col gap-6">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Gestión Administrativa</h1>
-        <p className="text-sm text-muted-foreground">Cajón de Comunidad y Recursos Humanos — lectura centralizada del store.</p>
+        <p className="text-sm text-muted-foreground">
+          Directorio de personas de la comunidad y privacidad de cada unidad.
+        </p>
       </div>
 
-      {error && <p className="text-sm text-destructive">{error}</p>}
+      {errorFirma && (
+        <p role="alert" className="text-sm text-destructive">
+          {errorFirma}
+        </p>
+      )}
 
-      <Tabs defaultValue="propietarios">
+      <Tabs defaultValue="directorio">
         <TabsList>
-          <TabsTrigger value="propietarios"><IconHome className="size-4 mr-1" /> Propietarios ({propietarios.length})</TabsTrigger>
-          <TabsTrigger value="residentes"><IconUsers className="size-4 mr-1" /> Residentes ({residentes.length})</TabsTrigger>
-          <TabsTrigger value="directiva"><IconGavel className="size-4 mr-1" /> Directiva ({directiva.length})</TabsTrigger>
-          <TabsTrigger value="personal"><IconBriefcase className="size-4 mr-1" /> Personal ({personal.length})</TabsTrigger>
+          <TabsTrigger value="directorio">
+            <IconUsers className="size-4 mr-1" aria-hidden="true" /> Directorio ({filtradas.length})
+          </TabsTrigger>
+          <TabsTrigger value="privacidad">
+            <IconLock className="size-4 mr-1" aria-hidden="true" /> Privacidad por unidad ({unidades.length})
+          </TabsTrigger>
         </TabsList>
 
-        {/* Cajón 1.1: Propietarios con controles de privacidad */}
-        <TabsContent value="propietarios" className="flex flex-col gap-4">
-          {propietarios.length === 0 && (
-            <Card><CardContent className="py-8 text-center text-sm text-muted-foreground">Sin propietarios registrados.</CardContent></Card>
-          )}
-          {propietarios.map(p => {
-            const susUnidades = unidadesDePropietario(p.id)
-            return (
-              <Card key={p.id}>
-                <CardHeader className="pb-3">
-                  <div className="flex items-center gap-3">
-                    <FotoReferencia url={p.fotografiaUrl} nombre={p.nombreCompleto} />
-                    <div>
-                      <CardTitle className="text-base">{p.nombres} {p.apellidos}</CardTitle>
-                      <CardDescription>{p.rut} · {p.telefonoMovil} · {p.email}</CardDescription>
-                    </div>
-                  </div>
-                </CardHeader>
-                {susUnidades.length > 0 && (
-                  <CardContent className="flex flex-col gap-3 border-t pt-4">
-                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Controles de privacidad por unidad</p>
-                    {susUnidades.map(unidadId => {
-                      const c = controlDeUnidad(unidadId)
+        {/* ---------------- Directorio ---------------- */}
+        <TabsContent value="directorio" className="flex flex-col gap-4">
+          <div className="flex flex-col gap-3">
+            <div className="relative max-w-sm">
+              <IconSearch
+                className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+                aria-hidden="true"
+              />
+              <Input
+                className="pl-8 pr-8"
+                value={busqueda}
+                onChange={e => setBusqueda(e.target.value)}
+                placeholder="Buscar por nombre, RUT o email…"
+                aria-label="Buscar personas"
+              />
+              {busqueda && (
+                <button
+                  type="button"
+                  onClick={() => setBusqueda("")}
+                  className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground hover:bg-muted"
+                  aria-label="Limpiar búsqueda"
+                >
+                  <IconX className="size-3.5" aria-hidden="true" />
+                </button>
+              )}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              {ROLES_DIRECTORIO.map(r => {
+                const activo = rolesFiltro.includes(r.id)
+                const Icono = r.icono
+                return (
+                  <Button
+                    key={r.id}
+                    type="button"
+                    size="sm"
+                    variant={activo ? "default" : "outline"}
+                    aria-pressed={activo}
+                    onClick={() => alternarRol(r.id)}
+                  >
+                    <Icono className="size-3.5 mr-1" aria-hidden="true" />
+                    {r.etiqueta} ({conteoPorRol.get(r.id) ?? 0})
+                  </Button>
+                )
+              })}
+              {rolesFiltro.length > 0 && (
+                <Button type="button" size="sm" variant="ghost" onClick={() => setRolesFiltro([])}>
+                  Limpiar filtros
+                </Button>
+              )}
+            </div>
+
+            <AvisoTruncamiento mostrados={personasDirectorio.length} total={totalDirectorio} />
+          </div>
+
+          <Card>
+            <CardContent className="pt-6">
+              {filtradas.length === 0 ? (
+                <p className="py-10 text-center text-sm text-muted-foreground">
+                  {hayBusqueda || rolesFiltro.length > 0
+                    ? "Ninguna persona coincide con la búsqueda o los filtros."
+                    : "Sin personas registradas."}
+                </p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Persona</TableHead>
+                      <TableHead>Contacto</TableHead>
+                      <TableHead>Roles</TableHead>
+                      <TableHead>Unidades</TableHead>
+                      <TableHead className="text-right">Ficha</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filtradas.map(p => {
+                      const roles = [...rolesDe(p)]
+                      const susUnidades = [
+                        ...unidadesDePropietario(p.id),
+                        ...unidadesDeResidente(p.id),
+                      ].map(id => etiquetaUnidad(unidadesPorId.get(id)) || id)
                       return (
-                        <div key={unidadId} className="rounded-md border p-3">
-                          <div className="mb-2 flex items-center justify-between">
-                            <p className="text-sm font-medium">{refUnidad(unidadId)}</p>
-                            {!c && <Badge variant="outline">defaults</Badge>}
-                          </div>
-                          <div className="grid gap-2 sm:grid-cols-3">
-                            <label className="flex items-center justify-between gap-2 rounded-md bg-muted/40 px-3 py-2 text-xs">
-                              Residente ve morosidad
-                              <Switch
-                                checked={c?.residenteVeMorosidad ?? false}
-                                aria-label={`Morosidad visible en ${refUnidad(unidadId)}`}
-                                onCheckedChange={v => actualizarControl(unidadId, { residenteVeMorosidad: v })}
+                        <TableRow key={p.id}>
+                          <TableCell>
+                            <div className="flex items-center gap-2.5">
+                              <FotoReferencia
+                                url={p.fotografiaUrl}
+                                nombre={p.nombreCompleto}
+                                className="size-8"
                               />
-                            </label>
-                            <label className="flex items-center justify-between gap-2 rounded-md bg-muted/40 px-3 py-2 text-xs">
-                              Residente ve actas
-                              <Switch
-                                checked={c?.residenteVeActas ?? false}
-                                aria-label={`Actas visibles en ${refUnidad(unidadId)}`}
-                                onCheckedChange={v => actualizarControl(unidadId, { residenteVeActas: v })}
-                              />
-                            </label>
-                            <label className="flex items-center justify-between gap-2 rounded-md bg-muted/40 px-3 py-2 text-xs">
-                              Alertas al residente
-                              <Switch
-                                checked={c?.alertasResidentesActivas ?? true}
-                                aria-label={`Alertas activas en ${refUnidad(unidadId)}`}
-                                onCheckedChange={v => actualizarControl(unidadId, { alertasResidentesActivas: v })}
-                              />
-                            </label>
-                          </div>
-                        </div>
+                              <div className="min-w-0">
+                                <p className="truncate font-medium">
+                                  {p.nombres} {p.apellidos}
+                                </p>
+                                <p className="text-xs text-muted-foreground">{p.rut}</p>
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <p className="truncate text-xs">{p.telefonoMovil || "—"}</p>
+                            <p className="truncate text-xs text-muted-foreground">{p.email || "—"}</p>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex flex-wrap gap-1">
+                              {roles.length === 0 ? (
+                                <span className="text-xs text-muted-foreground">—</span>
+                              ) : (
+                                roles.map(r => (
+                                  <Badge key={r} variant="secondary">
+                                    {ROLES_DIRECTORIO.find(x => x.id === r)?.etiqueta ?? r}
+                                  </Badge>
+                                ))
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-xs text-muted-foreground">
+                            {susUnidades.length === 0 ? "—" : susUnidades.join(", ")}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Button variant="outline" size="sm" onClick={() => setFicha(p)}>
+                              Ver ficha
+                            </Button>
+                          </TableCell>
+                        </TableRow>
                       )
                     })}
-                  </CardContent>
-                )}
-              </Card>
-            )
-          })}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
 
-        {/* Cajón 1.2: Residentes con su vínculo a unidad */}
-        <TabsContent value="residentes" className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {residentes.length === 0 && (
-            <Card className="md:col-span-2 xl:col-span-3"><CardContent className="py-8 text-center text-sm text-muted-foreground">Sin residentes registrados.</CardContent></Card>
-          )}
-          {residentes.map(p => {
-            const vinculadas = vinculos.filter(v => v.personaId === p.id && v.rol === "arrendatario" && !v.fechaFin)
-            return (
-              <Card key={p.id}>
-                <CardHeader className="pb-3">
-                  <div className="flex items-center gap-3">
-                    <FotoReferencia url={p.fotografiaUrl} nombre={p.nombreCompleto} />
-                    <div>
-                      <CardTitle className="text-base">{p.nombres} {p.apellidos}</CardTitle>
-                      <CardDescription>{p.rut}</CardDescription>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent className="text-xs text-muted-foreground">
-                  {p.telefonoMovil} · {p.email}
-                  <p className="mt-1">
-                    Habita: {vinculadas.length === 0 ? "sin unidad vigente" : vinculadas.map(v => refUnidad(v.unidadId)).join(", ")}
-                  </p>
-                </CardContent>
-              </Card>
-            )
-          })}
-        </TabsContent>
+        {/* ---------------- Privacidad por unidad ---------------- */}
+        <TabsContent value="privacidad" className="flex flex-col gap-4">
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="relative max-w-xs">
+                <IconSearch
+                  className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+                  aria-hidden="true"
+                />
+                <Input
+                  className="pl-8"
+                  value={filtroUnidad}
+                  onChange={e => setFiltroUnidad(e.target.value)}
+                  placeholder="Filtrar por unidad o propietario…"
+                  aria-label="Filtrar unidades"
+                />
+              </div>
+              <label className="flex items-center gap-2 text-sm">
+                <Switch checked={soloExplicitas} onCheckedChange={setSoloExplicitas} />
+                Solo con configuración explícita
+              </label>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Valores por defecto: el residente <strong>no</strong> ve morosidad ni actas, y las alertas
+              están activas. Cambiar un switch guarda la configuración de esa unidad.
+            </p>
+            <AvisoTruncamiento mostrados={unidades.length} total={totalUnidades} />
+          <p className="text-xs text-muted-foreground">
+            La columna Propietario se resuelve contra la primera página de vínculos cargados: si el
+            vínculo del dueño está fuera de ella, se muestra «—» aunque la unidad sí tenga dueño.
+          </p>
+          </div>
 
-        {/* Cajón 1.3: Directiva con firma digitalizada */}
-        <TabsContent value="directiva" className="flex flex-col gap-4">
-          {directiva.length === 0 && (
-            <Card><CardContent className="py-8 text-center text-sm text-muted-foreground">Sin miembros de directiva registrados (extensión de gobernanza).</CardContent></Card>
-          )}
-          {directiva.map(p => (
-            <Card key={p.id}>
-              <CardHeader className="pb-3">
-                <div className="flex items-center gap-3">
-                  <FotoReferencia url={p.fotografiaUrl} nombre={p.nombreCompleto} />
-                  <div className="flex-1">
-                    <CardTitle className="flex items-center gap-2 text-base">
-                      {p.nombres} {p.apellidos}
-                      <Badge variant="secondary">{CARGO_LABEL[p.datosGobernanza!.cargoDirectiva]}</Badge>
-                    </CardTitle>
-                    <CardDescription>{p.rut} · asume el {p.datosGobernanza!.fechaAsuncion}</CardDescription>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="border-t pt-4">
-                <div className="flex items-center justify-between gap-3">
-                  <p className="text-xs text-muted-foreground">
-                    Firma digitalizada:{" "}
-                    {p.datosGobernanza!.firmaDigital ? (
-                      <span className="font-medium text-emerald-600">{p.datosGobernanza!.firmaDigital}</span>
-                    ) : (
-                      "sin cargar"
-                    )}
-                  </p>
-                  <Button variant="outline" size="sm" onClick={() => { setEditandoFirma(p); setFirmaUrl(p.datosGobernanza!.firmaDigital ?? ""); setError(null) }}>
-                    <IconPencil className="size-4 mr-1" /> {p.datosGobernanza!.firmaDigital ? "Reemplazar firma" : "Cargar firma"}
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </TabsContent>
-
-        {/* Cajón 2.1: RRHH — acceso centralizado al personal (detalle en PE) */}
-        <TabsContent value="personal">
           <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Maestro de Personal</CardTitle>
-              <CardDescription>Fichas de trabajadores desde la extensión laboral. Requerimientos contractuales y previsionales detallados: módulo PE.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {personal.length === 0 ? (
-                <p className="py-6 text-center text-sm text-muted-foreground">Sin personal registrado.</p>
+            <CardContent className="pt-6">
+              {unidadesVisibles.length === 0 ? (
+                <p className="py-10 text-center text-sm text-muted-foreground">
+                  {soloExplicitas || filtroUnidad
+                    ? "Ninguna unidad coincide con el filtro."
+                    : "Sin unidades registradas."}
+                </p>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b text-left text-muted-foreground">
-                        <th className="py-2 pr-3 font-medium">Trabajador</th>
-                        <th className="py-2 pr-3 font-medium">Cargo</th>
-                        <th className="py-2 pr-3 font-medium">AFP</th>
-                        <th className="py-2 pr-3 font-medium">Previsión</th>
-                        <th className="py-2 font-medium">Ingreso</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {personal.map(p => (
-                        <tr key={p.id} className="border-b last:border-0">
-                          <td className="py-2 pr-3">{p.nombres} {p.apellidos}<span className="block text-xs text-muted-foreground">{p.rut}</span></td>
-                          <td className="py-2 pr-3">{p.datosLaborales!.cargo}</td>
-                          <td className="py-2 pr-3">{p.datosLaborales!.afp}</td>
-                          <td className="py-2 pr-3">{p.datosLaborales!.prevision}</td>
-                          <td className="py-2">{p.datosLaborales!.fechaIngreso}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Unidad</TableHead>
+                      <TableHead>Propietario</TableHead>
+                      <TableHead className="text-center">Ve morosidad</TableHead>
+                      <TableHead className="text-center">Ve actas</TableHead>
+                      <TableHead className="text-center">Recibe alertas</TableHead>
+                      <TableHead>Origen</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {unidadesVisibles.map(u => {
+                      const c = controlDeUnidad(u.id)
+                      const esExplicito = controles.some(x => x.unidadId === u.id)
+                      const guardando = Boolean(pendientes[u.id])
+                      const nombre = etiquetaUnidad(u)
+                      const error = erroresFila[u.id]
+                      return (
+                        <React.Fragment key={u.id}>
+                          <TableRow>
+                            <TableCell className="font-medium">{nombre}</TableCell>
+                            <TableCell className="text-xs text-muted-foreground">
+                              {propietarioDe(u.id) ?? "—"}
+                            </TableCell>
+                            <TableCell className="text-center">
+                              <Switch
+                                checked={c?.residenteVeMorosidad ?? false}
+                                disabled={guardando}
+                                aria-label={`Residente ve morosidad · ${nombre}`}
+                                onCheckedChange={v =>
+                                  actualizarControl(u.id, { residenteVeMorosidad: v })
+                                }
+                              />
+                            </TableCell>
+                            <TableCell className="text-center">
+                              <Switch
+                                checked={c?.residenteVeActas ?? false}
+                                disabled={guardando}
+                                aria-label={`Residente ve actas · ${nombre}`}
+                                onCheckedChange={v => actualizarControl(u.id, { residenteVeActas: v })}
+                              />
+                            </TableCell>
+                            <TableCell className="text-center">
+                              <Switch
+                                checked={c?.alertasResidentesActivas ?? true}
+                                disabled={guardando}
+                                aria-label={`Alertas al residente activas · ${nombre}`}
+                                onCheckedChange={v =>
+                                  actualizarControl(u.id, { alertasResidentesActivas: v })
+                                }
+                              />
+                            </TableCell>
+                            <TableCell>
+                              {guardando ? (
+                                <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                                  <IconLoader2 className="size-3.5 animate-spin" aria-hidden="true" />
+                                  Guardando…
+                                </span>
+                              ) : (
+                                <Badge variant={esExplicito ? "default" : "outline"}>
+                                  {esExplicito ? "explícito" : "defaults"}
+                                </Badge>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                          {error && (
+                            <TableRow>
+                              <TableCell colSpan={6} className="py-1">
+                                <p role="alert" className="text-xs text-destructive">
+                                  {nombre}: {error}
+                                </p>
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </React.Fragment>
+                      )
+                    })}
+                  </TableBody>
+                </Table>
               )}
             </CardContent>
           </Card>
         </TabsContent>
       </Tabs>
 
-      {/* Carga de firma digitalizada por referencia (D1) */}
-      <Dialog open={!!editandoFirma} onOpenChange={v => { if (!v) { setEditandoFirma(null); setError(null) } }}>
-        <DialogContent className="sm:max-w-md">
-          {editandoFirma && (
+      <Sheet open={ficha !== null} onOpenChange={v => { if (!v) setFicha(null) }}>
+        <SheetContent className="w-full overflow-y-auto sm:max-w-md">
+          {ficha && (
             <>
-              <DialogHeader>
-                <DialogTitle>Firma digitalizada · {editandoFirma.nombres} {editandoFirma.apellidos}</DialogTitle>
-                <DialogDescription>D1: la firma se guarda como URL de referencia (imagen), nunca embebida en el store.</DialogDescription>
-              </DialogHeader>
-              <div className="space-y-2">
-                <Label className="text-xs">URL de la imagen de firma</Label>
-                <Input value={firmaUrl} onChange={e => setFirmaUrl(e.target.value)} placeholder="https://…/firma.png" />
+              <SheetHeader>
+                <SheetTitle>Ficha de persona</SheetTitle>
+                <SheetDescription>Datos de contacto, roles y gobernanza.</SheetDescription>
+              </SheetHeader>
+              <div className="mt-4">
+                <FichaDetalle
+                  key={ficha.id}
+                  persona={ficha}
+                  roles={[...rolesDe(ficha)]}
+                  unidadesNombres={[
+                    ...unidadesDePropietario(ficha.id),
+                    ...unidadesDeResidente(ficha.id),
+                  ].map(id => etiquetaUnidad(unidadesPorId.get(id)) || id)}
+                  onGuardarFirma={guardarFirma}
+                />
               </div>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => { setEditandoFirma(null); setError(null) }}>Cancelar</Button>
-                <Button onClick={guardarFirma}><IconCheck className="size-4 mr-1" /> Guardar</Button>
-              </DialogFooter>
             </>
           )}
-        </DialogContent>
-      </Dialog>
+        </SheetContent>
+      </Sheet>
     </div>
   )
 }

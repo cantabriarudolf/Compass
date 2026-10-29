@@ -642,3 +642,64 @@ declara ignorada. **SQLite lo escondía porque serializa las escrituras**; el te
 - `LAB-mejoras` §captura automática esperaba una Action disparada por un archivo en disco que ya
   no se escribe: es `SHOULD` futuro y su texto no se tocó.
 
+
+## Reformulación de usabilidad de `/admin/gestion` (2026-10-26) — change `gestion-administrativa-usabilidad`
+
+La pantalla mezclaba dos trabajos en un solo eje: cuatro pestañas por rol (que se solapan — la misma
+persona puede ser propietaria y directiva) que además contenían, anidadas, la única configuración
+editable de la página (los tres switches de privacidad por unidad). Diagnóstico completo en
+`openspec/changes/gestion-administrativa-usabilidad/proposal.md`.
+
+### El defecto que no era estético
+
+`app/admin/gestion/page.tsx` destructuraba `usePersonas()` sin `total`, y el propio hook documenta que
+el consumidor **debe** avisar cuando `total > personas.length` (`lib/api/use-personas.ts:99-103`, con
+`components/pe/aviso-truncamiento.tsx` ya escrito para eso). Los contadores de pestaña se calculaban
+sobre la primera página de 100 y se presentaban como el universo. Misma familia que «Ningún select
+trunca en silencio» (PR #7), ahora cerrada también acá.
+
+Además la búsqueda server-side **ya existía y no se usaba**: `usePersonas(q)` arma `?q=`
+(nombreCompleto | rut | email) y la página llamaba al hook sin argumento.
+
+### Lo que cambió
+
+- **Directorio**: tabla única con buscador server-side (debounce 250 ms) y roles como **filtros
+  multi-selección** con contador, en lugar de pestañas que se solapaban.
+- **Privacidad por unidad**: matriz de una fila por unidad con tres columnas de switch, badge de
+  origen (`explícito` / `defaults`), filtro de texto y filtro «solo con configuración explícita».
+- **Ficha en `Sheet`** con foto, contacto, roles, unidades, gobernanza y datos laborales; reemplaza
+  las tarjetas de las tres pestañas de personas.
+- **Estado por fila** al guardar: `guardando…` deshabilita los tres switches y el error se pinta bajo
+  la fila con `role="alert"`, en vez de una línea roja al tope de la página.
+- **Firma con preview real** (`<img>`) y edición inline dentro del `Sheet` — sin `Dialog` anidado
+  sobre un modal, que encadena dos trampas de foco.
+- **Nombres fuera de página**: los propietarios que no están en la primera página de personas se
+  resuelven por lotes con `nombresDePersonas` (el helper que ya existía para esto), no con «—».
+
+### Lo que no se tocó
+
+- `actualizarControl` conserva el upsert idempotente, los defaults `false/false/true` y la
+  revalidación esperada antes de soltar el override optimista. Ningún endpoint, esquema ni RBAC.
+- Se mantiene `pageSize=100` + aviso declarado, que es lo que el contrato del hook exige; no se
+  implementó «cargar más» en el directorio (queda como mejora si molesta).
+
+### Corrección de un diagnóstico propio
+
+La auditoría había marcado como defecto que `<label>` envolviendo el `Switch` no reenviara el click.
+Es **falso**: `<button>` es elemento etiquetable y el patrón es convención del repo
+(`app/personas/personal/page.tsx:731`). Se retiró antes de actuar.
+
+### Compuertas
+
+`npm run typecheck` 0 · `npx eslint app/admin/gestion/page.tsx` 0 · `npm test` **1959/1959 en 203
+archivos** · `npm run build` 0. Verificación independiente read-only sobre un posible bucle de
+renderizado en el efecto de resolución de nombres: **no lo hay** (la clave memoizada no depende del
+estado que el efecto escribe).
+
+### Deuda declarada al cierre
+
+- **No hay test que cubra el render de esta página**: las compuertas prueban que compila y que no
+  rompió nada más, no que la pantalla se vea bien. Una regresión visual acá sólo la ve un humano.
+- `useVinculos()` también pagina a 100: una unidad cuyo vínculo de propiedad quede fuera de esa
+  página muestra «—» en la columna Propietario. Está declarado en pantalla, no silenciado.
+- La vista desplegada no se pudo inspeccionar (login); la verificación es sobre código y compuertas.
