@@ -4,7 +4,7 @@
 
 `k0mp4ss_fe/apps/web/app/admin/gestion/page.tsx` (359 líneas) muestra «Gestión Administrativa»
 con cuatro pestañas (Propietarios / Residentes / Directiva / Personal). La auditoría de usabilidad
-del 2026-10-26 encontró siete problemas; uno de ellos resultó ser un **defecto de contrato**, no de
+del 2026-10-29 encontró siete problemas; uno de ellos resultó ser un **defecto de contrato**, no de
 estética:
 
 | # | Hallazgo | Evidencia |

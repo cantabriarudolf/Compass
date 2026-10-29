@@ -643,7 +643,7 @@ declara ignorada. **SQLite lo escondía porque serializa las escrituras**; el te
   no se escribe: es `SHOULD` futuro y su texto no se tocó.
 
 
-## Reformulación de usabilidad de `/admin/gestion` (2026-10-26) — change `gestion-administrativa-usabilidad`
+## Reformulación de usabilidad de `/admin/gestion` (2026-10-29) — change `gestion-administrativa-usabilidad`
 
 La pantalla mezclaba dos trabajos en un solo eje: cuatro pestañas por rol (que se solapan — la misma
 persona puede ser propietaria y directiva) que además contenían, anidadas, la única configuración
