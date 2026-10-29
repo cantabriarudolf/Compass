@@ -803,7 +803,7 @@ export default function GestionAdministrativaPage() {
                               <Switch
                                 checked={c?.residenteVeMorosidad ?? false}
                                 disabled={guardando}
-                                aria-label={`Residente ve morosidad · ${nombre}`}
+                                aria-label={`Morosidad visible en ${nombre}`}
                                 onCheckedChange={v =>
                                   actualizarControl(u.id, { residenteVeMorosidad: v })
                                 }
@@ -813,7 +813,7 @@ export default function GestionAdministrativaPage() {
                               <Switch
                                 checked={c?.residenteVeActas ?? false}
                                 disabled={guardando}
-                                aria-label={`Residente ve actas · ${nombre}`}
+                                aria-label={`Actas visibles en ${nombre}`}
                                 onCheckedChange={v => actualizarControl(u.id, { residenteVeActas: v })}
                               />
                             </TableCell>
@@ -821,7 +821,7 @@ export default function GestionAdministrativaPage() {
                               <Switch
                                 checked={c?.alertasResidentesActivas ?? true}
                                 disabled={guardando}
-                                aria-label={`Alertas al residente activas · ${nombre}`}
+                                aria-label={`Alertas activas en ${nombre}`}
                                 onCheckedChange={v =>
                                   actualizarControl(u.id, { alertasResidentesActivas: v })
                                 }
