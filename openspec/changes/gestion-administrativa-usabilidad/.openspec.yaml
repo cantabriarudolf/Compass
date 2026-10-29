@@ -1,0 +1,10 @@
+schema: spec-driven
+
+# Reformulación de usabilidad de /admin/gestion con paridad de contrato
+# persistido: los tres switches de privacidad por unidad mantienen exactamente
+# la misma semántica de upsert (defaults `false/false/true` cuando no hay fila),
+# el mismo endpoint (`POST /api/controles-propiedad`) y la misma fuente de
+# verdad (servidor + revalidación SWR). Cambia la estructura de la vista, no lo
+# que se guarda ni quién puede verlo.
+# Ver openspec/CONVENCION-DELTAS.md
+skip_specs: true
