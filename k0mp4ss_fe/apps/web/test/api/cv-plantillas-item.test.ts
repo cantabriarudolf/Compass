@@ -5,8 +5,10 @@
  *
  * `PlantillaCVSchema` es un ZodEffects (refine multimedia), así que el PUT usa
  * put-merge: fusiona el parche con la fila y valida el objeto completo. Se fija
- * el 400 del refine/validación, el 403 de los roles que solo leen `cv`,
+ * el 400 del refine/validación, el 403 del rol que solo lee `cv` (conserjería,
+ * que sí puede leerlo: sin ese GET el 403 no probaría «lee pero no edita»),
  * el 404 cross-comunidad y que `comunidadId` del body nunca se persiste.
+ * El comité (también con `cv` ver/editar) no está sembrado en este archivo.
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from "vitest"
 import { NextRequest } from "next/server"
@@ -140,15 +142,19 @@ describe("/api/cv/plantillas/[id] — detalle/parcial/baja scoped", () => {
     expect((await invocar("GET", "cvpla-1")).status).toBe(401)
   })
 
-  it("GET propio → 200; todos los roles con `cv` ver", async () => {
+  it("GET propio → 200 para los roles con `cv` ver (admin, conserjería, residente)", async () => {
     await conSesion(emailAdmin, async () => {
       const res = await invocar("GET", "cvpla-1")
       expect(res.status).toBe(200)
       expect(((await res.json()) as { id: string }).id).toBe("cvpla-1")
     })
-    await conSesion(emailResidente, async () => {
-      expect((await invocar("GET", "cvpla-1")).status).toBe(200)
-    })
+    // Conserjería y residente tienen `cv` ver sin `editar`: son los roles que le
+    // dan sentido al 403 del PUT de más abajo.
+    for (const email of [emailConserje, emailResidente]) {
+      await conSesion(email, async () => {
+        expect((await invocar("GET", "cvpla-1")).status).toBe(200)
+      })
+    }
   })
 
   it("GET inexistente o de otra comunidad → 404", async () => {
@@ -179,6 +185,32 @@ describe("/api/cv/plantillas/[id] — detalle/parcial/baja scoped", () => {
       expect(((await res.json()) as { error: string }).error).toBe("Datos inválidos.")
       const enBd = await prisma.plantillaCV.findUnique({ where: { id: "cvpla-1" } })
       expect(enBd?.titulo).toBe("Plantilla cvpla-1")
+    })
+  })
+
+  it("PUT que deja imagen y video juntos → 400 del refine multimedia y no escribe", async () => {
+    // put-merge valida el objeto mergeado: la fila ya trae imagen y el parche
+    // agrega video, así que tiene que cortar el refine del ZodEffects.
+    await prisma.plantillaCV.update({
+      where: { id: "cvpla-1" },
+      data: { imagenUrl: "https://cdn.test.cl/plantilla.png" },
+    })
+    await conSesion(emailAdmin, async () => {
+      const res = await invocar("PUT", "cvpla-1", {
+        videoUrl: "https://youtu.be/abc12345678",
+      })
+      expect(res.status).toBe(400)
+      const json = (await res.json()) as {
+        error: string
+        detalles: { formErrors: string[] }
+      }
+      expect(json.error).toBe("Datos inválidos.")
+      expect(json.detalles.formErrors).toContain(
+        "Multimedia excluyente: la plantilla admite imagen o video, no ambos."
+      )
+      const enBd = await prisma.plantillaCV.findUnique({ where: { id: "cvpla-1" } })
+      expect(enBd?.imagenUrl).toBe("https://cdn.test.cl/plantilla.png")
+      expect(enBd?.videoUrl).toBeNull()
     })
   })
 

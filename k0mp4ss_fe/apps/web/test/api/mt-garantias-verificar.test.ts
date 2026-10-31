@@ -203,14 +203,35 @@ describe("POST /api/mt/garantias/verificar — alertas de garantía scoped", () 
     })
   })
 
-  it("segunda verificación no duplica la alerta (candado exactly-once) → alertadas 0", async () => {
+  it("segunda verificación no duplica la alerta del trabajo propio (candado exactly-once) → alertadas 0", async () => {
+    // El test crea su propio trabajo vencido y assertiona sobre él y sobre el
+    // delta de eventos: no depende del tamaño del fixture del `beforeEach`.
+    const propio = "mtgar-exactly-once"
+    await trabajo(propio, comunidad, dia(-1))
     await conSesion(emailAdmin, async () => {
-      expect(await (await verificar()).json()).toEqual({ ok: true, alertadas: 2 })
-      expect(await (await verificar()).json()).toEqual({ ok: true, alertadas: 0 })
-      const total = await prisma.eventoAuditoria.count({
-        where: { comunidadId: comunidad, tipoAccion: "MT_GUARANTEE_EXPIRED" },
+      const clave = { comunidadId: comunidad, tipoAccion: "MT_GUARANTEE_EXPIRED" }
+      const primero = await verificar()
+      expect(primero.status).toBe(200)
+      const alertadasPrimero = ((await primero.json()) as { alertadas: number }).alertadas
+      expect(alertadasPrimero).toBeGreaterThan(0)
+      const eventosTrasPrimero = await prisma.eventoAuditoria.count({ where: clave })
+      expect(eventosTrasPrimero).toBe(alertadasPrimero)
+      expect(
+        await prisma.eventoAuditoria.count({ where: { ...clave, referenciaId: propio } })
+      ).toBe(1)
+
+      const segundo = await verificar()
+      expect(segundo.status).toBe(200)
+      expect(await segundo.json()).toEqual({ ok: true, alertadas: 0 })
+      expect(await prisma.eventoAuditoria.count({ where: clave })).toBe(eventosTrasPrimero)
+      expect(
+        await prisma.eventoAuditoria.count({ where: { ...clave, referenciaId: propio } })
+      ).toBe(1)
+      const enBd = await prisma.trabajoMT.findUnique({
+        where: { id: propio },
+        select: { alertaGarantiaEnviada: true },
       })
-      expect(total).toBe(2)
+      expect(enBd?.alertaGarantiaEnviada).toBe(true)
     })
   })
 

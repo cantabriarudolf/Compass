@@ -30,6 +30,7 @@ const comunidad = "irsin-comunidad-a"
 const otraComunidad = "irsin-comunidad-b"
 const emailAdmin = "irsin-admin@test.cl"
 const emailConserje = "irsin-conserje@test.cl"
+const emailMantencion = "irsin-mantencion@test.cl"
 const emailComite = "irsin-comite@test.cl"
 const emailResidente = "irsin-residente@test.cl"
 const emailAdminOtra = "irsin-admin-b@test.cl"
@@ -96,6 +97,9 @@ describe("/api/ir/solicitudes-insumo/[id] — detalle/parcial/baja scoped", () =
     const usuarios: Array<[string, string, string]> = [
       [emailAdmin, "administrador", comunidad],
       [emailConserje, "conserjeria", comunidad],
+      // El encabezado afirma que mantención edita: sin este rol sembrado la
+      // afirmación no la ejercitaba ningún test.
+      [emailMantencion, "mantencion", comunidad],
       [emailComite, "comite", comunidad],
       [emailResidente, "residente", comunidad],
       [emailAdminOtra, "administrador", otraComunidad],
@@ -126,7 +130,14 @@ describe("/api/ir/solicitudes-insumo/[id] — detalle/parcial/baja scoped", () =
       await prisma.solicitudInsumoIR.deleteMany({
         where: { comunidadId: { in: [comunidad, otraComunidad] } },
       })
-      for (const email of [emailAdmin, emailConserje, emailComite, emailResidente, emailAdminOtra]) {
+      for (const email of [
+        emailAdmin,
+        emailConserje,
+        emailMantencion,
+        emailComite,
+        emailResidente,
+        emailAdminOtra,
+      ]) {
         await prisma.membresia.deleteMany({ where: { usuarioId: idDe(email) } })
         await prisma.usuario.delete({ where: { id: idDe(email) } }).catch(() => {})
       }
@@ -199,6 +210,15 @@ describe("/api/ir/solicitudes-insumo/[id] — detalle/parcial/baja scoped", () =
       const res = await invocar("PUT", "irsin-1", { areaDestino: "Hall" })
       expect(res.status).toBe(403)
       expect(await res.json()).toEqual({ error: "Permiso denegado." })
+    })
+  })
+
+  it("PUT mantención (`ir:mantenimiento` editar) → 200", async () => {
+    await conSesion(emailMantencion, async () => {
+      const res = await invocar("PUT", "irsin-1", { areaDestino: "Bodega norte" })
+      expect(res.status).toBe(200)
+      const enBd = await prisma.solicitudInsumoIR.findUnique({ where: { id: "irsin-1" } })
+      expect(enBd?.areaDestino).toBe("Bodega norte")
     })
   })
 

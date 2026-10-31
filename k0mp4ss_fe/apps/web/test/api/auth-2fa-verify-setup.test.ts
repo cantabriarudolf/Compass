@@ -41,6 +41,17 @@ const idDe = (email: string): string => email.split("@")[0] ?? email
 const secreto = new Map<string, string>()
 const claveDe = (id: string): string => `2fa-setup:${id}`
 
+/**
+ * Reloj congelado: el TOTP se deriva del reloj y la ruta lo verifica unos ms
+ * después, así que con reloj real el test dependía de no cruzar un paso de 30 s
+ * (ventana ±1 de `verificarCodigo2FA`) entre generar y verificar.
+ * Se congela solo `Date` (los temporizadores de bcrypt/Prisma siguen reales) y se
+ * captura el instante real al cargar el archivo: `registrarFallo` limpia con
+ * `Date.now()` los intentos fuera de la ventana de 15 min, así que una fecha
+ * absoluta en el pasado borraría los intentos de las suites que comparten la base.
+ */
+const HORA_FIJA = new Date()
+
 function tokenActual(secretoBase32: string): string {
   return speakeasy.totp({ secret: secretoBase32, encoding: "base32" })
 }
@@ -69,6 +80,8 @@ async function POST(body: unknown): Promise<Response> {
 describe("POST /api/auth/2fa/verify-setup — ramas del enrolamiento", () => {
   beforeAll(async () => {
     process.env.AUTH_SECRET = AUTH_SECRET
+    vi.useFakeTimers({ toFake: ["Date"] })
+    vi.setSystemTime(HORA_FIJA)
     const definiciones: Array<{
       email: string
       activo: boolean
@@ -128,6 +141,8 @@ describe("POST /api/auth/2fa/verify-setup — ramas del enrolamiento", () => {
       }
     } catch {
       // limpieza best-effort
+    } finally {
+      vi.useRealTimers()
     }
   })
 
@@ -160,8 +175,14 @@ describe("POST /api/auth/2fa/verify-setup — ramas del enrolamiento", () => {
 
   it(`con ${MAX_INTENTOS} fallos previos del usuario → 429 sin verificar el código`, async () => {
     const id = idDe(emailPendiente)
+    // `createdAt` explícito dentro de la ventana congelada: el default `now()`
+    // lo resuelve el motor de Prisma, que no ve el reloj falseado.
+    const reciente = new Date(HORA_FIJA.getTime() - 60_000)
     await prismaPlano.rateLimitAttempt.createMany({
-      data: Array.from({ length: MAX_INTENTOS }, () => ({ clave: claveDe(id) })),
+      data: Array.from({ length: MAX_INTENTOS }, () => ({
+        clave: claveDe(id),
+        createdAt: reciente,
+      })),
     })
     await conSesion(id, emailPendiente, async () => {
       const res = await POST({ codigo: tokenActual(secreto.get(emailPendiente)!) })
@@ -230,6 +251,7 @@ describe("POST /api/auth/2fa/verify-setup — ramas del enrolamiento", () => {
       const valido = tokenActual(secreto.get(emailPendiente)!)
       // Un fallo previo: el éxito debe limpiar la ventana de intentos.
       await POST({ codigo: valido === "000000" ? "000001" : "000000" })
+      expect(await prismaPlano.rateLimitAttempt.count({ where: { clave: claveDe(id) } })).toBe(1)
       const res = await POST({ codigo: valido })
       expect(res.status).toBe(200)
       const json = (await res.json()) as { ok: boolean; backupCodes: string[] }

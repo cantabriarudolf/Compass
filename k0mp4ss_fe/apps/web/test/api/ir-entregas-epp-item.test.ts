@@ -29,6 +29,7 @@ const comunidad = "irepp-comunidad-a"
 const otraComunidad = "irepp-comunidad-b"
 const emailAdmin = "irepp-admin@test.cl"
 const emailConserje = "irepp-conserje@test.cl"
+const emailMantencion = "irepp-mantencion@test.cl"
 const emailComite = "irepp-comite@test.cl"
 const emailResidente = "irepp-residente@test.cl"
 const emailAdminOtra = "irepp-admin-b@test.cl"
@@ -92,6 +93,9 @@ describe("/api/ir/entregas-epp/[id] — detalle/parcial/baja scoped", () => {
     const usuarios: Array<[string, string, string]> = [
       [emailAdmin, "administrador", comunidad],
       [emailConserje, "conserjeria", comunidad],
+      // El encabezado afirma que mantención edita: sin este rol sembrado la
+      // afirmación no la ejercitaba ningún test.
+      [emailMantencion, "mantencion", comunidad],
       [emailComite, "comite", comunidad],
       [emailResidente, "residente", comunidad],
       [emailAdminOtra, "administrador", otraComunidad],
@@ -122,7 +126,14 @@ describe("/api/ir/entregas-epp/[id] — detalle/parcial/baja scoped", () => {
       await prisma.entregaEPP.deleteMany({
         where: { comunidadId: { in: [comunidad, otraComunidad] } },
       })
-      for (const email of [emailAdmin, emailConserje, emailComite, emailResidente, emailAdminOtra]) {
+      for (const email of [
+        emailAdmin,
+        emailConserje,
+        emailMantencion,
+        emailComite,
+        emailResidente,
+        emailAdminOtra,
+      ]) {
         await prisma.membresia.deleteMany({ where: { usuarioId: idDe(email) } })
         await prisma.usuario.delete({ where: { id: idDe(email) } }).catch(() => {})
       }
@@ -195,6 +206,15 @@ describe("/api/ir/entregas-epp/[id] — detalle/parcial/baja scoped", () => {
       const res = await invocar("PUT", "irepp-1", { talla: "L" })
       expect(res.status).toBe(403)
       expect(await res.json()).toEqual({ error: "Permiso denegado." })
+    })
+  })
+
+  it("PUT mantención (`ir:mantenimiento` editar) → 200", async () => {
+    await conSesion(emailMantencion, async () => {
+      const res = await invocar("PUT", "irepp-1", { talla: "S" })
+      expect(res.status).toBe(200)
+      const enBd = await prisma.entregaEPP.findUnique({ where: { id: "irepp-1" } })
+      expect(enBd?.talla).toBe("S")
     })
   })
 

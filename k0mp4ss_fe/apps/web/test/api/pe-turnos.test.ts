@@ -35,9 +35,16 @@ const emailMantencion = "petur-mantencion@test.cl"
 
 const idDe = (email: string): string => email.split("@")[0] ?? email
 
-const hoy = (): string => new Date().toISOString().slice(0, 10)
+/**
+ * Reloj congelado: la ruta filtra por `hoyISO()` (día UTC del reloj real). La
+ * fixture armaba los eventos con `new Date()` en `beforeAll`, así que una corrida
+ * que cruzaba la medianoche UTC entre el seed y la lectura se quedaba sin filas.
+ * Se congela solo `Date` para no tocar los temporizadores de Prisma/Next.
+ */
+const HORA_FIJA = new Date("2026-03-15T12:00:00.000Z")
+const hoy = (): string => HORA_FIJA.toISOString().slice(0, 10)
 const ayer = (): string =>
-  new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+  new Date(HORA_FIJA.getTime() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
 
 async function conSesion(email: string, fn: () => Promise<void>): Promise<void> {
   const usuario = await prisma.usuario.findUnique({ where: { email } })
@@ -78,6 +85,8 @@ const evento = (
 describe("GET /api/pe/turnos — inicios de turno de hoy scoped", () => {
   beforeAll(async () => {
     process.env.AUTH_SECRET = AUTH_SECRET
+    vi.useFakeTimers({ toFake: ["Date"] })
+    vi.setSystemTime(HORA_FIJA)
     for (const [id, slug] of [
       [comunidad, "petur-a"],
       [otraComunidad, "petur-b"],
@@ -130,6 +139,8 @@ describe("GET /api/pe/turnos — inicios de turno de hoy scoped", () => {
       await prisma.comunidad.delete({ where: { id: comunidad } }).catch(() => {})
     } catch {
       // limpieza best-effort
+    } finally {
+      vi.useRealTimers()
     }
   })
 

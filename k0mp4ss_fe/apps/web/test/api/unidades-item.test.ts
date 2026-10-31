@@ -89,7 +89,13 @@ async function sembrarMaestros(
   eo: string
 ): Promise<void> {
   await prisma.microSector.create({
-    data: { id: ms, comunidadId: cid, macroSectorId: "uniitem-macro", nombre: `Micro ${ms}`, etiqueta: `MS ${ms}` },
+    data: {
+      id: ms,
+      comunidadId: cid,
+      macroSectorId: `uniitem-macro-${cid}`,
+      nombre: `Micro ${ms}`,
+      etiqueta: `MS ${ms}`,
+    },
   })
   await prisma.tipoUnidad.create({
     data: {
@@ -106,6 +112,16 @@ async function sembrarMaestros(
   await prisma.estadoOcupacion.create({
     data: { id: eo, comunidadId: cid, nombre: `Estado ${eo}`, color: "bg-emerald-500 text-white" },
   })
+}
+
+/**
+ * Los maestros se borran antes de sembrarlos: con `create` en `beforeAll` una
+ * corrida interrumpida dejaba filas y el archivo entero fallaba con P2002.
+ */
+async function limpiarMaestros(): Promise<void> {
+  await prisma.microSector.deleteMany({ where: { id: { in: [msA, msB] } } })
+  await prisma.tipoUnidad.deleteMany({ where: { id: { in: [tuA, tuB] } } })
+  await prisma.estadoOcupacion.deleteMany({ where: { id: { in: [eoA, eoB] } } })
 }
 
 const unidad = (
@@ -163,8 +179,6 @@ describe("/api/unidades/[id] — detalle/parcial/baja con FKs validadas", () => 
         data: { usuarioId: idDe(email), comunidadId, rol },
       })
     }
-    await sembrarMaestros(comunidad, msA, tuA, eoA)
-    await sembrarMaestros(otraComunidad, msB, tuB, eoB)
   }, 60_000)
 
   beforeEach(async () => {
@@ -175,6 +189,10 @@ describe("/api/unidades/[id] — detalle/parcial/baja con FKs validadas", () => 
     await prisma.unidad.deleteMany({
       where: { comunidadId: { in: [comunidad, otraComunidad] } },
     })
+    // Maestros y unidades quedan a cargo de cada test: sin residuos previos.
+    await limpiarMaestros()
+    await sembrarMaestros(comunidad, msA, tuA, eoA)
+    await sembrarMaestros(otraComunidad, msB, tuB, eoB)
     await unidad("uniitem-unidad-1", comunidad, msA, tuA, eoA)
     await unidad("uniitem-unidad-b", otraComunidad, msB, tuB, eoB)
   })
@@ -188,9 +206,7 @@ describe("/api/unidades/[id] — detalle/parcial/baja con FKs validadas", () => 
       await prisma.unidad.deleteMany({
         where: { comunidadId: { in: [comunidad, otraComunidad] } },
       })
-      await prisma.microSector.deleteMany({ where: { id: { in: [msA, msB] } } })
-      await prisma.tipoUnidad.deleteMany({ where: { id: { in: [tuA, tuB] } } })
-      await prisma.estadoOcupacion.deleteMany({ where: { id: { in: [eoA, eoB] } } })
+      await limpiarMaestros()
       for (const email of [emailAdmin, emailComite, emailResidente, emailAdminOtra]) {
         await prisma.membresia.deleteMany({ where: { usuarioId: idDe(email) } })
         await prisma.usuario.delete({ where: { id: idDe(email) } }).catch(() => {})
