@@ -41,6 +41,34 @@ function esDestinoSeguro(destino: string | null): destino is string {
   )
 }
 
+/**
+ * Mensaje para los rechazos de Google SSO. Google nunca crea cuentas: el
+ * administrador da de alta al usuario en el sistema. Si el email no tiene
+ * cuenta, la cuenta está inactiva o Google no certifica el correo, el callback
+ * `signIn` de `lib/auth.ts` devuelve `false` y Auth.js redirige a
+ * `pages.error` (/ingresar) con `?error=AccessDenied`.
+ */
+const ERROR_CUENTA_GOOGLE =
+  "Tu cuenta no existe o está inactiva. Pídele al administrador que la cree en el sistema."
+
+/**
+ * Traduce el `?error=` que Auth.js deja en la URL al volver de un flujo OAuth.
+ * `AccessDenied` es el código con el que se materializa el rechazo del callback
+ * `signIn`; `OAuthAccountNotLinked` quedó obsoleto al habilitar el match por
+ * email, pero se mantiene mapeado por si una URL vieja lo trae. Cualquier otro
+ * código no muestra mensaje al cargar: los errores del provider credentials se
+ * leen de la respuesta JSON del callback, no de la URL.
+ */
+function errorInicialDeUrl(parametros: {
+  get(clave: string): string | null
+}): string | null {
+  const codigo = parametros.get("error")
+  if (codigo === "AccessDenied" || codigo === "OAuthAccountNotLinked") {
+    return ERROR_CUENTA_GOOGLE
+  }
+  return null
+}
+
 interface RespuestaLogin {
   ok: boolean
   error?:
@@ -181,7 +209,9 @@ function IngresarForm() {
   const searchParams = useSearchParams()
   const [email, setEmail] = React.useState("")
   const [password, setPassword] = React.useState("")
-  const [error, setError] = React.useState<string | null>(null)
+  const [error, setError] = React.useState<string | null>(() =>
+    errorInicialDeUrl(searchParams)
+  )
   const [cargando, setCargando] = React.useState(false)
   const [paso, setPaso] = React.useState<1 | 2>(1)
   const [tempToken, setTempToken] = React.useState<string | null>(null)

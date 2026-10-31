@@ -6,6 +6,7 @@ import userEvent from "@testing-library/user-event"
 const mockPush = vi.fn()
 const mockAssign = vi.fn()
 let mockNextParam: string | null = null
+let mockErrorParam: string | null = null
 
 // La página navega con window.location.assign (recarga completa post-login),
 // no con router.push: se finge assign preservando origin (la página lo lee
@@ -36,7 +37,8 @@ function restaurarLocation() {
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: mockPush }),
   useSearchParams: () => ({
-    get: (k: string) => (k === "next" ? mockNextParam : null),
+    get: (k: string) =>
+      k === "next" ? mockNextParam : k === "error" ? mockErrorParam : null,
   }),
 }))
 
@@ -126,6 +128,7 @@ describe("app/ingresar/page.tsx (Auth.js)", () => {
     mockPush.mockClear()
     mockAssign.mockClear()
     mockNextParam = null
+    mockErrorParam = null
     fingirLocationAssign()
     manejadorFetch = () =>
       Promise.reject(new Error("fetch no mockeado en este test"))
@@ -429,5 +432,39 @@ describe("app/ingresar/page.tsx (Auth.js)", () => {
       screen.queryByLabelText(/código de verificación/i)
     ).not.toBeInTheDocument()
     expect(mockAssign).not.toHaveBeenCalled()
+  })
+
+  it("?error=AccessDenied explica que la cuenta no existe o está inactiva", async () => {
+    mockErrorParam = "AccessDenied"
+    render(<PaginaIngresar />)
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      /no existe o está inactiva/i
+    )
+    expect(screen.getByRole("alert")).toHaveTextContent(/administrador/i)
+  })
+
+  it("?error=OAuthAccountNotLinked muestra el mismo mensaje de cuenta no habilitada", async () => {
+    mockErrorParam = "OAuthAccountNotLinked"
+    render(<PaginaIngresar />)
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      /no existe o está inactiva/i
+    )
+  })
+
+  it("sin ?error= no muestra alerta al cargar la página", async () => {
+    render(<PaginaIngresar />)
+
+    await screen.findByRole("button", { name: /ingresar/i })
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument()
+  })
+
+  it("un ?error= no mapeado sigue sin mostrar alerta al cargar (comportamiento previo)", async () => {
+    mockErrorParam = "OAuthSignin"
+    render(<PaginaIngresar />)
+
+    await screen.findByRole("button", { name: /ingresar/i })
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument()
   })
 })

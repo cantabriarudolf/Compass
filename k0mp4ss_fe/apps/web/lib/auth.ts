@@ -171,17 +171,33 @@ const resultadoAuth = NextAuth({
           Google({
             clientId: process.env.GOOGLE_CLIENT_ID ?? "",
             clientSecret: process.env.GOOGLE_CLIENT_SECRET ?? "",
-            allowDangerousEmailAccountLinking: false,
+            // true a propósito: el schema no tiene tablas `Account`/`Session` y
+            // `AdapterPrismaCompass` devuelve `getUserByAccount` → null, así que
+            // el vínculo con Google nunca se persiste y el match es por email en
+            // cada login. Sin esta bandera @auth/core lanza
+            // `OAuthAccountNotLinked` para todo usuario existente y el SSO queda
+            // inutilizable. Es seguro porque el callback `signIn` es la compuerta:
+            // rechaza cualquier email sin usuario previo y activo (no hay creación
+            // implícita de cuentas) y exige que Google certifique el correo
+            // (`email_verified === true`).
+            allowDangerousEmailAccountLinking: true,
           }),
         ]),
   ],
   callbacks: {
-    async signIn({ user, account }) {
+    async signIn({ user, account, profile }) {
       if (account?.provider === "google") {
         const email = user.email?.toLowerCase()
         if (!email) return false
         const clave = `google:${email}`
         if (await excedeIntentos(clave)) return false
+        // Google nunca crea cuentas: la cuenta la da de alta el administrador.
+        // Además el correo debe venir certificado por el id_token OIDC; un
+        // email sin verificar permitiría suplantar a otra persona del sistema.
+        if (profile?.email_verified !== true) {
+          await registrarFallo(clave)
+          return false
+        }
         const usuario = await prisma.usuario.findUnique({ where: { email } })
         if (!usuario || !usuario.activo) {
           await registrarFallo(clave)

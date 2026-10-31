@@ -14,7 +14,7 @@ import { describe, it, expect, vi, beforeEach, beforeAll } from "vitest"
 const { estado, prismaMock, rateLimitMock } = vi.hoisted(() => ({
   estado: { config: null as any },
   prismaMock: {
-    usuario: { findUnique: vi.fn() },
+    usuario: { findUnique: vi.fn(), create: vi.fn() },
     membresia: { findMany: vi.fn() },
   },
   rateLimitMock: {
@@ -55,6 +55,9 @@ let callbacks: Callbacks
 
 const CUENTA_GOOGLE = { provider: "google", type: "oidc" }
 
+/** Claim de Google que certifica el correo (id_token OIDC). */
+const PERFIL_VERIFICADO = { email_verified: true }
+
 beforeAll(async () => {
   await import("@/lib/auth")
   callbacks = estado.config.callbacks as Callbacks
@@ -75,12 +78,13 @@ describe("signIn callback — Google SSO (filtro de autorización)", () => {
     expect(typeof callbacks.jwt).toBe("function")
   })
 
-  it("rechaza y registra fallo cuando el usuario no existe", async () => {
+  it("rechaza y registra fallo cuando el usuario no existe, sin crear cuenta", async () => {
     prismaMock.usuario.findUnique.mockResolvedValue(null)
 
     const permitido = await callbacks.signIn({
       user: { email: "nadie@comunidad.cl" },
       account: CUENTA_GOOGLE,
+      profile: PERFIL_VERIFICADO,
     })
 
     expect(permitido).toBe(false)
@@ -89,6 +93,8 @@ describe("signIn callback — Google SSO (filtro de autorización)", () => {
     })
     expect(rateLimitMock.registrarFallo).toHaveBeenCalledWith("google:nadie@comunidad.cl")
     expect(rateLimitMock.limpiarIntentos).not.toHaveBeenCalled()
+    // Google nunca crea usuarios: la cuenta la crea el administrador.
+    expect(prismaMock.usuario.create).not.toHaveBeenCalled()
   })
 
   it("rechaza y registra fallo cuando el usuario existe pero no está activo", async () => {
@@ -101,6 +107,7 @@ describe("signIn callback — Google SSO (filtro de autorización)", () => {
     const permitido = await callbacks.signIn({
       user: { email: "inactivo@comunidad.cl" },
       account: CUENTA_GOOGLE,
+      profile: PERFIL_VERIFICADO,
     })
 
     expect(permitido).toBe(false)
@@ -114,6 +121,7 @@ describe("signIn callback — Google SSO (filtro de autorización)", () => {
     await callbacks.signIn({
       user: { email: "Mayus@Comunidad.CL" },
       account: CUENTA_GOOGLE,
+      profile: PERFIL_VERIFICADO,
     })
 
     expect(rateLimitMock.excedeIntentos).toHaveBeenCalledWith("google:mayus@comunidad.cl")
@@ -138,7 +146,7 @@ describe("signIn callback — Google SSO (filtro de autorización)", () => {
     expect(rateLimitMock.limpiarIntentos).not.toHaveBeenCalled()
   })
 
-  it("permite usuario activo y limpia los intentos previos de la clave", async () => {
+  it("permite usuario activo con email verificado y limpia los intentos previos de la clave", async () => {
     prismaMock.usuario.findUnique.mockResolvedValue({
       id: "u-activo",
       email: "activo@comunidad.cl",
@@ -148,6 +156,7 @@ describe("signIn callback — Google SSO (filtro de autorización)", () => {
     const permitido = await callbacks.signIn({
       user: { email: "activo@comunidad.cl" },
       account: CUENTA_GOOGLE,
+      profile: PERFIL_VERIFICADO,
     })
 
     expect(permitido).toBe(true)
@@ -156,8 +165,68 @@ describe("signIn callback — Google SSO (filtro de autorización)", () => {
     expect(rateLimitMock.registrarFallo).not.toHaveBeenCalled()
   })
 
+  it("rechaza y registra fallo cuando Google no certifica el correo (email_verified false)", async () => {
+    prismaMock.usuario.findUnique.mockResolvedValue({
+      id: "u-activo",
+      email: "activo@comunidad.cl",
+      activo: true,
+    })
+
+    const permitido = await callbacks.signIn({
+      user: { email: "activo@comunidad.cl" },
+      account: CUENTA_GOOGLE,
+      profile: { email_verified: false },
+    })
+
+    expect(permitido).toBe(false)
+    expect(rateLimitMock.registrarFallo).toHaveBeenCalledWith("google:activo@comunidad.cl")
+    expect(rateLimitMock.limpiarIntentos).not.toHaveBeenCalled()
+    // El rechazo ocurre antes de consultar la BD: no se crea ni se autentica nada.
+    expect(prismaMock.usuario.findUnique).not.toHaveBeenCalled()
+    expect(prismaMock.usuario.create).not.toHaveBeenCalled()
+  })
+
+  it("rechaza y registra fallo cuando el profile no trae email_verified", async () => {
+    prismaMock.usuario.findUnique.mockResolvedValue({
+      id: "u-activo",
+      email: "activo@comunidad.cl",
+      activo: true,
+    })
+
+    const permitido = await callbacks.signIn({
+      user: { email: "activo@comunidad.cl" },
+      account: CUENTA_GOOGLE,
+      profile: { sub: "google-sub-sin-claim" },
+    })
+
+    expect(permitido).toBe(false)
+    expect(rateLimitMock.registrarFallo).toHaveBeenCalledWith("google:activo@comunidad.cl")
+    expect(rateLimitMock.limpiarIntentos).not.toHaveBeenCalled()
+    expect(prismaMock.usuario.findUnique).not.toHaveBeenCalled()
+    expect(prismaMock.usuario.create).not.toHaveBeenCalled()
+  })
+
+  it("el rate limit manda sobre la verificación de email: bloquea sin registrar fallo nuevo", async () => {
+    rateLimitMock.excedeIntentos.mockResolvedValue(true)
+
+    const permitido = await callbacks.signIn({
+      user: { email: "tope@comunidad.cl" },
+      account: CUENTA_GOOGLE,
+      profile: { email_verified: false },
+    })
+
+    expect(permitido).toBe(false)
+    expect(rateLimitMock.excedeIntentos).toHaveBeenCalledWith("google:tope@comunidad.cl")
+    expect(rateLimitMock.registrarFallo).not.toHaveBeenCalled()
+    expect(rateLimitMock.limpiarIntentos).not.toHaveBeenCalled()
+  })
+
   it("rechaza sin tocar rate limit cuando el email viene vacío", async () => {
-    const permitido = await callbacks.signIn({ user: {}, account: CUENTA_GOOGLE })
+    const permitido = await callbacks.signIn({
+      user: {},
+      account: CUENTA_GOOGLE,
+      profile: PERFIL_VERIFICADO,
+    })
 
     expect(permitido).toBe(false)
     expect(rateLimitMock.excedeIntentos).not.toHaveBeenCalled()
@@ -177,6 +246,32 @@ describe("signIn callback — Google SSO (filtro de autorización)", () => {
     expect(rateLimitMock.excedeIntentos).not.toHaveBeenCalled()
     expect(rateLimitMock.registrarFallo).not.toHaveBeenCalled()
     expect(prismaMock.usuario.findUnique).not.toHaveBeenCalled()
+  })
+})
+
+describe("provider Google — política de vinculación por email", () => {
+  it("registra Google con allowDangerousEmailAccountLinking habilitado", () => {
+    const providers = estado.config?.providers as Array<{
+      id?: string
+      options?: { allowDangerousEmailAccountLinking?: boolean }
+    }>
+    const google = providers.find((p) => p.id === "google")
+
+    expect(google).toBeDefined()
+    // Sin tablas Account/Session el vínculo no se persiste: el match por email
+    // es la única vía de login Google, y el callback signIn es la compuerta.
+    expect(google?.options?.allowDangerousEmailAccountLinking).toBe(true)
+  })
+
+  it("no habilita el account linking en el provider Credentials", () => {
+    const providers = estado.config?.providers as Array<{
+      id?: string
+      options?: { allowDangerousEmailAccountLinking?: boolean }
+    }>
+    const credentials = providers.find((p) => p.id === "credentials")
+
+    expect(credentials).toBeDefined()
+    expect(credentials?.options?.allowDangerousEmailAccountLinking).toBeUndefined()
   })
 })
 
