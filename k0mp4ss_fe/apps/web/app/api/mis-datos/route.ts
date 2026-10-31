@@ -2,6 +2,11 @@ import { NextResponse, NextRequest } from "next/server"
 import { z } from "zod"
 import { randomUUID } from "node:crypto"
 import { prisma } from "@/lib/prisma"
+import {
+  emailCanonico,
+  MENSAJE_EMAIL_DUPLICADO,
+  personaConEmailDuplicado,
+} from "@/lib/invariantes/persona"
 import { auth } from "@/lib/auth"
 import { logger } from "@/lib/logger"
 
@@ -155,6 +160,33 @@ export async function PATCH(request: NextRequest) {
 
   const { email, telefonoMovil, telefonoFijo } = parsed.data
   const cambios: string[] = []
+
+  // INV-01 (docs/INVARIANTES.md): la regla "email de Persona único por
+  // comunidad" tiene un solo dueño (`lib/invariantes/persona.ts`) y esta ruta
+  // la aplicaba de menos: escribía `Persona.email` mirando solo `Usuario.email`.
+  // El rechazo es duro y previo a cualquier escritura: ni la cuenta ni la ficha
+  // cambian si el correo ya es de otra persona de la comunidad.
+  if (email !== undefined) {
+    const ficha = await prisma.persona.findUnique({
+      where: { id: usuario.personaId },
+      select: { comunidadId: true },
+    })
+    if (!ficha) {
+      return NextResponse.json(
+        { error: "Su cuenta no tiene ficha de persona asociada. Contacte a administración." },
+        { status: 409 }
+      )
+    }
+    if (
+      await personaConEmailDuplicado(
+        ficha.comunidadId,
+        emailCanonico(email),
+        usuario.personaId
+      )
+    ) {
+      return NextResponse.json({ error: MENSAJE_EMAIL_DUPLICADO }, { status: 409 })
+    }
+  }
 
   if (email !== undefined && email.toLowerCase() !== usuario.email) {
     const ocupado = await prisma.usuario.findUnique({ where: { email: email.toLowerCase() } })

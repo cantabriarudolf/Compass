@@ -17,6 +17,13 @@ import { puede } from "@/lib/authz"
 import { prisma } from "@/lib/prisma"
 import { logger } from "@/lib/logger"
 import { variantesRun } from "@/lib/validacion-rut"
+import {
+  emailCanonico,
+  MENSAJE_EMAIL_DUPLICADO,
+  MENSAJE_RUT_DUPLICADO,
+  personaConEmailDuplicado,
+  personaConRutDuplicado,
+} from "@/lib/invariantes/persona"
 import { randomUUID } from "node:crypto"
 import {
   jsonError,
@@ -48,6 +55,11 @@ export function limpiarPayloadPersona(datos: Record<string, unknown>): Record<st
   for (const campo of CAMPOS_PERSONA) {
     if (campo in datos) salida[campo] = datos[campo]
   }
+  // INV-01: el email se persiste SIEMPRE en forma canónica (minúsculas, sin
+  // espacios). Se normaliza acá —y no sólo en la validación— porque el PUT de
+  // `/api/personas/[id]` escribe `limpiarPayloadPersona(parcial.data)` y no el
+  // payload validado: sin esto la comparación exacta de la regla se rompe.
+  if (typeof salida.email === "string") salida.email = emailCanonico(salida.email)
   return salida
 }
 
@@ -209,35 +221,25 @@ export async function validarYLimpiarPersona(
     }
   }
 
-  // MP: RUT y email únicos por comunidad (repetibles entre comunidades).
+  // INV-01 (docs/INVARIANTES.md): RUT y email únicos por comunidad, repetibles
+  // entre comunidades. La regla vive en `lib/invariantes/persona.ts` para que
+  // toda ruta que escriba `Persona` la aplique igual; acá solo se decide el 409.
+  // El email se normaliza ANTES de validar y de persistir: sin eso la
+  // comparación exacta deja pasar `Juan@X.cl` y `juan@x.cl` como dos fichas.
+  if (typeof datos.email === "string" && datos.email) {
+    datos.email = emailCanonico(datos.email)
+  }
   const excluirId = idParaExcluir ?? (typeof datos.id === "string" ? datos.id : "")
-  const not = excluirId ? { id: excluirId } : undefined
   if (typeof datos.rut === "string" && datos.rut) {
-    const dupRut = await prisma.persona.findFirst({
-      where: { comunidadId, rut: datos.rut, NOT: not },
-    })
-    if (dupRut) {
-      return {
-        ok: false,
-        response: jsonError(
-          409,
-          "Conflicto: el RUT ya está registrado en esta comunidad."
-        ),
-      }
+    if (await personaConRutDuplicado(comunidadId, datos.rut, excluirId || undefined)) {
+      return { ok: false, response: jsonError(409, MENSAJE_RUT_DUPLICADO) }
     }
   }
   if (typeof datos.email === "string" && datos.email) {
-    const dupEmail = await prisma.persona.findFirst({
-      where: { comunidadId, email: datos.email, NOT: not },
-    })
-    if (dupEmail) {
-      return {
-        ok: false,
-        response: jsonError(
-          409,
-          "Conflicto: el correo electrónico ya está registrado en esta comunidad."
-        ),
-      }
+    if (
+      await personaConEmailDuplicado(comunidadId, datos.email, excluirId || undefined)
+    ) {
+      return { ok: false, response: jsonError(409, MENSAJE_EMAIL_DUPLICADO) }
     }
   }
 

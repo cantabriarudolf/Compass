@@ -62,6 +62,10 @@ jobs:
       # archivo:línea arreglar, sin esperar 15 minutos de tests.
       - run: npm run audit:desvios
       - run: npm run audit:store
+      # Invariantes de datos (docs/INVARIANTES.md): las reglas sin dueño único
+      # centralizadas en lib/invariantes/. Corre sólo esas pruebas, con el
+      # rechazo como caso principal; es barato y dice qué ruta se desvió.
+      - run: npm run check:invariantes
       - run: npm test
       # Drill de restauración automatizado (SG §3 D-vi): backup → fila
       # marcadora → restore → verificación de conteos, contra ESTA BD
