@@ -7,7 +7,7 @@ Capa de datos persistente en el cliente que centraliza el estado del dominio, lo
 ## Requirements
 
 ### Requirement: Persistencia entre recargas
-El sistema SHALL persistir los datos de dominio en el servidor (base de datos vía API REST), de modo que las modificaciones realizadas en la interfaz sobrevivan a recargas de página. El store legacy `apps/web/lib/store.ts` SHALL conservar únicamente su snapshot histórico en localStorage bajo la key `compass-store`, leído hoy solo por las dos páginas del módulo dev (`/admin/qa-lab`, `/admin/mantenimiento`), y NO SHALL ser la fuente de verdad del dominio.
+El sistema SHALL persistir los datos de dominio en el servidor (base de datos vía API REST), de modo que las modificaciones realizadas en la interfaz sobrevivan a recargas de página. El store legacy `apps/web/lib/store.ts` SHALL conservar únicamente su snapshot histórico en localStorage bajo la key `compass-store`; tras el retiro del módulo dev (F9) ninguna pantalla lo lee, así que el snapshot queda huérfano en los navegadores hasta que se ejecute F22a. NO SHALL ser la fuente de verdad del dominio.
 
 #### Scenario: Cambio persistido al recargar
 - **WHEN** el usuario crea o edita una entidad y luego recarga la página
@@ -21,7 +21,7 @@ El sistema SHALL mantener `STORE_VERSION` congelado en 28 y NO SHALL incorporar 
 - **THEN** aplica el `migrate` existente sobre ese snapshot y `STORE_VERSION` permanece en 28, sin migraciones de dominio nuevas.
 
 ### Requirement: Sembrado inicial desde mocks
-Los mocks de `apps/web/data/` SHALL ser la semilla del servidor, aplicada por los scripts `seed:mocks` y `db:*` de npm. El store legacy SHALL seguir inicializándose con ese seed cuando no exista estado persistido, únicamente para las dos páginas del módulo dev que lo leen; los datos de dominio de las páginas del producto provienen del servidor.
+Los mocks de `apps/web/data/` SHALL ser la semilla del servidor, aplicada por los scripts `seed:mocks` y `db:*` de npm. El store legacy SHALL seguir inicializándose con ese seed cuando no exista estado persistido, sin consumidores en el producto; los datos de dominio de las páginas provienen del servidor.
 
 #### Scenario: Primera carga sin almacenamiento
 - **WHEN** no existe estado persistido en localStorage
