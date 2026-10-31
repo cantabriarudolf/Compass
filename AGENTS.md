@@ -25,8 +25,8 @@ monorepos — no usarlo como base fundacional).
 ## Convenciones críticas
 
 - **Terminología RG §4**: el término oficial es **"comunidad"**; "condominio" está en desuso y no debe introducirse en ningún archivo
-- **Workflow openspec**: un change de openspec solo es obligatorio cuando el trabajo modifica un contrato de capacidad (agrega, cambia o quita un requirement). Para el resto alcanza ODD: doc de feature, lista de tareas visible y commits por unidad revisable. Cuando sí aplica un change: deltas + `node openspec/scripts/check-delta-coverage.mjs` antes de archivar, y archive tras CI verde. Un fix no exige `proposal/specs/design/tasks`
-- **Deltas de spec**: formato canónico y las 3 trampas que rompen el archive → `openspec/CONVENCION-DELTAS.md`. Antes de archivar correr `node openspec/scripts/check-delta-coverage.mjs` (el `validate`, incluso `--strict`, NO detecta esos errores)
+- **Workflow openspec**: un change solo es obligatorio cuando el trabajo modifica un contrato de capacidad (agrega, cambia o quita un requirement); el lifecycle es ODD. El delta se aplica a mano sobre `openspec/specs/` y se borra la carpeta del change: el registro queda en git y en el avance. No hay CLI, ni archive, ni gate propio
+- **Al tocar una spec**: un requirement reemplazado conserva sus escenarios existentes con el nombre exacto (un reemplazo cubre el requirement completo; renombrar un escenario se lee como pérdida). El nombre de la capability ya existe: nunca se inventa una nueva para meter un delta
 - **NSGC pre-push**: antes de pushear, skill `nsgc-prepush` (manuales de módulo + avance + mocks si toca)
 - **Store legacy**: `lib/store.ts` está `@deprecated` con `STORE_VERSION` congelado en 28 y no recibe migraciones de dominio; los datos de dominio viven en la base vía API (ver `openspec/changes/st-fuente-verdad-bd`)
 - **Commits**: automáticos, sin pedir confirmación; estilo convencional en español (ver `git log`). Se commitea por unidad revisable (~400 líneas cambiadas), con los tests y los docs junto al comportamiento; solo los archivos del cambio, y la suciedad ajena del worktree queda fuera
