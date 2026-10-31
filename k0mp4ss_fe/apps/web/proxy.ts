@@ -47,7 +47,7 @@ function generarNonce(): string {
 }
 
 // D-i: CSP en Report-Only mode. Nonce único por request via Web Crypto.
-// Plan de activación enforcement: openspec/changes/sg-predeploy-headers/design.md
+// Plan de activación enforcement: specs/archive/sg-predeploy-headers/design.md
 // (telemetría DevTools CSP violations, criterio 0 violations 7 días).
 function cspEnforce(nonce: string): string {
   // D-i: orígenes auditados — self, imágenes https/data/blob, YouTube embeds visor CV, fonts Google

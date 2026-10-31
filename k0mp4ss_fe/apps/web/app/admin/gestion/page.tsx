@@ -6,7 +6,7 @@
  * La vista anterior mezclaba dos trabajos en un solo eje: cuatro pestañas por rol
  * (que se solapan: la misma persona puede ser propietaria y directiva) que además
  * contenían, anidadas, la única configuración editable de la pantalla. Ver
- * openspec/changes/gestion-administrativa-usabilidad/proposal.md.
+ * specs/archive/gestion-administrativa-usabilidad/proposal.md.
  *
  * Forma actual: dos tareas, dos pestañas.
  *   1. Directorio — tabla única con búsqueda server-side (`?q=`) y roles como

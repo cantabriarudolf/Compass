@@ -18,7 +18,7 @@
  * Historia: D1 dejó una excepción para el job `unit` de `ci.yml`, que exportaba
  * `DATABASE_URL: file:./dev.db`; la ventana E4 de SERIE-DEUDA-3 alineó los 3 valores
  * del workflow a `file:./perf-test.db` y **quitó la excepción**, así que la guarda
- * vuelve a ser absoluta. Ver openspec/changes/ci-db-descartable/proposal.md.
+ * vuelve a ser absoluta. Ver specs/archive/ci-db-descartable/proposal.md.
  */
 import path from "node:path"
 
@@ -104,7 +104,7 @@ export function mensajeDeAborto(destino: DestinoBase): string | null {
     " La suite de Vitest nunca escribe `prisma/dev.db` (base de desarrollo del owner).",
     " Quitá esa DATABASE_URL y dejá que la suite use la base descartable por defecto,",
     ' o apuntala a otra base (ej. `export DATABASE_URL="file:./perf-local.db"`).',
-    " Ver openspec/changes/test-db-descartable/design.md.",
+    " Ver specs/archive/test-db-descartable/design.md.",
     "=".repeat(76),
     "",
   ].join("\n")

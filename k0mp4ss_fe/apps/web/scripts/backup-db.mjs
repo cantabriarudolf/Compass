@@ -21,10 +21,11 @@ function findRepoRoot() {
   let dir = WEB_ROOT
   const root = path.parse(dir).root
   while (dir !== root) {
-    if (existsSync(path.join(dir, "openspec")) && existsSync(path.join(dir, "Data"))) return dir
+    const conSpecs = existsSync(path.join(dir, "specs")) || existsSync(path.join(dir, "openspec"))
+    if (conSpecs && existsSync(path.join(dir, "Data"))) return dir
     dir = path.dirname(dir)
   }
-  throw new Error("No se encontró la raíz del repo (openspec/ + Data/)")
+  throw new Error("No se encontró la raíz del repo (specs/ + Data/)")
 }
 
 function resolveDbPath() {

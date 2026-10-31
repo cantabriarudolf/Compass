@@ -1,7 +1,7 @@
 import "@testing-library/jest-dom/vitest"
 // La base de la suite se resuelve ACÁ antes que nada (y antes de cualquier import de
 // `@/lib/prisma`): base descartable por defecto + guarda dura contra `prisma/dev.db`.
-// Ver openspec/changes/test-db-descartable/ y test/db-descartable.setup.ts.
+// Ver specs/archive/test-db-descartable/ y test/db-descartable.setup.ts.
 import "./db-descartable.setup"
 import { beforeAll, afterAll, afterEach, beforeEach } from "vitest"
 import { setupServer } from "msw/node"

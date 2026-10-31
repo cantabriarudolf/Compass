@@ -130,12 +130,12 @@ function main() {
   }))
 
   const { sinExcepcion, obsoletas } = evaluar(archivos)
-  const rutaBacklog = join(RAIZ, "../../..", "openspec", "BACKLOG-100.md")
+  const rutaBacklog = join(RAIZ, "../../..", "specs", "BACKLOG-100.md")
   let driftDoc = null
   try {
     driftDoc = verificarMarcador(readFileSync(rutaBacklog, "utf8"), EXCEPCIONES.length)
   } catch {
-    driftDoc = "no se pudo leer openspec/BACKLOG-100.md"
+    driftDoc = "no se pudo leer specs/BACKLOG-100.md"
   }
   const conStore = archivos.filter((a) => RE_STORE.test(a.texto)).length
 
