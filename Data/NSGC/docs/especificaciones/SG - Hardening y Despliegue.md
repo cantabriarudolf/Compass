@@ -17,7 +17,7 @@ Checklist técnico de seguridad para completar la Fase C restante (pre-Base de D
 
 ## 2. Estado actual del hardening (ya implementado — no repetir)
 
-- `lib/env-guard.ts`: `isWriteApiEnabled()` desactiva APIs de escritura (`/api/backup`, `/api/dev-dashboard`) con 404 cuando `NEXT_PUBLIC_APP_ENV=production`; límite de 10 MB en backup (413).
+- `lib/env-guard.ts`: `isWriteApiEnabled()` desactiva APIs de escritura (`/api/backup`, `/api/admin/seed-authz`) con 404 cuando `NEXT_PUBLIC_APP_ENV=production`; límite de 10 MB en backup (413).
 - SEC-005 parcial: `partialize` del store vacía `smtpPassword` y `claveEliminacionMaestro` antes de persistir; la UI lo indica con placeholder. El traslado definitivo es C2-final.
 - Sesión y protección de rutas: ver `AU - Autenticacion y Sesion.md`.
 - Validación de identidad: `lib/rut.ts` (módulo 11 + pasaporte) integrada en `DocumentoIdentidadSchema`; migración v10 repara RUTs históricos con DV ficticio.

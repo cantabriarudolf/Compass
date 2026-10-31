@@ -1,5 +1,10 @@
 # LAB - Mejoras Lab (Fase 5 - Laboratorio y Automatización)
 
+> ⛔ **RETIRADO (F9, 2026-10-31):** el Laboratorio QA (`/admin/qa-lab`) y su dashboard
+> (`/admin/qa-dashboard`) ya no existen en la aplicación; se retiraron con
+> `openspec/changes/retiro-modulo-qa-dev/`. Este documento queda como registro histórico del
+> backlog que tuvieron.
+>
 > 🔌 **Datos:** este módulo es transversal dev-only; no tiene colección propia en `ST` más allá de `LAB-mejoras` como backlog. Vive en `openspec/specs/LAB-mejoras/` y se visualiza en `Fase 5` `k0mp4ss_fe/apps/web/lib/dev-dashboard.ts:66` (`PHASES`).
 
 Fase especial backlog para mejoras del **Laboratorio QA** (`/admin/qa-lab` `k0mp4ss_fe/apps/web/components/app-sidebar.tsx:125`). Agrupa mejoras futuras que no bloquean el core de la comunidad (Fases 0..4): vínculos en nueva ventana, screenshots automatizados y previews.

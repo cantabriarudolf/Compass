@@ -82,3 +82,11 @@ Este change retira **solo los seis del módulo**. Los siete de infraestructura s
 viva de `DEV-qa-lab`, que pasa a hospedar únicamente contratos de prueba. Retirarlos habría
 borrado contratos que el código todavía cumple, y `check-delta-coverage.mjs` no puede detectar
 ese tipo de pérdida.
+
+## `LAB-mejoras` entra en el retiro (2026-10-31)
+
+La capability `LAB-mejoras` describe la Fase 5 del tablero dev y nueve mejoras del Laboratorio
+(vínculos en ventana nueva, screenshots, poblado vía API por módulo, purga bulk). Su sujeto es el
+módulo retirado, así que sus nueve requirements se retiran en este mismo change. Las capacidades de
+poblado que sobreviven son las de base de datos (`seed:mocks`, `db:*`, `e2e:higiene`), contratos que
+permanecen en `DEV-qa-lab`.
