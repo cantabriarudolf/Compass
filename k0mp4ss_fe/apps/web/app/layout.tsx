@@ -13,6 +13,7 @@ import { ModeToggle } from "@/components/mode-toggle";
 import { CerrarSesion } from "@/components/cerrar-sesion";
 import { TooltipProvider } from "@workspace/ui/components/tooltip";
 import { ConsentBanner } from "@/components/consent-banner";
+import { LimpiezaStoreLegacy } from "@/components/limpieza-store-legacy";
 import { auth } from "@/lib/auth";
 
 // Título por defecto para TODAS las páginas (axe document-title): las páginas
@@ -47,6 +48,9 @@ export default async function RootLayout({
       className={cn("antialiased", fontMono.variable, "font-sans", inter.variable)}
     >
       <body>
+        {/* Una sola vez por navegador: borra la clave `compass-store` del store
+            retirado en F22a (no toca `compass-ui-store`). */}
+        <LimpiezaStoreLegacy />
         <ThemeProvider>
           <TooltipProvider>
                 <SidebarProvider>
