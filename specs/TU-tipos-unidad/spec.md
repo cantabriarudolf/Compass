@@ -79,7 +79,7 @@ Entidad `CompassData.tiposUnidad` `k0mp4ss_fe/apps/web/lib/store.ts:77`, seed `d
 
 ### Requirement: Eventos AM de Carga TU
 
-`seedBulkLoad` de `tiposUnidad` SHALL emitir `TU_SEED_LOADED` y mutaciones posteriores `TU_CREATE/TU_UPDATE_VALUE` `openspec/specs/TU-tipos-unidad/spec.md:58`.
+`seedBulkLoad` de `tiposUnidad` SHALL emitir `TU_SEED_LOADED` y mutaciones posteriores `TU_CREATE/TU_UPDATE_VALUE` `specs/TU-tipos-unidad/spec.md:58`.
 
 #### Scenario: Bulk TU auditado
 - **WHEN** se cargan 5 tipos

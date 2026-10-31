@@ -70,7 +70,7 @@ Blindar la plataforma antes del deploy real del owner: CSP estricta en report-on
   2. **Criterio 0 violations 7 días consecutivos** → flip `CSP_ENFORCEMENT=true` en Vercel (inmediato, sin redeploy).
   3. **Validación post-flip**: 24h monitoreo intensivo; si violations → rollback instantáneo `CSP_ENFORCEMENT=false`.
   4. **Próximos pasos (futuro)**: quitar `unsafe-inline`/`unsafe-eval` de `script-src` dejando solo `'nonce-{x}' 'strict-dynamic'` (requiere nonces en todos los scripts inline Next.js 16+), activar `preload` en HSTS (`includeSubDomains; preload`) con dominio real, someter a `hstspreload.org` tras `securityheaders.com` A+.
-  Runbook completo en `openspec/changes/sg-csp-enforcement/runbook.md`.
+  Runbook completo en `specs/archive/2026-10-06-sg-csp-enforcement/runbook.md`.
 
     - **Cifrado en reposo AES-256-GCM** (FASE2 P4): `lib/crypto.ts` (sobre `v1.gcm.iv.tag.ct`, clave `CLAVE_CIFRADO_DATOS` ≥32 chars, fail-closed en prod sin clave) + `lib/prisma-cifrado.ts` (extensión opt-in transparente, bulk fail-closed). Activo en rutas 2FA (`twoFactorSecret`/`twoFactorBackupCodes`); resto mapeado (Persona, ProveedorPE, ConfiguracionGlobal) pendiente de rollout por módulo + blind index HMAC para búsquedas. Migración idempotente: `npm run cifrar:datos` (`scripts/cifrar-datos-existentes.mjs`, con `--dry-run`).
 
@@ -92,5 +92,5 @@ Blindar la plataforma antes del deploy real del owner: CSP estricta en report-on
 - Sesión y guardia en **AU - Autenticación y Sesión** (`proxy.ts` + `lib/auth.ts` + `test/helpers/sesion-authjs.ts`).
 - Tenant y scoping en **ST - Capa de Datos Persistente** (`comunidadId` + `lib/prisma.ts` + `lib/env-guard.ts`).
 - Visor CV en **16 - CO - Visor de Mensajes** (origen youtube auditado).
-- Trazabilidad en **03 - Mapa de Desarrollo y Trazabilidad** y serie en `openspec/SERIE-PLATAFORMA.md` (P6 D-i/ii/iii, P7 D-iv + D-vi).
+- Trazabilidad en **03 - Mapa de Desarrollo y Trazabilidad** y serie en `specs/SERIES-ARCHIVO.md` (P6 D-i/ii/iii, P7 D-iv + D-vi).
 - Auditoría OWASP final en `Data/NSGC/docs/auditorias/auditoria - 2026-08-27 - owasp-final.md` (D-iv, P7).

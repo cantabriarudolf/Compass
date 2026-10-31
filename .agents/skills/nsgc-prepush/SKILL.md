@@ -56,7 +56,7 @@ Map the changed paths to their documentation requirements:
 | `apps/web/app/comunidad/personas/[id]/**` | `06 - Vinculación de Unidades.md` |
 | `apps/web/app/admin/configuracion/**` | `11 - CF - Configuración Global.md` |
 | `apps/web/app/admin/metricas/**` | `04 - Auditoría y Métricas.md` |
-| Specs / openspec changes | Affected module spec (see `openspec/` or `Data/NSGC/docs/manuales/03 - Mapa de Desarrollo y Trazabilidad.md`) |
+| Specs | Affected capability spec (see `specs/<capability>/spec.md` or `Data/NSGC/docs/manuales/03 - Mapa de Desarrollo y Trazabilidad.md`) |
 | Any application change | A new avance file |
 
 If no file maps to a manual directly, find the closest module by grepping the manuals:

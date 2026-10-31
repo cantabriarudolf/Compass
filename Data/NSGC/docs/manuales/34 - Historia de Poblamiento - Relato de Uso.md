@@ -1,6 +1,6 @@
 # 🏘️ 34 - Historia de Poblamiento - Relato de Uso
 
-> **Para quién es este documento:** Para ti, para el admin que poblará la comunidad por primera vez y para quien llegue después. No es contrato para la IA (eso vive en `openspec/specs/`), es la **crónica humana** de cómo se llena Compass sin quedar en pana. Cada capítulo cuenta qué hace una persona real y, al lado, qué engrane técnico lo hace posible.
+> **Para quién es este documento:** Para ti, para el admin que poblará la comunidad por primera vez y para quien llegue después. No es contrato para la IA (eso vive en `specs/`), es la **crónica humana** de cómo se llena Compass sin quedar en pana. Cada capítulo cuenta qué hace una persona real y, al lado, qué engrane técnico lo hace posible.
 
 ---
 
@@ -10,11 +10,11 @@ Este manual tiene **dos capas paralelas** en cada capítulo:
 
 | Relato humano | Gear técnico | Verificación cruzada |
 |---|---|---|
-| Qué vive una persona: "María, admin, llega el día 1..." | Qué colección de `k0mp4ss_fe/apps/web/lib/store.ts:57` se toca, con qué `rank` `openspec/specs/ST-capa-datos-persistente/spec.md:9` y dependencia `RG-reglas-generales:7` | Dónde mirar que el cruce funcionó (qué pestaña, qué badge, qué dona) |
+| Qué vive una persona: "María, admin, llega el día 1..." | Qué colección de `k0mp4ss_fe/apps/web/lib/store.ts:57` se toca, con qué `rank` `specs/ST-capa-datos-persistente/spec.md:9` y dependencia `RG-reglas-generales:7` | Dónde mirar que el cruce funcionó (qué pestaña, qué badge, qué dona) |
 
 Si solo lees el Relato, entiendes el orden de poblamiento. Si lees el Gear, entiendes por qué no puede invertirse.
 
-**Rank canónico que ordena toda la historia** `openspec/specs/ST-capa-datos-persistente/spec.md:9`:
+**Rank canónico que ordena toda la historia** `specs/ST-capa-datos-persistente/spec.md:9`:
 
 `0=CF/MA` (diccionario) → `1=TU/MP` (plantillas + gente) → `2=EF` (obra física `macro→micro→unidad`) → `3=VU` (amarras) → `4=FI/PE/IR/IN` → `5=RA/GE/MT` → `6=CT/PL` → `99=RE/AM` (huella)
 
@@ -44,7 +44,7 @@ Antes de construir una torre, María se sienta con el comité y acuerda el idiom
 
 * **Colecciones:** `MaestroCollections` `k0mp4ss_fe/apps/web/lib/store.ts:57` (14 colecciones) + `configuracion` singleton `k0mp4ss_fe/apps/web/data/admin/configuracion.ts:49`
 * **Seed:** `k0mp4ss_fe/apps/web/data/maestros.ts:6` (categorías/estados) + `k0mp4ss_fe/apps/web/data/admin/maestros.ts:12` (10 colecciones admin) + `k0mp4ss_fe/apps/web/data/comunidad/vinculos.ts:7` (`ESTADOS_INMOBILIARIOS`)
-* **Rank:** `0` raíz, sin `dependsOn` `openspec/specs/MA-maestros-administrativos/spec.md:7` y `openspec/specs/CF-configuracion-global/spec.md:7`
+* **Rank:** `0` raíz, sin `dependsOn` `specs/MA-maestros-administrativos/spec.md:7` y `specs/CF-configuracion-global/spec.md:7`
 * **Validación:** `saveMaestro` `k0mp4ss_fe/apps/web/lib/store.ts:342` único mutador; `removeMaestro:352` valida inverso (no borrar categoría en uso).
 
 ### Verificación
@@ -61,7 +61,7 @@ Crear en `MA > Categorías Macro` el `TEST-MACRO-TorreQA` y ver que aparece al t
 
 Con el idioma acordado, María dibuja **plantillas** (`TU`). No dibuja cada depto a mano: define "Loft 45m2 - 120k" una vez y todas las unidades que usen esa plantilla heredan metraje y cobro base. El metraje queda bloqueado en la ficha para no generar inconsistencias `Data/NSGC/docs/manuales/01 - Tipos de Unidad.md:14`.
 
-Luego **levanta la obra** (`EF`) `Data/NSGC/docs/manuales/02 - Estructura Física.md:5`: primero la **Torre** (`MacroSector` con categoría `TEST-MACRO-TorreQA`, nombre `SectorTEST`, `DescripMSectorTEST`), luego el **Piso** (`MicroSector` `Piso99-TEST` con `TEST-MICRO-PisoQA` colgado de `SectorTEST`), al final el **Depto 999** (`unidad` número `999`, tipo `TU-TEST-LoftQA`, estado `TEST-EdO-EnLimpieza`, micro `Piso99-TEST`). El orden interno es obligatorio `macro -> micro -> unidad` `openspec/specs/EF-estructura-fisica/spec.md:7`. Si intenta crear el 999 sin Piso, el botón queda deshabilitado `Data/NSGC/docs/especificaciones/EF - Estructura Fisica.md:44`.
+Luego **levanta la obra** (`EF`) `Data/NSGC/docs/manuales/02 - Estructura Física.md:5`: primero la **Torre** (`MacroSector` con categoría `TEST-MACRO-TorreQA`, nombre `SectorTEST`, `DescripMSectorTEST`), luego el **Piso** (`MicroSector` `Piso99-TEST` con `TEST-MICRO-PisoQA` colgado de `SectorTEST`), al final el **Depto 999** (`unidad` número `999`, tipo `TU-TEST-LoftQA`, estado `TEST-EdO-EnLimpieza`, micro `Piso99-TEST`). El orden interno es obligatorio `macro -> micro -> unidad` `specs/EF-estructura-fisica/spec.md:7`. Si intenta crear el 999 sin Piso, el botón queda deshabilitado `Data/NSGC/docs/especificaciones/EF - Estructura Fisica.md:44`.
 
 Los estacionamientos ya no son un módulo aparte: son unidades `u-E-999` con `tipo tipo-es-1` y `micro est-*` del macro `estacionamientos` `Data/NSGC/docs/especificaciones/ES - Estacionamientos.md:3`.
 
@@ -76,7 +76,7 @@ Los estacionamientos ya no son un módulo aparte: son unidades `u-E-999` con `ti
 
 ### Verificación
 
-* Al crear `TU-TEST-LoftQA` con `TEST-CATU-LoftQA`, el selector `Categoría` de `TU` lo lista sin hardcode `openspec/specs/TU-tipos-unidad/spec.md:18`.
+* Al crear `TU-TEST-LoftQA` con `TEST-CATU-LoftQA`, el selector `Categoría` de `TU` lo lista sin hardcode `specs/TU-tipos-unidad/spec.md:18`.
 * Al crear `SectorTEST` y `Piso99-TEST`, la dona de `EF` `Data/NSGC/docs/manuales/02 - Estructura Física.md:27` muestra segmento rojo `EnLimpieza` con `#ef4444` y click filtra la tabla a la 999. En `TU` el contador de `TU-TEST-LoftQA` pasa de 0 a 1.
 
 ---
@@ -162,8 +162,8 @@ Cada paso deja un evento inmutable en **Auditoría** `Data/NSGC/docs/especificac
 
 ### Gear técnico
 
-* `AM` rank `99` sumidero, depende de todos, no bloquea carga `openspec/specs/AM-auditoria-metricas/spec.md:7`.
-* Eventos `ST_SEED_STARTED, ST_SEED_COLLECTION_LOADED, ST_SEED_VALIDATION_FAILED, ST_MIGRATE_APPLIED` `openspec/specs/ST-capa-datos-persistente/spec.md:42` + `MA_MAESTRO_CREATE, TU_CREATE, VU_CHANGE_OWNER...` `AM:33`.
+* `AM` rank `99` sumidero, depende de todos, no bloquea carga `specs/AM-auditoria-metricas/spec.md:7`.
+* Eventos `ST_SEED_STARTED, ST_SEED_COLLECTION_LOADED, ST_SEED_VALIDATION_FAILED, ST_MIGRATE_APPLIED` `specs/ST-capa-datos-persistente/spec.md:42` + `MA_MAESTRO_CREATE, TU_CREATE, VU_CHANGE_OWNER...` `AM:33`.
 * `RE` vista sin colección, solo agregación.
 
 ### Verificación
@@ -187,7 +187,7 @@ Cada paso deja un evento inmutable en **Auditoría** `Data/NSGC/docs/especificac
 Borrado inverso: VU -> EF unidades -> EF micro -> EF macro -> MP -> TU -> MA
 ```
 
-Toda spec nueva SHALL copiar bloque `## N. Dependencias de Carga y Seed (ST)` de `RG-reglas-generales:27` con `Entidades ST | Depende de | Rank | Seed Manifest | Validación | Bulk | Migración`. Ver `openspec/specs/ST-capa-datos-persistente/spec.md:9`.
+Toda spec nueva SHALL copiar bloque `## N. Dependencias de Carga y Seed (ST)` de `RG-reglas-generales:27` con `Entidades ST | Depende de | Rank | Seed Manifest | Validación | Bulk | Migración`. Ver `specs/ST-capa-datos-persistente/spec.md:9`.
 
 ---
 

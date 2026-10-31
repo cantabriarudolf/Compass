@@ -7,8 +7,8 @@
 > **Regla**: si algo "debe existir" y no existe, se anota acá el mismo día. Nunca se deja solo en un
 > chat. Cuando se implementa, se mueve a la sección **Hecho** con su commit y su test.
 >
-> **Relacionado**: `openspec/BACKLOG-100.md` (deuda técnica y decisiones de producción/owner) ·
-> `openspec/changes/` (changes en curso) · `.agents/skills/auditoria-contratos-permisos/references/`
+> **Relacionado**: `specs/BACKLOG-100.md` (deuda técnica y decisiones de producción/owner) ·
+> `specs/archive/` (registro de trabajos cerrados) · `.agents/skills/auditoria-contratos-permisos/references/`
 > (antipatrones y hallazgos de permisos).
 
 ## Abiertos

@@ -71,7 +71,7 @@ Este documento actúa como la hoja de ruta oficial para el desarrollo del Proyec
 - 🔴 Bloqueado
 - ⏳ Pendiente
 - 🟡 Documentado (spec existe, falta archivar o spec sucio post-archivo)
-- 🔵 En Proceso (change activo en `openspec/changes/`)
+- 🔵 En Proceso (trabajo en curso sobre una spec ya escrita)
 - 🟢 Completado (archivado sin suciedad)
 
 > Nota: `ES` en Fase1 es histórico — desde v8 ver `EF` filtrado por `u-E-*`. `MA` movido de Fase2→Fase1 y `RP` a Fase0 para alinear `PHASES` con dependencias (MA alimenta EF/TU, RP es transversal).

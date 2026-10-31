@@ -18,11 +18,11 @@ Por eso F22 quedó bloqueada por **F22a**: migrar esos dos módulos primero.
 
 ## Specs que este trabajo debe respetar
 
-- `openspec/specs/ST-capa-datos-persistente/spec.md` — requirements vigentes: la base vía API es la
+- `specs/ST-capa-datos-persistente/spec.md` — requirements vigentes: la base vía API es la
   fuente de verdad; el store conserva solo su snapshot histórico; `STORE_VERSION` congelado en 28.
-- `openspec/PENDIENTES-FUNCIONALIDAD.md` — fila **F22** (es la que este trabajo cierra) y **F22a**.
-- `AGENTS.md` — lifecycle ODD; un change de openspec solo si cambia un contrato de capacidad
-  (este sí: retira requirements de `ST`).
+- `specs/PENDIENTES-FUNCIONALIDAD.md` — fila **F22** (es la que este trabajo cierra) y **F22a**.
+- `AGENTS.md` — lifecycle ODD; el requirement se edita directo en la spec solo si cambia un
+  contrato de capacidad (este sí: retira requirements de `ST`).
 
 ## Tareas (en este orden)
 
@@ -44,7 +44,7 @@ Por eso F22 quedó bloqueada por **F22a**: migrar esos dos módulos primero.
 6. **Tests**: reparar los ~46 archivos afectados; borrar los que se quedan sin sujeto. No debilitar
    ninguna aserción de seguridad ni de permisos para hacerlos pasar.
 7. **Candados**: `scripts/audit-store.mjs` ya está en allowlist 0; actualizar el marcador
-   `<!-- audit:store: archivos=N -->` de `openspec/BACKLOG-100.md` si cambia. Correr también
+   `<!-- audit:store: archivos=N -->` de `specs/BACKLOG-100.md` si cambia. Correr también
    `npm run audit:desvios` y `npm run check:rechecks`.
 8. **Specs**: retirar de `ST-capa-datos-persistente` los requirements que dejan de existir y
    actualizar la fila F22 de `PENDIENTES-FUNCIONALIDAD.md` a **Hecho** con commit y tests.

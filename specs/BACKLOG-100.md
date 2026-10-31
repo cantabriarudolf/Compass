@@ -3,7 +3,7 @@
 > Contexto durable para continuar en CUALQUIER chat futuro. El owner definió que el 100%
 > del spec vigente se cierra con la `SERIE-MENU-100` (A+B, COMPLETA 6/6). La frontera
 > C1-C4 se ejecuta en la **`SERIE-FRONTERA`** (C2 + C1 + C4; C3 EN PAUSA por credenciales
-> Google). Estado vivo: ver `openspec/SERIE-FRONTERA/00-plan.md` §Roadmap/Bitácora.
+> Google). Estado vivo: ver `specs/SERIE-FRONTERA/00-plan.md` §Roadmap/Bitácora.
 > **SERIE-FRONTERA COMPLETA 6/6** — C1/C2/C4 HECHOS, C3 EN PAUSA pendiente de credenciales.
 
 ## Estado de ejecución (2026-09-01 — CIERRE)
@@ -17,7 +17,7 @@
 
 ## C1 — Retención de logs de auditoría (5 años) — ✅ HECHO P2-P3 (1882e98/a9cd1b7)
 
-- **Spec:** `openspec/specs/AM-auditoria-metricas/spec.md` §Logs de Auditoría (Scenario
+- **Spec:** `specs/AM-auditoria-metricas/spec.md` §Logs de Auditoría (Scenario
   Retention: "MUST be retained for a minimum of 5 years") + `AM:80` inmutabilidad.
 - **Estado hoy:** la vista `/admin/logs` (change `am-logs-visor`) lee `store.eventos`
   (localStorage) con tope `MAX_EVENTOS = 500`. La retención real requiere capa de datos ST.
@@ -31,7 +31,7 @@
 
 ## C2 — Idempotencia del poblado QA Lab — ✅ HECHO P1 (0c9fb6a)
 
-- **Spec/contexto:** Serie QA-LAB (`openspec/SERIE-QA-LAB/`, COMPLETA 3/3) dejó el guard
+- **Spec/contexto:** Serie QA-LAB (`specs/SERIE-QA-LAB/`, COMPLETA 3/3) dejó el guard
   clean-first ("Existen datos TEST-*: ejecuta primero «Borrar todo lo de prueba»"). La
   idempotencia = que "Poblar todo de una vez" sobre datos TEST existentes no bloquee ni
   duplique (upsert por IDs TEST).
@@ -52,7 +52,7 @@
 > por las env vars reales de Vercel y las decisiones de owner de este checklist.
 > Fila detallada en §Changes activos (final del archivo).
 
-- **Spec:** `openspec/specs/AU-autenticacion-sesion/spec.md` §Autenticación Futura (Scenario
+- **Spec:** `specs/AU-autenticacion-sesion/spec.md` §Autenticación Futura (Scenario
   Google SSO). El proyecto hoy: Auth.js credentials + JWT + rate limit persistente (Serie
   Plataforma P5/P4, ver `project.md`).
 - **Estado hoy (2026-09-01 cierre):** SERIE-FRONTERA no ejecuta C3. Infraestructura Auth.js ya existe (adapter Prisma propio) — añadir provider Google es natural, PERO bloqueado hasta que el owner provea credenciales. SERIE COMPLETA 6/6 sin C3.
@@ -62,12 +62,12 @@
   - [ ] `redirect URI` autorizada — `http://localhost:3000/api/auth/callback/google` (dev) + URL de producción (ej. `https://<dominio>/api/auth/callback/google`) registrada en Google Cloud → Authorized redirect URIs
   - [ ] Decisión owner: vinculación solo para usuarios ya activados (`RP/MP Activación de Cuentas`), credentials queda como fallback; rol/membresía por defecto al primer login Google y tratamiento del rate limit por email
 - **Esfuerzo:** change grande. **Dependencias:** cuenta Google Cloud del owner + secretos (bloqueante).
-- **Sugerencia:** change `au-google-sso` — provider opcional, solo para usuarios ya activados (Activación de Cuentas RP/MP), manteniendo credentials como fallback. Al desbloquear, crear change openspec `au-google-sso` con `lib/auth.ts` (runtime Node) + env + tests.
-- **Serie:** SERIE-FRONTERA P6 cierra con C3 documentado EN PAUSA en `openspec/SERIE-FRONTERA/00-plan.md` Bitácora "SERIE COMPLETA" + este §C3.
+- **Sugerencia:** provider opcional, solo para usuarios ya activados (Activación de Cuentas RP/MP), manteniendo credentials como fallback. Al desbloquear, escribir el requirement de Google SSO directo en `specs/AU-autenticacion-sesion/spec.md` con `lib/auth.ts` (runtime Node) + env + tests.
+- **Serie:** SERIE-FRONTERA P6 cierra con C3 documentado EN PAUSA en `specs/SERIE-FRONTERA/00-plan.md` Bitácora "SERIE COMPLETA" + este §C3.
 
 ## C4 — ABAC contextual completo — ✅ HECHO P4-P5 (913489b/d336cd6)
 
-- **Spec:** `openspec/specs/RP-roles-permisos/spec.md` §Permisos Contextuales (ABAC) +
+- **Spec:** `specs/RP-roles-permisos/spec.md` §Permisos Contextuales (ABAC) +
   atributos ya presentes: `mp:propios`, `pl:propia`, `ct:propio`, `residenteVeMorosidad`
   (controles de privacidad `/admin/gestion`), `fi` filtrado por unidad.
 - **Estado hoy:** parcial — `puede()` es RBAC puro; los filtros ABAC están hardcodeados en
@@ -102,11 +102,11 @@ opcional del mismo patrón.
   `33c2ad1`, archivado `2026-09-03-qa-roadmap-visual`. Extensiones futuras posibles: chispas
   dinámicas por LLM, roadmap para lane unit, integración con `/qa` de ventanas nuevas.
 - Cualquier chat puede retomar estos ítems: la fuente de verdad es este archivo + los specs
-  citados. Al elegir uno, crear el change openspec correspondiente (no serie necesaria salvo
-  C1/C4 que ameritan 2 ventanas).
+  citados. Al elegir uno, escribir el requirement en la spec de la capability correspondiente (no
+  serie necesaria salvo C1/C4 que ameritan 2 ventanas).
 - Cualquier chat puede retomar estos ítems: la fuente de verdad es este archivo + los specs
-  citados. Al elegir uno, crear el change openspec correspondiente (no serie necesaria salvo
-  C1/C4 que ameritan 2 ventanas).
+  citados. Al elegir uno, escribir el requirement en la spec de la capability correspondiente (no
+  serie necesaria salvo C1/C4 que ameritan 2 ventanas).
 - Orden sugerido si hay ganas: C2 (mejora QA diaria) → C1 (compliance AM) → C3 → C4.
 - Estado al 2026-08-31: A+B se ejecutan en SERIE-MENU-100; C1-C4 sin empezar.
 
@@ -124,8 +124,8 @@ aclaración documental, 0 errores de cálculo.
 
 - **Estabilidad**: suite unit 517/517 verde, e2e 86/88 verde (2 skipped). Lint: 12 warnings (0 errores).
 - **Seguridad aplicada**: recurso `am` en authz, authz checks en APIs FI/Auditoría, auth en dev/QA endpoints, CSP report sanitizado.
-- **Deuda técnica documentada**: store monolito (5007 líneas), 27+ repeticiones de patrón ID, 4 funciones `hoyISO*` duplicadas. Ver `openspec/changes/revision-arquitectura/` y `openspec/changes/revision-integraal/`.
-- **Tareas derivadas**: ver `openspec/changes/revision-integraal/tasks.md` (priorizadas Critical/High/Medium/Low).
+- **Deuda técnica documentada**: store monolito (5007 líneas), 27+ repeticiones de patrón ID, 4 funciones `hoyISO*` duplicadas. Ver `specs/archive/2026-09-19-revision-arquitectura/` y `specs/archive/2026-09-20-revision-integraal/`.
+- **Tareas derivadas**: ver `specs/archive/2026-09-20-revision-integraal/tasks.md` (priorizadas Critical/High/Medium/Low).
 
 ## Mejoras de infraestructura de producción (SERIE-PRODUCCION P1-P6) — ✅ COMPLETA 2026-09-09
 
@@ -195,7 +195,7 @@ real de F16 se acota a salud/previsionales (ficha laboral, F18).
 ## Seguridad y compliance de producción (SERIE-PRODUCCION-FASE2 P1-P6) — ✅ COMPLETA 2026-09-10
 
 > Lleva Compass de "infraestructura mínima" a "producto seguro y compliant".
-> Detalle por ventana: `openspec/SERIE-PRODUCCION-FASE2/00-plan.md`.
+> Detalle por ventana: `specs/SERIE-PRODUCCION-FASE2/00-plan.md`.
 
 | Ventana | Qué se hizo | Commit |
 |---|---|---|
@@ -208,7 +208,7 @@ real de F16 se acota a salud/previsionales (ficha laboral, F18).
 
 **Métricas post-serie:**
 - Tests: 606/606 unit verdes (subieron de 552; incl. 22 de 2FA, 15 de cifrado, 4 de Sentry, 6 de ARCO)
-- tsc: 0 errores · Lint: 13 warnings (0 errores) · openspec validate: 37/37
+- tsc: 0 errores · Lint: 13 warnings (0 errores) · specs validadas: 37/37
 - STORE_VERSION: 27 (sin cambios en la serie)
 
 **Post-serie (requiere decisión/acción del owner):**
@@ -230,7 +230,7 @@ real de F16 se acota a salud/previsionales (ficha laboral, F18).
 ## Migración fuente de verdad localStorage → Base de Datos (SERIE-BD-FUENTE-VERDAD Fase 0–5B) — ✅ COMPLETA 2026-09-25
 
 > Cambia la fuente de verdad de la aplicación de `localStorage` (zustand persist) a Prisma/SQLite(dev) → PostgreSQL/Neon(prod).
-> Detalle por fase: `openspec/SERIE-BD-FUENTE-VERDAD/00-plan.md`.
+> Detalle por fase: `specs/SERIE-BD-FUENTE-VERDAD/00-plan.md`.
 
 | Fase | Qué se hizo | Commit |
 |---|---|---|
@@ -262,7 +262,7 @@ real de F16 se acota a salud/previsionales (ficha laboral, F18).
 
 > El CI de `main` estuvo rojo un mes **sin un solo test roto**: los jobs de Vitest corrían
 > 944/944 (hoy 967/967) verdes y morían por el umbral de cobertura. Detalle y evidencia:
-> `openspec/changes/ci-verde-ratchet-cobertura/{proposal,design,tasks}.md`.
+> `specs/archive/2026-10-12-ci-verde-ratchet-cobertura/{proposal,design,tasks}.md`.
 
 | Ítem | Estado | Dónde |
 |---|---|---|
@@ -309,7 +309,7 @@ va en P5, tras CI verde de la rama).
 | `a11y-p3-reservas-recursos` | ✅ ARCHIVADO (`6093381`) | fix en main desde `1f41ca3`: `opacity-70` fuera + badge "vencida" + `bg-sky-700` en reservas; `aria-label` del selector de estado y badges 700 en recursos; `skip_specs: true`, coverage ok |
 | `fix-vercel-data-ignore` | ✅ ARCHIVADO (`7510059`) | `.vercelignore:11` = `/Data/` anclado + comentario desde `52b26b9`; `skip_specs: true`, coverage ok. Al owner: redeploy en Vercel |
 | `e2e-rojos-flujo-a11y-smoke` | ✅ ARCHIVADO (`17fd892`) | lanes `e2e/flujo`+`e2e/a11y`+`e2e/smoke` 37/37 (Bitácora SERIE-E2E-FULL-VERDE P3, commit `d9a8ad7`); TDZ proveedores, banner cookies, tab controlado de bitácora y `e2e:higiene` verificados en código; deltas aplicados: +4 requirements y ~2 modificados en 5 specs |
-| `e2e-higiene-determinismo` | ✅ ARCHIVADO (`2026-10-13-e2e-higiene-determinismo`) | Saneamiento S4: delta `DEV-qa-lab` refrescado al diseño actual (corrida única `npx playwright test` sin tag GATED, specs autónomos vía `e2e/helpers/datos-test.ts`, receta `e2e:reseed-base` + `e2e:higiene --apply`) en vez de la estrategia muerta de `b7e88a8`; delta ST (seed determinista) aplicado a la spec viva; `check-delta-coverage` 0 → archive → `validate --all` 39/39 |
+| `e2e-higiene-determinismo` | ✅ ARCHIVADO (`2026-10-13-e2e-higiene-determinismo`) | Saneamiento S4: requirement de `DEV-qa-lab` refrescado al diseño actual (corrida única `npx playwright test` sin tag GATED, specs autónomos vía `e2e/helpers/datos-test.ts`, receta `e2e:reseed-base` + `e2e:higiene --apply`) en vez de la estrategia muerta de `b7e88a8`; requirement ST (seed determinista) aplicado a la spec viva; 39/39 specs validadas |
 | `au-google-sso` | ⏸ ACTIVO (owner) | código y tests en main; falta 3.1 env vars reales en Vercel + login Google en producción + 2 decisiones de rol/migración. Ver §C3 |
 | `st-split-fase2` | ⏳ ACTIVO | 0/19 tasks; no existe `lib/store/slices/` y `lib/store.ts` sigue monolito (8.889 líneas); alcance pendiente = 7 slices hoja (IR, MT, AD, PI/D3, CO, GE, CV) en el orden del proposal |
 
@@ -333,39 +333,39 @@ PR #1 verde (run `38444800307`) y `qlab-purga-bulk` archivado.
   dejan de ser rojos abiertos.
 - **Cierre (S2, hecho)**: CI verde del PR #1 en el run `38444800307` + archive de
   `qlab-purga-bulk` (`0f10d47`); el saneamiento quedó **cerrado** con P5 → HECHA en
-  `openspec/SERIE-NOCHE-2/00-plan.md`.
+  `specs/SERIE-NOCHE-2/00-plan.md`.
 - **Archives 2026-10-14 (punto 4, administrativo)**: los dos changes que quedaban aplicados
   sin archivar quedaron archivados — `e2e-guard-optin-ci` (`280d37f`) y
-  `au-google-provider-disabled` (`b5a9f42`); gate de deltas 1 ok · 0 a romper en cada uno y
-  `openspec validate --all` **36/36**. Deltas verificados tras aplicar: AU scaffold con 13
+  `au-google-provider-disabled` (`b5a9f42`); gate de requirements 1 ok · 0 a romper en cada uno y
+  validación de specs **36/36**. Requirements verificados tras aplicar: AU scaffold con 13
   escenarios + cláusula de la bandera; SG D-iii con los 3 escenarios del opt-in.
 
 ## SERIE-NOCHE-3 — deuda del store (materializada 2026-10-14) — rama `noche/serie-noche-3`
 
 El owner pidió saldar la deuda viva ("punto 4") en modo autónomo y sobre una rama nueva desde
-`main`. Queda materializada como serie de ventanas en `openspec/SERIE-NOCHE-3/`
+`main`. Queda materializada como serie de ventanas en `specs/SERIE-NOCHE-3/`
 (`00-plan.md` + `prompt-01.md`…`prompt-09.md`, cap duro **9 ventanas**):
 
 | Deuda | Cómo se salda |
 |---|---|
-| `store-cleanup` (no existía como change) | **P1 HECHA (2026-10-14)** — censo fino por miembro (incluye uso intra-store) + poda de 28 acciones sin consumidor. Censo v2: 180 miembros → 79 app · 71 QA-Lab · 26 solo-test · 2 muerto · 2 intra-store. `lib/store.ts` 8.890 → 7.621 líneas; `STORE_VERSION` 28 intacto. Evidencia: `openspec/changes/store-cleanup/design.md` y `Data/NSGC/docs/avances/avance - 2026-10-14 20-00.md` |
+| `store-cleanup` (no existía como change) | **P1 HECHA (2026-10-14)** — censo fino por miembro (incluye uso intra-store) + poda de 28 acciones sin consumidor. Censo v2: 180 miembros → 79 app · 71 QA-Lab · 26 solo-test · 2 muerto · 2 intra-store. `lib/store.ts` 8.890 → 7.621 líneas; `STORE_VERSION` 28 intacto. Evidencia: `specs/archive/2026-10-15-store-cleanup/design.md` y `Data/NSGC/docs/avances/avance - 2026-10-14 20-00.md` |
 | `st-split-fase2` (0/19) | **P2–P5** — los 7 slices hoja en `lib/store/slices/**`: IR+MT, AD+PI/D3, CO, GE+CV (movimiento puro, `STORE_VERSION` intacto) |
 | `api-cobertura-fases` (2.114 statements API sin cubrir) | **P6–P7** — las rutas más bajas + ratchet de `app/api/**` (regla medido − 1 pt) |
 | `store-cobertura-fase-b` (1.202 statements del store sin cubrir) | **P8** — tests comportamentales sobre `lib/store/**` + ratchet de `lib/**` |
 | Cierre y auditoría | **P9** — gates completos de la serie, archives, PR draft y deuda post-serie declarada |
 
-Estado: **COMPLETA 9/9** — P2–P9 cerradas; PR **#2 mergeado** el 2026-10-15. Detalle por ventana en `openspec/SERIE-NOCHE-3/00-plan.md` (Bitácora).
+Estado: **COMPLETA 9/9** — P2–P9 cerradas; PR **#2 mergeado** el 2026-10-15. Detalle por ventana en `specs/SERIE-NOCHE-3/00-plan.md` (Bitácora).
 
 ### Deuda descubierta por `store-cleanup` (2026-10-14)
 
 | Deuda | Detalle |
 |---|---|
-| **Deriva de prosa en 11 specs vivas** | `FI-finanzas-morosidad`, `CV-visor-mensajes`, `PI-portal-inmobiliario`, `GD-gestion-directiva`, `PL-liquidaciones-remuneraciones`, `CF-configuracion-global`, `PE-personal-servicios`, `MT-mantenimiento-proyectos`, `IR-inventario-recursos`, `IN-infracciones-multas`, `CO-comunicacion-vecinos` y `RA-reservas-amenities` nombran en prosa normativa acciones que P1 podó. El delta de P1 cubre las 3 requirements afectadas de `ST-capa-datos-persistente`; cerrar el resto exige deltas en esas 11 capabilities (fuera del alcance declarado de P1). Inventario exacto: `openspec/changes/store-cleanup/design.md` §Deriva de prosa |
+| **Deriva de prosa en 11 specs vivas** | `FI-finanzas-morosidad`, `CV-visor-mensajes`, `PI-portal-inmobiliario`, `GD-gestion-directiva`, `PL-liquidaciones-remuneraciones`, `CF-configuracion-global`, `PE-personal-servicios`, `MT-mantenimiento-proyectos`, `IR-inventario-recursos`, `IN-infracciones-multas`, `CO-comunicacion-vecinos` y `RA-reservas-amenities` nombran en prosa normativa acciones que P1 podó. El delta de P1 cubre las 3 requirements afectadas de `ST-capa-datos-persistente`; cerrar el resto exige deltas en esas 11 capabilities (fuera del alcance declarado de P1). Inventario exacto: `specs/archive/2026-10-15-store-cleanup/design.md` §Deriva de prosa |
 | **`CF_UPDATE_PARAM` sin emisor** | El evento no tiene emisor en el código: su único emisor era `saveConfiguracion` (poda de P1), que la app ya no llamaba, y `app/api/configuracion/route.ts` no lo emite. Gap **preexistente** de la migración CF→API. Requiere decisión del owner: re-implementar la auditoría server-side o retirar el requirement |
 | **Deriva en docs NSGC** | `manuales/28 - MK - Catálogo de Mocks.md` (24 acciones), `manuales/33 - ST - Capa de Datos Persistente.md`, `manuales/36 - MK - Data Dump Comunicación y Solicitudes.md` y `manuales/40 - MK - Data Dump Remuneraciones, Certificados y Reportería.md` nombran acciones podadas por P1. P1 solo puede tocar `Data/NSGC/docs/avances/**` (alcance declarado); sincronizar esos manuales requiere una ventana con alcance NSGC. Los avances y auditorías históricos no se corrigen |
 | **e2e `poblado-idempotente.spec.ts:96` (caso "cancelar")** | Espera **30 s** el mensaje de purga, pero una purga completa suma **38,7 s** de DELETEs secuenciales medidos en el log del dev server (el test hermano `:29` usa 120 s para la misma espera y documenta la purga como lenta). Falla en este entorno con y sin el cambio de P1 (el flujo es API REST + Prisma, no depende del store). Acción: subir esa espera a 120 s |
 
-> **Cierre verificado 2026-10-21**: las 4 deudas de esta tabla están saldadas. Deriva de prosa y deriva NSGC → 0 menciones de las acciones podadas en `openspec/specs/**` y `Data/NSGC/docs/manuales/**`; `CF_UPDATE_PARAM` → emisor server-side (DEUDA-2 D2); e2e `:96` → espera a 120 s (DEUDA-1 P1). Ver §Deuda viva verificada (2026-10-21) al final del archivo.
+> **Cierre verificado 2026-10-21**: las 4 deudas de esta tabla están saldadas. Deriva de prosa y deriva NSGC → 0 menciones de las acciones podadas en `specs/**` y `Data/NSGC/docs/manuales/**`; `CF_UPDATE_PARAM` → emisor server-side (DEUDA-2 D2); e2e `:96` → espera a 120 s (DEUDA-1 P1). Ver §Deuda viva verificada (2026-10-21) al final del archivo.
 
 ## Deuda viva verificada (2026-10-21)
 
@@ -386,8 +386,8 @@ merged (2026-10-16) · DEUDA-2/3/4/5 → en `main`.
 | Deriva de prosa (12 specs + 4 manuales NSGC), 2 warnings turbo, `CF_UPDATE_PARAM`, e2e `poblado-idempotente:96` | ✅ Saldado y verificado | — |
 
 **Gates de la verificación (2026-10-21)**: `tsc --noEmit` 0 errores · `eslint` exit 0 ·
-`openspec validate --all` 35 passed / 0 failed · 0 menciones de las 20 acciones podadas en
-`openspec/specs/**` y `Data/NSGC/docs/manuales/**`.
+validación de specs 35 passed / 0 failed · 0 menciones de las 20 acciones podadas en
+`specs/**` y `Data/NSGC/docs/manuales/**`.
 
 ### Store legacy: mapa de migración (auditoría read-only 2026-10-21)
 
@@ -462,8 +462,8 @@ leída** su propia notificación (hoy `PUT /api/notificaciones/[id]` exige `edit
 
 **Gates del cierre (2026-10-21)**: `npx tsc --noEmit` 0 errores · `npm run lint` 0 problemas ·
 suite completa **1388 tests / 136 archivos** con cobertura **94.39 / 85.84 / 93.85** (`lib/**` 99.63,
-`lib/store.ts` 99.95) · `openspec validate --all` **36 passed / 0 failed** ·
-`check-delta-coverage ui-legacy-store-fase1` **0 que romperían el archive** · `STORE_VERSION = 28`
+`lib/store.ts` 99.95) · validación de specs **36 passed / 0 failed** ·
+`STORE_VERSION = 28`
 sin tocar · `prisma/dev.db` y `Data/NSGC/backups/` intactos.
 
 ### Store legacy: cierre de la fase 2 (SERIE-FASE2, 2026-10-22)
@@ -509,7 +509,7 @@ FI cobranza multicanal, CV actas por referencia). 106 tests nuevos en 6 archivos
 orquestador fue `d10279c` (el cierre de turno se gobierna por `pe:cierre_turno`, no por `pe`).
 
 **Gates del cierre de la fase 2 (2026-10-22, commit `d10279c`)**: `npx tsc --noEmit` **0** ·
-`npm run lint` **0 problemas** · `openspec validate --all` **36 passed / 0 failed** · suite completa
+`npm run lint` **0 problemas** · validación de specs **36 passed / 0 failed** · suite completa
 observada por el orquestador **146 archivos / 1538 tests / `SUITE_EXIT=0` / 8m50s** ·
 `STORE_VERSION = 28` sin tocar · `prisma/dev.db`, `.env*` y `Data/NSGC/backups/` intactos.
 
@@ -575,11 +575,11 @@ activas» filtra por `FondoFI.activo`; el visor declara «…y N más» cuando r
 
 ## Cierre del 2026-10-25 — PRs #12–#16 (F1, F2, F3, F11 y la capacidad de F6)
 
-> Todo en `main`, sin PRs abiertos, `openspec validate --all` **36/36**. Los dos changes de la
+> Todo en `main`, sin PRs abiertos, validación de specs **36/36**. Los dos changes de la
 > sesión (`co-lectura-residente` y `metricas-reales-backup-descarga`) están **archivados** con
 > sus deltas aplicados a las specs vivas (`CO`, `RP`, `DEV-qa-lab`).
 >
-> El ledger vivo es `openspec/PENDIENTES-FUNCIONALIDAD.md`: leelo antes que nada. Al cierre
+> El ledger vivo es `specs/PENDIENTES-FUNCIONALIDAD.md`: leelo antes que nada. Al cierre
 > quedan abiertos **F4, F5, F6, F7, F8, F9 y F10**, todos con dueño o bloqueados.
 
 | PR | Qué entró | Merge |
@@ -648,7 +648,7 @@ declara ignorada. **SQLite lo escondía porque serializa las escrituras**; el te
 La pantalla mezclaba dos trabajos en un solo eje: cuatro pestañas por rol (que se solapan — la misma
 persona puede ser propietaria y directiva) que además contenían, anidadas, la única configuración
 editable de la página (los tres switches de privacidad por unidad). Diagnóstico completo en
-`openspec/changes/gestion-administrativa-usabilidad/proposal.md`.
+`specs/archive/2026-10-29-gestion-administrativa-usabilidad/proposal.md`.
 
 ### El defecto que no era estético
 

@@ -36,5 +36,5 @@ Navegar rápidamente entre módulos, identificar la página activa y plegar la b
 
 ## 🔗 Dependencias
 
-- La estructura del menú se sincroniza con las capabilities documentadas en `openspec/specs/`.
+- La estructura del menú se sincroniza con las capabilities documentadas en `specs/`.
 - El logo y nombre de la comunidad en la cabecera de la barra lateral vienen de **CF - Configuración Global**.

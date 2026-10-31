@@ -78,4 +78,4 @@ La compartición se logra porque todas las páginas leen de la **misma fuente de
 
 - **Store Global (Zustand + persist):** Los datos de dominio vivían en `apps/web/lib/store.ts`, persistidos en localStorage con key `compass-store`.
 - **Limitaciones:** Sin multi-usuario, sin respaldo centralizado, sin concurrencia, compliance deficiente con Ley 21.719.
-- **Migración:** Ver serie `openspec/SERIE-BD-FUENTE-VERDAD/` para el plan de migración completo.
+- **Migración:** Ver serie `specs/SERIE-BD-FUENTE-VERDAD/` para el plan de migración completo.

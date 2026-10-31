@@ -10,7 +10,7 @@ El sistema SHALL proveer `k0mp4ss_fe/apps/web/prisma/schema.prisma` con `datasou
 
 #### Scenario: Prisma instalado y migración limpia
 - **WHEN** se instala `prisma` + `@prisma/client` (SQLite dev) y se ejecuta `prisma migrate dev --name init` con `DATABASE_URL=file:./dev.db` en `.env.local`
-- **THEN** la migración aplica sin errores, `prisma generate` crea el cliente y `openspec validate --all` sigue verde.
+- **THEN** la migración aplica sin errores y `prisma generate` crea el cliente.
 
 #### Scenario: Toda entidad con comunidadId indexado
 - **WHEN** se inspecciona `prisma/schema.prisma`
@@ -28,7 +28,7 @@ El sistema SHALL exponer repositorios server-side en `k0mp4ss_fe/apps/web/lib/re
 - **THEN** cada listado contiene solo los registros de su propia `comunidadId`.
 
 ### Requirement: Constraints de unicidad compuesta opcionales tabla por tabla (C3b)
-El sistema MAY definir constraints de unicidad compuesta `@@unique([comunidadId, campo])` tabla por tabla, conforme a D5 (repetidos permitidos en la app, la BD decide). Cada constraint añadida SHALL estar documentada en `openspec/changes/bd-prisma-fundamento/design.md` con justificación; las tablas sin constraint SHALL explicitar la decisión de no-constraint. Ejemplos válidos: `Comunidad.slug @unique`, `TipoUnidad @@unique([comunidadId, nombre])`, `MacroSector @@unique([comunidadId, nombre])`, `FondoFI @@unique([comunidadId, nombre])`, `ProveedorPE @@unique([comunidadId, rut])`. Repetidos cross-comunidad SHALL seguir permitidos.
+El sistema MAY definir constraints de unicidad compuesta `@@unique([comunidadId, campo])` tabla por tabla, conforme a D5 (repetidos permitidos en la app, la BD decide). Cada constraint añadida SHALL estar documentada en `specs/archive/2026-08-27-bd-prisma-fundamento/design.md` con justificación; las tablas sin constraint SHALL explicitar la decisión de no-constraint. Ejemplos válidos: `Comunidad.slug @unique`, `TipoUnidad @@unique([comunidadId, nombre])`, `MacroSector @@unique([comunidadId, nombre])`, `FondoFI @@unique([comunidadId, nombre])`, `ProveedorPE @@unique([comunidadId, rut])`. Repetidos cross-comunidad SHALL seguir permitidos.
 
 #### Scenario: Constraint por comunidad documentada
 - **WHEN** se declara `@@unique([comunidadId, nombre])` en `TipoUnidad`

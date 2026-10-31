@@ -1,17 +1,17 @@
 # LAB - Mejoras Lab (Fase 5 - Laboratorio y Automatización)
 
 > ⛔ **RETIRADO (F9, 2026-10-31):** el Laboratorio QA (`/admin/qa-lab`) y su dashboard
-> (`/admin/qa-dashboard`) ya no existen en la aplicación; se retiraron con
-> `openspec/changes/retiro-modulo-qa-dev/`. Este documento queda como registro histórico del
+> (`/admin/qa-dashboard`) ya no existen en la aplicación; se retiraron con el trabajo F9
+> (`retiro-modulo-qa-dev`). Este documento queda como registro histórico del
 > backlog que tuvieron.
 >
-> 🔌 **Datos:** este módulo es transversal dev-only; no tiene colección propia en `ST` más allá de `LAB-mejoras` como backlog. Vive en `openspec/specs/LAB-mejoras/` y se visualiza en `Fase 5` `k0mp4ss_fe/apps/web/lib/dev-dashboard.ts:66` (`PHASES`).
+> 🔌 **Datos:** este módulo es transversal dev-only; no tiene colección propia en `ST` más allá de `LAB-mejoras` como backlog. Vive en `specs/LAB-mejoras/` y se visualiza en `Fase 5` `k0mp4ss_fe/apps/web/lib/dev-dashboard.ts:66` (`PHASES`).
 
 Fase especial backlog para mejoras del **Laboratorio QA** (`/admin/qa-lab` `k0mp4ss_fe/apps/web/components/app-sidebar.tsx:125`). Agrupa mejoras futuras que no bloquean el core de la comunidad (Fases 0..4): vínculos en nueva ventana, screenshots automatizados y previews.
 
 ## 1. Contexto
 
-`qa-lab` ya permite poblar `TEST-*` por `Rank 0..3` `openspec/specs/ST-capa-datos-persistente/spec.md:9` y ver `Cómo va quedando` `Data/NSGC/docs/manuales/34 - Historia de Poblamiento - Relato de Uso.md:1`. Las mejoras pedidas son transversales y no deben ensuciar `Fase 0..4`. Se crea `Fase 5` como contenedor.
+`qa-lab` ya permite poblar `TEST-*` por `Rank 0..3` `specs/ST-capa-datos-persistente/spec.md:9` y ver `Cómo va quedando` `Data/NSGC/docs/manuales/34 - Historia de Poblamiento - Relato de Uso.md:1`. Las mejoras pedidas son transversales y no deben ensuciar `Fase 0..4`. Se crea `Fase 5` como contenedor.
 
 ## 2. Funcionalidades Principales
 

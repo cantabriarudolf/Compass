@@ -1,7 +1,7 @@
 # Series de ventanas — archivo
 
 Índice de las series de ventanas de este proyecto. El trabajo multi-ventana se lleva ahora en la
-bitácora de la feature ODD, con espejo en Engram. Las carpetas `openspec/SERIE-*/` y los roadmaps
+bitácora de la feature ODD, con espejo en Engram. Las carpetas `specs/SERIE-*/` y los roadmaps
 planos son material histórico: el detalle por ventana se consulta en los commits que citan cada
 serie (`git log --grep=<serie>`).
 
@@ -36,9 +36,9 @@ serie (`git log --grep=<serie>`).
 | `SERIE-DEUDA-5` | Integrar noche-2 y dejar el repositorio limpio | completa 2/2 | 2 |
 | `SERIE-DEUDA-6` | Store legacy en la UI, fase 1: lectura y cableado de hooks | completa | 2 |
 
-Retiradas en este trabajo: 19 carpetas `openspec/SERIE-*/` y los roadmaps planos
+Retiradas en este trabajo: 19 carpetas `specs/SERIE-*/` y los roadmaps planos
 `SERIE-NSGC.md` / `SERIE-PLATAFORMA.md`. Quedan siete carpetas porque están citadas por ruta
 desde documentación viva, y no pueden retirarse hasta que esas citas se actualicen: `BACKLOG-100.md` (`SERIE-FRONTERA`, `SERIE-NOCHE-2`,
 `SERIE-NOCHE-3`, `SERIE-PRODUCCION-FASE2`, `SERIE-BD-FUENTE-VERDAD`, `SERIE-QA-LAB`),
-`openspec/changes/archive/**` (`SERIE-CUENTAS`, `SERIE-FRONTERA`, `SERIE-BD-FUENTE-VERDAD`) y
+`specs/archive/**` (`SERIE-CUENTAS`, `SERIE-FRONTERA`, `SERIE-BD-FUENTE-VERDAD`) y
 `Data/NSGC/docs/manuales|especificaciones` (`SERIE-PRODUCCION-FASE2`, `SERIE-BD-FUENTE-VERDAD`).

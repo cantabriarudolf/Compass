@@ -8,24 +8,18 @@ A medida que la conversación crece, el Agente tiene que "leer" todo el historia
 
 **¿Cuándo crear un chat nuevo?**
 - 🟢 **CHAT NUEVO**: Cuando vas a empezar un Módulo Nuevo (Ej: "Vamos a crear el módulo de Finanzas").
-- 🟢 **CHAT NUEVO**: Después de haber tirado un `@[/opsx-archive]`. (Borrón y cuenta nueva).
+- 🟢 **CHAT NUEVO**: Después de cerrar un trabajo y dejar spec, manual y avance al día. (Borrón y cuenta nueva).
 - 🟢 **CHAT NUEVO**: Cuando vayas a hacer "Bugfixing" específico (Ej: "Abre un chat nuevo y dime: Arregla el botón X de la vista Y").
 - 🔴 **MANTENER CHAT**: Solo mientras estamos en el proceso de iterar y corregir el módulo que estamos construyendo en ese momento.
 
-## 2. 🔄 El Ciclo de Vida Perfecto (Metodología OpenSpec)
+## 2. 🔄 El Ciclo de Vida Perfecto (lifecycle ODD)
 
 Para mecanizar nuestro trabajo y avanzar como un bulldozer, usa siempre este ciclo:
 
-1. **Diseño (Propose)**: 
-   - Comando: `@[/opsx-propose] Crea el change "nombre" basándote en el documento @[archivo.md]`
-   - *Qué hace*: El agente arma el plan, los diagramas y la lista de tareas. Lo revisas.
-2. **Ejecución (Apply)**:
-   - Comando: `@[/opsx-apply]`
-   - *Qué hace*: El agente se pone a picar código tarea por tarea. 
-3. **Cierre (Archive)**:
-   - Comando: `@[/opsx-archive]`
-   - *Qué hace*: Borra el andamio. Cierra el ciclo. 
-   - **⚠️ Paso Obligatorio Post-Archive**: Abre un CHAT NUEVO.
+1. **Diseño (spec)**: la spec del módulo vive en `specs/<AA>-<kebab-name>/spec.md`. Si el trabajo cambia un contrato de capacidad, el requirement se edita ahí directo y un requirement reemplazado conserva los nombres exactos de sus escenarios. Lo revisas.
+2. **Ejecución**: el agente implementa requirement por requirement, con sus tests al lado del comportamiento.
+3. **Cierre**: specs, manual de módulo, avance y trazabilidad al día. El trabajo cerrado queda registrado en git y, cuando dejó material de trabajo (propuesta, diseño, tareas), en `specs/archive/`.
+   - **⚠️ Paso Obligatorio Post-Cierre**: Abre un CHAT NUEVO.
 
 ## 3. 🎯 Cómo darme instrucciones (Prompting Eficiente)
 
@@ -46,28 +40,15 @@ Si seguimos el paso a paso, tú no tienes que preocuparte del código. Pero para
 
 ## 5. 🚀 Prompts Estándar — una sola variable `SPEC` (Copiar-Pegar)
 
-> Reemplaza **`SPEC`** una sola vez por el nombre del archivo en `Data/NSGC/docs/especificaciones/` (ej: `FI - Finanzas y Morosidad`). El agente deriva el `change` kebab y la ruta `@` automáticamente.
+> Reemplaza **`SPEC`** una sola vez por el nombre del archivo en `Data/NSGC/docs/especificaciones/` (ej: `FI - Finanzas y Morosidad`). El agente deriva la ruta `@` y la carpeta de spec `<AA>-<kebab-name>` automáticamente.
 
-**A. Llevar spec a OpenSpec:**
+**A. Llevar spec a `specs/`:**
 ```
-Lleva a OpenSpec la spec @Data/NSGC/docs/especificaciones/SPEC.md — crea el change (kebab de SPEC: AA-nombre-kebab), con proposal/design/tasks y delta specs que incluyan Dependencias de Carga y Seed (Rank 0..99 + Entidades ST + Seed Manifest + Validación FK en save* + Bulk SeedReport + Migración + eventos AM) y deja Historia 34 al día.
-# Ej: SPEC = FI - Finanzas y Morosidad → @Data/NSGC/docs/especificaciones/FI - Finanzas y Morosidad.md → change FI-finanzas-morosidad
-```
-
-**B. Validar sin cerrar (tu flujo paralelo):**
-```
- /valida-datos SPEC --partial
-# Ej: SPEC = FI-finanzas-morosidad
- /valida-datos --all-active --partial   # valida todos los changes activos + DAG global Rank, sin archivar
+Lleva la spec @Data/NSGC/docs/especificaciones/SPEC.md a specs/<AA>-<kebab-name>/spec.md — escribe los requirements con Dependencias de Carga y Seed (Rank 0..99 + Entidades ST + Seed Manifest + Validación FK en save* + Bulk SeedReport + Migración + eventos AM) y deja Historia 34 al día.
+# Ej: SPEC = FI - Finanzas y Morosidad → @Data/NSGC/docs/especificaciones/FI - Finanzas y Morosidad.md → specs/FI-finanzas-morosidad/spec.md
 ```
 
-**C. Cerrar módulo:**
-```
-/cierra-modulo SPEC
-# Ej: SPEC = FI-finanzas-morosidad   # hace valida-datos + tsc/lint + STORE_VERSION/migrate + Mocks/Manual/Avance/Trazabilidad + Archivado + pregunta push
-```
-
-> Desde `enhance-rg-st-seed-gears` valida-datos tiene 7 puntos (Penta + Rank + FK save + Bulk + Historia 34 `Data/NSGC/docs/manuales/34 - Historia de Poblamiento - Relato de Uso.md:1`) y modo `--partial` para no cerrar.
+**B. Validar y cerrar el trabajo:** ya no existen los comandos `/valida-datos` ni `/cierra-modulo` (vivían en el andamiaje del CLI retirado). El lifecycle es ODD: documento de tareas visible, commits por unidad revisable, y la verificación se corre de verdad — `npx tsc --noEmit`, la suite de Vitest, las lanes de Playwright que correspondan y los candados (`npm run audit:desvios`, `npm run audit:store`, `npm run check:rechecks`). Si el trabajo cambia un contrato de capacidad, el requirement se edita directo en `specs/<AA>-<kebab-name>/spec.md` conservando el nombre exacto de los escenarios existentes.
 
 ## 6. 🧪 Norma de Documentación de Mocks
 

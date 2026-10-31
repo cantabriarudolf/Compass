@@ -66,7 +66,7 @@ MA es raíz `rank 0` sin `dependsOn`. Entidades `MaestroCollections` `k0mp4ss_fe
 
 ### Requirement: Eventos AM de Carga de Maestros
 
-Cada `saveMaestro/removeMaestro` SHALL emitir `MA_MAESTRO_CREATE/UPDATE/DELETE` `openspec/specs/AM-auditoria-metricas/spec.md:33` y la carga bulk SHALL emitir `MA_SEED_LOADED {coleccion, count}`.
+Cada `saveMaestro/removeMaestro` SHALL emitir `MA_MAESTRO_CREATE/UPDATE/DELETE` `specs/AM-auditoria-metricas/spec.md:33` y la carga bulk SHALL emitir `MA_SEED_LOADED {coleccion, count}`.
 
 #### Scenario: Bulk MA auditado
 - **WHEN** `seedBulkLoad` carga `maestros.estadosOcupacion` (5 registros)

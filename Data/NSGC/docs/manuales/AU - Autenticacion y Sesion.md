@@ -55,4 +55,4 @@ Autenticar usuarios por email + contraseña, mantener sesión segura y limitar i
 - Usuarios vinculados a **MP - Maestro de Personas** (`personaId` opcional, 0..1).
 - Roles y permisos en **RP - Roles y Permisos** (`Membresia.rol` + `lib/authz.ts:puede()`).
 - Capa de datos en **ST - Capa de Datos Persistente** (`Usuario`/`Membresia`/`RateLimitAttempt` + `lib/prisma.ts` singleton).
-- Trazabilidad en **03 - Mapa de Desarrollo y Trazabilidad** y serie en `openspec/SERIE-PLATAFORMA.md` (P5 HECHA).
+- Trazabilidad en **03 - Mapa de Desarrollo y Trazabilidad** y serie en `specs/SERIES-ARCHIVO.md` (P5 HECHA).

@@ -4,7 +4,7 @@
 Define el comportamiento y la estructura del panel de navegación lateral (Sidebar) de la aplicación GECOS, incluyendo su organización por categorías, el resaltado de la ruta activa, la capacidad de plegarse/desplegarse mediante un control visible y su integración con los roles de usuario.
 ## Requirements
 ### Requirement: Categorized Navigation
-The navigation menu MUST follow the hierarchy implemented in `AppSidebar` and reflect the modules documented in `openspec/specs/`.
+The navigation menu MUST follow the hierarchy implemented in `AppSidebar` and reflect the modules documented in `specs/`.
 
 #### Scenario: Menu Structure
 - **WHEN** the user opens the Sidebar
@@ -38,9 +38,6 @@ The navigation menu MUST follow the hierarchy implemented in `AppSidebar` and re
   - **Personas**
     - Residentes (`/personas/residentes`)
     - Personal (`/personas/personal`)
-  - **Desarrollo AI**
-    - Dashboard OpenSpec (`/admin/dev-dashboard`)
-    - Laboratorio QA (`/admin/qa-lab`)
   - **Sistema**
     - Reportería y Dashboards (`/admin/reporteria`)
     - Auditoría y Métricas (`/admin/metricas`)

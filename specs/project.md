@@ -22,19 +22,19 @@ Each module represents a functional domain (Finance, Community, Infrastructure, 
 ## Development Conventions
 - **Language**: Simple Spanish for folder names, routes, and documentation.
 - **Technology**: Next.js (App Router), Tailwind CSS, shadcn/ui.
-- **Methodology**: OpenSpec for change and specification management.
+- **Methodology**: ODD lifecycle; the capability contract lives in `specs/<capability>/spec.md` and a requirement change is edited there directly.
 - **Data layer (ST)**: All domain data SHALL persist in the server (Prisma database accessed through the REST API) and SHALL be read from there through the `lib/api/use-*` hooks. The global store `apps/web/lib/store.ts` (Zustand + persist, key `compass-store`) is a **legacy** layer marked `@deprecated`: `STORE_VERSION` is frozen at 28, no new domain migrations are added, it MUST NOT receive new domain entities and its domain actions MUST NOT be used as the mutation mechanism for pages. Mocks in `apps/web/data/` are the **server** seed, applied by the `seed:mocks`/`db:*` npm scripts, and MUST NOT be imported directly by pages/components. Every new capability MUST declare its entities as a Prisma table plus a REST route, including referential-integrity validations on delete. See `ST-capa-datos-persistente` and `RG` (Reglas Generales).
-- **Alcance de cambios (OpenSpec)**: 1 módulo NSGC = 1 change OpenSpec (convención 1:1 con la capability `<AA>-<kebab-name>`); excepción: PE puede partirse en 2 changes si su alcance lo exige.
+- **Alcance de cambios**: 1 módulo NSGC = 1 capability spec (convención 1:1 con la carpeta `<AA>-<kebab-name>` en `specs/`); excepción: PE puede partirse en 2 trabajos si su alcance lo exige.
 - **Documentos PDF**: pdfmake es el motor estándar de generación documental (CT certificados, PL liquidaciones) con firma digitalizada embebida como imagen; se instala al implementar dichos módulos, no antes.
 - **Notificaciones**: se materializan como bandeja in-app simulada (`notify()` en el store, canal `email_simulado`, eventos AM); el envío real por correo (SMTP) queda fuera de alcance hasta SG. Media/adjuntos siempre por referencia (metadatos + URL), jamás base64/Blob en el store (ver ST).
 
 ---
 
-## Cross-Reference OpenSpec ↔ NSGC Docs
+## Cross-Reference specs ↔ NSGC Docs
 
-Each OpenSpec capability maps 1:1 to its module spec in `Data/NSGC/docs/especificaciones/` using the AA prefix.
+Each capability spec maps 1:1 to its module spec in `Data/NSGC/docs/especificaciones/` using the AA prefix.
 
-| OpenSpec capability (spec folder) | NSGC spec file |
+| Capability spec (folder in `specs/`) | NSGC spec file |
 | :--- | :--- |
 | `RG-*` | `RG - Reglas Generales.md` |
 | `MA-maestros-administrativos` | `MA - Maestros Administrativos.md` |
@@ -72,14 +72,14 @@ Each OpenSpec capability maps 1:1 to its module spec in `Data/NSGC/docs/especifi
 | `UI-interfaz-principal` | Cross-cutting UI (no AA code) |
 | `UI-navegacion-lateral` | Cross-cutting UI (no AA code) |
 
-### Remaining NSGC modules (pending OpenSpec specs)
-Ninguno: los 32 specs del roadmap (incluidos `AU` y `SG`) existen en `openspec/specs/` y la serie Plataforma P1–P8 está completa (auth, authz, Prisma scoping, secretos, Auth.js, CSP/headers, auditoría OWASP, backups con restore probado).
+### Remaining NSGC modules (pending specs)
+Ninguno: los 32 specs del roadmap (incluidos `AU` y `SG`) existen en `specs/` y la serie Plataforma P1–P8 está completa (auth, authz, Prisma scoping, secretos, Auth.js, CSP/headers, auditoría OWASP, backups con restore probado).
 
 ### Novedades 2026-08-31 / 2026-09-01 (QA + menú 100% + frontera)
 - **QA infra**: Dashboard QA `/admin/qa-dashboard` (estado de corridas, estimados CLI vs Chrome, alerta de máquina ahogada — `lib/qa-estado.ts` + `qa-estado.json`); skill `pruebas` v2.1 (preflight de sistema + registro en dashboard); CI e2e verde con suite completa (setup e2e resiliente + gate del QA Lab por `APP_ENV`).
 - **Series completadas**: CRUD-E2E (6/6, 22 specs CRUD), QA-LAB (3/3, lab 27→0 errores "Carga completa OK" + guard), MENU-100 (6/6: `/personas/residentes`, `/dashboard` Resumen, `/operaciones/accesos`, `/operaciones/paqueteria`, menú sin placeholders, dashboard OpenSpec 31/31 Completado), FRONTERA (6/6: poblado idempotente "Limpiar y poblar", logs de auditoría con retención en BD — `POST /api/auditoria/sync` + `GET /api/auditoria` — y ABAC contextual `puedeContextual()` + matriz visible en `/admin/permisos`).
-- **Frontera restante**: C3 Google SSO — EN PAUSA pendiente credenciales Google Cloud del owner (checklist en `openspec/BACKLOG-100.md` §C3).
+- **Frontera restante**: C3 Google SSO — EN PAUSA pendiente credenciales Google Cloud del owner (checklist en `specs/BACKLOG-100.md` §C3).
 ### Folder naming rule
-- Specs and active changes: `<AA>-<kebab-case-name>` (e.g. `EF-estructura-fisica`).
+- Spec folders: `<AA>-<kebab-case-name>` (e.g. `EF-estructura-fisica`).
 - Cross-cutting UI specs use `UI-` prefix.
 - Archived changes: `YYYY-MM-DD-<name>` (AA prefix optional in archive).

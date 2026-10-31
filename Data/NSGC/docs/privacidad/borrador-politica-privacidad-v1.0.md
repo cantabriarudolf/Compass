@@ -3,7 +3,7 @@
 > **Qué es esto**: el borrador de la política de privacidad que hoy vive como scaffold en
 > `k0mp4ss_fe/apps/web/app/privacidad/page.tsx`. Lo produjo la consulta al skill
 > `experto-admin-comunidades` el **2026-10-26**, sobre la asesoría previa registrada en
-> `openspec/BACKLOG-100.md` §«Privacidad y datos personales».
+> `specs/BACKLOG-100.md` §«Privacidad y datos personales».
 >
 > **Estado**: `[CRITERIO DEL PROYECTO]` = decisión nuestra · `[CONFIRMAR CON ABOGADO]` = depende de
 > norma secundaria, de la futura Agencia o de datos que el proyecto todavía no tiene. Esto **no

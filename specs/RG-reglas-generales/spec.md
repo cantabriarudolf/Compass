@@ -74,7 +74,7 @@ Toda spec nueva o modificada SHALL incluir, inmediatamente antes de la sección 
 
 #### Scenario: Spec con Dependencias incompletas
 - **WHEN** la sección `Dependencias` omite `Entidades ST`, `Depende de` o `Load Order Rank`
-- **THEN** la validación `openspec validate` falla hasta completar los campos.
+- **THEN** la spec se considera incompleta hasta completar los campos.
 
 ### Requirement: Validación Referencial en Escritura
 

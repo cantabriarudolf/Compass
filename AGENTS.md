@@ -6,11 +6,11 @@ monorepos — no usarlo como base fundacional).
 
 ## Dónde está la verdad del proyecto
 
-- **Estado vivo / frontera**: `openspec/BACKLOG-100.md` — léelo PRIMERO en cualquier ventana nueva
-- **Qué falta y todavía no existe**: `openspec/PENDIENTES-FUNCIONALIDAD.md` — funcionalidades que el sistema **necesita** y no tiene, con qué las desbloquea (owner o nadie). Si algo «debe existir» y no existe, se anota ahí el mismo día; nunca se deja solo en un chat
-- **Especificaciones por capacidad**: `openspec/specs/` (34 capabilities; `project.md` y `agents.md` son transversales, no módulos). **La instrucción de agentes vive SOLO en este `AGENTS.md`**
-- **Changes activos/archivados**: `openspec/changes/` (changes openspec; obligatorios solo cuando cambia un contrato de capacidad)
-- **Ventana nueva**: si Engram está disponible, `mem_context` primero; el ritual de archivos queda como respaldo: leer `openspec/BACKLOG-100.md` + `openspec/PENDIENTES-FUNCIONALIDAD.md` + `git status -sb` + `git log --oneline -5` y presentar dónde estamos
+- **Estado vivo / frontera**: `specs/BACKLOG-100.md` — léelo PRIMERO en cualquier ventana nueva
+- **Qué falta y todavía no existe**: `specs/PENDIENTES-FUNCIONALIDAD.md` — funcionalidades que el sistema **necesita** y no tiene, con qué las desbloquea (owner o nadie). Si algo «debe existir» y no existe, se anota ahí el mismo día; nunca se deja solo en un chat
+- **Especificaciones por capacidad**: `specs/` (34 capabilities; `project.md` y `agents.md` son transversales, no módulos). **La instrucción de agentes vive SOLO en este `AGENTS.md`**
+- **Specs y archivo**: `specs/archive/` guarda los trabajos cerrados; no hay changes activos, un cambio de contrato de capacidad se edita directo en `specs/<capability>/spec.md`
+- **Ventana nueva**: si Engram está disponible, `mem_context` primero; el ritual de archivos queda como respaldo: leer `specs/BACKLOG-100.md` + `specs/PENDIENTES-FUNCIONALIDAD.md` + `git status -sb` + `git log --oneline -5` y presentar dónde estamos
 - **Documentación NSGC**: `Data/NSGC/docs/` (manuales por módulo, avances de desarrollo, trazabilidad)
 
 ## Stack y rutas de código
@@ -25,10 +25,10 @@ monorepos — no usarlo como base fundacional).
 ## Convenciones críticas
 
 - **Terminología RG §4**: el término oficial es **"comunidad"**; "condominio" está en desuso y no debe introducirse en ningún archivo
-- **Workflow openspec**: un change solo es obligatorio cuando el trabajo modifica un contrato de capacidad (agrega, cambia o quita un requirement); el lifecycle es ODD. El delta se aplica a mano sobre `openspec/specs/` y se borra la carpeta del change: el registro queda en git y en el avance. No hay CLI, ni archive, ni gate propio
+- **Workflow de specs (ODD)**: el lifecycle es ODD. Solo cuando el trabajo modifica un contrato de capacidad (agrega, cambia o quita un requirement) se edita el texto del requirement directo en `specs/<capability>/spec.md`: el registro queda en git y en el avance. No hay CLI, ni change activo, ni archive, ni gate propio
 - **Al tocar una spec**: un requirement reemplazado conserva sus escenarios existentes con el nombre exacto (un reemplazo cubre el requirement completo; renombrar un escenario se lee como pérdida). El nombre de la capability ya existe: nunca se inventa una nueva para meter un delta
 - **NSGC pre-push**: antes de pushear, skill `nsgc-prepush` (manuales de módulo + avance + mocks si toca)
-- **Store legacy**: `lib/store.ts` está `@deprecated` con `STORE_VERSION` congelado en 28 y no recibe migraciones de dominio; los datos de dominio viven en la base vía API (ver `openspec/specs/ST-capa-datos-persistente/spec.md`)
+- **Store legacy**: `lib/store.ts` está `@deprecated` con `STORE_VERSION` congelado en 28 y no recibe migraciones de dominio; los datos de dominio viven en la base vía API (ver `specs/ST-capa-datos-persistente/spec.md`)
 - **Commits**: automáticos, sin pedir confirmación; estilo convencional en español (ver `git log`). Se commitea por unidad revisable (~400 líneas cambiadas), con los tests y los docs junto al comportamiento; solo los archivos del cambio, y la suciedad ajena del worktree queda fuera
 - **Delegación pesada**: delegá al escritor del harness cuando esté sano; si no está disponible, trabajá inline y reportalo. El orquestador verifica el resultado contra la spec en ambos casos
 
