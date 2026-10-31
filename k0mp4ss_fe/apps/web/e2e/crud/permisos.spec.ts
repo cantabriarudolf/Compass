@@ -9,16 +9,13 @@ test.describe("Permisos y Roles (RP) — vista read-only en /admin/permisos", ()
     const errores: string[] = []
     page.on("pageerror", (err) => errores.push(err.message))
 
-    // 0) Precondición: seed authz si la BD no tiene membresías (auto-suficiente,
-    //    usa el seed liviano de usuarios TEST del QA Lab — NO "Poblar todo").
+    // 0) Precondición: seed authz si la BD no tiene membresías (auto-suficiente).
+    //    Seed liviano de usuarios TEST por API (POST admin-only, idempotente).
     await page.goto("/admin/permisos")
     const sinMembresias = page.getByText("Tu usuario no tiene membresías registradas")
     if (await sinMembresias.isVisible().catch(() => false)) {
-      await page.goto("/admin/qa-lab")
-      const botonSeed = page.getByRole("button", { name: /Crear usuarios TEST/ })
-      await botonSeed.waitFor({ state: "visible", timeout: 30_000 })
-      await botonSeed.click({ force: true, noWaitAfter: true })
-      await expect(page.getByText(/Seed AU B3 OK/)).toBeVisible({ timeout: 60_000 })
+      const seed = await page.request.post("/api/admin/seed-authz")
+      expect(seed.ok(), `seed-authz respondió ${seed.status()}`).toBe(true)
       await page.goto("/admin/permisos")
     }
 

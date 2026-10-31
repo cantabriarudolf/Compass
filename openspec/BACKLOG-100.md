@@ -375,10 +375,10 @@ merged (2026-10-16) · DEUDA-2/3/4/5 → en `main`.
 
 | Frente | Estado | Desbloquea |
 |---|---|---|
-| Store legacy en la UI (`useCompassStore`) | Al 2026-10-26 quedan **3 archivos**, todos del módulo QA/dev (`qa-lab`, `dev-dashboard`, `mantenimiento`; F9), que desde el commit `09e8ba8` tiene guard de servidor con rol administrador + 404 en producción salvo opt-in e2e. La última deuda fuera del módulo salió ese mismo día: el espejo financiero `fi-espejo-bd` se retiró (commit `4a8ef36`) porque el store ya no es fuente de datos en ninguna pantalla operativa y el punto cero se siembra por script (`db:punto-cero`, corrido por `e2e:reseed-base`). El número lo dicta el candado `audit:store` (CI, job unit) y la allowlist de `scripts/audit-store.mjs` **sólo puede achicarse**: un archivo nuevo con el store falla el gate, y una excepción ya saldada también | **Nadie: slices de cableado, la allowlist marca el avance** |
+| Store legacy en la UI (`useCompassStore`) | Al 2026-10-26 quedan **0 archivos**: el módulo QA/dev (`qa-lab`, `dev-dashboard`, `mantenimiento`; F9) se retiró junto con sus rutas y pantallas, y con eso salió la última deuda — antes había salido el espejo financiero `fi-espejo-bd` (commit `4a8ef36`) porque el store ya no era fuente de datos en ninguna pantalla operativa y el punto cero se siembra por script (`db:punto-cero`, corrido por `e2e:reseed-base`). El número lo dicta el candado `audit:store` (CI, job unit) y la allowlist de `scripts/audit-store.mjs` **sólo puede achicarse**: hoy está vacía, así que un archivo nuevo con el store falla el gate sin excepción posible | **Nadie: allowlist vacía, el gate bloquea cualquier reaparición** |
 | Sync store→BD de FI (`lib/fi-sync.ts` + `POST /api/fi/sync`) | Seguimiento abierto: con el retiro del espejo `fi-espejo-bd` (commit `4a8ef36`) el sync store→BD quedó sin fuente de escritura operativa — falta definir quién la alimenta en la operación (hoy no hay camino vivo store→BD para FI) | **Owner**: decidir el destino del sync (integrarlo a la operación o retirarlo) |
 
-<!-- audit:store: archivos=3 -->
+<!-- audit:store: archivos=0 -->
 | `au-google-sso` | ⏸ Bloqueado (código 100 % listo) | Owner: `GOOGLE_CLIENT_ID`/`SECRET` en Vercel + 2 decisiones de rol/migración |
 | Decisiones de producción (Sentry DSN, pen-test, Ley 21.719, proveedor Postgres, privacidad/abogado, CSP con dominio real, secrets Vercel) | ⏸ Pendientes | Owner |
 | Falso positivo `window.open` (`app/comunidad/comunicacion/page.tsx:292`) | Decisión de producto | Owner (allowlist de dominios) |

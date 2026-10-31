@@ -265,8 +265,8 @@ export default function PermisosPage() {
         {comunidades && comunidades.length === 0 && (
           <Card className="border-dashed bg-muted/20">
             <CardContent className="py-6 text-center text-sm text-muted-foreground">
-              Tu usuario no tiene membresías registradas. Crea los usuarios TEST desde el{" "}
-              <a href="/admin/qa-lab" className="text-primary underline">Laboratorio QA</a> (👥 Crear usuarios TEST).
+              Tu usuario no tiene membresías registradas. Pedí a un administrador que te asigne
+              una en esta sección.
             </CardContent>
           </Card>
         )}

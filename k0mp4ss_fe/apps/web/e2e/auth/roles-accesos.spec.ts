@@ -3,7 +3,7 @@
 // Usa test.use({ storageState }) por archivo; no 5 proyectos en config.
 import { expect, test } from "@playwright/test"
 
-const GRUPOS = ["Inicio","Operaciones","Finanzas","Comunidad","Inventario","Personas","Desarrollo AI","Sistema"] as const
+const GRUPOS = ["Inicio","Operaciones","Finanzas","Comunidad","Inventario","Personas","Sistema"] as const
 
 type Matriz = Record<string, { visibles: string[]; ocultos: string[] }>
 
@@ -14,28 +14,27 @@ type Matriz = Record<string, { visibles: string[]; ocultos: string[] }>
 // Comunidad: [admin,residente,comite]
 // Inventario: [admin,mantencion] (Estructura/Tipos solo admin; Recursos/Mantenimiento admin+mantencion)
 // Personas: [admin]
-// Desarrollo AI: [admin]
 // Sistema: [admin,comite] (Reportería: [admin,comite]; resto admin)
 const MATRIZ: Matriz = {
   "comite@test.cl": {
     visibles: ["Inicio","Finanzas","Comunidad","Sistema"],
-    ocultos: ["Operaciones","Inventario","Personas","Desarrollo AI"],
+    ocultos: ["Operaciones","Inventario","Personas"],
   },
   "conserjeria@test.cl": {
     visibles: ["Inicio","Operaciones"],
-    ocultos: ["Finanzas","Comunidad","Inventario","Personas","Desarrollo AI","Sistema"],
+    ocultos: ["Finanzas","Comunidad","Inventario","Personas","Sistema"],
   },
   "residente@test.cl": {
     visibles: ["Inicio","Operaciones","Finanzas","Comunidad"],
-    ocultos: ["Inventario","Personas","Desarrollo AI","Sistema"],
+    ocultos: ["Inventario","Personas","Sistema"],
   },
   "arrendatario@test.cl": {
     visibles: ["Inicio","Operaciones","Finanzas","Comunidad"],
-    ocultos: ["Inventario","Personas","Desarrollo AI","Sistema"],
+    ocultos: ["Inventario","Personas","Sistema"],
   },
   "mantencion@test.cl": {
     visibles: ["Inicio","Operaciones","Inventario"],
-    ocultos: ["Finanzas","Comunidad","Personas","Desarrollo AI","Sistema"],
+    ocultos: ["Finanzas","Comunidad","Personas","Sistema"],
   },
 }
 

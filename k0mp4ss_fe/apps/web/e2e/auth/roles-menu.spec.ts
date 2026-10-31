@@ -14,7 +14,6 @@ const GRUPOS = [
   "Comunidad",
   "Inventario",
   "Personas",
-  "Desarrollo AI",
   "Sistema",
 ] as const
 
@@ -27,7 +26,6 @@ type Matriz = Record<string, { visibles: string[]; ocultos: string[] }>
 // - Comunidad: ["administrador","residente"]
 // - Inventario: ["administrador"]
 // - Personas: ["administrador"]
-// - Desarrollo AI: ["administrador"]
 // - Sistema: ["administrador"]
 const MATRIZ: Matriz = {
   "admin@test.cl": {
@@ -41,13 +39,13 @@ const MATRIZ: Matriz = {
       "Comunidad",
       "Inventario",
       "Personas",
-      "Desarrollo AI",
+
       "Sistema",
     ],
   },
   "residente@test.cl": {
     visibles: ["Inicio", "Operaciones", "Finanzas", "Comunidad"],
-    ocultos: ["Inventario", "Personas", "Desarrollo AI", "Sistema"],
+    ocultos: ["Inventario", "Personas",  "Sistema"],
   },
 }
 

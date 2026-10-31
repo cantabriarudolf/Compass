@@ -28,7 +28,8 @@ export interface SeedAuthzResult {
  * Comunidad A: comunidad-a (Comunidad Los Aromos TEST)
  * Comunidad B: comunidad-b (Comunidad Las Palmas TEST)
  * Cada usuario queda vinculado por membresia a su comunidad; admin en ambas para probar aislamiento A/B.
- * Llamado desde qa-lab (fase AU, requiere sesión admin) y desde tests con client temporal.
+ * Llamado desde `POST /api/admin/seed-authz` (requiere sesión admin) y desde tests
+ * con client temporal. El panel QA-Lab que también lo invocaba se retiró (F9).
  * Primer arranque sin usuarios: `npm run seed:authz` (scripts/seed-authz.mjs).
  */
 export async function seedUsuariosMembresias(client?: PrismaClient): Promise<SeedAuthzResult> {

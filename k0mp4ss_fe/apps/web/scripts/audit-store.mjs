@@ -36,19 +36,16 @@ const DIRS_IGNORADOS = new Set([".next", "node_modules", "playwright-report", "t
  * cablearlo contra su hook de `lib/api/`; cuando eso pasa, la entrada se BORRA de acá.
  */
 export const EXCEPCIONES = [
-  // Las 3 excepciones justificadas: módulo QA/dev (F9) que opera sobre hechos del navegador y el
-  // owner decidió que se retira o aísla antes de producción.
-  { archivo: "app/admin/qa-lab/page.tsx", motivo: "módulo QA/dev: se retira o aísla antes de producción (F9)", desde: "2026-10-25" },
-  { archivo: "app/admin/dev-dashboard/page.tsx", motivo: "módulo QA/dev: se retira o aísla antes de producción (F9)", desde: "2026-10-25" },
-  { archivo: "app/admin/mantenimiento/page.tsx", motivo: "módulo QA/dev: se retira o aísla antes de producción (F9)", desde: "2026-10-25" },
   // Historial de retiros (las entradas se borran, la lista sólo se achica): los 3 paneles PE
   // (2026-10-25, ventana pe-paneles-bd), 4 lecturas de dominio (2026-10-26: comentario de
   // remuneraciones, formulario-persona, formulario-unidad y estados-donut vía hooks de lib/api/),
   // app-sidebar y community-header (2026-10-26, migrados a useComunidadActual() sobre la
-  // proyección GET /api/comunidad-actual) y el espejo financiero fi-espejo-bd (2026-10-26,
+  // proyección GET /api/comunidad-actual), el espejo financiero fi-espejo-bd (2026-10-26,
   // ventana pe-paneles-bd N3: el store ya no es fuente de datos en ninguna pantalla operativa y
-  // el punto cero se siembra por script con db:punto-cero). Con eso la allowlist quedó reducida
-  // al módulo QA/dev.
+  // el punto cero se siembra por script con db:punto-cero) y el módulo QA/dev completo
+  // (2026-10-26, F9: qa-lab, dev-dashboard y mantenimiento se retiraron con sus rutas).
+  // Allowlist vacía: hoy ningún archivo de app/ ni components/ lee el store legacy, y cualquier
+  // archivo nuevo que lo haga falla el gate sin excepción posible.
 ]
 
 const RE_STORE = /\buseCompassStore\b/

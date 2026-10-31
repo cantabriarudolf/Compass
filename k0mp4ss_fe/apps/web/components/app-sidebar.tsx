@@ -9,7 +9,6 @@ import {
   IconBuildingSkyscraper,
   IconSettings,
   IconUserHeart,
-  IconAdjustments,
   IconChevronRight,
   IconCommand,
   IconClock,
@@ -49,7 +48,6 @@ export const SIDEBAR_GROUPS = [
   "Comunidad",
   "Inventario",
   "Personas",
-  "Desarrollo AI",
   "Sistema",
 ] as const
 
@@ -124,18 +122,6 @@ const data = {
       items: [
         { title: "Residentes", url: "/personas/residentes" },
         { title: "Personal", url: "/personas/personal" },
-      ],
-    },
-    {
-      title: "Desarrollo AI",
-      url: "/admin/dev-dashboard",
-      icon: IconAdjustments,
-      roles: ["administrador"],
-      items: [
-        { title: "Dashboard OpenSpec", url: "/admin/dev-dashboard" },
-        { title: "Laboratorio QA", url: "/admin/qa-lab" },
-        { title: "Estado de Pruebas QA", url: "/admin/qa-dashboard" },
-        { title: "Mantenimiento", url: "/admin/mantenimiento" },
       ],
     },
     {

@@ -210,8 +210,9 @@ export function getQaDashboardData() {
 }
 
 // Etapas del recorrido QA narrativo (D1): comandos validados según el mapa de la
-// skill `pruebas` y lotes CRUD por SERIE-CRUD-E2E. Fuente de verdad para el plan
-// (`planRoadmap`), el reporter (F2) y el dashboard /admin/qa-dashboard modo 🦉.
+// skill `pruebas` y lotes CRUD por SERIE-CRUD-E2E. Fuente de verdad del plan
+// (`planRoadmap`) y del reporter de Playwright (F2). El dashboard que las leía se
+// retiró con el módulo QA/dev (F9); el reporter sigue siendo consumidor vivo.
 export const ROADMAP_ETAPAS: QaEtapaDef[] = [
   {
     id: "setup",

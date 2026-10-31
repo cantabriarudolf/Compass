@@ -103,7 +103,8 @@ export default defineConfig({
         // Re-baseline 2026-10-16 (SERIE-DEUDA-1 P3, change `api-cobertura-fase3`):
         // medido 83.69/68.70/86.99/83.69 → 85.75/71.50/88.48/85.75 con las 3
         // carpetas más bajas de la medición cubiertas — `qa-roadmap`
-        // (62.5 → 91.67 st), `emisiones-gc` (66.89 → 94.26) y `vinculos`
+        // (62.5 → 91.67 st, retirada después con el módulo QA/dev, F9),
+        // `emisiones-gc` (66.89 → 94.26) y `vinculos`
         // (69.2 → 94.93) → piso = medido − 1 pt. Nunca se baja.
         // Re-baseline 2026-10-16 (SERIE-DEUDA-1 P4, change `api-cobertura-fase4`):
         // medido 85.75/71.50/88.48/85.75 → 88.39/75.83/89.22/88.39 con las 3

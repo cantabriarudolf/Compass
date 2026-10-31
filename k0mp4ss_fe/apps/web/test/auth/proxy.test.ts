@@ -57,11 +57,11 @@ describe("proxy (middleware Auth.js)", () => {
   })
 
   it("bloquea /admin sin sesión con redirect a /ingresar?next=", async () => {
-    const r = await proxy(mkReq("/admin/qa-lab"), undefined as never)
+    const r = await proxy(mkReq("/admin/permisos"), undefined as never)
     expect([307, 308].includes(r?.status ?? 0)).toBe(true)
     const loc = r?.headers.get("location") ?? ""
     expect(loc).toContain("/ingresar")
-    expect(loc).toContain(encodeURIComponent("/admin/qa-lab"))
+    expect(loc).toContain(encodeURIComponent("/admin/permisos"))
   })
 
   it("bloquea /api/* sin sesión con 401 JSON", async () => {

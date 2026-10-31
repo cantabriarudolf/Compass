@@ -166,7 +166,7 @@ describe("app/ingresar/page.tsx (Auth.js)", () => {
   })
 
   it("login exitoso respeta ?next= interno", async () => {
-    mockNextParam = "/admin/qa-lab"
+    mockNextParam = "/admin/permisos"
     mockCsrfOk()
     mockCallbackSuccess()
     const user = userEvent.setup()
@@ -177,7 +177,7 @@ describe("app/ingresar/page.tsx (Auth.js)", () => {
     )
     await user.type(screen.getByLabelText(/contraseña/i), "Test1234!")
     await user.click(screen.getByRole("button", { name: /ingresar/i }))
-    await waitFor(() => expect(mockAssign).toHaveBeenCalledWith("/admin/qa-lab"))
+    await waitFor(() => expect(mockAssign).toHaveBeenCalledWith("/admin/permisos"))
   })
 
   it("login exitoso ignora ?next= externo y va a /dashboard", async () => {
@@ -337,14 +337,14 @@ describe("app/ingresar/page.tsx (Auth.js)", () => {
   })
 
   it("paso 2 con verify OK redirige al destino ?next=", async () => {
-    mockNextParam = "/admin/qa-lab"
+    mockNextParam = "/admin/permisos"
     configurarFlujo2fa()
     mock2fa("/api/auth/2fa/verify", () => Promise.resolve(respJson({ ok: true })))
     const user = userEvent.setup()
     await llegarAPaso2(user)
     await user.type(screen.getByLabelText(/código de verificación/i), "123456")
     await user.click(screen.getByRole("button", { name: /verificar/i }))
-    await waitFor(() => expect(mockAssign).toHaveBeenCalledWith("/admin/qa-lab"))
+    await waitFor(() => expect(mockAssign).toHaveBeenCalledWith("/admin/permisos"))
   })
 
   it("paso 2 con código inválido muestra error sin avanzar", async () => {

@@ -578,11 +578,6 @@ const EXCEPCIONES_R1 = [
     motivo:
       "recurso semántico del ABAC, no de RBAC: lo evalúa puedeContextual con el control de privacidad alertasResidentesActivas y hoy ninguna ruta lo pide (el chequeo local vive en lib/store.ts:1327). Declararlo en la MATRIZ abriría un permiso que ningún rol debe tener.",
   },
-  {
-    recurso: "qa-lab",
-    motivo:
-      "herramienta interna de QA (purga de datos TEST). No es permiso de negocio: es backoffice de desarrollo y debe morir o aislarse antes de producción (mismo criterio que H6 del registro de hallazgos).",
-  },
 ]
 
 /**

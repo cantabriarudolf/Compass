@@ -15,7 +15,7 @@ export const dynamic = "force-dynamic"
  */
 export async function POST() {
   // P2 security audit: seed crea usuarios de prueba con credenciales conocidas —
-  // solo debe existir en desarrollo (misma política que /api/dev-dashboard y /api/backup).
+  // solo debe existir en desarrollo (misma política que /api/backup).
   if (!isWriteApiEnabled()) {
     return NextResponse.json({ error: "Not Found" }, { status: 404 })
   }

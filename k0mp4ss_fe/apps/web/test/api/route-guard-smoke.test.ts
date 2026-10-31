@@ -10,9 +10,9 @@
  *   se resuelve a un valor inexistente por diseño: el handler corta en 401.
  * - `/api/csp-report`: sink PÚBLICO (sin auth); POST siempre → 204, incluso
  *   con cuerpo malformado (JSON.parse falla → se loguea el raw, nunca lanza).
- * - `/api/qa-estado` y `/api/qa-roadmap`: `isWriteApiEnabled()` decide ANTES
- *   de auth (404 cuando el guard está apagado) y solo después se evalúa la
- *   sesión (401 sin cookie).
+ * - `/api/admin/seed-authz` y `/api/backup`: APIs de escritura dev-only.
+ *   `isWriteApiEnabled()` decide ANTES de auth (404 cuando el guard está apagado)
+ *   y solo después se evalúa la sesión (401 sin cookie).
  */
 import { describe, it, expect, vi, afterEach } from "vitest"
 import { NextRequest } from "next/server"
@@ -150,23 +150,27 @@ describe("/api/csp-report — sink público, nunca lanza", () => {
   })
 })
 
-describe("/api/qa-estado y /api/qa-roadmap — env-guard antes de auth", () => {
+describe("/api/admin/seed-authz y /api/backup — env-guard antes de auth", () => {
   afterEach(() => {
     vi.unstubAllEnvs()
   })
 
-  async function cargaQa(): Promise<{
-    estado: {
-      GET: () => Promise<Response>
-      POST: (req: Request) => Promise<Response>
-    }
-    roadmap: { GET: (req: Request) => Promise<Response> }
+  async function cargaWrites(): Promise<{
+    seed: { POST: () => Promise<Response> }
+    backup: { POST: (req: Request) => Promise<Response> }
   }> {
     return {
-      estado: await import("@/app/api/qa-estado/route"),
-      roadmap: await import("@/app/api/qa-roadmap/route"),
+      seed: await import("@/app/api/admin/seed-authz/route"),
+      backup: await import("@/app/api/backup/route"),
     }
   }
+
+  const reqBackup = () =>
+    new NextRequest("http://localhost/api/backup", {
+      method: "POST",
+      body: JSON.stringify({ content: "{}", fileName: "x.json" }),
+      headers: { "content-type": "application/json" },
+    })
 
   it("sin NEXT_PUBLIC_APP_ENV: el status previo al auth sigue a isWriteApiEnabled()", async () => {
     vi.stubEnv("NEXT_PUBLIC_APP_ENV", undefined)
@@ -174,57 +178,43 @@ describe("/api/qa-estado y /api/qa-roadmap — env-guard antes de auth", () => {
     const { isWriteApiEnabled } = await import("@/lib/env-guard")
     const habilitado = isWriteApiEnabled()
     const esperado = habilitado ? 401 : 404
-    const { estado, roadmap } = await cargaQa()
+    const { seed, backup } = await cargaWrites()
 
-    const resEstado = await estado.GET()
-    expect(resEstado.status).toBe(esperado)
-    const resRoadmap = await roadmap.GET(
-      new NextRequest("http://localhost/api/qa-roadmap")
-    )
-    expect(resRoadmap.status).toBe(esperado)
+    const resSeed = await seed.POST()
+    expect(resSeed.status).toBe(esperado)
+    const resBackup = await backup.POST(reqBackup())
+    expect(resBackup.status).toBe(esperado)
 
     // Invariante del guard: cuando está apagado, corta ANTES de auth.
     if (!habilitado) {
-      expect(((await resEstado.json()) as { error: string }).error).toMatch(/not found/i)
-      expect(((await resRoadmap.json()) as { error: string }).error).toMatch(/not found/i)
+      expect(((await resSeed.json()) as { error: string }).error).toMatch(/not found/i)
+      expect(((await resBackup.json()) as { error: string }).error).toMatch(/not found/i)
     }
   })
 
   it("NEXT_PUBLIC_APP_ENV=production → 404 sin sesión (guard corta antes de auth)", async () => {
     vi.stubEnv("NEXT_PUBLIC_APP_ENV", "production")
-    const { estado, roadmap } = await cargaQa()
+    const { seed, backup } = await cargaWrites()
 
-    const resEstadoGet = await estado.GET()
-    expect(resEstadoGet.status).toBe(404)
-    expect(((await resEstadoGet.json()) as { error: string }).error).toMatch(/not found/i)
+    const resSeed = await seed.POST()
+    expect(resSeed.status).toBe(404)
+    expect(((await resSeed.json()) as { error: string }).error).toMatch(/not found/i)
 
-    const resEstadoPost = await estado.POST(
-      new NextRequest("http://localhost/api/qa-estado", {
-        method: "POST",
-        body: JSON.stringify({ accion: "nota", runId: "r", etapaId: "e", texto: "t" }),
-        headers: { "content-type": "application/json" },
-      })
-    )
-    expect(resEstadoPost.status).toBe(404)
-
-    const resRoadmap = await roadmap.GET(
-      new NextRequest("http://localhost/api/qa-roadmap")
-    )
-    expect(resRoadmap.status).toBe(404)
+    const resBackup = await backup.POST(reqBackup())
+    expect(resBackup.status).toBe(404)
+    expect(((await resBackup.json()) as { error: string }).error).toMatch(/not found/i)
   })
 
   it("NEXT_PUBLIC_APP_ENV=development sin sesión → 401 tras el guard", async () => {
     vi.stubEnv("NEXT_PUBLIC_APP_ENV", "development")
-    const { estado, roadmap } = await cargaQa()
+    const { seed, backup } = await cargaWrites()
 
-    const resEstado = await estado.GET()
-    expect(resEstado.status).toBe(401)
-    expect(((await resEstado.json()) as { error: string }).error).toMatch(/autenticado/i)
+    const resSeed = await seed.POST()
+    expect(resSeed.status).toBe(401)
+    expect(((await resSeed.json()) as { error: string }).error).toMatch(/autenticado/i)
 
-    const resRoadmap = await roadmap.GET(
-      new NextRequest("http://localhost/api/qa-roadmap")
-    )
-    expect(resRoadmap.status).toBe(401)
-    expect(((await resRoadmap.json()) as { error: string }).error).toMatch(/autenticado/i)
+    const resBackup = await backup.POST(reqBackup())
+    expect(resBackup.status).toBe(401)
+    expect(((await resBackup.json()) as { error: string }).error).toMatch(/autenticado/i)
   })
 })

@@ -112,10 +112,10 @@ describe("D-iii re-chequeos 5/5 (scripted)", () => {
 
   it("[2/5] APIs escritura con APP_ENV=production → 404", async () => {
     process.env.NEXT_PUBLIC_APP_ENV = "production"
-    // dev-dashboard GET
-    const { GET } = await import("@/app/api/dev-dashboard/route")
-    const r1 = await GET()
-    console.log(`[2/5] GET /api/dev-dashboard production → 404: ${r1.status === 404 ? "OK" : `FAIL (status=${r1.status})`}`)
+    // seed-authz POST (seed dev de usuarios TEST)
+    const { POST: seedPost } = await import("@/app/api/admin/seed-authz/route")
+    const r1 = await seedPost()
+    console.log(`[2/5] POST /api/admin/seed-authz production → 404: ${r1.status === 404 ? "OK" : `FAIL (status=${r1.status})`}`)
     expect(r1.status).toBe(404)
 
     // backup POST (aunque sin sesión, debe ser 404 antes de 401 por env-guard)
@@ -129,55 +129,52 @@ describe("D-iii re-chequeos 5/5 (scripted)", () => {
     console.log(`[2/5] POST /api/backup production → 404: ${r2.status === 404 ? "OK" : `FAIL (status=${r2.status})`}`)
     expect(r2.status).toBe(404)
 
-    // dev-dashboard PATCH con production
-    const { PATCH } = await import("@/app/api/dev-dashboard/route")
-    const req3 = new Request("http://localhost/api/dev-dashboard", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ changeId: "test", taskId: "1.1" }),
-    })
-    const r3 = await PATCH(req3 as never)
-    console.log(`[2/5] PATCH /api/dev-dashboard production → 404: ${r3.status === 404 ? "OK" : `FAIL (status=${r3.status})`}`)
-    expect(r3.status).toBe(404)
-
     process.env.NEXT_PUBLIC_APP_ENV = "development"
   })
 
-  it("[3/5] path traversal changeId → 404/sanitizado", async () => {
-    const { toggleTask, readProjectFile } = await import("@/lib/dev-dashboard")
-    const r1 = toggleTask("../../etc/passwd", "1.0")
-    console.log(`[3/5] toggleTask("../../etc/passwd") → null: ${r1 === null ? "OK" : `FAIL (${r1})`}`)
-    expect(r1).toBeNull()
-
-    const r2 = toggleTask("..%2F..%2Fetc/passwd", "1.0")
-    console.log(`[3/5] toggleTask("..%2F..") → null: ${r2 === null ? "OK" : `FAIL`}`)
-    expect(r2).toBeNull()
-
-    const r3 = readProjectFile("../../etc/passwd")
-    console.log(`[3/5] readProjectFile("../../etc/passwd") → null: ${r3 === null ? "OK" : `FAIL`}`)
-    expect(r3).toBeNull()
-
-
-    // vía handler PATCH con traversal (P3: ahora requiere auth en dev-dashboard)
+  it("[3/5] nombre de archivo del cliente → sanitizado (sin traversal)", async () => {
+    // El cliente solo aporta un prefijo semántico: la fecha y el nombre final los
+    // fija el servidor, así que un `fileName`/`prefijo` con traversal no puede
+    // convertirse en una ruta del servidor.
     process.env.NEXT_PUBLIC_APP_ENV = "development"
-    const { PATCH } = await import("@/app/api/dev-dashboard/route")
+    const { POST } = await import("@/app/api/backup/route")
     const cookie = await cookieAdmin()
     state.cookie = cookie
-    const req = new Request("http://localhost/api/dev-dashboard", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json", cookie },
-      body: JSON.stringify({ changeId: "../../etc/passwd", taskId: "1.1" }),
+    const req = new Request("http://localhost/api/backup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-comunidad-id": comunidadA, cookie },
+      body: JSON.stringify({
+        content: "{}",
+        fileName: "../../etc/passwd",
+        prefijo: "../../etc/passwd",
+      }),
     })
-    const res = await PATCH(req as never)
+    const res = await POST(req as never)
+    const disposicion = res.headers.get("content-disposition") ?? ""
+    const nombre = disposicion.match(/filename="([^"]+)"/)?.[1] ?? ""
+    console.log(`[3/5] backup con prefijo traversal → ${nombre}: ${res.status === 200 && /^compass-backup-\d{4}-\d{2}-\d{2}_\d{2}-\d{2}\.json$/.test(nombre) ? "OK" : `FAIL (status=${res.status})`}`)
+    expect(res.status).toBe(200)
+    expect(nombre).toMatch(/^compass-backup-\d{4}-\d{2}-\d{2}_\d{2}-\d{2}\.json$/)
+    expect(disposicion).not.toContain("..")
+    expect(disposicion).not.toContain("etc/passwd")
+
+    // Un prefijo válido se conserva (el saneo no rompe el uso legítimo)
+    const reqValido = new Request("http://localhost/api/backup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-comunidad-id": comunidadA, cookie },
+      body: JSON.stringify({ content: "{}", prefijo: "compass-seed-report" }),
+    })
+    const resValido = await POST(reqValido as never)
     state.cookie = ""
-    console.log(`[3/5] PATCH dev-dashboard traversal → 404: ${res.status === 404 ? "OK" : `FAIL (status=${res.status})`}`)
-    expect(res.status).toBe(404)
+    const nombreValido = (resValido.headers.get("content-disposition") ?? "").match(/filename="([^"]+)"/)?.[1] ?? ""
+    console.log(`[3/5b] backup con prefijo válido → ${nombreValido}: ${nombreValido.startsWith("compass-seed-report-") ? "OK" : "FAIL"}`)
+    expect(nombreValido).toMatch(/^compass-seed-report-\d{4}-\d{2}-\d{2}_\d{2}-\d{2}\.json$/)
   })
 
   it("[4/5] GET /admin sin cookie → redirect /ingresar?next=", async () => {
     const proxy = (await import("@/proxy")).default
     process.env.AUTH_SECRET = "test-secret-12345678"
-    const req = new NextRequest("http://localhost/admin/qa-lab", {
+    const req = new NextRequest("http://localhost/admin/permisos", {
       headers: { "x-forwarded-proto": "http" },
     })
     const res: any = await (proxy as any)(req as any, undefined as never)
@@ -185,7 +182,7 @@ describe("D-iii re-chequeos 5/5 (scripted)", () => {
     console.log(`[4/5] /admin sin cookie → redirect: ${[307, 308].includes(res?.status) && loc.includes("/ingresar") && loc.includes("next=") ? "OK" : `FAIL (status=${res?.status} loc=${loc})`}`)
     expect([307, 308].includes(res?.status)).toBe(true)
     expect(loc).toContain("/ingresar")
-    expect(loc).toContain(encodeURIComponent("/admin/qa-lab"))
+    expect(loc).toContain(encodeURIComponent("/admin/permisos"))
   })
 
   it("[5/5] API sin sesión → 401", async () => {

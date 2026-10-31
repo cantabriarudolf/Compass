@@ -72,32 +72,35 @@ async function main() {
   {
     const envGuard = path.join(WEB_ROOT, "lib/env-guard.ts")
     const backup = path.join(WEB_ROOT, "app/api/backup/route.ts")
-    const dash = path.join(WEB_ROOT, "app/api/dev-dashboard/route.ts")
+    const seed = path.join(WEB_ROOT, "app/api/admin/seed-authz/route.ts")
     const eg = existsSync(envGuard) ? readFileSync(envGuard, "utf8") : ""
     const bRaw = existsSync(backup) ? readFileSync(backup, "utf8") : ""
-    const dRaw = existsSync(dash) ? readFileSync(dash, "utf8") : ""
+    const sRaw = existsSync(seed) ? readFileSync(seed, "utf8") : ""
     const hasIsWrite = eg.includes("isWriteApiEnabled") && eg.includes("production")
     const b404 = bRaw.includes("isWriteApiEnabled") && bRaw.includes("404") && bRaw.includes("Not Found")
-    const d404 = dRaw.includes("isWriteApiEnabled") && (dRaw.match(/404/g) || []).length >= 4 // GET/POST/PUT/PATCH
-    const cond = hasIsWrite && b404 && d404
-    check(2, "APIs escritura con APP_ENV=production → 404", cond, cond ? "isWriteApiEnabled + 404 en backup y dev-dashboard (4 métodos)" : "falta env-guard o 404")
+    const s404 = sRaw.includes("isWriteApiEnabled") && sRaw.includes("404") && sRaw.includes("Not Found")
+    const cond = hasIsWrite && b404 && s404
+    check(2, "APIs escritura con APP_ENV=production → 404", cond, cond ? "isWriteApiEnabled + 404 en backup y admin/seed-authz" : "falta env-guard o 404")
   }
 
-  // 3. path traversal changeId → 404/sanitizado
+  // 3. nombre de archivo del cliente → sanitizado (el cliente no fija la ruta)
   {
-    const dd = path.join(WEB_ROOT, "lib/dev-dashboard.ts")
-    const dashRoute = path.join(WEB_ROOT, "app/api/dev-dashboard/route.ts")
-    const ddRaw = existsSync(dd) ? readFileSync(dd, "utf8") : ""
-    const drRaw = existsSync(dashRoute) ? readFileSync(dashRoute, "utf8") : ""
-    const hasSafe = ddRaw.includes("SAFE_CHANGE_ID") && ddRaw.includes("^[A-Za-z0-9]")
-    const hasToggleGuard = ddRaw.includes("SAFE_CHANGE_ID.test(changeId)") && ddRaw.includes("return null")
-    const hasAllowedPrefixes = ddRaw.includes("ALLOWED_FILE_PREFIXES")
-    const drHas404 = drRaw.includes("Recurso no encontrado") || drRaw.includes("Recurso no disponible")
-    // lógica pura: probar regex directamente
-    const SAFE = /^[A-Za-z0-9][A-Za-z0-9._-]*$/
-    const traversalFails = !SAFE.test("../../etc/passwd") && !SAFE.test("..%2F..%2Fetc/passwd") && !SAFE.test("../etc/passwd")
-    const cond = hasSafe && hasToggleGuard && hasAllowedPrefixes && drHas404 && traversalFails
-    check(3, "path traversal changeId → 404/sanitizado", cond, cond ? "SAFE_CHANGE_ID + toggleTask null + allowlist" : "falta SAFE/allowlist/404")
+    const backup = path.join(WEB_ROOT, "app/api/backup/route.ts")
+    const raw = existsSync(backup) ? readFileSync(backup, "utf8") : ""
+    const hasPrefijo = raw.includes("PREFIJO_VALIDO") && raw.includes("^[a-zA-Z0-9-]{1,60}$")
+    const hasFallback = raw.includes("PREFIJO_POR_DEFECTO")
+    const serverName =
+      raw.includes("Content-Disposition") && raw.includes("nombreBackupServidor(")
+    // lógica pura: el prefijo aceptado no admite separadores ni traversal
+    const PREFIJO = /^[a-zA-Z0-9-]{1,60}$/
+    const traversalFails =
+      !PREFIJO.test("../../etc/passwd") &&
+      !PREFIJO.test("..%2F..%2Fetc/passwd") &&
+      !PREFIJO.test("../etc/passwd") &&
+      !PREFIJO.test("a/b") &&
+      PREFIJO.test("compass-backup")
+    const cond = hasPrefijo && hasFallback && serverName && traversalFails
+    check(3, "prefijo de backup sanitizado → sin traversal", cond, cond ? "PREFIJO_VALIDO + fallback + nombre del servidor" : "falta PREFIJO_VALIDO/fallback/nombre servidor")
   }
 
   // 4. /admin sin cookie → redirect /ingresar?next=

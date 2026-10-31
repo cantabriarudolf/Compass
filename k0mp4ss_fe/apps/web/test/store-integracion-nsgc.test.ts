@@ -5,9 +5,10 @@ import { tasaHuerfanosRE } from "@/lib/reporteria-utils"
 import { resetStore } from "./helpers"
 
 // Ventana 9 — QA integral de la serie NSGC.
-// Espejo a nivel store del botón "Cargar Todo" de /admin/qa-lab (engranaje 2) y
-// verificación explícita de las cadenas cross-módulo a–g (engranaje 3). Sin
-// datos TEST persistidos: cada prueba parte desde el seed limpio.
+// Espejo a nivel store del poblamiento completo que antes ejecutaba el botón
+// "Cargar Todo" del QA-Lab (retirado con F9) y verificación explícita de las
+// cadenas cross-módulo a–g (engranaje 3). Sin datos TEST persistidos: cada
+// prueba parte desde el seed limpio.
 
 const getState = () => useCompassStore.getState()
 const hoy = () => new Date().toISOString().slice(0, 10)
