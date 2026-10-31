@@ -1,6 +1,6 @@
 # INVARIANTES — dueño de cada regla de datos
 
-> Generado a partir del inventario de las 79 tablas de `prisma/schema.sqlite.prisma` y de las 156 rutas de `app/api`. Cada fila dice **qué dato**, **la regla en una frase**, **quién la impone hoy**, **todas las rutas que lo escriben** (`archivo:línea`) y **qué test la prueba**. Cuando la fila nombra una columna (`· email`, `· rut`), la lista de rutas se limita a las que escriben **esa columna**; cuando nombra la tabla, lista todo writer de la colección.
+> Generado a partir del inventario de las 79 tablas de `prisma/schema.sqlite.prisma` y de las 156 rutas de `app/api`. Cada fila dice **qué dato**, **la regla en una frase**, **quién la impone hoy**, **todas las rutas que lo escriben** (`archivo:línea`) y **qué test la prueba**. Cuando la fila nombra una columna (`· email`, `· rut`), la lista de rutas se limita a las que escriben **esa columna**; cuando nombra la tabla, lista todo writer de la colección. `Persona` aparece desdoblada en sus dos columnas únicas (`rut`, `email`).
 
 ## Cómo leer el dueño
 
@@ -95,6 +95,12 @@ Las filas marcadas `CADA FORMULARIO ⚠`, `NADIE ⚠` o con dos puertas distinta
 |---|---|---|---|---|
 | `PublicacionPortal` | Una publicación por unidad con estado publicado; no se borra con leads | `API` — guard `beforeDelete` + `puede:pi` | `app/api/publicaciones-portal/route.ts:21` | — (sin test de regla) |
 | `LeadPortal` | Contacto seguro: el residente no ve datos del lead | `API` — Zod + `puede:pi` | `app/api/leads-portal/route.ts:27`<br>`app/api/leads-portal/route.ts:74` | — (sin test de regla) |
+
+### Notificaciones
+
+| Dato | Regla | Dueño hoy | Rutas que lo escriben (`archivo:línea`) | Test que la prueba |
+|---|---|---|---|---|
+| `Notificacion` | Una notificación por evento y destinatario; `leida` sólo la marca el destinatario (ABAC) | `API` — `puede:notificaciones:propias` + filtro por destinatario en `/api/notificaciones/[id]/leer` | `app/api/cobros-fi/[id]/cobranza/route.ts:277`<br>`app/api/leads-portal/route.ts:98`<br>`app/api/liquidaciones/adelantos/route.ts:293`<br>`app/api/notificaciones/[id]/leer/route.ts:70`<br>`app/api/notificaciones/[id]/route.ts:104`<br>`app/api/notificaciones/route.ts:34`<br>`app/api/pe/_visitas.ts:74`<br>`app/api/pe/encomiendas/route.ts:46`<br>`app/api/pe/proyecciones/enviar/route.ts:114`<br>`app/api/reportes-re/[id]/distribuir/route.ts:143` | — (sin test de regla) |
 
 ### GD / AD — Directiva y administración
 
