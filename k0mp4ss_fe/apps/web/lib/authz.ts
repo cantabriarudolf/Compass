@@ -56,6 +56,11 @@ const MATRIZ: Record<Rol, Record<string, Set<Accion>>> = {
     // pero no el dato previsional, igual que conserjería.
     "pe:ficha": new Set<Accion>([]),
     "pe:directorio": new Set<Accion>(["ver"]),
+    // F25 (skill auditoria-contratos-permisos): el panel de turnos del día ya lo leía
+    // el comité por el FALLBACK DE PREFIJO de `pe`; se declara explícito para que el
+    // permiso declarado y el ejecutado sean lo mismo. Operar el turno
+    // (crear/editar/ejecutar) sigue siendo de conserjería: el comité audita, no opera.
+    "pe:cierre_turno": new Set<Accion>(["ver"]),
     // cv: visor de avisos — comité publica y edita; el resto solo ve (decisión owner 2026-10-21)
     "cv": new Set<Accion>(["ver", "crear", "editar"]),
     // in: expediente de infracciones y multas — el comité gestiona el caso (ve, crea, edita =

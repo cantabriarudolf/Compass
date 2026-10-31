@@ -700,3 +700,35 @@ describe("lib/authz — recursos co, co:buzon y co:lecturas (difusión vs buzón
     }
   })
 })
+
+describe("lib/authz — recurso pe:cierre_turno (F25)", () => {
+  it("conserjería opera el turno: ver, crear, editar y ejecutar", () => {
+    for (const accion of ["ver", "crear", "editar", "ejecutar"] as const) {
+      expect(puede("conserjeria", accion, "pe:cierre_turno")).toBe(true)
+    }
+  })
+
+  it("comité AUDITA el panel de turnos pero no lo opera: solo ver, y declarado explícito", () => {
+    // Antes de F25 el comité llegaba a `ver` por el fallback de prefijo de `pe`.
+    // Ahora la clave existe en la matriz del comité: el permiso declarado y el
+    // ejecutado son lo mismo, y las acciones de operación quedan cerradas por el
+    // conjunto explícito (si faltara la clave, `crear` seguiría cayendo a `pe`,
+    // que para el comité solo tiene `ver`; la clave lo vuelve intencional).
+    expect(puede("comite", "ver", "pe:cierre_turno")).toBe(true)
+    for (const accion of ["crear", "editar", "eliminar", "ejecutar"] as const) {
+      expect(puede("comite", accion, "pe:cierre_turno")).toBe(false)
+    }
+  })
+
+  it("residente y mantención no ven los turnos del personal", () => {
+    for (const rol of ["residente", "mantencion"] as const) {
+      expect(puede(rol, "ver", "pe:cierre_turno")).toBe(false)
+    }
+  })
+
+  it("administrador lo ve y lo opera por el wildcard", () => {
+    for (const accion of ["ver", "crear", "editar", "eliminar", "ejecutar"] as const) {
+      expect(puede("administrador", accion, "pe:cierre_turno")).toBe(true)
+    }
+  })
+})
