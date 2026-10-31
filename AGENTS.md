@@ -8,9 +8,9 @@ monorepos — no usarlo como base fundacional).
 
 - **Estado vivo / frontera**: `openspec/BACKLOG-100.md` — léelo PRIMERO en cualquier ventana nueva
 - **Qué falta y todavía no existe**: `openspec/PENDIENTES-FUNCIONALIDAD.md` — funcionalidades que el sistema **necesita** y no tiene, con qué las desbloquea (owner o nadie). Si algo «debe existir» y no existe, se anota ahí el mismo día; nunca se deja solo en un chat
-- **Especificaciones por capacidad**: `openspec/specs/` (31 módulos; `project.md` y `agents.md` son transversales, no módulos). **La instrucción de agentes vive SOLO en este `AGENTS.md`**: `openspec/specs/agents.md` y `HERMES.md` son puentes que apuntan acá para no duplicar reglas
-- **Changes activos/archivados**: `openspec/changes/` (workflow openspec: propose → apply → archive)
-- **Ventana nueva**: leer `openspec/BACKLOG-100.md` + `openspec/PENDIENTES-FUNCIONALIDAD.md` + `git status -sb` + `git log --oneline -5` y presentar dónde estamos
+- **Especificaciones por capacidad**: `openspec/specs/` (34 capabilities; `project.md` y `agents.md` son transversales, no módulos). **La instrucción de agentes vive SOLO en este `AGENTS.md`**
+- **Changes activos/archivados**: `openspec/changes/` (changes openspec; obligatorios solo cuando cambia un contrato de capacidad)
+- **Ventana nueva**: si Engram está disponible, `mem_context` primero; el ritual de archivos queda como respaldo: leer `openspec/BACKLOG-100.md` + `openspec/PENDIENTES-FUNCIONALIDAD.md` + `git status -sb` + `git log --oneline -5` y presentar dónde estamos
 - **Documentación NSGC**: `Data/NSGC/docs/` (manuales por módulo, avances de desarrollo, trazabilidad)
 
 ## Stack y rutas de código
@@ -18,19 +18,19 @@ monorepos — no usarlo como base fundacional).
 - Todo el código vive en `k0mp4ss_fe/` (monorepo): app en `apps/web`, UI compartida en `packages/ui`
 - Next.js 16 (App Router, Turbopack) · TypeScript estricto · Prisma + SQLite en dev (`DATABASE_URL` en `apps/web/.env`)
 - Auth.js credentials + rate limit persistente · Tailwind v4 + shadcn/ui vía `@workspace/ui/components`
-- Estado del cliente: zustand persist (`lib/store.ts`, STORE_VERSION + migraciones idempotentes)
+- Estado del cliente: estado de UI en `lib/store-ui.ts`. `lib/store.ts` es legacy `@deprecated` (STORE_VERSION 28 congelado, sin migraciones de dominio) y los datos de dominio viven en la base vía API
 - Tests: Vitest (unit/integración, `test/`) + Playwright (e2e, `e2e/` — lanes crud/flujo/smoke/auth)
 - Cualquier comando de build/test: `workdir k0mp4ss_fe/apps/web`
 
 ## Convenciones críticas
 
 - **Terminología RG §4**: el término oficial es **"comunidad"**; "condominio" está en desuso y no debe introducirse en ningún archivo
-- **Workflow openspec**: toda feature/fix → change openspec con proposal/specs/design/tasks; archivar tras CI verde
+- **Workflow openspec**: un change de openspec solo es obligatorio cuando el trabajo modifica un contrato de capacidad (agrega, cambia o quita un requirement). Para el resto alcanza ODD: doc de feature, lista de tareas visible y commits por unidad revisable. Cuando sí aplica un change: deltas + `node openspec/scripts/check-delta-coverage.mjs` antes de archivar, y archive tras CI verde. Un fix no exige `proposal/specs/design/tasks`
 - **Deltas de spec**: formato canónico y las 3 trampas que rompen el archive → `openspec/CONVENCION-DELTAS.md`. Antes de archivar correr `node openspec/scripts/check-delta-coverage.mjs` (el `validate`, incluso `--strict`, NO detecta esos errores)
 - **NSGC pre-push**: antes de pushear, skill `nsgc-prepush` (manuales de módulo + avance + mocks si toca)
-- **STORE_VERSION**: cambios al store llevan bump + migración idempotente + tests
-- **Commits**: automáticos al cerrar cada trabajo, sin pedir confirmación; estilo convencional en español (ver `git log`). Commitear solo los archivos del cambio; la suciedad ajena del worktree queda fuera
-- **Delegación pesada**: implementaciones grandes → subagente (no inline) para preservar la ventana; orquestador verifica contra el change
+- **Store legacy**: `lib/store.ts` está `@deprecated` con `STORE_VERSION` congelado en 28 y no recibe migraciones de dominio; los datos de dominio viven en la base vía API (ver `openspec/changes/st-fuente-verdad-bd`)
+- **Commits**: automáticos, sin pedir confirmación; estilo convencional en español (ver `git log`). Se commitea por unidad revisable (~400 líneas cambiadas), con los tests y los docs junto al comportamiento; solo los archivos del cambio, y la suciedad ajena del worktree queda fuera
+- **Delegación pesada**: delegá al escritor del harness cuando esté sano; si no está disponible, trabajá inline y reportalo. El orquestador verifica el resultado contra la spec en ambos casos
 
 ## Estilo y convenciones de código
 
