@@ -4,7 +4,7 @@
 // El 6to (arrendatario@test.cl) valida el perfil inquilino: login rol "residente"
 // (no existe rol login arrendatario: ROLES son 5) + ficha propia con vínculo
 // arrendatario vigente en comunidad-a (u-A-101, arrendada). Ver
-// specs/archive/roles-validacion-comunidad-a/cuentas-funcionales.md §2.
+// specs/archive/2026-10-05-roles-validacion-comunidad-a/cuentas-funcionales.md §2.
 // Uso: npm run seed:authz   (lee .env vía --env-file-if-exists)
 import { PrismaClient } from "@prisma/client"
 import bcrypt from "bcryptjs"
