@@ -199,6 +199,7 @@ import {
   siguienteFolioRA,
   upsert,
 } from "./store/helpers"
+import type { StoreResult } from "./store/helpers"
 import { irSlice } from "./store/slices/ir-slice"
 import { mtSlice } from "./store/slices/mt-slice"
 import { adSlice } from "./store/slices/ad-slice"
@@ -223,7 +224,7 @@ export {
 import { generarId } from "@/lib/id-utils"
 import { z } from "zod"
 
-export type StoreResult = { ok: boolean; error?: string }
+export type { StoreResult } from "./store/helpers"
 
 export interface EventoAuditoria {
   id: string

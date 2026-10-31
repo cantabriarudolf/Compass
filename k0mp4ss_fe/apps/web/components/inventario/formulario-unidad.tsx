@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { Unidad } from "@/data/inventario/estructura"
-import { StoreResult } from "@/lib/store"
+import { StoreResult } from "@/lib/store/helpers"
 import { useMaestros } from "@/lib/api/use-maestros"
 import type { EstadoOcupacion } from "@/lib/schemas"
 import { useTiposUnidad } from "@/lib/api/use-tipos-unidad"

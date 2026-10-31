@@ -8,6 +8,8 @@ import { ahoraISO, hoyISO } from "@/lib/date-utils"
 import { generarId } from "@/lib/id-utils"
 import { saldoPendiente } from "@/lib/finanzas-utils"
 
+export type StoreResult = { ok: boolean; error?: string }
+
 export function upsert<T extends { id: string }>(list: T[], item: T): T[] {
   return list.some((i) => i.id === item.id)
     ? list.map((i) => (i.id === item.id ? item : i))

@@ -3,7 +3,7 @@
 import * as React from "react"
 import { ROLES_PERSONA, ExtensionGobernanzaSchema, formatoErrorZod } from "@/lib/schemas"
 import type { Persona } from "@/lib/schemas"
-import { StoreResult } from "@/lib/store"
+import { StoreResult } from "@/lib/store/helpers"
 import { Button } from "@workspace/ui/components/button"
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"

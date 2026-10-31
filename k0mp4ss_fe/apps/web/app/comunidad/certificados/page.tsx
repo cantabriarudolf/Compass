@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { esMiembroDirectivaVigente } from "@/lib/store"
+import { esMiembroDirectivaVigente } from "@/lib/store/helpers"
 import { useCertificadosCT } from "@/lib/api/use-certificados-ct"
 import { useCobrosFI } from "@/lib/api/use-cobros-fi"
 import { useLiquidaciones } from "@/lib/api/use-liquidaciones"

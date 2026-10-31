@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import type { StoreResult } from "@/lib/store"
+import type { StoreResult } from "@/lib/store/helpers"
 import { usePersonas } from "@/lib/api/use-personas"
 
 import {

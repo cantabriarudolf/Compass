@@ -33,7 +33,7 @@ import {
 } from "@tabler/icons-react"
 import { puedeContextual } from "@/lib/authz"
 import type { ActaGD, ExtensionGobernanza, PeriodoDirectiva } from "@/lib/schemas"
-import { periodoDirectivaVigente, esMiembroDirectivaVigente } from "@/lib/store"
+import { periodoDirectivaVigente, esMiembroDirectivaVigente } from "@/lib/store/helpers"
 import { useActasGD } from "@/lib/api/use-actas-gd"
 import { usePeriodosDirectiva } from "@/lib/api/use-periodos-directiva"
 import { useControlesPropiedad } from "@/lib/api/use-controles-propiedad"

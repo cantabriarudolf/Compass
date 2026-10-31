@@ -6,7 +6,7 @@ import {
   MicroSector, 
   Unidad,
 } from "@/data/inventario/estructura"
-import type { StoreResult } from "@/lib/store"
+import type { StoreResult } from "@/lib/store/helpers"
 import { generarId } from "@/lib/id-utils"
 import { useMacroSectores } from "@/lib/api/use-macro-sectores"
 import { useMicroSectores } from "@/lib/api/use-micro-sectores"
