@@ -91,9 +91,12 @@ export default defineConfig({
         // cobertura: es que antes el store tapaba el promedio. Los dos huecos que
         // quedan a la vista (lib/schemas.ts al 69% de funciones y las ramas de
         // app/api/**) son trabajo aparte, anotados en PENDIENTES-FUNCIONALIDAD.
+        // Re-baseline 2026-10-31 (F23, cobertura de rutas API y schemas):
+        // medido 90.95/78.73/94.88/90.95 -> piso = medido - 1 pt. Sube ramas y
+        // funciones; ningun piso baja.
         statements: 89,
-        branches: 76,
-        functions: 91,
+        branches: 77,
+        functions: 93,
         lines: 89,
         // Núcleo: los 7 archivos desde SERIE-PRODUCCION P4 + el interior de
         // `lib/store/**` (slices + helpers + `lib/store.ts` legacy). Re-baseline
@@ -109,7 +112,9 @@ export default defineConfig({
         // Re-baseline 2026-10-31 (F22a): sin los slices al 100%, lib/** mide
         // 98.44/90.59/89.47/98.44 -> piso = medido - 1 pt. El arrastre de funciones
         // es lib/schemas.ts (69.23%).
-        "lib/**": { statements: 97, branches: 89, functions: 88, lines: 97 },
+        // Re-baseline 2026-10-31 (F23): medido 99.09/91.89/100.00/99.09 -> piso =
+        // medido - 1 pt. `lib/schemas.ts` pasa de 69.23% a 100% de funciones.
+        "lib/**": { statements: 98, branches: 90, functions: 99, lines: 98 },
         // Superficie API: 126 route handlers (smoke de guardias + fases).
         // Re-baseline 2026-10-16 (SERIE-DEUDA-1 P3, change `api-cobertura-fase3`):
         // medido 83.69/68.70/86.99/83.69 → 85.75/71.50/88.48/85.75 con las 3
@@ -124,11 +129,14 @@ export default defineConfig({
         // (74.43 → 91.48) → piso = medido − 1 pt. Nunca se baja.
         // Re-baseline 2026-10-31 (F22a): medido 88.60/76.39/92.35/88.60 -> piso =
         // medido - 1 pt (suben ramas y funciones).
+        // Re-baseline 2026-10-31 (F23): medido 89.31/77.98/94.33/89.31 -> piso =
+        // medido - 1 pt. 13 rutas pasaron de 0-33% a 75-100% de ramas, incluida
+        // liquidaciones/adelantos/[id], que no tenia ningun test.
         "app/api/**": {
-          statements: 87,
-          branches: 75,
-          functions: 91,
-          lines: 87,
+          statements: 88,
+          branches: 76,
+          functions: 93,
+          lines: 88,
         },
       },
     },
