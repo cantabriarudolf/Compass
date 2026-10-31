@@ -11,8 +11,7 @@ import React from "react"
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
 import { cleanup, render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { resetStore } from "../helpers"
-import { useCompassStore } from "@/lib/store"
+import { archivosQueUsanElStore } from "./sin-store"
 import type { InfraccionIN } from "@/lib/schemas"
 
 interface ResultadoAccion {
@@ -145,7 +144,6 @@ beforeAll(() => {
 })
 
 beforeEach(() => {
-  resetStore()
   fuente.infracciones = [infraccion()]
   fuente.mensajes = [
     {
@@ -255,10 +253,10 @@ describe("finanzas/multas — acciones del expediente por el hook (no por el sto
   })
 
   it("no invoca ninguna acción legacy del store al aplicar", async () => {
-    const estado = useCompassStore.getState()
-    const aplicarLegacy = vi.spyOn(estado, "aplicarInfraccionIN")
-    const desestimarLegacy = vi.spyOn(estado, "desestimarInfraccionIN")
-    const apelarLegacy = vi.spyOn(estado, "apelarInfraccionIN")
+    // El store se retiró en F22a y no queda sujeto sobre el que espiar: la
+    // propiedad se verifica sobre el fuente, con el evaluador de `audit:store`.
+    expect(archivosQueUsanElStore("app/finanzas/multas/page.tsx")).toEqual([])
+
     fuente.aplicar.mockResolvedValue({ ok: true })
     const user = userEvent.setup()
     render(<MultasPage />)
@@ -267,9 +265,6 @@ describe("finanzas/multas — acciones del expediente por el hook (no por el sto
     await user.click(within(dialog).getByRole("button", { name: "Aplicar multa" }))
 
     await waitFor(() => expect(fuente.aplicar).toHaveBeenCalledWith("in-1"))
-    expect(aplicarLegacy).not.toHaveBeenCalled()
-    expect(desestimarLegacy).not.toHaveBeenCalled()
-    expect(apelarLegacy).not.toHaveBeenCalled()
   })
 
   it("el buzón CO del formulario sale del hook y no del store", async () => {

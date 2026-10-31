@@ -1,124 +1,18 @@
-// Pure store helpers extracted from lib/store.ts (FASE 1).
-// No state, no set/get of the zustand store: every function receives what it
-// needs by argument. The CompassStore type is imported type-only, so there is
-// no runtime cycle with lib/store.ts.
-import type { CompassStore } from "../store"
+// Helpers puros que sobrevivieron al retiro del store legacy (F22a).
+// No hay estado acá: el store que los llamaba ya no existe. Solo quedan los
+// símbolos con consumidores en el producto; el resto (upsert, nombrePersona,
+// refUnidad, resolverVariablesCO, rolDestinatarioCO, siguienteCodigoIR,
+// siguienteFolioRA, siguienteFolioFE, getDeudaVigenteFI, registrarEvento,
+// MAX_EVENTOS y SetStateFn) se retiró con las acciones que los usaban.
 import type { PeriodoDirectiva, Persona } from "@/lib/schemas"
-import { ahoraISO, hoyISO } from "@/lib/date-utils"
-import { generarId } from "@/lib/id-utils"
-import { saldoPendiente } from "@/lib/finanzas-utils"
 
+/** Contrato de retorno de las acciones de escritura; lo consumen los hooks de `lib/api/use-*.ts`. */
 export type StoreResult = { ok: boolean; error?: string }
 
-export function upsert<T extends { id: string }>(list: T[], item: T): T[] {
-  return list.some((i) => i.id === item.id)
-    ? list.map((i) => (i.id === item.id ? item : i))
-    : [...list, item]
-}
-
-export function nombrePersona(get: () => CompassStore, personaId: string): string {
-  const p = get().personas.find((x) => x.id === personaId)
-  return p ? `${p.nombres} ${p.apellidos}` : personaId
-}
-
-export function refUnidad(get: () => CompassStore, unidadId: string): string {
-  const u = get().unidades.find((x) => x.id === unidadId)
-  return u ? `${u.etiqueta} ${u.numero}` : unidadId
-}
-
-// CO: sustitución de variables dinámicas de plantillas por destinatario.
-export function resolverVariablesCO(
-  get: () => CompassStore,
-  texto: string,
-  nombreUsuario?: string
-): string {
-  const comunidad = get().configuracion.nombreComunidad || "su comunidad"
-  const torre = get().macroSectores[0]?.nombre ?? comunidad
-  return texto
-    .replace(
-      /\[Nombre_Usuario\]/g,
-      nombreUsuario && nombreUsuario.trim().length > 0
-        ? nombreUsuario
-        : "vecino/a"
-    )
-    .replace(/\[Nombre_Torre\]/g, torre)
-    .replace(/\[Nombre_Comunidad\]/g, comunidad)
-}
-
-// CO: rol de bandeja para el destinatario de un envío masivo.
-export function rolDestinatarioCO(
-  get: () => CompassStore,
-  personaId: string
-): "propietario" | "residente" | "personal" | "directiva" {
-  const persona = get().personas.find((p) => p.id === personaId)
-  if (persona?.roles.includes("personal")) return "personal"
-  if (persona?.roles.includes("directiva")) return "directiva"
-  if (
-    get().vinculos.some(
-      (v) => v.personaId === personaId && v.rol === "propietario" && !v.fechaFin
-    )
-  )
-    return "propietario"
-  return "residente"
-}
-
-// IR: siguiente código de inventario IR-A-####.
-export function siguienteCodigoIR(get: () => CompassStore): string {
-  const numeros = get()
-    .activosIR.map((r) =>
-      Number.parseInt((r.codigo ?? "").replace(/^IR-A-/, ""), 10)
-    )
-    .filter((n) => Number.isFinite(n))
-  const siguiente = (numeros.length > 0 ? Math.max(...numeros) : 0) + 1
-  return `IR-A-${String(siguiente).padStart(4, "0")}`
-}
-
-// RA: siguiente folio de reserva RA-####.
-export function siguienteFolioRA(get: () => CompassStore): string {
-  const numeros = get()
-    .reservasRA.map((r) => Number.parseInt(r.folio.replace(/^RA-/, ""), 10))
-    .filter((n) => Number.isFinite(n))
-  const siguiente = (numeros.length > 0 ? Math.max(...numeros) : 0) + 1
-  return `RA-${String(siguiente).padStart(4, "0")}`
-}
-
-// RA §2: gate de morosidad — bloquea al solicitante que mantiene cobros
-// vencidos sin cubrir en las unidades donde tiene vínculo vigente.
-export function getDeudaVigenteFI(
-  get: () => CompassStore,
-  personaId: string
-): string | null {
-  const hoy = hoyISO()
-  const unidadesPersona = get()
-    .vinculos.filter((v) => v.personaId === personaId && !v.fechaFin)
-    .map((v) => v.unidadId)
-  const vencidos = get().cobrosFI.filter(
-    (c) =>
-      unidadesPersona.includes(c.unidadId) &&
-      c.fechaVencimiento !== undefined &&
-      c.fechaVencimiento < hoy &&
-      saldoPendiente(c) > 0
-  )
-  if (vencidos.length === 0) return null
-  const total = vencidos.reduce((acc, c) => acc + saldoPendiente(c), 0)
-  return `No se puede reservar: mantienes deuda vencida en Finanzas ($${total.toLocaleString("es-CL")} en ${vencidos.length} cobro(s)). Regulariza tu situación para volver a reservar.`
-}
-
-export function siguienteFolioFE(get: () => CompassStore): string {
-  const numeros = get()
-    .egresosFI.map((e) =>
-      Number.parseInt((e.folio ?? "").replace(/^FE-/, ""), 10)
-    )
-    .filter((n) => Number.isFinite(n))
-  const siguiente = (numeros.length > 0 ? Math.max(...numeros) : 0) + 1
-  return `FE-${String(siguiente).padStart(4, "0")}`
-}
-
 // GD-períodos: helpers de vigencia (libro: la directiva vigente = período
-// vigente + fichas sin término; fichas sin periodoId = legado pre-períodos),
-// movidos desde lib/store.ts en Store Split Fase 2 (P3) porque el slice AD los
-// necesita y un import runtime slice→store crearía un ciclo. lib/store.ts los
-// re-exporta: `@/lib/store` sigue siendo la puerta pública.
+// vigente + fichas sin término; fichas sin periodoId = legado pre-períodos).
+// `@/lib/store` los re-exportaba cuando el store era la puerta pública; hoy los
+// importan directo `app/comunidad/directiva` y `app/comunidad/certificados`.
 export const periodoDirectivaVigente = (s: {
   periodosDirectiva: PeriodoDirectiva[]
 }): PeriodoDirectiva | undefined =>
@@ -135,40 +29,4 @@ export const esMiembroDirectivaVigente = (
   // al activar un período, el quórum se acota a su nómina.
   if (!ficha.periodoId) return vigenteId === undefined
   return ficha.periodoId === vigenteId
-}
-
-// Máximo de eventos de auditoría retenidos en el store (movido desde lib/store.ts en
-// Store Split Fase 2 para que los slices puedan emitir eventos sin importar el store
-// en runtime).
-export const MAX_EVENTOS = 500
-
-// Firma mínima de `set` que necesita `registrarEvento` (movida junto al helper).
-export type SetStateFn = (
-  partial:
-    | Partial<CompassStore>
-    | ((state: CompassStore) => Partial<CompassStore>)
-) => void
-
-/** Emite un evento de auditoría AM recortando la cola a MAX_EVENTOS. */
-export function registrarEvento(
-  set: SetStateFn,
-  tipoAccion: string,
-  referenciaId: string,
-  descripcion: string,
-  categoria = "VU"
-): void {
-  set((s) => ({
-    eventos: [
-      ...s.eventos.slice(-(MAX_EVENTOS - 1)),
-      {
-        id: generarId("ev"),
-        timestamp: ahoraISO(),
-        usuario: "Admin",
-        categoria,
-        tipoAccion,
-        referenciaId,
-        descripcion,
-      },
-    ],
-  }))
 }

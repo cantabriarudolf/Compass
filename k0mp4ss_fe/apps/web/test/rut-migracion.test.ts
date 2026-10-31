@@ -1,5 +1,11 @@
+// VAL-005 (migración v10): los RUT sembrados históricamente tenían dígito
+// verificador ficticio; `repararRut` recalculaba el DV del cuerpo para que un
+// estado persistido previo no perdiera la colección de personas. El estado
+// persistido se retiró con el store legacy (F22a); la reparación sigue viva y
+// su propiedad —el RUT reparado vuelve a validar con módulo 11— es la que se
+// fija acá.
 import { describe, it, expect } from "vitest"
-import { repararRut, STORE_VERSION, useCompassStore } from "@/lib/store"
+import { repararRut } from "@/lib/store"
 import { validarDocumentoIdentidad } from "@/lib/rut"
 
 describe("repararRut (migración v10)", () => {
@@ -19,37 +25,14 @@ describe("repararRut (migración v10)", () => {
   it("no toca pasaportes", () => {
     expect(repararRut("AB123456")).toBe("AB123456")
   })
-})
 
-describe(`migración a v${STORE_VERSION}`, () => {
-  it("STORE_VERSION es 28", () => {
-    expect(STORE_VERSION).toBe(28)
+  it("no toca un documento con guion y cuerpo no numérico", () => {
+    expect(repararRut("ABC-1")).toBe("ABC-1")
   })
 
-  it("un persistido v9 con RUTs ficticios queda reparado y sin cambios de colección", () => {
-    const migrate = useCompassStore.persist.getOptions().migrate
-    const estadoViejo = {
-      personas: [
-        {
-          id: "p-test",
-          rut: "12.345.678-9",
-          nombreCompleto: "Test Migración",
-          nombres: "Test",
-          apellidos: "Migración",
-          email: "test@compass.local",
-          telefonoMovil: "+56912345678",
-          estadoCuenta: "activa",
-          condicionesEspecialesIds: [],
-          roles: ["propietario"],
-        },
-      ],
-    }
-    const migrado = migrate!(estadoViejo, 9) as Record<string, unknown>
-    const personas = migrado.personas as Array<{ id: string; rut: string }>
-    expect(personas).toHaveLength(1)
-    const primera = personas[0]
-    expect(primera?.id).toBe("p-test")
-    expect(primera ? validarDocumentoIdentidad(primera.rut) : false).toBe(true)
-    expect(primera?.rut).toBe("12.345.678-5")
+  it("el RUT reparado vuelve a validar con módulo 11", () => {
+    const reparado = repararRut("12.345.678-9")
+    expect(reparado).toBe("12.345.678-5")
+    expect(validarDocumentoIdentidad(reparado)).toBe(true)
   })
 })

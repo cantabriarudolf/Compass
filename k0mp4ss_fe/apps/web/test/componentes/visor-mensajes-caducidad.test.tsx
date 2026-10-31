@@ -4,11 +4,13 @@
 // /api/cv/avisos/[id]` con el `update` de `useAvisosCV` — y el ciclo sigue
 // siendo 1 pasada al montar + 1 cada 30 s, cortado al desmontar (mismo
 // comportamiento que montaba `caducarAvisosCV` a través de un ref).
+// Desde F22a el store ya no existe en el navegador: la propiedad "la caducidad
+// no toca el store" se verifica sobre el fuente, con el evaluador del candado
+// `npm run audit:store`.
 import React from "react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { act, cleanup, render } from "@testing-library/react"
-import { resetStore } from "../helpers"
-import { useCompassStore } from "@/lib/store"
+import { archivosQueUsanElStore } from "./sin-store"
 import type { AvisoCV } from "@/lib/schemas"
 
 const { actualizarAviso, estadoHook } = vi.hoisted(() => ({
@@ -63,7 +65,6 @@ function aviso(parcial: Partial<AvisoCV> & Pick<AvisoCV, "id">): AvisoCV {
 
 describe("visor-mensajes — caducidad de avisos vía API", () => {
   beforeEach(() => {
-    resetStore()
     vi.useFakeTimers()
     vi.setSystemTime(new Date("2026-10-21T12:00:00Z"))
     actualizarAviso.mockClear()
@@ -83,8 +84,6 @@ describe("visor-mensajes — caducidad de avisos vía API", () => {
   })
 
   it("archiva al montar, cada 30 s, y deja de caducar al desmontar", () => {
-    const espiaStore = vi.spyOn(useCompassStore.getState(), "caducarAvisosCV")
-
     const { unmount } = render(<VisorMensajesPage />)
 
     // Solo el aviso publicado con `expiresAt` anterior a hoy se archiva por API.
@@ -109,18 +108,11 @@ describe("visor-mensajes — caducidad de avisos vía API", () => {
       vi.advanceTimersByTime(120_000)
     })
     expect(actualizarAviso).toHaveBeenCalledTimes(3)
-
-    // La caducidad ya no depende del store legacy.
-    expect(espiaStore).not.toHaveBeenCalled()
   })
 
-  it("no muta el store legacy: los avisos viven solo en el servidor", () => {
-    const espiaStore = vi.spyOn(useCompassStore.getState(), "caducarAvisosCV")
-
-    render(<VisorMensajesPage />)
-
-    expect(espiaStore).not.toHaveBeenCalled()
-    expect(useCompassStore.getState().avisosCV).toHaveLength(0)
-    expect(useCompassStore.getState().eventos.filter(e => e.tipoAccion === "CV_ARCHIVED")).toHaveLength(0)
+  it("no lee ni escribe el store legacy: los avisos viven solo en el servidor", () => {
+    // El store se retiró en F22a, así que no hay estado que inspeccionar: el
+    // candado es que el visor no lo nombre en su fuente.
+    expect(archivosQueUsanElStore("app/visor-mensajes/page.tsx")).toEqual([])
   })
 })

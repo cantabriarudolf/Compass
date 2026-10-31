@@ -3,16 +3,16 @@
  * Fija la migración de `comunidad/certificados` (ventana V1 de SERIE-DEUDA-6):
  * las liquidaciones PL y los cobros FI ya NO se leen del store legacy
  * (`liquidacionesPL` / `cobrosFI`) sino de `useLiquidaciones()` /
- * `useCobrosFI()`. El test alimenta el store legacy con datos señuelo y los
- * hooks con los datos reales: si la página volviera al store, los señuelos
- * aparecerían en el DOM y estas aserciones fallarían.
+ * `useCobrosFI()`. El test alimenta los hooks con los datos reales y comprueba
+ * además, sobre el fuente, que la página no nombra el store: desde F22a el store
+ * no existe en el navegador, así que no hay señuelos que inyectar y el candado
+ * es el mismo evaluador de `npm run audit:store`.
  */
 import React from "react"
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
 import { cleanup, render, screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { resetStore } from "../helpers"
-import { useCompassStore } from "@/lib/store"
+import { archivosQueUsanElStore } from "./sin-store"
 import type { CobroFI, LiquidacionPL } from "@/lib/schemas"
 
 /**
@@ -182,7 +182,6 @@ beforeAll(() => {
 })
 
 beforeEach(() => {
-  resetStore()
   fuente.liquidaciones = []
   fuente.cobros = []
   fuente.cargandoLiquidaciones = false
@@ -281,13 +280,8 @@ describe("comunidad/certificados — fuente de datos vía hooks SWR", () => {
   })
 
   it("las liquidaciones del select salen de useLiquidaciones (solo confirmadas) y no del store", async () => {
-    // Señuelos en el store legacy: si la página volviera a leer el store, aparecerían.
-    useCompassStore.setState({
-      liquidacionesPL: [
-        liquidacion({ id: "liq-legacy", folio: "PL-LEGACY-0001", estado: "confirmada" }),
-      ],
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any)
+    // Sin store no hay señuelo posible: la propiedad se afirma sobre el fuente.
+    expect(archivosQueUsanElStore("app/comunidad/certificados/page.tsx")).toEqual([])
 
     fuente.liquidaciones = [
       liquidacion({ id: "liq-hook-conf", folio: "PL-2026-07-0007", estado: "confirmada" }),
@@ -308,14 +302,10 @@ describe("comunidad/certificados — fuente de datos vía hooks SWR", () => {
 
     expect(textos.some((t) => t.includes("PL-2026-07-0007"))).toBe(true)
     expect(textos.some((t) => t.includes("PL-2026-08-0008"))).toBe(false) // borrador
-    expect(textos.some((t) => t.includes("PL-LEGACY-0001"))).toBe(false) // store legacy
   }, PRESUPUESTO_CARGA)
 
   it("el gate Al Día se calcula con los cobros de useCobrosFI y no con el store", async () => {
-    useCompassStore.setState({
-      cobrosFI: [cobro({ id: "cob-legacy", unidadId: "uni-hook", montoBase: 999_000 })],
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any)
+    expect(archivosQueUsanElStore("app/comunidad/certificados/page.tsx")).toEqual([])
 
     fuente.cobros = [
       cobro({ id: "cob-hook-1", unidadId: "uni-hook", montoBase: 3_000 }),
@@ -330,7 +320,7 @@ describe("comunidad/certificados — fuente de datos vía hooks SWR", () => {
     await elegir(user, 0, /Al Día/i)
     await elegir(user, 1, /101/)
 
-    // 3.000 + 2.000 del hook (el señuelo del store diría $999.000).
+    // 3.000 + 2.000 de los cobros del hook (la unidad 102 no suma).
     expect(await screen.findByText(/Saldo pendiente actual: \$5\.000/)).toBeTruthy()
   }, PRESUPUESTO_CARGA)
 

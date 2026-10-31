@@ -83,10 +83,18 @@ export default defineConfig({
         // medido 94.32/85.70/93.77/94.32 con la suite verde (1299 tests en 126
         // archivos). La fase D dejó el global en 94/85.03 y la fase E (remanente del
         // store) terminó de subirlo → piso = medido − 1 pt. Nunca se baja.
-        statements: 93,
-        branches: 84,
-        functions: 92,
-        lines: 93,
+        // Re-baseline 2026-10-31 (F22a, retiro del store legacy del navegador):
+        // se borraron ~4.300 statements y ~4.000 ramas que estaban casi al 100%
+        // (lib/store.ts + los 7 slices). El agregado deja de estar dominado por
+        // ese módulo y pasa a medir el resto del código tal como está: medido
+        // 90.25/77.11/92.07/90.25 -> piso = medido - 1 pt. No es una regresión de
+        // cobertura: es que antes el store tapaba el promedio. Los dos huecos que
+        // quedan a la vista (lib/schemas.ts al 69% de funciones y las ramas de
+        // app/api/**) son trabajo aparte, anotados en PENDIENTES-FUNCIONALIDAD.
+        statements: 89,
+        branches: 76,
+        functions: 91,
+        lines: 89,
         // Núcleo: los 7 archivos desde SERIE-PRODUCCION P4 + el interior de
         // `lib/store/**` (slices + helpers + `lib/store.ts` legacy). Re-baseline
         // 2026-10-16 (P9): 97.63/91.11/99.44/97.63, con `lib/store.ts` en 96.06
@@ -98,7 +106,10 @@ export default defineConfig({
         // store): medido 99.63/94.03/99.44/99.63, con `lib/store.ts` en 99.95 y solo
         // dos statements inalcanzables por la API pública (`:4321` declarado en D4 y
         // `:5127` declarado en D5) → piso = medido − 1 pt. Nunca se baja.
-        "lib/**": { statements: 98, branches: 93, functions: 98, lines: 98 },
+        // Re-baseline 2026-10-31 (F22a): sin los slices al 100%, lib/** mide
+        // 98.44/90.59/89.47/98.44 -> piso = medido - 1 pt. El arrastre de funciones
+        // es lib/schemas.ts (69.23%).
+        "lib/**": { statements: 97, branches: 89, functions: 88, lines: 97 },
         // Superficie API: 126 route handlers (smoke de guardias + fases).
         // Re-baseline 2026-10-16 (SERIE-DEUDA-1 P3, change `api-cobertura-fase3`):
         // medido 83.69/68.70/86.99/83.69 → 85.75/71.50/88.48/85.75 con las 3
@@ -111,10 +122,12 @@ export default defineConfig({
         // carpetas más bajas de la medición cubiertas — `fondos-fi`
         // (71.16 → 89.66 st), `personas` (72.82 → 93.45) y `cobros-fi`
         // (74.43 → 91.48) → piso = medido − 1 pt. Nunca se baja.
+        // Re-baseline 2026-10-31 (F22a): medido 88.60/76.39/92.35/88.60 -> piso =
+        // medido - 1 pt (suben ramas y funciones).
         "app/api/**": {
           statements: 87,
-          branches: 74,
-          functions: 88,
+          branches: 75,
+          functions: 91,
           lines: 87,
         },
       },
