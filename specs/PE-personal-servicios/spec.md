@@ -59,7 +59,7 @@ El sistema SHALL exponer el directorio de emergencias consumiendo el maestro `co
 
 ### Requirement: Bitácora Digital de Conserjería
 El sistema SHALL reemplazar el libro físico de novedades con controles auditables en tiempo real:
-- **Visitas**: registro con nombre, DNI, patente opcional, unidad/residente destino, fecha, jornada (selector ligado al maestro `jornadas`) y notas; soporta pre-agendamiento (residente o administración agenda y el conserje marca "Ingresada" sellando la hora) y llegada sin aviso (registro manual); incluye **escaneo del QR de la cédula con la webcam** (`BarcodeDetector` nativo o `@zxing/browser`), que extrae el RUN, **valida el dígito verificador (módulo 11)** y consulta el padrón de la comunidad para **proponer** la identidad; el conserje confirma antes de completar el formulario y nada se persiste al escanear. Si el documento no tiene QR, no hay cámara o se niega el permiso, el flujo cae a **búsqueda manual por RUT**. El chip NFC y el PDF417 del reverso no se leen desde el navegador.
+- **Visitas**: registro con nombre, DNI, patente opcional, unidad/residente destino, fecha, jornada (selector ligado al maestro `jornadas`) y notas; soporta pre-agendamiento (residente o administración agenda y el conserje marca "Ingresada" sellando la hora) y llegada sin aviso (registro manual); incluye **escaneo del QR de la cédula con la webcam** (`BarcodeDetector` nativo o `@zxing/browser`), que extrae el RUN, **valida el dígito verificador (módulo 11)** y consulta el padrón de la comunidad para **proponer** la identidad; el conserje confirma antes de completar el formulario y nada se persiste al escanear. Si el documento no tiene QR, no hay cámara o se niega el permiso, el flujo cae a **búsqueda manual por RUT**. El chip NFC y el PDF417 del reverso no se leen desde el navegador. El escáner SHALL mostrar un **recuadro guía** sobre el video y SHALL aceptar la lectura sólo cuando el código detectado cae dentro de ese recuadro, para no tomar un QR del fondo; si el decodificador no informa la posición del código, la lectura SHALL aceptarse igual, y MUST NOT bloquearse el flujo por falta de ese dato. La cámara SHALL apagarse sola a los **30 segundos** sin lectura válida, informando el motivo, y el conserje SHALL poder **reintentar** el escaneo sin volver a abrir el panel.
 - **Encomiendas y delivery**: recepción con maestro `couriers` (selector normalizado, sin texto libre), destinatario/unidad, evidencia fotográfica por referencia D1 (metadatos + URL, jamás base64/Blob) y retiro registrado con retirador y fecha.
 - **Contratistas**: ingreso ligado al maestro `contratistas` con motivo específico obligatorio, unidad destino y origen del agendamiento (residente particular o administración).
 
@@ -76,6 +76,10 @@ Las notificaciones a residentes SHALL respetar los flags de CF (`notificarRegist
 #### Scenario: Contratista sin motivo rechazado
 - **WHEN** se registra un ingreso de contratista sin detallar el motivo específico
 - **THEN** retorna `{ok:false}` y no muta la bitácora
+
+#### Scenario: Cámara apagada por inactividad con reintento
+- **WHEN** el conserje abre el escáner y pasan 30 segundos sin una lectura válida dentro del recuadro guía
+- **THEN** la cámara se apaga, la pantalla informa que se apagó para no quedar encendida y ofrece «Reintentar», que vuelve a pedir la cámara con el plazo en cero
 
 ### Requirement: Dashboard Operativo (Reporte Diario)
 El sistema SHALL ofrecer a la operación un reporte diario con tarjetas de jornada (Mañana/Tarde/Noche) que muestran el estado Informado/No Informado según cierres de turno registrados para el día seleccionado (hoy por defecto, con historial de días anteriores accesible), más el resumen de novedades del día (visitas ingresadas, encomiendas recibidas, contratistas ingresados) presentado como tarjetas con detalle al hacer clic.

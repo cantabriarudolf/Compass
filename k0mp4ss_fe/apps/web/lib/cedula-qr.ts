@@ -14,6 +14,9 @@
  * Este módulo es puro y no toca el DOM: recibe el texto crudo del decodificador
  * y devuelve el RUN canónico. La validación del dígito verificador vive en
  * `lib/validacion-rut.ts` y el llamador DEBE aplicarla antes de usar el RUN.
+ *
+ * También vive acá la geometría del recuadro guía del escáner (`centroDentroDelMarco`,
+ * `lecturaEncuadrada`): es aritmética pura y así se puede probar sin cámara.
  */
 import { normalizarRun } from "@/lib/validacion-rut"
 
@@ -57,4 +60,107 @@ export function extraerRunDeQr(texto: string): string | null {
   const desdeUrl = runDesdeUrl(bruto)
   const candidato = desdeUrl ?? bruto
   return normalizarRun(candidato)
+}
+
+/** Punto en un sistema de coordenadas cualquiera (píxeles del video o de la pantalla). */
+export interface Punto {
+  x: number
+  y: number
+}
+
+/** Rectángulo alineado a los ejes: esquina superior izquierda más tamaño. */
+export interface Marco {
+  x: number
+  y: number
+  ancho: number
+  alto: number
+}
+
+/** Lado del recuadro guía como fracción del ancho renderizado del `<video>`. */
+export const FRACCION_MARCO_GUIA = 0.6
+
+/**
+ * Medidas que hacen falta para ubicar el recuadro y el código detectado.
+ *
+ * `ancho`/`alto` son las dimensiones RENDERIZADAS del elemento (px CSS, de
+ * `getBoundingClientRect`); `anchoReal`/`altoReal` son las del video real
+ * (`videoWidth`/`videoHeight`). Mezclar ambas sin escalar es el error clásico:
+ * en una pantalla retina el video real mide el doble que lo renderizado.
+ */
+export interface CajaVideo {
+  ancho: number
+  alto: number
+  anchoReal: number
+  altoReal: number
+}
+
+/**
+ * ¿El centro del código cae dentro del recuadro guía?
+ *
+ * Ambos argumentos tienen que estar en el MISMO sistema de coordenadas (el
+ * llamador convierte los píxeles del video real a píxeles CSS del elemento).
+ *
+ * - Borde inclusivo: un centro justo sobre el borde cuenta como adentro.
+ * - Un recuadro de tamaño cero (o con medidas no finitas) no contiene nada:
+ *   devuelve `false`. La falta de dato se resuelve en `lecturaEncuadrada`.
+ */
+export function centroDentroDelMarco(centro: Punto, marco: Marco): boolean {
+  if (!(marco.ancho > 0) || !(marco.alto > 0)) return false
+  return (
+    centro.x >= marco.x &&
+    centro.x <= marco.x + marco.ancho &&
+    centro.y >= marco.y &&
+    centro.y <= marco.y + marco.alto
+  )
+}
+
+/**
+ * Política del escáner: sólo se descarta la lectura si hay geometría suficiente
+ * para afirmar que el código está FUERA del recuadro.
+ *
+ * `centro` llega en `null` cuando el motor no informó caja ni esquinas, y `marco`
+ * en `null` cuando el `<video>` todavía no tiene dimensiones renderizadas. En
+ * ambos casos se acepta la lectura, igual que antes del recuadro: bloquear por
+ * falta de dato dejaría al conserje sin escáner.
+ */
+export function lecturaEncuadrada(centro: Punto | null, marco: Marco | null): boolean {
+  if (!centro || !marco) return true
+  return centroDentroDelMarco(centro, marco)
+}
+
+/**
+ * Recuadro guía en píxeles CSS, relativo a la esquina del `<video>`.
+ *
+ * Es un cuadrado centrado de `FRACCION_MARCO_GUIA` del ancho renderizado,
+ * recortado a la altura disponible: si el video es más bajo que ese cuadrado, el
+ * marco se achica para no salirse del área visible (el overlay y el cálculo de
+ * «adentro» usan este mismo rectángulo, así el verde nunca miente).
+ *
+ * Devuelve `null` mientras el video no tenga dimensiones renderizadas: sin
+ * medida no hay marco que juzgar.
+ */
+export function marcoGuia(caja: { ancho: number; alto: number }): Marco | null {
+  const lado = Math.min(caja.ancho * FRACCION_MARCO_GUIA, caja.alto)
+  if (!(lado > 0)) return null
+  return { x: (caja.ancho - lado) / 2, y: (caja.alto - lado) / 2, ancho: lado, alto: lado }
+}
+
+/**
+ * Convierte un punto del video REAL a píxeles CSS del elemento, que es el sistema
+ * donde vive el recuadro guía.
+ *
+ * El `<video>` se pinta con `object-cover`: la imagen se escala por
+ * `max(anchoCaja/anchoReal, altoCaja/altoReal)` y se recorta centrada, así que hay
+ * que aplicar esa escala y sumar el desplazamiento (negativo) del recorte. Sin
+ * `videoWidth`/`videoHeight` (frame sin metadatos todavía) devuelve `null`, y la
+ * lectura se acepta sin geometría.
+ */
+export function centroEnCaja(centro: Punto, caja: CajaVideo): Punto | null {
+  const { ancho, alto, anchoReal, altoReal } = caja
+  if (!(anchoReal > 0) || !(altoReal > 0) || !(ancho > 0) || !(alto > 0)) return null
+  const escala = Math.max(ancho / anchoReal, alto / altoReal)
+  return {
+    x: centro.x * escala + (ancho - anchoReal * escala) / 2,
+    y: centro.y * escala + (alto - altoReal * escala) / 2,
+  }
 }

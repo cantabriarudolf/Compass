@@ -14,23 +14,39 @@
  *
  * Reglas de operación:
  * - Nunca emite un RUN sin pasar `validarRun` (dígito verificador módulo 11).
- * - La cámara se apaga al detectar, al cancelar y al desmontar: si no, el LED
- *   queda prendido con la pestaña abierta.
+ * - Sólo emite si el código leído está dentro del recuadro guía del video: así no
+ *   se acepta un QR del fondo (un cartel, una promo). Si el motor no informa
+ *   geometría, la lectura se acepta igual que antes: no se bloquea por falta de dato.
+ * - Si no hay lectura válida en 30 s, la cámara se apaga sola y el conserje puede
+ *   reintentar: el LED no queda prendido con la pestaña abierta.
+ * - La cámara se apaga al detectar, al cancelar, al vencer el plazo y al desmontar.
  * - Si no hay cámara o el permiso se niega, devuelve un mensaje legible y NO
  *   rompe: el conserje sigue con el modo manual del mismo formulario.
  */
 import * as React from "react"
 import { Button } from "@workspace/ui/components/button"
-import { extraerRunDeQr } from "@/lib/cedula-qr"
+import {
+  centroEnCaja,
+  extraerRunDeQr,
+  lecturaEncuadrada,
+  marcoGuia,
+  type CajaVideo,
+  type Marco,
+  type Punto,
+} from "@/lib/cedula-qr"
 import { validarRun } from "@/lib/validacion-rut"
 
 /** Cada cuánto se intenta leer un frame nuevo (ms). */
 const INTERVALO_LECTURA_MS = 300
+/** Sin lectura válida en este plazo, la cámara se apaga sola (ms). */
+const CORTE_POR_INACTIVIDAD_MS = 30_000
 
 export const MENSAJE_QR_NO_CEDULA =
   "El QR leído no corresponde a una cédula: no trae un RUN del Registro Civil."
 export const MENSAJE_RUN_INVALIDO =
   "El RUN leído no pasa la validación del dígito verificador. Vuelve a apuntar el QR de la cédula."
+export const MENSAJE_CAMARA_INACTIVA =
+  "La cámara se apagó para no quedar encendida. Reintentar."
 export const MENSAJE_SIN_CAMARA =
   "Este navegador no expone la cámara (getUserMedia). Escribe el RUT y usa «Buscar en el padrón»."
 export const MENSAJE_PERMISO =
@@ -44,13 +60,28 @@ export const MENSAJE_CAMARA_FALLO =
 export const MENSAJE_SIN_LECTOR =
   "El escaneo de QR no está disponible en este navegador. Escribe el RUT y usa «Buscar en el padrón»."
 
-type Deteccion = { rawValue: string }
+/** Una lectura del frame: el texto y, si el motor la informó, su posición. */
+interface Lectura {
+  texto: string
+  /** Centro del código en píxeles del video REAL (no del elemento), o `null`. */
+  centro: Punto | null
+}
+
+/** Caja que informa `BarcodeDetector`, en píxeles del video real. */
+interface CajaDeteccion {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+type Deteccion = { rawValue: string; boundingBox?: CajaDeteccion | null }
 type DetectorNativo = { detect(origen: CanvasImageSource): Promise<Deteccion[]> }
 type ConstructorDetector = new (opciones?: { formats?: string[] }) => DetectorNativo
 
 /** Estrategia de lectura de un frame. `null` = todavía no hay QR en la imagen. */
 interface EstrategiaLectura {
-  leer(video: HTMLVideoElement): Promise<string | null>
+  leer(video: HTMLVideoElement): Promise<Lectura | null>
 }
 
 /** `BarcodeDetector` nativo, o `null` si el navegador no lo expone. */
@@ -65,9 +96,38 @@ function estrategiaNativa(Constructor: ConstructorDetector): EstrategiaLectura {
     async leer(video) {
       // El detector nativo rechaza el frame cuando aún no hay QR legible.
       const codigos = await detector.detect(video)
-      return codigos[0]?.rawValue ?? null
+      const primero = codigos[0]
+      if (!primero?.rawValue) return null
+      // `boundingBox` viene en píxeles del video real: la conversión a píxeles
+      // CSS del elemento (donde vive el recuadro) la hace `centroEnPantalla`.
+      const caja = primero.boundingBox
+      const centro = caja ? { x: caja.x + caja.width / 2, y: caja.y + caja.height / 2 } : null
+      return { texto: primero.rawValue, centro }
     },
   }
+}
+
+/**
+ * Promedio de las esquinas que informa zxing (píxeles del video real).
+ * Devuelve `null` si el lector no expone esquinas: hay motores que sólo dan texto.
+ */
+function centroDeEsquinas(resultado: {
+  getResultPoints?: () => { getX(): number; getY(): number }[] | null
+}): Punto | null {
+  if (typeof resultado.getResultPoints !== "function") return null
+  const puntos = resultado.getResultPoints() ?? []
+  const validos = puntos.filter(
+    (punto) => typeof punto?.getX === "function" && typeof punto?.getY === "function"
+  )
+  if (validos.length === 0) return null
+  const suma = validos.reduce(
+    (acumulado, punto) => ({
+      x: acumulado.x + punto.getX(),
+      y: acumulado.y + punto.getY(),
+    }),
+    { x: 0, y: 0 }
+  )
+  return { x: suma.x / validos.length, y: suma.y / validos.length }
 }
 
 /** Fallback para Safari/Firefox: lee con `@zxing/browser` (se importa on demand). */
@@ -78,7 +138,7 @@ async function estrategiaZxing(): Promise<EstrategiaLectura> {
     async leer(video) {
       try {
         const resultado = await lector.decodeOnceFromVideoElement(video)
-        return resultado.getText()
+        return { texto: resultado.getText(), centro: centroDeEsquinas(resultado) }
       } catch {
         // Frame sin QR (NotFoundException del lector): se reintenta en el próximo tick.
         return null
@@ -116,6 +176,22 @@ function mensajeDeCamara(error: unknown): string {
   return MENSAJE_CAMARA_FALLO
 }
 
+/**
+ * Medidas del `<video>`: lo renderizado en px CSS y lo que mide el video real.
+ * Las dos cosas juntas son lo único que permite ubicar el recuadro sin mentir
+ * (ver `centroEnCaja` en `lib/cedula-qr.ts`).
+ */
+function medidasDeVideo(video: HTMLVideoElement | null): CajaVideo | null {
+  if (!video) return null
+  const caja = video.getBoundingClientRect()
+  return {
+    ancho: caja.width,
+    alto: caja.height,
+    anchoReal: video.videoWidth,
+    altoReal: video.videoHeight,
+  }
+}
+
 export interface EscaneoQrCedulaProps {
   /** RUN canónico (`cuerpo-DV`) ya validado con módulo 11. */
   onDetectado: (run: string) => void
@@ -131,17 +207,50 @@ export function EscaneoQrCedula({ onDetectado, onError, onCancelar }: EscaneoQrC
   const refVideo = React.useRef<HTMLVideoElement | null>(null)
   const refStream = React.useRef<MediaStream | null>(null)
   const refIntervalo = React.useRef<ReturnType<typeof setInterval> | null>(null)
+  const refInactividad = React.useRef<ReturnType<typeof setTimeout> | null>(null)
   const refTerminado = React.useRef(false)
+  // Generación del intento: una lectura en vuelo puede resolver después del corte
+  // por inactividad o del «Reintentar», y entonces ya no le corresponde actuar.
+  const refGeneracion = React.useRef(0)
+  // El recuadro medido vive en un ref (lo consulta el bucle de lectura) y en el
+  // estado (lo pinta el overlay): un solo cálculo, así el verde no miente.
+  const refMarco = React.useRef<Marco | null>(null)
   // Los callbacks viven en un ref para que el efecto de cámara no se reinicie
   // cuando el panel se re-renderiza (reiniciarlo apagaría y reencendería el LED).
   const refCallbacks = React.useRef({ onDetectado, onError })
   const [estado, setEstado] = React.useState<Estado>("iniciando")
+  const [marco, setMarco] = React.useState<Marco | null>(null)
+  const [encuadrado, setEncuadrado] = React.useState(false)
   const [ultimoCodigo, setUltimoCodigo] = React.useState<string | null>(null)
   const [mensaje, setMensaje] = React.useState<string | null>(null)
+  // Cada «Reintentar» reabre el efecto de cámara con el contador en cero.
+  const [intento, setIntento] = React.useState(0)
+  // Un RUN ya emitido no se vuelve a escanear: el flujo siguió en el panel.
+  const [emitido, setEmitido] = React.useState(false)
 
   React.useEffect(() => {
     refCallbacks.current = { onDetectado, onError }
   })
+
+  /** Mide el recuadro con las dimensiones renderizadas del video. */
+  const medirMarco = React.useCallback(() => {
+    const medidas = medidasDeVideo(refVideo.current)
+    const medido = medidas ? marcoGuia(medidas) : null
+    refMarco.current = medido
+    setMarco(medido)
+  }, [])
+
+  React.useEffect(() => {
+    medirMarco()
+    const alCambiar = () => medirMarco()
+    window.addEventListener("resize", alCambiar)
+    const video = refVideo.current
+    video?.addEventListener("loadedmetadata", alCambiar)
+    return () => {
+      window.removeEventListener("resize", alCambiar)
+      video?.removeEventListener("loadedmetadata", alCambiar)
+    }
+  }, [medirMarco])
 
   /** Apaga la cámara de verdad: `stop()` en cada track y `srcObject` liberado. */
   const detenerCamara = React.useCallback(() => {
@@ -152,11 +261,16 @@ export function EscaneoQrCedula({ onDetectado, onError, onCancelar }: EscaneoQrC
     if (video) video.srcObject = null
   }, [])
 
+  /** Apaga todo: bucle de lectura, plazo de inactividad y cámara. */
   const detenerTodo = React.useCallback(() => {
     refTerminado.current = true
     if (refIntervalo.current) {
       clearInterval(refIntervalo.current)
       refIntervalo.current = null
+    }
+    if (refInactividad.current) {
+      clearTimeout(refInactividad.current)
+      refInactividad.current = null
     }
     detenerCamara()
   }, [detenerCamara])
@@ -164,6 +278,9 @@ export function EscaneoQrCedula({ onDetectado, onError, onCancelar }: EscaneoQrC
   React.useEffect(() => {
     let cancelado = false
     refTerminado.current = false
+    // Cada arranque del efecto es una generación nueva (montaje o «Reintentar»).
+    const generacion = (refGeneracion.current += 1)
+    setEstado("iniciando")
 
     const avisar = (texto: string) => {
       setMensaje(texto)
@@ -172,12 +289,24 @@ export function EscaneoQrCedula({ onDetectado, onError, onCancelar }: EscaneoQrC
 
     const abandonar = (texto: string) => {
       setEstado("detenido")
+      setEncuadrado(false)
       avisar(texto)
     }
 
-    const procesar = (texto: string) => {
-      setUltimoCodigo(texto)
-      const run = extraerRunDeQr(texto)
+    const procesar = (lectura: Lectura) => {
+      const medidas = medidasDeVideo(refVideo.current)
+      const centro = lectura.centro && medidas ? centroEnCaja(lectura.centro, medidas) : null
+      if (!lecturaEncuadrada(centro, refMarco.current)) {
+        // El código está fuera del recuadro (QR del fondo: un cartel, una promo):
+        // se descarta en silencio y se sigue escaneando. Avisar acá taparía la
+        // vista con errores por cada cartel que entra en cuadro.
+        setEncuadrado(false)
+        return
+      }
+      // Encuadre confirmado: el recuadro se pinta en verde.
+      setEncuadrado(true)
+      setUltimoCodigo(lectura.texto)
+      const run = extraerRunDeQr(lectura.texto)
       if (!run) {
         // QR ajeno (promoción, sitio web, etc.): se sigue escaneando, no se emite nada.
         avisar(MENSAJE_QR_NO_CEDULA)
@@ -190,6 +319,7 @@ export function EscaneoQrCedula({ onDetectado, onError, onCancelar }: EscaneoQrC
       detenerTodo()
       setEstado("detenido")
       setMensaje(null)
+      setEmitido(true)
       refCallbacks.current.onDetectado(run)
     }
 
@@ -232,6 +362,16 @@ export function EscaneoQrCedula({ onDetectado, onError, onCancelar }: EscaneoQrC
         }
       }
       setEstado("escaneando")
+      // La caja del video ya está montada: se mide antes de la primera lectura.
+      medirMarco()
+
+      // Corte por inactividad: sin lectura válida, la cámara no queda encendida.
+      refInactividad.current = setTimeout(() => {
+        detenerTodo()
+        setEstado("detenido")
+        setEncuadrado(false)
+        avisar(MENSAJE_CAMARA_INACTIVA)
+      }, CORTE_POR_INACTIVIDAD_MS)
 
       let leyendo = false
       refIntervalo.current = setInterval(() => {
@@ -241,8 +381,14 @@ export function EscaneoQrCedula({ onDetectado, onError, onCancelar }: EscaneoQrC
         leyendo = true
         void estrategia
           .leer(actual)
-          .then((texto) => {
-            if (texto) procesar(texto)
+          .then((lectura) => {
+            // Descarte de lecturas en vuelo: si el intento ya terminó (corte, cancelar,
+            // desmontar) o arrancó otro «Reintentar», la lectura vieja no emite, no
+            // avisa y no apaga la cámara del intento vigente. El fallback de zxing
+            // entra por acá también: `estrategia.leer` se espera antes de este paso.
+            if (!lectura) return
+            if (refTerminado.current || refGeneracion.current !== generacion) return
+            procesar(lectura)
           })
           .catch(() => null)
           .finally(() => {
@@ -257,12 +403,21 @@ export function EscaneoQrCedula({ onDetectado, onError, onCancelar }: EscaneoQrC
       cancelado = true
       detenerTodo()
     }
-  }, [detenerTodo])
+  }, [detenerTodo, medirMarco, intento])
 
   const cancelar = () => {
     detenerTodo()
     setEstado("detenido")
+    setEncuadrado(false)
     onCancelar()
+  }
+
+  /** Rearranca el escaneo con el plazo de inactividad en cero. */
+  const reintentar = () => {
+    setMensaje(null)
+    setEncuadrado(false)
+    setEmitido(false)
+    setIntento((anterior) => anterior + 1)
   }
 
   return (
@@ -271,14 +426,28 @@ export function EscaneoQrCedula({ onDetectado, onError, onCancelar }: EscaneoQrC
       role="region"
       aria-label="Escáner de QR de la cédula"
     >
-      <video
-        ref={refVideo}
-        className="h-48 w-full rounded-md bg-black object-cover"
-        aria-label="Previsualización de la cámara"
-        autoPlay
-        muted
-        playsInline
-      />
+      <div className="relative">
+        <video
+          ref={refVideo}
+          className="h-48 w-full rounded-md bg-black object-cover"
+          aria-label="Previsualización de la cámara"
+          autoPlay
+          muted
+          playsInline
+        />
+        {marco ? (
+          <div
+            aria-hidden="true"
+            className={`pointer-events-none absolute rounded-sm border-2 transition-colors ${
+              encuadrado ? "border-emerald-500" : "border-white/70"
+            }`}
+            style={{ left: marco.x, top: marco.y, width: marco.ancho, height: marco.alto }}
+          />
+        ) : null}
+        <p className="pointer-events-none absolute inset-x-0 top-1 text-center text-[11px] text-white">
+          <span className="rounded bg-black/60 px-1 py-0.5">Poné el QR dentro del recuadro</span>
+        </p>
+      </div>
       <p className="text-xs text-muted-foreground" aria-live="polite">
         {estado === "iniciando" ? "Pidiendo permiso para usar la cámara…" : null}
         {estado === "escaneando" ? "Acerca el anverso de la cédula: el QR va arriba del retrato." : null}
@@ -294,7 +463,12 @@ export function EscaneoQrCedula({ onDetectado, onError, onCancelar }: EscaneoQrC
           {mensaje}
         </p>
       ) : null}
-      <div className="flex justify-end">
+      <div className="flex justify-end gap-2">
+        {estado === "detenido" && !emitido ? (
+          <Button type="button" size="sm" onClick={reintentar}>
+            Reintentar
+          </Button>
+        ) : null}
         <Button type="button" size="sm" variant="outline" onClick={cancelar}>
           Cancelar escaneo
         </Button>
