@@ -4,6 +4,7 @@ import bcrypt from "bcryptjs"
 import { prismaCifrado as prisma } from "@/lib/prisma-cifrado"
 import { auth } from "@/lib/auth"
 import { logger } from "@/lib/logger"
+import { excedeIntentos, registrarFallo, limpiarIntentos } from "@/lib/rate-limit"
 
 export const dynamic = "force-dynamic"
 
@@ -16,11 +17,24 @@ const BodySchema = z.object({
  * Desactiva 2FA previa confirmación con la contraseña actual. Elimina secreto
  * y backup codes, e invalida todas las sesiones (tokenVersion++, mecanismo P2)
  * porque es un cambio de seguridad sensible — el cliente debe re-loguear.
+ *
+ * F24: intentos limitados con el mismo criterio que `2fa/verify-setup`
+ * (`MAX_INTENTOS` fallos / 15 min). La clave es por usuario y no por email
+ * porque acá ya hay sesión: el contador no se puede compartir entre cuentas y
+ * tampoco revela si el email existe. Sobre el umbral se corta antes de bcrypt.
  */
 export async function POST(request: NextRequest) {
   const sesion = await auth()
   if (!sesion?.user?.id) {
     return NextResponse.json({ error: "No autenticado." }, { status: 401 })
+  }
+
+  const clave = `2fa-disable:${sesion.user.id}`
+  if (await excedeIntentos(clave)) {
+    return NextResponse.json(
+      { error: "Demasiados intentos. Espere unos minutos." },
+      { status: 429 }
+    )
   }
 
   const body: unknown = await request.json().catch(() => null)
@@ -39,6 +53,7 @@ export async function POST(request: NextRequest) {
 
   const passwordOk = await bcrypt.compare(parsed.data.password, usuario.passwordHash)
   if (!passwordOk) {
+    await registrarFallo(clave)
     logger.warn({ event: "2FA_DISABLE_FALLIDO", usuarioId: usuario.id }, "Contraseña incorrecta al desactivar 2FA")
     return NextResponse.json({ error: "Contraseña incorrecta." }, { status: 401 })
   }
@@ -52,6 +67,7 @@ export async function POST(request: NextRequest) {
       tokenVersion: { increment: 1 },
     },
   })
+  await limpiarIntentos(clave)
 
   logger.info({ event: "2FA_DESACTIVADO", usuarioId: usuario.id }, "2FA desactivado, sesiones invalidadas")
   return NextResponse.json({ ok: true, sesionesInvalidadas: true })
