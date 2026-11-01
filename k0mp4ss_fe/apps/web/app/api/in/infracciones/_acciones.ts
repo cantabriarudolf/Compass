@@ -8,6 +8,7 @@
 import { normalizaRol, puede } from "@/lib/authz"
 import { prisma } from "@/lib/prisma"
 import { generarId } from "@/lib/id-utils"
+import { registrarEventoAuditoria, type ClienteAuditoria } from "@/lib/auditoria"
 import { personaIdDelUsuarioDb, unidadesVinculadasDb } from "@/lib/api/sesion-persona"
 import {
   jsonError,
@@ -95,10 +96,10 @@ export function registrarEventoIN(
   tipoAccion: string,
   referenciaId: string,
   descripcion: string,
-  client: Pick<typeof prisma, "eventoAuditoria"> = prisma
+  client: ClienteAuditoria = prisma
 ): Promise<unknown> {
-  return client.eventoAuditoria.create({
-    data: {
+  return registrarEventoAuditoria(
+    {
       id: generarId("ev"),
       comunidadId: scope.comunidadId,
       timestamp: new Date().toISOString(),
@@ -108,5 +109,6 @@ export function registrarEventoIN(
       referenciaId,
       descripcion,
     },
-  })
+    client
+  )
 }

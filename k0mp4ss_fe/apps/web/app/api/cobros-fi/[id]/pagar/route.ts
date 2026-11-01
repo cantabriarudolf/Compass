@@ -17,6 +17,7 @@ import { puede } from "@/lib/authz"
 import { prisma } from "@/lib/prisma"
 import { logger } from "@/lib/logger"
 import { generarId } from "@/lib/id-utils"
+import { registrarEventoAuditoria } from "@/lib/auditoria"
 import {
   exigibleTotal,
   hoyISO,
@@ -142,17 +143,15 @@ export async function POST(req: Request, ctx: Ctx): Promise<Response> {
       },
     })
 
-    await prisma.eventoAuditoria.create({
-      data: {
-        id: generarId("ev"),
-        comunidadId: scope.comunidadId,
-        timestamp: new Date().toISOString(),
-        usuario: scope.usuarioId,
-        categoria: "FI",
-        tipoAccion: "FI_RECEIVE_PAYMENT",
-        referenciaId: id,
-        descripcion: `Pago recibido por $${monto.toLocaleString("es-CL")} (${medio.trim()}) sobre ${cobro.descripcion}.`,
-      },
+    await registrarEventoAuditoria({
+      id: generarId("ev"),
+      comunidadId: scope.comunidadId,
+      timestamp: new Date().toISOString(),
+      usuario: scope.usuarioId,
+      categoria: "FI",
+      tipoAccion: "FI_RECEIVE_PAYMENT",
+      referenciaId: id,
+      descripcion: `Pago recibido por $${monto.toLocaleString("es-CL")} (${medio.trim()}) sobre ${cobro.descripcion}.`,
     })
 
     return Response.json({ ok: true })

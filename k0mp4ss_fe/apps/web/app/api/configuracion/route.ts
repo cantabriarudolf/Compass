@@ -18,6 +18,7 @@ import {
 } from "@/lib/api/with-comunidad-scope"
 import { logger } from "@/lib/logger"
 import { generarId } from "@/lib/id-utils"
+import { registrarEventoAuditoria } from "@/lib/auditoria"
 import crypto from "node:crypto"
 import type { Prisma } from "@prisma/client"
 
@@ -123,17 +124,15 @@ export async function PUT(req: Request): Promise<Response> {
     })
     if (cambios.length > 0) {
       try {
-        await prisma.eventoAuditoria.create({
-          data: {
-            id: generarId("ev"),
-            comunidadId: scope.comunidadId,
-            timestamp: new Date().toISOString(),
-            usuario: scope.usuarioId,
-            categoria: "CF",
-            tipoAccion: "CF_UPDATE_PARAM",
-            referenciaId: registro.id,
-            descripcion: `Parámetros legales de remuneraciones actualizados: ${cambios.join("; ")}.`,
-          },
+        await registrarEventoAuditoria({
+          id: generarId("ev"),
+          comunidadId: scope.comunidadId,
+          timestamp: new Date().toISOString(),
+          usuario: scope.usuarioId,
+          categoria: "CF",
+          tipoAccion: "CF_UPDATE_PARAM",
+          referenciaId: registro.id,
+          descripcion: `Parámetros legales de remuneraciones actualizados: ${cambios.join("; ")}.`,
         })
       } catch (e) {
         logger.error({ err: e }, "[configuracion] no se pudo registrar CF_UPDATE_PARAM")

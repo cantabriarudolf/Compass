@@ -16,6 +16,7 @@ import { puede } from "@/lib/authz"
 import { prisma } from "@/lib/prisma"
 import { logger } from "@/lib/logger"
 import { generarId } from "@/lib/id-utils"
+import { registrarEventoAuditoria } from "@/lib/auditoria"
 import {
   jsonError,
   withComunidadScope,
@@ -330,17 +331,15 @@ export async function POST(req: Request): Promise<Response> {
     // Auditoría `GD_PERIODO_REGISTRADO` (categoría GD): se emite después de la
     // escritura y nunca la bloquea (patrón de las rutas que auditan a mano).
     try {
-      await prisma.eventoAuditoria.create({
-        data: {
-          id: generarId("ev"),
-          comunidadId: scope.comunidadId,
-          timestamp: new Date().toISOString(),
-          usuario: scope.usuarioId,
-          categoria: "GD",
-          tipoAccion: "GD_PERIODO_REGISTRADO",
-          referenciaId: record.id,
-          descripcion: `Período de directiva registrado (${record.estado}) desde ${record.fechaInicio}, ${record.duracionMeses} meses, nómina de ${nomina.length} miembros.`,
-        },
+      await registrarEventoAuditoria({
+        id: generarId("ev"),
+        comunidadId: scope.comunidadId,
+        timestamp: new Date().toISOString(),
+        usuario: scope.usuarioId,
+        categoria: "GD",
+        tipoAccion: "GD_PERIODO_REGISTRADO",
+        referenciaId: record.id,
+        descripcion: `Período de directiva registrado (${record.estado}) desde ${record.fechaInicio}, ${record.duracionMeses} meses, nómina de ${nomina.length} miembros.`,
       })
     } catch (e) {
       logger.error({ err: e }, "[api/periodos-directiva] no se pudo registrar GD_PERIODO_REGISTRADO")

@@ -16,6 +16,7 @@
 import { puede } from "@/lib/authz"
 import { prisma } from "@/lib/prisma"
 import { generarId } from "@/lib/id-utils"
+import { registrarEventoAuditoria, type ClienteAuditoria } from "@/lib/auditoria"
 import { CobroFISchema } from "@/lib/schemas"
 import { jsonError, withComunidadScope, type ComunidadScope } from "@/lib/api/with-comunidad-scope"
 
@@ -86,10 +87,10 @@ export function registrarEventoRA(
   tipoAccion: string,
   referenciaId: string,
   descripcion: string,
-  client: Pick<typeof prisma, "eventoAuditoria"> = prisma
+  client: ClienteAuditoria = prisma
 ): Promise<unknown> {
-  return client.eventoAuditoria.create({
-    data: {
+  return registrarEventoAuditoria(
+    {
       id: generarId("ev"),
       comunidadId: scope.comunidadId,
       timestamp: new Date().toISOString(),
@@ -99,7 +100,8 @@ export function registrarEventoRA(
       referenciaId,
       descripcion,
     },
-  })
+    client
+  )
 }
 
 /** Siguiente folio `RA-####` correlativo dentro de la comunidad (espejo `siguienteFolioRA`). */

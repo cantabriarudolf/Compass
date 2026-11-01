@@ -9,6 +9,7 @@ import {
 } from "@/lib/invariantes/persona"
 import { auth } from "@/lib/auth"
 import { logger } from "@/lib/logger"
+import { registrarEventoAuditoria } from "@/lib/auditoria"
 
 export const dynamic = "force-dynamic"
 
@@ -51,17 +52,15 @@ async function auditar(comunidadId: string | null, usuarioId: string, tipoAccion
     return
   }
   try {
-    await prisma.eventoAuditoria.create({
-      data: {
-        id: randomUUID(),
-        comunidadId,
-        timestamp: new Date().toISOString(),
-        usuario: usuarioId,
-        categoria: "privacidad",
-        tipoAccion,
-        referenciaId: usuarioId,
-        descripcion,
-      },
+    await registrarEventoAuditoria({
+      id: randomUUID(),
+      comunidadId,
+      timestamp: new Date().toISOString(),
+      usuario: usuarioId,
+      categoria: "privacidad",
+      tipoAccion,
+      referenciaId: usuarioId,
+      descripcion,
     })
   } catch {
     // intencional: la auditoría nunca bloquea el derecho ARCO

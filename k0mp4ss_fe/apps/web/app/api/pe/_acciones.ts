@@ -24,6 +24,7 @@ import { puede, type Accion } from "@/lib/authz"
 import type { EvaluacionPE, HoraExtraPE } from "@/lib/schemas"
 import { prisma } from "@/lib/prisma"
 import { generarId } from "@/lib/id-utils"
+import { registrarEventoAuditoria, type ClienteAuditoria } from "@/lib/auditoria"
 import {
   jsonError,
   withComunidadScope,
@@ -117,10 +118,10 @@ export function registrarEventoPE(
   tipoAccion: string,
   referenciaId: string,
   descripcion: string,
-  client: Pick<typeof prisma, "eventoAuditoria"> = prisma
+  client: ClienteAuditoria = prisma
 ): Promise<unknown> {
-  return client.eventoAuditoria.create({
-    data: {
+  return registrarEventoAuditoria(
+    {
       id: generarId("ev"),
       comunidadId: scope.comunidadId,
       timestamp: new Date().toISOString(),
@@ -130,5 +131,6 @@ export function registrarEventoPE(
       referenciaId,
       descripcion,
     },
-  })
+    client
+  )
 }

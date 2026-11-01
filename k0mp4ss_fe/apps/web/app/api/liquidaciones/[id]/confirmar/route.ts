@@ -13,6 +13,7 @@ import { EgresoFISchema } from "@/lib/schemas"
 import { puede } from "@/lib/authz"
 import { prisma } from "@/lib/prisma"
 import { logger } from "@/lib/logger"
+import { registrarEventoAuditoria } from "@/lib/auditoria"
 import {
   jsonError,
   withComunidadScope,
@@ -164,17 +165,15 @@ export async function POST(
       })
       adelantosAplicados = legado.count
     }
-    await prisma.eventoAuditoria.create({
-      data: {
-        id: randomUUID(),
-        comunidadId: scope.comunidadId,
-        timestamp: new Date().toISOString(),
-        usuario: scope.usuarioId,
-        categoria: "PL",
-        tipoAccion: "PL_EXPENSE_SYNC",
-        referenciaId: id,
-        descripcion: `Liquidación ${liquidacion.folio} CONFIRMADA: egreso ${egreso.folio} de $${egreso.monto.toLocaleString("es-CL")} imputado a ${fondoGC.nombre} (categoría Sueldos); ${adelantosAplicados} adelanto(s) descontado(s).`,
-      },
+    await registrarEventoAuditoria({
+      id: randomUUID(),
+      comunidadId: scope.comunidadId,
+      timestamp: new Date().toISOString(),
+      usuario: scope.usuarioId,
+      categoria: "PL",
+      tipoAccion: "PL_EXPENSE_SYNC",
+      referenciaId: id,
+      descripcion: `Liquidación ${liquidacion.folio} CONFIRMADA: egreso ${egreso.folio} de $${egreso.monto.toLocaleString("es-CL")} imputado a ${fondoGC.nombre} (categoría Sueldos); ${adelantosAplicados} adelanto(s) descontado(s).`,
     })
     return Response.json({ ok: true, egresoId: egreso.id })
   } catch (e) {

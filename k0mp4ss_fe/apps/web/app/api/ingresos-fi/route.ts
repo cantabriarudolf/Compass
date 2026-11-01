@@ -9,6 +9,7 @@ import { puede } from "@/lib/authz"
 import { prisma } from "@/lib/prisma"
 import { logger } from "@/lib/logger"
 import { generarId } from "@/lib/id-utils"
+import { registrarEventoAuditoria } from "@/lib/auditoria"
 import { createCrudHandlers, type CrudDelegate } from "@/lib/api/crud-factory"
 import {
   jsonError,
@@ -105,17 +106,15 @@ export async function POST(req: Request): Promise<Response> {
     // Auditoría `FI_INGRESO_REGISTRADO` (categoría FI): se emite después de la
     // escritura y nunca la bloquea (patrón de las rutas que auditan a mano).
     try {
-      await prisma.eventoAuditoria.create({
-        data: {
-          id: generarId("ev"),
-          comunidadId: scope.comunidadId,
-          timestamp: new Date().toISOString(),
-          usuario: scope.usuarioId,
-          categoria: "FI",
-          tipoAccion: "FI_INGRESO_REGISTRADO",
-          referenciaId: record.id,
-          descripcion: `Ingreso registrado en el fondo ${record.fondoId}: $${record.monto.toLocaleString("es-CL")} (${record.concepto}), fecha ${record.fecha}.`,
-        },
+      await registrarEventoAuditoria({
+        id: generarId("ev"),
+        comunidadId: scope.comunidadId,
+        timestamp: new Date().toISOString(),
+        usuario: scope.usuarioId,
+        categoria: "FI",
+        tipoAccion: "FI_INGRESO_REGISTRADO",
+        referenciaId: record.id,
+        descripcion: `Ingreso registrado en el fondo ${record.fondoId}: $${record.monto.toLocaleString("es-CL")} (${record.concepto}), fecha ${record.fecha}.`,
       })
     } catch (e) {
       logger.error({ err: e }, "[api/ingresos-fi] no se pudo registrar FI_INGRESO_REGISTRADO")

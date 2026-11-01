@@ -21,6 +21,7 @@
 import { puede, type Accion } from "@/lib/authz"
 import { prisma } from "@/lib/prisma"
 import { generarId } from "@/lib/id-utils"
+import { registrarEventoAuditoria, type ClienteAuditoria } from "@/lib/auditoria"
 import type { CanalCobranzaFI } from "@/lib/schemas"
 import {
   jsonError,
@@ -158,10 +159,10 @@ export function registrarEventoCobranza(
   tipoAccion: string,
   referenciaId: string,
   descripcion: string,
-  client: Pick<typeof prisma, "eventoAuditoria"> = prisma
+  client: ClienteAuditoria = prisma
 ): Promise<unknown> {
-  return client.eventoAuditoria.create({
-    data: {
+  return registrarEventoAuditoria(
+    {
       id: generarId("ev"),
       comunidadId: scope.comunidadId,
       timestamp: new Date().toISOString(),
@@ -171,7 +172,8 @@ export function registrarEventoCobranza(
       referenciaId,
       descripcion,
     },
-  })
+    client
+  )
 }
 
 /** Formato CLP usado en los textos de la gestión (paridad con la UI). */

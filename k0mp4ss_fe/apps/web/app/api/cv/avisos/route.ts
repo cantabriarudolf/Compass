@@ -16,6 +16,7 @@ import { withComunidadScope } from "@/lib/api/with-comunidad-scope"
 import { hoyISO } from "@/lib/date-utils"
 import { generarId } from "@/lib/id-utils"
 import { logger } from "@/lib/logger"
+import { registrarEventosAuditoria } from "@/lib/auditoria"
 
 const handlers = createCrudHandlers({
   model: delegado(prisma.avisoCV),
@@ -58,8 +59,14 @@ async function archivarVencidosAlLeer(): Promise<void> {
     data: { estado: "archivado", fechaArchivado: hoy },
   })
 
-  await prisma.eventoAuditoria.createMany({
-    data: vencidos.map((v) => ({
+  // INV-03: cada evento pasa por la única puerta (`lib/auditoria.ts`), que
+  // valida la forma mínima antes de escribir. Sigue siendo best-effort: el
+  // llamador captura el fallo y la lista responde igual.
+  //
+  // Se emiten en UNA sentencia (`registrarEventosAuditoria`): validar-todos-y-
+  // crear-de-una deja el efecto atómico, como el `createMany` que había antes.
+  await registrarEventosAuditoria(
+    vencidos.map((v) => ({
       id: generarId("ev"),
       comunidadId: scope.comunidadId,
       timestamp: new Date().toISOString(),
@@ -68,8 +75,8 @@ async function archivarVencidosAlLeer(): Promise<void> {
       tipoAccion: "CV_ARCHIVED",
       referenciaId: v.id,
       descripcion: `Aviso "${v.titulo}" expiró automáticamente (${v.expiresAt}) y salió del carrusel.`,
-    })),
-  })
+    }))
+  )
 }
 
 export async function GET(req: Request): Promise<Response> {

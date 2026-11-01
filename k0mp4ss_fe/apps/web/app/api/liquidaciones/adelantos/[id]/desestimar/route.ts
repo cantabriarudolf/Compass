@@ -12,6 +12,7 @@
 import { prisma } from "@/lib/prisma"
 import { logger } from "@/lib/logger"
 import { generarId } from "@/lib/id-utils"
+import { registrarEventoAuditoria } from "@/lib/auditoria"
 import { puede } from "@/lib/authz"
 import {
   jsonError,
@@ -52,8 +53,8 @@ export async function POST(
         where: { id },
         data: { estado: "desestimado", saldo: 0 },
       })
-      await tx.eventoAuditoria.create({
-        data: {
+      await registrarEventoAuditoria(
+        {
           id: generarId("ev"),
           comunidadId: scope.comunidadId,
           timestamp: new Date().toISOString(),
@@ -63,7 +64,8 @@ export async function POST(
           referenciaId: id,
           descripcion: `Adelanto ${adelanto.folio} (${adelanto.pacto}) desestimado: se anula el saldo vivo de $${Math.round(adelanto.saldo ?? 0).toLocaleString("es-CL")} sin borrar el registro.`,
         },
-      })
+        tx
+      )
     })
 
     return Response.json({ ok: true, id, estado: "desestimado" })

@@ -21,6 +21,7 @@ import {
 import { puede } from "@/lib/authz"
 import { prisma } from "@/lib/prisma"
 import { logger } from "@/lib/logger"
+import { registrarEventoAuditoria } from "@/lib/auditoria"
 import { calcularLiquidacion } from "@/lib/pl-utils"
 import {
   adelantoImputableAlPeriodo,
@@ -390,17 +391,15 @@ export async function POST(req: Request): Promise<Response> {
         data: { liquidacionPLReferencia: id },
       })
     }
-    await prisma.eventoAuditoria.create({
-      data: {
-        id: randomUUID(),
-        comunidadId: scope.comunidadId,
-        timestamp: new Date().toISOString(),
-        usuario: scope.usuarioId,
-        categoria: "PL",
-        tipoAccion: "PL_GENERATE_PAYSLIP",
-        referenciaId: id,
-        descripcion: `Liquidación ${folio} generada para ${trabajador.nombres} ${trabajador.apellidos} (${input.periodo}): haberes $${calculo.totalHaberes.toLocaleString("es-CL")}, líquido a pagar $${(calculo.alcanceLiquido - planAdelantos.descuentoTotal).toLocaleString("es-CL")}.${planAdelantos.descuentoTotal > 0 ? ` Adelantos descontados: $${planAdelantos.descuentoTotal.toLocaleString("es-CL")} (anticipo $${planAdelantos.descuentoAnticipo.toLocaleString("es-CL")}, préstamo $${planAdelantos.descuentoPrestamo.toLocaleString("es-CL")}; topes 15% $${planAdelantos.topePrestamo.toLocaleString("es-CL")} / 45% $${planAdelantos.topeConjunto.toLocaleString("es-CL")}).` : ""}${planAdelantos.arrastreTotal > 0 ? ` ALERTA: arrastra $${planAdelantos.arrastreTotal.toLocaleString("es-CL")} al período siguiente.` : ""}`,
-      },
+    await registrarEventoAuditoria({
+      id: randomUUID(),
+      comunidadId: scope.comunidadId,
+      timestamp: new Date().toISOString(),
+      usuario: scope.usuarioId,
+      categoria: "PL",
+      tipoAccion: "PL_GENERATE_PAYSLIP",
+      referenciaId: id,
+      descripcion: `Liquidación ${folio} generada para ${trabajador.nombres} ${trabajador.apellidos} (${input.periodo}): haberes $${calculo.totalHaberes.toLocaleString("es-CL")}, líquido a pagar $${(calculo.alcanceLiquido - planAdelantos.descuentoTotal).toLocaleString("es-CL")}.${planAdelantos.descuentoTotal > 0 ? ` Adelantos descontados: $${planAdelantos.descuentoTotal.toLocaleString("es-CL")} (anticipo $${planAdelantos.descuentoAnticipo.toLocaleString("es-CL")}, préstamo $${planAdelantos.descuentoPrestamo.toLocaleString("es-CL")}; topes 15% $${planAdelantos.topePrestamo.toLocaleString("es-CL")} / 45% $${planAdelantos.topeConjunto.toLocaleString("es-CL")}).` : ""}${planAdelantos.arrastreTotal > 0 ? ` ALERTA: arrastra $${planAdelantos.arrastreTotal.toLocaleString("es-CL")} al período siguiente.` : ""}`,
     })
     return Response.json(record, { status: 201 })
   } catch (e) {

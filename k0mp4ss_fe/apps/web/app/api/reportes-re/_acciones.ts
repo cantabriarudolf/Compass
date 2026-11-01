@@ -31,6 +31,7 @@ import { puede, type Accion } from "@/lib/authz"
 import { generarId } from "@/lib/id-utils"
 import { hoyISO } from "@/lib/date-utils"
 import { prisma } from "@/lib/prisma"
+import { registrarEventoAuditoria, type ClienteAuditoria } from "@/lib/auditoria"
 import { saldoPendiente } from "@/lib/finanzas-utils"
 import type { BloqueReporteRE, ReporteRE } from "@/lib/schemas"
 import {
@@ -92,10 +93,10 @@ export function registrarEventoRE(
   tipoAccion: string,
   referenciaId: string,
   descripcion: string,
-  client: Pick<typeof prisma, "eventoAuditoria"> = prisma
+  client: ClienteAuditoria = prisma
 ): Promise<unknown> {
-  return client.eventoAuditoria.create({
-    data: {
+  return registrarEventoAuditoria(
+    {
       id: generarId("ev"),
       comunidadId: scope.comunidadId,
       timestamp: new Date().toISOString(),
@@ -105,7 +106,8 @@ export function registrarEventoRE(
       referenciaId,
       descripcion,
     },
-  })
+    client
+  )
 }
 
 /** Periodo del informe (AAAA-MM); por defecto el mes en curso. */

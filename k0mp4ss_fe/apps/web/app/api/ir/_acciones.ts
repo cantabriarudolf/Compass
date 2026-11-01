@@ -16,6 +16,7 @@
 import { puede } from "@/lib/authz"
 import { prisma } from "@/lib/prisma"
 import { generarId } from "@/lib/id-utils"
+import { registrarEventoAuditoria, type ClienteAuditoria } from "@/lib/auditoria"
 import {
   jsonError,
   withComunidadScope,
@@ -99,10 +100,10 @@ export function registrarEventoIR(
   tipoAccion: string,
   referenciaId: string,
   descripcion: string,
-  client: Pick<typeof prisma, "eventoAuditoria"> = prisma
+  client: ClienteAuditoria = prisma
 ): Promise<unknown> {
-  return client.eventoAuditoria.create({
-    data: {
+  return registrarEventoAuditoria(
+    {
       id: generarId("ev"),
       comunidadId: scope.comunidadId,
       timestamp: new Date().toISOString(),
@@ -112,7 +113,8 @@ export function registrarEventoIR(
       referenciaId,
       descripcion,
     },
-  })
+    client
+  )
 }
 
 /**
@@ -131,7 +133,7 @@ export async function registrarAlarmaStockBajo(
   },
   stockPrevio: number,
   stockNuevo: number,
-  client: Pick<typeof prisma, "eventoAuditoria"> = prisma
+  client: ClienteAuditoria = prisma
 ): Promise<void> {
   const umbral = recurso.umbralCritico
   if (!recurso.esCritico || umbral === null) return

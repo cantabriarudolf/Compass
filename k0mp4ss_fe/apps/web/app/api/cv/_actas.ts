@@ -19,6 +19,7 @@
 import { puede, type Accion } from "@/lib/authz"
 import { prisma } from "@/lib/prisma"
 import { generarId } from "@/lib/id-utils"
+import { registrarEventoAuditoria, type ClienteAuditoria } from "@/lib/auditoria"
 import {
   jsonError,
   withComunidadScope,
@@ -83,10 +84,10 @@ export function registrarEventoCV(
   tipoAccion: string,
   referenciaId: string,
   descripcion: string,
-  client: Pick<typeof prisma, "eventoAuditoria"> = prisma
+  client: ClienteAuditoria = prisma
 ): Promise<unknown> {
-  return client.eventoAuditoria.create({
-    data: {
+  return registrarEventoAuditoria(
+    {
       id: generarId("ev"),
       comunidadId: scope.comunidadId,
       timestamp: new Date().toISOString(),
@@ -96,7 +97,8 @@ export function registrarEventoCV(
       referenciaId,
       descripcion,
     },
-  })
+    client
+  )
 }
 
 /** Fila mínima de `actas_publicadas_cv` que se serializa al cliente. */

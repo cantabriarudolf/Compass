@@ -14,6 +14,7 @@ import { puede } from "@/lib/authz"
 import { prisma } from "@/lib/prisma"
 import { logger } from "@/lib/logger"
 import { generarId } from "@/lib/id-utils"
+import { registrarEventoAuditoria } from "@/lib/auditoria"
 import { createCrudHandlers, delegado } from "@/lib/api/crud-factory"
 import { createPutMerge } from "@/lib/api/put-merge"
 import { withComunidadScope } from "@/lib/api/with-comunidad-scope"
@@ -69,17 +70,15 @@ export async function PUT(req: Request, ctx: Ctx): Promise<Response> {
       const entradasHistorial = Array.isArray(cierre.historialCambios)
         ? cierre.historialCambios.length
         : 0
-      await prisma.eventoAuditoria.create({
-        data: {
-          id: generarId("ev"),
-          comunidadId: scope.comunidadId,
-          timestamp: new Date().toISOString(),
-          usuario: scope.usuarioId,
-          categoria: "PE",
-          tipoAccion: "PE_CIERRE_EDITADO",
-          referenciaId: id,
-          descripcion: `Cierre de turno del ${cierre.fecha ?? "?"} ${cierre.hora ?? ""} editado: novedades "${(cierre.novedadesGenerales ?? "").slice(0, 200)}", ${entradasHistorial} entrada(s) en el historial de cambios.`,
-        },
+      await registrarEventoAuditoria({
+        id: generarId("ev"),
+        comunidadId: scope.comunidadId,
+        timestamp: new Date().toISOString(),
+        usuario: scope.usuarioId,
+        categoria: "PE",
+        tipoAccion: "PE_CIERRE_EDITADO",
+        referenciaId: id,
+        descripcion: `Cierre de turno del ${cierre.fecha ?? "?"} ${cierre.hora ?? ""} editado: novedades "${(cierre.novedadesGenerales ?? "").slice(0, 200)}", ${entradasHistorial} entrada(s) en el historial de cambios.`,
       })
     }
   } catch (e) {

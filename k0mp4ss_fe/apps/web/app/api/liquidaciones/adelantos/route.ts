@@ -29,6 +29,7 @@ import { puede } from "@/lib/authz"
 import { prisma } from "@/lib/prisma"
 import { logger } from "@/lib/logger"
 import { generarId } from "@/lib/id-utils"
+import { registrarEventoAuditoria } from "@/lib/auditoria"
 import { createCrudHandlers, delegado } from "@/lib/api/crud-factory"
 import {
   jsonError,
@@ -278,8 +279,8 @@ export async function POST(req: Request): Promise<Response> {
       const creado = await tx.adelantoPL.create({
         data: { ...candidato, comunidadId: scope.comunidadId } as never,
       })
-      await tx.eventoAuditoria.create({
-        data: {
+      await registrarEventoAuditoria(
+        {
           id: generarId("ev"),
           comunidadId: scope.comunidadId,
           timestamp: new Date().toISOString(),
@@ -289,7 +290,8 @@ export async function POST(req: Request): Promise<Response> {
           referenciaId: id,
           descripcion: `Adelanto ${folio} (${pacto}) de $${monto.toLocaleString("es-CL")} entregado a ${trabajador.nombres} ${trabajador.apellidos}: ${input.glosa}. Imputación ${periodoImputacion}; bruta de referencia $${Math.round(bruta).toLocaleString("es-CL")} (${fuente}).${input.acuerdoEscritoRef ? ` Acuerdo escrito: ${input.acuerdoEscritoRef}.` : ""}`,
         },
-      })
+        tx
+      )
       await tx.notificacion.create({
         data: {
           id: generarId("not"),

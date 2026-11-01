@@ -13,6 +13,7 @@ import { puede } from "@/lib/authz"
 import { prisma } from "@/lib/prisma"
 import { logger } from "@/lib/logger"
 import { generarId } from "@/lib/id-utils"
+import { registrarEventoAuditoria } from "@/lib/auditoria"
 import { hoyISO, saldoFondo } from "@/lib/finanzas-utils"
 import { siguienteFolioFE } from "@/app/api/egresos-fi/route"
 import {
@@ -152,17 +153,15 @@ export async function POST(req: Request, ctx: Ctx): Promise<Response> {
       } as never,
     })
 
-    await prisma.eventoAuditoria.create({
-      data: {
-        id: generarId("ev"),
-        comunidadId: scope.comunidadId,
-        timestamp: new Date().toISOString(),
-        usuario: scope.usuarioId,
-        categoria: "FI",
-        tipoAccion: "FI_FUND_WITHDRAWN",
-        referenciaId: egreso.id,
-        descripcion: `Retiro de $${monto.toLocaleString("es-CL")} desde ${fondo.nombre}: ${descripcion}${actaPublicada ? ` (aprobado en acta ${actaPublicada})` : ""}.`,
-      },
+    await registrarEventoAuditoria({
+      id: generarId("ev"),
+      comunidadId: scope.comunidadId,
+      timestamp: new Date().toISOString(),
+      usuario: scope.usuarioId,
+      categoria: "FI",
+      tipoAccion: "FI_FUND_WITHDRAWN",
+      referenciaId: egreso.id,
+      descripcion: `Retiro de $${monto.toLocaleString("es-CL")} desde ${fondo.nombre}: ${descripcion}${actaPublicada ? ` (aprobado en acta ${actaPublicada})` : ""}.`,
     })
 
     return Response.json({ ok: true, egresoId: egreso.id })

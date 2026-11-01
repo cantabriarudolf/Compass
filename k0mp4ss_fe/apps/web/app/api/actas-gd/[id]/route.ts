@@ -15,6 +15,7 @@ import { logger } from "@/lib/logger"
 import { jsonError, withComunidadScope } from "@/lib/api/with-comunidad-scope"
 import { puedeGestionarActas, residentesVenActas } from "@/lib/api/gd-guard"
 import { generarId } from "@/lib/id-utils"
+import { registrarEventoAuditoria } from "@/lib/auditoria"
 import {
   errorActas,
   limpiarPayloadActa,
@@ -188,9 +189,11 @@ export async function DELETE(req: Request, ctx: CtxTipo): Promise<Response> {
         data: { estado: "desestimada" },
       })
       // Auditoría (categoría GD, patrón de periodos-directiva; nunca bloquea).
+      // INV-03: única puerta de escritura (`lib/auditoria.ts`), con el `tx` para
+      // que el evento siga siendo parte de la transacción.
       try {
-        await tx.eventoAuditoria.create({
-          data: {
+        await registrarEventoAuditoria(
+          {
             id: generarId("ev"),
             comunidadId: scope.comunidadId,
             timestamp: new Date().toISOString(),
@@ -202,7 +205,8 @@ export async function DELETE(req: Request, ctx: CtxTipo): Promise<Response> {
               ? `Acta GD desestimada (${record.estado}): ${motivo}.`
               : `Acta GD desestimada (${record.estado}) con copia en el archivo.`,
           },
-        })
+          tx
+        )
       } catch (e) {
         logger.error(
           { err: e },

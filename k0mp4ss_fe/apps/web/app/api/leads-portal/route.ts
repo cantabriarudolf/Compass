@@ -14,6 +14,7 @@ import { puede } from "@/lib/authz"
 import { prisma } from "@/lib/prisma"
 import { logger } from "@/lib/logger"
 import { createCrudHandlers } from "@/lib/api/crud-factory"
+import { registrarEventoAuditoria } from "@/lib/auditoria"
 import {
   jsonError,
   withComunidadScope,
@@ -109,17 +110,15 @@ export async function POST(req: Request): Promise<Response> {
           leida: false,
         },
       })
-      await prisma.eventoAuditoria.create({
-        data: {
-          id: randomUUID(),
-          comunidadId: scope.comunidadId,
-          timestamp: new Date().toISOString(),
-          usuario: scope.usuarioId,
-          categoria: "PI",
-          tipoAccion: "PI_LEAD_CONTACT",
-          referenciaId: id,
-          descripcion: `Interés registrado en ${ref} por ${datos.nombreContacto}.`,
-        },
+      await registrarEventoAuditoria({
+        id: randomUUID(),
+        comunidadId: scope.comunidadId,
+        timestamp: new Date().toISOString(),
+        usuario: scope.usuarioId,
+        categoria: "PI",
+        tipoAccion: "PI_LEAD_CONTACT",
+        referenciaId: id,
+        descripcion: `Interés registrado en ${ref} por ${datos.nombreContacto}.`,
       })
     }
 

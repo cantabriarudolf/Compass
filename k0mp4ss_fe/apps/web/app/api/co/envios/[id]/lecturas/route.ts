@@ -17,6 +17,7 @@ import { puede } from "@/lib/authz"
 import { prisma } from "@/lib/prisma"
 import { logger } from "@/lib/logger"
 import { generarId } from "@/lib/id-utils"
+import { registrarEventoAuditoria } from "@/lib/auditoria"
 import { jsonError, withComunidadScope } from "@/lib/api/with-comunidad-scope"
 import { registrarDenegacionCo } from "@/app/api/co/_lib/denegacion"
 
@@ -50,17 +51,15 @@ export async function GET(_req: Request, ctx: Ctx): Promise<Response> {
     })
 
     try {
-      await prisma.eventoAuditoria.create({
-        data: {
-          id: generarId("ev"),
-          comunidadId: scope.comunidadId,
-          timestamp: new Date().toISOString(),
-          usuario: scope.usuarioId,
-          categoria: "CO",
-          tipoAccion: "CO_LECTURA_CONSULTADA",
-          referenciaId: id,
-          descripcion: `Consulta del desglose de lecturas del envío "${envio.asunto}" por el rol ${scope.rol}: ${lecturas.filter((l) => l.leidoEn !== null).length} de ${lecturas.length} destinatarios con lectura registrada.`,
-        },
+      await registrarEventoAuditoria({
+        id: generarId("ev"),
+        comunidadId: scope.comunidadId,
+        timestamp: new Date().toISOString(),
+        usuario: scope.usuarioId,
+        categoria: "CO",
+        tipoAccion: "CO_LECTURA_CONSULTADA",
+        referenciaId: id,
+        descripcion: `Consulta del desglose de lecturas del envío "${envio.asunto}" por el rol ${scope.rol}: ${lecturas.filter((l) => l.leidoEn !== null).length} de ${lecturas.length} destinatarios con lectura registrada.`,
       })
     } catch (e) {
       // La auditoría nunca bloquea la consulta autorizada; se deja rastro en logs.

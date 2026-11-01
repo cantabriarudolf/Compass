@@ -11,6 +11,7 @@
 import { puede } from "@/lib/authz"
 import { prisma } from "@/lib/prisma"
 import { generarId } from "@/lib/id-utils"
+import { registrarEventoAuditoria, type ClienteAuditoria } from "@/lib/auditoria"
 import { saldoFondo } from "@/lib/finanzas-utils"
 import type { PagoCobroFI } from "@/lib/schemas"
 import {
@@ -75,10 +76,10 @@ export function registrarEventoMT(
   tipoAccion: string,
   referenciaId: string,
   descripcion: string,
-  client: Pick<typeof prisma, "eventoAuditoria"> = prisma
+  client: ClienteAuditoria = prisma
 ): Promise<unknown> {
-  return client.eventoAuditoria.create({
-    data: {
+  return registrarEventoAuditoria(
+    {
       id: generarId("ev"),
       comunidadId: scope.comunidadId,
       timestamp: new Date().toISOString(),
@@ -88,7 +89,8 @@ export function registrarEventoMT(
       referenciaId,
       descripcion,
     },
-  })
+    client
+  )
 }
 
 /** Siguiente folio `MT-####` correlativo dentro de la comunidad (espejo `saveTrabajoMT`). */

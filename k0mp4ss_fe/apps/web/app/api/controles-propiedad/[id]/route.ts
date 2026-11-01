@@ -22,6 +22,7 @@ import {
 } from "../route"
 import { generarId } from "@/lib/id-utils"
 import { logger } from "@/lib/logger"
+import { registrarEventoAuditoria } from "@/lib/auditoria"
 
 type CtxTipo = { params: Promise<{ id: string }> }
 
@@ -191,8 +192,8 @@ export async function DELETE(req: Request, ctx: CtxTipo): Promise<Response> {
       })
       // Auditoría (categoría AD, patrón de periodos-directiva; nunca bloquea).
       try {
-        await tx.eventoAuditoria.create({
-          data: {
+        await registrarEventoAuditoria(
+          {
             id: generarId("ev"),
             comunidadId: scope.comunidadId,
             timestamp: new Date().toISOString(),
@@ -204,7 +205,8 @@ export async function DELETE(req: Request, ctx: CtxTipo): Promise<Response> {
               ? `Control de propiedad desestimado (unidad ${record.unidadId}): ${motivo}.`
               : `Control de propiedad desestimado (unidad ${record.unidadId}) con copia en el archivo.`,
           },
-        })
+          tx
+        )
       } catch (e) {
         logger.error(
           { err: e },

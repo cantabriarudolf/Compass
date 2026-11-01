@@ -11,6 +11,7 @@ import { puede } from "@/lib/authz"
 import { prisma } from "@/lib/prisma"
 import { logger } from "@/lib/logger"
 import { generarId } from "@/lib/id-utils"
+import { registrarEventoAuditoria } from "@/lib/auditoria"
 import {
   diasDeAtraso,
   hoyISO,
@@ -104,17 +105,15 @@ export async function POST(req: Request, ctx: Ctx): Promise<Response> {
       data: { moras: [...moras, validacion.data] as never },
     })
 
-    await prisma.eventoAuditoria.create({
-      data: {
-        id: generarId("ev"),
-        comunidadId: scope.comunidadId,
-        timestamp: new Date().toISOString(),
-        usuario: scope.usuarioId,
-        categoria: "FI",
-        tipoAccion: "FI_MORA_APPLIED",
-        referenciaId: id,
-        descripcion: `Mora aplicada a ${cobro.descripcion}: $${monto.toLocaleString("es-CL")} (${dias} día(s) de atraso, tasa ${tasaMensualPct}% mensual pro-rata).`,
-      },
+    await registrarEventoAuditoria({
+      id: generarId("ev"),
+      comunidadId: scope.comunidadId,
+      timestamp: new Date().toISOString(),
+      usuario: scope.usuarioId,
+      categoria: "FI",
+      tipoAccion: "FI_MORA_APPLIED",
+      referenciaId: id,
+      descripcion: `Mora aplicada a ${cobro.descripcion}: $${monto.toLocaleString("es-CL")} (${dias} día(s) de atraso, tasa ${tasaMensualPct}% mensual pro-rata).`,
     })
 
     return Response.json({ ok: true })

@@ -10,6 +10,7 @@ import { puede } from "@/lib/authz"
 import { prisma } from "@/lib/prisma"
 import { logger } from "@/lib/logger"
 import { generarId } from "@/lib/id-utils"
+import { registrarEventoAuditoria } from "@/lib/auditoria"
 import { createCrudHandlers, delegado } from "@/lib/api/crud-factory"
 import { createPutMerge } from "@/lib/api/put-merge"
 import { withComunidadScope } from "@/lib/api/with-comunidad-scope"
@@ -71,17 +72,15 @@ export async function PUT(req: Request, ctx: Ctx): Promise<Response> {
     const scopeResult = await withComunidadScope()
     if (scopeResult.ok) {
       const { scope } = scopeResult
-      await prisma.eventoAuditoria.create({
-        data: {
-          id: generarId("ev"),
-          comunidadId: scope.comunidadId,
-          timestamp: new Date().toISOString(),
-          usuario: scope.usuarioId,
-          categoria: "IR",
-          tipoAccion: "IR_ASSET_REPAIR",
-          referenciaId: id,
-          descripcion: `${recurso.codigo ? `${recurso.codigo} · ` : ""}${recurso.nombre ?? "Activo IR"} (${recurso.categoria ?? "sin categoría"}) pasa a Reparación desde ${previo?.estadoActivo ?? "disponible"}.`,
-        },
+      await registrarEventoAuditoria({
+        id: generarId("ev"),
+        comunidadId: scope.comunidadId,
+        timestamp: new Date().toISOString(),
+        usuario: scope.usuarioId,
+        categoria: "IR",
+        tipoAccion: "IR_ASSET_REPAIR",
+        referenciaId: id,
+        descripcion: `${recurso.codigo ? `${recurso.codigo} · ` : ""}${recurso.nombre ?? "Activo IR"} (${recurso.categoria ?? "sin categoría"}) pasa a Reparación desde ${previo?.estadoActivo ?? "disponible"}.`,
       })
     }
   } catch (e) {

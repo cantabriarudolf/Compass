@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { puede } from "@/lib/authz"
+import { upsertEventoAuditoria } from "@/lib/auditoria"
 
 export const dynamic = "force-dynamic"
 
@@ -96,6 +97,12 @@ export async function POST(request: Request) {
   // Filtrar solo eventos con forma válida; si alguno inválido, se rechaza el batch completo si todos inválidos?
   // Se persiste solo el delta válido; los inválidos no cuentan como persistidos. Si hay inválidos mezclados, se ignora inválido.
   const validos = eventosRaw.filter(esEventoValido)
+  // INV-03: los que no pasan la forma mínima NO se persisten; antes entraban
+  // igual y la bitácora quedaba sin contrato. Se devuelven por id para que el
+  // cliente sepa qué descartó (no se pierden en silencio).
+  const rechazados: string[] = eventosRaw
+    .filter((e) => !esEventoValido(e))
+    .map((e) => (e && typeof e === "object" ? String((e as { id?: unknown }).id ?? "(sin id)") : "(sin id)"))
   if (validos.length === 0) {
     return NextResponse.json({ error: "Ningún evento válido en el batch" }, { status: 400 })
   }
@@ -103,33 +110,29 @@ export async function POST(request: Request) {
   let persistidos = 0
   for (const ev of validos) {
     try {
-      await prisma.eventoAuditoria.upsert({
-        where: { id: ev.id },
-        update: {
-          comunidadId: cid,
-          timestamp: ev.timestamp,
-          usuario: ev.usuario,
-          categoria: ev.categoria,
-          tipoAccion: ev.tipoAccion,
-          referenciaId: ev.referenciaId,
-          descripcion: ev.descripcion,
-        },
-        create: {
-          id: ev.id,
-          comunidadId: cid,
-          timestamp: ev.timestamp,
-          usuario: ev.usuario,
-          categoria: ev.categoria,
-          tipoAccion: ev.tipoAccion,
-          referenciaId: ev.referenciaId,
-          descripcion: ev.descripcion,
-        },
+      // INV-03: la ingesta pasa por la única puerta (`upsert` validado contra
+      // `EventoAuditoriaSchema`), que conserva la idempotencia por id.
+      await upsertEventoAuditoria({
+        id: ev.id,
+        comunidadId: cid,
+        timestamp: ev.timestamp,
+        usuario: ev.usuario,
+        categoria: ev.categoria,
+        tipoAccion: ev.tipoAccion,
+        referenciaId: ev.referenciaId,
+        descripcion: ev.descripcion,
       })
       persistidos += 1
     } catch {
-      // No bloquea el batch; se cuenta solo los persistidos con éxito
+      // No bloquea el batch: el evento inválido se reporta y sigue el resto.
+      rechazados.push(ev.id)
     }
   }
 
-  return NextResponse.json({ ok: true, recibidos: eventosRaw.length, persistidos })
+  return NextResponse.json({
+    ok: true,
+    recibidos: eventosRaw.length,
+    persistidos,
+    rechazados,
+  })
 }

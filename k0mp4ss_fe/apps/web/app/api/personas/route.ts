@@ -25,6 +25,7 @@ import {
   personaConRutDuplicado,
 } from "@/lib/invariantes/persona"
 import { randomUUID } from "node:crypto"
+import { registrarEventoAuditoria } from "@/lib/auditoria"
 import {
   jsonError,
   withComunidadScope,
@@ -276,17 +277,15 @@ export async function auditarPodaGobernanza(
   if (roles.includes("directiva")) return
 
   try {
-    await prisma.eventoAuditoria.create({
-      data: {
-        id: randomUUID(),
-        comunidadId: scope.comunidadId,
-        timestamp: new Date().toISOString(),
-        usuario: scope.usuarioId,
-        categoria: "AD",
-        tipoAccion: "AD_DIRECTIVA_DESVINCULADA",
-        referenciaId: actual.id,
-        descripcion: `Ficha de gobernanza depurada de ${actual.nombreCompleto}: rol directiva removido.`,
-      },
+    await registrarEventoAuditoria({
+      id: randomUUID(),
+      comunidadId: scope.comunidadId,
+      timestamp: new Date().toISOString(),
+      usuario: scope.usuarioId,
+      categoria: "AD",
+      tipoAccion: "AD_DIRECTIVA_DESVINCULADA",
+      referenciaId: actual.id,
+      descripcion: `Ficha de gobernanza depurada de ${actual.nombreCompleto}: rol directiva removido.`,
     })
   } catch (e) {
     // intencional: la auditoría nunca bloquea la escritura (patrón mis-datos).

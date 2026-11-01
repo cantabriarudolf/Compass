@@ -10,6 +10,7 @@ import { puede } from "@/lib/authz"
 import { prisma } from "@/lib/prisma"
 import { logger } from "@/lib/logger"
 import { generarId } from "@/lib/id-utils"
+import { registrarEventoAuditoria } from "@/lib/auditoria"
 import { createCrudHandlers, delegado } from "@/lib/api/crud-factory"
 import { createPutMerge } from "@/lib/api/put-merge"
 import { withComunidadScope } from "@/lib/api/with-comunidad-scope"
@@ -48,17 +49,15 @@ export async function GET(req: Request, ctx: Ctx): Promise<Response> {
     const scopeResult = await withComunidadScope()
     if (scopeResult.ok) {
       const { scope } = scopeResult
-      await prisma.eventoAuditoria.create({
-        data: {
-          id: generarId("ev"),
-          comunidadId: scope.comunidadId,
-          timestamp: new Date().toISOString(),
-          usuario: scope.usuarioId,
-          categoria: "CO",
-          tipoAccion: "CO_DOC_DOWNLOAD",
-          referenciaId: id,
-          descripcion: `Descarga del documento "${documento.nombre ?? id}" (${documento.tipoMime ?? "tipo desconocido"}, ${documento.tamanoKB ?? 0} KB) de la biblioteca comunal.`,
-        },
+      await registrarEventoAuditoria({
+        id: generarId("ev"),
+        comunidadId: scope.comunidadId,
+        timestamp: new Date().toISOString(),
+        usuario: scope.usuarioId,
+        categoria: "CO",
+        tipoAccion: "CO_DOC_DOWNLOAD",
+        referenciaId: id,
+        descripcion: `Descarga del documento "${documento.nombre ?? id}" (${documento.tipoMime ?? "tipo desconocido"}, ${documento.tamanoKB ?? 0} KB) de la biblioteca comunal.`,
       })
     }
   } catch (e) {

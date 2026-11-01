@@ -59,8 +59,8 @@ export async function POST(req: Request): Promise<Response> {
       personaId,
       `${persona.nombres} ${persona.apellidos} inicia turno (${jornada.nombre}).`
     )
-    // SAFETY: eventoAuditoria.create devuelve la fila creada; el helper lo tipa
-    // como unknown para no acoplarse al modelo completo.
+    // SAFETY: `registrarEventoAuditoria` (INV-03, única puerta de la bitácora)
+    // devuelve el evento validado; acá solo se lee su id.
     return Response.json({ ok: true, eventoId: (evento as { id: string }).id })
   } catch (e) {
     logger.error({ err: e }, "[api/pe/turnos/iniciar] error inesperado")
