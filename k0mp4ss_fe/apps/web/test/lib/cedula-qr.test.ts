@@ -20,6 +20,7 @@ import {
   centroEnCaja,
   extraerRunDeQr,
   lecturaEncuadrada,
+  marcoEnVideo,
   marcoGuia,
   type CajaVideo,
   type Marco,
@@ -220,6 +221,48 @@ describe("centroEnCaja (píxeles del video real a píxeles CSS del elemento)", (
     expect(centroEnCaja({ x: 10, y: 10 }, { ...CAJA_COMPLETA, altoReal: 0 })).toBeNull()
     expect(centroEnCaja({ x: 10, y: 10 }, { ...CAJA_COMPLETA, ancho: 0 })).toBeNull()
     expect(centroEnCaja({ x: 10, y: 10 }, { ...CAJA_COMPLETA, alto: 0 })).toBeNull()
+  })
+})
+
+describe("marcoEnVideo (recorte en píxeles nativos del video)", () => {
+  it("es la inversa del mapeo de object-cover: el marco CSS vuelve a píxeles nativos", () => {
+    // Caja 400x300 con video 640x480: escala 0.625 sin recorte.
+    const marco = marcoGuia(CAJA_COMPLETA)!
+    expect(marcoEnVideo(marco, CAJA_COMPLETA)).toEqual({ x: 128, y: 48, ancho: 384, alto: 384 })
+  })
+
+  it("ida y vuelta: las esquinas del recorte caen en las esquinas del marco CSS", () => {
+    const marco = marcoGuia(CAJA_COMPLETA)!
+    const recorte = marcoEnVideo(marco, CAJA_COMPLETA)!
+    expect(centroEnCaja({ x: recorte.x, y: recorte.y }, CAJA_COMPLETA)).toEqual({
+      x: marco.x,
+      y: marco.y,
+    })
+    expect(
+      centroEnCaja(
+        { x: recorte.x + recorte.ancho, y: recorte.y + recorte.alto },
+        CAJA_COMPLETA
+      )
+    ).toEqual({ x: marco.x + marco.ancho, y: marco.y + marco.alto })
+  })
+
+  it("compensa el recorte de object-cover en un video más ancho que la caja", () => {
+    const marco = marcoGuia(CAJA_RECORTADA)!
+    const recorte = marcoEnVideo(marco, CAJA_RECORTADA)!
+    // El marco arranca en y=0 de la caja, que ya está recortada 54 px arriba.
+    expect(recorte).toEqual({ x: 166.4, y: 86.4, ancho: 307.2, alto: 307.2 })
+    expect(centroEnCaja({ x: recorte.x, y: recorte.y }, CAJA_RECORTADA)).toEqual({
+      x: marco.x,
+      y: marco.y,
+    })
+  })
+
+  it("devuelve null sin dimensiones: no hay recorte que dibujar", () => {
+    const marco = marcoGuia(CAJA_COMPLETA)!
+    expect(marcoEnVideo(marco, { ...CAJA_COMPLETA, anchoReal: 0 })).toBeNull()
+    expect(marcoEnVideo(marco, { ...CAJA_COMPLETA, altoReal: 0 })).toBeNull()
+    expect(marcoEnVideo(marco, { ...CAJA_COMPLETA, ancho: 0 })).toBeNull()
+    expect(marcoEnVideo(marco, { ...CAJA_COMPLETA, alto: 0 })).toBeNull()
   })
 })
 

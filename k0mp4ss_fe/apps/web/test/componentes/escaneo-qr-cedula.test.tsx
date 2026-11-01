@@ -13,15 +13,19 @@
  * - Safari/Firefox no exponen `BarcodeDetector`: se usa `@zxing/browser`.
  * - Recuadro guía: sólo se emite el código que cae DENTRO del marco cuando el
  *   motor informa geometría; sin geometría se acepta igual que antes.
- * - Corte por inactividad: a los 30 s sin lectura la cámara se apaga, se informa
+ * - Corte por inactividad: a los 120 s sin lectura la cámara se apaga, se informa
  *   y «Reintentar» vuelve a arrancar con el plazo en cero; al desmontar no queda
  *   ningún timer vivo.
+ * - Resolución y foco: se muestra lo que el navegador entrega (`getSettings`) y si
+ *   el hardware acepta foco continuo; se decodifica el recorte del recuadro guía
+ *   en píxeles nativos, no el frame entero.
  */
 import React from "react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import {
+  CORTE_POR_INACTIVIDAD_MS,
   EscaneoQrCedula,
   MENSAJE_CAMARA_INACTIVA,
   MENSAJE_PERMISO,
@@ -43,6 +47,7 @@ const zxing = vi.hoisted(() => ({
 vi.mock("@zxing/browser", () => ({
   BrowserQRCodeReader: class {
     decodeOnceFromVideoElement = zxing.leer
+    decodeFromCanvas = zxing.leer
   },
 }))
 
@@ -100,6 +105,11 @@ function renderEscaneo() {
 beforeEach(() => {
   // jsdom no implementa la reproducción de media: sin este stub el preview avisa.
   vi.spyOn(window.HTMLMediaElement.prototype, "play").mockResolvedValue(undefined)
+  // jsdom no trae contexto 2D: el recorte del recuadro se dibuja en uno falso
+  // (no pinta nada, pero el canvas existe con el tamaño del recorte).
+  vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({
+    drawImage: vi.fn(),
+  } as unknown as CanvasRenderingContext2D)
   instalarCamara()
 })
 
@@ -216,17 +226,23 @@ describe("EscaneoQrCedula (componente, RTL)", () => {
 
 /** Un tick del bucle de lectura (300 ms) más margen. */
 const UN_TICK_MS = 400
-/** Plazo de corte por inactividad del componente (30 s) más margen. */
-const CORTE_MS = 30_500
+/** Plazo de corte por inactividad más margen (el plazo vive en el componente). */
+const CORTE_MS = CORTE_POR_INACTIVIDAD_MS + 500
+/** Justo antes del plazo: la cámara todavía debe estar escaneando. */
+const ANTES_DEL_CORTE_MS = CORTE_POR_INACTIVIDAD_MS - 1_000
+/** Margen tras «Reintentar» para que el intento nuevo arranque de verdad. */
+const TRAS_REINTENTO_MS = 2_000
 
 /**
  * Caja que informa el motor, en píxeles del video REAL (640x480).
  * Con una caja renderizada de 400x300 el marco guía es el cuadrado
  * { x: 80, y: 30, ancho: 240, alto: 240 }: estos dos centros caen uno adentro
- * y el otro afuera de ese cuadrado.
+ * y el otro afuera de ese cuadrado. Ahora el decodificador recibe el RECORTE del
+ * marco (384x384 px nativos), así que la caja "afuera" es una que el motor informa
+ * más allá del propio recorte: el candado del gating sigue descartándola.
  */
 const CAJA_DENTRO = { x: 300, y: 220, width: 40, height: 40 }
-const CAJA_FUERA = { x: 0, y: 0, width: 40, height: 40 }
+const CAJA_FUERA = { x: -2000, y: -2000, width: 40, height: 40 }
 
 /** `BarcodeDetector` falso que devuelve el QR de la cédula con su caja. */
 function instalarDetectorConCaja(
@@ -318,6 +334,27 @@ describe("EscaneoQrCedula — recuadro guía (RTL)", () => {
     expect(onError).not.toHaveBeenCalled()
   })
 
+  it("decodifica el recorte del recuadro guía, no el video completo, y reusa el canvas", async () => {
+    vi.useFakeTimers()
+    // Sin QR: el bucle sigue leyendo y se pueden comparar dos frames.
+    const detect = instalarDetectorConCaja(null)
+
+    renderEscaneo()
+    medirVideo()
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(UN_TICK_MS * 2)
+    })
+
+    const primero = detect.mock.calls[0]![0]
+    expect(primero).toBeInstanceOf(HTMLCanvasElement)
+    // Marco CSS de 240x240 sobre un video de 640x480 en una caja de 400x300:
+    // el recorte nativo es de 384x384, no el frame entero de 640x480.
+    expect((primero as HTMLCanvasElement).width).toBe(384)
+    expect((primero as HTMLCanvasElement).height).toBe(384)
+    // Un canvas por escáner, no uno por tick.
+    expect(detect.mock.calls[1]![0]).toBe(primero)
+  })
+
   it("sin geometría del motor emite igual aunque el recuadro esté medido", async () => {
     vi.useFakeTimers()
     // `instalarDetector` devuelve sólo `rawValue`: el motor no informa posición.
@@ -334,20 +371,20 @@ describe("EscaneoQrCedula — recuadro guía (RTL)", () => {
 })
 
 describe("EscaneoQrCedula — corte por inactividad (RTL)", () => {
-  it("apaga la cámara a los 30 s sin lectura e informa por qué", async () => {
+  it("apaga la cámara a los dos minutos sin lectura e informa por qué", async () => {
     vi.useFakeTimers()
     const camara = instalarCamaraDosTracks()
     instalarDetector([null])
 
     const { onError } = renderEscaneo()
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(29_000)
+      await vi.advanceTimersByTimeAsync(ANTES_DEL_CORTE_MS)
     })
-    // A los 29 s todavía no: el plazo se cuenta desde que la cámara escanea.
+    // Justo antes del plazo todavía no: se cuenta desde que la cámara escanea.
     expect(camara.stops[0]).not.toHaveBeenCalled()
 
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(2_000)
+      await vi.advanceTimersByTimeAsync(CORTE_MS - ANTES_DEL_CORTE_MS)
     })
 
     camara.stops.forEach((stop) => expect(stop).toHaveBeenCalled())
@@ -369,18 +406,20 @@ describe("EscaneoQrCedula — corte por inactividad (RTL)", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Reintentar" }))
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(1_000)
+      await vi.advanceTimersByTimeAsync(TRAS_REINTENTO_MS)
     })
     expect(camara.getUserMedia).toHaveBeenCalledTimes(2)
 
-    // El plazo arrancó de cero: a los 29 s del reintento sigue escaneando…
+    // El plazo arrancó de cero: antes del corte sigue escaneando…
     camara.stops[0]!.mockClear()
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(28_000)
+      await vi.advanceTimersByTimeAsync(
+        CORTE_POR_INACTIVIDAD_MS - TRAS_REINTENTO_MS - 1_000
+      )
     })
     expect(camara.stops[0]).not.toHaveBeenCalled()
 
-    // …y pasados los 30 s del reintento vuelve a cortar.
+    // …y pasado el plazo del reintento vuelve a cortar.
     await act(async () => {
       await vi.advanceTimersByTimeAsync(2_000)
     })
@@ -404,6 +443,136 @@ describe("EscaneoQrCedula — corte por inactividad (RTL)", () => {
 
     camara.stops.forEach((stop) => expect(stop).toHaveBeenCalled())
     expect(vi.getTimerCount()).toBe(0)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Resolución real y foco continuo (T1/T2 del pedido de hardware).
+// ---------------------------------------------------------------------------
+
+/**
+ * Cámara falsa que informa lo que un track real: `getSettings` con la resolución
+ * entregada en cada llamada y `getCapabilities` con los modos de foco del equipo.
+ */
+function instalarCamaraConAjustes(ajustes: {
+  resoluciones: { width: number; height: number }[]
+  focusMode?: string[]
+}): {
+  getUserMedia: ReturnType<typeof vi.fn>
+  stops: ReturnType<typeof vi.fn>[]
+  applyConstraints: ReturnType<typeof vi.fn>
+} {
+  const stops: ReturnType<typeof vi.fn>[] = []
+  const applyConstraints = vi.fn(async () => undefined)
+  let llamada = 0
+  const getUserMedia = vi.fn(async () => {
+    const resolucion =
+      ajustes.resoluciones[Math.min(llamada, ajustes.resoluciones.length - 1)]!
+    llamada += 1
+    const stop = vi.fn()
+    stops.push(stop)
+    const pista = {
+      stop,
+      getSettings: () => ({ width: resolucion.width, height: resolucion.height }),
+      getCapabilities: () => (ajustes.focusMode ? { focusMode: ajustes.focusMode } : {}),
+      applyConstraints,
+    }
+    return { getTracks: () => [pista], getVideoTracks: () => [pista] }
+  })
+  Object.defineProperty(navigator, "mediaDevices", {
+    value: { getUserMedia },
+    configurable: true,
+  })
+  return { getUserMedia, stops, applyConstraints }
+}
+
+describe("EscaneoQrCedula — resolución real y foco (RTL)", () => {
+  it("muestra la resolución que entrega el navegador y pide foco continuo si el hardware lo declara", async () => {
+    vi.useFakeTimers()
+    const camara = instalarCamaraConAjustes({
+      resoluciones: [{ width: 1920, height: 1080 }],
+      focusMode: ["continuous", "manual"],
+    })
+    instalarDetector([null])
+
+    renderEscaneo()
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(UN_TICK_MS)
+    })
+
+    expect(camara.getUserMedia).toHaveBeenCalledTimes(1)
+    // Se pide la resolución nativa, no el default del navegador.
+    expect(camara.getUserMedia.mock.calls[0]![0]).toEqual({
+      video: { width: { ideal: 1920 }, height: { ideal: 1080 }, facingMode: "environment" },
+    })
+    expect(screen.getByText(/Cámara: 1920x1080/)).toBeTruthy()
+    expect(screen.getByText(/foco continuo: sí/)).toBeTruthy()
+    expect(camara.applyConstraints).toHaveBeenCalledWith({
+      advanced: [{ focusMode: "continuous" }],
+    })
+  })
+
+  it("con foco fijo no pide focusMode y lo informa", async () => {
+    vi.useFakeTimers()
+    const camara = instalarCamaraConAjustes({
+      resoluciones: [{ width: 1920, height: 1080 }],
+      focusMode: ["manual"],
+    })
+    instalarDetector([null])
+
+    renderEscaneo()
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(UN_TICK_MS)
+    })
+
+    expect(screen.getByText(/foco continuo: no/)).toBeTruthy()
+    expect(camara.applyConstraints).not.toHaveBeenCalled()
+  })
+
+  it("reintenta una vez con 1280x960 cuando el navegador entrega menos de 1280 de ancho", async () => {
+    vi.useFakeTimers()
+    const camara = instalarCamaraConAjustes({
+      resoluciones: [
+        { width: 640, height: 480 },
+        { width: 1280, height: 960 },
+      ],
+    })
+    instalarDetector([URL_CEDULA])
+
+    const { onDetectado } = renderEscaneo()
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(UN_TICK_MS)
+    })
+
+    expect(camara.getUserMedia).toHaveBeenCalledTimes(2)
+    expect(camara.getUserMedia.mock.calls[1]![0]).toEqual({
+      video: { width: { ideal: 1280 }, height: { ideal: 960 }, facingMode: "environment" },
+    })
+    // El primer stream se libera antes de pedir el segundo.
+    expect(camara.stops[0]).toHaveBeenCalled()
+    expect(screen.getByText(/Cámara: 1280x960/)).toBeTruthy()
+    // Y el escaneo sigue funcionando con el stream nuevo.
+    expect(onDetectado).toHaveBeenCalledWith("16444555-0")
+  })
+
+  it("si tampoco alcanza la resolución mínima sigue escaneando con lo que haya", async () => {
+    vi.useFakeTimers()
+    instalarCamaraConAjustes({
+      resoluciones: [
+        { width: 640, height: 480 },
+        { width: 640, height: 480 },
+      ],
+    })
+    instalarDetector([URL_CEDULA])
+
+    const { onDetectado, onError } = renderEscaneo()
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(UN_TICK_MS)
+    })
+
+    expect(screen.getByText(/Cámara: 640x480/)).toBeTruthy()
+    expect(onDetectado).toHaveBeenCalledWith("16444555-0")
+    expect(onError).not.toHaveBeenCalled()
   })
 })
 

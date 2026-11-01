@@ -11,13 +11,18 @@
  * Cómo lee:
  * - `BarcodeDetector` nativo cuando el navegador lo expone (Chrome/Edge/Android).
  * - `@zxing/browser` (MIT) como fallback en Safari/Firefox, que no lo exponen.
+ * - Decodifica el RECORTE del recuadro guía en píxeles nativos del video, no el
+ *   frame entero escalado: con una cámara de 1080p el recuadro tiene más píxeles
+ *   útiles que todo el frame que el navegador entregaba por defecto.
+ * - Pide 1920x1080 y, si el navegador entrega menos de 1280 de ancho, reintenta
+ *   una vez con 1280x960. Pide foco continuo sólo si el hardware lo declara.
  *
  * Reglas de operación:
  * - Nunca emite un RUN sin pasar `validarRun` (dígito verificador módulo 11).
  * - Sólo emite si el código leído está dentro del recuadro guía del video: así no
  *   se acepta un QR del fondo (un cartel, una promo). Si el motor no informa
  *   geometría, la lectura se acepta igual que antes: no se bloquea por falta de dato.
- * - Si no hay lectura válida en 30 s, la cámara se apaga sola y el conserje puede
+ * - Si no hay lectura válida en 120 s, la cámara se apaga sola y el conserje puede
  *   reintentar: el LED no queda prendido con la pestaña abierta.
  * - La cámara se apaga al detectar, al cancelar, al vencer el plazo y al desmontar.
  * - Si no hay cámara o el permiso se niega, devuelve un mensaje legible y NO
@@ -29,6 +34,7 @@ import {
   centroEnCaja,
   extraerRunDeQr,
   lecturaEncuadrada,
+  marcoEnVideo,
   marcoGuia,
   type CajaVideo,
   type Marco,
@@ -38,8 +44,25 @@ import { validarRun } from "@/lib/validacion-rut"
 
 /** Cada cuánto se intenta leer un frame nuevo (ms). */
 const INTERVALO_LECTURA_MS = 300
-/** Sin lectura válida en este plazo, la cámara se apaga sola (ms). */
-const CORTE_POR_INACTIVIDAD_MS = 30_000
+/**
+ * Sin lectura válida en este plazo, la cámara se apaga sola (ms).
+ * Se exporta para que los tests lo importen en vez de repetir la aritmética.
+ */
+export const CORTE_POR_INACTIVIDAD_MS = 120_000
+
+/** Pedido de cámara: la resolución nativa primero. */
+const PEDIDO_HD: MediaTrackConstraints = {
+  width: { ideal: 1920 },
+  height: { ideal: 1080 },
+  facingMode: "environment",
+}
+/** Reintento cuando el navegador entrega menos de `ANCHO_MINIMO` de ancho. */
+const PEDIDO_MEDIO: MediaTrackConstraints = {
+  width: { ideal: 1280 },
+  height: { ideal: 960 },
+  facingMode: "environment",
+}
+const ANCHO_MINIMO = 1280
 
 export const MENSAJE_QR_NO_CEDULA =
   "El QR leído no corresponde a una cédula: no trae un RUN del Registro Civil."
@@ -63,8 +86,16 @@ export const MENSAJE_SIN_LECTOR =
 /** Una lectura del frame: el texto y, si el motor la informó, su posición. */
 interface Lectura {
   texto: string
-  /** Centro del código en píxeles del video REAL (no del elemento), o `null`. */
+  /** Centro del código en píxeles del origen decodificado, o `null`. */
   centro: Punto | null
+}
+
+/** Frame listo para decodificar y cómo volver a coordenadas del video. */
+interface Frame {
+  origen: CanvasImageSource
+  /** Origen del recorte en píxeles nativos (0/0 si se decodifica el video). */
+  offsetX: number
+  offsetY: number
 }
 
 /** Caja que informa `BarcodeDetector`, en píxeles del video real. */
@@ -81,7 +112,7 @@ type ConstructorDetector = new (opciones?: { formats?: string[] }) => DetectorNa
 
 /** Estrategia de lectura de un frame. `null` = todavía no hay QR en la imagen. */
 interface EstrategiaLectura {
-  leer(video: HTMLVideoElement): Promise<Lectura | null>
+  leer(origen: CanvasImageSource): Promise<Lectura | null>
 }
 
 /** `BarcodeDetector` nativo, o `null` si el navegador no lo expone. */
@@ -135,9 +166,13 @@ async function estrategiaZxing(): Promise<EstrategiaLectura> {
   const { BrowserQRCodeReader } = await import("@zxing/browser")
   const lector = new BrowserQRCodeReader()
   return {
-    async leer(video) {
+    async leer(origen) {
       try {
-        const resultado = await lector.decodeOnceFromVideoElement(video)
+        // El recorte llega como canvas; sin medidas (o sin 2D) llega el video.
+        const resultado =
+          origen instanceof HTMLCanvasElement
+            ? await lector.decodeFromCanvas(origen)
+            : await lector.decodeOnceFromVideoElement(origen as HTMLVideoElement)
         return { texto: resultado.getText(), centro: centroDeEsquinas(resultado) }
       } catch {
         // Frame sin QR (NotFoundException del lector): se reintenta en el próximo tick.
@@ -192,6 +227,88 @@ function medidasDeVideo(video: HTMLVideoElement | null): CajaVideo | null {
   }
 }
 
+/** Pista de video del stream (los dobles de test sólo exponen `getTracks`). */
+function pistaDeVideo(stream: MediaStream): MediaStreamTrack | undefined {
+  const pistas = stream.getVideoTracks?.()
+  if (pistas && pistas.length > 0) return pistas[0]
+  return stream.getTracks()[0]
+}
+
+/** Resolución real que informa el navegador (`getSettings`), o `null` si no la da. */
+function resolucionDe(pista: MediaStreamTrack | undefined): string | null {
+  const ajustes = pista?.getSettings?.()
+  if (!ajustes?.width || !ajustes.height) return null
+  return `${ajustes.width}x${ajustes.height}`
+}
+
+/**
+ * Pide foco continuo SÓLO si el hardware lo declara en `getCapabilities`.
+ *
+ * Las webcams USB de foco fijo (la mayoría) no exponen `focusMode`: ahí no se
+ * pide nada y el escaneo sigue igual. `applyConstraints` puede rechazar la
+ * petición: se ignora en silencio, el conserje no necesita ver ese detalle.
+ */
+function activarFocoContinuo(pista: MediaStreamTrack | undefined): boolean {
+  const capacidades = pista?.getCapabilities?.() as { focusMode?: string[] } | undefined
+  if (!capacidades?.focusMode?.includes("continuous")) return false
+  try {
+    const avanzadas = [{ focusMode: "continuous" }] as unknown as MediaTrackConstraintSet[]
+    const aplicado = pista?.applyConstraints({ advanced: avanzadas })
+    if (aplicado && typeof aplicado.catch === "function") void aplicado.catch(() => null)
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Abre la cámara pidiendo la resolución nativa.
+ *
+ * Si el navegador entrega menos de `ANCHO_MINIMO` de ancho, se libera ese stream
+ * y se reintenta UNA vez con el ideal medio (algunos navegadores eligen mejor
+ * así). Nunca se bloquea el escaneo por la resolución: si no informa medidas, o
+ * si el reintento tampoco alcanza, se sigue con lo que haya.
+ */
+async function abrirCamara(mediaDevices: MediaDevices): Promise<MediaStream> {
+  const stream = await mediaDevices.getUserMedia({ video: PEDIDO_HD })
+  const ancho = pistaDeVideo(stream)?.getSettings?.().width ?? 0
+  if (ancho === 0 || ancho >= ANCHO_MINIMO) return stream
+  // Se libera antes de volver a pedir: dos streams del mismo dispositivo pueden
+  // fallar con NotReadableError en cámaras exclusivas.
+  stream.getTracks().forEach((track) => track.stop())
+  return mediaDevices.getUserMedia({ video: PEDIDO_MEDIO })
+}
+
+/**
+ * Dibuja el recorte en el canvas reusado (uno por escáner, nunca uno por frame)
+ * y devuelve el canvas. Devuelve `null` si el navegador no da contexto 2D: el
+ * llamador decodifica entonces el video completo, como antes.
+ */
+function dibujarRecorte(
+  canvas: HTMLCanvasElement,
+  video: HTMLVideoElement,
+  recorte: Marco
+): HTMLCanvasElement | null {
+  const contexto = canvas.getContext("2d")
+  if (!contexto) return null
+  const ancho = Math.max(1, Math.round(recorte.ancho))
+  const alto = Math.max(1, Math.round(recorte.alto))
+  if (canvas.width !== ancho) canvas.width = ancho
+  if (canvas.height !== alto) canvas.height = alto
+  contexto.drawImage(
+    video,
+    Math.round(recorte.x),
+    Math.round(recorte.y),
+    ancho,
+    alto,
+    0,
+    0,
+    ancho,
+    alto
+  )
+  return canvas
+}
+
 export interface EscaneoQrCedulaProps {
   /** RUN canónico (`cuerpo-DV`) ya validado con módulo 11. */
   onDetectado: (run: string) => void
@@ -215,11 +332,16 @@ export function EscaneoQrCedula({ onDetectado, onError, onCancelar }: EscaneoQrC
   // El recuadro medido vive en un ref (lo consulta el bucle de lectura) y en el
   // estado (lo pinta el overlay): un solo cálculo, así el verde no miente.
   const refMarco = React.useRef<Marco | null>(null)
+  // Canvas offscreen reusado para decodificar sólo el recorte del recuadro.
+  const refCanvas = React.useRef<HTMLCanvasElement | null>(null)
   // Los callbacks viven en un ref para que el efecto de cámara no se reinicie
   // cuando el panel se re-renderiza (reiniciarlo apagaría y reencendería el LED).
   const refCallbacks = React.useRef({ onDetectado, onError })
   const [estado, setEstado] = React.useState<Estado>("iniciando")
   const [marco, setMarco] = React.useState<Marco | null>(null)
+  // Lo que el navegador realmente entrega, para no suponerlo desde la UI.
+  const [resolucion, setResolucion] = React.useState<string | null>(null)
+  const [focoContinuo, setFocoContinuo] = React.useState(false)
   const [encuadrado, setEncuadrado] = React.useState(false)
   const [ultimoCodigo, setUltimoCodigo] = React.useState<string | null>(null)
   const [mensaje, setMensaje] = React.useState<string | null>(null)
@@ -261,7 +383,7 @@ export function EscaneoQrCedula({ onDetectado, onError, onCancelar }: EscaneoQrC
     if (video) video.srcObject = null
   }, [])
 
-  /** Apaga todo: bucle de lectura, plazo de inactividad y cámara. */
+  /** Apaga todo: bucle de lectura, plazo de inactividad, canvas y cámara. */
   const detenerTodo = React.useCallback(() => {
     refTerminado.current = true
     if (refIntervalo.current) {
@@ -272,6 +394,13 @@ export function EscaneoQrCedula({ onDetectado, onError, onCancelar }: EscaneoQrC
       clearTimeout(refInactividad.current)
       refInactividad.current = null
     }
+    // El recorte no se guarda: se suelta el canvas y su bitmap queda descartable.
+    const canvas = refCanvas.current
+    if (canvas) {
+      canvas.width = 0
+      canvas.height = 0
+    }
+    refCanvas.current = null
     detenerCamara()
   }, [detenerCamara])
 
@@ -293,9 +422,15 @@ export function EscaneoQrCedula({ onDetectado, onError, onCancelar }: EscaneoQrC
       avisar(texto)
     }
 
-    const procesar = (lectura: Lectura) => {
+    const procesar = (lectura: Lectura, frame: Frame) => {
       const medidas = medidasDeVideo(refVideo.current)
-      const centro = lectura.centro && medidas ? centroEnCaja(lectura.centro, medidas) : null
+      const centro =
+        lectura.centro && medidas
+          ? centroEnCaja(
+              { x: lectura.centro.x + frame.offsetX, y: lectura.centro.y + frame.offsetY },
+              medidas
+            )
+          : null
       if (!lecturaEncuadrada(centro, refMarco.current)) {
         // El código está fuera del recuadro (QR del fondo: un cartel, una promo):
         // se descarta en silencio y se sigue escaneando. Avisar acá taparía la
@@ -333,6 +468,24 @@ export function EscaneoQrCedula({ onDetectado, onError, onCancelar }: EscaneoQrC
       }
       if (cancelado) return
 
+      /**
+       * Frame a decodificar: el RECORTE del recuadro guía en píxeles nativos del
+       * video, dibujado en el canvas reusado. Sin medidas (o sin contexto 2D) se
+       * decodifica el video completo, como antes.
+       */
+      const prepararFrame = (video: HTMLVideoElement): Frame => {
+        const medidas = medidasDeVideo(video)
+        const marcoCss = refMarco.current
+        const recorte = medidas && marcoCss ? marcoEnVideo(marcoCss, medidas) : null
+        if (recorte) {
+          const canvas = (refCanvas.current ??= document.createElement("canvas"))
+          if (dibujarRecorte(canvas, video, recorte)) {
+            return { origen: canvas, offsetX: recorte.x, offsetY: recorte.y }
+          }
+        }
+        return { origen: video, offsetX: 0, offsetY: 0 }
+      }
+
       const mediaDevices = typeof navigator === "undefined" ? undefined : navigator.mediaDevices
       if (!mediaDevices?.getUserMedia) {
         abandonar(MENSAJE_SIN_CAMARA)
@@ -341,7 +494,7 @@ export function EscaneoQrCedula({ onDetectado, onError, onCancelar }: EscaneoQrC
 
       let stream: MediaStream
       try {
-        stream = await mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
+        stream = await abrirCamara(mediaDevices)
       } catch (error) {
         if (!cancelado) abandonar(mensajeDeCamara(error))
         return
@@ -352,6 +505,10 @@ export function EscaneoQrCedula({ onDetectado, onError, onCancelar }: EscaneoQrC
       }
 
       refStream.current = stream
+      const pista = pistaDeVideo(stream)
+      // Lo que el navegador entregó de verdad, y si el hardware aceptó foco continuo.
+      setResolucion(resolucionDe(pista))
+      setFocoContinuo(activarFocoContinuo(pista))
       const video = refVideo.current
       if (video) {
         video.srcObject = stream
@@ -378,9 +535,10 @@ export function EscaneoQrCedula({ onDetectado, onError, onCancelar }: EscaneoQrC
         if (refTerminado.current || leyendo) return
         const actual = refVideo.current
         if (!actual) return
+        const frame = prepararFrame(actual)
         leyendo = true
         void estrategia
-          .leer(actual)
+          .leer(frame.origen)
           .then((lectura) => {
             // Descarte de lecturas en vuelo: si el intento ya terminó (corte, cancelar,
             // desmontar) o arrancó otro «Reintentar», la lectura vieja no emite, no
@@ -388,7 +546,7 @@ export function EscaneoQrCedula({ onDetectado, onError, onCancelar }: EscaneoQrC
             // entra por acá también: `estrategia.leer` se espera antes de este paso.
             if (!lectura) return
             if (refTerminado.current || refGeneracion.current !== generacion) return
-            procesar(lectura)
+            procesar(lectura, frame)
           })
           .catch(() => null)
           .finally(() => {
@@ -453,6 +611,11 @@ export function EscaneoQrCedula({ onDetectado, onError, onCancelar }: EscaneoQrC
         {estado === "escaneando" ? "Acerca el anverso de la cédula: el QR va arriba del retrato." : null}
         {estado === "detenido" && !mensaje ? "Escaneo detenido." : null}
       </p>
+      {resolucion ? (
+        <p className="text-xs text-muted-foreground">
+          Cámara: {resolucion} · foco continuo: {focoContinuo ? "sí" : "no"}
+        </p>
+      ) : null}
       {ultimoCodigo ? (
         <p className="text-xs text-muted-foreground">
           Último código leído: <code className="break-all">{ultimoCodigo}</code>

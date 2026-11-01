@@ -164,3 +164,25 @@ export function centroEnCaja(centro: Punto, caja: CajaVideo): Punto | null {
     y: centro.y * escala + (alto - altoReal * escala) / 2,
   }
 }
+
+/**
+ * Inversa de `centroEnCaja`: pasa un rectángulo en píxeles CSS del elemento a
+ * píxeles NATIVOS del video.
+ *
+ * Es lo que necesita el recorte del recuadro guía: decodificar el marco en
+ * resolución nativa (en 1080p son más píxeles que todo el frame que antes se
+ * decodificaba escalado) y no en píxeles CSS. Sin dimensiones devuelve `null`.
+ */
+export function marcoEnVideo(marco: Marco, caja: CajaVideo): Marco | null {
+  const { ancho, alto, anchoReal, altoReal } = caja
+  if (!(anchoReal > 0) || !(altoReal > 0) || !(ancho > 0) || !(alto > 0)) return null
+  const escala = Math.max(ancho / anchoReal, alto / altoReal)
+  const desplazamientoX = (ancho - anchoReal * escala) / 2
+  const desplazamientoY = (alto - altoReal * escala) / 2
+  return {
+    x: (marco.x - desplazamientoX) / escala,
+    y: (marco.y - desplazamientoY) / escala,
+    ancho: marco.ancho / escala,
+    alto: marco.alto / escala,
+  }
+}
