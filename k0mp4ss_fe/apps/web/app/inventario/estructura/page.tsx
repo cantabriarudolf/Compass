@@ -149,22 +149,21 @@ export default function EstructuraFisicaPage() {
       descripcion: formData.get("descripcion") as string,
     }
     const nombreTrim = data.nombre.trim().toLowerCase()
-    const etiquetaTrim = data.etiqueta.trim().toLowerCase()
     if (nombreTrim) {
+      // El nombre de macro sector es único por comunidad y lo impone la base
+      // (`@@unique([comunidadId, nombre])`). Antes acá un `confirm()` decía
+      // "repetidos permitidos" y además comparaba la etiqueta, que la base no
+      // mira: avisaba cuando igual iba a fallar y dejaba pasar el duplicado real.
       const existe = macroSectores.some(
         (m) =>
           m.id !== (editingMacro?.id ?? "") &&
-          m.nombre.trim().toLowerCase() === nombreTrim &&
-          m.etiqueta.trim().toLowerCase() === etiquetaTrim
+          m.nombre.trim().toLowerCase() === nombreTrim
       )
       if (existe) {
-        const confirmar = window.confirm(
-          "Ya existe un macro sector con ese nombre/etiqueta. ¿Deseas continuar? (D5: repetidos permitidos, es solo un aviso)"
+        setErrorDialogo(
+          "Ya existe un macro sector con ese nombre: el nombre es único por comunidad."
         )
-        if (!confirmar) {
-          setErrorDialogo("Guardado cancelado: duplicado detectado (D5: repetidos permitidos).")
-          return
-        }
+        return
       }
     }
     let resultado: { ok: boolean; error?: string }

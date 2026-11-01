@@ -127,13 +127,14 @@ export default function TiposUnidadPage() {
         (t) => t.id !== (editingItem?.id ?? "") && t.nombre.trim().toLowerCase() === nombreTrim.toLowerCase()
       )
       if (existeDuplicado) {
-        const confirmar = window.confirm(
-          "Ya existe un tipo de unidad con ese nombre. ¿Deseas continuar? (D5: repetidos permitidos, es solo un aviso)"
+        // El nombre es único por comunidad y lo impone la base
+        // (`@@unique([comunidadId, nombre])`): el POST responde 409. Antes acá
+        // un `confirm()` decía "repetidos permitidos" y dejaba seguir para
+        // chocar igual contra la base.
+        setErrorGuardado(
+          "Ya existe un tipo de unidad con ese nombre: el nombre es único por comunidad."
         )
-        if (!confirmar) {
-          setErrorGuardado("Guardado cancelado: duplicado detectado (D5: repetidos permitidos).")
-          return
-        }
+        return
       }
     }
 

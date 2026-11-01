@@ -78,21 +78,10 @@ export function FormularioPersona({ persona, personas, onSave, onCancel }: Formu
     }
 
     const nombreCompleto = `${nombres} ${apellidos}`.trim()
-    const nombreCompletoNorm = nombreCompleto.toLowerCase()
-    if (nombreCompletoNorm) {
-      const existeDuplicado = personas.some(
-        (p) => p.id !== (persona?.id ?? "") && p.nombreCompleto.trim().toLowerCase() === nombreCompletoNorm
-      )
-      if (existeDuplicado) {
-        const confirmar = window.confirm(
-          "Ya existe una persona con ese nombre completo. ¿Deseas continuar? (D5: repetidos permitidos, es solo un aviso)"
-        )
-        if (!confirmar) {
-          setErrores({ global: "Guardado cancelado: duplicado detectado (D5: repetidos permitidos)." })
-          return
-        }
-      }
-    }
+    // El nombre NO identifica: dos personas pueden llamarse igual y la que
+    // distingue es el RUT (validado arriba, único por comunidad en la API).
+    // Antes acá había un `window.confirm` que avisaba "repetidos permitidos"
+    // y no decidía nada: docs/INVARIANTES.md fila `Persona` · `nombreCompleto`.
 
     const nuevaPersona: Partial<Persona> = {
       id: persona?.id || `p-${Date.now()}`,
