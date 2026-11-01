@@ -385,10 +385,14 @@ export function VisitasPanel({
         <CardHeader>
           <CardTitle className="flex items-center justify-between gap-2">
             Registro de visita
+            {/* MARCADOR TEMPORAL (2026-11-01): el título en rojo sirve para confirmar en
+                pantalla que el deploy nuevo ya está vivo. Quitar el className
+                "text-red-600" cuando el owner confirme que lo vio. */}
             <Button
               type="button"
               size="sm"
               variant="outline"
+              className="text-red-600"
               onClick={() => {
                 setResultadoIdentidad(null)
                 setEscanerAbierto(true)
