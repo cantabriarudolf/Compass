@@ -58,6 +58,9 @@ async function main() {
     const hasNosniff = raw.includes("X-Content-Type-Options") && raw.includes("nosniff")
     const hasReferrer = raw.includes("Referrer-Policy")
     const hasPermissions = raw.includes("Permissions-Policy")
+    // Candado: la politica vacia `camera=()` bloquea getUserMedia en la propia pagina
+    // y rompe el escaner QR (PE). Debe permitir al menos el propio origen.
+    const permisoCamaraOk = /camera=\(\s*self\s*\)/.test(raw)
     const hasDnsPrefetch = raw.includes("X-DNS-Prefetch-Control")
     const hasCrossOpener = raw.includes("Cross-Origin-Opener-Policy")
     const hasCrossResource = raw.includes("Cross-Origin-Resource-Policy")
@@ -68,6 +71,7 @@ async function main() {
     console.log(`  X-Content-Type-Options nosniff: ${okFail(hasNosniff)}`)
     console.log(`  Referrer-Policy: ${okFail(hasReferrer)}`)
     console.log(`  Permissions-Policy: ${okFail(hasPermissions)}`)
+    console.log(`  Permissions-Policy camera=(self): ${okFail(permisoCamaraOk)}`)
     console.log(`  HSTS: ${hstsValue} → ${okFail(hasHSTS && !hasPreloadInHsts)} ${hasPreloadInHsts ? "(FAIL: preload presente sin dominio)" : "(OK sin preload)"}`)
     console.log(`  X-DNS-Prefetch-Control: ${okFail(hasDnsPrefetch)}`)
     console.log(`  X-Permitted-Cross-Domain-Policies: ${okFail(raw.includes("X-Permitted-Cross-Domain-Policies"))}`)
@@ -93,6 +97,7 @@ async function main() {
     if (!hasNosniff) errs.push("nosniff faltante")
     if (!hasReferrer) errs.push("Referrer-Policy faltante")
     if (!hasPermissions) errs.push("Permissions-Policy faltante")
+    if (!permisoCamaraOk) errs.push("Permissions-Policy no permite la camara al propio origen (camera=(self))")
     if (!hasHSTS) errs.push("HSTS faltante")
     if (hasPreloadInHsts) errs.push("HSTS contiene preload sin dominio (no debe hasta PUBLIC_DOMAIN)")
     if (errs.length) console.log(`\n  ⚠ Estáticos: ${errs.join("; ")}`)
