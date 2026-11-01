@@ -22,6 +22,7 @@ import {
   lecturaEncuadrada,
   marcoEnVideo,
   marcoGuia,
+  resumenEstructural,
   type CajaVideo,
   type Marco,
   type Punto,
@@ -279,5 +280,57 @@ describe("encuadre de punta a punta (caja medida + código detectado)", () => {
     // Esquina superior izquierda del video real: fuera del cuadrado guía.
     const centro = centroEnCaja({ x: 20, y: 20 }, CAJA_COMPLETA)
     expect(lecturaEncuadrada(centro, marco)).toBe(false)
+  })
+})
+
+describe("resumenEstructural (claves sí, valores nunca)", () => {
+  const URL_CON_DATOS =
+    "https://www.registrocivil.cl/valida-documento?RUN=16.444.555-0&nombres=ANA&apellidos=PEREZ"
+  const JSON_CON_DATOS = '{"run":"16444555-0","nombres":"ANA","apellidos":"PEREZ"}'
+
+  it("en una URL devuelve los nombres de los parámetros, no sus valores", () => {
+    const resumen = resumenEstructural(URL_CON_DATOS)
+    expect(resumen.tipo).toBe("url")
+    expect(resumen.largo).toBe(URL_CON_DATOS.length)
+    expect(resumen.claves).toEqual(["RUN", "nombres", "apellidos"])
+  })
+
+  it("en una URL sin query no inventa claves", () => {
+    expect(resumenEstructural("https://www.registrocivil.cl/valida-documento")).toEqual({
+      largo: 45,
+      tipo: "url",
+      claves: [],
+    })
+    expect(resumenEstructural("www.registrocivil.cl/x?RUN=1")).toEqual({
+      largo: 28,
+      tipo: "url",
+      claves: ["RUN"],
+    })
+  })
+
+  it("en un objeto JSON devuelve sus claves", () => {
+    const resumen = resumenEstructural(JSON_CON_DATOS)
+    expect(resumen.tipo).toBe("json")
+    expect(resumen.largo).toBe(JSON_CON_DATOS.length)
+    expect(resumen.claves).toEqual(["run", "nombres", "apellidos"])
+  })
+
+  it("en texto plano devuelve tipo texto y sin claves", () => {
+    expect(resumenEstructural("16444555-0")).toEqual({
+      largo: 10,
+      tipo: "texto",
+      claves: [],
+    })
+    expect(resumenEstructural("")).toEqual({ largo: 0, tipo: "texto", claves: [] })
+    // Un array JSON no es un objeto con claves: se informa como texto.
+    expect(resumenEstructural("[1,2,3]")).toEqual({ largo: 7, tipo: "texto", claves: [] })
+  })
+
+  it("nunca deja ver un valor: el resumen serializado no contiene ningún dato de la entrada", () => {
+    const valores = ["16.444.555-0", "ANA", "PEREZ", "registrocivil"]
+    for (const texto of [URL_CON_DATOS, JSON_CON_DATOS]) {
+      const serializado = JSON.stringify(resumenEstructural(texto))
+      for (const valor of valores) expect(serializado).not.toContain(valor)
+    }
   })
 })

@@ -811,3 +811,53 @@ describe("EscaneoQrCedula — lecturas en vuelo (RTL)", () => {
     expect(onDetectado).toHaveBeenCalledTimes(1)
   })
 })
+
+// ---------------------------------------------------------------------------
+// Estructura del código capturado: claves sí, valores nunca.
+// ---------------------------------------------------------------------------
+
+describe("EscaneoQrCedula — estructura del código (RTL)", () => {
+  it("«Capturar» muestra la estructura y no expone ningún valor", async () => {
+    vi.useFakeTimers()
+    instalarDetector([URL_CEDULA])
+
+    const { onDetectado } = renderEscaneo()
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1)
+    })
+
+    fireEvent.click(screen.getByRole("button", { name: "Capturar" }))
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1)
+    })
+
+    const linea = screen.getByText(/Código: \d+ caracteres/)
+    expect(linea.textContent).toContain(`Código: ${URL_CEDULA.length} caracteres`)
+    expect(linea.textContent).toContain("tipo url")
+    expect(linea.textContent).toContain("claves: RUN, type")
+    // Ni el RUN ni el resto de los valores del documento salen en esa línea.
+    expect(linea.textContent).not.toContain("16444555-0")
+    expect(linea.textContent).not.toContain("16.444.555-0")
+    // La estructura aparece también cuando el RUN se emite.
+    expect(onDetectado).toHaveBeenCalledWith("16444555-0")
+  })
+
+  it("«Capturar» informa claves vacías cuando el código es texto plano", async () => {
+    vi.useFakeTimers()
+    instalarDetector(["Hola mundo, sin estructura"])
+
+    renderEscaneo()
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1)
+    })
+
+    fireEvent.click(screen.getByRole("button", { name: "Capturar" }))
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1)
+    })
+
+    const linea = screen.getByText(/Código: \d+ caracteres/)
+    expect(linea.textContent).toContain("tipo texto")
+    expect(linea.textContent).toContain("claves: (ninguna)")
+  })
+})

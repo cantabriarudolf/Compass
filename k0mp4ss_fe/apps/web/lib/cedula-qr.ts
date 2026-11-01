@@ -186,3 +186,64 @@ export function marcoEnVideo(marco: Marco, caja: CajaVideo): Marco | null {
     alto: marco.alto / escala,
   }
 }
+
+/** Tipo de payload que trae el código leído. */
+export type TipoCodigo = "url" | "json" | "texto"
+
+/**
+ * Estructura de un código leído: metadatos, NUNCA contenido.
+ * `claves` son nombres de parámetros (URL) o de propiedades (JSON); los valores
+ * del documento no se copian acá bajo ninguna circunstancia.
+ */
+export interface ResumenEstructural {
+  /** Cantidad de caracteres del texto original. */
+  largo: number
+  tipo: TipoCodigo
+  /** Nombres de parámetros o claves, sin valores. Lista vacía en texto plano. */
+  claves: string[]
+}
+
+/** URL absoluta (`http`/`https`). */
+const RE_URL_ABSOLUTA = /^https?:\/\//i
+/** URL con forma relativa pero con query (`algo?clave=valor`). */
+const RE_URL_CON_QUERY = /^[^\s?]+\?[^=&\s]+=/i
+
+/**
+ * Describe la ESTRUCTURA de un código sin exponer su contenido.
+ *
+ * Regla dura: esta función devuelve largos, tipos y nombres de claves; MUST NOT
+ * devolver un fragmento de ningún valor. Es un documento personal (RUN, nombre y
+ * apellido de una persona): lo que se muestra en pantalla es sólo la forma del
+ * código, para saber si trae `nombres`/`apellidos` sin publicar el dato.
+ */
+export function resumenEstructural(texto: string): ResumenEstructural {
+  if (typeof texto !== "string") return { largo: 0, tipo: "texto", claves: [] }
+  const bruto = texto.trim()
+  if (!bruto) return { largo: texto.length, tipo: "texto", claves: [] }
+
+  if (RE_URL_ABSOLUTA.test(bruto) || RE_URL_CON_QUERY.test(bruto)) {
+    return { largo: texto.length, tipo: "url", claves: clavesDeQuery(bruto) }
+  }
+
+  try {
+    const parseado = JSON.parse(bruto) as unknown
+    if (parseado && typeof parseado === "object" && !Array.isArray(parseado)) {
+      return { largo: texto.length, tipo: "json", claves: Object.keys(parseado) }
+    }
+  } catch {
+    // No es JSON: abajo se informa como texto plano.
+  }
+  return { largo: texto.length, tipo: "texto", claves: [] }
+}
+
+/** Nombres de los parámetros de la query, decodificados, sin repetir y sin valores. */
+function clavesDeQuery(bruto: string): string[] {
+  const indice = bruto.indexOf("?")
+  if (indice === -1) return []
+  const consulta = bruto.slice(indice + 1).split("#")[0] ?? ""
+  const claves: string[] = []
+  for (const nombre of new URLSearchParams(consulta).keys()) {
+    if (nombre && !claves.includes(nombre)) claves.push(nombre)
+  }
+  return claves
+}

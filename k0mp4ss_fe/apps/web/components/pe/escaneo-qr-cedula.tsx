@@ -36,9 +36,11 @@ import {
   lecturaEncuadrada,
   marcoEnVideo,
   marcoGuia,
+  resumenEstructural,
   type CajaVideo,
   type Marco,
   type Punto,
+  type ResumenEstructural,
 } from "@/lib/cedula-qr"
 import { validarRun } from "@/lib/validacion-rut"
 
@@ -379,6 +381,8 @@ export function EscaneoQrCedula({ onDetectado, onError, onCancelar }: EscaneoQrC
   const [linternaDisponible, setLinternaDisponible] = React.useState(false)
   const [linternaEncendida, setLinternaEncendida] = React.useState(false)
   const [capturando, setCapturando] = React.useState(false)
+  // Estructura del último código capturado: claves sí, valores nunca.
+  const [estructura, setEstructura] = React.useState<ResumenEstructural | null>(null)
   const [encuadrado, setEncuadrado] = React.useState(false)
   const [ultimoCodigo, setUltimoCodigo] = React.useState<string | null>(null)
   const [mensaje, setMensaje] = React.useState<string | null>(null)
@@ -647,6 +651,9 @@ export function EscaneoQrCedula({ onDetectado, onError, onCancelar }: EscaneoQrC
     setCapturando(true)
     try {
       const lectura = await estrategia.leer(video)
+      // La estructura se muestra SIEMPRE, también cuando el RUN se emite: el punto
+      // es ver si el código trae `nombres`/`apellidos` entre sus claves.
+      setEstructura(resumenEstructural(lectura?.texto ?? ""))
       if (!lectura) {
         avisar(MENSAJE_CAPTURA_SIN_LECTURA)
         return
@@ -682,6 +689,7 @@ export function EscaneoQrCedula({ onDetectado, onError, onCancelar }: EscaneoQrC
     setMensaje(null)
     setEncuadrado(false)
     setEmitido(false)
+    setEstructura(null)
     setIntento((anterior) => anterior + 1)
   }
 
@@ -721,6 +729,12 @@ export function EscaneoQrCedula({ onDetectado, onError, onCancelar }: EscaneoQrC
       {resolucion ? (
         <p className="text-xs text-muted-foreground">
           Cámara: {resolucion} · foco continuo: {focoContinuo ? "sí" : "no"}
+        </p>
+      ) : null}
+      {estructura ? (
+        <p className="text-xs text-muted-foreground">
+          Código: {estructura.largo} caracteres · tipo {estructura.tipo} · claves:{" "}
+          {estructura.claves.length > 0 ? estructura.claves.join(", ") : "(ninguna)"}
         </p>
       ) : null}
       {ultimoCodigo ? (
