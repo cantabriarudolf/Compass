@@ -189,6 +189,10 @@ model MicroSector {
 
   @@index([comunidadId])
   @@index([macroSectorId])
+  // INV-04 (docs/INVARIANTES.md): el nombre se compone con el macro sector, así
+  // que "Piso 4" se repite entre edificios y no puede repetirse dentro del
+  // mismo. El índice compara TEXT tal cual; la guardia de la API normaliza.
+  @@unique([comunidadId, macroSectorId, nombre])
   @@map("micro_sectores")
 }
 

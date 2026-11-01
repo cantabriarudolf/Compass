@@ -20,12 +20,11 @@ Las filas marcadas `CADA FORMULARIO ⚠`, `NADIE ⚠` o con dos puertas distinta
 |---|---|---|---|
 | `Persona` · `email` | Único por comunidad | era **puerta partida**: `/api/personas` sí, `/api/mis-datos` no | centralizada → `lib/invariantes/persona.ts` |
 | `Persona` · `rut` | Único por comunidad | era **puerta única** (`/api/personas`) | centralizada → `lib/invariantes/persona.ts` |
-| `MicroSector` | Nombre/etiqueta único por macro sector | **CADA FORMULARIO** (D5 dice permitido) | `app/inventario/estructura/page.tsx:212` |
 | `Persona` · `nombreCompleto` | Sin duplicados de nombre | **CADA FORMULARIO** (no es regla de spec) | `components/comunidad/formulario-persona.tsx:88` |
 | `TipoUnidad` · `nombre` | Único por comunidad | **CADA FORMULARIO + DB contradictorios**: la UI avisa "repetidos permitidos", la DB responde 409 | `app/inventario/tipos/page.tsx:131` vs `@unique` |
 | `MacroSector` · `nombre` | Único por comunidad | **CADA FORMULARIO + DB parcial**: la UI compara nombre+etiqueta, la DB sólo nombre | `app/inventario/estructura/page.tsx:162` vs `@unique` |
 
-Ya resueltas (salieron de esta lista): `Persona.email`/`Persona.rut` (**INV-01**), `CierreTurnoPE` (**INV-02**) y `EventoAuditoria` (**INV-03**).
+Ya resueltas (salieron de esta lista): `Persona.email`/`Persona.rut` (**INV-01**), `CierreTurnoPE` (**INV-02**), `EventoAuditoria` (**INV-03**) y `MicroSector` (**INV-04**).
 
 ## Paso 2 — Tabla completa
 
@@ -45,7 +44,7 @@ Ya resueltas (salieron de esta lista): `Persona.email`/`Persona.rut` (**INV-01**
 |---|---|---|---|---|
 | `TipoUnidad` | Nombre único por comunidad; baja lógica (`activo`); no se borra si hay unidades | `DB` + `API` — `@unique([comunidadId,nombre])` + guard | `app/api/tipos-unidad/route.ts:19` | — (sin test de regla) |
 | `MacroSector` | Nombre único por comunidad; no se borra con microsectores | `DB` + `API` — `@unique([comunidadId,nombre])` + guard | `app/api/macro-sectores/route.ts:18` | — (sin test de regla) |
-| `MicroSector` | Nombre/etiqueta únicos **dentro del macro sector** (según la UI) | `CADA FORMULARIO ⚠` — `app/inventario/estructura/page.tsx:212` avisa con `confirm()`; la API acepta duplicados y D5 dice 'repetidos permitidos' | `app/api/micro-sectores/[id]/route.ts:62`<br>`app/api/micro-sectores/route.ts:24`<br>`app/api/micro-sectores/route.ts:105` | — (sin test de regla) |
+| `MicroSector` | Un micro sector por nombre dentro de su macro sector (se repite ENTRE edificios, nunca dentro del mismo) | `DB` + `CENTRAL` — `@@unique([comunidadId, macroSectorId, nombre])` (migración `20261031000000`) y guardia `lib/invariantes/estructura.ts` que compara trim+minúsculas | `app/api/micro-sectores/route.ts:96`<br>`app/api/micro-sectores/[id]/route.ts:62` | `test/api/invariantes-micro-sector.test.ts` (2 pruebas: mismo nombre en otro edificio / duplicado en el mismo → 409) |
 | `Unidad` | 3 FKs verificadas contra la comunidad; no se borra con vínculos; `numero` repetible a propósito | `API` — `verificarReferenciasUnidad` + `beforeDelete` (`app/api/unidades/route.ts:41`); sin `@unique` por decisión D5 | `app/api/unidades/[id]/route.ts:68`<br>`app/api/unidades/route.ts:25`<br>`app/api/unidades/route.ts:145` | — (sin test de regla) |
 
 ### MP / VU — Personas y vínculos
@@ -187,5 +186,5 @@ Ya resueltas (salieron de esta lista): `Persona.email`/`Persona.rut` (**INV-01**
 
 ## Cobertura de tests por regla
 
-De las filas de arriba, sólo unas pocas tienen un test que prueba la regla (y no sólo la ruta): `Persona.email`, `CierreTurnoPE` y `EventoAuditoria` (INV-01/02/03, nuevos), `Persona.rut` (`test/api/personas.test.ts`) y `ReservaRA` (solapamiento, `test/api/fase4-ra.test.ts`). El resto tiene cobertura de ruta —que la respuesta sea 200/409— pero no de invariante. Eso es lo que `npm run check:invariantes` empieza a cerrar: hoy corre 7 pruebas: dos por regla (acepta / rechaza) para INV-01 (`Persona.email`), tres para INV-02 (`CierreTurnoPE`, incluida la puerta del PUT) y dos para INV-03 (`EventoAuditoria`).
+De las filas de arriba, sólo unas pocas tienen un test que prueba la regla (y no sólo la ruta): `Persona.email`, `CierreTurnoPE`, `EventoAuditoria` y `MicroSector` (INV-01/02/03/04, nuevos), `Persona.rut` (`test/api/personas.test.ts`) y `ReservaRA` (solapamiento, `test/api/fase4-ra.test.ts`). El resto tiene cobertura de ruta —que la respuesta sea 200/409— pero no de invariante. Eso es lo que `npm run check:invariantes` empieza a cerrar: hoy corre 9 pruebas: dos por regla para INV-01 (`Persona.email`), tres para INV-02 (`CierreTurnoPE`, incluida la puerta del PUT), dos para INV-03 (`EventoAuditoria`) y dos para INV-04 (`MicroSector`).
 

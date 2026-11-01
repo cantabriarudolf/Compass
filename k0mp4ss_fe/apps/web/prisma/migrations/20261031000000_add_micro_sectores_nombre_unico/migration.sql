@@ -1,0 +1,19 @@
+-- INV-04 — un micro sector por nombre dentro de su macro sector.
+--
+-- Decisión del owner (2026-10-31): "Piso 4" se puede repetir ENTRE edificios
+-- (macro sectores distintos: Edificio 1 / Piso 4 y Edificio 2 / Piso 4), nunca
+-- dos veces DENTRO del mismo edificio: eso es duplicación, no un caso válido.
+--
+-- Migración ADITIVA: solo agrega un índice único compuesto; no toca datos.
+-- Antes de aplicarla en un entorno con datos reales, verificar duplicados:
+--   SELECT "comunidadId", "macroSectorId", "nombre", COUNT(*)
+--   FROM "micro_sectores" GROUP BY 1,2,3 HAVING COUNT(*) > 1;
+-- En la base de desarrollo la consulta devuelve 0 filas.
+--
+-- El índice es SENSIBLE a mayúsculas (SQLite y PostgreSQL comparan TEXT tal
+-- cual): "Piso 4" y "piso 4" pasarían. La guardia de la API
+-- (`lib/invariantes/estructura.ts`) compara normalizado (trim + minúsculas) y
+-- cubre ese hueco antes de llegar a la base.
+--
+-- CreateIndex
+CREATE UNIQUE INDEX "micro_sectores_comunidadId_macroSectorId_nombre_key" ON "micro_sectores"("comunidadId", "macroSectorId", "nombre");

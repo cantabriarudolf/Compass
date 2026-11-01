@@ -14,6 +14,7 @@ import {
   withComunidadScope,
 } from "@/lib/api/with-comunidad-scope"
 import { errorGenerico } from "@/app/api/personas/route"
+import { guardiaMicroSectorUnico } from "@/lib/invariantes/estructura"
 
 // Adaptador de delegate Prisma a la factory (mismo patrón que maestros/[tipo]).
 function delegado(modelo: unknown): CrudDelegate {
@@ -24,6 +25,9 @@ export const microHandlers = createCrudHandlers({
   model: delegado(prisma.microSector),
   schema: MicroSectorSchema,
   authzCheck: (rol, accion) => puede(rol, accion, "mp"),
+  // INV-04: un micro sector por nombre dentro de su macro sector (edificio).
+  // Se repite entre edificios; nunca dos veces en el mismo.
+  antesDeEscribir: guardiaMicroSectorUnico,
   beforeDelete: async (record, scope) => {
     const asociadas = await prisma.unidad.count({
       where: {
@@ -99,6 +103,17 @@ export async function POST(req: Request): Promise<Response> {
       parsed.data.macroSectorId
     )
     if (corto) return corto
+
+    // INV-04: un micro sector por nombre dentro de su macro sector (el nombre
+    // se compone con el edificio, así que se repite entre edificios y no dentro
+    // de uno). Se compara normalizado; el índice único de la base queda como
+    // red de seguridad para carreras concurrentes.
+    const cortoInv = await guardiaMicroSectorUnico({
+      datos: parsed.data as unknown as Record<string, unknown>,
+      previo: (existente as unknown as Record<string, unknown> | null) ?? null,
+      scope,
+    })
+    if (cortoInv) return cortoInv
 
     // SAFETY: parsed.data ya pasó MicroSectorSchema.safeParse; solo lista blanca.
     const limpio = limpiarMicro(parsed.data as unknown as Record<string, unknown>)

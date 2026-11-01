@@ -13,6 +13,7 @@ import {
 } from "@/lib/api/with-comunidad-scope"
 import { errorGenerico } from "@/app/api/personas/route"
 import { microHandlers, verificarMacroExiste } from "../route"
+import { guardiaMicroSectorUnico } from "@/lib/invariantes/estructura"
 
 type Ctx = { params: Promise<{ id: string }> }
 
@@ -59,6 +60,14 @@ export async function PUT(req: Request, ctx: Ctx): Promise<Response> {
       )
       if (corto) return corto
     }
+    // INV-04: mover el micro sector de edificio o renombrarlo tampoco puede
+    // duplicar el nombre dentro del macro sector destino.
+    const cortoInv = await guardiaMicroSectorUnico({
+      datos,
+      previo: existente as unknown as Record<string, unknown>,
+      scope,
+    })
+    if (cortoInv) return cortoInv
     const record = await prisma.microSector.update({
       where: { id },
       data: datos as never,
