@@ -1,8 +1,9 @@
 /** @type {import('next').NextConfig} */
 // SERIE-PRODUCCION P2 — configuración de producción:
-// - output: 'standalone' — genera .next/standalone con solo los node_modules
-//   necesarios: reduce el tamaño de imagen Docker y optimiza para serverless
-//   (target de hosting: Vercel). El arranque del server es `node .next/standalone/server.js`.
+// - outputFileTracingExcludes — recorta el bundle de cada Vercel Function (ver
+//   el bloque dentro de `nextConfig`): saca del trace los motores Prisma WASM
+//   de las bases que el proyecto no usa. Sin esto cada función pesaba ~80 MB y
+//   Functions Storage del plan Hobby (10 GB) quedaba excedido.
 // - build:analyze — `npm run build:analyze` envuelve el config con
 //   @next/bundle-analyzer (devDependency). Se importa dinámicamente SOLO si
 //   ANALYZE=true, así los builds normales no fallan aunque el paquete no esté
@@ -27,8 +28,39 @@ const securityHeaders = [
 
 let nextConfig = {
   transpilePackages: ["@workspace/ui"],
-  // SERIE-PRODUCCION P2: salida standalone (ver comentario de cabecera).
-  output: "standalone",
+  // Vercel Functions Storage: cada `route.ts` se empaqueta como su propia Vercel
+  // Function y arrastra su propio `node_modules` trazado. Sin exclusiones, cada
+  // función pesaba ~80,6 MB y de esos ~57 MB eran `@prisma/client`, casi todo
+  // blobs `.wasm-base64` con los motores de CockroachDB, MySQL, SQL Server y
+  // SQLite. El proyecto usa SOLO PostgreSQL (`prisma/schema.prisma`) y no tiene
+  // rutas edge ni driver adapters, así que esos motores son peso muerto
+  // duplicado 156 veces (una por `route.ts`).
+  // Medido: 156 route.ts + 40 page.tsx × 80,6 MB ≈ 12,5 GB por deployment,
+  // contra el tope de 10 GB del plan Hobby. Con estas exclusiones cada función
+  // queda en ~24 MB. Lo vigila `npm run check:trazado`.
+  outputFileTracingExcludes: {
+    "**/*": [
+      // OJO con el anclaje: Next resuelve cada glob con `path.join(dir, glob)`,
+      // donde `dir` es el directorio del proyecto (`apps/web`). Los node_modules
+      // del monorepo están hoisted en `k0mp4ss_fe/node_modules`, así que los
+      // archivos trazados caen fuera de `apps/web` y un glob anclado ahí no los
+      // alcanza nunca. Por eso cada patrón va también con `../../`, que es el
+      // prefijo hasta la raíz del monorepo. La variante sin prefijo cubre un
+      // node_modules local (pnpm sin hoisting).
+      ...[
+        // Motores WASM en base64 (`query_engine_bg.*` y `query_compiler_bg.*`)
+        // de las 5 bases soportadas: ~55 MB por función. Solo se cargan en el
+        // edge runtime o con driver adapters; acá corre el motor nativo.
+        "**/node_modules/@prisma/client/runtime/*.wasm-base64.*",
+        // Variante WASM del motor dentro del cliente generado (~2 MB).
+        "**/node_modules/.prisma/client/query_engine_bg.*",
+        // sharp/libvips para musl: Vercel corre glibc. La función de /_next/image
+        // la arma Vercel fuera del trace de Next, por eso acá no se mide.
+        "**/node_modules/@img/sharp-libvips-linuxmusl-x64/**",
+        "**/node_modules/@img/sharp-linuxmusl-x64/**",
+      ].flatMap((patron) => [patron, `../../${patron}`]),
+    ],
+  },
   // Permite HMR / _next/* desde otros equipos en la misma red local.
   // Sin esto Next 16 bloquea peticiones cross-origin en dev.
   allowedDevOrigins: [

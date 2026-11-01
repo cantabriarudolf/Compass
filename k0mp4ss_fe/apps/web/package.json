@@ -32,6 +32,7 @@
     "audit:desvios": "node scripts/audit-desvios.mjs",
     "audit:store": "node scripts/audit-store.mjs",
     "check:headers": "node scripts/check-headers.mjs",
+    "check:trazado": "node scripts/check-trazado.mjs",
     "check:rechecks": "node scripts/security-recheck.mjs",
     "check:invariantes": "vitest run test/api/invariantes-*.test.ts",
     "deploy:vercel": "node scripts/deploy-vercel.mjs",
