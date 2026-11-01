@@ -28,6 +28,8 @@ import {
   CORTE_POR_INACTIVIDAD_MS,
   EscaneoQrCedula,
   MENSAJE_CAMARA_INACTIVA,
+  MENSAJE_CAPTURA_NO_CEDULA,
+  MENSAJE_CAPTURA_SIN_LECTURA,
   MENSAJE_PERMISO,
   MENSAJE_QR_NO_CEDULA,
   MENSAJE_RUN_INVALIDO,
@@ -457,6 +459,7 @@ describe("EscaneoQrCedula — corte por inactividad (RTL)", () => {
 function instalarCamaraConAjustes(ajustes: {
   resoluciones: { width: number; height: number }[]
   focusMode?: string[]
+  torch?: boolean
 }): {
   getUserMedia: ReturnType<typeof vi.fn>
   stops: ReturnType<typeof vi.fn>[]
@@ -474,7 +477,10 @@ function instalarCamaraConAjustes(ajustes: {
     const pista = {
       stop,
       getSettings: () => ({ width: resolucion.width, height: resolucion.height }),
-      getCapabilities: () => (ajustes.focusMode ? { focusMode: ajustes.focusMode } : {}),
+      getCapabilities: () => ({
+        ...(ajustes.focusMode ? { focusMode: ajustes.focusMode } : {}),
+        ...(ajustes.torch === undefined ? {} : { torch: ajustes.torch }),
+      }),
       applyConstraints,
     }
     return { getTracks: () => [pista], getVideoTracks: () => [pista] }
@@ -573,6 +579,125 @@ describe("EscaneoQrCedula — resolución real y foco (RTL)", () => {
     expect(screen.getByText(/Cámara: 640x480/)).toBeTruthy()
     expect(onDetectado).toHaveBeenCalledWith("16444555-0")
     expect(onError).not.toHaveBeenCalled()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// «Capturar»: diagnóstico manual sobre el frame completo, sin gating.
+// ---------------------------------------------------------------------------
+
+describe("EscaneoQrCedula — Capturar (RTL)", () => {
+  it("sin lectura avisa y no emite, decodificando el frame completo", async () => {
+    vi.useFakeTimers()
+    // El motor no ve nada: el botón tiene que decirlo, no quedarse en silencio.
+    const detect = instalarDetectorConCaja(null)
+
+    const { onDetectado } = renderEscaneo()
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1)
+    })
+
+    fireEvent.click(screen.getByRole("button", { name: "Capturar" }))
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1)
+    })
+
+    expect(screen.getByRole("alert").textContent).toBe(MENSAJE_CAPTURA_SIN_LECTURA)
+    expect(onDetectado).not.toHaveBeenCalled()
+    // El origen es el <video> completo, no el recorte del recuadro.
+    expect(detect.mock.calls[0]![0]).toBe(screen.getByLabelText("Previsualización de la cámara"))
+  })
+
+  it("con un código que no es de cédula avisa con el texto crudo y no emite", async () => {
+    vi.useFakeTimers()
+    instalarDetector([URL_QR_AJENO])
+
+    const { onDetectado } = renderEscaneo()
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1)
+    })
+
+    fireEvent.click(screen.getByRole("button", { name: "Capturar" }))
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1)
+    })
+
+    const aviso = screen.getByRole("alert").textContent ?? ""
+    expect(aviso).toContain(MENSAJE_CAPTURA_NO_CEDULA)
+    expect(aviso).toContain(URL_QR_AJENO)
+    expect(onDetectado).not.toHaveBeenCalled()
+  })
+
+  it("con el RUN de la cédula emite igual que el camino automático", async () => {
+    vi.useFakeTimers()
+    const camara = instalarCamaraDosTracks()
+    instalarDetector([URL_CEDULA])
+
+    const { onDetectado } = renderEscaneo()
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1)
+    })
+
+    fireEvent.click(screen.getByRole("button", { name: "Capturar" }))
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1)
+    })
+
+    expect(onDetectado).toHaveBeenCalledWith("16444555-0")
+    expect(onDetectado).toHaveBeenCalledTimes(1)
+    // Emitir apaga la cámara, igual que en la lectura automática.
+    camara.stops.forEach((stop) => expect(stop).toHaveBeenCalled())
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Linterna: sólo si el hardware la declara, y nunca encendida sola.
+// ---------------------------------------------------------------------------
+
+describe("EscaneoQrCedula — linterna (RTL)", () => {
+  it("se ofrece y se aplica sólo si el hardware la declara, y se apaga al detener", async () => {
+    vi.useFakeTimers()
+    const camara = instalarCamaraConAjustes({
+      resoluciones: [{ width: 1920, height: 1080 }],
+      torch: true,
+    })
+    instalarDetector([null])
+
+    renderEscaneo()
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1)
+    })
+
+    const boton = screen.getByRole("button", { name: "Linterna" })
+    // Nunca se prende sola.
+    expect(boton.getAttribute("aria-pressed")).toBe("false")
+    expect(camara.applyConstraints).not.toHaveBeenCalled()
+
+    fireEvent.click(boton)
+    expect(camara.applyConstraints).toHaveBeenCalledWith({ advanced: [{ torch: true }] })
+    expect(screen.getByRole("button", { name: "Linterna" }).getAttribute("aria-pressed")).toBe(
+      "true"
+    )
+
+    // Al detener la cámara, la linterna se apaga explícitamente.
+    fireEvent.click(screen.getByRole("button", { name: "Cancelar escaneo" }))
+    expect(camara.applyConstraints).toHaveBeenCalledWith({ advanced: [{ torch: false }] })
+  })
+
+  it("sin torch en las capacidades no se ofrece la linterna", async () => {
+    vi.useFakeTimers()
+    instalarCamaraConAjustes({
+      resoluciones: [{ width: 1920, height: 1080 }],
+      torch: false,
+    })
+    instalarDetector([null])
+
+    renderEscaneo()
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1)
+    })
+
+    expect(screen.queryByRole("button", { name: "Linterna" })).toBeNull()
   })
 })
 

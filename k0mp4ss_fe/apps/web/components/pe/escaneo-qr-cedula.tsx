@@ -70,6 +70,9 @@ export const MENSAJE_RUN_INVALIDO =
   "El RUN leído no pasa la validación del dígito verificador. Vuelve a apuntar el QR de la cédula."
 export const MENSAJE_CAMARA_INACTIVA =
   "La cámara se apagó para no quedar encendida. Reintentar."
+export const MENSAJE_CAPTURA_SIN_LECTURA =
+  "No se pudo leer el código. Acercá la cédula y evitá reflejos."
+export const MENSAJE_CAPTURA_NO_CEDULA = "Se leyó un código, pero no es de una cédula."
 export const MENSAJE_SIN_CAMARA =
   "Este navegador no expone la cámara (getUserMedia). Escribe el RUT y usa «Buscar en el padrón»."
 export const MENSAJE_PERMISO =
@@ -251,14 +254,41 @@ function resolucionDe(pista: MediaStreamTrack | undefined): string | null {
 function activarFocoContinuo(pista: MediaStreamTrack | undefined): boolean {
   const capacidades = pista?.getCapabilities?.() as { focusMode?: string[] } | undefined
   if (!capacidades?.focusMode?.includes("continuous")) return false
+  return aplicarAvanzada(pista, { focusMode: "continuous" })
+}
+
+/**
+ * Aplica una restricción avanzada (`focusMode`, `torch`) al track.
+ * Devuelve `false` si el navegador la rechaza: el escaneo nunca depende de esto.
+ */
+function aplicarAvanzada(
+  pista: MediaStreamTrack | undefined,
+  ajuste: Record<string, unknown>
+): boolean {
+  if (!pista) return false
   try {
-    const avanzadas = [{ focusMode: "continuous" }] as unknown as MediaTrackConstraintSet[]
-    const aplicado = pista?.applyConstraints({ advanced: avanzadas })
+    const avanzadas = [ajuste] as unknown as MediaTrackConstraintSet[]
+    const aplicado = pista.applyConstraints({ advanced: avanzadas })
     if (aplicado && typeof aplicado.catch === "function") void aplicado.catch(() => null)
     return true
   } catch {
     return false
   }
+}
+
+/** `torch` sólo existe en las capacidades de algunos móviles: sin eso no se ofrece. */
+function soportaLinterna(pista: MediaStreamTrack | undefined): boolean {
+  const capacidades = pista?.getCapabilities?.() as { torch?: boolean } | undefined
+  return capacidades?.torch === true
+}
+
+/**
+ * Vista previa del texto crudo leído por «Capturar»: corta a 40 caracteres y
+ * deja ver el corte con puntos suspensivos (no es un recorte silencioso).
+ */
+function vistaPrevia(texto: string, maximo = 40): string {
+  const crudo = texto.trim()
+  return crudo.length > maximo ? `${crudo.slice(0, maximo)}…` : crudo
 }
 
 /**
@@ -334,6 +364,10 @@ export function EscaneoQrCedula({ onDetectado, onError, onCancelar }: EscaneoQrC
   const refMarco = React.useRef<Marco | null>(null)
   // Canvas offscreen reusado para decodificar sólo el recorte del recuadro.
   const refCanvas = React.useRef<HTMLCanvasElement | null>(null)
+  // Estrategia vigente y pista de video: las usa «Capturar» y la linterna.
+  const refEstrategia = React.useRef<EstrategiaLectura | null>(null)
+  const refPista = React.useRef<MediaStreamTrack | null>(null)
+  const refLinternaEncendida = React.useRef(false)
   // Los callbacks viven en un ref para que el efecto de cámara no se reinicie
   // cuando el panel se re-renderiza (reiniciarlo apagaría y reencendería el LED).
   const refCallbacks = React.useRef({ onDetectado, onError })
@@ -342,6 +376,9 @@ export function EscaneoQrCedula({ onDetectado, onError, onCancelar }: EscaneoQrC
   // Lo que el navegador realmente entrega, para no suponerlo desde la UI.
   const [resolucion, setResolucion] = React.useState<string | null>(null)
   const [focoContinuo, setFocoContinuo] = React.useState(false)
+  const [linternaDisponible, setLinternaDisponible] = React.useState(false)
+  const [linternaEncendida, setLinternaEncendida] = React.useState(false)
+  const [capturando, setCapturando] = React.useState(false)
   const [encuadrado, setEncuadrado] = React.useState(false)
   const [ultimoCodigo, setUltimoCodigo] = React.useState<string | null>(null)
   const [mensaje, setMensaje] = React.useState<string | null>(null)
@@ -378,6 +415,11 @@ export function EscaneoQrCedula({ onDetectado, onError, onCancelar }: EscaneoQrC
   const detenerCamara = React.useCallback(() => {
     const stream = refStream.current
     refStream.current = null
+    const pista = refPista.current
+    refPista.current = null
+    // La linterna se apaga explícitamente antes de soltar el track.
+    if (pista && refLinternaEncendida.current) aplicarAvanzada(pista, { torch: false })
+    refLinternaEncendida.current = false
     stream?.getTracks().forEach((track) => track.stop())
     const video = refVideo.current
     if (video) video.srcObject = null
@@ -401,8 +443,30 @@ export function EscaneoQrCedula({ onDetectado, onError, onCancelar }: EscaneoQrC
       canvas.height = 0
     }
     refCanvas.current = null
+    refEstrategia.current = null
     detenerCamara()
   }, [detenerCamara])
+
+  /** Aviso legible al conserje: mensaje local y canal de error del panel. */
+  const avisar = React.useCallback((texto: string) => {
+    setMensaje(texto)
+    refCallbacks.current.onError(texto)
+  }, [])
+
+  /**
+   * Emisión del RUN: apaga todo antes de avisar al panel. Es el mismo camino para
+   * la lectura automática y para «Capturar», así no hay dos comportamientos.
+   */
+  const emitir = React.useCallback(
+    (run: string) => {
+      detenerTodo()
+      setEstado("detenido")
+      setMensaje(null)
+      setEmitido(true)
+      refCallbacks.current.onDetectado(run)
+    },
+    [detenerTodo]
+  )
 
   React.useEffect(() => {
     let cancelado = false
@@ -410,11 +474,6 @@ export function EscaneoQrCedula({ onDetectado, onError, onCancelar }: EscaneoQrC
     // Cada arranque del efecto es una generación nueva (montaje o «Reintentar»).
     const generacion = (refGeneracion.current += 1)
     setEstado("iniciando")
-
-    const avisar = (texto: string) => {
-      setMensaje(texto)
-      refCallbacks.current.onError(texto)
-    }
 
     const abandonar = (texto: string) => {
       setEstado("detenido")
@@ -451,11 +510,7 @@ export function EscaneoQrCedula({ onDetectado, onError, onCancelar }: EscaneoQrC
         avisar(MENSAJE_RUN_INVALIDO)
         return
       }
-      detenerTodo()
-      setEstado("detenido")
-      setMensaje(null)
-      setEmitido(true)
-      refCallbacks.current.onDetectado(run)
+      emitir(run)
     }
 
     const iniciar = async () => {
@@ -475,7 +530,12 @@ export function EscaneoQrCedula({ onDetectado, onError, onCancelar }: EscaneoQrC
        */
       const prepararFrame = (video: HTMLVideoElement): Frame => {
         const medidas = medidasDeVideo(video)
-        const marcoCss = refMarco.current
+        // El recuadro se mide en CADA lectura, no se reusa el guardado: si el panel
+        // cambió de tamaño sin `resize` (barra del navegador, teclado, contenido que
+        // carga), un marco viejo recortaría fuera del QR y el gating lo descartaría
+        // en silencio. El overlay sigue al estado, que se refresca en `resize`.
+        const marcoCss = medidas ? marcoGuia(medidas) : null
+        refMarco.current = marcoCss
         const recorte = medidas && marcoCss ? marcoEnVideo(marcoCss, medidas) : null
         if (recorte) {
           const canvas = (refCanvas.current ??= document.createElement("canvas"))
@@ -506,9 +566,14 @@ export function EscaneoQrCedula({ onDetectado, onError, onCancelar }: EscaneoQrC
 
       refStream.current = stream
       const pista = pistaDeVideo(stream)
-      // Lo que el navegador entregó de verdad, y si el hardware aceptó foco continuo.
+      refPista.current = pista ?? null
+      refEstrategia.current = estrategia
+      // Lo que el navegador entregó de verdad, y qué acepta el hardware.
       setResolucion(resolucionDe(pista))
       setFocoContinuo(activarFocoContinuo(pista))
+      setLinternaDisponible(soportaLinterna(pista))
+      setLinternaEncendida(false)
+      refLinternaEncendida.current = false
       const video = refVideo.current
       if (video) {
         video.srcObject = stream
@@ -561,13 +626,55 @@ export function EscaneoQrCedula({ onDetectado, onError, onCancelar }: EscaneoQrC
       cancelado = true
       detenerTodo()
     }
-  }, [detenerTodo, medirMarco, intento])
+  }, [detenerTodo, emitir, avisar, medirMarco, intento])
 
   const cancelar = () => {
     detenerTodo()
     setEstado("detenido")
     setEncuadrado(false)
     onCancelar()
+  }
+
+  /**
+   * Lectura manual del frame COMPLETO en resolución nativa, sin recorte y sin
+   * gating: responde «¿el decodificador ve algo?» sin que el encuadre lo tape.
+   * Es el diagnóstico que hace falta cuando el escaneo automático calla.
+   */
+  const capturar = async () => {
+    const video = refVideo.current
+    const estrategia = refEstrategia.current
+    if (!video || !estrategia || capturando) return
+    setCapturando(true)
+    try {
+      const lectura = await estrategia.leer(video)
+      if (!lectura) {
+        avisar(MENSAJE_CAPTURA_SIN_LECTURA)
+        return
+      }
+      const run = extraerRunDeQr(lectura.texto)
+      if (!run) {
+        avisar(`${MENSAJE_CAPTURA_NO_CEDULA} Código: «${vistaPrevia(lectura.texto)}»`)
+        return
+      }
+      if (!validarRun(run)) {
+        avisar(MENSAJE_RUN_INVALIDO)
+        return
+      }
+      emitir(run)
+    } catch {
+      // El lector rechazó el frame: se informa igual que una captura sin lectura.
+      avisar(MENSAJE_CAPTURA_SIN_LECTURA)
+    } finally {
+      setCapturando(false)
+    }
+  }
+
+  /** Enciende o apaga la linterna del track vigente (sólo si el hardware la declara). */
+  const alternarLinterna = () => {
+    const encender = !linternaEncendida
+    aplicarAvanzada(refPista.current ?? undefined, { torch: encender })
+    refLinternaEncendida.current = encender
+    setLinternaEncendida(encender)
   }
 
   /** Rearranca el escaneo con el plazo de inactividad en cero. */
@@ -626,7 +733,29 @@ export function EscaneoQrCedula({ onDetectado, onError, onCancelar }: EscaneoQrC
           {mensaje}
         </p>
       ) : null}
-      <div className="flex justify-end gap-2">
+      <div className="flex flex-wrap justify-end gap-2">
+        {estado === "escaneando" ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            onClick={() => void capturar()}
+            disabled={capturando}
+          >
+            Capturar
+          </Button>
+        ) : null}
+        {estado === "escaneando" && linternaDisponible ? (
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            aria-pressed={linternaEncendida}
+            onClick={alternarLinterna}
+          >
+            Linterna
+          </Button>
+        ) : null}
         {estado === "detenido" && !emitido ? (
           <Button type="button" size="sm" onClick={reintentar}>
             Reintentar
