@@ -21,11 +21,12 @@ Las filas marcadas `CADA FORMULARIO ⚠`, `NADIE ⚠` o con dos puertas distinta
 | `Persona` · `email` | Único por comunidad | era **puerta partida**: `/api/personas` sí, `/api/mis-datos` no | centralizada → `lib/invariantes/persona.ts` |
 | `Persona` · `rut` | Único por comunidad | era **puerta única** (`/api/personas`) | centralizada → `lib/invariantes/persona.ts` |
 | `EventoAuditoria` | Forma mínima + append-only | **NADIE**: `EventoAuditoriaSchema` sin uso, 29 escritores a mano, `sync` con upsert | pendiente (30 sitios) |
-| `CierreTurnoPE` | Un cierre por fecha+jornada+trabajador | **CADA FORMULARIO** | `app/operaciones/bitacora/page.tsx:182` |
 | `MicroSector` | Nombre/etiqueta único por macro sector | **CADA FORMULARIO** (D5 dice permitido) | `app/inventario/estructura/page.tsx:212` |
 | `Persona` · `nombreCompleto` | Sin duplicados de nombre | **CADA FORMULARIO** (no es regla de spec) | `components/comunidad/formulario-persona.tsx:88` |
 | `TipoUnidad` · `nombre` | Único por comunidad | **CADA FORMULARIO + DB contradictorios**: la UI avisa "repetidos permitidos", la DB responde 409 | `app/inventario/tipos/page.tsx:131` vs `@unique` |
 | `MacroSector` · `nombre` | Único por comunidad | **CADA FORMULARIO + DB parcial**: la UI compara nombre+etiqueta, la DB sólo nombre | `app/inventario/estructura/page.tsx:162` vs `@unique` |
+
+Ya resueltas (salieron de esta lista): `Persona.email`/`Persona.rut` (**INV-01**) y `CierreTurnoPE` (**INV-02**).
 
 ## Paso 2 — Tabla completa
 
@@ -173,7 +174,7 @@ Las filas marcadas `CADA FORMULARIO ⚠`, `NADIE ⚠` o con dos puertas distinta
 | `ProveedorPE` | RUT único por comunidad | `DB` — `@unique([comunidadId,rut])` | `app/api/pe/proveedores/[id]/route.ts:12`<br>`app/api/pe/proveedores/route.ts:13` | — (sin test de regla) |
 | `MantencionPreventivaPE` | Ciclo preventivo por proveedor del tenant | `API` — Zod | `app/api/pe/mantenciones/[id]/route.ts:12`<br>`app/api/pe/mantenciones/route.ts:12` | — (sin test de regla) |
 | `VisitaTecnicaPE` | Visita con proveedor del tenant | `API` — Zod | `app/api/pe/visitas-tecnicas/[id]/route.ts:12`<br>`app/api/pe/visitas-tecnicas/route.ts:12` | — (sin test de regla) |
-| `CierreTurnoPE` | Un cierre por (fecha, jornada reportada, trabajador) | `CADA FORMULARIO ⚠` — `app/operaciones/bitacora/page.tsx:182` bloquea; la API no lo chequea y la spec PE no lo exige | `app/api/pe/cierres-turno/[id]/route.ts:21`<br>`app/api/pe/cierres-turno/route.ts:12` | — (sin test de regla) |
+| `CierreTurnoPE` | Un cierre por trabajador, fecha y jornada; identidad por ficha (RUT), nunca por nombre | `CENTRAL` — `lib/invariantes/pe.ts:cierreTurnoDuplicado` vía `antesDeEscribir` de la factory CRUD (POST) y del put-merge (PUT) | `app/api/pe/cierres-turno/route.ts:21`<br>`app/api/pe/cierres-turno/[id]/route.ts:39` | `test/api/invariantes-cierre-turno.test.ts` (3 pruebas: homónimos con RUT distinto / mismo trabajador 409 / PUT no puede mover el cierre a otro trabajador) |
 | `ProyeccionPE` | Proyección operativa derivada de feriados MA | `API` — Zod | `app/api/liquidaciones/route.ts:388`<br>`app/api/pe/proyecciones/[id]/route.ts:12`<br>`app/api/pe/proyecciones/enviar/route.ts:93`<br>`app/api/pe/proyecciones/route.ts:12` | — (sin test de regla) |
 
 ### PL / CT / RE
@@ -187,5 +188,5 @@ Las filas marcadas `CADA FORMULARIO ⚠`, `NADIE ⚠` o con dos puertas distinta
 
 ## Cobertura de tests por regla
 
-De las filas de arriba, sólo unas pocas tienen un test que prueba la regla (y no sólo la ruta): `Persona.email` (INV-01, nuevo), `Persona.rut` (`test/api/personas.test.ts`) y `ReservaRA` (solapamiento, `test/api/fase4-ra.test.ts`). El resto tiene cobertura de ruta —que la respuesta sea 200/409— pero no de invariante. Eso es lo que `npm run check:invariantes` empieza a cerrar: hoy corre 2 pruebas, una por cada caso de INV-01 (acepta libre / rechaza ajeno).
+De las filas de arriba, sólo unas pocas tienen un test que prueba la regla (y no sólo la ruta): `Persona.email` y `CierreTurnoPE` (INV-01/INV-02, nuevos), `Persona.rut` (`test/api/personas.test.ts`) y `ReservaRA` (solapamiento, `test/api/fase4-ra.test.ts`). El resto tiene cobertura de ruta —que la respuesta sea 200/409— pero no de invariante. Eso es lo que `npm run check:invariantes` empieza a cerrar: hoy corre 5 pruebas: dos por regla (acepta / rechaza) para INV-01 (`Persona.email`) y tres para INV-02 (`CierreTurnoPE`, incluida la puerta del PUT).
 

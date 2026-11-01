@@ -57,6 +57,22 @@ export type BeforeDelete = (
   scope: ComunidadScope
 ) => Response | null | Promise<Response | null>
 
+/**
+ * Guardia previa a la escritura (POST upsert y PUT parcial).
+ *
+ * `previo` es la fila existente (null si el POST crea). `datos` es el payload
+ * YA validado por Zod y con `id`/`comunidadId` sin limpiar todavia. Devuelve un
+ * Response para cortar la escritura, o null para seguir.
+ *
+ * Es el punto donde viven las reglas que necesitan mirar OTRA fila (unicidad de
+ * negocio, dependencias de estado): la factory no las conoce y no las inventa.
+ */
+export type AntesDeEscribir = (args: {
+  datos: Record<string, unknown>
+  previo: Record<string, unknown> | null
+  scope: ComunidadScope
+}) => Response | null | Promise<Response | null>
+
 export type AccionEscritura = "crear" | "editar" | "eliminar"
 
 export interface EscrituraCrud {
@@ -75,6 +91,8 @@ export interface CrudConfig {
   schema: z.ZodType
   authzCheck?: AuthzCheck
   beforeDelete?: BeforeDelete
+  /** Guardia previa a la escritura: corre despues de authz y antes del upsert/update. */
+  antesDeEscribir?: AntesDeEscribir
   /**
    * Hook post-escritura (auditoría, T1c), opcional y aditivo: sin él, el
    * comportamiento de GET/POST/PUT/DELETE es exactamente el de siempre.
@@ -159,6 +177,20 @@ async function leerJson(req: Request): Promise<unknown | null> {
 
 export function createCrudHandlers(config: CrudConfig): CrudHandlers {
   const { model, schema, authzCheck, beforeDelete } = config
+
+  async function aplicarGuardiaDeEscritura(
+    datos: Record<string, unknown>,
+    previo: Record<string, unknown> | null,
+    scope: ComunidadScope
+  ): Promise<Response | null> {
+    if (!config.antesDeEscribir) return null
+    try {
+      return await config.antesDeEscribir({ datos, previo, scope })
+    } catch (e) {
+      logger.error({ err: e }, "[crud-factory] antesDeEscribir fallo")
+      return jsonError(500, "Error interno del servidor.")
+    }
+  }
 
   async function notificarEscritura(escritura: EscrituraCrud): Promise<void> {
     if (!config.despuesDeEscribir) return
@@ -255,6 +287,13 @@ export function createCrudHandlers(config: CrudConfig): CrudHandlers {
       const denegado = autorizar(scope, existente ? "editar" : "crear")
       if (denegado) return denegado
 
+      const corto = await aplicarGuardiaDeEscritura(
+        datos,
+        (existente as Record<string, unknown> | null) ?? null,
+        scope
+      )
+      if (corto) return corto
+
       const payload = {
         ...limpiarPayload(datos),
         id,
@@ -335,6 +374,13 @@ export function createCrudHandlers(config: CrudConfig): CrudHandlers {
       }
       const denegado = autorizar(scope, "editar")
       if (denegado) return denegado
+
+      const corto = await aplicarGuardiaDeEscritura(
+        parsed.data as Record<string, unknown>,
+        record as Record<string, unknown>,
+        scope
+      )
+      if (corto) return corto
 
       const actualizado = await model.update({
         where: { id },

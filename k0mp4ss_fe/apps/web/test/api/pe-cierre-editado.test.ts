@@ -79,9 +79,15 @@ describe("/api/pe/cierres-turno/[id] — auditoría PE_CIERRE_EDITADO (am-emisor
       })
     }
     await limpiar()
+    // INV-02: un trabajador no puede tener dos cierres con la misma fecha y
+    // jornada. Los tres fixtures comparten fecha/jornada, así que cada uno usa
+    // una ficha distinta (persona = RUT, la identidad de la regla).
     for (const id of ["pecierre-cie-1", "pecierre-cie-403", "pecierre-cie-400"]) {
       await prisma.cierreTurnoPE.create({
-        data: { ...cierre(id), comunidadId: comunidadA } as never,
+        data: {
+          ...cierre(id, { trabajadorPersonaId: `${id}-pers` }),
+          comunidadId: comunidadA,
+        } as never,
       })
     }
     // Cierre ajeno (otra comunidad) para el 404 de scope.

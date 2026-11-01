@@ -17,6 +17,7 @@ import { generarId } from "@/lib/id-utils"
 import { createCrudHandlers, delegado } from "@/lib/api/crud-factory"
 import { createPutMerge } from "@/lib/api/put-merge"
 import { withComunidadScope } from "@/lib/api/with-comunidad-scope"
+import { guardiaCierreUnico } from "@/lib/invariantes/pe"
 
 const modelo = delegado(prisma.cierreTurnoPE)
 const authzCheck = (rol: string, accion: "ver" | "crear" | "editar" | "eliminar" | "ejecutar") =>
@@ -33,6 +34,9 @@ const putMerge = createPutMerge({
   schema: CierreTurnoPESchema,
   authzCheck,
   recurso: "pe/cierres-turno",
+  // INV-02: mover fecha/jornada/trabajador por PUT tampoco puede duplicar el
+  // cierre. La guardia funde el parche con la fila previa y excluye el propio id.
+  antesDeEscribir: guardiaCierreUnico,
 })
 
 type Ctx = { params: Promise<{ id: string }> }

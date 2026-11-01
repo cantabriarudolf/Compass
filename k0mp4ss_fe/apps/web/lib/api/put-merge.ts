@@ -21,7 +21,12 @@ import {
   jsonError,
   withComunidadScope,
 } from "./with-comunidad-scope"
-import type { AuthzCheck, CrudDelegate, DespuesDeEscribir } from "./crud-factory"
+import type {
+  AntesDeEscribir,
+  AuthzCheck,
+  CrudDelegate,
+  DespuesDeEscribir,
+} from "./crud-factory"
 
 export interface PutMergeConfig {
   model: CrudDelegate
@@ -38,6 +43,12 @@ export interface PutMergeConfig {
    * tampoco puede quedar en silencio.
    */
   despuesDeEscribir?: DespuesDeEscribir
+  /**
+   * Guardia previa a la escritura, misma semántica que en la factory CRUD:
+   * corre después de authz y antes del `model.update`, con el payload ya
+   * fusionado y validado. Devuelve un Response para cortar, o null para seguir.
+   */
+  antesDeEscribir?: AntesDeEscribir
 }
 
 type Ctx = { params: Promise<{ id: string }> }
@@ -90,6 +101,14 @@ export function createPutMerge(config: PutMergeConfig) {
       const datos = { ...(parsed.data as Record<string, unknown>) }
       delete datos.id
       delete datos.comunidadId
+      if (config.antesDeEscribir) {
+        const corto = await config.antesDeEscribir({
+          datos: parsed.data as Record<string, unknown>,
+          previo: existente,
+          scope,
+        })
+        if (corto) return corto
+      }
       const actualizado = await model.update({
         where: { id },
         data: datos,
