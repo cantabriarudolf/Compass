@@ -11,9 +11,16 @@
  * (3 locales, 83 estacionamientos, 1 amenity). Este script deja una comunidad
  * con números redondos y coherentes entre sí.
  *
+ * Desde el paso 7 también siembra la puerta: `bitacora_visitas_pe`,
+ * `encomiendas_pe` e `ingresos_contratista_pe` con el día de la corrida, para
+ * que el panel «Foto del día · Operaciones» del dashboard no quede en «sin
+ * movimiento».
+ *
  * Propiedades del script:
  * - **Determinista**: PRNG con semilla fija. Dos corridas dejan el mismo estado.
- * - **Idempotente**: todo es upsert por id determinista; no duplica filas.
+ * - **Idempotente**: todo es upsert por id determinista; no duplica filas. En la
+ *   portería el id lleva la fecha del día, así que dos corridas el mismo día
+ *   actualizan las mismas filas.
  * - **Aditivo**: NO borra personas con login (`p-3`…`p-7`, `p-arrendatario-1`)
  *   ni unidades existentes cuyos ids son contrato de `seed-authz.mjs` y de
  *   `e2e/`/`test/`. Solo borra los artefactos de QA (`test-*`).
@@ -25,6 +32,7 @@
  */
 /* global process, console */
 import { cargarUrlBase } from "../lib/database-url"
+import { hoyISO } from "../lib/date-utils"
 import { PrismaClient, Prisma } from "@prisma/client"
 
 const comunidadId =
@@ -987,10 +995,282 @@ async function pasoMultas(estructura: Estructura): Promise<void> {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
+// Paso 7 — Portería del día: visitas, encomiendas e ingresos de contratistas
+// ────────────────────────────────────────────────────────────────────────────
+
+/**
+ * La «foto del día» de Operaciones (`components/dashboard/foto-del-dia.tsx`) lee
+ * estas tres tablas y declara «sin movimiento» cuando no hay nada registrado
+ * para hoy. La fecha es la de la corrida y no una constante: el panel compara
+ * contra `hoyISO()`.
+ *
+ * Enums que la API valida (`lib/schemas.ts`) y que acá se respetan al pie de la
+ * letra, porque un valor inválido deja el panel roto:
+ * - visita: `origenAgenda` ∈ pre_agendada | sin_aviso, `estado` ∈ agendada |
+ *   ingresada | cancelada, `jornadaId` del maestro `j-manana`/`j-tarde`/`j-noche`.
+ * - encomienda: `courierId` del maestro de couriers, `estado` ∈ recibida |
+ *   retirada.
+ * - contratista: `estado` ∈ agendado | ingresado | cancelado, `agendadoPor` ∈
+ *   residente | administracion, `motivo` de 5 caracteres o más.
+ */
+
+/** Fecha ISO desplazada N días (negativo = hacia el pasado). */
+function desplazarDia(fecha: string, dias: number): string {
+  const [anio, mes, dia] = fecha.split("-").map(Number) as [number, number, number]
+  return iso(new Date(Date.UTC(anio, mes - 1, dia + dias)))
+}
+
+const dosDigitos = (n: number) => String(n).padStart(2, "0")
+
+/** Hora de la puerta: la mañana va de 08:00 a 12:59 y la tarde de 13:00 a 20:59. */
+function horaDePorteria(manana: boolean): string {
+  const horas = manana ? entero(8, 12) : entero(13, 20)
+  return `${dosDigitos(horas)}:${dosDigitos(entero(0, 59))}`
+}
+
+/** Jornada del maestro sembrado (`j-manana`, `j-tarde`, `j-noche`) según la hora. */
+function jornadaDeHora(hora: string): string {
+  const horas = Number(hora.slice(0, 2))
+  return horas < 13 ? "j-manana" : horas < 20 ? "j-tarde" : "j-noche"
+}
+
+/** `hora` menos N minutos, en el mismo formato HH:MM (nunca se va a negativo). */
+function restarMinutos(hora: string, minutos: number): string {
+  const total = Math.max(0, Number(hora.slice(0, 2)) * 60 + Number(hora.slice(3, 5)) - minutos)
+  return `${dosDigitos(Math.floor(total / 60))}:${dosDigitos(total % 60)}`
+}
+
+/** `createdAt` con hora local: la lista del día usa esa hora como hora del paquete. */
+function fechaHoraLocal(fecha: string, hora: string): Date {
+  const [anio, mes, dia] = fecha.split("-").map(Number) as [number, number, number]
+  return new Date(anio, mes - 1, dia, Number(hora.slice(0, 2)), Number(hora.slice(3, 5)))
+}
+
+/** Patente chilena determinista (4 letras + 2 dígitos) para la visita con auto. */
+function patenteDe(indice: number): string {
+  const letras = "BCDFGHJKLMNPRSTVWXYZ"
+  const cuatro = [1, 3, 7, 11].map((paso) => letras[(indice * paso + paso) % letras.length] as string)
+  return `${cuatro.join("")}${dosDigitos((indice * 37 + 11) % 100)}`
+}
+
+// 18 visitas ya ingresaron, 2 siguen agendadas y 2 se cancelaron: el panel no
+// cuenta las canceladas, así que el día muestra movimiento real.
+const ESTADOS_VISITA = [
+  "ingresada", "ingresada", "ingresada", "ingresada", "agendada",
+  "ingresada", "ingresada", "cancelada", "ingresada", "ingresada",
+  "ingresada", "ingresada", "ingresada", "agendada", "ingresada",
+  "ingresada", "ingresada", "ingresada", "cancelada", "ingresada",
+  "ingresada", "ingresada",
+] as const
+
+const NOTAS_VISITA = [
+  "Llegó caminando por el acceso peatonal.",
+  "Estacionó en el estacionamiento de visita E-085.",
+  "Trae herramientas para una reparación menor.",
+  "Acompaña al residente hasta la unidad.",
+  "Entrega de comida, no sube.",
+  "Visita familiar de la tarde.",
+]
+
+const TIPOS_PAQUETE = [
+  "Caja de cartón mediana",
+  "Sobre con documentos",
+  "Bolsa de supermercado",
+  "Caja grande de 40x30x30",
+  "Tubo con planos",
+  "Caja pequeña de farmacia",
+]
+
+// Maestros sembrados por `seed-db-from-mocks` (no se crean acá).
+const COURIERS_PORTERIA = [
+  "cour-chilexpress",
+  "cour-starken",
+  "cour-pedidosya",
+  "cour-uberflash",
+  "cour-correos",
+  "cour-otro",
+] as const
+
+// 9 encomiendas de hoy (6 por retirar y 3 ya retiradas) + 2 que llegaron ayer y
+// siguen en portería: el panel cuenta las pendientes sin importar el día.
+const ENCOMIENDAS_PORTERIA = 11
+const ENCOMIENDAS_DE_AYER = 2
+
+const INGRESOS_CONTRATISTAS = [
+  { proveedorId: "prv-hidropack", motivo: "Revisión mensual del hidropack y cambio de filtros", hora: "09:20", estado: "ingresado", agendadoPor: "administracion" },
+  { proveedorId: "prv-ascensores", motivo: "Mantención mensual de los ascensores de los cinco edificios", hora: "10:05", estado: "ingresado", agendadoPor: "administracion" },
+  { proveedorId: "prv-aseo", motivo: "Sanitización de los ductos de extracción", hora: "11:40", estado: "ingresado", agendadoPor: "administracion" },
+  { proveedorId: "prv-edificio", motivo: "Reparación de filtración en la techumbre del departamento", hora: "15:30", estado: "ingresado", agendadoPor: "residente" },
+  { proveedorId: "prv-jardin", motivo: "Poda de los árboles del sector de la piscina", hora: "16:45", estado: "agendado", agendadoPor: "administracion" },
+  { proveedorId: "prv-seguridad", motivo: "Revisión de las cámaras del acceso vehicular", hora: "18:10", estado: "agendado", agendadoPor: "administracion" },
+] as const
+
+async function pasoPorteria(estructura: Estructura): Promise<void> {
+  if (estructura.deptos.length === 0) {
+    console.log("[porteria] sin departamentos sembrados: se omite")
+    return
+  }
+  const dia = hoyISO()
+
+  // Residentes vigentes por unidad: las visitas y las encomiendas apuntan a una
+  // persona real de la comunidad, no a un id inventado.
+  const vinculos = await prisma.vinculoUnidad.findMany({
+    where: {
+      comunidadId,
+      fechaFin: null,
+      rol: { in: ["propietario", "copropietario", "arrendatario"] },
+    },
+    select: { unidadId: true, personaId: true },
+    orderBy: [{ unidadId: "asc" }, { personaId: "asc" }],
+  })
+  const personas = await prisma.persona.findMany({
+    where: { comunidadId, id: { in: [...new Set(vinculos.map((v) => v.personaId))] } },
+    select: { id: true, nombreCompleto: true },
+  })
+  const nombreDe = new Map(personas.map((p) => [p.id, p.nombreCompleto]))
+  const residenteDe = new Map<string, { personaId: string; nombre: string }>()
+  for (const vinculo of vinculos) {
+    if (residenteDe.has(vinculo.unidadId)) continue
+    residenteDe.set(vinculo.unidadId, {
+      personaId: vinculo.personaId,
+      nombre: nombreDe.get(vinculo.personaId) ?? vinculo.personaId,
+    })
+  }
+  const conResidente = estructura.deptos.filter((unidad) => residenteDe.has(unidad.id))
+  const destinos = conResidente.length > 0 ? conResidente : estructura.deptos
+
+  // Visitas de la bitácora, repartidas entre mañana y tarde.
+  for (const [indice, estado] of ESTADOS_VISITA.entries()) {
+    const unidad = destinos[indice % destinos.length] as UnidadMin
+    const residente = residenteDe.get(unidad.id)
+    const manana = indice % 2 === 0
+    const hora = horaDePorteria(manana)
+    const horaIngreso = estado === "ingresada" ? hora : null
+    const origenAgenda = indice % 3 === 0 ? "sin_aviso" : "pre_agendada"
+    // La visita sin aviso entra autorizada por teléfono: la gestión queda con su
+    // hora, que es anterior al ingreso (es la llamada, no el portazo).
+    const autorizada = origenAgenda === "sin_aviso" && estado === "ingresada"
+    const fila = {
+      comunidadId,
+      fecha: dia,
+      nombre: generarNombre().nombreCompleto,
+      dni: formatearRut(String(20_000_000 + indice * 1_007)),
+      patente: indice % 3 === 0 ? null : patenteDe(indice),
+      unidadId: unidad.id,
+      destinoPersonaId: residente?.personaId ?? null,
+      jornadaId: jornadaDeHora(hora),
+      origenAgenda,
+      agendadaPorPersonaId: origenAgenda === "pre_agendada" ? (residente?.personaId ?? null) : null,
+      estado,
+      horaIngreso,
+      autorizacionTelefonica: autorizada,
+      horaAutorizacion: autorizada && horaIngreso ? restarMinutos(horaIngreso, entero(3, 9)) : null,
+      notas:
+        estado === "cancelada"
+          ? "El residente avisó que la visita no llegaría."
+          : estado === "agendada"
+            ? "Pre-agendada por el residente; queda pendiente de ingreso."
+            : elegir(NOTAS_VISITA),
+    }
+    const id = `vis-${dia}-${String(indice + 1).padStart(2, "0")}`
+    await prisma.bitacoraVisitaPE.upsert({ where: { id }, update: fila, create: { id, ...fila } })
+  }
+
+  // Encomiendas: courier del maestro, evidencia por referencia (D1) y retiro
+  // registrado solo en las entregadas.
+  for (let indice = 0; indice < ENCOMIENDAS_PORTERIA; indice++) {
+    const unidad = destinos[(indice * 5) % destinos.length] as UnidadMin
+    const residente = residenteDe.get(unidad.id)
+    const deAyer = indice >= ENCOMIENDAS_PORTERIA - ENCOMIENDAS_DE_AYER
+    const diaRecepcion = deAyer ? desplazarDia(dia, -1) : dia
+    const retirada = !deAyer && indice % 3 === 2
+    const courierId = COURIERS_PORTERIA[indice % COURIERS_PORTERIA.length] as string
+    const hora = horaDePorteria(indice % 2 === 0)
+    const fila = {
+      comunidadId,
+      courierId,
+      destinatarioPersonaId: residente?.personaId ?? null,
+      unidadId: unidad.id,
+      descripcionPaquete: elegir(TIPOS_PAQUETE),
+      evidencia:
+        indice % 2 === 0
+          ? {
+              nombre: `evidencia-${courierId}-${indice + 1}.jpg`,
+              tipoMime: "image/jpeg",
+              tamanoKB: entero(180, 900),
+              url: `https://evidencias.demo.cl/porteria/${courierId}-${indice + 1}.jpg`,
+            }
+          : Prisma.DbNull,
+      fechaRecepcion: diaRecepcion,
+      estado: retirada ? "retirada" : "recibida",
+      retiro: retirada
+        ? {
+            retiradoPor: residente?.nombre ?? "Conserjería",
+            fechaRetiro: dia,
+            relacion: elegir(["El propio residente", "Familiar directo", "Conserje autorizado"]),
+          }
+        : Prisma.DbNull,
+      createdAt: fechaHoraLocal(diaRecepcion, hora),
+    }
+    const id = `enc-${diaRecepcion}-${String(indice + 1).padStart(2, "0")}`
+    await prisma.encomiendaPE.upsert({ where: { id }, update: fila, create: { id, ...fila } })
+  }
+
+  // El maestro de contratistas es el que resuelve el nombre de la empresa en la
+  // puerta (`/api/pe/maestros/contratistas`) y en el evento `PE_CONTRATISTA_INGRESADO`.
+  // Las filas se atan al proveedor sembrado (`prv-*`), así que el maestro espeja
+  // el mismo id: sin esto la pantalla mostraría el id crudo en vez del nombre.
+  for (const proveedor of PROVEEDORES) {
+    const fila = {
+      comunidadId,
+      nombre: proveedor.nombre,
+      rubro: proveedor.rubro,
+      telefono: proveedor.telefono,
+    }
+    await prisma.contratista.upsert({
+      where: { id: proveedor.id },
+      update: fila,
+      create: { id: proveedor.id, ...fila },
+    })
+  }
+
+  // Ingresos de contratistas: tres ya entraron y tres esperan (dos agendados y
+  // uno agendado por el residente de la unidad que los pidió).
+  for (const [indice, contratista] of INGRESOS_CONTRATISTAS.entries()) {
+    const unidad = destinos[indice % destinos.length] as UnidadMin
+    const residente = residenteDe.get(unidad.id)
+    const pidioElResidente = contratista.agendadoPor === "residente"
+    const fila = {
+      comunidadId,
+      contratistaId: contratista.proveedorId,
+      motivo: contratista.motivo,
+      unidadId: pidioElResidente ? unidad.id : null,
+      fecha: dia,
+      jornadaId: jornadaDeHora(contratista.hora),
+      agendadoPor: contratista.agendadoPor,
+      personaAgendaId: pidioElResidente ? (residente?.personaId ?? null) : null,
+      estado: contratista.estado,
+      horaIngreso: contratista.estado === "ingresado" ? contratista.hora : null,
+      notas:
+        contratista.estado === "ingresado"
+          ? "Ingreso registrado por conserjería con credencial de la empresa."
+          : "Agendado para hoy; queda pendiente de ingreso.",
+    }
+    const id = `ing-${dia}-${String(indice + 1).padStart(2, "0")}`
+    await prisma.ingresoContratistaPE.upsert({ where: { id }, update: fila, create: { id, ...fila } })
+  }
+
+  console.log(
+    `[porteria] ${ESTADOS_VISITA.length} visitas, ${ENCOMIENDAS_PORTERIA} encomiendas y ${INGRESOS_CONTRATISTAS.length} ingresos de contratistas para ${dia}`,
+  )
+}
+
+// ────────────────────────────────────────────────────────────────────────────
 // Verificación final
 // ────────────────────────────────────────────────────────────────────────────
 
 async function verificar(): Promise<void> {
+  const dia = hoyISO()
   const [unidades, personas, vinculos, locales, estac, visitas, amenities, emisiones, cobros, liquidaciones, proveedores, mantenciones, visitasTec, infracciones] =
     await Promise.all([
       prisma.unidad.count({ where: { comunidadId, microSectorId: { startsWith: "piso-torre-" } } }),
@@ -1008,6 +1288,15 @@ async function verificar(): Promise<void> {
       prisma.visitaTecnicaPE.count({ where: { comunidadId } }),
       prisma.infraccionIN.count({ where: { comunidadId } }),
     ])
+
+  // Portería — las cuatro cifras que el panel «Foto del día · Operaciones»
+  // pinta; «movimientos» en 0 es exactamente lo que muestra «sin movimiento».
+  const [visitasPorteria, encomiendasPendientes, encomiendasHoy, contratistasPorteria] = await Promise.all([
+    prisma.bitacoraVisitaPE.count({ where: { comunidadId, fecha: dia, estado: { not: "cancelada" } } }),
+    prisma.encomiendaPE.count({ where: { comunidadId, estado: "recibida" } }),
+    prisma.encomiendaPE.count({ where: { comunidadId, fechaRecepcion: dia } }),
+    prisma.ingresoContratistaPE.count({ where: { comunidadId, fecha: dia, estado: { not: "cancelado" } } }),
+  ])
 
   const duenios = await prisma.vinculoUnidad.findMany({
     where: { comunidadId, fechaFin: null, rol: { in: ["propietario", "copropietario"] } },
@@ -1049,6 +1338,10 @@ async function verificar(): Promise<void> {
     mantenciones,
     visitasTecnicas: visitasTec,
     infracciones,
+    visitasPorteria,
+    encomiendasPendientes,
+    contratistasPorteria,
+    movimientosPorteriaHoy: visitasPorteria + encomiendasHoy + contratistasPorteria,
   }
   console.log("[seed-demo-consistente] reporte:", reporte)
 
@@ -1082,6 +1375,7 @@ async function main(): Promise<void> {
   await pasoNominas()
   await pasoProveedores()
   await pasoMultas(estructura)
+  await pasoPorteria(estructura)
   await verificar()
 }
 
