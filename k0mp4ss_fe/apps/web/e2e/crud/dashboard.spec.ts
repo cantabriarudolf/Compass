@@ -2,86 +2,55 @@ import { expect, test } from "@playwright/test"
 
 test.use({ actionTimeout: 30_000 })
 
-test.describe("Dashboard — Resumen en /dashboard", () => {
-  test("vista read-only: heading, ≥4 KPI cards con datos del seed, links rápidos y 0 pageerror", async ({ page }) => {
+/**
+ * /dashboard dejó de ser la portada de inventario (feature `dashboard-operativo`):
+ * ahora es una portada operativa y financiera por perfil. Con la sesión de
+ * `admin@test.cl` (storageState compartido) se renderiza el perfil de gestión.
+ *
+ * Spec: odd/tasks/dashboard-operativo.md, S1-S8.
+ */
+test.describe("Dashboard — portada por perfil", () => {
+  test("perfil de gestión: foto del día, finanzas, deuda, provisión, nóminas, mantenciones y visitas", async ({
+    page,
+  }) => {
     const errores: string[] = []
     page.on("pageerror", (err) => errores.push(err.message))
 
     await page.goto("/dashboard")
 
-    // 1) Heading Resumen
-    await expect(page.getByRole("heading", { name: /Resumen/ })).toBeVisible({ timeout: 30_000 })
-    await expect(page.getByText("Vista gerencial")).toBeVisible()
+    // S1/S8 — foto rápida del día del módulo Operaciones.
+    await expect(page.getByText("Foto del día · Operaciones").first()).toBeVisible({ timeout: 30_000 })
 
-    // 2) Al menos 4 KPI cards con números no vacíos (valores del seed >0)
-    // Las cards contienen label arriba y valor numérico grande
-    // Afirmar que hay al menos 4 valores numéricos visibles en la grilla de KPIs
-    const kpiGrid = page.locator("text=Unidades totales").first()
-    await expect(kpiGrid).toBeVisible({ timeout: 15_000 })
-
-    // Contar KPI cards por sus labels conocidos
-    const labels = [
-      "Unidades totales",
-      "Personas registradas",
-      "Residentes vigentes",
-      "Tipos de unidad",
-      "Sectores",
-      "Estados ocupación",
-      "Fondos FI",
-    ]
-    let visibleKpis = 0
-    for (const label of labels) {
-      const el = page.getByText(label, { exact: true }).first()
-      if (await el.isVisible().catch(() => false)) visibleKpis++
-    }
-    expect(visibleKpis).toBeGreaterThanOrEqual(4)
-
-    // Cada KPI visible debe tener un número (no vacío) cercano
-    // Verificar que la página contiene al menos 4 números de 1-3 dígitos en cards
-    const numericCards = page.locator(".text-2xl.font-black")
-    const countNumeric = await numericCards.count()
-    expect(countNumeric).toBeGreaterThanOrEqual(4)
-    for (let i = 0; i < Math.min(countNumeric, 4); i++) {
-      const txt = (await numericCards.nth(i).textContent())?.trim() ?? ""
-      expect(txt).toMatch(/\d+/)
-      expect(txt.length).toBeGreaterThan(0)
+    // S3 — bloque financiero con sus cuatro cifras.
+    await expect(page.getByText("Finanzas de la comunidad").first()).toBeVisible({ timeout: 15_000 })
+    for (const etiqueta of ["Ingresos", "Egresos", "Caja total", "Caja por fondos"]) {
+      await expect(page.getByText(etiqueta, { exact: false }).first()).toBeVisible({ timeout: 15_000 })
     }
 
-    // 3) Links rápidos presentes (≥4 links a módulos)
-    await expect(page.getByText("Accesos rápidos", { exact: true }).first()).toBeVisible({ timeout: 15_000 })
-    const quickLinks = [
-      "Estructura Física",
-      "Residentes",
-      "Bitácora Diaria",
-      "Finanzas",
-      "Métricas",
-      "Personas",
-    ]
-    let quickVisible = 0
-    for (const title of quickLinks) {
-      const el = page.getByText(title, { exact: true }).first()
-      if (await el.isVisible().catch(() => false)) quickVisible++
-    }
-    expect(quickVisible).toBeGreaterThanOrEqual(4)
+    // S4 — deuda de las unidades con desglose.
+    await expect(page.getByText("Deuda de las unidades").first()).toBeVisible({ timeout: 15_000 })
 
-    // Verificar que los quick links son navegables (href existe)
-    const links = page.getByRole("link")
-    const linkCount = await links.count()
-    expect(linkCount).toBeGreaterThanOrEqual(4)
-    // Al menos un link apunta a /inventario/estructura y otro a /personas/residentes
-    await expect(page.getByRole("link", { name: /Estructura Física/i }).first()).toBeVisible()
-    // El href de KPI también cuenta — verificar que hay links a módulos fuente
-    const hrefs = await links.evaluateAll((els) => els.map((e) => (e as HTMLAnchorElement).href))
-    const hasEstructura = hrefs.some((h) => h.includes("/inventario/estructura"))
-    const hasResidentes = hrefs.some((h) => h.includes("/personas/residentes"))
-    expect(hasEstructura).toBeTruthy()
-    expect(hasResidentes).toBeTruthy()
+    // S5 — provisión del mes.
+    await expect(page.getByText("Provisión del mes").first()).toBeVisible({ timeout: 15_000 })
 
-    // 4) Solo lectura: sin botones de mutación
+    // S6 — compromisos: nóminas por pagar y gastos mensuales estimados.
+    await expect(page.getByText("Nóminas por pagar").first()).toBeVisible({ timeout: 15_000 })
+    await expect(page.getByText("Gastos mensuales estimados").first()).toBeVisible({ timeout: 15_000 })
+
+    // S7 — mantenciones preventivas desde el maestro de proveedores.
+    await expect(page.getByText("Mantenciones preventivas").first()).toBeVisible({ timeout: 15_000 })
+
+    // S8 — visitas técnicas conviven con la foto del día.
+    await expect(page.getByText("Visitas técnicas del período").first()).toBeVisible({ timeout: 15_000 })
+
+    // D5 — ningún panel queda en un esqueleto infinito: hay cifras en pesos.
+    const cifras = page.getByText(/\$\s?[\d.]+/)
+    expect(await cifras.count()).toBeGreaterThan(0)
+
+    // Portada de solo lectura: sin acciones de mutación.
     await expect(page.getByRole("button", { name: /eliminar|borrar|crear|guardar/i })).toHaveCount(0)
 
-    // 5) Ruta distinta de / (home)
-    // Home tiene "Bienvenido a GECOS", dashboard tiene "Resumen"
+    // No es la portada del home.
     await expect(page.getByText("Bienvenido a GECOS")).toHaveCount(0)
 
     expect(errores, "Excepciones no capturadas en /dashboard").toEqual([])
