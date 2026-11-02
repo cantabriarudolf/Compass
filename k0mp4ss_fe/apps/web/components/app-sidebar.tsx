@@ -68,9 +68,12 @@ const data = {
       icon: IconBook,
       roles: ["administrador", "conserjeria", "residente", "mantencion"],
       items: [
-        { title: "Bitácora Diaria", url: "/operaciones/bitacora" },
-        { title: "Accesos y Visitas", url: "/operaciones/accesos" },
-        { title: "Encomiendas", url: "/operaciones/paqueteria" },
+        // Los registros de acceso (visitas, encomiendas y trabajos) viven en un solo módulo:
+        // /operaciones/accesos ya muestra la lista consolidada del día, así que el menú deja
+        // una única entrada para todos ellos. Las páginas /operaciones/bitacora y
+        // /operaciones/paqueteria siguen existiendo y accesibles por URL directa, pero no se
+        // listan acá para no duplicar el registro.
+        { title: "Accesos", url: "/operaciones/accesos" },
         { title: "Reservas y Amenities", url: "/operaciones/reservas" },
         { title: "Solicitudes", url: "/operaciones/solicitudes" },
         { title: "Proveedores y Servicios", url: "/operaciones/proveedores" },
