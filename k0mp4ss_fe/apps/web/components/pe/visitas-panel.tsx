@@ -122,6 +122,15 @@ export function VisitasPanel({
   const [escanerAbierto, setEscanerAbierto] = React.useState(false)
   // Aviso previo de que la autorización telefónica no se podrá editar después.
   const [dialogoAutorizacion, setDialogoAutorizacion] = React.useState(false)
+  /**
+   * Rama fijada por la cédula. `null` = todavía nadie leyó un documento, así que
+   * el conserje elige a mano (cédula vieja, pasaporte o cámara denegada). Con
+   * valor, la rama la decidió el escaneo y los interruptores quedan fijados: si
+   * se pudieran mover, el conserje podría contradecir lo que leyó la cámara.
+   */
+  const [ramaPorIdentidad, setRamaPorIdentidad] = React.useState<
+    "padron" | "externa" | null
+  >(null)
   const [resultadoIdentidad, setResultadoIdentidad] = React.useState<ResultadoIdentidad | null>(null)
   const [buscandoIdentidad, setBuscandoIdentidad] = React.useState(false)
   const [avisoPadron, setAvisoPadron] = React.useState<string | null>(null)
@@ -290,11 +299,14 @@ export function VisitasPanel({
     // RUT fuera del padrón: la visita entra por el camino sin aviso, que es el que
     // exige el OK telefónico del residente.
     setFormVisita((f) => ({ ...f, origenAgenda: "sin_aviso", autorizacionTelefonica: false }))
+    setRamaPorIdentidad("externa")
   }
 
   /** RUN validado por el escáner: cierra la cámara y propone la identidad. */
   const manejarRunDetectado = (run: string) => {
     setEscanerAbierto(false)
+    // Lectura nueva: la rama anterior deja de valer hasta que se resuelva ésta.
+    setRamaPorIdentidad(null)
     void buscarEnPadron(run)
   }
 
@@ -312,6 +324,7 @@ export function VisitasPanel({
       return
     }
     onError(null)
+    setRamaPorIdentidad(null)
     void buscarEnPadron(canonico)
   }
 
@@ -337,6 +350,7 @@ export function VisitasPanel({
     setResultadoIdentidad(null)
     setAvisoPadron(null)
     onError(null)
+    setRamaPorIdentidad("padron")
     onSuccess("Identidad confirmada desde la cédula. La visita queda pre-agendada: regístrala y luego márcala como ingresada.")
   }
 
@@ -348,6 +362,7 @@ export function VisitasPanel({
     setResultadoIdentidad(null)
     setAvisoPadron(null)
     onError(null)
+    setRamaPorIdentidad("externa")
     onSuccess(
       "RUT leído aplicado como visita externa. Llama al residente, marca «Autorización telefónica recibida» y registra la visita."
     )
@@ -409,6 +424,7 @@ export function VisitasPanel({
       return
     }
     setFormVisita({ ...formVisita, nombre: "", dni: "", patente: "", notas: "", autorizacionTelefonica: false })
+    setRamaPorIdentidad(null)
     onError(null)
     onSuccess(esAgendada ? "Visita pre-agendada a la espera del ingreso." : "Visita registrada e ingresada.")
   }
@@ -441,7 +457,10 @@ export function VisitasPanel({
               type="button"
               size="sm"
               variant="outline"
-              className="text-red-600"
+              // MARCADOR TEMPORAL (2026-11-01): el título en verde sirve para confirmar
+              // en pantalla que el deploy nuevo ya está vivo. Quitar el className
+              // "text-green-600" cuando el owner confirme que lo vio.
+              className="text-green-600"
               onClick={() => {
                 setResultadoIdentidad(null)
                 setEscanerAbierto(true)
@@ -589,6 +608,7 @@ export function VisitasPanel({
           <label className="flex items-center gap-2 text-sm">
             <Switch
               checked={formVisita.origenAgenda === "pre_agendada"}
+              disabled={ramaPorIdentidad !== null}
               onCheckedChange={(v) => setFormVisita({ ...formVisita, origenAgenda: v ? "pre_agendada" : "sin_aviso" })}
             />
             Pre-agendada (espera confirmación de ingreso)
@@ -597,10 +617,18 @@ export function VisitasPanel({
             <label className="flex items-center gap-2 text-sm">
               <Switch
                 checked={formVisita.autorizacionTelefonica}
+                disabled={ramaPorIdentidad === "padron"}
                 onCheckedChange={(v) => setFormVisita({ ...formVisita, autorizacionTelefonica: v })}
               />
               Autorización telefónica recibida
             </label>
+          ) : null}
+          {ramaPorIdentidad ? (
+            <p className="text-xs text-muted-foreground">
+              {ramaPorIdentidad === "padron"
+                ? "La cédula está en el padrón: la visita queda pre-agendada. Se registra y después se marca ingresada."
+                : "El RUT no está en el padrón: la visita es sin aviso y necesita el OK telefónico del residente."}
+            </p>
           ) : null}
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="v-notas">Notas</Label>

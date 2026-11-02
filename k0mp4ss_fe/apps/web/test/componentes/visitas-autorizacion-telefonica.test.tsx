@@ -66,6 +66,24 @@ describe("VisitasPanel — autorización telefónica del residente", () => {
     expect(screen.queryByRole("switch", { name: /Autorización telefónica recibida/ })).toBeNull()
   })
 
+  it("sin escanear, el conserje sigue eligiendo la rama a mano", () => {
+    instalarApiPE({ unidades: UNIDADES })
+
+    render(<VisitasPanel diaReporte={HOY} onError={vi.fn()} onSuccess={vi.fn()} />)
+
+    // Fallback obligatorio del flujo: cédula vieja, pasaporte o cámara denegada.
+    // Sin lectura de documento la rama no la fija nadie, así que se elige a mano.
+    expect(
+      (screen.getByRole("switch", { name: /Pre-agendada/ }) as HTMLButtonElement).disabled
+    ).toBe(false)
+    expect(
+      (screen.getByRole("switch", { name: /Autorización telefónica recibida/ }) as HTMLButtonElement)
+        .disabled
+    ).toBe(false)
+    expect(screen.queryByText(/La cédula está en el padrón/)).toBeNull()
+    expect(screen.queryByText(/El RUT no está en el padrón/)).toBeNull()
+  })
+
   it("sin el check no registra la visita y lo declara", async () => {
     const user = userEvent.setup()
     const onError = vi.fn()

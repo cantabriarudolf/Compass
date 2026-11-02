@@ -317,6 +317,11 @@ describe("VisitasPanel (componente, RTL)", () => {
       screen.getByRole("switch", { name: /Pre-agendada/ }).getAttribute("aria-checked")
     ).toBe("true")
     expect(screen.queryByRole("switch", { name: /Autorización telefónica recibida/ })).toBeNull()
+    // La cédula fijó la rama: el interruptor ya no se puede contradecir.
+    expect(
+      (screen.getByRole("switch", { name: /Pre-agendada/ }) as HTMLButtonElement).disabled
+    ).toBe(true)
+    expect(screen.getByText(/La cédula está en el padrón/)).toBeTruthy()
 
     await user.click(screen.getByRole("button", { name: /Registrar visita/ }))
     await waitFor(() =>
@@ -354,6 +359,16 @@ describe("VisitasPanel (componente, RTL)", () => {
       screen.getByRole("switch", { name: /Pre-agendada/ }).getAttribute("aria-checked")
     ).toBe("false")
     expect(screen.getByRole("switch", { name: /Autorización telefónica recibida/ })).toBeTruthy()
+    // La rama quedó fijada por la lectura, pero el OK telefónico sigue accionable:
+    // es justo lo que el conserje tiene que marcar para poder registrar.
+    expect(
+      (screen.getByRole("switch", { name: /Pre-agendada/ }) as HTMLButtonElement).disabled
+    ).toBe(true)
+    expect(
+      (screen.getByRole("switch", { name: /Autorización telefónica recibida/ }) as HTMLButtonElement)
+        .disabled
+    ).toBe(false)
+    expect(screen.getByText(/El RUT no está en el padrón/)).toBeTruthy()
     // La visita externa tampoco se registra sola: falta el nombre y el botón.
     expect(buscarPeticiones(api, "POST", "/api/pe/bitacora-visitas")).toHaveLength(0)
   })
