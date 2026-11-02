@@ -83,3 +83,63 @@ export async function guardiaCierreUnico({
   )
   return dup ? jsonError(409, MENSAJE_CIERRE_DUPLICADO) : null
 }
+
+/**
+ * PE-visitas — La autorización telefónica del residente no se reedita.
+ *
+ * Decisión del owner (2026-11-01): cuando la visita llega SIN aviso, el conserje
+ * llama al residente y pide el OK por teléfono. Si lo recibe, registra la visita
+ * marcando «autorización telefónica recibida» y el sistema guarda la hora de esa
+ * gestión. Una vez guardada, la autorización es **constancia de quién dejó entrar
+ * a esa persona** y por eso no se puede revocar ni corregir después: si se
+ * pudiera, el registro dejaría de servir como prueba.
+ *
+ * El aviso de que no se podrá editar se da en la UI ANTES de guardar
+ * (`components/pe/visitas-panel.tsx`, AlertDialog). Esta guardia es la que lo
+ * hace valer por cualquier camino —panel, curl o script—, igual que la baja
+ * protegida de F15 y la guardia de INV-02.
+ *
+ * Reglas:
+ * 1. Una autorización ya registrada no se revoca (true → false se corta).
+ * 2. La hora de una gestión ya registrada no se reescribe.
+ * 3. Marcar la autorización exige la hora de la gestión: sin ella el registro
+ *    diría que alguien autorizó pero no cuándo, que es medio registro.
+ */
+
+export const MENSAJE_AUTORIZACION_INMUTABLE =
+  "La autorización telefónica ya quedó registrada y no se puede editar."
+
+export const MENSAJE_AUTORIZACION_SIN_HORA =
+  "La autorización telefónica necesita la hora de la gestión."
+
+/** Guardia `antesDeEscribir`: corta la reedición de la autorización, null si puede pasar. */
+export function guardiaAutorizacionInmutable({
+  datos,
+  previo,
+}: {
+  datos: Record<string, unknown>
+  previo: Record<string, unknown> | null
+}): Response | null {
+  const autorizada = datos.autorizacionTelefonica === true
+  const hora = typeof datos.horaAutorizacion === "string" ? datos.horaAutorizacion : undefined
+
+  // Marcar la autorización sin hora deja un registro a medias.
+  if (autorizada && !hora) return jsonError(400, MENSAJE_AUTORIZACION_SIN_HORA)
+
+  // En el POST no hay fila previa: no hay nada que proteger todavía.
+  if (!previo) return null
+
+  // Revocar una autorización ya registrada.
+  if (previo.autorizacionTelefonica === true && !autorizada) {
+    return jsonError(409, MENSAJE_AUTORIZACION_INMUTABLE)
+  }
+
+  // Reescribir la hora de una gestión ya registrada.
+  const horaPrevia =
+    typeof previo.horaAutorizacion === "string" ? previo.horaAutorizacion : undefined
+  if (horaPrevia !== undefined && hora !== undefined && hora !== horaPrevia) {
+    return jsonError(409, MENSAJE_AUTORIZACION_INMUTABLE)
+  }
+
+  return null
+}

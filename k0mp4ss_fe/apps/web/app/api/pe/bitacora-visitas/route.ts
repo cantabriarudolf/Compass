@@ -14,6 +14,7 @@ import { BitacoraVisitaPESchema } from "@/lib/schemas"
 import { puede } from "@/lib/authz"
 import { prisma } from "@/lib/prisma"
 import { createCrudHandlers, delegado } from "@/lib/api/crud-factory"
+import { guardiaAutorizacionInmutable } from "@/lib/invariantes/pe"
 import {
   avisarResidenteVisita,
   emitirVisitaIngresada,
@@ -25,6 +26,8 @@ const handlers = createCrudHandlers({
   model: delegado(prisma.bitacoraVisitaPE),
   schema: BitacoraVisitaPESchema,
   authzCheck: (rol, accion) => puede(rol, accion, "pe"),
+  // PE-visitas: la autorización telefónica, una vez registrada, no se reedita.
+  antesDeEscribir: guardiaAutorizacionInmutable,
   despuesDeEscribir: async ({ registro, scope, accion }) => {
     // La visita que entra es un hecho nuevo: un re-save del mismo id no vuelve a
     // emitir evento ni a avisar al residente.

@@ -11,6 +11,16 @@ import { Button } from "@workspace/ui/components/button"
 import { Badge } from "@workspace/ui/components/badge"
 import { Switch } from "@workspace/ui/components/switch"
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@workspace/ui/components/alert-dialog"
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -66,6 +76,8 @@ interface FormVisita {
   destinoPersonaId: string
   jornadaId: string
   origenAgenda: "pre_agendada" | "sin_aviso"
+  /** PE-visitas: el residente autorizó el ingreso por teléfono (sólo sin aviso). */
+  autorizacionTelefonica: boolean
   notas: string
 }
 
@@ -101,12 +113,15 @@ export function VisitasPanel({
     destinoPersonaId: "",
     jornadaId: "j-manana",
     origenAgenda: "sin_aviso",
+    autorizacionTelefonica: false,
     notas: "",
   })
 
   // Identificación por cédula: el escaneo o la búsqueda manual SOLO proponen
   // datos; la visita se sigue registrando con el botón de abajo.
   const [escanerAbierto, setEscanerAbierto] = React.useState(false)
+  // Aviso previo de que la autorización telefónica no se podrá editar después.
+  const [dialogoAutorizacion, setDialogoAutorizacion] = React.useState(false)
   const [resultadoIdentidad, setResultadoIdentidad] = React.useState<ResultadoIdentidad | null>(null)
   const [buscandoIdentidad, setBuscandoIdentidad] = React.useState(false)
   const [avisoPadron, setAvisoPadron] = React.useState<string | null>(null)
@@ -339,6 +354,27 @@ export function VisitasPanel({
       return
     }
     const esAgendada = formVisita.origenAgenda === "pre_agendada"
+    // La visita sin aviso entra porque el residente autorizó por teléfono: sin
+    // esa constancia no se registra nada.
+    if (!esAgendada && !formVisita.autorizacionTelefonica) {
+      onError(
+        "Marcá «Autorización telefónica recibida» antes de registrar una visita sin aviso."
+      )
+      return
+    }
+    // Última puerta antes de escribir algo que después no se puede corregir.
+    if (!esAgendada) {
+      setDialogoAutorizacion(true)
+      return
+    }
+    await ejecutarGuardado(true)
+  }
+
+  /**
+   * Escritura efectiva. `esAgendada` decide si la visita espera confirmación de
+   * ingreso o si entra ahora con la autorización telefónica del residente.
+   */
+  const ejecutarGuardado = async (esAgendada: boolean) => {
     const visita: BitacoraVisitaPE = {
       id: generarId("pe-vis"),
       fecha: diaReporte,
@@ -351,7 +387,11 @@ export function VisitasPanel({
       origenAgenda: formVisita.origenAgenda,
       agendadaPorPersonaId: undefined,
       estado: esAgendada ? "agendada" : "ingresada",
-      ...(esAgendada ? {} : { horaIngreso: horaActual() }),
+      // Sin aviso: la autorización y la hora de esa gestión viajan juntas y
+      // quedan congeladas (la API rechaza cualquier cambio posterior con 409).
+      ...(esAgendada
+        ? {}
+        : { horaIngreso: horaActual(), autorizacionTelefonica: true, horaAutorizacion: horaActual() }),
       notas: formVisita.notas.trim() || undefined,
     }
     const r = await crearVisitaApi(visita)
@@ -359,7 +399,7 @@ export function VisitasPanel({
       onError(r.error ?? "No se pudo registrar la visita.")
       return
     }
-    setFormVisita({ ...formVisita, nombre: "", dni: "", patente: "", notas: "" })
+    setFormVisita({ ...formVisita, nombre: "", dni: "", patente: "", notas: "", autorizacionTelefonica: false })
     onError(null)
     onSuccess(esAgendada ? "Visita pre-agendada a la espera del ingreso." : "Visita registrada e ingresada.")
   }
@@ -544,6 +584,15 @@ export function VisitasPanel({
             />
             Pre-agendada (espera confirmación de ingreso)
           </label>
+          {formVisita.origenAgenda === "sin_aviso" ? (
+            <label className="flex items-center gap-2 text-sm">
+              <Switch
+                checked={formVisita.autorizacionTelefonica}
+                onCheckedChange={(v) => setFormVisita({ ...formVisita, autorizacionTelefonica: v })}
+              />
+              Autorización telefónica recibida
+            </label>
+          ) : null}
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="v-notas">Notas</Label>
             <Input id="v-notas" value={formVisita.notas} onChange={(e) => setFormVisita({ ...formVisita, notas: e.target.value })} />
@@ -551,6 +600,26 @@ export function VisitasPanel({
           <Button onClick={() => void guardarVisita()}>
             <IconCheck className="mr-1 size-4" /> Registrar visita
           </Button>
+          {/* Aviso previo obligatorio: después de guardar, la autorización del
+              residente queda como constancia y no se puede editar. */}
+          <AlertDialog open={dialogoAutorizacion} onOpenChange={setDialogoAutorizacion}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>La autorización no se podrá editar</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Se va a registrar la visita con la autorización telefónica del residente y la
+                  hora de esta gestión. Una vez guardada, la autorización no se puede revocar ni
+                  corregir: queda como constancia de quién autorizó el ingreso.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Volver</AlertDialogCancel>
+                <AlertDialogAction onClick={() => void ejecutarGuardado(false)}>
+                  Sí, registrar
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </CardContent>
       </Card>
 

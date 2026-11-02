@@ -227,7 +227,9 @@ describe("VisitasPanel (componente, RTL)", () => {
     await user.type(screen.getByLabelText("DNI *"), "16.444.555-0")
     await elegirOpcion(user, 0) // Jornada
     await elegirUnidadDestino(user)
+    await user.click(screen.getByRole("switch", { name: /Autorización telefónica recibida/ }))
     await user.click(screen.getByRole("button", { name: /Registrar visita/ }))
+    await user.click(await screen.findByRole("button", { name: /Sí, registrar/ }))
 
     await waitFor(() =>
       expect(buscarPeticiones(api, "POST", "/api/pe/bitacora-visitas")).toHaveLength(1)
@@ -254,7 +256,7 @@ describe("VisitasPanel (componente, RTL)", () => {
     await user.type(screen.getByLabelText("DNI *"), "16.444.555-0")
     await elegirOpcion(user, 0) // Jornada
     await elegirUnidadDestino(user)
-    await user.click(screen.getByRole("switch"))
+    await user.click(screen.getByRole("switch", { name: /Pre-agendada/ }))
     await user.click(screen.getByRole("button", { name: /Registrar visita/ }))
 
     await waitFor(() =>
@@ -310,7 +312,9 @@ describe("VisitasPanel (componente, RTL)", () => {
     // La unidad del vínculo queda preseleccionada y visible en el control buscable.
     expect(screen.getAllByText("Depto 101 · 123-A11").length).toBeGreaterThanOrEqual(1)
 
+    await user.click(screen.getByRole("switch", { name: /Autorización telefónica recibida/ }))
     await user.click(screen.getByRole("button", { name: /Registrar visita/ }))
+    await user.click(await screen.findByRole("button", { name: /Sí, registrar/ }))
     await waitFor(() =>
       expect(buscarPeticiones(api, "POST", "/api/pe/bitacora-visitas")).toHaveLength(1)
     )

@@ -1096,6 +1096,12 @@ model BitacoraVisitaPE {
   agendadaPorPersonaId String?
   estado               String
   horaIngreso          String?
+  // Autorizacion telefonica del residente (PE-visitas, decision del owner 2026-11-01):
+  // el conserje llama al residente cuando la visita llega sin aviso. Una vez
+  // registrada, la autorizacion NO se puede reeditar (la API lo corta con 409):
+  // es la constancia de quien dejo entrar a esa persona.
+  autorizacionTelefonica Boolean @default(false)
+  horaAutorizacion       String?
   notas                String?
   createdAt            DateTime @default(now())
 

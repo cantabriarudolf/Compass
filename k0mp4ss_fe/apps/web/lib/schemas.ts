@@ -1398,6 +1398,13 @@ export const BitacoraVisitaPESchema = z.object({
   agendadaPorPersonaId: IdEntidadSchema.optional(),
   estado: z.enum(["agendada", "ingresada", "cancelada"]),
   horaIngreso: HoraPESchema.optional(),
+  // Autorización telefónica del residente (PE-visitas, decisión del owner
+  // 2026-11-01): sólo aplica a la visita que llegó sin aviso. `horaAutorizacion`
+  // es la hora de la gestión (la llamada), no la del ingreso. Una vez registrada
+  // no se puede reeditar: la API la corta con 409 en
+  // `app/api/pe/bitacora-visitas/[id]/route.ts`.
+  autorizacionTelefonica: z.boolean().optional(),
+  horaAutorizacion: HoraPESchema.optional(),
   notas: z.string().optional(),
 })
 

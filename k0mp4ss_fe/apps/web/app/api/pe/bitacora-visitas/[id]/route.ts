@@ -19,6 +19,7 @@ import { prisma } from "@/lib/prisma"
 import { jsonError } from "@/lib/api/with-comunidad-scope"
 import { createCrudHandlers, delegado } from "@/lib/api/crud-factory"
 import { createPutMerge } from "@/lib/api/put-merge"
+import { guardiaAutorizacionInmutable } from "@/lib/invariantes/pe"
 import {
   avisarResidenteVisita,
   emitirVisitaIngresada,
@@ -40,6 +41,8 @@ const handlers = createCrudHandlers({
   model: modelo,
   schema: BitacoraVisitaPESchema,
   authzCheck,
+  // PE-visitas: la autorización telefónica, una vez registrada, no se reedita.
+  antesDeEscribir: guardiaAutorizacionInmutable,
   beforeDelete: (record) => {
     const fila = record as { estado?: string }
     if (fila.estado === "ingresada") {
@@ -55,6 +58,8 @@ export const PUT = createPutMerge({
   schema: BitacoraVisitaPESchema,
   authzCheck,
   recurso: "pe/bitacora-visitas",
+  // PE-visitas: la autorización telefónica, una vez registrada, no se reedita.
+  antesDeEscribir: guardiaAutorizacionInmutable,
   despuesDeEscribir: async ({ registro, previo, scope }) => {
     const fila = registro as FilaVisita
     if (fila.estado !== "ingresada") return

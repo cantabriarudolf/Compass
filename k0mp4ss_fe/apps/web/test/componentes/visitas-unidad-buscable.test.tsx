@@ -97,7 +97,9 @@ describe("VisitasPanel — Unidad destino buscable (F6)", () => {
 
     await user.type(screen.getByLabelText("Nombre *"), "Visita F6")
     await user.type(screen.getByLabelText("DNI *"), "16.444.555-0")
+    await user.click(screen.getByRole("switch", { name: /Autorización telefónica recibida/ }))
     await user.click(screen.getByRole("button", { name: /Registrar visita/ }))
+    await user.click(await screen.findByRole("button", { name: /Sí, registrar/ }))
 
     await waitFor(() =>
       expect(
@@ -143,7 +145,9 @@ describe("VisitasPanel — Unidad destino buscable (F6)", () => {
       { timeout: 10_000 }
     )
     await user.click(await within(lista).findByRole("option", { name: /Residente Destino/ }))
+    await user.click(screen.getByRole("switch", { name: /Autorización telefónica recibida/ }))
     await user.click(screen.getByRole("button", { name: /Registrar visita/ }))
+    await user.click(await screen.findByRole("button", { name: /Sí, registrar/ }))
 
     await waitFor(() =>
       expect(
