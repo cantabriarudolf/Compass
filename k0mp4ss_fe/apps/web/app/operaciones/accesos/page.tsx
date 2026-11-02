@@ -7,6 +7,7 @@ import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
 import { IconBook2 } from "@tabler/icons-react"
 import { RegistroAcceso } from "@/components/pe/registro-acceso"
+import { ListaAccesosDia } from "@/components/pe/lista-accesos-dia"
 import { AvisoPrivacidadConserjeria } from "@/components/aviso-privacidad-conserjeria"
 
 function hoyISO(): string {
@@ -44,6 +45,10 @@ export default function AccesosPage() {
             panel correspondiente aparece solo. Los tres modos escriben en sus
             tablas actuales (decisión A: etiquetas nuevas, datos quietos). */}
         <RegistroAcceso diaReporte={diaReporte} onError={setError} onSuccess={setOkMsg} />
+
+        {/* T3: lista consolidada del día (visitas + encomiendas + trabajos), de solo
+            lectura. No reemplaza a los paneles: los complementa. */}
+        <ListaAccesosDia diaReporte={diaReporte} />
       </section>
     </div>
   )
