@@ -11,7 +11,7 @@
  * NO la reimplementa — una sola fuente de verdad para el DV en todo el repo.
  * Lo que agrega es la puerta del escáner: lo leído nunca se asume válido.
  */
-import { calcularDigitoVerificador } from "@/lib/rut"
+import { calcularDigitoVerificador, formatearRut } from "@/lib/rut"
 
 /** Cuerpo del RUN: 7 u 8 dígitos (los RUN de 5-6 dígitos ya no circulan). */
 const CUERPO_RUN = /^\d{7,8}$/
@@ -83,6 +83,20 @@ export function variantesRun(valor: string): string[] {
   return Array.from(
     new Set([canonico, `${agruparMiles(cuerpo)}-${dv}`, `${cuerpo}${dv}`])
   )
+}
+
+/**
+ * Grafía de presentación del RUN: cuerpo agrupado por miles y DV en mayúscula
+ * (`16.444.555-0`). Es la forma en que se muestra y se guarda lo que escribe el
+ * conserje, para que `16444555-0`, `164445550` y `16.444.555-0` no terminen siendo
+ * tres valores distintos de la misma persona.
+ *
+ * Devuelve `null` cuando el texto no tiene forma de RUN — igual que
+ * `normalizarRun`: el llamador deja el valor como está y no inventa nada.
+ */
+export function formatearRun(valor: string): string | null {
+  const canonico = normalizarRun(valor)
+  return canonico ? formatearRut(canonico) : null
 }
 
 /**

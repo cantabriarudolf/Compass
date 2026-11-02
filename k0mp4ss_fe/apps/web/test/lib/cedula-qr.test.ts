@@ -27,7 +27,13 @@ import {
   type Marco,
   type Punto,
 } from "@/lib/cedula-qr"
-import { mascararRun, normalizarRun, validarRun, variantesRun } from "@/lib/validacion-rut"
+import {
+  formatearRun,
+  mascararRun,
+  normalizarRun,
+  validarRun,
+  variantesRun,
+} from "@/lib/validacion-rut"
 
 const URL_CEDULA =
   "https://www.registrocivil.cl/servicios-en-linea/valida-documento?RUN=16.444.555-0&type=CEDULA"
@@ -118,6 +124,26 @@ describe("variantesRun", () => {
 
   it("devuelve [] cuando el valor no es un RUN", () => {
     expect(variantesRun("pasaporte-AB123456")).toEqual([])
+  })
+})
+
+describe("formatearRun (grafía de presentación)", () => {
+  it("deja el RUN con puntos y el DV en mayúscula, se escriba como se escriba", () => {
+    // Las tres formas en que el conserje puede tipear el mismo RUN.
+    expect(formatearRun("164445550")).toBe("16.444.555-0")
+    expect(formatearRun("16444555-0")).toBe("16.444.555-0")
+    expect(formatearRun("16.444.555-0")).toBe("16.444.555-0")
+  })
+
+  it("sube la k minúscula del dígito verificador", () => {
+    expect(formatearRun("1000005k")).toBe("1.000.005-K")
+    expect(formatearRun("1.000.005-k")).toBe("1.000.005-K")
+  })
+
+  it("no inventa formato cuando el texto no tiene forma de RUN", () => {
+    // Un pasaporte no es un RUN: el llamador deja el valor tal cual.
+    expect(formatearRun("AB123456")).toBeNull()
+    expect(formatearRun("")).toBeNull()
   })
 })
 

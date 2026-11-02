@@ -242,7 +242,9 @@ describe("VisitasPanel (componente, RTL)", () => {
     expect(cuerpo.fecha).toBe(HOY)
 
     sinErrores(onError)
-    expect(await screen.findByText("Visitante TEST-RTL")).toBeTruthy()
+    // El nombre se guarda en Título Caso (onBlur). El guion no corta palabra,
+    // así que TEST-RTL queda "Test-rtl": es la grafía de `aTituloCaso`.
+    expect(await screen.findByText("Visitante Test-rtl")).toBeTruthy()
     expect(onSuccess).toHaveBeenCalled()
   })
 
@@ -308,7 +310,7 @@ describe("VisitasPanel (componente, RTL)", () => {
     // La confirmación solo completa el formulario: tampoco guarda la visita.
     expect(buscarPeticiones(api, "POST", "/api/pe/bitacora-visitas")).toHaveLength(0)
     expect((screen.getByLabelText("Nombre *") as HTMLInputElement).value).toBe("Juan Pérez González")
-    expect((screen.getByLabelText("DNI *") as HTMLInputElement).value).toBe("15123456-9")
+    expect((screen.getByLabelText("DNI *") as HTMLInputElement).value).toBe("15.123.456-9")
     // La unidad del vínculo queda preseleccionada y visible en el control buscable.
     expect(screen.getAllByText("Depto 101 · 123-A11").length).toBeGreaterThanOrEqual(1)
     // RUT registrado en el padrón → la visita entra por el camino de la pre-agenda
@@ -352,7 +354,7 @@ describe("VisitasPanel (componente, RTL)", () => {
     expect(within(resultado).getByText(/19\.\*\*\*\.\*\*\*-0/)).toBeTruthy()
 
     await user.click(within(resultado).getByRole("button", { name: /Usar el RUT leído/ }))
-    expect((screen.getByLabelText("DNI *") as HTMLInputElement).value).toBe("19876543-0")
+    expect((screen.getByLabelText("DNI *") as HTMLInputElement).value).toBe("19.876.543-0")
     // RUT fuera del padrón → camino sin aviso: se gatilla el OK telefónico y la
     // pre-agenda queda apagada.
     expect(

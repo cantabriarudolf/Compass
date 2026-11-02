@@ -33,7 +33,8 @@ import { SelectorBuscable, type Opcion } from "@/components/selector-buscable"
 import { buscarPersonaPorRun, buscarPersonas, nombresDePersonas, usePersonasOperacion } from "@/lib/api/use-personas"
 import { buscarUnidades, etiquetasDeUnidades, useUnidadesOperacion } from "@/lib/api/use-unidades"
 import { esUnidadDestino, etiquetaUnidad } from "@/lib/unidades-destino"
-import { mascararRun, normalizarRun, validarRun } from "@/lib/validacion-rut"
+import { formatearRun, mascararRun, normalizarRun, validarRun } from "@/lib/validacion-rut"
+import { aTituloCaso } from "@/lib/normalizacion"
 import type { BitacoraVisitaPE } from "@/lib/schemas"
 
 /** Hora local HH:MM: es el formato de `horaIngreso` en el contrato PE. */
@@ -339,7 +340,7 @@ export function VisitasPanel({
     setFormVisita((f) => ({
       ...f,
       nombre: coincidencia.nombre,
-      dni: coincidencia.run,
+      dni: formatearRun(coincidencia.run) ?? coincidencia.run,
       unidadId: coincidencia.unidadId ?? f.unidadId,
       destinoPersonaId: coincidencia.personaId,
       // RUT registrado en el padrón: la visita sigue el camino de la pre-agenda.
@@ -358,7 +359,7 @@ export function VisitasPanel({
   const confirmarVisitaExterna = () => {
     if (resultadoIdentidad?.tipo !== "sin_coincidencia") return
     const run = resultadoIdentidad.run
-    setFormVisita((f) => ({ ...f, dni: run, origenAgenda: "sin_aviso", autorizacionTelefonica: false }))
+    setFormVisita((f) => ({ ...f, dni: formatearRun(run) ?? run, origenAgenda: "sin_aviso", autorizacionTelefonica: false }))
     setResultadoIdentidad(null)
     setAvisoPadron(null)
     onError(null)
@@ -551,11 +552,25 @@ export function VisitasPanel({
           <div className="grid grid-cols-2 gap-2">
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="v-nombre">Nombre *</Label>
-              <Input id="v-nombre" value={formVisita.nombre} onChange={(e) => setFormVisita({ ...formVisita, nombre: e.target.value })} />
+              <Input
+                id="v-nombre"
+                value={formVisita.nombre}
+                onChange={(e) => setFormVisita({ ...formVisita, nombre: e.target.value })}
+                // Al salir del campo se deja en Título Caso: `juan pérez` y
+                // `JUAN PEREZ` se guardan igual, respetando partículas (`de la`).
+                onBlur={() => setFormVisita((f) => ({ ...f, nombre: aTituloCaso(f.nombre) }))}
+              />
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="v-dni">DNI *</Label>
-              <Input id="v-dni" value={formVisita.dni} onChange={(e) => setFormVisita({ ...formVisita, dni: e.target.value })} />
+              <Input
+                id="v-dni"
+                value={formVisita.dni}
+                onChange={(e) => setFormVisita({ ...formVisita, dni: e.target.value })}
+                // Al salir del campo: `164445550` y `16444555-0` pasan a
+                // `16.444.555-0`. Si no tiene forma de RUN se deja como está.
+                onBlur={() => setFormVisita((f) => ({ ...f, dni: formatearRun(f.dni) ?? f.dni }))}
+              />
               <Button type="button" size="sm" variant="ghost" className="justify-start px-0" onClick={buscarRunManual}>
                 <IconSearch className="mr-1 size-4" /> Buscar en el padrón
               </Button>
