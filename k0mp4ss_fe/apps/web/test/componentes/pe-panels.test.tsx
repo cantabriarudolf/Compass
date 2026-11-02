@@ -311,16 +311,22 @@ describe("VisitasPanel (componente, RTL)", () => {
     expect((screen.getByLabelText("DNI *") as HTMLInputElement).value).toBe("15123456-9")
     // La unidad del vínculo queda preseleccionada y visible en el control buscable.
     expect(screen.getAllByText("Depto 101 · 123-A11").length).toBeGreaterThanOrEqual(1)
+    // RUT registrado en el padrón → la visita entra por el camino de la pre-agenda
+    // y el check de autorización telefónica deja de aplicar.
+    expect(
+      screen.getByRole("switch", { name: /Pre-agendada/ }).getAttribute("aria-checked")
+    ).toBe("true")
+    expect(screen.queryByRole("switch", { name: /Autorización telefónica recibida/ })).toBeNull()
 
-    await user.click(screen.getByRole("switch", { name: /Autorización telefónica recibida/ }))
     await user.click(screen.getByRole("button", { name: /Registrar visita/ }))
-    await user.click(await screen.findByRole("button", { name: /Sí, registrar/ }))
     await waitFor(() =>
       expect(buscarPeticiones(api, "POST", "/api/pe/bitacora-visitas")).toHaveLength(1)
     )
     const cuerpo = buscarPeticiones(api, "POST", "/api/pe/bitacora-visitas")[0]!
       .cuerpo as Record<string, unknown>
     expect(cuerpo.destinoPersonaId).toBe("p-1")
+    // Pre-agendada: espera confirmación de ingreso, sin autorización telefónica.
+    expect(cuerpo.estado).toBe("agendada")
   })
 
   it("sin coincidencia en el padrón ofrece la visita externa con el RUT leído", { timeout: PRESUPUESTO_CARGA }, async () => {
@@ -342,6 +348,12 @@ describe("VisitasPanel (componente, RTL)", () => {
 
     await user.click(within(resultado).getByRole("button", { name: /Usar el RUT leído/ }))
     expect((screen.getByLabelText("DNI *") as HTMLInputElement).value).toBe("19876543-0")
+    // RUT fuera del padrón → camino sin aviso: se gatilla el OK telefónico y la
+    // pre-agenda queda apagada.
+    expect(
+      screen.getByRole("switch", { name: /Pre-agendada/ }).getAttribute("aria-checked")
+    ).toBe("false")
+    expect(screen.getByRole("switch", { name: /Autorización telefónica recibida/ })).toBeTruthy()
     // La visita externa tampoco se registra sola: falta el nombre y el botón.
     expect(buscarPeticiones(api, "POST", "/api/pe/bitacora-visitas")).toHaveLength(0)
   })

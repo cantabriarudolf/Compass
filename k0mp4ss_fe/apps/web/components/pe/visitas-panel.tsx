@@ -287,6 +287,9 @@ export function VisitasPanel({
       return
     }
     setResultadoIdentidad({ tipo: "sin_coincidencia", run })
+    // RUT fuera del padrón: la visita entra por el camino sin aviso, que es el que
+    // exige el OK telefónico del residente.
+    setFormVisita((f) => ({ ...f, origenAgenda: "sin_aviso", autorizacionTelefonica: false }))
   }
 
   /** RUN validado por el escáner: cierra la cámara y propone la identidad. */
@@ -326,22 +329,28 @@ export function VisitasPanel({
       dni: coincidencia.run,
       unidadId: coincidencia.unidadId ?? f.unidadId,
       destinoPersonaId: coincidencia.personaId,
+      // RUT registrado en el padrón: la visita sigue el camino de la pre-agenda.
+      // El check de autorización telefónica sólo aplica al visitante que no está.
+      origenAgenda: "pre_agendada",
+      autorizacionTelefonica: false,
     }))
     setResultadoIdentidad(null)
     setAvisoPadron(null)
     onError(null)
-    onSuccess("Identidad confirmada desde la cédula. Registra la visita para dejarla en la bitácora.")
+    onSuccess("Identidad confirmada desde la cédula. La visita queda pre-agendada: regístrala y luego márcala como ingresada.")
   }
 
   /** Confirmación para el visitante que no está en el padrón (visita externa). */
   const confirmarVisitaExterna = () => {
     if (resultadoIdentidad?.tipo !== "sin_coincidencia") return
     const run = resultadoIdentidad.run
-    setFormVisita((f) => ({ ...f, dni: run }))
+    setFormVisita((f) => ({ ...f, dni: run, origenAgenda: "sin_aviso", autorizacionTelefonica: false }))
     setResultadoIdentidad(null)
     setAvisoPadron(null)
     onError(null)
-    onSuccess("RUT leído aplicado como visita externa. Escribe el nombre y registra la visita.")
+    onSuccess(
+      "RUT leído aplicado como visita externa. Llama al residente, marca «Autorización telefónica recibida» y registra la visita."
+    )
   }
 
   const guardarVisita = async () => {
