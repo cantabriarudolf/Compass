@@ -6,8 +6,7 @@ import * as React from "react"
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
 import { IconBook2 } from "@tabler/icons-react"
-import { VisitasPanel } from "@/components/pe/visitas-panel"
-import { ContratistasPanel } from "@/components/pe/contratistas-panel"
+import { RegistroAcceso } from "@/components/pe/registro-acceso"
 import { AvisoPrivacidadConserjeria } from "@/components/aviso-privacidad-conserjeria"
 
 function hoyISO(): string {
@@ -41,8 +40,10 @@ export default function AccesosPage() {
       </div>
 
       <section className="flex flex-col gap-6">
-        <VisitasPanel diaReporte={diaReporte} onError={setError} onSuccess={setOkMsg} />
-        <ContratistasPanel diaReporte={diaReporte} onError={setError} onSuccess={setOkMsg} />
+        {/* Una sola puerta: el conserje elige qué viene a hacer la persona y el
+            panel correspondiente aparece solo. Los tres modos escriben en sus
+            tablas actuales (decisión A: etiquetas nuevas, datos quietos). */}
+        <RegistroAcceso diaReporte={diaReporte} onError={setError} onSuccess={setOkMsg} />
       </section>
     </div>
   )
