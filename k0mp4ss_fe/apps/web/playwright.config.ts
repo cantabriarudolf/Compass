@@ -41,6 +41,13 @@ export default defineConfig({
       dependencies: ["setup"],
     },
   ],
+  // Limpieza previa: la lane `e2e/crud` crea filas TEST/QA y no siempre las borra, así que
+  // cada corrida arrancaba de un estado distinto (mismas fallas, distinto conteo).
+  // `scripts/limpiar-e2e.mjs` purga esas filas con reglas explícitas y una allowlist dura,
+  // y sólo opera sobre SQLite local: si DATABASE_URL no es `file:…`, aborta y la suite no
+  // arranca sobre una base que no puede limpiar. El detalle (y la omisión en CI) vive en
+  // `scripts/limpiar-e2e-global-setup.mjs`.
+  globalSetup: "./scripts/limpiar-e2e-global-setup.mjs",
   webServer: {
     // CI: servidor de producción (next start tras npm run build).
     // Local: next dev con reuseExistingServer para iterar rápido.
