@@ -67,6 +67,19 @@ Blindar la plataforma antes del deploy real del owner: CSP estricta en report-on
 
 - **Corte SQLite → PostgreSQL antes del build** (st-migracion-postgres 3.2, 2026-10-05): `npm run db:prod:migrar-datos` (→ `scripts/deploy-migrar-datos.mjs`) valida que `DATABASE_URL` sea PG (fail-closed, la URL nunca se imprime completa), crea el esquema baseline con `prisma db push` y migra los datos con `scripts/migrate-sqlite-to-postgres.mjs` (idempotente, backup previo de SQLite, verificación de conteos por tabla — probado en local: 23087 filas, 71/71 tablas, 0 fallidas). El build corre DESPUÉS, nunca antes. El deploy manual `npm run deploy:vercel` solo migra si `MIGRAR_DATOS_DESDE_SQLITE=1` (por defecto no toca datos); el job `deploy` de CI no se tocó. Corte real con Neon = decisión del owner (credenciales y corrida, fuera de esta serie).
 
+- **Cómo se sincroniza el esquema de PRODUCCIÓN** (2026-11-01, tras un error propio): **con `npx prisma db push`, NO con `prisma migrate deploy`**. `npm run db:prod:deploy` existe pero **falla con `P3019`**: `prisma/migrations/migration_lock.toml` dice `provider = "sqlite"` y esa carpeta de migraciones pertenece al esquema de desarrollo, no a Postgres. El script `deploy-migrar-datos.mjs` confirma la vía real (`prisma db push` para el baseline PG), igual que el job `unit-pg` del CI.
+
+  Procedimiento seguro para un cambio de esquema, en este orden:
+  1. **Previsualizar el SQL sin aplicarlo** (no toca nada):
+     `npx prisma migrate diff --from-schema-datasource prisma/schema.prisma --to-schema-datamodel prisma/schema.prisma --script`
+  2. **Leer el diff completo** y confirmar que no hay `DROP` ni `ALTER` destructivo. Si aparece un `CREATE UNIQUE INDEX`, comprobar antes los duplicados reales: el índice falla si existen y `db push` aborta.
+  3. Aplicar: `npx prisma db push --accept-data-loss`. El flag es obligatorio cuando Prisma marca «posible pérdida de datos» (lo hace por los índices únicos), **pero no borra nada por sí mismo**: aplica exactamente el diff del paso 1.
+  4. **Verificar contra la base**, no contra el comando: consultar `information_schema.columns` / `pg_indexes`.
+
+  Las credenciales de producción están en `apps/web/.env.neon` (Postgres de Neon) en esta máquina: `set -a && . ./.env.neon && set +a` y después el comando. `.env` es SQLite de desarrollo y `.env.local` también.
+
+  **Vercel Git NO corre migraciones** (`vercel.json` `buildCommand` es sólo `npm run build`, y el job `deploy` del CI es manual). Prisma pide todas las columnas del modelo, así que si el código se despliega antes de sincronizar el esquema, la pantalla que use ese modelo responde error hasta que se aplique.
+
 - **Plan de activación CSP enforcement** (D-i + sg-csp-enforcement): 
   1. **Telemetría 7 días** con `CSP_ENFORCEMENT=false` (Report-Only): monitorear DevTools Console → CSP violations, Network → `content-security-policy-report-only`, y `/api/csp-report` (POST sink estructurado). Rutas clave: `/`, `/ingresar`, `/admin/*`, `/visor-mensajes` con y sin youtube.
   2. **Criterio 0 violations 7 días consecutivos** → flip `CSP_ENFORCEMENT=true` en Vercel (inmediato, sin redeploy).
