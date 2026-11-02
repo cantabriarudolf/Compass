@@ -11,6 +11,10 @@
  * - ABAC residente: en colección GET ve únicamente su propia ficha.
  * - PE-visitas: `?rut=` resuelve la identidad leída del QR de la cédula
  *   (match exacto sobre las grafías normalizadas del RUN).
+ * - Directorio de residentes: `?esResidente=1` filtra a las personas con vínculo
+ *   vigente (`fechaFin` null) como propietario o arrendatario, y agrega al envelope
+ *   `vinculosVigentes` con esos vínculos de las personas de la página. La regla vive
+ *   acá porque el padrón se pagina: filtrar una página en el cliente esconde gente.
  */
 import { PersonaSchema } from "@/lib/schemas"
 import { puede } from "@/lib/authz"
@@ -298,8 +302,51 @@ function denegar(rol: string, accion: "ver" | "crear" | "editar" | "eliminar"): 
   return jsonError(403, "Permiso denegado.")
 }
 
+/** Roles de vínculo que hacen «residente» a una persona (regla del directorio). */
+const ROLES_RESIDENTE = ["propietario", "arrendatario"] as const
+
+/** Vínculo vigente que el directorio de residentes necesita para su columna «Unidad vinculada». */
+export interface VinculoVigenteResidente {
+  id: string
+  personaId: string
+  unidadId: string
+  rol: string
+  /** Etiqueta legible de la unidad (`etiqueta numero`), resuelta en el servidor. */
+  unidadEtiqueta: string | null
+}
+
+/**
+ * Vínculos vigentes (`fechaFin` null) de rol propietario/arrendatario de la comunidad.
+ *
+ * `VinculoUnidad` no declara relación Prisma con `Persona` (solo `personaId` indexado), así que
+ * el directorio no puede usar un `some` de relación: el filtro se resuelve con la lista cerrada
+ * de `personaId`. Se calcula sobre TODOS los vínculos de la comunidad y nunca sobre una página:
+ * filtrar en el cliente una página truncada esconde residentes que sí existen.
+ *
+ * La etiqueta de la unidad también se resuelve acá: el padrón de unidades pagina en 100 (de 184)
+ * y el directorio mostraría ids crudos en la mitad de sus filas.
+ */
+async function vinculosDeResidentes(
+  comunidadId: string
+): Promise<VinculoVigenteResidente[]> {
+  const filas = await prisma.vinculoUnidad.findMany({
+    where: { comunidadId, fechaFin: null, rol: { in: [...ROLES_RESIDENTE] } },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    select: { id: true, personaId: true, unidadId: true, rol: true },
+  })
+  if (filas.length === 0) return []
+
+  const unidades = await prisma.unidad.findMany({
+    where: { comunidadId, id: { in: [...new Set(filas.map((f) => f.unidadId))] } },
+    select: { id: true, etiqueta: true, numero: true },
+  })
+  const etiquetas = new Map(unidades.map((u) => [u.id, `${u.etiqueta} ${u.numero}`]))
+  return filas.map((f) => ({ ...f, unidadEtiqueta: etiquetas.get(f.unidadId) ?? null }))
+}
+
 /** GET lista paginada, filtrable por ?q= (nombreCompleto | rut | email).
- * Residente: ve únicamente su propia ficha (ABAC mp:propios). */
+ * Residente: ve únicamente su propia ficha (ABAC mp:propios).
+ * `?esResidente=1` agrega el filtro de residente y `vinculosVigentes` al envelope. */
 export async function GET(req: Request): Promise<Response> {
   const resultado = await withComunidadScope()
   if (!resultado.ok) return resultado.response
@@ -322,6 +369,7 @@ export async function GET(req: Request): Promise<Response> {
   )
   const q = url.searchParams.get("q")?.trim()
   const rut = url.searchParams.get("rut")?.trim()
+  const esResidente = url.searchParams.get("esResidente") === "1"
 
   const where: Record<string, unknown> = { comunidadId: scope.comunidadId }
   if (residente) {
@@ -347,6 +395,17 @@ export async function GET(req: Request): Promise<Response> {
   }
 
   try {
+    // Directorio de residentes: la regla se resuelve sobre los vínculos de la
+    // comunidad completa, no sobre una página. Va en `AND` y no en `where.id`
+    // para no pisar el id que ya fijó el ABAC del residente.
+    const vinculosResidentes = esResidente
+      ? await vinculosDeResidentes(scope.comunidadId)
+      : null
+    if (vinculosResidentes) {
+      const ids = [...new Set(vinculosResidentes.map((v) => v.personaId))]
+      where.AND = [{ id: { in: ids } }]
+    }
+
     const [data, total] = await Promise.all([
       prisma.persona.findMany({
         where,
@@ -356,7 +415,16 @@ export async function GET(req: Request): Promise<Response> {
       }),
       prisma.persona.count({ where }),
     ])
-    return Response.json({ data, page, pageSize, total })
+    // Envelope backward compatible: `data/page/pageSize/total` siguen igual; la
+    // clave nueva aparece SOLO cuando se pide `esResidente=1`.
+    const respuesta: Record<string, unknown> = { data, page, pageSize, total }
+    if (vinculosResidentes) {
+      const idsDeLaPagina = new Set(data.map((p) => p.id))
+      respuesta.vinculosVigentes = vinculosResidentes.filter((v) =>
+        idsDeLaPagina.has(v.personaId)
+      )
+    }
+    return Response.json(respuesta)
   } catch (e) {
     return errorGenerico(e)
   }

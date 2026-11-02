@@ -8,7 +8,14 @@
    mismas rutas; cada mutación revalida las claves SWR afectadas.
  - Contrato de mutación: Promise<StoreResult> ({ ok, error? }) para poder
    intercambiarse con las acciones legacy del store zustand.
+ *
+ * Directorio de residentes: `usePersonas(q, { soloResidentes: true })` pide el
+ * filtro `?esResidente=1` para que la regla (vínculo vigente propietario o
+ * arrendatario) la resuelva el servidor sobre TODOS los vínculos. La búsqueda
+ * del directorio va al servidor por el mismo motivo: filtrar en el navegador
+ * una página de 100 no encuentra a quien quedó fuera de esa página.
  */
+import * as React from "react"
 import useSWR, { mutate as mutateGlobal } from "swr"
 import type { Persona } from "@/data/comunidad/personas"
 import type { StoreResult } from "@/lib/store"
@@ -60,6 +67,18 @@ interface ColeccionPersonas {
   page: number
   pageSize: number
   total: number
+  /** Solo presente cuando se pidió `esResidente=1` (directorio de residentes). */
+  vinculosVigentes?: VinculoVigenteResidente[]
+}
+
+/** Vínculo vigente que el servidor adjunta al padrón cuando se pide `soloResidentes`. */
+export interface VinculoVigenteResidente {
+  id: string
+  personaId: string
+  unidadId: string
+  rol: string
+  /** Etiqueta legible de la unidad (`etiqueta numero`) resuelta por el servidor. */
+  unidadEtiqueta: string | null
 }
 
 /** Envía una mutación y traduce la respuesta HTTP a StoreResult. */
@@ -97,24 +116,115 @@ export interface UsePersonasResultado {
    * Total de personas que reporta el servidor para el filtro activo.
    *
    * La lista se pide con `pageSize=100`, así que `personas.length` puede ser
-   * menor que `total`: el consumidor DEBE avisar en pantalla cuando
-   * `total > personas.length` en vez de truncar en silencio (ver
-   * `components/pe/aviso-truncamiento.tsx`).
+   * menor que `total`: el consumidor no debe truncar en silencio. Las pantallas
+   * con paginación usan `hasMore`/`cargarMas` (ver `components/ver-mas.tsx`);
+   * el resto avisa el recorte (ver `components/pe/aviso-truncamiento.tsx`).
    */
   total: number
+  /**
+   * Vínculos vigentes de las personas cargadas. Solo llega poblado con
+   * `soloResidentes`; el servidor ya filtró a propietario/arrendatario vigente.
+   */
+  vinculosVigentes: VinculoVigenteResidente[]
   isLoading: boolean
+  /** Hay una consulta en vuelo (incluye la revalidación con filas previas en pantalla). */
+  isValidando: boolean
   error: Error | null
+  /** Quedan filas del `total` que no están en `personas` (paginación real). */
+  hasMore: boolean
+  /** Pide la página siguiente y la acumula; si no hay más, no dispara petición. */
+  cargarMas: () => Promise<void>
+  cargandoMas: boolean
   create: (persona: Partial<Persona>) => Promise<StoreResult>
   update: (id: string, parcial: Partial<Persona>) => Promise<StoreResult>
   remove: (id: string) => Promise<StoreResult>
 }
 
+/** Opciones del padrón. Sin opciones, la clave SWR es la de siempre (`?pageSize=100`). */
+export interface UsePersonasOpciones {
+  /**
+   * Filtra en el servidor a residentes: personas con vínculo vigente (`fechaFin`
+   * null) como propietario o arrendatario (`?esResidente=1`).
+   */
+  soloResidentes?: boolean
+  /**
+   * Mantiene las filas de la consulta anterior mientras la nueva está en vuelo
+   * (evita el salto de layout al escribir en el buscador).
+   */
+  mantenerFilasPrevias?: boolean
+}
+
 /** Lista paginada de personas, filtrable por ?q= (nombreCompleto | rut | email). */
-export function usePersonas(q?: string): UsePersonasResultado {
-  const url = q && q.trim() ? `${LISTA}?q=${encodeURIComponent(q.trim())}&pageSize=100` : `${LISTA}?pageSize=100`
-  const { data, error, isLoading, mutate } = useSWR<ColeccionPersonas, Error>(url, fetcher, {
-    revalidateOnFocus: true,
-  })
+export function usePersonas(
+  q?: string,
+  opciones: UsePersonasOpciones = {}
+): UsePersonasResultado {
+  const { soloResidentes = false, mantenerFilasPrevias = false } = opciones
+  const termino = q?.trim() ?? ""
+  // Se arma a mano (y no con URLSearchParams) para que la clave SWR de los
+  // consumidores que no usan opciones nuevas sea byte a byte la de antes.
+  const base = termino
+    ? `${LISTA}?q=${encodeURIComponent(termino)}&pageSize=100`
+    : `${LISTA}?pageSize=100`
+  const url = soloResidentes ? `${base}&esResidente=1` : base
+  const { data, error, isLoading, isValidating, mutate } = useSWR<ColeccionPersonas, Error>(
+    url,
+    fetcher,
+    {
+      revalidateOnFocus: true,
+      keepPreviousData: mantenerFilasPrevias,
+    }
+  )
+
+  // Páginas pedidas con `cargarMas`, atadas a la URL que las produjo: si cambia
+  // la búsqueda, las páginas viejas dejan de aplicar sin necesidad de un efecto.
+  // Mismo patrón que `useCrudCollection` (F11).
+  const [paginacion, setPaginacion] = React.useState<{
+    url: string
+    paginas: ColeccionPersonas[]
+  }>({ url, paginas: [] })
+  const paginasExtra = React.useMemo(
+    () => (paginacion.url === url ? paginacion.paginas : []),
+    [paginacion, url]
+  )
+  const [cargandoMas, setCargandoMas] = React.useState(false)
+
+  const personas = React.useMemo(
+    () => [...(data?.data ?? []), ...paginasExtra.flatMap((p) => p.data)],
+    [data, paginasExtra]
+  )
+  const vinculosVigentes = React.useMemo(
+    () => [
+      ...(data?.vinculosVigentes ?? []),
+      ...paginasExtra.flatMap((p) => p.vinculosVigentes ?? []),
+    ],
+    [data, paginasExtra]
+  )
+  const total = data?.total ?? 0
+  const hasMore = personas.length < total
+
+  const urlDePagina = (page: number): string =>
+    `${url}${url.includes("?") ? "&" : "?"}page=${page}`
+
+  const cargarMas = async (): Promise<void> => {
+    if (cargandoMas || !hasMore) return
+    const siguiente = (data?.page ?? 1) + paginasExtra.length + 1
+    setCargandoMas(true)
+    try {
+      const pagina = await fetcher<ColeccionPersonas>(urlDePagina(siguiente))
+      setPaginacion((previa) => {
+        const acumuladas = previa.url === url ? previa.paginas : []
+        // Idempotente: una página ya acumulada no se duplica en `personas`.
+        if (acumuladas.some((p) => p.page === pagina.page)) return previa
+        return { url, paginas: [...acumuladas, pagina] }
+      })
+    } catch {
+      // La página 1 sigue exponiendo su error vía SWR; acá solo se corta la
+      // carga para no dejar el botón en «Cargando…» eternamente.
+    } finally {
+      setCargandoMas(false)
+    }
+  }
 
   const create = async (persona: Partial<Persona>): Promise<StoreResult> => {
     const resultado = await enviar(LISTA, "POST", persona)
@@ -138,10 +248,15 @@ export function usePersonas(q?: string): UsePersonasResultado {
   }
 
   return {
-    personas: data?.data ?? [],
-    total: data?.total ?? 0,
+    personas,
+    total,
+    vinculosVigentes,
     isLoading,
+    isValidando: isValidating,
     error: error ?? null,
+    hasMore,
+    cargarMas,
+    cargandoMas,
     create,
     update,
     remove,

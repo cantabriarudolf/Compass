@@ -18,18 +18,20 @@ test.describe("Residentes — directorio filtrado en /personas/residentes", () =
     await expect(page.getByText("Unidad vinculada")).toBeVisible()
     await expect(page.getByText("Residentes con vínculo vigente")).toBeVisible()
 
-    // 3) Al menos un residente del seed con vínculo vigente propietario/arrendatario
-    //    Juan Pérez González (p-1, propietario en u-A-101) es determinístico del seed
-    await expect(page.getByText("Juan Pérez González").first()).toBeVisible({ timeout: 15_000 })
-
-    // 4) Cada fila expone unidad vinculada y link Ver Ficha a MP (no duplica edición)
+    // 3) Cada fila expone unidad vinculada y link Ver Ficha a MP (no duplica edición).
+    //    Se mide sin filtrar, cuando la tabla está paginada al tope del padrón.
     const linksFicha = page.getByRole("link", { name: "Ver Ficha" })
     await expect(linksFicha.first()).toBeVisible({ timeout: 15_000 })
     const countLinks = await linksFicha.count()
-    expect(countLinks).toBeGreaterThan(0)
-    // Cross-check: al menos 10 residentes vigentes (seed tiene 41)
     expect(countLinks).toBeGreaterThanOrEqual(5)
     await expect(linksFicha.first()).toHaveAttribute("href", /\/comunidad\/personas\//)
+
+    // 4) El buscador consulta al servidor: encuentra a un residente del seed que
+    //    NO está en la primera página del padrón. Juan Pérez González (p-1,
+    //    propietario en u-A-101) es la persona más antigua del seed y el padrón
+    //    pagina en 100 (de 118 personas), así que solo aparece buscando.
+    await page.getByPlaceholder("Buscar por nombre o RUT...").fill("Juan Pérez")
+    await expect(page.getByText("Juan Pérez González").first()).toBeVisible({ timeout: 15_000 })
 
     // 5) Badge de conteo coincide con filas (sanity)
     await expect(page.getByText(/residentes$/i).first()).toBeVisible()

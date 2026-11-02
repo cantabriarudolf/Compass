@@ -4,8 +4,7 @@ import * as React from "react"
 import Link from "next/link"
 // Datos de dominio vía API REST (BD fuente de verdad); store legacy deprecado.
 import { usePersonas } from "@/lib/api/use-personas"
-import { useVinculos } from "@/lib/api/use-vinculos"
-import { useUnidades } from "@/lib/api/use-unidades"
+import { VerMas } from "@/components/ver-mas"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import { Input } from "@workspace/ui/components/input"
 import { Badge } from "@workspace/ui/components/badge"
@@ -19,6 +18,9 @@ import {
   TableRow,
 } from "@workspace/ui/components/table"
 import { IconSearch, IconUserCircle, IconBuildingSkyscraper, IconUsers } from "@tabler/icons-react"
+
+/** Espera del buscador antes de consultar al servidor (una tecla, una request). */
+const DEBOUNCE_BUSQUEDA_MS = 300
 
 const getRoleBadgeColor = (rol: string) => {
   switch (rol) {
@@ -40,41 +42,35 @@ const getVinculoBadgeColor = (rol: string) => {
 }
 
 export default function ResidentesPage() {
-  const { personas, isLoading: cPersonas } = usePersonas()
-  const { vinculos, isLoading: cVinculos } = useVinculos()
-  const { items: unidades, isLoading: cUnidades } = useUnidades()
-  const isLoading = cPersonas || cVinculos || cUnidades
-
   const [searchTerm, setSearchTerm] = React.useState("")
+  const [busqueda, setBusqueda] = React.useState("")
 
-  const vinculosVigentes = React.useMemo(
-    () => vinculos.filter(v => !v.fechaFin && (v.rol === "propietario" || v.rol === "arrendatario")),
-    [vinculos]
+  // La búsqueda va al servidor con debounce. Antes se filtraba en el navegador
+  // sobre la primera página (100 de 118 personas): quien quedaba fuera de esa
+  // página no aparecía nunca, por más que se escribiera su nombre.
+  React.useEffect(() => {
+    const temporizador = setTimeout(() => setBusqueda(searchTerm), DEBOUNCE_BUSQUEDA_MS)
+    return () => clearTimeout(temporizador)
+  }, [searchTerm])
+
+  const {
+    personas: residentes,
+    vinculosVigentes,
+    total,
+    isLoading: cPersonas,
+    isValidando,
+    cargarMas,
+    cargandoMas,
+  } = usePersonas(busqueda, { soloResidentes: true, mantenerFilasPrevias: true })
+
+  const getVinculosDePersona = React.useCallback(
+    (personaId: string) => vinculosVigentes.filter(v => v.personaId === personaId),
+    [vinculosVigentes]
   )
 
-  const residentes = React.useMemo(() => {
-    const idsConVinculoVigente = new Set(vinculosVigentes.map(v => v.personaId))
-    let result = personas.filter(p => idsConVinculoVigente.has(p.id))
-    if (searchTerm.trim()) {
-      const q = searchTerm.toLowerCase()
-      result = result.filter(p =>
-        p.nombreCompleto.toLowerCase().includes(q) ||
-        p.rut.includes(searchTerm)
-      )
-    }
-    return result
-  }, [personas, vinculosVigentes, searchTerm])
+  const hayBusqueda = busqueda.trim().length > 0
 
-  const getUnidadesDePersona = React.useCallback((personaId: string) => {
-    return vinculosVigentes.filter(v => v.personaId === personaId)
-  }, [vinculosVigentes])
-
-  const etiquetaUnidad = React.useCallback((unidadId: string) => {
-    const u = unidades.find(x => x.id === unidadId)
-    return u ? `${u.etiqueta} ${u.numero}` : unidadId
-  }, [unidades])
-
-  if (isLoading) {
+  if (cPersonas) {
     return (
       <div className="flex flex-col gap-6 animate-pulse">
         <div className="h-9 w-72 rounded bg-muted/40" />
@@ -95,7 +91,7 @@ export default function ResidentesPage() {
           </p>
         </div>
         <Badge variant="secondary" className="text-xs font-bold">
-          {residentes.length} residentes
+          {total} residentes
         </Badge>
       </div>
 
@@ -107,18 +103,24 @@ export default function ResidentesPage() {
               Residentes con vínculo vigente
             </CardTitle>
             <CardDescription>
-              {residentes.length} personas con vínculo vigente como propietario o arrendatario. Solo lectura — la edición vive en el Directorio de Comunidad.
+              {total} personas con vínculo vigente como propietario o arrendatario. Solo lectura — la edición vive en el Directorio de Comunidad.
             </CardDescription>
           </div>
-          <div className="relative w-64">
-            <IconSearch className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              type="search"
-              placeholder="Buscar por nombre o RUT..."
-              className="pl-8 h-9 text-xs"
-              value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
-            />
+          <div className="flex flex-col items-end gap-1">
+            <div className="relative w-64">
+              <IconSearch className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                type="search"
+                placeholder="Buscar por nombre o RUT..."
+                className="pl-8 h-9 text-xs"
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+              />
+            </div>
+            {/* Búsqueda en vuelo: las filas previas quedan en pantalla, sin salto. */}
+            <span className="h-4 text-[10px] text-muted-foreground" role="status" aria-live="polite">
+              {isValidando ? "Buscando…" : ""}
+            </span>
           </div>
         </CardHeader>
         <CardContent>
@@ -134,7 +136,7 @@ export default function ResidentesPage() {
             </TableHeader>
             <TableBody>
               {residentes.map(persona => {
-                const vincs = getUnidadesDePersona(persona.id)
+                const vincs = getVinculosDePersona(persona.id)
                 return (
                   <TableRow key={persona.id} className="group">
                     <TableCell>
@@ -160,7 +162,9 @@ export default function ResidentesPage() {
                         {vincs.map(v => (
                           <div key={v.id} className="flex items-center gap-1.5">
                             <IconBuildingSkyscraper className="size-3.5 text-muted-foreground" />
-                            <span className="text-xs font-mono font-medium">{etiquetaUnidad(v.unidadId)}</span>
+                            {/* La etiqueta la resuelve el servidor: el padrón de unidades
+                                también pagina en 100 (de 184) y acá se verían ids crudos. */}
+                            <span className="text-xs font-mono font-medium">{v.unidadEtiqueta ?? v.unidadId}</span>
                             <Badge className={`${getVinculoBadgeColor(v.rol)} text-[9px] uppercase font-bold px-1.5 py-0`}>
                               {v.rol}
                             </Badge>
@@ -196,9 +200,15 @@ export default function ResidentesPage() {
                     <div className="py-12 text-center border border-dashed rounded-md bg-muted/20 space-y-3">
                       <IconUsers className="size-10 mx-auto text-muted-foreground/40" />
                       <div>
-                        <p className="font-semibold text-sm">Sin residentes con vínculo vigente</p>
+                        <p className="font-semibold text-sm">
+                          {hayBusqueda
+                            ? "Sin coincidencias para la búsqueda"
+                            : "Sin residentes con vínculo vigente"}
+                        </p>
                         <p className="text-xs text-muted-foreground max-w-md mx-auto">
-                          No se encontraron personas con vínculo vigente como propietario o arrendatario. Verificá los vínculos en el Directorio de Comunidad.
+                          {hayBusqueda
+                            ? `Ninguna persona con vínculo vigente como propietario o arrendatario coincide con «${busqueda.trim()}».`
+                            : "No se encontraron personas con vínculo vigente como propietario o arrendatario. Verificá los vínculos en el Directorio de Comunidad."}
                         </p>
                       </div>
                     </div>
@@ -207,6 +217,13 @@ export default function ResidentesPage() {
               )}
             </TableBody>
           </Table>
+          {/* Paginación real: el total del servidor no se esconde ni se recorta. */}
+          <VerMas
+            mostrados={residentes.length}
+            total={total}
+            cargando={cargandoMas}
+            onCargarMas={cargarMas}
+          />
         </CardContent>
       </Card>
     </div>
