@@ -49,98 +49,73 @@ async function elegirUnidadDestino(page: import("@playwright/test").Page): Promi
   return true
 }
 
-test.describe("conserjeria — registra visita bitácora", () => {
+/**
+ * Conserjería registra una visita por la puerta única de accesos.
+ *
+ * El journey anterior llenaba «Nombre *» / «DNI *» en la pestaña Visitas de
+ * `/operaciones/bitacora` y apretaba «Registrar visita». Desde el commit 931753c
+ * («una sola puerta para registrar accesos») esa pestaña quedó accesible solo por
+ * URL y el camino real del conserje es `/operaciones/accesos`: primero elige qué
+ * viene a hacer la persona («¿A qué viene?») y recién entonces aparece el panel
+ * con sus campos. Sin ese primer paso los inputs no existen y la visita nunca se
+ * crea, que es exactamente lo que fallaba antes de este rewrite.
+ *
+ * El registro tiene que quedar visible en las dos tablas de la pantalla: la del
+ * panel de la puerta y la lista consolidada del día (solo lectura).
+ */
+test.describe("conserjeria — registra visita en la puerta única de accesos", () => {
   test.use({ storageState: "e2e/.auth/conserjeria.json" })
-  test("visita TEST-* visible sin pageerror", async ({ page }) => {
+  test("visita TEST-* registrada y visible en la lista del día sin pageerror", async ({ page }) => {
     const errores: string[] = []
-    page.on("pageerror", e=>errores.push(e.message))
-    const ts = Date.now()
-    const nombre = `TEST-CONSERJERIA-${ts}`
-    await gotoStable(page, "/operaciones/bitacora")
-    await expect(page.getByRole("heading", { name: /Bitácora/i }).first()).toBeVisible({ timeout: 15_000 })
-    // P2: dar tiempo a que los chunks/queries del tabpanel asienten bajo carga.
-    await page.waitForTimeout(3000)
-    // P3 E2E-FULL-VERDE: el Tabs es no-controlado y la página antepone un
-    // skeleton a `cargandoAPI` — si una query revalida tarde, el árbol se
-    // re-monta y el tab vuelve a "Reporte Diario" (probado: form lleno y al
-    // final tab reseteado). Re-activar antes de cada paso que lo exige.
-    async function activarTabVisitas(): Promise<boolean> {
-      const tab = page.getByRole("tab", { name: "Visitas" })
-      // P2: activación por secuencia pointer completa (ni click Playwright ni
-      // .click() sintético activan el TabsTrigger bajo carga dev; la secuencia
-      // atómica sí). Se verifica por el panel, no por aria-selected.
-      for (let intento = 0; intento < 3; intento++) {
-        if (await tab.isVisible().catch(()=>false)) {
-          await tab.dispatchEvent("pointerdown").catch(()=>{})
-          await tab.dispatchEvent("mousedown").catch(()=>{})
-          await tab.dispatchEvent("mouseup").catch(()=>{})
-          await tab.dispatchEvent("click").catch(()=>{})
-          await page.waitForTimeout(600)
-        }
-        if (await page.getByLabel("Nombre *").isVisible().catch(()=>false)) return true
-      }
-      return page.getByLabel("Nombre *").isVisible().catch(()=>false)
-    }
-    await activarTabVisitas()
-    // El formulario vive en el panel: si hubo re-mount se vacía junto con el
-    // tab → (re)llenar y verificar el botón en la misma pasada, hasta 2 veces.
-    let lista = false
-    for (let pasada = 0; pasada < 2 && !lista; pasada++) {
-      await page.getByLabel("Nombre *").fill(nombre)
-      await page.getByLabel("DNI *").fill("16.444.555-0")
-      const unidad = page.getByLabel("Unidad destino")
-      await expect(unidad).toBeVisible({ timeout: 10_000 })
-      await elegirUnidadDestino(page)
-      await page.waitForTimeout(300)
-      // Pre-agendada ON (P2: click atómico + verificación, igual que tabs/combos)
-      const sw = page.getByRole("switch").first()
-      if (await sw.isVisible().catch(()=>false)) {
-        const checked = await sw.isChecked().catch(()=>false)
-        if (!checked) {
-          await sw.evaluate((el) => (el as HTMLElement).click()).catch(()=>{})
-          await page.waitForTimeout(500)
-          if (!await sw.isChecked().catch(()=>false)) {
-            await sw.evaluate((el) => (el as HTMLElement).click()).catch(()=>{})
-            await page.waitForTimeout(500)
-          }
-        }
-      }
-    const btnAqui = page.getByRole("button",{name:"Registrar visita"})
-    lista = await btnAqui.isVisible().catch(()=>false)
-    if (!lista) await activarTabVisitas()
-  }
-  // Submit con reintento anti-remount (P2 PG-FASE3: el Tabs no-controlado
-  // re-monta el panel y VACÍA los inputs entre el fill y el click; la
-  // validación "Nombre y DNI obligatorios" bloquea el submit sin POST y sin
-  // pageerror. Se rellena justo antes de cada click y se verifica el valor).
-  let creada = false
-  for (let intento = 0; intento < 3 && !creada; intento++) {
-    await activarTabVisitas()
-    // Pick de unidad DENTRO del intento (activarTab puede resetear el form;
-    // cada intento reconstruye todo: pick → fill → click sin esperas largas).
-    await elegirUnidadDestino(page)
+    page.on("pageerror", (e) => errores.push(e.message))
+    const nombre = `TEST-CONSERJERIA-${Date.now()}`
+
+    await gotoStable(page, "/operaciones/accesos")
+    await expect(page.getByRole("heading", { name: /Accesos y Visitas/ })).toBeVisible({ timeout: 15_000 })
+    // CardTitle es un div (no un heading): la puerta se afirma por su texto.
+    await expect(page.getByText("¿A qué viene?").first()).toBeVisible({ timeout: 15_000 })
+
+    // Paso 1 de la puerta: qué viene a hacer la persona. Recién ahí aparece el panel
+    // (no hay pestañas que activar: el formulario se monta con la respuesta elegida).
+    await page.getByRole("button", { name: /Viene a ver a alguien/ }).click()
     const inputNombre = page.getByLabel("Nombre *")
+    await expect(inputNombre).toBeVisible({ timeout: 10_000 })
     await inputNombre.fill(nombre)
     await page.getByLabel("DNI *").fill("16.444.555-0")
-    const valor = await inputNombre.inputValue().catch(()=>"")
-    if (valor !== nombre) continue
-    const btnIntento = page.getByRole("button",{name:"Registrar visita"})
-    if (!(await btnIntento.isVisible().catch(()=>false))) continue
-    await btnIntento.click({force:true,noWaitAfter:true})
-    await page.waitForTimeout(1200)
-    const rowCheck = page.getByRole("row").filter({hasText:nombre})
-    if (await rowCheck.isVisible().catch(()=>false)) creada = true
-  }
-    const row = page.getByRole("row").filter({hasText:nombre})
-    // La visita persiste en BD: si un re-mount reseteó el tab tras el click,
-    // re-activar antes de afirmar (el Remount no borra lo guardado).
-    if (!(await row.isVisible().catch(()=>false))) await activarTabVisitas()
-    await expect(row).toBeVisible({timeout:15_000})
-    // Estado según pre-agenda: "Agendada" (switch ON) o "Ingresada HH:MM"
-    // (switch OFF, ingreso directo mismo día). Ambas son journeys válidos.
-    const badgeAgendada = row.getByText("Agendada")
-    const badgeIngresada = row.getByText(/Ingresada/)
-    await expect(badgeAgendada.or(badgeIngresada).first()).toBeVisible({timeout:10_000})
+
+    // Unidad destino: combobox con búsqueda en el servidor (F6). El seed tiene cinco
+    // «Depto 101» (torres A–E) y el rol SII de la etiqueta es lo que las desambigua.
+    const eligioUnidad = await elegirUnidadDestino(page)
+    expect(eligioUnidad, "el combobox «Unidad destino» debe ofrecer resultados para «101»").toBe(true)
+
+    // Pre-agendada ON: la visita nace «Agendada» (espera el sello de ingreso), que es
+    // el estado con el que la puerta registra una visita anunciada por el residente.
+    const switchPre = page.getByRole("switch").first()
+    if (!(await switchPre.isChecked().catch(() => false))) {
+      await switchPre.click({ force: true, noWaitAfter: true })
+    }
+    await expect(switchPre).toBeChecked({ timeout: 5_000 })
+
+    // El campo normaliza a Título Caso al salir (onBlur), así que la fila se busca por
+    // el texto que quedó realmente en el input y no por el literal en mayúsculas.
+    const nombreGuardado = await inputNombre.inputValue()
+    expect(nombreGuardado.toLowerCase(), "la visita conserva el marcador TEST- del suite").toContain(
+      "test-conserjeria"
+    )
+
+    await page.getByRole("button", { name: "Registrar visita" }).click({ force: true, noWaitAfter: true })
+
+    // El panel de la puerta muestra el registro en su tabla del día…
+    const filas = page.getByRole("row").filter({ hasText: nombreGuardado })
+    await expect(filas.first()).toBeVisible({ timeout: 15_000 })
+    await expect(filas.first().getByText("Agendada")).toBeVisible({ timeout: 10_000 })
+
+    // …y la lista consolidada del día lo repite: dos tablas, la misma visita.
+    await expect(page.getByText(/Accesos del día \(/).first()).toBeVisible({ timeout: 10_000 })
+    await expect(filas, "la visita debe aparecer en el panel y en la lista del día").toHaveCount(2, {
+      timeout: 15_000,
+    })
+
     expect(errores).toEqual([])
   })
 })
