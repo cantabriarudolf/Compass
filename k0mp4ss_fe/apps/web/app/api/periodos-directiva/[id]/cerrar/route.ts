@@ -4,6 +4,10 @@
  * POST: cambia estado a "cerrado", fija fechaFin (body opcional, default hoy)
  * y archiva la nómina en `miembros` desde las fichas de MP en BD. Al cerrar,
  * la nómina queda congelada (el PUT con miembros responde 409).
+ * El snapshot pasa por `miembrosArchivados` (registro del libro): conserva la
+ * `capacidad` de cada ficha y lo ya archivado, y NO inventa un término personal
+ * (el cierre no implica que la persona haya dejado el cargo: eso lo registra la
+ * rotación, o la propia ficha cuando declara `fechaTermino`/`motivoTermino`).
  * Solo administrador/directiva con permiso de edición sobre GD.
  */
 import { z } from "zod"
@@ -11,7 +15,7 @@ import { prisma } from "@/lib/prisma"
 import { puede } from "@/lib/authz"
 import { hoyISO } from "@/lib/date-utils"
 import { jsonError, withComunidadScope } from "@/lib/api/with-comunidad-scope"
-import { errorPeriodos } from "../../route"
+import { errorPeriodos, fichasDeComunidad, miembrosArchivados } from "../../route"
 
 const CerrarSchema = z.object({
   fechaFin: z
@@ -51,34 +55,10 @@ export async function POST(req: Request, ctx: CtxTipo): Promise<Response> {
     const fechaFin = parsed.data.fechaFin ?? hoyISO()
 
     // Archiva la nómina desde las fichas de gobernanza en BD (libro físico).
-    const personas = await prisma.persona.findMany({
-      where: { comunidadId: scope.comunidadId },
-      select: { id: true, nombreCompleto: true, datosGobernanza: true },
-    })
-    // SAFETY: fichas Json escritas por la API de personas (ExtensionGobernanzaSchema); se archivan tal cual.
-    const roster = personas.flatMap((p) => {
-      const ficha = p.datosGobernanza as unknown as {
-        periodoId?: string
-        cargoDirectiva: string
-        fechaAsuncion: string
-        fechaTermino?: string
-        motivoTermino?: string
-      } | null
-      return ficha && ficha.periodoId === id
-        ? [
-            {
-              personaId: p.id,
-              nombre: p.nombreCompleto,
-              cargo: ficha.cargoDirectiva,
-              fechaAsuncion: ficha.fechaAsuncion,
-              ...(ficha.fechaTermino ? { fechaTermino: ficha.fechaTermino } : {}),
-              ...(ficha.motivoTermino ? { motivoTermino: ficha.motivoTermino } : {}),
-            },
-          ]
-        : []
-    })
+    const fichas = await fichasDeComunidad(scope)
+    const roster = miembrosArchivados(fichas, periodo, { fechaCierre: fechaFin })
 
-    // SAFETY: roster validado al asignar fichas; round-trip elimina undefined para InputJsonValue.
+    // SAFETY: roster construido desde fichas validadas; round-trip elimina undefined para InputJsonValue.
     const cerrado = await prisma.periodoDirectiva.update({
       where: { id },
       data: {

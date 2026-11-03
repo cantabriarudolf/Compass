@@ -32,7 +32,8 @@ import {
   IconLock,
 } from "@tabler/icons-react"
 import { puedeContextual } from "@/lib/authz"
-import type { ActaGD, ExtensionGobernanza, PeriodoDirectiva } from "@/lib/schemas"
+import type { ActaGD, CapacidadDirectiva, ExtensionGobernanza, PeriodoDirectiva } from "@/lib/schemas"
+import { leerMiembrosPeriodo } from "@/lib/schemas"
 import { periodoDirectivaVigente, esMiembroDirectivaVigente } from "@/lib/store/helpers"
 import { useActasGD } from "@/lib/api/use-actas-gd"
 import { usePeriodosDirectiva } from "@/lib/api/use-periodos-directiva"
@@ -49,6 +50,22 @@ const CARGO_LABEL: Record<string, string> = {
   tesorero: "Tesorero",
   secretario: "Secretario",
   director: "Director",
+}
+
+// Capacidad con que se ejerce el cargo (art. 17 inc. 4 Ley 21.442): es la
+// elegibilidad del miembro, el dato que el libro debe poder probar.
+const CAPACIDAD_LABEL: Record<string, string> = {
+  propietario: "Propietario",
+  conyuge_conviviente: "Cónyuge/conviviente civil",
+  apoderado: "Apoderado con poder notarial",
+  representante_persona_juridica: "Representante de persona jurídica",
+}
+
+// Motivo del término del mandato: información de cierre que guarda el período.
+const MOTIVO_TERMINO_LABEL: Record<string, string> = {
+  renuncia: "Renuncia",
+  remocion: "Remoción",
+  fin_periodo: "Fin de período",
 }
 
 // GD-períodos: art. 17 Ley 21.442 — máximo 36 meses fijados por asamblea.
@@ -94,6 +111,8 @@ export default function DirectivaPage() {
   const [perInscripcion, setPerInscripcion] = React.useState("")
   const [perReferencia, setPerReferencia] = React.useState("")
   const [selMiembros, setSelMiembros] = React.useState<Record<string, string>>({})
+  // Capacidad declarada por miembro seleccionado (elegibilidad del cargo).
+  const [selCapacidad, setSelCapacidad] = React.useState<Record<string, string>>({})
   const [tablaTemasTexto, setTablaTemasTexto] = React.useState("")
   const [invitadosTexto, setInvitadosTexto] = React.useState("")
 
@@ -262,12 +281,33 @@ export default function DirectivaPage() {
             <div className="border-t pt-3">
               <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">Históricos (libro)</p>
               <div className="flex flex-col gap-2">
-                {periodos.filter(p => p.estado === "cerrado").map(p => (
-                  <div key={p.id} className="rounded-md border p-2 text-xs">
-                    <p><strong>{p.fechaInicio}</strong> → {p.fechaFin ?? "—"} · {p.miembros.length} miembros{p.fechaInscripcion ? ` · Inscrito ${p.fechaInscripcion}` : ""}</p>
-                    <p className="text-muted-foreground">{p.miembros.map(m => `${m.nombre} (${CARGO_LABEL[m.cargo] ?? m.cargo})`).join(", ")}</p>
-                  </div>
-                ))}
+                {periodos.filter(p => p.estado === "cerrado").map(p => {
+                  // Lectura tolerante: los snapshots anteriores a la información
+                  // de cierre no traen capacidad, término ni entrega de
+                  // documentos, y el período se sigue mostrando igual.
+                  const archivados = leerMiembrosPeriodo(p.miembros)
+                  const salidas = archivados.filter(m => !!m.fechaTermino)
+                  const entrega = archivados.find(m => !!m.fechaEntregaDocumentos || !!m.entregaDocumentosA)
+                  return (
+                    <div key={p.id} className="rounded-md border p-2 text-xs">
+                      <p><strong>{p.fechaInicio}</strong> → {p.fechaFin ?? "—"} · {archivados.length} miembros{p.fechaInscripcion ? ` · Inscrito ${p.fechaInscripcion}` : ""}</p>
+                      <p className="text-muted-foreground">
+                        {archivados.map(m => `${m.nombre} (${CARGO_LABEL[m.cargo] ?? m.cargo}${m.capacidad ? ` · ${CAPACIDAD_LABEL[m.capacidad] ?? m.capacidad}` : ""})`).join(", ")}
+                      </p>
+                      {salidas.length > 0 && (
+                        <p className="text-muted-foreground">
+                          <span className="font-medium">Salidas:</span>{" "}
+                          {salidas.map(m => `${m.nombre} (${CARGO_LABEL[m.cargo] ?? m.cargo}) — ${m.fechaTermino}${m.motivoTermino ? ` · ${MOTIVO_TERMINO_LABEL[m.motivoTermino] ?? m.motivoTermino}` : ""}`).join(" · ")}
+                        </p>
+                      )}
+                      {entrega && (
+                        <p className="text-muted-foreground">
+                          Documentos del presidente entregados{entrega.fechaEntregaDocumentos ? ` el ${entrega.fechaEntregaDocumentos}` : " sin fecha"}{entrega.entregaDocumentosA ? ` a ${entrega.entregaDocumentosA}` : ""}
+                        </p>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
             </div>
           )}
@@ -437,12 +477,23 @@ export default function DirectivaPage() {
                           <input
                             type="checkbox"
                             checked={sel}
-                            onChange={() => setSelMiembros(prev => {
-                              const next = { ...prev }
-                              if (sel) delete next[p.id]
-                              else next[p.id] = p.datosGobernanza?.cargoDirectiva ?? ""
-                              return next
-                            })}
+                            onChange={() => {
+                              const seleccionando = !sel
+                              setSelMiembros(prev => {
+                                const next = { ...prev }
+                                if (seleccionando) next[p.id] = p.datosGobernanza?.cargoDirectiva ?? ""
+                                else delete next[p.id]
+                                return next
+                              })
+                              // Al deseleccionar se olvida también la capacidad declarada.
+                              if (!seleccionando) {
+                                setSelCapacidad(prev => {
+                                  const next = { ...prev }
+                                  delete next[p.id]
+                                  return next
+                                })
+                              }
+                            }}
                           />
                           <span className="flex-1">{p.nombres} {p.apellidos}</span>
                           {sel && (
@@ -450,6 +501,24 @@ export default function DirectivaPage() {
                               <SelectTrigger className="h-7 w-32"><SelectValue placeholder="Cargo" /></SelectTrigger>
                               <SelectContent>
                                 {Object.entries(CARGO_LABEL).map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}
+                              </SelectContent>
+                            </Select>
+                          )}
+                          {sel && (
+                            <Select
+                              // La ficha legacy de MP (data/comunidad/personas) no declara
+                              // `capacidad`; se lee con cast para prefillar la elegibilidad ya
+                              // registrada. También viaja en `ExtensionGobernanza` (lib/schemas).
+                              value={
+                                selCapacidad[p.id] ??
+                                (p.datosGobernanza as unknown as { capacidad?: string } | undefined)?.capacidad ??
+                                ""
+                              }
+                              onValueChange={v => setSelCapacidad(prev => ({ ...prev, [p.id]: v }))}
+                            >
+                              <SelectTrigger className="h-7 w-44"><SelectValue placeholder="Capacidad (art. 17)" /></SelectTrigger>
+                              <SelectContent>
+                                {Object.entries(CAPACIDAD_LABEL).map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}
                               </SelectContent>
                             </Select>
                           )}
@@ -469,6 +538,7 @@ export default function DirectivaPage() {
                           nombre: personas.find(p => p.id === personaId)?.nombreCompleto ?? personaId,
                           cargo: cargo as "presidente" | "tesorero" | "secretario" | "director",
                           fechaAsuncion: perInicio,
+                          ...(selCapacidad[personaId] ? { capacidad: selCapacidad[personaId] as CapacidadDirectiva } : {}),
                         }))
                       const id = `periodo-${Date.now().toString(36)}`
                       const r = await crearPeriodo({
@@ -494,6 +564,7 @@ export default function DirectivaPage() {
                             cargoDirectiva: m.cargo,
                             fechaAsuncion: m.fechaAsuncion,
                             periodoId: id,
+                            ...(m.capacidad ? { capacidad: m.capacidad } : {}),
                           }
                           await actualizarPersona(p.id, {
                             // null de BD (fotografiaUrl etc.) rompe el merge del PUT
@@ -515,7 +586,7 @@ export default function DirectivaPage() {
                       }
                       setError(null)
                       setPeriodoDialogo(false)
-                      setPerInicio(""); setPerDuracion("36"); setPerInscripcion(""); setPerReferencia(""); setSelMiembros({})
+                      setPerInicio(""); setPerDuracion("36"); setPerInscripcion(""); setPerReferencia(""); setSelMiembros({}); setSelCapacidad({})
                     }}>Registrar período</Button>
               </DialogFooter>
             </DialogContent>

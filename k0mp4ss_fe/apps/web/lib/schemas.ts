@@ -227,6 +227,34 @@ export const ExtensionLaboralSchema = z.object({
   evaluaciones: z.array(EvaluacionPESchema).optional(),
 })
 
+// GD-períodos: capacidad con que la persona integra la directiva (art. 17 inc. 4
+// Ley 21.442: propietario, su cónyuge o conviviente civil, su apoderado con poder
+// notarial, o el representante de la persona jurídica propietaria). Es el campo de
+// ELEGIBILIDAD del cargo: sin él la nómina archivada no puede probar por qué esa
+// persona podía ocupar el cargo. Se declara al designarla y viaja con la ficha y
+// con la nómina archivada del período.
+export const CAPACIDADES_DIRECTIVA = [
+  "propietario",
+  "conyuge_conviviente",
+  "apoderado",
+  "representante_persona_juridica",
+] as const
+
+export const CapacidadDirectivaSchema = z.enum(CAPACIDADES_DIRECTIVA)
+
+export type CapacidadDirectiva = z.infer<typeof CapacidadDirectivaSchema>
+
+/** Por qué terminó un mandato (el hecho que el libro debe poder probar). */
+export const MOTIVOS_TERMINO_DIRECTIVA = [
+  "renuncia",
+  "remocion",
+  "fin_periodo",
+] as const
+
+export const MotivoTerminoDirectivaSchema = z.enum(MOTIVOS_TERMINO_DIRECTIVA)
+
+export type MotivoTerminoDirectiva = z.infer<typeof MotivoTerminoDirectivaSchema>
+
 export const ExtensionGobernanzaSchema = z
   .object({
     id: IdEntidadSchema,
@@ -236,12 +264,15 @@ export const ExtensionGobernanzaSchema = z
       "secretario",
       "director",
     ]),
+    // Elegibilidad del cargo (art. 17 inc. 4). Opcional: las fichas anteriores a
+    // este campo siguen valiendo; su ausencia no invalida el mandato.
+    capacidad: CapacidadDirectivaSchema.optional(),
     firmaDigital: z.string().optional(),
     fechaAsuncion: FechaISOSchema,
     // Período al que pertenece la ficha (GD-períodos). Ausente = legado pre-períodos (cuenta como vigente).
     periodoId: IdEntidadSchema.optional(),
     fechaTermino: FechaISOSchema.optional(),
-    motivoTermino: z.enum(["renuncia", "remocion", "fin_periodo"]).optional(),
+    motivoTermino: MotivoTerminoDirectivaSchema.optional(),
   })
   .refine(
     (e) =>
@@ -255,6 +286,53 @@ export const ExtensionGobernanzaSchema = z
       )
 
     // GD-períodos: cada período archiva su nómina al cerrarse (libro: nunca se borra).
+
+/**
+ * Miembro archivado en la nómina de un período (GD-períodos).
+ *
+ * El shape es ADITIVO por decisión del owner (opción A: se preserva el registro,
+ * no se crea una entidad nueva). Los snapshots escritos antes de la fase de
+ * "información de cierre" no traen `capacidad`, `fechaTermino`/`motivoTermino`
+ * ni la entrega de documentos: se leen tal cual, con esos campos ausentes, y
+ * NUNCA se reescriben al leer.
+ */
+export const MiembroPeriodoSchema = z.object({
+  personaId: IdEntidadSchema,
+  nombre: z.string().min(1),
+  cargo: z.enum(["presidente", "tesorero", "secretario", "director"]),
+  fechaAsuncion: FechaISOSchema,
+  // Elegibilidad con que ocupó el cargo (art. 17 inc. 4).
+  capacidad: CapacidadDirectivaSchema.optional(),
+  // Cuándo y por qué terminó el mandato del que no continuó.
+  fechaTermino: FechaISOSchema.optional(),
+  motivoTermino: MotivoTerminoDirectivaSchema.optional(),
+  // Entrega de documentos del presidente saliente (art. 17): el libro es la prueba.
+  fechaEntregaDocumentos: FechaISOSchema.optional(),
+  entregaDocumentosA: z.string().min(1).optional(),
+})
+
+export type MiembroPeriodo = z.infer<typeof MiembroPeriodoSchema>
+
+export const MiembrosPeriodoSchema = z.array(MiembroPeriodoSchema)
+
+/**
+ * Lectura tolerante de la nómina archivada del libro.
+ *
+ * Acepta cualquier versión del shape (vieja sin campos de cierre, nueva con
+ * ellos) y no lanza nunca: un elemento ilegible se descarta para que un snapshot
+ * heredado no rompa el render del período. Los campos de cierre ausentes quedan
+ * `undefined`, que es lo que la vista muestra como "sin registro".
+ */
+export function leerMiembrosPeriodo(crudo: unknown): MiembroPeriodo[] {
+  if (!Array.isArray(crudo)) return []
+  const salida: MiembroPeriodo[] = []
+  for (const item of crudo) {
+    const parsed = MiembroPeriodoSchema.safeParse(item)
+    if (parsed.success) salida.push(parsed.data)
+  }
+  return salida
+}
+
     export const PeriodoDirectivaSchema = z.object({
       id: IdEntidadSchema,
       fechaInicio: FechaISOSchema,
@@ -293,19 +371,10 @@ export const ExtensionGobernanzaSchema = z
       estado: z.enum(["vigente", "cerrado"]),
       actaOrigenId: IdEntidadSchema.optional(),
       // Nómina congelada al cerrar (historia del libro).
-      miembros: z.array(
-        z.object({
-          personaId: IdEntidadSchema,
-          nombre: z.string().min(1),
-          cargo: z.enum(["presidente", "tesorero", "secretario", "director"]),
-          fechaAsuncion: FechaISOSchema,
-          fechaTermino: FechaISOSchema.optional(),
-          motivoTermino: z.enum(["renuncia", "remocion", "fin_periodo"]).optional(),
-        })
-      ),
+      miembros: MiembrosPeriodoSchema,
     })
 
-    export type PeriodoDirectiva = z.infer<typeof PeriodoDirectivaSchema>
+export type PeriodoDirectiva = z.infer<typeof PeriodoDirectivaSchema>
 
 export const ROLES_PERSONA = [
   "propietario",

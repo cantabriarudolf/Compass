@@ -4,6 +4,7 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest"
 import { NextRequest } from "next/server"
 import { prisma } from "@/lib/prisma"
+import { esMiembroDirectivaVigente } from "@/lib/store/helpers"
 
 const state = vi.hoisted(() => ({ cookie: "" }))
 vi.mock("next/headers", () => ({
@@ -676,6 +677,384 @@ describe("/api/periodos-directiva — GD períodos con BD real (Fase 0)", () => 
           })
         ).toBe(0)
       })
+    })
+  })
+
+  // Fase 3 (decisión del owner, opción A): la rotación deja de destruir el
+  // registro. Se distinguen dos cosas distintas:
+  // - la PROYECCIÓN (`Persona.datosGobernanza`, "quién está en la directiva
+  //   ahora") sí se depura al salir, o `esMiembroVigente` seguiría contando al
+  //   saliente en el quórum;
+  // - el REGISTRO (`PeriodoDirectiva.miembros`, "qué pasó") deja de perderse:
+  //   antes de depurar la ficha, la rotación escribe en el snapshot del período
+  //   que cierra el cargo, la fecha y el motivo del término del saliente.
+  describe("Fase 3 — la rotación conserva el registro del saliente", () => {
+    const idsNomina = ["gd3-1", "gd3-2", "gd3-3", "gd3-4", "gd3-5"]
+    const emailTesorero = "gd3-tesorero@test.cl"
+    const emailPresidente = "gd3-presidente@test.cl"
+    const idsPeriodos = ["gd3-per-1", "gd3-per-2", "gd3-per-viejo"]
+
+    const cargaCerrar = async () =>
+      await import("@/app/api/periodos-directiva/[id]/cerrar/route")
+    const cargaAprobar = async () =>
+      await import("@/app/api/actas-gd/[id]/aprobar/route")
+
+    async function CERRAR(id: string, body: unknown = {}): Promise<Response> {
+      const { POST: cerrar } = await cargaCerrar()
+      return cerrar(
+        new NextRequest(`http://localhost/api/periodos-directiva/${id}/cerrar`, {
+          method: "POST",
+          body: JSON.stringify(body),
+          headers: { "content-type": "application/json" },
+        }),
+        { params: Promise.resolve({ id }) }
+      )
+    }
+
+    async function APROBAR(id: string, personaId: string): Promise<Response> {
+      const { POST: aprobar } = await cargaAprobar()
+      return aprobar(
+        new NextRequest(`http://localhost/api/actas-gd/${id}/aprobar`, {
+          method: "POST",
+          body: JSON.stringify({ personaId }),
+          headers: { "content-type": "application/json" },
+        }),
+        { params: Promise.resolve({ id }) }
+      )
+    }
+
+    /** Nómina tal como la manda el cliente: la capacidad es la elegibilidad (art. 17 inc. 4). */
+    function nomina(
+      miembros: { personaId: string; cargo: string; capacidad?: string }[],
+      fechaAsuncion: string
+    ): Record<string, unknown>[] {
+      return miembros.map((m) => ({
+        personaId: m.personaId,
+        nombre: `Nómina ${m.personaId}`,
+        cargo: m.cargo,
+        fechaAsuncion,
+        ...(m.capacidad ? { capacidad: m.capacidad } : {}),
+      }))
+    }
+
+    const fichaDe = async (personaId: string) =>
+      (
+        (await prisma.persona.findUnique({ where: { id: personaId } })) as unknown as {
+          datosGobernanza: Record<string, unknown> | null
+        } | null
+      )?.datosGobernanza
+
+    const archivoDe = async (periodoId: string) => {
+      const periodo = await prisma.periodoDirectiva.findUnique({ where: { id: periodoId } })
+      return {
+        estado: periodo?.estado,
+        fechaFin: periodo?.fechaFin,
+        miembros: leerMiembrosDe(periodo?.miembros),
+      }
+    }
+
+    // Lectura cruda del Json archivado (sin validar): es lo que ve el cliente.
+    function leerMiembrosDe(crudo: unknown): Record<string, unknown>[] {
+      return Array.isArray(crudo) ? (crudo as Record<string, unknown>[]) : []
+    }
+
+    beforeAll(async () => {
+      await prisma.periodoDirectiva.deleteMany({ where: { id: { in: idsPeriodos } } })
+      await prisma.actaGD.deleteMany({ where: { id: "gd3-acta-1" } })
+      const nombres = ["Uno", "Dos", "Tres", "Cuatro", "Cinco"]
+      for (const [i, id] of idsNomina.entries()) {
+        await prisma.persona.upsert({
+          where: { id },
+          update: {},
+          create: {
+            id,
+            comunidadId: comunidadA,
+            rut: `9500000${i}-0`,
+            nombreCompleto: `Nómina ${id}`,
+            nombres: "Nómina",
+            apellidos: nombres[i]!,
+            email: `${id}@test.cl`,
+            telefonoMovil: "+56900000000",
+            estadoCuenta: "activa",
+            condicionesEspecialesIds: [],
+            roles: ["propietario"],
+          },
+        })
+      }
+      // Usuarios con identidad MP: la firma de actas exige "firmar como uno mismo".
+      for (const u of [
+        { id: "gd3-usuario-tesorero", email: emailTesorero, personaId: "gd3-2" },
+        { id: "gd3-usuario-presidente", email: emailPresidente, personaId: "gd3-4" },
+      ]) {
+        await prisma.usuario.upsert({ where: { email: u.email }, update: { personaId: u.personaId }, create: u })
+        await prisma.membresia.deleteMany({ where: { usuarioId: u.id } })
+        await prisma.membresia.create({ data: { usuarioId: u.id, comunidadId: comunidadA, rol: "propietario" } })
+      }
+    }, 30_000)
+
+    afterAll(async () => {
+      const idsUsuarios = ["gd3-usuario-tesorero", "gd3-usuario-presidente"]
+      await prisma.actaGD.deleteMany({ where: { id: "gd3-acta-1" } })
+      await prisma.periodoDirectiva.deleteMany({ where: { id: { in: idsPeriodos } } })
+      await prisma.membresia.deleteMany({ where: { usuarioId: { in: idsUsuarios } } })
+      await prisma.usuario.deleteMany({ where: { id: { in: idsUsuarios } } })
+    })
+
+    it("el alta del período propaga la capacidad de la nómina a la ficha", async () => {
+      await conSesion(emailAdmin, async () => {
+        const res = await POST(
+          periodoValido({
+            id: "gd3-per-1",
+            fechaInicio: "2026-01-15",
+            miembros: nomina(
+              [
+                { personaId: "gd3-1", cargo: "presidente", capacidad: "propietario" },
+                { personaId: "gd3-2", cargo: "tesorero", capacidad: "conyuge_conviviente" },
+                { personaId: "gd3-3", cargo: "secretario", capacidad: "apoderado" },
+              ],
+              "2026-01-15"
+            ),
+          })
+        )
+        expect(res.status).toBe(201)
+        const ficha = await fichaDe("gd3-2")
+        expect(ficha?.periodoId).toBe("gd3-per-1")
+        expect(ficha?.cargoDirectiva).toBe("tesorero")
+        expect(ficha?.capacidad).toBe("conyuge_conviviente")
+      })
+    })
+
+    it("al rotar, el período cerrado conserva cargo, asunción, término y motivo del saliente", async () => {
+      // Antes: el tesorero saliente está en la proyección (ficha) del período que va a cerrarse.
+      const antes = await fichaDe("gd3-2")
+      expect(antes).not.toBeNull()
+      expect(antes?.cargoDirectiva).toBe("tesorero")
+
+      await conSesion(emailAdmin, async () => {
+        const res = await POST(
+          periodoValido({
+            id: "gd3-per-2",
+            fechaInicio: "2026-06-01",
+            miembros: nomina(
+              [
+                { personaId: "gd3-3", cargo: "secretario", capacidad: "apoderado" },
+                { personaId: "gd3-4", cargo: "presidente", capacidad: "representante_persona_juridica" },
+                { personaId: "gd3-5", cargo: "director", capacidad: "propietario" },
+              ],
+              "2026-06-01"
+            ),
+          })
+        )
+        expect(res.status).toBe(201)
+      })
+
+      // Registro: el período que cierra guarda el hecho con fecha y motivo.
+      const cerrado = await archivoDe("gd3-per-1")
+      expect(cerrado.estado).toBe("cerrado")
+      expect(cerrado.fechaFin).toBe("2026-06-01")
+      const tesoreroSaliente = cerrado.miembros.find((m) => m.personaId === "gd3-2")
+      expect(tesoreroSaliente).toBeDefined()
+      expect(tesoreroSaliente).toMatchObject({
+        nombre: "Nómina gd3-2",
+        cargo: "tesorero",
+        fechaAsuncion: "2026-01-15",
+        capacidad: "conyuge_conviviente",
+        fechaTermino: "2026-06-01",
+        motivoTermino: "fin_periodo",
+      })
+
+      // Quien continúa no se registra como salida (misma persona, mismo mandato).
+      const secretarioContinuo = cerrado.miembros.find((m) => m.personaId === "gd3-3")
+      expect(secretarioContinuo).toBeDefined()
+      expect(secretarioContinuo?.cargo).toBe("secretario")
+      expect(secretarioContinuo?.fechaTermino).toBeUndefined()
+      expect(secretarioContinuo?.motivoTermino).toBeUndefined()
+
+      // Entrega de documentos del presidente saliente (art. 17): el registro es la prueba.
+      const presidenteSaliente = cerrado.miembros.find((m) => m.personaId === "gd3-1")
+      expect(presidenteSaliente).toMatchObject({
+        cargo: "presidente",
+        fechaTermino: "2026-06-01",
+        fechaEntregaDocumentos: "2026-06-01",
+        entregaDocumentosA: "Nómina gd3-4",
+      })
+
+      // Proyección: la ficha del saliente se depura (ya no está en el cargo).
+      expect(await fichaDe("gd3-2")).toBeNull()
+      expect(await fichaDe("gd3-1")).toBeNull()
+      // …y la del que continúa apunta al período nuevo, sin término.
+      expect(await fichaDe("gd3-3")).toMatchObject({
+        cargoDirectiva: "secretario",
+        periodoId: "gd3-per-2",
+        capacidad: "apoderado",
+      })
+    })
+
+    it("un período con snapshot viejo (sin los campos nuevos) se lee igual", async () => {
+      // Fila previa a esta fase: la nómina archivada tiene solo el shape viejo.
+      await prisma.periodoDirectiva.create({
+        data: {
+          id: "gd3-per-viejo",
+          comunidadId: comunidadA,
+          fechaInicio: "2020-01-01",
+          duracionMeses: 24,
+          fechaFin: "2022-01-01",
+          fechaInscripcion: "2020-02-01",
+          referenciaInscripcion: "Acta asamblea 2020",
+          estado: "cerrado",
+          miembros: [
+            { personaId: "gd3-1", nombre: "Nómina gd3-1", cargo: "presidente", fechaAsuncion: "2020-01-01" },
+            { personaId: "gd3-2", nombre: "Nómina gd3-2", cargo: "tesorero", fechaAsuncion: "2020-01-01" },
+          ],
+        },
+      })
+
+      await conSesion(emailAdmin, async () => {
+        const res = await GET_ONE("gd3-per-viejo")
+        expect(res.status).toBe(200)
+        const cuerpo = (await res.json()) as { miembros: Record<string, unknown>[] }
+        expect(cuerpo.miembros).toHaveLength(2)
+        expect(cuerpo.miembros[1]).toEqual({
+          personaId: "gd3-2",
+          nombre: "Nómina gd3-2",
+          cargo: "tesorero",
+          fechaAsuncion: "2020-01-01",
+        })
+      })
+
+      // La lectura tolerante del libro no rompe con el shape viejo ni con basura.
+      const { leerMiembrosPeriodo } = await import("@/lib/schemas")
+      const enBd = await prisma.periodoDirectiva.findUnique({ where: { id: "gd3-per-viejo" } })
+      const leidos = leerMiembrosPeriodo(enBd?.miembros)
+      expect(leidos).toHaveLength(2)
+      expect(leidos[0]).toMatchObject({ personaId: "gd3-1", cargo: "presidente", fechaAsuncion: "2020-01-01" })
+      // Campos nuevos ausentes = undefined, nunca una excepción.
+      expect(leidos[0]?.capacidad).toBeUndefined()
+      expect(leidos[0]?.fechaTermino).toBeUndefined()
+      expect(leidos[0]?.motivoTermino).toBeUndefined()
+      expect(leidos[0]?.fechaEntregaDocumentos).toBeUndefined()
+      expect(leidos[0]?.entregaDocumentosA).toBeUndefined()
+      // Elemento corrupto: se descarta, el resto del libro se sigue leyendo.
+      const mixto = leerMiembrosPeriodo([
+        ...leerMiembrosDe(enBd?.miembros),
+        { personaId: "gd3-raro" },
+        null,
+        "texto",
+      ])
+      expect(mixto).toHaveLength(2)
+      expect(leerMiembrosPeriodo(null)).toEqual([])
+      expect(leerMiembrosPeriodo(undefined)).toEqual([])
+    })
+
+    it("el snapshot nunca se vacía y lo ya registrado sobrevive al rearchivar", async () => {
+      const { miembrosArchivados } = await import("@/app/api/periodos-directiva/route")
+      // Snapshot previo con información de cierre ya escrita en el libro.
+      const previo = [
+        {
+          personaId: "gd3-1",
+          nombre: "Nómina gd3-1",
+          cargo: "presidente",
+          fechaAsuncion: "2020-01-01",
+          fechaTermino: "2020-06-01",
+          motivoTermino: "renuncia",
+          fechaEntregaDocumentos: "2020-06-02",
+          entregaDocumentosA: "Vecino Receptor",
+        },
+      ]
+      const cierre = { fechaCierre: "2026-06-01", cierraMandatos: true, motivoTermino: "fin_periodo" as const }
+      // Sin fichas legibles en MP: el archivo previo se conserva íntegro (no se borra).
+      expect(miembrosArchivados([], { id: "gd3-per-1", miembros: previo }, cierre)).toEqual(previo)
+      // Con ficha que ya no declara el término ni la entrega: no se pierde nada.
+      const fusionado = miembrosArchivados(
+        [
+          {
+            id: "gd3-1",
+            nombreCompleto: "Nómina gd3-1",
+            datosGobernanza: {
+              periodoId: "gd3-per-1",
+              cargoDirectiva: "presidente",
+              fechaAsuncion: "2020-01-01",
+            },
+          },
+        ],
+        { id: "gd3-per-1", miembros: previo },
+        cierre
+      )
+      expect(fusionado[0]).toMatchObject({
+        cargo: "presidente",
+        fechaTermino: "2020-06-01",
+        motivoTermino: "renuncia",
+        fechaEntregaDocumentos: "2020-06-02",
+        entregaDocumentosA: "Vecino Receptor",
+      })
+    })
+
+    it("la directiva corriente y la firma de actas ignoran a los salientes", async () => {
+      const personasEnBd = await prisma.persona.findMany({
+        where: { id: { in: idsNomina } },
+        select: { id: true, estadoCuenta: true, datosGobernanza: true },
+      })
+      const porId = new Map(personasEnBd.map((p) => [p.id, p]))
+      const esVigente = (id: string): boolean =>
+        esMiembroDirectivaVigente(
+          {
+            estadoCuenta: porId.get(id)?.estadoCuenta,
+            datosGobernanza: porId.get(id)?.datosGobernanza,
+          } as unknown as Parameters<typeof esMiembroDirectivaVigente>[0],
+          "gd3-per-2"
+        )
+      expect(esVigente("gd3-1")).toBe(false)
+      expect(esVigente("gd3-2")).toBe(false)
+      expect(esVigente("gd3-3")).toBe(true)
+      expect(esVigente("gd3-4")).toBe(true)
+      expect(esVigente("gd3-5")).toBe(true)
+
+      // Firma de actas: el saliente ya no puede firmar; el vigente sí.
+      await prisma.actaGD.create({
+        data: {
+          id: "gd3-acta-1",
+          comunidadId: comunidadA,
+          fecha: "2026-06-10",
+          hora: "19:00",
+          lugar: "Sede",
+          tablaTemas: [],
+          presentes: [],
+          ausentes: [],
+          invitados: [],
+          minuta: "Acta del período nuevo.",
+          adjuntos: [],
+          estado: "borrador",
+          aprobaciones: [],
+          periodoId: "gd3-per-2",
+        },
+      })
+      await conSesion(emailTesorero, async () => {
+        const res = await APROBAR("gd3-acta-1", "gd3-2")
+        expect(res.status).toBe(403)
+        expect(((await res.json()) as { error: string }).error).toMatch(/miembro vigente/i)
+        const acta = await prisma.actaGD.findUnique({ where: { id: "gd3-acta-1" } })
+        expect(acta?.aprobaciones as unknown as string[]).toEqual([])
+      })
+      await conSesion(emailPresidente, async () => {
+        expect((await APROBAR("gd3-acta-1", "gd3-4")).status).toBe(200)
+      })
+    })
+
+    it("el cierre manual sigue archivando la nómina desde MP, sin inventar términos", async () => {
+      await conSesion(emailAdmin, async () => {
+        const res = await CERRAR("gd3-per-2", { fechaFin: "2026-09-01" })
+        expect(res.status).toBe(200)
+      })
+      const cerrado = await archivoDe("gd3-per-2")
+      expect(cerrado.estado).toBe("cerrado")
+      expect(cerrado.fechaFin).toBe("2026-09-01")
+      expect(cerrado.miembros.map((m) => m.personaId).sort()).toEqual(["gd3-3", "gd3-4", "gd3-5"])
+      const director = cerrado.miembros.find((m) => m.personaId === "gd3-5")
+      expect(director).toMatchObject({ cargo: "director", fechaAsuncion: "2026-06-01", capacidad: "propietario" })
+      // El cierre no es una salida personal: el término queda solo si la ficha lo declara.
+      expect(director?.fechaTermino).toBeUndefined()
+      expect(director?.motivoTermino).toBeUndefined()
+      expect(director?.fechaEntregaDocumentos).toBeUndefined()
     })
   })
 })
