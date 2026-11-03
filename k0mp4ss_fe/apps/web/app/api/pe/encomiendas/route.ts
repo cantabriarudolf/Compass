@@ -1,7 +1,10 @@
 /**
  * /api/pe/encomiendas — encomiendas PE (BD-FUENTE-VERDAD Fase 4).
  *
- * GET paginado vía factory. POST upsert idempotente por id. Authz "pe".
+ * GET paginado vía factory. POST upsert idempotente por id. Authz sobre el recurso
+ * granular `pe:encomienda` (decisión owner 2026-11-05): la recepción es un registro
+ * del portón, la escribe conserjería y la leen conserjería y el administrador. El
+ * comité y mantención NO la leen (hasta ahora entraban por la raíz `pe`).
  *
  * Auditoría (T1c): el store legacy emitía `PE_ENCOMIENDA_RECIBIDA` en cada
  * save de encomienda, sin mirar el estado final; el POST conserva el evento
@@ -61,7 +64,7 @@ async function avisarResidenteEncomienda(
 const handlers = createCrudHandlers({
   model: delegado(prisma.encomiendaPE),
   schema: EncomiendaPESchema,
-  authzCheck: (rol, accion) => puede(rol, accion, "pe"),
+  authzCheck: (rol, accion) => puede(rol, accion, "pe:encomienda"),
   despuesDeEscribir: async ({ registro, scope, accion }) => {
     const fila = registro as FilaEncomienda
     // La recepción de UNA encomienda es un evento nuevo, no un re-save del

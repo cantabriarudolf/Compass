@@ -61,6 +61,26 @@ const MATRIZ: Record<Rol, Record<string, Set<Accion>>> = {
     // permiso declarado y el ejecutado sean lo mismo. Operar el turno
     // (crear/editar/ejecutar) sigue siendo de conserjería: el comité audita, no opera.
     "pe:cierre_turno": new Set<Accion>(["ver"]),
+    // Bitácora de visitas (decisión owner 2026-11-05): es el registro de un HECHO del
+    // edificio, no un acto administrativo — quien estuvo en el portón lo escribe, el
+    // comité lo LEE. La clave gobierna además las proyecciones de solo lectura
+    // `/api/pe/personas`, `/api/pe/unidades` y `/api/pe/maestros/[tipo]`, que el comité
+    // ya alcanzaba por el fallback de prefijo de `pe` (ver): la entrada explícita deja
+    // el permiso declarado igual al ejecutado sin mover ningún acceso.
+    "pe:bitacora": new Set<Accion>(["ver"]),
+    // Encomiendas (decisión owner 2026-11-05): la recepción en conserjería es un
+    // registro del portón; el comité NO lo lee (a diferencia de visitas y contratistas:
+    // el paquete es de una unidad, no del edificio) y hasta ahora entraba por el
+    // fallback de prefijo de `pe` ver. Conjunto vacío explícito: el bloqueo queda
+    // declarado en la MATRIZ y no depende de que la raíz siga teniendo `ver`.
+    "pe:encomienda": new Set<Accion>([]),
+    // Ingresos de contratistas (decisión owner 2026-11-05): es el LOG DEL PORTÓN de un
+    // hecho del edificio, no la programación de un trabajo en una unidad, así que el
+    // comité lo LEE y hasta ahora entraba por el fallback de prefijo de `pe` ver.
+    // Clave PROPIA y no `pe:contratista`: esa key describe el acto del residente de
+    // agendar al contratista de su unidad y le da `ver`; reusarla acá le abriría el
+    // registro de todos los ingresos del edificio, que es otra cosa.
+    "pe:ingreso_contratista": new Set<Accion>(["ver"]),
     // Calendario preventivo: el comité LEE el panel del edificio (paridad con el
     // widget S7 del dashboard de gestión) pero no programa ni edita mantenciones:
     // la gestión vive en `/admin/mantenciones`, que es del administrador.
@@ -116,6 +136,17 @@ const MATRIZ: Record<Rol, Record<string, Set<Accion>>> = {
     "mp:propios": new Set<Accion>(["ver", "editar"]),
     "pe": new Set<Accion>(["ver", "crear", "editar"]),
     "pe:bitacora": new Set<Accion>(["ver", "crear", "editar"]),
+    // Encomiendas (decisión owner 2026-11-05): recibir y entregar un paquete es dejar
+    // constancia de un hecho del portón, así que conserjería verifica, registra y
+    // corrige. Sin `eliminar`: dar de baja un registro auditable es del administrador
+    // (y la baja además está protegida por estado en la ruta [id]).
+    "pe:encomienda": new Set<Accion>(["ver", "crear", "editar"]),
+    // Ingresos de contratistas (decisión owner 2026-11-05): el portón verifica y registra
+    // el ingreso, así que conserjería verifica, registra y corrige. Clave propia y no
+    // `pe:contratista` (esa es del residente agendando a su contratista): el log del
+    // edificio no se comparte con el residente. Sin `eliminar`: la baja de un registro
+    // auditable es del administrador, y la ruta [id] además protege el ingreso sellado.
+    "pe:ingreso_contratista": new Set<Accion>(["ver", "crear", "editar"]),
     "pe:cierre_turno": new Set<Accion>(["ver", "crear", "editar", "ejecutar"]),
     "pe:reporte_diario": new Set<Accion>(["ver"]),
     "pe:directorio": new Set<Accion>(["ver"]),
@@ -179,6 +210,22 @@ const MATRIZ: Record<Rol, Record<string, Set<Accion>>> = {
     // Vacío explícito: el residente no lee ni gestiona el calendario preventivo;
     // sin la entrada, cualquier futura clave `pe` base le abriría el prefijo.
     "pe:mantenciones": new Set<Accion>([]),
+    // Vacío explícito (decisión owner 2026-11-05): del portón el residente no aprende
+    // nada — su programación propia vive en `pe:visita`/`pe:contratista` y el paquete
+    // le llega por notificación. La entrada corta el fallback de prefijo hacia `pe`.
+    "pe:bitacora": new Set<Accion>([]),
+    // Vacío explícito: el residente no inicia ni cierra turno del personal (decisión
+    // owner 2026-11-05); la entrada deja el bloqueo declarado, no heredado.
+    "pe:cierre_turno": new Set<Accion>([]),
+    // Vacío explícito (decisión owner 2026-11-05): el paquete le llega por notificación,
+    // no leyendo la planilla del portón (qué encomiendas hay y de quién son es dato de
+    // la operación). Corta el fallback de prefijo hacia `pe`.
+    "pe:encomienda": new Set<Accion>([]),
+    // Vacío explícito (decisión owner 2026-11-05): el residente agenda a SU contratista
+    // por `pe:contratista`, pero el registro de ingresos del edificio no es suyo: desde
+    // el log no aprende nada del portón. Entrada vacía propia para que el `ver` de
+    // `pe:contratista` no alcance el log.
+    "pe:ingreso_contratista": new Set<Accion>([]),
     // Vacío explícito: la visita técnica es del edificio, no de la unidad del residente
     // (decisión owner 2026-11-03); la entrada corta el fallback de prefijo hacia `pe`.
     "pe:visita_tecnica": new Set<Accion>([]),
@@ -190,6 +237,9 @@ const MATRIZ: Record<Rol, Record<string, Set<Accion>>> = {
     "pe:proyeccion": new Set<Accion>([]),
     "pe:proyeccion:enviar": new Set<Accion>([]),
     "pe:visita": new Set<Accion>(["ver", "crear"]), // agenda visitas/contratistas a su unidad
+    // Agenda al contratista de SU unidad (ver/crear). No es el log de ingresos del
+    // edificio: ese vive en `pe:ingreso_contratista`, vacío para el residente, para que
+    // este `ver` no le abra el registro del portón.
     "pe:contratista": new Set<Accion>(["ver", "crear"]),
     // SERIE-FASE2 §V2: el residente no registra evaluaciones de desempeño.
     "pe:evaluacion": new Set<Accion>([]),
@@ -264,6 +314,13 @@ const MATRIZ: Record<Rol, Record<string, Set<Accion>>> = {
     "ir:mantenimiento": new Set<Accion>(["ver", "crear", "editar"]),
     "ir:interno": new Set<Accion>(["ver", "crear"]),
     "pe:bitacora": new Set<Accion>(["ver"]),
+    // Vacío explícito (decisión owner 2026-11-05): la paquetería es del portón, no de
+    // las tareas de mantención; hasta ahora la leía y la escribía por el `pe` de sus
+    // tareas (fallback de prefijo). La entrada la cierra.
+    "pe:encomienda": new Set<Accion>([]),
+    // Vacío explícito (decisión owner 2026-11-05): los ingresos de contratistas son del
+    // portón; la entrada corta el fallback de prefijo hacia el `pe` de sus tareas.
+    "pe:ingreso_contratista": new Set<Accion>([]),
     "cv": new Set<Accion>(["ver"]), // visor de avisos: solo lectura (decisión owner 2026-10-21)
     "notificaciones": new Set<Accion>(["ver"]),
     // H7 — marcar leída es acto propio del destinatario: solo la propia (ABAC en la ruta)
@@ -446,6 +503,8 @@ export const RECURSOS_CONOCIDOS = [
   "pe:bitacora",
   "pe:cierre_turno",
   "pe:ficha",
+  "pe:encomienda",
+  "pe:ingreso_contratista",
   "pe:mantenciones",
   "pe:visita_tecnica",
   "pe:proveedor",

@@ -1,7 +1,9 @@
 /**
  * /api/pe/encomiendas/[id] — detalle/actualización parcial/baja.
  *
- * GET_ONE y DELETE vía factory. PUT parcial vía put-merge sobre "pe".
+ * GET_ONE y DELETE vía factory. PUT parcial vía put-merge sobre el recurso granular
+ * `pe:encomienda` (decisión owner 2026-11-05): conserjería registra la recepción y
+ * la entrega; el comité y mantención no leen la paquetería.
  *
  * Auditoría (T1c): el PUT conserva el evento `PE_ENCOMIENDA_RETIRADA` del
  * store legacy vía el hook post-escritura de put-merge, SOLO si la fila pasa
@@ -20,7 +22,7 @@ import { registrarEventoPE } from "@/app/api/pe/_acciones"
 
 const modelo = delegado(prisma.encomiendaPE)
 const authzCheck = (rol: string, accion: "ver" | "crear" | "editar" | "eliminar" | "ejecutar") =>
-  puede(rol, accion, "pe")
+  puede(rol, accion, "pe:encomienda")
 
 /**
  * Baja protegida (F15): una encomienda ya retirada tiene retiro registrado y no se

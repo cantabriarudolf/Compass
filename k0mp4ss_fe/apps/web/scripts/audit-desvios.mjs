@@ -667,20 +667,14 @@ const EXCEPCIONES_R1 = [
   // estado para que la lista no crezca. Cada entrada nombra sus rutas y su motivo dice por
   // qué la raíz es hoy la granularidad vigente de esa ruta. Ninguna de estas entradas
   // autoriza a agregar una ruta nueva: si aparece una, el candado la reporta.
-  {
-    recurso: "pe",
-    rutas: [
-      "app/api/pe/bitacora-visitas/[id]/route.ts",
-      "app/api/pe/bitacora-visitas/route.ts",
-      "app/api/pe/cierres-turno/route.ts",
-      "app/api/pe/encomiendas/[id]/route.ts",
-      "app/api/pe/encomiendas/route.ts",
-      "app/api/pe/ingresos-contratistas/[id]/route.ts",
-      "app/api/pe/ingresos-contratistas/route.ts",
-    ],
-    motivo:
-      "DEUDA CON DECISIÓN DEL OWNER PENDIENTE, no un aval: cuatro pares de rutas de Personal cuelgan todavía de la raíz desnuda `pe` — bitacora-visitas, cierres-turno (solo la colección), encomiendas e ingresos-contratistas (7 archivos: colección + [id]). Tres familias ya salieron de esta lista, cada una con su recurso propio: visitas-tecnicas (`pe:visita_tecnica`: registrar una visita es dejar constancia de un hecho, no un acto administrativo), proveedores (`pe:proveedor`: administrar un maestro es del administrador; la operación solo lo lee) y proyecciones (`pe:proyeccion` para computarla y registrarla, `pe:proyeccion:enviar` para empujar el costo a FI, que es un acto financiero del administrador). Todo rol que tenga `pe` (conserjería ver/crear/editar para su operación; mantención ver/crear/editar para sus tareas) entra a estas rutas por el fallback de prefijo de `puede()` (lib/authz.ts:288-292): es el mismo defecto que dejó /api/pe/mantenciones aceptando el PUT de conserjería, ya cortado con la entrada explícita `pe:mantenciones`. Cada par necesita su decisión de permiso por ruta del owner antes de cambiar el guard; hasta entonces la deuda queda escrita acá y ninguna ruta nueva puede sumarse a esta lista.",
-  },
+  //
+  // `pe` ya NO tiene entrada y no debe recuperarla: las cuatro familias que colgaban de la
+  // raíz desnuda salieron con su recurso propio (decisión del owner 2026-11-05, «el permiso
+  // sigue la naturaleza del acto» — son registros de hechos y los escribe conserjería):
+  // bitacora-visitas → `pe:bitacora`, cierres-turno → `pe:cierre_turno`,
+  // encomiendas → `pe:encomienda`, ingresos-contratistas → `pe:ingreso_contratista`.
+  // Una ruta PE nueva pide su clave granular; volver a la raíz `pe` es el defecto que el
+  // candado reporta (R1), no una excepción que se pueda anotar acá.
   ...baselineRaiz(
     "mp",
     [

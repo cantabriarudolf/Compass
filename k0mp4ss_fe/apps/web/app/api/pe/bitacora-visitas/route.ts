@@ -2,8 +2,11 @@
  * /api/pe/bitacora-visitas — bitácora de visitas PE (BD-FUENTE-VERDAD Fase 4).
  *
  * GET paginado vía factory (paginación obligatoria: alta frecuencia de
- * registros). POST upsert idempotente por id. Authz sobre el recurso "pe"
- * (conserjería + administrador operan; admin elimina).
+ * registros). POST upsert idempotente por id. Authz sobre el recurso granular
+ * `pe:bitacora` (decisión owner 2026-11-05): registrar una visita es dejar
+ * constancia de un hecho y lo escribe conserjería; el comité y el administrador
+ * la leen, y borrar sigue siendo del administrador. La raíz desnuda `pe`
+ * dejaba entrar a mantención por el fallback de prefijo.
  *
  * Efectos de escritura (en `_visitas.ts`, compartidos con el PUT del detalle):
  * - `PE_VISITA_INGRESADA` como evento auditable (mismo texto que el store).
@@ -25,7 +28,7 @@ import {
 const handlers = createCrudHandlers({
   model: delegado(prisma.bitacoraVisitaPE),
   schema: BitacoraVisitaPESchema,
-  authzCheck: (rol, accion) => puede(rol, accion, "pe"),
+  authzCheck: (rol, accion) => puede(rol, accion, "pe:bitacora"),
   // PE-visitas: la autorización telefónica, una vez registrada, no se reedita.
   antesDeEscribir: guardiaAutorizacionInmutable,
   despuesDeEscribir: async ({ registro, scope, accion }) => {

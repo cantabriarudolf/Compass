@@ -236,25 +236,16 @@ export function Panel({ rol }: { rol: string }) {
     expect(hallazgosDe(raiz, "R1")).toHaveLength(0)
   })
 
-  it("el baseline real de `pe` nombra los cuatro pares de rutas (7 archivos)", () => {
-    type EntradaBaseline = { recurso?: string; rutas?: string[]; motivo: string }
+  it("`pe` ya no tiene baseline de raíz desnuda: las cuatro familias piden su recurso granular", () => {
+    type EntradaBaseline = { recurso?: string; rutas?: string[] }
     const pe = (EXCEPCIONES.R1 as EntradaBaseline[]).find(
       (excepcion) => excepcion.recurso === "pe"
     )
-    expect(pe?.rutas).toHaveLength(7)
-    const familias = [
-      "bitacora-visitas",
-      "cierres-turno",
-      "encomiendas",
-      "ingresos-contratistas",
-    ]
-    for (const familia of familias)
-      expect(
-        pe?.rutas?.some((ruta) => ruta.startsWith(`app/api/pe/${familia}/`))
-      ).toBe(true)
-    // El motivo declara deuda con decisión del owner pendiente, no un aval.
-    expect(pe?.motivo).toContain("DEUDA CON DECISIÓN DEL OWNER PENDIENTE")
-    expect(pe?.motivo).toContain("pe:mantenciones")
+    // Decisión del owner 2026-11-05: bitacora-visitas → `pe:bitacora`,
+    // cierres-turno → `pe:cierre_turno`, encomiendas → `pe:encomienda`,
+    // ingresos-contratistas → `pe:ingreso_contratista`. Ninguna ruta PE queda
+    // heredando la raíz, así que la entrada del baseline desapareció.
+    expect(pe).toBeUndefined()
   })
 
   it("el repo real queda en verde con el baseline (la deuda de `pe` está cubierta)", () => {

@@ -1,7 +1,11 @@
 /**
  * /api/pe/ingresos-contratistas/[id] — detalle/actualización parcial/baja.
  *
- * GET_ONE y DELETE vía factory. PUT parcial vía put-merge sobre "pe".
+ * GET_ONE y DELETE vía factory. PUT parcial vía put-merge sobre el recurso granular
+ * `pe:ingreso_contratista` (decisión owner 2026-11-05): conserjería registra y sella
+ * el ingreso; el comité y el administrador lo leen. No se reusa `pe:contratista`
+ * porque el `ver` del residente ahí es para agendar a SU contratista y le abriría
+ * el log del portón.
  *
  * Auditoría (T1c): el PUT conserva el evento `PE_CONTRATISTA_INGRESADO` del
  * store legacy vía el hook post-escritura de put-merge, SOLO si la fila pasa
@@ -19,7 +23,7 @@ import { registrarEventoPE } from "@/app/api/pe/_acciones"
 
 const modelo = delegado(prisma.ingresoContratistaPE)
 const authzCheck = (rol: string, accion: "ver" | "crear" | "editar" | "eliminar" | "ejecutar") =>
-  puede(rol, accion, "pe")
+  puede(rol, accion, "pe:ingreso_contratista")
 
 /**
  * Baja protegida (F15): un ingreso ya sellado no se borra. El chequeo vive en el

@@ -2,7 +2,9 @@
  * /api/pe/bitacora-visitas/[id] — detalle/actualización parcial/baja.
  *
  * GET_ONE y DELETE vía factory. PUT parcial vía put-merge (fusión + validación
- * completa) sobre el recurso "pe".
+ * completa) sobre el recurso granular `pe:bitacora` (decisión owner 2026-11-05):
+ * conserjería registra y corrige el hecho; el comité y el administrador leen, y
+ * la baja sigue siendo del administrador.
  *
  * Auditoría (T1c): el PUT conserva el evento `PE_VISITA_INGRESADA` del store
  * legacy vía el hook post-escritura de put-merge, SOLO si la fila pasa a
@@ -29,7 +31,7 @@ import {
 
 const modelo = delegado(prisma.bitacoraVisitaPE)
 const authzCheck = (rol: string, accion: "ver" | "crear" | "editar" | "eliminar" | "ejecutar") =>
-  puede(rol, accion, "pe")
+  puede(rol, accion, "pe:bitacora")
 
 /**
  * Baja protegida (F15): la bitácora es un registro y no se limpia. Una visita ya
