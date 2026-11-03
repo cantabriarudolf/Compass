@@ -6,6 +6,7 @@ import { usePersonas } from "@/lib/api/use-personas"
 import { useUnidades } from "@/lib/api/use-unidades"
 import { useMicroSectores } from "@/lib/api/use-micro-sectores"
 import { useMaestros } from "@/lib/api/use-maestros"
+import { VerMas } from "@/components/ver-mas"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
@@ -139,7 +140,11 @@ export default function RecursosPage() {
   // `/inventario/tipos` con el padrón de unidades.
   const { items: activosIR, total: totalRecursos, isLoading: cargandoRecursos, create: crearRecurso, update: actualizarRecurso } = useRecursosIR({ todasLasPaginas: true })
   const { items: solicitudesInsumoIR, isLoading: cargandoSolicitudes, create: crearSolicitudInsumo, entregar: entregarSolicitudInsumo, resolverComodin: resolverComodinInsumo } = useSolicitudesInsumoIR({ todasLasPaginas: true })
-  const { items: entregasEPP, isLoading: cargandoEntregas, create: crearEntregaEPP } = useEntregasEPP()
+  // Las entregas de EPP solo se LISTAN (la pestaña no filtra ni cuenta), así que no necesitan la
+  // colección completa de entrada: el pie declara el total del servidor y `cargarMas` trae la
+  // página siguiente a pedido (`&page=2`), igual que `/personas/residentes`. Antes se pintaba la
+  // primera página como si fuera la colección y el recorte era mudo.
+  const { items: entregasEPP, total: totalEntregas, isLoading: cargandoEntregas, cargarMas: cargarMasEntregas, cargandoMas: cargandoMasEntregas, create: crearEntregaEPP } = useEntregasEPP()
   const { personas, isLoading: cargandoPersonas } = usePersonas()
   const { items: unidades, isLoading: cargandoUnidades } = useUnidades()
   const { items: microSectores, isLoading: cargandoMicro } = useMicroSectores()
@@ -585,6 +590,13 @@ export default function RecursosPage() {
                   </tbody>
                 </table>
               )}
+              {/* Paginación real: el total del servidor no se esconde ni se recorta. */}
+              <VerMas
+                mostrados={entregasEPP.length}
+                total={totalEntregas}
+                cargando={cargandoMasEntregas}
+                onCargarMas={cargarMasEntregas}
+              />
             </CardContent>
           </Card>
         </TabsContent>
