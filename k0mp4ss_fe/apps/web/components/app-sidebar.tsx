@@ -135,6 +135,11 @@ const data = {
       items: [
         { title: "Reportería y Dashboards", url: "/admin/reporteria", roles: ["administrador", "comite"] },
         { title: "Auditoría y Métricas", url: "/admin/metricas", roles: ["administrador"] },
+        // El calendario preventivo vivía dentro de /operaciones/proveedores; el owner
+        // lo separó a un panel propio, así que la entrada va en Sistema (grupo del
+        // administrador) y no en Operaciones. El page.tsx del panel además exige rol
+        // administrador en el servidor.
+        { title: "Mantenciones Preventivas", url: "/admin/mantenciones", roles: ["administrador"] },
         { title: "Gestión Administrativa", url: "/admin/gestion", roles: ["administrador"] },
         { title: "Maestros Administrativos", url: "/admin/maestros", roles: ["administrador"] },
         { title: "Configuración", url: "/admin/configuracion", roles: ["administrador"] },

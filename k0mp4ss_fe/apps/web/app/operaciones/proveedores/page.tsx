@@ -52,7 +52,6 @@ import {
 } from "@workspace/ui/components/dialog"
 import {
   IconBuildingFactory2,
-  IconCalendarRepeat,
   IconClipboardList,
   IconPhoneCall,
   IconPlus,
@@ -61,7 +60,6 @@ import {
   IconExternalLink,
 } from "@tabler/icons-react"
 import type { VisitaTecnicaPE } from "@/lib/schemas"
-import { alertasMantencionesVencidas } from "@/lib/personal-utils"
 
 interface FormProveedor {
   rut: string
@@ -95,12 +93,14 @@ export default function ProveedoresPage() {
     create: crearProveedorApi,
     remove: eliminarProveedorApi,
   } = useProveedoresPE()
+
+  // Las mantenciones se leen acá para dos reglas que siguen siendo de este
+  // módulo: bloquear la baja de un proveedor con historial y vincular la visita
+  // técnica a su ciclo. Su gestión vive en /admin/mantenciones.
   const {
     items: mantenciones,
     isLoading: cMantenciones,
-    create: crearMantencionApi,
     update: actualizarMantencionApi,
-    remove: eliminarMantencionApi,
   } = useMantencionesPE()
   const {
     items: visitasTecnicas,
@@ -140,17 +140,6 @@ export default function ProveedoresPage() {
         claveDocumento(p.rut) !== "" &&
         claveDocumento(p.rut) === claveDocumento(rutProv)
     )
-  const [formMant, setFormMant] = React.useState<{
-    proveedorId: string
-    descripcion: string
-    periodicidadMeses: string
-    proximaFecha: string
-    alertaDiasAntes: string
-    activo: boolean
-  } | null>(null)
-  const [editandoMantId, setEditandoMantId] = React.useState<string | null>(
-    null
-  )
   const [formVisita, setFormVisita] = React.useState<{
     proveedorId: string
     mantencionId: string
@@ -162,7 +151,6 @@ export default function ProveedoresPage() {
   } | null>(null)
 
   const hoy = hoyISO()
-  const alertas = alertasMantencionesVencidas(mantenciones, hoy)
 
   const guardarProveedor = async () => {
     if (!formProv) return
@@ -202,35 +190,6 @@ export default function ProveedoresPage() {
     setEditandoProvId(null)
     setError(null)
     setOkMsg("Proveedor guardado.")
-  }
-
-  const guardarMantencion = async () => {
-    if (!formMant) return
-    if (
-      !formMant.proveedorId ||
-      !formMant.descripcion.trim() ||
-      !formMant.proximaFecha
-    ) {
-      setError("Proveedor, descripción y próxima fecha son obligatorios.")
-      return
-    }
-    const r = await crearMantencionApi({
-      id: editandoMantId ?? generarId("mant"),
-      proveedorId: formMant.proveedorId,
-      descripcion: formMant.descripcion.trim(),
-      periodicidadMeses: Math.max(1, Number(formMant.periodicidadMeses) || 1),
-      proximaFecha: formMant.proximaFecha,
-      alertaDiasAntes: Math.max(0, Number(formMant.alertaDiasAntes) || 5),
-      activo: formMant.activo,
-    })
-    if (!r.ok) {
-      setError(r.error ?? "No se pudo guardar la mantención.")
-      return
-    }
-    setFormMant(null)
-    setEditandoMantId(null)
-    setError(null)
-    setOkMsg("Calendario preventivo actualizado.")
   }
 
   const guardarVisitaTecnica = async () => {
@@ -290,8 +249,9 @@ export default function ProveedoresPage() {
           <IconBuildingFactory2 className="size-6" /> Proveedores y Servicios
         </h1>
         <p className="text-sm text-muted-foreground">
-          Empresas de mantenimiento externo, mantenciones preventivas y
-          directorio de emergencias.
+          Empresas de mantenimiento externo, libro de visitas técnicas y
+          directorio de emergencias. Las mantenciones preventivas se administran
+          en Administración → Mantenciones Preventivas.
         </p>
       </header>
 
@@ -306,25 +266,10 @@ export default function ProveedoresPage() {
         </div>
       )}
 
-      {alertas.length > 0 && (
-        <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
-          <strong>Alertas de mantención:</strong>{" "}
-          {alertas
-            .map(
-              (a) =>
-                `${a.mantencion.descripcion}${a.diasRestantes < 0 ? ` (vencida hace ${Math.abs(a.diasRestantes)} días)` : ` vence en ${a.diasRestantes} día(s)`}`
-            )
-            .join(" · ")}
-        </div>
-      )}
-
       <Tabs defaultValue="catalogo">
         <TabsList>
           <TabsTrigger value="catalogo">
             Catálogo ({proveedores.length})
-          </TabsTrigger>
-          <TabsTrigger value="mantenciones">
-            Mantenciones ({mantenciones.length})
           </TabsTrigger>
           <TabsTrigger value="visitas">
             Visitas Técnicas ({visitasTecnicas.length})
@@ -429,238 +374,6 @@ export default function ProveedoresPage() {
                         </td>
                       </tr>
                     ))}
-                  </tbody>
-                </table>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent
-          value="mantenciones"
-          className="mt-4 grid gap-4 lg:grid-cols-[420px_1fr]"
-        >
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center justify-between gap-2">
-                <span className="flex items-center gap-2">
-                  <IconCalendarRepeat className="size-5" /> Preventivo
-                </span>
-              </CardTitle>
-              <CardDescription>
-                Servicios recurrentes con alerta automática.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-3">
-              <div className="flex flex-col gap-1.5">
-                <Label>Proveedor *</Label>
-                <Select
-                  value={formMant?.proveedorId || undefined}
-                  onValueChange={(v) =>
-                    setFormMant((f) => (f ? { ...f, proveedorId: v } : f))
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Seleccionar" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {proveedores
-                      .filter((p) => p.activo)
-                      .map((p) => (
-                        <SelectItem key={p.id} value={p.id}>
-                          {p.nombre}
-                        </SelectItem>
-                      ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="mt-desc">Descripción *</Label>
-                <Input
-                  id="mt-desc"
-                  value={formMant?.descripcion ?? ""}
-                  onChange={(e) =>
-                    setFormMant((f) =>
-                      f ? { ...f, descripcion: e.target.value } : f
-                    )
-                  }
-                  placeholder="Ej.: Mantención de ascensores"
-                />
-              </div>
-              <div className="grid grid-cols-3 gap-2">
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="mt-per">Periodicidad (meses)</Label>
-                  <Input
-                    id="mt-per"
-                    type="number"
-                    min={1}
-                    value={formMant?.periodicidadMeses ?? ""}
-                    onChange={(e) =>
-                      setFormMant((f) =>
-                        f ? { ...f, periodicidadMeses: e.target.value } : f
-                      )
-                    }
-                  />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="mt-prox">Próxima fecha *</Label>
-                  <Input
-                    id="mt-prox"
-                    type="date"
-                    value={formMant?.proximaFecha ?? ""}
-                    onChange={(e) =>
-                      setFormMant((f) =>
-                        f ? { ...f, proximaFecha: e.target.value } : f
-                      )
-                    }
-                  />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="mt-alert">Alerta (días antes)</Label>
-                  <Input
-                    id="mt-alert"
-                    type="number"
-                    min={0}
-                    value={formMant?.alertaDiasAntes ?? "5"}
-                    onChange={(e) =>
-                      setFormMant((f) =>
-                        f ? { ...f, alertaDiasAntes: e.target.value } : f
-                      )
-                    }
-                  />
-                </div>
-              </div>
-              <div className="flex items-center justify-between">
-                <label className="flex items-center gap-2 text-sm">
-                  <Switch
-                    checked={formMant?.activo ?? true}
-                    onCheckedChange={(v) =>
-                      setFormMant((f) => (f ? { ...f, activo: v } : f))
-                    }
-                  />{" "}
-                  Activa
-                </label>
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    onClick={() => setFormMant(null)}
-                    disabled={!formMant}
-                  >
-                    Cancelar
-                  </Button>
-                  <Button
-                    onClick={() => {
-                      setFormMant({
-                        proveedorId: "",
-                        descripcion: "",
-                        periodicidadMeses: "6",
-                        proximaFecha: hoy,
-                        alertaDiasAntes: "5",
-                        activo: true,
-                      })
-                      setEditandoMantId(null)
-                    }}
-                  >
-                    <IconPlus className="mr-1 size-4" /> Nueva
-                  </Button>
-                  <Button onClick={guardarMantencion} disabled={!formMant}>
-                    Guardar
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Calendario preventivo</CardTitle>
-            </CardHeader>
-            <CardContent className="p-0">
-              {mantenciones.length === 0 ? (
-                <p className="p-4 text-sm text-muted-foreground">
-                  Sin mantenciones programadas.
-                </p>
-              ) : (
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b text-left text-muted-foreground">
-                      <th className="p-3">Servicio</th>
-                      <th className="p-3">Proveedor</th>
-                      <th className="p-3">Ciclo</th>
-                      <th className="p-3">Próxima</th>
-                      <th className="p-3"></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {[...mantenciones]
-                      .sort((a, b) =>
-                        a.proximaFecha.localeCompare(b.proximaFecha)
-                      )
-                      .map((m) => {
-                        const dias = Math.round(
-                          (new Date(`${m.proximaFecha}T00:00:00`).getTime() -
-                            new Date(`${hoy}T00:00:00`).getTime()) /
-                            86400000
-                        )
-                        return (
-                          <tr key={m.id} className="border-b last:border-0">
-                            <td className="p-3">{m.descripcion}</td>
-                            <td className="p-3">
-                              {proveedores.find((p) => p.id === m.proveedorId)
-                                ?.nombre ?? m.proveedorId}
-                            </td>
-                            <td className="p-3">
-                              Cada {m.periodicidadMeses} mes(es)
-                            </td>
-                            <td className="p-3 font-mono">
-                              {m.proximaFecha}
-                              {dias <= m.alertaDiasAntes ? (
-                                <Badge variant="destructive" className="ml-2">
-                                  {dias < 0
-                                    ? `Vencida ${Math.abs(dias)}d`
-                                    : `${dias}d`}
-                                </Badge>
-                              ) : null}
-                            </td>
-                            <td className="flex gap-1 p-3">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() =>
-                                  setFormVisita({
-                                    proveedorId: m.proveedorId,
-                                    mantencionId: m.id,
-                                    tecnicoNombre: "",
-                                    fecha: hoy,
-                                    trabajoRealizado: "",
-                                    supervisorPersonaId: "",
-                                    unidadId: "",
-                                  })
-                                }
-                              >
-                                Registrar visita
-                              </Button>
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                    onClick={async () => {
-                                      // Paridad con la regla legacy: no se elimina una mantención con visitas técnicas asociadas.
-                                      const vinculadas = visitasTecnicas.filter((v) => v.mantencionId === m.id).length
-                                      if (vinculadas > 0) {
-                                        setError(`No se puede eliminar la mantención: ${vinculadas} visita(s) técnica(s) asociadas.`)
-                                        return
-                                      }
-                                      const r = await eliminarMantencionApi(m.id)
-                                      if (!r.ok) setError(r.error ?? "")
-                                      else setOkMsg("Mantención eliminada.")
-                                    }}
-                              >
-                                <IconTrash className="size-4" />
-                              </Button>
-                            </td>
-                          </tr>
-                        )
-                      })}
                   </tbody>
                 </table>
               )}

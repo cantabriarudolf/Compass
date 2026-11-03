@@ -1,13 +1,16 @@
 "use client"
 
 /**
- * MantencionesPreventivas — T7 (S7): el calendario preventivo del maestro de
- * proveedores (`/operaciones/proveedores` → mantenciones), visible desde el
- * dashboard sin tener que entrar al módulo.
+ * MantencionesPreventivas — T7 (S7): el calendario preventivo de la comunidad,
+ * visible desde el dashboard sin tener que entrar al módulo.
+ *
+ * RESUMEN, no gestión: el calendario se administra en `/admin/mantenciones`
+ * (panel del administrador) desde que el owner lo sacó de
+ * `/operaciones/proveedores`; este panel solo lo muestra y enlaza.
  *
  * La alerta NO se reinicia acá: se usa `alertasMantencionesVencidas`, el mismo
- * criterio del panel de proveedores (activa y dentro de `alertaDiasAntes`), así
- * que el badge del dashboard y el del módulo dicen lo mismo.
+ * criterio del panel de mantenciones (activa y dentro de `alertaDiasAntes`), así
+ * que el badge del dashboard y el del panel dicen lo mismo.
  */
 import * as React from "react"
 import { hoyISO } from "@/lib/date-utils"
@@ -18,7 +21,7 @@ import { IconCalendarRepeat } from "@tabler/icons-react"
 import { Aviso, CargandoPanel, Panel, SinMovimiento } from "./piezas"
 import { diasHasta, fechaCorta } from "./agregados"
 
-/** Cuántas mantenciones se listan; el resto vive en el módulo de proveedores. */
+/** Cuántas mantenciones se listan; el resto vive en el panel de administración. */
 const FILAS_VISIBLES = 6
 
 export function MantencionesPreventivas() {
@@ -54,17 +57,17 @@ export function MantencionesPreventivas() {
   return (
     <Panel
       titulo="Mantenciones preventivas"
-      descripcion="Próximas visitas programadas de las empresas del maestro de proveedores."
+      descripcion="Próximas visitas programadas de las empresas de servicios."
       icono={IconCalendarRepeat}
-      href="/operaciones/proveedores"
+      href="/admin/mantenciones"
       textoHref="Administrar"
     >
       {cargando ? (
         <CargandoPanel filas={5} />
       ) : error ? (
-        <Aviso tono="error">No se pudo leer el maestro de proveedores: {error.message}</Aviso>
+        <Aviso tono="error">No se pudo leer el calendario preventivo: {error.message}</Aviso>
       ) : ordenadas.length === 0 ? (
-        <SinMovimiento>Sin mantenciones preventivas activas en el maestro.</SinMovimiento>
+        <SinMovimiento>Sin mantenciones preventivas activas en el calendario.</SinMovimiento>
       ) : (
         <ul className="divide-y divide-muted-foreground/10">
           {ordenadas.slice(0, FILAS_VISIBLES).map((mantencion) => {
