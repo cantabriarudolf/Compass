@@ -76,6 +76,15 @@ test.describe("CRUD — Comunidad/Portal", () => {
         if (!cur || cur === "0") await inputPrecio.fill("9500000")
       }
 
+      // Descripción con marcador: la publicación manual cuelga de una unidad del
+      // seed y su id lo genera el servidor, así que el cleanup por diferencia de
+      // este spec es la única forma de reconocerla. Con el marcador en el texto
+      // que el spec controla, un residuo (spec que falla antes del `finally`)
+      // queda reclamable por `publicaciones_portal.descripcion LIKE 'TEST%'`.
+      const textareaDescripcion = dialog.locator("textarea").first()
+      await expect(textareaDescripcion).toBeVisible({ timeout: 10_000 })
+      await textareaDescripcion.fill(`TEST-Publicacion-${ts}`)
+
       // Guardar — single-shot idempotente (helper form-dialog): UN envío; sin
       // `fila` (la tabla se afirma por unidad/precio más abajo) no se reenvía
       // a ciegas: el re-submit ciego era el que duplicaba publicaciones.

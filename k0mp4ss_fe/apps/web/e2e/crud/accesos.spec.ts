@@ -129,7 +129,12 @@ test.describe("CRUD — Operaciones/Accesos", () => {
     page.on("pageerror", (err) => errores.push(err.message))
 
     const ts = Date.now()
-    const nombreVisita = `QA Visita ${ts}`
+    // Marcador `TEST-` y no `QA ` en el nombre: `npm run e2e:limpiar` reclama la
+    // visita con la regla que ya existe, `bitacora_visitas_pe.nombre LIKE 'test-%'`
+    // (la misma que usa `roles-journeys` con `TEST-CONSERJERIA-…`). El evento
+    // derivado `PE_VISITA_INGRESADA` embebe este nombre en su descripción, así que
+    // también cae en `eventos_auditoria.descripcion LIKE '%TEST%'`.
+    const nombreVisita = `TEST-VISITA-${ts}`
 
     await page.goto("/operaciones/accesos")
     await expect(page.getByText("¿A qué viene?").first()).toBeVisible({ timeout: 15_000 })

@@ -50,7 +50,12 @@ test.describe("Mini flujo — Maestro de Personas (MP)", () => {
 
       // El formulario expone labels accesibles
       await page.getByLabel("RUT o Pasaporte *").fill(RUT)
-      await page.getByLabel("Nombres *").fill("Ana")
+      // Marcador `TEST` en el nombre: la persona se crea por la UI, así que su id
+      // lo genera el servidor (no empieza con `test-`) y la regla `personas` de
+      // `npm run e2e:limpiar` no la vería. Con el marcador, `nombreCompleto`
+      // (= `nombres apellidos`, normalizado a Título Caso) empieza con `TEST`, y el
+      // residuo de un cleanup por id que no llegue a correr sigue siendo reclamable.
+      await page.getByLabel("Nombres *").fill("TEST Ana")
       await page.getByLabel("Apellidos *").fill(apellidos)
       await page.getByLabel("Correo Electrónico *").fill(email)
       await page.getByLabel("Teléfono Móvil *").fill("+56 9 1111 2222")
