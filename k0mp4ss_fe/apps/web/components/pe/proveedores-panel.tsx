@@ -29,9 +29,9 @@ import {
   useProveedoresPE,
   useMantencionesPE,
   useVisitasTecnicasPE,
+  registrarVisitaTecnicaApi,
 } from "@/lib/api/use-pe"
 import { hoyISO } from "@/lib/date-utils"
-import { proximaFechaPreventiva } from "@/lib/personal-utils"
 import { permisosProveedores } from "@/components/pe/permisos-proveedores"
 import type { ContactoEmergencia } from "@/lib/schemas"
 import {
@@ -122,17 +122,11 @@ export function ProveedoresPanel({ roles }: ProveedoresPanelProps) {
 
   // Las mantenciones se leen acá para dos reglas que siguen siendo de este
   // módulo: bloquear la baja de un proveedor con historial y vincular la visita
-  // técnica a su ciclo. Su gestión vive en /admin/mantenciones.
-  const {
-    items: mantenciones,
-    isLoading: cMantenciones,
-    update: actualizarMantencionApi,
-  } = useMantencionesPE()
-  const {
-    items: visitasTecnicas,
-    isLoading: cVisitasTec,
-    create: crearVisitaTecnicaApi,
-  } = useVisitasTecnicasPE()
+  // técnica a su ciclo. Su gestión vive en /admin/mantenciones, y el avance de la
+  // próxima fecha lo hace el servidor al registrar la visita (esta pantalla ya no
+  // escribe el maestro: para conserjería y mantención ese PUT responde 403).
+  const { items: mantenciones, isLoading: cMantenciones } = useMantencionesPE()
+  const { items: visitasTecnicas, isLoading: cVisitasTec } = useVisitasTecnicasPE()
   const cargandoAPI = cPersonas || cUnidades || cContactos || cProveedores || cMantenciones || cVisitasTec
 
   // Selects de personas y unidades: se recortan a LIMITE_SELECT y el recorte se
@@ -241,22 +235,24 @@ export function ProveedoresPanel({ roles }: ProveedoresPanelProps) {
       supervisorPersonaId: formVisita.supervisorPersonaId || undefined,
       unidadId: formVisita.unidadId || undefined,
     }
-    const r = await crearVisitaTecnicaApi(visita)
+    // El ciclo preventivo lo cierra el SERVIDOR dentro del POST: si la visita trae
+    // `mantencionId`, la próxima fecha de esa mantención avanza por su
+    // periodicidad desde la fecha de la VISITA. Acá solo se muestra lo que el
+    // servidor reportó, incluido el caso en que la visita quedó registrada pero la
+    // mantención no se pudo reprogramar (antes ese fallo era invisible: se hacía un
+    // PUT que respondía 403 y su resultado se descartaba).
+    const r = await registrarVisitaTecnicaApi(visita)
     if (!r.ok) {
       setError(r.error ?? "No se pudo registrar la visita técnica.")
       return
     }
-    // Ciclo preventivo cerrado: la próxima fecha avanza según periodicidad (paridad con la acción legacy).
-    if (visita.mantencionId) {
-      const mantencion = mantenciones.find((m) => m.id === visita.mantencionId)
-      if (mantencion) {
-    const proxima = proximaFechaPreventiva(visita.fecha, mantencion.periodicidadMeses)
-    await actualizarMantencionApi(mantencion.id, { proximaFecha: proxima })
-      }
-    }
     setFormVisita(null)
     setError(null)
-    setOkMsg("Visita técnica registrada en el libro (PE_VISITA_TECNICA).")
+    setOkMsg(
+      r.avance?.mensaje
+        ? `Visita técnica registrada en el libro (PE_VISITA_TECNICA). ${r.avance.mensaje}`
+        : "Visita técnica registrada en el libro (PE_VISITA_TECNICA)."
+    )
   }
 
   if (cargandoAPI) {

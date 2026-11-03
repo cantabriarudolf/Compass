@@ -74,6 +74,11 @@ vi.mock("@/lib/api/use-pe", () => ({
   useProveedoresPE: () => coleccion(PROVEEDORES),
   useMantencionesPE: () => coleccion([]),
   useVisitasTecnicasPE: () => coleccion([]),
+  // El alta de la visita ya no usa el `create` de la colección: el avance del ciclo
+  // preventivo viaja en el cuerpo del POST y lo lee esta función (servidor, no el
+  // `PUT` de mantenciones que respondía 403). Sin ella el módulo mockeado no cubre
+  // lo que el panel importa.
+  registrarVisitaTecnicaApi: vi.fn(async () => ({ ok: true })),
 }))
 
 import { ProveedoresPanel } from "@/components/pe/proveedores-panel"

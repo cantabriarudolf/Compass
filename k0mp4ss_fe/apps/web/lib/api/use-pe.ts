@@ -31,6 +31,9 @@ import type {
   VisitaTecnicaPE,
 } from "@/lib/schemas"
 import type { StoreResult } from "@/lib/store"
+// Tipo del aviso de avance del ciclo preventivo. Import SOLO de tipo: la ruta y
+// su módulo co-locado son código de servidor y no entran al bundle del navegador.
+import type { AvisoAvanceMantencion } from "@/app/api/pe/visitas-tecnicas/_avance-mantencion"
 
 const BASE_TURNOS = "/api/pe/turnos"
 const BASE_PERSONAS = "/api/personas"
@@ -59,6 +62,37 @@ export function useMantencionesPE(): CrudCollection<MantencionPreventivaPE> {
 
 export function useVisitasTecnicasPE(): CrudCollection<VisitaTecnicaPE> {
   return useCrudCollection<VisitaTecnicaPE>("/api/pe/visitas-tecnicas")
+}
+
+/** Resultado de registrar una visita: `StoreResult` + el aviso del servidor. */
+export interface ResultadoVisitaTecnica extends StoreResult {
+  /**
+   * Estado del avance de la `proximaFecha` de la mantención vinculada. Siempre
+   * viene en el POST; `mensaje` solo existe cuando hay algo que advertir (la
+   * visita se registró pero la mantención no se pudo reprogramar).
+   */
+  avance?: AvisoAvanceMantencion
+}
+
+/**
+ * Registra una visita técnica y devuelve el aviso del ciclo preventivo.
+ *
+ * El avance de la `proximaFecha` lo hace el SERVIDOR dentro del POST (ver
+ * `app/api/pe/visitas-tecnicas/_avance-mantencion.ts`): antes lo hacía la pantalla
+ * con un `PUT /api/pe/mantenciones/[id]` cuyo resultado se ignoraba, y desde que
+ * `pe:mantenciones` quedó en solo lectura para conserjería y mantención ese PUT
+ * respondía 403 y la fecha dejaba de avanzar sin que nadie se enterara. Acá se usa
+ * `postAccion` (no el `create` de la colección) porque hace falta leer el cuerpo de
+ * la respuesta; la revalidación es la misma de la colección, más el maestro de
+ * mantenciones, que es lo que el servidor acaba de tocar.
+ */
+export async function registrarVisitaTecnicaApi(
+  visita: VisitaTecnicaPE
+): Promise<ResultadoVisitaTecnica> {
+  const r = await postAccion("/api/pe/visitas-tecnicas", visita, ["/api/pe/mantenciones"])
+  if (!r.ok) return { ok: false, error: r.error }
+  const cuerpo = r.data as { avanceProximaFecha?: AvisoAvanceMantencion } | null
+  return { ok: true, avance: cuerpo?.avanceProximaFecha }
 }
 
 export function useCierresTurnoPE(): CrudCollection<CierreTurnoPE> {
