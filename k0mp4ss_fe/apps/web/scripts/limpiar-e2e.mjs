@@ -9,9 +9,15 @@
  * limpió a mano entre ambas, y `personal` hizo lo contrario. La suite se contamina sola.
  *
  * Reglas de la purga (tabla explícita en `REGLAS`, más abajo):
- * - Cada regla declara tabla + columna + patrón LIKE + motivo. NUNCA un barrido ciego
- *   `LIKE '%TEST%'` sobre todas las columnas de texto: uno anterior borró datos legítimos
- *   porque `arrendatario@test.cl` y los nombres de las comunidades demo contienen "TEST".
+ * - Cada regla declara tabla + condiciones + motivo. NUNCA un barrido ciego `LIKE '%TEST%'`
+ *   sobre todas las columnas de texto: uno anterior borró datos legítimos porque
+ *   `arrendatario@test.cl` y los nombres de las comunidades demo contienen "TEST".
+ * - `condiciones` son ALTERNATIVAS (se unen con OR); una alternativa puede llevar un AND
+ *   interno cuando la fila de e2e se reconoce por la combinación de dos columnas (actas:
+ *   `lugar` marcado O `minuta` marcada). Una regla AND-only perdería la mitad de las filas.
+ * - Las reglas que dependen del estado (huérfanos, hijos) están ordenadas: hijos antes que
+ *   padres, y el barrido de huérfanos DESPUÉS de purgar al padre. El orden del array es el
+ *   orden de borrado.
  * - Allowlist dura: las 6 cuentas de login, las 2 comunidades demo (`comunidad-a`,
  *   `comunidad-b`) y las filas del seed (personas/unidades/vínculos) no se tocan. La
  *   transacción lo verifica ANTES de commitear: si un contador del seed baja, revierte todo.
@@ -109,7 +115,7 @@ function like(columna, patron) {
  * @typedef {{ tabla: string, motivo: string, condiciones: { sql: string, params: string[] }[] }} Regla
  * @type {Regla[]}
  */
-const REGLAS = [
+export const REGLAS = [
   {
     tabla: "reservas_ra",
     motivo: "reservas de amenities de prueba: el elemento desaparece con la regla de elementos_ra",
@@ -121,12 +127,19 @@ const REGLAS = [
     ],
   },
   {
+    tabla: "avisos_cv",
+    motivo:
+      "avisos creados por el spec del visor: el título lleva el marcador «QA ». Es el debris que apilaba publicados en el carrusel público y hacía fallar `e2e/crud/visor.spec.ts`; se borra antes que su plantilla y que su acta",
+    condiciones: [like("titulo", "QA%")],
+  },
+  {
     tabla: "certificados_ct",
-    motivo: "certificados emitidos para una persona/unidad de prueba (helper e2e y UI)",
+    motivo:
+      "certificados emitidos para una persona/unidad de prueba (helper e2e y UI), o cuyo origenRef lleva el marcador test- en cualquier posición: el certificado de e2e referencia un vínculo de prueba («v-test-residente»), así que la coincidencia no está al inicio",
     condiciones: [
       like("personaId", "test-%"),
       like("unidadId", "test-%"),
-      like("origenRef", "test-%"),
+      like("origenRef", "%test-%"),
     ],
   },
   {
@@ -180,6 +193,30 @@ const REGLAS = [
     condiciones: [like("nombre", "QA-%")],
   },
   {
+    tabla: "egresos_fi",
+    motivo:
+      "egresos creados por el spec de finanzas con descripción «QA Egreso …». El seed describe los gastos en lenguaje natural («Útiles de Aseo», «Notaria»), nunca con el marcador, así que el prefijo es señal suficiente",
+    condiciones: [like("descripcion", "QA%")],
+  },
+  {
+    tabla: "actas_gd",
+    motivo:
+      "actas creadas por el spec del libro de actas: el lugar es «Sede QA» o la minuta lleva «QA ». Las dos columnas son ALTERNATIVAS (OR, no AND) porque el acta de e2e puede dejar la minuta vacía: una regla AND-only no reclamaría esas filas",
+    condiciones: [like("lugar", "%QA%"), like("minuta", "%QA %")],
+  },
+  {
+    tabla: "actas_gd_archivadas",
+    motivo:
+      "copias archivadas de un acta de prueba (borrado lógico): el archivo conserva lugar y minuta, así que se purga con el mismo predicado OR que actas_gd",
+    condiciones: [like("lugar", "%QA%"), like("minuta", "%QA %")],
+  },
+  {
+    tabla: "plantillas_co",
+    motivo:
+      "plantillas de comunicación creadas por el spec de CO con nombre «QA Plantilla …». Va después de avisos_cv porque el aviso apunta a su plantilla",
+    condiciones: [like("nombre", "QA%")],
+  },
+  {
     tabla: "proveedores_pe",
     motivo: "proveedores creados por el spec de proveedores con nombre QA-/Qa-",
     condiciones: [like("nombre", "QA-%"), like("nombre", "Qa-%")],
@@ -187,22 +224,38 @@ const REGLAS = [
   {
     tabla: "notificaciones",
     motivo:
-      "avisos generados por entidades de prueba (reportes QA-, encomiendas TEST-): es el mayor volumen",
+      "avisos generados por entidades de prueba (reportes QA-, encomiendas TEST-) —es el mayor volumen— y el aviso de recepción de una encomienda que ya no existe. Esa última alternativa se evalúa DESPUÉS de la regla de encomiendas_pe: el aviso sólo queda huérfano cuando el padre desapareció, y si corriera antes reclamaría nada y el aviso se apilaría para siempre",
     condiciones: [
       like("asunto", "%TEST%"),
       like("asunto", "%QA-%"),
       like("cuerpo", "%TEST%"),
       like("cuerpo", "%QA-%"),
+      {
+        sql: "asunto = ? AND NOT EXISTS (SELECT 1 FROM encomiendas_pe e WHERE e.destinatarioPersonaId = notificaciones.destinatarioPersonaId AND e.fechaRecepcion = notificaciones.fecha)",
+        params: ["Encomienda recibida en conserjería"],
+      },
     ],
   },
   {
     tabla: "eventos_auditoria",
     motivo:
-      "bitácora de entidades de prueba: referenciaId test- o descripción que nombra un marcador TEST/QA-",
+      "bitácora de entidades de prueba: referenciaId test- o descripción que nombra un marcador TEST/QA-, más las formas huérfanas —recepción de una encomienda que ya no existe, sincronización de una nómina que ya no existe, y eventos sobre una visita cuyo nombre lleva el marcador «QA ». Corre después de encomiendas_pe y liquidaciones_pl, que son las que dejan huérfanas a las dos primeras",
     condiciones: [
       like("referenciaId", "test-%"),
       like("descripcion", "%TEST%"),
       like("descripcion", "%QA-%"),
+      {
+        sql: "tipoAccion = 'PE_ENCOMIENDA_RECIBIDA' AND referenciaId NOT IN (SELECT id FROM encomiendas_pe)",
+        params: [],
+      },
+      {
+        sql: "tipoAccion = 'PL_EXPENSE_SYNC' AND referenciaId NOT IN (SELECT id FROM liquidaciones_pl)",
+        params: [],
+      },
+      {
+        sql: "referenciaId IN (SELECT id FROM bitacora_visitas_pe WHERE nombre LIKE ?)",
+        params: ["QA %"],
+      },
     ],
   },
   {
@@ -282,12 +335,12 @@ const REGLAS = [
 ]
 
 /** WHERE completo de una regla (cada condición entre paréntesis, unidas con OR). */
-function whereDe(regla) {
+export function whereDe(regla) {
   return regla.condiciones.map((c) => `(${c.sql})`).join(" OR ")
 }
 
 /** Parámetros de una regla, en el orden en que aparecen en el WHERE. */
-function paramsDe(regla) {
+export function paramsDe(regla) {
   return regla.condiciones.flatMap((c) => c.params)
 }
 
@@ -344,11 +397,28 @@ async function verificarAllowlist(tx, antes) {
   }
 }
 
+/** Filas que una regla reclamaría. La usan el dry-run y los tests de la tabla de reglas. */
+export async function contarRegla(db, regla) {
+  return contar(db, `SELECT COUNT(*) AS n FROM ${regla.tabla} WHERE ${whereDe(regla)}`, paramsDe(regla))
+}
+
+/**
+ * Borra las filas que la regla reclama y devuelve cuántas eran. Es el ÚNICO camino de borrado:
+ * `aplicar` y los tests llaman acá, para que el predicado probado sea el que corre de verdad.
+ */
+export async function borrarRegla(db, regla) {
+  const n = await db.$executeRawUnsafe(
+    `DELETE FROM ${regla.tabla} WHERE ${whereDe(regla)}`,
+    ...paramsDe(regla)
+  )
+  return Number(n)
+}
+
 /** Dry-run: conteo por regla, sin abrir transacción de escritura. */
 async function informar(db) {
   const filas = []
   for (const regla of REGLAS) {
-    const n = await contar(db, `SELECT COUNT(*) AS n FROM ${regla.tabla} WHERE ${whereDe(regla)}`, paramsDe(regla))
+    const n = await contarRegla(db, regla)
     if (n > 0) filas.push({ tabla: regla.tabla, n })
   }
   return filas
@@ -361,11 +431,8 @@ async function aplicar(db) {
       const antes = await contarSeed(tx)
       const filas = []
       for (const regla of REGLAS) {
-        const n = await tx.$executeRawUnsafe(
-          `DELETE FROM ${regla.tabla} WHERE ${whereDe(regla)}`,
-          ...paramsDe(regla)
-        )
-        if (Number(n) > 0) filas.push({ tabla: regla.tabla, n: Number(n) })
+        const n = await borrarRegla(tx, regla)
+        if (n > 0) filas.push({ tabla: regla.tabla, n })
       }
       await verificarAllowlist(tx, antes)
       return filas
