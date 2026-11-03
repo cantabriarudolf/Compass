@@ -151,7 +151,10 @@
 ### 3.6 `gd-periodos-directiva` — **CÓDIGO COMPLETO (1-4 ✅), PENDING TESTS**
 - **Completado**: Schemas (período + ficha + actas + CT), Store v28 + migración + helpers + acción + auto-assign + attaches + quórum; UI sección Períodos en `/comunidad/directiva`; Tests períodos (6) + ficha (5).
 - **Pendiente**: Full suite + tsc + eslint (gate NSGC) + NSGC pre-push + commit + push.
-- **Base legal**: Ley 21.442 art. 17 (período ≤3 años, reelegible, inscripción registral, composición impar 3–5).
+- **Base legal**: Ley 21.442 art. 17 (período ≤3 años, reelegible, inscripción registral, composición impar 3–5). **¹**
+
+  > **¹ Corrección 2026-11-03.** «Inscripción registral» no es base legal del art. 17 ni de ningún otro artículo: el especialista del proyecto en la Ley 21.442 revisó los arts. 15, 17, 18 y 71 y no hay deber general de inscribir el comité de administración. Detalle y efecto en el sistema en la corrección **¹** de §6.2.
+
 - **Veredicto**: Listo para validación final + archive.
 
 ### 3.7 `st-split-fase2` — **PROPUESTO, SIN EMPEZAR**
@@ -225,7 +228,7 @@
 
 | Tema | Artículo | URL LeyChile | Fecha recuperación |
 |---|---|---|---|
-| Período directiva (composición, duración, reelección, inscripción) | Art. 17 Ley 21.442 | https://www.bcn.cl/leychile/navegar?idNorma=1174663 (BCN) / https://www.leychile.cl/leychile/navegar?idNorma=1174663 (LeyChile) | 2026-10-06 |
+| Período directiva (composición, duración, reelección, inscripción **¹**) | Art. 17 Ley 21.442 | https://www.bcn.cl/leychile/navegar?idNorma=1174663 (BCN) / https://www.leychile.cl/leychile/navegar?idNorma=1174663 (LeyChile) | 2026-10-06 |
 | Quórum asamblea ordinaria | Art. 20 Ley 21.442 | https://www.bcn.cl/leychile/navegar?idNorma=1174663 | 2026-10-06 |
 | Quórum asamblea extraordinaria | Art. 21 Ley 21.442 | https://www.bcn.cl/leychile/navegar?idNorma=1174663 | 2026-10-06 |
 | Remoción comité de administración | Art. 26 (en lista materias extraordinarias) + Art. 18 | https://www.bcn.cl/leychile/navegar?idNorma=1174663&idVersion=2025-04-29 | 2026-10-06 |
@@ -233,6 +236,8 @@
 | Ley protección datos personales (base) | Ley 19.628 | https://www.bcn.cl/leychile/navegar?idNorma=141599 (LeyChile) | 2026-10-06 |
 | Agencia protección datos / entrada vigencia | Ley 21.719 (publicada 13/12/2024) | https://nuevo.leychile.cl/servicios/Consulta/Exportar?...&hddResultadoExportar=1209272.2026-12-01.0.0 | 2026-10-06 |
 | Derechos ARCO | Art. 12 Ley 19.628 (habeas data) + Ley 21.719 nuevos derechos | https://www.bcn.cl/leychile/navegar?idNorma=141599 | 2026-10-06 |
+
+> **¹ Corrección 2026-11-03.** El tema «inscripción» de la primera fila de esta tabla no proviene del art. 17: el especialista en la Ley 21.442 (arts. 15, 17, 18 y 71) no halló deber general de inscribir el comité de administración. El texto original se conserva arriba sin cambios; el detalle y el efecto en el sistema están en la corrección **¹** de §6.2.
 
 **Fuentes doctrina complementarias (verificadas en búsqueda):**
 - ComunidadFeliz (blog admin): Art. 17, 18, 19, 20, 21, 26 resúmenes
@@ -247,7 +252,7 @@
 |---|---|---|---|
 | Período directiva ≤3 años | **Art. 17**: "el período que le fije la asamblea, el que no podrá exceder de tres años" (BCN, LeyChile) | `PeriodoDirectiva.duracionMeses` Int + validación ≤36 (design) | ✅ Implementado en design |
 | Período reelegible | **Art. 17**: "sin perjuicio de poder ser reelegido" (BCN) | `PeriodoDirectiva` permite múltiples períodos | ✅ Modelo lo permite |
-| Inscripción registral comité | **Art. 17** + Reglamento Art. 19/21/22: inscripción en Registro Municipal / Conservador | `fechaInscripcion` + `referenciaInscripcion` en modelo | ✅ Campos presentes |
+| Inscripción registral comité **¹** | **Art. 17** + Reglamento Art. 19/21/22: inscripción en Registro Municipal / Conservador **¹** | `fechaInscripcion` + `referenciaInscripcion` en modelo | ✅ Campos presentes |
 | Composición impar 3–5 | **Art. 17**: "compuesto por un número impar de miembros, de a lo menos tres y con un máximo de cinco" (Ley 21.508 modifica) | Validación en activación (design task 3.3) | 🟡 Pendiente implementación |
 | Quórum constitución asamblea ordinaria | **Art. 20**: "mayoría de los copropietarios" (BCN) | No verificado en código | ❓ Pregunta abierta |
 | Quórum acuerdos asamblea extraordinaria | **Art. 21**: "mayoría de los presentes" (BCN) | No verificado en código | ❓ Pregunta abierta |
@@ -258,6 +263,8 @@
 | Conservación datos | **Ley 19.628 Art. 10** (mínimo necesario) + **Ley 21.719** principio de limitación del plazo | `solicitudEliminacion` + `solicitudEliminacionAt` en Usuario | ✅ Derecho al olvido |
 | Cámaras/control acceso (DNI, patente = datos sensibles) | **Ley 19.628 Art. 2 letra g** (datos sensibles: hábitos, origen racial, ideologías, salud, vida sexual) + **Ley 21.719** (datos biométricos, geolocalización) | `BitacoraVisitaPE.dni` + `patente` — no cifrado en reposo | ⚠️ **Gap**: DNI/patente en texto plano; **Ley 21.719 requiere cifrado** |
 | Vigencia Ley 21.719 | **Art. 1º transitorio**: "entradas en vigencia el 1° de diciembre de 2026" (nuevo.leychile.cl export) — **Proyecto de ley postergación a 1-dic-2027** (Mondaq, Carey, 11/09/2026) | App prepara ARCO, cifrado, consentimiento | 🟡 **Verificar si se aprueba postergación** |
+
+> **¹ Corrección 2026-11-03 (posterior a esta auditoría, 2026-10-05).** La fila «Inscripción registral comité» se conserva arriba tal como se auditó, pero **su atribución legal no se sostiene**. El especialista del proyecto en la Ley 21.442 revisó los artículos **15, 17, 18 y 71** y no encontró deber general de inscribir el comité de administración en registro alguno: las únicas inscripciones que la ley contempla son (a) el **Registro Municipal** de las *viviendas sociales* (**art. 71**) y (b) la del **administrador** en el **Registro Nacional de Administradores** — no la de la directiva ni la del período. Ni el art. 17 ni los arts. 19, 21 y 22 del Reglamento imponen inscribir el período, de modo que el «Registro Municipal / Conservador» que afirma la fila no tiene respaldo normativo. **Efecto en el sistema:** `referenciaInscripcion` dejó de ser obligatorio y la UI dejó de invocarlo como exigencia del art. 17 en el commit **`6507700`** (2026-11-03) — hoy es un respaldo externo opcional, su ausencia no bloquea el registro ni el cierre del período, y el requirement quedó reescrito en `specs/GD-gestion-directiva/spec.md`. `fechaInscripcion` se aborda por separado. Las demás filas de esta tabla no se tocan.
 
 ### 6.3 Formulario Persona — Campos Obligatorios por Ley vs Código
 
@@ -274,7 +281,8 @@
 | **Permite creación manual CV** | No | `permiteCreacionManualCV` Boolean? | ✅ Nuevo campo (SERIE-UI-MIGRACION-BD) |
 
 **Separación planos:**
-- **LEY**: RUT, nombre, composición directiva impar 3-5, período ≤3a, inscripción registral, quórums asamblea, firma comité certificados, base licitud morosidad, derechos ARCO, conservación mínima.
+- **LEY**: RUT, nombre, composición directiva impar 3-5, período ≤3a, quórums asamblea, firma comité certificados, base licitud morosidad, derechos ARCO, conservación mínima.
+  - **² Corrección 2026-11-03:** «inscripción registral» **no** es materia de ley para el comité. Se retira de esta lista por el mismo hallazgo de la nota ¹ de §6.2: no hay deber general de inscribir la directiva (arts. 15, 17, 18 y 71). Los registros que sí existen son el Municipal de *viviendas sociales* (art. 71) y el Nacional de Administradores, que es del administrador, no del comité.
 - **REGLAMENTO**: Detalles procedimentales (no verificado exhaustivamente).
 - **DOCTRINA** (Edipro/Zelkova/ComunidadFeliz): Vigencia directiva por acto de asamblea, no por mora; alertas 90/30 días solo informativas; snapshot directiva en certificados no bloqueante.
 - **CRITERIO PROYECTO**: Email/teléfono obligatorios (UX/comunicación), `permiteCreacionManualCV`, `estadoCuenta` enum, `condicionesEspecialesIds` Json.
