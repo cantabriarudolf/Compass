@@ -33,13 +33,14 @@ const MATRIZ: Matriz = {
     ocultos: [],
   },
   "conserjeria@test.cl": {
-    visibles: ["Inicio", "Operaciones"],
+    // Comunidad entra porque el grupo ahora aloja el Directorio de Emergencias,
+    // que conserjería sí puede leer. El resto de los items del grupo siguen
+    // con roles explícitos, así que no se le abrió ninguna otra pantalla.
+    visibles: ["Inicio", "Operaciones", "Comunidad"],
     ocultos: [
       "Finanzas",
-      "Comunidad",
       "Inventario",
       "Personas",
-
       "Sistema",
     ],
   },
