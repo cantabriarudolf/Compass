@@ -15,7 +15,31 @@ export default defineConfig({
   // next dev con turbopack compila rutas al primer uso (~7s por ruta fría):
   // el timeout de expect debe superar ese costo de primera compilación.
   expect: { timeout: 15_000 },
-  workers: process.env.CI ? 1 : undefined,
+  // Serializado a propósito. Toda la suite corre contra UNA base SQLite
+  // (`prisma/dev.db`) y comparte estado real (no mocks), así que dos workers
+  // pueden pisar la misma fila: el teardown de un spec borra el registro que
+  // otro todavía está leyendo. Caso medido: `remuneraciones.spec.ts` borraba su
+  // persona TEST (`test-p3-pl-trab-…`) en su `finally` mientras
+  // `reservas-admin.spec.ts` —que toma `personas[0]` del padrón compartido—
+  // seguía reservando con ella, y el panel mostraba el id crudo en vez del
+  // nombre (`Solicitante: test-p3-pl-trab-…`).
+  //
+  // Costo medido en esta máquina: `--workers=1` sobre la suite completa da
+  // 10m39s, ~1,04× el paralelo. Se paga sin discusión por tener una suite
+  // determinista: una corrida que falla a veces no se puede usar como prueba.
+  //
+  // La primera corrida serial expuso además que el paralelismo TAPABA una
+  // falla: `roles-accesos.spec.ts` esperaba oculto el grupo Comunidad, que
+  // `components/app-sidebar.tsx` abre a conserjería y mantención por el
+  // Directorio de Emergencias, y su locator sin scope reventaba por strict mode
+  // al aparecer el texto dos veces en el DOM. Con dos workers resolvía a un
+  // nodo y pasaba por casualidad. Ambas cosas ya están corregidas en el spec.
+  //
+  // Lo que sigue pendiente y NO se resuelve serializando: varios specs leen
+  // `personas[0]`/`unidades[0]` del padrón compartido en vez de crear sus
+  // propios datos. Eso hay que arreglarlo spec por spec; nunca recortando
+  // asserts para que la suite pase.
+  workers: 1,
   // Local: next dev compila cada ruta al primer uso (hasta ~60s de turbo).
   // CI: build de producción, rutas calientes.
   timeout: process.env.CI ? 30_000 : 120_000,
