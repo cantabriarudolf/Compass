@@ -125,18 +125,30 @@ const hoy = () => new Date().toISOString().slice(0, 10)
 
 export default function ProyectosPage() {
   // Lecturas de dominio vía hooks SWR (BD fuente de verdad).
-  const { items: trabajosMT, isLoading: cargandoTrabajos, create: crearTrabajo, update: actualizarTrabajo } = useTrabajosMT()
-  const { items: proyectosMT, isLoading: cargandoProyectos, create: crearProyecto, remove: eliminarProyecto } = useProyectosMT()
+  //
+  // `todasLasPaginas`: `/api/mt/trabajos` pagina de a 100 por `createdAt` descendente y NO acepta
+  // `?q=`, así que filtrar la primera página en el navegador dejaba inalcanzable todo trabajo
+  // anterior a las 100 filas más nuevas — y la pestaña de Prevención armaba los «Próximos
+  // vencimientos de mantención obligatoria» justo así. La colección se completa con la MISMA
+  // paginación del servidor (`&page=N`), igual que `/inventario/tipos` con el padrón de unidades.
+  const { items: trabajosMT, total: totalTrabajos, isLoading: cargandoTrabajos, create: crearTrabajo, update: actualizarTrabajo } = useTrabajosMT({ todasLasPaginas: true })
+  const { items: proyectosMT, isLoading: cargandoProyectos, create: crearProyecto, remove: eliminarProyecto } = useProyectosMT({ todasLasPaginas: true })
   const { personas, isLoading: cargandoPersonas } = usePersonas()
   const { items: unidades, isLoading: cargandoUnidades } = useUnidades()
   const { items: microSectores, isLoading: cargandoMicro } = useMicroSectores()
-  const { items: activosIR, isLoading: cargandoRecursos } = useRecursosIR()
+  // El selector «Equipo crítico del catálogo IR» filtra por naturaleza en el navegador: sobre la
+  // primera página ofrecía solo los equipos de las 100 filas más nuevas del catálogo.
+  const { items: activosIR, isLoading: cargandoRecursos } = useRecursosIR({ todasLasPaginas: true })
   const cargando = cargandoTrabajos || cargandoProyectos || cargandoPersonas || cargandoUnidades || cargandoMicro || cargandoRecursos
 
   const [error, setError] = React.useState<string | null>(null)
   const [msg, setMsg] = React.useState<string | null>(null)
   const [form, setForm] = React.useState<FormTrabajo | null>(null)
   const [editandoId, setEditandoId] = React.useState<string | null>(null)
+  // Paginación de presentación de la tabla de trabajos: la colección ya está completa (el hook
+  // pidió las páginas que faltaban), así que la tabla pagina 20 filas en vez de recortar en
+  // silencio en la primera página del servidor.
+  const [pagina, setPagina] = React.useState(1)
 
   const nombrePersona = (id?: string) => {
     if (!id) return "—"
@@ -153,7 +165,17 @@ export default function ProyectosPage() {
   }
 
   const ordenados = [...trabajosMT].reverse()
+
+  const POR_PAGINA = 20
+  const totalPaginas = Math.max(1, Math.ceil(ordenados.length / POR_PAGINA))
+  const paginaSegura = Math.min(pagina, totalPaginas)
+  const trabajosPagina = ordenados.slice((paginaSegura - 1) * POR_PAGINA, paginaSegura * POR_PAGINA)
+  const desde = ordenados.length === 0 ? 0 : (paginaSegura - 1) * POR_PAGINA + 1
+  const hasta = Math.min(paginaSegura * POR_PAGINA, ordenados.length)
+
   // Tablero preventivo: próximos vencimientos ordenados con vencidos destacados.
+  // `trabajosMT` es la colección COMPLETA: filtrar la primera página dejaba fuera los ciclos más
+  // viejos, que son justo los que vencen primero.
   const preventivos = trabajosMT
     .filter(t => t.preventivo && ["planificado", "en_curso"].includes(t.estado))
     .sort((a, b) => (a.fechaProgramada ?? "9999").localeCompare(b.fechaProgramada ?? "9999"))
@@ -248,7 +270,7 @@ export default function ProyectosPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {ordenados.map(t => (
+                      {trabajosPagina.map(t => (
                         <tr key={t.id} className="border-b last:border-0 align-top">
                           <td className="py-2 pr-3 font-mono text-xs">{t.folio}</td>
                           <td className="py-2 pr-3">
@@ -309,6 +331,28 @@ export default function ProyectosPage() {
                     </tbody>
                   </table>
                 </div>
+              )}
+
+              {ordenados.length > POR_PAGINA && (
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-[10px] text-muted-foreground">
+                    Mostrando {desde}–{hasta} de {ordenados.length}
+                  </span>
+                  <div className="flex items-center gap-1">
+                    <Button variant="outline" size="sm" className="h-7 text-[10px]" disabled={paginaSegura <= 1} onClick={() => setPagina(paginaSegura - 1)}>
+                      Anterior
+                    </Button>
+                    <span className="px-2 text-[10px] text-muted-foreground">
+                      Página {paginaSegura} de {totalPaginas}
+                    </span>
+                    <Button variant="outline" size="sm" className="h-7 text-[10px]" disabled={paginaSegura >= totalPaginas} onClick={() => setPagina(paginaSegura + 1)}>
+                      Siguiente
+                    </Button>
+                  </div>
+                </div>
+              )}
+              {ordenados.length > 0 && (
+                <p className="mt-3 text-xs text-muted-foreground">{totalTrabajos} trabajos en total.</p>
               )}
             </CardContent>
           </Card>

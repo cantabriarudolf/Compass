@@ -129,8 +129,16 @@ const hoy = () => new Date().toISOString().slice(0, 10)
 
 export default function RecursosPage() {
   // Lecturas de dominio vía hooks SWR (BD fuente de verdad).
-  const { items: activosIR, isLoading: cargandoRecursos, create: crearRecurso, update: actualizarRecurso } = useRecursosIR()
-  const { items: solicitudesInsumoIR, isLoading: cargandoSolicitudes, create: crearSolicitudInsumo, entregar: entregarSolicitudInsumo, resolverComodin: resolverComodinInsumo } = useSolicitudesInsumoIR()
+  //
+  // `todasLasPaginas` es lo que hace honesto el filtro de esta pantalla. Las dos rutas paginan de
+  // a 100 por `createdAt` descendente y NO aceptan `?q=` (no declaran `busqueda` en
+  // `createCrudHandlers`), así que filtrar la primera página en el navegador dejaba inalcanzable
+  // todo recurso anterior a las 100 filas más nuevas: el filtro por naturaleza, la alarma de
+  // reposición, las llaves no devueltas y los selectores de insumo/EPP de los diálogos. La
+  // colección se completa con la MISMA paginación del servidor (`&page=N`), igual que
+  // `/inventario/tipos` con el padrón de unidades.
+  const { items: activosIR, total: totalRecursos, isLoading: cargandoRecursos, create: crearRecurso, update: actualizarRecurso } = useRecursosIR({ todasLasPaginas: true })
+  const { items: solicitudesInsumoIR, isLoading: cargandoSolicitudes, create: crearSolicitudInsumo, entregar: entregarSolicitudInsumo, resolverComodin: resolverComodinInsumo } = useSolicitudesInsumoIR({ todasLasPaginas: true })
   const { items: entregasEPP, isLoading: cargandoEntregas, create: crearEntregaEPP } = useEntregasEPP()
   const { personas, isLoading: cargandoPersonas } = usePersonas()
   const { items: unidades, isLoading: cargandoUnidades } = useUnidades()
@@ -143,6 +151,9 @@ export default function RecursosPage() {
   const [fEstado, setFEstado] = React.useState<"todos" | EstadoActivoIR>("todos")
   const [formRecurso, setFormRecurso] = React.useState<FormRecurso | null>(null)
   const [editandoId, setEditandoId] = React.useState<string | null>(null)
+  // Paginación de presentación del catálogo: la colección ya está completa (el hook pidió las
+  // páginas que faltaban), así que la tabla muestra 20 filas por página en vez de todas juntas.
+  const [pagina, setPagina] = React.useState(1)
 
   // Nueva solicitud de insumo.
   const [nuevaSol, setNuevaSol] = React.useState<{
@@ -176,6 +187,22 @@ export default function RecursosPage() {
     if (fEstado !== "todos" && r.estadoActivo !== fEstado) return false
     return true
   })
+
+  const POR_PAGINA = 20
+  const totalPaginas = Math.max(1, Math.ceil(filtrados.length / POR_PAGINA))
+  const paginaSegura = Math.min(pagina, totalPaginas)
+  const recursosPagina = filtrados.slice((paginaSegura - 1) * POR_PAGINA, paginaSegura * POR_PAGINA)
+  const desde = filtrados.length === 0 ? 0 : (paginaSegura - 1) * POR_PAGINA + 1
+  const hasta = Math.min(paginaSegura * POR_PAGINA, filtrados.length)
+
+  // Al cambiar un filtro, volver a la primera página (ajuste durante el render — patrón React
+  // «storing information from previous renders», el mismo de `/inventario/estructura`).
+  const firmaFiltros = `${fCategoria}|${fEstado}`
+  const [firmaPrevia, setFirmaPrevia] = React.useState(firmaFiltros)
+  if (firmaPrevia !== firmaFiltros) {
+    setFirmaPrevia(firmaFiltros)
+    setPagina(1)
+  }
 
   const criticosBajoUmbral = activosIR.filter(r => r.esCritico && r.umbralCritico !== undefined && r.stock <= r.umbralCritico!)
   const noDevueltos = activosIR.filter(r => r.categoria === "acceso" && r.asignacionActual && r.asignacionActual.fecha < hoy())
@@ -358,7 +385,7 @@ export default function RecursosPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {filtrados.map(r => (
+                      {recursosPagina.map(r => (
                         <tr key={r.id} className="border-b last:border-0">
                           <td className="py-2 pr-3 font-mono text-xs">{r.codigo}</td>
                           <td className="py-2 pr-3">{r.nombre}{r.esCritico ? <span title="Stock crítico"> ⚠️</span> : null}</td>
@@ -385,6 +412,34 @@ export default function RecursosPage() {
                     </tbody>
                   </table>
                 </div>
+              )}
+
+              {filtrados.length > 0 && (
+                <>
+                  {filtrados.length > POR_PAGINA && (
+                    <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                      <span className="text-[10px] text-muted-foreground">
+                        Mostrando {desde}–{hasta} de {filtrados.length} con este filtro
+                      </span>
+                      <div className="flex items-center gap-1">
+                        <Button variant="outline" size="sm" className="h-7 text-[10px]" disabled={paginaSegura <= 1} onClick={() => setPagina(paginaSegura - 1)}>
+                          Anterior
+                        </Button>
+                        <span className="px-2 text-[10px] text-muted-foreground">
+                          Página {paginaSegura} de {totalPaginas}
+                        </span>
+                        <Button variant="outline" size="sm" className="h-7 text-[10px]" disabled={paginaSegura >= totalPaginas} onClick={() => setPagina(paginaSegura + 1)}>
+                          Siguiente
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                  {/* El padrón lo completa el hook con la paginación del servidor: el pie declara el
+                      total real y la tabla pagina las filas ya cargadas. */}
+                  <p className="mt-3 text-xs text-muted-foreground">
+                    {filtrados.length} recursos con este filtro · el padrón tiene {totalRecursos}.
+                  </p>
+                </>
               )}
             </CardContent>
           </Card>
