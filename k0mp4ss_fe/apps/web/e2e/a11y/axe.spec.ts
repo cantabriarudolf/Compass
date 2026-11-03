@@ -12,6 +12,7 @@ const DEUDA_CONOCIDA: Record<string, string[]> = {
   // Todas las violaciones graves/serias previas resueltas:
   // - color-contrast en /comunidad/personas (role badges) → FIXED
   // - color-contrast en /operaciones/bitacora (badge Sin incidencias) → FIXED
+  //   (esa ruta hoy redirige a /operaciones/accesos, que es la que se escanea)
   // - aria-valid-attr-value en /comunidad/personas (formulario-vinculo) → FIXED
 }
 
@@ -22,7 +23,9 @@ test.describe("Accesibilidad (axe-core) — módulos principales", () => {
     "/comunidad/personas",
     "/finanzas/gastos-comunes",
     "/operaciones/reservas",
-    "/operaciones/bitacora",
+    // `/operaciones/bitacora` quedó como redirect a la puerta única: se escanea el
+    // destino para no perder la cobertura de accesibilidad de la pantalla de accesos.
+    "/operaciones/accesos",
     "/inventario/recursos",
     "/admin/logs",
   ]

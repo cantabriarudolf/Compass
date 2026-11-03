@@ -14,7 +14,9 @@ test.describe("Smoke móvil — módulos renderizan en 390×844", () => {
     "/comunidad/personas",
     "/finanzas/gastos-comunes",
     "/operaciones/reservas",
-    "/operaciones/bitacora",
+    // `/operaciones/bitacora` quedó como redirect a la puerta única: se afirma el
+    // render móvil del destino, que es donde vive la pantalla de accesos.
+    "/operaciones/accesos",
     "/inventario/recursos",
     "/admin/logs",
   ]

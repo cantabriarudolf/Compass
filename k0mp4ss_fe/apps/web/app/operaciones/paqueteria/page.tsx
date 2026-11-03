@@ -1,55 +1,15 @@
-"use client"
+import { redirect } from "next/navigation"
 
-import * as React from "react"
-// Datos de dominio (encomiendas PE) viven en EncomiendasPanel vía hooks SWR;
-// esta página solo compone UI y estado de vista local.
-import { Input } from "@workspace/ui/components/input"
-import { Label } from "@workspace/ui/components/label"
-import { IconPackage } from "@tabler/icons-react"
-import { EncomiendasPanel } from "@/components/pe/encomiendas-panel"
-import { AvisoPrivacidadConserjeria } from "@/components/aviso-privacidad-conserjeria"
-
-function hoyISO(): string {
-  return new Date().toISOString().slice(0, 10)
-}
-
+/**
+ * Ruta retirada: la vista dedicada de encomiendas se fue a la puerta única.
+ *
+ * Desde el commit 931753c la recepción y el retiro de encomiendas es una de las
+ * respuestas de `/operaciones/accesos` («Trae o retira algo»), con la misma lista
+ * consolidada del día al lado. Esta URL sobrevive solo como enlace viejo
+ * (marcadores, avisos, manuales), así que se redirige en el servidor:
+ * `redirect()` responde antes de pintar nada, sin el parpadeo de una página
+ * retirada que se corrige desde el cliente.
+ */
 export default function PaqueteriaPage() {
-  const [diaReporte, setDiaReporte] = React.useState(hoyISO())
-  const [error, setError] = React.useState<string | null>(null)
-  const [okMsg, setOkMsg] = React.useState<string | null>(null)
-
-  return (
-    <div className="flex flex-col gap-6">
-      <header className="flex flex-col gap-1">
-        <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
-          <IconPackage className="size-6" /> Encomiendas
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          Recepción y retiro de encomiendas — logística de conserjería.
-        </p>
-      </header>
-
-      <AvisoPrivacidadConserjeria />
-
-      {error && (
-        <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
-          {error}
-        </div>
-      )}
-      {okMsg && (
-        <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-200">
-          {okMsg}
-        </div>
-      )}
-
-      <div className="flex items-end gap-3">
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="dia-paqueteria">Día consultado</Label>
-          <Input id="dia-paqueteria" type="date" value={diaReporte} onChange={(e) => setDiaReporte(e.target.value)} />
-        </div>
-      </div>
-
-      <EncomiendasPanel diaReporte={diaReporte} onError={setError} onSuccess={setOkMsg} />
-    </div>
-  )
+  redirect("/operaciones/accesos")
 }
