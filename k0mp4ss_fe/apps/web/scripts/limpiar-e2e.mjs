@@ -150,6 +150,12 @@ const REGLAS = [
     condiciones: [like("descripcionPaquete", "TEST-%")],
   },
   {
+    tabla: "bitacora_visitas_pe",
+    motivo:
+      "visitas registradas por los specs de portería y de conserjería. El campo pasa por una normalización de título, así que el marcador queda como «Test-…» y no como «TEST-…»: LIKE en SQLite es insensible a mayúsculas, de modo que el patrón en minúsculas cubre ambos.",
+    condiciones: [like("nombre", "test-%")],
+  },
+  {
     tabla: "reportes_re",
     motivo: "reportes emitidos por el spec de reportería con título QA-",
     condiciones: [like("titulo", "QA-%")],
