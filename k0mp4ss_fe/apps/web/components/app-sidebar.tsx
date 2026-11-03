@@ -95,14 +95,27 @@ const data = {
       title: "Comunidad",
       url: "/comunidad",
       icon: IconSpeakerphone,
-      roles: ["administrador", "residente", "comite"],
+      // El grupo se declara también para conserjería y mantención porque el
+      // directorio de emergencias (`pe:directorio` ver) es de TODOS los roles: si
+      // el grupo no incluyera a esos dos, la única entrada que les corresponde
+      // quedaría invisible. Para que eso no les abra el resto de Comunidad, cada
+      // ítem de abajo lleva sus propios roles (antes heredaban del grupo).
+      roles: ["administrador", "conserjeria", "residente", "comite", "mantencion"],
       items: [
-        { title: "Directorio de Personas", url: "/comunidad/personas" },
-        { title: "Comunicación", url: "/comunidad/comunicacion" },
-        { title: "Visor de Mensajes", url: "/comunidad/visor" },
-        { title: "Directiva", url: "/comunidad/directiva" },
-        { title: "Certificados", url: "/comunidad/certificados" },
-        { title: "Portal Inmobiliario", url: "/comunidad/portal" },
+        {
+          title: "Directorio de Emergencias",
+          url: "/comunidad/directorio",
+          // Mismos roles que el permiso `pe:directorio` ver en la matriz RP
+          // (`lib/authz.ts`) + el comodín del administrador. El page.tsx además
+          // exige sesión y ese permiso en el servidor.
+          roles: ["administrador", "conserjeria", "residente", "comite", "mantencion"],
+        },
+        { title: "Directorio de Personas", url: "/comunidad/personas", roles: ["administrador", "residente", "comite"] },
+        { title: "Comunicación", url: "/comunidad/comunicacion", roles: ["administrador", "residente", "comite"] },
+        { title: "Visor de Mensajes", url: "/comunidad/visor", roles: ["administrador", "residente", "comite"] },
+        { title: "Directiva", url: "/comunidad/directiva", roles: ["administrador", "residente", "comite"] },
+        { title: "Certificados", url: "/comunidad/certificados", roles: ["administrador", "residente", "comite"] },
+        { title: "Portal Inmobiliario", url: "/comunidad/portal", roles: ["administrador", "residente", "comite"] },
       ],
     },
     {

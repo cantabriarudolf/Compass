@@ -17,8 +17,14 @@
  * - la lectura del catálogo sigue viva (las seis filas del maestro se ven);
  * - los controles de escritura se ven si y solo si la matriz concede la acción
  *   que la ruta exige (`crear` alta, `editar` edición, `eliminar` baja);
- * - las otras dos pestañas (visitas técnicas y directorio de emergencias) no
- *   cambiaron para quien puede alcanzarlas.
+ * - el libro de visitas técnicas no cambió para quien puede alcanzarlo;
+ * - el directorio de emergencias ya no es una pestaña de esta pantalla: es una
+ *   superficie propia (`/comunidad/directorio`) porque `pe:directorio` lo tienen
+ *   todos los roles y esta pantalla no la abren todos. El caso que afirmaba la
+ *   lectura del directorio acá se reemplaza por dos: que salió de acá y que el
+ *   panel nuevo pinta exactamente los mismos contactos;
+ * - quien no puede leer ninguna de las dos pestañas que quedan no aterriza en
+ *   una pantalla vacía.
  */
 import React from "react"
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest"
@@ -41,7 +47,13 @@ const PROVEEDORES: ProveedorPE[] = [
 ]
 
 const CONTACTOS_EMERGENCIA: ContactoEmergencia[] = [
-  { id: "ce-1", categoria: "urgencia", nombre: "Bomberos Ñuñoa", telefono: "+56 2 2345 6789" },
+  {
+    id: "ce-1",
+    categoria: "urgencia",
+    nombre: "Bomberos Ñuñoa",
+    telefono: "+56 2 2345 6789",
+    sitioWeb: "https://bomberos.cl",
+  },
   { id: "tecnico-1", categoria: "tecnico", nombre: "Ascensores Andinos", telefono: "+56 2 2987 6543" },
 ]
 
@@ -82,6 +94,7 @@ vi.mock("@/lib/api/use-pe", () => ({
 }))
 
 import { ProveedoresPanel } from "@/components/pe/proveedores-panel"
+import { DirectorioPanel } from "@/app/comunidad/directorio/panel-directorio"
 
 function montar(roles: string[]) {
   return render(<ProveedoresPanel roles={roles} />)
@@ -177,7 +190,7 @@ describe("el formulario no queda abierto para quien no puede guardarlo", () => {
   })
 })
 
-describe("las otras pestañas no cambiaron para quien las alcanza", () => {
+describe("el libro de visitas no cambió para quien lo alcanza", () => {
   it("conserjería sigue registrando visitas técnicas", async () => {
     const usuario = userEvent.setup()
     montar(["conserjeria"])
@@ -187,14 +200,40 @@ describe("las otras pestañas no cambiaron para quien las alcanza", () => {
     expect(await screen.findByRole("button", { name: /Nueva visita/ })).toBeTruthy()
     expect(screen.getByText("Libro de Visitas Técnicas")).toBeTruthy()
   })
+})
 
-  it("conserjería sigue leyendo el directorio de emergencias", async () => {
-    const usuario = userEvent.setup()
+describe("el directorio de emergencias se mudó a /comunidad/directorio", () => {
+  it("ya no es una pestaña de esta pantalla ni se pintan sus contactos", () => {
     montar(["conserjeria"])
 
-    await usuario.click(screen.getByRole("tab", { name: "Directorio Emergencias" }))
+    expect(screen.queryByRole("tab", { name: "Directorio Emergencias" })).toBeNull()
+    expect(screen.queryByText("Bomberos Ñuñoa")).toBeNull()
+    expect(screen.queryByText("Ascensores Andinos")).toBeNull()
+  })
 
-    expect(await screen.findByText("Bomberos Ñuñoa")).toBeTruthy()
-    expect(screen.getByText("Ascensores Andinos")).toBeTruthy()
+  it("el panel nuevo pinta los mismos contactos: secciones, nombre, sitio y teléfono marcable", () => {
+    render(<DirectorioPanel />)
+
+    expect(screen.getByText("Servicios de Urgencia")).toBeTruthy()
+    expect(screen.getByText("Servicios Técnicos de Urgencia")).toBeTruthy()
+    for (const contacto of CONTACTOS_EMERGENCIA) {
+      expect(screen.getByText(contacto.nombre)).toBeTruthy()
+    }
+    expect(screen.getByText("https://bomberos.cl")).toBeTruthy()
+    // El teléfono se sigue ofreciendo como enlace `tel:` sin espacios (mismo
+    // render que tenía la pestaña: es un traslado, no un rediseño).
+    const enlace = screen.getByRole("link", { name: /\+56 2 2345 6789/ })
+    expect(enlace.getAttribute("href")).toBe("tel:+56223456789")
+  })
+})
+
+describe("quien no puede leer ninguna pestaña no aterriza en una pantalla vacía", () => {
+  it("el residente ve el aviso de sin acceso en vez del catálogo", () => {
+    montar(["residente"])
+
+    expect(screen.queryByRole("tab")).toBeNull()
+    expect(screen.getByText(/no tiene acceso/i)).toBeTruthy()
+    // Y no ve el maestro que dejó de tener permitido.
+    expect(screen.queryByText(PROVEEDORES[0]!.nombre)).toBeNull()
   })
 })

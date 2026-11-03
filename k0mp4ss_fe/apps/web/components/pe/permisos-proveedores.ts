@@ -46,17 +46,21 @@ export function permisosProveedores(roles: string[]): PermisosProveedores {
 /**
  * Qué pestañas puede leer cada rol.
  *
- * La pantalla sirve tres cosas distintas y cada una depende de su propio recurso:
- * el catálogo de empresas (`pe:proveedor`), el libro de visitas técnicas
- * (`pe:visita_tecnica`) y el directorio de emergencias (`pe:directorio`).
+ * La pantalla sirve dos cosas, y las dos son del mismo público privilegiado: el
+ * catálogo de empresas (`pe:proveedor`) y el libro de visitas técnicas
+ * (`pe:visita_tecnica`). El directorio de emergencias ya no está acá: su permiso
+ * (`pe:directorio`) lo tienen TODOS los roles, así que vive en su propia
+ * superficie, `/comunidad/directorio` (`app/comunidad/directorio/page.tsx`), y
+ * sacarlo de esta pantalla es lo que deja de esconder una cosa universal dentro
+ * de una pantalla que casi nadie puede abrir.
  *
- * Gatear la pantalla entera por `pe:proveedor` dejaría al residente sin su
- * directorio, que sí tiene permitido. Por eso se decide por pestaña.
+ * Se sigue decidiendo por pestaña y no por pantalla porque cada una depende de su
+ * propio recurso: `pe:proveedor` y `pe:visita_tecnica` no son la misma clave en
+ * la matriz aunque hoy coincidan en los roles.
  */
 export interface PestanasProveedores {
   catalogo: boolean
   visitas: boolean
-  emergencias: boolean
 }
 
 export function pestanasProveedores(roles: string[]): PestanasProveedores {
@@ -64,19 +68,19 @@ export function pestanasProveedores(roles: string[]): PestanasProveedores {
   return {
     catalogo: lee("pe:proveedor"),
     visitas: lee("pe:visita_tecnica"),
-    emergencias: lee("pe:directorio"),
   }
 }
 
 /**
  * Pestaña con la que se abre la pantalla: la primera que el rol puede leer.
  *
- * Sin esto la pantalla abría siempre en el catálogo, así que el residente
- * aterrizaba en la única pestaña que no puede leer y veía una pantalla vacía
- * teniendo el directorio de emergencias a un click.
+ * Sin esto la pantalla abría siempre en el catálogo, así que un rol que no lo
+ * lee aterrizaba en una pestaña que no puede ver. Con las dos pestañas denegadas
+ * no hay pestaña inicial (`""`): el panel declara el "sin acceso" en lugar de
+ * montar una pantalla vacía.
  */
 export function pestanaInicial(pestanas: PestanasProveedores): string {
   if (pestanas.catalogo) return "catalogo"
   if (pestanas.visitas) return "visitas"
-  return "emergencias"
+  return ""
 }

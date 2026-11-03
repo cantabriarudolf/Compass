@@ -1,51 +1,59 @@
 /**
  * Pestañas de /operaciones/proveedores por rol.
  *
- * La pantalla sirve tres cosas con permisos distintos: el catálogo de empresas
- * (`pe:proveedor`), el libro de visitas técnicas (`pe:visita_tecnica`) y el
- * directorio de emergencias (`pe:directorio`). Gatear la pantalla entera por el
- * primero dejaba al residente sin el directorio, que sí tiene permitido; y como
- * la pantalla abría siempre en el catálogo, aterrizaba en la única pestaña que
- * no puede leer y veía una pantalla vacía.
+ * La pantalla quedó con dos cosas, y las dos son privilegiadas: el catálogo de
+ * empresas (`pe:proveedor`) y el libro de visitas técnicas
+ * (`pe:visita_tecnica`). El directorio de emergencias SALIÓ de acá: su permiso
+ * (`pe:directorio`) lo tienen todos los roles, así que una cosa que todos leen
+ * no puede vivir dentro de una pantalla que casi nadie puede abrir. Su superficie
+ * es `/comunidad/directorio`.
+ *
+ * Lo que estos casos siguen protegiendo (era lo que protegían antes del traslado):
+ * - ninguna pestaña se pinta sin el permiso de su propio recurso;
+ * - la pestaña inicial nunca es una que no se pinta (el residente no aterriza en
+ *   el catálogo que no puede leer);
+ * - el rol que no puede leer ninguna de las dos pestañas no recibe ninguna, y la
+ *   pestaña inicial lo declara en vez de inventar una tercera.
  */
 import { describe, expect, it } from "vitest"
 
 import { pestanaInicial, pestanasProveedores } from "@/components/pe/permisos-proveedores"
 
 describe("pestañas de proveedores según el rol", () => {
-  it("el residente solo ve el directorio de emergencias, y abre ahí", () => {
+  it("el residente no recibe ninguna pestaña: el directorio ya no vive acá", () => {
     const p = pestanasProveedores(["residente"])
-    expect(p).toEqual({ catalogo: false, visitas: false, emergencias: true })
-    // Lo que motivó el cambio: antes abría en el catálogo y veía vacío.
-    expect(pestanaInicial(p)).toBe("emergencias")
+    expect(p).toEqual({ catalogo: false, visitas: false })
+    // El traslado retiró la pestaña `emergencias`: el permiso sigue existiendo en
+    // la matriz, pero su superficie es /comunidad/directorio.
+    expect(Object.keys(p)).toEqual(["catalogo", "visitas"])
+    // Sin pestañas legibles no hay pestaña inicial que pintar.
+    expect(pestanaInicial(p)).toBe("")
   })
 
-  it("conserjería lee el libro de visitas pero no el maestro de empresas", () => {
+  it("conserjería lee el catálogo y el libro de visitas, y abre en el catálogo", () => {
     const p = pestanasProveedores(["conserjeria"])
-    expect(p).toEqual({ catalogo: true, visitas: true, emergencias: true })
+    expect(p).toEqual({ catalogo: true, visitas: true })
     expect(pestanaInicial(p)).toBe("catalogo")
   })
 
-  it("mantención ve las mismas tres pestañas que conserjería", () => {
+  it("mantención ve las mismas dos pestañas que conserjería", () => {
     expect(pestanasProveedores(["mantencion"])).toEqual({
       catalogo: true,
       visitas: true,
-      emergencias: true,
     })
   })
 
-  it("el administrador y el comité no pierden ninguna pestaña", () => {
+  it("el administrador y el comité no pierden ninguna pestaña de esta pantalla", () => {
     for (const rol of ["administrador", "comite"]) {
       const p = pestanasProveedores([rol])
-      expect(p.catalogo).toBe(true)
-      expect(p.emergencias).toBe(true)
+      expect(p).toEqual({ catalogo: true, visitas: true })
     }
   })
 
-  it("sin rol útil abre en emergencias, que es la pestaña más restrictiva que existe", () => {
+  it("sin rol útil no hay ninguna pestaña ni pestaña inicial", () => {
     const p = pestanasProveedores([])
-    expect(p).toEqual({ catalogo: false, visitas: false, emergencias: false })
+    expect(p).toEqual({ catalogo: false, visitas: false })
     // Con todo denegado la pestaña inicial no puede ser una que no se pinta.
-    expect(pestanaInicial(p)).toBe("emergencias")
+    expect(pestanaInicial(p)).toBe("")
   })
 })

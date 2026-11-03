@@ -1,9 +1,8 @@
 "use client"
 
 /**
- * proveedores-panel — catálogo de proveedores, libro de visitas técnicas y
- * directorio de emergencias (antes era el `page.tsx` completo de
- * `/operaciones/proveedores`).
+ * proveedores-panel — catálogo de proveedores y libro de visitas técnicas (antes
+ * era el `page.tsx` completo de `/operaciones/proveedores`).
  *
  * El archivo se separó en servidor + cliente para poder frenar la ESCRITURA sin
  * cerrar la lectura: `page.tsx` resuelve los roles de la sesión con `auth()` y
@@ -12,9 +11,14 @@
  *
  * Leer el maestro de proveedores (`pe:proveedor` ver) es de la operación entera;
  * administrarlo es del administrador (`f7959cd`). Por eso las tres acciones de
- * escritura se pintan según `permisosProveedores(roles)` y las tres pestañas
- * siguen abiertas para todos los roles que hoy leen: visitas técnicas y
- * directorio de emergencias no se tocan.
+ * escritura se pintan según `permisosProveedores(roles)`.
+ *
+ * El directorio de emergencias YA NO ES UNA PESTAÑA DE ACÁ: su permiso
+ * (`pe:directorio` ver) lo tienen todos los roles, mientras que esta pantalla es
+ * de unos pocos. Vive en `/comunidad/directorio`
+ * (`app/comunidad/directorio/panel-directorio.tsx`), movido sin cambios de
+ * datos ni de copia. Lo que queda acá son las dos cosas privilegiadas, cada una
+ * con su propio portón de pestaña.
  */
 import * as React from "react"
 import { generarId } from "@/lib/id-utils"
@@ -24,7 +28,6 @@ import { aTituloCaso, emailNormalizado, telefonoNormalizado, sitioNormalizado } 
 import { usePersonas } from "@/lib/api/use-personas"
 import { useUnidades } from "@/lib/api/use-unidades"
 import { AvisoTruncamiento, LIMITE_SELECT } from "@/components/pe/aviso-truncamiento"
-import { useMaestros } from "@/lib/api/use-maestros"
 import {
   useProveedoresPE,
   useMantencionesPE,
@@ -33,7 +36,6 @@ import {
 } from "@/lib/api/use-pe"
 import { hoyISO } from "@/lib/date-utils"
 import { permisosProveedores, pestanasProveedores, pestanaInicial } from "@/components/pe/permisos-proveedores"
-import type { ContactoEmergencia } from "@/lib/schemas"
 import {
   Card,
   CardContent,
@@ -70,11 +72,9 @@ import {
 import {
   IconBuildingFactory2,
   IconClipboardList,
-  IconPhoneCall,
   IconPlus,
   IconPencil,
   IconTrash,
-  IconExternalLink,
 } from "@tabler/icons-react"
 import type { VisitaTecnicaPE } from "@/lib/schemas"
 
@@ -109,14 +109,14 @@ export function ProveedoresPanel({ roles }: ProveedoresPanelProps) {
   // Espejo cliente de la matriz: qué escrituras se pueden ofrecer sin que la API
   // responda 403. El permiso sigue decidiéndose en el servidor.
   const escritura = permisosProveedores(roles)
-  // Cada pestaña depende de su propio recurso: el catálogo es del maestro, las
-  // visitas del libro de obra y el directorio lo puede leer cualquier rol
-  // operativo. Gatear la pantalla entera dejaría al residente sin su directorio.
+  // Cada pestaña depende de su propio recurso (catálogo = maestro de proveedores,
+  // visitas = libro de obra). Si el rol no puede leer ninguna, abajo se declara
+  // el "sin acceso" en vez de montar una pantalla vacía.
   const pestanas = pestanasProveedores(roles)
+  const sinPestanas = !pestanas.catalogo && !pestanas.visitas
 
   const { personas, isLoading: cPersonas, total: totalPersonas } = usePersonas()
   const { items: unidades, isLoading: cUnidades, total: totalUnidades } = useUnidades()
-  const { data: contactosEmergencia, isLoading: cContactos } = useMaestros<ContactoEmergencia>("contactos-emergencia")
   const {
     items: proveedores,
     isLoading: cProveedores,
@@ -131,7 +131,7 @@ export function ProveedoresPanel({ roles }: ProveedoresPanelProps) {
   // escribe el maestro: para conserjería y mantención ese PUT responde 403).
   const { items: mantenciones, isLoading: cMantenciones } = useMantencionesPE()
   const { items: visitasTecnicas, isLoading: cVisitasTec } = useVisitasTecnicasPE()
-  const cargandoAPI = cPersonas || cUnidades || cContactos || cProveedores || cMantenciones || cVisitasTec
+  const cargandoAPI = cPersonas || cUnidades || cProveedores || cMantenciones || cVisitasTec
 
   // Selects de personas y unidades: se recortan a LIMITE_SELECT y el recorte se
   // declara en pantalla (saneamiento de truncamientos silenciosos). Acá el
@@ -275,9 +275,10 @@ export function ProveedoresPanel({ roles }: ProveedoresPanelProps) {
           <IconBuildingFactory2 className="size-6" /> Proveedores y Servicios
         </h1>
         <p className="text-sm text-muted-foreground">
-          Empresas de mantenimiento externo, libro de visitas técnicas y
-          directorio de emergencias. Las mantenciones preventivas se administran
-          en Administración → Mantenciones Preventivas.
+          Empresas de mantenimiento externo y libro de visitas técnicas. Las
+          mantenciones preventivas se administran en Administración →
+          Mantenciones Preventivas, y el directorio de emergencias vive en
+          Comunidad → Directorio de Emergencias.
         </p>
       </header>
 
@@ -292,6 +293,20 @@ export function ProveedoresPanel({ roles }: ProveedoresPanelProps) {
         </div>
       )}
 
+      {sinPestanas && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Sin acceso a esta pantalla</CardTitle>
+            <CardDescription>
+              Tu rol no tiene acceso al catálogo de proveedores ni al libro de
+              visitas técnicas. El directorio de emergencias está en Comunidad →
+              Directorio de Emergencias.
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      )}
+
+      {!sinPestanas && (
       <Tabs defaultValue={pestanaInicial(pestanas)}>
         <TabsList>
           {pestanas.catalogo && (
@@ -303,9 +318,6 @@ export function ProveedoresPanel({ roles }: ProveedoresPanelProps) {
             <TabsTrigger value="visitas">
               Visitas Técnicas ({visitasTecnicas.length})
             </TabsTrigger>
-          )}
-          {pestanas.emergencias && (
-            <TabsTrigger value="emergencias">Directorio Emergencias</TabsTrigger>
           )}
         </TabsList>
 
@@ -661,57 +673,8 @@ export function ProveedoresPanel({ roles }: ProveedoresPanelProps) {
             </Card>
           )}
         </TabsContent>
-
-        <TabsContent value="emergencias" className="mt-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <IconPhoneCall className="size-5" /> Directorio de Emergencias y
-                Utilidad Pública
-              </CardTitle>
-              <CardDescription>
-                Fuente: maestro contactosEmergencia de MA · disponible para
-                conserjería y residentes.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-6 md:grid-cols-2">
-              {(["urgencia", "tecnico"] as const).map((categoria) => (
-                <section key={categoria}>
-                  <h3 className="mb-2 text-sm font-semibold">
-                    {categoria === "urgencia"
-                      ? "Servicios de Urgencia"
-                      : "Servicios Técnicos de Urgencia"}
-                  </h3>
-                  <ul className="flex flex-col divide-y rounded-lg border">
-                    {(contactosEmergencia ?? [])
-                      .filter((c) => c.categoria === categoria)
-                      .map((c) => (
-                        <li
-                          key={c.id}
-                          className="flex items-center justify-between gap-3 px-3 py-2 text-sm"
-                        >
-                          <span>
-                            {c.nombre}
-                            <span className="block text-xs text-muted-foreground">
-                              {c.sitioWeb ?? "—"}
-                            </span>
-                          </span>
-                          <a
-                            href={`tel:${c.telefono.replace(/\s/g, "")}`}
-                            className="flex items-center gap-1 rounded-md border px-2 py-1 hover:bg-muted"
-                          >
-                            <Badge variant="outline">{c.telefono}</Badge>
-                            <IconExternalLink className="size-3" />
-                          </a>
-                        </li>
-                      ))}
-                  </ul>
-                </section>
-              ))}
-            </CardContent>
-          </Card>
-        </TabsContent>
       </Tabs>
+      )}
 
       {/* Diálogo proveedor: existe solo para quien puede guardarlo. `crear` y
           `editar` son las dos acciones que la ruta acepta en el POST upsert, así
