@@ -41,6 +41,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { IconBuilding, IconPlus, IconChevronRight, IconPencil, IconStack2, IconEdit, IconHistory, IconCalendarEvent, IconSearch } from "@tabler/icons-react"
 import { FormularioUnidad } from "@/components/inventario/formulario-unidad"
 import { EstadosDonut } from "@/components/inventario/estados-donut"
+import { VerMas } from "@/components/ver-mas"
+
+/** Espera del buscador antes de consultar al servidor (una tecla, una request). */
+const DEBOUNCE_BUSQUEDA_MS = 300
 
 /** Maestro nombre simple (MA): id + nombre para selects de categoría. */
 interface MaestroNombre {
@@ -57,7 +61,36 @@ export default function EstructuraFisicaPage() {
   // EF vía API REST (BD fuente de verdad); maestros/vínculos/personas vía hooks SWR.
   const { items: macroSectores, isLoading: cargandoMacro, create: crearMacro, update: editarMacro } = useMacroSectores()
   const { items: microSectores, isLoading: cargandoMicro, create: crearMicro } = useMicroSectores()
-  const { items: unidades, isLoading: cargandoUnidades, create: crearUnidad, update: editarUnidad } = useUnidades()
+  /**
+   * Búsqueda de unidades en el SERVIDOR (mismo arreglo que `/personas/residentes`).
+   *
+   * Antes la pantalla pedía una sola página del padrón y filtraba ese arreglo en el navegador:
+   * con la base de desarrollo (`GET /api/unidades?pageSize=100` de 184, ordenado por `createdAt`
+   * descendente) la página 1 eran estacionamientos y locales, así que buscar «101» no encontraba
+   * ninguno de los 80 departamentos por más que existieran. El término viaja a la API, que filtra
+   * sobre TODA la colección, y el servidor devuelve su propia paginación.
+   *
+   * `mantenerFilasPrevias` deja las filas anteriores en pantalla mientras la consulta nueva está
+   * en vuelo: la tabla no se vacía entre tecla y tecla.
+   */
+  const [busqueda, setBusqueda] = React.useState("")
+  const [busquedaServidor, setBusquedaServidor] = React.useState("")
+
+  React.useEffect(() => {
+    const temporizador = setTimeout(() => setBusquedaServidor(busqueda.trim()), DEBOUNCE_BUSQUEDA_MS)
+    return () => clearTimeout(temporizador)
+  }, [busqueda])
+
+  const {
+    items: unidades,
+    total: totalUnidades,
+    isLoading: cargandoUnidades,
+    isValidando: validandoUnidades,
+    cargarMas,
+    cargandoMas,
+    create: crearUnidad,
+    update: editarUnidad,
+  } = useUnidades({ q: busquedaServidor, mantenerFilasPrevias: true })
   const { personas, isLoading: cargandoPersonas } = usePersonas()
   const { vinculos, isLoading: cargandoVinculos } = useVinculos()
   const { data: categoriasMacro, isLoading: cCategoriasMacro } = useMaestros<MaestroNombre>("categorias-macro")
@@ -86,7 +119,6 @@ export default function EstructuraFisicaPage() {
   const [isMicroDialogOpen, setIsMicroDialogOpen] = React.useState(false)
   const [historialSelect, setHistorialSelect] = React.useState<Unidad | null>(null)
   const [errorDialogo, setErrorDialogo] = React.useState<string | null>(null)
-  const [busqueda, setBusqueda] = React.useState("")
   const [pagina, setPagina] = React.useState(1)
   const POR_PAGINA = 20
 
@@ -99,13 +131,12 @@ export default function EstructuraFisicaPage() {
     return matchesMacro && matchesMicro;
   })
 
-  // Búsqueda por N°/etiqueta + estado, con paginación (evita scroll infinito)
+  // El texto no se filtra acá: lo resuelve el servidor. Acá quedan los filtros de sector y estado,
+  // que se aplican sobre las filas cargadas, y la paginación de la tabla («20 por página»), que es
+  // presentación: el botón «Ver más» del pie pide las páginas que faltan del servidor.
   const textoBusqueda = busqueda.trim().toLowerCase()
   const unidadesVisibles = filteredUnidades.filter(u => {
-    const matchesEstado = filterStatus === "todos" || u.estadoId === filterStatus
-    const matchesTexto = textoBusqueda === "" ||
-      `${u.etiqueta} ${u.numero}`.toLowerCase().includes(textoBusqueda)
-    return matchesEstado && matchesTexto
+    return filterStatus === "todos" || u.estadoId === filterStatus
   })
   const totalPaginas = Math.max(1, Math.ceil(unidadesVisibles.length / POR_PAGINA))
   const paginaSegura = Math.min(pagina, totalPaginas)
@@ -454,7 +485,7 @@ export default function EstructuraFisicaPage() {
                   <div>
                     <CardTitle>Unidades</CardTitle>
                     <CardDescription>
-                      {unidadesVisibles.length} unidades en este sector.
+                      {unidadesVisibles.length} unidades con este filtro · el padrón tiene {totalUnidades}.
                     </CardDescription>
                   </div>
                   <FormularioUnidad
@@ -470,10 +501,14 @@ export default function EstructuraFisicaPage() {
                           <Input
                             value={busqueda}
                             onChange={(e) => setBusqueda(e.target.value)}
-                            placeholder="Buscar por N° de unidad…"
+                            placeholder="Buscar por N°, etiqueta o rol SII…"
                             className="h-8 pl-8 text-xs"
                           />
                         </div>
+                        {/* Búsqueda en vuelo: las filas previas quedan en pantalla, sin salto. */}
+                        <span className="text-[10px] text-muted-foreground min-w-16" role="status" aria-live="polite">
+                          {validandoUnidades ? "Buscando…" : ""}
+                        </span>
                         {busqueda && (
                           <Button variant="ghost" size="sm" className="h-8 text-[10px]" onClick={() => setBusqueda("")}>
                             Limpiar
@@ -577,7 +612,7 @@ export default function EstructuraFisicaPage() {
                       {unidadesVisibles.length > POR_PAGINA && (
                         <div className="flex items-center justify-between gap-2 mt-3 flex-wrap">
                           <span className="text-[10px] text-muted-foreground">
-                            Mostrando {desde}–{hasta} de {unidadesVisibles.length} unidades
+                            Mostrando {desde}–{hasta} de {unidadesVisibles.length} cargadas
                           </span>
                           <div className="flex items-center gap-1">
                             <Button variant="outline" size="sm" className="h-7 text-[10px]" disabled={paginaSegura <= 1} onClick={() => setPagina(paginaSegura - 1)}>
@@ -592,6 +627,14 @@ export default function EstructuraFisicaPage() {
                           </div>
                         </div>
                       )}
+                      {/* Paginación real del servidor: la tabla pagina 20 filas de las cargadas y
+                          este pie pide las páginas que faltan del padrón (o de la búsqueda). */}
+                      <VerMas
+                        mostrados={unidades.length}
+                        total={totalUnidades}
+                        cargando={cargandoMas}
+                        onCargarMas={cargarMas}
+                      />
                     </CardContent>
               </Card>
             </div>

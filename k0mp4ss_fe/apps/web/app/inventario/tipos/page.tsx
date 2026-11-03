@@ -50,7 +50,18 @@ interface MaestroConColor extends MaestroNombre {
 export default function TiposUnidadPage() {
   // Lectura de dominio vía hooks SWR (BD fuente de verdad).
   const { items: data, isLoading: cargandoTipos, create: crearTipo, update: editarTipo } = useTiposUnidad()
-  const { items: unidades, isLoading: cargandoUnidades } = useUnidades()
+  /**
+   * Padrón COMPLETO de unidades, no la primera página.
+   *
+   * Esta pantalla no busca texto: cuenta y lista las unidades de cada tipo. Con la página única
+   * de 100 (de 184 en la base de desarrollo, ordenada por `createdAt` descendente) los conteos
+   * mentían: «Depto Tipo A» y «Depto Tipo B» mostraban 0 unidades aunque tienen 40 cada uno, y
+   * abrir el tipo decía «No hay unidades asociadas» con 80 departamentos en el padrón.
+   *
+   * `todasLasPaginas` completa la colección con la MISMA paginación del servidor (`page=2`), así
+   * que el conteo y la lista se calculan sobre las 184 filas reales.
+   */
+  const { items: unidades, isLoading: cargandoUnidades } = useUnidades({ todasLasPaginas: true })
   const { items: microSectores, isLoading: cargandoMicro } = useMicroSectores()
   const { items: macroSectores, isLoading: cargandoMacro } = useMacroSectores()
   const { data: categoriasUnidad, isLoading: cCategoriasUnidad } = useMaestros<MaestroNombre>("categorias-unidad")

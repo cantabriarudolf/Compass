@@ -3,7 +3,11 @@
 /**
  * use-unidades — colección de unidades EF y búsqueda de destino de la operación (F6).
  *
- * - `useUnidades()`: hooks SWR para unidades EF (BD-FUENTE-VERDAD Fase 3).
+ * - `useUnidades(opciones?)`: hooks SWR para unidades EF (BD-FUENTE-VERDAD Fase 3). Sin
+ *   opciones la clave SWR y las peticiones son las de siempre (`?pageSize=100`); con `q` la
+ *   búsqueda la resuelve el servidor sobre TODA la colección, con `todasLasPaginas` la
+ *   colección se completa a través de la misma paginación y con `mantenerFilasPrevias` las
+ *   filas anteriores siguen en pantalla mientras la consulta nueva está en vuelo.
  * - `useUnidadesOperacion()`: padrón completo de la operación para los selects de los paneles PE
  *   (`pageSize=100`, el `LIMITE_SELECT` de `components/pe/aviso-truncamiento.tsx`), con el `total`
  *   del servidor para poder avisar el truncamiento en vez de cortar en silencio.
@@ -19,6 +23,7 @@
  * Mismo patrón que `buscarPersonaPorRun` en `use-personas.ts`: función suelta que propaga el
  * error, para que el consumidor decida si lo declara o cae a un padrón local.
  */
+import * as React from "react"
 import useSWR from "swr"
 import { useCrudCollection, type CrudCollection } from "./use-crud-collection"
 import type { Unidad } from "@/lib/schemas"
@@ -29,8 +34,125 @@ import {
   type UnidadOpcion,
 } from "@/lib/unidades-destino"
 
-export function useUnidades(): CrudCollection<Unidad> {
-  return useCrudCollection<Unidad>("/api/unidades")
+/** Colección EF (`/api/unidades`): la de siempre más el estado de la consulta en vuelo. */
+export interface UseUnidadesResultado extends CrudCollection<Unidad> {
+  /** Hay una consulta en vuelo (incluye la revalidación con las filas previas en pantalla). */
+  isValidando: boolean
+}
+
+/** Opciones de lectura de la colección EF. Aditivas: sin ellas nada cambia. */
+export interface UseUnidadesOpciones {
+  /**
+   * Búsqueda por texto resuelta en el servidor (`?q=` sobre número, etiqueta y rol SII).
+   *
+   * Es la forma correcta de buscar en el padrón: `/api/unidades` pagina de a 100 y la lista
+   * llega ordenada por `createdAt` descendente, así que filtrar en el navegador solo ve la
+   * primera página. Filtrar ahí deja fuera todo lo que no entró en esas 100 filas.
+   */
+  q?: string
+  /**
+   * Mantiene las filas de la consulta anterior mientras la nueva está en vuelo: el buscador no
+   * vacía la tabla entre tecla y tecla. El `total` de la consulta previa se conserva con las
+   * filas, para que el pie de paginación no salte.
+   */
+  mantenerFilasPrevias?: boolean
+  /**
+   * Completa la colección pidiendo las páginas siguientes hasta agotar el `total` del servidor.
+   * Es para las vistas que CUENTAN filas (saldos por tipo, cantidades): un conteo sobre la
+   * primera página miente. Usa la misma paginación de `cargarMas`, con un tope de seguridad.
+   */
+  todasLasPaginas?: boolean
+}
+
+/**
+ * Tope de páginas que `todasLasPaginas` pide solo: corta un bucle si el servidor devolviera
+ * páginas vacías con `total` todavía mayor.
+ */
+const MAXIMO_PAGINAS_AUTO = 50
+
+/**
+ * Colección de unidades EF.
+ *
+ * Sin opciones, la clave SWR es `?pageSize=100` —la misma de los consumidores que ya existían—
+ * así que esos consumidores no cambian de caché ni de petición.
+ */
+export function useUnidades(opciones: UseUnidadesOpciones = {}): UseUnidadesResultado {
+  const q = opciones.q?.trim() ?? ""
+  const mantenerFilasPrevias = opciones.mantenerFilasPrevias === true
+  const todasLasPaginas = opciones.todasLasPaginas === true
+
+  // Con `q` la búsqueda viaja al servidor; sin `q` la query queda vacía y la URL es la de antes.
+  const coleccion = useCrudCollection<Unidad>(
+    "/api/unidades",
+    q ? `pageSize=100&q=${encodeURIComponent(q)}` : ""
+  )
+  const url = q ? `/api/unidades?pageSize=100&q=${encodeURIComponent(q)}` : "/api/unidades?pageSize=100"
+
+  /**
+   * Última consulta resuelta con filas: es lo que se sigue viendo mientras la siguiente está
+   * en vuelo. Se guarda por URL para que una respuesta de otro término no se mezcle.
+   */
+  const [ultima, setUltima] = React.useState<{
+    url: string
+    filas: Unidad[]
+    total: number
+  } | null>(null)
+
+  const filasFrescas = coleccion.items
+  const cargandoPrimera = coleccion.isLoading
+  const totalFresco = coleccion.total
+
+  // Ajuste durante el render (mismo patrón que usa la pantalla de estructura para «storing
+  // information from previous renders»): la última consulta resuelta queda como referencia sin
+  // un effect que dispare un segundo render. Una consulta sin resultados no se guarda: el vacío
+  // es una respuesta, no un error que haya que tapar con filas viejas.
+  const ultimaDesactualizada =
+    ultima === null || ultima.url !== url || ultima.filas !== filasFrescas
+  if (
+    mantenerFilasPrevias &&
+    !cargandoPrimera &&
+    filasFrescas.length > 0 &&
+    ultimaDesactualizada
+  ) {
+    setUltima({ url, filas: filasFrescas, total: totalFresco })
+  }
+
+  const mostrandoPrevias =
+    mantenerFilasPrevias && cargandoPrimera && filasFrescas.length === 0 && ultima !== null
+
+  const items = mostrandoPrevias ? ultima.filas : filasFrescas
+  const total = mostrandoPrevias ? ultima.total : totalFresco
+  const hasMore = items.length < total
+
+  // Auto-paginación: un pedido por tamaño de colección. Así una página vacía no deja el bucle
+  // girando (el contador de filas no cambia y no se vuelve a pedir) y el tope acota el resto.
+  const ultimoPedidoRef = React.useRef(-1)
+  const paginasAutoRef = React.useRef(0)
+  const { cargarMas, cargandoMas } = coleccion
+
+  React.useEffect(() => {
+    paginasAutoRef.current = 0
+    ultimoPedidoRef.current = -1
+  }, [url])
+
+  React.useEffect(() => {
+    if (!todasLasPaginas) return
+    if (cargandoPrimera || cargandoMas) return
+    if (!hasMore) return
+    if (paginasAutoRef.current >= MAXIMO_PAGINAS_AUTO) return
+    if (ultimoPedidoRef.current === items.length) return
+    ultimoPedidoRef.current = items.length
+    paginasAutoRef.current += 1
+    void cargarMas()
+  }, [todasLasPaginas, cargandoPrimera, cargandoMas, hasMore, items.length, cargarMas])
+
+  return {
+    ...coleccion,
+    items,
+    total,
+    hasMore,
+    isValidando: cargandoPrimera,
+  }
 }
 
 const LISTA = "/api/pe/unidades"
