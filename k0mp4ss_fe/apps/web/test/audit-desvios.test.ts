@@ -14,7 +14,13 @@ import { dirname, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import { afterEach, describe, expect, it } from "vitest"
 
-import { auditar, recursosDeclarados } from "../scripts/audit-desvios.mjs"
+import {
+  EXCEPCIONES,
+  auditar,
+  clavesDeMatriz,
+  hermanosGranulares,
+  recursosDeclarados,
+} from "../scripts/audit-desvios.mjs"
 
 type Archivos = Record<string, string>
 
@@ -133,6 +139,129 @@ export function GET(rol: string) {
       },
     })
     expect(conExcepcion.filter((h) => h.regla === "R1")).toHaveLength(0)
+  })
+})
+
+describe("R1 · raíz desnuda con hermanos granulares", () => {
+  it("lee los hermanos granulares de una raíz y no inventa los que no existen", () => {
+    const claves = clavesDeMatriz(AUTHZ_MIN)
+    expect(hermanosGranulares(claves, "in")).toEqual(["in:apelar"])
+    expect(hermanosGranulares(claves, "fi")).toEqual([])
+  })
+
+  it("reporta la raíz desnuda y nombra la ruta, el recurso usado y el hermano granular", () => {
+    const raiz = crearRaiz({
+      "lib/authz.ts": AUTHZ_MIN,
+      "app/api/in/denuncias/route.ts": `import { puede } from "@/lib/authz"
+
+export function GET(rol: string) {
+  if (!puede(rol, "ver", "in")) return null
+  return { ok: true }
+}
+`,
+    })
+    const hallazgos = hallazgosDe(raiz, "R1")
+    expect(hallazgos).toHaveLength(1)
+    const [hallazgo] = hallazgos
+    expect(hallazgo?.archivo).toBe("app/api/in/denuncias/route.ts")
+    expect(hallazgo?.linea).toBe(4)
+    // El mensaje dice qué recurso se usó, qué hermano granular existe y qué hacer.
+    expect(hallazgo?.detalle).toContain('raíz desnuda "in"')
+    expect(hallazgo?.detalle).toContain('"in:apelar"')
+    expect(hallazgo?.accion).toContain('"in:apelar"')
+  })
+
+  it("acepta el recurso granular de la misma raíz", () => {
+    const raiz = crearRaiz({
+      "lib/authz.ts": AUTHZ_MIN,
+      "app/api/in/infracciones/route.ts": `import { puede } from "@/lib/authz"
+
+export function POST(rol: string) {
+  if (!puede(rol, "crear", "in:apelar")) return null
+  return { ok: true }
+}
+`,
+    })
+    expect(hallazgosDe(raiz, "R1")).toHaveLength(0)
+  })
+
+  it("la entrada de baseline cubre solo las rutas que nombra", () => {
+    const raiz = crearRaiz({
+      "lib/authz.ts": AUTHZ_MIN,
+      "app/api/in/denuncias/route.ts": `import { puede } from "@/lib/authz"
+
+export function GET(rol: string) {
+  return puede(rol, "ver", "in")
+}
+`,
+      "app/api/in/consultas/route.ts": `import { puede } from "@/lib/authz"
+
+export function GET(rol: string) {
+  return puede(rol, "ver", "in")
+}
+`,
+    })
+    // Sin allowlist, las dos rutas son hallazgo.
+    expect(
+      auditar({ raiz, excepciones: { R1: [] } }).filter((h) => h.regla === "R1")
+    ).toHaveLength(2)
+
+    const conBaseline = auditar({
+      raiz,
+      excepciones: {
+        R1: [
+          {
+            recurso: "in",
+            rutas: ["app/api/in/denuncias/route.ts"],
+            motivo: "estado medido: la ruta base del módulo usa la raíz",
+          },
+        ],
+      },
+    }).filter((h) => h.regla === "R1")
+    // La ruta listada se acepta; la que no está en la lista sigue siendo hallazgo.
+    expect(conBaseline).toHaveLength(1)
+    expect(conBaseline[0]?.archivo).toBe("app/api/in/consultas/route.ts")
+  })
+
+  it("no reporta la raíz desnuda en una página de UI (el guard de ruta vive en app/api)", () => {
+    const raiz = crearRaiz({
+      "lib/authz.ts": AUTHZ_MIN,
+      "app/comunidad/page.tsx": `import { puede } from "@/lib/authz"
+
+export function Panel({ rol }: { rol: string }) {
+  return puede(rol, "ver", "in") ? null : null
+}
+`,
+    })
+    expect(hallazgosDe(raiz, "R1")).toHaveLength(0)
+  })
+
+  it("el baseline real de `pe` nombra los siete pares de rutas (13 archivos)", () => {
+    type EntradaBaseline = { recurso?: string; rutas?: string[]; motivo: string }
+    const pe = (EXCEPCIONES.R1 as EntradaBaseline[]).find(
+      (excepcion) => excepcion.recurso === "pe"
+    )
+    expect(pe?.rutas).toHaveLength(13)
+    const familias = [
+      "bitacora-visitas",
+      "cierres-turno",
+      "encomiendas",
+      "ingresos-contratistas",
+      "proveedores",
+      "proyecciones",
+      "visitas-tecnicas",
+    ]
+    for (const familia of familias)
+      expect(
+        pe?.rutas?.some((ruta) => ruta.startsWith(`app/api/pe/${familia}/`))
+      ).toBe(true)
+    // El motivo declara deuda con decisión del owner pendiente, no un aval.
+    expect(pe?.motivo).toContain("DEUDA CON DECISIÓN DEL OWNER PENDIENTE")
+    expect(pe?.motivo).toContain("pe:mantenciones")
+  })
+
+  it("el repo real queda en verde con el baseline (la deuda de `pe` está cubierta)", () => {
+    expect(hallazgosDe(RAIZ_APP, "R1")).toHaveLength(0)
   })
 })
 

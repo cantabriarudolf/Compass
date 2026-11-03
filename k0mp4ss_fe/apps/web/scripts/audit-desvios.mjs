@@ -19,7 +19,8 @@
  *   node scripts/audit-desvios.mjs --raiz X  # audita otra raíz (lo usa el test con fixtures)
  *
  * Reglas:
- *   R1  Recursos de permisos usados en el código y ausentes de la MATRIZ de lib/authz.ts.
+ *   R1  Recursos de permisos usados en el código y ausentes de la MATRIZ de lib/authz.ts, y
+ *       raíces desnudas que heredan un módulo cuando ese módulo ya se declara granulado.
  *   R2  Marcadores de postergación ("desvío", "por simplicidad", "solo admin hasta"…).
  *   R3  Tests apagados o aserciones complacientes sin justificación escrita.
  *   R4  Truncamientos silenciosos de listas (.slice(0, N) sin AvisoTruncamiento/LIMITE_SELECT).
@@ -151,14 +152,13 @@ export function extraerBloque(texto, marcador) {
 }
 
 /**
- * Claves de la MATRIZ: cada recurso declarado en algún rol, más la raíz de cada clave
- * granular (`in:apelar` declara también `in`). El wildcard `"*"` NO declara nada: es
- * justamente lo que hace invisible el defecto (solo el administrador lo obtiene).
+ * Claves crudas de la MATRIZ (tal como están escritas, en minúsculas). El wildcard `"*"`
+ * NO es una clave: no declara nada.
  */
-export function recursosDeclarados(textoAuthz) {
+export function clavesDeMatriz(textoAuthz) {
   const bloque = extraerBloque(textoAuthz, "const MATRIZ")
-  const declarados = new Set()
-  if (!bloque) return declarados
+  const claves = new Set()
+  if (!bloque) return claves
   let profundidad = 0
   let rolActual = null
   for (const linea of bloque.split("\n")) {
@@ -168,14 +168,61 @@ export function recursosDeclarados(textoAuthz) {
     }
     if (profundidad === 2 && rolActual) {
       const clave = linea.match(/^\s*"([^"]+)"\s*:\s*new Set/)
-      if (clave && clave[1] !== "*") {
-        declarados.add(clave[1].trim().toLowerCase())
-        declarados.add(clave[1].split(":")[0].trim().toLowerCase())
-      }
+      if (clave && clave[1] !== "*") claves.add(clave[1].trim().toLowerCase())
     }
     profundidad += contar(linea, "{") - contar(linea, "}")
   }
+  return claves
+}
+
+/**
+ * Claves de la MATRIZ: cada recurso declarado en algún rol, más la raíz de cada clave
+ * granular (`in:apelar` declara también `in`). El wildcard `"*"` NO declara nada: es
+ * justamente lo que hace invisible el defecto (solo el administrador lo obtiene).
+ */
+export function recursosDeclarados(textoAuthz) {
+  const declarados = new Set()
+  for (const clave of clavesDeMatriz(textoAuthz)) {
+    declarados.add(clave)
+    declarados.add(clave.split(":")[0].trim().toLowerCase())
+  }
   return declarados
+}
+
+/**
+ * Hermanos granulares de una raíz: claves de la MATRIZ con forma `raiz:sufijo`. Cuando
+ * existen, `raiz` es un permiso de MÓDULO y toda ruta que pida la raíz desnuda hereda el
+ * permiso completo por el fallback de prefijo de `puede()` (lib/authz.ts, «check base
+ * prefix»): el rol que tenga la raíz —aunque sea solo `pe` ver/crear/editar para sus
+ * propias tareas— entra también a la ruta granular de otro.
+ */
+export function hermanosGranulares(claves, raiz) {
+  return [...claves].filter((clave) => clave.startsWith(`${raiz}:`)).sort()
+}
+
+/**
+ * Las rutas que se auditan con la regla de raíz desnuda son los guards del servidor
+ * (`app/api/**`, incluidas sus `_acciones.ts`). En páginas y librerías el guard de UI se
+ * resuelve con otro contexto y no abre ni cierra una ruta de la API.
+ */
+function esGuardDeRutaApi(archivo) {
+  return archivo.startsWith("app/api/")
+}
+
+/**
+ * Sugerencia concreta para el mensaje: si la propia ruta nombra el sub-recurso
+ * (`app/api/pe/mantenciones/...`) y ese hermano granular existe en la MATRIZ, ese es el
+ * recurso que el autor tiene que pedir. Devuelve null si la ruta no tiene un granular propio.
+ */
+function sugerenciaGranular(archivo, recurso, hermanos) {
+  const segmento = archivo.split("/")[3]
+  if (!segmento || segmento.startsWith("[") || segmento.startsWith("_")) return null
+  const candidato = `${recurso}:${segmento}`
+  return (
+    hermanos.find(
+      (hermano) => hermano === candidato || hermano.startsWith(`${candidato}:`)
+    ) ?? null
+  )
 }
 
 function contar(linea, caracter) {
@@ -251,7 +298,9 @@ function valorLiteral(expresion, constantes) {
 function reglaR1(raiz, archivos, excepciones) {
   const rutaAuthz = join(raiz, "lib", "authz.ts")
   if (!existsSync(rutaAuthz)) return []
-  const declarados = recursosDeclarados(readFileSync(rutaAuthz, "utf8"))
+  const textoAuthz = readFileSync(rutaAuthz, "utf8")
+  const claves = clavesDeMatriz(textoAuthz)
+  const declarados = recursosDeclarados(textoAuthz)
   if (declarados.size === 0) {
     return [
       {
@@ -279,17 +328,48 @@ function reglaR1(raiz, archivos, excepciones) {
       if (!llamada) continue
       const recurso = valorLiteral(llamada.args[2], constantes)
       if (!recurso) continue
-      if (declarados.has(recurso) || declarados.has(recurso.split(":")[0]))
-        continue
+      const archivo = rutaRelativa(raiz, absoluta)
       const linea = texto.slice(0, m.index).split("\n").length
-      if (exceptuado("R1", excepciones, { recurso })) continue
+      const declarado =
+        declarados.has(recurso) || declarados.has(recurso.split(":")[0])
+      if (!declarado) {
+        if (exceptuado("R1", excepciones, { recurso, archivo })) continue
+        hallazgos.push({
+          regla: "R1",
+          archivo,
+          linea,
+          recurso,
+          detalle: `${m[1]}() pide el recurso "${recurso}", que no está declarado para ningún rol`,
+          accion:
+            "declarar el recurso en la MATRIZ con el mínimo privilegio decidido (o justificarlo en la allowlist del candado)",
+        })
+        continue
+      }
+      // R1 · raíz desnuda que hereda el módulo entero.
+      // No es un recurso inexistente: es un recurso de MÓDULO usado para una ruta que ya
+      // tiene hermanos granulares en la MATRIZ. `puede()` resuelve la raíz y el rol que la
+      // tenga (p. ej. mantención con `pe` ver/crear/editar para sus tareas) entra igual.
+      if (recurso.includes(":")) continue
+      if (!esGuardDeRutaApi(archivo)) continue
+      const hermanos = hermanosGranulares(claves, recurso)
+      if (hermanos.length === 0) continue
+      if (exceptuado("R1", excepciones, { recurso, archivo })) continue
+      const citados = hermanos
+        .slice(0, 3)
+        .map((c) => `"${c}"`)
+        .join(", ")
+      const resto =
+        hermanos.length > 3 ? ` (+${hermanos.length - 3} más)` : ""
+      const sugerido = sugerenciaGranular(archivo, recurso, hermanos)
       hallazgos.push({
         regla: "R1",
-        archivo: rutaRelativa(raiz, absoluta),
+        archivo,
         linea,
-        detalle: `${m[1]}() pide el recurso "${recurso}", que no está declarado para ningún rol`,
-        accion:
-          "declarar el recurso en la MATRIZ con el mínimo privilegio decidido (o justificarlo en la allowlist del candado)",
+        recurso,
+        detalle: `${m[1]}() usa la raíz desnuda "${recurso}" en una ruta de la API, y la MATRIZ ya declara granular ${citados}${resto}: todo rol con "${recurso}" hereda esta ruta por el fallback de prefijo`,
+        accion: sugerido
+          ? `pedir el recurso granular "${sugerido}" en lugar de la raíz "${recurso}"; si la ruta debe seguir usando la raíz, declarar la entrada explícita que corta el fallback de prefijo y justificarla en la allowlist del candado`
+          : `pedir el recurso granular que corresponde (los declarados para "${recurso}" son ${citados}${resto}) en lugar de la raíz desnuda; si la raíz es lo correcto para esta ruta, justificarlo en la allowlist del candado con el motivo`,
       })
     }
   }
@@ -547,7 +627,12 @@ function reglaR5(raiz, archivos, excepciones) {
 // ---------------------------------------------------------------------------
 
 /**
- * R1 · recursos que a propósito viven fuera de la MATRIZ.
+ * R1 · dos clases de entrada.
+ *   1. `recurso` sola: el recurso vive A PROPÓSITO fuera de la MATRIZ (capacidad de plataforma).
+ *   2. `recurso` + `rutas`: baseline de raíz desnuda. La lista nombra cada ruta y el motivo
+ *      declara el estado medido: NO es un aval del guard, es el registro de la deuda para que
+ *      la lista no crezca. Toda ruta nueva que use una raíz desnuda necesita su propia clave.
+ *
  * Un recurso fuera de la matriz solo lo obtiene el administrador por el wildcard; eso es
  * correcto únicamente cuando la capacidad es de plataforma (no de rol de comunidad) y está
  * defendida en la propia ruta.
@@ -578,7 +663,156 @@ const EXCEPCIONES_R1 = [
     motivo:
       "recurso semántico del ABAC, no de RBAC: lo evalúa puedeContextual con el control de privacidad alertasResidentesActivas y hoy ninguna ruta lo pide (el chequeo local vive en lib/store.ts:1327). Declararlo en la MATRIZ abriría un permiso que ningún rol debe tener.",
   },
+  // --- Baseline de raíz desnuda (medido el 2026-11-03). NO es un aval: es una foto del
+  // estado para que la lista no crezca. Cada entrada nombra sus rutas y su motivo dice por
+  // qué la raíz es hoy la granularidad vigente de esa ruta. Ninguna de estas entradas
+  // autoriza a agregar una ruta nueva: si aparece una, el candado la reporta.
+  {
+    recurso: "pe",
+    rutas: [
+      "app/api/pe/bitacora-visitas/[id]/route.ts",
+      "app/api/pe/bitacora-visitas/route.ts",
+      "app/api/pe/cierres-turno/route.ts",
+      "app/api/pe/encomiendas/[id]/route.ts",
+      "app/api/pe/encomiendas/route.ts",
+      "app/api/pe/ingresos-contratistas/[id]/route.ts",
+      "app/api/pe/ingresos-contratistas/route.ts",
+      "app/api/pe/proveedores/[id]/route.ts",
+      "app/api/pe/proveedores/route.ts",
+      "app/api/pe/proyecciones/[id]/route.ts",
+      "app/api/pe/proyecciones/route.ts",
+      "app/api/pe/visitas-tecnicas/[id]/route.ts",
+      "app/api/pe/visitas-tecnicas/route.ts",
+    ],
+    motivo:
+      "DEUDA CON DECISIÓN DEL OWNER PENDIENTE, no un aval: siete pares de rutas de Personal cuelgan todavía de la raíz desnuda `pe` — bitacora-visitas, cierres-turno (solo la colección), encomiendas, ingresos-contratistas, proveedores, proyecciones y visitas-tecnicas (13 archivos: colección + [id]). Todo rol que tenga `pe` (conserjería ver/crear/editar para su operación; mantención ver/crear/editar para sus tareas) entra a estas rutas por el fallback de prefijo de `puede()` (lib/authz.ts:288-292): es el mismo defecto que dejó /api/pe/mantenciones aceptando el PUT de conserjería, ya cortado con la entrada explícita `pe:mantenciones`. Cada par necesita su decisión de permiso por ruta del owner antes de cambiar el guard; hasta entonces la deuda queda escrita acá y ninguna ruta nueva puede sumarse a esta lista.",
+  },
+  ...baselineRaiz(
+    "mp",
+    [
+      "app/api/importar/estructura/plantilla/route.ts",
+      "app/api/importar/estructura/route.ts",
+      "app/api/importar/personas/plantilla/route.ts",
+      "app/api/importar/personas/route.ts",
+      "app/api/importar/vinculos/plantilla/route.ts",
+      "app/api/importar/vinculos/route.ts",
+      "app/api/macro-sectores/route.ts",
+      "app/api/maestros/[tipo]/ocultar/route.ts",
+      "app/api/maestros/[tipo]/route.ts",
+      "app/api/micro-sectores/[id]/route.ts",
+      "app/api/micro-sectores/route.ts",
+      "app/api/pe/maestros/[tipo]/route.ts",
+      "app/api/personas/[id]/route.ts",
+      "app/api/personas/route.ts",
+      "app/api/tipos-unidad/route.ts",
+      "app/api/unidades/[id]/route.ts",
+      "app/api/unidades/route.ts",
+      "app/api/vinculos/[id]/route.ts",
+      "app/api/vinculos/route.ts",
+    ],
+    "personas, unidades, vínculos, maestros, macro/micro sectores, tipos de unidad e importaciones: la raíz `mp` es el permiso del módulo completo"
+  ),
+  ...baselineRaiz(
+    "fi",
+    [
+      "app/api/cobros-fi/[id]/mora/route.ts",
+      "app/api/cobros-fi/[id]/pagar/route.ts",
+      "app/api/cobros-fi/[id]/route.ts",
+      "app/api/cobros-fi/route.ts",
+      "app/api/egresos-fi/[id]/route.ts",
+      "app/api/egresos-fi/route.ts",
+      "app/api/emisiones-gc/[id]/route.ts",
+      "app/api/emisiones-gc/route.ts",
+      "app/api/fi/route.ts",
+      "app/api/fi/sync/route.ts",
+      "app/api/fondos-fi/[id]/retirar/route.ts",
+      "app/api/fondos-fi/[id]/route.ts",
+      "app/api/fondos-fi/route.ts",
+      "app/api/ingresos-fi/[id]/route.ts",
+      "app/api/ingresos-fi/route.ts",
+    ],
+    "módulos financieros (fi, cobros, ingresos, egresos, fondos, emisiones GC, sync): la raíz `fi` es el permiso del módulo completo; los granulares fi:balance, fi:gasto_comun y fi:cobranza tienen su propio guard donde aplica"
+  ),
+  ...baselineRaiz(
+    "co",
+    [
+      "app/api/co/documentos/[id]/route.ts",
+      "app/api/co/documentos/route.ts",
+      "app/api/co/envios/[id]/leer/route.ts",
+      "app/api/co/envios/[id]/route.ts",
+      "app/api/co/envios/route.ts",
+      "app/api/co/plantillas/[id]/route.ts",
+      "app/api/co/plantillas/route.ts",
+    ],
+    "comunicación con vecinos (documentos, envíos, plantillas): la raíz `co` es el permiso del módulo completo; co:buzon y co:lecturas tienen su propio guard"
+  ),
+  ...baselineRaiz(
+    "mt",
+    [
+      "app/api/mt/_acciones.ts",
+      "app/api/mt/proyectos/[id]/route.ts",
+      "app/api/mt/proyectos/route.ts",
+      "app/api/mt/trabajos/[id]/route.ts",
+      "app/api/mt/trabajos/route.ts",
+    ],
+    "mantención de tareas y proyectos: la raíz `mt` es el permiso del módulo completo; mt:tarea y mt:incidente tienen su propio guard"
+  ),
+  ...baselineRaiz(
+    "in",
+    [
+      "app/api/in/infracciones/[id]/route.ts",
+      "app/api/in/infracciones/_acciones.ts",
+      "app/api/in/infracciones/route.ts",
+      "app/api/in/tipos/[id]/route.ts",
+      "app/api/in/tipos/route.ts",
+    ],
+    "expediente de infracciones y tipos: la raíz `in` es el permiso del módulo completo; in:apelar (descargo propio del residente) tiene su propio guard"
+  ),
+  ...baselineRaiz(
+    "notificaciones",
+    [
+      "app/api/notificaciones/[id]/route.ts",
+      "app/api/notificaciones/route.ts",
+    ],
+    "bandeja de notificaciones y su detalle: la raíz `notificaciones` es el permiso del módulo completo; notificaciones:propias (marcar leída) es acto del destinatario y tiene su propio guard"
+  ),
+  ...baselineRaiz(
+    "pl",
+    [
+      "app/api/liquidaciones/[id]/confirmar/route.ts",
+      "app/api/liquidaciones/route.ts",
+    ],
+    "liquidaciones de personal: la raíz `pl` es el permiso del módulo completo; pl:propia y pl:adelantos tienen su propio guard"
+  ),
+  ...baselineRaiz(
+    "ct",
+    [
+      "app/api/certificados-ct/[id]/route.ts",
+      "app/api/certificados-ct/route.ts",
+    ],
+    "certificados CT: la raíz `ct` es el permiso del módulo completo; ct:propia, ct:propio, ct:residencia, ct:al_dia y ct:historial son alcances por unidad/persona con guard propio"
+  ),
+  ...baselineRaiz(
+    "re",
+    ["app/api/reportes-re/route.ts"],
+    "reporte RE: la raíz `re` es el permiso del módulo completo; re:centro_mando y re:reporte_diario tienen su propio guard"
+  ),
 ]
+
+/**
+ * Entrada de baseline para una raíz desnuda. El candado NO avala estos guards: registra el
+ * estado medido el 2026-11-03 para que la lista no crezca. Si una ruta nueva usa una raíz
+ * desnuda, no está acá y el candado la reporta.
+ */
+function baselineRaiz(raiz, rutas, detalle) {
+  return [
+    {
+      recurso: raiz,
+      rutas,
+      motivo: `Estado actual al 2026-11-03 (foto del estado, NO un aval): ${detalle}. La raíz desnuda es hoy la granularidad vigente de esas rutas y esta entrada existe solo para que la lista no crezca; no autoriza a sumar rutas nuevas, que deben declarar su propia clave granular (o su propia entrada con motivo).`,
+    },
+  ]
+}
 
 /**
  * R2 · menciones del marcador que NO describen un pendiente.
@@ -636,7 +870,11 @@ const EXCEPCIONES_R5 = [
   },
 ]
 
-const EXCEPCIONES = {
+/**
+ * Allowlist real del candado. Exportada para que el test pueda citar cada motivo y verificar
+ * que el baseline de raíz desnuda nombra exactamente las rutas medidas.
+ */
+export const EXCEPCIONES = {
   R1: EXCEPCIONES_R1,
   R2: EXCEPCIONES_R2,
   R3: EXCEPCIONES_R3,
@@ -649,6 +887,13 @@ function buscarExcepcion(regla, excepciones, hallazgo) {
   const lista = excepciones[regla] ?? []
   return (
     lista.find((excepcion) => {
+      // `archivo` puede venir sola (R2-R5) o acompañando a `recurso` (R1 de raíz desnuda,
+      // donde el mismo recurso se permite en una ruta y se prohíbe en otra).
+      if (excepcion.archivo !== undefined && excepcion.archivo !== hallazgo.archivo)
+        return false
+      // `rutas` es la lista de rutas del baseline: la excepción cubre solo esas rutas.
+      if (excepcion.rutas !== undefined && !excepcion.rutas.includes(hallazgo.archivo))
+        return false
       if (excepcion.recurso !== undefined)
         return excepcion.recurso === hallazgo.recurso
       if (excepcion.archivo !== hallazgo.archivo) return false
@@ -668,7 +913,7 @@ function exceptuado(regla, excepciones, hallazgo) {
 // ---------------------------------------------------------------------------
 
 const TITULOS = {
-  R1: "R1 · Recursos de permisos no declarados en la MATRIZ",
+  R1: "R1 · Recursos de permisos no declarados en la MATRIZ / raíz desnuda con hermanos granulares",
   R2: "R2 · Marcadores de postergación",
   R3: "R3 · Tests apagados sin justificación",
   R4: "R4 · Truncamientos silenciosos de listas",
@@ -682,8 +927,9 @@ function archivosDe(raiz, directorios) {
 }
 
 /**
- * Una excepción de la allowlist: `recurso` (R1) o `archivo` + `fragmento` (R2-R5), con su motivo.
- * @typedef {{ recurso?: string, archivo?: string, fragmento?: string, motivo: string }} Excepcion
+ * Una excepción de la allowlist: `recurso` (R1, sola) o `recurso` + `rutas` (R1 de raíz
+ * desnuda, con su lista de rutas) o `archivo` + `fragmento` (R2-R5), siempre con su motivo.
+ * @typedef {{ recurso?: string, rutas?: string[], archivo?: string, fragmento?: string, motivo: string }} Excepcion
  */
 /**
  * Allowlist inyectable por regla (el test la usa para probar el mecanismo sin tocar el repo).
@@ -730,7 +976,13 @@ function formatear(hallazgos) {
     // La allowlist se muestra siempre: nada queda silenciado sin decirlo.
     const excepciones = EXCEPCIONES[regla] ?? []
     if (excepciones.length > 0) {
-      const etiquetas = excepciones.map((e) => e.recurso ?? e.archivo)
+      const etiquetas = excepciones.map((e) =>
+        e.recurso && e.rutas
+          ? `${e.recurso} (${e.rutas.length} ruta(s) de baseline)`
+          : e.recurso && e.archivo
+            ? `${e.archivo} → ${e.recurso}`
+            : (e.recurso ?? e.archivo)
+      )
       lineas.push(
         `  allowlist (${excepciones.length}): ${etiquetas.join(" · ")}`
       )

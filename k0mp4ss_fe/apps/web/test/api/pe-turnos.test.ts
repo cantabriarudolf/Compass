@@ -159,9 +159,11 @@ describe("GET /api/pe/turnos — inicios de turno de hoy scoped", () => {
     })
   })
 
-  it("comité lee la vista por el fallback de prefijo `pe` ver → 200", async () => {
-    // El comité no tiene entrada propia para `pe:cierre_turno`; `puede()` cae a
-    // la base `pe`, donde sí tiene `ver`. Se fija el comportamiento real.
+  it("comité lee la vista por su entrada explícita `pe:cierre_turno` ver → 200", async () => {
+    // El comité tiene `"pe:cierre_turno": ["ver"]` declarado en la MATRIZ (lib/authz.ts:63):
+    // el 200 sale de esa entrada granular, no del fallback de prefijo `pe`. La distinción
+    // importa: si la entrada se quitara, el fallback le daría igual `pe` ver, pero el
+    // permiso pasaría a ser heredado del módulo y no decidido para turnos.
     await conSesion(emailComite, async () => {
       const res = await turnos()
       expect(res.status).toBe(200)
