@@ -47,6 +47,7 @@ import Link from "next/link"
 import { Persona } from "@/data/comunidad/personas"
 import { FormularioPersona } from "@/components/comunidad/formulario-persona"
 import { RolesDonut } from "@/components/comunidad/roles-donut"
+import { VerMas } from "@/components/ver-mas"
 
 const ROLES_TAB_CONFIG: { id: string; label: string; icon: React.ReactNode }[] =
   [
@@ -78,7 +79,20 @@ const ROLES_TAB_CONFIG: { id: string; label: string; icon: React.ReactNode }[] =
     },
   ]
 
-const ESTADOS_CUENTA = ["activos", "inactivos", "bloqueados"] as const
+/** Espera del buscador antes de consultar al servidor (una tecla, una request). */
+const DEBOUNCE_BUSQUEDA_MS = 300
+
+/**
+ * Estados de cuenta REALES de `Persona.estadoCuenta` (MP). Antes la pantalla usaba
+ * los plurales `activos|inactivos|bloqueados` y comparaba contra `persona.estadoCuenta`
+ * (`activa|inactiva|bloqueada`), así que el filtro y sus contadores nunca coincidían con
+ * nadie. Ahora el estado viaja al servidor con el valor persistido.
+ */
+const ESTADOS_CUENTA = [
+  { id: "activa", label: "ACTIVOS" },
+  { id: "inactiva", label: "INACTIVOS" },
+  { id: "bloqueada", label: "BLOQUEADOS" },
+] as const
 
 const getRoleBadgeVariant = (rol: string) => {
   switch (rol) {
@@ -114,8 +128,14 @@ const getRoleBadgeClass = (rol: string) => {
 
 export default function DirectorioPersonasPage() {
   const [searchTerm, setSearchTerm] = React.useState("")
-  const { personas: listaPersonas, isLoading, error, create, update } =
-usePersonas(searchTerm)
+  const [busqueda, setBusqueda] = React.useState("")
+
+  // La búsqueda va al servidor con debounce: antes se filtraba en el navegador una
+  // página de 100 y quien quedaba afuera no aparecía por más que se escribiera su nombre.
+  React.useEffect(() => {
+    const temporizador = setTimeout(() => setBusqueda(searchTerm), DEBOUNCE_BUSQUEDA_MS)
+    return () => clearTimeout(temporizador)
+  }, [searchTerm])
 
   const [isModalOpen, setIsModalOpen] = React.useState(false)
   const [editingPersona, setEditingPersona] = React.useState<Persona | null>(
@@ -133,56 +153,62 @@ usePersonas(searchTerm)
     undefined
   )
 
+  /** Rol activo del eje de pestañas/donut (uno solo a la vez). */
+  const rolActivo =
+    donutRole || (selectedRole !== "todos" ? selectedRole : undefined)
+
+  // Lista de la tabla: el rol y el estado de cuenta los resuelve el SERVIDOR, así que
+  // el filtro alcanza a todo el padrón y `total` es el total del filtro, no la página.
+  const {
+    personas: personasFiltradas,
+    total,
+    isLoading,
+    error,
+    create,
+    update,
+    cargarMas,
+    cargandoMas,
+  } = usePersonas(busqueda, {
+    ...(rolActivo ? { roles: [rolActivo] } : {}),
+    ...(selectedEstado !== "todos" ? { estadoCuenta: [selectedEstado] } : {}),
+  })
+
+  // Contadores por rol/estado y distribución del donut: la colección COMPLETA del scope.
+  // `todasLasPaginas` usa la misma paginación de `cargarMas` (patrón de `useUnidades`),
+  // porque un conteo sobre la primera página miente.
+  const {
+    personas: personasCompletas,
+    total: totalCompleto,
+    isLoading: cargandoCompleto,
+  } = usePersonas(undefined, { todasLasPaginas: true })
+
   // Contadores por rol
   const countByRole = React.useMemo(() => {
-    const counts: Record<string, number> = { todos: listaPersonas.length }
-    for (const p of listaPersonas) {
+    const counts: Record<string, number> = { todos: totalCompleto }
+    for (const p of personasCompletas) {
       for (const r of p.roles) {
         counts[r] = (counts[r] || 0) + 1
       }
     }
     return counts
-  }, [listaPersonas])
+  }, [personasCompletas, totalCompleto])
 
   // Contadores por estado
   const countByEstado = React.useMemo(() => {
-    const counts: Record<string, number> = { todos: listaPersonas.length }
-    for (const p of listaPersonas) {
+    const counts: Record<string, number> = { todos: totalCompleto }
+    for (const p of personasCompletas) {
       counts[p.estadoCuenta] = (counts[p.estadoCuenta] || 0) + 1
     }
     return counts
-  }, [listaPersonas])
+  }, [personasCompletas, totalCompleto])
 
-  // Filtrado multi-escala
-  const personasFiltradas = React.useMemo(() => {
-    let result = listaPersonas
-
-    // Filtro por rol (tab o donut)
-    const activeRoleFilter =
-      donutRole || (selectedRole !== "todos" ? selectedRole : undefined)
-    if (activeRoleFilter) {
-      result = result.filter((p) =>
-        p.roles.map((r) => String(r)).includes(String(activeRoleFilter))
-      )
-    }
-
-    // Filtro por estado (sidebar)
-    if (selectedEstado !== "todos") {
-      result = result.filter((p) => p.estadoCuenta === selectedEstado)
-    }
-
-    // Búsqueda por nombre o RUT
-    if (searchTerm.trim()) {
-      const q = searchTerm.toLowerCase()
-      result = result.filter(
-        (p) =>
-          p.nombreCompleto.toLowerCase().includes(q) ||
-          p.rut.includes(searchTerm)
-      )
-    }
-
-    return result
-  }, [listaPersonas, selectedRole, selectedEstado, searchTerm, donutRole])
+  /**
+   * El padrón completo está vacío (nadie creado todavía): ahí sí corresponde el estado
+   * vacío «Faltan personas registradas». Con un filtro sin coincidencias, en cambio, se
+   * muestra la tabla con «Sin resultados» y «Limpiar Filtros». El `isLoading` evita que el
+   * cartel de padrón vacío parpadee mientras la colección completa está en vuelo.
+   */
+  const sistemaVacio = !cargandoCompleto && totalCompleto === 0
 
   const scopeLabel =
     selectedRole === "todos"
@@ -290,7 +316,9 @@ usePersonas(searchTerm)
           </DialogHeader>
           <FormularioPersona
             persona={editingPersona ?? undefined}
-            personas={listaPersonas}
+            // El formulario ofrece la colección completa del scope, no la página ni el
+            // filtro activo: si no, con un filtro puesto no se podría asignar a nadie más.
+            personas={personasCompletas}
             onSave={handleSave}
             onCancel={() => {
               setIsModalOpen(false)
@@ -301,7 +329,7 @@ usePersonas(searchTerm)
       </Dialog>
 
       {/* TABS SCROLLABLES POR ROL */}
-      {listaPersonas.length > 0 && (
+      {!sistemaVacio && (
         <div className="flex w-full flex-col gap-2">
           <ScrollArea className="mb-2 w-full rounded-md border bg-muted/50 p-1 whitespace-nowrap">
             <div
@@ -338,7 +366,7 @@ usePersonas(searchTerm)
           {/* DONUT CHART */}
           <div className="pt-2">
             <RolesDonut
-              roles={listaPersonas.flatMap((p) => p.roles)}
+              roles={personasCompletas.flatMap((p) => p.roles)}
               scopeLabel={scopeLabel}
               selectedId={donutRole}
               onSelect={handleDonutSelect}
@@ -372,17 +400,17 @@ usePersonas(searchTerm)
                   </button>
                   {ESTADOS_CUENTA.map((estado) => (
                     <button
-                      key={estado}
-                      onClick={() => setSelectedEstado(estado)}
+                      key={estado.id}
+                      onClick={() => setSelectedEstado(estado.id)}
                       className={`flex items-center justify-between px-4 py-3 text-xs transition-colors hover:bg-muted ${
-                        selectedEstado === estado
+                        selectedEstado === estado.id
                           ? "border-l-4 border-primary bg-muted font-medium"
                           : "border-l-4 border-transparent opacity-70"
                       }`}
                     >
-                      {estado.toUpperCase()}
+                      {estado.label}
                       <span className="text-[9px] font-bold text-foreground tabular-nums">
-                        {countByEstado[estado] || 0}
+                        {countByEstado[estado.id] || 0}
                       </span>
                     </button>
                   ))}
@@ -396,7 +424,7 @@ usePersonas(searchTerm)
                 <div>
                   <CardTitle>Personas</CardTitle>
                   <CardDescription>
-                    {personasFiltradas.length} personas en este filtro.
+                    {total} personas en este filtro.
                   </CardDescription>
                 </div>
                 <div className="relative w-64">
@@ -426,13 +454,13 @@ usePersonas(searchTerm)
                   </Button>
                   {ESTADOS_CUENTA.map((estado) => (
                     <Button
-                      key={estado}
-                      variant={selectedEstado === estado ? "default" : "ghost"}
+                      key={estado.id}
+                      variant={selectedEstado === estado.id ? "default" : "ghost"}
                       size="sm"
-                      className={`h-6 px-2 text-[9px] font-bold ${selectedEstado === estado ? "" : "text-muted-foreground hover:text-foreground"}`}
-                      onClick={() => setSelectedEstado(estado)}
+                      className={`h-6 px-2 text-[9px] font-bold ${selectedEstado === estado.id ? "" : "text-muted-foreground hover:text-foreground"}`}
+                      onClick={() => setSelectedEstado(estado.id)}
                     >
-                      {estado.toUpperCase()}
+                      {estado.label}
                     </Button>
                   ))}
                 </div>
@@ -567,6 +595,15 @@ usePersonas(searchTerm)
                     )}
                   </TableBody>
                 </Table>
+
+                {/* Paginación real: el filtro lo resuelve el servidor y el resto de las filas
+                    del filtro se piden acá, en vez de quedar fuera de la primera página. */}
+                <VerMas
+                  mostrados={personasFiltradas.length}
+                  total={total}
+                  cargando={cargandoMas}
+                  onCargarMas={cargarMas}
+                />
               </CardContent>
             </Card>
           </div>
@@ -574,7 +611,7 @@ usePersonas(searchTerm)
       )}
 
       {/* EMPTY STATE: Sin personas creadas */}
-      {listaPersonas.length === 0 && (
+      {sistemaVacio && (
         <Card className="border-dashed p-8 text-center">
           <CardHeader>
             <CardTitle className="text-lg">

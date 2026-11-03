@@ -14,6 +14,13 @@
  * arrendatario) la resuelva el servidor sobre TODOS los vínculos. La búsqueda
  * del directorio va al servidor por el mismo motivo: filtrar en el navegador
  * una página de 100 no encuentra a quien quedó fuera de esa página.
+ *
+ * Directorios de personas (`/comunidad/personas`, `/admin/gestion`): el rol y el
+ * estado de cuenta también viajan al servidor — `?rol=`, `?rolDirectorio=` y
+ * `?estadoCuenta=`—, por el mismo motivo. Con `todasLasPaginas` el hook completa
+ * la colección con la paginación de `cargarMas` para las vistas que CUENTAN
+ * filas (contadores por rol/estado y distribución del donut), porque un conteo
+ * sobre la primera página miente.
  */
 import * as React from "react"
 import useSWR, { mutate as mutateGlobal } from "swr"
@@ -160,21 +167,73 @@ export interface UsePersonasOpciones {
    * (evita el salto de layout al escribir en el buscador).
    */
   mantenerFilasPrevias?: boolean
+  /**
+   * Filtra en el servidor por los roles PROPIOS de la persona (`?rol=a,b`), OR
+   * entre los pedidos — el eje de `/comunidad/personas`.
+   */
+  roles?: readonly string[]
+  /**
+   * Filtra en el servidor por los roles DERIVADOS del Directorio de Gestión
+   * Administrativa (`?rolDirectorio=a,b`): propietario (rol o vínculo),
+   * residente (arrendatario vigente o rol residente sin propietario), directiva
+   * (ficha de gobernanza) y personal (ficha laboral).
+   */
+  rolesDirectorio?: readonly string[]
+  /**
+   * Filtra en el servidor por el estado de cuenta exacto (`?estadoCuenta=a,b`):
+   * `activa`, `inactiva` o `bloqueada`.
+   */
+  estadoCuenta?: readonly string[]
+  /**
+   * Completa la colección pidiendo las páginas siguientes hasta agotar el `total`
+   * del servidor. Es para las vistas que CUENTAN filas (contadores por rol y por
+   * estado, donut de distribución): un conteo sobre la primera página miente.
+   * Usa la misma paginación de `cargarMas`, con un tope de seguridad. Mismo
+   * contrato que `useUnidades({ todasLasPaginas: true })`.
+   */
+  todasLasPaginas?: boolean
 }
 
-/** Lista paginada de personas, filtrable por ?q= (nombreCompleto | rut | email). */
+/** Tope de páginas que `todasLasPaginas` pide solo: corta el bucle si el servidor
+ * devolviera páginas vacías con `total` todavía mayor. */
+const MAXIMO_PAGINAS_AUTO = 50
+
+/**
+ * Sufijo de query de los filtros nuevos, en orden fijo. Sin filtros devuelve "",
+ * así la URL de los consumidores que no los piden queda byte a byte igual.
+ */
+function sufijoDeFiltros(opciones: UsePersonasOpciones): string {
+  const partes: string[] = []
+  const agregar = (nombre: string, valores?: readonly string[]): void => {
+    const limpios = (valores ?? []).map((valor) => valor.trim()).filter(Boolean)
+    if (limpios.length > 0) partes.push(`&${nombre}=${encodeURIComponent(limpios.join(","))}`)
+  }
+  agregar("rol", opciones.roles)
+  agregar("rolDirectorio", opciones.rolesDirectorio)
+  agregar("estadoCuenta", opciones.estadoCuenta)
+  return partes.join("")
+}
+
+/**
+ * Lista paginada de personas, filtrable por ?q= (nombreCompleto | rut | email).
+ *
+ * Las opciones nuevas son aditivas: sin ellas la petición es la misma de siempre
+ * (`?pageSize=100`, o `?q=…&pageSize=100`), así que todos los consumidores que ya
+ * existían siguen pidiendo exactamente lo mismo.
+ */
 export function usePersonas(
   q?: string,
   opciones: UsePersonasOpciones = {}
 ): UsePersonasResultado {
-  const { soloResidentes = false, mantenerFilasPrevias = false } = opciones
+  const { soloResidentes = false, mantenerFilasPrevias = false, todasLasPaginas = false } =
+    opciones
   const termino = q?.trim() ?? ""
   // Se arma a mano (y no con URLSearchParams) para que la clave SWR de los
   // consumidores que no usan opciones nuevas sea byte a byte la de antes.
   const base = termino
     ? `${LISTA}?q=${encodeURIComponent(termino)}&pageSize=100`
     : `${LISTA}?pageSize=100`
-  const url = soloResidentes ? `${base}&esResidente=1` : base
+  const url = `${base}${soloResidentes ? "&esResidente=1" : ""}${sufijoDeFiltros(opciones)}`
   const { data, error, isLoading, isValidating, mutate } = useSWR<ColeccionPersonas, Error>(
     url,
     fetcher,
@@ -214,7 +273,9 @@ export function usePersonas(
   const urlDePagina = (page: number): string =>
     `${url}${url.includes("?") ? "&" : "?"}page=${page}`
 
-  const cargarMas = async (): Promise<void> => {
+  // Memoizado: la auto-paginación de `todasLasPaginas` lo usa como dependencia de un
+  // efecto, y una identidad nueva por render volvería a disparar ese efecto siempre.
+  const cargarMas = React.useCallback(async (): Promise<void> => {
     if (cargandoMas || !hasMore) return
     const siguiente = (data?.page ?? 1) + paginasExtra.length + 1
     setCargandoMas(true)
@@ -232,7 +293,31 @@ export function usePersonas(
     } finally {
       setCargandoMas(false)
     }
-  }
+    // `urlDePagina` se arma con `url`, que ya está en las dependencias.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cargandoMas, hasMore, data?.page, paginasExtra.length, url])
+
+  // Auto-paginación (`todasLasPaginas`): un pedido por tamaño de colección, así
+  // una página vacía no deja el bucle girando (el contador de filas no cambia y
+  // no se vuelve a pedir) y el tope acota el resto. Mismo patrón que `useUnidades`.
+  const ultimoPedidoRef = React.useRef(-1)
+  const paginasAutoRef = React.useRef(0)
+
+  React.useEffect(() => {
+    paginasAutoRef.current = 0
+    ultimoPedidoRef.current = -1
+  }, [url])
+
+  React.useEffect(() => {
+    if (!todasLasPaginas) return
+    if (isLoading || cargandoMas) return
+    if (!hasMore) return
+    if (paginasAutoRef.current >= MAXIMO_PAGINAS_AUTO) return
+    if (ultimoPedidoRef.current === personas.length) return
+    ultimoPedidoRef.current = personas.length
+    paginasAutoRef.current += 1
+    void cargarMas()
+  }, [todasLasPaginas, isLoading, cargandoMas, hasMore, personas.length, cargarMas])
 
   const create = async (persona: Partial<Persona>): Promise<StoreResult> => {
     const resultado = await enviar(LISTA, "POST", persona)

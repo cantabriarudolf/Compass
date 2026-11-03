@@ -15,8 +15,14 @@
  *   vigente (`fechaFin` null) como propietario o arrendatario, y agrega al envelope
  *   `vinculosVigentes` con esos vínculos de las personas de la página. La regla vive
  *   acá porque el padrón se pagina: filtrar una página en el cliente esconde gente.
+ * - Filtros aditivos de los directorios (opcionales, sin parámetros nuevos no cambia nada):
+ *   `?rol=` (roles propios de `Persona.roles`), `?rolDirectorio=` (roles derivados del
+ *   Directorio de Gestión Administrativa: propietario/residente/directiva/personal) y
+ *   `?estadoCuenta=` (`activa|inactiva|bloqueada`). Se intersectan entre sí, con `q`/`rut`/
+ *   `esResidente` y con el ABAC: siempre suman condiciones a `where.AND`, nunca reemplazan el
+ *   `where` de permisos.
  */
-import { PersonaSchema } from "@/lib/schemas"
+import { PersonaSchema, ROLES_PERSONA } from "@/lib/schemas"
 import { puede } from "@/lib/authz"
 import { prisma } from "@/lib/prisma"
 import { logger } from "@/lib/logger"
@@ -305,6 +311,117 @@ function denegar(rol: string, accion: "ver" | "crear" | "editar" | "eliminar"): 
 /** Roles de vínculo que hacen «residente» a una persona (regla del directorio). */
 const ROLES_RESIDENTE = ["propietario", "arrendatario"] as const
 
+/** Estados de cuenta que persiste `Persona.estadoCuenta` (MP). */
+const ESTADOS_CUENTA = ["activa", "inactiva", "bloqueada"] as const
+
+/** Roles derivados del Directorio de Gestión Administrativa (`?rolDirectorio=`). */
+const ROLES_DIRECTORIO = ["propietario", "residente", "directiva", "personal"] as const
+
+/**
+ * Valores de un query param en CSV (`?rol=propietario,residente`): recortados, sin
+ * vacíos y sin repetidos. Ausente o vacío → lista vacía, que significa «no filtrar»:
+ * así los parámetros son aditivos y ningún caller de antes cambia de resultado.
+ */
+function valoresCsv(valor: string | null): string[] {
+  if (!valor) return []
+  return [...new Set(valor.split(",").map((v) => v.trim()).filter(Boolean))]
+}
+
+/**
+ * Ids de las personas que tienen al menos uno de los `roles` pedidos en `Persona.roles`
+ * (`?rol=`).
+ *
+ * El conjunto se resuelve con una proyección mínima de la comunidad y se intersecta con
+ * `where.AND` (mismo patrón que `vinculosDeResidentes`): la regla se resuelve sobre la
+ * colección completa, nunca sobre una página. Prisma no filtra arrays Json en SQLite
+ * (`array_contains` es exclusivo de PostgreSQL y la ruta corre sobre las dos bases), así
+ * que la pertenencia se evalúa en el servidor, no en el cliente.
+ */
+async function idsPorRol(comunidadId: string, roles: readonly string[]): Promise<string[]> {
+  const filas = await prisma.persona.findMany({
+    where: { comunidadId },
+    select: { id: true, roles: true },
+  })
+  return filas
+    .filter((fila) => {
+      const propios = Array.isArray(fila.roles) ? (fila.roles as string[]) : []
+      return propios.some((rol) => roles.includes(rol))
+    })
+    .map((fila) => fila.id)
+}
+
+/** Fila mínima para evaluar los roles derivados del directorio administrativo. */
+type FilaRolesDirectorio = {
+  id: string
+  roles: unknown
+  datosGobernanza: unknown
+  datosLaborales: unknown
+}
+
+/**
+ * Ids de las personas que cumplen al menos uno de los roles DERIVADOS del Directorio de
+ * Gestión Administrativa (`?rolDirectorio=`).
+ *
+ * Es espejo exacto de `rolesDe` de `app/admin/gestion/page.tsx` (y de
+ * `api-personas-falsa.ts` en los tests):
+ * - propietario: rol propio, o cualquier vínculo de rol propietario (vigente o cerrado);
+ * - residente: arrendatario con vínculo vigente, o rol residente sin rol propietario;
+ * - directiva: ficha de gobernanza presente;
+ * - personal: ficha laboral presente.
+ *
+ * El filtro vive en el servidor por el mismo motivo que `esResidente`: la pantalla pagina,
+ * y filtrar una página esconde gente. Igual que `idsPorRol`, solo aporta un conjunto de ids
+ * que se intersecta en `where.AND`; nunca reemplaza el alcance de permisos.
+ */
+async function idsPorRolDirectorio(
+  comunidadId: string,
+  roles: readonly string[]
+): Promise<string[]> {
+  const [filas, vinculos] = await Promise.all([
+    prisma.persona.findMany({
+      where: { comunidadId },
+      select: { id: true, roles: true, datosGobernanza: true, datosLaborales: true },
+    }),
+    prisma.vinculoUnidad.findMany({
+      where: { comunidadId },
+      select: { personaId: true, rol: true, fechaFin: true },
+    }),
+  ])
+
+  const propietarioPorVinculo = new Set(
+    vinculos.filter((v) => v.rol === "propietario").map((v) => v.personaId)
+  )
+  const arrendatarioVigente = new Set(
+    vinculos
+      .filter((v) => v.rol === "arrendatario" && v.fechaFin === null)
+      .map((v) => v.personaId)
+  )
+
+  const derivadosDe = (fila: FilaRolesDirectorio): Set<string> => {
+    const propios = Array.isArray(fila.roles) ? (fila.roles as string[]) : []
+    const derivados = new Set<string>()
+    if (propios.includes("propietario") || propietarioPorVinculo.has(fila.id)) {
+      derivados.add("propietario")
+    }
+    if (
+      arrendatarioVigente.has(fila.id) ||
+      (propios.includes("residente") && !propios.includes("propietario"))
+    ) {
+      derivados.add("residente")
+    }
+    if (fila.datosGobernanza != null) derivados.add("directiva")
+    if (fila.datosLaborales != null) derivados.add("personal")
+    return derivados
+  }
+
+  return filas
+    .filter((fila) => {
+      const derivados = derivadosDe(fila)
+      return roles.some((rol) => derivados.has(rol))
+    })
+    .map((fila) => fila.id)
+}
+
 /** Vínculo vigente que el directorio de residentes necesita para su columna «Unidad vinculada». */
 export interface VinculoVigenteResidente {
   id: string
@@ -346,7 +463,8 @@ async function vinculosDeResidentes(
 
 /** GET lista paginada, filtrable por ?q= (nombreCompleto | rut | email).
  * Residente: ve únicamente su propia ficha (ABAC mp:propios).
- * `?esResidente=1` agrega el filtro de residente y `vinculosVigentes` al envelope. */
+ * `?esResidente=1` agrega el filtro de residente y `vinculosVigentes` al envelope.
+ * `?rol=`, `?rolDirectorio=` y `?estadoCuenta=` son filtros aditivos de los directorios. */
 export async function GET(req: Request): Promise<Response> {
   const resultado = await withComunidadScope()
   if (!resultado.ok) return resultado.response
@@ -370,6 +488,10 @@ export async function GET(req: Request): Promise<Response> {
   const q = url.searchParams.get("q")?.trim()
   const rut = url.searchParams.get("rut")?.trim()
   const esResidente = url.searchParams.get("esResidente") === "1"
+  // Filtros aditivos: ausentes (o vacíos) no cambian nada del comportamiento de siempre.
+  const roles = valoresCsv(url.searchParams.get("rol"))
+  const rolesDirectorio = valoresCsv(url.searchParams.get("rolDirectorio"))
+  const estadosCuenta = valoresCsv(url.searchParams.get("estadoCuenta"))
 
   const where: Record<string, unknown> = { comunidadId: scope.comunidadId }
   if (residente) {
@@ -394,7 +516,36 @@ export async function GET(req: Request): Promise<Response> {
     where.rut = { in: variantes }
   }
 
+  // Validación DESPUÉS del RUT para no cambiar el 400 que ya existía: un RUT inválido
+  // sigue siendo el primer error de la petición. Un valor desconocido en los filtros
+  // nuevos devuelve 400 en vez de una lista vacía que parezca «no hay nadie».
+  if (roles.some((rol) => !(ROLES_PERSONA as readonly string[]).includes(rol))) {
+    return jsonError(400, "El rol informado no es válido.")
+  }
+  if (rolesDirectorio.some((rol) => !(ROLES_DIRECTORIO as readonly string[]).includes(rol))) {
+    return jsonError(400, "El rol de directorio informado no es válido.")
+  }
+  if (estadosCuenta.some((estado) => !(ESTADOS_CUENTA as readonly string[]).includes(estado))) {
+    return jsonError(400, "El estado de cuenta informado no es válido.")
+  }
+
   try {
+    // Filtros de los directorios: cada uno aporta una condición más a `AND`, así se
+    // intersectan entre sí y con el `where` que ya fijaron el scope y el ABAC del
+    // residente. Nunca se reemplaza el `where` de permisos.
+    const condiciones: Record<string, unknown>[] = []
+    if (roles.length > 0) {
+      condiciones.push({ id: { in: await idsPorRol(scope.comunidadId, roles) } })
+    }
+    if (rolesDirectorio.length > 0) {
+      condiciones.push({
+        id: { in: await idsPorRolDirectorio(scope.comunidadId, rolesDirectorio) },
+      })
+    }
+    if (estadosCuenta.length > 0) {
+      condiciones.push({ estadoCuenta: { in: estadosCuenta } })
+    }
+
     // Directorio de residentes: la regla se resuelve sobre los vínculos de la
     // comunidad completa, no sobre una página. Va en `AND` y no en `where.id`
     // para no pisar el id que ya fijó el ABAC del residente.
@@ -403,8 +554,9 @@ export async function GET(req: Request): Promise<Response> {
       : null
     if (vinculosResidentes) {
       const ids = [...new Set(vinculosResidentes.map((v) => v.personaId))]
-      where.AND = [{ id: { in: ids } }]
+      condiciones.push({ id: { in: ids } })
     }
+    if (condiciones.length > 0) where.AND = condiciones
 
     const [data, total] = await Promise.all([
       prisma.persona.findMany({

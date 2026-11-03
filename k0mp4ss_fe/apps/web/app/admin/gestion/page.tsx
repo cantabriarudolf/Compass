@@ -25,6 +25,7 @@ import { useVinculos } from "@/lib/api/use-vinculos"
 import { useUnidades } from "@/lib/api/use-unidades"
 import { useControlesPropiedad } from "@/lib/api/use-controles-propiedad"
 import { AvisoTruncamiento } from "@/components/pe/aviso-truncamiento"
+import { VerMas } from "@/components/ver-mas"
 import { Card, CardContent } from "@workspace/ui/components/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@workspace/ui/components/tabs"
 import { Input } from "@workspace/ui/components/input"
@@ -309,22 +310,34 @@ export default function GestionAdministrativaPage() {
   const busquedaDiferida = useDebounce(busqueda, 250)
   const hayBusqueda = busquedaDiferida.trim().length > 0
 
-  // Dos claves SWR: la base sin filtro (nombres para la matriz y conteos) y la
-  // del buscador. Sin búsqueda apuntan a la misma URL y SWR deduplica.
-  const { personas: personasBase, total: totalBase, isLoading: cBase } = usePersonas()
+  const [rolesFiltro, setRolesFiltro] = React.useState<RolDirectorio[]>([])
+
+  // Colección COMPLETA del scope: alimenta los contadores por rol y el nombre del dueño
+  // cuando su ficha no cae en la primera página. `todasLasPaginas` usa la misma
+  // paginación de `cargarMas` (patrón de `useUnidades`): contar una página miente.
+  const { personas: personasCompletas, isLoading: cBase } = usePersonas(undefined, {
+    todasLasPaginas: true,
+  })
+
+  // Una sola consulta para la tabla: la búsqueda y los roles del directorio los resuelve
+  // el SERVIDOR (antes el rol se filtraba en el navegador sobre la primera página).
   const {
-    personas: personasBusqueda,
-    total: totalBusqueda,
+    personas: personasDirectorio,
+    total: totalDirectorio,
     isLoading: cBusqueda,
+    cargarMas: cargarMasDirectorio,
+    cargandoMas: cargandoMasDirectorio,
     update: updatePersona,
-  } = usePersonas(busquedaDiferida)
+  } = usePersonas(
+    busquedaDiferida,
+    rolesFiltro.length > 0 ? { rolesDirectorio: rolesFiltro } : {}
+  )
   const { vinculos, isLoading: cVinculos } = useVinculos()
   const { items: unidades, total: totalUnidades, isLoading: cUnidades } = useUnidades()
   const { controles, isLoading: cControles, save: guardarControlApi } = useControlesPropiedad()
 
   const isLoading = cBase || cBusqueda || cVinculos || cUnidades || cControles
 
-  const [rolesFiltro, setRolesFiltro] = React.useState<RolDirectorio[]>([])
   const [ficha, setFicha] = React.useState<Persona | null>(null)
   const [filtroUnidad, setFiltroUnidad] = React.useState("")
   const [soloExplicitas, setSoloExplicitas] = React.useState(false)
@@ -356,16 +369,16 @@ export default function GestionAdministrativaPage() {
     return m
   }, [vinculos])
 
-  const personasPorId = React.useMemo(() => new Map(personasBase.map(p => [p.id, p])), [personasBase])
+  const personasPorId = React.useMemo(
+    () => new Map(personasCompletas.map(p => [p.id, p])),
+    [personasCompletas]
+  )
   const unidadesPorId = React.useMemo(() => new Map(unidades.map(u => [u.id, u])), [unidades])
 
-  const personasDirectorio = hayBusqueda ? personasBusqueda : personasBase
-  const totalDirectorio = hayBusqueda ? totalBusqueda : totalBase
-
   /**
-   * Predicados idénticos a la versión anterior, ahora como función: la búsqueda
-   * server-side puede devolver personas que no están en la primera página de la
-   * lista base, así que el rol se calcula por persona y no desde un mapa.
+   * El rol se sigue calculando por persona para las columnas y la ficha; lo que ya no
+   * hace es filtrar listas: el filtro por rol lo resuelve el servidor (`?rolDirectorio=`),
+   * porque la tabla pagina y filtrar una página escondía gente.
    */
   const rolesDe = React.useCallback(
     (p: Persona): Set<RolDirectorio> => {
@@ -401,22 +414,18 @@ export default function GestionAdministrativaPage() {
     [vinculosPorPersona]
   )
 
-  const filtradas = React.useMemo(() => {
-    if (rolesFiltro.length === 0) return personasDirectorio
-    return personasDirectorio.filter(p => {
-      const roles = rolesDe(p)
-      return rolesFiltro.some(r => roles.has(r))
-    })
-  }, [personasDirectorio, rolesFiltro, rolesDe])
+  // La tabla pinta lo que devolvió el servidor: búsqueda y roles ya vienen filtrados y el
+  // resto de las filas del filtro se piden con «Ver más» (`cargarMasDirectorio`).
+  const filtradas = personasDirectorio
 
   const conteoPorRol = React.useMemo(() => {
     const m = new Map<RolDirectorio, number>()
     for (const r of ROLES_DIRECTORIO) m.set(r.id, 0)
-    for (const p of personasDirectorio) {
+    for (const p of personasCompletas) {
       for (const r of rolesDe(p)) m.set(r, (m.get(r) ?? 0) + 1)
     }
     return m
-  }, [personasDirectorio, rolesDe])
+  }, [personasCompletas, rolesDe])
 
   const alternarRol = (rol: RolDirectorio) =>
     setRolesFiltro(prev => (prev.includes(rol) ? prev.filter(r => r !== rol) : [...prev, rol]))
@@ -592,7 +601,7 @@ export default function GestionAdministrativaPage() {
       <Tabs defaultValue="directorio">
         <TabsList>
           <TabsTrigger value="directorio">
-            <IconUsers className="size-4 mr-1" aria-hidden="true" /> Directorio ({filtradas.length})
+            <IconUsers className="size-4 mr-1" aria-hidden="true" /> Directorio ({totalDirectorio})
           </TabsTrigger>
           <TabsTrigger value="privacidad">
             <IconLock className="size-4 mr-1" aria-hidden="true" /> Privacidad por unidad ({unidades.length})
@@ -651,7 +660,12 @@ export default function GestionAdministrativaPage() {
               )}
             </div>
 
-            <AvisoTruncamiento mostrados={personasDirectorio.length} total={totalDirectorio} />
+            <VerMas
+              mostrados={personasDirectorio.length}
+              total={totalDirectorio}
+              cargando={cargandoMasDirectorio}
+              onCargarMas={cargarMasDirectorio}
+            />
           </div>
 
           <Card>
