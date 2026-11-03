@@ -65,6 +65,19 @@ const MATRIZ: Record<Rol, Record<string, Set<Accion>>> = {
     // widget S7 del dashboard de gestión) pero no programa ni edita mantenciones:
     // la gestión vive en `/admin/mantenciones`, que es del administrador.
     "pe:mantenciones": new Set<Accion>(["ver"]),
+    // Visita técnica (decisión owner 2026-11-03): es el LOG DE UN HECHO, no un acto
+    // administrativo — `VisitaTecnicaPE` no tiene ningún campo de dinero. Quien sabe qué
+    // pasó es quien estuvo ahí, así que el comité LEE la bitácora técnica y no la escribe.
+    "pe:visita_tecnica": new Set<Accion>(["ver"]),
+    // Proveedores (decisión owner 2026-11-03): es un MAESTRO (RUT, contacto, contrato).
+    // Administrar maestros es del administrador; el resto de la operación necesita leer
+    // quién es la empresa para poder registrar visitas y mantenciones, nada más.
+    "pe:proveedor": new Set<Accion>(["ver"]),
+    // Proyecciones (decisión owner 2026-11-03): calcular y registrar la proyección de
+    // costo es operativo (lo hacen conserjería y mantención); EMPUJARLA al módulo
+    // financiero es un acto financiero y tiene su propia clave, cerrada al administrador.
+    "pe:proyeccion": new Set<Accion>(["ver"]),
+    "pe:proyeccion:enviar": new Set<Accion>([]),
     // cv: visor de avisos — comité publica y edita; el resto solo ve (decisión owner 2026-10-21)
     "cv": new Set<Accion>(["ver", "crear", "editar"]),
     // in: expediente de infracciones y multas — el comité gestiona el caso (ve, crea, edita =
@@ -112,6 +125,20 @@ const MATRIZ: Record<Rol, Record<string, Set<Accion>>> = {
     // legítimo para bitácora, visitas y turnos, y dejaba el portón de
     // `/admin/mantenciones` en cosmético: la API aceptaba los PUT igual.
     "pe:mantenciones": new Set<Accion>(["ver"]),
+    // Visita técnica (decisión owner 2026-11-03): el registro de un hecho lo escribe
+    // quien estuvo en el edificio cuando ocurrió, así que conserjería verifica, registra
+    // y corrige. Sin esta entrada el fallback de prefijo le heredaba el `pe` completo
+    // (ver/crear/editar) y el permiso quedaba en lo que decidiera la pantalla.
+    "pe:visita_tecnica": new Set<Accion>(["ver", "crear", "editar"]),
+    // Proveedores (decisión owner 2026-11-03): el maestro se LEE para identificar a la
+    // empresa que llega al edificio; crear/editar el RUT y el contrato es del
+    // administrador. El `pe` de la operación ya no alcanza este maestro.
+    "pe:proveedor": new Set<Accion>(["ver"]),
+    // Proyecciones (decisión owner 2026-11-03): conserjería computa los reemplazos del
+    // mes y registra la proyección de costo (ver/crear/editar). Enviarla a Finanzas es
+    // otra cosa: esa entrada queda VACÍA explícita — enviar materializa un costo en FI.
+    "pe:proyeccion": new Set<Accion>(["ver", "crear", "editar"]),
+    "pe:proyeccion:enviar": new Set<Accion>([]),
     "pe:ficha": new Set<Accion>([]), // sin dato previsional/bancario
     // SERIE-FASE2 §V2: evaluar el desempeño del personal es acto del
     // administrador; conserjería no registra evaluaciones (Set vacío explícito).
@@ -152,6 +179,16 @@ const MATRIZ: Record<Rol, Record<string, Set<Accion>>> = {
     // Vacío explícito: el residente no lee ni gestiona el calendario preventivo;
     // sin la entrada, cualquier futura clave `pe` base le abriría el prefijo.
     "pe:mantenciones": new Set<Accion>([]),
+    // Vacío explícito: la visita técnica es del edificio, no de la unidad del residente
+    // (decisión owner 2026-11-03); la entrada corta el fallback de prefijo hacia `pe`.
+    "pe:visita_tecnica": new Set<Accion>([]),
+    // Vacío explícito: el residente no administra ni consulta el maestro de proveedores
+    // (RUT, contacto, contrato) — el dato vive en la operación del edificio.
+    "pe:proveedor": new Set<Accion>([]),
+    // Vacío explícito: el residente no ve la proyección de costo del personal ni la
+    // envía a Finanzas (decisión owner 2026-11-03).
+    "pe:proyeccion": new Set<Accion>([]),
+    "pe:proyeccion:enviar": new Set<Accion>([]),
     "pe:visita": new Set<Accion>(["ver", "crear"]), // agenda visitas/contratistas a su unidad
     "pe:contratista": new Set<Accion>(["ver", "crear"]),
     // SERIE-FASE2 §V2: el residente no registra evaluaciones de desempeño.
@@ -208,6 +245,18 @@ const MATRIZ: Record<Rol, Record<string, Set<Accion>>> = {
     // programar es del administrador. La entrada corta el fallback de prefijo a
     // `pe`, que le daba crear/editar por herencia.
     "pe:mantenciones": new Set<Accion>(["ver"]),
+    // Visita técnica (decisión owner 2026-11-03): quien ejecuta el trabajo es quien puede
+    // dejar constancia de él, así que mantención registra y corrige la visita técnica.
+    // La entrada evita que el `pe` de sus propias tareas decida por herencia.
+    "pe:visita_tecnica": new Set<Accion>(["ver", "crear", "editar"]),
+    // Proveedores (decisión owner 2026-11-03): mantención lee el maestro para saber a
+    // quién está llamando cuando reporta un incidente; no lo administra.
+    "pe:proveedor": new Set<Accion>(["ver"]),
+    // Proyecciones (decisión owner 2026-11-03): mantención computa los reemplazos y
+    // registra la proyección de costo (ver/crear/editar), igual que conserjería. El
+    // envío a Finanzas queda VACÍO explícito: es un acto financiero, no operativo.
+    "pe:proyeccion": new Set<Accion>(["ver", "crear", "editar"]),
+    "pe:proyeccion:enviar": new Set<Accion>([]),
     "pe:ficha": new Set<Accion>([]), // sin dato previsional/bancario
     "pe:directorio": new Set<Accion>(["ver"]),
     // Decisión owner 2026-10-21: mantención entrega insumos y resuelve
@@ -398,6 +447,10 @@ export const RECURSOS_CONOCIDOS = [
   "pe:cierre_turno",
   "pe:ficha",
   "pe:mantenciones",
+  "pe:visita_tecnica",
+  "pe:proveedor",
+  "pe:proyeccion",
+  "pe:proyeccion:enviar",
   "pe:reporte_diario",
   "pe:directorio",
   "pe:visita",

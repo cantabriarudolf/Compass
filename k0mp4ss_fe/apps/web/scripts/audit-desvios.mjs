@@ -677,15 +677,9 @@ const EXCEPCIONES_R1 = [
       "app/api/pe/encomiendas/route.ts",
       "app/api/pe/ingresos-contratistas/[id]/route.ts",
       "app/api/pe/ingresos-contratistas/route.ts",
-      "app/api/pe/proveedores/[id]/route.ts",
-      "app/api/pe/proveedores/route.ts",
-      "app/api/pe/proyecciones/[id]/route.ts",
-      "app/api/pe/proyecciones/route.ts",
-      "app/api/pe/visitas-tecnicas/[id]/route.ts",
-      "app/api/pe/visitas-tecnicas/route.ts",
     ],
     motivo:
-      "DEUDA CON DECISIÓN DEL OWNER PENDIENTE, no un aval: siete pares de rutas de Personal cuelgan todavía de la raíz desnuda `pe` — bitacora-visitas, cierres-turno (solo la colección), encomiendas, ingresos-contratistas, proveedores, proyecciones y visitas-tecnicas (13 archivos: colección + [id]). Todo rol que tenga `pe` (conserjería ver/crear/editar para su operación; mantención ver/crear/editar para sus tareas) entra a estas rutas por el fallback de prefijo de `puede()` (lib/authz.ts:288-292): es el mismo defecto que dejó /api/pe/mantenciones aceptando el PUT de conserjería, ya cortado con la entrada explícita `pe:mantenciones`. Cada par necesita su decisión de permiso por ruta del owner antes de cambiar el guard; hasta entonces la deuda queda escrita acá y ninguna ruta nueva puede sumarse a esta lista.",
+      "DEUDA CON DECISIÓN DEL OWNER PENDIENTE, no un aval: cuatro pares de rutas de Personal cuelgan todavía de la raíz desnuda `pe` — bitacora-visitas, cierres-turno (solo la colección), encomiendas e ingresos-contratistas (7 archivos: colección + [id]). Tres familias ya salieron de esta lista, cada una con su recurso propio: visitas-tecnicas (`pe:visita_tecnica`: registrar una visita es dejar constancia de un hecho, no un acto administrativo), proveedores (`pe:proveedor`: administrar un maestro es del administrador; la operación solo lo lee) y proyecciones (`pe:proyeccion` para computarla y registrarla, `pe:proyeccion:enviar` para empujar el costo a FI, que es un acto financiero del administrador). Todo rol que tenga `pe` (conserjería ver/crear/editar para su operación; mantención ver/crear/editar para sus tareas) entra a estas rutas por el fallback de prefijo de `puede()` (lib/authz.ts:288-292): es el mismo defecto que dejó /api/pe/mantenciones aceptando el PUT de conserjería, ya cortado con la entrada explícita `pe:mantenciones`. Cada par necesita su decisión de permiso por ruta del owner antes de cambiar el guard; hasta entonces la deuda queda escrita acá y ninguna ruta nueva puede sumarse a esta lista.",
   },
   ...baselineRaiz(
     "mp",

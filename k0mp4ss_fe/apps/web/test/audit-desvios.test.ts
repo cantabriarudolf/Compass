@@ -236,20 +236,17 @@ export function Panel({ rol }: { rol: string }) {
     expect(hallazgosDe(raiz, "R1")).toHaveLength(0)
   })
 
-  it("el baseline real de `pe` nombra los siete pares de rutas (13 archivos)", () => {
+  it("el baseline real de `pe` nombra los cuatro pares de rutas (7 archivos)", () => {
     type EntradaBaseline = { recurso?: string; rutas?: string[]; motivo: string }
     const pe = (EXCEPCIONES.R1 as EntradaBaseline[]).find(
       (excepcion) => excepcion.recurso === "pe"
     )
-    expect(pe?.rutas).toHaveLength(13)
+    expect(pe?.rutas).toHaveLength(7)
     const familias = [
       "bitacora-visitas",
       "cierres-turno",
       "encomiendas",
       "ingresos-contratistas",
-      "proveedores",
-      "proyecciones",
-      "visitas-tecnicas",
     ]
     for (const familia of familias)
       expect(

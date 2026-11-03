@@ -1,7 +1,9 @@
 /**
  * /api/pe/proyecciones/[id] — detalle/actualización parcial/baja.
  *
- * GET_ONE y DELETE vía factory. PUT parcial vía put-merge sobre "pe".
+ * GET_ONE y DELETE vía factory. PUT parcial vía put-merge sobre "pe:proyeccion": el mismo
+ * recurso de la colección, para que el par no se separe (la inconsistencia de
+ * `cierres-turno` nació de flipear un solo archivo del par).
  */
 import { ProyeccionPESchema } from "@/lib/schemas"
 import { puede } from "@/lib/authz"
@@ -11,7 +13,7 @@ import { createPutMerge } from "@/lib/api/put-merge"
 
 const modelo = delegado(prisma.proyeccionPE)
 const authzCheck = (rol: string, accion: "ver" | "crear" | "editar" | "eliminar" | "ejecutar") =>
-  puede(rol, accion, "pe")
+  puede(rol, accion, "pe:proyeccion")
 
 const handlers = createCrudHandlers({
   model: modelo,

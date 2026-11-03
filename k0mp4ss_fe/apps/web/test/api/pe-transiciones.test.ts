@@ -11,11 +11,12 @@
  * - `POST /api/pe/personas/[id]/horas-extras`
  * - `POST /api/pe/personas/[id]/evaluaciones`  (histórica e inmutable)
  * - `POST /api/pe/tareas-monitoreo/[id]/completar`
- * - `POST /api/pe/proyecciones/enviar`         (aviso: NO crea EgresoFI)
+ * - `POST /api/pe/proyecciones/enviar`         (aviso: NO crea EgresoFI; SOLO
+ *    administrador, porque empujar el costo a FI es un acto financiero)
  *
- * Guardias: 401 sin sesión, 403 con rol sin permiso (incluida la evaluación,
- * que es solo del administrador), 404 cross-comunidad, idempotencia/cierre de
- * la tarea y la inmutabilidad de la evaluación.
+ * Guardias: 401 sin sesión, 403 con rol sin permiso (incluidas la evaluación y el
+ * envío de la proyección, que son solo del administrador), 404 cross-comunidad,
+ * idempotencia/cierre de la tarea y la inmutabilidad de la evaluación.
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from "vitest"
 import { NextRequest } from "next/server"
@@ -673,9 +674,12 @@ describe("POST /api/pe/proyecciones/enviar", () => {
     expect(res.status).toBe(401)
   })
 
-  it("403 para residente y comité", async () => {
+  it("403 para todo rol que no sea administrador (incluidas conserjería y mantención)", async () => {
     await crearFeriado(`${mesAnio}-18`)
-    for (const email of [emailResidente, emailComite]) {
+    // Decisión owner 2026-11-03: enviar la proyección de costo materializa un costo en FI,
+    // así que `pe:proyeccion:enviar` es SOLO del administrador. Conserjería y mantención
+    // siguen creando la proyección (`pe:proyeccion`), pero ya no la empujan a Finanzas.
+    for (const email of [emailResidente, emailComite, emailConserjeria, emailMantencion]) {
       await conSesion(email, async () => {
         const res = await postJson(await rutaProyeccion(), "/api/pe/proyecciones/enviar", {
           mesAnio,
@@ -698,7 +702,10 @@ describe("POST /api/pe/proyecciones/enviar", () => {
 
     const egresosAntes = await prisma.egresoFI.count({ where: { comunidadId: comunidad } })
 
-    await conSesion(emailConserjeria, async () => {
+    // El envío a Finanzas lo ejecuta el administrador: es el rol que hoy tiene
+    // `pe:proyeccion:enviar` (decisión owner 2026-11-03). El resto de los roles está
+    // afirmado arriba con 403 y sin dejar fila.
+    await conSesion(emailAdmin, async () => {
       const res = await postJson(await rutaProyeccion(), "/api/pe/proyecciones/enviar", {
         mesAnio,
         costoParche: 35_000,

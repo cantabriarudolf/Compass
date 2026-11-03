@@ -2,8 +2,9 @@
  * /api/pe/proyecciones/enviar — envía la proyección de cobertura y costos del
  * mes a Finanzas.
  *
- * POST custom (`pe` editar): paridad server-side con `enviarProyeccionCostoFI`
- * del store legacy, con la decisión del plan SERIE-FASE2 §V2 bien visible:
+ * POST custom (`pe:proyeccion:enviar` editar, SOLO administrador): paridad server-side
+ * con `enviarProyeccionCostoFI` del store legacy, con la decisión del plan SERIE-FASE2
+ * §V2 bien visible:
  * **la proyección es un aviso/métrica, NO un gasto**. Por eso esta ruta:
  * - NO crea `EgresoFI` (ni ningún movimiento de fondo): no toca FI;
  * - deja la proyección como registro propio (`ProyeccionPE`) con
@@ -16,6 +17,11 @@
  * comunidad (`maestros_feriado`) y el personal de planta vigente, con las
  * mismas funciones puras que usaba la UI (`calcularProyeccionCobertura`,
  * `costoProyeccionPE`): un cliente no puede inventar el sobrecosto.
+ *
+ * Permiso separado (corrección del owner 2026-11-03): computar la proyección es
+ * operativo —conserjería y mantención la crean en `pe:proyeccion`—, pero EMPUJARLA a
+ * Finanzas es un acto financiero, así que el guard es `pe:proyeccion:enviar`, con Set
+ * vacío explícito para todo rol que no sea administrador.
  */
 import { z } from "zod"
 import { prisma } from "@/lib/prisma"
@@ -24,7 +30,7 @@ import { generarId } from "@/lib/id-utils"
 import { hoyISO } from "@/lib/date-utils"
 import { calcularProyeccionCobertura, costoProyeccionPE } from "@/lib/personal-utils"
 import { jsonError } from "@/lib/api/with-comunidad-scope"
-import { contextoAccionPE, registrarEventoPE } from "../../_acciones"
+import { contextoAccionPE, RECURSO_ENVIO_PROYECCION_PE, registrarEventoPE } from "../../_acciones"
 
 /** Entrada del POST: mes AAA-MM y los dos costos unitarios de la proyección. */
 const EntradaProyeccionSchema = z.object({
@@ -41,7 +47,7 @@ const EntradaProyeccionSchema = z.object({
 
 /** POST calcula, registra y notifica la proyección del mes (sin egreso FI). */
 export async function POST(req: Request): Promise<Response> {
-  const contexto = await contextoAccionPE()
+  const contexto = await contextoAccionPE(RECURSO_ENVIO_PROYECCION_PE)
   if (!contexto.ok) return contexto.response
   const { scope } = contexto
 

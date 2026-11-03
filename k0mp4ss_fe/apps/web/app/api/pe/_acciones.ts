@@ -8,12 +8,21 @@
  * usuario de la sesión, categoria/tipoAccion/referenciaId/descripcion).
  *
  * Decisiones del plan SERIE-FASE2 §V2 (no reinterpretar):
- * - `pe` para conserjería y mantención (ver/crear/editar): horas extra,
- *   completar tarea de monitoreo y enviar la proyección de costo.
+ * - `pe` para conserjería y mantención (ver/crear/editar): horas extra y
+ *   completar tarea de monitoreo.
  * - `pe:cierre_turno` para quien inicia/cierra turno (conserjería).
  * - Evaluaciones: SOLO administrador → recurso `pe:evaluacion`, declarado con
  *   Set vacío para el resto de los roles (menor privilegio explícito, corta el
  *   fallback de prefijo de `puede()`).
+ *
+ * Corrección del owner (2026-11-03), que reemplaza la cláusula de §V2 que dejaba
+ * «enviar la proyección de costo» dentro de `pe`: enviar la proyección de costo
+ * MATERIALIZA un costo en FI (la proyección nace de `costoEstimado` y deja
+ * `enviadoAFI`), así que es un acto financiero, no operativo → recurso propio
+ * `pe:proyeccion:enviar`, SOLO administrador, con Set vacío explícito para el
+ * resto de los roles. Calcular y registrar la proyección (`pe:proyeccion`
+ * ver/crear/editar) sigue siendo de conserjería y mantención: ellos computan los
+ * reemplazos. Lo que cambió es quién empuja el costo al módulo financiero.
  *
  * El historial de horas extra y evaluaciones VIVE en la ficha laboral
  * (`Persona.datosLaborales` es una columna Json), así que no hizo falta ningún
@@ -38,6 +47,12 @@ export const RECURSO_PE = "pe"
 export const RECURSO_TURNO_PE = "pe:cierre_turno"
 /** Recurso de las evaluaciones de desempeño: bloqueado para todo rol no-admin. */
 export const RECURSO_EVALUACION_PE = "pe:evaluacion"
+/**
+ * Recurso del ENVÍO de la proyección de costo a Finanzas (decisión owner 2026-11-03).
+ * Separado de `pe:proyeccion` a propósito: computar la proyección es operativo, empujar
+ * el costo a FI es un acto financiero y solo lo ejecuta el administrador.
+ */
+export const RECURSO_ENVIO_PROYECCION_PE = "pe:proyeccion:enviar"
 
 export type ContextoAccionPE =
   | { ok: true; scope: ComunidadScope }
