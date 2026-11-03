@@ -140,6 +140,12 @@ const data = {
         // administrador) y no en Operaciones. El page.tsx del panel además exige rol
         // administrador en el servidor.
         { title: "Mantenciones Preventivas", url: "/admin/mantenciones", roles: ["administrador"] },
+        // Los elementos reservables se creaban dentro de la pestaña "Elementos" de
+        // /operaciones/reservas; el owner pidió esa misma opción en el menú del
+        // administrador. Acá se administra el catálogo de amenities (crear, editar,
+        // habilitar/deshabilitar) y las reservas de los residentes siguen en
+        // Operaciones. El page.tsx del panel además exige rol administrador en el servidor.
+        { title: "Elementos", url: "/admin/elementos", roles: ["administrador"] },
         { title: "Gestión Administrativa", url: "/admin/gestion", roles: ["administrador"] },
         { title: "Maestros Administrativos", url: "/admin/maestros", roles: ["administrador"] },
         { title: "Configuración", url: "/admin/configuracion", roles: ["administrador"] },
