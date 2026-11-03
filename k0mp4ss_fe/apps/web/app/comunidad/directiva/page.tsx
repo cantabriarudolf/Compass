@@ -227,7 +227,9 @@ export default function DirectivaPage() {
                 <div className="flex flex-wrap items-center gap-2 text-sm">
                   <span><strong>Inicio:</strong> {periodoVigente.fechaInicio}</span>
                   <span><strong>Fin:</strong> {fin}</span>
-                  <span><strong>Inscripción:</strong> {periodoVigente.fechaInscripcion}</span>
+                  {periodoVigente.fechaInscripcion && (
+                    <span><strong>Inscripción:</strong> {periodoVigente.fechaInscripcion}</span>
+                  )}
                   <Badge className={alerta.clase}>{alerta.texto}</Badge>
                   {periodoVigente.fechasEstimadas && <Badge variant="secondary">Fechas estimadas — actualizar desde el libro</Badge>}
                 </div>
@@ -262,7 +264,7 @@ export default function DirectivaPage() {
               <div className="flex flex-col gap-2">
                 {periodos.filter(p => p.estado === "cerrado").map(p => (
                   <div key={p.id} className="rounded-md border p-2 text-xs">
-                    <p><strong>{p.fechaInicio}</strong> → {p.fechaFin ?? "—"} · {p.miembros.length} miembros · Inscrito {p.fechaInscripcion}</p>
+                    <p><strong>{p.fechaInicio}</strong> → {p.fechaFin ?? "—"} · {p.miembros.length} miembros{p.fechaInscripcion ? ` · Inscrito ${p.fechaInscripcion}` : ""}</p>
                     <p className="text-muted-foreground">{p.miembros.map(m => `${m.nombre} (${CARGO_LABEL[m.cargo] ?? m.cargo})`).join(", ")}</p>
                   </div>
                 ))}
@@ -415,8 +417,9 @@ export default function DirectivaPage() {
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1">
-                    <Label className="text-xs">Fecha de inscripción *</Label>
+                    <Label className="text-xs">Fecha de inscripción (opcional)</Label>
                     <Input type="date" value={perInscripcion} onChange={e => setPerInscripcion(e.target.value)} />
+                    <p className="text-xs text-muted-foreground">Opcional: la ley no exige inscribir la directiva. Completala solo si la comunidad ya inscribió el período; si no, el período se registra igual.</p>
                   </div>
                   <div className="space-y-1">
                     <Label className="text-xs">Respaldo externo (opcional)</Label>
@@ -472,7 +475,7 @@ export default function DirectivaPage() {
                         id,
                         fechaInicio: perInicio,
                         duracionMeses: Number(perDuracion),
-                        fechaInscripcion: perInscripcion || perInicio,
+                        fechaInscripcion: perInscripcion,
                         referenciaInscripcion: perReferencia.trim(),
                         estado: "vigente",
                         miembros,

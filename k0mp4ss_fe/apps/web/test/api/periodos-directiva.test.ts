@@ -346,6 +346,96 @@ describe("/api/periodos-directiva — GD períodos con BD real (Fase 0)", () => 
     })
   })
 
+  // `fechaInscripcion` acompaña al respaldo externo y es OPCIONAL por la misma
+  // razón: si la ley no exige inscribir la directiva, una comunidad puede
+  // registrar su período sin haberlo inscripto nunca. "" = no aplica.
+  it("POST sin fechaInscripcion → 201 y la fecha queda vacía", async () => {
+    await conSesion(emailAdmin, async () => {
+      const sinFecha = periodoValido({ id: "gd-per-sin-fecha", estado: "cerrado" })
+      delete sinFecha.fechaInscripcion
+      expect("fechaInscripcion" in sinFecha).toBe(false)
+
+      const res = await POST(sinFecha)
+      expect(res.status).toBe(201)
+
+      const enBd = await prisma.periodoDirectiva.findUnique({
+        where: { id: "gd-per-sin-fecha" },
+      })
+      expect(enBd).not.toBeNull()
+      expect(enBd?.fechaInscripcion).toBe("")
+      expect(enBd?.fechaInicio).toBe("2026-01-15")
+    })
+  })
+
+  it("POST con fechaInscripcion → 201 y la fecha se guarda", async () => {
+    await conSesion(emailAdmin, async () => {
+      const res = await POST(
+        periodoValido({
+          id: "gd-per-con-fecha",
+          estado: "cerrado",
+          fechaInscripcion: "2026-02-10",
+        })
+      )
+      expect(res.status).toBe(201)
+
+      const enBd = await prisma.periodoDirectiva.findUnique({
+        where: { id: "gd-per-con-fecha" },
+      })
+      expect(enBd?.fechaInscripcion).toBe("2026-02-10")
+    })
+  })
+
+  it("PUT parcial sin el campo no borra la fecha de inscripción que la fila ya tenía", async () => {
+    // Existe por el `.default("")` del schema: el `.partial()` del PUT no debe
+    // inyectar ese default y pisar una fecha real ya guardada.
+    await prisma.periodoDirectiva.create({
+      data: {
+        id: "gd-per-fecha-previo",
+        comunidadId: comunidadA,
+        fechaInicio: "2023-01-01",
+        duracionMeses: 24,
+        fechaInscripcion: "2023-01-10",
+        referenciaInscripcion: "Escritura pública N° 88, CBR Santiago",
+        estado: "cerrado",
+        miembros: [],
+      },
+    })
+    await conSesion(emailAdmin, async () => {
+      const res = await PUT("gd-per-fecha-previo", { duracionMeses: 12 })
+      expect(res.status).toBe(200)
+
+      const enBd = await prisma.periodoDirectiva.findUnique({
+        where: { id: "gd-per-fecha-previo" },
+      })
+      expect(enBd?.duracionMeses).toBe(12)
+      expect(enBd?.fechaInscripcion).toBe("2023-01-10")
+    })
+  })
+
+  it("PUT con cadena vacía explícita → la fecha de inscripción queda vacía (borrado intencional)", async () => {
+    await prisma.periodoDirectiva.create({
+      data: {
+        id: "gd-per-fecha-borrada",
+        comunidadId: comunidadA,
+        fechaInicio: "2023-06-01",
+        duracionMeses: 12,
+        fechaInscripcion: "2023-06-05",
+        referenciaInscripcion: "Acta asamblea N° 2/2023",
+        estado: "cerrado",
+        miembros: [],
+      },
+    })
+    await conSesion(emailAdmin, async () => {
+      const res = await PUT("gd-per-fecha-borrada", { fechaInscripcion: "" })
+      expect(res.status).toBe(200)
+
+      const enBd = await prisma.periodoDirectiva.findUnique({
+        where: { id: "gd-per-fecha-borrada" },
+      })
+      expect(enBd?.fechaInscripcion).toBe("")
+    })
+  })
+
   it("residente: ver sí (200), crear no (403) — puede(rol, accion, 'gd')", async () => {
     await conSesion(emailResidente, async () => {
       const get = await GET()

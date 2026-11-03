@@ -265,7 +265,21 @@ export const ExtensionGobernanzaSchema = z
         .min(1, "La duración mínima es 1 mes.")
         .max(36, "El período no puede exceder 36 meses (art. 17 Ley 21.442)."),
       fechaFin: FechaISOSchema.optional(),
-      fechaInscripcion: FechaISOSchema,
+      // Fecha en que la comunidad inscribió el período, si lo hizo. Opcional por
+      // la misma razón que `referenciaInscripcion`: la ley no exige inscribir la
+      // directiva, así que el dato es referencial y su ausencia se persiste como
+      // cadena vacía. "" = no aplica (la comunidad no inscribió el período); la
+      // columna sigue siendo NOT NULL para no reconstruir una tabla con historia
+      // de gobernanza.
+      fechaInscripcion: z
+        .union([FechaISOSchema, z.literal("")], {
+          errorMap: () => ({
+            message:
+              "Debe ser una fecha con formato AAAA-MM-DD o quedar vacía.",
+          }),
+        })
+        .optional()
+        .default(""),
       // Respaldo externo del período (acta o escritura que lo documenta). Opcional:
       // la ley no exige inscribir la directiva en registro alguno, así que el dato
       // es referencial y su ausencia se persiste como cadena vacía.
