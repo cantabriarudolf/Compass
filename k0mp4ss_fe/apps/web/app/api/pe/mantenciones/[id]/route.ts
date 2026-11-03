@@ -1,7 +1,9 @@
 /**
  * /api/pe/mantenciones/[id] — detalle/actualización parcial/baja.
  *
- * GET_ONE y DELETE vía factory. PUT parcial vía put-merge sobre "pe".
+ * GET_ONE y DELETE vía factory. PUT parcial vía put-merge sobre el recurso
+ * propio "pe:mantenciones" (no el `pe` genérico): leer el calendario no es
+ * gestionarlo, y conserjería solo conserva `ver`.
  */
 import { MantencionPreventivaPESchema } from "@/lib/schemas"
 import { puede } from "@/lib/authz"
@@ -11,7 +13,7 @@ import { createPutMerge } from "@/lib/api/put-merge"
 
 const modelo = delegado(prisma.mantencionPreventivaPE)
 const authzCheck = (rol: string, accion: "ver" | "crear" | "editar" | "eliminar" | "ejecutar") =>
-  puede(rol, accion, "pe")
+  puede(rol, accion, "pe:mantenciones")
 
 const handlers = createCrudHandlers({
   model: modelo,

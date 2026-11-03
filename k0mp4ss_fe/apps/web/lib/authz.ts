@@ -61,6 +61,10 @@ const MATRIZ: Record<Rol, Record<string, Set<Accion>>> = {
     // permiso declarado y el ejecutado sean lo mismo. Operar el turno
     // (crear/editar/ejecutar) sigue siendo de conserjería: el comité audita, no opera.
     "pe:cierre_turno": new Set<Accion>(["ver"]),
+    // Calendario preventivo: el comité LEE el panel del edificio (paridad con el
+    // widget S7 del dashboard de gestión) pero no programa ni edita mantenciones:
+    // la gestión vive en `/admin/mantenciones`, que es del administrador.
+    "pe:mantenciones": new Set<Accion>(["ver"]),
     // cv: visor de avisos — comité publica y edita; el resto solo ve (decisión owner 2026-10-21)
     "cv": new Set<Accion>(["ver", "crear", "editar"]),
     // in: expediente de infracciones y multas — el comité gestiona el caso (ve, crea, edita =
@@ -94,7 +98,7 @@ const MATRIZ: Record<Rol, Record<string, Set<Accion>>> = {
     "co:lecturas": new Set<Accion>([]),
     // explícitamente sin permisos: FI crear/editar/eliminar, PE bitacora, PL, IR:interno, admin:usuarios, backup
   },
-  // Conserjería / Seguridad: bitácora, visitas, encomiendas, iniciar/cerrar turno, directorio, reporte diario PE, IR mantenimiento
+  // Conserjería / Seguridad: bitácora, visitas, encomiendas, iniciar/cerrar turno, directorio, reporte diario PE, IR mantenimiento, lectura del calendario preventivo
   conserjeria: {
     "mp:propios": new Set<Accion>(["ver", "editar"]),
     "pe": new Set<Accion>(["ver", "crear", "editar"]),
@@ -102,6 +106,12 @@ const MATRIZ: Record<Rol, Record<string, Set<Accion>>> = {
     "pe:cierre_turno": new Set<Accion>(["ver", "crear", "editar", "ejecutar"]),
     "pe:reporte_diario": new Set<Accion>(["ver"]),
     "pe:directorio": new Set<Accion>(["ver"]),
+    // Calendario preventivo: conserjería LEE el resumen del edificio (widget S7 del
+    // dashboard operativo) y pierde la escritura. Sin esta entrada el fallback de
+    // prefijo heredaría el `pe` de arriba (ver/crear/editar), que es un permiso
+    // legítimo para bitácora, visitas y turnos, y dejaba el portón de
+    // `/admin/mantenciones` en cosmético: la API aceptaba los PUT igual.
+    "pe:mantenciones": new Set<Accion>(["ver"]),
     "pe:ficha": new Set<Accion>([]), // sin dato previsional/bancario
     // SERIE-FASE2 §V2: evaluar el desempeño del personal es acto del
     // administrador; conserjería no registra evaluaciones (Set vacío explícito).
@@ -139,6 +149,9 @@ const MATRIZ: Record<Rol, Record<string, Set<Accion>>> = {
     "ct:residencia": new Set<Accion>(["ver", "crear"]),
     "ct:al_dia": new Set<Accion>(["ver", "crear"]),
     "pe:directorio": new Set<Accion>(["ver"]),
+    // Vacío explícito: el residente no lee ni gestiona el calendario preventivo;
+    // sin la entrada, cualquier futura clave `pe` base le abriría el prefijo.
+    "pe:mantenciones": new Set<Accion>([]),
     "pe:visita": new Set<Accion>(["ver", "crear"]), // agenda visitas/contratistas a su unidad
     "pe:contratista": new Set<Accion>(["ver", "crear"]),
     // SERIE-FASE2 §V2: el residente no registra evaluaciones de desempeño.
@@ -190,6 +203,11 @@ const MATRIZ: Record<Rol, Record<string, Set<Accion>>> = {
     // Vacío explícito: cortan el fallback de prefijo de `puede()` hacia `pe`.
     // Iniciar/cerrar turno es de conserjería; la ficha previsional no aplica acá.
     "pe:cierre_turno": new Set<Accion>([]),
+    // Calendario preventivo: mantención LEE las mantenciones del edificio (widget
+    // S7 del dashboard operativo, el mismo que ve conserjería) y no las programa;
+    // programar es del administrador. La entrada corta el fallback de prefijo a
+    // `pe`, que le daba crear/editar por herencia.
+    "pe:mantenciones": new Set<Accion>(["ver"]),
     "pe:ficha": new Set<Accion>([]), // sin dato previsional/bancario
     "pe:directorio": new Set<Accion>(["ver"]),
     // Decisión owner 2026-10-21: mantención entrega insumos y resuelve
@@ -379,6 +397,7 @@ export const RECURSOS_CONOCIDOS = [
   "pe:bitacora",
   "pe:cierre_turno",
   "pe:ficha",
+  "pe:mantenciones",
   "pe:reporte_diario",
   "pe:directorio",
   "pe:visita",
