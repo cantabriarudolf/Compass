@@ -44,13 +44,30 @@ test.describe("CRUD — Personas/Personal", () => {
     await expect(inputFecha).toBeVisible({ timeout: 10_000 })
     await inputFecha.fill(fechaIngreso)
 
-    // F18: sin consentimiento expreso el servidor descarta los datos
-    // previsionales y bancarios, y en la UI esos campos quedan deshabilitados —
-    // por eso las FKs de más abajo no se podían elegir. Este caso prueba la
-    // ficha integral completa, así que declara el consentimiento primero.
+    // F18: el consentimiento expreso es lo que habilita la ficha médica; sin él
+    // esos campos quedan deshabilitados en la UI. Este caso prueba la ficha
+    // integral completa, así que deja el consentimiento OTORGADO antes de seguir.
+    //
+    // El check es un controlador controlado (el estado vive en la página) y la
+    // ficha que se abre puede traerlo YA tildado: esta misma prueba persiste el
+    // consentimiento y la fila que edita es del seed, que `e2e:limpiar` no toca
+    // por diseño. Un click ciego sobre una ficha ya otorgada REVOCA (y el servidor
+    // borra los datos sensibles al guardar), así que el test no puede suponer el
+    // estado de partida. Lo que sí puede exigir es el mecanismo: que el click
+    // SIEMPRE invierta el estado (un check que no responde falla acá) y que se
+    // termine con el consentimiento otorgado.
     const consentimiento = dialog.locator("#f-consentimiento-sensible")
-    await consentimiento.click({ force: true })
+    const medicamentos = dialog.getByRole("textbox", { name: "Medicamentos" })
+    const estadoInicial = await consentimiento.getAttribute("data-state")
+    await consentimiento.click()
+    await expect(consentimiento).toHaveAttribute("data-state", estadoInicial === "checked" ? "unchecked" : "checked", { timeout: 10_000 })
+    if (estadoInicial === "checked") {
+      // Venía otorgado y el click lo revocó; se vuelve a otorgar para la ficha completa.
+      await consentimiento.click()
+    }
     await expect(consentimiento).toHaveAttribute("data-state", "checked", { timeout: 10_000 })
+    // La consecuencia observable del consentimiento: la ficha médica se habilita.
+    await expect(medicamentos).toBeEnabled()
 
     // Helpers para selects con FKs obligatorias (AFPs seed)
     // El snapshot muestra que cada campo es <div><Label>X</Label><Select><Trigger combobox>… :contentReference[oaicite:0]{index=0}
