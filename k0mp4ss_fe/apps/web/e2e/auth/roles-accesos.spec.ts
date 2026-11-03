@@ -11,7 +11,9 @@ type Matriz = Record<string, { visibles: string[]; ocultos: string[] }>
 // Inicio: [admin,conserjeria,residente,comite,mantencion] (todos)
 // Operaciones: [admin,conserjeria,residente,mantencion]
 // Finanzas: [admin,residente,comite] (Remuneraciones: [admin] granular)
-// Comunidad: [admin,residente,comite]
+// Comunidad: [admin,residente,comite,conserjeria,mantencion] — aloja el Directorio
+// de Emergencias, que lee cualquier rol (pe:directorio); los demás items del grupo
+// conservan sus roles explícitos.
 // Inventario: [admin,mantencion] (Estructura/Tipos solo admin; Recursos/Mantenimiento admin+mantencion)
 // Personas: [admin]
 // Sistema: [admin,comite] (Reportería: [admin,comite]; resto admin)
@@ -21,8 +23,8 @@ const MATRIZ: Matriz = {
     ocultos: ["Operaciones","Inventario","Personas"],
   },
   "conserjeria@test.cl": {
-    visibles: ["Inicio","Operaciones"],
-    ocultos: ["Finanzas","Comunidad","Inventario","Personas","Sistema"],
+    visibles: ["Inicio","Operaciones","Comunidad"],
+    ocultos: ["Finanzas","Inventario","Personas","Sistema"],
   },
   "residente@test.cl": {
     visibles: ["Inicio","Operaciones","Finanzas","Comunidad"],
@@ -33,8 +35,8 @@ const MATRIZ: Matriz = {
     ocultos: ["Inventario","Personas","Sistema"],
   },
   "mantencion@test.cl": {
-    visibles: ["Inicio","Operaciones","Inventario"],
-    ocultos: ["Finanzas","Comunidad","Personas","Sistema"],
+    visibles: ["Inicio","Operaciones","Inventario","Comunidad"],
+    ocultos: ["Finanzas","Personas","Sistema"],
   },
 }
 
@@ -55,7 +57,16 @@ test.describe("comite@test.cl — matriz + 403 admin:usuarios", () => {
     await gotoEstable(page)
     const { visibles, ocultos } = MATRIZ["comite@test.cl"]!
     for (const g of visibles) await expect(page.getByText(g,{exact:true}).first()).toBeVisible({timeout:10_000})
-    for (const g of ocultos) await expect(page.getByText(g,{exact:true})).toBeHidden({timeout:10_000})
+    for (const g of ocultos) {
+      // Un grupo puede aparecer dos veces en el DOM (etiqueta y botón colapsable),
+      // así que hay que verificar que NINGUNA coincidencia sea visible: con el
+      // locator sin scope esto reventaba por strict mode en vez de afirmar.
+      const coincidencias = page.getByText(g, { exact: true })
+      const cuantas = await coincidencias.count()
+      for (let i = 0; i < cuantas; i++) {
+        await expect(coincidencias.nth(i)).toBeHidden({ timeout: 10_000 })
+      }
+    }
     // Granular: Remuneraciones oculto para comite
     await page.getByRole("button",{name:"Finanzas"}).click().catch(()=>{})
     await page.waitForTimeout(600)
@@ -83,7 +94,16 @@ test.describe("conserjeria@test.cl — matriz + 403", () => {
     await gotoEstable(page)
     const { visibles, ocultos } = MATRIZ["conserjeria@test.cl"]!
     for (const g of visibles) await expect(page.getByText(g,{exact:true}).first()).toBeVisible({timeout:10_000})
-    for (const g of ocultos) await expect(page.getByText(g,{exact:true})).toBeHidden({timeout:10_000})
+    for (const g of ocultos) {
+      // Un grupo puede aparecer dos veces en el DOM (etiqueta y botón colapsable),
+      // así que hay que verificar que NINGUNA coincidencia sea visible: con el
+      // locator sin scope esto reventaba por strict mode en vez de afirmar.
+      const coincidencias = page.getByText(g, { exact: true })
+      const cuantas = await coincidencias.count()
+      for (let i = 0; i < cuantas; i++) {
+        await expect(coincidencias.nth(i)).toBeHidden({ timeout: 10_000 })
+      }
+    }
     const status = await page.evaluate(async () => {
       const r = await fetch("/api/admin/usuarios?comunidadId=comunidad-a")
       return r.status
@@ -101,7 +121,16 @@ test.describe("residente@test.cl — matriz + 403", () => {
     await gotoEstable(page)
     const { visibles, ocultos } = MATRIZ["residente@test.cl"]!
     for (const g of visibles) await expect(page.getByText(g,{exact:true}).first()).toBeVisible({timeout:10_000})
-    for (const g of ocultos) await expect(page.getByText(g,{exact:true})).toBeHidden({timeout:10_000})
+    for (const g of ocultos) {
+      // Un grupo puede aparecer dos veces en el DOM (etiqueta y botón colapsable),
+      // así que hay que verificar que NINGUNA coincidencia sea visible: con el
+      // locator sin scope esto reventaba por strict mode en vez de afirmar.
+      const coincidencias = page.getByText(g, { exact: true })
+      const cuantas = await coincidencias.count()
+      for (let i = 0; i < cuantas; i++) {
+        await expect(coincidencias.nth(i)).toBeHidden({ timeout: 10_000 })
+      }
+    }
     // Gastos Comunes hereda Finanzas visible
     await page.getByRole("button",{name:"Finanzas"}).click().catch(()=>{})
     await page.waitForTimeout(600)
@@ -124,7 +153,16 @@ test.describe("mantencion@test.cl — matriz + 403 + granular Inventario", () =>
     await gotoEstable(page)
     const { visibles, ocultos } = MATRIZ["mantencion@test.cl"]!
     for (const g of visibles) await expect(page.getByText(g,{exact:true}).first()).toBeVisible({timeout:10_000})
-    for (const g of ocultos) await expect(page.getByText(g,{exact:true})).toBeHidden({timeout:10_000})
+    for (const g of ocultos) {
+      // Un grupo puede aparecer dos veces en el DOM (etiqueta y botón colapsable),
+      // así que hay que verificar que NINGUNA coincidencia sea visible: con el
+      // locator sin scope esto reventaba por strict mode en vez de afirmar.
+      const coincidencias = page.getByText(g, { exact: true })
+      const cuantas = await coincidencias.count()
+      for (let i = 0; i < cuantas; i++) {
+        await expect(coincidencias.nth(i)).toBeHidden({ timeout: 10_000 })
+      }
+    }
     // Inventario granular: Mantenimiento visible, Tipos oculto
     await page.getByRole("button",{name:"Inventario"}).click().catch(()=>{})
     await page.waitForTimeout(600)
@@ -148,7 +186,16 @@ test.describe("arrendatario@test.cl — matriz + 403", () => {
     await gotoEstable(page)
     const { visibles, ocultos } = MATRIZ["arrendatario@test.cl"]!
     for (const g of visibles) await expect(page.getByText(g,{exact:true}).first()).toBeVisible({timeout:10_000})
-    for (const g of ocultos) await expect(page.getByText(g,{exact:true})).toBeHidden({timeout:10_000})
+    for (const g of ocultos) {
+      // Un grupo puede aparecer dos veces en el DOM (etiqueta y botón colapsable),
+      // así que hay que verificar que NINGUNA coincidencia sea visible: con el
+      // locator sin scope esto reventaba por strict mode en vez de afirmar.
+      const coincidencias = page.getByText(g, { exact: true })
+      const cuantas = await coincidencias.count()
+      for (let i = 0; i < cuantas; i++) {
+        await expect(coincidencias.nth(i)).toBeHidden({ timeout: 10_000 })
+      }
+    }
     // Gastos Comunes hereda Finanzas visible (igual que residente: login rol residente)
     await page.getByRole("button",{name:"Finanzas"}).click().catch(()=>{})
     await page.waitForTimeout(600)
