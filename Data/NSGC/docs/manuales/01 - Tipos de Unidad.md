@@ -17,6 +17,12 @@ Repetidos **permitidos** (D5): el sistema no bloquea nombres duplicados, pero te
 - Al guardar un tipo con un **nombre ya existente** (comparación case-insensitive, sin contar el propio en edición), la UI muestra un diálogo advisory: *"Ya existe un tipo de unidad con ese nombre. ¿Deseas continuar? (D5: repetidos permitidos, es solo un aviso)"* con Confirmar/Cancelar.
 - Si confirmás, se persiste igual (`saveTipoUnidad` del store sigue permitiendo repetidos); si cancelás, el guardado se aborta sin mutar. El aviso vive solo en el formulario (`k0mp4ss_fe/apps/web/app/inventario/tipos/page.tsx:86`), no en el store, así que llamadas directas a `saveTipoUnidad` desde código/tests siguen funcionando.
 
+## 📊 Conteo real por tipo
+La pantalla cuenta y lista las unidades de cada tipo leyendo **el padrón completo**, no la primera página del endpoint (commit `e05c10f`).
+- Antes lo hacía por la página única y el número mentía: «Depto Tipo A» y «Depto Tipo B» mostraban **0 unidades** cuando tienen **40 cada uno**, y abrir el tipo decía «No hay unidades asociadas» con 80 departamentos en el padrón.
+- Hoy el listado trae todas las páginas (`useUnidades({ todasLasPaginas: true })`), así que el contador de la tarjeta, el del diálogo y la lista de unidades vinculadas coinciden con el padrón real.
+- El ojo del sistema no es una muestra: si un tipo aparece en 0 es porque de verdad no tiene unidades.
+
 ## 💡 Tips de Oro
 - **Metraje Estricto**: Asegúrate que el metraje sea el correcto aquí, porque en la ficha de la unidad va a quedar bloqueado por seguridad.
 - **Historial**: Si te equivocaste en un tipo que ya está siendo usado, edítalo con cuidado; el cambio se verá reflejado en todas las propiedades amarradas a ese modelo.
@@ -26,3 +32,4 @@ Repetidos **permitidos** (D5): el sistema no bloquea nombres duplicados, pero te
 Toda acción administrativa realizada en este módulo (especialmente cambios en el tarifario base) debe ser contabilizada y visibilizada en el **Módulo AM**. Los indicadores de recaudación proyectada de este módulo alimentan el Dashboard de Gestión Operativa, transformando la ejecución técnica en valor cuantificable para la comunidad.
 
 *Actualizado: 27/08/2026 — P3 D5 aviso duplicados por nombre (no bloqueante)*
+*Actualizado: 03/11/2026 — el conteo de unidades por tipo y el listado de unidades vinculadas leen el padrón completo (0 → 40 en Depto Tipo A y B).*

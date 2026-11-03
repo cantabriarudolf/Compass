@@ -23,13 +23,25 @@ Repetidos **permitidos** (D5): el sistema no bloquea nombres repetidos, pero te 
 ## 💡 Multiperfil
 No te extrañe si ves a la misma persona en distintos lados. El sistema permite que el "Seba" sea el **Propietario** de un departamento, pero que viva como **Residente** en otro. Todo queda amarrado a su mismo RUT.
 
+## 🔎 Búsqueda y filtros en el servidor
+El padrón se pagina y las pantallas ya no pueden filtrar «lo que vino»: si el filtro se resuelve en el navegador sobre la primera página, esconde gente (commits `5c62f1d` y `2374011`).
+
+- **La búsqueda por nombre o RUT va al servidor** con un retardo corto (300 ms): quien no venía en la primera página aparece igual. La tabla mantiene las filas anteriores mientras consulta, muestra el **total real** que informa el servidor y pagina en serio.
+- **Los filtros de rol y estado también van al servidor**, y los contadores se calculan sobre todo el padrón, no sobre la página. Parámetros opcionales del endpoint `GET /api/personas`:
+  - `?q=` texto; `?rut=` identidad exacta; `?esResidente=` vínculo vigente de propietario/arrendatario.
+  - `?rol=` roles propios de `Persona.roles` (CSV); `?rolDirectorio=` roles derivados del Directorio de Gestión Administrativa (`propietario` / `residente` / `directiva` / `personal`); `?estadoCuenta=` (`activa` / `inactiva` / `bloqueada`).
+  - Se **intersectan** entre sí y con el alcance de permisos: suman condiciones al `where`, nunca lo reemplazan. Un residente sigue viendo solo su ficha, también cuando filtra. Sin parámetros, la respuesta es la misma de antes.
+- **El filtro de estado usa los valores reales**: antes comparaba con los plurales «activos / inactivos / bloqueados» cuando la base guarda «activa / inactiva / bloqueada», así que no encontraba a nadie y sus contadores marcaban cero. Hoy el endpoint valida el valor y el filtro de la pantalla (`ACTIVOS / INACTIVOS / BLOQUEADOS`) traduce a la grafía persistida.
+- **Medido con el padrón de la demo** (118 personas, página de 100): propietario pasó de mostrar 63 a **74**, residente de 68 a **84**, directiva de 3 a **5** y activa de 95 a **113**.
+- **Aplica a las tres pantallas**: `/comunidad/personas` (padrón con filtro rápido por estado), `/personas/residentes` (solo residentes) y el Directorio de **Gestión Administrativa** (`/admin/gestion`, con los cuatro roles del directorio y su conteo).
+
 ## 🏠 Vista Residentes (`/personas/residentes` — P2 MENU-100)
 
 Directorio **solo lectura** de residentes y propietarios con vínculo vigente. No duplica la edición — esa vive en `/comunidad/personas`.
 
 - **Filtro**: personas con al menos un `vinculos` vigente (`!fechaFin`) y `rol` en `propietario` / `arrendatario`. Se excluyen `copropietario`/`ocupante` y tramos cerrados.
 - **Columnas**: identidad (nombre + RUT + badges de `roles`), unidad vinculada (`Depto 101`, `Local L-01` con badge de rol), contacto (móvil + email), estado de cuenta y acción **Ver Ficha** → `/comunidad/personas/[id]`.
-- **Búsqueda**: por nombre o RUT en la misma vista.
+- **Búsqueda**: por nombre o RUT, **resuelta en el servidor** (ver «Búsqueda y filtros en el servidor»): ya no se limita a la página cargada, y la tabla pagina contra el total real.
 - **Skeleton**: `animate-pulse` mientras `!hasHydrated`; empty state "Sin residentes con vínculo vigente" si no calza nada.
 - **Navegación**: el item "Personas → Residentes" ya no es "Próximamente" — quitado de `RUTAS_PENDIENTES` en `AppSidebar`.
 
@@ -44,3 +56,4 @@ Si la persona tiene rol `directiva`, su perfil muestra la pestaña **Gobernanza*
 Recuerda que estos son datos sensibles. El acceso a este maestro debe estar limitado solo a personal de confianza de la administración.
     
 *Actualizado: 23/09/2026 — ficha de gobernanza editable + coherencia rol↔ficha (GD) + P2 MENU-100 + P3 D5*
+*Actualizado: 03/11/2026 — búsqueda y filtros de rol y estado resueltos en el servidor; el filtro de estado deja de comparar plurales contra la grafía persistida.*

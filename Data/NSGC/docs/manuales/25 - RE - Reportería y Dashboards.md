@@ -8,6 +8,11 @@ Cada vista abierta del mando queda auditada (`RE_DASHBOARD_VIEW`). **Emitir cong
 
 ## 🛠️ Secciones
 
+- **Portada del sistema (`/dashboard`)**: la portada cambia de composición según el perfil, y el corte se decide **en el servidor** (`app/dashboard/page.tsx` → `perfilDeRoles`), no en el navegador (commit `8c80c79`).
+  - **Administrador y comité** comparten el *Panel de gestión*: foto del día de Operaciones (visitas, encomiendas pendientes e ingresos de trabajadores de hoy), bloque financiero (ingresos, egresos y caja total de los fondos activos), deuda de las unidades, provisión del mes, nóminas por pagar, gastos estimados por servicio, mantenciones preventivas con enlace «Administrar» a `/admin/mantenciones` y visitas técnicas. La única diferencia es la nómina: `GET /api/liquidaciones` exige `pl`, así que el comité la ve declarada como restringida en vez de recibir un error.
+  - **Conserjería y mantención** reciben la *portada operativa*: foto del día y día a día del edificio (mantenciones preventivas y visitas técnicas). **Residente** ve su estado de cuenta y sus reservas.
+  - Ningún perfil operativo ve los totales financieros de la comunidad: esa frontera la garantiza el servidor, no la UI.
+  - **El contador de cajas cuenta solo fondos activos** (commit `bdcbe12`); si todas las cajas están dadas de baja, lo dice en vez de mostrar un saldo consolidado que no existe.
 - **Reportería y Dashboards (`/admin/reporteria`)**:
   - **Centro de Mando**:
     - *Censo*: ratio de ocupación habitable, unidades con propietario/arrendatario vigente y unidades con residentes con condiciones especiales.

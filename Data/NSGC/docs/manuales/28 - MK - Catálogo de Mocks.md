@@ -28,6 +28,8 @@ k0mp4ss_fe/apps/web/data/
 
 > **⚠️ Desde ST**, casi todo vive en el store `compass-store` (`lib/store.ts`) con migraciones versionadas. Las colecciones PI/AD/GD (Sesión 1) nacen **vacías por diseño** dentro del store — ver sección 5. Las colecciones CO/GE (Sesión 2) siguen el mismo patrón; la excepción es `plantillasCO`, que se **siembra** desde `data/comunidad/plantillas-co.ts` — ver sección 6. En la Sesión 3 el patrón se repite para **IR/IN/MT**: `tiposInfraccionIN` se siembra desde `data/finanzas/tipos-infraccion.ts`; `activosIR`, `solicitudesInsumoIR`, `entregasEPP`, `infraccionesIN`, `trabajosMT` y `proyectosMT` nacen vacías — ver sección 7. En la **Sesión 4** lo hace **RA/CV**: `plantillasCV` se siembra desde `data/comunidad/plantillas-cv.ts`; `elementosRA`, `reservasRA` y `avisosCV` nacen vacías — ver sección 8. En la **Sesión 5** llega **FI**: `fondosFI` se siembra inline desde el propio store (3 fondos NSGC); `egresosFI`, `emisionesGC` y `cobrosFI` nacen vacías — ver sección 9. **P2 Punto Cero** añade `punto-cero-2324.json` (fixture versionado) y migra 4º fondo + 182 egresos +44 ingresos vía v27 idempotente.
 
+> **⚠️ Ojo con el dataset de demo**: `scripts/seed-demo-consistente.ts` **no vive en `data/`** — siembra la base con la comunidad de demostración (80 deptos, 4 locales, 100 estacionamientos, 73 dueños, finanzas y portería del día). Sus conteos y patrones de id están en la **sección 15** al final, y no coinciden con los dumps de `data/` porque son datasets distintos.
+
 ---
 
 ## 📦 Archivo por Archivo
@@ -491,4 +493,57 @@ No bump de `STORE_VERSION` (permanece 26) — reemplazo del scaffold HMAC por Au
 
 **Hoja de ruta:** adapter custom inactivo con JWT+credentials (listo para OAuth futuro sin duplicar modelos).
 
-*Última actualización: 27 de Agosto 2026 — Plataforma P5 (Auth.js JWT + D-v, sin bump STORE_VERSION)*
+### 15. Datos de demo en BD — `scripts/seed-demo-consistente.ts` (2026-11-02)
+
+| Campo | Detalle |
+|-------|---------|
+| **Ruta** | `k0mp4ss_fe/apps/web/scripts/seed-demo-consistente.ts` |
+| **Comando** | `npm run db:demo-consistente [-- --comunidad-id=comunidad-a]` (desde `k0mp4ss_fe/apps/web`) |
+| **Propósito** | Dejar la comunidad de demo con números redondos y coherentes entre sí: antes las pantallas de finanzas y operaciones mostraban tablas vacías mientras la estructura física tenía datos a medias (3 locales, 83 estacionamientos, 1 amenity) |
+| **Naturaleza** | **No vive en `data/`**: escribe en la base vía Prisma. Determinista (PRNG `mulberry32` con semilla `20261102`), idempotente (todo es `upsert` por id determinista, incluso la portería, cuyo id lleva la fecha del día) y **aditivo**: no borra personas con login (`p-3`…`p-7`, `p-arrendatario-1`) ni unidades contrato de `seed-authz`, `e2e/` o `test/`; solo purga artefactos de QA `test-*` |
+| **RUT** | Válidos por construcción: el dígito verificador se calcula con el mismo algoritmo de `lib/rut.ts`, nunca se escribe a mano. El script termina con un conteo de RUT válidos y sale con código 1 si alguno falla |
+| **Dependencia** | La comunidad debe existir antes (`npm run seed:authz`); si no existe, aborta con mensaje |
+
+**Estructura física resultante**
+
+| Qué | Cantidad | IDs / detalle |
+|-----|----------|---------------|
+| Macro-sectores | 5 edificios + comercial + estacionamientos | `torre-a`…`torre-e` rotulados «Edificio 1»…«Edificio 5», `comercial` «Sector Comercial», `estacionamientos` |
+| Departamentos | **80** | `piso-torre-*` (4 por piso × 4 pisos × 5 edificios); los crea otro seed, este script solo los cuenta y los usa como destino |
+| Locales | **4** | `u-LC-01`…`u-LC-04` (L-01 120 m² 5 %; L-02…L-04 60 m² 2,5 %), sector `piso-comercial-1`, rol SII `999-01`…`999-04` |
+| Estacionamientos | **100** | `u-E-001`…`u-E-100`: **80 privados** (`tipo-es-1`, prorrateo 0,5 %) + **20 de visita** (`u-E-081`…`u-E-100`, `tipo-es-visita`, prorrateo 0, estado `comun`, sin gasto común) |
+| Amenities | **4** | `ra-quincho-1` y `ra-quincho-2` (aforo 20, tarifa $15.000, garantía $30.000, bloque 3 h), `ra-salon-eventos` (aforo 80, $45.000, garantía $120.000, bloque 6 h), `ra-piscina` (aforo 40, gratis, bloque 2 h); anticipación 2 días, cancelación tardía 1 día con penalización $7.500 |
+| Reservas RA | **0** | El seed no crea reservas: `/admin/reservas` nace vacío hasta que alguien reserva un elemento que exija autorización |
+
+**Personas y ocupación**
+
+| Qué | Cantidad | Regla |
+|-----|----------|-------|
+| Dueños | **73** | Cada uno con al menos una propiedad y rol `propietario`; el script verifica que no quede dueño sin unidad |
+| Departamentos arrendados | **32** | 40 % de los 80: el resto (48) lo ocupa su dueño. `u-A-101` queda arrendada a `p-arrendatario-1` |
+| Arrendatarios | `p-arr-01`… | Personas creadas por el seed; `p-arrendatario-1` es además secretario de la directiva |
+| Directiva | 3 cargos | `p-5`, `p-1`, `p-6` con `datosGobernanza` y fecha de asunción 2025-03-01 |
+| Trabajadores | **3** | `p-trab-conserje`, `p-trab-mayordomo`, `p-trab-aseo` con ficha laboral |
+
+**Finanzas, servicios y portería**
+
+| Qué | Cantidad | Detalle |
+|-----|----------|---------|
+| Fondos | **4** | `fondo-gc` (saldo inicial $3.450.000), `fondo-reserva` ($12.800.000, aporte 5 %), `fondo-amenities` ($1.250.000), `fondo-cc-punto-cero` ($17.082.694) |
+| Emisiones de gasto común | **3** | Periodos `2026-08`, `2026-09`, `2026-10` en modo fijo, sobre deptos + locales + estacionamientos privados, con aporte de 5 % al fondo de reserva |
+| Cobros | 1 por unidad y periodo + 8 multas | `cobro-<periodo>-<unidadId>`; las multas son `cobro-multa-001`…`008` (2 de cada 3 pagadas) |
+| Infracciones | **8** | `inf-2026-001`…`008`, folio `IN-2026-001`…, sobre los primeros 8 departamentos, con cargo `multa_in` asociado |
+| Nóminas | **3** | Liquidaciones en borrador del periodo `2026-10` (una por trabajador) |
+| Proveedores | **6** | `prv-hidropack`, `prv-ascensores`, `prv-edificio`, `prv-aseo`, `prv-jardin`, `prv-seguridad` |
+| Mantenciones preventivas | **6** | `mant-hidropack`, `mant-ascensores`, `mant-edificio`, `mant-aseo`, `mant-jardin`, `mant-seguridad` (vencimientos entre noviembre y diciembre de 2026) |
+| Visitas técnicas | **6** | `vis-01`…`vis-06`, del 13 al 29 de octubre de 2026 |
+| Visitas de portería | **22** | Del **día de la corrida**: 18 ingresadas, 2 agendadas y 2 canceladas; las «sin aviso» que ingresan quedan con autorización telefónica y su hora de gestión |
+| Encomiendas | **11** | 9 del día (6 por retirar y 3 retiradas) + 2 recibidas el día anterior y aún pendientes: el panel cuenta las pendientes sin importar el día |
+| Ingresos de contratistas | **6** | 4 `ingresado` y 2 `agendado`, atados a los proveedores sembrados; el maestro `contratistas` espeja esos ids para que la puerta muestre el nombre y no el id crudo |
+
+Patrones de id de portería: `vis-<AAAA-MM-DD>-NN`, `enc-<AAAA-MM-DD>-NN`. La fecha es **la del día en que corre el script**, no una constante, porque el panel «Foto del día · Operaciones» del dashboard compara contra hoy. Al terminar, el script imprime un reporte con los conteos verificados (departamentos, dueños, arrendadas, locales, estacionamientos, amenities, emisiones, cobros, nóminas, proveedores, mantenciones, visitas técnicas, infracciones y movimiento de portería del día).
+
+> **Nota**: los mocks de `data/` (arriba) siguen siendo la fuente del store legacy y del poblamiento `seed-db-from-mocks`; este seed es el dataset de demo en base. Los conteos no coinciden con el dump de `29 - MK - Data Dump Inventario.md` (83 unidades en el mock) porque son datasets distintos: el de demo deja **184 unidades** (80 deptos + 4 locales + 100 plazas).
+
+*Última actualización: 03 de Noviembre 2026 — sección 15: seed de demo consistente en BD (estructura, personas, finanzas y portería con sus conteos)*
+*Anterior: 27 de Agosto 2026 — Plataforma P5 (Auth.js JWT + D-v, sin bump STORE_VERSION)*
