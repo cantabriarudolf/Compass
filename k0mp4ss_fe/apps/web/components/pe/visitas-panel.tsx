@@ -601,7 +601,9 @@ export function VisitasPanel({
               valorId={formVisita.unidadId}
               valorEtiqueta={etiquetaDeUnidad(formVisita.unidadId)}
               onSeleccionar={alElegirUnidad}
-              buscar={buscarUnidades}
+              // El contexto `{ page }` del selector habilita «Cargar más resultados»: la
+              // búsqueda de unidades tiene más de una página y antes solo se veía la primera.
+              buscar={(q, contexto) => buscarUnidades(q, contexto)}
               placeholder="Número, etiqueta o rol SII…"
               vacio="Ninguna unidad coincide. Revisá el número o el rol SII."
             />
@@ -615,7 +617,7 @@ export function VisitasPanel({
                   : undefined
               }
               onSeleccionar={alElegirPersona}
-              buscar={buscarPersonas}
+              buscar={(q, contexto) => buscarPersonas(q, contexto)}
               placeholder="Nombre o RUT del residente…"
               vacio="Ninguna persona coincide. Revisá el nombre o el RUT."
             />

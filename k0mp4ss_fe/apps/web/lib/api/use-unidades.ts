@@ -15,7 +15,8 @@
  *   PE. Pega en `GET /api/pe/unidades?q=`, la proyección de solo lectura de la operación de
  *   conserjería: cuatro campos, el scope de la sesión y el permiso `pe:bitacora`, que es el que
  *   tiene el rol que registra la visita. `/api/unidades` es el padrón completo y está detrás de
- *   `mp`, que conserjería no tiene: pedirlo ahí devolvía 403 al rol que lo necesita.
+ *   `mp`, que conserjería no tiene: pedirlo ahí devolvía 403 al rol que lo necesita. Con el
+ *   `{ page }` del selector forwardea `?page=` y devuelve `{ opciones, hayMas }`.
  * - `etiquetasDeUnidades(ids)`: etiquetas de una lista cerrada de ids contra `?ids=` de la misma
  *   proyección. Resuelve el rótulo de filas del día cuya unidad quedó fuera de la primera página
  *   del padrón (`pageSize=100`), que hoy muestra el id crudo que el conserje no puede leer.
@@ -27,6 +28,7 @@ import * as React from "react"
 import useSWR from "swr"
 import { useCrudCollection, type CrudCollection } from "./use-crud-collection"
 import type { Unidad } from "@/lib/schemas"
+import type { ContextoBusqueda, PaginaOpciones } from "@/components/selector-buscable"
 import {
   esUnidadDestino,
   etiquetaUnidad,
@@ -265,18 +267,43 @@ export async function etiquetasDeUnidades(ids: string[]): Promise<Record<string,
  *
  * La ruta ya excluye las plazas de estacionamiento; se filtra otra vez acá como guarda, porque
  * esta lista también alimenta la preselección de la identidad leída del QR.
+ *
+ * Sin `contexto` devuelve la lista suelta de siempre (una sola página de `PAGE_SIZE_BUSQUEDA`),
+ * así que los consumidores que no paginan no cambian. Con `contexto` —el `{ page }` que pasa
+ * `components/selector-buscable.tsx`— forwardea `?page=` a la ruta y devuelve `{ opciones, hayMas }`
+ * calculado contra el `total` del servidor: es lo que habilita «Cargar más resultados» en vez de
+ * dejar al conserje viendo las primeras 25 unidades de una búsqueda que tiene más.
  */
-export async function buscarUnidades(q: string): Promise<UnidadOpcion[]> {
+export function buscarUnidades(q: string): Promise<UnidadOpcion[]>
+export function buscarUnidades(
+  q: string,
+  contexto: ContextoBusqueda
+): Promise<PaginaOpciones>
+export async function buscarUnidades(
+  q: string,
+  contexto?: ContextoBusqueda
+): Promise<UnidadOpcion[] | PaginaOpciones> {
   const termino = q.trim()
-  if (!termino) return []
-  const url = `${LISTA}?q=${encodeURIComponent(termino)}&pageSize=${PAGE_SIZE_BUSQUEDA}`
+  if (!termino) return contexto ? { opciones: [], hayMas: false } : []
+  const page = Math.max(1, Math.trunc(contexto?.page ?? 1) || 1)
+  // `page` va al final y solo cuando el consumidor pagina: sin contexto la URL es la de antes.
+  const sufijoPagina = contexto ? `&page=${page}` : ""
+  const url = `${LISTA}?q=${encodeURIComponent(termino)}&pageSize=${PAGE_SIZE_BUSQUEDA}${sufijoPagina}`
   const res = await fetch(url, { headers: { accept: "application/json" } })
   if (!res.ok) {
     const cuerpo = (await res.json().catch(() => null)) as { error?: string } | null
     throw new Error(cuerpo?.error ?? `Error ${res.status} al buscar unidades.`)
   }
-  const coleccion = (await res.json()) as { data?: UnidadBuscable[] }
-  return (coleccion.data ?? [])
+  const coleccion = (await res.json()) as {
+    data?: UnidadBuscable[]
+    pageSize?: number
+    total?: number
+  }
+  const opciones = (coleccion.data ?? [])
     .filter(esUnidadDestino)
     .map((unidad) => ({ id: unidad.id, etiqueta: etiquetaUnidad(unidad) }))
+  if (!contexto) return opciones
+  // Quedan páginas mientras el borde de esta página no alcance el total del servidor.
+  const tamanoPagina = coleccion.pageSize ?? PAGE_SIZE_BUSQUEDA
+  return { opciones, hayMas: page * tamanoPagina < (coleccion.total ?? 0) }
 }

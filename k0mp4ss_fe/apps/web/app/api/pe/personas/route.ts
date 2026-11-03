@@ -18,10 +18,15 @@
  * mismo `select` y sin truncar por `pageSize`. `ids` gana sobre `rut` y `q`; sin ids (o con lista
  * vacía) el comportamiento no cambia.
  *
- * Envelope: `{ data, pageSize, total }`. El `total` es el count del MISMO `where` que la lista,
- * para que el panel pueda avisar el truncamiento (AvisoTruncamiento) en vez de cortar en silencio:
- * los selects de la operación piden el padrón completo con `pageSize=100`, mientras que las
- * búsquedas por texto siguen pidiendo `pageSize=25`.
+ * Envelope: `{ data, page, pageSize, total }`. El `total` es el count del MISMO `where` que la
+ * lista, para que el panel pueda avisar el truncamiento (AvisoTruncamiento) en vez de cortar en
+ * silencio: los selects de la operación piden el padrón completo con `pageSize=100`, mientras que
+ * las búsquedas por texto siguen pidiendo `pageSize=25`.
+ *
+ * `?page=` es aditivo y opcional (default 1 = `skip 0`): con él la búsqueda se puede recorrer
+ * hasta el final de a una página, que es lo que habilita «Cargar más resultados» en
+ * `components/selector-buscable.tsx`. Sin `page` la ruta responde exactamente lo de antes; el
+ * `total` es lo que le dice al cliente si quedan páginas (`page * pageSize < total`).
  */
 import type { Prisma } from "@prisma/client"
 import { puede } from "@/lib/authz"
@@ -29,6 +34,9 @@ import { prisma } from "@/lib/prisma"
 import { logger } from "@/lib/logger"
 import { jsonError, withComunidadScope } from "@/lib/api/with-comunidad-scope"
 import { variantesRun } from "@/lib/validacion-rut"
+
+/** Página pedida por defecto: `1` deja el `skip` en 0, así que sin `?page=` nada cambia. */
+const PAGINA_POR_DEFECTO = 1
 
 const PAGE_SIZE_POR_DEFECTO = 25
 /**
@@ -90,6 +98,18 @@ export async function GET(req: Request): Promise<Response> {
     )
   )
 
+  const page = Math.max(
+    PAGINA_POR_DEFECTO,
+    Math.trunc(
+      Number.parseInt(
+        url.searchParams.get("page") ?? String(PAGINA_POR_DEFECTO),
+        10
+      ) || PAGINA_POR_DEFECTO
+    )
+  )
+  /** Lista cerrada de ids: se sirve completa y siempre desde el principio, como hasta hoy. */
+  const listaCerrada = filtroIds !== null && filtroIds.ids.length > 0
+
   let where: Prisma.PersonaWhereInput = { comunidadId: scope.comunidadId }
   if (filtroIds && filtroIds.ids.length > 0) {
     // `ids` gana sobre `rut` y `q`: es una lista cerrada de ids concretos, no una búsqueda.
@@ -116,12 +136,14 @@ export async function GET(req: Request): Promise<Response> {
         where,
         orderBy: [{ createdAt: "desc" }, { id: "desc" }],
         // Lista cerrada: sin truncar por pageSize (el panel necesita TODOS los nombres pedidos).
-        take: filtroIds && filtroIds.ids.length > 0 ? filtroIds.ids.length : pageSize,
+        take: listaCerrada ? filtroIds.ids.length : pageSize,
+        // La lista cerrada ignora `page`: no es una búsqueda, es un lote de ids concretos.
+        skip: listaCerrada ? 0 : (page - 1) * pageSize,
         select: { id: true, rut: true, nombreCompleto: true },
       }),
       prisma.persona.count({ where }),
     ])
-    return Response.json({ data, pageSize, total })
+    return Response.json({ data, page, pageSize, total })
   } catch (e) {
     logger.error({ err: e }, "[api/pe/personas] error inesperado")
     return jsonError(500, "No se pudo consultar el padrón de personas.")

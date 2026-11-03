@@ -18,6 +18,7 @@
 import * as React from "react"
 import useSWR, { mutate as mutateGlobal } from "swr"
 import type { Persona } from "@/data/comunidad/personas"
+import type { ContextoBusqueda, PaginaOpciones } from "@/components/selector-buscable"
 import type { StoreResult } from "@/lib/store"
 import { normalizarRun } from "@/lib/validacion-rut"
 
@@ -31,6 +32,12 @@ const LISTA = "/api/personas"
  * gobierna con `pe:bitacora`.
  */
 const LISTA_OPERACION = "/api/pe/personas"
+
+/**
+ * Tamaño de página de la búsqueda del selector: el listbox no monta cientos de opciones, y el
+ * total del envelope le dice al consumidor si quedan más (ver `buscarPersonas`).
+ */
+const PAGE_SIZE_BUSQUEDA = 25
 
 /** Identidad mínima que devuelve la proyección de operación. */
 export interface PersonaOperacion {
@@ -47,6 +54,7 @@ export interface PersonaOpcion {
 
 interface ColeccionOperacion {
   data: PersonaOperacion[]
+  page?: number
   pageSize: number
   total: number
 }
@@ -363,14 +371,38 @@ export async function buscarPersonaPorRun(run: string): Promise<PersonaOperacion
  *
  * Devuelve opciones con el nombre completo como etiqueta: es lo que ve el conserje y lo que la
  * fila del día muestra. Propaga el error para que el selector lo declare.
+ *
+ * Sin `contexto` devuelve la lista suelta de siempre (una sola página de `PAGE_SIZE_BUSQUEDA`),
+ * así que los consumidores que no paginan no cambian. Con `contexto` —el `{ page }` que pasa
+ * `components/selector-buscable.tsx`— forwardea `?page=` y devuelve `{ opciones, hayMas }` según
+ * el `total` del servidor, para que la lista ofrezca «Cargar más resultados» en vez de cortar en
+ * silencio en la primera página.
  */
-export async function buscarPersonas(q: string): Promise<PersonaOpcion[]> {
+export function buscarPersonas(q: string): Promise<PersonaOpcion[]>
+export function buscarPersonas(
+  q: string,
+  contexto: ContextoBusqueda
+): Promise<PaginaOpciones>
+export async function buscarPersonas(
+  q: string,
+  contexto?: ContextoBusqueda
+): Promise<PersonaOpcion[] | PaginaOpciones> {
   const termino = q.trim()
-  if (!termino) return []
+  if (!termino) return contexto ? { opciones: [], hayMas: false } : []
+  const page = Math.max(1, Math.trunc(contexto?.page ?? 1) || 1)
+  // `page` va al final y solo cuando el consumidor pagina: sin contexto la URL es la de antes.
+  const sufijoPagina = contexto ? `&page=${page}` : ""
   const coleccion = await fetcher<ColeccionOperacion>(
-    `${LISTA_OPERACION}?q=${encodeURIComponent(termino)}&pageSize=25`
+    `${LISTA_OPERACION}?q=${encodeURIComponent(termino)}&pageSize=${PAGE_SIZE_BUSQUEDA}${sufijoPagina}`
   )
-  return (coleccion.data ?? []).map((p) => ({ id: p.id, etiqueta: p.nombreCompleto }))
+  const opciones = (coleccion.data ?? []).map((p) => ({
+    id: p.id,
+    etiqueta: p.nombreCompleto,
+  }))
+  if (!contexto) return opciones
+  // Quedan páginas mientras el borde de esta página no alcance el total del servidor.
+  const tamanoPagina = coleccion.pageSize ?? PAGE_SIZE_BUSQUEDA
+  return { opciones, hayMas: page * tamanoPagina < (coleccion.total ?? 0) }
 }
 
 /**
