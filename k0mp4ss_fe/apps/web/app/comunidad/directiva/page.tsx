@@ -373,9 +373,9 @@ export default function DirectivaPage() {
                         {pendientesDe(acta).map(d => (
                           <Button key={d.id} size="sm" onClick={async () => {
                             const r = await firmarActa(acta.id, d.id)
-                            if (!r.ok) setError(r.error ?? "No se pudo aprobar.")
+                            if (!r.ok) setError(r.error ?? "No se pudo firmar el acta.")
                           }}>
-                            <IconCheck className="size-4 mr-1" /> Aprobar como {CARGO_LABEL[d.datosGobernanza!.cargoDirectiva]}
+                            <IconCheck className="size-4 mr-1" /> Firmar acta · {CARGO_LABEL[d.datosGobernanza!.cargoDirectiva]}
                           </Button>
                         ))}
                       </div>
