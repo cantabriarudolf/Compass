@@ -146,6 +146,11 @@ const data = {
         // habilitar/deshabilitar) y las reservas de los residentes siguen en
         // Operaciones. El page.tsx del panel además exige rol administrador en el servidor.
         { title: "Elementos", url: "/admin/elementos", roles: ["administrador"] },
+        // Alerta de reservas: la cola de autorización del administrador. Va junto a
+        // Elementos porque es la otra mitad del mismo módulo (el dueño del pedido: la
+        // lista de reservas de Operaciones no dice qué autorizar). El page.tsx del panel
+        // exige rol administrador en el servidor y la API de la cola exige `editar` en RA.
+        { title: "Alerta de reservas", url: "/admin/reservas", roles: ["administrador"] },
         { title: "Gestión Administrativa", url: "/admin/gestion", roles: ["administrador"] },
         { title: "Maestros Administrativos", url: "/admin/maestros", roles: ["administrador"] },
         { title: "Configuración", url: "/admin/configuracion", roles: ["administrador"] },

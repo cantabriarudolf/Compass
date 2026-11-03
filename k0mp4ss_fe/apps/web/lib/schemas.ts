@@ -1087,6 +1087,11 @@ export const ElementoRASchema = z
       .positive("La penalización debe ser mayor a cero.")
       .optional(),
     activo: z.boolean({ required_error: "El estado activo es obligatorio." }),
+    // Alerta de reservas (aditivo): un elemento que exige autorización crea sus
+    // reservas en estado "solicitada" y espera al administrador. Opcional y con
+    // default en la base (`false`), así los elementos existentes y los clientes
+    // que no envían el campo conservan el comportamiento de siempre.
+    requiereAutorizacion: z.boolean().optional(),
   })
   .refine(
     (e) => e.franja === "dia_completo" || (e.duracionBloqueHoras ?? 0) >= 1,
@@ -1095,7 +1100,10 @@ export const ElementoRASchema = z
     }
   )
 
-export const ESTADOS_RESERVA_RA = ["confirmada", "cancelada"] as const
+// El estado "solicitada" se AGREGA al final: renombrar o quitar un valor rompe
+// a todo consumidor existente. Una reserva nace "solicitada" solo cuando su
+// elemento tiene `requiereAutorizacion = true`; si no, sigue naciendo "confirmada".
+export const ESTADOS_RESERVA_RA = ["confirmada", "cancelada", "solicitada"] as const
 export const EstadoReservaRASchema = z.enum(ESTADOS_RESERVA_RA)
 
 export const CancelacionRASchema = z.object({
@@ -1107,6 +1115,9 @@ export const CancelacionRASchema = z.object({
     .number()
     .min(0, "La penalización no puede ser negativa.")
     .optional(),
+  // Motivo declarado por el administrador al rechazar una solicitud de reserva
+  // (aditivo: las cancelaciones existentes no lo tienen).
+  motivo: z.string().optional(),
 })
 
 export const RetencionGarantiaRASchema = z.object({

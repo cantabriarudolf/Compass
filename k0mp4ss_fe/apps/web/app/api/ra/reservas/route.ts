@@ -14,7 +14,11 @@
  * - materialización transaccional del cargo al Fondo de Amenities
  *   (`concepto: "reserva_ra"`, `origenRef` = id de la reserva) cuando la
  *   tarifa es mayor a cero y existe fondo activo + unidad de cobro;
- * - UN evento de auditoría `RA_BOOKING_CREATED` solo en el alta.
+ * - UN evento de auditoría `RA_BOOKING_CREATED` solo en el alta;
+ * - estado inicial según el elemento (alerta de reservas, aditivo): con
+ *   `requiereAutorizacion = true` la reserva nace `solicitada` (sin cargo: la
+ *   deuda se materializa al autorizarla) y con el default `false` se conserva
+ *   el estado que manda el cliente, hoy `confirmada`, exactamente como antes.
  *
  * El POST conserva la semántica upsert por id de la serie: si el id ya existe
  * en la comunidad, se revalida el solapamiento excluyendo el propio registro
@@ -120,6 +124,28 @@ export async function POST(req: Request): Promise<Response> {
         )
       }
 
+      /*
+       * Estado inicial (alerta de reservas, aditivo): el elemento decide.
+       * - `requiereAutorizacion = true` → la reserva nace "solicitada" y espera
+       *   al administrador, sin importar lo que declare el cliente.
+       * - `false` (default de todos los elementos existentes) → se conserva el
+       *   estado que ya mandaba el cliente, hoy "confirmada": mismo resultado
+       *   que antes del cambio. Un "solicitada" autodeclarado se rechaza para
+       *   que el estado no se pueda pedir sin que el elemento lo exija.
+       * En la edición (upsert por id) el estado se sigue escribiendo como vino.
+       */
+      let estado = datos.estado
+      if (!existente) {
+        if (elemento.requiereAutorizacion) {
+          estado = "solicitada"
+        } else if (datos.estado === "solicitada") {
+          throw new ReservaRechazada(
+            400,
+            "El elemento no requiere autorización: la reserva nace confirmada."
+          )
+        }
+      }
+
       const vecinas = await tx.reservaRA.findMany({
         where: {
           comunidadId: scope.comunidadId,
@@ -134,9 +160,10 @@ export async function POST(req: Request): Promise<Response> {
         tramosSolapan(datos.horaInicio, datos.horaFin, v.horaInicio, v.horaFin)
       )
       // Capacidad por stock (espejo del store): día completo con stock 2 admite
-      // dos reservas paralelas; la tercera agota el cupo.
+      // dos reservas paralelas; la tercera agota el cupo. Una solicitud pendiente
+      // también ocupa el tramo: mientras el administrador decide, nadie más lo toma.
       const capacidad = Math.max(1, elemento.stock ?? 1)
-      if (datos.estado !== "cancelada" && solapadas.length >= capacidad) {
+      if (estado !== "cancelada" && solapadas.length >= capacidad) {
         const tramo = solapadas[0]
         throw new ReservaRechazada(
           409,
@@ -173,9 +200,10 @@ export async function POST(req: Request): Promise<Response> {
       const hoyStr = hoyISO()
 
       // Cobro al Fondo de Amenities (espejo del store): solo con tarifa > 0,
-      // fondo activo y unidad de cobro resolubles.
+      // fondo activo y unidad de cobro resolubles. Una solicitud pendiente NO
+      // genera deuda: el cargo se materializa recién al autorizarla.
       let cargoFIReferencia: string | undefined
-      if (datos.estado !== "cancelada" && elemento.tarifaUso > 0) {
+      if (estado !== "cancelada" && estado !== "solicitada" && elemento.tarifaUso > 0) {
         const fondo = await fondoAmenities(scope.comunidadId, tx)
         const unidadCobro = await unidadDeCobro(
           { unidadId: datos.unidadId ?? null, solicitantePersonaId: datos.solicitantePersonaId },
@@ -209,7 +237,7 @@ export async function POST(req: Request): Promise<Response> {
           fecha: datos.fecha,
           horaInicio: datos.horaInicio,
           horaFin: datos.horaFin,
-          estado: datos.estado,
+          estado,
           montoTarifa,
           montoGarantia,
           ...(cargoFIReferencia ? { cargoFIReferencia } : {}),
@@ -225,7 +253,7 @@ export async function POST(req: Request): Promise<Response> {
         scope,
         "RA_BOOKING_CREATED",
         datos.id,
-        `Reserva ${folio} CONFIRMADA: ${elemento.nombre} el ${datos.fecha} ${datos.horaInicio}–${datos.horaFin} a nombre de ${nombre} (tarifa $${montoTarifa.toLocaleString("es-CL")})${detalleCargo}.`,
+        `Reserva ${folio} ${estado === "solicitada" ? "SOLICITADA (espera autorización del administrador)" : "CONFIRMADA"}: ${elemento.nombre} el ${datos.fecha} ${datos.horaInicio}–${datos.horaFin} a nombre de ${nombre} (tarifa $${montoTarifa.toLocaleString("es-CL")})${detalleCargo}.`,
         tx
       )
 

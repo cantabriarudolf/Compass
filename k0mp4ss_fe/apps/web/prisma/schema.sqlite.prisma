@@ -807,6 +807,10 @@ model ElementoRA {
   cancelacionTardiaDias    Int?
   penalizacionTardiaMonto  Float?
   activo                   Boolean
+  // Alerta de reservas: si el elemento la exige, la reserva nace "solicitada"
+  // (pendiente del administrador) en vez de "confirmada". Aditivo: el default
+  // false conserva el comportamiento de todos los elementos existentes.
+  requiereAutorizacion     Boolean  @default(false)
   createdAt                DateTime @default(now())
   updatedAt                DateTime @updatedAt
 
