@@ -127,10 +127,12 @@ All role and permission changes MUST be traceable.
 - **THEN** the system MUST count them and expose "Número de intentos de acceso no autorizados" as a metric.
 
 ### Requirement: Matriz de Permisos del Módulo PE
-La matriz de permisos MUST definir el acceso al módulo Personal y Servicios por rol:
-- **Administrador Maestro / administración**: ver, crear, editar y eliminar fichas de trabajadores, feriados y proyecciones; gestión completa de proveedores, mantenciones preventivas y libro de visitas técnicas; lectura del reporte diario.
-- **Conserjería / Seguridad (personal)**: registrar y editar controles de bitácora (visitas, encomiendas, contratistas), iniciar turno y cerrar su propio turno; consulta del directorio de emergencias; sin acceso a datos previsionales ni bancarios de las fichas.
-- **Propietario / Residente**: agendar visitas y contratistas hacia su unidad y consultar el directorio de emergencias; sin acceso a la bitácora global ni a fichas laborales.
+La matriz MUST definir el acceso al módulo Personal y Servicios por rol, **con una clave por recurso y sin herencia de la raíz del módulo** (decisión del owner 2026-11-05). `puede()` resuelve la clave exacta y, si falta, cae al prefijo; por eso cada ruta de una superficie acotada declara la suya, y el candado `scripts/audit-desvios.mjs` falla si aparece una raíz desnuda con hermanas granulares.
+- **Administrador Maestro / administración**: acceso completo por comodín — fichas de trabajadores, feriados, proyecciones, proveedores, mantenciones preventivas, libro de visitas técnicas y reporte diario.
+- **Conserjería / Seguridad (personal)**: escribe los cuatro registros de la puerta — bitácora de visitas, cierres de turno, encomiendas e ingresos de contratistas; lee proveedores, mantenciones y visitas técnicas; calcula y registra la proyección de costo. **No** administra el maestro de proveedores, **no** envía la proyección al módulo financiero (acto del administrador) y **no** accede a datos previsionales ni bancarios de las fichas.
+- **Mantención**: lee bitácora (clave compartida con personas y unidades, que necesita para registrar), proveedores, mantenciones y visitas técnicas; **no escribe** ninguno de los cuatro registros de la puerta.
+- **Comité**: lee bitácora de visitas e ingresos de contratistas, para su rol de control de la administración; **no** lee encomiendas, que son logística de la puerta.
+- **Propietario / Residente**: agenda visitas y contratistas hacia su unidad y consulta el directorio de emergencias; sin acceso a la bitácora global ni a fichas laborales. El directorio es información de la comunidad: lo lee cualquier rol con sesión a través de una puerta de lectura propia (`/api/comunidad/directorio`), para no abrir el maestro administrativo que también expone bancos, AFP y datos previsionales.
 
 Cualquier permiso no listado SHALL denegarse conforme a Menor Privilegio, registrando `RP_PERMISSION_DENIED`.
 
