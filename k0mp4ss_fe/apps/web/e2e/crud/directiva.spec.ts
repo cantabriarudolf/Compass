@@ -4,7 +4,7 @@ import { guardarDialogo } from "../helpers/form-dialog"
 test.use({ actionTimeout: 30_000 })
 
 test.describe("CRUD — Comunidad/Directiva", () => {
-  test("registrar nueva acta borrador y verificar monitor de firmas y Aprobar como", async ({ page }) => {
+  test("registrar nueva acta borrador y verificar monitor de firmas y Firmar acta", async ({ page }) => {
     const errores: string[] = []
     page.on("pageerror", (err) => errores.push(err.message))
 
@@ -86,8 +86,10 @@ test.describe("CRUD — Comunidad/Directiva", () => {
     // Monitor de firmas — texto "Monitor de firmas"
     await expect(page.getByText(/Monitor de firmas/).first()).toBeVisible({ timeout: 10_000 })
 
-    // Botones Aprobar como {cargo} — al menos uno visible si hay directiva vigente
-    const btnAprobar = page.getByRole("button", { name: /Aprobar como/ }).first()
+    // Botones «Firmar acta · {cargo}» — al menos uno visible si hay directiva vigente.
+    // El texto decía «Aprobar como {cargo}» hasta que se corrigió: firmar un acta es el
+    // deber de cada miembro del comité, no una facultad del cargo.
+    const btnAprobar = page.getByRole("button", { name: /Firmar acta/ }).first()
     await expect(btnAprobar).toBeVisible({ timeout: 15_000 })
 
     expect(errores, "Excepciones no capturadas en comunidad/directiva").toEqual([])
