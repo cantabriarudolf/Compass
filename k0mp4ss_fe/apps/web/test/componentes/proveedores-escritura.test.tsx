@@ -82,6 +82,18 @@ vi.mock("@/lib/api/use-unidades", () => ({
 vi.mock("@/lib/api/use-maestros", () => ({
   useMaestros: () => ({ data: CONTACTOS_EMERGENCIA, isLoading: false, error: null }),
 }))
+// El directorio dejó de leer el maestro administrativo (`mp`): su lectura propia
+// es `/api/comunidad/directorio` (`pe:directorio` ver). Se mockea la fuente nueva
+// para que el caso de abajo siga afirmando lo mismo — los mismos contactos, con
+// el mismo render — sobre el origen correcto.
+vi.mock("@/lib/api/use-directorio-emergencias", () => ({
+  useDirectorioEmergencias: () => ({
+    data: CONTACTOS_EMERGENCIA,
+    isLoading: false,
+    error: null,
+    refetch: () => {},
+  }),
+}))
 vi.mock("@/lib/api/use-pe", () => ({
   useProveedoresPE: () => coleccion(PROVEEDORES),
   useMantencionesPE: () => coleccion([]),

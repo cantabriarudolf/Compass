@@ -22,15 +22,20 @@ import { DirectorioPanel } from "./panel-directorio"
  * El navegador no reimplementa autenticación ni deduce permisos; la API sigue
  * validando cada lectura.
  *
- * OJO — lectura de los datos: el hook `useMaestros("contactos-emergencia")` pega
- * en `/api/maestros/[tipo]`, cuya autorización es `puede(rol, accion, "mp")`
- * (maestros administrativos, `lib/api/crud-factory.ts` vía
- * `app/api/maestros/[tipo]/route.ts`), NO `pe:directorio`. Ese `mp` ver lo tienen
- * el administrador y el comité; conserjería, residente y mantención reciben 403
- * y ven el directorio vacío. Es una condición PREEXISTENTE (la pestaña vieja se
- * comportaba igual), no algo que este traslado introduzca, y no se corrige
- * ensanchando un permiso desde acá: alinear la lectura con `pe:directorio` es
- * una decisión sobre el maestro, no sobre la pantalla.
+ * Lectura de los datos: el panel usa `useDirectorioEmergencias`, que pega en
+ * `/api/comunidad/directorio` — una puerta de LECTURA propia, gateada con
+ * `pe:directorio` ver (el mismo permiso de este portón), que devuelve solo los
+ * contactos de emergencia de la comunidad. NO lee el maestro administrativo
+ * (`/api/maestros/contactos-emergencia`), cuyo gate es el del maestro
+ * administrativo (`mp` ver): ese permiso ancho (todos los maestros
+ * administrativos) lo tienen el administrador y el comité, y usarlo para servir
+ * el teléfono de Bomberos dejaba el directorio vacío para conserjería, residente
+ * y mantención (403) y exponía más de lo necesario a quien sí lo leía.
+ *
+ * Decisión del owner: el directorio es información de la comunidad y todos los
+ * roles lo leen; `pe:directorio` NO se angosta. Lo que se separó es la puerta:
+ * lectura angosta para todos (esta pantalla + `/api/comunidad/directorio`) y
+ * administración del maestro intacta para el administrador (`mp`, sin cambios).
  */
 export default async function DirectorioPage() {
   const session = await auth().catch(() => null)
