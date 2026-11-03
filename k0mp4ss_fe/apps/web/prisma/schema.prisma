@@ -458,10 +458,19 @@ model ActaGD {
   avisoCVReferencia String?
   // Período vigente al crear el acta (trazabilidad del libro GD).
   periodoId           String?
+  // Folio del libro de actas (Ley 21.442 art. 15: libro de actas foliado).
+  // Formato `AD-<año>-<correlativo de 4 dígitos>`, asignado por el servidor al
+  // crear el acta y NUNCA reasignado: el folio es la cita del acta.
+  folio             String?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 
   @@index([comunidadId])
+  // Garantía dura contra la carrera de folios: si dos altas leen el mismo
+  // máximo, la segunda choca con este índice y el POST reintenta con el
+  // siguiente (mismo patrón que certificados CT). Aditiva: ver migración
+  // add_actas_gd_folio.
+  @@unique([comunidadId, folio])
   @@map("actas_gd")
 }
 
@@ -484,6 +493,8 @@ model ActaGDArchivada {
   fechaPublicacion  String?
   avisoCVReferencia String?
   periodoId         String?
+  // Copia íntegra del acta: el folio archivado es la cita del acta desestimada.
+  folio             String?
   motivo            String?  // razón opcional declarada por quien desestima
   actorUsuarioId    String   // usuario de sesión que ejecutó el borrado lógico
   archivadaEn       DateTime @default(now())

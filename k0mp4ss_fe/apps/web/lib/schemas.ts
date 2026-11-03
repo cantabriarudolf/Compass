@@ -533,6 +533,10 @@ export const ActaGDSchema = z.object({
   avisoCVReferencia: z.string().optional(),
   // Período vigente al crear el acta (trazabilidad del libro).
   periodoId: IdEntidadSchema.optional(),
+  // Folio del libro de actas (`AD-<año>-<correlativo>`, Ley 21.442 art. 15).
+  // Opcional para que los payloads existentes sigan validando: lo asigna el
+  // servidor al crear el acta y el cliente nunca lo decide.
+  folio: z.string().optional(),
 })
 
 export const MensajeDocumentoInvalido =

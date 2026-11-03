@@ -291,7 +291,9 @@ export default function DirectivaPage() {
                         ? <Badge className="bg-emerald-600 hover:bg-emerald-700 text-white">Publicada</Badge>
                         : <Badge variant="secondary">Borrador de Directiva</Badge>}
                     </CardTitle>
-                    <CardDescription>{acta.lugar} · {acta.tablaTemas.length} tema(s)</CardDescription>
+                    <CardDescription>
+                      <span className="font-mono">{acta.folio ? `Folio ${acta.folio}` : "Sin folio asignado"}</span> · {acta.lugar} · {acta.tablaTemas.length} tema(s)
+                    </CardDescription>
                   </div>
                   {vista === "administrador" && (
                     <div className="flex items-center gap-1">
@@ -520,7 +522,11 @@ export default function DirectivaPage() {
             <>
               <DialogHeader>
                 <DialogTitle>{actas.some(a => a.id === editando.id) ? "Editar acta" : "Nueva acta de reunión"}</DialogTitle>
-                <DialogDescription>D1: los soportes documentales se referencian por URL; jamás embebidos.</DialogDescription>
+                <DialogDescription>
+                  {editando.folio
+                    ? `Folio del libro de actas: ${editando.folio} (no se renumera). D1: los soportes documentales se referencian por URL; jamás embebidos.`
+                    : "El folio del libro de actas se asigna al guardar. D1: los soportes documentales se referencian por URL; jamás embebidos."}
+                </DialogDescription>
               </DialogHeader>
               <div className="grid gap-3">
                 <div className="grid grid-cols-2 gap-3">

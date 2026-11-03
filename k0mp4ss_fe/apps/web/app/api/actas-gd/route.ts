@@ -3,7 +3,9 @@
  *
  * - GET paginado scoped por comunidad. Residente: solo publicadas y únicamente
  *   si algún control AD autoriza (residenteVeActas); sin autorización → 403.
- * - POST upsert idempotente por id, validado con ActaGDSchema.
+ * - POST upsert idempotente por id, validado con ActaGDSchema. Al CREAR, el
+ *   servidor asigna el folio del libro de actas (`AD-<año>-<correlativo>`,
+ *   Ley 21.442 art. 15); un acta ya foliada nunca se renumera.
  * - Reglas espejo de saveActaGD (lib/store.ts): presentes/ausentes deben ser
  *   miembros vigentes de la directiva; el acta hereda el período vigente.
  * - Authz: ver/crear/editar → administrador y directiva (comité);
@@ -24,8 +26,15 @@ import {
   residentesVenActas,
   type FichaGobernanzaMin,
 } from "@/lib/api/gd-guard"
+import { anioDeFecha, siguienteFolioActa } from "./_folio"
 
-/** Campos persistibles de ActaGD (el cliente nunca decide id ni comunidad). */
+/** Intentos de asignación de folio antes de rendirse ante colisiones reales. */
+const MAX_INTENTOS_FOLIO = 3
+
+/**
+ * Campos persistibles de ActaGD (el cliente nunca decide id, comunidad ni folio:
+ * el folio del libro de actas lo asigna el servidor al crear).
+ */
 const CAMPOS_ACTA = [
   "fecha",
   "hora",
@@ -51,6 +60,38 @@ export function limpiarPayloadActa(
     if (campo in datos) salida[campo] = datos[campo]
   }
   return salida
+}
+
+/** ¿El error es la colisión del índice único `(comunidadId, folio)`? */
+function esConflictoDeFolio(e: unknown): boolean {
+  return (
+    typeof e === "object" &&
+    e !== null &&
+    "code" in e &&
+    (e as { code: string }).code === "P2002"
+  )
+}
+
+/**
+ * Siguiente folio `AD-<año>-<correlativo>` de la comunidad: `max(correlativo del
+ * año) + 1` sobre los folios ya asignados. Mismo patrón que el folio `CT-####`
+ * de certificados (server-side, por comunidad, con el índice único como
+ * garantía dura y reintento acotado en el POST), pero SIN transacción
+ * interactiva: medido el 2026-11-04 con 5 altas en paralelo sobre SQLite, la
+ * transacción que sólo lee retenía el lock de escritura y 4 de 5 altas morían
+ * con P1008/P2028, mientras que con la lectura simple las 5 reciben folios
+ * consecutivos y distintos. La lectura no necesita transacción porque el
+ * índice único es lo que impide repetir un folio, no el aislamiento.
+ */
+async function asignarFolio(comunidadId: string, anio: string): Promise<string> {
+  const emitidos = await prisma.actaGD.findMany({
+    where: { comunidadId, folio: { not: null } },
+    select: { folio: true },
+  })
+  return siguienteFolioActa(
+    emitidos.map((acta) => acta.folio),
+    anio
+  )
 }
 
 export function errorActas(e: unknown): Response {
@@ -209,17 +250,53 @@ export async function POST(req: Request): Promise<Response> {
     const negocio = await validarAsistentesYPeriodo(datos, scope)
     if (!negocio.ok) return negocio.response
 
-    // SAFETY: payload blanqueado por CAMPOS_ACTA + comunidad del servidor; Json arrays ya validados por zod.
-    const record = await prisma.actaGD.upsert({
-      where: { id },
-      create: {
-        ...limpiarPayloadActa(datos),
-        id,
-        comunidadId: scope.comunidadId,
-      } as never,
-      update: limpiarPayloadActa(datos) as never,
-    })
-    return Response.json(record, { status: existente ? 200 : 201 })
+    const payload = limpiarPayloadActa(datos)
+    // Un acta ya foliada conserva su folio: editar (o reenviar el mismo id) no
+    // renumera nada. El UPDATE nunca incluye `folio`, y el folio del body se
+    // descarta en `limpiarPayloadActa` (no está en CAMPOS_ACTA), así que el
+    // cliente no puede fijarlo ni pisarlo.
+    if (existente) {
+      // SAFETY: payload blanqueado por CAMPOS_ACTA + comunidad del servidor; Json arrays ya validados por zod.
+      const record = await prisma.actaGD.upsert({
+        where: { id },
+        create: {
+          ...payload,
+          id,
+          comunidadId: scope.comunidadId,
+        } as never,
+        update: payload as never,
+      })
+      return Response.json(record, { status: 200 })
+    }
+
+    // Alta: el folio del libro lo asigna el servidor (Ley 21.442 art. 15).
+    const anio = anioDeFecha(datos.fecha as string)
+    for (let intento = 1; intento <= MAX_INTENTOS_FOLIO; intento++) {
+      const folio = await asignarFolio(scope.comunidadId, anio)
+      try {
+        // SAFETY: payload blanqueado por CAMPOS_ACTA + comunidad y folio del servidor; Json arrays ya validados por zod.
+        const record = await prisma.actaGD.upsert({
+          where: { id },
+          create: {
+            ...payload,
+            id,
+            comunidadId: scope.comunidadId,
+            folio,
+          } as never,
+          update: payload as never,
+        })
+        return Response.json(record, { status: 201 })
+      } catch (e) {
+        // P2002 = índice único `(comunidadId, folio)`: otra alta tomó el número
+        // entre la lectura y la escritura. Se reintenta con el siguiente; si se
+        // agotan los intentos, el desenlace es un 409 de conflicto, no un 500.
+        if (!esConflictoDeFolio(e)) return errorActas(e)
+      }
+    }
+    return jsonError(
+      409,
+      "Conflicto: no se pudo reservar un folio libre para el acta, reintentá el guardado."
+    )
   } catch (e) {
     return errorActas(e)
   }
