@@ -32,7 +32,7 @@ import {
   registrarVisitaTecnicaApi,
 } from "@/lib/api/use-pe"
 import { hoyISO } from "@/lib/date-utils"
-import { permisosProveedores } from "@/components/pe/permisos-proveedores"
+import { permisosProveedores, pestanasProveedores, pestanaInicial } from "@/components/pe/permisos-proveedores"
 import type { ContactoEmergencia } from "@/lib/schemas"
 import {
   Card,
@@ -109,6 +109,10 @@ export function ProveedoresPanel({ roles }: ProveedoresPanelProps) {
   // Espejo cliente de la matriz: qué escrituras se pueden ofrecer sin que la API
   // responda 403. El permiso sigue decidiéndose en el servidor.
   const escritura = permisosProveedores(roles)
+  // Cada pestaña depende de su propio recurso: el catálogo es del maestro, las
+  // visitas del libro de obra y el directorio lo puede leer cualquier rol
+  // operativo. Gatear la pantalla entera dejaría al residente sin su directorio.
+  const pestanas = pestanasProveedores(roles)
 
   const { personas, isLoading: cPersonas, total: totalPersonas } = usePersonas()
   const { items: unidades, isLoading: cUnidades, total: totalUnidades } = useUnidades()
@@ -288,15 +292,21 @@ export function ProveedoresPanel({ roles }: ProveedoresPanelProps) {
         </div>
       )}
 
-      <Tabs defaultValue="catalogo">
+      <Tabs defaultValue={pestanaInicial(pestanas)}>
         <TabsList>
-          <TabsTrigger value="catalogo">
-            Catálogo ({proveedores.length})
-          </TabsTrigger>
-          <TabsTrigger value="visitas">
-            Visitas Técnicas ({visitasTecnicas.length})
-          </TabsTrigger>
-          <TabsTrigger value="emergencias">Directorio Emergencias</TabsTrigger>
+          {pestanas.catalogo && (
+            <TabsTrigger value="catalogo">
+              Catálogo ({proveedores.length})
+            </TabsTrigger>
+          )}
+          {pestanas.visitas && (
+            <TabsTrigger value="visitas">
+              Visitas Técnicas ({visitasTecnicas.length})
+            </TabsTrigger>
+          )}
+          {pestanas.emergencias && (
+            <TabsTrigger value="emergencias">Directorio Emergencias</TabsTrigger>
+          )}
         </TabsList>
 
         <TabsContent value="catalogo" className="mt-4">
