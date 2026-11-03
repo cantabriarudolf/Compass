@@ -5,7 +5,7 @@
  * Los registros de acceso (visitas, encomiendas y trabajos) viven en el módulo Accesos
  * (/operaciones/accesos), que ya muestra la lista consolidada del día. El menú deja una
  * sola entrada para esos registros y no lista las páginas /operaciones/bitacora ni
- * /operaciones/paqueteria: siguen existiendo, pero solo por URL directa.
+ * /operaciones/paqueteria: quedaron retiradas y redirigen en el servidor a esta ruta.
  *
  * Reservas, Solicitudes y Proveedores se conservan: no son registros de acceso (reservas y
  * solicitudes son otro dominio; proveedores es el maestro de empresas).

@@ -140,18 +140,19 @@ El módulo SHALL emitir `PE_START_SHIFT`, `PE_TASK_DONE`, `PE_VISITA_TECNICA`, `
 - **WHEN** existen mantenciones preventivas con y sin visita técnica en su ciclo vigente
 - **THEN** el porcentaje de cumplimiento del plan se deriva de las colecciones sin almacenarse
 
-### Requirement: Vista Accesos y Visitas — ruta dedicada con paneles reutilizados de bitácora
-El sistema SHALL proveer la vista `/operaciones/accesos` como ruta dedicada "Accesos y Visitas" que renderiza los paneles de control de visitas y de contratistas reutilizando los componentes extraídos de `/operaciones/bitacora`, con el mismo modelo de datos y acciones del store (`bitacoraVisitasPE`, `ingresosContratistasPE`, `saveBitacoraVisitaPE`/`ingresarBitacoraVisitaPE`/`removeBitacoraVisitaPE`/`saveIngresoContratistaPE`/`confirmarIngresoContratistaPE`/`removeIngresoContratistaPE`), sin cambios de esquema ni bump de `STORE_VERSION`.
+### Requirement: Vista Accesos y Visitas — puerta única de accesos
+El sistema SHALL proveer `/operaciones/accesos` como **puerta única** del módulo: el conserje elige a qué viene la persona (visita, encomienda o trabajo) y el panel correspondiente aparece, junto a una lista consolidada del día de solo lectura. Las rutas `/operaciones/bitacora` y `/operaciones/paqueteria` quedan retiradas del menú y SHALL redirigir en el servidor a `/operaciones/accesos`; ninguna de las dos SHALL renderizar contenido propio. Las validaciones, los eventos y la auditoría de los tres flujos no cambian.
 
 #### Scenario: Acceso a la vista Accesos y Visitas
 - **WHEN** el usuario navega a `/operaciones/accesos`
-- **THEN** el sistema muestra el heading "Accesos y Visitas" (o "Accesos y Visitas — Bitácora") y descripción de control de accesos
-- **AND** renderiza el panel de visitas (form con Nombre *, DNI *, Unidad destino, jornada, switch Pre-agendada y botón "Registrar visita") y el panel de contratistas (Empresa *, motivo *, jornada, agendado por, unidad) con sus tablas del día seleccionado.
+- **THEN** el sistema muestra el heading "Accesos y Visitas", el selector de día y la pregunta "¿A qué viene?" con sus tres respuestas
+- **AND** no monta ningún panel por defecto: el formulario aparece recién cuando el conserje elige una respuesta
+- **AND** debajo renderiza la lista consolidada del día con visitas, encomiendas y trabajos, de solo lectura y sin acciones.
 
 #### Scenario: Paneles reutilizados sin divergencia de comportamiento
 - **WHEN** la vista carga
-- **THEN** los paneles SHALL derivar del mismo store que bitácora (colecciones `bitacoraVisitasPE` e `ingresosContratistasPE`) y usar las mismas validaciones y acciones (p. ej. motivo contratista ≥5 chars, nombre+DNI obligatorios, origenAgenda/estado)
-- **AND** bitácora SHALL seguir renderizando esos mismos componentes en sus tabs "Visitas" y "Contratistas" sin cambio de comportamiento (suite `bitacora.spec.ts` permanece verde).
+- **THEN** los paneles SHALL usar el mismo modelo de datos que la vista anterior (colecciones `bitacoraVisitasPE`, `ingresosContratistasPE`, `encomiendasPE`) y las mismas validaciones y acciones (p. ej. motivo contratista ≥5 chars, nombre+DNI obligatorios, origenAgenda/estado)
+- **AND** la cobertura de esos flujos vive en `e2e/crud/accesos.spec.ts`; las suites `bitacora.spec.ts` y `paqueteria.spec.ts` se retiraron junto con sus rutas.
 
 #### Scenario: Selector de día y filtrado
 - **WHEN** el usuario cambia el selector de día (input date)
@@ -166,21 +167,21 @@ El sistema SHALL proveer la vista `/operaciones/accesos` como ruta dedicada "Acc
 - **THEN** `/operaciones/accesos` ya no pertenece a `RUTAS_PENDIENTES` en `AppSidebar` y el item "Accesos y Visitas" es navegable sin badge "Próximamente".
 
 #### Scenario: Ruta dedicada distinta de bitácora
-- **WHEN** el usuario visita `/operaciones/bitacora` y `/operaciones/accesos`
-- **THEN** ambas rutas existen y son distintas (bitácora con tabs vs accesos con layout propio sin tabs de turno).
+- **WHEN** el usuario visita `/operaciones/bitacora`
+- **THEN** la ruta responde una redirección del servidor hacia `/operaciones/accesos` y no renderiza pantalla propia.
 
-### Requirement: Vista Encomiendas — ruta dedicada con panel reutilizado de bitácora
-El sistema SHALL proveer la vista `/operaciones/paqueteria` como ruta dedicada "Encomiendas" que renderiza el panel de recepción y retiro de encomiendas reutilizando el componente extraído de `/operaciones/bitacora`, con el mismo modelo de datos y acciones del store (`encomiendasPE`, `saveEncomiendaPE`/`registrarRetiroEncomiendaPE`/`removeEncomiendaPE`), sin cambios de esquema ni bump de `STORE_VERSION`. La recepción SHALL exigir courier del maestro y al menos destinatario o unidad; el retiro SHALL exigir quién retira (validación hard del store) y SHALL ser auditable (`PE_ENCOMIENDA_RECIBIDA`/`RETIRADA`).
+### Requirement: Vista Encomiendas — recepción dentro de la puerta única
+El sistema SHALL atender la recepción y el retiro de encomiendas dentro de `/operaciones/accesos`, eligiendo la respuesta "Trae o retira algo" en la puerta única, con el mismo modelo de datos y las mismas validaciones que la vista anterior (`encomiendasPE`, `saveEncomiendaPE`/`registrarRetiroEncomiendaPE`/`removeEncomiendaPE`). La recepción SHALL exigir courier del maestro y al menos destinatario o unidad; el retiro SHALL exigir quién retira (validación hard) y SHALL ser auditable (`PE_ENCOMIENDA_RECIBIDA`/`RETIRADA`). La ruta `/operaciones/paqueteria` queda retirada y SHALL redirigir en el servidor a `/operaciones/accesos`.
 
 #### Scenario: Acceso a la vista Encomiendas
 - **WHEN** el usuario navega a `/operaciones/paqueteria`
-- **THEN** el sistema muestra el heading "Encomiendas" y descripción de recepción/retiro
-- **AND** renderiza el panel de encomiendas (form con Courier / App *, Destinatario, Unidad, Descripción del paquete, Foto evidencia, URL foto, botón "Registrar recepción") y la tabla "Encomiendas del día ({dia})" con sus acciones.
+- **THEN** la ruta responde una redirección del servidor hacia `/operaciones/accesos`
+- **AND** la recepción de encomiendas se alcanza desde la puerta única eligiendo "Trae o retira algo", que monta el formulario con Courier / App *, Destinatario, Unidad, Descripción del paquete, Foto evidencia y el botón "Registrar recepción".
 
 #### Scenario: Panel reutilizado sin divergencia de comportamiento
 - **WHEN** la vista carga
-- **THEN** el panel SHALL derivar del mismo store que bitácora (colección `encomiendasPE`) y usar las mismas validaciones y acciones (courier obligatorio, destinatario o unidad obligatorio, evidencia URL D1 si presente, retiro requiere retiradoPor no vacío)
-- **AND** bitácora SHALL seguir renderizando ese mismo componente en su tab "Encomiendas" sin cambio de comportamiento (suite `bitacora.spec.ts` permanece verde).
+- **THEN** el panel SHALL usar el mismo modelo de datos que la vista anterior (colección `encomiendasPE`) y las mismas validaciones y acciones (courier obligatorio, destinatario o unidad obligatorio, evidencia URL D1 si presente, retiro requiere retiradoPor no vacío)
+- **AND** la cobertura de ese flujo vive en `e2e/crud/accesos.spec.ts`, que registra una recepción y la verifica también en la lista consolidada del día.
 
 #### Scenario: Recepción de encomienda de prueba
 - **WHEN** el usuario selecciona un courier del maestro, indica destinatario o unidad, describe "TEST-*" y confirma "Registrar recepción"
@@ -204,12 +205,12 @@ El sistema SHALL proveer la vista `/operaciones/paqueteria` como ruta dedicada "
 
 #### Scenario: Navegación lateral habilitada — RUTAS_PENDIENTES vacío
 - **WHEN** la vista existe
-- **THEN** `/operaciones/paqueteria` ya no pertenece a `RUTAS_PENDIENTES` en `AppSidebar` y el item "Encomiendas" es navegable sin badge "Próximamente"
+- **THEN** el menú de Operaciones expone una sola entrada, `/operaciones/accesos`, y las entradas "Bitácora Diaria" y "Encomiendas" ya no aparecen
 - **AND** `RUTAS_PENDIENTES` queda vacío (ninguna ruta pendiente restante).
 
 #### Scenario: Ruta dedicada distinta de bitácora
-- **WHEN** el usuario visita `/operaciones/bitacora` y `/operaciones/paqueteria`
-- **THEN** ambas rutas existen y son distintas (bitácora con tabs vs paquetería con layout propio sin tabs de turno).
+- **WHEN** el usuario visita `/operaciones/paqueteria`
+- **THEN** la ruta responde una redirección del servidor hacia `/operaciones/accesos` y no renderiza pantalla propia.
 
 ### Requirement: Poda de nulls de BD antes de enviar (sinNulos)
 Las páginas que reenvían filas Prisma SHALL podar nulls de primer nivel
