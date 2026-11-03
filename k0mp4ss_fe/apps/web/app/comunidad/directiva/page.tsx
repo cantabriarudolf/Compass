@@ -204,7 +204,7 @@ export default function DirectivaPage() {
             <CardTitle className="flex items-center gap-2 text-base">
               <IconGavel className="size-4" /> Período de directiva vigente
             </CardTitle>
-            <CardDescription>Inscripción y vigencia (art. 17 Ley 21.442: máximo 36 meses). El historial nunca se elimina.</CardDescription>
+            <CardDescription>Vigencia del período (art. 17 Ley 21.442: máximo 36 meses). El historial nunca se elimina.</CardDescription>
           </div>
           {vista === "administrador" && (
             <Button variant="outline" size="sm" onClick={() => { setPeriodoDialogo(true); setError(null) }} className="gap-1">
@@ -231,7 +231,9 @@ export default function DirectivaPage() {
                   <Badge className={alerta.clase}>{alerta.texto}</Badge>
                   {periodoVigente.fechasEstimadas && <Badge variant="secondary">Fechas estimadas — actualizar desde el libro</Badge>}
                 </div>
-                <p className="text-xs text-muted-foreground">Respaldo: {periodoVigente.referenciaInscripcion}</p>
+                {periodoVigente.referenciaInscripcion && (
+                  <p className="text-xs text-muted-foreground">Respaldo externo (opcional): {periodoVigente.referenciaInscripcion}</p>
+                )}
                 <div className="flex flex-wrap gap-2">
                   {directivaVigente.map(d => (
                     <span key={d.id} className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-xs">
@@ -417,8 +419,9 @@ export default function DirectivaPage() {
                     <Input type="date" value={perInscripcion} onChange={e => setPerInscripcion(e.target.value)} />
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs">Referencia (acta/escritura) *</Label>
+                    <Label className="text-xs">Respaldo externo (opcional)</Label>
                     <Input value={perReferencia} onChange={e => setPerReferencia(e.target.value)} placeholder="Acta asamblea 2026-03-01" />
+                    <p className="text-xs text-muted-foreground">Opcional: la ley no exige inscribir la directiva. Sirve para dejar anotado el acta o la escritura con que la comunidad respalda el período.</p>
                   </div>
                 </div>
                 <div className="space-y-1">

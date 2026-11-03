@@ -266,10 +266,14 @@ export const ExtensionGobernanzaSchema = z
         .max(36, "El período no puede exceder 36 meses (art. 17 Ley 21.442)."),
       fechaFin: FechaISOSchema.optional(),
       fechaInscripcion: FechaISOSchema,
+      // Respaldo externo del período (acta o escritura que lo documenta). Opcional:
+      // la ley no exige inscribir la directiva en registro alguno, así que el dato
+      // es referencial y su ausencia se persiste como cadena vacía.
       referenciaInscripcion: z
-        .string({ required_error: "La referencia de inscripción es obligatoria." })
-        .min(1, "Indicá el acta, escritura o inscripción de respaldo.")
-        .max(280, "La referencia excede el largo permitido."),
+        .string()
+        .max(280, "La referencia excede el largo permitido.")
+        .optional()
+        .default(""),
       // true = fechas estimadas pendientes de actualizar desde el libro físico.
       fechasEstimadas: z.boolean().optional(),
       estado: z.enum(["vigente", "cerrado"]),

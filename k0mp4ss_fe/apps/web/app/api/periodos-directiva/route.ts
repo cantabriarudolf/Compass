@@ -5,6 +5,8 @@
  * savePeriodoDirectiva en lib/store.ts):
  * - GET paginado scoped (residente puede ver: puede(rol, "ver", "gd")).
  * - POST upsert idempotente, validado con PeriodoDirectivaSchema.
+ * - `referenciaInscripcion` es un respaldo externo OPCIONAL (la ley no exige
+ *   inscribir la directiva); su ausencia no bloquea registro ni cierre.
  * - Art. 17 Ley 21.442: duración ≤ 36 meses (schema) + nómina impar de 3 a 5
  *   al activar un vigente + cada miembro existe y tiene cuenta activa.
  * - Solo un período "vigente" por comunidad (409 si otro vigente existe).
