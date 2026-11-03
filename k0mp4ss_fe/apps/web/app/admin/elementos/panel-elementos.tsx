@@ -20,6 +20,12 @@
  *   tienen valor: la API hace merge parcial y valida el documento completo.
  * - Desactivar un elemento no borra reservas históricas: solo deja de aceptar
  *   reservas nuevas, así que el panel nunca elimina el catálogo en uso.
+ * - `requiereAutorizacion` se envía SIEMPRE, en creación y en edición. Los
+ *   campos opcionales vacíos se omiten porque el `PUT` de la API hace merge
+ *   parcial, pero un booleano nunca está «vacío»: si se omitiera al apagarlo,
+ *   el merge conservaría el `true` anterior y el flag no se podría desactivar
+ *   desde la interfaz. Al encenderse, la reserva del elemento nace
+ *   «solicitada» y espera la aprobación del administrador.
  */
 import * as React from "react"
 import { generarId } from "@/lib/id-utils"
@@ -78,6 +84,7 @@ interface FormElemento {
   cancelacionTardiaDias: string
   penalizacionTardiaMonto: string
   activo: boolean
+  requiereAutorizacion: boolean
 }
 
 const FORM_ELEMENTO: FormElemento = {
@@ -93,6 +100,7 @@ const FORM_ELEMENTO: FormElemento = {
   cancelacionTardiaDias: "",
   penalizacionTardiaMonto: "",
   activo: true,
+  requiereAutorizacion: false,
 }
 
 /** Entero opcional: `undefined` cuando el campo está vacío o no es numérico. */
@@ -155,6 +163,7 @@ export function PanelElementos() {
       cancelacionTardiaDias: elemento.cancelacionTardiaDias?.toString() ?? "",
       penalizacionTardiaMonto: elemento.penalizacionTardiaMonto?.toString() ?? "",
       activo: elemento.activo,
+      requiereAutorizacion: elemento.requiereAutorizacion === true,
     })
   }
 
@@ -215,6 +224,8 @@ export function PanelElementos() {
         tarifaUso,
         garantiaRequerida,
         activo: datosForm.activo,
+        // Booleano, nunca «vacío»: viaja siempre para que apagarlo lo borre.
+        requiereAutorizacion: datosForm.requiereAutorizacion,
         ...(datosForm.franja === "bloques_horas" && duracion !== undefined
           ? { duracionBloqueHoras: duracion }
           : {}),
@@ -509,6 +520,23 @@ export function PanelElementos() {
                 />
                 Habilitado para reservas
               </label>
+              <div className="flex flex-col gap-1">
+                <label className="flex items-center gap-2 text-sm">
+                  <Switch
+                    checked={form.requiereAutorizacion}
+                    onCheckedChange={(v) =>
+                      setForm((f) =>
+                        f ? { ...f, requiereAutorizacion: v } : f
+                      )
+                    }
+                  />
+                  Requiere autorización del administrador
+                </label>
+                <p className="text-xs text-muted-foreground">
+                  Las reservas de este elemento nacen «solicitada» y esperan tu
+                  aprobación antes de confirmarse.
+                </p>
+              </div>
               <div className="flex justify-end gap-2">
                 <Button variant="outline" onClick={cerrarFormulario}>
                   Cancelar
@@ -591,9 +619,14 @@ export function PanelElementos() {
                         </span>
                       </TableCell>
                       <TableCell>
-                        <Badge variant={e.activo ? "secondary" : "outline"}>
-                          {e.activo ? "Habilitado" : "Deshabilitado"}
-                        </Badge>
+                        <div className="flex flex-wrap items-center gap-1">
+                          <Badge variant={e.activo ? "secondary" : "outline"}>
+                            {e.activo ? "Habilitado" : "Deshabilitado"}
+                          </Badge>
+                          {e.requiereAutorizacion && (
+                            <Badge variant="outline">Requiere autorización</Badge>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell>
                         <div className="flex justify-end gap-1">
