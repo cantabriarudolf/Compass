@@ -258,6 +258,94 @@ describe("/api/periodos-directiva — GD períodos con BD real (Fase 0)", () => 
     })
   })
 
+  // `referenciaInscripcion` es respaldo externo OPCIONAL: la ley no exige inscribir
+  // la directiva, así que su ausencia no puede bloquear el registro del período.
+  it("POST sin referenciaInscripcion → 201 y el respaldo queda vacío", async () => {
+    await conSesion(emailAdmin, async () => {
+      const sinRespaldo = periodoValido({ id: "gd-per-sin-respaldo", estado: "cerrado" })
+      delete sinRespaldo.referenciaInscripcion
+      expect("referenciaInscripcion" in sinRespaldo).toBe(false)
+
+      const res = await POST(sinRespaldo)
+      expect(res.status).toBe(201)
+
+      const enBd = await prisma.periodoDirectiva.findUnique({
+        where: { id: "gd-per-sin-respaldo" },
+      })
+      expect(enBd).not.toBeNull()
+      expect(enBd?.referenciaInscripcion).toBe("")
+    })
+  })
+
+  it("POST con referenciaInscripcion → 201 y el respaldo se guarda", async () => {
+    await conSesion(emailAdmin, async () => {
+      const res = await POST(
+        periodoValido({
+          id: "gd-per-con-respaldo",
+          estado: "cerrado",
+          referenciaInscripcion: "Acta de asamblea N° 7/2026",
+        })
+      )
+      expect(res.status).toBe(201)
+
+      const enBd = await prisma.periodoDirectiva.findUnique({
+        where: { id: "gd-per-con-respaldo" },
+      })
+      expect(enBd?.referenciaInscripcion).toBe("Acta de asamblea N° 7/2026")
+    })
+  })
+
+  it("PUT parcial sin el campo no borra el respaldo que la fila ya tenía", async () => {
+    // Existe por el `.default("")` del schema: el `.partial()` del PUT no debe
+    // inyectar ese default y pisar un respaldo real ya guardado.
+    await prisma.periodoDirectiva.create({
+      data: {
+        id: "gd-per-respaldo-previo",
+        comunidadId: comunidadA,
+        fechaInicio: "2023-01-01",
+        duracionMeses: 24,
+        fechaInscripcion: "2023-01-10",
+        referenciaInscripcion: "Escritura pública N° 88, CBR Santiago",
+        estado: "cerrado",
+        miembros: [],
+      },
+    })
+    await conSesion(emailAdmin, async () => {
+      const res = await PUT("gd-per-respaldo-previo", { duracionMeses: 12 })
+      expect(res.status).toBe(200)
+
+      const enBd = await prisma.periodoDirectiva.findUnique({
+        where: { id: "gd-per-respaldo-previo" },
+      })
+      expect(enBd?.duracionMeses).toBe(12)
+      expect(enBd?.referenciaInscripcion).toBe("Escritura pública N° 88, CBR Santiago")
+    })
+  })
+
+  it("PUT con cadena vacía explícita → el respaldo queda vacío (borrado intencional)", async () => {
+    await prisma.periodoDirectiva.create({
+      data: {
+        id: "gd-per-respaldo-borrado",
+        comunidadId: comunidadA,
+        fechaInicio: "2023-06-01",
+        duracionMeses: 12,
+        fechaInscripcion: "2023-06-05",
+        referenciaInscripcion: "Acta asamblea N° 2/2023",
+        estado: "cerrado",
+        miembros: [],
+      },
+    })
+    await conSesion(emailAdmin, async () => {
+      const res = await PUT("gd-per-respaldo-borrado", { referenciaInscripcion: "" })
+      expect(res.status).toBe(200)
+
+      const enBd = await prisma.periodoDirectiva.findUnique({
+        where: { id: "gd-per-respaldo-borrado" },
+      })
+      expect(enBd?.referenciaInscripcion).toBe("")
+    })
+  })
+
   it("residente: ver sí (200), crear no (403) — puede(rol, accion, 'gd')", async () => {
     await conSesion(emailResidente, async () => {
       const get = await GET()
