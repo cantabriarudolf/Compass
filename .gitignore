@@ -39,6 +39,10 @@ Data/NSGC/backups/test-*.json
 # Respaldos de la base de datos (nunca versionar)
 Data/NSGC/backups/
 
+# Documentos fuente del owner (reglamentos, contratos firmados): material privado.
+# Quedan fuera del repositorio a propósito; no se publican ni se envían a servicios externos.
+Data/NSGC/documentos/
+
 # Artefactos de orquestación y de tests
 odd/
 test-results/
