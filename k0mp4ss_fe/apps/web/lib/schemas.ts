@@ -1331,6 +1331,109 @@ export const EgresoFISchema = z.object({
   aprobacionActaGDId: IdEntidadSchema.optional(),
 })
 
+// --- Reglamento versionado del cobro (S1/S2/S3) ---
+
+/** Período de facturación: mes en formato AAAA-MM (ordenable como texto). */
+export const PeriodoFacturacionSchema = z
+  .string({ required_error: "El período es obligatorio." })
+  .regex(
+    /^(19|20)\d{2}-(0[1-9]|1[0-2])$/,
+    "El período debe tener formato AAAA-MM."
+  )
+
+/** Instrumento que funda la forma de contribución declarada. */
+export const FUENTES_INSTRUMENTO_REGLAMENTO = [
+  "reglamento_copropiedad",
+  "acta_asamblea",
+  "migracion_automatica",
+] as const
+export const FuenteInstrumentoReglamentoSchema = z.enum(
+  FUENTES_INSTRUMENTO_REGLAMENTO
+)
+
+/**
+ * Fuentes que fundan de verdad la forma de contribución (S1).
+ * `migracion_automatica` solo materializa el comportamiento heredado y no
+ * habilita la emisión, así que no se puede declarar por API.
+ */
+export const FUENTES_INSTRUMENTO_REALES = [
+  "reglamento_copropiedad",
+  "acta_asamblea",
+] as const
+export const FuenteInstrumentoRealSchema = z.enum(FUENTES_INSTRUMENTO_REALES)
+
+/** Cómo se reparte el gasto común (Ley 21.442 art. 6). */
+export const FORMAS_CONTRIBUCION_REGLAMENTO = [
+  "coeficiente",
+  "partes_iguales",
+  "monto_por_tipo",
+  "mixto",
+] as const
+export const FormaContribucionReglamentoSchema = z.enum(
+  FORMAS_CONTRIBUCION_REGLAMENTO
+)
+
+/**
+ * Números del cobro que gobierna una versión (S2). Ninguno se escribe como
+ * constante en la lógica: la emisión los lee de acá.
+ */
+export const ParametrosReglamentoSchema = z.object({
+  porcentajeReserva: z
+    .number({ required_error: "El porcentaje de reserva es obligatorio." })
+    .min(0, "El porcentaje de reserva no puede ser negativo."),
+  diasPagoGc: z
+    .number({ required_error: "Los días de pago son obligatorios." })
+    .int("Los días de pago deben ser un entero.")
+    .min(1, "Los días de pago deben estar entre 1 y 60.")
+    .max(60, "Los días de pago deben estar entre 1 y 60."),
+  tasaMoraMensualPct: z
+    .number({ required_error: "La tasa de mora es obligatoria." })
+    .min(0, "La tasa de mora no puede ser negativa."),
+  topeMoraPct: z
+    .number({ required_error: "El tope de mora es obligatorio." })
+    .min(0, "El tope de mora no puede ser negativo."),
+  cuotasCorte: z
+    .number({ required_error: "Las cuotas de corte son obligatorias." })
+    .int("Las cuotas de corte deben ser un entero.")
+    .min(0, "Las cuotas de corte no pueden ser negativas."),
+  diasPreavisoCorte: z
+    .number({ required_error: "Los días de preaviso son obligatorios." })
+    .int("Los días de preaviso deben ser un entero.")
+    .min(0, "Los días de preaviso no pueden ser negativos."),
+  ipcActivo: z.boolean({ required_error: "El interruptor de IPC es obligatorio." }),
+})
+
+/** Una versión del reglamento, con su instrumento y su vigencia (S3). */
+export const VersionReglamentoSchema = z.object({
+  id: IdEntidadSchema,
+  version: z
+    .number({ required_error: "La versión es obligatoria." })
+    .int("La versión debe ser un entero.")
+    .min(1, "La versión debe ser un entero positivo."),
+  vigenteDesde: PeriodoFacturacionSchema,
+  fuenteInstrumento: FuenteInstrumentoReglamentoSchema,
+  actaRef: z
+    .string()
+    .min(1, "La referencia del acta no puede estar vacía.")
+    .nullable()
+    .optional(),
+  formaContribucion: FormaContribucionReglamentoSchema,
+  parametros: ParametrosReglamentoSchema,
+})
+
+/**
+ * Alta de versión por API: `id` y `version` los asigna el servidor, y la fuente
+ * queda restringida a las reales (la migración automática no se declara a mano).
+ */
+export const NuevaVersionReglamentoSchema = VersionReglamentoSchema.pick({
+  vigenteDesde: true,
+  actaRef: true,
+  formaContribucion: true,
+  parametros: true,
+}).extend({
+  fuenteInstrumento: FuenteInstrumentoRealSchema,
+})
+
 export const LineaEmisionGCSchema = z.object({
   unidadId: IdEntidadSchema,
   responsablePersonaId: IdEntidadSchema,
@@ -2180,6 +2283,11 @@ export type IngresoFI = z.infer<typeof IngresoFISchema>
 export type LineaEmisionGC = z.infer<typeof LineaEmisionGCSchema>
 export type AporteFondoReserva = z.infer<typeof AporteFondoReservaSchema>
 export type EmisionGC = z.infer<typeof EmisionGCSchema>
+export type ParametrosReglamento = z.infer<typeof ParametrosReglamentoSchema>
+export type VersionReglamento = z.infer<typeof VersionReglamentoSchema>
+export type NuevaVersionReglamento = z.infer<
+  typeof NuevaVersionReglamentoSchema
+>
 export type ConceptoCobroFI = z.infer<typeof ConceptoCobroFISchema>
 export type MoraCobroFI = z.infer<typeof MoraCobroFISchema>
 export type PagoCobroFI = z.infer<typeof PagoCobroFISchema>

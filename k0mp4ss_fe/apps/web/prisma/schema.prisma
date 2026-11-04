@@ -52,6 +52,7 @@ model Comunidad {
   fondosFI                 FondoFI[]
   egresosFI                EgresoFI[]
   ingresosFI               IngresoFI[]
+  versionesReglamento      VersionReglamento[]
   emisionesGC              EmisionGC[]
   cobrosFI                 CobroFI[]
   // SERIE-FASE2 §V5 — cobranza FI multicanal (interruptor global, preferencia
@@ -979,6 +980,28 @@ model EgresoFI {
   @@index([comunidadId])
   @@index([fondoId])
   @@map("egresos_fi")
+}
+
+/// Reglamento versionado del cobro (S1/S3): agrupa los parámetros que gobiernan
+/// la emisión, el instrumento que los funda (artículo del reglamento de
+/// copropiedad o acta de asamblea) y el período desde el que rigen. Append-only:
+/// una versión nueva no reescribe las anteriores, y lo ya emitido queda con los
+/// valores con los que se calculó (S4).
+model VersionReglamento {
+  id                String    @id
+  comunidadId       String
+  comunidad         Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  version           Int
+  vigenteDesde      String
+  fuenteInstrumento String
+  actaRef           String?
+  formaContribucion String
+  parametros        Json
+  createdAt         DateTime  @default(now())
+
+  @@unique([comunidadId, version])
+  @@index([comunidadId])
+  @@map("versiones_reglamento")
 }
 
 model EmisionGC {
