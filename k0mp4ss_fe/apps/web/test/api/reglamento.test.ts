@@ -248,7 +248,12 @@ describe("/api/reglamento — versión vigente del reglamento con BD real", () =
       expect(creada.fuenteInstrumento).toBe("reglamento_copropiedad")
       expect(creada.actaRef).toBe("Reglamento de copropiedad, art. 11")
       expect(creada.formaContribucion).toBe("coeficiente")
-      expect(creada.parametros).toEqual(PARAMETROS)
+      // El recargo se declara por comunidad; una versión que no lo declara vuelve
+      // con la lectura normativa (encima del presupuesto, Ley 21.442 art. 39).
+      expect(creada.parametros).toEqual({
+        ...PARAMETROS,
+        reservaIncluidaEnPresupuesto: false,
+      })
 
       const enBD = await prisma.versionReglamento.findUnique({ where: { id: creada.id } })
       expect(enBD?.comunidadId).toBe(comunidad)
