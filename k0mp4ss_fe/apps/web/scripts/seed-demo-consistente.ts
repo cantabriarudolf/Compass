@@ -657,14 +657,63 @@ async function pasoPersonas(estructura: Estructura): Promise<Personas> {
  */
 const PORCENTAJE_RESERVA_DEMO = 5
 
+/** Fondo de imputación del recargo al fondo de reserva (el aporte no es interno). */
+const FONDO_RESERVA_ID = "fondo-reserva"
+
+/** Fondo de imputación del gasto común presupuestado. */
+const FONDO_GC_ID = "fondo-gc"
+
 const FONDOS = [
-  { id: "fondo-gc", nombre: "Fondo de Gasto Común", tipo: "gasto_comun", saldoInicial: 3_450_000, porcentajeAporte: null },
-  { id: "fondo-reserva", nombre: "Fondo de Reserva", tipo: "reserva", saldoInicial: 12_800_000, porcentajeAporte: PORCENTAJE_RESERVA_DEMO },
+  { id: FONDO_GC_ID, nombre: "Fondo de Gasto Común", tipo: "gasto_comun", saldoInicial: 3_450_000, porcentajeAporte: null },
+  { id: FONDO_RESERVA_ID, nombre: "Fondo de Reserva", tipo: "reserva", saldoInicial: 12_800_000, porcentajeAporte: PORCENTAJE_RESERVA_DEMO },
   { id: "fondo-amenities", nombre: "Fondo de Amenities", tipo: "amenities", saldoInicial: 1_250_000, porcentajeAporte: null },
   { id: "fondo-cc-punto-cero", nombre: "Cuenta Corriente", tipo: "gasto_comun", saldoInicial: 17_082_694, porcentajeAporte: null },
 ]
 
 type Finanzas = { duenioDe: Map<string, string> }
+
+/** Una línea del detalle de un cobro sembrado: concepto, monto y su fondo. */
+type LineaCobroSembrada = {
+  concepto: "gasto_comun"
+  monto: number
+  fondoId: string
+}
+
+/**
+ * Recargo al fondo de reserva de una unidad: el porcentaje que declara la
+ * versión vigente aplicado a su presupuesto, redondeado como el cobro. Es la
+ * MISMA cuenta que hace `detalleDeCobroGc`, de modo que el aporte que declara
+ * la emisión es exactamente la suma de las líneas de reserva de sus cobros.
+ */
+function reservaDe(presupuestoUnidad: number): number {
+  return monto(presupuestoUnidad * (PORCENTAJE_RESERVA_DEMO / 100))
+}
+
+/**
+ * Detalle de un cobro de gasto común (S5): el presupuesto de la unidad como
+ * línea de gasto común y, ENCIMA, el recargo al fondo de reserva imputado al
+ * fondo de reserva. Las líneas suman exactamente `montoBase`.
+ *
+ * Es la forma que escribe `app/api/emisiones-gc` (`desgloseCobro`) con
+ * `reservaIncluidaEnPresupuesto: false`, que es lo que declara la versión de
+ * este seed: el recargo se suma al presupuesto, no se desagrega de él. El seed
+ * escribe por Prisma directo y no importa esa función privada; lo que replica
+ * es el contrato, no el código.
+ */
+function detalleDeCobroGc(presupuestoUnidad: number): {
+  montoBase: number
+  lineas: LineaCobroSembrada[]
+} {
+  const reserva = reservaDe(presupuestoUnidad)
+  const lineas: LineaCobroSembrada[] = [
+    { concepto: "gasto_comun", monto: presupuestoUnidad, fondoId: FONDO_GC_ID },
+  ]
+  // Una línea de monto cero no se siembra: el esquema exige líneas positivas.
+  if (reserva > 0) {
+    lineas.push({ concepto: "gasto_comun", monto: reserva, fondoId: FONDO_RESERVA_ID })
+  }
+  return { montoBase: presupuestoUnidad + reserva, lineas }
+}
 
 async function pasoFinanzas(estructura: Estructura): Promise<Finanzas> {
   for (const fondo of FONDOS) {
@@ -692,9 +741,12 @@ async function pasoFinanzas(estructura: Estructura): Promise<Finanzas> {
   // `cobros_fi` directo por Prisma, así que nunca pasó por la compuerta; sin
   // esta versión, el demo abre y «Emitir» responde que la comunidad no declaró
   // nada. Los parámetros replican lo que el seed ya calcula: mismo vencimiento
-  // (`vencimientoDe`), mismo % de reserva que `aporteReserva` y la tasa de mora
-  // de sus cobros. El demo no modela corte ni IPC, así que esos quedan con los
+  // (`vencimientoDe`), mismo % de reserva que `reservaDe` y la tasa de mora de
+  // sus cobros. El demo no modela corte ni IPC, así que esos quedan con los
   // valores por defecto que documenta la migración `add_version_reglamento`.
+  // `reservaIncluidaEnPresupuesto: false` se declara explícito porque es el
+  // caso que el demo muestra: el recargo se cobra ENCIMA del presupuesto, así
+  // que el total a recaudar de cada período es presupuesto + recargo.
   const primeraVersion = {
     vigenteDesde: PERIODOS[0],
     fuenteInstrumento: "acta_asamblea",
@@ -708,6 +760,7 @@ async function pasoFinanzas(estructura: Estructura): Promise<Finanzas> {
       cuotasCorte: 3,
       diasPreavisoCorte: 5,
       ipcActivo: false,
+      reservaIncluidaEnPresupuesto: false,
     },
   }
   await prisma.versionReglamento.upsert({
@@ -722,7 +775,13 @@ async function pasoFinanzas(estructura: Estructura): Promise<Finanzas> {
   for (const periodo of PERIODOS) {
     const factor = factorPeriodo[periodo] ?? 1
     const lineas: Array<{ unidadId: string; responsablePersonaId: string; monto: number; cobroId: string }> = []
+    // Presupuesto del período (Σ lo que asigna la fórmula por unidad, SIN el
+    // recargo) y aporte al fondo de reserva (Σ recargos de las unidades). El
+    // recargo se cuenta por unidad porque es por unidad que se cobra: sumarlo
+    // sobre el total redondeado una sola vez daría un aporte que ningún cobro
+    // respalda en el centavo.
     let bruto = 0
+    let reservaTotal = 0
 
     for (const unidad of conGastoComun) {
       const base = BASE_GC[unidad.tipoUnidadId] ?? 30_000
@@ -731,21 +790,27 @@ async function pasoFinanzas(estructura: Estructura): Promise<Finanzas> {
       lineas.push({
         unidadId: unidad.id,
         responsablePersonaId: responsable(unidad.id),
+        // Presupuesto de la unidad: el cargo con su recargo es el `montoBase`
+        // del cobro, no esta línea (mismo criterio que la emisión por API).
         monto: montoGc,
         cobroId,
       })
       bruto += montoGc
+      reservaTotal += reservaDe(montoGc)
     }
 
-    const aporteReserva = monto(bruto * (PORCENTAJE_RESERVA_DEMO / 100))
     const emisionId = `emision-${periodo}`
     const filaEmision = {
       comunidadId,
       periodo,
       modo: "fijo",
-      gastoTotal: bruto + aporteReserva,
+      // Presupuesto emitido, no el total a recaudar: el recargo al fondo de
+      // reserva se cobra al lado y vive en `fondoReservaAporte`.
+      gastoTotal: bruto,
       lineas,
-      fondoReservaAporte: { fondoId: "fondo-reserva", monto: aporteReserva },
+      // El aporte declarado ES la suma de las líneas de reserva de los cobros
+      // de esta emisión, no un asiento interno del presupuesto.
+      fondoReservaAporte: { fondoId: FONDO_RESERVA_ID, monto: reservaTotal },
       fechaEmision: `${periodo}-01`,
     }
     await prisma.emisionGC.upsert({ where: { id: emisionId }, update: filaEmision, create: { id: emisionId, ...filaEmision } })
@@ -756,11 +821,16 @@ async function pasoFinanzas(estructura: Estructura): Promise<Finanzas> {
       const cobroId = linea.cobroId
       const fechaCargo = `${periodo}-01`
       const fechaVencimiento = vencimientoDe(periodo)
+      // El cobro lleva su detalle: presupuesto + recargo de reserva. Lo que se
+      // cobra a la unidad (`montoBase`) es la suma de esas líneas, y es también
+      // lo que paga quien está al día: si el pago se quedara en el presupuesto,
+      // la reserva declarada volvería a ser un número que nadie paga.
+      const detalle = detalleDeCobroGc(linea.monto)
       const pagos = paga
         ? [
             {
               id: `pago-${cobroId}`,
-              monto: linea.monto,
+              monto: detalle.montoBase,
               fecha: iso(new Date(Date.UTC(Number(periodo.slice(0, 4)), Number(periodo.slice(5, 7)) - 1, entero(5, 9)))),
               medio: elegir(["transferencia", "webpay", "efectivo"] as const),
             },
@@ -771,7 +841,7 @@ async function pasoFinanzas(estructura: Estructura): Promise<Finanzas> {
         : [
             {
               id: `mora-${cobroId}`,
-              monto: monto(linea.monto * 0.02),
+              monto: monto(detalle.montoBase * 0.02),
               diasAtraso: periodo === "2026-10" ? 22 : 52,
               tasaMensualPct: 1.5,
               fecha: vencimientoDe(periodo),
@@ -784,9 +854,11 @@ async function pasoFinanzas(estructura: Estructura): Promise<Finanzas> {
         concepto: "gasto_comun",
         origenModulo: "FI",
         origenRef: emisionId,
-        fondoId: "fondo-gc",
+        fondoId: FONDO_GC_ID,
         descripcion: `Gasto común ${periodo}`,
-        montoBase: linea.monto,
+        montoBase: detalle.montoBase,
+        // S5: el detalle del cobro, con el recargo imputado a su propio fondo.
+        lineas: detalle.lineas,
         fechaCargo,
         fechaVencimiento,
         moras,
@@ -1320,6 +1392,19 @@ async function pasoPorteria(estructura: Estructura): Promise<void> {
 // Verificación final
 // ────────────────────────────────────────────────────────────────────────────
 
+/**
+ * Líneas de un JSON de cobro/emisión, o `[]` si la fila no las trae. El `[]`
+ * cubre el cobro legacy (`lineas: null`), que es válido para el sistema pero
+ * que este seed no puede producir: el demo tiene que mostrar el detalle.
+ */
+function lineasDeJson(
+  valor: Prisma.JsonValue | null
+): Array<{ monto: number; fondoId?: string }> {
+  return Array.isArray(valor)
+    ? (valor as Array<{ monto: number; fondoId?: string }>)
+    : []
+}
+
 async function verificar(): Promise<void> {
   const dia = hoyISO()
   const [unidades, personas, vinculos, locales, estac, visitas, amenities, emisiones, cobros, liquidaciones, proveedores, mantenciones, visitasTec, infracciones] =
@@ -1409,6 +1494,74 @@ async function verificar(): Promise<void> {
   console.log(`[seed-demo-consistente] RUT válidos: ${personasTodas.length - invalidos.length}/${personasTodas.length}`)
   if (invalidos.length > 0) {
     console.error("[seed-demo-consistente] RUT inválidos:", invalidos.map((p) => p.id))
+    process.exitCode = 1
+  }
+
+  // S5 — la emisión y sus cobros dicen lo mismo. Son cuatro invariantes: la
+  // emisión declara el PRESUPUESTO (Σ líneas de la emisión), su aporte es la
+  // suma de las líneas de reserva de los cobros, el total a recaudar es
+  // presupuesto + aporte (el recargo va encima) y cada cobro con detalle suma
+  // exactamente su `montoBase`. Si una se rompe, el demo vuelve a mostrar una
+  // reserva declarada que nadie paga o un total que no cuadra con sus cobros.
+  const [emisionesGc, cobrosGc] = await Promise.all([
+    prisma.emisionGC.findMany({ where: { comunidadId }, orderBy: { periodo: "asc" } }),
+    prisma.cobroFI.findMany({
+      where: { comunidadId, origenModulo: "FI", periodo: { in: [...PERIODOS] } },
+      orderBy: { id: "asc" },
+    }),
+  ])
+  const desvios: string[] = []
+  for (const emision of emisionesGc) {
+    const lineasEmision = lineasDeJson(emision.lineas)
+    const presupuesto = lineasEmision.reduce((a, l) => a + l.monto, 0)
+    const aporte =
+      (emision.fondoReservaAporte as { monto?: number } | null)?.monto ?? 0
+    const propios = cobrosGc.filter((c) => c.origenRef === emision.id)
+    const total = propios.reduce((a, c) => a + c.montoBase, 0)
+    const reservaCobrada = propios.reduce(
+      (a, cobro) =>
+        a +
+        lineasDeJson(cobro.lineas)
+          .filter((l) => l.fondoId === FONDO_RESERVA_ID)
+          .reduce((b, l) => b + l.monto, 0),
+      0
+    )
+
+    if (emision.gastoTotal !== presupuesto) {
+      desvios.push(
+        `${emision.periodo}: gastoTotal ${emision.gastoTotal} ≠ Σ líneas de la emisión ${presupuesto}`
+      )
+    }
+    if (propios.length !== lineasEmision.length) {
+      desvios.push(
+        `${emision.periodo}: ${propios.length} cobros para ${lineasEmision.length} unidades emitidas`
+      )
+    }
+    if (total !== presupuesto + aporte) {
+      desvios.push(
+        `${emision.periodo}: total cobrado ${total} ≠ presupuesto ${presupuesto} + recargo ${aporte}`
+      )
+    }
+    if (reservaCobrada !== aporte) {
+      desvios.push(
+        `${emision.periodo}: líneas de reserva suman ${reservaCobrada} y el aporte declara ${aporte}`
+      )
+    }
+    for (const cobro of propios) {
+      const suma = lineasDeJson(cobro.lineas).reduce((a, l) => a + l.monto, 0)
+      if (cobro.lineas === null || suma !== cobro.montoBase) {
+        desvios.push(
+          `${cobro.id}: Σ líneas ${suma} ≠ montoBase ${cobro.montoBase}`
+        )
+      }
+    }
+
+    console.log(
+      `[seed-demo-consistente] ${emision.periodo}: presupuesto $${presupuesto.toLocaleString("es-CL")} + recargo $${aporte.toLocaleString("es-CL")} = total $${total.toLocaleString("es-CL")} (${propios.length} cobros)`
+    )
+  }
+  if (desvios.length > 0) {
+    console.error("[seed-demo-consistente] desvíos del cobro:", desvios)
     process.exitCode = 1
   }
 }
