@@ -58,6 +58,9 @@ export default defineConfig({
         "lib/env-guard.ts",
         "lib/logger.ts",
         "lib/authz.ts",
+        // T4 cobro-gastos-comunes-parametrico: el resolver de la versión
+        // vigente es el núcleo del cobro declarado, así que el ratchet lo mide.
+        "lib/reglamento.ts",
         "lib/schemas.ts",
         "app/api/**/route.ts",
       ],

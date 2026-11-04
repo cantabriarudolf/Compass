@@ -35,6 +35,7 @@ import {
   IconShield,
 } from "@tabler/icons-react"
 import { LogoUploader } from "@/components/admin/logo-uploader"
+import { ReglamentoGC } from "@/components/admin/reglamento-gc"
 
 export default function ConfiguracionPage() {
   const { config: configuracionRemota, isLoading, updateConfig } = useConfiguracion()
@@ -193,69 +194,72 @@ export default function ConfiguracionPage() {
           </TabsContent>
 
           <TabsContent value="gc">
-            <Card>
-              <CardHeader>
-                <CardTitle>Parametrización del Gasto Común</CardTitle>
-                <CardDescription>
-                  Define cómo se calcula el cobro base y las reglas de
-                  morosidad.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <div className="space-y-2">
-                  <Label>Modo de Cálculo *</Label>
-                  <Select
-                    value={config.modoCalculoGC}
-                    onValueChange={(v) =>
-                      updateField(
-                        "modoCalculoGC",
-                        v as ConfiguracionGlobal["modoCalculoGC"]
-                      )
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="fijo">
-                        Monto Fijo por Tipo de Unidad
-                      </SelectItem>
-                      <SelectItem value="variable">
-                        Variable por Prorrateo
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Día de Corte de Pago (1-31) *</Label>
-                  <Input
-                    type="number"
-                    min={1}
-                    max={31}
-                    value={config.diaCortePago}
-                    onChange={(e) =>
-                      updateField("diaCortePago", Number(e.target.value))
-                    }
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Límite de Meses para Aviso de Corte *</Label>
-                  <Input
-                    type="number"
-                    min={1}
-                    value={config.limiteMesesAvisoCorte}
-                    onChange={(e) =>
-                      updateField(
-                        "limiteMesesAvisoCorte",
-                        Number(e.target.value)
-                      )
-                    }
-                    required
-                  />
-                </div>
-              </CardContent>
-            </Card>
+            <div className="flex flex-col gap-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Parametrización del Gasto Común</CardTitle>
+                  <CardDescription>
+                    Define cómo se calcula el cobro base y las reglas de
+                    morosidad.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label>Modo de Cálculo *</Label>
+                    <Select
+                      value={config.modoCalculoGC}
+                      onValueChange={(v) =>
+                        updateField(
+                          "modoCalculoGC",
+                          v as ConfiguracionGlobal["modoCalculoGC"]
+                        )
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="fijo">
+                          Monto Fijo por Tipo de Unidad
+                        </SelectItem>
+                        <SelectItem value="variable">
+                          Variable por Prorrateo
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Día de Corte de Pago (1-31) *</Label>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={31}
+                      value={config.diaCortePago}
+                      onChange={(e) =>
+                        updateField("diaCortePago", Number(e.target.value))
+                      }
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Límite de Meses para Aviso de Corte *</Label>
+                    <Input
+                      type="number"
+                      min={1}
+                      value={config.limiteMesesAvisoCorte}
+                      onChange={(e) =>
+                        updateField(
+                          "limiteMesesAvisoCorte",
+                          Number(e.target.value)
+                        )
+                      }
+                      required
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+              <ReglamentoGC />
+            </div>
           </TabsContent>
 
           <TabsContent value="smtp">

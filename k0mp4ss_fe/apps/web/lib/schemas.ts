@@ -1395,11 +1395,11 @@ export const ParametrosReglamentoSchema = z.object({
   cuotasCorte: z
     .number({ required_error: "Las cuotas de corte son obligatorias." })
     .int("Las cuotas de corte deben ser un entero.")
-    .min(0, "Las cuotas de corte no pueden ser negativas."),
+    .min(1, "Las cuotas de corte deben ser un entero mayor o igual a 1."),
   diasPreavisoCorte: z
     .number({ required_error: "Los días de preaviso son obligatorios." })
     .int("Los días de preaviso deben ser un entero.")
-    .min(0, "Los días de preaviso no pueden ser negativos."),
+    .min(1, "Los días de preaviso deben ser un entero mayor o igual a 1."),
   ipcActivo: z.boolean({ required_error: "El interruptor de IPC es obligatorio." }),
 })
 
