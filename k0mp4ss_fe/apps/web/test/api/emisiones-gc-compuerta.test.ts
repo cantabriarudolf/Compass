@@ -313,6 +313,44 @@ describe("/api/emisiones-gc — compuerta de la versión del reglamento", () => 
     })
   })
 
+  it("(e) reserva declarada sin fondo de reserva activo → 400 y no escribe nada", async () => {
+    // La versión que rige 2026-06 declara 7% de aporte al fondo de reserva (S2).
+    // Sin fondo activo donde imputarlo, el aporte se perdería en silencio: la
+    // emisión no puede correr (S5).
+    await prisma.fondoFI.update({
+      where: { id: "egc4-fondo-res" },
+      data: { activo: false },
+    })
+    try {
+      await conSesion(emailAdminDeclarada, async () => {
+        const res = await emitir({
+          periodo: "2026-06",
+          modo: "fijo",
+          unidadIds: ["egc4-u-1"],
+        })
+        expect(res.status).toBe(400)
+        expect(((await res.json()) as { error: string }).error).toBe(
+          "Emisión bloqueada: la versión vigente de la comunidad Comunidad Declarada declara un 7% de aporte al fondo de reserva y no existe un fondo de reserva activo donde imputarlo."
+        )
+      })
+      expect(
+        await prisma.emisionGC.count({
+          where: { comunidadId: comunidadDeclarada, periodo: "2026-06" },
+        })
+      ).toBe(0)
+      expect(
+        await prisma.cobroFI.count({
+          where: { comunidadId: comunidadDeclarada, periodo: "2026-06" },
+        })
+      ).toBe(0)
+    } finally {
+      await prisma.fondoFI.update({
+        where: { id: "egc4-fondo-res" },
+        data: { activo: true },
+      })
+    }
+  })
+
   it("(d) la versión futura no rige un período anterior", async () => {
     await conSesion(emailAdminDeclarada, async () => {
       const res = await emitir({

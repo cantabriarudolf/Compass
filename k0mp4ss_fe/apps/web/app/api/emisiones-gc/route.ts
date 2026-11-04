@@ -55,11 +55,18 @@ function vencimientoPorDefecto(fechaCargo: string, diasPagoGc: number): string {
   return base.toISOString().slice(0, 10)
 }
 
-/** Motivos por los que la compuerta de la versión bloquea la emisión (S1/S2). */
+/** Motivos por los que la compuerta bloquea la emisión antes de escribir (S1/S2/S5). */
 type MotivoBloqueoEmision =
   | "sin_version"
   | "fuente_sin_respaldo"
   | "parametros_invalidos"
+  | "reserva_sin_fondo"
+
+/** Datos que algunos motivos necesitan para nombrar lo que falta. */
+interface ContextoBloqueo {
+  /** Porcentaje de reserva declarado por la versión (`reserva_sin_fondo`). */
+  porcentajeReserva?: number
+}
 
 /**
  * 400 que nombra el motivo y la comunidad, sin escribir nada. La compuerta
@@ -68,7 +75,8 @@ type MotivoBloqueoEmision =
 async function emisionBloqueada(
   comunidadId: string,
   periodo: string,
-  motivo: MotivoBloqueoEmision
+  motivo: MotivoBloqueoEmision,
+  contexto: ContextoBloqueo = {}
 ): Promise<Response> {
   const comunidad = await prisma.comunidad.findUnique({
     where: { id: comunidadId },
@@ -79,6 +87,8 @@ async function emisionBloqueada(
     sin_version: `Emisión bloqueada: la comunidad ${nombre} no declaró una versión del reglamento vigente para el período ${periodo}.`,
     fuente_sin_respaldo: `Emisión bloqueada: la versión vigente de la comunidad ${nombre} es una migración automática; la forma de contribución debe declararse por reglamento de copropiedad o acta de asamblea.`,
     parametros_invalidos: `Emisión bloqueada: los parámetros de la versión vigente de la comunidad ${nombre} no son válidos.`,
+    // `reserva_sin_fondo` siempre recibe el porcentaje: es parte del mensaje.
+    reserva_sin_fondo: `Emisión bloqueada: la versión vigente de la comunidad ${nombre} declara un ${contexto.porcentajeReserva ?? 0}% de aporte al fondo de reserva y no existe un fondo de reserva activo donde imputarlo.`,
   }
   return jsonError(400, mensajes[motivo])
 }
@@ -173,6 +183,17 @@ export async function POST(req: Request): Promise<Response> {
         `Emisión bloqueada: ${sinResponsable.length} unidad(es) sin responsable de cobro asignado.`
       )
     }
+    // Compuerta S2/S5: si la versión declara aporte al fondo de reserva, ese
+    // fondo tiene que existir y estar activo. Sin él el aporte se calculaba en
+    // 0 y un número declarado se perdía en silencio; ahora no se emite nada.
+    const fondoReserva = await prisma.fondoFI.findFirst({
+      where: { comunidadId: scope.comunidadId, tipo: "reserva", activo: true },
+    })
+    if (parametros.porcentajeReserva > 0 && !fondoReserva) {
+      return emisionBloqueada(scope.comunidadId, periodo, "reserva_sin_fondo", {
+        porcentajeReserva: parametros.porcentajeReserva,
+      })
+    }
     if (modo === "variable" && (!parsed.data.gastoTotal || parsed.data.gastoTotal <= 0)) {
       return jsonError(
         400,
@@ -224,9 +245,8 @@ export async function POST(req: Request): Promise<Response> {
     })
 
     const totalEmitido = lineas.reduce((acc, l) => acc + l.monto, 0)
-    const fondoReserva = await prisma.fondoFI.findFirst({
-      where: { comunidadId: scope.comunidadId, tipo: "reserva", activo: true },
-    })
+    // El fondo se resolvió en la compuerta; el aporte sale del porcentaje que
+    // declara la versión (S2), nunca del `porcentajeAporte` del fondo.
     const aporteMonto = fondoReserva
       ? Math.round((totalEmitido * parametros.porcentajeReserva) / 100)
       : 0
