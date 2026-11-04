@@ -1,7 +1,7 @@
 # FI-finanzas-morosidad Specification
 
 ## Purpose
-Centralizar la salud financiera de la comunidad: maestro de fondos con imputación, egresos categorizados con comprobante D1, emisión mensual del Gasto Común en modalidad fija o prorrateo, fondo de reserva con aporte automático, control de morosidad con corte de servicios y cobranza activa, y pagos con ajuste manual auditado. Fuente de verdad: `Data/NSGC/docs/especificaciones/FI - Finanzas y Morosidad.md`.
+Centralizar la salud financiera de la comunidad: maestro de fondos con imputación, egresos categorizados con comprobante D1, emisión mensual del Gasto Común en la forma de contribución que la comunidad declare, cobro con conceptos y recargo al fondo de reserva como cargo real, control de morosidad con corte de servicios y cobranza activa, y pagos con ajuste manual auditado. Fuente de verdad: `Data/NSGC/docs/especificaciones/FI - Finanzas y Morosidad.md`.
 ## Requirements
 ### Requirement: Maestro de Fondos con Imputación
 El sistema MUST mantener N fondos (cajas) mediante `saveFondoFI` (store) y la API REST `/api/fondos-fi` (POST upsert idempotente; PUT/DELETE en `/[id]`), retornando `StoreResult` cuando aplica, con nombre, tipo (`gasto_comun`|`reserva`|`especial`|`amenities`), descripción opcional, `porcentajeAporte` para fondos de reserva y flag activo. Todo egreso y todo cobro MUST imputarse a un fondo existente y activo. La eliminación de un fondo con movimientos asociados MUST bloquearse. El saldo de cada fondo SHALL ser derivable en base caja: pagos recibidos en cobros del fondo más aportes de reserva registrados, menos egresos del fondo.
@@ -26,14 +26,14 @@ El sistema MUST registrar salidas de dinero mediante `saveEgresoFI` (store) y la
 - **THEN** retorna `{ok:false}` sin mutar el estado
 
 ### Requirement: Emisión de Gasto Común Modalidad Fija y Prorrateo
-El sistema MUST generar la deuda mensual mediante `emitirGastoComun({periodo, gastoTotal?})` retornando `StoreResult`, leyendo el modo de `configuracion.modoCalculoGC` (CF): en modo fijo consulta el Monto Fijo (`montoBaseGc`) del tipo de unidad; en modo prorrateo exige gasto total a recaudar mayor a cero y calcula `(Gasto Total × % prorrateo de la unidad)`. Debe validar antes de emitir: configuración CF cargada (`modoCalculoGC` definido; si no, error "CF no cargado"), periodo no procesado previamente y todas las unidades elegibles con responsable de cobro asignado (propietario vigente). La emisión materializa una emisión con líneas por unidad y crea un cobro por unidad imputado al fondo de gasto común con vencimiento según `diaCortePago`.
+El sistema MUST generar la deuda mensual mediante `emitirGastoComun({periodo, gastoTotal?})` retornando `StoreResult`, leyendo la forma de contribución de la **versión vigente del reglamento de la comunidad** (ver requirement «Versión del Reglamento del Cobro por Comunidad»): en modo fijo consulta el Monto Fijo (`montoBaseGc`) del tipo de unidad; en modo prorrateo exige gasto total a recaudar mayor a cero y calcula `(Gasto Total × % prorrateo de la unidad)`. Debe validar antes de emitir y sin escribir nada: versión vigente para el período, fuente de instrumento real (reglamento de copropiedad o acta de asamblea; una migración automática NO habilita emitir), parámetros válidos en esa versión, período no procesado previamente y todas las unidades elegibles con responsable de cobro asignado (propietario vigente). Si la versión declara un recargo al fondo de reserva mayor a cero y no existe un fondo de reserva activo donde imputarlo, la emisión MUST rechazarse nombrando el porcentaje declarado. El vencimiento de cada cobro SHALL derivarse de los días de pago declarados en la versión (`diasPagoGc`), no de una constante. La emisión materializa una emisión con líneas por unidad y crea un cobro por unidad con su detalle de conceptos.
 
 #### Scenario: Emisión fija usa el monto base del tipo
 - **WHEN** se emite el periodo en modo fijo con unidades de tipos de $80.000 y $120.000
 - **THEN** cada cobro queda por el monto base de su tipo de unidad
 
 #### Scenario: Emisión prorrateo reparte el gasto total
-- **WHEN** se emite en modo variable un gasto total de $1.000.000 con unidades de coeficientes 50% y 25%
+- **WHEN** se emite en modo variable un gasto total de $1.000.000 con unidades de coeficientes 50% y 25% y una versión que declara 0% de recargo al fondo de reserva
 - **THEN** los cobros quedan en $500.000 y $250.000 respectivamente
 
 #### Scenario: Periodo repetido rechazado
@@ -48,16 +48,82 @@ El sistema MUST generar la deuda mensual mediante `emitirGastoComun({periodo, ga
 - **WHEN** se intenta emitir con `configuracion.modoCalculoGC` undefined
 - **THEN** retorna `{ok:false}` con "CF no cargado" y no muta colecciones financieras
 
+#### Scenario: Emisión bloqueada sin versión del reglamento
+- **WHEN** la comunidad no declaró una versión vigente para el período, o la única versión es una migración automática
+- **THEN** retorna 400 nombrando el motivo y la comunidad, y no crea emisión ni cobros
+
+#### Scenario: El vencimiento sale de los días declarados
+- **WHEN** la versión vigente declara 10 días de pago y se emite el período
+- **THEN** cada cobro vence a los 10 días de la fecha de emisión
+
+#### Scenario: Recargo declarado sin fondo de destino
+- **WHEN** la versión declara un porcentaje de reserva mayor a cero y no hay fondo de reserva activo
+- **THEN** retorna 400 nombrando el porcentaje declarado, sin crear emisión ni cobros
+
 ### Requirement: Fondo de Reserva con Aporte Automático y Retiros Documentados
-El sistema MUST aplicar automáticamente el porcentaje definido en el fondo de reserva (`porcentajeAporte`) sobre el total emitido en cada emisión GC, registrando el aporte en la emisión. Los retiros de fondo de reserva MUST registrarse mediante `retirarFondoFI` como egreso `uso_de_fondo` con aprobación documentada referenciando un acta GD publicada y validación de saldo suficiente; audita `FI_FUND_WITHDRAWN`.
+El recargo al fondo de reserva MUST cobrarse como **línea real del cobro de cada unidad**, con el porcentaje declarado en la versión vigente del reglamento (`porcentajeReserva`) y una fuente de la que nadie más sea dueño. La versión declara además si el recargo va **encima** del presupuesto aprobado (`reservaIncluidaEnPresupuesto: false`, lectura del art. 39 de la Ley 21.442: recargo sobre los gastos comunes) o **dentro** de él (`true`, cuando la asamblea presupuestó con el incluido): encima se suma al gasto común del mes; dentro se desagrega sin cambiar el total que paga la unidad. En ambos casos la suma de las líneas MUST dar exactamente el monto del cobro y el aporte de la emisión SHALL derivarse de las líneas de reserva, no de un cálculo paralelo. Los retiros de fondo de reserva MUST registrarse mediante `retirarFondoFI` como egreso `uso_de_fondo` con aprobación documentada referenciando un acta GD publicada y validación de saldo suficiente; el saldo disponible SHALL salir de las líneas que nombran el fondo (más saldo inicial e ingresos manuales, menos egresos), de modo que la caja real del fondo sea visible; audita `FI_FUND_WITHDRAWN`.
 
 #### Scenario: Aporte automático al emitir
-- **WHEN** se emite un periodo por $2.000.000 con fondo de reserva al 5%
-- **THEN** la emisión registra un aporte de $100.000 al fondo de reserva
+- **WHEN** se emite un periodo por $2.000.000 con un recargo declarado del 5% encima del presupuesto
+- **THEN** cada cobro lleva su línea de reserva y la emisión registra un aporte de $100.000 al fondo de reserva
 
 #### Scenario: Retiro sin acta publicada rechazado
 - **WHEN** se retira del fondo de reserva sin acta GD publicada de respaldo o superando el saldo
 - **THEN** retorna `{ok:false}` y no genera el egreso
+
+#### Scenario: Recargo encima del presupuesto
+- **WHEN** la versión declara 10% encima y la unidad tiene un gasto común de $60.000
+- **THEN** el cobro suma $66.000 con una línea de $6.000 al fondo de reserva
+
+#### Scenario: Recargo incluido en el presupuesto
+- **WHEN** la versión declara el recargo dentro del presupuesto y la unidad tiene un gasto común de $100.000 con 10%
+- **THEN** el cobro sigue en $100.000, desagregado en $90.909 de gasto común y $9.091 al fondo de reserva
+
+#### Scenario: Retiro ve la caja real del fondo
+- **WHEN** un cobro con línea de reserva está pagado y se retira del fondo de reserva
+- **THEN** el saldo disponible incluye lo efectivamente pagado por esa línea
+
+### Requirement: Versión del Reglamento del Cobro por Comunidad
+El sistema MUST mantener, por comunidad, versiones **append-only** del reglamento del cobro, cada una con `vigenteDesde` (período AAAA-MM), `fuenteInstrumento` (`reglamento_copropiedad` | `acta_asamblea` | `migracion_automatica`), `actaRef`, `formaContribucion` (`coeficiente` | `partes_iguales` | `monto_por_tipo` | `mixto`) y los parámetros del cobro (`porcentajeReserva`, `diasPagoGc`, `tasaMoraMensualPct`, `topeMoraPct`, `cuotasCorte`, `diasPreavisoCorte`, `ipcActivo`, `reservaIncluidaEnPresupuesto`). Ningún número del reglamento MUST vivir en el código: todos son configuración de la versión. La versión que rige un período SHALL ser la de `vigenteDesde` más alto que no lo supere, y las versiones futuras no aplican. El alta se hace por `GET|POST /api/reglamento` con permiso `fi:gasto_comun` (administración escribe, comité lee), sin PUT ni DELETE; `version` la asigna el servidor y el alta audita `FI_REG_VERSION`. Una emisión MUST guardar copia de los parámetros con los que calculó, de modo que declarar una versión nueva no altere lo ya emitido.
+
+#### Scenario: Forma de contribución declarada
+- **WHEN** una comunidad declara su forma de contribución con su instrumento y su fecha de vigencia
+- **THEN** la emisión de los períodos alcanzados usa esa declaración sin consultar constantes del código
+
+#### Scenario: Fuente real obligatoria
+- **WHEN** la única versión vigente es una migración automática
+- **THEN** la emisión se rechaza indicando que la forma de contribución debe declararse por reglamento de copropiedad o acta de asamblea
+
+#### Scenario: Versión futura no aplica
+- **WHEN** existe una versión con `vigenteDesde` posterior al período que se emite
+- **THEN** la emisión usa la versión anterior que sí lo alcanza
+
+#### Scenario: Versión usada no se edita
+- **WHEN** se intenta modificar o eliminar una versión ya declarada
+- **THEN** la API no lo permite: solo se agrega una versión nueva
+
+### Requirement: Contrato de Escritura del Cobro FI
+Cada cobro MUST poder expresar su detalle como líneas por concepto (`concepto`, `monto`, `fondoId` opcional). En **lectura** las líneas MAY ser nulas (cobros anteriores al detalle, que se leen como una línea implícita con su concepto y su monto y se imputan a su propio fondo). En **escritura** un detalle nulo MUST rechazarse —solo la ausencia significa cobro de una línea— y, si está presente, no puede estar vacío y su suma MUST ser exactamente el monto base del cobro. Toda escritura MUST validarse contra el registro **fusionado**, no solo contra el parche recibido, para que una edición parcial no pueda descuadrar el detalle. Todo camino que crea o modifica un cobro (emisión, multas, reservas y alta genérica) MUST validar con el contrato de escritura completo. La imputación de pagos a fondos SHALL hacerse por las líneas de cada cobro, de modo que un cobro con detalle acredite a cada fondo lo suyo y ninguno se cuente dos veces.
+
+#### Scenario: Detalle que no suma se rechaza
+- **WHEN** un cobro llega con líneas cuya suma difiere de su monto base
+- **THEN** la escritura se rechaza sin persistir nada
+
+#### Scenario: Edición parcial descuadrada rechazada
+- **WHEN** se edita solo el monto base de un cobro que ya tiene detalle
+- **THEN** se rechaza nombrando que las líneas deben sumar el monto base y la fila queda intacta
+
+#### Scenario: Detalle nulo rechazado en escritura
+- **WHEN** un alta o edición envía las líneas en nulo
+- **THEN** se rechaza indicando que, si el cobro no tiene detalle, se omitan las líneas
+
+#### Scenario: Cobro anterior al detalle sigue válido
+- **WHEN** se edita un cobro cuyas líneas son nulas en la base
+- **THEN** la escritura se acepta y se sigue leyendo como cobro de una línea imputado a su propio fondo
+
+#### Scenario: El pago se imputa por línea
+- **WHEN** un cobro con líneas de gasto común y de reserva se paga complete o parcialmente
+- **THEN** cada fondo recibe la parte de su línea y el fondo de reserva no cobra dos veces el mismo dinero
 
 ### Requirement: Control de Morosidad y Cobranza Activa
 El sistema SHALL calcular la mora sobre cobros vencidos usando `diaCortePago` (CF) como referencia de vencimiento: `aplicarMoraFI(cobroId, tasaMensualPct?)` propone y aplica la mora pro-rata por días de atraso (idempotente por día) auditando `FI_MORA_APPLIED`. El dashboard de corte de servicios SHALL resaltar exclusivamente las unidades cuya cantidad de periodos vencidos alcanza o supera `limiteMesesAvisoCorte` (CF), y `enviarCobranzaFI(unidadId)` MUST registrar gestiones notificando al responsable de cobro con canal email_simulado y auditando `FI_COBRANZA_SENT`.
