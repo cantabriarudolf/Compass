@@ -2,7 +2,7 @@
  * database-url — de qué base lee y escribe un script de datos, y cómo se decide.
  *
  * Contexto (2026-10-27, conexión de la base a Neon): las cuatro scripts de datos
- * (`seed:mocks`, `db:catalogo-nacional`, `db:punto-cero`, `db:fondos-fi`) hacían
+ * (`seed:datos`, `db:catalogo-nacional`, `db:punto-cero`, `db:fondos-fi`) hacían
  * `dotenv.config()` y después leían `process.env.DATABASE_URL`. Eso tiene dos agujeros:
  *
  *   1. `dotenv.config()` **no pisa** una variable ya presente. Bajo `vite-node`, Vite carga

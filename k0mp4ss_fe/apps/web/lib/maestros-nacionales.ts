@@ -7,7 +7,7 @@
  * una fila aparte en `MaestroOculto` (la nacional nunca se modifica).
  *
  * LOS IDS SALEN DE LA SEMILLA: se resuelven contra las listas de
- * `data/admin/maestros.ts`, las mismas que siembra `scripts/seed-db-from-mocks.ts`
+ * `data/admin/maestros.ts`, las mismas que siembra `scripts/seed-db-from-data.ts`
  * (upsert idempotente por id determinista: afp-habitat, banco-estado, f-1, etc.).
  * Nada está hardcodeado acá: si la semilla cambia, `esNacional` cambia con ella.
  *

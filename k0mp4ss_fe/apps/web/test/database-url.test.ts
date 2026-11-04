@@ -2,7 +2,7 @@
  * @vitest-environment node
  *
  * database-url — resolución de `DATABASE_URL` para los scripts de datos
- * (`seed:mocks`, `db:catalogo-nacional`, `db:punto-cero`, `db:fondos-fi`).
+ * (`seed:datos`, `db:catalogo-nacional`, `db:punto-cero`, `db:fondos-fi`).
  *
  * Por qué existe (2026-10-27): las cuatro scripts leían `process.env.DATABASE_URL`,
  * que bajo `vite-node` trae el valor de `.env.local` (`file:./dev.db`) inyectado

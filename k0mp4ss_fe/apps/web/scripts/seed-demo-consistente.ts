@@ -1204,7 +1204,7 @@ const TIPOS_PAQUETE = [
   "Caja pequeña de farmacia",
 ]
 
-// Maestros sembrados por `seed-db-from-mocks` (no se crean acá).
+// Maestros sembrados por `seed-db-from-data` (no se crean acá).
 const COURIERS_PORTERIA = [
   "cour-chilexpress",
   "cour-starken",

@@ -1,6 +1,6 @@
 // P2 — rp-pruebas-roles: 1 journey feliz por rol no-admin con storageState.
 // Usa entidades TEST-* nuevas; no confirma retiros/pagos del seed.
-// Afirma contra el seed en la BD (seed:authz + seed:mocks). NOTA (pe-paneles-bd):
+// Afirma contra el seed en la BD (seed:authz + seed:datos). NOTA (pe-paneles-bd):
 // ya NO lee el store legacy (localStorage "compass-store"): desde la serie
 // pe-paneles-bd ningún componente de /comunidad/* instancia el store zustand, así
 // que ese localStorage ni siquiera existe en el contexto del test. La fuente de

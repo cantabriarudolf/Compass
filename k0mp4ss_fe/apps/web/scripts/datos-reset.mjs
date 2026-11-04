@@ -48,7 +48,7 @@ const AYUDA = `datos:reset — borra la base local y la resiembra con los mocks
 
 Flag                    Descripción
 --db <archivo>          Base relativa a prisma/ (default ${DB_POR_DEFECTO})
---comunidad-id <id>     Comunidad destino de seed:mocks (default ${COMUNIDAD_POR_DEFECTO})
+--comunidad-id <id>     Comunidad destino de seed:datos (default ${COMUNIDAD_POR_DEFECTO})
 --help                  Esta ayuda
 
 Guarda dura: no corre si el entorno efectivo es producción ni si DATABASE_URL no es un
@@ -234,7 +234,7 @@ function main() {
   correr("npx", ["prisma", "migrate", "deploy", `--schema=${SCHEMA}`])
   correr("npx", ["prisma", "generate", `--schema=${SCHEMA}`])
   correr("npm", ["run", "seed:authz"])
-  correr("npm", ["run", "seed:mocks", "--", `--comunidad-id=${opciones.comunidadId}`])
+  correr("npm", ["run", "seed:datos", "--", `--comunidad-id=${opciones.comunidadId}`])
   // Los catálogos nacionales corren para TODAS las comunidades: su semilla es
   // global y el reset garantee que ninguna base quede desincronizada (F20).
   correr("npm", ["run", "db:catalogo-nacional"])

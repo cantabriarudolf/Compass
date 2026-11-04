@@ -543,7 +543,7 @@ No bump de `STORE_VERSION` (permanece 26) — reemplazo del scaffold HMAC por Au
 
 Patrones de id de portería: `vis-<AAAA-MM-DD>-NN`, `enc-<AAAA-MM-DD>-NN`. La fecha es **la del día en que corre el script**, no una constante, porque el panel «Foto del día · Operaciones» del dashboard compara contra hoy. Al terminar, el script imprime un reporte con los conteos verificados (departamentos, dueños, arrendadas, locales, estacionamientos, amenities, emisiones, cobros, nóminas, proveedores, mantenciones, visitas técnicas, infracciones y movimiento de portería del día).
 
-> **Nota**: los datos de `data/` son la semilla del poblamiento `seed-db-from-mocks`; el dataset de demo en base es otro y deja **184 unidades** (80 deptos + 4 locales + 100 plazas). Los conteos difieren del dump de `29 - MK - Data Dump Inventario.md` (83 unidades) porque son datasets distintos.
+> **Nota**: los datos de `data/` son la semilla del poblamiento `seed-db-from-data`; el dataset de demo en base es otro y deja **184 unidades** (80 deptos + 4 locales + 100 plazas). Los conteos difieren del dump de `29 - MK - Data Dump Inventario.md` (83 unidades) porque son datasets distintos.
 
 *Última actualización: 03 de Noviembre 2026 — sección 15: seed de demo consistente en BD (estructura, personas, finanzas y portería con sus conteos)*
 *Anterior: 27 de Agosto 2026 — Plataforma P5 (Auth.js JWT + D-v, sin bump STORE_VERSION)*

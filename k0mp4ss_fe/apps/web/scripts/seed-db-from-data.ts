@@ -1,6 +1,6 @@
 #!/usr/bin/env -S npx tsx
 /**
- * seed-db-from-mocks — puebla la BD de desarrollo con los datos de los mocks
+ * seed-db-from-data — puebla la BD de desarrollo con los datos de los mocks
  * de `data/` (serie UI-MIGRACION-BD): las páginas migradas a API REST leen de
  * la BD y estaban vacías.
  *
@@ -10,7 +10,7 @@
  * alineados con la convención de `migrate-punto-cero-a-db.ts`.
  *
  * Uso (desde k0mp4ss_fe/apps/web):
- *   npx tsx scripts/seed-db-from-mocks.ts [--comunidad-id=xxx]
+ *   npx tsx scripts/seed-db-from-data.ts [--comunidad-id=xxx]
  *
  * Comunidad destino: flag `--comunidad-id`, o env `COMUNIDAD_ID`, o la
  * primera Comunidad de la BD (orden de creación). Sin comunidad → crea

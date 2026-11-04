@@ -3,7 +3,7 @@
  * seed-catalogo-nacional — asegura los ocho catálogos del país (F20 fase 2)
  * en TODAS las comunidades de la BD, no sólo la comunidad destino.
  *
- * Problema que ataca: `seed-db-from-mocks` siembra los maestros nacionales
+ * Problema que ataca: `seed-db-from-data` siembra los maestros nacionales
  * sólo para la comunidad destino, así que (a) si la semilla incorpora un banco
  * nuevo, las comunidades existentes quedan con la copia vieja y nada lo
  * detecta, y (b) una comunidad nueva depende de que alguien se acuerde de

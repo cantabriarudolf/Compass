@@ -33,7 +33,7 @@ Ya resueltas (salieron de esta lista): `Persona.email`/`Persona.rut` (**INV-01**
 
 | Dato | Regla | Dueño hoy | Rutas que lo escriben (`archivo:línea`) | Test que la prueba |
 |---|---|---|---|---|
-| `Comunidad` | Una comunidad = un tenant raíz; `slug` único | `DB` — `@unique slug`; alta sólo por seed (`scripts/seed-db-from-mocks.ts:117`) | **ninguna ruta** | — (sin test de regla) |
+| `Comunidad` | Una comunidad = un tenant raíz; `slug` único | `DB` — `@unique slug`; alta sólo por seed (`scripts/seed-db-from-data.ts:117`) | **ninguna ruta** | — (sin test de regla) |
 | `Usuario` | Cuenta global; email único; una persona por usuario | `DB` — `@unique email`; validación inline en la ruta (sin schema Zod) | `app/api/admin/usuarios/route.ts:161`<br>`app/api/admin/usuarios/route.ts:169`<br>`app/api/auth/2fa/backup/route.ts:75`<br>`app/api/auth/2fa/disable/route.ts:61`<br>`app/api/auth/2fa/setup/route.ts:39`<br>`app/api/auth/2fa/verify-setup/route.ts:67`<br>`app/api/mis-datos/route.ts:126`<br>`app/api/mis-datos/route.ts:196` | — (sin test de regla) |
 | `Membresia` | Un usuario ↔ una comunidad, un par por vez; **es la fuente del tenant de cada request** | `DB` — `@unique([usuarioId,comunidadId])` + `withComunidadScope` (`lib/api/with-comunidad-scope.ts:37`) | `app/api/admin/usuarios/route.ts:154` | — (sin test de regla) |
 | `RateLimitAttempt` | Ventana de intentos por clave (anti fuerza bruta) | `API` — `lib/rate-limit.ts` es el único escritor; sin ruta | **ninguna ruta** | — (sin test de regla) |

@@ -23,7 +23,7 @@ test.use({ actionTimeout: 30_000 })
  * ni siquiera existe en el contexto del test. La fuente de verdad es la base:
  * las validaciones reforzadas usan GET /api/fi con la sesión admin del contexto
  * del navegador (la lane siembra el punto cero en BD vía el espejo fi-sync de
- * /finanzas; los seeds base seed:authz + seed:mocks no incluyen FI).
+ * /finanzas; los seeds base seed:authz + seed:datos no incluyen FI).
  * - Dashboards: /admin/metricas y /admin/reporteria renderizan sin pageerror
  *   y, si hay KPIs FI, reflejan datos 2023-2024 (Centro de Mando → Salud de Caja).
  */
