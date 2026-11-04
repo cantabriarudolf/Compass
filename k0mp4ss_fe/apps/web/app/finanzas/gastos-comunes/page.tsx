@@ -38,7 +38,7 @@ import {
   IconTrendingUp,
   IconWallet,
 } from "@tabler/icons-react"
-import type { CategoriaEgresoFI, CobroFI, TipoFondoFI } from "@/lib/schemas"
+import type { CategoriaEgresoFI, CobroFI, EmisionGC, TipoFondoFI } from "@/lib/schemas"
 import {
   estadoDeCobro,
   hoyISO,
@@ -99,6 +99,41 @@ interface FormIngreso {
   concepto: string
   fondoId: string
   familia: string
+}
+
+/**
+ * «Total a recaudar» de una emisión: la suma de `montoBase` de sus cobros, es
+ * decir lo que se le cobra a cada unidad. No se deriva del presupuesto más el
+ * recargo, porque esa resta solo vale cuando el recargo va ENCIMA del
+ * presupuesto: si la asamblea aprobó un presupuesto que ya lo incluye, el cobro
+ * no cambia y sumarle el recargo inflaría el total (S5). El cobro es el que
+ * manda, y es además la copia que quedó congelada al emitir (S4).
+ *
+ * Los cobros se leen con el hook que ya existe, filtrado por período —el
+ * período identifica a la emisión, porque la ruta rechaza emitir dos veces el
+ * mismo— y `origenRef` deja fuera los cobros del período que vienen de otro
+ * módulo (multas IN, reservas RA). Si la pantalla no tiene cargados todos los
+ * cobros de la emisión, no se muestra una suma parcial con cara de total.
+ */
+function TotalARecaudarEmision({ emision }: { emision: EmisionGC }) {
+  const { items, hasMore, isLoading } = useCobrosFI(emision.periodo)
+  const propios = items.filter(c => c.origenRef === emision.id)
+  const completo = !hasMore && propios.length >= emision.lineas.length
+  if (isLoading && propios.length === 0) {
+    return <span className="text-muted-foreground">…</span>
+  }
+  if (!completo) {
+    return (
+      <span
+        className="text-muted-foreground"
+        title="La pantalla no tiene cargados todos los cobros de esta emisión: se evita mostrar una suma incompleta como si fuera el total."
+      >
+        —
+      </span>
+    )
+  }
+  const total = propios.reduce((a, c) => a + c.montoBase, 0)
+  return <span className="tabular-nums">${total.toLocaleString("es-CL")}</span>
 }
 
 function periodoSugerido(): string {
@@ -632,7 +667,17 @@ export default function GastosComunesPage() {
           </div>
 
           <Card>
-            <CardHeader><CardTitle className="text-base">Historial de emisiones</CardTitle></CardHeader>
+            <CardHeader>
+              <CardTitle className="text-base">Historial de emisiones</CardTitle>
+              <CardDescription>
+                <b>Presupuesto emitido</b> es lo que la comunidad aprobó y se repartió por unidad, sin el recargo.
+                <b> Recargo al fondo de reserva</b> es el aporte que la versión vigente del reglamento suma a ese presupuesto.
+                <b> Total a recaudar</b> es lo que efectivamente se cobra a cada unidad: cuando el recargo va sobre el
+                presupuesto, presupuesto emitido + recargo = total a recaudar; si la asamblea aprobó un presupuesto que
+                ya incluye la reserva, el recargo se desagrega de ese presupuesto y el total a recaudar es igual al
+                presupuesto emitido.
+              </CardDescription>
+            </CardHeader>
             <CardContent className="p-0">
               <table className="w-full text-sm">
                 <thead>
@@ -640,8 +685,9 @@ export default function GastosComunesPage() {
                     <th className="px-4 py-2">Periodo</th>
                     <th className="px-4 py-2">Modo</th>
                     <th className="px-4 py-2 text-right">Unidades</th>
-                    <th className="px-4 py-2 text-right">Emitido</th>
-                    <th className="px-4 py-2 text-right">Aporte Reserva</th>
+                    <th className="px-4 py-2 text-right">Presupuesto emitido<span className="block font-normal normal-case tracking-normal">lo aprobado, sin recargo</span></th>
+                    <th className="px-4 py-2 text-right">Recargo al fondo de reserva<span className="block font-normal normal-case tracking-normal">aporte de la versión vigente</span></th>
+                    <th className="px-4 py-2 text-right">Total a recaudar<span className="block font-normal normal-case tracking-normal">lo que pagan las unidades</span></th>
                     <th className="px-4 py-2">Fecha</th>
                   </tr>
                 </thead>
@@ -651,13 +697,16 @@ export default function GastosComunesPage() {
                       <td className="px-4 py-2 font-medium">{e.periodo}</td>
                       <td className="px-4 py-2">{e.modo === "fijo" ? "Fija" : "Variable"}</td>
                       <td className="px-4 py-2 text-right">{e.lineas.length}</td>
+                      {/* Presupuesto: Σ líneas de la emisión (lo que asigna la fórmula vigente). */}
                       <td className="px-4 py-2 text-right tabular-nums">${e.lineas.reduce((a, l) => a + l.monto, 0).toLocaleString("es-CL")}</td>
+                      {/* Recargo: el aporte declarado por la emisión, que la ruta deriva de las líneas de reserva de los cobros emitidos (mismo número). */}
                       <td className="px-4 py-2 text-right tabular-nums">{e.fondoReservaAporte ? `$${e.fondoReservaAporte.monto.toLocaleString("es-CL")}` : "—"}</td>
+                      <td className="px-4 py-2 text-right"><TotalARecaudarEmision emision={e} /></td>
                       <td className="px-4 py-2">{e.fechaEmision}</td>
                     </tr>
                   ))}
                   {emisionesGC.length === 0 && (
-                    <tr><td colSpan={6} className="px-4 py-6 text-center text-muted-foreground">Aún no se ha emitido ningún periodo.</td></tr>
+                    <tr><td colSpan={7} className="px-4 py-6 text-center text-muted-foreground">Aún no se ha emitido ningún periodo.</td></tr>
                   )}
                 </tbody>
               </table>
