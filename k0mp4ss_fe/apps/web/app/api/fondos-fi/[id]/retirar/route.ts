@@ -8,7 +8,7 @@
  * (folio FE- correlativo, validado con `EgresoFISchema`) y emite UN evento
  * `FI_FUND_WITHDRAWN`.
  */
-import { EgresoFISchema, type PagoCobroFI } from "@/lib/schemas"
+import { EgresoFISchema, type ConceptoCobroFI, type LineaCobroFI, type PagoCobroFI } from "@/lib/schemas"
 import { puede } from "@/lib/authz"
 import { prisma } from "@/lib/prisma"
 import { logger } from "@/lib/logger"
@@ -95,8 +95,12 @@ export async function POST(req: Request, ctx: Ctx): Promise<Response> {
       )
     }
 
+    // El saldo de un fondo sale de las LÍNEAS del cobro que lo nombran (S5), no
+    // del `fondoId` del cobro: el recargo de reserva vive en cobros del fondo
+    // de gasto común. Por eso se traen todos los cobros de la comunidad y
+    // `saldoFondo` reparte lo pagado por línea; el guard de abajo no cambia.
     const cobros = await prisma.cobroFI.findMany({
-      where: { comunidadId: scope.comunidadId, fondoId: fondo.id },
+      where: { comunidadId: scope.comunidadId },
     })
     const egresos = await prisma.egresoFI.findMany({
       where: { comunidadId: scope.comunidadId, fondoId: fondo.id },
@@ -115,6 +119,11 @@ export async function POST(req: Request, ctx: Ctx): Promise<Response> {
         fondoId: c.fondoId,
         // SAFETY: pagos es Json con shape PagoCobroFI[] validado por CobroFISchema.
         pagos: (c.pagos ?? []) as unknown as PagoCobroFI[],
+        // SAFETY: concepto es String en BD con los valores de ConceptoCobroFISchema.
+        concepto: c.concepto as ConceptoCobroFI,
+        montoBase: c.montoBase,
+        // SAFETY: lineas es Json con shape LineaCobroFI[] validado por CobroFISchema.
+        lineas: c.lineas as unknown as LineaCobroFI[] | null,
       })),
       egresos,
       ingresosFI,

@@ -16,7 +16,7 @@ import { prisma } from "@/lib/prisma"
 import {
   FUENTES_INSTRUMENTO_REALES,
   ParametrosReglamentoSchema,
-  type ParametrosReglamento,
+  type ParametrosCobroReglamento,
 } from "@/lib/schemas"
 
 /** Lo mínimo que el resolver necesita de una versión (sirve para fixtures). */
@@ -67,11 +67,13 @@ export function autorizaEmision(version: { fuenteInstrumento: string }): boolean
 
 /**
  * Parámetros tipados de la versión, o null si la fila no los declara completos.
- * Una versión sin números válidos no puede gobernar una emisión (S2).
+ * Una versión sin números válidos no puede gobernar una emisión (S2). El tipo
+ * incluye `reservaIncluidaEnPresupuesto`, que el esquema completa con la
+ * lectura normativa cuando la versión persistida no lo trae (S5).
  */
 export function parametrosDeVersion(version: {
   parametros: unknown
-}): ParametrosReglamento | null {
+}): ParametrosCobroReglamento | null {
   const parsed = ParametrosReglamentoSchema.safeParse(version.parametros)
   return parsed.success ? parsed.data : null
 }

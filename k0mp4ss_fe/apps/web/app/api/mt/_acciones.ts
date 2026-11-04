@@ -13,7 +13,7 @@ import { prisma } from "@/lib/prisma"
 import { generarId } from "@/lib/id-utils"
 import { registrarEventoAuditoria, type ClienteAuditoria } from "@/lib/auditoria"
 import { saldoFondo } from "@/lib/finanzas-utils"
-import type { PagoCobroFI } from "@/lib/schemas"
+import type { ConceptoCobroFI, LineaCobroFI, PagoCobroFI } from "@/lib/schemas"
 import {
   jsonError,
   withComunidadScope,
@@ -44,7 +44,7 @@ export class RechazoMT extends Error {
  */
 export type ClienteMT = Pick<
   typeof prisma,
-  "trabajoMT" | "proyectoMT" | "fondoFI" | "cobroFI" | "egresoFI" | "emisionGC" | "eventoAuditoria"
+  "trabajoMT" | "proyectoMT" | "fondoFI" | "cobroFI" | "egresoFI" | "eventoAuditoria"
 >
 
 /** Contexto server-side de una acción MT: sesión + membresía + permiso indicado. */
@@ -122,28 +122,35 @@ export function sumarMesesISO(fechaISO: string, meses: number): string {
 
 /**
  * Saldo de un fondo FI con la MISMA fórmula que `saveProyectoMT` del store:
- * `saldoFondo(fondoId, { cobros, egresos, emisiones })` — Σ pagos de cobros del
- * fondo + aportes de emisiones al fondo de reserva − Σ egresos del fondo. El
- * store NO incluye `saldoInicial` ni ingresos manuales en este guard, así que
- * el espejo tampoco (ver `lib/store.ts` ~4830).
+ * `saldoFondo(fondoId, { cobros, egresos })` — Σ de lo pagado en cobros de la
+ * comunidad repartido por las LÍNEAS que nombran al fondo (S5) − Σ egresos del
+ * fondo. El store NO incluye `saldoInicial` ni ingresos manuales en este guard,
+ * así que el espejo tampoco (ver `lib/store.ts` ~4830).
+ *
+ * Los cobros se traen SIN filtro por fondo: el recargo de reserva vive en
+ * cobros del fondo de gasto común, así que un proyecto financiado con el fondo
+ * de reserva solo ve su caja si el reparto es por línea. `fondoReservaAporte`
+ * ya no se acredita: el recargo es una línea pagada, no un asiento interno.
  */
 export async function saldoFondoProyectoMT(
   fondoId: string,
   comunidadId: string,
   client: ClienteMT = prisma
 ): Promise<number> {
-  const [cobros, egresos, emisiones] = await Promise.all([
+  const [cobros, egresos] = await Promise.all([
     client.cobroFI.findMany({
-      where: { comunidadId, fondoId },
-      select: { fondoId: true, pagos: true },
+      where: { comunidadId },
+      select: {
+        fondoId: true,
+        pagos: true,
+        concepto: true,
+        montoBase: true,
+        lineas: true,
+      },
     }),
     client.egresoFI.findMany({
       where: { comunidadId, fondoId },
       select: { fondoId: true, monto: true },
-    }),
-    client.emisionGC.findMany({
-      where: { comunidadId },
-      select: { fondoReservaAporte: true },
     }),
   ])
   return saldoFondo(fondoId, {
@@ -151,9 +158,12 @@ export async function saldoFondoProyectoMT(
       fondoId: c.fondoId,
       // SAFETY: pagos es Json con shape PagoCobroFI[] validado por CobroFISchema.
       pagos: (c.pagos ?? []) as unknown as PagoCobroFI[],
+      // SAFETY: concepto es String en BD con los valores de ConceptoCobroFISchema.
+      concepto: c.concepto as ConceptoCobroFI,
+      montoBase: c.montoBase,
+      // SAFETY: lineas es Json con shape LineaCobroFI[] validado por CobroFISchema.
+      lineas: c.lineas as unknown as LineaCobroFI[] | null,
     })),
     egresos,
-    // SAFETY: fondoReservaAporte es Json con shape AporteFondoReserva validado por EmisionGCSchema.
-    emisiones: emisiones as unknown as { fondoReservaAporte?: { fondoId: string; monto: number } }[],
   })
 }

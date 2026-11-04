@@ -1,6 +1,7 @@
 // Helpers puros de RE - Reportería y Dashboards (ventana 8). Sin acceso al
 // store: reciben slices tipados y devuelven derivaciones testables.
 import type { CierreTurnoPE, SolicitudGE, CobroFI, EgresoFI, Persona, VinculoUnidad } from "./schemas"
+import { lineasDeCobro } from "./cobro-lineas"
 
 // --- Métricas demográficas (censo) ---
 
@@ -115,17 +116,55 @@ export interface SaludCajaRE {
   termometroVerde: boolean
 }
 
+/**
+ * Reparte un cobro entre los fondos que nombran sus LÍNEAS, en proporción al
+ * monto de cada línea. `emitido` suma los montos de las líneas; `recaudado`
+ * reparte los pagos en esa misma proporción, sin redondear por fondo (redondear
+ * cada parte rompería la suma). Un cobro legacy (sin líneas) se comporta como su
+ * única línea: todo a su propio `fondoId`, igual que antes del detalle (S5).
+ */
+function repartoDeCobroPorFondo(
+  cobro: Pick<CobroFI, "fondoId" | "montoBase" | "pagos" | "concepto" | "lineas">
+): { emitido: Map<string, number>; recaudado: Map<string, number> } {
+  const emitido = new Map<string, number>()
+  const recaudado = new Map<string, number>()
+  const pagado = cobro.pagos.reduce((acc, p) => acc + p.monto, 0)
+  const lineas = lineasDeCobro(cobro)
+  const totalLineas = lineas.reduce((acc, linea) => acc + linea.monto, 0)
+  if (totalLineas <= 0) {
+    // Sin montos no hay proporción posible: todo al fondo del cobro.
+    emitido.set(cobro.fondoId, cobro.montoBase)
+    if (pagado > 0) recaudado.set(cobro.fondoId, pagado)
+    return { emitido, recaudado }
+  }
+  for (const linea of lineas) {
+    const fondoId = linea.fondoId ?? cobro.fondoId
+    emitido.set(fondoId, (emitido.get(fondoId) ?? 0) + linea.monto)
+    if (pagado > 0) {
+      recaudado.set(
+        fondoId,
+        (recaudado.get(fondoId) ?? 0) + (pagado * linea.monto) / totalLineas
+      )
+    }
+  }
+  return { emitido, recaudado }
+}
+
 export function saludCajaFI(input: {
-  cobrosFI: Pick<CobroFI, "fondoId" | "montoBase" | "pagos" | "moras" | "diferencias">[]
+  cobrosFI: Pick<
+    CobroFI,
+    "fondoId" | "montoBase" | "pagos" | "moras" | "diferencias" | "concepto" | "lineas"
+  >[]
   egresosFI: Pick<EgresoFI, "monto" | "esRecurrente">[]
   fondos: { id: string; nombre: string }[]
 }): SaludCajaRE {
-  const recaudacionPorFondo: RecaudacionFondoRE[] = input.fondos.map(f => {
-    const delFondo = input.cobrosFI.filter(c => c.fondoId === f.id)
-    const emitido = delFondo.reduce((acc, c) => acc + c.montoBase, 0)
-    const recaudado = delFondo.reduce((acc, c) => acc + c.pagos.reduce((a2, p) => a2 + p.monto, 0), 0)
-    return { fondoId: f.id, nombre: f.nombre, emitido, recaudado }
-  })
+  const repartos = input.cobrosFI.map(repartoDeCobroPorFondo)
+  const recaudacionPorFondo: RecaudacionFondoRE[] = input.fondos.map(f => ({
+    fondoId: f.id,
+    nombre: f.nombre,
+    emitido: repartos.reduce((acc, r) => acc + (r.emitido.get(f.id) ?? 0), 0),
+    recaudado: repartos.reduce((acc, r) => acc + (r.recaudado.get(f.id) ?? 0), 0),
+  }))
   const ingresosNetos = input.cobrosFI.reduce((acc, c) => acc + c.pagos.reduce((a, p) => a + p.monto, 0), 0)
   const egresosTotales = input.egresosFI.reduce((acc, e) => acc + e.monto, 0)
   const gastosFijosRecurrentes = input.egresosFI.filter(e => e.esRecurrente).reduce((acc, e) => acc + e.monto, 0)

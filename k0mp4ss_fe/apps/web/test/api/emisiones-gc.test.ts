@@ -426,29 +426,57 @@ describe("/api/emisiones-gc — emisiones de Gasto Común con BD real", () => {
       })
       expect(res.status).toBe(201)
       const j = (await res.json()) as {
-        emision: { id: string; gastoTotal: number; fondoReservaAporte?: { monto: number } }
+        emision: {
+          id: string
+          gastoTotal: number
+          lineas: { monto: number }[]
+          fondoReservaAporte?: { monto: number }
+        }
         cobros: {
           id: string
           montoBase: number
-          lineas: { concepto: string; monto: number }[] | null
+          lineas: { concepto: string; monto: number; fondoId?: string }[] | null
         }[]
       }
+      // El presupuesto emitido y el aporte declarado no cambian (S5): lo que
+      // cambia es que el recargo de reserva (10%) es ahora una línea real del
+      // cobro, así que la unidad paga 60.000 + 6.000 = 66.000.
       expect(j.emision.gastoTotal).toBe(120000)
+      // La línea de la emisión sigue diciendo el presupuesto de la unidad
+      // (Σ líneas = gastoTotal); el cargo con recargo vive en el cobro.
+      expect(j.emision.lineas.map((l) => l.monto)).toEqual([60000, 60000])
+      expect(j.emision.lineas.reduce((total, l) => total + l.monto, 0)).toBe(
+        j.emision.gastoTotal
+      )
       expect(j.emision.fondoReservaAporte?.monto).toBe(12000)
       expect(j.cobros.length).toBe(2)
-      expect(j.cobros.every((c) => c.montoBase === 60000)).toBe(true)
-      // T5 (S5): el cobro lleva exactamente una línea de gasto común que suma
-      // lo mismo que `montoBase`; los montos de arriba no cambian en este corte.
+      expect(j.cobros.every((c) => c.montoBase === 66000)).toBe(true)
       for (const c of j.cobros) {
-        expect(c.lineas).toEqual([{ concepto: "gasto_comun", monto: c.montoBase }])
+        expect(c.lineas).toEqual([
+          { concepto: "gasto_comun", monto: 60000, fondoId: fondoGC },
+          { concepto: "gasto_comun", monto: 6000, fondoId: fondoReserva },
+        ])
         expect(c.lineas?.reduce((total, l) => total + l.monto, 0)).toBe(c.montoBase)
       }
+      // El aporte al fondo de reserva es exactamente la suma de sus líneas.
+      const aporteDeLineas = j.cobros.reduce(
+        (total, c) =>
+          total +
+          (c.lineas ?? [])
+            .filter((l) => l.fondoId === fondoReserva)
+            .reduce((suma, l) => suma + l.monto, 0),
+        0
+      )
+      expect(aporteDeLineas).toBe(j.emision.fondoReservaAporte?.monto)
       const guardados = await prisma.cobroFI.findMany({
         where: { comunidadId: comunidadA, origenRef: j.emision.id },
       })
       expect(guardados.length).toBe(2)
       for (const c of guardados) {
-        expect(c.lineas).toEqual([{ concepto: "gasto_comun", monto: c.montoBase }])
+        expect(c.lineas).toEqual([
+          { concepto: "gasto_comun", monto: 60000, fondoId: fondoGC },
+          { concepto: "gasto_comun", monto: 6000, fondoId: fondoReserva },
+        ])
       }
     })
   })
@@ -479,11 +507,20 @@ describe("/api/emisiones-gc — emisiones de Gasto Común con BD real", () => {
       expect(res.status).toBe(201)
       const j = (await res.json()) as {
         emision: { id: string; modo: string; gastoTotal: number; fondoReservaAporte?: { monto: number } }
-        cobros: { montoBase: number }[]
+        cobros: {
+          montoBase: number
+          lineas: { concepto: string; monto: number; fondoId?: string }[] | null
+        }[]
       }
       expect(j.emision.modo).toBe("variable")
+      // El presupuesto prorrateado (100.000) sigue siendo el de la asamblea.
       expect(j.emision.gastoTotal).toBe(100000)
-      expect(j.cobros[0]?.montoBase).toBe(60000)
+      // La unidad paga su prorrateo (60.000) más el recargo declarado (6.000).
+      expect(j.cobros[0]?.montoBase).toBe(66000)
+      expect(j.cobros[0]?.lineas).toEqual([
+        { concepto: "gasto_comun", monto: 60000, fondoId: fondoGC },
+        { concepto: "gasto_comun", monto: 6000, fondoId: fondoReserva },
+      ])
       expect(j.emision.fondoReservaAporte?.monto).toBe(6000)
     })
   })

@@ -504,5 +504,78 @@ describe("/api/mt — acciones de trabajos y proyectos (BD real)", () => {
         })
       })
     })
+
+    it("un proyecto financiado por el fondo de reserva ve la caja de sus líneas (S5)", async () => {
+      const fondoReservaMT = "mt-acc-fondo-reserva"
+      await prisma.fondoFI.create({
+        data: {
+          id: fondoReservaMT,
+          comunidadId: comunidad,
+          nombre: "Fondo Reserva MT",
+          tipo: "reserva",
+          activo: true,
+          saldoInicial: 0,
+        },
+      })
+      // Cobro del corte 2: imputado al fondo de gasto común, con el recargo de
+      // reserva como línea pagada al fondo de reserva.
+      await prisma.cobroFI.create({
+        data: {
+          id: "mt-acc-cobro-reserva",
+          comunidadId: comunidad,
+          unidadId: "mt-acc-u-1",
+          periodo: "2026-11",
+          concepto: "gasto_comun",
+          origenModulo: "FI",
+          fondoId: fondoGC,
+          descripcion: "Gasto Común 2026-11 con recargo de reserva",
+          montoBase: 66_000,
+          lineas: [
+            { concepto: "gasto_comun", monto: 60_000, fondoId: fondoGC },
+            { concepto: "gasto_comun", monto: 6_000, fondoId: fondoReservaMT },
+          ],
+          fechaCargo: "2026-11-01",
+          moras: [],
+          pagos: [
+            { id: "mt-acc-pago-reserva", monto: 66_000, fecha: "2026-11-05", medio: "transferencia" },
+          ],
+          diferencias: [],
+        },
+      })
+
+      const { proyectos } = await cargaModulos()
+      await conSesion(async () => {
+        const deMas = await proyectos.POST(
+          pedir(
+            "mt/proyectos",
+            proyecto({
+              id: "mt-acc-py-res-1",
+              presupuestoEstimado: 6_001,
+              fondoFinanciamientoId: fondoReservaMT,
+            })
+          )
+        )
+        expect(deMas.status).toBe(409)
+        const cuerpo = (await deMas.json()) as { error: string }
+        expect(cuerpo.error).toContain("Saldo insuficiente")
+        expect(cuerpo.error).toContain((6_000).toLocaleString("es-CL"))
+        expect(await prisma.proyectoMT.findUnique({ where: { id: "mt-acc-py-res-1" } })).toBeNull()
+
+        const ok = await proyectos.POST(
+          pedir(
+            "mt/proyectos",
+            proyecto({
+              id: "mt-acc-py-res-2",
+              presupuestoEstimado: 6_000,
+              fondoFinanciamientoId: fondoReservaMT,
+            })
+          )
+        )
+        expect(ok.status).toBe(201)
+        expect(
+          (await prisma.proyectoMT.findUnique({ where: { id: "mt-acc-py-res-2" } }))?.presupuestoEstimado
+        ).toBe(6_000)
+      })
+    })
   })
 })

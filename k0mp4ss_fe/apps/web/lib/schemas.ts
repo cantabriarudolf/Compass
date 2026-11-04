@@ -1402,6 +1402,17 @@ export const ParametrosReglamentoSchema = z.object({
     .int("Los días de preaviso deben ser un entero.")
     .min(1, "Los días de preaviso deben ser un entero mayor o igual a 1."),
   ipcActivo: z.boolean({ required_error: "El interruptor de IPC es obligatorio." }),
+  /**
+   * Dónde vive el recargo al fondo de reserva que la comunidad declara (S5).
+   * `false` (default) = se cobra ENCIMA del gasto común mensual, que es la
+   * lectura normativa: la ley habla de un recargo sobre los gastos comunes
+   * (Ley 21.442 art. 39) y el reglamento de la comunidad de un "recargo
+   * equivalente a un 10% del gasto común mensual". `true` = la asamblea aprobó
+   * un presupuesto que ya lo contiene, así que el recargo se desagrega del
+   * total en vez de sumarse. Opcional con default para que las versiones ya
+   * persistidas sigan parseando, con la lectura normativa.
+   */
+  reservaIncluidaEnPresupuesto: z.boolean().default(false),
 })
 
 /** Una versión del reglamento, con su instrumento y su vigencia (S3). */
@@ -2323,7 +2334,25 @@ export type IngresoFI = z.infer<typeof IngresoFISchema>
 export type LineaEmisionGC = z.infer<typeof LineaEmisionGCSchema>
 export type AporteFondoReserva = z.infer<typeof AporteFondoReservaSchema>
 export type EmisionGC = z.infer<typeof EmisionGCSchema>
-export type ParametrosReglamento = z.infer<typeof ParametrosReglamentoSchema>
+/**
+ * Los números de la versión tal como se guardan, incluido dónde va el recargo
+ * de reserva (`reservaIncluidaEnPresupuesto`): el dato que decide si el cobro
+ * lo suma al gasto común o lo desagrega de él (S5).
+ */
+export type ParametrosCobroReglamento = z.infer<
+  typeof ParametrosReglamentoSchema
+>
+/**
+ * `ParametrosReglamento` es la vista del formulario de declaración: los siete
+ * campos que la comunidad escribe (los seis números y el interruptor de IPC).
+ * `reservaIncluidaEnPresupuesto` todavía no tiene control en la pantalla, así
+ * que no ensancha el tipo que el formulario recorre como columnas numéricas;
+ * el cobro lo lee con `ParametrosCobroReglamento`, que sí lo incluye.
+ */
+export type ParametrosReglamento = Omit<
+  ParametrosCobroReglamento,
+  "reservaIncluidaEnPresupuesto"
+>
 export type VersionReglamento = z.infer<typeof VersionReglamentoSchema>
 export type NuevaVersionReglamento = z.infer<
   typeof NuevaVersionReglamentoSchema

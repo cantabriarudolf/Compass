@@ -7,7 +7,11 @@
  * emisión + sus cobros en una transacción. Solo administrador (crear "fi").
  */
 import { z } from "zod"
-import { CobroFISchema, EmisionGCSchema } from "@/lib/schemas"
+import {
+  CobroFISchema,
+  EmisionGCSchema,
+  type LineaCobroFI,
+} from "@/lib/schemas"
 import { puede } from "@/lib/authz"
 import { prisma } from "@/lib/prisma"
 import { logger } from "@/lib/logger"
@@ -53,6 +57,64 @@ function vencimientoPorDefecto(fechaCargo: string, diasPagoGc: number): string {
   const base = new Date(`${fechaCargo}T00:00:00`)
   base.setDate(base.getDate() + diasPagoGc)
   return base.toISOString().slice(0, 10)
+}
+
+/** Reparto del monto de una unidad entre gasto común y recargo de reserva. */
+interface DesgloseCobro {
+  /** Lo que paga la unidad: la suma exacta de las líneas. */
+  montoBase: number
+  /** Recargo al fondo de reserva (0 si la versión no declara reserva). */
+  reserva: number
+  lineas: LineaCobroFI[]
+}
+
+/**
+ * Convierte el monto que asigna la fórmula vigente (`tarifa del tipo` en fijo,
+ * `gastoTotal · prorrateo` en variable, redondeado como hoy) en el desglose del
+ * cobro (S5): la reserva es un cargo REAL a la unidad, no un asiento interno,
+ * y su fondo de imputación vive en la propia línea.
+ *
+ * - `incluidaEnPresupuesto = false` (lectura normativa por defecto): el
+ *   recargo va encima del gasto común — `reserva = round(m · P / 100)`.
+ * - `incluidaEnPresupuesto = true` (la asamblea aprobó un presupuesto que ya lo
+ *   contiene): la unidad paga exactamente lo mismo que hoy y el recargo se
+ *   desagrega — `reserva = round(m · P / (100 + P))`, el resto es gasto común.
+ *
+ * En ambos casos las líneas suman exactamente `montoBase`. Una línea de monto
+ * cero no se emite: el esquema exige líneas positivas y el total no cambia.
+ */
+function desgloseCobro(
+  montoAsignado: number,
+  porcentajeReserva: number,
+  incluidaEnPresupuesto: boolean,
+  fondoGcId: string,
+  fondoReservaId: string | null
+): DesgloseCobro {
+  let gastoComun = montoAsignado
+  let reserva = 0
+  if (porcentajeReserva > 0) {
+    reserva = incluidaEnPresupuesto
+      ? Math.round(
+          (montoAsignado * porcentajeReserva) / (100 + porcentajeReserva)
+        )
+      : Math.round((montoAsignado * porcentajeReserva) / 100)
+    if (incluidaEnPresupuesto) gastoComun = montoAsignado - reserva
+  }
+  // El concepto de la línea es el mismo que ya existe (`gasto_comun`): el
+  // esquema no tiene un miembro que nombre el aporte al fondo de reserva y no
+  // se inventa uno en este corte. Lo que distingue la línea es su `fondoId`.
+  const lineas: LineaCobroFI[] = []
+  if (gastoComun > 0) {
+    lineas.push({ concepto: "gasto_comun", monto: gastoComun, fondoId: fondoGcId })
+  }
+  if (reserva > 0 && fondoReservaId) {
+    lineas.push({
+      concepto: "gasto_comun",
+      monto: reserva,
+      fondoId: fondoReservaId,
+    })
+  }
+  return { montoBase: gastoComun + reserva, reserva, lineas }
 }
 
 /** Motivos por los que la compuerta bloquea la emisión antes de escribir (S1/S2/S5). */
@@ -213,17 +275,32 @@ export async function POST(req: Request): Promise<Response> {
     const emisionId = generarId("egc")
     const lineas: { unidadId: string; responsablePersonaId: string; monto: number; cobroId: string }[] = []
     const cobros: Record<string, unknown>[] = []
+    // Presupuesto emitido (Σ monto asignado, sin el recargo) y aporte declarado
+    // al fondo de reserva (Σ líneas de reserva).
+    let presupuestoTotal = 0
+    let reservaTotal = 0
     elegibles.forEach((u, idx) => {
-      const monto =
+      const montoAsignado =
         modo === "fijo"
           ? Math.round(tarifaPorTipo.get(u.tipoUnidadId) ?? 0)
           : Math.round((parsed.data.gastoTotal ?? 0) * u.prorrateo)
+      const desglose = desgloseCobro(
+        montoAsignado,
+        parametros.porcentajeReserva,
+        parametros.reservaIncluidaEnPresupuesto,
+        fondoGC.id,
+        fondoReserva?.id ?? null
+      )
+      presupuestoTotal += montoAsignado
+      reservaTotal += desglose.reserva
       const cobroId = generarId("cob", idx)
       lineas.push({
         unidadId: u.id,
         // SAFETY: la unidad pasó el filtro sinResponsable; el vínculo existe.
         responsablePersonaId: responsablePorUnidad.get(u.id) as string,
-        monto,
+        // Presupuesto de la unidad (Σ líneas = `gastoTotal`): el cargo con su
+        // recargo de reserva es el `montoBase` del cobro, no esta línea.
+        monto: montoAsignado,
         cobroId,
       })
       cobros.push({
@@ -235,10 +312,10 @@ export async function POST(req: Request): Promise<Response> {
         origenRef: emisionId,
         fondoId: fondoGC.id,
         descripcion: `Gasto Común ${periodo}`,
-        montoBase: monto,
-        // S5: el cobro nace con su desglose. Este corte emite una sola línea
-        // (gasto común) por el mismo monto que ya va en `montoBase`.
-        lineas: [{ concepto: "gasto_comun", monto }],
+        montoBase: desglose.montoBase,
+        // S5: el cobro nace con su desglose y su recargo de reserva imputado al
+        // fondo de reserva. La suma de las líneas es `montoBase`.
+        lineas: desglose.lineas,
         fechaCargo: hoy,
         fechaVencimiento: vencimiento,
         moras: [],
@@ -247,22 +324,21 @@ export async function POST(req: Request): Promise<Response> {
       })
     })
 
-    const totalEmitido = lineas.reduce((acc, l) => acc + l.monto, 0)
     // El fondo se resolvió en la compuerta; el aporte sale del porcentaje que
-    // declara la versión (S2), nunca del `porcentajeAporte` del fondo.
-    const aporteMonto = fondoReserva
-      ? Math.round((totalEmitido * parametros.porcentajeReserva) / 100)
-      : 0
-
+    // declara la versión (S2), nunca del `porcentajeAporte` del fondo, y es
+    // exactamente la suma de las líneas de reserva de los cobros.
     const emision = {
       id: emisionId,
       periodo,
       modo,
-      gastoTotal: modo === "variable" ? (parsed.data.gastoTotal ?? totalEmitido) : totalEmitido,
+      gastoTotal:
+        modo === "variable"
+          ? (parsed.data.gastoTotal ?? presupuestoTotal)
+          : presupuestoTotal,
       lineas,
       fondoReservaAporte:
-        aporteMonto > 0 && fondoReserva
-          ? { fondoId: fondoReserva.id, monto: aporteMonto }
+        reservaTotal > 0 && fondoReserva
+          ? { fondoId: fondoReserva.id, monto: reservaTotal }
           : undefined,
       fechaEmision: hoy,
     }

@@ -6,7 +6,8 @@
  * mayúsculas) y authz sobre el recurso "fi" (solo administrador escribe;
  * comité lee; residente sin acceso).
  */
-import { FondoFISchema } from "@/lib/schemas"
+import { FondoFISchema, type ConceptoCobroFI, type LineaCobroFI } from "@/lib/schemas"
+import { lineasDeCobro } from "@/lib/cobro-lineas"
 import { puede } from "@/lib/authz"
 import { prisma } from "@/lib/prisma"
 import { logger } from "@/lib/logger"
@@ -35,21 +36,28 @@ export const fondosHandlers = createCrudHandlers({
       prisma.ingresoFI.count({
         where: { comunidadId: scope.comunidadId, fondoId: id },
       }),
-      prisma.cobroFI.count({
-        where: { comunidadId: scope.comunidadId, fondoId: id },
+      // Los cobros se imputan por LÍNEAS (S5): un cobro del fondo de gasto
+      // común puede nombrar el fondo de reserva en su recargo, y el cobro
+      // legacy (sin líneas) sigue imputando a su propio `fondoId`.
+      prisma.cobroFI.findMany({
+        where: { comunidadId: scope.comunidadId },
+        select: { fondoId: true, concepto: true, montoBase: true, lineas: true },
       }),
     ])
-    // fondoReservaAporte es Json: se filtra en JS (pocas emisiones por comunidad).
-    const emisiones = await prisma.emisionGC.findMany({
-      where: { comunidadId: scope.comunidadId },
-      select: { fondoReservaAporte: true },
-    })
-    const aportes = emisiones.filter(
-      (e) =>
-        (e.fondoReservaAporte as { fondoId?: string } | null)?.fondoId ===
-        id
+    // Un cobro cuenta una vez aunque más de una línea nombre el fondo: el
+    // mensaje cuenta documentos, no líneas.
+    const cobrosQueLoImputan = cobros.filter((c) =>
+      lineasDeCobro({
+        // SAFETY: concepto es String en BD con los valores de ConceptoCobroFISchema.
+        concepto: c.concepto as ConceptoCobroFI,
+        montoBase: c.montoBase,
+        // SAFETY: lineas es Json con shape LineaCobroFI[] validado por CobroFISchema.
+        lineas: c.lineas as unknown as LineaCobroFI[] | null,
+      }).some((linea) => (linea.fondoId ?? c.fondoId) === id)
     ).length
-    const total = egresos + ingresos + cobros + aportes
+    // El aporte declarado de una emisión (`fondoReservaAporte`) ya no cuenta
+    // como movimiento: el recargo real es una línea del cobro, contada arriba.
+    const total = egresos + ingresos + cobrosQueLoImputan
     if (total > 0) {
       return jsonError(
         409,

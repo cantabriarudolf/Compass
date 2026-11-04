@@ -499,4 +499,256 @@ describe("/api/fondos-fi — fondos FI con BD real", () => {
       expect(evento?.categoria).toBe("FI")
     })
   })
+
+  // --- retirar: el saldo sale de las líneas que nombran al fondo (T5 corte 2, S5) ---
+
+  it("retirar: un cobro pagado con línea de reserva habilita la caja del fondo de reserva", async () => {
+    const fondoGcLineas = "ffi4-fondo-gc-lineas"
+    const fondoResLineas = "ffi4-fondo-res-lineas"
+    await prisma.fondoFI.createMany({
+      data: [
+        {
+          id: fondoGcLineas,
+          comunidadId: comunidadA,
+          nombre: "Fondo GC con líneas",
+          tipo: "gasto_comun",
+          activo: true,
+          saldoInicial: 0,
+        },
+        {
+          id: fondoResLineas,
+          comunidadId: comunidadA,
+          nombre: "Fondo Reserva con líneas",
+          tipo: "reserva",
+          activo: true,
+          saldoInicial: 0,
+        },
+      ],
+    })
+    // Cobro del corte 2: 60.000 de gasto común + 6.000 de recargo de reserva,
+    // cada línea imputada a su fondo, pagado completo.
+    await prisma.cobroFI.create({
+      data: {
+        id: "ffi4-cob-lineas-res",
+        comunidadId: comunidadA,
+        unidadId: "ffi4-u-lineas",
+        periodo: "2026-11",
+        concepto: "gasto_comun",
+        origenModulo: "FI",
+        fondoId: fondoGcLineas,
+        descripcion: "Gasto Común 2026-11",
+        montoBase: 66000,
+        lineas: [
+          { concepto: "gasto_comun", monto: 60000, fondoId: fondoGcLineas },
+          { concepto: "gasto_comun", monto: 6000, fondoId: fondoResLineas },
+        ],
+        fechaCargo: "2026-11-01",
+        moras: [],
+        pagos: [
+          { id: "ffi4-pago-res", monto: 66000, fecha: "2026-11-05", medio: "transferencia" },
+        ],
+        diferencias: [],
+      },
+    })
+
+    await conSesion(emailAdmin, async () => {
+      // La caja del fondo de reserva es su línea pagada (6.000): ni el total del
+      // cobro (66.000) ni un aporte interno de la emisión.
+      const reserva = await retirar(fondoResLineas, {
+        monto: 6000,
+        descripcion: "Mantención del equipo de bombeo",
+        aprobacionActaGDId: actaPublicada,
+      })
+      expect(reserva.status).toBe(200)
+
+      const sinCaja = await retirar(fondoResLineas, {
+        monto: 1,
+        descripcion: "Un peso sobre lo recaudado por reserva",
+        aprobacionActaGDId: actaPublicada,
+      })
+      expect(sinCaja.status).toBe(400)
+      expect(((await sinCaja.json()) as { error: string }).error).toContain(
+        `disponible $${(0).toLocaleString("es-CL")}`
+      )
+
+      // El fondo de gasto común conserva solo su parte: 60.000, no 66.000.
+      const gcDeMas = await retirar(fondoGcLineas, {
+        monto: 60001,
+        descripcion: "Retiro por sobre la parte de gasto común",
+      })
+      expect(gcDeMas.status).toBe(400)
+      expect(((await gcDeMas.json()) as { error: string }).error).toContain(
+        `disponible $${(60000).toLocaleString("es-CL")}`
+      )
+
+      const gc = await retirar(fondoGcLineas, {
+        monto: 60000,
+        descripcion: "Pago del aseo de noviembre",
+      })
+      expect(gc.status).toBe(200)
+    })
+  })
+
+  it("retirar: un cobro legacy sin líneas sigue acreditando solo a su propio fondo", async () => {
+    const fondoLegacy = "ffi4-fondo-legacy"
+    const fondoResLegacy = "ffi4-fondo-res-legacy"
+    await prisma.fondoFI.createMany({
+      data: [
+        {
+          id: fondoLegacy,
+          comunidadId: comunidadA,
+          nombre: "Fondo legacy sin líneas",
+          tipo: "gasto_comun",
+          activo: true,
+          saldoInicial: 0,
+        },
+        {
+          id: fondoResLegacy,
+          comunidadId: comunidadA,
+          nombre: "Fondo reserva sin líneas",
+          tipo: "reserva",
+          activo: true,
+          saldoInicial: 0,
+        },
+      ],
+    })
+    await prisma.cobroFI.create({
+      data: {
+        id: "ffi4-cob-legacy",
+        comunidadId: comunidadA,
+        unidadId: "ffi4-u-legacy",
+        periodo: "2026-11",
+        concepto: "cuota_extraordinaria",
+        origenModulo: "FI",
+        fondoId: fondoLegacy,
+        descripcion: "Cuota extraordinaria portón",
+        montoBase: 50000,
+        // Legacy: la columna `lineas` queda NULL (cobro de una sola línea).
+        fechaCargo: "2026-11-01",
+        moras: [],
+        pagos: [
+          { id: "ffi4-pago-legacy", monto: 50000, fecha: "2026-11-06", medio: "transferencia" },
+        ],
+        diferencias: [],
+      },
+    })
+
+    await conSesion(emailAdmin, async () => {
+      const ok = await retirar(fondoLegacy, {
+        monto: 50000,
+        descripcion: "Instalación del portón nuevo",
+      })
+      expect(ok.status).toBe(200)
+
+      // La reserva no recibe nada del cobro legacy: su pago no nombra su fondo.
+      const res = await retirar(fondoResLegacy, {
+        monto: 1,
+        descripcion: "Un peso del cobro legacy a la reserva",
+        aprobacionActaGDId: actaPublicada,
+      })
+      expect(res.status).toBe(400)
+      expect(((await res.json()) as { error: string }).error).toContain(
+        `disponible $${(0).toLocaleString("es-CL")}`
+      )
+    })
+  })
+
+  // --- DELETE: los movimientos se cuentan por líneas (T5 corte 2, S5) ---
+
+  it("DELETE: un fondo nombrado por las líneas de un cobro tiene movimientos → 409", async () => {
+    const fondoGcLineasBorrar = "ffi4-fondo-gc-lineas-borrar"
+    const fondoResLineasBorrar = "ffi4-fondo-res-lineas-borrar"
+    await prisma.fondoFI.createMany({
+      data: [
+        {
+          id: fondoGcLineasBorrar,
+          comunidadId: comunidadA,
+          nombre: "Fondo GC con líneas a borrar",
+          tipo: "gasto_comun",
+          activo: true,
+          saldoInicial: 0,
+        },
+        {
+          id: fondoResLineasBorrar,
+          comunidadId: comunidadA,
+          nombre: "Fondo Reserva con líneas a borrar",
+          tipo: "reserva",
+          activo: true,
+          saldoInicial: 0,
+        },
+      ],
+    })
+    await prisma.cobroFI.create({
+      data: {
+        id: "ffi4-cob-lineas-borrar",
+        comunidadId: comunidadA,
+        unidadId: "ffi4-u-lineas-borrar",
+        periodo: "2026-11",
+        concepto: "gasto_comun",
+        origenModulo: "FI",
+        fondoId: fondoGcLineasBorrar,
+        descripcion: "Gasto Común 2026-11 con recargo de reserva",
+        montoBase: 66000,
+        lineas: [
+          { concepto: "gasto_comun", monto: 60000, fondoId: fondoGcLineasBorrar },
+          { concepto: "gasto_comun", monto: 6000, fondoId: fondoResLineasBorrar },
+        ],
+        fechaCargo: "2026-11-01",
+        moras: [],
+        pagos: [],
+        diferencias: [],
+      },
+    })
+
+    await conSesion(emailAdmin, async () => {
+      // Borrar este fondo dejaría la línea apuntando a un fondo inexistente.
+      const res = await llamar("DELETE", fondoResLineasBorrar)
+      expect(res.status).toBe(409)
+      expect(((await res.json()) as { error: string }).error).toBe(
+        "No se puede eliminar el fondo: 1 movimiento(s) financiero(s) lo imputan."
+      )
+      expect(await prisma.fondoFI.findUnique({ where: { id: fondoResLineasBorrar } })).not.toBeNull()
+    })
+  })
+
+  it("DELETE: el aporte declarado de una emisión ya no cuenta como movimiento", async () => {
+    const fondoResAporte = "ffi4-fondo-res-aporte"
+    await prisma.fondoFI.create({
+      data: {
+        id: fondoResAporte,
+        comunidadId: comunidadA,
+        nombre: "Fondo Reserva solo con aporte declarado",
+        tipo: "reserva",
+        activo: true,
+        saldoInicial: 0,
+      },
+    })
+    // La emisión declara el aporte esperado, pero no hay cobro con líneas ni
+    // egreso/ingreso que impute al fondo: el monto declarado no es un movimiento.
+    await prisma.emisionGC.create({
+      data: {
+        id: "ffi4-egc-aporte",
+        comunidadId: comunidadA,
+        periodo: "2026-12",
+        modo: "fijo",
+        gastoTotal: 60000,
+        lineas: [
+          {
+            unidadId: "ffi4-u-aporte",
+            responsablePersonaId: "ffi4-p-aporte",
+            monto: 60000,
+            cobroId: "ffi4-cob-aporte",
+          },
+        ],
+        fondoReservaAporte: { fondoId: fondoResAporte, monto: 6000 },
+        fechaEmision: "2026-12-01",
+      },
+    })
+
+    await conSesion(emailAdmin, async () => {
+      const res = await llamar("DELETE", fondoResAporte)
+      expect(res.status).toBe(200)
+      expect(await prisma.fondoFI.findUnique({ where: { id: fondoResAporte } })).toBeNull()
+    })
+  })
 })

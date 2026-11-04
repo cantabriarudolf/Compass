@@ -83,7 +83,12 @@ describe("autorizaEmision", () => {
 
 describe("parametrosDeVersion", () => {
   it("devuelve los parámetros cuando la versión los declara completos", () => {
-    expect(parametrosDeVersion({ parametros: PARAMETROS })).toEqual(PARAMETROS)
+    // Una versión persistida sin el dato declarado parsea con la lectura
+    // normativa: el recargo de reserva va ENCIMA del presupuesto (S5).
+    expect(parametrosDeVersion({ parametros: PARAMETROS })).toEqual({
+      ...PARAMETROS,
+      reservaIncluidaEnPresupuesto: false,
+    })
   })
 
   it("devuelve null cuando falta un parámetro obligatorio", () => {

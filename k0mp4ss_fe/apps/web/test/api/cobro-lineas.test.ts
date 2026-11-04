@@ -93,6 +93,28 @@ describe("CobroFISchema — lineas opcionales con suma exacta (S5)", () => {
     }
   })
 
+  it("acepta el cobro con dos líneas del mismo concepto imputadas a fondos distintos", () => {
+    // Shape que emite la emisión del corte 2 de T5: gasto común al fondo GC y
+    // recargo de reserva al fondo de reserva. El concepto no distingue las
+    // líneas; el fondo de imputación sí.
+    const res = CobroFISchema.safeParse(
+      cobroBase({
+        montoBase: 66000,
+        lineas: [
+          { concepto: "gasto_comun", monto: 60000, fondoId: "fondo-gc-t5" },
+          { concepto: "gasto_comun", monto: 6000, fondoId: "fondo-res-t5" },
+        ],
+      })
+    )
+    expect(res.success).toBe(true)
+    if (res.success) {
+      expect(res.data.lineas?.map((l) => l.fondoId)).toEqual([
+        "fondo-gc-t5",
+        "fondo-res-t5",
+      ])
+    }
+  })
+
   it("rechaza lineas cuya suma difiere de montoBase", () => {
     for (const lineas of [
       [{ concepto: "gasto_comun", monto: 59999 }],

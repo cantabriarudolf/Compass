@@ -129,6 +129,35 @@ describe("/api/emisiones-gc — compuerta de la versión del reglamento", () => 
       } as never,
     })
 
+    // T5 corte 2 (S5): dos versiones más para declarar DÓNDE vive el recargo de
+    // reserva. `reservaIncluidaEnPresupuesto` es un dato de la comunidad, no una
+    // constante del código; las versiones anteriores no lo traen y parsean con
+    // la lectura normativa (encima del presupuesto).
+    for (const v of [
+      {
+        version: 4,
+        vigenteDesde: "2026-11",
+        ...versionValida({
+          parametros: {
+            ...PARAMETROS_BASE,
+            porcentajeReserva: 10,
+            reservaIncluidaEnPresupuesto: true,
+          },
+        }),
+      },
+      {
+        version: 5,
+        vigenteDesde: "2026-12",
+        ...versionValida({
+          parametros: { ...PARAMETROS_BASE, porcentajeReserva: 0 },
+        }),
+      },
+    ]) {
+      await prisma.versionReglamento.create({
+        data: { id: `egc4-vreg-${v.version}`, comunidadId: comunidadDeclarada, ...v } as never,
+      })
+    }
+
     // Base emisible de la comunidad declarada: tipo, unidad, propietario, fondo
     // GC y fondo de reserva con un 10% que NO debe usarse (la versión declara 7).
     await prisma.tipoUnidad.create({
@@ -382,6 +411,61 @@ describe("/api/emisiones-gc — compuerta de la versión del reglamento", () => 
       }
       expect(j.cobros[0]?.fechaVencimiento).toBe(sumarDias(j.emision.fechaEmision, 20))
       expect(j.emision.fondoReservaAporte?.monto).toBe(5000)
+    })
+  })
+
+  it("(f) reserva incluida en el presupuesto: la unidad paga lo mismo y el recargo se desagrega", async () => {
+    await conSesion(emailAdminDeclarada, async () => {
+      const res = await emitir({
+        periodo: "2026-11",
+        modo: "fijo",
+        unidadIds: ["egc4-u-1"],
+      })
+      expect(res.status).toBe(201)
+      const j = (await res.json()) as {
+        emision: { gastoTotal: number; fondoReservaAporte?: { monto: number } | null }
+        cobros: {
+          montoBase: number
+          lineas: { concepto: string; monto: number; fondoId?: string }[] | null
+        }[]
+      }
+      // El residente paga exactamente lo de hoy (100.000): la reserva no se
+      // suma, se desagrega del presupuesto que la asamblea ya aprobó.
+      expect(j.cobros[0]?.montoBase).toBe(100000)
+      // round(100.000 · 10 / 110) = 9.091; el gasto común queda en 90.909.
+      expect(j.cobros[0]?.lineas).toEqual([
+        { concepto: "gasto_comun", monto: 90909, fondoId: "egc4-fondo-gc" },
+        { concepto: "gasto_comun", monto: 9091, fondoId: "egc4-fondo-res" },
+      ])
+      expect(j.cobros[0]?.lineas?.reduce((total, l) => total + l.monto, 0)).toBe(100000)
+      expect(j.emision.fondoReservaAporte?.monto).toBe(9091)
+      // El presupuesto emitido sigue siendo el de la asamblea.
+      expect(j.emision.gastoTotal).toBe(100000)
+    })
+  })
+
+  it("(g) reserva 0%: una sola línea y ningún aporte al fondo", async () => {
+    await conSesion(emailAdminDeclarada, async () => {
+      const res = await emitir({
+        periodo: "2026-12",
+        modo: "fijo",
+        unidadIds: ["egc4-u-1"],
+      })
+      expect(res.status).toBe(201)
+      const j = (await res.json()) as {
+        emision: { gastoTotal: number; fondoReservaAporte?: { monto: number } | null }
+        cobros: {
+          montoBase: number
+          lineas: { concepto: string; monto: number; fondoId?: string }[] | null
+        }[]
+      }
+      expect(j.cobros[0]?.montoBase).toBe(100000)
+      expect(j.cobros[0]?.lineas).toEqual([
+        { concepto: "gasto_comun", monto: 100000, fondoId: "egc4-fondo-gc" },
+      ])
+      // Sin reserva declarada no hay línea de reserva ni aporte al fondo.
+      expect(j.emision.fondoReservaAporte ?? null).toBeNull()
+      expect(j.emision.gastoTotal).toBe(100000)
     })
   })
 })
