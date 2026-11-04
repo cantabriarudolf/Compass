@@ -3,14 +3,20 @@ import { prisma } from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { puede } from "@/lib/authz"
 import { logger } from "@/lib/logger"
+import { saldoFondo } from "@/lib/finanzas-utils"
+import type { ConceptoCobroFI, LineaCobroFI, PagoCobroFI } from "@/lib/schemas"
 
 export const dynamic = "force-dynamic"
 
 /**
  * GET /api/fi?fondoId=&q=&page=&pageSize= — lectura del espejo BD de Finanzas (fi-sync-bd).
  * Retorna egresos e ingresos paginados (misma page/pageSize), fondos completos y
- * totales agregados por fondo (conteos + sumas de monto, saldo = COALESCE(saldoInicial,0)
- * + ingresos - egresos). Scoped por comunidad de la membresía del usuario autenticado.
+ * totales agregados por fondo (conteos + sumas de monto). El `saldo` de cada fondo
+ * suma su apertura y sus ingresos manuales, resta sus egresos y acredita lo que las
+ * unidades PAGARON en los cobros, imputado por las LÍNEAS de cada cobro (S5): el
+ * recargo de reserva vive en cobros del fondo de gasto común, así que repartirlo por
+ * `cobro.fondoId` le negaría la caja al fondo de reserva. Scoped por comunidad de la
+ * membresía del usuario autenticado.
  */
 export async function GET(request: Request) {
   const sesion = await auth()
@@ -77,7 +83,7 @@ export async function GET(request: Request) {
     ]
   }
 
-  const [totalEgresos, egresos, totalIngresos, ingresos, fondos, agrupEgresos, agrupIngresos] = await Promise.all([
+  const [totalEgresos, egresos, totalIngresos, ingresos, fondos, agrupEgresos, agrupIngresos, cobros] = await Promise.all([
     prisma.egresoFI.count({ where: whereEgresos } as never),
     prisma.egresoFI.findMany({
       where: whereEgresos as never,
@@ -95,6 +101,13 @@ export async function GET(request: Request) {
     prisma.fondoFI.findMany({ where: { comunidadId } as never, orderBy: { nombre: "asc" } }),
     prisma.egresoFI.groupBy({ by: ["fondoId"], _count: { _all: true }, _sum: { monto: true }, where: { comunidadId } as never }),
     prisma.ingresoFI.groupBy({ by: ["fondoId"], _count: { _all: true }, _sum: { monto: true }, where: { comunidadId } as never }),
+    // Los cobros entran en la MISMA ronda de consultas: uno solo para toda la
+    // comunidad, nunca uno por fondo. Se piden únicamente las columnas que
+    // deciden el reparto de lo pagado.
+    prisma.cobroFI.findMany({
+      where: { comunidadId } as never,
+      select: { fondoId: true, pagos: true, concepto: true, montoBase: true, lineas: true },
+    }),
   ])
 
   type AgrupFI = {
@@ -104,6 +117,23 @@ export async function GET(request: Request) {
   }
   const mapaEgresos = new Map(agrupEgresos.map((g: AgrupFI) => [g.fondoId, g]))
   const mapaIngresos = new Map(agrupIngresos.map((g: AgrupFI) => [g.fondoId, g]))
+  // Los cobros de la comunidad, ya en memoria: `saldoFondo` reparte lo pagado por
+  // las líneas de cada cobro (el cobro legacy sin detalle es una línea a su propio
+  // fondo) y es la MISMA fórmula del guard de retiros y del saldo de proyectos MT.
+  const cobrosDeLaComunidad = cobros.map((c) => ({
+    fondoId: c.fondoId,
+    // SAFETY: pagos es Json con shape PagoCobroFI[] validado por CobroFISchema.
+    pagos: (c.pagos ?? []) as unknown as PagoCobroFI[],
+    // SAFETY: concepto es String en BD con los valores de ConceptoCobroFISchema.
+    concepto: c.concepto as ConceptoCobroFI,
+    montoBase: c.montoBase,
+    // SAFETY: lineas es Json con shape LineaCobroFI[] validado por CobroFISchema.
+    lineas: c.lineas as unknown as LineaCobroFI[] | null,
+  }))
+  // Los agregados que ya se cuentan en la respuesta alimentan la misma resta del
+  // saldo, así `saldo` y los contadores no pueden divergir.
+  const egresosPorFondo = agrupEgresos.map((g: AgrupFI) => ({ fondoId: g.fondoId, monto: g._sum.monto ?? 0 }))
+  const ingresosPorFondo = agrupIngresos.map((g: AgrupFI) => ({ fondoId: g.fondoId, monto: g._sum.monto ?? 0 }))
   const totalesPorFondo = fondos.map((f: (typeof fondos)[number]) => {
     const ge = mapaEgresos.get(f.id) as AgrupFI | undefined
     const gi = mapaIngresos.get(f.id) as AgrupFI | undefined
@@ -118,7 +148,12 @@ export async function GET(request: Request) {
       montoEgresos,
       ingresos: gi?._count._all ?? 0,
       montoIngresos,
-      saldo: saldoInicial + montoIngresos - montoEgresos,
+      saldo: saldoFondo(f.id, {
+        cobros: cobrosDeLaComunidad,
+        egresos: egresosPorFondo,
+        ingresosFI: ingresosPorFondo,
+        saldoInicialPorFondo: { [f.id]: saldoInicial },
+      }),
     }
   })
 

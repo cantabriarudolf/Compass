@@ -16,6 +16,10 @@
  * `porFondo` (dashboard-operativo T3) expone el desglose por caja tal como lo
  * devuelve el servidor: `GET /api/fi` ya calcula `saldo` por fondo, así que el
  * dashboard no lo deduce de las listas paginadas de egresos e ingresos (D4).
+ * Ese `saldo` no es sólo apertura + ingresos manuales − egresos: también cuenta
+ * lo que las unidades pagaron en los cobros, imputado por las líneas de cada
+ * cobro (S5), así que el navegador nunca puede recomponerlo desde los totales
+ * de este envelope.
  */
 import useSWR from "swr"
 
@@ -25,7 +29,10 @@ interface TotalesPorFondo {
   saldoInicial?: number
   montoEgresos?: number
   montoIngresos?: number
-  /** Saldo del fondo calculado en el servidor (saldoInicial + ingresos − egresos). */
+  /**
+   * Saldo del fondo calculado en el servidor: apertura + ingresos manuales −
+   * egresos + lo recaudado por las líneas de los cobros (S5).
+   */
   saldo?: number
 }
 
@@ -82,8 +89,10 @@ export function useResumenFI(): ResumenFI {
   const totales = data?.totalesPorFondo ?? []
   const montoEgresos = totales.reduce((suma, t) => suma + (t.montoEgresos ?? 0), 0)
   const montoIngresos = totales.reduce((suma, t) => suma + (t.montoIngresos ?? 0), 0)
-  // El servidor gana (D4): su `saldo` ya es saldoInicial + ingresos − egresos por
-  // fondo. La fórmula local queda solo como respaldo de un envelope más viejo.
+  // El servidor gana (D4): su `saldo` ya incluye la apertura, los ingresos
+  // manuales, los egresos y lo recaudado por las líneas de los cobros. La
+  // fórmula local queda solo como respaldo de un envelope más viejo, y como no
+  // sabe nada de cobros puede quedarse corta: nunca sobrescribe al servidor.
   const conSaldoServidor =
     totales.length > 0 && totales.every((t) => typeof t.saldo === "number")
   const conSaldo = totales.every((t) => typeof t.saldoInicial === "number")
