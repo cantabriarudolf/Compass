@@ -5,6 +5,7 @@
 
 import { z } from "zod"
 import { validarDocumentoIdentidad } from "./rut"
+import { lineasContradicenMontoBase } from "./cobro-lineas"
 
 // --- Helpers ---
 
@@ -1505,7 +1506,20 @@ export const DiferenciaPagoFISchema = z.object({
   fecha: FechaISOSchema,
 })
 
-export const CobroFISchema = z.object({
+/**
+ * Una línea del cobro FI: concepto, monto y el fondo de imputación cuando la
+ * línea lo declara. `fondoId` es opcional para no romper a los creadores de hoy,
+ * que imputan al fondo del cobro completo (S5).
+ */
+export const LineaCobroFISchema = z.object({
+  concepto: ConceptoCobroFISchema,
+  monto: z
+    .number({ required_error: "El monto de la línea es obligatorio." })
+    .positive("El monto de la línea debe ser mayor a cero."),
+  fondoId: IdEntidadSchema.optional(),
+})
+
+const CobroFISchemaBase = z.object({
   id: IdEntidadSchema,
   unidadId: IdEntidadSchema,
   periodo: z
@@ -1521,12 +1535,38 @@ export const CobroFISchema = z.object({
   montoBase: z
     .number({ required_error: "El monto base es obligatorio." })
     .positive("El monto base debe ser mayor a cero."),
+  // S5: nullable y opcional para que los cobros ya emitidos (sin líneas) sigan
+  // siendo válidos como cobro de una sola línea. Cuando viene, no puede estar
+  // vacío y debe sumar exactamente `montoBase`.
+  lineas: z
+    .array(LineaCobroFISchema)
+    .min(1, "El cobro con líneas exige al menos una línea.")
+    .nullable()
+    .optional(),
   fechaCargo: FechaISOSchema,
   fechaVencimiento: FechaISOSchema.optional(),
   moras: z.array(MoraCobroFISchema),
   pagos: z.array(PagoCobroFISchema),
   diferencias: z.array(DiferenciaPagoFISchema),
 })
+
+/**
+ * El refine de `lineas` convierte el schema en ZodEffects, que no expone
+ * `.partial()`. El PUT genérico de /api/cobros-fi lo usa para validar el parche
+ * parcial; se conserva apuntando al objeto base. El invariante se valida al
+ * crear o enviar el cobro completo (el parche puede tocar solo `montoBase` o
+ * solo `lineas`, sin el otro lado del contrato).
+ */
+export const CobroFISchema = Object.assign(
+  CobroFISchemaBase.refine(
+    (cobro) => !lineasContradicenMontoBase(cobro.lineas, cobro.montoBase),
+    {
+      message: "Las líneas deben sumar exactamente el monto base.",
+      path: ["lineas"],
+    }
+  ),
+  { partial: () => CobroFISchemaBase.partial() }
+)
 
 // --- Cobranza FI multicanal (SERIE-FASE2 §V5) ---
 //
@@ -2292,6 +2332,7 @@ export type ConceptoCobroFI = z.infer<typeof ConceptoCobroFISchema>
 export type MoraCobroFI = z.infer<typeof MoraCobroFISchema>
 export type PagoCobroFI = z.infer<typeof PagoCobroFISchema>
 export type DiferenciaPagoFI = z.infer<typeof DiferenciaPagoFISchema>
+export type LineaCobroFI = z.infer<typeof LineaCobroFISchema>
 export type CobroFI = z.infer<typeof CobroFISchema>
 export type EnvioCobranzaFI = z.infer<typeof EnvioCobranzaFISchema>
 export type ConfiguracionCobranzaFI = z.infer<

@@ -1038,6 +1038,7 @@ model CobroFI {
   fondoId          String
   descripcion      String
   montoBase        Float
+  lineas           Json?    // LineaCobroFI[] | null (S5); null = cobro legacy de una línea
   fechaCargo       String
   fechaVencimiento String?
   moras            Json     // MoraCobroFI[]

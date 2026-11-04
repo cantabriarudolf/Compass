@@ -236,6 +236,9 @@ export async function POST(req: Request): Promise<Response> {
         fondoId: fondoGC.id,
         descripcion: `Gasto Común ${periodo}`,
         montoBase: monto,
+        // S5: el cobro nace con su desglose. Este corte emite una sola línea
+        // (gasto común) por el mismo monto que ya va en `montoBase`.
+        lineas: [{ concepto: "gasto_comun", monto }],
         fechaCargo: hoy,
         fechaVencimiento: vencimiento,
         moras: [],

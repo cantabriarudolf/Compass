@@ -427,16 +427,29 @@ describe("/api/emisiones-gc — emisiones de Gasto Común con BD real", () => {
       expect(res.status).toBe(201)
       const j = (await res.json()) as {
         emision: { id: string; gastoTotal: number; fondoReservaAporte?: { monto: number } }
-        cobros: { id: string; montoBase: number }[]
+        cobros: {
+          id: string
+          montoBase: number
+          lineas: { concepto: string; monto: number }[] | null
+        }[]
       }
       expect(j.emision.gastoTotal).toBe(120000)
       expect(j.emision.fondoReservaAporte?.monto).toBe(12000)
       expect(j.cobros.length).toBe(2)
       expect(j.cobros.every((c) => c.montoBase === 60000)).toBe(true)
+      // T5 (S5): el cobro lleva exactamente una línea de gasto común que suma
+      // lo mismo que `montoBase`; los montos de arriba no cambian en este corte.
+      for (const c of j.cobros) {
+        expect(c.lineas).toEqual([{ concepto: "gasto_comun", monto: c.montoBase }])
+        expect(c.lineas?.reduce((total, l) => total + l.monto, 0)).toBe(c.montoBase)
+      }
       const guardados = await prisma.cobroFI.findMany({
         where: { comunidadId: comunidadA, origenRef: j.emision.id },
       })
       expect(guardados.length).toBe(2)
+      for (const c of guardados) {
+        expect(c.lineas).toEqual([{ concepto: "gasto_comun", monto: c.montoBase }])
+      }
     })
   })
 
