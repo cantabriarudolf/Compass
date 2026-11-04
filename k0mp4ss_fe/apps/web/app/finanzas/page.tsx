@@ -8,8 +8,9 @@
  * Sobre los montos: los hooks exponen el `total` de filas que reporta el
  * servidor, pero no sumas de `monto` ni saldo por fondo (los `items` llegan
  * truncados a pageSize=100, así que sumarlos en el cliente no cuadraría; y el
- * saldo canónico de fondo lo calcula `saldoFondo` en la subpágina considerando
- * cobros y emisiones). Donde el hook no sostiene el número se muestra «—».
+ * saldo canónico de fondo lo calcula el servidor con `saldoFondo`, repartiendo
+ * lo pagado entre los fondos que nombran las líneas de cada cobro). Donde el
+ * hook no sostiene el número se muestra «—».
  */
 import * as React from "react"
 import Link from "next/link"
