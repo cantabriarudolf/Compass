@@ -1,13 +1,13 @@
-# 🧪 MK - Catálogo de Mocks
+# 🧪 MK - Catálogo de Datos Semilla
 
-> Documento de trazabilidad para saber **qué datos mockeados existen**, **dónde viven**, **qué contienen** y **quién los consume**.
-> Cuando un módulo se conecte a backend real, este documento sirve de checklist para saber qué reemplazar.
+> Documento de referencia de los **datos semilla**: qué registros existen en `apps/web/data/`, qué contienen y qué escribe el seeder en la base. La fuente de verdad del sistema es la base de datos (Prisma); `data/` no es la fuente ni un lugar donde inventar datos.
+> Todo el sistema ya funciona contra la base: este documento sirve para saber qué escribe el seeder y con qué patrón de IDs.
 
 ---
 
 ## 📍 Ubicación Base
 
-Los mocks de seed viven en `data/` y las colecciones de módulos nuevos viven en el store (`lib/store.ts`, seeds vacíos):
+Los datos semilla viven en `data/`; las colecciones de módulos que todavía no salieron del store legacy viven en `lib/store.ts` (seeds vacíos):
 ```
 k0mp4ss_fe/apps/web/data/
 ├── maestros.ts                    ← Categorías estructurales y estados de ocupación
@@ -129,12 +129,12 @@ k0mp4ss_fe/apps/web/data/
 
 | Interface | Campos clave | Propósito |
 |-----------|-------------|-----------|
-| `VinculoUnidad` | `id`, `unidadId`, `rol`, `fechaInicio`, `fechaFin?`, `estadoOcupacionPropiedad?`, `permiteVerFinanzas` | Relación persona ↔ unidad (mock de tabla join) |
+| `VinculoUnidad` | `id`, `unidadId`, `rol`, `fechaInicio`, `fechaFin?`, `estadoOcupacionPropiedad?`, `permiteVerFinanzas` | Relación persona ↔ unidad (tabla join) |
 | `ExtensionLaboral` | `id`, `cargo`, `afp`, `prevision`, `fechaIngreso` | Datos de personal contratado |
 | `ExtensionGobernanza` | `id`, `cargoDirectiva`, `firmaDigital?`, `fechaAsuncion` | Datos de cargos de directiva |
 | `Persona` | `id`, `rut`, `nombreCompleto`, `nombres`, `apellidos`, `email`, `telefonoMovil`, `telefonoFijo?`, `fotografiaUrl?`, `estadoCuenta`, `condicionesEspecialesIds[]`, `roles[]`, `vinculosUnidad?`, `datosLaborales?`, `datosGobernanza?` | La identidad atómica del sistema |
 
-#### Los 10 personajes mockeados:
+#### Los 10 personajes del dataset:
 
 | ID | Nombre | RUT | Roles | Caso que simula |
 |----|--------|-----|-------|----------------|
@@ -397,7 +397,7 @@ solicitudesGE.
 
 Cuando se conecte cada módulo al backend NestJS, este es el orden sugerido:
 
-| Prioridad | Mock a reemplazar | Endpoint esperado | Módulos afectados |
+| Prioridad | Dato semilla | Endpoint | Módulos afectados |
 |-----------|-------------------|--------------------|--------------------|
 | 🔴 1 | `maestros.ts` + `admin/` | `GET /api/maestros/*`, `GET /api/configuracion` | **TODOS** (transversales) |
 | 🟠 2 | `estructura.ts` | `GET /api/inventario/tipos-unidad`, `GET /api/inventario/sectores`, `GET /api/inventario/unidades` | Inventario, Métricas |
@@ -405,7 +405,7 @@ Cuando se conecte cada módulo al backend NestJS, este es el orden sugerido:
 | 🟢 4 | `vinculos.ts` | `GET /api/comunidad/vinculos` | VU, PI (trigger portal) |
 | 🟢 5 | Colecciones store PI/AD/GD | `/api/portal/*`, `/api/admin/controles/*`, `/api/directiva/actas` | Portal, Gestión, Directiva |
 
-> **Regla de oro:** Cuando reemplaces un mock, basta con cambiar el `import` en la página/componente por un `fetch` o `useQuery`. Las interfaces (`TipoUnidad`, `Persona`, etc.) ya están definidas y deberían coincidir con el contrato del API.
+> **Regla de oro:** la base es la fuente. `data/` solo alimenta el seeder; un dato que no está en la base no existe para la aplicación, y ninguna pantalla debe mostrar datos que no vengan de la base.
 
 ---
 
@@ -489,7 +489,7 @@ No bump de `STORE_VERSION` (permanece 26) — reemplazo del scaffold HMAC por Au
 
 **Seed TEST (password P5):** `admin@test.cl` etc. ahora con `passwordHash = bcrypt("test1234")`; `lib/seed-authz.ts` + `scripts/seed-authz.mjs` idempotentes (`npm run seed:authz` primer arranque).
 
-**Mocks de sesión (test):** cookie `authjs.session-token` (dev http) / `__Secure-authjs.session-token` (prod https), JWE `A256CBC-HS512` con `AUTH_SECRET` (HKDF). Flujo login: `GET /api/auth/csrf` → `POST /api/auth/callback/credentials` (`X-Auth-Return-Redirect: 1`, respuesta `{url}` con `code=credentials|rate_limited`). Ver `test/auth/api-auth.test.ts` (8 integración CSRF) y `test/auth/rate-limit.test.ts` (5 D-v).
+**Sesión de prueba (test):** cookie `authjs.session-token` (dev http) / `__Secure-authjs.session-token` (prod https), JWE `A256CBC-HS512` con `AUTH_SECRET` (HKDF). Flujo login: `GET /api/auth/csrf` → `POST /api/auth/callback/credentials` (`X-Auth-Return-Redirect: 1`, respuesta `{url}` con `code=credentials|rate_limited`). Ver `test/auth/api-auth.test.ts` (8 integración CSRF) y `test/auth/rate-limit.test.ts` (5 D-v).
 
 **Hoja de ruta:** adapter custom inactivo con JWT+credentials (listo para OAuth futuro sin duplicar modelos).
 
@@ -543,7 +543,7 @@ No bump de `STORE_VERSION` (permanece 26) — reemplazo del scaffold HMAC por Au
 
 Patrones de id de portería: `vis-<AAAA-MM-DD>-NN`, `enc-<AAAA-MM-DD>-NN`. La fecha es **la del día en que corre el script**, no una constante, porque el panel «Foto del día · Operaciones» del dashboard compara contra hoy. Al terminar, el script imprime un reporte con los conteos verificados (departamentos, dueños, arrendadas, locales, estacionamientos, amenities, emisiones, cobros, nóminas, proveedores, mantenciones, visitas técnicas, infracciones y movimiento de portería del día).
 
-> **Nota**: los mocks de `data/` (arriba) siguen siendo la fuente del store legacy y del poblamiento `seed-db-from-mocks`; este seed es el dataset de demo en base. Los conteos no coinciden con el dump de `29 - MK - Data Dump Inventario.md` (83 unidades en el mock) porque son datasets distintos: el de demo deja **184 unidades** (80 deptos + 4 locales + 100 plazas).
+> **Nota**: los datos de `data/` son la semilla del poblamiento `seed-db-from-mocks`; el dataset de demo en base es otro y deja **184 unidades** (80 deptos + 4 locales + 100 plazas). Los conteos difieren del dump de `29 - MK - Data Dump Inventario.md` (83 unidades) porque son datasets distintos.
 
 *Última actualización: 03 de Noviembre 2026 — sección 15: seed de demo consistente en BD (estructura, personas, finanzas y portería con sus conteos)*
 *Anterior: 27 de Agosto 2026 — Plataforma P5 (Auth.js JWT + D-v, sin bump STORE_VERSION)*

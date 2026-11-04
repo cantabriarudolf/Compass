@@ -1,6 +1,6 @@
 ---
 name: nsgc-prepush
-description: "Validate NSGC documentation before pushing to GitHub. Use when the user asks to push, subir a github, commit+push, or publish changes to origin. Checks the current change to determine if it requires: (1) updating mock data docs (Catálogo de Mocks + Data Dump per the Mock Documentation Norm), (2) updating the corresponding module manual in Data/NSGC/docs/manuales/, and (3) creating a development avance in Data/NSGC/docs/avances/. Also updates the Trazabilidad map and index when needed."
+description: "Validate NSGC documentation before pushing to GitHub. Use when the user asks to push, subir a github, commit+push, or publish changes to origin. Checks the current change to determine if it requires: (1) updating the seed data docs (Catálogo de Datos Semilla + Data Dump per the Norma de Documentación de Datos Semilla), (2) updating the corresponding module manual in Data/NSGC/docs/manuales/, and (3) creating a development avance in Data/NSGC/docs/avances/. Also updates the Trazabilidad map and index when needed."
 license: MIT
 allowed-tools: Bash
 ---
@@ -12,7 +12,7 @@ Validate that every push to GitHub keeps the NSGC documentation in sync with the
 ## Core Principle
 
 The user's docs (`Data/NSGC/docs/`) are the project's memory. A push is only "clean" when these three are satisfied for the change being pushed:
-1. **Mocks**: if any mock file in `k0mp4ss_fe/apps/web/data/` changed → the Mock Documentation Norm applies.
+1. **Datos semilla**: si cambió algún archivo de `k0mp4ss_fe/apps/web/data/` → aplica la Norma de Documentación de Datos Semilla (`00 - Torpedo`, §6). La base es la fuente; `data/` solo alimenta el seeder.
 2. **Manual**: the module manual affected by the change is up to date.
 3. **Avance**: a development avance exists for this work session.
 
@@ -47,7 +47,7 @@ Map the changed paths to their documentation requirements:
 
 | Change touches | Documentation required |
 |----------------|------------------------|
-| `k0mp4ss_fe/apps/web/data/**` | Mock Documentation Norm (Catálogo + Data Dump + índice) |
+| `k0mp4ss_fe/apps/web/data/**` | Norma de Datos Semilla (Catálogo + Data Dump + índice) |
 | `apps/web/app/inventario/estructura/**` | `02 - Estructura Física.md` |
 | `apps/web/app/inventario/tipos/**` | `01 - Tipos de Unidad.md` |
 | `apps/web/app/inventario/estacionamientos/**` | `03 - Estacionamientos.md` |
@@ -65,11 +65,11 @@ If no file maps to a manual directly, find the closest module by grepping the ma
 rg -l "<module keyword>" "Data/NSGC/docs/manuales/"
 ```
 
-### 3. Check / fill the Mock Documentation Norm
+### 3. Check / fill the Norma de Documentación de Datos Semilla
 
-Only if `k0mp4ss_fe/apps/web/data/**` changed. Per Section 5 of the Torpedo:
+Only if `k0mp4ss_fe/apps/web/data/**` changed. Per Section 6 of the Torpedo:
 
-1. **Catálogo de Mocks** (`Data/NSGC/docs/manuales/28 - MK - Catálogo de Mocks.md`):
+1. **Catálogo de Datos Semilla** (`Data/NSGC/docs/manuales/28 - MK - Catálogo de Datos Semilla.md`):
    - Add the new/modified file with its path, interfaces, exports and consumers.
    - Update the dependency map if relationships changed.
 2. **Data Dump** (`29 - MK - Data Dump Inventario.md`, `30 - MK - Data Dump Comunidad.md`, etc.):
@@ -127,7 +127,7 @@ Using the template seen in existing avances:
 Present a checklist to the user BEFORE pushing, e.g.:
 
 ```
-✅ Catálogo de Mocks actualizado (data/estructura.ts)
+✅ Catálogo de Datos Semilla actualizado (data/estructura.ts)
 ✅ Data Dump Inventario actualizado (83 deptos)
 ✅ Manual 02 - Estructura Física.md actualizado
 ✅ Avance creado: avance - 2026-08-15 12-45.md
@@ -141,5 +141,5 @@ If anything is missing, fill it before allowing the push. Do not push until the 
 - Read existing manuals/avances to match tone, format and emoji style before writing.
 - Keep manuals concise; they are user-facing "chuletas", not technical specs.
 - Avances are per work session, not per commit. Reuse the existing avance file if this session already has one.
-- Never invent records in data dumps; dump exactly what is in the mock files.
+- Never invent records in data dumps; dump exactly what is in the seed files under `apps/web/data/`.
 - If the change has no app code impact (pure docs/chore), the manual update may be skipped, but the avance still applies if it's a work session.

@@ -1,4 +1,4 @@
-# CI Compass (k0mp4ss): Vitest (unidad/integración con mocks) + E2E Playwright
+# CI Compass (k0mp4ss): Vitest (unidad/integración sobre base descartable) + E2E Playwright
 # (navegador real contra build de producción). Rate-limit corre en job aislado
 # porque contamina el contador persistente por IP (SG D-v) — ver
 # e2e/auth/rate-limit.spec.ts y avance 2026-08-28.
@@ -125,7 +125,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: unit
     # Corrida única sin fases (serie E2E-SIN-GATED): los specs arman su dato
-    # TEST vía API y el resto lee el seed completo (authz + mocks).
+    # TEST vía API y el resto lee el seed completo (authz + datos semilla).
     timeout-minutes: 60
     defaults:
       run:
@@ -170,7 +170,7 @@ jobs:
       # P1012 ("URL must start with postgresql://").
       - run: npx prisma generate --schema=prisma/schema.sqlite.prisma
       - run: npx playwright install --with-deps chromium
-      - name: BD desde cero + seed completo (usuarios TEST + mocks)
+      - name: BD desde cero + seed completo (usuarios TEST + datos semilla)
         run: |
           npx prisma migrate deploy --schema=prisma/schema.sqlite.prisma
           npm run e2e:reseed-base

@@ -50,11 +50,13 @@ Lleva la spec @Data/NSGC/docs/especificaciones/SPEC.md a specs/<AA>-<kebab-name>
 
 **B. Validar y cerrar el trabajo:** ya no existen los comandos `/valida-datos` ni `/cierra-modulo` (vivían en el andamiaje del CLI retirado). El lifecycle es ODD: documento de tareas visible, commits por unidad revisable, y la verificación se corre de verdad — `npx tsc --noEmit`, la suite de Vitest, las lanes de Playwright que correspondan y los candados (`npm run audit:desvios`, `npm run audit:store`, `npm run check:rechecks`). Si el trabajo cambia un contrato de capacidad, el requirement se edita directo en `specs/<AA>-<kebab-name>/spec.md` conservando el nombre exacto de los escenarios existentes.
 
-## 6. 🧪 Norma de Documentación de Mocks
+## 6. 🧪 Norma de Documentación de Datos Semilla
 
-**OBLIGATORIO al cerrar cada módulo.** Cuando se creen o modifiquen archivos en `data/`, el Agente DEBE:
+**Todo el sistema vive en la base de datos (Prisma).** `apps/web/data/` **no es la fuente** ni un lugar para inventar datos: son los **datos semilla** con los que se puebla la base, y su documentación existe para saber qué escribe el seeder. Ninguna pantalla muestra datos que no vengan de la base, y un botón que no escribe en la base no existe.
 
-1. **Actualizar el Catálogo** (`28 - MK - Catálogo de Mocks.md`):
+**OBLIGATORIO al cerrar un módulo.** Cuando se creen o modifiquen archivos en `data/`, el Agente DEBE:
+
+1. **Actualizar el Catálogo** (`28 - MK - Catálogo de Datos Semilla.md`):
    - Agregar el archivo nuevo con su ruta, interfaces, exports y consumidores.
    - Actualizar el mapa de dependencias si corresponde.
 
@@ -66,8 +68,8 @@ Lleva la spec @Data/NSGC/docs/especificaciones/SPEC.md a specs/<AA>-<kebab-name>
 3. **¿Por qué?** Para que tú puedas:
    - Consultar qué datos existen sin gastar tokens preguntándome.
    - Crear registros nuevos copiando el patrón de IDs.
-   - Saber exactamente qué reemplazar cuando se conecte al backend real.
+   - Saber qué escribe el seeder y con qué patrón de IDs, sin tocar la base para averiguarlo.
 
 **Nomenclatura:**
-- Mock en código: `data/{dominio}/{entidad}.ts`
+- Datos semilla en código: `data/{dominio}/{entidad}.ts`
 - Data Dump en docs: `{NN} - MK - Data Dump {Dominio}.md`
