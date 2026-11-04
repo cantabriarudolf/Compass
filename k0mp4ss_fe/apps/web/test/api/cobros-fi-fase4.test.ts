@@ -10,6 +10,7 @@
  */
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest"
 import { NextRequest } from "next/server"
+import type { Prisma } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 
 const state = vi.hoisted(() => ({ cookie: "" }))
@@ -45,6 +46,14 @@ const cobBorrable = "cfi4-cob-borrable"
 const cobMora = "cfi4-cob-mora"
 const cobTest = "test-cfi4-cob-test"
 const cobAjeno = "cfi4-cob-ajeno"
+const cobConLineas = "cfi4-cob-con-lineas"
+const cobConLineasOk = "cfi4-cob-con-lineas-ok"
+
+/** Detalle de S5: el recargo de reserva vive como línea y suma el `montoBase`. */
+const lineasCobro = [
+  { concepto: "gasto_comun", monto: 60000, fondoId: fondoA },
+  { concepto: "gasto_comun", monto: 6000, fondoId: fondoA },
+]
 
 type CobroSeed = {
   id: string
@@ -54,6 +63,7 @@ type CobroSeed = {
   pagos?: { id: string; monto: number; fecha: string; medio: string }[]
   fechaVencimiento?: string | null
   periodo?: string
+  lineas?: Prisma.InputJsonValue
 }
 
 function cobroSeed(c: CobroSeed) {
@@ -69,6 +79,7 @@ function cobroSeed(c: CobroSeed) {
     montoBase: c.montoBase,
     fechaCargo: "2026-01-05",
     fechaVencimiento: c.fechaVencimiento === undefined ? "2026-01-31" : c.fechaVencimiento,
+    ...(c.lineas === undefined ? {} : { lineas: c.lineas }),
     moras: [],
     pagos: c.pagos ?? [],
     diferencias: [],
@@ -197,6 +208,12 @@ describe("/api/cobros-fi — cobros FI con BD real", () => {
     })
     await prisma.cobroFI.create({
       data: cobroSeed({ id: cobTest, unidadId: "test-cfi4-u", montoBase: 25000, pagos: [pago("cfi4-pag-3", 25000)] }),
+    })
+    await prisma.cobroFI.create({
+      data: cobroSeed({ id: cobConLineas, unidadId: "cfi4-u-1", montoBase: 66000, lineas: lineasCobro }),
+    })
+    await prisma.cobroFI.create({
+      data: cobroSeed({ id: cobConLineasOk, unidadId: "cfi4-u-1", montoBase: 66000, lineas: lineasCobro }),
     })
     await prisma.cobroFI.create({
       data: {
@@ -524,6 +541,154 @@ describe("/api/cobros-fi — cobros FI con BD real", () => {
       expect(
         await prisma.eventoAuditoria.count({ where: { referenciaId: cobMora, tipoAccion: "FI_MORA_APPLIED" } })
       ).toBe(1)
+    })
+  })
+
+  /**
+   * T8 cobro-gastos-comunes-parametrico (S5) — el PUT valida el registro
+   * FUSIONADO (fila + parche) contra el contrato de escritura, no solo el
+   * parche. Un cobro con detalle no puede quedar descuadrado ni perder sus
+   * líneas por un PUT parcial, y la fila no se toca cuando se rechaza.
+   */
+  it("PUT que cambia solo montoBase de un cobro con detalle → 400 y la fila intacta", async () => {
+    await conSesion(emailAdmin, async () => {
+      const antes = await prisma.cobroFI.findUnique({ where: { id: cobConLineas } })
+      const res = await item("PUT", cobConLineas, { montoBase: 70000 })
+      expect(res.status).toBe(400)
+      expect(((await res.json()) as { error: string }).error).toBe(
+        "Las líneas deben sumar exactamente el monto base."
+      )
+      const despues = await prisma.cobroFI.findUnique({ where: { id: cobConLineas } })
+      expect(despues?.montoBase).toBe(66000)
+      expect(despues?.lineas).toEqual(antes?.lineas)
+      // Sin escritura no hay `updatedAt` nuevo: la fila quedó intacta.
+      expect(despues?.updatedAt).toEqual(antes?.updatedAt)
+    })
+  })
+
+  it("PUT que cambia montoBase y lineas en forma consistente → 200", async () => {
+    await conSesion(emailAdmin, async () => {
+      const nuevas = [
+        { concepto: "gasto_comun", monto: 64000, fondoId: fondoA },
+        { concepto: "gasto_comun", monto: 6000, fondoId: fondoA },
+      ]
+      const res = await item("PUT", cobConLineasOk, { montoBase: 70000, lineas: nuevas })
+      expect(res.status).toBe(200)
+      const enBd = await prisma.cobroFI.findUnique({ where: { id: cobConLineasOk } })
+      expect(enBd?.montoBase).toBe(70000)
+      expect(enBd?.lineas).toEqual(nuevas)
+    })
+  })
+
+  it("PUT con lineas: null → 400 con el mensaje del detalle y la fila intacta", async () => {
+    await conSesion(emailAdmin, async () => {
+      const res = await item("PUT", cobConLineas, { lineas: null })
+      expect(res.status).toBe(400)
+      const cuerpo = (await res.json()) as {
+        error: string
+        detalles?: { fieldErrors?: Record<string, string[]> }
+      }
+      expect(cuerpo.error).toBe("Datos inválidos.")
+      expect(cuerpo.detalles?.fieldErrors?.lineas).toContain(
+        "El detalle del cobro no puede ser nulo: si el cobro no tiene detalle, omití las líneas."
+      )
+      const enBd = await prisma.cobroFI.findUnique({ where: { id: cobConLineas } })
+      expect(enBd?.montoBase).toBe(66000)
+      expect(enBd?.lineas).toEqual(lineasCobro)
+    })
+  })
+
+  it("PUT de un cobro legacy (sin lineas) sigue aceptándose", async () => {
+    await conSesion(emailAdmin, async () => {
+      // `cobSinVenc` no tiene líneas y su `fechaVencimiento` es NULL en la base:
+      // el contrato de escritura no puede confundir un NULL histórico con un
+      // dato inválido ni con un borrado de detalle.
+      const res = await item("PUT", cobSinVenc, { montoBase: 111111 })
+      expect(res.status).toBe(200)
+      const enBd = await prisma.cobroFI.findUnique({ where: { id: cobSinVenc } })
+      expect(enBd?.montoBase).toBe(111111)
+      expect(enBd?.lineas).toBeNull()
+      expect(enBd?.fechaVencimiento).toBeNull()
+    })
+  })
+
+  /**
+   * PRESERVE: el POST ya aceptaba un cobro con detalle coherente. La guardia
+   * nueva no puede romper el alta legítima de un cobro con sus líneas.
+   */
+  it("POST con el detalle coherente sigue creando el cobro → 201", async () => {
+    await conSesion(emailAdmin, async () => {
+      const res = await coleccion(
+        "POST",
+        "",
+        cobroSeed({
+          id: "cfi4-cob-con-lineas-nuevo",
+          unidadId: "cfi4-u-1",
+          montoBase: 66000,
+          lineas: lineasCobro,
+        })
+      )
+      expect(res.status).toBe(201)
+      const enBd = await prisma.cobroFI.findUnique({
+        where: { id: "cfi4-cob-con-lineas-nuevo" },
+      })
+      expect(enBd?.montoBase).toBe(66000)
+      expect(enBd?.lineas).toEqual(lineasCobro)
+    })
+  })
+
+  it("POST con el detalle descuadrado → 400 y no crea ni toca la fila", async () => {
+    await conSesion(emailAdmin, async () => {
+      const res = await coleccion(
+        "POST",
+        "",
+        cobroSeed({
+          id: "cfi4-cob-desync",
+          unidadId: "cfi4-u-1",
+          montoBase: 50000,
+          lineas: [{ concepto: "gasto_comun", monto: 40000 }],
+        })
+      )
+      expect(res.status).toBe(400)
+      expect(((await res.json()) as { error: string }).error).toBe(
+        "Las líneas deben sumar exactamente el monto base."
+      )
+      expect(
+        await prisma.cobroFI.findUnique({ where: { id: "cfi4-cob-desync" } })
+      ).toBeNull()
+
+      // Y en el upsert sobre un cobro que ya tiene detalle: el parche solo
+      // cambia el total, así que las líneas viejas quedarían descuadradas.
+      const upsert = await coleccion(
+        "POST",
+        "",
+        cobroSeed({ id: cobConLineas, unidadId: "cfi4-u-1", montoBase: 70000 })
+      )
+      expect(upsert.status).toBe(400)
+      expect(
+        (await prisma.cobroFI.findUnique({ where: { id: cobConLineas } }))?.montoBase
+      ).toBe(66000)
+    })
+  })
+
+  it("POST con lineas: null → 400 y no crea la fila", async () => {
+    await conSesion(emailAdmin, async () => {
+      const res = await coleccion("POST", "", {
+        ...cobroSeed({ id: "cfi4-cob-null", unidadId: "cfi4-u-1", montoBase: 50000 }),
+        lineas: null,
+      })
+      expect(res.status).toBe(400)
+      const cuerpo = (await res.json()) as {
+        error: string
+        detalles?: { fieldErrors?: Record<string, string[]> }
+      }
+      expect(cuerpo.error).toBe("Datos inválidos.")
+      expect(cuerpo.detalles?.fieldErrors?.lineas).toContain(
+        "El detalle del cobro no puede ser nulo: si el cobro no tiene detalle, omití las líneas."
+      )
+      expect(
+        await prisma.cobroFI.findUnique({ where: { id: "cfi4-cob-null" } })
+      ).toBeNull()
     })
   })
 })

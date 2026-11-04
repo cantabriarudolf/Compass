@@ -5,12 +5,22 @@
  * cobros de unidades donde tiene vínculo activo (paridad con el filtro
  * `fi` por unidad del store). Otros roles requieren ver "fi".
  * POST upsert vía factory (solo administrador escribe).
+ *
+ * T8 (S5): la escritura usa `CobroFIEscrituraSchema` (rechaza `lineas: null`) y
+ * una guardia que valida el registro que va a quedar guardado —fila existente +
+ * payload— contra `CobroFIEscrituraCompletaSchema`. Sin ella, el PUT del factory
+ * validaba solo el parche y un cambio aislado de `montoBase` (o de `lineas`)
+ * dejaba el cobro descuadrado.
  */
-import { CobroFISchema } from "@/lib/schemas"
+import { CobroFIEscrituraCompletaSchema, CobroFIEscrituraSchema } from "@/lib/schemas"
 import { puede } from "@/lib/authz"
 import { prisma } from "@/lib/prisma"
 import { logger } from "@/lib/logger"
-import { createCrudHandlers, type CrudDelegate } from "@/lib/api/crud-factory"
+import {
+  createCrudHandlers,
+  type AntesDeEscribir,
+  type CrudDelegate,
+} from "@/lib/api/crud-factory"
 import {
   jsonError,
   withComunidadScope,
@@ -23,10 +33,41 @@ function delegado(modelo: unknown): CrudDelegate {
   return modelo as CrudDelegate
 }
 
+/**
+ * Columnas nullable del modelo cuyo `NULL` significa "sin dato" para el contrato
+ * de escritura. Un cobro legacy tiene `lineas`, `origenRef` y `fechaVencimiento`
+ * en `NULL`: sin normalizarlas, ningún cobro emitido antes de S5 podría
+ * actualizarse. Un `NULL` del PAYLOAD sí se rechaza (lo valida el esquema antes
+ * de esta guardia), así que esto no abre la puerta a borrar el detalle.
+ */
+const NULOS_DE_BD = ["lineas", "origenRef", "fechaVencimiento"] as const
+
+/**
+ * Guardia previa a la escritura (POST upsert y PUT parcial): valida el registro
+ * FUSIONADO, no solo el payload. El PUT del factory es parcial, así que un
+ * parche que toca un solo lado del contrato (solo `montoBase` o solo `lineas`)
+ * se detecta acá y se rechaza con el mensaje del invariante, sin escribir.
+ */
+const guardiaCobroCoherente: AntesDeEscribir = ({ datos, previo }) => {
+  const fusionado: Record<string, unknown> = { ...(previo ?? {}), ...datos }
+  for (const campo of NULOS_DE_BD) {
+    if (fusionado[campo] === null) delete fusionado[campo]
+  }
+  const validacion = CobroFIEscrituraCompletaSchema.safeParse(fusionado)
+  if (validacion.success) return null
+  const delDetalle = validacion.error.issues.find(
+    (issue) => issue.path.join(".") === "lineas"
+  )
+  return jsonError(400, delDetalle?.message ?? "Datos inválidos.", {
+    detalles: validacion.error.flatten(),
+  })
+}
+
 export const cobrosHandlers = createCrudHandlers({
   model: delegado(prisma.cobroFI),
-  schema: CobroFISchema,
+  schema: CobroFIEscrituraSchema,
   authzCheck: (rol, accion) => puede(rol, accion, "fi"),
+  antesDeEscribir: guardiaCobroCoherente,
 })
 
 export const POST = cobrosHandlers.POST

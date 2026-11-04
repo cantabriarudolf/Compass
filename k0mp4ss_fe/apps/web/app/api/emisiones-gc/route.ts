@@ -8,7 +8,7 @@
  */
 import { z } from "zod"
 import {
-  CobroFISchema,
+  CobroFIEscrituraCompletaSchema,
   EmisionGCSchema,
   type LineaCobroFI,
 } from "@/lib/schemas"
@@ -349,7 +349,7 @@ export async function POST(req: Request): Promise<Response> {
       })
     }
     for (const cobro of cobros) {
-      const valido = CobroFISchema.safeParse(cobro)
+      const valido = CobroFIEscrituraCompletaSchema.safeParse(cobro)
       if (!valido.success) {
         return jsonError(400, "Datos inválidos.", {
           detalles: valido.error.flatten(),
@@ -364,7 +364,7 @@ export async function POST(req: Request): Promise<Response> {
       }),
       ...cobros.map((c) =>
         prisma.cobroFI.create({
-          // SAFETY: cada cobro pasó CobroFISchema.safeParse arriba.
+          // SAFETY: cada cobro pasó CobroFIEscrituraCompletaSchema.safeParse arriba.
           data: { ...c, comunidadId: scope.comunidadId } as never,
         })
       ),

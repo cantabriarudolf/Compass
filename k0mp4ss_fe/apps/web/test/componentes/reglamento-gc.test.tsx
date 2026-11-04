@@ -141,7 +141,11 @@ function escribir(id: RegExp, valor: string): void {
   fireEvent.change(screen.getByLabelText(id), { target: { value: valor } })
 }
 
-/** Completa los siete parámetros y la declaración; devuelve lo que el usuario tipeó. */
+/**
+ * Completa los siete números y la declaración. Los dos interruptores quedan en
+ * su valor por defecto (IPC apagado, recargo de reserva encima del presupuesto)
+ * salvo que el caso los toque a propósito.
+ */
 async function completar(
   user: ReturnType<typeof userEvent.setup>
 ): Promise<void> {
@@ -227,6 +231,9 @@ describe("ReglamentoGC — versión vigente y alta de versión", () => {
         cuotasCorte: 3,
         diasPreavisoCorte: 5,
         ipcActivo: true,
+        // El recargo de reserva se declara por defecto ENCIMA del presupuesto
+        // (lectura del art. 39): el interruptor arranca apagado y viaja igual.
+        reservaIncluidaEnPresupuesto: false,
       },
     })
     const cuerpo = post?.cuerpo as Record<string, unknown>
@@ -353,6 +360,64 @@ describe("ReglamentoGC — versión vigente y alta de versión", () => {
     await user.click(screen.getByRole("button", { name: "Declarar versión" }))
     expect(await screen.findByText(/versión declarada: rige desde/i)).toBeTruthy()
     expect(peticiones.filter((p) => p.metodo === "POST")).toHaveLength(1)
+  })
+
+  it("(h) el alta declara dónde va el recargo de reserva y lo manda al servidor", async () => {
+    const user = userEvent.setup()
+    montar()
+    await screen.findByText(/sin versión declarada/i)
+
+    const reserva = screen.getByRole("switch", {
+      name: /fondo de reserva ya está en el presupuesto/i,
+    })
+    // Por defecto encima: es la lectura normativa del recargo (S5).
+    expect(reserva).toHaveAttribute("aria-checked", "false")
+    expect(
+      screen.getByText(/se cobra por encima del presupuesto aprobado/i)
+    ).toBeTruthy()
+
+    await completar(user)
+    await user.click(reserva)
+    expect(reserva).toHaveAttribute("aria-checked", "true")
+    expect(
+      screen.getByText(/ya está dentro del presupuesto aprobado/i)
+    ).toBeTruthy()
+    expect(
+      screen.queryByText(/se cobra por encima del presupuesto aprobado/i)
+    ).toBeNull()
+
+    await user.click(screen.getByRole("button", { name: "Declarar versión" }))
+    expect(await screen.findByText(/versión declarada: rige desde/i)).toBeTruthy()
+    const post = peticiones.find((p) => p.metodo === "POST")
+    const parametros = (post?.cuerpo as { parametros: Record<string, unknown> })
+      .parametros
+    expect(parametros.reservaIncluidaEnPresupuesto).toBe(true)
+    // El resto de la declaración no cambia por el interruptor nuevo.
+    expect(parametros.porcentajeReserva).toBe(12.5)
+  })
+
+  it("(i) la versión vigente muestra que el recargo ya está dentro del presupuesto", async () => {
+    versionVigente = {
+      ...VERSION,
+      parametros: { ...VERSION.parametros, reservaIncluidaEnPresupuesto: true },
+    }
+    montar()
+
+    expect(
+      await screen.findByText("Dentro del presupuesto aprobado")
+    ).toBeTruthy()
+    expect(screen.queryByText("Encima del presupuesto aprobado")).toBeNull()
+  })
+
+  it("(j) una versión sin el dato declarado se lee encima del presupuesto", async () => {
+    // La versión persistida antes del interruptor no trae el campo: el esquema
+    // completa con la lectura normativa, y la pantalla no puede inventar otra.
+    versionVigente = VERSION
+    montar()
+
+    expect(
+      await screen.findByText("Encima del presupuesto aprobado")
+    ).toBeTruthy()
   })
 })
 

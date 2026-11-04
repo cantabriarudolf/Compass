@@ -14,7 +14,7 @@ import { prisma } from "@/lib/prisma"
 import { logger } from "@/lib/logger"
 import { generarId } from "@/lib/id-utils"
 import { vencimientoDesdeDiaCorte } from "@/lib/finanzas-utils"
-import { CobroFISchema } from "@/lib/schemas"
+import { CobroFIEscrituraCompletaSchema } from "@/lib/schemas"
 import { jsonError } from "@/lib/api/with-comunidad-scope"
 import {
   cargarInfraccion,
@@ -154,13 +154,13 @@ export async function POST(_req: Request, ctx: Ctx): Promise<Response> {
         pagos: [],
         diferencias: [],
       }
-      const validacion = CobroFISchema.safeParse(candidato)
+      const validacion = CobroFIEscrituraCompletaSchema.safeParse(candidato)
       if (!validacion.success) {
         return jsonError(400, "Datos inválidos.", {
           detalles: validacion.error.flatten(),
         })
       }
-      // SAFETY: validacion.data ya pasó CobroFISchema.safeParse; el cast solo
+      // SAFETY: validacion.data ya pasó CobroFIEscrituraCompletaSchema; el cast solo
       // borra la forma nominal del schema para reusar el objeto como data Prisma.
       cobroData = validacion.data as unknown as Record<string, unknown>
       cobroId = validacion.data.id
@@ -194,7 +194,7 @@ export async function POST(_req: Request, ctx: Ctx): Promise<Response> {
       if (update.count === 0) return false
       if (cobroData) {
         await tx.cobroFI.create({
-          // SAFETY: cobroData pasó CobroFISchema.safeParse arriba.
+          // SAFETY: cobroData pasó CobroFIEscrituraCompletaSchema.safeParse arriba.
           data: { ...cobroData, comunidadId: scope.comunidadId } as never,
         })
       }

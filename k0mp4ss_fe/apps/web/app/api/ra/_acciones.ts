@@ -17,7 +17,7 @@ import { puede } from "@/lib/authz"
 import { prisma } from "@/lib/prisma"
 import { generarId } from "@/lib/id-utils"
 import { registrarEventoAuditoria, type ClienteAuditoria } from "@/lib/auditoria"
-import { CobroFISchema } from "@/lib/schemas"
+import { CobroFIEscrituraCompletaSchema } from "@/lib/schemas"
 import { jsonError, withComunidadScope, type ComunidadScope } from "@/lib/api/with-comunidad-scope"
 
 /** Conceptos FI de RA (los mismos tres del store). */
@@ -160,7 +160,7 @@ export interface CandidatoCobroRA {
 /**
  * Construye el cobro FI de RA con la forma exacta del store (mismo periodo
  * mensual, mismo `origenModulo`, arrays vacíos de moras/pagos/diferencias) y lo
- * valida con `CobroFISchema` antes de tocar la BD.
+ * valida con `CobroFIEscrituraCompletaSchema` antes de tocar la BD.
  */
 export function construirCobro(c: CandidatoCobroRA): Record<string, unknown> {
   const candidato = {
@@ -179,13 +179,13 @@ export function construirCobro(c: CandidatoCobroRA): Record<string, unknown> {
     pagos: [],
     diferencias: [],
   }
-  const validacion = CobroFISchema.safeParse(candidato)
+  const validacion = CobroFIEscrituraCompletaSchema.safeParse(candidato)
   if (!validacion.success) {
     throw new RechazoRA(400, "Datos inválidos.", {
       detalles: validacion.error.flatten(),
     })
   }
-  // SAFETY: el candidato ya pasó CobroFISchema.safeParse; el cast sólo borra la
+  // SAFETY: el candidato ya pasó CobroFIEscrituraCompletaSchema.safeParse; el cast sólo borra la
   // forma nominal del schema para reusar el objeto como data Prisma.
   return validacion.data as unknown as Record<string, unknown>
 }
@@ -212,7 +212,7 @@ export async function materializarCobro(
   })
   if (existente) return { id: existente.id, reutilizado: true }
   await tx.cobroFI.create({
-    // SAFETY: candidato pasó CobroFISchema.safeParse en construirCobro.
+    // SAFETY: candidato pasó CobroFIEscrituraCompletaSchema.safeParse en construirCobro.
     data: { ...candidato, comunidadId } as never,
   })
   return { id: candidato.id as string, reutilizado: false }

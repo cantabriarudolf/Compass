@@ -1,21 +1,30 @@
 /**
  * @vitest-environment node
  *
- * T5 cobro-gastos-comunes-parametrico (S5) — el cobro FI como lista de conceptos.
+ * T5/T8 cobro-gastos-comunes-parametrico (S5) — el cobro FI como lista de conceptos.
  *
- * Este corte es aditivo: `lineas` nace opcional/`NULL` para no reescribir los
- * cobros ya emitidos, `lineasDeCobro` sintetiza la línea histórica cuando no
- * hay líneas y la migración solo agrega la columna. Aquí se fija el invariante
- * (las líneas presentes suman exactamente `montoBase`) y se ejecuta la
- * sentencia REAL de la migración sobre una base SQLite temporal, fuera del
- * worktree, para comprobar que agrega la columna sin tocar filas existentes.
+ * `lineas` nace opcional/`NULL` para no reescribir los cobros ya emitidos y
+ * `lineasDeCobro` sintetiza la línea histórica cuando no hay líneas. T8 separa
+ * los dos contratos: `CobroFISchema` es LECTURA (fila de la base, `lineas` puede
+ * ser `NULL`) y `CobroFIEscrituraSchema` es ESCRITURA (`lineas: null` se
+ * rechaza: un escritor no puede borrar el detalle mandando nulo). El invariante
+ * «la suma del detalle = `montoBase`» vive en la escritura completa
+ * (`CobroFIEscrituraCompletaSchema`), no en el esquema que todo lector parsea.
+ * También se ejecuta la sentencia REAL de la migración sobre una base SQLite
+ * temporal, fuera del worktree, para comprobar que agregó la columna sin tocar
+ * filas existentes.
  */
 import { describe, it, expect } from "vitest"
+import { z } from "zod"
 import { mkdtempSync, readFileSync, rmSync } from "node:fs"
 import os from "node:os"
 import path from "node:path"
 import { PrismaClient } from "@prisma/client"
-import { CobroFISchema } from "@/lib/schemas"
+import {
+  CobroFIEscrituraCompletaSchema,
+  CobroFIEscrituraSchema,
+  CobroFISchema,
+} from "@/lib/schemas"
 import { DESTINO_BASE } from "../db-descartable.setup"
 
 /** La migración se ejecuta sobre SQLite; en el job PostgreSQL no se aplica (usa db push). */
@@ -66,8 +75,37 @@ async function conBaseTemporal<T>(
   }
 }
 
-describe("CobroFISchema — lineas opcionales con suma exacta (S5)", () => {
+const MENSAJE_DETALLE_NULO =
+  "El detalle del cobro no puede ser nulo: si el cobro no tiene detalle, omití las líneas."
+const MENSAJE_SUMA = "Las líneas deben sumar exactamente el monto base."
+
+/**
+ * T8: cada contrato tiene que poder componerse sin trucos. Hoy
+ * `CobroFISchema.partial()` existía solo porque un `Object.assign` se lo pegaba
+ * a mano a un ZodEffects; `.extend`, `.pick` y `.shape` no. Se prueban los
+ * cuatro sobre el contrato de lectura y sobre el de escritura.
+ */
+function componeComoSchemaDeObjeto(
+  schema: typeof CobroFISchema | typeof CobroFIEscrituraSchema
+): void {
+  expect(schema.partial().safeParse({ descripcion: "solo el parche" }).success).toBe(
+    true
+  )
+  const extendido = schema.extend({ nota: z.string() })
+  expect(extendido.shape.nota.safeParse("x").success).toBe(true)
+  const elegido = schema.pick({ montoBase: true })
+  expect(elegido.safeParse({ montoBase: 60000 }).success).toBe(true)
+  expect(schema.shape.montoBase.safeParse(60000).success).toBe(true)
+}
+
+describe("CobroFISchema — contrato de LECTURA del cobro (S5)", () => {
+  it("es un z.object composable: partial, extend, pick y shape funcionan", () => {
+    componeComoSchemaDeObjeto(CobroFISchema)
+  })
+
   it("acepta el cobro legacy sin lineas y con lineas nulas", () => {
+    // La fila de la base guarda NULL donde el cobro es de una sola línea: el
+    // lector no puede tratar eso como un cobro inválido.
     const sinLineas = CobroFISchema.safeParse(cobroBase())
     expect(sinLineas.success).toBe(true)
     if (sinLineas.success) expect(sinLineas.data.lineas).toBeUndefined()
@@ -115,29 +153,41 @@ describe("CobroFISchema — lineas opcionales con suma exacta (S5)", () => {
     }
   })
 
-  it("rechaza lineas cuya suma difiere de montoBase", () => {
-    for (const lineas of [
-      [{ concepto: "gasto_comun", monto: 59999 }],
-      [
-        { concepto: "gasto_comun", monto: 50000 },
-        { concepto: "multa_in", monto: 10001 },
-      ],
-    ]) {
-      const res = CobroFISchema.safeParse(cobroBase({ lineas }))
-      expect(res.success).toBe(false)
-      if (!res.success) {
-        const issue = res.error.issues.find(
-          (i) => i.path.join(".") === "lineas"
-        )
-        expect(issue?.message).toBe(
-          "Las líneas deben sumar exactamente el monto base."
-        )
-      }
+  it("no juzga la suma: leer una fila no es escribirla", () => {
+    // Si el invariante viviera acá, un lector no podría leer un cobro
+    // descuadrado sin declararlo inválido. La coherencia se exige al escribir.
+    const res = CobroFISchema.safeParse(
+      cobroBase({ lineas: [{ concepto: "gasto_comun", monto: 59999 }] })
+    )
+    expect(res.success).toBe(true)
+  })
+})
+
+describe("CobroFIEscrituraSchema — contrato de ESCRITURA (S5)", () => {
+  it("es un z.object composable: partial, extend, pick y shape funcionan", () => {
+    componeComoSchemaDeObjeto(CobroFIEscrituraSchema)
+  })
+
+  it("rechaza el detalle nulo: un escritor no puede borrar las líneas mandando null", () => {
+    const res = CobroFIEscrituraSchema.safeParse(cobroBase({ lineas: null }))
+    expect(res.success).toBe(false)
+    if (!res.success) {
+      const issue = res.error.issues.find((i) => i.path.join(".") === "lineas")
+      expect(issue?.message).toBe(MENSAJE_DETALLE_NULO)
     }
+    // Y también en el parche del PUT, que es donde se intentaría el borrado.
+    const parche = CobroFIEscrituraSchema.partial().safeParse({ lineas: null })
+    expect(parche.success).toBe(false)
+  })
+
+  it("acepta el cobro legacy: la ausencia de líneas es una sola línea histórica", () => {
+    const res = CobroFIEscrituraSchema.safeParse(cobroBase())
+    expect(res.success).toBe(true)
+    if (res.success) expect(res.data.lineas).toBeUndefined()
   })
 
   it("rechaza lineas vacías y líneas con monto no positivo", () => {
-    const vacias = CobroFISchema.safeParse(cobroBase({ lineas: [] }))
+    const vacias = CobroFIEscrituraSchema.safeParse(cobroBase({ lineas: [] }))
     expect(vacias.success).toBe(false)
     if (!vacias.success) {
       expect(
@@ -146,10 +196,57 @@ describe("CobroFISchema — lineas opcionales con suma exacta (S5)", () => {
     }
 
     for (const monto of [0, -1]) {
-      const res = CobroFISchema.safeParse(
+      const res = CobroFIEscrituraSchema.safeParse(
         cobroBase({ lineas: [{ concepto: "gasto_comun", monto }] })
       )
       expect(res.success).toBe(false)
+    }
+  })
+})
+
+describe("CobroFIEscrituraCompletaSchema — el invariante donde se escribe (S5)", () => {
+  it("acepta las líneas que suman exactamente montoBase", () => {
+    const res = CobroFIEscrituraCompletaSchema.safeParse(
+      cobroBase({
+        montoBase: 66000,
+        lineas: [
+          { concepto: "gasto_comun", monto: 60000, fondoId: "fondo-gc-t5" },
+          { concepto: "gasto_comun", monto: 6000, fondoId: "fondo-res-t5" },
+        ],
+      })
+    )
+    expect(res.success).toBe(true)
+  })
+
+  it("acepta el cobro legacy sin detalle: la ausencia no contradice el total", () => {
+    expect(CobroFIEscrituraCompletaSchema.safeParse(cobroBase()).success).toBe(true)
+  })
+
+  it("rechaza lineas cuya suma difiere de montoBase", () => {
+    for (const lineas of [
+      [{ concepto: "gasto_comun", monto: 59999 }],
+      [
+        { concepto: "gasto_comun", monto: 50000 },
+        { concepto: "multa_in", monto: 10001 },
+      ],
+    ]) {
+      const res = CobroFIEscrituraCompletaSchema.safeParse(cobroBase({ lineas }))
+      expect(res.success).toBe(false)
+      if (!res.success) {
+        const issue = res.error.issues.find(
+          (i) => i.path.join(".") === "lineas"
+        )
+        expect(issue?.message).toBe(MENSAJE_SUMA)
+      }
+    }
+  })
+
+  it("sigue rechazando el detalle nulo", () => {
+    const res = CobroFIEscrituraCompletaSchema.safeParse(cobroBase({ lineas: null }))
+    expect(res.success).toBe(false)
+    if (!res.success) {
+      const issue = res.error.issues.find((i) => i.path.join(".") === "lineas")
+      expect(issue?.message).toBe(MENSAJE_DETALLE_NULO)
     }
   })
 })

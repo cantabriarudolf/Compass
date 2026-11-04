@@ -1530,7 +1530,16 @@ export const LineaCobroFISchema = z.object({
   fondoId: IdEntidadSchema.optional(),
 })
 
-const CobroFISchemaBase = z.object({
+/**
+ * Contrato de LECTURA del cobro FI (S5): la forma en que la fila vive en la
+ * base. `lineas` es nullable porque los cobros emitidos antes del detalle
+ * guardan `NULL`, y eso significa exactamente un cobro de una sola línea
+ * (`lineasDeCobro` la sintetiza). Es un `z.object` plano a propósito:
+ * `.partial()`, `.extend()`, `.pick()` y `.shape` tienen que funcionar sobre él,
+ * y por eso el invariante de la suma NO vive acá: un lector no debe declarar
+ * inválida una fila legacy que solo está incompleta de detalle.
+ */
+export const CobroFISchema = z.object({
   id: IdEntidadSchema,
   unidadId: IdEntidadSchema,
   periodo: z
@@ -1547,8 +1556,7 @@ const CobroFISchemaBase = z.object({
     .number({ required_error: "El monto base es obligatorio." })
     .positive("El monto base debe ser mayor a cero."),
   // S5: nullable y opcional para que los cobros ya emitidos (sin líneas) sigan
-  // siendo válidos como cobro de una sola línea. Cuando viene, no puede estar
-  // vacío y debe sumar exactamente `montoBase`.
+  // siendo válidos como cobro de una sola línea.
   lineas: z
     .array(LineaCobroFISchema)
     .min(1, "El cobro con líneas exige al menos una línea.")
@@ -1562,21 +1570,38 @@ const CobroFISchemaBase = z.object({
 })
 
 /**
- * El refine de `lineas` convierte el schema en ZodEffects, que no expone
- * `.partial()`. El PUT genérico de /api/cobros-fi lo usa para validar el parche
- * parcial; se conserva apuntando al objeto base. El invariante se valida al
- * crear o enviar el cobro completo (el parche puede tocar solo `montoBase` o
- * solo `lineas`, sin el otro lado del contrato).
+ * Contrato de ESCRITURA del cobro FI: lo que un cliente o una ruta puede
+ * mandar. La única diferencia con el de lectura es `lineas`: `null` se rechaza
+ * —un escritor no puede borrar el detalle mandando nulo— y solo la AUSENCIA
+ * significa "cobro legacy de una sola línea". Sigue siendo un `z.object` plano,
+ * así que `.partial()` (el parche del PUT) y `.extend()` funcionan.
+ *
+ * Los mensajes los devuelve la API en `detalles` (400 `Datos inválidos.`) y el
+ * de la suma define por sí solo la respuesta del PUT que descuadra el registro.
  */
-export const CobroFISchema = Object.assign(
-  CobroFISchemaBase.refine(
-    (cobro) => !lineasContradicenMontoBase(cobro.lineas, cobro.montoBase),
-    {
-      message: "Las líneas deben sumar exactamente el monto base.",
-      path: ["lineas"],
-    }
-  ),
-  { partial: () => CobroFISchemaBase.partial() }
+export const CobroFIEscrituraSchema = CobroFISchema.extend({
+  lineas: z
+    .array(LineaCobroFISchema, {
+      invalid_type_error:
+        "El detalle del cobro no puede ser nulo: si el cobro no tiene detalle, omití las líneas.",
+    })
+    .min(1, "El cobro con líneas exige al menos una línea.")
+    .optional(),
+})
+
+/**
+ * La escritura COMPLETA: forma del cobro más el invariante de S5 (la suma del
+ * detalle es exactamente `montoBase`). Es el contrato de las rutas que crean un
+ * cobro entero (emisión, multas IN, reservas RA) y el que valida el registro
+ * FUSIONADO —fila + parche— antes de un PUT, donde el parche puede tocar un solo
+ * lado del contrato.
+ */
+export const CobroFIEscrituraCompletaSchema = CobroFIEscrituraSchema.refine(
+  (cobro) => !lineasContradicenMontoBase(cobro.lineas, cobro.montoBase),
+  {
+    message: "Las líneas deben sumar exactamente el monto base.",
+    path: ["lineas"],
+  }
 )
 
 // --- Cobranza FI multicanal (SERIE-FASE2 §V5) ---
@@ -2343,11 +2368,12 @@ export type ParametrosCobroReglamento = z.infer<
   typeof ParametrosReglamentoSchema
 >
 /**
- * `ParametrosReglamento` es la vista del formulario de declaración: los siete
- * campos que la comunidad escribe (los seis números y el interruptor de IPC).
- * `reservaIncluidaEnPresupuesto` todavía no tiene control en la pantalla, así
- * que no ensancha el tipo que el formulario recorre como columnas numéricas;
- * el cobro lo lee con `ParametrosCobroReglamento`, que sí lo incluye.
+ * `ParametrosReglamento` es la vista de los parámetros que la declaración
+ * recorre como columnas numéricas: los seis números y el interruptor de IPC.
+ * `reservaIncluidaEnPresupuesto` también se declara en pantalla (T9), pero es un
+ * interruptor con su propio bloque, no una columna: el cobro lo lee con
+ * `ParametrosCobroReglamento`, que sí lo incluye y lo completa con la lectura
+ * normativa cuando la versión persistida no lo trae.
  */
 export type ParametrosReglamento = Omit<
   ParametrosCobroReglamento,

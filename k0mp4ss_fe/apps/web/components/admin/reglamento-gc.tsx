@@ -23,6 +23,7 @@ import { autorizaEmision, parametrosDeVersion } from "@/lib/reglamento"
 import {
   NuevaVersionReglamentoSchema,
   type NuevaVersionReglamento,
+  type ParametrosCobroReglamento,
   type ParametrosReglamento,
   type VersionReglamento,
 } from "@/lib/schemas"
@@ -139,6 +140,21 @@ function filasParametros(p: ParametrosReglamento) {
   ]
 }
 
+/**
+ * Dónde va el recargo de reserva (S5): encima del presupuesto aprobado o ya
+ * dentro de él. Una versión persistida antes del interruptor parsea con la
+ * lectura normativa (`false` = encima), así que la pantalla dice lo mismo que
+ * el cobro; una versión sin parámetros válidos no declara nada.
+ */
+function textoReservaIncluida(
+  parametros: ParametrosCobroReglamento | null
+): string {
+  if (!parametros) return "No declarado"
+  return parametros.reservaIncluidaEnPresupuesto
+    ? "Dentro del presupuesto aprobado"
+    : "Encima del presupuesto aprobado"
+}
+
 /** Lectura de la versión que rige: instrumento con su acta y los números del mes. */
 function VersionVigente({ version }: { version: VersionReglamento }) {
   // `parametrosDeVersion` es la misma guarda que usa la emisión: una fila con
@@ -156,6 +172,10 @@ function VersionVigente({ version }: { version: VersionReglamento }) {
     {
       etiqueta: "Forma de contribución",
       valor: ETIQUETA_FORMA[version.formaContribucion] ?? version.formaContribucion,
+    },
+    {
+      etiqueta: "Recargo de reserva",
+      valor: textoReservaIncluida(parametros),
     },
     {
       etiqueta: "Habilita la emisión",
@@ -220,6 +240,7 @@ interface FormVersion {
   formaContribucion: Forma | ""
   numeros: Record<CampoNumerico, string>
   ipcActivo: boolean
+  reservaIncluidaEnPresupuesto: boolean
 }
 
 /**
@@ -289,6 +310,8 @@ const FORM_VACIO: FormVersion = {
     diasPreavisoCorte: "",
   },
   ipcActivo: false,
+  // Por defecto ENCIMA del presupuesto: la lectura normativa del recargo.
+  reservaIncluidaEnPresupuesto: false,
 }
 
 type Armado =
@@ -327,6 +350,7 @@ function armarNuevaVersion(form: FormVersion): Armado {
     cuotasCorte: Number(form.numeros.cuotasCorte),
     diasPreavisoCorte: Number(form.numeros.diasPreavisoCorte),
     ipcActivo: form.ipcActivo,
+    reservaIncluidaEnPresupuesto: form.reservaIncluidaEnPresupuesto,
   }
   const numericos = [
     parametros.porcentajeReserva,
@@ -553,6 +577,30 @@ export function ReglamentoGC() {
                   id="reg-ipc"
                   checked={form.ipcActivo}
                   onCheckedChange={(v) => setForm((f) => ({ ...f, ipcActivo: v }))}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2 md:col-span-2">
+              <div className="flex items-center justify-between gap-3 rounded-lg border p-3">
+                <div className="space-y-0.5">
+                  <Label htmlFor="reg-reserva-incluida">
+                    El fondo de reserva ya está en el presupuesto
+                  </Label>
+                  {/* Una línea, y dice qué significa cada lado: el cobro suma el
+                      recargo o lo desagrega del total (S5). */}
+                  <p className="text-xs text-muted-foreground">
+                    {form.reservaIncluidaEnPresupuesto
+                      ? "Sí: el recargo ya está dentro del presupuesto aprobado y se desagrega del gasto común, no se suma."
+                      : "No: el recargo se cobra por encima del presupuesto aprobado y se suma al gasto común del mes."}
+                  </p>
+                </div>
+                <Switch
+                  id="reg-reserva-incluida"
+                  checked={form.reservaIncluidaEnPresupuesto}
+                  onCheckedChange={(v) =>
+                    setForm((f) => ({ ...f, reservaIncluidaEnPresupuesto: v }))
+                  }
                 />
               </div>
             </div>
