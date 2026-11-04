@@ -195,6 +195,32 @@ describe("/api/emisiones-gc — emisiones de Gasto Común con BD real", () => {
         porcentajeAporte: 10,
       },
     })
+    // T3 (cobro-gastos-comunes-parametrico): emitir exige una versión vigente
+    // del reglamento con fuente real. Los números replican el comportamiento
+    // que este archivo ya medía (30 días, reserva 10%), así ningún test cambia
+    // de expectativa por la compuerta.
+    for (const comunidadId of [comunidadA, comunidadC]) {
+      await prisma.versionReglamento.create({
+        data: {
+          id: `egc3-vreg-${comunidadId}`,
+          comunidadId,
+          version: 1,
+          vigenteDesde: "2026-01",
+          fuenteInstrumento: "reglamento_copropiedad",
+          actaRef: null,
+          formaContribucion: "monto_por_tipo",
+          parametros: {
+            porcentajeReserva: 10,
+            diasPagoGc: 30,
+            tasaMoraMensualPct: 1,
+            topeMoraPct: 50,
+            cuotasCorte: 3,
+            diasPreavisoCorte: 5,
+            ipcActivo: false,
+          },
+        } as never,
+      })
+    }
     await prisma.emisionGC.create({ data: emisionSeedData(emisionSeed, lineaSeed) })
     await prisma.emisionGC.create({ data: emisionSeedData(emisionIncompleta, []) })
     await prisma.emisionGC.create({
@@ -221,6 +247,7 @@ describe("/api/emisiones-gc — emisiones de Gasto Común con BD real", () => {
     const enComunidades = { in: [comunidadA, comunidadB, comunidadC] }
     await prisma.cobroFI.deleteMany({ where: { comunidadId: enComunidades } })
     await prisma.emisionGC.deleteMany({ where: { comunidadId: enComunidades } })
+    await prisma.versionReglamento.deleteMany({ where: { comunidadId: enComunidades } })
     await prisma.vinculoUnidad.deleteMany({ where: { comunidadId: enComunidades } })
     await prisma.persona.deleteMany({ where: { comunidadId: enComunidades } })
     await prisma.unidad.deleteMany({ where: { comunidadId: enComunidades } })

@@ -82,6 +82,7 @@ describe("/api FI completo — finanzas con BD real (BD-FUENTE-VERDAD Fase 3)", 
     // Estado limpio de las entidades bajo test.
     await prisma.cobroFI.deleteMany({ where: { comunidadId: comunidad } })
     await prisma.emisionGC.deleteMany({ where: { comunidadId: comunidad } })
+    await prisma.versionReglamento.deleteMany({ where: { comunidadId: comunidad } })
     await prisma.egresoFI.deleteMany({ where: { comunidadId: comunidad } })
     await prisma.ingresoFI.deleteMany({ where: { comunidadId: comunidad } })
     await prisma.fondoFI.deleteMany({ where: { comunidadId: comunidad } })
@@ -92,6 +93,7 @@ describe("/api FI completo — finanzas con BD real (BD-FUENTE-VERDAD Fase 3)", 
       state.cookie = ""
       await prisma.cobroFI.deleteMany({ where: { comunidadId: comunidad } })
       await prisma.emisionGC.deleteMany({ where: { comunidadId: comunidad } })
+      await prisma.versionReglamento.deleteMany({ where: { comunidadId: comunidad } })
       await prisma.egresoFI.deleteMany({ where: { comunidadId: comunidad } })
       await prisma.ingresoFI.deleteMany({ where: { comunidadId: comunidad } })
       await prisma.fondoFI.deleteMany({ where: { comunidadId: comunidad } })
@@ -264,6 +266,31 @@ describe("/api FI completo — finanzas con BD real (BD-FUENTE-VERDAD Fase 3)", 
   })
 
   async function seedEmision(): Promise<void> {
+    // T3 (cobro-gastos-comunes-parametrico): la emisión exige una versión
+    // vigente del reglamento con fuente real; los parámetros no cambian
+    // ninguna expectativa de este archivo (no hay fondo de reserva).
+    await prisma.versionReglamento.upsert({
+      where: { comunidadId_version: { comunidadId: comunidad, version: 1 } },
+      update: {},
+      create: {
+        id: "fi-vreg-1",
+        comunidadId: comunidad,
+        version: 1,
+        vigenteDesde: "2026-01",
+        fuenteInstrumento: "acta_asamblea",
+        actaRef: "Acta de asamblea 2026-01",
+        formaContribucion: "coeficiente",
+        parametros: {
+          porcentajeReserva: 0,
+          diasPagoGc: 30,
+          tasaMoraMensualPct: 1,
+          topeMoraPct: 50,
+          cuotasCorte: 3,
+          diasPreavisoCorte: 5,
+          ipcActivo: false,
+        },
+      } as never,
+    })
     await prisma.tipoUnidad.upsert({
       where: { id: "fi-tipo-a" },
       update: {},

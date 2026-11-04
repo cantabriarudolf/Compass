@@ -89,6 +89,21 @@ function vencimientoDe(periodo: string): string {
   return iso(new Date(Date.UTC(anio, mes, 10)))
 }
 
+/** Milisegundos de un día: conversión de unidades, no un parámetro del reglamento. */
+const MS_POR_DIA = 24 * 60 * 60 * 1000
+
+/**
+ * Días corridos entre la emisión del seed (`AAAA-MM-01`) y el vencimiento que el
+ * seed ya usa (`vencimientoDe`). La versión del reglamento declara ese número
+ * como `diasPagoGc`, así el vencimiento que calcula la API para el primer
+ * período emitido es el mismo que el seed ya sembró en `cobros_fi`.
+ */
+function diasDePagoDe(periodo: string): number {
+  const emision = Date.parse(`${periodo}-01T00:00:00Z`)
+  const vencimiento = Date.parse(`${vencimientoDe(periodo)}T00:00:00Z`)
+  return Math.round((vencimiento - emision) / MS_POR_DIA)
+}
+
 function diasDesde(periodo: string): string {
   const [anio, mes] = periodo.split("-").map(Number) as [number, number]
   return iso(new Date(Date.UTC(anio, mes - 1, 5)))
@@ -635,9 +650,16 @@ async function pasoPersonas(estructura: Estructura): Promise<Personas> {
 // Paso 3 — Fondos, emisiones de gasto común y cobros (S9)
 // ────────────────────────────────────────────────────────────────────────────
 
+/**
+ * Porcentaje del fondo de reserva que el seed aplica a cada emisión. Es el
+ * mismo número que declara `fondo-reserva.porcentajeAporte`: una sola fuente
+ * para el aporte sembrado y para los parámetros de la versión del reglamento.
+ */
+const PORCENTAJE_RESERVA_DEMO = 5
+
 const FONDOS = [
   { id: "fondo-gc", nombre: "Fondo de Gasto Común", tipo: "gasto_comun", saldoInicial: 3_450_000, porcentajeAporte: null },
-  { id: "fondo-reserva", nombre: "Fondo de Reserva", tipo: "reserva", saldoInicial: 12_800_000, porcentajeAporte: 5 },
+  { id: "fondo-reserva", nombre: "Fondo de Reserva", tipo: "reserva", saldoInicial: 12_800_000, porcentajeAporte: PORCENTAJE_RESERVA_DEMO },
   { id: "fondo-amenities", nombre: "Fondo de Amenities", tipo: "amenities", saldoInicial: 1_250_000, porcentajeAporte: null },
   { id: "fondo-cc-punto-cero", nombre: "Cuenta Corriente", tipo: "gasto_comun", saldoInicial: 17_082_694, porcentajeAporte: null },
 ]
@@ -665,6 +687,35 @@ async function pasoFinanzas(estructura: Estructura): Promise<Finanzas> {
   const duenioDe = new Map(vinculos.map((v) => [v.unidadId, v.personaId]))
   const responsable = (unidadId: string) => duenioDe.get(unidadId) ?? "p-5"
 
+  // T3 (cobro-gastos-comunes-parametrico): la emisión por API exige una versión
+  // vigente del reglamento con fuente real. Este seed escribe `emisiones_gc` y
+  // `cobros_fi` directo por Prisma, así que nunca pasó por la compuerta; sin
+  // esta versión, el demo abre y «Emitir» responde que la comunidad no declaró
+  // nada. Los parámetros replican lo que el seed ya calcula: mismo vencimiento
+  // (`vencimientoDe`), mismo % de reserva que `aporteReserva` y la tasa de mora
+  // de sus cobros. El demo no modela corte ni IPC, así que esos quedan con los
+  // valores por defecto que documenta la migración `add_version_reglamento`.
+  const primeraVersion = {
+    vigenteDesde: PERIODOS[0],
+    fuenteInstrumento: "acta_asamblea",
+    actaRef: "Acta de asamblea (dato de demo)",
+    formaContribucion: "monto_por_tipo",
+    parametros: {
+      porcentajeReserva: PORCENTAJE_RESERVA_DEMO,
+      diasPagoGc: diasDePagoDe(PERIODOS[0]),
+      tasaMoraMensualPct: 1.5,
+      topeMoraPct: 50,
+      cuotasCorte: 3,
+      diasPreavisoCorte: 5,
+      ipcActivo: false,
+    },
+  }
+  await prisma.versionReglamento.upsert({
+    where: { comunidadId_version: { comunidadId, version: 1 } },
+    update: primeraVersion,
+    create: { id: `reglamento-${comunidadId}-v1`, comunidadId, version: 1, ...primeraVersion },
+  })
+
   const conGastoComun = [...estructura.deptos, ...estructura.locales, ...estructura.estacPrivados]
   const factorPeriodo: Record<string, number> = { "2026-08": 1, "2026-09": 1.021, "2026-10": 1.034 }
 
@@ -686,7 +737,7 @@ async function pasoFinanzas(estructura: Estructura): Promise<Finanzas> {
       bruto += montoGc
     }
 
-    const aporteReserva = monto(bruto * 0.05)
+    const aporteReserva = monto(bruto * (PORCENTAJE_RESERVA_DEMO / 100))
     const emisionId = `emision-${periodo}`
     const filaEmision = {
       comunidadId,

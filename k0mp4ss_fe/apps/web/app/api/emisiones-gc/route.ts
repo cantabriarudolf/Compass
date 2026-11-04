@@ -13,6 +13,11 @@ import { prisma } from "@/lib/prisma"
 import { logger } from "@/lib/logger"
 import { generarId } from "@/lib/id-utils"
 import { hoyISO } from "@/lib/date-utils"
+import {
+  autorizaEmision,
+  parametrosDeVersion,
+  versionReglamentoVigenteDeComunidad,
+} from "@/lib/reglamento"
 import { createCrudHandlers, type CrudDelegate } from "@/lib/api/crud-factory"
 import {
   jsonError,
@@ -43,11 +48,39 @@ const EmitirGCInputSchema = z.object({
   unidadIds: z.array(z.string().min(1)).optional(),
 })
 
-/** Vencimiento por defecto: 30 días corridos desde el cargo. */
-function vencimientoPorDefecto(fechaCargo: string): string {
+/** Vencimiento por defecto: los días de pago que declara la versión vigente. */
+function vencimientoPorDefecto(fechaCargo: string, diasPagoGc: number): string {
   const base = new Date(`${fechaCargo}T00:00:00`)
-  base.setDate(base.getDate() + 30)
+  base.setDate(base.getDate() + diasPagoGc)
   return base.toISOString().slice(0, 10)
+}
+
+/** Motivos por los que la compuerta de la versión bloquea la emisión (S1/S2). */
+type MotivoBloqueoEmision =
+  | "sin_version"
+  | "fuente_sin_respaldo"
+  | "parametros_invalidos"
+
+/**
+ * 400 que nombra el motivo y la comunidad, sin escribir nada. La compuerta
+ * corre antes de crear: una comunidad sin declaración no emite.
+ */
+async function emisionBloqueada(
+  comunidadId: string,
+  periodo: string,
+  motivo: MotivoBloqueoEmision
+): Promise<Response> {
+  const comunidad = await prisma.comunidad.findUnique({
+    where: { id: comunidadId },
+    select: { nombre: true },
+  })
+  const nombre = comunidad?.nombre ?? comunidadId
+  const mensajes: Record<MotivoBloqueoEmision, string> = {
+    sin_version: `Emisión bloqueada: la comunidad ${nombre} no declaró una versión del reglamento vigente para el período ${periodo}.`,
+    fuente_sin_respaldo: `Emisión bloqueada: la versión vigente de la comunidad ${nombre} es una migración automática; la forma de contribución debe declararse por reglamento de copropiedad o acta de asamblea.`,
+    parametros_invalidos: `Emisión bloqueada: los parámetros de la versión vigente de la comunidad ${nombre} no son válidos.`,
+  }
+  return jsonError(400, mensajes[motivo])
 }
 
 /** POST emite el Gasto Común del período y genera sus cobros. */
@@ -70,6 +103,23 @@ export async function POST(req: Request): Promise<Response> {
   const { periodo, modo } = parsed.data
 
   try {
+    // Compuerta S1: sin versión vigente que funde la forma de contribución no
+    // se emite nada. Se resuelve antes de cualquier lectura de montos.
+    const versionVigente = await versionReglamentoVigenteDeComunidad(
+      scope.comunidadId,
+      periodo
+    )
+    if (!versionVigente) {
+      return emisionBloqueada(scope.comunidadId, periodo, "sin_version")
+    }
+    if (!autorizaEmision(versionVigente)) {
+      return emisionBloqueada(scope.comunidadId, periodo, "fuente_sin_respaldo")
+    }
+    const parametros = parametrosDeVersion(versionVigente)
+    if (!parametros) {
+      return emisionBloqueada(scope.comunidadId, periodo, "parametros_invalidos")
+    }
+
     const duplicada = await prisma.emisionGC.findFirst({
       where: { comunidadId: scope.comunidadId, periodo },
     })
@@ -136,7 +186,9 @@ export async function POST(req: Request): Promise<Response> {
     const tarifaPorTipo = new Map(tipos.map((t) => [t.id, t.montoBaseGc]))
 
     const hoy = hoyISO()
-    const vencimiento = parsed.data.fechaVencimiento ?? vencimientoPorDefecto(hoy)
+    const vencimiento =
+      parsed.data.fechaVencimiento ??
+      vencimientoPorDefecto(hoy, parametros.diasPagoGc)
     const emisionId = generarId("egc")
     const lineas: { unidadId: string; responsablePersonaId: string; monto: number; cobroId: string }[] = []
     const cobros: Record<string, unknown>[] = []
@@ -176,7 +228,7 @@ export async function POST(req: Request): Promise<Response> {
       where: { comunidadId: scope.comunidadId, tipo: "reserva", activo: true },
     })
     const aporteMonto = fondoReserva
-      ? Math.round((totalEmitido * (fondoReserva.porcentajeAporte ?? 0)) / 100)
+      ? Math.round((totalEmitido * parametros.porcentajeReserva) / 100)
       : 0
 
     const emision = {
