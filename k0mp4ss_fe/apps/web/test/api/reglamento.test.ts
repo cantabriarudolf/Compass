@@ -316,4 +316,99 @@ describe("/api/reglamento — versión vigente del reglamento con BD real", () =
       expect(j.version).toBe(2)
     })
   })
+
+  /**
+   * El registro FUSIONADO —id y `version` los pone el servidor— se valida con
+   * `VersionReglamentoSchema` antes de escribirse: la ruta no confía en el
+   * valor que calcula. La única forma de que ese guard falle es una fila con la
+   * columna `version` corrupta, y entonces la respuesta no puede ser una fila
+   * con versión 0.
+   */
+  it("POST con la versión corrupta en BD → 400 «Datos inválidos.» y ninguna fila nueva", async () => {
+    // La última versión persistida es -1, así que el servidor calcularía la 0.
+    const originales = await prisma.versionReglamento.findMany({
+      where: { comunidadId: comunidad },
+    })
+    await prisma.versionReglamento.deleteMany({ where: { comunidadId: comunidad } })
+    await prisma.versionReglamento.create({
+      data: {
+        id: "rl-version-corrupta",
+        comunidadId: comunidad,
+        version: -1,
+        vigenteDesde: "2026-01",
+        fuenteInstrumento: "reglamento_copropiedad",
+        actaRef: null,
+        formaContribucion: "coeficiente",
+        parametros: PARAMETROS,
+      },
+    })
+    try {
+      await conSesion(emailAdmin, async () => {
+        const res = await llamar("POST", { body: cuerpoVersion({ vigenteDesde: "2026-07" }) })
+        expect(res.status).toBe(400)
+        expect(((await res.json()) as { error: string }).error).toBe("Datos inválidos.")
+      })
+      // El guard escribe cero filas: ni la que pidió el cliente ni la versión 0.
+      const versiones = await prisma.versionReglamento.findMany({
+        where: { comunidadId: comunidad },
+        select: { version: true },
+      })
+      expect(versiones.map((v) => v.version)).toEqual([-1])
+    } finally {
+      await prisma.versionReglamento.deleteMany({ where: { comunidadId: comunidad } })
+      for (const v of originales) {
+        await prisma.versionReglamento.create({
+          data: {
+            id: v.id,
+            comunidadId: v.comunidadId,
+            version: v.version,
+            vigenteDesde: v.vigenteDesde,
+            fuenteInstrumento: v.fuenteInstrumento,
+            actaRef: v.actaRef,
+            formaContribucion: v.formaContribucion,
+            parametros: v.parametros as never,
+          },
+        })
+      }
+    }
+  })
+
+  /**
+   * Leer el reglamento nunca devuelve una versión con parámetros corruptos: si
+   * la fila no se puede deserializar, la ruta responde 500 genérico en vez de
+   * un 200 con datos que no cumplen el contrato (el detalle queda en el log).
+   * El escenario es una migración a medias, no un input del cliente.
+   */
+  it("GET con una fila de parámetros ilegibles → 500 genérico, sin filtrar el detalle", async () => {
+    await prisma.versionReglamento.create({
+      data: {
+        id: "rl-version-ilegible",
+        comunidadId: comunidad,
+        version: 3,
+        vigenteDesde: "2026-09",
+        fuenteInstrumento: "reglamento_copropiedad",
+        actaRef: null,
+        formaContribucion: "coeficiente",
+        parametros: PARAMETROS,
+      },
+    })
+    try {
+      // Escritura cruda: el cliente Prisma jamás serializa un JSON inválido.
+      await prisma.$executeRawUnsafe(
+        `UPDATE versiones_reglamento SET parametros = '{ilegible' WHERE id = 'rl-version-ilegible'`
+      )
+      await conSesion(emailAdmin, async () => {
+        const res = await llamar("GET", { periodo: "2026-09" })
+        expect(res.status).toBe(500)
+        const cuerpo = (await res.json()) as Record<string, unknown>
+        expect(cuerpo.error).toBe("Error interno del servidor.")
+        // El detalle del fallo no viaja al cliente.
+        expect(JSON.stringify(cuerpo)).not.toContain("ilegible")
+      })
+    } finally {
+      await prisma.$executeRawUnsafe(
+        `DELETE FROM versiones_reglamento WHERE id = 'rl-version-ilegible'`
+      )
+    }
+  })
 })

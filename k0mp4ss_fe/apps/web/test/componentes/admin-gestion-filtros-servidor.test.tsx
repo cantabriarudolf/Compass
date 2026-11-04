@@ -31,6 +31,11 @@ import {
 } from "./api-personas-falsa"
 import GestionAdministrativaPage from "@/app/admin/gestion/page"
 
+// Mismo piso que el resto de los tests de componentes: bajo la instrumentación
+// de cobertura del suite completo estos dos casos rozan los 5 s (el default de
+// Vitest) y fallan por tiempo, no por comportamiento.
+vi.setConfig({ testTimeout: 60_000 })
+
 let api: ApiPersonas
 
 beforeEach(() => {

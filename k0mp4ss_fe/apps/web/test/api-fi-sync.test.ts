@@ -438,4 +438,81 @@ describe("FI sync — POST /api/fi/sync + GET /api/fi (fi-sync-bd)", () => {
       expect(gc.saldo).toBe(100_000 + 20_000 + 100_000 - 30_000)
     })
   })
+
+  /**
+   * Identidad y alcance de la lectura: quién entra y a qué comunidad apunta.
+   *
+   * La ruta resuelve la comunidad por la membresía del usuario y NUNCA por el
+   * `comunidadId` del query; el único atajo es el header `x-comunidad-id`, que
+   * igual exige membresía en esa comunidad. Un usuario inactivo no lee aunque
+   * su cookie de sesión siga siendo válida.
+   */
+  describe("GET /api/fi — identidad, comunidad activa y permiso", () => {
+    const emailInactivo = "fisync-inactivo@test.cl"
+    const emailConserje = "fisync-conserje@test.cl"
+
+    afterAll(async () => {
+      for (const email of [emailInactivo, emailConserje]) {
+        const u = await prisma.usuario.findUnique({ where: { email } })
+        if (!u) continue
+        await prisma.membresia.deleteMany({ where: { usuarioId: u.id } })
+        await prisma.usuario.delete({ where: { id: u.id } }).catch(() => {})
+      }
+    })
+
+    it("usuario inactivo con cookie válida → 401 «Usuario no encontrado o inactivo»", async () => {
+      await prisma.usuario.create({
+        data: {
+          id: "fisync-usuario-inactivo",
+          email: emailInactivo,
+          activo: false,
+        },
+      })
+      await prisma.membresia.create({
+        data: {
+          usuarioId: "fisync-usuario-inactivo",
+          comunidadId: comunidadA,
+          rol: "administrador",
+        },
+      })
+      const res = await callGet({ email: emailInactivo })
+      expect(res.status).toBe(401)
+      expect(((await res.json()) as { error: string }).error).toBe(
+        "Usuario no encontrado o inactivo"
+      )
+    })
+
+    it("header x-comunidad-id con membresía → lee esa comunidad", async () => {
+      const res = await callGet({ email: adminEmailB, headers: { "x-comunidad-id": comunidadB } })
+      expect(res.status).toBe(200)
+      const j = (await res.json()) as { egresos: { total: number } }
+      expect(j.egresos.total).toBe(3)
+    })
+
+    it("header x-comunidad-id sin membresía en esa comunidad → 403 «Sin pertenencia a la comunidad»", async () => {
+      const res = await callGet({ email: adminEmailA, headers: { "x-comunidad-id": comunidadB } })
+      expect(res.status).toBe(403)
+      expect(((await res.json()) as { error: string }).error).toBe(
+        "Sin pertenencia a la comunidad"
+      )
+    })
+
+    it("rol sin `ver fi` (conserje) → 403 con el motivo del permiso, sin datos", async () => {
+      await prisma.usuario.create({
+        data: { id: "fisync-usuario-conserje", email: emailConserje, activo: true },
+      })
+      await prisma.membresia.create({
+        data: {
+          usuarioId: "fisync-usuario-conserje",
+          comunidadId: comunidadA,
+          rol: "conserje",
+        },
+      })
+      const res = await callGet({ email: emailConserje })
+      expect(res.status).toBe(403)
+      const cuerpo = (await res.json()) as Record<string, unknown>
+      expect(cuerpo.error).toBe("Permiso denegado. Requiere rol comité o administrador.")
+      expect(cuerpo.egresos).toBeUndefined()
+    })
+  })
 })

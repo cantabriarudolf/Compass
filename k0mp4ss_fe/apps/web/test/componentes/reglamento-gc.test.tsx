@@ -22,6 +22,11 @@ import ConfiguracionPage from "@/app/admin/configuracion/page"
 import { configuracionDefault } from "@/data/admin/configuracion"
 import { instalarEntornoRadix } from "./entorno-radix"
 
+// Mismo piso que el resto de los tests de componentes: bajo la instrumentación
+// de cobertura del suite completo el caso (f) roza los 5 s (el default de
+// Vitest) y falla por tiempo, no por comportamiento.
+vi.setConfig({ testTimeout: 60_000 })
+
 /** Versión vigente de fixture: acta real, números con decimales que no se redondean. */
 const VERSION = {
   id: "vreg-1",

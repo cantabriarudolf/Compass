@@ -482,6 +482,107 @@ describe("/api/in/infracciones acciones — apelar, respaldar, aplicar y desesti
         expect(await prisma.cobroFI.count({ where: { comunidadId: comunidadB } })).toBe(0)
       })
     })
+
+    /**
+     * Cobro directo por daños: la infracción no tiene tipo de catálogo, así que
+     * el monto sale del costo de reparación declarado en la ficha y no del
+     * tarifario. La sanción se describe como «Cobro directo», no como multa.
+     */
+    it("cobro directo por daños: montoAplicado = costo de reparación y cobro con ese monto", async () => {
+      const { aplicar } = await cargaModulos()
+      await nuevaInfraccion({
+        id: "in-acc-ap-dano",
+        tipoInfraccionId: null,
+        danoDirecto: {
+          descripcionDaño: "Quiebre de la puerta vidriada del hall de acceso.",
+          costoReparacion: 87_500,
+        },
+      })
+      await conSesion(async () => {
+        const res = await aplicar.POST(
+          pedir("in/infracciones/in-acc-ap-dano/aplicar"),
+          ctx("in-acc-ap-dano")
+        )
+        expect(res.status).toBe(200)
+        const inf = await prisma.infraccionIN.findUnique({ where: { id: "in-acc-ap-dano" } })
+        expect(inf?.estado).toBe("aplicada")
+        expect(inf?.montoAplicado).toBe(87_500)
+        const cobro = await prisma.cobroFI.findFirst({
+          where: { comunidadId: comunidad, origenRef: "in-acc-ap-dano" },
+        })
+        expect(cobro?.concepto).toBe("multa_in")
+        expect(cobro?.montoBase).toBe(87_500)
+        expect(cobro?.descripcion).toContain("Cobro directo")
+        expect(inf?.cargoFIReferencia).toBe(cobro?.id)
+      })
+    })
+
+    /**
+     * Una ficha sin tipo de catálogo y sin cobro directo no tiene monto que
+     * cobrar: se rechaza en vez de aplicar una multa de $0 al gasto común.
+     */
+    it("sin tipo de catálogo ni cobro directo → 400 «el tipo de infracción ya no existe»", async () => {
+      const { aplicar } = await cargaModulos()
+      await nuevaInfraccion({ id: "in-acc-ap-sin-nada", tipoInfraccionId: null })
+      await conSesion(async () => {
+        const res = await aplicar.POST(
+          pedir("in/infracciones/in-acc-ap-sin-nada/aplicar"),
+          ctx("in-acc-ap-sin-nada")
+        )
+        expect(res.status).toBe(400)
+        expect(((await res.json()) as { error: string }).error).toBe(
+          "No se puede aplicar: el tipo de infracción ya no existe en el catálogo."
+        )
+        const inf = await prisma.infraccionIN.findUnique({ where: { id: "in-acc-ap-sin-nada" } })
+        expect(inf?.estado).toBe("en_revision")
+        expect(
+          await prisma.cobroFI.count({
+            where: { comunidadId: comunidad, origenRef: "in-acc-ap-sin-nada" },
+          })
+        ).toBe(0)
+      })
+    })
+
+    /**
+     * Sin fondo de gasto común activo no hay a quién imputar el cargo: la multa
+     * se aplica igual (la sanción existe) y la referencia del cargo queda
+     * `pendiente`, que es lo que el evento de la bitácora deja dicho.
+     */
+    it("sin fondo de gasto común activo → 200 aplicada, sin cobro y cargo pendiente", async () => {
+      const { aplicar } = await cargaModulos()
+      await nuevaInfraccion({ id: "in-acc-ap-sin-fondo" })
+      await prisma.fondoFI.update({ where: { id: "in-acc-fondo-gc" }, data: { activo: false } })
+      try {
+        await conSesion(async () => {
+          const res = await aplicar.POST(
+            pedir("in/infracciones/in-acc-ap-sin-fondo/aplicar"),
+            ctx("in-acc-ap-sin-fondo")
+          )
+          expect(res.status).toBe(200)
+          const inf = await prisma.infraccionIN.findUnique({
+            where: { id: "in-acc-ap-sin-fondo" },
+          })
+          expect(inf?.estado).toBe("aplicada")
+          expect(inf?.montoAplicado).toBe(15_000)
+          expect(inf?.cargoFIReferencia).toBe("pendiente")
+          expect(
+            await prisma.cobroFI.count({
+              where: { comunidadId: comunidad, origenRef: "in-acc-ap-sin-fondo" },
+            })
+          ).toBe(0)
+          const evento = await prisma.eventoAuditoria.findFirst({
+            where: { comunidadId: comunidad, referenciaId: "in-acc-ap-sin-fondo" },
+          })
+          expect(evento?.descripcion).toContain("sin fondo disponible para imputar el cargo")
+        })
+      } finally {
+        await prisma.fondoFI.update({ where: { id: "in-acc-fondo-gc" }, data: { activo: true } })
+        await prisma.infraccionIN.deleteMany({ where: { id: "in-acc-ap-sin-fondo" } })
+        await prisma.eventoAuditoria.deleteMany({
+          where: { comunidadId: comunidad, referenciaId: "in-acc-ap-sin-fondo" },
+        })
+      }
+    })
   })
 
   describe("desestimar", () => {

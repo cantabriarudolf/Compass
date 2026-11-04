@@ -17,6 +17,7 @@ import { describe, it, expect } from "vitest"
 import { z } from "zod"
 import {
   CertificadoCTSchema,
+  PeriodoDirectivaSchema,
   RecursoIRSchema,
   formatoErrorZod,
   validarConEsquema,
@@ -215,5 +216,59 @@ describe("CertificadoCTSchema.firmaUrl — D1 en la firma digitalizada", () => {
     expect(issue?.message).toBe(
       "Media por referencia (D1): la firma debe ser una URL, no contenido embebido."
     )
+  })
+})
+
+/**
+ * `PeriodoDirectivaSchema.fechaInscripcion` — la fecha de inscripción del
+ * período es referencial: la ley no exige inscribir la directiva, así que el
+ * campo acepta `""` (= la comunidad no inscribió). Por eso no es un
+ * `FechaISOSchema` pelado sino una unión con su propio mensaje: un cliente que
+ * manda `01/02/2026` tiene que recibir qué formato se espera, no el error
+ * genérico de la unión.
+ */
+describe("PeriodoDirectivaSchema.fechaInscripcion — fecha referencial o vacía", () => {
+  /** Período mínimo válido; cada test sobrescribe solo `fechaInscripcion`. */
+  function periodo(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+    return {
+      id: "gd-per-1",
+      fechaInicio: "2026-01-15",
+      duracionMeses: 24,
+      estado: "vigente",
+      miembros: [],
+      ...overrides,
+    }
+  }
+
+  it("un valor que no es texto recibe el mensaje del contrato", () => {
+    const parsed = PeriodoDirectivaSchema.safeParse(periodo({ fechaInscripcion: 20260201 }))
+    expect(parsed.success).toBe(false)
+    if (parsed.success) return
+    const issue = parsed.error.issues.find((i) => i.path.join(".") === "fechaInscripcion")
+    expect(issue?.message).toBe(
+      "Debe ser una fecha con formato AAAA-MM-DD o quedar vacía."
+    )
+  })
+
+  it("una fecha con formato equivocado recibe el formato esperado, no un error genérico", () => {
+    const parsed = PeriodoDirectivaSchema.safeParse(
+      periodo({ fechaInscripcion: "01/02/2026" })
+    )
+    expect(parsed.success).toBe(false)
+    if (parsed.success) return
+    const issue = parsed.error.issues.find((i) => i.path.join(".") === "fechaInscripcion")
+    expect(issue?.message).toContain("AAAA-MM-DD")
+  })
+
+  it("acepta vacío (la comunidad no inscribió el período) y una fecha ISO", () => {
+    const vacio = PeriodoDirectivaSchema.safeParse(periodo({ fechaInscripcion: "" }))
+    expect(vacio.success).toBe(true)
+    if (vacio.success) expect(vacio.data.fechaInscripcion).toBe("")
+
+    const conFecha = PeriodoDirectivaSchema.safeParse(
+      periodo({ fechaInscripcion: "2026-02-01" })
+    )
+    expect(conFecha.success).toBe(true)
+    if (conFecha.success) expect(conFecha.data.fechaInscripcion).toBe("2026-02-01")
   })
 })
