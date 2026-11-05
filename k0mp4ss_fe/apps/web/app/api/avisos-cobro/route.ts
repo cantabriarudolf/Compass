@@ -58,6 +58,7 @@ import {
 import {
   contenidoAviso,
   folioNumerado,
+  hashContenido,
   nuevoCodigoVerificacion,
   siguienteNumeroDeFolio,
   totalesDelPeriodo,
@@ -66,6 +67,10 @@ import {
   type ReglamentoDelAviso,
 } from "@/lib/aviso-cobro"
 import type { ResumenMensual } from "@/lib/resumen-mensual"
+import {
+  personaIdDelUsuarioDb,
+  unidadesVinculadasDb,
+} from "@/lib/api/sesion-persona"
 import { createCrudHandlers, type CrudDelegate } from "@/lib/api/crud-factory"
 import { jsonError, withComunidadScope } from "@/lib/api/with-comunidad-scope"
 
@@ -80,7 +85,115 @@ export const avisosHandlers = createCrudHandlers({
   authzCheck: (rol, accion) => puede(rol, accion, "fi:gasto_comun"),
 })
 
-export const GET = avisosHandlers.GET
+/** El aviso es parte del gasto común: emitirlo, entregarlo y auditarlo. */
+const RECURSO_AVISO = "fi:gasto_comun"
+
+/**
+ * F27 — la clave del RESIDENTE: lee el aviso de SU unidad.
+ *
+ * `ver` es su única acción (emitir y entregar siguen siendo `fi:gasto_comun`) y
+ * el alcance por unidad es ABAC de ESTA ruta: el cliente nunca decide de quién
+ * es el aviso, igual que `fi:cobranza:propia` en `cobros-fi/canales`.
+ */
+const RECURSO_AVISO_PROPIO = "fi:aviso:propio"
+
+/**
+ * Columnas de CF que el papel imprime: identidad de la comunidad, administrador
+ * responsable y firma. Es lo que el PDF del residente necesita; el SMTP y la
+ * clave de eliminación NO son parte del documento y no salen de acá.
+ */
+const COLUMNAS_DOCUMENTO = {
+  nombreComunidad: true,
+  direccionOficial: true,
+  rutComunidad: true,
+  administradorResponsable: true,
+  rutAdministrador: true,
+  firmaDigitalizadaUrl: true,
+} as const
+
+/**
+ * GET lista paginada. Dos ramas, una sola forma de respuesta:
+ *
+ * - `fi:gasto_comun` (administración y comité): todos los avisos de la
+ *   comunidad, como hasta hoy. `?unidadId=` acota a una unidad.
+ * - `fi:aviso:propio` (residente): SOLO los avisos de las unidades donde tiene
+ *   vínculo VIGENTE (`unidadesVinculadasDb`, la misma regla ABAC del resto de
+ *   la app). Pedir una unidad ajena devuelve el conjunto VACÍO con 200, nunca
+ *   403: un 403 confirmaría que existe un aviso de esa unidad.
+ *
+ * Cada fila viaja con su `contenido` congelado (el papel se arma solo desde la
+ * fila guardada) y con `hash`, la huella calculada ACÁ con `hashContenido`: el
+ * builder del PDF la exige como parámetro y del lado del cliente no se puede
+ * calcular (`lib/aviso-cobro` es de servidor: crypto + Prisma).
+ */
+export async function GET(req: Request): Promise<Response> {
+  const scopeResult = await withComunidadScope()
+  if (!scopeResult.ok) return scopeResult.response
+  const scope = scopeResult.scope
+
+  const veTodas = puede(scope.rol, "ver", RECURSO_AVISO)
+  const veLaPropia = puede(scope.rol, "ver", RECURSO_AVISO_PROPIO)
+  if (!veTodas && !veLaPropia) return jsonError(403, "Permiso denegado.")
+
+  let url: URL
+  try {
+    url = new URL(req.url)
+  } catch {
+    return jsonError(400, "URL de solicitud inválida.")
+  }
+  const page = Math.max(1, Number.parseInt(url.searchParams.get("page") ?? "1", 10) || 1)
+  const pageSize = Math.min(
+    100,
+    Math.max(1, Number.parseInt(url.searchParams.get("pageSize") ?? "50", 10) || 50)
+  )
+  const unidadId = url.searchParams.get("unidadId")?.trim() || undefined
+
+  try {
+    const where: Prisma.AvisoCobroWhereInput = { comunidadId: scope.comunidadId }
+    if (!veTodas) {
+      // Lo propio se resuelve en el SERVIDOR: el vínculo vigente (`fechaFin`
+      // nulo) manda, y el parámetro `unidadId` solo puede INTERSECTAR, nunca
+      // ampliar el alcance.
+      const personaId = await personaIdDelUsuarioDb(scope.usuarioId)
+      const propias = personaId
+        ? await unidadesVinculadasDb(personaId, scope.comunidadId)
+        : []
+      where.unidadId = {
+        in: unidadId ? propias.filter((u) => u === unidadId) : propias,
+      }
+    } else if (unidadId) {
+      where.unidadId = unidadId
+    }
+
+    const [filas, total, configuracion] = await Promise.all([
+      prisma.avisoCobro.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      prisma.avisoCobro.count({ where }),
+      prisma.configuracionGlobal.findUnique({
+        where: { comunidadId: scope.comunidadId },
+        select: COLUMNAS_DOCUMENTO,
+      }),
+    ])
+
+    return Response.json({
+      data: filas.map((fila) => ({
+        ...fila,
+        hash: hashContenido(fila.contenido),
+      })),
+      page,
+      pageSize,
+      total,
+      documento: configuracion ?? null,
+    })
+  } catch (e) {
+    logger.error({ err: e }, "[api/avisos-cobro] error GET")
+    return jsonError(500, "Error interno del servidor.")
+  }
+}
 
 const EmitirAvisosInputSchema = z.object({
   periodo: PeriodoFacturacionSchema,

@@ -35,6 +35,11 @@ const MATRIZ: Record<Rol, Record<string, Set<Accion>>> = {
     "fi:cobranza": new Set<Accion>(["ver"]),
     // Vacío explícito: la preferencia de canal es del residente, no del comité.
     "fi:cobranza:propia": new Set<Accion>([]),
+    // F27 aviso-de-cobro: el aviso es el papel de UNA unidad. El comité lo lee
+    // por `fi:gasto_comun` (todos los de la comunidad), no por esta clave: sin
+    // la entrada vacía, `ver` caería al prefijo `fi` (que el comité sí tiene) y
+    // la clave del residente se concedería sola a quien administra el edificio.
+    "fi:aviso:propio": new Set<Accion>([]),
     "am": new Set<Accion>(["ver"]), // RP §Roles Estándar: comité lee auditorías (P2 security audit); crear/editar solo admin
     "mp": new Set<Accion>(["ver", "editar"]), // editar propios + ver morosidad (filtrado abajo)
     "mp:propios": new Set<Accion>(["ver", "editar"]),
@@ -198,6 +203,9 @@ const MATRIZ: Record<Rol, Record<string, Set<Accion>>> = {
     // fallback de prefijo hacia `fi`, que tampoco tiene).
     "fi:cobranza": new Set<Accion>([]),
     "fi:cobranza:propia": new Set<Accion>([]),
+    // F27: el aviso propio es del residente; conserjería no lo lee (vacío
+    // explícito: corta el fallback de prefijo hacia `fi`, que tampoco tiene).
+    "fi:aviso:propio": new Set<Accion>([]),
   },
   // Propietario / Residente: estado cuenta propio, pago GC, reserva amenities, reclamos, votos, certificados propios, directorio, IR mantenimiento solo
   residente: {
@@ -275,6 +283,12 @@ const MATRIZ: Record<Rol, Record<string, Set<Accion>>> = {
     // preferencia solo puede tocar su propia persona).
     "fi:cobranza": new Set<Accion>([]),
     "fi:cobranza:propia": new Set<Accion>(["ver", "editar"]),
+    // F27 aviso-de-cobro: el residente LEE el aviso de cobro con el que se le
+    // cobra (período, folio, contenido congelado y PDF firmado). `ver` es su
+    // única acción —emitir y entregar siguen siendo `fi:gasto_comun` del
+    // administrador— y el ALCANCE es ABAC de la ruta: solo las unidades con
+    // vínculo vigente (`unidadesVinculadasDb`), nunca las ajenas.
+    "fi:aviso:propio": new Set<Accion>(["ver"]),
   },
   // Personal de Mantención: lista tareas asignadas + reporte incidentes físicos, IR mantenimiento + interno
   mantencion: {
@@ -328,6 +342,8 @@ const MATRIZ: Record<Rol, Record<string, Set<Accion>>> = {
     // SERIE-FASE2 §V5: la cobranza FI no es tarea de mantención (vacío explícito).
     "fi:cobranza": new Set<Accion>([]),
     "fi:cobranza:propia": new Set<Accion>([]),
+    // F27: el aviso propio tampoco es tarea de mantención (vacío explícito).
+    "fi:aviso:propio": new Set<Accion>([]),
   },
 }
 
@@ -493,6 +509,7 @@ export const RECURSOS_CONOCIDOS = [
   "fi:gasto_comun",
   "fi:cobranza",
   "fi:cobranza:propia",
+  "fi:aviso:propio",
   "mp",
   "mp:propios",
   "mp:morosidad",

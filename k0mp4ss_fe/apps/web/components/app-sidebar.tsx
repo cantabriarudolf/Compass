@@ -115,6 +115,15 @@ const data = {
         { title: "Visor de Mensajes", url: "/comunidad/visor", roles: ["administrador", "residente", "comite"] },
         { title: "Directiva", url: "/comunidad/directiva", roles: ["administrador", "residente", "comite"] },
         { title: "Certificados", url: "/comunidad/certificados", roles: ["administrador", "residente", "comite"] },
+        {
+          // F27: el aviso de cobro con el que se cobra. Mismos roles que la
+          // lectura de la ruta: el residente ve el de sus unidades
+          // (`fi:aviso:propio`), administración y comité los de la comunidad
+          // (`fi:gasto_comun`).
+          title: "Avisos de Cobro",
+          url: "/comunidad/avisos-cobro",
+          roles: ["administrador", "residente", "comite"],
+        },
         { title: "Portal Inmobiliario", url: "/comunidad/portal", roles: ["administrador", "residente", "comite"] },
       ],
     },

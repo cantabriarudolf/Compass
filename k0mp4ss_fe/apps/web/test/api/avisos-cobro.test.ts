@@ -27,6 +27,8 @@ import { Prisma } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { hoyISO } from "@/lib/date-utils"
 import { cargarResumenMensual } from "@/lib/resumen-mensual"
+import { hashContenido } from "@/lib/aviso-cobro"
+import { configuracionDefault } from "@/data/admin/configuracion"
 
 const state = vi.hoisted(() => ({ cookie: "" }))
 vi.mock("next/headers", () => ({
@@ -66,6 +68,11 @@ const EMAIL_RESIDENTE = "avc-residente@test.cl"
 const EMAIL_ADMIN_B = "avc-admin-b@test.cl"
 const EMAIL_ADMIN_C = "avc-admin-c@test.cl"
 
+/** Persona (MP) del usuario residente: el vínculo manda el alcance. */
+const PERSONA_RESIDENTE = "avc-persona-res"
+/** Firma configurada de la comunidad A (el PDF la embebe resuelta a data URL). */
+const FIRMA_URL = "https://cdn.test/firma-admin.png"
+
 type FilaAviso = {
   id: string
   comunidadId: string
@@ -77,6 +84,19 @@ type FilaAviso = {
   vencimiento: string | null
   contenido: Record<string, unknown>
   totalesComunidad: Record<string, unknown>
+}
+
+/** Fila tal como la sirve el GET: la fila guardada + la huella de su contenido. */
+type FilaAvisoListado = FilaAviso & { hash: string }
+
+/** Proyección de CF que el papel imprime (la que necesita el PDF del residente). */
+type DocumentoAviso = {
+  nombreComunidad: string
+  direccionOficial: string
+  rutComunidad: string
+  administradorResponsable: string
+  rutAdministrador: string
+  firmaDigitalizadaUrl: string | null
 }
 
 /** Línea del cobro tal como la guarda FI (S5). */
@@ -166,6 +186,10 @@ describe("/api/avisos-cobro — documento congelado, foliado e inmutable (S1/S4/
     await prisma.emisionGC.deleteMany({ where: { comunidadId: { in: comunidades } } })
     await prisma.versionReglamento.deleteMany({ where: { comunidadId: { in: comunidades } } })
     await prisma.fondoFI.deleteMany({ where: { comunidadId: { in: comunidades } } })
+    // Vínculos y personas del residente de la prueba de lectura (F27).
+    await prisma.vinculoUnidad.deleteMany({ where: { comunidadId: { in: comunidades } } })
+    await prisma.persona.deleteMany({ where: { comunidadId: { in: comunidades } } })
+    await prisma.configuracionGlobal.deleteMany({ where: { comunidadId: { in: comunidades } } })
     await prisma.unidad.deleteMany({ where: { comunidadId: { in: comunidades } } })
   }
 
@@ -182,16 +206,18 @@ describe("/api/avisos-cobro — documento congelado, foliado e inmutable (S1/S4/
       await prisma.comunidad.upsert({ where: { id: c.id }, update: {}, create: c })
     }
     for (const u of [
-      { id: "avc-user-admin", email: EMAIL_ADMIN },
-      { id: "avc-user-comite", email: EMAIL_COMITE },
-      { id: "avc-user-residente", email: EMAIL_RESIDENTE },
-      { id: "avc-user-admin-b", email: EMAIL_ADMIN_B },
-      { id: "avc-user-admin-c", email: EMAIL_ADMIN_C },
+      { id: "avc-user-admin", email: EMAIL_ADMIN, personaId: undefined },
+      { id: "avc-user-comite", email: EMAIL_COMITE, personaId: undefined },
+      // El residente de la prueba de lectura (F27) es una persona del maestro
+      // con vínculos: el alcance de lo propio sale de ahí, nunca del cliente.
+      { id: "avc-user-residente", email: EMAIL_RESIDENTE, personaId: PERSONA_RESIDENTE },
+      { id: "avc-user-admin-b", email: EMAIL_ADMIN_B, personaId: undefined },
+      { id: "avc-user-admin-c", email: EMAIL_ADMIN_C, personaId: undefined },
     ]) {
       await prisma.usuario.upsert({
         where: { email: u.email },
-        update: { activo: true },
-        create: { ...u, activo: true },
+        update: { activo: true, personaId: u.personaId },
+        create: { id: u.id, email: u.email, personaId: u.personaId, activo: true },
       })
     }
     const membresias = [
@@ -207,6 +233,61 @@ describe("/api/avisos-cobro — documento congelado, foliado e inmutable (S1/S4/
     for (const m of membresias) await prisma.membresia.create({ data: m })
 
     await limpiar()
+
+    // F27: la persona del residente y sus vínculos. `avc-u-1` es SU unidad
+    // (vínculo vigente); `avc-u-2` es la del vecino y su vínculo está CERRADO
+    // (`fechaFin`): pedirla no puede devolver nada, ni ahora ni después.
+    await prisma.persona.create({
+      data: {
+        id: PERSONA_RESIDENTE,
+        comunidadId: COM_A,
+        rut: "11111111-1",
+        nombreCompleto: "Rosa Residente",
+        nombres: "Rosa",
+        apellidos: "Residente",
+        email: EMAIL_RESIDENTE,
+        telefonoMovil: "+56911111111",
+        estadoCuenta: "activa",
+        condicionesEspecialesIds: [],
+        roles: ["propietario"],
+      },
+    })
+    await prisma.vinculoUnidad.create({
+      data: {
+        id: "avc-vinc-1",
+        comunidadId: COM_A,
+        personaId: PERSONA_RESIDENTE,
+        unidadId: "avc-u-1",
+        rol: "propietario",
+        fechaInicio: "2026-01-01",
+        fechaFin: null,
+        permiteVerFinanzas: true,
+      },
+    })
+    await prisma.vinculoUnidad.create({
+      data: {
+        id: "avc-vinc-2",
+        comunidadId: COM_A,
+        personaId: PERSONA_RESIDENTE,
+        unidadId: "avc-u-2",
+        rol: "arrendatario",
+        fechaInicio: "2025-01-01",
+        fechaFin: "2025-12-31",
+        permiteVerFinanzas: false,
+      },
+    })
+    // CF de A: lo que el papel imprime (identidad, responsable y firma).
+    await prisma.configuracionGlobal.create({
+      data: {
+        ...configuracionDefault,
+        id: "avc-cfg-a",
+        comunidadId: COM_A,
+        nombreComunidad: "Comunidad Aviso A",
+        smtpPassword: "no-se-expone",
+        claveEliminacionMaestro: "no-se-expone",
+        firmaDigitalizadaUrl: FIRMA_URL,
+      },
+    })
 
     // Fondos de caja: sin ellos el saldo al cierre no es computable (COM_C).
     await prisma.fondoFI.create({
@@ -733,7 +814,7 @@ describe("/api/avisos-cobro — documento congelado, foliado e inmutable (S1/S4/
     expect(await prisma.avisoCobro.findUnique({ where: { id: avisoU1.id } })).not.toBeNull()
   })
 
-  it("el comité lee los avisos y no los emite; el residente no los ve", async () => {
+  it("el comité lee los avisos y no los emite; el residente lee SOLO los de su unidad", async () => {
     const lectura = await como(EMAIL_COMITE, () => getAvisos())
     expect(lectura.status).toBe(200)
     const emisionComite = await como(EMAIL_COMITE, () =>
@@ -741,10 +822,90 @@ describe("/api/avisos-cobro — documento congelado, foliado e inmutable (S1/S4/
     )
     expect(emisionComite.status).toBe(403)
 
-    const lecturaResidente = await como(EMAIL_RESIDENTE, () => getAvisos())
-    expect(lecturaResidente.status).toBe(403)
+    // F27: el residente ya no recibe 403. Lee los avisos de la unidad donde
+    // tiene vínculo VIGENTE (101): AC-0001 del período y AC-0003 del anterior.
+    const lecturaResidente = await como(EMAIL_RESIDENTE, () =>
+      getAvisos("?page=1&pageSize=100")
+    )
+    expect(lecturaResidente.status).toBe(200)
+    const suyos = lecturaResidente.json.data as FilaAvisoListado[]
+    expect(suyos.map((a) => a.folio).sort()).toEqual(["AC-0001", "AC-0003"])
+    expect(suyos.every((a) => a.unidadId === "avc-u-1")).toBe(true)
+    expect(lecturaResidente.json.total).toBe(2)
+    // El contenido CONGELADO viaja en la respuesta: sin él el residente no
+    // puede armar el papel (el PDF se arma solo desde la fila guardada).
+    expect(suyos.find((a) => a.folio === "AC-0001")!.contenido).toEqual(contenidoCongelado)
+    // La emisión sigue siendo del administrador.
     const emisionResidente = await como(EMAIL_RESIDENTE, () => postAviso({ periodo: PERIODO }))
     expect(emisionResidente.status).toBe(403)
+  })
+
+  it("el residente no lee el aviso de una unidad ajena: conjunto vacío, nunca 403", async () => {
+    // La 102 es la unidad del vecino (y su vínculo está cerrado). Un 403
+    // confirmaría que el aviso existe; la respuesta correcta es no devolverlo.
+    const ajena = await como(EMAIL_RESIDENTE, () => getAvisos("?unidadId=avc-u-2"))
+    expect(ajena.status).toBe(200)
+    expect(ajena.json.data).toEqual([])
+    expect(ajena.json.total).toBe(0)
+
+    // Pedir la propia unidad explícitamente sí funciona (el filtro es la
+    // INTERSECCIÓN con sus vínculos vigentes, no un rechazo del parámetro).
+    const propia = await como(EMAIL_RESIDENTE, () => getAvisos("?unidadId=avc-u-1"))
+    expect(propia.status).toBe(200)
+    expect((propia.json.data as FilaAvisoListado[]).map((a) => a.folio).sort()).toEqual([
+      "AC-0001",
+      "AC-0003",
+    ])
+
+    // Un pedido con el período del vecino tampoco devuelve la fila ajena.
+    const ajeno = await como(EMAIL_RESIDENTE, () =>
+      getAvisos(`?unidadId=avc-u-2&page=1&pageSize=100`)
+    )
+    expect(ajeno.status).toBe(200)
+    expect(ajeno.json.data).toEqual([])
+
+    // El administrador sigue leyendo todo (la rama `fi:gasto_comun` no cambia).
+    const admin = await como(EMAIL_ADMIN, () => getAvisos("?unidadId=avc-u-2"))
+    expect(admin.status).toBe(200)
+    expect((admin.json.data as FilaAvisoListado[]).map((a) => a.folio).sort()).toEqual([
+      "AC-0002",
+      "AC-0004",
+    ])
+  })
+
+  it("cada aviso lleva la huella de su contenido congelado, no una recalculada al servir", async () => {
+    // El PDF recibe el hash como parámetro obligatorio; la pantalla no puede
+    // calcularlo (lib/aviso-cobro es de servidor), así que la ruta lo sirve ya
+    // calculado. Si alguien lo recalculara desde otra cosa, esto lo delata.
+    for (const email of [EMAIL_ADMIN, EMAIL_RESIDENTE]) {
+      const listado = await como(email, () => getAvisos("?page=1&pageSize=100"))
+      expect(listado.status).toBe(200)
+      const filas = listado.json.data as FilaAvisoListado[]
+      expect(filas.length).toBeGreaterThan(0)
+      for (const fila of filas) {
+        expect(fila.hash, `${email} ${fila.folio}`).toBe(hashContenido(fila.contenido))
+        expect(fila.hash).toMatch(/^[0-9A-F]{16}$/)
+      }
+    }
+  })
+
+  it("la respuesta trae lo que el papel imprime de CF, sin los datos de SMTP", async () => {
+    const listado = await como(EMAIL_RESIDENTE, () => getAvisos())
+    expect(listado.status).toBe(200)
+    const documento = listado.json.documento as DocumentoAviso
+    expect(documento).toEqual({
+      nombreComunidad: "Comunidad Aviso A",
+      direccionOficial: configuracionDefault.direccionOficial,
+      rutComunidad: configuracionDefault.rutComunidad,
+      administradorResponsable: configuracionDefault.administradorResponsable,
+      rutAdministrador: configuracionDefault.rutAdministrador,
+      firmaDigitalizadaUrl: FIRMA_URL,
+    })
+    // El SMTP y la clave de eliminación no son parte del documento.
+    const claves = Object.keys(documento)
+    expect(claves.some((k) => k.startsWith("smtp"))).toBe(false)
+    expect(claves).not.toContain("claveEliminacionMaestro")
+    expect(JSON.stringify(documento)).not.toContain("no-se-expone")
   })
 
   it("el listado pagina y el aviso emitido queda con su emisión persistida", async () => {

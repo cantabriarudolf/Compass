@@ -2,7 +2,15 @@
  * @vitest-environment node
  */
 import { describe, it, expect } from "vitest"
-import { puede, tienePermiso, ROLES, matrizPermisos, puedeContextual, reglasContextuales } from "./authz"
+import {
+  puede,
+  tienePermiso,
+  ROLES,
+  matrizPermisos,
+  puedeContextual,
+  reglasContextuales,
+  RECURSOS_CONOCIDOS,
+} from "./authz"
 
 describe("lib/authz — matriz RP (pure, sin IO)", () => {
   it("expone 5 roles estándar RP", () => {
@@ -730,5 +738,52 @@ describe("lib/authz — recurso pe:cierre_turno (F25)", () => {
     for (const accion of ["ver", "crear", "editar", "eliminar", "ejecutar"] as const) {
       expect(puede("administrador", accion, "pe:cierre_turno")).toBe(true)
     }
+  })
+})
+
+// F27 aviso-de-cobro: la cara visible del aviso en la app.
+//
+// La clave existe para que el RESIDENTE lea su propio aviso de cobro (`ver`) sin
+// abrirle el módulo FI: emitir y entregar siguen siendo `fi:gasto_comun` del
+// administrador (la ruta de emisión no cambia). El alcance por unidad —solo las
+// unidades con vínculo vigente, nunca las ajenas— es ABAC de la RUTA
+// (`app/api/avisos-cobro/route.ts` + `unidadesVinculadasDb`) y se prueba donde
+// vive: `test/api/avisos-cobro.test.ts` ("no lee la unidad ajena").
+describe("lib/authz — recurso fi:aviso:propio (el residente lee su aviso de cobro, F27)", () => {
+  it("residente lee lo suyo y nada más: `ver` es su única acción", () => {
+    expect(puede("residente", "ver", "fi:aviso:propio")).toBe(true)
+    // Emitir, entregar y borrar el papel NO son actos del residente.
+    for (const accion of ["crear", "editar", "eliminar", "ejecutar"] as const) {
+      expect(puede("residente", accion, "fi:aviso:propio")).toBe(false)
+    }
+  })
+
+  it("comité, conserjería y mantención NO la obtienen por fallback: entrada explícita y vacía", () => {
+    const matriz = matrizPermisos()
+    for (const rol of ["comite", "conserjeria", "mantencion"] as const) {
+      // Sin la entrada, `puede()` cae al prefijo `fi`: el comité tiene `fi ver` y
+      // la clave se concedería sola. El conjunto vacío declarado lo corta.
+      const entrada = matriz[rol].find((e) => e.recurso === "fi:aviso:propio")
+      expect(entrada, `${rol} debe declarar fi:aviso:propio (no ausencia)`).toBeDefined()
+      expect(entrada!.acciones, `${rol} no debe tener acciones`).toEqual([])
+      for (const accion of ["ver", "crear", "editar", "eliminar", "ejecutar"] as const) {
+        expect(puede(rol, accion, "fi:aviso:propio")).toBe(false)
+      }
+    }
+    // El residente la declara con la única acción que ejerce.
+    expect(
+      matriz.residente.find((e) => e.recurso === "fi:aviso:propio")!.acciones
+    ).toEqual(["ver"])
+  })
+
+  it("el comité sigue leyendo por fi:gasto_comun, no por la clave del residente", () => {
+    expect(puede("comite", "ver", "fi:gasto_comun")).toBe(true)
+    expect(puede("comite", "ver", "fi:aviso:propio")).toBe(false)
+    // Administrador: wildcard, sin entrada propia.
+    expect(puede("administrador", "ver", "fi:aviso:propio")).toBe(true)
+  })
+
+  it("la clave figura en RECURSOS_CONOCIDOS", () => {
+    expect(RECURSOS_CONOCIDOS).toContain("fi:aviso:propio")
   })
 })
