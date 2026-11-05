@@ -298,6 +298,18 @@ jobs:
             echo "::error title=Esquema sin sincronizar::Falta el secret DATABASE_URL (Neon): la base no se va a alinear. Cargalo en Settings -> Secrets."
             exit 1
           fi
+      # Diagnóstico ANTES del push, con el mismo DATABASE_URL que usa el push y
+      # la misma `working-directory` (necesita el client de `@prisma/client` que
+      # deja el postinstall de `npm ci`). No es un gate: sale 0 siempre y sólo
+      # lee. Existe porque el aviso de `db push` ("a unique constraint covering
+      # [comunidadId,folio] on `actas_gd` will be added") no dice CUÁNTAS filas
+      # chocan; sin estos números, decidir `--accept-data-loss` es una apuesta.
+      - name: Diagnosticar folios de actas duplicados
+        if: steps.db_secret.outputs.present == 'true'
+        working-directory: k0mp4ss_fe/apps/web
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: node scripts/diagnostico-folios-actas.mjs
       - name: Sincronizar el esquema
         if: steps.db_secret.outputs.present == 'true'
         working-directory: k0mp4ss_fe/apps/web
