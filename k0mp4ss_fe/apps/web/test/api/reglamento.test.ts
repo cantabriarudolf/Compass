@@ -11,6 +11,16 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest"
 import { NextRequest } from "next/server"
 import { prisma } from "@/lib/prisma"
+import { parametrosDeVersion } from "@/lib/reglamento"
+import { DESTINO_BASE } from "../db-descartable.setup"
+
+/**
+ * El JSON sintácticamente roto solo se puede escribir en SQLite: ahí `parametros`
+ * es una columna TEXT y Prisma falla al deserializarla (P2023). En PostgreSQL es
+ * `JSONB` y el motor valida el JSON al escribir (SQLSTATE 22P02), así que la
+ * fila no puede existir: ese caso se guarda por motor, no se borra.
+ */
+const ES_SQLITE = DESTINO_BASE.archivo !== null
 
 const state = vi.hoisted(() => ({ cookie: "" }))
 vi.mock("next/headers", () => ({
@@ -374,12 +384,61 @@ describe("/api/reglamento — versión vigente del reglamento con BD real", () =
   })
 
   /**
-   * Leer el reglamento nunca devuelve una versión con parámetros corruptos: si
-   * la fila no se puede deserializar, la ruta responde 500 genérico en vez de
-   * un 200 con datos que no cumplen el contrato (el detalle queda en el log).
-   * El escenario es una migración a medias, no un input del cliente.
+   * Dos escenarios sobre la misma columna `parametros`, con motivos distintos.
+   *
+   * 1. JSON válido con la forma equivocada (corre en SQLite y en PostgreSQL): no
+   *    lo puede leer el contrato de la versión. La ruta GET no revalida la fila
+   *    —devuelve lo almacenado— y la compuerta de emisión la descarta:
+   *    `parametrosDeVersion` devuelve null y la emisión responde
+   *    `parametros_invalidos`, así que una migración a medias no gobierna un cobro.
+   * 2. JSON sintácticamente roto (solo SQLite, ver `ES_SQLITE`): Prisma falla al
+   *    deserializar la columna y la ruta responde 500 genérico en vez de un 200
+   *    con datos que no puede leer. En PostgreSQL el escenario es imposible por
+   *    construcción (JSONB valida al escribir), así que se guarda por motor con
+   *    el motivo escrito en vez de borrarlo. Los dos son una migración a medias,
+   *    no un input del cliente.
    */
-  it("GET con una fila de parámetros ilegibles → 500 genérico, sin filtrar el detalle", async () => {
+  it("GET con una fila de parámetros de forma inválida: la ruta devuelve lo almacenado y la compuerta la descarta", async () => {
+    await prisma.versionReglamento.create({
+      data: {
+        id: "rl-version-forma-invalida",
+        comunidadId: comunidad,
+        version: 3,
+        vigenteDesde: "2026-09",
+        fuenteInstrumento: "reglamento_copropiedad",
+        actaRef: null,
+        formaContribucion: "coeficiente",
+        parametros: PARAMETROS,
+      },
+    })
+    try {
+      // JSON válido —lo acepta tanto el TEXT de SQLite como el JSONB de
+      // PostgreSQL— con la forma equivocada: no lo parsea el contrato.
+      await prisma.$executeRawUnsafe(
+        `UPDATE versiones_reglamento SET parametros = '{"porcentajeReserva":"n/a"}' WHERE id = 'rl-version-forma-invalida'`
+      )
+      const fila = await prisma.versionReglamento.findUniqueOrThrow({
+        where: { id: "rl-version-forma-invalida" },
+      })
+      // La compuerta de emisión no acepta la versión: sin parámetros válidos no
+      // hay cobro (`app/api/emisiones-gc/route.ts` → `parametros_invalidos`).
+      expect(parametrosDeVersion(fila)).toBeNull()
+
+      await conSesion(emailAdmin, async () => {
+        const res = await llamar("GET", { periodo: "2026-09" })
+        expect(res.status).toBe(200)
+        const cuerpo = (await res.json()) as Record<string, unknown>
+        // GET entrega la fila tal cual: quien valida el contrato es la compuerta.
+        expect(cuerpo.parametros).toEqual({ porcentajeReserva: "n/a" })
+      })
+    } finally {
+      await prisma.$executeRawUnsafe(
+        `DELETE FROM versiones_reglamento WHERE id = 'rl-version-forma-invalida'`
+      )
+    }
+  })
+
+  it.skipIf(!ES_SQLITE)("GET con una fila de parámetros ilegibles → 500 genérico, sin filtrar el detalle", async () => {
     await prisma.versionReglamento.create({
       data: {
         id: "rl-version-ilegible",
@@ -393,7 +452,8 @@ describe("/api/reglamento — versión vigente del reglamento con BD real", () =
       },
     })
     try {
-      // Escritura cruda: el cliente Prisma jamás serializa un JSON inválido.
+      // Escritura cruda: el cliente Prisma jamás serializa un JSON inválido, y
+      // en SQLite la columna TEXT no lo valida (en JSONB PostgreSQL lo rechaza).
       await prisma.$executeRawUnsafe(
         `UPDATE versiones_reglamento SET parametros = '{ilegible' WHERE id = 'rl-version-ilegible'`
       )

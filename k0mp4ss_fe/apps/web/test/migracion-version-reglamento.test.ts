@@ -11,11 +11,22 @@
  * El test ejecuta la sentencia REAL del archivo de migración dentro de una
  * transacción que se revierte al final: mide el efecto sobre la base
  * descartable sin dejar filas creadas.
+ *
+ * Solo corre sobre SQLite (`ES_SQLITE`, abajo): este archivo de migración es el
+ * camino SQLite, donde lo aplica `prisma migrate deploy`. En PostgreSQL el
+ * esquema lo crea `prisma db push` sobre `schema.prisma` y esta sentencia no es
+ * portable (`CREATE TABLE` con `DATETIME`, y la tabla ya existe), así que
+ * correrla allí no mide nada del producto. Mismo guardia que
+ * `test/api/cobro-lineas.test.ts:31`.
  */
 import { describe, it, expect } from "vitest"
 import { readFileSync } from "node:fs"
 import path from "node:path"
 import { prisma } from "@/lib/prisma"
+import { DESTINO_BASE } from "./db-descartable.setup"
+
+/** La migración se ejecuta sobre SQLite; en el job PostgreSQL no se aplica (usa db push). */
+const ES_SQLITE = DESTINO_BASE.archivo !== null
 
 const ARCHIVO_MIGRACION = path.resolve(
   __dirname,
@@ -105,7 +116,7 @@ const COBRO_FIJO = {
 }
 
 describe("migración add_version_reglamento — backfill idempotente", () => {
-  it("crea la versión 1 con los parámetros de hoy sin tocar emisiones ni cobros", async () => {
+  it.skipIf(!ES_SQLITE)("crea la versión 1 con los parámetros de hoy sin tocar emisiones ni cobros", async () => {
     const sql = sentenciaBackfill()
     const observado: {
       parametrosFija?: Record<string, unknown>

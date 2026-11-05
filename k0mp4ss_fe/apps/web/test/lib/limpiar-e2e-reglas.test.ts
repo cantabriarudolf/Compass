@@ -17,6 +17,14 @@
  * La prueba de que la regla no toca el seed es doble acá: la fila "de seed" sigue existiendo
  * después del borrado, y la verificación de allowlist de la transacción real (contadores de
  * personas/unidades/vínculos + cuentas de login) se mide en la base real al aplicar la purga.
+ *
+ * Los ocho casos que abren base corren solo sobre SQLite (`ES_SQLITE`, abajo): cada uno arma su
+ * propia base con un `PrismaClient` de URL `file:` (`baseFija`), y en el job PostgreSQL el cliente
+ * generado es `provider = "postgresql"` (`ci.yml`: `prisma generate` + `prisma db push` sin
+ * `--schema`), así que el motor rechaza esa URL antes de la primera query y los casos no llegan a
+ * medir la regla. Se guardan por motor; el predicado de la regla no se toca. El caso de orden de
+ * borrado no abre base y sigue corriendo en los dos motores. Mismo guardia que
+ * `test/api/cobro-lineas.test.ts:31`.
  */
 import { mkdtempSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
@@ -24,6 +32,10 @@ import path from "node:path"
 import { PrismaClient } from "@prisma/client"
 import { afterEach, describe, expect, it } from "vitest"
 import { REGLAS, borrarRegla, contarRegla } from "../../scripts/limpiar-e2e.mjs"
+import { DESTINO_BASE } from "../db-descartable.setup"
+
+/** La base de cada caso es SQLite: en el job PostgreSQL no se aplica (su cliente es `file:`). */
+const ES_SQLITE = DESTINO_BASE.archivo !== null
 
 /** Tablas mínimas por regla: sólo las columnas que el predicado mira (nombres del schema real). */
 const TABLAS = {
@@ -85,7 +97,7 @@ afterEach(async () => {
 })
 
 describe("e2e:limpiar — avisos del visor (CV)", () => {
-  it("purga el aviso QA del spec del visor y no toca un aviso del seed", async () => {
+  it.skipIf(!ES_SQLITE)("purga el aviso QA del spec del visor y no toca un aviso del seed", async () => {
     const db = await baseFija("avisos_cv")
     await db.$executeRawUnsafe(
       `INSERT INTO avisos_cv (id, titulo) VALUES (?, ?), (?, ?)`,
@@ -103,7 +115,7 @@ describe("e2e:limpiar — avisos del visor (CV)", () => {
 })
 
 describe("e2e:limpiar — plantillas de comunicación (CO)", () => {
-  it("purga la plantilla QA y no toca una plantilla del seed", async () => {
+  it.skipIf(!ES_SQLITE)("purga la plantilla QA y no toca una plantilla del seed", async () => {
     const db = await baseFija("plantillas_co")
     await db.$executeRawUnsafe(
       `INSERT INTO plantillas_co (id, nombre) VALUES (?, ?), (?, ?)`,
@@ -121,7 +133,7 @@ describe("e2e:limpiar — plantillas de comunicación (CO)", () => {
 })
 
 describe("e2e:limpiar — egresos (FI)", () => {
-  it("purga el egreso QA y no toca un egreso del seed descrito en lenguaje natural", async () => {
+  it.skipIf(!ES_SQLITE)("purga el egreso QA y no toca un egreso del seed descrito en lenguaje natural", async () => {
     const db = await baseFija("egresos_fi")
     await db.$executeRawUnsafe(
       `INSERT INTO egresos_fi (id, descripcion) VALUES (?, ?), (?, ?), (?, ?)`,
@@ -141,7 +153,7 @@ describe("e2e:limpiar — egresos (FI)", () => {
 })
 
 describe("e2e:limpiar — libro de actas (GD)", () => {
-  it("purga el acta QA por lugar o por minuta, y no toca un acta del seed", async () => {
+  it.skipIf(!ES_SQLITE)("purga el acta QA por lugar o por minuta, y no toca un acta del seed", async () => {
     const db = await baseFija("actas_gd")
     await db.$executeRawUnsafe(
       `INSERT INTO actas_gd (id, lugar, minuta) VALUES (?, ?, ?), (?, ?, ?), (?, ?, ?), (?, ?, ?)`,
@@ -169,7 +181,7 @@ describe("e2e:limpiar — libro de actas (GD)", () => {
     expect(await idsDe(db, "actas_gd")).toEqual(["acta-otra", "acta-seed"])
   })
 
-  it("purga la copia archivada del acta QA con el mismo predicado", async () => {
+  it.skipIf(!ES_SQLITE)("purga la copia archivada del acta QA con el mismo predicado", async () => {
     const db = await baseFija("actas_gd_archivadas")
     await db.$executeRawUnsafe(
       `INSERT INTO actas_gd_archivadas (id, lugar, minuta) VALUES (?, ?, ?), (?, ?, ?)`,
@@ -189,7 +201,7 @@ describe("e2e:limpiar — libro de actas (GD)", () => {
 })
 
 describe("e2e:limpiar — certificados (CT)", () => {
-  it("purga el certificado cuyo origenRef lleva test- en cualquier posición y conserva el del seed", async () => {
+  it.skipIf(!ES_SQLITE)("purga el certificado cuyo origenRef lleva test- en cualquier posición y conserva el del seed", async () => {
     const db = await baseFija("certificados_ct")
     await db.$executeRawUnsafe(
       `INSERT INTO certificados_ct (id, personaId, unidadId, origenRef) VALUES (?, ?, ?, ?), (?, ?, ?, ?), (?, ?, ?, ?)`,
@@ -217,7 +229,7 @@ describe("e2e:limpiar — certificados (CT)", () => {
 })
 
 describe("e2e:limpiar — eventos de auditoría huérfanos", () => {
-  it("purga los eventos cuyo padre ya no existe y conserva los que apuntan a datos vivos", async () => {
+  it.skipIf(!ES_SQLITE)("purga los eventos cuyo padre ya no existe y conserva los que apuntan a datos vivos", async () => {
     const db = await baseFija("eventos_auditoria", "encomiendas_pe", "liquidaciones_pl", "bitacora_visitas_pe")
     await db.$executeRawUnsafe(
       `INSERT INTO encomiendas_pe (id, descripcionPaquete, destinatarioPersonaId, fechaRecepcion) VALUES (?, ?, ?, ?)`,
@@ -291,7 +303,7 @@ describe("e2e:limpiar — eventos de auditoría huérfanos", () => {
 })
 
 describe("e2e:limpiar — aviso de recepción de encomienda (notificaciones)", () => {
-  it("reclama el aviso huérfano y el del padre purgado en la misma corrida, sin tocar el del seed", async () => {
+  it.skipIf(!ES_SQLITE)("reclama el aviso huérfano y el del padre purgado en la misma corrida, sin tocar el del seed", async () => {
     const db = await baseFija("notificaciones", "encomiendas_pe")
     await db.$executeRawUnsafe(
       `INSERT INTO encomiendas_pe (id, descripcionPaquete, destinatarioPersonaId, fechaRecepcion) VALUES (?, ?, ?, ?), (?, ?, ?, ?)`,
