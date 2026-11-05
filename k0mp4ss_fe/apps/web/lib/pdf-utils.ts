@@ -25,12 +25,58 @@ async function cargarPdfMake(): Promise<any> {
   return pdfMakePromise
 }
 
+/** El motivo del fallo, sin perder el mensaje que dio el motor. */
+function motivoDe(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
+/**
+ * Entrega al navegador un blob YA construido.
+ *
+ * Mismo patrón que usa pdfmake para guardar (`<a download>` + object URL), con
+ * el object URL liberado cuando la descarga ya arrancó, no antes.
+ */
+function descargarBlob(blob: Blob, fileName: string): void {
+  const url = URL.createObjectURL(blob)
+  const enlace = document.createElement("a")
+  enlace.href = url
+  enlace.download = fileName
+  document.body.appendChild(enlace)
+  enlace.click()
+  enlace.remove()
+  setTimeout(() => URL.revokeObjectURL(url), 40_000)
+}
+
+/**
+ * Genera y descarga el documento. Resuelve SÓLO si el PDF existe de verdad.
+ *
+ * `createPdf(...).download(...)` sin esperar resolvía antes de que pdfmake
+ * renderizara el blob: toda pantalla mostraba "PDF generado" aunque el
+ * documento no se hubiera podido armar (una definición inválida reventaba
+ * después, fuera del `try/catch` del caller). Por eso acá se construye primero
+ * el blob (`getBlob`, que compila el documento) y recién con el PDF en la mano
+ * se dispara la descarga; si el documento no sale, se rechaza nombrando el
+ * fallo.
+ */
 export async function descargarPdf(
   docDefinition: Record<string, unknown>,
   fileName: string
 ): Promise<void> {
-  const pdfMake = await cargarPdfMake()
-  pdfMake.createPdf(docDefinition).download(fileName)
+  let blob: Blob
+  try {
+    const pdfMake = await cargarPdfMake()
+    blob = await pdfMake.createPdf(docDefinition).getBlob()
+  } catch (error) {
+    throw new Error(
+      `El documento «${fileName}» no se pudo armar: ${motivoDe(error)}`
+    )
+  }
+  if (!blob || blob.size === 0) {
+    throw new Error(
+      `El documento «${fileName}» salió vacío: no hay nada que descargar.`
+    )
+  }
+  descargarBlob(blob, fileName)
 }
 
 // Convierte una URL de imagen a dataURL en memoria para embeberla en el PDF.
@@ -248,7 +294,11 @@ export async function documentoLiquidacionPDF(
           ],
         },
       },
-      { ...bloqueFirma({ config, firmaDataUrl }), marginTop: 30 },
+      // El bloque de firma es un ARRAY de nodos: se envuelve en `stack` en vez
+      // de esparcirlo. `{ ...array }` produce claves numéricas y pdfmake lo
+      // rechaza; el resultado visual es el mismo y el margen sigue aplicando al
+      // bloque completo.
+      { stack: bloqueFirma({ config, firmaDataUrl }), marginTop: 30 },
     ],
     styles: { titulo: { fontSize: 14, bold: true } },
     defaultStyle: { font: "Roboto", fontSize: 10 },
@@ -305,7 +355,7 @@ export async function documentoCertificadoPDF(input: {
         text: `Se extiende el presente ${input.tipo} a solicitud de ${input.solicitanteNombre}, para los fines que estime convenientes.`,
         marginTop: 12,
       },
-      { ...bloqueFirma({ config, firmaDataUrl }), marginTop: 30 },
+      { stack: bloqueFirma({ config, firmaDataUrl }), marginTop: 30 },
     ],
     styles: { titulo: { fontSize: 14, bold: true } },
     defaultStyle: { font: "Roboto", fontSize: 10 },
@@ -623,7 +673,7 @@ export function documentoAvisoCobroPDF(
         marginTop: 6,
         fontSize: 9,
       },
-      { ...bloqueFirma({ config, firmaDataUrl }), marginTop: 30 },
+      { stack: bloqueFirma({ config, firmaDataUrl }), marginTop: 30 },
     ],
     styles: { titulo: { fontSize: 14, bold: true } },
     defaultStyle: { font: "Roboto", fontSize: 10 },
