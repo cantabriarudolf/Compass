@@ -99,14 +99,20 @@ test.describe("CRUD — PE selector de unidad destino pagina en el servidor", ()
     ])
 
     // El mismo `page` aditivo existe en `/api/pe/personas`, con su proyección de identidad intacta.
+    // Tamaño de página chico a propósito: lo que se prueba es que dos páginas son disjuntas y
+    // completas, no cuántas personas hay. El seed de CI tiene menos coincidencias con «na» que el
+    // de demo, y fijar 25 hacía fallar la precondición sin que hubiera nada roto en el endpoint.
+    const PERSONAS_POR_PAGINA = 5
     const personasUno = (await (
-      await page.request.get("/api/pe/personas?q=na&pageSize=25")
+      await page.request.get(`/api/pe/personas?q=na&pageSize=${PERSONAS_POR_PAGINA}`)
     ).json()) as { data: Record<string, unknown>[]; total: number }
     const personasDos = (await (
-      await page.request.get("/api/pe/personas?q=na&pageSize=25&page=2")
+      await page.request.get(
+        `/api/pe/personas?q=na&pageSize=${PERSONAS_POR_PAGINA}&page=2`
+      )
     ).json()) as { data: Record<string, unknown>[]; total: number }
 
-    expect(personasUno.total).toBeGreaterThan(25)
+    expect(personasUno.total).toBeGreaterThan(PERSONAS_POR_PAGINA)
     const idsPrimera = new Set(personasUno.data.map((fila) => fila.id as string))
     expect(personasDos.data.length).toBeGreaterThan(0)
     // Páginas disjuntas: la segunda trae las que la primera no mostraba.
