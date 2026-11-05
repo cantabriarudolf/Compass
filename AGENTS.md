@@ -32,6 +32,7 @@ monorepos — no usarlo como base fundacional).
 - **Store legacy**: `lib/store.ts` está `@deprecated` con `STORE_VERSION` congelado en 28 y no recibe migraciones de dominio; los datos de dominio viven en la base vía API (ver `specs/ST-capa-datos-persistente/spec.md`)
 - **Commits**: automáticos, sin pedir confirmación; estilo convencional en español (ver `git log`). Se commitea por unidad revisable (~400 líneas cambiadas), con los tests y los docs junto al comportamiento; solo los archivos del cambio, y la suciedad ajena del worktree queda fuera
 - **Delegación pesada**: delegá al escritor del harness cuando esté sano; si no está disponible, trabajá inline y reportalo. El orquestador verifica el resultado contra la spec en ambos casos
+- **Paralelismo**: dos unidades corren a la vez solo si sus archivos son **disjuntos** y **al menos una no ejecuta suites**. Si comparten contrato, si una afirma lo que la otra cambia, o si las dos necesitan tests o Playwright: **en serie**. Un worker pesado por vez; `--maxWorkers=1|2` en toda corrida propia; la suite completa con cobertura **una vez por lote**, nunca por corte. Procedimiento y guardas de evidencia en `.agents/skills/delegacion-paralela/SKILL.md`
 
 ## Estilo y convenciones de código
 
