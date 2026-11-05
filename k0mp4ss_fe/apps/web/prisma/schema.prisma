@@ -55,6 +55,8 @@ model Comunidad {
   versionesReglamento      VersionReglamento[]
   emisionesGC              EmisionGC[]
   cobrosFI                 CobroFI[]
+  // Aviso de cobro mensual (S1/S4/S7): documento congelado por unidad/período.
+  avisosCobro              AvisoCobro[]
   // SERIE-FASE2 §V5 — cobranza FI multicanal (interruptor global, preferencia
   // por residente y registro de cada envío).
   configuracionCobranzaFI  ConfiguracionCobranzaFI?
@@ -1046,6 +1048,45 @@ model CobroFI {
   @@index([unidadId])
   @@index([periodo])
   @@map("cobros_fi")
+}
+
+// Aviso de cobro mensual (S1, S4, S7 — serie aviso-de-cobro): el PAPEL con el
+// que se cobra. Existe por unidad y período, se emite una sola vez y guarda
+// copia congelada del contenido y de los parámetros con los que se calculó
+// (`contenido`) más los totales de comunidad del período (`totalesComunidad`,
+// Ley 21.442 art. 31: ingresos, egresos y saldo de caja).
+//
+// No se edita ni se borra: es el documento que funda el plazo de pago y el
+// título ejecutivo. Un cambio posterior en el cargo o en la caja NO reescribe
+// el aviso ya emitido (ver `lib/aviso-cobro.ts`).
+model AvisoCobro {
+  id                 String   @id
+  comunidadId        String
+  comunidad          Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  unidadId           String
+  // Período AAAA-MM del aviso (ordenable como texto, igual que el cobro).
+  periodo            String
+  folio              String
+  codigoVerificacion String
+  fechaEmision       String
+  vencimiento        String?
+  contenido          Json
+  totalesComunidad   Json
+  createdAt          DateTime @default(now())
+
+  @@index([comunidadId])
+  @@index([unidadId])
+  @@index([periodo])
+  // Folio correlativo POR COMUNIDAD (`AC-####`): lo asigna el servidor en la
+  // transacción de emisión y este índice es la garantía dura contra la carrera
+  // entre dos emisiones concurrentes (mismo patrón que los certificados CT).
+  @@unique([comunidadId, folio])
+  // El código de verificación se sortea contra los ya emitidos de la comunidad;
+  // el índice lo vuelve una garantía, no una esperanza.
+  @@unique([comunidadId, codigoVerificacion])
+  // Una unidad no puede tener dos avisos del mismo período: se cobra una vez.
+  @@unique([comunidadId, unidadId, periodo])
+  @@map("avisos_cobro")
 }
 
 // Cobranza FI multicanal (SERIE-FASE2 §V5): visor interno + email, con

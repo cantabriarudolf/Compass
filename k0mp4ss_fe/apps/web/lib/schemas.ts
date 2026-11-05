@@ -1604,6 +1604,30 @@ export const CobroFIEscrituraCompletaSchema = CobroFIEscrituraSchema.refine(
   }
 )
 
+/**
+ * Aviso de cobro emitido (serie aviso-de-cobro, S1/S4/S7): el documento
+ * CONGELADO por unidad y período, con folio `AC-####` y código de verificación
+ * asignados por el servidor. `contenido` y `totalesComunidad` son el Json que
+ * arma `lib/aviso-cobro.ts`; este contrato gobierna la fila persistida (el
+ * contenido tiene su propio tipo, `ContenidoAviso`, porque su forma la fija el
+ * documento, no la base).
+ */
+export const AvisoCobroSchema = z.object({
+  id: IdEntidadSchema,
+  unidadId: IdEntidadSchema,
+  periodo: PeriodoFacturacionSchema,
+  folio: z.string().min(1, "El folio es obligatorio."),
+  codigoVerificacion: z
+    .string({ required_error: "El código de verificación es obligatorio." })
+    .min(6, "El código de verificación debe tener al menos 6 caracteres."),
+  fechaEmision: FechaISOSchema,
+  // `null` = el cargo del período no declaró vencimiento (T7 lo deriva de la
+  // fecha de emisión). Nunca una fecha inventada.
+  vencimiento: FechaISOSchema.nullable(),
+  contenido: z.record(z.unknown()),
+  totalesComunidad: z.record(z.unknown()),
+})
+
 // --- Cobranza FI multicanal (SERIE-FASE2 §V5) ---
 //
 // Canales fijos de la cobranza: visor interno (notificación en la app) y email
@@ -2389,6 +2413,7 @@ export type PagoCobroFI = z.infer<typeof PagoCobroFISchema>
 export type DiferenciaPagoFI = z.infer<typeof DiferenciaPagoFISchema>
 export type LineaCobroFI = z.infer<typeof LineaCobroFISchema>
 export type CobroFI = z.infer<typeof CobroFISchema>
+export type AvisoCobro = z.infer<typeof AvisoCobroSchema>
 export type EnvioCobranzaFI = z.infer<typeof EnvioCobranzaFISchema>
 export type ConfiguracionCobranzaFI = z.infer<
   typeof ConfiguracionCobranzaFISchema
