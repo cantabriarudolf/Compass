@@ -33,8 +33,10 @@
  *   1. encabezado con el protocolo de la URL del entorno (nunca la URL);
  *   2. resumen legible, contado del SQL generado: cuántas `CREATE TABLE` (con
  *      nombres), cuántos `ALTER TABLE … ADD COLUMN` (tabla + columna), cuántos
- *      `DROP TABLE` / `DROP COLUMN` (los peligrosos, destacados) y cuántas
- *      sentencias de otra clase (agrupadas por tipo);
+ *      `DROP TABLE` / `DROP COLUMN` / `ALTER TABLE … ALTER COLUMN` (los
+ *      peligrosos, destacados) y cuántas sentencias de otra clase (agrupadas por
+ *      tipo). Un cambio de tipo entra ahí porque en PostgreSQL puede truncar
+ *      datos: no es «otra sentencia», es una pérdida posible;
  *   3. el SQL completo al final, para que el detalle quede en el log;
  *   4. si el SQL vino vacío: «la base está al día con el schema». Eso también
  *      es una respuesta —y la mejor noticia posible para el `db push`.
@@ -47,8 +49,9 @@
  * Veredicto para el CI (`GITHUB_OUTPUT`): además del informe humano escribe una
  * salida de máquina, `destructivo=false` o `destructivo=true`, para que el job
  * decida con un `if:` en vez de leer el log. `true` significa «no se puede
- * aplicar solo»: el diff trae algún `DROP TABLE` / `DROP COLUMN`, **o el diff no
- * se pudo calcular** (sin `DATABASE_URL`, CLI roto, timeout, error inesperado).
+ * aplicar solo»: el diff trae algún `DROP TABLE` / `DROP COLUMN` / `ALTER TABLE
+ * … ALTER COLUMN`, **o el diff no se pudo calcular** (sin `DATABASE_URL`, CLI
+ * roto, timeout, error inesperado).
  * «No verificado» nunca vale como seguro — es exactamente el atajo que convirtió
  * un `--accept-data-loss` permanente en una apuesta.
  *
@@ -233,6 +236,11 @@ function nombreDe(match, indice) {
  * Clasifica cada sentencia por lo que HACE, no por su texto: el resumen cuenta
  * efectos (`ADD COLUMN`), no la forma del SQL. `otras` agrupa por tipo para que
  * se lea qué más toca el push sin imprimir sentencia por sentencia.
+ *
+ * `columnasAlteradas` NO es una categoría informativa: un
+ * `ALTER TABLE … ALTER COLUMN` (tipo, `SET NOT NULL`, `DROP DEFAULT`) queda acá y
+ * cuenta como destructivo, porque `db push` lo aplica con `--accept-data-loss` y
+ * en PostgreSQL un cambio de tipo puede truncar la columna.
  */
 function clasificar(sentencias) {
   const resultado = {
@@ -240,6 +248,7 @@ function clasificar(sentencias) {
     columnasAgregadas: [],
     tablasBorradas: [],
     columnasBorradas: [],
+    columnasAlteradas: [],
     otras: [],
   }
 
@@ -273,6 +282,18 @@ function clasificar(sentencias) {
     const borrarTabla = new RegExp(String.raw`^DROP TABLE (?:IF EXISTS )?${IDENTIFICADOR}`, "i").exec(plano)
     if (borrarTabla) {
       resultado.tablasBorradas.push(nombreDe(borrarTabla, 1))
+      continue
+    }
+
+    // Después de los DROP (un `DROP COLUMN` no es un cambio de tipo) y antes de
+    // `otras`: si esto cayera en `otras`, el veredicto diría «nada destructivo»
+    // y el push aplicaría el cambio con `--accept-data-loss`.
+    const alterarColumna = new RegExp(
+      String.raw`^ALTER TABLE (?:IF EXISTS )?${IDENTIFICADOR} ALTER COLUMN ${IDENTIFICADOR}`,
+      "i"
+    ).exec(plano)
+    if (alterarColumna) {
+      resultado.columnasAlteradas.push(`${nombreDe(alterarColumna, 1)}.${nombreDe(alterarColumna, 3)}`)
       continue
     }
 
@@ -423,21 +444,25 @@ function listaONinguna(nombres, vacio) {
 }
 
 /**
- * El resumen legible. Se arma con etiquetas fijas (`CREATE TABLE`,
- * `ALTER TABLE ... ADD COLUMN`, `DROP TABLE`, `DROP COLUMN`) porque son las
- * mismas palabras con las que `db push` avisa: así el log se busca con lo que ya
- * está en el error del job.
- */
-/**
- * La única definición de «destructivo» del script: sentencias que borran datos de
- * la base (`DROP TABLE` / `DROP COLUMN`). Se cuenta desde la clasificación, no
- * desde el texto del SQL, y la usan el informe y el veredicto para que no puedan
- * decir cosas distintas.
+ * La única definición de «destructivo» del script: lo que puede costar datos de
+ * la base real.
+ *   - `DROP TABLE` / `DROP COLUMN`: borran datos, sin vuelta;
+ *   - `ALTER TABLE … ALTER COLUMN`: en PostgreSQL un cambio de tipo puede truncar
+ *     la columna, y `SET NOT NULL` puede reescribir el contenido. Se cuenta
+ *     completo, no sólo el `SET DATA TYPE`: es más chico que el riesgo que evita.
+ * Se cuenta desde la clasificación, no desde el texto del SQL, y la usan el
+ * informe y el veredicto para que no puedan decir cosas distintas.
  */
 function borraDatos(deriva) {
-  return deriva.tablasBorradas.length + deriva.columnasBorradas.length
+  return deriva.tablasBorradas.length + deriva.columnasBorradas.length + deriva.columnasAlteradas.length
 }
 
+/**
+ * El resumen legible. Se arma con etiquetas fijas (`CREATE TABLE`,
+ * `ALTER TABLE ... ADD COLUMN`, `DROP TABLE`, `DROP COLUMN`, `ALTER COLUMN`)
+ * porque son las mismas palabras con las que `db push` avisa: así el log se busca
+ * con lo que ya está en el error del job.
+ */
 function imprimirResumen(deriva) {
   const otrasPorTipo = new Map()
   for (const tipo of deriva.otras) otrasPorTipo.set(tipo, (otrasPorTipo.get(tipo) ?? 0) + 1)
@@ -456,6 +481,13 @@ function imprimirResumen(deriva) {
   console.log(
     `  ⚠️ PELIGROSO — DROP COLUMN: ${deriva.columnasBorradas.length} — ${listaONinguna(deriva.columnasBorradas, "ninguna columna se borra")}`
   )
+  // Sólo cuando hay cambios de tipo, para que una deriva aditiva o sólo con DROP
+  // no cambie ni un byte de su informe ya verificado en el log del CI.
+  if (deriva.columnasAlteradas.length > 0) {
+    console.log(
+      `  ⚠️ PELIGROSO — ALTER COLUMN: ${deriva.columnasAlteradas.length} — ${deriva.columnasAlteradas.join(", ")}`
+    )
+  }
   console.log(
     `  otras sentencias: ${deriva.otras.length} — ${otrasDetalle || "ninguna de otra clase"}`
   )
@@ -469,6 +501,11 @@ function imprimirResumen(deriva) {
     console.log(
       "  (`db push` sin `--accept-data-loss` falla): la decisión es del owner, y acá no se toma."
     )
+    if (deriva.columnasAlteradas.length > 0) {
+      console.log(
+        "  Entre ellas hay cambios de tipo (`ALTER COLUMN`): en PostgreSQL pueden truncar la columna."
+      )
+    }
   }
 }
 
@@ -485,6 +522,7 @@ function lineaDeResumen({ deriva, motivo }) {
     deriva.columnasAgregadas.length +
     deriva.tablasBorradas.length +
     deriva.columnasBorradas.length +
+    deriva.columnasAlteradas.length +
     deriva.otras.length
 
   if (total === 0) {
@@ -498,6 +536,9 @@ function lineaDeResumen({ deriva, motivo }) {
     `${deriva.columnasAgregadas.length} ADD COLUMN, ` +
     `${deriva.tablasBorradas.length} DROP TABLE, ` +
     `${deriva.columnasBorradas.length} DROP COLUMN, ` +
+    // Nombrado sólo cuando hay: el conteo de una deriva sin cambios de tipo queda
+    // igual al que ya está verificado en el log del CI.
+    (deriva.columnasAlteradas.length > 0 ? `${deriva.columnasAlteradas.length} ALTER COLUMN, ` : "") +
     `${deriva.otras.length} otras`
 
   if (destructivas > 0) {

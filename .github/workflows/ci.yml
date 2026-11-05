@@ -273,9 +273,10 @@ jobs:
     #
     # `--accept-data-loss` NO es un flag permanente de este job: lo pasa sólo el
     # paso del push, y sólo cuando el diagnóstico de deriva PRUEBA que el diff es
-    # aditivo (`destructivo=false`). Con un `DROP TABLE` / `DROP COLUMN` —o con un
-    # diff que no se pudo calcular, porque «no verificado» no es «seguro»— no se
-    # aplica nada y el último paso frena pidiendo una persona. Un permiso
+    # aditivo (`destructivo=false`). Con un `DROP TABLE` / `DROP COLUMN` / cambio
+    # de tipo de columna (`ALTER COLUMN`, que en PostgreSQL puede truncar) —o con
+    # un diff que no se pudo calcular, porque «no verificado» no es «seguro»— no
+    # se aplica nada y el último paso frena pidiendo una persona. Un permiso
     # permanente sobre la base real es el mismo error que una clave en un archivo.
     #
     # RIESGO ACEPTADO (decisión del owner, 2026-10-27): un cambio de esquema
@@ -345,16 +346,16 @@ jobs:
         run: npx prisma db push --skip-generate --accept-data-loss
       # Última palabra del diagnóstico, y el ÚNICO lugar del job autorizado a
       # fallar por la deriva: el push no corrió porque el diff trae `DROP TABLE`
-      # / `DROP COLUMN`, o porque no se pudo verificar (sin `DATABASE_URL`, CLI
-      # roto, timeout) y eso nunca cuenta como seguro. Con el secret ausente el
-      # job ya murió en `db_secret` y este paso no aplica: por eso repite el
-      # prefijo `db_secret`.
+      # / `DROP COLUMN` / `ALTER COLUMN` (un cambio de tipo puede truncar), o
+      # porque no se pudo verificar (sin `DATABASE_URL`, CLI roto, timeout) y eso
+      # nunca cuenta como seguro. Con el secret ausente el job ya murió en
+      # `db_secret` y este paso no aplica: por eso repite el prefijo `db_secret`.
       - name: Frenar si la deriva no es sólo aditiva
         if: steps.db_secret.outputs.present == 'true' && steps.deriva_esquema.outputs.destructivo != 'false'
         run: |
-          echo "::error title=Deriva destructiva pendiente::El esquema NO se aplicó: la deriva contra la base real trae cambios destructivos (DROP TABLE / DROP COLUMN) o no se pudo verificar, y este job sólo aplica cambios provablemente aditivos."
+          echo "::error title=Deriva destructiva pendiente::El esquema NO se aplicó: la deriva contra la base real trae cambios destructivos (DROP TABLE / DROP COLUMN / cambio de tipo de columna) o no se pudo verificar, y este job sólo aplica cambios provablemente aditivos."
           echo ""
-          echo "Qué hacer: leé el resumen y el SQL completo del paso «Diagnosticar deriva de esquema (migrate diff)», decidí si el DROP es aceptable, y aplicalo VOS, a mano, desde k0mp4ss_fe/apps/web:"
+          echo "Qué hacer: leé el resumen y el SQL completo del paso «Diagnosticar deriva de esquema (migrate diff)», decidí si el DROP o el cambio de tipo es aceptable, y aplicalo VOS, a mano, desde k0mp4ss_fe/apps/web:"
           echo ""
           echo "    DATABASE_URL=<la de Neon> npx prisma db push --skip-generate --accept-data-loss"
           echo ""
