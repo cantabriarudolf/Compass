@@ -58,7 +58,11 @@ function objetoDe(valor: unknown): Record<string, unknown> {
 
 /** Total adeudado congelado, no recalculado desde los cargos. */
 function totalAdeudado(aviso: AvisoCobroListado): unknown {
-  return objetoDe(aviso.contenido.montos).totalAdeudado
+  const montos = objetoDe(aviso.contenido.montos)
+  // Desde la versión 2 el aviso consolida la deuda de períodos anteriores; el papel
+  // muestra ese total, así que la lista muestra el mismo número y no otro. Una fila
+  // versión 1 solo tiene el total del período y cae al respaldo.
+  return montos.totalAdeudadoConsolidado ?? montos.totalAdeudado
 }
 
 /** Unidad del aviso, tal como quedó congelada en el contenido. */
