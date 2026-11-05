@@ -312,3 +312,235 @@ export async function documentoCertificadoPDF(input: {
   }
   return doc
 }
+
+// ── Aviso de cobro mensual (serie aviso-de-cobro, T5 / S2) ────────────────────
+//
+// El aviso firmado es el papel con el que se cobra (Ley 21.442 arts. 31 y 32).
+// Este documento se arma SOLO desde la fila congelada `avisos_cobro`: cada cifra
+// sale de `contenido`, ninguna se recalcula desde los cargos, el reglamento ni el
+// resumen del mes. Un PDF que recalcula es un PDF que puede contradecir el aviso
+// que se firmó, y el papel dejaría de ser prueba de nada.
+//
+// La regla del dato que falta es la misma del contenido: si la fila no trae una
+// cifra, el documento imprime `NO_DISPONIBLE`, nunca un cero (un cero se lee
+// como "no se cobra" y ahí significa "no se sabe").
+
+/** Marca única de una cifra que la fila congelada no trae. Nunca un cero. */
+export const NO_DISPONIBLE = "No disponible"
+
+/** La fila congelada del aviso: columnas + `contenido` (JSON de la base). */
+export interface FilaAvisoCobroPdf {
+  folio: string
+  codigoVerificacion: string
+  periodo: string
+  fechaEmision: string
+  vencimiento: string | null
+  /** `ContenidoAviso` congelado; se lee de forma defensiva, es JSON de base. */
+  contenido: unknown
+}
+
+export interface AvisoPdfInput {
+  aviso: FilaAvisoCobroPdf
+  config: ConfiguracionGlobal
+  /** Firma ya resuelta a data URL (`urlADataUrl`); `null` = bloque en blanco. */
+  firmaDataUrl?: string | null
+  /**
+   * Huella del contenido congelado, ya calculada con `hashContenido`.
+   *
+   * Entra calculada porque este módulo es de CLIENTE (lo importan las pantallas)
+   * y `lib/aviso-cobro` es de SERVIDOR (crypto + Prisma): importar la función de
+   * valor arrastraría Prisma al bundle del navegador. La ruta que imprime el
+   * aviso la pasa con `hashContenido(aviso.contenido)`.
+   */
+  hash: string
+}
+
+function objetoDe(valor: unknown): Record<string, unknown> {
+  return valor && typeof valor === "object" && !Array.isArray(valor)
+    ? (valor as Record<string, unknown>)
+    : {}
+}
+
+/** La cifra congelada, o `null` si la fila no la trae (jamás un 0 de relleno). */
+function cifraDe(valor: unknown): number | null {
+  return typeof valor === "number" && Number.isFinite(valor) ? valor : null
+}
+
+function textoDe(valor: unknown): string | null {
+  return typeof valor === "string" && valor.length > 0 ? valor : null
+}
+
+/** `null` se imprime como el faltante declarado; el resto como monto chileno. */
+function dinero(valor: number | null): string {
+  return valor === null ? NO_DISPONIBLE : CLP(valor)
+}
+
+/** Proporción declarada como fracción (`0.0125`) impresa como porcentaje. */
+function porcentajeFraccion(valor: number | null): string {
+  return valor === null
+    ? NO_DISPONIBLE
+    : `${(valor * 100).toLocaleString("es-CL", { maximumFractionDigits: 4 })}%`
+}
+
+/** Porcentaje que el reglamento ya declara en puntos (`10` = 10%). */
+function porcentajePuntos(valor: number | null): string {
+  return valor === null
+    ? NO_DISPONIBLE
+    : `${valor.toLocaleString("es-CL", { maximumFractionDigits: 4 })}%`
+}
+
+function siNo(valor: unknown): string {
+  return typeof valor === "boolean" ? (valor ? "Sí" : "No") : NO_DISPONIBLE
+}
+
+/**
+ * Aviso de cobro mensual firmado, con el hash del contenido congelado impreso.
+ *
+ * Síncrona a propósito: la firma llega ya resuelta (no hay nada que esperar) y
+ * todo lo demás sale de la fila. Devuelve la definición pdfmake; descargarla es
+ * trabajo de `descargarPdf`.
+ */
+export function documentoAvisoCobroPDF(
+  input: AvisoPdfInput
+): Record<string, unknown> {
+  const { aviso, config, firmaDataUrl = null, hash } = input
+  const contenido = objetoDe(aviso.contenido)
+  const montos = objetoDe(contenido.montos)
+  const resumen = objetoDe(contenido.resumenComunidad)
+  const participacion = objetoDe(contenido.participacion)
+  const unidad = objetoDe(contenido.unidad)
+  const noComputables = Array.isArray(contenido.noComputables)
+    ? contenido.noComputables
+    : []
+
+  const fila = (etiqueta: string, valor: string): any[] => [
+    { text: etiqueta },
+    { text: valor, alignment: "right" },
+  ]
+  const filaMonto = (etiqueta: string, valor: unknown): any[] =>
+    fila(etiqueta, dinero(cifraDe(valor)))
+  const filaTotal = (etiqueta: string, valor: unknown): any[] => [
+    { text: etiqueta, bold: true, fillColor: "#eeeeee" },
+    {
+      text: dinero(cifraDe(valor)),
+      bold: true,
+      alignment: "right",
+      fillColor: "#eeeeee",
+    },
+  ]
+  const seccion = (titulo: string): any => ({
+    text: titulo,
+    bold: true,
+    marginTop: 10,
+    marginBottom: 4,
+    fontSize: 11,
+  })
+  const tabla = (filas: any[][]): any => ({
+    table: { widths: ["*", "auto"], body: filas },
+  })
+
+  const numeroUnidad = textoDe(unidad.numero) ?? NO_DISPONIBLE
+  const etiquetaUnidad = textoDe(unidad.etiqueta) ?? NO_DISPONIBLE
+  const hasta = textoDe(resumen.hasta) ?? NO_DISPONIBLE
+
+  // `otros` es una lista: ausente es un faltante declarado, vacía es "no hay
+  // otros conceptos". No son lo mismo y el documento no los confunde.
+  const otros = Array.isArray(montos.otros) ? montos.otros : null
+  const filasOtros =
+    otros === null
+      ? [fila("Otros conceptos", NO_DISPONIBLE)]
+      : otros.map((otro) => {
+          const concepto = textoDe(objetoDe(otro).concepto) ?? NO_DISPONIBLE
+          return filaMonto(`Otros conceptos — ${concepto}`, objetoDe(otro).monto)
+        })
+
+  const doc = {
+    header: encabezadoInstitucional(config),
+    footer: (currentPage: number) => ({
+      columns: [
+        {
+          text: `Aviso ${aviso.folio} · ${aviso.periodo} · Hash ${hash}`,
+          fontSize: 7,
+        },
+        { text: `Página ${currentPage}`, fontSize: 7, alignment: "right" },
+      ],
+    }),
+    content: [
+      {
+        text: "AVISO DE COBRO DE GASTOS COMUNES",
+        style: "titulo",
+        alignment: "center",
+      },
+      `Folio ${aviso.folio} · Código de verificación: ${aviso.codigoVerificacion}`,
+      `Unidad ${numeroUnidad} (${etiquetaUnidad}) · Período ${aviso.periodo}`,
+      `Fecha de emisión: ${aviso.fechaEmision} · Vencimiento: ${aviso.vencimiento ?? "No declarado"}`,
+      seccion("PARTICIPACIÓN EN EL GASTO COMÚN"),
+      tabla([
+        fila(
+          "Proporción al gasto común",
+          porcentajeFraccion(cifraDe(participacion.prorrateo))
+        ),
+        fila(
+          "Forma de contribución",
+          textoDe(participacion.formaContribucion) ?? NO_DISPONIBLE
+        ),
+        fila(
+          "Aporte al fondo de reserva",
+          porcentajePuntos(cifraDe(participacion.porcentajeReserva))
+        ),
+        fila(
+          "Reserva incluida en el presupuesto",
+          siNo(participacion.reservaIncluidaEnPresupuesto)
+        ),
+      ]),
+      seccion("CONCEPTOS DEL PERÍODO"),
+      tabla([
+        filaMonto("Gasto común del período", montos.gastoComun),
+        filaMonto("Recargo al fondo de reserva", montos.recargoFondoReserva),
+        filaMonto("Multas aplicadas", montos.multas),
+        filaMonto("Intereses (moras) devengados", montos.intereses),
+        ...filasOtros,
+        filaMonto("Total exigible del período", montos.exigible),
+        filaMonto("Pagado a la fecha de emisión", montos.pagado),
+        filaTotal("TOTAL ADEUDADO", montos.totalAdeudado),
+      ]),
+      seccion(
+        `TOTALES DE LA COMUNIDAD (período ${aviso.periodo}, corte ${hasta})`
+      ),
+      tabla([
+        filaMonto("Ingresos del mes", objetoDe(resumen.ingresos).total),
+        filaMonto("Egresos del mes", objetoDe(resumen.egresos).total),
+        filaMonto(
+          "Saldo de caja al cierre",
+          objetoDe(resumen.saldoCaja).alCierre
+        ),
+      ]),
+      ...(noComputables.length > 0
+        ? [
+            seccion("DATOS QUE NO SE PUDIERON COMPUTAR"),
+            ...noComputables.map((dato) => ({
+              text:
+                textoDe(objetoDe(dato).detalle) ??
+                `Dato no computable: ${textoDe(objetoDe(dato).campo) ?? NO_DISPONIBLE}`,
+              marginBottom: 4,
+            })),
+          ]
+        : []),
+      seccion("TRAZABILIDAD DEL DOCUMENTO"),
+      `Hash del contenido congelado: ${hash}`,
+      {
+        text: "Verificación: SHA-256 del JSON canónico del contenido (claves ordenadas, sin espacios); se imprimen los primeros 16 caracteres hexadecimales en mayúscula. Cualquiera puede recalcularlo y compararlo.",
+        fontSize: 8,
+      },
+      {
+        text: "Los montos de este aviso provienen del documento congelado al momento de su emisión: no se recalculan al imprimir.",
+        marginTop: 6,
+        fontSize: 9,
+      },
+      { ...bloqueFirma({ config, firmaDataUrl }), marginTop: 30 },
+    ],
+    styles: { titulo: { fontSize: 14, bold: true } },
+    defaultStyle: { font: "Roboto", fontSize: 10 },
+  }
+  return doc
+}

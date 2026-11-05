@@ -39,10 +39,18 @@
  *   - `parametros_invalidos`: la versión existe pero sus números no parsean;
  *   - `prorrateo_no_declarado`: la unidad no declara coeficiente (0 o menos).
  *
+ * ── La huella del contenido ─────────────────────────────────────────────────
+ *
+ * `hashContenido` (S2) devuelve una cadena corta y reproducible del contenido
+ * congelado: es lo que el aviso firmado imprime para que cualquiera pueda decir
+ * si el papel corresponde al documento que el sistema emitió. El PDF que la
+ * lleva vive en `lib/pdf-utils` (`documentoAvisoCobroPDF`); este módulo aporta la
+ * huella, no el documento.
+ *
  * ── Lo que este corte NO hace (y por eso no lo simula) ───────────────────────
  *
- * - No firma ni genera PDF (T5, S2): el contenido se congela acá, la firma es
- *   del documento.
+ * - No firma ni entrega (T5/T6): el contenido se congela acá y el hash se
+ *   calcula acá; la firma y la entrega son del documento y del visor.
  * - No entrega ni registra la entrega (T6, S3).
  * - No deriva el vencimiento desde la fecha de emisión (T7, S6): el `vencimiento`
  *   del aviso es el del cargo ya emitido para ese período, y si el período no
@@ -55,7 +63,7 @@
  *   `otros` con su nombre, sin cambiar este contrato.
  */
 
-import { randomUUID } from "node:crypto"
+import { createHash, randomUUID } from "node:crypto"
 import type {
   ConceptoCobroFI,
   LineaCobroFI,
@@ -344,6 +352,68 @@ export function contenidoAviso(entrada: EntradaContenidoAviso): ContenidoAviso {
     resumenComunidad: resumen,
     noComputables,
   }
+}
+
+/**
+ * Serialización canónica del contenido: claves ordenadas recursivamente y sin
+ * espacios. `JSON.stringify` no sirve para esto: respeta el orden de inserción,
+ * y el JSON que vuelve de la base no conserva el orden con el que se congeló.
+ * Dos objetos con los mismos datos tienen que dar el mismo texto, o el hash
+ * impreso en el papel no se puede reproducir.
+ *
+ * Las claves sin valor se omiten (igual que `JSON.stringify`) y un número no se
+ * confunde con su versión en texto. El orden de los arrays NO se toca: una lista
+ * ordenada es contenido, no una forma de escribir el mismo dato.
+ */
+function canonico(valor: unknown): string {
+  if (valor === null) return "null"
+  if (Array.isArray(valor)) return `[${valor.map(canonico).join(",")}]`
+  switch (typeof valor) {
+    case "object": {
+      const objeto = valor as Record<string, unknown>
+      const claves = Object.keys(objeto)
+        .filter((clave) => objeto[clave] !== undefined)
+        .sort()
+      const cuerpo = claves
+        .map((clave) => `${JSON.stringify(clave)}:${canonico(objeto[clave])}`)
+        .join(",")
+      return `{${cuerpo}}`
+    }
+    case "number":
+      if (!Number.isFinite(valor)) {
+        throw new TypeError(
+          "El contenido del aviso no puede llevar un número no finito."
+        )
+      }
+      return JSON.stringify(valor)
+    case "string":
+    case "boolean":
+      return JSON.stringify(valor)
+    default:
+      throw new TypeError(
+        `El contenido del aviso no puede llevar un valor de tipo ${typeof valor}.`
+      )
+  }
+}
+
+/** Caracteres hexadecimales que se imprimen del SHA-256 (16 de 64). */
+const HASH_LARGO = 16
+
+/**
+ * Huella del contenido congelado, para imprimirla en el aviso y verificarla a
+ * mano (S2).
+ *
+ * Algoritmo exacto: SHA-256 del JSON canónico del contenido (claves ordenadas
+ * recursivamente, sin espacios, UTF-8), en hexadecimal, y se imprimen los
+ * primeros 16 caracteres en mayúscula (`A1B2C3D4E5F60718`). Se reproduce a mano:
+ * ordenar las claves, quitar los espacios, calcular SHA-256 y comparar los
+ * primeros 16. No depende del proceso ni del orden de inserción de las claves.
+ */
+export function hashContenido(contenido: unknown): string {
+  const hex = createHash("sha256")
+    .update(canonico(contenido), "utf8")
+    .digest("hex")
+  return hex.slice(0, HASH_LARGO).toUpperCase()
 }
 
 /**
