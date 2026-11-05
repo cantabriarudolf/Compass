@@ -57,6 +57,8 @@ model Comunidad {
   cobrosFI                 CobroFI[]
   // Aviso de cobro mensual (S1/S4/S7): documento congelado por unidad/período.
   avisosCobro              AvisoCobro[]
+  // S3: registro de la ENTREGA de cada aviso (visor con prueba, correo en cola).
+  enviosAvisoCobro         EnvioAvisoCobro[]
   // SERIE-FASE2 §V5 — cobranza FI multicanal (interruptor global, preferencia
   // por residente y registro de cada envío).
   configuracionCobranzaFI  ConfiguracionCobranzaFI?
@@ -1073,6 +1075,9 @@ model AvisoCobro {
   contenido          Json
   totalesComunidad   Json
   createdAt          DateTime @default(now())
+  // S3: las entregas del papel. El aviso no se borra nunca, así que la cascada
+  // sólo se dispararía al borrar la comunidad.
+  entregas           EnvioAvisoCobro[]
 
   @@index([comunidadId])
   @@index([unidadId])
@@ -1087,6 +1092,50 @@ model AvisoCobro {
   // Una unidad no puede tener dos avisos del mismo período: se cobra una vez.
   @@unique([comunidadId, unidadId, periodo])
   @@map("avisos_cobro")
+}
+
+// Entrega del aviso de cobro (S3 — serie aviso-de-cobro): la prueba de que el
+// PAPEL llegó a una persona por un canal concreto.
+//
+// Por qué NO alcanza `Notificacion`: la bandeja interna es el canal visor real,
+// pero no modela el estado de una entrega (ni `pendiente` ni `fallido`), no
+// guarda el motivo por el que un canal no salió y no tiene clave de
+// idempotencia, así que no puede impedir que re-entregar el mismo aviso
+// duplique el registro. Por qué NO alcanza `EnvioCobranzaFI`: el aviso no es un
+// cobro (`cobroId` es obligatorio y su vocabulario de estados es
+// `pendiente|enviado|fallido`, donde `enviado` es el email que NUNCA salió) y
+// esa tabla es el historial de la gestión de deuda por unidad. Se reusa el
+// `Notificacion` como canal visor y esta tabla guarda el registro, con la misma
+// idempotencia de `envios_cobranza_fi` (`claveEnvio` único por comunidad).
+model EnvioAvisoCobro {
+  id             String     @id
+  comunidadId    String
+  comunidad      Comunidad  @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  avisoId        String
+  aviso          AvisoCobro  @relation(fields: [avisoId], references: [id], onDelete: Cascade)
+  // Destinatario de registro: el propietario VIGENTE de la unidad del aviso.
+  personaId      String
+  // `visor` | `email` (CANALES_ENTREGA_AVISO en lib/schemas.ts).
+  canal          String
+  // `entregado` | `pendiente` | `fallido`. El visor es `entregado` porque la
+  // fila de `Notificacion` se creó en la misma transacción; el email es
+  // `pendiente` mientras no exista emisor SMTP (F4).
+  estado         String
+  fecha          String
+  motivo         String?
+  // La notificación que prueba la entrega por el visor (null en email).
+  notificacionId String?
+  claveEnvio     String
+  reenvio        Boolean    @default(false)
+  createdAt      DateTime   @default(now())
+
+  // Idempotencia: re-entregar el mismo aviso a la misma persona por el mismo
+  // canal choca acá; el reenvío explícito agrega un sufijo `:reenvio:<epoch>`.
+  @@unique([comunidadId, claveEnvio])
+  @@index([comunidadId])
+  @@index([avisoId])
+  @@index([personaId])
+  @@map("envios_aviso_cobro")
 }
 
 // Cobranza FI multicanal (SERIE-FASE2 §V5): visor interno + email, con

@@ -1628,6 +1628,41 @@ export const AvisoCobroSchema = z.object({
   totalesComunidad: z.record(z.unknown()),
 })
 
+// --- Entrega del aviso de cobro (S3 — serie aviso-de-cobro) ---
+//
+// El aviso se ENTREGA por el visor interno (la notificación que el residente
+// ve) y el correo queda en cola hasta que exista un emisor SMTP real (F4, hoy
+// bloqueado por credenciales del owner). Los estados son
+// `entregado | pendiente | fallido`: NO existe `enviado`, porque hoy nada sale
+// por correo y un estado que diga "enviado" sería una afirmación falsa sobre un
+// documento que funda un plazo de pago.
+
+export const CANALES_ENTREGA_AVISO = ["visor", "email"] as const
+export const CanalEntregaAvisoSchema = z.enum(CANALES_ENTREGA_AVISO)
+export type CanalEntregaAviso = (typeof CANALES_ENTREGA_AVISO)[number]
+
+export const ESTADOS_ENTREGA_AVISO = [
+  "entregado",
+  "pendiente",
+  "fallido",
+] as const
+export const EstadoEntregaAvisoSchema = z.enum(ESTADOS_ENTREGA_AVISO)
+export type EstadoEntregaAviso = (typeof ESTADOS_ENTREGA_AVISO)[number]
+
+/** Registro de una entrega: aviso, destinatario, canal, estado, fecha y motivo. */
+export const EnvioAvisoCobroSchema = z.object({
+  id: IdEntidadSchema,
+  avisoId: IdEntidadSchema,
+  personaId: IdEntidadSchema,
+  canal: CanalEntregaAvisoSchema,
+  estado: EstadoEntregaAvisoSchema,
+  fecha: FechaISOSchema,
+  motivo: z.string().nullable().optional(),
+  notificacionId: IdEntidadSchema.nullable().optional(),
+  claveEnvio: z.string().min(1),
+  reenvio: z.boolean(),
+})
+
 // --- Cobranza FI multicanal (SERIE-FASE2 §V5) ---
 //
 // Canales fijos de la cobranza: visor interno (notificación en la app) y email
@@ -2414,6 +2449,7 @@ export type DiferenciaPagoFI = z.infer<typeof DiferenciaPagoFISchema>
 export type LineaCobroFI = z.infer<typeof LineaCobroFISchema>
 export type CobroFI = z.infer<typeof CobroFISchema>
 export type AvisoCobro = z.infer<typeof AvisoCobroSchema>
+export type EnvioAvisoCobro = z.infer<typeof EnvioAvisoCobroSchema>
 export type EnvioCobranzaFI = z.infer<typeof EnvioCobranzaFISchema>
 export type ConfiguracionCobranzaFI = z.infer<
   typeof ConfiguracionCobranzaFISchema
