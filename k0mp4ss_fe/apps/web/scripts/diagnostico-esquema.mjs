@@ -44,8 +44,18 @@
  * sentencias / base al día" falso es peor que no tener respuesta, porque alguien
  * lo lee, concluye que el `db push` es seguro y lo aprueba.
  *
- * Es un diagnóstico, no un gate: SIEMPRE sale 0 y sólo lee. No aplica nada, no
- * sugiere `--accept-data-loss` y no reemplaza la decisión del owner.
+ * Veredicto para el CI (`GITHUB_OUTPUT`): además del informe humano escribe una
+ * salida de máquina, `destructivo=false` o `destructivo=true`, para que el job
+ * decida con un `if:` en vez de leer el log. `true` significa «no se puede
+ * aplicar solo»: el diff trae algún `DROP TABLE` / `DROP COLUMN`, **o el diff no
+ * se pudo calcular** (sin `DATABASE_URL`, CLI roto, timeout, error inesperado).
+ * «No verificado» nunca vale como seguro — es exactamente el atajo que convirtió
+ * un `--accept-data-loss` permanente en una apuesta.
+ *
+ * Es un diagnóstico, no un gate: SIEMPRE sale 0 y sólo lee. No aplica nada y no
+ * reemplaza la decisión del owner; el job usa el veredicto para aplicar el push
+ * cuando —y sólo cuando— la deriva es provablemente aditiva, y para frenar con
+ * un mensaje cuando hay algo que una persona tiene que decidir.
  *
  * Nunca imprime `DATABASE_URL` (sólo su protocolo) ni credenciales de un error:
  * esto se lee en consolas y en los logs de CI. Mismo criterio de redacción que
@@ -66,7 +76,8 @@
  *
  * Lo corre el CI en el job `esquema`, en el paso siguiente al diagnóstico de
  * folios y anterior a `prisma db push`, con el mismo `DATABASE_URL`, la misma
- * `working-directory` y el mismo `if:` que el push.
+ * `working-directory` y el mismo `if:` que el push. El paso declara un `id`
+ * (`deriva_esquema`) y el push lee `steps.deriva_esquema.outputs.destructivo`.
  */
 
 /**
@@ -76,7 +87,7 @@
  * que no correr.
  */
 import { spawnSync } from "node:child_process"
-import { readFileSync } from "node:fs"
+import { appendFileSync, readFileSync } from "node:fs"
 import { createRequire } from "node:module"
 
 const URL_BASE = process.env.DATABASE_URL?.trim() ?? ""
@@ -120,6 +131,36 @@ function protocoloDe(urlBase) {
 
 function lineaGuiones() {
   return "-".repeat(72)
+}
+
+/**
+ * Contrato con el CI: GitHub le da a cada paso de `run` un archivo de salida en
+ * `GITHUB_OUTPUT`, y lo que se escribe ahí (`clave=valor`) es lo que el `if:` de
+ * los pasos siguientes puede leer. Sin ese archivo (uso local, a mano) no se
+ * escribe nada: el informe humano de siempre ya está impreso.
+ *
+ * `destructivo=true` es el lado seguro de la moneda y por eso se usa también
+ * cuando NO hay veredicto posible. Si la escritura falla, se avisa y no se
+ * inventa un `false`: la salida queda vacía, el `if:` del push no se cumple y no
+ * se aplica nada. Fallar abierto acá sería repetir el error que este script
+ * existe para evitar.
+ */
+function escribirVeredicto(destructivo) {
+  const archivo = process.env.GITHUB_OUTPUT?.trim()
+  if (!archivo) return
+
+  const valor = destructivo ? "true" : "false"
+  try {
+    appendFileSync(archivo, `destructivo=${valor}\n`)
+    console.log(`veredicto para el CI (GITHUB_OUTPUT): destructivo=${valor}`)
+  } catch (error) {
+    console.log(
+      `no se pudo escribir el veredicto en GITHUB_OUTPUT — ${unaLinea(redactar(error?.message, URL_BASE))}`
+    )
+    console.log(
+      "el job leerá `destructivo` vacío: no se aplicará ningún cambio y el paso del gate humano lo dirá"
+    )
+  }
 }
 
 /* ---------- lectura del SQL ---------- */
@@ -387,6 +428,16 @@ function listaONinguna(nombres, vacio) {
  * mismas palabras con las que `db push` avisa: así el log se busca con lo que ya
  * está en el error del job.
  */
+/**
+ * La única definición de «destructivo» del script: sentencias que borran datos de
+ * la base (`DROP TABLE` / `DROP COLUMN`). Se cuenta desde la clasificación, no
+ * desde el texto del SQL, y la usan el informe y el veredicto para que no puedan
+ * decir cosas distintas.
+ */
+function borraDatos(deriva) {
+  return deriva.tablasBorradas.length + deriva.columnasBorradas.length
+}
+
 function imprimirResumen(deriva) {
   const otrasPorTipo = new Map()
   for (const tipo of deriva.otras) otrasPorTipo.set(tipo, (otrasPorTipo.get(tipo) ?? 0) + 1)
@@ -409,7 +460,7 @@ function imprimirResumen(deriva) {
     `  otras sentencias: ${deriva.otras.length} — ${otrasDetalle || "ninguna de otra clase"}`
   )
 
-  const destructivas = deriva.tablasBorradas.length + deriva.columnasBorradas.length
+  const destructivas = borraDatos(deriva)
   if (destructivas > 0) {
     console.log("")
     console.log(
@@ -440,7 +491,7 @@ function lineaDeResumen({ deriva, motivo }) {
     return "deriva de esquema: la base está al día con el schema — 0 sentencias pendientes"
   }
 
-  const destructivas = deriva.tablasBorradas.length + deriva.columnasBorradas.length
+  const destructivas = borraDatos(deriva)
   const pendientes = plural(total, "sentencia pendiente", "sentencias pendientes")
   const conteo =
     `${deriva.crearTablas.length} CREATE TABLE, ` +
@@ -470,6 +521,7 @@ async function main() {
     console.log(
       "deriva de esquema: NO VERIFICADO — sin DATABASE_URL en el entorno: no hay base que comparar"
     )
+    escribirVeredicto(true)
     return
   }
 
@@ -488,6 +540,7 @@ async function main() {
     console.log("")
     console.log(lineaGuiones())
     console.log(lineaDeResumen({ motivo: lectura.motivo }))
+    escribirVeredicto(true)
     return
   }
 
@@ -500,6 +553,7 @@ async function main() {
     console.log("")
     console.log(lineaGuiones())
     console.log(lineaDeResumen({ deriva }))
+    escribirVeredicto(false)
     return
   }
 
@@ -514,6 +568,7 @@ async function main() {
   console.log("")
   console.log(lineaGuiones())
   console.log(lineaDeResumen({ deriva }))
+  escribirVeredicto(borraDatos(deriva) > 0)
 }
 
 // Diagnóstico, no gate: pase lo que pase el job sigue y el `db push` decide.
@@ -523,4 +578,6 @@ main().catch((error) => {
   console.log(
     `deriva de esquema: NO VERIFICADO — falló el diagnóstico inesperadamente (${unaLinea(error?.name ?? "Error")})`
   )
+  // Un diagnóstico que revienta tampoco sabe si el diff es aditivo: no se aplica.
+  escribirVeredicto(true)
 })

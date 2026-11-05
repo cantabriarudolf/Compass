@@ -268,14 +268,20 @@ jobs:
     # No se aplica esquema desde un commit cuyos tests unitarios fallen. No se
     # incluye `e2e`: hoy está en rojo por deuda ajena y frenaría el esquema.
     needs: [unit, unit-pg]
-    # Sólo en push a main (los PR no tocan la base real). Sin --accept-data-loss:
-    # una deriva destructiva falla acá en vez de aplicarse sola. `migrate deploy`
-    # no sirve mientras los dos schemas compartan `prisma/migrations` (P3019).
+    # Sólo en push a main (los PR no tocan la base real). `migrate deploy` no
+    # sirve mientras los dos schemas compartan `prisma/migrations` (P3019).
+    #
+    # `--accept-data-loss` NO es un flag permanente de este job: lo pasa sólo el
+    # paso del push, y sólo cuando el diagnóstico de deriva PRUEBA que el diff es
+    # aditivo (`destructivo=false`). Con un `DROP TABLE` / `DROP COLUMN` —o con un
+    # diff que no se pudo calcular, porque «no verificado» no es «seguro»— no se
+    # aplica nada y el último paso frena pidiendo una persona. Un permiso
+    # permanente sobre la base real es el mismo error que una clave en un archivo.
     #
     # RIESGO ACEPTADO (decisión del owner, 2026-10-27): un cambio de esquema
-    # mergeado a main se aplica a producción sin aprobación humana. Se acepta para
-    # que el demo nunca quede con el esquema atrás; las válvulas son la falta de
-    # `--accept-data-loss` y el `needs: [unit, unit-pg]`. Al pasar a la rama
+    # ADITIVO mergeado a main se aplica a producción sin aprobación humana. Se
+    # acepta para que el demo nunca quede con el esquema atrás; las válvulas son
+    # el gate de `destructivo` y el `needs: [unit, unit-pg]`. Al pasar a la rama
     # paralela con gate, esto vuelve a revisarse.
     if: github.event_name == 'push'
     timeout-minutes: 10
@@ -316,20 +322,44 @@ jobs:
       # cambio incluye sentencias destructivas. Este paso corre `prisma migrate
       # diff --script` (sólo lectura) y deja en el log el resumen contado y el
       # SQL completo, para que decidir sobre `--accept-data-loss` no sea a
-      # ciegas. Igual que el diagnóstico de folios: el script sale 0 siempre y
-      # nunca frena el job, tampoco cuando `migrate diff` no puede correr.
+      # ciegas. El script sale 0 siempre y nunca frena el job, tampoco cuando
+      # `migrate diff` no puede correr; lo que sí hace es dejar el veredicto
+      # `destructivo` en `GITHUB_OUTPUT`, y con eso deciden los dos pasos de
+      # abajo: el push (sólo si es `false`) y el gate humano (si no lo es).
       - name: Diagnosticar deriva de esquema (migrate diff)
+        id: deriva_esquema
         if: steps.db_secret.outputs.present == 'true'
         working-directory: k0mp4ss_fe/apps/web
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: node scripts/diagnostico-esquema.mjs
+      # El push corre SÓLO con deriva provablemente aditiva. El prefijo
+      # `db_secret` se mantiene porque es el mismo `if:` que tenía el paso; el
+      # veredicto es lo único nuevo. `--accept-data-loss` viaja acá y no en el
+      # job: en el mismo paso que lo justifica, no como permiso permanente.
       - name: Sincronizar el esquema
-        if: steps.db_secret.outputs.present == 'true'
+        if: steps.db_secret.outputs.present == 'true' && steps.deriva_esquema.outputs.destructivo == 'false'
         working-directory: k0mp4ss_fe/apps/web
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
-        run: npx prisma db push --skip-generate
+        run: npx prisma db push --skip-generate --accept-data-loss
+      # Última palabra del diagnóstico, y el ÚNICO lugar del job autorizado a
+      # fallar por la deriva: el push no corrió porque el diff trae `DROP TABLE`
+      # / `DROP COLUMN`, o porque no se pudo verificar (sin `DATABASE_URL`, CLI
+      # roto, timeout) y eso nunca cuenta como seguro. Con el secret ausente el
+      # job ya murió en `db_secret` y este paso no aplica: por eso repite el
+      # prefijo `db_secret`.
+      - name: Frenar si la deriva no es sólo aditiva
+        if: steps.db_secret.outputs.present == 'true' && steps.deriva_esquema.outputs.destructivo != 'false'
+        run: |
+          echo "::error title=Deriva destructiva pendiente::El esquema NO se aplicó: la deriva contra la base real trae cambios destructivos (DROP TABLE / DROP COLUMN) o no se pudo verificar, y este job sólo aplica cambios provablemente aditivos."
+          echo ""
+          echo "Qué hacer: leé el resumen y el SQL completo del paso «Diagnosticar deriva de esquema (migrate diff)», decidí si el DROP es aceptable, y aplicalo VOS, a mano, desde k0mp4ss_fe/apps/web:"
+          echo ""
+          echo "    DATABASE_URL=<la de Neon> npx prisma db push --skip-generate --accept-data-loss"
+          echo ""
+          echo "Después volvé a correr este job: con la deriva aplicada el diff queda vacío, destructivo=false y el push automático no tiene nada que hacer."
+          exit 1
 
   deploy:
     name: Deploy a Vercel (producción)
