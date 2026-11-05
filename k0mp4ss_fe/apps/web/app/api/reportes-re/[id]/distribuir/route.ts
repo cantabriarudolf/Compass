@@ -7,11 +7,14 @@
  * - **Distribuir = publicar en el visor interno con permiso + email opcional.**
  *   Los destinatarios se resuelven AHORA (segmentación EF + perfil + tenencia),
  *   no al emitir: el informe congelado no cambia, la audiencia sí puede.
- * - El **email queda en outbox `pendiente`**: la plataforma no tiene emisor SMTP
- *   implementado, así que el envío se registra con estado `pendiente` y esta ruta
- *   NUNCA responde que se envió. Solo el visor queda en estado `publicado`.
+ * - El **email sale por el emisor SMTP real** (`lib/smtp.ts`, F4): `enviado`
+ *   solo cuando el servidor aceptó el mensaje, `fallido` con el motivo cuando
+ *   rebotó y `pendiente` cuando no hay emisor configurado (falta la CF o
+ *   `SMTP_PASSWORD`). Esta ruta NUNCA responde que se envió algo que el servidor
+ *   no aceptó. Solo el visor queda en estado `publicado`.
  * - El estado del envío se persiste en `envios` (una entrada por canal y
- *   destinatario, con fecha y estado) y se resume en `estadoDistribucion`.
+ *   destinatario, con fecha y estado) y se resume en `estadoDistribucion` con el
+ *   estado más restrictivo: `pendiente` > `fallido` > `enviado` > `publicado`.
  *
  * Authz: SOLO administrador (`re` editar); el comité solo lee (`re` ver).
  */
@@ -21,6 +24,7 @@ import { logger } from "@/lib/logger"
 import { hoyISO } from "@/lib/date-utils"
 import { generarId } from "@/lib/id-utils"
 import { resolverSegmentacionRE } from "@/lib/reporteria-utils"
+import { enviarCorreoComunidad, estadoRegistroSMTP, motivoSMTP } from "@/lib/smtp"
 import type { EnvioReporteRE, ReporteRE } from "@/lib/schemas"
 import { jsonError } from "@/lib/api/with-comunidad-scope"
 import { cargarReporteRE, contextoAccionRE, registrarEventoRE } from "../../_acciones"
@@ -111,23 +115,59 @@ export async function POST(req: Request, ctx: Ctx): Promise<Response> {
     const porPersona = new Map(personas.map((p) => [p.id, p]))
     const resumenBloques = (reporte.bloques as string[]).join(", ")
     const primerBloque = (reporte.payloadSnapshot as ReporteRE["payloadSnapshot"])[0]
+    // Un solo texto para la bandeja interna y para el correo: el informe dice lo
+    // mismo por los dos canales.
+    const asuntoEnvio = `Reporte distribuido: ${reporte.titulo}`
+    const cuerpoEnvio = `${reporte.titulo} — bloques: ${resumenBloques}.${
+      primerBloque?.lineas[0]
+        ? ` ${primerBloque.lineas[0].etiqueta}: ${primerBloque.lineas[0].valor}.`
+        : ""
+    }`
 
-    // Envíos: el visor interno queda publicado; el email, si corresponde,
-    // queda ENCOLADO como `pendiente` (sin emisor SMTP, no se marca enviado).
+    // Envíos por email: UN mensaje por destinatario con correo registrado, fuera
+    // de la transacción (la red no se mezcla con la escritura en la base). El
+    // estado es el que declaró el servidor SMTP; los destinatarios sin correo
+    // quedan `fallido` (no hay a dónde entregar) en vez de un `pendiente` falso.
+    const enviosEmail: EnvioReporteRE[] = []
+    const motivosEmail = new Set<string>()
+    if (encolarEmail) {
+      for (const personaId of destinatarios) {
+        const destino = porPersona.get(personaId)?.email?.trim() ?? ""
+        const envio = destino
+          ? await enviarCorreoComunidad(scope.comunidadId, {
+              to: destino,
+              subject: asuntoEnvio,
+              text: cuerpoEnvio,
+            })
+          : ({
+              estado: "fallido" as const,
+              motivo:
+                "Falló el envío por SMTP: el destinatario no tiene correo electrónico registrado.",
+            })
+        motivosEmail.add(motivoSMTP(envio))
+        enviosEmail.push({
+          canal: "email",
+          destinatarioPersonaId: personaId,
+          fecha,
+          estado: estadoRegistroSMTP(envio),
+        })
+      }
+    }
+
+    // Envíos: el visor interno queda publicado y el email con el estado real.
     const envios: EnvioReporteRE[] = [
       { canal: "visor", fecha, estado: "publicado" },
-      ...(encolarEmail
-        ? destinatarios.map((personaId) => ({
-            canal: "email" as const,
-            destinatarioPersonaId: personaId,
-            fecha,
-            estado: "pendiente" as const,
-          }))
-        : []),
+      ...enviosEmail,
     ]
-    const estadoDistribucion = envios.some((e) => e.estado === "pendiente")
+    const estadosEmail = enviosEmail.map((envio) => envio.estado)
+    const estadoEmail = estadosEmail.includes("pendiente")
       ? "pendiente"
-      : "publicado"
+      : estadosEmail.includes("fallido")
+        ? "fallido"
+        : estadosEmail.includes("enviado")
+          ? "enviado"
+          : "publicado"
+    const estadoDistribucion = estadoEmail === "publicado" ? "publicado" : estadoEmail
 
     await prisma.$transaction(async (tx) => {
       // El informe se publica en la bandeja interna de cada destinatario
@@ -146,12 +186,8 @@ export async function POST(req: Request, ctx: Ctx): Promise<Response> {
             comunidadId: scope.comunidadId,
             destinatarioRol: rolBandeja,
             destinatarioPersonaId: personaId,
-            asunto: `Reporte distribuido: ${reporte.titulo}`,
-            cuerpo: `${reporte.titulo} — bloques: ${resumenBloques}.${
-              primerBloque?.lineas[0]
-                ? ` ${primerBloque.lineas[0].etiqueta}: ${primerBloque.lineas[0].valor}.`
-                : ""
-            }`,
+            asunto: asuntoEnvio,
+            cuerpo: cuerpoEnvio,
             canal: "email_simulado",
             moduloOrigen: "RE",
             fecha,
@@ -177,7 +213,7 @@ export async function POST(req: Request, ctx: Ctx): Promise<Response> {
         id,
         `Reporte "${reporte.titulo}"${reporte.numero ? ` N°${reporte.numero}` : ""} publicado en el visor interno para ${destinatarios.length} destinatario(s)${
           encolarEmail
-            ? "; el email quedó en la cola de salida como pendiente (sin emisor SMTP, no se envió)."
+            ? `; email → ${estadoEmail} (${enviosEmail.length} envío(s) registrado(s))${[...motivosEmail].length > 0 ? `: ${[...motivosEmail].join(" | ")}` : ""}.`
             : " (sin email)."
         }`,
         tx
@@ -188,7 +224,7 @@ export async function POST(req: Request, ctx: Ctx): Promise<Response> {
       ok: true,
       destinatarios: destinatarios.length,
       estadoDistribucion,
-      email: encolarEmail ? "pendiente" : "no_solicitado",
+      email: encolarEmail ? estadoEmail : "no_solicitado",
       mensaje: `Reporte publicado en el visor interno para ${destinatarios.length} destinatario(s).`,
     })
   } catch (e) {

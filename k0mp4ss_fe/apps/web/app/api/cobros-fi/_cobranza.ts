@@ -14,7 +14,9 @@
  *   El apagado más restrictivo gana: no hay forma de saltear el interruptor
  *   global desde la preferencia individual.
  * - **Sin emisor SMTP** el email queda en outbox `pendiente` y nunca se reporta
- *   como enviado.
+ *   como enviado. Con el emisor real (`lib/smtp.ts`, F4) el estado del email es
+ *   el que devolvió el servidor: `enviado` solo si aceptó el mensaje, `fallido`
+ *   con su motivo si rebotó, y `pendiente` cuando falta configuración.
  * - Authz: `fi:cobranza` (administrador ejecuta, comité solo `ver`) y
  *   `fi:cobranza:propia` (el residente decide su propio canal, ABAC en la ruta).
  */

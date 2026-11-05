@@ -9,9 +9,12 @@
  *   (crea la notificación de la app) y/o por **email** (cola de salida) solo si
  *   el interruptor GLOBAL de la comunidad y la preferencia del RESIDENTE están
  *   encendidos. Un canal apagado no se usa y queda registrado el motivo.
- * - **Nunca se reporta un email como enviado**: la plataforma no tiene emisor
- *   SMTP implementado, así que el correo se registra como `pendiente` en
- *   `envios_cobranza_fi` y la respuesta lo dice con ese estado.
+ * - **Nunca se reporta un email como enviado**: el correo sale por el emisor
+ *   SMTP real (`lib/smtp.ts`, F4). El registro dice `enviado` solo cuando el
+ *   servidor aceptó el mensaje; `fallido` con el motivo cuando rebotó (auth
+ *   rechazada, conexión rechazada, timeout); y `pendiente` cuando no hay emisor
+ *   configurado (falta la CF o `SMTP_PASSWORD`), que es una condición de
+ *   configuración y no un envío fallido.
  * - **Cada envío queda registrado**: canal, fecha, destinatario, estado
  *   (`pendiente|enviado|fallido`) y motivo.
  * - **Idempotencia**: reenviar la misma gestión (misma unidad, mismo
@@ -32,6 +35,7 @@ import { logger } from "@/lib/logger"
 import { hoyISO } from "@/lib/date-utils"
 import { generarId } from "@/lib/id-utils"
 import { estadoDeCobro, saldoPendiente } from "@/lib/finanzas-utils"
+import { enviarCorreoComunidad, estadoRegistroSMTP, motivoSMTP } from "@/lib/smtp"
 import { CANALES_COBRANZA_FI, type CanalCobranzaFI } from "@/lib/schemas"
 import { jsonError } from "@/lib/api/with-comunidad-scope"
 import {
@@ -51,10 +55,10 @@ const EntradaCobranzaSchema = z.object({
   reenviar: z.boolean().optional(),
 })
 
-/** Estado de UN canal en la respuesta: enviado, en cola, omitido o ya existente. */
+/** Estado de UN canal en la respuesta: enviado, en cola, fallido, omitido o ya existente. */
 export type ResultadoCanalCobranza = {
   canal: CanalCobranzaFI
-  estado: "enviado" | "pendiente" | "omitido" | "duplicado"
+  estado: "enviado" | "pendiente" | "fallido" | "omitido" | "duplicado"
   motivo?: string
   envioId?: string
   fecha?: string
@@ -148,15 +152,20 @@ export async function POST(req: Request, ctx: Ctx): Promise<Response> {
     }
     const personaId = vinculo.personaId
 
-    const [global, preferencia, unidad] = await Promise.all([
+    const [global, preferencia, unidad, persona] = await Promise.all([
       leerInterruptorGlobal(scope.comunidadId),
       leerPreferenciaCanal(scope.comunidadId, personaId),
       prisma.unidad.findUnique({
         where: { id: ancla.unidadId },
         select: { etiqueta: true, numero: true },
       }),
+      prisma.persona.findUnique({
+        where: { id: personaId },
+        select: { email: true },
+      }),
     ])
     const refUnidad = unidad ? `${unidad.etiqueta} ${unidad.numero}` : ancla.unidadId
+    const emailDestino = persona?.email?.trim() ?? ""
 
     // Resolución de canales: global ∧ preferencia, con motivo por canal.
     const canales = resolverCanalesCobranza(global, preferencia)
@@ -173,6 +182,10 @@ export async function POST(req: Request, ctx: Ctx): Promise<Response> {
           )})`
       )
       .join("; ")
+    // Un solo texto para los dos canales: el correo dice lo mismo que el aviso
+    // del visor (no hay dos redacciones que se desincronicen).
+    const asuntoEnvio = `Recordatorio de deuda vencida (${refUnidad})`
+    const cuerpoEnvio = `Su unidad registra ${clp(montoTotal)} en ${vencidos.length} cobro(s) vencido(s): ${detalle}. Regularice su situación para evitar corte de servicios.`
     const fecha = hoy
     const reenvioEn = reenviar ? Date.now() : undefined
 
@@ -218,16 +231,30 @@ export async function POST(req: Request, ctx: Ctx): Promise<Response> {
       }
 
       // Visor interno: el envío se materializa en la notificación de la app
-      // (estado `enviado`). Email: queda en la cola de salida (`pendiente`),
-      // porque la plataforma no tiene emisor SMTP implementado.
+      // (estado `enviado`). Email: sale por el emisor SMTP real (F4) y el
+      // registro solo dice `enviado` si el servidor aceptó el mensaje.
       const esEmail = canal === "email"
       const envioId = generarId("env-cob")
-      const motivoEnvio = esEmail
-        ? "Sin emisor SMTP configurado: el correo queda en la cola de salida (outbox) y no se reporta como enviado."
-        : undefined
+      let estado: "pendiente" | "enviado" | "fallido" = "enviado"
+      let motivoEnvio: string | undefined
+      if (esEmail) {
+        const envio = emailDestino
+          ? await enviarCorreoComunidad(scope.comunidadId, {
+              to: emailDestino,
+              subject: asuntoEnvio,
+              text: cuerpoEnvio,
+            })
+          : ({
+              estado: "fallido" as const,
+              motivo:
+                "Falló el envío por SMTP: el propietario de la unidad no tiene correo electrónico registrado.",
+            })
+        estado = estadoRegistroSMTP(envio)
+        motivoEnvio = motivoSMTP(envio)
+      }
       aEscribir.push({
         canal,
-        estado: esEmail ? "pendiente" : "enviado",
+        estado,
         claveEnvio: claveEnvioCobranza({
           unidadId: ancla.unidadId,
           personaId,
@@ -239,7 +266,7 @@ export async function POST(req: Request, ctx: Ctx): Promise<Response> {
       })
       resultados.push({
         canal,
-        estado: esEmail ? "pendiente" : "enviado",
+        estado,
         motivo: motivoEnvio,
         envioId,
         fecha,
@@ -280,8 +307,8 @@ export async function POST(req: Request, ctx: Ctx): Promise<Response> {
               comunidadId: scope.comunidadId,
               destinatarioRol: "propietario",
               destinatarioPersonaId: personaId,
-              asunto: `Recordatorio de deuda vencida (${refUnidad})`,
-              cuerpo: `Su unidad registra ${clp(montoTotal)} en ${vencidos.length} cobro(s) vencido(s): ${detalle}. Regularice su situación para evitar corte de servicios.`,
+              asunto: asuntoEnvio,
+              cuerpo: cuerpoEnvio,
               canal: "email_simulado",
               moduloOrigen: "FI",
               fecha,
@@ -321,7 +348,7 @@ export async function POST(req: Request, ctx: Ctx): Promise<Response> {
     }
 
     const creados = resultados.filter(
-      (r) => r.estado === "enviado" || r.estado === "pendiente"
+      (r) => r.estado === "enviado" || r.estado === "pendiente" || r.estado === "fallido"
     )
     const omitidos = resultados.filter((r) => r.estado === "omitido")
     // `idempotente` describe lo único que importa para no duplicar: la gestión
