@@ -125,6 +125,86 @@ Cada cobro MUST poder expresar su detalle como líneas por concepto (`concepto`,
 - **WHEN** un cobro con líneas de gasto común y de reserva se paga complete o parcialmente
 - **THEN** cada fondo recibe la parte de su línea y el fondo de reserva no cobra dos veces el mismo dinero
 
+### Requirement: Aviso de Cobro Congelado por Unidad y Período
+El sistema MUST emitir el aviso de cobro de un período mediante `POST /api/avisos-cobro` (permiso `fi:gasto_comun`: administración emite, comité lee), para una unidad o para todas las unidades con cobro en el período, y el aviso MUST nacer congelado: folio `AC-####` correlativo **por comunidad**, código de verificación, fecha de emisión y `contenido` guardado tal como se emitió, con folio y código asignados por el servidor dentro de la transacción y protegidos por el índice único `(comunidadId, folio)`. El contenido SHALL llevar lo que exige el artículo 31 de la Ley 21.442: la proporción de la unidad al gasto común y al fondo de reserva con los términos del reglamento vigente que la fijaron, el desglose por concepto (gasto común, recargo al fondo de reserva, multas y los demás conceptos, cada uno con su nombre y su monto), los intereses y multas adeudados a la fecha de emisión, lo pagado a esa fecha, el total adeudado y, a nivel comunidad, el detalle de ingresos, egresos mensuales y saldo de caja al cierre del período. Un aviso emitido NO SHALL poder editarse (no hay PUT) ni borrarse (DELETE responde siempre 409) y un par unidad-período ya avisado rechaza una segunda emisión (409). Cuando una cifra que la ley exige no se puede computar, el documento MUST declararla por su nombre y con su motivo en `contenido.noComputables` en vez de imprimir un cero, y la cifra correspondiente queda en `null`; los totales de comunidad son la excepción que bloquea: sin fondos de caja no son computables y el aviso no se emite (400). Un período sin emisión de gasto común no admite aviso (409) y una unidad sin cobro en el período no recibe aviso (400 si se la pide, omitida cuando se emite para todas).
+
+#### Scenario: Aviso con el contenido que exige la ley
+- **WHEN** se emite el aviso de una unidad con cobro en el período
+- **THEN** el contenido lleva la proporción al gasto común y al fondo de reserva, el desglose por concepto, los intereses y multas a la fecha de emisión, lo pagado, el total adeudado y los tres totales de la comunidad del mes, y el aviso queda persistido con su folio `AC-####` y su código de verificación
+
+#### Scenario: Folio correlativo por comunidad asignado por el servidor
+- **WHEN** se emiten avisos en dos comunidades
+- **THEN** cada folio sigue la secuencia de su propia comunidad y es el servidor quien lo asigna, no el cliente
+
+#### Scenario: Aviso emitido no se borra
+- **WHEN** se intenta eliminar un aviso emitido
+- **THEN** la API responde 409 nombrando el documento con el que se cobra y la fila sigue intacta
+
+#### Scenario: Cambiar el cargo no cambia el aviso
+- **WHEN** el cargo, sus moras, sus pagos o los egresos de la comunidad se modifican después de emitido el aviso
+- **THEN** el contenido congelado sigue diciendo exactamente lo mismo que decía al emitirse
+
+#### Scenario: Dato que la ley pide y no se puede computar se declara con su nombre
+- **WHEN** la unidad no declara coeficiente o la comunidad no tiene versión vigente del reglamento para el período
+- **THEN** el contenido lo declara en `noComputables` con su campo y su motivo, la cifra queda en `null` y el monto del cargo que sí se conoce se imprime igual
+
+#### Scenario: Sin fondos de caja no hay aviso
+- **WHEN** la comunidad no tiene fondos de caja registrados, así que el saldo al cierre del período no es computable
+- **THEN** la emisión responde 400 nombrando lo que no se puede computar y no crea ningún aviso
+
+### Requirement: Documento Firmado con la Huella del Contenido
+El documento del aviso SHALL armarse **solo desde la fila guardada**: cada cifra sale del `contenido` congelado y ninguna se recalcula desde los cargos, el reglamento ni el resumen del mes, de modo que el papel no pueda contradecir al aviso firmado. El documento MUST llevar la firma digitalizada configurada en CF resuelta a imagen (sin firma configurada el bloque queda en blanco y sigue nombrando al administrador responsable) y la huella determinista del contenido: SHA-256 del JSON canónico del contenido —claves ordenadas recursivamente, sin espacios, UTF-8— en hexadecimal, de la que se imprimen los primeros 16 caracteres, impresa en el documento y en el pie de cada página, de modo que el papel se pueda verificar contra lo que el sistema emitió. Lo que la fila no trae MUST imprimirse como «No disponible», nunca como cero.
+
+#### Scenario: El documento no recalcula ninguna cifra
+- **WHEN** el contenido guardado no trae un monto del desglose
+- **THEN** el documento imprime «No disponible» y no lo deduce de otros campos del aviso ni imprime cero
+
+#### Scenario: La huella del contenido se imprime
+- **WHEN** se arma el documento de un aviso emitido
+- **THEN** lleva el hash del contenido congelado impreso, en el cuerpo y en el pie de cada página
+
+#### Scenario: Huella reproducible y sensible al contenido
+- **WHEN** se calcula la huella del mismo contenido dos veces, o de dos contenidos que solo difieren en un monto, en el período o en el orden de una lista
+- **THEN** el mismo contenido da siempre el mismo hash de 16 caracteres hexadecimales en mayúscula, el orden de las claves no lo altera, y cualquier cambio en un dato o en el orden de un array da otro hash
+
+#### Scenario: Firma configurada embebida
+- **WHEN** la comunidad tiene firma digitalizada configurada y se arma el documento del aviso
+- **THEN** la firma se embebe en el bloque de firma junto al administrador responsable
+
+### Requirement: Entrega del Aviso con Prueba
+La entrega del aviso MUST ser una acción explícita (`POST /api/avisos-cobro/[id]/entrega`, permiso `fi:gasto_comun`) y no un efecto de la emisión. El destinatario SHALL ser el propietario **vigente** de la unidad del aviso; una unidad sin propietario vigente MUST rechazar la entrega nombrando la unidad y el folio, sin escribir nada. La entrega por el visor MUST materializarse en la notificación que el residente ve, creada en la misma transacción, y el registro de la entrega SHALL guardar el id de esa notificación como prueba de que se entregó. El correo SHALL quedar `pendiente` con su motivo mientras no exista emisor SMTP (F4) y NUNCA SHALL reportarse como enviado ni como entregado. Los interruptores de canal de la cobranza NO SHALL gobernar la entrega del aviso: apagan recordatorios de deuda, y el aviso arranca el plazo de pago, así que no puede quedar sin entregar en silencio. Reentregar el mismo aviso a la misma persona por el mismo canal no SHALL duplicar el registro; el reenvío explícito agrega una fila nueva marcada como reenvío.
+
+#### Scenario: Entrega por el visor con la notificación como prueba
+- **WHEN** la administración entrega el aviso de una unidad con propietario vigente
+- **THEN** se crea la notificación del residente con el folio y el período, el registro de la entrega la referencia por su id y el canal visor queda `entregado`
+
+#### Scenario: El correo queda en cola y nunca se reporta como enviado
+- **WHEN** se entrega un aviso sin emisor SMTP configurado
+- **THEN** el canal email queda `pendiente` con el motivo del outbox y ningún estado del registro dice enviado
+
+#### Scenario: Unidad sin propietario vigente no se entrega
+- **WHEN** se intenta entregar el aviso de una unidad sin propietario vigente
+- **THEN** la entrega se rechaza nombrando la unidad y el folio, y no se escribe registro de entrega, notificación ni evento
+
+### Requirement: Plazo de Pago desde la Emisión del Aviso
+El vencimiento del aviso SHALL derivarse de su **fecha de emisión** más los `diasPagoGc` de la versión del reglamento que rige el período —nunca la última versión declarada—, contados como días corridos en UTC (Ley 21.442 art. 7), y el aviso MUST persistir ese vencimiento en su propio campo. Como la mora corre desde el `fechaVencimiento` del cargo, la emisión MUST alinear la fecha de vencimiento del cargo del período a la del aviso dentro de la misma transacción, y la copia congelada del cargo dentro del contenido SHALL decir la misma fecha. Sin versión vigente para el período no hay plazo que derivar: el aviso MUST quedar con vencimiento `null` y no tocar el cargo, en vez de inventar una fecha.
+
+#### Scenario: El vencimiento es la emisión más los días declarados
+- **WHEN** la versión que rige el período declara 10 días de pago y se emite el aviso
+- **THEN** el vencimiento del aviso es su fecha de emisión más 10 días corridos y no la fecha que traía el cargo
+
+#### Scenario: Rige la versión del período, no la última
+- **WHEN** existe una versión posterior que declara otros días y una anterior que alcanza el período
+- **THEN** el vencimiento usa los días de la versión que rige el período y queda congelada esa versión en el contenido
+
+#### Scenario: El cargo se alinea al papel
+- **WHEN** se emite el aviso de un período y el cargo traía otra fecha de vencimiento o ninguna
+- **THEN** el cargo queda con la fecha de vencimiento del aviso en la misma transacción y su copia congelada en el contenido dice lo mismo
+
+#### Scenario: Sin versión vigente no se inventa el plazo
+- **WHEN** la comunidad no declara una versión del reglamento vigente para el período
+- **THEN** el aviso queda con vencimiento `null`, declara lo no computable y el cargo conserva su fecha
+
 ### Requirement: Control de Morosidad y Cobranza Activa
 El sistema SHALL calcular la mora sobre cobros vencidos usando `diaCortePago` (CF) como referencia de vencimiento: `aplicarMoraFI(cobroId, tasaMensualPct?)` propone y aplica la mora pro-rata por días de atraso (idempotente por día) auditando `FI_MORA_APPLIED`. El dashboard de corte de servicios SHALL resaltar exclusivamente las unidades cuya cantidad de periodos vencidos alcanza o supera `limiteMesesAvisoCorte` (CF), y `enviarCobranzaFI(unidadId)` MUST registrar gestiones notificando al responsable de cobro con canal email_simulado y auditando `FI_COBRANZA_SENT`.
 
