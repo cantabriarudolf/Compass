@@ -84,6 +84,13 @@ function linea(concepto: string, monto: number, fondoId: string) {
   return { concepto, monto, fondoId }
 }
 
+/** Suma días corridos a una fecha ISO, con el mismo reloj UTC que el aviso. */
+function sumarDias(fecha: string, dias: number): string {
+  const base = new Date(`${fecha}T00:00:00Z`)
+  base.setUTCDate(base.getUTCDate() + dias)
+  return base.toISOString().slice(0, 10)
+}
+
 describe("/api/avisos-cobro — documento congelado, foliado e inmutable (S1/S4/S7)", () => {
   const cookies = new Map<string, string>()
   /** Aviso de la unidad 101 de la comunidad A, emitido en el primer caso. */
@@ -531,8 +538,10 @@ describe("/api/avisos-cobro — documento congelado, foliado e inmutable (S1/S4/
     expect(avisoU1.codigoVerificacion).toMatch(/^VC-[A-Z0-9]{8}$/)
     expect(avisoU1.periodo).toBe(PERIODO)
     expect(avisoU1.fechaEmision).toBe(hoyISO())
-    // El vencimiento es el del cargo emitido, no una fecha inventada.
-    expect(avisoU1.vencimiento).toBe(`${PERIODO}-10`)
+    // S6 (T7): el vencimiento se deriva de la EMISIÓN + los `diasPagoGc` de la
+    // versión (10), no del `fechaVencimiento` que traía el cargo (`2026-09-10`).
+    expect(avisoU1.vencimiento).toBe(sumarDias(avisoU1.fechaEmision, 10))
+    expect(avisoU1.vencimiento).not.toBe(`${PERIODO}-10`)
 
     const participacion = contenidoCongelado.participacion as Record<string, unknown>
     expect(participacion).toEqual({

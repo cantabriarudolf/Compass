@@ -39,6 +39,27 @@
  *   - `parametros_invalidos`: la versión existe pero sus números no parsean;
  *   - `prorrateo_no_declarado`: la unidad no declara coeficiente (0 o menos).
  *
+ * ── El plazo de pago corre desde la EMISIÓN del aviso (S6) ──────────────────
+ *
+ * Ley 21.442 art. 7: el pago se hace "dentro de los diez primeros días
+ * siguientes a la fecha de emisión del correspondiente aviso de cobro". El reloj
+ * arranca en la EMISIÓN, no en la entrega (la entrega es un deber aparte, S3):
+ *
+ *     vencimiento = fechaEmision + diasPagoGc de la versión que rige el período
+ *
+ * `vencimientoAviso` hace esa cuenta y es lo que el aviso persiste en su columna
+ * `vencimiento`. El plazo es configuración de la comunidad, no del código: 10
+ * días en el reglamento de referencia, otros valores si la versión los declara.
+ *
+ * El aviso es el documento que cuenta, así que la emisión ALINEA el cargo del
+ * período a la fecha del papel (`fechaVencimiento`). No es un detalle: la mora
+ * corre desde `fechaVencimiento` (`app/api/cobros-fi/[id]/mora`), y una fecha
+ * que el residente no vio en el aviso no puede cobrar intereses. Las otras dos
+ * salidas se descartaron: rechazar la emisión bloquearía el papel por una fecha
+ * heredada del cargo, y "reportar" la diferencia la deja viva en la base, que
+ * es exactamente lo que hay que evitar. La copia congelada del cargo dentro del
+ * contenido toma la fecha alineada, para que el documento no se contradiga.
+ *
  * ── La huella del contenido ─────────────────────────────────────────────────
  *
  * `hashContenido` (S2) devuelve una cadena corta y reproducible del contenido
@@ -52,9 +73,6 @@
  * - No firma ni entrega (T5/T6): el contenido se congela acá y el hash se
  *   calcula acá; la firma y la entrega son del documento y del visor.
  * - No entrega ni registra la entrega (T6, S3).
- * - No deriva el vencimiento desde la fecha de emisión (T7, S6): el `vencimiento`
- *   del aviso es el del cargo ya emitido para ese período, y si el período no
- *   declara uno queda `null` en vez de inventar una fecha.
  * - No consolida la deuda de períodos anteriores: el aviso cobra el período que
  *   emite. Sumar saldos viejos exige decidir su alcance contable, y esa decisión
  *   no se toma acá.
@@ -448,20 +466,29 @@ export async function totalesDelPeriodo(
 }
 
 /**
- * Vencimiento del aviso: el que ya declara el cargo del período. Con cargos que
- * declaran fechas distintas no se elige una (sería inventar) y queda `null`.
+ * Vencimiento del aviso (S6, Ley 21.442 art. 7): la fecha de emisión del aviso
+ * arranca el plazo de pago que declara la versión del reglamento vigente en el
+ * período.
+ *
+ * Algoritmo exacto: se suman `diasPagoGc` días CORRIDOS a la fecha de emisión
+ * sobre el reloj UTC (no sobre la hora local: el día del documento no puede
+ * depender de la zona del servidor) y se devuelve `AAAA-MM-DD`.
+ *
+ *     2026-09-01 + 10 → 2026-09-11 · 2026-09-25 + 10 → 2026-10-05
+ *     2026-12-28 + 10 → 2027-01-07
+ *
+ * Sin días de pago declarados (`null`: la comunidad no tiene versión vigente o
+ * sus parámetros no parsean) no hay plazo que derivar y el vencimiento queda
+ * `null`: no se inventa una fecha. La entrega del aviso NO entra en la cuenta.
  */
-export function vencimientoDelPeriodo(
-  cobros: ReadonlyArray<{ fechaVencimiento?: string | null }>
+export function vencimientoAviso(
+  fechaEmision: string,
+  diasPagoGc: number | null
 ): string | null {
-  const fechas = [
-    ...new Set(
-      cobros
-        .map((cobro) => cobro.fechaVencimiento ?? null)
-        .filter((fecha): fecha is string => fecha !== null)
-    ),
-  ]
-  return fechas.length === 1 ? fechas[0]! : null
+  if (diasPagoGc === null || !Number.isFinite(diasPagoGc)) return null
+  const base = new Date(`${fechaEmision}T00:00:00Z`)
+  base.setUTCDate(base.getUTCDate() + diasPagoGc)
+  return base.toISOString().slice(0, 10)
 }
 
 /** Siguiente número correlativo de folio de una lista de folios emitidos. */

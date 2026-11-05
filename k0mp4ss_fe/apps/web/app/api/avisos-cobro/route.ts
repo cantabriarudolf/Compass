@@ -22,6 +22,14 @@
  *   4. los totales de comunidad del período deben ser computables (400): sin
  *      fondos de caja no hay saldo al cierre que declarar (art. 31).
  *
+ * El vencimiento del aviso NO se copia del cargo (S6): se deriva de la fecha de
+ * emisión y de los `diasPagoGc` de la versión que rige el período
+ * (`vencimientoAviso`). Como el aviso es el documento que cuenta, la emisión
+ * alinea el `fechaVencimiento` del cargo a la fecha del papel dentro de la misma
+ * transacción: la mora corre desde esa fecha y no puede correr desde una que el
+ * residente nunca vio. Un aviso sin versión vigente no tiene plazo declarado:
+ * queda con `vencimiento` en `null` y el cargo no se toca.
+ *
  * Lo que la ley exige y no se puede computar (reglamento vigente, prorrateo de
  * la unidad) NO bloquea la emisión: queda declarado en `contenido.noComputables`
  * con su motivo, y el documento lo imprime en vez de un cero. Ver
@@ -53,7 +61,7 @@ import {
   nuevoCodigoVerificacion,
   siguienteNumeroDeFolio,
   totalesDelPeriodo,
-  vencimientoDelPeriodo,
+  vencimientoAviso,
   type ContenidoAviso,
   type ReglamentoDelAviso,
 } from "@/lib/aviso-cobro"
@@ -235,8 +243,23 @@ export async function POST(req: Request): Promise<Response> {
     })
 
     const fechaEmision = hoyISO()
+    // El plazo de pago (S6) es del DOCUMENTO, no del cargo: emisión + los días
+    // que declara la versión que rige el período. Sin versión no hay plazo y el
+    // vencimiento queda `null` en vez de inventar una fecha.
+    const vencimiento = vencimientoAviso(
+      fechaEmision,
+      reglamento?.parametros?.diasPagoGc ?? null
+    )
     const filas: FilaAvisoNueva[] = objetivos.map((unidad, idx) => {
-      const cobros = cobrosDelPeriodo.filter((c) => c.unidadId === unidad.id)
+      const cobros = cobrosDelPeriodo
+        .filter((c) => c.unidadId === unidad.id)
+        // El papel manda: el cargo se emite alineado a la fecha del aviso, así
+        // que la copia congelada del contenido dice lo mismo que la columna
+        // `vencimiento` y que el cargo alineado en la transacción.
+        .map((cobro) => ({
+          ...cobro,
+          fechaVencimiento: vencimiento ?? cobro.fechaVencimiento,
+        }))
       const contenido = contenidoAviso({
         periodo,
         fechaEmision,
@@ -266,7 +289,7 @@ export async function POST(req: Request): Promise<Response> {
         unidadId: unidad.id,
         periodo,
         fechaEmision,
-        vencimiento: vencimientoDelPeriodo(cobros),
+        vencimiento,
         contenido,
         totalesComunidad: totales.resumen,
       }
@@ -314,6 +337,26 @@ export async function POST(req: Request): Promise<Response> {
               })
             )
             numero += 1
+          }
+
+          // S6, la otra mitad de la regla: si el cargo del período traía otra
+          // fecha, el papel manda y el cargo queda con la fecha del aviso. La
+          // mora corre desde `fechaVencimiento`, así que dejarla distinta sería
+          // cobrar intereses contra una fecha que el residente nunca vio.
+          if (vencimiento) {
+            await tx.cobroFI.updateMany({
+              where: {
+                comunidadId: scope.comunidadId,
+                periodo,
+                unidadId: { in: filas.map((f) => f.unidadId) },
+                // `not` no alcanza a las filas sin fecha: el `null` se nombra.
+                OR: [
+                  { fechaVencimiento: null },
+                  { fechaVencimiento: { not: vencimiento } },
+                ],
+              },
+              data: { fechaVencimiento: vencimiento },
+            })
           }
           return filasCreadas
         })
