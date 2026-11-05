@@ -56,14 +56,20 @@ export const configuracionDefault: ConfiguracionGlobal = {
   diaCortePago: 5,
   limiteMesesAvisoCorte: 3,
 
+  // Correos: `smtpUser` y `smtpFrom` son obligatorios y no vacíos en
+  // ConfiguracionGlobalSchema, así que llevan un buzón de dominio reservado
+  // (`.test`, RFC 2606) que no puede pertenecer a ninguna comunidad real.
+  // `smtpBcc` y `smtpRecepcion` son nullable: una comunidad nueva no hereda
+  // buzones ajenos y el seed escribe NULL (sin BCC ni Reply-To) hasta que el
+  // administrador los configure.
   smtpHost: "smtp.gmail.com",
   smtpPort: 587,
-  smtpUser: "gdcuentas@sgc.cl",
+  smtpUser: "correo@comunidad.test",
   smtpSecurity: "tls",
-  smtpFrom: "gdcuentas@sgc.cl",
+  smtpFrom: "correo@comunidad.test",
   smtpFromName: "Administración Edificio Plaza Central",
-  smtpBcc: "auditoria@sgc.cl",
-  smtpRecepcion: "conserjeria@sgc.cl",
+  smtpBcc: undefined,
+  smtpRecepcion: undefined,
 
   notificarEmisionGC: true,
   notificarRegistroVisitas: true,

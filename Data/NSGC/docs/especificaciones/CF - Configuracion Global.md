@@ -43,7 +43,7 @@ Este parámetro es crítico para el funcionamiento de los módulos de Comunicaci
 - **Usuario de Autenticación:** Cuenta de correo para loguearse.
 - **Contraseña o Token de App:** Credencial de acceso (almacenamiento encriptado).
 - **Seguridad:** Selección entre SSL, TLS o sin seguridad.
-- **Correo Remitente (From):** Dirección que figurará como emisor (ej: `gdcuentas@sgc.cl`).
+- **Correo Remitente (From):** Dirección que figurará como emisor (ej: `correo@comunidad.test`).
 - **Nombre Remitente:** Nombre comercial que verá el vecino.
 - **Correo en Copia (BCC - Auditoría):** Email oculto para respaldo de todas las comunicaciones.
 - **Correo de Conserjería / Recepción:** Email para notificaciones específicas de la operación diaria.
