@@ -38,7 +38,7 @@ import {
   IconTrendingUp,
   IconWallet,
 } from "@tabler/icons-react"
-import type { CategoriaEgresoFI, CobroFI, EmisionGC, TipoFondoFI } from "@/lib/schemas"
+import type { AvisoCobro, CategoriaEgresoFI, CobroFI, EmisionGC, TipoFondoFI } from "@/lib/schemas"
 import {
   estadoDeCobro,
   hoyISO,
@@ -52,6 +52,7 @@ import { useFondosFI } from "@/lib/api/use-fondos-fi"
 import { useEgresosFI } from "@/lib/api/use-egresos-fi"
 import { useIngresosFI } from "@/lib/api/use-ingresos-fi"
 import { useEmisionesGC } from "@/lib/api/use-emisiones-gc"
+import { emitirAvisosCobro, entregarAvisoCobro } from "@/lib/api/use-avisos-cobro"
 import { useCobrosFI, useAccionesCobranzaFI, useCanalesCobranzaFI } from "@/lib/api/use-cobros-fi"
 import { useUnidades } from "@/lib/api/use-unidades"
 import { useTiposUnidad } from "@/lib/api/use-tipos-unidad"
@@ -134,6 +135,134 @@ function TotalARecaudarEmision({ emision }: { emision: EmisionGC }) {
   }
   const total = propios.reduce((a, c) => a + c.montoBase, 0)
   return <span className="tabular-nums">${total.toLocaleString("es-CL")}</span>
+}
+
+/**
+ * Acción del aviso de cobro sobre un período YA emitido en gasto común
+ * (F27, spec «Aviso de Cobro Congelado…» y «Entrega del Aviso con Prueba»).
+ *
+ * Emitir y entregar son dos momentos distintos y acá se mantienen separados a
+ * propósito. `POST /api/avisos-cobro` congela el papel —folio, contenido,
+ * vencimiento— y `POST /api/avisos-cobro/[id]/entrega` deja el registro de que
+ * el residente lo recibió: ESA es la prueba de la entrega, y sin entrega el
+ * aviso no arranca el plazo de pago. Por eso la entrega nunca es un efecto de
+ * la emisión: la dispara el administrador, aviso por aviso, después.
+ *
+ * Los tres conteos son los que la ruta ya devuelve: CREADOS son las filas que
+ * volvieron; OMITIDOS son las unidades que la emisión repartió y no tienen
+ * cobro en el período (la ruta las saltea, porque un aviso en $0 sería un
+ * documento falso); RECHAZADO es la respuesta de la ruta cuando el período no
+ * tiene emisión o los totales de la comunidad no son computables, y su motivo
+ * se imprime tal cual, sin suavizarlo.
+ */
+export function AccionAvisoDeCobro({
+  periodo,
+  unidadesEmitidas,
+  emisiones,
+}: {
+  periodo: string
+  /** Unidades que la emisión del período repartió (una línea por unidad). */
+  unidadesEmitidas: number
+  /** Períodos con emisión de gasto común: sin emisión no hay aviso que emitir. */
+  emisiones: readonly { periodo: string }[]
+}) {
+  const [emitiendo, setEmitiendo] = React.useState(false)
+  const [entregando, setEntregando] = React.useState(false)
+  const [emision, setEmision] = React.useState<{
+    creados: AvisoCobro[]
+    omitidos: number
+    rechazo: string | null
+  } | null>(null)
+  const [entregas, setEntregas] = React.useState<Array<{ folio: string; texto: string }>>([])
+
+  // Sin emisión de gasto común no hay gasto común que notificar: el aviso
+  // quedaría sin respaldo y la ruta lo rechaza (409).
+  if (!emisiones.some(e => e.periodo === periodo)) {
+    return (
+      <span className="text-xs text-muted-foreground">Sin emisión de gasto común: no hay aviso que emitir.</span>
+    )
+  }
+
+  const emitir = async () => {
+    setEmitiendo(true)
+    setEntregas([])
+    try {
+      const r = await emitirAvisosCobro(periodo)
+      setEmision({
+        creados: r.avisos,
+        // Un rechazo no omite a nadie: la ruta no llegó a mirar las unidades.
+        omitidos: r.ok ? Math.max(0, unidadesEmitidas - r.avisos.length) : 0,
+        rechazo: r.ok ? null : (r.error ?? "La emisión fue rechazada."),
+      })
+    } finally {
+      setEmitiendo(false)
+    }
+  }
+
+  // Un pedido por aviso: la entrega es de cada papel al propietario vigente de
+  // su unidad, y el resultado se informa por folio (incluido el que falla).
+  const entregar = async (avisos: AvisoCobro[]) => {
+    setEntregando(true)
+    const filas: Array<{ folio: string; texto: string }> = []
+    try {
+      for (const aviso of avisos) {
+        const r = await entregarAvisoCobro(aviso.id)
+        filas.push({
+          folio: aviso.folio,
+          texto: r.ok
+            ? (r.mensaje ?? "Entrega registrada.")
+            : `No se entregó: ${r.error ?? "error desconocido"}`,
+        })
+        setEntregas([...filas])
+      }
+    } finally {
+      setEntregando(false)
+    }
+  }
+
+  // Un aviso emitido no se reemite (409): si ya hay avisos, no se ofrece emitir.
+  const yaEmitido = emision !== null && emision.creados.length > 0
+
+  return (
+    <div className="max-w-xs space-y-1.5">
+      {!yaEmitido && (
+        <Button size="sm" variant="outline" onClick={emitir} disabled={emitiendo}>
+          <IconReceipt2 className="size-4 mr-1" /> Emitir avisos del período {periodo}
+        </Button>
+      )}
+      {emision !== null && (
+        <div role="status" aria-live="polite" className="space-y-1.5 text-xs">
+          <p className="font-medium">
+            Avisos del período {periodo}: {emision.creados.length} creados, {emision.omitidos} sin aviso
+            (unidades con cobro en el período que esta corrida no cubrió), {emision.rechazo ? "1 rechazado" : "0 rechazados"}.
+          </p>
+          {emision.rechazo && (
+            <p className="text-destructive">El servidor rechazó la emisión: {emision.rechazo}</p>
+          )}
+          {yaEmitido && (
+            <>
+              <p className="text-muted-foreground">
+                Emitir no es entregar: la entrega es el registro de que el residente recibió el aviso, y por eso es un paso aparte.
+              </p>
+              <Button size="sm" variant="outline" onClick={() => entregar(emision.creados)} disabled={entregando}>
+                <IconSend className="size-4 mr-1" />
+                {emision.creados.length === 1
+                  ? "Entregar el aviso por el visor"
+                  : `Entregar los ${emision.creados.length} avisos por el visor`}
+              </Button>
+            </>
+          )}
+          {entregas.length > 0 && (
+            <ul className="space-y-0.5 text-muted-foreground">
+              {entregas.map(e => (
+                <li key={e.folio}>{e.folio} · {e.texto}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </div>
+  )
 }
 
 function periodoSugerido(): string {
@@ -689,6 +818,7 @@ export default function GastosComunesPage() {
                     <th className="px-4 py-2 text-right">Recargo al fondo de reserva<span className="block font-normal normal-case tracking-normal">aporte de la versión vigente</span></th>
                     <th className="px-4 py-2 text-right">Total a recaudar<span className="block font-normal normal-case tracking-normal">lo que pagan las unidades</span></th>
                     <th className="px-4 py-2">Fecha</th>
+                    <th className="px-4 py-2">Aviso de cobro<span className="block font-normal normal-case tracking-normal">emitir y entregar</span></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -703,10 +833,14 @@ export default function GastosComunesPage() {
                       <td className="px-4 py-2 text-right tabular-nums">{e.fondoReservaAporte ? `$${e.fondoReservaAporte.monto.toLocaleString("es-CL")}` : "—"}</td>
                       <td className="px-4 py-2 text-right"><TotalARecaudarEmision emision={e} /></td>
                       <td className="px-4 py-2">{e.fechaEmision}</td>
+                      {/* Emitir congela el papel; entregar lo registra. Son dos pasos. */}
+                      <td className="px-4 py-2 align-top">
+                        <AccionAvisoDeCobro periodo={e.periodo} unidadesEmitidas={e.lineas.length} emisiones={emisionesGC} />
+                      </td>
                     </tr>
                   ))}
                   {emisionesGC.length === 0 && (
-                    <tr><td colSpan={7} className="px-4 py-6 text-center text-muted-foreground">Aún no se ha emitido ningún periodo.</td></tr>
+                    <tr><td colSpan={8} className="px-4 py-6 text-center text-muted-foreground">Aún no se ha emitido ningún periodo.</td></tr>
                   )}
                 </tbody>
               </table>
