@@ -324,6 +324,16 @@ export async function documentoCertificadoPDF(input: {
 // La regla del dato que falta es la misma del contenido: si la fila no trae una
 // cifra, el documento imprime `NO_DISPONIBLE`, nunca un cero (un cero se lee
 // como "no se cobra" y ahí significa "no se sabe").
+//
+// ── Versión 1 y versión 2 del contenido congelado ───────────────────────────
+//
+// El aviso consolida la deuda de períodos anteriores (S4, L8), pero las filas ya
+// emitidas están congeladas en la versión 1 y NO se reimprimen distintas: la
+// sección de deuda anterior sólo aparece si el payload la trae (versión 2). Un
+// aviso v1 se imprime exactamente como el día que se emitió, y sus cifras no se
+// tocan. En la v2 el bloque siempre viene (`periodos: []` cuando no hay deuda),
+// así que el papel puede afirmar "sin deuda de períodos anteriores" en vez de
+// callarlo: un bloque ausente y uno vacío no se distinguen después.
 
 /** Marca única de una cifra que la fila congelada no trae. Nunca un cero. */
 export const NO_DISPONIBLE = "No disponible"
@@ -454,6 +464,81 @@ export function documentoAvisoCobroPDF(
           return filaMonto(`Otros conceptos — ${concepto}`, objetoDe(otro).monto)
         })
 
+  // Deuda de períodos anteriores: se imprime si y sólo si el payload la trae.
+  // `undefined`, `null` o una fila v1 significa "este aviso no consolida" y no
+  // se inventa la sección.
+  const traeDeudaAnterior =
+    contenido.deudaAnterior !== null &&
+    typeof contenido.deudaAnterior === "object" &&
+    !Array.isArray(contenido.deudaAnterior)
+  const bloqueDeuda = objetoDe(contenido.deudaAnterior)
+  const periodosDeuda = Array.isArray(bloqueDeuda.periodos)
+    ? bloqueDeuda.periodos
+    : null
+
+  /** Una celda de dinero de la tabla de deuda: la cifra congelada o el faltante. */
+  const celdaDinero = (valor: unknown): any => ({
+    text: dinero(cifraDe(valor)),
+    alignment: "right",
+  })
+
+  const seccionDeudaAnterior = (): any[] => {
+    if (!traeDeudaAnterior) return []
+    const cuerpo: any[][] = [
+      ["Período", "Concepto", "Monto base", "Intereses", "Pagado", "Saldo"].map(
+        (titulo) => ({ text: titulo, bold: true, fillColor: "#eeeeee" })
+      ),
+    ]
+    if (periodosDeuda !== null) {
+      for (const delPeriodo of periodosDeuda) {
+        const bloque = objetoDe(delPeriodo)
+        const periodo = textoDe(bloque.periodo) ?? NO_DISPONIBLE
+        const cargos = Array.isArray(bloque.cargos) ? bloque.cargos : []
+        for (const delCargo of cargos) {
+          const cargo = objetoDe(delCargo)
+          const concepto = textoDe(cargo.concepto) ?? NO_DISPONIBLE
+          const descripcion = textoDe(cargo.descripcion)
+          cuerpo.push([
+            { text: periodo },
+            { text: descripcion ? `${concepto} — ${descripcion}` : concepto },
+            celdaDinero(cargo.montoBase),
+            celdaDinero(cargo.intereses),
+            celdaDinero(cargo.pagado),
+            celdaDinero(cargo.saldo),
+          ])
+        }
+      }
+    }
+    return [
+      seccion("DEUDA DE PERÍODOS ANTERIORES"),
+      ...(periodosDeuda === null
+        ? [{ text: NO_DISPONIBLE, marginBottom: 4 }]
+        : periodosDeuda.length === 0
+          ? [
+              {
+                text: `Sin deuda de períodos anteriores al período ${aviso.periodo}.`,
+                marginBottom: 4,
+              },
+            ]
+          : [
+              {
+                table: {
+                  widths: ["auto", "*", "auto", "auto", "auto", "auto"],
+                  body: cuerpo,
+                },
+                fontSize: 8,
+              },
+            ]),
+      tabla([
+        filaMonto("Total deuda de períodos anteriores", montos.totalDeudaAnterior),
+        filaTotal(
+          "TOTAL ADEUDADO CONSOLIDADO (período + deuda anterior)",
+          montos.totalAdeudadoConsolidado
+        ),
+      ]),
+    ]
+  }
+
   const doc = {
     header: encabezadoInstitucional(config),
     footer: (currentPage: number) => ({
@@ -504,6 +589,7 @@ export function documentoAvisoCobroPDF(
         filaMonto("Pagado a la fecha de emisión", montos.pagado),
         filaTotal("TOTAL ADEUDADO", montos.totalAdeudado),
       ]),
+      ...seccionDeudaAnterior(),
       seccion(
         `TOTALES DE LA COMUNIDAD (período ${aviso.periodo}, corte ${hasta})`
       ),

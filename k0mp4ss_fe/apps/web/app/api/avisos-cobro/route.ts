@@ -30,6 +30,11 @@
  * residente nunca vio. Un aviso sin versión vigente no tiene plazo declarado:
  * queda con `vencimiento` en `null` y el cargo no se toca.
  *
+ * El aviso declara la DEUDA COMPLETA de la unidad (S4, L8): además de los cargos
+ * del período se traen, en una lectura más, los cargos de la unidad en otros
+ * períodos. `contenidoAviso` decide cuáles son deuda (saldo pendiente positivo) y
+ * los congela en `deudaAnterior`; la ruta no filtra ni recalcula ningún monto.
+ * *
  * Lo que la ley exige y no se puede computar (reglamento vigente, prorrateo de
  * la unidad) NO bloquea la emisión: queda declarado en `contenido.noComputables`
  * con su motivo, y el documento lo imprime en vez de un cero. Ver
@@ -63,6 +68,7 @@ import {
   siguienteNumeroDeFolio,
   totalesDelPeriodo,
   vencimientoAviso,
+  type CobroDelAviso,
   type ContenidoAviso,
   type ReglamentoDelAviso,
 } from "@/lib/aviso-cobro"
@@ -223,6 +229,37 @@ class AvisoDuplicado extends Error {
   }
 }
 
+/** Fila de `cobroFI` tal como sale de Prisma. */
+type CobroFila = Awaited<ReturnType<typeof prisma.cobroFI.findMany>>[number]
+
+/**
+ * Proyección del cargo a lo que el aviso lee (nunca se recalcula un monto).
+ *
+ * `fechaVencimiento` permite pasar la fecha del PAPEL (S6) cuando el cargo es
+ * del período del aviso; sin ella el cargo conserva la suya, que es lo que
+ * corresponde a un cargo de otro período (este documento no lo re-fecha).
+ */
+function comoDelAviso(
+  cobro: CobroFila,
+  fechaVencimiento?: string | null
+): CobroDelAviso {
+  return {
+    id: cobro.id,
+    periodo: cobro.periodo,
+    // SAFETY: `concepto`/`lineas`/`moras`/`pagos` son columnas con el shape de
+    // los esquemas FI; el lector de líneas acepta NULL como cobro legacy.
+    concepto: cobro.concepto as ConceptoCobroFI,
+    descripcion: cobro.descripcion,
+    montoBase: cobro.montoBase,
+    lineas: cobro.lineas as unknown as LineaCobroFI[] | null,
+    fondoId: cobro.fondoId,
+    fechaCargo: cobro.fechaCargo,
+    fechaVencimiento: fechaVencimiento ?? cobro.fechaVencimiento,
+    moras: cobro.moras as unknown as MoraCobroFI[],
+    pagos: cobro.pagos as unknown as PagoCobroFI[],
+  }
+}
+
 /** Material del índice único que disparó el P2002 ("folio", "unidadId,periodo"...). */
 function targetDelConflicto(e: unknown): string {
   if (typeof e !== "object" || e === null || !("code" in e)) return ""
@@ -355,6 +392,19 @@ export async function POST(req: Request): Promise<Response> {
       select: { id: true, nombre: true, tipo: true },
     })
 
+    // 6. Deuda de los OTROS períodos de las unidades objetivo (S4, L8). Se traen
+    // todos sus cargos de períodos distintos al del aviso y `contenidoAviso`
+    // decide cuáles son deuda (saldo pendiente positivo a la fecha de emisión):
+    // lo que se declara es lo que se debe, no lo que ya se folió.
+    const cobrosAnteriores = await prisma.cobroFI.findMany({
+      where: {
+        comunidadId: scope.comunidadId,
+        unidadId: { in: objetivos.map((u) => u.id) },
+        periodo: { not: periodo },
+      },
+      orderBy: [{ periodo: "asc" }, { fechaCargo: "asc" }, { id: "asc" }],
+    })
+
     const fechaEmision = hoyISO()
     // El plazo de pago (S6) es del DOCUMENTO, no del cargo: emisión + los días
     // que declara la versión que rige el período. Sin versión no hay plazo y el
@@ -364,36 +414,23 @@ export async function POST(req: Request): Promise<Response> {
       reglamento?.parametros?.diasPagoGc ?? null
     )
     const filas: FilaAvisoNueva[] = objetivos.map((unidad, idx) => {
+      // El papel manda: el cargo se emite alineado a la fecha del aviso, así que
+      // la copia congelada del contenido dice lo mismo que la columna
+      // `vencimiento` y que el cargo alineado en la transacción.
       const cobros = cobrosDelPeriodo
         .filter((c) => c.unidadId === unidad.id)
-        // El papel manda: el cargo se emite alineado a la fecha del aviso, así
-        // que la copia congelada del contenido dice lo mismo que la columna
-        // `vencimiento` y que el cargo alineado en la transacción.
-        .map((cobro) => ({
-          ...cobro,
-          fechaVencimiento: vencimiento ?? cobro.fechaVencimiento,
-        }))
+        .map((cobro) => comoDelAviso(cobro, vencimiento))
+      const anteriores = cobrosAnteriores
+        .filter((c) => c.unidadId === unidad.id)
+        .map((cobro) => comoDelAviso(cobro))
       const contenido = contenidoAviso({
         periodo,
         fechaEmision,
         unidad,
         reglamento,
         fondos,
-        // SAFETY: lineas/moras/pagos son Json con shape validado por CobroFISchema
-        // y `concepto` es String en BD con los valores de CONCEPTOS_COBRO_FI; el
-        // lector de líneas (lineasDeCobro) acepta NULL como cobro legacy.
-        cobros: cobros.map((cobro) => ({
-          id: cobro.id,
-          concepto: cobro.concepto as ConceptoCobroFI,
-          descripcion: cobro.descripcion,
-          montoBase: cobro.montoBase,
-          lineas: cobro.lineas as unknown as LineaCobroFI[] | null,
-          fondoId: cobro.fondoId,
-          fechaCargo: cobro.fechaCargo,
-          fechaVencimiento: cobro.fechaVencimiento,
-          moras: cobro.moras as unknown as MoraCobroFI[],
-          pagos: cobro.pagos as unknown as PagoCobroFI[],
-        })),
+        cobros,
+        cobrosAnteriores: anteriores,
         resumen: totales.resumen,
       })
       return {

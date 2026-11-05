@@ -27,6 +27,40 @@
  * detalle. El aviso NO reimplementa esa fórmula: la copia congelada es la del
  * resumen del período.
  *
+ * ── La deuda de períodos anteriores SÍ se consolida (S4, L8) ─────────────────
+ *
+ * El aviso es el título ejecutivo (arts. 31 y 32), así que no puede decir "debe
+ * $47.000" a un vecino que arrastra tres meses: tiene que declarar la deuda
+ * completa. Entra TODO cargo de la unidad con saldo pendiente positivo cuyo
+ * período NO es el del aviso — tenga o no aviso emitido ese período: lo que se
+ * declara es lo que se debe, no lo que ya se folió. El saldo sale de
+ * `saldoPendiente` (`montoBase` + moras − pagos, nunca negativo) sobre las
+ * moras y los pagos devengados a la fecha de emisión, igual que el período.
+ * Nunca se recalcula un monto a mano.
+ *
+ * El bloque `deudaAnterior` se agrupa por período, del más viejo al más nuevo,
+ * y SIEMPRE está presente: sin deuda anterior viene con `periodos: []` y
+ * `total: 0`, para que el papel pueda afirmar "sin deuda de períodos
+ * anteriores" en vez de callarlo (un bloque ausente y un bloque vacío no se
+ * distinguen después).
+ *
+ * ── Versión 2 del contenido: lo de ayer sigue diciendo lo mismo ──────────────
+ *
+ * Las filas ya emitidas están congeladas en la versión 1 y no se tocan. La
+ * versión 2 AGREGA, no reinterpreta: `montos.totalAdeudado` sigue siendo el
+ * total del período que el aviso emite (una fila v1 y una v2 significan lo
+ * mismo en ese campo), y lo nuevo viaja en campos nuevos:
+ *
+ *   deudaAnterior.periodos[]  los cargos impagos de otros períodos, con saldo
+ *   deudaAnterior.total       la suma de esos saldos
+ *   montos.totalDeudaAnterior        el mismo total, del lado de los montos
+ *   montos.totalAdeudadoConsolidado  `totalAdeudado` + `totalDeudaAnterior`
+ *
+ * Los dos totales de la deuda anterior salen de la MISMA variable: no pueden
+ * divergir. El documento que lee la fila decide qué imprimir según la versión
+ * (`lib/pdf-utils`), así que un lector viejo de una fila v2 sigue viendo el
+ * período donde siempre lo vio.
+ *
  * ── La regla del dato que falta ──────────────────────────────────────────────
  *
  * Un monto que la ley exige y no se puede computar NO se imprime como cero: se
@@ -73,9 +107,9 @@
  * - No firma ni entrega (T5/T6): el contenido se congela acá y el hash se
  *   calcula acá; la firma y la entrega son del documento y del visor.
  * - No entrega ni registra la entrega (T6, S3).
- * - No consolida la deuda de períodos anteriores: el aviso cobra el período que
- *   emite. Sumar saldos viejos exige decidir su alcance contable, y esa decisión
- *   no se toma acá.
+ * - No decide el alcance contable de lo consolidado: declara lo que la base ya
+ *   dice que se debe (cargos impagos de la unidad). Un cargo que la comunidad
+ *   condone o reprograme sale de la deuda cuando sale de la base, no acá.
  * - Prima de seguro y cuota de convenio (S4) todavía no existen como conceptos
  *   del cobro (el convenio es F29): cuando existan, llegan como líneas y caen en
  *   `otros` con su nombre, sin cambiar este contrato.
@@ -90,6 +124,7 @@ import type {
   ParametrosCobroReglamento,
 } from "@/lib/schemas"
 import { lineasDeCobro } from "@/lib/cobro-lineas"
+import { saldoPendiente } from "@/lib/finanzas-utils"
 import { cargarResumenMensual, type ResumenMensual } from "@/lib/resumen-mensual"
 import { prisma } from "@/lib/prisma"
 
@@ -106,6 +141,8 @@ export const PREFIJO_FOLIO_AVISO = "AC-"
 /** Lo mínimo que el contenido necesita del cargo FI (nada se recalcula). */
 export interface CobroDelAviso {
   id: string
+  /** Período `AAAA-MM` del cargo: decide si es deuda anterior o del aviso. */
+  periodo: string
   concepto: ConceptoCobroFI
   descripcion: string
   montoBase: number
@@ -150,6 +187,12 @@ export interface EntradaContenidoAviso {
   reglamento: ReglamentoDelAviso | null
   fondos: readonly FondoDelAviso[]
   cobros: readonly CobroDelAviso[]
+  /**
+   * Cargos de la unidad en OTROS períodos (la ruta trae todos los que no son el
+   * del aviso). La función decide cuáles son deuda: saldo pendiente positivo y
+   * período distinto al del aviso.
+   */
+  cobrosAnteriores: readonly CobroDelAviso[]
   /** Totales de comunidad del período (`cargarResumenMensual`). */
   resumen: ResumenMensual
 }
@@ -183,6 +226,31 @@ export interface LineaDelAviso {
   origen: "linea" | "legacy"
 }
 
+/** Un cargo impago de un período anterior, tal como queda congelado. */
+export interface CargoDeudaAnterior {
+  cobroId: string
+  concepto: string
+  descripcion: string
+  /** Monto base del cargo (el que el motor FI emitió). */
+  montoBase: number
+  /** Moras devengadas a la fecha de emisión. */
+  intereses: number
+  /** Pagos registrados a la fecha de emisión. */
+  pagado: number
+  /** `montoBase + intereses - pagado` por `saldoPendiente`, nunca negativo. */
+  saldo: number
+}
+
+/**
+ * La deuda de períodos anteriores que el aviso declara (S4, L8), agrupada por
+ * período y del más viejo al más nuevo. Presente SIEMPRE: vacía cuando no hay
+ * deuda, para que el papel pueda decir "sin deuda de períodos anteriores".
+ */
+export interface DeudaAnteriorDelAviso {
+  periodos: Array<{ periodo: string; cargos: CargoDeudaAnterior[] }>
+  total: number
+}
+
 export interface MontosDelAviso {
   gastoComun: number
   recargoFondoReserva: number
@@ -195,14 +263,22 @@ export interface MontosDelAviso {
   exigible: number
   /** Pagado a la fecha de emisión. */
   pagado: number
-  /** `exigible - pagado`, nunca negativo. */
+  /** `exigible - pagado`, nunca negativo. Sigue siendo SOLO del período. */
   totalAdeudado: number
+  /** Suma de los saldos de `deudaAnterior` (0 si no hay deuda anterior). */
+  totalDeudaAnterior: number
+  /** `totalAdeudado + totalDeudaAnterior`: lo que el papel cobra entero. */
+  totalAdeudadoConsolidado: number
 }
 
 /** El documento congelado de un aviso (lo que se persiste en `contenido`). */
 export interface ContenidoAviso {
-  /** Versión del contrato del contenido: un lector futuro sabe qué está leyendo. */
-  version: 1
+  /**
+   * Versión del contrato del contenido: un lector futuro sabe qué está leyendo.
+   * v1 = solo el período; v2 = período + `deudaAnterior` + totales consolidados.
+   * Lo de v1 no cambia de significado en v2.
+   */
+  version: 2
   periodo: string
   fechaEmision: string
   unidad: { id: string; numero: string; etiqueta: string }
@@ -224,6 +300,8 @@ export interface ContenidoAviso {
     fechaVencimiento: string | null
   }>
   detalle: LineaDelAviso[]
+  /** Deuda de períodos anteriores (vacía si no hay, nunca ausente). */
+  deudaAnterior: DeudaAnteriorDelAviso
   montos: MontosDelAviso
   resumenComunidad: ResumenMensual
   noComputables: ValorNoComputable[]
@@ -236,6 +314,53 @@ function suma(valores: readonly number[]): number {
 /** Comparación lexicográfica de fechas ISO `AAAA-MM-DD` (nunca pasa por `Date`). */
 function hastaLaFecha(fecha: string, corte: string): boolean {
   return fecha <= corte
+}
+
+/**
+ * La deuda de períodos anteriores de una unidad (S4, L8): todo cargo con saldo
+ * pendiente positivo cuyo período no es el del aviso.
+ *
+ * El saldo NO se recalcula a mano: `saldoPendiente` es la fórmula del motor FI
+ * (`montoBase + moras - pagos`, nunca negativo) y se le pasa la misma vista
+ * recortada a la fecha de emisión que el resto del documento usa. Sumar por
+ * fuera dejaría dos aritméticas de la misma deuda que pueden diferir.
+ */
+function deudaAnteriorDe(
+  cobros: readonly CobroDelAviso[],
+  periodo: string,
+  fechaEmision: string
+): DeudaAnteriorDelAviso {
+  const porPeriodo = new Map<string, CargoDeudaAnterior[]>()
+  for (const cobro of cobros) {
+    // El período del aviso se cobra en `montos`: acá sería contarlo dos veces.
+    if (cobro.periodo === periodo) continue
+    const moras = cobro.moras.filter((mora) => hastaLaFecha(mora.fecha, fechaEmision))
+    const pagos = cobro.pagos.filter((pago) => hastaLaFecha(pago.fecha, fechaEmision))
+    const saldo = saldoPendiente({ montoBase: cobro.montoBase, moras, pagos })
+    // Un cargo pagado no es deuda: no entra, y por eso tampoco suma 0 al total.
+    if (saldo <= 0) continue
+    const cargo: CargoDeudaAnterior = {
+      cobroId: cobro.id,
+      concepto: cobro.concepto,
+      descripcion: cobro.descripcion,
+      montoBase: cobro.montoBase,
+      intereses: suma(moras.map((mora) => mora.monto)),
+      pagado: suma(pagos.map((pago) => pago.monto)),
+      saldo,
+    }
+    const delPeriodo = porPeriodo.get(cobro.periodo)
+    if (delPeriodo) delPeriodo.push(cargo)
+    else porPeriodo.set(cobro.periodo, [cargo])
+  }
+  // Los períodos son `AAAA-MM`: el orden lexicográfico es el cronológico, y no
+  // pasa por `Date` (que es donde un período se cae al mes vecino).
+  const periodos = [...porPeriodo.keys()]
+    .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))
+    .map((periodoDeLaDeuda) => ({
+      periodo: periodoDeLaDeuda,
+      cargos: porPeriodo.get(periodoDeLaDeuda)!,
+    }))
+  return { periodos, total: suma(periodos.flatMap((p) => p.cargos.map((c) => c.saldo))) }
 }
 
 /**
@@ -336,8 +461,16 @@ export function contenidoAviso(entrada: EntradaContenidoAviso): ContenidoAviso {
   const exigible =
     gastoComun + suma(lineasReserva.map((l) => l.monto)) + multas + suma(otros.map((o) => o.monto)) + intereses
 
+  // Deuda de otros períodos: lo que el vecino arrastra también es este papel.
+  const deudaAnterior = deudaAnteriorDe(
+    entrada.cobrosAnteriores,
+    periodo,
+    fechaEmision
+  )
+  const totalAdeudado = Math.max(0, exigible - pagado)
+
   return {
-    version: 1,
+    version: 2,
     periodo,
     fechaEmision,
     unidad: { id: unidad.id, numero: unidad.numero, etiqueta: unidad.etiqueta },
@@ -357,6 +490,7 @@ export function contenidoAviso(entrada: EntradaContenidoAviso): ContenidoAviso {
       fechaVencimiento: cobro.fechaVencimiento ?? null,
     })),
     detalle,
+    deudaAnterior,
     montos: {
       gastoComun,
       recargoFondoReserva: suma(lineasReserva.map((l) => l.monto)),
@@ -365,7 +499,9 @@ export function contenidoAviso(entrada: EntradaContenidoAviso): ContenidoAviso {
       otros,
       exigible,
       pagado,
-      totalAdeudado: Math.max(0, exigible - pagado),
+      totalAdeudado,
+      totalDeudaAnterior: deudaAnterior.total,
+      totalAdeudadoConsolidado: totalAdeudado + deudaAnterior.total,
     },
     resumenComunidad: resumen,
     noComputables,

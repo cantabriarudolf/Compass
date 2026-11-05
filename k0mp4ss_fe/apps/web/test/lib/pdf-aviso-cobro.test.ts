@@ -329,3 +329,178 @@ describe("documentoAvisoCobroPDF — el dato que falta se declara, nunca un cero
     expect(filas(doc)).toContainEqual(["Proporción al gasto común", NO_DISPONIBLE])
   })
 })
+
+// ── Consolidación de la deuda de períodos anteriores (S4, version 2) ─────────
+//
+// El aviso es el título ejecutivo: si el vecino arrastra meses, el papel tiene
+// que declarar la deuda completa (Ley 21.442 arts. 31 y 32) y no sólo el mes.
+// La versión 2 del contenido agrega el bloque; el papel lo imprime cuando el
+// payload lo trae y sigue imprimiendo igual un aviso ya emitido en versión 1.
+
+/** La deuda anterior congelada: tres cargos en dos períodos, del más viejo. */
+const DEUDA_ANTERIOR = {
+  periodos: [
+    {
+      periodo: "2026-07",
+      cargos: [
+        {
+          cobroId: "cob-jul",
+          concepto: "gasto_comun",
+          descripcion: "Gasto Común 2026-07",
+          montoBase: 45000,
+          intereses: 1000,
+          pagado: 0,
+          saldo: 46000,
+        },
+      ],
+    },
+    {
+      periodo: "2026-08",
+      cargos: [
+        {
+          cobroId: "cob-ago",
+          concepto: "gasto_comun",
+          descripcion: "Gasto Común 2026-08",
+          montoBase: 45000,
+          intereses: 0,
+          pagado: 20000,
+          saldo: 25000,
+        },
+      ],
+    },
+  ],
+  total: 71000,
+}
+
+/** El mismo aviso, congelado en la versión 2 (período + deuda anterior). */
+const CONTENIDO_V2 = {
+  ...CONTENIDO,
+  version: 2,
+  deudaAnterior: DEUDA_ANTERIOR,
+  montos: {
+    ...CONTENIDO.montos,
+    totalDeudaAnterior: 71000,
+    totalAdeudadoConsolidado: 131700,
+  },
+}
+
+/** Renglones de todas las tablas, con el ancho que tenga cada una. */
+function renglones(doc: unknown): string[][] {
+  const out: string[][] = []
+  const visitar = (nodo: unknown): void => {
+    if (Array.isArray(nodo)) {
+      nodo.forEach(visitar)
+      return
+    }
+    if (!nodo || typeof nodo !== "object") return
+    const obj = nodo as Record<string, unknown>
+    const tabla = obj.table as { body?: unknown } | undefined
+    if (tabla && Array.isArray(tabla.body)) {
+      for (const fila of tabla.body) {
+        if (Array.isArray(fila)) out.push(fila.map((celda) => textos(celda).join(" ")))
+      }
+    }
+    for (const [clave, valor] of Object.entries(obj)) {
+      if (clave !== "table") visitar(valor)
+    }
+  }
+  visitar(doc)
+  return out
+}
+
+describe("documentoAvisoCobroPDF — deuda de períodos anteriores (S4, versión 2)", () => {
+  it("imprime el desglose por período con intereses, pagos y saldo", () => {
+    const doc = docDe(CONTENIDO_V2)
+    const todo = textos(doc).join("\n")
+    expect(todo).toContain("DEUDA DE PERÍODOS ANTERIORES")
+    expect(renglones(doc)).toContainEqual([
+      "2026-07",
+      "gasto_comun — Gasto Común 2026-07",
+      "$45.000",
+      "$1.000",
+      "$0",
+      "$46.000",
+    ])
+    expect(renglones(doc)).toContainEqual([
+      "2026-08",
+      "gasto_comun — Gasto Común 2026-08",
+      "$45.000",
+      "$0",
+      "$20.000",
+      "$25.000",
+    ])
+  })
+
+  it("los períodos se imprimen del más viejo al más nuevo, como vienen congelados", () => {
+    const anchos = renglones(docDe(CONTENIDO_V2))
+    const julio = anchos.findIndex((fila) => fila[0] === "2026-07")
+    const agosto = anchos.findIndex((fila) => fila[0] === "2026-08")
+    expect(julio).toBeGreaterThanOrEqual(0)
+    expect(agosto).toBeGreaterThan(julio)
+  })
+
+  it("imprime el total de la deuda anterior y el total adeudado consolidado", () => {
+    const pares = filas(docDe(CONTENIDO_V2))
+    expect(pares).toContainEqual(["Total deuda de períodos anteriores", "$71.000"])
+    expect(pares).toContainEqual(["TOTAL ADEUDADO CONSOLIDADO (período + deuda anterior)", "$131.700"])
+    // El total del período sigue siendo el del período: no se reemplaza.
+    expect(pares).toContainEqual(["TOTAL ADEUDADO", "$60.700"])
+  })
+
+  it("sin deuda anterior el papel lo dice en vez de callarlo", () => {
+    const sinDeuda = {
+      ...CONTENIDO_V2,
+      deudaAnterior: { periodos: [], total: 0 },
+      montos: { ...CONTENIDO_V2.montos, totalDeudaAnterior: 0, totalAdeudadoConsolidado: 60700 },
+    }
+    const doc = docDe(sinDeuda)
+    expect(textos(doc).join("\n")).toContain(
+      "Sin deuda de períodos anteriores al período 2026-09"
+    )
+    // Sin cargos anteriores no hay renglones de deuda: el bloque queda vacío.
+    expect(renglones(doc).some((fila) => fila.length === 6)).toBe(false)
+    expect(filas(doc)).toContainEqual([
+      "TOTAL ADEUDADO CONSOLIDADO (período + deuda anterior)",
+      "$60.700",
+    ])
+  })
+
+  it("un aviso ya emitido en versión 1 se imprime exactamente como antes, sin la sección", () => {
+    const doc = docDe(CONTENIDO)
+    const todo = textos(doc).join("\n")
+    expect(todo).not.toContain("DEUDA DE PERÍODOS ANTERIORES")
+    expect(todo).not.toContain("Sin deuda de períodos anteriores")
+    expect(renglones(doc).some((fila) => fila.length === 6)).toBe(false)
+    const pares = filas(doc)
+    // Sus cifras siguen siendo las mismas de siempre.
+    expect(pares).toContainEqual(["TOTAL ADEUDADO", "$60.700"])
+    expect(pares).not.toContainEqual([
+      "TOTAL ADEUDADO CONSOLIDADO (período + deuda anterior)",
+      "$60.700",
+    ])
+  })
+
+  it("una cifra de la deuda anterior que no está se declara, nunca se imprime como cero", () => {
+    const incompleto = {
+      ...CONTENIDO_V2,
+      deudaAnterior: {
+        periodos: [
+          {
+            periodo: "2026-07",
+            cargos: [{ cobroId: "cob-jul", concepto: "gasto_comun", descripcion: "Gasto Común 2026-07", montoBase: 45000 }],
+          },
+        ],
+        total: 46000,
+      },
+      montos: { ...CONTENIDO_V2.montos, totalAdeudadoConsolidado: undefined },
+    }
+    const doc = docDe(incompleto)
+    const filaJulio = renglones(doc).find((fila) => fila[0] === "2026-07")!
+    expect(filaJulio.slice(3)).toEqual([NO_DISPONIBLE, NO_DISPONIBLE, NO_DISPONIBLE])
+    expect(filaJulio).not.toContain("$0")
+    expect(filas(doc)).toContainEqual([
+      "TOTAL ADEUDADO CONSOLIDADO (período + deuda anterior)",
+      NO_DISPONIBLE,
+    ])
+  })
+})

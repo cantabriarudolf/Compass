@@ -645,7 +645,32 @@ describe("/api/avisos-cobro — documento congelado, foliado e inmutable (S1/S4/
       otros: [],
       exigible: 67_200,
       pagado: 20_000,
+      // Sigue significando "este período": la deuda anterior va aparte.
       totalAdeudado: 47_200,
+      totalDeudaAnterior: 66_000,
+      totalAdeudadoConsolidado: 113_200,
+    })
+    // L8/S4: la 101 arrastra el período anterior sin pagar (cobro legacy de
+    // 66.000), así que el papel declara la deuda completa y no sólo el mes.
+    expect(contenidoCongelado.version).toBe(2)
+    expect(contenidoCongelado.deudaAnterior).toEqual({
+      periodos: [
+        {
+          periodo: PERIODO_ANT,
+          cargos: [
+            {
+              cobroId: "avc-cob-1a",
+              concepto: "gasto_comun",
+              descripcion: `Gasto Común ${PERIODO_ANT}`,
+              montoBase: 66_000,
+              intereses: 0,
+              pagado: 0,
+              saldo: 66_000,
+            },
+          ],
+        },
+      ],
+      total: 66_000,
     })
     const detalle = contenidoCongelado.detalle as Array<Record<string, unknown>>
     expect(detalle).toHaveLength(2)
