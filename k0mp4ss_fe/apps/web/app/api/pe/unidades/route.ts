@@ -28,6 +28,13 @@
  * mismo `select` y sin truncar por `pageSize`. Es el complemento de `?q=` para resolver la
  * etiqueta de filas del día cuya unidad quedó fuera de la primera página del padrón; `ids` gana
  * sobre `q` cuando vienen los dos, y sin ids (o con lista vacía) el comportamiento no cambia.
+ *
+ * Orden TOTAL (`numero`, `rolSii`, `id`): paginar exige un orden determinista. `numero` no es
+ * único (el schema lo declara: «No unique on [comunidadId, numero]», C3b/D5) y `rolSii` tampoco
+ * (todo el padrón sin rol SII comparte la cadena vacía), así que sin el desempate final por `id`
+ * el motor es libre de devolver las filas empatadas en cualquier orden: dos pedidos idénticos
+ * podían traer páginas distintas y dos páginas consecutivas podían solaparse o saltear filas. Con
+ * el desempate, las páginas particionan el resultado sin solapamiento ni huecos.
  */
 import type { Prisma } from "@prisma/client"
 import { puede } from "@/lib/authz"
@@ -131,7 +138,9 @@ export async function GET(req: Request): Promise<Response> {
     const [data, total] = await Promise.all([
       prisma.unidad.findMany({
         where,
-        orderBy: [{ numero: "asc" }, { rolSii: "asc" }],
+        // Total: `id` es único, así que los empates de `numero`/`rolSii` dejan de ser ambiguos
+        // y `skip`/`take` cortan siempre las mismas filas con el mismo orden.
+        orderBy: [{ numero: "asc" }, { rolSii: "asc" }, { id: "asc" }],
         // Lista cerrada: sin truncar por pageSize (el panel necesita TODAS las etiquetas pedidas).
         take: listaCerrada ? filtroIds.ids.length : pageSize,
         // La lista cerrada ignora `page`: no es una búsqueda, es un lote de ids concretos.
