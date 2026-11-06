@@ -649,6 +649,9 @@ model Documento {
   // Relación inversa VIRTUAL (no genera columna): la constancia de entrega de
   // lo legal vive en `envios_documento` (A3).
   envios              EnvioDocumento[]
+  // Relación inversa VIRTUAL (no genera columna): las versiones del reglamento
+  // del cobro que este documento LEGAL respalda (A4 · S9).
+  versionesReglamento VersionReglamento[]
 
   @@index([comunidadId, naturaleza])
   @@index([comunidadId, tipoDocumental])
@@ -1098,6 +1101,9 @@ model EgresoFI {
 /// copropiedad o acta de asamblea) y el período desde el que rigen. Append-only:
 /// una versión nueva no reescribe las anteriores, y lo ya emitido queda con los
 /// valores con los que se calculó (S4).
+/// S9 (F35 A4): una versión NUEVA apunta al `Documento` legal del archivo que la
+/// respalda (`documentoId`); `actaRef` queda como referencia histórica de lo ya
+/// declarado y no se reescribe.
 model VersionReglamento {
   id                String    @id
   comunidadId       String
@@ -1105,13 +1111,27 @@ model VersionReglamento {
   version           Int
   vigenteDesde      String
   fuenteInstrumento String
+  /// @deprecated — una versión NUEVA ya no guarda una referencia de acta suelta:
+  /// apunta al `Documento` legal que la respalda (`documentoId`, A4 · S9). Esta
+  /// columna queda SOLO para las filas históricas: no se borra ni se reescribe,
+  /// porque es la evidencia de qué acta fundó los parámetros ya cobrados.
   actaRef           String?
+  // El documento legal del archivo de la comunidad que respalda esta versión
+  // (A4 · S9). Nullable a propósito: las filas históricas solo tienen `actaRef`
+  // y tienen que seguir leyéndose. «Obligatorio» es una regla del ALTA, no de
+  // la tabla (ver `NuevaVersionReglamentoSchema` y /api/reglamento).
+  documentoId       String?
+  // `onDelete: Restrict` es la segunda barrera: un documento legal es
+  // append-only (A1 · S2), así que el motor impide borrar uno ya enlazado
+  // aunque una ruta se olvidara de chequearlo.
+  documento         Documento? @relation(fields: [documentoId], references: [id], onDelete: Restrict)
   formaContribucion String
   parametros        Json
   createdAt         DateTime  @default(now())
 
   @@unique([comunidadId, version])
   @@index([comunidadId])
+  @@index([documentoId])
   @@map("versiones_reglamento")
 }
 

@@ -132,3 +132,18 @@ Los documentos `legal` del archivo SHALL poder enviarse a destinatarios (propiet
 #### Scenario: Lo comunitario no se entrega
 - **WHEN** se intenta enviar un documento `comunitario` a destinatarios
 - **THEN** la respuesta es 409 y no se escribe ninguna constancia por persona
+
+### Requirement: La Versión del Reglamento Apunta a su Acta
+La versión del reglamento que rige el cobro NO SHALL guardar la referencia del acta como texto libre. Cada versión nueva SHALL apuntar al `Documento` `legal` del archivo que la respalda (`documentoId`), de la misma comunidad, con `onDelete: Restrict` porque un documento legal se corrige con una versión nueva y nunca se borra. El campo `actaRef` queda `@deprecated`: sobrevive solo como referencia histórica de las versiones ya declaradas y no se reescribe. Una versión nueva sin documento, con un documento de otra comunidad o con un documento `comunitario` SHALL rechazarse con 400 y un mensaje que diga cuál de los tres casos es.
+
+#### Scenario: Versión nueva sin acta respaldante
+- **WHEN** se declara una versión del reglamento sin `documentoId`
+- **THEN** la respuesta es 400 con `campo: "documentoId"` y no se escribe la versión
+
+#### Scenario: Acta de otra comunidad o comunitaria
+- **WHEN** se apunta a un documento de otra comunidad o a uno de naturaleza `comunitario`
+- **THEN** la respuesta es 400 sin confirmar la existencia del documento ajeno, y no se escribe la versión
+
+#### Scenario: La versión vieja se sigue leyendo
+- **WHEN** se lee una versión histórica que solo tiene `actaRef`
+- **THEN** la lectura devuelve esa referencia y la pantalla la muestra marcada como histórica

@@ -11,7 +11,10 @@
  *
  * Alta: `POST /api/reglamento` declara una versión nueva. Es append-only —no hay
  * PUT ni DELETE— y `id`/`version` los asigna el servidor, así que el hook manda
- * el cuerpo tal cual lo trae la pantalla (`NuevaVersionReglamento`).
+ * el cuerpo tal cual lo trae la pantalla (`NuevaVersionReglamento`). S9 (F35 A4):
+ * ese cuerpo apunta al `Documento` legal del archivo (`documentoId`) y ya no
+ * lleva una referencia de acta suelta; el servidor responde 400 si el documento
+ * falta, no existe en la comunidad o no es legal.
  *
  * Contrato: `StoreResult`, el mismo del store y de los hooks vecinos, que es lo
  * que la página ya sabe manejar.

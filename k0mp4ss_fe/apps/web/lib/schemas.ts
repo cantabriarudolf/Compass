@@ -1424,11 +1424,23 @@ export const VersionReglamentoSchema = z.object({
     .min(1, "La versión debe ser un entero positivo."),
   vigenteDesde: PeriodoFacturacionSchema,
   fuenteInstrumento: FuenteInstrumentoReglamentoSchema,
+  /**
+   * @deprecated referencia de acta suelta de las filas HISTÓRICAS (F35 A4 · S9).
+   * Una versión nueva apunta a `documentoId`; esta columna no se borra ni se
+   * reescribe, y la lectura la sigue devolviendo para lo ya persistido.
+   */
   actaRef: z
     .string()
     .min(1, "La referencia del acta no puede estar vacía.")
     .nullable()
     .optional(),
+  /**
+   * El `Documento` legal del archivo que respalda la versión (A4 · S9).
+   * Nullable al leer: las filas históricas solo tienen `actaRef`. El alta lo
+   * exige — esa regla vive en `resolverDocumentoRespaldo` para que el rechazo
+   * diga cuál de los tres motivos falló (falta, no existe, no es legal).
+   */
+  documentoId: IdEntidadSchema.nullable().optional(),
   formaContribucion: FormaContribucionReglamentoSchema,
   parametros: ParametrosReglamentoSchema,
 })
@@ -1436,14 +1448,19 @@ export const VersionReglamentoSchema = z.object({
 /**
  * Alta de versión por API: `id` y `version` los asigna el servidor, y la fuente
  * queda restringida a las reales (la migración automática no se declara a mano).
+ *
+ * S9: el alta apunta al documento legal que respalda la versión y ya NO acepta
+ * `actaRef` suelto. Si un cliente viejo lo manda, zod lo descarta: guardarlo
+ * volvería a dejar dos verdades sobre qué acta aprobó los parámetros.
  */
 export const NuevaVersionReglamentoSchema = VersionReglamentoSchema.pick({
   vigenteDesde: true,
-  actaRef: true,
   formaContribucion: true,
   parametros: true,
 }).extend({
   fuenteInstrumento: FuenteInstrumentoRealSchema,
+  // Obligatorio en el ALTA (nullable solo al leer, para las filas históricas).
+  documentoId: IdEntidadSchema,
 })
 
 export const LineaEmisionGCSchema = z.object({

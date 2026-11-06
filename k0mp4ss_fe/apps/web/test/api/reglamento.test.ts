@@ -37,9 +37,44 @@ vi.mock("next/headers", () => ({
 const AUTH_SECRET = "test-secret-12345678"
 
 const comunidad = "rl-com-a"
+const comunidadAjena = "rl-com-b"
 const emailAdmin = "rl-admin@test.cl"
 const emailComite = "rl-comite@test.cl"
 const emailResidente = "rl-residente@test.cl"
+
+/** Documentos del archivo que usan los casos de S9 (A4). */
+const DOC_LEGAL = "rl-doc-legal"
+const DOC_COMUNITARIO = "rl-doc-comunitario"
+const DOC_AJENO = "rl-doc-ajeno"
+
+/**
+ * S9 — los tres motivos con los que el alta rechaza el respaldo. Se afirman
+ * literales: son contrato de la API, no detalle de implementación.
+ */
+const MENSAJE_SIN_DOCUMENTO =
+  "Falta el documento legal que respalda la versión: elegí uno del archivo de la comunidad."
+const MENSAJE_DOCUMENTO_INEXISTENTE =
+  "El documento indicado no existe en el archivo de esta comunidad."
+const MENSAJE_DOCUMENTO_NO_LEGAL =
+  "El documento indicado no es legal: la versión del reglamento se respalda solo con un documento de naturaleza legal."
+
+/** Fila mínima de `Documento` para los casos de respaldo de S9. */
+function documentoFila(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    comunidadId: comunidad,
+    naturaleza: "legal",
+    tipoDocumental: "actas-asamblea",
+    glosa: "Acta de asamblea N° 12, 2026-02-20",
+    referenciaAutentica: "Notaría 4ta, fojas 12, 2026-02-20",
+    archivoNombre: "acta-12.pdf",
+    archivoTipoMime: "application/pdf",
+    archivoTamanoKB: 128,
+    archivoUrl: "https://cdn.test.cl/acta-12.pdf",
+    version: 1,
+    vigenteDesde: "2026-02-20",
+    ...overrides,
+  }
+}
 
 const PARAMETROS = {
   porcentajeReserva: 10,
@@ -55,7 +90,9 @@ function cuerpoVersion(overrides: Record<string, unknown> = {}): Record<string, 
   return {
     vigenteDesde: "2026-01",
     fuenteInstrumento: "reglamento_copropiedad",
-    actaRef: "Reglamento de copropiedad, art. 11",
+    // S9: la versión nueva apunta al documento legal que la respalda; ya no
+    // viaja una referencia de acta suelta.
+    documentoId: DOC_LEGAL,
     formaContribucion: "coeficiente",
     parametros: PARAMETROS,
     ...overrides,
@@ -70,6 +107,13 @@ describe("/api/reglamento — versión vigente del reglamento con BD real", () =
       where: { id: comunidad },
       update: {},
       create: { id: comunidad, nombre: "Comunidad Reglamento", slug: "rl-com-a" },
+    })
+    // Comunidad ajena: existe solo para probar que un documento suyo no se puede
+    // enlazar y que el rechazo no confirma que exista.
+    await prisma.comunidad.upsert({
+      where: { id: comunidadAjena },
+      update: {},
+      create: { id: comunidadAjena, nombre: "Comunidad Ajena", slug: "rl-com-b" },
     })
     for (const u of [
       { id: "rl-user-admin", email: emailAdmin },
@@ -92,6 +136,35 @@ describe("/api/reglamento — versión vigente del reglamento con BD real", () =
     })
     for (const m of membresias) await prisma.membresia.create({ data: m })
     await prisma.versionReglamento.deleteMany({ where: { comunidadId: comunidad } })
+    await prisma.documento.deleteMany({
+      where: { comunidadId: { in: [comunidad, comunidadAjena] } },
+    })
+    await prisma.documento.create({
+      data: {
+        id: DOC_LEGAL,
+        ...documentoFila({ glosa: "Acta de asamblea N° 12, 2026-02-20" }),
+      } as never,
+    })
+    await prisma.documento.create({
+      data: {
+        id: DOC_COMUNITARIO,
+        ...documentoFila({
+          naturaleza: "comunitario",
+          tipoDocumental: "otros",
+          glosa: "Circular de convivencia 2026",
+          referenciaAutentica: null,
+        }),
+      } as never,
+    })
+    await prisma.documento.create({
+      data: {
+        id: DOC_AJENO,
+        ...documentoFila({
+          comunidadId: comunidadAjena,
+          glosa: "Acta de la comunidad ajena",
+        }),
+      } as never,
+    })
     await prisma.eventoAuditoria.deleteMany({
       where: { comunidadId: comunidad, tipoAccion: "FI_REG_VERSION" },
     })
@@ -101,6 +174,9 @@ describe("/api/reglamento — versión vigente del reglamento con BD real", () =
     state.cookie = ""
     delete process.env.NEXT_PUBLIC_APP_ENV
     await prisma.versionReglamento.deleteMany({ where: { comunidadId: comunidad } })
+    await prisma.documento.deleteMany({
+      where: { comunidadId: { in: [comunidad, comunidadAjena] } },
+    })
     await prisma.eventoAuditoria.deleteMany({
       where: { comunidadId: comunidad, tipoAccion: "FI_REG_VERSION" },
     })
@@ -110,7 +186,7 @@ describe("/api/reglamento — versión vigente del reglamento con BD real", () =
       },
     })
     await prisma.usuario.deleteMany({ where: { email: { startsWith: "rl-" } } })
-    await prisma.comunidad.deleteMany({ where: { id: comunidad } })
+    await prisma.comunidad.deleteMany({ where: { id: { in: [comunidad, comunidadAjena] } } })
   })
 
   async function conSesion(email: string, fn: () => Promise<void>): Promise<void> {
@@ -250,13 +326,16 @@ describe("/api/reglamento — versión vigente del reglamento con BD real", () =
         vigenteDesde: string
         fuenteInstrumento: string
         actaRef: string | null
+        documentoId: string | null
         formaContribucion: string
         parametros: Record<string, unknown>
       }
       expect(creada.version).toBe(1)
       expect(creada.vigenteDesde).toBe("2026-01")
       expect(creada.fuenteInstrumento).toBe("reglamento_copropiedad")
-      expect(creada.actaRef).toBe("Reglamento de copropiedad, art. 11")
+      // S9: la versión apunta al documento legal y NO guarda acta suelta.
+      expect(creada.documentoId).toBe(DOC_LEGAL)
+      expect(creada.actaRef).toBeNull()
       expect(creada.formaContribucion).toBe("coeficiente")
       // El recargo se declara por comunidad; una versión que no lo declara vuelve
       // con la lectura normativa (encima del presupuesto, Ley 21.442 art. 39).
@@ -267,6 +346,7 @@ describe("/api/reglamento — versión vigente del reglamento con BD real", () =
 
       const enBD = await prisma.versionReglamento.findUnique({ where: { id: creada.id } })
       expect(enBD?.comunidadId).toBe(comunidad)
+      expect(enBD?.documentoId).toBe(DOC_LEGAL)
 
       const evento = await prisma.eventoAuditoria.findFirst({
         where: { comunidadId: comunidad, referenciaId: creada.id },
@@ -282,7 +362,6 @@ describe("/api/reglamento — versión vigente del reglamento con BD real", () =
         body: cuerpoVersion({
           vigenteDesde: "2026-06",
           fuenteInstrumento: "acta_asamblea",
-          actaRef: null,
           formaContribucion: "partes_iguales",
           parametros: { ...PARAMETROS, porcentajeReserva: 5, diasPagoGc: 20 },
         }),
@@ -327,6 +406,143 @@ describe("/api/reglamento — versión vigente del reglamento con BD real", () =
     })
   })
 
+  /** S9/T17 — sin documento no hay versión nueva: el error dice que falta. */
+  it("POST sin documento de respaldo → 400 con el motivo del faltante y sin escribir", async () => {
+    await conSesion(emailAdmin, async () => {
+      for (const cuerpo of [
+        cuerpoVersion({ documentoId: undefined }),
+        cuerpoVersion({ documentoId: "" }),
+        cuerpoVersion({ documentoId: "   " }),
+        cuerpoVersion({ documentoId: null }),
+      ]) {
+        const res = await llamar("POST", { body: cuerpo })
+        expect(res.status).toBe(400)
+        expect(((await res.json()) as { error: string }).error).toBe(
+          MENSAJE_SIN_DOCUMENTO
+        )
+      }
+    })
+    expect(await prisma.versionReglamento.count({ where: { comunidadId: comunidad } })).toBe(2)
+  })
+
+  /**
+   * S9/T17 — un documento de otra comunidad se rechaza con el MISMO mensaje que
+   * un id inexistente: la respuesta no confirma que el documento ajeno exista
+   * (mismo contrato que el resto de la API). Y no escribe nada.
+   */
+  it("POST con documento de otra comunidad → 400 sin confirmar que exista", async () => {
+    await conSesion(emailAdmin, async () => {
+      const ajena = await llamar("POST", { body: cuerpoVersion({ documentoId: DOC_AJENO }) })
+      expect(ajena.status).toBe(400)
+      const mensajeAjena = ((await ajena.json()) as { error: string }).error
+      expect(mensajeAjena).toBe(MENSAJE_DOCUMENTO_INEXISTENTE)
+
+      const inexistente = await llamar("POST", {
+        body: cuerpoVersion({ documentoId: "rl-doc-no-existe" }),
+      })
+      expect(inexistente.status).toBe(400)
+      const mensajeInexistente = ((await inexistente.json()) as { error: string }).error
+      // Idéntico mensaje: el rechazo no distingue «no es tuyo» de «no existe».
+      expect(mensajeInexistente).toBe(mensajeAjena)
+    })
+    expect(await prisma.versionReglamento.count({ where: { comunidadId: comunidad } })).toBe(2)
+  })
+
+  /** S9/T17 — el respaldo tiene que ser un documento LEGAL, no uno comunitario. */
+  it("POST con documento comunitario → 400: la versión se respalda solo con un legal", async () => {
+    await conSesion(emailAdmin, async () => {
+      const res = await llamar("POST", { body: cuerpoVersion({ documentoId: DOC_COMUNITARIO }) })
+      expect(res.status).toBe(400)
+      expect(((await res.json()) as { error: string }).error).toBe(
+        MENSAJE_DOCUMENTO_NO_LEGAL
+      )
+    })
+    expect(await prisma.versionReglamento.count({ where: { comunidadId: comunidad } })).toBe(2)
+  })
+
+  /**
+   * S9 — el alta deja de llevar una referencia de acta suelta. Aunque un cliente
+   * viejo la siga mandando, la versión nueva no la guarda: si la guardara, el
+   * sistema volvería a tener dos verdades sobre qué acta aprobó los parámetros.
+   */
+  it("POST con `actaRef` suelto → 201 y la fila NO guarda la referencia suelta", async () => {
+    let creadaId: string | null = null
+    try {
+      await conSesion(emailAdmin, async () => {
+        const res = await llamar("POST", {
+          body: cuerpoVersion({ vigenteDesde: "2026-02", actaRef: "Acta suelta N° 99" }),
+        })
+        expect(res.status).toBe(201)
+        const creada = (await res.json()) as {
+          id: string
+          actaRef: string | null
+          documentoId: string | null
+        }
+        creadaId = creada.id
+        expect(creada.documentoId).toBe(DOC_LEGAL)
+        expect(creada.actaRef).toBeNull()
+        const enBD = await prisma.versionReglamento.findUniqueOrThrow({
+          where: { id: creada.id },
+        })
+        expect(enBD.actaRef).toBeNull()
+        expect(enBD.documentoId).toBe(DOC_LEGAL)
+      })
+    } finally {
+      // La fila se retira para no mover la numeración que afirman los otros casos.
+      if (creadaId) {
+        await prisma.versionReglamento.deleteMany({ where: { id: creadaId } })
+      }
+    }
+  })
+
+  /**
+   * S9 — la versión válida se lee de vuelta apuntando al documento. Y una fila
+   * histórica (solo `actaRef`, sin `documentoId`) se sigue leyendo igual: el
+   * cambio no invalida lo ya persistido.
+   */
+  it("GET devuelve el documento de la versión nueva y conserva el `actaRef` de la histórica", async () => {
+    // Fila histórica anterior al archivo: se inserta directo (no hay alta por API
+    // que produzca actaRef) para probar que la lectura no la rompe.
+    await prisma.versionReglamento.create({
+      data: {
+        id: "rl-version-historica",
+        comunidadId: comunidad,
+        version: 9,
+        vigenteDesde: "2025-06",
+        fuenteInstrumento: "acta_asamblea",
+        actaRef: "Acta de asamblea N° 3, 2025-06-10",
+        documentoId: null,
+        formaContribucion: "coeficiente",
+        parametros: PARAMETROS,
+      } as never,
+    })
+    try {
+      await conSesion(emailAdmin, async () => {
+        const historica = await llamar("GET", { periodo: "2025-07" })
+        expect(historica.status).toBe(200)
+        const cuerpo = (await historica.json()) as {
+          version: number
+          actaRef: string | null
+          documentoId: string | null
+        }
+        expect(cuerpo.version).toBe(9)
+        expect(cuerpo.actaRef).toBe("Acta de asamblea N° 3, 2025-06-10")
+        expect(cuerpo.documentoId).toBeNull()
+
+        // La versión nueva (vigente desde 2026-01) lee el documento enlazado.
+        const nueva = await llamar("GET", { periodo: "2026-03" })
+        expect(nueva.status).toBe(200)
+        expect(
+          ((await nueva.json()) as { documentoId: string | null }).documentoId
+        ).toBe(DOC_LEGAL)
+      })
+    } finally {
+      await prisma.versionReglamento.deleteMany({
+        where: { comunidadId: comunidad, id: "rl-version-historica" },
+      })
+    }
+  })
+
   /**
    * El registro FUSIONADO —id y `version` los pone el servidor— se valida con
    * `VersionReglamentoSchema` antes de escribirse: la ruta no confía en el
@@ -348,6 +564,7 @@ describe("/api/reglamento — versión vigente del reglamento con BD real", () =
         vigenteDesde: "2026-01",
         fuenteInstrumento: "reglamento_copropiedad",
         actaRef: null,
+        documentoId: null,
         formaContribucion: "coeficiente",
         parametros: PARAMETROS,
       },
@@ -375,6 +592,7 @@ describe("/api/reglamento — versión vigente del reglamento con BD real", () =
             vigenteDesde: v.vigenteDesde,
             fuenteInstrumento: v.fuenteInstrumento,
             actaRef: v.actaRef,
+            documentoId: v.documentoId,
             formaContribucion: v.formaContribucion,
             parametros: v.parametros as never,
           },
@@ -407,6 +625,7 @@ describe("/api/reglamento — versión vigente del reglamento con BD real", () =
         vigenteDesde: "2026-09",
         fuenteInstrumento: "reglamento_copropiedad",
         actaRef: null,
+        documentoId: null,
         formaContribucion: "coeficiente",
         parametros: PARAMETROS,
       },
@@ -447,6 +666,7 @@ describe("/api/reglamento — versión vigente del reglamento con BD real", () =
         vigenteDesde: "2026-09",
         fuenteInstrumento: "reglamento_copropiedad",
         actaRef: null,
+        documentoId: null,
         formaContribucion: "coeficiente",
         parametros: PARAMETROS,
       },

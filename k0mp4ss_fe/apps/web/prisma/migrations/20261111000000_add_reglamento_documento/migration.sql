@@ -1,0 +1,51 @@
+-- F35 serie A (A4) — el cobro apunta al DOCUMENTO legal, no a una cadena (S9).
+--
+-- Aditiva: agrega UNA columna nullable y su índice a `versiones_reglamento`.
+-- No altera ni borra ninguna columna existente, no toca `documentos` (la
+-- entidad de A1) ni ninguna otra tabla, y no reescribe filas: sin backfill. La
+-- relación inversa `Documento.versionesReglamento` es VIRTUAL y no genera
+-- columna.
+--
+-- Por qué `actaRef` NO se borra:
+--   · Es la única evidencia de qué acta fundó las versiones que ya gobernaron
+--     emisiones mensuales. Borrarla o reescribirla sería reescribir historia de
+--     lo ya cobrado.
+--   · Las filas históricas quedan con `actaRef` cargado y `documentoId` NULL: se
+--     siguen leyendo igual (`GET /api/reglamento` devuelve la fila tal cual).
+--     «Una versión nueva exige `documentoId`» es una regla del ALTA, no de la
+--     tabla, así que no hay ningún backfill que inventar acá.
+--
+-- Por qué `documentoId` es NULLABLE aunque la validación lo exija: las filas
+-- históricas no tienen documento que enlazar y no se pueden inventar.
+--
+-- Por qué ON DELETE RESTRICT:
+--   · Un documento legal es append-only (A1 · S2): no se borra, se corrige con
+--     una versión nueva. RESTRICT es la segunda barrera del motor — si una ruta
+--     intentara borrar un legal ya enlazado, la base lo impide aunque la
+--     aplicación no lo hubiera chequeado. En la práctica lo legal ya responde
+--     409 al DELETE, así que esto es defensa en profundidad, no la primera
+--     guarda.
+--
+-- Lo que la base NO puede verificar (y valida `app/api/reglamento`): que el
+-- documento sea de la MISMA comunidad y de naturaleza `legal`. Eso necesita
+-- mirar dos columnas de otra fila y la lista cerrada de naturalezas vive en
+-- `lib/documento-archivo.ts`; un CHECK con la lista duplicada acá sería una
+-- segunda verdad sobre qué es legal.
+--
+-- Dialecto: este directorio está fijado a SQLite (`migration_lock.toml`), motor
+-- de dev, de la suite y del job `unit` del CI. La forma del ALTER es idéntica en
+-- PostgreSQL (columna + FK con RESTRICT), así que la baseline PG
+-- (`prisma db push` con schema.prisma) no necesita un script aparte.
+--
+-- Se agrega la FK en el ADD COLUMN en vez de reconstruir la tabla (patrón
+-- `RedefineTables` que genera `prisma migrate dev`): SQLite permite una columna
+-- nueva con REFERENCES cuando su valor por defecto es NULL, y así la migración
+-- no copia ni suelta una tabla que hoy tiene las versiones que gobiernan cobros
+-- reales. La restricción queda registrada en el motor y `PRAGMA
+-- foreign_key_list` la reporta con `on_delete: RESTRICT`.
+
+-- AlterTable
+ALTER TABLE "versiones_reglamento" ADD COLUMN "documentoId" TEXT REFERENCES "documentos" ("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- CreateIndex
+CREATE INDEX "versiones_reglamento_documentoId_idx" ON "versiones_reglamento"("documentoId");

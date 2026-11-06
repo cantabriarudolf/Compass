@@ -8,7 +8,13 @@
  * porque son datos de fixture, no números de un reglamento real (S8).
  */
 import { describe, it, expect } from "vitest"
-import { autorizaEmision, parametrosDeVersion, versionReglamentoVigente } from "./reglamento"
+import {
+  autorizaEmision,
+  parametrosDeVersion,
+  resolverDocumentoRespaldo,
+  versionReglamentoVigente,
+  type ClienteDocumentoReglamento,
+} from "./reglamento"
 import type { ParametrosReglamento } from "./schemas"
 
 const PARAMETROS: ParametrosReglamento = {
@@ -94,5 +100,78 @@ describe("parametrosDeVersion", () => {
   it("devuelve null cuando falta un parámetro obligatorio", () => {
     expect(parametrosDeVersion({ parametros: {} })).toBeNull()
     expect(parametrosDeVersion({ parametros: { ...PARAMETROS, diasPagoGc: 61 } })).toBeNull()
+  })
+})
+
+/**
+ * S9 (A4 · T17) — el respaldo documental de una versión NUEVA del reglamento.
+ *
+ * Tres motivos, y el rechazo no confirma la existencia de un documento de otra
+ * comunidad: el mismo motivo que un id inexistente.
+ */
+function clienteConDocumento(
+  fila: { id: string; comunidadId: string; naturaleza: string } | null
+): { client: ClienteDocumentoReglamento; consultas: string[] } {
+  const consultas: string[] = []
+  const client = {
+    documento: {
+      findUnique: async ({ where }: { where: { id: string } }) => {
+        consultas.push(where.id)
+        return fila
+      },
+    },
+  } as unknown as ClienteDocumentoReglamento
+  return { client, consultas }
+}
+
+describe("resolverDocumentoRespaldo", () => {
+  it("sin documento declarado devuelve «faltante» y no consulta la base", async () => {
+    for (const valor of [undefined, null, "", "   ", 42, {}]) {
+      const { client, consultas } = clienteConDocumento(null)
+      await expect(resolverDocumentoRespaldo("com-1", valor, client)).resolves.toEqual({
+        ok: false,
+        motivo: "faltante",
+      })
+      expect(consultas).toEqual([])
+    }
+  })
+
+  it("un documento de otra comunidad no confirma que exista: mismo motivo que un id inexistente", async () => {
+    const ajena = await resolverDocumentoRespaldo(
+      "com-1",
+      "doc-ajeno",
+      clienteConDocumento({ id: "doc-ajeno", comunidadId: "com-2", naturaleza: "legal" })
+        .client
+    )
+    const inexistente = await resolverDocumentoRespaldo(
+      "com-1",
+      "doc-fantasma",
+      clienteConDocumento(null).client
+    )
+    expect(ajena).toEqual({ ok: false, motivo: "no_existe" })
+    expect(inexistente).toEqual(ajena)
+  })
+
+  it("un documento comunitario no puede respaldar la versión: motivo «no_legal»", async () => {
+    const { client } = clienteConDocumento({
+      id: "doc-circular",
+      comunidadId: "com-1",
+      naturaleza: "comunitario",
+    })
+    await expect(
+      resolverDocumentoRespaldo("com-1", "doc-circular", client)
+    ).resolves.toEqual({ ok: false, motivo: "no_legal" })
+  })
+
+  it("un legal de la misma comunidad resuelve y consulta con el id recortado", async () => {
+    const { client, consultas } = clienteConDocumento({
+      id: "doc-legal",
+      comunidadId: "com-1",
+      naturaleza: "legal",
+    })
+    await expect(
+      resolverDocumentoRespaldo("com-1", "  doc-legal  ", client)
+    ).resolves.toEqual({ ok: true, documentoId: "doc-legal" })
+    expect(consultas).toEqual(["doc-legal"])
   })
 })

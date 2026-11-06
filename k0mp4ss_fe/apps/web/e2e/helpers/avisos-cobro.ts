@@ -16,6 +16,12 @@
 //      diseño, Ley 21.442 art. 32), así que la corrida siguiente elige el
 //      período libre siguiente en vez de reusar el que ya quedó avisado.
 //
+// Emitir exige una versión del reglamento con fuente real (compuerta S1), y
+// desde F35 A4 · S9 esa versión nueva apunta al documento `legal` del archivo
+// de la comunidad que la respalda (`documentoId`), no a un `actaRef` suelto: por
+// eso el branch de emisión deja también esa acta en el archivo, con id estable y
+// sin duplicar (lo legal es append-only: un POST repetido responde 409).
+//
 // Nada de esto crea personas, vínculos ni unidades: usa los del seed.
 import { expect, type APIRequestContext } from "@playwright/test"
 
@@ -132,6 +138,65 @@ const PARAMETROS_REGLAMENTO_TEST = {
 type VersionReglamento = { fuenteInstrumento?: string; vigenteDesde?: string }
 
 /**
+ * Acta LEGAL del archivo que respalda la versión del reglamento (F35 A4 · S9).
+ *
+ * El alta de una versión exige `documentoId` de un `Documento` de naturaleza
+ * `legal` de la MISMA comunidad (y lo legal exige `referenciaAutentica`), así que
+ * una base descartable necesita uno: el archivo del seed lo trae, pero no se
+ * puede asumir que el seed corrió (`db:push` sin `seed:datos` deja la tabla
+ * vacía). Por eso el id es fijo —`asegurar`, no «crear siempre»— y los metadatos
+ * declaran que es de prueba, igual que los PDF sintéticos del archivo
+ * (`public/archivo-documentos/`): media por referencia, nunca bytes (D1).
+ */
+const DOCUMENTO_ACTA_REGLAMENTO_TEST = {
+  id: "doc-archivo-acta-asamblea-e2e-avisos",
+  naturaleza: "legal",
+  tipoDocumental: "actas-asamblea",
+  glosa:
+    "Acta de asamblea que aprobó los parámetros de cobro (documento de respaldo de la suite E2E)",
+  referenciaAutentica:
+    "Acta de prueba de la suite E2E, sin valor legal: fojas 12, 15-03-2026",
+  archivoNombre: "acta-asamblea-2026.pdf",
+  archivoTipoMime: "application/pdf",
+  archivoTamanoKB: 4,
+  archivoUrl: "/archivo-documentos/acta-asamblea-2026.pdf",
+  vigenteDesde: "2026-03-15",
+} as const
+
+/** Fila mínima del archivo para resolver si el acta ya está. */
+type DocumentoFila = { id?: string; naturaleza?: string }
+
+/**
+ * Deja el acta legal en el archivo y devuelve su id. Se busca primero en el
+ * listado —y no en el detalle, porque abrir un documento deja rastro de
+ * auditoría (T11)— y solo se crea si falta: `POST /api/documentos` es upsert por
+ * `id`, pero sobre una fila legal existente responde 409 a propósito (S2).
+ */
+async function asegurarDocumentoRespaldo(
+  request: APIRequestContext,
+): Promise<string> {
+  const archivo = await coleccionCompleta<DocumentoFila>(request, "/api/documentos")
+  const existente = archivo.find((d) => d.id === DOCUMENTO_ACTA_REGLAMENTO_TEST.id)
+  if (existente) {
+    expect(
+      existente.naturaleza,
+      "el acta de respaldo de la versión debe ser un documento legal del archivo",
+    ).toBe("legal")
+    return DOCUMENTO_ACTA_REGLAMENTO_TEST.id
+  }
+
+  const alta = await request.post("/api/documentos", {
+    data: DOCUMENTO_ACTA_REGLAMENTO_TEST,
+  })
+  const textoAlta = await alta.text()
+  expect(
+    alta.ok(),
+    `POST /api/documentos debe dejar el acta legal que respalda la versión: ${alta.status()} ${textoAlta.slice(0, 300)}`,
+  ).toBe(true)
+  return DOCUMENTO_ACTA_REGLAMENTO_TEST.id
+}
+
+/**
  * La emisión de gasto común exige una versión del reglamento que funde la forma
  * de contribución: la que crea el backfill de la migración es
  * `migracion_automatica` y NO habilita emitir (compuerta S1), así que una base
@@ -139,6 +204,10 @@ type VersionReglamento = { fuenteInstrumento?: string; vigenteDesde?: string }
  * versión real por la misma ruta que usa la pantalla (`POST /api/reglamento`),
  * solo si la vigente no autoriza. Es el mismo patrón «asegurar» que
  * `asegurarParamsLegalesTEST` de `datos-test.ts`.
+ *
+ * S9: la versión nueva se respalda con el acta `legal` del archivo
+ * (`documentoId`), no con un `actaRef` de texto: el alta sin ese documento
+ * responde 400 y el acta ya está resuelta acá antes de postear.
  */
 async function asegurarVersionReglamento(
   request: APIRequestContext,
@@ -159,11 +228,12 @@ async function asegurarVersionReglamento(
     ).toBe(404)
   }
 
+  const documentoId = await asegurarDocumentoRespaldo(request)
   const alta = await request.post("/api/reglamento", {
     data: {
       vigenteDesde: periodo,
       fuenteInstrumento: "reglamento_copropiedad",
-      actaRef: "Reglamento de copropiedad, art. 11",
+      documentoId,
       formaContribucion: "coeficiente",
       parametros: PARAMETROS_REGLAMENTO_TEST,
     },
