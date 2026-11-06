@@ -23,6 +23,7 @@
  *   - MA: maestros admin (AFP, salud, bancos, feriados, etc.) + @@maestros.ts
  *     (categorías EF, estados de ocupación) + estados inmobiliarios (VU)
  *   - IN: 5 tipos de infracción
+ *   - AD/F35: 4 documentos del archivo de la comunidad (3 legales + 1 comunitario)
  *
  * El punto cero financiero (182 egresos + 44 ingresos) NO vive aquí: tiene su
  * propio script `scripts/migrate-punto-cero-a-db.ts` (misma comunidad destino
@@ -37,6 +38,7 @@ import {
   vinculos,
   ESTADOS_INMOBILIARIOS,
 } from "../data/comunidad/vinculos"
+import { documentosArchivo } from "../data/comunidad/documentos-archivo"
 import {
   tiposUnidad,
   macroSectores,
@@ -311,6 +313,34 @@ async function main(): Promise<void> {
       })
     }
 
+    // --- AD/F35: archivo de documentos de la comunidad (serie A, T9) ---
+    // Tres legales con su referencia auténtica + la circular comunitaria. Los
+    // PDF son sintéticos (`public/archivo-documentos/`) y la fila comunitaria
+    // apunta a la URL del colorín por decisión del owner: es la broma.
+    // `version` va fija (1) porque la asigna el servidor para las altas nuevas;
+    // `subidoPorPersonaId` queda null (columna sin FK a propósito).
+    for (const d of documentosArchivo) {
+      const fila = {
+        naturaleza: d.naturaleza,
+        tipoDocumental: d.tipoDocumental,
+        glosa: d.glosa,
+        referenciaAutentica: d.referenciaAutentica ?? null,
+        archivoNombre: d.archivoNombre,
+        archivoTipoMime: d.archivoTipoMime,
+        archivoTamanoKB: d.archivoTamanoKB,
+        archivoUrl: d.archivoUrl,
+        hash: d.hash ?? null,
+        version: d.version,
+        vigenteDesde: d.vigenteDesde,
+        subidoPorPersonaId: d.subidoPorPersonaId,
+      }
+      await prisma.documento.upsert({
+        where: { id: d.id },
+        update: { ...fila, comunidadId },
+        create: { id: d.id, ...fila, comunidadId },
+      })
+    }
+
     // --- Verificación de conteos (reporte final) ---
     const conteos = {
       configuracion: await prisma.configuracionGlobal.count({
@@ -333,6 +363,7 @@ async function main(): Promise<void> {
       tiposInfraccion: await prisma.tipoInfraccionIN.count({
         where: { comunidadId },
       }),
+      documentos: await prisma.documento.count({ where: { comunidadId } }),
     }
     console.log(`[seed-mocks] ok comunidad=${comunidadId}`, conteos)
   } finally {

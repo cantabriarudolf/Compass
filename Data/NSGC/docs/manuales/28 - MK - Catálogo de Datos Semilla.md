@@ -545,5 +545,28 @@ Patrones de id de portería: `vis-<AAAA-MM-DD>-NN`, `enc-<AAAA-MM-DD>-NN`. La fe
 
 > **Nota**: los datos de `data/` son la semilla del poblamiento `seed-db-from-data`; el dataset de demo en base es otro y deja **184 unidades** (80 deptos + 4 locales + 100 plazas). Los conteos difieren del dump de `29 - MK - Data Dump Inventario.md` (83 unidades) porque son datasets distintos.
 
-*Última actualización: 03 de Noviembre 2026 — sección 15: seed de demo consistente en BD (estructura, personas, finanzas y portería con sus conteos)*
-*Anterior: 27 de Agosto 2026 — Plataforma P5 (Auth.js JWT + D-v, sin bump STORE_VERSION)*
+### 16. Archivo de documentos de la comunidad — `data/comunidad/documentos-archivo.ts` (06/11/2026)
+
+| Campo | Detalle |
+|-------|---------|
+| **Ruta** | `k0mp4ss_fe/apps/web/data/comunidad/documentos-archivo.ts` |
+| **Propósito** | Las cuatro filas con las que `/comunidad/archivo` nace con datos (AD/F35 serie A, T9): tres documentos **legales** con su referencia auténtica y una **circular comunitaria**. Sin esta semilla la pantalla queda vacía aunque el archivo exista. |
+| **Export** | `documentosArchivo: DocumentoArchivoSeed[]` (4 registros). `DocumentoArchivoSeed` = `DocumentoArchivo` del dominio + `version` fija en `1` (la asigna el servidor para las altas nuevas) + `subidoPorPersonaId: null` (columna sin FK a propósito: la procedencia sobrevive a una fusión o baja del padrón). |
+| **Consumidor** | `scripts/seed-db-from-data.ts`: upsert idempotente por id con la **misma comunidad destino** que el resto de la semilla (`--comunidad-id`, `COMUNIDAD_ID` o la primera comunidad; el archivo no declara `comunidadId`). El reporte final del script cuenta `documentos`. |
+| **Naturaleza** | Datos **semilla**, no mocks de UI: la pantalla lee de `/api/documentos` (tabla `documentos`). Los legales son append-only: la semilla no reemplaza versiones, solo crea la v1. |
+
+| id | naturaleza · tipoDocumental | glosa | referenciaAutentica | archivo |
+|----|-----------------------------|-------|---------------------|---------|
+| `doc-archivo-reglamento-copropiedad` | legal · `reglamento-copropiedad` | Reglamento de copropiedad vigente y sus modificaciones | Conservador de Bienes Raíces de Santiago, inscripción 4521 del año 2026 | `/archivo-documentos/reglamento-copropiedad.pdf` · 5 KB · vigente desde `2026-01-15` |
+| `doc-archivo-acta-asamblea-2026` | legal · `actas-asamblea` | Acta de asamblea ordinaria de marzo 2026 | Notaría 4ª de Santiago, fojas 12, 15-03-2026 | `/archivo-documentos/acta-asamblea-2026.pdf` · 4 KB · vigente desde `2026-03-15` |
+| `doc-archivo-poliza-seguro-2026` | legal · `polizas-seguro` | Póliza de seguro de áreas comunes 2026 | Póliza POL-2026-004871, corredora inscrita en la CMF | `/archivo-documentos/poliza-seguro.pdf` · 4 KB · vigente desde `2026-01-01` |
+| `doc-archivo-circular-emergencia` | comunitario · `otros` | Circular del plan de emergencia | **sin referencia** (solo lo legal la exige) | `https://www.youtube.com/watch?v=dQw4w9WgXcQ` · 0 KB · vigente desde `2026-04-01` |
+
+**Origen de los PDF.** Los tres documentos legales apuntan a PDF **sintéticos** servidos desde `public/archivo-documentos/` (`reglamento-copropiedad.pdf`, `acta-asamblea-2026.pdf`, `poliza-seguro.pdf`). Cada uno dice **«DOCUMENTO DE PRUEBA — SIN VALOR LEGAL»** dos veces y se reemplaza por el documento real antes de producción. El `archivoTamanoKB` de la semilla es el tamaño redondeado de esos archivos.
+
+**La fila comunitaria es la broma.** `doc-archivo-circular-emergencia` tiene como `archivoUrl` la URL del video `dQw4w9WgXcQ` **por decisión del owner** (L6 del plan de la serie A): no es un documento, es la fila de chiste para demostrar que lo comunitario se publica sin referencia. Se conservan `archivoNombre` (`plan-de-emergencia.pdf`) y `archivoTipoMime` (`application/pdf`) porque esas columnas son obligatorias; el tamaño va en `0` porque no hay binario medible. La pestaña «Biblioteca» de Comunicación se retira después (T11): este archivo es la única lista de documentos.
+
+**Riesgo de prueba:** la semilla deja el archivo con un solo registro por tipo, así que la marca «Vigente» de los legales se ve siempre en la v1; la marca «Reemplazado» aparece recién con una v2 real (la unidad A1 ya prueba esa regla en `test/api/documentos-archivo.test.ts`).
+
+*Última actualización: 06 de Noviembre 2026 — sección 16: semilla del archivo de documentos de la comunidad (3 legales + 1 circular comunitaria)*
+*Anterior: 03 de Noviembre 2026 — sección 15: seed de demo consistente en BD (estructura, personas, finanzas y portería con sus conteos)*
