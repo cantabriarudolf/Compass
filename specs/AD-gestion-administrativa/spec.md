@@ -86,3 +86,26 @@ conciliar después (igual que proyectos/reservas con `mutateGlobal`).
 #### Scenario: Toggle flippea y persiste
 - **WHEN** se clickea el switch y se recarga
 - **THEN** `aria-checked` cambia al instante y persiste tras reload.
+
+### Requirement: Archivo de Documentos de la Comunidad
+El sistema MUST conservar y poner a disposición el archivo del condominio en una sola entidad `Documento` con dos naturalezas: `legal` y `comunitario` (Ley 21.442 art. 9). Cada documento SHALL declarar `comunidadId`, `naturaleza`, `tipoDocumental` de una lista cerrada (reglamento de copropiedad y sus modificaciones, actas de asamblea, actas de comité, Registro de Copropietarios, permiso de edificación y planos, certificado de copropiedad y plano, proveedores y subcontratistas, carpeta de ascensores, manuales de instalaciones, plan de emergencia, pólizas de seguro, contabilidad y rendiciones, más `otros` para lo comunitario), `glosa`, la referencia del archivo (nombre, tipo MIME, tamañoKB y URL — media por referencia, jamás base64/Blob), `version`, `vigenteDesde` como fecha calendario AAAA-MM-DD, `hash` SHA-256 opcional, `subidoPorPersonaId` y `createdAt`. La `version` la asigna el servidor dentro de (comunidad, tipo documental) y el cliente NO SHALL enviarla. Los documentos `legal` son append-only: exigen `referenciaAutentica` (fojas, fecha, notaría o Conservador) y su PUT o DELETE responde 409, porque la corrección es una versión nueva. Los `comunitario` SHALL poder reemplazarse y borrarse. Rutas `GET`/`POST /api/documentos` y `GET`/`PUT`/`DELETE /api/documentos/[id]` con la clave de permiso `doc` (administración todo, comité ver y crear, residente ver).
+
+#### Scenario: Documento legal inmutable
+- **WHEN** se intenta editar o eliminar un documento con `naturaleza` `legal`
+- **THEN** la respuesta es 409 y la fila original queda intacta en la base
+
+#### Scenario: Legal sin referencia auténtica
+- **WHEN** se da de alta un documento legal sin `referenciaAutentica`
+- **THEN** la respuesta es 400 con `campo: "referenciaAutentica"` y no queda fila creada
+
+#### Scenario: Comunitario reemplazable
+- **WHEN** se reemplaza o se borra un documento `comunitario` con la clave `doc`
+- **THEN** la operación se aplica y la versión del documento se conserva
+
+#### Scenario: Versión asignada por el servidor
+- **WHEN** se sube una segunda acta del mismo `tipoDocumental` en la misma comunidad
+- **THEN** queda con `version` 2, aunque el payload traiga otro número
+
+#### Scenario: Archivo por referencia
+- **WHEN** se intenta guardar el archivo con una URL `data:` o `blob:`
+- **THEN** la respuesta es 400 por la regla D1 (media por referencia)
