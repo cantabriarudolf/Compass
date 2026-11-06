@@ -15,7 +15,10 @@
  * `whereEnvioDetalle`, `personaIdDelUsuario`). Cada aserción cita el `path:line`
  * del filtro que fija: si ese filtro se borra, la aserción falla.
  *
- * Recursos de este lote: `personas`, `notificaciones`, `co/envios`.
+ * Recursos del primer lote: `personas`, `notificaciones`, `co/envios`.
+ * Recursos del segundo lote: `controles-propiedad`, `cobros-fi/canales`,
+ * `co/mensajes-buzon`, `vinculos` (límite documentado) y `liquidaciones`
+ * (defecto declarado: `pl:propia` sin usar).
  */
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest"
 import { prisma } from "@/lib/prisma"
@@ -52,6 +55,7 @@ const EMAIL = {
   resA1: "ppo-res-a1@test.cl",
   resA2: "ppo-res-a2@test.cl",
   resB1: "ppo-res-b1@test.cl",
+  conserjeA: "ppo-conserje-a@test.cl",
 }
 
 // Notificaciones de la comunidad A.
@@ -63,6 +67,23 @@ const NOTI_DIFUSION_U_A2 = "ppo-noti-difusion-ua2" // difusión al rol, unidad d
 // Envíos CO de la comunidad A.
 const ENV_COMPARTIDO = "ppo-env-compartido" // destinatarios: A-1 y A-2
 const ENV_SOLO_A2 = "ppo-env-solo-a2" // destinatario: solo A-2
+
+// Controles de propiedad (AD): uno por unidad de la comunidad A.
+const CONTROL_A1 = "ppo-ctrl-a1" // unidad A-1
+const CONTROL_A2 = "ppo-ctrl-a2" // unidad A-2 (otra unidad)
+
+// Buzón CO de la comunidad A: el reportante es la pertenencia.
+const MSG_A1 = "ppo-msg-a1" // reportado por A-1
+const MSG_A2 = "ppo-msg-a2" // reportado por A-2
+
+// Liquidaciones PL: una por comunidad (la pertenencia es `trabajadorPersonaId`).
+const LIQ_A = "ppo-liq-a" // comunidad A, trabajador A-1
+const LIQ_B = "ppo-liq-b" // comunidad B, trabajador B-1
+
+// Vínculos vigentes creados por el arnés (uno por persona/unidad).
+const V_A1 = `ppo-v-${P_A1}`
+const V_A2 = `ppo-v-${P_A2}`
+const V_B1 = `ppo-v-${P_B1}`
 
 type Envelope<T> = { data: T[]; page: number; pageSize: number; total: number }
 
@@ -82,8 +103,24 @@ const moduloNotificacion = () => import("@/app/api/notificaciones/[id]/route")
 const moduloNotificacionLeer = () => import("@/app/api/notificaciones/[id]/leer/route")
 const moduloEnvio = () => import("@/app/api/co/envios/[id]/route")
 const moduloEnvioLecturas = () => import("@/app/api/co/envios/[id]/lecturas/route")
+const moduloControlesPropiedad = () => import("@/app/api/controles-propiedad/route")
+const moduloControlPropiedad = () => import("@/app/api/controles-propiedad/[id]/route")
+const moduloCanalesCobranza = () => import("@/app/api/cobros-fi/canales/route")
+const moduloMensajesBuzon = () => import("@/app/api/co/mensajes-buzon/route")
+const moduloMensajeBuzon = () => import("@/app/api/co/mensajes-buzon/[id]/route")
+const moduloVinculo = () => import("@/app/api/vinculos/[id]/route")
+const moduloLiquidacion = () => import("@/app/api/liquidaciones/[id]/route")
 
 async function limpiar(): Promise<void> {
+  await prisma.controlPropiedadArchivada.deleteMany({
+    where: { comunidadId: { in: [COM_A, COM_B] } },
+  })
+  await prisma.controlPropiedad.deleteMany({ where: { comunidadId: { in: [COM_A, COM_B] } } })
+  await prisma.mensajeBuzonCO.deleteMany({ where: { comunidadId: { in: [COM_A, COM_B] } } })
+  await prisma.liquidacionPL.deleteMany({ where: { comunidadId: { in: [COM_A, COM_B] } } })
+  await prisma.preferenciaCanalCobranzaFI.deleteMany({
+    where: { comunidadId: { in: [COM_A, COM_B] } },
+  })
   await prisma.envioCO.deleteMany({ where: { comunidadId: { in: [COM_A, COM_B] } } })
   await prisma.notificacion.deleteMany({ where: { comunidadId: { in: [COM_A, COM_B] } } })
   await prisma.eventoAuditoria.deleteMany({ where: { comunidadId: { in: [COM_A, COM_B] } } })
@@ -168,6 +205,9 @@ beforeAll(async () => {
     { email: EMAIL.resA1, comunidadId: COM_A, rol: "residente", personaId: P_A1 },
     { email: EMAIL.resA2, comunidadId: COM_A, rol: "residente", personaId: P_A2 },
     { email: EMAIL.resB1, comunidadId: COM_B, rol: "residente", personaId: P_B1 },
+    // Conserjería sin ficha MP: el caso de `liquidaciones` sólo necesita el rol
+    // (la matriz le declara `pl:propia` ver y la ruta no la usa).
+    { email: EMAIL.conserjeA, comunidadId: COM_A, rol: "conserjeria", personaId: null },
   ]) {
     const usuario = await prisma.usuario.upsert({
       where: { email: u.email },
@@ -233,6 +273,118 @@ beforeAll(async () => {
       { id: "ppo-ed-a2-solo", envioId: ENV_SOLO_A2, personaId: P_A2, unidadId: U_A2 },
     ],
   })
+
+  // Controles de propiedad: una fila por unidad, con flags distintos para que
+  // «la fila ajena queda intacta» se pueda comparar de verdad.
+  await prisma.controlPropiedad.createMany({
+    data: [
+      {
+        id: CONTROL_A1,
+        comunidadId: COM_A,
+        unidadId: U_A1,
+        residenteVeMorosidad: false,
+        residenteVeActas: true,
+        alertasResidentesActivas: true,
+        estado: "vigente",
+      },
+      {
+        id: CONTROL_A2,
+        comunidadId: COM_A,
+        unidadId: U_A2,
+        residenteVeMorosidad: true,
+        residenteVeActas: false,
+        alertasResidentesActivas: false,
+        estado: "vigente",
+      },
+    ],
+  })
+
+  // Preferencia de canal de cobranza: una fila por persona, con valores opuestos
+  // (un `update` ajeno se vería en la relectura).
+  await prisma.preferenciaCanalCobranzaFI.createMany({
+    data: [
+      { id: "ppo-pref-a1", comunidadId: COM_A, personaId: P_A1, canalVisor: true, canalEmail: false },
+      { id: "ppo-pref-a2", comunidadId: COM_A, personaId: P_A2, canalVisor: false, canalEmail: true },
+    ],
+  })
+
+  // Buzón CO: el reportante es la pertenencia de la fila.
+  for (const [id, reportantePersonaId, nombre] of [
+    [MSG_A1, P_A1, "Ana Auno"],
+    [MSG_A2, P_A2, "Beto Ados"],
+  ] as const) {
+    await prisma.mensajeBuzonCO.create({
+      data: {
+        id,
+        comunidadId: COM_A,
+        folio: `BZ-${id}`,
+        clasificacion: "reclamo",
+        reportantePersonaId,
+        reportanteNombre: nombre,
+        asunto: `Asunto ${id}`,
+        cuerpo: `Cuerpo ${id}`,
+        visibilidadComite: true,
+        fechaIngreso: "2026-11-05",
+        estado: "recibido",
+        respuestas: [],
+      },
+    })
+  }
+
+  // Liquidaciones PL: una por comunidad (los totales no importan acá — la prueba
+  // es de alcance, no de cálculo — pero la fila exige todos los campos).
+  const liquidacion = (
+    id: string,
+    comunidadId: string,
+    trabajadorPersonaId: string,
+    folio: string
+  ) => ({
+    id,
+    comunidadId,
+    folio,
+    trabajadorPersonaId,
+    periodo: "2026-10",
+    fechaGeneracion: "2026-10-30",
+    diasTrabajados: 30,
+    sueldoBaseContrato: 650000,
+    diasMesComercial: 30,
+    jornadaSemanal: 44,
+    sueldoBaseProporcional: 650000,
+    horasExtrasHoras: 0,
+    valorHoraOrdinaria: 0,
+    montoHorasExtras: 0,
+    bonos: [],
+    gratificacionLegal: 0,
+    totalImponible: 650000,
+    asignacionMovilizacion: 0,
+    asignacionColacion: 0,
+    cargas: 0,
+    montoAsignacionFamiliar: 0,
+    totalHaberes: 650000,
+    nombreAfp: "AFP Habitat",
+    tasaAFP: 10.58,
+    montoAFP: 0,
+    nombreSalud: "FONASA",
+    saludTipo: "fonasa",
+    montoSalud: 0,
+    tasaSIS: 1.48,
+    montoSIS: 0,
+    montoSeguroCesantia: 0,
+    montoAPV: 0,
+    totalDescuentos: 0,
+    descuentoAnticipos: 0,
+    adelantosIds: [],
+    alcanceLiquido: 650000,
+    liquidoAPagar: 650000,
+    estado: "borrador",
+    egresoFIReferencia: "pendiente",
+  })
+  for (const fila of [
+    liquidacion(LIQ_A, COM_A, P_A1, "LIQ-0001"),
+    liquidacion(LIQ_B, COM_B, P_B1, "LIQ-0002"),
+  ]) {
+    await prisma.liquidacionPL.create({ data: fila as never })
+  }
 }, 30_000)
 
 afterAll(async () => {
@@ -555,6 +707,363 @@ describe("co/envios — pertenencia por destinatario (T3)", () => {
       // app/api/co/envios/[id]/lecturas/route.ts:36 — la respuesta es el error, no la
       // lista de `personaId`/`leidoEn` de los vecinos.
       expect(await cuerpoJson<{ error: string }>(res)).toEqual({ error: "Permiso denegado." })
+    })
+  })
+})
+
+describe("controles-propiedad — propio, otra unidad (T3/T4)", () => {
+  it("control: el administrador de A ve los dos controles de su comunidad", async () => {
+    await conSesion(EMAIL.adminA, async () => {
+      const res = await invocarApi(
+        moduloControlesPropiedad(),
+        "GET",
+        "controles-propiedad?pageSize=100"
+      )
+      expect(res.status).toBe(200)
+      const j = await cuerpoJson<Envelope<{ id: string }>>(res)
+      // app/api/controles-propiedad/route.ts:65 — `unidadesVisibles` devuelve "todas"
+      // para gestión: las dos filas existen y son legibles, así que lo que le oculta
+      // la de A-2 al residente es el filtro por unidad, no la ausencia de la fila.
+      expect(new Set(j.data.map((c) => c.id))).toEqual(new Set([CONTROL_A1, CONTROL_A2]))
+    })
+  })
+
+  it("residente A-1: la colección trae solo el control de su unidad", async () => {
+    await conSesion(EMAIL.resA1, async () => {
+      const res = await invocarApi(
+        moduloControlesPropiedad(),
+        "GET",
+        "controles-propiedad?pageSize=100"
+      )
+      expect(res.status).toBe(200)
+      const j = await cuerpoJson<Envelope<{ id: string; unidadId: string }>>(res)
+      // app/api/controles-propiedad/route.ts:100 — `where.unidadId = { in: visibles }`
+      // con `unidadesVinculadasDb(personaId, comunidadId)`: sin ese filtro la
+      // colección trae el control de A-2 (el `where` base es solo la comunidad).
+      expect(j.data.map((c) => c.id)).toEqual([CONTROL_A1])
+      expect(j.data.map((c) => c.unidadId)).toEqual([U_A1])
+      // app/api/controles-propiedad/route.ts:110 — el `total` usa el MISMO `where`:
+      // no delata la fila de la unidad vecina.
+      expect(j.total).toBe(1)
+    })
+  })
+
+  it("residente A-1: GET de su control → 200; GET del control de A-2 → 403 sin flags", async () => {
+    await conSesion(EMAIL.resA1, async () => {
+      const propio = await invocarApi(
+        moduloControlPropiedad(),
+        "GET",
+        "controles-propiedad/[id]",
+        { params: { id: CONTROL_A1 } }
+      )
+      // app/api/controles-propiedad/[id]/route.ts:62 — el ABAC de pertenencia deja
+      // pasar la unidad propia (control negativo del 403 de abajo).
+      expect(propio.status).toBe(200)
+      expect((await cuerpoJson<{ id: string }>(propio)).id).toBe(CONTROL_A1)
+
+      const ajeno = await invocarApi(
+        moduloControlPropiedad(),
+        "GET",
+        "controles-propiedad/[id]",
+        { params: { id: CONTROL_A2 } }
+      )
+      // app/api/controles-propiedad/[id]/route.ts:62 — `!unidades.includes(record.unidadId)`:
+      // 403, que es lo que el mapa declara para este recurso (a diferencia del 404 de
+      // `notificaciones`/`co/envios`). El 404 cross-comunidad es de `:54`.
+      expect(ajeno.status).toBe(403)
+      // La respuesta es solo el error: ningún flag de privacidad de la unidad vecina.
+      expect(await cuerpoJson<{ error: string }>(ajeno)).toEqual({
+        error: "Permiso denegado: solo ves los controles de tu unidad.",
+      })
+    })
+  })
+
+  it("residente A-1: PUT y DELETE del control de A-2 → 403 y la fila queda intacta", async () => {
+    await conSesion(EMAIL.resA1, async () => {
+      const antes = await prisma.controlPropiedad.findUnique({ where: { id: CONTROL_A2 } })
+      const put = await invocarApi(
+        moduloControlPropiedad(),
+        "PUT",
+        "controles-propiedad/[id]",
+        { params: { id: CONTROL_A2 }, body: { residenteVeMorosidad: true, residenteVeActas: false } }
+      )
+      // app/api/controles-propiedad/[id]/route.ts:92 — la escritura exige
+      // `puedeGestionarControles(rol, "editar")` (`ad` editar, que el residente no
+      // tiene): el 403 es por CLAVE, no por fila. La fila ajena igual queda intacta.
+      expect(put.status).toBe(403)
+      expect(await cuerpoJson<{ error: string }>(put)).toEqual({ error: "Permiso denegado." })
+      expect(await prisma.controlPropiedad.findUnique({ where: { id: CONTROL_A2 } })).toEqual(antes)
+
+      const del = await invocarApi(
+        moduloControlPropiedad(),
+        "DELETE",
+        "controles-propiedad/[id]",
+        { params: { id: CONTROL_A2 } }
+      )
+      // app/api/controles-propiedad/[id]/route.ts:169-170 — el DELETE corta con
+      // "denegado" dentro de la transacción, antes de archivar y de marcar
+      // `desestimada`: no hay borrado lógico de la fila ajena.
+      expect(del.status).toBe(403)
+      expect(await prisma.controlPropiedad.findUnique({ where: { id: CONTROL_A2 } })).toEqual(antes)
+      expect(await prisma.controlPropiedadArchivada.count({ where: { id: CONTROL_A2 } })).toBe(0)
+    })
+  })
+})
+
+describe("cobros-fi/canales — preferencia por persona (T3/T4)", () => {
+  it("control: el administrador de A ve las dos preferencias de la comunidad", async () => {
+    await conSesion(EMAIL.adminA, async () => {
+      const res = await invocarApi(moduloCanalesCobranza(), "GET", "cobros-fi/canales")
+      expect(res.status).toBe(200)
+      const j = await cuerpoJson<{ personas: { personaId: string }[]; propio: unknown }>(res)
+      // app/api/cobros-fi/canales/route.ts:67-78 — `veTodas` (`fi:cobranza` ver, solo
+      // admin y comité) lista todas las preferencias de la comunidad.
+      expect(new Set(j.personas.map((p) => p.personaId))).toEqual(new Set([P_A1, P_A2]))
+      expect(j.propio).toBeNull()
+    })
+  })
+
+  it("residente A-1: GET → 200 con la colección filtrada (no 403) y solo su preferencia", async () => {
+    await conSesion(EMAIL.resA1, async () => {
+      const fila = await prisma.preferenciaCanalCobranzaFI.findUnique({
+        where: { comunidadId_personaId: { comunidadId: COM_A, personaId: P_A1 } },
+      })
+      const res = await invocarApi(moduloCanalesCobranza(), "GET", "cobros-fi/canales")
+      // Respuesta de HOY, fijada tal cual: el residente no tiene `fi:cobranza` ver, así
+      // que la lectura ajena NO es un 403 — es una colección vacía (`personas: []`)
+      // más su propia preferencia en `propio`
+      // (app/api/cobros-fi/canales/route.ts:87-91). La fila de A-2 no viaja.
+      expect(res.status).toBe(200)
+      const j = await cuerpoJson<{
+        personas: unknown[]
+        propio: { personaId: string; visor: boolean; email: boolean } | null
+      }>(res)
+      expect(j.personas).toEqual([])
+      // app/api/cobros-fi/canales/route.ts:62 — `propio` sale de
+      // `personaIdDelUsuarioDb(scope.usuarioId)`, nunca del cliente.
+      expect(j.propio).toEqual({ personaId: P_A1, visor: fila?.canalVisor, email: fila?.canalEmail })
+      expect(JSON.stringify(j)).not.toContain(P_A2)
+    })
+  })
+
+  it("residente A-1: PUT de su propia preferencia → 200 y se persiste (control negativo)", async () => {
+    await conSesion(EMAIL.resA1, async () => {
+      const antes = await prisma.preferenciaCanalCobranzaFI.findUnique({
+        where: { comunidadId_personaId: { comunidadId: COM_A, personaId: P_A1 } },
+      })
+      const res = await invocarApi(moduloCanalesCobranza(), "PUT", "cobros-fi/canales", {
+        body: { personaId: P_A1, canalVisor: !antes?.canalVisor, canalEmail: !antes?.canalEmail },
+      })
+      // app/api/cobros-fi/canales/route.ts:148-153 — `fi:cobranza:propia` editar +
+      // ABAC de pertenencia: la persona del body es la de la sesión, así que pasa.
+      // Sin esta cara, «403 a todo PUT» pasaría por protección correcta.
+      expect(res.status).toBe(200)
+      expect(await cuerpoJson<{ ok: boolean; personaId: string }>(res)).toMatchObject({
+        ok: true,
+        personaId: P_A1,
+      })
+      const despues = await prisma.preferenciaCanalCobranzaFI.findUnique({
+        where: { comunidadId_personaId: { comunidadId: COM_A, personaId: P_A1 } },
+      })
+      expect(despues?.canalVisor).toBe(!antes?.canalVisor)
+      expect(despues?.canalEmail).toBe(!antes?.canalEmail)
+    })
+  })
+
+  it("residente A-1: PUT de la preferencia de A-2 → 403 y la fila de A-2 intacta", async () => {
+    await conSesion(EMAIL.resA1, async () => {
+      const antes = await prisma.preferenciaCanalCobranzaFI.findUnique({
+        where: { comunidadId_personaId: { comunidadId: COM_A, personaId: P_A2 } },
+      })
+      const res = await invocarApi(moduloCanalesCobranza(), "PUT", "cobros-fi/canales", {
+        body: { personaId: P_A2, canalVisor: true, canalEmail: true },
+      })
+      // app/api/cobros-fi/canales/route.ts:153-154 — `propia !== personaId`: el
+      // cliente no decide de quién es la preferencia; el 403 sale antes de leer la
+      // persona del body (así que tampoco confirma existencia).
+      expect(res.status).toBe(403)
+      expect(await cuerpoJson<{ error: string }>(res)).toEqual({ error: "Permiso denegado." })
+      expect(
+        await prisma.preferenciaCanalCobranzaFI.findUnique({
+          where: { comunidadId_personaId: { comunidadId: COM_A, personaId: P_A2 } },
+        })
+      ).toEqual(antes)
+    })
+  })
+})
+
+describe("co/mensajes-buzon — pertenencia por reportante (T3/T4)", () => {
+  it("control: el administrador de A ve los dos mensajes del buzón", async () => {
+    await conSesion(EMAIL.adminA, async () => {
+      const res = await invocarApi(moduloMensajesBuzon(), "GET", "co/mensajes-buzon?pageSize=100")
+      expect(res.status).toBe(200)
+      const j = await cuerpoJson<Envelope<{ id: string }>>(res)
+      // app/api/co/_lib/buzon-alcance.ts:32 — para el administrador el alcance es `{}`
+      // (toda la comunidad): las dos filas existen y son legibles.
+      expect(new Set(j.data.map((m) => m.id))).toEqual(new Set([MSG_A1, MSG_A2]))
+    })
+  })
+
+  it("residente A-1: la colección trae solo el mensaje que reportó él", async () => {
+    await conSesion(EMAIL.resA1, async () => {
+      const res = await invocarApi(moduloMensajesBuzon(), "GET", "co/mensajes-buzon?pageSize=100")
+      expect(res.status).toBe(200)
+      const j = await cuerpoJson<Envelope<{ id: string }>>(res)
+      // app/api/co/_lib/buzon-alcance.ts:35 — `{ reportantePersonaId: personaId }`:
+      // sin ese filtro la bandeja del residente trae el reclamo del vecino.
+      expect(j.data.map((m) => m.id)).toEqual([MSG_A1])
+      // app/api/co/mensajes-buzon/route.ts:44 — el `total` usa el MISMO `where`.
+      expect(j.total).toBe(1)
+    })
+  })
+
+  it("residente A-1: GET de su mensaje → 200; GET del reportado por A-2 → 404", async () => {
+    await conSesion(EMAIL.resA1, async () => {
+      const propio = await invocarApi(moduloMensajeBuzon(), "GET", "co/mensajes-buzon/[id]", {
+        params: { id: MSG_A1 },
+      })
+      // app/api/co/mensajes-buzon/[id]/route.ts:40 — `whereMensajeBuzon` conserva el
+      // alcance: el reportante sí lee su propio mensaje (control negativo).
+      expect(propio.status).toBe(200)
+      expect((await cuerpoJson<{ id: string }>(propio)).id).toBe(MSG_A1)
+
+      const ajeno = await invocarApi(moduloMensajeBuzon(), "GET", "co/mensajes-buzon/[id]", {
+        params: { id: MSG_A2 },
+      })
+      // app/api/co/mensajes-buzon/[id]/route.ts:41-43 — el `findFirst` con el alcance
+      // no encuentra la fila ajena y responde el mismo 404 que un id inventado.
+      expect(ajeno.status).toBe(404)
+      expect(await cuerpoJson<{ error: string }>(ajeno)).toEqual({
+        error: "Registro no encontrado.",
+      })
+    })
+  })
+
+  it("residente A-1: PUT del mensaje de A-2 → 403 y la fila queda intacta", async () => {
+    await conSesion(EMAIL.resA1, async () => {
+      const antes = await prisma.mensajeBuzonCO.findUnique({ where: { id: MSG_A2 } })
+      const ajeno = await invocarApi(moduloMensajeBuzon(), "PUT", "co/mensajes-buzon/[id]", {
+        params: { id: MSG_A2 },
+        body: { asunto: "Asunto intruso" },
+      })
+      // lib/api/put-merge.ts:79-80 — `authzCheck(rol, "editar")` sobre `co:buzon`:
+      // el residente solo tiene ver+crear (`lib/authz.ts:273`), así que el 403 es por
+      // CLAVE y no por fila. Se fija el contrato real: la fila ajena no se escribe.
+      expect(ajeno.status).toBe(403)
+      const cuerpoAjeno = await cuerpoJson<{ error: string }>(ajeno)
+      expect(cuerpoAjeno).toEqual({ error: "Permiso denegado." })
+
+      // Control que documenta el límite: el MISMO 403 sale para el mensaje propio,
+      // así que la regla por fila en escritura no es ejercitable en este recurso (el
+      // residente nunca edita). La lectura sí discrimina (ver los dos casos de arriba).
+      const propio = await invocarApi(moduloMensajeBuzon(), "PUT", "co/mensajes-buzon/[id]", {
+        params: { id: MSG_A1 },
+        body: { asunto: "Asunto propio" },
+      })
+      expect(propio.status).toBe(403)
+      expect(await cuerpoJson<{ error: string }>(propio)).toEqual(cuerpoAjeno)
+
+      expect(await prisma.mensajeBuzonCO.findUnique({ where: { id: MSG_A2 } })).toEqual(antes)
+    })
+  })
+})
+
+describe("vinculos — límite documentado, no caso por fila (T3)", () => {
+  it("el residente recibe 403 antes de cualquier filtro; el admin sí discrimina comunidad", async () => {
+    await conSesion(EMAIL.resA1, async () => {
+      const propio = await invocarApi(moduloVinculo(), "GET", "vinculos/[id]", {
+        params: { id: V_A1 },
+      })
+      const ajeno = await invocarApi(moduloVinculo(), "GET", "vinculos/[id]", {
+        params: { id: V_A2 },
+      })
+      // app/api/vinculos/[id]/route.ts:23 — el gate es `puede(rol, "ver", "mp")` y el
+      // residente no lo tiene (`lib/authz.ts`): el 403 sale ANTES de leer la fila, con
+      // el vínculo propio y con el ajeno por igual. Por eso este recurso NO tiene caso
+      // por relación: la regla de fila no se puede ejercitar.
+      expect(propio.status).toBe(403)
+      expect(ajeno.status).toBe(403)
+      expect(await cuerpoJson<{ error: string }>(ajeno)).toEqual(
+        await cuerpoJson<{ error: string }>(propio)
+      )
+      // Mismo límite que `e2e/crud/arrendatario-limite.spec.ts:60` fija para
+      // `/api/vinculos` (403 del residente por diseño); no se cambia acá.
+    })
+
+    await conSesion(EMAIL.adminA, async () => {
+      const propio = await invocarApi(moduloVinculo(), "GET", "vinculos/[id]", {
+        params: { id: V_A1 },
+      })
+      // Control: para un lector `mp` la ruta sí sirve la fila de su comunidad.
+      expect(propio.status).toBe(200)
+      expect((await cuerpoJson<{ id: string }>(propio)).id).toBe(V_A1)
+
+      const ajeno = await invocarApi(moduloVinculo(), "GET", "vinculos/[id]", {
+        params: { id: V_B1 },
+      })
+      // app/api/vinculos/[id]/route.ts:28-29 — 404 cross-comunidad por
+      // `findUnique` + comparación, sin confirmar existencia.
+      expect(ajeno.status).toBe(404)
+      expect(await cuerpoJson<{ error: string }>(ajeno)).toEqual({
+        error: "Registro no encontrado.",
+      })
+    })
+  })
+})
+
+describe("liquidaciones — defecto declarado: `pl:propia` sin usar (T3)", () => {
+  it("conserjería A: GET de una liquidación → 403 (el `pl:propia` declarado no se aplica)", async () => {
+    await conSesion(EMAIL.conserjeA, async () => {
+      const propiaComunidad = await invocarApi(
+        moduloLiquidacion(),
+        "GET",
+        "liquidaciones/[id]",
+        { params: { id: LIQ_A } }
+      )
+      const otraComunidad = await invocarApi(
+        moduloLiquidacion(),
+        "GET",
+        "liquidaciones/[id]",
+        { params: { id: LIQ_B } }
+      )
+      // hallazgo (mapa T1, fila `liquidaciones`): app/api/liquidaciones/route.ts:63
+      // pide `pl` y nunca aplica `pl:propia`, la clave que la matriz declara para
+      // conserjería (`lib/authz.ts:186`, «solo propia liquidación»). El 403 sale del
+      // `pl` vacío de conserjería (`lib/authz.ts:185`), antes de leer la fila: hoy no
+      // hay regla por fila que probar, y la liquidación propia tampoco se lee. Es un
+      // defecto declarado: este caso lo fija, no lo arregla.
+      expect(propiaComunidad.status).toBe(403)
+      const cuerpoPropia = await cuerpoJson<{ error: string }>(propiaComunidad)
+      expect(cuerpoPropia).toEqual({ error: "Permiso denegado." })
+      // Sin filtro de fila, la otra comunidad tampoco se distingue (mismo 403).
+      expect(otraComunidad.status).toBe(403)
+      expect(await cuerpoJson<{ error: string }>(otraComunidad)).toEqual(cuerpoPropia)
+    })
+  })
+
+  it("control: el administrador de A lee la liquidación de su comunidad", async () => {
+    await conSesion(EMAIL.adminA, async () => {
+      const res = await invocarApi(moduloLiquidacion(), "GET", "liquidaciones/[id]", {
+        params: { id: LIQ_A },
+      })
+      // app/api/liquidaciones/route.ts:63 — `puede(rol, accion, "pl")`: solo el
+      // administrador tiene `pl`, así que la fila de su comunidad se sirve.
+      expect(res.status).toBe(200)
+      expect((await cuerpoJson<{ id: string }>(res)).id).toBe(LIQ_A)
+    })
+  })
+
+  it("administrador de A: GET de la liquidación de B → 404 cross-comunidad", async () => {
+    await conSesion(EMAIL.adminA, async () => {
+      const res = await invocarApi(moduloLiquidacion(), "GET", "liquidaciones/[id]", {
+        params: { id: LIQ_B },
+      })
+      // lib/api/crud-factory.ts:335-337 — `findUnique` + `comunidadId !== scope`:
+      // la fila de la otra comunidad responde igual que un id inexistente.
+      expect(res.status).toBe(404)
+      expect(await cuerpoJson<{ error: string }>(res)).toEqual({
+        error: "Registro no encontrado.",
+      })
     })
   })
 })
