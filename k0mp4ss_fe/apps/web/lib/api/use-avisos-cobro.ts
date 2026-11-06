@@ -72,6 +72,33 @@ export interface EmitirAvisosResultado {
   ok: boolean
   error?: string
   avisos: AvisoCobro[]
+  /**
+   * Las unidades que la corrida dejó SIN aviso, con el motivo que el servidor
+   * puede afirmar. Llega siempre (vacía si no hubo omisiones), y es la fuente
+   * del conteo: la pantalla ya no lo deduce restando las líneas de la emisión.
+   *
+   * En un rechazo (`ok: false`) viene vacía porque la ruta no llegó a mirar las
+   * unidades y `postAccion` sólo devuelve el `error` del fallo.
+   */
+  sinAviso: UnidadSinAviso[]
+}
+
+/** Motivo por el que una unidad quedó sin aviso (contrato de la ruta). */
+export type MotivoSinAviso =
+  /** La emisión la repartió y el período no tiene cargo para ella. */
+  | "sin_cobro"
+  /** Ya tenía un aviso emitido de ese período: uno emitido no se reemplaza. */
+  | "ya_tiene_aviso"
+  /** Hay un cargo en el período y la unidad no se pudo resolver. */
+  | "otro"
+
+/** Una unidad que la corrida dejó sin aviso, tal como la declara el servidor. */
+export interface UnidadSinAviso {
+  unidadId: string
+  /** `null` cuando el cargo apunta a una unidad que ya no existe. */
+  numero: string | null
+  etiqueta: string | null
+  motivo: MotivoSinAviso
 }
 
 /** Estado de un canal en la entrega (`entregado` en el visor, `pendiente` el correo). */
@@ -101,9 +128,15 @@ export async function emitirAvisosCobro(
   periodo: string
 ): Promise<EmitirAvisosResultado> {
   const r = await postAccion(BASE, { periodo })
-  if (!r.ok) return { ok: false, error: r.error, avisos: [] }
-  const cuerpo = r.data as { avisos?: AvisoCobro[] } | null
-  return { ok: true, avisos: cuerpo?.avisos ?? [] }
+  if (!r.ok) return { ok: false, error: r.error, avisos: [], sinAviso: [] }
+  const cuerpo = r.data as
+    | { avisos?: AvisoCobro[]; sinAviso?: UnidadSinAviso[] }
+    | null
+  return {
+    ok: true,
+    avisos: cuerpo?.avisos ?? [],
+    sinAviso: cuerpo?.sinAviso ?? [],
+  }
 }
 
 /** Entrega explícita de UN aviso al propietario vigente (nunca automática). */

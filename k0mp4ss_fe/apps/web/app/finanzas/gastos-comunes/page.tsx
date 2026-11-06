@@ -52,7 +52,7 @@ import { useFondosFI } from "@/lib/api/use-fondos-fi"
 import { useEgresosFI } from "@/lib/api/use-egresos-fi"
 import { useIngresosFI } from "@/lib/api/use-ingresos-fi"
 import { useEmisionesGC } from "@/lib/api/use-emisiones-gc"
-import { emitirAvisosCobro, entregarAvisoCobro } from "@/lib/api/use-avisos-cobro"
+import { emitirAvisosCobro, entregarAvisoCobro, type UnidadSinAviso } from "@/lib/api/use-avisos-cobro"
 import { useCobrosFI, useAccionesCobranzaFI, useCanalesCobranzaFI } from "@/lib/api/use-cobros-fi"
 import { useUnidades } from "@/lib/api/use-unidades"
 import { useTiposUnidad } from "@/lib/api/use-tipos-unidad"
@@ -138,6 +138,22 @@ function TotalARecaudarEmision({ emision }: { emision: EmisionGC }) {
 }
 
 /**
+ * Cómo se lee cada motivo que declara la ruta. La pantalla NO interpreta: si el
+ * servidor dijo `otro`, lo que se imprime es que no se pudo determinar la causa.
+ */
+const MOTIVO_SIN_AVISO: Record<UnidadSinAviso["motivo"], string> = {
+  sin_cobro: "no tiene cargo en el período",
+  ya_tiene_aviso: "ya tiene aviso de este período",
+  otro: "no se pudo determinar la causa",
+}
+
+/** Nombre de la unidad con lo que el servidor pudo dar: etiqueta, número o id. */
+function nombreDeUnidadSinAviso(unidad: UnidadSinAviso): string {
+  if (unidad.etiqueta) return unidad.etiqueta
+  return unidad.numero ? `Unidad ${unidad.numero}` : unidad.unidadId
+}
+
+/**
  * Acción del aviso de cobro sobre un período YA emitido en gasto común
  * (F27, spec «Aviso de Cobro Congelado…» y «Entrega del Aviso con Prueba»).
  *
@@ -148,21 +164,22 @@ function TotalARecaudarEmision({ emision }: { emision: EmisionGC }) {
  * aviso no arranca el plazo de pago. Por eso la entrega nunca es un efecto de
  * la emisión: la dispara el administrador, aviso por aviso, después.
  *
- * Los tres conteos son los que la ruta ya devuelve: CREADOS son las filas que
- * volvieron; OMITIDOS son las unidades que la emisión repartió y no tienen
- * cobro en el período (la ruta las saltea, porque un aviso en $0 sería un
- * documento falso); RECHAZADO es la respuesta de la ruta cuando el período no
- * tiene emisión o los totales de la comunidad no son computables, y su motivo
- * se imprime tal cual, sin suavizarlo.
+ * Lo que se informa es lo que la ruta devuelve, sin interpretarlo: CREADOS son
+ * las filas que volvieron; SIN AVISO son las unidades que la corrida no cubrió,
+ * cada una con el motivo que el servidor declaró (`sin_cobro`,
+ * `ya_tiene_aviso`, `otro`); RECHAZADO es la respuesta de la ruta cuando el
+ * período no tiene emisión o los totales de la comunidad no son computables, y
+ * su motivo se imprime tal cual, sin suavizarlo.
+ *
+ * El conteo de «sin aviso» NO se deduce restando las líneas de la emisión: esa
+ * resta daba un número sin causa, y un número sin causa se lee como una falla
+ * del sistema. La lista la declara el servidor y acá sólo se imprime.
  */
 export function AccionAvisoDeCobro({
   periodo,
-  unidadesEmitidas,
   emisiones,
 }: {
   periodo: string
-  /** Unidades que la emisión del período repartió (una línea por unidad). */
-  unidadesEmitidas: number
   /** Períodos con emisión de gasto común: sin emisión no hay aviso que emitir. */
   emisiones: readonly { periodo: string }[]
 }) {
@@ -170,7 +187,7 @@ export function AccionAvisoDeCobro({
   const [entregando, setEntregando] = React.useState(false)
   const [emision, setEmision] = React.useState<{
     creados: AvisoCobro[]
-    omitidos: number
+    sinAviso: UnidadSinAviso[]
     rechazo: string | null
   } | null>(null)
   const [entregas, setEntregas] = React.useState<Array<{ folio: string; texto: string }>>([])
@@ -190,8 +207,9 @@ export function AccionAvisoDeCobro({
       const r = await emitirAvisosCobro(periodo)
       setEmision({
         creados: r.avisos,
-        // Un rechazo no omite a nadie: la ruta no llegó a mirar las unidades.
-        omitidos: r.ok ? Math.max(0, unidadesEmitidas - r.avisos.length) : 0,
+        // La lista viene del servidor; en un rechazo llega vacía porque la ruta
+        // no llegó a mirar las unidades (un rechazo no omite a nadie).
+        sinAviso: r.ok ? r.sinAviso : [],
         rechazo: r.ok ? null : (r.error ?? "La emisión fue rechazada."),
       })
     } finally {
@@ -233,9 +251,17 @@ export function AccionAvisoDeCobro({
       {emision !== null && (
         <div role="status" aria-live="polite" className="space-y-1.5 text-xs">
           <p className="font-medium">
-            Avisos del período {periodo}: {emision.creados.length} creados, {emision.omitidos} sin aviso
-            (unidades con cobro en el período que esta corrida no cubrió), {emision.rechazo ? "1 rechazado" : "0 rechazados"}.
+            Avisos del período {periodo}: {emision.creados.length} creados, {emision.sinAviso.length} sin aviso, {emision.rechazo ? "1 rechazado" : "0 rechazados"}.
           </p>
+          {emision.sinAviso.length > 0 && (
+            <ul className="space-y-0.5 text-muted-foreground">
+              {emision.sinAviso.map(u => (
+                <li key={u.unidadId}>
+                  Sin aviso: {nombreDeUnidadSinAviso(u)} — {MOTIVO_SIN_AVISO[u.motivo]}
+                </li>
+              ))}
+            </ul>
+          )}
           {emision.rechazo && (
             <p className="text-destructive">El servidor rechazó la emisión: {emision.rechazo}</p>
           )}
@@ -835,7 +861,7 @@ export default function GastosComunesPage() {
                       <td className="px-4 py-2">{e.fechaEmision}</td>
                       {/* Emitir congela el papel; entregar lo registra. Son dos pasos. */}
                       <td className="px-4 py-2 align-top">
-                        <AccionAvisoDeCobro periodo={e.periodo} unidadesEmitidas={e.lineas.length} emisiones={emisionesGC} />
+                        <AccionAvisoDeCobro periodo={e.periodo} emisiones={emisionesGC} />
                       </td>
                     </tr>
                   ))}
