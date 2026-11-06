@@ -145,8 +145,11 @@ test.describe("residente — RA reserva + CT certificado + no FI", () => {
   //      `documentoCertificadoPDF` desreferencia `config.firmaDigitalizadaUrl`
   //      (lib/pdf-utils.ts:322-331), así que el PDF no se arma y la descarga no
   //      ocurre ni aunque la unidad esté elegida.
-  //      (La persona solicitante YA funciona: `GET /api/vinculos` se cerró con la
-  //      clave propia `vu:propio` y alcance en el servidor — ver F34 punto (1).)
+  //      (El select de persona solicitante TAMPOCO funciona: `GET /api/vinculos`
+  //      exige `mp` y el residente no lo tiene. Se intento abrir con una clave
+  //      propia y se REVIRTIO: devolvia 200 al arrendatario y rompia el limite
+  //      deliberado de e2e/crud/arrendatario-limite.spec.ts:60. Abrirlo exige
+  //      decidir que roles leen sus vinculos y actualizar ese limite a proposito.)
   //
   // CAMINO DECIDIDO (no se improvisa acá):
   //   (1) unidades → alcance propio a las unidades donde el residente tiene
