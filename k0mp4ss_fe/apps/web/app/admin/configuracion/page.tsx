@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { mutate } from "swr"
 import { ConfiguracionGlobal } from "@/data/admin/configuracion"
 import { useConfiguracion } from "@/lib/api/use-configuracion"
 import {
@@ -37,8 +38,18 @@ import {
 import { LogoUploader } from "@/components/admin/logo-uploader"
 import { ReglamentoGC } from "@/components/admin/reglamento-gc"
 
+/** Pestañas de la pantalla. Fuente única: la usan el formulario ya cargado y el
+ * esqueleto de carga, para que la estructura de la pantalla no se bifurque. */
+const PESTANAS = [
+  { value: "identidad", etiqueta: "Identidad Legal", Icono: IconBuilding },
+  { value: "gc", etiqueta: "Gasto Común", Icono: IconCalculator },
+  { value: "smtp", etiqueta: "Correo SMTP", Icono: IconMail },
+  { value: "notificaciones", etiqueta: "Notificaciones", Icono: IconBell },
+  { value: "operacion", etiqueta: "Operación y Seguridad", Icono: IconShield },
+] as const
+
 export default function ConfiguracionPage() {
-  const { config: configuracionRemota, isLoading, updateConfig } = useConfiguracion()
+  const { config: configuracionRemota, error, updateConfig } = useConfiguracion()
   const [config, setConfig] = React.useState<ConfiguracionGlobal | null>(null)
 
   React.useEffect(() => {
@@ -67,12 +78,55 @@ export default function ConfiguracionPage() {
     alert("Configuración guardada en la base de datos")
   }
 
-  if (isLoading || !config) {
+  // El encabezado y las pestañas se pintan SIEMPRE, también sin datos: son
+  // estructura, no datos. Así la pantalla nunca queda vacía (antes, mientras
+  // la API no respondía, esto era un bloque gris sin título ni pestañas: el
+  // "no muestra nada" del reporte) y el HTML del servidor ya trae las
+  // pestañas. Los VALORES del formulario siguen viniendo sólo de la base.
+  if (!config) {
     return (
-      <div className="flex animate-pulse flex-col gap-6">
-        <div className="h-9 w-72 rounded bg-muted/40" />
-        <div className="h-4 w-96 max-w-full rounded bg-muted/30" />
-        <div className="h-64 w-full rounded-lg bg-muted/30" />
+      <div className="mx-auto flex max-w-5xl flex-col gap-6">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">
+            Configuración Global
+          </h1>
+          <p className="text-muted-foreground">
+            Parámetros base que rigen el comportamiento del sistema.
+          </p>
+        </div>
+        <Tabs defaultValue="identidad" className="w-full">
+          <TabsList className="mb-6 flex h-auto flex-wrap bg-muted/50 p-1">
+            {PESTANAS.map(({ value, etiqueta, Icono }) => (
+              <TabsTrigger key={value} value={value} className="gap-2">
+                <Icono className="size-4" /> {etiqueta}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+          {error ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>No se pudo leer la configuración</CardTitle>
+                <CardDescription>
+                  La configuración vive en la base y la API no respondió:{" "}
+                  {error.message}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Button
+                  type="button"
+                  onClick={() => void mutate("/api/configuracion")}
+                >
+                  Reintentar
+                </Button>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="flex animate-pulse flex-col gap-4">
+              <div className="h-4 w-96 max-w-full rounded bg-muted/30" />
+              <div className="h-64 w-full rounded-lg bg-muted/30" />
+            </div>
+          )}
+        </Tabs>
       </div>
     )
   }
@@ -96,21 +150,11 @@ export default function ConfiguracionPage() {
       <form id="config-form" onSubmit={handleSave}>
         <Tabs defaultValue="identidad" className="w-full">
           <TabsList className="mb-6 flex h-auto flex-wrap bg-muted/50 p-1">
-            <TabsTrigger value="identidad" className="gap-2">
-              <IconBuilding className="size-4" /> Identidad Legal
-            </TabsTrigger>
-            <TabsTrigger value="gc" className="gap-2">
-              <IconCalculator className="size-4" /> Gasto Común
-            </TabsTrigger>
-            <TabsTrigger value="smtp" className="gap-2">
-              <IconMail className="size-4" /> Correo SMTP
-            </TabsTrigger>
-            <TabsTrigger value="notificaciones" className="gap-2">
-              <IconBell className="size-4" /> Notificaciones
-            </TabsTrigger>
-            <TabsTrigger value="operacion" className="gap-2">
-              <IconShield className="size-4" /> Operación y Seguridad
-            </TabsTrigger>
+            {PESTANAS.map(({ value, etiqueta, Icono }) => (
+              <TabsTrigger key={value} value={value} className="gap-2">
+                <Icono className="size-4" /> {etiqueta}
+              </TabsTrigger>
+            ))}
           </TabsList>
 
           <TabsContent value="identidad">

@@ -28,6 +28,32 @@ const securityHeaders = [
 
 let nextConfig = {
   transpilePackages: ["@workspace/ui"],
+  // DEV: caché de filesystem de Turbopack APAGADO (viene encendido por defecto
+  // en Next 16: `experimental.turbopackFileSystemCacheForDev: true`).
+  //
+  // Por qué: ese caché es una base de datos en `.next/dev/cache/turbopack/`
+  // (segmentos `.sst` + `.meta`) que se escribe desde el proceso del dev
+  // server. Si el proceso muere a mitad de una escritura o si se borra `.next`
+  // mientras el server está vivo —las dos cosas que se hacen acá todo el
+  // tiempo para "destrabar" el dev—, la base queda con referencias colgadas y
+  // el server siguiente no falla: queda a medias. Caso medido (2026-11-06):
+  // `GET /api/configuracion` se quedaba en `○ Compiling /api/configuracion ...`
+  // para siempre (curl 000 a los 25s y a los 60s) mientras
+  // `/api/comunidad-actual` respondía 200, y el log mostraba
+  // `panicked ... Unable to open static sorted file 00003142.sst`. La misma
+  // ruta, con el caché limpio, responde 200 en ~6s la primera compilación y
+  // ~100ms después. O sea: el cuelgue no estaba en el código de la ruta.
+  //
+  // Costo medido en esta máquina con `npm run dev`: Ready 6,1s sin caché,
+  // contra 9,6s con `.next` en frío y 2,7s reusando un caché ya caliente; la
+  // primera compilación de /api/configuracion tarda 5,8s sin caché contra
+  // ~100ms con el caché caliente. Se paga unos segundos por arranque y se
+  // elimina el cuelgue permanente. Si algún día se quiere el caché de vuelta,
+  // alcanza con borrar este bloque — pero entonces NUNCA borrar `.next` ni
+  // matar el server a mitad de compilación, porque eso es lo que lo envenena.
+  experimental: {
+    turbopackFileSystemCacheForDev: false,
+  },
   // Vercel Functions Storage: cada `route.ts` se empaqueta como su propia Vercel
   // Function y arrastra su propio `node_modules` trazado. Sin exclusiones, cada
   // función pesaba ~80,6 MB y de esos ~57 MB eran `@prisma/client`, casi todo
