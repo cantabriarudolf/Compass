@@ -1,15 +1,21 @@
 /**
  * /api/liquidaciones — colección de liquidaciones PL (SERIE-GATED-API-BD P3).
  *
- * GET paginado vía factory (solo administración: sueldos sensibles).
+ * GET paginado con el alcance decidido por rol (T6 de la serie «Permisos por
+ * objeto»): la administración (`pl` ver) ve todas las de la comunidad —delega
+ * en la factory, igual que siempre— y el trabajador (`pl:propia` ver, hoy el
+ * rol conserjería) ve solo las filas cuyo `trabajadorPersonaId` es SU persona,
+ * resuelta en el servidor (`personaIdDelUsuarioDb`): el cliente nunca aporta su
+ * identidad. Quien no es ni administrador ni dueño de la fila recibe el 404 del
+ * repo, no un 403 que confirme que existe.
  * POST custom "generar": valida trabajador con ficha y sueldo base (404 si no
  * existe / cross-comunidad, 400 sin ficha o sin sueldo), FKs legales MA (400),
  * parámetros CF (400 "CF no cargado"), duplicado trabajador+periodo (409);
  * calcula server-side vía `pl-utils` (puro), folio LIQ- correlativo, vínculo a
  * la proyección PE del periodo si existe y evento `PL_GENERATE_PAYSLIP`.
  * El cliente nunca envía totales: el servidor recalcula y manda.
- * Authz: `puede(rol, accion, "pl")` (solo administración; la page ya es
- * `roles: ["administrador"]` en el sidebar).
+ * Authz de escritura: `puede(rol, accion, "pl")` (solo administración; la page
+ * ya es `roles: ["administrador"]` en el sidebar).
  */
 import { randomUUID } from "node:crypto"
 import { z } from "zod"
@@ -30,9 +36,11 @@ import {
   saldoVivoAdelanto,
 } from "./adelantos/_calculo"
 import { createCrudHandlers, type CrudDelegate } from "@/lib/api/crud-factory"
+import { personaIdDelUsuarioDb } from "@/lib/api/sesion-persona"
 import {
   jsonError,
   withComunidadScope,
+  type ComunidadScope,
 } from "@/lib/api/with-comunidad-scope"
 
 function delegado(modelo: unknown): CrudDelegate {
@@ -64,7 +72,138 @@ export const liquidacionesHandlers = createCrudHandlers({
   beforeDelete: guardBorrador,
 })
 
-export const GET = liquidacionesHandlers.GET
+/** Clave de la administración: ve todas las liquidaciones de la comunidad. */
+const RECURSO_PL = "pl"
+/** Clave del trabajador: ve su propia liquidación y solo la suya. */
+const RECURSO_PL_PROPIA = "pl:propia"
+
+/**
+ * Alcance de lectura de PL, decidido en el servidor.
+ *
+ * - `comunidad`: el rol tiene `pl` ver (administración) → todas las filas de la
+ *   comunidad, con el comportamiento de siempre.
+ * - `propia`: el rol tiene `pl:propia` ver (trabajador) → solo las filas cuyo
+ *   `trabajadorPersonaId` es su persona. Con `personaId` null la sesión no tiene
+ *   identidad MP y por lo tanto no es dueña de ninguna fila: NO se ensancha a la
+ *   comunidad.
+ */
+type AlcanceLiquidaciones =
+  | { ok: true; tipo: "comunidad" }
+  | { ok: true; tipo: "propia"; personaId: string | null }
+  | { ok: false; response: Response }
+
+/**
+ * Resuelve el alcance de lectura con las claves de la matriz.
+ *
+ * La identidad del trabajador sale de la BD (`personaIdDelUsuarioDb`, el mismo
+ * helper de notificaciones y buzón): el cliente no aporta `personaId` ni
+ * `trabajadorPersonaId` en query ni body.
+ */
+async function alcanceDeLectura(
+  scope: ComunidadScope
+): Promise<AlcanceLiquidaciones> {
+  if (puede(scope.rol, "ver", RECURSO_PL)) return { ok: true, tipo: "comunidad" }
+  if (!puede(scope.rol, "ver", RECURSO_PL_PROPIA)) {
+    return { ok: false, response: jsonError(403, "Permiso denegado.") }
+  }
+  return {
+    ok: true,
+    tipo: "propia",
+    personaId: await personaIdDelUsuarioDb(scope.usuarioId),
+  }
+}
+
+/**
+ * GET de la colección.
+ *
+ * La administración delega en la factory (`liquidacionesHandlers.GET`): el
+ * `where` por comunidad, la paginación, el orden y el envelope no se reescriben
+ * acá, así que su comportamiento no cambia. El trabajador recibe un `where`
+ * acotado a su persona, y el cliente no puede ampliarlo con parámetros propios.
+ */
+export async function GET(req: Request): Promise<Response> {
+  const resultado = await withComunidadScope()
+  if (!resultado.ok) return resultado.response
+  const scope = resultado.scope
+  const alcance = await alcanceDeLectura(scope)
+  if (!alcance.ok) return alcance.response
+  if (alcance.tipo === "comunidad") return liquidacionesHandlers.GET(req)
+
+  let url: URL
+  try {
+    url = new URL(req.url)
+  } catch {
+    return jsonError(400, "URL de solicitud inválida.")
+  }
+  const page = Math.max(1, Number.parseInt(url.searchParams.get("page") ?? "1", 10) || 1)
+  const pageSize = Math.min(
+    100,
+    Math.max(1, Number.parseInt(url.searchParams.get("pageSize") ?? "50", 10) || 50)
+  )
+  const personaId = alcance.personaId
+  // Sin identidad MP no hay fila propia: se responde el envelope vacío en vez de
+  // consultar con `trabajadorPersonaId: null`, que en Prisma es «sin filtro».
+  if (personaId === null) {
+    return Response.json({ data: [], page, pageSize, total: 0 })
+  }
+  const where = {
+    comunidadId: scope.comunidadId,
+    trabajadorPersonaId: personaId,
+  }
+  try {
+    const [data, total] = await Promise.all([
+      prisma.liquidacionPL.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      prisma.liquidacionPL.count({ where }),
+    ])
+    return Response.json({ data, page, pageSize, total })
+  } catch (e) {
+    logger.error({ err: e }, "[api/liquidaciones] error GET")
+    return jsonError(500, "Error interno del servidor.")
+  }
+}
+
+/**
+ * GET de UNA liquidación (lo exporta `[id]/route.ts` como `GET`).
+ *
+ * - Administración: factory (`findUnique` + `comunidadId`, 404 cross-comunidad).
+ * - Trabajador: 200 solo si la fila es de SU persona **y** de su comunidad. Todo
+ *   lo demás es el 404 del repo, nunca 403: el 404 no confirma que la fila
+ *   exista y el cuerpo jamás trae el monto ajeno.
+ */
+export async function liquidacionGetPorId(
+  req: Request,
+  ctx: { params: Promise<{ id: string }> }
+): Promise<Response> {
+  const resultado = await withComunidadScope()
+  if (!resultado.ok) return resultado.response
+  const scope = resultado.scope
+  const alcance = await alcanceDeLectura(scope)
+  if (!alcance.ok) return alcance.response
+  if (alcance.tipo === "comunidad") return liquidacionesHandlers.GET_ONE(req, ctx)
+
+  const personaId = alcance.personaId
+  if (personaId === null) return jsonError(404, "Registro no encontrado.")
+  try {
+    const { id } = await ctx.params
+    const record = await prisma.liquidacionPL.findFirst({
+      where: {
+        id,
+        comunidadId: scope.comunidadId,
+        trabajadorPersonaId: personaId,
+      },
+    })
+    if (!record) return jsonError(404, "Registro no encontrado.")
+    return Response.json(record)
+  } catch (e) {
+    logger.error({ err: e }, "[api/liquidaciones] error GET_ONE")
+    return jsonError(500, "Error interno del servidor.")
+  }
+}
 
 const BonoInputSchema = z.object({
   glosa: z.string().min(1, "La glosa del bono es obligatoria."),

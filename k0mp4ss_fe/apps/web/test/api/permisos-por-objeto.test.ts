@@ -18,7 +18,8 @@
  * Recursos del primer lote: `personas`, `notificaciones`, `co/envios`.
  * Recursos del segundo lote: `controles-propiedad`, `cobros-fi/canales`,
  * `co/mensajes-buzon`, `vinculos` (límite documentado) y `liquidaciones`
- * (defecto declarado: `pl:propia` sin usar).
+ * (T6: el trabajador lee la suya; el defecto de `pl:propia` sin usar queda
+ * cerrado por la ruta, y este arnés fija la regla por fila).
  */
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest"
 import { prisma } from "@/lib/prisma"
@@ -56,6 +57,7 @@ const EMAIL = {
   resA2: "ppo-res-a2@test.cl",
   resB1: "ppo-res-b1@test.cl",
   conserjeA: "ppo-conserje-a@test.cl",
+  trabajadorA: "ppo-trabajador-a@test.cl",
 }
 
 // Notificaciones de la comunidad A.
@@ -76,8 +78,11 @@ const CONTROL_A2 = "ppo-ctrl-a2" // unidad A-2 (otra unidad)
 const MSG_A1 = "ppo-msg-a1" // reportado por A-1
 const MSG_A2 = "ppo-msg-a2" // reportado por A-2
 
-// Liquidaciones PL: una por comunidad (la pertenencia es `trabajadorPersonaId`).
+// Liquidaciones PL: la pertenencia es `trabajadorPersonaId`. Dos trabajadores en
+// la comunidad A (para distinguir «la mía» de «otra persona de mi comunidad») y
+// una en la comunidad B (para el 404 cross-comunidad).
 const LIQ_A = "ppo-liq-a" // comunidad A, trabajador A-1
+const LIQ_A2 = "ppo-liq-a2" // comunidad A, trabajador A-2 (misma comunidad, otro trabajador)
 const LIQ_B = "ppo-liq-b" // comunidad B, trabajador B-1
 
 // Vínculos vigentes creados por el arnés (uno por persona/unidad).
@@ -109,6 +114,7 @@ const moduloCanalesCobranza = () => import("@/app/api/cobros-fi/canales/route")
 const moduloMensajesBuzon = () => import("@/app/api/co/mensajes-buzon/route")
 const moduloMensajeBuzon = () => import("@/app/api/co/mensajes-buzon/[id]/route")
 const moduloVinculo = () => import("@/app/api/vinculos/[id]/route")
+const moduloLiquidaciones = () => import("@/app/api/liquidaciones/route")
 const moduloLiquidacion = () => import("@/app/api/liquidaciones/[id]/route")
 
 async function limpiar(): Promise<void> {
@@ -205,9 +211,11 @@ beforeAll(async () => {
     { email: EMAIL.resA1, comunidadId: COM_A, rol: "residente", personaId: P_A1 },
     { email: EMAIL.resA2, comunidadId: COM_A, rol: "residente", personaId: P_A2 },
     { email: EMAIL.resB1, comunidadId: COM_B, rol: "residente", personaId: P_B1 },
-    // Conserjería sin ficha MP: el caso de `liquidaciones` sólo necesita el rol
-    // (la matriz le declara `pl:propia` ver y la ruta no la usa).
+    // Conserjería sin ficha MP: tiene `pl:propia` ver pero ninguna identidad que
+    // pueda ser dueña de una liquidación, así que no hay fila que devolver.
     { email: EMAIL.conserjeA, comunidadId: COM_A, rol: "conserjeria", personaId: null },
+    // El trabajador (rol conserjería) con su identidad MP: es el dueño de LIQ_A.
+    { email: EMAIL.trabajadorA, comunidadId: COM_A, rol: "conserjeria", personaId: P_A1 },
   ]) {
     const usuario = await prisma.usuario.upsert({
       where: { email: u.email },
@@ -331,13 +339,14 @@ beforeAll(async () => {
     })
   }
 
-  // Liquidaciones PL: una por comunidad (los totales no importan acá — la prueba
-  // es de alcance, no de cálculo — pero la fila exige todos los campos).
+  // Liquidaciones PL: los totales no importan acá — la prueba es de alcance, no
+  // de cálculo — pero la fila exige todos los campos.
   const liquidacion = (
     id: string,
     comunidadId: string,
     trabajadorPersonaId: string,
-    folio: string
+    folio: string,
+    liquido = 650000
   ) => ({
     id,
     comunidadId,
@@ -349,18 +358,18 @@ beforeAll(async () => {
     sueldoBaseContrato: 650000,
     diasMesComercial: 30,
     jornadaSemanal: 44,
-    sueldoBaseProporcional: 650000,
+    sueldoBaseProporcional: liquido,
     horasExtrasHoras: 0,
     valorHoraOrdinaria: 0,
     montoHorasExtras: 0,
     bonos: [],
     gratificacionLegal: 0,
-    totalImponible: 650000,
+    totalImponible: liquido,
     asignacionMovilizacion: 0,
     asignacionColacion: 0,
     cargas: 0,
     montoAsignacionFamiliar: 0,
-    totalHaberes: 650000,
+    totalHaberes: liquido,
     nombreAfp: "AFP Habitat",
     tasaAFP: 10.58,
     montoAFP: 0,
@@ -374,13 +383,16 @@ beforeAll(async () => {
     totalDescuentos: 0,
     descuentoAnticipos: 0,
     adelantosIds: [],
-    alcanceLiquido: 650000,
-    liquidoAPagar: 650000,
+    alcanceLiquido: liquido,
+    liquidoAPagar: liquido,
     estado: "borrador",
     egresoFIReferencia: "pendiente",
   })
   for (const fila of [
     liquidacion(LIQ_A, COM_A, P_A1, "LIQ-0001"),
+    // Otro trabajador, misma comunidad: el líquido distinto hace visible que el
+    // alcance del trabajador no trae montos ajenos.
+    liquidacion(LIQ_A2, COM_A, P_A2, "LIQ-0003", 910000),
     liquidacion(LIQ_B, COM_B, P_B1, "LIQ-0002"),
   ]) {
     await prisma.liquidacionPL.create({ data: fila as never })
@@ -1011,49 +1023,99 @@ describe("vinculos — límite documentado, no caso por fila (T3)", () => {
   })
 })
 
-describe("liquidaciones — defecto declarado: `pl:propia` sin usar (T3)", () => {
-  it("conserjería A: GET de una liquidación → 403 (el `pl:propia` declarado no se aplica)", async () => {
-    await conSesion(EMAIL.conserjeA, async () => {
-      const propiaComunidad = await invocarApi(
-        moduloLiquidacion(),
-        "GET",
-        "liquidaciones/[id]",
-        { params: { id: LIQ_A } }
-      )
-      const otraComunidad = await invocarApi(
-        moduloLiquidacion(),
-        "GET",
-        "liquidaciones/[id]",
-        { params: { id: LIQ_B } }
-      )
-      // hallazgo (mapa T1, fila `liquidaciones`): app/api/liquidaciones/route.ts:63
-      // pide `pl` y nunca aplica `pl:propia`, la clave que la matriz declara para
-      // conserjería (`lib/authz.ts:186`, «solo propia liquidación»). El 403 sale del
-      // `pl` vacío de conserjería (`lib/authz.ts:185`), antes de leer la fila: hoy no
-      // hay regla por fila que probar, y la liquidación propia tampoco se lee. Es un
-      // defecto declarado: este caso lo fija, no lo arregla.
-      expect(propiaComunidad.status).toBe(403)
-      const cuerpoPropia = await cuerpoJson<{ error: string }>(propiaComunidad)
-      expect(cuerpoPropia).toEqual({ error: "Permiso denegado." })
-      // Sin filtro de fila, la otra comunidad tampoco se distingue (mismo 403).
-      expect(otraComunidad.status).toBe(403)
-      expect(await cuerpoJson<{ error: string }>(otraComunidad)).toEqual(cuerpoPropia)
-    })
-  })
+describe("liquidaciones — defecto declarado: `pl:propia` sin usar (T3) → cerrado en T6", () => {
+  const ids = (cuerpo: Envelope<{ id: string }>) => cuerpo.data.map((fila) => fila.id).sort()
 
-  it("control: el administrador de A lee la liquidación de su comunidad", async () => {
-    await conSesion(EMAIL.adminA, async () => {
+  it("el trabajador A-1 lee SU liquidación (200) y la fila es la suya", async () => {
+    await conSesion(EMAIL.trabajadorA, async () => {
       const res = await invocarApi(moduloLiquidacion(), "GET", "liquidaciones/[id]", {
         params: { id: LIQ_A },
       })
-      // app/api/liquidaciones/route.ts:63 — `puede(rol, accion, "pl")`: solo el
-      // administrador tiene `pl`, así que la fila de su comunidad se sirve.
+      // app/api/liquidaciones/[id]/route.ts:15 → `liquidacionGetPorId`
+      // (app/api/liquidaciones/route.ts:178-206): con `pl:propia` ver la lectura
+      // se acota a `trabajadorPersonaId === personaId` de la sesión.
       expect(res.status).toBe(200)
-      expect((await cuerpoJson<{ id: string }>(res)).id).toBe(LIQ_A)
+      const fila = await cuerpoJson<{
+        id: string
+        trabajadorPersonaId: string
+        liquidoAPagar: number
+      }>(res)
+      expect(fila.id).toBe(LIQ_A)
+      expect(fila.trabajadorPersonaId).toBe(P_A1)
+      expect(fila.liquidoAPagar).toBe(650000)
     })
   })
 
-  it("administrador de A: GET de la liquidación de B → 404 cross-comunidad", async () => {
+  it("el trabajador A-1: la liquidación de otro trabajador de su comunidad → 404", async () => {
+    await conSesion(EMAIL.trabajadorA, async () => {
+      const res = await invocarApi(moduloLiquidacion(), "GET", "liquidaciones/[id]", {
+        params: { id: LIQ_A2 },
+      })
+      // Respuesta no filtrante del repo: el 404 no confirma que la fila exista, y
+      // el líquido ajeno (LIQ_A2 = 910000) no viaja en el cuerpo.
+      expect(res.status).toBe(404)
+      const cuerpo = await cuerpoJson<{ error: string }>(res)
+      expect(cuerpo).toEqual({ error: "Registro no encontrado." })
+      expect(JSON.stringify(cuerpo)).not.toContain("910000")
+    })
+  })
+
+  it("el trabajador A-1: la liquidación de otra comunidad → 404", async () => {
+    await conSesion(EMAIL.trabajadorA, async () => {
+      const res = await invocarApi(moduloLiquidacion(), "GET", "liquidaciones/[id]", {
+        params: { id: LIQ_B },
+      })
+      expect(res.status).toBe(404)
+      expect(await cuerpoJson<{ error: string }>(res)).toEqual({
+        error: "Registro no encontrado.",
+      })
+    })
+  })
+
+  it("el trabajador A-1: la colección trae solo lo suyo", async () => {
+    await conSesion(EMAIL.trabajadorA, async () => {
+      const res = await invocarApi(moduloLiquidaciones(), "GET", "liquidaciones?pageSize=50")
+      expect(res.status).toBe(200)
+      const cuerpo = await cuerpoJson<
+        Envelope<{ id: string; trabajadorPersonaId: string; liquidoAPagar: number }>
+      >(res)
+      // app/api/liquidaciones/route.ts:124-169 → `GET` (rama `pl:propia`): el
+      // `where` lleva `trabajadorPersonaId` de la sesión (`:150-153`); las filas
+      // ajenas no se cuentan.
+      expect(ids(cuerpo)).toEqual([LIQ_A])
+      expect(cuerpo.total).toBe(1)
+      expect(cuerpo.data.map((fila) => fila.trabajadorPersonaId)).toEqual([P_A1])
+      // El líquido de LIQ_A2 (910000, otro trabajador) no aparece en ninguna fila.
+      expect(cuerpo.data.every((fila) => fila.liquidoAPagar === 650000)).toBe(true)
+    })
+  })
+
+  it("control: el administrador de A ve todas las liquidaciones de su comunidad", async () => {
+    await conSesion(EMAIL.adminA, async () => {
+      const coleccion = await invocarApi(
+        moduloLiquidaciones(),
+        "GET",
+        "liquidaciones?pageSize=50"
+      )
+      expect(coleccion.status).toBe(200)
+      const cuerpo = await cuerpoJson<
+        Envelope<{ id: string; liquidoAPagar: number }>
+      >(coleccion)
+      // app/api/liquidaciones/route.ts:130 delega en la factory cuando el rol
+      // tiene `pl` ver: el comportamiento administrativo no cambia.
+      expect(ids(cuerpo)).toEqual([LIQ_A, LIQ_A2])
+      expect(cuerpo.total).toBe(2)
+      expect(cuerpo.data.find((fila) => fila.id === LIQ_A2)?.liquidoAPagar).toBe(910000)
+
+      const detalle = await invocarApi(moduloLiquidacion(), "GET", "liquidaciones/[id]", {
+        params: { id: LIQ_A2 },
+      })
+      expect(detalle.status).toBe(200)
+      expect((await cuerpoJson<{ id: string }>(detalle)).id).toBe(LIQ_A2)
+    })
+  })
+
+  it("control: el administrador de A sigue recibiendo 404 cross-comunidad", async () => {
     await conSesion(EMAIL.adminA, async () => {
       const res = await invocarApi(moduloLiquidacion(), "GET", "liquidaciones/[id]", {
         params: { id: LIQ_B },
@@ -1064,6 +1126,77 @@ describe("liquidaciones — defecto declarado: `pl:propia` sin usar (T3)", () =>
       expect(await cuerpoJson<{ error: string }>(res)).toEqual({
         error: "Registro no encontrado.",
       })
+    })
+  })
+
+  it("el trabajador no ensancha el alcance con personaId/trabajadorPersonaId del cliente", async () => {
+    await conSesion(EMAIL.trabajadorA, async () => {
+      const alcanceAjeno = `personaId=${P_A2}&trabajadorPersonaId=${P_A2}`
+      // Query de la colección: se ignora, la identidad sale de la membresía.
+      const coleccion = await invocarApi(
+        moduloLiquidaciones(),
+        "GET",
+        `liquidaciones?pageSize=50&${alcanceAjeno}`
+      )
+      expect(coleccion.status).toBe(200)
+      expect(ids(await cuerpoJson<Envelope<{ id: string }>>(coleccion))).toEqual([LIQ_A])
+
+      // Query del detalle: el `[id]` ajeno sigue siendo 404.
+      const detalle = await invocarApi(
+        moduloLiquidacion(),
+        "GET",
+        `liquidaciones/[id]?${alcanceAjeno}`,
+        { params: { id: LIQ_A2 } }
+      )
+      expect(detalle.status).toBe(404)
+
+      // Body: la ruta [id] no tiene PUT (el snapshot es inmutable) y el único
+      // canal con body es `POST /api/liquidaciones` (generar). El
+      // `trabajadorPersonaId` del body no abre nada: el rol decide antes.
+      const alta = await invocarApi(moduloLiquidaciones(), "POST", "liquidaciones", {
+        body: { trabajadorPersonaId: P_A2, periodo: "2026-11", diasTrabajados: 30 },
+      })
+      expect(alta.status).toBe(403)
+      expect(await cuerpoJson<{ error: string }>(alta)).toEqual({
+        error: "Permiso denegado.",
+      })
+      // Solo la fila del arnés (LIQ_A2): no se generó una nueva con el body.
+      const ajenas = await prisma.liquidacionPL.count({
+        where: { comunidadId: COM_A, trabajadorPersonaId: P_A2 },
+      })
+      expect(ajenas).toBe(1)
+      const enBd = await prisma.liquidacionPL.findUnique({ where: { id: LIQ_A } })
+      expect(enBd?.trabajadorPersonaId).toBe(P_A1)
+    })
+  })
+
+  it("conserjería sin identidad MP: no tiene filas que leer (colección vacía, 404 por id)", async () => {
+    await conSesion(EMAIL.conserjeA, async () => {
+      const coleccion = await invocarApi(moduloLiquidaciones(), "GET", "liquidaciones?pageSize=50")
+      expect(coleccion.status).toBe(200)
+      const cuerpo = await cuerpoJson<Envelope<{ id: string }>>(coleccion)
+      expect(cuerpo.data).toEqual([])
+      expect(cuerpo.total).toBe(0)
+      const detalle = await invocarApi(moduloLiquidacion(), "GET", "liquidaciones/[id]", {
+        params: { id: LIQ_A },
+      })
+      expect(detalle.status).toBe(404)
+    })
+  })
+
+  it("preserva la matriz: el residente dueño de la misma persona no entra por `pl:propia`", async () => {
+    await conSesion(EMAIL.resA1, async () => {
+      // `P_A1` es la persona de las dos sesiones (residente y trabajador), pero la
+      // clave gobierna, no la persona: el residente no tiene `pl:propia`.
+      const coleccion = await invocarApi(moduloLiquidaciones(), "GET", "liquidaciones?pageSize=50")
+      expect(coleccion.status).toBe(403)
+      expect(await cuerpoJson<{ error: string }>(coleccion)).toEqual({
+        error: "Permiso denegado.",
+      })
+      const detalle = await invocarApi(moduloLiquidacion(), "GET", "liquidaciones/[id]", {
+        params: { id: LIQ_A },
+      })
+      expect(detalle.status).toBe(403)
     })
   })
 })
