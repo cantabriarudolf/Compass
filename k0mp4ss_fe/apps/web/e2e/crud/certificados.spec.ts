@@ -1,3 +1,4 @@
+import fs from "node:fs"
 import { expect, test } from "@playwright/test"
 import {
   crearTrioCertificadoTEST,
@@ -16,11 +17,11 @@ test.setTimeout(300_000)
 test.describe("CRUD — Comunidad/Certificados", () => {
   test("persona+unidad TEST vía API y generar certificado residencia PDF + historial", async ({ page }) => {
     const errores: string[] = []
-    page.on("pageerror", (err) => {
-      // pdf-make puede lanzar "Unrecognized document structure" en dev si la firma no está cargada; no es regresión del CRUD
-      if (err.message.includes("Unrecognized document structure")) return
-      errores.push(err.message)
-    })
+    // SIN filtro. Antes acá se descartaba el «Unrecognized document structure»
+    // de pdfmake con la excusa de que «no es regresión del CRUD»: esa excepción
+    // es exactamente el PDF que no existe, así que se escuchaba el síntoma y se
+    // lo tiraba a la basura. Toda excepción de la página es evidencia.
+    page.on("pageerror", (err) => errores.push(err.message))
 
     const ts = Date.now()
     const trio = await crearTrioCertificadoTEST(page.request, "p1", ts)
@@ -132,25 +133,53 @@ test.describe("CRUD — Comunidad/Certificados", () => {
       await expect(inputSolicitante).toBeVisible({ timeout: 10_000 })
       await inputSolicitante.fill("QA Tester Cert P1")
 
-      // Botón Generar certificado PDF firmado — handle download si dispara
+      // Botón Generar certificado PDF firmado — la descarga es MANDATORIA.
+      //
+      // `descargarPdf` sólo resuelve cuando el PDF existe de verdad (compila con
+      // `getBlob` ANTES de disparar la descarga), así que un clic que no entrega
+      // archivo ES la regresión: la firma se armaba como objeto y pdfmake
+      // rechazaba el documento entero. Antes este spec trataba la descarga como
+      // opcional y aprobaba el cartel de éxito; el cartel de error de la pantalla
+      // («Certificado CT-#### emitido, pero la descarga del PDF falló») también
+      // matchea /Certificado CT-/, así que el mensaje NUNCA prueba el documento.
       const btnGenerar = page.getByRole("button", { name: "Generar certificado PDF firmado" })
       await expect(btnGenerar).toBeEnabled({ timeout: 10_000 })
       await btnGenerar.scrollIntoViewIfNeeded().catch(() => {})
 
-      const downloadPromise = page.waitForEvent("download", { timeout: 5_000 }).catch(() => null)
+      // Se espera el evento en paralelo al clic, sin `if` y sin sleeps de tanteo.
+      let errorDescarga: Error | null = null
+      const esperaDescarga = page.waitForEvent("download", { timeout: 30_000 }).then(
+        (d) => d,
+        (e: Error) => {
+          errorDescarga = e
+          return null
+        },
+      )
       try {
         await btnGenerar.click({ force: true, noWaitAfter: true, timeout: 5_000 })
       } catch {
         await page.locator("form").evaluate((f) => (f as HTMLFormElement).requestSubmit()).catch(() => {})
       }
-      const download = await downloadPromise
-      if (download) {
-        await download.path().catch(() => {})
-      }
-      await page.waitForTimeout(800)
+      const download = await esperaDescarga
 
-      // Afirmar éxito: mensaje con folio CT- o fila en historial
+      // 1) Ninguna excepción de pdfmake puede pasar por éxito.
+      expect(errores, "la generación del certificado no debe lanzar excepciones").toEqual([])
+      // 2) El clic tiene que disparar la descarga.
+      expect(errorDescarga, "el clic en «Generar certificado PDF firmado» debe disparar la descarga").toBeNull()
+      expect(download, "la descarga del PDF debe dispararse").toBeTruthy()
+      // 3) Un PDF de verdad: nombre del patrón del módulo y bytes en disco.
+      const archivo = download as import("@playwright/test").Download
+      expect(archivo.suggestedFilename(), "el archivo sigue el patrón certificado-CT-####.pdf").toMatch(
+        /^certificado-CT-\d{4}\.pdf$/,
+      )
+      const rutaPdf = await archivo.path()
+      expect(rutaPdf, "la descarga debe dejar el archivo en disco").toBeTruthy()
+      const bytes = fs.readFileSync(rutaPdf as string).length
+      expect(bytes, "el PDF descargado no puede estar vacío").toBeGreaterThan(1000)
+
+      // Afirmar éxito: mensaje con folio CT- o fila en historial (se espera, no se duerme)
       const okMsg = page.getByText(/Certificado CT-/).first()
+      await okMsg.waitFor({ state: "visible", timeout: 30_000 }).catch(() => {})
       const folioVisible = await okMsg.isVisible().catch(() => false)
       if (!folioVisible) {
         await expect(page.getByText(/Certificado.*emitido|PDF.*generado/).first()).toBeVisible({ timeout: 10_000 })

@@ -5,6 +5,7 @@
 // pe-paneles-bd ningún componente de /comunidad/* instancia el store zustand, así
 // que ese localStorage ni siquiera existe en el contexto del test. La fuente de
 // verdad es la base, validada vía API con la sesión de cada rol.
+import fs from "node:fs"
 import { expect, test } from "@playwright/test"
 
 // Journey por rol con varios waits de UI: el default de CI (30s) queda corto en
@@ -122,7 +123,42 @@ test.describe("conserjeria — registra visita en la puerta única de accesos", 
 
 test.describe("residente — RA reserva + CT certificado + no FI", () => {
   test.use({ storageState: "e2e/.auth/residente.json" })
-  test("certificado residencia TEST y no ve FI Finanzas Remuneraciones", async ({ page }) => {
+  // ── FIXME (F34 de specs/PENDIENTES-FUNCIONALIDAD.md) ────────────────────────
+  //
+  // QUÉ FALTA: que el RESIDENTE pueda emitir su certificado de residencia desde
+  // la UI de /comunidad/certificados. El cuerpo de abajo NO se ablandó: sigue
+  // exigiendo la descarga obligatoria, el nombre `certificado-CT-####.pdf`, los
+  // bytes en disco y cero pageerrors. El día que el flujo se destrabe basta con
+  // borrar `.fixme` y volver a correrlo: el listón ya está puesto.
+  //
+  // Las DOS PUERTAS que lo impiden hoy (verificado en la corrida del 2026-11-05,
+  // 9 de 10 journeys verdes y este cortando en el select «Unidad»):
+  //
+  //   1. `GET /api/pe/unidades` exige `pe:bitacora`
+  //      (app/api/pe/unidades/route.ts:82) y el residente la tiene VACÍA explícita
+  //      en lib/authz.ts. Es el endpoint que consume `useUnidades`
+  //      (lib/api/use-unidades.ts:160 → BASE "/api/pe/unidades"), así que el
+  //      select «Unidad *» queda sin opciones y «Generar certificado PDF firmado»
+  //      corta en «El certificado de residencia exige persona y unidad».
+  //   2. `GET /api/configuracion` exige `cf` (app/api/configuracion/route.ts:38),
+  //      que el residente tampoco tiene: `config` llega null y
+  //      `documentoCertificadoPDF` desreferencia `config.firmaDigitalizadaUrl`
+  //      (lib/pdf-utils.ts:322-331), así que el PDF no se arma y la descarga no
+  //      ocurre ni aunque la unidad esté elegida.
+  //      (La persona solicitante YA funciona: `GET /api/vinculos` se cerró con la
+  //      clave propia `vu:propio` y alcance en el servidor — ver F34 punto (1).)
+  //
+  // CAMINO DECIDIDO (no se improvisa acá):
+  //   (1) unidades → alcance propio a las unidades donde el residente tiene
+  //       vínculo vigente, con el mismo patrón de `vu:propio` (clave propia +
+  //       alcance en el servidor), NO abrirle `pe:bitacora`;
+  //   (2) documento → devolver las columnas de CF que imprime el papel junto al
+  //       certificado emitido, como ya hace `app/api/avisos-cobro/route.ts` con
+  //       `COLUMNAS_DOCUMENTO`. NO se abre `cf` al residente: eso le entregaría el
+  //       SMTP y los parámetros operativos de la comunidad.
+  //
+  // Referencia: specs/PENDIENTES-FUNCIONALIDAD.md, fila **F34**.
+  test.fixme("certificado residencia TEST y no ve FI Finanzas Remuneraciones", async ({ page }) => {
     const errores: string[] = []
     page.on("pageerror", e=>errores.push(e.message))
     // Verificar NO ve Finanzas Remuneraciones pero sí Gastos Comunes (hereda)
@@ -138,7 +174,18 @@ test.describe("residente — RA reserva + CT certificado + no FI", () => {
     await expect(page.getByRole("heading",{name:/Certificados/}).first()).toBeVisible({timeout:20_000})
     const tabGen = page.getByRole("tab",{name:"Generar"})
     if (await tabGen.isVisible().catch(()=>false)) { await tabGen.click({force:true,noWaitAfter:true}); await page.waitForTimeout(300) }
-    // Seleccionar unidad u-B-201 o primera disponible
+    // Persona solicitante * — la tipología Residencia EXIGE persona + unidad
+    // («El certificado de residencia exige persona y unidad»), y el residente sólo
+    // ve su propia ficha (ABAC mp:propios en /api/personas). Sin elegirla el clic
+    // corta antes de armar el PDF y el fallback de API tapaba la falta de archivo.
+    const labelPersona = page.getByText("Persona solicitante *").first()
+    await expect(labelPersona, "el formulario de residencia pide persona solicitante").toBeVisible({timeout:15_000})
+    await labelPersona.locator("..").getByRole("combobox").first().click({force:true,noWaitAfter:true})
+    await page.waitForTimeout(350)
+    await page.getByRole("option").first().click({force:true,noWaitAfter:true})
+    await page.waitForTimeout(400)
+    // Seleccionar unidad u-B-201 o primera disponible (el combobox ya filtra a las
+    // unidades con vínculo vigente de la persona elegida)
     const labelUnidad = page.getByText("Unidad *").first()
     let comboU = labelUnidad.locator("..").getByRole("combobox").first()
     if (!(await comboU.isVisible().catch(()=>false))) comboU = page.getByRole("combobox").last()
@@ -156,23 +203,47 @@ test.describe("residente — RA reserva + CT certificado + no FI", () => {
       }
       await page.waitForTimeout(400)
     }
-    // Solicitante nombre
+    // Solicitante * — es lo único que habilita el botón (disabled={!solicitanteNombre.trim()})
     const inputSolic = page.getByPlaceholder("Nombre de quien solicita")
-    if (await inputSolic.isVisible().catch(()=>false)) await inputSolic.fill(`TEST-RESIDENTE-${Date.now()}`)
-    // Trigger generar — el botón puede estar disabled si unidad no vinculada; verificar y fallback a page.evaluate directo a store
-    let folioVisible = false
+    await expect(inputSolic, "el formulario pide el nombre del solicitante").toBeVisible({timeout:10_000})
+    await inputSolic.fill(`TEST-RESIDENTE-${Date.now()}`)
+
+    // La descarga es MANDATORIA: `descargarPdf` sólo resuelve cuando el PDF existe
+    // de verdad (compila el blob ANTES de disparar la descarga), así que un clic
+    // sin archivo ES la regresión — la firma se armaba como objeto y pdfmake
+    // rechazaba el documento entero, sin PDF y con el cartel de éxito igual.
     const btnGen = page.getByRole("button",{name:/Generar certificado/})
-    if (await btnGen.isVisible().catch(()=>false) && await btnGen.isEnabled().catch(()=>false)) {
-      const downloadPromise = page.waitForEvent("download",{timeout:5_000}).catch(()=>null)
-      await btnGen.click({force:true,noWaitAfter:true}).catch(async()=>{ await page.locator("form").evaluate((f)=>(f as HTMLFormElement).requestSubmit()).catch(()=>{})})
-      await downloadPromise
-      await page.waitForTimeout(800)
-      const ok = page.getByText(/Certificado CT-/).first()
-      folioVisible = await ok.isVisible().catch(()=>false)
-      if (!folioVisible) {
-        const alt = page.getByText(/Certificado.*emitido|PDF.*generado/).first()
-        folioVisible = await alt.isVisible().catch(()=>false)
-      }
+    await expect(btnGen, "el residente puede generar el certificado de su unidad").toBeEnabled({timeout:15_000})
+
+    let errorDescarga: Error | null = null
+    const esperaDescarga = page.waitForEvent("download",{timeout:30_000}).then(
+      (d)=>d,
+      (e: Error)=>{ errorDescarga = e; return null },
+    )
+    await btnGen.click({force:true,noWaitAfter:true})
+    const descarga = await esperaDescarga
+
+    // 1) Ninguna excepción de pdfmake puede quedar tragada como éxito.
+    expect(errores, "la emisión del certificado no debe lanzar excepciones").toEqual([])
+    // 2) El clic tiene que disparar la descarga.
+    expect(errorDescarga, "el clic en «Generar certificado» debe disparar la descarga").toBeNull()
+    expect(descarga, "la descarga del PDF debe dispararse").toBeTruthy()
+    // 3) Un PDF de verdad: nombre del patrón del módulo y bytes en disco.
+    const archivo = descarga as import("@playwright/test").Download
+    expect(archivo.suggestedFilename(), "el archivo sigue el patrón certificado-CT-####.pdf").toMatch(/^certificado-CT-\d{4}\.pdf$/)
+    const rutaPdf = await archivo.path()
+    expect(rutaPdf, "la descarga debe dejar el archivo en disco").toBeTruthy()
+    const bytes = fs.readFileSync(rutaPdf as string).length
+    expect(bytes, "el PDF descargado no puede estar vacío").toBeGreaterThan(1000)
+
+    // El mensaje trae el folio; se espera (sin sleep) y sigue siendo informativo.
+    let folioVisible = false
+    const ok = page.getByText(/Certificado CT-/).first()
+    await ok.waitFor({ state: "visible", timeout: 20_000 }).catch(()=>{})
+    folioVisible = await ok.isVisible().catch(()=>false)
+    if (!folioVisible) {
+      const alt = page.getByText(/Certificado.*emitido|PDF.*generado/).first()
+      folioVisible = await alt.isVisible().catch(()=>false)
     }
     // Fallback vía API si la UI no generó (para robustez sin poblar QA lab): la BD
     // es la fuente de verdad (ver NOTA pe-paneles-bd en la cabecera). Con la sesión
