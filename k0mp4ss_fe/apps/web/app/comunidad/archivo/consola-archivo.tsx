@@ -47,6 +47,7 @@ import {
   IconArchive,
   IconExternalLink,
   IconPencil,
+  IconSend,
   IconTrash,
 } from "@tabler/icons-react"
 import {
@@ -65,6 +66,7 @@ import { useDocumentos, type DocumentoArchivoEnLista } from "@/lib/api/use-docum
 import { generarId } from "@/lib/id-utils"
 import { hoyISO } from "@/lib/date-utils"
 import { VerMas } from "@/components/ver-mas"
+import { DialogoEnvioDocumento } from "./dialogo-envio-documento"
 
 type FiltroNaturaleza = "todos" | NaturalezaDocumento
 type FiltroTipo = "todos" | TipoDocumental
@@ -145,6 +147,8 @@ export function ConsolaArchivo({ roles }: { roles: string[] }) {
   const [error, setError] = React.useState<string | null>(null)
   const [exito, setExito] = React.useState<string | null>(null)
   const [guardando, setGuardando] = React.useState(false)
+  // A3 · documento legal cuyo diálogo de envío está abierto (null = cerrado).
+  const [documentoEnvio, setDocumentoEnvio] = React.useState<DocumentoArchivoEnLista | null>(null)
 
   // ABAC/RP: la matriz decide; la API vuelve a validar cada escritura.
   const puedeCrear = tienePermiso(roles, "crear", "doc")
@@ -339,6 +343,20 @@ export function ConsolaArchivo({ roles }: { roles: string[] }) {
       setFormulario(formularioVacio())
     }
     setExito("Documento comunitario eliminado.")
+  }
+
+  /**
+   * A3 · abrir el diálogo de envío.
+   *
+   * Sólo existe para lo legal: un documento comunitario se publica al visor de
+   * toda la comunidad y su constancia es "publicado", no una entrega por persona
+   * (S8). Por eso la fila comunitaria no ofrece la acción — no está deshabilitada:
+   * no aplica.
+   */
+  const abrirEnvio = (documento: DocumentoArchivoEnLista): void => {
+    setError(null)
+    setExito(null)
+    setDocumentoEnvio(documento)
   }
 
   return (
@@ -569,7 +587,9 @@ export function ConsolaArchivo({ roles }: { roles: string[] }) {
           <CardTitle className="text-base">Documentos de la comunidad</CardTitle>
           <CardDescription>
             Los legales marcan si están vigentes (la versión más alta de su tipo). Un documento legal
-            no se edita ni se borra: se corrige con una versión nueva.
+            no se edita ni se borra: se corrige con una versión nueva, y se entrega con constancia
+            por destinatario. Los comunitarios se publican al visor de toda la comunidad: no se
+            envían por persona.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
@@ -713,6 +733,18 @@ export function ConsolaArchivo({ roles }: { roles: string[] }) {
                           </TableCell>
                           <TableCell className="text-right align-top">
                             <div className="flex items-center justify-end gap-1">
+                              {/* A3/S8 · sólo lo legal se entrega por persona. */}
+                              {puedeCrear && documento.naturaleza === "legal" && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon-sm"
+                                  aria-label={`Enviar ${documento.glosa}`}
+                                  title="Enviar el documento legal con constancia por destinatario"
+                                  onClick={() => abrirEnvio(documento)}
+                                >
+                                  <IconSend className="size-4" />
+                                </Button>
+                              )}
                               <Button
                                 variant="ghost"
                                 size="icon-sm"
@@ -752,6 +784,15 @@ export function ConsolaArchivo({ roles }: { roles: string[] }) {
           />
         </CardContent>
       </Card>
+
+      {/* A3 · el diálogo se monta sólo con un documento legal elegido: el padrón
+          de destinatarios se resuelve cuando hace falta, no al pintar la lista. */}
+      {documentoEnvio && (
+        <DialogoEnvioDocumento
+          documento={documentoEnvio}
+          onCerrar={() => setDocumentoEnvio(null)}
+        />
+      )}
     </div>
   )
 }

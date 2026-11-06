@@ -123,6 +123,87 @@ vi.mock("@/lib/api/use-documentos", () => ({
   }),
 }))
 
+/**
+ * Destinatarios del envío (A3): los resuelve `useDestinatariosArchivo` con el
+ * directorio de residentes del servidor y la nómina vigente del libro de
+ * gobernanza. Se mientan los dos hooks —no la red— para que el caso afirme la
+ * expansión de grupos y personas sueltas, que es lo que manda la corrida.
+ */
+vi.mock("@/lib/api/use-personas", () => ({
+  usePersonas: () => ({
+    personas: [
+      { id: "p-ana", nombreCompleto: "Ana Propietaria" },
+      { id: "p-bruno", nombreCompleto: "Bruno Propietario" },
+      { id: "p-carla", nombreCompleto: "Carla Arrendataria" },
+    ],
+    total: 3,
+    vinculosVigentes: [
+      {
+        id: "v-ana",
+        personaId: "p-ana",
+        unidadId: "u-101",
+        rol: "propietario",
+        unidadEtiqueta: "Depto 101",
+      },
+      {
+        id: "v-bruno",
+        personaId: "p-bruno",
+        unidadId: "u-102",
+        rol: "propietario",
+        unidadEtiqueta: "Depto 102",
+      },
+      {
+        id: "v-carla",
+        personaId: "p-carla",
+        unidadId: "u-103",
+        rol: "arrendatario",
+        unidadEtiqueta: "Depto 103",
+      },
+    ],
+    isLoading: false,
+    isValidando: false,
+    error: null,
+    hasMore: false,
+    cargarMas: async () => {},
+    cargandoMas: false,
+    create: async () => ({ ok: true }),
+    update: async () => ({ ok: true }),
+    remove: async () => ({ ok: true }),
+  }),
+}))
+
+vi.mock("@/lib/api/use-periodos-directiva", () => ({
+  usePeriodosDirectiva: () => ({
+    periodos: [],
+    vigente: {
+      id: "periodo-2026",
+      estado: "vigente",
+      miembros: [
+        {
+          personaId: "p-diego",
+          nombre: "Diego Comité",
+          cargo: "presidente",
+          fechaAsuncion: "2026-01-01",
+        },
+        // Mandato terminado: ya no ocupa el cargo y no se ofrece como destinatario.
+        {
+          personaId: "p-elena",
+          nombre: "Elena Saliente",
+          cargo: "secretario",
+          fechaAsuncion: "2025-01-01",
+          fechaTermino: "2026-01-31",
+        },
+      ],
+    },
+    isLoading: false,
+    error: null,
+    create: async () => ({ ok: true }),
+    update: async () => ({ ok: true }),
+    remove: async () => ({ ok: true }),
+    cerrar: async () => ({ ok: true }),
+  }),
+}))
+
 beforeEach(() => {
   instalarEntornoRadix()
   api.create.mockReset()
@@ -365,5 +446,148 @@ describe("Archivo de documentos — la pantalla dice lo que la entidad permite",
     await elegirOpcion(user, filtro, /^Comunitario$/)
     expect(screen.queryByText("Reglamento de copropiedad vigente y sus modificaciones")).toBeNull()
     expect(screen.getByText("Circular del plan de emergencia")).toBeInTheDocument()
+  })
+
+  it("A3/S8 · ofrece «Enviar» en las filas legales y no en la comunitaria (está publicada)", () => {
+    renderConsola(["administrador"])
+
+    // Lo legal se entrega con constancia por destinatario: la acción existe.
+    expect(
+      screen.getByRole("button", { name: "Enviar Acta de asamblea ordinaria de marzo 2026" })
+    ).toBeEnabled()
+    expect(
+      screen.getByRole("button", { name: "Enviar Reglamento de copropiedad vigente y sus modificaciones" })
+    ).toBeEnabled()
+
+    // S8 · lo comunitario se publica al visor de toda la comunidad: no se envía
+    // por persona, así que la fila no ofrece la acción (no es un botón apagado).
+    expect(
+      screen.queryByRole("button", { name: "Enviar Circular del plan de emergencia" })
+    ).toBeNull()
+  })
+
+  it("A3 · el residente no recibe la acción de enviar (sólo tiene ver)", () => {
+    renderConsola(["residente"])
+    expect(
+      screen.queryByRole("button", { name: "Enviar Acta de asamblea ordinaria de marzo 2026" })
+    ).toBeNull()
+  })
+
+  it("A3 · manda grupos y personas sueltas en UNA corrida y muestra el estado por destinatario", async () => {
+    const user = userEvent.setup({ delay: null })
+    const pedidos: Array<{ url: string; metodo: string; cuerpo: Record<string, unknown> }> = []
+    const fetchFalso = vi.fn(async (entrada: RequestInfo | URL, init?: RequestInit) => {
+      pedidos.push({
+        url: String(entrada),
+        metodo: String(init?.method),
+        cuerpo: JSON.parse(String(init?.body)) as Record<string, unknown>,
+      })
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          mensaje: 'Documento "Acta de asamblea ordinaria de marzo 2026" procesado para 3 destinatario(s) por el canal email: entregado 1, pendiente 1, fallido 1.',
+          resultados: [
+            {
+              personaId: "p-ana",
+              canal: "email",
+              estado: "entregado",
+              fecha: "2026-11-10",
+            },
+            {
+              personaId: "p-bruno",
+              canal: "email",
+              estado: "pendiente",
+              motivo:
+                "Sin emisor SMTP configurado (F4): el correo queda en la cola de salida (outbox) y no se reporta como enviado.",
+              fecha: "2026-11-10",
+            },
+            {
+              personaId: "p-diego",
+              canal: "email",
+              estado: "fallido",
+              motivo:
+                'Falló el envío por SMTP: el destinatario "diego@email.com" es una dirección de prueba o inexistente, por lo que no se envió nada.',
+              fecha: "2026-11-10",
+            },
+          ],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      )
+    })
+    vi.stubGlobal("fetch", fetchFalso)
+
+    renderConsola(["administrador"])
+    await user.click(
+      screen.getByRole("button", { name: "Enviar Acta de asamblea ordinaria de marzo 2026" })
+    )
+
+    const dialogo = await screen.findByRole("dialog")
+    // La nómina vigente del comité no incluye al miembro con mandato terminado.
+    expect(within(dialogo).queryByText("Elena Saliente")).toBeNull()
+    expect(within(dialogo).getByText("Diego Comité")).toBeInTheDocument()
+
+    // Un grupo (2 propietarios) + una persona suelta (comité) en la misma corrida.
+    await user.click(within(dialogo).getByRole("checkbox", { name: /Propietarios \(2\)/ }))
+    await user.click(within(dialogo).getByRole("checkbox", { name: /Diego Comité/ }))
+
+    // El canal es el correo: es donde `pendiente` y `fallido` tienen sentido.
+    await elegirOpcion(user, within(dialogo).getByRole("combobox", { name: "Canal" }), /Correo electrónico/)
+
+    await user.click(
+      within(dialogo).getByRole("button", { name: "Enviar a 3 destinatario(s)" })
+    )
+
+    // UNA petición con los tres destinatarios resueltos (nunca una por persona).
+    expect(pedidos).toHaveLength(1)
+    expect(pedidos[0]?.url).toBe("/api/documentos/doc-archivo-acta-asamblea-2026-03/envio")
+    expect(pedidos[0]?.metodo).toBe("POST")
+    expect(pedidos[0]?.cuerpo).toEqual({
+      personasIds: ["p-ana", "p-bruno", "p-diego"],
+      canal: "email",
+      reenviar: false,
+    })
+
+    // El estado por destinatario con su motivo, tal como lo registró el servidor.
+    const resultados = await within(dialogo).findByRole("list", { name: "Resultado del envío" })
+    const ana = within(resultados).getByText("Ana Propietaria").closest("li")
+    expect(ana).toHaveTextContent("Entregado")
+    const bruno = within(resultados).getByText("Bruno Propietario").closest("li")
+    expect(bruno).toHaveTextContent("Pendiente")
+    expect(bruno).toHaveTextContent(/cola de salida|outbox/)
+    const diego = within(resultados).getByText("Diego Comité").closest("li")
+    expect(diego).toHaveTextContent("Fallido")
+    expect(diego).toHaveTextContent(/no se envió nada/)
+
+    // El reenvío es explícito: la misma corrida con el tilde agrega la constancia
+    // nueva en vez de chocar contra la clave de idempotencia.
+    await user.click(
+      within(dialogo).getByRole("checkbox", { name: /Reenviar a quienes ya lo recibieron/ })
+    )
+    await user.click(
+      within(dialogo).getByRole("button", { name: "Enviar a 3 destinatario(s)" })
+    )
+    expect(pedidos).toHaveLength(2)
+    expect(pedidos[1]?.cuerpo).toEqual({
+      personasIds: ["p-ana", "p-bruno", "p-diego"],
+      canal: "email",
+      reenviar: true,
+    })
+  })
+
+  it("A3 · no deja mandar sin destinatarios elegidos", async () => {
+    const user = userEvent.setup({ delay: null })
+    const fetchFalso = vi.fn()
+    vi.stubGlobal("fetch", fetchFalso)
+
+    renderConsola(["administrador"])
+    await user.click(
+      screen.getByRole("button", { name: "Enviar Acta de asamblea ordinaria de marzo 2026" })
+    )
+
+    const dialogo = await screen.findByRole("dialog")
+    expect(
+      within(dialogo).getByRole("button", { name: "Enviar a 0 destinatario(s)" })
+    ).toBeDisabled()
+    expect(fetchFalso).not.toHaveBeenCalled()
   })
 })
