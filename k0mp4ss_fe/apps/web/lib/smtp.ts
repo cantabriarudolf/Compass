@@ -25,6 +25,23 @@
  * - **Sin dependencias**: el diálogo SMTP (EHLO, STARTTLS, AUTH PLAIN/LOGIN,
  *   MAIL/RCPT/DATA) se habla sobre `node:net`/`node:tls`. No se agrega
  *   `nodemailer` ni ninguna otra librería para esto.
+ * - **A una dirección que no puede existir no se le envía nada.** Los dominios
+ *   reservados por RFC 2606 / RFC 6761 (`*.test`, `*.example`, `*.invalid`,
+ *   `*.localhost`, y los literales `example.com`/`example.org`/`example.net`) y
+ *   el dominio ficticio de los datos semilla (`email.com`) no tienen buzones
+ *   reales: aceptarles un mensaje es fabricar un rebote. Un rebote suelto es
+ *   inofensivo; un patrón de rebotes daña la reputación del remitente y puede
+ *   dejar el dominio de la comunidad en una lista negra. Por eso el rechazo es
+ *   local (se decide ANTES de abrir la conexión), se registra como `fallido`
+ *   —nunca `pendiente`, que significa "sin emisor configurado"— y el motivo dice
+ *   por qué y nombra la dirección. El choque real que lo motivó: un e2e entregó
+ *   un aviso a `juan.perez@email.com` (semilla, inexistente) y el servidor lo
+ *   aceptó. Las direcciones malformadas (sin `@`, sin parte local, con espacios)
+ *   caen en la misma guardia. Un BCC o un Reply-To con dirección imposible
+ *   rechaza el envío ENTERO y el motivo nombra esa dirección: descartar sólo la
+ *   copia escondería el error de CF y el BCC igual rebota. El `From` no entra en
+ *   la guardia: es el emisor declarado en CF y no es destinatario de ningún
+ *   rebote.
  * - Los llamadores traducen el desenlace con `estadoRegistroSMTP`/`motivoSMTP`,
  *   de modo que la cola de salida diga siempre la verdad.
  */
@@ -131,6 +148,11 @@ export async function enviarCorreoComunidad(
 /**
  * Envía un mensaje con una fila de CF ya leída. Es el núcleo que usan las rutas
  * (vía `enviarCorreoComunidad`) y los tests de transporte.
+ *
+ * Antes de resolver la configuración se ejecuta la guardia de direcciones que no
+ * pueden existir (ver `direccionInexistente`): una dirección imposible no se
+ * arregla configurando el emisor, así que se declara `fallido` de entrada y no
+ * puede quedar `pendiente`.
  */
 export async function enviarCorreoSMTP(
   fila: FilaConfiguracionSMTP | null,
@@ -138,8 +160,27 @@ export async function enviarCorreoSMTP(
   opciones: OpcionesEnvioSMTP = {}
 ): Promise<ResultadoEnvioSMTP> {
   const entorno = opciones.env ?? process.env
+
+  // Nadie a quien enviar: se rechaza sin mirar la configuración ni abrir nada.
+  const rechazoDelDestinatario = motivoDireccionRechazada("el destinatario", mensaje.to)
+  if (rechazoDelDestinatario) return { estado: "fallido", motivo: rechazoDelDestinatario }
+
   const resuelta = resolverConfiguracion(fila, entorno)
   if (!resuelta.ok) return { estado: "no_configurado", motivo: resuelta.motivo }
+
+  // Las copias de CF rebotan igual que el destinatario: si alguna es imposible,
+  // se rechaza el envío completo y el motivo nombra la dirección y el campo.
+  for (const copia of resuelta.config.bcc) {
+    const rechazo = motivoDireccionRechazada("el BCC de auditoría configurado en CF", copia)
+    if (rechazo) return { estado: "fallido", motivo: rechazo }
+  }
+  if (resuelta.config.replyTo) {
+    const rechazo = motivoDireccionRechazada(
+      "el Reply-To (correo de recepción de CF)",
+      resuelta.config.replyTo
+    )
+    if (rechazo) return { estado: "fallido", motivo: rechazo }
+  }
 
   const secreto = secretoDelEntorno(entorno)
   const tiempoLimiteMs = opciones.tiempoLimiteMs ?? TIEMPO_LIMITE_MS
@@ -173,6 +214,107 @@ export function motivoSMTP(resultado: ResultadoEnvioSMTP): string {
       : "Aceptado por el servidor SMTP."
   }
   return resultado.motivo
+}
+
+// --- Guardia de direcciones que no pueden existir ---------------------------
+
+/**
+ * Dominios de primer nivel reservados por RFC 2606 y RFC 6761. Ninguno puede
+ * tener un buzón real: `*.test` (pruebas), `*.example` (documentación),
+ * `*.invalid` (direcciones deliberadamente inválidas) y `*.localhost` (el propio
+ * equipo). Aceptarles un mensaje es fabricar un rebote.
+ */
+const TLD_RESERVADOS: readonly string[] = ["test", "example", "invalid", "localhost"]
+
+/** Dominios literales reservados por RFC 2606 §2 para documentación. */
+const DOMINIOS_RESERVADOS: readonly string[] = ["example.com", "example.org", "example.net"]
+
+/**
+ * El dominio ficticio de los datos semilla de la plataforma: los residentes
+ * sembrados llevan direcciones `@email.com` que NO existen como buzones. Se
+ * declara acá, con nombre propio, para que se lea por qué está en la lista.
+ */
+const DOMINIO_FICTICIO_DE_LA_SEMILLA = "email.com"
+
+/** Por qué una dirección no puede ser un buzón real. */
+type ClaseDireccionInexistente = "reservada" | "semilla" | "malformada"
+
+interface DireccionInexistente {
+  /** Dirección recortada, para nombrarla en el motivo. */
+  direccion: string
+  clase: ClaseDireccionInexistente
+  /** Explicación corta del porqué, para el texto del rechazo. */
+  detalle: string
+}
+
+/**
+ * Decide si una dirección NO puede ser un buzón real. Devuelve `null` cuando la
+ * dirección es plausible y el envío puede intentarse.
+ *
+ * Tres clases: malformada (sin `@`, sin parte local, sin dominio, con espacios o
+ * con más de un `@`), reservada (RFC 2606 / RFC 6761) y semilla (el dominio
+ * ficticio de los datos sembrados).
+ */
+function direccionInexistente(correo: string): DireccionInexistente | null {
+  const direccion = correo.trim()
+  const malformada = (detalle: string): DireccionInexistente => ({
+    direccion,
+    clase: "malformada",
+    detalle,
+  })
+
+  if (direccion === "") return malformada("está vacía")
+  if (/\s/.test(direccion)) return malformada("contiene espacios en blanco")
+
+  const partes = direccion.split("@")
+  if (partes.length === 1) return malformada("no tiene @")
+  if (partes.length > 2) return malformada("tiene más de un @")
+  const [local = "", dominioCrudo = ""] = partes
+  if (local === "") return malformada("no tiene parte local (nada antes del @)")
+
+  const dominio = dominioCrudo.toLowerCase()
+  if (dominio === "") return malformada("no tiene dominio (nada después del @)")
+
+  const etiquetas = dominio.split(".")
+  const tld = etiquetas[etiquetas.length - 1] ?? ""
+  if (TLD_RESERVADOS.includes(tld)) {
+    return {
+      direccion,
+      clase: "reservada",
+      detalle: `"${tld}" es un dominio de primer nivel reservado por RFC 2606/RFC 6761 para pruebas y documentación`,
+    }
+  }
+  if (DOMINIOS_RESERVADOS.includes(dominio)) {
+    return {
+      direccion,
+      clase: "reservada",
+      detalle: `"${dominio}" es un dominio reservado por RFC 2606 para pruebas y documentación`,
+    }
+  }
+  if (dominio === DOMINIO_FICTICIO_DE_LA_SEMILLA) {
+    return {
+      direccion,
+      clase: "semilla",
+      detalle: `"${dominio}" es el dominio ficticio de los datos semilla de la plataforma`,
+    }
+  }
+  return null
+}
+
+/**
+ * Motivo del rechazo para un destinatario, o `null` si la dirección es
+ * plausible. El motivo dice qué dirección, qué rol cumple (destinatario, BCC o
+ * Reply-To), por qué no puede existir y que por eso no se envió nada: es el
+ * texto que ve el operador en la cola de salida.
+ */
+function motivoDireccionRechazada(rol: string, correo: string): string | null {
+  const inexistente = direccionInexistente(correo)
+  if (!inexistente) return null
+  const explicacion =
+    inexistente.clase === "malformada"
+      ? `no es una dirección de correo válida (${inexistente.detalle})`
+      : `es una dirección de prueba o inexistente (${inexistente.detalle})`
+  return `Falló el envío por SMTP: ${rol} "${inexistente.direccion}" ${explicacion}, por lo que no se envió nada y no se abrió ninguna conexión SMTP.`
 }
 
 // --- Resolución de la configuración -----------------------------------------

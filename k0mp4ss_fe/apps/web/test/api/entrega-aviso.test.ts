@@ -261,24 +261,24 @@ describe("/api/avisos-cobro/[id]/entrega — visor con prueba, correo en cola (S
       {
         id: PROPIETARIO_U1,
         rut: "22222222-2",
-        email: "ent-propietaria-u1@ejemplo.test",
+        email: "ent-propietaria-u1@residenciallasacacias.cl",
       },
       {
         id: PROPIETARIO_U1_ANTERIOR,
         rut: "33333333-3",
-        email: "ent-propietario-anterior@ejemplo.test",
+        email: "ent-propietario-anterior@residenciallasacacias.cl",
       },
       {
         id: ARRENDATARIO_U2,
         rut: "44444444-4",
-        email: "ent-arrendatario-u2@ejemplo.test",
+        email: "ent-arrendatario-u2@residenciallasacacias.cl",
       },
       {
         id: PROPIETARIO_U3,
         rut: "55555555-5",
-        email: "ent-propietario-u3@ejemplo.test",
+        email: "ent-propietario-u3@residenciallasacacias.cl",
       },
-      { id: "ent-b-p-1", rut: "66666666-6", email: "ent-b-p-1@ejemplo.test" },
+      { id: "ent-b-p-1", rut: "66666666-6", email: "ent-b-p-1@residenciallasacacias.cl" },
     ]) {
       await prisma.persona.create({
         data: {

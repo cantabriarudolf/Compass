@@ -53,7 +53,7 @@ const USUARIO_ADMIN = "ent-email-admin"
 const EMAIL_ADMIN = "ent-email-admin@test.cl"
 const UNIDAD = "ent-email-u-1"
 const PERSONA = "ent-email-p-1"
-const EMAIL_PERSONA = "propietaria@ejemplo.test"
+const EMAIL_PERSONA = "propietaria@residenciallasacacias.cl"
 const FONDO = "ent-email-fondo-gc"
 const EMISION = "ent-email-egc"
 const COBRO = "ent-email-cob-1"
@@ -392,6 +392,46 @@ describe("entrega del aviso por correo: los tres estados del emisor SMTP", () =>
     expect(emailLeido?.notificacionId).toBeNull()
     expect(visorLeido?.estado).toBe("entregado")
     expect(visorLeido?.notificacionId).not.toBeNull()
+  })
+
+  it("un residente sembrado con dirección ficticia (@email.com) queda fallido con su razón y sin conexión", async () => {
+    // El caso del incidente: la semilla trae direcciones `@email.com` que no
+    // existen, y el servidor aceptaba el mensaje (rebote). Ahora el correo se
+    // rechaza localmente y la fila dice por qué.
+    const servidor = await levantarServidor({ modo: "aceptar" })
+    await configurarSMTP(servidor.port)
+    await prisma.persona.update({
+      where: { id: PERSONA },
+      data: { email: "juan.perez@email.com" },
+    })
+
+    const { status, json } = await entregar(aviso.id)
+
+    expect(status).toBe(200)
+    const emailJson = canales(json).email
+    expect(emailJson.estado).toBe("fallido")
+    const motivo = String(emailJson.motivo)
+    expect(motivo).toContain("juan.perez@email.com")
+    expect(motivo).toMatch(/dirección de prueba o inexistente/i)
+    expect(motivo).toMatch(/dominio ficticio de los datos semilla/i)
+    expect(motivo).toMatch(/no se envió nada/i)
+    // Nunca `pendiente`: eso significa "sin emisor configurado", otro estado.
+    expect(emailJson.estado).not.toBe("pendiente")
+    expect(emailJson.estado).not.toBe("enviado")
+
+    const filas = await envios(aviso.id)
+    expect(filas.email?.estado).toBe("fallido")
+    expect(filas.email?.motivo).toBe(motivo)
+    expect(filas.email?.notificacionId).toBeNull()
+
+    // PRESERVE: el visor no depende del SMTP y sigue entregado.
+    expect(canales(json).visor.estado).toBe("entregado")
+    expect(filas.visor?.estado).toBe("entregado")
+    expect(filas.visor?.notificacionId).not.toBeNull()
+
+    // Y no hubo ni un intento: el servidor falso no vio conexión, auth ni mensaje.
+    expect(servidor.mensajes).toHaveLength(0)
+    expect(servidor.autenticaciones).toHaveLength(0)
   })
 
   it("si el servidor rechaza la autenticación el correo queda fallido y el motivo no lleva la contraseña", async () => {

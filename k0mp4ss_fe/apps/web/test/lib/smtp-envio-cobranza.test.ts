@@ -190,7 +190,7 @@ beforeEach(async () => {
       nombreCompleto: "Rosa Soto",
       nombres: "Rosa",
       apellidos: "Soto",
-      email: "rosa.soto@ejemplo.test",
+      email: "rosa.soto@residenciallasacacias.cl",
       telefonoMovil: "+56911111111",
       estadoCuenta: "activa",
       condicionesEspecialesIds: [],
@@ -305,8 +305,8 @@ describe("cobranza por email con el emisor SMTP real", () => {
       { usuario: USUARIO_SMTP, secreto: CLAVE_FALSA },
     ])
     const recibido = servidor.mensajes[0]
-    expect(recibido?.to).toEqual(["rosa.soto@ejemplo.test"])
-    expect(recibido?.crudo).toContain("To: <rosa.soto@ejemplo.test>")
+    expect(recibido?.to).toEqual(["rosa.soto@residenciallasacacias.cl"])
+    expect(recibido?.crudo).toContain("To: <rosa.soto@residenciallasacacias.cl>")
     expect(recibido?.crudo).toContain("Subject: Recordatorio de deuda vencida (Torre A 101)")
     expect(recibido?.crudo).toContain("$120.000")
     // El mensaje que viaja tampoco lleva la contraseña.

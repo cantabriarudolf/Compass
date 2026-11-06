@@ -13,6 +13,13 @@
  *
  * Y la regla que no se negocia: la contraseña de `process.env.SMTP_PASSWORD` no
  * aparece en ningún motivo, ni siquiera cuando el servidor la repite.
+ *
+ * Además: una dirección que NO puede existir (los dominios ficticios de la
+ * semilla y los reservados por RFC 2606/RFC 6761) se rechaza como `fallido`
+ * ANTES de abrir la conexión, con el motivo que dice por qué y nombra la
+ * dirección. Nunca `pendiente` (eso es "sin emisor configurado") y nunca
+ * `enviado`. El choque real que lo motivó: un e2e entregó un aviso a
+ * `juan.perez@email.com`, que no existe, y el servidor lo aceptó (rebote).
  */
 import { createServer } from "node:net"
 import { afterEach, describe, expect, it } from "vitest"
@@ -30,7 +37,12 @@ import {
 /** Contraseña inventada: no es una credencial, es texto de prueba. */
 const CLAVE_FALSA = "clave-inventada-solo-para-tests"
 const USUARIO = "emisor@ejemplo.test"
-const DESTINATARIO = "residente@ejemplo.test"
+/**
+ * Buzón que SÍ podría existir. No puede ser `*.test` ni `*.example`: el emisor
+ * rechaza esas direcciones a propósito, así que usarlas acá probaría la guardia
+ * en vez del envío.
+ */
+const DESTINATARIO = "residente@residenciallasacacias.cl"
 
 const servidores: ServidorSMTPFalso[] = []
 
@@ -189,14 +201,17 @@ describe("el servidor acepta: el registro puede decir `enviado`", () => {
   it("el BCC de auditoría de CF viaja como destinatario y no en las cabeceras", async () => {
     const servidor = await levantarServidor({ modo: "aceptar" })
     const resultado = await enviarCorreoSMTP(
-      filaBase(servidor.port, { smtpBcc: "auditoria@ejemplo.test" }),
+      filaBase(servidor.port, { smtpBcc: "auditoria@administracionlasacacias.cl" }),
       mensajeDePrueba,
       { env: { SMTP_PASSWORD: CLAVE_FALSA } }
     )
 
     expect(resultado.estado).toBe("enviado")
-    expect(servidor.mensajes[0]?.to).toEqual([DESTINATARIO, "auditoria@ejemplo.test"])
-    expect(servidor.mensajes[0]?.crudo).not.toContain("auditoria@ejemplo.test")
+    expect(servidor.mensajes[0]?.to).toEqual([
+      DESTINATARIO,
+      "auditoria@administracionlasacacias.cl",
+    ])
+    expect(servidor.mensajes[0]?.crudo).not.toContain("auditoria@administracionlasacacias.cl")
   })
 })
 
@@ -277,6 +292,189 @@ describe("el envío falla: `fallido`, con motivo y sin la contraseña", () => {
     if (resultado.estado !== "fallido") throw new Error("estado inesperado")
     expect(resultado.motivo).toMatch(/starttls/i)
     expect(resultado.motivo).not.toContain(CLAVE_FALSA)
+  })
+})
+
+describe("direcciones que no pueden existir: se rechazan ANTES de conectar", () => {
+  /**
+   * El caso del incidente: el e2e entregó un aviso real a `juan.perez@email.com`
+   * (semilla) y el servidor lo aceptó, así que iba a rebotar. `email.com` es el
+   * dominio ficticio de los datos semilla.
+   */
+  it("la dirección ficticia de la semilla se rechaza con su motivo y sin abrir conexión", async () => {
+    // Puerto cerrado a propósito: si el emisor intentara conectar, el motivo
+    // diría ECONNREFUSED. Que diga la razón de la dirección prueba que no hubo
+    // intento de conexión.
+    const puerto = await puertoLibre()
+    const resultado = await enviarCorreoSMTP(
+      filaBase(puerto),
+      { ...mensajeDePrueba, to: "juan.perez@email.com" },
+      { env: { SMTP_PASSWORD: CLAVE_FALSA }, tiempoLimiteMs: 2000 }
+    )
+
+    expect(resultado.estado).toBe("fallido")
+    if (resultado.estado !== "fallido") throw new Error("estado inesperado")
+    expect(resultado.motivo).toMatch(/falló el envío por SMTP/i)
+    expect(resultado.motivo).toContain("juan.perez@email.com")
+    expect(resultado.motivo).toMatch(/dirección de prueba o inexistente/i)
+    expect(resultado.motivo).toMatch(/dominio ficticio de los datos semilla/i)
+    expect(resultado.motivo).toContain("email.com")
+    expect(resultado.motivo).toMatch(/no se envió nada/i)
+    expect(resultado.motivo).not.toMatch(/ECONNREFUSED|conexión rechazada/i)
+
+    // Y el estado persistido dice la verdad: `fallido`, nunca `pendiente`.
+    expect(estadoRegistroSMTP(resultado)).toBe("fallido")
+    expect(motivoSMTP(resultado)).toBe(resultado.motivo)
+  })
+
+  it("una dirección ficticia no queda `pendiente` aunque falte el emisor", async () => {
+    // `pendiente` significa "no hay emisor configurado", no "dirección mala":
+    // el rechazo no depende de la configuración y no puede confundirse con ella.
+    const resultado = await enviarCorreoSMTP(
+      null,
+      { ...mensajeDePrueba, to: "juan.perez@email.com" },
+      { env: {} }
+    )
+
+    expect(resultado.estado).toBe("fallido")
+    if (resultado.estado !== "fallido") throw new Error("estado inesperado")
+    expect(resultado.motivo).toContain("juan.perez@email.com")
+    expect(estadoRegistroSMTP(resultado)).toBe("fallido")
+  })
+
+  it("con un servidor escuchando, la dirección ficticia no produce ni una conexión", async () => {
+    const servidor = await levantarServidor({ modo: "aceptar" })
+    const resultado = await enviarCorreoSMTP(
+      filaBase(servidor.port),
+      { ...mensajeDePrueba, to: "juan.perez@email.com" },
+      { env: { SMTP_PASSWORD: CLAVE_FALSA } }
+    )
+
+    expect(resultado.estado).toBe("fallido")
+    // Ni mensaje, ni autenticación: el servidor no vio nada.
+    expect(servidor.mensajes).toHaveLength(0)
+    expect(servidor.autenticaciones).toHaveLength(0)
+  })
+
+  /**
+   * Dominios reservados por RFC 2606 / RFC 6761 (`*.test`, `*.example`,
+   * `*.invalid`, `*.localhost` y los literales `example.com|org|net`) más el
+   * dominio ficticio de la semilla (`email.com`). Ninguno puede tener un buzón
+   * real, así que enviarles es fabricar un rebote.
+   */
+  it.each([
+    ["residente@comunidad.test", "comunidad.test"],
+    ["residente@sub.dominio.test", "sub.dominio.test"],
+    ["residente@ejemplo.example", "ejemplo.example"],
+    ["residente@servidor.invalid", "servidor.invalid"],
+    ["residente@intranet.localhost", "intranet.localhost"],
+    ["contacto@example.com", "example.com"],
+    ["contacto@example.org", "example.org"],
+    ["contacto@example.net", "example.net"],
+    ["juan.perez@email.com", "email.com"],
+  ])("rechaza %s (dominio que no puede existir)", async (direccion) => {
+    const servidor = await levantarServidor({ modo: "aceptar" })
+    const resultado = await enviarCorreoSMTP(
+      filaBase(servidor.port),
+      { ...mensajeDePrueba, to: direccion },
+      { env: { SMTP_PASSWORD: CLAVE_FALSA } }
+    )
+
+    expect(resultado.estado).toBe("fallido")
+    if (resultado.estado !== "fallido") throw new Error("estado inesperado")
+    expect(resultado.motivo).toContain(direccion)
+    expect(resultado.motivo).toMatch(/dirección de prueba o inexistente/i)
+    expect(resultado.motivo).toMatch(/no se envió nada/i)
+    expect(estadoRegistroSMTP(resultado)).toBe("fallido")
+    expect(servidor.mensajes).toHaveLength(0)
+    expect(servidor.autenticaciones).toHaveLength(0)
+  })
+
+  it.each([
+    ["juan.perez", /no tiene @/i],
+    ["@email.com", /parte local/i],
+    ["juan perez@gmail.com", /espacios en blanco/i],
+    ["juan.perez@", /no tiene dominio/i],
+  ])("rechaza la dirección malformada %s", async (direccion, razon) => {
+    const servidor = await levantarServidor({ modo: "aceptar" })
+    const resultado = await enviarCorreoSMTP(
+      filaBase(servidor.port),
+      { ...mensajeDePrueba, to: direccion },
+      { env: { SMTP_PASSWORD: CLAVE_FALSA } }
+    )
+
+    expect(resultado.estado).toBe("fallido")
+    if (resultado.estado !== "fallido") throw new Error("estado inesperado")
+    expect(resultado.motivo).toMatch(/no es una dirección de correo válida/i)
+    expect(resultado.motivo).toMatch(razon)
+    expect(resultado.motivo).toMatch(/no se envió nada/i)
+    expect(estadoRegistroSMTP(resultado)).toBe("fallido")
+    expect(servidor.mensajes).toHaveLength(0)
+    expect(servidor.autenticaciones).toHaveLength(0)
+  })
+
+  /**
+   * Decisión: un BCC a un buzón inexistente rebota igual que el destinatario,
+   * así que se rechaza el envío COMPLETO (no se manda copia a nadie) y el
+   * motivo nombra la dirección culpable. Descartar sólo esa copia dejaría el
+   * error escondido en CF y seguiría fabricando rebotes.
+   */
+  it("un BCC de CF que no puede existir rechaza el envío entero y nombra esa dirección", async () => {
+    const servidor = await levantarServidor({ modo: "aceptar" })
+    const resultado = await enviarCorreoSMTP(
+      filaBase(servidor.port, { smtpBcc: "auditoria@email.com" }),
+      mensajeDePrueba,
+      { env: { SMTP_PASSWORD: CLAVE_FALSA } }
+    )
+
+    expect(resultado.estado).toBe("fallido")
+    if (resultado.estado !== "fallido") throw new Error("estado inesperado")
+    expect(resultado.motivo).toContain("auditoria@email.com")
+    expect(resultado.motivo).toMatch(/BCC/i)
+    expect(resultado.motivo).toMatch(/no se envió nada/i)
+    expect(estadoRegistroSMTP(resultado)).toBe("fallido")
+    // Envío entero rechazado: el destinatario válido tampoco recibe nada.
+    expect(servidor.mensajes).toHaveLength(0)
+    expect(servidor.autenticaciones).toHaveLength(0)
+  })
+
+  /**
+   * Misma decisión para el Reply-To (`smtpRecepcion` de CF): apunta a un buzón
+   * que no existe, así que la respuesta del residente rebotaría. Se rechaza el
+   * envío entero y el motivo nombra el campo de CF que hay que corregir.
+   */
+  it("un Reply-To de CF que no puede existir rechaza el envío y nombra la dirección", async () => {
+    const servidor = await levantarServidor({ modo: "aceptar" })
+    const resultado = await enviarCorreoSMTP(
+      filaBase(servidor.port, { smtpRecepcion: "recepcion@comunidad.test" }),
+      mensajeDePrueba,
+      { env: { SMTP_PASSWORD: CLAVE_FALSA } }
+    )
+
+    expect(resultado.estado).toBe("fallido")
+    if (resultado.estado !== "fallido") throw new Error("estado inesperado")
+    expect(resultado.motivo).toContain("recepcion@comunidad.test")
+    expect(resultado.motivo).toMatch(/Reply-To/i)
+    expect(estadoRegistroSMTP(resultado)).toBe("fallido")
+    expect(servidor.mensajes).toHaveLength(0)
+    expect(servidor.autenticaciones).toHaveLength(0)
+  })
+
+  /**
+   * El borde del guardia: un dominio real que sólo EMPIEZA con "test" no es un
+   * dominio de prueba. La semilla usa `arrendatario@test.cl`, que sí existe como
+   * dominio de internet, así que no se puede rechazar por prefijo.
+   */
+  it("un dominio real que empieza con test (test.cl) sí se envía", async () => {
+    const servidor = await levantarServidor({ modo: "aceptar" })
+    const resultado = await enviarCorreoSMTP(
+      filaBase(servidor.port),
+      { ...mensajeDePrueba, to: "arrendatario@test.cl" },
+      { env: { SMTP_PASSWORD: CLAVE_FALSA } }
+    )
+
+    expect(resultado.estado).toBe("enviado")
+    expect(servidor.mensajes[0]?.to).toEqual(["arrendatario@test.cl"])
   })
 })
 

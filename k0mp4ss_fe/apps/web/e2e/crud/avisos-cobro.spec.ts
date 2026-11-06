@@ -153,8 +153,9 @@ test.describe("CRUD — Finanzas/Avisos de Cobro", () => {
       const lineaEntrega = filaEmision.locator("li").filter({ hasText: avisoEmitido.folio })
       await expect(lineaEntrega).toBeVisible({ timeout: 120_000 })
       await expect(lineaEntrega).toContainText("visor entregado")
-      // Sin emisor SMTP el correo queda en cola y NUNCA se reporta como enviado.
-      await expect(lineaEntrega).toContainText("email pendiente")
+      // El propietario sembrado tiene una dirección de prueba: el emisor se niega a
+      // enviar y lo registra como fallido con el motivo, en vez de intentarlo y rebotar.
+      await expect(lineaEntrega).toContainText("email fallido")
 
       await expect
         .poll(
@@ -171,7 +172,11 @@ test.describe("CRUD — Finanzas/Avisos de Cobro", () => {
         "la entrega por el visor se materializa en la notificación del residente",
       ).toBeTruthy()
       const entregaEmail = envios.find((e) => e.canal === "email")
-      expect(entregaEmail?.estado).toBe("pendiente")
+      expect(entregaEmail?.estado).toBe("fallido")
+      expect(
+        entregaEmail?.motivo,
+        "el motivo nombra la dirección de prueba y dice que no se envió nada",
+      ).toContain("prueba o inexistente")
 
       // ── 4. El residente ve el aviso con su folio y su total congelado ────
       const totalCongelado = totalAdeudadoDe(avisoEmitido)
