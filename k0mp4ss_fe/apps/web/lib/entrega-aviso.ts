@@ -12,10 +12,13 @@
  *    residente ve en su bandeja, con el folio y el período del aviso. El estado
  *    `entregado` del canal visor sólo se registra porque esa fila se creó en la
  *    misma transacción: no hay entrega declarada sin notificación que la pruebe.
- * 2. **El correo queda en cola.** La plataforma no tiene emisor SMTP (F4,
- *    bloqueado por credenciales del owner), así que el canal email se registra
- *    `pendiente` con su motivo y NUNCA `entregado` ni `enviado`. El vocabulario
- *    de estados (lib/schemas.ts) no tiene `enviado` a propósito.
+ * 2. **El correo se intenta y se reporta como pasó.** El canal email sale por
+ *    el emisor SMTP real (`lib/smtp.ts`, F4): queda `enviado` SOLO cuando el
+ *    servidor aceptó el mensaje (con el id que devolvió), `fallido` con el
+ *    motivo redactado cuando se intentó y rebotó, y `pendiente` con
+ *    `MOTIVO_SIN_SMTP` cuando la comunidad no tiene emisor configurado —que es
+ *    una condición de configuración, no un envío fallido—. Nunca `entregado`:
+ *    el correo no crea ninguna notificación que lo pruebe.
  * 3. **El destinatario es el dueño de registro.** El propietario VIGENTE de la
  *    unidad (`rol: "propietario"`, `fechaFin: null`), con el mismo criterio que
  *    la cobranza FI. Sin propietario vigente no hay entrega: la ruta la rechaza
@@ -31,15 +34,26 @@
  * queda como fila nueva marcada `reenvio: true`, igual que la cobranza.
  */
 import { prisma } from "@/lib/prisma"
+import { enviarCorreoComunidad, estadoRegistroSMTP, motivoSMTP } from "@/lib/smtp"
 import type { CanalEntregaAviso, EstadoEntregaAviso } from "@/lib/schemas"
 
 /**
  * Motivo del correo en cola. Es el mismo hecho que declara
- * `app/api/cobros-fi/[id]/cobranza/route.ts` para su outbox: sin SMTP no hay
- * envío, y decirlo es más honesto que un estado optimista.
+ * `app/api/cobros-fi/[id]/cobranza/route.ts` para su outbox: sin emisor
+ * configurado no hay envío, y decirlo es más honesto que un estado optimista.
+ * Desde F4 este motivo es CONDICIONAL: sólo se escribe cuando el emisor no está
+ * configurado (falta la fila de CF o `SMTP_PASSWORD`), no siempre.
  */
 export const MOTIVO_SIN_SMTP =
   "Sin emisor SMTP configurado (F4): el correo del aviso queda en la cola de salida (outbox) y no se reporta como enviado."
+
+/**
+ * Motivo del correo cuando el aviso no tiene a quién ir. Es un dato que falta,
+ * no una falta de emisor: se declara como envío fallido (mismo criterio que la
+ * cobranza FI), nunca como `pendiente` ni como `enviado`.
+ */
+export const MOTIVO_SIN_DESTINATARIO =
+  "Falló el envío por SMTP: el propietario vigente de la unidad no tiene correo electrónico registrado."
 
 /** Lo mínimo de la unidad para nombrarla en textos y mensajes de error. */
 export interface UnidadDelDestinatario {
@@ -100,17 +114,70 @@ export interface PlanEntregaCanal {
 }
 
 /**
- * Estado con el que se registra cada canal. El visor es `entregado` porque la
- * ruta crea su `Notificacion` en la misma transacción; el correo es `pendiente`
- * con el motivo del outbox.
+ * Lo que el canal email necesita para intentar el envío: la comunidad que
+ * aporta la configuración SMTP (CF), a quién va y qué dice el mensaje.
  */
-export function planDeCanal(canal: CanalEntregaAviso): PlanEntregaCanal {
-  return canal === "email"
-    ? { canal, estado: "pendiente", motivo: MOTIVO_SIN_SMTP }
-    : { canal, estado: "entregado", motivo: null }
+export interface MensajeEmailAviso {
+  comunidadId: string
+  /** Correo del propietario vigente; vacío o `null` = no hay destinatario. */
+  destinatario: string | null
+  asunto: string
+  cuerpo: string
 }
 
-/** Asunto de la notificación del visor: nombra el folio y el período. */
+/** Contexto de la entrega completo: hoy el visor no necesita nada más. */
+export interface ContextoEntregaAviso {
+  email: MensajeEmailAviso
+}
+
+/**
+ * Estado con el que se registra cada canal.
+ *
+ * - **visor** → `entregado`: la ruta crea su `Notificacion` en la misma
+ *   transacción y el registro guarda el id. Ese estado NO depende del correo.
+ * - **email** → el desenlace REAL del emisor (`lib/smtp.ts`):
+ *   - `no_configurado` → `pendiente` con `MOTIVO_SIN_SMTP` (condición de
+ *     configuración; no se abre ninguna conexión);
+ *   - `enviado` → `enviado`, con el id del mensaje que devolvió el servidor
+ *     dentro del motivo (la aceptación del servidor es la prueba);
+ *   - `fallido` → `fallido` con el motivo redactado (nunca la contraseña).
+ *
+ * El correo NUNCA se registra `entregado`: no crea ninguna notificación que lo
+ * pruebe. El visor NUNCA se registra `enviado`: su hecho es la notificación.
+ */
+export async function planDeCanal(
+  canal: CanalEntregaAviso,
+  contexto: ContextoEntregaAviso
+): Promise<PlanEntregaCanal> {
+  if (canal === "visor") return { canal, estado: "entregado", motivo: null }
+
+  const destinatario = contexto.email.destinatario?.trim() ?? ""
+  if (destinatario === "") {
+    return { canal, estado: "fallido", motivo: MOTIVO_SIN_DESTINATARIO }
+  }
+
+  const resultado = await enviarCorreoComunidad(contexto.email.comunidadId, {
+    to: destinatario,
+    subject: contexto.email.asunto,
+    text: contexto.email.cuerpo,
+  })
+
+  // `no_configurado` es estado de configuración, no envío fallido: queda en la
+  // cola de salida con el motivo del outbox.
+  if (resultado.estado === "no_configurado") {
+    return { canal, estado: "pendiente", motivo: MOTIVO_SIN_SMTP }
+  }
+
+  // `enviado` exige la aceptación del servidor (250 final del DATA). El motivo
+  // guarda el id del mensaje que devolvió el servidor cuando lo trae.
+  return {
+    canal,
+    estado: estadoRegistroSMTP(resultado),
+    motivo: motivoSMTP(resultado),
+  }
+}
+
+/** Asunto del aviso: nombra el folio y el período (visor y correo dicen lo mismo). */
 export function asuntoNotificacionAviso(input: {
   folio: string
   periodo: string
@@ -118,7 +185,7 @@ export function asuntoNotificacionAviso(input: {
   return `Aviso de cobro ${input.folio} — período ${input.periodo}`
 }
 
-/** Cuerpo de la notificación del visor: referencia el aviso que se entrega. */
+/** Cuerpo del aviso: referencia el documento que se entrega (visor y correo). */
 export function cuerpoNotificacionAviso(input: {
   folio: string
   periodo: string

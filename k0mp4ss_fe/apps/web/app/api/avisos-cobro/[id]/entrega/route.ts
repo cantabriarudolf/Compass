@@ -12,8 +12,12 @@
  *   el folio y el período del aviso, y el registro apunta a ella. El estado se
  *   escribe en la MISMA transacción que la notificación: no hay entrega
  *   declarada sin la fila que la prueba.
- * - **Email** (`pendiente`): sin emisor SMTP (F4) el correo queda en la cola de
- *   salida con su motivo. Nunca `entregado` ni `enviado`.
+ * - **Email** (emisión real): sale por el emisor SMTP (`lib/smtp.ts`, F4) y el
+ *   registro dice la verdad del intento: `enviado` SOLO si el servidor aceptó
+ *   el mensaje (el motivo guarda el id que devolvió), `fallido` con el motivo
+ *   redactado si se intentó y rebotó, y `pendiente` con su motivo si la
+ *   comunidad no tiene emisor configurado. Nunca `entregado`: el correo no crea
+ *   notificación que lo pruebe.
  * - **Idempotencia**: reentregar el mismo aviso a la misma persona por el mismo
  *   canal devuelve `duplicado` y no escribe nada; el body acepta
  *   `{ reenviar: true }` para un reenvío explícito, que agrega una fila nueva
@@ -61,7 +65,10 @@ const EntradaEntregaSchema = z.object({
   reenviar: z.boolean().optional(),
 })
 
-/** Estado de UN canal en la respuesta: entregado, en cola, fallido o ya existente. */
+/**
+ * Estado de UN canal en la respuesta: entregado (visor), enviado (correo
+ * aceptado por el servidor), en cola, fallido o ya existente.
+ */
 export type ResultadoCanalEntrega = {
   canal: CanalEntregaAviso
   estado: EstadoEntregaAviso | "duplicado"
@@ -125,6 +132,14 @@ export async function POST(req: Request, ctx: Ctx): Promise<Response> {
       )
     }
 
+    // El correo del aviso va al destinatario de registro; sin correo cargado el
+    // canal email no se puede inventar como enviado (`planDeCanal` lo declara
+    // fallido). Se lee sólo cuando ya hay a quién entregar.
+    const persona = await prisma.persona.findUnique({
+      where: { id: personaId },
+      select: { email: true },
+    })
+
     // Una entrega previa por canal: la clave base es la que decide si esto es
     // una reentrega (no escribe) o un reenvío explícito (escribe una fila más).
     const clavesBase = new Map<CanalEntregaAviso, string>(
@@ -158,7 +173,23 @@ export async function POST(req: Request, ctx: Ctx): Promise<Response> {
         })
         continue
       }
-      const plan = planDeCanal(canal)
+      // El contexto del correo es el mismo texto del aviso: no hay una segunda
+      // redacción que se desincronice del visor ni del papel.
+      const plan = await planDeCanal(canal, {
+        email: {
+          comunidadId: scope.comunidadId,
+          destinatario: persona?.email ?? null,
+          asunto: asuntoNotificacionAviso({
+            folio: aviso.folio,
+            periodo: aviso.periodo,
+          }),
+          cuerpo: cuerpoNotificacionAviso({
+            folio: aviso.folio,
+            periodo: aviso.periodo,
+            referenciaUnidad,
+          }),
+        },
+      })
       const resultado: ResultadoCanalEntrega = {
         canal,
         estado: plan.estado,

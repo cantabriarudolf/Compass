@@ -172,15 +172,23 @@ El documento del aviso SHALL armarse **solo desde la fila guardada**: cada cifra
 - **THEN** la firma se embebe en el bloque de firma junto al administrador responsable
 
 ### Requirement: Entrega del Aviso con Prueba
-La entrega del aviso MUST ser una acción explícita (`POST /api/avisos-cobro/[id]/entrega`, permiso `fi:gasto_comun`) y no un efecto de la emisión. El destinatario SHALL ser el propietario **vigente** de la unidad del aviso; una unidad sin propietario vigente MUST rechazar la entrega nombrando la unidad y el folio, sin escribir nada. La entrega por el visor MUST materializarse en la notificación que el residente ve, creada en la misma transacción, y el registro de la entrega SHALL guardar el id de esa notificación como prueba de que se entregó. El correo SHALL quedar `pendiente` con su motivo mientras no exista emisor SMTP (F4) y NUNCA SHALL reportarse como enviado ni como entregado. Los interruptores de canal de la cobranza NO SHALL gobernar la entrega del aviso: apagan recordatorios de deuda, y el aviso arranca el plazo de pago, así que no puede quedar sin entregar en silencio. Reentregar el mismo aviso a la misma persona por el mismo canal no SHALL duplicar el registro; el reenvío explícito agrega una fila nueva marcada como reenvío.
+La entrega del aviso MUST ser una acción explícita (`POST /api/avisos-cobro/[id]/entrega`, permiso `fi:gasto_comun`) y no un efecto de la emisión. El destinatario SHALL ser el propietario **vigente** de la unidad del aviso; una unidad sin propietario vigente MUST rechazar la entrega nombrando la unidad y el folio, sin escribir nada. La entrega por el visor MUST materializarse en la notificación que el residente ve, creada en la misma transacción, y el registro de la entrega SHALL guardar el id de esa notificación como prueba de que se entregó. El canal email SHALL intentar el envío real por el emisor SMTP (F4) y su estado MUST ser el desenlace observado, sin confundirse con el del visor: `enviado` sólo cuando el servidor aceptó el mensaje, guardando en el registro el id de mensaje que devolvió el servidor; `fallido` con el motivo redactado cuando el envío se intentó y rebotó (autenticación rechazada, conexión rechazada, timeout, o propietario sin correo registrado); y `pendiente` con su motivo del outbox cuando la comunidad no tiene emisor configurado (falta la configuración global o la variable `SMTP_PASSWORD`), que es una condición de configuración y no un envío fallido. El canal email NUNCA SHALL registrarse `entregado` y el canal visor NUNCA SHALL registrarse `enviado`: el visor se prueba con su notificación y el correo con la aceptación del servidor. La contraseña SMTP NUNCA SHALL aparecer en el registro ni en la respuesta: se redacta antes de armar cualquier motivo. Los interruptores de canal de la cobranza NO SHALL gobernar la entrega del aviso: apagan recordatorios de deuda, y el aviso arranca el plazo de pago, así que no puede quedar sin entregar en silencio. Reentregar el mismo aviso a la misma persona por el mismo canal no SHALL duplicar el registro; el reenvío explícito agrega una fila nueva marcada como reenvío.
 
 #### Scenario: Entrega por el visor con la notificación como prueba
 - **WHEN** la administración entrega el aviso de una unidad con propietario vigente
 - **THEN** se crea la notificación del residente con el folio y el período, el registro de la entrega la referencia por su id y el canal visor queda `entregado`
 
 #### Scenario: El correo queda en cola y nunca se reporta como enviado
-- **WHEN** se entrega un aviso sin emisor SMTP configurado
-- **THEN** el canal email queda `pendiente` con el motivo del outbox y ningún estado del registro dice enviado
+- **WHEN** se entrega un aviso de una comunidad sin emisor SMTP configurado (sin configuración global o sin `SMTP_PASSWORD`)
+- **THEN** el canal email queda `pendiente` con el motivo del outbox, no se abre ninguna conexión SMTP y ningún estado del registro dice enviado
+
+#### Scenario: El correo aceptado por el servidor queda enviado con su id
+- **WHEN** el servidor SMTP acepta el mensaje del aviso
+- **THEN** el canal email queda `enviado`, el registro guarda el id de mensaje que devolvió el servidor y el canal visor sigue `entregado` con su notificación, sin que un estado se use por el otro
+
+#### Scenario: El correo rechazado queda fallido sin la contraseña
+- **WHEN** el servidor SMTP rechaza la autenticación o el mensaje, o el propietario vigente no tiene correo registrado
+- **THEN** el canal email queda `fallido` con el motivo redactado y la contraseña SMTP no aparece ni en el registro ni en la respuesta
 
 #### Scenario: Unidad sin propietario vigente no se entrega
 - **WHEN** se intenta entregar el aviso de una unidad sin propietario vigente

@@ -5,17 +5,19 @@
  *
  * S3 pide dos cosas que no se pueden separar: el aviso SHALL quedar disponible
  * al residente en el VISOR y SHALL registrarse su entrega. La tercera pieza es
- * la que protege la honestidad del registro: sin emisor SMTP (F4) el correo
- * queda en cola y NUNCA se reporta como enviado. Este archivo fija el contrato
- * observable de `POST/GET /api/avisos-cobro/[id]/entrega`:
+ * la que protege la honestidad del registro: el correo sale por el emisor SMTP
+ * real (F4) y una comunidad SIN emisor configurado deja el correo en cola, sin
+ * reportarlo NUNCA como enviado. Este archivo fija el contrato observable de
+ * `POST/GET /api/avisos-cobro/[id]/entrega`:
  *
  *   1. entregar crea la notificación que el residente ve (folio + período) Y el
  *      registro de entrega: el visor queda `entregado` porque esa fila existe;
  *   2. el destinatario es el propietario VIGENTE de la unidad; una unidad sin
  *      propietario vigente se rechaza nombrando la unidad y no escribe nada (ni
  *      siquiera una entrega vacía);
- *   3. el correo queda `pendiente` con el motivo (sin SMTP) y nunca
- *      `entregado`/`enviado`;
+ *   3. el correo queda `pendiente` con el motivo del outbox (esta comunidad no
+ *      tiene emisor SMTP configurado) y, como nadie aceptó nada, ningún estado
+ *      del registro dice `enviado` ni `entregado` por el correo;
  *   4. re-entregar el mismo aviso a la misma persona y canal no duplica;
  *   5. el reenvío explícito agrega UN registro nuevo y queda auditado;
  *   6. el aviso de otra comunidad no se entrega ni se lee (404);
@@ -192,6 +194,9 @@ describe("/api/avisos-cobro/[id]/entrega — visor con prueba, correo en cola (S
     await prisma.vinculoUnidad.deleteMany({
       where: { comunidadId: { in: comunidades } },
     })
+    await prisma.persona.deleteMany({
+      where: { comunidadId: { in: comunidades } },
+    })
     await prisma.unidad.deleteMany({ where: { comunidadId: { in: comunidades } } })
   }
 
@@ -249,6 +254,46 @@ describe("/api/avisos-cobro/[id]/entrega — visor con prueba, correo en cola (S
         saldoInicial: 0,
       },
     })
+
+    // Cada vínculo necesita su persona: el correo del aviso va al propietario
+    // vigente, y sin fila de persona no habría destinatario al que enviar.
+    for (const p of [
+      {
+        id: PROPIETARIO_U1,
+        rut: "22222222-2",
+        email: "ent-propietaria-u1@ejemplo.test",
+      },
+      {
+        id: PROPIETARIO_U1_ANTERIOR,
+        rut: "33333333-3",
+        email: "ent-propietario-anterior@ejemplo.test",
+      },
+      {
+        id: ARRENDATARIO_U2,
+        rut: "44444444-4",
+        email: "ent-arrendatario-u2@ejemplo.test",
+      },
+      {
+        id: PROPIETARIO_U3,
+        rut: "55555555-5",
+        email: "ent-propietario-u3@ejemplo.test",
+      },
+      { id: "ent-b-p-1", rut: "66666666-6", email: "ent-b-p-1@ejemplo.test" },
+    ]) {
+      await prisma.persona.create({
+        data: {
+          ...p,
+          comunidadId: p.id === "ent-b-p-1" ? COM_B : COM_A,
+          nombreCompleto: `Persona ${p.id}`,
+          nombres: "Persona",
+          apellidos: p.id,
+          telefonoMovil: "+56911111111",
+          estadoCuenta: "activa",
+          condicionesEspecialesIds: [],
+          roles: ["propietario"],
+        },
+      })
+    }
 
     for (const u of [
       { id: U1, comunidadId: COM_A, numero: "101", etiqueta: "Depto 101" },
@@ -449,7 +494,7 @@ describe("/api/avisos-cobro/[id]/entrega — visor con prueba, correo en cola (S
     expect(json.notificacionId).toBe(notificacion?.id)
   })
 
-  it("el correo queda pendiente con su motivo y nunca se reporta como entregado ni enviado", async () => {
+  it("sin emisor configurado el correo queda pendiente y nunca se reporta como entregado ni enviado", async () => {
     const entregas = await entregasDe(avisoU1.id)
     const email = entregas.find((e) => e.canal === "email")
 
@@ -457,15 +502,16 @@ describe("/api/avisos-cobro/[id]/entrega — visor con prueba, correo en cola (S
     expect(email?.estado).toBe("pendiente")
     expect(email?.motivo).toMatch(/SMTP/)
     expect(email?.motivo).toMatch(/cola de salida|outbox/)
-    // Sin SMTP no hay notificación de correo: la fila pendiente no prueba envío.
+    // Sin emisor configurado no hay notificación de correo: la fila pendiente
+    // no prueba envío.
     expect(email?.notificacionId).toBeNull()
 
     const { json } = await como(EMAIL_ADMIN, () => historial(avisoU1.id))
     const envios = json.envios as Array<Json>
     const emailJson = envios.find((e) => e.canal === "email")
     expect(emailJson?.estado).toBe("pendiente")
-    // Ningún estado del contrato dice "enviado": el vocabulario es
-    // entregado | pendiente | fallido.
+    // Nadie aceptó nada en este escenario: aunque el vocabulario ya tenga
+    // `enviado`, acá no aparece y `entregado` es solo del visor.
     expect(envios.map((e) => e.estado)).not.toContain("enviado")
     expect(emailJson?.estado).not.toBe("entregado")
   })

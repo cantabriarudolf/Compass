@@ -1631,11 +1631,13 @@ export const AvisoCobroSchema = z.object({
 // --- Entrega del aviso de cobro (S3 — serie aviso-de-cobro) ---
 //
 // El aviso se ENTREGA por el visor interno (la notificación que el residente
-// ve) y el correo queda en cola hasta que exista un emisor SMTP real (F4, hoy
-// bloqueado por credenciales del owner). Los estados son
-// `entregado | pendiente | fallido`: NO existe `enviado`, porque hoy nada sale
-// por correo y un estado que diga "enviado" sería una afirmación falsa sobre un
-// documento que funda un plazo de pago.
+// ve) y se ENVÍA por correo con el emisor SMTP real (`lib/smtp.ts`, F4). Por eso
+// los estados son `entregado | enviado | pendiente | fallido`, y no se
+// confunden: `entregado` es el visor, cuya entrega la prueba la fila de
+// `Notificacion`; `enviado` es el correo, que sólo se declara cuando el servidor
+// SMTP aceptó el mensaje; `pendiente` es el correo que quedó en la cola de
+// salida porque la comunidad no tiene emisor configurado; `fallido` es el envío
+// que se intentó y rebotó.
 
 export const CANALES_ENTREGA_AVISO = ["visor", "email"] as const
 export const CanalEntregaAvisoSchema = z.enum(CANALES_ENTREGA_AVISO)
@@ -1643,6 +1645,7 @@ export type CanalEntregaAviso = (typeof CANALES_ENTREGA_AVISO)[number]
 
 export const ESTADOS_ENTREGA_AVISO = [
   "entregado",
+  "enviado",
   "pendiente",
   "fallido",
 ] as const
