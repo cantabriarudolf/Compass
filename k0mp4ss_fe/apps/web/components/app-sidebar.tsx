@@ -112,6 +112,15 @@ const data = {
         },
         { title: "Directorio de Personas", url: "/comunidad/personas", roles: ["administrador", "residente", "comite"] },
         { title: "Comunicación", url: "/comunidad/comunicacion", roles: ["administrador", "residente", "comite"] },
+        {
+          // F35 serie A: el archivo de documentos de la comunidad (Ley 21.442
+          // art. 9). Mismos roles que la clave `doc` ver: administración,
+          // comité y residente. El page.tsx además exige el permiso y la sesión
+          // en el servidor, y la API valida cada lectura y escritura.
+          title: "Archivo",
+          url: "/comunidad/archivo",
+          roles: ["administrador", "residente", "comite"],
+        },
         { title: "Visor de Mensajes", url: "/comunidad/visor", roles: ["administrador", "residente", "comite"] },
         { title: "Directiva", url: "/comunidad/directiva", roles: ["administrador", "residente", "comite"] },
         { title: "Certificados", url: "/comunidad/certificados", roles: ["administrador", "residente", "comite"] },
