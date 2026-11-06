@@ -12,7 +12,9 @@
  * autoriza a las API routes de CO (`auth()` + membresía en BD): así la pantalla
  * y la API no pueden discrepar sobre quién puede ver qué.
  *
- *   administrador → consola (redacción, plantillas, buzón, biblioteca)
+ *   administrador → consola (redacción, plantillas y buzón; la pestaña Biblioteca
+ *                   se retiró en F35 serie A, T11: el Archivo de Documentos es la
+ *                   única lista de documentos)
  *   comite        → bandeja de lectura con agregados
  *   residente     → bandeja propia
  *   sin `co` ver  → sin acceso

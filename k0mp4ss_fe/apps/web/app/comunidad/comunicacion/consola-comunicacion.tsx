@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { usePlantillasCO, useEnviosCO, useMensajesBuzonCO, useDocumentosCO } from "@/lib/api/use-co"
+import { usePlantillasCO, useEnviosCO, useMensajesBuzonCO } from "@/lib/api/use-co"
 import { usePersonas } from "@/lib/api/use-personas"
 import { useUnidades } from "@/lib/api/use-unidades"
 import { useVinculos } from "@/lib/api/use-vinculos"
@@ -33,12 +33,10 @@ import {
   IconSend,
   IconTemplate,
   IconInbox,
-  IconBooks,
   IconPlus,
   IconPencil,
   IconTrash,
   IconCheck,
-  IconExternalLink,
 } from "@tabler/icons-react"
 import { MetricaLecturas } from "@/components/co/metrica-lecturas"
 import { totalesDeEnvio } from "@/components/co/totales-envio"
@@ -70,8 +68,15 @@ const CATEGORIA_LABEL: Record<string, string> = {
 }
 
 /**
- * consola-comunicacion — consola de administración de CO (redacción, plantillas,
- * buzón y biblioteca).
+ * consola-comunicacion — consola de administración de CO (redacción, plantillas y
+ * buzón).
+ *
+ * La pestaña «Biblioteca de Documentos Comunales» se retiró (F35 serie A, T11): el
+ * owner decidió que el Archivo de Documentos (`/comunidad/archivo`) absorbe la
+ * biblioteca, porque dos listados de documentos en la UI son dos verdades. La
+ * lectura de un documento del archivo se audita ahí (`AD_DOC_APERTURA`) y la tabla
+ * `documentos_co`, con sus filas, se retira en una unidad posterior que migre los
+ * datos primero.
  *
  * Solo la renderiza `page.tsx` cuando el rol resuelto en el servidor es
  * administrador (change co-lectura-residente, D1): el `<Select>` «Vista» que
@@ -88,8 +93,7 @@ export function ConsolaComunicacionCO() {
   const { items: plantillasCO, isLoading: cPlantillas, create: crearPlantillaApi, update: actualizarPlantillaApi, remove: eliminarPlantillaApi } = usePlantillasCO()
   const { items: enviosCO, isLoading: cEnvios, create: crearEnvioApi } = useEnviosCO()
   const { items: mensajesBuzonCO, isLoading: cBuzon, create: crearMensajeApi, update: actualizarMensajeApi } = useMensajesBuzonCO()
-  const { items: documentosCO, isLoading: cDocs, create: crearDocumentoApi, update: actualizarDocumentoApi, remove: eliminarDocumentoApi } = useDocumentosCO()
-  // TODO: migrar eventos de auditoría (lecturas de envío, descargas de docs, notificaciones email_simulado) a endpoints de API en próxima fase.
+  // TODO: migrar eventos de auditoría (lecturas de envío, notificaciones email_simulado) a endpoints de API en próxima fase.
 
   const [error, setError] = React.useState<string | null>(null)
   const [exito, setExito] = React.useState<string | null>(null)
@@ -116,10 +120,7 @@ export function ConsolaComunicacionCO() {
   // --- Plantillas ---
   const [editandoPlantilla, setEditandoPlantilla] = React.useState<PlantillaCO | null>(null)
 
-      // --- Biblioteca ---
-      const [editandoDoc, setEditandoDoc] = React.useState<{ id: string; nombre: string; categoria: string; tipoMime: string; tamanoKB: number; url: string } | null>(null)
-
-      const cargando = cPersonas || cVinculos || cUnidades || cMacro || cMicro || cPlantillas || cEnvios || cBuzon || cDocs
+      const cargando = cPersonas || cVinculos || cUnidades || cMacro || cMicro || cPlantillas || cEnvios || cBuzon
 
       const nombrePersona = (id: string) => {
         const p = personas.find(x => x.id === id)
@@ -267,53 +268,6 @@ export function ConsolaComunicacionCO() {
         setEditandoPlantilla(null)
       }
 
-      const guardarDoc = async () => {
-        if (!editandoDoc) return
-        const existente = documentosCO.some(d => d.id === editandoDoc.id)
-        const r = existente
-          ? await actualizarDocumentoApi(editandoDoc.id, { nombre: editandoDoc.nombre, categoria: editandoDoc.categoria, tipoMime: editandoDoc.tipoMime, tamanoKB: editandoDoc.tamanoKB, url: editandoDoc.url })
-          : await crearDocumentoApi(editandoDoc)
-        if (!r.ok) { setError(r.error ?? "No se pudo guardar el documento."); return }
-        setEditandoDoc(null)
-      }
-
-      /**
-       * Destino de documento ya validado (D1): parseo, esquema http(s) y allowlist
-       * de host (origen propio + almacenamiento del proyecto). Devuelve `null` si
-       * no es seguro abrirlo, así que el `window.open` de abajo solo recibe un
-       * `URL` validado y nunca el string que vino del registro.
-       *
-       * Ampliar `DOMINIOS_PERMITIDOS` cuando se sume otro proveedor de archivos
-       * (decisión del owner, F10 de PENDIENTES-FUNCIONALIDAD).
-       */
-      const destinoDocumentoSeguro = (raw: string): URL | null => {
-        let url: URL
-        try {
-          url = new URL(raw)
-        } catch {
-          return null
-        }
-        // Solo http(s): rechaza javascript:, data: y cualquier otro esquema.
-        if (url.protocol !== "http:" && url.protocol !== "https:") return null
-        const DOMINIOS_PERMITIDOS = ["supabase.co", "supabase.in"]
-        const hostPermitido =
-          url.origin === window.location.origin ||
-          DOMINIOS_PERMITIDOS.some(
-            (d) => url.hostname === d || url.hostname.endsWith(`.${d}`)
-          )
-        return hostPermitido ? url : null
-      }
-
-      const abrirDocumento = (docId: string, url: string) => {
-        // TODO: registrarDescargaDocCO (evento de auditoría) aún viaja vía API en fase posterior.
-        const destino = destinoDocumentoSeguro(url)
-        if (!destino) {
-          setError("URL del documento inválida o fuera de los dominios permitidos (D1).")
-          return
-        }
-        window.open(destino.toString(), "_blank", "noopener,noreferrer")
-      }
-
       // Privacidad del buzón (S10): el alcance por rol se filtra en el SERVIDOR
       // (`_lib/buzon-alcance.ts`). Esta consola es solo del administrador, que
       // registra y responde lo que llega a la oficina, así que ve la colección
@@ -335,7 +289,7 @@ export function ConsolaComunicacionCO() {
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight"><IconSpeakerphone className="size-6" /> Comunicación</h1>
-          <p className="text-sm text-muted-foreground">Canal oficial: mensajería masiva por filtros EF/MP, plantillas, buzón ciudadano y biblioteca.</p>
+          <p className="text-sm text-muted-foreground">Canal oficial: mensajería masiva por filtros EF/MP, plantillas y buzón ciudadano.</p>
         </div>
       </div>
 
@@ -347,7 +301,6 @@ export function ConsolaComunicacionCO() {
           <TabsTrigger value="redaccion" className="gap-1"><IconSend className="size-4" /> Masivos</TabsTrigger>
           <TabsTrigger value="plantillas" className="gap-1"><IconTemplate className="size-4" /> Plantillas</TabsTrigger>
           <TabsTrigger value="buzon" className="gap-1"><IconInbox className="size-4" /> Buzón Ciudadano</TabsTrigger>
-          <TabsTrigger value="biblioteca" className="gap-1"><IconBooks className="size-4" /> Biblioteca</TabsTrigger>
         </TabsList>
 
         <TabsContent value="redaccion" className="pt-4 flex flex-col gap-4 lg:flex-row lg:items-start">
@@ -614,30 +567,6 @@ export function ConsolaComunicacionCO() {
           </div>
         </TabsContent>
 
-        <TabsContent value="biblioteca" className="pt-4 flex flex-col gap-4">
-          <Button variant="outline" size="sm" className="self-start" onClick={() => setEditandoDoc({ id: `doc-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`, nombre: "", categoria: "reglamento", tipoMime: "application/pdf", tamanoKB: 100, url: "" })}>
-              <IconPlus className="size-4 mr-1" /> Agregar documento
-            </Button>
-          <div className="grid gap-3 md:grid-cols-2">
-            {documentosCO.length === 0 && <Card className="md:col-span-2"><CardContent className="py-8 text-center text-sm text-muted-foreground">La biblioteca está vacía. Acceso 24/7 a documentación legal y operativa.</CardContent></Card>}
-            {documentosCO.map(doc => (
-              <Card key={doc.id}>
-                <CardContent className="flex items-center justify-between gap-3 pt-4">
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium">{doc.nombre}</p>
-                    <p className="text-xs text-muted-foreground">{doc.categoria} · {doc.tipoMime} · {doc.tamanoKB} KB</p>
-                  </div>
-                  <div className="flex shrink-0 gap-1">
-                    <Button size="sm" variant="outline" onClick={() => abrirDocumento(doc.id, doc.url)}>
-                      <IconExternalLink className="size-3 mr-1" /> Abrir
-                    </Button>
-                    <Button variant="ghost" size="icon" aria-label="Eliminar documento" onClick={() => { void eliminarDocumentoApi(doc.id) }}><IconTrash className="size-4" /></Button>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </TabsContent>
       </Tabs>
 
       {/* Diálogo de respuesta del buzón */}
@@ -714,44 +643,6 @@ export function ConsolaComunicacionCO() {
               <DialogFooter>
                 <Button variant="outline" onClick={() => setEditandoPlantilla(null)}>Cancelar</Button>
                 <Button onClick={guardarPlantilla}>Guardar</Button>
-              </DialogFooter>
-            </>
-          )}
-        </DialogContent>
-      </Dialog>
-
-      {/* Diálogo de documento */}
-      <Dialog open={!!editandoDoc} onOpenChange={v => { if (!v) setEditandoDoc(null) }}>
-        <DialogContent className="sm:max-w-lg">
-          {editandoDoc && (
-            <>
-              <DialogHeader>
-                <DialogTitle>Agregar documento comunal</DialogTitle>
-                <DialogDescription>D1 media por referencia: solo metadatos + URL; jamás contenido embebido.</DialogDescription>
-              </DialogHeader>
-              <div className="grid gap-3">
-                <div className="space-y-1">
-                  <Label className="text-xs">Nombre</Label>
-                  <Input value={editandoDoc.nombre} onChange={e => setEditandoDoc({ ...editandoDoc, nombre: e.target.value })} placeholder="Reglamento de Copropiedad.pdf" />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <Label className="text-xs">Categoría</Label>
-                    <Input value={editandoDoc.categoria} onChange={e => setEditandoDoc({ ...editandoDoc, categoria: e.target.value })} placeholder="reglamento / acta / operativo" />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs">Tamaño (KB)</Label>
-                    <Input type="number" min={0} value={editandoDoc.tamanoKB} onChange={e => setEditandoDoc({ ...editandoDoc, tamanoKB: Number(e.target.value) })} />
-                  </div>
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">URL del documento</Label>
-                  <Input value={editandoDoc.url} onChange={e => setEditandoDoc({ ...editandoDoc, url: e.target.value })} placeholder="https://…" />
-                </div>
-              </div>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setEditandoDoc(null)}>Cancelar</Button>
-                <Button onClick={guardarDoc}>Guardar</Button>
               </DialogFooter>
             </>
           )}

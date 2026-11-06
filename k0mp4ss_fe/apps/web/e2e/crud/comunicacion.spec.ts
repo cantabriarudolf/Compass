@@ -88,4 +88,18 @@ test.describe("CRUD — Comunidad/Comunicacion", () => {
 
     expect(errores, "Excepciones no capturadas en comunidad/comunicacion").toEqual([])
   })
+
+  // F35 serie A, T11: el owner retiró la pestaña «Biblioteca» —el Archivo de
+  // Documentos (`/comunidad/archivo`) absorbe la biblioteca— y las otras tres
+  // pestañas siguen ahí. No había ningún caso de la biblioteca en esta lane: el
+  // flujo de alta por URL se ejerce en `test/componentes/archivo-documentos.test.tsx`.
+  test("la consola no ofrece la pestaña Biblioteca y conserva las otras tres", async ({ page }) => {
+    await page.goto("/comunidad/comunicacion")
+    await expect(page.getByRole("heading", { name: /Comunicación/ })).toBeVisible({ timeout: 15_000 })
+
+    await expect(page.getByRole("tab", { name: /Masivos/ })).toBeVisible({ timeout: 15_000 })
+    await expect(page.getByRole("tab", { name: /Plantillas/ })).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByRole("tab", { name: /Buzón Ciudadano/ })).toBeVisible({ timeout: 10_000 })
+    await expect(page.getByRole("tab", { name: /Biblioteca/ })).toHaveCount(0)
+  })
 })

@@ -1,7 +1,7 @@
 # CO-comunicacion-vecinos Specification
 
 ## Purpose
-Canal oficial de comunicación con la comunidad: mensajería masiva por filtros EF/MP con confirmación de lectura, maestro de plantillas prefijadas con variables dinámicas, buzón de interacción ciudadana (felicitaciones/sugerencias/reclamos) con tickets y biblioteca documental. Fuente de verdad: `Data/NSGC/docs/especificaciones/CO - Comunicacion Vecinos.md`.
+Canal oficial de comunicación con la comunidad: mensajería masiva por filtros EF/MP con confirmación de lectura, maestro de plantillas prefijadas con variables dinámicas y buzón de interacción ciudadana (felicitaciones/sugerencias/reclamos) con tickets. La biblioteca documental de CO se fusionó en el Archivo de Documentos de la Comunidad (`AD-gestion-administrativa`), que es la única lista de documentos de la UI. Fuente de verdad: `Data/NSGC/docs/especificaciones/CO - Comunicacion Vecinos.md`.
 
 ## Requirements
 
@@ -68,15 +68,15 @@ El buzón MUST recibir felicitaciones, sugerencias y reclamos presentándose en 
 - **THEN** la vista de directiva lo lista; si no, solo la Administración lo ve
 
 ### Requirement: Biblioteca de Documentos Comunales
-El sistema MUST ofrecer acceso 24/7 a documentos comunales referenciados por metadatos + URL (nombre, tipo MIME, tamañoKB, url — D1, jamás base64/Blob), gestionados con `saveDocumentoCO`/`removeDocumentoCO` (store) y por la API REST `/api/co/documentos` (GET paginado, POST upsert idempotente; detalle/PUT/DELETE en `/[id]`); cada descarga queda auditada como `CO_DOC_DOWNLOAD`.
+La biblioteca documental de CO se fusionó en el «Archivo de Documentos de la Comunidad» (`AD-gestion-administrativa`): entidad `Documento`, API `/api/documentos` y pantalla `/comunidad/archivo`, cuyo filtro `comunitario` hace el papel que tenía esta biblioteca. La pestaña «Biblioteca» de la consola de Comunicación ya no existe: el sistema MUST ofrecer acceso 24/7 a los documentos comunales en esa única lista, referenciados por metadatos + URL (nombre, tipo MIME, tamañoKB, url — D1, jamás base64/Blob). Abrir un documento MUST resolver primero el detalle auditado `GET /api/documentos/[id]`, que SHALL emitir el evento inmutable `AD_DOC_APERTURA` (categoría AD) con referencia al documento, y después abrir su URL. El nombre `CO_DOC_DOWNLOAD` NO se retira del catálogo: las filas históricas de la bitácora lo conservan. `DocumentoCO`, `/api/co/documentos` y `useDocumentosCO` quedan `@deprecated` por esta razón; su tabla y sus filas se retiran en una unidad posterior que primero migra los datos.
 
 #### Scenario: Descarga auditada
 - **WHEN** un usuario abre un documento de la biblioteca
-- **THEN** se emite el evento `CO_DOC_DOWNLOAD` con referencia al documento
+- **THEN** se emite el evento `AD_DOC_APERTURA` con referencia al documento
 
 #### Scenario: Documento por referencia
 - **WHEN** se intenta guardar un documento con URL data:/blob:
-- **THEN** retorna `{ok:false}` citando la regla D1 media por referencia
+- **THEN** la escritura se rechaza con 400 citando la regla D1 media por referencia
 
 ### Requirement: Integración con Auditoría y Métricas (AM)
 El módulo SHALL emitir `CO_SEND_MASSIVE`, `CO_TICKET_CREATED`, `CO_TICKET_RESPONDIDO`, `CO_TICKET_ESTADO` y `CO_DOC_DOWNLOAD` como eventos inmutables con data cuantificable: número de destinatarios por envío, tasa de apertura, volumen de reclamos por clasificación y tiempo de cierre de ticket (fecha ingreso→cierre).

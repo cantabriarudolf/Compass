@@ -14,7 +14,12 @@
  *   - el formulario no deja mandar un legal sin `referenciaAutentica` (S3) y, aun
  *     así, un rechazo de la API se muestra con el texto que devuelve la API en vez
  *     de taparse;
- *   - el filtro por naturaleza achica la lista.
+ *   - el filtro por naturaleza achica la lista;
+ *   - abrir un documento resuelve PRIMERO el detalle auditado
+ *     (`GET /api/documentos/[id]`, que emite `AD_DOC_APERTURA`) y recién después
+ *     abre `archivoUrl`; si esa lectura se niega, el archivo no se abre y se pinta
+ *     el texto con que la API lo explica (T11: la Biblioteca de CO se retiró y su
+ *     observabilidad de lectura no se pierde).
  *
  * Se monta `ConsolaArchivo` (no el `page.tsx`) porque la página es un server
  * component `async` que espera `auth()` y no se puede montar en jsdom; la única
@@ -24,7 +29,7 @@
  */
 import React from "react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { cleanup, render, screen, within } from "@testing-library/react"
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { instalarEntornoRadix } from "./entorno-radix"
 import {
@@ -130,6 +135,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup()
+  vi.unstubAllGlobals()
 })
 
 function renderConsola(roles: string[]) {
@@ -288,6 +294,60 @@ describe("Archivo de documentos — la pantalla dice lo que la entidad permite",
       screen.getByRole("button", { name: "Eliminar Circular del plan de emergencia" })
     )
     expect(screen.getByRole("alert")).toHaveTextContent(MENSAJE_LEGAL_INMUTABLE)
+  })
+
+  it("abrir resuelve primero el detalle auditado y recién después abre la URL del archivo", async () => {
+    const user = userEvent.setup({ delay: null })
+    const pedidos: string[] = []
+    const fetchFalso = vi.fn(async (entrada: RequestInfo | URL) => {
+      pedidos.push(String(entrada))
+      return new Response(JSON.stringify({ archivoUrl: "https://cdn.compass.cl/reglamento.pdf" }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      })
+    })
+    vi.stubGlobal("fetch", fetchFalso)
+    // La pestaña se abre dentro del gesto del usuario y navega después del GET.
+    const ventana = { location: { href: "" } }
+    const abrirVentana = vi.fn(() => ventana)
+    vi.stubGlobal("open", abrirVentana)
+
+    renderConsola(["administrador"])
+    await user.click(
+      screen.getByRole("link", {
+        name: "Abrir Reglamento de copropiedad vigente y sus modificaciones en una pestaña nueva",
+      })
+    )
+
+    // El rastro de lectura lo deja el GET del detalle, nunca el listado.
+    expect(pedidos).toEqual(["/api/documentos/doc-archivo-reglamento-copropiedad"])
+    // La URL que se abre es la que resolvió el detalle autorizado.
+    await waitFor(() => expect(ventana.location.href).toBe("https://cdn.compass.cl/reglamento.pdf"))
+  })
+
+  it("si la lectura auditada se niega, no abre el archivo y muestra el texto de la API", async () => {
+    const user = userEvent.setup({ delay: null })
+    const fetchFalso = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ error: "Permiso denegado." }), {
+          status: 403,
+          headers: { "content-type": "application/json" },
+        })
+    )
+    vi.stubGlobal("fetch", fetchFalso)
+    const ventana = { location: { href: "" }, close: vi.fn() }
+    vi.stubGlobal("open", vi.fn(() => ventana))
+
+    renderConsola(["residente"])
+    await user.click(
+      screen.getByRole("link", {
+        name: "Abrir Circular del plan de emergencia en una pestaña nueva",
+      })
+    )
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Permiso denegado.")
+    expect(ventana.location.href).toBe("")
+    expect(ventana.close).toHaveBeenCalled()
   })
 
   it("el filtro por naturaleza achica la lista", async () => {

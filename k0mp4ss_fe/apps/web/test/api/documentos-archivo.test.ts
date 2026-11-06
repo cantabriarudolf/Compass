@@ -11,6 +11,11 @@
  * Además: la versión la asigna el servidor dentro de (comunidad, tipo), el
  * cliente no la manda; el tipo documental es lista cerrada; el archivo es una
  * referencia (D1, jamás data:/blob:); y el alcance por comunidad se respeta.
+ *
+ * T11 (retiro de la Biblioteca de CO): abrir un documento del archivo resuelve el
+ * detalle (`GET /api/documentos/[id]`) y esa lectura deja el evento inmutable
+ * `AD_DOC_APERTURA` de categoría AD. El listado no audita (listar no es abrir) y
+ * los caminos rojos tampoco.
  */
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest"
 import { prisma } from "@/lib/prisma"
@@ -109,6 +114,17 @@ function listar(query = ""): Promise<Response> {
   return invocarApi(rutaColeccion, "GET", `documentos${query}`)
 }
 
+function verDetalle(id: string): Promise<Response> {
+  return invocarApi(rutaItem, "GET", `documentos/${id}`, { params: { id } })
+}
+
+/** Aperturas auditadas de la comunidad A: el evento de lectura del archivo. */
+function contarAperturas(): Promise<number> {
+  return prisma.eventoAuditoria.count({
+    where: { comunidadId: comunidadA, tipoAccion: "AD_DOC_APERTURA" },
+  })
+}
+
 describe("F35-A1 · archivo de documentos de la comunidad", () => {
   beforeAll(async () => {
     process.env.AUTH_SECRET = AUTH_SECRET
@@ -157,6 +173,9 @@ describe("F35-A1 · archivo de documentos de la comunidad", () => {
 
   async function limpiar(): Promise<void> {
     await prisma.documento.deleteMany({
+      where: { comunidadId: { in: [comunidadA, comunidadB] } },
+    })
+    await prisma.eventoAuditoria.deleteMany({
       where: { comunidadId: { in: [comunidadA, comunidadB] } },
     })
   }
@@ -305,6 +324,56 @@ describe("F35-A1 · archivo de documentos de la comunidad", () => {
 
       const resEdit = await editar("docarq-ajeno", { glosa: "no debería" })
       expect(resEdit.status).toBe(404)
+    })
+  })
+
+  it("T11 · abrir el documento emite AD_DOC_APERTURA (categoría AD) con la referencia", async () => {
+    await conUsuario(emailAdmin, async () => {
+      const alta = await crear(
+        comunitario("docarq-apertura", { glosa: "Circular de fachada para la apertura" })
+      )
+      expect(alta.status).toBe(201)
+
+      const res = await verDetalle("docarq-apertura")
+      expect(res.status).toBe(200)
+      // Preservar: auditar la apertura no cambia lo que la ruta devuelve.
+      expect((await cuerpoJson<{ glosa: string }>(res)).glosa).toBe(
+        "Circular de fachada para la apertura"
+      )
+
+      const eventos = await prisma.eventoAuditoria.findMany({
+        where: { comunidadId: comunidadA, tipoAccion: "AD_DOC_APERTURA" },
+      })
+      expect(eventos).toHaveLength(1)
+      const evento = eventos[0]!
+      expect(evento.categoria).toBe("AD")
+      expect(evento.referenciaId).toBe("docarq-apertura")
+      expect(evento.usuario).toBe("docarq-user-admin")
+      expect(evento.descripcion).toContain("Circular de fachada para la apertura")
+      expect(evento.descripcion).toContain("circular-fachada.pdf")
+
+      // La apertura es un evento nuevo de AD: no reescribe el nombre histórico de CO.
+      const co = await prisma.eventoAuditoria.count({
+        where: { comunidadId: comunidadA, tipoAccion: "CO_DOC_DOWNLOAD" },
+      })
+      expect(co).toBe(0)
+    })
+  })
+
+  it("T11 · listar el archivo no audita una apertura", async () => {
+    await conUsuario(emailAdmin, async () => {
+      expect((await listar()).status).toBe(200)
+      expect(await contarAperturas()).toBe(1)
+    })
+  })
+
+  it("T11 · un 403 y un 404 no dejan evento de apertura", async () => {
+    await conUsuario(emailMantencion, async () => {
+      expect((await verDetalle("docarq-apertura")).status).toBe(403)
+    })
+    await conUsuario(emailAdmin, async () => {
+      expect((await verDetalle("docarq-no-existe")).status).toBe(404)
+      expect(await contarAperturas()).toBe(1)
     })
   })
 })

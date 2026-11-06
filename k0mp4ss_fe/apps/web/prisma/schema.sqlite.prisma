@@ -590,6 +590,16 @@ model MensajeBuzonCO {
   @@map("mensajes_buzon_co")
 }
 
+/// @deprecated — «Biblioteca de Documentos Comunales» de CO (Fase 4).
+///
+/// Retirada en F35 serie A T11: el «Archivo de Documentos de la Comunidad»
+/// (`Documento`, `/api/documentos`, `/comunidad/archivo`) es la ÚNICA lista de
+/// documentos y su filtro `comunitario` hace el papel de la vieja biblioteca; la
+/// apertura se audita ahí como `AD_DOC_APERTURA` (categoría AD).
+///
+/// La tabla NO se borra acá: sus filas se migran a `Documento` en una unidad
+/// posterior, y es esa unidad —con la mirada del owner sobre los datos— la que
+/// puede soltarla. No agregues consumidores nuevos.
 model DocumentoCO {
   id          String   @id
   comunidadId String

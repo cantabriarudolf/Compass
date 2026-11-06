@@ -1,6 +1,14 @@
 /**
  * /api/co/documentos/[id] — detalle/actualización parcial/baja.
  *
+ * @deprecated La «Biblioteca de Documentos Comunales» se retiró (F35 serie A, T11):
+ * el «Archivo de Documentos de la Comunidad» (`/api/documentos`, tabla `Documento`)
+ * es la única lista y su apertura se audita ahí como `AD_DOC_APERTURA`. Esta ruta
+ * queda viva solo mientras `documentos_co` conserve sus filas; tabla y datos se
+ * retiran en la unidad que los migre a `Documento`. El nombre del evento
+ * `CO_DOC_DOWNLOAD` NO se retira del catálogo: las filas históricas de la bitácora
+ * lo conservan con ese nombre. No agregues consumidores nuevos.
+ *
  * GET_ONE y DELETE vía factory. PUT parcial vía put-merge sobre "co".
  * Abrir/descargar un documento de la biblioteca (GET del detalle) emite
  * `CO_DOC_DOWNLOAD` (categoría CO) después de la lectura autorizada.

@@ -71,7 +71,7 @@ El panel SHALL ofrecer un Cajón de Recursos Humanos que liste las fichas de tra
 - **THEN** ve las personas con extensión laboral vigente agrupadas por función, leyendo exclusivamente del store
 
 ### Requirement: Integración con Auditoría y Métricas (AM)
-El módulo SHALL emitir `AD_OWNER_CONFIG_CHANGE` y `AD_DIRECTIVA_SIGN_UPLOAD` como eventos inmutables con data cuantificable (número de propietarios que comparten información, firmas subidas).
+El módulo SHALL emitir `AD_OWNER_CONFIG_CHANGE` y `AD_DIRECTIVA_SIGN_UPLOAD` como eventos inmutables con data cuantificable (número de propietarios que comparten información, firmas subidas). El archivo de documentos SHALL emitir además `AD_DOC_APERTURA` cada vez que se abre un documento autorizado: la lectura del archivo es un acto auditable, y al retirarse la Biblioteca de CO su evento `CO_DOC_DOWNLOAD` no puede quedar como el único testigo de que alguien miró un papel.
 
 #### Scenario: Métrica de rotación de cargos
 - **WHEN** la reportería consulta gobernanza

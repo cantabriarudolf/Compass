@@ -284,6 +284,48 @@ export function ConsolaArchivo({ roles }: { roles: string[] }) {
     }
   }
 
+  /**
+   * Abrir un documento es una LECTURA AUDITADA (T11).
+   *
+   * La pestaña «Biblioteca» de Comunicación emitía `CO_DOC_DOWNLOAD` al abrir un
+   * documento; al retirarla, esa observabilidad se muda acá y no se pierde:
+   * primero se resuelve el detalle (`GET /api/documentos/[id]` — la ruta que emite
+   * `AD_DOC_APERTURA` en el servidor) y solo después se abre `archivoUrl`.
+   *
+   * La pestaña se abre DENTRO del gesto del usuario porque, abierta después del
+   * `await`, el navegador la trata como emergente y la bloquea. Si la lectura se
+   * niega o falla, la pestaña se cierra sin navegar y se pinta el texto con que
+   * la API explica el rechazo (mismo criterio que el resto de la pantalla: no se
+   * traduce a un mensaje propio que pueda divergir del servidor).
+   */
+  const abrirDocumento = async (documento: DocumentoArchivoEnLista): Promise<void> => {
+    setError(null)
+    const ventana = window.open("", "_blank")
+    try {
+      const respuesta = await fetch(`/api/documentos/${encodeURIComponent(documento.id)}`, {
+        headers: { accept: "application/json" },
+      })
+      if (!respuesta.ok) {
+        const cuerpo = (await respuesta.json().catch(() => ({}))) as { error?: string }
+        ventana?.close()
+        setError(cuerpo.error ?? `No se pudo abrir el documento (${respuesta.status}).`)
+        return
+      }
+      const detalle = (await respuesta.json()) as { archivoUrl?: string }
+      const destino = detalle.archivoUrl ?? documento.archivoUrl
+      if (!ventana) {
+        // El navegador no dio la ventana preparada: se abre igual la referencia.
+        window.open(destino, "_blank", "noopener,noreferrer")
+        return
+      }
+      ventana.opener = null
+      ventana.location.href = destino
+    } catch {
+      ventana?.close()
+      setError("No se pudo abrir el documento: la lectura del detalle no se completó.")
+    }
+  }
+
   const borrar = async (documento: DocumentoArchivoEnLista): Promise<void> => {
     setError(null)
     setExito(null)
@@ -650,6 +692,20 @@ export function ConsolaArchivo({ roles }: { roles: string[] }) {
                                 target="_blank"
                                 rel="noreferrer"
                                 aria-label={`Abrir ${documento.glosa} en una pestaña nueva`}
+                                onClick={(evento) => {
+                                  // Ctrl/Cmd/Shift o clic medio: el navegador decide,
+                                  // sin abrir dos veces la misma pestaña.
+                                  if (
+                                    evento.metaKey ||
+                                    evento.ctrlKey ||
+                                    evento.shiftKey ||
+                                    evento.button !== 0
+                                  ) {
+                                    return
+                                  }
+                                  evento.preventDefault()
+                                  void abrirDocumento(documento)
+                                }}
                               >
                                 <IconExternalLink className="size-3.5" /> Abrir
                               </a>

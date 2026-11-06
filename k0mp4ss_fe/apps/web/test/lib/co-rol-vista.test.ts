@@ -5,7 +5,7 @@
  *
  * Contrato: no existe ningún valor elegible por el usuario. El rol llega del
  * servidor y esta función pura decide qué se renderiza:
- *   administrador → consola (redacción, plantillas, buzón, biblioteca)
+ *   administrador → consola (redacción, plantillas, buzón)
  *   comite        → bandeja de lectura con agregados
  *   residente     → bandeja propia
  *   sin `co` ver  → sin acceso (la matriz es la fuente de verdad, no una lista

@@ -6,6 +6,9 @@ const MODULOS = [
   "/admin",
   "/comunidad/personas",
   "/comunidad/comunicacion",
+  // La pestaña «Biblioteca» de Comunicación se retiró (F35 serie A, T11): el
+  // Archivo de Documentos es la única lista y se humea por su propia ruta.
+  "/comunidad/archivo",
   "/finanzas/gastos-comunes",
   "/inventario/recursos",
   "/operaciones/reservas",
