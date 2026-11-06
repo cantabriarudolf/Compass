@@ -44,6 +44,8 @@ model Comunidad {
   documentosCO             DocumentoCO[]
   // F35 serie A — archivo de documentos de la comunidad (legal + comunitario).
   documentos               Documento[]
+  // A3 — constancia de entrega por destinatario de los documentos legales.
+  enviosDocumento          EnvioDocumento[]
   solicitudesGE            SolicitudGE[]
   activosIR                RecursoIR[]
   solicitudesInsumoIR      SolicitudInsumoIR[]
@@ -644,6 +646,9 @@ model Documento {
   vigenteDesde        String    // fecha calendario AAAA-MM-DD, no instante: ver VersionReglamento
   subidoPorPersonaId  String?
   createdAt           DateTime  @default(now())
+  // Relación inversa VIRTUAL (no genera columna): la constancia de entrega de
+  // lo legal vive en `envios_documento` (A3).
+  envios              EnvioDocumento[]
 
   @@index([comunidadId, naturaleza])
   @@index([comunidadId, tipoDocumental])
@@ -651,6 +656,53 @@ model Documento {
   // quedarse con el mismo número (la segunda responde 409).
   @@unique([comunidadId, tipoDocumental, version])
   @@map("documentos")
+}
+
+// Entrega de un documento LEGAL y su constancia por destinatario (F35 serie A,
+// A3 · S7/S8).
+//
+// Una fila por (documento, persona, canal). Lo legal conserva la constancia por
+// destinatario; lo comunitario NO se entrega persona por persona: se publica al
+// visor de toda la comunidad y su constancia es "publicado" (S8), así que la
+// ruta de envío lo rechaza (409) en vez de fabricar entregas.
+//
+// Estados por canal (mismo contrato que `EnvioAvisoCobro`, con un matiz):
+//   · visor → `entregado`: la fila de `Notificacion` se creó en la MISMA
+//     transacción y `notificacionId` la prueba. No hay entrega declarada sin la
+//     fila que la prueba.
+//   · email → `entregado` SOLO si el servidor SMTP aceptó el mensaje (F4,
+//     `lib/smtp.ts`); `pendiente` cuando la comunidad no tiene emisor
+//     configurado (condición de configuración, no envío) y `fallido` cuando se
+//     intentó y rebotó. El aviso llama `enviado` a la aceptación del servidor;
+//     acá el vocabulario del documento la llama `entregado` porque el correo es
+//     su único canal de constancia.
+model EnvioDocumento {
+  id             String    @id
+  comunidadId    String
+  comunidad      Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  documentoId    String
+  documento      Documento @relation(fields: [documentoId], references: [id], onDelete: Cascade)
+  // Destinatario de registro: la persona a la que se le entregó el documento.
+  personaId      String
+  // `visor` | `email` (CANALES_ENVIO_DOCUMENTO en app/api/documentos/_lib).
+  canal          String
+  // `entregado` | `pendiente` | `fallido` (ver arriba qué significa cada uno).
+  estado         String
+  fecha          String
+  motivo         String?
+  // La notificación que prueba la entrega por el visor (null en email).
+  notificacionId String?
+  claveEnvio     String
+  reenvio        Boolean   @default(false)
+  createdAt      DateTime  @default(now())
+
+  // Idempotencia: entregar el mismo documento a la misma persona por el mismo
+  // canal choca acá; el reenvío explícito agrega un sufijo `:reenvio:<epoch>`.
+  @@unique([comunidadId, claveEnvio])
+  @@index([comunidadId])
+  @@index([documentoId])
+  @@index([personaId])
+  @@map("envios_documento")
 }
 
 // Gestión de Solicitudes (GE)

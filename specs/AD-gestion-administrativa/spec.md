@@ -109,3 +109,26 @@ El sistema MUST conservar y poner a disposición el archivo del condominio en un
 #### Scenario: Archivo por referencia
 - **WHEN** se intenta guardar el archivo con una URL `data:` o `blob:`
 - **THEN** la respuesta es 400 por la regla D1 (media por referencia)
+
+### Requirement: Envío de Documentos Legales con Constancia
+Los documentos `legal` del archivo SHALL poder enviarse a destinatarios (propietario, arrendatario, comité o personas sueltas) en una sola corrida, con una clave de idempotencia por documento, destinatario y canal, y con un registro de entrega por destinatario. La constancia SHALL decir `entregado` solo cuando exista la notificación del visor o el servidor de correo haya aceptado el mensaje; cuando no, `pendiente` o `fallido` con su motivo. Un reenvío explícito SHALL agregar una constancia nueva con sufijo, sin duplicar ni sobrescribir la anterior. Los documentos `comunitario` NO SHALL generar entregas por persona: se publican a toda la comunidad y su constancia es la publicación. El registro de entregas es vista de auditoría (nombra destinatarios), no del residente.
+
+#### Scenario: Dos corridas iguales no duplican
+- **WHEN** se envía el mismo documento al mismo destinatario por el mismo canal dos veces sin pedir reenvío
+- **THEN** existe una sola constancia, y el índice único de la clave de envío es lo que lo garantiza
+
+#### Scenario: Reenvío explícito con sufijo
+- **WHEN** se pide reenviar a un destinatario que ya tenía constancia
+- **THEN** se agrega una fila nueva con sufijo de reenvío y la anterior queda intacta
+
+#### Scenario: Entregado exige prueba en el visor
+- **WHEN** se entrega un documento por el visor
+- **THEN** la constancia queda `entregado` con el id de la notificación creada en la misma operación
+
+#### Scenario: El correo no aceptado no es entrega
+- **WHEN** el servidor de correo no acepta el mensaje o no hay emisor configurado
+- **THEN** la constancia queda `pendiente` o `fallido` con su motivo y nunca `entregado`
+
+#### Scenario: Lo comunitario no se entrega
+- **WHEN** se intenta enviar un documento `comunitario` a destinatarios
+- **THEN** la respuesta es 409 y no se escribe ninguna constancia por persona
