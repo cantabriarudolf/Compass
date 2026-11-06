@@ -124,6 +124,23 @@ function montarPagina(): void {
   )
 }
 
+/**
+ * La página completa, esperando al FORMULARIO y no al marco.
+ *
+ * `a3ba4f4` cambió la pantalla a propósito: el marco y las cinco pestañas se
+ * pintan siempre —también mientras la configuración no llegó, y con tarjeta de
+ * error y «Reintentar» si la API falla—, así que la pestaña «Gasto Común» existe
+ * ANTES de que existan sus campos y su panel todavía no está montado. Esperar el
+ * botón «Guardar Cambios» (que sólo se pinta con los datos cargados) deja la
+ * pestaña lista para el click sin ablandar ninguna aserción: los campos que se
+ * piden abajo siguen siendo obligatorios, y ahora la prueba distingue «no cargó»
+ * de «no muestra».
+ */
+async function montarPaginaConFormulario(): Promise<void> {
+  montarPagina()
+  await screen.findByRole("button", { name: "Guardar Cambios" })
+}
+
 /** Abre el combobox `nombre` y elige la opción cuyo texto matchea `patron`. */
 async function elegir(
   user: ReturnType<typeof userEvent.setup>,
@@ -272,7 +289,7 @@ describe("ReglamentoGC — versión vigente y alta de versión", () => {
   it("(e) Enter en un campo del reglamento no guarda la configuración", async () => {
     const user = userEvent.setup()
     versionVigente = VERSION
-    montarPagina()
+    await montarPaginaConFormulario()
     await user.click(await screen.findByRole("tab", { name: /Gasto Común/ }))
 
     const campo = await screen.findByLabelText(/Vigente desde/)
@@ -291,7 +308,7 @@ describe("ReglamentoGC — versión vigente y alta de versión", () => {
   it("(f) el bloque no agrega restricciones nativas: la configuración se guarda igual", async () => {
     const user = userEvent.setup()
     versionVigente = VERSION
-    montarPagina()
+    await montarPaginaConFormulario()
     await user.click(await screen.findByRole("tab", { name: /Gasto Común/ }))
 
     // Alta completa, salvo un valor fuera de rango a propósito (el máximo es 60).
@@ -435,7 +452,7 @@ describe("configuración — la pestaña Gasto Común conserva su parametrizaci�
   it("mantiene Modo de Cálculo, Día de Corte y Límite de Meses, y suma la versión", async () => {
     const user = userEvent.setup()
     versionVigente = VERSION
-    montarPagina()
+    await montarPaginaConFormulario()
 
     await user.click(await screen.findByRole("tab", { name: /Gasto Común/ }))
 
