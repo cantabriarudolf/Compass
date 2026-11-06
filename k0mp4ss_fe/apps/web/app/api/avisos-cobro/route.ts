@@ -39,6 +39,14 @@
  * la unidad) NO bloquea la emisión: queda declarado en `contenido.noComputables`
  * con su motivo, y el documento lo imprime en vez de un cero. Ver
  * `lib/aviso-cobro.ts`.
+ *
+ * ── La respuesta dice POR QUÉ una unidad quedó sin aviso ────────────────────
+ *
+ * El POST devuelve `avisos` (como siempre) y, además, `sinAviso`: la lista de
+ * las unidades que esta corrida no cubrió con el motivo que el servidor puede
+ * AFIRMAR (`sin_cobro`, `ya_tiene_aviso`, `otro`). Antes la pantalla deducía el
+ * conteo restando las líneas de la emisión y el porqué era una suposición: un
+ * número sin causa declarada se lee como una falla del sistema.
  */
 import { z } from "zod"
 import type { Prisma } from "@prisma/client"
@@ -270,9 +278,93 @@ function targetDelConflicto(e: unknown): string {
   return typeof target === "string" ? target : ""
 }
 
+/** Motivo de una unidad que quedó sin aviso en esta corrida. */
+type MotivoSinAviso =
+  /** La emisión la repartió y el período no tiene cargo para ella. */
+  | "sin_cobro"
+  /** Ya tiene un aviso emitido de ese período: uno emitido no se reemplaza. */
+  | "ya_tiene_aviso"
+  /** Hay un cargo en el período y la unidad no se pudo resolver: cajón honesto. */
+  | "otro"
+
+/** Una unidad que la corrida dejó sin aviso, con lo que el servidor sabe de ella. */
+interface UnidadSinAviso {
+  unidadId: string
+  /** `null` cuando el cargo apunta a una unidad que ya no existe. */
+  numero: string | null
+  etiqueta: string | null
+  motivo: MotivoSinAviso
+}
+
 /**
- * POST emite los avisos del período. Devuelve `{ avisos }` con las filas ya
- * foliadas, en el orden de las unidades objetivo.
+ * Unidades que la emisión repartió (una línea por unidad), sin repetir y sin
+ * confiar en la forma del Json: una línea rara se ignora en vez de romper el POST.
+ */
+function unidadesDeLaEmision(lineas: Prisma.JsonValue): string[] {
+  if (!Array.isArray(lineas)) return []
+  const ids = new Set<string>()
+  for (const linea of lineas) {
+    if (typeof linea !== "object" || linea === null) continue
+    const unidadId = (linea as { unidadId?: unknown }).unidadId
+    if (typeof unidadId === "string" && unidadId !== "") ids.add(unidadId)
+  }
+  return [...ids]
+}
+
+/**
+ * Las unidades que esta corrida deja sin aviso, con el motivo declarado.
+ *
+ * - `sin_cobro`: la emisión repartió la unidad y el período no tiene cargo para
+ *   ella. Es exactamente lo que antes la pantalla deducía restando, y el motivo
+ *   que no podía nombrar.
+ * - `otro`: hay un cargo del período para una unidad que ya no existe en la
+ *   comunidad, así que no hay ni papel ni destinatario que nombrar. No se
+ *   inventa una causa y no se calla la omisión.
+ *
+ * Con `unidadId` explícito la corrida apunta a UNA unidad (y la compuerta ya
+ * rechazó el caso sin cargo), así que no hay omisión que declarar.
+ */
+async function unidadesSinAviso(params: {
+  comunidadId: string
+  lineasDeLaEmision: Prisma.JsonValue
+  unidadesConCobro: ReadonlySet<string>
+  objetivos: readonly { id: string }[]
+}): Promise<UnidadSinAviso[]> {
+  const conObjetivo = new Set(params.objetivos.map((u) => u.id))
+  const sinCobro = unidadesDeLaEmision(params.lineasDeLaEmision).filter(
+    (unidadId) => !params.unidadesConCobro.has(unidadId)
+  )
+  const sinUnidad = [...params.unidadesConCobro].filter(
+    (unidadId) => !conObjetivo.has(unidadId)
+  )
+  const filas: UnidadSinAviso[] = []
+  if (sinCobro.length > 0) {
+    // Solo se paga la lectura cuando hay omisiones que nombrar.
+    const unidades = await prisma.unidad.findMany({
+      where: { comunidadId: params.comunidadId, id: { in: sinCobro } },
+      select: { id: true, numero: true, etiqueta: true },
+    })
+    const porId = new Map(unidades.map((unidad) => [unidad.id, unidad]))
+    for (const unidadId of sinCobro) {
+      const unidad = porId.get(unidadId)
+      filas.push({
+        unidadId,
+        numero: unidad?.numero ?? null,
+        etiqueta: unidad?.etiqueta ?? null,
+        motivo: "sin_cobro",
+      })
+    }
+  }
+  for (const unidadId of sinUnidad) {
+    filas.push({ unidadId, numero: null, etiqueta: null, motivo: "otro" })
+  }
+  return filas
+}
+
+/**
+ * POST emite los avisos del período. Devuelve `{ avisos, sinAviso }`: las filas
+ * ya foliadas, en el orden de las unidades objetivo, y las unidades que la
+ * corrida dejó sin papel con su motivo. `avisos` no cambia de forma.
  */
 export async function POST(req: Request): Promise<Response> {
   const scopeResult = await withComunidadScope()
@@ -297,7 +389,7 @@ export async function POST(req: Request): Promise<Response> {
     // notificar, y el papel quedaría sin respaldo.
     const emision = await prisma.emisionGC.findFirst({
       where: { comunidadId: scope.comunidadId, periodo },
-      select: { id: true },
+      select: { id: true, lineas: true },
     })
     if (!emision) {
       return jsonError(
@@ -352,17 +444,43 @@ export async function POST(req: Request): Promise<Response> {
         periodo,
         unidadId: { in: objetivos.map((u) => u.id) },
       },
-      select: { folio: true },
+      select: { folio: true, unidadId: true },
       orderBy: { folio: "asc" },
     })
     if (yaEmitidos.length > 0) {
+      const porId = new Map(objetivos.map((unidad) => [unidad.id, unidad]))
+      // El rechazo también dice POR QUÉ: esas unidades ya tienen papel del
+      // período, y un aviso emitido no se reemplaza. `error` sigue siendo el
+      // único campo que la pantalla imprime hoy; esto agrega el dato.
       return jsonError(
         409,
         `El período ${periodo} ya tiene aviso emitido para ${yaEmitidos.length} de ${objetivos.length} unidad(es) (${yaEmitidos
           .map((a) => a.folio)
-          .join(", ")}): un aviso emitido no se reemplaza.`
+          .join(", ")}): un aviso emitido no se reemplaza.`,
+        {
+          sinAviso: yaEmitidos.map((aviso): UnidadSinAviso => {
+            const unidad = porId.get(aviso.unidadId)
+            return {
+              unidadId: aviso.unidadId,
+              numero: unidad?.numero ?? null,
+              etiqueta: unidad?.etiqueta ?? null,
+              motivo: "ya_tiene_aviso",
+            }
+          }),
+        }
       )
     }
+
+    // Las unidades que esta corrida deja sin aviso, con su motivo declarado.
+    // La pantalla ya no tiene que deducir el conteo ni suponer la causa.
+    const sinAviso = parsed.data.unidadId
+      ? []
+      : await unidadesSinAviso({
+          comunidadId: scope.comunidadId,
+          lineasDeLaEmision: emision.lineas,
+          unidadesConCobro,
+          objetivos,
+        })
 
     // 4. Totales de comunidad del período (Ley 21.442 art. 31). Sin fondos de
     // caja el saldo al cierre no es computable y el aviso no se emite.
@@ -510,7 +628,7 @@ export async function POST(req: Request): Promise<Response> {
           }
           return filasCreadas
         })
-        return Response.json({ avisos: creados }, { status: 201 })
+        return Response.json({ avisos: creados, sinAviso }, { status: 201 })
       } catch (e) {
         if (e instanceof AvisoDuplicado) {
           return jsonError(
