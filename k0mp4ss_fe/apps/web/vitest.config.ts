@@ -61,6 +61,12 @@ export default defineConfig({
         // T4 cobro-gastos-comunes-parametrico: el resolver de la versión
         // vigente es el núcleo del cobro declarado, así que el ratchet lo mide.
         "lib/reglamento.ts",
+        // Higiene (unidad de loaders): estos dos módulos estaban fuera porque sus
+        // cargadores Prisma (`cargarResumenMensual` y `totalesDelPeriodo`) no
+        // tenían prueba; con `test/api/cargadores-aviso.test.ts` midiendo la
+        // traducción comunidad → filas contra la base, entran al ratchet.
+        "lib/resumen-mensual.ts",
+        "lib/aviso-cobro.ts",
         "lib/schemas.ts",
         "app/api/**/route.ts",
       ],
