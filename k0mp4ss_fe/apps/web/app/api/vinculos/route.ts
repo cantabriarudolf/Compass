@@ -8,8 +8,11 @@
  * - Cierre automático del tramo anterior (propietario/arrendatario) dentro
  *   de una transacción junto con el upsert.
  * - Exclusividad de titularidad/arriendo y anti-autosolapamiento (409).
- * Authz: la matriz no tiene recurso "vu"; el módulo se cubre con "mp".
+ * Authz: el módulo se cubre con "mp" (administración y comité: todos los
+ * vínculos de la comunidad) y con la clave PROPIA "vu:propio" (residente: SOLO
+ * los vínculos de su ficha, filtrados acá con su identidad de sesión).
  */
+import { Prisma } from "@prisma/client"
 import { VinculoUnidadSchema } from "@/lib/schemas"
 import { puede } from "@/lib/authz"
 import { prisma } from "@/lib/prisma"
@@ -18,7 +21,21 @@ import {
   withComunidadScope,
   type ComunidadScope,
 } from "@/lib/api/with-comunidad-scope"
+import { personaIdDelUsuarioDb } from "@/lib/api/sesion-persona"
 import { errorGenerico } from "@/app/api/personas/route"
+
+/** Recurso del módulo: lectura/escritura del padrón de vínculos. */
+export const RECURSO_VINCULO = "mp"
+
+/**
+ * Clave PROPIA del residente: lee los vínculos de SU ficha.
+ *
+ * `ver` es su única acción (crear/editar la titularidad sigue siendo de quien
+ * administra el padrón) y el alcance por persona es ABAC de ESTA ruta: el
+ * cliente nunca aporta su personaId, sale de la sesión. Misma forma que
+ * `fi:aviso:propio` en `app/api/avisos-cobro/route.ts`.
+ */
+export const RECURSO_VINCULO_PROPIO = "vu:propio"
 
 const CAMPOS_VINCULO = [
   "personaId",
@@ -184,12 +201,23 @@ export async function ejecutarUpsertVinculo(
   }
 }
 
-/** GET lista paginada (scoped a la comunidad). */
+/**
+ * GET lista paginada. Dos ramas, una sola forma de respuesta:
+ *
+ * - `mp` (administración y comité): todos los vínculos de la comunidad, como
+ *   hasta hoy. `?personaId=` acota a una persona.
+ * - `vu:propio` (residente): SOLO los vínculos de SU ficha, resueltos en el
+ *   servidor con `personaIdDelUsuarioDb`. Pedir los de otra persona devuelve el
+ *   conjunto VACÍO con 200, nunca 403: un 403 confirmaría que ese vínculo
+ *   existe. `?personaId=` solo puede INTERSECTAR, jamás ampliar el alcance.
+ */
 export async function GET(req: Request): Promise<Response> {
   const resultado = await withComunidadScope()
   if (!resultado.ok) return resultado.response
   const scope = resultado.scope
-  if (!puede(scope.rol, "ver", "mp")) {
+  const veTodos = puede(scope.rol, "ver", RECURSO_VINCULO)
+  const veLosPropios = puede(scope.rol, "ver", RECURSO_VINCULO_PROPIO)
+  if (!veTodos && !veLosPropios) {
     return jsonError(403, "Permiso denegado.")
   }
 
@@ -204,9 +232,22 @@ export async function GET(req: Request): Promise<Response> {
     100,
     Math.max(1, Number.parseInt(url.searchParams.get("pageSize") ?? "50", 10) || 50)
   )
-  const where = { comunidadId: scope.comunidadId }
+  const personaIdPedido = url.searchParams.get("personaId")?.trim() || undefined
 
   try {
+    const where: Prisma.VinculoUnidadWhereInput = { comunidadId: scope.comunidadId }
+    if (!veTodos) {
+      // Lo propio se resuelve en el SERVIDOR: la persona sale de la sesión, no de
+      // la query. Sin ficha propia no hay «propio» que devolver: conjunto vacío.
+      const personaId = await personaIdDelUsuarioDb(scope.usuarioId)
+      const propias = personaId ? [personaId] : []
+      where.personaId = {
+        in: personaIdPedido ? propias.filter((p) => p === personaIdPedido) : propias,
+      }
+    } else if (personaIdPedido) {
+      where.personaId = personaIdPedido
+    }
+
     const [data, total] = await Promise.all([
       prisma.vinculoUnidad.findMany({
         where,
@@ -242,7 +283,7 @@ export async function POST(req: Request): Promise<Response> {
     if (existente && existente.comunidadId !== scope.comunidadId) {
       return jsonError(404, "Registro no encontrado.")
     }
-    if (!puede(scope.rol, existente ? "editar" : "crear", "mp")) {
+    if (!puede(scope.rol, existente ? "editar" : "crear", RECURSO_VINCULO)) {
       return jsonError(403, "Permiso denegado.")
     }
     // SAFETY: VinculoUnidadSchema ya validó el shape; el cast recupera la
