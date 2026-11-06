@@ -44,11 +44,6 @@ const MATRIZ: Record<Rol, Record<string, Set<Accion>>> = {
     "mp": new Set<Accion>(["ver", "editar"]), // editar propios + ver morosidad (filtrado abajo)
     "mp:propios": new Set<Accion>(["ver", "editar"]),
     "mp:morosidad": new Set<Accion>(["ver"]),
-    // VU — la lectura «solo los propios» es del RESIDENTE: el comité lee los
-    // vínculos con `mp` (todos los del padrón). La entrada VACÍA explícita deja
-    // declarado el bloqueo en vez de depender de que la base `vu` no exista: si
-    // algún día existiera, el fallback por prefijo no le abriría la clave.
-    "vu:propio": new Set<Accion>([]),
     "re": new Set<Accion>(["ver"]),
     "re:centro_mando": new Set<Accion>(["ver"]),
     // SERIE-FASE2 §V4 (decisión del plan): el comité LEE los adelantos PL
@@ -144,10 +139,6 @@ const MATRIZ: Record<Rol, Record<string, Set<Accion>>> = {
   // Conserjería / Seguridad: bitácora, visitas, encomiendas, iniciar/cerrar turno, directorio, reporte diario PE, IR mantenimiento, lectura del calendario preventivo
   conserjeria: {
     "mp:propios": new Set<Accion>(["ver", "editar"]),
-    // VU — vacío explícito: los vínculos de unidad se leen con `mp` (conserjería
-    // no lo tiene) y la clave propia es del residente. Sin la entrada, el
-    // permiso quedaría a merced de un futuro prefijo `vu`.
-    "vu:propio": new Set<Accion>([]),
     "pe": new Set<Accion>(["ver", "crear", "editar"]),
     "pe:bitacora": new Set<Accion>(["ver", "crear", "editar"]),
     // Encomiendas (decisión owner 2026-11-05): recibir y entregar un paquete es dejar
@@ -219,14 +210,6 @@ const MATRIZ: Record<Rol, Record<string, Set<Accion>>> = {
   // Propietario / Residente: estado cuenta propio, pago GC, reserva amenities, reclamos, votos, certificados propios, directorio, IR mantenimiento solo
   residente: {
     "mp:propios": new Set<Accion>(["ver", "editar"]),
-    // VU — el residente LEE los vínculos de SU ficha (clave PROPIA: no se le abre
-    // `mp`, que le entregaría el padrón completo). `ver` es su única acción —crear
-    // y editar la titularidad es de quien administra— y el ALCANCE por persona lo
-    // resuelve el SERVIDOR en `app/api/vinculos/route.ts` con
-    // `personaIdDelUsuarioDb`: pedir los de otra persona devuelve conjunto VACÍO,
-    // nunca 403 (un 403 confirmaría que ese vínculo existe). Es la misma forma de
-    // `fi:aviso:propio` y `ct:propio`: clave propia + alcance en la ruta.
-    "vu:propio": new Set<Accion>(["ver"]),
     "ct": new Set<Accion>(["ver", "crear"]),
     "ct:propio": new Set<Accion>(["ver", "crear"]),
     "ct:residencia": new Set<Accion>(["ver", "crear"]),
@@ -310,9 +293,6 @@ const MATRIZ: Record<Rol, Record<string, Set<Accion>>> = {
   // Personal de Mantención: lista tareas asignadas + reporte incidentes físicos, IR mantenimiento + interno
   mantencion: {
     "mp:propios": new Set<Accion>(["ver", "editar"]),
-    // VU — vacío explícito: mantención no lee el padrón (`mp`) ni tiene vínculos
-    // propios que mostrar. La entrada declara el bloqueo, no lo hereda.
-    "vu:propio": new Set<Accion>([]),
     "mt": new Set<Accion>(["ver", "crear", "editar", "ejecutar"]),
     "mt:tarea": new Set<Accion>(["ver", "ejecutar"]),
     "mt:incidente": new Set<Accion>(["ver", "crear"]),
@@ -557,8 +537,6 @@ export const RECURSOS_CONOCIDOS = [
   "ct",
   "ct:propio",
   "ct:historial",
-  // VU — vínculos de unidad: la lectura del residente se acota a su ficha
-  "vu:propio",
   "re",
   "re:centro_mando",
   "re:reporte_diario",

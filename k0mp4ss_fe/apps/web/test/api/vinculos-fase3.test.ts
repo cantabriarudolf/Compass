@@ -234,19 +234,10 @@ describe("/api/vinculos — vínculos unidad/persona con BD real (fase 3)", () =
     expect((await llamar("DELETE", "vu3-v-prop-vig")).status).toBe(401)
   })
 
-  it("residente (clave propia vu:propio, sin ficha ligada): lee 200 vacío, no escribe el padrón", async () => {
+  it("residente (sin recurso mp): GET, POST y DELETE → 403", async () => {
     await conSesion(emailResidente, async () => {
-      // El conjunto propio se resuelve en el servidor. Este usuario del fixture no
-      // tiene `personaId`, así que «lo propio» es vacío: 200 con data [], nunca
-      // 403 (un 403 confirmaría que hay vínculos en la comunidad).
-      const get = await llamar("GET")
-      expect(get.status).toBe(200)
-      const j = (await get.json()) as { data: unknown[]; total: number }
-      expect(j.data).toEqual([])
-      expect(j.total).toBe(0)
-      // El vínculo de un tercero no se lee ni por id: 404, no 403.
-      expect((await llamar("GET", "vu3-v-prop-vig")).status).toBe(404)
-      // Escribir la titularidad sigue siendo de quien administra el padrón.
+      expect((await llamar("GET")).status).toBe(403)
+      expect((await llamar("GET", "vu3-v-prop-vig")).status).toBe(403)
       expect((await llamar("POST", undefined, vinculoValido())).status).toBe(403)
       expect((await llamar("PUT", "vu3-v-prop-vig", { permiteVerFinanzas: false })).status).toBe(403)
       expect((await llamar("DELETE", "vu3-v-prop-vig")).status).toBe(403)

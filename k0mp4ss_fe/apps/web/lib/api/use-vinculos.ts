@@ -3,12 +3,8 @@
 /**
  * use-vinculos — hooks SWR para la colección VU (BD-FUENTE-VERDAD Fase 0).
  *
- * - Lectura: GET /api/vinculos y GET /api/vinculos/[id]. El ALCANCE lo resuelve
- *   el SERVIDOR: quien administra el padrón (`mp`: administración y comité) lee
- *   todos los vínculos de la comunidad, y el residente (`vu:propio`) lee SOLO
- *   los de su propia ficha (su identidad sale de la sesión, no de la query). El
- *   `?personaId=` opcional solo INTERSECTA ese alcance. El filtro por personaId
- *   del consumidor sigue siendo válido, pero ya no es el único candado.
+ * - Lectura: GET /api/vinculos y GET /api/vinculos/[id]. La API no filtra por
+ *   personaId en el servidor: el scoping por persona lo hace el consumidor.
  * - Escritura: POST (upsert idempotente por id, con cierre automático del tramo
  *   anterior), PUT parcial y DELETE; cada mutación revalida las claves SWR.
  * - Contrato de mutación: Promise<StoreResult> ({ ok, error? }).

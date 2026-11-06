@@ -5,49 +5,28 @@
  * misma ruta de negocio que POST (cierre automático y solapamientos).
  * Baja protegida: un tramo de propietario vigente no se elimina si la unidad
  * tiene ControlPropiedad (409); el resto se elimina libremente.
- *
- * Authz de lectura: `mp` (administración y comité) lee cualquier vínculo de la
- * comunidad; `vu:propio` (residente) lee SOLO los de su ficha y el ajeno le
- * responde 404 — nunca 403, que confirmaría que el id existe.
  */
 import { VinculoUnidadSchema } from "@/lib/schemas"
 import { puede } from "@/lib/authz"
 import { prisma } from "@/lib/prisma"
 import { jsonError, withComunidadScope } from "@/lib/api/with-comunidad-scope"
-import { personaIdDelUsuarioDb } from "@/lib/api/sesion-persona"
-import {
-  ejecutarUpsertVinculo,
-  RECURSO_VINCULO,
-  RECURSO_VINCULO_PROPIO,
-  type DatosVinculo,
-} from "../route"
+import { ejecutarUpsertVinculo, type DatosVinculo } from "../route"
 import { errorGenerico } from "@/app/api/personas/route"
 
 type CtxTipo = { params: Promise<{ id: string }> }
 
-/** GET_ONE por id (scoped a la comunidad y, para el residente, a su ficha). */
+/** GET_ONE por id (scoped a la comunidad). */
 export async function GET(req: Request, ctx: CtxTipo): Promise<Response> {
   const resultado = await withComunidadScope()
   if (!resultado.ok) return resultado.response
   const scope = resultado.scope
-  const veTodos = puede(scope.rol, "ver", RECURSO_VINCULO)
-  const veLosPropios = puede(scope.rol, "ver", RECURSO_VINCULO_PROPIO)
-  if (!veTodos && !veLosPropios) return jsonError(403, "Permiso denegado.")
+  if (!puede(scope.rol, "ver", "mp")) return jsonError(403, "Permiso denegado.")
   const { id } = await ctx.params
 
   try {
     const record = await prisma.vinculoUnidad.findUnique({ where: { id } })
     if (!record || record.comunidadId !== scope.comunidadId) {
       return jsonError(404, "Registro no encontrado.")
-    }
-    if (!veTodos) {
-      // Lo propio se resuelve en el SERVIDOR: la identidad sale de la sesión. Un
-      // vínculo ajeno responde lo MISMO que uno inexistente (404) para no
-      // confirmar que existe.
-      const personaId = await personaIdDelUsuarioDb(scope.usuarioId)
-      if (!personaId || record.personaId !== personaId) {
-        return jsonError(404, "Registro no encontrado.")
-      }
     }
     return Response.json(record)
   } catch (e) {
