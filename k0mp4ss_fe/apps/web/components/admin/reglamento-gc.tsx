@@ -7,6 +7,10 @@
  * S1/S3 en pantalla: sin versión declarada la emisión mensual se bloquea, y los
  * números del mes salen de la versión vigente, no del código (S2). La versión es
  * append-only: no se edita ni se borra, se declara la siguiente.
+ * S9 (F35 serie A, A4): el respaldo de la versión ya no se tipea — se elige del
+ * ARCHIVO de documentos de la comunidad, y solo un documento `legal` puede
+ * respaldar la forma de contribución. Las versiones históricas, que solo tienen
+ * `actaRef`, se siguen mostrando tal cual y marcadas como referencia histórica.
  *
  * Vive dentro del `<form id="config-form">` de `/admin/configuracion` (el
  * guardado de la configuración), así que no lleva `<form>` propio —quedaría
@@ -19,7 +23,9 @@
  */
 import * as React from "react"
 import { useReglamento } from "@/lib/api/use-reglamento"
+import { useDocumentos, type DocumentoArchivoEnLista } from "@/lib/api/use-documentos"
 import { autorizaEmision, parametrosDeVersion } from "@/lib/reglamento"
+import { ETIQUETAS_TIPO_DOCUMENTAL } from "@/lib/documento-archivo"
 import {
   NuevaVersionReglamentoSchema,
   type NuevaVersionReglamento,
@@ -155,11 +161,29 @@ function textoReservaIncluida(
     : "Encima del presupuesto aprobado"
 }
 
-/** Lectura de la versión que rige: instrumento con su acta y los números del mes. */
-function VersionVigente({ version }: { version: VersionReglamento }) {
+/** Lectura de la versión que rige: instrumento con su respaldo y los números del mes. */
+function VersionVigente({
+  version,
+  documentos,
+}: {
+  version: VersionReglamento
+  documentos: DocumentoArchivoEnLista[]
+}) {
   // `parametrosDeVersion` es la misma guarda que usa la emisión: una fila con
   // números incompletos no puede mostrarse como si gobernara el cobro.
   const parametros = parametrosDeVersion(version)
+  // S9: el documento sale del archivo de la comunidad. Si la fila apunta a uno
+  // que no está en la página cargada, se dice el id en vez de ocultarlo.
+  const respaldo = version.documentoId
+    ? (documentos.find((d) => d.id === version.documentoId) ?? null)
+    : null
+  const respaldoTexto = version.documentoId
+    ? respaldo
+      ? etiquetaDocumento(respaldo)
+      : `Documento ${version.documentoId} (no está en el archivo visible)`
+    : "No declarado"
+  const actaHistorica = version.actaRef?.trim()
+
   const resumen = [
     { etiqueta: "Versión", valor: String(version.version) },
     { etiqueta: "Vigente desde", valor: version.vigenteDesde },
@@ -168,7 +192,15 @@ function VersionVigente({ version }: { version: VersionReglamento }) {
       valor:
         ETIQUETA_FUENTE[version.fuenteInstrumento] ?? version.fuenteInstrumento,
     },
-    { etiqueta: "Acta o artículo", valor: version.actaRef?.trim() || "No declarado" },
+    { etiqueta: "Documento de respaldo", valor: respaldoTexto },
+    ...(actaHistorica
+      ? [
+          {
+            etiqueta: "Acta o artículo (referencia histórica)",
+            valor: actaHistorica,
+          },
+        ]
+      : []),
     {
       etiqueta: "Forma de contribución",
       valor: ETIQUETA_FORMA[version.formaContribucion] ?? version.formaContribucion,
@@ -195,6 +227,14 @@ function VersionVigente({ version }: { version: VersionReglamento }) {
           </div>
         ))}
       </dl>
+
+      {actaHistorica && (
+        <p className="text-xs text-muted-foreground">
+          Esta versión es anterior al archivo de documentos: su respaldo es una
+          referencia histórica de acta y no cambia. Para fundar una forma de
+          contribución nueva, declarala apuntando al documento legal del archivo.
+        </p>
+      )}
 
       {!autorizaEmision(version) && (
         <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
@@ -236,11 +276,41 @@ function VersionVigente({ version }: { version: VersionReglamento }) {
 interface FormVersion {
   vigenteDesde: string
   fuenteInstrumento: Fuente | ""
-  actaRef: string
+  documentoId: string
   formaContribucion: Forma | ""
   numeros: Record<CampoNumerico, string>
   ipcActivo: boolean
   reservaIncluidaEnPresupuesto: boolean
+}
+
+/**
+ * Etiqueta de un documento del archivo en el select del respaldo (S9/T18):
+ * tipo + glosa + versión + desde cuándo rige. El mismo vocabulario que la tabla
+ * del Archivo, para que la persona reconozca el documento que está eligiendo.
+ */
+function etiquetaDocumento(documento: DocumentoArchivoEnLista): string {
+  const tipo =
+    ETIQUETAS_TIPO_DOCUMENTAL[documento.tipoDocumental] ?? documento.tipoDocumental
+  return `${tipo} · ${documento.glosa} · v${documento.version} · ${documento.vigenteDesde}`
+}
+
+/**
+ * Los legales del archivo, los más nuevos primero dentro de cada tipo: el
+ * respaldo de una versión nueva es un documento `legal`, nunca un comunitario
+ * (S9). El orden es estable para que el select no cambie de un render a otro.
+ */
+function legalesDelArchivo(
+  documentos: DocumentoArchivoEnLista[]
+): DocumentoArchivoEnLista[] {
+  return documentos
+    .filter((documento) => documento.naturaleza === "legal")
+    .slice()
+    .sort(
+      (a, b) =>
+        a.tipoDocumental.localeCompare(b.tipoDocumental) ||
+        b.version - a.version ||
+        b.vigenteDesde.localeCompare(a.vigenteDesde)
+    )
 }
 
 /**
@@ -299,7 +369,7 @@ const CAMPOS_NUMERICOS: {
 const FORM_VACIO: FormVersion = {
   vigenteDesde: "",
   fuenteInstrumento: "",
-  actaRef: "",
+  documentoId: "",
   formaContribucion: "",
   numeros: {
     porcentajeReserva: "",
@@ -331,6 +401,15 @@ function armarNuevaVersion(form: FormVersion): Armado {
     return {
       ok: false,
       error: "Elegí el instrumento que funda la forma de contribución.",
+    }
+  }
+  // S9: sin documento legal del archivo no hay respaldo, y sin respaldo el
+  // sistema volvería a tener dos verdades sobre qué acta aprobó los parámetros.
+  if (!form.documentoId) {
+    return {
+      ok: false,
+      error:
+        "Elegí el documento legal que respalda la versión: tiene que estar en el archivo de la comunidad.",
     }
   }
   if (!form.formaContribucion) {
@@ -370,7 +449,7 @@ function armarNuevaVersion(form: FormVersion): Armado {
   const candidata = {
     vigenteDesde: form.vigenteDesde.trim(),
     fuenteInstrumento: form.fuenteInstrumento,
-    actaRef: form.actaRef.trim() === "" ? null : form.actaRef.trim(),
+    documentoId: form.documentoId,
     formaContribucion: form.formaContribucion,
     parametros,
   }
@@ -386,6 +465,8 @@ function armarNuevaVersion(form: FormVersion): Armado {
 
 export function ReglamentoGC() {
   const { version, isLoading, error, declararVersion } = useReglamento()
+  const { items: documentos, isLoading: cargandoDocumentos } = useDocumentos()
+  const legales = legalesDelArchivo(documentos)
   const [form, setForm] = React.useState<FormVersion>(FORM_VACIO)
   const [errorAlta, setErrorAlta] = React.useState<string | null>(null)
   const [okMsg, setOkMsg] = React.useState<string | null>(null)
@@ -456,7 +537,7 @@ export function ReglamentoGC() {
             </div>
           )
         ) : (
-          <VersionVigente version={version} />
+          <VersionVigente version={version} documentos={documentos} />
         )}
 
         <div className="flex flex-col gap-3 border-t pt-4">
@@ -511,16 +592,28 @@ export function ReglamentoGC() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="reg-acta">Acta o artículo de referencia</Label>
-              <Input
-                id="reg-acta"
-                value={form.actaRef}
-                onChange={(e) => setForm((f) => ({ ...f, actaRef: e.target.value }))}
-                placeholder="Acta de asamblea N° 12, art. 11"
-                autoComplete="off"
-              />
+              <Label htmlFor="reg-documento">Documento legal que la respalda *</Label>
+              <Select
+                value={form.documentoId || undefined}
+                onValueChange={(v) => setForm((f) => ({ ...f, documentoId: v }))}
+              >
+                <SelectTrigger id="reg-documento" className="w-full">
+                  <SelectValue placeholder="Elegir del archivo" />
+                </SelectTrigger>
+                <SelectContent>
+                  {legales.map((documento) => (
+                    <SelectItem key={documento.id} value={documento.id}>
+                      {etiquetaDocumento(documento)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <p className="text-xs text-muted-foreground">
-                El acta ya vive en Gestión Documental: acá va solo la referencia.
+                {cargandoDocumentos
+                  ? "Cargando el archivo de documentos…"
+                  : legales.length === 0
+                    ? "El archivo todavía no tiene documentos legales: cargá el acta o el reglamento en /comunidad/archivo."
+                    : "Sale del archivo de la comunidad: el acta ya no se tipea acá y solo un documento legal puede respaldar la forma de contribución."}
               </p>
             </div>
 

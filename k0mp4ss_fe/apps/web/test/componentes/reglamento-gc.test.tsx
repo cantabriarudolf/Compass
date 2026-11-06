@@ -20,6 +20,7 @@ import { SWRConfig } from "swr"
 import { ReglamentoGC } from "@/components/admin/reglamento-gc"
 import ConfiguracionPage from "@/app/admin/configuracion/page"
 import { configuracionDefault } from "@/data/admin/configuracion"
+import { ETIQUETAS_TIPO_DOCUMENTAL } from "@/lib/documento-archivo"
 import { instalarEntornoRadix } from "./entorno-radix"
 
 // Mismo piso que el resto de los tests de componentes: bajo la instrumentación
@@ -35,6 +36,7 @@ const VERSION = {
   vigenteDesde: "2026-03",
   fuenteInstrumento: "acta_asamblea",
   actaRef: "Acta de asamblea N° 12, 2026-02-20",
+  documentoId: null as string | null,
   formaContribucion: "coeficiente",
   parametros: {
     porcentajeReserva: 8.5,
@@ -47,6 +49,38 @@ const VERSION = {
   },
   createdAt: "2026-02-21T00:00:00.000Z",
 }
+
+/** Documento LEGAL del archivo: el único que puede respaldar una versión (S9). */
+const DOC_LEGAL = {
+  id: "doc-legal-1",
+  naturaleza: "legal",
+  tipoDocumental: "actas-asamblea",
+  glosa: "Acta de asamblea N° 12, 2026-02-20",
+  referenciaAutentica: "Notaría 4ta, fojas 12, 2026-02-20",
+  archivoNombre: "acta-12.pdf",
+  archivoTipoMime: "application/pdf",
+  archivoTamanoKB: 128,
+  archivoUrl: "https://cdn.test.cl/acta-12.pdf",
+  version: 2,
+  vigenteDesde: "2026-02-20",
+}
+
+/** Documento comunitario: NO puede respaldar la forma de contribución. */
+const DOC_COMUNITARIO = {
+  id: "doc-comunitario-1",
+  naturaleza: "comunitario",
+  tipoDocumental: "otros",
+  glosa: "Circular de convivencia 2026",
+  archivoNombre: "circular.pdf",
+  archivoTipoMime: "application/pdf",
+  archivoTamanoKB: 64,
+  archivoUrl: "https://cdn.test.cl/circular.pdf",
+  version: 1,
+  vigenteDesde: "2026-01-15",
+}
+
+/** Etiqueta exacta de la opción: tipo + glosa + versión + vigenteDesde (T18). */
+const ETIQUETA_DOC_LEGAL = `${ETIQUETAS_TIPO_DOCUMENTAL["actas-asamblea"]} · ${DOC_LEGAL.glosa} · v${DOC_LEGAL.version} · ${DOC_LEGAL.vigenteDesde}`
 
 interface Peticion {
   metodo: string
@@ -75,6 +109,15 @@ const fetchFalso = vi.fn(
     peticiones.push({ metodo, url, cuerpo })
     if (metodo === "POST" && url.startsWith("/api/reglamento")) {
       return responderJson(respuestaPost.cuerpo, respuestaPost.status)
+    }
+    // El archivo de documentos: la pantalla elige el respaldo de la versión.
+    if (url.startsWith("/api/documentos")) {
+      return responderJson({
+        data: [DOC_LEGAL, DOC_COMUNITARIO],
+        page: 1,
+        pageSize: 100,
+        total: 2,
+      })
     }
     // La página de configuración lee su propia config; el bloque nuevo no la toca.
     if (url === "/api/configuracion") return responderJson(configuracionDefault)
@@ -167,16 +210,15 @@ function escribir(id: RegExp, valor: string): void {
  * Completa los siete números y la declaración. Los dos interruptores quedan en
  * su valor por defecto (IPC apagado, recargo de reserva encima del presupuesto)
  * salvo que el caso los toque a propósito.
+ *
+ * S9: el respaldo ya no se tipea — se elige del archivo de documentos.
  */
 async function completar(
   user: ReturnType<typeof userEvent.setup>
 ): Promise<void> {
   await user.type(screen.getByLabelText(/Vigente desde/), "2026-04")
   await elegir(user, /Instrumento que la funda/, /Reglamento de copropiedad/)
-  await user.type(
-    screen.getByLabelText(/Acta o artículo de referencia/),
-    "Reglamento de copropiedad, art. 11"
-  )
+  await elegir(user, /Documento legal que la respalda/, /Acta de asamblea N° 12/)
   await elegir(user, /Forma de contribución/, /Por coeficiente/)
   escribir(/Fondo de reserva/, "12.5")
   escribir(/Plazo de pago/, "10")
@@ -243,7 +285,8 @@ describe("ReglamentoGC — versión vigente y alta de versión", () => {
     expect(post?.cuerpo).toEqual({
       vigenteDesde: "2026-04",
       fuenteInstrumento: "reglamento_copropiedad",
-      actaRef: "Reglamento de copropiedad, art. 11",
+      // S9: la versión apunta al documento legal del archivo.
+      documentoId: DOC_LEGAL.id,
       formaContribucion: "coeficiente",
       parametros: {
         porcentajeReserva: 12.5,
@@ -261,6 +304,8 @@ describe("ReglamentoGC — versión vigente y alta de versión", () => {
     const cuerpo = post?.cuerpo as Record<string, unknown>
     expect(cuerpo).not.toHaveProperty("version")
     expect(cuerpo).not.toHaveProperty("id")
+    // La referencia de acta suelta ya no viaja ni se guarda (S9).
+    expect(cuerpo).not.toHaveProperty("actaRef")
   })
 
   it("(d) el error del servidor se muestra y no se pierde nada de lo tipeado", async () => {
@@ -276,9 +321,10 @@ describe("ReglamentoGC — versión vigente y alta de versión", () => {
     expect(screen.getByLabelText(/Fondo de reserva/)).toHaveValue("12.5")
     expect(screen.getByLabelText(/Tasa de mora mensual/)).toHaveValue("1.2345")
     expect(screen.getByLabelText(/Vigente desde/)).toHaveValue("2026-04")
-    expect(screen.getByLabelText(/Acta o artículo de referencia/)).toHaveValue(
-      "Reglamento de copropiedad, art. 11"
-    )
+    // La elección del respaldo tampoco se pierde.
+    expect(
+      screen.getByRole("combobox", { name: /Documento legal que la respalda/ })
+    ).toHaveTextContent(DOC_LEGAL.glosa)
     expect(
       screen.getByRole("switch", { name: "Reajuste por IPC" })
     ).toHaveAttribute("aria-checked", "true")
@@ -317,7 +363,6 @@ describe("ReglamentoGC — versión vigente y alta de versión", () => {
 
     const campos = [
       /Vigente desde/,
-      /Acta o artículo de referencia/,
       /Fondo de reserva/,
       /Plazo de pago/,
       /Tasa de mora mensual/,
@@ -325,6 +370,11 @@ describe("ReglamentoGC — versión vigente y alta de versión", () => {
       /Cuotas impagas para el corte/,
       /Preaviso del corte/,
     ].map((etiqueta) => screen.getByLabelText(etiqueta))
+    // El respaldo es un select: el trigger es un botón y tampoco lleva
+    // restricciones nativas que frenen el guardado de la página.
+    campos.push(
+      screen.getByRole("combobox", { name: /Documento legal que la respalda/ })
+    )
 
     // Ningún campo del bloque lleva restricciones nativas: el navegador no puede
     // frenar el guardado de la configuración por un valor del reglamento.
@@ -440,6 +490,80 @@ describe("ReglamentoGC — versión vigente y alta de versión", () => {
     expect(
       await screen.findByText("Encima del presupuesto aprobado")
     ).toBeTruthy()
+  })
+
+  /**
+   * S9 (A4 · T18) — el respaldo se elige del ARCHIVO, no se tipea, y solo lo
+   * legal puede respaldar la forma de contribución.
+   */
+  it("(k) el select ofrece solo los documentos legales del archivo, con tipo, glosa, versión y vigencia", async () => {
+    const user = userEvent.setup()
+    montar()
+    await screen.findByText(/sin versión declarada/i)
+
+    await user.click(
+      screen.getByRole("combobox", { name: /Documento legal que la respalda/ })
+    )
+    const listbox = await screen.findByRole("listbox", {}, { timeout: 5_000 })
+    const opciones = within(listbox).getAllByRole("option")
+    // Un solo legal en el archivo: el comunitario no se ofrece como respaldo.
+    expect(opciones).toHaveLength(1)
+    expect(opciones[0]?.textContent).toBe(ETIQUETA_DOC_LEGAL)
+    expect(within(listbox).queryByText(DOC_COMUNITARIO.glosa)).toBeNull()
+
+    await user.click(opciones[0]!)
+    await completar(user)
+    await user.click(screen.getByRole("button", { name: "Declarar versión" }))
+
+    expect(await screen.findByText(/versión declarada: rige desde/i)).toBeTruthy()
+    const post = peticiones.find((p) => p.metodo === "POST")
+    expect((post?.cuerpo as { documentoId: string }).documentoId).toBe(DOC_LEGAL.id)
+  })
+
+  it("(l) sin documento elegido el alta no llega al servidor", async () => {
+    const user = userEvent.setup()
+    montar()
+    await screen.findByText(/sin versión declarada/i)
+
+    // Todo completo salvo el respaldo: lo que la pantalla rechaza es la falta del
+    // documento, no otro campo del bloque.
+    await user.type(screen.getByLabelText(/Vigente desde/), "2026-04")
+    await elegir(user, /Instrumento que la funda/, /Reglamento de copropiedad/)
+    await elegir(user, /Forma de contribución/, /Por coeficiente/)
+    escribir(/Fondo de reserva/, "12.5")
+    escribir(/Plazo de pago/, "10")
+    escribir(/Tasa de mora mensual/, "1.2345")
+    escribir(/Tope de mora/, "2.75")
+    escribir(/Cuotas impagas para el corte/, "3")
+    escribir(/Preaviso del corte/, "5")
+
+    await user.click(screen.getByRole("button", { name: "Declarar versión" }))
+
+    expect(
+      await screen.findByText(/elegí el documento legal que respalda la versión/i)
+    ).toBeTruthy()
+    expect(peticiones.filter((p) => p.metodo === "POST")).toEqual([])
+  })
+
+  it("(m) la versión vigente muestra el documento del archivo que la respalda", async () => {
+    versionVigente = { ...VERSION, actaRef: null, documentoId: DOC_LEGAL.id }
+    montar()
+
+    expect(await screen.findByText(ETIQUETA_DOC_LEGAL)).toBeTruthy()
+    // Sin referencia histórica: esta versión sí apunta al archivo.
+    expect(screen.queryByText(/referencia histórica/i)).toBeNull()
+  })
+
+  it("(n) una versión histórica con `actaRef` y sin documento se lee marcada como histórica", async () => {
+    versionVigente = { ...VERSION, documentoId: null }
+    montar()
+
+    expect(await screen.findByText(VERSION.actaRef)).toBeTruthy()
+    // La marca de histórico está en el rótulo del dato, no solo en una nota.
+    expect(screen.getByText("Acta o artículo (referencia histórica)")).toBeTruthy()
+    expect(screen.getByText(/anterior al archivo de documentos/i)).toBeTruthy()
+    // No hay documento que mostrar: la pantalla no inventa uno.
+    expect(screen.getByText("No declarado")).toBeTruthy()
   })
 })
 
