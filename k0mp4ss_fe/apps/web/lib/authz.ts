@@ -132,6 +132,9 @@ const MATRIZ: Record<Rol, Record<string, Set<Accion>>> = {
     // nominativo de lecturas (`co:lecturas`) queda VACÍO explícito: sin esa entrada caería
     // al prefijo `co` y el comité vería quién leyó cada comunicación de los vecinos.
     "co": new Set<Accion>(["ver", "crear"]),
+    // F35-A: el comité sube sus propias actas al archivo y lee todo el archivo;
+    // borrar sigue siendo de administración (y lo legal responde 409 igual).
+    "doc": new Set<Accion>(["ver", "crear"]),
     "co:buzon": new Set<Accion>(["ver", "crear"]),
     "co:lecturas": new Set<Accion>([]),
     // explícitamente sin permisos: FI crear/editar/eliminar, PE bitacora, PL, IR:interno, admin:usuarios, backup
@@ -264,6 +267,9 @@ const MATRIZ: Record<Rol, Record<string, Set<Accion>>> = {
     // el canal de reclamos/sugerencias. `co:lecturas` (desglose nominativo de quién leyó)
     // es del administrador: vacío explícito para cortar el fallback de prefijo hacia `co`.
     "co": new Set<Accion>(["ver"]),
+    // F35-A: el archivo es «poner a disposición» (Ley 21.442 art. 9): el residente
+    // LEE lo legal y lo comunitario. Sin `crear` ni `eliminar`: no lo administra.
+    "doc": new Set<Accion>(["ver"]),
     "co:buzon": new Set<Accion>(["ver", "crear"]),
     "co:lecturas": new Set<Accion>([]),
     "gd": new Set<Accion>(["ver"]), // actas según residenteVeActas (ABAC)
@@ -547,6 +553,7 @@ export const RECURSOS_CONOCIDOS = [
   "ra",
   "ge",
   "co",
+  "doc",
   "co:buzon",
   "co:lecturas",
   "gd",

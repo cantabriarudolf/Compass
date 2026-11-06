@@ -37,6 +37,8 @@ model Comunidad {
   enviosCO                 EnvioCO[]
   mensajesBuzonCO          MensajeBuzonCO[]
   documentosCO             DocumentoCO[]
+  // F35 serie A — archivo de documentos de la comunidad (legal + comunitario).
+  documentos               Documento[]
   solicitudesGE            SolicitudGE[]
   activosIR                RecursoIR[]
   solicitudesInsumoIR      SolicitudInsumoIR[]
@@ -596,6 +598,44 @@ model DocumentoCO {
 
   @@index([comunidadId])
   @@map("documentos_co")
+}
+
+/// F35 serie A — archivo de documentos de la comunidad (Ley 21.442 art. 9).
+///
+/// Una sola entidad, dos naturalezas:
+///   · `legal`      ⊂ append-only: no se edita ni se borra; se corrige con otra versión.
+///                    Exige `referenciaAutentica` (fojas/fecha/notaría o Conservador).
+///   · `comunitario` ⊂ reemplazable: se edita y se borra con la clave `doc`.
+///
+/// D1 (media por referencia): el archivo son metadatos + URL, nunca bytes ni
+/// base64, igual que `DocumentoCO`. `version` la asigna el servidor dentro de
+/// (comunidadId, tipoDocumental); el cliente no la manda.
+/// `subidoPorPersonaId` no lleva FK a propósito: la procedencia del documento
+/// debe sobrevivir a una fusión o baja del padrón.
+model Documento {
+  id                  String    @id
+  comunidadId         String
+  comunidad           Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  naturaleza          String    // "legal" | "comunitario" (lista cerrada en lib/documento-archivo.ts)
+  tipoDocumental      String    // lista cerrada de la ley + "otros"
+  glosa               String    // a qué corresponde el documento, en palabras del que lo sube
+  referenciaAutentica String?   // fojas/fecha/notaría o Conservador; obligatoria si es legal
+  archivoNombre       String
+  archivoTipoMime     String
+  archivoTamanoKB     Float
+  archivoUrl          String
+  hash                String?   // SHA-256 hex del archivo, cuando se puede calcular fuera del sistema
+  version             Int
+  vigenteDesde        String    // fecha calendario AAAA-MM-DD, no instante: ver VersionReglamento
+  subidoPorPersonaId  String?
+  createdAt           DateTime  @default(now())
+
+  @@index([comunidadId, naturaleza])
+  @@index([comunidadId, tipoDocumental])
+  // Una sola línea de historia por tipo: dos altas concurrentes no pueden
+  // quedarse con el mismo número (la segunda responde 409).
+  @@unique([comunidadId, tipoDocumental, version])
+  @@map("documentos")
 }
 
 // Gestión de Solicitudes (GE)
