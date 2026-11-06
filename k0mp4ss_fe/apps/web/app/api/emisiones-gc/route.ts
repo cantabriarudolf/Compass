@@ -27,6 +27,7 @@ import {
   jsonError,
   withComunidadScope,
 } from "@/lib/api/with-comunidad-scope"
+import { vencimientoAviso } from "@/lib/aviso-cobro"
 import { errorGenerico } from "@/app/api/personas/route"
 
 // Adaptador de delegate Prisma a la factory (mismo patrón que maestros/[tipo]).
@@ -51,13 +52,6 @@ const EmitirGCInputSchema = z.object({
   fechaVencimiento: z.string().min(1).optional(),
   unidadIds: z.array(z.string().min(1)).optional(),
 })
-
-/** Vencimiento por defecto: los días de pago que declara la versión vigente. */
-function vencimientoPorDefecto(fechaCargo: string, diasPagoGc: number): string {
-  const base = new Date(`${fechaCargo}T00:00:00`)
-  base.setDate(base.getDate() + diasPagoGc)
-  return base.toISOString().slice(0, 10)
-}
 
 /** Reparto del monto de una unidad entre gasto común y recargo de reserva. */
 interface DesgloseCobro {
@@ -269,9 +263,17 @@ export async function POST(req: Request): Promise<Response> {
     const tarifaPorTipo = new Map(tipos.map((t) => [t.id, t.montoBaseGc]))
 
     const hoy = hoyISO()
+    // S6, con UNA sola aritmética: el cargo nace con la fecha que el aviso va a
+    // derivar — emisión + los `diasPagoGc` de la versión que rige el período —
+    // calculada por `vencimientoAviso` (días corridos sobre UTC, nunca sobre la
+    // hora local del servidor), la misma función que usa
+    // `app/api/avisos-cobro`. Antes cada ruta hacía su cuenta y la emisión podía
+    // sembrar una fecha que la emisión del papel después tenía que corregir.
+    // `diasPagoGc` es un entero del esquema de la versión, así que el plazo
+    // existe siempre acá: la función compartida no devuelve `null`.
     const vencimiento =
       parsed.data.fechaVencimiento ??
-      vencimientoPorDefecto(hoy, parametros.diasPagoGc)
+      (vencimientoAviso(hoy, parametros.diasPagoGc) ?? undefined)
     const emisionId = generarId("egc")
     const lineas: { unidadId: string; responsablePersonaId: string; monto: number; cobroId: string }[] = []
     const cobros: Record<string, unknown>[] = []
