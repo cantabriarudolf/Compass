@@ -19,6 +19,8 @@ out/
 # Prisma / SQLite (C1)
 *.db
 *.db-journal
+# Respaldos previos a una migracion (`dev.db.pre-<fecha>`): nunca se versionan.
+*.db.pre-*
 
 # Logs
 *.log
