@@ -5,7 +5,11 @@
  * "ir:mantenimiento".
  *
  * Alcance por filas (`alcanceEntregasEPP`): la entrega hecha a otra persona
- * responde 404 y no se carga; gestión conserva la comunidad entera.
+ * responde 404 y no se carga; gestión conserva la comunidad entera. El MISMO
+ * helper se pasa al PUT de `put-merge` —no un segundo filtro— porque conserjería
+ * y mantención tienen `ir:mantenimiento` editar y `personaId` en el seed
+ * (`scripts/seed-authz.mjs`): sin él podían escribir la entrega de otra persona
+ * aunque ya no podían leerla.
  */
 import { EntregaEPPSchema } from "@/lib/schemas"
 import { puede } from "@/lib/authz"
@@ -31,5 +35,6 @@ export const PUT = createPutMerge({
   schema: EntregaEPPSchema,
   authzCheck,
   recurso: "ir/entregas-epp",
+  alcance: alcanceEntregasEPP,
 })
 export const DELETE = handlers.DELETE

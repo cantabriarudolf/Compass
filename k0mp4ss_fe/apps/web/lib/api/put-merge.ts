@@ -12,6 +12,9 @@
  * - `comunidadId` desde sesión, jamás del body.
  * - Authz `editar` antes de tocar Prisma.
  * - Registro de otra comunidad → 404 (sin filtrar existencia).
+ * - Alcance por filas opcional (`alcance`, misma forma y contrato que en la
+ *   factory): la comunidad dice qué filas PUEDEN existir para el actor; el
+ *   alcance dice cuáles de ellas son suyas.
  * - Claves desconocidas (createdAt/updatedAt de Prisma) las poda Zod.
  */
 import type { z } from "zod"
@@ -20,8 +23,10 @@ import type { Accion } from "@/lib/authz"
 import {
   jsonError,
   withComunidadScope,
+  type ComunidadScope,
 } from "./with-comunidad-scope"
 import type {
+  AlcanceDeFilas,
   AntesDeEscribir,
   AuthzCheck,
   CrudDelegate,
@@ -33,6 +38,30 @@ export interface PutMergeConfig {
   schema: z.ZodType
   authzCheck?: AuthzCheck
   recurso?: string
+  /**
+   * Alcance por filas, opcional y aditivo. Misma firma y contrato que
+   * `CrudConfig.alcance` (`crud-factory`): recibe el scope de la sesión y
+   * devuelve el fragmento `where` de «lo propio», o `null` cuando el rol ve la
+   * comunidad completa.
+   *
+   * `null` cubre además el caso raro de una sesión cuyo usuario NO tiene
+   * `personaId` en el Maestro de Personas (`personaIdDelUsuarioDb`): sin
+   * identidad el alcance no tiene con qué comparar, así que conserva el acceso
+   * que el rol ya tenía. El hueco no es de permisos ni de filas, es del alta del
+   * usuario, y cerrarlo exige que todo `Usuario` tenga persona; el `_alcance.ts`
+   * del recurso es el que lo documenta y `test/api/ir-entregas-epp-item.test.ts`
+   * fija hoy ese camino (roles sembrados sin `personaId`).
+   *
+   * Sin esta opción el comportamiento es exactamente el de siempre:
+   * `findUnique({ where: { id } })` + comparación de `comunidadId`, UNA consulta.
+   * Con fragmento, el filtro viaja en el `where` (`findFirst`), así que la fila
+   * de otro dueño NO se carga y responde el 404 genérico de la serie —nunca 403:
+   * el 403 confirmaría que existe—, con el mismo criterio que el PUT de la
+   * factory. Una ruta que ya declara `alcance` para su colección debe pasar AQUÍ
+   * el MISMO helper (el `_alcance.ts` del recurso), no un segundo filtro: así la
+   * definición de «lo propio» es una sola por recurso.
+   */
+  alcance?: AlcanceDeFilas
   /**
    * Hook post-escritura (auditoría, T1c), opcional y aditivo: se invoca
    * después del `model.update` con `accion: "editar"`, `registro` = fila
@@ -58,6 +87,44 @@ type Ctx = { params: Promise<{ id: string }> }
  */
 export function createPutMerge(config: PutMergeConfig) {
   const { model, schema, authzCheck, recurso } = config
+
+  /**
+   * Fila por `id` que el actor puede escribir, o `null` (→ 404 genérico).
+   *
+   * Sin `alcance` se conserva la lectura de siempre —`findUnique` + comparación
+   * de comunidad, UNA consulta—, así que las rutas que no lo declaran no cambian
+   * ni de comportamiento ni de consulta. Con `alcance`, el filtro viaja en el
+   * `where` (`findFirst`) y la fila de otro dueño no se carga; el PUT no necesita
+   * distinguir «ajena» de «inexistente» (a diferencia del POST de la factory, no
+   * hay upsert que pudiera reescribirla por `id`), así que ambos casos comparten
+   * el mismo 404.
+   */
+  async function cargarFila(
+    scope: ComunidadScope,
+    id: string
+  ): Promise<Record<string, unknown> | null> {
+    const fragmento = config.alcance
+      ? ((await config.alcance(scope)) ?? null)
+      : null
+    if (!fragmento) {
+      const fila = (await model.findUnique({ where: { id } })) as Record<
+        string,
+        unknown
+      > | null
+      // Registro de OTRA comunidad → 404 (sin filtrar existencia).
+      if (!fila || fila.comunidadId !== scope.comunidadId) return null
+      return fila
+    }
+    if (!model.findFirst) {
+      throw new Error(
+        "El delegate no expone findFirst: el alcance por filas no se puede aplicar."
+      )
+    }
+    return (await model.findFirst({
+      where: { id, comunidadId: scope.comunidadId, ...fragmento },
+    })) as Record<string, unknown> | null
+  }
+
   return async function PUT(req: Request, ctx: Ctx): Promise<Response> {
     const resultado = await withComunidadScope()
     if (!resultado.ok) return resultado.response
@@ -70,12 +137,8 @@ export function createPutMerge(config: PutMergeConfig) {
 
     const { id } = await ctx.params
     try {
-      const existente = (await model.findUnique({
-        where: { id },
-      })) as Record<string, unknown> | null
-      if (!existente || existente.comunidadId !== scope.comunidadId) {
-        return jsonError(404, "Registro no encontrado.")
-      }
+      const existente = await cargarFila(scope, id)
+      if (!existente) return jsonError(404, "Registro no encontrado.")
       if (authzCheck && !authzCheck(scope.rol, "editar" as Accion)) {
         return jsonError(403, "Permiso denegado.")
       }

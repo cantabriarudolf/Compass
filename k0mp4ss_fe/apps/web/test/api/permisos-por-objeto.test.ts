@@ -2130,19 +2130,24 @@ describe("ir/entregas-epp — el dueño es `EntregaEPP.personaId` (lote 4)", () 
     })
   })
 
-  it("residente A-1: PUT de la entrega ajena → 403 por CLAVE; DELETE → 404 por ALCANCE, la fila intacta", async () => {
+  it("residente A-1: PUT de la entrega ajena → 404 por ALCANCE; DELETE → 404 por ALCANCE, la fila intacta", async () => {
     await conSesion(EMAIL.resA1, async () => {
       const antes = await prisma.entregaEPP.findUnique({ where: { id: EPP_A2 } })
       const put = await invocarApi(moduloEntregaEPP(), "PUT", "ir/entregas-epp/[id]", {
         params: { id: EPP_A2 },
         body: { talla: "XL" },
       })
-      // lib/api/put-merge.ts:79-80 — `authzCheck(rol, "editar")` sobre
-      // `ir:mantenimiento` (`app/api/ir/entregas-epp/[id]/route.ts`): el residente sólo
-      // tiene ver (lib/authz.ts:259), así que el 403 es por CLAVE y NO por fila. El PUT
-      // va por put-merge, no por el PUT de la factory: la clave corta antes del alcance.
-      expect(put.status).toBe(403)
-      expect(await cuerpoJson<{ error: string }>(put)).toEqual({ error: "Permiso denegado." })
+      // ANTES (hasta que `put-merge` recibió el alcance): este PUT daba **403 por CLAVE**
+      // porque la ruta no declaraba `alcance`; `findUnique({ where: { id } })` + comunidad
+      // cargaba la fila ajena y el único corte era `authzCheck`. AHORA el PUT resuelve la
+      // fila con `findFirst({ id, comunidadId, ...alcanceEntregasEPP })`, igual que el PUT
+      // de la factory: la entrega de A-2 no se carga y responde el 404 genérico ANTES de
+      // la clave. El 403 por clave sigue fijado en
+      // `test/api/ir-entregas-epp-item.test.ts` (comité con la fila propia) y en el
+      // control de la entrega PROPIA al final de este mismo caso.
+      expect(put.status).toBe(404)
+      expect(await cuerpoJson<{ error: string }>(put)).toEqual({ error: "Registro no encontrado." })
+      expect(await prisma.entregaEPP.findUnique({ where: { id: EPP_A2 } })).toEqual(antes)
 
       const del = await invocarApi(moduloEntregaEPP(), "DELETE", "ir/entregas-epp/[id]", {
         params: { id: EPP_A2 },
@@ -2162,6 +2167,49 @@ describe("ir/entregas-epp — el dueño es `EntregaEPP.personaId` (lote 4)", () 
       expect(delPropia.status).toBe(403)
       expect(await cuerpoJson<{ error: string }>(delPropia)).toEqual({ error: "Permiso denegado." })
       expect(await prisma.entregaEPP.findUnique({ where: { id: EPP_A1 } })).not.toBeNull()
+    })
+  })
+
+  it("conserjería con identidad MP: PUT de la entrega de otra persona → 404 y la fila intacta; la propia → 200", async () => {
+    // El hueco que cierra este caso: `conserjeria` y `mantencion` tienen
+    // `ir:mantenimiento` editar (lib/authz.ts:194 y :334) y en el seed real llevan
+    // `personaId` (`scripts/seed-authz.mjs:55,57`), así que ya eran alcance por filas
+    // para LEER. El PUT de `put-merge` resolvía la fila con `findUnique({ where: { id } })`
+    // + comunidad y dejaba escribir la entrega hecha a OTRA persona: la clave `editar`
+    // la tenía el rol y el dueño de la fila no se miraba. La sesión es la conserjería
+    // con identidad MP (persona A-1).
+    await conSesion(EMAIL.trabajadorA, async () => {
+      const antes = await prisma.entregaEPP.findUnique({ where: { id: EPP_A2 } })
+      const ajena = await invocarApi(moduloEntregaEPP(), "PUT", "ir/entregas-epp/[id]", {
+        params: { id: EPP_A2 },
+        body: { talla: "XL" },
+      })
+      // lib/api/put-merge.ts — con `alcance` el `findFirst` lleva
+      // `{ id, comunidadId, personaId }`: la entrega de A-2 no se carga y la respuesta es
+      // el 404 genérico, no un 200 con la talla cambiada.
+      expect(ajena.status).toBe(404)
+      const cuerpo = await cuerpoJson<Record<string, unknown>>(ajena)
+      expect(cuerpo).toEqual({ error: "Registro no encontrado." })
+      expect(cuerpo).not.toHaveProperty("personaId")
+      expect(cuerpo).not.toHaveProperty("talla")
+      // La fila sigue existiendo y sin tocar: el 404 es ALCANCE, no ausencia.
+      expect(await prisma.entregaEPP.findUnique({ where: { id: EPP_A2 } })).toEqual(antes)
+
+      // Control de la frontera: la entrega PROPIA del MISMO rol sí se escribe (200).
+      // Sin este control, un alcance que negara todo pasaría el caso de arriba.
+      try {
+        const propia = await invocarApi(moduloEntregaEPP(), "PUT", "ir/entregas-epp/[id]", {
+          params: { id: EPP_A1 },
+          body: { talla: "S" },
+        })
+        expect(propia.status).toBe(200)
+        const enBd = await prisma.entregaEPP.findUnique({ where: { id: EPP_A1 } })
+        expect(enBd?.talla).toBe("S")
+        expect(enBd?.personaId).toBe(P_A1)
+      } finally {
+        // La talla original vuelve para no dejar el arnés mutado a los casos vecinos.
+        await prisma.entregaEPP.update({ where: { id: EPP_A1 }, data: { talla: "M" } })
+      }
     })
   })
 })
@@ -2480,7 +2528,7 @@ describe("ir/solicitudes-insumo — el modelo no tiene `unidadId`: el dueño es 
     })
   })
 
-  it("residente A-1: PUT de la solicitud ajena → 403 por CLAVE y la fila intacta", async () => {
+  it("residente A-1: PUT de la solicitud ajena → 404 por ALCANCE y la fila intacta", async () => {
     await conSesion(EMAIL.resA1, async () => {
       const antes = await prisma.solicitudInsumoIR.findUnique({ where: { id: INSU_A2 } })
       const res = await invocarApi(
@@ -2489,14 +2537,59 @@ describe("ir/solicitudes-insumo — el modelo no tiene `unidadId`: el dueño es 
         "ir/solicitudes-insumo/[id]",
         { params: { id: INSU_A2 }, body: { estado: "rechazada" } }
       )
-      // lib/api/put-merge.ts:79-80 — `authzCheck(rol, "editar")` sobre `ir:mantenimiento`
-      // (app/api/ir/solicitudes-insumo/[id]/route.ts:14-15): el residente sólo tiene ver
-      // (lib/authz.ts:259), así que el 403 es por CLAVE. LÍMITE DOCUMENTADO: entregar y
-      // resolver el comodín son de conserjería/mantención; la escritura por fila no es
-      // ejercitable sin un rol con alcance de unidad.
-      expect(res.status).toBe(403)
-      expect(await cuerpoJson<{ error: string }>(res)).toEqual({ error: "Permiso denegado." })
+      // ANTES (hasta que `put-merge` recibió el alcance): este PUT daba **403 por CLAVE**
+      // porque la ruta no declaraba `alcance` y `findUnique` + comunidad cargaba la fila
+      // ajena. AHORA `put-merge` resuelve con
+      // `findFirst({ id, comunidadId, ...alcanceSolicitudesInsumoIR })`, igual que el PUT
+      // de la factory: la solicitud de A-2 no se carga y responde el 404 genérico ANTES
+      // de la clave. El 403 por clave sigue fijado en
+      // `test/api/ir-solicitudes-insumo-item.test.ts` (comité con la fila propia).
+      expect(res.status).toBe(404)
+      expect(await cuerpoJson<{ error: string }>(res)).toEqual({ error: "Registro no encontrado." })
       expect(await prisma.solicitudInsumoIR.findUnique({ where: { id: INSU_A2 } })).toEqual(antes)
+    })
+  })
+
+  it("conserjería con identidad MP: PUT de la solicitud de otra persona → 404 y la fila intacta; la propia → 200", async () => {
+    // Mismo hueco que en `ir/entregas-epp`: conserjería y mantención tienen
+    // `ir:mantenimiento` editar (lib/authz.ts:194 y :334) y `personaId` en el seed real
+    // (`scripts/seed-authz.mjs:55,57`), así que el PUT resolvía la fila con el único
+    // filtro de la comunidad y dejaba escribir la solicitud de otra persona.
+    await conSesion(EMAIL.trabajadorA, async () => {
+      const antes = await prisma.solicitudInsumoIR.findUnique({ where: { id: INSU_A2 } })
+      const ajena = await invocarApi(
+        moduloSolicitudInsumo(),
+        "PUT",
+        "ir/solicitudes-insumo/[id]",
+        { params: { id: INSU_A2 }, body: { areaDestino: "Intento ajeno" } }
+      )
+      // lib/api/put-merge.ts — el `findFirst` lleva
+      // `{ id, comunidadId, solicitantePersonaId }`: la solicitud de A-2 no se carga.
+      expect(ajena.status).toBe(404)
+      const cuerpo = await cuerpoJson<Record<string, unknown>>(ajena)
+      expect(cuerpo).toEqual({ error: "Registro no encontrado." })
+      expect(cuerpo).not.toHaveProperty("solicitantePersonaId")
+      expect(await prisma.solicitudInsumoIR.findUnique({ where: { id: INSU_A2 } })).toEqual(antes)
+
+      // Control de la frontera: la solicitud PROPIA del MISMO rol sí se escribe (200).
+      try {
+        const propia = await invocarApi(
+          moduloSolicitudInsumo(),
+          "PUT",
+          "ir/solicitudes-insumo/[id]",
+          { params: { id: INSU_A1 }, body: { areaDestino: "Bodega norte" } }
+        )
+        expect(propia.status).toBe(200)
+        const enBd = await prisma.solicitudInsumoIR.findUnique({ where: { id: INSU_A1 } })
+        expect(enBd?.areaDestino).toBe("Bodega norte")
+        expect(enBd?.solicitantePersonaId).toBe(P_A1)
+      } finally {
+        // El área original vuelve para no dejar el arnés mutado a los casos vecinos.
+        await prisma.solicitudInsumoIR.update({
+          where: { id: INSU_A1 },
+          data: { areaDestino: "Pasillo de la unidad 101" },
+        })
+      }
     })
   })
 })
