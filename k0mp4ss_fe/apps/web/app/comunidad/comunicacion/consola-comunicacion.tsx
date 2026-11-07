@@ -70,13 +70,13 @@ const CATEGORIA_LABEL: Record<string, string> = {
 /**
  * consola-comunicacion — consola de administración de CO (redacción, plantillas y
  * buzón).
+ * publicación-portal", "co/plantillas")
  *
- * La pestaña «Biblioteca de Documentos Comunales» se retiró (F35 serie A, T11): el
+ * La pestaña «Biblioteca de Documentos Comunales» se retiró (F35 serie A, T11) y su
+ * tabla `documentos_co` también (A5, con sus filas migradas a `Documento`). El
  * owner decidió que el Archivo de Documentos (`/comunidad/archivo`) absorbe la
  * biblioteca, porque dos listados de documentos en la UI son dos verdades. La
- * lectura de un documento del archivo se audita ahí (`AD_DOC_APERTURA`) y la tabla
- * `documentos_co`, con sus filas, se retira en una unidad posterior que migre los
- * datos primero.
+ * lectura de un documento del archivo se audita ahí (`AD_DOC_APERTURA`).
  *
  * Solo la renderiza `page.tsx` cuando el rol resuelto en el servidor es
  * administrador (change co-lectura-residente, D1): el `<Select>` «Vista» que

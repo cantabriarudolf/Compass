@@ -28,7 +28,6 @@ const cargaModulos = async () => ({
   envios: await import("@/app/api/co/envios/route"),
   mensajes: await import("@/app/api/co/mensajes-buzon/route"),
   mensajeItem: await import("@/app/api/co/mensajes-buzon/[id]/route"),
-  documentos: await import("@/app/api/co/documentos/route"),
 })
 
 type Handler = (
@@ -62,7 +61,6 @@ describe("/api CO — comunicación con vecinos con BD real (Fase 4)", () => {
     await prisma.plantillaCO.deleteMany({ where: { comunidadId: comunidad } })
     await prisma.envioCO.deleteMany({ where: { comunidadId: comunidad } })
     await prisma.mensajeBuzonCO.deleteMany({ where: { comunidadId: comunidad } })
-    await prisma.documentoCO.deleteMany({ where: { comunidadId: comunidad } })
   }, 30_000)
 
   afterAll(async () => {
@@ -71,7 +69,6 @@ describe("/api CO — comunicación con vecinos con BD real (Fase 4)", () => {
       await prisma.plantillaCO.deleteMany({ where: { comunidadId: comunidad } })
       await prisma.envioCO.deleteMany({ where: { comunidadId: comunidad } })
       await prisma.mensajeBuzonCO.deleteMany({ where: { comunidadId: comunidad } })
-      await prisma.documentoCO.deleteMany({ where: { comunidadId: comunidad } })
       await prisma.membresia.deleteMany({
         where: { usuarioId: { in: ["f4-co-admin", "f4-co-residente"] } },
       })
@@ -129,8 +126,8 @@ describe("/api CO — comunicación con vecinos con BD real (Fase 4)", () => {
     expect(get.status).toBe(401)
   })
 
-  it("las 4 entidades CO persisten en la BD", async () => {
-    const { plantillas, envios, mensajes, documentos } = await cargaModulos()
+  it("las 3 entidades CO persisten en la BD", async () => {
+    const { plantillas, envios, mensajes } = await cargaModulos()
     await conSesion(emailAdmin, async () => {
       const p = await llamar(Promise.resolve(plantillas), "POST", "co/plantillas", {
         id: "co-pl-1", nombre: "Aviso cobranza", categoria: "cobranza", asunto: "Cuota impaga", cuerpo: "Estimado [Nombre_Usuario]",
@@ -148,11 +145,6 @@ describe("/api CO — comunicación con vecinos con BD real (Fase 4)", () => {
         fechaIngreso: "2026-03-05", estado: "recibido", respuestas: [],
       })
       expect(m.status).toBe(201)
-      const d = await llamar(Promise.resolve(documentos), "POST", "co/documentos", {
-        id: "co-doc-1", nombre: "Reglamento", tipoMime: "application/pdf", tamanoKB: 120, url: "https://example.com/reglamento.pdf", categoria: "reglamentos",
-      })
-      expect(d.status).toBe(201)
-      expect((await prisma.documentoCO.findUnique({ where: { id: "co-doc-1" } }))?.categoria).toBe("reglamentos")
     })
   })
 

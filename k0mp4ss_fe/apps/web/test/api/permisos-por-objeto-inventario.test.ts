@@ -93,13 +93,7 @@ const DECLARACIONES: readonly Declaracion[] = [
     cubre: "certificados-ct — el dueño es `unidadId`/`personaId` (lote 3)",
   },
 
-  // ── CO: documentos, envíos, buzón, plantillas ─────────────────────────────
-  {
-    ruta: "co/documentos/[id]",
-    clase: "exento",
-    motivo:
-      "`co` (administración/comité) sobre `DocumentoCO`, que sólo tiene `comunidadId`: no hay fila propia que comparar.",
-  },
+  // ── CO: envíos, buzón, plantillas ─────────────────────────────────────────
   {
     ruta: "co/envios/[id]",
     clase: "caso",

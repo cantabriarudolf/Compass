@@ -561,12 +561,6 @@ export const MensajeBuzonCOSchema = z.object({
   respuestas: z.array(RespuestaBuzonCOSchema),
 })
 
-// Biblioteca documental: reutiliza metadatos D1 (nombre/tipoMime/tamanoKB/url).
-export const DocumentoCOSchema = ImagenReferenciaSchema.extend({
-  id: IdEntidadSchema,
-  categoria: z.string().min(1, "La categoría del documento es obligatoria."),
-})
-
 // --- Gestión Administrativa (AD) ---
 
 // Controles de privacidad/comunicación del propietario sobre su unidad.
@@ -2382,7 +2376,6 @@ export type ClasificacionBuzon = z.infer<typeof ClasificacionBuzonSchema>
 export type EstadoBuzonCO = z.infer<typeof EstadoBuzonCOSchema>
 export type RespuestaBuzonCO = z.infer<typeof RespuestaBuzonCOSchema>
 export type MensajeBuzonCO = z.infer<typeof MensajeBuzonCOSchema>
-export type DocumentoCO = z.infer<typeof DocumentoCOSchema>
 export type TipoSolicitudGE = z.infer<typeof TipoSolicitudGESchema>
 export type EstadoSolicitudGE = z.infer<typeof EstadoSolicitudGESchema>
 export type ComentarioGE = z.infer<typeof ComentarioGESchema>

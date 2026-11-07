@@ -24,8 +24,9 @@ type Ctx = { params: Promise<{ id: string }> }
  *
  * Se agrega al catálogo (el `tipoAccion` de la bitácora es texto, no una unión
  * cerrada) y NO reemplaza a `CO_DOC_DOWNLOAD`: ese nombre sigue en el catálogo
- * porque la ruta deprecada `/api/co/documentos/[id]` lo emite y las filas
- * históricas lo conservan.
+ * porque las filas históricas de la bitácora lo conservan. Su emisor —la ruta
+ * deprecada `/api/co/documentos/[id]`— se retiró con la tabla `documentos_co`
+ * (A5), así que hoy nadie lo emite y tampoco se borra.
  */
 export const EVENTO_APERTURA_ARCHIVO = "AD_DOC_APERTURA"
 

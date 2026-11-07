@@ -3,16 +3,15 @@
 /**
  * use-co — hooks SWR para Comunicación con Vecinos CO (Fase 4).
  *
- * El pedazo de DOCUMENTOS de este módulo (`useDocumentosCO` y el tipo `DocumentoCO`)
- * está `@deprecated`: la «Biblioteca de Documentos Comunales» se retiró (F35 serie A,
- * T11) y el Archivo de Documentos es la única lista. Ver la nota del hook, que
- * explica por qué se conserva y hasta cuándo.
+ * El módulo ya no tiene pedazo de DOCUMENTOS: `useDocumentosCO` y su tipo
+ * `DocumentoCO` se retiraron con la tabla `documentos_co` (F35 serie A, A5). La
+ * única lista es el «Archivo de Documentos de la Comunidad»
+ * (`lib/api/use-documentos.ts`).
  */
 import useSWR from "swr"
 import { useCrudCollection, postAccion, type CrudCollection } from "./use-crud-collection"
 import type { StoreResult } from "@/lib/store"
 import type {
-  DocumentoCO,
   EnvioCO,
   LecturaEnvioCO,
   MensajeBuzonCO,
@@ -59,20 +58,6 @@ export function useEnviosCO(): CrudCollection<EnvioCO> {
 
 export function useMensajesBuzonCO(): CrudCollection<MensajeBuzonCO> {
   return useCrudCollection<MensajeBuzonCO>("/api/co/mensajes-buzon")
-}
-
-/**
- * @deprecated La «Biblioteca de Documentos Comunales» se retiró: su lista vive en el
- * «Archivo de Documentos de la Comunidad» (`/comunidad/archivo`, hook
- * `lib/api/use-documentos.ts`) y su filtro `comunitario` hace ese papel. Abrir un
- * documento del archivo emite `AD_DOC_APERTURA` (categoría AD) en vez de
- * `CO_DOC_DOWNLOAD`.
- *
- * El hook queda porque la tabla `documentos_co` todavía tiene filas: se retira con
- * la unidad que las migre a `Documento`. No lo uses en pantallas nuevas.
- */
-export function useDocumentosCO(): CrudCollection<DocumentoCO> {
-  return useCrudCollection<DocumentoCO>("/api/co/documentos")
 }
 
 /** GET de un recurso de CO con error legible (mismo contrato de mensajes que la colección). */

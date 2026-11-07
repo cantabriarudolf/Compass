@@ -102,7 +102,6 @@ export function crearRepositorio(comunidadId: string, client?: PrismaClient) {
     plantillasCO: scoped(prisma.plantillaCO),
     enviosCO: scoped(prisma.envioCO),
     mensajesBuzonCO: scoped(prisma.mensajeBuzonCO),
-    documentosCO: scoped(prisma.documentoCO),
     // GE
     solicitudesGE: scoped(prisma.solicitudGE),
     // IR

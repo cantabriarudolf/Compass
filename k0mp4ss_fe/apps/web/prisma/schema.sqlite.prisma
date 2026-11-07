@@ -41,7 +41,6 @@ model Comunidad {
   plantillasCO             PlantillaCO[]
   enviosCO                 EnvioCO[]
   mensajesBuzonCO          MensajeBuzonCO[]
-  documentosCO             DocumentoCO[]
   // F35 serie A — archivo de documentos de la comunidad (legal + comunitario).
   documentos               Documento[]
   // A3 — constancia de entrega por destinatario de los documentos legales.
@@ -592,31 +591,6 @@ model MensajeBuzonCO {
   @@map("mensajes_buzon_co")
 }
 
-/// @deprecated — «Biblioteca de Documentos Comunales» de CO (Fase 4).
-///
-/// Retirada en F35 serie A T11: el «Archivo de Documentos de la Comunidad»
-/// (`Documento`, `/api/documentos`, `/comunidad/archivo`) es la ÚNICA lista de
-/// documentos y su filtro `comunitario` hace el papel de la vieja biblioteca; la
-/// apertura se audita ahí como `AD_DOC_APERTURA` (categoría AD).
-///
-/// La tabla NO se borra acá: sus filas se migran a `Documento` en una unidad
-/// posterior, y es esa unidad —con la mirada del owner sobre los datos— la que
-/// puede soltarla. No agregues consumidores nuevos.
-model DocumentoCO {
-  id          String   @id
-  comunidadId String
-  comunidad   Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
-  nombre      String
-  tipoMime    String
-  tamanoKB    Float
-  url         String
-  categoria   String
-  createdAt   DateTime @default(now())
-
-  @@index([comunidadId])
-  @@map("documentos_co")
-}
-
 /// F35 serie A — archivo de documentos de la comunidad (Ley 21.442 art. 9).
 ///
 /// Una sola entidad, dos naturalezas:
@@ -625,7 +599,7 @@ model DocumentoCO {
 ///   · `comunitario` ⊂ reemplazable: se edita y se borra con la clave `doc`.
 ///
 /// D1 (media por referencia): el archivo son metadatos + URL, nunca bytes ni
-/// base64, igual que `DocumentoCO`. `version` la asigna el servidor dentro de
+/// base64. `version` la asigna el servidor dentro de
 /// (comunidadId, tipoDocumental); el cliente no la manda.
 /// `subidoPorPersonaId` no lleva FK a propósito: la procedencia del documento
 /// debe sobrevivir a una fusión o baja del padrón.

@@ -9,10 +9,10 @@
  *   (b) las otras tres pestañas siguen ahí y su contenido sigue renderizando
  *       (retirar una pestaña no puede llevarse la consola puesta).
  *
- * El mock de `@/lib/api/use-co` no expone `useDocumentosCO` a propósito: si la
- * consola volviera a leer la colección `documentos_co` —la tabla queda
- * `@deprecated`, con sus filas, hasta la unidad que migre los datos— el caso
- * falla, en vez de pasar leyendo una lista que ya no se muestra.
+ * El mock de `@/lib/api/use-co` no expone `useDocumentosCO` a propósito: el hook se
+ * retiró junto con la tabla `documentos_co` (F35 serie A, A5). Si la consola volviera
+ * a pedir esa colección —ahora inexistente— el caso falla, en vez de pasar leyendo
+ * una lista que ya no se muestra.
  */
 import React from "react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"

@@ -17,6 +17,7 @@ import { describe, it, expect } from "vitest"
 import { z } from "zod"
 import {
   CertificadoCTSchema,
+  ImagenReferenciaSchema,
   PeriodoDirectivaSchema,
   RecursoIRSchema,
   formatoErrorZod,
@@ -216,6 +217,49 @@ describe("CertificadoCTSchema.firmaUrl — D1 en la firma digitalizada", () => {
     expect(issue?.message).toBe(
       "Media por referencia (D1): la firma debe ser una URL, no contenido embebido."
     )
+  })
+})
+
+/**
+ * `ImagenReferenciaSchema.url` — la regla D1 del archivo por referencia.
+ *
+ * El schema es la pieza que comparten publicaciones del portal, evidencias MT y
+ * comprobantes FI, y hasta el retiro de `documentos_co` (F35 A5) el único test que
+ * ejercitaba su `url` era el de la tabla retirada. La regla sigue viva, así que se
+ * prueba acá: si mañana alguien acepta un binario embebido en cualquier adjunto, el
+ * que falla es este caso.
+ */
+describe("ImagenReferenciaSchema.url — D1 en los adjuntos por referencia", () => {
+  const imagen = (overrides: Record<string, unknown> = {}): Record<string, unknown> => ({
+    nombre: "circular-fachada.pdf",
+    tipoMime: "application/pdf",
+    tamanoKB: 120,
+    url: "https://cdn.test.cl/circular.pdf",
+    ...overrides,
+  })
+
+  it("acepta una URL https de referencia", () => {
+    const parsed = ImagenReferenciaSchema.safeParse(imagen())
+    expect(parsed.success).toBe(true)
+    if (!parsed.success) return
+    expect(parsed.data.url).toBe("https://cdn.test.cl/circular.pdf")
+  })
+
+  it("rechaza una data-URL con el mensaje D1 de los adjuntos", () => {
+    const parsed = ImagenReferenciaSchema.safeParse(
+      imagen({ url: "data:application/pdf;base64,AAA" })
+    )
+    expect(parsed.success).toBe(false)
+    if (parsed.success) return
+    const issue = parsed.error.issues.find((i) => i.path.join(".") === "url")
+    expect(issue?.message).toBe(
+      "Media por referencia: no se permiten data-URL ni Blob embebidos (D1)."
+    )
+  })
+
+  it("rechaza un blob: sin importar mayúsculas", () => {
+    const parsed = ImagenReferenciaSchema.safeParse(imagen({ url: "BLOB:interno/foto.png" }))
+    expect(parsed.success).toBe(false)
   })
 })
 

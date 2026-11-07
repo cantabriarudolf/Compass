@@ -37,9 +37,8 @@ interface ModuloItem {
   DELETE: HandlerItem
 }
 
-/** Las 16 rutas `[id]` a cubrir (GET_ONE / PUT parcial / DELETE vía factory). */
+/** Las rutas `[id]` a cubrir (GET_ONE / PUT parcial / DELETE vía factory). */
 const RUTAS_ITEM: Array<{ nombre: string; cargar: () => Promise<unknown> }> = [
-  { nombre: "co/documentos", cargar: () => import("@/app/api/co/documentos/[id]/route") },
   { nombre: "co/envios", cargar: () => import("@/app/api/co/envios/[id]/route") },
   { nombre: "co/plantillas", cargar: () => import("@/app/api/co/plantillas/[id]/route") },
   { nombre: "cv/plantillas", cargar: () => import("@/app/api/cv/plantillas/[id]/route") },
