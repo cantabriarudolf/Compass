@@ -2,30 +2,40 @@
 /**
  * F27 — la pantalla del residente para ver y descargar su aviso de cobro.
  *
- * Lo que este test fija (y que hoy no existía): el residente ve los avisos que
- * la API le sirve y descarga el PAPEL desde la fila guardada. Dos invariantes
- * del documento firmado que no pueden quedar al criterio de la pantalla:
+ * El aviso es un documento CONGELADO (Ley 21.442 arts. 31 y 32) y la pantalla no
+ * lo interprete: imprime lo que la fila guardada dice. Lo que este test fija:
  *
- *   1. el PDF se arma con el `contenido` CONGELADO que trajo la fila, sin
- *      recalcular ninguna cifra;
- *   2. la huella que recibe el builder es la del contenido
- *      (`hashContenido(contenido)`), no una inventada ni la de otro aviso.
+ *   1. la fila pinta período, folio, unidad, total a pagar, estado y fecha de
+ *      emisión, y el total y la unidad salen del `contenido` CONGELADO — la
+ *      pantalla no recalcula ninguna cifra desde los cargos;
+ *   2. el estado se LEE de la fila: `Pagado` cuando el contenido declara pagado
+ *      todo lo exigible y deuda 0, `Vencido`/`Pendiente` según el `vencimiento`
+ *      persistido, y `Sin plazo declarado` cuando es `null` (la versión del
+ *      reglamento no era computable). Nunca una fecha ni un estado inventados;
+ *   3. «Descargar PDF» es un enlace al PDF del aviso (`/api/avisos-cobro/<id>/pdf`,
+ *      que responde `attachment` con el folio en el nombre) y cada fila apunta a
+ *      SU aviso: el `id` de la fila es el único que entra en la URL;
+ *   4. el residente sin avisos ve un estado vacío que dice justo eso, y la
+ *      gestión (que ve la comunidad entera) no lee un vacío como si fuera «su
+ *      unidad»;
+ *   5. sin configuración de la comunidad no se ofrece una descarga que la API va
+ *      a rechazar (409: sin CF no hay papel que armar);
+ *   6. el portón es el de la matriz (`fi:gasto_comun` ver o `fi:aviso:propio`
+ *      ver), el mismo par de claves que decide la API, y el menú del residente
+ *      lleva a la pantalla — conserjería y mantención, que no tienen ninguna de
+ *      las dos claves, no la ven.
  *
- * El hash se calcula acá con `hashContenido` —la misma función del servidor— y
- * se compara con lo que la pantalla le pasó a `documentoAvisoCobroPDF`.
+ * Se monta `ConsolaAvisosCobro` (no el `page.tsx`) porque la página es un server
+ * component `async` que espera `auth()` y no se puede montar en jsdom; lo único
+ * que decide es el redirect y pasar `roles`, así que el caso de permisos se
+ * afirma con la matriz real (`tienePermiso`).
  */
 import React from "react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { cleanup, render, screen } from "@testing-library/react"
-import userEvent from "@testing-library/user-event"
-import { hashContenido } from "@/lib/aviso-cobro"
+import { cleanup, render, screen, within } from "@testing-library/react"
 
-/** Dobles de prueba: el PDF se mockea entero (acá interesa QUÉ recibe). */
+/** Lo que devuelve el hook de lectura; se reescribe en cada caso. */
 const fuente = vi.hoisted(() => ({
-  documentoAvisoCobroPDF: vi.fn(),
-  descargarPdf: vi.fn(),
-  urlADataUrl: vi.fn(),
-  /** Lo que devuelve el hook de lectura; se reescribe en cada caso. */
   estado: {
     avisos: [] as unknown[],
     documento: null as unknown,
@@ -34,6 +44,31 @@ const fuente = vi.hoisted(() => ({
     error: null as Error | null,
   },
 }))
+
+vi.mock("@/lib/api/use-avisos-cobro", () => ({
+  useAvisosCobro: () => fuente.estado,
+}))
+
+// El grupo «Comunidad» del menú se expande solo cuando la ruta activa cae
+// dentro del grupo; el caso del sidebar monta la pantalla como ruta activa.
+vi.mock("next/navigation", () => ({
+  usePathname: () => "/comunidad/avisos-cobro",
+}))
+
+vi.mock("@/lib/api/use-configuracion", () => ({
+  useComunidadActual: () => ({
+    nombre: "Comunidad Los Almendros",
+    logoUrl: undefined,
+    isLoading: false,
+    error: null,
+  }),
+}))
+
+import { ConsolaAvisosCobro } from "@/app/comunidad/avisos-cobro/consola-avisos-cobro"
+import { puedeVerAvisosCobro } from "@/app/comunidad/avisos-cobro/alcance"
+import { AppSidebar } from "@/components/app-sidebar"
+import { SidebarProvider } from "@workspace/ui/components/sidebar"
+import { TooltipProvider } from "@workspace/ui/components/tooltip"
 
 /** CF proyectada al papel: lo único que el documento imprime de la configuración. */
 const DOCUMENTO = {
@@ -91,10 +126,7 @@ const CONTENIDO = {
   noComputables: [],
 }
 
-/** La huella canónica del contenido: la que el servidor sirve y el PDF imprime. */
-const HASH = hashContenido(CONTENIDO)
-
-const AVISO_VIGENTE = {
+const AVISO_PENDIENTE = {
   id: "avi-1",
   unidadId: "u-1",
   periodo: "2026-09",
@@ -104,53 +136,75 @@ const AVISO_VIGENTE = {
   vencimiento: "2099-01-15",
   contenido: CONTENIDO,
   totalesComunidad: {},
-  hash: HASH,
+  hash: "hash-1",
 }
 
 const AVISO_VENCIDO = {
-  ...AVISO_VIGENTE,
+  ...AVISO_PENDIENTE,
   id: "avi-2",
   periodo: "2026-08",
   folio: "AC-0002",
+  fechaEmision: "2026-08-05",
   vencimiento: "2000-01-01",
-  hash: hashContenido({ ...CONTENIDO, periodo: "2026-08" }),
+  contenido: {
+    ...CONTENIDO,
+    periodo: "2026-08",
+    fechaEmision: "2026-08-05",
+    montos: { ...CONTENIDO.montos, totalAdeudado: 120_000 },
+  },
+  hash: "hash-2",
 }
 
 const AVISO_SIN_PLAZO = {
-  ...AVISO_VIGENTE,
+  ...AVISO_PENDIENTE,
   id: "avi-3",
   periodo: "2026-07",
   folio: "AC-0003",
+  fechaEmision: "2026-07-05",
   vencimiento: null,
-  hash: hashContenido({ ...CONTENIDO, periodo: "2026-07" }),
+  contenido: { ...CONTENIDO, periodo: "2026-07", fechaEmision: "2026-07-05" },
+  hash: "hash-3",
 }
 
-vi.mock("@/lib/api/use-avisos-cobro", () => ({
-  useAvisosCobro: () => fuente.estado,
-}))
+/**
+ * Aviso que nació SIN deuda: el contenido declara pagado todo lo exigible y un
+ * total adeudado 0. Trae un vencimiento ya pasado a propósito: la deuda saldada
+ * manda sobre el plazo (nadie debe algo que ya pagó).
+ */
+const AVISO_PAGADO = {
+  ...AVISO_PENDIENTE,
+  id: "avi-4",
+  periodo: "2026-06",
+  folio: "AC-0004",
+  fechaEmision: "2026-06-05",
+  vencimiento: "2000-06-15",
+  contenido: {
+    ...CONTENIDO,
+    periodo: "2026-06",
+    fechaEmision: "2026-06-05",
+    montos: { ...CONTENIDO.montos, pagado: 47_200, totalAdeudado: 0 },
+  },
+  hash: "hash-4",
+}
 
-vi.mock("@/lib/pdf-utils", () => ({
-  documentoAvisoCobroPDF: fuente.documentoAvisoCobroPDF,
-  descargarPdf: fuente.descargarPdf,
-  urlADataUrl: fuente.urlADataUrl,
-}))
-
-import AvisosCobroPage from "@/app/comunidad/avisos-cobro/page"
+const TODOS = [AVISO_PENDIENTE, AVISO_VENCIDO, AVISO_SIN_PLAZO, AVISO_PAGADO]
 
 const texto = (el: HTMLElement | null) =>
   (el?.textContent ?? "").replace(/\s+/g, " ").trim()
 
+/** La fila (`<tr>`) del aviso con ese folio, para afirmar campo por campo. */
+function fila(folio: string): HTMLElement {
+  const celda = screen.getByText(folio)
+  const tr = celda.closest("tr")
+  if (!tr) throw new Error(`No hay fila para el aviso ${folio}`)
+  return tr as HTMLElement
+}
+
 beforeEach(() => {
-  fuente.documentoAvisoCobroPDF.mockReset()
-  fuente.descargarPdf.mockReset()
-  fuente.urlADataUrl.mockReset()
-  fuente.documentoAvisoCobroPDF.mockReturnValue({ content: "aviso" })
-  fuente.descargarPdf.mockResolvedValue(undefined)
-  fuente.urlADataUrl.mockResolvedValue(null)
   fuente.estado = {
-    avisos: [AVISO_VIGENTE, AVISO_VENCIDO, AVISO_SIN_PLAZO],
+    avisos: TODOS,
     documento: DOCUMENTO,
-    total: 3,
+    total: TODOS.length,
     isLoading: false,
     error: null,
   }
@@ -161,89 +215,148 @@ afterEach(() => {
 })
 
 describe("/comunidad/avisos-cobro — el residente ve y descarga su aviso (F27)", () => {
-  it("lista período, folio, total adeudado y estado de cada aviso", () => {
-    render(<AvisosCobroPage />)
+  it("pinta período, folio, unidad, total a pagar, estado y fecha de cada aviso", () => {
+    render(<ConsolaAvisosCobro roles={["residente"]} />)
 
-    expect(screen.getByRole("heading", { name: /avisos de cobro/i })).toBeInTheDocument()
-    expect(screen.getByText("AC-0001")).toBeInTheDocument()
-    expect(screen.getByText("AC-0002")).toBeInTheDocument()
-    // Total adeudado: la cifra CONGELADA del contenido, con formato chileno.
-    expect(texto(document.body)).toContain("47.200")
-    // Estado derivado de la fila, no de un cálculo de la pantalla.
-    expect(screen.getByText("Vigente")).toBeInTheDocument()
-    expect(screen.getByText("Vencido")).toBeInTheDocument()
-    expect(screen.getByText("Sin plazo declarado")).toBeInTheDocument()
-    // Los períodos vienen del contenido congelado.
-    expect(texto(document.body)).toContain("2026-09")
+    expect(
+      screen.getByRole("heading", { name: /avisos de cobro/i })
+    ).toBeInTheDocument()
+
+    // Período, folio, unidad, fecha de emisión y total: todo sale de la fila
+    // guardada, con el formato chileno de la cifra congelada.
+    const pendiente = fila("AC-0001")
+    expect(within(pendiente).getByText("2026-09")).toBeInTheDocument()
+    expect(within(pendiente).getByText("Depto 101")).toBeInTheDocument()
+    expect(within(pendiente).getByText("2026-09-05")).toBeInTheDocument()
+    expect(within(pendiente).getByText("$47.200")).toBeInTheDocument()
+    expect(within(pendiente).getByText("Pendiente")).toBeInTheDocument()
+
+    // El total del aviso vencido es el suyo, no el de otra fila.
+    expect(within(fila("AC-0002")).getByText("$120.000")).toBeInTheDocument()
+    expect(within(fila("AC-0002")).getByText("Vencido")).toBeInTheDocument()
+    expect(
+      within(fila("AC-0003")).getByText("Sin plazo declarado")
+    ).toBeInTheDocument()
+    expect(within(fila("AC-0004")).getByText("Pagado")).toBeInTheDocument()
+
+    expect(screen.getAllByRole("row")).toHaveLength(TODOS.length + 1)
   })
 
-  it("descarga el PDF con el contenido guardado y la huella del contenido", async () => {
-    const user = userEvent.setup()
-    render(<AvisosCobroPage />)
+  it("cada Descargar PDF apunta al PDF de SU aviso", () => {
+    render(<ConsolaAvisosCobro roles={["residente"]} />)
 
-    const botones = screen.getAllByRole("button", { name: /descargar/i })
-    expect(botones).toHaveLength(3)
-    await user.click(botones[0]!)
+    const enlaces = screen.getAllByRole("link", { name: /descargar/i })
+    expect(enlaces).toHaveLength(TODOS.length)
 
-    expect(fuente.documentoAvisoCobroPDF).toHaveBeenCalledTimes(1)
-    const entrada = fuente.documentoAvisoCobroPDF.mock.calls[0]![0] as {
-      aviso: { folio: string; codigoVerificacion: string; contenido: unknown }
-      hash: string
-      config: unknown
-      firmaDataUrl: string | null
+    for (const aviso of TODOS) {
+      const enlace = screen.getByRole("link", {
+        name: new RegExp(aviso.folio, "i"),
+      })
+      expect(enlace.getAttribute("href")).toBe(
+        `/api/avisos-cobro/${aviso.id}/pdf`
+      )
+      // La ruta ya responde `attachment`; el atributo evita que el navegador
+      // lo abra en la pestaña cuando el header no se respeta.
+      expect(enlace).toHaveAttribute("download")
+      expect(enlace.closest("tr")).toBe(fila(aviso.folio))
     }
-    // El documento se arma SOLO desde la fila guardada.
-    expect(entrada.aviso.folio).toBe("AC-0001")
-    expect(entrada.aviso.codigoVerificacion).toBe("VC-ABCD1234")
-    expect(entrada.aviso.contenido).toEqual(CONTENIDO)
-    // La huella es la del contenido congelado, no otra.
-    expect(entrada.hash).toBe(HASH)
-    expect(entrada.hash).toBe(hashContenido(entrada.aviso.contenido))
-    // Y la configuración que imprime el papel es la que sirvió la API.
-    expect(entrada.config).toEqual(DOCUMENTO)
-    // Sin firma resoluble el bloque queda en blanco: nunca una firma inventada.
-    expect(entrada.firmaDataUrl).toBeNull()
-    expect(fuente.descargarPdf).toHaveBeenCalledWith(
-      { content: "aviso" },
-      "aviso-cobro-AC-0001.pdf"
-    )
   })
 
-  it("resuelve la firma configurada para embeberla en el papel", async () => {
-    fuente.urlADataUrl.mockResolvedValue("data:image/png;base64,ZmlybWE=")
-    const user = userEvent.setup()
-    render(<AvisosCobroPage />)
+  it("sin avisos el residente ve el vacío de su unidad, no una tabla en blanco", () => {
+    fuente.estado = { ...fuente.estado, avisos: [], total: 0 }
+    render(<ConsolaAvisosCobro roles={["residente"]} />)
 
-    await user.click(screen.getAllByRole("button", { name: /descargar/i })[0]!)
-
-    expect(fuente.urlADataUrl).toHaveBeenCalledWith(DOCUMENTO.firmaDigitalizadaUrl)
-    const entrada = fuente.documentoAvisoCobroPDF.mock.calls[0]![0] as {
-      firmaDataUrl: string | null
-    }
-    expect(entrada.firmaDataUrl).toBe("data:image/png;base64,ZmlybWE=")
+    expect(
+      screen.getByText(/todavía no hay avisos para tu unidad/i)
+    ).toBeInTheDocument()
+    expect(screen.queryByRole("table")).not.toBeInTheDocument()
+    expect(screen.queryByRole("link", { name: /descargar/i })).toBeNull()
   })
 
-  it("sin avisos emite el estado vacío en vez de una tabla en blanco", () => {
+  it("la gestión no lee el vacío como si fuera «su unidad»", () => {
+    fuente.estado = { ...fuente.estado, avisos: [], total: 0 }
+    render(<ConsolaAvisosCobro roles={["comite"]} />)
+
+    expect(
+      screen.getByText(/la comunidad todavía no tiene avisos de cobro emitidos/i)
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/tu unidad/i)).toBeNull()
+  })
+
+  it("sin configuración de la comunidad no ofrece una descarga que la API va a rechazar", () => {
+    fuente.estado = { ...fuente.estado, documento: null }
+    render(<ConsolaAvisosCobro roles={["residente"]} />)
+
+    expect(
+      screen.getByText(/no tiene configuración registrada/i)
+    ).toBeInTheDocument()
+    // Sin CF la ruta responde 409: se dice, no se ofrece un enlace muerto.
+    expect(screen.queryByRole("link", { name: /descargar/i })).toBeNull()
+    expect(
+      within(fila("AC-0001")).getByRole("button", { name: /descargar/i })
+    ).toBeDisabled()
+  })
+
+  it("muestra el error de la API cuando la lectura falla", () => {
     fuente.estado = {
+      ...fuente.estado,
       avisos: [],
-      documento: DOCUMENTO,
-      total: 0,
-      isLoading: false,
-      error: null,
+      error: new Error("Permiso denegado."),
     }
-    render(<AvisosCobroPage />)
+    render(<ConsolaAvisosCobro roles={["residente"]} />)
 
-    expect(texto(document.body)).toMatch(/todavía no tenés avisos de cobro/i)
-    expect(screen.queryByRole("button", { name: /descargar/i })).not.toBeInTheDocument()
+    expect(texto(document.body)).toContain("Permiso denegado.")
+  })
+})
+
+describe("portón y menú de /comunidad/avisos-cobro", () => {
+  it("admite a quien la matriz deja leer el aviso y a nadie más", () => {
+    // Las dos claves de lectura de F27: `fi:gasto_comun` ver (administración y
+    // comité) y `fi:aviso:propio` ver (residente). Es el mismo par que decide
+    // `puedeLeerAvisosCobro` en la API.
+    expect(puedeVerAvisosCobro(["administrador"])).toBe(true)
+    expect(puedeVerAvisosCobro(["comite"])).toBe(true)
+    expect(puedeVerAvisosCobro(["residente"])).toBe(true)
+    expect(puedeVerAvisosCobro(["conserjeria"])).toBe(false)
+    expect(puedeVerAvisosCobro(["mantencion"])).toBe(false)
+    expect(puedeVerAvisosCobro([])).toBe(false)
   })
 
-  it("si la descarga falla lo dice: no confirma un PDF que no se descargó", async () => {
-    fuente.descargarPdf.mockRejectedValue(new Error("permiso denegado por el navegador"))
-    const user = userEvent.setup()
-    render(<AvisosCobroPage />)
+  it("el menú del residente lleva a la pantalla; conserjería no la ve", () => {
+    // jsdom no implementa matchMedia y el SidebarProvider lo consulta.
+    Object.defineProperty(window, "matchMedia", {
+      configurable: true,
+      writable: true,
+      value: (consulta: string) => ({
+        matches: false,
+        media: consulta,
+        onchange: null,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        addListener: () => {},
+        removeListener: () => {},
+        dispatchEvent: () => false,
+      }),
+    })
 
-    await user.click(screen.getAllByRole("button", { name: /descargar/i })[0]!)
+    const montarMenu = (roles: string[]) =>
+      render(
+        <TooltipProvider>
+          <SidebarProvider>
+            <AppSidebar roles={roles} />
+          </SidebarProvider>
+        </TooltipProvider>
+      )
 
-    expect(await screen.findByText(/no se pudo generar el pdf/i)).toBeInTheDocument()
+    montarMenu(["residente"])
+    expect(
+      screen
+        .getByRole("link", { name: "Avisos de Cobro" })
+        .getAttribute("href")
+    ).toBe("/comunidad/avisos-cobro")
+    cleanup()
+
+    montarMenu(["conserjeria"])
+    expect(screen.queryByRole("link", { name: "Avisos de Cobro" })).toBeNull()
   })
 })

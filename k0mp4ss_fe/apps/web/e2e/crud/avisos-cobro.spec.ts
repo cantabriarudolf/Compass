@@ -214,12 +214,26 @@ test.describe("CRUD — Finanzas/Avisos de Cobro", () => {
       // La espera va sobre el page del RESIDENTE (el del contexto propio), no
       // sobre el del administrador, y sólo después de que la fila del aviso está
       // visible con su folio y su total.
-      const botonDescargar = filaAviso.getByRole("button", { name: "Descargar PDF" })
-      await expect(botonDescargar).toBeEnabled({ timeout: 30_000 })
+      //
+      // El control es un ENLACE, no un botón: el papel lo sirve el SERVIDOR
+      // desde la fila guardada (`GET /api/avisos-cobro/<id>/pdf`, que responde
+      // `attachment` con el folio en el nombre) y el `download` hace que el clic
+      // baje el archivo en vez de abrir una pestaña. El `id` del aviso emitido es
+      // lo único que entra en la URL, así que se afirma tal cual.
+      const enlaceDescargar = filaAviso.getByRole("link", {
+        name: `Descargar el PDF del aviso ${avisoEmitido.folio} (período ${periodo})`,
+      })
+      await expect(enlaceDescargar).toHaveAttribute(
+        "href",
+        `/api/avisos-cobro/${avisoEmitido.id}/pdf`,
+      )
+      await expect(enlaceDescargar).toHaveAttribute("download", "")
+      await expect(enlaceDescargar).toBeEnabled({ timeout: 30_000 })
 
-      // El builder de pdfmake corre en el cliente: si revienta, la descarga no
-      // llega nunca y el motivo queda en la excepción de la página. La excepción
-      // se informa con su mensaje exacto antes que el timeout de la descarga.
+      // El documento viaja como descarga servida por la ruta: si esa ruta falla,
+      // el evento `download` no llega nunca y el motivo queda en el timeout (o en
+      // la excepción de la página, que se informa con su mensaje exacto antes que
+      // ese timeout).
       let errorDescarga: Error | null = null
       const esperaDescarga = pageResidente
         .waitForEvent("download", { timeout: 30_000 })
@@ -231,7 +245,7 @@ test.describe("CRUD — Finanzas/Avisos de Cobro", () => {
           },
         )
 
-      await botonDescargar.click()
+      await enlaceDescargar.click()
       const descarga = await esperaDescarga
 
       await expect(
@@ -251,12 +265,12 @@ test.describe("CRUD — Finanzas/Avisos de Cobro", () => {
       const bytes = fs.readFileSync(rutaPdf as string).length
       expect(bytes, "el PDF descargado no puede estar vacío").toBeGreaterThan(1000)
 
-      // Y la pantalla lo reporta con el folio del aviso emitido.
-      await expect(
-        pageResidente.getByText(
-          `PDF ${avisoEmitido.folio} generado con la huella de su contenido congelado.`,
-        ),
-      ).toBeVisible({ timeout: 30_000 })
+      // Se RETIRA la afirmación del texto de confirmación del cliente (el que
+      // decía «PDF <folio> generado con la huella de su contenido congelado»):
+      // el PDF ya no se arma en el navegador. La pantalla sólo enlaza el
+      // documento que el SERVIDOR sirve desde la fila guardada, así que no queda
+      // ningún estado «generado» del lado del cliente que observar. El documento
+      // queda probado arriba, por el archivo descargado: su nombre y sus bytes.
 
       expect(erroresAdmin, "Excepciones no capturadas en finanzas/gastos-comunes").toEqual([])
       expect(erroresResidente, "Excepciones no capturadas en comunidad/avisos-cobro").toEqual([])

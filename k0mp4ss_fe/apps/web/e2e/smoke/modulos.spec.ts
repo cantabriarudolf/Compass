@@ -9,6 +9,11 @@ const MODULOS = [
   // La pestaña «Biblioteca» de Comunicación se retiró (F35 serie A, T11): el
   // Archivo de Documentos es la única lista y se humea por su propia ruta.
   "/comunidad/archivo",
+  // F27: el aviso de cobro del residente. La ruta se humea acá porque la
+  // pantalla abre con el portón de la matriz (`fi:gasto_comun` ver para
+  // administración y comité, `fi:aviso:propio` ver para el residente) y lee la
+  // colección real: si el gate o la lectura se rompen, este módulo lo dice.
+  "/comunidad/avisos-cobro",
   "/finanzas/gastos-comunes",
   "/inventario/recursos",
   "/operaciones/reservas",
