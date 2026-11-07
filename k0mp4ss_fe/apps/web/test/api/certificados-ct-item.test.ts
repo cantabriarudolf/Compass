@@ -54,6 +54,11 @@ async function GET(id: string): Promise<Response> {
   })
 }
 
+async function GETColeccion(): Promise<Response> {
+  const { GET: handler } = await import("@/app/api/certificados-ct/route")
+  return handler(new NextRequest("http://localhost/api/certificados-ct?pageSize=100"))
+}
+
 async function DELETE(id: string): Promise<Response> {
   const { DELETE: handler } = await import("@/app/api/certificados-ct/[id]/route")
   return handler(
@@ -152,6 +157,36 @@ describe("/api/certificados-ct/[id] — detalle y baja inmutable scoped", () => 
     })
     await conSesion(emailComite, async () => {
       expect((await GET("ctitem-cert-1")).status).toBe(200)
+    })
+  })
+
+  it("GET colección → administrador y comité ven toda la comunidad (el alcance no los acota)", async () => {
+    // Preserva el comportamiento histórico del GET de colección para los roles de
+    // gestión: `alcanceCertificadosCT` devuelve `null` para ellos y el `where`
+    // sigue siendo la comunidad.
+    await sembrarCertificado("ctitem-cert-2", comunidad)
+    for (const email of [emailAdmin, emailComite]) {
+      await conSesion(email, async () => {
+        const res = await GETColeccion()
+        expect(res.status).toBe(200)
+        const json = (await res.json()) as { data: Array<{ id: string }> }
+        expect(new Set(json.data.map((c) => c.id))).toEqual(
+          new Set(["ctitem-cert-1", "ctitem-cert-2"])
+        )
+      })
+    }
+  })
+
+  it("GET colección → residente sin vínculos no recibe los certificados de la comunidad", async () => {
+    // El residente de este arnés no tiene `personaId` ni vínculos: «lo propio»
+    // queda vacío y la colección no puede devolver lo que antes entregaba la
+    // factory (solo `comunidadId`).
+    await conSesion(emailResidente, async () => {
+      const res = await GETColeccion()
+      expect(res.status).toBe(200)
+      const json = (await res.json()) as { data: unknown[]; total: number }
+      expect(json.data).toEqual([])
+      expect(json.total).toBe(0)
     })
   })
 

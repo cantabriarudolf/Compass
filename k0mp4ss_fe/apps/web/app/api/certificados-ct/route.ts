@@ -1,22 +1,45 @@
 /**
  * /api/certificados-ct — colección de certificados CT (BD-FUENTE-VERDAD Fase 5A).
  *
- * GET paginado vía factory. POST upsert idempotente con el gate de emisión
- * (deuda/saldo de la unidad) aplicado en servidor, no en el cliente.
+ * GET paginado con alcance por objeto. POST upsert idempotente con el gate de
+ * emisión (deuda/saldo de la unidad) aplicado en servidor, no en el cliente.
  * Authz: recurso "ct" (admin full, comité ver, residente ver/crear propios).
+ *
+ * Alcance (permisos por objeto, 2026-11-06): la matriz dice quién ENTRA a la
+ * ruta; qué FILAS ve lo decide `alcanceCertificadosCT`. Administrador y comité
+ * conservan la visión de toda la comunidad. Cualquier otro rol —el residente—
+ * lee solo «lo propio»: los certificados de sus unidades con vínculo vigente
+ * (`unidadesVinculadasDb`) o los emitidos a su persona (`personaIdDelUsuarioDb`).
+ * Ambos datos salen de la BD de la sesión, nunca del cliente. La misma regla
+ * acota la EMISIÓN (`rechazoDeEmisionAjena`): el residente no emite para una
+ * unidad/persona ajena, ni siquiera para que el gate de «al día» le imprima el
+ * saldo pendiente de un tercero en el mensaje de rechazo.
+ *
+ * La fila ajena responde 404 «Registro no encontrado.» y no 403: el 403
+ * confirmaría que el certificado existe, que es justo el dato que se protege
+ * (mismo criterio que notificaciones, liquidaciones e infracciones).
  *
  * Inmutabilidad (design.md Decisión 5): un certificado emitido es un documento
  * inmutable; `DELETE /api/certificados-ct/[id]` rechaza con 409 en la capa API y
  * el residuo TEST lo purga `e2e:higiene` (no `limpiar()`).
  */
 import { randomUUID } from "node:crypto"
+import type { Prisma } from "@prisma/client"
 import { CertificadoCTSchema, type MoraCobroFI, type PagoCobroFI } from "@/lib/schemas"
-import { puede } from "@/lib/authz"
+import { normalizaRol, puede } from "@/lib/authz"
 import { prisma } from "@/lib/prisma"
 import { logger } from "@/lib/logger"
 import { saldoPendiente } from "@/lib/finanzas-utils"
 import { createCrudHandlers } from "@/lib/api/crud-factory"
-import { jsonError, withComunidadScope } from "@/lib/api/with-comunidad-scope"
+import {
+  personaIdDelUsuarioDb,
+  unidadesVinculadasDb,
+} from "@/lib/api/sesion-persona"
+import {
+  jsonError,
+  withComunidadScope,
+  type ComunidadScope,
+} from "@/lib/api/with-comunidad-scope"
 
 function delegado(modelo: unknown) {
   return modelo as import("@/lib/api/crud-factory").CrudDelegate
@@ -28,7 +51,97 @@ export const certificadosHandlers = createCrudHandlers({
   authzCheck: (rol, accion) => puede(rol, accion, "ct"),
 })
 
-export const GET = certificadosHandlers.GET
+/** Roles que ven los certificados de toda la comunidad (sin acotar por objeto). */
+const VE_TODA_LA_COMUNIDAD = new Set(["administrador", "comite"])
+
+function veTodaLaComunidad(scope: ComunidadScope): boolean {
+  const rol = normalizaRol(scope.rol) ?? scope.rol.trim().toLowerCase()
+  return VE_TODA_LA_COMUNIDAD.has(rol)
+}
+
+/**
+ * Vínculos del actor para la familia CT, resueltos en el servidor.
+ *
+ * `personaId` es el del `Usuario` de la sesión y `unidades` son sus vínculos
+ * VIGENTES en la comunidad del scope: ni uno ni otro se aceptan del body/query
+ * (misma regla que `withComunidadScope` para el `comunidadId`).
+ */
+async function vinculosDelActor(
+  scope: ComunidadScope
+): Promise<{ personaId: string | null; unidades: string[] }> {
+  const personaId = await personaIdDelUsuarioDb(scope.usuarioId)
+  const unidades = personaId
+    ? await unidadesVinculadasDb(personaId, scope.comunidadId)
+    : []
+  return { personaId, unidades }
+}
+
+/**
+ * `where` de «lo propio» para un rol acotado, o `null` si el rol ve la comunidad
+ * completa. Es la ÚNICA definición del alcance CT: la consumen el GET de la
+ * colección y el GET por id, así que la lectura por lista y la lectura puntual no
+ * pueden divergir.
+ */
+export async function alcanceCertificadosCT(
+  scope: ComunidadScope
+): Promise<Prisma.CertificadoCTWhereInput | null> {
+  if (veTodaLaComunidad(scope)) return null
+
+  const { personaId, unidades } = await vinculosDelActor(scope)
+  const propios: Prisma.CertificadoCTWhereInput[] = []
+  if (personaId) propios.push({ personaId })
+  if (unidades.length > 0) propios.push({ unidadId: { in: unidades } })
+  // Sin persona ni vínculos no hay nada propio: `id in []` no matchea nada (más
+  // explícito que un `OR: []`, y no depende del dialecto).
+  return propios.length > 0 ? { OR: propios } : { id: { in: [] } }
+}
+
+/**
+ * GET paginado — mismo shape que la factory (`{ data, page, pageSize, total }`),
+ * con el `where` acotado por `alcanceCertificadosCT` antes de leer.
+ */
+export async function GET(req: Request): Promise<Response> {
+  const resultado = await withComunidadScope()
+  if (!resultado.ok) return resultado.response
+  const scope = resultado.scope
+
+  if (!puede(scope.rol, "ver", "ct")) {
+    return jsonError(403, "Permiso denegado.")
+  }
+
+  let url: URL
+  try {
+    url = new URL(req.url)
+  } catch {
+    return jsonError(400, "URL de solicitud inválida.")
+  }
+  const page = Math.max(1, Number.parseInt(url.searchParams.get("page") ?? "1", 10) || 1)
+  const pageSize = Math.min(
+    100,
+    Math.max(1, Number.parseInt(url.searchParams.get("pageSize") ?? "50", 10) || 50)
+  )
+
+  try {
+    const alcance = await alcanceCertificadosCT(scope)
+    const where: Prisma.CertificadoCTWhereInput = {
+      comunidadId: scope.comunidadId,
+      ...(alcance ?? {}),
+    }
+    const [data, total] = await Promise.all([
+      prisma.certificadoCT.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      prisma.certificadoCT.count({ where }),
+    ])
+    return Response.json({ data, page, pageSize, total })
+  } catch (e) {
+    logger.error({ err: e }, "[api/certificados-ct] error GET")
+    return jsonError(500, "Error interno del servidor.")
+  }
+}
 
 /**
  * Gate de emisión del certificado Al Día (paridad server-side con
@@ -78,6 +191,37 @@ async function gateSaldoAlDia(cuerpo: string): Promise<Response | null> {
   }
 }
 
+/**
+ * Guardia de emisión: fuera de la gestión, la unidad y la persona pedidas tienen
+ * que ser del actor (unidad con vínculo vigente, persona propia).
+ *
+ * Existe porque `ct` crear está abierto al residente y el POST aceptaba cualquier
+ * `unidadId` de la comunidad: con `tipo: "al_dia"` el gate de saldo respondía 409
+ * con el monto pendiente de la unidad ajena en el mensaje. Por eso corre ANTES de
+ * `gateSaldoAlDia`, y por eso el rechazo es 404 y no 403: 403 diría que la unidad
+ * existe. Sin `unidadId`/`personaId` no hay dueño que verificar y no hay tercero
+ * al que aludir, así que la emisión sigue su curso.
+ */
+async function rechazoDeEmisionAjena(
+  datos: Record<string, unknown> | null
+): Promise<Response | null> {
+  if (!datos) return null // JSON inválido: lo reporta la factory con 400.
+  const unidadPedida = typeof datos.unidadId === "string" ? datos.unidadId.trim() : ""
+  const personaPedida = typeof datos.personaId === "string" ? datos.personaId.trim() : ""
+  if (!unidadPedida && !personaPedida) return null
+
+  const resultado = await withComunidadScope()
+  if (!resultado.ok) return resultado.response
+  const scope = resultado.scope
+  if (veTodaLaComunidad(scope)) return null // gestión: emite para toda la comunidad
+
+  const { personaId, unidades } = await vinculosDelActor(scope)
+  const unidadPropia = unidadPedida === "" || unidades.includes(unidadPedida)
+  const personaPropia = personaPedida === "" || personaPedida === personaId
+  if (unidadPropia && personaPropia) return null
+  return jsonError(404, "Registro no encontrado.")
+}
+
 /** Intentos de asignación de folio antes de rendirse ante colisiones reales. */
 const MAX_INTENTOS_CORRELATIVO = 3
 
@@ -90,13 +234,19 @@ const MAX_INTENTOS_CORRELATIVO = 3
  * Ahora el servidor completa `folio`/`codigoVerificacion` cuando el body no los
  * trae (o los trae vacíos) y delega el resto en la factory: mismo authz, mismo
  * scoping, misma validación, mismo upsert idempotente por id.
+ *
+ * Antes de todo eso corre `rechazoDeEmisionAjena`: el alcance por objeto se
+ * evalúa primero porque el gate de saldo imprime el monto de la unidad.
  */
 export async function POST(req: Request): Promise<Response> {
   const cuerpo = await req.text()
+  const datos = leerObjeto(cuerpo)
+  const rechazoAlcance = await rechazoDeEmisionAjena(datos)
+  if (rechazoAlcance) return rechazoAlcance
+
   const rechazo = await gateSaldoAlDia(cuerpo)
   if (rechazo) return rechazo
 
-  const datos = leerObjeto(cuerpo)
   // Folio y código explícitos: no hay nada que completar (el folio que manda el
   // QA-Lab o un import masivo se respeta tal cual, ver tests).
   if (!datos || (!vacio(datos.folio) && !vacio(datos.codigoVerificacion))) {

@@ -20,6 +20,15 @@
  * `co/mensajes-buzon`, `vinculos` (límite documentado) y `liquidaciones`
  * (T6: el trabajador lee la suya; el defecto de `pl:propia` sin usar queda
  * cerrado por la ruta, y este arnés fija la regla por fila).
+ * Recursos del tercer lote: `certificados-ct` (la fuga se CERRÓ el 2026-11-06: el
+ * residente leía el certificado de otra unidad porque el `where` de la ruta era
+ * solo la comunidad; ahora el alcance es «lo propio» —unidades con vínculo vigente
+ * o la propia persona— y la fila ajena responde 404. Los dos casos que estaban en
+ * `it.fails` son `it` normales, y la emisión tiene su propio caso: el residente no
+ * puede emitir para una unidad/persona ajena, ni siquiera para leer su saldo),
+ * `in/infracciones` (límite documentado en la lectura de gestión + la apelación
+ * propia, que es la regla por fila que sí se puede ejercitar) y
+ * `pe/encomiendas` (clave vacía: límite documentado, sin regla de fila posible).
  */
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest"
 import { prisma } from "@/lib/prisma"
@@ -85,6 +94,36 @@ const LIQ_A = "ppo-liq-a" // comunidad A, trabajador A-1
 const LIQ_A2 = "ppo-liq-a2" // comunidad A, trabajador A-2 (misma comunidad, otro trabajador)
 const LIQ_B = "ppo-liq-b" // comunidad B, trabajador B-1
 
+// Certificados CT (lote 3): el dueño es `unidadId`/`personaId`. Uno por unidad de
+// la comunidad A (para comparar propio contra ajeno) y uno de la comunidad B (para
+// el 404 cross-comunidad que la factory sí implementa).
+const CERT_A1 = "ppo-cert-a1" // unidad A-1, persona A-1
+const CERT_A2 = "ppo-cert-a2" // unidad A-2, persona A-2 (otra unidad)
+const CERT_B1 = "ppo-cert-b1" // comunidad B
+// Certificado SIN unidad: el dueño es solo `personaId` (caso `liquidacion_sueldo`
+// y cualquier documento emitido a una persona). Fija que «lo propio» no es solo
+// la unidad: la persona vinculada al usuario también acota.
+const CERT_PERSONA_A1 = "ppo-cert-persona-a1" // persona A-1, sin unidad
+// Cobro pendiente de la unidad A-2: es el dato que el gate de «al día» imprimía
+// en el mensaje de rechazo, así que un residente que emitía para la unidad ajena
+// leía su deuda sin tener vínculo con ella.
+const COBRO_DEUDA_A2 = "ppo-cobro-deuda-a2"
+const DEUDA_A2 = 543_210
+
+// Infracciones IN (lote 3): el dueño es `unidadId`. Las dos de A quedan
+// `en_revision` porque es el único estado que admite descargos de apelación.
+const INFR_A1 = "ppo-infr-a1" // unidad A-1 (propia de la sesión resA1)
+const INFR_A2 = "ppo-infr-a2" // unidad A-2 (ajena, misma comunidad)
+
+// Encomiendas PE (lote 3): el dueño es `destinatarioPersonaId`/`unidadId`.
+const ENC_A1 = "ppo-enc-a1" // destinatario A-1, unidad A-1
+const ENC_A2 = "ppo-enc-a2" // destinatario A-2, unidad A-2
+const ENC_B1 = "ppo-enc-b1" // comunidad B
+
+/** Descargos válidos (mínimo 10 caracteres, `apelar/route.ts:53`). */
+const DESCARGO =
+  "Los ruidos provenían de la mudanza del vecino del 102, no de mi unidad."
+
 // Vínculos vigentes creados por el arnés (uno por persona/unidad).
 const V_A1 = `ppo-v-${P_A1}`
 const V_A2 = `ppo-v-${P_A2}`
@@ -116,8 +155,19 @@ const moduloMensajeBuzon = () => import("@/app/api/co/mensajes-buzon/[id]/route"
 const moduloVinculo = () => import("@/app/api/vinculos/[id]/route")
 const moduloLiquidaciones = () => import("@/app/api/liquidaciones/route")
 const moduloLiquidacion = () => import("@/app/api/liquidaciones/[id]/route")
+const moduloCertificadosCT = () => import("@/app/api/certificados-ct/route")
+const moduloCertificadoCT = () => import("@/app/api/certificados-ct/[id]/route")
+const moduloInfracciones = () => import("@/app/api/in/infracciones/route")
+const moduloInfraccion = () => import("@/app/api/in/infracciones/[id]/route")
+const moduloApelarInfraccion = () => import("@/app/api/in/infracciones/[id]/apelar/route")
+const moduloEncomiendas = () => import("@/app/api/pe/encomiendas/route")
+const moduloEncomienda = () => import("@/app/api/pe/encomiendas/[id]/route")
 
 async function limpiar(): Promise<void> {
+  await prisma.certificadoCT.deleteMany({ where: { comunidadId: { in: [COM_A, COM_B] } } })
+  await prisma.cobroFI.deleteMany({ where: { comunidadId: { in: [COM_A, COM_B] } } })
+  await prisma.infraccionIN.deleteMany({ where: { comunidadId: { in: [COM_A, COM_B] } } })
+  await prisma.encomiendaPE.deleteMany({ where: { comunidadId: { in: [COM_A, COM_B] } } })
   await prisma.controlPropiedadArchivada.deleteMany({
     where: { comunidadId: { in: [COM_A, COM_B] } },
   })
@@ -397,6 +447,146 @@ beforeAll(async () => {
   ]) {
     await prisma.liquidacionPL.create({ data: fila as never })
   }
+
+  // Certificados CT: el `resumen` y el `folio` distintos hacen visible, en la
+  // relectura, que el documento que viaja es el de la otra unidad.
+  await prisma.certificadoCT.createMany({
+    data: [
+      {
+        id: CERT_A1,
+        comunidadId: COM_A,
+        folio: "CT-0001",
+        codigoVerificacion: "VC-AAA111",
+        tipo: "residencia",
+        unidadId: U_A1,
+        personaId: P_A1,
+        solicitanteNombre: "Ana Auno",
+        resumen: "Certificado de residencia de la unidad 101.",
+        detalle: [{ clave: "Unidad", valor: "101" }],
+        fechaEmision: "2026-11-06",
+      },
+      {
+        id: CERT_A2,
+        comunidadId: COM_A,
+        folio: "CT-0002",
+        codigoVerificacion: "VC-BBB222",
+        tipo: "estado_cuenta",
+        unidadId: U_A2,
+        personaId: P_A2,
+        solicitanteNombre: "Beto Ados",
+        resumen: "Estado de cuenta de la unidad 102.",
+        detalle: [{ clave: "Unidad", valor: "102" }],
+        fechaEmision: "2026-11-06",
+      },
+      {
+        id: CERT_B1,
+        comunidadId: COM_B,
+        folio: "CT-0001",
+        codigoVerificacion: "VC-CCC333",
+        tipo: "residencia",
+        unidadId: U_B1,
+        personaId: P_B1,
+        solicitanteNombre: "Caro Buno",
+        resumen: "Certificado de residencia de la unidad 201.",
+        detalle: [{ clave: "Unidad", valor: "201" }],
+        fechaEmision: "2026-11-06",
+      },
+      {
+        id: CERT_PERSONA_A1,
+        comunidadId: COM_A,
+        folio: "CT-0003",
+        codigoVerificacion: "VC-DDD444",
+        tipo: "liquidacion_sueldo",
+        unidadId: null,
+        personaId: P_A1,
+        solicitanteNombre: "Ana Auno",
+        resumen: "Certificado de renta de la persona A-1.",
+        detalle: [{ clave: "Persona", valor: "Ana Auno" }],
+        fechaEmision: "2026-11-06",
+      },
+    ],
+  })
+
+  // Deuda de la unidad A-2: existe para poder observar (y luego cerrar) que el
+  // gate de «al día» imprimía el saldo de una unidad ajena en el rechazo.
+  await prisma.cobroFI.create({
+    data: {
+      id: COBRO_DEUDA_A2,
+      comunidadId: COM_A,
+      unidadId: U_A2,
+      periodo: "2026-10",
+      concepto: "gasto_comun",
+      origenModulo: "manual",
+      fondoId: "ppo-fondo-gc",
+      descripcion: "GC pendiente de la unidad 102 (arnés de permisos por objeto).",
+      montoBase: DEUDA_A2,
+      fechaCargo: "2026-10-01",
+      fechaVencimiento: "2026-10-31",
+      moras: [],
+      pagos: [],
+      diferencias: [],
+    },
+  })
+
+  // Infracciones IN: `en_revision` es el estado que admite descargos, así que la
+  // apelación se puede probar sin fabricar transiciones previas.
+  const infraccion = (id: string, comunidadId: string, unidadId: string, folio: string) => ({
+    id,
+    comunidadId,
+    folio,
+    unidadId,
+    fechaSuceso: "2026-11-04",
+    horaSuceso: "22:15",
+    antecedentes:
+      "Ruido excesivo después del horario de descanso fijado en el reglamento.",
+    evidencias: [],
+    estado: "en_revision",
+    fechaRegistro: "2026-11-05",
+    comentariosDirectiva: [],
+    respaldosDirectiva: [],
+  })
+  await prisma.infraccionIN.createMany({
+    data: [
+      infraccion(INFR_A1, COM_A, U_A1, "IN-0001"),
+      infraccion(INFR_A2, COM_A, U_A2, "IN-0002"),
+    ],
+  })
+
+  // Encomiendas PE: una por unidad de A y una de B (404 cross-comunidad).
+  await prisma.encomiendaPE.createMany({
+    data: [
+      {
+        id: ENC_A1,
+        comunidadId: COM_A,
+        courierId: "ppo-courier",
+        destinatarioPersonaId: P_A1,
+        unidadId: U_A1,
+        descripcionPaquete: "Caja mediana sellada.",
+        fechaRecepcion: "2026-11-05",
+        estado: "recibida",
+      },
+      {
+        id: ENC_A2,
+        comunidadId: COM_A,
+        courierId: "ppo-courier",
+        destinatarioPersonaId: P_A2,
+        unidadId: U_A2,
+        descripcionPaquete: "Sobre certificado.",
+        fechaRecepcion: "2026-11-05",
+        estado: "recibida",
+      },
+      {
+        id: ENC_B1,
+        comunidadId: COM_B,
+        courierId: "ppo-courier",
+        destinatarioPersonaId: P_B1,
+        unidadId: U_B1,
+        descripcionPaquete: "Bolsa de supermercado.",
+        fechaRecepcion: "2026-11-05",
+        estado: "recibida",
+      },
+    ],
+  })
 }, 30_000)
 
 afterAll(async () => {
@@ -1201,3 +1391,384 @@ describe("liquidaciones — defecto declarado: `pl:propia` sin usar (T3) → cer
   })
 })
 
+describe("certificados-ct — el dueño es `unidadId`/`personaId` (lote 3)", () => {
+  it("control: el administrador de A abre el certificado de la unidad de A-2", async () => {
+    await conSesion(EMAIL.adminA, async () => {
+      const res = await invocarApi(moduloCertificadoCT(), "GET", "certificados-ct/[id]", {
+        params: { id: CERT_A2 },
+      })
+      // app/api/certificados-ct/[id]/route.ts — alcanceCertificadosCT devuelve `null`
+      // para administrador (wildcard `ct` ver): la fila de la unidad 102 existe y es
+      // legible, así el 404 del residente de los casos siguientes no es «fila ausente».
+      expect(res.status).toBe(200)
+      expect((await cuerpoJson<{ id: string }>(res)).id).toBe(CERT_A2)
+
+      const coleccion = await invocarApi(
+        moduloCertificadosCT(),
+        "GET",
+        "certificados-ct?pageSize=100"
+      )
+      expect(coleccion.status).toBe(200)
+      const j = await cuerpoJson<Envelope<{ id: string }>>(coleccion)
+      // app/api/certificados-ct/route.ts — sin alcance (gestión) el `where` sigue
+      // siendo la comunidad: los tres certificados de A están en la base y el
+      // administrador los ve, incluido el de la persona sin unidad.
+      expect(new Set(j.data.map((c) => c.id))).toEqual(
+        new Set([CERT_A1, CERT_A2, CERT_PERSONA_A1])
+      )
+    })
+  })
+
+  it("residente A-1: el certificado de la unidad de A-2 → 404, igual que un id inexistente", async () => {
+    // Regla aplicada (app/api/certificados-ct/route.ts · alcanceCertificadosCT):
+    // «lo propio» = mis unidades con vínculo vigente (`unidadesVinculadasDb`) o mi
+    // persona (`personaIdDelUsuarioDb`), ambas resueltas server-side. Un certificado
+    // de otra unidad no es legible → 404 y no 403: el 403 confirmaría que existe.
+    //
+    // Este caso estaba en `it.fails` con la fuga abierta: `GET
+    // /api/certificados-ct/ppo-cert-a2` respondía **200** con la fila entera de la
+    // unidad 102 —`folio: "CT-0002"`, `codigoVerificacion: "VC-BBB222"`,
+    // `personaId: "ppo-p-a2"`, `unidadId: "ppo-u-a2"`, `resumen` y `detalle`— porque
+    // el residente tiene `ct` ver (`lib/authz.ts:216`) y el único filtro de la ruta
+    // era la comunidad (`lib/api/crud-factory.ts:335`). El `unidadId ∈
+    // unidadesVinculadas` que el motor declara (`lib/authz.ts:480`) ahora lo cablea
+    // la ruta.
+    await conSesion(EMAIL.resA1, async () => {
+      const res = await invocarApi(moduloCertificadoCT(), "GET", "certificados-ct/[id]", {
+        params: { id: CERT_A2 },
+      })
+      // Contrato exigido: la fila ajena responde igual que un id inexistente.
+      expect(res.status).toBe(404)
+      // Y el cuerpo no puede llevar el documento ajeno.
+      const cuerpo = await cuerpoJson<Record<string, unknown>>(res)
+      expect(cuerpo).not.toHaveProperty("folio")
+      expect(cuerpo).not.toHaveProperty("codigoVerificacion")
+      // El 404 es el genérico de la ruta: ni siquiera dice «existe pero no es tuya».
+      expect(cuerpo).toEqual({ error: "Registro no encontrado." })
+    })
+  })
+
+  it("residente A-1: la colección no trae el certificado de A-2 (solo lo propio)", async () => {
+    // Misma corrida, misma fuga: `GET /api/certificados-ct?pageSize=100` devolvía
+    // los DOS certificados de la comunidad a la sesión de la unidad 101, con sus
+    // `personaId` y `unidadId`. Ahora el `where` suma el alcance antes de leer.
+    await conSesion(EMAIL.resA1, async () => {
+      const res = await invocarApi(
+        moduloCertificadosCT(),
+        "GET",
+        "certificados-ct?pageSize=100"
+      )
+      expect(res.status).toBe(200)
+      const j = await cuerpoJson<Envelope<{ id: string; unidadId?: string | null }>>(res)
+      expect(j.data.map((c) => c.id)).not.toContain(CERT_A2)
+      expect(j.data.every((c) => c.unidadId !== U_A2)).toBe(true)
+      // Lo propio sí viaja: su unidad y su persona (sin unidad). Sin esta mitad, un
+      // `where` vacío también pasaría el caso de arriba.
+      expect(new Set(j.data.map((c) => c.id))).toEqual(new Set([CERT_A1, CERT_PERSONA_A1]))
+      expect(j.total).toBe(2)
+    })
+  })
+
+  it("residente A-1: su certificado de unidad y el de su persona → 200", async () => {
+    await conSesion(EMAIL.resA1, async () => {
+      const propio = await invocarApi(moduloCertificadoCT(), "GET", "certificados-ct/[id]", {
+        params: { id: CERT_A1 },
+      })
+      expect(propio.status).toBe(200)
+      const fila = await cuerpoJson<{ id: string; folio: string }>(propio)
+      expect(fila.id).toBe(CERT_A1)
+      expect(fila.folio).toBe("CT-0001")
+
+      // Documento de la persona sin unidad: el dueño es `personaId`, no `unidadId`.
+      const dePersona = await invocarApi(
+        moduloCertificadoCT(),
+        "GET",
+        "certificados-ct/[id]",
+        { params: { id: CERT_PERSONA_A1 } }
+      )
+      expect(dePersona.status).toBe(200)
+      expect((await cuerpoJson<{ id: string }>(dePersona)).id).toBe(CERT_PERSONA_A1)
+    })
+  })
+
+  it("residente A-2: el certificado de la persona A-1 → 404 (la persona también acota)", async () => {
+    await conSesion(EMAIL.resA2, async () => {
+      const res = await invocarApi(moduloCertificadoCT(), "GET", "certificados-ct/[id]", {
+        params: { id: CERT_PERSONA_A1 },
+      })
+      // Misma comunidad, otra persona: el documento es de A-1, no de la unidad 102.
+      expect(res.status).toBe(404)
+      expect(await cuerpoJson<{ error: string }>(res)).toEqual({
+        error: "Registro no encontrado.",
+      })
+
+      const coleccion = await invocarApi(
+        moduloCertificadosCT(),
+        "GET",
+        "certificados-ct?pageSize=100"
+      )
+      const j = await cuerpoJson<Envelope<{ id: string }>>(coleccion)
+      expect(j.data.map((c) => c.id)).toEqual([CERT_A2])
+    })
+  })
+
+  it("residente A-1: emitir para la unidad ajena → 404, sin fila y sin el saldo ajeno", async () => {
+    // HALLAZGO del mismo lote, en la superficie de ESCRITURA: el residente tiene
+    // `ct` crear (`lib/authz.ts:216`) y el POST aceptaba cualquier `unidadId` de la
+    // comunidad. Con `tipo: "al_dia"` el gate de saldo respondía **409** con el
+    // monto pendiente de la unidad ajena en el mensaje (información financiera de
+    // un tercero, sin vínculo con él). Se cierra con la misma regla: la unidad
+    // pedida tiene que ser una de las vinculadas del actor.
+    await conSesion(EMAIL.resA1, async () => {
+      const res = await invocarApi(moduloCertificadosCT(), "POST", "certificados-ct", {
+        body: {
+          id: "ppo-cert-intruso",
+          tipo: "al_dia",
+          unidadId: U_A2,
+          personaId: P_A2,
+          solicitanteNombre: "Ana Auno",
+          resumen: "Emisión para la unidad ajena.",
+          detalle: [{ clave: "Unidad", valor: "102" }],
+          fechaEmision: "2026-11-06",
+        },
+      })
+      const json = await cuerpoJson<Record<string, unknown>>(res)
+      // El mensaje lleva el cuerpo observado: en rojo muestra el monto filtrado.
+      expect(res.status, JSON.stringify(json)).toBe(404)
+      expect(json).toEqual({ error: "Registro no encontrado." })
+      expect(JSON.stringify(json)).not.toContain("543")
+      expect(
+        await prisma.certificadoCT.findUnique({ where: { id: "ppo-cert-intruso" } })
+      ).toBeNull()
+    })
+  })
+
+  it("residente A-1: emitir con la persona ajena → 404 y no crea el documento", async () => {
+    // Tercera pata del alcance: `personaId` tampoco es del cliente. Un residente
+    // no emite un documento a nombre de otra persona de la comunidad.
+    await conSesion(EMAIL.resA1, async () => {
+      const res = await invocarApi(moduloCertificadosCT(), "POST", "certificados-ct", {
+        body: {
+          id: "ppo-cert-fantasma",
+          tipo: "liquidacion_sueldo",
+          personaId: P_A2,
+          solicitanteNombre: "Beto Ados",
+          resumen: "Certificado a nombre de otra persona.",
+          detalle: [{ clave: "Persona", valor: "Beto Ados" }],
+          fechaEmision: "2026-11-06",
+        },
+      })
+      const json = await cuerpoJson<Record<string, unknown>>(res)
+      expect(res.status, JSON.stringify(json)).toBe(404)
+      expect(json).toEqual({ error: "Registro no encontrado." })
+      expect(
+        await prisma.certificadoCT.findUnique({ where: { id: "ppo-cert-fantasma" } })
+      ).toBeNull()
+    })
+  })
+
+  it("residente A-1: emitir para su propia unidad sigue funcionando → 201", async () => {
+    // Preserva lo que ya hacía: el residente emite el certificado de su unidad
+    // (`ct` crear) con folio y código explícitos, como el QA-Lab del e2e.
+    await conSesion(EMAIL.resA1, async () => {
+      const res = await invocarApi(moduloCertificadosCT(), "POST", "certificados-ct", {
+        body: {
+          id: "ppo-cert-propio-nuevo",
+          folio: "CT-9101",
+          codigoVerificacion: "VC-RESA1",
+          tipo: "residencia",
+          unidadId: U_A1,
+          personaId: P_A1,
+          solicitanteNombre: "Ana Auno",
+          resumen: "Certificado de residencia de la unidad 101.",
+          detalle: [{ clave: "Unidad", valor: "101" }],
+          fechaEmision: "2026-11-06",
+        },
+      })
+      const json = await cuerpoJson<Record<string, unknown>>(res)
+      expect(res.status, JSON.stringify(json)).toBe(201)
+      const enBd = await prisma.certificadoCT.findUnique({
+        where: { id: "ppo-cert-propio-nuevo" },
+      })
+      expect(enBd?.unidadId).toBe(U_A1)
+      expect(enBd?.personaId).toBe(P_A1)
+    })
+  })
+
+  it("residente A-1: un certificado de otra comunidad → 404 (la comunidad sí se filtra)", async () => {
+    await conSesion(EMAIL.resA1, async () => {
+      const res = await invocarApi(moduloCertificadoCT(), "GET", "certificados-ct/[id]", {
+        params: { id: CERT_B1 },
+      })
+      // lib/api/crud-factory.ts:335 — `record.comunidadId !== scope.comunidadId` → 404
+      // genérico. Es el único filtro de la ruta además de la clave: la comunidad queda
+      // cerrada y el DUEÑO no, que es el hallazgo que fijan los dos casos de arriba.
+      expect(res.status).toBe(404)
+      expect(await cuerpoJson<{ error: string }>(res)).toEqual({
+        error: "Registro no encontrado.",
+      })
+    })
+  })
+})
+
+describe("in/infracciones — dueño por unidad: lectura de gestión y apelación propia (lote 3)", () => {
+  it("control: conserjería (`in` ver) lee el expediente de las dos unidades", async () => {
+    await conSesion(EMAIL.conserjeA, async () => {
+      const item = await invocarApi(moduloInfraccion(), "GET", "in/infracciones/[id]", {
+        params: { id: INFR_A2 },
+      })
+      // lib/authz.ts:199 — `in` ver/crear para conserjería + lib/api/crud-factory.ts:327:
+      // el detalle de la unidad 102 se sirve completo a un rol de gestión.
+      expect(item.status).toBe(200)
+      expect((await cuerpoJson<{ id: string; unidadId: string }>(item)).unidadId).toBe(U_A2)
+
+      const coleccion = await invocarApi(moduloInfracciones(), "GET", "in/infracciones?pageSize=100")
+      expect(coleccion.status).toBe(200)
+      const j = await cuerpoJson<Envelope<{ id: string }>>(coleccion)
+      // lib/api/crud-factory.ts:236 — el `where` es la comunidad, así que la gestión
+      // (comité por `lib/authz.ts:112`, conserjería por `:199`) ve las dos filas. No es
+      // una fuga: el único rol con unidad —el residente— no tiene `in` (caso siguiente).
+      expect(new Set(j.data.map((i) => i.id))).toEqual(new Set([INFR_A1, INFR_A2]))
+    })
+  })
+
+  it("residente A-1: el expediente IN → 403 por CLAVE, idéntico con su infracción y con la ajena", async () => {
+    await conSesion(EMAIL.resA1, async () => {
+      const coleccion = await invocarApi(moduloInfracciones(), "GET", "in/infracciones?pageSize=100")
+      // lib/authz.ts:280 — el residente solo tiene `in:apelar` crear: no hay clave `in`
+      // (ni base que la conceda), y `lib/api/crud-factory.ts:220` corta antes de armar
+      // el `where`. LÍMITE DOCUMENTADO: la lectura del expediente no es ejercitable por
+      // fila en este recurso, porque el dueño de la fila no entra a la ruta.
+      expect(coleccion.status).toBe(403)
+      const cuerpo = await cuerpoJson<{ error: string }>(coleccion)
+      expect(cuerpo).toEqual({ error: "Permiso denegado." })
+
+      const propia = await invocarApi(moduloInfraccion(), "GET", "in/infracciones/[id]", {
+        params: { id: INFR_A1 },
+      })
+      // Control del límite: el mismo 403 llega con SU unidad, así que no hay regla de
+      // fila que pinchar en la lectura. La regla por fila de este recurso vive en
+      // `apelar` (los dos casos siguientes), que es la ruta que el residente sí alcanza.
+      expect(propia.status).toBe(403)
+      expect(await cuerpoJson<{ error: string }>(propia)).toEqual(cuerpo)
+    })
+  })
+
+  it("residente A-1: apelar la infracción de A-2 → 404 y la fila ajena no cambia", async () => {
+    await conSesion(EMAIL.resA1, async () => {
+      const antes = await prisma.infraccionIN.findUnique({ where: { id: INFR_A2 } })
+      const res = await invocarApi(
+        moduloApelarInfraccion(),
+        "POST",
+        "in/infracciones/[id]/apelar",
+        { params: { id: INFR_A2 }, body: { descargos: DESCARGO } }
+      )
+      // app/api/in/infracciones/[id]/apelar/route.ts:44 — `!unidadesVinculadas.includes(
+      // infraccion.unidadId)` → 404: el patrón canónico ABAC→404 del mapa de T1. La
+      // unidad de la sesión sale de `unidadesVinculadasDb` (`sesion-persona.ts:26`), no
+      // del cliente.
+      expect(res.status).toBe(404)
+      const cuerpo = await cuerpoJson<{ error: string }>(res)
+      expect(cuerpo).toEqual({ error: "Registro no encontrado." })
+      // apelar/route.ts:44-46 — el 404 de pertenencia sale antes del `update`, que vive
+      // en `:60`: el estado y la apelación de la fila ajena quedan iguales y no se firma
+      // ningún `IN_APELACION` (`:68`).
+      expect(await prisma.infraccionIN.findUnique({ where: { id: INFR_A2 } })).toEqual(antes)
+      expect(
+        await prisma.eventoAuditoria.count({
+          where: { comunidadId: COM_A, referenciaId: INFR_A2, tipoAccion: "IN_APELACION" },
+        })
+      ).toBe(0)
+
+      // Mismo 404 que un id inexistente: el ajeno de mi comunidad y el fantasma son
+      // indistinguibles (app/api/in/infracciones/_acciones.ts:86 para el cross-comunidad).
+      const fantasma = await invocarApi(
+        moduloApelarInfraccion(),
+        "POST",
+        "in/infracciones/[id]/apelar",
+        { params: { id: "ppo-infr-no-existe" }, body: { descargos: DESCARGO } }
+      )
+      expect(fantasma.status).toBe(404)
+      expect(await cuerpoJson<{ error: string }>(fantasma)).toEqual(cuerpo)
+    })
+  })
+
+  it("residente A-1: apelar SU infracción → 200 con los descargos persistidos (control negativo)", async () => {
+    await conSesion(EMAIL.resA1, async () => {
+      const res = await invocarApi(
+        moduloApelarInfraccion(),
+        "POST",
+        "in/infracciones/[id]/apelar",
+        { params: { id: INFR_A1 }, body: { descargos: DESCARGO } }
+      )
+      // apelar/route.ts:44 — con la unidad vinculada el predicado deja pasar: sin esta
+      // cara, «404 a toda apelación» pasaría por regla por fila.
+      expect(res.status).toBe(200)
+      expect(await cuerpoJson<{ ok: boolean }>(res)).toEqual({ ok: true })
+      const fila = await prisma.infraccionIN.findUnique({ where: { id: INFR_A1 } })
+      // apelar/route.ts:60-66 — el estado pasa a `apelada` y los descargos quedan en la
+      // fila propia (no en la ajena); `:68` emite el único `IN_APELACION`.
+      expect(fila?.estado).toBe("apelada")
+      expect(fila?.apelacion).toMatchObject({ descargos: DESCARGO })
+      expect(
+        await prisma.eventoAuditoria.count({
+          where: { comunidadId: COM_A, referenciaId: INFR_A1, tipoAccion: "IN_APELACION" },
+        })
+      ).toBe(1)
+    })
+  })
+})
+
+describe("pe/encomiendas — clave vacía: el residente no lee el portón (lote 3)", () => {
+  it("control: conserjería de A abre la encomienda de la unidad de A-2", async () => {
+    await conSesion(EMAIL.conserjeA, async () => {
+      const res = await invocarApi(moduloEncomienda(), "GET", "pe/encomiendas/[id]", {
+        params: { id: ENC_A2 },
+      })
+      // lib/authz.ts:151 — `pe:encomienda` ver/crear/editar para conserjería, más
+      // lib/api/crud-factory.ts:327: el portón lee la fila completa (destinatario,
+      // unidad, descripción del paquete). El 403 del residente de abajo es la CLAVE,
+      // no la ausencia de la fila.
+      expect(res.status).toBe(200)
+      expect((await cuerpoJson<{ id: string }>(res)).id).toBe(ENC_A2)
+
+      const otraComunidad = await invocarApi(moduloEncomienda(), "GET", "pe/encomiendas/[id]", {
+        params: { id: ENC_B1 },
+      })
+      // lib/api/crud-factory.ts:335 — 404 cross-comunidad, el mismo contrato del resto.
+      expect(otraComunidad.status).toBe(404)
+    })
+  })
+
+  it("residente A-1 (destinatario de ENC_A1): 403 en la propia, en la ajena y en la colección", async () => {
+    await conSesion(EMAIL.resA1, async () => {
+      const propia = await invocarApi(moduloEncomienda(), "GET", "pe/encomiendas/[id]", {
+        params: { id: ENC_A1 },
+      })
+      // lib/authz.ts:234 — `pe:encomienda` es un Set vacío EXPLÍCITO para el residente
+      // (decisión owner 2026-11-05: el paquete llega por notificación, no leyendo la
+      // planilla del portón); el exact key corta el fallback de prefijo de `puede()`
+      // (`lib/authz.ts:407-411`). El 403 sale en `lib/api/crud-factory.ts:327` antes de
+      // leer la fila. No hay regla por fila que pinchar acá: NINGÚN rol con unidad lee
+      // el recurso (solo administración y conserjería, que ven la comunidad entera).
+      expect(propia.status).toBe(403)
+      const cuerpo = await cuerpoJson<{ error: string }>(propia)
+      expect(cuerpo).toEqual({ error: "Permiso denegado." })
+
+      // Control del límite: el 403 es el mismo para la encomienda de la unidad vecina,
+      // así que la respuesta no distingue dueño de tercero (ni siquiera confirma que
+      // el paquete exista).
+      const ajena = await invocarApi(moduloEncomienda(), "GET", "pe/encomiendas/[id]", {
+        params: { id: ENC_A2 },
+      })
+      expect(ajena.status).toBe(403)
+      expect(await cuerpoJson<{ error: string }>(ajena)).toEqual(cuerpo)
+
+      const coleccion = await invocarApi(moduloEncomiendas(), "GET", "pe/encomiendas?pageSize=100")
+      // Misma clave en la colección (`lib/api/crud-factory.ts:220`): no hay lista que
+      // filtrar y la de la unidad vecina tampoco aparece.
+      expect(coleccion.status).toBe(403)
+      expect(await cuerpoJson<{ error: string }>(coleccion)).toEqual(cuerpo)
+    })
+  })
+})
