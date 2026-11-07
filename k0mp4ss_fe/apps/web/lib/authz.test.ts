@@ -36,14 +36,19 @@ describe("lib/authz — matriz RP (pure, sin IO)", () => {
 
   it("comite — puede ver FI/balance y centro de mando, pero no crear FI ni gestionar usuarios", () => {
     expect(puede("comite", "ver", "FI")).toBe(true)
-    expect(puede("comite", "ver", "FI:balance")).toBe(true)
+    // D1 (2026-11-07): `fi:balance` se vació a propósito — es la misma capacidad que
+    // `fi` ver de la línea de arriba, sin puerta propia. La clave ya no concede nada.
+    expect(puede("comite", "ver", "FI:balance")).toBe(false)
     expect(puede("comite", "ejecutar", "FI:gasto_comun")).toBe(true) // aprobar gasto
     expect(puede("comite", "crear", "FI")).toBe(false)
     expect(puede("comite", "editar", "FI")).toBe(false)
     expect(puede("comite", "ver", "MP:morosidad")).toBe(true)
     expect(puede("comite", "ver", "RE:centro_mando")).toBe(true)
     expect(puede("comite", "crear", "RE:centro_mando")).toBe(false) // sin distribución
-    expect(puede("comite", "ver", "CT:historial")).toBe(true)
+    // D1: `ct:historial` se vació a propósito (no hay pantalla de historial; el
+    // comité ya lee `ct`). El fallback de prefijo, cortado por el Set vacío.
+    expect(puede("comite", "ver", "CT:historial")).toBe(false)
+    expect(puede("comite", "ver", "CT")).toBe(true)
     expect(puede("comite", "ver", "admin:usuarios")).toBe(false)
     expect(puede("comite", "ejecutar", "backup")).toBe(false)
     expect(puede("comite", "crear", "IR:interno")).toBe(false)
@@ -55,7 +60,9 @@ describe("lib/authz — matriz RP (pure, sin IO)", () => {
     expect(puede("conserjeria", "editar", "PE:bitacora")).toBe(true)
     expect(puede("conserjeria", "ejecutar", "PE:cierre_turno")).toBe(true)
     expect(puede("conserjeria", "ver", "PE:directorio")).toBe(true)
-    expect(puede("conserjeria", "ver", "PE:reporte_diario")).toBe(true)
+    // D1: el reporte diario PE nunca se construyó; conserjería conserva `pe` y `re`.
+    expect(puede("conserjeria", "ver", "PE:reporte_diario")).toBe(false)
+    expect(puede("conserjeria", "ver", "PE")).toBe(true)
     expect(puede("conserjeria", "ver", "FI")).toBe(false)
     expect(puede("conserjeria", "ver", "FI:balance")).toBe(false)
     expect(puede("conserjeria", "ver", "PE:ficha")).toBe(false)
@@ -84,8 +91,10 @@ describe("lib/authz — matriz RP (pure, sin IO)", () => {
 
   it("mantencion — puede ver/ejecutar MT y pedir ambos tipos de insumo, pero no admin usuarios ni FI", () => {
     expect(puede("mantencion", "ver", "MT")).toBe(true)
-    expect(puede("mantencion", "ejecutar", "MT:tarea")).toBe(true)
-    expect(puede("mantencion", "crear", "MT:incidente")).toBe(true)
+    // D1: `mt:tarea` y `mt:incidente` se vaciaron — mantención ya tiene `mt`
+    // completo (ver/crear/editar/ejecutar), verificado en la línea de arriba.
+    expect(puede("mantencion", "ejecutar", "MT:tarea")).toBe(false)
+    expect(puede("mantencion", "crear", "MT:incidente")).toBe(false)
     expect(puede("mantencion", "ver", "IR:mantenimiento")).toBe(true)
     expect(puede("mantencion", "ver", "IR:interno")).toBe(true)
     expect(puede("mantencion", "crear", "IR:interno")).toBe(true)
@@ -265,9 +274,9 @@ describe("lib/authz — puedeContextual ABAC (paridad 1:1)", () => {
     expect(puedeContextual("residente", "ver", "ct:propio", { unidadId: "u-A-999", unidadIdsVinculadas: ["u-A-101"] })).toBe(false)
     expect(puedeContextual("residente", "ver", "ct:al_dia", { unidadId: "u-A-101", unidadIdsVinculadas: ["u-A-101"] })).toBe(true)
     expect(puedeContextual("residente", "crear", "ct:al_dia", { unidadId: "u-B-202", unidadIdsVinculadas: ["u-A-101"] })).toBe(false)
-    // ct:propia (alias conserjeria) exige vinculación igual
-    expect(puedeContextual("conserjeria", "ver", "ct:propia", { unidadId: "u-A-101", unidadIdsVinculadas: ["u-A-101"] })).toBe(true)
-    expect(puedeContextual("conserjeria", "ver", "ct:propia", { unidadId: "u-X", unidadIdsVinculadas: ["u-A-101"] })).toBe(false)
+    // `ct:propia` (conserjería) se vació en D1: sin ruta ni pantalla, el staff no tiene
+    // certificado que pedir. La clave ya no concede nada, ni con vinculación válida.
+    expect(puedeContextual("conserjeria", "ver", "ct:propia", { unidadId: "u-A-101", unidadIdsVinculadas: ["u-A-101"] })).toBe(false)
   })
 
   // gd — privacidad residenteVeActas (paridad app/comunidad/directiva/page.tsx:73)
@@ -276,7 +285,7 @@ describe("lib/authz — puedeContextual ABAC (paridad 1:1)", () => {
     expect(puedeContextual("residente", "ver", "gd", { privacidad: { residenteVeActas: false } })).toBe(false)
     expect(puedeContextual("residente", "ver", "gd", {})).toBe(false)
     // comite/administrador no son gated por privacidad
-    expect(puedeContextual("comite", "ver", "ct:historial", {})).toBe(true)
+    expect(puedeContextual("comite", "ver", "gd", {})).toBe(true)
     expect(puedeContextual("administrador", "ver", "gd", {})).toBe(true)
   })
 
@@ -411,26 +420,32 @@ describe("lib/authz — reglasContextuales() snapshot ABAC para /admin/permisos"
     expect(reglas.find((e) => e.recurso === "gd:acta")!.donde).toBe("motor")
   })
 
-  it("morosidad — check local con residenteVeMorosidad (mp:morosidad y fi:morosidad)", () => {
+  // Decisión 2026-11-07 (D3 de «Permisos por objeto»): estas reglas las implementa el
+  // MOTOR (`puedeContextual`), no un check local de la UI. El «check local» que este
+  // inventario declaraba vivía en `lib/store.ts`, retirado con el store legacy: la
+  // bandera hoy no la obedece ninguna ruta porque ninguna llama al motor. El test
+  // pina la verdad —motor— y que el detalle lo diga.
+  it("morosidad — bandera implementada en el motor y sin ruta que la llame (mp:morosidad y fi:morosidad)", () => {
     const mp = reglas.find((e) => e.rol === "residente" && e.recurso === "mp:morosidad")
     const fi = reglas.find((e) => e.rol === "residente" && e.recurso === "fi:morosidad")
     expect(mp).toBeDefined()
     expect(fi).toBeDefined()
     expect(mp!.condicion).toBe("según privacidad: residenteVeMorosidad")
-    expect(mp!.donde).toBe("check local")
-    expect(fi!.donde).toBe("check local")
-    expect(mp!.detalle).toMatch(/app\/admin\/gestion/)
+    expect(mp!.donde).toBe("motor")
+    expect(mp!.detalle).toMatch(/ninguna ruta|NINGUNA ruta|sin ruta/i)
+    expect(fi!.donde).toBe("motor")
   })
 
-  it("alertasResidentesActivas — check local con notify:residente / pe:notify_residente", () => {
+  it("alertasResidentesActivas — en el motor, sin superficie de alerta para el residente", () => {
     const n = reglas.find((e) => e.recurso === "notify:residente")
     const pe = reglas.find((e) => e.recurso === "pe:notify_residente")
     expect(n).toBeDefined()
     expect(pe).toBeDefined()
     expect(n!.condicion).toBe("según privacidad: alertasResidentesActivas")
-    expect(n!.donde).toBe("check local")
-    expect(pe!.donde).toBe("check local")
-    expect(n!.detalle).toMatch(/lib\/store\.ts:1327/)
+    expect(n!.donde).toBe("motor")
+    expect(n!.detalle).toMatch(/ninguna ruta|sin ruta/i)
+    expect(pe!.donde).toBe("motor")
+    expect(pe!.detalle).toMatch(/store legacy|ya no existe/i)
   })
 
   it("retorna copia no referencial y nunca desincroniza con el motor (puedeContextual)", () => {

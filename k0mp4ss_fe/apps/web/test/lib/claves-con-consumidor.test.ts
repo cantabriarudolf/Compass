@@ -278,6 +278,52 @@ const MOTIVO_PENDIENTE =
   "hallazgo: declarada y sin consumidor, decisión pendiente"
 
 const EXENCIONES: readonly Exencion[] = [
+  // ── Vaciadas por D1 (2026-11-07): concedían acciones y nadie las pedía ────
+  // Son las 7 que el guardián contaba como «declarada y sin consumidor». No se
+  // borran: se vacían, porque borrar la entrada devolvería la concesión por el
+  // fallback de prefijo. El motivo dice por qué la capacidad no existe o sobra.
+  {
+    clave: "fi:balance",
+    clase: "vacia-a-proposito",
+    motivo:
+      "redundante: el comité ya tiene `fi` ver, que es la capacidad real. No existe una pantalla de balance que pida esta clave.",
+  },
+  {
+    clave: "ct:historial",
+    clase: "vacia-a-proposito",
+    motivo:
+      "redundante: el comité ya tiene `ct` ver. No hay pantalla de historial de certificados; el detalle se lee con `ct`.",
+  },
+  {
+    clave: "ct:propia",
+    clase: "vacia-a-proposito",
+    motivo:
+      "sin superficie: el certificado de la unidad vinculada del staff no tiene ruta ni pantalla. El residente conserva `ct:propio`, `ct:residencia` y `ct:al_dia`.",
+  },
+  {
+    clave: "mt:tarea",
+    clase: "vacia-a-proposito",
+    motivo:
+      "redundante: mantención ya tiene `mt` completo (ver/crear/editar/ejecutar); esta clave no agregaba ninguna acción.",
+  },
+  {
+    clave: "mt:incidente",
+    clase: "vacia-a-proposito",
+    motivo:
+      "redundante: se resuelve con `mt` crear, que mantención ya tiene.",
+  },
+  {
+    clave: "pe:reporte_diario",
+    clase: "vacia-a-proposito",
+    motivo:
+      "sin superficie: el reporte diario PE nunca se construyó (los `reportes-re/*` piden `re`). Corta el fallback hacia `pe` de conserjería.",
+  },
+  {
+    clave: "re:reporte_diario",
+    clase: "vacia-a-proposito",
+    motivo:
+      "redundante: conserjería ya tiene `re` ver para el centro de mando y los reportes.",
+  },
   // ── Vacías a propósito: existen para cortar el fallback de prefijo ────────
   {
     clave: "co:lecturas",
@@ -324,20 +370,13 @@ const EXENCIONES: readonly Exencion[] = [
   // T9 no las arregla: las deja nombradas para que la decisión sea explícita.
   // Cuando alguna gane consumidor, el caso de `hallazgo` de abajo lo va a pedir.
   { clave: "ct:al_dia", clase: "hallazgo", motivo: MOTIVO_PENDIENTE },
-  { clave: "ct:historial", clase: "hallazgo", motivo: MOTIVO_PENDIENTE },
-  { clave: "ct:propia", clase: "hallazgo", motivo: MOTIVO_PENDIENTE },
   { clave: "ct:propio", clase: "hallazgo", motivo: MOTIVO_PENDIENTE },
   { clave: "ct:residencia", clase: "hallazgo", motivo: MOTIVO_PENDIENTE },
-  { clave: "fi:balance", clase: "hallazgo", motivo: MOTIVO_PENDIENTE },
   { clave: "ir:interno", clase: "hallazgo", motivo: MOTIVO_PENDIENTE },
   { clave: "mp:morosidad", clase: "hallazgo", motivo: MOTIVO_PENDIENTE },
   { clave: "mp:propios", clase: "hallazgo", motivo: MOTIVO_PENDIENTE },
-  { clave: "mt:incidente", clase: "hallazgo", motivo: MOTIVO_PENDIENTE },
-  { clave: "mt:tarea", clase: "hallazgo", motivo: MOTIVO_PENDIENTE },
   { clave: "pe:contratista", clase: "hallazgo", motivo: MOTIVO_PENDIENTE },
-  { clave: "pe:reporte_diario", clase: "hallazgo", motivo: MOTIVO_PENDIENTE },
   { clave: "pe:visita", clase: "hallazgo", motivo: MOTIVO_PENDIENTE },
-  { clave: "re:reporte_diario", clase: "hallazgo", motivo: MOTIVO_PENDIENTE },
 ]
 
 const DECLARADAS = new Set(EXENCIONES.map((exencion) => exencion.clave))

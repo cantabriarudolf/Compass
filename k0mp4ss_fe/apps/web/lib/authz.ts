@@ -27,7 +27,10 @@ const MATRIZ: Record<Rol, Record<string, Set<Accion>>> = {
   // Miembro del Comité: lectura financiera + auditoría; aprueba gastos; RE centro de mando lectura; CT historial lectura
   comite: {
     "fi": new Set<Accion>(["ver", "ejecutar"]), // ver balance, ejecutar aprobar gasto
-    "fi:balance": new Set<Accion>(["ver"]),
+    // Vacío a propósito (decisión 2026-11-07, D1 de «Permisos por objeto»): nadie pide
+    // `fi:balance`. El comité ya tiene `fi` ver, así que esta clave era una segunda
+    // verdad sin puerta. El Set vacío corta el fallback de prefijo de `puede()`.
+    "fi:balance": new Set<Accion>([]),
     "fi:gasto_comun": new Set<Accion>(["ver", "ejecutar"]),
     // SERIE-FASE2 §V5: el comité AUDITA la cobranza (ver) pero no la ejecuta.
     // Sin esta entrada explícita `puede()` caería al prefijo `fi`, donde el
@@ -51,7 +54,9 @@ const MATRIZ: Record<Rol, Record<string, Set<Accion>>> = {
     // administrador. Recurso propio para no abrir `pl` (sueldos sensibles).
     "pl:adelantos": new Set<Accion>(["ver"]),
     "ct": new Set<Accion>(["ver"]),
-    "ct:historial": new Set<Accion>(["ver"]),
+    // Vacío a propósito (D1): el comité ya tiene `ct` ver y no existe pantalla de
+    // historial. Set vacío para cortar el fallback de prefijo.
+    "ct:historial": new Set<Accion>([]),
     // SERIE-FASE2 §V2 (decisión del plan): el comité LEE Personal (`pe` ver);
     // registrar/editar transiciones es de quien las opera. Las evaluaciones de
     // desempeño se declaran VACÍAS a propósito (solo administrador las registra).
@@ -156,7 +161,9 @@ const MATRIZ: Record<Rol, Record<string, Set<Accion>>> = {
     // auditable es del administrador, y la ruta [id] además protege el ingreso sellado.
     "pe:ingreso_contratista": new Set<Accion>(["ver", "crear", "editar"]),
     "pe:cierre_turno": new Set<Accion>(["ver", "crear", "editar", "ejecutar"]),
-    "pe:reporte_diario": new Set<Accion>(["ver"]),
+    // Vacío a propósito (D1): el reporte diario PE no tiene ruta ni pantalla; los
+    // `reportes-re/*` piden `re`. Set vacío para cortar el fallback a `pe`.
+    "pe:reporte_diario": new Set<Accion>([]),
     "pe:directorio": new Set<Accion>(["ver"]),
     // Calendario preventivo: conserjería LEE el resumen del edificio (widget S7 del
     // dashboard operativo) y pierde la escritura. Sin esta entrada el fallback de
@@ -187,8 +194,12 @@ const MATRIZ: Record<Rol, Record<string, Set<Accion>>> = {
     // Vacío explícito: no hay auto-servicio del trabajador sobre adelantos
     // (SERIE-FASE2 §V4). Corta el fallback de prefijo hacia `pl`.
     "pl:adelantos": new Set<Accion>([]),
-    "ct:propia": new Set<Accion>(["ver"]),
-    "re:reporte_diario": new Set<Accion>(["ver"]),
+    // Vacío a propósito (D1): el certificado «de la unidad vinculada del staff» no
+    // tiene ruta ni pantalla. El residente conserva `ct:propio`/`:residencia`/`:al_dia`.
+    "ct:propia": new Set<Accion>([]),
+    // Vacío a propósito (D1): conserjería ya tiene `re` ver; esta clave no tenía
+    // consumidor. Set vacío para cortar el fallback de prefijo.
+    "re:reporte_diario": new Set<Accion>([]),
     // Decisión owner 2026-10-21: conserjería entrega insumos y resuelve
     // comodines en un click (`editar` = POST .../entregar y .../resolver-comodin).
     "ir:mantenimiento": new Set<Accion>(["ver", "crear", "editar"]),
@@ -300,8 +311,11 @@ const MATRIZ: Record<Rol, Record<string, Set<Accion>>> = {
   mantencion: {
     "mp:propios": new Set<Accion>(["ver", "editar"]),
     "mt": new Set<Accion>(["ver", "crear", "editar", "ejecutar"]),
-    "mt:tarea": new Set<Accion>(["ver", "ejecutar"]),
-    "mt:incidente": new Set<Accion>(["ver", "crear"]),
+    // Vacío a propósito (D1): mantención ya tiene `mt` completo (ver/crear/editar/
+    // ejecutar), así que `mt:tarea` no agregaba nada. Set vacío = sin fallback.
+    "mt:tarea": new Set<Accion>([]),
+    // Vacío a propósito (D1): `mt:incidente` tampoco agregaba nada sobre `mt`.
+    "mt:incidente": new Set<Accion>([]),
     // SERIE-FASE2 §V2: mantención opera las transiciones de Personal (horas
     // extra, completar tarea de monitoreo, enviar proyección de costo) pero NO
     // inicia/cierra turno (eso es `pe:cierre_turno`, conserjería) ni evalúa.
@@ -619,11 +633,11 @@ const REGLAS_ABAC: EntradaABAC[] = [
   { rol: "residente", recurso: "gd", condicion: "según privacidad: residenteVeActas", descripcion: "Residente solo ve actas si el control de privacidad lo autoriza", donde: "motor", detalle: "lib/authz.ts:puedeContextual gd residenteVeActas — migrado P4 desde app/comunidad/directiva/page.tsx:73" },
   { rol: "residente", recurso: "gd:acta", condicion: "según privacidad: residenteVeActas", descripcion: "Actas GD visibles solo si propietario autorizó (privacidad)", donde: "motor", detalle: "lib/authz.ts:puedeContextual gd:* residenteVeActas" },
   // Morosidad — privacidad (check local heredado P4)
-  { rol: "residente", recurso: "mp:morosidad", condicion: "según privacidad: residenteVeMorosidad", descripcion: "Visibilidad de morosidad FI filtrada por control de privacidad", donde: "check local", detalle: "app/admin/gestion/page.tsx:176 switch residenteVeMorosidad + lib/schemas.ts:282 flag — modelado en puedeContextual:218 pero UI/store aún filtra local" },
-  { rol: "residente", recurso: "fi:morosidad", condicion: "según privacidad: residenteVeMorosidad", descripcion: "Visibilidad de morosidad FI para residente según privacidad", donde: "check local", detalle: "app/admin/gestion/page.tsx:176 — check local no migrado por acoplo a switch UI" },
+  { rol: "residente", recurso: "mp:morosidad", condicion: "según privacidad: residenteVeMorosidad", descripcion: "Visibilidad de morosidad FI filtrada por control de privacidad", donde: "motor", detalle: "puedeContextual lee `residenteVeMorosidad`, pero NINGUNA ruta llama al motor: el «check local» que este inventario citaba vivía en `lib/store.ts`, retirado con el store legacy (decisión 2026-11-07: sin motor; la bandera queda sin superficie hasta que exista una vista de morosidad para el residente)" },
+  { rol: "residente", recurso: "fi:morosidad", condicion: "según privacidad: residenteVeMorosidad", descripcion: "Visibilidad de morosidad FI para residente según privacidad", donde: "motor", detalle: "puedeContextual lee la bandera en fi:morosidad; sin ruta que lo llame. El check local citado ya no existe (store legacy retirado)" },
   // Alertas a residente — privacidad (check local heredado P4)
-  { rol: "residente", recurso: "notify:residente", condicion: "según privacidad: alertasResidentesActivas", descripcion: "Notificaciones operativas a residente silenciables por privacidad", donde: "check local", detalle: "lib/store.ts:1327 notify gate alertasResidentesActivas — modelado en puedeContextual:226 pero aún con lectura directa de controlesPropiedad" },
-  { rol: "residente", recurso: "pe:notify_residente", condicion: "según privacidad: alertasResidentesActivas", descripcion: "Notificaciones PE a residente respetan alerta activa", donde: "check local", detalle: "lib/store.ts:1327 — check local heredado P4" },
+  { rol: "residente", recurso: "notify:residente", condicion: "según privacidad: alertasResidentesActivas", descripcion: "Notificaciones operativas a residente silenciables por privacidad", donde: "motor", detalle: "puedeContextual lee `alertasResidentesActivas` en notify:residente; ninguna ruta lo llama. El check local citado (lib/store.ts:1327) se retiró con el store legacy" },
+  { rol: "residente", recurso: "pe:notify_residente", condicion: "según privacidad: alertasResidentesActivas", descripcion: "Notificaciones PE a residente respetan alerta activa", donde: "motor", detalle: "puedeContextual lee la bandera en pe:notify_residente; sin ruta que lo llame. El check local citado (lib/store.ts:1327) ya no existe" },
 ]
 
 /**
