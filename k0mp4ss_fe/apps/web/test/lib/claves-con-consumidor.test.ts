@@ -430,7 +430,7 @@ describe("T9 — el barrido de consumidores", () => {
     ).toEqual([])
     // Anclas de consumidor: si el barrido se rompe, se cae acá y no pasa vacío.
     expect(CONSUMIDORES.get("pl:propia")).toContain(
-      "app/api/liquidaciones/route.ts"
+      "app/api/liquidaciones/_alcance.ts"
     )
     expect(CONSUMIDORES.get("in:apelar")).toContain(
       "app/api/in/infracciones/_acciones.ts"

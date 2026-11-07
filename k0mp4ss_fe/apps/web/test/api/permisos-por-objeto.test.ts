@@ -89,6 +89,13 @@
  * el documento compilado del builder existente con el mismo alcance. La
  * administración sigue viendo la comunidad entera: los dos avisos del arnés
  * existen y los lee, así el 404 del residente es alcance y no ausencia.
+ * Bloque T10 (`liquidaciones/[id]/pdf`): la cara visible de `pl:propia` tiene su
+ * descarga. `GET /api/liquidaciones/[id]/pdf` sirve el papel que arma
+ * `documentoLiquidacionPDF` sobre la fila guardada —sin recalcular ninguna
+ * cifra— con el MISMO `where` que el detalle (`app/api/liquidaciones/_alcance.ts`):
+ * la propia 200 con `application/pdf` y el nombre `liquidacion-<periodo>-<folio>.pdf`,
+ * la de otro trabajador y la de otra comunidad 404 genérico, y la administración
+ * sigue bajando cualquiera de su comunidad.
  */
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest"
 import { prisma } from "@/lib/prisma"
@@ -331,6 +338,7 @@ const moduloMensajeBuzon = () => import("@/app/api/co/mensajes-buzon/[id]/route"
 const moduloVinculo = () => import("@/app/api/vinculos/[id]/route")
 const moduloLiquidaciones = () => import("@/app/api/liquidaciones/route")
 const moduloLiquidacion = () => import("@/app/api/liquidaciones/[id]/route")
+const moduloLiquidacionPdf = () => import("@/app/api/liquidaciones/[id]/pdf/route")
 const moduloCertificadosCT = () => import("@/app/api/certificados-ct/route")
 const moduloCertificadoCT = () => import("@/app/api/certificados-ct/[id]/route")
 const moduloInfracciones = () => import("@/app/api/in/infracciones/route")
@@ -2128,6 +2136,90 @@ describe("liquidaciones — defecto declarado: `pl:propia` sin usar (T3) → cer
         params: { id: LIQ_A },
       })
       expect(detalle.status).toBe(403)
+    })
+  })
+})
+
+describe("liquidaciones/[id]/pdf — el trabajador descarga SU liquidación (T10)", () => {
+  it("el trabajador A-1 descarga SU liquidación como PDF real, con período y folio en el nombre", async () => {
+    await conSesion(EMAIL.trabajadorA, async () => {
+      const res = await invocarApi(
+        moduloLiquidacionPdf(),
+        "GET",
+        "liquidaciones/[id]/pdf",
+        { params: { id: LIQ_A } }
+      )
+      // Antes de T10 esta ruta no existía: el trabajador podía LEER su
+      // liquidación por API y no podía bajar el papel que la administración
+      // emitió. El documento sale del builder existente sobre la fila guardada.
+      expect(res.status).toBe(200)
+      expect(res.headers.get("content-type")).toBe("application/pdf")
+      // El nombre lleva período y folio: quien descarga dos liquidaciones no
+      // las confunde en la carpeta de descargas.
+      expect(res.headers.get("content-disposition")).toBe(
+        'attachment; filename="liquidacion-2026-10-LIQ-0001.pdf"'
+      )
+      // Es un documento personal: no se cachea en proxies ni en el navegador.
+      expect(res.headers.get("cache-control")).toBe("no-store")
+      const bytes = Buffer.from(await res.arrayBuffer())
+      // Bytes de un PDF de verdad: firma %PDF- y un documento no trivial. Un
+      // cuerpo JSON o vacío con `application/pdf` no pasa esta mitad.
+      expect(bytes.subarray(0, 5).toString()).toBe("%PDF-")
+      expect(bytes.length).toBeGreaterThan(1000)
+    })
+  })
+
+  it("el trabajador A-1: la liquidación de otro trabajador de su comunidad → 404 sin documento", async () => {
+    await conSesion(EMAIL.trabajadorA, async () => {
+      const res = await invocarApi(
+        moduloLiquidacionPdf(),
+        "GET",
+        "liquidaciones/[id]/pdf",
+        { params: { id: LIQ_A2 } }
+      )
+      // Mismo alcance que el detalle: la fila ajena no se carga ni se imprime, y
+      // el 404 no confirma que exista (el líquido ajeno = 910000 no viaja).
+      expect(res.status).toBe(404)
+      expect(res.headers.get("content-type")).toContain("application/json")
+      const cuerpo = await cuerpoJson<Record<string, unknown>>(res)
+      expect(cuerpo).toEqual({ error: "Registro no encontrado." })
+      expect(JSON.stringify(cuerpo)).not.toContain("910000")
+    })
+  })
+
+  it("el trabajador A-1: la liquidación de otra comunidad → 404 en el PDF", async () => {
+    await conSesion(EMAIL.trabajadorA, async () => {
+      const res = await invocarApi(
+        moduloLiquidacionPdf(),
+        "GET",
+        "liquidaciones/[id]/pdf",
+        { params: { id: LIQ_B } }
+      )
+      expect(res.status).toBe(404)
+      expect(await cuerpoJson<Record<string, unknown>>(res)).toEqual({
+        error: "Registro no encontrado.",
+      })
+    })
+  })
+
+  it("control: la administración descarga el PDF de la liquidación que al trabajador le da 404", async () => {
+    await conSesion(EMAIL.adminA, async () => {
+      const res = await invocarApi(
+        moduloLiquidacionPdf(),
+        "GET",
+        "liquidaciones/[id]/pdf",
+        { params: { id: LIQ_A2 } }
+      )
+      // La fila existe y el papel se puede armar: el 404 del trabajador es el
+      // alcance por persona, no una ruta que no sabe imprimir.
+      expect(res.status).toBe(200)
+      expect(res.headers.get("content-type")).toBe("application/pdf")
+      expect(res.headers.get("content-disposition")).toBe(
+        'attachment; filename="liquidacion-2026-10-LIQ-0003.pdf"'
+      )
+      const bytes = Buffer.from(await res.arrayBuffer())
+      expect(bytes.subarray(0, 5).toString()).toBe("%PDF-")
+      expect(bytes.length).toBeGreaterThan(1000)
     })
   })
 })

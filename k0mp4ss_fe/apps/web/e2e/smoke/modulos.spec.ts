@@ -14,6 +14,11 @@ const MODULOS = [
   // administración y comité, `fi:aviso:propio` ver para el residente) y lee la
   // colección real: si el gate o la lectura se rompen, este módulo lo dice.
   "/comunidad/avisos-cobro",
+  // T10 de la serie «Permisos por objeto»: la liquidación de sueldo del
+  // trabajador. Se humea acá porque la pantalla abre con el portón de la matriz
+  // (`pl:propia` ver para el trabajador, `pl` ver para la administración) y lee
+  // la colección real: si el gate o la lectura se rompen, este módulo lo dice.
+  "/comunidad/mis-liquidaciones",
   "/finanzas/gastos-comunes",
   "/inventario/recursos",
   "/operaciones/reservas",

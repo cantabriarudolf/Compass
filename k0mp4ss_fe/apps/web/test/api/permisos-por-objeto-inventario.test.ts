@@ -307,6 +307,11 @@ const DECLARACIONES: readonly Declaracion[] = [
     motivo: "sólo administración (`pl` editar): confirmar la liquidación del trabajador.",
   },
   {
+    ruta: "liquidaciones/[id]/pdf",
+    clase: "caso",
+    cubre: "liquidaciones/[id]/pdf — el trabajador descarga SU liquidación (T10)",
+  },
+  {
     ruta: "liquidaciones/adelantos/[id]",
     clase: "exento",
     motivo: "contabilidad de la comunidad (`pl`): adelanto de liquidación (T1).",

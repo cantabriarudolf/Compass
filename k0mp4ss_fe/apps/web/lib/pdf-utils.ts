@@ -147,15 +147,26 @@ function bloqueFirma({ config, firmaDataUrl }: FirmaPdfInput) {
 }
 
 // Liquidación de sueldo estándar chileno con firma embebida.
+//
+// `firmaResuelta` existe para el SERVIDOR: una API route no tiene DOM y
+// `urlADataUrl` (Image + canvas) devuelve `null` allí, así que quien sirve el
+// documento como respuesta HTTP resuelve la firma con fetch y la pasa ya
+// armada. Sin ese argumento —el navegador de la administración— la firma se
+// resuelve acá como siempre; `null` explícito deja el bloque en blanco sin
+// intentar cargarla (una firma ausente no puede impedir el documento).
 export async function documentoLiquidacionPDF(
   liq: LiquidacionPL,
   nombreTrabajador: string,
   rutTrabajador: string,
-  config: ConfiguracionGlobal
+  config: ConfiguracionGlobal,
+  firmaResuelta?: string | null
 ): Promise<Record<string, unknown>> {
-  const firmaDataUrl = config.firmaDigitalizadaUrl
-    ? await urlADataUrl(config.firmaDigitalizadaUrl)
-    : null
+  const firmaDataUrl =
+    firmaResuelta !== undefined
+      ? firmaResuelta
+      : config.firmaDigitalizadaUrl
+        ? await urlADataUrl(config.firmaDigitalizadaUrl)
+        : null
   const fila = (a: string, b: string): any[] => [
     { text: a },
     { text: b, alignment: "right" },

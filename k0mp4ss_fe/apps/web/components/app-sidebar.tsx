@@ -133,6 +133,15 @@ const data = {
           url: "/comunidad/avisos-cobro",
           roles: ["administrador", "residente", "comite"],
         },
+        {
+          // T10 de la serie «Permisos por objeto»: la liquidación de sueldo de su
+          // persona. Mismos roles que la lectura de la ruta: conserjería por
+          // `pl:propia` ver (el trabajador) y la administración por `pl` ver (y su
+          // comodín). El page.tsx además exige el permiso en el servidor.
+          title: "Mis Liquidaciones",
+          url: "/comunidad/mis-liquidaciones",
+          roles: ["administrador", "conserjeria"],
+        },
         { title: "Portal Inmobiliario", url: "/comunidad/portal", roles: ["administrador", "residente", "comite"] },
       ],
     },

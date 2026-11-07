@@ -36,12 +36,8 @@ import {
   saldoVivoAdelanto,
 } from "./adelantos/_calculo"
 import { createCrudHandlers, type CrudDelegate } from "@/lib/api/crud-factory"
-import { personaIdDelUsuarioDb } from "@/lib/api/sesion-persona"
-import {
-  jsonError,
-  withComunidadScope,
-  type ComunidadScope,
-} from "@/lib/api/with-comunidad-scope"
+import { jsonError, withComunidadScope } from "@/lib/api/with-comunidad-scope"
+import { alcanceDeLectura, whereDeLiquidacion, wherePropio } from "./_alcance"
 
 function delegado(modelo: unknown): CrudDelegate {
   return modelo as CrudDelegate
@@ -72,46 +68,10 @@ export const liquidacionesHandlers = createCrudHandlers({
   beforeDelete: guardBorrador,
 })
 
-/** Clave de la administración: ve todas las liquidaciones de la comunidad. */
-const RECURSO_PL = "pl"
-/** Clave del trabajador: ve su propia liquidación y solo la suya. */
-const RECURSO_PL_PROPIA = "pl:propia"
-
 /**
- * Alcance de lectura de PL, decidido en el servidor.
- *
- * - `comunidad`: el rol tiene `pl` ver (administración) → todas las filas de la
- *   comunidad, con el comportamiento de siempre.
- * - `propia`: el rol tiene `pl:propia` ver (trabajador) → solo las filas cuyo
- *   `trabajadorPersonaId` es su persona. Con `personaId` null la sesión no tiene
- *   identidad MP y por lo tanto no es dueña de ninguna fila: NO se ensancha a la
- *   comunidad.
+ * Alcance de lectura de PL — una sola definición, compartida con el detalle y
+ * el PDF: ver `./_alcance.ts`.
  */
-type AlcanceLiquidaciones =
-  | { ok: true; tipo: "comunidad" }
-  | { ok: true; tipo: "propia"; personaId: string | null }
-  | { ok: false; response: Response }
-
-/**
- * Resuelve el alcance de lectura con las claves de la matriz.
- *
- * La identidad del trabajador sale de la BD (`personaIdDelUsuarioDb`, el mismo
- * helper de notificaciones y buzón): el cliente no aporta `personaId` ni
- * `trabajadorPersonaId` en query ni body.
- */
-async function alcanceDeLectura(
-  scope: ComunidadScope
-): Promise<AlcanceLiquidaciones> {
-  if (puede(scope.rol, "ver", RECURSO_PL)) return { ok: true, tipo: "comunidad" }
-  if (!puede(scope.rol, "ver", RECURSO_PL_PROPIA)) {
-    return { ok: false, response: jsonError(403, "Permiso denegado.") }
-  }
-  return {
-    ok: true,
-    tipo: "propia",
-    personaId: await personaIdDelUsuarioDb(scope.usuarioId),
-  }
-}
 
 /**
  * GET de la colección.
@@ -141,14 +101,12 @@ export async function GET(req: Request): Promise<Response> {
     Math.max(1, Number.parseInt(url.searchParams.get("pageSize") ?? "50", 10) || 50)
   )
   const personaId = alcance.personaId
-  // Sin identidad MP no hay fila propia: se responde el envelope vacío en vez de
-  // consultar con `trabajadorPersonaId: null`, que en Prisma es «sin filtro».
-  if (personaId === null) {
+  // `wherePropio` devuelve null sin identidad MP: no hay fila propia que
+  // consultar, así que se responde el envelope vacío en vez de consultar con
+  // `trabajadorPersonaId: null`, que en Prisma es «sin filtro».
+  const where = wherePropio(personaId, scope.comunidadId)
+  if (where === null) {
     return Response.json({ data: [], page, pageSize, total: 0 })
-  }
-  const where = {
-    comunidadId: scope.comunidadId,
-    trabajadorPersonaId: personaId,
   }
   try {
     const [data, total] = await Promise.all([
@@ -186,17 +144,13 @@ export async function liquidacionGetPorId(
   if (!alcance.ok) return alcance.response
   if (alcance.tipo === "comunidad") return liquidacionesHandlers.GET_ONE(req, ctx)
 
-  const personaId = alcance.personaId
-  if (personaId === null) return jsonError(404, "Registro no encontrado.")
   try {
     const { id } = await ctx.params
-    const record = await prisma.liquidacionPL.findFirst({
-      where: {
-        id,
-        comunidadId: scope.comunidadId,
-        trabajadorPersonaId: personaId,
-      },
-    })
+    // `whereDeLiquidacion` es el MISMO `where` que usan la colección y el PDF;
+    // con identidad MP ausente devuelve null y la fila no existe para la sesión.
+    const where = whereDeLiquidacion(alcance, scope.comunidadId, id)
+    if (where === null) return jsonError(404, "Registro no encontrado.")
+    const record = await prisma.liquidacionPL.findFirst({ where })
     if (!record) return jsonError(404, "Registro no encontrado.")
     return Response.json(record)
   } catch (e) {

@@ -768,6 +768,7 @@ const EXCEPCIONES_R1 = [
     "pl",
     [
       "app/api/liquidaciones/[id]/confirmar/route.ts",
+      "app/api/liquidaciones/_alcance.ts",
       "app/api/liquidaciones/route.ts",
     ],
     "liquidaciones de personal: la raíz `pl` es el permiso del módulo completo; pl:propia y pl:adelantos tienen su propio guard"
