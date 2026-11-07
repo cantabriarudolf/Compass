@@ -31,9 +31,19 @@ const comunidadB = "pecierre-com-b"
 const emailAdmin = "pecierre-admin@test.cl"
 const emailMantencion = "pecierre-mantencion@test.cl"
 
-const usuarios = [
+const usuarios: { id: string; email: string; rol: string; personaId?: string }[] = [
   { id: "pecierre-user-admin", email: emailAdmin, rol: "administrador" },
-  { id: "pecierre-user-mantencion", email: emailMantencion, rol: "mantencion" },
+  // El rol SÍ queda fuera de `pe:cierre_turno` (mantención), pero el usuario lleva
+  // la ficha MP de SU propio cierre (`pecierre-cie-403`): así el alcance por filas
+  // deja pasar la fila y el rechazo vuelve a ser por CLAVE (403), que es lo que este
+  // caso fija. Sin `personaId`, `alcancePorFilasDeSesion` resuelve `denegado` y la
+  // ruta responde el 404 del alcance antes de evaluar el permiso.
+  {
+    id: "pecierre-user-mantencion",
+    email: emailMantencion,
+    rol: "mantencion",
+    personaId: "pecierre-cie-403-pers",
+  },
 ]
 
 function cierre(id: string, overrides: Record<string, unknown> = {}): Record<string, unknown> {
@@ -66,8 +76,13 @@ describe("/api/pe/cierres-turno/[id] — auditoría PE_CIERRE_EDITADO (am-emisor
     for (const u of usuarios) {
       await prisma.usuario.upsert({
         where: { email: u.email },
-        update: {},
-        create: { id: u.id, email: u.email, activo: true },
+        update: { personaId: u.personaId ?? null },
+        create: {
+          id: u.id,
+          email: u.email,
+          activo: true,
+          personaId: u.personaId ?? null,
+        },
       })
     }
     await prisma.membresia.deleteMany({

@@ -288,7 +288,7 @@ const DECLARACIONES: readonly Declaracion[] = [
     ruta: "leads-portal/[id]",
     clase: "exento",
     motivo:
-      "`pi` (administración): `LeadPortal` sólo tiene `comunidadId`; el dato es de un prospecto del portal, sin unidad ni persona de la comunidad.",
+      "`pi` no existe en la matriz (`lib/authz.ts`): sólo el wildcard de administración pasa, así que ningún rol acotado llega. Y `LeadPortal` sólo tiene `comunidadId`: el dato es de un prospecto del portal, sin unidad ni persona de la comunidad.",
   },
 
   // ── liquidaciones (PL) ────────────────────────────────────────────────────
@@ -383,9 +383,9 @@ const DECLARACIONES: readonly Declaracion[] = [
   },
   {
     ruta: "pe/cierres-turno/[id]",
-    clase: "pendiente",
-    motivo:
-      "dueño `CierreTurnoPE.trabajadorPersonaId`; no figura en el mapa de T1 y la factory sólo filtra comunidad.",
+    clase: "caso",
+    cubre:
+      "pe/cierres-turno — el dueño es `CierreTurnoPE.trabajadorPersonaId` (lote 5)",
   },
   {
     ruta: "pe/encomiendas/[id]",
@@ -408,7 +408,7 @@ const DECLARACIONES: readonly Declaracion[] = [
     ruta: "pe/mantenciones/[id]",
     clase: "exento",
     motivo:
-      "`pe:mantenciones`: `MantencionPreventivaPE` no tiene `unidadId`; el mapa de T1 la marcaba «nv» con dueño y el modelo no lo tiene.",
+      "`pe:mantenciones` es ver para administración, comité, conserjería y mantención, y el modelo `MantencionPreventivaPE` no tiene `unidadId` ni `personaId` (`proveedorId` es el maestro del proveedor): no hay campo por el que acotar. Ningún rol acotado la escribe (sólo `ver`), así que tampoco hay PUT que acotar.",
   },
   {
     ruta: "pe/personas/[id]/evaluaciones",
@@ -431,7 +431,7 @@ const DECLARACIONES: readonly Declaracion[] = [
     ruta: "pe/proyecciones/[id]",
     clase: "exento",
     motivo:
-      "`pe:proyeccion`: `ProyeccionPE` no tiene `unidadId`; el mapa de T1 la marcaba «nv» con dueño y el modelo no lo tiene.",
+      "`pe:proyeccion` es ver/crear/editar para conserjería y mantención, y `ProyeccionPE` no tiene `unidadId` ni `personaId`: es el cálculo de costo del personal del edificio, una fila de la comunidad sin dueño por fila que comparar.",
   },
   {
     ruta: "pe/tareas-monitoreo/[id]/completar",
@@ -481,9 +481,8 @@ const DECLARACIONES: readonly Declaracion[] = [
   },
   {
     ruta: "ra/reservas/[id]",
-    clase: "pendiente",
-    motivo:
-      "dueño `ReservaRA.unidadId`; no figura en el mapa de T1 y la factory sólo filtra comunidad.",
+    clase: "caso",
+    cubre: "ra/reservas — el dueño es `ReservaRA.solicitantePersonaId` (lote 5)",
   },
   {
     ruta: "ra/reservas/[id]/autorizar",
@@ -493,9 +492,9 @@ const DECLARACIONES: readonly Declaracion[] = [
   },
   {
     ruta: "ra/reservas/[id]/cancelar",
-    clase: "pendiente",
+    clase: "exento",
     motivo:
-      "el residente cancela la reserva propia (`ReservaRA.unidadId`) y no hay caso por fila.",
+      "límite documentado: la acción exige `editar` en `ra` (`app/api/ra/_acciones.ts:56`) y la matriz sólo se lo da a administración, así que ningún rol acotado la alcanza — el residente recibe 403 por clave incluso en SU reserva. El día que la matriz le dé `editar`, esta ruta tiene que resolver la fila con `alcanceReservasRA`, igual que `[id]`.",
   },
   {
     ruta: "ra/reservas/[id]/rechazar",

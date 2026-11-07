@@ -8,6 +8,12 @@
  * OJO: el recurso es `pe:cierre_turno`, no el `pe` genérico. Con `pe` (que V2 abrió con
  * `editar` a mantención para las transiciones de personal) cualquier rol operativo podía
  * editar cierres de turno ajenos; el test preexistente lo fijaba como 403 y lo destapó.
+ *
+ * Alcance por filas (`alcanceCierresTurnoPE`): el cierre del OTRO trabajador responde
+ * 404 y no se carga; gestión conserva la comunidad entera. El MISMO helper se pasa al
+ * PUT de `put-merge` —no un segundo filtro— porque conserjería tiene
+ * `pe:cierre_turno` editar y `personaId` en el seed (`scripts/seed-authz.mjs:55`): sin
+ * él editaba el cierre ajeno aunque ya no pudiera leerlo.
  */
 import { CierreTurnoPESchema } from "@/lib/schemas"
 import { puede } from "@/lib/authz"
@@ -19,6 +25,7 @@ import { createCrudHandlers, delegado } from "@/lib/api/crud-factory"
 import { createPutMerge } from "@/lib/api/put-merge"
 import { withComunidadScope } from "@/lib/api/with-comunidad-scope"
 import { guardiaCierreUnico } from "@/lib/invariantes/pe"
+import { alcanceCierresTurnoPE } from "../_alcance"
 
 const modelo = delegado(prisma.cierreTurnoPE)
 const authzCheck = (rol: string, accion: "ver" | "crear" | "editar" | "eliminar" | "ejecutar") =>
@@ -28,6 +35,7 @@ const handlers = createCrudHandlers({
   model: modelo,
   schema: CierreTurnoPESchema,
   authzCheck,
+  alcance: alcanceCierresTurnoPE,
 })
 
 const putMerge = createPutMerge({
@@ -35,6 +43,7 @@ const putMerge = createPutMerge({
   schema: CierreTurnoPESchema,
   authzCheck,
   recurso: "pe/cierres-turno",
+  alcance: alcanceCierresTurnoPE,
   // INV-02: mover fecha/jornada/trabajador por PUT tampoco puede duplicar el
   // cierre. La guardia funde el parche con la fila previa y excluye el propio id.
   antesDeEscribir: guardiaCierreUnico,

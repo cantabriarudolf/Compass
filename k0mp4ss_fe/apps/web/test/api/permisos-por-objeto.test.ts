@@ -41,6 +41,20 @@
  * entra a la ruta: límite documentado) y `cv/avisos` (el modelo no tiene dueño
  * por fila: el visor es de la comunidad y `creadoPorPersonaId` es quién lo creó,
  * no a quién pertenece).
+ * Recursos del quinto lote: `pe/cierres-turno` (el dueño es
+ * `CierreTurnoPE.trabajadorPersonaId`: la conserjería leía y editaba el cierre de
+ * OTRO trabajador porque la ruta sólo filtraba la comunidad; cerrado con
+ * `alcanceCierresTurnoPE`, que ahora declaran el detalle y la COLECCIÓN —sin él
+ * la lista traía las novedades de todos los turnos del edificio—), `ra/reservas` (el dueño es
+ * `ReservaRA.solicitantePersonaId`: el residente leía la reserva de otra unidad
+ * con su folio, su tramo y sus montos; cerrado con `alcanceReservasRA`) y
+ * `pe/mantenciones`, `pe/proyecciones` y `leads-portal`, que quedan EXENTOS en el
+ * inventario porque el modelo NO tiene dueño por fila —`MantencionPreventivaPE`,
+ * `ProyeccionPE` y `LeadPortal` sólo tienen `comunidadId`— y el caso fija ese
+ * hecho leyendo la fila real, no la suposición del mapa de T1.
+ * `ra/reservas/[id]/cancelar` es límite documentado: la acción exige `editar` en
+ * `ra`, que la matriz sólo da a administración, así que ningún rol acotado la
+ * alcanza y no hay regla por fila que ejercitar.
  * Bloque T16: un rol ACOTADO sin identidad MP (conserjería en los dos recursos
  * de `ir`, residente en `ge`) falla CERRADO —colección vacía, detalle 404 y PUT
  * 404 con la fila intacta— porque sin `personaId` no hay «lo propio» que
@@ -168,6 +182,29 @@ const AVISO_A1 = "ppo-aviso-a1" // comunidad A
 const AVISO_A2 = "ppo-aviso-a2" // comunidad A (segundo aviso, para comparar)
 const AVISO_B1 = "ppo-aviso-b1" // comunidad B (cerrado por comunidad)
 
+// Cierres de turno PE (lote 5): el dueño es `trabajadorPersonaId` (la ficha del
+// trabajador que cerró el turno). Las novedades distintas hacen visible, en la
+// respuesta, que el registro que viaja es el del otro trabajador.
+const CIERRE_A1 = "ppo-cierre-a1" // trabajador A-1 (la persona de resA1/trabajadorA)
+const CIERRE_A2 = "ppo-cierre-a2" // trabajador A-2 (otra persona de la comunidad)
+const CIERRE_B1 = "ppo-cierre-b1" // comunidad B (404 cross-comunidad)
+
+// Reservas RA (lote 5): el dueño es `solicitantePersonaId` (quién reservó). Una por
+// solicitante de A, una de B y una más que sólo sirve al control de `cancelar`.
+const RES_A1 = "ppo-res-a1" // solicitante A-1, unidad A-1, tramo 10:00–12:00
+const RES_A2 = "ppo-res-a2" // solicitante A-2, unidad A-2, tramo 12:00–14:00
+const RES_B1 = "ppo-res-b1" // comunidad B
+const RES_CANCELABLE = "ppo-res-cancelable" // confirmada: la cancela el administrador (control)
+
+// Recursos SIN dueño por fila (lote 5): sirven para fijar que la exención del
+// inventario sale del modelo, no del mapa de T1 (que los marcaba «nv» con dueño).
+const MANT_A1 = "ppo-mant-a1" // comunidad A
+const MANT_B1 = "ppo-mant-b1" // comunidad B
+const PROY_A1 = "ppo-proy-a1" // comunidad A
+const PROY_B1 = "ppo-proy-b1" // comunidad B
+const LEAD_A1 = "ppo-lead-a1" // comunidad A
+const LEAD_B1 = "ppo-lead-b1" // comunidad B
+
 /** Descargos válidos (mínimo 10 caracteres, `apelar/route.ts:53`). */
 const DESCARGO =
   "Los ruidos provenían de la mudanza del vecino del 102, no de mi unidad."
@@ -220,8 +257,22 @@ const moduloSolicitudesInsumo = () => import("@/app/api/ir/solicitudes-insumo/ro
 const moduloSolicitudInsumo = () => import("@/app/api/ir/solicitudes-insumo/[id]/route")
 const moduloAvisosCV = () => import("@/app/api/cv/avisos/route")
 const moduloAvisoCV = () => import("@/app/api/cv/avisos/[id]/route")
+const moduloCierresTurno = () => import("@/app/api/pe/cierres-turno/route")
+const moduloCierreTurno = () => import("@/app/api/pe/cierres-turno/[id]/route")
+const moduloReservaRA = () => import("@/app/api/ra/reservas/[id]/route")
+const moduloCancelarReservaRA = () => import("@/app/api/ra/reservas/[id]/cancelar/route")
+const moduloMantencionPE = () => import("@/app/api/pe/mantenciones/[id]/route")
+const moduloProyeccionPE = () => import("@/app/api/pe/proyecciones/[id]/route")
+const moduloLeadPortal = () => import("@/app/api/leads-portal/[id]/route")
 
 async function limpiar(): Promise<void> {
+  await prisma.cierreTurnoPE.deleteMany({ where: { comunidadId: { in: [COM_A, COM_B] } } })
+  await prisma.reservaRA.deleteMany({ where: { comunidadId: { in: [COM_A, COM_B] } } })
+  await prisma.mantencionPreventivaPE.deleteMany({
+    where: { comunidadId: { in: [COM_A, COM_B] } },
+  })
+  await prisma.proyeccionPE.deleteMany({ where: { comunidadId: { in: [COM_A, COM_B] } } })
+  await prisma.leadPortal.deleteMany({ where: { comunidadId: { in: [COM_A, COM_B] } } })
   await prisma.entregaEPP.deleteMany({ where: { comunidadId: { in: [COM_A, COM_B] } } })
   await prisma.bitacoraVisitaPE.deleteMany({ where: { comunidadId: { in: [COM_A, COM_B] } } })
   await prisma.solicitudGE.deleteMany({ where: { comunidadId: { in: [COM_A, COM_B] } } })
@@ -873,6 +924,144 @@ beforeAll(async () => {
         requiereVistoBueno: false,
         origen: "manual",
         fechaCreacion: "2026-11-05",
+      },
+    ],
+  })
+
+  // Cierres de turno PE (lote 5): uno por trabajador de A y uno de B. La fecha y la
+  // jornada se repiten a propósito: lo que distingue al dueño es
+  // `trabajadorPersonaId` (INV-02: un cierre por trabajador, fecha y jornada).
+  const cierre = (id: string, comunidadId: string, trabajadorPersonaId: string) => ({
+    id,
+    comunidadId,
+    fecha: "2026-11-05",
+    hora: "08:00",
+    jornadaReportadaId: "ppo-jornada-manana",
+    trabajadorPersonaId,
+    novedadesGenerales: `Novedades del turno de ${trabajadorPersonaId}`,
+    incidencias: { hubo: false },
+    checklistInstalaciones: [{ item: "Portón principal", ok: true }],
+    checklistEquipamiento: [{ item: "Celular de ronda", ok: true }],
+    historialCambios: [
+      { fecha: "2026-11-05", resumen: "Cierre enviado por el trabajador" },
+    ],
+    notificadoAAdmin: true,
+  })
+  await prisma.cierreTurnoPE.createMany({
+    data: [
+      cierre(CIERRE_A1, COM_A, P_A1),
+      cierre(CIERRE_A2, COM_A, P_A2),
+      cierre(CIERRE_B1, COM_B, P_B1),
+    ] as never,
+  })
+
+  // Reservas RA (lote 5): la pertenencia es `solicitantePersonaId` (quién reservó).
+  // El mismo elemento y el mismo día en tramos distintos: el arnés no depende de un
+  // `ElementoRA` sembrado (el detalle y el PUT no lo leen).
+  const reserva = (
+    id: string,
+    comunidadId: string,
+    solicitantePersonaId: string,
+    unidadId: string,
+    horaInicio: string,
+    horaFin: string
+  ) => ({
+    id,
+    comunidadId,
+    folio: `RA-${id}`,
+    elementoId: "ppo-elemento-quincho",
+    solicitantePersonaId,
+    unidadId,
+    fecha: "2026-11-12",
+    horaInicio,
+    horaFin,
+    estado: "confirmada",
+    montoTarifa: 15000,
+    montoGarantia: 5000,
+  })
+  await prisma.reservaRA.createMany({
+    data: [
+      reserva(RES_A1, COM_A, P_A1, U_A1, "10:00", "12:00"),
+      reserva(RES_A2, COM_A, P_A2, U_A2, "12:00", "14:00"),
+      reserva(RES_B1, COM_B, P_B1, U_B1, "10:00", "12:00"),
+      reserva(RES_CANCELABLE, COM_A, P_A1, U_A1, "16:00", "18:00"),
+    ] as never,
+  })
+
+  // Recursos sin dueño por fila (lote 5): una fila por comunidad. Ninguno de los
+  // tres modelos tiene `unidadId` ni `personaId` (prisma/schema.prisma), que es el
+  // hecho que sostiene su exención en el inventario de T5.
+  await prisma.mantencionPreventivaPE.createMany({
+    data: [
+      {
+        id: MANT_A1,
+        comunidadId: COM_A,
+        proveedorId: "ppo-proveedor-ascensores",
+        descripcion: "Mantención preventiva del ascensor (comunidad A).",
+        periodicidadMeses: 3,
+        proximaFecha: "2026-12-01",
+        alertaDiasAntes: 7,
+        activo: true,
+      },
+      {
+        id: MANT_B1,
+        comunidadId: COM_B,
+        proveedorId: "ppo-proveedor-ascensores",
+        descripcion: "Mantención preventiva del ascensor (comunidad B).",
+        periodicidadMeses: 3,
+        proximaFecha: "2026-12-01",
+        alertaDiasAntes: 7,
+        activo: true,
+      },
+    ],
+  })
+  await prisma.proyeccionPE.createMany({
+    data: [
+      {
+        id: PROY_A1,
+        comunidadId: COM_A,
+        mesAnio: "2026-12",
+        feriados: [],
+        diasFeriados: 0,
+        reemplazosNecesarios: 0,
+        costoEstimado: 1000000,
+        detalleCosto: { personalPlanta: 2, costoParche: 0, costoDiaExtra: 0 },
+        enviadoAFI: false,
+      },
+      {
+        id: PROY_B1,
+        comunidadId: COM_B,
+        mesAnio: "2026-12",
+        feriados: [],
+        diasFeriados: 0,
+        reemplazosNecesarios: 0,
+        costoEstimado: 900000,
+        detalleCosto: { personalPlanta: 2, costoParche: 0, costoDiaExtra: 0 },
+        enviadoAFI: false,
+      },
+    ],
+  })
+  await prisma.leadPortal.createMany({
+    data: [
+      {
+        id: LEAD_A1,
+        comunidadId: COM_A,
+        publicacionId: "ppo-publicacion-a1",
+        nombreContacto: "Interesado de la comunidad A",
+        contacto: "+56911112222",
+        mensaje: "Quisiera visitar el departamento publicado.",
+        fecha: "2026-11-05",
+        atendido: false,
+      },
+      {
+        id: LEAD_B1,
+        comunidadId: COM_B,
+        publicacionId: "ppo-publicacion-b1",
+        nombreContacto: "Interesado de la comunidad B",
+        contacto: "+56933334444",
+        mensaje: "Consulta por la publicación de la comunidad B.",
+        fecha: "2026-11-05",
+        atendido: false,
       },
     ],
   })
@@ -2827,6 +3016,394 @@ describe("rol acotado SIN identidad MP — falla cerrado (T16)", () => {
       })
       expect(detalle.status).toBe(200)
       expect((await cuerpoJson<{ personaId: string }>(detalle)).personaId).toBe(P_A2)
+    })
+  })
+})
+
+// ── Lote 5: cierres de turno, reservas y los tres recursos sin dueño por fila ─
+
+describe("pe/cierres-turno — el dueño es `CierreTurnoPE.trabajadorPersonaId` (lote 5)", () => {
+  it("control: el administrador de A lee los dos cierres de su comunidad, no el de B", async () => {
+    await conSesion(EMAIL.adminA, async () => {
+      const res = await invocarApi(moduloCierresTurno(), "GET", "pe/cierres-turno?pageSize=100")
+      expect(res.status).toBe(200)
+      const j = await cuerpoJson<Envelope<{ id: string }>>(res)
+      // lib/api/crud-factory.ts:236 — el `where` base es la comunidad: los dos cierres de A
+      // existen y son legibles para gestión, así que lo que decide si la conserjería ve el
+      // cierre del otro trabajador es el alcance por fila, no la ausencia de la fila.
+      expect(new Set(j.data.map((c) => c.id))).toEqual(new Set([CIERRE_A1, CIERRE_A2]))
+    })
+  })
+
+  it("conserjería A-1: la colección devuelve solo el cierre de SU persona, no el del trabajador A-2", async () => {
+    // CERRADO (antes fuga): `GET /api/pe/cierres-turno?pageSize=100` respondía **200**
+    // con `data: [ppo-cierre-a1, ppo-cierre-a2]` —el cierre del otro trabajador con sus
+    // `novedadesGenerales`— porque la conserjería tiene `pe:cierre_turno` ver
+    // (lib/authz.ts:158) y la colección filtraba SÓLO la comunidad. Ahora
+    // `alcanceCierresTurnoPE` (`app/api/pe/cierres-turno/_alcance.ts`) suma
+    // `{ trabajadorPersonaId }` al `where` del `findMany` Y del `count`
+    // (lib/api/crud-factory.ts:320,325), así que la fila ajena no entra ni en la lista
+    // ni en el total. La pantalla que lo consumía (`app/personas/personal/page.tsx`,
+    // monitor de jornadas) está en el menú de administración, que conserva la
+    // comunidad entera; ningún consumidor es un rol acotado que necesite ver el turno
+    // del otro.
+    await conSesion(EMAIL.trabajadorA, async () => {
+      const res = await invocarApi(moduloCierresTurno(), "GET", "pe/cierres-turno?pageSize=100")
+      expect(res.status).toBe(200)
+      const j = await cuerpoJson<
+        Envelope<{ id: string; trabajadorPersonaId: string; novedadesGenerales: string }>
+      >(res)
+      expect(j.data.map((c) => c.id)).toEqual([CIERRE_A1])
+      expect(j.data.every((c) => c.trabajadorPersonaId === P_A1)).toBe(true)
+      // El dato de tercero que viajaba en la lista: las novedades del turno ajeno.
+      expect(j.data.map((c) => c.novedadesGenerales)).not.toContain(
+        `Novedades del turno de ${P_A2}`
+      )
+      expect(j.total).toBe(1)
+    })
+  })
+
+  it("conserjería sin identidad MP: la colección de cierres → total 0 (falla cerrado, T16)", async () => {
+    // Misma decisión que en el detalle: `alcancePorFilasDeSesion` devuelve `denegado` y
+    // el fragmento es `{ id: { in: [] } }`, no `null`. Sin este caso, «sin persona» en la
+    // COLECCIÓN podría volver a leerse como «sin restricción por fila» y el portón vería
+    // los turnos de todo el edificio.
+    await conSesion(EMAIL.conserjeA, async () => {
+      const res = await invocarApi(moduloCierresTurno(), "GET", "pe/cierres-turno?pageSize=100")
+      expect(res.status).toBe(200)
+      const j = await cuerpoJson<Envelope<{ id: string }>>(res)
+      expect(j.data).toEqual([])
+      expect(j.total).toBe(0)
+    })
+  })
+
+  it("conserjería A-1: el cierre de SU persona → 200; el del trabajador A-2 → 404, no 200 con sus novedades", async () => {
+    await conSesion(EMAIL.trabajadorA, async () => {
+      const propia = await invocarApi(moduloCierreTurno(), "GET", "pe/cierres-turno/[id]", {
+        params: { id: CIERRE_A1 },
+      })
+      // lib/authz.ts:158 — conserjería tiene `pe:cierre_turno` ver, y
+      // `alcanceCierresTurnoPE` (`app/api/pe/cierres-turno/_alcance.ts`) deja pasar la fila
+      // porque `trabajadorPersonaId` es la persona de la sesión. Control negativo del 404:
+      // sin esta mitad, un alcance que negara TODO pasaría el caso de abajo.
+      expect(propia.status).toBe(200)
+      expect((await cuerpoJson<{ trabajadorPersonaId: string }>(propia)).trabajadorPersonaId).toBe(
+        P_A1
+      )
+
+      const ajena = await invocarApi(moduloCierreTurno(), "GET", "pe/cierres-turno/[id]", {
+        params: { id: CIERRE_A2 },
+      })
+      // ANTES (fuga): 200 con la fila completa del otro trabajador —`novedadesGenerales`,
+      // `incidencias`, los dos checklist y el `historialCambios`— porque la factory leía por
+      // id y sólo comparaba la comunidad. AHORA el `findFirst` lleva
+      // `{ id, comunidadId, trabajadorPersonaId }` y la respuesta es el 404 genérico.
+      expect(ajena.status).toBe(404)
+      const cuerpo = await cuerpoJson<Record<string, unknown>>(ajena)
+      expect(cuerpo).toEqual({ error: "Registro no encontrado." })
+      expect(cuerpo).not.toHaveProperty("trabajadorPersonaId")
+      expect(cuerpo).not.toHaveProperty("novedadesGenerales")
+      // La fila EXISTE: el 404 es ALCANCE, no ausencia.
+      expect(await prisma.cierreTurnoPE.findUnique({ where: { id: CIERRE_A2 } })).not.toBeNull()
+    })
+  })
+
+  it("conserjería A-1: PUT del cierre del trabajador A-2 → 404 y la fila intacta; el propio → 200", async () => {
+    await conSesion(EMAIL.trabajadorA, async () => {
+      const antes = await prisma.cierreTurnoPE.findUnique({ where: { id: CIERRE_A2 } })
+      const ajena = await invocarApi(moduloCierreTurno(), "PUT", "pe/cierres-turno/[id]", {
+        params: { id: CIERRE_A2 },
+        body: { novedadesGenerales: "Edición del cierre ajeno" },
+      })
+      // ANTES (fuga): 200 y `novedadesGenerales` del otro trabajador reescrita — la
+      // conserjería tiene `pe:cierre_turno` editar (lib/authz.ts:158) y `put-merge`
+      // resolvía la fila con `findUnique({ where: { id } })` + comunidad. AHORA recibe el
+      // MISMO `alcanceCierresTurnoPE` que la lectura, no un segundo filtro.
+      expect(ajena.status).toBe(404)
+      expect(await cuerpoJson<{ error: string }>(ajena)).toEqual({
+        error: "Registro no encontrado.",
+      })
+      expect(await prisma.cierreTurnoPE.findUnique({ where: { id: CIERRE_A2 } })).toEqual(antes)
+
+      // Control de la frontera: el cierre PROPIO del mismo rol sí se escribe (200).
+      try {
+        const propia = await invocarApi(moduloCierreTurno(), "PUT", "pe/cierres-turno/[id]", {
+          params: { id: CIERRE_A1 },
+          body: { novedadesGenerales: "Novedades corregidas por el propio trabajador" },
+        })
+        expect(propia.status).toBe(200)
+        const enBd = await prisma.cierreTurnoPE.findUnique({ where: { id: CIERRE_A1 } })
+        expect(enBd?.novedadesGenerales).toBe("Novedades corregidas por el propio trabajador")
+        expect(enBd?.trabajadorPersonaId).toBe(P_A1)
+      } finally {
+        // Las novedades originales vuelven para no dejar el arnés mutado a los casos vecinos.
+        await prisma.cierreTurnoPE.update({
+          where: { id: CIERRE_A1 },
+          data: { novedadesGenerales: `Novedades del turno de ${P_A1}` },
+        })
+      }
+    })
+  })
+
+  it("conserjería sin identidad MP: el detalle y el PUT de un cierre → 404 (falla cerrado, T16)", async () => {
+    // `conserjeA` es conserjería (`pe:cierre_turno` ver/editar) SIN ficha MP: el fragmento
+    // es `{ id: { in: [] } }`, no `null`. Sin este caso, «sin persona» podría volver a
+    // leerse como «sin restricción por fila» y la comunidad quedaría abierta.
+    await conSesion(EMAIL.conserjeA, async () => {
+      const antes = await prisma.cierreTurnoPE.findUnique({ where: { id: CIERRE_A2 } })
+      const detalle = await invocarApi(moduloCierreTurno(), "GET", "pe/cierres-turno/[id]", {
+        params: { id: CIERRE_A2 },
+      })
+      expect(detalle.status).toBe(404)
+      expect(await cuerpoJson<{ error: string }>(detalle)).toEqual({
+        error: "Registro no encontrado.",
+      })
+
+      const put = await invocarApi(moduloCierreTurno(), "PUT", "pe/cierres-turno/[id]", {
+        params: { id: CIERRE_A2 },
+        body: { novedadesGenerales: "Intento sin identidad" },
+      })
+      expect(put.status).toBe(404)
+      expect(await prisma.cierreTurnoPE.findUnique({ where: { id: CIERRE_A2 } })).toEqual(antes)
+    })
+  })
+})
+
+describe("ra/reservas — el dueño es `ReservaRA.solicitantePersonaId` (lote 5)", () => {
+  it("residente A-1: su reserva → 200; la de la unidad 102 → 404, no 200 con su folio y sus montos", async () => {
+    await conSesion(EMAIL.resA1, async () => {
+      const propia = await invocarApi(moduloReservaRA(), "GET", "ra/reservas/[id]", {
+        params: { id: RES_A1 },
+      })
+      // lib/authz.ts:261 — el residente tiene `ra` ver, y `alcanceReservasRA`
+      // (`app/api/ra/reservas/_alcance.ts`) deja pasar la fila porque
+      // `solicitantePersonaId` es su persona.
+      expect(propia.status).toBe(200)
+      expect(
+        (await cuerpoJson<{ solicitantePersonaId: string }>(propia)).solicitantePersonaId
+      ).toBe(P_A1)
+
+      const ajena = await invocarApi(moduloReservaRA(), "GET", "ra/reservas/[id]", {
+        params: { id: RES_A2 },
+      })
+      // ANTES (fuga): 200 con `folio`, `horaInicio`/`horaFin`, `montoTarifa`,
+      // `montoGarantia`, `unidadId` y `solicitantePersonaId` de otra unidad. AHORA el
+      // `findFirst` lleva `{ id, comunidadId, solicitantePersonaId }` → 404 genérico.
+      expect(ajena.status).toBe(404)
+      const cuerpo = await cuerpoJson<Record<string, unknown>>(ajena)
+      expect(cuerpo).toEqual({ error: "Registro no encontrado." })
+      expect(cuerpo).not.toHaveProperty("solicitantePersonaId")
+      expect(cuerpo).not.toHaveProperty("folio")
+      // La fila EXISTE: el 404 es ALCANCE, no ausencia.
+      expect(await prisma.reservaRA.findUnique({ where: { id: RES_A2 } })).not.toBeNull()
+
+      const otraComunidad = await invocarApi(moduloReservaRA(), "GET", "ra/reservas/[id]", {
+        params: { id: RES_B1 },
+      })
+      expect(otraComunidad.status).toBe(404)
+      expect(await cuerpoJson<{ error: string }>(otraComunidad)).toEqual({
+        error: "Registro no encontrado.",
+      })
+    })
+  })
+
+  it("residente A-1: PUT de la reserva ajena → 404 por ALCANCE; la propia → 403 por CLAVE (sin `editar` en `ra`)", async () => {
+    await conSesion(EMAIL.resA1, async () => {
+      const antes = await prisma.reservaRA.findUnique({ where: { id: RES_A2 } })
+      const ajena = await invocarApi(moduloReservaRA(), "PUT", "ra/reservas/[id]", {
+        params: { id: RES_A2 },
+        body: { horaFin: "15:00" },
+      })
+      // Orden del put-merge (`lib/api/put-merge.ts`): la fila se resuelve ANTES del authz,
+      // así que la ajena responde 404 —el delta de contrato aceptado en
+      // `odd/tasks/permisos-por-objeto.md` (L18)— y no un 403 que confirmaría existencia.
+      expect(ajena.status).toBe(404)
+      expect(await cuerpoJson<{ error: string }>(ajena)).toEqual({
+        error: "Registro no encontrado.",
+      })
+      expect(await prisma.reservaRA.findUnique({ where: { id: RES_A2 } })).toEqual(antes)
+
+      // La fila PROPIA se carga y el corte es la CLAVE: el residente no tiene `ra`
+      // editar (lib/authz.ts:261), así que el PUT es 403 y no escribe nada.
+      const propia = await invocarApi(moduloReservaRA(), "PUT", "ra/reservas/[id]", {
+        params: { id: RES_A1 },
+        body: { horaFin: "13:00" },
+      })
+      expect(propia.status).toBe(403)
+      expect(await cuerpoJson<{ error: string }>(propia)).toEqual({ error: "Permiso denegado." })
+      expect((await prisma.reservaRA.findUnique({ where: { id: RES_A1 } }))?.horaFin).toBe("12:00")
+    })
+  })
+
+  it("residente sin identidad MP: el detalle de una reserva → 404 (falla cerrado, T16)", async () => {
+    await conSesion(EMAIL.resSinId, async () => {
+      const res = await invocarApi(moduloReservaRA(), "GET", "ra/reservas/[id]", {
+        params: { id: RES_A1 },
+      })
+      // Misma regla que el bloque T16: un rol acotado sin `personaId` no tiene «lo propio»
+      // que comparar, así que el fragmento no matchea nada.
+      expect(res.status).toBe(404)
+      expect(await cuerpoJson<Record<string, unknown>>(res)).toEqual({
+        error: "Registro no encontrado.",
+      })
+      expect(await prisma.reservaRA.findUnique({ where: { id: RES_A1 } })).not.toBeNull()
+    })
+  })
+
+  it("cancelar: ningún rol acotado alcanza la acción — residente 403 con el MISMO cuerpo para la propia y la ajena (límite documentado)", async () => {
+    // Control: la acción existe y funciona para el único rol que la alcanza. Sin esta
+    // mitad, el 403 del residente podría ser una ruta rota y no una clave.
+    await conSesion(EMAIL.adminA, async () => {
+      const res = await invocarApi(
+        moduloCancelarReservaRA(),
+        "POST",
+        "ra/reservas/[id]/cancelar",
+        { params: { id: RES_CANCELABLE } }
+      )
+      expect(res.status).toBe(200)
+      expect(await cuerpoJson<{ ok: boolean }>(res)).toEqual({ ok: true })
+      expect((await prisma.reservaRA.findUnique({ where: { id: RES_CANCELABLE } }))?.estado).toBe(
+        "cancelada"
+      )
+    })
+
+    // LÍMITE DOCUMENTADO: `contextoAccionRA` (`app/api/ra/_acciones.ts:56`) exige
+    // `puede(rol, "editar", "ra")` y la matriz sólo se lo da a administración
+    // (lib/authz.ts:261 — el residente tiene ver/crear). Ningún rol acotado alcanza la
+    // acción, así que no hay regla por fila que ejercitar: el residente no puede cancelar
+    // NI SU PROPIA reserva. Disparador para cuando la matriz le dé `editar`: esta ruta
+    // tiene que resolver la fila con `alcanceReservasRA`, igual que el `[id]`.
+    await conSesion(EMAIL.resA1, async () => {
+      const propia = await invocarApi(
+        moduloCancelarReservaRA(),
+        "POST",
+        "ra/reservas/[id]/cancelar",
+        { params: { id: RES_A1 } }
+      )
+      expect(propia.status).toBe(403)
+      const cuerpo = await cuerpoJson<{ error: string }>(propia)
+      expect(cuerpo).toEqual({ error: "Permiso denegado." })
+
+      // El cuerpo es idéntico para la reserva de la unidad vecina: la respuesta no
+      // distingue dueño de tercero (ni confirma que la fila exista).
+      const ajena = await invocarApi(
+        moduloCancelarReservaRA(),
+        "POST",
+        "ra/reservas/[id]/cancelar",
+        { params: { id: RES_A2 } }
+      )
+      expect(ajena.status).toBe(403)
+      expect(await cuerpoJson<{ error: string }>(ajena)).toEqual(cuerpo)
+
+      // Nada se canceló: el rechazo por clave ocurre antes de la transición de estado.
+      expect((await prisma.reservaRA.findUnique({ where: { id: RES_A1 } }))?.estado).toBe(
+        "confirmada"
+      )
+      expect((await prisma.reservaRA.findUnique({ where: { id: RES_A2 } }))?.estado).toBe(
+        "confirmada"
+      )
+    })
+  })
+})
+
+describe("pe/mantenciones, pe/proyecciones y leads-portal — el modelo no tiene dueño por fila (lote 5)", () => {
+  it("`pe:mantenciones`: la conserjería lee la mantención de su comunidad y la fila no tiene unidad ni persona", async () => {
+    await conSesion(EMAIL.conserjeA, async () => {
+      const res = await invocarApi(moduloMantencionPE(), "GET", "pe/mantenciones/[id]", {
+        params: { id: MANT_A1 },
+      })
+      // lib/authz.ts:166 — conserjería y mantención tienen `pe:mantenciones` ver, y la
+      // ruta sirve la fila completa. NO es una fuga: `MantencionPreventivaPE`
+      // (prisma/schema.prisma) no tiene `unidadId` ni `personaId` —`proveedorId` es el
+      // maestro del proveedor, no el dueño de la fila—, así que no hay campo por el que
+      // acotar. Es el motivo del `exento` del inventario de T5, fijado sobre la fila real.
+      expect(res.status).toBe(200)
+      const fila = await cuerpoJson<Record<string, unknown>>(res)
+      expect(fila.id).toBe(MANT_A1)
+      expect(fila).not.toHaveProperty("unidadId")
+      expect(fila).not.toHaveProperty("personaId")
+      expect(fila).not.toHaveProperty("trabajadorPersonaId")
+
+      // Único límite que existe: la comunidad (404 genérico).
+      const otraComunidad = await invocarApi(moduloMantencionPE(), "GET", "pe/mantenciones/[id]", {
+        params: { id: MANT_B1 },
+      })
+      expect(otraComunidad.status).toBe(404)
+
+      // Y ningún rol acotado la escribe: `pe:mantenciones` sólo da `ver` a conserjería y
+      // mantención (lib/authz.ts:166,327), así que el corte es por CLAVE.
+      const put = await invocarApi(moduloMantencionPE(), "PUT", "pe/mantenciones/[id]", {
+        params: { id: MANT_A1 },
+        body: { alertaDiasAntes: 14 },
+      })
+      expect(put.status).toBe(403)
+      expect(await cuerpoJson<{ error: string }>(put)).toEqual({ error: "Permiso denegado." })
+      expect(
+        (await prisma.mantencionPreventivaPE.findUnique({ where: { id: MANT_A1 } }))
+          ?.alertaDiasAntes
+      ).toBe(7)
+    })
+  })
+
+  it("`pe:proyeccion`: la conserjería edita la proyección de la comunidad y la fila no tiene dueño", async () => {
+    await conSesion(EMAIL.conserjeA, async () => {
+      const res = await invocarApi(moduloProyeccionPE(), "GET", "pe/proyecciones/[id]", {
+        params: { id: PROY_A1 },
+      })
+      // `ProyeccionPE` no tiene `unidadId` ni `personaId`: es el cálculo de costo del
+      // personal del edificio, una fila de la comunidad. Por eso la exención del
+      // inventario de T5, y por eso la conserjería la escribe con `pe:proyeccion` editar
+      // (lib/authz.ts:179) sin que haya dueño que comparar.
+      expect(res.status).toBe(200)
+      const fila = await cuerpoJson<Record<string, unknown>>(res)
+      expect(fila).not.toHaveProperty("unidadId")
+      expect(fila).not.toHaveProperty("personaId")
+      expect(fila).not.toHaveProperty("trabajadorPersonaId")
+
+      const put = await invocarApi(moduloProyeccionPE(), "PUT", "pe/proyecciones/[id]", {
+        params: { id: PROY_A1 },
+        body: { costoEstimado: 1234567 },
+      })
+      expect(put.status).toBe(200)
+      expect(
+        (await prisma.proyeccionPE.findUnique({ where: { id: PROY_A1 } }))?.costoEstimado
+      ).toBe(1234567)
+    })
+  })
+
+  it("leads-portal: sólo la administración llega (403 por clave para residente y conserjería) y la fila no tiene dueño", async () => {
+    await conSesion(EMAIL.adminA, async () => {
+      const res = await invocarApi(moduloLeadPortal(), "GET", "leads-portal/[id]", {
+        params: { id: LEAD_A1 },
+      })
+      // `LeadPortal` sólo tiene `comunidadId`: el dato es de un prospecto del portal, no de
+      // una unidad ni de una persona de la comunidad. Es el motivo del `exento` de T5.
+      expect(res.status).toBe(200)
+      const fila = await cuerpoJson<Record<string, unknown>>(res)
+      expect(fila.id).toBe(LEAD_A1)
+      expect(fila).not.toHaveProperty("unidadId")
+      expect(fila).not.toHaveProperty("personaId")
+    })
+
+    await conSesion(EMAIL.resA1, async () => {
+      const res = await invocarApi(moduloLeadPortal(), "GET", "leads-portal/[id]", {
+        params: { id: LEAD_A1 },
+      })
+      // `pi` no existe en la matriz (lib/authz.ts): sólo el wildcard del administrador
+      // pasa, así que el 403 es por CLAVE y no queda rol acotado con acceso que acotar
+      // por fila (segunda razón del `exento`).
+      expect(res.status).toBe(403)
+      const cuerpo = await cuerpoJson<{ error: string }>(res)
+      expect(cuerpo).toEqual({ error: "Permiso denegado." })
+      expect(await prisma.leadPortal.findUnique({ where: { id: LEAD_A1 } })).not.toBeNull()
+    })
+
+    await conSesion(EMAIL.conserjeA, async () => {
+      const res = await invocarApi(moduloLeadPortal(), "GET", "leads-portal/[id]", {
+        params: { id: LEAD_A1 },
+      })
+      expect(res.status).toBe(403)
+      expect(await cuerpoJson<{ error: string }>(res)).toEqual({ error: "Permiso denegado." })
     })
   })
 })
