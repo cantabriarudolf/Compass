@@ -29,6 +29,18 @@
  * `in/infracciones` (límite documentado en la lectura de gestión + la apelación
  * propia, que es la regla por fila que sí se puede ejercitar) y
  * `pe/encomiendas` (clave vacía: límite documentado, sin regla de fila posible).
+ * Recursos del cuarto lote: `ir/entregas-epp` (el dueño es `EntregaEPP.personaId`;
+ * la fuga se CERRÓ con el alcance por filas de la factory: el residente lee solo
+ * las entregas de su persona y la ajena responde 404), `ge/solicitudes` (dueño
+ * `unidadId`/`solicitantePersonaId`: la colección y el detalle se cerraron igual,
+ * y el POST lleva su propia guardia de escritura —`rechazoDeSolicitudAjena`—
+ * porque un alta no se puede validar con un `where`), `ir/solicitudes-insumo` (el
+ * modelo NO tiene `unidadId`: el dueño real de la fila es `solicitantePersonaId`,
+ * y el residente ya no ve la solicitud de otra persona), `pe/bitacora-visitas`
+ * (dueño `unidadId`/`destinoPersonaId`, pero NINGÚN rol con alcance de unidad
+ * entra a la ruta: límite documentado) y `cv/avisos` (el modelo no tiene dueño
+ * por fila: el visor es de la comunidad y `creadoPorPersonaId` es quién lo creó,
+ * no a quién pertenece).
  */
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest"
 import { prisma } from "@/lib/prisma"
@@ -120,6 +132,36 @@ const ENC_A1 = "ppo-enc-a1" // destinatario A-1, unidad A-1
 const ENC_A2 = "ppo-enc-a2" // destinatario A-2, unidad A-2
 const ENC_B1 = "ppo-enc-b1" // comunidad B
 
+// Entregas de EPP IR (lote 4): el dueño es `personaId` (a quién se le entregó el
+// equipo). La talla y el estado distintos hacen visible, en la respuesta, que el
+// registro que viaja es el de la otra persona.
+const EPP_A1 = "ppo-epp-a1" // persona A-1 (propia de la sesión resA1)
+const EPP_A2 = "ppo-epp-a2" // persona A-2 (otra persona de la misma comunidad)
+const EPP_B1 = "ppo-epp-b1" // comunidad B (404 cross-comunidad)
+
+// Bitácora de visitas PE (lote 4): el dueño es `unidadId`/`destinoPersonaId`.
+// El nombre y el DNI distintos hacen visible el registro de la visita ajena.
+const VIS_A1 = "ppo-vis-a1" // visita a la unidad A-1
+const VIS_A2 = "ppo-vis-a2" // visita a la unidad A-2
+const VIS_B1 = "ppo-vis-b1" // comunidad B
+
+// Solicitudes GE (lote 4): el dueño es `unidadId` (+ `solicitantePersonaId`).
+const SOL_A1 = "ppo-sol-a1" // unidad A-1, solicitante A-1
+const SOL_A2 = "ppo-sol-a2" // unidad A-2, solicitante A-2 (otra unidad)
+const SOL_B1 = "ppo-sol-b1" // comunidad B
+
+// Solicitudes de insumo IR (lote 4): el modelo NO tiene `unidadId` — el dueño de
+// la fila es `solicitantePersonaId` (ver el `describe` del recurso).
+const INSU_A1 = "ppo-insu-a1" // solicitante A-1
+const INSU_A2 = "ppo-insu-a2" // solicitante A-2 (otra persona de la comunidad)
+const INSU_B1 = "ppo-insu-b1" // comunidad B
+
+// Avisos CV (lote 4): el modelo no tiene `unidadId`; `creadoPorPersonaId` es quién
+// publicó el aviso (gestión), no un dueño por fila.
+const AVISO_A1 = "ppo-aviso-a1" // comunidad A
+const AVISO_A2 = "ppo-aviso-a2" // comunidad A (segundo aviso, para comparar)
+const AVISO_B1 = "ppo-aviso-b1" // comunidad B (cerrado por comunidad)
+
 /** Descargos válidos (mínimo 10 caracteres, `apelar/route.ts:53`). */
 const DESCARGO =
   "Los ruidos provenían de la mudanza del vecino del 102, no de mi unidad."
@@ -162,8 +204,23 @@ const moduloInfraccion = () => import("@/app/api/in/infracciones/[id]/route")
 const moduloApelarInfraccion = () => import("@/app/api/in/infracciones/[id]/apelar/route")
 const moduloEncomiendas = () => import("@/app/api/pe/encomiendas/route")
 const moduloEncomienda = () => import("@/app/api/pe/encomiendas/[id]/route")
+const moduloEntregasEPP = () => import("@/app/api/ir/entregas-epp/route")
+const moduloEntregaEPP = () => import("@/app/api/ir/entregas-epp/[id]/route")
+const moduloBitacoraVisitas = () => import("@/app/api/pe/bitacora-visitas/route")
+const moduloBitacoraVisita = () => import("@/app/api/pe/bitacora-visitas/[id]/route")
+const moduloSolicitudesGE = () => import("@/app/api/ge/solicitudes/route")
+const moduloSolicitudGE = () => import("@/app/api/ge/solicitudes/[id]/route")
+const moduloSolicitudesInsumo = () => import("@/app/api/ir/solicitudes-insumo/route")
+const moduloSolicitudInsumo = () => import("@/app/api/ir/solicitudes-insumo/[id]/route")
+const moduloAvisosCV = () => import("@/app/api/cv/avisos/route")
+const moduloAvisoCV = () => import("@/app/api/cv/avisos/[id]/route")
 
 async function limpiar(): Promise<void> {
+  await prisma.entregaEPP.deleteMany({ where: { comunidadId: { in: [COM_A, COM_B] } } })
+  await prisma.bitacoraVisitaPE.deleteMany({ where: { comunidadId: { in: [COM_A, COM_B] } } })
+  await prisma.solicitudGE.deleteMany({ where: { comunidadId: { in: [COM_A, COM_B] } } })
+  await prisma.solicitudInsumoIR.deleteMany({ where: { comunidadId: { in: [COM_A, COM_B] } } })
+  await prisma.avisoCV.deleteMany({ where: { comunidadId: { in: [COM_A, COM_B] } } })
   await prisma.certificadoCT.deleteMany({ where: { comunidadId: { in: [COM_A, COM_B] } } })
   await prisma.cobroFI.deleteMany({ where: { comunidadId: { in: [COM_A, COM_B] } } })
   await prisma.infraccionIN.deleteMany({ where: { comunidadId: { in: [COM_A, COM_B] } } })
@@ -584,6 +641,227 @@ beforeAll(async () => {
         descripcionPaquete: "Bolsa de supermercado.",
         fechaRecepcion: "2026-11-05",
         estado: "recibida",
+      },
+    ],
+  })
+
+  // Entregas de EPP IR (lote 4): una por persona en A (para comparar propio contra
+  // ajeno) y una en B (404 cross-comunidad, que la factory sí implementa).
+  await prisma.entregaEPP.createMany({
+    data: [
+      {
+        id: EPP_A1,
+        comunidadId: COM_A,
+        recursoId: "ppo-rec-casco",
+        personaId: P_A1,
+        fechaEntrega: "2026-11-04",
+        talla: "M",
+        estado: "nuevo",
+      },
+      {
+        id: EPP_A2,
+        comunidadId: COM_A,
+        recursoId: "ppo-rec-guantes",
+        personaId: P_A2,
+        fechaEntrega: "2026-11-04",
+        talla: "L",
+        estado: "renovar",
+        proximaRenovacion: "2026-12-04",
+      },
+      {
+        id: EPP_B1,
+        comunidadId: COM_B,
+        recursoId: "ppo-rec-casco",
+        personaId: P_B1,
+        fechaEntrega: "2026-11-04",
+        talla: "S",
+        estado: "nuevo",
+      },
+    ],
+  })
+
+  // Bitácora de visitas PE (lote 4): una por unidad de A y una de B. `jornadaId` es
+  // un id suelto (sin FK); nombre y DNI distintos identifican la visita ajena.
+  await prisma.bitacoraVisitaPE.createMany({
+    data: [
+      {
+        id: VIS_A1,
+        comunidadId: COM_A,
+        fecha: "2026-11-05",
+        nombre: "Visita de la unidad 101",
+        dni: "71000001-1",
+        unidadId: U_A1,
+        destinoPersonaId: P_A1,
+        jornadaId: "ppo-jornada-a",
+        origenAgenda: "pre_agendada",
+        estado: "agendada",
+      },
+      {
+        id: VIS_A2,
+        comunidadId: COM_A,
+        fecha: "2026-11-05",
+        nombre: "Visita de la unidad 102",
+        dni: "71000002-2",
+        unidadId: U_A2,
+        destinoPersonaId: P_A2,
+        jornadaId: "ppo-jornada-a",
+        origenAgenda: "sin_aviso",
+        estado: "agendada",
+      },
+      {
+        id: VIS_B1,
+        comunidadId: COM_B,
+        fecha: "2026-11-05",
+        nombre: "Visita de la comunidad B",
+        dni: "71000003-3",
+        unidadId: U_B1,
+        destinoPersonaId: P_B1,
+        jornadaId: "ppo-jornada-b",
+        origenAgenda: "pre_agendada",
+        estado: "agendada",
+      },
+    ],
+  })
+
+  // Solicitudes GE (lote 4): una por unidad en A y una en B. Título y descripción
+  // distintos hacen visible, en la respuesta, la solicitud de la unidad vecina.
+  await prisma.solicitudGE.createMany({
+    data: [
+      {
+        id: SOL_A1,
+        comunidadId: COM_A,
+        folio: "GE-0001",
+        tipo: "buzon",
+        titulo: "Filtración del baño de la unidad 101",
+        descripcion: "El baño principal filtra hacia el departamento de abajo.",
+        solicitantePersonaId: P_A1,
+        unidadId: U_A1,
+        estado: "nuevo",
+        fechaCreacion: "2026-11-05",
+        comentarios: [],
+        historialEstados: [],
+      },
+      {
+        id: SOL_A2,
+        comunidadId: COM_A,
+        folio: "GE-0002",
+        tipo: "buzon",
+        titulo: "Ruidos molestos de la unidad 102",
+        descripcion: "Ruidos después de las 23:00 en el pasillo del segundo piso.",
+        solicitantePersonaId: P_A2,
+        unidadId: U_A2,
+        estado: "en_revision",
+        fechaCreacion: "2026-11-05",
+        comentarios: [],
+        historialEstados: [],
+      },
+      {
+        id: SOL_B1,
+        comunidadId: COM_B,
+        folio: "GE-0001",
+        tipo: "buzon",
+        titulo: "Solicitud de la comunidad B",
+        descripcion: "Reclamo de la comunidad B.",
+        solicitantePersonaId: P_B1,
+        unidadId: U_B1,
+        estado: "nuevo",
+        fechaCreacion: "2026-11-05",
+        comentarios: [],
+        historialEstados: [],
+      },
+    ],
+  })
+
+  // Solicitudes de insumo IR (lote 4): el modelo no tiene `unidadId`, así que la
+  // pertenencia que se compara es `solicitantePersonaId`.
+  await prisma.solicitudInsumoIR.createMany({
+    data: [
+      {
+        id: INSU_A1,
+        comunidadId: COM_A,
+        folio: "SI-0001",
+        solicitantePersonaId: P_A1,
+        estadoComodin: "no_comodin",
+        cantidad: 2,
+        areaDestino: "Pasillo de la unidad 101",
+        estado: "pendiente",
+        fechaSolicitud: "2026-11-05",
+      },
+      {
+        id: INSU_A2,
+        comunidadId: COM_A,
+        folio: "SI-0002",
+        solicitantePersonaId: P_A2,
+        estadoComodin: "no_comodin",
+        cantidad: 6,
+        areaDestino: "Estacionamiento de la unidad 102",
+        estado: "entregada",
+        fechaSolicitud: "2026-11-05",
+        entregaFecha: "2026-11-06",
+      },
+      {
+        id: INSU_B1,
+        comunidadId: COM_B,
+        folio: "SI-0001",
+        solicitantePersonaId: P_B1,
+        estadoComodin: "no_comodin",
+        cantidad: 1,
+        areaDestino: "Conserjería de B",
+        estado: "pendiente",
+        fechaSolicitud: "2026-11-05",
+      },
+    ],
+  })
+
+  // Avisos CV (lote 4): el visor es de la comunidad y el modelo no tiene dueño por
+  // fila. `expiresAt` en el futuro o nulo evita que la caducidad al leer
+  // (`app/api/cv/avisos/route.ts:39`) archive una fila del arnés a mitad de corrida.
+  await prisma.avisoCV.createMany({
+    data: [
+      {
+        id: AVISO_A1,
+        comunidadId: COM_A,
+        titulo: "Corte de agua programado",
+        cuerpo: "Se cortará el agua el 07-11-2026 entre 09:00 y 13:00.",
+        tipologia: "info",
+        duracionSegundos: 10,
+        pantallaCompleta: false,
+        expiresAt: null,
+        tags: ["agua"],
+        estado: "publicado",
+        requiereVistoBueno: false,
+        origen: "manual",
+        fechaCreacion: "2026-11-05",
+      },
+      {
+        id: AVISO_A2,
+        comunidadId: COM_A,
+        titulo: "Fumigación del subterráneo",
+        cuerpo: "La fumigación del subterráneo se hará el 08-11-2026 a las 10:00.",
+        tipologia: "advertencia",
+        duracionSegundos: 15,
+        pantallaCompleta: true,
+        expiresAt: "2099-12-31",
+        tags: [],
+        estado: "publicado",
+        requiereVistoBueno: false,
+        origen: "manual",
+        fechaCreacion: "2026-11-05",
+      },
+      {
+        id: AVISO_B1,
+        comunidadId: COM_B,
+        titulo: "Aviso de la comunidad B",
+        cuerpo: "Aviso que sólo existe en la comunidad B.",
+        tipologia: "info",
+        duracionSegundos: 10,
+        pantallaCompleta: false,
+        expiresAt: null,
+        tags: [],
+        estado: "publicado",
+        requiereVistoBueno: false,
+        origen: "manual",
+        fechaCreacion: "2026-11-05",
       },
     ],
   })
@@ -1769,6 +2047,507 @@ describe("pe/encomiendas — clave vacía: el residente no lee el portón (lote 
       // filtrar y la de la unidad vecina tampoco aparece.
       expect(coleccion.status).toBe(403)
       expect(await cuerpoJson<{ error: string }>(coleccion)).toEqual(cuerpo)
+    })
+  })
+})
+
+describe("ir/entregas-epp — el dueño es `EntregaEPP.personaId` (lote 4)", () => {
+  it("control: el administrador de A ve las dos entregas de su comunidad, no la de B", async () => {
+    await conSesion(EMAIL.adminA, async () => {
+      const res = await invocarApi(moduloEntregasEPP(), "GET", "ir/entregas-epp?pageSize=100")
+      expect(res.status).toBe(200)
+      const j = await cuerpoJson<Envelope<{ id: string }>>(res)
+      // lib/api/crud-factory.ts:236 — el `where` base es la comunidad: las dos entregas
+      // de A existen y son legibles para gestión, así que lo que decide si el residente
+      // ve la de A-2 es el alcance por fila, no la ausencia de la fila.
+      expect(new Set(j.data.map((e) => e.id))).toEqual(new Set([EPP_A1, EPP_A2]))
+    })
+  })
+
+  it("residente A-1: la colección no trae la entrega hecha a otra persona", async () => {
+    // CERRADO (antes fuga): `GET /api/ir/entregas-epp?pageSize=100` respondía **200**
+    // con `data: [ppo-epp-a1, ppo-epp-a2]` —la entrega de A-2 entera, con
+    // `personaId: "ppo-p-a2"`, `recursoId: "ppo-rec-guantes"`, `talla: "L"` y
+    // `estado: "renovar"`— porque el residente tiene `ir:mantenimiento` ver
+    // (lib/authz.ts:259) y la colección filtraba SÓLO la comunidad. Ahora
+    // `alcanceEntregasEPP` (app/api/ir/entregas-epp/_alcance.ts) suma `{ personaId }`
+    // al `where` del `findMany` Y del `count`, así que la fila ajena no entra ni en
+    // la lista ni en el total.
+    await conSesion(EMAIL.resA1, async () => {
+      const res = await invocarApi(moduloEntregasEPP(), "GET", "ir/entregas-epp?pageSize=100")
+      expect(res.status).toBe(200)
+      const j = await cuerpoJson<Envelope<{ id: string; personaId: string }>>(res)
+      expect(j.data.map((e) => e.id)).toEqual([EPP_A1])
+      expect(j.data.every((e) => e.personaId === P_A1)).toBe(true)
+      expect(j.total).toBe(1)
+    })
+  })
+
+  it("residente A-1: su propia entrega → 200; la de otra comunidad → 404", async () => {
+    await conSesion(EMAIL.resA1, async () => {
+      const propia = await invocarApi(moduloEntregaEPP(), "GET", "ir/entregas-epp/[id]", {
+        params: { id: EPP_A1 },
+      })
+      // app/api/ir/entregas-epp/[id]/route.ts:14-15 + lib/api/crud-factory.ts:327 — el
+      // residente tiene `ir:mantenimiento` ver, así que el 200 no es un descuido de la
+      // clave: la ruta lo deja pasar y sirve la fila que SÍ es suya (control negativo
+      // del 404 que falta en el caso siguiente).
+      expect(propia.status).toBe(200)
+      expect((await cuerpoJson<{ personaId: string }>(propia)).personaId).toBe(P_A1)
+
+      const otraComunidad = await invocarApi(moduloEntregaEPP(), "GET", "ir/entregas-epp/[id]", {
+        params: { id: EPP_B1 },
+      })
+      // lib/api/crud-factory.ts:335 — `record.comunidadId !== scope.comunidadId` → 404
+      // genérico. La comunidad queda cerrada; el DUEÑO de la fila no, que es lo que
+      // fijan los dos casos vecinos.
+      expect(otraComunidad.status).toBe(404)
+      expect(await cuerpoJson<{ error: string }>(otraComunidad)).toEqual({
+        error: "Registro no encontrado.",
+      })
+    })
+  })
+
+  it("residente A-1: la entrega de la persona A-2 → 404, no 200 con su talla", async () => {
+    // CERRADO (antes fuga): `GET /api/ir/entregas-epp/ppo-epp-a2` respondía **200**
+    // con la fila completa (`personaId: "ppo-p-a2"`, `talla: "L"`, `estado:
+    // "renovar"`, `proximaRenovacion: "2026-12-04"`) porque la factory leía por id y
+    // sólo comparaba la comunidad. Ahora el `findFirst` lleva
+    // `{ id, comunidadId, personaId }`: la fila ajena NO se carga y la respuesta es
+    // el 404 genérico, sin filtrar que exista.
+    await conSesion(EMAIL.resA1, async () => {
+      const res = await invocarApi(moduloEntregaEPP(), "GET", "ir/entregas-epp/[id]", {
+        params: { id: EPP_A2 },
+      })
+      expect(res.status).toBe(404)
+      const cuerpo = await cuerpoJson<Record<string, unknown>>(res)
+      expect(cuerpo).toEqual({ error: "Registro no encontrado." })
+      expect(cuerpo).not.toHaveProperty("personaId")
+      expect(cuerpo).not.toHaveProperty("talla")
+      // La fila existe: el 404 es ALCANCE, no ausencia. Si mañana se borrara el
+      // arnés, este caso seguiría verde por la razón equivocada.
+      expect(await prisma.entregaEPP.findUnique({ where: { id: EPP_A2 } })).not.toBeNull()
+    })
+  })
+
+  it("residente A-1: PUT de la entrega ajena → 403 por CLAVE; DELETE → 404 por ALCANCE, la fila intacta", async () => {
+    await conSesion(EMAIL.resA1, async () => {
+      const antes = await prisma.entregaEPP.findUnique({ where: { id: EPP_A2 } })
+      const put = await invocarApi(moduloEntregaEPP(), "PUT", "ir/entregas-epp/[id]", {
+        params: { id: EPP_A2 },
+        body: { talla: "XL" },
+      })
+      // lib/api/put-merge.ts:79-80 — `authzCheck(rol, "editar")` sobre
+      // `ir:mantenimiento` (`app/api/ir/entregas-epp/[id]/route.ts`): el residente sólo
+      // tiene ver (lib/authz.ts:259), así que el 403 es por CLAVE y NO por fila. El PUT
+      // va por put-merge, no por el PUT de la factory: la clave corta antes del alcance.
+      expect(put.status).toBe(403)
+      expect(await cuerpoJson<{ error: string }>(put)).toEqual({ error: "Permiso denegado." })
+
+      const del = await invocarApi(moduloEntregaEPP(), "DELETE", "ir/entregas-epp/[id]", {
+        params: { id: EPP_A2 },
+      })
+      // El DELETE sí va por la factory (`handlers.DELETE`): la fila se carga con el
+      // `where` acotado por `alcanceEntregasEPP`, así que la ajena responde el 404
+      // genérico —no 403— y no se toca.
+      expect(del.status).toBe(404)
+      expect(await cuerpoJson<{ error: string }>(del)).toEqual({ error: "Registro no encontrado." })
+      expect(await prisma.entregaEPP.findUnique({ where: { id: EPP_A2 } })).toEqual(antes)
+
+      // Control de la frontera: con la entrega PROPIA la fila sí se carga y el corte es
+      // por CLAVE (`eliminar` no está en `ir:mantenimiento` del residente).
+      const delPropia = await invocarApi(moduloEntregaEPP(), "DELETE", "ir/entregas-epp/[id]", {
+        params: { id: EPP_A1 },
+      })
+      expect(delPropia.status).toBe(403)
+      expect(await cuerpoJson<{ error: string }>(delPropia)).toEqual({ error: "Permiso denegado." })
+      expect(await prisma.entregaEPP.findUnique({ where: { id: EPP_A1 } })).not.toBeNull()
+    })
+  })
+})
+
+describe("pe/bitacora-visitas — dueño `unidadId`/`destinoPersonaId`, pero ningún rol con unidad entra (lote 4)", () => {
+  it("control: la conserjería de A abre la visita de la unidad de A-2", async () => {
+    await conSesion(EMAIL.conserjeA, async () => {
+      const res = await invocarApi(moduloBitacoraVisita(), "GET", "pe/bitacora-visitas/[id]", {
+        params: { id: VIS_A2 },
+      })
+      // lib/authz.ts:146 — conserjería tiene `pe:bitacora` ver/crear/editar, y
+      // lib/api/crud-factory.ts:327 sirve la fila completa: el registro existe y es
+      // legible para el portón, con `unidadId`, `destinoPersonaId`, `nombre` y `dni`.
+      // El 403 del residente de abajo es la CLAVE, no la ausencia de la fila.
+      expect(res.status).toBe(200)
+      const fila = await cuerpoJson<{ id: string; unidadId: string }>(res)
+      expect(fila.id).toBe(VIS_A2)
+      expect(fila.unidadId).toBe(U_A2)
+
+      const collection = await invocarApi(moduloBitacoraVisitas(), "GET", "pe/bitacora-visitas?pageSize=100")
+      expect(collection.status).toBe(200)
+      const j = await cuerpoJson<Envelope<{ id: string }>>(collection)
+      // lib/api/crud-factory.ts:236 — la conserjería ve las dos visitas de la comunidad,
+      // incluida la de la unidad vecina: el portón no está acotado por unidad.
+      expect(new Set(j.data.map((v) => v.id))).toEqual(new Set([VIS_A1, VIS_A2]))
+    })
+  })
+
+  it("residente A-1: 403 en la visita de SU unidad y en la ajena, con el mismo cuerpo (límite documentado)", async () => {
+    await conSesion(EMAIL.resA1, async () => {
+      const propia = await invocarApi(moduloBitacoraVisita(), "GET", "pe/bitacora-visitas/[id]", {
+        params: { id: VIS_A1 },
+      })
+      // lib/authz.ts:227 — `pe:bitacora` es un Set vacío EXPLÍCITO para el residente: el
+      // check exacto de `puede()` lo deja en 403 (lib/authz.ts:407-410) y corta el
+      // fallback de prefijo hacia `pe` (lib/authz.ts:415-419). El 403 sale en
+      // lib/api/crud-factory.ts:327 antes de leer la fila. LÍMITE DOCUMENTADO: `BitacoraVisitaPE.unidadId` y
+      // `destinoPersonaId` tienen dueño, pero NINGÚN rol con alcance de unidad alcanza la
+      // ruta (administración, comité, conserjería y mantención ven la comunidad entera),
+      // así que la regla por fila de este recurso no es ejercitable: no hay caso por
+      // relación que escribir sin inventar un rol. El campo de pertenencia queda nombrado
+      // en el inventario de T5 (`permisos-por-objeto-inventario.test.ts`).
+      expect(propia.status).toBe(403)
+      const cuerpo = await cuerpoJson<{ error: string }>(propia)
+      expect(cuerpo).toEqual({ error: "Permiso denegado." })
+
+      // Control del límite: el cuerpo es idéntico para la visita de la unidad vecina, así
+      // que la respuesta no distingue dueño de tercero (ni confirma que exista).
+      const ajena = await invocarApi(moduloBitacoraVisita(), "GET", "pe/bitacora-visitas/[id]", {
+        params: { id: VIS_A2 },
+      })
+      expect(ajena.status).toBe(403)
+      expect(await cuerpoJson<{ error: string }>(ajena)).toEqual(cuerpo)
+
+      const coleccion = await invocarApi(
+        moduloBitacoraVisitas(),
+        "GET",
+        "pe/bitacora-visitas?pageSize=100"
+      )
+      // Misma clave en la colección (lib/api/crud-factory.ts:220): no hay lista que
+      // filtrar y la visita de la unidad vecina tampoco aparece.
+      expect(coleccion.status).toBe(403)
+      expect(await cuerpoJson<{ error: string }>(coleccion)).toEqual(cuerpo)
+    })
+  })
+})
+
+describe("ge/solicitudes — el dueño es `SolicitudGE.unidadId` (lote 4)", () => {
+  it("control: el administrador de A ve las dos solicitudes de su comunidad, no la de B", async () => {
+    await conSesion(EMAIL.adminA, async () => {
+      const res = await invocarApi(moduloSolicitudesGE(), "GET", "ge/solicitudes?pageSize=100")
+      expect(res.status).toBe(200)
+      const j = await cuerpoJson<Envelope<{ id: string }>>(res)
+      // lib/api/crud-factory.ts:236 — el `where` base es la comunidad: las dos solicitudes
+      // de A existen y son legibles, así que lo que decide si el residente ve la de la
+      // unidad 102 es el alcance por fila, no la ausencia de la fila.
+      expect(new Set(j.data.map((s) => s.id))).toEqual(new Set([SOL_A1, SOL_A2]))
+    })
+  })
+
+  it("residente A-1: la colección no trae la solicitud de la unidad 102", async () => {
+    // CERRADO (antes fuga): `GET /api/ge/solicitudes?pageSize=100` respondía **200**
+    // con `data: [ppo-sol-a1, ppo-sol-a2]` —la solicitud de la unidad vecina con
+    // `unidadId: "ppo-u-a2"`, `solicitantePersonaId: "ppo-p-a2"`, `titulo: "Ruidos
+    // molestos de la unidad 102"` y su descripción— porque el residente tiene `ge`
+    // ver (lib/authz.ts:262) y la colección filtraba SÓLO la comunidad. Ahora
+    // `alcanceSolicitudesGE` (app/api/ge/solicitudes/_alcance.ts) suma
+    // `OR: [{ unidadId: { in: vínculos vigentes } }, { solicitantePersonaId }]`, con
+    // los vínculos y la persona resueltos en el servidor.
+    await conSesion(EMAIL.resA1, async () => {
+      const res = await invocarApi(moduloSolicitudesGE(), "GET", "ge/solicitudes?pageSize=100")
+      expect(res.status).toBe(200)
+      const j = await cuerpoJson<Envelope<{ id: string; unidadId: string }>>(res)
+      expect(j.data.map((s) => s.id)).toEqual([SOL_A1])
+      expect(j.data.every((s) => s.unidadId === U_A1)).toBe(true)
+      expect(j.total).toBe(1)
+    })
+  })
+
+  it("residente A-1: su propia solicitud → 200; la de otra comunidad → 404", async () => {
+    await conSesion(EMAIL.resA1, async () => {
+      const propia = await invocarApi(moduloSolicitudGE(), "GET", "ge/solicitudes/[id]", {
+        params: { id: SOL_A1 },
+      })
+      // app/api/ge/solicitudes/[id]/route.ts:13-14 + lib/api/crud-factory.ts:327 — el
+      // residente tiene `ge` ver, así que su propia solicitud se sirve (control negativo
+      // del 404 que falta en el caso siguiente).
+      expect(propia.status).toBe(200)
+      expect((await cuerpoJson<{ unidadId: string }>(propia)).unidadId).toBe(U_A1)
+
+      const otraComunidad = await invocarApi(moduloSolicitudGE(), "GET", "ge/solicitudes/[id]", {
+        params: { id: SOL_B1 },
+      })
+      // lib/api/crud-factory.ts:335 — `record.comunidadId !== scope.comunidadId` → 404
+      // genérico: la comunidad queda cerrada, el dueño de la fila no.
+      expect(otraComunidad.status).toBe(404)
+      expect(await cuerpoJson<{ error: string }>(otraComunidad)).toEqual({
+        error: "Registro no encontrado.",
+      })
+    })
+  })
+
+  it("residente A-1: la solicitud de la unidad 102 → 404, no 200 con su contenido", async () => {
+    // CERRADO (antes fuga): `GET /api/ge/solicitudes/ppo-sol-a2` respondía **200** con
+    // la fila completa (`unidadId: "ppo-u-a2"`, `solicitantePersonaId: "ppo-p-a2"`,
+    // `titulo: "Ruidos molestos de la unidad 102"`, `estado: "en_revision"` y la
+    // descripción del reclamo del vecino) porque la factory leía por id y sólo
+    // comparaba la comunidad. Ahora la lectura por id lleva el `where` acotado y la
+    // fila ajena no se carga.
+    await conSesion(EMAIL.resA1, async () => {
+      const res = await invocarApi(moduloSolicitudGE(), "GET", "ge/solicitudes/[id]", {
+        params: { id: SOL_A2 },
+      })
+      expect(res.status).toBe(404)
+      const cuerpo = await cuerpoJson<Record<string, unknown>>(res)
+      expect(cuerpo).toEqual({ error: "Registro no encontrado." })
+      expect(cuerpo).not.toHaveProperty("unidadId")
+      expect(cuerpo).not.toHaveProperty("titulo")
+      // La fila existe: el 404 es ALCANCE, no ausencia.
+      expect(await prisma.solicitudGE.findUnique({ where: { id: SOL_A2 } })).not.toBeNull()
+    })
+  })
+
+  it("residente A-1: crear una solicitud con la unidad y la persona ajenas → rechazada", async () => {
+    // CERRADO (antes fuga de ESCRITURA): `POST /api/ge/solicitudes` con
+    // `{ unidadId: "ppo-u-a2", solicitantePersonaId: "ppo-p-a2" }` respondía **201** y
+    // la fila quedaba creada a nombre de la unidad vecina: el residente tiene `ge`
+    // crear (lib/authz.ts:262) y el POST validaba el body sin comparar
+    // `unidadId`/`solicitantePersonaId` con los vínculos del actor. Un alta no se
+    // puede validar con un `where` (la fila no existe todavía), así que la ruta
+    // declara `rechazoDeSolicitudAjena` en `antesDeEscribir`, la misma forma que
+    // `rechazoDeEmisionAjena` en `app/api/certificados-ct/route.ts`.
+    const intrusa = "ppo-sol-intrusa"
+    const propia = "ppo-sol-propia"
+    try {
+      await conSesion(EMAIL.resA1, async () => {
+        const res = await invocarApi(moduloSolicitudesGE(), "POST", "ge/solicitudes", {
+          body: {
+            id: intrusa,
+            folio: "GE-9001",
+            tipo: "buzon",
+            titulo: "Solicitud a nombre de la unidad 102",
+            descripcion: "Alta con la unidad y la persona de un tercero.",
+            solicitantePersonaId: P_A2,
+            unidadId: U_A2,
+            estado: "nuevo",
+            fechaCreacion: "2026-11-05",
+            comentarios: [],
+            historialEstados: [],
+          },
+        })
+        expect(res.status).toBe(404)
+        expect(await cuerpoJson<{ error: string }>(res)).toEqual({
+          error: "Registro no encontrado.",
+        })
+        expect(await prisma.solicitudGE.findUnique({ where: { id: intrusa } })).toBeNull()
+
+        // Control de la frontera: la misma alta con la unidad y la persona PROPIAS sí
+        // entra (201). Sin este control, un guardia que negara todo pasaría el caso.
+        const alta = await invocarApi(moduloSolicitudesGE(), "POST", "ge/solicitudes", {
+          body: {
+            id: propia,
+            folio: "GE-9002",
+            tipo: "buzon",
+            titulo: "Filtración en el baño de mi unidad",
+            descripcion: "Alta con la unidad y la persona de la propia sesión.",
+            solicitantePersonaId: P_A1,
+            unidadId: U_A1,
+            estado: "nuevo",
+            fechaCreacion: "2026-11-05",
+            comentarios: [],
+            historialEstados: [],
+          },
+        })
+        expect(alta.status).toBe(201)
+        const enBd = await prisma.solicitudGE.findUnique({ where: { id: propia } })
+        expect(enBd?.comunidadId).toBe(COM_A)
+        expect(enBd?.unidadId).toBe(U_A1)
+      })
+    } finally {
+      // La base es descartable, el orden no: si el guardia se rompe, la fila intrusa se
+      // crea y contaminaría los casos de la colección de este archivo.
+      await prisma.solicitudGE.deleteMany({ where: { id: { in: [intrusa, propia] } } })
+    }
+  })
+
+  it("residente A-1: PUT de la solicitud ajena → 403 por CLAVE y la fila intacta", async () => {
+    await conSesion(EMAIL.resA1, async () => {
+      const antes = await prisma.solicitudGE.findUnique({ where: { id: SOL_A2 } })
+      const res = await invocarApi(moduloSolicitudGE(), "PUT", "ge/solicitudes/[id]", {
+        params: { id: SOL_A2 },
+        body: { estado: "cerrado" },
+      })
+      // lib/api/put-merge.ts:79-80 — `authzCheck(rol, "editar")` sobre `ge`
+      // (app/api/ge/solicitudes/[id]/route.ts:13-14): el residente sólo tiene ver+crear
+      // (lib/authz.ts:262), así que el 403 es por CLAVE y no por fila. LÍMITE DOCUMENTADO:
+      // la escritura de la solicitud no es ejercitable por relación acá (el mismo 403
+      // llegaría con la propia); se fija que la fila ajena no cambia.
+      expect(res.status).toBe(403)
+      expect(await cuerpoJson<{ error: string }>(res)).toEqual({ error: "Permiso denegado." })
+      expect(await prisma.solicitudGE.findUnique({ where: { id: SOL_A2 } })).toEqual(antes)
+    })
+  })
+})
+
+describe("ir/solicitudes-insumo — el modelo no tiene `unidadId`: el dueño es `solicitantePersonaId` (lote 4)", () => {
+  it("control: el administrador de A ve las dos solicitudes de su comunidad, no la de B", async () => {
+    await conSesion(EMAIL.adminA, async () => {
+      const res = await invocarApi(
+        moduloSolicitudesInsumo(),
+        "GET",
+        "ir/solicitudes-insumo?pageSize=100"
+      )
+      expect(res.status).toBe(200)
+      const j = await cuerpoJson<Envelope<{ id: string }>>(res)
+      // lib/api/crud-factory.ts:236 — las dos solicitudes de A existen y son legibles; lo
+      // que oculta (o no) la de A-2 al residente es el alcance por fila.
+      expect(new Set(j.data.map((s) => s.id))).toEqual(new Set([INSU_A1, INSU_A2]))
+    })
+  })
+
+  it("residente A-1: la colección no trae la solicitud de otra persona", async () => {
+    // CERRADO (antes fuga): `GET /api/ir/solicitudes-insumo?pageSize=100` respondía
+    // **200** con `data: [ppo-insu-a1, ppo-insu-a2]` —la fila ajena con
+    // `solicitantePersonaId: "ppo-p-a2"`, `cantidad: 6` y `areaDestino:
+    // "Estacionamiento de la unidad 102"`— porque el residente tiene
+    // `ir:mantenimiento` ver (lib/authz.ts:259) y la colección filtraba SÓLO la
+    // comunidad. Ahora `alcanceSolicitudesInsumoIR` suma `{ solicitantePersonaId }`
+    // al `where` del `findMany` Y del `count`. Nota de modelo: `SolicitudInsumoIR`
+    // NO tiene `unidadId` (prisma/schema.prisma, model SolicitudInsumoIR), así que
+    // el campo de pertenencia real es `solicitantePersonaId`.
+    await conSesion(EMAIL.resA1, async () => {
+      const res = await invocarApi(
+        moduloSolicitudesInsumo(),
+        "GET",
+        "ir/solicitudes-insumo?pageSize=100"
+      )
+      expect(res.status).toBe(200)
+      const j = await cuerpoJson<Envelope<{ id: string; solicitantePersonaId: string }>>(res)
+      expect(j.data.map((s) => s.id)).toEqual([INSU_A1])
+      expect(j.data.every((s) => s.solicitantePersonaId === P_A1)).toBe(true)
+      expect(j.total).toBe(1)
+    })
+  })
+
+  it("residente A-1: su propia solicitud → 200; la de otra comunidad → 404", async () => {
+    await conSesion(EMAIL.resA1, async () => {
+      const propia = await invocarApi(
+        moduloSolicitudInsumo(),
+        "GET",
+        "ir/solicitudes-insumo/[id]",
+        { params: { id: INSU_A1 } }
+      )
+      // app/api/ir/solicitudes-insumo/[id]/route.ts:14-15 + lib/api/crud-factory.ts:327 —
+      // con `ir:mantenimiento` ver la fila propia se sirve (control negativo).
+      expect(propia.status).toBe(200)
+      expect((await cuerpoJson<{ solicitantePersonaId: string }>(propia)).solicitantePersonaId).toBe(
+        P_A1
+      )
+
+      const otraComunidad = await invocarApi(
+        moduloSolicitudInsumo(),
+        "GET",
+        "ir/solicitudes-insumo/[id]",
+        { params: { id: INSU_B1 } }
+      )
+      // lib/api/crud-factory.ts:335 — 404 cross-comunidad, el mismo contrato del resto.
+      expect(otraComunidad.status).toBe(404)
+      expect(await cuerpoJson<{ error: string }>(otraComunidad)).toEqual({
+        error: "Registro no encontrado.",
+      })
+    })
+  })
+
+  it("residente A-1: la solicitud de la persona A-2 → 404, no 200 con su área", async () => {
+    // CERRADO (antes fuga): `GET /api/ir/solicitudes-insumo/ppo-insu-a2` respondía
+    // **200** con la fila completa (`solicitantePersonaId: "ppo-p-a2"`, `cantidad: 6`,
+    // `estado: "entregada"`, `entregaFecha: "2026-11-06"` y `areaDestino` del
+    // estacionamiento de la unidad 102) porque la factory sólo comparaba la comunidad.
+    // Ahora el `findFirst` lleva `{ id, comunidadId, solicitantePersonaId }`: la fila
+    // ajena no se carga.
+    await conSesion(EMAIL.resA1, async () => {
+      const res = await invocarApi(
+        moduloSolicitudInsumo(),
+        "GET",
+        "ir/solicitudes-insumo/[id]",
+        { params: { id: INSU_A2 } }
+      )
+      expect(res.status).toBe(404)
+      const cuerpo = await cuerpoJson<Record<string, unknown>>(res)
+      expect(cuerpo).toEqual({ error: "Registro no encontrado." })
+      expect(cuerpo).not.toHaveProperty("solicitantePersonaId")
+      expect(cuerpo).not.toHaveProperty("areaDestino")
+      // La fila existe: el 404 es ALCANCE, no ausencia.
+      expect(await prisma.solicitudInsumoIR.findUnique({ where: { id: INSU_A2 } })).not.toBeNull()
+    })
+  })
+
+  it("residente A-1: PUT de la solicitud ajena → 403 por CLAVE y la fila intacta", async () => {
+    await conSesion(EMAIL.resA1, async () => {
+      const antes = await prisma.solicitudInsumoIR.findUnique({ where: { id: INSU_A2 } })
+      const res = await invocarApi(
+        moduloSolicitudInsumo(),
+        "PUT",
+        "ir/solicitudes-insumo/[id]",
+        { params: { id: INSU_A2 }, body: { estado: "rechazada" } }
+      )
+      // lib/api/put-merge.ts:79-80 — `authzCheck(rol, "editar")` sobre `ir:mantenimiento`
+      // (app/api/ir/solicitudes-insumo/[id]/route.ts:14-15): el residente sólo tiene ver
+      // (lib/authz.ts:259), así que el 403 es por CLAVE. LÍMITE DOCUMENTADO: entregar y
+      // resolver el comodín son de conserjería/mantención; la escritura por fila no es
+      // ejercitable sin un rol con alcance de unidad.
+      expect(res.status).toBe(403)
+      expect(await cuerpoJson<{ error: string }>(res)).toEqual({ error: "Permiso denegado." })
+      expect(await prisma.solicitudInsumoIR.findUnique({ where: { id: INSU_A2 } })).toEqual(antes)
+    })
+  })
+})
+
+describe("cv/avisos — el visor es de la comunidad: el modelo no tiene dueño por fila (lote 4)", () => {
+  it("control: la conserjería de A ve los dos avisos de su comunidad, no el de B", async () => {
+    await conSesion(EMAIL.conserjeA, async () => {
+      const res = await invocarApi(moduloAvisosCV(), "GET", "cv/avisos?pageSize=100")
+      expect(res.status).toBe(200)
+      const j = await cuerpoJson<Envelope<{ id: string }>>(res)
+      // lib/authz.ts:196 — `cv` ver para conserjería + lib/api/crud-factory.ts:236: los dos
+      // avisos de A existen y son legibles, y el de B queda fuera por comunidad.
+      expect(new Set(j.data.map((a) => a.id))).toEqual(new Set([AVISO_A1, AVISO_A2]))
+    })
+  })
+
+  it("residente A-1: ve los mismos avisos que la gestión y la fila no tiene unidad ni persona dueña", async () => {
+    await conSesion(EMAIL.resA1, async () => {
+      const res = await invocarApi(moduloAvisosCV(), "GET", "cv/avisos?pageSize=100")
+      expect(res.status).toBe(200)
+      const j = await cuerpoJson<Envelope<Record<string, unknown> & { id: string }>>(res)
+      // lib/authz.ts:276 — `cv` ver para el residente; lib/api/crud-factory.ts:236 — el
+      // `where` es la comunidad. LÍMITE DOCUMENTADO: acá NO hay regla de fila que pinchar
+      // y el 200 con la colección completa NO es una fuga: el aviso del visor es un
+      // mensaje de la comunidad, y el modelo `AvisoCV` (prisma/schema.prisma) no tiene
+      // `unidadId` ni `personaId` dueña. Se fija el hecho que lo sostiene, para que la
+      // exención del inventario de T5 no se apoye en una suposición.
+      expect(new Set(j.data.map((a) => a.id))).toEqual(new Set([AVISO_A1, AVISO_A2]))
+      expect(j.data.every((a) => !("unidadId" in a))).toBe(true)
+      // `creadoPorPersonaId` es quién publicó el aviso (gestión), no a quién pertenece: en
+      // el arnés ningún aviso lo trae, y el residente no crea avisos (`cv` crear es de
+      // administración y comité, lib/authz.ts:107).
+      expect(j.data.every((a) => a.creadoPorPersonaId == null)).toBe(true)
+
+      const porId = await invocarApi(moduloAvisoCV(), "GET", "cv/avisos/[id]", {
+        params: { id: AVISO_A2 },
+      })
+      // app/api/cv/avisos/[id]/route.ts:15-16 + lib/api/crud-factory.ts:327 — el detalle
+      // del aviso es igual de comunitario que la lista: no hay dueño con quien compararlo.
+      expect(porId.status).toBe(200)
+      expect((await cuerpoJson<{ id: string }>(porId)).id).toBe(AVISO_A2)
+
+      const otraComunidad = await invocarApi(moduloAvisoCV(), "GET", "cv/avisos/[id]", {
+        params: { id: AVISO_B1 },
+      })
+      // lib/api/crud-factory.ts:335 — el único límite que sí existe: el aviso de la otra
+      // comunidad responde 404 genérico.
+      expect(otraComunidad.status).toBe(404)
+      expect(await cuerpoJson<{ error: string }>(otraComunidad)).toEqual({
+        error: "Registro no encontrado.",
+      })
     })
   })
 })

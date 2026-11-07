@@ -5,6 +5,9 @@
  * `SI-####` generado server-side cuando el body no lo trae. Authz
  * "ir:mantenimiento".
  *
+ * Alcance por filas (`alcanceSolicitudesInsumoIR`): el residente solo ve las
+ * solicitudes de su persona; gestión conserva la comunidad entera.
+ *
  * Folio server-side (bug preexistente): la UI crea la solicitud con
  * `folio: ""` y `SolicitudInsumoIRSchema.folio` exige `min(1)`, así que el POST
  * del factory respondía 400 "Datos inválidos." y no se podía crear NINGUNA
@@ -19,11 +22,13 @@ import { prisma } from "@/lib/prisma"
 import { logger } from "@/lib/logger"
 import { createCrudHandlers, delegado } from "@/lib/api/crud-factory"
 import { jsonError, withComunidadScope } from "@/lib/api/with-comunidad-scope"
+import { alcanceSolicitudesInsumoIR } from "./_alcance"
 
 const handlers = createCrudHandlers({
   model: delegado(prisma.solicitudInsumoIR),
   schema: SolicitudInsumoIRSchema,
   authzCheck: (rol, accion) => puede(rol, accion, "ir:mantenimiento"),
+  alcance: alcanceSolicitudesInsumoIR,
 })
 
 export const GET = handlers.GET

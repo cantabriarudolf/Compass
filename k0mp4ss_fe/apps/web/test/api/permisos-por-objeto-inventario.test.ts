@@ -208,9 +208,8 @@ const DECLARACIONES: readonly Declaracion[] = [
   // ── gastos comunes del edificio (GE) ──────────────────────────────────────
   {
     ruta: "ge/solicitudes/[id]",
-    clase: "pendiente",
-    motivo:
-      "dueño `SolicitudGE.unidadId`; la factory sólo filtra comunidad (T1 «nv»).",
+    clase: "caso",
+    cubre: "ge/solicitudes — el dueño es `SolicitudGE.unidadId` (lote 4)",
   },
 
   // ── infracciones (IN) ─────────────────────────────────────────────────────
@@ -258,9 +257,8 @@ const DECLARACIONES: readonly Declaracion[] = [
   // ── insumos y EPP (IR) ────────────────────────────────────────────────────
   {
     ruta: "ir/entregas-epp/[id]",
-    clase: "pendiente",
-    motivo:
-      "dueño `EntregaEPP.personaId`; la factory sólo filtra comunidad (T1 «nv»).",
+    clase: "caso",
+    cubre: "ir/entregas-epp — el dueño es `EntregaEPP.personaId` (lote 4)",
   },
   {
     ruta: "ir/recursos/[id]",
@@ -269,9 +267,9 @@ const DECLARACIONES: readonly Declaracion[] = [
   },
   {
     ruta: "ir/solicitudes-insumo/[id]",
-    clase: "exento",
-    motivo:
-      "`ir:mantenimiento`: `SolicitudInsumoIR` sólo tiene `comunidadId`; el mapa de T1 la marcaba «nv» con dueño y el modelo no lo tiene.",
+    clase: "caso",
+    cubre:
+      "ir/solicitudes-insumo — el modelo no tiene `unidadId`: el dueño es `solicitantePersonaId` (lote 4)",
   },
   {
     ruta: "ir/solicitudes-insumo/[id]/entregar",

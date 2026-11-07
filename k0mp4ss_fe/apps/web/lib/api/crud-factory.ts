@@ -7,6 +7,8 @@
  * - POST es upsert idempotente por `id` (la fuente de verdad gana, no el orden).
  * - Validación Zod del body antes de tocar Prisma.
  * - Authz opcional por acción (ver|crear|editar|eliminar) vía `puede()`.
+ * - Alcance por filas opcional (`alcance`): la comunidad dice qué filas PUEDEN
+ *   existir para el actor; el alcance dice cuáles de ellas son suyas.
  * - Errores estandarizados: 400 Zod, 401 auth, 403 authz, 404 not found,
  *   409 P2002, 500 genérico.
  */
@@ -23,6 +25,12 @@ import {
 export interface CrudDelegate {
   findMany(args?: Record<string, unknown>): Promise<unknown[]>
   findUnique(args: { where: { id: string } }): Promise<unknown>
+  /**
+   * Opcional: lo usa el alcance por filas para cargar una fila SOLO si cumple
+   * el fragmento (un `findUnique` no acepta filtros que no sean únicos, así que
+   * no sirve para acotar). Los delegates de Prisma siempre lo exponen.
+   */
+  findFirst?(args?: Record<string, unknown>): Promise<unknown>
   count(args?: Record<string, unknown>): Promise<number>
   upsert(args: {
     where: { id: string }
@@ -50,6 +58,47 @@ export function delegado(modelo: unknown): CrudDelegate {
 }
 
 export type AuthzCheck = (rol: string, accion: Accion) => boolean
+
+/**
+ * Alcance por filas («lo propio») de una colección, resuelto desde la sesión.
+ *
+ * Devuelve un fragmento `where` para fusionar en TODA consulta a nivel de fila
+ * (colección, GET por id, PUT y DELETE), o `null` cuando el rol ve la comunidad
+ * completa (gestión: administrador y comité). El fragmento sale de la BD de la
+ * sesión —vínculos y persona del usuario—, nunca del body ni del query.
+ *
+ * Contrato de la fila ajena: con fragmento, la fila de otro dueño responde el
+ * 404 genérico de la serie («Registro no encontrado.»), no 403 —el 403
+ * confirmaría que existe— y NO se carga: el filtro viaja en el `where`, no en
+ * una comparación posterior a la lectura.
+ *
+ * LÍMITE: el alcance acota filas EXISTENTES; no puede validar una creación,
+ * porque en el alta la fila todavía no existe. El `POST` que crea necesita su
+ * propia guardia de pertenencia en la ruta (ver `AntesDeEscribir`): comparar el
+ * `unidadId`/`personaId` del payload con los vínculos del actor, como hace
+ * `rechazoDeEmisionAjena` en `app/api/certificados-ct/route.ts`.
+ */
+export type AlcanceDeFilas = (
+  scope: ComunidadScope
+) => Promise<Record<string, unknown> | null> | Record<string, unknown> | null
+
+/**
+ * Resultado de resolver una fila por `id` bajo el alcance del actor.
+ *
+ * - `visible`: la fila se puede servir y escribir.
+ * - `oculta`: la fila EXISTE pero no es visible (es de otro dueño, o de otra
+ *   comunidad). Se responde el 404 genérico.
+ * - `inexistente`: no hay fila con ese `id`.
+ *
+ * La distinción entre `oculta` e `inexistente` importa solo en el POST: el
+ * upsert escribe por `where: { id }`, así que tratar una fila oculta como alta
+ * reescribiría la fila ajena (y, si es de otra comunidad, se la llevaría puesta
+ * sin cambiarle la comunidad).
+ */
+type FilaResuelta =
+  | { estado: "visible"; fila: Record<string, unknown> }
+  | { estado: "oculta" }
+  | { estado: "inexistente" }
 
 /** Guardia previa al borrado: devuelve un Response para cortar, o null para seguir. */
 export type BeforeDelete = (
@@ -90,6 +139,11 @@ export interface CrudConfig {
   model: CrudDelegate
   schema: z.ZodType
   authzCheck?: AuthzCheck
+  /**
+   * Alcance por filas, opcional y aditivo. Sin esta opción el comportamiento es
+   * exactamente el de siempre: el único filtro es `comunidadId`.
+   */
+  alcance?: AlcanceDeFilas
   beforeDelete?: BeforeDelete
   /** Guardia previa a la escritura: corre despues de authz y antes del upsert/update. */
   antesDeEscribir?: AntesDeEscribir
@@ -213,6 +267,52 @@ export function createCrudHandlers(config: CrudConfig): CrudHandlers {
     return null
   }
 
+  /** Fragmento de alcance del actor, o `null` si no hay restricción por fila. */
+  async function resolverAlcance(
+    scope: ComunidadScope
+  ): Promise<Record<string, unknown> | null> {
+    if (!config.alcance) return null
+    return (await config.alcance(scope)) ?? null
+  }
+
+  /**
+   * Fila por `id` bajo el alcance del actor (ver `FilaResuelta`).
+   *
+   * Sin fragmento se conserva la lectura de siempre —`findUnique` + comparación
+   * de comunidad, UNA consulta—, así que las rutas que no declaran `alcance` no
+   * cambian ni de comportamiento ni de consulta. Con fragmento, el filtro viaja
+   * en el `where` (`findFirst`): la fila de otro dueño NO se carga. Si el filtro
+   * no la encuentra, se comprueba la EXISTENCIA con un `count` —sin leer la
+   * fila— para distinguir «es ajena» de «no existe»: es lo que permite al POST
+   * no confundir un id ajeno con un alta.
+   */
+  async function resolverFila(
+    scope: ComunidadScope,
+    id: string,
+    fragmento: Record<string, unknown> | null
+  ): Promise<FilaResuelta> {
+    if (!fragmento) {
+      const record = (await model.findUnique({ where: { id } })) as {
+        comunidadId?: string
+      } | null
+      if (!record) return { estado: "inexistente" }
+      // Registro de OTRA comunidad → oculta (404 sin filtrar existencia).
+      if (record.comunidadId !== scope.comunidadId) return { estado: "oculta" }
+      return { estado: "visible", fila: record as Record<string, unknown> }
+    }
+    if (!model.findFirst) {
+      throw new Error(
+        "El delegate no expone findFirst: el alcance por filas no se puede aplicar."
+      )
+    }
+    const record = (await model.findFirst({
+      where: { id, comunidadId: scope.comunidadId, ...fragmento },
+    })) as Record<string, unknown> | null
+    if (record) return { estado: "visible", fila: record }
+    const existentes = await model.count({ where: { id } })
+    return existentes > 0 ? { estado: "oculta" } : { estado: "inexistente" }
+  }
+
   async function GET(req: Request): Promise<Response> {
     const resultado = await withComunidadScope()
     if (!resultado.ok) return resultado.response
@@ -243,6 +343,11 @@ export function createCrudHandlers(config: CrudConfig): CrudHandlers {
       }
     }
     try {
+      // Alcance por filas: se resuelve DENTRO del try para que un fallo del
+      // alcance caiga en el mapeo de errores y no en un 200 vacío. Se compone
+      // con AND para no pisar el `OR` de la búsqueda por texto.
+      const fragmento = await resolverAlcance(scope)
+      if (fragmento) where = { AND: [where, fragmento] }
       const [data, total] = await Promise.all([
         model.findMany({
           where,
@@ -277,13 +382,13 @@ export function createCrudHandlers(config: CrudConfig): CrudHandlers {
     if (!id) return jsonError(400, "El identificador (id) es obligatorio.")
 
     try {
-      const existente = (await model.findUnique({
-        where: { id },
-      })) as Record<string, unknown> | null
-      // Upsert sobre un registro de OTRA comunidad → 404 (sin filtrar existencia)
-      if (existente && existente.comunidadId !== scope.comunidadId) {
-        return jsonError(404, "Registro no encontrado.")
-      }
+      const fila = await resolverFila(scope, id, await resolverAlcance(scope))
+      // Upsert sobre un registro que existe pero NO es visible —de otro dueño
+      // bajo el alcance, o de otra comunidad— → 404 (sin filtrar existencia).
+      // El upsert escribe por `where: { id }`, así que tratarlo como alta
+      // reescribiría la fila ajena; por eso la existencia se comprueba antes.
+      if (fila.estado === "oculta") return jsonError(404, "Registro no encontrado.")
+      const existente = fila.estado === "visible" ? fila.fila : null
       const denegado = autorizar(scope, existente ? "editar" : "crear")
       if (denegado) return denegado
 
@@ -329,13 +434,9 @@ export function createCrudHandlers(config: CrudConfig): CrudHandlers {
 
     const { id } = await ctx.params
     try {
-      const record = (await model.findUnique({
-        where: { id },
-      })) as { comunidadId?: string } | null
-      if (!record || record.comunidadId !== scope.comunidadId) {
-        return jsonError(404, "Registro no encontrado.")
-      }
-      return Response.json(record)
+      const fila = await resolverFila(scope, id, await resolverAlcance(scope))
+      if (fila.estado !== "visible") return jsonError(404, "Registro no encontrado.")
+      return Response.json(fila.fila)
     } catch (e) {
       return mapearError(e)
     }
@@ -366,12 +467,9 @@ export function createCrudHandlers(config: CrudConfig): CrudHandlers {
     }
     const { id } = await ctx.params
     try {
-      const record = (await model.findUnique({
-        where: { id },
-      })) as { comunidadId?: string } | null
-      if (!record || record.comunidadId !== scope.comunidadId) {
-        return jsonError(404, "Registro no encontrado.")
-      }
+      const fila = await resolverFila(scope, id, await resolverAlcance(scope))
+      if (fila.estado !== "visible") return jsonError(404, "Registro no encontrado.")
+      const record = fila.fila
       const denegado = autorizar(scope, "editar")
       if (denegado) return denegado
 
@@ -409,12 +507,9 @@ export function createCrudHandlers(config: CrudConfig): CrudHandlers {
 
     const { id } = await ctx.params
     try {
-      const record = (await model.findUnique({
-        where: { id },
-      })) as { comunidadId?: string } | null
-      if (!record || record.comunidadId !== scope.comunidadId) {
-        return jsonError(404, "Registro no encontrado.")
-      }
+      const fila = await resolverFila(scope, id, await resolverAlcance(scope))
+      if (fila.estado !== "visible") return jsonError(404, "Registro no encontrado.")
+      const record = fila.fila
       const denegado = autorizar(scope, "eliminar")
       if (denegado) return denegado
       if (beforeDelete) {
