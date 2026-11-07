@@ -67,6 +67,21 @@
  * los montos, la penalización, la garantía retenida y el cargo FI
  * (`proyectarReservaRA` sobre `CrudConfig.proyeccion` de la factory). El
  * `total` no se redacta y la gestión recibe la fila completa.
+ * Bloque T17 (el ALTA, que el alcance no puede validar porque la fila no existe):
+ * `pe/cierres-turno` queda CERRADO —la conserjería creaba un cierre a nombre de
+ * otro trabajador (201) y podía regalar el propio por PUT (200); ahora
+ * `rechazoDeCierreTurnoAjeno`, sobre el helper compartido
+ * `lib/api/propiedad-de-alta.ts`, responde 404 antes de escribir—; `ir/entregas-epp`
+ * e `ir/solicitudes-insumo` quedan VERIFICADOS como alta operativa (el residente no
+ * tiene `ir:mantenimiento` crear, el 403 es por CLAVE y no hay hueco que cerrar);
+ * `ra/reservas` y `pe/turnos/iniciar` quedan CERRADOS sobre el mismo helper: el alta
+ * ajena responde 404 antes de escribir, sin fila y sin el efecto colateral que la
+ * hacía daño —ni el cargo `reserva_ra` al Fondo de Amenities de la unidad ajena
+ * (`ra/reservas`, releído del libro FI) ni el evento `PE_START_SHIFT` a nombre de un
+ * tercero (`pe/turnos/iniciar`, contado en la bitácora)—. Sus fixtures
+ * (`test/api/fase4-ra.test.ts` y `test/api/pe-transiciones.test.ts`) recibieron la
+ * identidad MP que la sesión acotada necesitaba para ejercitar el camino real: la
+ * misma actualización de fixture que T15, sin debilitar ningún caso.
  */
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest"
 import { prisma } from "@/lib/prisma"
@@ -217,6 +232,23 @@ const PROY_B1 = "ppo-proy-b1" // comunidad B
 const LEAD_A1 = "ppo-lead-a1" // comunidad A
 const LEAD_B1 = "ppo-lead-b1" // comunidad B
 
+// Fixtures del ALTA (T17): el POST de `ra/reservas` carga el elemento reservable, el
+// de `pe/turnos/iniciar` valida la jornada contra el maestro y las dos rutas de turno
+// exigen la ficha laboral de PE (`leerDatosLaborales`). Sin estos tres datos el alta
+// con dueño ajeno no se puede observar: la ruta responde 400/404 ANTES de escribir y
+// el hueco quedaría invisible.
+const ELEMENTO_QUINCHO = "ppo-elemento-quincho" // el mismo id que usan las reservas del arnés
+const JORNADA_MANANA = "ppo-jornada-manana"
+// Elemento CON tarifa y fondo de amenities ACTIVO: sin ellos el alta ajena "se cierra"
+// sin haber probado la parte que importa —el cargo que el vecino terminaría pagando—.
+// El cargo vive en el libro FI con `origenRef` = id de la reserva, así que la relectura
+// del libro prueba que no quedó deuda registrada.
+const ELEMENTO_CON_TARIFA = "ppo-elemento-con-tarifa"
+const FONDO_AMENITIES_A = "ppo-fondo-amenities-a"
+const TARIFA_CON_TARIFA = 15_000
+/** Ficha laboral mínima de PE: lo que `leerDatosLaborales` exige (objeto no vacío). */
+const FICHA_LABORAL = { cargo: "Conserje", fechaIngreso: "2025-01-02" }
+
 /** Descargos válidos (mínimo 10 caracteres, `apelar/route.ts:53`). */
 const DESCARGO =
   "Los ruidos provenían de la mudanza del vecino del 102, no de mi unidad."
@@ -234,6 +266,34 @@ async function conSesion<T>(email: string, fn: () => Promise<T>): Promise<T> {
     return await fn()
   } finally {
     state.cookie = ""
+  }
+}
+
+/**
+ * Cierre de turno PE válido para el POST de la colección (T17).
+ *
+ * La jornada es la del maestro (`JORNADA_MANANA`) y la fecha por defecto no choca con
+ * los cierres del arnés (`2026-11-05`), así que una alta rechazada por ALCANCE no se
+ * puede confundir con un 409 de INV-02 (un cierre por trabajador, fecha y jornada).
+ */
+function cierrePE(
+  id: string,
+  trabajadorPersonaId: string,
+  overrides: Record<string, unknown> = {}
+): Record<string, unknown> {
+  return {
+    id,
+    fecha: "2026-11-07",
+    hora: "08:00",
+    jornadaReportadaId: JORNADA_MANANA,
+    trabajadorPersonaId,
+    novedadesGenerales: `Novedades del turno de ${trabajadorPersonaId}`,
+    incidencias: { hubo: false },
+    checklistInstalaciones: [{ item: "Portón principal", ok: true }],
+    checklistEquipamiento: [{ item: "Celular de ronda", ok: true }],
+    historialCambios: [{ fecha: "2026-11-07", resumen: "Cierre enviado por el trabajador" }],
+    notificadoAAdmin: true,
+    ...overrides,
   }
 }
 
@@ -272,6 +332,7 @@ const moduloAvisoCV = () => import("@/app/api/cv/avisos/[id]/route")
 const moduloCierresTurno = () => import("@/app/api/pe/cierres-turno/route")
 const moduloCierreTurno = () => import("@/app/api/pe/cierres-turno/[id]/route")
 const moduloReservasRA = () => import("@/app/api/ra/reservas/route")
+const moduloIniciarTurnoPE = () => import("@/app/api/pe/turnos/iniciar/route")
 const moduloReservaRA = () => import("@/app/api/ra/reservas/[id]/route")
 const moduloCancelarReservaRA = () => import("@/app/api/ra/reservas/[id]/cancelar/route")
 const moduloMantencionPE = () => import("@/app/api/pe/mantenciones/[id]/route")
@@ -281,6 +342,8 @@ const moduloLeadPortal = () => import("@/app/api/leads-portal/[id]/route")
 async function limpiar(): Promise<void> {
   await prisma.cierreTurnoPE.deleteMany({ where: { comunidadId: { in: [COM_A, COM_B] } } })
   await prisma.reservaRA.deleteMany({ where: { comunidadId: { in: [COM_A, COM_B] } } })
+  await prisma.elementoRA.deleteMany({ where: { comunidadId: { in: [COM_A, COM_B] } } })
+  await prisma.jornada.deleteMany({ where: { comunidadId: { in: [COM_A, COM_B] } } })
   await prisma.mantencionPreventivaPE.deleteMany({
     where: { comunidadId: { in: [COM_A, COM_B] } },
   })
@@ -293,6 +356,7 @@ async function limpiar(): Promise<void> {
   await prisma.avisoCV.deleteMany({ where: { comunidadId: { in: [COM_A, COM_B] } } })
   await prisma.certificadoCT.deleteMany({ where: { comunidadId: { in: [COM_A, COM_B] } } })
   await prisma.cobroFI.deleteMany({ where: { comunidadId: { in: [COM_A, COM_B] } } })
+  await prisma.fondoFI.deleteMany({ where: { comunidadId: { in: [COM_A, COM_B] } } })
   await prisma.infraccionIN.deleteMany({ where: { comunidadId: { in: [COM_A, COM_B] } } })
   await prisma.encomiendaPE.deleteMany({ where: { comunidadId: { in: [COM_A, COM_B] } } })
   await prisma.controlPropiedadArchivada.deleteMany({
@@ -345,12 +409,14 @@ beforeAll(async () => {
     })
   }
 
-  // Una persona por unidad, y cada una con su vínculo vigente (fechaFin null).
-  for (const [id, comunidadId, unidadId, nombre, rut] of [
-    [P_A1, COM_A, U_A1, "Ana Auno", "70000001-1"],
-    [P_A2, COM_A, U_A2, "Beto Ados", "70000002-2"],
-    [P_B1, COM_B, U_B1, "Caro Buno", "70000003-3"],
-    [P_B2, COM_B, U_B2, "Dani Bdos", "70000004-4"],
+  // Una persona por unidad, y cada una con su vínculo vigente (fechaFin null). Las dos
+  // personas de A llevan ficha laboral de PE: son las trabajadoras del arnés y sin ella
+  // `pe/turnos/iniciar` responde 400 antes de escribir (T17).
+  for (const [id, comunidadId, unidadId, nombre, rut, datosLaborales] of [
+    [P_A1, COM_A, U_A1, "Ana Auno", "70000001-1", FICHA_LABORAL],
+    [P_A2, COM_A, U_A2, "Beto Ados", "70000002-2", FICHA_LABORAL],
+    [P_B1, COM_B, U_B1, "Caro Buno", "70000003-3", null],
+    [P_B2, COM_B, U_B2, "Dani Bdos", "70000004-4", null],
   ] as const) {
     const [nombres, apellidos] = nombre.split(" ") as [string, string]
     await prisma.persona.create({
@@ -366,6 +432,7 @@ beforeAll(async () => {
         estadoCuenta: "activa",
         condicionesEspecialesIds: [],
         roles: ["propietario"],
+        ...(datosLaborales ? { datosLaborales } : {}),
       },
     })
     await prisma.vinculoUnidad.create({
@@ -966,6 +1033,56 @@ beforeAll(async () => {
       cierre(CIERRE_A2, COM_A, P_A2),
       cierre(CIERRE_B1, COM_B, P_B1),
     ] as never,
+  })
+
+  // Elemento reservable y jornada del maestro (T17): los exigen los POST de `ra/reservas`
+  // y `pe/turnos/iniciar` respectivamente. Tarifa y garantía en 0 para que el alta no
+  // materialice un cobro al Fondo de Amenities (la prueba es de propiedad, no de dinero).
+  await prisma.elementoRA.create({
+    data: {
+      id: ELEMENTO_QUINCHO,
+      comunidadId: COM_A,
+      nombre: "Quincho",
+      tipo: "espacio_fisico",
+      franja: "bloques_horas",
+      duracionBloqueHoras: 2,
+      tarifaUso: 0,
+      garantiaRequerida: 0,
+      stock: 1,
+      activo: true,
+      requiereAutorizacion: false,
+    },
+  })
+  // El segundo elemento SÍ cobra, y hay fondo de amenities activo donde imputar el cargo:
+  // es el escenario en el que una reserva ajena le dejaba la deuda a la unidad del
+  // payload (`unidadDeCobro`), que es el daño que T17 cierra (ver el caso del lote 6).
+  await prisma.elementoRA.create({
+    data: {
+      id: ELEMENTO_CON_TARIFA,
+      comunidadId: COM_A,
+      nombre: "Sala multiuso",
+      tipo: "espacio_fisico",
+      franja: "bloques_horas",
+      duracionBloqueHoras: 2,
+      tarifaUso: TARIFA_CON_TARIFA,
+      garantiaRequerida: 0,
+      stock: 1,
+      activo: true,
+      requiereAutorizacion: false,
+    },
+  })
+  await prisma.fondoFI.create({
+    data: {
+      id: FONDO_AMENITIES_A,
+      comunidadId: COM_A,
+      nombre: "Fondo de Amenities A",
+      tipo: "amenities",
+      activo: true,
+      saldoInicial: 0,
+    },
+  })
+  await prisma.jornada.create({
+    data: { id: JORNADA_MANANA, comunidadId: COM_A, nombre: "Jornada mañana" },
   })
 
   // Reservas RA (lote 5): la pertenencia es `solicitantePersonaId` (quién reservó).
@@ -3520,5 +3637,265 @@ describe("pe/mantenciones, pe/proyecciones y leads-portal — el modelo no tiene
       expect(res.status).toBe(403)
       expect(await cuerpoJson<{ error: string }>(res)).toEqual({ error: "Permiso denegado." })
     })
+  })
+})
+
+// ── Lote 6 (T17): el ALTA no puede atribuir la fila a otro dueño ─────────────
+//
+// El alcance por filas (`alcance`, `_alcance.ts` de cada recurso) acota filas
+// EXISTENTES: colección, detalle, PUT y DELETE. Un alta no se puede validar con un
+// `where` porque la fila todavía no existe, así que el portón de escritura necesita su
+// propia guardia, previa a Prisma, que compare el dueño que el PAYLOAD reclama contra
+// la identidad de la sesión resuelta en BD (`alcancePorFilasDeSesion`,
+// `unidadesVinculadasDb`). Es la forma de `rechazoDeSolicitudAjena`
+// (`app/api/ge/solicitudes/_alcance.ts`), factorizada en
+// `lib/api/propiedad-de-alta.ts` para que los recursos no la reinventen.
+
+describe("T17 · el alta no puede atribuir la fila a otro dueño", () => {
+  it("ra/reservas: el residente A-1 no crea una reserva con la persona y la unidad ajenas → 404 y sin fila", async () => {
+    const intrusa = "ppo-res-intrusa"
+    try {
+      await conSesion(EMAIL.resA1, async () => {
+        const res = await invocarApi(moduloReservasRA(), "POST", "ra/reservas", {
+          body: {
+            id: intrusa,
+            elementoId: ELEMENTO_CON_TARIFA,
+            solicitantePersonaId: P_A2,
+            unidadId: U_A2,
+            fecha: "2026-11-14",
+            horaInicio: "09:00",
+            horaFin: "10:00",
+            estado: "confirmada",
+          },
+        })
+        // OBSERVADO antes del guardia (2026-11-07, `ppo-res-a1@test.cl`, residente con
+        // `personaId` `ppo-p-a1`): el mismo POST respondía **201** con la fila completa
+        // —`{"id":"ppo-res-intrusa","comunidadId":"ppo-com-a","folio":"RA-…",
+        // "solicitantePersonaId":"ppo-p-a2","unidadId":"ppo-u-a2",…}`— y la reserva
+        // quedaba en la BD a nombre de la unidad vecina. El residente tiene `ra`
+        // ver/crear (lib/authz.ts:261) y el POST transaccional validaba el payload sin
+        // comparar `solicitantePersonaId` ni `unidadId` con la sesión. Contrato seguro:
+        // el de `ge/solicitudes` (404 genérico, sin fila).
+        expect(res.status).toBe(404)
+        expect(await cuerpoJson<{ error: string }>(res)).toEqual({
+          error: "Registro no encontrado.",
+        })
+        expect(await prisma.reservaRA.findUnique({ where: { id: intrusa } })).toBeNull()
+        // Y el LIBRO FI no registra el cargo de la reserva ajena: con tarifa > 0 y
+        // fondo de amenities activo, el alta materializaba `reserva_ra` con
+        // `origenRef` = id de la reserva y lo imputaba a la unidad del payload
+        // (`unidadDeCobro`), es decir el vecino recibía la deuda de una reserva que
+        // no pidió. La relectura del libro es la prueba de que el efecto desapareció.
+        expect(
+          await prisma.cobroFI.count({
+            where: { comunidadId: COM_A, origenModulo: "RA", origenRef: intrusa },
+          })
+        ).toBe(0)
+      })
+    } finally {
+      await prisma.cobroFI.deleteMany({ where: { comunidadId: COM_A, origenRef: intrusa } })
+      await prisma.reservaRA.deleteMany({ where: { id: intrusa } })
+    }
+  })
+
+  it("ra/reservas: control de la frontera — el residente A-1 SÍ crea su propia reserva (201) y el cargo va a SU unidad", async () => {
+    const propia = "ppo-res-propia-a1"
+    try {
+      await conSesion(EMAIL.resA1, async () => {
+        const res = await invocarApi(moduloReservasRA(), "POST", "ra/reservas", {
+          body: {
+            id: propia,
+            elementoId: ELEMENTO_CON_TARIFA,
+            solicitantePersonaId: P_A1,
+            unidadId: U_A1,
+            fecha: "2026-11-15",
+            horaInicio: "10:00",
+            horaFin: "11:00",
+            estado: "confirmada",
+          },
+        })
+        // Sin esta mitad, una guardia que negara TODO pasaría el caso de la fuga.
+        expect(res.status).toBe(201)
+        const enBd = await prisma.reservaRA.findUnique({ where: { id: propia } })
+        expect(enBd?.comunidadId).toBe(COM_A)
+        expect(enBd?.solicitantePersonaId).toBe(P_A1)
+        expect(enBd?.unidadId).toBe(U_A1)
+        // Y el camino real del alta sigue materializando el cargo —tarifa > 0 y fondo
+        // activo—, ahora imputado a la unidad del DUEÑO: el guardia no rompe el cobro,
+        // solo niega la atribución a un tercero.
+        const cargos = await prisma.cobroFI.findMany({
+          where: { comunidadId: COM_A, origenModulo: "RA", origenRef: propia },
+        })
+        expect(cargos).toHaveLength(1)
+        expect(cargos[0]?.unidadId).toBe(U_A1)
+        expect(cargos[0]?.concepto).toBe("reserva_ra")
+        expect(cargos[0]?.montoBase).toBe(TARIFA_CON_TARIFA)
+      })
+    } finally {
+      await prisma.cobroFI.deleteMany({ where: { comunidadId: COM_A, origenRef: propia } })
+      await prisma.reservaRA.deleteMany({ where: { id: propia } })
+    }
+  })
+
+  it("pe/cierres-turno: la conserjería no crea el cierre de turno del otro trabajador → 404 y sin fila", async () => {
+    const intruso = "ppo-cierre-intruso"
+    try {
+      await conSesion(EMAIL.trabajadorA, async () => {
+        const res = await invocarApi(moduloCierresTurno(), "POST", "pe/cierres-turno", {
+          body: cierrePE(intruso, P_A2),
+        })
+        // Fuga de ESCRITURA: `trabajadorA` es conserjería con `personaId` P_A1
+        // (lib/authz.ts:158, `pe:cierre_turno` crear) y el POST de la factory sólo
+        // aplicaba el alcance a la fila EXISTENTE; el alta quedaba a nombre del trabajador
+        // que el payload nombrara. INV-02 no la frena: es otro trabajador.
+        expect(res.status).toBe(404)
+        expect(await cuerpoJson<{ error: string }>(res)).toEqual({
+          error: "Registro no encontrado.",
+        })
+        expect(await prisma.cierreTurnoPE.findUnique({ where: { id: intruso } })).toBeNull()
+      })
+    } finally {
+      await prisma.cierreTurnoPE.deleteMany({ where: { id: intruso } })
+    }
+  })
+
+  it("pe/cierres-turno: control de la frontera — el cierre de SU persona sí entra (201)", async () => {
+    const propio = "ppo-cierre-propio-a1"
+    try {
+      await conSesion(EMAIL.trabajadorA, async () => {
+        const res = await invocarApi(moduloCierresTurno(), "POST", "pe/cierres-turno", {
+          body: cierrePE(propio, P_A1, { fecha: "2026-11-08" }),
+        })
+        expect(res.status).toBe(201)
+        const enBd = await prisma.cierreTurnoPE.findUnique({ where: { id: propio } })
+        expect(enBd?.comunidadId).toBe(COM_A)
+        expect(enBd?.trabajadorPersonaId).toBe(P_A1)
+      })
+    } finally {
+      await prisma.cierreTurnoPE.deleteMany({ where: { id: propio } })
+    }
+  })
+
+  it("pe/cierres-turno: mover el cierre PROPIO al otro trabajador → 404 y la fila intacta", async () => {
+    // La guardia también corre en el PUT parcial (put-merge): sin ella, el propio
+    // trabajador podía "regalar" su cierre a otro —dejando asentado que A-2 cerró un
+    // turno que A-2 nunca cerró— aunque el alcance ya le impedía LEER el cierre ajeno.
+    await conSesion(EMAIL.trabajadorA, async () => {
+      const antes = await prisma.cierreTurnoPE.findUnique({ where: { id: CIERRE_A1 } })
+      const res = await invocarApi(moduloCierreTurno(), "PUT", "pe/cierres-turno/[id]", {
+        params: { id: CIERRE_A1 },
+        body: { trabajadorPersonaId: P_A2, fecha: "2026-11-09" },
+      })
+      expect(res.status).toBe(404)
+      expect(await cuerpoJson<{ error: string }>(res)).toEqual({
+        error: "Registro no encontrado.",
+      })
+      expect(await prisma.cierreTurnoPE.findUnique({ where: { id: CIERRE_A1 } })).toEqual(antes)
+    })
+  })
+
+  it("pe/turnos/iniciar: la conserjería no inicia el turno de otra persona → 404 y sin evento", async () => {
+    // OBSERVADO antes del guardia (2026-11-07, `ppo-trabajador-a@test.cl`, conserjería
+    // con `personaId` `ppo-p-a1`): `POST /api/pe/turnos/iniciar` con
+    // `{ personaId: "ppo-p-a2", jornadaId: "ppo-jornada-manana" }` respondía **200**
+    // `{"ok":true,"eventoId":"ev-…"}` y escribía el evento `PE_START_SHIFT` con
+    // `referenciaId: "ppo-p-a2"` en la bitácora —constancia de que A-2 inició un turno
+    // que A-2 no inició—. La ruta vive en la auditoría y `PE_START_SHIFT` alimenta
+    // «Turnos iniciados hoy» y la descripción «<nombre> inicia turno».
+    await conSesion(EMAIL.trabajadorA, async () => {
+      const res = await invocarApi(moduloIniciarTurnoPE(), "POST", "pe/turnos/iniciar", {
+        body: { personaId: P_A2, jornadaId: JORNADA_MANANA },
+      })
+      expect(res.status).toBe(404)
+      expect(await cuerpoJson<{ error: string }>(res)).toEqual({
+        error: "Registro no encontrado.",
+      })
+      // Y la bitácora no registra el turno de la persona ajena: sin esta relectura, un
+      // 404 que igual hubiera escrito el evento también pasaría el caso.
+      expect(
+        await prisma.eventoAuditoria.count({
+          where: { comunidadId: COM_A, tipoAccion: "PE_START_SHIFT", referenciaId: P_A2 },
+        })
+      ).toBe(0)
+    })
+  })
+
+  it("pe/turnos/iniciar: control de la frontera — el turno de SU persona sí se inicia (200)", async () => {
+    await conSesion(EMAIL.trabajadorA, async () => {
+      const res = await invocarApi(moduloIniciarTurnoPE(), "POST", "pe/turnos/iniciar", {
+        body: { personaId: P_A1, jornadaId: JORNADA_MANANA },
+      })
+      expect(res.status).toBe(200)
+      const cuerpo = await cuerpoJson<{ ok: boolean; eventoId: string }>(res)
+      expect(cuerpo.ok).toBe(true)
+      const evento = await prisma.eventoAuditoria.findUnique({
+        where: { id: cuerpo.eventoId },
+      })
+      expect(evento?.categoria).toBe("PE")
+      expect(evento?.tipoAccion).toBe("PE_START_SHIFT")
+      expect(evento?.referenciaId).toBe(P_A1)
+      expect(evento?.comunidadId).toBe(COM_A)
+    })
+  })
+
+  it("ir/entregas-epp: el residente no registra la entrega de EPP de otra persona (clave sin `crear`)", async () => {
+    // VERIFICADO con la petición real: acá NO hay fuga de alta por falta de guardia.
+    // `ir:mantenimiento` crear lo tienen conserjería y mantención (lib/authz.ts:194 y
+    // :334), NO el residente (lib/authz.ts:259 — sólo `ver`, decisión owner
+    // 2026-10-21). El 403 llega por CLAVE, antes de la escritura, así que el alta con
+    // dueño ajeno no está abierta a ningún rol de ciudadano y no hay nada que cerrar:
+    // `personaId` es el RECEPTOR de la entrega que el operador registra, no la
+    // atribución que el actor hace de sí mismo.
+    const intrusa = "ppo-epp-intrusa"
+    try {
+      await conSesion(EMAIL.resA1, async () => {
+        const res = await invocarApi(moduloEntregasEPP(), "POST", "ir/entregas-epp", {
+          body: {
+            id: intrusa,
+            recursoId: "ppo-rec-casco",
+            personaId: P_A2,
+            fechaEntrega: "2026-11-09",
+            estado: "nuevo",
+          },
+        })
+        expect(res.status).toBe(403)
+        expect(await cuerpoJson<{ error: string }>(res)).toEqual({
+          error: "Permiso denegado.",
+        })
+        expect(await prisma.entregaEPP.findUnique({ where: { id: intrusa } })).toBeNull()
+      })
+    } finally {
+      await prisma.entregaEPP.deleteMany({ where: { id: intrusa } })
+    }
+  })
+
+  it("ir/solicitudes-insumo: el residente no crea una solicitud a nombre de otra persona (clave sin `crear`)", async () => {
+    // Mismo caso que `ir/entregas-epp` y por la misma razón: el residente sólo tiene
+    // `ir:mantenimiento` ver (lib/authz.ts:259), así que `solicitantePersonaId` no es
+    // una atribución que él pueda falsificar. El alta la ejerce el rol operativo.
+    const intrusa = "ppo-insu-intrusa"
+    try {
+      await conSesion(EMAIL.resA1, async () => {
+        const res = await invocarApi(moduloSolicitudesInsumo(), "POST", "ir/solicitudes-insumo", {
+          body: {
+            id: intrusa,
+            folio: "",
+            solicitantePersonaId: P_A2,
+            estadoComodin: "no_comodin",
+            cantidad: 1,
+            areaDestino: "Bodega de la unidad 102",
+            estado: "pendiente",
+            fechaSolicitud: "2026-11-09",
+          },
+        })
+        expect(res.status).toBe(403)
+        expect(await cuerpoJson<{ error: string }>(res)).toEqual({
+          error: "Permiso denegado.",
+        })
+        expect(await prisma.solicitudInsumoIR.findUnique({ where: { id: intrusa } })).toBeNull()
+      })
+    } finally {
+      await prisma.solicitudInsumoIR.deleteMany({ where: { id: intrusa } })
+    }
   })
 })

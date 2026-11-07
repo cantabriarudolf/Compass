@@ -23,6 +23,16 @@ const comunidad = "fase4-ra"
 const emailAdmin = "f4-ra-admin@test.cl"
 const emailResidente = "f4-ra-residente@test.cl"
 
+// Identidad MP del residente (T17 «permisos por objeto»): el alta de `ra/reservas`
+// compara el dueño que el payload reclama contra la SESIÓN, así que el residente
+// necesita una ficha propia y un vínculo vigente con su unidad. Sin ellos la sesión
+// no tiene «lo propio» y el caso de alta no podría ejercitar el camino real.
+const personaResidente = "f4-ra-persona-residente"
+const unidadResidente = "f4-ra-unidad-residente"
+const vinculoResidente = "f4-ra-vinculo-residente"
+const personaAjena = "f4-ra-persona-ajena"
+const unidadAjena = "f4-ra-unidad-ajena"
+
 const cargaModulos = async () => ({
   elementos: await import("@/app/api/ra/elementos/route"),
   reservas: await import("@/app/api/ra/reservas/route"),
@@ -39,7 +49,9 @@ function reservaValida(overrides: Record<string, unknown> = {}): Record<string, 
     id: "ra-res-1",
     folio: "RA-0001",
     elementoId: "ra-elem-1",
-    solicitantePersonaId: "ra-pers-1",
+    // El dueño de la reserva es el actor: el residente de la sesión y su unidad.
+    solicitantePersonaId: personaResidente,
+    unidadId: unidadResidente,
     fecha: "2026-04-10",
     horaInicio: "10:00",
     horaFin: "12:00",
@@ -59,10 +71,16 @@ describe("/api RA — reservas con guarda de concurrencia (Fase 4)", () => {
       create: { id: comunidad, nombre: "Comunidad F4 RA", slug: "fase4-ra" },
     })
     for (const u of [
-      { id: "f4-ra-admin", email: emailAdmin, activo: true },
-      { id: "f4-ra-residente", email: emailResidente, activo: true },
+      { id: "f4-ra-admin", email: emailAdmin, personaId: null as string | null, activo: true },
+      { id: "f4-ra-residente", email: emailResidente, personaId: personaResidente, activo: true },
     ]) {
-      await prisma.usuario.upsert({ where: { email: u.email }, update: {}, create: u })
+      // La identidad MP de la sesión sale de `Usuario.personaId` (nunca del body):
+      // es la que la guardia de alta compara contra `solicitantePersonaId`/`unidadId`.
+      await prisma.usuario.upsert({
+        where: { email: u.email },
+        update: { personaId: u.personaId },
+        create: u,
+      })
     }
     await prisma.membresia.deleteMany({
       where: { usuarioId: { in: ["f4-ra-admin", "f4-ra-residente"] } },
@@ -73,15 +91,67 @@ describe("/api RA — reservas con guarda de concurrencia (Fase 4)", () => {
     await prisma.membresia.create({
       data: { usuarioId: "f4-ra-residente", comunidadId: comunidad, rol: "residente" },
     })
+    await prisma.cobroFI.deleteMany({ where: { comunidadId: comunidad } })
     await prisma.reservaRA.deleteMany({ where: { comunidadId: comunidad } })
     await prisma.elementoRA.deleteMany({ where: { comunidadId: comunidad } })
+    await prisma.vinculoUnidad.deleteMany({ where: { comunidadId: comunidad } })
+    await prisma.persona.deleteMany({ where: { comunidadId: comunidad } })
+    await prisma.unidad.deleteMany({ where: { comunidadId: comunidad } })
+    // Ficha y vínculo del residente: la unidad es suya y el vínculo está vigente
+    // (`fechaFin: null`), que es lo que `unidadesVinculadasDb` reconoce como propio.
+    await prisma.unidad.create({
+      data: {
+        id: unidadResidente,
+        comunidadId: comunidad,
+        microSectorId: "f4-ra-ms",
+        numero: "101",
+        etiqueta: "Depto 101",
+        tipoUnidadId: "f4-ra-tu",
+        metraje: 55,
+        prorrateo: 0.3,
+        rolSii: "7000-101",
+        estadoId: "f4-ra-est",
+        servicios: {},
+      },
+    })
+    await prisma.persona.create({
+      data: {
+        id: personaResidente,
+        comunidadId: comunidad,
+        rut: "10000001-1",
+        nombreCompleto: "Ana Residenta",
+        nombres: "Ana",
+        apellidos: "Residenta",
+        email: "ana.residenta@test.cl",
+        telefonoMovil: "+56911111111",
+        estadoCuenta: "activa",
+        condicionesEspecialesIds: [],
+        roles: ["propietario"],
+      },
+    })
+    await prisma.vinculoUnidad.create({
+      data: {
+        id: vinculoResidente,
+        comunidadId: comunidad,
+        personaId: personaResidente,
+        unidadId: unidadResidente,
+        rol: "propietario",
+        fechaInicio: "2026-01-01",
+        fechaFin: null,
+        permiteVerFinanzas: true,
+      },
+    })
   }, 30_000)
 
   afterAll(async () => {
     try {
       state.cookie = ""
+      await prisma.cobroFI.deleteMany({ where: { comunidadId: comunidad } })
       await prisma.reservaRA.deleteMany({ where: { comunidadId: comunidad } })
       await prisma.elementoRA.deleteMany({ where: { comunidadId: comunidad } })
+      await prisma.vinculoUnidad.deleteMany({ where: { comunidadId: comunidad } })
+      await prisma.persona.deleteMany({ where: { comunidadId: comunidad } })
+      await prisma.unidad.deleteMany({ where: { comunidadId: comunidad } })
       await prisma.membresia.deleteMany({
         where: { usuarioId: { in: ["f4-ra-admin", "f4-ra-residente"] } },
       })
@@ -156,11 +226,34 @@ describe("/api RA — reservas con guarda de concurrencia (Fase 4)", () => {
   it("residente crea reserva → 201 y queda en la BD", async () => {
     const { reservas } = await cargaModulos()
     await conSesion(emailResidente, async () => {
+      // La reserva es SUYA: su persona y su unidad, las de la sesión.
       const res = await llamar(Promise.resolve(reservas), "POST", "ra/reservas", reservaValida())
       expect(res.status).toBe(201)
       const enBd = await prisma.reservaRA.findUnique({ where: { id: "ra-res-1" } })
       expect(enBd?.comunidadId).toBe(comunidad)
       expect(enBd?.folio).toBe("RA-0001")
+      expect(enBd?.solicitantePersonaId).toBe(personaResidente)
+      expect(enBd?.unidadId).toBe(unidadResidente)
+
+      // T17: el alta no puede atribuir la reserva a otro dueño. Mismo POST, con la
+      // persona y la unidad de un tercero: 404 genérico y ninguna fila escrita. El
+      // dueño ajeno no existe en la BD a propósito —la guardia compara IDENTIDADES,
+      // no existencias, y por eso tampoco filtra si el tercero existe—.
+      const ajena = await llamar(
+        Promise.resolve(reservas),
+        "POST",
+        "ra/reservas",
+        reservaValida({
+          id: "ra-res-ajena",
+          folio: "RA-AJENA",
+          solicitantePersonaId: personaAjena,
+          unidadId: unidadAjena,
+          fecha: "2026-04-11",
+        })
+      )
+      expect(ajena.status).toBe(404)
+      expect(await ajena.json()).toEqual({ error: "Registro no encontrado." })
+      expect(await prisma.reservaRA.findUnique({ where: { id: "ra-res-ajena" } })).toBeNull()
     })
   })
 

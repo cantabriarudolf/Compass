@@ -11,12 +11,20 @@
  * Authz: `pe:cierre_turno` crear — conserjería inicia/cierra turno; mantención y
  * residente no (403). El rol sale de la membresía, nunca del body.
  *
+ * ESCRITURA (T17): el evento se escribe a nombre de la persona del payload, así que
+ * un rol acotado solo puede iniciar el turno de SU persona. `rechazoDeAltaAjena`
+ * (`lib/api/propiedad-de-alta.ts`) corre después del authz por clave y ANTES de cargar
+ * la ficha o escribir nada: la persona ajena responde 404 «Registro no encontrado.» —el
+ * 403 confirmaría que existe— y la bitácora no recibe ningún `PE_START_SHIFT` a su
+ * nombre. La gestión inicia el turno de cualquiera.
+ *
  * Mensajes idénticos al store: la paridad de textos es parte del contrato con
  * el usuario, no un detalle de estilo.
  */
 import { prisma } from "@/lib/prisma"
 import { logger } from "@/lib/logger"
 import { jsonError } from "@/lib/api/with-comunidad-scope"
+import { rechazoDeAltaAjena } from "@/lib/api/propiedad-de-alta"
 import {
   cargarPersonaPE,
   contextoAccionPE,
@@ -39,6 +47,12 @@ export async function POST(req: Request): Promise<Response> {
   if (!personaId || !jornadaId) {
     return jsonError(400, "Seleccione trabajador y jornada para iniciar el turno.")
   }
+
+  // T17 (escritura): el turno de otra persona no se inicia por un rol acotado. Va
+  // después del authz por clave (un rol sin `pe:cierre_turno` crear sigue viendo su
+  // 403) y antes de leer la ficha: el 404 genérico no dice si la persona existe.
+  const corto = await rechazoDeAltaAjena({ scope, pretension: { personaId } })
+  if (corto) return corto
 
   try {
     const persona = await cargarPersonaPE(personaId, scope)

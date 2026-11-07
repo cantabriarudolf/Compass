@@ -19,9 +19,18 @@
  *
  * El MISMO helper se pasa a la factory y al put-merge: dos filtros distintos para
  * la misma pertenencia es cómo se abre un PUT que la lectura ya cerraba.
+ *
+ * ESCRITURA (T17): el alcance no puede validar un alta —la fila todavía no existe— y
+ * el POST de la factory es un upsert, así que un rol acotado podía crear un cierre a
+ * nombre de OTRO trabajador (y, por el PUT parcial, regalar el propio). Por eso el
+ * recurso declara además `rechazoDeCierreTurnoAjeno`, con la forma de
+ * `rechazoDeSolicitudAjena` sobre el helper compartido
+ * `lib/api/propiedad-de-alta.ts`: la conserjería (identidad P_A1 en la sesión) sigue
+ * cerrando SU turno y la gestión sigue cerrando el de cualquiera.
  */
 import type { Prisma } from "@prisma/client"
 import { alcancePorFilasDeSesion } from "@/lib/api/sesion-persona"
+import { rechazoDeAltaAjena } from "@/lib/api/propiedad-de-alta"
 import type { ComunidadScope } from "@/lib/api/with-comunidad-scope"
 
 /**
@@ -39,4 +48,30 @@ export async function alcanceCierresTurnoPE(
   if (alcance.tipo === "comunidad") return null
   if (alcance.tipo === "denegado") return { id: { in: [] } }
   return { trabajadorPersonaId: alcance.personaId }
+}
+
+/**
+ * Guardia previa a la escritura del cierre: el rol acotado solo cierra turnos de SU
+ * persona; la gestión cierra el de cualquiera.
+ *
+ * Corre en el POST (alta) y en el PUT parcial (mover el cierre a otro trabajador). El
+ * dueño efectivo se calcula fusionando la fila previa con el payload —en el PUT parcial
+ * el parche puede no traer `trabajadorPersonaId`, y en el POST `previo` es `null`—, así
+ * que la guardia no depende de que el cliente repita el campo. Responde el 404 genérico
+ * y no 403: el 403 confirmaría que la ficha reclamada existe.
+ */
+export function rechazoDeCierreTurnoAjeno({
+  datos,
+  previo,
+  scope,
+}: {
+  datos: Record<string, unknown>
+  previo: Record<string, unknown> | null
+  scope: ComunidadScope
+}): Promise<Response | null> {
+  const efectivo = { ...(previo ?? {}), ...datos }
+  return rechazoDeAltaAjena({
+    scope,
+    pretension: { personaId: efectivo.trabajadorPersonaId },
+  })
 }

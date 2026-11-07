@@ -27,13 +27,31 @@
  * reserva a administrador (`components/app-sidebar.tsx:152-158`). Los dos roles
  * de reportería están en `ROLES_CON_ALCANCE_DE_COMUNIDAD`
  * (`lib/api/sesion-persona.ts`), así que siguen leyendo la comunidad entera.
+ *
+ * ESCRITURA (T17): el alcance de arriba solo resuelve la fila que el upsert intenta
+ * SOBREESCRIBIR; el alta no tiene fila. Por eso `antesDeEscribir` encadena dos
+ * guardias: `rechazoDeCierreTurnoAjeno` primero —la conserjería con identidad MP solo
+ * cierra turnos de SU persona, la gestión cierra el de cualquiera— y después
+ * `guardiaCierreUnico` (INV-02). El cierre del otro trabajador responde 404, no 403.
  */
 import { CierreTurnoPESchema } from "@/lib/schemas"
 import { puede } from "@/lib/authz"
 import { prisma } from "@/lib/prisma"
-import { createCrudHandlers, delegado } from "@/lib/api/crud-factory"
+import {
+  createCrudHandlers,
+  delegado,
+  type AntesDeEscribir,
+} from "@/lib/api/crud-factory"
 import { guardiaCierreUnico } from "@/lib/invariantes/pe"
-import { alcanceCierresTurnoPE } from "./_alcance"
+import { alcanceCierresTurnoPE, rechazoDeCierreTurnoAjeno } from "./_alcance"
+
+/**
+ * Las dos guardias previas a la escritura, en orden: primero la PROPIEDAD del cierre
+ * (T17) y después INV-02. `antesDeEscribir` es un solo hook, así que la composición
+ * vive acá y no en `lib/invariantes/pe.ts`, que no conoce identidades.
+ */
+const antesDeEscribir: AntesDeEscribir = async (args) =>
+  (await rechazoDeCierreTurnoAjeno(args)) ?? guardiaCierreUnico(args)
 
 const handlers = createCrudHandlers({
   model: delegado(prisma.cierreTurnoPE),
@@ -43,8 +61,8 @@ const handlers = createCrudHandlers({
   // intenta sobreescribir, así que un cierre ajeno ya no se puede reescribir por
   // el upsert de la colección (404 por alcance, no edición).
   alcance: alcanceCierresTurnoPE,
-  // INV-02: misma guardia en POST (crear) y en el PUT parcial de [id].
-  antesDeEscribir: guardiaCierreUnico,
+  // T17 + INV-02: la propiedad del cierre (alta) y, después, la regla de unicidad.
+  antesDeEscribir,
 })
 
 export const GET = handlers.GET

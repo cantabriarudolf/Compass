@@ -29,6 +29,14 @@
  * proyección `proyectarReservaRA` redacta la fila ajena (quién, unidad, montos,
  * penalización, garantía retenida y cargo FI). La decisión de rol/identidad se
  * resuelve una vez por request en `_alcance.ts`.
+ *
+ * ESCRITURA (T17): el alcance por filas no puede validar un ALTA —la fila todavía no
+ * existe— ni la REASIGNACIÓN que un upsert hace sobre una fila existente. Por eso el
+ * POST llama `rechazoDeAltaAjena` ANTES de la transacción
+ * (`lib/api/propiedad-de-alta.ts`): un rol acotado solo reserva a nombre de SU persona
+ * y de SUS unidades con vínculo vigente; el dueño ajeno responde 404 «Registro no
+ * encontrado.» y no se escribe nada —ni la reserva ni el cargo `reserva_ra` al Fondo de
+ * Amenities de la unidad que el payload nombraba—. La gestión reserva para cualquiera.
  */
 import { z } from "zod"
 import { ReservaRASchema } from "@/lib/schemas"
@@ -37,6 +45,7 @@ import { prisma } from "@/lib/prisma"
 import { logger } from "@/lib/logger"
 import { hoyISO } from "@/lib/date-utils"
 import { createCrudHandlers, delegado } from "@/lib/api/crud-factory"
+import { rechazoDeAltaAjena } from "@/lib/api/propiedad-de-alta"
 import { proyectarReservaRA } from "./_alcance"
 import {
   jsonError,
@@ -105,6 +114,21 @@ export async function POST(req: Request): Promise<Response> {
     })
   }
   const datos = parsed.data
+
+  // T17 (escritura): el alta —y la reasignación que el upsert hace— no puede atribuir
+  // la reserva a otra persona ni a otra unidad. Corre ANTES de la transacción y no
+  // depende de que el id exista: el dueño que se compara es el que el payload afirma.
+  // Solo se consulta para un rol que PODRÍA escribir: sin `crear` ni `editar` el POST
+  // ya termina en 403 dentro de la transacción, y adelantar la guardia cambiaría la
+  // precedencia de esa respuesta (un id existente de otra comunidad respondería 404
+  // antes del authz, como hasta ahora).
+  if (puede(scope.rol, "crear", "ra") || puede(scope.rol, "editar", "ra")) {
+    const corto = await rechazoDeAltaAjena({
+      scope,
+      pretension: { personaId: datos.solicitantePersonaId, unidadId: datos.unidadId },
+    })
+    if (corto) return corto
+  }
 
   try {
     const record = await prisma.$transaction(async (tx) => {

@@ -47,7 +47,6 @@ const emailResidente = "pe-trans-residente@test.cl"
 const emailAdminOtra = "pe-trans-admin-otra@test.cl"
 
 const emailToId = (email: string): string => email.split("@")[0] ?? email
-
 const hoy = (): string => new Date().toISOString().slice(0, 10)
 
 const nuevoId = (prefijo: string): string =>
@@ -172,6 +171,22 @@ async function sembrarUsuarios(): Promise<void> {
   }
 }
 
+/**
+ * Identidad MP de la conserjería (T17 «permisos por objeto»).
+ *
+ * `POST /api/pe/turnos/iniciar` compara la persona del payload contra la identidad MP
+ * de la sesión, y esa identidad sale de `Usuario.personaId`. Cada caso de inicio de
+ * turno se da su propia persona y apunta la sesión a ella: sin identidad la conserjería
+ * no tendría «lo propio» y su propio turno respondería 404 (falla cerrado), que es un
+ * camino distinto del que el caso quiere ejercitar. `beforeEach` limpia la identidad.
+ */
+async function apuntarConserjeriaA(personaId: string | null): Promise<void> {
+  await prisma.usuario.update({
+    where: { id: emailToId(emailConserjeria) },
+    data: { personaId },
+  })
+}
+
 async function conSesion(email: string, fn: () => Promise<void>): Promise<void> {
   const user = await prisma.usuario.findUnique({ where: { email } })
   if (!user) throw new Error(`usuario no encontrado: ${email}`)
@@ -268,6 +283,9 @@ beforeEach(async () => {
   await prisma.persona.deleteMany({ where: { comunidadId: { in: [comunidad, otraComunidad] } } })
   await prisma.jornada.deleteMany({ where: { comunidadId: { in: [comunidad, otraComunidad] } } })
   await prisma.feriado.deleteMany({ where: { comunidadId: { in: [comunidad, otraComunidad] } } })
+  // La identidad MP se apunta por caso (ver `apuntarConserjeriaA`): acá se limpia para
+  // que ningún caso herede la de otro ni quede apuntando a una ficha ya borrada.
+  await apuntarConserjeriaA(null)
 })
 
 afterAll(async () => {
@@ -346,6 +364,9 @@ describe("POST /api/pe/turnos/iniciar", () => {
       datosLaborales: fichaLaboral(),
     })
     const jornadaId = await crearJornada({ nombre: "Turno noche" })
+    // SU persona: la de la sesión, que es la única que el guardia de propiedad deja
+    // pasar a un rol acotado.
+    await apuntarConserjeriaA(personaId)
 
     await conSesion(emailConserjeria, async () => {
       const res = await postJson(await rutaIniciarTurno(), "/api/pe/turnos/iniciar", {
@@ -378,15 +399,46 @@ describe("POST /api/pe/turnos/iniciar", () => {
   })
 
   it("400 si el trabajador no tiene ficha laboral (mensaje del legacy)", async () => {
-    const personaId = await crearPersona()
+    // La guardia de propiedad corre ANTES de la ficha laboral (T17), así que para
+    // que el 400 siga siendo por la ficha ausente —y no un 404 de propiedad— el
+    // caso se da su propia persona: una sin ficha laboral, apuntada a la sesión.
+    const sinFicha = await crearPersona()
     const jornadaId = await crearJornada()
+    await apuntarConserjeriaA(sinFicha)
     await conSesion(emailConserjeria, async () => {
       const res = await postJson(await rutaIniciarTurno(), "/api/pe/turnos/iniciar", {
-        personaId,
+        personaId: sinFicha,
         jornadaId,
       })
       expect(res.status).toBe(400)
       expect(await res.json()).toEqual({ error: "La persona no tiene ficha laboral de PE." })
+    })
+  })
+
+  it("404 si intenta iniciar el turno de otra persona (T17: solo el propio)", async () => {
+    // Otra persona de la MISMA comunidad, con ficha laboral y jornada válidas: lo
+    // único que distingue el intento es el dueño. Antes del guardia esto respondía
+    // 200 y escribía un `PE_START_SHIFT` a nombre de quien no inició el turno.
+    const propia = await crearPersona({ datosLaborales: fichaLaboral() })
+    const ajena = await crearPersona({ datosLaborales: fichaLaboral() })
+    const jornadaId = await crearJornada()
+    await apuntarConserjeriaA(propia)
+    await conSesion(emailConserjeria, async () => {
+      const res = await postJson(await rutaIniciarTurno(), "/api/pe/turnos/iniciar", {
+        personaId: ajena,
+        jornadaId,
+      })
+      expect(res.status).toBe(404)
+      expect(await res.json()).toEqual({ error: "Registro no encontrado." })
+      expect(
+        await prisma.eventoAuditoria.count({
+          where: {
+            comunidadId: comunidad,
+            tipoAccion: "PE_START_SHIFT",
+            referenciaId: ajena,
+          },
+        })
+      ).toBe(0)
     })
   })
 

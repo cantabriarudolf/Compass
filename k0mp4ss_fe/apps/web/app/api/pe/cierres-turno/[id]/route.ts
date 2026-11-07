@@ -14,6 +14,12 @@
  * PUT de `put-merge` —no un segundo filtro— porque conserjería tiene
  * `pe:cierre_turno` editar y `personaId` en el seed (`scripts/seed-authz.mjs:55`): sin
  * él editaba el cierre ajeno aunque ya no pudiera leerlo.
+ *
+ * ESCRITURA (T17): el PUT parcial tampoco puede MOVER un cierre propio a otro
+ * trabajador —dejaría asentado que A-2 cerró un turno que nunca cerró—, así que
+ * `antesDeEscribir` encadena `rechazoDeCierreTurnoAjeno` (la misma composición que el
+ * POST de la colección) antes de INV-02. La fila ajena responde 404, y la propia con
+ * dueño ajeno también.
  */
 import { CierreTurnoPESchema } from "@/lib/schemas"
 import { puede } from "@/lib/authz"
@@ -21,15 +27,26 @@ import { prisma } from "@/lib/prisma"
 import { logger } from "@/lib/logger"
 import { generarId } from "@/lib/id-utils"
 import { registrarEventoAuditoria } from "@/lib/auditoria"
-import { createCrudHandlers, delegado } from "@/lib/api/crud-factory"
+import {
+  createCrudHandlers,
+  delegado,
+  type AntesDeEscribir,
+} from "@/lib/api/crud-factory"
 import { createPutMerge } from "@/lib/api/put-merge"
 import { withComunidadScope } from "@/lib/api/with-comunidad-scope"
 import { guardiaCierreUnico } from "@/lib/invariantes/pe"
-import { alcanceCierresTurnoPE } from "../_alcance"
+import { alcanceCierresTurnoPE, rechazoDeCierreTurnoAjeno } from "../_alcance"
 
 const modelo = delegado(prisma.cierreTurnoPE)
 const authzCheck = (rol: string, accion: "ver" | "crear" | "editar" | "eliminar" | "ejecutar") =>
   puede(rol, accion, "pe:cierre_turno")
+
+/**
+ * Propiedad del cierre (T17) y después INV-02: `antesDeEscribir` es un solo hook, así
+ * que el orden se declara acá, una vez, y lo usan el POST y el PUT.
+ */
+const antesDeEscribir: AntesDeEscribir = async (args) =>
+  (await rechazoDeCierreTurnoAjeno(args)) ?? guardiaCierreUnico(args)
 
 const handlers = createCrudHandlers({
   model: modelo,
@@ -46,7 +63,7 @@ const putMerge = createPutMerge({
   alcance: alcanceCierresTurnoPE,
   // INV-02: mover fecha/jornada/trabajador por PUT tampoco puede duplicar el
   // cierre. La guardia funde el parche con la fila previa y excluye el propio id.
-  antesDeEscribir: guardiaCierreUnico,
+  antesDeEscribir,
 })
 
 type Ctx = { params: Promise<{ id: string }> }
