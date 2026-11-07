@@ -23,6 +23,12 @@
  * El POST conserva la semántica upsert por id de la serie: si el id ya existe
  * en la comunidad, se revalida el solapamiento excluyendo el propio registro
  * y se actualiza (sin volver a materializar el cobro); si no, se crea (201).
+ *
+ * GET (serie «permisos por objeto», T18): la colección NO se acota por fila —es
+ * el calendario que el residente necesita para ver los tramos ocupados— pero la
+ * proyección `proyectarReservaRA` redacta la fila ajena (quién, unidad, montos,
+ * penalización, garantía retenida y cargo FI). La decisión de rol/identidad se
+ * resuelve una vez por request en `_alcance.ts`.
  */
 import { z } from "zod"
 import { ReservaRASchema } from "@/lib/schemas"
@@ -31,6 +37,7 @@ import { prisma } from "@/lib/prisma"
 import { logger } from "@/lib/logger"
 import { hoyISO } from "@/lib/date-utils"
 import { createCrudHandlers, delegado } from "@/lib/api/crud-factory"
+import { proyectarReservaRA } from "./_alcance"
 import {
   jsonError,
   withComunidadScope,
@@ -51,6 +58,9 @@ const handlers = createCrudHandlers({
   model: delegado(prisma.reservaRA),
   schema: ReservaRASchema,
   authzCheck: (rol, accion) => puede(rol, accion, "ra"),
+  // Redacción de la fila ajena en la COLECCIÓN (ver el encabezado y
+  // `_alcance.ts`): la decisión de filas se resuelve una vez por request.
+  proyeccion: proyectarReservaRA,
 })
 
 export const GET = handlers.GET

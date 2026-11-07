@@ -171,7 +171,35 @@ export interface CrudConfig {
    * suite) no lo soporta y su `LIKE` ya es case-insensitive para ASCII.
    */
   busqueda?: { campos: string[] }
+  /**
+   * Redacción de la respuesta de la COLECCIÓN, opcional y aditiva (ver
+   * `ProyeccionDeFilas`). Sin esta opción, `GET` responde exactamente lo de
+   * siempre: es el único punto donde una ruta decide que una fila visible
+   * (la ocupación) no revele datos de otro (la identidad, los montos).
+   */
+  proyeccion?: ProyeccionDeFilas
 }
+
+/**
+ * Proyección de respuesta opcional de la COLECCIÓN (serie «permisos por
+ * objeto», T18): decide la FORMA de la fila que viaja al cliente sin tocar la
+ * fila de la base.
+ *
+ * Contrato:
+ * - Se aplica a `data` y SOLO a `data`: `page`, `pageSize` y `total` se sirven
+ *   tal cual (un `total` redactado mentiría sobre cuántas filas existen).
+ * - Sin `proyeccion` la respuesta es byte a byte la de siempre.
+ * - Recibe el `scope` de la sesión —nunca el body ni el query— y puede devolver
+ *   una promesa: la ruta que necesita resolver una decisión (rol/identidad)
+ *   la resuelve UNA vez por request y devuelve un mapeador puro (ver
+ *   `app/api/ra/reservas/_alcance.ts`, que memoiza la decisión por `scope`).
+ * - Devolver la fila tal cual es lo correcto cuando el actor ve la comunidad
+ *   completa: la proyección no copia lo que no cambia.
+ */
+export type ProyeccionDeFilas = (
+  fila: Record<string, unknown>,
+  scope: ComunidadScope
+) => Record<string, unknown> | Promise<Record<string, unknown>>
 
 export interface CrudHandlers {
   /** GET lista paginada — para route.ts de colección. */
@@ -230,7 +258,7 @@ async function leerJson(req: Request): Promise<unknown | null> {
 }
 
 export function createCrudHandlers(config: CrudConfig): CrudHandlers {
-  const { model, schema, authzCheck, beforeDelete } = config
+  const { model, schema, authzCheck, beforeDelete, proyeccion } = config
 
   async function aplicarGuardiaDeEscritura(
     datos: Record<string, unknown>,
@@ -357,7 +385,17 @@ export function createCrudHandlers(config: CrudConfig): CrudHandlers {
         }),
         model.count({ where }),
       ])
-      return Response.json({ data, page, pageSize, total })
+      // Proyección de fila (opt-in, ver CrudConfig.proyeccion): toca `data` y
+      // nada más. El `total` es el de la consulta sin redactar y sin
+      // `proyeccion` el cuerpo es idéntico al de siempre.
+      const filas = proyeccion
+        ? await Promise.all(
+            data.map((fila) =>
+              proyeccion(fila as Record<string, unknown>, scope)
+            )
+          )
+        : data
+      return Response.json({ data: filas, page, pageSize, total })
     } catch (e) {
       return mapearError(e)
     }

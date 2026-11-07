@@ -60,6 +60,13 @@
  * 404 con la fila intacta— porque sin `personaId` no hay «lo propio» que
  * comparar; la gestión sin identidad (administrador con `personaId` null) sigue
  * viendo la comunidad entera, que es lo que fijan los controles de arriba.
+ * Bloque T18: la COLECCIÓN de `ra/reservas` es el calendario y NO se acota por
+ * fila —el residente necesita ver los tramos ocupados—, pero sí se redacta: de
+ * la fila ajena se conserva la ocupación (`folio`, `elementoId`, `fecha`,
+ * `horaInicio`, `horaFin`, `estado`) y viajan en `null` la identidad, la unidad,
+ * los montos, la penalización, la garantía retenida y el cargo FI
+ * (`proyectarReservaRA` sobre `CrudConfig.proyeccion` de la factory). El
+ * `total` no se redacta y la gestión recibe la fila completa.
  */
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest"
 import { prisma } from "@/lib/prisma"
@@ -195,6 +202,11 @@ const RES_A1 = "ppo-res-a1" // solicitante A-1, unidad A-1, tramo 10:00–12:00
 const RES_A2 = "ppo-res-a2" // solicitante A-2, unidad A-2, tramo 12:00–14:00
 const RES_B1 = "ppo-res-b1" // comunidad B
 const RES_CANCELABLE = "ppo-res-cancelable" // confirmada: la cancela el administrador (control)
+// Reserva AJENA con dinero anidado y referencia al Fondo de Amenities: fija la
+// redacción de la COLECCIÓN (T18) sobre los campos que no son escalares.
+const RES_A2_CARGO = "ppo-res-a2-cargo" // solicitante A-2, cancelada con penalización
+const MOTIVO_CANCELACION_A2 = "Cancelación tardía de la unidad ajena"
+const MOTIVO_RETENCION_A2 = "Daño en el quincho de la unidad ajena"
 
 // Recursos SIN dueño por fila (lote 5): sirven para fijar que la exención del
 // inventario sale del modelo, no del mapa de T1 (que los marcaba «nv» con dueño).
@@ -259,6 +271,7 @@ const moduloAvisosCV = () => import("@/app/api/cv/avisos/route")
 const moduloAvisoCV = () => import("@/app/api/cv/avisos/[id]/route")
 const moduloCierresTurno = () => import("@/app/api/pe/cierres-turno/route")
 const moduloCierreTurno = () => import("@/app/api/pe/cierres-turno/[id]/route")
+const moduloReservasRA = () => import("@/app/api/ra/reservas/route")
 const moduloReservaRA = () => import("@/app/api/ra/reservas/[id]/route")
 const moduloCancelarReservaRA = () => import("@/app/api/ra/reservas/[id]/cancelar/route")
 const moduloMantencionPE = () => import("@/app/api/pe/mantenciones/[id]/route")
@@ -964,7 +977,8 @@ beforeAll(async () => {
     solicitantePersonaId: string,
     unidadId: string,
     horaInicio: string,
-    horaFin: string
+    horaFin: string,
+    extra: Record<string, unknown> = {}
   ) => ({
     id,
     comunidadId,
@@ -978,6 +992,7 @@ beforeAll(async () => {
     estado: "confirmada",
     montoTarifa: 15000,
     montoGarantia: 5000,
+    ...extra,
   })
   await prisma.reservaRA.createMany({
     data: [
@@ -985,6 +1000,17 @@ beforeAll(async () => {
       reserva(RES_A2, COM_A, P_A2, U_A2, "12:00", "14:00"),
       reserva(RES_B1, COM_B, P_B1, U_B1, "10:00", "12:00"),
       reserva(RES_CANCELABLE, COM_A, P_A1, U_A1, "16:00", "18:00"),
+      reserva(RES_A2_CARGO, COM_A, P_A2, U_A2, "18:00", "20:00", {
+        estado: "cancelada",
+        cancelacion: {
+          fecha: "2026-11-10",
+          tardia: true,
+          penalizacion: 2500,
+          motivo: MOTIVO_CANCELACION_A2,
+        },
+        garantiaRetenida: { monto: 5000, motivo: MOTIVO_RETENCION_A2 },
+        cargoFIReferencia: "ppo-cargo-fi-ajeno",
+      }),
     ] as never,
   })
 
@@ -3232,6 +3258,95 @@ describe("ra/reservas — el dueño es `ReservaRA.solicitantePersonaId` (lote 5)
       expect(propia.status).toBe(403)
       expect(await cuerpoJson<{ error: string }>(propia)).toEqual({ error: "Permiso denegado." })
       expect((await prisma.reservaRA.findUnique({ where: { id: RES_A1 } }))?.horaFin).toBe("12:00")
+    })
+  })
+
+  it("residente A-1: la colección conserva el tramo AJENO (ocupación) y redacta quién, unidad y montos (T18)", async () => {
+    await conSesion(EMAIL.resA1, async () => {
+      const res = await invocarApi(moduloReservasRA(), "GET", "ra/reservas?pageSize=100")
+      expect(res.status).toBe(200)
+      const j = await cuerpoJson<Envelope<Record<string, unknown>>>(res)
+      // ANTES (fuga): `GET /api/ra/reservas` servía la fila ajena COMPLETA —
+      // `solicitantePersonaId`, `unidadId`, `montoTarifa`, `montoGarantia`,
+      // `cargoFIReferencia`, la penalización de la cancelación y la garantía retenida de
+      // la otra unidad— porque la colección no tiene alcance a propósito (es el calendario
+      // que el residente necesita para ver los tramos ocupados) y la factory no tenía
+      // proyección de respuesta. AHORA `proyectarReservaRA`
+      // (`app/api/ra/reservas/_alcance.ts`) redacta la fila ajena en la RESPUESTA.
+      const total = await prisma.reservaRA.count({ where: { comunidadId: COM_A } })
+      // El `total` NO se redacta: es la ocupación, no la identidad.
+      expect(j.total).toBe(total)
+      expect(j.data).toHaveLength(total)
+      expect(new Set(j.data.map((r) => r.id))).toEqual(
+        new Set([RES_A1, RES_A2, RES_CANCELABLE, RES_A2_CARGO])
+      )
+
+      const ajena = j.data.find((r) => r.id === RES_A2_CARGO)!
+      // La OCUPACIÓN del tramo se conserva (es lo que el calendario necesita).
+      expect(ajena).toMatchObject({
+        id: RES_A2_CARGO,
+        folio: `RA-${RES_A2_CARGO}`,
+        elementoId: "ppo-elemento-quincho",
+        fecha: "2026-11-12",
+        horaInicio: "18:00",
+        horaFin: "20:00",
+        estado: "cancelada",
+      })
+      // La IDENTIDAD y el DINERO no: todo campo que nombra a la persona, a la unidad
+      // o al monto de la fila ajena viaja en `null`.
+      expect(ajena.solicitantePersonaId).toBeNull()
+      expect(ajena.unidadId).toBeNull()
+      expect(ajena.montoTarifa).toBeNull()
+      expect(ajena.montoGarantia).toBeNull()
+      expect(ajena.cargoFIReferencia).toBeNull()
+      expect(ajena.garantiaRetenida).toBeNull()
+      // La penalización es dinero: de la cancelación sobreviven los hechos del tramo.
+      expect(ajena.cancelacion).toEqual({
+        fecha: "2026-11-10",
+        tardia: true,
+        penalizacion: null,
+      })
+
+      // La fila de la BD sigue completa: la redacción es de la respuesta, no del dato.
+      const enBD = await prisma.reservaRA.findUnique({ where: { id: RES_A2_CARGO } })
+      expect(enBD?.solicitantePersonaId).toBe(P_A2)
+      expect(enBD?.unidadId).toBe(U_A2)
+      expect(enBD?.montoTarifa).toBe(15000)
+      expect(enBD?.montoGarantia).toBe(5000)
+      expect(enBD?.cargoFIReferencia).toBe("ppo-cargo-fi-ajeno")
+
+      // La fila PROPIA no se toca: el dueño conserva su identidad y sus montos.
+      const propia = j.data.find((r) => r.id === RES_A1)!
+      expect(propia.solicitantePersonaId).toBe(P_A1)
+      expect(propia.unidadId).toBe(U_A1)
+      expect(propia.montoTarifa).toBe(15000)
+      expect(propia.montoGarantia).toBe(5000)
+    })
+  })
+
+  it("control: el administrador de A recibe la misma colección SIN redactar (T18)", async () => {
+    await conSesion(EMAIL.adminA, async () => {
+      const res = await invocarApi(moduloReservasRA(), "GET", "ra/reservas?pageSize=100")
+      expect(res.status).toBe(200)
+      const j = await cuerpoJson<Envelope<Record<string, unknown>>>(res)
+      // Gestión no está acotada por fila (`alcancePorFilasDeSesion` → `comunidad`), así
+      // que la proyección devuelve la fila tal cual: nada se nullifica.
+      const ajena = j.data.find((r) => r.id === RES_A2_CARGO)!
+      expect(ajena).toMatchObject({
+        solicitantePersonaId: P_A2,
+        unidadId: U_A2,
+        montoTarifa: 15000,
+        montoGarantia: 5000,
+        cargoFIReferencia: "ppo-cargo-fi-ajeno",
+        garantiaRetenida: { monto: 5000, motivo: MOTIVO_RETENCION_A2 },
+      })
+      // El motivo de la cancelación es dato de la fila: gestión lo conserva completo.
+      expect(ajena.cancelacion).toEqual({
+        fecha: "2026-11-10",
+        tardia: true,
+        penalizacion: 2500,
+        motivo: MOTIVO_CANCELACION_A2,
+      })
     })
   })
 

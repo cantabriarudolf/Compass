@@ -68,6 +68,15 @@ const FRANJA_LABEL: Record<FranjaRA, string> = {
 
 const hoyStr = () => new Date().toISOString().slice(0, 10)
 
+/**
+ * Dinero de una reserva tal como llega del servidor. La COLECCIÓN redacta la
+ * fila ajena (`null` en `montoTarifa`/`montoGarantia`) para un actor acotado por
+ * fila, así que la pantalla distingue «no informado» de cero: `—` y nunca `$0`
+ * sobre un monto que el servidor no entregó.
+ */
+const dinero = (monto: number | null | undefined): string =>
+  typeof monto === "number" ? `$${monto.toLocaleString("es-CL")}` : "—"
+
 function generarSlots(
   franja: FranjaRA,
   duracionHoras: string
@@ -391,8 +400,10 @@ update: actualizarReservaApi,
                               </span>
                             </td>
                             <td className="py-2 pr-3">
-                              {nombrePersona(r.solicitantePersonaId)}
-                              {r.unidadId &&
+                              {r.solicitantePersonaId
+                                ? nombrePersona(r.solicitantePersonaId)
+                                : "Reservado"}
+                              {r.unidadId ? (
                                 (() => {
                                   const u = unidades.find(
                                     (x) => x.id === r.unidadId
@@ -402,13 +413,17 @@ update: actualizarReservaApi,
                                       {u.etiqueta} {u.numero}
                                     </span>
                                   ) : null
-                                })()}
+                                })()
+                              ) : (
+                                <span className="block text-xs text-muted-foreground">
+                                  —
+                                </span>
+                              )}
                             </td>
                             <td className="py-2 pr-3">
-                              ${r.montoTarifa.toLocaleString("es-CL")}
+                              {dinero(r.montoTarifa)}
                               <span className="block text-xs text-muted-foreground">
-                                garantía $
-                                {r.montoGarantia.toLocaleString("es-CL")}
+                                garantía {dinero(r.montoGarantia)}
                               </span>
                               {r.cargoFIReferencia === "pendiente" && (
                                 <Badge
@@ -443,8 +458,11 @@ update: actualizarReservaApi,
                                       className="text-[9px]"
                                     >
                                       tardía
-                                      {r.cancelacion.penalizacion
-                                        ? ` · $${r.cancelacion.penalizacion.toLocaleString("es-CL")}`
+                                      {typeof r.cancelacion.penalizacion ===
+                                      "number"
+                                        ? ` · ${dinero(
+                                            r.cancelacion.penalizacion
+                                          )}`
                                         : ""}
                                     </Badge>
                                   )}
@@ -464,6 +482,7 @@ update: actualizarReservaApi,
                               <div className="flex flex-wrap gap-1">
                                 {r.estado === "confirmada" &&
                                   !r.garantiaRetenida &&
+                                  typeof r.montoGarantia === "number" &&
                                   r.montoGarantia > 0 && (
                                     <Button
                                       size="sm"
@@ -1078,15 +1097,14 @@ update: actualizarReservaApi,
         }}
       >
         <DialogContent className="sm:max-w-md">
-          {retencion && (
+          {retencion && typeof retencion.reserva.montoGarantia === "number" && (
             <>
               <DialogHeader>
                 <DialogTitle>
                   Retener garantía — {retencion.reserva.folio}
                 </DialogTitle>
                 <DialogDescription>
-                  Monto en custodia: $
-                  {retencion.reserva.montoGarantia.toLocaleString("es-CL")} · se
+                  Monto en custodia: {dinero(retencion.reserva.montoGarantia)} · se
                   notificará a administración.
                 </DialogDescription>
               </DialogHeader>
