@@ -1,0 +1,735 @@
+/**
+ * @vitest-environment node
+ *
+ * Serie «Permisos por objeto» · T12 — el guardián de los mensajes de error.
+ *
+ * L14/L15 dejaron anotada la clase de defecto que ningún otro guardián mira: el
+ * 409 del gate de saldo de certificados llevaba **el monto pendiente de otra
+ * unidad dentro del texto del error**. Nadie lo lee como fuga porque no es un 200
+ * con datos: es un error, y el error lo lee el que pide. Un mensaje que interpola
+ * un dato de una fila es una respuesta con datos, con otro código de estado.
+ *
+ * Este archivo recorre `app/api/**` y `lib/api/**`, encuentra **todo mensaje de
+ * error que interpole un valor** —`jsonError(status, …)` con template literal y las
+ * propiedades `error`/`mensaje`/`message`/`detalle`— y exige que cada uno esté
+ * declarado con su clase y su motivo. Un mensaje nuevo sin declarar rompe; una
+ * declaración sin sitio también.
+ *
+ * Las tres clases que admite la declaración son las tres formas en que un mensaje
+ * con datos puede ser correcto:
+ *
+ *   · `no-fila`  — lo interpolado NO es dato de una fila: un valor del cuerpo del
+ *                  request, una constante, un contador de un conjunto propio.
+ *   · `admin`    — lo interpolado sí es dato de una fila, pero la ruta exige una
+ *                  clave de administración de la comunidad: quien llega ya ve
+ *                  todas las filas de esa comunidad en su pantalla.
+ *   · `alcance`  — lo interpolado sí es dato de una fila, y la fila se resolvió
+ *                  acotada al que pide (where con `comunidadId`, alcance por
+ *                  unidad/persona) o la compuerta de ajeneidad corrió antes.
+ *
+ * No existe clase «excepción»: un mensaje que filtra la fila de un tercero no se
+ * puede declarar. Es el mismo criterio que el guardián del inventario (T5): la
+ * deuda no se disfraza de exención.
+ *
+ * Qué se verifica mecánicamente y qué no:
+ *   · SÍ: que no haya mensajes sin declarar, que no haya declaraciones huérfanas
+ *     y que el token de compuerta que la declaración nombra **siga existiendo** en
+ *     el archivo que corresponde. Si alguien borra `fi:gasto_comun` de una ruta
+ *     cuyo mensaje interpola el nombre de un fondo, este guardián lo dice.
+ *   · NO: que la compuerta sea suficiente. Eso lo lee un humano en el `motivo`,
+ *     que por eso es obligatorio y nombra el `path` que lo sostiene.
+ *
+ * No toca base, ni sesión, ni fixtures: lee el filesystem y compara listas.
+ */
+import { readFileSync, readdirSync } from "node:fs"
+import path from "node:path"
+import ts from "typescript"
+import { describe, expect, it } from "vitest"
+
+/** `apps/web` — este archivo vive en `test/api/`. */
+const APP_DIR = path.resolve(__dirname, "../..")
+const RAICES = ["app/api", "lib/api"] as const
+
+type Declaracion =
+  | {
+      readonly archivo: string
+      readonly mensaje: string
+      readonly clase: "no-fila"
+      readonly motivo: string
+    }
+  | {
+      readonly archivo: string
+      readonly mensaje: string
+      readonly clase: "admin" | "alcance"
+      /** Token que debe seguir en el archivo: la clave de permiso o el helper de alcance. */
+      readonly compuerta: string
+      /** Archivo donde vive la compuerta, cuando el mensaje se arma en un helper puro. */
+      readonly enArchivo?: string
+      readonly motivo: string
+    }
+
+/** Un sitio detectado en el código: archivo, línea del mensaje y expresión interpolada. */
+interface Sitio {
+  readonly archivo: string
+  readonly linea: number
+  readonly mensaje: string
+}
+
+/**
+ * Forma canónica de un mensaje: colapsa espacios (un template literal puede ocupar
+ * tres líneas) y reemplaza cada interpolación por `${}`, así la clave no depende de
+ * la línea ni del nombre de la variable. Si cambia el texto o cambia lo que se
+ * interpola, deja de coincidir y hay que volver a declararlo.
+ */
+function normalizar(mensaje: string): string {
+  return mensaje
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\$\{[^}]*(\}[^}]*)*\}/g, "${}")
+}
+
+/**
+ * Recorre las dos raíces y devuelve cada mensaje de error que interpola algo.
+ *
+ * Se usa el parser de TypeScript y no regex porque el repo tiene mensajes de tres
+ * líneas con interpolaciones anidadas dentro de un objeto: un regex los corta por
+ * la mitad, y un guardián que se pierde sitios no guarda nada.
+ */
+function recolectar(raices: readonly string[] = RAICES): Sitio[] {
+  const archivos: string[] = []
+  const recorrer = (dir: string): void => {
+    for (const entrada of readdirSync(dir, { withFileTypes: true })) {
+      const completo = path.join(dir, entrada.name)
+      if (entrada.isDirectory()) recorrer(completo)
+      else if (/\.ts$/.test(entrada.name) && !/\.test\.ts$/.test(entrada.name)) archivos.push(completo)
+    }
+  }
+  for (const raiz of raices) recorrer(path.join(APP_DIR, raiz))
+
+  const sitios: Sitio[] = []
+  for (const completo of archivos) {
+    // La identidad del sitio es la ruta relativa a `apps/web` (la que se declara);
+    // la lectura usa la absoluta.
+    const archivo = path.relative(APP_DIR, completo)
+    const fuente = readFileSync(completo, "utf8")
+    const sf = ts.createSourceFile(archivo, fuente, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
+    const linea = (pos: number): number => sf.getLineAndCharacterOfPosition(pos).line + 1
+    const registrar = (nodo: ts.Node, mensajeNodo: ts.Node): void => {
+      sitios.push({
+        archivo,
+        linea: linea(nodo.getStart()),
+        mensaje: normalizar(mensajeNodo.getText(sf)),
+      })
+    }
+    const visitar = (nodo: ts.Node): void => {
+      // jsonError(status, `…`) — el mensaje es el segundo argumento.
+      if (
+        ts.isCallExpression(nodo) &&
+        ts.isIdentifier(nodo.expression) &&
+        nodo.expression.text === "jsonError"
+      ) {
+        const arg = nodo.arguments[1]
+        if (arg && ts.isTemplateExpression(arg)) registrar(nodo, arg)
+      }
+      // { error: `…` } y sus sinónimos: cubre Response.json y los extras de jsonError.
+      if (
+        ts.isPropertyAssignment(nodo) &&
+        ts.isIdentifier(nodo.name) &&
+        ["error", "mensaje", "message", "detalle"].includes(nodo.name.text) &&
+        ts.isTemplateExpression(nodo.initializer)
+      ) {
+        registrar(nodo, nodo.initializer)
+      }
+      ts.forEachChild(nodo, visitar)
+    }
+    visitar(sf)
+  }
+  return sitios
+}
+
+const clave = (s: { archivo: string; mensaje: string }): string =>
+  `${s.archivo}\u0000${s.mensaje}`
+
+/**
+ * Inventario auditado el 2026-11-07 sobre los 243 archivos de `app/api` + `lib/api`:
+ * 54 mensajes con interpolación. Dos (`mt/proyectos`) eran fuga —nombre y saldo del
+ * fondo FI servidos a mantención, que no tiene ninguna clave `fi`— y se corrigieron
+ * en la misma unidad; los otros 52 están acá con su clase y su motivo.
+ *
+ * Agrupado por recurso, en el orden en que los devuelve el recorrido.
+ */
+const DECLARACIONES: readonly Declaracion[] = [
+  // ── app/api/actas-gd ──────────────────────────────────────────
+  {
+    archivo: "app/api/actas-gd/route.ts",
+    mensaje:
+      "`No se puede guardar el acta: el asistente \"${}\" no existe en el Maestro de Personas.`",
+    clase: "no-fila",
+    motivo:
+      "el id sale del cuerpo del acta: el mensaje dice cuál id no existe, no lee ninguna fila.",
+  },
+  {
+    archivo: "app/api/actas-gd/route.ts",
+    mensaje:
+      "`No se puede guardar el acta: ${} no es miembro vigente de la directiva.`",
+    clase: "admin",
+    compuerta: "gd",
+    motivo:
+      "la persona se busca con `comunidadId` en el where y el POST exige `gd` crear/editar: quien llega ya ve el maestro de su comunidad.",
+  },
+
+  // ── app/api/auditoria ─────────────────────────────────────────
+  {
+    archivo: "app/api/auditoria/sync/route.ts",
+    mensaje:
+      "`Batch demasiado grande: máximo ${} eventos`",
+    clase: "no-fila",
+    motivo:
+      "`MAX_BATCH` es una constante del módulo.",
+  },
+
+  // ── app/api/avisos-cobro ──────────────────────────────────────
+  {
+    archivo: "app/api/avisos-cobro/[id]/entrega/route.ts",
+    mensaje:
+      "`La unidad ${} no se puede entregar sin destinatario y no se registra una entrega en el vacío.`",
+    clase: "admin",
+    compuerta: "fi:gasto_comun",
+    motivo:
+      "registrar la entrega exige `fi:gasto_comun` crear (sólo administración); aviso y unidad se resuelven con `comunidadId`.",
+  },
+  {
+    archivo: "app/api/avisos-cobro/[id]/route.ts",
+    mensaje:
+      "`El aviso ${} no se puede eliminar: es el documento con el que se cobra y la ley no permite retirarlo una vez emitido. La corrección de un aviso equivocado se emite como documento posterior.`",
+    clase: "admin",
+    compuerta: "fi:gasto_comun",
+    motivo:
+      "el folio y el período salen sólo después de `fi:gasto_comun` eliminar y del 404 cross-comunidad de la factory.",
+  },
+  {
+    archivo: "app/api/avisos-cobro/route.ts",
+    mensaje:
+      "`No se puede emitir el aviso: el período ${} no tiene emisión de gasto común.`",
+    clase: "no-fila",
+    motivo:
+      "el período es del cuerpo del request.",
+  },
+  {
+    archivo: "app/api/avisos-cobro/route.ts",
+    mensaje:
+      "`La unidad ${}: un aviso no cobra un período sin cargo.`",
+    clase: "alcance",
+    compuerta: "comunidadId",
+    motivo:
+      "la unidad se resuelve con `findFirst` acotado por `comunidadId` antes de nombrarla.",
+  },
+  {
+    archivo: "app/api/avisos-cobro/route.ts",
+    mensaje:
+      "`El período ${} no tiene unidades con cobro: no hay aviso que emitir.`",
+    clase: "no-fila",
+    motivo:
+      "el período es del cuerpo del request.",
+  },
+  {
+    archivo: "app/api/avisos-cobro/route.ts",
+    mensaje:
+      "`El período ${}): un aviso emitido no se reemplaza.`",
+    clase: "admin",
+    compuerta: "fi:gasto_comun",
+    motivo:
+      "los folios son avisos ya emitidos de la propia comunidad, y emitir exige `fi:gasto_comun` crear.",
+  },
+  {
+    archivo: "app/api/avisos-cobro/route.ts",
+    mensaje:
+      "`El período ${}): un aviso emitido no se reemplaza.`",
+    clase: "admin",
+    compuerta: "fi:gasto_comun",
+    motivo:
+      "el folio en conflicto se lee dentro de la transacción con `comunidadId`; la ruta exige `fi:gasto_comun` crear.",
+  },
+
+  // ── app/api/certificados-ct ───────────────────────────────────
+  {
+    archivo: "app/api/certificados-ct/route.ts",
+    mensaje:
+      "`No se puede emitir: la unidad mantiene $${} pendiente(s). El certificado Al Día exige saldo <= 0.`",
+    clase: "alcance",
+    compuerta: "rechazoDeEmisionAjena",
+    motivo:
+      "`rechazoDeEmisionAjena` corre ANTES del gate de saldo: cuando el mensaje se arma, la unidad ya es la propia (hallazgo L14).",
+  },
+
+  // ── app/api/controles-propiedad ───────────────────────────────
+  {
+    archivo: "app/api/controles-propiedad/route.ts",
+    mensaje:
+      "`La unidad ya tiene controles registrados (${}).`",
+    clase: "admin",
+    compuerta: "ad",
+    motivo:
+      "el id del duplicado es de la propia comunidad y el alta exige `ad` crear (administración y comité).",
+  },
+
+  // ── app/api/cv ────────────────────────────────────────────────
+  {
+    archivo: "app/api/cv/actas/route.ts",
+    mensaje:
+      "`Solo un acta publicada por quórum puede difundirse en el visor (estado actual: ${}).`",
+    clase: "admin",
+    compuerta: "cv",
+    motivo:
+      "el estado del acta es de un acta con `comunidadId` verificado; difundir exige `cv` crear.",
+  },
+
+  // ── app/api/documentos ────────────────────────────────────────
+  {
+    archivo: "app/api/documentos/[id]/envio/route.ts",
+    mensaje:
+      "`El documento no se puede entregar a personas que no pertenecen a esta comunidad: ${}.`",
+    clase: "no-fila",
+    motivo:
+      "`faltantes` son los ids del cuerpo que no pertenecen a la comunidad: no son datos de una fila leída.",
+  },
+
+  // ── app/api/egresos-fi ────────────────────────────────────────
+  {
+    archivo: "app/api/egresos-fi/route.ts",
+    mensaje:
+      "`No se puede guardar el gasto: el fondo \"${}\" está inactivo.`",
+    clase: "admin",
+    compuerta: "fi",
+    motivo:
+      "el fondo se resuelve con `comunidadId` y la ruta exige `fi` crear/editar (sólo administración).",
+  },
+
+  // ── app/api/emisiones-gc ──────────────────────────────────────
+  {
+    archivo: "app/api/emisiones-gc/[id]/route.ts",
+    mensaje:
+      "`No se puede eliminar la emisión: ${} cobro(s) tienen pagos registrados.`",
+    clase: "admin",
+    compuerta: "fi",
+    motivo:
+      "el contador se calcula con `comunidadId` y eliminar exige `fi` eliminar.",
+  },
+  {
+    archivo: "app/api/emisiones-gc/route.ts",
+    mensaje:
+      "`El periodo ${} ya fue procesado previamente.`",
+    clase: "no-fila",
+    motivo:
+      "el período es del cuerpo; el mensaje no agrega ningún dato de la emisión previa.",
+  },
+  {
+    archivo: "app/api/emisiones-gc/route.ts",
+    mensaje:
+      "`Emisión bloqueada: ${} unidad(es) sin responsable de cobro asignado.`",
+    clase: "no-fila",
+    motivo:
+      "cuenta de un conjunto propio que el handler ya recorre; no nombra ninguna unidad.",
+  },
+
+  // ── app/api/fi ────────────────────────────────────────────────
+  {
+    archivo: "app/api/fi/sync/route.ts",
+    mensaje:
+      "`Batch demasiado grande: máximo ${} elementos`",
+    clase: "no-fila",
+    motivo:
+      "`MAX_BATCH` es una constante del módulo.",
+  },
+
+  // ── app/api/fondos-fi ─────────────────────────────────────────
+  {
+    archivo: "app/api/fondos-fi/[id]/retirar/route.ts",
+    mensaje:
+      "`No se puede retirar: el fondo \"${}\" está inactivo.`",
+    clase: "admin",
+    compuerta: "fi",
+    motivo:
+      "la ruta exige `fi` editar (sólo administración) y el fondo es de la propia comunidad.",
+  },
+  {
+    archivo: "app/api/fondos-fi/[id]/retirar/route.ts",
+    mensaje:
+      "`Saldo insuficiente en \"${}.`",
+    clase: "admin",
+    compuerta: "fi",
+    motivo:
+      "saldo de la propia comunidad bajo gate `fi` editar: quien lo lee ya ve el fondo en Finanzas.",
+  },
+  {
+    archivo: "app/api/fondos-fi/[id]/route.ts",
+    mensaje:
+      "`Ya existe un fondo con el nombre \"${}\".`",
+    clase: "no-fila",
+    motivo:
+      "el nombre es del cuerpo del request que choca con el existente.",
+  },
+  {
+    archivo: "app/api/fondos-fi/route.ts",
+    mensaje:
+      "`No se puede eliminar el fondo: ${} movimiento(s) financiero(s) lo imputan.`",
+    clase: "admin",
+    compuerta: "fi",
+    motivo:
+      "el contador se calcula con `comunidadId` y eliminar exige `fi` eliminar.",
+  },
+  {
+    archivo: "app/api/fondos-fi/route.ts",
+    mensaje:
+      "`Ya existe un fondo con el nombre \"${}\".`",
+    clase: "no-fila",
+    motivo:
+      "el nombre es del cuerpo del request que choca con el existente.",
+  },
+
+  // ── app/api/ingresos-fi ───────────────────────────────────────
+  {
+    archivo: "app/api/ingresos-fi/route.ts",
+    mensaje:
+      "`No se puede registrar el ingreso: el fondo \"${}\" está inactivo.`",
+    clase: "admin",
+    compuerta: "fi",
+    motivo:
+      "el fondo se resuelve con `comunidadId` y la ruta exige `fi` crear/editar.",
+  },
+
+  // ── app/api/liquidaciones ─────────────────────────────────────
+  {
+    archivo: "app/api/liquidaciones/adelantos/_calculo.ts",
+    mensaje:
+      "`El préstamo de ${}): regístralo como anticipo regular o difiere el excedente a otro período.`",
+    clase: "admin",
+    compuerta: "pl:adelantos",
+    enArchivo: "app/api/liquidaciones/adelantos/route.ts",
+    motivo:
+      "función pura del cálculo: la compuerta vive en el caller, que exige `pl:adelantos` crear (sólo administración).",
+  },
+  {
+    archivo: "app/api/liquidaciones/adelantos/_calculo.ts",
+    mensaje:
+      "`Las deducciones del período (${}) — art. 58 inc. 4.`",
+    clase: "admin",
+    compuerta: "pl:adelantos",
+    enArchivo: "app/api/liquidaciones/adelantos/route.ts",
+    motivo:
+      "función pura del cálculo: la compuerta vive en el caller, que exige `pl:adelantos` crear (sólo administración).",
+  },
+  {
+    archivo: "app/api/liquidaciones/route.ts",
+    mensaje:
+      "`Ya existe una liquidación ${} para este trabajador.`",
+    clase: "no-fila",
+    motivo:
+      "el período es del cuerpo del request.",
+  },
+
+  // ── app/api/macro-sectores ────────────────────────────────────
+  {
+    archivo: "app/api/macro-sectores/route.ts",
+    mensaje:
+      "`No se puede eliminar el macro sector: ${} sub-sector(es) asociado(s).`",
+    clase: "admin",
+    compuerta: "mp",
+    motivo:
+      "el contador se calcula con `comunidadId` y eliminar exige `mp` eliminar.",
+  },
+
+  // ── app/api/maestros ──────────────────────────────────────────
+  {
+    archivo: "app/api/maestros/[tipo]/route.ts",
+    mensaje:
+      "`Conflicto: el maestro está en uso por fichas laborales (campo ${}).`",
+    clase: "no-fila",
+    motivo:
+      "el campo es una clave de la constante `CAMPOS_FK_LABORALES`.",
+  },
+
+  // ── app/api/micro-sectores ────────────────────────────────────
+  {
+    archivo: "app/api/micro-sectores/route.ts",
+    mensaje:
+      "`No se puede eliminar el sub-sector: ${} unidad(es) asociada(s).`",
+    clase: "admin",
+    compuerta: "mp",
+    motivo:
+      "el contador se calcula con `comunidadId` y eliminar exige `mp` eliminar.",
+  },
+
+  // ── app/api/mt ────────────────────────────────────────────────
+  // Los dos mensajes que había acá interpolaban nombre y saldo del fondo FI y los
+  // leía mantención, que no tiene ninguna clave `fi`: se corrigieron en T12 (409/400
+  // sin datos de Finanzas). Lo que queda interpola el monto que el usuario escribió.
+  {
+    archivo: "app/api/mt/proyectos/route.ts",
+    mensaje:
+      "`Saldo insuficiente del fondo de financiamiento: el proyecto pide $${}.`",
+    clase: "no-fila",
+    motivo:
+      "el monto es el presupuesto que vino en el cuerpo del request: dato del que pide, no de la fila del fondo.",
+  },
+
+  // ── app/api/pe ────────────────────────────────────────────────
+  {
+    archivo: "app/api/pe/personas/route.ts",
+    mensaje:
+      "`Se piden más de ${}.`",
+    clase: "no-fila",
+    motivo:
+      "`MAXIMO_IDS` es una constante del módulo.",
+  },
+  {
+    archivo: "app/api/pe/proyecciones/enviar/route.ts",
+    mensaje:
+      "`No hay feriados registrados para ${}; cargue el calendario antes de proyectar.`",
+    clase: "no-fila",
+    motivo:
+      "`mesAnio` es del cuerpo del request.",
+  },
+  {
+    archivo: "app/api/pe/unidades/route.ts",
+    mensaje:
+      "`Se piden más de ${}.`",
+    clase: "no-fila",
+    motivo:
+      "`MAXIMO_IDS` es una constante del módulo.",
+  },
+  {
+    archivo: "app/api/pe/visitas-tecnicas/_avance-mantencion.ts",
+    mensaje:
+      "`Mantención reprogramada al ${}.`",
+    clase: "alcance",
+    compuerta: "comunidadId",
+    motivo:
+      "si la mantención es de otra comunidad el mensaje es genérico y sin fecha; la fecha sólo aparece cuando la fila es propia.",
+  },
+
+  // ── app/api/periodos-directiva ────────────────────────────────
+  {
+    archivo: "app/api/periodos-directiva/[id]/route.ts",
+    mensaje:
+      "`No se puede eliminar: ${} acta(s) referencian este período (trazabilidad del libro).`",
+    clase: "admin",
+    compuerta: "gd",
+    motivo:
+      "el contador se calcula con `comunidadId` y eliminar exige `gd` eliminar.",
+  },
+  {
+    archivo: "app/api/periodos-directiva/route.ts",
+    mensaje:
+      "`Cargo inválido en la nómina: ${}.`",
+    clase: "no-fila",
+    motivo:
+      "el cargo es del cuerpo de la nómina.",
+  },
+  {
+    archivo: "app/api/periodos-directiva/route.ts",
+    mensaje:
+      "`Fecha de asunción inválida en la nómina: ${}.`",
+    clase: "no-fila",
+    motivo:
+      "la fecha es del cuerpo de la nómina.",
+  },
+  {
+    archivo: "app/api/periodos-directiva/route.ts",
+    mensaje:
+      "`No se puede activar: la persona \"${}\" no existe.`",
+    clase: "no-fila",
+    motivo:
+      "el id de persona es del cuerpo de la nómina: se nombra el id que no existe, no una fila leída.",
+  },
+  {
+    archivo: "app/api/periodos-directiva/route.ts",
+    mensaje:
+      "`No se puede activar: ${} no tiene cuenta activa.`",
+    clase: "admin",
+    compuerta: "gd",
+    motivo:
+      "el nombre se interpola sólo si `persona.comunidadId` es la del scope, y activar exige `gd` crear/editar.",
+  },
+  {
+    archivo: "app/api/periodos-directiva/route.ts",
+    mensaje:
+      "`No se puede activar el período: la nómina debe ser impar de 3 a 5 miembros (art. 17 Ley 21.442). Recibidos: ${}.`",
+    clase: "no-fila",
+    motivo:
+      "cuenta la nómina que vino en el cuerpo.",
+  },
+
+  // ── app/api/personas ──────────────────────────────────────────
+  {
+    archivo: "app/api/personas/[id]/route.ts",
+    mensaje:
+      "`No se puede eliminar la persona: ${} vínculo(s) de unidad asociado(s).`",
+    clase: "admin",
+    compuerta: "mp",
+    motivo:
+      "el contador se calcula con `comunidadId` y eliminar exige `mp` eliminar, después del ABAC de identidad.",
+  },
+  {
+    archivo: "app/api/personas/route.ts",
+    mensaje:
+      "`${} no existe en el maestro correspondiente.`",
+    clase: "no-fila",
+    motivo:
+      "el campo es una clave de un mapa constante de validación.",
+  },
+  {
+    archivo: "app/api/personas/route.ts",
+    mensaje:
+      "`condicionEspecial ${} no existe.`",
+    clase: "no-fila",
+    motivo:
+      "el id es del cuerpo y el conjunto válido se lee con `comunidadId`.",
+  },
+
+  // ── app/api/publicaciones-portal ──────────────────────────────
+  {
+    archivo: "app/api/publicaciones-portal/route.ts",
+    mensaje:
+      "`No se puede eliminar la publicación: tiene ${} lead(s) asociado(s).`",
+    clase: "admin",
+    compuerta: "pi",
+    motivo:
+      "el contador se calcula con `comunidadId` y eliminar exige la clave de publicaciones internas.",
+  },
+
+  // ── app/api/ra ────────────────────────────────────────────────
+  {
+    archivo: "app/api/ra/reservas/[id]/retener/route.ts",
+    mensaje:
+      "`El monto retenido debe coincidir con la garantía de la reserva ($${}).`",
+    clase: "admin",
+    compuerta: "ra",
+    motivo:
+      "retener exige `ra` editar (sólo administración) y la reserva se carga con `comunidadId`.",
+  },
+
+  // ── app/api/reglamento ────────────────────────────────────────
+  {
+    archivo: "app/api/reglamento/route.ts",
+    mensaje:
+      "`La comunidad no tiene una versión del reglamento vigente para el período ${}.`",
+    clase: "no-fila",
+    motivo:
+      "el período es del query validado; el mensaje no agrega datos de la versión vigente.",
+  },
+
+  // ── app/api/reportes-re ───────────────────────────────────────
+  {
+    archivo: "app/api/reportes-re/[id]/distribuir/route.ts",
+    mensaje:
+      "`El reporte ya fue distribuido el ${} destinatario(s).`",
+    clase: "admin",
+    compuerta: "re",
+    motivo:
+      "distribuir exige `re` editar (sólo administración) y el reporte se carga con el scope.",
+  },
+  {
+    archivo: "app/api/reportes-re/[id]/distribuir/route.ts",
+    mensaje:
+      "`Reporte publicado en el visor interno para ${} destinatario(s).`",
+    clase: "no-fila",
+    motivo:
+      "cuenta los destinatarios del conjunto que el handler acaba de resolver, en la respuesta de éxito.",
+  },
+  {
+    archivo: "app/api/reportes-re/generar/route.ts",
+    mensaje:
+      "`${} no existe en la Estructura Física de la comunidad.`",
+    clase: "no-fila",
+    motivo:
+      "`faltante` es un id del cuerpo que no existe en la estructura física de la comunidad.",
+  },
+
+  // ── app/api/tipos-unidad ──────────────────────────────────────
+  {
+    archivo: "app/api/tipos-unidad/route.ts",
+    mensaje:
+      "`No se puede eliminar el tipo de unidad: ${} unidad(es) vinculada(s).`",
+    clase: "admin",
+    compuerta: "mp",
+    motivo:
+      "el contador se calcula con `comunidadId` y eliminar exige `mp` eliminar.",
+  },
+
+  // ── app/api/vinculos ──────────────────────────────────────────
+  {
+    archivo: "app/api/vinculos/route.ts",
+    mensaje:
+      "`No se puede vincular: la persona está marcada como ${} en el Maestro de Personas.`",
+    clase: "admin",
+    compuerta: "mp",
+    motivo:
+      "la persona se busca con `comunidadId` en el where y vincular exige `mp` crear/editar.",
+  },
+
+]
+
+describe("mensajes de error — T12: ningún mensaje que interpola datos queda sin declarar", () => {
+  it("las dos raíces existen y el barrido encuentra mensajes (si no, el guardián se apagó solo)", () => {
+    for (const raiz of RAICES) expect(() => readdirSync(path.join(APP_DIR, raiz))).not.toThrow()
+    expect(recolectar().length).toBeGreaterThan(0)
+  })
+
+  it("cada mensaje que interpola está declarado con su clase y su motivo", () => {
+    const declarados = new Set(DECLARACIONES.map(clave))
+    const sinDeclarar = recolectar().filter((s) => !declarados.has(clave(s)))
+    const detalle = sinDeclarar.map((s) => `  ${s.archivo}:${s.linea}\n      ${s.mensaje}`).join("\n")
+    expect(
+      sinDeclarar,
+      sinDeclarar.length === 0
+        ? ""
+        : "Mensaje de error nuevo que interpola un valor. Declaralo en DECLARACIONES con su clase " +
+          "(no-fila | admin | alcance) y su motivo, o quitá la interpolación:\n" +
+          detalle +
+          "\n"
+    ).toEqual([])
+  })
+
+  it("no hay declaraciones huérfanas: si el mensaje se fue, la declaración también", () => {
+    const detectados = new Set(recolectar().map(clave))
+    const huerfanas = DECLARACIONES.filter((d) => !detectados.has(clave(d)))
+    const detalle = huerfanas.map((d) => `  ${d.archivo}\n      ${d.mensaje}`).join("\n")
+    expect(
+      huerfanas,
+      huerfanas.length === 0
+        ? ""
+        : "Declaración sin mensaje que la respalde: borrala o corregí el texto normalizado:\n" +
+          detalle +
+          "\n"
+    ).toEqual([])
+  })
+
+  it("cada declaración con dato de fila nombra una compuerta que sigue existiendo en el código", () => {
+    const sinCompuerta = DECLARACIONES.filter(
+      (d) =>
+        d.clase !== "no-fila" &&
+        !readFileSync(path.join(APP_DIR, d.enArchivo ?? d.archivo), "utf8").includes(d.compuerta)
+    )
+    const detalle = sinCompuerta
+      .map((d) => `  ${d.archivo} → compuerta ausente: ${d.clase === "no-fila" ? "" : d.compuerta}`)
+      .join("\n")
+    expect(
+      sinCompuerta,
+      sinCompuerta.length === 0
+        ? ""
+        : "La compuerta que el motivo nombra ya no está en el archivo: el mensaje interpola un " +
+          "dato de fila sin el permiso que lo respaldaba. Revisá el motivo o quitá la interpolación:\n" +
+          detalle +
+          "\n"
+    ).toEqual([])
+  })
+
+  it("ninguna declaración es una excepción encubierta: toda clase admite veredicto y todo motivo explica", () => {
+    for (const d of DECLARACIONES) {
+      expect(["no-fila", "admin", "alcance"]).toContain(d.clase)
+      expect(d.motivo.length, `motivo vacío en ${d.archivo}: ${d.mensaje}`).toBeGreaterThan(20)
+      if (d.clase !== "no-fila") expect(d.compuerta.length).toBeGreaterThan(0)
+    }
+  })
+})

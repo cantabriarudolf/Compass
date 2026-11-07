@@ -62,16 +62,22 @@ export async function POST(req: Request): Promise<Response> {
         )
       }
       if (!fondo.activo) {
+        // Sin nombre ni saldo del fondo: `mt` lo ejerce mantención, que no tiene
+        // ninguna clave `fi`, así que el nombre y el saldo del fondo FI son datos de
+        // otro recurso que este mensaje le estaba sirviendo (T12, mensajes que
+        // filtran filas). El que administra los ve en su pantalla de Finanzas.
         return jsonError(
           400,
-          `No se puede guardar el proyecto: el fondo "${fondo.nombre}" está inactivo.`
+          "No se puede guardar el proyecto: el fondo de financiamiento indicado está inactivo."
         )
       }
       const saldo = await saldoFondoProyectoMT(fondo.id, scope.comunidadId)
       if (saldo < datos.presupuestoEstimado) {
+        // Mismo criterio: se informa el monto que el usuario escribió (dato suyo), no
+        // el saldo disponible del fondo (dato de Finanzas).
         return jsonError(
           409,
-          `Saldo insuficiente en "${fondo.nombre}": disponible $${saldo.toLocaleString("es-CL")} para financiar un presupuesto de $${datos.presupuestoEstimado.toLocaleString("es-CL")}.`
+          `Saldo insuficiente del fondo de financiamiento: el proyecto pide $${datos.presupuestoEstimado.toLocaleString("es-CL")}.`
         )
       }
     }

@@ -455,14 +455,19 @@ describe("/api/mt — acciones de trabajos y proyectos (BD real)", () => {
       ...overrides,
     })
 
-    it("presupuesto mayor al saldo del fondo → 409 'Saldo insuficiente'", async () => {
+    it("presupuesto mayor al saldo del fondo → 409 sin el saldo ni el nombre del fondo", async () => {
       const { proyectos } = await cargaModulos()
       await conSesion(async () => {
         const res = await proyectos.POST(pedir("mt/proyectos", proyecto()))
         expect(res.status).toBe(409)
         const cuerpo = (await res.json()) as { error: string }
         expect(cuerpo.error).toContain("Saldo insuficiente")
-        expect(cuerpo.error).toContain(SALDO_GC.toLocaleString("es-CL"))
+        // T12 · el mensaje llega a mantención, que no tiene ninguna clave `fi`: no
+        // puede llevar el saldo del fondo ni su nombre, dos datos de Finanzas.
+        expect(cuerpo.error).not.toContain(`$${SALDO_GC.toLocaleString("es-CL")}`)
+        expect(cuerpo.error).not.toContain("Fondo Gasto Común MT")
+        // Lo que sí puede llevar: el monto que el propio usuario escribió.
+        expect(cuerpo.error).toContain(`$${(12_000_000).toLocaleString("es-CL")}`)
         expect(await prisma.proyectoMT.findUnique({ where: { id: "mt-acc-py-1" } })).toBeNull()
       })
     })
@@ -499,9 +504,11 @@ describe("/api/mt — acciones de trabajos y proyectos (BD real)", () => {
           pedir("mt/proyectos", proyecto({ id: "mt-acc-py-4", presupuestoEstimado: 100_000, fondoFinanciamientoId: fondoInactivo }))
         )
         expect(res.status).toBe(400)
-        expect((await res.json()) as { error: string }).toMatchObject({
-          error: expect.stringContaining("inactivo"),
-        })
+        const cuerpo = (await res.json()) as { error: string }
+        expect(cuerpo.error).toContain("inactivo")
+        // T12 · el mensaje llega a mantención, que no tiene clave `fi`: tampoco el
+        // nombre del fondo inactivo es suyo.
+        expect(cuerpo.error).not.toContain("Fondo Inactivo MT")
       })
     })
 
@@ -558,7 +565,11 @@ describe("/api/mt — acciones de trabajos y proyectos (BD real)", () => {
         expect(deMas.status).toBe(409)
         const cuerpo = (await deMas.json()) as { error: string }
         expect(cuerpo.error).toContain("Saldo insuficiente")
-        expect(cuerpo.error).toContain((6_000).toLocaleString("es-CL"))
+        // T12 · el saldo del fondo de reserva no viaja en el mensaje; el presupuesto
+        // que pide el usuario, sí.
+        expect(cuerpo.error).not.toContain(`$${(6_000).toLocaleString("es-CL")}`)
+        expect(cuerpo.error).not.toContain("Fondo Reserva MT")
+        expect(cuerpo.error).toContain(`$${(6_001).toLocaleString("es-CL")}`)
         expect(await prisma.proyectoMT.findUnique({ where: { id: "mt-acc-py-res-1" } })).toBeNull()
 
         const ok = await proyectos.POST(
