@@ -67,6 +67,17 @@ type Declaracion =
       readonly enArchivo?: string
       readonly motivo: string
     }
+  | {
+      readonly archivo: string
+      readonly mensaje: string
+      // El segundo argumento de `jsonError` no es un literal: el texto lo redacta un
+      // helper de `lib/**` y la ruta sólo lo reenvía con su status. `origen` nombra
+      // la raíz donde se redacta, y sus mensajes con interpolación tienen que estar
+      // declarados acá también (regla de productores).
+      readonly clase: "indirecto"
+      readonly origen: "lib/**"
+      readonly motivo: string
+    }
 
 /** Un sitio detectado en el código: archivo, línea del mensaje y expresión interpolada. */
 interface Sitio {
@@ -88,6 +99,23 @@ function normalizar(mensaje: string): string {
     .replace(/\$\{[^}]*(\}[^}]*)*\}/g, "${}")
 }
 
+/** Recorre las raíces dadas y entrega cada `.ts` (sin tests) con su ruta relativa a `apps/web`. */
+function recorrerArchivos(
+  raices: readonly string[],
+  alLeer: (archivo: string, completo: string) => void
+): void {
+  const recorrer = (dir: string): void => {
+    for (const entrada of readdirSync(dir, { withFileTypes: true })) {
+      const completo = path.join(dir, entrada.name)
+      if (entrada.isDirectory()) recorrer(completo)
+      else if (/\.ts$/.test(entrada.name) && !/\.test\.ts$/.test(entrada.name)) {
+        alLeer(path.relative(APP_DIR, completo), completo)
+      }
+    }
+  }
+  for (const raiz of raices) recorrer(path.join(APP_DIR, raiz))
+}
+
 /**
  * Recorre las dos raíces y devuelve cada mensaje de error que interpola algo.
  *
@@ -96,21 +124,8 @@ function normalizar(mensaje: string): string {
  * la mitad, y un guardián que se pierde sitios no guarda nada.
  */
 function recolectar(raices: readonly string[] = RAICES): Sitio[] {
-  const archivos: string[] = []
-  const recorrer = (dir: string): void => {
-    for (const entrada of readdirSync(dir, { withFileTypes: true })) {
-      const completo = path.join(dir, entrada.name)
-      if (entrada.isDirectory()) recorrer(completo)
-      else if (/\.ts$/.test(entrada.name) && !/\.test\.ts$/.test(entrada.name)) archivos.push(completo)
-    }
-  }
-  for (const raiz of raices) recorrer(path.join(APP_DIR, raiz))
-
   const sitios: Sitio[] = []
-  for (const completo of archivos) {
-    // La identidad del sitio es la ruta relativa a `apps/web` (la que se declara);
-    // la lectura usa la absoluta.
-    const archivo = path.relative(APP_DIR, completo)
+  recorrerArchivos(raices, (archivo, completo: string) => {
     const fuente = readFileSync(completo, "utf8")
     const sf = ts.createSourceFile(archivo, fuente, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
     const linea = (pos: number): number => sf.getLineAndCharacterOfPosition(pos).line + 1
@@ -136,15 +151,106 @@ function recolectar(raices: readonly string[] = RAICES): Sitio[] {
         ts.isPropertyAssignment(nodo) &&
         ts.isIdentifier(nodo.name) &&
         ["error", "mensaje", "message", "detalle"].includes(nodo.name.text) &&
-        ts.isTemplateExpression(nodo.initializer)
+        ts.isTemplateExpression(nodo.initializer) &&
+        // En `lib/**` sólo interesan los que INTERPOLAN: los catálogos de mensajes
+        // fijos (`MENSAJE_LEGAL_INMUTABLE`) son un literal con nombre, no una fila.
+        (RAICES.some((r) => archivo.startsWith(r)) || nodo.initializer.templateSpans.length > 0)
       ) {
         registrar(nodo, nodo.initializer)
+      }
+      // `new RechazoIR(\`…\`)` / `throw new Error(\`…\`)`: el mensaje viaja como
+      // excepción y una ruta lo reenvía con `e.message`. También es texto del cliente.
+      if (ts.isNewExpression(nodo) && /Error$|^Rechazo/.test(nodo.expression.getText(sf))) {
+        const arg = nodo.arguments?.[0]
+        if (arg && ts.isTemplateExpression(arg) && arg.templateSpans.length > 0) {
+          registrar(nodo, arg)
+        }
       }
       ts.forEachChild(nodo, visitar)
     }
     visitar(sf)
-  }
+  })
   return sitios
+}
+
+/**
+ * Mensajes que la ruta **reenvía**: `jsonError(status, e.message)`, `resultado.error`,
+ * un `MENSAJE_*` con nombre, el mensaje de un zod... El guardián no puede saber qué
+ * dice adentro (lo redacta otro módulo), así que exige declararlo con `indirecto` y
+ * revisa el módulo que lo redacta (regla de productores, abajo).
+ */
+function recolectarIndirectos(raices: readonly string[] = RAICES): Sitio[] {
+  const sitios: Sitio[] = []
+  recorrerArchivos(raices, (archivo, completo: string) => {
+    const fuente = readFileSync(completo, "utf8")
+    const sf = ts.createSourceFile(archivo, fuente, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
+    const visitar = (nodo: ts.Node): void => {
+      if (
+        ts.isCallExpression(nodo) &&
+        ts.isIdentifier(nodo.expression) &&
+        nodo.expression.text === "jsonError"
+      ) {
+        const arg = nodo.arguments[1]
+        if (arg && !ts.isStringLiteral(arg) && !ts.isTemplateExpression(arg)) {
+          sitios.push({
+            archivo,
+            linea: sf.getLineAndCharacterOfPosition(nodo.getStart()).line + 1,
+            mensaje: normalizar(arg.getText(sf)),
+          })
+        }
+      }
+      ts.forEachChild(nodo, visitar)
+    }
+    visitar(sf)
+  })
+  return sitios
+}
+
+/**
+ * Mensajes que se redactan en `lib/**` y pueden terminar en el cuerpo de un error
+ * reenviado. Sólo los que interpolan: un mensaje fijo no puede describir una fila.
+ */
+function recolectarProductores(): Sitio[] {
+  const sitios: Sitio[] = []
+  recorrerArchivos(["lib"], (archivo, completo: string) => {
+    const fuente = readFileSync(completo, "utf8")
+    const sf = ts.createSourceFile(archivo, fuente, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
+    const visitar = (nodo: ts.Node): void => {
+      if (
+        ts.isPropertyAssignment(nodo) &&
+        ts.isIdentifier(nodo.name) &&
+        ["error", "mensaje", "message", "detalle"].includes(nodo.name.text) &&
+        ts.isTemplateExpression(nodo.initializer) &&
+        nodo.initializer.templateSpans.length > 0
+      ) {
+        sitios.push({
+          archivo,
+          linea: sf.getLineAndCharacterOfPosition(nodo.getStart()).line + 1,
+          mensaje: normalizar(nodo.initializer.getText(sf)),
+        })
+      }
+      ts.forEachChild(nodo, visitar)
+    }
+    visitar(sf)
+  })
+  return sitios
+}
+
+/**
+ * Todos los sitios que el guardián vigila, sin duplicados: lo que la ruta escribe, lo
+ * que la ruta reenvía y lo que se redacta en `lib/**` (con interpolación). `lib/api`
+ * pertenece a las dos raíces y a `lib`, así que se deduplica por clave.
+ */
+function recolectarTodo(): Sitio[] {
+  const unicos = new Map<string, Sitio>()
+  for (const sitio of [
+    ...recolectar(),
+    ...recolectarIndirectos(),
+    ...recolectarProductores(),
+  ]) {
+    unicos.set(clave(sitio), sitio)
+  }
+  return [...unicos.values()]
 }
 
 const clave = (s: { archivo: string; mensaje: string }): string =>
@@ -668,17 +774,490 @@ const DECLARACIONES: readonly Declaracion[] = [
       "la persona se busca con `comunidadId` en el where y vincular exige `mp` crear/editar.",
   },
 
+  // ── Segunda pasada de T12: lo que la ruta REENVÍA y lo que se REDACTA en lib/**
+  // (hallazgo del verificador independiente: 33 `jsonError(status, e.message)` y compañía
+  // eran invisibles para el barrido de literales). Ver el docstring de arriba.
+  // app/api/avisos-cobro/route.ts
+  {
+    archivo: "app/api/avisos-cobro/route.ts",
+    mensaje:
+      "totales.error",
+    clase: "indirecto",
+    origen: "lib/**",
+    motivo:
+      "el texto lo redacta un helper de `lib/**` y la ruta sólo le pone el status y el `extra`; los mensajes de `lib/**` que interpolan están declarados en este mismo archivo, y ninguno describe una fila que el que pide no pueda ver.",
+  },
+  {
+    archivo: "app/api/avisos-cobro/route.ts",
+    mensaje:
+      "esCorrelativo ? \"Conflicto: no se pudo reservar un folio libre para el aviso, reintentá la emisión.\" : `El período ${} ya tiene aviso emitido: un aviso emitido no se reemplaza.`",
+    clase: "indirecto",
+    origen: "lib/**",
+    motivo:
+      "el texto lo redacta un helper de `lib/**` y la ruta sólo le pone el status y el `extra`; los mensajes de `lib/**` que interpolan están declarados en este mismo archivo, y ninguno describe una fila que el que pide no pueda ver.",
+  },
+  // app/api/cobros-fi/route.ts
+  {
+    archivo: "app/api/cobros-fi/route.ts",
+    mensaje:
+      "delDetalle?.message ?? \"Datos inválidos.\"",
+    clase: "indirecto",
+    origen: "lib/**",
+    motivo:
+      "el texto lo redacta un helper de `lib/**` y la ruta sólo le pone el status y el `extra`; los mensajes de `lib/**` que interpolan están declarados en este mismo archivo, y ninguno describe una fila que el que pide no pueda ver.",
+  },
+  // app/api/documentos/[id]/envio/route.ts
+  {
+    archivo: "app/api/documentos/[id]/envio/route.ts",
+    mensaje:
+      "MENSAJE_COMUNITARIO_PUBLICADO",
+    clase: "indirecto",
+    origen: "lib/**",
+    motivo:
+      "el texto lo redacta un helper de `lib/**` y la ruta sólo le pone el status y el `extra`; los mensajes de `lib/**` que interpolan están declarados en este mismo archivo, y ninguno describe una fila que el que pide no pueda ver.",
+  },
+  // app/api/documentos/route.ts
+  {
+    archivo: "app/api/documentos/route.ts",
+    mensaje:
+      "MENSAJE_LEGAL_INMUTABLE",
+    clase: "indirecto",
+    origen: "lib/**",
+    motivo:
+      "el texto lo redacta un helper de `lib/**` y la ruta sólo le pone el status y el `extra`; los mensajes de `lib/**` que interpolan están declarados en este mismo archivo, y ninguno describe una fila que el que pide no pueda ver.",
+  },
+  {
+    archivo: "app/api/documentos/route.ts",
+    mensaje:
+      "MENSAJE_REFERENCIA_AUTENTICA",
+    clase: "indirecto",
+    origen: "lib/**",
+    motivo:
+      "el texto lo redacta un helper de `lib/**` y la ruta sólo le pone el status y el `extra`; los mensajes de `lib/**` que interpolan están declarados en este mismo archivo, y ninguno describe una fila que el que pide no pueda ver.",
+  },
+  {
+    archivo: "app/api/documentos/route.ts",
+    mensaje:
+      "MENSAJE_LEGAL_INMUTABLE",
+    clase: "indirecto",
+    origen: "lib/**",
+    motivo:
+      "el texto lo redacta un helper de `lib/**` y la ruta sólo le pone el status y el `extra`; los mensajes de `lib/**` que interpolan están declarados en este mismo archivo, y ninguno describe una fila que el que pide no pueda ver.",
+  },
+  // app/api/emisiones-gc/route.ts
+  {
+    archivo: "app/api/emisiones-gc/route.ts",
+    mensaje:
+      "mensajes[motivo]",
+    clase: "indirecto",
+    origen: "lib/**",
+    motivo:
+      "el texto lo redacta un helper de `lib/**` y la ruta sólo le pone el status y el `extra`; los mensajes de `lib/**` que interpolan están declarados en este mismo archivo, y ninguno describe una fila que el que pide no pueda ver.",
+  },
+  // app/api/importar/estructura/route.ts
+  {
+    archivo: "app/api/importar/estructura/route.ts",
+    mensaje:
+      "e instanceof Error ? e.message : \"El archivo CSV no se pudo leer.\"",
+    clase: "indirecto",
+    origen: "lib/**",
+    motivo:
+      "el texto lo redacta un helper de `lib/**` y la ruta sólo le pone el status y el `extra`; los mensajes de `lib/**` que interpolan están declarados en este mismo archivo, y ninguno describe una fila que el que pide no pueda ver.",
+  },
+  // app/api/importar/personas/route.ts
+  {
+    archivo: "app/api/importar/personas/route.ts",
+    mensaje:
+      "e instanceof Error ? e.message : \"El archivo CSV no se pudo leer.\"",
+    clase: "indirecto",
+    origen: "lib/**",
+    motivo:
+      "el texto lo redacta un helper de `lib/**` y la ruta sólo le pone el status y el `extra`; los mensajes de `lib/**` que interpolan están declarados en este mismo archivo, y ninguno describe una fila que el que pide no pueda ver.",
+  },
+  // app/api/importar/vinculos/route.ts
+  {
+    archivo: "app/api/importar/vinculos/route.ts",
+    mensaje:
+      "e instanceof Error ? e.message : \"El archivo CSV no se pudo leer.\"",
+    clase: "indirecto",
+    origen: "lib/**",
+    motivo:
+      "el texto lo redacta un helper de `lib/**` y la ruta sólo le pone el status y el `extra`; los mensajes de `lib/**` que interpolan están declarados en este mismo archivo, y ninguno describe una fila que el que pide no pueda ver.",
+  },
+  // app/api/ir/solicitudes-insumo/[id]/entregar/route.ts
+  {
+    archivo: "app/api/ir/solicitudes-insumo/[id]/entregar/route.ts",
+    mensaje:
+      "e.message",
+    clase: "indirecto",
+    origen: "lib/**",
+    motivo:
+      "el texto lo redacta un helper de `lib/**` y la ruta sólo le pone el status y el `extra`; los mensajes de `lib/**` que interpolan están declarados en este mismo archivo, y ninguno describe una fila que el que pide no pueda ver.",
+  },
+  // app/api/ir/solicitudes-insumo/[id]/resolver-comodin/route.ts
+  {
+    archivo: "app/api/ir/solicitudes-insumo/[id]/resolver-comodin/route.ts",
+    mensaje:
+      "e.message",
+    clase: "indirecto",
+    origen: "lib/**",
+    motivo:
+      "el texto lo redacta un helper de `lib/**` y la ruta sólo le pone el status y el `extra`; los mensajes de `lib/**` que interpolan están declarados en este mismo archivo, y ninguno describe una fila que el que pide no pueda ver.",
+  },
+  // app/api/liquidaciones/adelantos/route.ts
+  {
+    archivo: "app/api/liquidaciones/adelantos/route.ts",
+    mensaje:
+      "validacion.error",
+    clase: "indirecto",
+    origen: "lib/**",
+    motivo:
+      "el texto lo redacta un helper de `lib/**` y la ruta sólo le pone el status y el `extra`; los mensajes de `lib/**` que interpolan están declarados en este mismo archivo, y ninguno describe una fila que el que pide no pueda ver.",
+  },
+  // app/api/maestros/[tipo]/[id]/route.ts
+  {
+    archivo: "app/api/maestros/[tipo]/[id]/route.ts",
+    mensaje:
+      "mensaje",
+    clase: "indirecto",
+    origen: "lib/**",
+    motivo:
+      "el texto lo redacta un helper de `lib/**` y la ruta sólo le pone el status y el `extra`; los mensajes de `lib/**` que interpolan están declarados en este mismo archivo, y ninguno describe una fila que el que pide no pueda ver.",
+  },
+  // app/api/maestros/[tipo]/route.ts
+  {
+    archivo: "app/api/maestros/[tipo]/route.ts",
+    mensaje:
+      "MENSAJE_NACIONAL_PROTEGIDO",
+    clase: "indirecto",
+    origen: "lib/**",
+    motivo:
+      "el texto lo redacta un helper de `lib/**` y la ruta sólo le pone el status y el `extra`; los mensajes de `lib/**` que interpolan están declarados en este mismo archivo, y ninguno describe una fila que el que pide no pueda ver.",
+  },
+  // app/api/pe/personas/[id]/evaluaciones/route.ts
+  {
+    archivo: "app/api/pe/personas/[id]/evaluaciones/route.ts",
+    mensaje:
+      "parsed.error.issues[0]?.message ?? \"Datos de la evaluación inválidos.\"",
+    clase: "indirecto",
+    origen: "lib/**",
+    motivo:
+      "el texto lo redacta un helper de `lib/**` y la ruta sólo le pone el status y el `extra`; los mensajes de `lib/**` que interpolan están declarados en este mismo archivo, y ninguno describe una fila que el que pide no pueda ver.",
+  },
+  // app/api/pe/personas/[id]/horas-extras/route.ts
+  {
+    archivo: "app/api/pe/personas/[id]/horas-extras/route.ts",
+    mensaje:
+      "parsed.error.issues[0]?.message ?? \"Datos de la hora extra inválidos.\"",
+    clase: "indirecto",
+    origen: "lib/**",
+    motivo:
+      "el texto lo redacta un helper de `lib/**` y la ruta sólo le pone el status y el `extra`; los mensajes de `lib/**` que interpolan están declarados en este mismo archivo, y ninguno describe una fila que el que pide no pueda ver.",
+  },
+  // app/api/pe/personas/route.ts
+  {
+    archivo: "app/api/pe/personas/route.ts",
+    mensaje:
+      "filtroIds.error",
+    clase: "indirecto",
+    origen: "lib/**",
+    motivo:
+      "el texto lo redacta un helper de `lib/**` y la ruta sólo le pone el status y el `extra`; los mensajes de `lib/**` que interpolan están declarados en este mismo archivo, y ninguno describe una fila que el que pide no pueda ver.",
+  },
+  // app/api/pe/proyecciones/enviar/route.ts
+  {
+    archivo: "app/api/pe/proyecciones/enviar/route.ts",
+    mensaje:
+      "parsed.error.issues[0]?.message ?? \"Datos de la proyección inválidos.\"",
+    clase: "indirecto",
+    origen: "lib/**",
+    motivo:
+      "el texto lo redacta un helper de `lib/**` y la ruta sólo le pone el status y el `extra`; los mensajes de `lib/**` que interpolan están declarados en este mismo archivo, y ninguno describe una fila que el que pide no pueda ver.",
+  },
+  // app/api/pe/unidades/route.ts
+  {
+    archivo: "app/api/pe/unidades/route.ts",
+    mensaje:
+      "filtroIds.error",
+    clase: "indirecto",
+    origen: "lib/**",
+    motivo:
+      "el texto lo redacta un helper de `lib/**` y la ruta sólo le pone el status y el `extra`; los mensajes de `lib/**` que interpolan están declarados en este mismo archivo, y ninguno describe una fila que el que pide no pueda ver.",
+  },
+  // app/api/personas/route.ts
+  {
+    archivo: "app/api/personas/route.ts",
+    mensaje:
+      "MENSAJE_RUT_DUPLICADO",
+    clase: "indirecto",
+    origen: "lib/**",
+    motivo:
+      "el texto lo redacta un helper de `lib/**` y la ruta sólo le pone el status y el `extra`; los mensajes de `lib/**` que interpolan están declarados en este mismo archivo, y ninguno describe una fila que el que pide no pueda ver.",
+  },
+  {
+    archivo: "app/api/personas/route.ts",
+    mensaje:
+      "MENSAJE_EMAIL_DUPLICADO",
+    clase: "indirecto",
+    origen: "lib/**",
+    motivo:
+      "el texto lo redacta un helper de `lib/**` y la ruta sólo le pone el status y el `extra`; los mensajes de `lib/**` que interpolan están declarados en este mismo archivo, y ninguno describe una fila que el que pide no pueda ver.",
+  },
+  // app/api/ra/reservas/[id]/autorizar/route.ts
+  {
+    archivo: "app/api/ra/reservas/[id]/autorizar/route.ts",
+    mensaje:
+      "e.message",
+    clase: "indirecto",
+    origen: "lib/**",
+    motivo:
+      "el texto lo redacta un helper de `lib/**` y la ruta sólo le pone el status y el `extra`; los mensajes de `lib/**` que interpolan están declarados en este mismo archivo, y ninguno describe una fila que el que pide no pueda ver.",
+  },
+  // app/api/ra/reservas/[id]/cancelar/route.ts
+  {
+    archivo: "app/api/ra/reservas/[id]/cancelar/route.ts",
+    mensaje:
+      "e.message",
+    clase: "indirecto",
+    origen: "lib/**",
+    motivo:
+      "el texto lo redacta un helper de `lib/**` y la ruta sólo le pone el status y el `extra`; los mensajes de `lib/**` que interpolan están declarados en este mismo archivo, y ninguno describe una fila que el que pide no pueda ver.",
+  },
+  // app/api/ra/reservas/[id]/retener/route.ts
+  {
+    archivo: "app/api/ra/reservas/[id]/retener/route.ts",
+    mensaje:
+      "e.message",
+    clase: "indirecto",
+    origen: "lib/**",
+    motivo:
+      "el texto lo redacta un helper de `lib/**` y la ruta sólo le pone el status y el `extra`; los mensajes de `lib/**` que interpolan están declarados en este mismo archivo, y ninguno describe una fila que el que pide no pueda ver.",
+  },
+  // app/api/ra/reservas/route.ts
+  {
+    archivo: "app/api/ra/reservas/route.ts",
+    mensaje:
+      "e.message",
+    clase: "indirecto",
+    origen: "lib/**",
+    motivo:
+      "el texto lo redacta un helper de `lib/**` y la ruta sólo le pone el status y el `extra`; los mensajes de `lib/**` que interpolan están declarados en este mismo archivo, y ninguno describe una fila que el que pide no pueda ver.",
+  },
+  {
+    archivo: "app/api/ra/reservas/route.ts",
+    mensaje:
+      "e.message",
+    clase: "indirecto",
+    origen: "lib/**",
+    motivo:
+      "el texto lo redacta un helper de `lib/**` y la ruta sólo le pone el status y el `extra`; los mensajes de `lib/**` que interpolan están declarados en este mismo archivo, y ninguno describe una fila que el que pide no pueda ver.",
+  },
+  // app/api/reglamento/route.ts
+  {
+    archivo: "app/api/reglamento/route.ts",
+    mensaje:
+      "MENSAJES_DOCUMENTO_REGLAMENTO[respaldo.motivo]",
+    clase: "indirecto",
+    origen: "lib/**",
+    motivo:
+      "el texto lo redacta un helper de `lib/**` y la ruta sólo le pone el status y el `extra`; los mensajes de `lib/**` que interpolan están declarados en este mismo archivo, y ninguno describe una fila que el que pide no pueda ver.",
+  },
+  // app/api/reportes-re/generar/route.ts
+  {
+    archivo: "app/api/reportes-re/generar/route.ts",
+    mensaje:
+      "parsed.error.issues[0]?.message ?? \"Datos del reporte inválidos.\"",
+    clase: "indirecto",
+    origen: "lib/**",
+    motivo:
+      "el texto lo redacta un helper de `lib/**` y la ruta sólo le pone el status y el `extra`; los mensajes de `lib/**` que interpolan están declarados en este mismo archivo, y ninguno describe una fila que el que pide no pueda ver.",
+  },
+  {
+    archivo: "app/api/reportes-re/generar/route.ts",
+    mensaje:
+      "resultado.error",
+    clase: "indirecto",
+    origen: "lib/**",
+    motivo:
+      "el texto lo redacta un helper de `lib/**` y la ruta sólo le pone el status y el `extra`; los mensajes de `lib/**` que interpolan están declarados en este mismo archivo, y ninguno describe una fila que el que pide no pueda ver.",
+  },
+  // app/api/reportes-re/vistas/route.ts
+  {
+    archivo: "app/api/reportes-re/vistas/route.ts",
+    mensaje:
+      "parsed.error.issues[0]?.message ?? \"La vista del Centro de Mando no es válida.\"",
+    clase: "indirecto",
+    origen: "lib/**",
+    motivo:
+      "el texto lo redacta un helper de `lib/**` y la ruta sólo le pone el status y el `extra`; los mensajes de `lib/**` que interpolan están declarados en este mismo archivo, y ninguno describe una fila que el que pide no pueda ver.",
+  },
+  // app/api/vinculos/route.ts
+  {
+    archivo: "app/api/vinculos/route.ts",
+    mensaje:
+      "e.message",
+    clase: "indirecto",
+    origen: "lib/**",
+    motivo:
+      "el texto lo redacta un helper de `lib/**` y la ruta sólo le pone el status y el `extra`; los mensajes de `lib/**` que interpolan están declarados en este mismo archivo, y ninguno describe una fila que el que pide no pueda ver.",
+  },
+  // lib/api/use-server-collection.ts
+  {
+    archivo: "lib/api/use-server-collection.ts",
+    mensaje:
+      "`Sin conexión y sin caché offline para ${}.`",
+    clase: "no-fila",
+    motivo:
+      "la URL del endpoint y el status HTTP: constantes del hook, no datos de una fila.",
+  },
+  {
+    archivo: "lib/api/use-server-collection.ts",
+    mensaje:
+      "`Error ${}.`",
+    clase: "no-fila",
+    motivo:
+      "la URL del endpoint y el status HTTP: constantes del hook, no datos de una fila.",
+  },
+  // lib/aviso-cobro.ts
+  {
+    archivo: "lib/aviso-cobro.ts",
+    mensaje:
+      "`La comunidad no declara una versión del reglamento vigente para el período ${}: la forma de contribución y el porcentaje de aporte al fondo de reserva no son computables.`",
+    clase: "no-fila",
+    motivo:
+      "el período del cálculo y la versión del reglamento de la propia comunidad; quien lo recibe emite con `fi:gasto_comun` crear, la misma compuerta de la emisión.",
+  },
+  {
+    archivo: "lib/aviso-cobro.ts",
+    mensaje:
+      "`La versión ${} del reglamento no declara parámetros válidos: el porcentaje de aporte al fondo de reserva no es computable.`",
+    clase: "no-fila",
+    motivo:
+      "el período del cálculo y la versión del reglamento de la propia comunidad; quien lo recibe emite con `fi:gasto_comun` crear, la misma compuerta de la emisión.",
+  },
+  {
+    archivo: "lib/aviso-cobro.ts",
+    mensaje:
+      "`La unidad ${} no declara coeficiente de participación en el maestro de unidades: la proporción al gasto común y al fondo de reserva no es computable.`",
+    clase: "no-fila",
+    motivo:
+      "el período del cálculo y la versión del reglamento de la propia comunidad; quien lo recibe emite con `fi:gasto_comun` crear, la misma compuerta de la emisión.",
+  },
+  {
+    archivo: "lib/aviso-cobro.ts",
+    mensaje:
+      "`No se puede emitir el aviso: la comunidad no tiene fondos de caja registrados, así que el saldo de caja al cierre del período ${} no es computable.`",
+    clase: "no-fila",
+    motivo:
+      "el período del cálculo y la versión del reglamento de la propia comunidad; quien lo recibe emite con `fi:gasto_comun` crear, la misma compuerta de la emisión.",
+  },
+  // lib/database-url.ts
+  {
+    archivo: "lib/database-url.ts",
+    mensaje:
+      "`Definí DATABASE_URL en el entorno o revisá la línea DATABASE_URL= de ${}.`",
+    clase: "no-fila",
+    motivo:
+      "nombra el archivo de entorno que el operador debe revisar; no lee ninguna fila.",
+  },
+  // lib/importar/personas.ts
+  {
+    archivo: "lib/importar/personas.ts",
+    mensaje:
+      "`debe listar al menos un rol del sistema (${}).`",
+    clase: "no-fila",
+    motivo:
+      "lista las claves cerradas de roles del catálogo, no filas de personas.",
+  },
+  {
+    archivo: "lib/importar/personas.ts",
+    mensaje:
+      "`debe ser uno de: ${}».`",
+    clase: "no-fila",
+    motivo:
+      "lista las claves cerradas de roles del catálogo, no filas de personas.",
+  },
+  // lib/qa-estado.ts
+  {
+    archivo: "lib/qa-estado.ts",
+    mensaje:
+      "`Run no encontrado: ${}`",
+    clase: "no-fila",
+    motivo:
+      "ids del run de QA que el propio llamador envió por la API de QA.",
+  },
+  {
+    archivo: "lib/qa-estado.ts",
+    mensaje:
+      "`La etapa ${}`",
+    clase: "no-fila",
+    motivo:
+      "ids del run de QA que el propio llamador envió por la API de QA.",
+  },
+  {
+    archivo: "lib/qa-estado.ts",
+    mensaje:
+      "`Etapa desconocida: ${}`",
+    clase: "no-fila",
+    motivo:
+      "ids del run de QA que el propio llamador envió por la API de QA.",
+  },
+  {
+    archivo: "lib/qa-estado.ts",
+    mensaje:
+      "`Baseline de ${} min`",
+    clase: "no-fila",
+    motivo:
+      "ids del run de QA que el propio llamador envió por la API de QA.",
+  },
+  // lib/schemas.ts
+  {
+    archivo: "lib/schemas.ts",
+    mensaje:
+      "`Maestro \"${}\" no soportado.`",
+    clase: "no-fila",
+    motivo:
+      "la clave del maestro que vino en el request.",
+  },
+  // lib/smtp.ts
+  {
+    archivo: "lib/smtp.ts",
+    mensaje:
+      "`\"${}\" es un dominio de primer nivel reservado por RFC 2606/RFC 6761 para pruebas y documentación`",
+    clase: "no-fila",
+    motivo:
+      "valida la dirección que el propio usuario tipeó: el TLD y el dominio son parte de su entrada, no de una fila.",
+  },
+  {
+    archivo: "lib/smtp.ts",
+    mensaje:
+      "`\"${}\" es un dominio reservado por RFC 2606 para pruebas y documentación`",
+    clase: "no-fila",
+    motivo:
+      "valida la dirección que el propio usuario tipeó: el TLD y el dominio son parte de su entrada, no de una fila.",
+  },
+  {
+    archivo: "lib/smtp.ts",
+    mensaje:
+      "`\"${}\" es el dominio ficticio de los datos semilla de la plataforma`",
+    clase: "no-fila",
+    motivo:
+      "valida la dirección que el propio usuario tipeó: el TLD y el dominio son parte de su entrada, no de una fila.",
+  },
 ]
 
 describe("mensajes de error — T12: ningún mensaje que interpola datos queda sin declarar", () => {
   it("las dos raíces existen y el barrido encuentra mensajes (si no, el guardián se apagó solo)", () => {
     for (const raiz of RAICES) expect(() => readdirSync(path.join(APP_DIR, raiz))).not.toThrow()
     expect(recolectar().length).toBeGreaterThan(0)
+    // El barrido completo suma lo reenviado y lo redactado en `lib/**`: si sólo
+    // encuentra los literales de las rutas, las dos reglas nuevas se apagaron.
+    expect(recolectarTodo().length).toBeGreaterThan(recolectar().length)
   })
 
   it("cada mensaje que interpola está declarado con su clase y su motivo", () => {
     const declarados = new Set(DECLARACIONES.map(clave))
-    const sinDeclarar = recolectar().filter((s) => !declarados.has(clave(s)))
+    const sinDeclarar = recolectarTodo().filter((s) => !declarados.has(clave(s)))
     const detalle = sinDeclarar.map((s) => `  ${s.archivo}:${s.linea}\n      ${s.mensaje}`).join("\n")
     expect(
       sinDeclarar,
@@ -692,7 +1271,7 @@ describe("mensajes de error — T12: ningún mensaje que interpola datos queda s
   })
 
   it("no hay declaraciones huérfanas: si el mensaje se fue, la declaración también", () => {
-    const detectados = new Set(recolectar().map(clave))
+    const detectados = new Set(recolectarTodo().map(clave))
     const huerfanas = DECLARACIONES.filter((d) => !detectados.has(clave(d)))
     const detalle = huerfanas.map((d) => `  ${d.archivo}\n      ${d.mensaje}`).join("\n")
     expect(
@@ -708,11 +1287,11 @@ describe("mensajes de error — T12: ningún mensaje que interpola datos queda s
   it("cada declaración con dato de fila nombra una compuerta que sigue existiendo en el código", () => {
     const sinCompuerta = DECLARACIONES.filter(
       (d) =>
-        d.clase !== "no-fila" &&
+        (d.clase === "admin" || d.clase === "alcance") &&
         !readFileSync(path.join(APP_DIR, d.enArchivo ?? d.archivo), "utf8").includes(d.compuerta)
     )
     const detalle = sinCompuerta
-      .map((d) => `  ${d.archivo} → compuerta ausente: ${d.clase === "no-fila" ? "" : d.compuerta}`)
+      .map((d) => `  ${d.archivo} → compuerta ausente: ${"compuerta" in d ? d.compuerta : ""}`)
       .join("\n")
     expect(
       sinCompuerta,
@@ -727,9 +1306,10 @@ describe("mensajes de error — T12: ningún mensaje que interpola datos queda s
 
   it("ninguna declaración es una excepción encubierta: toda clase admite veredicto y todo motivo explica", () => {
     for (const d of DECLARACIONES) {
-      expect(["no-fila", "admin", "alcance"]).toContain(d.clase)
+      expect(["no-fila", "admin", "alcance", "indirecto"]).toContain(d.clase)
       expect(d.motivo.length, `motivo vacío en ${d.archivo}: ${d.mensaje}`).toBeGreaterThan(20)
-      if (d.clase !== "no-fila") expect(d.compuerta.length).toBeGreaterThan(0)
+      if (d.clase === "admin" || d.clase === "alcance") expect(d.compuerta.length).toBeGreaterThan(0)
+      if (d.clase === "indirecto") expect(d.origen).toBe("lib/**")
     }
   })
 })
