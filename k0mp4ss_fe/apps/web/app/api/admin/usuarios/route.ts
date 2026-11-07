@@ -1,7 +1,8 @@
 import { NextResponse, NextRequest } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { auth } from "@/lib/auth"
-import { puede } from "@/lib/authz"
+import { puede, ROLES, type Rol } from "@/lib/authz"
+import { ROLES_CON_ALCANCE_DE_COMUNIDAD } from "@/lib/api/sesion-persona"
 import { logger } from "@/lib/logger"
 
 export const dynamic = "force-dynamic"
@@ -151,9 +152,33 @@ export async function PATCH(request: NextRequest) {
   const cambiaActivo = typeof body.activo === "boolean"
 
   if (cambiaRol) {
+    // Decisión 2026-11-07 (D2 de «Permisos por objeto»): la ficha de persona sigue
+    // siendo opcional en la columna —Auth.js crea el usuario antes de saber quién es—
+    // pero un rol ACOTADO POR FILA no puede quedar sin ficha: sin `personaId` los
+    // `_alcance.ts` fallan cerrado y el usuario no ve nada, así que el sistema le
+    // estaría dando un rol que no puede ejercer. Se rechaza acá, donde se concede.
+    const nuevoRol = String(body.rol)
+    if (!ROLES.includes(nuevoRol as Rol)) {
+      return NextResponse.json({ error: "Rol desconocido." }, { status: 400 })
+    }
+    if (!ROLES_CON_ALCANCE_DE_COMUNIDAD.has(nuevoRol)) {
+      const destino = await prisma.usuario.findUnique({
+        where: { id: usuarioId },
+        select: { personaId: true },
+      })
+      if (!destino?.personaId) {
+        return NextResponse.json(
+          {
+            error:
+              "Un rol operativo necesita ficha de persona: sin ella el alcance por fila le niega todo. Asigná la persona antes del rol.",
+          },
+          { status: 400 }
+        )
+      }
+    }
     await prisma.membresia.update({
       where: { id: membresia.id },
-      data: { rol: String(body.rol) },
+      data: { rol: nuevoRol },
     })
   }
 

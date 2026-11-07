@@ -43,7 +43,7 @@ export async function unidadesVinculadasDb(
  * (`app/api/certificados-ct/route.ts`) y la de toda la serie «permisos por
  * objeto»: administrador y comité.
  */
-const ROLES_CON_ALCANCE_DE_COMUNIDAD = new Set(["administrador", "comite"])
+export const ROLES_CON_ALCANCE_DE_COMUNIDAD = new Set(["administrador", "comite"])
 
 /**
  * Decisión de alcance por filas de una sesión, en tres estados:

@@ -175,6 +175,60 @@ describe("/api/admin — PATCH usuarios y POST seed-authz", () => {
       expect(despues?.tokenVersion).toBe((antes?.tokenVersion ?? 0) + 1)
     })
 
+    // Decisión 2026-11-07 (D2 de «Permisos por objeto»): la ficha de persona sigue
+    // siendo opcional en la columna, pero un rol ACOTADO POR FILA no puede quedar
+    // sin ficha: sin `personaId` los `_alcance.ts` fallan cerrado y el rol que se le
+    // da no se puede ejercer. Se rechaza donde se concede el rol.
+    it("D2 · un rol operativo sin ficha de persona → 400 y la membresía no se toca", async () => {
+      await conSesion(emailAdmin)
+      const antes = await prisma.membresia.findFirst({
+        where: { usuarioId: "admin-patch-user-residente", comunidadId: comunidadA },
+      })
+      await prisma.usuario.update({
+        where: { id: "admin-patch-user-residente" },
+        data: { personaId: null },
+      })
+
+      const res = await PATCH(
+        { usuarioId: "admin-patch-user-residente", rol: "conserjeria" },
+        { comunidadId: comunidadA }
+      )
+      expect(res.status).toBe(400)
+      expect(((await res.json()) as { error: string }).error).toContain("ficha de persona")
+
+      const despues = await prisma.membresia.findFirst({
+        where: { usuarioId: "admin-patch-user-residente", comunidadId: comunidadA },
+      })
+      expect(despues?.rol).toBe(antes?.rol)
+
+      // La regla es la ficha, no el rol: con ficha asignada, el mismo cambio pasa.
+      await prisma.usuario.update({
+        where: { id: "admin-patch-user-residente" },
+        data: { personaId: "admin-patch-persona-1" },
+      })
+      const ok = await PATCH(
+        { usuarioId: "admin-patch-user-residente", rol: "conserjeria" },
+        { comunidadId: comunidadA }
+      )
+      expect(ok.status).toBe(200)
+      // Los roles con alcance de comunidad no exigen ficha (administrador y comité).
+      const comite = await PATCH(
+        { usuarioId: "admin-patch-user-residente", rol: "comite" },
+        { comunidadId: comunidadA }
+      )
+      expect(comite.status).toBe(200)
+    })
+
+    it("D2 · un rol que no existe en la matriz → 400 antes de escribir", async () => {
+      await conSesion(emailAdmin)
+      const res = await PATCH(
+        { usuarioId: "admin-patch-user-residente", rol: "superusuario" },
+        { comunidadId: comunidadA }
+      )
+      expect(res.status).toBe(400)
+      expect(((await res.json()) as { error: string }).error).toBe("Rol desconocido.")
+    })
+
     it("cambio de activo a false → 200, desactiva el usuario y vuelve a subir tokenVersion", async () => {
       const antes = await prisma.usuario.findUnique({ where: { id: "admin-patch-user-residente" } })
       await conSesion(emailAdmin)
