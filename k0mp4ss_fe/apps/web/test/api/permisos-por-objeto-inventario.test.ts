@@ -88,10 +88,9 @@ const DECLARACIONES: readonly Declaracion[] = [
 
   // ── certificados de la comunidad (CT) ─────────────────────────────────────
   {
-    ruta: "certificados-ct/[id]",
-    clase: "pendiente",
-    motivo:
-      "dueño `CertificadoCT.unidadId`/`personaId`; la factory sólo filtra comunidad (T1 «nv»).",
+        ruta: "certificados-ct/[id]",
+    clase: "caso",
+    cubre: "certificados-ct — el dueño es `unidadId`/`personaId` (lote 3)",
   },
 
   // ── CO: documentos, envíos, buzón, plantillas ─────────────────────────────

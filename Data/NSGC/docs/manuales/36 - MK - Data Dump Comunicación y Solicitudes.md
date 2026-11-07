@@ -71,6 +71,10 @@ El ciclo operativo del ticket vive en `solicitudesGE` (tipo `buzon`) vía `mensa
 
 Descarga auditada → evento `CO_DOC_DOWNLOAD` (servida por `/api/co/documentos/[id]`).
 
+> **Estado (2026-11-07): colección retirada de la interfaz.** La pestaña «Biblioteca» de Comunicación ya no existe: el **Archivo de Documentos de la Comunidad** (AD) es la única lista de documentos y su filtro `comunitario` hace el papel de esta biblioteca. La tabla `documentos_co` y la API `/api/co/documentos` quedan `@deprecated`, sin consumidores nuevos, y sus filas se migran a `documentos` en una unidad posterior; por eso el dump sigue describiendo la estructura. `CO_DOC_DOWNLOAD` sobrevive solo en la bitácora histórica: la apertura de un documento del archivo se audita con `AD_DOC_APERTURA`.
+>
+> El archivo nuevo tiene su propio dump resuelto en `28 - MK - Catálogo de Datos Semilla.md` §16 (tres documentos legales + una circular comunitaria). No se duplica acá.
+
 ---
 
 ## 🎫 Tickets — `solicitudesGE` (0 registros)

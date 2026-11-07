@@ -17,6 +17,7 @@ Dos mundos que comparten módulo: **RRHH** profundiza la extensión laboral mín
   - **Evaluación histórica e inmutable**: una vez registrada no se edita; se agrega otra entrada al historial.
   - **Proyección de costo = aviso, no gasto**: es una métrica/alerta para administración; **no crea egreso en Finanzas**.
   - **Cierre de turno con permiso propio**: iniciar y editar el cierre de turno se gobierna con el permiso de cierre de turno (conserjería), no con el permiso general de personal.
+  - **Cada trabajador firmó su turno**: el dueño del cierre es `trabajadorPersonaId`. La conserjería lee, edita y crea solo los cierres de **su persona**; el cierre de otro trabajador responde 404 —no 403, que confirmaría que existe— y la administración cierra el de cualquiera. Lo mismo vale al iniciar turno: un rol acotado no puede iniciar el turno de otra persona, así que la bitácora no recibe un `PE_START_SHIFT` a nombre de un tercero. Si el usuario operativo no tiene ficha de persona, no ve ninguna fila (falla cerrado).
 - **Registro de accesos y cierre de turno (hoy dentro de `/operaciones/accesos`; `/operaciones/bitacora` redirige)**:
   - **La bitácora de cinco pestañas se retiró** (commit `6c9f9b7`): `app/operaciones/bitacora/page.tsx` ya no pinta nada, redirige en el servidor a `/operaciones/accesos`. Lo que el conserje registra (visitas, encomiendas, trabajos) y lo que lee del día viven en la puerta única; los paneles de Visitas, Contratistas y Encomiendas se conservan como componentes (`components/pe/*-panel.tsx`) y son los que la puerta compone.
   - **Reporte Diario**: día consultable (hoy o anteriores) con tarjetas de jornada derivadas de los cierres registrados y conteos de novedades.
@@ -43,6 +44,7 @@ Dos mundos que comparten módulo: **RRHH** profundiza la extensión laboral mín
 - **FKs por id, nunca texto libre**: la ficha rechaza cualquier `afpId`/`bancoId`/etc. inexistente y un maestro legal en uso no se puede borrar.
 - **Anti-negligencia real**: dejar todo en "SÍ" sin escribir obliga a describir y adjuntar evidencia; cambiar a "NO" oculta los campos. El sistema valida el evento, no cronometra.
 - **Trazabilidad de cierres**: editar un reporte appendea al historial interno; los cierres históricos no son eliminables (solo los del día o los TEST de qa-lab).
+- **El cierre es de quien lo firmó**: ni la lectura ni la edición ni el alta de un cierre ajeno están disponibles para un rol acotado. El 404 es la respuesta de la fila ajena y el evento de auditoría solo se escribe para el propio.
 - **Flags de CF**: `notificarRegistroVisitas` y `notificarEncomiendas` deciden si el residente recibe la notificación simulada.
 - **Proyección honesta**: sin feriados cargados en el mes no hay envío a FI; el sobrecosto viaja como estimación, nunca como egreso real (eso llega con PL).
 - **Hora extra sin papeleo**: registrada en la ficha, se mira como KPI y se sugiere al liquidar; la decisión final la toma el administrador en PL, no hay circuito aparte de aprobación.
@@ -55,6 +57,6 @@ Dos mundos que comparten módulo: **RRHH** profundiza la extensión laboral mín
 - **MP**: identidad del trabajador (no se duplica); la extensión laboral mínima sigue alimentando el cajón RRHH de AD.
 - **MA**: maestros legales (AFP/salud/asignación familiar/bancos/mutualidades), `feriados`, `contactosEmergencia` y los operativos nuevos (`jornadas`, `couriers`, `contratistas`).
 - **EF**: unidades destino de visitas/encomiendas/contratistas. **MT**: tareas del panel de monitoreo. **CF**: flags de notificación y jornada semanal estándar.
-- **RP y sesión**: `/admin/mantenciones` depende de `lib/authz` y de los roles de la sesión (`Membresia.rol`), no de la visibilidad del sidebar.
+- **RP y sesión**: `/admin/mantenciones` depende de `lib/authz` y de los roles de la sesión (`Membresia.rol`), no de la visibilidad del sidebar. Los cierres de turno y el inicio de turno además aplican alcance por fila (`app/api/pe/cierres-turno/_alcance.ts`, `lib/api/propiedad-de-alta.ts`).
 - **FI**: destino de la proyección de costos. **PL**: liquidaciones reales (ventana 8) — hoy queda `"pendiente"`.
 - Notificaciones con `notify()` (**ST**, D2/D3); media por referencia (**D1**) para fotografías y evidencias.

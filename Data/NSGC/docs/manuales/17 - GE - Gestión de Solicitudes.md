@@ -10,6 +10,7 @@ Cada solicitud entra como ticket con folio único `GE-####` y estado Nuevo; el s
 
 - **Panel de Control**: contadores por estado (Nuevo, En Revisión, Requiere Acción Vecino, En Proceso, Resuelto, Cerrado) + SLA promedio de resolución en horas derivado del historial.
 - **Bandeja de entrada**: grilla con los 10 tickets más recientes (ID, tipo, fecha, unidad, estado breve) y filtros por rango de fechas, unidad, solicitante y tipo de gestión.
+- **Alcance por fila**: el dueño de una solicitud es su `unidadId` o la persona que la pidió (`solicitantePersonaId`). Administración y comité ven la comunidad completa; el residente lee solo las solicitudes de sus unidades con vínculo vigente o las que pidió su persona, y el alta a nombre de una unidad o persona ajena responde 404 (el PUT parcial tampoco permite mover una solicitud propia a una unidad ajena). La solicitud ajena responde 404 —no 403— y ambos datos salen de la base de la sesión.
 - **Detalle del ticket**: trazabilidad completa — comentarios de administración/solicitante, historial de estados con timestamps y resolución final. Abrir el detalle marca automáticamente En Revisión (primera lectura).
 - **Formularios por tipología**:
   - *Insumos*: área de destino obligatoria + material solicitado (catálogo pendiente a **IR**).
@@ -24,11 +25,13 @@ Cada solicitud entra como ticket con folio único `GE-####` y estado Nuevo; el s
 - **Grabaciones sin unidad no existen**: la regla obliga a vincular unidad/residente incluso cuando lo pide el personal de conserjería.
 - **Referencia pendiente IR**: los insumos hoy usan texto libre auditado; cuando exista **IR - Inventario y Recursos** se endurecerá al catálogo real.
 - **Auditoría**: `GE_TICKET_CREATED`, `GE_TICKET_STATE_CHANGE`, `GE_TICKET_RESOLVED`.
+- **El ticket ajeno no existe**: el residente no ve el expediente de otra unidad ni puede crear uno a nombre de un tercero. La guardia corre antes de escribir, así que no queda fila ni evento.
 
 ## 🔗 Dependencias
 
 - Solicitantes/unidades de **MP**, **EF** y **VU** (vínculos vigentes para autocompletar).
 - Tickets tipo buzon enlazados a `mensajesBuzonCO` de **CO - Comunicación Vecinos**.
 - Notificaciones automáticas con `notify()` (**ST**, D3).
+- **RP**: alcance por fila en `app/api/ge/solicitudes/_alcance.ts` (lectura y guardia de escritura).
 
 (End of file)

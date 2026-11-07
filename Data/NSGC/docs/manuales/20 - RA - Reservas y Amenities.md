@@ -9,6 +9,8 @@ Dos pilares: el **Maestro de Elementos** define qué se puede reservar (espacio 
 ## 🛠️ Secciones
 
 - **Calendario**: grilla cronológica de reservas confirmadas/canceladas/solicitadas; alta guiada (elemento → solicitante MP → fecha → tramo según bloques); acciones Cancelar y Retener garantía (con motivo). Cada reserva guarda snapshot de tarifa y garantía vigentes al confirmar.
+  - **El calendario muestra la ocupación, no la reserva del vecino**: el residente ve qué tramo está tomado, de qué elemento y en qué estado —lo necesita para no chocar—, pero la fila ajena viaja **redactada**: sin identidad del solicitante, sin unidad, sin montos, sin referencia del cargo al Fondo de Amenities, sin garantía retenida y con el motivo de cancelación redactado. Sus propias reservas las ve completas. La administración y el comité no cambian.
+  - **El alta tampoco queda a nombre de otro**: un rol acotado no puede crear una reserva con la persona o la unidad de un tercero (404, sin cargo al fondo y sin evento), ni regalarse la propia por el PUT parcial.
 - **Elementos**: CRUD del maestro — tipo (Espacio Físico / Activo Mobiliario), ubicación EF (sub-sector) o IR (activo del catálogo), franja bloques_horas|dia_completo con duración, tarifa, garantía, aforo (piscina) o stock (2 quinchos idénticos → 2), anticipación mínima, ventana de cancelación tardía, penalización y el interruptor **«Requiere autorización del administrador»**.
   - Este catálogo también se administra desde **`/admin/elementos`** (`app/admin/elementos/panel-elementos.tsx`, commit `0d61a77`), entrada propia del menú del administrador; la pestaña «Elementos» de Operaciones sigue existiendo para la operación diaria. El panel muestra un **badge «Requiere autorización»** en cada elemento marcado y envía el campo en creación y en edición.
   - `requiereAutorizacion` es aditivo y por defecto `false`: los elementos existentes y los clientes que no mandan el campo siguen creando reservas `confirmada` igual que antes (commit `9cbebd0`).
@@ -39,12 +41,15 @@ La reserva y sus cobros se materializan en el servidor, dentro de la misma trans
 - **Rechazo con razón**: el motivo es obligatorio; es lo único que el solicitante puede leer para entender por qué no le autorizaron el quincho.
 - **Cancelación tardía con diente**: si faltan ≤ cancelacionTardiaDias días, la cancelación marca `tardia` y deriva la penalización como cobro real al Fondo de Amenities en FI.
 - **Garantía retenida = evento**: al devolver un activo dañado, retén la garantía con motivo — notifica a administración (`RA_WARRANTY_RETAINED`) y genera un cobro del fondo de amenities.
+- **Lo ajeno se ve como ocupación, no como dato**: el calendario del residente sirve para elegir un horario libre, no para averiguar quién reservó ni cuánto pagó. La redacción de la fila viaja desde el servidor (`proyectarReservaRA`), no es un filtro de la pantalla.
+- **Una reserva ajena no se abre ni se edita**: el detalle y el PUT de una reserva de otra persona responden 404 —nunca 403, que confirmaría que existe—, y la reserva a nombre de un tercero no se puede crear.
 - **Cobros vivos en FI**: tarifas, penalizaciones y garantías retenidas se materializan como cobros del Fondo de Amenities y `cargoFIReferencia` guarda el id del cobro (conexión FI, Sesión 5); el gate de morosidad está activo: quien arrastra deuda vencida no puede reservar.
 - **Auditoría**: `RA_BOOKING_CREATED`, `RA_BOOKING_AUTHORIZED`, `RA_BOOKING_REJECTED`, `RA_BOOKING_CANCELLED`, `RA_WARRANTY_RETAINED`.
 
 ## 🔗 Dependencias
 
 - Sub-sectores de **EF** y activos del catálogo de **IR** como ubicación del elemento.
+- **RP**: el alcance de lectura y de escritura lo decide el servidor (`app/api/ra/reservas/_alcance.ts` + `lib/api/propiedad-de-alta.ts`); la matriz solo dice quién entra.
 - Solicitantes activos del **MP**.
 - Notificaciones con `notify()` (**ST**, D3).
 - El carrusel de **CV - Visor de Mensajes** muestra las reservas confirmadas de los próximos 7 días.

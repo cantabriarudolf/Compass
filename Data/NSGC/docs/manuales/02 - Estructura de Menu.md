@@ -17,9 +17,12 @@ Esta estructura aplica un diseño de **Navegación Basada en Dominios**, agrupan
 | | Remuneraciones | `/finanzas/remuneraciones` | PE, PL | |
 | **Comunidad** | Directorio de Personas | `/comunidad/personas` | MP | `IconSpeakerphone` |
 | | Comunicación | `/comunidad/comunicacion` | CO | |
+| | Archivo | `/comunidad/archivo` | AD | |
 | | Visor de Mensajes | `/comunidad/visor` | CV | |
 | | Directiva | `/comunidad/directiva` | GD | |
 | | Certificados | `/comunidad/certificados` | CT | |
+| | Avisos de Cobro | `/comunidad/avisos-cobro` | FI | |
+| | Mis Liquidaciones | `/comunidad/mis-liquidaciones` | PL | |
 | | Portal Inmobiliario | `/comunidad/portal` | PI | |
 | **Inventario** | Estructura Física | `/inventario/estructura` | EF, ES | `IconBuildingSkyscraper` |
 | | Tipos de Unidad | `/inventario/tipos` | TU | |
@@ -55,6 +58,15 @@ Tres pantallas nacieron como pestañas de otros módulos y ahora son entradas pr
 | **Mantenciones Preventivas** | `/admin/mantenciones` | CRUD del calendario preventivo (antes dentro de `/operaciones/proveedores`) |
 | **Elementos** | `/admin/elementos` | Catálogo de amenities reservables, incluido el interruptor «Requiere autorización del administrador» |
 | **Alerta de reservas** | `/admin/reservas` | Cola de solicitudes para autorizar o rechazar con motivo |
+
+### 🗂️ Las dos entradas nuevas de Comunidad (2026-11-07)
+
+| Entrada | Ruta | Roles del menú | Qué se hace ahí |
+| :--- | :--- | :--- | :--- |
+| **Archivo** | `/comunidad/archivo` | administrador, comité, residente | Archivo de Documentos de la Comunidad (AD): legales append-only y comunitarios reemplazables, con envío y constancia por destinatario. Reemplaza la pestaña «Biblioteca» que se retiró de Comunicación. |
+| **Mis Liquidaciones** | `/comunidad/mis-liquidaciones` | administrador, conserjería | La liquidación de sueldo de la propia persona, en solo lectura y con descarga del PDF. La administración la usa para consultar cualquier liquidación de la comunidad. |
+
+Las dos abren con el permiso en el servidor, no con la lista de roles copiada: `doc` ver para el Archivo y `pl` ver (gestión) o `pl:propia` ver (trabajador) para Mis Liquidaciones. El aviso de cobro (`/comunidad/avisos-cobro`, FI) ya estaba en el menú desde F27 y usa su propio par de claves: `fi:gasto_comun` ver para administración y comité, `fi:aviso:propio` ver para el residente.
 
 ---
 

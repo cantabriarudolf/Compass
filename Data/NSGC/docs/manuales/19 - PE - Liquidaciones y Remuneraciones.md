@@ -18,6 +18,7 @@ Cada liquidación es un **snapshot inmutable**: al generarla el sistema congela 
     Ciclo Pendiente → Descontado en la próxima liquidación confirmada; un adelanto descontado no es eliminable.
   - **Parámetros Legales**: edición restringida a administración del valor **UF mensual**, ingreso mínimo mensual, tope de gratificación legal (factor 4.75 sobre IMM) y tasa SIS. Cada cambio queda auditado como `CF_UPDATE_PARAM`.
   - **PDF**: botón por fila regenera la liquidación con pdfmake e incrusta la firma del administrador dentro del documento (nunca se guarda base64 en el sistema).
+  - **Mi liquidación (`/comunidad/mis-liquidaciones`)**: el trabajador —hoy conserjería, con `pl:propia` ver— abre su propia pantalla y ve periodo, folio, días, haberes, descuentos y líquido a pagar, con el detalle expandible que imprime las mismas líneas que el papel. Es **solo lectura y sin recálculo**: las cifras salen del snapshot guardado. El alcance por fila lo resuelve el servidor (`trabajadorPersonaId` = la persona del usuario de sesión), así que la liquidación de otro trabajador responde 404 y no se carga. El botón de descarga sirve el PDF desde la fila guardada (`GET /api/liquidaciones/[id]/pdf`), con la misma regla de alcance y `no-store`; si la firma no se puede resolver, la línea sale en blanco antes que romper la descarga.
 
 ## 🧮 Cómo se Calcula
 
@@ -34,6 +35,8 @@ Cada liquidación es un **snapshot inmutable**: al generarla el sistema congela 
 - **Un documento por periodo**: la misma persona no puede tener dos liquidaciones del mismo mes.
 - **Solo borradores se borran**: una vez confirmada, la liquidación queda amarrada al egreso FE de Finanzas y al historial.
 - **Proyección conectada**: si existía una proyección de feriados PE del periodo, la liquidación deja su referencia materializada (ya no dice "pendiente").
+- **El permiso sin pantalla es medio permiso**: `pl:propia` estuvo declarada en la matriz y ningún archivo la pedía; hoy el trabajador ejerce el derecho en `/comunidad/mis-liquidaciones` y en la descarga del PDF, no solo en el papel de la matriz.
+- **Una sola definición de «lo propio»**: colección, detalle y PDF comparten el mismo `where` (`app/api/liquidaciones/_alcance.ts`). Un filtro copiado por ruta es el que un día deja bajar el sueldo del vecino por el camino que nadie actualizó.
 - **Auditoría**: `PL_GENERATE_PAYSLIP`, `PL_ADD_ADVANCE`, `PL_DELETE_PAYSLIP`, `PL_EXPENSE_SYNC`.
 
 ## 🔗 Dependencias
@@ -42,3 +45,4 @@ Cada liquidación es un **snapshot inmutable**: al generarla el sistema congela 
 - **MA**: tasas AFP, tipo de salud y tramo de asignación familiar referenciados por id desde la ficha.
 - **CF**: mes comercial, jornada estándar y parámetros legales (UF/IMM/tope/SIS).
 - **FI**: fondo GC activo destino del egreso de sueldos. **CT**: certificado de liquidación solo sobre documentos confirmados.
+- **RP**: `pl` ver es la lectura de la administración y `pl:propia` ver la del trabajador; el alcance por fila lo decide el servidor (`lib/api/sesion-persona.ts`), nunca el cliente.

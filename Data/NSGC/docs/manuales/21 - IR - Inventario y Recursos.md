@@ -8,6 +8,8 @@ Un catálogo único con código `IR-A-####` por recurso y cuatro naturalezas: in
 
 **Permisos**: conserjería y mantención registran las solicitudes y entregan; comité y residente solo consultan.
 
+**Alcance por fila (permisos por objeto)**: el dueño de una solicitud de insumo es `solicitantePersonaId` (el modelo no tiene unidad) y el de una entrega de EPP es la persona a la que se le entregó el equipo (`personaId`). Administración y comité ven la comunidad completa; un rol acotado ve solo sus propias filas, y si su usuario no tiene ficha de persona no ve ninguna (falla cerrado: antes ese caso abría todas las de la comunidad). La fila ajena responde 404 —no 403— en la colección, el detalle y el PUT.
+
 ## 🛠️ Secciones
 
 - **Catálogo**: grilla filtrable por naturaleza/estado; alta y edición por tipo de recurso (ubicación EF obligatoria para infraestructura, unidad obligatoria para llaves); cambio de estado con auditoría.
@@ -25,10 +27,13 @@ Un catálogo único con código `IR-A-####` por recurso y cuatro naturalezas: in
 - **Entrega sin stock rechaza** indicando faltante; nada se muta parcialmente.
 - **Referencia pendiente FI**: toda compra con factura marca `cargoFIReferencia:"pendiente"` (la vinculación contable del ingreso de recursos queda post-serie; la conexión de Sesión 5 cubrió IN/MT/RA).
 - **Auditoría**: `IR_STOCK_LOW`, `IR_DELIVERY_EPP`, `IR_ASSET_REPAIR`, `IR_COMODIN_ALERTA` (+ baja auditada).
+- **Cada uno ve lo que pidió o lo que recibió**: la solicitud de insumo se acota por quien la pidió y la entrega de EPP por quien la recibió. Una fila ajena no se lee ni se edita: responde el 404 genérico, igual que un id que no existe.
+- **El campo de persona no es auto-atribución** en estos dos recursos: en EPP es el receptor que registra un rol operativo, y el residente no tiene la clave de alta. Por eso no necesitaron guardia de creación, solo alcance de lectura.
 
 ## 🔗 Dependencias
 
 - Ubicación de **EF** (micro sectores/unidades) y responsables de **MP**.
 - Maestros **MA** (`unidadesMedida`) para insumos.
+- **RP**: alcance por fila resuelto en el servidor (`app/api/ir/entregas-epp/_alcance.ts`, `app/api/ir/solicitudes-insumo/_alcance.ts`).
 - Notificaciones con `notify()` (**ST**, D3).
 
