@@ -237,6 +237,23 @@ function recolectarProductores(): Sitio[] {
 }
 
 /**
+ * El barrido se paga UNA vez por proceso. Antes cada caso re-escaneaba el árbol y
+ * el primero se pasaba de los 5 s por defecto cuando la suite entera corría en
+ * paralelo: un guardián que se cae por reloj no está guardando nada.
+ */
+let cacheVigilados: Sitio[] | undefined
+function sitiosVigilados(): Sitio[] {
+  cacheVigilados ??= recolectarTodo()
+  return cacheVigilados
+}
+
+let cacheRaiz: Sitio[] | undefined
+function sitiosDeRaiz(): Sitio[] {
+  cacheRaiz ??= recolectar()
+  return cacheRaiz
+}
+
+/**
  * Todos los sitios que el guardián vigila, sin duplicados: lo que la ruta escribe, lo
  * que la ruta reenvía y lo que se redacta en `lib/**` (con interpolación). `lib/api`
  * pertenece a las dos raíces y a `lib`, así que se deduplica por clave.
@@ -1247,17 +1264,17 @@ const DECLARACIONES: readonly Declaracion[] = [
 ]
 
 describe("mensajes de error — T12: ningún mensaje que interpola datos queda sin declarar", () => {
-  it("las dos raíces existen y el barrido encuentra mensajes (si no, el guardián se apagó solo)", () => {
+  it("las dos raíces existen y el barrido encuentra mensajes (si no, el guardián se apagó solo)", { timeout: 30_000 }, () => {
     for (const raiz of RAICES) expect(() => readdirSync(path.join(APP_DIR, raiz))).not.toThrow()
-    expect(recolectar().length).toBeGreaterThan(0)
+    expect(sitiosDeRaiz().length).toBeGreaterThan(0)
     // El barrido completo suma lo reenviado y lo redactado en `lib/**`: si sólo
     // encuentra los literales de las rutas, las dos reglas nuevas se apagaron.
-    expect(recolectarTodo().length).toBeGreaterThan(recolectar().length)
+    expect(sitiosVigilados().length).toBeGreaterThan(sitiosDeRaiz().length)
   })
 
-  it("cada mensaje que interpola está declarado con su clase y su motivo", () => {
+  it("cada mensaje que interpola está declarado con su clase y su motivo", { timeout: 30_000 }, () => {
     const declarados = new Set(DECLARACIONES.map(clave))
-    const sinDeclarar = recolectarTodo().filter((s) => !declarados.has(clave(s)))
+    const sinDeclarar = sitiosVigilados().filter((s) => !declarados.has(clave(s)))
     const detalle = sinDeclarar.map((s) => `  ${s.archivo}:${s.linea}\n      ${s.mensaje}`).join("\n")
     expect(
       sinDeclarar,
@@ -1270,8 +1287,8 @@ describe("mensajes de error — T12: ningún mensaje que interpola datos queda s
     ).toEqual([])
   })
 
-  it("no hay declaraciones huérfanas: si el mensaje se fue, la declaración también", () => {
-    const detectados = new Set(recolectarTodo().map(clave))
+  it("no hay declaraciones huérfanas: si el mensaje se fue, la declaración también", { timeout: 30_000 }, () => {
+    const detectados = new Set(sitiosVigilados().map(clave))
     const huerfanas = DECLARACIONES.filter((d) => !detectados.has(clave(d)))
     const detalle = huerfanas.map((d) => `  ${d.archivo}\n      ${d.mensaje}`).join("\n")
     expect(
