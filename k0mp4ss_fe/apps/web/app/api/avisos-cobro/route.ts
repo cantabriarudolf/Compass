@@ -82,9 +82,11 @@ import {
 } from "@/lib/aviso-cobro"
 import type { ResumenMensual } from "@/lib/resumen-mensual"
 import {
-  personaIdDelUsuarioDb,
-  unidadesVinculadasDb,
-} from "@/lib/api/sesion-persona"
+  RECURSO_AVISO,
+  alcanceAvisosCobro,
+  puedeLeerAvisosCobro,
+} from "./_alcance"
+import { COLUMNAS_DOCUMENTO } from "./_documento"
 import { createCrudHandlers, type CrudDelegate } from "@/lib/api/crud-factory"
 import { jsonError, withComunidadScope } from "@/lib/api/with-comunidad-scope"
 
@@ -93,37 +95,21 @@ function delegado(modelo: unknown): CrudDelegate {
   return modelo as CrudDelegate
 }
 
+/**
+ * Handlers de la colección y del detalle. `ver` acepta las DOS lecturas de F27
+ * (gestión con `fi:gasto_comun` y residente con `fi:aviso:propio`) y el alcance
+ * por filas decide cuáles avisos ve cada una. Emitir, entregar y eliminar siguen
+ * exigiendo la clave de la gestión (`Crear`/`Eliminar` no cambian).
+ */
 export const avisosHandlers = createCrudHandlers({
   model: delegado(prisma.avisoCobro),
   schema: AvisoCobroSchema,
-  authzCheck: (rol, accion) => puede(rol, accion, "fi:gasto_comun"),
+  authzCheck: (rol, accion) =>
+    accion === "ver"
+      ? puedeLeerAvisosCobro(rol)
+      : puede(rol, accion, RECURSO_AVISO),
+  alcance: alcanceAvisosCobro,
 })
-
-/** El aviso es parte del gasto común: emitirlo, entregarlo y auditarlo. */
-const RECURSO_AVISO = "fi:gasto_comun"
-
-/**
- * F27 — la clave del RESIDENTE: lee el aviso de SU unidad.
- *
- * `ver` es su única acción (emitir y entregar siguen siendo `fi:gasto_comun`) y
- * el alcance por unidad es ABAC de ESTA ruta: el cliente nunca decide de quién
- * es el aviso, igual que `fi:cobranza:propia` en `cobros-fi/canales`.
- */
-const RECURSO_AVISO_PROPIO = "fi:aviso:propio"
-
-/**
- * Columnas de CF que el papel imprime: identidad de la comunidad, administrador
- * responsable y firma. Es lo que el PDF del residente necesita; el SMTP y la
- * clave de eliminación NO son parte del documento y no salen de acá.
- */
-const COLUMNAS_DOCUMENTO = {
-  nombreComunidad: true,
-  direccionOficial: true,
-  rutComunidad: true,
-  administradorResponsable: true,
-  rutAdministrador: true,
-  firmaDigitalizadaUrl: true,
-} as const
 
 /**
  * GET lista paginada. Dos ramas, una sola forma de respuesta:
@@ -131,9 +117,10 @@ const COLUMNAS_DOCUMENTO = {
  * - `fi:gasto_comun` (administración y comité): todos los avisos de la
  *   comunidad, como hasta hoy. `?unidadId=` acota a una unidad.
  * - `fi:aviso:propio` (residente): SOLO los avisos de las unidades donde tiene
- *   vínculo VIGENTE (`unidadesVinculadasDb`, la misma regla ABAC del resto de
- *   la app). Pedir una unidad ajena devuelve el conjunto VACÍO con 200, nunca
- *   403: un 403 confirmaría que existe un aviso de esa unidad.
+ *   vínculo VIGENTE. La regla vive en `alcanceAvisosCobro` (`_alcance.ts`), que
+ *   ambos comparten con el detalle y el PDF; acá solo se compone con el `where`
+ *   de la comunidad. Pedir una unidad ajena devuelve el conjunto VACÍO con 200,
+ *   nunca 403: un 403 confirmaría que existe un aviso de esa unidad.
  *
  * Cada fila viaja con su `contenido` congelado (el papel se arma solo desde la
  * fila guardada) y con `hash`, la huella calculada ACÁ con `hashContenido`: el
@@ -145,9 +132,7 @@ export async function GET(req: Request): Promise<Response> {
   if (!scopeResult.ok) return scopeResult.response
   const scope = scopeResult.scope
 
-  const veTodas = puede(scope.rol, "ver", RECURSO_AVISO)
-  const veLaPropia = puede(scope.rol, "ver", RECURSO_AVISO_PROPIO)
-  if (!veTodas && !veLaPropia) return jsonError(403, "Permiso denegado.")
+  if (!puedeLeerAvisosCobro(scope.rol)) return jsonError(403, "Permiso denegado.")
 
   let url: URL
   try {
@@ -163,21 +148,13 @@ export async function GET(req: Request): Promise<Response> {
   const unidadId = url.searchParams.get("unidadId")?.trim() || undefined
 
   try {
-    const where: Prisma.AvisoCobroWhereInput = { comunidadId: scope.comunidadId }
-    if (!veTodas) {
-      // Lo propio se resuelve en el SERVIDOR: el vínculo vigente (`fechaFin`
-      // nulo) manda, y el parámetro `unidadId` solo puede INTERSECTAR, nunca
-      // ampliar el alcance.
-      const personaId = await personaIdDelUsuarioDb(scope.usuarioId)
-      const propias = personaId
-        ? await unidadesVinculadasDb(personaId, scope.comunidadId)
-        : []
-      where.unidadId = {
-        in: unidadId ? propias.filter((u) => u === unidadId) : propias,
-      }
-    } else if (unidadId) {
-      where.unidadId = unidadId
-    }
+    // `?unidadId=` solo puede INTERSECTAR el alcance, nunca ampliarlo: por eso
+    // se compone con AND y no se asigna después del fragmento. El `total` se
+    // cuenta con el MISMO `where`: no anuncia filas que la respuesta no trae.
+    let where: Prisma.AvisoCobroWhereInput = { comunidadId: scope.comunidadId }
+    if (unidadId) where.unidadId = unidadId
+    const fragmento = await alcanceAvisosCobro(scope)
+    if (fragmento) where = { AND: [where, fragmento] }
 
     const [filas, total, configuracion] = await Promise.all([
       prisma.avisoCobro.findMany({

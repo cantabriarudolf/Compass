@@ -82,9 +82,17 @@
  * (`test/api/fase4-ra.test.ts` y `test/api/pe-transiciones.test.ts`) recibieron la
  * identidad MP que la sesión acotada necesitaba para ejercitar el camino real: la
  * misma actualización de fixture que T15, sin debilitar ningún caso.
+ * Bloque T7 (`fi/avisos-cobro`, F27): el dueño de la fila es la UNIDAD. El
+ * residente lee con `fi:aviso:propio` ver SOLO los avisos de las unidades donde
+ * tiene vínculo vigente —colección con el `total` acotado, detalle 200 para el
+ * propio y 404 genérico para el ajeno— y `GET /api/avisos-cobro/[id]/pdf` sirve
+ * el documento compilado del builder existente con el mismo alcance. La
+ * administración sigue viendo la comunidad entera: los dos avisos del arnés
+ * existen y los lee, así el 404 del residente es alcance y no ausencia.
  */
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest"
 import { prisma } from "@/lib/prisma"
+import { configuracionDefault } from "@/data/admin/configuracion"
 import { cookieDeUsuario, cuerpoJson, invocarApi } from "../helpers/api-sesion"
 
 const state = vi.hoisted(() => ({ cookie: "" }))
@@ -232,6 +240,17 @@ const PROY_B1 = "ppo-proy-b1" // comunidad B
 const LEAD_A1 = "ppo-lead-a1" // comunidad A
 const LEAD_B1 = "ppo-lead-b1" // comunidad B
 
+// Avisos de cobro FI (F27 · T7): el dueño de la fila es la UNIDAD (`unidadId`).
+// Uno por unidad de A (para comparar el propio contra el ajeno) y uno de B (la
+// comunidad ya la cerraba la factory). El período es el mismo en los tres: lo que
+// distingue la fila es la unidad, no el período.
+const AVCOB_A1 = "ppo-avcob-a1" // unidad A-1 (propia de la sesión resA1)
+const AVCOB_A2 = "ppo-avcob-a2" // unidad A-2 (ajena, misma comunidad)
+const AVCOB_B1 = "ppo-avcob-b1" // comunidad B (404 cross-comunidad)
+/** Configuración global de A: sin ella el papel no se puede armar (409). */
+const CF_A = "ppo-cf-a"
+const PERIODO_AVISO = "2026-10"
+
 // Fixtures del ALTA (T17): el POST de `ra/reservas` carga el elemento reservable, el
 // de `pe/turnos/iniciar` valida la jornada contra el maestro y las dos rutas de turno
 // exigen la ficha laboral de PE (`leerDatosLaborales`). Sin estos tres datos el alta
@@ -338,6 +357,9 @@ const moduloCancelarReservaRA = () => import("@/app/api/ra/reservas/[id]/cancela
 const moduloMantencionPE = () => import("@/app/api/pe/mantenciones/[id]/route")
 const moduloProyeccionPE = () => import("@/app/api/pe/proyecciones/[id]/route")
 const moduloLeadPortal = () => import("@/app/api/leads-portal/[id]/route")
+const moduloAvisosCobro = () => import("@/app/api/avisos-cobro/route")
+const moduloAvisoCobro = () => import("@/app/api/avisos-cobro/[id]/route")
+const moduloAvisoCobroPdf = () => import("@/app/api/avisos-cobro/[id]/pdf/route")
 
 async function limpiar(): Promise<void> {
   await prisma.cierreTurnoPE.deleteMany({ where: { comunidadId: { in: [COM_A, COM_B] } } })
@@ -354,6 +376,10 @@ async function limpiar(): Promise<void> {
   await prisma.solicitudGE.deleteMany({ where: { comunidadId: { in: [COM_A, COM_B] } } })
   await prisma.solicitudInsumoIR.deleteMany({ where: { comunidadId: { in: [COM_A, COM_B] } } })
   await prisma.avisoCV.deleteMany({ where: { comunidadId: { in: [COM_A, COM_B] } } })
+  await prisma.avisoCobro.deleteMany({ where: { comunidadId: { in: [COM_A, COM_B] } } })
+  await prisma.configuracionGlobal.deleteMany({
+    where: { comunidadId: { in: [COM_A, COM_B] } },
+  })
   await prisma.certificadoCT.deleteMany({ where: { comunidadId: { in: [COM_A, COM_B] } } })
   await prisma.cobroFI.deleteMany({ where: { comunidadId: { in: [COM_A, COM_B] } } })
   await prisma.fondoFI.deleteMany({ where: { comunidadId: { in: [COM_A, COM_B] } } })
@@ -1207,6 +1233,100 @@ beforeAll(async () => {
         atendido: false,
       },
     ],
+  })
+
+  // Avisos de cobro FI (F27 · T7). El contenido es COPIADO de un aviso emitido:
+  // la ruta y el PDF leen de acá y no recalculan ninguna cifra. Los folios y
+  // códigos son únicos por comunidad porque el modelo los indexa así.
+  const contenidoDeAviso = (unidadId: string, numero: string, total: number) => ({
+    version: 1,
+    periodo: PERIODO_AVISO,
+    fechaEmision: "2026-10-05",
+    unidad: { id: unidadId, numero, etiqueta: `Depto ${numero}` },
+    reglamento: null,
+    participacion: {
+      prorrateo: 0.3,
+      formaContribucion: "prorrateo",
+      porcentajeReserva: 10,
+      reservaIncluidaEnPresupuesto: false,
+    },
+    cargos: [
+      {
+        id: `ppo-cobro-congelado-${unidadId}`,
+        concepto: "gasto_comun",
+        descripcion: "Gasto común del período congelado",
+        montoBase: total,
+        fechaCargo: "2026-10-01",
+        fechaVencimiento: "2026-10-15",
+      },
+    ],
+    detalle: [
+      {
+        cobroId: `ppo-cobro-congelado-${unidadId}`,
+        concepto: "gasto_comun",
+        monto: total,
+        fondoId: "ppo-fondo-gc",
+        fondoNombre: "Gasto común",
+        origen: "linea",
+      },
+    ],
+    montos: {
+      gastoComun: total,
+      recargoFondoReserva: 0,
+      multas: 0,
+      intereses: 0,
+      otros: [],
+      exigible: total,
+      pagado: 0,
+      totalAdeudado: total,
+    },
+    resumenComunidad: {
+      periodo: PERIODO_AVISO,
+      desde: "2026-10-01",
+      hasta: "2026-10-31",
+      ingresos: { total: 12500000, deCobros: 12000000, manuales: 500000, cantidad: 3, detalle: [] },
+      egresos: { total: 9800000, cantidad: 4, detalle: [] },
+      saldoCaja: {
+        inicial: 5000000,
+        ingresosAcumulados: 12500000,
+        egresosAcumulados: 9800000,
+        alCierre: 7700000,
+      },
+    },
+    noComputables: [],
+  })
+  for (const [id, comunidadId, unidadId, numero, folio, codigo, total] of [
+    [AVCOB_A1, COM_A, U_A1, "101", "AC-7001", "VC-A7001", 47000],
+    [AVCOB_A2, COM_A, U_A2, "102", "AC-7002", "VC-A7002", 61000],
+    [AVCOB_B1, COM_B, U_B1, "201", "AC-7003", "VC-B7003", 52000],
+  ] as const) {
+    await prisma.avisoCobro.create({
+      data: {
+        id,
+        comunidadId,
+        unidadId,
+        periodo: PERIODO_AVISO,
+        folio,
+        codigoVerificacion: codigo,
+        fechaEmision: "2026-10-05",
+        vencimiento: "2026-10-15",
+        contenido: contenidoDeAviso(unidadId, numero, total),
+        totalesComunidad: { periodo: PERIODO_AVISO, saldoCajaAlCierre: 7700000 },
+      },
+    })
+  }
+  // La firma queda en `null` a propósito: el PDF del arnés se compila de verdad
+  // (bytes pdfmake), y una URL remota haría que la suite dependiera de la red.
+  await prisma.configuracionGlobal.create({
+    data: {
+      ...configuracionDefault,
+      id: CF_A,
+      comunidadId: COM_A,
+      nombreComunidad: "Comunidad Permisos Por Objeto A",
+      smtpPassword: "no-se-expone",
+      claveEliminacionMaestro: "no-se-expone",
+      firmaDigitalizadaUrl: null,
+    },
   })
 }, 30_000)
 
@@ -3897,5 +4017,226 @@ describe("T17 · el alta no puede atribuir la fila a otro dueño", () => {
     } finally {
       await prisma.solicitudInsumoIR.deleteMany({ where: { id: intrusa } })
     }
+  })
+})
+
+describe("fi/avisos-cobro — el residente lee y descarga SU aviso (F27 · T7)", () => {
+  it("control: la administración de A ve los DOS avisos del arnés y abre el de la unidad 102", async () => {
+    await conSesion(EMAIL.adminA, async () => {
+      const coleccion = await invocarApi(
+        moduloAvisosCobro(),
+        "GET",
+        "avisos-cobro?pageSize=100"
+      )
+      expect(coleccion.status).toBe(200)
+      const j = await cuerpoJson<Envelope<{ id: string; unidadId: string }>>(coleccion)
+      // Las DOS filas de A existen y son legibles por gestión: el 404 del
+      // residente de los casos siguientes es ALCANCE, no ausencia de la fila.
+      expect(new Set(j.data.map((a) => a.id))).toEqual(new Set([AVCOB_A1, AVCOB_A2]))
+      expect(j.total).toBe(2)
+
+      const detalle = await invocarApi(
+        moduloAvisoCobro(),
+        "GET",
+        "avisos-cobro/[id]",
+        { params: { id: AVCOB_A2 } }
+      )
+      expect(detalle.status).toBe(200)
+      const fila = await cuerpoJson<{ id: string; unidadId: string }>(detalle)
+      expect(fila.id).toBe(AVCOB_A2)
+      expect(fila.unidadId).toBe(U_A2)
+    })
+  })
+
+  it("residente A-1: lee SU aviso (200) y el de la unidad ajena responde el 404 genérico", async () => {
+    await conSesion(EMAIL.resA1, async () => {
+      const propio = await invocarApi(
+        moduloAvisoCobro(),
+        "GET",
+        "avisos-cobro/[id]",
+        { params: { id: AVCOB_A1 } }
+      )
+      // Antes de T7 esta misma petición respondía 403: el detalle solo aceptaba
+      // `fi:gasto_comun` (la clave de la administración) y el residente no la
+      // tiene. Abrir la lectura sin el filtro habría dejado leer la deuda de la
+      // unidad vecina cambiando el id.
+      expect(propio.status).toBe(200)
+      const fila = await cuerpoJson<{ id: string; folio: string; unidadId: string }>(propio)
+      expect(fila.id).toBe(AVCOB_A1)
+      expect(fila.folio).toBe("AC-7001")
+      expect(fila.unidadId).toBe(U_A1)
+
+      const ajena = await invocarApi(
+        moduloAvisoCobro(),
+        "GET",
+        "avisos-cobro/[id]",
+        { params: { id: AVCOB_A2 } }
+      )
+      // La fila ajena no se carga ni se sirve: 404 y el cuerpo genérico, nunca
+      // 403 (un 403 confirmaría que el aviso existe).
+      expect(ajena.status).toBe(404)
+      expect(await cuerpoJson<Record<string, unknown>>(ajena)).toEqual({
+        error: "Registro no encontrado.",
+      })
+    })
+  })
+
+  it("residente A-1: la colección solo trae los avisos de sus unidades y el total cuenta esas filas", async () => {
+    await conSesion(EMAIL.resA1, async () => {
+      const coleccion = await invocarApi(
+        moduloAvisosCobro(),
+        "GET",
+        "avisos-cobro?pageSize=100"
+      )
+      expect(coleccion.status).toBe(200)
+      const j = await cuerpoJson<Envelope<{ id: string; unidadId: string }>>(coleccion)
+      // Lo propio viaja; lo ajeno ni siquiera entra al conjunto.
+      expect(j.data.map((a) => a.id)).toEqual([AVCOB_A1])
+      expect(j.data.every((a) => a.unidadId === U_A1)).toBe(true)
+      // El `total` se cuenta con el MISMO where: no anuncia filas que no viajan.
+      expect(j.total).toBe(1)
+
+      // `?unidadId=` solo puede INTERSECTAR el alcance, nunca ampliarlo.
+      const ajena = await invocarApi(
+        moduloAvisosCobro(),
+        "GET",
+        "avisos-cobro?unidadId=ppo-u-a2&pageSize=100"
+      )
+      expect(ajena.status).toBe(200)
+      const jAjena = await cuerpoJson<Envelope<{ id: string }>>(ajena)
+      expect(jAjena.data).toEqual([])
+      expect(jAjena.total).toBe(0)
+
+      const propia = await invocarApi(
+        moduloAvisosCobro(),
+        "GET",
+        "avisos-cobro?unidadId=ppo-u-a1&pageSize=100"
+      )
+      expect(propia.status).toBe(200)
+      const jPropia = await cuerpoJson<Envelope<{ id: string }>>(propia)
+      expect(jPropia.data.map((a) => a.id)).toEqual([AVCOB_A1])
+      expect(jPropia.total).toBe(1)
+    })
+  })
+
+  it("residente A-1: descarga SU aviso como PDF real, y el de la unidad ajena → 404", async () => {
+    await conSesion(EMAIL.resA1, async () => {
+      const res = await invocarApi(
+        moduloAvisoCobroPdf(),
+        "GET",
+        "avisos-cobro/[id]/pdf",
+        { params: { id: AVCOB_A1 } }
+      )
+      expect(res.status).toBe(200)
+      expect(res.headers.get("content-type")).toBe("application/pdf")
+      // El nombre del archivo lleva el folio: quien descarga dos avisos no los
+      // confunde en la carpeta de descargas.
+      expect(res.headers.get("content-disposition")).toBe(
+        'attachment; filename="aviso-cobro-AC-7001.pdf"'
+      )
+      const bytes = Buffer.from(await res.arrayBuffer())
+      // Bytes de un PDF de verdad: firma %PDF- y un documento no trivial. Un
+      // cuerpo JSON o vacío con `application/pdf` no pasa esta mitad.
+      expect(bytes.subarray(0, 5).toString()).toBe("%PDF-")
+      expect(bytes.length).toBeGreaterThan(1000)
+
+      const ajena = await invocarApi(
+        moduloAvisoCobroPdf(),
+        "GET",
+        "avisos-cobro/[id]/pdf",
+        { params: { id: AVCOB_A2 } }
+      )
+      // Mismo alcance que la lectura: sin PDF para el aviso ajeno.
+      expect(ajena.status).toBe(404)
+      expect(ajena.headers.get("content-type")).toContain("application/json")
+      expect(await cuerpoJson<Record<string, unknown>>(ajena)).toEqual({
+        error: "Registro no encontrado.",
+      })
+    })
+  })
+
+  it("control: la administración descarga el PDF del aviso que al residente le da 404", async () => {
+    await conSesion(EMAIL.adminA, async () => {
+      const res = await invocarApi(
+        moduloAvisoCobroPdf(),
+        "GET",
+        "avisos-cobro/[id]/pdf",
+        { params: { id: AVCOB_A2 } }
+      )
+      // La fila existe y el papel se puede armar: el 404 del residente es el
+      // alcance por unidad, no una ruta que no sabe imprimir.
+      expect(res.status).toBe(200)
+      expect(res.headers.get("content-type")).toBe("application/pdf")
+      const bytes = Buffer.from(await res.arrayBuffer())
+      expect(bytes.subarray(0, 5).toString()).toBe("%PDF-")
+      expect(bytes.length).toBeGreaterThan(1000)
+    })
+  })
+
+  it("residente A-1: el aviso de otra comunidad → 404 en el detalle y en el PDF", async () => {
+    await conSesion(EMAIL.resA1, async () => {
+      const detalle = await invocarApi(
+        moduloAvisoCobro(),
+        "GET",
+        "avisos-cobro/[id]",
+        { params: { id: AVCOB_B1 } }
+      )
+      expect(detalle.status).toBe(404)
+
+      const pdf = await invocarApi(moduloAvisoCobroPdf(), "GET", "avisos-cobro/[id]/pdf", {
+        params: { id: AVCOB_B1 },
+      })
+      expect(pdf.status).toBe(404)
+      expect(await cuerpoJson<Record<string, unknown>>(pdf)).toEqual({
+        error: "Registro no encontrado.",
+      })
+    })
+  })
+
+  it("residente SIN ficha MP: la lectura falla CERRADO (colección vacía y detalle 404)", async () => {
+    await conSesion(EMAIL.resSinId, async () => {
+      const coleccion = await invocarApi(
+        moduloAvisosCobro(),
+        "GET",
+        "avisos-cobro?pageSize=100"
+      )
+      // El rol está acotado por fila y no hay identidad para resolver «lo
+      // propio»: el fragmento no matchea nada. Devolver la comunidad entera
+      // sería el fail-open que `alcancePorFilasDeSesion` cierra.
+      expect(coleccion.status).toBe(200)
+      const j = await cuerpoJson<Envelope<{ id: string }>>(coleccion)
+      expect(j.data).toEqual([])
+      expect(j.total).toBe(0)
+
+      const detalle = await invocarApi(
+        moduloAvisoCobro(),
+        "GET",
+        "avisos-cobro/[id]",
+        { params: { id: AVCOB_A1 } }
+      )
+      expect(detalle.status).toBe(404)
+    })
+  })
+
+  it("conserjería de A: sin `fi:aviso:propio` la lectura sigue cerrada (403 en detalle y PDF)", async () => {
+    await conSesion(EMAIL.conserjeA, async () => {
+      // La clave del residente es SUYA: el hecho de leer un aviso no se concede
+      // a quien no la tiene, ni siquiera para el aviso de otra persona.
+      const detalle = await invocarApi(
+        moduloAvisoCobro(),
+        "GET",
+        "avisos-cobro/[id]",
+        { params: { id: AVCOB_A1 } }
+      )
+      expect(detalle.status).toBe(403)
+      expect(await cuerpoJson<{ error: string }>(detalle)).toEqual({
+        error: "Permiso denegado.",
+      })
+
+      const pdf = await invocarApi(moduloAvisoCobroPdf(), "GET", "avisos-cobro/[id]/pdf", {
+        params: { id: AVCOB_A1 },
+      })
+      expect(pdf.status).toBe(403)
+    })
   })
 })

@@ -71,15 +71,19 @@ const DECLARACIONES: readonly Declaracion[] = [
   // ── avisos de cobro (FI) ──────────────────────────────────────────────────
   {
     ruta: "avisos-cobro/[id]",
-    clase: "pendiente",
-    motivo:
-      "dueño `AvisoCobro.unidadId`; la factory no valida la unidad y hoy lo tapa la clave `fi:gasto_comun` (T1, defecto declarado).",
+    clase: "caso",
+    cubre: "fi/avisos-cobro — el residente lee y descarga SU aviso (F27 · T7)",
   },
   {
     ruta: "avisos-cobro/[id]/entrega",
     clase: "exento",
     motivo:
       "sólo administración (`fi:gasto_comun` crear): registra la entrega del aviso, no lee la fila del residente.",
+  },
+  {
+    ruta: "avisos-cobro/[id]/pdf",
+    clase: "caso",
+    cubre: "fi/avisos-cobro — el residente lee y descarga SU aviso (F27 · T7)",
   },
 
   // ── certificados de la comunidad (CT) ─────────────────────────────────────

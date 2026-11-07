@@ -436,7 +436,7 @@ describe("T9 — el barrido de consumidores", () => {
       "app/api/in/infracciones/_acciones.ts"
     )
     expect(CONSUMIDORES.get("fi:aviso:propio")).toContain(
-      "app/api/avisos-cobro/route.ts"
+      "app/api/avisos-cobro/_alcance.ts"
     )
   })
 
