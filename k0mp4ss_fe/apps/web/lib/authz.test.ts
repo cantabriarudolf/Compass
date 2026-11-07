@@ -431,9 +431,9 @@ describe("lib/authz — reglasContextuales() snapshot ABAC para /admin/permisos"
     expect(mp).toBeDefined()
     expect(fi).toBeDefined()
     expect(mp!.condicion).toBe("según privacidad: residenteVeMorosidad")
-    expect(mp!.donde).toBe("motor")
+    expect(mp!.donde).toBe("sin superficie")
     expect(mp!.detalle).toMatch(/ninguna ruta|NINGUNA ruta|sin ruta/i)
-    expect(fi!.donde).toBe("motor")
+    expect(fi!.donde).toBe("sin superficie")
   })
 
   it("alertasResidentesActivas — en el motor, sin superficie de alerta para el residente", () => {
@@ -442,9 +442,9 @@ describe("lib/authz — reglasContextuales() snapshot ABAC para /admin/permisos"
     expect(n).toBeDefined()
     expect(pe).toBeDefined()
     expect(n!.condicion).toBe("según privacidad: alertasResidentesActivas")
-    expect(n!.donde).toBe("motor")
+    expect(n!.donde).toBe("sin superficie")
     expect(n!.detalle).toMatch(/ninguna ruta|sin ruta/i)
-    expect(pe!.donde).toBe("motor")
+    expect(pe!.donde).toBe("sin superficie")
     expect(pe!.detalle).toMatch(/store legacy|ya no existe/i)
   })
 
@@ -455,7 +455,9 @@ describe("lib/authz — reglasContextuales() snapshot ABAC para /admin/permisos"
     expect(a).toEqual(b)
     // cada entrada debe tener donde válido y descripcion legible
     for (const r of a) {
-      expect(["motor", "check local"]).toContain(r.donde)
+      // Los tres valores posibles: dónde se aplica la regla, incluido «sin superficie»
+      // (el motor la implementa y ninguna ruta la llama).
+      expect(["motor", "check local", "sin superficie"]).toContain(r.donde)
       expect(r.descripcion.length).toBeGreaterThan(5)
       expect(r.condicion.length).toBeGreaterThan(3)
     }

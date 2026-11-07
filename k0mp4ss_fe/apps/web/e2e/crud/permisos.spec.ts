@@ -44,7 +44,10 @@ test.describe("Permisos y Roles (RP) — vista read-only en /admin/permisos", ()
     await expect(page.getByText("gd").first()).toBeVisible()
     // badges donde
     await expect(page.getByText("motor", { exact: true }).first()).toBeVisible()
-    await expect(page.getByText("check local", { exact: true }).first()).toBeVisible()
+    // `check local` ya no existe: las cuatro reglas de privacidad que lo usaban citaban un
+    // check de `lib/store.ts` retirado con el store legacy. El badge ahora se llama
+    // «sin superficie» y dice la verdad: el motor lo implementa y ninguna ruta lo llama.
+    await expect(page.getByText("sin superficie", { exact: true }).first()).toBeVisible()
     // sin mutaciones en sección ABAC
     await expect(page.locator("section", { hasText: "Permisos contextuales" }).getByRole("button")).toHaveCount(0)
 

@@ -236,7 +236,7 @@ export default function PermisosPage() {
           Permisos contextuales (ABAC)
         </h2>
         <p className="text-xs text-muted-foreground px-1">
-          Reglas ABAC derivadas de <code className="font-mono">puedeContextual()</code> — snapshot read-only — condición legible + dónde se aplica (motor / check local).
+          Reglas ABAC derivadas de <code className="font-mono">puedeContextual()</code> — snapshot read-only — condición legible + dónde se aplica (<code className="font-mono">motor</code> = lo aplica <code className="font-mono">puedeContextual</code> y una ruta lo llama; <code className="font-mono">check local</code> = lo aplica la ruta; <code className="font-mono">sin superficie</code> = el motor lo implementa y ninguna ruta lo llama, así que hoy no protege nada).
         </p>
         <SeccionABAC reglas={abac} />
       </section>
