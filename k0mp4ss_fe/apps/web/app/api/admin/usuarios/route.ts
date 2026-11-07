@@ -1,7 +1,7 @@
 import { NextResponse, NextRequest } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { auth } from "@/lib/auth"
-import { puede, ROLES, type Rol } from "@/lib/authz"
+import { normalizaRol, puede, ROLES, type Rol } from "@/lib/authz"
 import { ROLES_CON_ALCANCE_DE_COMUNIDAD } from "@/lib/api/sesion-persona"
 import { logger } from "@/lib/logger"
 
@@ -157,8 +157,15 @@ export async function PATCH(request: NextRequest) {
     // pero un rol ACOTADO POR FILA no puede quedar sin ficha: sin `personaId` los
     // `_alcance.ts` fallan cerrado y el usuario no ve nada, así que el sistema le
     // estaría dando un rol que no puede ejercer. Se rechaza acá, donde se concede.
-    const nuevoRol = String(body.rol)
-    if (!ROLES.includes(nuevoRol as Rol)) {
+    // Se normaliza igual que en la lectura: `normalizaRol` acepta los alias que el
+    // resto del sistema acepta ("Comité" → "comite", "admin" → "administrador").
+    // Sin esto, el PATCH sería la única puerta del repo que rechaza un alias válido.
+    const rolNormalizado = normalizaRol(String(body.rol))
+    if (!rolNormalizado) {
+      return NextResponse.json({ error: "Rol desconocido." }, { status: 400 })
+    }
+    const nuevoRol: Rol = rolNormalizado
+    if (!ROLES.includes(nuevoRol)) {
       return NextResponse.json({ error: "Rol desconocido." }, { status: 400 })
     }
     if (!ROLES_CON_ALCANCE_DE_COMUNIDAD.has(nuevoRol)) {

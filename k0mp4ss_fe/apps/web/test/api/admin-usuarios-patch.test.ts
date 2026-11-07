@@ -219,6 +219,21 @@ describe("/api/admin — PATCH usuarios y POST seed-authz", () => {
       expect(comite.status).toBe(200)
     })
 
+    it("D2 · un alias de rol válido se normaliza, no se rechaza", async () => {
+      // El resto del sistema acepta "Comité" como alias de "comite" (`normalizaRol`).
+      // El PATCH no puede ser la única puerta que lo rechaza: se guarda el rol normalizado.
+      await conSesion(emailAdmin)
+      const res = await PATCH(
+        { usuarioId: "admin-patch-user-residente", rol: "Comité" },
+        { comunidadId: comunidadA }
+      )
+      expect(res.status).toBe(200)
+      const membresia = await prisma.membresia.findFirst({
+        where: { usuarioId: "admin-patch-user-residente", comunidadId: comunidadA },
+      })
+      expect(membresia?.rol).toBe("comite")
+    })
+
     it("D2 · un rol que no existe en la matriz → 400 antes de escribir", async () => {
       await conSesion(emailAdmin)
       const res = await PATCH(
