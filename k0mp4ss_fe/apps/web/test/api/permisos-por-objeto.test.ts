@@ -41,6 +41,11 @@
  * entra a la ruta: límite documentado) y `cv/avisos` (el modelo no tiene dueño
  * por fila: el visor es de la comunidad y `creadoPorPersonaId` es quién lo creó,
  * no a quién pertenece).
+ * Bloque T16: un rol ACOTADO sin identidad MP (conserjería en los dos recursos
+ * de `ir`, residente en `ge`) falla CERRADO —colección vacía, detalle 404 y PUT
+ * 404 con la fila intacta— porque sin `personaId` no hay «lo propio» que
+ * comparar; la gestión sin identidad (administrador con `personaId` null) sigue
+ * viendo la comunidad entera, que es lo que fijan los controles de arriba.
  */
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest"
 import { prisma } from "@/lib/prisma"
@@ -79,6 +84,7 @@ const EMAIL = {
   resB1: "ppo-res-b1@test.cl",
   conserjeA: "ppo-conserje-a@test.cl",
   trabajadorA: "ppo-trabajador-a@test.cl",
+  resSinId: "ppo-res-sin-id@test.cl",
 }
 
 // Notificaciones de la comunidad A.
@@ -323,6 +329,11 @@ beforeAll(async () => {
     { email: EMAIL.conserjeA, comunidadId: COM_A, rol: "conserjeria", personaId: null },
     // El trabajador (rol conserjería) con su identidad MP: es el dueño de LIQ_A.
     { email: EMAIL.trabajadorA, comunidadId: COM_A, rol: "conserjeria", personaId: P_A1 },
+    // Residente sin ficha MP: tiene `ge` ver (lib/authz.ts:262) pero ninguna
+    // identidad que pueda poseer una fila. Es la única sesión acotada que llega a
+    // `ge/solicitudes` sin `personaId`, así que es la que prueba que el rol
+    // acotado sin identidad NO cae en «ve todo» (bloque T16).
+    { email: EMAIL.resSinId, comunidadId: COM_A, rol: "residente", personaId: null },
   ]) {
     const usuario = await prisma.usuario.upsert({
       where: { email: u.email },
@@ -2641,6 +2652,181 @@ describe("cv/avisos — el visor es de la comunidad: el modelo no tiene dueño p
       expect(await cuerpoJson<{ error: string }>(otraComunidad)).toEqual({
         error: "Registro no encontrado.",
       })
+    })
+  })
+})
+
+describe("rol acotado SIN identidad MP — falla cerrado (T16)", () => {
+  it("conserjería sin `personaId`: `ir/entregas-epp` no devuelve filas ni por id, y el PUT no escribe", async () => {
+    // La trampa: `alcanceEntregasEPP` devolvía `null` («sin restricción por fila»)
+    // cuando el `Usuario` no tenía `personaId`. Para administrador y comité eso es
+    // correcto —no están acotados por fila—, pero para conserjería (acotada por
+    // fila: `ir:mantenimiento` ver, lib/authz.ts:194) era un fail-open: la sesión
+    // sin ficha MP veía y escribía TODAS las entregas de la comunidad. Sin
+    // identidad no hay «lo propio» que comparar, así que la respuesta correcta es
+    // el fragmento que no matchea nada —`{ id: { in: [] } }`—, el mismo patrón de
+    // `alcanceCertificadosCT` (app/api/certificados-ct/route.ts).
+    await conSesion(EMAIL.conserjeA, async () => {
+      const lista = await invocarApi(moduloEntregasEPP(), "GET", "ir/entregas-epp?pageSize=100")
+      expect(lista.status).toBe(200)
+      const j = await cuerpoJson<Envelope<{ id: string }>>(lista)
+      // ANTES (RED): `data: [ppo-epp-a1, ppo-epp-a2]` y `total: 2`, con la entrega
+      // hecha a otra persona incluida.
+      expect(j.data).toEqual([])
+      expect(j.total).toBe(0)
+
+      const porId = await invocarApi(moduloEntregaEPP(), "GET", "ir/entregas-epp/[id]", {
+        params: { id: EPP_A1 },
+      })
+      // ANTES (RED): 200 con la fila completa. El 404 es ALCANCE, no ausencia: la
+      // fila existe y el caso siguiente lo comprueba.
+      expect(porId.status).toBe(404)
+      const cuerpo = await cuerpoJson<Record<string, unknown>>(porId)
+      expect(cuerpo).toEqual({ error: "Registro no encontrado." })
+      expect(cuerpo).not.toHaveProperty("personaId")
+      expect(cuerpo).not.toHaveProperty("talla")
+
+      const antes = await prisma.entregaEPP.findUnique({ where: { id: EPP_A1 } })
+      expect(antes).not.toBeNull()
+      const put = await invocarApi(moduloEntregaEPP(), "PUT", "ir/entregas-epp/[id]", {
+        params: { id: EPP_A1 },
+        body: { talla: "XL" },
+      })
+      // ANTES (RED): 200 y la talla cambiada — conserjería tiene `editar` y el
+      // `findFirst` del put-merge no llevaba fragmento, así que la fila se cargaba
+      // con el único filtro de la comunidad.
+      expect(put.status).toBe(404)
+      expect(await cuerpoJson<{ error: string }>(put)).toEqual({
+        error: "Registro no encontrado.",
+      })
+      expect(await prisma.entregaEPP.findUnique({ where: { id: EPP_A1 } })).toEqual(antes)
+    })
+  })
+
+  it("conserjería sin `personaId`: `ir/solicitudes-insumo` no devuelve filas ni por id, y el PUT no escribe", async () => {
+    // Misma trampa y misma regla en `alcanceSolicitudesInsumoIR`: el dueño de la
+    // fila es `solicitantePersonaId` y sin persona no hay dueño con quien comparar.
+    await conSesion(EMAIL.conserjeA, async () => {
+      const lista = await invocarApi(
+        moduloSolicitudesInsumo(),
+        "GET",
+        "ir/solicitudes-insumo?pageSize=100"
+      )
+      expect(lista.status).toBe(200)
+      const j = await cuerpoJson<Envelope<{ id: string }>>(lista)
+      // ANTES (RED): `data: [ppo-insu-a1, ppo-insu-a2]` y `total: 2`.
+      expect(j.data).toEqual([])
+      expect(j.total).toBe(0)
+
+      const porId = await invocarApi(moduloSolicitudInsumo(), "GET", "ir/solicitudes-insumo/[id]", {
+        params: { id: INSU_A1 },
+      })
+      expect(porId.status).toBe(404)
+      expect(await cuerpoJson<Record<string, unknown>>(porId)).toEqual({
+        error: "Registro no encontrado.",
+      })
+
+      const antes = await prisma.solicitudInsumoIR.findUnique({ where: { id: INSU_A1 } })
+      expect(antes).not.toBeNull()
+      const put = await invocarApi(moduloSolicitudInsumo(), "PUT", "ir/solicitudes-insumo/[id]", {
+        params: { id: INSU_A1 },
+        body: { areaDestino: "Intento sin identidad" },
+      })
+      expect(put.status).toBe(404)
+      expect(await cuerpoJson<{ error: string }>(put)).toEqual({
+        error: "Registro no encontrado.",
+      })
+      expect(await prisma.solicitudInsumoIR.findUnique({ where: { id: INSU_A1 } })).toEqual(antes)
+    })
+  })
+
+  it("residente sin `personaId`: `ge/solicitudes` no devuelve filas ni por id", async () => {
+    // `ge` ver lo tienen administrador, comité y residente (lib/authz.ts:262); el
+    // único rol ACOTADO por fila es el residente, así que la sesión sin identidad
+    // que llega a esta ruta es un residente sin ficha MP. `alcanceSolicitudesGE`
+    // devolvía `null` en ese caso y la colección traía las solicitudes de TODA la
+    // comunidad. La ESCRITURA de este rol ya fallaba cerrado: no tiene `ge` editar
+    // (el PUT responde 403 por CLAVE) y el POST pasa por
+    // `rechazoDeSolicitudAjena`, que sin persona/vínculos rechaza cualquier
+    // payload con unidad o persona; por eso acá se fija la LECTURA.
+    await conSesion(EMAIL.resSinId, async () => {
+      const lista = await invocarApi(moduloSolicitudesGE(), "GET", "ge/solicitudes?pageSize=100")
+      expect(lista.status).toBe(200)
+      const j = await cuerpoJson<Envelope<{ id: string }>>(lista)
+      // ANTES (RED): `data: [ppo-sol-a1, ppo-sol-a2]` y `total: 2`.
+      expect(j.data).toEqual([])
+      expect(j.total).toBe(0)
+
+      const porId = await invocarApi(moduloSolicitudGE(), "GET", "ge/solicitudes/[id]", {
+        params: { id: SOL_A1 },
+      })
+      expect(porId.status).toBe(404)
+      const cuerpo = await cuerpoJson<Record<string, unknown>>(porId)
+      expect(cuerpo).toEqual({ error: "Registro no encontrado." })
+      expect(cuerpo).not.toHaveProperty("unidadId")
+      expect(cuerpo).not.toHaveProperty("titulo")
+      // La fila existe: el 404 es ALCANCE, no ausencia.
+      expect(await prisma.solicitudGE.findUnique({ where: { id: SOL_A1 } })).not.toBeNull()
+
+      // PRESERVE de la guardia de escritura: `rechazoDeSolicitudAjena` ya fallaba
+      // cerrado sin identidad (sin persona/vínculos, cualquier unidad o persona del
+      // payload es ajena) y el cambio de definición compartida no puede aflojarla.
+      const intrusa = "ppo-sol-sin-id"
+      try {
+        const alta = await invocarApi(moduloSolicitudesGE(), "POST", "ge/solicitudes", {
+          body: {
+            id: intrusa,
+            folio: "GE-9100",
+            tipo: "buzon",
+            titulo: "Alta de una sesión sin identidad",
+            descripcion: "Intento de alta con la unidad y la persona de un tercero.",
+            solicitantePersonaId: P_A1,
+            unidadId: U_A1,
+            estado: "nuevo",
+            fechaCreacion: "2026-11-05",
+            comentarios: [],
+            historialEstados: [],
+          },
+        })
+        expect(alta.status).toBe(404)
+        expect(await cuerpoJson<{ error: string }>(alta)).toEqual({
+          error: "Registro no encontrado.",
+        })
+        expect(await prisma.solicitudGE.findUnique({ where: { id: intrusa } })).toBeNull()
+      } finally {
+        await prisma.solicitudGE.deleteMany({ where: { id: intrusa } })
+      }
+    })
+  })
+
+  it("control: el administrador de A, también sin `personaId`, sigue viendo la comunidad entera", async () => {
+    // El complemento obligatorio del bloque: la corrección es «rol acotado sin
+    // identidad → nada», NO «sin `personaId` → nada». El administrador del arnés
+    // se siembra con `personaId: null` a propósito, así que si el arreglo se
+    // hubiera hecho por «personaId ausente» en vez de por ROL, este caso caería
+    // con las tres colecciones vacías.
+    await conSesion(EMAIL.adminA, async () => {
+      const epp = await cuerpoJson<Envelope<{ id: string }>>(
+        await invocarApi(moduloEntregasEPP(), "GET", "ir/entregas-epp?pageSize=100")
+      )
+      expect(new Set(epp.data.map((e) => e.id))).toEqual(new Set([EPP_A1, EPP_A2]))
+
+      const insumo = await cuerpoJson<Envelope<{ id: string }>>(
+        await invocarApi(moduloSolicitudesInsumo(), "GET", "ir/solicitudes-insumo?pageSize=100")
+      )
+      expect(new Set(insumo.data.map((s) => s.id))).toEqual(new Set([INSU_A1, INSU_A2]))
+
+      const ge = await cuerpoJson<Envelope<{ id: string }>>(
+        await invocarApi(moduloSolicitudesGE(), "GET", "ge/solicitudes?pageSize=100")
+      )
+      expect(new Set(ge.data.map((s) => s.id))).toEqual(new Set([SOL_A1, SOL_A2]))
+
+      // El detalle de gestión tampoco se acota: la fila se sirve completa.
+      const detalle = await invocarApi(moduloEntregaEPP(), "GET", "ir/entregas-epp/[id]", {
+        params: { id: EPP_A2 },
+      })
+      expect(detalle.status).toBe(200)
+      expect((await cuerpoJson<{ personaId: string }>(detalle)).personaId).toBe(P_A2)
     })
   })
 })

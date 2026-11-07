@@ -90,21 +90,29 @@ describe("/api/ir/entregas-epp/[id] — detalle/parcial/baja scoped", () => {
         create: { id, nombre: `Comunidad ${id}`, slug },
       })
     }
-    const usuarios: Array<[string, string, string]> = [
-      [emailAdmin, "administrador", comunidad],
-      [emailConserje, "conserjeria", comunidad],
+    // El rol sale de la membresía; la identidad MP (`personaId`) decide qué fila es
+    // «propia». Las filas del arnés son `irepp-1` (persona `irepp-persona-irepp-1`) e
+    // `irepp-b` (otra comunidad), así que conserjería, mantención y residente llevan la
+    // persona de `irepp-1`: es la entrega que estos casos ya tratan como suya. Sin esa
+    // identidad el alcance por filas falla CERRADO (T16) y estos roles no verían ninguna
+    // fila: el arnés dejó de depender del fail-open de «sesión sin ficha MP». El
+    // administrador y el comité quedan SIN `personaId` a propósito —no están acotados por
+    // fila—, así que este archivo también fija que la gestión no se decide por identidad.
+    const usuarios: Array<[string, string, string, string | null]> = [
+      [emailAdmin, "administrador", comunidad, null],
+      [emailConserje, "conserjeria", comunidad, "irepp-persona-irepp-1"],
       // El encabezado afirma que mantención edita: sin este rol sembrado la
       // afirmación no la ejercitaba ningún test.
-      [emailMantencion, "mantencion", comunidad],
-      [emailComite, "comite", comunidad],
-      [emailResidente, "residente", comunidad],
-      [emailAdminOtra, "administrador", otraComunidad],
+      [emailMantencion, "mantencion", comunidad, "irepp-persona-irepp-1"],
+      [emailComite, "comite", comunidad, null],
+      [emailResidente, "residente", comunidad, "irepp-persona-irepp-1"],
+      [emailAdminOtra, "administrador", otraComunidad, null],
     ]
-    for (const [email, rol, comunidadId] of usuarios) {
+    for (const [email, rol, comunidadId, personaId] of usuarios) {
       await prisma.usuario.upsert({
         where: { email },
-        update: {},
-        create: { id: idDe(email), email, activo: true },
+        update: { personaId },
+        create: { id: idDe(email), email, personaId, activo: true },
       })
       await prisma.membresia.deleteMany({ where: { usuarioId: idDe(email) } })
       await prisma.membresia.create({ data: { usuarioId: idDe(email), comunidadId, rol } })

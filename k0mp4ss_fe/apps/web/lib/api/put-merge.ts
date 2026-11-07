@@ -44,13 +44,11 @@ export interface PutMergeConfig {
    * devuelve el fragmento `where` de «lo propio», o `null` cuando el rol ve la
    * comunidad completa.
    *
-   * `null` cubre además el caso raro de una sesión cuyo usuario NO tiene
-   * `personaId` en el Maestro de Personas (`personaIdDelUsuarioDb`): sin
-   * identidad el alcance no tiene con qué comparar, así que conserva el acceso
-   * que el rol ya tenía. El hueco no es de permisos ni de filas, es del alta del
-   * usuario, y cerrarlo exige que todo `Usuario` tenga persona; el `_alcance.ts`
-   * del recurso es el que lo documenta y `test/api/ir-entregas-epp-item.test.ts`
-   * fija hoy ese camino (roles sembrados sin `personaId`).
+   * `null` es la ausencia de restricción y la decide el ROL (gestión: administrador
+   * y comité ven la comunidad completa), nunca la ausencia de identidad. Un rol
+   * acotado por filas cuyo usuario no tiene `personaId` **no** recibe `null`: recibe
+   * un fragmento que no matchea nada y falla cerrado (ver
+   * `alcancePorFilasDeSesion` en `lib/api/sesion-persona.ts`).
    *
    * Sin esta opción el comportamiento es exactamente el de siempre:
    * `findUnique({ where: { id } })` + comparación de `comunidadId`, UNA consulta.
