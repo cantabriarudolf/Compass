@@ -1,0 +1,191 @@
+name: Esquema de producción (manual)
+
+# Carril para aplicar el esquema a la base REAL (Neon) **desde GitHub**, sin que
+# nadie tenga que pegar una cadena de conexión en una terminal. El secreto
+# `DATABASE_URL` ya vive en este repositorio y lo lee el runner: la credencial no
+# pasa por la máquina de nadie ni por el contexto de un agente.
+#
+# Por qué existe: el job `esquema` del CI alinea la base en cada push, pero **se
+# niega** —con razón— a aplicar cambios destructivos, porque `--accept-data-loss`
+# es una decisión con datos en juego. Hasta hoy esa decisión terminaba en «corré
+# esto a mano desde tu terminal», que es justo el paso que no deja registro. Este
+# workflow convierte ese paso en un run de Actions: queda quién lo disparó, sobre
+# qué commit, con qué diff y con qué intención escrita.
+#
+# Los tres modos:
+#   · diagnostico        — muestra el diff y su veredicto. No toca nada. Siempre seguro.
+#   · aplicar            — aplica SÓLO si el diff es aditivo. Si trae un DROP, frena.
+#   · aplicar-destructivo — aplica aceptando pérdida de datos, pero exige:
+#                           1) que el input `commit` sea exactamente el SHA que corre,
+#                           2) un archivo de intención commiteado en ESE commit
+#                              (`prisma/aplicar-prod/<AAAA-MM-DD>-<motivo>.md`) que
+#                              nombre ese SHA y diga qué se borra y por qué.
+#
+# La intención no es burocracia: es la diferencia entre «lo decidí» y «lo tipeé».
+
+on:
+  workflow_dispatch:
+    inputs:
+      modo:
+        description: "diagnostico | aplicar | aplicar-destructivo"
+        required: true
+        type: choice
+        options:
+          - diagnostico
+          - aplicar
+          - aplicar-destructivo
+      commit:
+        description: "SHA completo del commit de main sobre el que se aplica (tiene que coincidir con el que corre)"
+        required: true
+        type: string
+      intencion:
+        description: "Sólo aplicar-destructivo: ruta del archivo de intención RELATIVA A LA RAÍZ del repo (k0mp4ss_fe/apps/web/prisma/aplicar-prod/<fecha>-<motivo>.md)"
+        required: false
+        type: string
+
+# Una operación de base no se cancela a mitad de camino: si llega otro run, espera.
+concurrency:
+  group: db-prod
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  db-prod:
+    name: Esquema de producción (${{ inputs.modo }})
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: k0mp4ss_fe/apps/web
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: k0mp4ss_fe/package-lock.json
+      - run: npm ci
+        working-directory: k0mp4ss_fe
+
+      # El SHA declarado es la única entrada que el operador escribe a mano, y es lo
+      # que ata el run a un árbol concreto: si no coincide, no se sigue.
+      - name: Verificar que el commit declarado es el que corre
+        run: |
+          if [ "${{ inputs.commit }}" != "${{ github.sha }}" ]; then
+            echo "::error title=Commit distinto::El input commit ('${{ inputs.commit }}') no es el commit que corre ('${{ github.sha }}'). Abortado sin tocar la base."
+            exit 1
+          fi
+          echo "aplicando sobre ${{ github.sha }}"
+
+      - name: ¿Hay DATABASE_URL?
+        id: db_secret
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          if [ -n "$DATABASE_URL" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error title=Falta DATABASE_URL::No está el secreto de Neon: este carril no puede diagnosticar ni aplicar."
+            exit 1
+          fi
+
+      # Mismo idioma que el job `esquema` del CI: `migrate diff` de la base real al
+      # esquema deseado, y un veredicto explícito sobre si el SQL destruye datos.
+      - name: Diagnosticar la deriva
+        id: deriva
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          set -o pipefail
+          npx prisma migrate diff \
+            --from-url "$DATABASE_URL" \
+            --to-schema-datamodel prisma/schema.prisma \
+            --script > /tmp/deriva.sql
+          echo "--- deriva ---"; cat /tmp/deriva.sql; echo "--- fin ---"
+          if [ ! -s /tmp/deriva.sql ]; then
+            echo "deriva=vacia" >> "$GITHUB_OUTPUT"
+            echo "destructivo=no" >> "$GITHUB_OUTPUT"
+            echo "La base real ya coincide con el esquema: no hay nada que aplicar."
+            exit 0
+          fi
+          echo "deriva=pendiente" >> "$GITHUB_OUTPUT"
+          if grep -qiE 'DROP[[:space:]]+TABLE|DROP[[:space:]]+COLUMN|ALTER[[:space:]]+COLUMN[^;]*TYPE|TRUNCATE|DELETE[[:space:]]+FROM' /tmp/deriva.sql; then
+            echo "destructivo=si" >> "$GITHUB_OUTPUT"
+            echo "::warning title=Deriva destructiva::El SQL trae sentencias que destruyen o transforman datos."
+          else
+            echo "destructivo=no" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Publicar el diff y el veredicto
+        run: |
+          {
+            echo "## Esquema de producción — modo \`${{ inputs.modo }}\`"
+            echo ""
+            echo "- Commit: \`${{ github.sha }}\`"
+            echo "- Deriva: ${{ steps.deriva.outputs.deriva }}"
+            echo "- Destructiva: **${{ steps.deriva.outputs.destructivo }}**"
+            echo ""
+            echo '```sql'
+            cat /tmp/deriva.sql
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Nada que aplicar
+        if: steps.deriva.outputs.deriva == 'vacia'
+        run: echo "La base real ya está alineada; ningún modo toca nada."
+
+      - name: Aplicar (sólo si el diff es aditivo)
+        if: inputs.modo == 'aplicar' && steps.deriva.outputs.deriva == 'pendiente'
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          if [ "${{ steps.deriva.outputs.destructivo }}" != "no" ]; then
+            echo "::error title=Deriva destructiva::Este modo sólo aplica cambios aditivos. Si el DROP es lo que querés, usá \`aplicar-destructivo\` con su archivo de intención."
+            exit 1
+          fi
+          npx prisma db push --skip-generate
+
+      - name: Aplicar destructivo (exige intención escrita en este commit)
+        if: inputs.modo == 'aplicar-destructivo' && steps.deriva.outputs.deriva == 'pendiente'
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          ARCH="${{ inputs.intencion }}"
+          if [ -z "$ARCH" ]; then
+            echo "::error title=Falta la intención::\`aplicar-destructivo\` exige el input \`intencion\` con la ruta del archivo commiteado."
+            exit 1
+          fi
+          # El input se interpreta SIEMPRE relativo a la raíz del repo, no al cwd del job.
+          RUTA="../../$ARCH"
+          if [ ! -f "$RUTA" ]; then
+            echo "::error title=Intención inexistente::No existe '$ARCH' en este commit. Creá \`k0mp4ss_fe/apps/web/prisma/aplicar-prod/<AAAA-MM-DD>-<motivo>.md\`, commiteálo en el mismo commit que se aplica y repetí."
+            exit 1
+          fi
+          if ! grep -q "${{ github.sha }}" "$RUTA"; then
+            echo "::error title=La intención no nombra este commit::El archivo '$RUTA' tiene que nombrar el SHA \`${{ github.sha }}\` y decir qué se borra y por qué. Sin eso, el borrado no se aplica."
+            exit 1
+          fi
+          echo "### Intención declarada" >> "$GITHUB_STEP_SUMMARY"
+          cat "$RUTA" >> "$GITHUB_STEP_SUMMARY"
+          npx prisma db push --skip-generate --accept-data-loss
+
+      - name: Verificar que la base quedó alineada
+        if: inputs.modo != 'diagnostico' && steps.deriva.outputs.deriva == 'pendiente'
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          npx prisma migrate diff \
+            --from-url "$DATABASE_URL" \
+            --to-schema-datamodel prisma/schema.prisma \
+            --script > /tmp/despues.sql
+          if [ -s /tmp/despues.sql ]; then
+            echo "::error title=La base no quedó alineada::Después de aplicar, el diff sigue teniendo sentencias:"
+            cat /tmp/despues.sql
+            exit 1
+          fi
+          echo "La base real quedó alineada con el esquema."
