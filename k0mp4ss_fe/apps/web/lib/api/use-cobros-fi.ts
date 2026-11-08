@@ -37,6 +37,65 @@ export function useCobrosFI(periodo?: string, unidadId?: string): CrudCollection
   return useCrudCollection<CobroFI>("/api/cobros-fi", params.toString())
 }
 
+/**
+ * Una fila de `GET /api/cobros-fi/mi-estado-cuenta`: la deuda propia del
+ * residente por cargo. El alcance lo resolvió el servidor con los vínculos
+ * vigentes de la sesión; el cliente no manda ni acepta un id de unidad.
+ */
+export interface CobroEstadoCuenta {
+  id: string
+  unidadId: string
+  unidadNumero: string | null
+  unidadEtiqueta: string | null
+  periodo: string
+  concepto: string
+  descripcion: string
+  /** Monto del cargo, sin moras. */
+  montoCargo: number
+  /** Total abonado del cargo. */
+  pagado: number
+  /** Total de moras devengadas del cargo. */
+  moras: number
+  /** `montoCargo + moras − pagado`, nunca negativo. */
+  saldoPendiente: number
+  /** `pendiente` | `parcial` | `pagado` | `vencido` (lo calcula el servidor). */
+  estado: string
+  fechaVencimiento: string | null
+  /** El aviso emitido del período, si existe. */
+  avisoId: string | null
+}
+
+export interface EstadoCuentaFIRespuesta {
+  data: CobroEstadoCuenta[]
+  /** Suma de `saldoPendiente` de todas las filas, calculada por el servidor. */
+  saldoTotal: number
+}
+
+export interface UseMiEstadoCuentaFI {
+  cobros: CobroEstadoCuenta[]
+  saldoTotal: number
+  isLoading: boolean
+  error: Error | null
+}
+
+/**
+ * GET `/api/cobros-fi/mi-estado-cuenta` — la deuda de las unidades donde el
+ * usuario tiene vínculo vigente. Sin vínculo el servidor responde lista vacía
+ * (200), no 403: no hay deuda que mostrar y no se confirma la ajena.
+ */
+export function useMiEstadoCuentaFI(): UseMiEstadoCuentaFI {
+  const { data, error, isLoading } = useSWR<EstadoCuentaFIRespuesta, Error>(
+    "/api/cobros-fi/mi-estado-cuenta",
+    fetcher
+  )
+  return {
+    cobros: data?.data ?? [],
+    saldoTotal: data?.saldoTotal ?? 0,
+    isLoading,
+    error: error ?? null,
+  }
+}
+
 /** Interruptores de canal (global de la comunidad o de un residente). */
 export interface CanalesCobranzaFI {
   visor: boolean

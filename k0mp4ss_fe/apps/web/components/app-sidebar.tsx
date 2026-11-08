@@ -134,6 +134,18 @@ const data = {
           roles: ["administrador", "residente", "comite"],
         },
         {
+          // La deuda PROPIA del residente, siempre y solo la suya. Mismos roles
+          // que la compuerta de la ruta (`fi:aviso:propio` ver): el residente y
+          // el comodín de la administración. La bandera `residenteVeMorosidad`
+          // NO interviene (decisión del owner 2026-11-08): lo que garantiza el
+          // alcance es el filtro por fila de la API, no un interruptor. El
+          // comité no entra porque la clave está vacía para su rol, y el menú
+          // no puede ofrecer una pantalla que el servidor va a rechazar.
+          title: "Mi Estado de Cuenta",
+          url: "/comunidad/mi-estado-cuenta",
+          roles: ["administrador", "residente"],
+        },
+        {
           // T10 de la serie «Permisos por objeto»: la liquidación de sueldo de su
           // persona. Mismos roles que la lectura de la ruta: conserjería por
           // `pl:propia` ver (el trabajador) y la administración por `pl` ver (y su
