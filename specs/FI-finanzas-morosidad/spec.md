@@ -382,3 +382,73 @@ asc movía fondos/egresos/ingresos a `comunidad-b` en cada sync del layout
 - **THEN** fondo CC + 182 egresos + 44 ingresos quedan en A y el tab
   Fondos muestra "Cuenta Corriente".
 
+### Requirement: Estado de cuenta propio del residente
+El residente MUST ver su propia deuda **siempre y sólo la suya**, mediante
+`GET /api/cobros-fi/mi-estado-cuenta` (compuerta `fi:aviso:propio` ver) y la
+pantalla `/comunidad/mi-estado-cuenta`. La ruta SHALL ser auto-acotada: resuelve
+la persona del usuario y sus unidades con vínculo **vigente** en la base
+(`personaIdDelUsuarioDb` + `unidadesVinculadasDb` con `fechaFin: null`) y arma
+el `where` con el `comunidadId` del scope más esas unidades; NUNCA SHALL leer un
+`unidadId` ni otro identificador del cliente —un query con un id ajeno se ignora
+y no ensancha la respuesta—. Por unidad y período SHALL devolver el monto del
+cargo (`montoBase`), lo pagado, las moras devengadas, el saldo pendiente y el
+estado, calculados con `saldoPendiente` y `estadoDeCobro` de
+`lib/finanzas-utils.ts` —los mismos helpers que usa el resto de FI, sin una
+segunda definición de la deuda—, más el `avisoId` del período cuando el papel
+está emitido. El saldo total SHALL calcularlo el servidor. La ruta NO SHALL
+exponer ids de personas ni filas fuera del alcance: la unidad ajena, la de
+vínculo cerrado y la de otra comunidad no aparecen. Sin sesión responde 401 y un
+rol sin la clave 403; en cambio, sin ficha en el Maestro de Personas o sin
+vínculo vigente la respuesta SHALL ser **200 con lista vacía**, no 403, porque un
+403 confirmaría que existe la deuda de una unidad que no es la propia. La
+bandera `residenteVeMorosidad` NO SHALL gobernar esta lectura —el residente ve su
+deuda siempre, y lo que impide ver la del vecino es el filtro por fila, no un
+interruptor que alguien pueda apagar—; la columna sigue `@deprecated`. La
+pantalla SHALL ser de **consulta**: muestra el saldo total y una fila por unidad y
+período con su estado, enlaza el PDF del aviso cuando existe, y declara «al día»
+cuando el saldo es cero conservando el historial; no emite ni reemplaza el
+estado de cuenta **certificado** ni el «al día», que son acto del administrador
+(CT). El menú SHALL ofrecer la entrada a residente y administrador, nunca a
+comité, conserjería ni mantención.
+
+#### Scenario: La deuda propia se arma con lo que el servidor resuelve
+- **WHEN** un residente con vínculo vigente en dos unidades abre
+  `/comunidad/mi-estado-cuenta`
+- **THEN** ve una fila por unidad y período con cargo, pagos, moras, saldo y
+  estado, y el saldo total que calculó el servidor
+
+#### Scenario: La unidad ajena no aparece aunque se pida
+- **WHEN** un residente consulta
+  `GET /api/cobros-fi/mi-estado-cuenta?unidadId=<unidad de otro residente>`
+- **THEN** esa fila no aparece y la respuesta sigue trayendo sólo las unidades
+  de sus vínculos vigentes
+
+#### Scenario: El vínculo cerrado y la otra comunidad quedan fuera
+- **WHEN** la persona tuvo un vínculo con `fechaFin` y existe un cobro de esa
+  unidad, o un cobro de otra comunidad apuntando a una unidad propia
+- **THEN** ninguna de las dos filas aparece en su estado de cuenta
+
+#### Scenario: Sin vínculo vigente responde 200 con lista vacía
+- **WHEN** una sesión sin ficha en el Maestro de Personas, o sin vínculo vigente
+  en la comunidad, consulta el endpoint
+- **THEN** responde 200 con `data: []` y `saldoTotal: 0`, no 403
+
+#### Scenario: El saldo y el estado salen de los helpers de FI
+- **WHEN** un cobro tiene pagos parciales y una mora devengada
+- **THEN** el saldo es el cargo más las moras menos lo pagado (nunca negativo) y
+  el estado es el que `estadoDeCobro` calcula para el resto de la app, sin una
+  regla propia en la pantalla
+
+#### Scenario: Consultar no es certificar
+- **WHEN** el residente lee su saldo en esta pantalla
+- **THEN** obtiene su deuda con el aviso del período cuando existe, y el
+  certificado de estado de cuenta y el «Unidad Al Día» siguen siendo del
+  administrador (CT): esta pantalla no los emite
+
+#### Scenario: La bandera retirada no abre ni cierra la pantalla
+- **WHEN** el residente abre la pantalla con `residenteVeMorosidad` en `false` o
+  en `true`
+- **THEN** ve lo mismo en los dos casos, porque lo que decide qué filas ve es el
+  filtro por fila de la ruta; el comité queda fuera por la matriz, no por la
+  bandera
+

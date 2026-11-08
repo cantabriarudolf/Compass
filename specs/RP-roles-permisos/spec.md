@@ -46,6 +46,11 @@ El sistema DEBE exponer esta matriz como snapshot legible para la vista administ
 - **WHEN** any user opens `/admin/permisos`
 - **THEN** the view MUST NOT offer actions to assign roles, edit memberships or mutate the matrix.
 
+#### Scenario: La clave del aviso propio también gobierna el estado de cuenta
+- **WHEN** se consulta `GET /api/cobros-fi/mi-estado-cuenta` o se abre `/comunidad/mi-estado-cuenta`
+- **THEN** la compuerta es `fi:aviso:propio` ver, la misma clave que abre la lectura del aviso de cobro propio: el residente entra y el administrador por su comodín, mientras comité, conserjería y mantención reciben 403 y no ven la entrada en el menú
+- **AND** qué filas ve cada uno no lo decide la matriz sino el `where` de la ruta (persona y vínculos vigentes resueltos en la base), así que la clave abre la pantalla y el filtro decide el alcance
+
 ### Requirement: Permisos Contextuales (ABAC)
 The system SHALL support Attribute-Based Access Control for resource-specific or context-specific actions via `puedeContextual(rol, accion, recurso, contexto)` where `contexto` includes `personaId` (identidad propia), `unidadId` (unidad reclamada), `unidadIdsVinculadas` (unidades con vínculo vigente) and `privacidad { residenteVeActas }`. The system SHALL expose it as optional contextual filtering where applicable. The system MUST preserve least privilege and parity 1:1 with current decisions: `puedeContextual = puede() base + refinamiento ABAC` only for granular resources (`:propios`, `:propia`, `:residencia`, `:al_dia`, privacidad); resources without contextual dimension MUST delegate directly to `puede()`. Migration of existing inline checks SHALL NOT change observable decisions. El contexto SHALL declarar sólo las banderas de privacidad que tienen consumidor: `residenteVeActas` se obedece en `lib/api/gd-guard.ts` y en las rutas de actas (`actas-gd`, `cv/actas`). `residenteVeMorosidad` y `alertasResidentesActivas` se retiraron del contexto el 2026-11-07: sus cuatro reglas (`mp:morosidad`, `fi:morosidad`, `notify:residente`, `pe:notify_residente`) salieron de `REGLAS_ABAC` y de `puedeContextual` porque ninguna ruta las obedecía, y la identidad-tipo `residente` de esas ramas no protegía nada.
 
@@ -77,6 +82,7 @@ The system SHALL support Attribute-Based Access Control for resource-specific or
 #### Scenario: Privacidad FI — residente solo ve morosidad si autorizado
 - **WHEN** un residente llama `puedeContextual("residente","ver","mp:morosidad", {})` o con cualquier `privacidad` del contexto
 - **THEN** el sistema SHALL denegar en ambos casos: la bandera `residenteVeMorosidad` se retiró el 2026-11-07 (ninguna ruta la obedecía) y el residente no tiene `mp:morosidad` en la matriz, así que no hay contexto que abra lo que la base niega.
+- **AND** ver la deuda **propia** no pasa por acá: desde el 2026-11-08 el residente la ve siempre por `fi:aviso:propio` ver (spec `FI-finanzas-morosidad`, «Estado de cuenta propio del residente»), y lo que impide leer la del vecino es el filtro por fila de la ruta, no una bandera.
 
 #### Scenario: Delegación sin contexto para recursos no granulares
 - **WHEN** se llama `puedeContextual("comite","ver","fi:balance", {})` o cualquier recurso sin sufijo ABAC
