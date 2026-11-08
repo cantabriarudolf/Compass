@@ -33,9 +33,19 @@ import CertificadosEmision from "./_componentes/certificados-emision"
  * hace en el cliente: el componente recibe las opciones ya filtradas y la API
  * vuelve a validar cada emisión, así que la pantalla no autoriza nada.
  *
- * El reparto tipo→clave vive hoy en dos lugares (este archivo y la ruta) porque
- * módulo compartido (`lib/certificados-ct.ts`), el mismo que usa la ruta: no hay una
- * segunda lista que pueda desincronizarse.
+ * El reparto tipo→clave NO vive acá: se importa de `lib/certificados-ct.ts`, el
+ * mismo módulo que usa `POST /api/certificados-ct`, así que no hay una segunda
+ * lista que pueda desincronizarse.
+ *
+ * Qué pantalla recibe cada rol (F34): la administración, el formulario completo;
+ * el comité, el historial sin emisión; y el residente —que sólo recibe
+ * `residencia`— una pantalla ANGOSTA que emite y descarga su propio certificado.
+ * Se angosta porque el residente no puede leer `GET /api/vinculos` (`mp`),
+ * `GET /api/pe/unidades` (`pe:bitacora`) ni `GET /api/configuracion` (`cf`), y
+ * abrirle esas rutas para poblar el formulario le entregaría el padrón del
+ * edificio y los parámetros operativos de la comunidad. Su fuente es
+ * `GET /api/certificados-ct/mis-vinculos`, auto-acotada a sus vínculos vigentes, y
+ * el papel lo sirve `GET /api/certificados-ct/[id]/pdf`.
  */
 
 export default async function CertificadosPage() {

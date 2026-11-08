@@ -88,7 +88,13 @@ const DECLARACIONES: readonly Declaracion[] = [
 
   // ── certificados de la comunidad (CT) ─────────────────────────────────────
   {
-        ruta: "certificados-ct/[id]",
+    ruta: "certificados-ct/[id]/pdf",
+    clase: "exento",
+    motivo:
+      "el PDF servido por el servidor (F34) tiene su caso por relación en `test/api/certificados-ct-emision-residente.test.ts` (describe «F34 — emisión del propio certificado por tipología»): propia 200 con el archivo, ajena 404 y cross-comunidad 404. No se duplica acá para no tener dos listones del mismo contrato.",
+  },
+  {
+    ruta: "certificados-ct/[id]",
     clase: "caso",
     cubre: "certificados-ct — el dueño es `unidadId`/`personaId` (lote 3)",
   },

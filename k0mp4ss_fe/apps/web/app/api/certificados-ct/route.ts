@@ -19,6 +19,11 @@
  * confirmaría que el certificado existe, que es justo el dato que se protege
  * (mismo criterio que notificaciones, liquidaciones e infracciones).
  *
+ * El papel (`GET /api/certificados-ct/[id]/pdf`) sale por otra ruta con el MISMO
+ * alcance, porque el residente no puede armar el PDF en el navegador: eso exigía
+ * `GET /api/configuracion` (`cf`) y abrirle `cf` le entregaría el SMTP y los
+ * parámetros operativos de la comunidad.
+ *
  * Emisión por tipología (F34, 2026-11-07): el residente emite SU certificado y
  * sólo el que la ley le deja. La Ley 21.442 no regula un «certificado de
  * residencia» —el proyecto de ley 17737-14, en trámite, existe justamente para
@@ -32,9 +37,14 @@
  * y el residente —que sólo conserva `crear` en `ct:residencia`— recibe 403 en el
  * resto de las tipologías. La administración y el comité no cambian.
  *
- * Orden de compuertas (L14): `rechazoDeEmisionAjena` (404) → tipología (403/400) →
- * gate de saldo (409). El gate de saldo va último porque su mensaje imprime el
- * monto pendiente de la unidad.
+ * Orden de compuertas (L14): el ANCLAJE del residente (`anclarResidencia`) →
+ * `rechazoDeEmisionAjena` (404) → tipología (403/400) → gate de saldo (409). El
+ * anclaje va primero porque es lo único que PRODUCE datos: si el residente tiene
+ * un solo vínculo vigente, la unidad y la persona salen de la BD y el resto de las
+ * compuertas ya evalúa el cuerpo completo. No revela nada —sólo lee los vínculos
+ * de la sesión— y no adelanta el 404: cuando la unidad pedida no es suya la
+ * resolución no toca el cuerpo y `rechazoDeEmisionAjena` contesta 404. El gate de
+ * saldo va último porque su mensaje imprime el monto pendiente de la unidad.
  *
  * Inmutabilidad (design.md Decisión 5): un certificado emitido es un documento
  * inmutable; `DELETE /api/certificados-ct/[id]` rechaza con 409 en la capa API y
@@ -57,7 +67,12 @@ import {
   withComunidadScope,
   type ComunidadScope,
 } from "@/lib/api/with-comunidad-scope"
-import { RECURSO_DE_EMISION_POR_TIPO, recursoDeEmision } from "@/lib/certificados-ct"
+import {
+  MENSAJE_ELEGIR_VINCULO,
+  MENSAJE_SIN_VINCULO,
+  RECURSO_DE_EMISION_POR_TIPO,
+  recursoDeEmision,
+} from "@/lib/certificados-ct"
 
 function delegado(modelo: unknown) {
   return modelo as import("@/lib/api/crud-factory").CrudDelegate
@@ -275,9 +290,8 @@ async function rechazoDeEmisionAjena(
  * existencia de nada: niega una capacidad —la ley reserva el estado de deudas al
  * administrador—, igual que el resto de las claves de la matriz.
  *
- * La residencia, además, exige anclaje: un certificado de residencia sin unidad ni
- * persona no acredita ningún vínculo, y para el residente la emisión es «sobre SU
- * vínculo vigente». La administración conserva su camino sin anclaje.
+ * El anclaje de la residencia NO vive acá: lo resuelve `anclarResidencia` antes,
+ * porque no es una negativa sino la completitud de los datos del propio actor.
  */
 async function rechazoDeTipoNoEmisible(
   datos: Record<string, unknown> | null
@@ -293,23 +307,76 @@ async function rechazoDeTipoNoEmisible(
   if (veTodaLaComunidad(scope)) return null // gestión: emite todas las tipologías
 
   if (!puede(scope.rol, "crear", recurso)) return jsonError(403, "Permiso denegado.")
-
-  if (tipo === "residencia") {
-    const unidadPedida = typeof datos.unidadId === "string" ? datos.unidadId.trim() : ""
-    const personaPedida = typeof datos.personaId === "string" ? datos.personaId.trim() : ""
-    // Sin valores interpolados: el mensaje no tiene que declararse en el guardián
-    // de T12, y es el mismo texto que valida la pantalla CT antes de emitir.
-    if (!unidadPedida || !personaPedida) {
-      return jsonError(400, "El certificado de residencia exige persona y unidad.")
-    }
-  }
   return null
+}
+
+/**
+ * Anclaje del certificado de residencia para un rol acotado (F34).
+ *
+ * Existe porque el 400 de anclaje era un callejón: el residente no puede leer
+ * `GET /api/vinculos` (exige `mp`) ni `GET /api/pe/unidades` (exige `pe:bitacora`),
+ * así que exigirle `unidadId` y `personaId` era exigirle un dato que la pantalla
+ * no podía conseguir sin abrirle el padrón del edificio. La regla es la del
+ * principio: el residente no elige lo que el servidor ya sabe.
+ *
+ *   · un vínculo vigente → la unidad y la persona se completan desde la BD (lo que
+ *     el cliente haya mandado de más se respeta; lo que falta se resuelve solo);
+ *   · varios vínculos → 400 pidiendo elegir: la residencia es un hecho de UNA
+ *     unidad y el servidor no puede inventar cuál;
+ *   · ninguno → 400: sin vínculo no hay residencia que acreditar.
+ *
+ * La administración conserva su camino sin anclaje. Cuando el cliente pide una
+ * unidad o una persona AJENA el cuerpo no se toca: la resolución no confirma ni
+ * niega la existencia de nada y `rechazoDeEmisionAjena` responde el 404 genérico,
+ * así que el orden de compuertas (L14) se mantiene.
+ */
+async function anclarResidencia(
+  cuerpo: string,
+  datos: Record<string, unknown> | null
+): Promise<
+  | { ok: true; cuerpo: string; datos: Record<string, unknown> | null }
+  | { ok: false; response: Response }
+> {
+  const sinCambios = { ok: true as const, cuerpo, datos }
+  if (!datos || datos.tipo !== "residencia") return sinCambios
+
+  const resultado = await withComunidadScope()
+  if (!resultado.ok) return sinCambios // 401/403 los resuelve la factory
+  const scope = resultado.scope
+  if (veTodaLaComunidad(scope)) return sinCambios
+
+  const unidadPedida = typeof datos.unidadId === "string" ? datos.unidadId.trim() : ""
+  const personaPedida = typeof datos.personaId === "string" ? datos.personaId.trim() : ""
+
+  const { personaId, unidades } = await vinculosDelActor(scope)
+  const anclar = (extra: Record<string, unknown>) => {
+    const completos = { ...datos, ...extra }
+    return { ok: true as const, cuerpo: JSON.stringify(completos), datos: completos }
+  }
+
+  // Persona ajena: el cuerpo queda como vino y el 404 lo da `rechazoDeEmisionAjena`.
+  if (personaPedida && personaPedida !== personaId) return sinCambios
+
+  if (unidadPedida) {
+    // Unidad ajena: ídem. Sólo se completa lo que el servidor ya sabe que es propio.
+    if (!unidades.includes(unidadPedida)) return sinCambios
+    if (personaPedida) return sinCambios
+    return anclar({ personaId })
+  }
+
+  if (unidades.length === 0) return { ok: false, response: jsonError(400, MENSAJE_SIN_VINCULO) }
+  if (unidades.length > 1) {
+    return { ok: false, response: jsonError(400, MENSAJE_ELEGIR_VINCULO) }
+  }
+  // Un solo vínculo vigente: es SU unidad y SU persona, resueltas de la BD.
+  return anclar({ unidadId: unidades[0], personaId })
 }
 
 /** Intentos de asignación de folio antes de rendirse ante colisiones reales. */
 const MAX_INTENTOS_CORRELATIVO = 3
 
-/** POST upsert idempotente por id, con gate de deuda/saldo previo y folio
+/**
+ * POST upsert idempotente por id, con gate de deuda/saldo previo y folio
  * `CT-####` correlativo por comunidad asignado en el servidor.
  *
  * Folio server-side (auditoría "funciones de palo" 2026-10-23): el cliente lo
@@ -319,14 +386,22 @@ const MAX_INTENTOS_CORRELATIVO = 3
  * trae (o los trae vacíos) y delega el resto en la factory: mismo authz, mismo
  * scoping, misma validación, mismo upsert idempotente por id.
  *
- * Antes de todo eso corre `rechazoDeEmisionAjena`: el alcance por objeto se
- * evalúa primero porque el gate de saldo imprime el monto de la unidad. Entre el
- * alcance y el saldo corre la tipología (`rechazoDeTipoNoEmisible`): el tipo que la
- * ley no deja emitir al residente se rechaza antes de mirar dinero alguno.
+ * Antes de todo eso corre `anclarResidencia` —un solo vínculo vigente se resuelve
+ * solo, varios piden elegir— y después `rechazoDeEmisionAjena`: el alcance por
+ * objeto se evalúa antes del gate de saldo porque ese mensaje imprime el monto de
+ * la unidad. Entre el alcance y el saldo corre la tipología
+ * (`rechazoDeTipoNoEmisible`): el tipo que la ley no deja emitir al residente se
+ * rechaza antes de mirar dinero alguno.
  */
 export async function POST(req: Request): Promise<Response> {
-  const cuerpo = await req.text()
-  const datos = leerObjeto(cuerpo)
+  const original = await req.text()
+  const anclaje = await anclarResidencia(original, leerObjeto(original))
+  if (!anclaje.ok) return anclaje.response
+  // Cuerpo que sigue el camino: el original, o el anclado cuando el servidor
+  // completó la unidad y la persona del residente.
+  const cuerpo = anclaje.cuerpo
+  const datos = anclaje.datos
+
   const rechazoAlcance = await rechazoDeEmisionAjena(datos)
   if (rechazoAlcance) return rechazoAlcance
 

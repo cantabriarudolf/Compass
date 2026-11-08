@@ -161,7 +161,7 @@ test.describe("residente — RA reserva + CT certificado + no FI", () => {
   //       SMTP y los parámetros operativos de la comunidad.
   //
   // Referencia: specs/PENDIENTES-FUNCIONALIDAD.md, fila **F34**.
-  test.fixme("certificado residencia TEST y no ve FI Finanzas Remuneraciones", async ({ page }) => {
+  test("certificado residencia TEST y no ve FI Finanzas Remuneraciones", async ({ page }) => {
     const errores: string[] = []
     page.on("pageerror", e=>errores.push(e.message))
     // Verificar NO ve Finanzas Remuneraciones pero sí Gastos Comunes (hereda)
@@ -177,39 +177,27 @@ test.describe("residente — RA reserva + CT certificado + no FI", () => {
     await expect(page.getByRole("heading",{name:/Certificados/}).first()).toBeVisible({timeout:20_000})
     const tabGen = page.getByRole("tab",{name:"Generar"})
     if (await tabGen.isVisible().catch(()=>false)) { await tabGen.click({force:true,noWaitAfter:true}); await page.waitForTimeout(300) }
-    // Persona solicitante * — la tipología Residencia EXIGE persona + unidad
-    // («El certificado de residencia exige persona y unidad»), y el residente sólo
-    // ve su propia ficha (ABAC mp:propios en /api/personas). Sin elegirla el clic
-    // corta antes de armar el PDF y el fallback de API tapaba la falta de archivo.
-    const labelPersona = page.getByText("Persona solicitante *").first()
-    await expect(labelPersona, "el formulario de residencia pide persona solicitante").toBeVisible({timeout:15_000})
-    await labelPersona.locator("..").getByRole("combobox").first().click({force:true,noWaitAfter:true})
-    await page.waitForTimeout(350)
-    await page.getByRole("option").first().click({force:true,noWaitAfter:true})
-    await page.waitForTimeout(400)
-    // Seleccionar unidad u-B-201 o primera disponible (el combobox ya filtra a las
-    // unidades con vínculo vigente de la persona elegida)
-    const labelUnidad = page.getByText("Unidad *").first()
-    let comboU = labelUnidad.locator("..").getByRole("combobox").first()
-    if (!(await comboU.isVisible().catch(()=>false))) comboU = page.getByRole("combobox").last()
-    if (await comboU.isVisible().catch(()=>false)) {
-      await comboU.click({force:true,noWaitAfter:true})
+    // El residente NO elige persona ni unidad: el servidor resuelve las dos desde su
+    // vínculo vigente (GET /api/certificados-ct/mis-vinculos, auto-acotado). Antes la
+    // pantalla pedía `GET /api/personas`, `GET /api/pe/unidades` y `GET /api/configuracion`,
+    // tres rutas cerradas al residente: de ahí venían las dos puertas de F34.
+    await expect(
+      page.getByText("Persona solicitante *"),
+      "el residente no elige la persona: la resuelve el servidor desde su vínculo",
+    ).toHaveCount(0)
+    // Si tiene MÁS de un vínculo vigente, el select ofrece sólo los suyos (nunca el
+    // padrón del edificio) y hay que elegir uno: el certificado acredita una vivienda.
+    const selectUnidad = page.getByRole("combobox").first()
+    if (await selectUnidad.isVisible().catch(() => false)) {
+      await selectUnidad.click({ force: true, noWaitAfter: true })
       await page.waitForTimeout(350)
-      const opt = page.getByRole("option").filter({hasText:"B-201"}).first()
-      if (await opt.isVisible().catch(()=>false)) await opt.click({force:true,noWaitAfter:true})
-      else {
-        const opts = page.getByRole("option")
-        const cnt = await opts.count()
-        let picked=false
-        for (let i=0;i<cnt;i++){const txt=(await opts.nth(i).textContent())?.trim()??""; if(txt && !txt.includes("Selecciona")){await opts.nth(i).click({force:true,noWaitAfter:true}); picked=true; break}}
-        if(!picked) await opts.first().click({force:true,noWaitAfter:true}).catch(()=>{})
-      }
+      await page.getByRole("option").first().click({ force: true, noWaitAfter: true })
       await page.waitForTimeout(400)
     }
-    // Solicitante * — es lo único que habilita el botón (disabled={!solicitanteNombre.trim()})
-    const inputSolic = page.getByPlaceholder("Nombre de quien solicita")
-    await expect(inputSolic, "el formulario pide el nombre del solicitante").toBeVisible({timeout:10_000})
-    await inputSolic.fill(`TEST-RESIDENTE-${Date.now()}`)
+    await expect(
+      page.getByText("Residente", { exact: true }).first(),
+      "la pantalla muestra el vínculo con el que va a emitir",
+    ).toBeVisible({ timeout: 15_000 })
 
     // La descarga es MANDATORIA: `descargarPdf` sólo resuelve cuando el PDF existe
     // de verdad (compila el blob ANTES de disparar la descarga), así que un clic

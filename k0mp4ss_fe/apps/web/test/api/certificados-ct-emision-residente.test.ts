@@ -26,9 +26,23 @@
  * Veredicto por relación, no por endpoint: propia → se emite (o 403 si la ley no
  * lo permite), de otra unidad de la misma comunidad → 404 sin confirmar
  * existencia, de otra comunidad → 404.
+ *
+ * F34 · cierre de la pantalla (`/comunidad/certificados` sin abrir ninguna ruta):
+ * el residente no puede leer `GET /api/vinculos` (`mp`), `GET /api/pe/unidades`
+ * (`pe:bitacora`) ni `GET /api/configuracion` (`cf`), así que la pantalla no se
+ * podía poblar para él. La solución NO fue abrir esas rutas —el padrón del
+ * edificio y los parámetros operativos de la comunidad no son suyos— sino:
+ *   · `GET /api/certificados-ct/mis-vinculos` — fuente PROPIA y auto-acotada
+ *     (sólo los vínculos vigentes de la persona de la sesión);
+ *   · `GET /api/certificados-ct/[id]/pdf` — el papel servido por el servidor,
+ *     con el MISMO `alcanceCertificadosCT` del detalle y 404 genérico para la
+ *     fila ajena;
+ *   · anclaje resuelto en el servidor: con un solo vínculo vigente el residente
+ *     no tiene que elegir lo que el servidor ya sabe.
  */
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest"
 import { prisma } from "@/lib/prisma"
+import { configuracionDefault } from "@/data/admin/configuracion"
 import { cookieDeUsuario, cuerpoJson, invocarApi } from "../helpers/api-sesion"
 
 const state = vi.hoisted(() => ({ cookie: "" }))
@@ -49,22 +63,48 @@ const COM_B = "ctres-com-b"
 const U_PROPIA = "ctres-u-a1" // unidad del residente de la sesión
 const U_VECINA = "ctres-u-a2" // otra unidad de la MISMA comunidad, con deuda
 const U_B = "ctres-u-b1" // otra comunidad
+// Un residente con DOS vínculos vigentes: el servidor no puede elegir por él.
+const U_MULTI1 = "ctres-u-a3"
+const U_MULTI2 = "ctres-u-a4"
+// Vínculo CERRADO de la persona de la sesión: no es «su vínculo vigente».
+const U_CERRADA = "ctres-u-a5"
 
 const P_PROPIA = "ctres-p-a1" // persona del usuario residente (Usuario.personaId)
 const P_VECINA = "ctres-p-a2"
+const P_MULTI = "ctres-p-multi"
+const P_SIN_FICHA = "ctres-p-sin-ficha"
 
 const EMAIL = {
   residente: "ctres-residente@test.cl",
   vecino: "ctres-vecino@test.cl",
   admin: "ctres-admin@test.cl",
   comite: "ctres-comite@test.cl",
+  multi: "ctres-multi@test.cl",
+  mantencion: "ctres-mantencion@test.cl",
+  sinFicha: "ctres-sin-ficha@test.cl",
 }
+
+/** CF de la comunidad del arnés: sin ella el PDF no se puede armar (409). */
+const CF_A = "ctres-cf-a"
+
+/**
+ * Mensaje del anclaje ambiguo. Se fija el texto EXACTO: es lo que lee el
+ * residente cuando tiene dos vínculos vigentes y le toca elegir cuál certifica.
+ */
+const MENSAJE_ELEGIR_VINCULO =
+  "Tenés más de un vínculo vigente: elegí la unidad del certificado."
+
+/** Mensaje de la emisión sin anclaje posible: no hay vínculo que acreditar. */
+const MENSAJE_SIN_VINCULO =
+  "No registrás un vínculo vigente en esta comunidad: no hay residencia que certificar."
 
 /** Saldo del vecino: el dato que no puede viajar en ningún mensaje al residente. */
 const DEUDA_VECINA = 88_000
 const COBRO_VECINA = "ctres-cobro-vecina"
 
 const moduloColeccion = () => import("@/app/api/certificados-ct/route")
+const moduloPdf = () => import("@/app/api/certificados-ct/[id]/pdf/route")
+const moduloMisVinculos = () => import("@/app/api/certificados-ct/mis-vinculos/route")
 
 async function conSesion<T>(email: string, fn: () => Promise<T>): Promise<T> {
   state.cookie = await cookieDeUsuario(email)
@@ -98,6 +138,21 @@ function emitir(body: Record<string, unknown>) {
   return invocarApi(moduloColeccion(), "POST", "certificados-ct", { body })
 }
 
+/** Descarga del papel tal como la pide el navegador del residente. */
+function descargarPdf(id: string) {
+  return invocarApi(moduloPdf(), "GET", `certificados-ct/${id}/pdf`, {
+    params: { id },
+  })
+}
+
+/**
+ * La fuente PROPIA del residente. Recibe la ruta con query para poder afirmar
+ * que un id del cliente NO amplía el alcance.
+ */
+function misVinculos(query = "") {
+  return invocarApi(moduloMisVinculos(), "GET", `certificados-ct/mis-vinculos${query}`)
+}
+
 async function existe(id: string) {
   return prisma.certificadoCT.findUnique({ where: { id } })
 }
@@ -116,11 +171,15 @@ describe("F34 — emisión del propio certificado por tipología", () => {
     await prisma.vinculoUnidad.deleteMany({ where: { comunidadId: { in: [COM_A, COM_B] } } })
     await prisma.persona.deleteMany({ where: { comunidadId: { in: [COM_A, COM_B] } } })
     await prisma.unidad.deleteMany({ where: { comunidadId: { in: [COM_A, COM_B] } } })
+    await prisma.configuracionGlobal.deleteMany({ where: { comunidadId: { in: [COM_A, COM_B] } } })
 
     for (const [id, comunidadId, numero, prorrateo] of [
       [U_PROPIA, COM_A, "101", 0.3],
       [U_VECINA, COM_A, "102", 0.2],
       [U_B, COM_B, "201", 0.4],
+      [U_MULTI1, COM_A, "103", 0.1],
+      [U_MULTI2, COM_A, "104", 0.1],
+      [U_CERRADA, COM_A, "105", 0.1],
     ] as const) {
       await prisma.unidad.create({
         data: {
@@ -128,7 +187,7 @@ describe("F34 — emisión del propio certificado por tipología", () => {
           comunidadId,
           microSectorId: `ctres-ms-${comunidadId}`,
           numero,
-          etiqueta: `Depto ${numero}`,
+          etiqueta: "Depto",
           tipoUnidadId: `ctres-tu-${comunidadId}`,
           metraje: 55,
           prorrateo,
@@ -142,6 +201,7 @@ describe("F34 — emisión del propio certificado por tipología", () => {
     for (const [id, comunidadId, unidadId, nombre] of [
       [P_PROPIA, COM_A, U_PROPIA, "Ana Propia"],
       [P_VECINA, COM_A, U_VECINA, "Beto Vecino"],
+      [P_MULTI, COM_A, U_MULTI1, "Marta Multi"],
     ] as const) {
       const [nombres, apellidos] = nombre.split(" ") as [string, string]
       await prisma.persona.create({
@@ -173,6 +233,35 @@ describe("F34 — emisión del propio certificado por tipología", () => {
       })
     }
 
+    // La persona multi-vínculo: DOS vínculos vigentes, el caso en que el servidor
+    // no puede elegir por el residente.
+    await prisma.vinculoUnidad.create({
+      data: {
+        id: "ctres-v-multi-2",
+        comunidadId: COM_A,
+        personaId: P_MULTI,
+        unidadId: U_MULTI2,
+        rol: "arrendatario",
+        fechaInicio: "2025-03-01",
+        fechaFin: null,
+        permiteVerFinanzas: false,
+      },
+    })
+    // Y un vínculo CERRADO de la persona de la sesión: no es vigente, así que no
+    // debe aparecer entre «sus vínculos» ni servir de anclaje.
+    await prisma.vinculoUnidad.create({
+      data: {
+        id: "ctres-v-propia-cerrado",
+        comunidadId: COM_A,
+        personaId: P_PROPIA,
+        unidadId: U_CERRADA,
+        rol: "propietario",
+        fechaInicio: "2020-01-01",
+        fechaFin: "2026-06-30",
+        permiteVerFinanzas: false,
+      },
+    })
+
     // La unidad propia NO tiene cobros: su saldo es 0, así que un 403 en `al_dia`
     // prueba la compuerta de tipología y no la de saldo.
     await prisma.cobroFI.create({
@@ -199,6 +288,9 @@ describe("F34 — emisión del propio certificado por tipología", () => {
       { email: EMAIL.vecino, comunidadId: COM_A, rol: "residente", personaId: P_VECINA },
       { email: EMAIL.admin, comunidadId: COM_A, rol: "administrador", personaId: null },
       { email: EMAIL.comite, comunidadId: COM_A, rol: "comite", personaId: null },
+      { email: EMAIL.multi, comunidadId: COM_A, rol: "residente", personaId: P_MULTI },
+      { email: EMAIL.mantencion, comunidadId: COM_A, rol: "mantencion", personaId: null },
+      { email: EMAIL.sinFicha, comunidadId: COM_A, rol: "residente", personaId: null },
     ]) {
       const usuario = await prisma.usuario.upsert({
         where: { email: u.email },
@@ -210,6 +302,19 @@ describe("F34 — emisión del propio certificado por tipología", () => {
         data: { usuarioId: usuario.id, comunidadId: u.comunidadId, rol: u.rol },
       })
     }
+
+    // CF de la comunidad A: el papel imprime su identidad y al administrador
+    // responsable. La firma queda en `null` a propósito —el PDF del arnés se
+    // compila de verdad y una URL remota haría depender la suite de la red.
+    await prisma.configuracionGlobal.create({
+      data: {
+        ...configuracionDefault,
+        id: CF_A,
+        comunidadId: COM_A,
+        nombreComunidad: "Comunidad F34 A",
+        firmaDigitalizadaUrl: null,
+      },
+    })
   }, 30_000)
 
   afterAll(async () => {
@@ -220,6 +325,9 @@ describe("F34 — emisión del propio certificado por tipología", () => {
       await prisma.vinculoUnidad.deleteMany({ where: { comunidadId: { in: [COM_A, COM_B] } } })
       await prisma.persona.deleteMany({ where: { comunidadId: { in: [COM_A, COM_B] } } })
       await prisma.unidad.deleteMany({ where: { comunidadId: { in: [COM_A, COM_B] } } })
+      await prisma.configuracionGlobal.deleteMany({
+        where: { comunidadId: { in: [COM_A, COM_B] } },
+      })
       for (const email of Object.values(EMAIL)) {
         const usuario = await prisma.usuario.findUnique({ where: { email } })
         if (!usuario) continue
@@ -252,14 +360,218 @@ describe("F34 — emisión del propio certificado por tipología", () => {
     })
   })
 
-  it("residencia sin anclar unidad ni persona → 400 y no crea nada", async () => {
-    // El certificado de residencia es sobre un vínculo: sin unidad ni persona no
-    // hay vínculo que acreditar, así que el residente no puede emitir un documento
-    // suelto (la administración conserva su camino, ver el control de gestión).
+  it("residencia sin anclar unidad ni persona, con UN vínculo vigente → 201 y el servidor lo resuelve", async () => {
+    // El anclaje dejó de ser un callejón: si el residente tiene UN solo vínculo
+    // vigente, su vínculo ES la unidad y la persona (salen de la BD de la sesión),
+    // así que el cuerpo no tiene que repetir lo que el servidor ya sabe.
     await conSesion(EMAIL.residente, async () => {
-      const res = await emitir(certificado("ctres-res-suelto", "residencia"))
+      const res = await emitir(certificado("ctres-res-anclada-sola", "residencia"))
+      expect(res.status, JSON.stringify(await res.clone().json())).toBe(201)
+      const enBd = await existe("ctres-res-anclada-sola")
+      expect(enBd?.unidadId).toBe(U_PROPIA)
+      expect(enBd?.personaId).toBe(P_PROPIA)
+      // El vínculo CERRADO de la misma persona no es «su vínculo vigente»: si
+      // entrara al anclaje, el residente tendría dos y este caso sería el 400.
+      expect(enBd?.unidadId).not.toBe(U_CERRADA)
+    })
+  })
+
+  it("residencia sin anclar con VARIOS vínculos vigentes → 400 pide elegir y no crea nada", async () => {
+    // Con dos vínculos vigentes el servidor NO puede elegir: la residencia es un
+    // hecho de una unidad concreta. El 400 nombra la salida (elegir) y no nombra
+    // ninguna de las unidades del actor.
+    await conSesion(EMAIL.multi, async () => {
+      const res = await emitir(certificado("ctres-res-anclada-multi", "residencia"))
       expect(res.status).toBe(400)
-      expect(await existe("ctres-res-suelto")).toBeNull()
+      const json = await cuerpoJson<{ error: string }>(res)
+      expect(json.error).toBe(MENSAJE_ELEGIR_VINCULO)
+      expect(JSON.stringify(json)).not.toContain(U_MULTI1)
+      expect(JSON.stringify(json)).not.toContain(U_MULTI2)
+      expect(await existe("ctres-res-anclada-multi")).toBeNull()
+    })
+  })
+
+  it("residencia sin persona pero con SU unidad → 201 y la persona la pone el servidor", async () => {
+    // La mitad pedida se respeta y la que falta la completa la sesión: el cliente
+    // no inventa la persona del documento.
+    await conSesion(EMAIL.multi, async () => {
+      const res = await emitir(
+        certificado("ctres-res-anclada-unidad", "residencia", { unidadId: U_MULTI2 })
+      )
+      expect(res.status, JSON.stringify(await res.clone().json())).toBe(201)
+      const enBd = await existe("ctres-res-anclada-unidad")
+      expect(enBd?.unidadId).toBe(U_MULTI2)
+      expect(enBd?.personaId).toBe(P_MULTI)
+    })
+  })
+
+  it("residencia sin anclar y sin ningún vínculo vigente → 400 y no crea nada", async () => {
+    // Sin vínculo no hay residencia que certificar. Se dice en vez de emitir un
+    // documento suelto que no acredita nada.
+    await conSesion(EMAIL.vecino, async () => {
+      // El vecino tiene vínculo: se cierra para observar el caso sin anclaje.
+      await prisma.vinculoUnidad.updateMany({
+        where: { personaId: P_VECINA, comunidadId: COM_A },
+        data: { fechaFin: "2026-07-31" },
+      })
+      const res = await emitir(certificado("ctres-res-anclada-ninguna", "residencia"))
+      expect(res.status).toBe(400)
+      expect(await cuerpoJson<{ error: string }>(res)).toEqual({ error: MENSAJE_SIN_VINCULO })
+      expect(await existe("ctres-res-anclada-ninguna")).toBeNull()
+      await prisma.vinculoUnidad.updateMany({
+        where: { personaId: P_VECINA, comunidadId: COM_A },
+        data: { fechaFin: null },
+      })
+    })
+  })
+
+  // ── La fuente PROPIA del residente (cierre de F34) ──────────────────────
+
+  it("mis-vinculos devuelve SÓLO los vínculos vigentes de la persona de la sesión", async () => {
+    await conSesion(EMAIL.residente, async () => {
+      const res = await misVinculos()
+      expect(res.status).toBe(200)
+      const json = await cuerpoJson<{
+        data: Array<{ unidadId: string; personaId: string; unidad: string }>
+      }>(res)
+      // Un vínculo: la unidad de la sesión. Ni el cerrado ni los del vecino ni los
+      // del otro residente — la fuente no es un listado de la comunidad.
+      expect(json.data.map((v) => v.unidadId)).toEqual([U_PROPIA])
+      expect(json.data.every((v) => v.personaId === P_PROPIA)).toBe(true)
+      // Y trae el rótulo que la pantalla imprime, resuelto en el servidor.
+      expect(json.data[0]?.unidad).toBe("Depto 101")
+    })
+  })
+
+  it("mis-vinculos con varios vínculos: los ofrece TODOS y sólo los suyos", async () => {
+    await conSesion(EMAIL.multi, async () => {
+      const json = await cuerpoJson<{ data: Array<{ unidadId: string }> }>(
+        await misVinculos()
+      )
+      expect(new Set(json.data.map((v) => v.unidadId))).toEqual(
+        new Set([U_MULTI1, U_MULTI2])
+      )
+    })
+  })
+
+  it("mis-vinculos ignora los ids del cliente: un query con persona/Unidad ajena no amplía el alcance", async () => {
+    await conSesion(EMAIL.residente, async () => {
+      const json = await cuerpoJson<{ data: Array<{ unidadId: string; personaId: string }> }>(
+        await misVinculos(`?personaId=${P_VECINA}&unidadId=${U_VECINA}`)
+      )
+      expect(json.data.map((v) => v.unidadId)).toEqual([U_PROPIA])
+      expect(json.data.every((v) => v.personaId === P_PROPIA)).toBe(true)
+    })
+  })
+
+  it("mis-vinculos sin `ct` ver → 403 (mantención no consulta certificados)", async () => {
+    await conSesion(EMAIL.mantencion, async () => {
+      const res = await misVinculos()
+      expect(res.status).toBe(403)
+      expect(await cuerpoJson<{ error: string }>(res)).toEqual({ error: "Permiso denegado." })
+    })
+  })
+
+  it("mis-vinculos sin ficha en el Maestro de Personas → lista vacía, no la comunidad", async () => {
+    // Falla CERRADO: sin `personaId` no hay vínculos propios que resolver.
+    await conSesion(EMAIL.sinFicha, async () => {
+      const res = await misVinculos()
+      expect(res.status).toBe(200)
+      expect(await cuerpoJson<{ data: unknown[] }>(res)).toEqual({ data: [] })
+    })
+  })
+
+  // ── El papel servido por el servidor (cierre de F34) ──────────────────────
+
+  it("el residente descarga SU certificado como PDF real, con el folio en el nombre", async () => {
+    await conSesion(EMAIL.residente, async () => {
+      const fila = await prisma.certificadoCT.findUniqueOrThrow({
+        where: { id: "ctres-res-propia" },
+      })
+      expect(fila.folio).toMatch(/^CT-\d{4}$/)
+
+      const res = await descargarPdf("ctres-res-propia")
+      expect(res.status).toBe(200)
+      expect(res.headers.get("content-type")).toBe("application/pdf")
+      // El nombre del archivo es el del módulo: quien descarga dos certificados
+      // no los confunde en la carpeta de descargas.
+      expect(res.headers.get("content-disposition")).toBe(
+        `attachment; filename="certificado-${fila.folio}.pdf"`
+      )
+      // Documento personal: no se cachea en proxies ni en el navegador.
+      expect(res.headers.get("cache-control")).toBe("no-store")
+      const bytes = Buffer.from(await res.arrayBuffer())
+      // Bytes de un PDF de verdad: firma `%PDF-` y documento no trivial. Un cuerpo
+      // JSON o vacío con `application/pdf` no pasa esta mitad.
+      expect(bytes.subarray(0, 5).toString()).toBe("%PDF-")
+      expect(bytes.length).toBeGreaterThan(1000)
+    })
+  })
+
+  it("el residente NO descarga el PDF de la unidad vecina → 404 sin documento", async () => {
+    await conSesion(EMAIL.admin, async () => {
+      const res = await emitir(
+        certificado("ctres-pdf-vecina", "estado_cuenta", { unidadId: U_VECINA })
+      )
+      expect(res.status).toBe(201)
+    })
+    await conSesion(EMAIL.residente, async () => {
+      const res = await descargarPdf("ctres-pdf-vecina")
+      expect(res.status).toBe(404)
+      expect(res.headers.get("content-type")).toContain("application/json")
+      // El 404 es el genérico del detalle: el certificado ajeno existe y no se dice.
+      expect(await cuerpoJson<Record<string, unknown>>(res)).toEqual({
+        error: "Registro no encontrado.",
+      })
+    })
+  })
+
+  it("el residente NO descarga el PDF de otra comunidad → 404", async () => {
+    await conSesion(EMAIL.admin, async () => {
+      const res = await emitir(
+        certificado("ctres-pdf-otra-comunidad", "estado_cuenta", { unidadId: U_PROPIA })
+      )
+      expect(res.status).toBe(201)
+    })
+    // La fila de COM_A que el residente ni siquiera puede ver por detalle: se
+    // mueve a COM_B en la BD para que el 404 pruebe el `comunidadId` del where y
+    // no la simple ausencia del certificado.
+    await prisma.certificadoCT.update({
+      where: { id: "ctres-pdf-otra-comunidad" },
+      data: { comunidadId: COM_B },
+    })
+    await conSesion(EMAIL.residente, async () => {
+      const res = await descargarPdf("ctres-pdf-otra-comunidad")
+      expect(res.status).toBe(404)
+      expect(await cuerpoJson<Record<string, unknown>>(res)).toEqual({
+        error: "Registro no encontrado.",
+      })
+    })
+  })
+
+  it("el residente descarga el certificado emitido a SU persona aunque no tenga unidad", async () => {
+    // El dueño de la fila puede ser `personaId` sin `unidadId`: el alcance del PDF
+    // es el MISMO `alcanceCertificadosCT` del detalle, no una regla aparte.
+    await conSesion(EMAIL.admin, async () => {
+      const res = await emitir(
+        certificado("ctres-pdf-persona", "residencia", { personaId: P_PROPIA })
+      )
+      expect(res.status).toBe(201)
+    })
+    await conSesion(EMAIL.residente, async () => {
+      const res = await descargarPdf("ctres-pdf-persona")
+      expect(res.status).toBe(200)
+      expect(res.headers.get("content-type")).toBe("application/pdf")
+    })
+  })
+
+  it("control: la administración descarga el PDF del vecino que al residente le da 404", async () => {
+    await conSesion(EMAIL.admin, async () => {
+      const res = await descargarPdf("ctres-pdf-vecina")
+      // La fila existe y el papel se puede armar: el 404 del residente es el
+      // alcance por objeto, no una ruta que no sabe imprimir.
+      expect(res.status).toBe(200)
+      expect(res.headers.get("content-type")).toBe("application/pdf")
     })
   })
 

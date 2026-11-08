@@ -138,6 +138,9 @@ const { default: CertificadosPage } = await import("@/app/comunidad/certificados
 const { default: CertificadosEmision, TIPO_LABEL } = await import(
   "@/app/comunidad/certificados/_componentes/certificados-emision"
 )
+// El tipo del vínculo propio viaja desde el componente: es el contrato que la
+// pantalla comparte con `GET /api/certificados-ct/mis-vinculos`.
+import type { VinculoPropio } from "@/app/comunidad/certificados/_componentes/certificados-emision"
 
 const TODAS = ["residencia", "estado_cuenta", "liquidacion_sueldo", "al_dia"] as const
 
@@ -239,19 +242,7 @@ describe("la pantalla de certificados — portón y filtro del servidor", () => 
 })
 
 describe("la pantalla de certificados — lo que ve cada rol", () => {
-  it("el residente no ve la tipología reservada: sólo residencia en el selector", async () => {
-    const user = userEvent.setup()
-    render(<CertificadosEmision tiposEmisibles={["residencia"]} />)
-
-    const opciones = await opcionesDelSelect(user)
-    expect(opciones).toHaveLength(1)
-    expect(opciones[0]).toMatch(/Certificado de Residencia/i)
-    for (const reservada of ["Estado de Cuenta", "Liquidación de Sueldo", "Al Día"]) {
-      expect(opciones.join(" | ")).not.toContain(reservada)
-    }
-  }, PRESUPUESTO_CARGA)
-
-  it("la administración sí ve las cuatro", async () => {
+  it("la administración ve las cuatro tipologías", async () => {
     const user = userEvent.setup()
     render(<CertificadosEmision tiposEmisibles={[...TODAS]} />)
 
@@ -269,5 +260,127 @@ describe("la pantalla de certificados — lo que ve cada rol", () => {
     expect(
       screen.queryByRole("button", { name: /Generar certificado PDF firmado/i })
     ).toBeNull()
+  })
+})
+
+/**
+ * El residente (F34).
+ *
+ * La pantalla se ANGOSTÓ en vez de abrir rutas: con un solo vínculo vigente hay un
+ * botón y ningún select, porque el residente no elige lo que el servidor ya sabe
+ * (su vínculo vigente ES su unidad y su persona). Con varios, el selector ofrece
+ * sólo SUS vínculos, de la fuente auto-acotada. Lo que se fija acá es lo que el
+ * usuario ve: la forma del formulario por cantidad de vínculos.
+ */
+const VINCULO_UNO: VinculoPropio[] = [
+  {
+    id: "vinculo-propio-1",
+    unidadId: "unidad-101",
+    unidad: "Depto 101",
+    personaId: "persona-propia",
+    persona: "Ana Propia",
+    rut: "11.111.111-1",
+    rol: "propietario",
+    fechaInicio: "2020-01-01",
+  },
+]
+
+const VINCULOS_TRES: VinculoPropio[] = [
+  VINCULO_UNO[0]!,
+  {
+    ...VINCULO_UNO[0]!,
+    id: "vinculo-propio-2",
+    unidadId: "unidad-201",
+    unidad: "Depto 201",
+  },
+  {
+    ...VINCULO_UNO[0]!,
+    id: "vinculo-propio-3",
+    unidadId: "unidad-301",
+    unidad: "Depto 301",
+  },
+]
+
+/** Stub de la fuente PROPIA: la pantalla no debe pedir vínculos ni unidades al padrón. */
+async function stubMisVinculos(vinculos: VinculoPropio[]): Promise<string[]> {
+  const llamadas: string[] = []
+  const respuesta = () =>
+    new Response(JSON.stringify({ data: vinculos }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    })
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((recurso: string | URL | Request) => {
+      const url = typeof recurso === "string" ? recurso : String(recurso)
+      llamadas.push(url)
+      return Promise.resolve(respuesta())
+    })
+  )
+  return llamadas
+}
+
+describe("la pantalla del residente — emisión propia sin abrir ninguna ruta", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it("con UN vínculo vigente muestra un botón, sin selects ni campos que el servidor ya sabe", async () => {
+    await stubMisVinculos(VINCULO_UNO)
+    render(<CertificadosEmision tiposEmisibles={["residencia"]} />)
+
+    const boton = await screen.findByRole("button", {
+      name: /Generar certificado PDF firmado/i,
+    })
+    expect(boton).toBeEnabled()
+    // Sin selects: el vínculo ES la unidad y la persona.
+    expect(screen.queryAllByRole("combobox")).toHaveLength(0)
+    // Y sin el campo «Solicitante» de la gestión: lo pone el vínculo de la sesión.
+    expect(screen.queryByPlaceholderText(/Nombre de quien solicita/i)).toBeNull()
+    // Lo que va a certificar se ve antes de emitir.
+    expect(screen.getByText("Depto 101")).toBeTruthy()
+    expect(screen.getAllByText("Ana Propia").length).toBeGreaterThan(0)
+  })
+
+  it("con VARIOS vínculos el selector ofrece SÓLO los suyos", async () => {
+    await stubMisVinculos(VINCULOS_TRES)
+    const user = userEvent.setup()
+    render(<CertificadosEmision tiposEmisibles={["residencia"]} />)
+
+    const combos = await screen.findAllByRole("combobox")
+    expect(combos).toHaveLength(1)
+    await user.click(combos[0]!)
+    const listbox = await screen.findByRole("listbox", {}, { timeout: 5_000 })
+    const opciones = within(listbox)
+      .getAllByRole("option")
+      .map((o) => o.textContent ?? "")
+    expect(opciones).toEqual(["Depto 101", "Depto 201", "Depto 301"])
+    // La tipología no se elige: el residente sólo emite residencia.
+    expect(screen.getByText(TIPO_LABEL.residencia)).toBeTruthy()
+  })
+
+  it("sin vínculo vigente no ofrece emitir y dice por qué", async () => {
+    await stubMisVinculos([])
+    render(<CertificadosEmision tiposEmisibles={["residencia"]} />)
+
+    expect(await screen.findByText(/Sin vínculo vigente/i)).toBeTruthy()
+    expect(
+      screen.queryByRole("button", { name: /Generar certificado PDF firmado/i })
+    ).toBeNull()
+    expect(screen.queryAllByRole("combobox")).toHaveLength(0)
+  })
+
+  it("pide sus vínculos a la fuente PROPIA y a ninguna ruta de la gestión", async () => {
+    // El punto del cierre de F34: la pantalla no toca `vinculos` (`mp`),
+    // `pe/unidades` (`pe:bitacora`) ni `configuracion` (`cf`). Si alguna de esas
+    // apareciera acá, el residente volvería a ver una pantalla vacía.
+    const llamadas = await stubMisVinculos(VINCULO_UNO)
+    render(<CertificadosEmision tiposEmisibles={["residencia"]} />)
+    await screen.findByRole("button", { name: /Generar certificado PDF firmado/i })
+
+    expect(llamadas).toContain("/api/certificados-ct/mis-vinculos")
+    for (const prohibida of ["/api/vinculos", "/api/pe/unidades", "/api/configuracion"]) {
+      expect(llamadas.some((url) => url.startsWith(prohibida))).toBe(false)
+    }
   })
 })

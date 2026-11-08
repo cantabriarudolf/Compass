@@ -1261,6 +1261,36 @@ const DECLARACIONES: readonly Declaracion[] = [
     motivo:
       "valida la dirección que el propio usuario tipeó: el TLD y el dominio son parte de su entrada, no de una fila.",
   },
+  // ── El anclaje del certificado de residencia (F34) ────────────────────
+  // Mensajes fijos de `lib/certificados-ct.ts` reenviados por la ruta: el texto no
+  // interpola nada, así que no hay dato de fila que pueda viajar al cliente.
+  {
+    archivo: "app/api/certificados-ct/route.ts",
+    mensaje:
+      "MENSAJE_SIN_VINCULO",
+    clase: "indirecto",
+    origen: "lib/**",
+    motivo:
+      "el texto lo redacta `lib/certificados-ct.ts` y no interpola ningún valor: no describe ninguna fila, sólo la ausencia de un vínculo propio.",
+  },
+  {
+    archivo: "app/api/certificados-ct/route.ts",
+    mensaje:
+      "MENSAJE_ELEGIR_VINCULO",
+    clase: "indirecto",
+    origen: "lib/**",
+    motivo:
+      "el texto lo redacta `lib/certificados-ct.ts` y no interpola ningún valor: pide elegir entre vínculos propios, sin nombrar datos de la fila.",
+  },
+  // ── Borrado de personas: la ficha que un usuario apunta ──────────────
+  {
+    archivo: "app/api/personas/[id]/route.ts",
+    mensaje:
+      "`No se puede eliminar la persona: ${} usuario(s) tienen su ficha asignada. Quitá la ficha primero.`",
+    clase: "no-fila",
+    motivo:
+      "el número cuenta usuarios que apuntan a la persona del path; no describe la fila de un tercero y la ruta exige `mp` eliminar.",
+  },
 ]
 
 describe("mensajes de error — T12: ningún mensaje que interpola datos queda sin declarar", () => {

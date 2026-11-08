@@ -27,6 +27,20 @@
 import { puede } from "@/lib/authz"
 import { TIPOS_CERTIFICADO_CT, type TipoCertificadoCT } from "@/lib/schemas"
 
+/**
+ * Mensajes del anclaje del certificado de residencia (F34). Viven acá, junto al
+ * mapa de tipologías, porque los usa la ruta y los va a usar la pantalla: una
+ * frase copiada en dos archivos es una segunda verdad que se desincroniza.
+ * Los dos son fijos, sin interpolación: no hay dato de fila que pueda viajar.
+ */
+/** El rol está acotado y no tiene ningún vínculo vigente: no hay residencia que certificar. */
+export const MENSAJE_SIN_VINCULO =
+  "No registrás un vínculo vigente en esta comunidad: no hay residencia que certificar."
+
+/** El rol tiene más de un vínculo: el servidor no elige entre dos viviendas. */
+export const MENSAJE_ELEGIR_VINCULO =
+  "Tenés más de un vínculo vigente: elegí la unidad del certificado."
+
 export const RECURSO_DE_EMISION_POR_TIPO: Record<TipoCertificadoCT, string> = {
   residencia: "ct:residencia",
   al_dia: "ct:al_dia",
@@ -41,6 +55,37 @@ export function recursoDeEmision(tipo: string): string | undefined {
   return Object.prototype.hasOwnProperty.call(RECURSO_DE_EMISION_POR_TIPO, tipo)
     ? RECURSO_DE_EMISION_POR_TIPO[tipo as TipoCertificadoCT]
     : undefined
+}
+
+/**
+ * Etiqueta visible de cada tipología.
+ *
+ * Vive acá y no en la pantalla porque la usan los dos lados del mostrador: el
+ * formulario (`TIPO_LABEL` de `certificados-emision.tsx`, que sólo la reexporta)
+ * y el papel que sirve `GET /api/certificados-ct/[id]/pdf`, que se arma en el
+ * SERVIDOR —donde un módulo `"use client"` no se puede importar—. Una copia por
+ * lado es una segunda verdad: el PDF titularía el documento distinto de como lo
+ * nombra la pantalla y nadie se enteraría hasta imprimirlo.
+ */
+export const ETIQUETA_POR_TIPO_CERTIFICADO: Record<TipoCertificadoCT, string> = {
+  residencia: "Certificado de Residencia",
+  estado_cuenta: "Estado de Cuenta / Fondos",
+  liquidacion_sueldo: "Certificado Liquidación de Sueldo",
+  al_dia: "Certificado Al Día (Informativo)",
+}
+
+/**
+ * Etiqueta de una tipología leída de la fila (`tipo` es `String` en Prisma).
+ *
+ * La fila ya validó con `CertificadoCTSchema` al crearse, así que el valor es
+ * del enum; el fallback existe para que un valor histórico desconocido se
+ * imprima tal cual en vez de sacar al residente el documento con una etiqueta
+ * vacía.
+ */
+export function etiquetaDeTipoCertificado(tipo: string): string {
+  return Object.prototype.hasOwnProperty.call(ETIQUETA_POR_TIPO_CERTIFICADO, tipo)
+    ? ETIQUETA_POR_TIPO_CERTIFICADO[tipo as TipoCertificadoCT]
+    : tipo
 }
 
 /**
