@@ -153,7 +153,11 @@ vi.mock("@/lib/api/use-cobros-fi", () => ({
   }),
 }))
 
-import CertificadosPage from "@/app/comunidad/certificados/page"
+import CertificadosEmision from "@/app/comunidad/certificados/_componentes/certificados-emision"
+import { TIPOS_CERTIFICADO_CT } from "@/lib/schemas"
+
+/** Las cuatro tipologías: el caso de administración, que es el que estos tests cubren. */
+const TIPOS_DEL_ARNES = TIPOS_CERTIFICADO_CT
 
 const PRESUPUESTO_CARGA = 120_000
 
@@ -271,7 +275,7 @@ function cobro(parcial: Partial<CobroFI> & Pick<CobroFI, "id" | "unidadId" | "mo
 describe("comunidad/certificados — fuente de datos vía hooks SWR", () => {
   it("muestra el estado de carga mientras un hook de la colección sigue cargando", () => {
     fuente.cargandoCobros = true
-    const { container } = render(<CertificadosPage />)
+    const { container } = render(<CertificadosEmision tiposEmisibles={[...TIPOS_DEL_ARNES]} />)
 
     // El skeleton reemplaza el contenido (mismo gate de carga de siempre, ahora
     // alimentado por los flags `isLoading` de los hooks).
@@ -289,7 +293,7 @@ describe("comunidad/certificados — fuente de datos vía hooks SWR", () => {
     ]
 
     const user = userEvent.setup()
-    render(<CertificadosPage />)
+    render(<CertificadosEmision tiposEmisibles={[...TIPOS_DEL_ARNES]} />)
 
     await elegir(user, 0, /Liquidación de Sueldo/i)
 
@@ -315,7 +319,7 @@ describe("comunidad/certificados — fuente de datos vía hooks SWR", () => {
     ]
 
     const user = userEvent.setup()
-    render(<CertificadosPage />)
+    render(<CertificadosEmision tiposEmisibles={[...TIPOS_DEL_ARNES]} />)
 
     await elegir(user, 0, /Al Día/i)
     await elegir(user, 1, /101/)
@@ -330,7 +334,7 @@ describe("comunidad/certificados — fuente de datos vía hooks SWR", () => {
     ]
 
     const user = userEvent.setup()
-    render(<CertificadosPage />)
+    render(<CertificadosEmision tiposEmisibles={[...TIPOS_DEL_ARNES]} />)
 
     await elegir(user, 0, /Liquidación de Sueldo/i)
     await elegir(user, 1, /PL-2026-07-0007/)

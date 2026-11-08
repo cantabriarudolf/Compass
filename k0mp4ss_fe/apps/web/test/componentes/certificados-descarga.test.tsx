@@ -133,7 +133,11 @@ vi.mock("@/lib/pdf-utils", () => ({
   descargarPdf: fuente.descargarPdf,
 }))
 
-import CertificadosPage from "@/app/comunidad/certificados/page"
+import CertificadosEmision from "@/app/comunidad/certificados/_componentes/certificados-emision"
+import { TIPOS_CERTIFICADO_CT } from "@/lib/schemas"
+
+/** Las cuatro tipologías: el caso de administración, que es el que estos tests cubren. */
+const TIPOS_DEL_ARNES = TIPOS_CERTIFICADO_CT
 
 /** Registro que devuelve el POST (folio y código puestos por el servidor). */
 const REGISTRO_EMITIDO = {
@@ -223,7 +227,7 @@ async function emitir(user: ReturnType<typeof userEvent.setup>): Promise<void> {
 describe("comunidad/certificados — emisión y descarga del PDF", () => {
   it("descarga OK: confirma la emisión y usa el folio que asignó el servidor", { timeout: PRESUPUESTO_CARGA }, async () => {
     const user = userEvent.setup()
-    render(<CertificadosPage />)
+    render(<CertificadosEmision tiposEmisibles={[...TIPOS_DEL_ARNES]} />)
     await emitir(user)
 
     expect(await screen.findByText(/emitido y firmado/i)).toBeTruthy()
@@ -247,7 +251,7 @@ describe("comunidad/certificados — emisión y descarga del PDF", () => {
   it("descarga que rechaza: NO confirma el éxito, avisa que el registro sí se emitió", { timeout: PRESUPUESTO_CARGA }, async () => {
     fuente.descargarPdf.mockRejectedValue(new Error("permiso denegado por el navegador"))
     const user = userEvent.setup()
-    render(<CertificadosPage />)
+    render(<CertificadosEmision tiposEmisibles={[...TIPOS_DEL_ARNES]} />)
     await emitir(user)
 
     const aviso = await screen.findByText(/la descarga del PDF falló/i)
