@@ -19,13 +19,30 @@
  * confirmaría que el certificado existe, que es justo el dato que se protege
  * (mismo criterio que notificaciones, liquidaciones e infracciones).
  *
+ * Emisión por tipología (F34, 2026-11-07): el residente emite SU certificado y
+ * sólo el que la ley le deja. La Ley 21.442 no regula un «certificado de
+ * residencia» —el proyecto de ley 17737-14, en trámite, existe justamente para
+ * facultar al administrador a emitirlo— así que certificar dónde vive no usurpa
+ * ningún acto administrativo. En cambio, el art. 20 N° 4 pone entre las funciones
+ * del administrador «emitir certificados en lo relativo al estado de deudas de las
+ * unidades» y el art. 15 manda acreditar la calidad de copropietario hábil
+ * «mediante certificado expedido por el administrador o por quien haga sus veces»:
+ * el estado de cuenta y el «al día» no salen de la mano del residente. El reparto
+ * vive en `RECURSO_DE_EMISION_POR_TIPO` (matriz de permisos, no una lista nueva),
+ * y el residente —que sólo conserva `crear` en `ct:residencia`— recibe 403 en el
+ * resto de las tipologías. La administración y el comité no cambian.
+ *
+ * Orden de compuertas (L14): `rechazoDeEmisionAjena` (404) → tipología (403/400) →
+ * gate de saldo (409). El gate de saldo va último porque su mensaje imprime el
+ * monto pendiente de la unidad.
+ *
  * Inmutabilidad (design.md Decisión 5): un certificado emitido es un documento
  * inmutable; `DELETE /api/certificados-ct/[id]` rechaza con 409 en la capa API y
  * el residuo TEST lo purga `e2e:higiene` (no `limpiar()`).
  */
 import { randomUUID } from "node:crypto"
 import type { Prisma } from "@prisma/client"
-import { CertificadoCTSchema, type MoraCobroFI, type PagoCobroFI } from "@/lib/schemas"
+import { CertificadoCTSchema, type MoraCobroFI, type PagoCobroFI, type TipoCertificadoCT } from "@/lib/schemas"
 import { normalizaRol, puede } from "@/lib/authz"
 import { prisma } from "@/lib/prisma"
 import { logger } from "@/lib/logger"
@@ -40,15 +57,41 @@ import {
   withComunidadScope,
   type ComunidadScope,
 } from "@/lib/api/with-comunidad-scope"
+import { RECURSO_DE_EMISION_POR_TIPO, recursoDeEmision } from "@/lib/certificados-ct"
 
 function delegado(modelo: unknown) {
   return modelo as import("@/lib/api/crud-factory").CrudDelegate
 }
 
+/**
+ * Claves de la matriz que gobiernan la EMISIÓN, por tipología (F34).
+ *
+ * No es una lista de roles nueva: es el despacho de la tipología a la clave que ya
+ * existe en `lib/authz.ts`. `estado_cuenta` y `liquidacion_sueldo` se quedan en la
+ * clave base `ct` porque no tienen clave propia Y porque ninguna de las dos es
+ * auto-emitible (el residente sólo conserva `ct` ver).
+ */
+
+/**
+ * ¿Este rol emite algún certificado? La factory sólo recibe `(rol, accion)` —no ve
+ * el cuerpo, así que no puede saber QUÉ tipología se emite—; la tipología exacta la
+ * decide `rechazoDeTipoNoEmisible` antes de llegar acá. Esta compuerta queda como
+ * «¿tiene alguna capacidad de emisión?»: administrador (wildcard), residente por
+ * `ct:residencia`. El comité, que sólo tiene `ct` ver, sigue sin poder emitir.
+ */
+function puedeEmitirCertificados(rol: string): boolean {
+  return (
+    puede(rol, "crear", "ct") ||
+    puede(rol, "crear", "ct:residencia") ||
+    puede(rol, "crear", "ct:al_dia")
+  )
+}
+
 export const certificadosHandlers = createCrudHandlers({
   model: delegado(prisma.certificadoCT),
   schema: CertificadoCTSchema,
-  authzCheck: (rol, accion) => puede(rol, accion, "ct"),
+  authzCheck: (rol, accion) =>
+    accion === "crear" ? puedeEmitirCertificados(rol) : puede(rol, accion, "ct"),
 })
 
 /** Roles que ven los certificados de toda la comunidad (sin acotar por objeto). */
@@ -222,6 +265,47 @@ async function rechazoDeEmisionAjena(
   return jsonError(404, "Registro no encontrado.")
 }
 
+/**
+ * Guardia por tipología: la clave de la matriz decide si el actor puede EMITIR ese
+ * tipo de certificado.
+ *
+ * Corre después de `rechazoDeEmisionAjena` (la fila ajena ya respondió 404, así que
+ * acá el único dato que se mira es el tipo) y antes de `gateSaldoAlDia` (cuyo 409
+ * imprime el monto de la unidad). El rechazo es 403 y no 404 porque no niega la
+ * existencia de nada: niega una capacidad —la ley reserva el estado de deudas al
+ * administrador—, igual que el resto de las claves de la matriz.
+ *
+ * La residencia, además, exige anclaje: un certificado de residencia sin unidad ni
+ * persona no acredita ningún vínculo, y para el residente la emisión es «sobre SU
+ * vínculo vigente». La administración conserva su camino sin anclaje.
+ */
+async function rechazoDeTipoNoEmisible(
+  datos: Record<string, unknown> | null
+): Promise<Response | null> {
+  if (!datos) return null // JSON inválido: lo reporta la factory con 400.
+  const tipo = typeof datos.tipo === "string" ? datos.tipo : ""
+  const recurso = recursoDeEmision(tipo)
+  if (!recurso) return null // tipología desconocida: la reporta la factory con 400.
+
+  const resultado = await withComunidadScope()
+  if (!resultado.ok) return null // 401/403 los resuelve el camino de siempre.
+  const scope = resultado.scope
+  if (veTodaLaComunidad(scope)) return null // gestión: emite todas las tipologías
+
+  if (!puede(scope.rol, "crear", recurso)) return jsonError(403, "Permiso denegado.")
+
+  if (tipo === "residencia") {
+    const unidadPedida = typeof datos.unidadId === "string" ? datos.unidadId.trim() : ""
+    const personaPedida = typeof datos.personaId === "string" ? datos.personaId.trim() : ""
+    // Sin valores interpolados: el mensaje no tiene que declararse en el guardián
+    // de T12, y es el mismo texto que valida la pantalla CT antes de emitir.
+    if (!unidadPedida || !personaPedida) {
+      return jsonError(400, "El certificado de residencia exige persona y unidad.")
+    }
+  }
+  return null
+}
+
 /** Intentos de asignación de folio antes de rendirse ante colisiones reales. */
 const MAX_INTENTOS_CORRELATIVO = 3
 
@@ -236,13 +320,18 @@ const MAX_INTENTOS_CORRELATIVO = 3
  * scoping, misma validación, mismo upsert idempotente por id.
  *
  * Antes de todo eso corre `rechazoDeEmisionAjena`: el alcance por objeto se
- * evalúa primero porque el gate de saldo imprime el monto de la unidad.
+ * evalúa primero porque el gate de saldo imprime el monto de la unidad. Entre el
+ * alcance y el saldo corre la tipología (`rechazoDeTipoNoEmisible`): el tipo que la
+ * ley no deja emitir al residente se rechaza antes de mirar dinero alguno.
  */
 export async function POST(req: Request): Promise<Response> {
   const cuerpo = await req.text()
   const datos = leerObjeto(cuerpo)
   const rechazoAlcance = await rechazoDeEmisionAjena(datos)
   if (rechazoAlcance) return rechazoAlcance
+
+  const rechazoEmision = await rechazoDeTipoNoEmisible(datos)
+  if (rechazoEmision) return rechazoEmision
 
   const rechazo = await gateSaldoAlDia(cuerpo)
   if (rechazo) return rechazo

@@ -224,10 +224,25 @@ const MATRIZ: Record<Rol, Record<string, Set<Accion>>> = {
   // Propietario / Residente: estado cuenta propio, pago GC, reserva amenities, reclamos, votos, certificados propios, directorio, IR mantenimiento solo
   residente: {
     "mp:propios": new Set<Accion>(["ver", "editar"]),
-    "ct": new Set<Accion>(["ver", "crear"]),
+    // F34 · el residente emite SU certificado, y sólo el que la ley le deja.
+    // La emisión dejó de ser un `ct` genérico: `POST /api/certificados-ct` despacha
+    // por tipología a las claves finas. `ct` ver es la lectura (colección y detalle,
+    // acotadas por `alcanceCertificadosCT`); crear sobre la clave base ya no existe
+    // porque no hay tipología huérfana: la que no tiene clave propia no se emite.
+    //   · `ct:residencia` — ÚNICO tipo auto-emitible: la Ley 21.442 no regula el
+    //     «certificado de residencia» (el proyecto 17737-14, en trámite, existe para
+    //     facultar al ADMINISTRADOR a emitirlo), así que no hay acto administrativo
+    //     que el residente esté usurpando al certificar dónde vive.
+    //   · `ct:al_dia` ver — el estado de deudas y la calidad de copropietario hábil
+    //     son actos del administrador (art. 20 N° 4: «emitir certificados en lo
+    //     relativo al estado de deudas de las unidades»; art. 15: «se acreditará
+    //     mediante certificado expedido por el administrador»). El residente consulta
+    //     lo suyo, no lo certifica. `ct:propio` queda intacto y sin tipología que la
+    //     pida: es deuda declarada en `test/lib/claves-con-consumidor.test.ts`.
+    "ct": new Set<Accion>(["ver"]),
     "ct:propio": new Set<Accion>(["ver", "crear"]),
     "ct:residencia": new Set<Accion>(["ver", "crear"]),
-    "ct:al_dia": new Set<Accion>(["ver", "crear"]),
+    "ct:al_dia": new Set<Accion>(["ver"]),
     "pe:directorio": new Set<Accion>(["ver"]),
     // Vacío explícito: el residente no lee ni gestiona el calendario preventivo;
     // sin la entrada, cualquier futura clave `pe` base le abriría el prefijo.
@@ -629,8 +644,8 @@ const REGLAS_ABAC: EntradaABAC[] = [
   { rol: "conserjeria", recurso: "pl:propia", condicion: "solo propia", descripcion: "Solo ve su propia liquidación (filtra por personaId)", donde: "motor", detalle: "lib/authz.ts:puedeContextual pl:propia requiere personaId — paridad lib/store.ts:3807" },
   // CT — unidad vinculada (motor)
   { rol: "residente", recurso: "ct:propio", condicion: "unidad vinculada", descripcion: "Solo certificados de su unidad con vínculo vigente", donde: "motor", detalle: "lib/authz.ts:puedeContextual ct:propio requiere unidadId ∈ unidadIdsVinculadas — paridad lib/store.ts:4253 vinculoVigente" },
-  { rol: "residente", recurso: "ct:residencia", condicion: "unidad vinculada", descripcion: "Certificado residencia exige vínculo vigente a la unidad reclamada", donde: "motor", detalle: "lib/authz.ts:puedeContextual ct:residencia — paridad app/comunidad/certificados/page.tsx:177 filtro unidades por vínculo" },
-  { rol: "residente", recurso: "ct:al_dia", condicion: "unidad vinculada", descripcion: "Certificado al día exige unidad vinculada (saldo lo decide CT)", donde: "motor", detalle: "lib/authz.ts:puedeContextual ct:al_dia vinculación; saldo pendiente bloquea en lib/store.ts:4272 (check local complementario)" },
+  { rol: "residente", recurso: "ct:residencia", condicion: "unidad vinculada", descripcion: "Certificado residencia exige vínculo vigente a la unidad reclamada", donde: "motor", detalle: "lib/authz.ts:puedeContextual ct:residencia + app/api/certificados-ct/route.ts:rechazoDeTipoNoEmisible — el residente emite sólo este tipo, y sólo anclado a su unidad y persona vinculadas (F34; Ley 21.442 art. 20 N° 4 no lo reserva al administrador)" },
+  { rol: "residente", recurso: "ct:al_dia", condicion: "unidad vinculada", descripcion: "Certificado al día exige unidad vinculada (saldo lo decide CT)", donde: "motor", detalle: "ver, NO crear desde F34: la emisión de un certificado sobre el estado de deudas es función del administrador (Ley 21.442 art. 20 N° 4 y art. 15), así que app/api/certificados-ct/route.ts:rechazoDeTipoNoEmisible responde 403 al residente" },
   { rol: "residente", recurso: "ct:estado_cuenta", condicion: "unidad vinculada", descripcion: "Estado de cuenta solo de su unidad vinculada", donde: "motor", detalle: "lib/authz.ts:puedeContextual ct:estado_cuenta requiere unidadId ∈ unidadIdsVinculadas" },
   { rol: "conserjeria", recurso: "ct:propia", condicion: "unidad vinculada", descripcion: "Solo certificados de su unidad vinculada", donde: "motor", detalle: "lib/authz.ts:puedeContextual ct:propia" },
   // GD — privacidad actas (motor, migrado P4)

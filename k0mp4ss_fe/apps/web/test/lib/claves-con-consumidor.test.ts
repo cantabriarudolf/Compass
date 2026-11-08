@@ -369,9 +369,11 @@ const EXENCIONES: readonly Exencion[] = [
   // ── Hallazgos: declaradas con acciones y sin puerta ───────────────────────
   // T9 no las arregla: las deja nombradas para que la decisión sea explícita.
   // Cuando alguna gane consumidor, el caso de `hallazgo` de abajo lo va a pedir.
-  { clave: "ct:al_dia", clase: "hallazgo", motivo: MOTIVO_PENDIENTE },
+  // `ct:al_dia` y `ct:residencia` salieron de esta lista en F34: la emisión por
+  // tipología las consume en `app/api/certificados-ct/route.ts`. `ct:propio` sigue
+  // acá: no hay tipología que la pida (su certificado propio se emite con
+  // `ct:residencia` o no se emite).
   { clave: "ct:propio", clase: "hallazgo", motivo: MOTIVO_PENDIENTE },
-  { clave: "ct:residencia", clase: "hallazgo", motivo: MOTIVO_PENDIENTE },
   { clave: "ir:interno", clase: "hallazgo", motivo: MOTIVO_PENDIENTE },
   { clave: "mp:morosidad", clase: "hallazgo", motivo: MOTIVO_PENDIENTE },
   { clave: "mp:propios", clase: "hallazgo", motivo: MOTIVO_PENDIENTE },
