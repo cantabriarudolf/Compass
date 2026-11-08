@@ -289,23 +289,21 @@ describe("lib/authz — puedeContextual ABAC (paridad 1:1)", () => {
     expect(puedeContextual("administrador", "ver", "gd", {})).toBe(true)
   })
 
-  // mp:morosidad / fi:morosidad — privacidad residenteVeMorosidad
-  it("mp:morosidad — residente solo ve morosidad si residenteVeMorosidad true (comite siempre ve)", () => {
-    expect(puedeContextual("comite", "ver", "mp:morosidad", {})).toBe(true) // comite no gated
-    // residente no tiene mp:morosidad base → aunque privacidad true, deniega por menor privilegio
-    expect(puedeContextual("residente", "ver", "mp:morosidad", { privacidad: { residenteVeMorosidad: true } })).toBe(false)
-    // Para testear privacidad de morosidad, usamos un rol hipotético que sí tenga base — usamos mp:propios con privacidad? Instead test fi:morosidad con residente que no tiene base → sigue false, prueba menor privilegio
-    // Si residente tuviera mp:morosidad, la privacidad lo gatearía; probamos con comite+privacidad no afecta
-    expect(puedeContextual("comite", "ver", "mp:morosidad", { privacidad: { residenteVeMorosidad: false } })).toBe(true)
+  // Decisión owner 2026-11-07: `residenteVeMorosidad` y `alertasResidentesActivas` se
+  // retiraron de la superficie porque ninguna ruta las obedecía. El motor ya no las lee;
+  // la clave `mp:morosidad` sigue en la MATRIZ (el comité la tiene con `ver`) sin gate.
+  it("mp:morosidad — la clave sigue en la matriz, sin gate de privacidad", () => {
+    expect(puedeContextual("comite", "ver", "mp:morosidad", {})).toBe(true)
+    expect(puedeContextual("residente", "ver", "mp:morosidad", {})).toBe(false) // sin base
+    expect(puedeContextual("residente", "ver", "fi:morosidad", {})).toBe(false)
   })
 
-  // alertasResidentesActivas — notificación operativa silenciable
-  it("notify:residente — respeta alertasResidentesActivas", () => {
-    expect(puedeContextual("residente", "ver", "notify:residente", { privacidad: { alertasResidentesActivas: true } })).toBe(false) // base false → sigue false
-    // Usamos un recurso que base concede para residente? residente no tiene notify:residente base, so test con admin bypass
-    // Para validar gate, usamos puedeContextual directamente sobre recurso que concedería si existiera: probamos pe:visita con privacidad
-    // En implementación actual, notify:residente no existe en matriz → base false, nunca concede; testeamos que no amplía
-    expect(puedeContextual("residente", "crear", "pe:visita", { privacidad: { alertasResidentesActivas: false } })).toBe(true) // pe:visita no es notify → no gateado
+  // Sin bandera que las silencie: la notificación operativa a residente no depende de
+  // un control de privacidad (cablearla dejaría al administrador callar avisos legales).
+  it("notify:residente / pe:notify_residente — sin bandera de privacidad", () => {
+    expect(puedeContextual("residente", "ver", "notify:residente", {})).toBe(false) // sin base
+    expect(puedeContextual("residente", "ver", "pe:notify_residente", {})).toBe(false)
+    expect(puedeContextual("administrador", "ver", "notify:residente", {})).toBe(true) // wildcard
   })
 
   // Delegación sin contexto para recursos no granulares
@@ -322,7 +320,7 @@ describe("lib/authz — puedeContextual ABAC (paridad 1:1)", () => {
   it("menor privilegio — contexto no amplía permisos base denegados", () => {
     expect(puedeContextual("residente", "ver", "pe:bitacora", { personaId: "p-1", unidadId: "u-A-101", unidadIdsVinculadas: ["u-A-101"], privacidad: { residenteVeActas: true } })).toBe(false)
     expect(puedeContextual("conserjeria", "ver", "fi:balance", { personaId: "p-1" })).toBe(false)
-    expect(puedeContextual("residente", "ver", "mp:morosidad", { privacidad: { residenteVeMorosidad: true } })).toBe(false) // sin base, contexto no concede
+    expect(puedeContextual("residente", "ver", "mp:morosidad", {})).toBe(false) // sin base, contexto no concede
   })
 
   // Case-insensitive y alias preservados
@@ -420,32 +418,18 @@ describe("lib/authz — reglasContextuales() snapshot ABAC para /admin/permisos"
     expect(reglas.find((e) => e.recurso === "gd:acta")!.donde).toBe("motor")
   })
 
-  // Decisión 2026-11-07 (D3 de «Permisos por objeto»): estas reglas las implementa el
-  // MOTOR (`puedeContextual`), no un check local de la UI. El «check local» que este
-  // inventario declaraba vivía en `lib/store.ts`, retirado con el store legacy: la
-  // bandera hoy no la obedece ninguna ruta porque ninguna llama al motor. El test
-  // pina la verdad —motor— y que el detalle lo diga.
-  it("morosidad — bandera implementada en el motor y sin ruta que la llame (mp:morosidad y fi:morosidad)", () => {
-    const mp = reglas.find((e) => e.rol === "residente" && e.recurso === "mp:morosidad")
-    const fi = reglas.find((e) => e.rol === "residente" && e.recurso === "fi:morosidad")
-    expect(mp).toBeDefined()
-    expect(fi).toBeDefined()
-    expect(mp!.condicion).toBe("según privacidad: residenteVeMorosidad")
-    expect(mp!.donde).toBe("sin superficie")
-    expect(mp!.detalle).toMatch(/ninguna ruta|NINGUNA ruta|sin ruta/i)
-    expect(fi!.donde).toBe("sin superficie")
-  })
-
-  it("alertasResidentesActivas — en el motor, sin superficie de alerta para el residente", () => {
-    const n = reglas.find((e) => e.recurso === "notify:residente")
-    const pe = reglas.find((e) => e.recurso === "pe:notify_residente")
-    expect(n).toBeDefined()
-    expect(pe).toBeDefined()
-    expect(n!.condicion).toBe("según privacidad: alertasResidentesActivas")
-    expect(n!.donde).toBe("sin superficie")
-    expect(n!.detalle).toMatch(/ninguna ruta|sin ruta/i)
-    expect(pe!.donde).toBe("sin superficie")
-    expect(pe!.detalle).toMatch(/store legacy|ya no existe/i)
+  // Decisión owner 2026-11-07: las banderas `residenteVeMorosidad` y
+  // `alertasResidentesActivas` se retiraron de la superficie y del inventario ABAC.
+  // Lo que queda declarado sobre privacidad es sólo `residenteVeActas`, que sí se obedece.
+  it("las banderas retiradas ya no se declaran en el inventario ABAC", () => {
+    const retiradas = reglas.filter((e) =>
+      /residenteVeMorosidad|alertasResidentesActivas/.test(`${e.condicion} ${e.detalle ?? ""}`)
+    )
+    expect(retiradas).toEqual([])
+    expect(reglas.filter((e) => /residenteVeActas/.test(e.condicion)).map((e) => e.recurso).sort()).toEqual([
+      "gd",
+      "gd:acta",
+    ])
   })
 
   it("retorna copia no referencial y nunca desincroniza con el motor (puedeContextual)", () => {

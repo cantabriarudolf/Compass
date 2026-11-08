@@ -23,9 +23,7 @@ function controlValido(overrides: Record<string, unknown> = {}): Record<string, 
   return {
     id: "ad-ctrl-1",
     unidadId: "ad-u1",
-    residenteVeMorosidad: false,
     residenteVeActas: true,
-    alertasResidentesActivas: true,
     ...overrides,
   }
 }
@@ -65,7 +63,7 @@ describe("/api/controles-propiedad — AD con BD real (Fase 2)", () => {
     ]) {
       await prisma.comunidad.upsert({ where: { id: c.id }, update: {}, create: c })
     }
-    for (const u of [unidad("ad-u1", "101"), unidad("ad-u2", "102")]) {
+    for (const u of [unidad("ad-u1", "101"), unidad("ad-u2", "102"), unidad("ad-u3", "103")]) {
       await prisma.unidad.upsert({ where: { id: u.id as string }, update: {}, create: u as never })
     }
     // Residente vinculado a U1 (no a U2).
@@ -204,6 +202,43 @@ describe("/api/controles-propiedad — AD con BD real (Fase 2)", () => {
     })
   })
 
+  // Decisión owner 2026-11-07: `residenteVeMorosidad` y `alertasResidentesActivas` se
+  // retiraron de la superficie (nadie las obedecía). La API ya no las lista ni las
+  // acepta: el payload blanqueado las descarta y las columnas —@deprecated en Prisma,
+  // se quedan porque borrarlas exige migración con datos en SQLite— conservan el
+  // default histórico documentado, nunca el valor que mande el cliente.
+  it("los campos retirados no están en el contrato: el payload blanqueado los descarta", async () => {
+    const { coleccion } = await cargaModulos()
+    expect(
+      coleccion.limpiarPayloadControl({
+        id: "ad-ctrl-x",
+        comunidadId: comunidadB,
+        unidadId: "ad-u3",
+        residenteVeActas: true,
+        residenteVeMorosidad: true,
+        alertasResidentesActivas: false,
+      })
+    ).toEqual({ unidadId: "ad-u3", residenteVeActas: true })
+  })
+
+  it("POST con los campos retirados → 201 y las columnas quedan en su default histórico", async () => {
+    await conSesion(emailAdmin, async () => {
+      const res = await POST(
+        controlValido({
+          id: "ad-ctrl-retirado",
+          unidadId: "ad-u3",
+          residenteVeMorosidad: true,
+          alertasResidentesActivas: false,
+        })
+      )
+      expect(res.status).toBe(201)
+      const enBd = await prisma.controlPropiedad.findUnique({ where: { id: "ad-ctrl-retirado" } })
+      expect(enBd?.residenteVeActas).toBe(true)
+      expect(enBd?.residenteVeMorosidad).toBe(false)
+      expect(enBd?.alertasResidentesActivas).toBe(true)
+    })
+  })
+
   it("unidad inexistente → 400; duplicado por unidad → 409", async () => {
     await conSesion(emailAdmin, async () => {
       const mala = await POST(controlValido({ id: "ad-ctrl-mala", unidadId: "ad-u9" }))
@@ -234,9 +269,12 @@ describe("/api/controles-propiedad — AD con BD real (Fase 2)", () => {
 
   it("PUT parcial persiste; DELETE desestima con archivo (admin)", async () => {
     await conSesion(emailAdmin, async () => {
-      const put = await PUT("ad-ctrl-1", { residenteVeMorosidad: true })
+      const put = await PUT("ad-ctrl-1", { residenteVeActas: false })
       expect(put.status).toBe(200)
-      expect((await prisma.controlPropiedad.findUnique({ where: { id: "ad-ctrl-1" } }))?.residenteVeMorosidad).toBe(true)
+      const trasPut = await prisma.controlPropiedad.findUnique({ where: { id: "ad-ctrl-1" } })
+      expect(trasPut?.residenteVeActas).toBe(false)
+      // El campo retirado del contrato ya no viaja: la columna no se mueve del default.
+      expect(trasPut?.residenteVeMorosidad).toBe(false)
       expect((await DELETE("ad-ctrl-2")).status).toBe(200)
       // Borrado lógico: la fila NO desaparece, queda desestimada y con copia.
       const enBd = await prisma.controlPropiedad.findUnique({ where: { id: "ad-ctrl-2" } })
@@ -254,6 +292,7 @@ describe("/api/controles-propiedad — AD con BD real (Fase 2)", () => {
         id: "ad-ctrl-b",
         comunidadId: comunidadB,
         unidadId: "ad-ub1",
+        // Columnas @deprecated: la fila sembrada directo en Prisma las sigue exigiendo.
         residenteVeMorosidad: false,
         residenteVeActas: false,
         alertasResidentesActivas: true,

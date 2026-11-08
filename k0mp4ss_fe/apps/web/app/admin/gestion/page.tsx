@@ -14,9 +14,9 @@
  *   2. Privacidad por unidad — matriz de una fila por unidad, porque la unidad es
  *      el sujeto real del control.
  *
- * Paridad de contrato: `actualizarControl` conserva el upsert idempotente y los
- * defaults (morosidad y actas ocultas, alertas activas). No cambia qué se guarda
- * ni quién lo ve.
+ * Paridad de contrato: `actualizarControl` conserva el upsert idempotente y el default
+ * (actas ocultas). Los interruptores de morosidad y alertas se retiraron el 2026-11-07
+ * (decisión owner): nadie los obedecía, así que la pantalla dejó de prometerlos.
  */
 import * as React from "react"
 import { mutate as mutateGlobal } from "swr"
@@ -440,9 +440,7 @@ export default function GestionAdministrativaPage() {
       ...(base ?? {
         id: `ctrl-${unidadId}`,
         unidadId,
-        residenteVeMorosidad: false,
         residenteVeActas: false,
-        alertasResidentesActivas: true,
       }),
       ...over,
     }
@@ -453,9 +451,7 @@ export default function GestionAdministrativaPage() {
     const base: ControlPropiedad = existente ?? {
       id: `ctrl-${unidadId}`,
       unidadId,
-      residenteVeMorosidad: false,
       residenteVeActas: false,
-      alertasResidentesActivas: true,
     }
     setOverrideControles(prev => ({ ...prev, [unidadId]: { ...prev[unidadId], ...cambios } }))
     setPendientes(prev => ({ ...prev, [unidadId]: true }))
@@ -769,8 +765,8 @@ export default function GestionAdministrativaPage() {
               </label>
             </div>
             <p className="text-xs text-muted-foreground">
-              Valores por defecto: el residente <strong>no</strong> ve morosidad ni actas, y las alertas
-              están activas. Cambiar un switch guarda la configuración de esa unidad.
+              Valor por defecto: el residente <strong>no</strong> ve las actas. Cambiar el switch
+              guarda la configuración de esa unidad.
             </p>
             <AvisoTruncamiento mostrados={unidades.length} total={totalUnidades} />
           <p className="text-xs text-muted-foreground">
@@ -793,9 +789,7 @@ export default function GestionAdministrativaPage() {
                     <TableRow>
                       <TableHead>Unidad</TableHead>
                       <TableHead>Propietario</TableHead>
-                      <TableHead className="text-center">Ve morosidad</TableHead>
                       <TableHead className="text-center">Ve actas</TableHead>
-                      <TableHead className="text-center">Recibe alertas</TableHead>
                       <TableHead>Origen</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -815,30 +809,10 @@ export default function GestionAdministrativaPage() {
                             </TableCell>
                             <TableCell className="text-center">
                               <Switch
-                                checked={c?.residenteVeMorosidad ?? false}
-                                disabled={guardando}
-                                aria-label={`Morosidad visible en ${nombre}`}
-                                onCheckedChange={v =>
-                                  actualizarControl(u.id, { residenteVeMorosidad: v })
-                                }
-                              />
-                            </TableCell>
-                            <TableCell className="text-center">
-                              <Switch
                                 checked={c?.residenteVeActas ?? false}
                                 disabled={guardando}
                                 aria-label={`Actas visibles en ${nombre}`}
                                 onCheckedChange={v => actualizarControl(u.id, { residenteVeActas: v })}
-                              />
-                            </TableCell>
-                            <TableCell className="text-center">
-                              <Switch
-                                checked={c?.alertasResidentesActivas ?? true}
-                                disabled={guardando}
-                                aria-label={`Alertas activas en ${nombre}`}
-                                onCheckedChange={v =>
-                                  actualizarControl(u.id, { alertasResidentesActivas: v })
-                                }
                               />
                             </TableCell>
                             <TableCell>
@@ -856,7 +830,7 @@ export default function GestionAdministrativaPage() {
                           </TableRow>
                           {error && (
                             <TableRow>
-                              <TableCell colSpan={6} className="py-1">
+                              <TableCell colSpan={4} className="py-1">
                                 <p role="alert" className="text-xs text-destructive">
                                   {nombre}: {error}
                                 </p>

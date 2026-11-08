@@ -1736,7 +1736,7 @@ describe("controles-propiedad — propio, otra unidad (T3/T4)", () => {
         moduloControlPropiedad(),
         "PUT",
         "controles-propiedad/[id]",
-        { params: { id: CONTROL_A2 }, body: { residenteVeMorosidad: true, residenteVeActas: false } }
+        { params: { id: CONTROL_A2 }, body: { residenteVeActas: false } }
       )
       // app/api/controles-propiedad/[id]/route.ts:92 — la escritura exige
       // `puedeGestionarControles(rol, "editar")` (`ad` editar, que el residente no

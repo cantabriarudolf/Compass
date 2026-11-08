@@ -564,18 +564,16 @@ export const MensajeBuzonCOSchema = z.object({
 // --- Gestión Administrativa (AD) ---
 
 // Controles de privacidad/comunicación del propietario sobre su unidad.
-// Defaults al leer sin registro: {residenteVeMorosidad:false, residenteVeActas:false, alertasResidentesActivas:true}
+// Default al leer sin registro: {residenteVeActas:false}
+// `residenteVeMorosidad` y `alertasResidentesActivas` se retiraron de la superficie el
+// 2026-11-07 (decisión owner): ninguna ruta las obedecía, así que el contrato dejó de
+// prometerlas. Las columnas siguen en la base marcadas @deprecated; borrarlas exige una
+// migración con datos en SQLite, que es decisión aparte.
 export const ControlPropiedadSchema = z.object({
   id: IdEntidadSchema,
   unidadId: IdEntidadSchema,
-  residenteVeMorosidad: z.boolean({
-    required_error: "El flag de morosidad visible es obligatorio.",
-  }),
   residenteVeActas: z.boolean({
     required_error: "El flag de actas visibles es obligatorio.",
-  }),
-  alertasResidentesActivas: z.boolean({
-    required_error: "El flag de alertas es obligatorio.",
   }),
   // Borrado lógico (decisión owner 2026-10-21): al ausentarse se asume "vigente";
   // "desestimada" solo lo escribe el DELETE (borrado lógico con archivo).

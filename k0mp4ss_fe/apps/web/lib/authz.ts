@@ -465,7 +465,7 @@ export interface ContextoABAC {
   personaId?: string // identidad del usuario autenticado (sesión)
   unidadId?: string // unidad reclamada
   unidadIdsVinculadas?: string[] // unidades con vínculo vigente del usuario
-  privacidad?: { residenteVeMorosidad?: boolean; residenteVeActas?: boolean; alertasResidentesActivas?: boolean }
+  privacidad?: { residenteVeActas?: boolean }
 }
 
 /**
@@ -514,22 +514,6 @@ export function puedeContextual(rol: string, accion: string, recurso: string, ct
   if (recursoNorm === "gd" || recursoNorm.startsWith("gd:")) {
     if (rolNorm === "residente") {
       return !!ctx.privacidad?.residenteVeActas
-    }
-    return true
-  }
-  // Morosidad FI/MP visible según privacidad (paridad con app/admin/gestion/page.tsx switch + controlesPropiedad)
-  if (recursoNorm === "mp:morosidad" || recursoNorm === "fi:morosidad") {
-    if (rolNorm === "residente") {
-      return !!ctx.privacidad?.residenteVeMorosidad
-    }
-    return true
-  }
-  // Alertas a residente silenciables (paridad con lib/store.ts:1327 notify gate alertasResidentesActivas)
-  // Recurso semántico: si se evalúa notificación operativa a residente, checkea alertasResidentesActivas
-  if (recursoNorm === "notify:residente" || recursoNorm === "pe:notify_residente") {
-    if (rolNorm === "residente") {
-      // default true si no hay control; solo false explícito silencia
-      if (ctx.privacidad?.alertasResidentesActivas === false) return false
     }
     return true
   }
@@ -651,12 +635,6 @@ const REGLAS_ABAC: EntradaABAC[] = [
   // GD — privacidad actas (motor, migrado P4)
   { rol: "residente", recurso: "gd", condicion: "según privacidad: residenteVeActas", descripcion: "Residente solo ve actas si el control de privacidad lo autoriza", donde: "motor", detalle: "lib/authz.ts:puedeContextual gd residenteVeActas — migrado P4 desde app/comunidad/directiva/page.tsx:73" },
   { rol: "residente", recurso: "gd:acta", condicion: "según privacidad: residenteVeActas", descripcion: "Actas GD visibles solo si propietario autorizó (privacidad)", donde: "motor", detalle: "lib/authz.ts:puedeContextual gd:* residenteVeActas" },
-  // Morosidad — privacidad (check local heredado P4)
-  { rol: "residente", recurso: "mp:morosidad", condicion: "según privacidad: residenteVeMorosidad", descripcion: "Visibilidad de morosidad FI filtrada por control de privacidad", donde: "sin superficie", detalle: "puedeContextual lee `residenteVeMorosidad`, pero NINGUNA ruta llama al motor: el «check local» que este inventario citaba vivía en `lib/store.ts`, retirado con el store legacy (decisión 2026-11-07: sin motor; la bandera queda sin superficie hasta que exista una vista de morosidad para el residente)" },
-  { rol: "residente", recurso: "fi:morosidad", condicion: "según privacidad: residenteVeMorosidad", descripcion: "Visibilidad de morosidad FI para residente según privacidad", donde: "sin superficie", detalle: "puedeContextual lee la bandera en fi:morosidad; sin ruta que lo llame. El check local citado ya no existe (store legacy retirado)" },
-  // Alertas a residente — privacidad (check local heredado P4)
-  { rol: "residente", recurso: "notify:residente", condicion: "según privacidad: alertasResidentesActivas", descripcion: "Notificaciones operativas a residente silenciables por privacidad", donde: "sin superficie", detalle: "puedeContextual lee `alertasResidentesActivas` en notify:residente; ninguna ruta lo llama. El check local citado (lib/store.ts:1327) se retiró con el store legacy" },
-  { rol: "residente", recurso: "pe:notify_residente", condicion: "según privacidad: alertasResidentesActivas", descripcion: "Notificaciones PE a residente respetan alerta activa", donde: "sin superficie", detalle: "puedeContextual lee la bandera en pe:notify_residente; sin ruta que lo llame. El check local citado (lib/store.ts:1327) ya no existe" },
 ]
 
 /**

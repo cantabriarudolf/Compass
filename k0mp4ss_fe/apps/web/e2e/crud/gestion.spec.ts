@@ -4,7 +4,7 @@ import { guardarDialogo } from "../helpers/form-dialog"
 test.use({ actionTimeout: 30_000 })
 
 test.describe("CRUD — Admin/Gestion", () => {
-  test("toggle privacidad morosidad visible y flujo Cargar firma en ficha (Sheet)", async ({ page }) => {
+  test("toggle de privacidad de actas visibles y flujo Cargar firma en ficha (Sheet)", async ({ page }) => {
     const errores: string[] = []
     page.on("pageerror", (err) => errores.push(err.message))
 
@@ -17,17 +17,18 @@ test.describe("CRUD — Admin/Gestion", () => {
     await expect(tabPrivacidad).toBeVisible({ timeout: 15_000 })
     await tabPrivacidad.click()
 
-    // Primer switch con name accesible "Morosidad visible en <unidad>":
-    // leer, flippear y afirmar el flip explícitamente. Sin guardas de
-    // visibilidad: si la matriz no está, el test FALLA.
-    const switchMorosidad = page.getByRole("switch", { name: /Morosidad visible en/ }).first()
-    await expect(switchMorosidad).toBeVisible({ timeout: 15_000 })
-    const checkedBefore = (await switchMorosidad.getAttribute("aria-checked")) === "true"
+    // El único switch de privacidad que queda es el de actas: los de morosidad y
+    // alertas se retiraron el 2026-11-07 porque nadie los obedecía (ver
+    // `specs/RP-roles-permisos/spec.md`). Leer, flippear y afirmar el flip
+    // explícitamente; sin guardas de visibilidad: si la matriz no está, FALLA.
+    const switchActas = page.getByRole("switch", { name: /Actas visibles en/ }).first()
+    await expect(switchActas).toBeVisible({ timeout: 15_000 })
+    const checkedBefore = (await switchActas.getAttribute("aria-checked")) === "true"
     const esperadoTrasClick = checkedBefore ? "false" : "true"
-    await switchMorosidad.click()
+    await switchActas.click()
     await expect(
-      switchMorosidad,
-      "El switch de morosidad debe flippear aria-checked tras click",
+      switchActas,
+      "El switch de actas debe flippear aria-checked tras click",
     ).toHaveAttribute("aria-checked", esperadoTrasClick, { timeout: 10_000 })
     const checkedAfter = esperadoTrasClick === "true"
 
@@ -35,7 +36,7 @@ test.describe("CRUD — Admin/Gestion", () => {
     await page.reload()
     await expect(page.getByRole("heading", { name: /Gestión Administrativa/ })).toBeVisible({ timeout: 15_000 })
     await tabPrivacidad.click()
-    const switchRecheck = page.getByRole("switch", { name: /Morosidad visible en/ }).first()
+    const switchRecheck = page.getByRole("switch", { name: /Actas visibles en/ }).first()
     await expect(switchRecheck).toBeVisible({ timeout: 15_000 })
     const ariaRecheck = await switchRecheck.getAttribute("aria-checked")
     expect(ariaRecheck === "true").toBe(checkedAfter)
