@@ -64,22 +64,26 @@ async function columnasDePersona(): Promise<Referencia[]> {
  * que se verifica es justamente lo que el ORM no modela: no hay `@relation`.
  */
 async function filasRotas(ref: Referencia): Promise<Array<{ id: string; valor: string }>> {
+  const tipo = (ref.tipo ?? "").toLowerCase()
   if (EN_POSTGRES) {
-    const esJson = (ref.tipo ?? "").includes("json")
+    // PostgreSQL tipa TODAS las ramas de un `CASE`, aunque no se ejecuten: con una
+    // columna jsonb, la rama escalar intentaba `text = jsonb` y la consulta moría con
+    // «operator does not exist» (lo cazó `unit-pg`). Por eso acá no hay CASE: se arma
+    // UNA expresión según la forma real de la columna.
+    const condicion = tipo.includes("json")
+      ? `EXISTS (SELECT 1 FROM jsonb_array_elements_text(t."${ref.columna}"::jsonb) AS je(v)
+                  WHERE je.v IS NOT NULL
+                    AND NOT EXISTS (SELECT 1 FROM personas p WHERE p.id = je.v))`
+      : tipo === "array"
+        ? `EXISTS (SELECT 1 FROM unnest(t."${ref.columna}") AS v
+                    WHERE v IS NOT NULL
+                      AND NOT EXISTS (SELECT 1 FROM personas p WHERE p.id = v))`
+        : `NOT EXISTS (SELECT 1 FROM personas p WHERE p.id = t."${ref.columna}")`
     return prisma.$queryRawUnsafe<Array<{ id: string; valor: string }>>(
       `SELECT t.id::text AS id, t."${ref.columna}"::text AS valor
          FROM "${ref.tabla}" t
         WHERE t."${ref.columna}" IS NOT NULL
-          AND (
-            CASE WHEN ${esJson ? "true" : "false"}
-              THEN EXISTS (
-                SELECT 1 FROM jsonb_array_elements_text(t."${ref.columna}"::jsonb) AS je(v)
-                 WHERE je.v IS NOT NULL
-                   AND NOT EXISTS (SELECT 1 FROM personas p WHERE p.id = je.v)
-              )
-              ELSE NOT EXISTS (SELECT 1 FROM personas p WHERE p.id = t."${ref.columna}")
-            END
-          )
+          AND ${condicion}
         LIMIT 5`
     )
   }
