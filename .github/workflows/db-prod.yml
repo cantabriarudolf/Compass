@@ -107,7 +107,13 @@ jobs:
             --to-schema-datamodel prisma/schema.prisma \
             --script > /tmp/deriva.sql
           echo "--- deriva ---"; cat /tmp/deriva.sql; echo "--- fin ---"
-          if [ ! -s /tmp/deriva.sql ]; then
+          # `migrate diff --script` NO escribe un archivo vacío cuando no hay deriva:
+          # escribe `-- This is an empty migration.`. Un chequeo `-s` (¿tiene bytes?)
+          # daría «pendiente» siempre —y la verificación posterior fallaría incluso
+          # después de aplicar bien—, así que se mira el SQL ÚTIL: se descartan
+          # comentarios y líneas en blanco. Lo cazó el primer run de diagnóstico.
+          SQL_UTIL=$(grep -vE '^[[:space:]]*(--.*)?$' /tmp/deriva.sql || true)
+          if [ -z "$SQL_UTIL" ]; then
             echo "deriva=vacia" >> "$GITHUB_OUTPUT"
             echo "destructivo=no" >> "$GITHUB_OUTPUT"
             echo "La base real ya coincide con el esquema: no hay nada que aplicar."
@@ -183,9 +189,10 @@ jobs:
             --from-url "$DATABASE_URL" \
             --to-schema-datamodel prisma/schema.prisma \
             --script > /tmp/despues.sql
-          if [ -s /tmp/despues.sql ]; then
-            echo "::error title=La base no quedó alineada::Después de aplicar, el diff sigue teniendo sentencias:"
-            cat /tmp/despues.sql
+          SQL_DESPUES=$(grep -vE '^[[:space:]]*(--.*)?$' /tmp/despues.sql || true)
+          if [ -n "$SQL_DESPUES" ]; then
+            echo "::error title=La base no quedó alineada::Después de aplicar, el diff sigue teniendo sentencias útiles:"
+            echo "$SQL_DESPUES"
             exit 1
           fi
           echo "La base real quedó alineada con el esquema."
