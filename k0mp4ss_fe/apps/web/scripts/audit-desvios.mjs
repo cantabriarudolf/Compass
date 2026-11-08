@@ -661,7 +661,7 @@ const EXCEPCIONES_R1 = [
   {
     recurso: "notify:residente",
     motivo:
-      "recurso semántico del ABAC, no de RBAC: lo evalúa puedeContextual con el control de privacidad alertasResidentesActivas y hoy ninguna ruta lo pide (el chequeo local vive en lib/store.ts:1327). Declararlo en la MATRIZ abriría un permiso que ningún rol debe tener.",
+      "recurso semántico del ABAC, no de RBAC: lo implementaba `puedeContextual` contra el control de privacidad `alertasResidentesActivas`, que se retiró el 2026-11-07 junto con la regla —ninguna ruta lo pedía y el chequeo local que este motivo citaba (`lib/store.ts:1327`) se fue con el store legacy—. Hoy el motor ya no lo evalúa y ninguna ruta lo llamaría. Declararlo en la MATRIZ abriría un permiso que ningún rol debe tener.",
   },
   // --- Baseline de raíz desnuda (medido el 2026-11-03). NO es un aval: es una foto del
   // estado para que la lista no crezca. Cada entrada nombra sus rutas y su motivo dice por

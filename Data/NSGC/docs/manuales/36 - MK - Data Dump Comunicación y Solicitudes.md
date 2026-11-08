@@ -1,6 +1,6 @@
 # 📋 MK - Data Dump: Comunicación y Solicitudes (Sesión 2 NSGC)
 
-> Registros resueltos de las colecciones CO/GE. La única colección **con datos sembrados** es `plantillasCO` (5 plantillas del NSGC); `enviosCO`, `mensajesBuzonCO`, `documentosCO` y `solicitudesGE` están **vacías por diseño** y se pueblan desde la UI.
+> Registros resueltos de las colecciones CO/GE. La única colección **con datos sembrados** es `plantillasCO` (5 plantillas del NSGC); `enviosCO`, `mensajesBuzonCO` y `solicitudesGE` están **vacías por diseño** y se pueblan desde la UI. `documentosCO` **ya no existe**: la tabla `documentos_co` se retiró el 2026-11-07 (`9f9c363`) y su papel lo hace el Archivo de Documentos de AD.
 > Fuente: `k0mp4ss_fe/apps/web/data/comunidad/plantillas-co.ts` + `lib/store.ts` (seeds) + `lib/schemas.ts` (esquemas). Store v14/v15.
 
 ## 📢 Plantillas CO — `plantillasCO` (5 registros sembrados)
@@ -58,7 +58,9 @@ El ciclo operativo del ticket vive en `solicitudesGE` (tipo `buzon`) vía `mensa
 
 ---
 
-## 📚 Biblioteca — `documentosCO` (0 registros)
+## 📚 Biblioteca — `documentosCO` (retirada el 2026-11-07)
+
+Estructura histórica, conservada para leer filas viejas de la bitácora:
 
 | Campo | Tipo | Obligatorio | Notas |
 |-------|------|-------------|-------|
@@ -69,9 +71,7 @@ El ciclo operativo del ticket vive en `solicitudesGE` (tipo `buzon`) vía `mensa
 | `tamanoKB` | number ≥ 0 | ✅ | Solo metadato |
 | `url` | string ≤2048 | ✅ | D1: http(s); rechaza `data:` y `blob:` |
 
-Descarga auditada → evento `CO_DOC_DOWNLOAD` (servida por `/api/co/documentos/[id]`).
-
-> **Estado (2026-11-07): colección retirada de la interfaz.** La pestaña «Biblioteca» de Comunicación ya no existe: el **Archivo de Documentos de la Comunidad** (AD) es la única lista de documentos y su filtro `comunitario` hace el papel de esta biblioteca. La tabla `documentos_co` y la API `/api/co/documentos` quedan `@deprecated`, sin consumidores nuevos, y sus filas se migran a `documentos` en una unidad posterior; por eso el dump sigue describiendo la estructura. `CO_DOC_DOWNLOAD` sobrevive solo en la bitácora histórica: la apertura de un documento del archivo se audita con `AD_DOC_APERTURA`.
+> **Estado: colección eliminada, no deprecada.** La pestaña «Biblioteca» de Comunicación ya no existe y la capa de datos también se fue: el commit `9f9c363` movió las filas a `documentos` (mapeo columna por columna: `naturaleza`=comunitario, `tipoDocumental`=otros, `glosa`=nombre, `version` corrida por el `MAX(version)` de cada comunidad y tipo) y después soltó la tabla. `DocumentoCO`, `/api/co/documentos` (colección y detalle), `useDocumentosCO`, `saveDocumentoCO`/`removeDocumentoCO` y la entrada de los dos schemas Prisma **ya no existen**; `Documento` (AD) es la única entidad documental. `CO_DOC_DOWNLOAD` sobrevive sólo en la bitácora histórica: la apertura de un documento del archivo se audita con `AD_DOC_APERTURA`.
 >
 > El archivo nuevo tiene su propio dump resuelto en `28 - MK - Catálogo de Datos Semilla.md` §16 (tres documentos legales + una circular comunitaria). No se duplica acá.
 

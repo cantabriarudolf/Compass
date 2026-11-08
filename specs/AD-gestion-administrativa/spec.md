@@ -17,16 +17,17 @@ El panel del administrador SHALL presentar los perfiles de propietarios, residen
 - **THEN** se persiste solo como URL/referencia con metadatos, nunca base64/Blob
 
 ### Requirement: Controles de Privacidad y Comunicación del Propietario
-El sistema MUST mantener una colección `controlesPropiedad` por unidad con los flags `residenteVeMorosidad`, `residenteVeActas` y `alertasResidentesActivas`, editables por el propietario de la unidad y por administración mediante `saveControlPropiedad` (validando FK a `unidades` y retornando `StoreResult`). Por defecto los flags de visibilidad están desactivados y las alertas activadas. Todo cambio emite el evento AM `AD_OWNER_CONFIG_CHANGE`.
+El sistema MUST mantener una colección `controlesPropiedad` por unidad con el único flag de privacidad vivo, `residenteVeActas`, editable por el propietario de la unidad y por administración mediante `saveControlPropiedad` (validando FK a `unidades` y retornando `StoreResult`). Por defecto el flag de visibilidad está desactivado. Todo cambio emite el evento AM `AD_OWNER_CONFIG_CHANGE`. Los flags `residenteVeMorosidad` y `alertasResidentesActivas` se retiraron de la superficie el 2026-11-07 porque ninguna ruta los obedecía: dejan de aceptarse en el contrato de escritura (`ControlPropiedadSchema` y la lista blanca de `app/api/controles-propiedad`), desaparecen de `/admin/gestion` y de `REGLAS_ABAC`, y sus columnas persisten en la base marcadas `@deprecated` hasta una migración con datos que las elimine; al crear un control el servidor las escribe con su valor histórico (`false` / `true`), nunca con lo que mande el cliente.
 
 #### Scenario: Notificar a Residentes
 - **WHEN** el propietario activa "Notificar a Residentes" para su unidad
-- **THEN** `residenteVeMorosidad` y/o `residenteVeActas` se persisten en `controlesPropiedad`
-- **AND** GD/FI consultan estos flags antes de mostrar actas o reportes de morosidad al residente
+- **THEN** `residenteVeActas` se persiste en `controlesPropiedad`
+- **AND** GD consulta ese flag antes de mostrar actas al residente; la morosidad ya no tiene control por unidad porque `residenteVeMorosidad` se retiró el 2026-11-07 (ninguna ruta la leía)
 
 #### Scenario: Gestión de Alertas Residentes
-- **WHEN** el propietario silencia "Gestión de Alertas Residentes" (visitas, encomiendas, reservas)
-- **THEN** `notify()` no genera notificaciones automáticas dirigidas al residente de esa unidad mientras `alertasResidentesActivas` sea `false`
+- **WHEN** el propietario busca silenciar "Gestión de Alertas Residentes" (visitas, encomiendas, reservas) en `/admin/gestion`
+- **THEN** no encuentra ese control —se retiró el 2026-11-07— y `notify()` no consulta ninguna bandera de alertas por unidad para decidir si notifica al residente
+- **AND** la columna `alertasResidentesActivas` permanece `@deprecated` en `controlesPropiedad` como valor histórico, fuera del contrato de escritura y de toda lectura
 
 #### Scenario: Cambio auditado
 - **WHEN** cualquier flag cambia

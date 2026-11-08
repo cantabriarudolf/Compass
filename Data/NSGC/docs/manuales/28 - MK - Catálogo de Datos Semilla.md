@@ -260,7 +260,7 @@ Consumido por: `lib/store.ts` (seedData). Dump completo en `36 - MK - Data Dump 
 | `plantillasCO` | v14 | 5 plantillas seed (arriba); CRUD libre | `savePlantillaCO`, `removePlantillaCO` (bloqueo si envíos la usan) |
 | `enviosCO` | v14 | Snapshot inmutable `{personaId, unidadId?}[]` + lecturas[] | `saveEnvioCO` (loop `notify()` + `CO_SEND_MASSIVE`), `registrarLecturaEnvioCO` (idempotente) |
 | `mensajesBuzonCO` | v14 | Folio `BUZ-####`, clasificación felicitacion/sugerencia/reclamo, estado recibido→en_gestion→resuelto→cerrado, respuestas[], `visibilidadComite` | `saveMensajeBuzonCO`, `responderMensajeBuzonCO` (auto En Gestión), `cambiarEstadoBuzonCO` (matriz estricta), `removeMensajeBuzonCO` |
-| `documentosCO` | v14 | Referencias D1 {nombre, tipoMime, tamanoKB, url, categoria} | `saveDocumentoCO` (rechaza data:/blob:), `removeDocumentoCO`, API REST `/api/co/documentos` (la descarga audita `CO_DOC_DOWNLOAD`) |
+| ~~`documentosCO`~~ | v14 | **Retirada** (2026-11-07, `9f9c363`): la reemplazó `Documento` del Archivo de Documentos de la Comunidad (AD). La tabla `documentos_co` se soltó después de mover sus filas a `documentos`; no hay colección viva ni seed | Sin acción: `saveDocumentoCO`, `removeDocumentoCO`, `DocumentoCO`, `/api/co/documentos` y `useDocumentosCO` ya no existen |
 | `solicitudesGE` | v15 | Folio `GE-####`, tipo insumos/grabaciones/buzon, estado workflow NSGC §1.4, comentarios[], historialEstados[] con timestamps SLA | `saveSolicitudGE`, `abrirSolicitudGE` (auto En Revisión), `responderSolicitudGE`, `resolverSolicitudGE`, `cerrarSolicitudGE`, `removeSolicitudGE` |
 
 Consumidores: `app/comunidad/comunicacion/page.tsx` (CO), `app/operaciones/solicitudes/page.tsx` (GE). Eventos AM: `CO_SEND_MASSIVE`, `CO_TICKET_CREATED/RESPONDIDO/ESTADO`, `CO_DOC_DOWNLOAD`; `GE_TICKET_CREATED/STATE_CHANGE/RESOLVED`.
@@ -387,8 +387,9 @@ maestros.ts (RAÍZ - sin dependencias)
 
 lib/store.ts consume TODOS los seeds anteriores y añade las colecciones
 PI/AD/GD vacías por diseño (v13) + CO/GE de la Sesión 2 (v14/v15):
-plantillasCO (sembrada), enviosCO, mensajesBuzonCO, documentosCO,
-solicitudesGE.
+plantillasCO (sembrada), enviosCO, mensajesBuzonCO, solicitudesGE.
+(`documentosCO` se retiró el 2026-11-07: el Archivo de Documentos de la
+comunidad, entidad `Documento` de AD, es la única lista documental.)
 ```
 
 ---

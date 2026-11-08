@@ -47,7 +47,7 @@ El sistema DEBE exponer esta matriz como snapshot legible para la vista administ
 - **THEN** the view MUST NOT offer actions to assign roles, edit memberships or mutate the matrix.
 
 ### Requirement: Permisos Contextuales (ABAC)
-The system SHALL support Attribute-Based Access Control for resource-specific or context-specific actions via `puedeContextual(rol, accion, recurso, contexto)` where `contexto` includes `personaId` (identidad propia), `unidadId` (unidad reclamada), `unidadIdsVinculadas` (unidades con vínculo vigente) and `privacidad { residenteVeMorosidad, residenteVeActas, alertasResidentesActivas }`. The system SHALL expose it as optional contextual filtering where applicable. The system MUST preserve least privilege and parity 1:1 with current decisions: `puedeContextual = puede() base + refinamiento ABAC` only for granular resources (`:propios`, `:propia`, `:residencia`, `:al_dia`, privacidad); resources without contextual dimension MUST delegate directly to `puede()`. Migration of existing inline checks SHALL NOT change observable decisions.
+The system SHALL support Attribute-Based Access Control for resource-specific or context-specific actions via `puedeContextual(rol, accion, recurso, contexto)` where `contexto` includes `personaId` (identidad propia), `unidadId` (unidad reclamada), `unidadIdsVinculadas` (unidades con vínculo vigente) and `privacidad { residenteVeActas }`. The system SHALL expose it as optional contextual filtering where applicable. The system MUST preserve least privilege and parity 1:1 with current decisions: `puedeContextual = puede() base + refinamiento ABAC` only for granular resources (`:propios`, `:propia`, `:residencia`, `:al_dia`, privacidad); resources without contextual dimension MUST delegate directly to `puede()`. Migration of existing inline checks SHALL NOT change observable decisions. El contexto SHALL declarar sólo las banderas de privacidad que tienen consumidor: `residenteVeActas` se obedece en `lib/api/gd-guard.ts` y en las rutas de actas (`actas-gd`, `cv/actas`). `residenteVeMorosidad` y `alertasResidentesActivas` se retiraron del contexto el 2026-11-07: sus cuatro reglas (`mp:morosidad`, `fi:morosidad`, `notify:residente`, `pe:notify_residente`) salieron de `REGLAS_ABAC` y de `puedeContextual` porque ninguna ruta las obedecía, y la identidad-tipo `residente` de esas ramas no protegía nada.
 
 #### Scenario: Supply Request Context
 - **WHEN** a resident requests a maintenance supply
@@ -67,16 +67,16 @@ The system SHALL support Attribute-Based Access Control for resource-specific or
 - **THEN** el sistema SHALL conceder; si `unidadId` no está en `unidadIdsVinculadas`, SHALL denegar (aunque `puede()` base sea true), preservando la validación `vinculoVigente` de `lib/store.ts:4253`.
 
 #### Scenario: Certificado al día exige unidad vinculada (saldo lo decide CT, no ABAC)
-- **WHEN** un residente llama `puedeContextual("residente","crear","ct:al_dia", { unidadId:"u-A-101", unidadIdsVinculadas:["u-A-101"] })`
-- **THEN** el sistema SHALL conceder si la unidad está vinculada; la deuda pendiente sigue bloqueando la emisión en `lib/store.ts` (no cambia decisión ABAC).
+- **WHEN** un residente llama `puedeContextual("residente","ver","ct:al_dia", { unidadId:"u-A-101", unidadIdsVinculadas:["u-A-101"] })`
+- **THEN** el sistema SHALL conceder si la unidad está vinculada; con `crear` SHALL denegar siempre, porque la matriz le da `ct:al_dia` sólo `ver` (F34: emitir un certificado sobre el estado de deudas es función del administrador) y la deuda pendiente sigue bloqueando la emisión en la capa CT (no cambia decisión ABAC).
 
 #### Scenario: Privacidad GD — residente solo ve actas si dueño autorizó
 - **WHEN** un residente llama `puedeContextual("residente","ver","gd", { privacidad:{ residenteVeActas:false } })`
 - **THEN** el sistema SHALL denegar; con `residenteVeActas:true` SHALL conceder si `puede()` base lo permite. Para roles no residentes, `privacidad` no refina.
 
 #### Scenario: Privacidad FI — residente solo ve morosidad si autorizado
-- **WHEN** un residente llama `puedeContextual("residente","ver","mp:morosidad", { privacidad:{ residenteVeMorosidad:false } })`
-- **THEN** el sistema SHALL denegar; con `residenteVeMorosidad:true` SHALL conceder si base lo permite (paridad con `controlesPropiedad` en `lib/store.ts:1327` y `app/comunidad/directiva/page.tsx:73`).
+- **WHEN** un residente llama `puedeContextual("residente","ver","mp:morosidad", {})` o con cualquier `privacidad` del contexto
+- **THEN** el sistema SHALL denegar en ambos casos: la bandera `residenteVeMorosidad` se retiró el 2026-11-07 (ninguna ruta la obedecía) y el residente no tiene `mp:morosidad` en la matriz, así que no hay contexto que abra lo que la base niega.
 
 #### Scenario: Delegación sin contexto para recursos no granulares
 - **WHEN** se llama `puedeContextual("comite","ver","fi:balance", {})` o cualquier recurso sin sufijo ABAC
@@ -159,15 +159,16 @@ Cualquier permiso no listado SHALL denegarse conforme a Menor Privilegio, regist
 ### Requirement: Matriz de Permisos del Módulo CT
 La matriz de permisos MUST definir el acceso a Certificados por rol:
 - **Administrador Maestro / administración**: generar cualquier tipología para cualquier unidad/persona; consultar y exportar el historial completo.
-- **Propietario / Residente**: solicitar certificado de residencia, estado de cuenta y al día de SU unidad; sin acceso al historial global.
+- **Propietario / Residente**: emitir **sólo** su certificado de residencia, para su vínculo vigente (`ct:residencia` crear), y leer lo suyo (`ct` ver, `ct:al_dia` ver); `estado_cuenta` y `al_dia` son actos del administrador (Ley 21.442 art. 20 N° 4 y art. 15) y su emisión le responde 403. Sin acceso al historial global.
 - **Conserjería / Seguridad (personal)**: descargar únicamente sus certificados de liquidación de sueldo confirmados.
-- **Directiva / Comité**: lectura del historial de emisión.
+- **Directiva / Comité**: lectura del historial de emisión por `ct` ver (`ct:historial` queda declarada vacía: no hay pantalla de historial propia y la lectura viaja por la clave padre).
+- La emisión se despacha por tipología a la clave que la gobierna (`RECURSO_DE_EMISION_POR_TIPO`, `lib/certificados-ct.ts`): `residencia` → `ct:residencia`, `al_dia` → `ct:al_dia`, `estado_cuenta` y `liquidacion_sueldo` → `ct`. `ct:propio` conserva `ver`+`crear` sin tipología que la pida: es deuda declarada, no una concesión viva.
 
 Cualquier permiso no listado SHALL denegarse conforme a Menor Privilegio, registrando `RP_PERMISSION_DENIED`.
 
 #### Scenario: Residente solicita solo lo suyo
-- **WHEN** un residente solicita un certificado Al Día
-- **THEN** solo puede seleccionar unidades donde mantiene vínculo vigente
+- **WHEN** un residente abre la emisión de certificados
+- **THEN** el formulario sólo ofrece `residencia` y cualquier unidad fuera de sus vínculos vigentes responde 404
 
 ### Requirement: Matriz de Permisos del Módulo RE
 La matriz de permisos MUST definir el acceso a Reportería y Dashboards por rol:
@@ -201,7 +202,7 @@ The system MUST let an authenticated user with memberships see the communities t
 - **THEN** the system MUST deny access with 403 and log the denial (AM).
 
 ### Requirement: Matriz Contextual visible
-El sistema MUST exponer en `/admin/permisos` la matriz contextual ABAC de forma read-only, derivada en tiempo de ejecución del snapshot de `lib/authz.ts` (`reglasContextuales()`). Cada entrada SHALL mostrar por rol: recurso, condición legible (ej. "solo propios", "unidad vinculada", "según privacidad"), descripción y dónde se aplica ("motor" para `puedeContextual` o "check local" para checks inline no migrados). La vista MUST mantener el badge "solo lectura" y cero botones de mutación, y MUST reflejar el snapshot del motor sin datos duros desincronizables.
+El sistema MUST exponer en `/admin/permisos` la matriz contextual ABAC de forma read-only, derivada en tiempo de ejecución del snapshot de `lib/authz.ts` (`reglasContextuales()`). Cada entrada SHALL mostrar por rol: recurso, condición legible (ej. "solo propios", "unidad vinculada", "según privacidad"), descripción y dónde se aplica, con tres valores: "motor" (lo aplica `puedeContextual` y una ruta lo llama), "check local" (lo aplica la ruta) y "sin superficie" (el motor lo implementa y ninguna ruta lo llama, así que hoy no protege nada). La vista MUST mantener el badge "solo lectura" y cero botones de mutación, y MUST reflejar el snapshot del motor sin datos duros desincronizables.
 
 #### Scenario: Snapshot derivado sin datos duros
 - **WHEN** se carga `/admin/permisos`
@@ -209,11 +210,12 @@ El sistema MUST exponer en `/admin/permisos` la matriz contextual ABAC de forma 
 
 #### Scenario: Reglas por rol con condición legible
 - **WHEN** un operador inspecciona la sección ABAC
-- **THEN** SHALL ver al menos una regla por cada rol con refinamiento ABAC (residente, conserjeria, comite, mantencion) con su recurso y badge de condición legible ("solo propios" | "solo propia" | "unidad vinculada" | "según privacidad: residenteVeActas" | "según privacidad: residenteVeMorosidad" | "según privacidad: alertasResidentesActivas").
+- **THEN** SHALL ver al menos una regla por cada rol con refinamiento ABAC (residente, conserjeria, comite, mantencion) con su recurso y badge de condición legible ("solo propios" | "solo propia" | "unidad vinculada" | "según privacidad: residenteVeActas").
 
 #### Scenario: Dónde se aplica — motor vs check local
 - **WHEN** se lista cada regla ABAC
-- **THEN** cada fila SHALL mostrar un badge "motor" si la regla está implementada en `puedeContextual` (ej. `gd`/`gd:*` con `residenteVeActas`, `mp:propios`, `pl:propia`, `ct:propio`/`ct:residencia`/`ct:al_dia` con vinculación) o "check local" si es un check inline aún no migrado por acoplo a store/UI (ej. `mp:morosidad`/`fi:morosidad` con `residenteVeMorosidad` en switches de `app/admin/gestion`, `notify:residente`/`pe:notify_residente` con `alertasResidentesActivas` en `lib/store.ts:1327`, `ct:al_dia` saldo en `lib/store.ts:4272`, `vinculoVigente` en `lib/store.ts:4253` / filtros `app/comunidad/certificados/page.tsx:177`).
+- **THEN** cada fila SHALL mostrar uno de los tres badges de "dónde se aplica": "motor" si la regla está implementada en `puedeContextual` y una ruta la llama (ej. `gd`/`gd:*` con `residenteVeActas`, `mp:propios`, `pl:propia`, `ct:propio`/`ct:residencia`/`ct:al_dia` con vinculación); "check local" si es un check inline que la ruta aplica y el motor no; o "sin superficie" si el motor la implementa y ninguna ruta la llama, con el detalle escrito de que hoy no protege nada.
+- **AND** el snapshot HOY tiene 12 reglas y todas son "motor": las cuatro de morosidad y alertas a residente salieron el 2026-11-07 con sus banderas, así que "check local" y "sin superficie" quedan como valores del contrato sin fila propia hasta que aparezca la primera.
 
 #### Scenario: Solo lectura sin mutaciones
 - **WHEN** cualquier usuario abre `/admin/permisos` con la sección ABAC visible

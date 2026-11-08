@@ -13,7 +13,7 @@
 | C2 Idempotencia poblado | ✅ HECHO — SERIE-FRONTERA P1 `0c9fb6a` — guard → confirmación "Limpiar y poblar de una vez" (`limpiar()`+`runFase todo`), e2e `poblado-idempotente` 2/2 | SERIE-FRONTERA P1 (00-plan.md + avance 2026-09-01 06-30) |
 | C1 Retención logs 5 años | ✅ HECHO — SERIE-FRONTERA P2 `1882e98` + P3 `a9cd1b7` — sync batch debounce 2s → `POST /api/auditoria/sync` upsert idempotente + `GET /api/auditoria` paginado + `/admin/logs` lee BD con paginación server-side y export CSV | SERIE-FRONTERA P2-P3 (avances 2026-09-01 07-15/08-15) |
 | C3 Google SSO | ⏸ **EN PAUSA** — requiere del owner (ver §C3 checklist) — provider en `lib/auth.ts` (runtime Node), solo usuarios activados, credentials fallback | Este archivo §C3 — pendiente |
-| C4 ABAC contextual | ✅ HECHO — SERIE-FRONTERA P4 `913489b` + P5 `d336cd6` — `puedeContextual(rol,accion,recurso,ctx)` puro + `reglasContextuales()` snapshot + matriz contextual read-only en `/admin/permisos` (16 reglas, motor/check local) | SERIE-FRONTERA P4-P5 (avances 2026-09-01 09-30/10-30) |
+| C4 ABAC contextual | ✅ HECHO — SERIE-FRONTERA P4 `913489b` + P5 `d336cd6` — `puedeContextual(rol,accion,recurso,ctx)` puro + `reglasContextuales()` snapshot + matriz contextual read-only en `/admin/permisos` (12 reglas hoy, badges `motor`/`check local`/`sin superficie`) | SERIE-FRONTERA P4-P5 (avances 2026-09-01 09-30/10-30) |
 
 ## C1 — Retención de logs de auditoría (5 años) — ✅ HECHO P2-P3 (1882e98/a9cd1b7)
 
@@ -68,8 +68,9 @@
 ## C4 — ABAC contextual completo — ✅ HECHO P4-P5 (913489b/d336cd6)
 
 - **Spec:** `specs/RP-roles-permisos/spec.md` §Permisos Contextuales (ABAC) +
-  atributos ya presentes: `mp:propios`, `pl:propia`, `ct:propio`, `residenteVeMorosidad`
-  (controles de privacidad `/admin/gestion`), `fi` filtrado por unidad.
+  atributos ya presentes: `mp:propios`, `pl:propia`, `ct:propio`, `residenteVeActas`
+  (único control de privacidad que quedó vivo en `/admin/gestion`; las otras dos banderas se
+  retiraron el 2026-11-07 porque ninguna ruta las obedecía), `fi` filtrado por unidad.
 - **Estado hoy:** parcial — `puede()` es RBAC puro; los filtros ABAC están hardcodeados en
   páginas/repos (propios/propia). Falta el modelo contextual formal (recurso + contexto →
   decisión) y su matriz visible.

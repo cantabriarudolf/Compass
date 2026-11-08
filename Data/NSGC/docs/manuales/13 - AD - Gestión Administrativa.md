@@ -4,15 +4,14 @@ El panel de trabajo del administrador: desde acá ves los perfiles de toda la co
 
 ## 🚀 Funcionalidad Principal
 
-Centralizar la gestión de personas bajo dos cajones — Comunidad y Recursos Humanos — y dar al propietario controles de privacidad/comunicación sobre su unidad. El archivo de documentos es la otra mitad: el papel que respalda lo que el panel administra, con su historia y su constancia de entrega.
+Centralizar la gestión de personas bajo dos cajones — Comunidad y Recursos Humanos — y dar al propietario controles de privacidad sobre su unidad. El archivo de documentos es la otra mitad: el papel que respalda lo que el panel administra, con su historia y su constancia de entrega.
 
 ## 🛠️ Secciones
 
 - **Cajón de Comunidad**: directorio de propietarios, residentes y miembros de directiva, con sus vínculos a unidades y roles.
 - **Cajón de Recursos Humanos**: acceso a fichas del personal (conserjería, aseo, administración).
-- **Controles por Unidad**: por cada propiedad definís `residenteVeMorosidad`, `residenteVeActas` y `alertasResidentesActivas`. Si la unidad no tiene registro, aplican los valores por defecto (morosidad oculta, actas ocultas, alertas activas). Cada control tiene un estado: `vigente` o `desestimada`. El administrador o el comité pueden desestimar un control, pero **nada se borra**: se copia a la tabla de archivo (`ControlPropiedadArchivada`, con quién y cuándo) y se emite `AD_CONTROL_DESESTIMADO`. El listado excluye los desestimados y al desestimar la unidad queda **liberada** para volver a registrar sus controles.
+- **Controles por Unidad**: por cada propiedad definís el único control de privacidad vivo, `residenteVeActas`. Si la unidad no tiene registro, aplica el valor por defecto (actas ocultas). Los interruptores de **morosidad** (`residenteVeMorosidad`) y de **alertas a residentes** (`alertasResidentesActivas`) **se retiraron el 2026-11-07** (decisión del owner): ninguna ruta los obedecía, así que la pantalla dejó de prometerlos. Las columnas siguen en la base marcadas `@deprecated`, con su valor histórico, hasta una migración con datos que las elimine: el alta escribe `false` / `true` y el `POST` de la ruta no acepta esas claves aunque el cliente las mande. Cada control tiene un estado: `vigente` o `desestimada`. El administrador o el comité pueden desestimar un control, pero **nada se borra**: se copia a la tabla de archivo (`ControlPropiedadArchivada`, con quién y cuándo) y se emite `AD_CONTROL_DESESTIMADO`. El listado excluye los desestimados y al desestimar la unidad queda **liberada** para volver a registrar sus controles.
 - **Desestimado no da permisos ni bloquea**: un control desestimado deja de contar — `residenteVeActas` solo suma controles **vigentes** (el archivo no hace visible un acta) y no bloquea eliminar un vínculo de propietario (el bloqueo pasó a mirar solo vigentes).
-- **Notificar a Residentes / Gestión de Alertas**: envío de alertas respetando el opt-out del propietario.
 - **Firma Digitalizada**: los cargos de directiva registran su firma como referencia (URL/metadata) para alimentar el flujo de actas de GD.
 - **Archivo de Documentos de la Comunidad (`/comunidad/archivo`)**: la única lista de documentos de la comunidad, con dos naturalezas sobre la misma entidad `Documento` (Ley 21.442 art. 9).
   - **Legal**: lo que la ley manda conservar y poder probar —reglamento de copropiedad y sus modificaciones, actas de asamblea y de comité, Registro de Copropietarios, permiso de edificación y planos, certificado de copropiedad y plano, proveedores y subcontratistas, carpeta de ascensores, manuales de instalaciones, plan de emergencia, pólizas de seguro, contabilidad y rendiciones—. Es **append-only**: editar o borrar responde 409 y la corrección es una versión nueva; el alta exige **referencia auténtica** (fojas, fecha, notaría o Conservador) y sin ella responde 400 con el campo señalado.
@@ -27,9 +26,9 @@ Centralizar la gestión de personas bajo dos cajones — Comunidad y Recursos Hu
 
 ## 💡 Tips de Oro
 
-- **Privacidad primero**: aunque el residente tenga vínculo vigente, solo ve morosidad o actas si el dueño lo autorizó acá.
+- **Privacidad primero**: aunque el residente tenga vínculo vigente, solo ve las actas si el dueño lo autorizó acá. Es el **único** control de privacidad por unidad que el sistema obedece.
 - **Firma por referencia**: la firma es una URL/metadato, jamás una imagen incrustada (decisión D1).
-- **Alertas silenciables**: si el propietario apaga `alertasResidentesActivas`, el sistema registra pero no notifica (decisión D3).
+- **Un control retirado no se disfraza**: los switches de morosidad y de alertas no se ocultaron ni se dejaron en gris — se quitaron del contrato, de la ruta y del motor. Una bandera que se muestra y nadie obedece enseña a desconfiar de todas las demás.
 - **Auditoría**: cambios de configuración, firmas y desestimaciones de controles generan eventos `AD_OWNER_CONFIG_CHANGE`, `AD_DIRECTIVA_SIGN_UPLOAD` y `AD_CONTROL_DESESTIMADO`; la depuración de una ficha de gobernanza al perder el rol `directiva` queda auditada con `AD_DIRECTIVA_DESVINCULADA` por cualquier vía de escritura (API incluida).
 - **Alcance actual**: lo contractual/previsional del personal vive en PE; acá solo hay acceso a fichas.
 - **Robustez ante extensiones nulas**: las listas de Directiva y Personal excluyen fichas con `datosGobernanza`/`datosLaborales` en `null` (igual que ausente); la página nunca revienta por eso.
@@ -43,7 +42,7 @@ Centralizar la gestión de personas bajo dos cajones — Comunidad y Recursos Hu
 
 - Lee identidades de **MP - Maestro de Personas** y vínculos de **VU - Vinculación de Unidades**.
 - Sus controles gobiernan la visibilidad de actas en **GD - Gestión de Directiva**.
-- Las alertas usan la bandeja simulada transversal (**ST - Capa de Datos Persistente**, D3).
+- Las alertas usan la bandeja simulada transversal (**ST - Capa de Datos Persistente**, D3); el envío no tiene opt-out por unidad desde el retiro de `alertasResidentesActivas` (2026-11-07).
 - El archivo respalda la versión del reglamento que rige el cobro en **FI - Finanzas y Morosidad** (`VersionReglamento.documentoId`): el alta exige un documento **legal** de la misma comunidad.
 - Las entregas de documentos legales usan la notificación interna del visor (**CV/ST**, D3) y el mismo emisor SMTP que el aviso de cobro (**FI**).
-- La biblioteca documental de **CO - Comunicación Vecinos** se fusionó acá: `DocumentoCO` y `/api/co/documentos` quedan `@deprecated` y sus filas se migran en una unidad posterior.
+- La biblioteca documental de **CO - Comunicación Vecinos** se fusionó acá y la tabla vieja ya no existe: `documentos_co`, `DocumentoCO`, `/api/co/documentos` y el hook `useDocumentosCO` se retiraron en el commit `9f9c363` después de mover sus filas a `documentos` (mapeo columna por columna, versionado corrido por el `MAX(version)` existente de cada comunidad y tipo). `Documento` es la única entidad documental.

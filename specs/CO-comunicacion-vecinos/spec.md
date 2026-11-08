@@ -18,9 +18,7 @@ El sistema MUST permitir componer un mensaje (manual o desde plantilla) y resolv
 - **WHEN** `saveEnvioCO` recibe un destinatario que no existe en `personas`
 - **THEN** retorna `{ok:false}` con error de integridad referencial y no muta el estado
 
-#### Scenario: Gate de alertas del propietario (AD)
-- **WHEN** el destinatario residente pertenece a una unidad cuyo dueño silenció `alertasResidentesActivas`
-- **THEN** `notify()` omite esa notificación operativa sin fallar el envío
+El silenciamiento por unidad que este requirement prometía (`alertasResidentesActivas`) **nunca tuvo consumidor**: `notify()` jamás lo consultó y el control se retiró de `/admin/gestion` el 2026-11-07. `saveEnvioCO` entrega a los destinatarios que resuelven los filtros, sin opt-out por unidad.
 
 ### Requirement: Confirmación de Lectura
 Cada envío MUST registrar qué destinatarios abrieron la comunicación oficial mediante
