@@ -64,6 +64,10 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          # Historia completa: el modo destructivo verifica que el SHA que nombra el
+          # archivo de intención sea ANCESTRO del commit aplicado (`merge-base
+          # --is-ancestor`), y eso no se puede resolver con un clon superficial.
+          fetch-depth: 0
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
@@ -172,12 +176,42 @@ jobs:
             echo "::error title=Intención inexistente::No existe '$ARCH' en este commit. Creá \`k0mp4ss_fe/apps/web/prisma/aplicar-prod/<AAAA-MM-DD>-<motivo>.md\`, commiteálo en el mismo commit que se aplica y repetí."
             exit 1
           fi
-          if ! grep -q "${{ github.sha }}" "$RUTA"; then
-            echo "::error title=La intención no nombra este commit::El archivo '$RUTA' tiene que nombrar el SHA \`${{ github.sha }}\` y decir qué se borra y por qué. Sin eso, el borrado no se aplica."
+          # El archivo no puede nombrar su propio commit (sería circular: el SHA no
+          # existe hasta que el archivo está commiteado). Nombra un commit ANTERIOR de
+          # la misma línea —el que retiró el código, el que hizo el ensayo— y el carril
+          # verifica que sea ancestro del que se aplica: el vínculo queda atado a un
+          # punto concreto de la historia, no a una frase suelta.
+          SHA_INT=$(grep -oE '\b[0-9a-f]{40}\b' "$RUTA" | head -1)
+          if [ -z "$SHA_INT" ]; then
+            echo "::error title=La intención no nombra un commit::El archivo '$RUTA' tiene que incluir el SHA completo (40 caracteres) del commit que retiró el código o hizo el ensayo."
             exit 1
           fi
+          if ! git merge-base --is-ancestor "$SHA_INT" HEAD; then
+            echo "::error title=El commit de la intención no es ancestro::El SHA '$SHA_INT' que nombra '$RUTA' no está en la historia del commit aplicado (${{ github.sha }}). La intención tiene que apuntar a un commit anterior de esta misma línea."
+            exit 1
+          fi
+          echo "intención: $RUTA (anclada en ${SHA_INT:0:8}, ancestro de ${{ github.sha }})"
           echo "### Intención declarada" >> "$GITHUB_STEP_SUMMARY"
           cat "$RUTA" >> "$GITHUB_STEP_SUMMARY"
+          # Antes de borrar, se cuenta lo que se pierde: sin esto el run dice «listo»
+          # y nadie sabe si se fue una tabla vacía o cien filas.
+          node -e '
+            const { PrismaClient } = require("@prisma/client");
+            const fs = require("fs");
+            const sql = fs.readFileSync("/tmp/deriva.sql", "utf8");
+            const tablas = [...new Set([...sql.matchAll(/DROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?"?([a-zA-Z0-9_]+)"?/gi)].map((m) => m[1]))];
+            const p = new PrismaClient();
+            (async () => {
+              for (const t of tablas) {
+                try {
+                  const r = await p.$queryRawUnsafe(`SELECT count(*)::int AS n FROM \"${t}\"`);
+                  console.log(`PÉRDIDA \u00b7 ${t}: ${r[0].n} fila(s)`);
+                } catch (e) {
+                  console.log(`PÉRDIDA \u00b7 ${t}: no se pudo contar (${String(e.message).split("\n")[0]})`);
+                }
+              }
+              await p.$disconnect();
+            })();'
           npx prisma db push --skip-generate --accept-data-loss
 
       - name: Verificar que la base quedó alineada
