@@ -777,9 +777,11 @@ const EXCEPCIONES_R1 = [
     "ct",
     [
       "app/api/certificados-ct/[id]/route.ts",
+      "app/api/certificados-ct/[id]/pdf/route.ts",
+      "app/api/certificados-ct/mis-vinculos/route.ts",
       "app/api/certificados-ct/route.ts",
     ],
-    "certificados CT: la raíz `ct` es el permiso del módulo completo; ct:propia, ct:propio, ct:residencia, ct:al_dia y ct:historial son alcances por unidad/persona con guard propio"
+    "certificados CT: la raíz `ct` es el permiso del módulo completo; ct:propia, ct:propio, ct:residencia, ct:al_dia y ct:historial son alcances por unidad/persona con guard propio. Las dos rutas de F34 (el PDF servido y `mis-vinculos`) piden la raíz a propósito: sirven CUALQUIER tipología que el que pide ya podía leer —el alcance por fila lo aplica `alcanceCertificadosCT`—, así que pedir un fino ahí mentiría sobre el acto"
   ),
   ...baselineRaiz(
     "re",

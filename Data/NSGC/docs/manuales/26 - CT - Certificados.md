@@ -34,6 +34,22 @@ El gate dejó de vivir solo en la pantalla: el servidor lo aplica siempre.
 - **La tipología también se decide en el servidor**: un `tipo` que no existe en el mapa de emisión responde 400, y uno cuya clave el rol no tiene responde 403, sin crear fila. La pantalla y la ruta leen el mismo mapa, así que no pueden divergir.
 - **Residuo honesto**: el certificado TEST no se puede borrar por diseño; lo purga la higiene e2e (`e2e:higiene`), no "Borrar todo lo de prueba" del laboratorio.
 
+### Cómo emite el residente, de punta a punta (F34, 2026-11-07)
+
+La pantalla del residente **no pide elegir persona ni unidad**: el servidor resuelve las dos desde su vínculo
+vigente, así que no necesita leer el padrón del edificio ni la configuración de la comunidad.
+
+- `GET /api/certificados-ct/mis-vinculos` — **auto-acotada**: devuelve sólo los vínculos vigentes de la sesión
+  (unidad, persona, RUT, rol). Nunca acepta ids del cliente.
+- `POST /api/certificados-ct` con `tipo: "residencia"` — si hay **un** vínculo vigente no hace falta anclar unidad ni
+  persona; si hay **varios**, responde 400 pidiendo elegir entre los propios. El residente no puede emitir las demás
+  tipologías (403).
+- `GET /api/certificados-ct/[id]/pdf` — el PDF lo sirve el servidor con alcance por fila (404 genérico para la ajena).
+  Es el mismo patrón que el aviso de cobro (F27) y la liquidación (T10).
+
+Lo único que el residente necesita para descargar es su propia sesión: ni `pe:bitacora` ni `cf` intervienen.
+
+
 ## 💡 Tips de Oro
 
 - **Gate Al Día visible**: antes de emitir, la pantalla muestra el saldo actual de la unidad; si está en verde califica, si no, la emisión será rechazada.
@@ -42,6 +58,7 @@ El gate dejó de vivir solo en la pantalla: el servidor lo aplica siempre.
 - **Media por referencia**: el sistema guarda solo la URL de la firma usada; el binario del PDF vive únicamente en tu descarga.
 - **Un certificado ajeno no existe**: ni en el historial ni en el detalle ni en el mensaje de rechazo. Si necesitás saber si una unidad está al día, mirá el saldo en su ficha con el permiso que corresponda, no el error de una emisión.
 - **El residente certifica dónde vive, no cuánto debe**: su residencia la emite él mismo, pero el «al día» y el estado de cuenta los firma el administrador porque la ley así lo exige. Un 403 ahí no es un defecto de la pantalla: es el reparto legal, y por eso el botón ni siquiera aparece.
+- **El residente no ve selects**: si ves un formulario pidiendo persona y unidad es el de administración; para el residente la pantalla muestra su vínculo y un botón. Si aparece «Tenés más de un vínculo vigente», elige entre **los suyos** — nunca del edificio.
 - **Auditoría**: `CT_GENERATE_RESIDENCE`, `CT_GENERATE_FINANCIAL`, `CT_GENERATE_PAYROLL`, `CT_GENERATE_AL_DIA`.
 
 ## 🔗 Dependencias
