@@ -170,8 +170,12 @@ jobs:
             echo "::error title=Falta la intención::\`aplicar-destructivo\` exige el input \`intencion\` con la ruta del archivo commiteado."
             exit 1
           fi
-          # El input se interpreta SIEMPRE relativo a la raíz del repo, no al cwd del job.
-          RUTA="../../$ARCH"
+          # El input se interpreta SIEMPRE relativo a la raíz del repo. Se pregunta a git
+          # por esa raíz en vez de contar `../`: el cwd del job es `k0mp4ss_fe/apps/web`,
+          # y contar mal los niveles fue exactamente el defecto del primer run real.
+          REPO_ROOT="$(git rev-parse --show-toplevel)"
+          RUTA="$REPO_ROOT/$ARCH"
+          echo "intención en $RUTA"
           if [ ! -f "$RUTA" ]; then
             echo "::error title=Intención inexistente::No existe '$ARCH' en este commit. Creá \`k0mp4ss_fe/apps/web/prisma/aplicar-prod/<AAAA-MM-DD>-<motivo>.md\`, commiteálo en el mismo commit que se aplica y repetí."
             exit 1
