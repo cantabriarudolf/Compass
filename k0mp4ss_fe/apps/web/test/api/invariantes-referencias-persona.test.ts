@@ -25,10 +25,27 @@ import { prisma } from "@/lib/prisma"
 interface Referencia {
   tabla: string
   columna: string
+  tipo?: string
 }
 
+/**
+ * El catálogo es distinto en cada motor y la suite corre contra los dos: SQLite en
+ * dev y en el job `unit`, PostgreSQL en `unit-pg`. La invariante tiene que valer en
+ * ambos o no es una invariante del sistema, es una del archivo.
+ */
+const EN_POSTGRES = (process.env.DATABASE_URL ?? "").startsWith("postgres")
+
 async function columnasDePersona(): Promise<Referencia[]> {
-  return prisma.$queryRaw<Referencia[]>`
+  if (EN_POSTGRES) {
+    return prisma.$queryRaw<Referencia[]>`
+      SELECT table_name AS tabla, column_name AS columna, data_type AS tipo
+      FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND (column_name LIKE '%personaId' OR column_name LIKE '%PersonaId')
+      ORDER BY table_name, column_name
+    `
+  }
+  const filas = await prisma.$queryRaw<Array<{ tabla: string; columna: string }>>`
     SELECT m.name AS tabla, p.name AS columna
     FROM sqlite_master m
     JOIN pragma_table_info(m.name) p
@@ -38,6 +55,7 @@ async function columnasDePersona(): Promise<Referencia[]> {
       AND (p.name LIKE '%personaId' OR p.name LIKE '%PersonaId')
     ORDER BY m.name, p.name
   `
+  return filas.map((f) => ({ ...f, tipo: "text" }))
 }
 
 /**
@@ -46,6 +64,25 @@ async function columnasDePersona(): Promise<Referencia[]> {
  * que se verifica es justamente lo que el ORM no modela: no hay `@relation`.
  */
 async function filasRotas(ref: Referencia): Promise<Array<{ id: string; valor: string }>> {
+  if (EN_POSTGRES) {
+    const esJson = (ref.tipo ?? "").includes("json")
+    return prisma.$queryRawUnsafe<Array<{ id: string; valor: string }>>(
+      `SELECT t.id::text AS id, t."${ref.columna}"::text AS valor
+         FROM "${ref.tabla}" t
+        WHERE t."${ref.columna}" IS NOT NULL
+          AND (
+            CASE WHEN ${esJson ? "true" : "false"}
+              THEN EXISTS (
+                SELECT 1 FROM jsonb_array_elements_text(t."${ref.columna}"::jsonb) AS je(v)
+                 WHERE je.v IS NOT NULL
+                   AND NOT EXISTS (SELECT 1 FROM personas p WHERE p.id = je.v)
+              )
+              ELSE NOT EXISTS (SELECT 1 FROM personas p WHERE p.id = t."${ref.columna}")
+            END
+          )
+        LIMIT 5`
+    )
+  }
   return prisma.$queryRawUnsafe<Array<{ id: string; valor: string }>>(
     `SELECT t.id AS id, t."${ref.columna}" AS valor
        FROM "${ref.tabla}" t
