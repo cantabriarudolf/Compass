@@ -40,7 +40,6 @@ model Comunidad {
   documentos                  Documento[]
   // A3 — constancia de entrega por destinatario de los documentos legales.
   enviosDocumento             EnvioDocumento[]
-  documentosCO                DocumentoCO[]
   solicitudesGE               SolicitudGE[]
   activosIR                   RecursoIR[]
   solicitudesInsumoIR         SolicitudInsumoIR[]
@@ -591,37 +590,6 @@ model MensajeBuzonCO {
 
   @@index([comunidadId])
   @@map("mensajes_buzon_co")
-}
-
-/// @deprecated — «Biblioteca de Documentos Comunales» de CO (Fase 4).
-///
-/// El código ya NO la usa: la reemplazó el «Archivo de Documentos» (`Documento`,
-/// `/api/documentos`, `/comunidad/archivo`) y sus rutas, su hook y su schema de
-/// validación se retiraron el 2026-11-07. En SQLite (dev, suite y job `unit`) la
-/// tabla ya no existe: `prisma/schema.sqlite.prisma` no la declara.
-///
-/// **Este modelo se declara SOLO acá, en el esquema de PostgreSQL, por una razón
-/// operativa**: la tabla todavía existe en la base real (Neon) y el job «Esquema de
-/// la base (Neon)» compara ese esquema contra ella. Si no se declara, el diff pide
-/// `DROP TABLE documentos_co` y el job —con razón— se niega a aplicar cambios
-/// destructivos, dejando el deploy de producción frenado.
-///
-/// Es una foto de la realidad, no un aval: el borrado en producción se hace por el
-/// carril de esquema de producción (`prisma/sql-prod/`), con su registro en Actions.
-/// Mientras tanto: no agregues consumidores ni filas.
-model DocumentoCO {
-  id          String    @id
-  comunidadId String
-  comunidad   Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
-  nombre      String
-  tipoMime    String
-  tamanoKB    Float
-  url         String
-  categoria   String
-  createdAt   DateTime  @default(now())
-
-  @@index([comunidadId])
-  @@map("documentos_co")
 }
 
 /// F35 serie A — archivo de documentos de la comunidad (Ley 21.442 art. 9).

@@ -1,8 +1,12 @@
 # Retiro de `documentos_co` en producción
 
-- **Commit de referencia**: 7c602937f350a90f064c743618dd8aaf2333bc26
-  (el commit en que se corrigió el carril `db-prod`; el retiro del código y de la tabla
-  en dev está en `9f9c363`, y el esquema de producción quedó alineado desde `639573b`)
+- **Commit de referencia**: b5724146d52877a96e53e2bef71238c4a9a585d5
+  (el commit que dejó el carril `db-prod` con la guarda de ancestría y el conteo de
+  filas; el retiro del código y de la tabla en dev está en `9f9c363`)
+- **Secuencia**: `639573b` declaró `DocumentoCO` en el esquema de PostgreSQL como foto de
+  producción, para destrabar el deploy mientras la tabla seguía allá. Este run cierra esa
+  foto: el mismo commit que dispara el borrado **quita la declaración** del modelo, así que
+  el diff vuelve a pedir el `DROP` y el carril tiene algo concreto que aplicar.
 - **Qué se borra**: la tabla `documentos_co` completa y su foreign key
   `documentos_co_comunidadId_fkey`. Es la vieja «Biblioteca de Documentos Comunales» de
   CO: el código dejó de usarla el 2026-11-07 (reemplazada por `documentos`, el Archivo de
