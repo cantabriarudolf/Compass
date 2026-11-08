@@ -157,6 +157,19 @@ export async function DELETE(req: Request, ctx: CtxTipo): Promise<Response> {
         `No se puede eliminar la persona: ${vinculos} vínculo(s) de unidad asociado(s).`
       )
     }
+    // `Usuario.personaId` es una referencia SUELTA por convención del proyecto (16
+    // columnas apuntan a una persona y ninguna lleva FK, para no atar el orden del
+    // sembrado ni acoplar los módulos). Sin FK, borrar la persona dejaría cuentas
+    // apuntando al vacío: la sesión seguiría abierta y el alcance por fila le negaría
+    // todo en silencio. La guarda vive acá, en la superficie de borrado, que es el
+    // único camino que puede crear ese estado.
+    const usuarios = await prisma.usuario.count({ where: { personaId: id } })
+    if (usuarios > 0) {
+      return jsonError(
+        409,
+        `No se puede eliminar la persona: ${usuarios} usuario(s) tienen su ficha asignada. Quitá la ficha primero.`
+      )
+    }
     await prisma.persona.delete({ where: { id } })
     return Response.json({ ok: true })
   } catch (e) {

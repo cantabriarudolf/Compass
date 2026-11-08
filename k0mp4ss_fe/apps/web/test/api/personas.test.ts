@@ -301,6 +301,50 @@ describe("/api/personas — MP con BD real (BD-FUENTE-VERDAD)", () => {
     })
   })
 
+  // `Usuario.personaId` es una referencia suelta por convención del proyecto (16
+  // columnas apuntan a una persona y ninguna lleva FK). Sin FK, el único camino que
+  // puede dejar una cuenta apuntando al vacío es borrar la persona: la sesión seguiría
+  // abierta y el alcance por fila le negaría todo en silencio. La guarda va en el
+  // borrado.
+  it("DELETE persona con un usuario que la apunta → 409, y sin la ficha → 200", async () => {
+    await prisma.persona.create({
+      data: {
+        id: "mp-pers-con-usuario",
+        comunidadId: comunidadA,
+        rut: "11111111-1",
+        nombreCompleto: "Ana Con Cuenta",
+        nombres: "Ana",
+        apellidos: "Con Cuenta",
+        email: "ana-cuenta@test.cl",
+        telefonoMovil: "+56944444444",
+        estadoCuenta: "activa",
+        condicionesEspecialesIds: [],
+        roles: [],
+      },
+    })
+    await prisma.usuario.create({
+      data: { id: "mp-user-con-persona", email: "mp-user-con-persona@test.cl", activo: true, personaId: "mp-pers-con-usuario" },
+    })
+    try {
+      await conSesion(emailAdmin, async () => {
+        const res = await DELETE("mp-pers-con-usuario")
+        expect(res.status).toBe(409)
+        const j = (await res.json()) as { error: string }
+        expect(j.error).toContain("usuario(s) tienen su ficha asignada")
+        // No confirma datos de la persona ni borra nada.
+        expect(await prisma.persona.findUnique({ where: { id: "mp-pers-con-usuario" } })).not.toBeNull()
+
+        // Quitada la ficha, la misma baja pasa: la guarda protege el vínculo, no la fila.
+        await prisma.usuario.update({ where: { id: "mp-user-con-persona" }, data: { personaId: null } })
+        const ok = await DELETE("mp-pers-con-usuario")
+        expect(ok.status).toBe(200)
+        expect(await prisma.persona.findUnique({ where: { id: "mp-pers-con-usuario" } })).toBeNull()
+      })
+    } finally {
+      await prisma.usuario.delete({ where: { id: "mp-user-con-persona" } }).catch(() => {})
+    }
+  })
+
   it("PUT firma digital sobre fila con nulls Prisma → 200 (P2 E2E-FULL-VERDE)", async () => {
     await prisma.persona.create({
       data: {
