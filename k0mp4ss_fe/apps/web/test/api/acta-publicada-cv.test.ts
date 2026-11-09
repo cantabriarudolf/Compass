@@ -460,6 +460,22 @@ describe("/api/cv/actas — publicar actas por referencia (V6)", () => {
     await conSesion(emailAdmin, async () => {
       expect((await publicar(actaPublicada)).status).toBe(201)
     })
+    // La bandera es por unidad: el residente la ve si SU vínculo con la unidad del
+    // control está vigente. El fixture no lo creaba porque la lectura vieja era por
+    // comunidad («algún control encendido»), que es el defecto corregido.
+    await prisma.vinculoUnidad.upsert({
+      where: { id: "cv6-v-res" },
+      update: { fechaFin: null },
+      create: {
+        id: "cv6-v-res",
+        comunidadId: comunidad,
+        personaId: personaResidente,
+        unidadId,
+        rol: "propietario",
+        fechaInicio: "2024-01-01",
+        permiteVerFinanzas: false,
+      } as never,
+    })
     await conSesion(emailResidente, async () => {
       const res = await getJson()
       expect(res.status).toBe(200)

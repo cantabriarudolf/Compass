@@ -14,6 +14,7 @@ import { prisma } from "@/lib/prisma"
 import { logger } from "@/lib/logger"
 import { jsonError, withComunidadScope } from "@/lib/api/with-comunidad-scope"
 import { puedeGestionarActas, residentesVenActas } from "@/lib/api/gd-guard"
+import { personaIdDelUsuarioDb } from "@/lib/api/sesion-persona"
 import { generarId } from "@/lib/id-utils"
 import { registrarEventoAuditoria } from "@/lib/auditoria"
 import {
@@ -54,7 +55,7 @@ export async function GET(_req: Request, ctx: CtxTipo): Promise<Response> {
     if (esResidente(scope.rol)) {
       if (
         record.estado !== "publicada" ||
-        !(await residentesVenActas(scope.comunidadId))
+        !(await residentesVenActas(scope.comunidadId, await personaIdDelUsuarioDb(scope.usuarioId)))
       ) {
         return jsonError(404, "Registro no encontrado.")
       }

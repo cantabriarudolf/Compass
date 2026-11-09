@@ -426,10 +426,46 @@ describe("DELETE /api/controles-propiedad/[id] — borrado lógico con archivo (
 
   it("un control desestimado no habilita ver actas a los residentes (el ABAC lee solo vigentes)", async () => {
     const { residentesVenActas } = await import("@/lib/api/gd-guard")
+    // La bandera es POR UNIDAD: el residente la ve sólo si SU vínculo vigente con esa
+    // unidad existe. Este fixture no lo tenía porque la lectura vieja era por comunidad
+    // («algún control de la comunidad encendido»), que es el defecto que se corrigió.
+    await prisma.persona.upsert({
+      where: { id: "bl-p-res" },
+      update: {},
+      create: {
+        id: "bl-p-res",
+        comunidadId: comunidad,
+        rut: "99999999-9",
+        nombreCompleto: "Res Borrado Logico",
+        nombres: "Res",
+        apellidos: "Borrado Logico",
+        email: "bl-p-res@test.cl",
+        telefonoMovil: "+56900000000",
+        estadoCuenta: "activa",
+        condicionesEspecialesIds: [],
+        roles: [],
+      } as never,
+    })
+    await prisma.vinculoUnidad.upsert({
+      where: { id: "bl-v-res" },
+      update: {},
+      create: {
+        id: "bl-v-res",
+        comunidadId: comunidad,
+        personaId: "bl-p-res",
+        unidadId: "bl-u1",
+        rol: "propietario",
+        fechaInicio: "2024-01-01",
+        permiteVerFinanzas: false,
+      } as never,
+    })
     await prisma.controlPropiedad.create({
       data: { ...controlBase, id: "bl-ctrl-actas", residenteVeActas: true } as never,
     })
-    expect(await residentesVenActas(comunidad)).toBe(true)
+    expect(await residentesVenActas(comunidad, "bl-p-res")).toBe(true)
+    // Y el residente de OTRA unidad no la ve, aunque la de al lado la tenga encendida.
+    expect(await residentesVenActas(comunidad, "bl-p-sin-vinculo")).toBe(false)
+    expect(await residentesVenActas(comunidad, null)).toBe(false)
 
     await conSesion(emailComite, async () => {
       const res = await deleteControl("bl-ctrl-actas")
@@ -437,7 +473,7 @@ describe("DELETE /api/controles-propiedad/[id] — borrado lógico con archivo (
     })
 
     // El archivo no da permisos: solo un control vigente habilita el visor.
-    expect(await residentesVenActas(comunidad)).toBe(false)
+    expect(await residentesVenActas(comunidad, "bl-p-res")).toBe(false)
   })
 
   it("una fila desestimada no habilita el re-registro duplicado de la unidad", async () => {

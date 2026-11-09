@@ -26,6 +26,7 @@ import {
   residentesVenActas,
   type FichaGobernanzaMin,
 } from "@/lib/api/gd-guard"
+import { personaIdDelUsuarioDb } from "@/lib/api/sesion-persona"
 import { anioDeFecha, siguienteFolioActa } from "./_folio"
 
 /** Intentos de asignación de folio antes de rendirse ante colisiones reales. */
@@ -169,7 +170,7 @@ export async function GET(req: Request): Promise<Response> {
   const esResidente = rol === "residente" || rol === "propietario"
 
   if (esResidente) {
-    if (!(await residentesVenActas(scope.comunidadId))) {
+    if (!(await residentesVenActas(scope.comunidadId, await personaIdDelUsuarioDb(scope.usuarioId)))) {
       return jsonError(
         403,
         "Las actas no están visibles para residentes (tu propietario no activó residenteVeActas)."

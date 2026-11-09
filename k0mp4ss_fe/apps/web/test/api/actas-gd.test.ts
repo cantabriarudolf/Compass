@@ -139,13 +139,45 @@ describe("/api/actas-gd — GD actas con BD real (Fase 2)", () => {
         alertasResidentesActivas: true,
       },
     })
+    // Un residente sin ficha no puede acreditar que vive en una unidad que autorizó: con
+    // la lectura por unidad, el 403 es lo correcto. El fixture le da ficha y vínculo.
+    await prisma.persona.upsert({
+      where: { id: "gd2-res" },
+      update: {},
+      create: {
+        id: "gd2-res",
+        comunidadId: comunidadA,
+        rut: "88888888-8",
+        nombreCompleto: "Res GD2",
+        nombres: "Res",
+        apellidos: "GD2",
+        email: "gd2-res@test.cl",
+        telefonoMovil: "+56911111111",
+        estadoCuenta: "activa",
+        condicionesEspecialesIds: [],
+        roles: [],
+      } as never,
+    })
+    await prisma.vinculoUnidad.upsert({
+      where: { id: "gd2-v-res" },
+      update: { fechaFin: null },
+      create: {
+        id: "gd2-v-res",
+        comunidadId: comunidadA,
+        personaId: "gd2-res",
+        unidadId: "gd2-u1",
+        rol: "propietario",
+        fechaInicio: "2024-01-01",
+        permiteVerFinanzas: false,
+      } as never,
+    })
     const usuarios = [
       { id: "gd2-usuario-admin", email: emailAdmin, personaId: null },
       { id: "gd2-usuario-m1", email: "gd2-m1@test.cl", personaId: "gd2-m1" },
       { id: "gd2-usuario-m2", email: "gd2-m2@test.cl", personaId: "gd2-m2" },
       { id: "gd2-usuario-m3", email: "gd2-m3@test.cl", personaId: "gd2-m3" },
       { id: "gd2-usuario-out", email: "gd2-out@test.cl", personaId: "gd2-out" },
-      { id: "gd2-usuario-res", email: emailComite, personaId: null },
+      { id: "gd2-usuario-res", email: emailComite, personaId: "gd2-res" },
       { id: "gd2-usuario-resc", email: "gd2-resc@test.cl", personaId: null },
     ]
     for (const u of usuarios) {

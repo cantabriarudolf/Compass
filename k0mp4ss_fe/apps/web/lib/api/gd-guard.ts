@@ -15,6 +15,7 @@
 import { prisma } from "@/lib/prisma"
 import { puede } from "@/lib/authz"
 import type { Accion } from "@/lib/authz"
+import { unidadesVinculadasDb } from "./sesion-persona"
 
 export const CARGOS_DIRECTIVA = [
   "presidente",
@@ -105,10 +106,22 @@ export function puedeGestionarControles(rol: string, accion: Accion): boolean {
 }
 
 /** ¿Algún control VIGENTE de la comunidad autoriza a residentes a ver actas? */
-export async function residentesVenActas(comunidadId: string): Promise<boolean> {
+export async function residentesVenActas(
+  comunidadId: string,
+  personaId: string | null
+): Promise<boolean> {
+  // La bandera es POR UNIDAD (`ControlPropiedad.unidadId`), así que se lee por unidad:
+  // antes se buscaba "algún control de la comunidad con la bandera encendida", y eso
+  // hacía que si UN propietario la activaba, TODOS los residentes del edificio vieran
+  // las actas —incluidos los de unidades que no autorizaron— mientras el 403 decía
+  // «tu propietario no activó». Se resuelve la identidad y los vínculos desde la base,
+  // nunca desde el cliente.
+  if (!personaId) return false
+  const unidades = await unidadesVinculadasDb(personaId, comunidadId)
+  if (unidades.length === 0) return false
   const control = await prisma.controlPropiedad.findFirst({
     // Los desestimados (borrado lógico) no habilitan nada: el archivo no da permisos.
-    where: { comunidadId, residenteVeActas: true, estado: "vigente" },
+    where: { comunidadId, unidadId: { in: unidades }, residenteVeActas: true, estado: "vigente" },
     select: { id: true },
   })
   return control !== null

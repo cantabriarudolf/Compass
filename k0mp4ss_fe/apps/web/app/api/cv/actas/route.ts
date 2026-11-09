@@ -27,6 +27,7 @@ import {
 } from "@/lib/schemas"
 import { jsonError, type ComunidadScope } from "@/lib/api/with-comunidad-scope"
 import { residentesVenActas } from "@/lib/api/gd-guard"
+import { personaIdDelUsuarioDb } from "@/lib/api/sesion-persona"
 import {
   ESTADO_ACTA_PUBLICADA,
   contextoActasCV,
@@ -63,7 +64,7 @@ export async function GET(): Promise<Response> {
   const { scope } = contexto
 
   if (esRolResidente(scope.rol)) {
-    if (!(await residentesVenActas(scope.comunidadId))) {
+    if (!(await residentesVenActas(scope.comunidadId, await personaIdDelUsuarioDb(scope.usuarioId)))) {
       return jsonError(
         403,
         "Las actas no están visibles para residentes (tu propietario no activó residenteVeActas)."
