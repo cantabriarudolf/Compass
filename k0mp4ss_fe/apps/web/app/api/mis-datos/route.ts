@@ -8,6 +8,7 @@ import {
   personaConEmailDuplicado,
 } from "@/lib/invariantes/persona"
 import { auth } from "@/lib/auth"
+import { puede } from "@/lib/authz"
 import { logger } from "@/lib/logger"
 import { registrarEventoAuditoria } from "@/lib/auditoria"
 
@@ -20,6 +21,20 @@ export const dynamic = "force-dynamic"
  *   (integridad referencial); marca solicitud + fecha para proceso en 30 días.
  * - PATCH: rectificación — actualiza email/teléfonos de su ficha de persona
  *   (y su email de login si cambia). Todo cambio queda en auditoría.
+ *
+ * A1b (serie «Permisos por objeto», 2026-11-09): la rectificación es el acto que
+ * la matriz describe como «el residente edita sus propios datos» (`mp:propios`
+ * ver+editar para comité, conserjería, residente y mantención; el administrador
+ * por comodín). Hasta hoy la ruta escribía la ficha mirando sólo la sesión, así
+ * que la clave no tenía puerta. El PATCH pide ahora `puede(rol, "editar",
+ * "mp:propios")` **además** del alcance por `personaId`, que no se toca: la
+ * puerta dice «puede editar su ficha», el `where` dice «y sólo la suya».
+ * El rol sale de la membresía canónica de la cuenta (la última, el mismo criterio
+ * con el que se ancla la auditoría) y, si no hay ninguna, se niega: un rol que la
+ * matriz no conoce no edita nada (la serie falla cerrado desde T16).
+ * GET y DELETE quedan sin la clave a propósito: son derechos ARCO sobre la
+ * propia cuenta —leer lo que el sistema guarda de uno y pedir el borrado—, no
+ * editan datos y no alcanzan la fila de un tercero.
  */
 
 const PatchSchema = z
@@ -40,9 +55,17 @@ async function usuarioAutenticado() {
   return usuario
 }
 
+/** Membresía canónica de la cuenta: la última (`comunidadAncla` y el rol salen de acá). */
+async function membresiaAncla(usuarioId: string) {
+  return prisma.membresia.findFirst({
+    where: { usuarioId },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+  })
+}
+
 /** Comunidad para anclar eventos de auditoría (scope canónico: ÚLTIMA membresía; null si no hay). */
 async function comunidadAncla(usuarioId: string): Promise<string | null> {
-  const m = await prisma.membresia.findFirst({ where: { usuarioId }, orderBy: [{ createdAt: "desc" }, { id: "desc" }] })
+  const m = await membresiaAncla(usuarioId)
   return m?.comunidadId ?? null
 }
 
@@ -142,18 +165,30 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: "No autenticado." }, { status: 401 })
   }
 
+  // A1b — la puerta de la matriz. Va después de «¿hay ficha que editar?» (409,
+  // que es un hecho de la cuenta y no un permiso) y antes de leer el cuerpo: un
+  // rol que no puede editar su propia ficha no gasta validación ni escribe nada.
+  if (!usuario.personaId) {
+    return NextResponse.json(
+      { error: "Su cuenta no tiene ficha de persona asociada. Contacte a administración." },
+      { status: 409 }
+    )
+  }
+
+  const membresia = await membresiaAncla(usuario.id)
+  if (!membresia || !puede(membresia.rol, "editar", "mp:propios")) {
+    return NextResponse.json(
+      { error: "Permiso denegado: su rol no permite editar sus datos personales." },
+      { status: 403 }
+    )
+  }
+
   const body: unknown = await request.json().catch(() => null)
   const parsed = PatchSchema.safeParse(body)
   if (!parsed.success) {
     return NextResponse.json(
       { error: parsed.error.issues[0]?.message ?? "Datos inválidos." },
       { status: 400 }
-    )
-  }
-  if (!usuario.personaId) {
-    return NextResponse.json(
-      { error: "Su cuenta no tiene ficha de persona asociada. Contacte a administración." },
-      { status: 409 }
     )
   }
 

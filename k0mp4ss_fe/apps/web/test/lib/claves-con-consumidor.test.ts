@@ -22,8 +22,8 @@
  * `packages/ui/src/**`. El delimitador es lo que impide el falso positivo de
  * prefijo: `"fi"` no se conforma con `"fi:balance"`. Los comentarios se
  * descartan antes de buscar, porque una clave **citada** en la prosa describe
- * la intención y no la puerta: `mp:propios` y `mp:morosidad` se citan en
- * comentarios y hoy ninguna ruta las pide. Quedan fuera `lib/authz.ts` (es la
+ * la intención y no la puerta: `mp:morosidad` se cita en la prosa de varias rutas
+ * y hoy ninguna la pide. Quedan fuera `lib/authz.ts` (es la
  * matriz, no un consumidor) y los archivos de prueba (nombran claves para
  * probar el motor).
  *
@@ -110,8 +110,8 @@ const CLAVES_SIN_ACCIONES = CLAVES.filter(
 /**
  * Descarta comentarios —de línea y de bloque— conservando el código y las
  * cadenas. Es lo que separa «la clave se cita» de «la clave se ejecuta»: sin
- * esto, `mp:propios` y `mp:morosidad` pasarían por consumidas porque la prosa
- * de las rutas las nombra, y el guardia tendría un agujero silencioso.
+ * esto, `mp:morosidad` pasaría por consumida porque la prosa
+ * de las rutas la nombra, y el guardia tendría un agujero silencioso.
  */
 function quitarComentarios(fuente: string): string {
   const salida: string[] = []
@@ -401,9 +401,10 @@ const EXENCIONES: readonly Exencion[] = [
   // tipología las consume en `app/api/certificados-ct/route.ts`. `ct:propio`,
   // `ir:interno`, `pe:visita` y `pe:contratista` salieron el 2026-11-09: la
   // capacidad no existe, así que se vaciaron (motivos en el bloque de arriba)
-  // en vez de quedar como deuda.
+  // en vez de quedar como deuda. `mp:propios` salió el 2026-11-09: la rectificación
+  // del autoservicio (`PATCH /api/mis-datos`) la pide, que es el acto que la matriz
+  // describe como «editar sus propios datos».
   { clave: "mp:morosidad", clase: "hallazgo", motivo: MOTIVO_PENDIENTE },
-  { clave: "mp:propios", clase: "hallazgo", motivo: MOTIVO_PENDIENTE },
 ]
 
 const DECLARADAS = new Set(EXENCIONES.map((exencion) => exencion.clave))

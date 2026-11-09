@@ -29,6 +29,20 @@ const COMUNIDAD_ID = `comunidad-arco-${SUFIJO}`
 const PERSONA_ID = `persona-arco-${SUFIJO}`
 const PASSWORD = "Secret123"
 
+// ── A1b · la puerta `mp:propios` ────────────────────────────────────────────
+// Tres cuentas con ficha propia para separar «tiene la clave» de «no la tiene»:
+// la matriz se la concede a los cinco roles (al administrador por comodín), así
+// que el caso negativo se ejerce con un rol que la matriz no conoce: la ruta
+// tiene que fallar cerrado, igual que el resto de la serie.
+const EMAIL_GATE = `arco-gate-${SUFIJO}`
+const PERSONA_GATE = `persona-gate-${SUFIJO}`
+const EMAIL_HUERFANA = `arco-huerfano-${SUFIJO}`
+const PERSONA_HUERFANA = `persona-huerfana-${SUFIJO}`
+const EMAIL_ADMIN = `arco-admin-${SUFIJO}`
+const PERSONA_ADMIN = `persona-admin-${SUFIJO}`
+const EMAIL_TERCERO = `arco-tercero-${SUFIJO}`
+const PERSONA_TERCERO = `persona-tercero-${SUFIJO}`
+
 let usuarioId = ""
 
 async function sesionCookie(uid: string, email: string): Promise<string> {
@@ -189,5 +203,154 @@ describe("P6 — /api/mis-datos (derechos ARCO)", () => {
   it("DELETE sin sesión → 401", async () => {
     const { DELETE } = await import("@/app/api/mis-datos/route")
     expect((await call({ DELETE }, "DELETE")).status).toBe(401)
+  })
+})
+
+
+/**
+ * A1b — `mp:propios` es la clave que la matriz declara para «editar sus propios
+ * datos» y hasta hoy la ruta no la pedía: `/api/mis-datos` escribía la ficha de
+ * `Usuario.personaId` mirando sólo la sesión. El alcance por persona se queda
+ * (nadie puede tocar la ficha de otro); lo que se agrega es la puerta.
+ *
+ * El veredicto se pide por caso, no por implementación: 403 cuando la matriz no
+ * concede `editar` sobre `mp:propios`, 200 cuando sí, y la fila intacta siempre
+ * que la respuesta sea una negativa.
+ *
+ * Suite independiente de la de arriba: comunidad y cuentas propias, porque el
+ * `afterAll` del describe anterior borra las suyas antes de que estos casos corran.
+ */
+describe("A1b — `mp:propios` gobierna el autoservicio de la ficha", () => {
+  const COMUNIDAD_GATE = `comunidad-gate-${SUFIJO}`
+  const EMAIL_RESIDENTE = `arco-residente-${SUFIJO}`
+  const PERSONA_RESIDENTE = `persona-residente-${SUFIJO}`
+  const cuentas: Record<string, { usuarioId: string; email: string }> = {}
+
+  const crear = async (email: string, personaId: string, nombre: string) => {
+    await prisma.persona.create({
+      data: {
+        id: personaId,
+        comunidadId: COMUNIDAD_GATE,
+        rut: `77.${String(SUFIJO).slice(-7)}-${SUFIJO % 10}`,
+        nombreCompleto: nombre,
+        nombres: nombre.split(" ")[0]!,
+        apellidos: "GATE_TEST",
+        email,
+        telefonoMovil: "+56944444444",
+        estadoCuenta: "activa",
+        condicionesEspecialesIds: [],
+        roles: [],
+      },
+    })
+    const u = await prisma.usuario.create({
+      data: { email, passwordHash: await bcrypt.hash(PASSWORD, 10), activo: true, personaId },
+    })
+    cuentas[email] = { usuarioId: u.id, email }
+    return u.id
+  }
+
+  beforeAll(async () => {
+    await prisma.comunidad.create({
+      data: { id: COMUNIDAD_GATE, nombre: "Comunidad Gate", slug: `gate-${SUFIJO}` },
+    })
+    // Residente: tiene `mp:propios` con ver+editar. Edita lo suyo.
+    const residente = await crear(EMAIL_RESIDENTE, PERSONA_RESIDENTE, "Residente Gate")
+    await prisma.membresia.create({ data: { usuarioId: residente, comunidadId: COMUNIDAD_GATE, rol: "residente" } })
+    // Rol que la matriz no conoce: no tiene `mp:propios` ni ninguna otra clave.
+    const gate = await crear(EMAIL_GATE, PERSONA_GATE, "Gate Rol")
+    await prisma.membresia.create({ data: { usuarioId: gate, comunidadId: COMUNIDAD_GATE, rol: "invitado" } })
+    // Ficha propia y ninguna membresía: antes escribía, ahora falla cerrado.
+    await crear(EMAIL_HUERFANA, PERSONA_HUERFANA, "Huerfana Rol")
+    // Administrador: entra por comodín, el gate no lo cambia.
+    const admin = await crear(EMAIL_ADMIN, PERSONA_ADMIN, "Admin Rol")
+    await prisma.membresia.create({ data: { usuarioId: admin, comunidadId: COMUNIDAD_GATE, rol: "administrador" } })
+    // Tercero: su ficha no puede cambiar por el PATCH de nadie.
+    await crear(EMAIL_TERCERO, PERSONA_TERCERO, "Tercero Rol")
+  }, 30_000)
+
+  afterAll(async () => {
+    try {
+      await prisma.eventoAuditoria.deleteMany({
+        where: { referenciaId: { in: Object.values(cuentas).map((c) => c.usuarioId) } },
+      })
+      await prisma.usuario.deleteMany({ where: { email: { in: Object.keys(cuentas) } } })
+      // Las personas caen con la comunidad (onDelete: Cascade).
+      await prisma.comunidad.delete({ where: { id: COMUNIDAD_GATE } }).catch(() => {})
+    } catch {
+      // intencional: vacío por diseño
+    }
+  })
+
+  it("residente (tiene la clave) edita su ficha → 200 y la fila cambia", async () => {
+    const { PATCH } = await import("@/app/api/mis-datos/route")
+    const cuenta = cuentas[EMAIL_RESIDENTE]!
+    const res = await call(
+      { PATCH },
+      "PATCH",
+      { telefonoMovil: "+56955555555" },
+      await sesionCookie(cuenta.usuarioId, cuenta.email)
+    )
+    expect(res.status).toBe(200)
+    const persona = await prisma.persona.findUnique({ where: { id: PERSONA_RESIDENTE } })
+    expect(persona?.telefonoMovil).toBe("+56955555555")
+  })
+
+  it("rol sin la clave → 403 y la ficha queda intacta", async () => {
+    const { PATCH } = await import("@/app/api/mis-datos/route")
+    const cuenta = cuentas[EMAIL_GATE]!
+    const res = await call(
+      { PATCH },
+      "PATCH",
+      { telefonoMovil: "+56966666666" },
+      await sesionCookie(cuenta.usuarioId, cuenta.email)
+    )
+    expect(res.status).toBe(403)
+    const j = (await res.json()) as { error: string }
+    expect(j.error).toMatch(/permiso/i)
+    const persona = await prisma.persona.findUnique({ where: { id: PERSONA_GATE } })
+    expect(persona?.telefonoMovil).toBe("+56944444444")
+  })
+
+  it("cuenta con ficha y sin membresía → 403 (falla cerrado) y la ficha queda intacta", async () => {
+    const { PATCH } = await import("@/app/api/mis-datos/route")
+    const cuenta = cuentas[EMAIL_HUERFANA]!
+    const res = await call(
+      { PATCH },
+      "PATCH",
+      { telefonoMovil: "+56977777777" },
+      await sesionCookie(cuenta.usuarioId, cuenta.email)
+    )
+    expect(res.status).toBe(403)
+    const persona = await prisma.persona.findUnique({ where: { id: PERSONA_HUERFANA } })
+    expect(persona?.telefonoMovil).toBe("+56944444444")
+  })
+
+  it("administrador entra por comodín → 200", async () => {
+    const { PATCH } = await import("@/app/api/mis-datos/route")
+    const cuenta = cuentas[EMAIL_ADMIN]!
+    const res = await call(
+      { PATCH },
+      "PATCH",
+      { telefonoMovil: "+56988888888" },
+      await sesionCookie(cuenta.usuarioId, cuenta.email)
+    )
+    expect(res.status).toBe(200)
+    const persona = await prisma.persona.findUnique({ where: { id: PERSONA_ADMIN } })
+    expect(persona?.telefonoMovil).toBe("+56988888888")
+  })
+
+  it("el alcance por personaId se queda: el PATCH no toca la ficha de otro", async () => {
+    const { PATCH } = await import("@/app/api/mis-datos/route")
+    const cuenta = cuentas[EMAIL_RESIDENTE]!
+    const res = await call(
+      { PATCH },
+      "PATCH",
+      { telefonoMovil: "+56999999999" },
+      await sesionCookie(cuenta.usuarioId, cuenta.email)
+    )
+    expect(res.status).toBe(200)
+    const tercero = await prisma.persona.findUnique({ where: { id: PERSONA_TERCERO } })
+    expect(tercero?.telefonoMovil).toBe("+56944444444")
+    expect(tercero?.email).toBe(EMAIL_TERCERO)
   })
 })
