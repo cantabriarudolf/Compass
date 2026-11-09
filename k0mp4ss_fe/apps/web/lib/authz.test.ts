@@ -42,7 +42,7 @@ describe("lib/authz — matriz RP (pure, sin IO)", () => {
     expect(puede("comite", "ejecutar", "FI:gasto_comun")).toBe(true) // aprobar gasto
     expect(puede("comite", "crear", "FI")).toBe(false)
     expect(puede("comite", "editar", "FI")).toBe(false)
-    expect(puede("comite", "ver", "MP:morosidad")).toBe(true)
+    expect(puede("comite", "ver", "MP:morosidad")).toBe(false) // A1b: vaciada, nadie la pide
     expect(puede("comite", "ver", "RE:centro_mando")).toBe(true)
     expect(puede("comite", "crear", "RE:centro_mando")).toBe(false) // sin distribución
     // D1: `ct:historial` se vació a propósito (no hay pantalla de historial; el
@@ -317,10 +317,15 @@ describe("lib/authz — puedeContextual ABAC (paridad 1:1)", () => {
   })
 
   // Decisión owner 2026-11-07: `residenteVeMorosidad` y `alertasResidentesActivas` se
-  // retiraron de la superficie porque ninguna ruta las obedecía. El motor ya no las lee;
-  // la clave `mp:morosidad` sigue en la MATRIZ (el comité la tiene con `ver`) sin gate.
-  it("mp:morosidad — la clave sigue en la matriz, sin gate de privacidad", () => {
-    expect(puedeContextual("comite", "ver", "mp:morosidad", {})).toBe(true)
+  // retiraron de la superficie porque ninguna ruta las obedecía. El motor ya no las lee.
+  // A1b (2026-11-09): la clave `mp:morosidad` —que el comité tenía con `ver`— se vació
+  // con las otras siete: ninguna ruta la pedía, y la deuda propia del residente se lee
+  // con `fi:aviso:propio`. Vacía corta además el fallback hacia `mp` del comité.
+  it("mp:morosidad — clave vacía a propósito, sin gate de privacidad", () => {
+    expect(puede("comite", "ver", "mp:morosidad")).toBe(false)
+    expect(puedeContextual("comite", "ver", "mp:morosidad", {})).toBe(false)
+    // El comité conserva `mp` completo: la clave granular no se comía la base.
+    expect(puede("comite", "ver", "mp")).toBe(true)
     expect(puedeContextual("residente", "ver", "mp:morosidad", {})).toBe(false) // sin base
     expect(puedeContextual("residente", "ver", "fi:morosidad", {})).toBe(false)
   })

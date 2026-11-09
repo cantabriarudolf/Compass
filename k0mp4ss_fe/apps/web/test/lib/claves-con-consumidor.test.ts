@@ -352,6 +352,12 @@ const EXENCIONES: readonly Exencion[] = [
     motivo:
       "sin superficie: agendar al contratista de la propia unidad tampoco tiene ruta ni pantalla, y el log del portón vive en `pe:ingreso_contratista` (vacío para el residente). Vacía corta el fallback de prefijo hacia `pe`.",
   },
+  {
+    clave: "mp:morosidad",
+    clase: "vacia-a-proposito",
+    motivo:
+      "sin consumidor: el comité la tenía con ver y ninguna ruta la pide —la deuda propia del residente se lee con `fi:aviso:propio` (F27) y la ajena la impide el filtro por fila—. Vacía corta el fallback de prefijo hacia `mp`, que el comité conserva con ver+editar.",
+  },
   // ── Vacías a propósito: existen para cortar el fallback de prefijo ────────
   {
     clave: "co:lecturas",
@@ -403,8 +409,8 @@ const EXENCIONES: readonly Exencion[] = [
   // capacidad no existe, así que se vaciaron (motivos en el bloque de arriba)
   // en vez de quedar como deuda. `mp:propios` salió el 2026-11-09: la rectificación
   // del autoservicio (`PATCH /api/mis-datos`) la pide, que es el acto que la matriz
-  // describe como «editar sus propios datos».
-  { clave: "mp:morosidad", clase: "hallazgo", motivo: MOTIVO_PENDIENTE },
+  // describe como «editar sus propios datos»; `mp:morosidad` se vació en la misma
+  // unidad, así que la lista de hallazgos queda vacía.
 ]
 
 const DECLARADAS = new Set(EXENCIONES.map((exencion) => exencion.clave))

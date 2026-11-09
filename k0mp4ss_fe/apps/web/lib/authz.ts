@@ -46,7 +46,11 @@ const MATRIZ: Record<Rol, Record<string, Set<Accion>>> = {
     "am": new Set<Accion>(["ver"]), // RP §Roles Estándar: comité lee auditorías (P2 security audit); crear/editar solo admin
     "mp": new Set<Accion>(["ver", "editar"]), // editar propios + ver morosidad (filtrado abajo)
     "mp:propios": new Set<Accion>(["ver", "editar"]),
-    "mp:morosidad": new Set<Accion>(["ver"]),
+    // Vacío a propósito (A1b, 2026-11-09): el comité la tenía con `ver` y ninguna ruta
+    // la pedía. La deuda propia del residente se lee con `fi:aviso:propio` y la ajena la
+    // impide el filtro por fila, así que no hay capacidad de morosidad que gobernar.
+    // Vacía —no borrada— porque borrarla devolvería la concesión por el fallback a `mp`.
+    "mp:morosidad": new Set<Accion>([]),
     "re": new Set<Accion>(["ver"]),
     "re:centro_mando": new Set<Accion>(["ver"]),
     // SERIE-FASE2 §V4 (decisión del plan): el comité LEE los adelantos PL
