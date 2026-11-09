@@ -264,9 +264,7 @@ describe("/api/vinculos — VU con BD real (BD-FUENTE-VERDAD)", () => {
         id: "vu-control-1",
         comunidadId: comunidadA,
         unidadId: "vu-unidad-1",
-        residenteVeMorosidad: true,
         residenteVeActas: true,
-        alertasResidentesActivas: false,
       },
     })
     await conSesion(async () => {

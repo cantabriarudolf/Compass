@@ -499,9 +499,7 @@ describe("/api/vinculos — vínculos unidad/persona con BD real (fase 3)", () =
           id: "vu3-cp-1",
           comunidadId: comunidadA,
           unidadId: "vu3-u-1",
-          residenteVeMorosidad: true,
           residenteVeActas: true,
-          alertasResidentesActivas: true,
         },
       })
       const res = await llamar("DELETE", "vu3-v-prop-vig")

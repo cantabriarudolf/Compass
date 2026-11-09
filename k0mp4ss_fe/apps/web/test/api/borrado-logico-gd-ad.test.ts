@@ -63,9 +63,7 @@ const controlBase = {
   id: "bl-ctrl-1",
   comunidadId: comunidad,
   unidadId: "bl-u1",
-  residenteVeMorosidad: false,
   residenteVeActas: false,
-  alertasResidentesActivas: true,
 }
 
 /** Usuarios con sesiones reales para los dos describes (comité/admin pueden; conserjería/residente no). */
@@ -485,9 +483,7 @@ describe("DELETE /api/controles-propiedad/[id] — borrado lógico con archivo (
           body: JSON.stringify({
             id: "bl-ctrl-nuevo",
             unidadId: "bl-u1",
-            residenteVeMorosidad: false,
             residenteVeActas: false,
-            alertasResidentesActivas: true,
           }),
           headers: { "content-type": "application/json" },
         })

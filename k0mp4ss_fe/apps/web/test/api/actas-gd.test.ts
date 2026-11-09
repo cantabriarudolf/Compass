@@ -134,9 +134,7 @@ describe("/api/actas-gd — GD actas con BD real (Fase 2)", () => {
         id: "gd2-ctrl-1",
         comunidadId: comunidadA,
         unidadId: "gd2-u1",
-        residenteVeMorosidad: false,
         residenteVeActas: true,
-        alertasResidentesActivas: true,
       },
     })
     // Un residente sin ficha no puede acreditar que vive en una unidad que autorizó: con

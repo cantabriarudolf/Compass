@@ -167,11 +167,10 @@ export async function POST(req: Request): Promise<Response> {
       )
     }
 
-    // SAFETY: payload blanqueado + comunidad del servidor.
-    // `residenteVeMorosidad` y `alertasResidentesActivas` son columnas @deprecated
-    // (retiradas de la superficie el 2026-11-07: nadie las lee) y SQLite no las tiene
-    // con default, así que el alta las escribe con su valor histórico documentado,
-    // nunca con lo que mande el cliente. El update no las toca: conserva lo guardado.
+    // SAFETY: payload blanqueado + comunidad del servidor. Las dos banderas muertas
+    // (`residenteVeMorosidad`, `alertasResidentesActivas`) ya no existen: la migración
+    // 20261113000000 las retiró de las dos tablas, así que el alta no escribe nada que
+    // el cliente no pueda mandar.
     const record = await prisma.controlPropiedad.upsert({
       where: { id },
       create: {
@@ -180,8 +179,6 @@ export async function POST(req: Request): Promise<Response> {
         )),
         id,
         comunidadId: scope.comunidadId,
-        residenteVeMorosidad: false,
-        alertasResidentesActivas: true,
       } as never,
       update: limpiarPayloadControl(
         parsed.data as unknown as Record<string, unknown>

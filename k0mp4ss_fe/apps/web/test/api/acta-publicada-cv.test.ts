@@ -272,9 +272,7 @@ beforeAll(async () => {
       id: controlId,
       comunidadId: comunidad,
       unidadId,
-      residenteVeMorosidad: false,
       residenteVeActas: true,
-      alertasResidentesActivas: true,
       estado: "vigente",
     },
   })

@@ -421,11 +421,9 @@ model ControlPropiedad {
   unidadId                  String
   /// @deprecated Nadie la lee: retirada de la superficie el 2026-11-07 (decisión owner).
   /// Borrarla exige reconstruir la tabla en SQLite (migración con datos) — decisión aparte.
-  residenteVeMorosidad      Boolean
   residenteVeActas          Boolean
   /// @deprecated Nadie la lee: retirada de la superficie el 2026-11-07 (decisión owner).
   /// Borrarla exige reconstruir la tabla en SQLite (migración con datos) — decisión aparte.
-  alertasResidentesActivas  Boolean
   // Borrado lógico (decisión owner 2026-10-21): vigente | desestimada.
   estado                    String   @default("vigente")
   createdAt                 DateTime @default(now())
@@ -443,10 +441,8 @@ model ControlPropiedadArchivada {
   comunidadId              String
   unidadId                 String
   /// @deprecated Copia del control: la bandera no la lee nadie (retirada el 2026-11-07).
-  residenteVeMorosidad     Boolean
   residenteVeActas         Boolean
   /// @deprecated Copia del control: la bandera no la lee nadie (retirada el 2026-11-07).
-  alertasResidentesActivas Boolean
   motivo                   String?  // razón opcional declarada por quien desestima
   actorUsuarioId           String   // usuario de sesión que ejecutó el borrado lógico
   archivadaEn              DateTime @default(now())

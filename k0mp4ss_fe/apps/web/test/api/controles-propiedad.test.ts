@@ -202,11 +202,11 @@ describe("/api/controles-propiedad — AD con BD real (Fase 2)", () => {
     })
   })
 
-  // Decisión owner 2026-11-07: `residenteVeMorosidad` y `alertasResidentesActivas` se
-  // retiraron de la superficie (nadie las obedecía). La API ya no las lista ni las
-  // acepta: el payload blanqueado las descarta y las columnas —@deprecated en Prisma,
-  // se quedan porque borrarlas exige migración con datos en SQLite— conservan el
-  // default histórico documentado, nunca el valor que mande el cliente.
+  // Decisión owner 2026-11-07 y pago del 2026-11-08: `residenteVeMorosidad` y
+  // `alertasResidentesActivas` se retiraron de la superficie porque nadie las obedecía,
+  // y la migración 20261113000000 las retiró también de las dos tablas. La API no las
+  // lista ni las acepta: el payload blanqueado las descarta y no hay columna donde
+  // escribirlas, ni siquiera con el valor que mande el cliente.
   it("los campos retirados no están en el contrato: el payload blanqueado los descarta", async () => {
     const { coleccion } = await cargaModulos()
     expect(
@@ -221,7 +221,7 @@ describe("/api/controles-propiedad — AD con BD real (Fase 2)", () => {
     ).toEqual({ unidadId: "ad-u3", residenteVeActas: true })
   })
 
-  it("POST con los campos retirados → 201 y las columnas quedan en su default histórico", async () => {
+  it("POST con los campos retirados → 201 y la fila no los guarda (ya no existen)", async () => {
     await conSesion(emailAdmin, async () => {
       const res = await POST(
         controlValido({
@@ -234,8 +234,10 @@ describe("/api/controles-propiedad — AD con BD real (Fase 2)", () => {
       expect(res.status).toBe(201)
       const enBd = await prisma.controlPropiedad.findUnique({ where: { id: "ad-ctrl-retirado" } })
       expect(enBd?.residenteVeActas).toBe(true)
-      expect(enBd?.residenteVeMorosidad).toBe(false)
-      expect(enBd?.alertasResidentesActivas).toBe(true)
+      // La migración 20261113000000 retiró las dos columnas: no es que conserven un
+      // default, es que ya no hay dónde escribirlas.
+      expect(enBd as unknown as Record<string, unknown>).not.toHaveProperty("residenteVeMorosidad")
+      expect(enBd as unknown as Record<string, unknown>).not.toHaveProperty("alertasResidentesActivas")
     })
   })
 
@@ -273,8 +275,6 @@ describe("/api/controles-propiedad — AD con BD real (Fase 2)", () => {
       expect(put.status).toBe(200)
       const trasPut = await prisma.controlPropiedad.findUnique({ where: { id: "ad-ctrl-1" } })
       expect(trasPut?.residenteVeActas).toBe(false)
-      // El campo retirado del contrato ya no viaja: la columna no se mueve del default.
-      expect(trasPut?.residenteVeMorosidad).toBe(false)
       expect((await DELETE("ad-ctrl-2")).status).toBe(200)
       // Borrado lógico: la fila NO desaparece, queda desestimada y con copia.
       const enBd = await prisma.controlPropiedad.findUnique({ where: { id: "ad-ctrl-2" } })
@@ -292,10 +292,7 @@ describe("/api/controles-propiedad — AD con BD real (Fase 2)", () => {
         id: "ad-ctrl-b",
         comunidadId: comunidadB,
         unidadId: "ad-ub1",
-        // Columnas @deprecated: la fila sembrada directo en Prisma las sigue exigiendo.
-        residenteVeMorosidad: false,
         residenteVeActas: false,
-        alertasResidentesActivas: true,
       },
     })
     await conSesion(emailAdmin, async () => {
