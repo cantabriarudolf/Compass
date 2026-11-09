@@ -174,7 +174,22 @@ test.describe("residente — SU ficha p-3 en Mis datos + RA + CT", () => {
       .filter({ hasText: /Gómez|Roberto/ })
       .first()
     if (await optPropia.isVisible().catch(() => false)) {
-      await optPropia.click({ force: true, noWaitAfter: true })
+      // El listado de solicitantes revalida async y re-monta los options: el
+      // click puede caer sobre un nodo ya desmontado (`element was detached
+      // from the DOM`) y quedarse 10s esperando un nodo muerto. Se reintenta la
+      // apertura+click acotada (misma apertura idempotente del resto del spec)
+      // en vez de una sola espera larga. No relaja nada: el efecto real lo
+      // verifica el flujo posterior (Confirmar disponibilidad → Reserva
+      // confirmada), que falla igual si el solicitante no quedó elegido.
+      for (let intento = 0; intento < 3; intento++) {
+        const elegido = await optPropia
+          .click({ force: true, noWaitAfter: true, timeout: 5_000 })
+          .then(() => true)
+          .catch(() => false)
+        if (elegido) break
+        await abrirSelect(page, triggerSol)
+        await expect(optPropia).toBeVisible({ timeout: 10_000 })
+      }
     } else {
       await pickFirstOption(page, triggerSol)
     }
