@@ -403,7 +403,7 @@ vínculo vigente la respuesta SHALL ser **200 con lista vacía**, no 403, porque
 403 confirmaría que existe la deuda de una unidad que no es la propia. La
 bandera `residenteVeMorosidad` NO SHALL gobernar esta lectura —el residente ve su
 deuda siempre, y lo que impide ver la del vecino es el filtro por fila, no un
-interruptor que alguien pueda apagar—; la columna sigue `@deprecated`. La
+interruptor que alguien pueda apagar—; la columna se retiró de la base con la migración `20261113000000_retira_banderas_muertas`, aplicada en dev y en producción (run `42697576526`). La
 pantalla SHALL ser de **consulta**: muestra el saldo total y una fila por unidad y
 período con su estado, enlaza el PDF del aviso cuando existe, y declara «al día»
 cuando el saldo es cero conservando el historial; no emite ni reemplaza el

@@ -17,17 +17,17 @@ El panel del administrador SHALL presentar los perfiles de propietarios, residen
 - **THEN** se persiste solo como URL/referencia con metadatos, nunca base64/Blob
 
 ### Requirement: Controles de Privacidad y Comunicación del Propietario
-El sistema MUST mantener una colección `controlesPropiedad` por unidad con el único flag de privacidad vivo, `residenteVeActas`, editable por el propietario de la unidad y por administración mediante `saveControlPropiedad` (validando FK a `unidades` y retornando `StoreResult`). Por defecto el flag de visibilidad está desactivado. Todo cambio emite el evento AM `AD_OWNER_CONFIG_CHANGE`. Los flags `residenteVeMorosidad` y `alertasResidentesActivas` se retiraron de la superficie el 2026-11-07 porque ninguna ruta los obedecía: dejan de aceptarse en el contrato de escritura (`ControlPropiedadSchema` y la lista blanca de `app/api/controles-propiedad`), desaparecen de `/admin/gestion` y de `REGLAS_ABAC`, y sus columnas persisten en la base marcadas `@deprecated` hasta una migración con datos que las elimine; al crear un control el servidor las escribe con su valor histórico (`false` / `true`), nunca con lo que mande el cliente.
+El sistema MUST mantener una colección `controlesPropiedad` por unidad con el único flag de privacidad vivo, `residenteVeActas`, editable por el propietario de la unidad y por administración mediante `saveControlPropiedad` (validando FK a `unidades` y retornando `StoreResult`). Por defecto el flag de visibilidad está desactivado. Todo cambio emite el evento AM `AD_OWNER_CONFIG_CHANGE`. Los flags `residenteVeMorosidad` y `alertasResidentesActivas` se retiraron de la superficie el 2026-11-07 porque ninguna ruta los obedecía: dejan de aceptarse en el contrato de escritura (`ControlPropiedadSchema` y la lista blanca de `app/api/controles-propiedad`), desaparecen de `/admin/gestion` y de `REGLAS_ABAC`, y la migración `20261113000000_retira_banderas_muertas` retiró sus columnas de `controles_propiedad` y de `controles_propiedad_archivados` sin perder ninguna fila —aplicada en dev y en producción, carril `db-prod`, run `42697576526`—; los seeders y el contrato de escritura ya no las mencionan.
 
 #### Scenario: Notificar a Residentes
 - **WHEN** el propietario activa "Notificar a Residentes" para su unidad
 - **THEN** `residenteVeActas` se persiste en `controlesPropiedad`
-- **AND** GD consulta ese flag antes de mostrar actas al residente; la morosidad ya no tiene control por unidad porque `residenteVeMorosidad` se retiró el 2026-11-07 (ninguna ruta la leía)
+- **AND** GD consulta ese flag antes de mostrar actas al residente; la morosidad ya no tiene control por unidad porque `residenteVeMorosidad` se retiró el 2026-11-07 (ninguna ruta la leía) y su columna ya no existe en la base
 
 #### Scenario: Gestión de Alertas Residentes
 - **WHEN** el propietario busca silenciar "Gestión de Alertas Residentes" (visitas, encomiendas, reservas) en `/admin/gestion`
 - **THEN** no encuentra ese control —se retiró el 2026-11-07— y `notify()` no consulta ninguna bandera de alertas por unidad para decidir si notifica al residente
-- **AND** la columna `alertasResidentesActivas` permanece `@deprecated` en `controlesPropiedad` como valor histórico, fuera del contrato de escritura y de toda lectura
+- **AND** la columna `alertasResidentesActivas` se retiró de `controles_propiedad` y de `controles_propiedad_archivados` con la migración `20261113000000_retira_banderas_muertas` —dev y producción, run `42697576526`, sin perder ninguna fila— y quedó fuera del contrato de escritura, de los seeders y de toda lectura
 
 #### Scenario: Cambio auditado
 - **WHEN** cualquier flag cambia
@@ -79,8 +79,9 @@ El módulo SHALL emitir `AD_OWNER_CONFIG_CHANGE` y `AD_DIRECTIVA_SIGN_UPLOAD` co
 - **THEN** puede derivar rotación de cargos de directiva a partir de `datosGobernanza.fechaAsuncion` y los eventos AM
 
 ### Requirement: Switch de privacidad con reflejo inmediato
-El switch de morosidad es controlado por la lista SWR y la revalidación
-tarda segundos bajo carga dev (el assert a 600ms fallaba). SHALL aplicar
+El switch de privacidad por unidad —hoy `residenteVeActas`, el único vivo; el de
+morosidad se retiró con su bandera el 2026-11-07— es controlado por la lista SWR y
+la revalidación tarda segundos bajo carga dev (el assert a 600ms fallaba). SHALL aplicar
 override optimista local al instante, esperar la revalidación tras el PUT y
 conciliar después (igual que proyectos/reservas con `mutateGlobal`).
 

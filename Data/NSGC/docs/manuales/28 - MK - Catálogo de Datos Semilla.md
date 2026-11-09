@@ -215,11 +215,9 @@ Acciones: `notify()` (store); lectura vía API REST `/api/notificaciones/[id]`. 
 |-------|------|---------------------|
 | `id` | string | |
 | `unidadId` | string | FK a unidades |
-| `residenteVeMorosidad` | boolean | `false` |
 | `residenteVeActas` | boolean | `false` |
-| `alertasResidentesActivas` | boolean | `true` |
 
-Consumidor: `app/admin/gestion/page.tsx`; gobierna visibilidad en GD. Acciones: `saveControlPropiedad`, `removeControlPropiedad`.
+Consumidor: `app/admin/gestion/page.tsx`; gobierna visibilidad en GD. Acciones: `saveControlPropiedad`, `removeControlPropiedad`. Las dos banderas que el store v12 declaraba de más —`residenteVeMorosidad` y `alertasResidentesActivas`— ya no se siembran ni existen en la base: la migración `20261113000000_retira_banderas_muertas` las retiró de `controles_propiedad` y de `controles_propiedad_archivados` sin perder filas (dev y producción, carril `db-prod`, run `42697576526`).
 
 #### 5.5 `actasGD` (GD, store v13)
 

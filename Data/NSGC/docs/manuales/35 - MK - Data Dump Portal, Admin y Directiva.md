@@ -76,10 +76,8 @@ Vacía por diseño: si una unidad no tiene registro, se asumen los defaults.
 | `id` | string | — | Patrón: `ctrl-{unidadId}` |
 | `unidadId` | string | — | Una fila por unidad |
 | `residenteVeActas` | boolean | `false` | El residente ve actas publicadas — **el único control de privacidad vivo** (se obedece en `lib/api/gd-guard.ts` y en las rutas de actas `actas-gd`/`cv/actas`) |
-| `residenteVeMorosidad` | boolean | `false` | **Columna `@deprecated`** (2026-11-07): retirada del contrato, de la UI y del motor porque ninguna ruta la leía. El alta la escribe en `false`; no se acepta desde el cliente |
-| `alertasResidentesActivas` | boolean | `true` | **Columna `@deprecated`** (2026-11-07): el control se retiró de `/admin/gestion` porque `notify()` nunca lo consultó. El alta la escribe en `true`; no se acepta desde el cliente |
 
-Las dos columnas `@deprecated` sobreviven sólo hasta una migración con datos que las elimine: se conservan con su valor histórico para no reescribir filas existentes.
+Las dos banderas retiradas de la superficie el 2026-11-07 —`residenteVeMorosidad`, que ninguna ruta leía, y `alertasResidentesActivas`, que `notify()` nunca consultó— ya **no existen en la base**: la migración `20261113000000_retira_banderas_muertas` borró sus columnas de `controles_propiedad` y de `controles_propiedad_archivados` reconstruyendo ambas tablas y copiando todas las filas, así que no se perdió nada más que las dos columnas. Se aplicó en dev y en producción (carril `db-prod`, run `42697576526`) y ni los seeders ni el `POST` de la ruta las mencionan.
 
 ---
 
