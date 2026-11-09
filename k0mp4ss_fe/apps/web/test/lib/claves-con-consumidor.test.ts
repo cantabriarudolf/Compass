@@ -22,7 +22,7 @@
  * `packages/ui/src/**`. El delimitador es lo que impide el falso positivo de
  * prefijo: `"fi"` no se conforma con `"fi:balance"`. Los comentarios se
  * descartan antes de buscar, porque una clave **citada** en la prosa describe
- * la intención y no la puerta: `mp:propios` y `pe:contratista` se citan en
+ * la intención y no la puerta: `mp:propios` y `mp:morosidad` se citan en
  * comentarios y hoy ninguna ruta las pide. Quedan fuera `lib/authz.ts` (es la
  * matriz, no un consumidor) y los archivos de prueba (nombran claves para
  * probar el motor).
@@ -110,7 +110,7 @@ const CLAVES_SIN_ACCIONES = CLAVES.filter(
 /**
  * Descarta comentarios —de línea y de bloque— conservando el código y las
  * cadenas. Es lo que separa «la clave se cita» de «la clave se ejecuta»: sin
- * esto, `mp:propios` y `pe:contratista` pasarían por consumidas porque la prosa
+ * esto, `mp:propios` y `mp:morosidad` pasarían por consumidas porque la prosa
  * de las rutas las nombra, y el guardia tendría un agujero silencioso.
  */
 function quitarComentarios(fuente: string): string {
@@ -324,6 +324,34 @@ const EXENCIONES: readonly Exencion[] = [
     motivo:
       "redundante: conserjería ya tiene `re` ver para el centro de mando y los reportes.",
   },
+  // ── Vaciadas el 2026-11-09: capacidades que no existen ───────────────────
+  // Las cuatro concedían acciones a algún rol y ninguna tenía una sola puerta.
+  // Igual que las de D1: no se borran —borrar la entrada devuelve la concesión
+  // por el fallback de prefijo de `puede()`—, se vacían con el motivo escrito.
+  {
+    clave: "ct:propio",
+    clase: "vacia-a-proposito",
+    motivo:
+      "sin superficie: ninguna tipología de certificado la pide —el residente emite con `ct:residencia` y lee con `ct` ver— y no hay ruta ni pantalla de «certificado propio». Vacía corta el fallback de prefijo hacia `ct`.",
+  },
+  {
+    clave: "ir:interno",
+    clase: "vacia-a-proposito",
+    motivo:
+      "sin superficie: la capacidad «personal de servicio interno» no existe; las tres rutas `ir/*` piden `ir:mantenimiento`. Vacía corta el fallback de prefijo hacia `ir:mantenimiento`.",
+  },
+  {
+    clave: "pe:visita",
+    clase: "vacia-a-proposito",
+    motivo:
+      "sin superficie: agendar una visita a la propia unidad no tiene ruta ni pantalla. Vacía corta el fallback de prefijo hacia `pe` (el registro del edificio es `pe:bitacora`).",
+  },
+  {
+    clave: "pe:contratista",
+    clase: "vacia-a-proposito",
+    motivo:
+      "sin superficie: agendar al contratista de la propia unidad tampoco tiene ruta ni pantalla, y el log del portón vive en `pe:ingreso_contratista` (vacío para el residente). Vacía corta el fallback de prefijo hacia `pe`.",
+  },
   // ── Vacías a propósito: existen para cortar el fallback de prefijo ────────
   {
     clave: "co:lecturas",
@@ -370,15 +398,12 @@ const EXENCIONES: readonly Exencion[] = [
   // T9 no las arregla: las deja nombradas para que la decisión sea explícita.
   // Cuando alguna gane consumidor, el caso de `hallazgo` de abajo lo va a pedir.
   // `ct:al_dia` y `ct:residencia` salieron de esta lista en F34: la emisión por
-  // tipología las consume en `app/api/certificados-ct/route.ts`. `ct:propio` sigue
-  // acá: no hay tipología que la pida (su certificado propio se emite con
-  // `ct:residencia` o no se emite).
-  { clave: "ct:propio", clase: "hallazgo", motivo: MOTIVO_PENDIENTE },
-  { clave: "ir:interno", clase: "hallazgo", motivo: MOTIVO_PENDIENTE },
+  // tipología las consume en `app/api/certificados-ct/route.ts`. `ct:propio`,
+  // `ir:interno`, `pe:visita` y `pe:contratista` salieron el 2026-11-09: la
+  // capacidad no existe, así que se vaciaron (motivos en el bloque de arriba)
+  // en vez de quedar como deuda.
   { clave: "mp:morosidad", clase: "hallazgo", motivo: MOTIVO_PENDIENTE },
   { clave: "mp:propios", clase: "hallazgo", motivo: MOTIVO_PENDIENTE },
-  { clave: "pe:contratista", clase: "hallazgo", motivo: MOTIVO_PENDIENTE },
-  { clave: "pe:visita", clase: "hallazgo", motivo: MOTIVO_PENDIENTE },
 ]
 
 const DECLARADAS = new Set(EXENCIONES.map((exencion) => exencion.clave))

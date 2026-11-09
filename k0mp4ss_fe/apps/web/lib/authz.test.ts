@@ -71,12 +71,17 @@ describe("lib/authz — matriz RP (pure, sin IO)", () => {
     expect(puede("conserjeria", "ver", "admin:usuarios")).toBe(false)
   })
 
-  it("residente — puede editar propios y certificados propios y pedir mantenimiento, pero no FI ni interno ni usuarios", () => {
+  it("residente — puede editar propios y leer sus certificados, y pedir mantenimiento, pero no FI ni interno ni usuarios", () => {
     expect(puede("residente", "editar", "MP:propios")).toBe(true)
-    expect(puede("residente", "ver", "CT:propio")).toBe(true)
-    expect(puede("residente", "crear", "CT:propio")).toBe(true)
+    // 2026-11-09: `ct:propio` y `pe:visita` se vaciaron —no hay tipología de
+    // «certificado propio» ni superficie de agenda de visitas—. Lo que conserva
+    // la capacidad es `ct` ver (leer sus certificados) y `pe:directorio` ver.
+    expect(puede("residente", "ver", "CT:propio")).toBe(false)
+    expect(puede("residente", "crear", "CT:propio")).toBe(false)
+    expect(puede("residente", "ver", "CT")).toBe(true)
     expect(puede("residente", "ver", "PE:directorio")).toBe(true)
-    expect(puede("residente", "crear", "PE:visita")).toBe(true)
+    expect(puede("residente", "crear", "PE:visita")).toBe(false)
+    expect(puede("residente", "crear", "PE:contratista")).toBe(false)
     expect(puede("residente", "ver", "IR:mantenimiento")).toBe(true)
     // Decisión owner 2026-10-21: el residente solo consulta el inventario
     // (ya no crea solicitudes de insumo ni entrega).
@@ -89,15 +94,18 @@ describe("lib/authz — matriz RP (pure, sin IO)", () => {
     expect(puede("residente", "ver", "PE:bitacora")).toBe(false) // sin bitácora global
   })
 
-  it("mantencion — puede ver/ejecutar MT y pedir ambos tipos de insumo, pero no admin usuarios ni FI", () => {
+  it("mantencion — ve/ejecuta MT y opera el inventario por `ir:mantenimiento` (no `ir:interno`), pero no admin usuarios ni FI", () => {
     expect(puede("mantencion", "ver", "MT")).toBe(true)
     // D1: `mt:tarea` y `mt:incidente` se vaciaron — mantención ya tiene `mt`
     // completo (ver/crear/editar/ejecutar), verificado en la línea de arriba.
     expect(puede("mantencion", "ejecutar", "MT:tarea")).toBe(false)
     expect(puede("mantencion", "crear", "MT:incidente")).toBe(false)
     expect(puede("mantencion", "ver", "IR:mantenimiento")).toBe(true)
-    expect(puede("mantencion", "ver", "IR:interno")).toBe(true)
-    expect(puede("mantencion", "crear", "IR:interno")).toBe(true)
+    expect(puede("mantencion", "crear", "IR:mantenimiento")).toBe(true)
+    // 2026-11-09: `ir:interno` se vació — la capacidad «personal de servicio
+    // interno» no existe y el inventario se opera por `ir:mantenimiento`.
+    expect(puede("mantencion", "ver", "IR:interno")).toBe(false)
+    expect(puede("mantencion", "crear", "IR:interno")).toBe(false)
     expect(puede("mantencion", "ver", "admin:usuarios")).toBe(false)
     expect(puede("mantencion", "ver", "FI")).toBe(false)
   })
@@ -142,12 +150,15 @@ describe("lib/authz — matriz RP (pure, sin IO)", () => {
     }
   })
 
-  it("ABAC IR — interno solo personal servicio (conserjeria/mantencion + admin)", () => {
+  it("ABAC IR — `ir:interno` vacío: el inventario se opera por `ir:mantenimiento`", () => {
     expect(puede("residente", "crear", "IR:interno")).toBe(false)
     expect(puede("comite", "crear", "IR:interno")).toBe(false)
-    expect(puede("conserjeria", "crear", "IR:interno")).toBe(true)
-    expect(puede("mantencion", "crear", "IR:interno")).toBe(true)
-    expect(puede("administrador", "crear", "IR:interno")).toBe(true)
+    // 2026-11-09: la capacidad «personal de servicio interno» no existe, así que
+    // la clave se vació en lugar de concederse. La concesión de conserjería y
+    // mantención vive en la clave padre, que es la que piden las tres rutas `ir/*`.
+    expect(puede("conserjeria", "crear", "IR:interno")).toBe(false)
+    expect(puede("mantencion", "crear", "IR:interno")).toBe(false)
+    expect(puede("administrador", "crear", "IR:interno")).toBe(true) // wildcard: recurso no vacío
     // mantenimiento: quien opera el inventario (decisión owner 2026-10-21);
     // el comité y el residente solo leen desde esa decisión.
     expect(puede("residente", "crear", "IR:mantenimiento")).toBe(false)
@@ -158,7 +169,10 @@ describe("lib/authz — matriz RP (pure, sin IO)", () => {
 
   it("alias de roles normaliza", () => {
     expect(puede("personal", "ver", "PE:bitacora")).toBe(true) // alias conserjeria
-    expect(puede("propietario", "ver", "CT:propio")).toBe(true)
+    // `ct:propio` se vació el 2026-11-09 (ninguna tipología la pide): el alias se
+    // prueba con la clave padre que sí conserva la lectura de certificados.
+    expect(puede("propietario", "ver", "CT:propio")).toBe(false)
+    expect(puede("propietario", "ver", "CT")).toBe(true)
     expect(puede("directiva", "ver", "RE:centro_mando")).toBe(true)
   })
 
@@ -220,9 +234,18 @@ describe("lib/authz — matriz RP (pure, sin IO)", () => {
       expect(puede(rol, "crear", "ir:mantenimiento")).toBe(false)
       expect(puede(rol, "editar", "ir:mantenimiento")).toBe(false)
     }
-    // menor privilegio intacto: nadie elimina y `ir:interno` conserva su matriz.
+    // menor privilegio intacto: nadie elimina.
     for (const rol of ["comite", "conserjeria", "residente", "mantencion"] as const) {
       expect(puede(rol, "eliminar", "ir:mantenimiento")).toBe(false)
+    }
+    // `ir:interno` se vació el 2026-11-09: la capacidad «personal de servicio
+    // interno» no existe (las tres rutas `ir/*` piden `ir:mantenimiento`). La
+    // capacidad sigue donde siempre estuvo, en la clave padre.
+    for (const rol of ["conserjeria", "mantencion"] as const) {
+      expect(puede(rol, "ver", "ir:interno")).toBe(false)
+      expect(puede(rol, "crear", "ir:interno")).toBe(false)
+      expect(puede(rol, "ver", "ir:mantenimiento")).toBe(true)
+      expect(puede(rol, "crear", "ir:mantenimiento")).toBe(true)
     }
     expect(puede("residente", "ver", "ir:interno")).toBe(false)
   })
@@ -269,9 +292,13 @@ describe("lib/authz — puedeContextual ABAC (paridad 1:1)", () => {
     expect(puedeContextual("residente", "crear", "ct:residencia", { personaId: "p-1", unidadId: "u-A-101" } as never)).toBe(false)
   })
 
-  it("ct:propio y ct:al_dia — misma regla de vinculación (al_dia no chequea saldo aquí)", () => {
-    expect(puedeContextual("residente", "ver", "ct:propio", { unidadId: "u-A-101", unidadIdsVinculadas: ["u-A-101"] })).toBe(true)
+  it("ct:al_dia — vínculo vigente (no chequea saldo aquí); ct:propio quedó vacío", () => {
+    // `ct:propio` se vació el 2026-11-09: ningún tipo de certificado la pide —el
+    // residente emite con `ct:residencia`— y no hay ruta ni pantalla propia. El
+    // `ct` ver es la lectura que conserva; el vínculo ya no cambia el veredicto.
+    expect(puedeContextual("residente", "ver", "ct:propio", { unidadId: "u-A-101", unidadIdsVinculadas: ["u-A-101"] })).toBe(false)
     expect(puedeContextual("residente", "ver", "ct:propio", { unidadId: "u-A-999", unidadIdsVinculadas: ["u-A-101"] })).toBe(false)
+    expect(puedeContextual("residente", "ver", "ct", { unidadId: "u-A-101", unidadIdsVinculadas: ["u-A-101"] })).toBe(true)
     expect(puedeContextual("residente", "ver", "ct:al_dia", { unidadId: "u-A-101", unidadIdsVinculadas: ["u-A-101"] })).toBe(true)
     expect(puedeContextual("residente", "crear", "ct:al_dia", { unidadId: "u-B-202", unidadIdsVinculadas: ["u-A-101"] })).toBe(false)
     // `ct:propia` (conserjería) se vació en D1: sin ruta ni pantalla, el staff no tiene
@@ -311,7 +338,12 @@ describe("lib/authz — puedeContextual ABAC (paridad 1:1)", () => {
     expect(puedeContextual("comite", "ver", "fi:balance", {})).toBe(puede("comite", "ver", "fi:balance"))
     expect(puedeContextual("conserjeria", "ver", "pe:bitacora", {})).toBe(true)
     expect(puedeContextual("conserjeria", "ver", "pe:bitacora", { personaId: "cualquiera" })).toBe(true)
-    expect(puedeContextual("residente", "crear", "pe:visita", {})).toBe(true)
+    // La agenda de visitas y contratistas del residente no existe como capacidad
+    // (sin ruta ni pantalla): sus dos claves quedaron vacías el 2026-11-09 y la
+    // delegación a `puede()` devuelve false. El portón sigue en el `pe` de conserjería.
+    expect(puedeContextual("residente", "crear", "pe:visita", {})).toBe(false)
+    expect(puedeContextual("residente", "crear", "pe:contratista", {})).toBe(false)
+    expect(puedeContextual("conserjeria", "crear", "pe", {})).toBe(true)
     expect(puedeContextual("residente", "crear", "ir:interno", {})).toBe(false)
     expect(puedeContextual("residente", "ver", "admin:usuarios", { personaId: "p-1" })).toBe(false)
   })

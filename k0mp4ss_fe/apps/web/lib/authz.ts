@@ -156,8 +156,8 @@ const MATRIZ: Record<Rol, Record<string, Set<Accion>>> = {
     "pe:encomienda": new Set<Accion>(["ver", "crear", "editar"]),
     // Ingresos de contratistas (decisión owner 2026-11-05): el portón verifica y registra
     // el ingreso, así que conserjería verifica, registra y corrige. Clave propia y no
-    // `pe:contratista` (esa es del residente agendando a su contratista): el log del
-    // edificio no se comparte con el residente. Sin `eliminar`: la baja de un registro
+    // `pe:contratista` (esa era la agenda del residente, vaciada el 2026-11-09 porque la
+    // pre-agenda no existe): el log del edificio no se comparte con el residente. Sin `eliminar`: la baja de un registro
     // auditable es del administrador, y la ruta [id] además protege el ingreso sellado.
     "pe:ingreso_contratista": new Set<Accion>(["ver", "crear", "editar"]),
     "pe:cierre_turno": new Set<Accion>(["ver", "crear", "editar", "ejecutar"]),
@@ -195,7 +195,8 @@ const MATRIZ: Record<Rol, Record<string, Set<Accion>>> = {
     // (SERIE-FASE2 §V4). Corta el fallback de prefijo hacia `pl`.
     "pl:adelantos": new Set<Accion>([]),
     // Vacío a propósito (D1): el certificado «de la unidad vinculada del staff» no
-    // tiene ruta ni pantalla. El residente conserva `ct:propio`/`:residencia`/`:al_dia`.
+    // tiene ruta ni pantalla. El residente conserva `ct` ver y `ct:residencia`;
+    // `ct:propio` se vació el 2026-11-09 con este mismo criterio (ver abajo).
     "ct:propia": new Set<Accion>([]),
     // Vacío a propósito (D1): conserjería ya tiene `re` ver; esta clave no tenía
     // consumidor. Set vacío para cortar el fallback de prefijo.
@@ -203,7 +204,10 @@ const MATRIZ: Record<Rol, Record<string, Set<Accion>>> = {
     // Decisión owner 2026-10-21: conserjería entrega insumos y resuelve
     // comodines en un click (`editar` = POST .../entregar y .../resolver-comodin).
     "ir:mantenimiento": new Set<Accion>(["ver", "crear", "editar"]),
-    "ir:interno": new Set<Accion>(["ver", "crear"]), // personal servicio sí
+    // Vacío a propósito (2026-11-09): la capacidad «personal de servicio interno»
+    // no existe — las tres rutas `ir/*` piden `ir:mantenimiento`. El Set vacío
+    // corta el fallback de prefijo de `puede()` hacia `ir:mantenimiento`.
+    "ir:interno": new Set<Accion>([]),
     "cv": new Set<Accion>(["ver"]), // visor de avisos: solo lectura (decisión owner 2026-10-21)
     // in: conserjería reporta la infracción (ver + crear) pero no resuelve el caso; "in:apelar"
     // vacío corta el fallback de prefijo de puede() (la apelación no es de conserjería)
@@ -237,10 +241,13 @@ const MATRIZ: Record<Rol, Record<string, Set<Accion>>> = {
     //     son actos del administrador (art. 20 N° 4: «emitir certificados en lo
     //     relativo al estado de deudas de las unidades»; art. 15: «se acreditará
     //     mediante certificado expedido por el administrador»). El residente consulta
-    //     lo suyo, no lo certifica. `ct:propio` queda intacto y sin tipología que la
-    //     pida: es deuda declarada en `test/lib/claves-con-consumidor.test.ts`.
+    //     lo suyo, no lo certifica. `ct:propio` se vació el 2026-11-09 (capacidad
+    //     inexistente: ninguna tipología la pide y no hay pantalla propia).
     "ct": new Set<Accion>(["ver"]),
-    "ct:propio": new Set<Accion>(["ver", "crear"]),
+    // Vacío a propósito (2026-11-09): el «certificado propio» no tiene tipología
+    // que lo emita, ni ruta, ni pantalla; el residente emite con `ct:residencia` y
+    // lee con `ct`. El Set vacío corta el fallback de prefijo de `puede()` hacia `ct`.
+    "ct:propio": new Set<Accion>([]),
     "ct:residencia": new Set<Accion>(["ver", "crear"]),
     "ct:al_dia": new Set<Accion>(["ver"]),
     "pe:directorio": new Set<Accion>(["ver"]),
@@ -248,8 +255,9 @@ const MATRIZ: Record<Rol, Record<string, Set<Accion>>> = {
     // sin la entrada, cualquier futura clave `pe` base le abriría el prefijo.
     "pe:mantenciones": new Set<Accion>([]),
     // Vacío explícito (decisión owner 2026-11-05): del portón el residente no aprende
-    // nada — su programación propia vive en `pe:visita`/`pe:contratista` y el paquete
-    // le llega por notificación. La entrada corta el fallback de prefijo hacia `pe`.
+    // nada — la agenda de visitas/contratistas no existe (`pe:visita`/`pe:contratista`
+    // quedaron vacías el 2026-11-09) y el paquete le llega por notificación. La entrada
+    // corta el fallback de prefijo hacia `pe`.
     "pe:bitacora": new Set<Accion>([]),
     // Vacío explícito: el residente no inicia ni cierra turno del personal (decisión
     // owner 2026-11-05); la entrada deja el bloqueo declarado, no heredado.
@@ -258,10 +266,10 @@ const MATRIZ: Record<Rol, Record<string, Set<Accion>>> = {
     // no leyendo la planilla del portón (qué encomiendas hay y de quién son es dato de
     // la operación). Corta el fallback de prefijo hacia `pe`.
     "pe:encomienda": new Set<Accion>([]),
-    // Vacío explícito (decisión owner 2026-11-05): el residente agenda a SU contratista
-    // por `pe:contratista`, pero el registro de ingresos del edificio no es suyo: desde
-    // el log no aprende nada del portón. Entrada vacía propia para que el `ver` de
-    // `pe:contratista` no alcance el log.
+    // Vacío explícito (decisión owner 2026-11-05): el registro de ingresos del edificio
+    // no es del residente —la agenda de su contratista por `pe:contratista` no existe,
+    // quedó vacía el 2026-11-09— y desde el log no aprende nada del portón. Entrada
+    // vacía propia para que el `ver` de `pe` (que tampoco tiene) no alcance el log.
     "pe:ingreso_contratista": new Set<Accion>([]),
     // Vacío explícito: la visita técnica es del edificio, no de la unidad del residente
     // (decisión owner 2026-11-03); la entrada corta el fallback de prefijo hacia `pe`.
@@ -273,17 +281,23 @@ const MATRIZ: Record<Rol, Record<string, Set<Accion>>> = {
     // envía a Finanzas (decisión owner 2026-11-03).
     "pe:proyeccion": new Set<Accion>([]),
     "pe:proyeccion:enviar": new Set<Accion>([]),
-    "pe:visita": new Set<Accion>(["ver", "crear"]), // agenda visitas/contratistas a su unidad
-    // Agenda al contratista de SU unidad (ver/crear). No es el log de ingresos del
-    // edificio: ese vive en `pe:ingreso_contratista`, vacío para el residente, para que
-    // este `ver` no le abra el registro del portón.
-    "pe:contratista": new Set<Accion>(["ver", "crear"]),
+    // Vacío a propósito (2026-11-09): la pre-agenda de una visita a la propia unidad
+    // no tiene ruta ni pantalla; el registro del edificio es `pe:bitacora`, que el
+    // residente no lee. El Set vacío corta el fallback de prefijo de `puede()` hacia `pe`.
+    "pe:visita": new Set<Accion>([]),
+    // Vacío a propósito (2026-11-09): agendar al contratista de la unidad tampoco
+    // tiene ruta ni pantalla, y el log de ingresos vive en `pe:ingreso_contratista`
+    // (también vacío para el residente). El vacío corta el fallback de prefijo hacia `pe`.
+    "pe:contratista": new Set<Accion>([]),
     // SERIE-FASE2 §V2: el residente no registra evaluaciones de desempeño.
     "pe:evaluacion": new Set<Accion>([]),
     // Decisión owner 2026-10-21: el residente solo consulta el inventario de
     // insumos; ya no crea solicitudes ni cierra el ciclo.
     "ir:mantenimiento": new Set<Accion>(["ver"]),
-    "ir:interno": new Set<Accion>([]), // bloqueado
+    // Vacío a propósito (2026-11-09): la clave no tiene capacidad ni consumidor en
+    // ningún rol; el residente ya estaba bloqueado y el vacío corta el fallback de
+    // prefijo de `puede()` hacia `ir:mantenimiento`.
+    "ir:interno": new Set<Accion>([]),
     "ra": new Set<Accion>(["ver", "crear"]), // reserva amenities (ABAC propia)
     "ge": new Set<Accion>(["ver", "crear"]),
     // CO — cambio co-lectura-residente (D-3/D4): el residente LEE las comunicaciones
@@ -361,7 +375,10 @@ const MATRIZ: Record<Rol, Record<string, Set<Accion>>> = {
     // Decisión owner 2026-10-21: mantención entrega insumos y resuelve
     // comodines en un click (`editar` = POST .../entregar y .../resolver-comodin).
     "ir:mantenimiento": new Set<Accion>(["ver", "crear", "editar"]),
-    "ir:interno": new Set<Accion>(["ver", "crear"]),
+    // Vacío a propósito (2026-11-09): la capacidad «personal de servicio interno»
+    // no existe — las tres rutas `ir/*` piden `ir:mantenimiento`. El Set vacío
+    // corta el fallback de prefijo de `puede()` hacia `ir:mantenimiento`.
+    "ir:interno": new Set<Accion>([]),
     "pe:bitacora": new Set<Accion>(["ver"]),
     // Vacío explícito (decisión owner 2026-11-05): la paquetería es del portón, no de
     // las tareas de mantención; hasta ahora la leía y la escribía por el `pe` de sus
