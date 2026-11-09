@@ -1,6 +1,6 @@
 # Retiro de `residenteVeMorosidad` y `alertasResidentesActivas` en producción
 
-- **Commit de referencia**: 17bc9c4d0f0a7b0b6c3ff2f1e0b9a6e6a3a8f0d31
+- **Commit de referencia**: 17bc9c4e04c443d57b2c689d2d7aab3adf647d17
   (el commit que arregló `residenteVeActas` por unidad; las dos banderas muertas se
   retiraron de la superficie en `d5cc7d6`, el 2026-11-07)
 - **Qué se borra**: dos columnas `BOOLEAN NOT NULL` de **dos** tablas —
