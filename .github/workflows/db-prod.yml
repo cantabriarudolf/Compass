@@ -190,32 +190,30 @@ jobs:
             echo "::error title=La intención no nombra un commit::El archivo '$RUTA' tiene que incluir el SHA completo (40 caracteres) del commit que retiró el código o hizo el ensayo."
             exit 1
           fi
+          # Dos fallas distintas, dos mensajes distintos: «ese SHA no existe» (se
+          # inventó, o el archivo apunta a otra rama) no es lo mismo que «existe
+          # pero no está en esta historia». El 2026-11-08 el carril frenó bien un
+          # SHA falso, pero lo contó como problema de ancestría y eso manda a
+          # buscar la avería en el lugar equivocado.
+          if ! git cat-file -e "${SHA_INT}^{commit}" 2>/dev/null; then
+            echo "::error title=El commit de la intención no existe::El SHA '$SHA_INT' que nombra '$RUTA' no existe en este repositorio. Copiá el SHA real con \`git rev-parse <ref>\`, corregí el archivo y commiteálo: un SHA inventado de 40 caracteres parece válido y no lo es."
+            exit 1
+          fi
           if ! git merge-base --is-ancestor "$SHA_INT" HEAD; then
-            echo "::error title=El commit de la intención no es ancestro::El SHA '$SHA_INT' que nombra '$RUTA' no está en la historia del commit aplicado (${{ github.sha }}). La intención tiene que apuntar a un commit anterior de esta misma línea."
+            echo "::error title=El commit de la intención no es ancestro::El SHA '$SHA_INT' existe (${SHA_INT:0:8}) pero no está en la historia del commit aplicado (${{ github.sha }}). La intención tiene que apuntar a un commit ANTERIOR de esta misma línea."
             exit 1
           fi
           echo "intención: $RUTA (anclada en ${SHA_INT:0:8}, ancestro de ${{ github.sha }})"
           echo "### Intención declarada" >> "$GITHUB_STEP_SUMMARY"
           cat "$RUTA" >> "$GITHUB_STEP_SUMMARY"
           # Antes de borrar, se cuenta lo que se pierde: sin esto el run dice «listo»
-          # y nadie sabe si se fue una tabla vacía o cien filas.
-          node -e '
-            const { PrismaClient } = require("@prisma/client");
-            const fs = require("fs");
-            const sql = fs.readFileSync("/tmp/deriva.sql", "utf8");
-            const tablas = [...new Set([...sql.matchAll(/DROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?"?([a-zA-Z0-9_]+)"?/gi)].map((m) => m[1]))];
-            const p = new PrismaClient();
-            (async () => {
-              for (const t of tablas) {
-                try {
-                  const r = await p.$queryRawUnsafe(`SELECT count(*)::int AS n FROM \"${t}\"`);
-                  console.log(`PÉRDIDA \u00b7 ${t}: ${r[0].n} fila(s)`);
-                } catch (e) {
-                  console.log(`PÉRDIDA \u00b7 ${t}: no se pudo contar (${String(e.message).split("\n")[0]})`);
-                }
-              }
-              await p.$disconnect();
-            })();'
+          # y nadie sabe si se fue una tabla vacía, cien filas o una columna con
+          # valores. El 2026-11-08 (run 42697576526) el paso buscaba sólo `DROP TABLE`
+          # y la deriva era de cuatro `DROP COLUMN`: no imprimió una línea. El parser
+          # vive en `scripts/db-prod-contar-perdidas.mjs` con sus casos en
+          # `test/db-prod-contar-perdidas.test.ts`, para que el próximo `DROP COLUMN`
+          # no pase en silencio.
+          node scripts/db-prod-contar-perdidas.mjs /tmp/deriva.sql
           npx prisma db push --skip-generate --accept-data-loss
 
       - name: Verificar que la base quedó alineada
