@@ -937,6 +937,13 @@ export const TipoInfraccionINSchema = z.object({
       required_error: "El monto/valor asociado a la sanción es obligatorio.",
     })
     .min(0, "El valor no puede ser negativo."),
+  // S1 — ancla legal del monto: artículo del reglamento o acta que lo fija.
+  // Opcional para no invalidar las filas ya cargadas ni los llamadores actuales.
+  referenciaLegal: z
+    .string()
+    .trim()
+    .max(300, "La referencia legal no puede superar los 300 caracteres.")
+    .optional(),
 })
 
 export const ESTADOS_INFRACCION_IN = [

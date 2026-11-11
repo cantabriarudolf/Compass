@@ -155,6 +155,8 @@ El sistema SHALL registrar la vigencia del Registro de Copropietarios **por unid
 
 El permiso del arrendatario para declarar el registro SHALL ser un atributo del **vínculo** (`VinculoUnidad.puedeDeclararRegistro`), con valor por omisión `false`: nadie obtiene el permiso sin un acto deliberado del propietario, y la obligación legal de mantener el registro actualizado sigue siendo del propietario. El propietario vigente SHALL poder declarar el registro de su unidad siempre; el arrendatario vigente SHALL poder declararlo sólo cuando ese atributo esté en `true`; cualquier otro rol (`copropietario`, `ocupante`) NO SHALL poder declarar. Toda declaración SHALL guardar su procedencia en la evidencia (`origen`: `administrador`, `propietario` o `arrendatario`), derivada del vínculo del usuario de sesión y NO SHALL aceptarse del cuerpo del request. La declaración por la cuenta propia (`POST /api/vigencia-registro/mi-declaracion`) SHALL exigir un vínculo vigente con la unidad en la comunidad de la sesión y SHALL responder 404 «Unidad no encontrada.» a cualquier otra unidad —incluida una de otra comunidad—, sin revelar que existe, y NO SHALL escribir nada cuando rechaza. Una declaración aceptada SHALL ejecutar la misma transacción del acto administrativo —fecha de la última declaración en el acto y limpieza del requerimiento vigente **sin borrar** las filas de `RequerimientoVigencia`— y SHALL dejar un evento `AD_VIGENCIA_DECLARACION_PROPIA` con el número de la unidad y el origen. La vista del residente SHALL ser auto-acotada (`GET /api/vigencia-registro/mi-unidad`): resuelta desde la persona del usuario de sesión y sus vínculos vigentes de la comunidad en sesión, sin aceptar `unidadId` ni `comunidadId` del cliente, devolviendo sólo las unidades propias con el estado derivado y el permiso del vínculo, y SHALL devolver una lista vacía —nunca 404— cuando la cuenta no tiene persona en el Maestro de Personas o no tiene vínculos, porque no tener unidades es un estado legítimo. La procedencia por omisión de una declaración escrita sin origen explícito SHALL ser `administrador`, para que el acto administrativo anterior a este campo conserve su rótulo.
 
+El monto de la multa por el Registro no actualizado SHALL salir del maestro de infracciones de la propia comunidad (`TipoInfraccionIN`), con el nombre canónico `Registro de Copropietarios no actualizado` y el valor que fije *su* reglamento; NO SHALL existir un segundo maestro de multas, un monto por defecto ni un valor en el código. El tipo SHALL poder declarar su ancla legal en `referenciaLegal` —el artículo del reglamento o el acta que fija el monto—, que documenta la procedencia del número y NO SHALL habilitar nada por sí misma. La disponibilidad SHALL decidirse con la regla pura `multaDisponible` de `lib/vigencia-registro.ts` y traducirse desde la base en `lib/vigencia-multa.ts`; sin la fila del tipo, o con un valor no positivo, la multa NO SHALL estar disponible y el sistema SHALL declararlo con su motivo, sin inventar un número. `GET /api/vigencia-registro` SHALL informar esa disponibilidad en un campo `multa` —`disponible` con su `monto` y su `referenciaLegal`, o `disponible` en `false` con el `motivo`—, calculado una vez por comunidad, sin alterar el estado, el resumen ni el total de las unidades.
+
 La administración SHALL contar con la pantalla `/admin/gestion/vigencia-registro`, que SHALL mostrar el estado derivado de cada unidad con su resumen por estado y SHALL ofrecer por fila sólo los actos que ese estado admite —requerir cuando el calendario lo pide y no hay ciclo abierto, revalidar siempre, y el barrido de avisos como acto explícito de la administración—, mostrando los errores de la API con su mensaje y una comunidad sin unidades como tal, nunca como una tabla vacía.
 
 #### Scenario: Unidad sin declaración
@@ -240,3 +242,19 @@ La administración SHALL contar con la pantalla `/admin/gestion/vigencia-registr
 #### Scenario: Una declaración administrativa conserva su procedencia
 - **WHEN** la administración revalida el registro de una unidad con el acto administrativo existente
 - **THEN** la evidencia queda rotulada con `origen` `administrador` sin cambiar el resto de su comportamiento
+
+#### Scenario: La multa sale del maestro de la comunidad
+- **WHEN** la comunidad declaró «Registro de Copropietarios no actualizado» en su maestro de infracciones con un monto positivo y su ancla legal
+- **THEN** el listado informa la multa disponible con ese monto y esa `referenciaLegal`, sin tomar ningún valor del código
+
+#### Scenario: Sin el tipo declarado no se multa
+- **WHEN** la comunidad no declaró el tipo en su maestro de infracciones
+- **THEN** el listado informa la multa como no disponible con el motivo que nombra el tipo faltante y dice que no se multa, y no se inventa ningún monto
+
+#### Scenario: Un monto en cero no habilita la multa
+- **WHEN** el tipo existe en el maestro de la comunidad con valor cero
+- **THEN** la multa no está disponible y el listado lo declara con su motivo
+
+#### Scenario: La multa de una comunidad no alcanza a otra
+- **WHEN** otra comunidad declaró el tipo con su propio monto
+- **THEN** cada comunidad informa la disponibilidad de su propio maestro y ninguna hereda el monto de la otra

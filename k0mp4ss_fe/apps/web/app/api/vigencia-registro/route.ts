@@ -10,10 +10,16 @@
  * tiene `ad:ver` sobre la marca de su propiedad y con esa acción vería el
  * registro de TODAS las unidades, que es justo lo que S5 prohíbe. La vista
  * acotada del propietario y del arrendatario llega por vínculo (T7), no acá.
+ *
+ * S1: la respuesta suma `multa`, la disponibilidad de la multa de vigencia tal
+ * como la declaró la comunidad en su propio maestro de infracciones (con su
+ * ancla legal). Se calcula una vez por comunidad, nunca por unidad, y si no
+ * está declarada lo dice: el sistema no inventa un monto.
  */
 import { puede } from "@/lib/authz"
 import { prisma } from "@/lib/prisma"
 import { estadoDelCaso, type EstadoCasoRegistro } from "@/lib/vigencia-registro"
+import { multaDeVigenciaDeLaComunidad } from "@/lib/vigencia-multa"
 import { jsonError, withComunidadScope } from "@/lib/api/with-comunidad-scope"
 
 interface FilaVigencia {
@@ -39,7 +45,7 @@ export async function GET(): Promise<Response> {
 
   const hoy = new Date()
 
-  const [unidades, casos] = await Promise.all([
+  const [unidades, casos, multa] = await Promise.all([
     prisma.unidad.findMany({
       where: { comunidadId: scope.comunidadId },
       select: { id: true, numero: true, etiqueta: true },
@@ -48,6 +54,7 @@ export async function GET(): Promise<Response> {
     prisma.vigenciaRegistroUnidad.findMany({
       where: { comunidadId: scope.comunidadId },
     }),
+    multaDeVigenciaDeLaComunidad(scope.comunidadId),
   ])
 
   const porUnidad = new Map(casos.map((caso) => [caso.unidadId, caso]))
@@ -81,5 +88,18 @@ export async function GET(): Promise<Response> {
     resumen,
     total: data.length,
     hoy: hoy.toISOString(),
+    // S1: disponible o el motivo por el que la comunidad no puede multar, más el
+    // ancla legal declarada en el maestro (si consta).
+    multa: multa.disponible
+      ? {
+          disponible: true,
+          monto: multa.monto,
+          referenciaLegal: multa.referenciaLegal,
+        }
+      : {
+          disponible: false,
+          motivo: multa.motivo,
+          referenciaLegal: multa.referenciaLegal,
+        },
   })
 }

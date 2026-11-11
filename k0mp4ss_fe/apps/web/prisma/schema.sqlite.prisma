@@ -891,6 +891,10 @@ model TipoInfraccionIN {
   categoria   String
   tipoSancion String
   valor       Float
+  // S1 — ancla legal: artículo del reglamento o acta que fija el monto. Es la
+  // procedencia del número que declara la comunidad; sin monto declarado no se
+  // multa (la compuerta vive en `lib/vigencia-multa.ts`).
+  referenciaLegal String?
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 

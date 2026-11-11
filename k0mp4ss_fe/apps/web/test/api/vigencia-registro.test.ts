@@ -173,6 +173,10 @@ describe("vigencia del registro — API", () => {
       await prisma.usuario.deleteMany({
         where: { id: { in: [USER_ADMIN, USER_RESIDENTE] } },
       })
+      // S1: la fila del maestro de multas que cargan los tests de esta suite.
+      await prisma.tipoInfraccionIN.deleteMany({
+        where: { comunidadId: { in: [COMUNIDAD, COMUNIDAD_B] } },
+      })
       await prisma.comunidad.deleteMany({
         where: { id: { in: [COMUNIDAD, COMUNIDAD_B] } },
       })
@@ -252,6 +256,72 @@ describe("vigencia del registro — API", () => {
         habilitado_para_multa: 1,
       })
     })
+  })
+
+  it("sin el tipo en el maestro, la multa no está disponible y el motivo lo dice (S1)", async () => {
+    await conSesion(EMAIL_ADMIN, async () => {
+      const { GET } = await moduloGet()
+      const respuesta = await GET()
+      expect(respuesta.status).toBe(200)
+      const cuerpo = await respuesta.json()
+
+      expect(cuerpo.multa.disponible).toBe(false)
+      expect(cuerpo.multa.motivo).toContain(
+        "Registro de Copropietarios no actualizado"
+      )
+      expect(cuerpo.multa.motivo).toContain("no se multa")
+      expect(cuerpo.multa.monto).toBeUndefined()
+      expect(cuerpo.multa.referenciaLegal).toBeNull()
+
+      // El listado no cambió: el campo es aditivo.
+      expect(cuerpo.total).toBe(4)
+      expect(cuerpo.resumen).toEqual({
+        al_dia: 1,
+        sin_declaracion: 1,
+        requerido: 1,
+        habilitado_para_multa: 1,
+      })
+    })
+  })
+
+  it("con el tipo declarado en el maestro, la multa trae su monto y su ancla legal (S1)", async () => {
+    const tipo = "vig-tipo-multa-registro"
+    const referenciaLegal = "Artículo 12 del reglamento de copropiedad"
+    await prisma.tipoInfraccionIN.create({
+      data: {
+        id: tipo,
+        comunidadId: COMUNIDAD,
+        nombre: "Registro de Copropietarios no actualizado",
+        categoria: "grave",
+        tipoSancion: "monto_fijo",
+        valor: 35000,
+        referenciaLegal,
+      },
+    })
+    try {
+      await conSesion(EMAIL_ADMIN, async () => {
+        const { GET } = await moduloGet()
+        const respuesta = await GET()
+        expect(respuesta.status).toBe(200)
+        const cuerpo = await respuesta.json()
+
+        expect(cuerpo.multa.disponible).toBe(true)
+        expect(cuerpo.multa.monto).toBe(35000)
+        expect(cuerpo.multa.referenciaLegal).toBe(referenciaLegal)
+        expect(cuerpo.multa.motivo).toBeUndefined()
+
+        // El listado sigue igual: ni la multa ni el monto tocan las filas.
+        expect(cuerpo.total).toBe(4)
+        expect(cuerpo.resumen).toEqual({
+          al_dia: 1,
+          sin_declaracion: 1,
+          requerido: 1,
+          habilitado_para_multa: 1,
+        })
+      })
+    } finally {
+      await prisma.tipoInfraccionIN.deleteMany({ where: { id: tipo } })
+    }
   })
 
   it("un fundamento vacío no se acepta: 400 y nada escrito", async () => {
