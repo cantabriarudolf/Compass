@@ -169,7 +169,25 @@ jobs:
       # schema.sqlite.prisma. Sin --schema el CLI lee el schema PG y muere con
       # P1012 ("URL must start with postgresql://").
       - run: npx prisma generate --schema=prisma/schema.sqlite.prisma
-      - run: npx playwright install --with-deps chromium
+      # La instalación del navegador baja paquetes de Ubuntu con `apt`, y el mirror del
+      # runner falla más de lo que parece: el 2026-11-09 dos corridas seguidas tumbaron
+      # los dos jobs e2e de un commit que sólo tocaba un `.md`, con
+      # «Temporary failure resolving 'archive.ubuntu.com'» y «Failed to fetch … fonts-*».
+      # Eso no es un test rojo: es la red del runner. Se reintenta antes de dar la
+      # corrida por perdida (3 intentos, espera creciente) y, si igual falla, el error
+      # lo dice: sin navegador no se ejecutó ni un test.
+      - name: Instalar Chromium (con reintentos por el mirror de Ubuntu)
+        run: |
+          for intento in 1 2 3; do
+            if npx playwright install --with-deps chromium; then
+              echo "chromium instalado en el intento $intento"
+              exit 0
+            fi
+            echo "::warning title=Instalación de Chromium falló::Intento $intento de 3 (mirror de Ubuntu). Reintentando en $((intento * 20))s…"
+            sleep $((intento * 20))
+          done
+          echo "::error title=No se pudo instalar Chromium::Los tres intentos fallaron bajando el navegador o sus dependencias del mirror de Ubuntu. Esto es infraestructura del runner, no un test rojo: ningún test llegó a ejecutarse. Volvé a correr el job."
+          exit 1
       - name: BD desde cero + seed completo (usuarios TEST + datos semilla)
         run: |
           npx prisma migrate deploy --schema=prisma/schema.sqlite.prisma
@@ -246,7 +264,25 @@ jobs:
       - run: npm ci
         working-directory: k0mp4ss_fe
       - run: npx prisma generate --schema=prisma/schema.sqlite.prisma
-      - run: npx playwright install --with-deps chromium
+      # La instalación del navegador baja paquetes de Ubuntu con `apt`, y el mirror del
+      # runner falla más de lo que parece: el 2026-11-09 dos corridas seguidas tumbaron
+      # los dos jobs e2e de un commit que sólo tocaba un `.md`, con
+      # «Temporary failure resolving 'archive.ubuntu.com'» y «Failed to fetch … fonts-*».
+      # Eso no es un test rojo: es la red del runner. Se reintenta antes de dar la
+      # corrida por perdida (3 intentos, espera creciente) y, si igual falla, el error
+      # lo dice: sin navegador no se ejecutó ni un test.
+      - name: Instalar Chromium (con reintentos por el mirror de Ubuntu)
+        run: |
+          for intento in 1 2 3; do
+            if npx playwright install --with-deps chromium; then
+              echo "chromium instalado en el intento $intento"
+              exit 0
+            fi
+            echo "::warning title=Instalación de Chromium falló::Intento $intento de 3 (mirror de Ubuntu). Reintentando en $((intento * 20))s…"
+            sleep $((intento * 20))
+          done
+          echo "::error title=No se pudo instalar Chromium::Los tres intentos fallaron bajando el navegador o sus dependencias del mirror de Ubuntu. Esto es infraestructura del runner, no un test rojo: ningún test llegó a ejecutarse. Volvé a correr el job."
+          exit 1
       - name: BD desde cero + seed usuarios TEST
         run: |
           npx prisma migrate deploy --schema=prisma/schema.sqlite.prisma
