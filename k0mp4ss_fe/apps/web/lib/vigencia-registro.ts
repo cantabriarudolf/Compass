@@ -197,6 +197,72 @@ export function multaDisponible(
 }
 
 /** Estados que habilitan proponer la multa (S4: la propone el sistema, la aplica el Comité). */
-export function habilitaPropuestaDeMulta(veredicto: VeredictoVigencia): boolean {
+export function habilitaPropuestaDeMulta(veredicto: {
+  readonly estado: EstadoCasoRegistro
+}): boolean {
   return veredicto.estado === "habilitado_para_multa"
+}
+
+/**
+ * El estado de un caso **persistido**, donde la declaración puede no constar
+ * todavía: una unidad recién cargada no tiene registro declarado, y eso no es
+ * «al día». Se reporta como `sin_declaracion` — incidente de datos (S8), nunca
+ * habilitación de multa (S1: no se inventa una falta).
+ */
+export type EstadoCasoRegistro = EstadoVigencia | "sin_declaracion"
+
+export interface FilaCasoRegistro {
+  readonly ultimaActualizacion?: string | Date | null
+  readonly requerimientoEn?: string | Date | null
+}
+
+export interface VeredictoDelCaso {
+  readonly estado: EstadoCasoRegistro
+  readonly cambiaEl?: string
+  readonly diasParaCambiar?: number
+  readonly descripcion: string
+}
+
+/**
+ * Traduce la fila persistida al veredicto del calendario.
+ *
+ * Sin declaración, la única referencia posible es el acto de requerir: mientras
+ * el requerimiento esté abierto, las ramas del reloj anual son inalcanzables y
+ * manda el plazo de 60 días. Con requerimiento y sin dato, se multa por no
+ * responder al requerimiento — no por un vencimiento anual que nunca se midió.
+ */
+export function estadoDelCaso(
+  fila: FilaCasoRegistro,
+  hoy: string | Date
+): VeredictoDelCaso {
+  const requerido = fila.requerimientoEn ? aFecha(fila.requerimientoEn) : null
+  const declarado = fila.ultimaActualizacion
+    ? aFecha(fila.ultimaActualizacion)
+    : null
+
+  if (!requerido && !declarado) {
+    return {
+      estado: "sin_declaracion",
+      descripcion:
+        "No consta la declaración del registro de esta unidad: se notifica como incidente de datos y no se multa.",
+    }
+  }
+
+  return estadoDeVigencia(
+    {
+      ultimaActualizacion: declarado ?? (requerido as Date),
+      requerimientoEn: requerido,
+    },
+    hoy
+  )
+}
+
+/**
+ * S6 — la fecha de vencimiento se congela en el acto de requerir y se guarda:
+ * recalcularla después permitiría mover el plazo cambiando un dato de entrada.
+ */
+export function vencimientoDelRequerimiento(
+  requerimientoEn: string | Date
+): Date {
+  return sumarDias(aFecha(requerimientoEn), DIAS_PARA_RESPONDER)
 }

@@ -22,122 +22,125 @@ model Comunidad {
   updatedAt DateTime @updatedAt
 
   // back-relations (opcional, ayudan a Prisma)
-  tiposUnidad              TipoUnidad[]
-  macroSectores            MacroSector[]
-  microSectores            MicroSector[]
-  unidades                 Unidad[]
-  personas                 Persona[]
-  vinculos                 VinculoUnidad[]
-  eventos                  EventoAuditoria[]
-  configuraciones          ConfiguracionGlobal[]
-  publicacionesPortal      PublicacionPortal[]
-  leadsPortal              LeadPortal[]
-  notificaciones           Notificacion[]
-  controlesPropiedades     ControlPropiedad[]
-  periodosDirectiva        PeriodoDirectiva[]
-  actasGD                  ActaGD[]
+  tiposUnidad                 TipoUnidad[]
+  macroSectores               MacroSector[]
+  microSectores               MicroSector[]
+  unidades                    Unidad[]
+  personas                    Persona[]
+  vinculos                    VinculoUnidad[]
+  eventos                     EventoAuditoria[]
+  configuraciones             ConfiguracionGlobal[]
+  publicacionesPortal         PublicacionPortal[]
+  leadsPortal                 LeadPortal[]
+  notificaciones              Notificacion[]
+  controlesPropiedades        ControlPropiedad[]
+  // Vigencia del Registro de Copropietarios (S2: el reloj corre por unidad).
+  vigenciasRegistro           VigenciaRegistroUnidad[]
+  requerimientosVigencia      RequerimientoVigencia[]
+  periodosDirectiva           PeriodoDirectiva[]
+  actasGD                     ActaGD[]
   // SERIE-FASE2 §V6 — actas GD publicadas en el visor CV (por referencia).
-  actasPublicadasCV        ActaPublicadaCV[]
-  plantillasCO             PlantillaCO[]
-  enviosCO                 EnvioCO[]
-  mensajesBuzonCO          MensajeBuzonCO[]
+  actasPublicadasCV           ActaPublicadaCV[]
+  plantillasCO                PlantillaCO[]
+  enviosCO                    EnvioCO[]
+  mensajesBuzonCO             MensajeBuzonCO[]
   // F35 serie A — archivo de documentos de la comunidad (legal + comunitario).
-  documentos               Documento[]
+  documentos                  Documento[]
   // A3 — constancia de entrega por destinatario de los documentos legales.
-  enviosDocumento          EnvioDocumento[]
-  solicitudesGE            SolicitudGE[]
-  activosIR                RecursoIR[]
-  solicitudesInsumoIR      SolicitudInsumoIR[]
-  entregasEPP              EntregaEPP[]
-  tiposInfraccionIN        TipoInfraccionIN[]
-  infraccionesIN           InfraccionIN[]
-  trabajosMT               TrabajoMT[]
-  proyectosMT              ProyectoMT[]
-  elementosRA              ElementoRA[]
-  reservasRA               ReservaRA[]
-  avisosCV                 AvisoCV[]
-  plantillasCV             PlantillaCV[]
-  fondosFI                 FondoFI[]
-  egresosFI                EgresoFI[]
-  ingresosFI               IngresoFI[]
-  versionesReglamento      VersionReglamento[]
-  emisionesGC              EmisionGC[]
-  cobrosFI                 CobroFI[]
+  enviosDocumento             EnvioDocumento[]
+  solicitudesGE               SolicitudGE[]
+  activosIR                   RecursoIR[]
+  solicitudesInsumoIR         SolicitudInsumoIR[]
+  entregasEPP                 EntregaEPP[]
+  tiposInfraccionIN           TipoInfraccionIN[]
+  infraccionesIN              InfraccionIN[]
+  trabajosMT                  TrabajoMT[]
+  proyectosMT                 ProyectoMT[]
+  elementosRA                 ElementoRA[]
+  reservasRA                  ReservaRA[]
+  avisosCV                    AvisoCV[]
+  plantillasCV                PlantillaCV[]
+  fondosFI                    FondoFI[]
+  egresosFI                   EgresoFI[]
+  ingresosFI                  IngresoFI[]
+  versionesReglamento         VersionReglamento[]
+  emisionesGC                 EmisionGC[]
+  cobrosFI                    CobroFI[]
   // Aviso de cobro mensual (S1/S4/S7): documento congelado por unidad/período.
-  avisosCobro              AvisoCobro[]
+  avisosCobro                 AvisoCobro[]
   // S3: registro de la ENTREGA de cada aviso (visor con prueba, correo en cola).
-  enviosAvisoCobro         EnvioAvisoCobro[]
+  enviosAvisoCobro            EnvioAvisoCobro[]
   // SERIE-FASE2 §V5 — cobranza FI multicanal (interruptor global, preferencia
   // por residente y registro de cada envío).
-  configuracionCobranzaFI  ConfiguracionCobranzaFI?
+  configuracionCobranzaFI     ConfiguracionCobranzaFI?
   preferenciasCanalCobranzaFI PreferenciaCanalCobranzaFI[]
-  enviosCobranzaFI         EnvioCobranzaFI[]
-  bitacoraVisitasPE        BitacoraVisitaPE[]
-  encomiendasPE            EncomiendaPE[]
-  ingresosContratistasPE   IngresoContratistaPE[]
-  proveedoresPE            ProveedorPE[]
-  mantencionesPreventivasPE MantencionPreventivaPE[]
-  visitasTecnicasPE        VisitaTecnicaPE[]
-  cierresTurnoPE           CierreTurnoPE[]
-  proyeccionesPE           ProyeccionPE[]
-  liquidacionesPL          LiquidacionPL[]
-  adelantosPL              AdelantoPL[]
-  certificadosCT           CertificadoCT[]
-  reportesRE               ReporteRE[]
-  membresias               Membresia[]
+  enviosCobranzaFI            EnvioCobranzaFI[]
+  bitacoraVisitasPE           BitacoraVisitaPE[]
+  encomiendasPE               EncomiendaPE[]
+  ingresosContratistasPE      IngresoContratistaPE[]
+  proveedoresPE               ProveedorPE[]
+  mantencionesPreventivasPE   MantencionPreventivaPE[]
+  visitasTecnicasPE           VisitaTecnicaPE[]
+  cierresTurnoPE              CierreTurnoPE[]
+  proyeccionesPE              ProyeccionPE[]
+  liquidacionesPL             LiquidacionPL[]
+  adelantosPL                 AdelantoPL[]
+  certificadosCT              CertificadoCT[]
+  reportesRE                  ReporteRE[]
+  membresias                  Membresia[]
   // maestros
-  afps                     Afp[]
-  previsionesSalud         PrevisionSalud[]
-  mutualesCajas            MutualCaja[]
-  feriados                 Feriado[]
-  bancos                   Banco[]
-  indicesAjuste            IndiceAjuste[]
-  cajasFondos              CajaFondo[]
-  categoriasInsumos        CategoriaInsumo[]
-  unidadesMedida           UnidadMedida[]
-  contactosEmergencia      ContactoEmergencia[]
-  condicionesEspeciales    CondicionEspecial[]
-  estadosOcupacion         EstadoOcupacion[]
-  categoriasMacro          CategoriaMacro[]
-  categoriasMicro          CategoriaMicro[]
-  categoriasUnidad         CategoriaUnidad[]
-  estadosInmobiliarios     EstadoInmobiliario[]
-  asignacionesFamiliar     AsignacionFamiliar[]
-  jornadas                 Jornada[]
-  couriers                 Courier[]
-  contratistas             Contratista[]
+  afps                        Afp[]
+  previsionesSalud            PrevisionSalud[]
+  mutualesCajas               MutualCaja[]
+  feriados                    Feriado[]
+  bancos                      Banco[]
+  indicesAjuste               IndiceAjuste[]
+  cajasFondos                 CajaFondo[]
+  categoriasInsumos           CategoriaInsumo[]
+  unidadesMedida              UnidadMedida[]
+  contactosEmergencia         ContactoEmergencia[]
+  condicionesEspeciales       CondicionEspecial[]
+  estadosOcupacion            EstadoOcupacion[]
+  categoriasMacro             CategoriaMacro[]
+  categoriasMicro             CategoriaMicro[]
+  categoriasUnidad            CategoriaUnidad[]
+  estadosInmobiliarios        EstadoInmobiliario[]
+  asignacionesFamiliar        AsignacionFamiliar[]
+  jornadas                    Jornada[]
+  couriers                    Courier[]
+  contratistas                Contratista[]
   // F20 — ocultamiento por comunidad de filas de catálogos nacionales
-  maestrosOcultos          MaestroOculto[]
+  maestrosOcultos             MaestroOculto[]
 }
 
 // Autenticación y Autorización (B3 — AU §4, RP, D3; P5 — AU §3 Auth.js + SG D-v)
 model Usuario {
-  id           String   @id @default(cuid())
-  email        String   @unique
-  personaId    String? // 0..1 hacia MP.Persona.id (no FK estricta para desacoplar)
-  activo       Boolean  @default(true)
-  passwordHash String? // bcrypt (AU §3: login contra BD vía Auth.js credentials)
-  tokenVersion Int      @default(0) // SERIE-PRODUCCION-FASE2 P2: invalidación de sesiones
-  twoFactorSecret      String?   // SERIE-PRODUCCION-FASE2 P3: secreto TOTP Base32 (pendiente hasta verify-setup)
-  twoFactorEnabled     Boolean   @default(false) // SERIE-PRODUCCION-FASE2 P3: 2FA activo
-  twoFactorBackupCodes String?   // SERIE-PRODUCCION-FASE2 P3: JSON array de hashes bcrypt de códigos de respaldo
-  solicitudEliminacion   Boolean   @default(false) // SERIE-PRODUCCION-FASE2 P6: derecho a olvido (Ley 21.719)
+  id                     String      @id @default(cuid())
+  email                  String      @unique
+  personaId              String? // 0..1 hacia MP.Persona.id (no FK estricta para desacoplar)
+  activo                 Boolean     @default(true)
+  passwordHash           String? // bcrypt (AU §3: login contra BD vía Auth.js credentials)
+  tokenVersion           Int         @default(0) // SERIE-PRODUCCION-FASE2 P2: invalidación de sesiones
+  twoFactorSecret        String? // SERIE-PRODUCCION-FASE2 P3: secreto TOTP Base32 (pendiente hasta verify-setup)
+  twoFactorEnabled       Boolean     @default(false) // SERIE-PRODUCCION-FASE2 P3: 2FA activo
+  twoFactorBackupCodes   String? // SERIE-PRODUCCION-FASE2 P3: JSON array de hashes bcrypt de códigos de respaldo
+  solicitudEliminacion   Boolean     @default(false) // SERIE-PRODUCCION-FASE2 P6: derecho a olvido (Ley 21.719)
   solicitudEliminacionAt DateTime? // SERIE-PRODUCCION-FASE2 P6: fecha de la solicitud
-  membresias   Membresia[]
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  membresias             Membresia[]
+  createdAt              DateTime    @default(now())
+  updatedAt              DateTime    @updatedAt
 
   @@map("usuarios")
 }
 
 model Membresia {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   usuarioId   String
   usuario     Usuario   @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
   comunidadId String
   comunidad   Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
   rol         String
-  createdAt   DateTime @default(now())
+  createdAt   DateTime  @default(now())
 
   @@unique([usuarioId, comunidadId])
   @@index([comunidadId])
@@ -157,7 +160,7 @@ model RateLimitAttempt {
 
 // Estructura Física — Inventario
 model TipoUnidad {
-  id               String   @id
+  id               String    @id
   comunidadId      String
   comunidad        Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
   nombre           String
@@ -166,64 +169,64 @@ model TipoUnidad {
   montoBaseGc      Float
   descripcion      String?
   activo           Boolean
-  historialTarifas Json     // TarifaHistorica[]
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  historialTarifas Json // TarifaHistorica[]
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
-  @@index([comunidadId])
   @@unique([comunidadId, nombre])
+  @@index([comunidadId])
   @@map("tipos_unidad")
 }
 
 model MacroSector {
-  id          String   @id
+  id          String    @id
   comunidadId String
   comunidad   Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
   nombre      String
   etiqueta    String
   descripcion String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
-  @@index([comunidadId])
   @@unique([comunidadId, nombre])
+  @@index([comunidadId])
   @@map("macro_sectores")
 }
 
 model MicroSector {
-  id            String   @id
+  id            String    @id
   comunidadId   String
   comunidad     Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
   macroSectorId String
   nombre        String
   etiqueta      String
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
-  @@index([comunidadId])
-  @@index([macroSectorId])
   // INV-04 (docs/INVARIANTES.md): el nombre se compone con el macro sector, así
   // que "Piso 4" se repite entre edificios y no puede repetirse dentro del
   // mismo. El índice compara TEXT tal cual; la guardia de la API normaliza.
   @@unique([comunidadId, macroSectorId, nombre])
+  @@index([comunidadId])
+  @@index([macroSectorId])
   @@map("micro_sectores")
 }
 
 model Unidad {
-  id           String   @id
-  comunidadId  String
-  comunidad    Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  id            String    @id
+  comunidadId   String
+  comunidad     Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
   microSectorId String
-  numero       String
-  etiqueta     String
-  tipoUnidadId String
-  metraje      Float
-  prorrateo    Float
-  rolSii       String
-  estadoId     String
-  servicios    Json // ServiciosUnidad
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  numero        String
+  etiqueta      String
+  tipoUnidadId  String
+  metraje       Float
+  prorrateo     Float
+  rolSii        String
+  estadoId      String
+  servicios     Json // ServiciosUnidad
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   @@index([comunidadId])
   @@index([microSectorId])
@@ -233,25 +236,25 @@ model Unidad {
 }
 
 model Persona {
-  id                         String   @id
-  comunidadId                String
-  comunidad                  Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
-  rut                        String
-  nombreCompleto             String
-  nombres                    String
-  apellidos                  String
-  email                      String
-  telefonoMovil              String
-  telefonoFijo               String?
-  fotografiaUrl              String?
-  estadoCuenta               String   // activa | inactiva | bloqueada
-  condicionesEspecialesIds   Json     // string[]
-  roles                      Json     // ROLES_PERSONA[]
-  datosLaborales             Json?    // ExtensionLaboral
-  datosGobernanza            Json?    // ExtensionGobernanza
-  permiteCreacionManualCV    Boolean?
-  createdAt                  DateTime @default(now())
-  updatedAt                  DateTime @updatedAt
+  id                       String    @id
+  comunidadId              String
+  comunidad                Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  rut                      String
+  nombreCompleto           String
+  nombres                  String
+  apellidos                String
+  email                    String
+  telefonoMovil            String
+  telefonoFijo             String?
+  fotografiaUrl            String?
+  estadoCuenta             String // activa | inactiva | bloqueada
+  condicionesEspecialesIds Json // string[]
+  roles                    Json // ROLES_PERSONA[]
+  datosLaborales           Json? // ExtensionLaboral
+  datosGobernanza          Json? // ExtensionGobernanza
+  permiteCreacionManualCV  Boolean?
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
 
   @@index([comunidadId])
   @@index([rut])
@@ -260,19 +263,19 @@ model Persona {
 }
 
 model VinculoUnidad {
-  id                          String   @id
-  comunidadId                 String
-  comunidad                   Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
-  personaId                   String
-  unidadId                    String
-  rol                         String   // propietario | arrendatario | copropietario | ocupante
-  fechaInicio                 String   // FechaISO
-  fechaFin                    String?
-  estadoOcupacionPropiedad    String?
-  permiteVerFinanzas          Boolean
-  cerrarAnterior              Boolean?
-  createdAt                   DateTime @default(now())
-  updatedAt                   DateTime @updatedAt
+  id                       String    @id
+  comunidadId              String
+  comunidad                Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  personaId                String
+  unidadId                 String
+  rol                      String // propietario | arrendatario | copropietario | ocupante
+  fechaInicio              String // FechaISO
+  fechaFin                 String?
+  estadoOcupacionPropiedad String?
+  permiteVerFinanzas       Boolean
+  cerrarAnterior           Boolean?
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
 
   @@index([comunidadId])
   @@index([personaId])
@@ -281,7 +284,7 @@ model VinculoUnidad {
 }
 
 model EventoAuditoria {
-  id           String   @id
+  id           String    @id
   comunidadId  String
   comunidad    Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
   timestamp    String
@@ -290,7 +293,7 @@ model EventoAuditoria {
   tipoAccion   String
   referenciaId String
   descripcion  String
-  createdAt    DateTime @default(now())
+  createdAt    DateTime  @default(now())
 
   @@index([comunidadId])
   @@index([categoria])
@@ -298,8 +301,8 @@ model EventoAuditoria {
 }
 
 model ConfiguracionGlobal {
-  id                            String   @id
-  comunidadId                   String   @unique
+  id                            String    @id
+  comunidadId                   String    @unique
   comunidad                     Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
   nombreComunidad               String
   logoUrl                       String?
@@ -316,7 +319,7 @@ model ConfiguracionGlobal {
   smtpHost                      String
   smtpPort                      Int
   smtpUser                      String
-  smtpPassword                  String   @default("")
+  smtpPassword                  String    @default("")
   smtpSecurity                  String
   smtpFrom                      String
   smtpFromName                  String
@@ -331,15 +334,15 @@ model ConfiguracionGlobal {
   diasMesComercial              Int
   diasVacacionesMes             Float
   jornadaSemanalEstandar        Int
-  claveEliminacionMaestro       String   @default("")
+  claveEliminacionMaestro       String    @default("")
   visibilidadPortalInmobiliario String?
   cvRequiereVistoBueno          Boolean?
   ufMensual                     Float?
   ingresoMinimoMensual          Float?
   topeGratificacionLegal        Float?
   tasaSIS                       Float?
-  createdAt                     DateTime @default(now())
-  updatedAt                     DateTime @updatedAt
+  createdAt                     DateTime  @default(now())
+  updatedAt                     DateTime  @updatedAt
 
   @@index([comunidadId])
   @@map("configuracion_global")
@@ -347,24 +350,24 @@ model ConfiguracionGlobal {
 
 // Portal Inmobiliario (PI)
 model PublicacionPortal {
-  id                        String   @id
-  comunidadId               String
-  comunidad                 Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
-  unidadId                  String
-  operacion                 String   // venta | arriendo
-  precio                    Float
-  moneda                    String?
-  dormitorios               Int?
-  banos                     Int?
-  etiquetaEstado            String?
-  descripcion               String?
-  urlMapa                   String?
-  condicionesContractuales  String?
-  imagenes                  Json     // ImagenReferencia[]
-  activa                    Boolean
-  fechaPublicacion          String
-  createdAt                 DateTime @default(now())
-  updatedAt                 DateTime @updatedAt
+  id                       String    @id
+  comunidadId              String
+  comunidad                Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  unidadId                 String
+  operacion                String // venta | arriendo
+  precio                   Float
+  moneda                   String?
+  dormitorios              Int?
+  banos                    Int?
+  etiquetaEstado           String?
+  descripcion              String?
+  urlMapa                  String?
+  condicionesContractuales String?
+  imagenes                 Json // ImagenReferencia[]
+  activa                   Boolean
+  fechaPublicacion         String
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
 
   @@index([comunidadId])
   @@index([unidadId])
@@ -372,16 +375,16 @@ model PublicacionPortal {
 }
 
 model LeadPortal {
-  id              String   @id
-  comunidadId     String
-  comunidad       Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
-  publicacionId   String
-  nombreContacto  String
-  contacto        String
-  mensaje         String?
-  fecha           String
-  atendido        Boolean
-  createdAt       DateTime @default(now())
+  id             String    @id
+  comunidadId    String
+  comunidad      Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  publicacionId  String
+  nombreContacto String
+  contacto       String
+  mensaje        String?
+  fecha          String
+  atendido       Boolean
+  createdAt      DateTime  @default(now())
 
   @@index([comunidadId])
   @@index([publicacionId])
@@ -389,7 +392,7 @@ model LeadPortal {
 }
 
 model Notificacion {
-  id                    String   @id
+  id                    String    @id
   comunidadId           String
   comunidad             Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
   destinatarioRol       String
@@ -400,12 +403,12 @@ model Notificacion {
   unidadId              String?
   asunto                String
   cuerpo                String
-  canal                 String   @default("email_simulado")
+  canal                 String    @default("email_simulado")
   moduloOrigen          String
   fecha                 String
-  leida                 Boolean  @default(false)
-  fechaLectura          String?  // ISO de la primera lectura (métrica enviados/leídos); null = no leída
-  createdAt             DateTime @default(now())
+  leida                 Boolean   @default(false)
+  fechaLectura          String? // ISO de la primera lectura (métrica enviados/leídos); null = no leída
+  createdAt             DateTime  @default(now())
 
   @@index([comunidadId])
   @@index([destinatarioRol])
@@ -415,23 +418,68 @@ model Notificacion {
 
 // Gestión Administrativa (AD) / Directiva (GD)
 model ControlPropiedad {
-  id                        String   @id
-  comunidadId               String
-  comunidad                 Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
-  unidadId                  String
+  id                       String    @id
+  comunidadId              String
+  comunidad                Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  unidadId                 String
   /// @deprecated Nadie la lee: retirada de la superficie el 2026-11-07 (decisión owner).
   /// Borrarla exige reconstruir la tabla en SQLite (migración con datos) — decisión aparte.
-  residenteVeActas          Boolean
+  residenteVeActas         Boolean
   /// @deprecated Nadie la lee: retirada de la superficie el 2026-11-07 (decisión owner).
   /// Borrarla exige reconstruir la tabla en SQLite (migración con datos) — decisión aparte.
   // Borrado lógico (decisión owner 2026-10-21): vigente | desestimada.
-  estado                    String   @default("vigente")
-  createdAt                 DateTime @default(now())
-  updatedAt                 DateTime @updatedAt
+  estado                   String    @default("vigente")
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
 
   @@index([comunidadId])
   @@index([unidadId])
   @@map("controles_propiedad")
+}
+
+/// Vigencia del Registro de Copropietarios (Ley 21.442 art. 9 y Reglamento de la
+/// ley, D.O. 09-01-2025). S2: el reloj corre por UNIDAD, no por persona — una fila
+/// por unidad con los hechos del ciclo. S6: los hechos quedan congelados; el
+/// estado NO se persiste, se deriva con `lib/vigencia-registro.ts`, para que no
+/// existan dos verdades que se separen con el tiempo.
+model VigenciaRegistroUnidad {
+  id                  String    @id @default(cuid())
+  comunidadId         String
+  comunidad           Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  unidadId            String
+  /// Fecha de la última declaración **o revalidación** (S3: confirmar sin cambios
+  /// es cumplir). `null` = no consta declaración: se reporta `sin_declaracion` y
+  /// NO se multa (S1: no se inventa la falta).
+  ultimaActualizacion DateTime?
+  /// Acto de requerir vigente: es el que arranca los 60 días corridos (S2).
+  /// Al declarar o revalidar se limpia; la historia queda en RequerimientoVigencia.
+  requerimientoEn     DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  @@unique([comunidadId, unidadId])
+  @@index([comunidadId])
+  @@map("vigencia_registro_unidad")
+}
+
+/// Evidencia inmutable del requerimiento anual (S6): append-only, una fila por
+/// acto, con el vencimiento congelado en el momento de requerir. Es la prueba de
+/// que la administración cumplió su deber del art. 9; nada la edita ni la borra.
+model RequerimientoVigencia {
+  id            String    @id @default(cuid())
+  comunidadId   String
+  comunidad     Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  unidadId      String
+  fecha         DateTime  @default(now())
+  /// `fecha + 60 días corridos`, calculado UNA sola vez en el acto (S6):
+  /// recalcularlo después permitiría mover el plazo cambiando un dato.
+  venceEn       DateTime
+  registradoPor String
+  fundamento    String
+  createdAt     DateTime  @default(now())
+
+  @@index([comunidadId, unidadId])
+  @@map("requerimientos_vigencia")
 }
 
 // Archivo de borrado lógico AD: copia íntegra del control al momento de
@@ -443,8 +491,8 @@ model ControlPropiedadArchivada {
   /// @deprecated Copia del control: la bandera no la lee nadie (retirada el 2026-11-07).
   residenteVeActas         Boolean
   /// @deprecated Copia del control: la bandera no la lee nadie (retirada el 2026-11-07).
-  motivo                   String?  // razón opcional declarada por quien desestima
-  actorUsuarioId           String   // usuario de sesión que ejecutó el borrado lógico
+  motivo                   String? // razón opcional declarada por quien desestima
+  actorUsuarioId           String // usuario de sesión que ejecutó el borrado lógico
   archivadaEn              DateTime @default(now())
   createdAt                DateTime @default(now())
   updatedAt                DateTime @updatedAt
@@ -454,38 +502,38 @@ model ControlPropiedadArchivada {
 }
 
 model ActaGD {
-  id                String   @id
+  id                String    @id
   comunidadId       String
   comunidad         Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
   fecha             String
   hora              String
   lugar             String
-  tablaTemas        Json     // string[]
-  presentes         Json     // string[]
-  ausentes          Json     // string[]
-  invitados         Json     // string[]
+  tablaTemas        Json // string[]
+  presentes         Json // string[]
+  ausentes          Json // string[]
+  invitados         Json // string[]
   minuta            String
-  adjuntos          Json     // ImagenReferencia[]
+  adjuntos          Json // ImagenReferencia[]
   // Borrado lógico (decisión owner 2026-10-21): borrador | publicada | desestimada.
   estado            String
-  aprobaciones      Json     // string[]
+  aprobaciones      Json // string[]
   fechaPublicacion  String?
   avisoCVReferencia String?
   // Período vigente al crear el acta (trazabilidad del libro GD).
-  periodoId           String?
+  periodoId         String?
   // Folio del libro de actas (Ley 21.442 art. 15: libro de actas foliado).
   // Formato `AD-<año>-<correlativo de 4 dígitos>`, asignado por el servidor al
   // crear el acta y NUNCA reasignado: el folio es la cita del acta.
   folio             String?
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
-  @@index([comunidadId])
   // Garantía dura contra la carrera de folios: si dos altas leen el mismo
   // máximo, la segunda choca con este índice y el POST reintenta con el
   // siguiente (mismo patrón que certificados CT). Aditiva: ver migración
   // add_actas_gd_folio.
   @@unique([comunidadId, folio])
+  @@index([comunidadId])
   @@map("actas_gd")
 }
 
@@ -497,21 +545,21 @@ model ActaGDArchivada {
   fecha             String
   hora              String
   lugar             String
-  tablaTemas        Json     // string[]
-  presentes         Json     // string[]
-  ausentes          Json     // string[]
-  invitados         Json     // string[]
+  tablaTemas        Json // string[]
+  presentes         Json // string[]
+  ausentes          Json // string[]
+  invitados         Json // string[]
   minuta            String
-  adjuntos          Json     // ImagenReferencia[]
-  estado            String   // estado del acta al momento de archivar
-  aprobaciones      Json     // string[]
+  adjuntos          Json // ImagenReferencia[]
+  estado            String // estado del acta al momento de archivar
+  aprobaciones      Json // string[]
   fechaPublicacion  String?
   avisoCVReferencia String?
   periodoId         String?
   // Copia íntegra del acta: el folio archivado es la cita del acta desestimada.
   folio             String?
-  motivo            String?  // razón opcional declarada por quien desestima
-  actorUsuarioId    String   // usuario de sesión que ejecutó el borrado lógico
+  motivo            String? // razón opcional declarada por quien desestima
+  actorUsuarioId    String // usuario de sesión que ejecutó el borrado lógico
   archivadaEn       DateTime @default(now())
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
@@ -522,31 +570,31 @@ model ActaGDArchivada {
 
 // Comunicación con Vecinos (CO)
 model PlantillaCO {
-  id          String   @id
+  id          String    @id
   comunidadId String
   comunidad   Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
   nombre      String
   categoria   String
   asunto      String
   cuerpo      String
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   @@index([comunidadId])
   @@map("plantillas_co")
 }
 
 model EnvioCO {
-  id            String   @id
+  id            String    @id
   comunidadId   String
   comunidad     Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
   asunto        String
   cuerpo        String
   plantillaId   String?
-  destinatarios Json     // DestinatarioEnvio[] — snapshot inmutable de lo enviado (trazabilidad)
+  destinatarios Json // DestinatarioEnvio[] — snapshot inmutable de lo enviado (trazabilidad)
   fechaEnvio    String
-  lecturas      Json     // string[] — derivada de EnvioDestinatarioCO (no es fuente de verdad)
-  createdAt     DateTime @default(now())
+  lecturas      Json // string[] — derivada de EnvioDestinatarioCO (no es fuente de verdad)
+  createdAt     DateTime  @default(now())
 
   // Fuente de verdad de pertenencia y de estado de lectura (change co-lectura-residente D3).
   destinatariosCO EnvioDestinatarioCO[]
@@ -572,22 +620,22 @@ model EnvioDestinatarioCO {
 }
 
 model MensajeBuzonCO {
-  id                   String   @id
-  comunidadId          String
-  comunidad            Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
-  folio                String
-  clasificacion        String
-  reportantePersonaId  String?
-  reportanteNombre     String
-  unidadId             String?
-  asunto               String
-  cuerpo               String
-  visibilidadComite    Boolean
-  fechaIngreso         String
-  estado               String
-  respuestas           Json     // RespuestaBuzonCO[]
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
+  id                  String    @id
+  comunidadId         String
+  comunidad           Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  folio               String
+  clasificacion       String
+  reportantePersonaId String?
+  reportanteNombre    String
+  unidadId            String?
+  asunto              String
+  cuerpo              String
+  visibilidadComite   Boolean
+  fechaIngreso        String
+  estado              String
+  respuestas          Json // RespuestaBuzonCO[]
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
   @@index([comunidadId])
   @@map("mensajes_buzon_co")
@@ -606,22 +654,22 @@ model MensajeBuzonCO {
 /// `subidoPorPersonaId` no lleva FK a propósito: la procedencia del documento
 /// debe sobrevivir a una fusión o baja del padrón.
 model Documento {
-  id                  String    @id
+  id                  String              @id
   comunidadId         String
-  comunidad           Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
-  naturaleza          String    // "legal" | "comunitario" (lista cerrada en lib/documento-archivo.ts)
-  tipoDocumental      String    // lista cerrada de la ley + "otros"
-  glosa               String    // a qué corresponde el documento, en palabras del que lo sube
-  referenciaAutentica String?   // fojas/fecha/notaría o Conservador; obligatoria si es legal
+  comunidad           Comunidad           @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  naturaleza          String // "legal" | "comunitario" (lista cerrada en lib/documento-archivo.ts)
+  tipoDocumental      String // lista cerrada de la ley + "otros"
+  glosa               String // a qué corresponde el documento, en palabras del que lo sube
+  referenciaAutentica String? // fojas/fecha/notaría o Conservador; obligatoria si es legal
   archivoNombre       String
   archivoTipoMime     String
   archivoTamanoKB     Float
   archivoUrl          String
-  hash                String?   // SHA-256 hex del archivo, cuando se puede calcular fuera del sistema
+  hash                String? // SHA-256 hex del archivo, cuando se puede calcular fuera del sistema
   version             Int
-  vigenteDesde        String    // fecha calendario AAAA-MM-DD, no instante: ver VersionReglamento
+  vigenteDesde        String // fecha calendario AAAA-MM-DD, no instante: ver VersionReglamento
   subidoPorPersonaId  String?
-  createdAt           DateTime  @default(now())
+  createdAt           DateTime            @default(now())
   // Relación inversa VIRTUAL (no genera columna): la constancia de entrega de
   // lo legal vive en `envios_documento` (A3).
   envios              EnvioDocumento[]
@@ -629,11 +677,11 @@ model Documento {
   // del cobro que este documento LEGAL respalda (A4 · S9).
   versionesReglamento VersionReglamento[]
 
-  @@index([comunidadId, naturaleza])
-  @@index([comunidadId, tipoDocumental])
   // Una sola línea de historia por tipo: dos altas concurrentes no pueden
   // quedarse con el mismo número (la segunda responde 409).
   @@unique([comunidadId, tipoDocumental, version])
+  @@index([comunidadId, naturaleza])
+  @@index([comunidadId, tipoDocumental])
   @@map("documentos")
 }
 
@@ -686,26 +734,26 @@ model EnvioDocumento {
 
 // Gestión de Solicitudes (GE)
 model SolicitudGE {
-  id                 String   @id
-  comunidadId        String
-  comunidad          Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
-  folio              String
-  tipo               String
-  titulo             String
-  descripcion        String
+  id                   String    @id
+  comunidadId          String
+  comunidad            Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  folio                String
+  tipo                 String
+  titulo               String
+  descripcion          String
   solicitantePersonaId String?
-  unidadId           String?
-  estado             String
-  fechaCreacion      String
-  comentarios        Json     // ComentarioGE[]
-  detalleGrabaciones Json?
-  detalleInsumos     Json?
-  mensajeBuzonId     String?
-  resolucion         String?
-  fechaCierre        String?
-  historialEstados   Json     // CambioEstadoGE[]
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  unidadId             String?
+  estado               String
+  fechaCreacion        String
+  comentarios          Json // ComentarioGE[]
+  detalleGrabaciones   Json?
+  detalleInsumos       Json?
+  mensajeBuzonId       String?
+  resolucion           String?
+  fechaCierre          String?
+  historialEstados     Json // CambioEstadoGE[]
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 
   @@index([comunidadId])
   @@map("solicitudes_ge")
@@ -713,34 +761,34 @@ model SolicitudGE {
 
 // Inventario y Recursos (IR)
 model RecursoIR {
-  id                String   @id
-  comunidadId       String
-  comunidad         Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
-  codigo            String?
-  nombre            String
-  categoria         String
-  marca             String?
-  modelo            String?
-  descripcion       String?
-  fichaTecnicaUrl   String?
-  microSectorId     String?
-  unidadId          String?
+  id                   String    @id
+  comunidadId          String
+  comunidad            Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  codigo               String?
+  nombre               String
+  categoria            String
+  marca                String?
+  modelo               String?
+  descripcion          String?
+  fichaTecnicaUrl      String?
+  microSectorId        String?
+  unidadId             String?
   responsablePersonaId String?
-  estadoActivo      String
-  unidadMedidaId    String?
-  stock             Float
-  esCritico         Boolean
-  umbralCritico     Float?
-  proveedor         String?
-  numeroFactura     String?
-  facturaUrl        String?
-  garantiaHasta     String?
-  talla             String?
-  renovacionMeses   Int?
-  asignacionActual  Json?
-  cargoFIReferencia String?
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  estadoActivo         String
+  unidadMedidaId       String?
+  stock                Float
+  esCritico            Boolean
+  umbralCritico        Float?
+  proveedor            String?
+  numeroFactura        String?
+  facturaUrl           String?
+  garantiaHasta        String?
+  talla                String?
+  renovacionMeses      Int?
+  asignacionActual     Json?
+  cargoFIReferencia    String?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 
   @@index([comunidadId])
   @@index([categoria])
@@ -748,39 +796,39 @@ model RecursoIR {
 }
 
 model SolicitudInsumoIR {
-  id                  String   @id
-  comunidadId         String
-  comunidad           Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
-  folio               String
+  id                   String    @id
+  comunidadId          String
+  comunidad            Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  folio                String
   solicitantePersonaId String
-  recursoInsumoId     String?
-  comodin             Json?
-  recursoSustitutoId  String?
-  estadoComodin       String
-  cantidad            Float
-  areaDestino         String
-  estado              String
-  fechaSolicitud      String
-  entregaFecha        String?
+  recursoInsumoId      String?
+  comodin              Json?
+  recursoSustitutoId   String?
+  estadoComodin        String
+  cantidad             Float
+  areaDestino          String
+  estado               String
+  fechaSolicitud       String
+  entregaFecha         String?
   rechazoJustificacion String?
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 
   @@index([comunidadId])
   @@map("solicitudes_insumo_ir")
 }
 
 model EntregaEPP {
-  id               String   @id
-  comunidadId      String
-  comunidad        Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
-  recursoId        String
-  personaId        String
-  fechaEntrega     String
-  talla            String?
-  estado           String
+  id                String    @id
+  comunidadId       String
+  comunidad         Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  recursoId         String
+  personaId         String
+  fechaEntrega      String
+  talla             String?
+  estado            String
   proximaRenovacion String?
-  createdAt        DateTime @default(now())
+  createdAt         DateTime  @default(now())
 
   @@index([comunidadId])
   @@index([personaId])
@@ -789,44 +837,44 @@ model EntregaEPP {
 
 // Infracciones y Multas (IN)
 model TipoInfraccionIN {
-  id          String   @id
+  id          String    @id
   comunidadId String
   comunidad   Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
   nombre      String
   categoria   String
   tipoSancion String
   valor       Float
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   @@index([comunidadId])
   @@map("tipos_infraccion_in")
 }
 
 model InfraccionIN {
-  id                        String   @id
-  comunidadId               String
-  comunidad                 Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
-  folio                     String
-  tipoInfraccionId          String?
-  danoDirecto               Json?
-  unidadId                  String
-  reportantePersonaId       String?
-  mensajeBuzonId            String?
-  fechaSuceso               String
-  horaSuceso                String
-  antecedentes              String
-  evidencias                Json     // ImagenReferencia[]
-  estado                    String
-  fechaRegistro             String
-  montoAplicado             Float?
-  comentariosDirectiva      Json     // ComentarioInternoIN[]
-  respaldosDirectiva        Json     // string[]
-  apelacion                 Json?
+  id                         String    @id
+  comunidadId                String
+  comunidad                  Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  folio                      String
+  tipoInfraccionId           String?
+  danoDirecto                Json?
+  unidadId                   String
+  reportantePersonaId        String?
+  mensajeBuzonId             String?
+  fechaSuceso                String
+  horaSuceso                 String
+  antecedentes               String
+  evidencias                 Json // ImagenReferencia[]
+  estado                     String
+  fechaRegistro              String
+  montoAplicado              Float?
+  comentariosDirectiva       Json // ComentarioInternoIN[]
+  respaldosDirectiva         Json // string[]
+  apelacion                  Json?
   desestimacionJustificacion String?
-  cargoFIReferencia         String?
-  createdAt                 DateTime @default(now())
-  updatedAt                 DateTime @updatedAt
+  cargoFIReferencia          String?
+  createdAt                  DateTime  @default(now())
+  updatedAt                  DateTime  @updatedAt
 
   @@index([comunidadId])
   @@index([unidadId])
@@ -835,7 +883,7 @@ model InfraccionIN {
 
 // Mantenimiento y Proyectos (MT)
 model TrabajoMT {
-  id                    String   @id
+  id                    String    @id
   comunidadId           String
   comunidad             Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
   folio                 String
@@ -845,7 +893,7 @@ model TrabajoMT {
   microSectorId         String?
   activoIRId            String?
   responsablePersonaId  String?
-  proveedor             Json?    // ProveedorMT
+  proveedor             Json? // ProveedorMT
   prioridad             String
   estado                String
   fechaProgramada       String?
@@ -857,18 +905,18 @@ model TrabajoMT {
   garantiaInicio        String?
   garantiaFin           String?
   alertaGarantiaEnviada Boolean
-  evidencias            Json     // EvidenciaMT[]
+  evidencias            Json // EvidenciaMT[]
   preventivo            Json?
   cargoFIReferencia     String?
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
 
   @@index([comunidadId])
   @@map("trabajos_mt")
 }
 
 model ProyectoMT {
-  id                    String   @id
+  id                    String    @id
   comunidadId           String
   comunidad             Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
   nombre                String
@@ -878,8 +926,8 @@ model ProyectoMT {
   fechaObjetivo         String?
   estado                String
   fondoFinanciamientoId String?
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
 
   @@index([comunidadId])
   @@map("proyectos_mt")
@@ -887,53 +935,53 @@ model ProyectoMT {
 
 // Reservas y Amenities (RA)
 model ElementoRA {
-  id                       String   @id
-  comunidadId              String
-  comunidad                Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
-  nombre                   String
-  tipo                     String
-  microSectorId            String?
-  activoIRId               String?
-  franja                   String
-  duracionBloqueHoras      Int?
-  tarifaUso                Float
-  garantiaRequerida        Float
-  aforo                    Int?
-  stock                    Int?
-  anticipacionMinimaDias   Int?
-  cancelacionTardiaDias    Int?
-  penalizacionTardiaMonto  Float?
-  activo                   Boolean
+  id                      String    @id
+  comunidadId             String
+  comunidad               Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  nombre                  String
+  tipo                    String
+  microSectorId           String?
+  activoIRId              String?
+  franja                  String
+  duracionBloqueHoras     Int?
+  tarifaUso               Float
+  garantiaRequerida       Float
+  aforo                   Int?
+  stock                   Int?
+  anticipacionMinimaDias  Int?
+  cancelacionTardiaDias   Int?
+  penalizacionTardiaMonto Float?
+  activo                  Boolean
   // Alerta de reservas: si el elemento la exige, la reserva nace "solicitada"
   // (pendiente del administrador) en vez de "confirmada". Aditivo: el default
   // false conserva el comportamiento de todos los elementos existentes.
-  requiereAutorizacion     Boolean  @default(false)
-  createdAt                DateTime @default(now())
-  updatedAt                DateTime @updatedAt
+  requiereAutorizacion    Boolean   @default(false)
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
 
   @@index([comunidadId])
   @@map("elementos_ra")
 }
 
 model ReservaRA {
-  id                String   @id
-  comunidadId       String
-  comunidad         Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
-  folio             String
-  elementoId        String
+  id                   String    @id
+  comunidadId          String
+  comunidad            Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  folio                String
+  elementoId           String
   solicitantePersonaId String
-  unidadId          String?
-  fecha             String
-  horaInicio        String
-  horaFin           String
-  estado            String
-  montoTarifa       Float
-  montoGarantia     Float
-  cancelacion       Json?
-  garantiaRetenida  Json?
-  cargoFIReferencia String?
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  unidadId             String?
+  fecha                String
+  horaInicio           String
+  horaFin              String
+  estado               String
+  montoTarifa          Float
+  montoGarantia        Float
+  cancelacion          Json?
+  garantiaRetenida     Json?
+  cargoFIReferencia    String?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 
   @@index([comunidadId])
   @@index([elementoId])
@@ -947,17 +995,17 @@ model ReservaRA {
 /// contenido y los permisos al leer. El documento canónico (inmutable) sigue
 /// siendo la fila de `actas_gd`; acá solo hay estado de publicación y actor.
 model ActaPublicadaCV {
-  id                       String   @id
+  id                       String    @id
   comunidadId              String
   comunidad                Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
   actaId                   String
-  estado                   String   // publicado | despublicado
+  estado                   String // publicado | despublicado
   publicadoEn              DateTime
   publicadoPorUsuarioId    String
   despublicadoEn           DateTime?
   despublicadoPorUsuarioId String?
-  createdAt                DateTime @default(now())
-  updatedAt                DateTime @updatedAt
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
 
   @@unique([comunidadId, actaId])
   @@index([comunidadId])
@@ -965,49 +1013,49 @@ model ActaPublicadaCV {
 }
 
 model AvisoCV {
-  id                  String   @id
-  comunidadId         String
-  comunidad           Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
-  titulo              String
-  cuerpo              String
-  tipologia           String
-  duracionSegundos    Int
-  imagenUrl           String?
-  videoUrl            String?
-  pantallaCompleta    Boolean
-  expiresAt           String?
-  tags                Json     // string[]
-  estado              String
-  requiereVistoBueno  Boolean
-  creadoPorPersonaId  String?
-  origen              String
-  plantillaId         String?
-  actaId              String?
-  fechaCreacion       String
-  fechaPublicacion    String?
-  fechaArchivado      String?
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  id                 String    @id
+  comunidadId        String
+  comunidad          Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  titulo             String
+  cuerpo             String
+  tipologia          String
+  duracionSegundos   Int
+  imagenUrl          String?
+  videoUrl           String?
+  pantallaCompleta   Boolean
+  expiresAt          String?
+  tags               Json // string[]
+  estado             String
+  requiereVistoBueno Boolean
+  creadoPorPersonaId String?
+  origen             String
+  plantillaId        String?
+  actaId             String?
+  fechaCreacion      String
+  fechaPublicacion   String?
+  fechaArchivado     String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
   @@index([comunidadId])
   @@map("avisos_cv")
 }
 
 model PlantillaCV {
-  id                        String   @id
-  comunidadId               String
-  comunidad                 Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
-  titulo                    String
-  cuerpo                    String
-  tipologia                 String
-  duracionSegundosSugerida  Int
-  imagenUrl                 String?
-  videoUrl                  String?
-  pantallaCompleta          Boolean
-  tags                      Json
-  activa                    Boolean
-  createdAt                 DateTime @default(now())
-  updatedAt                 DateTime @updatedAt
+  id                       String    @id
+  comunidadId              String
+  comunidad                Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  titulo                   String
+  cuerpo                   String
+  tipologia                String
+  duracionSegundosSugerida Int
+  imagenUrl                String?
+  videoUrl                 String?
+  pantallaCompleta         Boolean
+  tags                     Json
+  activa                   Boolean
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
 
   @@index([comunidadId])
   @@map("plantillas_cv")
@@ -1015,7 +1063,7 @@ model PlantillaCV {
 
 // Finanzas y Morosidad (FI)
 model FondoFI {
-  id               String   @id
+  id               String    @id
   comunidadId      String
   comunidad        Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
   nombre           String
@@ -1024,17 +1072,17 @@ model FondoFI {
   porcentajeAporte Float?
   activo           Boolean
   saldoInicial     Float?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
-  @@index([comunidadId])
   @@unique([comunidadId, nombre])
+  @@index([comunidadId])
   @@map("fondos_fi")
 }
 
 // Espejo FI del store (fi-sync-bd): ingresos manuales a fondo incl. punto cero
 model IngresoFI {
-  id          String   @id
+  id          String    @id
   comunidadId String
   comunidad   Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
   fondoId     String
@@ -1042,7 +1090,7 @@ model IngresoFI {
   monto       Float
   concepto    String
   familia     String?
-  createdAt   DateTime @default(now())
+  createdAt   DateTime  @default(now())
 
   @@index([comunidadId])
   @@index([fondoId])
@@ -1050,22 +1098,22 @@ model IngresoFI {
 }
 
 model EgresoFI {
-  id                    String   @id
-  comunidadId           String
-  comunidad             Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
-  folio                 String?
-  fecha                 String
-  categoria             String
-  descripcion           String
-  monto                 Float
-  fondoId               String
-  esRecurrente          Boolean
-  comprobante           Json?
-  microSectoresIds      Json?
-  proveedor             String?
-  unidadId              String?
-  aprobacionActaGDId    String?
-  createdAt             DateTime @default(now())
+  id                 String    @id
+  comunidadId        String
+  comunidad          Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  folio              String?
+  fecha              String
+  categoria          String
+  descripcion        String
+  monto              Float
+  fondoId            String
+  esRecurrente       Boolean
+  comprobante        Json?
+  microSectoresIds   Json?
+  proveedor          String?
+  unidadId           String?
+  aprobacionActaGDId String?
+  createdAt          DateTime  @default(now())
 
   @@index([comunidadId])
   @@index([fondoId])
@@ -1081,9 +1129,9 @@ model EgresoFI {
 /// respalda (`documentoId`); `actaRef` queda como referencia histórica de lo ya
 /// declarado y no se reescribe.
 model VersionReglamento {
-  id                String    @id
+  id                String     @id
   comunidadId       String
-  comunidad         Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  comunidad         Comunidad  @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
   version           Int
   vigenteDesde      String
   fuenteInstrumento String
@@ -1103,7 +1151,7 @@ model VersionReglamento {
   documento         Documento? @relation(fields: [documentoId], references: [id], onDelete: Restrict)
   formaContribucion String
   parametros        Json
-  createdAt         DateTime  @default(now())
+  createdAt         DateTime   @default(now())
 
   @@unique([comunidadId, version])
   @@index([comunidadId])
@@ -1112,16 +1160,16 @@ model VersionReglamento {
 }
 
 model EmisionGC {
-  id                  String   @id
-  comunidadId         String
-  comunidad           Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
-  periodo             String
-  modo                String
-  gastoTotal          Float
-  lineas              Json     // LineaEmisionGC[]
-  fondoReservaAporte  Json?
-  fechaEmision        String
-  createdAt           DateTime @default(now())
+  id                 String    @id
+  comunidadId        String
+  comunidad          Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  periodo            String
+  modo               String
+  gastoTotal         Float
+  lineas             Json // LineaEmisionGC[]
+  fondoReservaAporte Json?
+  fechaEmision       String
+  createdAt          DateTime  @default(now())
 
   @@index([comunidadId])
   @@index([periodo])
@@ -1129,7 +1177,7 @@ model EmisionGC {
 }
 
 model CobroFI {
-  id               String   @id
+  id               String    @id
   comunidadId      String
   comunidad        Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
   unidadId         String
@@ -1140,14 +1188,14 @@ model CobroFI {
   fondoId          String
   descripcion      String
   montoBase        Float
-  lineas           Json?    // LineaCobroFI[] | null (S5); null = cobro legacy de una línea
+  lineas           Json? // LineaCobroFI[] | null (S5); null = cobro legacy de una línea
   fechaCargo       String
   fechaVencimiento String?
-  moras            Json     // MoraCobroFI[]
-  pagos            Json     // PagoCobroFI[]
-  diferencias      Json     // DiferenciaPagoFI[]
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  moras            Json // MoraCobroFI[]
+  pagos            Json // PagoCobroFI[]
+  diferencias      Json // DiferenciaPagoFI[]
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
   @@index([comunidadId])
   @@index([unidadId])
@@ -1165,9 +1213,9 @@ model CobroFI {
 // título ejecutivo. Un cambio posterior en el cargo o en la caja NO reescribe
 // el aviso ya emitido (ver `lib/aviso-cobro.ts`).
 model AvisoCobro {
-  id                 String   @id
+  id                 String            @id
   comunidadId        String
-  comunidad          Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  comunidad          Comunidad         @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
   unidadId           String
   // Período AAAA-MM del aviso (ordenable como texto, igual que el cobro).
   periodo            String
@@ -1177,14 +1225,11 @@ model AvisoCobro {
   vencimiento        String?
   contenido          Json
   totalesComunidad   Json
-  createdAt          DateTime @default(now())
+  createdAt          DateTime          @default(now())
   // S3: las entregas del papel. El aviso no se borra nunca, así que la cascada
   // sólo se dispararía al borrar la comunidad.
   entregas           EnvioAvisoCobro[]
 
-  @@index([comunidadId])
-  @@index([unidadId])
-  @@index([periodo])
   // Folio correlativo POR COMUNIDAD (`AC-####`): lo asigna el servidor en la
   // transacción de emisión y este índice es la garantía dura contra la carrera
   // entre dos emisiones concurrentes (mismo patrón que los certificados CT).
@@ -1194,6 +1239,9 @@ model AvisoCobro {
   @@unique([comunidadId, codigoVerificacion])
   // Una unidad no puede tener dos avisos del mismo período: se cobra una vez.
   @@unique([comunidadId, unidadId, periodo])
+  @@index([comunidadId])
+  @@index([unidadId])
+  @@index([periodo])
   @@map("avisos_cobro")
 }
 
@@ -1215,7 +1263,7 @@ model EnvioAvisoCobro {
   comunidadId    String
   comunidad      Comunidad  @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
   avisoId        String
-  aviso          AvisoCobro  @relation(fields: [avisoId], references: [id], onDelete: Cascade)
+  aviso          AvisoCobro @relation(fields: [avisoId], references: [id], onDelete: Cascade)
   // Destinatario de registro: el propietario VIGENTE de la unidad del aviso.
   personaId      String
   // `visor` | `email` (CANALES_ENTREGA_AVISO en lib/schemas.ts).
@@ -1251,14 +1299,14 @@ model EnvioAvisoCobro {
 
 /// Interruptor global de la comunidad (singleton por comunidad).
 model ConfiguracionCobranzaFI {
-  id             String   @id
-  comunidadId    String   @unique
+  id             String    @id
+  comunidadId    String    @unique
   comunidad      Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
-  canalVisor     Boolean  @default(true)
-  canalEmail     Boolean  @default(true)
+  canalVisor     Boolean   @default(true)
+  canalEmail     Boolean   @default(true)
   actualizadoPor String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   @@index([comunidadId])
   @@map("configuracion_cobranza_fi")
@@ -1266,15 +1314,15 @@ model ConfiguracionCobranzaFI {
 
 /// Preferencia de canal del residente (una por persona y comunidad).
 model PreferenciaCanalCobranzaFI {
-  id             String   @id
+  id             String    @id
   comunidadId    String
   comunidad      Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
   personaId      String
-  canalVisor     Boolean  @default(true)
-  canalEmail     Boolean  @default(true)
+  canalVisor     Boolean   @default(true)
+  canalEmail     Boolean   @default(true)
   actualizadoPor String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   @@unique([comunidadId, personaId])
   @@index([comunidadId])
@@ -1289,7 +1337,7 @@ model PreferenciaCanalCobranzaFI {
 /// `claveEnvio` es la idempotencia: unidad + destinatario + canal, con sufijo de
 /// timestamp cuando el administrador pide un reenvío explícito.
 model EnvioCobranzaFI {
-  id              String   @id
+  id              String    @id
   comunidadId     String
   comunidad       Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
   cobroId         String
@@ -1299,11 +1347,11 @@ model EnvioCobranzaFI {
   estado          String
   fecha           String
   motivo          String?
-  montoTotal      Float    @default(0)
+  montoTotal      Float     @default(0)
   cobrosIncluidos Json // string[] de cobros vencidos cubiertos por la gestión
   claveEnvio      String
-  reenvio         Boolean  @default(false)
-  createdAt       DateTime @default(now())
+  reenvio         Boolean   @default(false)
+  createdAt       DateTime  @default(now())
 
   @@unique([comunidadId, claveEnvio])
   @@index([comunidadId])
@@ -1314,35 +1362,35 @@ model EnvioCobranzaFI {
 
 // Personal y Servicios (PE)
 model BitacoraVisitaPE {
-  id                   String   @id
-  comunidadId          String
-  comunidad            Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
-  fecha                String
-  nombre               String
-  dni                  String
-  patente              String?
-  unidadId             String?
-  destinoPersonaId     String?
-  jornadaId            String
-  origenAgenda         String
-  agendadaPorPersonaId String?
-  estado               String
-  horaIngreso          String?
+  id                     String    @id
+  comunidadId            String
+  comunidad              Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  fecha                  String
+  nombre                 String
+  dni                    String
+  patente                String?
+  unidadId               String?
+  destinoPersonaId       String?
+  jornadaId              String
+  origenAgenda           String
+  agendadaPorPersonaId   String?
+  estado                 String
+  horaIngreso            String?
   // Autorizacion telefonica del residente (PE-visitas, decision del owner 2026-11-01):
   // el conserje llama al residente cuando la visita llega sin aviso. Una vez
   // registrada, la autorizacion NO se puede reeditar (la API lo corta con 409):
   // es la constancia de quien dejo entrar a esa persona.
-  autorizacionTelefonica Boolean @default(false)
+  autorizacionTelefonica Boolean   @default(false)
   horaAutorizacion       String?
-  notas                String?
-  createdAt            DateTime @default(now())
+  notas                  String?
+  createdAt              DateTime  @default(now())
 
   @@index([comunidadId])
   @@map("bitacora_visitas_pe")
 }
 
 model EncomiendaPE {
-  id                    String   @id
+  id                    String    @id
   comunidadId           String
   comunidad             Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
   courierId             String
@@ -1353,15 +1401,15 @@ model EncomiendaPE {
   fechaRecepcion        String
   estado                String
   retiro                Json?
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
 
   @@index([comunidadId])
   @@map("encomiendas_pe")
 }
 
 model IngresoContratistaPE {
-  id              String   @id
+  id              String    @id
   comunidadId     String
   comunidad       Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
   contratistaId   String
@@ -1374,44 +1422,44 @@ model IngresoContratistaPE {
   estado          String
   horaIngreso     String?
   notas           String?
-  createdAt       DateTime @default(now())
+  createdAt       DateTime  @default(now())
 
   @@index([comunidadId])
   @@map("ingresos_contratista_pe")
 }
 
 model ProveedorPE {
-  id        String   @id
+  id          String    @id
   comunidadId String
-  comunidad Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
-  rut       String
-  nombre    String
-  rubro     String
-  contacto  String?
-  telefono  String?
-  email     String?
-  sitioWeb  String?
-  activo    Boolean
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  comunidad   Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  rut         String
+  nombre      String
+  rubro       String
+  contacto    String?
+  telefono    String?
+  email       String?
+  sitioWeb    String?
+  activo      Boolean
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
-  @@index([comunidadId])
   @@unique([comunidadId, rut])
+  @@index([comunidadId])
   @@map("proveedores_pe")
 }
 
 model MantencionPreventivaPE {
-  id            String   @id
-  comunidadId   String
-  comunidad     Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
-  proveedorId   String
-  descripcion   String
+  id                String    @id
+  comunidadId       String
+  comunidad         Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  proveedorId       String
+  descripcion       String
   periodicidadMeses Int
-  proximaFecha  String
-  alertaDiasAntes Int
-  activo        Boolean
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  proximaFecha      String
+  alertaDiasAntes   Int
+  activo            Boolean
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
   @@index([comunidadId])
   @@index([proveedorId])
@@ -1419,7 +1467,7 @@ model MantencionPreventivaPE {
 }
 
 model VisitaTecnicaPE {
-  id                  String   @id
+  id                  String    @id
   comunidadId         String
   comunidad           Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
   proveedorId         String
@@ -1429,7 +1477,7 @@ model VisitaTecnicaPE {
   trabajoRealizado    String
   supervisorPersonaId String?
   unidadId            String?
-  createdAt           DateTime @default(now())
+  createdAt           DateTime  @default(now())
 
   @@index([comunidadId])
   @@index([proveedorId])
@@ -1437,40 +1485,40 @@ model VisitaTecnicaPE {
 }
 
 model CierreTurnoPE {
-  id                      String   @id
-  comunidadId             String
-  comunidad               Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
-  fecha                   String
-  hora                    String
-  jornadaReportadaId      String
-  trabajadorPersonaId     String
-  novedadesGenerales      String?
-  incidencias             Json
-  checklistInstalaciones  Json
-  checklistEquipamiento   Json
-  historialCambios        Json
-  notificadoAAdmin        Boolean
-  createdAt               DateTime @default(now())
-  updatedAt               DateTime @updatedAt
+  id                     String    @id
+  comunidadId            String
+  comunidad              Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  fecha                  String
+  hora                   String
+  jornadaReportadaId     String
+  trabajadorPersonaId    String
+  novedadesGenerales     String?
+  incidencias            Json
+  checklistInstalaciones Json
+  checklistEquipamiento  Json
+  historialCambios       Json
+  notificadoAAdmin       Boolean
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
 
   @@index([comunidadId])
   @@map("cierres_turno_pe")
 }
 
 model ProyeccionPE {
-  id                       String   @id
-  comunidadId              String
-  comunidad                Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
-  mesAnio                  String
-  feriados                 Json
-  diasFeriados             Int
-  reemplazosNecesarios     Int
-  costoEstimado            Float
-  detalleCosto             Json
-  enviadoAFI               Boolean
-  liquidacionPLReferencia  String?
-  createdAt                DateTime @default(now())
-  updatedAt                DateTime @updatedAt
+  id                      String    @id
+  comunidadId             String
+  comunidad               Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  mesAnio                 String
+  feriados                Json
+  diasFeriados            Int
+  reemplazosNecesarios    Int
+  costoEstimado           Float
+  detalleCosto            Json
+  enviadoAFI              Boolean
+  liquidacionPLReferencia String?
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
 
   @@index([comunidadId])
   @@map("proyecciones_pe")
@@ -1478,59 +1526,59 @@ model ProyeccionPE {
 
 // Liquidaciones y Remuneraciones (PL)
 model LiquidacionPL {
-  id                       String   @id
-  comunidadId              String
-  comunidad                Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
-  folio                    String
-  trabajadorPersonaId      String
-  periodo                  String
-  fechaGeneracion          String
-  diasTrabajados           Int
-  sueldoBaseContrato       Float
-  diasMesComercial         Int
-  jornadaSemanal           Float
-  sueldoBaseProporcional   Float
-  horasExtrasHoras         Float
-  valorHoraOrdinaria       Float
-  montoHorasExtras         Float
-  bonos                    Json
-  gratificacionLegal       Float
-  totalImponible           Float
-  asignacionMovilizacion   Float
-  asignacionColacion       Float
+  id                        String    @id
+  comunidadId               String
+  comunidad                 Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  folio                     String
+  trabajadorPersonaId       String
+  periodo                   String
+  fechaGeneracion           String
+  diasTrabajados            Int
+  sueldoBaseContrato        Float
+  diasMesComercial          Int
+  jornadaSemanal            Float
+  sueldoBaseProporcional    Float
+  horasExtrasHoras          Float
+  valorHoraOrdinaria        Float
+  montoHorasExtras          Float
+  bonos                     Json
+  gratificacionLegal        Float
+  totalImponible            Float
+  asignacionMovilizacion    Float
+  asignacionColacion        Float
   asignacionFamiliarTramoId String?
-  cargas                   Int
-  montoAsignacionFamiliar  Float
-  totalHaberes             Float
-  afpId                    String?
-  nombreAfp                String
-  tasaAFP                  Float
-  montoAFP                 Float
-  saludId                  String?
-  nombreSalud              String
-  saludTipo                String
-  saludPorcentaje          Float?
-  saludValorUF             Float?
-  ufAplicada               Float?
-  montoSalud               Float
-  tasaSIS                  Float
-  montoSIS                 Float
-  montoSeguroCesantia      Float
-  montoAPV                 Float
-  totalDescuentos          Float
-  descuentoAnticipos       Float
-  adelantosIds             Json
+  cargas                    Int
+  montoAsignacionFamiliar   Float
+  totalHaberes              Float
+  afpId                     String?
+  nombreAfp                 String
+  tasaAFP                   Float
+  montoAFP                  Float
+  saludId                   String?
+  nombreSalud               String
+  saludTipo                 String
+  saludPorcentaje           Float?
+  saludValorUF              Float?
+  ufAplicada                Float?
+  montoSalud                Float
+  tasaSIS                   Float
+  montoSIS                  Float
+  montoSeguroCesantia       Float
+  montoAPV                  Float
+  totalDescuentos           Float
+  descuentoAnticipos        Float
+  adelantosIds              Json
   // SERIE-FASE2 §V4 — plan de deducción por adelanto con su tope aplicado y el
   // arrastre resultante; lo calcula el servidor al generar (nunca el cliente) y lo
   // consume la confirmación para actualizar saldo/estado sin recalcular.
-  adelantosDetalle         Json?
-  alcanceLiquido           Float
-  liquidoAPagar            Float
-  estado                   String
-  egresoFIReferencia       String?
-  proyeccionPEReferencia   String?
-  createdAt                DateTime @default(now())
-  updatedAt                DateTime @updatedAt
+  adelantosDetalle          Json?
+  alcanceLiquido            Float
+  liquidoAPagar             Float
+  estado                    String
+  egresoFIReferencia        String?
+  proyeccionPEReferencia    String?
+  createdAt                 DateTime  @default(now())
+  updatedAt                 DateTime  @updatedAt
 
   @@index([comunidadId])
   @@index([trabajadorPersonaId])
@@ -1538,7 +1586,7 @@ model LiquidacionPL {
 }
 
 model AdelantoPL {
-  id                  String   @id
+  id                  String    @id
   comunidadId         String
   comunidad           Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
   folio               String
@@ -1552,12 +1600,12 @@ model AdelantoPL {
   // `anticipo_regular` = pago anticipado de lo devengado (se descuenta 100% en la
   // liquidación siguiente, sin tope 15%); `prestamo` = deuda con acuerdo escrito,
   // topada al 15% mensual de la remuneración bruta y al 45% conjunto (art. 58 inc. 3-4).
-  pacto               String   @default("anticipo_regular")
+  pacto               String    @default("anticipo_regular")
   // Saldo vivo: el arrastre cuando el líquido del período no alcanza.
-  saldo               Float    @default(0)
+  saldo               Float     @default(0)
   // Período en que corresponde imputar el descuento (AAAA-MM); "" = legado
   // (se imputa en la liquidación siguiente que se genere).
-  periodoImputacion   String   @default("")
+  periodoImputacion   String    @default("")
   // Referencia al acuerdo escrito/firmado del préstamo (obligatoria si pacto = prestamo).
   acuerdoEscritoRef   String?
   creadoPor           String?
@@ -1565,8 +1613,8 @@ model AdelantoPL {
   comprobante         String?
   // Auditoría de cada deducción aplicada, ligada a su liquidación.
   deducciones         Json?
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
   @@index([comunidadId])
   @@index([trabajadorPersonaId])
@@ -1576,34 +1624,34 @@ model AdelantoPL {
 
 // Certificados (CT)
 model CertificadoCT {
-  id                String   @id
-  comunidadId       String
-  comunidad         Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
-  folio             String
+  id                 String    @id
+  comunidadId        String
+  comunidad          Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  folio              String
   codigoVerificacion String
-  tipo              String
-  unidadId          String?
-  personaId         String?
-  origenRef         String?
-  solicitanteNombre String
-  resumen           String
-  detalle           Json
-  firmaUrl          String?
-  fechaEmision      String
-  createdAt         DateTime @default(now())
+  tipo               String
+  unidadId           String?
+  personaId          String?
+  origenRef          String?
+  solicitanteNombre  String
+  resumen            String
+  detalle            Json
+  firmaUrl           String?
+  fechaEmision       String
+  createdAt          DateTime  @default(now())
 
-  @@index([comunidadId])
   // Folio correlativo POR COMUNIDAD (CT-####): el número lo asigna el POST en
   // una transacción, y este índice es la garantía dura contra la carrera entre
   // dos emisiones concurrentes (sin él, `max+1` sobre una lectura permite
   // duplicados). Aditiva: ver migración add_certificados_ct_folio_unico.
   @@unique([comunidadId, folio])
+  @@index([comunidadId])
   @@map("certificados_ct")
 }
 
 // Reportería y Dashboards (RE)
 model ReporteRE {
-  id                     String   @id
+  id                     String    @id
   comunidadId            String
   comunidad              Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
   titulo                 String
@@ -1624,8 +1672,8 @@ model ReporteRE {
   estadoDistribucion     String?
   envios                 Json?
   lecturas               Json?
-  createdAt              DateTime @default(now())
-  updatedAt              DateTime @updatedAt
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
 
   @@unique([comunidadId, numero])
   @@index([comunidadId])
@@ -1634,114 +1682,114 @@ model ReporteRE {
 
 // Maestros Administrativos y Legales (MA)
 model Afp {
-  id            String   @id
-  comunidadId   String
-  comunidad     Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
-  nombre        String
+  id             String    @id
+  comunidadId    String
+  comunidad      Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  nombre         String
   tasaCotizacion Float
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   @@index([comunidadId])
   @@map("maestros_afp")
 }
 
 model PrevisionSalud {
-  id          String   @id
+  id          String    @id
   comunidadId String
   comunidad   Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
   nombre      String
   tipo        String // fonasa | isapre
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   @@index([comunidadId])
   @@map("maestros_prevision_salud")
 }
 
 model MutualCaja {
-  id          String   @id
+  id          String    @id
   comunidadId String
   comunidad   Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
   nombre      String
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   @@index([comunidadId])
   @@map("maestros_mutual_caja")
 }
 
 model Feriado {
-  id          String   @id
-  comunidadId String
-  comunidad   Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
-  fecha       String
-  nombre      String
+  id            String    @id
+  comunidadId   String
+  comunidad     Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  fecha         String
+  nombre        String
   irrenunciable Boolean
-  createdAt   DateTime @default(now())
+  createdAt     DateTime  @default(now())
 
   @@index([comunidadId])
   @@map("maestros_feriado")
 }
 
 model Banco {
-  id          String   @id
+  id          String    @id
   comunidadId String
   comunidad   Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
   nombre      String
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   @@index([comunidadId])
   @@map("maestros_banco")
 }
 
 model IndiceAjuste {
-  id          String   @id
+  id          String    @id
   comunidadId String
   comunidad   Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
   nombre      String
   codigo      String
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   @@index([comunidadId])
   @@map("maestros_indice_ajuste")
 }
 
 model CajaFondo {
-  id          String   @id
+  id          String    @id
   comunidadId String
   comunidad   Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
   nombre      String
   tipo        String
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   @@index([comunidadId])
   @@map("maestros_caja_fondo")
 }
 
 model CategoriaInsumo {
-  id          String   @id
+  id          String    @id
   comunidadId String
   comunidad   Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
   nombre      String
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   @@index([comunidadId])
   @@map("maestros_categoria_insumo")
 }
 
 model UnidadMedida {
-  id          String   @id
+  id          String    @id
   comunidadId String
   comunidad   Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
   nombre      String
   abreviatura String
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   @@index([comunidadId])
   @@map("maestros_unidad_medida")
@@ -1766,143 +1814,143 @@ model MaestroOculto {
 }
 
 model ContactoEmergencia {
-  id          String   @id
+  id          String    @id
   comunidadId String
   comunidad   Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
   categoria   String?
   nombre      String
   telefono    String
   sitioWeb    String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   @@index([comunidadId])
   @@map("maestros_contacto_emergencia")
 }
 
 model CondicionEspecial {
-  id          String   @id
+  id          String    @id
   comunidadId String
   comunidad   Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
   nombre      String
   color       String
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   @@index([comunidadId])
   @@map("maestros_condicion_especial")
 }
 
 model EstadoOcupacion {
-  id          String   @id
+  id          String    @id
   comunidadId String
   comunidad   Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
   nombre      String
   color       String
   hex         String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   @@index([comunidadId])
   @@map("maestros_estado_ocupacion")
 }
 
 model CategoriaMacro {
-  id          String   @id
+  id          String    @id
   comunidadId String
   comunidad   Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
   nombre      String
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   @@index([comunidadId])
   @@map("maestros_categoria_macro")
 }
 
 model CategoriaMicro {
-  id          String   @id
+  id          String    @id
   comunidadId String
   comunidad   Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
   nombre      String
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   @@index([comunidadId])
   @@map("maestros_categoria_micro")
 }
 
 model CategoriaUnidad {
-  id          String   @id
+  id          String    @id
   comunidadId String
   comunidad   Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
   nombre      String
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   @@index([comunidadId])
   @@map("maestros_categoria_unidad")
 }
 
 model EstadoInmobiliario {
-  id          String   @id
+  id          String    @id
   comunidadId String
   comunidad   Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
   nombre      String
   color       String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   @@index([comunidadId])
   @@map("maestros_estado_inmobiliario")
 }
 
 model AsignacionFamiliar {
-  id          String   @id
+  id          String    @id
   comunidadId String
   comunidad   Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
   nombre      String
   monto       Float
   rangoRentas String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   @@index([comunidadId])
   @@map("maestros_asignacion_familiar")
 }
 
 model Jornada {
-  id          String   @id
+  id          String    @id
   comunidadId String
   comunidad   Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
   nombre      String
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   @@index([comunidadId])
   @@map("maestros_jornada")
 }
 
 model Courier {
-  id          String   @id
+  id          String    @id
   comunidadId String
   comunidad   Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
   nombre      String
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   @@index([comunidadId])
   @@map("maestros_courier")
 }
 
 model Contratista {
-  id          String   @id
+  id          String    @id
   comunidadId String
   comunidad   Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
   nombre      String
   rubro       String?
   telefono    String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   @@index([comunidadId])
   @@map("maestros_contratista")
@@ -1919,9 +1967,9 @@ model PeriodoDirectiva {
   fechaInscripcion      String
   referenciaInscripcion String
   fechasEstimadas       Boolean   @default(false)
-  estado                String    // vigente | cerrado
+  estado                String // vigente | cerrado
   actaOrigenId          String?
-  miembros              Json      // MiembroPeriodoDirectiva[]
+  miembros              Json // MiembroPeriodoDirectiva[]
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 

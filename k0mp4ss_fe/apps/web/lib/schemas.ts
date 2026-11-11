@@ -2328,6 +2328,22 @@ export const EventoAuditoriaSchema = z.object({
   descripcion: z.string().min(1),
 })
 
+/**
+ * Requerimiento anual del Registro de Copropietarios (S2, S6).
+ *
+ * El fundamento es obligatorio y con contenido: un requerimiento que no dice
+ * qué se pide no sirve como evidencia de que la administración cumplió su
+ * deber (Ley 21.442 art. 9). La fecha la pone el servidor, nunca el cliente.
+ */
+export const RequerimientoVigenciaSchema = z.object({
+  unidadId: IdEntidadSchema,
+  fundamento: z
+    .string()
+    .trim()
+    .min(10, "El fundamento debe decir qué se requiere actualizar.")
+    .max(500, "El fundamento no puede superar los 500 caracteres."),
+})
+
 // --- Tipos derivados (z.infer): contratos únicos del dominio ---
 
 export type TarifaHistorica = z.infer<typeof TarifaHistoricaSchema>

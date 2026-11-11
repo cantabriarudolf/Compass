@@ -29,6 +29,9 @@ model Comunidad {
   leadsPortal                 LeadPortal[]
   notificaciones              Notificacion[]
   controlesPropiedades        ControlPropiedad[]
+  // Vigencia del Registro de Copropietarios (S2: el reloj corre por unidad).
+  vigenciasRegistro           VigenciaRegistroUnidad[]
+  requerimientosVigencia      RequerimientoVigencia[]
   periodosDirectiva           PeriodoDirectiva[]
   actasGD                     ActaGD[]
   // SERIE-FASE2 §V6 — actas GD publicadas en el visor CV (por referencia).
@@ -427,6 +430,51 @@ model ControlPropiedad {
   @@index([comunidadId])
   @@index([unidadId])
   @@map("controles_propiedad")
+}
+
+/// Vigencia del Registro de Copropietarios (Ley 21.442 art. 9 y Reglamento de la
+/// ley, D.O. 09-01-2025). S2: el reloj corre por UNIDAD, no por persona — una fila
+/// por unidad con los hechos del ciclo. S6: los hechos quedan congelados; el
+/// estado NO se persiste, se deriva con `lib/vigencia-registro.ts`, para que no
+/// existan dos verdades que se separen con el tiempo.
+model VigenciaRegistroUnidad {
+  id                  String    @id @default(cuid())
+  comunidadId         String
+  comunidad           Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  unidadId            String
+  /// Fecha de la última declaración **o revalidación** (S3: confirmar sin cambios
+  /// es cumplir). `null` = no consta declaración: se reporta `sin_declaracion` y
+  /// NO se multa (S1: no se inventa la falta).
+  ultimaActualizacion DateTime?
+  /// Acto de requerir vigente: es el que arranca los 60 días corridos (S2).
+  /// Al declarar o revalidar se limpia; la historia queda en RequerimientoVigencia.
+  requerimientoEn     DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  @@unique([comunidadId, unidadId])
+  @@index([comunidadId])
+  @@map("vigencia_registro_unidad")
+}
+
+/// Evidencia inmutable del requerimiento anual (S6): append-only, una fila por
+/// acto, con el vencimiento congelado en el momento de requerir. Es la prueba de
+/// que la administración cumplió su deber del art. 9; nada la edita ni la borra.
+model RequerimientoVigencia {
+  id            String    @id @default(cuid())
+  comunidadId   String
+  comunidad     Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  unidadId      String
+  fecha         DateTime  @default(now())
+  /// `fecha + 60 días corridos`, calculado UNA sola vez en el acto (S6):
+  /// recalcularlo después permitiría mover el plazo cambiando un dato.
+  venceEn       DateTime
+  registradoPor String
+  fundamento    String
+  createdAt     DateTime  @default(now())
+
+  @@index([comunidadId, unidadId])
+  @@map("requerimientos_vigencia")
 }
 
 // Archivo de borrado lógico AD: copia íntegra del control al momento de

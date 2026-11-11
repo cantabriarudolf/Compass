@@ -149,3 +149,26 @@ La versión del reglamento que rige el cobro NO SHALL guardar la referencia del 
 #### Scenario: La versión vieja se sigue leyendo
 - **WHEN** se lee una versión histórica que solo tiene `actaRef`
 - **THEN** la lectura devuelve esa referencia y la pantalla la muestra marcada como histórica
+
+### Requirement: Vigencia del Registro de Copropietarios
+El sistema SHALL registrar la vigencia del Registro de Copropietarios **por unidad**, nunca por persona: el deber del art. 9 de la Ley 21.442 se refiere a la unidad y a quien la posee. Cada unidad SHALL tener a lo sumo un caso de vigencia por comunidad (`comunidadId + unidadId` único) con dos hechos: la fecha de la última declaración o revalidación —`null` cuando no consta— y la fecha del acto de requerir vigente. El estado (`al_dia`, `por_vencer`, `requerido`, `habilitado_para_multa`, `sin_declaracion`) SHALL derivarse en el servidor con `lib/vigencia-registro.ts` y NO SHALL persistirse: guardarlo crearía una segunda verdad que se separa del calendario. Los 60 días corridos SHALL contarse desde el acto de requerir, no desde el cumpleaños del dato; sin requerimiento el estado tope SHALL ser `requerido` y nunca `habilitado_para_multa`. Una unidad sin declaración SHALL reportarse `sin_declaracion` y NO SHALL habilitar multa. El acto de requerir SHALL escribir evidencia append-only con el vencimiento congelado, el usuario que lo registró y su fundamento; un segundo requerimiento sobre un ciclo abierto SHALL responder 409 sin escribir evidencia nueva. La lectura completa del registro SHALL exigir `ad` con acción `editar`: la acción `ver` no alcanza porque el rol `residente` la posee y vería el registro de todas las unidades.
+
+#### Scenario: Unidad sin declaración
+- **WHEN** una unidad no tiene caso de vigencia o su última actualización es `null`
+- **THEN** el estado es `sin_declaracion`, el sistema no habilita multa y la unidad se reporta como incidente de datos
+
+#### Scenario: Requerimiento anual
+- **WHEN** la administración requiere la actualización de una unidad sin requerimiento abierto
+- **THEN** se congelan la fecha del acto y su vencimiento a 60 días corridos en la evidencia, y el estado pasa a `requerido`
+
+#### Scenario: Vencimiento del plazo
+- **WHEN** pasan los 60 días corridos desde el requerimiento sin declaración ni revalidación
+- **THEN** el estado derivado es `habilitado_para_multa` con la fecha de vencimiento congelada en la evidencia
+
+#### Scenario: Segundo requerimiento sin declaración
+- **WHEN** se intenta requerir de nuevo una unidad que ya tiene un requerimiento abierto
+- **THEN** la respuesta es 409 y no se escribe una segunda evidencia
+
+#### Scenario: El residente no ve el registro ajeno
+- **WHEN** un usuario con rol `residente` pide el listado completo del registro
+- **THEN** la respuesta es 403

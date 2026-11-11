@@ -14,8 +14,10 @@ import { describe, expect, it } from "vitest"
 import {
   DIAS_PARA_RESPONDER,
   estadoDeVigencia,
+  estadoDelCaso,
   habilitaPropuestaDeMulta,
   multaDisponible,
+  vencimientoDelRequerimiento,
 } from "@/lib/vigencia-registro"
 
 /** Última actualización de referencia: 1 de enero de 2026. */
@@ -80,6 +82,38 @@ describe("vigencia del registro — los 60 días del requerimiento", () => {
       "2027-03-10"
     )
     expect(v.estado).toBe("al_dia")
+  })
+})
+
+describe("vigencia del registro — el caso persistido (S2, S6)", () => {
+  it("una unidad sin declaración no se puede multar: se reporta como incidente de datos", () => {
+    const v = estadoDelCaso({}, "2027-06-01")
+    expect(v.estado).toBe("sin_declaracion")
+    expect(habilitaPropuestaDeMulta(v)).toBe(false)
+  })
+
+  it("requerir una unidad sin declaración arranca los 60 días igual", () => {
+    // La obligación nace del acto de requerir, no de una fecha de dato que no consta.
+    const v = estadoDelCaso({ requerimientoEn: "2027-01-10" }, "2027-01-11")
+    expect(v.estado).toBe("requerido")
+    expect(v.diasParaCambiar).toBe(DIAS_PARA_RESPONDER - 1)
+  })
+
+  it("pasados los 60 días de ese requerimiento, el caso habilita la multa", () => {
+    const v = estadoDelCaso({ requerimientoEn: "2027-01-10" }, "2027-03-12")
+    expect(v.estado).toBe("habilitado_para_multa")
+    expect(habilitaPropuestaDeMulta(v)).toBe(true)
+  })
+
+  it("el vencimiento del requerimiento se congela a 60 días corridos", () => {
+    // S6: la fecha de vencimiento queda fijada en el acto, no se recalcula después.
+    expect(vencimientoDelRequerimiento("2027-01-10").toISOString()).toBe(
+      "2027-03-11T00:00:00.000Z"
+    )
+    // Cruza fin de año sin corrimientos de zona ni de mes.
+    expect(vencimientoDelRequerimiento("2026-12-31").toISOString()).toBe(
+      "2027-03-01T00:00:00.000Z"
+    )
   })
 })
 
