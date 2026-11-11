@@ -668,6 +668,81 @@ describe("vigencia del registro — revalidación sin cambios (S3)", () => {
     expect(evento?.usuario).toBe(USER_ADMIN_R)
     expect(evento?.descripcion).toContain("501")
   })
+
+  it("un 400 sobre una unidad con caso abierto no le toca el caso", async () => {
+    // El caso de rechazo se arma acá y no se hereda de otro test: el fixture
+    // previo cierra el ciclo de U_REQUERIDA_R, así que depender de su estado
+    // haría que este test midiera el orden de ejecución.
+    const unidad = "vig-rev-u-caso-previo"
+    const abierto = hace(20)
+    await crearUnidad(unidad, "504", COMUNIDAD_R)
+    await prisma.vigenciaRegistroUnidad.create({
+      data: {
+        comunidadId: COMUNIDAD_R,
+        unidadId: unidad,
+        ultimaActualizacion: null,
+        requerimientoEn: abierto,
+      },
+    })
+
+    await conSesionR(EMAIL_ADMIN_R, async () => {
+      const respuesta = await revalidar(unidad, "corto")
+      expect(respuesta.status).toBe(400)
+    })
+
+    const despues = await caso(unidad)
+    // Un rechazo no puede cerrar el ciclo por accidente: la fecha del
+    // requerimiento sigue siendo exactamente la misma.
+    expect(despues?.requerimientoEn?.getTime()).toBe(abierto.getTime())
+    expect(await revalidaciones(unidad)).toHaveLength(0)
+    expect(await eventos(unidad)).toBe(0)
+  })
+
+  it("revalidar una unidad con el plazo vencido la deja al día sin borrar la evidencia", async () => {
+    // El caso más adversarial: ya venció el plazo, así que la multa estaba
+    // habilitada. Revalidar después no puede hacer desaparecer la prueba de que
+    // el plazo corrió y no se respondió (S6).
+    const unidad = "vig-rev-u-vencida"
+    const requeridoHace = hace(100)
+    const vencioHace = hace(40)
+    await crearUnidad(unidad, "505", COMUNIDAD_R)
+    await prisma.vigenciaRegistroUnidad.create({
+      data: {
+        comunidadId: COMUNIDAD_R,
+        unidadId: unidad,
+        ultimaActualizacion: null,
+        requerimientoEn: requeridoHace,
+      },
+    })
+    await prisma.requerimientoVigencia.create({
+      data: {
+        comunidadId: COMUNIDAD_R,
+        unidadId: unidad,
+        fecha: requeridoHace,
+        venceEn: vencioHace,
+        registradoPor: USER_ADMIN_R,
+        fundamento: "Requerimiento del ciclo vencido.",
+      },
+    })
+
+    await conSesionR(EMAIL_ADMIN_R, async () => {
+      const respuesta = await revalidar(unidad, DETALLE_VALIDO)
+      expect(respuesta.status).toBe(200)
+      const cuerpo = await respuesta.json()
+      expect(cuerpo.estado).toBe("al_dia")
+    })
+
+    const evidencia = await prisma.requerimientoVigencia.findMany({
+      where: { comunidadId: COMUNIDAD_R, unidadId: unidad },
+    })
+    expect(evidencia).toHaveLength(1)
+    expect(evidencia[0]?.venceEn.getTime()).toBe(vencioHace.getTime())
+
+    const despues = await caso(unidad)
+    expect(despues?.requerimientoEn).toBeNull()
+    expect(despues?.ultimaActualizacion).not.toBeNull()
+    expect(await revalidaciones(unidad)).toHaveLength(1)
+  })
 })
 
 /**
