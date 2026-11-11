@@ -23,6 +23,9 @@ export interface VinculoUnidad {
   estadoOcupacionPropiedad?: string;
   // Privacidad Delegada
   permiteVerFinanzas: boolean;
+  // S5 — el propietario habilita a su arrendatario a declarar el Registro de
+  // Copropietarios. Default en la base: false.
+  puedeDeclararRegistro?: boolean;
   // Cierre automático de tramo anterior (solo propietario/arrendatario)
   cerrarAnterior?: boolean;
 }

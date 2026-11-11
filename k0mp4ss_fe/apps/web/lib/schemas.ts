@@ -123,6 +123,11 @@ export const VinculoUnidadSchema = z.object({
   permiteVerFinanzas: z.boolean({
     required_error: "El flag de privacidad financiera es obligatorio.",
   }),
+  // S5 — el arrendatario sólo declara el Registro de Copropietarios si el
+  // propietario lo habilita por vínculo. Opcional a propósito: las llamadas que
+  // no lo mandan siguen funcionando y decide el default de la base (`false`),
+  // que es el lado seguro — nadie gana el permiso por omisión.
+  puedeDeclararRegistro: z.boolean().optional(),
   // Cierre automático de tramo anterior (solo propietario/arrendatario)
   cerrarAnterior: z.boolean().optional(),
 })

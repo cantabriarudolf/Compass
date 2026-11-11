@@ -28,6 +28,11 @@ const CAMPOS_VINCULO = [
   "fechaFin",
   "estadoOcupacionPropiedad",
   "permiteVerFinanzas",
+  // S5 — lo enciende el propietario para que su arrendatario pueda declarar el
+  // Registro de Copropietarios. La obligación sigue siendo del propietario y el
+  // arrendatario nunca puede escribir su propio vínculo: esta ruta exige `mp`
+  // con `crear`/`editar`, y el rol `residente` no tiene `mp` en la matriz.
+  "puedeDeclararRegistro",
   "cerrarAnterior",
 ] as const
 
@@ -57,6 +62,8 @@ export interface DatosVinculo extends Record<string, unknown> {
   fechaFin?: string | null
   estadoOcupacionPropiedad?: string
   permiteVerFinanzas: boolean
+  /// S5: si el arrendatario de esta unidad puede declarar el Registro.
+  puedeDeclararRegistro?: boolean
   cerrarAnterior?: boolean
 }
 

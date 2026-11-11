@@ -85,6 +85,10 @@ export function FormularioVinculoUnidad({
   const [permiteVerFinanzas, setPermiteVerFinanzas] = React.useState(
     vinculo?.permiteVerFinanzas ?? false
   )
+  // S5: el permiso del arrendatario lo da el PROPIETARIO y es por vínculo.
+  const [puedeDeclararRegistro, setPuedeDeclararRegistro] = React.useState(
+    vinculo?.puedeDeclararRegistro ?? false
+  )
   const [estadoOcupacionPropiedad, setEstadoOcupacionPropiedad] =
     React.useState<VinculoUnidad["estadoOcupacionPropiedad"]>(
       vinculo?.estadoOcupacionPropiedad ?? "habitada"
@@ -135,11 +139,15 @@ export function FormularioVinculoUnidad({
     setErrores(nuevosErrores)
     if (Object.keys(nuevosErrores).length > 0) return
 
-    const resultado = await onSave({
+    const datos: Omit<VinculoUnidad, "id" | "personaId"> = {
       unidadId,
       rol: rol as RolVinculo,
       fechaInicio,
       ...(fechaFin ? { fechaFin } : {}),
+      // S5: el permiso del arrendatario viaja SIEMPRE con su valor actual. El
+      // patrón de `permiteVerFinanzas` (reset a false fuera de propietario) acá
+      // borraría la habilitación que ya dio el dueño al editar otro rol.
+      puedeDeclararRegistro,
       ...(rol === "propietario"
         ? {
             estadoOcupacionPropiedad: estadoOcupacionPropiedad ?? "habitada",
@@ -149,7 +157,8 @@ export function FormularioVinculoUnidad({
       ...(rol === "propietario" || rol === "arrendatario"
         ? { cerrarAnterior }
         : {}),
-    })
+    }
+    const resultado = await onSave(datos)
     if (resultado && !resultado.ok) {
       setErrores({
         global: resultado.error ?? "No se pudo guardar el vínculo.",
@@ -348,6 +357,28 @@ export function FormularioVinculoUnidad({
                   id="permite-ver-finanzas"
                   checked={permiteVerFinanzas}
                   onCheckedChange={setPermiteVerFinanzas}
+                />
+              </div>
+
+              {/* S5: el arrendatario puede declarar el Registro de
+                  Copropietarios sólo si el propietario se lo habilita. */}
+              <div className="flex items-center justify-between gap-4 rounded-lg border p-4">
+                <div>
+                  <Label htmlFor="puede-declarar-registro">
+                    Permitir que el arrendatario declare el Registro de
+                    Copropietarios
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    La obligación de mantener el registro actualizado sigue
+                    siendo del propietario: esto sólo deja que el arrendatario
+                    informe los cambios que conoce de la unidad, y cada
+                    declaración queda con quién la hizo.
+                  </p>
+                </div>
+                <Switch
+                  id="puede-declarar-registro"
+                  checked={puedeDeclararRegistro}
+                  onCheckedChange={setPuedeDeclararRegistro}
                 />
               </div>
 

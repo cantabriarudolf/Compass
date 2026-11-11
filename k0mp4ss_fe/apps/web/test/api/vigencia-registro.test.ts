@@ -1116,3 +1116,604 @@ describe("vigencia del registro — avisos al propietario, administrador y Comit
     expect(descripciones[1]).toContain("0 omitido(s)")
   })
 })
+
+/**
+ * S5 — el arrendatario declara sólo si el propietario lo habilita, y toda
+ * declaración guarda quién la hizo.
+ *
+ * El obligado por el art. 9 es el propietario; el dato lo tiene quien vive la
+ * unidad. Este bloque prueba las dos mitades de esa frase: que el permiso es un
+ * acto del dueño (por vínculo, `default false`, nadie lo gana por omisión) y que
+ * la declaración guarda su procedencia —`propietario` o `arrendatario`— sacada
+ * del vínculo de la sesión, nunca del cuerpo del request. También prueba lo que
+ * NO se abre: la cuenta del arrendatario no ve ni declara la unidad de otro, y
+ * sin permiso no escribe ni una fila de evidencia.
+ *
+ * Fixture propio (`vig-dec-*`): el `afterAll` de los bloques anteriores borra su
+ * comunidad, sus usuarios y sus unidades.
+ */
+describe("vigencia del registro — permiso del arrendatario y procedencia de la declaración (S5)", () => {
+  const COMUNIDAD_D = "vig-dec-comunidad-a"
+  const COMUNIDAD_D_B = "vig-dec-comunidad-b"
+
+  const EMAIL_SIN_PERSONA_D = "vig-dec-sin-persona@test.cl"
+  const EMAIL_SIN_VINCULO_D = "vig-dec-sin-vinculo@test.cl"
+  const EMAIL_PROPIETARIO_D = "vig-dec-propietario@test.cl"
+  const EMAIL_ARRENDATARIO_D = "vig-dec-arrendatario@test.cl"
+  const EMAIL_ADMIN_D = "vig-dec-admin@test.cl"
+
+  const USER_SIN_PERSONA_D = "vig-dec-user-sin-persona"
+  const USER_SIN_VINCULO_D = "vig-dec-user-sin-vinculo"
+  const USER_PROPIETARIO_D = "vig-dec-user-propietario"
+  const USER_ARRENDATARIO_D = "vig-dec-user-arrendatario"
+  const USER_ADMIN_D = "vig-dec-user-admin"
+
+  const PERSONA_PROPIETARIO_D = "vig-dec-persona-propietario"
+  const PERSONA_SIN_VINCULO_D = "vig-dec-persona-sin-vinculo"
+  const PERSONA_ARRENDATARIO_D = "vig-dec-persona-arrendatario"
+
+  // Unidades del dueño: una con el plazo vencido y otra sin declaración alguna.
+  const U_PROPIETARIO_D = "vig-dec-u-propietario"
+  const U_PROPIETARIO_DOS_D = "vig-dec-u-propietario-dos"
+  // La unidad que vive el arrendatario: empieza SIN el permiso del propietario.
+  const U_ARRENDATARIO_D = "vig-dec-u-arrendatario"
+  // Misma comunidad, sin vínculo con el arrendatario: no debe existir para él.
+  const U_AJENA_D = "vig-dec-u-ajena"
+  // Camino administrativo (PRESERVE del acto de revalidar).
+  const U_ADMIN_D = "vig-dec-u-admin"
+  // Otra comunidad: el cambio de id no cruza el tenant.
+  const U_OTRA_COMUNIDAD_D = "vig-dec-u-otra"
+
+  const DETALLE_VALIDO =
+    "El arrendatario confirma que los datos del registro de la unidad siguen iguales."
+
+  // Fechas fijadas UNA vez: recalcularlas en la aserción mediría el reloj.
+  const DECLARADO_HACE_30 = hace(30)
+  const ULTIMA_ACTUALIZACION_PROPIETARIO = hace(400)
+  const REQUERIDO_HACE = hace(100)
+
+  const moduloMiUnidad = () =>
+    import("@/app/api/vigencia-registro/mi-unidad/route")
+  const moduloMiDeclaracion = () =>
+    import("@/app/api/vigencia-registro/mi-declaracion/route")
+  const moduloRevalidacionAdmin = () =>
+    import("@/app/api/vigencia-registro/revalidacion/route")
+
+  function miUnidad(): Promise<Response> {
+    return moduloMiUnidad().then(({ GET }) => GET())
+  }
+
+  function declarar(unidadId: string, detalle: string): Promise<Response> {
+    return moduloMiDeclaracion().then(({ POST }) =>
+      POST(
+        new Request("http://localhost/api/vigencia-registro/mi-declaracion", {
+          method: "POST",
+          body: JSON.stringify({ unidadId, detalle }),
+        })
+      )
+    )
+  }
+
+  const declaraciones = (unidadId: string) =>
+    prisma.revalidacionVigencia.findMany({
+      where: { comunidadId: COMUNIDAD_D, unidadId },
+      orderBy: { fecha: "asc" },
+    })
+
+  const eventos = (unidadId: string) =>
+    prisma.eventoAuditoria.count({
+      where: {
+        comunidadId: COMUNIDAD_D,
+        referenciaId: unidadId,
+        tipoAccion: "AD_VIGENCIA_DECLARACION_PROPIA",
+      },
+    })
+
+  const caso = (unidadId: string) =>
+    prisma.vigenciaRegistroUnidad.findUnique({
+      where: {
+        comunidadId_unidadId: { comunidadId: COMUNIDAD_D, unidadId },
+      },
+    })
+
+  async function conSesionD(
+    email: string,
+    fn: () => Promise<void>
+  ): Promise<void> {
+    const user = await prisma.usuario.findUnique({ where: { email } })
+    if (!user) throw new Error(`usuario no encontrado: ${email}`)
+    const { cookieSesionAuthjs } = await import("../helpers/sesion-authjs")
+    state.cookie = await cookieSesionAuthjs({ sub: user.id, email: user.email })
+    try {
+      await fn()
+    } finally {
+      state.cookie = ""
+    }
+  }
+
+  beforeAll(async () => {
+    process.env.AUTH_SECRET ||= AUTH_SECRET
+
+    for (const [id, nombre, slug] of [
+      [COMUNIDAD_D, "Comunidad Declaración", "vig-dec-comunidad-a"],
+      [COMUNIDAD_D_B, "Comunidad Declaración B", "vig-dec-comunidad-b"],
+    ] as const) {
+      await prisma.comunidad.upsert({
+        where: { id },
+        update: {},
+        create: { id, nombre, slug },
+      })
+    }
+
+    const usuarios = [
+      { id: USER_SIN_PERSONA_D, email: EMAIL_SIN_PERSONA_D, personaId: null },
+      { id: USER_SIN_VINCULO_D, email: EMAIL_SIN_VINCULO_D, personaId: PERSONA_SIN_VINCULO_D },
+      { id: USER_PROPIETARIO_D, email: EMAIL_PROPIETARIO_D, personaId: PERSONA_PROPIETARIO_D },
+      { id: USER_ARRENDATARIO_D, email: EMAIL_ARRENDATARIO_D, personaId: PERSONA_ARRENDATARIO_D },
+      { id: USER_ADMIN_D, email: EMAIL_ADMIN_D, personaId: null },
+    ]
+    for (const u of usuarios) {
+      await prisma.usuario.upsert({
+        where: { email: u.email },
+        update: { personaId: u.personaId },
+        create: { id: u.id, email: u.email, activo: true, personaId: u.personaId },
+      })
+    }
+
+    const idsUsuarios = usuarios.map((u) => u.id)
+    await prisma.membresia.deleteMany({
+      where: { usuarioId: { in: idsUsuarios } },
+    })
+    for (const u of usuarios) {
+      await prisma.membresia.create({
+        data: {
+          usuarioId: u.id,
+          comunidadId: COMUNIDAD_D,
+          // El arrendatario tiene su cuenta propia y acotada (S5): rol residente.
+          rol: u.id === USER_ADMIN_D ? "administrador" : "residente",
+        },
+      })
+    }
+
+    await prisma.revalidacionVigencia.deleteMany({
+      where: { comunidadId: { in: [COMUNIDAD_D, COMUNIDAD_D_B] } },
+    })
+    await prisma.vigenciaRegistroUnidad.deleteMany({
+      where: { comunidadId: { in: [COMUNIDAD_D, COMUNIDAD_D_B] } },
+    })
+    await prisma.requerimientoVigencia.deleteMany({
+      where: { comunidadId: { in: [COMUNIDAD_D, COMUNIDAD_D_B] } },
+    })
+    await prisma.eventoAuditoria.deleteMany({
+      where: { comunidadId: { in: [COMUNIDAD_D, COMUNIDAD_D_B] } },
+    })
+    await prisma.vinculoUnidad.deleteMany({
+      where: { comunidadId: { in: [COMUNIDAD_D, COMUNIDAD_D_B] } },
+    })
+    await prisma.unidad.deleteMany({
+      where: { comunidadId: { in: [COMUNIDAD_D, COMUNIDAD_D_B] } },
+    })
+    await prisma.persona.deleteMany({
+      where: { comunidadId: { in: [COMUNIDAD_D, COMUNIDAD_D_B] } },
+    })
+
+    for (const [id, nombre] of [
+      [PERSONA_PROPIETARIO_D, "Dueña Vigente"],
+      [PERSONA_SIN_VINCULO_D, "Sin Vínculo"],
+      [PERSONA_ARRENDATARIO_D, "Arrendatario Vigente"],
+    ] as const) {
+      await prisma.persona.create({
+        data: {
+          id,
+          comunidadId: COMUNIDAD_D,
+          rut: `dec-${id}`,
+          nombreCompleto: nombre,
+          nombres: nombre.split(" ")[0] ?? nombre,
+          apellidos: "Declaración",
+          email: `${id}@test.cl`,
+          telefonoMovil: "+56900000000",
+          estadoCuenta: "activa",
+          condicionesEspecialesIds: [],
+          roles: [],
+        },
+      })
+    }
+
+    await crearUnidad(U_PROPIETARIO_D, "1701", COMUNIDAD_D)
+    await crearUnidad(U_PROPIETARIO_DOS_D, "1704", COMUNIDAD_D)
+    await crearUnidad(U_ARRENDATARIO_D, "1702", COMUNIDAD_D)
+    await crearUnidad(U_AJENA_D, "1703", COMUNIDAD_D)
+    await crearUnidad(U_ADMIN_D, "1705", COMUNIDAD_D)
+    await crearUnidad(U_OTRA_COMUNIDAD_D, "1801", COMUNIDAD_D_B)
+
+    await prisma.vinculoUnidad.create({
+      data: {
+        id: "vig-dec-vinculo-propietario",
+        comunidadId: COMUNIDAD_D,
+        personaId: PERSONA_PROPIETARIO_D,
+        unidadId: U_PROPIETARIO_D,
+        rol: "propietario",
+        fechaInicio: "2021-01-01",
+        fechaFin: null,
+        permiteVerFinanzas: true,
+      },
+    })
+    await prisma.vinculoUnidad.create({
+      data: {
+        id: "vig-dec-vinculo-propietario-dos",
+        comunidadId: COMUNIDAD_D,
+        personaId: PERSONA_PROPIETARIO_D,
+        unidadId: U_PROPIETARIO_DOS_D,
+        rol: "propietario",
+        fechaInicio: "2022-01-01",
+        fechaFin: null,
+        permiteVerFinanzas: false,
+      },
+    })
+    await prisma.vinculoUnidad.create({
+      data: {
+        id: "vig-dec-vinculo-arrendatario",
+        comunidadId: COMUNIDAD_D,
+        personaId: PERSONA_ARRENDATARIO_D,
+        unidadId: U_ARRENDATARIO_D,
+        rol: "arrendatario",
+        fechaInicio: "2025-03-01",
+        fechaFin: null,
+        permiteVerFinanzas: false,
+        // default false: nadie hereda el permiso, lo da el propietario.
+        puedeDeclararRegistro: false,
+      },
+    })
+
+    await prisma.vigenciaRegistroUnidad.create({
+      data: {
+        comunidadId: COMUNIDAD_D,
+        unidadId: U_PROPIETARIO_D,
+        ultimaActualizacion: ULTIMA_ACTUALIZACION_PROPIETARIO,
+        requerimientoEn: REQUERIDO_HACE,
+      },
+    })
+    await prisma.requerimientoVigencia.create({
+      data: {
+        comunidadId: COMUNIDAD_D,
+        unidadId: U_PROPIETARIO_D,
+        fecha: REQUERIDO_HACE,
+        venceEn: new Date(REQUERIDO_HACE.getTime() + 60 * DIA),
+        registradoPor: USER_ADMIN_D,
+        fundamento: "Requerimiento anual del Registro de la unidad 1701.",
+      },
+    })
+    await prisma.vigenciaRegistroUnidad.create({
+      data: {
+        comunidadId: COMUNIDAD_D,
+        unidadId: U_ARRENDATARIO_D,
+        ultimaActualizacion: DECLARADO_HACE_30,
+      },
+    })
+    await prisma.vigenciaRegistroUnidad.create({
+      data: {
+        comunidadId: COMUNIDAD_D,
+        unidadId: U_ADMIN_D,
+        ultimaActualizacion: null,
+        requerimientoEn: REQUERIDO_HACE,
+      },
+    })
+  }, 30_000)
+
+  afterAll(async () => {
+    try {
+      await prisma.revalidacionVigencia.deleteMany({
+        where: { comunidadId: { in: [COMUNIDAD_D, COMUNIDAD_D_B] } },
+      })
+      await prisma.vigenciaRegistroUnidad.deleteMany({
+        where: { comunidadId: { in: [COMUNIDAD_D, COMUNIDAD_D_B] } },
+      })
+      await prisma.requerimientoVigencia.deleteMany({
+        where: { comunidadId: { in: [COMUNIDAD_D, COMUNIDAD_D_B] } },
+      })
+      await prisma.eventoAuditoria.deleteMany({
+        where: { comunidadId: { in: [COMUNIDAD_D, COMUNIDAD_D_B] } },
+      })
+      await prisma.vinculoUnidad.deleteMany({
+        where: { comunidadId: { in: [COMUNIDAD_D, COMUNIDAD_D_B] } },
+      })
+      await prisma.unidad.deleteMany({
+        where: { comunidadId: { in: [COMUNIDAD_D, COMUNIDAD_D_B] } },
+      })
+      await prisma.membresia.deleteMany({
+        where: {
+          usuarioId: {
+            in: [
+              USER_SIN_PERSONA_D,
+              USER_SIN_VINCULO_D,
+              USER_PROPIETARIO_D,
+              USER_ARRENDATARIO_D,
+              USER_ADMIN_D,
+            ],
+          },
+        },
+      })
+      await prisma.usuario.deleteMany({
+        where: {
+          id: {
+            in: [
+              USER_SIN_PERSONA_D,
+              USER_SIN_VINCULO_D,
+              USER_PROPIETARIO_D,
+              USER_ARRENDATARIO_D,
+              USER_ADMIN_D,
+            ],
+          },
+        },
+      })
+      await prisma.persona.deleteMany({
+        where: { comunidadId: { in: [COMUNIDAD_D, COMUNIDAD_D_B] } },
+      })
+      await prisma.comunidad.deleteMany({
+        where: { id: { in: [COMUNIDAD_D, COMUNIDAD_D_B] } },
+      })
+    } catch {
+      // limpieza best-effort
+    }
+  })
+
+  it("sin sesión responde 401 en las dos rutas y no escribe nada", async () => {
+    const lista = await miUnidad()
+    expect(lista.status).toBe(401)
+
+    const declaracion = await declarar(U_ARRENDATARIO_D, DETALLE_VALIDO)
+    expect(declaracion.status).toBe(401)
+
+    expect(await declaraciones(U_ARRENDATARIO_D)).toHaveLength(0)
+    expect(await eventos(U_ARRENDATARIO_D)).toBe(0)
+  })
+
+  it("sin persona o sin vínculo recibe la lista vacía y un 404, nunca la unidad ajena", async () => {
+    // Sin ficha en el Maestro de Personas: no hay «lo propio» que resolver.
+    await conSesionD(EMAIL_SIN_PERSONA_D, async () => {
+      const lista = await miUnidad()
+      expect(lista.status).toBe(200)
+      expect(await lista.json()).toMatchObject({ data: [], total: 0 })
+
+      const declaracion = await declarar(U_ARRENDATARIO_D, DETALLE_VALIDO)
+      expect(declaracion.status).toBe(404)
+    })
+
+    // Con ficha pero sin ningún vínculo vigente: el mismo resultado.
+    await conSesionD(EMAIL_SIN_VINCULO_D, async () => {
+      const lista = await miUnidad()
+      expect(lista.status).toBe(200)
+      expect(await lista.json()).toMatchObject({ data: [], total: 0 })
+
+      const declaracion = await declarar(U_ARRENDATARIO_D, DETALLE_VALIDO)
+      expect(declaracion.status).toBe(404)
+    })
+
+    // Un 404 no puede escribir: ni caso, ni evidencia, ni evento, ni auditoría.
+    expect(await declaraciones(U_ARRENDATARIO_D)).toHaveLength(0)
+    expect(await eventos(U_ARRENDATARIO_D)).toBe(0)
+    expect((await caso(U_ARRENDATARIO_D))?.ultimaActualizacion?.getTime()).toBe(
+      DECLARADO_HACE_30.getTime()
+    )
+  })
+
+  it("el propietario vigente declara y la fila guarda origen propietario", async () => {
+    await conSesionD(EMAIL_PROPIETARIO_D, async () => {
+      const respuesta = await declarar(U_PROPIETARIO_D, DETALLE_VALIDO)
+      expect(respuesta.status).toBe(200)
+      expect(await respuesta.json()).toEqual({
+        ok: true,
+        unidadId: U_PROPIETARIO_D,
+        estado: "al_dia",
+      })
+    })
+
+    const firmadas = await declaraciones(U_PROPIETARIO_D)
+    expect(firmadas).toHaveLength(1)
+    expect(firmadas[0]).toMatchObject({
+      revalidadoPor: USER_PROPIETARIO_D,
+      detalle: DETALLE_VALIDO,
+      origen: "propietario",
+    })
+
+    const despues = await caso(U_PROPIETARIO_D)
+    expect(despues?.ultimaActualizacion).not.toBeNull()
+    expect(despues?.requerimientoEn).toBeNull()
+
+    // S6: la evidencia del requerimiento anterior no se toca al declarar.
+    const evidencia = await prisma.requerimientoVigencia.findMany({
+      where: { comunidadId: COMUNIDAD_D, unidadId: U_PROPIETARIO_D },
+    })
+    expect(evidencia).toHaveLength(1)
+    expect(evidencia[0]?.fecha.getTime()).toBe(REQUERIDO_HACE.getTime())
+
+    expect(await eventos(U_PROPIETARIO_D)).toBe(1)
+    const [evento] = await prisma.eventoAuditoria.findMany({
+      where: {
+        comunidadId: COMUNIDAD_D,
+        referenciaId: U_PROPIETARIO_D,
+        tipoAccion: "AD_VIGENCIA_DECLARACION_PROPIA",
+      },
+    })
+    expect(evento?.categoria).toBe("AD")
+    expect(evento?.usuario).toBe(USER_PROPIETARIO_D)
+    expect(evento?.descripcion).toContain("1701")
+    expect(evento?.descripcion).toContain("propietario")
+  })
+
+  it("el arrendatario sin el permiso del propietario no declara: 403 y nada escrito", async () => {
+    const antes = await caso(U_ARRENDATARIO_D)
+
+    await conSesionD(EMAIL_ARRENDATARIO_D, async () => {
+      const respuesta = await declarar(U_ARRENDATARIO_D, DETALLE_VALIDO)
+      expect(respuesta.status).toBe(403)
+      const cuerpo = await respuesta.json()
+      // El mensaje dice que falta el permiso del dueño, no un «permiso denegado» genérico.
+      expect(String(cuerpo.error)).toMatch(/propietario/i)
+      expect(String(cuerpo.error)).toMatch(/habilit/i)
+    })
+
+    expect(await declaraciones(U_ARRENDATARIO_D)).toHaveLength(0)
+    expect(await eventos(U_ARRENDATARIO_D)).toBe(0)
+    const despues = await caso(U_ARRENDATARIO_D)
+    expect(despues?.ultimaActualizacion?.getTime()).toBe(
+      antes?.ultimaActualizacion?.getTime()
+    )
+    expect(despues?.requerimientoEn).toBeNull()
+  })
+
+  it("cuando el propietario habilita al arrendatario, la declaración guarda origen arrendatario", async () => {
+    // El acto es del dueño y por vínculo: se enciende el permiso de ESE arrendatario.
+    await prisma.vinculoUnidad.update({
+      where: { id: "vig-dec-vinculo-arrendatario" },
+      data: { puedeDeclararRegistro: true },
+    })
+
+    await conSesionD(EMAIL_ARRENDATARIO_D, async () => {
+      const respuesta = await declarar(U_ARRENDATARIO_D, DETALLE_VALIDO)
+      expect(respuesta.status).toBe(200)
+      expect(await respuesta.json()).toEqual({
+        ok: true,
+        unidadId: U_ARRENDATARIO_D,
+        estado: "al_dia",
+      })
+    })
+
+    const firmadas = await declaraciones(U_ARRENDATARIO_D)
+    expect(firmadas).toHaveLength(1)
+    expect(firmadas[0]).toMatchObject({
+      revalidadoPor: USER_ARRENDATARIO_D,
+      origen: "arrendatario",
+      detalle: DETALLE_VALIDO,
+    })
+
+    const [evento] = await prisma.eventoAuditoria.findMany({
+      where: {
+        comunidadId: COMUNIDAD_D,
+        referenciaId: U_ARRENDATARIO_D,
+        tipoAccion: "AD_VIGENCIA_DECLARACION_PROPIA",
+      },
+    })
+    expect(evento?.usuario).toBe(USER_ARRENDATARIO_D)
+    expect(evento?.descripcion).toContain("1702")
+    expect(evento?.descripcion).toContain("arrendatario")
+  })
+
+  it("el arrendatario de una unidad no declara la de otro: 404 y nada escrito", async () => {
+    // El permiso ya está encendido: lo que frena acá es el alcance, no el flag.
+    await conSesionD(EMAIL_ARRENDATARIO_D, async () => {
+      const ajena = await declarar(U_AJENA_D, DETALLE_VALIDO)
+      expect(ajena.status).toBe(404)
+      // El mismo 404 para una unidad de otra comunidad: el id no cruza el tenant.
+      const otraComunidad = await declarar(U_OTRA_COMUNIDAD_D, DETALLE_VALIDO)
+      expect(otraComunidad.status).toBe(404)
+    })
+
+    expect(await declaraciones(U_AJENA_D)).toHaveLength(0)
+    expect(
+      await prisma.revalidacionVigencia.count({
+        where: { unidadId: U_OTRA_COMUNIDAD_D },
+      })
+    ).toBe(0)
+    expect(
+      await prisma.vigenciaRegistroUnidad.count({
+        where: { unidadId: { in: [U_AJENA_D, U_OTRA_COMUNIDAD_D] } },
+      })
+    ).toBe(0)
+    expect(await eventos(U_AJENA_D)).toBe(0)
+  })
+
+  it("mi-unidad devuelve sólo los vínculos propios con el estado derivado y el permiso", async () => {
+    // El estado esperado sale del mismo veredicto que la ruta deriva de la fila:
+    // si el test recalculara el calendario por su cuenta mediría el reloj, no el
+    // hecho guardado.
+    async function esperado(unidadId: string) {
+      const fila = await caso(unidadId)
+      return estadoDelCaso(
+        {
+          ultimaActualizacion: fila?.ultimaActualizacion ?? null,
+          requerimientoEn: fila?.requerimientoEn ?? null,
+        },
+        new Date()
+      ).estado
+    }
+
+    await conSesionD(EMAIL_PROPIETARIO_D, async () => {
+      const respuesta = await miUnidad()
+      expect(respuesta.status).toBe(200)
+      const cuerpo = await respuesta.json()
+      const porUnidad = new Map(
+        cuerpo.data.map((f: { unidadId: string }) => [f.unidadId, f])
+      )
+      // Sólo las unidades con vínculo de ESTA persona: ni la del arrendatario ni
+      // la unidad ajena aparecen.
+      expect(cuerpo.total).toBe(2)
+      expect(porUnidad.has(U_ARRENDATARIO_D)).toBe(false)
+      expect(porUnidad.has(U_AJENA_D)).toBe(false)
+
+      const propia = porUnidad.get(U_PROPIETARIO_D) as Record<string, unknown>
+      expect(propia).toMatchObject({
+        numero: "1701",
+        etiqueta: "Unidad 1701",
+        rol: "propietario",
+        // Nadie hereda el permiso: el dueño no lo tiene sobre sí mismo.
+        puedeDeclararRegistro: false,
+        estado: await esperado(U_PROPIETARIO_D),
+      })
+      // La ruta devuelve los mismos campos que el listado administrativo.
+      expect(propia).toHaveProperty("descripcion")
+      expect(propia).toHaveProperty("ultimaActualizacion")
+      expect(propia).toHaveProperty("requerimientoEn")
+
+      // Unidad sin caso: sin declaración, y eso se ve como tal.
+      const sinCaso = porUnidad.get(U_PROPIETARIO_DOS_D) as Record<string, unknown>
+      expect(sinCaso).toMatchObject({
+        numero: "1704",
+        estado: "sin_declaracion",
+        ultimaActualizacion: null,
+        requerimientoEn: null,
+      })
+    })
+
+    await conSesionD(EMAIL_ARRENDATARIO_D, async () => {
+      const respuesta = await miUnidad()
+      expect(respuesta.status).toBe(200)
+      const cuerpo = await respuesta.json()
+      expect(cuerpo.total).toBe(1)
+      expect(cuerpo.data[0]).toMatchObject({
+        unidadId: U_ARRENDATARIO_D,
+        numero: "1702",
+        rol: "arrendatario",
+        // El permiso encendido por el dueño se refleja en la vista acotada.
+        puedeDeclararRegistro: true,
+        estado: await esperado(U_ARRENDATARIO_D),
+      })
+    })
+  })
+
+  it("PRESERVE: la revalidación administrativa sigue guardando su evidencia como del administrador", async () => {
+    await conSesionD(EMAIL_ADMIN_D, async () => {
+      const { POST } = await moduloRevalidacionAdmin()
+      const respuesta = await POST(
+        new Request("http://localhost/api/vigencia-registro/revalidacion", {
+          method: "POST",
+          body: JSON.stringify({ unidadId: U_ADMIN_D, detalle: DETALLE_VALIDO }),
+        })
+      )
+      expect(respuesta.status).toBe(200)
+      const cuerpo = await respuesta.json()
+      expect(cuerpo.ok).toBe(true)
+      expect(cuerpo.estado).toBe("al_dia")
+    })
+
+    const firmadas = await declaraciones(U_ADMIN_D)
+    expect(firmadas).toHaveLength(1)
+    // La columna nueva no cambia el acto administrativo: su default la rotula.
+    expect(firmadas[0]).toMatchObject({
+      revalidadoPor: USER_ADMIN_D,
+      origen: "administrador",
+    })
+    expect((await caso(U_ADMIN_D))?.requerimientoEn).toBeNull()
+    expect(await eventos(U_ADMIN_D)).toBe(0)
+  })
+})

@@ -186,6 +186,83 @@ describe("/api/vinculos — VU con BD real (BD-FUENTE-VERDAD)", () => {
     })
   })
 
+  it("el permiso de declarar el Registro se persiste y su default es false (S5)", async () => {
+    // La ruta filtra el body por una allow-list (`CAMPOS_VINCULO`): si el campo
+    // no está listada, el switch del formulario no llega nunca a la base. Este
+    // test es el que prueba que sí llega, y que omitirlo no enciende nada.
+    const personas = [
+      { id: "vu-pers-declara", rut: "11111111-1", nombres: "Dora", apellidos: "Declara", email: "vu-dora@test.cl" },
+      { id: "vu-pers-arrienda", rut: "22222222-2", nombres: "Elsa", apellidos: "Arrienda", email: "vu-elsa@test.cl" },
+    ]
+    for (const p of personas) {
+      await prisma.persona.create({
+        data: {
+          id: p.id,
+          comunidadId: comunidadA,
+          rut: p.rut,
+          nombreCompleto: `${p.nombres} ${p.apellidos}`,
+          nombres: p.nombres,
+          apellidos: p.apellidos,
+          email: p.email,
+          telefonoMovil: "+56944444444",
+          estadoCuenta: "activa",
+          condicionesEspecialesIds: [],
+          roles: [],
+        },
+      })
+    }
+    await prisma.unidad.create({
+      data: {
+        id: "vu-unidad-declara",
+        comunidadId: comunidadA,
+        microSectorId: "ms-2",
+        numero: "102",
+        etiqueta: "Depto 102",
+        tipoUnidadId: "tu-2",
+        metraje: 55,
+        prorrateo: 1,
+        rolSii: "2222-33",
+        estadoId: "ocu-1",
+        servicios: {},
+      },
+    })
+
+    await conSesion(async () => {
+      // Sin el campo: lo decide el default de la base.
+      const sinCampo = await POST(
+        vinculoValido({
+          id: "vu-declara-sin",
+          personaId: "vu-pers-declara",
+          unidadId: "vu-unidad-declara",
+          rol: "propietario",
+        })
+      )
+      expect(sinCampo.status).toBe(201)
+
+      // Con el campo: es el acto del propietario habilitando a su arrendatario.
+      const conCampo = await POST(
+        vinculoValido({
+          id: "vu-declara-con",
+          personaId: "vu-pers-arrienda",
+          unidadId: "vu-unidad-declara",
+          rol: "arrendatario",
+          puedeDeclararRegistro: true,
+        })
+      )
+      expect(conCampo.status).toBe(201)
+    })
+
+    const guardado = await prisma.vinculoUnidad.findUnique({
+      where: { id: "vu-declara-con" },
+    })
+    expect(guardado?.puedeDeclararRegistro).toBe(true)
+
+    const omitido = await prisma.vinculoUnidad.findUnique({
+      where: { id: "vu-declara-sin" },
+    })
+    expect(omitido?.puedeDeclararRegistro).toBe(false)
+  })
+
   it("vínculo sobre persona inactiva → 409", async () => {
     await conSesion(async () => {
       const res = await POST(

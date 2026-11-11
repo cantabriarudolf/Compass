@@ -270,6 +270,11 @@ model VinculoUnidad {
   fechaFin                 String?
   estadoOcupacionPropiedad String?
   permiteVerFinanzas       Boolean
+  /// S5 — el arrendatario puede declarar el Registro de Copropietarios SÓLO si
+  /// el propietario se lo habilita por vínculo (mismo patrón que `permiteVerFinanzas`).
+  /// `default false` = el propietario habilita: nadie gana este permiso sin un
+  /// acto deliberado del dueño, y la obligación legal sigue siendo suya.
+  puedeDeclararRegistro    Boolean   @default(false)
   cerrarAnterior           Boolean?
   createdAt                DateTime  @default(now())
   updatedAt                DateTime  @updatedAt
@@ -491,6 +496,11 @@ model RevalidacionVigencia {
   /// Qué se confirmó que sigue igual, en palabras de quien revalidó:
   /// un «sigue igual» sin contenido no sirve como evidencia.
   detalle       String
+  /// S5 — quién declaró: `administrador` | `propietario` | `arrendatario`.
+  /// Sale del vínculo del usuario de sesión, nunca del cuerpo del request: es la
+  /// procedencia de la declaración y no puede elegirse. El default conserva como
+  /// administrativas las filas escritas antes de existir este campo.
+  origen        String    @default("administrador")
 
   @@index([comunidadId, unidadId])
   @@map("revalidaciones_vigencia")
