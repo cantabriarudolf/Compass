@@ -37,6 +37,7 @@ model Comunidad {
   // Vigencia del Registro de Copropietarios (S2: el reloj corre por unidad).
   vigenciasRegistro           VigenciaRegistroUnidad[]
   requerimientosVigencia      RequerimientoVigencia[]
+  revalidacionesVigencia      RevalidacionVigencia[]
   periodosDirectiva           PeriodoDirectiva[]
   actasGD                     ActaGD[]
   // SERIE-FASE2 §V6 — actas GD publicadas en el visor CV (por referencia).
@@ -480,6 +481,23 @@ model RequerimientoVigencia {
 
   @@index([comunidadId, unidadId])
   @@map("requerimientos_vigencia")
+}
+
+/// Evidencia inmutable de una revalidación (S3): confirmar que el registro sigue
+/// igual es cumplir. Append-only: la declaración no se borra ni se edita.
+model RevalidacionVigencia {
+  id            String    @id @default(cuid())
+  comunidadId   String
+  comunidad     Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  unidadId      String
+  fecha         DateTime  @default(now())
+  revalidadoPor String
+  /// Qué se confirmó que sigue igual, en palabras de quien revalidó:
+  /// un «sigue igual» sin contenido no sirve como evidencia.
+  detalle       String
+
+  @@index([comunidadId, unidadId])
+  @@map("revalidaciones_vigencia")
 }
 
 // Archivo de borrado lógico AD: copia íntegra del control al momento de

@@ -2344,6 +2344,23 @@ export const RequerimientoVigenciaSchema = z.object({
     .max(500, "El fundamento no puede superar los 500 caracteres."),
 })
 
+/**
+ * Revalidación del Registro sin cambios (S3: confirmar que sigue igual es
+ * cumplir).
+ *
+ * El detalle es obligatorio y con contenido: una revalidación que no dice qué
+ * se confirmó no sirve como evidencia frente a la unidad, el Comité ni un
+ * reclamo posterior. La fecha y quién revalidó los pone el servidor.
+ */
+export const RevalidacionVigenciaSchema = z.object({
+  unidadId: IdEntidadSchema,
+  detalle: z
+    .string()
+    .trim()
+    .min(10, "El detalle debe decir qué se confirmó que sigue igual.")
+    .max(500, "El detalle no puede superar los 500 caracteres."),
+})
+
 // --- Tipos derivados (z.infer): contratos únicos del dominio ---
 
 export type TarifaHistorica = z.infer<typeof TarifaHistoricaSchema>
