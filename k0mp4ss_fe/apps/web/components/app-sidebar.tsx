@@ -204,6 +204,15 @@ const data = {
         // exige rol administrador en el servidor y la API de la cola exige `editar` en RA.
         { title: "Alerta de reservas", url: "/admin/reservas", roles: ["administrador"] },
         { title: "Gestión Administrativa", url: "/admin/gestion", roles: ["administrador"] },
+        // Vigencia del Registro de Copropietarios (Ley 21.442 art. 9): la ley
+        // obliga a la administración a requerir la actualización cada año y el
+        // Comité debe ver el estado. La entrada refleja la matriz (`ad` + `editar`),
+        // no la amplía: el portón real está en la página y en las cuatro rutas.
+        {
+          title: "Vigencia del Registro",
+          url: "/admin/gestion/vigencia-registro",
+          roles: ["administrador", "comite"],
+        },
         { title: "Maestros Administrativos", url: "/admin/maestros", roles: ["administrador"] },
         { title: "Configuración", url: "/admin/configuracion", roles: ["administrador"] },
         { title: "Permisos", url: "/admin/permisos", roles: ["administrador"] },
