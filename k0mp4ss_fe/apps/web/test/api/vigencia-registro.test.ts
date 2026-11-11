@@ -11,6 +11,7 @@
  */
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest"
 import { prisma } from "@/lib/prisma"
+import { estadoDelCaso } from "@/lib/vigencia-registro"
 
 const state = vi.hoisted(() => ({ cookie: "" }))
 vi.mock("next/headers", () => ({
@@ -666,5 +667,377 @@ describe("vigencia del registro — revalidación sin cambios (S3)", () => {
     expect(evento?.categoria).toBe("AD")
     expect(evento?.usuario).toBe(USER_ADMIN_R)
     expect(evento?.descripcion).toContain("501")
+  })
+})
+
+/**
+ * S8 — administrador y Comité se enteran siempre.
+ *
+ * El aviso no puede depender de que alguien se acuerde: la administración corre
+ * un barrido explícito, `POST /api/vigencia-registro/avisos`, y el barrido es
+ * idempotente. Este bloque prueba las dos mitades de esa frase: lo que el
+ * barrido escribe en la primera corrida (la notificación y su constancia) y que
+ * la segunda no escribe nada, ni siquiera cuando el destinatario es un rol sin
+ * persona. También prueba el caso que S8 nombra como incidente: una unidad sin
+ * propietario vigente, que se notifica a la administración y al Comité y nunca
+ * al vacío.
+ *
+ * Fixture propio (`vig-avi-*`): el `afterAll` de los bloques anteriores borra su
+ * comunidad, sus usuarios y sus unidades.
+ */
+describe("vigencia del registro — avisos al propietario, administrador y Comité (S8)", () => {
+  const COMUNIDAD_V = "vig-avi-comunidad-a"
+  const COMUNIDAD_V_B = "vig-avi-comunidad-b"
+  const EMAIL_ADMIN_V = "vig-avi-admin@test.cl"
+  const EMAIL_RESIDENTE_V = "vig-avi-residente@test.cl"
+  const USER_ADMIN_V = "vig-avi-user-admin"
+  const USER_RESIDENTE_V = "vig-avi-user-residente"
+
+  // Unidad en el mes 10.5: «por vencer», con propietario vigente.
+  const U_POR_VENCER_V = "vig-avi-u-por-vencer"
+  // Unidad sin declaración y sin propietario vigente: incidente de datos.
+  const U_SIN_DUENO_V = "vig-avi-u-sin-dueno"
+  // La unidad de la otra comunidad no participa del barrido.
+  const U_OTRA_V = "vig-avi-u-otra"
+
+  const PERSONA_PROPIETARIO = "vig-avi-persona-propietario"
+  // Dueño anterior: su vínculo está cerrado, así que NO es el propietario vigente.
+  const PERSONA_ANTERIOR = "vig-avi-persona-anterior"
+
+  // 320 días: más de 10 meses (aviso) y menos de 12 (requerimiento anual).
+  const ULTIMA_POR_VENCER = hace(320)
+
+  const moduloAvisos = () =>
+    import("@/app/api/vigencia-registro/avisos/route")
+
+  function emitirAvisos(): Promise<Response> {
+    return moduloAvisos().then(({ POST }) =>
+      POST(
+        new Request("http://localhost/api/vigencia-registro/avisos", {
+          method: "POST",
+        })
+      )
+    )
+  }
+
+  const notificaciones = (unidadId: string) =>
+    prisma.notificacion.findMany({
+      where: { comunidadId: COMUNIDAD_V, unidadId },
+      orderBy: { asunto: "asc" },
+    })
+
+  const constancias = (unidadId: string) =>
+    prisma.avisoVigencia.findMany({
+      where: { comunidadId: COMUNIDAD_V, unidadId },
+      orderBy: [{ tipo: "asc" }, { destinatario: "asc" }],
+    })
+
+  const eventos = () =>
+    prisma.eventoAuditoria.findMany({
+      where: {
+        comunidadId: COMUNIDAD_V,
+        tipoAccion: "AD_VIGENCIA_AVISOS",
+      },
+    })
+
+  async function conSesionV(
+    email: string,
+    fn: () => Promise<void>
+  ): Promise<void> {
+    const user = await prisma.usuario.findUnique({ where: { email } })
+    if (!user) throw new Error(`usuario no encontrado: ${email}`)
+    const { cookieSesionAuthjs } = await import("../helpers/sesion-authjs")
+    state.cookie = await cookieSesionAuthjs({ sub: user.id, email: user.email })
+    try {
+      await fn()
+    } finally {
+      state.cookie = ""
+    }
+  }
+
+  beforeAll(async () => {
+    process.env.AUTH_SECRET ||= AUTH_SECRET
+
+    for (const [id, nombre, slug] of [
+      [COMUNIDAD_V, "Comunidad Avisos", "vig-avi-comunidad-a"],
+      [COMUNIDAD_V_B, "Comunidad Avisos B", "vig-avi-comunidad-b"],
+    ] as const) {
+      await prisma.comunidad.upsert({
+        where: { id },
+        update: {},
+        create: { id, nombre, slug },
+      })
+    }
+
+    await prisma.usuario.upsert({
+      where: { email: EMAIL_ADMIN_V },
+      update: {},
+      create: { id: USER_ADMIN_V, email: EMAIL_ADMIN_V, activo: true },
+    })
+    await prisma.usuario.upsert({
+      where: { email: EMAIL_RESIDENTE_V },
+      update: {},
+      create: { id: USER_RESIDENTE_V, email: EMAIL_RESIDENTE_V, activo: true },
+    })
+
+    await prisma.membresia.deleteMany({
+      where: { usuarioId: { in: [USER_ADMIN_V, USER_RESIDENTE_V] } },
+    })
+    await prisma.membresia.create({
+      data: {
+        usuarioId: USER_ADMIN_V,
+        comunidadId: COMUNIDAD_V,
+        rol: "administrador",
+      },
+    })
+    await prisma.membresia.create({
+      data: {
+        usuarioId: USER_RESIDENTE_V,
+        comunidadId: COMUNIDAD_V,
+        rol: "residente",
+      },
+    })
+
+    await prisma.avisoVigencia.deleteMany({
+      where: { comunidadId: { in: [COMUNIDAD_V, COMUNIDAD_V_B] } },
+    })
+    await prisma.notificacion.deleteMany({
+      where: { comunidadId: { in: [COMUNIDAD_V, COMUNIDAD_V_B] } },
+    })
+    await prisma.vigenciaRegistroUnidad.deleteMany({
+      where: { comunidadId: { in: [COMUNIDAD_V, COMUNIDAD_V_B] } },
+    })
+    await prisma.requerimientoVigencia.deleteMany({
+      where: { comunidadId: { in: [COMUNIDAD_V, COMUNIDAD_V_B] } },
+    })
+    await prisma.eventoAuditoria.deleteMany({
+      where: { comunidadId: { in: [COMUNIDAD_V, COMUNIDAD_V_B] } },
+    })
+    await prisma.vinculoUnidad.deleteMany({
+      where: { comunidadId: { in: [COMUNIDAD_V, COMUNIDAD_V_B] } },
+    })
+    await prisma.unidad.deleteMany({
+      where: { comunidadId: { in: [COMUNIDAD_V, COMUNIDAD_V_B] } },
+    })
+
+    await crearUnidad(U_POR_VENCER_V, "1402", COMUNIDAD_V)
+    await crearUnidad(U_SIN_DUENO_V, "1403", COMUNIDAD_V)
+    await crearUnidad(U_OTRA_V, "1404", COMUNIDAD_V_B)
+
+    await prisma.vigenciaRegistroUnidad.create({
+      data: {
+        comunidadId: COMUNIDAD_V,
+        unidadId: U_POR_VENCER_V,
+        ultimaActualizacion: ULTIMA_POR_VENCER,
+      },
+    })
+
+    await prisma.vinculoUnidad.create({
+      data: {
+        id: "vig-avi-vinculo-vigente",
+        comunidadId: COMUNIDAD_V,
+        personaId: PERSONA_PROPIETARIO,
+        unidadId: U_POR_VENCER_V,
+        rol: "propietario",
+        fechaInicio: "2020-01-01",
+        fechaFin: null,
+        permiteVerFinanzas: false,
+      },
+    })
+    // Dueño cerrado de la unidad sin dueño vigente: tener un vínculo histórico
+    // no la salva del incidente.
+    await prisma.vinculoUnidad.create({
+      data: {
+        id: "vig-avi-vinculo-anterior",
+        comunidadId: COMUNIDAD_V,
+        personaId: PERSONA_ANTERIOR,
+        unidadId: U_SIN_DUENO_V,
+        rol: "propietario",
+        fechaInicio: "2015-01-01",
+        fechaFin: "2024-12-31",
+        permiteVerFinanzas: false,
+      },
+    })
+  }, 30_000)
+
+  afterAll(async () => {
+    try {
+      await prisma.avisoVigencia.deleteMany({
+        where: { comunidadId: { in: [COMUNIDAD_V, COMUNIDAD_V_B] } },
+      })
+      await prisma.notificacion.deleteMany({
+        where: { comunidadId: { in: [COMUNIDAD_V, COMUNIDAD_V_B] } },
+      })
+      await prisma.vigenciaRegistroUnidad.deleteMany({
+        where: { comunidadId: { in: [COMUNIDAD_V, COMUNIDAD_V_B] } },
+      })
+      await prisma.requerimientoVigencia.deleteMany({
+        where: { comunidadId: { in: [COMUNIDAD_V, COMUNIDAD_V_B] } },
+      })
+      await prisma.eventoAuditoria.deleteMany({
+        where: { comunidadId: { in: [COMUNIDAD_V, COMUNIDAD_V_B] } },
+      })
+      await prisma.vinculoUnidad.deleteMany({
+        where: { comunidadId: { in: [COMUNIDAD_V, COMUNIDAD_V_B] } },
+      })
+      await prisma.unidad.deleteMany({
+        where: { comunidadId: { in: [COMUNIDAD_V, COMUNIDAD_V_B] } },
+      })
+      await prisma.membresia.deleteMany({
+        where: { usuarioId: { in: [USER_ADMIN_V, USER_RESIDENTE_V] } },
+      })
+      await prisma.usuario.deleteMany({
+        where: { id: { in: [USER_ADMIN_V, USER_RESIDENTE_V] } },
+      })
+      await prisma.comunidad.deleteMany({
+        where: { id: { in: [COMUNIDAD_V, COMUNIDAD_V_B] } },
+      })
+    } catch {
+      // limpieza best-effort
+    }
+  })
+
+  it("sin sesión responde 401 y no escribe avisos ni notificaciones", async () => {
+    const respuesta = await emitirAvisos()
+    expect(respuesta.status).toBe(401)
+    expect(await prisma.avisoVigencia.count({ where: { comunidadId: COMUNIDAD_V } })).toBe(0)
+    expect(await prisma.notificacion.count({ where: { comunidadId: COMUNIDAD_V } })).toBe(0)
+    expect(await eventos()).toHaveLength(0)
+  })
+
+  it("el residente no puede emitir los avisos: 403 y nada escrito", async () => {
+    await conSesionV(EMAIL_RESIDENTE_V, async () => {
+      const respuesta = await emitirAvisos()
+      expect(respuesta.status).toBe(403)
+    })
+    expect(await prisma.avisoVigencia.count({ where: { comunidadId: COMUNIDAD_V } })).toBe(0)
+    expect(await prisma.notificacion.count({ where: { comunidadId: COMUNIDAD_V } })).toBe(0)
+    expect(await eventos()).toHaveLength(0)
+  })
+
+  it("emite el aviso de por vencer al propietario vigente con su constancia y el incidente de la unidad sin dueño", async () => {
+    await conSesionV(EMAIL_ADMIN_V, async () => {
+      const respuesta = await emitirAvisos()
+      expect(respuesta.status).toBe(200)
+      const cuerpo = await respuesta.json()
+      expect(cuerpo).toEqual({ ok: true, emitidos: 3, omitidos: 0 })
+    })
+
+    // El hito esperado sale del mismo veredicto que la ruta deriva de la fila:
+    // el requerimiento anual de la unidad, no una fecha del reloj del test.
+    const caso = await prisma.vigenciaRegistroUnidad.findUnique({
+      where: {
+        comunidadId_unidadId: {
+          comunidadId: COMUNIDAD_V,
+          unidadId: U_POR_VENCER_V,
+        },
+      },
+    })
+    const veredicto = estadoDelCaso(
+      {
+        ultimaActualizacion: caso?.ultimaActualizacion ?? null,
+        requerimientoEn: caso?.requerimientoEn ?? null,
+      },
+      new Date()
+    )
+    expect(veredicto.estado).toBe("por_vencer")
+    const hito = veredicto.cambiaEl
+    if (!hito) throw new Error("el veredicto por vencer no trae hito")
+
+    const delPropietario = await notificaciones(U_POR_VENCER_V)
+    expect(delPropietario).toHaveLength(1)
+    expect(delPropietario[0]).toMatchObject({
+      destinatarioRol: "propietario",
+      destinatarioPersonaId: PERSONA_PROPIETARIO,
+      canal: "email_simulado",
+      moduloOrigen: "AD_VIGENCIA",
+      leida: false,
+    })
+    expect(delPropietario[0]?.asunto).toContain("1402")
+    expect(delPropietario[0]?.asunto).toContain(hito)
+    expect(delPropietario[0]?.cuerpo).toContain("1402")
+    expect(delPropietario[0]?.cuerpo).toContain(hito)
+
+    const constancia = await constancias(U_POR_VENCER_V)
+    expect(constancia).toHaveLength(1)
+    expect(constancia[0]).toMatchObject({
+      tipo: "por_vencer",
+      destinatario: "propietario",
+      hito,
+      notificacionId: delPropietario[0]?.id,
+    })
+
+    const delIncidente = await constancias(U_SIN_DUENO_V)
+    expect(delIncidente.map((fila) => fila.destinatario)).toEqual([
+      "administrador",
+      "comite",
+    ])
+    expect(delIncidente.every((fila) => fila.tipo === "sin_propietario")).toBe(true)
+
+    // La unidad de la otra comunidad no se barrió.
+    expect(await prisma.avisoVigencia.count({ where: { unidadId: U_OTRA_V } })).toBe(0)
+  })
+
+  it("una segunda corrida del mismo barrido no duplica avisos ni notificaciones", async () => {
+    await conSesionV(EMAIL_ADMIN_V, async () => {
+      const respuesta = await emitirAvisos()
+      expect(respuesta.status).toBe(200)
+      const cuerpo = await respuesta.json()
+      expect(cuerpo).toEqual({ ok: true, emitidos: 0, omitidos: 3 })
+    })
+
+    expect(await notificaciones(U_POR_VENCER_V)).toHaveLength(1)
+    expect(await constancias(U_POR_VENCER_V)).toHaveLength(1)
+    expect(
+      await prisma.notificacion.count({ where: { comunidadId: COMUNIDAD_V } })
+    ).toBe(3)
+    expect(
+      await prisma.avisoVigencia.count({ where: { comunidadId: COMUNIDAD_V } })
+    ).toBe(3)
+  })
+
+  it("la unidad sin propietario vigente no recibe aviso al propietario: el incidente va al administrador y al Comité", async () => {
+    const avisos = await prisma.notificacion.findMany({
+      where: { comunidadId: COMUNIDAD_V, unidadId: U_SIN_DUENO_V },
+    })
+    expect(avisos.map((fila) => fila.destinatarioRol).sort()).toEqual([
+      "administrador",
+      "comite",
+    ])
+    // Ni el dueño histórico ni un destinatario vacío reciben el incidente.
+    expect(
+      await prisma.notificacion.count({
+        where: {
+          comunidadId: COMUNIDAD_V,
+          unidadId: U_SIN_DUENO_V,
+          destinatarioPersonaId: { in: [PERSONA_ANTERIOR, PERSONA_PROPIETARIO] },
+        },
+      })
+    ).toBe(0)
+    expect(
+      await prisma.avisoVigencia.count({
+        where: {
+          comunidadId: COMUNIDAD_V,
+          unidadId: U_SIN_DUENO_V,
+          destinatario: "propietario",
+        },
+      })
+    ).toBe(0)
+  })
+
+  it("cada corrida deja exactamente un evento de auditoría con lo emitido y lo omitido", async () => {
+    const propios = await eventos()
+    // Dos corridas exitosas; las rechazadas (401 y 403) no auditaron nada.
+    expect(propios).toHaveLength(2)
+    for (const evento of propios) {
+      expect(evento.categoria).toBe("AD")
+      expect(evento.usuario).toBe(USER_ADMIN_V)
+      expect(evento.referenciaId).toBe(COMUNIDAD_V)
+    }
+    const descripciones = propios.map((evento) => evento.descripcion).sort()
+    expect(descripciones[0]).toContain("0 emitido(s)")
+    expect(descripciones[0]).toContain("3 omitido(s)")
+    expect(descripciones[1]).toContain("3 emitido(s)")
+    expect(descripciones[1]).toContain("0 omitido(s)")
   })
 })

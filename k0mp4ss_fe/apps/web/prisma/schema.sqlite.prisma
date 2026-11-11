@@ -38,6 +38,7 @@ model Comunidad {
   vigenciasRegistro           VigenciaRegistroUnidad[]
   requerimientosVigencia      RequerimientoVigencia[]
   revalidacionesVigencia      RevalidacionVigencia[]
+  avisosVigencia              AvisoVigencia[]
   periodosDirectiva           PeriodoDirectiva[]
   actasGD                     ActaGD[]
   // SERIE-FASE2 §V6 — actas GD publicadas en el visor CV (por referencia).
@@ -498,6 +499,24 @@ model RevalidacionVigencia {
 
   @@index([comunidadId, unidadId])
   @@map("revalidaciones_vigencia")
+}
+
+/// Registro de idempotencia y de constancia de los avisos de vigencia emitidos
+/// (S8). Una fila por (unidad, tipo de aviso, hito): volver a correr el barrido no
+/// duplica avisos ni notificaciones.
+model AvisoVigencia {
+  id             String    @id @default(cuid())
+  comunidadId    String
+  comunidad      Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  unidadId       String
+  tipo           String
+  destinatario   String
+  hito           String
+  notificacionId String
+  emitidoEn      DateTime  @default(now())
+  @@unique([comunidadId, unidadId, tipo, destinatario, hito])
+  @@index([comunidadId])
+  @@map("avisos_vigencia")
 }
 
 // Archivo de borrado lógico AD: copia íntegra del control al momento de
