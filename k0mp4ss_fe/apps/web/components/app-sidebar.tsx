@@ -123,6 +123,14 @@ const data = {
         },
         { title: "Visor de Mensajes", url: "/comunidad/visor", roles: ["administrador", "residente", "comite"] },
         { title: "Directiva", url: "/comunidad/directiva", roles: ["administrador", "residente", "comite"] },
+        // Acuerdos del comité: el registro expone quién votó qué, así que la
+        // pantalla no se le ofrece al residente aunque `gd:ver` lo tendría para
+        // el acta. El portón real está en la página y en el GET.
+        {
+          title: "Acuerdos",
+          url: "/comunidad/directiva/acuerdos",
+          roles: ["administrador", "comite"],
+        },
         { title: "Certificados", url: "/comunidad/certificados", roles: ["administrador", "residente", "comite"] },
         {
           // F27: el aviso de cobro con el que se cobra. Mismos roles que la

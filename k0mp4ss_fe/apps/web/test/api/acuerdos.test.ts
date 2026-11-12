@@ -16,7 +16,10 @@
  *      PONDERADO por prorrateo: una unidad de 60 de 100 derechos decide sola, y
  *      una abstención no suma a favor;
  *   6. el acuerdo se resuelve cuando el resultado se alcanza: `estado` y
- *      `resueltoEn` quedan escritos en la misma transacción que el voto.
+ *      `resueltoEn` quedan escritos en la misma transacción que el voto;
+ *   7. la LECTURA del registro (U3b) alcanza a la comunidad de la sesión y a
+ *      nadie más —ni con un `comunidadId` en la URL—, exige `gd` ver (401/403) y
+ *      devuelve los votos con el resultado recomputado y los derechos usados.
  */
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest"
 import { NextRequest } from "next/server"
@@ -50,6 +53,11 @@ const EMAIL_OUT = "acu-out@test.cl"
 const EMAIL_OWN60 = "acu-own60@test.cl"
 const EMAIL_OWN40 = "acu-own40@test.cl"
 const EMAIL_OWN60B = "acu-own60b@test.cl"
+// Rol sin `gd` en la matriz: sirve para probar el 403 de la lectura.
+const EMAIL_CONSERJERIA = "acu-conserjeria@test.cl"
+// Acuerdo de la OTRA comunidad: la lectura del scope no puede verlo.
+const ACUERDO_COM_B = "acu-ac-b-get"
+const MATERIA_COM_B = "Acuerdo de la comunidad B que no se lista en A"
 
 const MATERIA_CORTE =
   "Corte de servicios de la unidad por tres cuotas impagas (Ley 21.442 art. 20 N°9)"
@@ -185,6 +193,13 @@ describe("/api/acuerdos — registro de acuerdos con votos inmutables (U3)", () 
       { id: "acu-usuario-own60", email: EMAIL_OWN60, personaId: "acu-own-60", comunidadId: COM_A, rol: "residente" },
       { id: "acu-usuario-own60b", email: EMAIL_OWN60B, personaId: "acu-own-60b", comunidadId: COM_A, rol: "residente" },
       { id: "acu-usuario-own40", email: EMAIL_OWN40, personaId: "acu-own-40", comunidadId: COM_A, rol: "residente" },
+      {
+        id: "acu-usuario-conserjeria",
+        email: EMAIL_CONSERJERIA,
+        personaId: null,
+        comunidadId: COM_A,
+        rol: "conserjeria",
+      },
     ]
     for (const u of usuarios) {
       await prisma.usuario.upsert({
@@ -231,6 +246,7 @@ describe("/api/acuerdos — registro de acuerdos con votos inmutables (U3)", () 
               EMAIL_OWN60,
               EMAIL_OWN60B,
               EMAIL_OWN40,
+              EMAIL_CONSERJERIA,
             ],
           },
         },
@@ -264,6 +280,17 @@ describe("/api/acuerdos — registro de acuerdos con votos inmutables (U3)", () 
         headers: { "content-type": "application/json" },
       })
     )
+  }
+
+  /**
+   * Lectura del registro. La URL es un parámetro a propósito: un caso prueba que
+   * un `comunidadId` declarado por el cliente NO cambia el alcance.
+   */
+  async function GET_ACUERDOS(
+    url = "http://localhost/api/acuerdos"
+  ): Promise<Response> {
+    const { coleccion } = await cargaModulos()
+    return coleccion.GET(new NextRequest(url, { method: "GET" }))
   }
 
   async function POST_VOTO(id: string, body: unknown): Promise<Response> {
@@ -612,5 +639,171 @@ describe("/api/acuerdos — registro de acuerdos con votos inmutables (U3)", () 
       expect((await POST_VOTO("acu-no-existe", { decision: "a_favor" })).status).toBe(404)
     })
     expect(await prisma.votoAcuerdo.count({ where: { acuerdoId: "acu-ac-b" } })).toBe(0)
+  })
+
+  // ── U3b: la lectura del registro ────────────────────────────────────────────
+
+  it("GET: 401 sin sesión y 403 para un rol sin `gd`", async () => {
+    state.cookie = ""
+    expect((await GET_ACUERDOS()).status).toBe(401)
+
+    // Conserjería no tiene `gd` en la matriz: la lectura no se le ofrece.
+    await conSesion(EMAIL_CONSERJERIA, async () => {
+      const res = await GET_ACUERDOS()
+      expect(res.status).toBe(403)
+      const j = (await res.json()) as { error: string }
+      expect(j.error).toBe("Permiso denegado.")
+    })
+  })
+
+  it("GET: el residente no lee el registro aunque tenga gd:ver", async () => {
+    // El registro expone QUIÉN votó qué: son datos personales de los miembros y
+    // de los propietarios. La lectura exige `editar` y no `ver` justamente porque
+    // el rol `residente` tiene `gd:ver` para el acta.
+    await conSesion(EMAIL_OWN60, async () => {
+      const res = await GET_ACUERDOS()
+      expect(res.status).toBe(403)
+      const j = (await res.json()) as { error: string }
+      expect(j.error).toBe("Permiso denegado.")
+    })
+  })
+
+  it("GET: lista los acuerdos con sus votos, el resultado derivado y los derechos usados", async () => {
+    const acuerdo = await crearAcuerdo(acuerdoComite())
+    await conSesion(EMAIL_M1, async () => {
+      expect((await POST_VOTO(acuerdo.id, { decision: "a_favor" })).status).toBe(200)
+    })
+
+    // La asamblea se pesa por prorrateo: 40 derechos en abstención sobre 100.
+    const asamblea = await crearAcuerdo(
+      acuerdoAsamblea("mayoria_absoluta_derechos", "Presupuesto 2028 por partidas")
+    )
+    await conSesion(EMAIL_OWN40, async () => {
+      expect((await POST_VOTO(asamblea.id, { decision: "abstencion" })).status).toBe(200)
+    })
+
+    await conSesion(EMAIL_M1, async () => {
+      const res = await GET_ACUERDOS()
+      expect(res.status).toBe(200)
+      const j = (await res.json()) as {
+        data: Array<{
+          id: string
+          folio: string
+          cuerpo: string
+          materia: string
+          estado: string
+          quorumRequerido: string
+          fecha: string
+          resueltoEn: string | null
+          actaId: string | null
+          derechosTotales: number
+          resultado: {
+            resultado: string
+            aFavor: number
+            enContra: number
+            abstenciones: number
+            motivo: string
+          }
+          votos: Array<{
+            personaId: string
+            nombre: string | null
+            decision: string
+            peso: number
+            unidadId: string | null
+            fecha: string
+          }>
+        }>
+        total: number
+        limite: number
+        mostrados: number
+      }
+
+      // El libro se lee entero (hasta el tope) y el tope se declara.
+      expect(j.limite).toBe(100)
+      expect(j.mostrados).toBe(j.data.length)
+      expect(j.total).toBe(
+        await prisma.acuerdo.count({ where: { comunidadId: COM_A } })
+      )
+
+      const comite = j.data.find((a) => a.id === acuerdo.id)
+      expect(comite).toBeDefined()
+      expect(comite?.folio).toBe(acuerdo.folio)
+      expect(comite?.cuerpo).toBe("comite")
+      expect(comite?.materia).toBe(MATERIA_CORTE)
+      expect(comite?.estado).toBe("abierto")
+      expect(comite?.quorumRequerido).toBe("un_voto_por_miembro")
+      expect(comite?.resueltoEn).toBeNull()
+      // El padrón del comité son sus tres miembros vigentes.
+      expect(comite?.derechosTotales).toBe(3)
+      expect(comite?.resultado.resultado).toBe("pendiente")
+      expect(comite?.resultado.aFavor).toBe(1)
+      expect(comite?.votos).toHaveLength(1)
+      expect(comite?.votos[0]).toMatchObject({
+        personaId: "acu-m1",
+        nombre: "Miembro Uno",
+        decision: "a_favor",
+        peso: 1,
+        unidadId: null,
+      })
+      expect(typeof comite?.votos[0]?.fecha).toBe("string")
+      expect(typeof comite?.fecha).toBe("string")
+
+      // La asamblea pondera por derechos: el padrón son las dos unidades (100).
+      const asambleaLeida = j.data.find((a) => a.id === asamblea.id)
+      expect(asambleaLeida?.derechosTotales).toBe(100)
+      expect(asambleaLeida?.resultado.aFavor).toBe(0)
+      expect(asambleaLeida?.resultado.abstenciones).toBe(40)
+      expect(asambleaLeida?.resultado.resultado).toBe("pendiente")
+      // El motivo mide contra los DERECHOS de la comunidad (100), no contra lo
+      // emitido: es la diferencia con el comité, donde se mide en votos.
+      expect(asambleaLeida?.resultado.motivo).toContain("a favor de 100 derechos")
+      expect(asambleaLeida?.votos[0]).toMatchObject({
+        personaId: "acu-own-40",
+        decision: "abstencion",
+        peso: 40,
+        unidadId: U40,
+      })
+    })
+  })
+
+  it("GET: nunca devuelve un acuerdo de otra comunidad, ni con `?comunidadId` en la URL", async () => {
+    // Acuerdo propio de la comunidad B (idempotente: este archivo puede correr
+    // con la base recién migrada).
+    await prisma.acuerdo.upsert({
+      where: { id: ACUERDO_COM_B },
+      update: { materia: MATERIA_COM_B },
+      create: {
+        id: ACUERDO_COM_B,
+        comunidadId: COM_B,
+        cuerpo: "comite",
+        materia: MATERIA_COM_B,
+        folio: "AD-2026-9100",
+        quorumRequerido: "un_voto_por_miembro",
+        creadoPor: "acu-usuario-admin",
+      },
+    })
+
+    await conSesion(EMAIL_M1, async () => {
+      // El `comunidadId` del cliente es una declaración, no un alcance: se ignora.
+      const res = await GET_ACUERDOS(
+        "http://localhost/api/acuerdos?comunidadId=acu-com-b"
+      )
+      expect(res.status).toBe(200)
+      const j = (await res.json()) as {
+        data: Array<{ id: string; materia: string; comunidadId?: string }>
+        total: number
+      }
+
+      const ids = j.data.map((a) => a.id)
+      expect(ids).not.toContain(ACUERDO_COM_B)
+      expect(ids).not.toContain("acu-ac-b")
+      expect(j.data.some((a) => a.materia === MATERIA_COM_B)).toBe(false)
+      // La fila no expone la comunidad: el alcance lo resolvió el servidor.
+      expect(j.data.every((a) => a.comunidadId === undefined)).toBe(true)
+      // Y el total contado también es el de esta comunidad.
+      expect(j.total).toBe(
+        await prisma.acuerdo.count({ where: { comunidadId: COM_A } })
+      )
+    })
   })
 })

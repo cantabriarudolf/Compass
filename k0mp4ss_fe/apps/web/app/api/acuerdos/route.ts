@@ -12,6 +12,14 @@
  *   mismo permiso de las actas). El servidor asigna id, folio del libro
  *   (`AD-<año>-<correlativo>`, con reintento si el índice único choca), fecha,
  *   estado inicial `abierto` y `creadoPor`; el cliente no decide ninguno.
+ * - GET (U3b): lee el registro con su resultado DERIVADO. Guard `gd` + `ver`.
+ *   Acotado a la comunidad de la sesión: el `comunidadId` nunca viene del
+ *   cliente, y un `?comunidadId=` en la URL se ignora. Devuelve los últimos
+ *   `LIMITE_ACUERDOS` acuerdos con el total del libro, cada uno con sus votos
+ *   (persona, decisión, peso, unidad, fecha) y el cómputo de
+ *   `resultadoDelAcuerdo` más los derechos totales usados: el resultado no se
+ *   guarda, se recomputa al leer. `estado`/`resueltoEn` son el hecho persistido
+ *   (un acuerdo resuelto no se reescribe); el cómputo es la vista de hoy.
  * - Los votos NO se emiten acá: van por `[id]/voto` (un voto por persona,
  *   inmutable). No hay PUT ni DELETE: un acuerdo no se reescribe por API.
  */
@@ -26,8 +34,23 @@ import {
   withComunidadScope,
   type ComunidadScope,
 } from "@/lib/api/with-comunidad-scope"
+import { idsDirectivaVigenteDb, periodoVigenteDb } from "@/lib/api/gd-guard"
+import { resultadoDelAcuerdo, type CuerpoDelAcuerdo } from "@/lib/acuerdos"
 import { puedeGestionarAcuerdos } from "./_guard"
 import { anioDeFecha, siguienteFolioAcuerdo } from "./_folio"
+
+/**
+ * Tope de la lectura del registro (U3b).
+ *
+ * **Capitado, no paginado**: la lectura devuelve los `LIMITE_ACUERDOS` acuerdos
+ * más recientes —ordenados por fecha y, a igual fecha, por folio descendente—
+ * junto con `total`, el conteo completo del libro de la comunidad. Un libro de
+ * gobernanza crece de a decenas por año, así que el tope no esconde nada
+ * habitual; si la comunidad alguna vez lo supera, `total` delata la diferencia y
+ * la paginación será su propia unidad de trabajo (no se inventa acá un
+ * `page`/`pageSize` que nadie consume).
+ */
+const LIMITE_ACUERDOS = 100
 
 /** Intentos de asignación de folio antes de rendirse ante colisiones reales. */
 const MAX_INTENTOS_FOLIO = 3
@@ -164,4 +187,147 @@ export async function POST(req: Request): Promise<Response> {
     409,
     "Conflicto: no se pudo reservar un folio libre para el acuerdo, reintentá el registro."
   )
+}
+
+/** Cuerpo del acuerdo en los dos valores que la regla pura sabe computar. */
+function cuerpoDelAcuerdo(valor: string): CuerpoDelAcuerdo {
+  // La fila guarda el código; `AcuerdoSchema` impide escribir otro. Si llegara
+  // un valor viejo, se computa como comité —el cuerpo sólo cambia el texto del
+  // motivo en las reglas que no son `un_voto_por_miembro`— y el estado
+  // persistido sigue siendo el hecho.
+  return valor === "asamblea" ? "asamblea" : "comite"
+}
+
+/**
+ * GET /api/acuerdos — lectura del registro con el resultado recomputado.
+ *
+ * Se lee en un número FIJO de consultas, no por acuerdo ni por voto: los
+ * acuerdos con sus votos en una sola lectura, el conteo del libro en otra, y el
+ * padrón —miembros vigentes del comité y suma de prorrateos de la asamblea— una
+ * vez por comunidad, no una vez por acuerdo.
+ *
+ * `_req` se declara porque Next lo entrega, pero NO se lee: no hay parámetro que
+ * cambie el alcance. La comunidad sale de `withComunidadScope()`, la única
+ * fuente, así que un `?comunidadId=` del cliente no mueve nada.
+ */
+export async function GET(_req: Request): Promise<Response> {
+  const resultado = await withComunidadScope()
+  if (!resultado.ok) return resultado.response
+  const { scope } = resultado
+
+  // El registro expone QUIÉN votó qué: son datos personales de los miembros del
+  // comité y de los propietarios. Por eso la lectura exige la misma acción que
+  // administrar el libro (editar), no ver: el rol residente tiene gd:ver y vería
+  // la deliberación completa de la comunidad. Mismo criterio que el registro de
+  // vigencia (S5), y más estricto que el acta, que sí tiene su propio ABAC
+  // (residenteVeActas).
+  if (!puedeGestionarAcuerdos(scope.rol, "editar")) {
+    return jsonError(403, "Permiso denegado.")
+  }
+
+  try {
+    const [acuerdos, total, derechosAsamblea, periodoVigente] = await Promise.all([
+      prisma.acuerdo.findMany({
+        where: { comunidadId: scope.comunidadId },
+        orderBy: [{ fecha: "desc" }, { folio: "desc" }],
+        take: LIMITE_ACUERDOS,
+        select: {
+          id: true,
+          folio: true,
+          cuerpo: true,
+          materia: true,
+          estado: true,
+          quorumRequerido: true,
+          fecha: true,
+          resueltoEn: true,
+          actaId: true,
+          votos: {
+            orderBy: { fecha: "asc" },
+            select: {
+              personaId: true,
+              decision: true,
+              peso: true,
+              unidadId: true,
+              fecha: true,
+            },
+          },
+        },
+      }),
+      prisma.acuerdo.count({ where: { comunidadId: scope.comunidadId } }),
+      prisma.unidad.aggregate({
+        where: { comunidadId: scope.comunidadId },
+        _sum: { prorrateo: true },
+      }),
+      periodoVigenteDb(scope.comunidadId),
+    ])
+
+    // El padrón del comité son los miembros VIGENTES de la directiva (un voto por
+    // miembro, art. 17); el de la asamblea, los derechos de toda la comunidad
+    // (art. 15). Se mide una vez por comunidad, nunca por acuerdo.
+    const derechosComite = (
+      await idsDirectivaVigenteDb(scope.comunidadId, periodoVigente?.id)
+    ).length
+    const derechosAsambleaTotal = derechosAsamblea._sum.prorrateo ?? 0
+
+    // Nombre de quien votó, en UNA consulta para todos los votos del listado: la
+    // evidencia del voto es la persona, y una pantalla que muestre ids de fila
+    // no sirve. El voto sigue siendo de la persona (`personaId`), no del nombre.
+    const personaIds = [
+      ...new Set(acuerdos.flatMap((acuerdo) => acuerdo.votos.map((v) => v.personaId))),
+    ]
+    const personas =
+      personaIds.length === 0
+        ? []
+        : await prisma.persona.findMany({
+            where: { comunidadId: scope.comunidadId, id: { in: personaIds } },
+            select: { id: true, nombreCompleto: true },
+          })
+    const nombrePorPersona = new Map(
+      personas.map((persona) => [persona.id, persona.nombreCompleto])
+    )
+
+    const data = acuerdos.map((acuerdo) => {
+      const cuerpo = cuerpoDelAcuerdo(acuerdo.cuerpo)
+      const derechosTotales =
+        cuerpo === "asamblea" ? derechosAsambleaTotal : derechosComite
+      return {
+        id: acuerdo.id,
+        folio: acuerdo.folio,
+        cuerpo: acuerdo.cuerpo,
+        materia: acuerdo.materia,
+        estado: acuerdo.estado,
+        quorumRequerido: acuerdo.quorumRequerido,
+        fecha: acuerdo.fecha.toISOString(),
+        resueltoEn: acuerdo.resueltoEn?.toISOString() ?? null,
+        actaId: acuerdo.actaId,
+        derechosTotales,
+        // Derivado, nunca guardado aparte: la regla pura es la misma que usa el
+        // POST del voto al resolver el acuerdo.
+        resultado: resultadoDelAcuerdo({
+          cuerpo,
+          quorumRequerido: acuerdo.quorumRequerido,
+          votos: acuerdo.votos,
+          derechosTotales,
+        }),
+        votos: acuerdo.votos.map((voto) => ({
+          personaId: voto.personaId,
+          nombre: nombrePorPersona.get(voto.personaId) ?? null,
+          decision: voto.decision,
+          peso: voto.peso,
+          unidadId: voto.unidadId,
+          fecha: voto.fecha.toISOString(),
+        })),
+      }
+    })
+
+    return Response.json({
+      data,
+      total,
+      limite: LIMITE_ACUERDOS,
+      mostrados: data.length,
+    })
+  } catch (e) {
+    logger.error({ err: e }, "[api/acuerdos] error inesperado al leer el registro")
+    return jsonError(500, "Error interno del servidor.")
+  }
 }
