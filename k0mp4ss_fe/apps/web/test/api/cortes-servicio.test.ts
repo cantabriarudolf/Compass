@@ -15,7 +15,9 @@
  *      preaviso responde 400 con su motivo y no deja ninguna fila;
  *   3. la electrodependencia bloquea SIEMPRE (400 con el motivo, cero filas) y la
  *      unidad se resuelve en la comunidad (la ajena es 404);
- *   4. con menos de tres cuotas impagas el preaviso es 400 y no escribe;
+ *   4. la morosidad se DERIVA de los cobros de la unidad —el cuerpo de la petición
+ *      no la declara— y con menos de tres cuotas VENCIDAS el preaviso es 400 y no
+ *      escribe, mande lo que mande el cliente en el cuerpo;
  *   5. el preaviso válido es 201 y su `fechaHabilitada` es el quinto día corrido
  *      contado desde el día del preaviso (ese día no cuenta);
  *   6. el corte no se ejecuta antes del quinto día (400, la fila queda en preaviso)
@@ -57,10 +59,24 @@ const U_ELECTRO = "cse-u-electro"
 const U_OTRA = "cse-u-otra"
 /** Unidad sin electrodependiente al preavisar: el dato se registra DESPUÉS. */
 const U_TARDIO = "cse-u-tardio"
+/** Unidad con UNA sola cuota vencida: no llega al mínimo legal. */
+const U_UNO = "cse-u-uno"
+/** Unidad con DOS cuotas vencidas: tampoco llega al mínimo legal. */
+const U_DOS = "cse-u-dos"
+/** Unidad sin ningún cobro emitido: cero cuotas vencidas. */
+const U_SIN_DEUDA = "cse-u-sin-deuda"
+/** Tres cuotas EMITIDAS con una pagada: sólo dos están vencidas. */
+const U_TRES_CON_PAGO = "cse-u-tres-pagado"
+/** Cuatro cuotas vencidas: la deuda derivada manda sobre lo que declare el cliente. */
+const U_CUATRO = "cse-u-cuatro"
+
+/** Fondo de gasto común al que los cobros de la fixture imputan (`CobroFI.fondoId`). */
+const FONDO_GC = "cse-fondo-gc"
 
 /** Acuerdo del Comité que autoriza el corte de la unidad U_MORA. */
 const ACUERDO_OK = "cse-ac-ok"
 const ACUERDO_OK_ELECTRO = "cse-ac-ok-electro"
+const ACUERDO_OK_CUATRO = "cse-ac-ok-cuatro"
 const ACUERDO_ABIERTO = "cse-ac-abierto"
 const ACUERDO_ASAMBLEA = "cse-ac-asamblea"
 const ACUERDO_OTRA_COMUNIDAD = "cse-ac-b"
@@ -79,6 +95,50 @@ const MS_POR_DIA = 24 * 60 * 60 * 1000
 /** Inicio del día UTC: lo que la regla llama «el quinto día». */
 function inicioDelDiaUTC(fecha: Date): number {
   return Date.UTC(fecha.getUTCFullYear(), fecha.getUTCMonth(), fecha.getUTCDate())
+}
+
+/**
+ * Período AAAA-MM de hace `meses` meses (UTC), contado desde hoy: la fixture no
+ * fija fechas absolutas, así el vencimiento de los cobros no depende del día en
+ * que corre la suite.
+ */
+function periodoHaceMeses(meses: number): string {
+  const hoy = new Date()
+  const fecha = new Date(
+    Date.UTC(hoy.getUTCFullYear(), hoy.getUTCMonth() - meses, 1)
+  )
+  return `${fecha.getUTCFullYear()}-${String(fecha.getUTCMonth() + 1).padStart(2, "0")}`
+}
+
+/**
+ * Cobro FI REAL de la fixture: el vencimiento cae el día 10 del período, así que
+ * todo período pasado cuenta como vencido (`estadoDeCobro`) mientras quede saldo.
+ */
+function cobroDeLaUnidad(opciones: {
+  id: string
+  unidadId: string
+  periodo: string
+  montoBase: number
+  pagos?: Array<{ id: string; monto: number; fecha: string; medio: string }>
+}) {
+  const { id, unidadId, periodo, montoBase } = opciones
+  return {
+    id,
+    comunidadId: COM_A,
+    unidadId,
+    periodo,
+    concepto: "gasto_comun",
+    origenModulo: "FI",
+    fondoId: FONDO_GC,
+    descripcion: `Gasto Común ${periodo}`,
+    montoBase,
+    lineas: [{ concepto: "gasto_comun", monto: montoBase, fondoId: FONDO_GC }],
+    fechaCargo: `${periodo}-01`,
+    fechaVencimiento: `${periodo}-10`,
+    moras: [],
+    pagos: opciones.pagos ?? [],
+    diferencias: [],
+  }
 }
 
 /** Forma de la vista que devuelven las cuatro rutas. */
@@ -148,9 +208,75 @@ describe("/api/cortes-servicio — corte de servicios por morosidad (F28)", () =
       datosUnidad(U_MORA, COM_A, "201"),
       datosUnidad(U_ELECTRO, COM_A, "202", true),
       datosUnidad(U_TARDIO, COM_A, "203"),
+      datosUnidad(U_UNO, COM_A, "204"),
+      datosUnidad(U_DOS, COM_A, "205"),
+      datosUnidad(U_SIN_DEUDA, COM_A, "206"),
+      datosUnidad(U_TRES_CON_PAGO, COM_A, "207"),
+      datosUnidad(U_CUATRO, COM_A, "208"),
       datosUnidad(U_OTRA, COM_B, "901"),
     ]) {
       await prisma.unidad.upsert({ where: { id: u.id }, update: {}, create: u })
+    }
+
+    // La morosidad que habilita el corte NO se declara en el cuerpo: la DERIVA la
+    // ruta de los cobros reales de la unidad (`morosidadPorUnidad`), así que la
+    // fixture tiene que sembrar los cobros que la ley cuenta. Se rehacen en cada
+    // corrida para que un cobro viejo con otro monto no mueva el resultado.
+    await prisma.cobroFI.deleteMany({
+      where: { comunidadId: { in: [COM_A, COM_B] } },
+    })
+    const cobros = [
+      // U_MORA: tres períodos vencidos que suman exactamente $1.234.567, la deuda
+      // que la fila guarda como snapshot y la que la bitácora escribe.
+      cobroDeLaUnidad({ id: "cse-cfi-mora-1", unidadId: U_MORA, periodo: periodoHaceMeses(3), montoBase: 411_522 }),
+      cobroDeLaUnidad({ id: "cse-cfi-mora-2", unidadId: U_MORA, periodo: periodoHaceMeses(2), montoBase: 411_522 }),
+      cobroDeLaUnidad({ id: "cse-cfi-mora-3", unidadId: U_MORA, periodo: periodoHaceMeses(1), montoBase: 411_523 }),
+      // U_ELECTRO: diez períodos vencidos, para que la electrodependencia bloquee
+      // CON deuda de sobra y no porque falten cuotas.
+      ...Array.from({ length: 10 }, (_, indice) =>
+        cobroDeLaUnidad({
+          id: `cse-cfi-electro-${indice + 1}`,
+          unidadId: U_ELECTRO,
+          periodo: periodoHaceMeses(10 - indice),
+          montoBase: 50_000,
+        })
+      ),
+      // U_TARDIO: tres vencidas, para que el preaviso del último caso sea 201 y la
+      // electrodependencia se registre DESPUÉS.
+      cobroDeLaUnidad({ id: "cse-cfi-tardio-1", unidadId: U_TARDIO, periodo: periodoHaceMeses(3), montoBase: 30_000 }),
+      cobroDeLaUnidad({ id: "cse-cfi-tardio-2", unidadId: U_TARDIO, periodo: periodoHaceMeses(2), montoBase: 30_000 }),
+      cobroDeLaUnidad({ id: "cse-cfi-tardio-3", unidadId: U_TARDIO, periodo: periodoHaceMeses(1), montoBase: 30_000 }),
+      // U_UNO: una sola cuota vencida.
+      cobroDeLaUnidad({ id: "cse-cfi-uno-1", unidadId: U_UNO, periodo: periodoHaceMeses(1), montoBase: 40_000 }),
+      // U_DOS: dos cuotas vencidas.
+      cobroDeLaUnidad({ id: "cse-cfi-dos-1", unidadId: U_DOS, periodo: periodoHaceMeses(2), montoBase: 60_000 }),
+      cobroDeLaUnidad({ id: "cse-cfi-dos-2", unidadId: U_DOS, periodo: periodoHaceMeses(1), montoBase: 60_000 }),
+      // U_TRES_CON_PAGO: tres cuotas emitidas; la última está pagada ENTERA, así
+      // que su estado es `pagado` y no cuenta como vencida.
+      cobroDeLaUnidad({ id: "cse-cfi-tres-1", unidadId: U_TRES_CON_PAGO, periodo: periodoHaceMeses(3), montoBase: 45_000 }),
+      cobroDeLaUnidad({ id: "cse-cfi-tres-2", unidadId: U_TRES_CON_PAGO, periodo: periodoHaceMeses(2), montoBase: 45_000 }),
+      cobroDeLaUnidad({
+        id: "cse-cfi-tres-3",
+        unidadId: U_TRES_CON_PAGO,
+        periodo: periodoHaceMeses(1),
+        montoBase: 45_000,
+        pagos: [
+          {
+            id: "cse-pago-tres-1",
+            monto: 45_000,
+            fecha: `${periodoHaceMeses(1)}-20`,
+            medio: "transferencia",
+          },
+        ],
+      }),
+      // U_CUATRO: cuatro períodos vencidos por $450.000 en total.
+      cobroDeLaUnidad({ id: "cse-cfi-cuatro-1", unidadId: U_CUATRO, periodo: periodoHaceMeses(4), montoBase: 100_000 }),
+      cobroDeLaUnidad({ id: "cse-cfi-cuatro-2", unidadId: U_CUATRO, periodo: periodoHaceMeses(3), montoBase: 100_000 }),
+      cobroDeLaUnidad({ id: "cse-cfi-cuatro-3", unidadId: U_CUATRO, periodo: periodoHaceMeses(2), montoBase: 100_000 }),
+      cobroDeLaUnidad({ id: "cse-cfi-cuatro-4", unidadId: U_CUATRO, periodo: periodoHaceMeses(1), montoBase: 150_000 }),
+    ]
+    for (const cobro of cobros) {
+      await prisma.cobroFI.create({ data: cobro })
     }
 
     const acuerdos = [
@@ -182,6 +308,17 @@ describe("/api/cortes-servicio — corte de servicios por morosidad (F28)", () =
         cuerpo: "comite",
         materia: "Corte de servicios de la unidad 203 (Ley 21.442 art. 20 N°9)",
         folio: "AD-2026-9005",
+        estado: "aprobado",
+        quorumRequerido: "un_voto_por_miembro",
+        resueltoEn: new Date("2026-02-10T12:00:00.000Z"),
+        creadoPor: "cse-usuario-admin",
+      },
+      {
+        id: ACUERDO_OK_CUATRO,
+        comunidadId: COM_A,
+        cuerpo: "comite",
+        materia: "Corte de servicios de la unidad 208 (Ley 21.442 art. 20 N°9)",
+        folio: "AD-2026-9006",
         estado: "aprobado",
         quorumRequerido: "un_voto_por_miembro",
         resueltoEn: new Date("2026-02-10T12:00:00.000Z"),
@@ -275,6 +412,9 @@ describe("/api/cortes-servicio — corte de servicios por morosidad (F28)", () =
       await prisma.corteServicio.deleteMany({
         where: { comunidadId: { in: [COM_A, COM_B] } },
       })
+      await prisma.cobroFI.deleteMany({
+        where: { comunidadId: { in: [COM_A, COM_B] } },
+      })
       await prisma.eventoAuditoria.deleteMany({
         where: { comunidadId: { in: [COM_A, COM_B] } },
       })
@@ -349,12 +489,15 @@ describe("/api/cortes-servicio — corte de servicios por morosidad (F28)", () =
     return coleccion.GET(new NextRequest(url, { method: "GET" }))
   }
 
+  /**
+   * Cuerpo del preaviso: unidad, servicio y acuerdo. La morosidad NO viaja acá
+   * —`cuotasImpagas` y `montoAdeudado` ya no existen en el contrato—: la deriva el
+   * servidor de los cobros de la unidad.
+   */
   const preaviso = (extra: Record<string, unknown> = {}) => ({
     unidadId: U_MORA,
     servicio: "electricidad",
     acuerdoId: ACUERDO_OK,
-    cuotasImpagas: 3,
-    montoAdeudado: 1_234_567,
     ...extra,
   })
 
@@ -430,7 +573,7 @@ describe("/api/cortes-servicio — corte de servicios por morosidad (F28)", () =
 
     await conSesion(EMAIL_ADMIN, async () => {
       const res = await POST_PREAVISO(
-        preaviso({ unidadId: U_ELECTRO, acuerdoId: ACUERDO_OK_ELECTRO, cuotasImpagas: 10 })
+        preaviso({ unidadId: U_ELECTRO, acuerdoId: ACUERDO_OK_ELECTRO })
       )
       expect(res.status).toBe(400)
       expect(((await res.json()) as { error: string }).error).toBe(dictamen.motivo)
@@ -441,9 +584,11 @@ describe("/api/cortes-servicio — corte de servicios por morosidad (F28)", () =
   })
 
   it("con menos de tres cuotas impagas el preaviso es 400 y no escribe", async () => {
+    // Las cuotas no se declaran: se cuentan de los cobros VENCIDOS de la unidad. La
+    // fixture tiene una unidad sin cobros, otra con una vencida y otra con dos.
     await conSesion(EMAIL_ADMIN, async () => {
-      for (const cuotasImpagas of [0, 1, 2]) {
-        const res = await POST_PREAVISO(preaviso({ cuotasImpagas }))
+      for (const unidadId of [U_SIN_DEUDA, U_UNO, U_DOS]) {
+        const res = await POST_PREAVISO(preaviso({ unidadId }))
         expect(res.status).toBe(400)
         expect(((await res.json()) as { error: string }).error).toBe(
           "No procede el corte: la ley exige tres o más cuotas impagas, continuas o discontinuas (Ley 21.442 art. 20 N°9)."
@@ -466,6 +611,8 @@ describe("/api/cortes-servicio — corte de servicios por morosidad (F28)", () =
       expect(vista.unidadNumero).toBe("201")
       expect(vista.acuerdoId).toBe(ACUERDO_OK)
       expect(vista.acuerdoFolio).toBe("AD-2026-9001")
+      // Tres períodos VENCIDOS de U_MORA por $1.234.567: el número y el monto los
+      // deriva el servidor de los cobros, no vienen del cuerpo.
       expect(vista.cuotasImpagas).toBe(3)
       expect(vista.montoAdeudado).toBe(1_234_567)
       expect(vista.creadoPor).toBe("cse-usuario-admin")
@@ -622,7 +769,7 @@ describe("/api/cortes-servicio — corte de servicios por morosidad (F28)", () =
   it("un segundo servicio, mientras uno está suspendido: 409 y no deja otra fila", async () => {
     await conSesion(EMAIL_ADMIN, async () => {
       const res = await POST_PREAVISO(
-        preaviso({ servicio: "telecomunicaciones", montoAdeudado: 500_000 })
+        preaviso({ servicio: "telecomunicaciones" })
       )
       expect(res.status).toBe(409)
       expect(((await res.json()) as { error: string }).error).toBe(
@@ -779,5 +926,83 @@ describe("/api/cortes-servicio — corte de servicios por morosidad (F28)", () =
         data: { electrodependiente: false },
       })
     }
+  })
+
+  it("una sola cuota vencida no habilita el corte aunque el cuerpo declare tres", async () => {
+    // El defecto que esto cierra: el cliente declaraba cuotasImpagas. Bastaba con
+    // mandar `3` para un deudor de UNA cuota y el preaviso se aceptaba, con el
+    // corte ilegal ejecutándose cinco días después. `cuotasImpagas` y
+    // `montoAdeudado` ya no existen en el contrato: viajan en el cuerpo y se
+    // descartan, y la decisión se toma con la deuda de la base.
+    const antes = await prisma.corteServicio.count({ where: { comunidadId: COM_A } })
+    await conSesion(EMAIL_ADMIN, async () => {
+      const res = await POST_PREAVISO({
+        ...preaviso({ unidadId: U_UNO }),
+        cuotasImpagas: 3,
+        montoAdeudado: 999_999,
+      })
+      expect(res.status).toBe(400)
+      expect(((await res.json()) as { error: string }).error).toBe(
+        "No procede el corte: la ley exige tres o más cuotas impagas, continuas o discontinuas (Ley 21.442 art. 20 N°9)."
+      )
+    })
+    expect(await prisma.corteServicio.count({ where: { comunidadId: COM_A } })).toBe(antes)
+    expect(
+      await prisma.corteServicio.count({ where: { comunidadId: COM_A, unidadId: U_UNO } })
+    ).toBe(0)
+  })
+
+  it("con tres o más cuotas vencidas persiste la morosidad derivada, no la declarada", async () => {
+    // U_CUATRO tiene cuatro períodos vencidos por $450.000 y el cuerpo manda otra
+    // cosa (99 cuotas y $1): lo que la fila guarda —y lo que la ejecución vuelve a
+    // juzgar— es la deuda de la base, el snapshot de por qué se autorizó el corte.
+    await conSesion(EMAIL_ADMIN, async () => {
+      const res = await POST_PREAVISO({
+        ...preaviso({ unidadId: U_CUATRO, acuerdoId: ACUERDO_OK_CUATRO }),
+        cuotasImpagas: 99,
+        montoAdeudado: 1,
+      })
+      expect(res.status).toBe(201)
+      const vista = (await res.json()) as VistaCorte
+      expect(vista.cuotasImpagas).toBe(4)
+      expect(vista.montoAdeudado).toBe(450_000)
+
+      const enBd = await prisma.corteServicio.findUnique({ where: { id: vista.id } })
+      expect(enBd?.cuotasImpagas).toBe(4)
+      expect(enBd?.montoAdeudado).toBe(450_000)
+      expect(enBd?.estado).toBe("preaviso")
+
+      const evento = await prisma.eventoAuditoria.findFirst({
+        where: {
+          comunidadId: COM_A,
+          tipoAccion: "FI_CORTE_PREAVISO",
+          referenciaId: vista.id,
+        },
+      })
+      expect(evento?.descripcion).toContain("4 cuota(s)")
+      expect(evento?.descripcion).toContain("450.000")
+      expect(evento?.descripcion).toContain("AD-2026-9006")
+    })
+  })
+
+  it("tres cuotas emitidas con una pagada no habilitan el corte: quedan dos vencidas", async () => {
+    // Tres cuotas EMITIDAS no son tres cuotas VENCIDAS: la pagada por completo está
+    // `pagado` y no cuenta. Ojo con el matiz: un pago PARCIAL tampoco la saca del
+    // vencido (`estadoDeCobro` mira el saldo pendiente), por eso la fixture paga
+    // esta cuota entera.
+    const antes = await prisma.corteServicio.count({ where: { comunidadId: COM_A } })
+    await conSesion(EMAIL_ADMIN, async () => {
+      const res = await POST_PREAVISO(preaviso({ unidadId: U_TRES_CON_PAGO }))
+      expect(res.status).toBe(400)
+      expect(((await res.json()) as { error: string }).error).toBe(
+        "No procede el corte: la ley exige tres o más cuotas impagas, continuas o discontinuas (Ley 21.442 art. 20 N°9)."
+      )
+    })
+    expect(await prisma.corteServicio.count({ where: { comunidadId: COM_A } })).toBe(antes)
+    expect(
+      await prisma.corteServicio.count({
+        where: { comunidadId: COM_A, unidadId: U_TRES_CON_PAGO },
+      })
+    ).toBe(0)
   })
 })

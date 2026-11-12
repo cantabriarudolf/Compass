@@ -79,6 +79,8 @@ model Comunidad {
   conveniosPago               ConvenioPago[]
   // F28 — trámite del corte de servicios por morosidad (Ley 21.442 art. 20 N°9).
   cortesServicio              CorteServicio[]
+  // F31 — presupuesto por partidas aprobado por comité o asamblea, según el reglamento.
+  presupuestos                Presupuesto[]
   bitacoraVisitasPE           BitacoraVisitaPE[]
   encomiendasPE               EncomiendaPE[]
   ingresosContratistasPE      IngresoContratistaPE[]
@@ -1623,6 +1625,55 @@ model CuotaConvenio {
   @@unique([convenioId, numero])
   @@index([comunidadId])
   @@map("convenios_pago_cuotas")
+}
+
+// F31 — presupuesto por partidas de un período (AAAA). El cuerpo que lo aprueba
+// lo define el reglamento de cada comunidad: el art. 17 faculta al comité a
+// aprobar presupuestos estimativos de gastos comunes y el art. 15 reserva
+// materias a la asamblea, así que el sistema REGISTRA cuál de los dos fue y lo
+// copia del acuerdo que lo aprueba —nunca lo asume—. El `total` es un snapshot:
+// la suma exacta de las partidas en el momento del alta.
+//
+// Una sola versión `vigente` por comunidad y período: la versión nueva reemplaza
+// a la anterior (estado `reemplazado`) en la misma transacción, así que la
+// historia queda legible y no conviven dos presupuestos del mismo período.
+model Presupuesto {
+  id          String    @id
+  comunidadId String
+  comunidad   Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  periodo     String // AAAA
+  cuerpo      String // comite | asamblea — copiado del acuerdo que lo aprueba
+  acuerdoId   String // acuerdo foliado que lo aprueba (estado y cuerpo verificados)
+  version     Int // 1, 2, 3… por comunidad y período
+  estado      String    @default("vigente") // vigente | reemplazado
+  total       Float // snapshot: suma exacta de las partidas al aprobar
+  creadoPor   String // usuario de sesión que registró el presupuesto
+  createdAt   DateTime  @default(now())
+
+  partidas PartidaPresupuesto[]
+
+  @@unique([comunidadId, periodo, version])
+  @@index([comunidadId, periodo, estado])
+  @@map("presupuestos")
+}
+
+// Partida del presupuesto: el desglose por concepto que exige la contabilidad
+// mensual (Reglamento de la Ley 21.442 art. 24). `categoria` usa el catálogo de
+// egresos FI (`CATEGORIAS_EGRESO_FI`) para que el presupuesto y la contabilidad
+// hablen de los mismos conceptos. `orden` es único por presupuesto: dos partidas
+// no pueden ocupar el mismo lugar del desglose.
+model PartidaPresupuesto {
+  id            String      @id
+  comunidadId   String
+  presupuestoId String
+  presupuesto   Presupuesto @relation(fields: [presupuestoId], references: [id], onDelete: Cascade)
+  nombre        String
+  categoria     String // sueldos | mantencion | servicios | administracion | uso_de_fondo | otro
+  monto         Float
+  orden         Int
+
+  @@unique([presupuestoId, orden])
+  @@map("partidas_presupuesto")
 }
 
 // Personal y Servicios (PE)

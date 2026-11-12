@@ -782,8 +782,15 @@ export const ServicioCortableSchema = z.enum(
 
 /**
  * Preaviso del corte. La ley exige AVISO AL DEUDOR con cinco días corridos y
- * acuerdo del Comité: por eso `acuerdoId` es obligatorio y la morosidad se declara
- * con su número de cuotas y su monto.
+ * acuerdo del Comité: por eso `acuerdoId` es obligatorio.
+ *
+ * La MOROSIDAD no viaja en el cuerpo: `cuotasImpagas` y `montoAdeudado` los deriva
+ * el servidor de los cobros de la unidad (`morosidadPorUnidad` de
+ * `lib/finanzas-utils.ts`), porque el número que habilita el corte es un HECHO de
+ * la base y no algo que declare quien pide el corte —si el cliente lo declarara,
+ * bastaría con mandar tres cuotas para un deudor de una y el corte ilegal pasaría
+ * el trámite—. Los campos que un cliente viejo siga enviando se descartan: no
+ * cambian el dictamen ni la fila.
  *
  * El `id`, la fecha del preaviso, la fecha habilitada (`preaviso + 5 días
  * corridos`), el estado inicial y quién lo registra los decide el servidor: nunca
@@ -794,14 +801,6 @@ export const CorteServicioPreavisoSchema = z.object({
   unidadId: IdEntidadSchema,
   servicio: ServicioCortableSchema,
   acuerdoId: IdEntidadSchema,
-  cuotasImpagas: z
-    .number({ required_error: "El número de cuotas impagas es obligatorio." })
-    .int("El número de cuotas impagas debe ser un entero.")
-    .min(0, "El número de cuotas impagas no puede ser negativo."),
-  montoAdeudado: z
-    .number({ required_error: "El monto adeudado es obligatorio." })
-    .finite("El monto adeudado debe ser un número finito.")
-    .min(0, "El monto adeudado no puede ser negativo."),
 })
 
 /** Ejecución del corte ya preavisado: el cliente nombra la fila y nada más. */
@@ -1516,6 +1515,55 @@ export const CATEGORIAS_EGRESO_FI = [
   "otro",
 ] as const
 export const CategoriaEgresoFISchema = z.enum(CATEGORIAS_EGRESO_FI)
+
+// --- Presupuesto por partidas (F31 — Ley 21.442 arts. 15 y 17) ---
+
+/**
+ * El período del presupuesto es el AÑO (AAAA), no el mes del cobro: se aprueba
+ * un presupuesto anual de partidas y las emisiones mensuales lo consumen después.
+ */
+export const PeriodoPresupuestoSchema = z
+  .string({ required_error: "El período es obligatorio." })
+  .regex(/^(19|20)\d{2}$/, "El período debe tener formato AAAA.")
+
+/**
+ * Partida del presupuesto: nombre, concepto y monto. La `categoria` usa el mismo
+ * catálogo que los egresos FI (`CATEGORIAS_EGRESO_FI`), así el desglose del
+ * presupuesto y la contabilidad mensual hablan de los mismos conceptos
+ * (Reglamento de la Ley 21.442 art. 24). El monto no puede ser negativo: una
+ * partida negativa no es un gasto presupuestable.
+ */
+export const PartidaPresupuestoSchema = z.object({
+  nombre: z
+    .string({ required_error: "El nombre de la partida es obligatorio." })
+    .trim()
+    .min(1, "El nombre de la partida es obligatorio.")
+    .max(120, "El nombre de la partida no puede superar los 120 caracteres."),
+  categoria: CategoriaEgresoFISchema,
+  monto: z
+    .number({ required_error: "El monto de la partida es obligatorio." })
+    .finite("El monto de la partida debe ser un número finito.")
+    .nonnegative("El monto de la partida no puede ser negativo."),
+})
+
+/**
+ * Alta del presupuesto: el período, el acuerdo que lo aprueba y las partidas.
+ *
+ * El `id`, la versión, el cuerpo, el estado, el total y quién lo registra los
+ * decide el servidor: el cuerpo y el estado se LEEN del acuerdo (nunca vienen
+ * del cliente, porque el reglamento define quién aprueba) y el total se suma de
+ * las partidas en centavos enteros.
+ */
+export const PresupuestoCreacionSchema = z.object({
+  periodo: PeriodoPresupuestoSchema,
+  acuerdoId: IdEntidadSchema,
+  partidas: z
+    .array(PartidaPresupuestoSchema)
+    .min(1, "El presupuesto debe tener al menos una partida."),
+})
+
+export type PresupuestoCreacion = z.infer<typeof PresupuestoCreacionSchema>
+export type PartidaPresupuesto = z.infer<typeof PartidaPresupuestoSchema>
 
 export const EgresoFISchema = z.object({
   id: IdEntidadSchema,

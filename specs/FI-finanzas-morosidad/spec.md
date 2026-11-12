@@ -267,6 +267,47 @@ El sistema SHALL permitir a la administración suscribir un convenio de pago de 
 - **WHEN** se llaman las tres rutas sin sesión, o con un rol que no tiene `fi:cobranza`
 - **THEN** responden 401 y 403 respectivamente, y el intento rechazado no deja convenios ni cuotas
 
+### Requirement: Presupuesto por Partidas
+El sistema SHALL registrar el presupuesto por partidas de un período (AAAA) aprobado por **el cuerpo que el reglamento de la comunidad defina**. La Ley 21.442 faculta al **Comité** a aprobar presupuestos estimativos de gastos comunes (art. 17) y reserva materias a la **Asamblea** (art. 15): cuál de los dos aprueba las partidas NO SHALL elegirlo el sistema. El alta (`POST /api/presupuestos`, guard `fi:gasto_comun` crear) SHALL exigir un **acuerdo de esta comunidad en estado `aprobado`** —leído de la tabla `Acuerdo`, nunca declarado por el cliente—, MUST responder 400 con el motivo si el acuerdo no existe en la comunidad, no está aprobado o su cuerpo no es `comite` ni `asamblea`, y en ese caso NO SHALL escribir ninguna fila. El `cuerpo` del presupuesto SHALL **copiarse del acuerdo** que lo aprueba, de modo que el registro conserve quién aprobó y no lo asuma.
+
+El presupuesto SHALL persistirse en el modelo aditivo `Presupuesto` (tabla `presupuestos`: período, cuerpo `comite|asamblea`, acuerdo que lo aprueba, versión, estado `vigente|reemplazado`, total, quién lo registró) con sus `PartidaPresupuesto` (tabla `partidas_presupuesto`: nombre, categoría del catálogo de egresos FI —el desglose por concepto del Reglamento art. 24—, monto y orden único por presupuesto), con índice único `(comunidadId, periodo, version)`. Las **partidas vacías o con monto negativo** NO SHALL constituir presupuesto (400 y ninguna fila). El `total` SHALL ser la suma **exacta** de las partidas en centavos enteros y SHALL persistirse como **snapshot** de lo aprobado: una partida que cambie después no reescribe el presupuesto. La regla que decide el total, la habilitación y la validez de las partidas SHALL ser pura (`totalDePartidas`, `presupuestoPermitido`, `validarPartidas` en `lib/presupuesto.ts`: sin base ni reloj).
+
+Una comunidad MUST NOT tener dos presupuestos `vigente` del mismo período: un alta nueva del mismo período SHALL ser la **versión siguiente** y el vigente anterior SHALL quedar `reemplazado` en la MISMA transacción que escribe el nuevo, conservando sus partidas y su total para que la historia siga legible. La versión y el reemplazo se resuelven dentro de la transacción (el índice único es la garantía dura contra la carrera) y NO SHALL existir una ruta separada de reemplazo. La lectura (`GET /api/presupuestos`, guard `fi:gasto_comun` ver) SHALL devolver todas las versiones de la comunidad de la sesión con sus partidas ordenadas, su estado y su total persistido, en un número FIJO de consultas, y NUNCA SHALL devolver presupuestos de otra comunidad. Toda escritura SHALL auditar `FI_PRESUPUESTO_CREADO` con el período, la versión, el cuerpo aprobador, el total y el folio del acuerdo, en la misma transacción. NO SHALL existir PUT ni DELETE: un presupuesto aprobado es evidencia y se cambia aprobando otro.
+
+Frontera deliberada: la **emisión de gastos comunes contra el presupuesto** no es parte de esta capacidad todavía. La emisión mensual sigue recibiendo su monto a repartir y no consume estas partidas; queda declarado como deuda en `specs/PENDIENTES-FUNCIONALIDAD.md`.
+
+#### Scenario: El cuerpo aprobador sale del acuerdo
+- **WHEN** la asamblea aprueba el presupuesto de 2026 y después el comité aprueba la versión revisada del mismo período
+- **THEN** la primera versión queda con cuerpo `asamblea` y la segunda con cuerpo `comite`: el sistema copia el cuerpo de cada acuerdo y nunca lo asume
+
+#### Scenario: Sin acuerdo aprobado no hay presupuesto
+- **WHEN** se intenta crear un presupuesto citando un acuerdo inexistente en la comunidad, uno que sigue `abierto` o uno de cuerpo `consejo`
+- **THEN** cada intento responde 400 con el motivo que falta y la base no gana ni presupuesto ni partidas
+
+#### Scenario: El total exacto queda como snapshot
+- **WHEN** se aprueba un presupuesto de partidas $333.333,33 + $333.333,33 + $333.333,34
+- **THEN** el total persistido es exactamente $1.000.000, igual a la suma en centavos de las partidas, y la respuesta lo devuelve junto con el folio del acuerdo que lo aprueba
+
+#### Scenario: Una sola versión vigente por período
+- **WHEN** se registra un segundo presupuesto del mismo período
+- **THEN** queda como versión 2 en estado `vigente`, la versión 1 pasa a `reemplazado` en la misma transacción y sólo una versión del período queda vigente
+
+#### Scenario: El reemplazo conserva la historia
+- **WHEN** se lee el presupuesto después de un reemplazo
+- **THEN** las dos versiones aparecen con su estado y su cuerpo, y las partidas y el total de la versión reemplazada no se borraron ni se reescribieron
+
+#### Scenario: Partidas vacías o monto negativo rechazados
+- **WHEN** el alta envía una lista de partidas vacía o una partida con monto negativo
+- **THEN** responde 400 y no queda ninguna fila del período
+
+#### Scenario: La lectura del presupuesto no cruza comunidades
+- **WHEN** se leen los presupuestos con un `?comunidadId=` de otra comunidad en la URL
+- **THEN** la respuesta trae sólo las versiones de la comunidad de la sesión, con sus partidas ordenadas y su total persistido, y ningún presupuesto ajeno
+
+#### Scenario: Sin sesión y sin la clave del gasto común
+- **WHEN** se llaman las dos rutas sin sesión, o con un rol que no tiene `fi:gasto_comun`
+- **THEN** responden 401 y 403 respectivamente, y el intento rechazado no deja presupuestos ni partidas
+
 ### Requirement: Pagos con Ajuste Manual e Informe de Diferencia Inmutable
 Al recibir un pago, el sistema MUST cargar el monto exigible exacto (deuda base + moras − pagos previos) mediante `registrarPagoFI(cobroId, pago)`. Si el administrador ingresa un monto distinto (descuento a favor del residente o recargo a favor de la comunidad), el sistema MUST exigir justificación obligatoria, procesar el pago y generar un informe de diferencia inmutable (sin acciones de edición ni borrado) que registra esperado, recibido, diferencia, tipo y justificación; audita `FI_RECEIVE_PAYMENT` y, ante ajuste, también `FI_MANUAL_DISCOUNT`.
 
@@ -515,14 +556,26 @@ revocación y quién cursó el preaviso) y la unidad SHALL llevar el hecho
 de la petición: una prohibición legal no se declara desde el cliente. El estado
 inicial, la fecha del preaviso y la fecha habilitada los SHALL decidir el servidor.
 
+Las **cuotas impagas y el monto adeudado NO SHALL venir del cuerpo de la
+petición**: las SHALL derivar el servidor de los `CobroFI` de la unidad con
+`morosidadPorUnidad` (`lib/finanzas-utils.ts`, el mismo cálculo con el que el
+dashboard de morosos decide qué unidad está atrasada), en una sola consulta para
+la unidad, y SHALL persistir esos dos números DERIVADOS como snapshot de por qué se
+autorizó el corte —la ejecución los vuelve a juzgar—. Un cuerpo que envíe
+`cuotasImpagas` o `montoAdeudado` NO SHALL alterar el dictamen ni la fila: los
+campos se descartan, porque la deuda que habilita el corte es un hecho de la base
+y no una declaración de quien pide el corte.
+
 Las cuatro rutas de `/api/cortes-servicio` SHALL exigir el recurso `fi:cobranza` de
 la matriz —el corte es el último acto de la cobranza: la administración lo ejecuta,
 el Comité lo audita— y SHALL resolver SIEMPRE la comunidad desde la sesión, nunca
 desde el cliente. `POST /api/cortes-servicio` (crear) SHALL exigir un acuerdo de
 esta comunidad, del cuerpo `comite` y en estado `aprobado` (400 con el motivo si
-falta alguna condición), SHALL devolver 404 para la unidad de otra comunidad, 400
-para el dictamen de la regla pura y 409 si la unidad ya tiene un corte vigente del
-mismo servicio o si otro servicio está suspendido. `POST /api/cortes-servicio/ejecutar`
+falta alguna condición), SHALL derivar los PERÍODOS VENCIDOS de la unidad —el
+número que juzga el dictamen, nunca uno declarado en el cuerpo—, SHALL devolver 404
+para la unidad de otra comunidad, 400 para el dictamen de la regla pura y 409 si la
+unidad ya tiene un corte vigente del mismo servicio o si otro servicio está
+suspendido. `POST /api/cortes-servicio/ejecutar`
 (editar) SHALL releer la unidad y el acuerdo, volver a aplicar el dictamen con los
 datos del momento del corte —el `electrodependiente` puede haberse registrado
 después del preaviso— y cambiar el estado con una actualización CONDICIONAL
@@ -545,14 +598,26 @@ la comunidad): queda declarada como deuda en `specs/PENDIENTES-FUNCIONALIDAD.md`
 la ruta no la inventa leyendo el cuerpo de la petición.
 
 #### Scenario: Tres cuotas impagas habilitan el preaviso
-- **WHEN** la administración cursa el preaviso de un servicio con tres o más cuotas
-  impagas, continuas o discontinuas, sobre una unidad sin prohibiciones
-- **THEN** el alta responde 201, la fila queda en `preaviso` y la `fechaHabilitada`
+- **WHEN** la administración cursa el preaviso de un servicio sobre una unidad sin
+  prohibiciones que registra tres o más cuotas vencidas, continuas o discontinuas,
+  en sus `CobroFI` (la deuda la deriva el servidor; el cuerpo no la declara)
+- **THEN** el alta responde 201, la fila queda en `preaviso` con el número de
+  cuotas y el monto DERIVADOS persistidos y la `fechaHabilitada`
   es el quinto día corrido contado desde el día del preaviso
 
 #### Scenario: Menos de tres cuotas no habilita el corte
-- **WHEN** el preaviso declara cero, una o dos cuotas impagas
+- **WHEN** la unidad registra cero, una o dos cuotas vencidas en sus `CobroFI`
 - **THEN** responde 400 con el motivo de la regla pura y no queda ninguna fila
+
+#### Scenario: La deuda se deriva de los cobros y no del cuerpo
+- **WHEN** el preaviso de una unidad con UNA sola cuota vencida envía
+  `cuotasImpagas: 3` en el cuerpo, o el de una unidad con cuatro cuotas vencidas
+  envía `cuotasImpagas: 99` y `montoAdeudado: 1`
+- **THEN** el primero responde 400 con el motivo de las tres cuotas y no deja
+  ninguna fila (el campo se descarta), y el segundo responde 201 con el número de
+  cuotas y el monto DERIVADOS de la base persistidos en la fila y en la auditoría;
+  una unidad con tres cuotas emitidas de las que una está pagada tampoco habilita
+  el corte, porque esa cuota no está vencida
 
 #### Scenario: Sin acuerdo aprobado del Comité no hay preaviso
 - **WHEN** el acuerdo no existe en la comunidad, es de asamblea o sigue `abierto`

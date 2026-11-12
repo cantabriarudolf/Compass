@@ -15,15 +15,17 @@
  *   · el acuerdo se LEE de la base (U3) y tiene que ser de esta comunidad, del
  *     Comité y estar `aprobado` (400 con el motivo si no);
  *   · el dictamen lo da `cortePermitido` con la electrodependencia LEÍDA DE LA
- *     UNIDAD —el cliente no la declara— y con la morosidad declarada;
+ *     UNIDAD y con la morosidad DERIVADA de los cobros de esa unidad: el cliente
+ *     no declara ni la una ni la otra, porque las dos son hechos de la base;
  *   · un servicio no se preavisa dos veces mientras el primero siga vigente y no
  *     se preavisa otro mientras uno esté ejecutado (409);
  *   · la fecha habilitada la calcula el servidor: `preaviso + 5 días corridos`.
  *
- * - POST: guard `fi:cobranza` + crear. Escribe el preaviso y el evento
- *   `FI_CORTE_PREAVISO` en UNA transacción, con la comprobación de «un corte
- *   vigente por servicio» DENTRO de esa transacción (leerla afuera dejaría la
- *   ventana abierta entre la lectura y el alta).
+ * - POST: guard `fi:cobranza` + crear. Deriva la deuda de los `CobroFI` de la
+ *   unidad (`morosidadPorUnidad`) y escribe el preaviso con esos números como
+ *   snapshot, junto al evento `FI_CORTE_PREAVISO` en UNA transacción, con la
+ *   comprobación de «un corte vigente por servicio» DENTRO de esa transacción
+ *   (leerla afuera dejaría la ventana abierta entre la lectura y el alta).
  * - GET: guard `fi:cobranza` + ver. Acotado a la comunidad de la sesión —el
  *   `comunidadId` nunca viene del cliente— y leído en un número FIJO de consultas:
  *   los cortes en una, el conteo en otra y los nombres (unidad y folio del
@@ -32,12 +34,14 @@
  * La ejecución y la revocación van por sus propias rutas: son actos distintos del
  * preaviso y no comparten guard ni estado de entrada.
  */
-import { CorteServicioPreavisoSchema } from "@/lib/schemas"
+import { CorteServicioPreavisoSchema, type CobroFI } from "@/lib/schemas"
 import { puede } from "@/lib/authz"
 import { prisma } from "@/lib/prisma"
 import { logger } from "@/lib/logger"
 import { generarId } from "@/lib/id-utils"
 import { registrarEventoAuditoria } from "@/lib/auditoria"
+import { hoyISO } from "@/lib/date-utils"
+import { morosidadPorUnidad } from "@/lib/finanzas-utils"
 import {
   cortePermitido,
   fechaHabilitadaDelCorte,
@@ -156,6 +160,36 @@ export async function POST(req: Request): Promise<Response> {
     (corte) => corte.servicio !== datos.servicio && corte.estado === "ejecutado"
   )
 
+  // La DEUDA es un hecho de la base y no una declaración de quien pide el corte.
+  // Se deriva de los cobros REALES de la unidad con la MISMA función que el
+  // dashboard de morosos usa para resaltar qué unidad está atrasada
+  // (`morosidadPorUnidad`), así el trámite y la pantalla no pueden contar distinto:
+  // una sola consulta para esa unidad, nunca una por cobro, y el recorte por fecha
+  // lo hace la función pura con el día de hoy. Si se tomara del cuerpo de la
+  // petición, mandar `cuotasImpagas: 3` para un deudor de una cuota bastaría para
+  // que el preaviso se acepte y el corte ilegal se ejecute cinco días después.
+  const cobrosDeLaUnidad = await prisma.cobroFI.findMany({
+    where: { comunidadId: scope.comunidadId, unidadId: unidad.id },
+    select: {
+      id: true,
+      unidadId: true,
+      periodo: true,
+      montoBase: true,
+      moras: true,
+      pagos: true,
+      fechaVencimiento: true,
+    },
+  })
+  // SAFETY: `morosidadPorUnidad` sólo lee de cada cobro su unidad, su período, su
+  // monto base, sus moras, sus pagos y su vencimiento —todos seleccionados arriba—
+  // y el cálculo pasa por `estadoDeCobro`/`saldoPendiente`, los mismos helpers del
+  // resto de la app. Las columnas Json tienen la forma de los esquemas FI.
+  const morosidad = morosidadPorUnidad(
+    unidad.id,
+    cobrosDeLaUnidad as unknown as CobroFI[],
+    hoyISO()
+  )
+
   // El dictamen de la regla pura es la autoridad de la DECISIÓN. El texto de cada
   // rechazo se escribe literal (el guardián de mensajes no audita nombres) y
   // `test/api/cortes-servicio.test.ts` compara el cuerpo devuelto con el motivo de
@@ -174,7 +208,7 @@ export async function POST(req: Request): Promise<Response> {
   // pide el corte declararía que no hay catástrofe—. Queda declarado como deuda en
   // `specs/PENDIENTES-FUNCIONALIDAD.md`.
   const dictamen = cortePermitido({
-    cuotasImpagas: datos.cuotasImpagas,
+    cuotasImpagas: morosidad.periodosVencidos,
     electrodependiente: unidad.electrodependiente,
     deudaDeCatastrofe: false,
     otroServicioYaCortado,
@@ -227,8 +261,12 @@ export async function POST(req: Request): Promise<Response> {
           unidadId: unidad.id,
           servicio: datos.servicio,
           acuerdoId: acuerdo.id,
-          cuotasImpagas: datos.cuotasImpagas,
-          montoAdeudado: datos.montoAdeudado,
+          // El número de cuotas y el monto son el SNAPSHOT de por qué se permitió
+          // el corte: se persisten los DERIVADOS de la base. La ejecución los
+          // vuelve a juzgar (`POST /api/cortes-servicio/ejecutar`), así que un
+          // valor declarado por el cliente dejaría el corte ilegal en pie.
+          cuotasImpagas: morosidad.periodosVencidos,
+          montoAdeudado: morosidad.deudaVencida,
           fechaPreaviso: ahora,
           fechaHabilitada,
           estado: "preaviso",
@@ -245,7 +283,7 @@ export async function POST(req: Request): Promise<Response> {
           categoria: "FI",
           tipoAccion: "FI_CORTE_PREAVISO",
           referenciaId: fila.id,
-          descripcion: `Se cursó el preaviso de corte de ${datos.servicio} a la unidad ${unidad.numero}: ${datos.cuotasImpagas} cuota(s) impaga(s) por ${pesos(datos.montoAdeudado)}, habilitado desde el ${fechaHabilitada.toISOString()}; autorizado por el acuerdo ${acuerdo.folio} del Comité (Ley 21.442 art. 20 N°9).`,
+          descripcion: `Se cursó el preaviso de corte de ${datos.servicio} a la unidad ${unidad.numero}: ${morosidad.periodosVencidos} cuota(s) impaga(s) por ${pesos(morosidad.deudaVencida)}, habilitado desde el ${fechaHabilitada.toISOString()}; autorizado por el acuerdo ${acuerdo.folio} del Comité (Ley 21.442 art. 20 N°9).`,
         },
         tx
       )
