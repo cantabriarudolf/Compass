@@ -226,6 +226,11 @@ const data = {
           url: "/admin/gestion/convenios",
           roles: ["administrador", "comite"],
         },
+        {
+          title: "Conciliación Bancaria",
+          url: "/admin/gestion/conciliacion",
+          roles: ["administrador", "comite"],
+        },
         { title: "Maestros Administrativos", url: "/admin/maestros", roles: ["administrador"] },
         { title: "Configuración", url: "/admin/configuracion", roles: ["administrador"] },
         { title: "Permisos", url: "/admin/permisos", roles: ["administrador"] },
