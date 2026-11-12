@@ -10,8 +10,15 @@
  * Guard `fi:cobranza` + editar (el mismo recurso del alta: el pago es cobranza).
  * El convenio y la cuota se resuelven acotados a la comunidad de la sesión (404 si
  * no existen ahí), la cuota ya pagada responde 409 sin reescribir la fila, y todo
- * el efecto —cuota, estado del convenio y evento `FI_CONVENIO_PAGO`— ocurre en UNA
- * transacción.
+ * el efecto —cuota, cargo FI, estado del convenio y evento `FI_CONVENIO_PAGO`—
+ * ocurre en UNA transacción.
+ *
+ * El pago también se registra en el `CobroFI` que le corresponde a la cuota, con
+ * el MISMO mecanismo del módulo FI: una entrada en `pagos` con `{id, monto, fecha,
+ * medio}`, nunca una segunda fila de pago. El cargo se resuelve por el convenio de
+ * origen (`origenRef`) y el período de vencimiento de la cuota; si la cuota no
+ * tiene ese cargo —un convenio anterior a la integración contable— el pago no se
+ * marca en falso: responde 409 y la transacción no deja nada.
  *
  * Por qué la ruta es una colección y no `/[id]/pago`: el inventario de rutas con
  * segmento dinámico (`test/api/permisos-por-objeto-inventario.test.ts`) exige que
@@ -20,7 +27,7 @@
  * El `convenioId` viaja en el cuerpo, se resuelve scoped y la prueba de pertenencia
  * es la misma que probaría un segmento de URL.
  */
-import { PagoCuotaConvenioSchema } from "@/lib/schemas"
+import { PagoCuotaConvenioSchema, PagoCobroFISchema, type PagoCobroFI } from "@/lib/schemas"
 import { puede } from "@/lib/authz"
 import { prisma } from "@/lib/prisma"
 import { logger } from "@/lib/logger"
@@ -37,6 +44,9 @@ const RECURSO_CONVENIOS = "fi:cobranza"
 
 /** Centinela para distinguir el conflicto de negocio de una falla real. */
 const CUOTA_YA_PAGADA = "CONVENIO_CUOTA_YA_PAGADA"
+
+/** La cuota existe pero no tiene el cargo FI que la contabilidad exige. */
+const CARGO_FI_DE_LA_CUOTA_AUSENTE = "CONVENIO_CARGO_FI_AUSENTE"
 
 /**
  * Los textos de error van LITERALES en cada `jsonError`, no en constantes: el
@@ -72,9 +82,10 @@ export async function POST(req: Request): Promise<Response> {
 
   const convenio = await prisma.convenioPago.findFirst({
     where: { id: convenioId, comunidadId: scope.comunidadId },
-    // Sólo el id: la vista se rearma desde la base dentro de la transacción, así que
-    // leer los demás campos acá sería una segunda verdad a medio actualizar.
-    select: { id: true },
+    // Sólo lo que hace falta para resolver el cargo: la vista se rearma desde la
+    // base dentro de la transacción, así que leer los demás campos acá sería una
+    // segunda verdad a medio actualizar.
+    select: { id: true, unidadId: true },
   })
   if (!convenio) return jsonError(404, "Convenio no encontrado.")
 
@@ -84,12 +95,31 @@ export async function POST(req: Request): Promise<Response> {
       convenioId: convenio.id,
       numero,
     },
-    select: { id: true, numero: true, monto: true, estado: true },
+    select: { id: true, numero: true, monto: true, estado: true, venceEn: true },
   })
   if (!cuota) return jsonError(404, "Cuota no encontrada.")
   if (cuota.estado === "pagada") return jsonError(409, "La cuota ya está pagada.")
 
   const ahora = new Date()
+
+  /**
+   * El pago se arma con la MISMA forma que escribe el módulo FI (`PagoCobroFI`):
+   * id, monto, fecha y medio. El convenio no captura el medio real del dinero
+   * (efectivo o transferencia), así que se declara el origen del registro.
+   */
+  const periodoDeLaCuota = cuota.venceEn.toISOString().slice(0, 7)
+  const pagoCandidato: PagoCobroFI = {
+    id: generarId("pag"),
+    monto: cuota.monto,
+    fecha: ahora.toISOString().slice(0, 10),
+    medio: "convenio",
+  }
+  const validacionPago = PagoCobroFISchema.safeParse(pagoCandidato)
+  if (!validacionPago.success) {
+    return jsonError(400, "Datos inválidos.", {
+      detalles: validacionPago.error.flatten(),
+    })
+  }
 
   try {
     const vista = await prisma.$transaction(async (tx) => {
@@ -105,6 +135,26 @@ export async function POST(req: Request): Promise<Response> {
         },
       })
       if (tomada.count === 0) throw new Error(CUOTA_YA_PAGADA)
+
+      // El pago queda también en el cargo FI de la cuota, con el mecanismo del
+      // módulo FI (la entrada de `pagos` del cobro): no se crea un segundo pago.
+      const cobro = await tx.cobroFI.findFirst({
+        where: {
+          comunidadId: scope.comunidadId,
+          origenModulo: "FI",
+          origenRef: convenio.id,
+          unidadId: convenio.unidadId,
+          periodo: periodoDeLaCuota,
+        },
+        select: { id: true, pagos: true },
+      })
+      if (!cobro) throw new Error(CARGO_FI_DE_LA_CUOTA_AUSENTE)
+      // SAFETY: pagos es Json con shape PagoCobroFI[] validado por CobroFISchema.
+      const pagosDelCobro = (cobro.pagos ?? []) as unknown as PagoCobroFI[]
+      await tx.cobroFI.update({
+        where: { id: cobro.id },
+        data: { pagos: [...pagosDelCobro, validacionPago.data] as never },
+      })
 
       // ¿Quedó deuda? Se cuenta después de marcar: si es la última, el convenio se
       // cierra como `saldado` en la misma transacción.
@@ -148,6 +198,12 @@ export async function POST(req: Request): Promise<Response> {
   } catch (e) {
     if (e instanceof Error && e.message === CUOTA_YA_PAGADA) {
       return jsonError(409, "La cuota ya está pagada.")
+    }
+    if (e instanceof Error && e.message === CARGO_FI_DE_LA_CUOTA_AUSENTE) {
+      return jsonError(
+        409,
+        "La cuota no tiene un cargo FI asociado en la contabilidad: el pago no se puede registrar."
+      )
     }
     logger.error({ err: e }, "[api/convenios/pago] error inesperado al registrar el pago")
     return jsonError(500, "Error interno del servidor.")

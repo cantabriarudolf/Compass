@@ -11,12 +11,16 @@
  *     escribe (400 con el motivo);
  *   · la primera cuota se registra PAGADA en la fecha de suscripción y no se
  *     genera como deuda; las demás salen de la regla pura `cuotasDelConvenio`;
- *   · una unidad no puede tener dos convenios `vigente` a la vez (409).
+ *   · una unidad no puede tener dos convenios `vigente` a la vez (409);
+ *   · cada cuota 1..N nace como un `CobroFI` imputado al fondo de gasto común
+ *     ACTIVO de la comunidad (sin ese fondo no hay convenio: 400 y cero filas),
+ *     porque la deuda del convenio tiene que ser la que el sistema cobra.
  *
  * - POST: guard `fi:cobranza` + crear (administración; el comité autoriza por el
  *   acuerdo y audita por la lectura, según la matriz). Escribe el convenio, sus
- *   cuotas y el evento `FI_CONVENIO_CREADO` en UNA transacción: o existe el
- *   convenio foliado por su acuerdo, o no existe nada.
+ *   cuotas, sus cargos FI y los eventos `FI_CONVENIO_CREADO` / `FI_CONVENIO_CARGOS`
+ *   en UNA transacción: o existe el convenio foliado por su acuerdo, o no existe
+ *   nada.
  * - GET: guard `fi:cobranza` + ver. Acotado a la comunidad de la sesión —el
  *   `comunidadId` nunca viene del cliente— y leído en un número FIJO de consultas:
  *   los convenios con sus cuotas en una, el conteo en otra, y los nombres (unidad,
@@ -25,9 +29,13 @@
  *
  * No hay PUT ni DELETE: un convenio suscrito es un hecho con cuotas emitidas, no
  * se reescribe. La anulación es una decisión de negocio que todavía no existe y
- * no se simula.
+ * no se simula. El archivo del convenio firmado tampoco: el instrumento vale por
+ * la firma del deudor y generarlo sin ella sería mentir en el archivo.
  */
-import { ConvenioPagoCreacionSchema } from "@/lib/schemas"
+import {
+  CobroFIEscrituraCompletaSchema,
+  ConvenioPagoCreacionSchema,
+} from "@/lib/schemas"
 import { puede } from "@/lib/authz"
 import { prisma } from "@/lib/prisma"
 import { logger } from "@/lib/logger"
@@ -120,7 +128,27 @@ export async function POST(req: Request): Promise<Response> {
     return jsonError(400, "No se puede suscribir el convenio: el acuerdo no está aprobado.")
   }
 
+  // El fondo de imputación se resuelve ANTES de abrir la transacción que escribe,
+  // igual que la emisión de gasto común: sin un fondo de gasto común activo no hay
+  // dónde imputar la deuda del convenio y no se escribe ni el convenio.
+  const fondoGC = await prisma.fondoFI.findFirst({
+    where: {
+      comunidadId: scope.comunidadId,
+      tipo: "gasto_comun",
+      activo: true,
+    },
+    select: { id: true, nombre: true },
+  })
+  if (!fondoGC) {
+    return jsonError(
+      400,
+      "No se puede suscribir el convenio: la comunidad no tiene un fondo de gasto común activo donde imputar las cuotas."
+    )
+  }
+
   const ahora = new Date()
+  // El cargo FI se registra el día de la firma; el vencimiento es el de la cuota.
+  const fechaCargo = ahora.toISOString().slice(0, 10)
 
   // La fecha de suscripción es AHORA (la decide el servidor) y es el ancla de los
   // vencimientos mensuales: la regla pura no lee el reloj.
@@ -178,6 +206,55 @@ export async function POST(req: Request): Promise<Response> {
     })),
   ]
 
+  /**
+   * Los cargos FI de las cuotas 1..N: la deuda del convenio tiene que ser la que
+   * el sistema cobra, no una fila paralela. La cuota 0 NO se carga: se pagó al
+   * suscribir y contarla otra vez cobraría dos veces el mismo dinero.
+   *
+   * El período es el mes en que la cuota VENCE: el cargo pertenece a la deuda de
+   * ese mes y esa columna es la clave con la que el pago encuentra su cobro. El
+   * concepto es `gasto_comun` (el catálogo FI no tiene un concepto de convenio y
+   * no se inventa uno), y la línea repite el monto de la cuota para que la suma
+   * del detalle sea exactamente el monto base (S5).
+   */
+  const cargosDelConvenio: Record<string, unknown>[] = []
+  for (const cuota of cuotasDelSaldo) {
+    const fechaVenceCuota = cuota.venceEn.toISOString()
+    const candidato = {
+      id: generarId("cob", cuota.numero),
+      unidadId: unidad.id,
+      periodo: fechaVenceCuota.slice(0, 7),
+      concepto: "gasto_comun",
+      origenModulo: "FI",
+      origenRef: convenioId,
+      fondoId: fondoGC.id,
+      descripcion: `Convenio de pago ${convenioId}: cuota ${cuota.numero} de ${datos.numeroCuotas}`,
+      montoBase: cuota.monto,
+      lineas: [
+        { concepto: "gasto_comun", monto: cuota.monto, fondoId: fondoGC.id },
+      ],
+      fechaCargo,
+      fechaVencimiento: fechaVenceCuota.slice(0, 10),
+      moras: [],
+      pagos: [],
+      diferencias: [],
+    }
+    const validacion = CobroFIEscrituraCompletaSchema.safeParse(candidato)
+    if (!validacion.success) {
+      // El cargo lo arma esta ruta, no el cliente: llegar acá es un defecto del
+      // contrato interno, y no se persiste a ciegas.
+      return jsonError(400, "Datos inválidos.", {
+        detalles: validacion.error.flatten(),
+      })
+    }
+    // El tenant no es parte del contrato de lectura/escritura del cobro: lo pone
+    // el servidor desde el scope, nunca el cuerpo.
+    cargosDelConvenio.push({
+      ...(validacion.data as unknown as Record<string, unknown>),
+      comunidadId: scope.comunidadId,
+    })
+  }
+
   try {
     const vista = await prisma.$transaction<ConvenioEnLaVista>(async (tx) => {
       // «Un solo convenio vigente por unidad» se verifica DENTRO de la transacción
@@ -212,6 +289,10 @@ export async function POST(req: Request): Promise<Response> {
 
       await tx.cuotaConvenio.createMany({ data: cuotasAcrear })
 
+      // Los cargos FI de la deuda, en la MISMA transacción: un convenio sin sus
+      // cargos sería un trámite que la contabilidad no conoce.
+      await tx.cobroFI.createMany({ data: cargosDelConvenio as never })
+
       await registrarEventoAuditoria(
         {
           id: generarId("ev"),
@@ -222,6 +303,21 @@ export async function POST(req: Request): Promise<Response> {
           tipoAccion: "FI_CONVENIO_CREADO",
           referenciaId: creado.id,
           descripcion: `Convenio de pago ${creado.id} de la unidad ${unidad.numero} con ${persona.nombreCompleto}: total ${pesos(datos.montoTotal)} en ${datos.numeroCuotas} cuota(s) mensuales, primera cuota de ${pesos(datos.primeraCuota)} pagada al suscribir; autorizado por el acuerdo ${acuerdo.folio} del Comité (Ley 21.442 art. 6).`,
+        },
+        tx
+      )
+
+      await registrarEventoAuditoria(
+        {
+          id: generarId("ev"),
+          comunidadId: scope.comunidadId,
+          timestamp: ahora.toISOString(),
+          usuario: scope.usuarioId,
+          categoria: "FI",
+          tipoAccion: "FI_CONVENIO_CARGOS",
+          referenciaId: creado.id,
+          // Cuenta los cargos creados, no los montos: el monto vive en cada cobro.
+          descripcion: `Convenio de pago ${creado.id}: ${cargosDelConvenio.length} cargo(s) FI creados en el fondo ${fondoGC.nombre} (cuotas 1 a ${datos.numeroCuotas}).`,
         },
         tx
       )

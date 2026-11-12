@@ -16,13 +16,18 @@
  *      PAGADA en la fecha de suscripción y las N cuotas del saldo suman exacto;
  *   4. una unidad no puede tener dos convenios vigentes (409 y una sola fila);
  *   5. al pagar todas las cuotas el convenio queda `saldado`, y una cuota pagada
- *      no se vuelve a pagar (409) sin tocar la fila;
+ *      no se vuelve a pagar (409) sin tocar la fila ni duplicar el pago en el cargo;
  *   6. la lectura devuelve los convenios con sus cuotas y los totales pagado y
- *      pendiente, acotada a la comunidad de la sesión.
+ *      pendiente, acotada a la comunidad de la sesión;
+ *   7. la deuda del convenio es la que la contabilidad cobra: un `CobroFI` por
+ *      cuota 1..N (ninguno por la cuota 0), imputado al fondo de gasto común
+ *      activo, con su evento `FI_CONVENIO_CARGOS`; sin ese fondo el alta es 400 y
+ *      no escribe nada, y un fallo a mitad de la transacción revierte todo.
  */
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest"
 import { NextRequest } from "next/server"
 import { prisma } from "@/lib/prisma"
+import { generarId } from "@/lib/id-utils"
 
 const state = vi.hoisted(() => ({ cookie: "" }))
 vi.mock("next/headers", () => ({
@@ -58,8 +63,18 @@ const ACUERDO_OTRA_COMUNIDAD = "conv-ac-b"
 const ACUERDO_OK_U2 = "conv-ac-ok-u2"
 
 const EMAIL_ADMIN = "conv-admin@test.cl"
+const EMAIL_ADMIN_B = "conv-admin-b@test.cl"
 const EMAIL_COMITE = "conv-comite@test.cl"
 const EMAIL_RESIDENTE = "conv-residente@test.cl"
+
+/** Fondo de gasto común ACTIVO donde el convenio imputa sus cuotas. */
+const FONDO_A = "conv-fondo-gc-a"
+/** En la comunidad B el único fondo de gasto común está INACTIVO. */
+const FONDO_B_INACTIVO = "conv-fondo-gc-b-inactivo"
+
+/** Mensaje literal del alta sin fondo: no se inventa un fondo ni se escribe nada. */
+const MENSAJE_SIN_FONDO =
+  "No se puede suscribir el convenio: la comunidad no tiene un fondo de gasto común activo donde imputar las cuotas."
 
 /** Convenio de la OTRA comunidad: la lectura del scope no puede verlo. */
 const CONVENIO_COM_B = "conv-convenio-b"
@@ -140,6 +155,31 @@ describe("/api/convenios — convenio de pago con acuerdo del Comité (F29)", ()
       { id: COM_B, nombre: "Comunidad Convenios B", slug: "conv-com-b" },
     ]) {
       await prisma.comunidad.upsert({ where: { id: c.id }, update: {}, create: c })
+    }
+
+    // A tiene el fondo de gasto común activo que exige el convenio; B sólo uno
+    // inactivo, así que su alta no puede imputar la deuda y se rechaza.
+    for (const fondo of [
+      {
+        id: FONDO_A,
+        comunidadId: COM_A,
+        nombre: "Fondo de Gasto Común",
+        tipo: "gasto_comun",
+        activo: true,
+      },
+      {
+        id: FONDO_B_INACTIVO,
+        comunidadId: COM_B,
+        nombre: "Fondo de Gasto Común",
+        tipo: "gasto_comun",
+        activo: false,
+      },
+    ]) {
+      await prisma.fondoFI.upsert({
+        where: { id: fondo.id },
+        update: { activo: fondo.activo },
+        create: fondo,
+      })
     }
 
     for (const p of [
@@ -245,6 +285,9 @@ describe("/api/convenios — convenio de pago con acuerdo del Comité (F29)", ()
 
     const usuarios = [
       { id: "conv-usuario-admin", email: EMAIL_ADMIN, comunidadId: COM_A, rol: "administrador" },
+      // Administración de B: la prueba del alta sin fondo necesita una sesión
+      // cuyo scope sea la comunidad que no puede imputar.
+      { id: "conv-usuario-admin-b", email: EMAIL_ADMIN_B, comunidadId: COM_B, rol: "administrador" },
       { id: "conv-usuario-comite", email: EMAIL_COMITE, comunidadId: COM_A, rol: "comite" },
       { id: "conv-usuario-residente", email: EMAIL_RESIDENTE, comunidadId: COM_A, rol: "residente" },
     ]
@@ -268,6 +311,9 @@ describe("/api/convenios — convenio de pago con acuerdo del Comité (F29)", ()
   afterAll(async () => {
     try {
       state.cookie = ""
+      await prisma.cobroFI.deleteMany({
+        where: { comunidadId: { in: [COM_A, COM_B] } },
+      })
       await prisma.cuotaConvenio.deleteMany({
         where: { comunidadId: { in: [COM_A, COM_B] } },
       })
@@ -282,11 +328,14 @@ describe("/api/convenios — convenio de pago con acuerdo del Comité (F29)", ()
       })
       await prisma.unidad.deleteMany({ where: { comunidadId: { in: [COM_A, COM_B] } } })
       await prisma.persona.deleteMany({ where: { comunidadId: { in: [COM_A, COM_B] } } })
+      await prisma.fondoFI.deleteMany({
+        where: { comunidadId: { in: [COM_A, COM_B] } },
+      })
       await prisma.membresia.deleteMany({
         where: { comunidadId: { in: [COM_A, COM_B] } },
       })
       await prisma.usuario.deleteMany({
-        where: { email: { in: [EMAIL_ADMIN, EMAIL_COMITE, EMAIL_RESIDENTE] } },
+        where: { email: { in: [EMAIL_ADMIN, EMAIL_ADMIN_B, EMAIL_COMITE, EMAIL_RESIDENTE] } },
       })
       for (const id of [COM_A, COM_B]) {
         await prisma.comunidad.delete({ where: { id } }).catch(() => {})
@@ -448,6 +497,94 @@ describe("/api/convenios — convenio de pago con acuerdo del Comité (F29)", ()
     expect(await prisma.convenioPago.count({ where: { comunidadId: COM_A } })).toBe(0)
   })
 
+  it("sin fondo de gasto común activo el alta es 400 literal y no escribe NADA", async () => {
+    await conSesion(EMAIL_ADMIN_B, async () => {
+      const res = await POST_CONVENIO({
+        unidadId: U_OTRA,
+        personaId: P_OTRA,
+        acuerdoId: ACUERDO_OTRA_COMUNIDAD,
+        montoTotal: 300_000,
+        numeroCuotas: 2,
+        primeraCuota: 100_000,
+      })
+      expect(res.status).toBe(400)
+      expect(((await res.json()) as { error: string }).error).toBe(MENSAJE_SIN_FONDO)
+    })
+
+    // Ni convenio, ni cuotas, ni cargos, ni auditoría: el fondo se resuelve antes
+    // de la transacción que escribe. El fondo inactivo de B NO se usa.
+    expect(
+      await prisma.convenioPago.count({ where: { comunidadId: COM_B, unidadId: U_OTRA } })
+    ).toBe(0)
+    expect(await prisma.cuotaConvenio.count({ where: { comunidadId: COM_B } })).toBe(0)
+    expect(await prisma.cobroFI.count({ where: { comunidadId: COM_B } })).toBe(0)
+    expect(
+      await prisma.eventoAuditoria.count({
+        where: {
+          comunidadId: COM_B,
+          tipoAccion: { in: ["FI_CONVENIO_CREADO", "FI_CONVENIO_CARGOS"] },
+        },
+      })
+    ).toBe(0)
+    // El convenio preexistente de B sigue siendo el único de esa comunidad.
+    expect(await prisma.convenioPago.count({ where: { comunidadId: COM_B } })).toBe(1)
+  })
+
+  it("si un cargo FI falla en medio de la transacción no queda NADA escrito", async () => {
+    const ahoraFijo = Date.now()
+    const reloj = vi.spyOn(Date, "now").mockReturnValue(ahoraFijo)
+    const azar = vi.spyOn(Math, "random").mockReturnValue(0.5)
+    // El id con el que la ruta identificará el cargo de la cuota 2, ya ocupado: la
+    // escritura de los cargos choca contra la clave primaria y la transacción revierte.
+    const idEnConflicto = generarId("cob", 2)
+    try {
+      await prisma.cobroFI.create({
+        data: {
+          id: idEnConflicto,
+          comunidadId: COM_A,
+          unidadId: U1,
+          periodo: "2026-01",
+          concepto: "gasto_comun",
+          origenModulo: "FI",
+          fondoId: FONDO_A,
+          descripcion: "Cargo plantado para forzar la colisión de clave",
+          montoBase: 1,
+          fechaCargo: "2026-01-01",
+          fechaVencimiento: "2026-01-01",
+          moras: [],
+          pagos: [],
+          diferencias: [],
+        },
+      })
+
+      await conSesion(EMAIL_ADMIN, async () => {
+        const res = await POST_CONVENIO(terminos())
+        expect(res.status).toBe(500)
+        expect(((await res.json()) as { error: string }).error).toBe(
+          "Error interno del servidor."
+        )
+      })
+
+      // La transacción ya había escrito el convenio y sus cuotas cuando el cargo
+      // chocó: si no fuera atómica, esas filas seguirían acá.
+      expect(await prisma.convenioPago.count({ where: { comunidadId: COM_A } })).toBe(0)
+      expect(await prisma.cuotaConvenio.count({ where: { comunidadId: COM_A } })).toBe(0)
+      expect(await prisma.cobroFI.count({ where: { comunidadId: COM_A } })).toBe(1)
+      expect(
+        await prisma.eventoAuditoria.count({
+          where: {
+            comunidadId: COM_A,
+            tipoAccion: { in: ["FI_CONVENIO_CREADO", "FI_CONVENIO_CARGOS"] },
+          },
+        })
+      ).toBe(0)
+    } finally {
+      azar.mockRestore()
+      reloj.mockRestore()
+      await prisma.cobroFI.deleteMany({ where: { id: idEnConflicto } })
+    }
+  })
+
   it("con acuerdo aprobado del Comité el alta es 201: primera cuota pagada y N cuotas que suman el saldo", async () => {
     const creado = await crearConvenio(terminos())
 
@@ -513,6 +650,55 @@ describe("/api/convenios — convenio de pago con acuerdo del Comité (F29)", ()
     expect(evento?.categoria).toBe("FI")
     expect(evento?.descripcion).toContain("AD-2026-8001")
     expect(evento?.descripcion).toContain("1.000.000")
+
+    // La deuda del convenio quedó en la contabilidad FI: UN cargo por cuota 1..N,
+    // ninguno por la cuota 0 (ya pagada al suscribir: contarla sería cobrar dos
+    // veces el mismo dinero) y todos imputados al fondo de gasto común activo.
+    const cargos = await prisma.cobroFI.findMany({
+      where: { comunidadId: COM_A, origenRef: creado.id },
+      orderBy: { periodo: "asc" },
+    })
+    expect(cargos).toHaveLength(3)
+    expect(cargos.every((cargo) => cargo.unidadId === U1)).toBe(true)
+    expect(cargos.every((cargo) => cargo.origenModulo === "FI")).toBe(true)
+    expect(cargos.every((cargo) => cargo.concepto === "gasto_comun")).toBe(true)
+    expect(cargos.every((cargo) => cargo.fondoId === FONDO_A)).toBe(true)
+    expect(cargos.every((cargo) => (cargo.pagos as unknown[]).length === 0)).toBe(true)
+    // El período de cada cargo es el mes en que vence su cuota, y su vencimiento
+    // es el de la cuota: la cuota 0 no tiene ningún cargo.
+    expect(cargos.map((cargo) => cargo.periodo)).toEqual(
+      deuda.map((cuota) => cuota.venceEn.toISOString().slice(0, 7))
+    )
+    expect(cargos.map((cargo) => cargo.fechaVencimiento)).toEqual(
+      deuda.map((cuota) => cuota.venceEn.toISOString().slice(0, 10))
+    )
+    expect(
+      cargos.reduce((suma, cargo) => suma + centavos(cargo.montoBase), 0)
+    ).toBe(saldo)
+    // El detalle de cada cargo suma exactamente su monto base (S5).
+    for (const cargo of cargos) {
+      const lineas = cargo.lineas as unknown as Array<{
+        concepto: string
+        monto: number
+        fondoId?: string
+      }>
+      expect(
+        lineas.reduce((suma, linea) => suma + centavos(linea.monto), 0)
+      ).toBe(centavos(cargo.montoBase))
+      expect(lineas.every((linea) => linea.fondoId === FONDO_A)).toBe(true)
+    }
+
+    // UN evento con el CONTEO de cargos (no con los montos).
+    const eventoCargos = await prisma.eventoAuditoria.findMany({
+      where: {
+        comunidadId: COM_A,
+        tipoAccion: "FI_CONVENIO_CARGOS",
+        referenciaId: creado.id,
+      },
+    })
+    expect(eventoCargos).toHaveLength(1)
+    expect(eventoCargos[0]?.categoria).toBe("FI")
+    expect(eventoCargos[0]?.descripcion).toContain("3 cargo(s)")
   })
 
   it("una unidad no puede tener dos convenios vigentes: 409 y una sola fila", async () => {
@@ -567,6 +753,27 @@ describe("/api/convenios — convenio de pago con acuerdo del Comité (F29)", ()
     const pagado = cuotas.reduce((suma, cuota) => suma + centavos(cuota.monto), 0)
     expect(pagado).toBe(centavos(1_000_000))
 
+    // Cada pago de cuota quedó en SU cargo FI, una sola vez: ni una segunda fila
+    // de cobro ni una segunda entrada de pago.
+    const cargos = await prisma.cobroFI.findMany({
+      where: { comunidadId: COM_A, origenRef: convenioId },
+      orderBy: { periodo: "asc" },
+    })
+    expect(cargos).toHaveLength(3)
+    expect(cargos.map((cargo) => centavos(cargo.montoBase))).toEqual(
+      cuotas.slice(1).map((cuota) => centavos(cuota.monto))
+    )
+    for (const cargo of cargos) {
+      const pagosDelCargo = cargo.pagos as unknown as Array<{
+        monto: number
+        fecha: string
+        medio: string
+      }>
+      expect(pagosDelCargo).toHaveLength(1)
+      expect(centavos(pagosDelCargo[0]!.monto)).toBe(centavos(cargo.montoBase))
+      expect(pagosDelCargo[0]!.medio).toBe("convenio")
+    }
+
     const eventos = await prisma.eventoAuditoria.findMany({
       where: { comunidadId: COM_A, tipoAccion: "FI_CONVENIO_PAGO" },
     })
@@ -598,6 +805,15 @@ describe("/api/convenios — convenio de pago con acuerdo del Comité (F29)", ()
       where: { convenioId, numero: 1 },
     })
     expect(despues?.pagadaEn?.getTime()).toBe(antes?.pagadaEn?.getTime())
+    // El 409 tampoco agregó un segundo pago al cargo FI de la cuota.
+    const cargoCuota1 = await prisma.cobroFI.findFirst({
+      where: {
+        comunidadId: COM_A,
+        origenRef: convenioId,
+        fechaVencimiento: antes!.venceEn.toISOString().slice(0, 10),
+      },
+    })
+    expect((cargoCuota1?.pagos as unknown[] | undefined)?.length).toBe(1)
     expect(
       await prisma.eventoAuditoria.count({
         where: { comunidadId: COM_A, tipoAccion: "FI_CONVENIO_PAGO" },
