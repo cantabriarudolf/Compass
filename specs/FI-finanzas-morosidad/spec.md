@@ -228,6 +228,45 @@ El sistema SHALL calcular la mora sobre cobros vencidos usando `diaCortePago` (C
 - **WHEN** la administración envía la gestión de cobranza a una unidad morosa
 - **THEN** el responsable recibe notificación email_simulado y queda registrado `FI_COBRANZA_SENT`
 
+### Requirement: Convenio de Pago de Deuda
+El sistema SHALL permitir a la administración suscribir un convenio de pago de la deuda de gastos comunes de una unidad (Ley 21.442 art. 6) mediante `POST /api/convenios` (guard `fi:cobranza` crear). El convenio MUST quedar autorizado por un **acuerdo del Comité en estado `aprobado` de la misma comunidad**, leído de la tabla `Acuerdo` —nunca declarado por el cliente—: sin esa fila la ruta MUST responder 400 con el motivo (acuerdo inexistente en la comunidad, acuerdo de cuerpo distinto del Comité o acuerdo no aprobado) y no escribe ninguna fila. La **primera cuota** MUST pagarse al suscribir: se registra como `CuotaConvenio` número 0 en estado `pagada`, con su fecha y el usuario que la registró, y NUNCA se genera como deuda. El saldo `montoTotal − primeraCuota` SHALL repartirse en `numeroCuotas` cuotas mensuales de al menos un centavo, con el residuo del redondeo en la **última** cuota para que la suma cierre exacta al centavo, y con vencimientos mensuales derivados de la fecha de suscripción que conservan el día del mes (acotado al último día cuando el mes destino no lo tiene, sin arrastrar el día hacia los meses siguientes). La regla que arma las cuotas SHALL ser pura (`cuotasDelConvenio` en `lib/convenios.ts`: no consulta base ni lee reloj) y `numeroCuotas` MUST ser al menos 1, con `0 < primeraCuota <= montoTotal`. Una unidad MUST NOT tener dos convenios en estado `vigente`: el alta MUST responder 409 y no dejar filas, verificándolo dentro de la transacción que escribe. El pago de una cuota SHALL registrarse con `POST /api/convenios/pago` (guard `fi:cobranza` editar) guardando `pagadaEn` y el usuario, MUST rechazar con 409 una cuota ya pagada sin reescribir la fila, y al pagarse la última cuota pendiente el convenio MUST quedar `saldado` en la misma transacción. La lectura (`GET /api/convenios`, guard `fi:cobranza` ver) SHALL devolver los convenios de la comunidad de la sesión con sus cuotas y los totales **pagado** y **pendiente** derivados en memoria —sin una consulta por cuota— y NUNCA SHALL devolver convenios de otra comunidad. Toda escritura SHALL auditar `FI_CONVENIO_CREADO` / `FI_CONVENIO_PAGO` con el monto, la unidad y el folio del acuerdo que autoriza, en la misma transacción que escribe. La integración con la contabilidad del cobro, la constancia del convenio en el aviso de cobro y el archivo de documentos NO son parte de esta capacidad todavía.
+
+#### Scenario: Alta con el acuerdo del Comité
+- **WHEN** la administración suscribe un convenio de $1.000.000 en 3 cuotas con primera cuota de $333.333, citando un acuerdo del Comité aprobado
+- **THEN** responde 201, la cuota 0 queda `pagada` en la fecha de suscripción con $333.333 y las cuotas 1 a 3 quedan `pendientes` sumando exactamente $666.667, con evento `FI_CONVENIO_CREADO` que cita el folio del acuerdo
+
+#### Scenario: Sin acuerdo aprobado del Comité no hay convenio
+- **WHEN** se suscribe un convenio citando un acuerdo inexistente, uno que no es del Comité o uno que sigue `abierto`
+- **THEN** cada intento responde 400 con su motivo y la base no gana ni un convenio ni una cuota
+
+#### Scenario: Un solo convenio vigente por unidad
+- **WHEN** se intenta suscribir un segundo convenio vigente para la misma unidad
+- **THEN** responde 409, la unidad conserva un único convenio y no se crean cuotas nuevas
+
+#### Scenario: El reparto del saldo cierra al centavo
+- **WHEN** el saldo a financiar no es divisible por el número de cuotas
+- **THEN** las cuotas quedan iguales salvo la última, que absorbe el residuo del redondeo, y su suma es exactamente el saldo
+
+#### Scenario: Vencimientos mensuales desde la suscripción
+- **WHEN** se suscribe un convenio un 31 de enero
+- **THEN** las cuotas vencen el 28 de febrero, el 31 de marzo y el 30 de abril: el día sale de la suscripción y un mes corto no lo arrastra
+
+#### Scenario: Pagar la última cuota cierra el convenio
+- **WHEN** se registra el pago de la última cuota pendiente
+- **THEN** la cuota queda `pagada` con su fecha y su usuario, el convenio queda `saldado` en la misma transacción y el evento `FI_CONVENIO_PAGO` queda auditado
+
+#### Scenario: Una cuota no se paga dos veces
+- **WHEN** se registra el pago de una cuota que ya estaba `pagada`
+- **THEN** responde 409 sin mover la fecha de pago ni agregar un evento
+
+#### Scenario: La lectura no cruza comunidades
+- **WHEN** se leen los convenios con un `?comunidadId=` de otra comunidad en la URL
+- **THEN** la respuesta trae sólo los convenios de la comunidad de la sesión, con sus cuotas y los totales pagado y pendiente derivados de ellas
+
+#### Scenario: Sin sesión y sin la clave financiera
+- **WHEN** se llaman las tres rutas sin sesión, o con un rol que no tiene `fi:cobranza`
+- **THEN** responden 401 y 403 respectivamente, y el intento rechazado no deja convenios ni cuotas
+
 ### Requirement: Pagos con Ajuste Manual e Informe de Diferencia Inmutable
 Al recibir un pago, el sistema MUST cargar el monto exigible exacto (deuda base + moras − pagos previos) mediante `registrarPagoFI(cobroId, pago)`. Si el administrador ingresa un monto distinto (descuento a favor del residente o recargo a favor de la comunidad), el sistema MUST exigir justificación obligatoria, procesar el pago y generar un informe de diferencia inmutable (sin acciones de edición ni borrado) que registra esperado, recibido, diferencia, tipo y justificación; audita `FI_RECEIVE_PAYMENT` y, ante ajuste, también `FI_MANUAL_DISCOUNT`.
 
@@ -244,7 +283,7 @@ Al recibir un pago, el sistema MUST cargar el monto exigible exacto (deuda base 
 - **THEN** la diferencia queda registrada de forma inmutable con tipo descuento/recargo, montos y fecha, junto a los eventos de auditoría
 
 ### Requirement: Integración con Auditoría y Métricas (AM)
-El módulo SHALL emitir `FI_EMISION_GC`, `FI_EGRESS_CREATED`, `FI_MORA_APPLIED`, `FI_RECEIVE_PAYMENT`, `FI_MANUAL_DISCOUNT`, `FI_COBRANZA_SENT` y `FI_FUND_WITHDRAWN` como eventos inmutables con data cuantificable: montos emitidos vs recaudados, diferencias por ajustes manuales, gestiones de cobranza realizadas, índice de morosidad y recaudación por fondo derivables de las colecciones.
+El módulo SHALL emitir `FI_EMISION_GC`, `FI_EGRESS_CREATED`, `FI_MORA_APPLIED`, `FI_RECEIVE_PAYMENT`, `FI_MANUAL_DISCOUNT`, `FI_COBRANZA_SENT`, `FI_FUND_WITHDRAWN`, `FI_CONVENIO_CREADO` y `FI_CONVENIO_PAGO` como eventos inmutables con data cuantificable: montos emitidos vs recaudados, diferencias por ajustes manuales, gestiones de cobranza realizadas, convenios suscritos y cobrados, índice de morosidad y recaudación por fondo derivables de las colecciones.
 
 #### Scenario: Auditoría completa del ciclo
 - **WHEN** ocurren emisión, egreso, mora, pago ajustado y cobranza

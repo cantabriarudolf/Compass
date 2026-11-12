@@ -75,6 +75,8 @@ model Comunidad {
   configuracionCobranzaFI     ConfiguracionCobranzaFI?
   preferenciasCanalCobranzaFI PreferenciaCanalCobranzaFI[]
   enviosCobranzaFI            EnvioCobranzaFI[]
+  // F29 — convenio de pago de deuda de gastos comunes (Ley 21.442 art. 6).
+  conveniosPago               ConvenioPago[]
   bitacoraVisitasPE           BitacoraVisitaPE[]
   encomiendasPE               EncomiendaPE[]
   ingresosContratistasPE      IngresoContratistaPE[]
@@ -1507,6 +1509,73 @@ model EnvioCobranzaFI {
   @@index([cobroId])
   @@index([unidadId])
   @@map("envios_cobranza_fi")
+}
+
+// Convenio de pago de la deuda de gastos comunes (F29 — Ley 21.442 art. 6).
+//
+// El administrador está facultado para celebrarlo, pero NO por su sola voluntad:
+// el convenio exige ACUERDO DEL COMITÉ, y ese acuerdo es una fila real del libro
+// de gobernanza (`Acuerdo`, U3), no un texto pegado en la observación. Por eso
+// `acuerdoId` es obligatorio: un convenio sin acuerdo aprobado de comité no se
+// puede persistir (la ruta lo exige y devuelve 400).
+//
+// La PRIMERA CUOTA se paga al suscribir: se registra como `CuotaConvenio` número 0
+// ya pagada, no como deuda. Las cuotas mensuales del saldo van numeradas 1..N y las
+// arma `lib/convenios.ts` (regla pura, residuo del redondeo en la última).
+//
+// Estado: `vigente` | `saldado` | `incumplido` | `anulado`. La ruta de pago marca
+// `saldado` al pagarse la última cuota pendiente. Una unidad no puede tener dos
+// convenios `vigente` a la vez (la ruta lo verifica dentro de la transacción).
+model ConvenioPago {
+  id                String    @id
+  comunidadId       String
+  comunidad         Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  unidadId          String
+  // Deudor: la persona que firma el convenio (Maestro de Personas de la comunidad).
+  personaId         String
+  // Acuerdo del Comité que autoriza el convenio (Ley 21.442 art. 6).
+  acuerdoId         String
+  montoTotal        Float
+  numeroCuotas      Int
+  fechaSuscripcion  DateTime
+  // Lo que se pagó al suscribir: la cuota 0, que no se genera como deuda.
+  primeraCuota      Float
+  estado            String    @default("vigente") // vigente | saldado | incumplido | anulado
+  observaciones     String?
+  creadoPor         String
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  cuotas CuotaConvenio[]
+
+  // El índice por comunidad + unidad es el que sostiene la regla «un solo
+  // convenio vigente por unidad»: la ruta cuenta dentro de la transacción y este
+  // índice deja la lectura barata.
+  @@index([comunidadId, unidadId])
+  @@index([comunidadId])
+  @@map("convenios_pago")
+}
+
+// Cuota del convenio: la 0 es el pago al suscribir (nace pagada), 1..N son la
+// deuda mensual. `numero` es único por convenio, así que la misma cuota no se
+// puede registrar dos veces aunque dos peticiones de pago lleguen juntas.
+model CuotaConvenio {
+  id            String       @id
+  comunidadId   String
+  convenioId    String
+  convenio      ConvenioPago @relation(fields: [convenioId], references: [id], onDelete: Cascade)
+  numero        Int
+  monto         Float
+  venceEn       DateTime
+  estado        String       @default("pendiente") // pendiente | pagada | vencida
+  pagadaEn      DateTime?
+  registradaPor String?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  @@unique([convenioId, numero])
+  @@index([comunidadId])
+  @@map("convenios_pago_cuotas")
 }
 
 // Personal y Servicios (PE)

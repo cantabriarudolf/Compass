@@ -693,6 +693,81 @@ export const VotoAcuerdoSchema = z.object({
   }),
 })
 
+// --- Convenio de pago de deuda de gastos comunes (F29 — Ley 21.442 art. 6) ---
+
+/**
+ * Términos con los que se suscribe un convenio de pago de la deuda de gastos
+ * comunes. La ley faculta al administrador a celebrarlo exigiendo ACUERDO DEL
+ * COMITÉ y el pago de la PRIMERA CUOTA al suscribir; por eso `acuerdoId` es
+ * obligatorio y `primeraCuota` no es opcional.
+ *
+ * El `id`, la fecha de suscripción, el estado y quién lo registra los decide el
+ * servidor: nunca vienen del cliente. Las cuotas no se envían: las arma la regla
+ * pura `cuotasDelConvenio` a partir de estos cuatro números.
+ */
+export const ConvenioPagoCreacionSchema = z
+  .object({
+    unidadId: IdEntidadSchema,
+    personaId: IdEntidadSchema,
+    acuerdoId: IdEntidadSchema,
+    montoTotal: z
+      .number({ required_error: "El monto total es obligatorio." })
+      .finite("El monto total debe ser un número finito.")
+      .positive("El monto total debe ser mayor a cero."),
+    numeroCuotas: z
+      .number({ required_error: "El número de cuotas es obligatorio." })
+      .int("El número de cuotas debe ser un entero.")
+      .min(1, "El convenio debe tener al menos una cuota mensual del saldo."),
+    primeraCuota: z
+      .number({ required_error: "La primera cuota es obligatoria." })
+      .finite("La primera cuota debe ser un número finito.")
+      .positive("La primera cuota debe ser mayor a cero."),
+    observaciones: z
+      .string()
+      .trim()
+      .max(500, "Las observaciones no pueden superar los 500 caracteres.")
+      .optional(),
+  })
+  .superRefine((datos, ctx) => {
+    // La primera cuota se paga al suscribir: no puede superar lo que se debe.
+    if (datos.primeraCuota > datos.montoTotal) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["primeraCuota"],
+        message: "La primera cuota no puede superar el monto total del convenio.",
+      })
+      return
+    }
+    // El saldo se reparte en cuotas de al menos un centavo (la regla pura rechaza
+    // el mismo borde: esto lo vuelve un 400 con el campo nombrado, no un 500).
+    const saldoCentavos =
+      Math.round(datos.montoTotal * 100) - Math.round(datos.primeraCuota * 100)
+    if (saldoCentavos > 0 && saldoCentavos < datos.numeroCuotas) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["numeroCuotas"],
+        message:
+          "La primera cuota deja un saldo que no alcanza para cuotas de al menos un centavo.",
+      })
+    }
+  })
+
+/**
+ * Pago de UNA cuota del convenio. El `numero` 0 es la primera cuota, que nace
+ * pagada al suscribir: la ruta responde 409 sin recalcular nada, porque el
+ * convenio no puede cobrar dos veces el mismo dinero.
+ */
+export const PagoCuotaConvenioSchema = z.object({
+  convenioId: IdEntidadSchema,
+  numero: z
+    .number({ required_error: "El número de cuota es obligatorio." })
+    .int("El número de cuota debe ser un entero.")
+    .min(0, "El número de cuota no puede ser negativo."),
+})
+
+export type ConvenioPagoCreacion = z.infer<typeof ConvenioPagoCreacionSchema>
+export type PagoCuotaConvenio = z.infer<typeof PagoCuotaConvenioSchema>
+
 export const MensajeDocumentoInvalido =
   "RUT inválido (dígito verificador incorrecto) o pasaporte con formato no válido."
 
