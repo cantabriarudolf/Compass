@@ -768,6 +768,67 @@ export const PagoCuotaConvenioSchema = z.object({
 export type ConvenioPagoCreacion = z.infer<typeof ConvenioPagoCreacionSchema>
 export type PagoCuotaConvenio = z.infer<typeof PagoCuotaConvenioSchema>
 
+// --- Corte de servicios por morosidad (F28 — Ley 21.442 art. 20 N°9) ---
+
+/**
+ * Los tres servicios que la ley deja suspender. El contrato del cuerpo es el
+ * mismo que la regla pura (`SERVICIOS_CORTABLES` de `lib/cortes-servicio.ts`): un
+ * servicio fuera de la lista no se puede preavisar ni por error de tipeo.
+ */
+export const ServicioCortableSchema = z.enum(
+  ["electricidad", "telecomunicaciones", "calefaccion"],
+  { required_error: "El servicio a cortar es obligatorio." }
+)
+
+/**
+ * Preaviso del corte. La ley exige AVISO AL DEUDOR con cinco días corridos y
+ * acuerdo del Comité: por eso `acuerdoId` es obligatorio y la morosidad se declara
+ * con su número de cuotas y su monto.
+ *
+ * El `id`, la fecha del preaviso, la fecha habilitada (`preaviso + 5 días
+ * corridos`), el estado inicial y quién lo registra los decide el servidor: nunca
+ * vienen del cliente. `electrodependiente` tampoco viene: se lee de la unidad,
+ * porque una prohibición legal no se declara en el cuerpo de la petición.
+ */
+export const CorteServicioPreavisoSchema = z.object({
+  unidadId: IdEntidadSchema,
+  servicio: ServicioCortableSchema,
+  acuerdoId: IdEntidadSchema,
+  cuotasImpagas: z
+    .number({ required_error: "El número de cuotas impagas es obligatorio." })
+    .int("El número de cuotas impagas debe ser un entero.")
+    .min(0, "El número de cuotas impagas no puede ser negativo."),
+  montoAdeudado: z
+    .number({ required_error: "El monto adeudado es obligatorio." })
+    .finite("El monto adeudado debe ser un número finito.")
+    .min(0, "El monto adeudado no puede ser negativo."),
+})
+
+/** Ejecución del corte ya preavisado: el cliente nombra la fila y nada más. */
+export const CorteServicioEjecucionSchema = z.object({
+  corteId: IdEntidadSchema,
+})
+
+/**
+ * Revocación del corte: por pago de la deuda (reposición al día hábil siguiente)
+ * o por error del trámite. El motivo es obligatorio porque la revocación deja sin
+ * efecto un acto administrativo y la bitácora tiene que decir por qué.
+ */
+export const CorteServicioRevocacionSchema = z.object({
+  corteId: IdEntidadSchema,
+  motivo: z
+    .string({ required_error: "El motivo de la revocación es obligatorio." })
+    .trim()
+    .min(5, "El motivo de la revocación debe explicar por qué se deja sin efecto.")
+    .max(500, "El motivo de la revocación no puede superar los 500 caracteres."),
+})
+
+export type CorteServicioPreaviso = z.infer<typeof CorteServicioPreavisoSchema>
+export type CorteServicioEjecucion = z.infer<typeof CorteServicioEjecucionSchema>
+export type CorteServicioRevocacion = z.infer<
+  typeof CorteServicioRevocacionSchema
+>
+
 export const MensajeDocumentoInvalido =
   "RUT inválido (dígito verificador incorrecto) o pasaporte con formato no válido."
 

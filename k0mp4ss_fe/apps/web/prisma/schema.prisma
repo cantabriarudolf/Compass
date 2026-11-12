@@ -77,6 +77,8 @@ model Comunidad {
   enviosCobranzaFI            EnvioCobranzaFI[]
   // F29 — convenio de pago de deuda de gastos comunes (Ley 21.442 art. 6).
   conveniosPago               ConvenioPago[]
+  // F28 — trámite del corte de servicios por morosidad (Ley 21.442 art. 20 N°9).
+  cortesServicio              CorteServicio[]
   bitacoraVisitasPE           BitacoraVisitaPE[]
   encomiendasPE               EncomiendaPE[]
   ingresosContratistasPE      IngresoContratistaPE[]
@@ -227,6 +229,11 @@ model Unidad {
   rolSii        String
   estadoId      String
   servicios     Json // ServiciosUnidad
+  // F28 — Ley 21.442 art. 20 N°9: en la unidad donde reside una persona
+  // ELECTRODEPENDIENTE el corte de servicios está PROHIBIDO, sin excepción y
+  // aunque la morosidad supere las tres cuotas. Es un hecho de la unidad que
+  // declara la administración; el corte lo lee de acá y nunca de la UI.
+  electrodependiente Boolean @default(false)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
@@ -713,6 +720,46 @@ model VotoAcuerdo {
   @@unique([acuerdoId, personaId])
   @@index([comunidadId])
   @@map("acuerdos_votos")
+}
+
+// Corte de servicios por morosidad (F28 — Ley 21.442 art. 20 N°9).
+//
+// Es el TRÁMITE, no la orden a la empresa: guarda el preaviso escrito que la ley
+// exige (cinco días corridos al deudor), el acuerdo del Comité que autoriza, las
+// cuotas impagas y el monto que sostienen el corte, y el hecho de la ejecución o
+// la revocación. La suspensión material la hace la empresa proveedora, así que
+// `ejecutado` es la constancia de que se cursó la orden, no una señal enviada.
+//
+// Reglas que sostiene la tabla y audita la ruta:
+//   · `fechaHabilitada` = preaviso + 5 días corridos (día del preaviso no cuenta);
+//   · un corte por servicio vigente (`preaviso` | `ejecutado`) por unidad;
+//   · no pueden suspenderse dos servicios a la vez;
+//   · `revocado` deja la unidad habilitada (reposición al día hábil siguiente de
+//     regularizada la deuda).
+model CorteServicio {
+  id              String    @id
+  comunidadId     String
+  comunidad       Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  unidadId        String
+  servicio        String // electricidad | telecomunicaciones | calefaccion (art. 20 N°9)
+  acuerdoId       String // acuerdo del Comité que autoriza el corte
+  cuotasImpagas   Int // morosidad que sostiene el corte (>= 3)
+  montoAdeudado   Float // deuda a la fecha del preaviso, en pesos
+  fechaPreaviso   DateTime // cuándo se cursó el aviso escrito al deudor
+  fechaHabilitada DateTime // preaviso + 5 días corridos: desde acá se puede ejecutar
+  estado          String    @default("preaviso") // preaviso | ejecutado | revocado
+  ejecutadoPor    String? // usuario de sesión que cursó la orden de suspensión
+  ejecutadoEn     DateTime?
+  revocadoPor     String? // usuario de sesión que dejó el corte sin efecto
+  revocadoEn      DateTime?
+  motivo          String? // por qué se revocó (pago de la deuda o error del trámite)
+  creadoPor       String // usuario de sesión que cursó el preaviso
+  createdAt       DateTime  @default(now())
+
+  @@index([comunidadId])
+  @@index([comunidadId, unidadId])
+  @@index([comunidadId, estado])
+  @@map("cortes_servicio")
 }
 
 // Comunicación con Vecinos (CO)

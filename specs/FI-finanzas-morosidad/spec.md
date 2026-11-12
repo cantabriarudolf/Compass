@@ -491,3 +491,113 @@ comité, conserjería ni mantención.
   filtro por fila de la ruta; el comité queda fuera por la matriz, no por la
   bandera
 
+
+### Requirement: Corte de Servicios por Morosidad
+El sistema SHALL implementar el trámite del corte de servicios de la Ley 21.442
+art. 20 N°9, que faculta al administrador a suspender —o requerir a las empresas
+que suspendan— la **electricidad, las telecomunicaciones o la calefacción** de las
+unidades que adeuden **tres o más cuotas, continuas o discontinuas**. El trámite
+SHALL exigir **acuerdo del Comité** y **aviso al deudor con cinco días corridos de
+anticipación**, y NO SHALL permitir el corte en una unidad donde resida una persona
+**electrodependiente** ni por deudas devengadas bajo **estado de catástrofe**, ni
+sobre un **segundo servicio mientras otro esté suspendido**. La decisión SHALL vivir
+en la regla pura `lib/cortes-servicio.ts` (`cortePermitido`,
+`fechaHabilitadaDelCorte`, `puedeEjecutarse`), sin base ni reloj: las fechas entran
+por parámetro y la unidad entra ya resuelta, de modo que el preaviso y la ejecución
+no puedan decidir distinto.
+
+El trámite SHALL persistirse en el modelo aditivo `CorteServicio` (tabla
+`cortes_servicio`: servicio, acuerdo que autoriza, cuotas impagas, monto adeudado,
+`fechaPreaviso`, `fechaHabilitada` = preaviso + 5 días corridos, estado
+`preaviso|ejecutado|revocado`, quién y cuándo ejecutó o revocó, motivo de la
+revocación y quién cursó el preaviso) y la unidad SHALL llevar el hecho
+`electrodependiente` (default `false`), que se LEE de la unidad y nunca del cuerpo
+de la petición: una prohibición legal no se declara desde el cliente. El estado
+inicial, la fecha del preaviso y la fecha habilitada los SHALL decidir el servidor.
+
+Las cuatro rutas de `/api/cortes-servicio` SHALL exigir el recurso `fi:cobranza` de
+la matriz —el corte es el último acto de la cobranza: la administración lo ejecuta,
+el Comité lo audita— y SHALL resolver SIEMPRE la comunidad desde la sesión, nunca
+desde el cliente. `POST /api/cortes-servicio` (crear) SHALL exigir un acuerdo de
+esta comunidad, del cuerpo `comite` y en estado `aprobado` (400 con el motivo si
+falta alguna condición), SHALL devolver 404 para la unidad de otra comunidad, 400
+para el dictamen de la regla pura y 409 si la unidad ya tiene un corte vigente del
+mismo servicio o si otro servicio está suspendido. `POST /api/cortes-servicio/ejecutar`
+(editar) SHALL releer la unidad y el acuerdo, volver a aplicar el dictamen con los
+datos del momento del corte —el `electrodependiente` puede haberse registrado
+después del preaviso— y cambiar el estado con una actualización CONDICIONAL
+(`estado = preaviso`), de modo que una segunda ejecución concurrente responda 409 en
+vez de suspender dos veces. `POST /api/cortes-servicio/revocar` (editar) SHALL dejar
+el corte en `revocado` con motivo obligatorio, tanto desde `preaviso` como desde
+`ejecutado`: **la reposición del servicio procede al día hábil siguiente de
+regularizada la deuda** (Ley 21.442 art. 20 N°9), y el sistema registra el hecho
+administrativo, no la reconexión. `GET /api/cortes-servicio` (ver) SHALL devolver los
+cortes de la comunidad de la sesión con su estado y sus fechas en un número FIJO de
+consultas. El sistema SHALL auditar `FI_CORTE_PREAVISO`, `FI_CORTE_EJECUTADO` y
+`FI_CORTE_REVOCADO` en la misma transacción que escribe el hecho.
+
+Frontera deliberada: la **suspensión material la hace la empresa proveedora**, así
+que `ejecutado` es la constancia de que la orden se cursó, no una señal enviada
+—este requirement NO SHALL integrar un proveedor—. La prohibición por estado de
+catástrofe está implementada en la regla pura y hoy **no tiene fuente en el
+sistema** (no existe el dato en la unidad, en el acuerdo ni en la configuración de
+la comunidad): queda declarada como deuda en `specs/PENDIENTES-FUNCIONALIDAD.md` y
+la ruta no la inventa leyendo el cuerpo de la petición.
+
+#### Scenario: Tres cuotas impagas habilitan el preaviso
+- **WHEN** la administración cursa el preaviso de un servicio con tres o más cuotas
+  impagas, continuas o discontinuas, sobre una unidad sin prohibiciones
+- **THEN** el alta responde 201, la fila queda en `preaviso` y la `fechaHabilitada`
+  es el quinto día corrido contado desde el día del preaviso
+
+#### Scenario: Menos de tres cuotas no habilita el corte
+- **WHEN** el preaviso declara cero, una o dos cuotas impagas
+- **THEN** responde 400 con el motivo de la regla pura y no queda ninguna fila
+
+#### Scenario: Sin acuerdo aprobado del Comité no hay preaviso
+- **WHEN** el acuerdo no existe en la comunidad, es de asamblea o sigue `abierto`
+- **THEN** responde 400 con el motivo que falta y no queda ninguna fila
+
+#### Scenario: La electrodependencia bloquea siempre
+- **WHEN** la unidad tiene registrada una persona electrodependiente, aunque adeude
+  diez cuotas
+- **THEN** el preaviso responde 400 con el motivo y no queda ninguna fila, y una
+  electrodependencia registrada DESPUÉS del preaviso impide ejecutar el corte
+
+#### Scenario: La deuda devengada en catástrofe bloquea el corte
+- **WHEN** la deuda se devengó bajo estado de catástrofe
+- **THEN** la regla pura niega el corte con su motivo, sin mirar el número de cuotas
+
+#### Scenario: Un solo servicio a la vez
+- **WHEN** la unidad ya tiene un servicio suspendido y se intenta preavisar otro, o
+  se repite el mismo servicio
+- **THEN** responde 409 y no queda ninguna fila nueva
+
+#### Scenario: El corte no se adelanta al quinto día
+- **WHEN** se intenta ejecutar el corte el mismo día del preaviso o el cuarto día
+- **THEN** responde 400 con el motivo, la fila sigue en `preaviso` y no se emite
+  `FI_CORTE_EJECUTADO`
+
+#### Scenario: Cumplido el plazo el corte se ejecuta y se re-ejecuta una sola vez
+- **WHEN** se ejecuta el corte el quinto día y después se lo intenta ejecutar de
+  nuevo
+- **THEN** la primera ejecución responde 200 con estado `ejecutado` y audita
+  `FI_CORTE_EJECUTADO`, y la segunda responde 409 sin volver a escribir la fila
+
+#### Scenario: La revocación deja la unidad habilitada
+- **WHEN** la administración revoca el corte por pago de la deuda o por error, con
+  su motivo
+- **THEN** responde 200 con estado `revocado`, audita `FI_CORTE_REVOCADO` y no se
+  puede revocar una segunda vez (409); la reposición del servicio corre desde el
+  día hábil siguiente de regularizada la deuda
+
+#### Scenario: La lectura está acotada a la comunidad de la sesión
+- **WHEN** el Comité consulta `GET /api/cortes-servicio`, incluso con un
+  `?comunidadId=` de otra comunidad en la URL
+- **THEN** recibe sólo los cortes de la comunidad de la sesión, con su estado y sus
+  fechas, y ningún corte de otra comunidad aparece
+
+#### Scenario: La suspensión material no la hace el sistema
+- **WHEN** el corte queda `ejecutado`
+- **THEN** lo que existe es la constancia de la orden cursada y su auditoría, no una
+  señal enviada a la empresa proveedora
