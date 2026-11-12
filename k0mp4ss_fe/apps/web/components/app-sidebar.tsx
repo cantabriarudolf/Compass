@@ -236,6 +236,11 @@ const data = {
           url: "/admin/gestion/presupuestos",
           roles: ["administrador", "comite"],
         },
+        {
+          title: "Reparto por Sector",
+          url: "/admin/gestion/repartos-sector",
+          roles: ["administrador", "comite"],
+        },
         { title: "Maestros Administrativos", url: "/admin/maestros", roles: ["administrador"] },
         { title: "Configuración", url: "/admin/configuracion", roles: ["administrador"] },
         { title: "Permisos", url: "/admin/permisos", roles: ["administrador"] },

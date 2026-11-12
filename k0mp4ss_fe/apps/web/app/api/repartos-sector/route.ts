@@ -20,6 +20,11 @@
  *     de las cuotas es EXACTAMENTE el monto total (el residuo va al mayor avalúo);
  *   · la unidad sin avalúo declarado queda FUERA y no se reparte en partes iguales
  *     para compensarla; si ninguna unidad del sector tiene avalúo, no se emite nada;
+ *   · las unidades que quedaron FUERA se persisten con el reparto como snapshot
+ *     CONGELADO (`unidadesExcluidas`, con `unidadId` y `unidadNumero`), y al leer se
+ *     devuelve esa foto, nunca el complemento del padrón de hoy: una unidad dada de
+ *     alta en el sector después de la emisión no existía cuando el reparto se emitió,
+ *     y mostrarla como «excluida» sería mentir sobre lo que se emitió;
  *   · el reparto se persiste como documento emitido: monto total, avalúo total y
  *     cuotas con el avalúo CONGELADO (una revalorización posterior no reescribe lo
  *     emitido), con el evento `FI_REPARTO_SECTOR_EMITIDO` en la MISMA transacción.
@@ -147,6 +152,20 @@ export async function POST(req: Request): Promise<Response> {
       }))
       const avaluoTotal = avaluoTotalDeCuotas(dictamen.cuotas)
 
+      // Las unidades que el reparto dejó fuera, con el número que tenían al emitir.
+      // Se derivan de las cuotas que dictaminó la regla —no de una segunda lectura
+      // de los avalúos—, así que esta lista es su complemento exacto dentro del
+      // sector: si la regla cambia, la exclusión cambia con ella y no se despega.
+      const idsQueEntraron = new Set(
+        dictamen.cuotas.map((cuota) => cuota.unidadId)
+      )
+      const unidadesExcluidas = unidades
+        .filter((unidad) => !idsQueEntraron.has(unidad.id))
+        .map((unidad) => ({
+          unidadId: unidad.id,
+          unidadNumero: unidad.numero,
+        }))
+
       const creado = await tx.repartoSector.create({
         data: {
           id: repartoId,
@@ -158,6 +177,9 @@ export async function POST(req: Request): Promise<Response> {
           // que entraron al reparto. No se recalculan al leer.
           montoTotal: datos.montoTotal,
           avaluoTotal,
+          // Snapshot de lo que NO entró: las unidades sin avalúo declarado al
+          // emitir. Tampoco se recalcula al leer (ver `_vista.ts`).
+          unidadesExcluidas,
           estado: "emitido",
           creadoPor: scope.usuarioId,
         },

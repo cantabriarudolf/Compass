@@ -1,0 +1,18 @@
+-- F32 · U4 — la lista de unidades EXCLUIDAS de un reparto por sector.
+--
+-- El reparto por sector deja fuera a la unidad que no tiene avalúo fiscal
+-- declarado (`null` o <= 0): no paga su parte y no se la compensa repartiendo en
+-- partes iguales. Esa exclusión no se podía leer, así que la pantalla no podía
+-- señalar el avalúo que nadie cargó.
+--
+-- La columna es un SNAPSHOT CONGELADO de las unidades del sector que no entraron,
+-- en la forma `[{ "unidadId": …, "unidadNumero": … }]`. No se deriva del padrón al
+-- leer: una unidad dada de alta en el sector DESPUÉS de la emisión no existía
+-- cuando el reparto se emitió, y mostrarla como excluida sería falso.
+--
+-- Aditiva: una columna nueva, con `DEFAULT '[]'`. El valor por defecto es también
+-- lo que escribe el alta, así que una fila creada sin declararla no queda en NULL.
+-- Las filas que ya existieran antes de esta columna —si las hay— quedan con la
+-- lista vacía: su exclusión no se registró y no es reconstruible, porque depende
+-- del padrón y de los avalúos de aquel momento.
+ALTER TABLE "repartos_sector" ADD COLUMN "unidadesExcluidas" JSONB NOT NULL DEFAULT '[]';

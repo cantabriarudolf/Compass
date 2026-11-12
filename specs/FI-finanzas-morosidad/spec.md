@@ -823,7 +823,17 @@ un documento propio, con su propia emisión.
 El avalúo fiscal SHALL ser un hecho de la unidad (`Unidad.avaluoFiscal`, columna
 aditiva y opcional) y NO SHALL declararse en el cuerpo de la petición: se lee de la
 base, porque un avalúo que declara quien pide el reparto le permite moverle la carga
-a otra unidad. `NULL` significa **no declarado**. El campo vive en el modelo de la
+a otra unidad. `NULL` significa **no declarado**. La unidad sin avalúo SHALL quedar
+**fuera** del reparto y NO SHALL compensarse repartiendo el monto en partes iguales
+entre las demás: el dato que falta no se inventa ni se diluye.
+
+La emisión SHALL congelar, junto con las cuotas, la **lista de las unidades que
+quedaron fuera** (`RepartoSector.unidadesExcluidas`), y esa lista SHALL leerse de la
+fila persistida, nunca recalcularse contra el padrón del sector: una unidad dada de
+alta en el sector después de la emisión no existía cuando se emitió, así que no
+puede aparecer como excluida de un reparto anterior. La pantalla SHALL mostrar esa
+lista con el número de cada unidad y su motivo, porque una unidad que deja de pagar
+en silencio es un error de carga que alguien tiene que ver. El campo vive en el modelo de la
 unidad, pero la capacidad es de FI: TU gobierna el maestro de tipos de unidad (las
 plantillas), no los hechos catastrales de cada unidad, así que el contrato del
 reparto se especifica acá.

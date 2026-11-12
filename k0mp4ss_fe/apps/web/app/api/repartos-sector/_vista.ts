@@ -2,10 +2,16 @@
  * `_vista.ts` — la forma en que se devuelve un reparto por sector (F32).
  *
  * El alta y la lectura devuelven lo mismo: el reparto con su sector, su período,
- * su concepto, el monto total y el avalúo total PERSISTIDOS, y sus cuotas. Los dos
- * totales salen de la fila, no de una segunda suma calculada al leer: son el
- * snapshot del momento en que se emitió, y una revalorización posterior de una
- * unidad no reescribe lo emitido.
+ * su concepto, el monto total y el avalúo total PERSISTIDOS, sus cuotas y la lista
+ * de unidades que quedaron FUERA. Los dos totales salen de la fila, no de una
+ * segunda suma calculada al leer: son el snapshot del momento en que se emitió, y
+ * una revalorización posterior de una unidad no reescribe lo emitido.
+ *
+ * `unidadesExcluidas` se LEE de la columna y nunca se deriva del padrón de hoy: una
+ * unidad dada de alta en el sector después de la emisión no existía cuando el
+ * reparto se emitió, así que mostrarla como excluida sería falso. Por la misma
+ * razón la vista no cruza las cuotas con las unidades del sector: el complemento
+ * de las cuotas de HOY no es la exclusión de AYER.
  *
  * El número de unidad y el nombre del sector los resuelve la ruta en consultas
  * fijas (no hay relación Prisma desde la cuota hacia la unidad, a propósito: el
@@ -31,6 +37,12 @@ export interface RepartoSectorPersistido {
   readonly estado: string
   readonly creadoPor: string
   readonly createdAt: Date
+  /**
+   * Columna `Json` con el snapshot de las unidades sin avalúo al emitir. Se recibe
+   * como `unknown` a propósito: la vista no confía en la forma del valor guardado
+   * y la valida antes de exponerla.
+   */
+  readonly unidadesExcluidas: unknown
 }
 
 /** Cuota tal como viaja al cliente, con el número de unidad que la ruta resolvió. */
@@ -40,6 +52,16 @@ export interface CuotaEnLaVista {
   readonly unidadNumero: string | null
   readonly avaluoUsado: number
   readonly monto: number
+}
+
+/**
+ * Unidad que quedó FUERA del reparto al emitirse: no tenía avalúo fiscal declarado
+ * (ni `null` ni un valor <= 0 entran a la regla), así que no paga su parte y no se
+ * la compensa. Es el snapshot congelado, no el padrón de hoy.
+ */
+export interface UnidadExcluidaEnLaVista {
+  readonly unidadId: string
+  readonly unidadNumero: string
 }
 
 /** Reparto tal como viaja al cliente, con sus cuotas. */
@@ -55,6 +77,7 @@ export interface RepartoSectorEnLaVista {
   readonly creadoPor: string
   readonly createdAt: string
   readonly cuotas: CuotaEnLaVista[]
+  readonly unidadesExcluidas: UnidadExcluidaEnLaVista[]
 }
 
 /** Nombres que acompañan al reparto, resueltos por la ruta. */
@@ -62,6 +85,31 @@ export interface NombresDelReparto {
   readonly microSectorNombre?: string | null
   /** Número de unidad por id, resuelto para todo el listado en una consulta. */
   readonly numeroPorUnidad?: ReadonlyMap<string, string>
+}
+
+/**
+ * Lee el snapshot persistido de las unidades excluidas.
+ *
+ * La columna la escribe el alta con `[{ unidadId, unidadNumero }]`. Se lee TAL CUAL
+ * y no se cruza con las unidades actuales del sector: hacerlo convertiría una foto
+ * en un cálculo y señalaría como excluida a una unidad que se dio de alta después
+ * de la emisión. Una entrada con otra forma se descarta en vez de inventar una
+ * exclusión que el reparto no declaró.
+ */
+function leerUnidadesExcluidas(valor: unknown): UnidadExcluidaEnLaVista[] {
+  if (!Array.isArray(valor)) return []
+  const excluidas: UnidadExcluidaEnLaVista[] = []
+  for (const entrada of valor) {
+    if (typeof entrada !== "object" || entrada === null) continue
+    const registro = entrada as Record<string, unknown>
+    const unidadId = registro.unidadId
+    const unidadNumero = registro.unidadNumero
+    if (typeof unidadId !== "string" || typeof unidadNumero !== "string") {
+      continue
+    }
+    excluidas.push({ unidadId, unidadNumero })
+  }
+  return excluidas
 }
 
 /**
@@ -99,5 +147,6 @@ export function vistaDeReparto(
       avaluoUsado: cuota.avaluoUsado,
       monto: cuota.monto,
     })),
+    unidadesExcluidas: leerUnidadesExcluidas(reparto.unidadesExcluidas),
   }
 }

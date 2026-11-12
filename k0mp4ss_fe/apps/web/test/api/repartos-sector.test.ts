@@ -48,6 +48,8 @@ const COM_B = "rf-com-b"
 const SECTOR_A1 = "rf-ms-a1"
 /** Sector con avalúos que dejan residuo de redondeo (2/3 y 1/3). */
 const SECTOR_A2 = "rf-ms-a2"
+/** Sector con una unidad con avalúo y otra en CERO: la lista de excluidas se congela. */
+const SECTOR_A3 = "rf-ms-a3"
 /** Sector donde NINGUNA unidad declaró avalúo (null y 0). */
 const SECTOR_SIN_AVALUO = "rf-ms-sin"
 /** Sector sin unidades: no hay entre quiénes repartir. */
@@ -60,6 +62,10 @@ const UNIDAD_A1_102 = "rf-u-a1-102"
 const UNIDAD_A1_SIN = "rf-u-a1-sin"
 const UNIDAD_A2_201 = "rf-u-a2-201"
 const UNIDAD_A2_202 = "rf-u-a2-202"
+const UNIDAD_A3_401 = "rf-u-a3-401"
+const UNIDAD_A3_402 = "rf-u-a3-402"
+/** Alta DESPUÉS de emitir el reparto: no existía cuando se congeló la exclusión. */
+const UNIDAD_A3_403 = "rf-u-a3-403"
 const UNIDAD_SIN_AVALUO_1 = "rf-u-sin-1"
 const UNIDAD_SIN_AVALUO_2 = "rf-u-sin-2"
 const UNIDAD_B = "rf-u-b-1"
@@ -87,6 +93,12 @@ interface CuotaVista {
   monto: number
 }
 
+/** Una unidad que quedó FUERA del reparto por no tener avalúo fiscal declarado. */
+interface UnidadExcluidaVista {
+  unidadId: string
+  unidadNumero: string
+}
+
 /** Forma del reparto en el alta y en la lectura. */
 interface RepartoVista {
   id: string
@@ -100,6 +112,7 @@ interface RepartoVista {
   creadoPor: string
   createdAt: string
   cuotas: CuotaVista[]
+  unidadesExcluidas: UnidadExcluidaVista[]
 }
 
 interface ListadoRepartos {
@@ -133,6 +146,7 @@ describe("/api/repartos-sector — gasto por sector con avalúo fiscal (F32)", (
     for (const sector of [
       { id: SECTOR_A1, comunidadId: COM_A, macroSectorId: "rf-macro-a", nombre: "Torre A", etiqueta: "Edificio" },
       { id: SECTOR_A2, comunidadId: COM_A, macroSectorId: "rf-macro-a", nombre: "Torre B", etiqueta: "Edificio" },
+      { id: SECTOR_A3, comunidadId: COM_A, macroSectorId: "rf-macro-a", nombre: "Torre E", etiqueta: "Edificio" },
       { id: SECTOR_SIN_AVALUO, comunidadId: COM_A, macroSectorId: "rf-macro-a", nombre: "Torre C", etiqueta: "Edificio" },
       { id: SECTOR_VACIO, comunidadId: COM_A, macroSectorId: "rf-macro-a", nombre: "Torre D", etiqueta: "Edificio" },
       { id: SECTOR_B, comunidadId: COM_B, macroSectorId: "rf-macro-b", nombre: "Torre Ajena", etiqueta: "Edificio" },
@@ -152,6 +166,9 @@ describe("/api/repartos-sector — gasto por sector con avalúo fiscal (F32)", (
       { id: UNIDAD_A1_SIN, microSectorId: SECTOR_A1, numero: "103", avaluoFiscal: null },
       { id: UNIDAD_A2_201, microSectorId: SECTOR_A2, numero: "201", avaluoFiscal: 48_000_000 },
       { id: UNIDAD_A2_202, microSectorId: SECTOR_A2, numero: "202", avaluoFiscal: 24_000_000 },
+      // La 402 declara avalúo CERO: tampoco entra al reparto, y queda registrada.
+      { id: UNIDAD_A3_401, microSectorId: SECTOR_A3, numero: "401", avaluoFiscal: 30_000_000 },
+      { id: UNIDAD_A3_402, microSectorId: SECTOR_A3, numero: "402", avaluoFiscal: 0 },
       { id: UNIDAD_SIN_AVALUO_1, microSectorId: SECTOR_SIN_AVALUO, numero: "301", avaluoFiscal: null },
       { id: UNIDAD_SIN_AVALUO_2, microSectorId: SECTOR_SIN_AVALUO, numero: "302", avaluoFiscal: 0 },
     ]) {
@@ -468,6 +485,11 @@ describe("/api/repartos-sector — gasto por sector con avalúo fiscal (F32)", (
     ])
     // La unidad 103 NO tiene avalúo: no aparece en las cuotas (ni con $0).
     expect(reparto.cuotas.some((cuota) => cuota.unidadId === UNIDAD_A1_SIN)).toBe(false)
+    // Y la unidad sin avalúo SÍ queda registrada como excluida: es el dato que
+    // permite detectar el avalúo que nadie cargó.
+    expect(reparto.unidadesExcluidas).toEqual([
+      { unidadId: UNIDAD_A1_SIN, unidadNumero: "103" },
+    ])
     // La suma de las cuotas es EXACTAMENTE el monto total, en centavos enteros.
     expect(sumaEnCentavos(reparto.cuotas)).toBe(centavos(1_000_000))
 
@@ -483,6 +505,10 @@ describe("/api/repartos-sector — gasto por sector con avalúo fiscal (F32)", (
     expect(fila?.avaluoTotal).toBe(100_000_000)
     expect(fila?.cuotas.map((cuota) => cuota.avaluoUsado)).toEqual([
       60_000_000, 40_000_000,
+    ])
+    // La exclusión vive en la FILA del reparto, no se deduce de las cuotas.
+    expect(fila?.unidadesExcluidas).toEqual([
+      { unidadId: UNIDAD_A1_SIN, unidadNumero: "103" },
     ])
 
     // Auditoría en la misma transacción.
@@ -505,6 +531,9 @@ describe("/api/repartos-sector — gasto por sector con avalúo fiscal (F32)", (
       const encontrado = listado.data.find((fila) => fila.id === reparto.id)
       expect(encontrado).toBeDefined()
       expect(encontrado?.cuotas.map((cuota) => cuota.monto)).toEqual([600_000, 400_000])
+      expect(encontrado?.unidadesExcluidas).toEqual([
+        { unidadId: UNIDAD_A1_SIN, unidadNumero: "103" },
+      ])
       expect(listado.mostrados).toBe(listado.data.length)
     })
   })
@@ -521,6 +550,8 @@ describe("/api/repartos-sector — gasto por sector con avalúo fiscal (F32)", (
     )
 
     expect(reparto.avaluoTotal).toBe(72_000_000)
+    // Ninguna unidad del sector quedó fuera: la lista llega vacía, no ausente.
+    expect(reparto.unidadesExcluidas).toEqual([])
     expect(reparto.cuotas.map((cuota) => cuota.monto)).toEqual([
       666_666.67, // mayor avalúo (48M): absorbe el centavo del redondeo
       333_333.33,
@@ -529,6 +560,80 @@ describe("/api/repartos-sector — gasto por sector con avalúo fiscal (F32)", (
     expect(
       reparto.cuotas.reduce((acumulado, cuota) => acumulado + centavos(cuota.monto), 0)
     ).toBe(centavos(reparto.montoTotal))
+  })
+
+  it("la lista de unidades excluidas se CONGELA al emitir: una unidad dada de alta después no aparece", async () => {
+    // Emisión con la 401 (avalúo declarado) y la 402 (avalúo CERO): la 402 no paga
+    // y queda registrada como excluida.
+    const primero = await emitirReparto(
+      alta({
+        microSectorId: SECTOR_A3,
+        concepto: "Pintura de la escalera de la Torre E",
+        montoTotal: 300_000,
+      })
+    )
+    expect(primero.cuotas.map((cuota) => cuota.unidadId)).toEqual([UNIDAD_A3_401])
+    expect(primero.unidadesExcluidas).toEqual([
+      { unidadId: UNIDAD_A3_402, unidadNumero: "402" },
+    ])
+
+    // Una unidad NUEVA en el mismo sector, sin avalúo, DESPUÉS de la emisión. No
+    // existía cuando el reparto se emitió, así que no puede figurar como excluida.
+    await prisma.unidad.create({
+      data: {
+        id: UNIDAD_A3_403,
+        comunidadId: COM_A,
+        microSectorId: SECTOR_A3,
+        numero: "403",
+        etiqueta: "Depto",
+        tipoUnidadId: "rf-tu-1",
+        metraje: 50,
+        prorrateo: 10,
+        rolSii: "rf-rol-403",
+        estadoId: "habitada",
+        servicios: {},
+        avaluoFiscal: null,
+      },
+    })
+    expect(
+      await prisma.unidad.count({
+        where: { comunidadId: COM_A, microSectorId: SECTOR_A3 },
+      })
+    ).toBe(3)
+
+    // La lectura devuelve el snapshot PERSISTIDO: la 402, no la 403. Si la vista
+    // derivara la lista del padrón de hoy, la 403 aparecería acá.
+    await conSesion(EMAIL_ADMIN, async () => {
+      const res = await GET_REPARTOS()
+      expect(res.status).toBe(200)
+      const listado = (await res.json()) as ListadoRepartos
+      const encontrado = listado.data.find((fila) => fila.id === primero.id)
+      expect(encontrado?.unidadesExcluidas).toEqual([
+        { unidadId: UNIDAD_A3_402, unidadNumero: "402" },
+      ])
+    })
+
+    // La prueba de que era snapshot y no derivación: un reparto NUEVO del mismo
+    // sector sí ve las dos unidades sin avalúo. Dos repartos del mismo sector,
+    // dos listas distintas, cada una congelada en su emisión.
+    const segundo = await emitirReparto(
+      alta({
+        microSectorId: SECTOR_A3,
+        concepto: "Pintura de la escalera de la Torre E, segunda emisión",
+        montoTotal: 300_000,
+      })
+    )
+    expect(segundo.unidadesExcluidas).toEqual([
+      { unidadId: UNIDAD_A3_402, unidadNumero: "402" },
+      { unidadId: UNIDAD_A3_403, unidadNumero: "403" },
+    ])
+
+    const filaPrimero = await prisma.repartoSector.findUnique({
+      where: { id: primero.id },
+    })
+    expect(filaPrimero?.unidadesExcluidas).toEqual([
+      { unidadId: UNIDAD_A3_402, unidadNumero: "402" },
+    ])
   })
 
   it("la lectura nunca devuelve un reparto de otra comunidad, ni con `?comunidadId=`", async () => {

@@ -1749,6 +1749,16 @@ model RepartoSector {
   concepto      String // qué gasto se reparte (el servicio o bien del sector)
   montoTotal    Float // snapshot: lo que se repartió
   avaluoTotal   Float // snapshot: la suma de los avalúos que entraron al reparto
+  // Snapshot de las unidades del sector que quedaron FUERA del reparto al emitirlo:
+  // las que NO tenían avalúo fiscal declarado (`null` o <= 0). Forma:
+  // [{ unidadId, unidadNumero }].
+  //
+  // Se guarda CONGELADO y NO se recalcula al leer. Una unidad dada de alta en el
+  // sector después de la emisión no existía cuando el reparto se emitió, así que
+  // mostrarla como «excluida» sería mentir sobre lo que se emitió. Una unidad
+  // excluida no paga su parte y no se la compensa con un reparto en partes iguales
+  // (la regla vive en `lib/reparto-sector.ts`).
+  unidadesExcluidas Json @default("[]")
   estado        String    @default("emitido")
   creadoPor     String // usuario de sesión que emitió el reparto
   createdAt     DateTime  @default(now())
