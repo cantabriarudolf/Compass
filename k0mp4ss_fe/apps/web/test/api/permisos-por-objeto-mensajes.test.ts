@@ -282,6 +282,21 @@ const clave = (s: { archivo: string; mensaje: string }): string =>
  * Agrupado por recurso, en el orden en que los devuelve el recorrido.
  */
 const DECLARACIONES: readonly Declaracion[] = [
+  // ── app/api/acuerdos ──────────────────────────────────────────
+  {
+    archivo: "app/api/acuerdos/route.ts",
+    mensaje: "`No se puede registrar el acuerdo: el acta \"${}\" no existe en esta comunidad.`",
+    clase: "no-fila",
+    motivo:
+      "el id del acta sale del cuerpo del request y el mensaje dice cuál no existe: no lee ni revela ninguna fila ajena.",
+  },
+  {
+    archivo: "app/api/acuerdos/[id]/voto/route.ts",
+    mensaje: "desenlace.error",
+    clase: "no-fila",
+    motivo:
+      "el texto lo produce la regla de votación sobre el propio acuerdo del scope (repetido, resuelto o unidad ya votada): no expone datos de una fila ajena.",
+  },
   // ── app/api/vigencia-registro ─────────────────────────────────
   {
     archivo: "app/api/vigencia-registro/multa/route.ts",

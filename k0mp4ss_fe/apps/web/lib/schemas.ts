@@ -624,6 +624,75 @@ export const ActaGDSchema = z.object({
   folio: z.string().optional(),
 })
 
+// --- Registro de Acuerdos de gobernanza (U3 de la serie de pruebas manuales) ---
+
+/** Cuerpos que adoptan acuerdos: el comité y la asamblea. */
+export const CuerpoAcuerdoSchema = z.enum(["comite", "asamblea"])
+
+/**
+ * Reglas de quórum que el acuerdo puede declarar como APLICADAS. La ley reparte
+ * la competencia (corte de servicios → comité, art. 20 N°9; convenio de pago →
+ * comité, art. 6) y el reglamento de cada comunidad define quién aprueba su
+ * presupuesto: el registro conserva la regla, no la asume.
+ */
+export const QuorumAcuerdoSchema = z.enum([
+  "un_voto_por_miembro",
+  "mayoria_absoluta_presentes",
+  "mayoria_absoluta_derechos",
+  "mayoria_reforzada_derechos",
+])
+
+/**
+ * Alta de un acuerdo. El `id`, el folio, la fecha, el estado inicial y quién lo
+ * registra los decide el servidor: nunca vienen del cliente.
+ */
+export const AcuerdoSchema = z
+  .object({
+    cuerpo: CuerpoAcuerdoSchema,
+    materia: z
+      .string({ required_error: "La materia del acuerdo es obligatoria." })
+      .trim()
+      .min(5, "La materia debe decir qué se acuerda.")
+      .max(300, "La materia no puede superar los 300 caracteres."),
+    quorumRequerido: QuorumAcuerdoSchema,
+    // Acta que respalda la sesión (asamblea) o la reunión (comité), si consta.
+    actaId: IdEntidadSchema.optional(),
+  })
+  .superRefine((datos, ctx) => {
+    // La regla y el cuerpo no son independientes: el comité vota por miembro
+    // (art. 17) y la asamblea pondera por prorrateo (art. 15). Un acuerdo con
+    // la regla del otro cuerpo no se puede computar, así que se rechaza al alta.
+    const reglaDeComite = datos.quorumRequerido === "un_voto_por_miembro"
+    if (datos.cuerpo === "comite" && !reglaDeComite) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["quorumRequerido"],
+        message:
+          "El comité vota por miembro: la regla de un acuerdo del comité es un_voto_por_miembro.",
+      })
+    }
+    if (datos.cuerpo === "asamblea" && reglaDeComite) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["quorumRequerido"],
+        message:
+          "La asamblea vota ponderada por prorrateo: la regla de un acuerdo de asamblea no puede ser un_voto_por_miembro.",
+      })
+    }
+  })
+
+/**
+ * Emisión de UN voto. El votante no viene en el cuerpo: se deriva de la sesión
+ * (Maestro de Personas + vínculos en la base), así que el cliente no puede
+ * votar por otro. El resto de la fila (peso, unidad, fecha, folio) lo pone el
+ * servidor.
+ */
+export const VotoAcuerdoSchema = z.object({
+  decision: z.enum(["a_favor", "en_contra", "abstencion"], {
+    required_error: "La decisión del voto es obligatoria.",
+  }),
+})
+
 export const MensajeDocumentoInvalido =
   "RUT inválido (dígito verificador incorrecto) o pasaporte con formato no válido."
 

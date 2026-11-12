@@ -37,6 +37,8 @@ model Comunidad {
   propuestasMultaVigencia     PropuestaMultaVigencia[]
   periodosDirectiva           PeriodoDirectiva[]
   actasGD                     ActaGD[]
+  // U3 — registro de acuerdos de gobernanza (comité o asamblea).
+  acuerdos                    Acuerdo[]
   // SERIE-FASE2 §V6 — actas GD publicadas en el visor CV (por referencia).
   actasPublicadasCV           ActaPublicadaCV[]
   plantillasCO                PlantillaCO[]
@@ -649,6 +651,66 @@ model ActaGDArchivada {
 
   @@index([comunidadId])
   @@map("actas_gd_archivadas")
+}
+
+// Registro de Acuerdos con votos inmutables (U3 de la serie «saldar para
+// pruebas manuales»): la pieza de gobernanza que necesitan el corte de
+// servicios (F28, acuerdo del comité — Ley 21.442 art. 20 N°9), el convenio de
+// pago (F29, art. 6) y el presupuesto por partidas (F31).
+//
+// El acuerdo guarda CUÁL fue la regla aplicada (`quorumRequerido`) porque la ley
+// reparte la competencia entre comité y asamblea y el reglamento de cada
+// comunidad define quién aprueba su presupuesto: el registro no lo asume.
+model Acuerdo {
+  id              String    @id
+  comunidadId     String
+  comunidad       Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  cuerpo          String // comite | asamblea
+  materia         String // qué se acordó (corte de servicios, convenio de pago, presupuesto…)
+  // Folio del libro de acuerdos: `AD-<año>-<correlativo>`, asignado por el
+  // servidor al crear y nunca reasignado. El índice único es la garantía dura
+  // contra la carrera (el POST reintenta con el siguiente correlativo).
+  folio           String
+  estado          String    @default("abierto") // abierto | aprobado | rechazado
+  // La regla APLICADA, en texto: un_voto_por_miembro |
+  // mayoria_absoluta_presentes | mayoria_absoluta_derechos |
+  // mayoria_reforzada_derechos (ver lib/acuerdos.ts).
+  quorumRequerido String
+  fecha           DateTime  @default(now())
+  // Acta que respalda la sesión (asamblea) o la reunión (comité), si consta.
+  actaId          String?
+  creadoPor       String // usuario de sesión que registró el acuerdo
+  resueltoEn      DateTime?
+  createdAt       DateTime  @default(now())
+
+  votos VotoAcuerdo[]
+
+  @@unique([comunidadId, folio])
+  @@index([comunidadId])
+  @@map("acuerdos")
+}
+
+// Voto de un acuerdo: EVIDENCIA. No se edita ni se borra — no hay ninguna ruta
+// de actualización ni de baja, y el índice único impide el doble voto de la
+// misma persona en el mismo acuerdo.
+model VotoAcuerdo {
+  id            String   @id
+  comunidadId   String
+  acuerdoId     String
+  acuerdo       Acuerdo  @relation(fields: [acuerdoId], references: [id], onDelete: Cascade)
+  personaId     String // quién votó (Maestro de Personas, derivado de la sesión)
+  // Unidad que aporta el peso del voto en la asamblea. Es null en el comité
+  // (un voto por miembro) y cuando la persona vota con varias unidades: en ese
+  // caso el peso es la SUMA de sus prorrateos y ninguna unidad lo representa.
+  unidadId      String?
+  decision      String // a_favor | en_contra | abstencion
+  peso          Float // 1 en el comité; prorrateo (o suma) de la unidad en la asamblea
+  registradoPor String // usuario de sesión que emitió el voto
+  fecha         DateTime @default(now())
+
+  @@unique([acuerdoId, personaId])
+  @@index([comunidadId])
+  @@map("acuerdos_votos")
 }
 
 // Comunicación con Vecinos (CO)

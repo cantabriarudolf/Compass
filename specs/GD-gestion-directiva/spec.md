@@ -178,3 +178,41 @@ La migración de `STORE_VERSION` a 28 SHALL inyectar un período inicial `id: "p
 #### Scenario: Segunda migración no duplica el período
 - **WHEN** la migración v28 se aplica sobre un estado que ya contiene `periodo-1`
 - **THEN** no se duplica el período ni se alteran las fichas ya migradas
+
+### Requirement: Registro de Acuerdos con Votos Inmutables
+El sistema SHALL registrar los acuerdos de gobernanza como entidad `Acuerdo` (`id`, `comunidadId`, `cuerpo: comite|asamblea`, `materia`, `folio`, `estado: abierto|aprobado|rechazado`, `quorumRequerido`, `fecha`, `actaId?`, `creadoPor`, `resueltoEn?`, `createdAt`), persistida en la tabla `acuerdos` con folio `AD-<año>-<correlativo>` único por comunidad, asignado por el servidor al crear (con reintento acotado ante la colisión del índice único) y nunca reasignado. El alta SHALL ser del comité y de la administración (recurso `gd`, acción `crear`) y SHALL emitir el evento `AD_ACUERDO_CREADO` en la misma transacción que el acuerdo. El cuerpo y la regla de quórum los declara quien registra y el registro conserva CUÁL se aplicó, porque la ley reparte la competencia —el corte de servicios y el convenio de pago exigen acuerdo del comité (Ley 21.442 art. 20 N°9 y art. 6)— y el reglamento de cada comunidad define qué cuerpo aprueba su presupuesto: el registro no lo asume. La regla SHALL ser coherente con el cuerpo: `un_voto_por_miembro` solo para el comité y las mayorías de derechos (`mayoria_absoluta_presentes`, `mayoria_absoluta_derechos`, `mayoria_reforzada_derechos`) solo para la asamblea. El `actaId` declarado SHALL existir en la misma comunidad (400 si no existe): el acta es la prueba de la sesión y una cita falsa no entra al libro.
+
+El voto SHALL ser inmutable: `VotoAcuerdo` (`acuerdoId`, `personaId`, `unidadId?`, `decision: a_favor|en_contra|abstencion`, `peso`, `registradoPor`, `fecha`) se emite con `POST /api/acuerdos/[id]/voto`, a lo más una vez por persona y acuerdo, y NO SHALL existir ruta de actualización ni de borrado de un voto. El votante SHALL derivarse de la sesión (Maestro de Personas y vínculos leídos de la base), nunca del cuerpo de la solicitud. En el comité SHALL exigirse membresía vigente de la directiva y el peso SHALL ser 1: un voto por miembro (Ley 21.442 art. 17). En la asamblea SHALL exigirse vínculo vigente de propietario en alguna unidad de la comunidad y el peso SHALL ser el prorrateo de la unidad, porque los votos se ponderan por derechos y nunca uno por persona (Ley 21.442 art. 15); si la persona tiene varias unidades, el peso SHALL ser la SUMA de sus prorrateos y el voto NO SHALL asociarse a una unidad única. El prorrateo de una unidad NO SHALL contarse dos veces en el mismo acuerdo: si otro copropietario de la misma unidad ya votó, el voto SHALL rechazarse (409).
+
+El resultado SHALL derivarse de los votos con la regla pura `resultadoDelAcuerdo` y NO SHALL guardarse un total aparte: mayoría estricta de los votos emitidos en el comité (la abstención cuenta como emitida y nunca como favor), mayoría absoluta de los derechos presentes, mayoría absoluta de los derechos de la comunidad o mayoría reforzada del 66% de los derechos, según la regla declarada. El acuerdo SHALL quedar `pendiente` mientras la mayoría todavía pueda alcanzarse o perderse, y SHALL resolverse en `aprobado` o `rechazado` —escribiendo `estado` y `resueltoEn`— en la misma transacción del voto que lo decide; un acuerdo resuelto NO SHALL admitir más votos (409) y un voto repetido SHALL rechazarse (409). El voto y el evento `AD_ACUERDO_VOTO` SHALL escribirse en la misma transacción que la resolución. Los trámites que la ley reserva al acuerdo (corte de servicios, convenio de pago, presupuesto por partidas) SHALL citar el folio del acuerdo registrado: sin acuerdo no hay acto.
+
+#### Scenario: Acuerdo de comité con folio del libro
+- **WHEN** el comité o la administración registra un acuerdo de cuerpo `comite` con la regla `un_voto_por_miembro`
+- **THEN** la API responde 201 con el folio `AD-<año>-<correlativo>` asignado por el servidor, `estado: "abierto"` y `creadoPor` tomado de la sesión
+- **AND** se emite `AD_ACUERDO_CREADO` con el folio en la descripción, en la misma transacción del alta
+
+#### Scenario: Regla incoherente con el cuerpo rechazada
+- **WHEN** se registra un acuerdo de asamblea con `un_voto_por_miembro`, o uno de comité con una mayoría de derechos
+- **THEN** `AcuerdoSchema` lo rechaza (400) y no se persiste ningún acuerdo
+
+#### Scenario: Voto ponderado en la asamblea
+- **WHEN** un propietario con vínculo vigente vota a favor en un acuerdo de asamblea con la regla `mayoria_absoluta_derechos` y su unidad tiene 60 de los 100 derechos de la comunidad
+- **THEN** el voto se registra con peso 60 y el acuerdo queda `aprobado` con `resueltoEn`
+- **AND** una abstención pesa en el total emitido pero no suma a favor, así que un acuerdo puede seguir abierto después de una abstención
+
+#### Scenario: Voto inmutable
+- **WHEN** la misma persona intenta votar dos veces en el mismo acuerdo, o alguien con derecho intenta votar un acuerdo ya resuelto
+- **THEN** la API responde 409 y la fila de votos no cambia (no hay ruta de edición ni de borrado: el voto es evidencia)
+
+#### Scenario: Votante derivado de la sesión
+- **WHEN** se envía un voto sin ser miembro vigente del comité (o, en la asamblea, sin vínculo de propietario vigente)
+- **THEN** la API responde 403 y no se escribe ningún voto, sin importar qué identidad declare el cuerpo de la solicitud
+
+#### Scenario: Resultado derivado de los votos
+- **WHEN** el padrón todavía permite alcanzar o perder la mayoría
+- **THEN** el acuerdo permanece `abierto` y la respuesta informa `pendiente` con el motivo y los totales a favor, en contra y de abstenciones
+- **AND** cuando la mayoría ya es irreversible el acuerdo se resuelve en la transacción del voto que la alcanzó
+
+#### Scenario: Sin acuerdo no hay acto
+- **WHEN** un trámite que la ley reserva al acuerdo del comité (corte de servicios, convenio de pago) se quiere ejecutar
+- **THEN** debe citar el folio de un acuerdo registrado en este libro, porque el registro es la prueba de que el acto existió
