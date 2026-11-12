@@ -21,6 +21,7 @@ import { prisma } from "@/lib/prisma"
 import {
   NOMBRE_TIPO_MULTA_VIGENCIA,
   multaDeVigenciaDeLaComunidad,
+  propuestaDeMultaPermitida,
 } from "@/lib/vigencia-multa"
 
 const COM_A = "vig-multa-com-a"
@@ -134,5 +135,96 @@ describe("vigencia — la multa sale del maestro de la comunidad (S1)", () => {
 
     const deA = await multaDeVigenciaDeLaComunidad(COM_A)
     expect(deA.disponible).toBe(false)
+  })
+})
+
+/**
+ * S4 — cuándo se permite proponer la multa.
+ *
+ * Proponer es un acto explícito de la administración (D5: sin cron) y sólo
+ * puede nacer cuando el caso está `habilitado_para_multa`, la comunidad declaró
+ * el monto en su maestro y el ciclo todavía no tiene propuesta. La regla es pura
+ * a propósito: recibe el veredicto y la disponibilidad ya resueltos y no consulta
+ * la base, para que todo «no» traiga su motivo legible y ninguna ruta tenga que
+ * re-derivar la decisión.
+ */
+describe("vigencia — cuándo se permite proponer la multa (S4)", () => {
+  const multaDeclarada = {
+    disponible: true as const,
+    monto: 35000,
+    tipo: NOMBRE_TIPO_MULTA_VIGENCIA,
+    referenciaLegal: "Artículo 12 del reglamento de copropiedad",
+    tipoInfraccionId: "vig-multa-tipo-a",
+  }
+
+  const sinMonto = {
+    disponible: false as const,
+    motivo: `La comunidad no declaró en su maestro de infracciones el tipo «${NOMBRE_TIPO_MULTA_VIGENCIA}»: no se multa y no se inventa un monto.`,
+    referenciaLegal: null,
+    tipoInfraccionId: null,
+  }
+
+  it("con el caso habilitado, el monto declarado y el ciclo libre, la propuesta se permite", () => {
+    expect(
+      propuestaDeMultaPermitida({
+        veredicto: { estado: "habilitado_para_multa" },
+        multa: multaDeclarada,
+        propuestaExistente: false,
+      })
+    ).toEqual({ permitida: true })
+  })
+
+  it("en cualquier otro estado la propuesta se rechaza nombrando el estado", () => {
+    for (const estado of [
+      "al_dia",
+      "por_vencer",
+      "requerido",
+      "sin_declaracion",
+    ] as const) {
+      const decision = propuestaDeMultaPermitida({
+        veredicto: { estado },
+        multa: multaDeclarada,
+        propuestaExistente: false,
+      })
+      expect(decision.permitida).toBe(false)
+      if (decision.permitida) throw new Error(`no debía permitirse: ${estado}`)
+      expect(decision.motivo).toContain(estado)
+      expect(decision.motivo).toContain("no se propone")
+    }
+  })
+
+  it("sin el monto declarado en el maestro, el rechazo repite el motivo de la multa", () => {
+    const decision = propuestaDeMultaPermitida({
+      veredicto: { estado: "habilitado_para_multa" },
+      multa: sinMonto,
+      propuestaExistente: false,
+    })
+    expect(decision.permitida).toBe(false)
+    if (decision.permitida) throw new Error("no debía permitirse sin monto")
+    expect(decision.motivo).toBe(sinMonto.motivo)
+    expect(decision.motivo).toContain("no se multa")
+  })
+
+  it("con una propuesta ya escrita en el ciclo, la segunda se rechaza y no se duplica", () => {
+    const decision = propuestaDeMultaPermitida({
+      veredicto: { estado: "habilitado_para_multa" },
+      multa: multaDeclarada,
+      propuestaExistente: true,
+    })
+    expect(decision.permitida).toBe(false)
+    if (decision.permitida) throw new Error("no debía permitirse dos veces")
+    expect(decision.motivo).toContain("Ya hay una propuesta")
+    expect(decision.motivo).toContain("ciclo")
+
+    // La propuesta existente manda sobre el resto: un ciclo cerrado tampoco se
+    // vuelve a proponer por la puerta del estado, y el motivo sigue siendo el mismo.
+    const cerrada = propuestaDeMultaPermitida({
+      veredicto: { estado: "al_dia" },
+      multa: sinMonto,
+      propuestaExistente: true,
+    })
+    expect(cerrada).toMatchObject({ permitida: false })
+    if (cerrada.permitida) throw new Error("no debía permitirse")
+    expect(cerrada.motivo).toBe(decision.motivo)
   })
 })

@@ -282,6 +282,14 @@ const clave = (s: { archivo: string; mensaje: string }): string =>
  * Agrupado por recurso, en el orden en que los devuelve el recorrido.
  */
 const DECLARACIONES: readonly Declaracion[] = [
+  // ── app/api/vigencia-registro ─────────────────────────────────
+  {
+    archivo: "app/api/vigencia-registro/multa/route.ts",
+    mensaje: "resultadoPropuesta.motivo",
+    clase: "no-fila",
+    motivo:
+      "el motivo lo produce la regla pura (`propuestaDeMultaPermitida`) sobre el estado de la propia unidad del scope y el monto declarado de la comunidad: no lee ni revela una fila ajena.",
+  },
   // ── app/api/actas-gd ──────────────────────────────────────────
   {
     archivo: "app/api/actas-gd/route.ts",

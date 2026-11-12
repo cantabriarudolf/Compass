@@ -229,6 +229,12 @@ const DECLARACIONES: readonly Declaracion[] = [
       "caso canónico de pertenencia (`InfraccionIN.unidadId`, 404 ABAC en `apelar/route.ts:44`); T3/T4 todavía no lo escriben.",
   },
   {
+    ruta: "vigencia-registro/multa/[id]/aplicar",
+    clase: "exento",
+    motivo:
+      "sólo administración y Comité (`ad` editar/crear): aplica o desestima una propuesta de multa por su id con el acuerdo del Comité, y responde sin devolver datos de una fila ajena; la unidad va scoped por comunidad y el 404 no distingue casos.",
+  },
+  {
     ruta: "in/infracciones/[id]/aplicar",
     clase: "exento",
     motivo:

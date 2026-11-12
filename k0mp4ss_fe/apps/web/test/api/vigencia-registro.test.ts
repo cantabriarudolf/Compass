@@ -1787,3 +1787,570 @@ describe("vigencia del registro — permiso del arrendatario y procedencia de la
     expect(await eventos(U_ADMIN_D)).toBe(0)
   })
 })
+
+/**
+ * S4 — la multa se propone sola con el monto del maestro y la aplica el Comité.
+ *
+ * Proponer es un acto explícito de la administración (D5: sin cron) y congela el
+ * monto y el ancla legal del maestro de la comunidad en ese instante: cambiar el
+ * maestro después no mueve la propuesta, y esa es la evidencia. Aplicarla exige
+ * el acuerdo del Comité con su referencia (acta o número de acuerdo): sin ese
+ * texto la multa no existe. Desestimar deja el motivo y no crea ninguna
+ * infracción. Los casos recorren la vida de una misma propuesta en orden, como el
+ * resto de la suite.
+ */
+describe("vigencia del registro — propuesta de multa y aplicación por el Comité (S4)", () => {
+  const COMUNIDAD_M = "vig-mul-comunidad-a"
+  const COMUNIDAD_M_B = "vig-mul-comunidad-b"
+
+  const EMAIL_ADMIN_M = "vig-mul-admin@test.cl"
+  const EMAIL_RESIDENTE_M = "vig-mul-residente@test.cl"
+  const EMAIL_COMITE_M = "vig-mul-comite@test.cl"
+  const EMAIL_ADMIN_M_B = "vig-mul-admin-b@test.cl"
+
+  const USER_ADMIN_M = "vig-mul-user-admin"
+  const USER_RESIDENTE_M = "vig-mul-user-residente"
+  const USER_COMITE_M = "vig-mul-user-comite"
+  const USER_ADMIN_M_B = "vig-mul-user-admin-b"
+
+  const TIPO_MULTA_M = "vig-mul-tipo"
+  const NOMBRE_TIPO_M = "Registro de Copropietarios no actualizado"
+  const MONTO_MAESTRO = 35000
+  const REFERENCIA_LEGAL_M = "Artículo 12 del reglamento de copropiedad"
+
+  const U_AL_DIA_M = "vig-mul-u-al-dia"
+  const U_PROPONE_M = "vig-mul-u-propone"
+  const U_DESESTIMA_M = "vig-mul-u-desestima"
+  const U_OTRA_COMUNIDAD_M = "vig-mul-u-otra"
+
+  const ACUERDO =
+    "Acta de Comité ordinaria N° 12 de 2026, acuerdo 3: aplicar la multa por el Registro no actualizado."
+  const MOTIVO_DESESTIMACION =
+    "El Comité acordó esperar la declaración del propietario antes de multar."
+
+  const moduloPropuesta = () =>
+    import("@/app/api/vigencia-registro/multa/route")
+  const moduloResolucion = () =>
+    import("@/app/api/vigencia-registro/multa/[id]/aplicar/route")
+
+  type Ctx = { params: Promise<{ id: string }> }
+  const ctx = (id: string): Ctx => ({ params: Promise.resolve({ id }) })
+
+  /** Propuesta que recorre el describe: la escribe el primer test y la resuelven los siguientes. */
+  let propuestaCiclo = ""
+
+  function proponer(unidadId: string): Promise<Response> {
+    return moduloPropuesta().then(({ POST }) =>
+      POST(
+        new Request("http://localhost/api/vigencia-registro/multa", {
+          method: "POST",
+          body: JSON.stringify({ unidadId }),
+        })
+      )
+    )
+  }
+
+  function resolver(id: string, cuerpo: unknown): Promise<Response> {
+    return moduloResolucion().then(({ POST }) =>
+      POST(
+        new Request(
+          `http://localhost/api/vigencia-registro/multa/${id}/aplicar`,
+          { method: "POST", body: JSON.stringify(cuerpo) }
+        ),
+        ctx(id)
+      )
+    )
+  }
+
+  const propuestas = (unidadId: string) =>
+    prisma.propuestaMultaVigencia.findMany({
+      where: { comunidadId: COMUNIDAD_M, unidadId },
+      orderBy: { createdAt: "asc" },
+    })
+
+  const infracciones = (unidadId: string) =>
+    prisma.infraccionIN.findMany({
+      where: { comunidadId: COMUNIDAD_M, unidadId },
+      orderBy: { createdAt: "asc" },
+    })
+
+  const eventos = (unidadId: string, tipoAccion: string) =>
+    prisma.eventoAuditoria.count({
+      where: {
+        comunidadId: COMUNIDAD_M,
+        referenciaId: unidadId,
+        tipoAccion,
+      },
+    })
+
+  const caso = (unidadId: string) =>
+    prisma.vigenciaRegistroUnidad.findUnique({
+      where: {
+        comunidadId_unidadId: { comunidadId: COMUNIDAD_M, unidadId },
+      },
+    })
+
+  async function conSesionM(
+    email: string,
+    fn: () => Promise<void>
+  ): Promise<void> {
+    const user = await prisma.usuario.findUnique({ where: { email } })
+    if (!user) throw new Error(`usuario no encontrado: ${email}`)
+    const { cookieSesionAuthjs } = await import("../helpers/sesion-authjs")
+    state.cookie = await cookieSesionAuthjs({ sub: user.id, email: user.email })
+    try {
+      await fn()
+    } finally {
+      state.cookie = ""
+    }
+  }
+
+  beforeAll(async () => {
+    process.env.AUTH_SECRET ||= AUTH_SECRET
+
+    for (const [id, nombre, slug] of [
+      [COMUNIDAD_M, "Comunidad Propuesta de Multa", "vig-mul-comunidad-a"],
+      [COMUNIDAD_M_B, "Comunidad Propuesta de Multa B", "vig-mul-comunidad-b"],
+    ] as const) {
+      await prisma.comunidad.upsert({
+        where: { id },
+        update: {},
+        create: { id, nombre, slug },
+      })
+    }
+
+    for (const [id, email] of [
+      [USER_ADMIN_M, EMAIL_ADMIN_M],
+      [USER_RESIDENTE_M, EMAIL_RESIDENTE_M],
+      [USER_COMITE_M, EMAIL_COMITE_M],
+      [USER_ADMIN_M_B, EMAIL_ADMIN_M_B],
+    ] as const) {
+      await prisma.usuario.upsert({
+        where: { email },
+        update: {},
+        create: { id, email, activo: true },
+      })
+    }
+
+    const usuarios = [
+      USER_ADMIN_M,
+      USER_RESIDENTE_M,
+      USER_COMITE_M,
+      USER_ADMIN_M_B,
+    ]
+    await prisma.membresia.deleteMany({ where: { usuarioId: { in: usuarios } } })
+    await prisma.membresia.createMany({
+      data: [
+        // Un solo vínculo por usuario: el scope de la sesión es determinista.
+        { usuarioId: USER_ADMIN_M, comunidadId: COMUNIDAD_M, rol: "administrador" },
+        { usuarioId: USER_RESIDENTE_M, comunidadId: COMUNIDAD_M, rol: "residente" },
+        { usuarioId: USER_COMITE_M, comunidadId: COMUNIDAD_M, rol: "comite" },
+        { usuarioId: USER_ADMIN_M_B, comunidadId: COMUNIDAD_M_B, rol: "administrador" },
+      ],
+    })
+
+    const comunidades = [COMUNIDAD_M, COMUNIDAD_M_B]
+    await prisma.eventoAuditoria.deleteMany({
+      where: { comunidadId: { in: comunidades } },
+    })
+    await prisma.propuestaMultaVigencia.deleteMany({
+      where: { comunidadId: { in: comunidades } },
+    })
+    await prisma.infraccionIN.deleteMany({
+      where: { comunidadId: { in: comunidades } },
+    })
+    await prisma.vigenciaRegistroUnidad.deleteMany({
+      where: { comunidadId: { in: comunidades } },
+    })
+    await prisma.requerimientoVigencia.deleteMany({
+      where: { comunidadId: { in: comunidades } },
+    })
+    await prisma.tipoInfraccionIN.deleteMany({
+      where: { comunidadId: { in: comunidades } },
+    })
+    await prisma.unidad.deleteMany({
+      where: { comunidadId: { in: comunidades } },
+    })
+
+    await crearUnidad(U_AL_DIA_M, "301", COMUNIDAD_M)
+    await crearUnidad(U_PROPONE_M, "302", COMUNIDAD_M)
+    await crearUnidad(U_DESESTIMA_M, "303", COMUNIDAD_M)
+    await crearUnidad(U_OTRA_COMUNIDAD_M, "401", COMUNIDAD_M_B)
+
+    await prisma.vigenciaRegistroUnidad.createMany({
+      data: [
+        {
+          comunidadId: COMUNIDAD_M,
+          unidadId: U_AL_DIA_M,
+          ultimaActualizacion: hace(30),
+        },
+        {
+          comunidadId: COMUNIDAD_M,
+          unidadId: U_PROPONE_M,
+          ultimaActualizacion: hace(400),
+          requerimientoEn: hace(100),
+        },
+        {
+          comunidadId: COMUNIDAD_M,
+          unidadId: U_DESESTIMA_M,
+          ultimaActualizacion: hace(400),
+          requerimientoEn: hace(100),
+        },
+        // La otra comunidad no declara el tipo en su maestro: es el caso S1.
+        {
+          comunidadId: COMUNIDAD_M_B,
+          unidadId: U_OTRA_COMUNIDAD_M,
+          ultimaActualizacion: hace(400),
+          requerimientoEn: hace(100),
+        },
+      ],
+    })
+
+    // S1: el monto y su ancla legal salen del maestro de ESTA comunidad.
+    await prisma.tipoInfraccionIN.create({
+      data: {
+        id: TIPO_MULTA_M,
+        comunidadId: COMUNIDAD_M,
+        nombre: NOMBRE_TIPO_M,
+        categoria: "grave",
+        tipoSancion: "monto_fijo",
+        valor: MONTO_MAESTRO,
+        referenciaLegal: REFERENCIA_LEGAL_M,
+      },
+    })
+  }, 30_000)
+
+  afterAll(async () => {
+    try {
+      const comunidades = [COMUNIDAD_M, COMUNIDAD_M_B]
+      await prisma.eventoAuditoria.deleteMany({
+        where: { comunidadId: { in: comunidades } },
+      })
+      await prisma.propuestaMultaVigencia.deleteMany({
+        where: { comunidadId: { in: comunidades } },
+      })
+      await prisma.infraccionIN.deleteMany({
+        where: { comunidadId: { in: comunidades } },
+      })
+      await prisma.vigenciaRegistroUnidad.deleteMany({
+        where: { comunidadId: { in: comunidades } },
+      })
+      await prisma.requerimientoVigencia.deleteMany({
+        where: { comunidadId: { in: comunidades } },
+      })
+      await prisma.tipoInfraccionIN.deleteMany({
+        where: { comunidadId: { in: comunidades } },
+      })
+      await prisma.unidad.deleteMany({
+        where: { comunidadId: { in: comunidades } },
+      })
+      await prisma.membresia.deleteMany({
+        where: {
+          usuarioId: {
+            in: [USER_ADMIN_M, USER_RESIDENTE_M, USER_COMITE_M, USER_ADMIN_M_B],
+          },
+        },
+      })
+      await prisma.usuario.deleteMany({
+        where: {
+          id: {
+            in: [USER_ADMIN_M, USER_RESIDENTE_M, USER_COMITE_M, USER_ADMIN_M_B],
+          },
+        },
+      })
+      await prisma.comunidad.deleteMany({
+        where: { id: { in: comunidades } },
+      })
+    } catch {
+      // limpieza best-effort
+    }
+  })
+
+  it("sin sesión responde 401 en las dos rutas y no escribe nada", async () => {
+    const { POST: proponerSinSesion } = await moduloPropuesta()
+    const propuesta = await proponerSinSesion(
+      new Request("http://localhost/api/vigencia-registro/multa", {
+        method: "POST",
+        body: JSON.stringify({ unidadId: U_PROPONE_M }),
+      })
+    )
+    expect(propuesta.status).toBe(401)
+
+    const { POST: resolverSinSesion } = await moduloResolucion()
+    const resolucion = await resolverSinSesion(
+      new Request("http://localhost/api/vigencia-registro/multa/x/aplicar", {
+        method: "POST",
+        body: JSON.stringify({ acuerdoReferencia: ACUERDO }),
+      }),
+      ctx("x")
+    )
+    expect(resolucion.status).toBe(401)
+
+    expect(await propuestas(U_PROPONE_M)).toHaveLength(0)
+    expect(await infracciones(U_PROPONE_M)).toHaveLength(0)
+  })
+
+  it("el residente no propone ni aplica: 403 y nada escrito", async () => {
+    await conSesionM(EMAIL_RESIDENTE_M, async () => {
+      const propuesta = await proponer(U_PROPONE_M)
+      expect(propuesta.status).toBe(403)
+
+      const resolucion = await resolver("vig-mul-propuesta-inexistente", {
+        acuerdoReferencia: ACUERDO,
+      })
+      expect(resolucion.status).toBe(403)
+    })
+
+    expect(await propuestas(U_PROPONE_M)).toHaveLength(0)
+    expect(await infracciones(U_PROPONE_M)).toHaveLength(0)
+    expect(await eventos(U_PROPONE_M, "AD_VIGENCIA_MULTA_PROPUESTA")).toBe(0)
+  })
+
+  it("una unidad al día no admite propuesta: rechazo con el motivo y sin fila", async () => {
+    await conSesionM(EMAIL_ADMIN_M, async () => {
+      const respuesta = await proponer(U_AL_DIA_M)
+      expect(respuesta.status).toBe(400)
+      const cuerpo = await respuesta.json()
+      expect(cuerpo.error).toContain("al_dia")
+      expect(cuerpo.error).toContain("no se propone")
+    })
+
+    expect(await propuestas(U_AL_DIA_M)).toHaveLength(0)
+    expect(await eventos(U_AL_DIA_M, "AD_VIGENCIA_MULTA_PROPUESTA")).toBe(0)
+  })
+
+  it("sin el tipo declarado en el maestro no se propone, y el motivo lo dice (S1)", async () => {
+    await conSesionM(EMAIL_ADMIN_M_B, async () => {
+      const respuesta = await proponer(U_OTRA_COMUNIDAD_M)
+      expect(respuesta.status).toBe(400)
+      const cuerpo = await respuesta.json()
+      expect(cuerpo.error).toContain(NOMBRE_TIPO_M)
+      expect(cuerpo.error).toContain("no se multa")
+    })
+
+    expect(
+      await prisma.propuestaMultaVigencia.count({
+        where: { comunidadId: COMUNIDAD_M_B, unidadId: U_OTRA_COMUNIDAD_M },
+      })
+    ).toBe(0)
+  })
+
+  it("proponer congela el monto del maestro, su ancla legal y el ciclo abierto", async () => {
+    await conSesionM(EMAIL_ADMIN_M, async () => {
+      const respuesta = await proponer(U_PROPONE_M)
+      expect(respuesta.status).toBe(200)
+      const cuerpo = await respuesta.json()
+      expect(cuerpo.ok).toBe(true)
+      expect(cuerpo.monto).toBe(MONTO_MAESTRO)
+      expect(cuerpo.referenciaLegal).toBe(REFERENCIA_LEGAL_M)
+      propuestaCiclo = cuerpo.propuestaId
+    })
+
+    const [fila] = await propuestas(U_PROPONE_M)
+    if (!fila) throw new Error("no se escribió la propuesta")
+    expect(fila).toMatchObject({
+      estado: "propuesta",
+      monto: MONTO_MAESTRO,
+      referenciaLegal: REFERENCIA_LEGAL_M,
+      tipoInfraccionId: TIPO_MULTA_M,
+      propuestaPor: USER_ADMIN_M,
+    })
+    // El ciclo es el requerimiento que abrió los 60 días, no la fecha de hoy.
+    const requerimientoEn = (await caso(U_PROPONE_M))?.requerimientoEn
+    expect(requerimientoEn).not.toBeNull()
+    expect(fila.requerimientoEn.getTime()).toBe(
+      (requerimientoEn as Date).getTime()
+    )
+    expect(await eventos(U_PROPONE_M, "AD_VIGENCIA_MULTA_PROPUESTA")).toBe(1)
+  })
+
+  it("una segunda propuesta del mismo ciclo responde 409 y no duplica la fila", async () => {
+    await conSesionM(EMAIL_ADMIN_M, async () => {
+      const respuesta = await proponer(U_PROPONE_M)
+      expect(respuesta.status).toBe(409)
+      const cuerpo = await respuesta.json()
+      expect(cuerpo.error).toContain("propuesta")
+      expect(cuerpo.error).toContain("ciclo")
+    })
+
+    expect(await propuestas(U_PROPONE_M)).toHaveLength(1)
+    expect(await eventos(U_PROPONE_M, "AD_VIGENCIA_MULTA_PROPUESTA")).toBe(1)
+  })
+
+  it("una unidad y una propuesta de otra comunidad responden 404 sin tocarse", async () => {
+    const casoAjeno = await prisma.vigenciaRegistroUnidad.findUnique({
+      where: {
+        comunidadId_unidadId: {
+          comunidadId: COMUNIDAD_M_B,
+          unidadId: U_OTRA_COMUNIDAD_M,
+        },
+      },
+    })
+    const ajena = await prisma.propuestaMultaVigencia.create({
+      data: {
+        comunidadId: COMUNIDAD_M_B,
+        unidadId: U_OTRA_COMUNIDAD_M,
+        monto: 1000,
+        requerimientoEn: casoAjeno?.requerimientoEn as Date,
+        propuestaPor: USER_ADMIN_M_B,
+      },
+    })
+
+    await conSesionM(EMAIL_ADMIN_M, async () => {
+      const propuesta = await proponer(U_OTRA_COMUNIDAD_M)
+      expect(propuesta.status).toBe(404)
+
+      const resolucion = await resolver(ajena.id, {
+        acuerdoReferencia: ACUERDO,
+      })
+      expect(resolucion.status).toBe(404)
+    })
+
+    expect(
+      await prisma.propuestaMultaVigencia.count({
+        where: { comunidadId: COMUNIDAD_M, unidadId: U_OTRA_COMUNIDAD_M },
+      })
+    ).toBe(0)
+    const intacta = await prisma.propuestaMultaVigencia.findUnique({
+      where: { id: ajena.id },
+    })
+    expect(intacta?.estado).toBe("propuesta")
+    expect(
+      await prisma.infraccionIN.count({
+        where: { comunidadId: COMUNIDAD_M_B, unidadId: U_OTRA_COMUNIDAD_M },
+      })
+    ).toBe(0)
+  })
+
+  it("aplicar sin el acuerdo del Comité responde 400 y nada cambia", async () => {
+    await conSesionM(EMAIL_COMITE_M, async () => {
+      const respuesta = await resolver(propuestaCiclo, {})
+      expect(respuesta.status).toBe(400)
+    })
+
+    const fila = await prisma.propuestaMultaVigencia.findUnique({
+      where: { id: propuestaCiclo },
+    })
+    expect(fila).toMatchObject({
+      estado: "propuesta",
+      aplicadaPor: null,
+      aplicadaEn: null,
+      infraccionId: null,
+    })
+    expect(await infracciones(U_PROPONE_M)).toHaveLength(0)
+    expect(await eventos(U_PROPONE_M, "AD_VIGENCIA_MULTA_APLICADA")).toBe(0)
+  })
+
+  it("el Comité aplica con su acuerdo: UNA infracción con el monto congelado y su evento", async () => {
+    let infraccionId = ""
+    await conSesionM(EMAIL_COMITE_M, async () => {
+      const respuesta = await resolver(propuestaCiclo, {
+        acuerdoReferencia: ACUERDO,
+      })
+      expect(respuesta.status).toBe(200)
+      const cuerpo = await respuesta.json()
+      expect(cuerpo.ok).toBe(true)
+      expect(cuerpo.estado).toBe("aplicada")
+      infraccionId = cuerpo.infraccionId
+    })
+
+    const fila = await prisma.propuestaMultaVigencia.findUnique({
+      where: { id: propuestaCiclo },
+    })
+    expect(fila).toMatchObject({
+      estado: "aplicada",
+      aplicadaPor: USER_COMITE_M,
+      acuerdoReferencia: ACUERDO,
+      infraccionId,
+    })
+    expect(fila?.aplicadaEn).not.toBeNull()
+
+    const escritas = await infracciones(U_PROPONE_M)
+    expect(escritas).toHaveLength(1)
+    const infraccion = escritas[0]
+    if (!infraccion) throw new Error("no se escribió la infracción")
+    expect(infraccion).toMatchObject({
+      id: infraccionId,
+      unidadId: U_PROPONE_M,
+      estado: "aplicada",
+      tipoInfraccionId: TIPO_MULTA_M,
+      montoAplicado: MONTO_MAESTRO,
+      cargoFIReferencia: null,
+    })
+    expect(infraccion.folio).toMatch(/^IN-\d{4}$/)
+    // La evidencia apunta a la propuesta que la originó.
+    expect(JSON.stringify(infraccion.evidencias)).toContain(propuestaCiclo)
+    expect(infraccion.antecedentes).toContain(ACUERDO)
+    expect(await eventos(U_PROPONE_M, "AD_VIGENCIA_MULTA_APLICADA")).toBe(1)
+    // La materialización financiera (CargoFI) queda en el módulo IN: acá no se crea.
+    expect(
+      await prisma.cobroFI.count({ where: { comunidadId: COMUNIDAD_M } })
+    ).toBe(0)
+
+    // Una propuesta resuelta no se vuelve a aplicar.
+    await conSesionM(EMAIL_COMITE_M, async () => {
+      const respuesta = await resolver(propuestaCiclo, {
+        acuerdoReferencia: ACUERDO,
+      })
+      expect(respuesta.status).toBe(409)
+    })
+    expect(await infracciones(U_PROPONE_M)).toHaveLength(1)
+    expect(await eventos(U_PROPONE_M, "AD_VIGENCIA_MULTA_APLICADA")).toBe(1)
+  })
+
+  it("cambiar el maestro después de proponer no mueve la propuesta ni la infracción", async () => {
+    await prisma.tipoInfraccionIN.update({
+      where: { id: TIPO_MULTA_M },
+      data: { valor: 99000, referenciaLegal: "Acta modificada del reglamento" },
+    })
+    try {
+      const fila = await prisma.propuestaMultaVigencia.findUnique({
+        where: { id: propuestaCiclo },
+      })
+      expect(fila?.monto).toBe(MONTO_MAESTRO)
+      expect(fila?.referenciaLegal).toBe(REFERENCIA_LEGAL_M)
+
+      const [infraccion] = await infracciones(U_PROPONE_M)
+      expect(infraccion?.montoAplicado).toBe(MONTO_MAESTRO)
+    } finally {
+      await prisma.tipoInfraccionIN.update({
+        where: { id: TIPO_MULTA_M },
+        data: { valor: MONTO_MAESTRO, referenciaLegal: REFERENCIA_LEGAL_M },
+      })
+    }
+  })
+
+  it("desestimar con motivo deja la propuesta cerrada y sin infracción", async () => {
+    let propuesta = ""
+    await conSesionM(EMAIL_ADMIN_M, async () => {
+      const respuesta = await proponer(U_DESESTIMA_M)
+      expect(respuesta.status).toBe(200)
+      propuesta = (await respuesta.json()).propuestaId
+    })
+
+    await conSesionM(EMAIL_ADMIN_M, async () => {
+      const respuesta = await resolver(propuesta, {
+        desestimar: true,
+        motivo: MOTIVO_DESESTIMACION,
+      })
+      expect(respuesta.status).toBe(200)
+      const cuerpo = await respuesta.json()
+      expect(cuerpo.ok).toBe(true)
+      expect(cuerpo.estado).toBe("desestimada")
+    })
+
+    const fila = await prisma.propuestaMultaVigencia.findUnique({
+      where: { id: propuesta },
+    })
+    expect(fila).toMatchObject({
+      estado: "desestimada",
+      motivoDesestimacion: MOTIVO_DESESTIMACION,
+      infraccionId: null,
+    })
+    expect(await infracciones(U_DESESTIMA_M)).toHaveLength(0)
+    expect(
+      await eventos(U_DESESTIMA_M, "AD_VIGENCIA_MULTA_DESESTIMADA")
+    ).toBe(1)
+    expect(await eventos(U_DESESTIMA_M, "AD_VIGENCIA_MULTA_APLICADA")).toBe(0)
+  })
+})

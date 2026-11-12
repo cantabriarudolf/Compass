@@ -39,6 +39,7 @@ model Comunidad {
   requerimientosVigencia      RequerimientoVigencia[]
   revalidacionesVigencia      RevalidacionVigencia[]
   avisosVigencia              AvisoVigencia[]
+  propuestasMultaVigencia     PropuestaMultaVigencia[]
   periodosDirectiva           PeriodoDirectiva[]
   actasGD                     ActaGD[]
   // SERIE-FASE2 §V6 — actas GD publicadas en el visor CV (por referencia).
@@ -527,6 +528,46 @@ model AvisoVigencia {
   @@unique([comunidadId, unidadId, tipo, destinatario, hito])
   @@index([comunidadId])
   @@map("avisos_vigencia")
+}
+
+/// Propuesta de multa por Registro no actualizado (S4): el sistema la propone con
+/// el monto congelado del maestro de la comunidad y la aplica el Comité con su acuerdo.
+/// Una propuesta por ciclo: la clave es la unidad y el acto de requerir que abrió los
+/// 60 días. El monto y el ancla legal se congelan al proponer, así que cambiar el
+/// maestro después no mueve la propuesta: esa es la evidencia.
+model PropuestaMultaVigencia {
+  id                  String    @id @default(cuid())
+  comunidadId         String
+  comunidad           Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  unidadId            String
+  /// Momento en que el sistema propuso la multa (acto explícito, sin cron: D5).
+  fecha               DateTime  @default(now())
+  /// Monto congelado del maestro de la comunidad al proponer (S1: nunca un valor
+  /// del código ni un monto por defecto).
+  monto               Float
+  /// Ancla legal congelada: artículo del reglamento o acta que fija el monto.
+  referenciaLegal     String?
+  /// Fila del maestro de la que salió el monto; `null` si no consta.
+  tipoInfraccionId    String?
+  /// `propuesta` | `aplicada` | `desestimada`.
+  estado              String    @default("propuesta")
+  /// Ciclo que la origina: el acto de requerir que abrió los 60 días.
+  requerimientoEn     DateTime
+  propuestaPor        String
+  /// Quién la aplicó (administrador o Comité) y cuándo.
+  aplicadaPor         String?
+  aplicadaEn          DateTime?
+  /// Acuerdo del Comité que la aprobó: acta o número de acuerdo (exigido al aplicar).
+  acuerdoReferencia   String?
+  /// Infracción IN creada al aplicarla; `null` mientras siga propuesta o desestimada.
+  infraccionId        String?
+  motivoDesestimacion String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  @@unique([comunidadId, unidadId, requerimientoEn])
+  @@index([comunidadId])
+  @@map("propuestas_multa_vigencia")
 }
 
 // Archivo de borrado lógico AD: copia íntegra del control al momento de

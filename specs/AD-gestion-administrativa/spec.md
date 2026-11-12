@@ -157,6 +157,8 @@ El permiso del arrendatario para declarar el registro SHALL ser un atributo del 
 
 El monto de la multa por el Registro no actualizado SHALL salir del maestro de infracciones de la propia comunidad (`TipoInfraccionIN`), con el nombre canónico `Registro de Copropietarios no actualizado` y el valor que fije *su* reglamento; NO SHALL existir un segundo maestro de multas, un monto por defecto ni un valor en el código. El tipo SHALL poder declarar su ancla legal en `referenciaLegal` —el artículo del reglamento o el acta que fija el monto—, que documenta la procedencia del número y NO SHALL habilitar nada por sí misma. La disponibilidad SHALL decidirse con la regla pura `multaDisponible` de `lib/vigencia-registro.ts` y traducirse desde la base en `lib/vigencia-multa.ts`; sin la fila del tipo, o con un valor no positivo, la multa NO SHALL estar disponible y el sistema SHALL declararlo con su motivo, sin inventar un número. `GET /api/vigencia-registro` SHALL informar esa disponibilidad en un campo `multa` —`disponible` con su `monto` y su `referenciaLegal`, o `disponible` en `false` con el `motivo`—, calculado una vez por comunidad, sin alterar el estado, el resumen ni el total de las unidades.
 
+La multa SHALL proponerla el sistema con un acto explícito de la administración (`POST /api/vigencia-registro/multa`, `ad` con acción `crear`), sin cron ni disparo programado: el caso `habilitado_para_multa` habilita la propuesta, y la decisión SHALL resolverse con la regla pura `propuestaDeMultaPermitida` de `lib/vigencia-multa.ts` a partir del veredicto, de la disponibilidad del monto y de si el ciclo ya tiene propuesta, sin consultar la base. La propuesta SHALL congelar en el acto el monto, su `referenciaLegal` y la fila del maestro de la que salen, junto con la unidad y el acto de requerir que abrió el ciclo; cambiar el maestro después NO SHALL mover la propuesta ya escrita, y la diferencia entre lo congelado y lo vigente queda como evidencia. NO SHALL proponerse multa cuando el caso no está `habilitado_para_multa` ni cuando la comunidad no declaró el monto: el rechazo SHALL decir el motivo y NO SHALL escribir fila ni evento. SHALL haber a lo sumo una propuesta por ciclo —unidad más acto de requerir, único en `propuestas_multa_vigencia`—: una segunda propuesta del mismo ciclo SHALL responder 409 sin escribir una segunda fila. Aplicar SHALL ser un acto del Comité o de la administración —cuyo usuario queda registrado igual— y SHALL exigir `acuerdoReferencia`, el acta o el número de acuerdo que aprobó la multa: sin ese texto NO SHALL aplicarse. Aplicar SHALL crear UNA `InfraccionIN` para la unidad con el monto congelado en la propuesta —nunca el monto vigente del maestro— y SHALL cerrar la propuesta como `aplicada` con quién, cuándo y con qué acuerdo en la misma transacción, dejando un evento `AD_VIGENCIA_MULTA_APLICADA`. NO SHALL crearse un `CargoFI` en este acto: la materialización financiera queda en el módulo IN. Desestimar SHALL exigir un `motivo`, SHALL cerrar la propuesta como `desestimada` sin crear ninguna infracción y SHALL dejar un evento `AD_VIGENCIA_MULTA_DESESTIMADA`. Una propuesta resuelta NO SHALL volverse a resolver: el segundo intento SHALL responder 409 sin escribir una segunda infracción ni un segundo evento. Toda resolución SHALL responder 404 sin revelar propuestas de otra comunidad, y NO SHALL aceptar `comunidadId` del cliente.
+
 La administración SHALL contar con la pantalla `/admin/gestion/vigencia-registro`, que SHALL mostrar el estado derivado de cada unidad con su resumen por estado y SHALL ofrecer por fila sólo los actos que ese estado admite —requerir cuando el calendario lo pide y no hay ciclo abierto, revalidar siempre, y el barrido de avisos como acto explícito de la administración—, mostrando los errores de la API con su mensaje y una comunidad sin unidades como tal, nunca como una tabla vacía.
 
 #### Scenario: Unidad sin declaración
@@ -258,3 +260,47 @@ La administración SHALL contar con la pantalla `/admin/gestion/vigencia-registr
 #### Scenario: La multa de una comunidad no alcanza a otra
 - **WHEN** otra comunidad declaró el tipo con su propio monto
 - **THEN** cada comunidad informa la disponibilidad de su propio maestro y ninguna hereda el monto de la otra
+
+#### Scenario: La propuesta congela el monto del maestro
+- **WHEN** la administración propone la multa de una unidad `habilitado_para_multa` y la comunidad declaró el tipo con un monto positivo y su ancla legal
+- **THEN** la respuesta es 200 con ese monto y esa `referenciaLegal` congelados en la propuesta, y se registra el evento `AD_VIGENCIA_MULTA_PROPUESTA`
+
+#### Scenario: Sin el monto declarado no se propone multa
+- **WHEN** la administración propone la multa de una unidad `habilitado_para_multa` en una comunidad que no declaró el tipo en su maestro
+- **THEN** la respuesta rechaza con el motivo que nombra el tipo faltante y dice que no se multa, y no se escribe ninguna propuesta
+
+#### Scenario: Un caso que no está habilitado no admite propuesta
+- **WHEN** la administración intenta proponer la multa de una unidad `al_dia`, `por_vencer`, `requerido` o `sin_declaracion`
+- **THEN** la respuesta rechaza nombrando el estado del caso y no se escribe ninguna propuesta ni ningún evento
+
+#### Scenario: Una propuesta por ciclo
+- **WHEN** se propone por segunda vez la multa de la misma unidad en el mismo ciclo abierto por el requerimiento
+- **THEN** la respuesta es 409 y sigue existiendo una sola propuesta
+
+#### Scenario: La multa se aplica con el acuerdo del Comité
+- **WHEN** un usuario del Comité aplica una propuesta con la referencia del acta o del acuerdo que la aprobó
+- **THEN** la respuesta es 200, la propuesta queda `aplicada` con quién y cuándo, se crea UNA `InfraccionIN` para la unidad con el monto congelado, se registra el evento `AD_VIGENCIA_MULTA_APLICADA` y no se crea ningún `CargoFI`
+
+#### Scenario: Sin el acuerdo del Comité no hay multa
+- **WHEN** se intenta aplicar una propuesta sin `acuerdoReferencia`
+- **THEN** la respuesta es 400 y la propuesta, la infracción y la auditoría quedan intactas
+
+#### Scenario: El maestro cambia después de proponer
+- **WHEN** la comunidad cambia el monto o el ancla legal de su maestro después de que la multa fue propuesta
+- **THEN** la propuesta conserva el monto y la `referenciaLegal` congelados en el acto de proponer
+
+#### Scenario: Desestimar la propuesta no crea infracción
+- **WHEN** el Comité o la administración desestima una propuesta con su motivo
+- **THEN** la propuesta queda `desestimada` con ese motivo, no se crea ninguna infracción y se registra el evento `AD_VIGENCIA_MULTA_DESESTIMADA`
+
+#### Scenario: El residente no propone ni aplica la multa
+- **WHEN** un usuario con rol `residente` llama a la propuesta o a su aplicación
+- **THEN** la respuesta es 403 y no se escribe ninguna propuesta, ninguna infracción ni ningún evento
+
+#### Scenario: Una propuesta resuelta no se resuelve dos veces
+- **WHEN** se intenta aplicar o desestimar una propuesta que ya está `aplicada` o `desestimada`
+- **THEN** la respuesta es 409 y no se escribe una segunda infracción ni un segundo evento
+
+#### Scenario: La propuesta de otra comunidad no se ve
+- **WHEN** se intenta proponer la multa de una unidad de otra comunidad, o resolver una propuesta de otra comunidad
+- **THEN** la respuesta es 404 y la propuesta y la infracción ajenas quedan intactas
