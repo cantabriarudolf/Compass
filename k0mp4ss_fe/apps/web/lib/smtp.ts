@@ -15,11 +15,18 @@
  *   rechazada, conexión rechazada, respuesta inesperada del servidor).
  *
  * Decisiones que no se reinterpretan:
- * - **La contraseña vive SOLO en `process.env.SMTP_PASSWORD`.** No se lee de la
- *   base, no se persiste, no se loguea, no se devuelve y no se incluye en ningún
- *   motivo de error: se redacta (literal y en base64) antes de armar el texto. La
- *   fila de CF se lee con un `select` explícito que NI SIQUIERA pide
- *   `smtpPassword`, así el secreto no entra en memoria desde la base.
+ * - **La contraseña del camino global vive SOLO en `process.env.SMTP_PASSWORD`.**
+ *   No se lee de la base, no se persiste, no se loguea, no se devuelve y no se
+ *   incluye en ningún motivo de error: se redacta (literal y en base64) antes de
+ *   armar el texto. La fila de CF se lee con un `select` explícito que NI SIQUIERA
+ *   pide `smtpPassword`, así el secreto no entra en memoria desde la base.
+ * - **F33 agrega un camino por comunidad sin tocar el anterior.** Quien envía
+ *   puede pasar `opciones.credencial` con host, puerto, usuario y el secreto YA
+ *   descifrado en memoria (la base lo guarda cifrado, ver
+ *   `lib/cifrado-secretos.ts`). Con credencial explícita se usa esa y no la
+ *   variable de entorno; sin ella, todo sigue exactamente como antes. Los
+ *   llamadores existentes no cambian: migrarlos a la credencial de su comunidad
+ *   es trabajo aparte, anotado en `specs/PENDIENTES-FUNCIONALIDAD.md`.
  * - **Nunca se dice `enviado` sin aceptación del servidor**: el resultado sale del
  *   código de respuesta final del DATA, no de que la conexión se haya abierto.
  * - **Sin dependencias**: el diálogo SMTP (EHLO, STARTTLS, AUTH PLAIN/LOGIN,
@@ -86,6 +93,25 @@ export interface OpcionesEnvioSMTP {
   env?: EntornoSMTP
   /** Tope de la conversación completa. Default: `TIEMPO_LIMITE_MS`. */
   tiempoLimiteMs?: number
+  /**
+   * Credencial de la comunidad (F33), con el secreto EN CLARO y solo en memoria:
+   * quien la pasa lo descifra con la clave maestra del entorno y no lo persiste.
+   * Cuando está, el emisor usa este host/puerto/usuario/secreto y NO consulta
+   * `SMTP_PASSWORD`; sin ella, el camino global queda igual que siempre.
+   */
+  credencial?: CredencialSMTP
+}
+
+/**
+ * Credencial SMTP de UNA comunidad, ya descifrada. Vive en memoria durante un
+ * envío y nunca se escribe en un motivo, un log ni una respuesta.
+ */
+export interface CredencialSMTP {
+  host: string
+  puerto: number
+  usuario: string
+  /** Contraseña en claro: la descifra el llamador con la clave maestra. */
+  secreto: string
 }
 
 /** Tope de la conversación SMTP completa (incluye conexión y handshake TLS). */
@@ -160,12 +186,13 @@ export async function enviarCorreoSMTP(
   opciones: OpcionesEnvioSMTP = {}
 ): Promise<ResultadoEnvioSMTP> {
   const entorno = opciones.env ?? process.env
+  const credencial = opciones.credencial
 
   // Nadie a quien enviar: se rechaza sin mirar la configuración ni abrir nada.
   const rechazoDelDestinatario = motivoDireccionRechazada("el destinatario", mensaje.to)
   if (rechazoDelDestinatario) return { estado: "fallido", motivo: rechazoDelDestinatario }
 
-  const resuelta = resolverConfiguracion(fila, entorno)
+  const resuelta = resolverConfiguracion(fila, entorno, credencial)
   if (!resuelta.ok) return { estado: "no_configurado", motivo: resuelta.motivo }
 
   // Las copias de CF rebotan igual que el destinatario: si alguna es imposible,
@@ -182,7 +209,7 @@ export async function enviarCorreoSMTP(
     if (rechazo) return { estado: "fallido", motivo: rechazo }
   }
 
-  const secreto = secretoDelEntorno(entorno)
+  const secreto = credencial ? credencial.secreto : secretoDelEntorno(entorno)
   const tiempoLimiteMs = opciones.tiempoLimiteMs ?? TIEMPO_LIMITE_MS
   try {
     const { messageId } = await conversar(resuelta.config, secreto, mensaje, tiempoLimiteMs)
@@ -357,7 +384,8 @@ function listaDeCorreos(valor: string | null | undefined): string[] {
  */
 function resolverConfiguracion(
   fila: FilaConfiguracionSMTP | null,
-  entorno: EntornoSMTP
+  entorno: EntornoSMTP,
+  credencial?: CredencialSMTP
 ): { ok: true; config: ConfiguracionResuelta } | { ok: false; motivo: string } {
   if (!fila) {
     return {
@@ -366,6 +394,38 @@ function resolverConfiguracion(
         "Sin emisor SMTP configurado: la comunidad no tiene configuración global (CF).",
     }
   }
+
+  // Camino de F33: la credencial de la comunidad manda sobre host/puerto/usuario
+  // y sobre el secreto. El remitente y la seguridad siguen viniendo de CF.
+  if (credencial) {
+    const faltantesCredencial: string[] = []
+    if (!fila.smtpFrom?.trim()) faltantesCredencial.push("smtpFrom")
+    if (!fila.smtpFromName?.trim()) faltantesCredencial.push("smtpFromName")
+    if (!credencial.host?.trim()) faltantesCredencial.push("host")
+    if (!credencial.puerto || credencial.puerto <= 0) faltantesCredencial.push("puerto")
+    if (!credencial.usuario?.trim()) faltantesCredencial.push("usuario")
+    if (!credencial.secreto?.trim()) faltantesCredencial.push("secreto")
+    if (faltantesCredencial.length > 0) {
+      return {
+        ok: false,
+        motivo: `Sin emisor SMTP configurado: falta(n) en la credencial de correo de la comunidad ${faltantesCredencial.join(", ")}.`,
+      }
+    }
+    return {
+      ok: true,
+      config: {
+        host: credencial.host.trim(),
+        port: credencial.puerto,
+        user: credencial.usuario.trim(),
+        seguridad: seguridadValida(fila.smtpSecurity),
+        from: fila.smtpFrom.trim(),
+        fromName: fila.smtpFromName.trim(),
+        bcc: listaDeCorreos(fila.smtpBcc),
+        replyTo: listaDeCorreos(fila.smtpRecepcion)[0] ?? null,
+      },
+    }
+  }
+
   const faltantes: string[] = []
   if (!fila.smtpHost?.trim()) faltantes.push("smtpHost")
   if (!fila.smtpPort || fila.smtpPort <= 0) faltantes.push("smtpPort")

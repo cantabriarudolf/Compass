@@ -47,6 +47,8 @@ The system MUST allow the admin to define how common expenses are calculated and
 ### Requirement: Configuración SMTP
 The system MUST store email server parameters for automated notifications. Los secretos `smtpPassword` SHALL NOT existir en el schema cliente; viven como variable de entorno servidor `SMTP_PASSWORD` (C2-final).
 
+**F33 — credencial por comunidad**: además del camino global por variable de entorno, la credencial del buzón SHALL poder guardarse **por comunidad y cifrada en la base** (`CredencialCorreoComunidad`), con la contraseña cargable desde la configuración, nunca devuelta y auditada sin el valor (requirement «Credencial de correo por comunidad, cifrada»). `SMTP_PASSWORD` sigue siendo el camino por defecto de los envíos existentes mientras migran a la credencial de su comunidad.
+
 #### Scenario: SMTP Fields
 - **WHEN** the admin configures SMTP
 - **THEN** the following fields MUST be editable:
@@ -60,6 +62,49 @@ The system MUST store email server parameters for automated notifications. Los s
   - `smtpRecepcion` (optional)
 - **AND** `smtpPassword` SHALL NOT exist in `ConfiguracionGlobalSchema` nor `data/admin/configuracion.ts` nor be persisted in `compass-store`
 - **AND** the UI SHALL show "Gestionado por el servidor (variable de entorno SMTP_PASSWORD)" without an editable password input
+
+### Requirement: Credencial de correo por comunidad, cifrada
+The system MUST guardar la credencial SMTP de CADA comunidad cifrada en la base y SHALL NOT devolverla, loguearla ni registrarla en claro. Una instalación que sirve a dos comunidades con dos buzones SHALL poder autenticar en los dos.
+
+#### Scenario: Guardado cifrado por comunidad
+- **WHEN** la administración guarda `host`, `puerto`, `usuario` y `secreto` en `PUT /api/configuracion/correo` (recurso `cf`, acción `editar`)
+- **THEN** el secreto SHALL cifrarse con AES-256-GCM con un IV aleatorio por guardado y el tag de autenticación SHALL guardarse en la misma fila (`secretoCifrado`, `iv`, `authTag`)
+- **AND** ninguna columna de `credenciales_correo_comunidad` SHALL contener el texto plano del secreto
+- **AND** la clave maestra SHALL leerse SOLO de la variable de entorno `CLAVE_MAESTRA_SECRETOS`: no se guarda en la base, no entra en los backups, no se devuelve y no se loguea
+
+#### Scenario: Rotación de la credencial
+- **WHEN** la administración vuelve a guardar la credencial, con el mismo secreto o con otro
+- **THEN** el sistema SHALL generar un IV nuevo y el paquete cifrado SHALL cambiar
+- **AND** SHALL seguir existiendo UNA sola fila por comunidad
+
+#### Scenario: Lectura sin el secreto
+- **WHEN** un usuario con `cf` `ver` consulta `GET /api/configuracion/correo`
+- **THEN** la respuesta SHALL traer solo `configurada`, `host`, `puerto`, `usuario`, `actualizadoEn` y `actualizadoPor`
+- **AND** el secreto SHALL NOT aparecer en el cuerpo, ni completo, ni en parte, ni en base64
+- **AND** sin credencial guardada `configurada` SHALL ser `false` con los demás campos en `null`
+
+#### Scenario: Envío de prueba con el error exacto
+- **WHEN** la administración pide `POST /api/configuracion/correo/probar` (recurso `cf`, acción `editar`)
+- **THEN** el sistema SHALL descifrar el secreto en memoria y enviar UN correo de prueba al email del propio usuario de sesión (nunca a un destinatario elegido por el cliente)
+- **AND** el envío de prueba SHALL usar la credencial guardada de la comunidad y NOT la variable global `SMTP_PASSWORD`
+- **AND** si el proveedor rechaza, la respuesta SHALL traer el texto exacto del proveedor (código y detalle), con el secreto redactado literal y en base64
+- **AND** sin credencial guardada, o sin los campos de remitente de CF, NO se abre ninguna conexión y el motivo SHALL nombrar lo que falta
+
+#### Scenario: Fail-closed sin clave maestra
+- **WHEN** `CLAVE_MAESTRA_SECRETOS` no existe, está vacía o no mide 32 bytes (64 caracteres hex o base64 de 32 bytes)
+- **THEN** `PUT /api/configuracion/correo` SHALL responder 500 con un mensaje que nombra la variable y SHALL NOT escribir ninguna fila
+- **AND** `POST /api/configuracion/correo/probar` SHALL rechazarse sin abrir conexión
+- **AND** el sistema SHALL NOT caer a texto plano ni a la contraseña global como reemplazo
+
+#### Scenario: Auditoría sin el valor
+- **WHEN** la credencial se carga o se rota
+- **THEN** la bitácora SHALL registrar `CF_CREDENCIAL_CORREO_ACTUALIZADA` con la comunidad, el usuario que la cambió y la referencia de la fila, en la misma transacción que la escritura
+- **AND** la descripción SHALL NOT contener el secreto, ni su prefijo, ni su longitud, ni un hash, ni el paquete cifrado
+
+#### Scenario: Gobierno del recurso `cf`
+- **WHEN** se consulta o se modifica la credencial de correo
+- **THEN** `ver` SHALL permitir la lectura (administración y comité) y `editar` SHALL gobernar el guardado y el envío de prueba (solo administración)
+- **AND** el `comunidadId` SHALL salir del scope del servidor, nunca del cuerpo de la petición
 
 ### Requirement: Reglas y Opt-in de Notificaciones
 The system MUST allow enabling/disabling automatic email notifications per module.

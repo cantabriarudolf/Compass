@@ -2657,6 +2657,31 @@ export const ConfiguracionGlobalSchema = z.object({
     .optional(),
 })
 
+/**
+ * Credencial de correo POR COMUNIDAD (F33).
+ *
+ * Es el cuerpo de `PUT /api/configuracion/correo`: host, puerto y usuario se
+ * guardan tal cual, y `secreto` es lo único que se cifra con la clave maestra
+ * del entorno antes de tocar la base. El secreto NO se recorta: una contraseña
+ * con espacios al borde es válida para el proveedor y recortarla rompería la
+ * autenticación; solo se rechaza si está vacía o son puras espacios.
+ */
+export const CredencialCorreoComunidadSchema = z.object({
+  host: z.string().trim().min(1, "El servidor SMTP es obligatorio."),
+  puerto: z
+    .number()
+    .int("El puerto SMTP debe ser un número entero.")
+    .min(1, "El puerto SMTP es inválido.")
+    .max(65535, "El puerto SMTP es inválido."),
+  usuario: z.string().trim().min(1, "El usuario SMTP es obligatorio."),
+  secreto: z
+    .string()
+    .min(1, "La contraseña SMTP es obligatoria.")
+    .refine((valor) => valor.trim().length > 0, {
+      message: "La contraseña SMTP no puede estar vacía.",
+    }),
+})
+
 // --- Auditoría interna del store ---
 
 export const EventoAuditoriaSchema = z.object({

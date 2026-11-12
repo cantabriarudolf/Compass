@@ -30,6 +30,8 @@ model Comunidad {
   vinculos                    VinculoUnidad[]
   eventos                     EventoAuditoria[]
   configuraciones             ConfiguracionGlobal[]
+  // F33 — credencial SMTP de la comunidad, cifrada con la clave maestra del entorno.
+  credencialCorreo            CredencialCorreoComunidad?
   publicacionesPortal         PublicacionPortal[]
   leadsPortal                 LeadPortal[]
   notificaciones              Notificacion[]
@@ -378,6 +380,34 @@ model ConfiguracionGlobal {
 
   @@index([comunidadId])
   @@map("configuracion_global")
+}
+
+// F33 — credencial SMTP POR COMUNIDAD, cifrada en la base.
+//
+// El host, el puerto y el usuario son visibles (los devuelve la lectura); el
+// secreto viaja cifrado con AES-256-GCM (`secretoCifrado` + `iv` + `authTag`,
+// IV distinto por guardado) y SOLO se abre con la clave maestra del entorno
+// (`CLAVE_MAESTRA_SECRETOS`), que no está en la base ni en los backups. Sin esa
+// clave no se guarda ni se envía nada: el sistema falla cerrado y nunca cae a
+// texto plano ni a la `SMTP_PASSWORD` global.
+model CredencialCorreoComunidad {
+  id             String    @id
+  comunidadId    String    @unique
+  comunidad      Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  host           String
+  puerto         Int
+  usuario        String
+  secretoCifrado String
+  iv             String
+  authTag        String
+  // Versión del paquete cifrado; hoy solo existe la 1.
+  version        Int       @default(1)
+  actualizadoPor String
+  actualizadoEn  DateTime  @updatedAt
+  createdAt      DateTime  @default(now())
+
+  @@index([comunidadId])
+  @@map("credenciales_correo_comunidad")
 }
 
 // Portal Inmobiliario (PI)

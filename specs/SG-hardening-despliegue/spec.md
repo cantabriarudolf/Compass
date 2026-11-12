@@ -76,6 +76,31 @@ Los campos sensibles `smtpPassword` y `claveEliminacionMaestro` SHALL dejar de e
 - **WHEN** se lee `k0mp4ss_fe/apps/web/.env.example`
 - **THEN** contiene `SMTP_PASSWORD` y `CLAVE_ELIMINACION_MAESTRO` con comentarios indicando que son secretos servidor
 
+### Requirement: Clave maestra de secretos en el entorno (F33)
+El sistema SHALL cifrar los secretos por comunidad (la credencial de correo de F33) con AES-256-GCM y una clave maestra que vive SOLO en la variable de entorno `CLAVE_MAESTRA_SECRETOS`. La clave SHALL NOT guardarse en la base, ni en los backups, ni en el repositorio, ni en una respuesta HTTP, ni en un log. La variable SHALL medir 32 bytes, en 64 caracteres hex o en base64 de 32 bytes; cualquier otro valor SHALL tratarse como no configurado.
+
+El sistema SHALL fallar cerrado: sin clave válida, guardar un secreto SHALL responder 500 nombrando la variable y sin escribir ninguna fila, y el envío de correo con credencial de comunidad SHALL rechazarse sin abrir conexión. SHALL NOT existir una clave de reemplazo, un valor por defecto ni una caída a texto plano —a diferencia de `CLAVE_CIFRADO_DATOS`, cuya clave dummy es solo para dev/test—, porque lo que protege es una contraseña de autenticación real.
+
+#### Scenario: Sin la variable el guardado falla y no escribe
+- **WHEN** `CLAVE_MAESTRA_SECRETOS` no está definida y la administración guarda la credencial de correo de una comunidad
+- **THEN** la respuesta SHALL ser 500 con un mensaje que nombra `CLAVE_MAESTRA_SECRETOS`
+- **AND** la tabla `credenciales_correo_comunidad` SHALL quedar sin esa fila y la bitácora sin evento de carga
+
+#### Scenario: Clave de longitud inválida
+- **WHEN** `CLAVE_MAESTRA_SECRETOS` mide algo distinto de 32 bytes (por ejemplo 32 caracteres crudos, 63 hex o `"clave-corta"`)
+- **THEN** el estado de la clave SHALL ser `invalida`, el guardado SHALL responder 500 y no SHALL escribir fila
+- **AND** la clave de 32 caracteres crudos SHALL NOT aceptarse como si fueran 32 bytes (base64 de 32 caracteres decodifica 24)
+
+#### Scenario: Sin la variable no se envía correo con credencial de comunidad
+- **WHEN** una comunidad tiene credencial guardada y se pide el envío de prueba sin `CLAVE_MAESTRA_SECRETOS`
+- **THEN** la respuesta SHALL ser 500 nombrando la variable
+- **AND** NO se SHALL abrir ninguna conexión SMTP ni SHALL enviarse nada
+
+#### Scenario: Rotación de la clave maestra
+- **WHEN** se decide rotar la clave maestra
+- **THEN** los paquetes ya guardados SHALL responder `No fue posible descifrar el secreto guardado` hasta que la credencial se vuelva a cargar con la clave nueva
+- **AND** el sistema SHALL NOT devolver un valor parcial, vacío ni texto plano en ese estado
+
 ### Requirement: Headers contra dominio configurable y script de verificación (D-ii)
 El sistema SHALL documentar `PUBLIC_DOMAIN` en `k0mp4ss_fe/apps/web/.env.example` como variable vacía por defecto (dominio definitivo configurable por env, aún no existe; no hardcodeado). Los headers de seguridad en `k0mp4ss_fe/apps/web/next.config.mjs` SHALL verificarse y complementarse: `Strict-Transport-Security: max-age=63072000; includeSubDomains` **sin** `preload` mientras no haya dominio real (documentado que `preload` se activa solo con dominio), `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `Permissions-Policy: camera=(self), microphone=(), geolocation=()` SHALL mantenerse (la cámara se habilita solo al propio origen porque el escáner QR de la cédula lo necesita; micrófono y geolocalización siguen cerrados), y SHALL añadirse `X-DNS-Prefetch-Control: on`, `X-Permitted-Cross-Domain-Policies: none`, `Cross-Origin-Opener-Policy: same-origin`, `Cross-Origin-Resource-Policy: same-origin` (y `Cross-Origin-Embedder-Policy: credentialless` si no rompe `next dev` HMR). El sistema SHALL proveer `npm run check:headers` (`k0mp4ss_fe/apps/web/scripts/check-headers.mjs` o test) que imprima los headers para verificación: lectura estática de `next.config.mjs`+`proxy.ts` CSP y, si `next dev` corre, `fetch` vivo contra `http://localhost:3000` mostrando headers reales y validando HSTS sin `preload` y CSP-Report-Only presente. La limitación `next build` por Google Fonts sin red SHALL estar documentada (usar `next dev`+`curl`).
 
