@@ -666,3 +666,130 @@ la ruta no la inventa leyendo el cuerpo de la petición.
 - **WHEN** el corte queda `ejecutado`
 - **THEN** lo que existe es la constancia de la orden cursada y su auditoría, no una
   señal enviada a la empresa proveedora
+
+### Requirement: Conciliación de Cartola Bancaria
+El sistema SHALL conciliar la cartola que el banco exporta contra los registros de
+la comunidad, bajo la decisión D1 del plan: NO SHALL integrarse al banco por API ni
+por scraping. La importación entra por `POST /api/conciliacion/importar` (guard
+`fi:cobranza` crear) con el nombre del archivo y su contenido como texto. El
+sistema NO SHALL guardar el binario: guarda las filas que pudo leer y su estado de
+conciliación, y el nombre del archivo es lo único que conserva el origen del dato.
+El reglamento de la ley exige llevar las cuentas e inversiones «debidamente
+conciliadas» (art. 24) y el reglamento de la comunidad pide vincular el ingreso
+bancario con la unidad: eso es lo que esta capacidad deja medible.
+
+El lector SHALL ser una regla pura (`parsearCartola` en `lib/conciliacion.ts`: sin
+base y sin reloj) y SHALL tolerar el separador `,` y `;`, el monto con punto o coma
+decimal —con o sin separador de miles— y las fechas `AAAA-MM-DD` y `DD/MM/AAAA`,
+con el encabezado en castellano y sus alias habituales. Cada fila ilegible MUST
+producir su error con el número de línea del archivo y el dato que no se pudo leer;
+la ruta MUST responder 400 con esas filas y NO SHALL importar ninguna: ni la
+cartola, ni los movimientos, ni los contadores. Una cartola parcial es un número que
+no cuadra y nadie sabe por qué.
+
+Importación y enlace SHALL persistirse en los modelos aditivos `CartolaImportada`
+(tabla `cartolas_importadas`: archivo, quién importó, filas, conciliadas y
+noConciliadas) y `MovimientoCartola` (tabla `movimientos_cartola`: fecha,
+descripción, referencia, contraparte, monto, tipo `cargo|abono`, estado
+`conciliado|no_conciliado|resuelto_manual`, origen `autorresuelto|manual`, quién y
+cuándo resolvió, y la referencia del cargo con el que quedó atado), con índice
+`(comunidadId, estado)` para la cola. La cartola, sus movimientos y el evento de
+auditoría SHALL escribirse en UNA transacción, y los contadores MUST cumplir
+`filas = conciliadas + noConciliadas`, contando como conciliadas las resueltas a
+mano.
+
+El enlace SHALL decidirse con la regla pura `enlazarMovimiento`, en este orden:
+(1) referencia exacta y monto exacto; (2) contraparte —RUT o nombre, normalizados,
+sin acentos ni puntuación— con monto exacto y fecha dentro de ±5 días; (3) monto
+exacto con UN único candidato compatible. El monto SHALL compararse en centavos
+enteros. Los candidatos SHALL ser los de la comunidad de la sesión: los
+`IngresoFI` (candidato `ingreso`), los `EgresoFI` (candidato `egreso`, con su folio
+como referencia y su proveedor como contraparte) y cada pago de un `CobroFI`
+(candidato `pago`, con la referencia del aviso y el número de unidad como
+contraparte). Un movimiento `cargo` MUST NOT enlazarse con un ingreso ni con un
+pago, y un `abono` MUST NOT enlazarse con un egreso. Cuando más de un candidato
+coincide por la misma regla, el movimiento MUST NOT enlazarse: queda en la cola de
+`no_conciliado`, porque un enlace que adivina es peor que uno sin conciliar.
+
+La cola SHALL resolverse con `POST /api/conciliacion/resolver` (guard
+`fi:cobranza` editar) con el movimiento y la referencia del cargo: MUST responder
+404 para el movimiento de otra comunidad, 409 si ya estaba `conciliado` o
+`resuelto_manual`, y SHALL dejar el movimiento en `resuelto_manual` con `origen`
+`manual`, el usuario y la fecha de la resolución y la referencia recibida,
+recalculando los contadores de la cartola en la misma transacción con una
+actualización CONDICIONAL (`estado = no_conciliado`), de modo que dos resoluciones
+concurrentes no se pisen. La lectura (`GET /api/conciliacion`, guard `fi:cobranza`
+ver) SHALL devolver las cartolas de la comunidad de la sesión con sus movimientos y
+su estado en un número FIJO de consultas, y NUNCA SHALL devolver las de otra
+comunidad. Toda escritura SHALL auditar `FI_CARTOLA_IMPORTADA` —con el archivo y
+sus contadores— o `FI_MOVIMIENTO_CONCILIADO` —con el movimiento y la referencia— en
+la misma transacción.
+
+Frontera deliberada: la conciliación NO SHALL crear asientos contables. Lee
+`IngresoFI`, `EgresoFI` y `CobroFI` como candidatos y guarda la referencia con la que
+quedó atado cada movimiento; imputar a un fondo o emitir el cargo es trabajo del
+trámite que cobra. La importación tampoco SHALL deduplicar por contenido —la tabla
+no guarda la huella del archivo—: reimportar el mismo archivo crea otra cartola, y
+el operador ve las dos con su nombre y su fecha. La pantalla de la cola NO es parte
+de esta capacidad.
+
+#### Scenario: La cartola del banco se lee con sus formatos
+- **WHEN** se importa un CSV separado por `;` con fechas `DD/MM/AAAA` y montos como
+  `1.234,56`, y otro separado por `,` con fechas `AAAA-MM-DD` y montos como
+  `1234.56`
+- **THEN** las dos cartolas se leen con el mismo monto y la misma fecha, el tipo de
+  cada fila sale del signo —o de la columna `tipo` cuando existe— y la respuesta
+  devuelve los importados, los conciliados y los que quedaron en la cola
+
+#### Scenario: Una fila ilegible rechaza el archivo completo
+- **WHEN** una cartola trae una fila con fecha inexistente, monto ilegible o
+  columnas corridas junto a filas legibles
+- **THEN** responde 400 nombrando cada fila inválida y no queda ni la cartola ni el
+  movimiento legible que venía en el mismo archivo
+
+#### Scenario: El enlace por referencia y monto
+- **WHEN** un movimiento de la cartola trae la referencia de un egreso de la
+  comunidad y su monto exacto
+- **THEN** el movimiento queda `conciliado`, con `origen` `autorresuelto` y el id
+  del egreso como referencia del cargo, y el contador de la cartola lo cuenta
+
+#### Scenario: La ambigüedad queda en la cola
+- **WHEN** dos egresos de la comunidad tienen el mismo monto y el movimiento de la
+  cartola no trae una referencia que los distinga
+- **THEN** el movimiento queda `no_conciliado`, sin referencia de cargo, para que
+  una persona decida cuál es
+
+#### Scenario: Un cargo no paga un ingreso
+- **WHEN** un cargo de la cartola coincide en monto con un ingreso registrado, o un
+  abono coincide con un egreso
+- **THEN** el movimiento no se enlaza con ese registro y queda en la cola
+
+#### Scenario: La resolución manual deja rastro y la cartola sigue cerrando
+- **WHEN** la administración resuelve a mano un movimiento de la cola con su
+  referencia de cargo
+- **THEN** el movimiento queda `resuelto_manual` con su autor, su fecha y su
+  referencia, el evento `FI_MOVIMIENTO_CONCILIADO` queda auditado y los contadores
+  de la cartola se recalculan: `filas` sigue siendo `conciliadas + noConciliadas`
+
+#### Scenario: Un movimiento ya resuelto no se resuelve dos veces
+- **WHEN** se intenta resolver un movimiento que ya estaba `conciliado` o
+  `resuelto_manual`
+- **THEN** responde 409 con su motivo y la fila conserva su autor, su fecha y su
+  referencia originales
+
+#### Scenario: Reimportar el mismo archivo no rompe
+- **WHEN** se importa dos veces el mismo archivo con el mismo nombre
+- **THEN** quedan dos cartolas independientes con sus propios movimientos y sus
+  contadores coherentes, porque la importación no deduplica por contenido
+
+#### Scenario: La lectura y los candidatos no cruzan comunidades
+- **WHEN** se leen las cartolas con la sesión de una comunidad, o se importa una
+  cartola cuyo monto coincide con un egreso de otra comunidad
+- **THEN** la lectura sólo devuelve las cartolas de la comunidad de la sesión y el
+  egreso ajeno no enlaza nada
+
+#### Scenario: Sin sesión y sin la clave financiera
+- **WHEN** se llaman las tres rutas sin sesión, o con un rol que no tiene
+  `fi:cobranza` —el comité sólo tiene la lectura— y se intenta importar o resolver
+- **THEN** responden 401 y 403 respectivamente, y el intento rechazado no deja
+  cartolas ni movimientos

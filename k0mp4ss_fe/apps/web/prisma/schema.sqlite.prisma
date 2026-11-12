@@ -86,6 +86,9 @@ model Comunidad {
   cortesServicio              CorteServicio[]
   // F31 — presupuesto por partidas aprobado por comité o asamblea, según el reglamento.
   presupuestos                Presupuesto[]
+  // F30 — conciliación bancaria por importación de cartola (decisión D1).
+  cartolasImportadas          CartolaImportada[]
+  movimientosCartola          MovimientoCartola[]
   bitacoraVisitasPE           BitacoraVisitaPE[]
   encomiendasPE               EncomiendaPE[]
   ingresosContratistasPE      IngresoContratistaPE[]
@@ -2297,4 +2300,63 @@ model PeriodoDirectiva {
   @@index([comunidadId])
   @@index([estado])
   @@map("periodos_directiva")
+}
+
+// F30 — conciliación bancaria por importación de cartola (decisión D1: sin
+// integración con el banco; se importa el archivo que el banco ya exporta).
+//
+// La cartola es el ARCHIVO que entró, con su nombre y los contadores de lo que se
+// pudo enlazar. Los contadores se recalculan desde el estado de sus movimientos:
+// `filas` es siempre `conciliadas + noConciliadas`, y resolverse a mano cuenta
+// como conciliado (el movimiento quedó atado a un registro).
+model CartolaImportada {
+  id            String    @id
+  comunidadId   String
+  comunidad     Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  nombreArchivo String
+  importadaPor  String // usuario de sesión que importó el archivo
+  filas         Int
+  conciliadas   Int
+  noConciliadas Int
+  createdAt     DateTime  @default(now())
+
+  // El archivo no se guarda en la base: lo que queda es la fila leída y su
+  // estado. Reimportar el mismo archivo crea otra cartola (no hay deduplicación
+  // por contenido porque la tabla no guarda la huella del archivo).
+  movimientos MovimientoCartola[]
+
+  @@index([comunidadId])
+  @@map("cartolas_importadas")
+}
+
+// Movimiento de una cartola: la fila del banco tal como se leyó, con el estado de
+// su conciliación. `no_conciliado` (el default) es la cola que una persona
+// resuelve; `conciliado` es el enlace automático con `origen` `autorresuelto`, y
+// `resuelto_manual` guarda quién lo resolvió y con qué referencia.
+//
+// `cargoReferencia` apunta al registro con el que quedó atado (el id del
+// candidato cuando enlazó la regla pura, o la referencia que escribió la
+// persona). NO crea asientos contables: la cartola no escribe en IngresoFI,
+// EgresoFI ni CobroFI, sólo los lee como candidatos.
+model MovimientoCartola {
+  id              String           @id
+  comunidadId     String
+  comunidad       Comunidad        @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  cartolaId       String
+  cartola         CartolaImportada @relation(fields: [cartolaId], references: [id], onDelete: Cascade)
+  fecha           DateTime
+  descripcion     String
+  referencia      String?
+  contraparte     String?
+  monto           Float // monto en pesos, siempre positivo: el signo vive en `tipo`
+  tipo            String // cargo | abono
+  estado          String           @default("no_conciliado") // conciliado | no_conciliado | resuelto_manual
+  origen          String? // autorresuelto | manual
+  resueltoPor     String?
+  resueltoEn      DateTime?
+  cargoReferencia String?
+
+  @@index([comunidadId, estado])
+  @@index([cartolaId])
+  @@map("movimientos_cartola")
 }

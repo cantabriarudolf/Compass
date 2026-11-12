@@ -768,6 +768,52 @@ export const PagoCuotaConvenioSchema = z.object({
 export type ConvenioPagoCreacion = z.infer<typeof ConvenioPagoCreacionSchema>
 export type PagoCuotaConvenio = z.infer<typeof PagoCuotaConvenioSchema>
 
+// --- Conciliación bancaria por importación de cartola (F30) ---
+
+/**
+ * Importación de una cartola (decisión D1: sin integración con el banco; se
+ * importa el archivo que el banco ya exporta).
+ *
+ * El archivo viaja como TEXTO, no como multipart: la ruta no guarda el archivo —
+ * guarda las filas que pudo leer y su estado de conciliación—, así que no hay
+ * binario que almacenar. El nombre del archivo es lo único que conserva el origen
+ * del dato, y por eso es obligatorio.
+ *
+ * El tope de tamaño es el del cuerpo de la petición, no una regla de negocio: una
+ * cartola mensual entra varias veces por debajo de ese número.
+ */
+export const ConciliacionImportacionSchema = z.object({
+  nombreArchivo: z
+    .string({ required_error: "El nombre del archivo es obligatorio." })
+    .trim()
+    .min(1, "El nombre del archivo es obligatorio.")
+    .max(200, "El nombre del archivo no puede superar los 200 caracteres."),
+  contenido: z
+    .string({ required_error: "El contenido de la cartola es obligatorio." })
+    .min(1, "El contenido de la cartola es obligatorio.")
+    .max(
+      5_000_000,
+      "El contenido de la cartola no puede superar los 5.000.000 de caracteres."
+    ),
+})
+
+/**
+ * Resolución manual de un movimiento que quedó en la cola. La referencia es el
+ * registro con el que la persona lo ata (un folio, el id de un egreso o el dato
+ * que el banco no trajo): el sistema no la inventa ni la deduce del texto libre.
+ */
+export const ConciliacionResolucionSchema = z.object({
+  movimientoId: IdEntidadSchema,
+  cargoReferencia: z
+    .string({ required_error: "La referencia del cargo es obligatoria." })
+    .trim()
+    .min(1, "La referencia del cargo es obligatoria.")
+    .max(200, "La referencia del cargo no puede superar los 200 caracteres."),
+})
+
+export type ConciliacionImportacion = z.infer<typeof ConciliacionImportacionSchema>
+export type ConciliacionResolucion = z.infer<typeof ConciliacionResolucionSchema>
+
 // --- Corte de servicios por morosidad (F28 — Ley 21.442 art. 20 N°9) ---
 
 /**
