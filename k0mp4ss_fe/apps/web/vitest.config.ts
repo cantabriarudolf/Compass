@@ -36,6 +36,15 @@ export default defineConfig({
   test: {
     environment: "jsdom",
     globals: false,
+    // El default de Vitest son 5 s por test. La suite completa corre 265 archivos
+    // con `--maxWorkers=2`, base SQLite real y jsdom, y con ese techo un componente
+    // que tarda 5,1 s por competencia de CPU rompe la corrida entera. Pasó cuatro
+    // veces en un día, siempre en un test de componente distinto y siempre verde al
+    // correr solo (los 50 archivos de `test/componentes` dan 294/294 con dos
+    // workers). No es lógica: es presupuesto de tiempo, así que se le da margen.
+    // No debilita ninguna aserción: un test que cuelga de verdad tarda 15 s en
+    // fallar en vez de 5, pero falla igual.
+    testTimeout: 15_000,
     // La base de la suite (change `test-db-descartable`): el setup resuelve la base
     // descartable (`prisma/perf-test.db`) y aborta si el destino fuera `prisma/dev.db`;
     // el globalSetup la recrea y la migra de cero antes del primer archivo de test.
