@@ -221,6 +221,11 @@ const data = {
           url: "/admin/gestion/vigencia-registro",
           roles: ["administrador", "comite"],
         },
+        {
+          title: "Convenios de Pago",
+          url: "/admin/gestion/convenios",
+          roles: ["administrador", "comite"],
+        },
         { title: "Maestros Administrativos", url: "/admin/maestros", roles: ["administrador"] },
         { title: "Configuración", url: "/admin/configuracion", roles: ["administrador"] },
         { title: "Permisos", url: "/admin/permisos", roles: ["administrador"] },
