@@ -161,6 +161,8 @@ La multa SHALL proponerla el sistema con un acto explícito de la administració
 
 La administración SHALL contar con la pantalla `/admin/gestion/vigencia-registro`, que SHALL mostrar el estado derivado de cada unidad con su resumen por estado y SHALL ofrecer por fila sólo los actos que ese estado admite —requerir cuando el calendario lo pide y no hay ciclo abierto, revalidar siempre, y el barrido de avisos como acto explícito de la administración—, mostrando los errores de la API con su mensaje y una comunidad sin unidades como tal, nunca como una tabla vacía.
 
+El porcentaje de unidades con el registro al día SHALL exponerse como KPI en el módulo de métricas existente (`/admin/metricas`), calculado por la regla pura `kpiDeVigencia` de `lib/vigencia-metricas.ts` a partir de los estados **ya derivados** por `estadoDelCaso` —nunca de un estado persistido ni de una segunda definición del calendario—. La cifra SHALL informarse por `GET /api/vigencia-registro/kpi`, que SHALL exigir `ad` con acción `editar` (la misma compuerta del listado: `ver` no alcanza), SHALL resolver las unidades y sus casos con una consulta por colección —nunca una por unidad— y SHALL devolver el total de unidades, cuántas están `al_dia`, el porcentaje redondeado a un decimal y el desglose por estado, incluidos `por_vencer`, `requerido`, `habilitado_para_multa` y `sin_declaracion`, junto con la fecha con la que se derivó. Una comunidad sin unidades SHALL informar porcentaje `0` sin dividir por cero, y la pantalla NO SHALL mostrar una cifra cuando la métrica no se pudo calcular: SHALL mostrar el error de la API con su mensaje en vez de un cero que se lea como «ninguna unidad al día».
+
 #### Scenario: Unidad sin declaración
 - **WHEN** una unidad no tiene caso de vigencia o su última actualización es `null`
 - **THEN** el estado es `sin_declaracion`, el sistema no habilita multa y la unidad se reporta como incidente de datos
@@ -304,3 +306,7 @@ La administración SHALL contar con la pantalla `/admin/gestion/vigencia-registr
 #### Scenario: La propuesta de otra comunidad no se ve
 - **WHEN** se intenta proponer la multa de una unidad de otra comunidad, o resolver una propuesta de otra comunidad
 - **THEN** la respuesta es 404 y la propuesta y la infracción ajenas quedan intactas
+
+#### Scenario: Porcentaje de unidades con el registro al día
+- **WHEN** la administración consulta `GET /api/vigencia-registro/kpi` o abre el módulo de métricas
+- **THEN** recibe las unidades `al_dia` sobre el total, el porcentaje redondeado a un decimal y el desglose por estado —incluido `sin_declaracion`— derivado de los hechos de cada unidad y no de un estado guardado, y una comunidad sin unidades informa `0` sin dividir por cero

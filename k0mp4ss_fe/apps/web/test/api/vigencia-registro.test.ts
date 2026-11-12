@@ -2354,3 +2354,272 @@ describe("vigencia del registro — propuesta de multa y aplicación por el Comi
     expect(await eventos(U_DESESTIMA_M, "AD_VIGENCIA_MULTA_APLICADA")).toBe(0)
   })
 })
+
+/**
+ * S9 — la métrica para el Comité.
+ *
+ * El porcentaje de unidades con el registro al día cuelga del módulo de
+ * métricas existente. La ruta no guarda el estado ni lo vuelve a calcular por
+ * su cuenta: deriva cada unidad con `estadoDelCaso` —la misma función que usa
+ * el listado— y cuenta. Lo que este bloque fija es que la cifra que ve el
+ * Comité coincide con los estados derivados del listado, que el residente no la
+ * ve y que una comunidad sin unidades informa `0` en vez de dividir por cero.
+ */
+describe("vigencia del registro — KPI de unidades al día (S9)", () => {
+  const COMUNIDAD_K = "vig-kpi-comunidad-a"
+  const COMUNIDAD_K_B = "vig-kpi-comunidad-b"
+  // Comunidad sin unidades: el denominador del porcentaje es 0.
+  const COMUNIDAD_K_VACIA = "vig-kpi-comunidad-vacia"
+
+  const EMAIL_ADMIN_K = "vig-kpi-admin@test.cl"
+  const EMAIL_RESIDENTE_K = "vig-kpi-residente@test.cl"
+  const EMAIL_ADMIN_VACIA_K = "vig-kpi-admin-vacia@test.cl"
+
+  const USER_ADMIN_K = "vig-kpi-user-admin"
+  const USER_RESIDENTE_K = "vig-kpi-user-residente"
+  const USER_ADMIN_VACIA_K = "vig-kpi-user-admin-vacia"
+
+  // Una unidad por estado: el desglose esperado se lee de un vistazo.
+  const U_AL_DIA_K = "vig-kpi-u-al-dia"
+  const U_POR_VENCER_K = "vig-kpi-u-por-vencer"
+  const U_REQUERIDA_K = "vig-kpi-u-requerida"
+  const U_VENCIDA_K = "vig-kpi-u-vencida"
+  const U_SIN_DECLARACION_K = "vig-kpi-u-sin-declaracion"
+  // Con un caso al día: si la ruta se saliera del scope, el total subiría a 6.
+  const U_OTRA_COMUNIDAD_K = "vig-kpi-u-otra"
+
+  const moduloKpi = () => import("@/app/api/vigencia-registro/kpi/route")
+  const moduloListado = () => import("@/app/api/vigencia-registro/route")
+
+  async function conSesionK(
+    email: string,
+    fn: () => Promise<void>
+  ): Promise<void> {
+    const user = await prisma.usuario.findUnique({ where: { email } })
+    if (!user) throw new Error(`usuario no encontrado: ${email}`)
+    const { cookieSesionAuthjs } = await import("../helpers/sesion-authjs")
+    state.cookie = await cookieSesionAuthjs({ sub: user.id, email: user.email })
+    try {
+      await fn()
+    } finally {
+      state.cookie = ""
+    }
+  }
+
+  beforeAll(async () => {
+    process.env.AUTH_SECRET ||= AUTH_SECRET
+
+    for (const [id, nombre, slug] of [
+      [COMUNIDAD_K, "Comunidad KPI Vigencia", "vig-kpi-comunidad-a"],
+      [COMUNIDAD_K_B, "Comunidad KPI Vigencia B", "vig-kpi-comunidad-b"],
+      [
+        COMUNIDAD_K_VACIA,
+        "Comunidad KPI Vigencia Vacía",
+        "vig-kpi-comunidad-vacia",
+      ],
+    ] as const) {
+      await prisma.comunidad.upsert({
+        where: { id },
+        update: {},
+        create: { id, nombre, slug },
+      })
+    }
+
+    for (const [id, email] of [
+      [USER_ADMIN_K, EMAIL_ADMIN_K],
+      [USER_RESIDENTE_K, EMAIL_RESIDENTE_K],
+      [USER_ADMIN_VACIA_K, EMAIL_ADMIN_VACIA_K],
+    ] as const) {
+      await prisma.usuario.upsert({
+        where: { email },
+        update: {},
+        create: { id, email, activo: true },
+      })
+    }
+
+    const usuariosK = [USER_ADMIN_K, USER_RESIDENTE_K, USER_ADMIN_VACIA_K]
+    await prisma.membresia.deleteMany({
+      where: { usuarioId: { in: usuariosK } },
+    })
+    await prisma.membresia.create({
+      data: {
+        usuarioId: USER_ADMIN_K,
+        comunidadId: COMUNIDAD_K,
+        rol: "administrador",
+      },
+    })
+    await prisma.membresia.create({
+      data: {
+        usuarioId: USER_RESIDENTE_K,
+        comunidadId: COMUNIDAD_K,
+        rol: "residente",
+      },
+    })
+    await prisma.membresia.create({
+      data: {
+        usuarioId: USER_ADMIN_VACIA_K,
+        comunidadId: COMUNIDAD_K_VACIA,
+        rol: "administrador",
+      },
+    })
+
+    const comunidadesK = [COMUNIDAD_K, COMUNIDAD_K_B, COMUNIDAD_K_VACIA]
+    await prisma.vigenciaRegistroUnidad.deleteMany({
+      where: { comunidadId: { in: comunidadesK } },
+    })
+    await prisma.requerimientoVigencia.deleteMany({
+      where: { comunidadId: { in: comunidadesK } },
+    })
+    await prisma.eventoAuditoria.deleteMany({
+      where: { comunidadId: { in: comunidadesK } },
+    })
+    await prisma.unidad.deleteMany({
+      where: { comunidadId: { in: comunidadesK } },
+    })
+
+    for (const [id, numero] of [
+      [U_AL_DIA_K, "101"],
+      [U_POR_VENCER_K, "102"],
+      [U_REQUERIDA_K, "103"],
+      [U_VENCIDA_K, "104"],
+      [U_SIN_DECLARACION_K, "105"],
+    ] as const) {
+      await crearUnidad(id, numero, COMUNIDAD_K)
+    }
+    await crearUnidad(U_OTRA_COMUNIDAD_K, "201", COMUNIDAD_K_B)
+
+    await prisma.vigenciaRegistroUnidad.createMany({
+      data: [
+        {
+          comunidadId: COMUNIDAD_K,
+          unidadId: U_AL_DIA_K,
+          ultimaActualizacion: hace(30),
+        },
+        {
+          comunidadId: COMUNIDAD_K,
+          unidadId: U_POR_VENCER_K,
+          ultimaActualizacion: hace(320),
+        },
+        {
+          comunidadId: COMUNIDAD_K,
+          unidadId: U_REQUERIDA_K,
+          ultimaActualizacion: hace(400),
+          requerimientoEn: hace(10),
+        },
+        {
+          comunidadId: COMUNIDAD_K,
+          unidadId: U_VENCIDA_K,
+          ultimaActualizacion: hace(400),
+          requerimientoEn: hace(100),
+        },
+        {
+          comunidadId: COMUNIDAD_K_B,
+          unidadId: U_OTRA_COMUNIDAD_K,
+          ultimaActualizacion: hace(5),
+        },
+      ],
+    })
+  }, 30_000)
+
+  afterAll(async () => {
+    try {
+      const comunidadesK = [COMUNIDAD_K, COMUNIDAD_K_B, COMUNIDAD_K_VACIA]
+      await prisma.vigenciaRegistroUnidad.deleteMany({
+        where: { comunidadId: { in: comunidadesK } },
+      })
+      await prisma.requerimientoVigencia.deleteMany({
+        where: { comunidadId: { in: comunidadesK } },
+      })
+      await prisma.eventoAuditoria.deleteMany({
+        where: { comunidadId: { in: comunidadesK } },
+      })
+      await prisma.unidad.deleteMany({
+        where: { comunidadId: { in: comunidadesK } },
+      })
+      await prisma.membresia.deleteMany({
+        where: {
+          usuarioId: {
+            in: [USER_ADMIN_K, USER_RESIDENTE_K, USER_ADMIN_VACIA_K],
+          },
+        },
+      })
+      await prisma.usuario.deleteMany({
+        where: {
+          id: { in: [USER_ADMIN_K, USER_RESIDENTE_K, USER_ADMIN_VACIA_K] },
+        },
+      })
+      await prisma.comunidad.deleteMany({
+        where: { id: { in: comunidadesK } },
+      })
+    } catch {
+      // limpieza best-effort
+    }
+  })
+
+  it("sin sesión responde 401", async () => {
+    const { GET } = await moduloKpi()
+    const respuesta = await GET()
+    expect(respuesta.status).toBe(401)
+  })
+
+  it("el residente no ve la métrica del registro: 403", async () => {
+    await conSesionK(EMAIL_RESIDENTE_K, async () => {
+      const { GET } = await moduloKpi()
+      const respuesta = await GET()
+      expect(respuesta.status).toBe(403)
+    })
+  })
+
+  it("el administrador ve el KPI derivado de las mismas unidades que el listado", async () => {
+    await conSesionK(EMAIL_ADMIN_K, async () => {
+      const { GET } = await moduloKpi()
+      const respuesta = await GET()
+      expect(respuesta.status).toBe(200)
+      const cuerpo = await respuesta.json()
+
+      // 5 unidades, una por estado: 1 al día de 5 = 20 %.
+      expect(cuerpo.total).toBe(5)
+      expect(cuerpo.alDia).toBe(1)
+      expect(cuerpo.porcentajeAlDia).toBe(20)
+      expect(cuerpo.porEstado).toEqual({
+        al_dia: 1,
+        por_vencer: 1,
+        requerido: 1,
+        habilitado_para_multa: 1,
+        sin_declaracion: 1,
+      })
+      // La suma del desglose es el total: ninguna unidad se pierde ni se cuenta dos veces.
+      expect(
+        Object.values(cuerpo.porEstado as Record<string, number>).reduce(
+          (acc, n) => acc + n,
+          0
+        )
+      ).toBe(cuerpo.total)
+      // La fecha de referencia viaja para poder leer el KPI sin adivinar el día.
+      expect(Number.isNaN(Date.parse(cuerpo.hoy))).toBe(false)
+      // La unidad de la otra comunidad no entra en la cuenta.
+      expect(cuerpo.porEstado.al_dia).toBe(1)
+
+      // La métrica no tiene segunda definición del estado: coincide con el listado.
+      const { GET: GET_LISTADO } = await moduloListado()
+      const listado = await (await GET_LISTADO()).json()
+      expect(cuerpo.porEstado).toEqual(listado.resumen)
+      expect(cuerpo.total).toBe(listado.total)
+    })
+  })
+
+  it("una comunidad sin unidades informa 0 y no divide por cero", async () => {
+    await conSesionK(EMAIL_ADMIN_VACIA_K, async () => {
+      const { GET } = await moduloKpi()
+      const respuesta = await GET()
+      expect(respuesta.status).toBe(200)
+      const cuerpo = await respuesta.json()
+
+      expect(cuerpo.total).toBe(0)
+      expect(cuerpo.alDia).toBe(0)
+      expect(cuerpo.porcentajeAlDia).toBe(0)
+      expect(cuerpo.porEstado).toEqual({})
+      expect(Number.isNaN(cuerpo.porcentajeAlDia)).toBe(false)
+    })
+  })
+})

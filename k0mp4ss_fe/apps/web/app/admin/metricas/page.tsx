@@ -6,6 +6,7 @@ import { useTiposUnidad } from "@/lib/api/use-tipos-unidad"
 import { useMaestros } from "@/lib/api/use-maestros"
 import { useEmisionesGC } from "@/lib/api/use-emisiones-gc"
 import { variacionTarifaria } from "@/lib/metricas-utils"
+import { useKpiVigencia } from "./use-kpi-vigencia"
 import { Card, CardContent } from "@workspace/ui/components/card"
 import { Badge } from "@workspace/ui/components/badge"
 import { 
@@ -14,7 +15,24 @@ import {
   IconSettings,
   IconFingerprint,
   IconBolt,
+  IconClipboardCheck,
 } from "@tabler/icons-react"
+
+/**
+ * Estados del Registro en el orden del calendario, con su rótulo en español.
+ *
+ * La lista es fija para que el desglose de la pantalla no cambie de forma según
+ * qué estados tengan unidades: `sin_declaracion: 0` también informa (hoy no hay
+ * incidentes de datos), y un estado nuevo que la regla pura devuelva mañana se
+ * agrega al final en vez de desaparecer de la métrica.
+ */
+const ESTADOS_VIGENCIA = [
+  { estado: "al_dia", etiqueta: "Al día" },
+  { estado: "por_vencer", etiqueta: "Por vencer" },
+  { estado: "requerido", etiqueta: "Requerido" },
+  { estado: "habilitado_para_multa", etiqueta: "Habilitado para multa" },
+  { estado: "sin_declaracion", etiqueta: "Sin declaración" },
+] as const
 
 export default function MetricasPage() {
   const { items: unidades, isLoading: cargandoUnidades } = useUnidades()
@@ -23,13 +41,20 @@ export default function MetricasPage() {
   const { data: categoriasMacro, isLoading: cargandoMacro } = useMaestros("categorias-macro")
   const { data: categoriasMicro, isLoading: cargandoMicro } = useMaestros("categorias-micro")
   const { items: emisionesGC, isLoading: cargandoEmisiones } = useEmisionesGC()
+  // S9: el KPI del Registro vive en el servidor (ruta propia); acá sólo se lee.
+  const {
+    kpi: kpiVigencia,
+    isLoading: cargandoKpiVigencia,
+    error: errorKpiVigencia,
+  } = useKpiVigencia()
   const isLoading =
     cargandoUnidades ||
     cargandoTipos ||
     cargandoEstados ||
     cargandoMacro ||
     cargandoMicro ||
-    cargandoEmisiones
+    cargandoEmisiones ||
+    cargandoKpiVigencia
 
   // CÁLCULOS POR MÓDULO
   
@@ -63,6 +88,31 @@ export default function MetricasPage() {
         maximumFractionDigits: 1,
       })}%`
     : "—";
+
+  // VR — Vigencia del Registro (S9): el porcentaje de unidades al día sale del
+  // estado DERIVADO de cada unidad, no de un campo guardado. Si la regla pura
+  // devuelve un estado que la pantalla no conoce, se agrega al desglose con su
+  // clave cruda en vez de esconderlo.
+  const porcentajeVigencia = kpiVigencia
+    ? `${kpiVigencia.porcentajeAlDia.toLocaleString("es-CO", {
+        minimumFractionDigits: 1,
+        maximumFractionDigits: 1,
+      })}%`
+    : "—";
+  const estadosDelKpi = kpiVigencia
+    ? [
+        ...ESTADOS_VIGENCIA.map((estado) => ({
+          ...estado,
+          cantidad: kpiVigencia.porEstado[estado.estado] ?? 0,
+        })),
+        ...Object.entries(kpiVigencia.porEstado)
+          .filter(
+            ([estado]) =>
+              !ESTADOS_VIGENCIA.some((conocido) => conocido.estado === estado)
+          )
+          .map(([estado, cantidad]) => ({ estado, etiqueta: estado, cantidad })),
+      ]
+    : [];
 
   if (isLoading) {
     return (
@@ -159,6 +209,70 @@ export default function MetricasPage() {
             sub="Colores dinámicos vinculados a UI"
           />
         </div>
+      </section>
+
+      {/* --- MÓDULO: VIGENCIA DEL REGISTRO (VR · S9) --- */}
+      <section className="space-y-4">
+        <div className="flex items-center gap-2 text-emerald-600 font-bold uppercase text-xs tracking-widest px-1">
+          <IconClipboardCheck className="size-4" /> Módulo: Vigencia del Registro (VR)
+        </div>
+        {errorKpiVigencia ? (
+          // El error de la API se muestra con su mensaje: sin permiso no hay cifra,
+          // y un cero acá se leería como «ninguna unidad al día».
+          <Card className="shadow-none border-muted-foreground/10">
+            <CardContent className="pt-4">
+              <p className="text-sm text-destructive">
+                {errorKpiVigencia.message}
+              </p>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <ModuleMetric
+              label="Unidades con el registro al día"
+              value={
+                kpiVigencia
+                  ? `${kpiVigencia.alDia} / ${kpiVigencia.total}`
+                  : "—"
+              }
+              sub="Registro de Copropietarios · Ley 21.442 art. 9"
+            />
+            <ModuleMetric
+              label="% del registro al día"
+              value={porcentajeVigencia}
+              sub={
+                kpiVigencia
+                  ? `Derivado del calendario de ${kpiVigencia.total} unidad(es), no guardado`
+                  : "Sin estado derivado todavía"
+              }
+            />
+            <Card className="shadow-none border-muted-foreground/10">
+              <CardContent className="pt-4 space-y-2">
+                <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">
+                  Desglose por estado
+                </p>
+                {kpiVigencia && kpiVigencia.total > 0 ? (
+                  <div className="flex flex-wrap gap-1.5">
+                    {estadosDelKpi.map((estado) => (
+                      <Badge
+                        key={estado.estado}
+                        variant="secondary"
+                        className="font-normal"
+                      >
+                        {estado.etiqueta}:
+                        <span className="font-bold">{estado.cantidad}</span>
+                      </Badge>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-[10px] text-muted-foreground italic">
+                    La comunidad no tiene unidades cargadas todavía.
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        )}
       </section>
 
       {/* FOOTER DE VALOR OPERACIONAL */}
