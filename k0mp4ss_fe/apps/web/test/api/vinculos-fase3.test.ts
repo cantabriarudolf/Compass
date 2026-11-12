@@ -467,7 +467,7 @@ describe("/api/vinculos — vínculos unidad/persona con BD real (fase 3)", () =
     })
   })
 
-  it("PUT que genera un duplicado activo → 409 sin mutar", async () => {
+  it("PUT que intenta re-apuntar a otra persona o unidad → 400 sin mutar", async () => {
     await conSesion(emailAdmin, async () => {
       const antes = await prisma.vinculoUnidad.findUniqueOrThrow({ where: { id: "vu3-v-arr-vig" } })
       const res = await llamar("PUT", "vu3-v-arr-vig", {
@@ -475,9 +475,12 @@ describe("/api/vinculos — vínculos unidad/persona con BD real (fase 3)", () =
         unidadId: "vu3-u-3",
         rol: "arrendatario",
       })
-      expect(res.status).toBe(409)
+      // Un vínculo no se re-apunta: es otro vínculo. Antes esta ruta llegaba al
+      // chequeo de duplicado y respondía 409; ahora se corta antes con 400 y un
+      // mensaje que dice qué hacer (cerrar el actual y crear el nuevo).
+      expect(res.status).toBe(400)
       expect(((await res.json()) as { error: string }).error).toBe(
-        "Esta persona ya tiene un vínculo vigente con esta unidad y una persona no puede tener dos a la vez, sin importar el rol (propietario, arrendatario, ocupante). Termina el vínculo actual antes de registrar otro."
+        "Un vínculo no se re-apunta a otra persona ni a otra unidad: cerrá el actual con fecha de término y creá uno nuevo."
       )
       const despues = await prisma.vinculoUnidad.findUniqueOrThrow({ where: { id: "vu3-v-arr-vig" } })
       expect(despues.unidadId).toBe(antes.unidadId)

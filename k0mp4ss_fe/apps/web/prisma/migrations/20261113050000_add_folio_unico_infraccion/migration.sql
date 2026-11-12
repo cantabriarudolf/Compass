@@ -1,0 +1,23 @@
+-- IN — folio `IN-####` ÚNICO POR COMUNIDAD.
+--
+-- Contexto (deuda del módulo IN, cerrada con la propuesta de multa de vigencia):
+-- el folio se genera en el servidor como `max(correlativo) + 1` sobre los folios
+-- de la comunidad. Ese contador no es una garantía: dos aplicaciones concurrentes
+-- leen el mismo máximo y escriben el mismo folio. La sanción se dicta y se cita
+-- por su número, así que un duplicado la vuelve inidentificable — no hay forma de
+-- saber cuál de las dos se notificó.
+--
+-- El índice único `(comunidadId, folio)` es la garantía dura: la segunda alta
+-- choca con P2002 y el handler que crea la infracción reintenta con el folio
+-- siguiente (mismo patrón que el folio `AD-<año>-####` de actas y `CT-####` de
+-- certificados). El UMBRAL del reintento vive en el handler, no acá.
+--
+-- Aditiva: SOLO crea un índice; no altera columnas, filas ni datos.
+-- Requisito de despliegue: si una comunidad ya tiene folios repetidos (posible
+-- con la carrera que este índice cierra), `prisma migrate deploy` falla y hay que
+-- renumerar esas infracciones antes de volver a correrlo. La base de
+-- desarrollo/tests se recrea desde cero (`scripts/e2e-fresh.mjs`,
+-- `test/db-descartable-global.setup.ts`), así que no le aplica.
+
+-- CreateIndex
+CREATE UNIQUE INDEX "infracciones_in_comunidadId_folio_key" ON "infracciones_in"("comunidadId", "folio");

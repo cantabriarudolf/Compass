@@ -1122,6 +1122,13 @@ model InfraccionIN {
   createdAt                  DateTime  @default(now())
   updatedAt                  DateTime  @updatedAt
 
+  // Folio único POR COMUNIDAD: el `IN-####` se dicta y se cita, así que dos
+  // sanciones con el mismo número quedan inidentificables y no hay forma de
+  // saber cuál se notificó. El contador (`max + 1`) no alcanza solo —dos
+  // aplicaciones concurrentes leen el mismo máximo—, así que la garantía dura es
+  // este índice: la segunda choca con P2002 y el handler que crea la infracción
+  // reintenta con el folio siguiente (mismo patrón que el folio AD de actas).
+  @@unique([comunidadId, folio])
   @@index([comunidadId])
   @@index([unidadId])
   @@map("infracciones_in")

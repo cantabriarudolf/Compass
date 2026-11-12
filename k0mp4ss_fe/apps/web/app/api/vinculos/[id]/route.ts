@@ -54,6 +54,21 @@ export async function PUT(req: Request, ctx: CtxTipo): Promise<Response> {
     if (!parcial.success) {
       return jsonError(400, "Datos inválidos.", { detalles: parcial.error.flatten() })
     }
+    // Un vínculo NO se re-apunta: si cambia la persona o la unidad, es otro
+    // vínculo. Moverlo en silencio se lleva el historial a otra ficha y rompe el
+    // cierre automático del tramo anterior. El camino correcto es cerrar el actual
+    // (fechaFin) y crear el nuevo, que es lo que hace el alta con `cerrarAnterior`.
+    if (
+      (parcial.data.personaId !== undefined &&
+        parcial.data.personaId !== existente.personaId) ||
+      (parcial.data.unidadId !== undefined &&
+        parcial.data.unidadId !== existente.unidadId)
+    ) {
+      return jsonError(
+        400,
+        "Un vínculo no se re-apunta a otra persona ni a otra unidad: cerrá el actual con fecha de término y creá uno nuevo."
+      )
+    }
     // SAFETY: existente es una fila Prisma (fechaFin: string | null) y el
     // parche Zod opcional; el spread mezcla Record<string, unknown> que TS
     // no puede estrechar, pero el shape es el validado por el schema

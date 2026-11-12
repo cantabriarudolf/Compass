@@ -99,6 +99,15 @@ export const UnidadSchema = z.object({
   rolSii: z.string(),
   estadoId: IdEntidadSchema,
   servicios: ServiciosUnidadSchema.default({}),
+  // F32: avalúo fiscal de la unidad. Opcional y nullable porque una unidad puede
+  // no tenerlo declarado, y ese caso NO se inventa un valor: sin avalúo la unidad
+  // queda fuera del reparto del gasto de su sector (nunca se reparte en partes
+  // iguales para compensar).
+  avaluoFiscal: z
+    .number()
+    .min(0, "El avalúo fiscal no puede ser negativo.")
+    .optional()
+    .nullable(),
 })
 
 // --- Comunidad: Vínculos (VU) y Personas (MP) ---

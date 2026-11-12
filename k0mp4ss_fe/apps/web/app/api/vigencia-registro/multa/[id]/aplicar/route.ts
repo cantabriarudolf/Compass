@@ -51,10 +51,30 @@ const ResolucionMultaVigenciaSchema = z.union([
   }),
 ])
 
+/** Intentos de folio antes de rendirse ante colisiones reales (mismo tope que actas GD). */
+const MAX_INTENTOS_FOLIO = 3
+
+/**
+ * ¿El error es la colisión del índice único `(comunidadId, folio)`?
+ *
+ * La garantía contra dos sanciones con el mismo número es ese índice: cuando la
+ * carrera ocurre, la segunda escritura llega acá como P2002 y el reintento le
+ * asigna el folio siguiente en vez de dejar un 500 o un duplicado.
+ */
+function esConflictoDeFolio(e: unknown): boolean {
+  return (
+    typeof e === "object" &&
+    e !== null &&
+    "code" in e &&
+    (e as { code: string }).code === "P2002"
+  )
+}
+
 /**
  * Folio `IN-####` correlativo de la comunidad, el mismo formato que usa el módulo
- * IN. Se calcula dentro de la transacción; el maestro no impone unicidad de folio,
- * así que dos altas simultáneas podrían compartir número (deuda del módulo IN).
+ * IN. Se calcula dentro de la transacción. El contador no es la garantía: el
+ * índice único `(comunidadId, folio)` lo es, y por eso el alta de la infracción
+ * reintenta cuando dos aplicaciones leen el mismo máximo.
  */
 async function siguienteFolio(
   tx: Prisma.TransactionClient,
@@ -182,99 +202,117 @@ export async function POST(request: Request, ctx: Ctx): Promise<Response> {
   }
 
   const acuerdoReferencia = datos.acuerdoReferencia
-  const infraccionId = generarId("in")
 
-  try {
-    const aplicada = await prisma.$transaction(async (tx) => {
-      const tomada = await tx.propuestaMultaVigencia.updateMany({
-        where: { id, comunidadId: scope.comunidadId, estado: "propuesta" },
-        data: {
-          estado: "aplicada",
-          aplicadaPor: scope.usuarioId,
-          aplicadaEn: ahora,
-          acuerdoReferencia,
-          infraccionId,
-        },
+  // El folio de la sanción es único por comunidad (`IN-####`). Si dos aplicaciones
+  // leen el mismo máximo, la segunda choca contra el índice único y la transacción
+  // entera revierte —la propuesta vuelve a estar `propuesta`—, así que se reintenta
+  // con el folio siguiente. Agotados los intentos el desenlace es un 409 de
+  // conflicto: nunca un 500 ni una sanción con el folio repetido.
+  for (let intento = 1; intento <= MAX_INTENTOS_FOLIO; intento++) {
+    const infraccionId = generarId("in")
+
+    try {
+      const aplicada = await prisma.$transaction(async (tx) => {
+        const tomada = await tx.propuestaMultaVigencia.updateMany({
+          where: { id, comunidadId: scope.comunidadId, estado: "propuesta" },
+          data: {
+            estado: "aplicada",
+            aplicadaPor: scope.usuarioId,
+            aplicadaEn: ahora,
+            acuerdoReferencia,
+            infraccionId,
+          },
+        })
+        if (tomada.count === 0) return null
+
+        // S6: el vencimiento que se congeló al requerir es el hecho de la multa.
+        // Se lee de la evidencia y no se recalcula; si no consta, cae en la fecha
+        // de la propuesta (que también está congelada).
+        const requerimiento = await tx.requerimientoVigencia.findFirst({
+          where: {
+            comunidadId: scope.comunidadId,
+            unidadId: propuesta.unidadId,
+            fecha: propuesta.requerimientoEn,
+          },
+          select: { venceEn: true },
+          orderBy: { fecha: "desc" },
+        })
+        const suceso = requerimiento?.venceEn ?? propuesta.fecha
+        const ancla = propuesta.referenciaLegal
+          ? ` Ancla legal del monto: ${propuesta.referenciaLegal}.`
+          : ""
+
+        await tx.infraccionIN.create({
+          data: {
+            id: infraccionId,
+            comunidadId: scope.comunidadId,
+            folio: await siguienteFolio(tx, scope.comunidadId),
+            tipoInfraccionId: propuesta.tipoInfraccionId,
+            unidadId: propuesta.unidadId,
+            fechaSuceso: suceso.toISOString().slice(0, 10),
+            horaSuceso: "23:59",
+            antecedentes: `Registro de Copropietarios no actualizado: la unidad ${numero} no respondió el requerimiento del ${propuesta.requerimientoEn.toISOString().slice(0, 10)} dentro de los 60 días corridos (venció el ${suceso.toISOString().slice(0, 10)}). Multa propuesta por el sistema con el monto congelado del maestro de la comunidad y aplicada por acuerdo del Comité: ${acuerdoReferencia}.${ancla}`,
+            evidencias: [
+              {
+                nombre: `Propuesta de multa por vigencia ${propuesta.id}`,
+                tipoMime: "text/plain",
+                tamanoKB: 0,
+                url: `/admin/gestion/vigencia-registro?propuesta=${propuesta.id}`,
+              },
+            ],
+            estado: "aplicada",
+            fechaRegistro: hoyISO(),
+            // El monto congelado de la propuesta, no el vigente del maestro.
+            montoAplicado: propuesta.monto,
+            comentariosDirectiva: [],
+            // `respaldosDirectiva` guarda ids de personas de la directiva: el
+            // acuerdo del Comité ya vive en la propuesta y en la auditoría.
+            respaldosDirectiva: [],
+          },
+        })
+
+        await registrarEventoAuditoria(
+          {
+            id: generarId("ev"),
+            comunidadId: scope.comunidadId,
+            timestamp: ahora.toISOString(),
+            usuario: scope.usuarioId,
+            categoria: "AD",
+            tipoAccion: "AD_VIGENCIA_MULTA_APLICADA",
+            referenciaId: propuesta.unidadId,
+            descripcion: `Multa por vigencia APLICADA para la unidad ${numero} (propuesta ${propuesta.id}): monto congelado $${propuesta.monto}; acuerdo del Comité: ${acuerdoReferencia}; aplicada por el rol «${rol}»; infracción ${infraccionId}.`,
+          },
+          tx
+        )
+
+        return { infraccionId }
       })
-      if (tomada.count === 0) return null
 
-      // S6: el vencimiento que se congeló al requerir es el hecho de la multa.
-      // Se lee de la evidencia y no se recalcula; si no consta, cae en la fecha
-      // de la propuesta (que también está congelada).
-      const requerimiento = await tx.requerimientoVigencia.findFirst({
-        where: {
-          comunidadId: scope.comunidadId,
-          unidadId: propuesta.unidadId,
-          fecha: propuesta.requerimientoEn,
-        },
-        select: { venceEn: true },
-        orderBy: { fecha: "desc" },
+      if (!aplicada) {
+        return jsonError(
+          409,
+          "La propuesta ya fue resuelta: no se puede volver a aplicar ni desestimar."
+        )
+      }
+
+      return Response.json({
+        ok: true,
+        propuestaId: propuesta.id,
+        estado: "aplicada",
+        infraccionId: aplicada.infraccionId,
       })
-      const suceso = requerimiento?.venceEn ?? propuesta.fecha
-      const ancla = propuesta.referenciaLegal
-        ? ` Ancla legal del monto: ${propuesta.referenciaLegal}.`
-        : ""
-
-      await tx.infraccionIN.create({
-        data: {
-          id: infraccionId,
-          comunidadId: scope.comunidadId,
-          folio: await siguienteFolio(tx, scope.comunidadId),
-          tipoInfraccionId: propuesta.tipoInfraccionId,
-          unidadId: propuesta.unidadId,
-          fechaSuceso: suceso.toISOString().slice(0, 10),
-          horaSuceso: "23:59",
-          antecedentes: `Registro de Copropietarios no actualizado: la unidad ${numero} no respondió el requerimiento del ${propuesta.requerimientoEn.toISOString().slice(0, 10)} dentro de los 60 días corridos (venció el ${suceso.toISOString().slice(0, 10)}). Multa propuesta por el sistema con el monto congelado del maestro de la comunidad y aplicada por acuerdo del Comité: ${acuerdoReferencia}.${ancla}`,
-          evidencias: [
-            {
-              nombre: `Propuesta de multa por vigencia ${propuesta.id}`,
-              tipoMime: "text/plain",
-              tamanoKB: 0,
-              url: `/admin/gestion/vigencia-registro?propuesta=${propuesta.id}`,
-            },
-          ],
-          estado: "aplicada",
-          fechaRegistro: hoyISO(),
-          // El monto congelado de la propuesta, no el vigente del maestro.
-          montoAplicado: propuesta.monto,
-          comentariosDirectiva: [],
-          // `respaldosDirectiva` guarda ids de personas de la directiva: el
-          // acuerdo del Comité ya vive en la propuesta y en la auditoría.
-          respaldosDirectiva: [],
-        },
-      })
-
-      await registrarEventoAuditoria(
-        {
-          id: generarId("ev"),
-          comunidadId: scope.comunidadId,
-          timestamp: ahora.toISOString(),
-          usuario: scope.usuarioId,
-          categoria: "AD",
-          tipoAccion: "AD_VIGENCIA_MULTA_APLICADA",
-          referenciaId: propuesta.unidadId,
-          descripcion: `Multa por vigencia APLICADA para la unidad ${numero} (propuesta ${propuesta.id}): monto congelado $${propuesta.monto}; acuerdo del Comité: ${acuerdoReferencia}; aplicada por el rol «${rol}»; infracción ${infraccionId}.`,
-        },
-        tx
-      )
-
-      return { infraccionId }
-    })
-
-    if (!aplicada) {
-      return jsonError(
-        409,
-        "La propuesta ya fue resuelta: no se puede volver a aplicar ni desestimar."
-      )
+    } catch (e) {
+      // P2002 = otra aplicación tomó el folio entre la lectura y la escritura.
+      // La transacción ya revirtió, así que el intento siguiente lee la base
+      // real y asigna el folio que sigue; cualquier otro error es un 500.
+      if (!esConflictoDeFolio(e)) {
+        return jsonError(500, "No se pudo aplicar la propuesta de multa.")
+      }
     }
-
-    return Response.json({
-      ok: true,
-      propuestaId: propuesta.id,
-      estado: "aplicada",
-      infraccionId: aplicada.infraccionId,
-    })
-  } catch {
-    return jsonError(500, "No se pudo aplicar la propuesta de multa.")
   }
+
+  return jsonError(
+    409,
+    "Conflicto: no se pudo asignar un folio único a la infracción, reintentá la aplicación de la multa."
+  )
 }

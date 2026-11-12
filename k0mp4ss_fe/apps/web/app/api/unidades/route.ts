@@ -58,6 +58,10 @@ const CAMPOS_UNIDAD = [
   "rolSii",
   "estadoId",
   "servicios",
+  // F32: sin este campo en la allow-list el avalúo se descartaba en silencio antes
+  // del upsert y el reparto por sector no tenía de dónde leerlo (mismo agujero que
+  // tuvo `puedeDeclararRegistro` en los vínculos).
+  "avaluoFiscal",
 ] as const
 
 export interface ReferenciasUnidad {

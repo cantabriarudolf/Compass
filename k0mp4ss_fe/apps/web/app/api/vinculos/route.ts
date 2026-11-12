@@ -252,6 +252,21 @@ export async function POST(req: Request): Promise<Response> {
     if (!puede(scope.rol, existente ? "editar" : "crear", "mp")) {
       return jsonError(403, "Permiso denegado.")
     }
+    // Un vínculo existente NO se re-apunta: la persona y la unidad son su
+    // identidad. Mover el vínculo a otra unidad u otra persona reescribiría para
+    // quién y para qué unidad se declaró, y el cierre automático del tramo
+    // anterior nunca se dispararía porque la fila sigue siendo «la misma». El
+    // camino que deja historial es cerrar este vínculo y crear uno nuevo.
+    if (
+      existente &&
+      (existente.personaId !== parsed.data.personaId ||
+        existente.unidadId !== parsed.data.unidadId)
+    ) {
+      return jsonError(
+        400,
+        "Un vínculo no se re-apunta: la persona y la unidad de un vínculo existente no se cambian. Cerrá el vínculo actual y creá uno nuevo, así queda el historial y el cierre automático del tramo anterior hace su trabajo."
+      )
+    }
     // SAFETY: VinculoUnidadSchema ya validó el shape; el cast recupera la
     // interfaz DatosVinculo (campos opcionales como fechaFin) que Zod infiere
     // como opcional idéntico, pero que el double cast evita frotar genéricos.
