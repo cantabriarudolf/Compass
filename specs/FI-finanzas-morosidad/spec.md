@@ -793,3 +793,103 @@ de esta capacidad.
   `fi:cobranza` —el comité sólo tiene la lectura— y se intenta importar o resolver
 - **THEN** responden 401 y 403 respectivamente, y el intento rechazado no deja
   cartolas ni movimientos
+
+### Requirement: Reparto del Gasto de un Sector por Avalúo Fiscal
+El sistema SHALL registrar el reparto de un gasto entre las unidades de UN sector,
+en proporción al **avalúo fiscal** de cada una, porque el reglamento de la comunidad
+manda que los gastos de bienes o servicios que sirven sólo a un sector se carguen
+sólo a ese sector. La emisión mensual de gasto común reparte entre todas las
+unidades de la comunidad y no puede expresar esa carga diferenciada: el reparto es
+un documento propio, con su propia emisión.
+
+El avalúo fiscal SHALL ser un hecho de la unidad (`Unidad.avaluoFiscal`, columna
+aditiva y opcional) y NO SHALL declararse en el cuerpo de la petición: se lee de la
+base, porque un avalúo que declara quien pide el reparto le permite moverle la carga
+a otra unidad. `NULL` significa **no declarado**. El campo vive en el modelo de la
+unidad, pero la capacidad es de FI: TU gobierna el maestro de tipos de unidad (las
+plantillas), no los hechos catastrales de cada unidad, así que el contrato del
+reparto se especifica acá.
+
+La regla que reparte SHALL ser pura (`repartirPorAvaluo` en `lib/reparto-sector.ts`:
+sin base y sin reloj) y SHALL sostener cinco reglas:
+
+1. el monto SHALL repartirse en proporción al avalúo de cada unidad que lo tenga
+   declarado;
+2. la unidad con avalúo `null` (o con un avalúo no positivo) MUST quedar FUERA del
+   reparto: NO SHALL asignársele cero, NO SHALL usársela para compensar y NO SHALL
+   repartirse el total en partes iguales;
+3. si NINGUNA unidad del sector tiene avalúo, el reparto NO SHALL emitirse y la
+   respuesta MUST decir el motivo;
+4. el dinero SHALL operarse en **centavos enteros** y la suma de las cuotas SHALL
+   ser **exactamente** el monto total; el residuo del redondeo SHALL asignarse a la
+   unidad de **mayor avalúo** (con empate, a la primera del orden recibido, para que
+   el resultado sea determinístico);
+5. un monto total que no sea un número finito mayor o igual a un centavo NO SHALL
+   repartirse.
+
+La emisión (`POST /api/repartos-sector`, guard `fi:gasto_comun` crear) SHALL
+persistir en los modelos aditivos `RepartoSector` (tabla `repartos_sector`:
+`microSectorId`, período `AAAA-MM`, concepto, `montoTotal`, `avaluoTotal`, estado
+`emitido`, quién lo emitió) y `CuotaRepartoSector` (tabla `cuotas_reparto_sector`:
+unidad, `avaluoUsado` y monto, con índice único `(repartoSectorId, unidadId)`), con
+`montoTotal` y `avaluoTotal` como **snapshot** y el avalúo de cada cuota
+**congelado**: una revalorización posterior de la unidad NO SHALL reescribir un
+reparto emitido. El sector MUST ser de la comunidad de la sesión (400 con el motivo
+si no existe para ese scope) y, si el reparto no se puede emitir, NO SHALL
+escribirse ninguna fila. La emisión, sus cuotas y el evento de auditoría
+`FI_REPARTO_SECTOR_EMITIDO` SHALL escribirse en UNA transacción.
+
+La lectura (`GET /api/repartos-sector`, guard `fi:gasto_comun` ver) SHALL devolver
+los repartos de la comunidad de la sesión con sus cuotas en un número FIJO de
+consultas y NUNCA SHALL devolver los de otra comunidad. NO SHALL existir PUT ni
+DELETE: un reparto emitido es la evidencia de lo que se le cargó a cada unidad y con
+qué avalúo, y se corrige emitiendo otro.
+
+Frontera deliberada: el reparto NO SHALL crear `CobroFI` ni modificar `EmisionGC`.
+Conectar la emisión de gasto común con el reparto por sector, cargar el avalúo por el
+maestro de unidades y la pantalla quedan declarados como deuda en
+`specs/PENDIENTES-FUNCIONALIDAD.md` (F32).
+
+#### Scenario: El gasto del sector se reparte en proporción al avalúo
+- **WHEN** se emite el reparto de $1.000.000 en un sector cuyas unidades declararon
+  avalúos de $60.000.000 y $40.000.000
+- **THEN** las cuotas quedan en $600.000 y $400.000, con el avalúo usado congelado
+  en cada una y el avalúo total del reparto en $100.000.000
+
+#### Scenario: La unidad sin avalúo queda fuera y no se reparte en partes iguales
+- **WHEN** el sector tiene una tercera unidad con `avaluoFiscal` `NULL` y se emite el
+  reparto
+- **THEN** esa unidad no aparece en las cuotas —ni con $0—, el total se reparte sólo
+  entre las que declararon avalúo y la suma de las cuotas sigue siendo el monto total
+
+#### Scenario: Sin ningún avalúo no se reparte
+- **WHEN** se emite un reparto en un sector donde ninguna unidad declaró avalúo (o
+  donde los avalúos declarados son cero)
+- **THEN** responde 400 con el motivo y no queda ni el reparto ni sus cuotas
+
+#### Scenario: La suma de las cuotas es exactamente el monto total
+- **WHEN** se emite un reparto de $1.000.000 con avalúos que dan dos tercios y un
+  tercio ($48.000.000 y $24.000.000)
+- **THEN** la suma de las cuotas es exactamente $1.000.000 en centavos enteros: el
+  centavo del redondeo lo absorbe la unidad de mayor avalúo, que queda en $666.666,67
+
+#### Scenario: Un monto que no llega a un centavo no se reparte
+- **WHEN** el alta envía un monto total de cero, negativo o menor a un centavo
+- **THEN** responde 400 por el contrato del cuerpo y no queda ninguna fila
+
+#### Scenario: El reparto emitido no se reescribe
+- **WHEN** una unidad del sector cambia su avalúo después de emitido el reparto
+- **THEN** el reparto conserva su monto total, su avalúo total y el `avaluoUsado` de
+  cada cuota tal como se emitieron
+
+#### Scenario: La lectura no cruza comunidades
+- **WHEN** se leen los repartos con la sesión de una comunidad, incluso con un
+  `?comunidadId=` de otra en la URL
+- **THEN** sólo aparecen los repartos de la comunidad de la sesión, con sus cuotas y
+  el número de unidad de cada una, y ninguno de la otra comunidad
+
+#### Scenario: Sin sesión y sin la clave del gasto común
+- **WHEN** se llaman las dos rutas sin sesión, o con un rol que no tiene
+  `fi:gasto_comun` —el residente no la tiene y el comité sólo lee—
+- **THEN** responden 401 y 403 respectivamente, y el intento rechazado no deja
+  repartos ni cuotas

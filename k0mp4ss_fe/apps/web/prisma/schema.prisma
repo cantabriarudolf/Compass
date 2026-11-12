@@ -81,6 +81,8 @@ model Comunidad {
   cortesServicio              CorteServicio[]
   // F31 — presupuesto por partidas aprobado por comité o asamblea, según el reglamento.
   presupuestos                Presupuesto[]
+  // F32 — reparto del gasto de un sector entre sus unidades, por avalúo fiscal.
+  repartosSector              RepartoSector[]
   // F30 — conciliación bancaria por importación de cartola (decisión D1).
   cartolasImportadas          CartolaImportada[]
   movimientosCartola          MovimientoCartola[]
@@ -231,6 +233,12 @@ model Unidad {
   tipoUnidadId  String
   metraje       Float
   prorrateo     Float
+  // F32 — avalúo fiscal de la unidad, el hecho catastral con el que se reparte el
+  // gasto de un sector entre sus unidades (reglamento de la comunidad: lo que
+  // sirve a un solo sector se carga sólo a ese sector, en proporción al avalúo).
+  // `NULL` = NO DECLARADO: la unidad NO se incluye en el reparto de su sector y
+  // NUNCA se reparte en partes iguales para compensarla (ver `lib/reparto-sector.ts`).
+  avaluoFiscal  Float?
   rolSii        String
   estadoId      String
   servicios     Json // ServiciosUnidad
@@ -1677,6 +1685,60 @@ model PartidaPresupuesto {
 
   @@unique([presupuestoId, orden])
   @@map("partidas_presupuesto")
+}
+
+// F32 — reparto del gasto de UN sector entre sus unidades, en proporción al avalúo
+// fiscal de cada una. Nace de lo que el reglamento de la comunidad manda: los
+// gastos de bienes o servicios que sirven sólo a un sector se cargan sólo a ese
+// sector, en proporción al avalúo fiscal de sus unidades (la emisión general
+// reparte entre TODAS las unidades de la comunidad y no puede expresar esa carga
+// diferenciada).
+//
+// El reparto es un DOCUMENTO EMITIDO: guarda el monto total y el avalúo total que
+// se usaron como snapshot, y sus cuotas quedan congeladas con el avalúo de ese
+// momento. Una revalorización posterior de la unidad no reescribe un reparto ya
+// emitido (el modelo no tiene updatedAt a propósito: no se edita).
+model RepartoSector {
+  id            String    @id
+  comunidadId   String
+  comunidad     Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  microSectorId String // sector al que se carga el gasto (no lleva relación: es una FK blanda)
+  periodo       String // AAAA-MM, el mismo período del gasto común que lo origina
+  concepto      String // qué gasto se reparte (el servicio o bien del sector)
+  montoTotal    Float // snapshot: lo que se repartió
+  avaluoTotal   Float // snapshot: la suma de los avalúos que entraron al reparto
+  estado        String    @default("emitido")
+  creadoPor     String // usuario de sesión que emitió el reparto
+  createdAt     DateTime  @default(now())
+
+  cuotas CuotaRepartoSector[]
+
+  @@index([comunidadId])
+  @@index([comunidadId, periodo])
+  @@index([microSectorId])
+  @@map("repartos_sector")
+}
+
+// Cuota del reparto: cuánto le toca a UNA unidad, con el avalúo que se usó al
+// emitir. `avaluoUsado` es la evidencia del prorrateo: sin él, un avalúo que
+// cambie después dejaría las cuotas sin explicación.
+//
+// El índice único `(repartoSectorId, unidadId)` impide dos cuotas de la misma
+// unidad en el mismo reparto. La unidad SIN avalúo declarado no tiene cuota: la
+// regla la deja fuera (no se le asigna 0 ni se reparte en partes iguales).
+model CuotaRepartoSector {
+  id              String        @id
+  comunidadId     String
+  repartoSectorId String
+  repartoSector   RepartoSector @relation(fields: [repartoSectorId], references: [id], onDelete: Cascade)
+  unidadId        String
+  avaluoUsado     Float // avalúo con el que se calculó esta cuota (congelado)
+  monto           Float
+
+  @@unique([repartoSectorId, unidadId])
+  @@index([comunidadId])
+  @@index([unidadId])
+  @@map("cuotas_reparto_sector")
 }
 
 // Personal y Servicios (PE)

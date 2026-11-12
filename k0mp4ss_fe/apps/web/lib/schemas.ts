@@ -1645,6 +1645,36 @@ export const PeriodoFacturacionSchema = z
     "El período debe tener formato AAAA-MM."
   )
 
+/**
+ * Alta del reparto de un gasto por sector (F32): qué gasto, de qué sector, de qué
+ * período y por cuánto.
+ *
+ * El `id`, el estado, el avalúo total, las cuotas y quién lo emite los decide el
+ * servidor: el avalúo se LEE de las unidades del sector (`Unidad.avaluoFiscal`) y
+ * el reparto lo calcula la regla pura (`repartirPorAvaluo`). Si el cliente pudiera
+ * mandar los avalúos, bastaría con declarar el de una unidad para moverle la carga
+ * a otra: el hecho catastral no se declara en el cuerpo de la petición.
+ *
+ * El período es AAAA-MM —el mismo del gasto común que el reparto carga al sector— y
+ * `montoTotal` exige al menos un centavo porque la moneda se opera en centavos
+ * enteros: un monto que no llega a un centavo no es un gasto repartible.
+ */
+export const RepartoSectorCreacionSchema = z.object({
+  microSectorId: IdEntidadSchema,
+  periodo: PeriodoFacturacionSchema,
+  concepto: z
+    .string({ required_error: "El concepto del reparto es obligatorio." })
+    .trim()
+    .min(1, "El concepto del reparto es obligatorio.")
+    .max(200, "El concepto del reparto no puede superar los 200 caracteres."),
+  montoTotal: z
+    .number({ required_error: "El monto total a repartir es obligatorio." })
+    .finite("El monto total a repartir debe ser un número finito.")
+    .min(0.01, "El monto total a repartir debe ser mayor o igual a un centavo."),
+})
+
+export type RepartoSectorCreacion = z.infer<typeof RepartoSectorCreacionSchema>
+
 /** Instrumento que funda la forma de contribución declarada. */
 export const FUENTES_INSTRUMENTO_REGLAMENTO = [
   "reglamento_copropiedad",
