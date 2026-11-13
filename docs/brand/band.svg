@@ -34,16 +34,6 @@
 
   <text x="1112" y="232" text-anchor="end" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="18" letter-spacing="2.2" fill="#c0a062" fill-opacity="0.85">powered by</text>
   <g transform="translate(1134 226)">
-    <circle r="1.7" fill="#8a6d3f"/>
-      <path d="M0 -2.4 C 3.4 -4.5, 5.1 -7.8, 0 -9.4 C -5.1 -7.8, -3.4 -4.5, 0 -2.4 Z" transform="rotate(0)" fill="#c0a062"/>
-      <path d="M0 -2.4 C 3.4 -4.5, 5.1 -7.8, 0 -9.4 C -5.1 -7.8, -3.4 -4.5, 0 -2.4 Z" transform="rotate(72)" fill="#c0a062"/>
-      <path d="M0 -2.4 C 3.4 -4.5, 5.1 -7.8, 0 -9.4 C -5.1 -7.8, -3.4 -4.5, 0 -2.4 Z" transform="rotate(144)" fill="#c0a062"/>
-      <path d="M0 -2.4 C 3.4 -4.5, 5.1 -7.8, 0 -9.4 C -5.1 -7.8, -3.4 -4.5, 0 -2.4 Z" transform="rotate(216)" fill="#c0a062"/>
-      <path d="M0 -2.4 C 3.4 -4.5, 5.1 -7.8, 0 -9.4 C -5.1 -7.8, -3.4 -4.5, 0 -2.4 Z" transform="rotate(288)" fill="#c0a062"/>
-  </g>
-
-  <text x="1112" y="232" text-anchor="end" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="18" letter-spacing="2.2" fill="#c0a062" fill-opacity="0.85">powered by</text>
-  <g transform="translate(1134 226)">
     <circle r="1.7" fill="#bb749c"/>
       <path d="M0 -2.4 C 3.4 -4.5, 5.1 -7.8, 0 -9.4 C -5.1 -7.8, -3.4 -4.5, 0 -2.4 Z" transform="rotate(0)" fill="#f095c8"/>
       <path d="M0 -2.4 C 3.4 -4.5, 5.1 -7.8, 0 -9.4 C -5.1 -7.8, -3.4 -4.5, 0 -2.4 Z" transform="rotate(72)" fill="#f095c8"/>
