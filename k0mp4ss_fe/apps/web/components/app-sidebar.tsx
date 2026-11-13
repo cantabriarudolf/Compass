@@ -243,6 +243,11 @@ const data = {
         },
         { title: "Maestros Administrativos", url: "/admin/maestros", roles: ["administrador"] },
         { title: "Configuración", url: "/admin/configuracion", roles: ["administrador"] },
+        {
+          title: "Credencial de correo",
+          url: "/admin/configuracion/correo",
+          roles: ["administrador", "comite"],
+        },
         { title: "Permisos", url: "/admin/permisos", roles: ["administrador"] },
         { title: "Logs de Auditoría", url: "/admin/logs", roles: ["administrador"] },
         { title: "Carga inicial", url: "/admin/carga-inicial", roles: ["administrador"] },
