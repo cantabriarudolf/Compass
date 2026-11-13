@@ -4,5 +4,11 @@
   "outputDirectory": "apps/web/.next",
   "installCommand": "npm install",
   "framework": "nextjs",
-  "regions": ["iad1"]
+  "regions": ["iad1"],
+  "crons": [
+    {
+      "path": "/api/vigencia-registro/avisos",
+      "schedule": "0 12 * * *"
+    }
+  ]
 }

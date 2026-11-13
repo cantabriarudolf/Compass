@@ -21,7 +21,11 @@
  * Por eso emitir es un acto explícito y repetible de la administración: no hay
  * reloj escondido que cambie el resultado entre dos corridas.
  *
- * **La emisión no es automática**: no hay cron en este repositorio ni lo habrá
+ * **La emisión puede ser programada**: el cron de Vercel llama al mismo barrido por
+ * `GET /api/vigencia-registro/avisos` con el secreto del entorno (ver
+ * `lib/vigencia-barrido.ts`), y este módulo sigue siendo puro: no sabe de relojes, ni de
+ * cron, ni de correo. La frase que había acá (que no habría cron) quedó falsa cuando el
+ * owner decidió programarlo.
  * por este contrato. La administración corre el barrido; el barrido es
  * idempotente. La programación automática está fuera de alcance (S8).
  *

@@ -1,114 +1,67 @@
 /**
- * POST /api/vigencia-registro/avisos — el barrido de avisos de S8.
+ * `/api/vigencia-registro/avisos` — el barrido de avisos de S8, por los dos
+ * caminos que lo disparan.
  *
- * S8 exige que el administrador **y** el Comité se enteren siempre del estado
- * del Registro, que el propietario reciba el aviso que le toca, y que una unidad
- * sin propietario registrado se notifique como incidente de datos en vez de
- * quedarse en silencio. Lo que este repositorio no tiene es un reloj que corra
- * solo: **emitir es un acto explícito y repetible de la administración**, no un
- * job programado. La programación automática está fuera del contrato de esta
- * capacidad; si algún día se decide, será una decisión aparte y no un cron
- * escondido en esta ruta.
+ * `POST` es el acto explícito de la administración: la comunidad sale del scope
+ * de la sesión y el rol sin `ad` + `editar` recibe 403 (S8). `GET` es la entrada
+ * del cron de Vercel (`vercel.json` → `crons`): no hay sesión, así que la
+ * autenticación es el secreto compartido del encabezado `Authorization: Bearer
+ * <CRON_SECRET>` y el barrido recorre TODAS las comunidades con caso de vigencia.
  *
- * Por eso la idempotencia no es un adorno: volver a correr el barrido tiene que
- * ser seguro. Cada aviso se identifica por `(comunidad, unidad, tipo,
- * destinatario, hito)` en `avisos_vigencia`; la notificación y su constancia se
- * escriben en la MISMA transacción y el choque contra el índice único revierte
- * las dos y se cuenta como `omitido`, nunca como error. Dos administradores
- * apretando el botón a la vez no duplican avisos.
+ * **Las dos rutas corren el MISMO barrido** (`barrerAvisosDeVigencia` de
+ * `lib/vigencia-barrido.ts`). Acá no hay una lógica duplicada que pueda
+ * desincronizarse: lo único distinto es de dónde sale la comunidad y cómo se
+ * autentica al llamador.
  *
- * El destinatario «propietario» es el VIGENTE de la unidad (`rol: "propietario"`
- * con `fechaFin: null`, el más reciente), el mismo criterio que
- * `propietarioVigenteDeUnidad()` de `lib/entrega-aviso.ts` usa para entregar
- * avisos de cobro. Acá se resuelve en una sola consulta para no hacer N+1 sobre
- * todas las unidades de la comunidad.
+ * Decisiones que no se reinterpretan:
+ * - **El secreto del cron vive SOLO en `process.env.CRON_SECRET`.** Si falta, el
+ *   `GET` responde 500 y NO hace nada: sin secreto no hay forma de distinguir al
+ *   cron de un curioso, y responder "autorizado porque no hay secreto" sería una
+ *   puerta abierta. Falla cerrada, igual que la clave maestra de secretos.
+ * - **Sin el secreto correcto no hay ningún efecto**: 401 antes de leer la base,
+ *   de emitir avisos y de auditar. La comparación es en tiempo constante.
+ * - **El correo no se finge (S4)**: un aviso sin credencial de la comunidad (o
+ *   sin correo de destino) queda escrito en la bandeja y el resumen dice cuántos
+ *   quedaron así y por qué. El secreto del SMTP no sale de memoria.
+ * - **Idempotencia**: cada aviso se identifica por `(comunidad, unidad, tipo,
+ *   destinatario, hito)` en `avisos_vigencia`; el choque contra el índice único
+ *   se cuenta como `omitido`, nunca como error, y una segunda corrida del `GET`
+ *   con los mismos hechos no escribe nada.
  */
+import { timingSafeEqual } from "node:crypto"
 import { puede } from "@/lib/authz"
-import { prisma } from "@/lib/prisma"
-import { generarId } from "@/lib/id-utils"
-import { registrarEventoAuditoria } from "@/lib/auditoria"
 import { jsonError, withComunidadScope } from "@/lib/api/with-comunidad-scope"
-import { estadoDelCaso } from "@/lib/vigencia-registro"
 import {
-  avisosDelCaso,
-  type AvisoVigenciaDecidido,
-} from "@/lib/vigencia-avisos"
+  USUARIO_CRON,
+  barrerAvisosDeVigencia,
+  comunidadesConCasoDeVigencia,
+  type ResumenBarridoComunidad,
+} from "@/lib/vigencia-barrido"
 
-/** P2002 = choque contra el índice único de idempotencia del barrido. */
-function esDuplicado(error: unknown): boolean {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    "code" in error &&
-    (error as { code: string }).code === "P2002"
-  )
+/** Variable de entorno del secreto compartido con el cron. Nunca en la base. */
+const VARIABLE_CRON_SECRET = "CRON_SECRET"
+
+/** El secreto del encabezado, o `null` si el esquema no es `Bearer` o viene vacío. */
+function leerBearer(encabezado: string | null): string | null {
+  if (encabezado === null) return null
+  const partes = encabezado.trim().split(/\s+/)
+  const esquema = partes[0] ?? ""
+  if (esquema.toLowerCase() !== "bearer") return null
+  const valor = partes.slice(1).join(" ")
+  return valor === "" ? null : valor
 }
 
-interface EmisionAviso {
-  comunidadId: string
-  unidadId: string
-  personaId: string | null
-  aviso: AvisoVigenciaDecidido
-  fecha: string
-}
-
-/**
- * Escribe UNA notificación con su constancia, o no escribe nada.
- *
- * La transacción es la que impide el medio aviso: si la constancia choca contra
- * el índice único, la notificación de esa misma transacción se revierte y el
- * aviso queda como `omitido` —el mismo aviso ya estaba emitido—.
- */
-async function emitirAviso({
-  comunidadId,
-  unidadId,
-  personaId,
-  aviso,
-  fecha,
-}: EmisionAviso): Promise<boolean> {
-  try {
-    await prisma.$transaction(async (tx) => {
-      const notificacionId = generarId("not")
-      await tx.notificacion.create({
-        data: {
-          id: notificacionId,
-          comunidadId,
-          destinatarioRol: aviso.destinatario,
-          // Sólo el propietario es una persona concreta; el administrador y el
-          // Comité son roles y su bandeja se acota por `unidadId` (F5).
-          destinatarioPersonaId:
-            aviso.destinatario === "propietario" ? personaId : null,
-          unidadId,
-          asunto: aviso.asunto,
-          cuerpo: aviso.cuerpo,
-          canal: "email_simulado",
-          moduloOrigen: "AD_VIGENCIA",
-          fecha,
-          leida: false,
-        },
-      })
-      await tx.avisoVigencia.create({
-        data: {
-          comunidadId,
-          unidadId,
-          tipo: aviso.tipo,
-          destinatario: aviso.destinatario,
-          hito: aviso.hito,
-          notificacionId,
-        },
-      })
-    })
-    return true
-  } catch (error) {
-    if (esDuplicado(error)) return false
-    throw error
-  }
+/** Comparación en tiempo constante: el largo distinto se rechaza antes. */
+function secretoCoincide(recibido: string, esperado: string): boolean {
+  const a = Buffer.from(recibido, "utf8")
+  const b = Buffer.from(esperado, "utf8")
+  if (a.length !== b.length) return false
+  return timingSafeEqual(a, b)
 }
 
 /**
- * El barrido no recibe payload: la comunidad sale del scope del servidor y los
- * hechos salen de la base. Acepta el `Request` sólo por la firma de route
- * handler, y no lo lee a propósito.
+ * El barrido manual: la comunidad sale del scope del servidor y los hechos de la
+ * base. Acepta el `Request` sólo por la firma de route handler, y no lo lee.
  */
 export async function POST(_request: Request): Promise<Response> {
   const resultado = await withComunidadScope()
@@ -119,97 +72,119 @@ export async function POST(_request: Request): Promise<Response> {
     return jsonError(403, "Permiso denegado.")
   }
 
-  const ahora = new Date()
-  const fecha = ahora.toISOString()
-
   try {
-    const [unidades, casos, vinculos] = await Promise.all([
-      prisma.unidad.findMany({
-        where: { comunidadId: scope.comunidadId },
-        select: { id: true, numero: true },
-        orderBy: { numero: "asc" },
-      }),
-      prisma.vigenciaRegistroUnidad.findMany({
-        where: { comunidadId: scope.comunidadId },
-        select: {
-          unidadId: true,
-          ultimaActualizacion: true,
-          requerimientoEn: true,
-        },
-      }),
-      // Mismo criterio que `propietarioVigenteDeUnidad()`: rol propietario,
-      // vínculo abierto (`fechaFin: null`) y el más reciente primero. Una sola
-      // consulta para todas las unidades: el primer vínculo de cada unidad es su
-      // propietario vigente, igual que el `findFirst` por unidad.
-      prisma.vinculoUnidad.findMany({
-        where: {
-          comunidadId: scope.comunidadId,
-          rol: "propietario",
-          fechaFin: null,
-        },
-        orderBy: { fechaInicio: "desc" },
-        select: { unidadId: true, personaId: true },
-      }),
-    ])
-
-    const casoPorUnidad = new Map(casos.map((caso) => [caso.unidadId, caso]))
-    const propietarioPorUnidad = new Map<string, string>()
-    for (const vinculo of vinculos) {
-      if (!propietarioPorUnidad.has(vinculo.unidadId)) {
-        propietarioPorUnidad.set(vinculo.unidadId, vinculo.personaId)
-      }
-    }
-
-    let emitidos = 0
-    let omitidos = 0
-
-    for (const unidad of unidades) {
-      const caso = casoPorUnidad.get(unidad.id)
-      const personaId = propietarioPorUnidad.get(unidad.id) ?? null
-      const veredicto = estadoDelCaso(
-        {
-          ultimaActualizacion: caso?.ultimaActualizacion ?? null,
-          requerimientoEn: caso?.requerimientoEn ?? null,
-        },
-        ahora
-      )
-
-      const avisos = avisosDelCaso({
-        veredicto,
-        numeroUnidad: unidad.numero,
-        hayPropietarioVigente: personaId !== null,
-        hayRequerimientoAbierto: caso?.requerimientoEn != null,
-      })
-
-      for (const aviso of avisos) {
-        const emitido = await emitirAviso({
-          comunidadId: scope.comunidadId,
-          unidadId: unidad.id,
-          personaId,
-          aviso,
-          fecha,
-        })
-        if (emitido) emitidos += 1
-        else omitidos += 1
-      }
-    }
-
-    // Un evento por corrida, no uno por aviso: las notificaciones mismas son la
-    // evidencia; este evento deja constancia de que el barrido se corrió y de
-    // cuánto emitió y cuánto omitió por idempotencia.
-    await registrarEventoAuditoria({
-      id: generarId("ev"),
+    const resumen = await barrerAvisosDeVigencia({
       comunidadId: scope.comunidadId,
-      timestamp: fecha,
       usuario: scope.usuarioId,
-      categoria: "AD",
-      tipoAccion: "AD_VIGENCIA_AVISOS",
-      referenciaId: scope.comunidadId,
-      descripcion: `Avisos de vigencia del Registro de Copropietarios: ${emitidos} emitido(s) y ${omitidos} omitido(s) por idempotencia.`,
     })
-
-    return Response.json({ ok: true, emitidos, omitidos })
+    // Contrato histórico del botón: el correo lo cuenta la bitácora y el cron,
+    // no esta respuesta, que el cliente ya consumía con estas dos cifras.
+    return Response.json({
+      ok: true,
+      emitidos: resumen.emitidos,
+      omitidos: resumen.omitidos,
+    })
   } catch {
     return jsonError(500, "No se pudieron emitir los avisos de vigencia.")
+  }
+}
+
+/** Una comunidad dentro del resumen del cron: su barrido, o su error. */
+interface ResultadoComunidad {
+  comunidadId: string
+  ok: boolean
+  error: string | null
+  emitidos: number
+  omitidos: number
+  enviados: number
+  fallidos: number
+  sinEmisor: number
+  enBandeja: number
+  motivos: readonly string[]
+}
+
+function resultadoOk(resumen: ResumenBarridoComunidad): ResultadoComunidad {
+  return { ...resumen, ok: true, error: null }
+}
+
+function resultadoConError(comunidadId: string): ResultadoComunidad {
+  return {
+    comunidadId,
+    ok: false,
+    error: "No se pudieron emitir los avisos de vigencia.",
+    emitidos: 0,
+    omitidos: 0,
+    enviados: 0,
+    fallidos: 0,
+    sinEmisor: 0,
+    enBandeja: 0,
+    motivos: [],
+  }
+}
+
+/**
+ * El barrido automático (cron de Vercel). Sin sesión: el `comunidadId` sale de la
+ * lista de comunidades con caso de vigencia, nunca de la request.
+ */
+export async function GET(request: Request): Promise<Response> {
+  const esperado = process.env[VARIABLE_CRON_SECRET]
+  // Fail-closed ANTES de leer el encabezado o la base: sin secreto configurado no
+  // existe forma de autorizar a nadie.
+  if (esperado === undefined || esperado.trim() === "") {
+    return jsonError(
+      500,
+      "No se puede correr el barrido automático: falta la variable de entorno CRON_SECRET en el servidor."
+    )
+  }
+
+  const recibido = leerBearer(request.headers.get("authorization"))
+  if (recibido === null || !secretoCoincide(recibido, esperado)) {
+    return jsonError(
+      401,
+      "No autorizado: el barrido automático exige el secreto del cron en el encabezado Authorization (Bearer)."
+    )
+  }
+
+  try {
+    const comunidades = await comunidadesConCasoDeVigencia()
+    const resultados: ResultadoComunidad[] = []
+    for (const comunidadId of comunidades) {
+      try {
+        resultados.push(
+          resultadoOk(
+            await barrerAvisosDeVigencia({
+              comunidadId,
+              usuario: USUARIO_CRON,
+            })
+          )
+        )
+      } catch {
+        // Una comunidad rota no puede esconder el barrido de las demás: se
+        // informa su error en su propia fila y la corrida sigue.
+        resultados.push(resultadoConError(comunidadId))
+      }
+    }
+
+    const sumar = (campo: keyof Omit<ResultadoComunidad, "comunidadId" | "ok" | "error" | "motivos">) =>
+      resultados.reduce((total, fila) => total + fila[campo], 0)
+
+    return Response.json({
+      ok: true,
+      comunidades: resultados,
+      totales: {
+        comunidades: resultados.length,
+        emitidos: sumar("emitidos"),
+        omitidos: sumar("omitidos"),
+        enviados: sumar("enviados"),
+        fallidos: sumar("fallidos"),
+        sinEmisor: sumar("sinEmisor"),
+        enBandeja: sumar("enBandeja"),
+      },
+    })
+  } catch {
+    return jsonError(
+      500,
+      "No se pudo correr el barrido automático de avisos de vigencia."
+    )
   }
 }
