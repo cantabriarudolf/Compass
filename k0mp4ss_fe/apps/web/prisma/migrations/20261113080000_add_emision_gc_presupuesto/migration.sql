@@ -1,0 +1,15 @@
+-- F31 · V1 (S6) — la emisión de gasto común guarda contra qué presupuesto se contrastó.
+--
+-- El presupuesto es ESTIMATIVO (Ley 21.442 art. 22): NO es el monto que se cobra.
+-- El monto cobrado sigue saliendo del gasto efectivamente devengado, que ya vive en
+-- `gastoTotal`. Esta columna sólo traza el contraste mensual contra la doceava
+-- parte del presupuesto aprobado, y el exceso se declara en el evento de bitácora.
+--
+-- Aditiva: una columna nueva, nullable, sin default. Las emisiones que ya existen
+-- quedan en NULL: nacieron antes de esta columna y no tuvieron presupuesto contra
+-- el cual contrastarse. No se rellena hacia atrás porque inventar ese vínculo sería
+-- afirmar que un presupuesto rigió una emisión que lo ignoró.
+--
+-- La columna es una FK BLANDA (sin constraint), como el resto de las referencias
+-- entre módulos. El índice de lectura por período ya existe.
+ALTER TABLE "emisiones_gc" ADD COLUMN "presupuestoId" TEXT;

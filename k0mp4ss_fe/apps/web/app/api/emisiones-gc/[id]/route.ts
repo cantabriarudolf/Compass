@@ -47,6 +47,11 @@ export async function PUT(req: Request, ctx: Ctx): Promise<Response> {
     const datos = { ...(parcial.data as Record<string, unknown>) }
     delete datos.id
     delete datos.comunidadId
+    // `presupuestoId` es la TRAZA del presupuesto con el que se contrastó la
+    // emisión (S6): se fija al emitir y un parche no la reescribe. Cambiar el
+    // vínculo dejaría una emisión apuntando a un presupuesto contra el que nunca
+    // se comparó.
+    delete datos.presupuestoId
     // SAFETY: merge del registro Prisma con el parche validado; solo se valida.
     const mergeado = {
       ...(existente as unknown as Record<string, unknown>),

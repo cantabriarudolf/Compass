@@ -1,10 +1,27 @@
 /**
  * /api/emisiones-gc — emisiones de Gasto Común FI (BD-FUENTE-VERDAD Fase 3).
  *
- * GET paginado vía factory. POST = `emitirGastoComun` del store, ahora en
- * servidor: valida período/fondo/unidades con responsable, calcula montos
- * (modo fijo por tarifa de tipo de unidad, variable por prorrateo) y crea la
- * emisión + sus cobros en una transacción. Solo administrador (crear "fi").
+ * GET paginado vía factory. POST emite el gasto común del período: valida
+ * período/fondo/unidades con responsable, contrasta el monto contra el
+ * PRESUPUESTO APROBADO del año y calcula montos (modo fijo por tarifa de tipo de
+ * unidad, variable por prorrateo del gasto devengado) y crea la emisión + sus
+ * cobros + su evento de auditoría en una transacción. Solo administrador
+ * (crear "fi").
+ *
+ * F31 · V1 (S6, corregido) — el presupuesto es ESTIMATIVO (Ley 21.442 art. 22):
+ *   · el cobro del mes es por el gasto DEVENGADO, no por la proyección anual: el
+ *     monto emitido es el que declara el período (prorrateo) o la suma de las
+ *     tarifas del reglamento (fijo), nunca el total del presupuesto;
+ *   · con presupuesto `vigente` del año, la emisión se CONTRASTA contra su
+ *     doceavo mensual (total / 12) y el exceso se declara con los DOS números en
+ *     la respuesta y en la bitácora. NO se bloquea: un gasto urgente o imprevisto
+ *     es lícito y el presupuesto sólo estima;
+ *   · sin presupuesto aprobado la emisión corre igual y deja la advertencia
+ *     literal de que no puede contrastarse: el comité no aprueba un presupuesto
+ *     para impedir que la administración cobre;
+ *   · la emisión guarda el `presupuestoId` del presupuesto con el que se
+ *     contrastó (NULL cuando no había ninguno) y lo nombra en la bitácora con su
+ *     período, versión y folio del acuerdo.
  */
 import { z } from "zod"
 import {
@@ -17,6 +34,8 @@ import { prisma } from "@/lib/prisma"
 import { logger } from "@/lib/logger"
 import { generarId } from "@/lib/id-utils"
 import { hoyISO } from "@/lib/date-utils"
+import { registrarEventoAuditoria } from "@/lib/auditoria"
+import { totalDePartidas } from "@/lib/presupuesto"
 import {
   autorizaEmision,
   parametrosDeVersion,
@@ -48,10 +67,162 @@ const EmitirGCInputSchema = z.object({
     .string()
     .regex(/^\d{4}-\d{2}$/, "El periodo debe tener formato AAAA-MM."),
   modo: z.enum(["fijo", "variable"]),
+  /**
+   * Gasto DEVENGADO del período en modo prorrateo: es la fuente del monto a
+   * repartir (Ley 21.442 art. 22: se cobran los gastos efectivamente incurridos,
+   * no la estimación anual del presupuesto). En modo fijo el monto lo fijan las
+   * tarifas que declara la versión del reglamento.
+   */
   gastoTotal: z.number().positive().optional(),
   fechaVencimiento: z.string().min(1).optional(),
   unidadIds: z.array(z.string().min(1)).optional(),
 })
+
+/**
+ * Pesos en formato chileno para los mensajes del operador y la bitácora, con
+ * hasta dos decimales: el doceavo mensual del presupuesto no siempre es entero
+ * ($1.000.000 / 12 = $83.333,33) y un monto se declara al centavo.
+ */
+function pesos(monto: number): string {
+  return `$${monto.toLocaleString("es-CL", { maximumFractionDigits: 2 })}`
+}
+
+/**
+ * Pesos → centavos enteros. El contraste se hace en la unidad mínima de la
+ * moneda: comparar floats deja pasar diferencias invisibles al operador.
+ */
+function enCentavos(monto: number): number {
+  return Math.round(monto * 100)
+}
+
+/** Nombre del cuerpo aprobador para la bitácora: la ley nombra comité o asamblea. */
+function nombreDelCuerpo(cuerpo: string): string {
+  return cuerpo === "comite" ? "el Comité" : "la Asamblea"
+}
+
+/**
+ * Año (AAAA) del período de la emisión (AAAA-MM). El presupuesto por partidas se
+ * aprueba por AÑO, así que el contraste del mes busca el del año del período.
+ * `""` si el período no trae año: entonces no hay presupuesto con qué contrastar
+ * y la emisión sigue con su advertencia.
+ */
+function anioDelPeriodo(periodo: string): string {
+  return periodo.split("-")[0] ?? ""
+}
+
+/**
+ * Advertencia literal de una emisión que no puede contrastarse: sin presupuesto
+ * aprobado del año el sistema no tiene contra qué comparar, y la administración
+ * no puede quedar impedida de cobrar los gastos del período porque el comité no
+ * haya aprobado un presupuesto.
+ */
+const ADVERTENCIA_SIN_PRESUPUESTO =
+  "Emisión sin contraste presupuestario: no hay presupuesto aprobado para el año, la emisión no puede contrastarse."
+
+/** Meses del año: el doceavo mensual es la referencia estimativa del art. 22. */
+const MESES_DEL_ANIO = 12
+
+/** Exceso del mes contra la referencia estimativa del presupuesto anual. */
+interface ExcesoMensual {
+  /** Lo que la emisión cobra: el gasto devengado del período. */
+  montoEmitido: number
+  /** Doceavo del presupuesto anual: la referencia estimativa del mes. */
+  referenciaMensual: number
+  /** Cuánto supera el monto emitido a la referencia, al centavo. */
+  diferencia: number
+  /** Sentencia literal que declara el exceso con los DOS números a la vista. */
+  descripcion: string
+}
+
+/** Resultado de contrastar la emisión contra el presupuesto vigente del año. */
+interface ContrastePresupuesto {
+  /** Presupuesto con el que se contrastó; `null` si no había ninguno aprobado. */
+  presupuestoId: string | null
+  /** Total anual aprobado (suma de partidas); `null` sin presupuesto. */
+  totalPresupuesto: number | null
+  /** Doceavo mensual de ese total; `null` sin presupuesto. */
+  referenciaMensual: number | null
+  /** Exceso declarado; `null` si el mes no supera la referencia o no hay presupuesto. */
+  exceso: ExcesoMensual | null
+  /** Advertencia literal cuando no hay presupuesto con qué contrastar. */
+  advertencia: string | null
+}
+
+/** Lo mínimo que el contraste necesita del presupuesto ya leído. */
+interface PresupuestoParaContraste {
+  readonly id: string
+  readonly partidas: readonly { readonly monto: number }[]
+}
+
+/**
+ * Contrasta el monto emitido contra el presupuesto ANUAL vigente y declara el
+ * exceso, sin bloquear nada (Ley 21.442 art. 22: el presupuesto es estimativo y
+ * el cobro es por el gasto devengado).
+ *
+ * El exceso se decide en centavos enteros y sin divisiones aproximadas: el mes
+ * supera su doceavo exactamente cuando `emitido × 12 > presupuesto anual`. La
+ * referencia que se declara se redondea al centavo sólo para mostrarla.
+ */
+function contrastarConPresupuesto(
+  gastoTotalEmitido: number,
+  presupuesto: PresupuestoParaContraste | null
+): ContrastePresupuesto {
+  if (!presupuesto) {
+    return {
+      presupuestoId: null,
+      totalPresupuesto: null,
+      referenciaMensual: null,
+      exceso: null,
+      advertencia: ADVERTENCIA_SIN_PRESUPUESTO,
+    }
+  }
+  const centavosPresupuesto = enCentavos(totalDePartidas(presupuesto.partidas))
+  const centavosEmitido = enCentavos(gastoTotalEmitido)
+  const totalPresupuesto = centavosPresupuesto / 100
+  const referenciaMensual =
+    Math.round(centavosPresupuesto / MESES_DEL_ANIO) / 100
+  const sinExceso = {
+    presupuestoId: presupuesto.id,
+    totalPresupuesto,
+    referenciaMensual,
+    advertencia: null,
+  }
+  if (centavosEmitido * MESES_DEL_ANIO <= centavosPresupuesto) {
+    return { ...sinExceso, exceso: null }
+  }
+  const diferencia =
+    Math.round(centavosEmitido - centavosPresupuesto / MESES_DEL_ANIO) / 100
+  return {
+    ...sinExceso,
+    exceso: {
+      montoEmitido: gastoTotalEmitido,
+      referenciaMensual,
+      diferencia,
+      descripcion: `El total emitido de ${pesos(gastoTotalEmitido)} supera el doceavo mensual de ${pesos(referenciaMensual)} del presupuesto vigente de ${pesos(totalPresupuesto)}; el presupuesto es estimativo y la emisión no se bloquea.`,
+    },
+  }
+}
+
+/**
+ * Lo que la bitácora deja constancia del contraste: con presupuesto nombra el
+ * documento usado y el exceso (o su ausencia); sin presupuesto, la advertencia
+ * literal.
+ */
+function contrasteEnLaBitacora(
+  contraste: ContrastePresupuesto,
+  presupuesto: {
+    readonly periodo: string
+    readonly version: number
+    readonly cuerpo: string
+    readonly acuerdoId: string
+  } | null,
+  folioDelAcuerdo: string | null
+): string {
+  if (!presupuesto) return ADVERTENCIA_SIN_PRESUPUESTO
+  const documento = `presupuesto ${presupuesto.periodo} versión ${presupuesto.version} aprobado por ${nombreDelCuerpo(presupuesto.cuerpo)} según el acuerdo ${folioDelAcuerdo ?? presupuesto.acuerdoId}`
+  if (contraste.exceso) return `${documento}: ${contraste.exceso.descripcion}`
+  return `${documento}: el total emitido no supera el doceavo mensual de ${pesos(contraste.referenciaMensual ?? 0)} del presupuesto anual de ${pesos(contraste.totalPresupuesto ?? 0)}.`
+}
 
 /** Reparto del monto de una unidad entre gasto común y recargo de reserva. */
 interface DesgloseCobro {
@@ -329,14 +500,37 @@ export async function POST(req: Request): Promise<Response> {
     // El fondo se resolvió en la compuerta; el aporte sale del porcentaje que
     // declara la versión (S2), nunca del `porcentajeAporte` del fondo, y es
     // exactamente la suma de las líneas de reserva de los cobros.
+    //
+    // S6 · F31 — el monto emitido es el gasto DEVENGADO del período: en modo
+    // prorrateo, el total que declara el cuerpo; en modo fijo, la suma de las
+    // tarifas que paga cada unidad. El presupuesto NO es la fuente del monto.
+    const gastoTotalEmitido =
+      modo === "variable"
+        ? (parsed.data.gastoTotal ?? presupuestoTotal)
+        : presupuestoTotal
+
+    // El presupuesto se aprueba por AÑO (el período de la emisión es AAAA-MM, su
+    // año es el prefijo) y sólo el `vigente` sirve de referencia: con dos
+    // versiones manda la de versión mayor. Su ausencia NO bloquea (art. 22).
+    const presupuesto = await prisma.presupuesto.findFirst({
+      where: {
+        comunidadId: scope.comunidadId,
+        periodo: anioDelPeriodo(periodo),
+        estado: "vigente",
+      },
+      orderBy: { version: "desc" },
+      include: { partidas: { orderBy: { orden: "asc" } } },
+    })
+    // El contraste declara el exceso del mes contra el doceavo del presupuesto
+    // anual y deja la advertencia cuando no hay presupuesto: nunca rechaza.
+    const contraste = contrastarConPresupuesto(gastoTotalEmitido, presupuesto)
     const emision = {
       id: emisionId,
       periodo,
       modo,
-      gastoTotal:
-        modo === "variable"
-          ? (parsed.data.gastoTotal ?? presupuestoTotal)
-          : presupuestoTotal,
+      gastoTotal: gastoTotalEmitido,
+      // S6: la traza al presupuesto con el que se contrastó (NULL si no hubo).
+      presupuestoId: contraste.presupuestoId,
       lineas,
       fondoReservaAporte:
         reservaTotal > 0 && fondoReserva
@@ -359,19 +553,46 @@ export async function POST(req: Request): Promise<Response> {
       }
     }
 
-    const [creada] = await prisma.$transaction([
-      prisma.emisionGC.create({
+    // El folio del acuerdo es la prueba de quién aprobó el presupuesto: la
+    // bitácora nombra el documento usado, no sólo un id. Si la fila del acuerdo
+    // no está (dato de prueba), se cita el id con el que el presupuesto la
+    // referencia — nunca se inventa un folio. Sin presupuesto no hay acuerdo que
+    // citar.
+    const acuerdoDelPresupuesto = presupuesto
+      ? await prisma.acuerdo.findFirst({
+          where: { id: presupuesto.acuerdoId, comunidadId: scope.comunidadId },
+          select: { folio: true },
+        })
+      : null
+
+    await prisma.$transaction(async (tx) => {
+      await tx.emisionGC.create({
         // SAFETY: emision pasó EmisionGCSchema.safeParse arriba.
         data: { ...validaEmision.data, comunidadId: scope.comunidadId } as never,
-      }),
-      ...cobros.map((c) =>
-        prisma.cobroFI.create({
+      })
+      for (const c of cobros) {
+        await tx.cobroFI.create({
           // SAFETY: cada cobro pasó CobroFIEscrituraCompletaSchema.safeParse arriba.
           data: { ...c, comunidadId: scope.comunidadId } as never,
         })
-      ),
-    ])
-    void creada
+      }
+      // S6 · F31: la emisión deja constancia del contraste —el exceso con sus
+      // dos números o la advertencia de que no pudo contrastarse—, con el mismo
+      // contrato de evento que ya usan las otras escrituras FI.
+      await registrarEventoAuditoria(
+        {
+          id: generarId("ev"),
+          comunidadId: scope.comunidadId,
+          timestamp: new Date().toISOString(),
+          usuario: scope.usuarioId,
+          categoria: "FI",
+          tipoAccion: "FI_EMISION_GC_CREADA",
+          referenciaId: emisionId,
+          descripcion: `Emisión de gasto común ${periodo} por ${pesos(gastoTotalEmitido)} en modo ${modo}: ${lineas.length} unidad(es), ${contrasteEnLaBitacora(contraste, presupuesto, acuerdoDelPresupuesto?.folio ?? null)}`,
+        },
+        tx
+      )
+    })
     const guardadas = await prisma.cobroFI.findMany({
       where: { comunidadId: scope.comunidadId, origenRef: emisionId },
     })
@@ -379,7 +600,14 @@ export async function POST(req: Request): Promise<Response> {
       where: { id: emisionId },
     })
     return Response.json(
-      { emision: emisionGuardada, cobros: guardadas },
+      {
+        emision: emisionGuardada,
+        cobros: guardadas,
+        // S6: el exceso (si lo hay) y la advertencia de no poder contrastar
+        // viajan con la emisión: el operador ve la comparación en el momento.
+        advertencia: contraste.advertencia,
+        exceso: contraste.exceso,
+      },
       { status: 201 }
     )
   } catch (e) {

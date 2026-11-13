@@ -1824,6 +1824,14 @@ export const EmisionGCSchema = z.object({
     .regex(/^\d{4}-\d{2}$/, "El periodo debe tener formato AAAA-MM."),
   modo: ModoCalculoGCSchema,
   gastoTotal: z.number().min(0),
+  /**
+   * Presupuesto APROBADO y VIGENTE con el que se contrastó la emisión (F31 · V1).
+   * El presupuesto es estimativo (Ley 21.442 art. 22) y NO es la fuente del
+   * monto: se guarda como traza del contraste mensual. `null` cuando no había
+   * presupuesto aprobado del año (la emisión corrió con su advertencia) y en una
+   * emisión histórica, anterior a este vínculo — que no se inventa hacia atrás.
+   */
+  presupuestoId: IdEntidadSchema.nullable().optional(),
   lineas: z
     .array(LineaEmisionGCSchema)
     .min(1, "La emisión exige al menos una unidad."),

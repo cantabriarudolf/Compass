@@ -1429,6 +1429,12 @@ model EmisionGC {
   periodo            String
   modo               String
   gastoTotal         Float
+  // Presupuesto APROBADO y VIGENTE que autorizó la emisión (F31 · V1). Es una
+  // FK blanda, como el resto de las referencias entre módulos: el presupuesto
+  // es un documento emitido que no se edita ni se borra, y la emisión guarda
+  // también la huella de sus partidas en `gastoTotal`. NULL = emisión anterior
+  // a esta columna: no tuvo presupuesto y no se inventa uno hacia atrás.
+  presupuestoId      String?
   lineas             Json // LineaEmisionGC[]
   fondoReservaAporte Json?
   fechaEmision       String

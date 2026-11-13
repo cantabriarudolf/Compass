@@ -1424,6 +1424,14 @@ model EmisionGC {
   periodo            String
   modo               String
   gastoTotal         Float
+  // Presupuesto APROBADO y VIGENTE contra el que se CONTRASTÓ la emisión (F31).
+  // Ojo: el presupuesto es estimativo (Ley 21.442 art. 22) y NO es el monto que se
+  // cobra — el cobro es por el gasto efectivamente devengado, que vive en
+  // `gastoTotal`. Esta columna es la traza del contraste: contra qué presupuesto
+  // se comparó el mes y cuánto se apartó. FK blanda, como el resto de las
+  // referencias entre módulos. NULL = emisión anterior a esta columna o emitida
+  // sin presupuesto aprobado; en ningún caso se inventa uno hacia atrás.
+  presupuestoId      String?
   lineas             Json // LineaEmisionGC[]
   fondoReservaAporte Json?
   fechaEmision       String
