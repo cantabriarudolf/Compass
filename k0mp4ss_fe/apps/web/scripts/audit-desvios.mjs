@@ -845,6 +845,12 @@ const EXCEPCIONES_R4 = [
       "el recorte está declarado en la UI: la tarjeta se titula 'Vista previa (primeras 8 líneas)' y su descripción explica que es una muestra antes de emitir. No es la lista donde se opera.",
   },
   {
+    archivo: "app/admin/gestion/conciliacion/_componentes/conciliacion.tsx",
+    fragmento: "iso.slice(0, 10)",
+    motivo:
+      "no recorta una lista: recorta una fecha ISO a su día para pintarla en la fila del movimiento. Ninguna fila queda fuera de la vista. Falso positivo declarado: si el recorte cambia de forma, la excepción deja de aplicar.",
+  },
+  {
     archivo: "app/comunidad/directiva/acuerdos/consola-acuerdos.tsx",
     fragmento: "iso.slice(0, 10)",
     motivo:
