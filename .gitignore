@@ -54,3 +54,8 @@ k0mp4ss_fe/apps/web/e2e/.auth/
 # Local Pi runtime state
 .atl/
 .codegraph/
+.vercel
+.env*
+
+# xlsx financiero: dato del owner, no se publica (ver docs/SECRETOS.md)
+Data/NSGC/ingresosvsegresos.23y24/
