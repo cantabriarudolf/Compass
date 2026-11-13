@@ -1,9 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 240" width="1200" height="240" role="presentation">
   <rect width="1200" height="240" fill="#0a0a0b"/>
   <line x1="0" y1="1.5" x2="1200" y2="1.5" stroke="#c0a062" stroke-width="3" opacity="0.55"/>
-  <line x1="0" y1="238.5" x2="1200" y2="238.5" stroke="#c0a062" stroke-width="3" opacity="0.55"/>
+  <line x1="0" y1="238.5" x2="1122" y2="238.5" stroke="#c0a062" stroke-width="3" opacity="0.55"/>
   <line x1="40" y1="22" x2="1160" y2="22" stroke="#8a6d3f" stroke-width="1.2" opacity="0.35"/>
-  <line x1="40" y1="218" x2="1160" y2="218" stroke="#8a6d3f" stroke-width="1.2" opacity="0.35"/>
+  <line x1="40" y1="218" x2="1096" y2="218" stroke="#8a6d3f" stroke-width="1.2" opacity="0.35"/>
   <g stroke="#8a6d3f" stroke-width="1.2" opacity="0.5">
     <line x1="392" y1="120" x2="512" y2="120"/>
     <line x1="688" y1="120" x2="808" y2="120"/>
@@ -30,5 +30,25 @@
     <path d="M 237.878,175.653 L 241.333,176.394 L 244.864,176.531 L 248.366,176.060 L 251.735,174.994 L 254.268,173.734 L 256.602,172.137 L 258.695,170.235 L 260.505,168.062 L 262.000,165.661 L 262.000,67.627 L 252.022,69.686 L 242.140,72.163 L 232.370,75.053 L 222.730,78.351 L 213.238,82.052 L 203.909,86.147 L 194.760,90.632 L 185.809,95.496 L 177.069,100.733 L 168.557,106.332 L 237.878,175.653 Z" fill="#c9ccd1"/>
     <path d="M 350.000,165.661 L 351.919,168.629 L 354.319,171.222 L 357.129,173.365 L 360.265,174.994 L 362.946,175.893 L 365.725,176.415 L 368.550,176.550 L 371.367,176.294 L 374.122,175.653 L 443.443,106.332 L 434.931,100.733 L 426.191,95.496 L 417.240,90.632 L 408.091,86.147 L 398.762,82.052 L 389.270,78.351 L 379.630,75.053 L 369.860,72.163 L 359.978,69.686 L 350.000,67.627 L 350.000,165.661 Z" fill="#c9ccd1"/>
     <path d="M 436.347,237.878 L 435.606,241.333 L 435.469,244.864 L 435.940,248.366 L 437.006,251.735 L 438.266,254.268 L 439.863,256.602 L 441.765,258.695 L 443.938,260.505 L 446.339,262.000 L 544.373,262.000 L 542.314,252.022 L 539.837,242.140 L 536.947,232.370 L 533.649,222.730 L 529.948,213.238 L 525.853,203.909 L 521.368,194.760 L 516.504,185.809 L 511.267,177.069 L 505.668,168.557 L 436.347,237.878 Z" fill="#c9ccd1"/>
+  </g>
+
+  <text x="1112" y="232" text-anchor="end" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="18" letter-spacing="2.2" fill="#c0a062" fill-opacity="0.85">powered by</text>
+  <g transform="translate(1134 226)">
+    <circle r="1.7" fill="#8a6d3f"/>
+      <path d="M0 -2.4 C 3.4 -4.5, 5.1 -7.8, 0 -9.4 C -5.1 -7.8, -3.4 -4.5, 0 -2.4 Z" transform="rotate(0)" fill="#c0a062"/>
+      <path d="M0 -2.4 C 3.4 -4.5, 5.1 -7.8, 0 -9.4 C -5.1 -7.8, -3.4 -4.5, 0 -2.4 Z" transform="rotate(72)" fill="#c0a062"/>
+      <path d="M0 -2.4 C 3.4 -4.5, 5.1 -7.8, 0 -9.4 C -5.1 -7.8, -3.4 -4.5, 0 -2.4 Z" transform="rotate(144)" fill="#c0a062"/>
+      <path d="M0 -2.4 C 3.4 -4.5, 5.1 -7.8, 0 -9.4 C -5.1 -7.8, -3.4 -4.5, 0 -2.4 Z" transform="rotate(216)" fill="#c0a062"/>
+      <path d="M0 -2.4 C 3.4 -4.5, 5.1 -7.8, 0 -9.4 C -5.1 -7.8, -3.4 -4.5, 0 -2.4 Z" transform="rotate(288)" fill="#c0a062"/>
+  </g>
+
+  <text x="1112" y="232" text-anchor="end" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="18" letter-spacing="2.2" fill="#c0a062" fill-opacity="0.85">powered by</text>
+  <g transform="translate(1134 226)">
+    <circle r="1.7" fill="#bb749c"/>
+      <path d="M0 -2.4 C 3.4 -4.5, 5.1 -7.8, 0 -9.4 C -5.1 -7.8, -3.4 -4.5, 0 -2.4 Z" transform="rotate(0)" fill="#f095c8"/>
+      <path d="M0 -2.4 C 3.4 -4.5, 5.1 -7.8, 0 -9.4 C -5.1 -7.8, -3.4 -4.5, 0 -2.4 Z" transform="rotate(72)" fill="#f095c8"/>
+      <path d="M0 -2.4 C 3.4 -4.5, 5.1 -7.8, 0 -9.4 C -5.1 -7.8, -3.4 -4.5, 0 -2.4 Z" transform="rotate(144)" fill="#f095c8"/>
+      <path d="M0 -2.4 C 3.4 -4.5, 5.1 -7.8, 0 -9.4 C -5.1 -7.8, -3.4 -4.5, 0 -2.4 Z" transform="rotate(216)" fill="#f095c8"/>
+      <path d="M0 -2.4 C 3.4 -4.5, 5.1 -7.8, 0 -9.4 C -5.1 -7.8, -3.4 -4.5, 0 -2.4 Z" transform="rotate(288)" fill="#f095c8"/>
   </g>
 </svg>
