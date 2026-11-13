@@ -14,6 +14,20 @@ Checklist técnico de seguridad para completar la Fase C restante (pre-Base de D
 | C1b | Repositorios con scoping obligatorio por `comunidadId` + tests de aislamiento entre comunidades A/B | Un test intenta leer/escribir cross-comunidad y falla; ningún repositorio expone query sin scope |
 | C2-final | Trasladar SMTP y clave de eliminación maestro a variables de entorno del servidor (`SMTP_PASSWORD`, etc.) y borrar los campos del store cliente | Los campos ya no existen en `ConfiguracionGlobalSchema`; el envío real ocurre server-side |
 | C3b | Constraint de unicidad opcional en BD compuesta (ej. unidad única por micro sector), no global | Decidir tabla por tabla; documentar cada constraint añadida |
+| C4 | **Variables de entorno obligatorias de la ventana 2026-11-12** | ver §2.1 |
+
+## 2.1 Variables de entorno que el despliegue debe declarar
+
+Dos variables nuevas nacieron con las capacidades de la ventana del 2026-11-12. **Las dos fallan cerrado**: sin ellas el sistema no guarda en claro ni deja pasar el cron, y el error que devuelve nombra la variable que falta. Cargarlas en el proyecto de Vercel (producción y preview) antes de usar las capacidades que dependen de ellas.
+
+| Variable | Para qué | Qué pasa sin ella |
+|---|---|---|
+| `CLAVE_MAESTRA_SECRETOS` | Clave maestra de 32 bytes (hex o base64) con la que se cifra en la base la credencial SMTP **de cada comunidad** (AES-256-GCM, IV y tag por registro) | Guardar una credencial responde 500 y **no escribe nada**; el envío de prueba no abre conexión. No hay clave por defecto ni valor de relleno en ningún entorno. Rotarla invalida los paquetes guardados: hay que volver a cargar la credencial de cada comunidad |
+| `CRON_SECRET` | Secreto que Vercel envía como `Authorization: Bearer` al endpoint del barrido programado de avisos (`GET /api/vigencia-registro/avisos`) | El endpoint responde 500 sin ejecutar nada y el cron diario no hace nada. Vercel sólo agrega el encabezado solo si esta variable existe en el proyecto |
+
+`SMTP_PASSWORD` (global) sigue existiendo como camino heredado para los envíos que todavía no migraron a la credencial por comunidad; la credencial por comunidad, cuando existe, tiene precedencia.
+
+## 2. Estado actual del hardening (ya implementado — no repetir)
 
 ## 2. Estado actual del hardening (ya implementado — no repetir)
 
