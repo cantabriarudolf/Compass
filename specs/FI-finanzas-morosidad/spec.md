@@ -631,6 +631,37 @@ cortes de la comunidad de la sesión con su estado y sus fechas en un número FI
 consultas. El sistema SHALL auditar `FI_CORTE_PREAVISO`, `FI_CORTE_EJECUTADO` y
 `FI_CORTE_REVOCADO` en la misma transacción que escribe el hecho.
 
+El trámite NO SHALL quedarse en el registro del acto: cursar la orden SHALL emitir el
+**requerimiento escrito** como `Documento` de naturaleza `legal` del archivo de la
+comunidad (`POST /api/cortes-servicio`), en la MISMA transacción del alta y con los
+campos de archivo reales —nombre, tipo MIME, tamaño, hash y URL que responde—
+calculados del PDF que el motor del repo compila al emitirlo, una glosa que nombra la
+unidad y una `referenciaAutentica` que apunta al trámite del corte; el corte SHALL
+quedar vinculado a ese documento (`documentoId`, aditivo y nullable, sin backfill:
+los cortes anteriores no tienen un escrito que no se cursó). El papel SHALL imprimir
+la unidad, el servicio afectado, las cuotas impagas y el monto adeudado, la fecha
+desde la cual la suspensión es posible y la base legal, y SHALL servirse por
+`GET /api/cortes-servicio/requerimiento` (guard `fi:cobranza` ver, acotado a la
+comunidad de la sesión) desde la fila congelada del corte: D1 sigue vigente y el
+binario NO se persiste, se recomienda por la misma definición determinista y el hash
+guardado lo identifica.
+
+El trámite SHALL registrar además la **constancia de entrega** al deudor en
+`EnvioDocumento` para el propietario VIGENTE de la unidad —el mismo criterio de
+`propietarioVigenteDeUnidad` que usa la cobranza—, en estado `pendiente` mientras no
+exista un envío real: el contrato de los envíos admite `entregado`/`enviado` SÓLO si
+el servidor aceptó el mensaje, así que el alta de esta unidad NO SHALL declarar una
+entrega que no ocurrió. Sin propietario vigente el preaviso SHALL cursarse igual —la
+ley exige avisar—, NO SHALL crearse una fila de entrega sin destinatario, y la
+respuesta y la bitácora SHALL nombrar por qué la constancia no existe. La respuesta
+del alta SHALL devolver el `documentoId` y la constancia, y el evento
+`FI_CORTE_PREAVISO` SHALL registrar los dos.
+
+El **día hábil siguiente** de la reposición (art. 20 N°9) SHALL derivarse del
+calendario por la regla pura `siguienteDiaHabil` (`lib/dias-habiles.ts`, sin base y
+sin reloj), que salta sábados y domingos y los feriados que recibe por parámetro —la
+fuente del repo es el maestro `Feriado` de la comunidad— y NO SHALL tipearse a mano.
+
 Frontera deliberada: la **suspensión material la hace la empresa proveedora**, así
 que `ejecutado` es la constancia de que la orden se cursó, no una señal enviada
 —este requirement NO SHALL integrar un proveedor—. La prohibición por estado de
@@ -708,6 +739,34 @@ la ruta no la inventa leyendo el cuerpo de la petición.
 - **WHEN** el corte queda `ejecutado`
 - **THEN** lo que existe es la constancia de la orden cursada y su auditoría, no una
   señal enviada a la empresa proveedora
+
+#### Scenario: El preaviso emite el requerimiento escrito y lo vincula al corte
+- **WHEN** la administración cursa el preaviso de un corte que procede
+- **THEN** queda un `Documento` de naturaleza `legal` en el archivo de la comunidad,
+  con glosa que nombra la unidad, `referenciaAutentica` que apunta al trámite, los
+  campos de archivo con el nombre, el MIME, el tamaño y el hash del PDF REAL y una
+  URL que devuelve esos bytes (un PDF de verdad); el corte queda apuntando a ese
+  documento con `documentoId`, y la respuesta del alta y el evento
+  `FI_CORTE_PREAVISO` registran su id
+
+#### Scenario: La constancia de entrega nace pendiente y no declara un envío que no ocurrió
+- **WHEN** la unidad tiene propietario vigente y el preaviso se cursa
+- **THEN** queda una sola fila de `EnvioDocumento` para esa persona, acotada a la
+  comunidad de la sesión, en estado `pendiente` y con su motivo: no hay entrega
+  declarada sin un envío que el servidor haya aceptado, y la respuesta devuelve el id
+  de la constancia
+
+#### Scenario: Sin propietario vigente el preaviso se cursa y la constancia no se inventa
+- **WHEN** la unidad no tiene propietario vigente en el Registro de Copropietarios y
+  la morosidad habilita el corte
+- **THEN** el preaviso responde 201 con su requerimiento escrito, no se crea ninguna
+  fila de `EnvioDocumento` y la respuesta y la bitácora dicen que la constancia no se
+  creó porque la unidad no tiene propietario vigente
+
+#### Scenario: El día hábil de reposición se deriva del calendario
+- **WHEN** la deuda se regulariza un viernes, un sábado o un feriado
+- **THEN** el día hábil siguiente que devuelve la regla pura es el primer día hábil
+  posterior (el lunes, o el siguiente al feriado), nunca un día tipeado
 
 ### Requirement: Conciliación de Cartola Bancaria
 El sistema SHALL conciliar la cartola que el banco exporta contra los registros de

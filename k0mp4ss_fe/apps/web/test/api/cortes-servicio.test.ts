@@ -27,12 +27,19 @@
  *   8. revocar deja el corte en `revocado` (200, auditado) y no se revoca dos veces
  *      (409);
  *   9. la lectura devuelve los cortes de la comunidad de la sesión con su estado y
- *      sus fechas.
+ *      sus fechas;
+ *  10. el preaviso EMITE el requerimiento escrito (S8): un `Documento` legal con su
+ *      archivo real —cuyos bytes servidos son un PDF de verdad— y la constancia de
+ *      entrega al propietario vigente, en `pendiente` porque ningún envío se cursó;
+ *      sin propietario vigente el preaviso se cursa igual y la respuesta dice por
+ *      qué la constancia no existe.
  */
+import { createHash } from "node:crypto"
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest"
 import { NextRequest } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { cortePermitido } from "@/lib/cortes-servicio"
+import { definicionDelRequerimiento } from "@/lib/requerimiento-corte"
 
 const state = vi.hoisted(() => ({ cookie: "" }))
 vi.mock("next/headers", () => ({
@@ -69,6 +76,14 @@ const U_SIN_DEUDA = "cse-u-sin-deuda"
 const U_TRES_CON_PAGO = "cse-u-tres-pagado"
 /** Cuatro cuotas vencidas: la deuda derivada manda sobre lo que declare el cliente. */
 const U_CUATRO = "cse-u-cuatro"
+/** Unidad con propietario VIGENTE: el preaviso emite requerimiento y constancia. */
+const U_CON_PROPIETARIO = "cse-u-con-propietario"
+/** Unidad sin ningún propietario vigente: la constancia no se puede crear. */
+const U_SIN_PROPIETARIO = "cse-u-sin-propietario"
+
+/** Propietario vigente de U_CON_PROPIETARIO (rol `propietario`, fechaFin null). */
+const PROPIETARIO_VIGENTE = "cse-persona-propietario"
+const VINCULO_PROPIETARIO = "cse-vinculo-propietario"
 
 /** Fondo de gasto común al que los cobros de la fixture imputan (`CobroFI.fondoId`). */
 const FONDO_GC = "cse-fondo-gc"
@@ -81,6 +96,8 @@ const ACUERDO_ABIERTO = "cse-ac-abierto"
 const ACUERDO_ASAMBLEA = "cse-ac-asamblea"
 const ACUERDO_OTRA_COMUNIDAD = "cse-ac-b"
 const ACUERDO_OK_TARDIO = "cse-ac-ok-tardio"
+const ACUERDO_OK_PROPIETARIO = "cse-ac-ok-propietario"
+const ACUERDO_OK_SIN_PROPIETARIO = "cse-ac-ok-sin-propietario"
 
 const EMAIL_ADMIN = "cse-admin@test.cl"
 const EMAIL_COMITE = "cse-comite@test.cl"
@@ -141,6 +158,26 @@ function cobroDeLaUnidad(opciones: {
   }
 }
 
+/**
+ * Constancia de entrega del requerimiento, tal como viaja en el alta del preaviso.
+ *
+ * `id: null` significa que NO existe la fila: la unidad no tiene propietario
+ * vigente y el sistema no inventa un destinatario. `estado` es el estado
+ * PERSISTIDO de `envios_documento` y por eso también es `null` cuando no hay fila.
+ */
+interface ConstanciaDeLaVista {
+  id: string | null
+  estado: string | null
+  personaId: string | null
+  motivo: string | null
+}
+
+/** La vista del corte más la constancia del preaviso (sólo la devuelve el alta). */
+interface VistaPreaviso extends VistaCorte {
+  documentoId: string | null
+  constancia: ConstanciaDeLaVista
+}
+
 /** Forma de la vista que devuelven las cuatro rutas. */
 interface VistaCorte {
   id: string
@@ -189,6 +226,7 @@ describe("/api/cortes-servicio — corte de servicios por morosidad (F28)", () =
     coleccion: await import("@/app/api/cortes-servicio/route"),
     ejecutar: await import("@/app/api/cortes-servicio/ejecutar/route"),
     revocar: await import("@/app/api/cortes-servicio/revocar/route"),
+    requerimiento: await import("@/app/api/cortes-servicio/requerimiento/route"),
   })
 
   /** Preaviso que la unidad morosa cursa en el caso 5: la fila que el resto usa. */
@@ -213,10 +251,46 @@ describe("/api/cortes-servicio — corte de servicios por morosidad (F28)", () =
       datosUnidad(U_SIN_DEUDA, COM_A, "206"),
       datosUnidad(U_TRES_CON_PAGO, COM_A, "207"),
       datosUnidad(U_CUATRO, COM_A, "208"),
+      datosUnidad(U_CON_PROPIETARIO, COM_A, "209"),
+      datosUnidad(U_SIN_PROPIETARIO, COM_A, "210"),
       datosUnidad(U_OTRA, COM_B, "901"),
     ]) {
       await prisma.unidad.upsert({ where: { id: u.id }, update: {}, create: u })
     }
+
+    // El destinatario de la constancia es el propietario VIGENTE de la unidad, el
+    // mismo criterio del resto del módulo (`propietarioVigenteDeUnidad`): rol
+    // `propietario` y `fechaFin` null. U_SIN_PROPIETARIO no tiene ninguno y eso es
+    // parte del caso: sin destinatario no se inventa una entrega.
+    await prisma.vinculoUnidad.deleteMany({ where: { id: VINCULO_PROPIETARIO } })
+    await prisma.persona.deleteMany({ where: { id: PROPIETARIO_VIGENTE } })
+    await prisma.persona.create({
+      data: {
+        id: PROPIETARIO_VIGENTE,
+        comunidadId: COM_A,
+        rut: "11.111.111-1",
+        nombreCompleto: "Propietario Vigente Cortes",
+        nombres: "Propietario",
+        apellidos: "Vigente Cortes",
+        email: "cse-propietario@test.cl",
+        telefonoMovil: "+56 9 1111 1111",
+        estadoCuenta: "activa",
+        condicionesEspecialesIds: [],
+        roles: ["residente"],
+      },
+    })
+    await prisma.vinculoUnidad.create({
+      data: {
+        id: VINCULO_PROPIETARIO,
+        comunidadId: COM_A,
+        personaId: PROPIETARIO_VIGENTE,
+        unidadId: U_CON_PROPIETARIO,
+        rol: "propietario",
+        fechaInicio: "2025-01-01",
+        permiteVerFinanzas: true,
+        puedeDeclararRegistro: false,
+      },
+    })
 
     // La morosidad que habilita el corte NO se declara en el cuerpo: la DERIVA la
     // ruta de los cobros reales de la unidad (`morosidadPorUnidad`), así que la
@@ -274,6 +348,15 @@ describe("/api/cortes-servicio — corte de servicios por morosidad (F28)", () =
       cobroDeLaUnidad({ id: "cse-cfi-cuatro-2", unidadId: U_CUATRO, periodo: periodoHaceMeses(3), montoBase: 100_000 }),
       cobroDeLaUnidad({ id: "cse-cfi-cuatro-3", unidadId: U_CUATRO, periodo: periodoHaceMeses(2), montoBase: 100_000 }),
       cobroDeLaUnidad({ id: "cse-cfi-cuatro-4", unidadId: U_CUATRO, periodo: periodoHaceMeses(1), montoBase: 150_000 }),
+      // U_CON_PROPIETARIO: tres períodos vencidos por $300.000, el papel que emite
+      // el preaviso tiene que imprimir ese monto.
+      cobroDeLaUnidad({ id: "cse-cfi-propietario-1", unidadId: U_CON_PROPIETARIO, periodo: periodoHaceMeses(3), montoBase: 100_000 }),
+      cobroDeLaUnidad({ id: "cse-cfi-propietario-2", unidadId: U_CON_PROPIETARIO, periodo: periodoHaceMeses(2), montoBase: 100_000 }),
+      cobroDeLaUnidad({ id: "cse-cfi-propietario-3", unidadId: U_CON_PROPIETARIO, periodo: periodoHaceMeses(1), montoBase: 100_000 }),
+      // U_SIN_PROPIETARIO: la misma morosidad, sin dueño vigente a quién avisar.
+      cobroDeLaUnidad({ id: "cse-cfi-sin-propietario-1", unidadId: U_SIN_PROPIETARIO, periodo: periodoHaceMeses(3), montoBase: 70_000 }),
+      cobroDeLaUnidad({ id: "cse-cfi-sin-propietario-2", unidadId: U_SIN_PROPIETARIO, periodo: periodoHaceMeses(2), montoBase: 70_000 }),
+      cobroDeLaUnidad({ id: "cse-cfi-sin-propietario-3", unidadId: U_SIN_PROPIETARIO, periodo: periodoHaceMeses(1), montoBase: 70_000 }),
     ]
     for (const cobro of cobros) {
       await prisma.cobroFI.create({ data: cobro })
@@ -319,6 +402,28 @@ describe("/api/cortes-servicio — corte de servicios por morosidad (F28)", () =
         cuerpo: "comite",
         materia: "Corte de servicios de la unidad 208 (Ley 21.442 art. 20 N°9)",
         folio: "AD-2026-9006",
+        estado: "aprobado",
+        quorumRequerido: "un_voto_por_miembro",
+        resueltoEn: new Date("2026-02-10T12:00:00.000Z"),
+        creadoPor: "cse-usuario-admin",
+      },
+      {
+        id: ACUERDO_OK_PROPIETARIO,
+        comunidadId: COM_A,
+        cuerpo: "comite",
+        materia: "Corte de servicios de la unidad 209 (Ley 21.442 art. 20 N°9)",
+        folio: "AD-2026-9020",
+        estado: "aprobado",
+        quorumRequerido: "un_voto_por_miembro",
+        resueltoEn: new Date("2026-02-10T12:00:00.000Z"),
+        creadoPor: "cse-usuario-admin",
+      },
+      {
+        id: ACUERDO_OK_SIN_PROPIETARIO,
+        comunidadId: COM_A,
+        cuerpo: "comite",
+        materia: "Corte de servicios de la unidad 210 (Ley 21.442 art. 20 N°9)",
+        folio: "AD-2026-9021",
         estado: "aprobado",
         quorumRequerido: "un_voto_por_miembro",
         resueltoEn: new Date("2026-02-10T12:00:00.000Z"),
@@ -409,6 +514,13 @@ describe("/api/cortes-servicio — corte de servicios por morosidad (F28)", () =
   afterAll(async () => {
     try {
       state.cookie = ""
+      // El escrito y su constancia primero: `envios_documento` cuelga del documento.
+      await prisma.envioDocumento.deleteMany({
+        where: { comunidadId: { in: [COM_A, COM_B] } },
+      })
+      await prisma.documento.deleteMany({
+        where: { comunidadId: { in: [COM_A, COM_B] } },
+      })
       await prisma.corteServicio.deleteMany({
         where: { comunidadId: { in: [COM_A, COM_B] } },
       })
@@ -422,6 +534,12 @@ describe("/api/cortes-servicio — corte de servicios por morosidad (F28)", () =
         where: { comunidadId: { in: [COM_A, COM_B] } },
       })
       await prisma.acuerdo.deleteMany({
+        where: { comunidadId: { in: [COM_A, COM_B] } },
+      })
+      await prisma.vinculoUnidad.deleteMany({
+        where: { comunidadId: { in: [COM_A, COM_B] } },
+      })
+      await prisma.persona.deleteMany({
         where: { comunidadId: { in: [COM_A, COM_B] } },
       })
       await prisma.unidad.deleteMany({ where: { comunidadId: { in: [COM_A, COM_B] } } })
@@ -487,6 +605,17 @@ describe("/api/cortes-servicio — corte de servicios por morosidad (F28)", () =
   async function GET_CORTES(url = "http://localhost/api/cortes-servicio"): Promise<Response> {
     const { coleccion } = await cargaModulos()
     return coleccion.GET(new NextRequest(url, { method: "GET" }))
+  }
+
+  /** Descarga del requerimiento: la URL que el `Documento` guarda en `archivoUrl`. */
+  async function GET_REQUERIMIENTO(corteId: string): Promise<Response> {
+    const { requerimiento } = await cargaModulos()
+    return requerimiento.GET(
+      new NextRequest(
+        `http://localhost/api/cortes-servicio/requerimiento?corteId=${encodeURIComponent(corteId)}`,
+        { method: "GET" }
+      )
+    )
   }
 
   /**
@@ -1004,5 +1133,186 @@ describe("/api/cortes-servicio — corte de servicios por morosidad (F28)", () =
         where: { comunidadId: COM_A, unidadId: U_TRES_CON_PAGO },
       })
     ).toBe(0)
+  })
+
+  // ── S8: el preaviso emite el requerimiento escrito y su constancia ──────────
+
+  it("el preaviso emite el requerimiento escrito como documento legal y su constancia de entrega", async () => {
+    await conSesion(EMAIL_ADMIN, async () => {
+      const res = await POST_PREAVISO(
+        preaviso({
+          unidadId: U_CON_PROPIETARIO,
+          acuerdoId: ACUERDO_OK_PROPIETARIO,
+        })
+      )
+      expect(res.status).toBe(201)
+      const vista = (await res.json()) as VistaPreaviso
+
+      expect(vista.documentoId).toBeTruthy()
+      const corte = await prisma.corteServicio.findUnique({ where: { id: vista.id } })
+      expect(corte?.documentoId).toBe(vista.documentoId)
+
+      // El escrito es un `Documento` legal del archivo con sus campos de ARCHIVO
+      // REALES: nombre, MIME, tamaño, URL que responde, hash y referencia al trámite.
+      const documento = await prisma.documento.findUnique({
+        where: { id: String(vista.documentoId) },
+      })
+      expect(documento).not.toBeNull()
+      expect(documento?.comunidadId).toBe(COM_A)
+      expect(documento?.naturaleza).toBe("legal")
+      expect(documento?.tipoDocumental).toBe("otros")
+      expect(documento?.glosa).toContain("209")
+      expect(documento?.referenciaAutentica).toContain(vista.id)
+      expect(documento?.archivoNombre.endsWith(".pdf")).toBe(true)
+      expect(documento?.archivoTipoMime).toBe("application/pdf")
+      expect(documento?.archivoTamanoKB).toBeGreaterThan(0)
+      expect(documento?.archivoUrl).toContain(vista.id)
+      expect(documento?.hash).toMatch(/^[a-f0-9]{64}$/)
+
+      // Los bytes que el documento declara son un PDF de VERDAD: se descarga por la
+      // URL que el archivo guarda y se miran la cabecera, el cierre, el tamaño y el
+      // hash. Sin esto, `archivoNombre` sería un nombre y no un documento.
+      const descarga = await GET_REQUERIMIENTO(vista.id)
+      expect(descarga.status).toBe(200)
+      expect(descarga.headers.get("content-type")).toBe("application/pdf")
+      expect(descarga.headers.get("content-disposition")).toContain(
+        String(documento?.archivoNombre)
+      )
+      const bytes = new Uint8Array(await descarga.arrayBuffer())
+      const texto = new TextDecoder("latin1").decode(bytes)
+      expect(texto.startsWith("%PDF-")).toBe(true)
+      expect(texto.slice(-1024)).toContain("%%EOF")
+      expect(createHash("sha256").update(bytes).digest("hex")).toBe(documento?.hash)
+      expect(Math.round((bytes.length / 1024) * 10) / 10).toBe(
+        documento?.archivoTamanoKB
+      )
+
+      // Lo que el papel imprime: la unidad, la deuda, el servicio, la fecha desde la
+      // que la suspensión es posible y la base legal. Se mira la definición porque el
+      // binario está comprimido; el binario ya se probó arriba.
+      const definicion = definicionDelRequerimiento({
+        corteId: vista.id,
+        comunidadNombre: "Comunidad Cortes A",
+        unidadNumero: "209",
+        servicio: String(corte?.servicio),
+        cuotasImpagas: Number(corte?.cuotasImpagas),
+        montoAdeudado: Number(corte?.montoAdeudado),
+        fechaPreaviso: new Date(String(corte?.fechaPreaviso)),
+        fechaHabilitada: new Date(String(corte?.fechaHabilitada)),
+        acuerdoFolio: "AD-2026-9020",
+      })
+      const impreso = JSON.stringify(definicion)
+      expect(impreso).toContain("209")
+      expect(impreso).toContain("300.000")
+      expect(impreso).toContain("Electricidad")
+      expect(impreso).toContain(
+        new Date(String(corte?.fechaHabilitada)).toISOString().slice(0, 10)
+      )
+      expect(impreso).toContain("Ley 21.442 art. 20 N°9")
+
+      // La constancia de entrega: UNA, del propietario VIGENTE de la unidad y en
+      // `pendiente`, porque ningún envío real se cursó. `entregado` sin envío sería
+      // declarar una entrega que no ocurrió.
+      const envios = await prisma.envioDocumento.findMany({
+        where: { documentoId: String(vista.documentoId) },
+      })
+      expect(envios).toHaveLength(1)
+      const envio = envios[0]
+      if (!envio) throw new Error("el preaviso no registró la constancia de entrega")
+      expect(envio.comunidadId).toBe(COM_A)
+      expect(envio.personaId).toBe(PROPIETARIO_VIGENTE)
+      expect(envio.estado).toBe("pendiente")
+      expect(envio.motivo).toBeTruthy()
+      expect(envio.notificacionId).toBeNull()
+      expect(vista.constancia.id).toBe(envio.id)
+      expect(vista.constancia.estado).toBe("pendiente")
+      expect(vista.constancia.personaId).toBe(PROPIETARIO_VIGENTE)
+      expect(vista.constancia.motivo).toBe(envio.motivo)
+
+      // La bitácora del preaviso registra el documento y la constancia.
+      const evento = await prisma.eventoAuditoria.findFirst({
+        where: {
+          comunidadId: COM_A,
+          tipoAccion: "FI_CORTE_PREAVISO",
+          referenciaId: vista.id,
+        },
+      })
+      expect(evento?.descripcion).toContain(String(documento?.id))
+      expect(evento?.descripcion).toContain(envio.id)
+    })
+  })
+
+  it("una unidad sin propietario vigente se preavisa igual y la respuesta dice por qué no hay constancia", async () => {
+    await conSesion(EMAIL_ADMIN, async () => {
+      const res = await POST_PREAVISO(
+        preaviso({
+          unidadId: U_SIN_PROPIETARIO,
+          acuerdoId: ACUERDO_OK_SIN_PROPIETARIO,
+        })
+      )
+      // El preaviso NO depende de encontrar destinatario: la ley exige avisar, y el
+      // sistema deja constancia de que hoy no hay a quién.
+      expect(res.status).toBe(201)
+      const vista = (await res.json()) as VistaPreaviso
+
+      expect(vista.unidadId).toBe(U_SIN_PROPIETARIO)
+      expect(vista.estado).toBe("preaviso")
+      expect(vista.documentoId).toBeTruthy()
+      // Sin destinatario no se inventa uno: la constancia no existe y se dice por qué.
+      expect(vista.constancia.id).toBeNull()
+      expect(vista.constancia.estado).toBeNull()
+      expect(vista.constancia.personaId).toBeNull()
+      expect(vista.constancia.motivo).toContain("propietario vigente")
+      expect(vista.constancia.motivo).toContain("210")
+      expect(
+        await prisma.envioDocumento.count({
+          where: { documentoId: String(vista.documentoId) },
+        })
+      ).toBe(0)
+
+      const evento = await prisma.eventoAuditoria.findFirst({
+        where: {
+          comunidadId: COM_A,
+          tipoAccion: "FI_CORTE_PREAVISO",
+          referenciaId: vista.id,
+        },
+      })
+      expect(evento?.descripcion).toContain(String(vista.documentoId))
+      expect(evento?.descripcion).toContain("propietario vigente")
+      expect(evento?.descripcion).toContain("210")
+    })
+  })
+
+  it("un preaviso rechazado no emite un segundo requerimiento ni una segunda constancia", async () => {
+    // El estado del trámite sigue siendo el que manda: el 409 del segundo preaviso
+    // no puede dejar un papel huérfano en el archivo ni una entrega de más.
+    const documentosAntes = await prisma.documento.count({
+      where: { comunidadId: COM_A },
+    })
+    const enviosAntes = await prisma.envioDocumento.count({
+      where: { comunidadId: COM_A },
+    })
+
+    await conSesion(EMAIL_ADMIN, async () => {
+      const res = await POST_PREAVISO(
+        preaviso({
+          unidadId: U_CON_PROPIETARIO,
+          acuerdoId: ACUERDO_OK_PROPIETARIO,
+        })
+      )
+      expect(res.status).toBe(409)
+    })
+
+    expect(await prisma.documento.count({ where: { comunidadId: COM_A } })).toBe(
+      documentosAntes
+    )
+    expect(await prisma.envioDocumento.count({ where: { comunidadId: COM_A } })).toBe(
+      enviosAntes
+    )
+    expect(
+      await prisma.corteServicio.count({
+        where: { comunidadId: COM_A, unidadId: U_CON_PROPIETARIO },
+      })
+    ).toBe(1)
   })
 })

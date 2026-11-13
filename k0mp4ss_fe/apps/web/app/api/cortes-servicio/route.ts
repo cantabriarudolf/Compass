@@ -26,6 +26,11 @@
  *   snapshot, junto al evento `FI_CORTE_PREAVISO` en UNA transacción, con la
  *   comprobación de «un corte vigente por servicio» DENTRO de esa transacción
  *   (leerla afuera dejaría la ventana abierta entre la lectura y el alta).
+ * - POST (S8): la misma transacción EMITE el requerimiento escrito —un
+ *   `Documento` legal del archivo, con los bytes reales del PDF y la referencia de
+ *   vuelta al corte— y la constancia de entrega en `envios_documento`, que empieza
+ *   en `pendiente` porque esta unidad todavía no cursa ningún envío. La respuesta
+ *   devuelve los dos ids y la bitácora los registra.
  * - GET: guard `fi:cobranza` + ver. Acotado a la comunidad de la sesión —el
  *   `comunidadId` nunca viene del cliente— y leído en un número FIJO de consultas:
  *   los cortes en una, el conteo en otra y los nombres (unidad y folio del
@@ -42,6 +47,20 @@ import { generarId } from "@/lib/id-utils"
 import { registrarEventoAuditoria } from "@/lib/auditoria"
 import { hoyISO } from "@/lib/date-utils"
 import { morosidadPorUnidad } from "@/lib/finanzas-utils"
+import { compilarPdf } from "@/lib/api/pdf-servidor"
+import { propietarioVigenteDeUnidad } from "@/lib/entrega-aviso"
+import { claveEnvioDocumento } from "@/app/api/documentos/_lib/envio-documento"
+import {
+  CANAL_DE_LA_CONSTANCIA,
+  MOTIVO_CONSTANCIA_PENDIENTE,
+  TIPO_DOCUMENTAL_REQUERIMIENTO,
+  archivoDelRequerimiento,
+  definicionDelRequerimiento,
+  glosaDelRequerimiento,
+  motivoSinPropietarioVigente,
+  referenciaAutenticaDelCorte,
+  type ArchivoDelRequerimiento,
+} from "@/lib/requerimiento-corte"
 import {
   cortePermitido,
   fechaHabilitadaDelCorte,
@@ -51,7 +70,11 @@ import {
   withComunidadScope,
   type ComunidadScope,
 } from "@/lib/api/with-comunidad-scope"
-import { vistaDeCorte } from "./_vista"
+import {
+  vistaDeCorte,
+  vistaDePreaviso,
+  type ConstanciaDeEntregaEnLaVista,
+} from "./_vista"
 
 /**
  * Recurso de la matriz que gobierna el corte: `fi:cobranza`.
@@ -88,6 +111,21 @@ const ESTADOS_VIGENTES = ["preaviso", "ejecutado"] as const
  */
 function pesos(monto: number): string {
   return `$${monto.toLocaleString("es-CL")}`
+}
+
+/**
+ * Intentos de la transacción del alta.
+ *
+ * El único choque esperable es el contador de versiones del archivo: `version` se
+ * numera dentro de (comunidad, tipo documental) y dos preavisos simultáneos pueden
+ * leer el mismo máximo y chocar contra el índice único (`P2002`). La transacción
+ * fallida no deja nada escrito, así que el reintento es seguro — y es UNO solo.
+ */
+const MAXIMO_INTENTOS_DE_ALTA = 2
+
+/** ¿El error es el choque contra un índice único de la base? */
+function esChoqueDeIndiceUnico(e: unknown): boolean {
+  return (e as { code?: string }).code === "P2002"
 }
 
 export async function POST(req: Request): Promise<Response> {
@@ -237,74 +275,225 @@ export async function POST(req: Request): Promise<Response> {
   const ahora = new Date()
   const fechaHabilitada = fechaHabilitadaDelCorte(ahora)
 
+  // ── S8: el escrito y su constancia se preparan ANTES de la transacción ─────
+  //
+  // El PDF se compila con el motor del repo (`compilarPdf`, el mismo que sirve el
+  // certificado y la liquidación) y los ids se conocen de antemano, así que el
+  // papel que se archiva es el del corte que se va a escribir y la compilación no
+  // tiene una transacción de base abierta esperando.
+  const comunidad = await prisma.comunidad.findUnique({
+    where: { id: scope.comunidadId },
+    select: { nombre: true },
+  })
+  const corteId = generarId("cse")
+  const documentoId = generarId("doc")
+  const envioId = generarId("env-doc")
+
+  // El destinatario de la constancia es el propietario VIGENTE de la unidad, el
+  // mismo criterio con el que la cobranza decide a quién se le cobra
+  // (`propietarioVigenteDeUnidad`): rol `propietario` y `fechaFin` null. Si no hay,
+  // no se inventa un destinatario (ver más abajo).
+  const propietarioId = await propietarioVigenteDeUnidad(scope.comunidadId, unidad.id)
+
+  const glosa = glosaDelRequerimiento({
+    numeroUnidad: unidad.numero,
+    servicio: datos.servicio,
+    cuotasImpagas: morosidad.periodosVencidos,
+  })
+  const referenciaAutentica = referenciaAutenticaDelCorte({
+    corteId,
+    fechaPreaviso: ahora,
+  })
+
+  let archivo: ArchivoDelRequerimiento
   try {
-    const creado = await prisma.$transaction(async (tx) => {
-      // La relectura va DENTRO de la transacción que escribe: si otra alta tomó el
-      // servicio entre la lectura de arriba y esta escritura, el conteo ya no da
-      // cero y no se escribe nada (ni el preaviso ni el evento).
-      const vigentesAhora = await tx.corteServicio.findMany({
-        where: {
-          comunidadId: scope.comunidadId,
-          unidadId: unidad.id,
-          estado: { in: [...ESTADOS_VIGENTES] },
-        },
-        select: { servicio: true },
-      })
-      if (vigentesAhora.some((corte) => corte.servicio === datos.servicio)) {
-        throw new Error(YA_HAY_CORTE_DEL_SERVICIO)
-      }
-
-      const fila = await tx.corteServicio.create({
-        data: {
-          id: generarId("cse"),
-          comunidadId: scope.comunidadId,
-          unidadId: unidad.id,
-          servicio: datos.servicio,
-          acuerdoId: acuerdo.id,
-          // El número de cuotas y el monto son el SNAPSHOT de por qué se permitió
-          // el corte: se persisten los DERIVADOS de la base. La ejecución los
-          // vuelve a juzgar (`POST /api/cortes-servicio/ejecutar`), así que un
-          // valor declarado por el cliente dejaría el corte ilegal en pie.
-          cuotasImpagas: morosidad.periodosVencidos,
-          montoAdeudado: morosidad.deudaVencida,
-          fechaPreaviso: ahora,
-          fechaHabilitada,
-          estado: "preaviso",
-          creadoPor: scope.usuarioId,
-        },
-      })
-
-      await registrarEventoAuditoria(
-        {
-          id: generarId("ev"),
-          comunidadId: scope.comunidadId,
-          timestamp: ahora.toISOString(),
-          usuario: scope.usuarioId,
-          categoria: "FI",
-          tipoAccion: "FI_CORTE_PREAVISO",
-          referenciaId: fila.id,
-          descripcion: `Se cursó el preaviso de corte de ${datos.servicio} a la unidad ${unidad.numero}: ${morosidad.periodosVencidos} cuota(s) impaga(s) por ${pesos(morosidad.deudaVencida)}, habilitado desde el ${fechaHabilitada.toISOString()}; autorizado por el acuerdo ${acuerdo.folio} del Comité (Ley 21.442 art. 20 N°9).`,
-        },
-        tx
-      )
-
-      return fila
+    const definicion = definicionDelRequerimiento({
+      corteId,
+      comunidadNombre: comunidad?.nombre ?? scope.comunidadId,
+      unidadNumero: unidad.numero,
+      servicio: datos.servicio,
+      cuotasImpagas: morosidad.periodosVencidos,
+      montoAdeudado: morosidad.deudaVencida,
+      fechaPreaviso: ahora,
+      fechaHabilitada,
+      acuerdoFolio: acuerdo.folio,
     })
-
-    return Response.json(
-      vistaDeCorte(creado, {
-        unidadNumero: unidad.numero,
-        acuerdoFolio: acuerdo.folio,
-      }),
-      { status: 201 }
-    )
+    archivo = archivoDelRequerimiento(await compilarPdf(definicion), corteId)
   } catch (e) {
-    if (e instanceof Error && e.message === YA_HAY_CORTE_DEL_SERVICIO) {
-      return jsonError(409, "La unidad ya tiene un corte vigente de ese servicio.")
-    }
-    logger.error({ err: e }, "[api/cortes-servicio] error inesperado al preavisar el corte")
+    // Sin escrito no hay preaviso: la ley exige AVISO, y un corte cuya constancia
+    // escrita no se pudo emitir no se cursa. Falla cerrada y no escribe nada.
+    logger.error(
+      { err: e, unidadId: unidad.id },
+      "[api/cortes-servicio] no se pudo compilar el requerimiento del preaviso"
+    )
     return jsonError(500, "Error interno del servidor.")
   }
+
+  let ultimoError: unknown = null
+  for (let intento = 1; intento <= MAXIMO_INTENTOS_DE_ALTA; intento++) {
+    try {
+      const creado = await prisma.$transaction(async (tx) => {
+        // La relectura va DENTRO de la transacción que escribe: si otra alta tomó el
+        // servicio entre la lectura de arriba y esta escritura, el conteo ya no da
+        // cero y no se escribe nada (ni el preaviso, ni el documento, ni el evento).
+        const vigentesAhora = await tx.corteServicio.findMany({
+          where: {
+            comunidadId: scope.comunidadId,
+            unidadId: unidad.id,
+            estado: { in: [...ESTADOS_VIGENTES] },
+          },
+          select: { servicio: true },
+        })
+        if (vigentesAhora.some((corte) => corte.servicio === datos.servicio)) {
+          throw new Error(YA_HAY_CORTE_DEL_SERVICIO)
+        }
+
+        // La versión del documento es la siguiente dentro de (comunidad, tipo), el
+        // mismo contador con el que numera el archivo de la comunidad. Se lee DENTRO
+        // de la transacción que escribe; el reintento de arriba cubre el choque de
+        // dos altas simultáneas contra el índice único.
+        const { _max } = await tx.documento.aggregate({
+          where: {
+            comunidadId: scope.comunidadId,
+            tipoDocumental: TIPO_DOCUMENTAL_REQUERIMIENTO,
+          },
+          _max: { version: true },
+        })
+
+        // El REQUERIMIENTO ESCRITO (S8). Naturaleza `legal`: el papel prueba un acto
+        // de la administración frente al deudor y no se edita — se corrige con una
+        // versión nueva—. Los campos del archivo son los del PDF REAL que se acaba de
+        // compilar, y `referenciaAutentica` apunta al trámite que lo originó.
+        await tx.documento.create({
+          data: {
+            id: documentoId,
+            comunidadId: scope.comunidadId,
+            naturaleza: "legal",
+            tipoDocumental: TIPO_DOCUMENTAL_REQUERIMIENTO,
+            glosa,
+            referenciaAutentica,
+            archivoNombre: archivo.nombre,
+            archivoTipoMime: archivo.tipoMime,
+            archivoTamanoKB: archivo.tamanoKB,
+            archivoUrl: archivo.url,
+            hash: archivo.hash,
+            version: (_max.version ?? 0) + 1,
+            vigenteDesde: hoyISO(),
+          },
+        })
+
+        const fila = await tx.corteServicio.create({
+          data: {
+            id: corteId,
+            comunidadId: scope.comunidadId,
+            unidadId: unidad.id,
+            servicio: datos.servicio,
+            acuerdoId: acuerdo.id,
+            // El número de cuotas y el monto son el SNAPSHOT de por qué se permitió
+            // el corte: se persisten los DERIVADOS de la base. La ejecución los
+            // vuelve a juzgar (`POST /api/cortes-servicio/ejecutar`), así que un
+            // valor declarado por el cliente dejaría el corte ilegal en pie.
+            cuotasImpagas: morosidad.periodosVencidos,
+            montoAdeudado: morosidad.deudaVencida,
+            fechaPreaviso: ahora,
+            fechaHabilitada,
+            estado: "preaviso",
+            documentoId,
+            creadoPor: scope.usuarioId,
+          },
+        })
+
+        // La CONSTANCIA DE ENTREGA al deudor. Nace `pendiente` y no `entregado`
+        // porque esta unidad no cursa ningún envío: el contrato de los envíos dice
+        // que `entregado` —o `enviado`— se registra SÓLO si el servidor aceptó el
+        // mensaje, y acá no se abrió ninguna conexión ni se creó la notificación
+        // que probaría una entrega por el visor. Escribir `entregado` sería declarar
+        // un hecho que no ocurrió justo en el papel que habilita el corte.
+        let constancia: ConstanciaDeEntregaEnLaVista
+        if (propietarioId) {
+          await tx.envioDocumento.create({
+            data: {
+              id: envioId,
+              comunidadId: scope.comunidadId,
+              documentoId,
+              personaId: propietarioId,
+              canal: CANAL_DE_LA_CONSTANCIA,
+              estado: "pendiente",
+              fecha: hoyISO(),
+              motivo: MOTIVO_CONSTANCIA_PENDIENTE,
+              notificacionId: null,
+              // La clave es la del archivo de la comunidad
+              // (`claveEnvioDocumento`): entregar el mismo documento a la misma
+              // persona por el mismo canal no duplica la constancia.
+              claveEnvio: claveEnvioDocumento({
+                documentoId,
+                personaId: propietarioId,
+                canal: CANAL_DE_LA_CONSTANCIA,
+              }),
+              reenvio: false,
+            },
+          })
+          constancia = {
+            id: envioId,
+            estado: "pendiente",
+            personaId: propietarioId,
+            motivo: MOTIVO_CONSTANCIA_PENDIENTE,
+          }
+        } else {
+          // Sin propietario vigente NO hay constancia: una fila de entrega exige un
+          // destinatario y el sistema no lo inventa. El preaviso se cursa igual —la
+          // ley exige avisar— y la respuesta y la bitácora dicen qué falta.
+          constancia = {
+            id: null,
+            estado: null,
+            personaId: null,
+            motivo: motivoSinPropietarioVigente(unidad.numero),
+          }
+        }
+
+        await registrarEventoAuditoria(
+          {
+            id: generarId("ev"),
+            comunidadId: scope.comunidadId,
+            timestamp: ahora.toISOString(),
+            usuario: scope.usuarioId,
+            categoria: "FI",
+            tipoAccion: "FI_CORTE_PREAVISO",
+            referenciaId: fila.id,
+            descripcion: `Se cursó el preaviso de corte de ${datos.servicio} a la unidad ${unidad.numero}: ${morosidad.periodosVencidos} cuota(s) impaga(s) por ${pesos(morosidad.deudaVencida)}, habilitado desde el ${fechaHabilitada.toISOString()}; autorizado por el acuerdo ${acuerdo.folio} del Comité (Ley 21.442 art. 20 N°9). Requerimiento escrito emitido como documento legal ${documentoId} («${glosa}»). ${constancia.id ? `Constancia de entrega ${constancia.id} al propietario vigente de la unidad, en estado pendiente: el envío real todavía no se cursó.` : constancia.motivo}`,
+          },
+          tx
+        )
+
+        return { corte: fila, constancia }
+      })
+
+      return Response.json(
+        vistaDePreaviso(
+          creado.corte,
+          {
+            unidadNumero: unidad.numero,
+            acuerdoFolio: acuerdo.folio,
+          },
+          creado.constancia
+        ),
+        { status: 201 }
+      )
+    } catch (e) {
+      if (e instanceof Error && e.message === YA_HAY_CORTE_DEL_SERVICIO) {
+        return jsonError(409, "La unidad ya tiene un corte vigente de ese servicio.")
+      }
+      ultimoError = e
+      // Sólo el choque del contador de versiones se reintenta, y una vez.
+      if (!esChoqueDeIndiceUnico(e) || intento === MAXIMO_INTENTOS_DE_ALTA) break
+    }
+  }
+
+  logger.error(
+    { err: ultimoError },
+    "[api/cortes-servicio] error inesperado al preavisar el corte"
+  )
+  return jsonError(500, "Error interno del servidor.")
 }
 
 /**

@@ -9,6 +9,10 @@
  *
  * Las fechas viajan como ISO: el corte es un acto administrativo con plazos y la
  * hora del servidor es la que manda, no la del navegador.
+ *
+ * `documentoId` (S8) es el requerimiento ESCRITO que el preaviso emitió: viaja en
+ * las cuatro vistas porque es un dato del trámite —de dónde salió el papel— y el
+ * alta suma la constancia de su entrega, que sólo existe en ese acto.
  */
 
 /** Fila persistida, en la forma mínima que la vista necesita. */
@@ -27,6 +31,8 @@ export interface CortePersistido {
   readonly revocadoPor: string | null
   readonly revocadoEn: Date | null
   readonly motivo: string | null
+  /** Requerimiento escrito emitido por el preaviso (`documentos`), si existe. */
+  readonly documentoId: string | null
   readonly creadoPor: string
   readonly createdAt: Date
 }
@@ -55,8 +61,28 @@ export interface CorteEnLaVista {
   readonly revocadoPor: string | null
   readonly revocadoEn: string | null
   readonly motivo: string | null
+  readonly documentoId: string | null
   readonly creadoPor: string
   readonly createdAt: string
+}
+
+/**
+ * Constancia de entrega del requerimiento tal como viaja en el alta del preaviso.
+ *
+ * `id: null` no es un dato que falte: es que la fila NO existe porque la unidad no
+ * tiene propietario vigente y el sistema no inventa un destinatario. En ese caso
+ * `estado` también es `null` (no hay fila que tenga estado) y `motivo` dice por qué.
+ */
+export interface ConstanciaDeEntregaEnLaVista {
+  readonly id: string | null
+  readonly estado: string | null
+  readonly personaId: string | null
+  readonly motivo: string | null
+}
+
+/** Vista del ALTA: el corte recién creado y la constancia de su requerimiento. */
+export interface PreavisoEnLaVista extends CorteEnLaVista {
+  readonly constancia: ConstanciaDeEntregaEnLaVista
 }
 
 export function vistaDeCorte(
@@ -80,7 +106,21 @@ export function vistaDeCorte(
     revocadoPor: corte.revocadoPor,
     revocadoEn: corte.revocadoEn?.toISOString() ?? null,
     motivo: corte.motivo,
+    documentoId: corte.documentoId,
     creadoPor: corte.creadoPor,
     createdAt: corte.createdAt.toISOString(),
   }
+}
+
+/**
+ * Vista del preaviso: la del corte más la constancia de entrega de su
+ * requerimiento. Sólo la usa el alta, que es el acto que la crea (o el que dice
+ * por qué no se pudo crear).
+ */
+export function vistaDePreaviso(
+  corte: CortePersistido,
+  nombres: NombresDelCorte,
+  constancia: ConstanciaDeEntregaEnLaVista
+): PreavisoEnLaVista {
+  return { ...vistaDeCorte(corte, nombres), constancia }
 }

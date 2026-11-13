@@ -806,12 +806,20 @@ model CorteServicio {
   revocadoPor     String? // usuario de sesión que dejó el corte sin efecto
   revocadoEn      DateTime?
   motivo          String? // por qué se revocó (pago de la deuda o error del trámite)
+  /// S8 — el REQUERIMIENTO ESCRITO que el preaviso emitió, en el archivo de la
+  /// comunidad. El corte existía y el papel que prueba el aviso al deudor no: hoy
+  /// el preaviso escribe el `Documento` legal con los bytes reales del escrito y
+  /// deja acá la referencia. Es NULL en los cortes cursados antes de esta columna
+  /// (no hay backfill: el papel de esos cortes no se puede reconstruir con su
+  /// fecha) y en un corte escrito directo en la base.
+  documentoId     String?
   creadoPor       String // usuario de sesión que cursó el preaviso
   createdAt       DateTime  @default(now())
 
   @@index([comunidadId])
   @@index([comunidadId, unidadId])
   @@index([comunidadId, estado])
+  @@index([documentoId])
   @@map("cortes_servicio")
 }
 
