@@ -16,11 +16,20 @@
  * - un propietario sin correo no se inventa como enviado: queda `fallido`;
  * - el canal del visor no depende del SMTP (PRESERVE): sigue `enviado` y crea la
  *   notificación interna.
+ *
+ * F33 — la credencial por comunidad la resuelve el EMISOR, no este llamador:
+ * con credencial guardada el correo se autentica con ese usuario; sin ella, sin
+ * clave maestra o con el paquete ilegible se envía por la variable global y el
+ * motivo PERSISTIDO dice cuál de los tres motivos ocurrió.
  */
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
 import { NextRequest } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { configuracionDefault } from "@/data/admin/configuracion"
+import {
+  VARIABLE_CLAVE_MAESTRA,
+  cifrarSecreto,
+} from "@/lib/cifrado-secretos"
 import {
   iniciarServidorSMTPFalso,
   type ServidorSMTPFalso,
@@ -41,6 +50,12 @@ vi.mock("next/headers", () => ({
 const AUTH_SECRET = "test-secret-12345678"
 /** Contraseña inventada: no es una credencial, es texto de prueba. */
 const CLAVE_FALSA = "clave-inventada-solo-para-tests"
+/** Clave maestra de prueba: 32 bytes, no una credencial real. */
+const CLAVE_MAESTRA = Buffer.alloc(32, 31).toString("base64")
+/** Otra clave de 32 bytes: no abre el paquete cifrado con la anterior. */
+const OTRA_CLAVE = Buffer.alloc(32, 32).toString("base64")
+const USUARIO_COMUNIDAD = "buzon@comunidad-smtp-cob.cl"
+const SECRETO_COMUNIDAD = "secreto-comunidad-smtp-cob-inventado"
 
 const comunidad = "smtp-cob-comunidad"
 const emailAdmin = "smtp-cob-admin@test.cl"
@@ -50,12 +65,43 @@ const cobroId = "smtp-cob-c-1"
 
 const emailToId = (email: string): string => email.split("@")[0] ?? email
 const secretoPrevio = process.env.SMTP_PASSWORD
+const clavePrevia = process.env[VARIABLE_CLAVE_MAESTRA]
 
 const servidores: ServidorSMTPFalso[] = []
 
 function fijarSecreto(valor: string | undefined): void {
   if (valor === undefined) delete process.env.SMTP_PASSWORD
   else process.env.SMTP_PASSWORD = valor
+}
+
+function fijarClaveMaestra(valor: string | undefined): void {
+  if (valor === undefined) delete process.env[VARIABLE_CLAVE_MAESTRA]
+  else process.env[VARIABLE_CLAVE_MAESTRA] = valor
+}
+
+/**
+ * Guarda la credencial CIFRADA, igual que `PUT /api/configuracion/correo`. La
+ * clave usada para cifrar se puede elegir: así se prueba el paquete que ya no
+ * se abre con la clave del entorno.
+ */
+async function guardarCredencial(
+  puerto: number,
+  opciones: { clave?: string } = {}
+): Promise<void> {
+  const paquete = cifrarSecreto(SECRETO_COMUNIDAD, {
+    [VARIABLE_CLAVE_MAESTRA]: opciones.clave ?? CLAVE_MAESTRA,
+  })
+  await prisma.credencialCorreoComunidad.create({
+    data: {
+      id: `cred-${comunidad}`,
+      comunidadId: comunidad,
+      host: "127.0.0.1",
+      puerto,
+      usuario: USUARIO_COMUNIDAD,
+      ...paquete,
+      actualizadoPor: "test",
+    },
+  })
 }
 
 async function levantarServidor(
@@ -158,6 +204,8 @@ beforeAll(async () => {
 beforeEach(async () => {
   state.cookie = ""
   fijarSecreto(CLAVE_FALSA)
+  fijarClaveMaestra(CLAVE_MAESTRA)
+  await prisma.credencialCorreoComunidad.deleteMany({ where: { comunidadId: comunidad } })
   await prisma.envioCobranzaFI.deleteMany({ where: { comunidadId: comunidad } })
   await prisma.notificacion.deleteMany({ where: { comunidadId: comunidad } })
   await prisma.eventoAuditoria.deleteMany({ where: { comunidadId: comunidad } })
@@ -234,7 +282,9 @@ afterEach(async () => {
 
 afterAll(async () => {
   fijarSecreto(secretoPrevio)
+  fijarClaveMaestra(clavePrevia)
   try {
+    await prisma.credencialCorreoComunidad.deleteMany({ where: { comunidadId: comunidad } })
     await prisma.envioCobranzaFI.deleteMany({ where: { comunidadId: comunidad } })
     await prisma.notificacion.deleteMany({ where: { comunidadId: comunidad } })
     await prisma.eventoAuditoria.deleteMany({ where: { comunidadId: comunidad } })
@@ -377,5 +427,110 @@ describe("cobranza por email con el emisor SMTP real", () => {
     const email = await envioEmail()
     expect(email?.estado).toBe("fallido")
     expect(servidor.mensajes).toHaveLength(0)
+  })
+})
+
+describe("credencial de correo por comunidad (F33): la resuelve el emisor", () => {
+  it("con credencial guardada el correo se autentica con ESE usuario, no con el global", async () => {
+    const servidorGlobal = await levantarServidor({ modo: "aceptar" })
+    const servidorComunidad = await levantarServidor({
+      modo: "aceptar",
+      usuario: USUARIO_COMUNIDAD,
+      secreto: SECRETO_COMUNIDAD,
+    })
+    await configurarSMTP(servidorGlobal.port)
+    await guardarCredencial(servidorComunidad.port)
+
+    await conSesion(async () => {
+      const res = await ejecutarCobranza()
+      expect(res.status).toBe(200)
+      const json = await res.json()
+      expect(json.canales.email.estado).toBe("enviado")
+    })
+
+    const email = await envioEmail()
+    expect(email?.estado).toBe("enviado")
+    expect(servidorComunidad.autenticaciones).toEqual([
+      { usuario: USUARIO_COMUNIDAD, secreto: SECRETO_COMUNIDAD },
+    ])
+    expect(servidorComunidad.mensajes).toHaveLength(1)
+    // El camino global no se tocó: la credencial de la comunidad manda.
+    expect(servidorGlobal.autenticaciones).toHaveLength(0)
+    expect(servidorGlobal.mensajes).toHaveLength(0)
+    expect(String(email?.motivo)).not.toContain("comunidad_sin_credencial")
+  })
+
+  it("sin credencial guardada envía con SMTP_PASSWORD y el motivo dice comunidad_sin_credencial", async () => {
+    const servidor = await levantarServidor({ modo: "aceptar" })
+    await configurarSMTP(servidor.port)
+
+    await conSesion(async () => {
+      const res = await ejecutarCobranza()
+      expect(res.status).toBe(200)
+      const json = await res.json()
+      expect(json.canales.email.estado).toBe("enviado")
+    })
+
+    const email = await envioEmail()
+    expect(email?.estado).toBe("enviado")
+    expect(String(email?.motivo)).toContain("comunidad_sin_credencial")
+    expect(String(email?.motivo)).toMatch(/aceptado por el servidor SMTP/i)
+    expect(servidor.autenticaciones).toEqual([{ usuario: USUARIO_SMTP, secreto: CLAVE_FALSA }])
+    expect(servidor.mensajes).toHaveLength(1)
+  })
+
+  it("sin clave maestra envía igual por el camino global y el motivo dice clave_maestra_ausente", async () => {
+    const servidorGlobal = await levantarServidor({ modo: "aceptar" })
+    const servidorComunidad = await levantarServidor({
+      modo: "aceptar",
+      usuario: USUARIO_COMUNIDAD,
+      secreto: SECRETO_COMUNIDAD,
+    })
+    await configurarSMTP(servidorGlobal.port)
+    await guardarCredencial(servidorComunidad.port)
+    fijarClaveMaestra(undefined)
+
+    await conSesion(async () => {
+      const res = await ejecutarCobranza()
+      expect(res.status).toBe(200)
+      const json = await res.json()
+      // Nada lanzó: el envío sale por la variable global.
+      expect(json.canales.email.estado).toBe("enviado")
+    })
+
+    const email = await envioEmail()
+    expect(email?.estado).toBe("enviado")
+    expect(String(email?.motivo)).toContain("clave_maestra_ausente")
+    expect(servidorGlobal.autenticaciones).toEqual([
+      { usuario: USUARIO_SMTP, secreto: CLAVE_FALSA },
+    ])
+    expect(servidorComunidad.autenticaciones).toHaveLength(0)
+  })
+
+  it("con la credencial ilegible envía igual por el camino global y el motivo dice credencial_ilegible", async () => {
+    const servidorGlobal = await levantarServidor({ modo: "aceptar" })
+    const servidorComunidad = await levantarServidor({
+      modo: "aceptar",
+      usuario: USUARIO_COMUNIDAD,
+      secreto: SECRETO_COMUNIDAD,
+    })
+    await configurarSMTP(servidorGlobal.port)
+    // Se cifró con otra clave: el paquete guardado ya no se abre.
+    await guardarCredencial(servidorComunidad.port, { clave: OTRA_CLAVE })
+
+    await conSesion(async () => {
+      const res = await ejecutarCobranza()
+      expect(res.status).toBe(200)
+      const json = await res.json()
+      expect(json.canales.email.estado).toBe("enviado")
+    })
+
+    const email = await envioEmail()
+    expect(email?.estado).toBe("enviado")
+    expect(String(email?.motivo)).toContain("credencial_ilegible")
+    expect(servidorGlobal.autenticaciones).toEqual([
+      { usuario: USUARIO_SMTP, secreto: CLAVE_FALSA },
+    ])
+    expect(servidorComunidad.autenticaciones).toHaveLength(0)
   })
 })

@@ -20,13 +20,24 @@
  *   incluye en ningún motivo de error: se redacta (literal y en base64) antes de
  *   armar el texto. La fila de CF se lee con un `select` explícito que NI SIQUIERA
  *   pide `smtpPassword`, así el secreto no entra en memoria desde la base.
- * - **F33 agrega un camino por comunidad sin tocar el anterior.** Quien envía
- *   puede pasar `opciones.credencial` con host, puerto, usuario y el secreto YA
- *   descifrado en memoria (la base lo guarda cifrado, ver
- *   `lib/cifrado-secretos.ts`). Con credencial explícita se usa esa y no la
- *   variable de entorno; sin ella, todo sigue exactamente como antes. Los
- *   llamadores existentes no cambian: migrarlos a la credencial de su comunidad
- *   es trabajo aparte, anotado en `specs/PENDIENTES-FUNCIONALIDAD.md`.
+ * - **F33: la credencial de la comunidad se resuelve ACÁ, no en cada llamador.**
+ *   `enviarCorreoComunidad` lee la `CredencialCorreoComunidad` de la comunidad
+ *   (`lib/correo-comunidad.ts`), descifra el secreto en memoria con la clave
+ *   maestra y la usa. Precedencia: credencial EXPLÍCITA (`opciones.credencial`, la
+ *   que ya pasan el barrido de vigencia y la prueba de envío) > credencial de la
+ *   comunidad > variable global `SMTP_PASSWORD`. Resolverla en el emisor y no en
+ *   el llamador es deliberado: un llamador nuevo que se olvide no puede caer en
+ *   silencio a la contraseña global. Los llamadores no cambian de firma; el
+ *   barrido de vigencia sigue pasando su credencial y no se re-resuelve.
+ * - **Cuando se envía con la variable global, el motivo dice POR QUÉ.** La
+ *   resolución devuelve `comunidad_sin_credencial` (no hay fila),
+ *   `clave_maestra_ausente` (la variable falta o no mide 32 bytes) o
+ *   `credencial_ilegible` (el paquete guardado no se abre). Ese motivo viaja en
+ *   el resultado y `motivoSMTP` lo escribe en la cola de salida, porque una fila
+ *   que sólo dice «aceptado» no puede insinuar una credencial que no se usó. Si
+ *   la comunidad no tiene credencial y el emisor global tampoco está
+ *   configurado, el desenlace sigue siendo `no_configurado` (condición de
+ *   configuración, no envío fallido) y el motivo nombra las dos cosas.
  * - **Nunca se dice `enviado` sin aceptación del servidor**: el resultado sale del
  *   código de respuesta final del DATA, no de que la conexión se haya abierto.
  * - **Sin dependencias**: el diálogo SMTP (EHLO, STARTTLS, AUTH PLAIN/LOGIN,
@@ -56,12 +67,26 @@ import { randomUUID } from "node:crypto"
 import { connect as conectarRed, isIP, type Socket } from "node:net"
 import { connect as conectarTls, type TLSSocket } from "node:tls"
 import { prisma } from "@/lib/prisma"
+import {
+  EXPLICACION_MOTIVO_GLOBAL,
+  resolverCredencialDeComunidad,
+  type MotivoCredencialGlobal,
+} from "@/lib/correo-comunidad"
 
-/** Desenlace de un intento de envío. Estados que NO se confunden entre sí. */
+/** Motivo por el que un envío se resolvió con el emisor global (F33). */
+export type { MotivoCredencialGlobal } from "@/lib/correo-comunidad"
+
+/**
+ * Desenlace de un intento de envío. Estados que NO se confunden entre sí.
+ *
+ * `motivoGlobal` dice por qué se envió con la variable global en lugar de la
+ * credencial de la comunidad (F33); ausente significa que se usó la credencial de
+ * la comunidad o una credencial explícita.
+ */
 export type ResultadoEnvioSMTP =
-  | { estado: "enviado"; messageId: string | null }
-  | { estado: "no_configurado"; motivo: string }
-  | { estado: "fallido"; motivo: string }
+  | { estado: "enviado"; messageId: string | null; motivoGlobal?: MotivoCredencialGlobal }
+  | { estado: "no_configurado"; motivo: string; motivoGlobal?: MotivoCredencialGlobal }
+  | { estado: "fallido"; motivo: string; motivoGlobal?: MotivoCredencialGlobal }
 
 /** Estado tal como se persiste en la cola de salida (`pendiente|enviado|fallido`). */
 export type EstadoRegistroSMTP = "pendiente" | "enviado" | "fallido"
@@ -97,9 +122,17 @@ export interface OpcionesEnvioSMTP {
    * Credencial de la comunidad (F33), con el secreto EN CLARO y solo en memoria:
    * quien la pasa lo descifra con la clave maestra del entorno y no lo persiste.
    * Cuando está, el emisor usa este host/puerto/usuario/secreto y NO consulta
-   * `SMTP_PASSWORD`; sin ella, el camino global queda igual que siempre.
+   * `SMTP_PASSWORD`; tampoco resuelve la credencial guardada de la comunidad (la
+   * explícita manda).
    */
   credencial?: CredencialSMTP
+  /**
+   * Motivo por el que `enviarCorreoComunidad` decidió usar el emisor global
+   * (F33). Lo llena ese envoltorio —único que conoce el `comunidadId`— para que
+   * el motivo persistido diga la verdad; un llamador directo de
+   * `enviarCorreoSMTP` no lo pasa.
+   */
+  motivoGlobal?: MotivoCredencialGlobal
 }
 
 /**
@@ -149,6 +182,11 @@ export async function leerConfiguracionSMTP(
 /**
  * Envía un mensaje con la configuración SMTP de la comunidad.
  *
+ * Es el punto donde se resuelve la credencial de la comunidad (F33): quien llama
+ * no tiene que pasar nada y, si no la hay, el envío cae a la variable global con
+ * el motivo escrito. Con credencial explícita en `opciones.credencial` no se
+ * resuelve ninguna otra: esa manda (barrido de vigencia y prueba de envío).
+ *
  * No lanza: cualquier falla —incluida una excepción inesperada del transporte—
  * vuelve como `{ estado: "fallido", motivo }` con el secreto redactado.
  */
@@ -168,7 +206,29 @@ export async function enviarCorreoComunidad(
       motivo: "Sin emisor SMTP configurado: no se pudo leer la configuración global (CF).",
     }
   }
-  return enviarCorreoSMTP(fila, mensaje, opciones)
+
+  // F33: la credencial se resuelve UNA vez, acá. Sin fila de CF no hay remitente
+  // con el que enviar, así que no se consulta la credencial para nada.
+  let credencial = opciones.credencial
+  let motivoGlobal: MotivoCredencialGlobal | undefined
+  if (!credencial && fila) {
+    try {
+      const resuelta = await resolverCredencialDeComunidad(comunidadId)
+      if (resuelta.ok) credencial = resuelta.credencial
+      else motivoGlobal = resuelta.motivo
+    } catch {
+      // No se pudo saber si la comunidad tiene credencial. Declarar
+      // `comunidad_sin_credencial` sería inventar y enviar con la global a
+      // ciegas también: sin configuración legible no se envía.
+      return {
+        estado: "no_configurado",
+        motivo:
+          "Sin emisor SMTP configurado: no se pudo leer la credencial de correo de la comunidad.",
+      }
+    }
+  }
+
+  return enviarCorreoSMTP(fila, mensaje, { ...opciones, credencial, motivoGlobal })
 }
 
 /**
@@ -187,13 +247,20 @@ export async function enviarCorreoSMTP(
 ): Promise<ResultadoEnvioSMTP> {
   const entorno = opciones.env ?? process.env
   const credencial = opciones.credencial
+  const motivoGlobal = opciones.motivoGlobal
 
   // Nadie a quien enviar: se rechaza sin mirar la configuración ni abrir nada.
   const rechazoDelDestinatario = motivoDireccionRechazada("el destinatario", mensaje.to)
   if (rechazoDelDestinatario) return { estado: "fallido", motivo: rechazoDelDestinatario }
 
   const resuelta = resolverConfiguracion(fila, entorno, credencial)
-  if (!resuelta.ok) return { estado: "no_configurado", motivo: resuelta.motivo }
+  if (!resuelta.ok) {
+    return {
+      estado: "no_configurado",
+      motivo: conNotaCredencialNoUsada(resuelta.motivo, motivoGlobal),
+      motivoGlobal,
+    }
+  }
 
   // Las copias de CF rebotan igual que el destinatario: si alguna es imposible,
   // se rechaza el envío completo y el motivo nombra la dirección y el campo.
@@ -213,9 +280,13 @@ export async function enviarCorreoSMTP(
   const tiempoLimiteMs = opciones.tiempoLimiteMs ?? TIEMPO_LIMITE_MS
   try {
     const { messageId } = await conversar(resuelta.config, secreto, mensaje, tiempoLimiteMs)
-    return { estado: "enviado", messageId }
+    return { estado: "enviado", messageId, motivoGlobal }
   } catch (error) {
-    return { estado: "fallido", motivo: motivoDeFallo(error, secreto) }
+    return {
+      estado: "fallido",
+      motivo: conNotaEmisorGlobal(motivoDeFallo(error, secreto), motivoGlobal),
+      motivoGlobal,
+    }
   }
 }
 
@@ -236,11 +307,39 @@ export function motivoSMTP(resultado: ResultadoEnvioSMTP): string {
     return `${resultado.motivo} El correo queda en la cola de salida (outbox) y no se reporta como enviado.`
   }
   if (resultado.estado === "enviado") {
-    return resultado.messageId
+    const aceptado = resultado.messageId
       ? `Aceptado por el servidor SMTP (id ${resultado.messageId}).`
       : "Aceptado por el servidor SMTP."
+    return conNotaEmisorGlobal(aceptado, resultado.motivoGlobal)
   }
   return resultado.motivo
+}
+
+// --- Notas de la credencial usada (F33) -------------------------------------
+
+/**
+ * Agrega al motivo por qué se envió con la variable global en vez de la
+ * credencial de la comunidad. Sin `motivoGlobal` el motivo no cambia: el camino
+ * con credencial de la comunidad no lleva ninguna nota.
+ */
+function conNotaEmisorGlobal(
+  motivo: string,
+  motivoGlobal: MotivoCredencialGlobal | undefined
+): string {
+  if (!motivoGlobal) return motivo
+  return `${motivo} Se usó el emisor global (SMTP_PASSWORD) porque ${EXPLICACION_MOTIVO_GLOBAL[motivoGlobal]}.`
+}
+
+/**
+ * Agrega al motivo por qué no se usó la credencial de la comunidad cuando el
+ * envío tampoco tiene emisor global: son dos hechos y la fila los dice los dos.
+ */
+function conNotaCredencialNoUsada(
+  motivo: string,
+  motivoGlobal: MotivoCredencialGlobal | undefined
+): string {
+  if (!motivoGlobal) return motivo
+  return `${motivo} La credencial de correo de la comunidad no se usó porque ${EXPLICACION_MOTIVO_GLOBAL[motivoGlobal]}.`
 }
 
 // --- Guardia de direcciones que no pueden existir ---------------------------

@@ -47,7 +47,7 @@ The system MUST allow the admin to define how common expenses are calculated and
 ### Requirement: Configuración SMTP
 The system MUST store email server parameters for automated notifications. Los secretos `smtpPassword` SHALL NOT existir en el schema cliente; viven como variable de entorno servidor `SMTP_PASSWORD` (C2-final).
 
-**F33 — credencial por comunidad**: además del camino global por variable de entorno, la credencial del buzón SHALL poder guardarse **por comunidad y cifrada en la base** (`CredencialCorreoComunidad`), con la contraseña cargable desde la configuración, nunca devuelta y auditada sin el valor (requirement «Credencial de correo por comunidad, cifrada»). `SMTP_PASSWORD` sigue siendo el camino por defecto de los envíos existentes mientras migran a la credencial de su comunidad.
+**F33 — credencial por comunidad**: además del camino global por variable de entorno, la credencial del buzón SHALL poder guardarse **por comunidad y cifrada en la base** (`CredencialCorreoComunidad`), con la contraseña cargable desde la configuración, nunca devuelta y auditada sin el valor (requirement «Credencial de correo por comunidad, cifrada»). El envío de los módulos existentes SHALL usar la credencial de su comunidad cuando exista, sin que el llamador tenga que pasarla (`enviarCorreoComunidad` la resuelve en `lib/correo-comunidad.ts`); `SMTP_PASSWORD` queda como último recurso y el motivo del registro dice por qué.
 
 #### Scenario: SMTP Fields
 - **WHEN** the admin configures SMTP
@@ -82,6 +82,13 @@ The system MUST guardar la credencial SMTP de CADA comunidad cifrada en la base 
 - **THEN** la respuesta SHALL traer solo `configurada`, `host`, `puerto`, `usuario`, `actualizadoEn` y `actualizadoPor`
 - **AND** el secreto SHALL NOT aparecer en el cuerpo, ni completo, ni en parte, ni en base64
 - **AND** sin credencial guardada `configurada` SHALL ser `false` con los demás campos en `null`
+
+#### Scenario: Envío con la credencial de la comunidad
+- **WHEN** el sistema envía un correo de una comunidad sin una credencial explícita
+- **THEN** el emisor SHALL resolver la `CredencialCorreoComunidad` de la comunidad y descifrar el secreto EN MEMORIA con `CLAVE_MAESTRA_SECRETOS`, sin que el llamador cambie de firma ni pase nada
+- **AND** la precedencia SHALL ser: credencial explícita > credencial de la comunidad > variable de entorno `SMTP_PASSWORD`
+- **AND** con credencial de la comunidad el correo SHALL autenticarse con ese usuario y NOT con `SMTP_PASSWORD`
+- **AND** si no hay credencial guardada, si la clave maestra falta o no es válida, o si el paquete guardado no se descifra, el envío SHALL intentarse con `SMTP_PASSWORD` y el motivo persistido SHALL decir `comunidad_sin_credencial`, `clave_maestra_ausente` o `credencial_ilegible`, respectivamente, sin lanzar y sin omitir el envío
 
 #### Scenario: Envío de prueba con el error exacto
 - **WHEN** la administración pide `POST /api/configuracion/correo/probar` (recurso `cf`, acción `editar`)
