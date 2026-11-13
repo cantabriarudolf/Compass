@@ -2,8 +2,9 @@
  * `_vista.ts` — la forma en que se devuelve un reparto por sector (F32).
  *
  * El alta y la lectura devuelven lo mismo: el reparto con su sector, su período,
- * su concepto, el monto total y el avalúo total PERSISTIDOS, sus cuotas y la lista
- * de unidades que quedaron FUERA. Los dos totales salen de la fila, no de una
+ * su concepto, el monto total y el avalúo total PERSISTIDOS, sus cuotas —cada una
+ * con el `CobroFI` que produjo (S7), que es la deuda que el sistema cobra— y la
+ * lista de unidades que quedaron FUERA. Los dos totales salen de la fila, no de una
  * segunda suma calculada al leer: son el snapshot del momento en que se emitió, y
  * una revalorización posterior de una unidad no reescribe lo emitido.
  *
@@ -24,6 +25,11 @@ export interface CuotaDelRepartoPersistida {
   readonly unidadId: string
   readonly avaluoUsado: number
   readonly monto: number
+  /**
+   * `CobroFI` que la cuota produjo (S7). `null` = la cuota quedó en cero y no hay
+   * deuda que cobrar, o el reparto se emitió antes de que existiera el vínculo.
+   */
+  readonly cobroId: string | null
 }
 
 /** Reparto ya persistido, en la forma mínima que la vista necesita. */
@@ -52,6 +58,8 @@ export interface CuotaEnLaVista {
   readonly unidadNumero: string | null
   readonly avaluoUsado: number
   readonly monto: number
+  /** La deuda que la cuota produjo: el `CobroFI` que el sistema cobra. */
+  readonly cobroId: string | null
 }
 
 /**
@@ -146,6 +154,9 @@ export function vistaDeReparto(
       unidadNumero: numeroPorUnidad.get(cuota.unidadId) ?? null,
       avaluoUsado: cuota.avaluoUsado,
       monto: cuota.monto,
+      // El vínculo a la deuda se lee de la fila, no se busca al armar la vista: si
+      // la cuota no produjo un cobro, no se inventa uno.
+      cobroId: cuota.cobroId ?? null,
     })),
     unidadesExcluidas: leerUnidadesExcluidas(reparto.unidadesExcluidas),
   }

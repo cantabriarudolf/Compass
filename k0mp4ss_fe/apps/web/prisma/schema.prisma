@@ -1799,10 +1799,17 @@ model CuotaRepartoSector {
   unidadId        String
   avaluoUsado     Float // avalúo con el que se calculó esta cuota (congelado)
   monto           Float
+  // El `CobroFI` que esta cuota produjo al emitir el reparto (S7): la deuda que el
+  // sistema cobra de verdad. Es el vínculo inverso del `CobroFI.origenRef`, que
+  // apunta al reparto. NULL = la cuota quedó en cero y no hay deuda que cobrar, o
+  // el reparto se emitió antes de que existiera esta columna: esos repartos no
+  // tienen deuda y no se reconstruye hacia atrás.
+  cobroId         String?
 
   @@unique([repartoSectorId, unidadId])
   @@index([comunidadId])
   @@index([unidadId])
+  @@index([cobroId])
   @@map("cuotas_reparto_sector")
 }
 

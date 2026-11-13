@@ -897,9 +897,37 @@ consultas y NUNCA SHALL devolver los de otra comunidad. NO SHALL existir PUT ni
 DELETE: un reparto emitido es la evidencia de lo que se le cargó a cada unidad y con
 qué avalúo, y se corrige emitiendo otro.
 
-Frontera deliberada: el reparto NO SHALL crear `CobroFI` ni modificar `EmisionGC`.
-Conectar la emisión de gasto común con el reparto por sector, cargar el avalúo por el
-maestro de unidades y la pantalla quedan declarados como deuda en
+La emisión SHALL dejar el reparto como **deuda cobrable del período**, no sólo como
+documento (S7): por cada unidad INCLUIDA SHALL crearse un `CobroFI` con el monto de
+su cuota, el período del reparto, el concepto `gasto_comun` del catálogo FI, el
+`origenRef` del reparto y el fondo de gasto común **activo** de la comunidad, en la
+MISMA transacción que el reparto y sus cuotas; y la cuota SHALL registrar el cobro
+que produjo (`CuotaRepartoSector.cobroId`), de modo que el documento y la deuda se
+señalen mutuamente. La suma de las deudas SHALL ser exactamente el monto total del
+reparto. La cuota que queda en CERO por el prorrateo NO SHALL producir un cobro: un
+cargo de monto base cero no es una deuda que se cobre, y su `cobroId` queda nulo.
+Todos los cobros SHALL llevar la misma fecha de cargo —el día de la emisión— y un
+vencimiento derivado del día de corte de pago de la comunidad, porque una deuda sin
+vencimiento no entra en mora.
+
+La unidad EXCLUIDA por falta de avalúo NO SHALL recibir deuda de ese reparto: no
+tiene cuota y no tiene cobro. La lista de `unidadesExcluidas` SHALL ser, por lo
+tanto, la lista de a quién no se le cobró ese gasto.
+
+Sin un fondo de gasto común activo la emisión NO SHALL escribir ninguna fila —ni el
+reparto, ni sus cuotas, ni las deudas, ni el evento— y SHALL responder 400 con el
+motivo: el fondo de imputación no se inventa y NO SHALL tomarse el de reserva.
+
+La emisión SHALL ser idempotente por la identidad del gasto repartido —comunidad,
+sector, período y concepto—: si ya existe un reparto con esa identidad, NO SHALL
+crearse otro ni otra deuda y la respuesta SHALL ser 409. Corregir un reparto es
+emitir otro con su propio concepto. `EmisionGC` NO SHALL modificarse: el reparto
+sigue siendo su propia emisión y las deudas del reparto se suman a la cobranza por
+sus propios `CobroFI`.
+
+Los repartos emitidos antes de que existiera la deuda NO SHALL reconstruirse hacia
+atrás: no tienen cobro y esa es la verdad de lo que pasó. La carga del avalúo por el
+maestro de unidades y la pantalla del reparto quedan declaradas como deuda en
 `specs/PENDIENTES-FUNCIONALIDAD.md` (F32).
 
 #### Scenario: El gasto del sector se reparte en proporción al avalúo
@@ -945,3 +973,33 @@ maestro de unidades y la pantalla quedan declarados como deuda en
   `fi:gasto_comun` —el residente no la tiene y el comité sólo lee—
 - **THEN** responden 401 y 403 respectivamente, y el intento rechazado no deja
   repartos ni cuotas
+
+#### Scenario: El reparto emitido queda como deuda cobrable del período
+- **WHEN** se emite el reparto de $1.000.000 de un sector con dos unidades incluidas
+  cuyas cuotas son $600.000 y $400.000
+- **THEN** quedan dos `CobroFI` del período, por $600.000 y $400.000, imputados al
+  fondo de gasto común activo de la comunidad y con `origenRef` al reparto, cada
+  cuota registra el cobro que produjo y la suma de las deudas es exactamente
+  $1.000.000
+
+#### Scenario: La unidad excluida no recibe deuda del reparto
+- **WHEN** el sector tiene una unidad sin avalúo declarado y se emite el reparto
+- **THEN** esa unidad no tiene cuota ni `CobroFI` de ese reparto: la lista de
+  excluidas es la lista de a quién no se le cobró
+
+#### Scenario: Sin fondo de gasto común activo no se emite ni se escribe
+- **WHEN** la comunidad no tiene un fondo de gasto común activo —o lo tiene
+  inactivo— y se intenta emitir el reparto
+- **THEN** responde 400 con el motivo y no queda reparto, ni cuota, ni cobro, ni
+  evento de auditoría
+
+#### Scenario: Emitir dos veces el mismo reparto no cobra dos veces
+- **WHEN** se emite otra vez un reparto con la misma comunidad, sector, período y
+  concepto que uno ya emitido
+- **THEN** responde 409, no se crea un segundo reparto ni una segunda deuda, y otro
+  concepto del mismo sector y período sí se emite con su propia deuda
+
+#### Scenario: Si la deuda no se puede escribir no queda el reparto
+- **WHEN** la escritura de los `CobroFI` falla dentro de la transacción de emisión
+- **THEN** no queda ni el reparto, ni sus cuotas, ni las deudas, ni el evento: la
+  emisión es todo o nada

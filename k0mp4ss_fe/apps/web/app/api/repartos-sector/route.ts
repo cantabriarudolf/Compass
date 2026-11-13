@@ -27,30 +27,45 @@
  *     y mostrarla como «excluida» sería mentir sobre lo que se emitió;
  *   · el reparto se persiste como documento emitido: monto total, avalúo total y
  *     cuotas con el avalúo CONGELADO (una revalorización posterior no reescribe lo
- *     emitido), con el evento `FI_REPARTO_SECTOR_EMITIDO` en la MISMA transacción.
+ *     emitido), con el evento `FI_REPARTO_SECTOR_EMITIDO` en la MISMA transacción;
+ *   · **el reparto es DEUDA, no sólo documento (S7)**: cada cuota —es decir, cada
+ *     unidad INCLUIDA— nace como un `CobroFI` del período, con el monto de la cuota,
+ *     imputado al fondo de gasto común ACTIVO de la comunidad y con `origenRef` al
+ *     reparto. Es el mismo mecanismo con el que la cuota de un convenio se vuelve
+ *     deuda (F29b): una deuda que el sistema no conoce no se cobra, y este trámite
+ *     existía para cargarle a un sector lo que le corresponde;
+ *   · la unidad EXCLUIDA por falta de avalúo no recibe deuda: se queda sin cuota y
+ *     sin cobro. La lista de excluidas no es un adorno de la pantalla, es a quién
+ *     NO se le cobra;
+ *   · sin un fondo de gasto común activo no hay dónde imputar la deuda y la emisión
+ *     responde 400 con el motivo: el fondo NO se inventa;
+ *   · emitir de nuevo el mismo gasto del mismo sector y período responde 409: el
+ *     reparto ya es deuda y reemitirlo la cobraría dos veces. Corregir un reparto es
+ *     emitir otro con su propio concepto.
  *
  * - POST: guard `fi:gasto_comun` + crear (la administración emite; el comité lo lee
- *   por `ver`). O existe el reparto con su avalúo total, sus cuotas y su evento, o
- *   no existe nada.
+ *   por `ver`). O existe el reparto con su avalúo total, sus cuotas, sus deudas y su
+ *   evento, o no existe nada.
  * - GET: guard `fi:gasto_comun` + ver. Acotado a la comunidad de la sesión —el
  *   `comunidadId` nunca viene del cliente— y leído en un número FIJO de consultas:
  *   los repartos con sus cuotas en una, el conteo en otra y los nombres (sector y
  *   número de unidad) en dos más para todo el listado.
  *
  * No hay PUT ni DELETE: un reparto emitido es la evidencia de lo que se le cargó a
- * cada unidad con qué avalúo. Corregirlo es emitir otro con su propio concepto.
- *
- * Frontera deliberada: este documento NO crea `CobroFI` ni modifica la emisión de
- * gasto común. Conectar la emisión con el reparto por sector es la unidad
- * siguiente, y queda declarado en `specs/PENDIENTES-FUNCIONALIDAD.md`.
+ * cada unidad con qué avalúo, y ahora también de lo que se le cobró. Corregirlo es
+ * emitir otro con su propio concepto.
  */
-import { RepartoSectorCreacionSchema } from "@/lib/schemas"
+import {
+  CobroFIEscrituraCompletaSchema,
+  RepartoSectorCreacionSchema,
+} from "@/lib/schemas"
 import { puede } from "@/lib/authz"
 import { prisma } from "@/lib/prisma"
 import { logger } from "@/lib/logger"
 import { generarId } from "@/lib/id-utils"
 import { registrarEventoAuditoria } from "@/lib/auditoria"
 import { avaluoTotalDeCuotas, repartirPorAvaluo } from "@/lib/reparto-sector"
+import { vencimientoDesdeDiaCorte } from "@/lib/finanzas-utils"
 import {
   jsonError,
   withComunidadScope,
@@ -103,8 +118,41 @@ export async function POST(req: Request): Promise<Response> {
   }
   const datos = parsed.data
 
+  // El fondo de imputación se resuelve ANTES de abrir la transacción que escribe,
+  // igual que la emisión de gasto común y que el convenio (F29b): sin un fondo de
+  // gasto común activo no hay dónde imputar la deuda de las cuotas, y no se escribe
+  // nada. El fondo NO se inventa ni se usa el de reserva: `gasto_comun` es el tipo
+  // que declara la comunidad para el gasto que se cobra.
+  const fondoGC = await prisma.fondoFI.findFirst({
+    where: {
+      comunidadId: scope.comunidadId,
+      tipo: "gasto_comun",
+      activo: true,
+    },
+    orderBy: { id: "asc" },
+    select: { id: true, nombre: true },
+  })
+  if (!fondoGC) {
+    return jsonError(
+      400,
+      "No se puede emitir el reparto: la comunidad no tiene un fondo de gasto común activo donde imputar las cuotas."
+    )
+  }
+
   const ahora = new Date()
   const repartoId = generarId("rse")
+  // El día de cargo es el de la emisión, y el vencimiento sale del día de corte que
+  // la comunidad declara en su configuración (con el mismo defecto que la multa IN):
+  // una deuda con vencimiento es la que puede entrar en mora y en cobranza.
+  const fechaCargo = ahora.toISOString().slice(0, 10)
+  const configuracion = await prisma.configuracionGlobal.findUnique({
+    where: { comunidadId: scope.comunidadId },
+    select: { diaCortePago: true },
+  })
+  const fechaVencimiento = vencimientoDesdeDiaCorte(
+    datos.periodo,
+    configuracion?.diaCortePago ?? 5
+  )
 
   try {
     // Todo lo que decide el reparto se lee y se escribe en UNA transacción: los
@@ -113,6 +161,8 @@ export async function POST(req: Request): Promise<Response> {
     const emision = await prisma.$transaction<
       | { readonly tipo: "sector_ausente" }
       | { readonly tipo: "sin_avaluo" }
+      | { readonly tipo: "cargo_invalido" }
+      | { readonly tipo: "ya_emitido" }
       | { readonly tipo: "emitido"; readonly vista: RepartoSectorEnLaVista }
     >(async (tx) => {
       const microSector = await tx.microSector.findFirst({
@@ -120,6 +170,21 @@ export async function POST(req: Request): Promise<Response> {
         select: { id: true, nombre: true },
       })
       if (!microSector) return { tipo: "sector_ausente" } as const
+
+      // IDEMPOTENCIA del cobro: el reparto se identifica por sector + período +
+      // concepto, que es lo que dice QUÉ gasto se repartió a QUIÉN. Si ya existe,
+      // su deuda ya está emitida y volver a emitirlo la cobraría dos veces. Se lee
+      // DENTRO de la transacción que escribe para no dejar la ventana abierta entre
+      // la lectura y el alta. Corregir un reparto es emitir otro con otro concepto.
+      const yaEmitido = await tx.repartoSector.count({
+        where: {
+          comunidadId: scope.comunidadId,
+          microSectorId: datos.microSectorId,
+          periodo: datos.periodo,
+          concepto: datos.concepto,
+        },
+      })
+      if (yaEmitido > 0) return { tipo: "ya_emitido" } as const
 
       // La unidad sin avalúo se trae igual: es la regla la que la deja fuera (y la
       // que decide que sin ninguna unidad con avalúo no hay reparto). Filtrarla en
@@ -142,6 +207,10 @@ export async function POST(req: Request): Promise<Response> {
       })
       if (!dictamen.permitido) return { tipo: "sin_avaluo" } as const
 
+      // Cada cuota lleva el id del cargo que produce: es el vínculo hacia la deuda.
+      // La cuota que quedó en CERO no produce deuda —un cobro con monto base cero no
+      // pasa el contrato FI y no es algo que se cobre— y su `cobroId` queda NULL; la
+      // cuota sigue en el reparto como evidencia de la parte que le tocó.
       const cuotas = dictamen.cuotas.map((cuota, indice) => ({
         id: generarId("cru", indice + 1),
         comunidadId: scope.comunidadId,
@@ -149,6 +218,7 @@ export async function POST(req: Request): Promise<Response> {
         unidadId: cuota.unidadId,
         avaluoUsado: cuota.avaluoUsado,
         monto: cuota.monto,
+        cobroId: cuota.monto > 0 ? generarId("cob", indice) : null,
       }))
       const avaluoTotal = avaluoTotalDeCuotas(dictamen.cuotas)
 
@@ -165,6 +235,45 @@ export async function POST(req: Request): Promise<Response> {
           unidadId: unidad.id,
           unidadNumero: unidad.numero,
         }))
+
+      // La deuda de cada unidad incluida, con la forma que ya usa la emisión de
+      // gasto común y la cuota del convenio: concepto del catálogo FI
+      // (`gasto_comun`), el período del reparto, el fondo de gasto común activo y
+      // `origenRef` al reparto. El detalle de una línea repite el monto de la cuota
+      // para que la suma del detalle cierre con el monto base (S5).
+      const cargos: Record<string, unknown>[] = []
+      for (const cuota of cuotas) {
+        if (cuota.cobroId === null) continue
+        const candidato = {
+          id: cuota.cobroId,
+          unidadId: cuota.unidadId,
+          periodo: datos.periodo,
+          concepto: "gasto_comun",
+          origenModulo: "FI",
+          origenRef: repartoId,
+          fondoId: fondoGC.id,
+          descripcion: `Reparto por sector ${microSector.nombre} ${datos.periodo}: ${datos.concepto}`,
+          montoBase: cuota.monto,
+          lineas: [
+            { concepto: "gasto_comun", monto: cuota.monto, fondoId: fondoGC.id },
+          ],
+          fechaCargo,
+          fechaVencimiento,
+          moras: [],
+          pagos: [],
+          diferencias: [],
+        }
+        const validacion = CobroFIEscrituraCompletaSchema.safeParse(candidato)
+        if (!validacion.success) {
+          // El cargo lo arma esta ruta, no el cliente: llegar acá es un defecto del
+          // contrato interno, y no se persiste a ciegas.
+          return { tipo: "cargo_invalido" } as const
+        }
+        cargos.push({
+          ...(validacion.data as unknown as Record<string, unknown>),
+          comunidadId: scope.comunidadId,
+        })
+      }
 
       const creado = await tx.repartoSector.create({
         data: {
@@ -187,6 +296,14 @@ export async function POST(req: Request): Promise<Response> {
 
       await tx.cuotaRepartoSector.createMany({ data: cuotas })
 
+      // La deuda, en la MISMA transacción: un reparto sin sus cobros sería el
+      // documento de un cobro que la contabilidad no conoce, que es exactamente lo
+      // que este trámite dejó de ser. Se escriben DESPUÉS del reparto y sus cuotas
+      // para que una falla acá sólo pueda terminar en la reversión de todo.
+      if (cargos.length > 0) {
+        await tx.cobroFI.createMany({ data: cargos as never })
+      }
+
       const numeroPorUnidad = new Map(
         unidades.map((unidad) => [unidad.id, unidad.numero])
       )
@@ -200,7 +317,9 @@ export async function POST(req: Request): Promise<Response> {
           categoria: "FI",
           tipoAccion: "FI_REPARTO_SECTOR_EMITIDO",
           referenciaId: creado.id,
-          descripcion: `Reparto del sector ${microSector.nombre} para ${datos.periodo} (${datos.concepto}): ${pesos(datos.montoTotal)} entre ${cuotas.length} unidad(es) con avalúo fiscal declarado, avalúo total ${pesos(avaluoTotal)}.`,
+          // Nombra el fondo y cuenta los cargos: el evento dice dónde quedó la
+          // deuda, no sólo que el reparto existe.
+          descripcion: `Reparto del sector ${microSector.nombre} para ${datos.periodo} (${datos.concepto}): ${pesos(datos.montoTotal)} entre ${cuotas.length} unidad(es) con avalúo fiscal declarado, avalúo total ${pesos(avaluoTotal)}; ${cargos.length} cuota(s) imputadas como deuda del período en el fondo ${fondoGC.nombre}.`,
         },
         tx
       )
@@ -224,6 +343,21 @@ export async function POST(req: Request): Promise<Response> {
       return jsonError(
         400,
         "No se puede emitir el reparto: el sector no tiene unidades con avalúo fiscal declarado, y sin avalúo no se reparte entre las unidades del sector."
+      )
+    }
+    if (emision.tipo === "cargo_invalido") {
+      // El cargo lo arma esta ruta, no el cliente: llegar acá es un defecto del
+      // contrato interno. La transacción no escribió nada.
+      logger.error(
+        { repartoId },
+        "[api/repartos-sector] el cargo FI de una cuota no pasó el contrato"
+      )
+      return jsonError(500, "Error interno del servidor.")
+    }
+    if (emision.tipo === "ya_emitido") {
+      return jsonError(
+        409,
+        "Ya se emitió un reparto de este gasto en este sector para el período: emitirlo otra vez cobraría dos veces la misma cuota."
       )
     }
     return Response.json(emision.vista, { status: 201 })

@@ -1429,11 +1429,13 @@ model EmisionGC {
   periodo            String
   modo               String
   gastoTotal         Float
-  // Presupuesto APROBADO y VIGENTE que autorizó la emisión (F31 · V1). Es una
-  // FK blanda, como el resto de las referencias entre módulos: el presupuesto
-  // es un documento emitido que no se edita ni se borra, y la emisión guarda
-  // también la huella de sus partidas en `gastoTotal`. NULL = emisión anterior
-  // a esta columna: no tuvo presupuesto y no se inventa uno hacia atrás.
+  // Presupuesto APROBADO y VIGENTE contra el que se CONTRASTÓ la emisión (F31).
+  // Ojo: el presupuesto es estimativo (Ley 21.442 art. 22) y NO es el monto que se
+  // cobra — el cobro es por el gasto efectivamente devengado, que vive en
+  // `gastoTotal`. Esta columna es la traza del contraste: contra qué presupuesto
+  // se comparó el mes y cuánto se apartó. FK blanda, como el resto de las
+  // referencias entre módulos. NULL = emisión anterior a esta columna o emitida
+  // sin presupuesto aprobado; en ningún caso se inventa uno hacia atrás.
   presupuestoId      String?
   lineas             Json // LineaEmisionGC[]
   fondoReservaAporte Json?
@@ -1802,10 +1804,17 @@ model CuotaRepartoSector {
   unidadId        String
   avaluoUsado     Float // avalúo con el que se calculó esta cuota (congelado)
   monto           Float
+  // El `CobroFI` que esta cuota produjo al emitir el reparto (S7): la deuda que el
+  // sistema cobra de verdad. Es el vínculo inverso del `CobroFI.origenRef`, que
+  // apunta al reparto. NULL = la cuota quedó en cero y no hay deuda que cobrar, o
+  // el reparto se emitió antes de que existiera esta columna: esos repartos no
+  // tienen deuda y no se reconstruye hacia atrás.
+  cobroId         String?
 
   @@unique([repartoSectorId, unidadId])
   @@index([comunidadId])
   @@index([unidadId])
+  @@index([cobroId])
   @@map("cuotas_reparto_sector")
 }
 
