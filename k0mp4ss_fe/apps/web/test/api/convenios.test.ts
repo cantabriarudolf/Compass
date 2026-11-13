@@ -23,11 +23,35 @@
  *      cuota 1..N (ninguno por la cuota 0), imputado al fondo de gasto común
  *      activo, con su evento `FI_CONVENIO_CARGOS`; sin ese fondo el alta es 400 y
  *      no escribe nada, y un fallo a mitad de la transacción revierte todo.
+ *
+ * V5 — el convenio firmado a mano entra al archivo legal (F29):
+ *
+ *   8. el PDF que la administración escanea se sube al depósito PRIVADO, el
+ *      `Documento` legal guarda los metadatos reales del archivo (tamaño y hash
+ *      de los BYTES) y el convenio queda apuntando a él, con la constancia de
+ *      entrega al deudor en `pendiente` (no hay envío cursado) y el evento
+ *      `FI_CONVENIO_DOCUMENTO_SUBIDO`;
+ *   9. la descarga devuelve los MISMOS bytes y el mismo sha256 que se
+ *      archivaron, sólo para `fi:cobranza` ver (el residente recibe 403: el
+ *      papel lleva el nombre del deudor y su deuda);
+ *  10. un archivo que no es PDF es 400 literal y no toca ni la base ni el
+ *      depósito, y el papel se sube UNA sola vez (el segundo intento es 409 y
+ *      deja el primero intacto);
+ *  11. si la subida falla no se escribe NADA, y si la transacción falla después
+ *      de subir, el archivo se BORRA del depósito: no quedan huérfanos.
+ *
+ * Las llamadas al depósito NO salen a internet: el archivo habla con un servidor
+ * HTTP falso en `127.0.0.1` que exige el token, la versión de API y el acceso
+ * privado, igual que el servidor SMTP de prueba (`test/lib/servidor-smtp-falso.ts`).
  */
-import { describe, it, expect, beforeAll, afterAll, vi } from "vitest"
+import { createHash } from "node:crypto"
+import { createServer, type Server, type ServerResponse } from "node:http"
+import { describe, it, expect, beforeAll, beforeEach, afterAll, vi } from "vitest"
 import { NextRequest } from "next/server"
+import { http, passthrough } from "msw"
 import { prisma } from "@/lib/prisma"
 import { generarId } from "@/lib/id-utils"
+import { server as servidorMSW } from "../setup"
 
 const state = vi.hoisted(() => ({ cookie: "" }))
 vi.mock("next/headers", () => ({
@@ -78,6 +102,37 @@ const MENSAJE_SIN_FONDO =
 
 /** Convenio de la OTRA comunidad: la lectura del scope no puede verlo. */
 const CONVENIO_COM_B = "conv-convenio-b"
+
+// ── V5: el papel firmado ────────────────────────────────────────────────────
+
+/** Unidad del convenio cuyo PDF firmado se archiva. */
+const U_FIRMA = "conv-u-firma"
+/** Unidad del convenio que se usa para las subidas que fallan. */
+const U_FIRMA_FALLA = "conv-u-firma-falla"
+/** Convenio (comunidad A) que recibe el papel firmado en el primer caso. */
+const CONVENIO_PARA_FIRMAR = "conv-convenio-para-firmar"
+/** Convenio (comunidad A) que nunca queda con documento: subidas fallidas. */
+const CONVENIO_DE_LA_SUBIDA_QUE_FALLA = "conv-convenio-subida-falla"
+
+/** Token del depósito: texto inventado, nunca una credencial real. */
+const TOKEN_DEL_DEPOSITO = "token-de-prueba-del-deposito"
+/** Versión de la API del depósito que el servidor falso exige (la de Vercel Blob). */
+const VERSION_API_DEL_DEPOSITO = "12"
+
+/**
+ * Mensajes LITERALES de las dos rutas del documento firmado.
+ *
+ * Van como literales en `jsonError` y se comparan acá tal cual: el contrato del
+ * archivo no es «algo salió mal», es qué pasó con el papel.
+ */
+const MENSAJE_NO_ES_PDF =
+  "El archivo no es un PDF: el convenio se firma a mano y la administración lo escanea en PDF, así que un archivo con otro formato no entra al archivo legal."
+const MENSAJE_YA_TIENE_DOCUMENTO =
+  "El convenio ya tiene su documento firmado: el papel firmado se sube una sola vez."
+const MENSAJE_SUBIDA_FALLIDA =
+  "No se pudo guardar el archivo en el depósito de documentos: no se escribió ninguna fila."
+const MENSAJE_SIN_DOCUMENTO =
+  "El convenio no tiene documento firmado: primero se sube el papel que la administración escaneó."
 
 /** Forma de la vista que devuelven las tres rutas (altas y lectura). */
 interface VistaConvenio {
@@ -141,6 +196,203 @@ function datosUnidad(id: string, comunidadId: string, numero: string) {
   }
 }
 
+/** Documento firmado tal como lo devuelve el alta (201). */
+interface VistaDocumentoFirmado {
+  id: string
+  convenioId: string
+  hash: string
+  tamanoBytes: number
+  archivoNombre: string
+  constancia: {
+    id: string
+    estado: string
+    personaId: string
+    motivo: string
+  }
+}
+
+/**
+ * PDF mínimo REAL: cabecera `%PDF-1.4` con su marca binaria, catálogo, una página
+ * y `%%EOF`.
+ *
+ * La ruta no parsea el PDF —lo que se archiva y se sirve son los BYTES y su
+ * sha256—, así que el documento sólo tiene que ser un PDF de verdad en lo
+ * observable: la cabecera mágica que la ruta verifica y el nombre que declara.
+ * Cada llamada lleva una marca distinta para que dos PDF tengan bytes distintos.
+ */
+function pdfMinimo(marca: string): Buffer {
+  const lineas = [
+    "%PDF-1.4",
+    `% ${marca}`,
+    "1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj",
+    "2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj",
+    "3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 300 400]>>endobj",
+    "trailer<</Root 1 0 R>>",
+    "startxref",
+    "0",
+    "%%EOF",
+    "",
+  ]
+  return Buffer.from(lineas.join("\n"), "latin1")
+}
+
+/** Objeto guardado por el depósito de prueba, con los bytes exactos recibidos. */
+interface ObjetoDelDeposito {
+  bytes: Buffer
+  tipoMime: string
+}
+
+/** Una petición recibida por el depósito de prueba, para auditar cabeceras. */
+interface PeticionAlDeposito {
+  metodo: string
+  pathname: string
+  autorizacion: string
+  version: string
+  acceso: string
+}
+
+/** Modos del depósito falso: lo que el test necesita provocar. */
+type ModoDepositoFalso = "aceptar" | "rechazar_subida" | "rechazar_descarga"
+
+interface ServidorDepositoFalso {
+  readonly baseUrl: string
+  readonly objetos: Map<string, ObjetoDelDeposito>
+  readonly peticiones: PeticionAlDeposito[]
+  readonly borrados: string[]
+  modo: ModoDepositoFalso
+  cerrar(): Promise<void>
+}
+
+/**
+ * Servidor del depósito de archivos EN MEMORIA, escuchando sólo en `127.0.0.1`
+ * con puerto efímero: ninguna conexión sale de loopback y el token es el que el
+ * propio test decide (nunca una credencial real).
+ *
+ * Habla lo justo de la API REST del store privado que usa `lib/almacen-documentos`:
+ * `PUT` (subir), `GET` (descargar) y `DELETE` (borrar). Exige el `authorization`
+ * con su token, `x-api-version: 12` y, en la subida, `x-vercel-blob-access:
+ * private`: si el código dejara de declarar el acceso privado o mandara otra
+ * versión de API, el test lo dice en vez de fingir que guardó.
+ */
+async function iniciarServidorDepositoFalso(): Promise<ServidorDepositoFalso> {
+  const objetos = new Map<string, ObjetoDelDeposito>()
+  const peticiones: PeticionAlDeposito[] = []
+  const borrados: string[] = []
+  const estado: { modo: ModoDepositoFalso; baseUrl: string } = {
+    modo: "aceptar",
+    baseUrl: "",
+  }
+
+  const responder = (res: ServerResponse, status: number, cuerpo: unknown): void => {
+    const texto = JSON.stringify(cuerpo)
+    res.writeHead(status, {
+      "content-type": "application/json",
+      "content-length": String(Buffer.byteLength(texto)),
+    })
+    res.end(texto)
+  }
+
+  const servidor: Server = createServer((req, res) => {
+    const trozos: Buffer[] = []
+    req.on("data", (trozo: Buffer) => trozos.push(Buffer.from(trozo)))
+    req.on("end", () => {
+      const url = new URL(req.url ?? "/", "http://127.0.0.1")
+      const pathname = decodeURIComponent(url.pathname.replace(/^\//, ""))
+      const autorizacion = String(req.headers.authorization ?? "")
+      const version = String(req.headers["x-api-version"] ?? "")
+      const acceso = String(req.headers["x-vercel-blob-access"] ?? "")
+      const metodo = req.method ?? ""
+      peticiones.push({ metodo, pathname, autorizacion, version, acceso })
+
+      if (autorizacion !== `Bearer ${TOKEN_DEL_DEPOSITO}`) {
+        responder(res, 403, { error: "el depósito de prueba exige su token" })
+        return
+      }
+      if (version !== VERSION_API_DEL_DEPOSITO) {
+        responder(res, 400, { error: "el depósito de prueba exige x-api-version 12" })
+        return
+      }
+
+      if (metodo === "PUT") {
+        if (estado.modo === "rechazar_subida") {
+          responder(res, 500, { error: "el depósito no pudo guardar" })
+          return
+        }
+        if (acceso !== "private") {
+          responder(res, 400, { error: "el depósito de prueba es privado" })
+          return
+        }
+        const tipoMime = String(req.headers["x-content-type"] ?? "application/octet-stream")
+        objetos.set(pathname, { bytes: Buffer.concat(trozos), tipoMime })
+        responder(res, 200, {
+          pathname,
+          url: `${estado.baseUrl}/${pathname}`,
+          contentType: tipoMime,
+        })
+        return
+      }
+
+      if (metodo === "GET") {
+        if (estado.modo === "rechazar_descarga") {
+          responder(res, 500, { error: "el depósito no pudo leer el archivo" })
+          return
+        }
+        const objeto = objetos.get(pathname)
+        if (!objeto) {
+          responder(res, 404, { error: "el archivo no existe en el depósito" })
+          return
+        }
+        res.writeHead(200, {
+          "content-type": objeto.tipoMime,
+          "content-length": String(objeto.bytes.length),
+        })
+        res.end(objeto.bytes)
+        return
+      }
+
+      if (metodo === "DELETE") {
+        objetos.delete(pathname)
+        borrados.push(pathname)
+        responder(res, 200, { deleted: true, pathname })
+        return
+      }
+
+      responder(res, 405, { error: "método no soportado por el depósito de prueba" })
+    })
+  })
+
+  const puerto = await new Promise<number>((resolver, rechazar) => {
+    servidor.once("error", rechazar)
+    servidor.listen(0, "127.0.0.1", () => {
+      const direccion = servidor.address()
+      if (direccion === null || typeof direccion === "string") {
+        rechazar(new Error("el depósito de prueba no obtuvo un puerto TCP"))
+        return
+      }
+      resolver(direccion.port)
+    })
+  })
+  estado.baseUrl = `http://127.0.0.1:${puerto}`
+
+  return {
+    get baseUrl(): string {
+      return estado.baseUrl
+    },
+    get modo(): ModoDepositoFalso {
+      return estado.modo
+    },
+    set modo(valor: ModoDepositoFalso) {
+      estado.modo = valor
+    },
+    objetos,
+    peticiones,
+    borrados,
+    async cerrar(): Promise<void> {
+      await new Promise<void>((resolver) => servidor.close(() => resolver()))
+    },
+  }
+}
+
 describe("/api/convenios — convenio de pago con acuerdo del Comité (F29)", () => {
   const cargaModulos = async () => ({
     coleccion: await import("@/app/api/convenios/route"),
@@ -193,6 +445,8 @@ describe("/api/convenios — convenio de pago con acuerdo del Comité (F29)", ()
     for (const u of [
       datosUnidad(U1, COM_A, "101"),
       datosUnidad(U2, COM_A, "102"),
+      datosUnidad(U_FIRMA, COM_A, "103"),
+      datosUnidad(U_FIRMA_FALLA, COM_A, "104"),
       datosUnidad(U_OTRA, COM_B, "901"),
       datosUnidad(U_OTRA_PAGO, COM_B, "902"),
     ]) {
@@ -889,4 +1143,530 @@ describe("/api/convenios — convenio de pago con acuerdo del Comité (F29)", ()
       ).toBe(centavos(400_000))
     })
   })
+
+  // ── V5: el papel firmado a mano entra al archivo legal ────────────────────
+  describe("/api/convenios/documento — el papel firmado se archiva y se sirve", () => {
+      let deposito: ServidorDepositoFalso
+      const entornoPrevio = {
+        token: process.env.BLOB_READ_WRITE_TOKEN,
+        base: process.env.BLOB_API_BASE_URL,
+      }
+
+      /** Alta del papel firmado por la API (el cuerpo que arma la pantalla). */
+      async function POST_DOCUMENTO(body: Record<string, unknown>): Promise<Response> {
+        const { POST } = await import("@/app/api/convenios/documento/route")
+        return POST(
+          new NextRequest("http://localhost/api/convenios/documento", {
+            method: "POST",
+            body: JSON.stringify(body),
+            headers: { "content-type": "application/json" },
+          })
+        )
+      }
+
+      /** Descarga del papel firmado por la API. */
+      async function GET_DOCUMENTO(convenioId: string): Promise<Response> {
+        const { GET } = await import("@/app/api/convenios/documento/route")
+        return GET(
+          new NextRequest(
+            `http://localhost/api/convenios/documento?convenioId=${encodeURIComponent(convenioId)}`,
+            { method: "GET" }
+          )
+        )
+      }
+
+      /** Documento archivado del convenio que ya lo tiene (caso 1). */
+      async function documentoDelConvenio(convenioId: string) {
+        const convenio = await prisma.convenioPago.findUnique({ where: { id: convenioId } })
+        if (!convenio?.documentoId) throw new Error("el convenio no tiene documento archivado")
+        const documento = await prisma.documento.findUnique({ where: { id: convenio.documentoId } })
+        if (!documento) throw new Error("el documento archivado no está en la base")
+        return documento
+      }
+
+      beforeAll(async () => {
+        deposito = await iniciarServidorDepositoFalso()
+        // El único depósito que el código puede ver en la suite: 127.0.0.1.
+        process.env.BLOB_READ_WRITE_TOKEN = TOKEN_DEL_DEPOSITO
+        process.env.BLOB_API_BASE_URL = deposito.baseUrl
+
+        // La corrida arranca sin documentos del archivo en estas comunidades: los
+        // casos de abajo cuentan filas.
+        await prisma.envioDocumento.deleteMany({
+          where: { comunidadId: { in: [COM_A, COM_B] } },
+        })
+        await prisma.documento.deleteMany({
+          where: { comunidadId: { in: [COM_A, COM_B] } },
+        })
+        await prisma.eventoAuditoria.deleteMany({
+          where: {
+            comunidadId: { in: [COM_A, COM_B] },
+            tipoAccion: "FI_CONVENIO_DOCUMENTO_SUBIDO",
+          },
+        })
+
+        // Dos convenios vigentes SIN documento firmado, escritos directo en la base:
+        // la subida del papel no depende de cómo se suscribió el convenio.
+        for (const convenio of [
+          {
+            id: CONVENIO_PARA_FIRMAR,
+            unidadId: U_FIRMA,
+          },
+          {
+            id: CONVENIO_DE_LA_SUBIDA_QUE_FALLA,
+            unidadId: U_FIRMA_FALLA,
+          },
+        ]) {
+          const datos = {
+            comunidadId: COM_A,
+            unidadId: convenio.unidadId,
+            personaId: P1,
+            acuerdoId: ACUERDO_OK,
+            montoTotal: 600_000,
+            numeroCuotas: 2,
+            fechaSuscripcion: new Date("2026-03-31T12:00:00.000Z"),
+            primeraCuota: 200_000,
+            estado: "vigente",
+            creadoPor: "conv-usuario-admin",
+            documentoId: null,
+          }
+          await prisma.convenioPago.upsert({
+            where: { id: convenio.id },
+            update: datos,
+            create: { id: convenio.id, ...datos },
+          })
+        }
+      }, 30_000)
+
+      beforeEach(() => {
+        // `test/setup.ts` monta msw y rechaza toda petición no declarada. Las del
+        // depósito salen de verdad, pero sólo hacia 127.0.0.1: se dejan pasar.
+        servidorMSW.use(http.all(/^http:\/\/127\.0\.0\.1:\d+\//, () => passthrough()))
+      })
+
+      afterAll(async () => {
+        try {
+          await deposito.cerrar()
+          if (entornoPrevio.token === undefined) delete process.env.BLOB_READ_WRITE_TOKEN
+          else process.env.BLOB_READ_WRITE_TOKEN = entornoPrevio.token
+          if (entornoPrevio.base === undefined) delete process.env.BLOB_API_BASE_URL
+          else process.env.BLOB_API_BASE_URL = entornoPrevio.base
+
+          await prisma.envioDocumento.deleteMany({
+            where: { comunidadId: { in: [COM_A, COM_B] } },
+          })
+          await prisma.documento.deleteMany({
+            where: { comunidadId: { in: [COM_A, COM_B] } },
+          })
+          await prisma.eventoAuditoria.deleteMany({
+            where: {
+              comunidadId: { in: [COM_A, COM_B] },
+              tipoAccion: "FI_CONVENIO_DOCUMENTO_SUBIDO",
+            },
+          })
+        } catch {
+          // intencional: limpieza best-effort, la base de la suite es descartable
+        }
+      }, 30_000)
+
+      it("sube el PDF firmado: 201 con el documento legal real, el convenio apuntando y la constancia en pendiente", async () => {
+        const pdf = pdfMinimo("convenio firmado de la unidad 103")
+        const hashEsperado = createHash("sha256").update(pdf).digest("hex")
+
+        let vista: VistaDocumentoFirmado | null = null
+        await conSesion(EMAIL_ADMIN, async () => {
+          const res = await POST_DOCUMENTO({
+            convenioId: CONVENIO_PARA_FIRMAR,
+            nombreArchivo: "convenio-firmado-101.pdf",
+            contenidoBase64: pdf.toString("base64"),
+          })
+          expect(res.status).toBe(201)
+          vista = (await res.json()) as VistaDocumentoFirmado
+        })
+        const creado = vista!
+
+        // La respuesta dice lo que el archivo guardó: id, hash y tamaño REALES.
+        expect(creado.convenioId).toBe(CONVENIO_PARA_FIRMAR)
+        expect(creado.hash).toBe(hashEsperado)
+        expect(creado.tamanoBytes).toBe(pdf.length)
+        expect(creado.archivoNombre).toBe("convenio-firmado-101.pdf")
+
+        const documento = await prisma.documento.findUnique({ where: { id: creado.id } })
+        expect(documento).not.toBeNull()
+        expect(documento?.comunidadId).toBe(COM_A)
+        expect(documento?.naturaleza).toBe("legal")
+        expect(documento?.tipoDocumental).toBe("otros")
+        expect(documento?.glosa).toContain("103")
+        expect(documento?.archivoNombre).toBe("convenio-firmado-101.pdf")
+        expect(documento?.archivoTipoMime).toBe("application/pdf")
+        expect(documento?.archivoTamanoKB).toBe(
+          Math.round((pdf.length / 1024) * 10) / 10
+        )
+        expect(documento?.hash).toBe(hashEsperado)
+        // Lo archivado es la RUTA del depósito privado, nunca un enlace público.
+        expect(documento?.archivoUrl).not.toMatch(/^https?:/i)
+        expect(documento?.archivoUrl?.startsWith("convenios/")).toBe(true)
+        expect(documento?.archivoUrl).toContain(CONVENIO_PARA_FIRMAR)
+        // La referencia auténtica es el acuerdo del Comité que autoriza el convenio.
+        expect(documento?.referenciaAutentica).toContain("AD-2026-8001")
+        // La vigencia del papel es la fecha de suscripción del convenio.
+        expect(documento?.vigenteDesde).toBe("2026-03-31")
+        expect(documento?.version).toBeGreaterThanOrEqual(1)
+
+        // Los bytes que recibió el depósito son exactamente los del PDF, en la ruta
+        // que quedó archivada, y con acceso privado.
+        const guardado = deposito.objetos.get(documento!.archivoUrl)
+        expect(guardado).toBeDefined()
+        expect(Buffer.compare(guardado!.bytes, pdf)).toBe(0)
+        const subida = deposito.peticiones.find((peticion) => peticion.metodo === "PUT")
+        expect(subida?.pathname).toBe(documento!.archivoUrl)
+        expect(subida?.acceso).toBe("private")
+        expect(subida?.version).toBe(VERSION_API_DEL_DEPOSITO)
+
+        // El convenio queda apuntando a su papel.
+        const convenio = await prisma.convenioPago.findUnique({
+          where: { id: CONVENIO_PARA_FIRMAR },
+        })
+        expect(convenio?.documentoId).toBe(creado.id)
+
+        // La constancia de entrega al DEUDOR nace `pendiente`: no se cursó ningún envío.
+        const envios = await prisma.envioDocumento.findMany({
+          where: { documentoId: creado.id },
+        })
+        expect(envios).toHaveLength(1)
+        const envio = envios[0]!
+        expect(envio.comunidadId).toBe(COM_A)
+        expect(envio.personaId).toBe(P1)
+        expect(envio.canal).toBe("email")
+        expect(envio.estado).toBe("pendiente")
+        expect(envio.notificacionId).toBeNull()
+        expect(envio.claveEnvio).toBe(`${creado.id}:${P1}:email`)
+        expect(envio.motivo).toContain("no se cursó")
+        expect(creado.constancia).toEqual({
+          id: envio.id,
+          estado: "pendiente",
+          personaId: P1,
+          motivo: envio.motivo,
+        })
+
+        // El papel queda auditado con el folio que lo autoriza.
+        const evento = await prisma.eventoAuditoria.findFirst({
+          where: {
+            comunidadId: COM_A,
+            tipoAccion: "FI_CONVENIO_DOCUMENTO_SUBIDO",
+            referenciaId: CONVENIO_PARA_FIRMAR,
+          },
+        })
+        expect(evento).not.toBeNull()
+        expect(evento?.categoria).toBe("FI")
+        expect(evento?.descripcion).toContain(creado.id)
+        expect(evento?.descripcion).toContain("AD-2026-8001")
+      })
+
+      it("la descarga devuelve los MISMOS bytes y el mismo sha256 que se archivaron", async () => {
+        const documento = await documentoDelConvenio(CONVENIO_PARA_FIRMAR)
+        const guardado = deposito.objetos.get(documento.archivoUrl)
+        expect(guardado).toBeDefined()
+
+        // El Comité AUDITA la cobranza: `fi:cobranza` ver alcanza para leer el papel.
+        await conSesion(EMAIL_COMITE, async () => {
+          const res = await GET_DOCUMENTO(CONVENIO_PARA_FIRMAR)
+          expect(res.status).toBe(200)
+          expect(res.headers.get("content-type")).toBe("application/pdf")
+          expect(res.headers.get("content-disposition")).toBe(
+            'attachment; filename="convenio-firmado-101.pdf"'
+          )
+          // `no-store`: es el papel de un deudor, no un recurso cacheable.
+          expect(res.headers.get("cache-control")).toBe("no-store")
+          expect(res.headers.get("content-length")).toBe(String(guardado!.bytes.length))
+
+          const servidos = Buffer.from(await res.arrayBuffer())
+          // Byte por byte contra lo que el depósito tiene guardado...
+          expect(Buffer.compare(servidos, guardado!.bytes)).toBe(0)
+          // ...y el sha256 servido es el hash que el archivo legal declara.
+          expect(createHash("sha256").update(servidos).digest("hex")).toBe(documento.hash)
+          expect(servidos.toString("latin1").startsWith("%PDF-")).toBe(true)
+        })
+      })
+
+      it("un archivo que no es PDF es 400 literal y no toca ni la base ni el depósito", async () => {
+        const documentosAntes = await prisma.documento.count({
+          where: { comunidadId: COM_A },
+        })
+        const enviosAntes = await prisma.envioDocumento.count({
+          where: { comunidadId: COM_A },
+        })
+        const eventosAntes = await prisma.eventoAuditoria.count({
+          where: { comunidadId: COM_A, tipoAccion: "FI_CONVENIO_DOCUMENTO_SUBIDO" },
+        })
+        const peticionesAntes = deposito.peticiones.length
+
+        // Un escaneo JPEG: los vecinos SOLO pueden subir PDF, así que este archivo no
+        // entra al archivo legal y no hay nada que rechazar más tarde.
+        const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46])
+
+        await conSesion(EMAIL_ADMIN, async () => {
+          const res = await POST_DOCUMENTO({
+            convenioId: CONVENIO_DE_LA_SUBIDA_QUE_FALLA,
+            nombreArchivo: "escaneo.jpg",
+            contenidoBase64: jpeg.toString("base64"),
+          })
+          expect(res.status).toBe(400)
+          expect(((await res.json()) as { error: string }).error).toBe(MENSAJE_NO_ES_PDF)
+        })
+
+        expect(await prisma.documento.count({ where: { comunidadId: COM_A } })).toBe(
+          documentosAntes
+        )
+        expect(await prisma.envioDocumento.count({ where: { comunidadId: COM_A } })).toBe(
+          enviosAntes
+        )
+        expect(
+          await prisma.eventoAuditoria.count({
+            where: { comunidadId: COM_A, tipoAccion: "FI_CONVENIO_DOCUMENTO_SUBIDO" },
+          })
+        ).toBe(eventosAntes)
+        expect(
+          (
+            await prisma.convenioPago.findUnique({
+              where: { id: CONVENIO_DE_LA_SUBIDA_QUE_FALLA },
+            })
+          )?.documentoId
+        ).toBeNull()
+        // El depósito no se tocó: un archivo que no es PDF no se sube ni para
+        // descubrir después que no se podía archivar.
+        expect(deposito.peticiones.length).toBe(peticionesAntes)
+      })
+
+      it("el papel firmado se sube UNA sola vez: el segundo intento es 409 y el primero queda intacto", async () => {
+        const antes = await documentoDelConvenio(CONVENIO_PARA_FIRMAR)
+        const objetosAntes = deposito.objetos.size
+        const enviosAntes = await prisma.envioDocumento.count({
+          where: { comunidadId: COM_A },
+        })
+
+        // Un PDF con OTROS bytes: si la ruta lo aceptara, el hash archivado dejaría de
+        // ser el de la firma que el deudor puso en el papel.
+        const otroPdf = pdfMinimo("una segunda firma que no corresponde")
+        await conSesion(EMAIL_ADMIN, async () => {
+          const res = await POST_DOCUMENTO({
+            convenioId: CONVENIO_PARA_FIRMAR,
+            nombreArchivo: "convenio-firmado-101-v2.pdf",
+            contenidoBase64: otroPdf.toString("base64"),
+          })
+          expect(res.status).toBe(409)
+          expect(((await res.json()) as { error: string }).error).toBe(
+            MENSAJE_YA_TIENE_DOCUMENTO
+          )
+        })
+
+        const despues = await documentoDelConvenio(CONVENIO_PARA_FIRMAR)
+        expect(despues.id).toBe(antes.id)
+        expect(despues.hash).toBe(antes.hash)
+        expect(despues.archivoUrl).toBe(antes.archivoUrl)
+        expect(despues.version).toBe(antes.version)
+        // El depósito no ganó un segundo objeto ni cambió el de la firma.
+        expect(deposito.objetos.size).toBe(objetosAntes)
+        expect(
+          createHash("sha256")
+            .update(deposito.objetos.get(antes.archivoUrl)!.bytes)
+            .digest("hex")
+        ).toBe(antes.hash)
+        expect(
+          await prisma.envioDocumento.count({ where: { comunidadId: COM_A } })
+        ).toBe(enviosAntes)
+      })
+
+      it("el convenio de otra comunidad es 404 en las dos rutas y no deja filas", async () => {
+        await conSesion(EMAIL_ADMIN, async () => {
+          const subida = await POST_DOCUMENTO({
+            convenioId: CONVENIO_COM_B,
+            nombreArchivo: "convenio-firmado-901.pdf",
+            contenidoBase64: pdfMinimo("convenio de la otra comunidad").toString("base64"),
+          })
+          expect(subida.status).toBe(404)
+          expect(((await subida.json()) as { error: string }).error).toBe(
+            "Convenio no encontrado."
+          )
+
+          const descarga = await GET_DOCUMENTO(CONVENIO_COM_B)
+          expect(descarga.status).toBe(404)
+          expect(((await descarga.json()) as { error: string }).error).toBe(
+            "Convenio no encontrado."
+          )
+        })
+
+        // El convenio ajeno no ganó documento ni constancia, y el depósito no se tocó.
+        expect(await prisma.documento.count({ where: { comunidadId: COM_B } })).toBe(0)
+        expect(await prisma.envioDocumento.count({ where: { comunidadId: COM_B } })).toBe(0)
+        expect(
+          (
+            await prisma.convenioPago.findUnique({ where: { id: CONVENIO_COM_B } })
+          )?.documentoId
+        ).toBeNull()
+      })
+
+      it("el residente no sube ni descarga el convenio firmado: 403 en las dos rutas", async () => {
+        await conSesion(EMAIL_RESIDENTE, async () => {
+          const subida = await POST_DOCUMENTO({
+            convenioId: CONVENIO_PARA_FIRMAR,
+            nombreArchivo: "convenio-firmado-101.pdf",
+            contenidoBase64: pdfMinimo("un residente no firma por la administración").toString(
+              "base64"
+            ),
+          })
+          expect(subida.status).toBe(403)
+          expect(((await subida.json()) as { error: string }).error).toBe("Permiso denegado.")
+
+          // El papel lleva el nombre del deudor y su deuda: el vecino no lo lee.
+          const descarga = await GET_DOCUMENTO(CONVENIO_PARA_FIRMAR)
+          expect(descarga.status).toBe(403)
+          expect(((await descarga.json()) as { error: string }).error).toBe(
+            "Permiso denegado."
+          )
+        })
+
+        const documento = await documentoDelConvenio(CONVENIO_PARA_FIRMAR)
+        expect(documento.hash).not.toBe(
+          createHash("sha256")
+            .update(pdfMinimo("un residente no firma por la administración"))
+            .digest("hex")
+        )
+      })
+
+      it("la descarga de un convenio sin documento firmado es 409 con su motivo", async () => {
+        await conSesion(EMAIL_ADMIN, async () => {
+          const res = await GET_DOCUMENTO(CONVENIO_DE_LA_SUBIDA_QUE_FALLA)
+          expect(res.status).toBe(409)
+          expect(((await res.json()) as { error: string }).error).toBe(MENSAJE_SIN_DOCUMENTO)
+        })
+      })
+
+      it("si la subida al depósito falla no se escribe NADA", async () => {
+        const documentosAntes = await prisma.documento.count({
+          where: { comunidadId: COM_A },
+        })
+        const enviosAntes = await prisma.envioDocumento.count({
+          where: { comunidadId: COM_A },
+        })
+        const eventosAntes = await prisma.eventoAuditoria.count({
+          where: { comunidadId: COM_A, tipoAccion: "FI_CONVENIO_DOCUMENTO_SUBIDO" },
+        })
+        const objetosAntes = deposito.objetos.size
+
+        deposito.modo = "rechazar_subida"
+        try {
+          await conSesion(EMAIL_ADMIN, async () => {
+            const res = await POST_DOCUMENTO({
+              convenioId: CONVENIO_DE_LA_SUBIDA_QUE_FALLA,
+              nombreArchivo: "convenio-firmado-104.pdf",
+              contenidoBase64: pdfMinimo("el depósito no guardó").toString("base64"),
+            })
+            expect(res.status).toBe(502)
+            expect(((await res.json()) as { error: string }).error).toBe(
+              MENSAJE_SUBIDA_FALLIDA
+            )
+          })
+        } finally {
+          deposito.modo = "aceptar"
+        }
+
+        // Sin archivo no hay documento legal, ni vínculo, ni constancia, ni evento.
+        expect(await prisma.documento.count({ where: { comunidadId: COM_A } })).toBe(
+          documentosAntes
+        )
+        expect(await prisma.envioDocumento.count({ where: { comunidadId: COM_A } })).toBe(
+          enviosAntes
+        )
+        expect(
+          await prisma.eventoAuditoria.count({
+            where: { comunidadId: COM_A, tipoAccion: "FI_CONVENIO_DOCUMENTO_SUBIDO" },
+          })
+        ).toBe(eventosAntes)
+        expect(
+          (
+            await prisma.convenioPago.findUnique({
+              where: { id: CONVENIO_DE_LA_SUBIDA_QUE_FALLA },
+            })
+          )?.documentoId
+        ).toBeNull()
+        expect(deposito.objetos.size).toBe(objetosAntes)
+      })
+
+      it("si la transacción falla después de subir, el archivo se BORRA del depósito", async () => {
+        const ahoraFijo = Date.now()
+        const reloj = vi.spyOn(Date, "now").mockReturnValue(ahoraFijo)
+        const azar = vi.spyOn(Math, "random").mockReturnValue(0.5)
+        // El id con el que la ruta identificará el documento, ya ocupado: el alta del
+        // `Documento` choca contra la clave primaria y la transacción revierte.
+        const idEnConflicto = generarId("doc")
+        const documentosAntes = await prisma.documento.count({
+          where: { comunidadId: COM_A },
+        })
+        try {
+          await prisma.documento.create({
+            data: {
+              id: idEnConflicto,
+              comunidadId: COM_A,
+              naturaleza: "legal",
+              tipoDocumental: "otros",
+              glosa: "Documento plantado para forzar la colisión de clave",
+              referenciaAutentica: "sin referencia",
+              archivoNombre: "plantado.pdf",
+              archivoTipoMime: "application/pdf",
+              archivoTamanoKB: 1,
+              archivoUrl: "convenios/plantado.pdf",
+              hash: null,
+              version: 999,
+              vigenteDesde: "2026-01-01",
+            },
+          })
+
+          const peticionesAntes = deposito.peticiones.length
+          await conSesion(EMAIL_ADMIN, async () => {
+            const res = await POST_DOCUMENTO({
+              convenioId: CONVENIO_DE_LA_SUBIDA_QUE_FALLA,
+              nombreArchivo: "convenio-firmado-104.pdf",
+              contenidoBase64: pdfMinimo("la transacción no se pudo aplicar").toString("base64"),
+            })
+            expect(res.status).toBe(500)
+            expect(((await res.json()) as { error: string }).error).toBe(
+              "Error interno del servidor."
+            )
+          })
+
+          const subidas = deposito.peticiones
+            .slice(peticionesAntes)
+            .filter((peticion) => peticion.metodo === "PUT")
+          // Se subió UNA vez: el reintento del contador de versiones reintenta la
+          // transacción, no la subida del archivo.
+          expect(subidas).toHaveLength(1)
+          // Y como la transacción no se pudo aplicar, el archivo se borró: no queda un
+          // huérfano en el depósito que nadie pueda volver a leer.
+          expect(deposito.borrados).toContain(subidas[0]!.pathname)
+          expect(deposito.objetos.has(subidas[0]!.pathname)).toBe(false)
+
+          expect(await prisma.documento.count({ where: { comunidadId: COM_A } })).toBe(
+            documentosAntes + 1
+          )
+          expect(
+            (
+              await prisma.convenioPago.findUnique({
+                where: { id: CONVENIO_DE_LA_SUBIDA_QUE_FALLA },
+              })
+            )?.documentoId
+          ).toBeNull()
+          expect(await prisma.envioDocumento.count({ where: { comunidadId: COM_A } })).toBe(1)
+          expect(
+            await prisma.eventoAuditoria.count({
+              where: { comunidadId: COM_A, tipoAccion: "FI_CONVENIO_DOCUMENTO_SUBIDO" },
+            })
+          ).toBe(1)
+        } finally {
+          azar.mockRestore()
+          reloj.mockRestore()
+          await prisma.documento.deleteMany({ where: { id: idEnConflicto } })
+        }
+      })
+    })
 })

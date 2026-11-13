@@ -1669,6 +1669,14 @@ model ConvenioPago {
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 
+  /// V5 — el PAPEL FIRMADO del convenio, en el archivo legal de la comunidad.
+  /// El valor de este instrumento es la firma del deudor: el sistema no lo
+  /// genera, lo recibe escaneado por la administración y lo archiva como
+  /// `Documento` legal con sus bytes reales en el depósito privado. Es NULL en
+  /// los convenios suscritos antes de esta columna (su papel no se puede
+  /// reconstruir) y hasta que la administración suba el escaneo.
+  documentoId       String?
+
   cuotas CuotaConvenio[]
 
   // El índice por comunidad + unidad es el que sostiene la regla «un solo
@@ -1676,6 +1684,8 @@ model ConvenioPago {
   // índice deja la lectura barata.
   @@index([comunidadId, unidadId])
   @@index([comunidadId])
+  // El archivo se audita en el sentido inverso (qué convenio tiene este papel).
+  @@index([documentoId])
   @@map("convenios_pago")
 }
 

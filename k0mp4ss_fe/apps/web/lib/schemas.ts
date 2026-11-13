@@ -774,8 +774,43 @@ export const PagoCuotaConvenioSchema = z.object({
     .min(0, "El número de cuota no puede ser negativo."),
 })
 
+/**
+ * Tope del archivo que viaja en base64 (~15 MB de PDF).
+ *
+ * Es el tope del CUERPO de la petición, no una regla de negocio: un escaneo de un
+ * convenio de una hoja entra muchas veces por debajo. Sin tope, un cuerpo enorme
+ * se decodifica entero en memoria antes de saber si es un PDF.
+ */
+export const MAXIMO_BASE64_DEL_PAPEL = 20_000_000
+
+/**
+ * Alta del PAPEL FIRMADO de un convenio (F29 · V5).
+ *
+ * El convenio se firma a mano y la administración lo escanea: el archivo viaja en
+ * base64 porque el cuerpo de la petición es JSON (sin `multipart` ni una librería
+ * de subida), y NO se persiste —se sube al depósito privado y en la base quedan los
+ * metadatos y la ruta—. El `nombreArchivo` es el que elige quien sube el escaneo;
+ * el servidor lo sanea antes de archivarlo y de servirlo en una cabecera.
+ */
+export const ConvenioDocumentoSchema = z.object({
+  convenioId: IdEntidadSchema,
+  nombreArchivo: z
+    .string({ required_error: "El nombre del archivo es obligatorio." })
+    .trim()
+    .min(1, "El nombre del archivo es obligatorio.")
+    .max(200, "El nombre del archivo no puede superar los 200 caracteres."),
+  contenidoBase64: z
+    .string({ required_error: "El contenido del archivo es obligatorio." })
+    .min(1, "El contenido del archivo es obligatorio.")
+    .max(
+      MAXIMO_BASE64_DEL_PAPEL,
+      "El archivo supera el tamaño máximo que se puede subir."
+    ),
+})
+
 export type ConvenioPagoCreacion = z.infer<typeof ConvenioPagoCreacionSchema>
 export type PagoCuotaConvenio = z.infer<typeof PagoCuotaConvenioSchema>
+export type ConvenioDocumento = z.infer<typeof ConvenioDocumentoSchema>
 
 // --- Conciliación bancaria por importación de cartola (F30) ---
 
