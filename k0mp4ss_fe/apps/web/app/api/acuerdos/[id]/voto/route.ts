@@ -18,7 +18,11 @@
  * Reglas de la evidencia:
  * - Un voto no se repite (@@unique acuerdoId+personaId, 409) y la unidad no se
  *   cuenta dos veces: si el prorrateo de una unidad ya está emitido en este
- *   acuerdo, otro copropietario de la MISMA unidad recibe 409.
+ *   acuerdo, otro copropietario de la MISMA unidad recibe 409. La garantía es de
+ *   la BASE, no del chequeo: el índice único `(acuerdoId, claveUnidad)` —la
+ *   columna `claveUnidad`, que es null cuando el voto no está atado a una unidad—
+ *   impide el doble peso aunque dos emisiones simultáneas pasen el chequeo.
+ *   Los dos P2002 se traducen a 409 con su mensaje: nunca a un 500.
  * - Un acuerdo que ya no está `abierto` no admite votos (409).
  * - **No existe ruta de actualización ni de borrado de un voto**: es evidencia
  *   de lo que cada persona decidió. Corregir un voto es un acto nuevo, no una
@@ -62,7 +66,7 @@ type Desenlace =
   | { ok: true; computo: ResultadoDelAcuerdo }
   | { ok: false; status: 404 | 409; error: string }
 
-/** ¿El error es el índice único `(acuerdoId, personaId)` (voto duplicado)? */
+/** ¿El error es un P2002 (violación de índice único)? */
 function esVotoDuplicado(e: unknown): boolean {
   return (
     typeof e === "object" &&
@@ -70,6 +74,18 @@ function esVotoDuplicado(e: unknown): boolean {
     "code" in e &&
     (e as { code: string }).code === "P2002"
   )
+}
+
+/**
+ * Nombre del índice único que rechazó la escritura, leído del `meta.target` del
+ * P2002 (Prisma lo entrega como lista de campos o como nombre del índice).
+ */
+function indiceUnicoViolado(e: unknown): string {
+  if (typeof e !== "object" || e === null) return ""
+  const meta = (e as { meta?: { target?: unknown } }).meta
+  const target = meta?.target
+  if (Array.isArray(target)) return target.join(",")
+  return typeof target === "string" ? target : ""
 }
 
 /** Peso con hasta 4 decimales, para el texto de la bitácora. */
@@ -265,6 +281,10 @@ export async function POST(request: Request, ctx: Ctx): Promise<Response> {
             acuerdoId: id,
             personaId,
             unidadId,
+            // La unidad viaja también acá para que el índice único
+            // `(acuerdoId, claveUnidad)` la cuente UNA vez: es la garantía de la
+            // base, no el chequeo de arriba (que se puede cruzar en una carrera).
+            claveUnidad: unidadId,
             decision,
             peso,
             registradoPor: scope.usuarioId,
@@ -315,9 +335,19 @@ export async function POST(request: Request, ctx: Ctx): Promise<Response> {
     }
     return Response.json({ ok: true, resultado: desenlace.computo })
   } catch (e) {
-    // P2002 = carrera contra el índice único del voto: dos emisiones simultáneas
-    // de la misma persona. El desenlace es 409, no 500.
+    // P2002 = carrera contra un índice único: dos emisiones simultáneas. Cuál de
+    // los dos chocó lo dice la base en el `target` del error, y el desenlace es
+    // 409 en los dos casos, nunca 500:
+    //   · `(acuerdoId, claveUnidad)`: otro copropietario de la MISMA unidad ganó la
+    //     carrera, así que el prorrateo de la unidad ya está emitido.
+    //   · `(acuerdoId, personaId)`: la misma persona emitió dos veces.
     if (esVotoDuplicado(e)) {
+      if (indiceUnicoViolado(e).includes("claveUnidad")) {
+        return jsonError(
+          409,
+          "La unidad ya emitió su voto en este acuerdo: el prorrateo no se cuenta dos veces."
+        )
+      }
       return jsonError(
         409,
         "Ya registraste tu voto en este acuerdo: un voto no se repite ni se edita."

@@ -53,6 +53,7 @@ const EMAIL_OUT = "acu-out@test.cl"
 const EMAIL_OWN60 = "acu-own60@test.cl"
 const EMAIL_OWN40 = "acu-own40@test.cl"
 const EMAIL_OWN60B = "acu-own60b@test.cl"
+const EMAIL_OWN_DUAL = "acu-owndual@test.cl"
 // Rol sin `gd` en la matriz: sirve para probar el 403 de la lectura.
 const EMAIL_CONSERJERIA = "acu-conserjeria@test.cl"
 // Acuerdo de la OTRA comunidad: la lectura del scope no puede verlo.
@@ -119,6 +120,9 @@ describe("/api/acuerdos — registro de acuerdos con votos inmutables (U3)", () 
       datosPersona("acu-own-40", "26666666-6", "Propietario Cuarenta", "acu-own40@test.cl", null, ["propietario"]),
       // Copropietario de la MISMA unidad 60: su voto no puede duplicar el prorrateo.
       datosPersona("acu-own-60b", "27777777-7", "Copropietario Sesenta", "acu-own60b@test.cl", null, ["propietario"]),
+      // Propietario de DOS unidades: su voto pesa la SUMA y ninguna unidad lo
+      // representa, así que la fila queda con `claveUnidad` null.
+      datosPersona("acu-own-dual", "28888888-8", "Propietario Doble", "acu-owndual@test.cl", null, ["propietario"]),
     ]
     for (const p of personas) {
       await prisma.persona.upsert({ where: { id: p.id }, update: {}, create: p })
@@ -166,6 +170,8 @@ describe("/api/acuerdos — registro de acuerdos con votos inmutables (U3)", () 
     for (const v of [
       { id: "acu-v-60", personaId: "acu-own-60", unidadId: U60 },
       { id: "acu-v-60b", personaId: "acu-own-60b", unidadId: U60 },
+      { id: "acu-v-dual-60", personaId: "acu-own-dual", unidadId: U60 },
+      { id: "acu-v-dual-40", personaId: "acu-own-dual", unidadId: U40 },
       { id: "acu-v-40", personaId: "acu-own-40", unidadId: U40 },
     ]) {
       await prisma.vinculoUnidad.upsert({
@@ -192,6 +198,7 @@ describe("/api/acuerdos — registro de acuerdos con votos inmutables (U3)", () 
       { id: "acu-usuario-out", email: EMAIL_OUT, personaId: "acu-out", comunidadId: COM_A, rol: "comite" },
       { id: "acu-usuario-own60", email: EMAIL_OWN60, personaId: "acu-own-60", comunidadId: COM_A, rol: "residente" },
       { id: "acu-usuario-own60b", email: EMAIL_OWN60B, personaId: "acu-own-60b", comunidadId: COM_A, rol: "residente" },
+      { id: "acu-usuario-dual", email: EMAIL_OWN_DUAL, personaId: "acu-own-dual", comunidadId: COM_A, rol: "residente" },
       { id: "acu-usuario-own40", email: EMAIL_OWN40, personaId: "acu-own-40", comunidadId: COM_A, rol: "residente" },
       {
         id: "acu-usuario-conserjeria",
@@ -245,6 +252,7 @@ describe("/api/acuerdos — registro de acuerdos con votos inmutables (U3)", () 
               EMAIL_OUT,
               EMAIL_OWN60,
               EMAIL_OWN60B,
+              EMAIL_OWN_DUAL,
               EMAIL_OWN40,
               EMAIL_CONSERJERIA,
             ],
@@ -479,6 +487,14 @@ describe("/api/acuerdos — registro de acuerdos con votos inmutables (U3)", () 
       expect(j.resultado.aFavor).toBe(1)
 
       expect((await POST_VOTO(acuerdo.id, { decision: "a_favor" })).status).toBe(409)
+      // El texto del 409 es parte del contrato: es el mismo que devuelve la
+      // carrera contra el índice único de la persona (P2002, ver el catch de la ruta).
+      const repetido = await POST_VOTO(acuerdo.id, { decision: "a_favor" })
+      expect(repetido.status).toBe(409)
+      const jr = (await repetido.json()) as { error: string }
+      expect(jr.error).toBe(
+        "Ya registraste tu voto en este acuerdo: un voto no se repite ni se edita."
+      )
     })
     const votos = await prisma.votoAcuerdo.findMany({
       where: { acuerdoId: acuerdo.id },
@@ -620,6 +636,197 @@ describe("/api/acuerdos — registro de acuerdos con votos inmutables (U3)", () 
     expect(
       await prisma.votoAcuerdo.count({ where: { acuerdoId: acuerdo.id } })
     ).toBe(1)
+
+    // El peso de la unidad quedó emitido UNA vez: 60 derechos, no 120. La fila
+    // guarda la unidad también en `claveUnidad`, que es lo que hace cumplir el
+    // índice único de la base (ver los casos de abajo).
+    const votos = await prisma.votoAcuerdo.findMany({
+      where: { acuerdoId: acuerdo.id },
+    })
+    expect(votos[0]?.claveUnidad).toBe(U60)
+    expect(
+      (
+        await prisma.votoAcuerdo.aggregate({
+          where: { acuerdoId: acuerdo.id, unidadId: U60 },
+          _sum: { peso: true },
+        })
+      )._sum.peso
+    ).toBe(60)
+  })
+
+  it("una persona con una unidad guarda claveUnidad = unidadId en la fila del voto", async () => {
+    // Mayoría reforzada: el acuerdo sigue ABIERTO después del voto, que es el
+    // único estado en que se puede emitir.
+    const acuerdo = await crearAcuerdo(
+      acuerdoAsamblea(
+        "mayoria_reforzada_derechos",
+        "Pintura de la fachada en asamblea extraordinaria"
+      )
+    )
+    await conSesion(EMAIL_OWN60, async () => {
+      expect((await POST_VOTO(acuerdo.id, { decision: "a_favor" })).status).toBe(200)
+    })
+    const votos = await prisma.votoAcuerdo.findMany({
+      where: { acuerdoId: acuerdo.id },
+    })
+    expect(votos).toHaveLength(1)
+    // Mismo valor en las dos columnas: la de negocio y la que indexa.
+    expect(votos[0]?.unidadId).toBe(U60)
+    expect(votos[0]?.claveUnidad).toBe(U60)
+  })
+
+  it("la base —no el código— garantiza un voto por unidad: dos insertos con la misma (acuerdoId, claveUnidad) chocan con P2002", async () => {
+    const acuerdo = await crearAcuerdo(
+      acuerdoAsamblea(
+        "mayoria_reforzada_derechos",
+        "Cambio de destino de un bien común en asamblea extraordinaria"
+      )
+    )
+    const base = {
+      comunidadId: COM_A,
+      acuerdoId: acuerdo.id,
+      decision: "a_favor",
+      peso: 60,
+    }
+
+    // Los DOS copropietarios pasaron el chequeo blando: es lo que deja una carrera
+    // a medio camino. Acá no hay carrera: el estado "pasaron los dos" se escribe a
+    // mano y se comprueba qué hace la base con la segunda fila.
+    await prisma.votoAcuerdo.create({
+      data: {
+        ...base,
+        id: "acu-race-voto-1",
+        personaId: "acu-own-60",
+        unidadId: U60,
+        claveUnidad: U60,
+        registradoPor: "acu-usuario-own60",
+      },
+    })
+    await expect(
+      prisma.votoAcuerdo.create({
+        data: {
+          ...base,
+          id: "acu-race-voto-2",
+          personaId: "acu-own-60b",
+          unidadId: U60,
+          claveUnidad: U60,
+          registradoPor: "acu-usuario-own60b",
+        },
+      })
+    ).rejects.toMatchObject({ code: "P2002" })
+
+    // La unidad sigue pesando una vez: la fila rechazada no dejó nada.
+    expect(
+      await prisma.votoAcuerdo.count({ where: { acuerdoId: acuerdo.id } })
+    ).toBe(1)
+  })
+
+  it("los votos sin unidad (claveUnidad null) conviven: varios NULL en el mismo acuerdo no chocan", async () => {
+    const acuerdo = await crearAcuerdo(acuerdoComite())
+    // Un voto de comité (persona, sin unidad) y otro con la forma de una persona
+    // con VARIAS unidades (peso suma, sin unidad): las dos filas quedan con
+    // `claveUnidad` null. En SQLite y en PostgreSQL los NULL no colisionan en un
+    // índice único, así que conviven.
+    for (const v of [
+      { id: "acu-null-1", personaId: "acu-m1", peso: 100, unidadId: null },
+      { id: "acu-null-2", personaId: "acu-own-dual", peso: 1, unidadId: null },
+    ] as const) {
+      await prisma.votoAcuerdo.create({
+        data: {
+          id: v.id,
+          comunidadId: COM_A,
+          acuerdoId: acuerdo.id,
+          personaId: v.personaId,
+          unidadId: v.unidadId,
+          claveUnidad: null,
+          decision: "abstencion",
+          peso: v.peso,
+          registradoPor: "acu-usuario-admin",
+        },
+      })
+    }
+    // Y la ruta sigue emitiendo un voto sin unidad contra la misma base: null no choca.
+    await conSesion(EMAIL_M2, async () => {
+      const res = await POST_VOTO(acuerdo.id, { decision: "abstencion" })
+      expect(res.status).toBe(200)
+    })
+
+    const votos = await prisma.votoAcuerdo.findMany({
+      where: { acuerdoId: acuerdo.id },
+    })
+    expect(votos).toHaveLength(3)
+    expect(votos.every((v) => v.claveUnidad === null)).toBe(true)
+    expect(votos.every((v) => v.unidadId === null)).toBe(true)
+  })
+
+  it("una persona con varias unidades pesa la SUMA y no queda atada a ninguna unidad", async () => {
+    const acuerdo = await crearAcuerdo(
+      acuerdoAsamblea(
+        "mayoria_reforzada_derechos",
+        "Reparación del ascensor con cuota extraordinaria"
+      )
+    )
+    await conSesion(EMAIL_OWN_DUAL, async () => {
+      const res = await POST_VOTO(acuerdo.id, { decision: "a_favor" })
+      expect(res.status).toBe(200)
+      const j = (await res.json()) as {
+        resultado: { aFavor: number; resultado: string }
+      }
+      // 60 + 40: el peso es la suma de sus prorrateos.
+      expect(j.resultado.aFavor).toBe(100)
+    })
+    const votos = await prisma.votoAcuerdo.findMany({
+      where: { acuerdoId: acuerdo.id },
+    })
+    expect(votos).toHaveLength(1)
+    expect(votos[0]?.peso).toBe(100)
+    // Ninguna unidad sola representa este voto, así que no hay clave que indexar.
+    expect(votos[0]?.unidadId).toBeNull()
+    expect(votos[0]?.claveUnidad).toBeNull()
+  })
+
+  it("si la base ya tiene tomada la unidad, el alta responde 409 con el mensaje de la unidad y no 500", async () => {
+    const acuerdo = await crearAcuerdo(
+      acuerdoAsamblea(
+        "mayoria_reforzada_derechos",
+        "Corte del servicio de agua de la unidad 101"
+      )
+    )
+    // La fila se planta con `unidadId` null y `claveUnidad` de la unidad a
+    // propósito: reproduce el estado que deja la carrera (el chequeo blando filtra
+    // por `unidadId` y no la ve), así que la única garantía que queda es el índice.
+    await prisma.votoAcuerdo.create({
+      data: {
+        id: "acu-unidad-tomada",
+        comunidadId: COM_A,
+        acuerdoId: acuerdo.id,
+        personaId: "acu-own-60",
+        unidadId: null,
+        claveUnidad: U60,
+        decision: "a_favor",
+        peso: 60,
+        registradoPor: "acu-usuario-own60",
+      },
+    })
+    await conSesion(EMAIL_OWN60B, async () => {
+      const res = await POST_VOTO(acuerdo.id, { decision: "a_favor" })
+      // El P2002 del índice de la unidad es 409, nunca 500.
+      expect(res.status).toBe(409)
+      const j = (await res.json()) as { error: string }
+      expect(j.error).toBe(
+        "La unidad ya emitió su voto en este acuerdo: el prorrateo no se cuenta dos veces."
+      )
+    })
+    // La fila rechazada no quedó: la unidad pesa una vez.
+    expect(
+      await prisma.votoAcuerdo.count({ where: { acuerdoId: acuerdo.id } })
+    ).toBe(1)
+    // Y no hay evento de auditoría de un voto que la base no aceptó.
+    expect(
+      await prisma.eventoAuditoria.count({
+        where: { referenciaId: acuerdo.id, tipoAccion: "AD_ACUERDO_VOTO" },
+      })
+    ).toBe(0)
   })
 
   it("404 para el acuerdo de otra comunidad y para uno inexistente", async () => {

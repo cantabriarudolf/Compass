@@ -748,8 +748,8 @@ model Acuerdo {
 }
 
 // Voto de un acuerdo: EVIDENCIA. No se edita ni se borra — no hay ninguna ruta
-// de actualización ni de baja, y el índice único impide el doble voto de la
-// misma persona en el mismo acuerdo.
+// de actualización ni de baja, y los índices únicos impiden el doble voto de la
+// misma persona y el doble peso de la misma unidad en el mismo acuerdo.
 model VotoAcuerdo {
   id            String   @id
   comunidadId   String
@@ -760,12 +760,22 @@ model VotoAcuerdo {
   // (un voto por miembro) y cuando la persona vota con varias unidades: en ese
   // caso el peso es la SUMA de sus prorrateos y ninguna unidad lo representa.
   unidadId      String?
+  // `claveUnidad` existe SOLO para llevar la unicidad de la unidad a un índice:
+  // guarda el `unidadId` cuando el voto está atado a una unidad y queda null en
+  // los votos que no lo están (comité, o una persona con varias unidades cuyo
+  // peso es la SUMA). Es una llave de indexación, no un dato de negocio: se
+  // escribe siempre igual que `unidadId`, o null.
+  claveUnidad   String?
   decision      String // a_favor | en_contra | abstencion
   peso          Float // 1 en el comité; prorrateo (o suma) de la unidad en la asamblea
   registradoPor String // usuario de sesión que emitió el voto
   fecha         DateTime @default(now())
 
   @@unique([acuerdoId, personaId])
+  // El prorrateo de una unidad se cuenta UNA vez por acuerdo. En SQLite y en
+  // PostgreSQL los NULL no colisionan en un índice único, así que los votos sin
+  // unidad (`claveUnidad` null) conviven sin límite y la unidad repetida choca.
+  @@unique([acuerdoId, claveUnidad])
   @@index([comunidadId])
   @@map("acuerdos_votos")
 }
