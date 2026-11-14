@@ -34,7 +34,7 @@ import { PrismaClient } from "@prisma/client"
 import { cargarUrlBase } from "../lib/database-url"
 
 /** Fecha marca del cierre: identifica el cierre del fixture y es reversible. */
-const FECHA_CIERRE = "2026-01-31"
+const FECHA_CIERRE = "2099-12-31"
 
 /** Unidades que el fixture crea sin ningún vínculo (nunca declaradas). */
 const UNIDADES_SIN_TITULAR = [
@@ -60,6 +60,7 @@ function accionPedida(): "aplicar" | "quitar" | null {
 }
 
 async function aplicar(prisma: PrismaClient, comunidadId: string): Promise<void> {
+  let cerradosEnEstaCorrida = 0
   const [microSector, tipoUnidad] = await Promise.all([
     prisma.microSector.findFirst({
       where: { comunidadId },
@@ -107,6 +108,7 @@ async function aplicar(prisma: PrismaClient, comunidadId: string): Promise<void>
     console.log(
       `[fixture-integridad] ya había un vínculo cerrado con la marca (${yaCerrado.id}): no se cierra otro`
     )
+    cerradosEnEstaCorrida = 0
   } else {
     // El tramo más alto por id suele ser una plaza: cerrar una plaza rompe menos
     // relatos de la demo que cerrar el vínculo del presidente.
@@ -124,13 +126,17 @@ async function aplicar(prisma: PrismaClient, comunidadId: string): Promise<void>
       where: { id: victima.id },
       data: { fechaFin: FECHA_CIERRE },
     })
+    cerradosEnEstaCorrida = 1
     console.log(
       `[fixture-integridad] vínculo cerrado sin reemplazo: ${victima.id} (unidad ${victima.unidadId}, fechaFin ${FECHA_CIERRE})`
     )
   }
 
   console.log(
-    `[fixture-integridad] aplicado en ${comunidadId}: ${UNIDADES_SIN_TITULAR.length} unidades sin ningún vínculo + 1 vínculo cerrado sin reemplazo`
+    `[fixture-integridad] aplicado en ${comunidadId}: ${UNIDADES_SIN_TITULAR.length} unidades sin ningún vínculo + ` +
+      (cerradosEnEstaCorrida === 1
+        ? "1 vínculo cerrado sin reemplazo (esta corrida)"
+        : "0 vínculos cerrados en esta corrida (la marca ya existía)")
   )
 }
 
@@ -143,6 +149,10 @@ async function quitar(prisma: PrismaClient, comunidadId: string): Promise<void> 
     where: { comunidadId, id: { in: ids } },
   })
   const reabiertos = await prisma.vinculoUnidad.updateMany({
+    // Sólo el centinela: `FECHA_CIERRE` es una fecha que ninguna venta real puede
+    // tener. Antes la marca era 2026-01-31, una fecha plausible: si una unidad se
+    // vendió de verdad ese día, `--quitar` reabría ese tramo y la unidad volvía a
+    // aparecer con dueño. Lo encontró la revisión nativa del 2026-11-14.
     where: { comunidadId, rol: "propietario", fechaFin: FECHA_CIERRE },
     data: { fechaFin: null },
   })
