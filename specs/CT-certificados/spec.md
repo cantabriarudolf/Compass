@@ -56,6 +56,25 @@ Las compuertas SHALL evaluarse en este orden y no otro: `rechazoDeEmisionAjena` 
 - **WHEN** la administración emite cualquiera de las cuatro tipologías, o el comité intenta emitir
 - **THEN** la administración obtiene 201 en las cuatro y el comité 403 (sólo tiene `ct` `ver`)
 
+### Requirement: Selección del solicitante por búsqueda en el servidor (F36)
+La pantalla de emisión SHALL ofrecer la persona solicitante del certificado de residencia mediante una búsqueda resuelta en el servidor (`GET /api/certificados-ct/buscar-personas`) y SHALL NOT ofrecerla como una lista truncada del padrón del cliente: un certificado de residencia es un documento legal sobre UNA persona, y una lista capada a la primera página de 100 deja fuera a quien no cabe en ella. El endpoint SHALL responder con una página chica (`q` obligatorio, con `page`, `pageSize` y `total` declarados) que el buscador muestre como «Mostrando N de M», de modo que el recorte se vea y nunca se cargue la colección completa. El universo de la búsqueda SHALL ser las personas con vínculo vigente (`fechaFin` null) en la comunidad de la sesión —la misma regla del gate de residencia— y cada fila SHALL traer los vínculos vigentes con el rótulo de la unidad, de modo que la emisión se arme con la fila buscada y no con las colecciones truncadas del cliente; el resumen y el detalle del certificado emitido no cambian. El endpoint SHALL estar gobernado por la matriz con la clave de emisión de la tipología que alimenta (`ct:residencia` con `ver`, el despacho de `RECURSO_DE_EMISION_POR_TIPO.residencia`; por el fallback de prefijo de `puede()`, todo rol con `ct` `ver` entra igual que en `mis-vinculos`) y SHALL aplicar el alcance por filas de la serie «permisos por objeto» (`alcancePorFilasDeSesion`): administración y comité buscan la comunidad; un rol acotado sólo encuentra su propia persona y, sin ficha en el Maestro de Personas, nada (falla cerrado).
+
+#### Scenario: La persona solicitante se busca en el servidor
+- **WHEN** la administración escribe en el buscador de personas del certificado de residencia
+- **THEN** la consulta viaja al endpoint con `q`, la pantalla dibuja la respuesta del servidor con «Mostrando N de M» y la persona puede elegirse aunque el padrón del cliente esté truncado
+
+#### Scenario: El tope de la página declara lo que queda fuera
+- **WHEN** la búsqueda tiene más coincidencias que el tope de la página
+- **THEN** la respuesta declara `total` mayor que las filas de la página y el buscador muestra el recorte en vez de esconderlo
+
+#### Scenario: Sólo personas con vínculo vigente
+- **WHEN** se busca una persona sin vínculo vigente (o con vínculo cerrado) en la comunidad
+- **THEN** la búsqueda no la ofrece: el universo es el de las personas certificables por el gate de residencia
+
+#### Scenario: El alcance por filas gobierna la búsqueda
+- **WHEN** un rol acotado busca en el formulario de emisión
+- **THEN** sólo encuentra su propia persona; sin ficha en el Maestro de Personas la respuesta es vacía (falla cerrado) y las filas de otra comunidad nunca aparecen
+
 ### Requirement: Historial de Emisión con código de verificación
 Cada certificado emitido SHALL registrarse en `certificadosCT` con folio CT-#### correlativo, código de verificación único, fecha, solicitante, tipología y snapshot inmutable del payload usado. El historial es auditablemente inmutable: solo registros TEST son eliminables. Cuando exista un período de directiva vigente al momento de emitir, el registro SHALL incluir además `directivaRef` como snapshot no bloqueante: el `periodoId` del período vigente y sus `firmantes` (`personaId`, `nombre` y `cargo` de los miembros vigentes de ese período). La ausencia de período vigente NO SHALL bloquear la emisión: en ese caso `directivaRef` queda ausente.
 

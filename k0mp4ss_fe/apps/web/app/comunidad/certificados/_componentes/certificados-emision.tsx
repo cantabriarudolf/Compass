@@ -5,6 +5,7 @@ import { esMiembroDirectivaVigente } from "@/lib/store/helpers"
 import { useCertificadosCT } from "@/lib/api/use-certificados-ct"
 import { useCobrosFI } from "@/lib/api/use-cobros-fi"
 import { useLiquidaciones } from "@/lib/api/use-liquidaciones"
+import { BuscadorEntidad } from "@/components/buscador-entidad"
 import { usePersonas } from "@/lib/api/use-personas"
 import { useUnidades } from "@/lib/api/use-unidades"
 import { useVinculos } from "@/lib/api/use-vinculos"
@@ -54,6 +55,32 @@ export interface CertificadosEmisionProps {
 
 /** URL de la fuente PROPIA del residente (auto-acotada en el servidor). */
 const MIS_VINCULOS = "/api/certificados-ct/mis-vinculos"
+
+/**
+ * URL del buscador ligero de personas para el formulario de emisión (F36).
+ *
+ * Reemplaza al padrón truncado: `usePersonas()` pide `/api/personas?pageSize=100`
+ * y el `Select` montaba esa primera página filtrada en el cliente con los
+ * vínculos de `/api/vinculos?pageSize=100` —también recortados—, así que una
+ * persona fuera de esas páginas no podía certificarse.
+ */
+const BUSCADOR_PERSONAS = "/api/certificados-ct/buscar-personas"
+
+/**
+ * Fila del buscador de personas (`GET /api/certificados-ct/buscar-personas`).
+ *
+ * La emisión se arma con esta fila —identidad y vínculos VIGENTES resueltos por
+ * el servidor— y no con las colecciones truncadas del cliente: quien quedó fuera
+ * de las primeras 100 filas del padrón igualmente se puede certificar.
+ */
+interface PersonaBuscada {
+  id: string
+  nombres: string
+  apellidos: string
+  rut: string
+  /** Vínculos vigentes (`fechaFin: null`), con el rótulo `etiqueta numero`. */
+  vinculos: { id: string; unidadId: string; unidad: string; rol: string }[]
+}
 
 /** Vínculo propio tal como lo sirve `GET /api/certificados-ct/mis-vinculos`. */
 export interface VinculoPropio {
@@ -214,7 +241,14 @@ function CertificadosGestion({ tiposEmisibles }: CertificadosEmisionProps) {
   const [tipo, setTipo] = React.useState<CertificadoCT["tipo"]>(
     () => tiposEmisibles[0] ?? "residencia"
   )
-  const [personaId, setPersonaId] = React.useState("")
+  /**
+   * La persona solicitante elegida en el buscador (F36). La fila COMPLETA —no sólo
+   * el id— es la que arma el payload de emisión: el padrón del cliente
+   * (`usePersonas`) trae la primera página de 100 y la persona buscada puede estar
+   * fuera de ella.
+   */
+  const [personaElegida, setPersonaElegida] = React.useState<PersonaBuscada | null>(null)
+  const personaId = personaElegida?.id ?? ""
   const [unidadId, setUnidadId] = React.useState("")
   const [liquidacionId, setLiquidacionId] = React.useState("")
   const [solicitanteNombre, setSolicitanteNombre] = React.useState("")
@@ -241,9 +275,6 @@ function CertificadosGestion({ tiposEmisibles }: CertificadosEmisionProps) {
     cobrosFI.filter(c => c.unidadId === id).reduce((acc, c) => acc + saldoPendiente(c), 0)
 
   // Destinos válidos según tipología.
-  const personasConVinculoActivo = personas.filter(p =>
-    vinculos.some(v => v.personaId === p.id && !v.fechaFin && (!unidadId || v.unidadId === unidadId))
-  )
   const liquidacionesConfirmadas = liquidacionesPL.filter(l => l.estado === "confirmada")
   const gateAlDia = tipo === "al_dia" && unidadId ? saldoUnidad(unidadId) : null
 
@@ -265,16 +296,19 @@ function CertificadosGestion({ tiposEmisibles }: CertificadosEmisionProps) {
     let detalle: [string, string][] = []
 
     if (tipoActual === "residencia") {
-      const persona = personas.find(p => p.id === personaId)
-      const vinculoVigente = vinculos.find(v => v.personaId === personaId && v.unidadId === unidadId && !v.fechaFin)
+      // F36: la persona sale de la FILA BUSCADA en el servidor, no del padrón
+      // truncado del cliente. Los vínculos de la fila ya llegan vigentes
+      // (`fechaFin: null`) desde la ruta, con el rótulo de la unidad.
+      const persona = personaElegida
+      const vinculoVigente = persona?.vinculos.find(v => v.unidadId === unidadId)
       if (!persona || !unidadId) throw new Error("El certificado de residencia exige persona y unidad.")
       if (!vinculoVigente) throw new Error("No se puede emitir: el solicitante no mantiene un vínculo activo en la unidad (VU).")
       origenRef = vinculoVigente.id
-      resumen = `Se certifica que ${persona.nombres} ${persona.apellidos} (RUT ${persona.rut}) reside actualmente en ${refUnidadUI(unidadId)} según los registros de vinculación vigentes.`
+      resumen = `Se certifica que ${persona.nombres} ${persona.apellidos} (RUT ${persona.rut}) reside actualmente en ${vinculoVigente.unidad} según los registros de vinculación vigentes.`
       detalle = [
         ["Residente", `${persona.nombres} ${persona.apellidos}`],
         ["RUT", persona.rut],
-        ["Unidad", refUnidadUI(unidadId)],
+        ["Unidad", vinculoVigente.unidad],
         ["Rol", vinculoVigente.rol],
       ]
     } else if (tipoActual === "estado_cuenta" || tipoActual === "al_dia") {
@@ -447,7 +481,7 @@ function CertificadosGestion({ tiposEmisibles }: CertificadosEmisionProps) {
       <CardContent className="grid gap-4 md:grid-cols-2">
         <div className="flex flex-col gap-1.5">
           <Label>Tipo de certificado *</Label>
-          <Select value={tipo} onValueChange={v => { setTipo(v as CertificadoCT["tipo"]); setPersonaId(""); setUnidadId(""); setLiquidacionId("") }}>
+          <Select value={tipo} onValueChange={v => { setTipo(v as CertificadoCT["tipo"]); setPersonaElegida(null); setUnidadId(""); setLiquidacionId("") }}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
               {tiposEmisibles.map(t => (
@@ -460,27 +494,36 @@ function CertificadosGestion({ tiposEmisibles }: CertificadosEmisionProps) {
         {tipo === "residencia" && (
           <>
             <div className="flex flex-col gap-1.5">
-              <Label>Persona solicitante *</Label>
-              <Select value={personaId} onValueChange={setPersonaId}>
-                <SelectTrigger><SelectValue placeholder="Selecciona persona" /></SelectTrigger>
-                <SelectContent>
-                  {personasConVinculoActivo.map(p => (
-                    <SelectItem key={p.id} value={p.id}>{p.nombres} {p.apellidos}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">Solo personas con vínculo vigente en alguna unidad.</p>
+              {/* F36: la persona se BUSCA en el servidor (padrón completo, con total
+                  declarado) en vez de ofrecerse en una lista truncada a 100. */}
+              <BuscadorEntidad<PersonaBuscada>
+                etiqueta="Persona solicitante *"
+                url={BUSCADOR_PERSONAS}
+                placeholder="Buscar por nombre o RUT…"
+                idDe={p => p.id}
+                etiquetaDe={p => `${p.nombres} ${p.apellidos}`}
+                seleccion={personaElegida ? { id: personaElegida.id, etiqueta: `${personaElegida.nombres} ${personaElegida.apellidos}` } : null}
+                onSeleccion={(_seleccion, fila) => setPersonaElegida(fila)}
+                vacio="Sin personas con vínculo vigente para esa búsqueda."
+              />
+              <p className="text-xs text-muted-foreground">Solo personas con vínculo vigente en alguna unidad; la búsqueda consulta el padrón completo de la comunidad.</p>
             </div>
             <div className="flex flex-col gap-1.5">
               <Label>Unidad *</Label>
               <Select value={unidadId || undefined} onValueChange={setUnidadId}>
                 <SelectTrigger><SelectValue placeholder="Selecciona unidad" /></SelectTrigger>
                 <SelectContent>
-                  {unidades.filter(u => !personaId || vinculos.some(v => v.personaId === personaId && v.unidadId === u.id && !v.fechaFin)).map(u => (
-                    <SelectItem key={u.id} value={u.id}>{u.etiqueta} {u.numero}</SelectItem>
-                  ))}
+                  {(personaElegida?.vinculos ?? [])
+                    // Un vínculo por unidad: si la persona tuviera dos vínculos vigentes
+                    // en la misma unidad, el primero es el que certifica (el mismo que
+                    // encuentra la búsqueda del vínculo al emitir).
+                    .filter((v, i, lista) => lista.findIndex(x => x.unidadId === v.unidadId) === i)
+                    .map(v => (
+                      <SelectItem key={v.id} value={v.unidadId}>{v.unidad}</SelectItem>
+                    ))}
                 </SelectContent>
               </Select>
+              <p className="text-xs text-muted-foreground">Las unidades salen de los vínculos vigentes de la persona elegida.</p>
             </div>
           </>
         )}
