@@ -12,7 +12,7 @@ name: Esquema de producción (manual)
 # workflow convierte ese paso en un run de Actions: queda quién lo disparó, sobre
 # qué commit, con qué diff y con qué intención escrita.
 #
-# Los tres modos:
+# Los cuatro modos:
 #   · diagnostico        — muestra el diff y su veredicto. No toca nada. Siempre seguro.
 #   · aplicar            — aplica SÓLO si el diff es aditivo. Si trae un DROP, frena.
 #   · aplicar-destructivo — aplica aceptando pérdida de datos, pero exige:
@@ -20,26 +20,38 @@ name: Esquema de producción (manual)
 #                           2) un archivo de intención commiteado en ESE commit
 #                              (`prisma/aplicar-prod/<AAAA-MM-DD>-<motivo>.md`) que
 #                              nombre ese SHA y diga qué se borra y por qué.
+#   · aplicar-sql        — corre UN archivo SQL escrito y commiteado de
+#                          `prisma/sql-prod/` (un backfill: el diff del esquema
+#                          crea la columna, no la llena). Nunca SQL libre ni una
+#                          ruta arbitraria, y no admite nada destructivo: para eso
+#                          está `aplicar-destructivo` con su intención.
 #
 # La intención no es burocracia: es la diferencia entre «lo decidí» y «lo tipeé».
+# El SQL escrito tampoco: el archivo declara con qué se comprueba (`-- verificar:`)
+# y qué tiene que dar (`-- esperado:`), así el run no termina en «listo» sin prueba.
 
 on:
   workflow_dispatch:
     inputs:
       modo:
-        description: "diagnostico | aplicar | aplicar-destructivo"
+        description: "diagnostico | aplicar | aplicar-destructivo | aplicar-sql"
         required: true
         type: choice
         options:
           - diagnostico
           - aplicar
           - aplicar-destructivo
+          - aplicar-sql
       commit:
         description: "SHA completo del commit de main sobre el que se aplica (tiene que coincidir con el que corre)"
         required: true
         type: string
       intencion:
         description: "Sólo aplicar-destructivo: ruta del archivo de intención RELATIVA A LA RAÍZ del repo (k0mp4ss_fe/apps/web/prisma/aplicar-prod/<fecha>-<motivo>.md)"
+        required: false
+        type: string
+      sql:
+        description: "Sólo aplicar-sql: ruta RELATIVA A LA RAÍZ del repo del SQL commiteado (k0mp4ss_fe/apps/web/prisma/sql-prod/<fecha>-<motivo>.sql)"
         required: false
         type: string
 
@@ -145,8 +157,10 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
+      # `aplicar-sql` no aplica el esquema: su archivo se corre aunque el diff esté
+      # vacío, así que el aviso de «ningún modo toca nada» sería mentira para ese modo.
       - name: Nada que aplicar
-        if: steps.deriva.outputs.deriva == 'vacia'
+        if: steps.deriva.outputs.deriva == 'vacia' && inputs.modo != 'aplicar-sql'
         run: echo "La base real ya está alineada; ningún modo toca nada."
 
       - name: Aplicar (sólo si el diff es aditivo)
@@ -216,8 +230,176 @@ jobs:
           node scripts/db-prod-contar-perdidas.mjs /tmp/deriva.sql
           npx prisma db push --skip-generate --accept-data-loss
 
+      # Modo `aplicar-sql`: un archivo escrito, no un campo de texto. El carril nunca
+      # ejecuta SQL que venga de un input; ejecuta un blob DEL COMMIT, validado antes.
+      # Las guardas corren todas antes de abrir la conexión, y cada una frena con su
+      # propio mensaje: distinguir la falla es lo que evita buscar la avería donde no está.
+      - name: Aplicar SQL escrito (commiteado, de sql-prod/, no destructivo, con verificación)
+        if: inputs.modo == 'aplicar-sql'
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          # Los inputs entran por entorno, no interpolados en el script: una ruta con
+          # comillas o `$()` no puede convertirse en código del runner.
+          SQL_INPUT: ${{ inputs.sql }}
+          SHA_APLICADO: ${{ github.sha }}
+        run: |
+          set -o pipefail
+
+          if [ "${{ steps.deriva.outputs.deriva }}" = "pendiente" ]; then
+            echo "::warning title=Deriva pendiente::La base no está alineada con el esquema, y este modo NO aplica el esquema: sólo corre el SQL escrito. Si querés el esquema, primero un run con \`aplicar\`."
+          fi
+
+          # --- Guarda 1: hay ruta, y vive en sql-prod/ ---------------------------------
+          if [ -z "$SQL_INPUT" ]; then
+            echo "::error title=Falta el SQL::\`aplicar-sql\` exige el input \`sql\` con la ruta, RELATIVA A LA RAÍZ del repo, del archivo commiteado (k0mp4ss_fe/apps/web/prisma/sql-prod/<AAAA-MM-DD>-<motivo>.sql)."
+            exit 1
+          fi
+          PREFIJO="k0mp4ss_fe/apps/web/prisma/sql-prod/"
+          case "$SQL_INPUT" in
+            "$PREFIJO"*) ;;
+            *)
+              echo "::error title=Ruta fuera de sql-prod::'$SQL_INPUT' no empieza con '$PREFIJO'. Este modo sólo corre archivos de ese directorio: sin esta guarda sería «ejecutá cualquier archivo del repo». La ruta es relativa a la raíz del repo."
+              exit 1
+              ;;
+          esac
+          # El prefijo solo no alcanza: `sql-prod/../../../../algo.sql` lo cumple y sale del
+          # directorio. Un segmento `..` se rechaza acá, con este mensaje y no con el de git.
+          case "/$SQL_INPUT" in
+            */../*|*/..)
+              echo "::error title=La ruta trae '..'::'$SQL_INPUT' contiene un segmento '..'. La ruta tiene que ser literal y quedarse dentro de '$PREFIJO'."
+              exit 1
+              ;;
+          esac
+
+          # --- Guarda 2: el archivo está commiteado en ESTE commit (o en un ancestro) ---
+          # `git cat-file -e SHA:ruta` pregunta por la ruta dentro del árbol de ese commit,
+          # que está resuelta desde la raíz del repo (no desde el cwd del job). Un archivo
+          # que sólo está en el árbol de trabajo no está en ese árbol y no se ejecuta.
+          REPO_ROOT="$(git rev-parse --show-toplevel)"
+          RUTA="$REPO_ROOT/$SQL_INPUT"
+          if ! git cat-file -e "${SHA_APLICADO}:${SQL_INPUT}" 2>/dev/null; then
+            echo "::error title=El SQL no está commiteado en este commit::La ruta '$SQL_INPUT' no existe en el commit $SHA_APLICADO. Guardá el archivo en '$PREFIJO', commiteálo en el mismo commit que se aplica (o en uno anterior) y repetí: un archivo que sólo está en el árbol de trabajo no se ejecuta."
+            exit 1
+          fi
+          # Se lee el blob del commit, no el disco: lo que se valida es exactamente lo que
+          # se ejecuta. Si alguien dejó el editor con otra versión, se avisa y gana el commit.
+          SQL_FILE=/tmp/aplicar-sql.sql
+          git show "${SHA_APLICADO}:${SQL_INPUT}" > "$SQL_FILE"
+          if [ -f "$RUTA" ] && ! cmp -s "$SQL_FILE" "$RUTA"; then
+            echo "::warning title=El archivo en disco difiere del commit::Se ejecuta el contenido de $SHA_APLICADO, no el del árbol de trabajo."
+          fi
+
+          # --- Guarda 3: el header declara la verificación y el valor esperado ----------
+          # Un backfill sin forma de comprobarlo es un UPDATE a ciegas que termina en «listo».
+          VERIF_SQL="$(sed -nE 's/^[[:space:]]*--[[:space:]]*verificar:[[:space:]]*//p' "$SQL_FILE" | head -1)"
+          if [ -z "$VERIF_SQL" ]; then
+            echo "::error title=Falta la verificación::El archivo '$SQL_INPUT' no declara la consulta de verificación. Agregá al header una línea \`-- verificar: SELECT ...\` que devuelva una cifra."
+            exit 1
+          fi
+          if ! printf '%s' "$VERIF_SQL" | grep -qiE '^[[:space:]]*SELECT\b'; then
+            echo "::error title=La verificación no es un SELECT::En '$SQL_INPUT' la línea \`-- verificar:\` tiene que empezar con SELECT; decía: $VERIF_SQL"
+            exit 1
+          fi
+          ESPERADO="$(sed -nE 's/^[[:space:]]*--[[:space:]]*esperado:[[:space:]]*//p' "$SQL_FILE" | head -1 | sed -E 's/[[:space:]]+$//')"
+          if [ -z "$ESPERADO" ]; then
+            echo "::error title=Falta el valor esperado::El archivo '$SQL_INPUT' no declara el valor esperado. Agregá al header \`-- esperado: 0\` con el valor que la verificación tiene que devolver DESPUÉS del UPDATE."
+            exit 1
+          fi
+
+          # --- Guarda 4: nada destructivo (DROP/DELETE/TRUNCATE/ALTER/GRANT) -------------
+          # Esos son del modo `aplicar-destructivo`, con su intención escrita. Se miran los
+          # comentarios fuera (`--` y `/* */`, también los de varias líneas): este mismo
+          # archivo puede HABLAR de un DELETE sin ejecutarlo —los SQL de SQLite que
+          # documentan este carril lo hacen— y eso no es una sentencia.
+          SQL_SIN_COMENTARIOS=/tmp/aplicar-sql-sin-comentarios.sql
+          awk '
+            {
+              linea = $0; salida = ""; i = 1
+              while (i <= length(linea)) {
+                if (en_bloque) {
+                  j = index(substr(linea, i), "*/")
+                  if (j == 0) { i = length(linea) + 1 }
+                  else { en_bloque = 0; i = i + j + 1 }
+                } else {
+                  d = index(substr(linea, i), "--")
+                  b = index(substr(linea, i), "/*")
+                  if (d == 0 && b == 0) { salida = salida substr(linea, i); i = length(linea) + 1 }
+                  else if (b == 0 || (d != 0 && d < b)) { salida = salida substr(linea, i, d - 1); i = length(linea) + 1 }
+                  else { salida = salida substr(linea, i, b - 1); en_bloque = 1; i = i + b + 1 }
+                }
+              }
+              print salida
+            }
+          ' "$SQL_FILE" > /tmp/aplicar-sql-sin-comentarios.sql
+          SQL_UTIL=$(grep -vE '^[[:space:]]*$' "$SQL_SIN_COMENTARIOS" || true)
+          if [ -z "$SQL_UTIL" ]; then
+            echo "::error title=El archivo no trae sentencias::'$SQL_INPUT' queda vacío al descontar comentarios y líneas en blanco: no hay nada que ejecutar."
+            exit 1
+          fi
+          PROHIBIDA=$(grep -oiE '\b(DROP|DELETE|TRUNCATE|ALTER|GRANT)\b' "$SQL_SIN_COMENTARIOS" | head -1 | tr '[:lower:]' '[:upper:]' || true)
+          if [ -n "$PROHIBIDA" ]; then
+            echo "::error title=SQL destructivo::'$SQL_INPUT' trae '$PROHIBIDA' fuera de comentarios. DROP, DELETE, TRUNCATE, ALTER y GRANT no se corren en este modo: son del modo \`aplicar-destructivo\`, con su archivo de intención. Abortado sin tocar la base."
+            exit 1
+          fi
+
+          echo "SQL de este run: $SQL_INPUT (blob del commit $SHA_APLICADO, sin palabras destructivas fuera de comentarios)"
+          {
+            echo ""
+            echo "### Modo aplicar-sql"
+            echo ""
+            echo "- Archivo: \`$SQL_INPUT\` (commit \`$SHA_APLICADO\`)"
+            echo "- Verificación: \`$VERIF_SQL\`"
+            echo "- Esperado después: \`$ESPERADO\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          # --- Ejecución: la foto de antes, el archivo, la foto de después --------------
+          # 1) Antes. Se imprime pero no se exige: en un backfill lo normal es que dé
+          #    distinto de cero, y que el UPDATE lo lleve al valor declarado.
+          if ! VALOR_ANTES="$(psql "$DATABASE_URL" -tA -c "$VERIF_SQL")"; then
+            echo "::error title=Falló la verificación previa::La consulta de verificación no se pudo correr contra la base. Abortado ANTES de ejecutar '$SQL_INPUT'."
+            exit 1
+          fi
+          echo "verificación previa: $VALOR_ANTES"
+
+          # 2) El archivo, con ON_ERROR_STOP=1: si una sentencia falla, las siguientes no
+          #    corren. Sin eso un backfill a medias se leería como «listo».
+          SALIDA_SQL=/tmp/aplicar-sql-salida.txt
+          if ! psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f "$SQL_FILE" 2>&1 | tee "$SALIDA_SQL"; then
+            echo "::error title=El SQL falló::psql devolvió error con ON_ERROR_STOP=1 sobre '$SQL_INPUT'. La base quedó en el punto que muestra la salida de arriba; no se reintenta nada solo."
+            exit 1
+          fi
+
+          # 3) Filas afectadas: el tag que imprime psql (`UPDATE <n>`). Se listan y se suman
+          #    por si el archivo trae más de un UPDATE.
+          FILAS_TAG=$(grep -oE '^UPDATE [0-9]+' "$SALIDA_SQL" || true)
+          if [ -z "$FILAS_TAG" ]; then
+            FILAS_TOTAL=0
+            echo "filas afectadas por UPDATE: 0 (el archivo no cerró ningún UPDATE)"
+          else
+            echo "$FILAS_TAG"
+            FILAS_TOTAL=$(printf '%s\n' "$FILAS_TAG" | awk '{s += $2} END {print s + 0}')
+            echo "filas afectadas por UPDATE: $FILAS_TOTAL"
+          fi
+
+          # 4) Después, contra lo declarado. Si no coincide, el job FALLA: el archivo dijo
+          #    qué tenía que dar y no dio eso, así que «aplicado» sería una suposición.
+          if ! VALOR_DESPUES="$(psql "$DATABASE_URL" -tA -c "$VERIF_SQL")"; then
+            echo "::error title=Falló la verificación posterior::El UPDATE corrió pero la consulta de verificación no se pudo ejecutar. Revisá a mano: no se sabe si el archivo quedó completo."
+            exit 1
+          fi
+          echo "verificación posterior: $VALOR_DESPUES (esperado: $ESPERADO)"
+          if [ "$VALOR_DESPUES" != "$ESPERADO" ]; then
+            echo "::error title=La verificación no dio lo esperado::Después de correr '$SQL_INPUT', la verificación devolvió '$VALOR_DESPUES' y el archivo declara \`-- esperado: $ESPERADO\`. El UPDATE corrió: la base quedó como quedó y esto no se reintenta solo."
+            exit 1
+          fi
+          {
+            echo "- Verificación: antes \`$VALOR_ANTES\` → después \`$VALOR_DESPUES\` (esperado \`$ESPERADO\`)"
+            echo "- Filas afectadas por UPDATE: **$FILAS_TOTAL**"
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "'$SQL_INPUT' aplicado y verificado: $VALOR_DESPUES (esperado $ESPERADO), $FILAS_TOTAL filas por UPDATE."
+
       - name: Verificar que la base quedó alineada
-        if: inputs.modo != 'diagnostico' && steps.deriva.outputs.deriva == 'pendiente'
+        if: inputs.modo != 'diagnostico' && inputs.modo != 'aplicar-sql' && steps.deriva.outputs.deriva == 'pendiente'
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |

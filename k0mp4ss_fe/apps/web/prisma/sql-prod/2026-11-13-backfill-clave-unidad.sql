@@ -29,6 +29,11 @@ UPDATE "acuerdos_votos"
  WHERE "unidadId" IS NOT NULL
    AND "claveUnidad" IS NULL;
 
+-- Marcadores que el carril `aplicar-sql` exige para poder ejecutar este archivo y
+-- comprobar el resultado. La consulta debe dar `esperado` al terminar.
+-- verificar: SELECT count(*) FROM "acuerdos_votos" WHERE "unidadId" IS NOT NULL AND "claveUnidad" IS NULL;
+-- esperado: 0
+
 -- NOTA SOBRE EL CARRIL
 -- `.github/workflows/db-prod.yml` acepta `diagnostico | aplicar | aplicar-destructivo`:
 -- `aplicar` aplica el diff del esquema y `aplicar-destructivo` exige una intención

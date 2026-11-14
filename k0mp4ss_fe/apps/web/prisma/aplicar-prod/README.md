@@ -37,3 +37,31 @@ blanco. Si el borrado no se puede justificar así, no se hace.
 `2026-11-12-retira-documentos-co.md` — la tabla de la vieja biblioteca de CO, retirada del
 código el 2026-11-07 y pendiente de borrar en producción. Su versión PostgreSQL está en
 `prisma/sql-prod/2026-11-12-retira-documentos-co.sql`.
+
+## El otro carril: `aplicar-sql`
+
+`prisma/sql-prod/` guarda los SQL de una sola pasada —backfills, correcciones de datos—
+que el diff del esquema no puede expresar: el diff crea la columna, no la llena. El modo
+`aplicar-sql` del carril `db-prod` corre **un** archivo de ese directorio, y sólo eso: no
+toma SQL de un campo de texto, así que nunca es SQL libre.
+
+Se niega, siempre **antes** de abrir la conexión, cuando:
+
+- la ruta no empieza con `k0mp4ss_fe/apps/web/prisma/sql-prod/`, o trae un segmento `..`;
+- el archivo no está commiteado en el commit que se aplica;
+- al archivo le falta en el header `-- verificar: SELECT ...` o `-- esperado: <valor>`;
+- el SQL trae `DROP`, `DELETE`, `TRUNCATE`, `ALTER` o `GRANT` fuera de comentarios: eso es
+  de `aplicar-destructivo`, con su intención.
+
+El header es lo que distingue un backfill de un `UPDATE` a ciegas — las dos líneas se
+leen antes de ejecutar, la verificación corre antes (se imprime) y después (tiene que dar
+el valor declarado o el job falla), y el run informa las filas que tocó el `UPDATE`:
+
+```sql
+-- verificar: SELECT count(*) FROM "acuerdos_votos" WHERE "unidadId" IS NOT NULL AND "claveUnidad" IS NULL;
+-- esperado: 0
+```
+
+**El commit se exige igual que en la intención**: el archivo tiene que estar en el commit
+que se aplica o en un ancestro suyo. Uno que sólo está en el árbol de trabajo no corre
+—se ejecuta el contenido del commit, no el del editor—, y el run lo avisa si difieren.
