@@ -58,6 +58,8 @@ const EMAIL = {
   admin: "f36b-admin@test.cl",
   residente: "f36b-residente@test.cl",
   mantencion: "f36b-mantencion@test.cl",
+  conserjeria: "f36b-conserjeria@test.cl",
+  comite: "f36b-comite@test.cl",
   sinFicha: "f36b-sinficha@test.cl",
   adminB: "f36b-admin-b@test.cl",
 }
@@ -203,6 +205,8 @@ describe("F36 — GET /api/certificados-ct/buscar-personas", () => {
       { email: EMAIL.admin, comunidadId: COM_A, rol: "administrador", personaId: null },
       { email: EMAIL.residente, comunidadId: COM_A, rol: "residente", personaId: P_ANA },
       { email: EMAIL.mantencion, comunidadId: COM_A, rol: "mantencion", personaId: null },
+      { email: EMAIL.conserjeria, comunidadId: COM_A, rol: "conserjeria", personaId: null },
+      { email: EMAIL.comite, comunidadId: COM_A, rol: "comite", personaId: null },
       { email: EMAIL.sinFicha, comunidadId: COM_A, rol: "residente", personaId: null },
       { email: EMAIL.adminB, comunidadId: COM_B, rol: "administrador", personaId: null },
     ]) {
@@ -248,6 +252,42 @@ describe("F36 — GET /api/certificados-ct/buscar-personas", () => {
     const res = await conSesion(EMAIL.mantencion, () => buscar("Ana"))
     expect(res.status).toBe(403)
     expect((await cuerpo(res)).error).toBe("Permiso denegado.")
+  })
+
+  it("conserjería tampoco busca el padrón del formulario (403)", async () => {
+    // Segundo caso real de la compuerta: conserjería opera el portón pero
+    // carece de `ct` y de `ct:residencia` (sólo tiene `ct:propia`, vacía
+    // explícita). Si la compuerta se abriera o fallara abierto, acá habría 200
+    // y el padrón del formulario: el test fija el 403 con el mensaje literal,
+    // no un vacío silencioso.
+    const res = await conSesion(EMAIL.conserjeria, () => buscar("Ana"))
+    expect(res.status).toBe(403)
+    expect((await cuerpo(res)).error).toBe("Permiso denegado.")
+  })
+
+  it("el comité entra por el fallback de prefijo y busca su comunidad, nunca la ajena", async () => {
+    // PIN de la compuerta (revisión de 0afa2a3). El comité tiene la clave
+    // exacta `ct` con `ver` y NO tiene entrada propia de `ct:residencia`, así
+    // que su 200 sólo puede venir del fallback de prefijo de `puede()`. Este
+    // caso detecta la mutación que le corta ese camino: que la ruta pida una
+    // clave de `ct` con Set VACÍO explícito para comité (el patrón del código
+    // para cortar fallbacks, cf. `ct:historial`) o que el motor pierda el
+    // fallback de prefijo — en ambos, este 200 se vuelve 403.
+    // La mutación INVERSA —ensanchar la clave a `ct`— no es detectable hoy:
+    // para los cinco roles de la matriz
+    // `puede(rol, "ver", "ct:residencia") === puede(rol, "ver", "ct")`
+    // (ningún rol tiene `ct` ver sin alcanzar también `ct:residencia` ver),
+    // así que el candado observable es este lado positivo.
+    // Y el alcance: comité está en `ROLES_CON_ALCANCE_DE_COMUNIDAD` sin ficha
+    // en MP; si cayera al alcance por filas recibiría `denegado` (fail-closed)
+    // y este 200 con Ana se volvería un vacío silencioso.
+    await conSesion(EMAIL.comite, async () => {
+      const res = await buscar("Buscada")
+      expect(res.status).toBe(200)
+      const vista = await cuerpo(res)
+      expect(vista.data.map((p) => p.id)).toEqual([P_ANA])
+      expect(vista.data.some((p) => p.id === P_B_ANA)).toBe(false)
+    })
   })
 
   it("sin `q` responde 400: la búsqueda es la razón de la ruta", async () => {
@@ -322,6 +362,23 @@ describe("F36 — GET /api/certificados-ct/buscar-personas", () => {
       const denegada = await cuerpo(await buscar("Buscada"))
       expect(denegada.total).toBe(0)
       expect(denegada.data).toEqual([])
+    })
+  })
+
+  it("una persona ajena buscada por RUT o email responde la MISMA página vacía que un sin-match", async () => {
+    // La persona ajena EXISTE y la administración la encuentra: el contraste
+    // prueba que el vacío del rol acotado no es «la persona no existe» sino
+    // «no es tuya». La respuesta declara la misma forma que un sin-match
+    // genuino (data [], total 0, page, pageSize), así que el consumidor no
+    // puede distinguir «no existe» de «no te incumbe».
+    await conSesion(EMAIL.admin, async () => {
+      const existe = await cuerpo(await buscar("11.444.441-K"))
+      expect(existe.total).toBe(1)
+    })
+    await conSesion(EMAIL.residente, async () => {
+      const vacia = { data: [], page: 1, pageSize: 25, total: 0 }
+      expect(await cuerpo(await buscar("11.444.441-K"))).toEqual(vacia)
+      expect(await cuerpo(await buscar("f36b-p-lote-01@f36b.test.cl"))).toEqual(vacia)
     })
   })
 
