@@ -136,4 +136,67 @@ describe("tarjeta de titularidad en /admin/metricas", () => {
     expect(valorDeMetrica(seccion, ETIQUETA_CONTEO)).toBe("0")
     expect(within(seccion).getByText(ESTADO_BUENO)).toBeTruthy()
   })
+
+  it("dos unidades pueden compartir número: cada fila sobrevive con SU causa (sin claves duplicadas)", () => {
+    // No unique en [comunidadId, numero] (C3b/D5): números repetibles entre
+    // micro-sectores. Una clave por número haría que React vea dos hijos con la
+    // misma clave y concilie mal la lista.
+    estadoTitularidad.titularidad = {
+      sinTitular: 2,
+      nuncaDeclarado: 1,
+      vinculoCerradoSinReemplazo: 1,
+      unidades: [
+        { numero: "101", causa: "nunca_declarado" },
+        { numero: "101", causa: "vinculo_cerrado_sin_reemplazo" },
+      ],
+    }
+    const errores: unknown[] = []
+    const espia = vi
+      .spyOn(console, "error")
+      .mockImplementation((...args: unknown[]) => {
+        errores.push(args)
+      })
+    try {
+      render(<MetricasPage />)
+      const seccion = seccionTitularidad()
+
+      // Las dos filas existen aunque compartan número, cada una con SU causa.
+      expect(within(seccion).getAllByText("101")).toHaveLength(2)
+      expect(within(seccion).getAllByText("Nunca declarado")).toHaveLength(1)
+      expect(
+        within(seccion).getAllByText("Vínculo cerrado sin reemplazo")
+      ).toHaveLength(1)
+
+      // Y React no avisa claves duplicadas durante el render.
+      const textoErrores = errores
+        .map((e) => (Array.isArray(e) ? e.map(String).join(" ") : String(e)))
+        .join("\n")
+      expect(textoErrores).not.toMatch(/same key|duplicate key/i)
+    } finally {
+      espia.mockRestore()
+    }
+  })
+
+  it("con más unidades sin dueño que las que trae la lista, declara cuántas muestra de cuántas son", () => {
+    // La API corta la lista en 50 y declara el total aparte: la nota debe decir
+    // ambos números (el mostrado y el real), nunca sólo el recorte.
+    estadoTitularidad.titularidad = {
+      sinTitular: 52,
+      nuncaDeclarado: 52,
+      vinculoCerradoSinReemplazo: 0,
+      unidades: Array.from({ length: 50 }, (_, i) => ({
+        numero: `C-${String(i + 1).padStart(2, "0")}`,
+        causa: "nunca_declarado" as const,
+      })),
+    }
+    render(<MetricasPage />)
+    const seccion = seccionTitularidad()
+
+    // La métrica sigue declarando el TOTAL, no el recorte.
+    expect(valorDeMetrica(seccion, ETIQUETA_CONTEO)).toBe("52")
+    // La nota lleva los dos números: mostrados y totales.
+    expect(
+      within(seccion).getByText("Mostrando 50 de 52 unidades sin titular.")
+    ).toBeTruthy()
+  })
 })

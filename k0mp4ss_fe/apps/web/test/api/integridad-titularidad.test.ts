@@ -27,6 +27,11 @@ import { leerTitularidad } from "@/app/admin/metricas/_titularidad"
 
 const APP_DIR = path.resolve(__dirname, "..", "..")
 const COMUNIDAD = "integridad-titular-com-a"
+/** Otra comunidad que toma para sí el id de una unidad del fixture. */
+const COMUNIDAD_OTRA = "integridad-titular-com-b"
+/** Unidad del fixture cuyo id ya fue tomado por la OTRA comunidad. */
+const U_AJENA = "u-INT-01"
+const VINCULO_AJENO = "integridad-vinculo-ajeno"
 const SCHEMA = "prisma/schema.sqlite.prisma"
 
 let directorio = ""
@@ -97,7 +102,6 @@ afterAll(async () => {
   await prisma?.$disconnect()
   if (directorio) rmSync(directorio, { recursive: true, force: true })
 })
-
 describe("integridad de titularidad — semilla de demo completa", () => {
   it("la semilla deja las 166 unidades con propietario vigente", async () => {
     const titularidad = await leerTitularidad(COMUNIDAD, prisma)
@@ -166,4 +170,80 @@ describe("chequeo de integridad — fixture roto aplicado y quitado", () => {
     expect(estricto.estado).toBe(0)
     expect(totalDelChequeo(estricto.salida)).toBe(0)
   }, 180_000)
+})
+
+describe("fixture roto — colisión de id con otra comunidad", () => {
+  it("si el id del fixture ya existe en OTRA comunidad, --aplicar aborta y no toca nada", async () => {
+    // La colisión se monta ACÁ (no en beforeAll): los applies/quitars de los
+    // describe anteriores son legítimos y sólo en ESTE caso el id del fixture
+    // ya fue tomado por otra comunidad.
+    await prisma.comunidad.create({
+      data: { id: COMUNIDAD_OTRA, nombre: "Comunidad Integridad Otra", slug: "integridad-otra" },
+    })
+    await prisma.unidad.create({
+      data: {
+        id: U_AJENA,
+        comunidadId: COMUNIDAD_OTRA,
+        microSectorId: "micro-ajeno",
+        numero: "INT-01",
+        etiqueta: "Unidad ajena",
+        tipoUnidadId: "tipo-ajeno",
+        metraje: 50,
+        prorrateo: 1,
+        rolSii: "",
+        estadoId: "vacante",
+        servicios: {},
+      },
+    })
+    // La unidad ajena tiene un vínculo de propietario: una reasignación lo
+    // dejaría huérfano (el daño que la guardia tiene que impedir).
+    await prisma.vinculoUnidad.create({
+      data: {
+        id: VINCULO_AJENO,
+        comunidadId: COMUNIDAD_OTRA,
+        personaId: "persona-ajena",
+        unidadId: U_AJENA,
+        rol: "propietario",
+        fechaInicio: "2020-01-01",
+        fechaFin: null,
+        permiteVerFinanzas: false,
+      },
+    })
+
+    const aplicar = correr([
+      "vite-node",
+      "scripts/fixture-integridad-titularidad.ts",
+      `--comunidad-id=${COMUNIDAD}`,
+      "--aplicar",
+    ])
+    const salida = `${aplicar.stdout ?? ""}${aplicar.stderr ?? ""}`
+    expect(aplicar.status, `aplicar debería abortar por colisión de id:\n${salida}`).not.toBe(0)
+    // El error literal nombra el id y la comunidad dueña de la fila.
+    expect(salida).toContain(U_AJENA)
+    expect(salida).toContain(COMUNIDAD_OTRA)
+
+    // La unidad ajena sigue siendo de SU comunidad y conserva su vínculo:
+    // nada fue reasignado ni borrado.
+    const despues = await prisma.unidad.findUnique({ where: { id: U_AJENA } })
+    expect(despues?.comunidadId).toBe(COMUNIDAD_OTRA)
+    const vinculoDespues = await prisma.vinculoUnidad.findUnique({
+      where: { id: VINCULO_AJENO },
+    })
+    expect(vinculoDespues?.unidadId).toBe(U_AJENA)
+    expect(vinculoDespues?.comunidadId).toBe(COMUNIDAD_OTRA)
+
+    // Y la comunidad pedida quedó intacta: ni unidades nuevas ni cierre.
+    const titularidad = await leerTitularidad(COMUNIDAD, prisma)
+    expect(titularidad.total).toBe(0)
+    expect(titularidad.evaluadas).toBe(166)
+    const cierre = await prisma.vinculoUnidad.findFirst({
+      where: { comunidadId: COMUNIDAD, fechaFin: "2099-12-31" },
+    })
+    expect(cierre).toBeNull()
+
+    // Limpieza local: la comunidad colisionada no queda para ningún otro caso.
+    await prisma.vinculoUnidad.deleteMany({ where: { comunidadId: COMUNIDAD_OTRA } })
+    await prisma.unidad.deleteMany({ where: { comunidadId: COMUNIDAD_OTRA } })
+    await prisma.comunidad.deleteMany({ where: { id: COMUNIDAD_OTRA } })
+  }, 120_000)
 })

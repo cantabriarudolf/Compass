@@ -125,4 +125,45 @@ describe("semilla de titulares — ninguna unidad de la demo queda sin dueño", 
   it("es determinista: dos generaciones dejan la misma semilla", () => {
     expect(generarTitularesDeDemo()).toEqual(titularesDeDemo)
   })
+
+  it("un bien común se excluye por el CONJUNTO de ids que se le pasa, no sólo por el id de la demo", () => {
+    // El modelo TipoUnidad no tiene un campo que marque un bien común (la
+    // `categoria` es un rótulo libre y la comparte con los estacionamientos
+    // privados): la exclusión es por ids y quien llama puede pasar el conjunto
+    // real de SU comunidad. La demo de prueba usa un id distinto al de la demo
+    // sembrada para probar que el conjunto por defecto no es un hecho universal.
+    const unidadAjena = {
+      id: "u-otro-bien-comun",
+      microSectorId: "est-vis",
+      numero: "BC-01",
+      etiqueta: "Bien común de otra comunidad",
+      tipoUnidadId: "tipo-bien-comun-otro",
+      metraje: 12.5,
+      prorrateo: 0,
+      rolSii: "",
+      estadoId: "comun",
+      servicios: {},
+    }
+    const unidadesConOtroBienComun = [...unidades, unidadAjena]
+
+    // Sin opciones (el conjunto por defecto es el id de la demo): la unidad con
+    // otro id de bien común se cuenta como sin dueño — la demo no lo siembra.
+    const porDefecto = evaluarTitularidad(unidadesConOtroBienComun, semillaCompleta)
+    expect(porDefecto.total).toBe(1)
+    expect(porDefecto.bienesComunes).toBe(0)
+    expect(porDefecto.evaluadas).toBe(167)
+
+    // Con el conjunto de la comunidad: se excluye como bien común y la unidad
+    // real de la demo no se ve afectada.
+    const conConjunto = evaluarTitularidad(unidadesConOtroBienComun, semillaCompleta, {
+      tiposBienComun: new Set(["tipo-bien-comun-otro"]),
+    })
+    expect(conConjunto.total).toBe(0)
+    expect(conConjunto.bienesComunes).toBe(1)
+    expect(conConjunto.evaluadas).toBe(166)
+    expect(conConjunto.porCausa).toEqual({
+      nunca_declarado: 0,
+      vinculo_cerrado_sin_reemplazo: 0,
+    })
+  })
 })

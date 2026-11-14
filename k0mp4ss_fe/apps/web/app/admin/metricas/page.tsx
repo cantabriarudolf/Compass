@@ -363,9 +363,12 @@ export default function MetricasPage() {
                 ) : (
                   <>
                     <ul className="space-y-1">
-                      {(titularidad?.unidades ?? []).map((unidad) => (
+                      {(titularidad?.unidades ?? []).map((unidad, indice) => (
                         <li
-                          key={unidad.numero}
+                          // No unique en [comunidadId, numero] (C3b/D5): dos
+                          // unidades de la misma comunidad pueden compartir
+                          // número. La clave suma causa e índice: no puede chocar.
+                          key={`${unidad.numero}-${unidad.causa}-${indice}`}
                           className="flex items-center justify-between gap-2 text-sm"
                         >
                           <span className="font-medium">{unidad.numero}</span>

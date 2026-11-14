@@ -21,19 +21,38 @@
  *   - `vinculo_cerrado_sin_reemplazo`: hubo dueño y su tramo se cerró sin uno
  *     nuevo. Es el error caro: parece una unidad vendida y sigue sin cobrador.
  *
- * Los BIENES COMUNES quedan fuera del universo evaluado: `tipo-es-visita` es la
- * playa de visitas de la comunidad («bien común, no se asigna a unidades», ver
- * `scripts/seed-demo-consistente.ts` paso 1 y `specs/EF-estructura-fisica`). Un
- * bien común no tiene dueño y no se le cobra a nadie: contarlo como incidente
- * sería un falso positivo permanente. El conteo de excluidas se informa igual
- * (`bienesComunes`) para que la exclusión no esconda nada.
+ * Los BIENES COMUNES quedan fuera del universo evaluado. UNA HIPÓTESIS DECLARADA:
+ * el modelo `TipoUnidad` NO tiene un campo que marque un bien común (verificado
+ * contra `prisma/schema.prisma`; su `categoria` es un rótulo libre —en la demo el
+ * estacionamiento de visitas y los estacionamientos privados comparten
+ * `categoria: "Estacionamiento"`—). La exclusión es entonces POR IDS DE TIPO y el
+ * conjunto por defecto contiene el id de LA DEMO (`tipo-es-visita`,
+ * `scripts/seed-demo-consistente.ts` paso S5). Una comunidad cuyo bien común
+ * tenga otro id se contaría mal (falso positivo: «sin propietario») salvo que
+ * quien llame pase el conjunto real por `tiposBienComun` — `evaluarTitularidad` y
+ * `leerTitularidad` lo aceptan. No se inventa columna de esquema para taparlo.
+ * La exclusión se informa igual (`bienesComunes`) para que no esconda nada.
  *
  * Este módulo NO imprime ni devuelve datos personales: unidad, número y causa.
  */
 import type { PrismaClient } from "@prisma/client"
 
-/** Tipo de unidad del estacionamiento de visitas: bien común, sin titular. */
-export const TIPO_UNIDAD_BIEN_COMUN = "tipo-es-visita"
+/**
+ * Id del tipo de unidad «Estacionamiento Visita» de la comunidad de DEMO: el bien
+ * común que la semilla consistente crea (`scripts/seed-demo-consistente.ts` paso
+ * S5). NO es un hecho del modelo `TipoUnidad` — el esquema no tiene un campo que
+ * marque un bien común —: es el id que la demo le pone. Una comunidad real cuyo
+ * bien común tenga otro id debe pasar su conjunto por `tiposBienComun`.
+ */
+export const TIPO_UNIDAD_BIEN_COMUN_DEMO = "tipo-es-visita"
+
+/**
+ * El conjunto por defecto de tipos de bien común: SÓLO el id de la demo. Es un
+ * default documentado, no una verdad universal (ver la hipótesis del encabezado).
+ */
+export const TIPOS_BIEN_COMUN_POR_DEFECTO: ReadonlySet<string> = new Set([
+  TIPO_UNIDAD_BIEN_COMUN_DEMO,
+])
 
 /** Rol del vínculo que responde por la unidad. */
 const ROL_PROPIETARIO = "propietario"
@@ -87,13 +106,26 @@ function porNumero(a: UnidadSinTitular, b: UnidadSinTitular): number {
   return a.numero.localeCompare(b.numero, "es", { numeric: true })
 }
 
+/** Opciones de la derivación de titularidad. */
+export interface OpcionesTitularidad {
+  /**
+   * Ids de tipo de unidad que son bien común: se excluyen del universo evaluado
+   * (no aplica exigirles dueño). Por defecto sólo `TIPO_UNIDAD_BIEN_COMUN_DEMO`,
+   * el id de la demo. Una comunidad con su bien común bajo otro id debe pasar el
+   * conjunto real acá; si no lo hace, su bien común se cuenta como unidad sin
+   * dueño (falso positivo visible) en vez de esconderse silenciosamente.
+   */
+  tiposBienComun?: ReadonlySet<string>
+}
+
 /**
  * Deriva la titularidad de las unidades a partir de sus vínculos. Pura: recibe
  * las filas y devuelve el hecho, sin base ni reloj.
  */
 export function evaluarTitularidad(
   unidades: readonly UnidadParaTitularidad[],
-  vinculos: readonly VinculoParaTitularidad[]
+  vinculos: readonly VinculoParaTitularidad[],
+  opciones: OpcionesTitularidad = {}
 ): Titularidad {
   const porUnidad = new Map<string, { vigente: boolean; cerrado: boolean }>()
   for (const vinculo of vinculos) {
@@ -104,7 +136,8 @@ export function evaluarTitularidad(
     porUnidad.set(vinculo.unidadId, estado)
   }
 
-  const evaluables = unidades.filter((u) => u.tipoUnidadId !== TIPO_UNIDAD_BIEN_COMUN)
+  const tiposBienComun = opciones.tiposBienComun ?? TIPOS_BIEN_COMUN_POR_DEFECTO
+  const evaluables = unidades.filter((u) => !tiposBienComun.has(u.tipoUnidadId))
   const sinTitular: UnidadSinTitular[] = []
   for (const unidad of evaluables) {
     const estado = porUnidad.get(unidad.id)
@@ -144,7 +177,8 @@ type ClienteTitularidad = Pick<PrismaClient, "unidad" | "vinculoUnidad">
  */
 export async function leerTitularidad(
   comunidadId: string,
-  cliente: ClienteTitularidad
+  cliente: ClienteTitularidad,
+  opciones: OpcionesTitularidad = {}
 ): Promise<Titularidad> {
   const [unidades, vinculos] = await Promise.all([
     cliente.unidad.findMany({
@@ -157,5 +191,5 @@ export async function leerTitularidad(
       select: { unidadId: true, rol: true, fechaFin: true },
     }),
   ])
-  return evaluarTitularidad(unidades, vinculos)
+  return evaluarTitularidad(unidades, vinculos, opciones)
 }

@@ -13,8 +13,11 @@
  *      declaradas. Se crean con el primer micro-sector y tipo de unidad de la
  *      comunidad, así no se inventan referencias que no existan.
  *   2. UN vínculo de propietario vigente que se cierra sin reemplazo: el tramo
- *      queda con `fechaFin = 2026-01-31` y la unidad se ve vendida sin comprador.
- *      La fecha es la marca que permite deshacerlo.
+ *      queda con `fechaFin = 2099-12-31` y la unidad se ve vendida sin comprador.
+ *      La marca es un CENTINELA a propósito: ninguna venta real puede tener esa
+ *      fecha, así que `--quitar` sólo reabre el tramo del fixture. Con una fecha
+ *      plausible (la marca vieja, 2026-01-31) un tramo cerrado de verdad ese día
+ *      quedaba indistinguible del del fixture y `--quitar` lo reabría igual.
  *
  * Qué quita (`--quitar`): borra las tres unidades del fixture y reabre los
  * vínculos de propietario que quedaron cerrados con la fecha marca. Es
@@ -24,9 +27,9 @@
  * Los dos comandos imprimen qué hicieron. NO imprimen datos de personas.
  *
  * Uso (desde k0mp4ss_fe/apps/web):
- *   npm run fixture:integridad -- --comunidad-id=comunidad-a --aplicar
+ *   npm run db:fixture-integridad -- --comunidad-id=comunidad-a --aplicar
  *   npm run check:titularidad -- --comunidad-id=comunidad-a --strict   # falla
- *   npm run fixture:integridad -- --comunidad-id=comunidad-a --quitar
+ *   npm run db:fixture-integridad -- --comunidad-id=comunidad-a --quitar
  *   npm run check:titularidad -- --comunidad-id=comunidad-a --strict   # pasa
  */
 /* global process, console */
@@ -80,6 +83,19 @@ async function aplicar(prisma: PrismaClient, comunidadId: string): Promise<void>
   }
 
   for (const unidad of UNIDADES_SIN_TITULAR) {
+    // Guardia anti-robo: el upsert de abajo lleva `update: { comunidadId }`,
+    // así que si el id del fixture ya existe en OTRA comunidad lo REASIGNARÍA
+    // y dejaría huérfanos sus vínculos. Nunca se reasigna: se aborta nombrando
+    // el id y la comunidad dueña de la fila.
+    const choque = await prisma.unidad.findUnique({
+      where: { id: unidad.id },
+      select: { id: true, comunidadId: true },
+    })
+    if (choque && choque.comunidadId !== comunidadId) {
+      throw new Error(
+        `No se puede aplicar el fixture: el id de unidad ${unidad.id} ya pertenece a la comunidad ${choque.comunidadId} (pedido sobre ${comunidadId}). El fixture no reasigna unidades entre comunidades.`
+      )
+    }
     await prisma.unidad.upsert({
       where: { id: unidad.id },
       update: { comunidadId },
