@@ -69,6 +69,12 @@ const AUTH_SECRET = "test-secret-12345678"
 
 const COM_A = "conv-com-a"
 const COM_B = "conv-com-b"
+/**
+ * Comunidad dedicada a los cobros vencidos de la derivación del deudor: sus
+ * filas existen para que los dos endpoints nuevos se prueben sin mover los
+ * contadores de A y de B, que varios casos de este archivo afirman en cero.
+ */
+const COM_C = "conv-com-c"
 
 const U1 = "conv-u-1"
 const U2 = "conv-u-2"
@@ -78,6 +84,26 @@ const U_OTRA_PAGO = "conv-u-otra-pago"
 const P1 = "conv-p-1"
 const P2 = "conv-p-2"
 const P_OTRA = "conv-p-otra"
+/** Propietario de U1 con el vínculo CERRADO: ya no es propietario vigente. */
+const P_CERRADO = "conv-p-cerrado"
+/** Arrendatario vigente de U1: vive en la unidad, no la debe. */
+const P_ARRENDATARIO = "conv-p-arrendatario"
+
+// ── El deudor se DERIVA de la unidad y no se elige a ciegas ─────────────────
+/**
+ * Unidades de COM_C: la 101 con dos cobros vencidos, la 102 con uno vencido y
+ * uno pagado, y la 201 con un cobro que todavía no vence (no está morosa).
+ */
+const U_C_101 = "conv-c-u-101"
+const U_C_102 = "conv-c-u-102"
+const U_C_SIN_DEUDA = "conv-c-u-201"
+/** Vínculos de la 101: dos propietarios vigentes, uno cerrado y un arrendatario. */
+const P_C_ANA = "conv-c-p-ana"
+const P_C_BRUNO = "conv-c-p-bruno"
+const P_C_CERRADO = "conv-c-p-cerrado"
+const P_C_ARRENDATARIO = "conv-c-p-arrendatario"
+/** Fondo de gasto común de COM_C: el `CobroFI` lo exige, la derivación no lo lee. */
+const FONDO_C = "conv-fondo-gc-c"
 
 /** Acuerdo del Comité que autoriza el convenio de la unidad U1. */
 const ACUERDO_OK = "conv-ac-ok"
@@ -88,6 +114,7 @@ const ACUERDO_OK_U2 = "conv-ac-ok-u2"
 
 const EMAIL_ADMIN = "conv-admin@test.cl"
 const EMAIL_ADMIN_B = "conv-admin-b@test.cl"
+const EMAIL_ADMIN_C = "conv-admin-c@test.cl"
 const EMAIL_COMITE = "conv-comite@test.cl"
 const EMAIL_RESIDENTE = "conv-residente@test.cl"
 
@@ -99,6 +126,14 @@ const FONDO_B_INACTIVO = "conv-fondo-gc-b-inactivo"
 /** Mensaje literal del alta sin fondo: no se inventa un fondo ni se escribe nada. */
 const MENSAJE_SIN_FONDO =
   "No se puede suscribir el convenio: la comunidad no tiene un fondo de gasto común activo donde imputar las cuotas."
+
+/**
+ * El 400 literal del alta cuando el deudor no es propietario VIGENTE de la
+ * unidad. El convenio regulariza la deuda del DUEÑO (Ley 21.442 art. 6):
+ * suscribirlo con quien no la debe sería un registro válido de una deuda ajena.
+ */
+const MENSAJE_DEUDOR_NO_PROPIETARIO =
+  "No se puede suscribir el convenio: el deudor no es propietario vigente de la unidad."
 
 /** Convenio de la OTRA comunidad: la lectura del scope no puede verlo. */
 const CONVENIO_COM_B = "conv-convenio-b"
@@ -163,7 +198,8 @@ function datosPersona(
   comunidadId: string,
   rut: string,
   nombre: string,
-  email: string
+  email: string,
+  roles: string[] = ["propietario"]
 ) {
   return {
     id,
@@ -176,17 +212,22 @@ function datosPersona(
     telefonoMovil: "+56900000000",
     estadoCuenta: "activa",
     condicionesEspecialesIds: [],
-    roles: ["propietario"],
+    roles,
   }
 }
 
-function datosUnidad(id: string, comunidadId: string, numero: string) {
+function datosUnidad(
+  id: string,
+  comunidadId: string,
+  numero: string,
+  etiqueta = "Depto"
+) {
   return {
     id,
     comunidadId,
     microSectorId: `conv-ms-${numero}`,
     numero,
-    etiqueta: "Depto",
+    etiqueta,
     tipoUnidadId: "conv-tu-1",
     metraje: 50,
     prorrateo: 10,
@@ -405,6 +446,7 @@ describe("/api/convenios — convenio de pago con acuerdo del Comité (F29)", ()
     for (const c of [
       { id: COM_A, nombre: "Comunidad Convenios A", slug: "conv-com-a" },
       { id: COM_B, nombre: "Comunidad Convenios B", slug: "conv-com-b" },
+      { id: COM_C, nombre: "Comunidad Convenios C", slug: "conv-com-c" },
     ]) {
       await prisma.comunidad.upsert({ where: { id: c.id }, update: {}, create: c })
     }
@@ -426,6 +468,13 @@ describe("/api/convenios — convenio de pago con acuerdo del Comité (F29)", ()
         tipo: "gasto_comun",
         activo: false,
       },
+      {
+        id: FONDO_C,
+        comunidadId: COM_C,
+        nombre: "Fondo de Gasto Común",
+        tipo: "gasto_comun",
+        activo: true,
+      },
     ]) {
       await prisma.fondoFI.upsert({
         where: { id: fondo.id },
@@ -438,6 +487,28 @@ describe("/api/convenios — convenio de pago con acuerdo del Comité (F29)", ()
       datosPersona(P1, COM_A, "19111111-1", "Deudor Uno", "conv-p1@test.cl"),
       datosPersona(P2, COM_A, "19222222-2", "Deudor Dos", "conv-p2@test.cl"),
       datosPersona(P_OTRA, COM_B, "19333333-3", "Deudor Ajeno", "conv-p-otra@test.cl"),
+      // Viven en la 101 de A pero NO son propietarios vigentes de ella.
+      datosPersona(P_CERRADO, COM_A, "19444444-4", "Dueño Anterior", "conv-p-cerrado@test.cl"),
+      datosPersona(
+        P_ARRENDATARIO,
+        COM_A,
+        "19555555-5",
+        "Arrendatario Vigente",
+        "conv-p-arrendatario@test.cl",
+        ["residente"]
+      ),
+      // COM_C: dos propietarios vigentes de la 101, uno cerrado y un arrendatario.
+      datosPersona(P_C_ANA, COM_C, "19666666-6", "Ana Propietaria", "conv-c-ana@test.cl"),
+      datosPersona(P_C_BRUNO, COM_C, "19777777-7", "Bruno Propietario", "conv-c-bruno@test.cl"),
+      datosPersona(P_C_CERRADO, COM_C, "19888888-8", "Carla Ex Dueña", "conv-c-cerrada@test.cl"),
+      datosPersona(
+        P_C_ARRENDATARIO,
+        COM_C,
+        "19999999-9",
+        "Diego Arrendatario",
+        "conv-c-arrendatario@test.cl",
+        ["residente"]
+      ),
     ]) {
       await prisma.persona.upsert({ where: { id: p.id }, update: {}, create: p })
     }
@@ -449,8 +520,78 @@ describe("/api/convenios — convenio de pago con acuerdo del Comité (F29)", ()
       datosUnidad(U_FIRMA_FALLA, COM_A, "104"),
       datosUnidad(U_OTRA, COM_B, "901"),
       datosUnidad(U_OTRA_PAGO, COM_B, "902"),
+      datosUnidad(U_C_101, COM_C, "101", "Depto"),
+      datosUnidad(U_C_102, COM_C, "102", "Oficina"),
+      datosUnidad(U_C_SIN_DEUDA, COM_C, "201", "Depto"),
     ]) {
       await prisma.unidad.upsert({ where: { id: u.id }, update: {}, create: u })
+    }
+
+    // ── Vínculos: el convenio exige que el deudor sea PROPIETARIO VIGENTE ────
+    //
+    // Mismo criterio que la cobranza FI (`propietarioVigenteDeUnidad`): rol
+    // `propietario` con `fechaFin` null y el más reciente primero. P1 es dueño de
+    // U1 y P2 de U2, que es lo que hace válidos los convenios de los casos de
+    // abajo; los dos últimos vínculos de A existen para probar que NO alcanzan.
+    const vinculos = [
+      { id: "conv-v-p1-u1", comunidadId: COM_A, personaId: P1, unidadId: U1, rol: "propietario", fechaInicio: "2024-01-01", fechaFin: null },
+      { id: "conv-v-p2-u2", comunidadId: COM_A, personaId: P2, unidadId: U2, rol: "propietario", fechaInicio: "2024-01-01", fechaFin: null },
+      { id: "conv-v-cerrado-u1", comunidadId: COM_A, personaId: P_CERRADO, unidadId: U1, rol: "propietario", fechaInicio: "2020-01-01", fechaFin: "2025-06-30" },
+      { id: "conv-v-arrend-u1", comunidadId: COM_A, personaId: P_ARRENDATARIO, unidadId: U1, rol: "arrendatario", fechaInicio: "2025-01-01", fechaFin: null },
+      { id: "conv-v-p-otra-u-otra", comunidadId: COM_B, personaId: P_OTRA, unidadId: U_OTRA, rol: "propietario", fechaInicio: "2024-01-01", fechaFin: null },
+      { id: "conv-c-v-ana-101", comunidadId: COM_C, personaId: P_C_ANA, unidadId: U_C_101, rol: "propietario", fechaInicio: "2023-01-01", fechaFin: null },
+      { id: "conv-c-v-bruno-101", comunidadId: COM_C, personaId: P_C_BRUNO, unidadId: U_C_101, rol: "propietario", fechaInicio: "2024-01-01", fechaFin: null },
+      { id: "conv-c-v-cerrado-101", comunidadId: COM_C, personaId: P_C_CERRADO, unidadId: U_C_101, rol: "propietario", fechaInicio: "2019-01-01", fechaFin: "2022-12-31" },
+      { id: "conv-c-v-arrend-101", comunidadId: COM_C, personaId: P_C_ARRENDATARIO, unidadId: U_C_101, rol: "arrendatario", fechaInicio: "2025-02-01", fechaFin: null },
+    ]
+    for (const v of vinculos) {
+      await prisma.vinculoUnidad.upsert({
+        where: { id: v.id },
+        update: { fechaFin: v.fechaFin },
+        create: { ...v, permiteVerFinanzas: true },
+      })
+    }
+
+    // ── Cobros vencidos de COM_C ────────────────────────────────────────────
+    //
+    // La deuda se DERIVA de los `CobroFI` (`estadoDeCobro`/`morosidadPorUnidad`),
+    // igual que el tablero de morosos: un cobro pagado no es deuda y uno que
+    // todavía no vence tampoco. La 102 aparece con un período y la 201 no aparece.
+    const cobros = [
+      { id: "conv-c-cob-101-01", unidadId: U_C_101, periodo: "2024-01", montoBase: 10_000, fechaVencimiento: "2024-01-10", pagos: [] },
+      { id: "conv-c-cob-101-02", unidadId: U_C_101, periodo: "2024-02", montoBase: 20_000, fechaVencimiento: "2024-02-10", pagos: [] },
+      { id: "conv-c-cob-102-03", unidadId: U_C_102, periodo: "2024-03", montoBase: 5_000, fechaVencimiento: "2024-03-10", pagos: [] },
+      {
+        id: "conv-c-cob-102-04",
+        unidadId: U_C_102,
+        periodo: "2024-04",
+        montoBase: 7_000,
+        fechaVencimiento: "2024-04-10",
+        pagos: [{ id: "conv-c-pago-102-04", monto: 7_000, fecha: "2024-04-05", medio: "transferencia" }],
+      },
+      { id: "conv-c-cob-201-05", unidadId: U_C_SIN_DEUDA, periodo: "2099-01", montoBase: 9_000, fechaVencimiento: "2099-01-10", pagos: [] },
+    ]
+    for (const c of cobros) {
+      await prisma.cobroFI.upsert({
+        where: { id: c.id },
+        update: { pagos: c.pagos },
+        create: {
+          id: c.id,
+          comunidadId: COM_C,
+          unidadId: c.unidadId,
+          periodo: c.periodo,
+          concepto: "gasto_comun",
+          origenModulo: "FI",
+          fondoId: FONDO_C,
+          descripcion: `Cobro de prueba de la unidad ${c.unidadId} del período ${c.periodo}`,
+          montoBase: c.montoBase,
+          fechaCargo: c.fechaVencimiento,
+          fechaVencimiento: c.fechaVencimiento,
+          moras: [],
+          pagos: c.pagos,
+          diferencias: [],
+        },
+      })
     }
 
     const acuerdos = [
@@ -542,6 +683,7 @@ describe("/api/convenios — convenio de pago con acuerdo del Comité (F29)", ()
       // Administración de B: la prueba del alta sin fondo necesita una sesión
       // cuyo scope sea la comunidad que no puede imputar.
       { id: "conv-usuario-admin-b", email: EMAIL_ADMIN_B, comunidadId: COM_B, rol: "administrador" },
+      { id: "conv-usuario-admin-c", email: EMAIL_ADMIN_C, comunidadId: COM_C, rol: "administrador" },
       { id: "conv-usuario-comite", email: EMAIL_COMITE, comunidadId: COM_A, rol: "comite" },
       { id: "conv-usuario-residente", email: EMAIL_RESIDENTE, comunidadId: COM_A, rol: "residente" },
     ]
@@ -566,32 +708,35 @@ describe("/api/convenios — convenio de pago con acuerdo del Comité (F29)", ()
     try {
       state.cookie = ""
       await prisma.cobroFI.deleteMany({
-        where: { comunidadId: { in: [COM_A, COM_B] } },
+        where: { comunidadId: { in: [COM_A, COM_B, COM_C] } },
       })
       await prisma.cuotaConvenio.deleteMany({
-        where: { comunidadId: { in: [COM_A, COM_B] } },
+        where: { comunidadId: { in: [COM_A, COM_B, COM_C] } },
       })
       await prisma.convenioPago.deleteMany({
-        where: { comunidadId: { in: [COM_A, COM_B] } },
+        where: { comunidadId: { in: [COM_A, COM_B, COM_C] } },
       })
       await prisma.votoAcuerdo.deleteMany({
-        where: { comunidadId: { in: [COM_A, COM_B] } },
+        where: { comunidadId: { in: [COM_A, COM_B, COM_C] } },
       })
       await prisma.acuerdo.deleteMany({
-        where: { comunidadId: { in: [COM_A, COM_B] } },
+        where: { comunidadId: { in: [COM_A, COM_B, COM_C] } },
       })
-      await prisma.unidad.deleteMany({ where: { comunidadId: { in: [COM_A, COM_B] } } })
-      await prisma.persona.deleteMany({ where: { comunidadId: { in: [COM_A, COM_B] } } })
+      await prisma.vinculoUnidad.deleteMany({
+        where: { comunidadId: { in: [COM_A, COM_B, COM_C] } },
+      })
+      await prisma.unidad.deleteMany({ where: { comunidadId: { in: [COM_A, COM_B, COM_C] } } })
+      await prisma.persona.deleteMany({ where: { comunidadId: { in: [COM_A, COM_B, COM_C] } } })
       await prisma.fondoFI.deleteMany({
-        where: { comunidadId: { in: [COM_A, COM_B] } },
+        where: { comunidadId: { in: [COM_A, COM_B, COM_C] } },
       })
       await prisma.membresia.deleteMany({
-        where: { comunidadId: { in: [COM_A, COM_B] } },
+        where: { comunidadId: { in: [COM_A, COM_B, COM_C] } },
       })
       await prisma.usuario.deleteMany({
-        where: { email: { in: [EMAIL_ADMIN, EMAIL_ADMIN_B, EMAIL_COMITE, EMAIL_RESIDENTE] } },
+        where: { email: { in: [EMAIL_ADMIN, EMAIL_ADMIN_B, EMAIL_ADMIN_C, EMAIL_COMITE, EMAIL_RESIDENTE] } },
       })
-      for (const id of [COM_A, COM_B]) {
+      for (const id of [COM_A, COM_B, COM_C]) {
         await prisma.comunidad.delete({ where: { id } }).catch(() => {})
       }
     } catch {
@@ -638,6 +783,30 @@ describe("/api/convenios — convenio de pago con acuerdo del Comité (F29)", ()
   ): Promise<Response> {
     const { coleccion } = await cargaModulos()
     return coleccion.GET(new NextRequest(url, { method: "GET" }))
+  }
+
+  /**
+   * Las dos rutas ESTÁTICAS de la derivación del deudor se cargan por separado:
+   * si se sumaran a `cargaModulos`, un fallo de estos endpoints haría fallar los
+   * casos del convenio que no tienen nada que ver.
+   */
+  async function GET_UNIDADES_CON_DEUDA(query = ""): Promise<Response> {
+    const { GET } = await import("@/app/api/convenios/unidades-con-deuda/route")
+    return GET(
+      new NextRequest(
+        `http://localhost/api/convenios/unidades-con-deuda${query}`,
+        { method: "GET" }
+      )
+    )
+  }
+
+  async function GET_DEUDORES(query = ""): Promise<Response> {
+    const { GET } = await import("@/app/api/convenios/deudores/route")
+    return GET(
+      new NextRequest(`http://localhost/api/convenios/deudores${query}`, {
+        method: "GET",
+      })
+    )
   }
 
   const terminos = (extra: Record<string, unknown> = {}) => ({
@@ -731,6 +900,49 @@ describe("/api/convenios — convenio de pago con acuerdo del Comité (F29)", ()
       )
     })
     expect(await prisma.convenioPago.count({ where: { comunidadId: COM_A } })).toBe(0)
+  })
+
+  it("un deudor que no es propietario VIGENTE de la unidad es 400 literal y no escribe NADA", async () => {
+    // El convenio regulariza la deuda del DUEÑO de la unidad (Ley 21.442 art. 6).
+    // Aceptar a cualquier persona de la comunidad permitía crear el convenio de la
+    // unidad 101 con el deudor de la 102: un registro válido de una deuda ajena.
+    await conSesion(EMAIL_ADMIN, async () => {
+      // P2 existe en la comunidad, pero es propietario de la 102, no de la 101.
+      const otroDueno = await POST_CONVENIO(terminos({ personaId: P2 }))
+      expect(otroDueno.status).toBe(400)
+      expect(((await otroDueno.json()) as { error: string }).error).toBe(
+        MENSAJE_DEUDOR_NO_PROPIETARIO
+      )
+
+      // Dueño de la 101 con el vínculo CERRADO: ya no es propietario vigente.
+      const cerrado = await POST_CONVENIO(terminos({ personaId: P_CERRADO }))
+      expect(cerrado.status).toBe(400)
+      expect(((await cerrado.json()) as { error: string }).error).toBe(
+        MENSAJE_DEUDOR_NO_PROPIETARIO
+      )
+
+      // Arrendatario vigente de la 101: vive ahí, no la debe.
+      const arrendatario = await POST_CONVENIO(
+        terminos({ personaId: P_ARRENDATARIO })
+      )
+      expect(arrendatario.status).toBe(400)
+      expect(((await arrendatario.json()) as { error: string }).error).toBe(
+        MENSAJE_DEUDOR_NO_PROPIETARIO
+      )
+    })
+
+    // El rechazo no deja fila alguna: ni convenio, ni cuota, ni cargo, ni evento.
+    expect(await prisma.convenioPago.count({ where: { comunidadId: COM_A } })).toBe(0)
+    expect(await prisma.cuotaConvenio.count({ where: { comunidadId: COM_A } })).toBe(0)
+    expect(await prisma.cobroFI.count({ where: { comunidadId: COM_A } })).toBe(0)
+    expect(
+      await prisma.eventoAuditoria.count({
+        where: {
+          comunidadId: COM_A,
+          tipoAccion: { in: ["FI_CONVENIO_CREADO", "FI_CONVENIO_CARGOS"] },
+        },
+      })
+    ).toBe(0)
   })
 
   it("el alta exige los términos del convenio → 400 por zod sin escribir", async () => {
@@ -1141,6 +1353,143 @@ describe("/api/convenios — convenio de pago con acuerdo del Comité (F29)", ()
       expect(
         centavos((vigente?.totales.pagado ?? 0) + (vigente?.totales.pendiente ?? 0))
       ).toBe(centavos(400_000))
+    })
+  })
+
+  // ── El deudor se DERIVA de la unidad, no se elige a ciegas ────────────────
+  describe("/api/convenios — la deuda y el deudor se derivan de la unidad", () => {
+    it("sin sesión las dos rutas de derivación son 401", async () => {
+      state.cookie = ""
+      expect((await GET_UNIDADES_CON_DEUDA()).status).toBe(401)
+      expect((await GET_DEUDORES(`?unidadId=${U_C_101}`)).status).toBe(401)
+    })
+
+    it("un rol sin `fi:cobranza` crear no deriva ni la deuda ni el deudor: 403", async () => {
+      await conSesion(EMAIL_RESIDENTE, async () => {
+        expect((await GET_UNIDADES_CON_DEUDA()).status).toBe(403)
+        const deudores = await GET_DEUDORES(`?unidadId=${U1}`)
+        expect(deudores.status).toBe(403)
+        expect(((await deudores.json()) as { error: string }).error).toBe(
+          "Permiso denegado."
+        )
+      })
+    })
+
+    it("`unidades-con-deuda` lista sólo las unidades con cobros VENCIDOS, con sus períodos y su deuda", async () => {
+      await conSesion(EMAIL_ADMIN_C, async () => {
+        const res = await GET_UNIDADES_CON_DEUDA()
+        expect(res.status).toBe(200)
+        const j = (await res.json()) as {
+          data: Array<{
+            unidadId: string
+            numero: string
+            etiqueta: string | null
+            periodosVencidos: number
+            deudaVencida: number
+          }>
+          total: number
+          limite: number
+          mostrados: number
+        }
+
+        // La 102 tiene dos cobros con fecha pasada y sólo UNO es deuda (el otro
+        // está pagado); la 201 tiene un cobro que todavía no vence y no está morosa.
+        expect(j.data.map((fila) => fila.unidadId).sort()).toEqual(
+          [U_C_101, U_C_102].sort()
+        )
+        expect(j.data.map((fila) => fila.unidadId)).not.toContain(U_C_SIN_DEUDA)
+
+        const c101 = j.data.find((fila) => fila.unidadId === U_C_101)!
+        expect(c101.numero).toBe("101")
+        expect(c101.etiqueta).toBe("Depto")
+        expect(c101.periodosVencidos).toBe(2)
+        expect(centavos(c101.deudaVencida)).toBe(centavos(30_000))
+
+        const c102 = j.data.find((fila) => fila.unidadId === U_C_102)!
+        expect(c102.numero).toBe("102")
+        expect(c102.periodosVencidos).toBe(1)
+        expect(centavos(c102.deudaVencida)).toBe(centavos(5_000))
+
+        expect(j.total).toBe(2)
+        expect(j.mostrados).toBe(j.data.length)
+        expect(j.limite).toBe(50)
+      })
+    })
+
+    it("el filtro `q` busca por número y por etiqueta, y nunca hace aparecer una unidad sin deuda", async () => {
+      await conSesion(EMAIL_ADMIN_C, async () => {
+        const porNumero = (await (await GET_UNIDADES_CON_DEUDA("?q=101")).json()) as {
+          data: Array<{ unidadId: string; numero: string }>
+        }
+        expect(porNumero.data.map((fila) => fila.unidadId)).toEqual([U_C_101])
+
+        const porEtiqueta = (await (await GET_UNIDADES_CON_DEUDA("?q=Ofic")).json()) as {
+          data: Array<{ unidadId: string }>
+        }
+        expect(porEtiqueta.data.map((fila) => fila.unidadId)).toEqual([U_C_102])
+
+        // La 201 coincide con el número buscado, pero no tiene deuda vencida: la
+        // búsqueda ACOTA el universo de deudoras, no lo amplía.
+        const sinDeuda = (await (await GET_UNIDADES_CON_DEUDA("?q=201")).json()) as {
+          data: unknown[]
+          total: number
+        }
+        expect(sinDeuda.data).toEqual([])
+        expect(sinDeuda.total).toBe(0)
+      })
+    })
+
+    it("la unidad de otra comunidad NUNCA aparece en el listado", async () => {
+      await conSesion(EMAIL_ADMIN, async () => {
+        const res = await GET_UNIDADES_CON_DEUDA()
+        expect(res.status).toBe(200)
+        const j = (await res.json()) as { data: Array<{ unidadId: string }> }
+        const ajenas = [U_C_101, U_C_102, U_C_SIN_DEUDA]
+        expect(j.data.every((fila) => !ajenas.includes(fila.unidadId))).toBe(true)
+      })
+    })
+
+    it("`deudores` devuelve los propietarios VIGENTES y no el vínculo cerrado ni el arrendatario", async () => {
+      await conSesion(EMAIL_ADMIN_C, async () => {
+        const res = await GET_DEUDORES(`?unidadId=${U_C_101}`)
+        expect(res.status).toBe(200)
+        const j = (await res.json()) as {
+          data: Array<{ personaId: string; nombreCompleto: string; rut: string | null }>
+          total: number
+        }
+
+        // Dos propietarios vigentes, el más reciente primero: el mismo `orderBy`
+        // del criterio de la cobranza FI.
+        expect(j.data.map((deudor) => deudor.personaId)).toEqual([
+          P_C_BRUNO,
+          P_C_ANA,
+        ])
+        expect(
+          j.data.find((deudor) => deudor.personaId === P_C_ANA)?.nombreCompleto
+        ).toBe("Ana Propietaria")
+        // El propietario con `fechaFin` y el arrendatario vigente NO son deudores.
+        expect(j.data.map((deudor) => deudor.personaId)).not.toContain(P_C_CERRADO)
+        expect(j.data.map((deudor) => deudor.personaId)).not.toContain(
+          P_C_ARRENDATARIO
+        )
+        expect(j.total).toBe(2)
+      })
+    })
+
+    it("`deudores` de una unidad de otra comunidad es 404 y sin `unidadId` es 400", async () => {
+      await conSesion(EMAIL_ADMIN, async () => {
+        const ajena = await GET_DEUDORES(`?unidadId=${U_C_101}`)
+        expect(ajena.status).toBe(404)
+        expect(((await ajena.json()) as { error: string }).error).toBe(
+          "Unidad no encontrada."
+        )
+
+        const sinParametro = await GET_DEUDORES()
+        expect(sinParametro.status).toBe(400)
+        expect(((await sinParametro.json()) as { error: string }).error).toBe(
+          "Falta el parámetro unidadId."
+        )
+      })
     })
   })
 

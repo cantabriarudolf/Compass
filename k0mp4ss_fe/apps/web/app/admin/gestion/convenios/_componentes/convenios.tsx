@@ -19,6 +19,20 @@
  *     y los cargos FI los escribe el servidor en una transacción. La aritmética
  *     se muestra ANTES de suscribir para que el administrador vea qué va a firmar
  *     —no para persistirla— y por eso el texto dice quién calcula los montos;
+ *   · el DEUDOR se DERIVA de la unidad, no se elige de una lista de personas. El
+ *     convenio regulariza la deuda del PROPIETARIO VIGENTE de la unidad (Ley
+ *     21.442 art. 6) y la API rechaza con 400 a quien no lo sea, así que el
+ *     formulario ofrece sólo eso: elegida la unidad, pide sus propietarios
+ *     vigentes a `GET /api/convenios/deudores?unidadId=` (uno solo se
+ *     preselecciona; varios se ofrecen; ninguno se declara y manda a corregir el
+ *     registro, sin dejar firmar). Antes había dos selects con las 100 primeras
+ *     unidades y las 100 primeras personas de la comunidad: una lista ciega que
+ *     permitía firmar la deuda de una unidad a nombre de quien vive en otra;
+ *   · la UNIDAD se busca entre las que tienen deuda vencida
+ *     (`GET /api/convenios/unidades-con-deuda?q=`), que es la única deuda que un
+ *     convenio puede regularizar. El filtro `q` va al servidor: la pantalla no
+ *     trae el padrón entero para filtrarlo en el navegador, y el recorte de la
+ *     respuesta se declara con `AvisoTruncamiento`;
  *   · el PAGO de una cuota manda `{convenioId, numero}` y nada más: el monto, la
  *     fecha, el medio y el cierre del convenio como `saldado` los deriva el
  *     servidor de la cuota persistida (Ley 21.442 art. 6: la primera cuota se
@@ -83,14 +97,16 @@ import {
   IconReceipt,
 } from "@tabler/icons-react"
 import { AvisoTruncamiento } from "@/components/pe/aviso-truncamiento"
+import { cn } from "@workspace/ui/lib/utils"
 
 const RUTA = {
   convenios: "/api/convenios",
   pago: "/api/convenios/pago",
-  // El tope de la factory de colecciones (`pageSize` máx. 100). Si la comunidad
-  // tiene más, `AvisoTruncamiento` lo dice en pantalla en vez de esconderlo.
-  unidades: "/api/unidades?pageSize=100",
-  personas: "/api/personas?pageSize=100",
+  // Las unidades que un convenio puede regularizar: las que tienen cobros
+  // vencidos, con `q` para encontrar una en una comunidad grande.
+  unidadesConDeuda: "/api/convenios/unidades-con-deuda",
+  // El deudor DERIVADO de la unidad: sus propietarios vigentes.
+  deudores: "/api/convenios/deudores",
   acuerdos: "/api/acuerdos",
 } as const
 
@@ -123,18 +139,26 @@ interface ConvenioLeido {
   acuerdoFolio: string | null
 }
 
-/** Una unidad del catálogo, lo mínimo para el select del alta. */
-interface UnidadLeida {
-  id: string
+/**
+ * Una unidad CON DEUDA VENCIDA, lo mínimo para ofrecerla en el buscador. La
+ * deuda y los períodos los deriva el servidor con la regla del módulo FI.
+ */
+interface UnidadConDeuda {
+  unidadId: string
   numero: string
-  etiqueta?: string | null
+  etiqueta: string | null
+  periodosVencidos: number
+  deudaVencida: number
 }
 
-/** Una persona del catálogo, lo mínimo para el select del deudor. */
-interface PersonaLeida {
-  id: string
+/**
+ * Un propietario VIGENTE de la unidad elegida: el único deudor posible del
+ * convenio. `personaId` es lo que viaja en el alta como `personaId`.
+ */
+interface DeudorLeido {
+  personaId: string
   nombreCompleto: string
-  rut?: string | null
+  rut: string
 }
 
 /** Un acuerdo del libro, lo mínimo para elegir el que autoriza el convenio. */
@@ -299,17 +323,28 @@ export function ConsolaConvenios({
   const [avisoPago, setAvisoPago] = React.useState<string | null>(null)
 
   // Catálogo del alta. Se pide sólo si el rol puede suscribir: un rol que sólo
-  // audita no necesita las unidades, las personas ni el libro de acuerdos.
-  const [unidades, setUnidades] = React.useState<UnidadLeida[]>([])
-  const [personas, setPersonas] = React.useState<PersonaLeida[]>([])
+  // audita no necesita el libro de acuerdos ni las unidades con deuda.
   const [acuerdos, setAcuerdos] = React.useState<AcuerdoLeido[]>([])
-  const [totalUnidades, setTotalUnidades] =
-    React.useState<TotalDeColeccion>(SIN_TOTAL)
-  const [totalPersonas, setTotalPersonas] =
-    React.useState<TotalDeColeccion>(SIN_TOTAL)
   const [totalAcuerdos, setTotalAcuerdos] =
     React.useState<TotalDeColeccion>(SIN_TOTAL)
-  const [erroresCatalogo, setErroresCatalogo] = React.useState<string[]>([])
+  const [errorAcuerdos, setErrorAcuerdos] = React.useState<string | null>(null)
+
+  // Buscador de unidades DEUDORAS: el `q` va al servidor, que filtra por número
+  // y etiqueta y devuelve sólo las que tienen cobros vencidos.
+  const [busquedaUnidad, setBusquedaUnidad] = React.useState("")
+  const [unidadesConDeuda, setUnidadesConDeuda] = React.useState<
+    UnidadConDeuda[]
+  >([])
+  const [cargandoUnidades, setCargandoUnidades] = React.useState(false)
+  const [errorUnidades, setErrorUnidades] = React.useState<string | null>(null)
+  const [totalUnidades, setTotalUnidades] =
+    React.useState<TotalDeColeccion>(SIN_TOTAL)
+
+  // Deudor derivado de la unidad elegida: nunca una lista de personas.
+  const [deudores, setDeudores] = React.useState<DeudorLeido[]>([])
+  const [cargandoDeudores, setCargandoDeudores] = React.useState(false)
+  const [errorDeudores, setErrorDeudores] = React.useState<string | null>(null)
+  const pedidoDeudores = React.useRef<string | null>(null)
 
   const [unidadId, setUnidadId] = React.useState("")
   const [personaId, setPersonaId] = React.useState("")
@@ -345,49 +380,32 @@ export function ConsolaConvenios({
     setCargando(false)
   }, [])
 
-  const cargarCatalogo = React.useCallback(async (): Promise<void> => {
-    const [unidadesLeidas, personasLeidas, acuerdosLeidos] = await Promise.all([
-      leerJson(RUTA.unidades),
-      leerJson(RUTA.personas),
-      leerJson(RUTA.acuerdos),
-    ])
+  const cargarAcuerdos = React.useCallback(async (): Promise<void> => {
+    const acuerdosLeidos = await leerJson(RUTA.acuerdos)
 
-    // Cada colección falla con SU mensaje: si el libro de acuerdos responde 403,
-    // el administrador tiene que leer ese 403 y no un «no hay acuerdos».
-    const errores: string[] = []
-    for (const leida of [unidadesLeidas, personasLeidas, acuerdosLeidos]) {
-      if (!leida.ok && !errores.includes(leida.mensaje)) errores.push(leida.mensaje)
+    if (!acuerdosLeidos.ok) {
+      setErrorAcuerdos(acuerdosLeidos.mensaje)
+      setAcuerdos([])
+      setTotalAcuerdos(SIN_TOTAL)
+      return
     }
-    setErroresCatalogo(errores)
-
-    const datosUnidades = unidadesLeidas.cuerpo?.data
-    setUnidades(Array.isArray(datosUnidades) ? (datosUnidades as UnidadLeida[]) : [])
-    setTotalUnidades({
-      leidos: Array.isArray(datosUnidades) ? datosUnidades.length : 0,
-      total:
-        typeof unidadesLeidas.cuerpo?.total === "number"
-          ? unidadesLeidas.cuerpo.total
-          : 0,
-    })
-
-    const datosPersonas = personasLeidas.cuerpo?.data
-    setPersonas(Array.isArray(datosPersonas) ? (datosPersonas as PersonaLeida[]) : [])
-    setTotalPersonas({
-      leidos: Array.isArray(datosPersonas) ? datosPersonas.length : 0,
-      total:
-        typeof personasLeidas.cuerpo?.total === "number"
-          ? personasLeidas.cuerpo.total
-          : 0,
-    })
 
     const datosAcuerdos = acuerdosLeidos.cuerpo?.data
-    setAcuerdos(Array.isArray(datosAcuerdos) ? (datosAcuerdos as AcuerdoLeido[]) : [])
+    if (!Array.isArray(datosAcuerdos)) {
+      setErrorAcuerdos(sinLista("acuerdos"))
+      setAcuerdos([])
+      setTotalAcuerdos(SIN_TOTAL)
+      return
+    }
+
+    setErrorAcuerdos(null)
+    setAcuerdos(datosAcuerdos as AcuerdoLeido[])
     setTotalAcuerdos({
-      leidos: Array.isArray(datosAcuerdos) ? datosAcuerdos.length : 0,
+      leidos: datosAcuerdos.length,
       total:
         typeof acuerdosLeidos.cuerpo?.total === "number"
           ? acuerdosLeidos.cuerpo.total
-          : 0,
+          : datosAcuerdos.length,
     })
   }, [])
 
@@ -397,8 +415,101 @@ export function ConsolaConvenios({
 
   React.useEffect(() => {
     if (!puedeCrear) return
-    void cargarCatalogo()
-  }, [cargarCatalogo, puedeCrear])
+    void cargarAcuerdos()
+  }, [cargarAcuerdos, puedeCrear])
+
+  /**
+   * El buscador de unidades deudoras pide al SERVIDOR con su `q`: la pantalla no
+   * trae el padrón entero para filtrarlo en el navegador. El retardo evita una
+   * consulta por tecla y `vigente` descarta la respuesta que ya no corresponde a
+   * lo que está escrito, para que una lista vieja no pise la nueva.
+   */
+  React.useEffect(() => {
+    if (!puedeCrear) return
+    let vigente = true
+    const termino = busquedaUnidad.trim()
+
+    const temporizador = setTimeout(() => {
+      void (async () => {
+        setCargandoUnidades(true)
+        const respuesta = await leerJson(
+          termino === ""
+            ? RUTA.unidadesConDeuda
+            : `${RUTA.unidadesConDeuda}?q=${encodeURIComponent(termino)}`
+        )
+        if (!vigente) return
+        setCargandoUnidades(false)
+
+        if (!respuesta.ok) {
+          setErrorUnidades(respuesta.mensaje)
+          setUnidadesConDeuda([])
+          setTotalUnidades(SIN_TOTAL)
+          return
+        }
+        const lista = respuesta.cuerpo?.data
+        if (!Array.isArray(lista)) {
+          setErrorUnidades(sinLista("unidades con deuda"))
+          setUnidadesConDeuda([])
+          setTotalUnidades(SIN_TOTAL)
+          return
+        }
+
+        setErrorUnidades(null)
+        setUnidadesConDeuda(lista as UnidadConDeuda[])
+        setTotalUnidades({
+          leidos: lista.length,
+          total:
+            typeof respuesta.cuerpo?.total === "number"
+              ? respuesta.cuerpo.total
+              : lista.length,
+        })
+      })()
+    }, 250)
+
+    return () => {
+      vigente = false
+      clearTimeout(temporizador)
+    }
+  }, [busquedaUnidad, puedeCrear])
+
+  /**
+   * Elegir la unidad DERIVA su deudor: se piden sus propietarios vigentes y, si
+   * hay uno solo, se preselecciona. Cambiar de unidad limpia el deudor anterior
+   * para que nadie firme en silencio la deuda de otra unidad, y una respuesta que
+   * llega tarde no se aplica sobre la unidad elegida después.
+   */
+  async function elegirUnidad(unidadLeida: UnidadConDeuda): Promise<void> {
+    if (enviandoAlta) return
+    const pedido = unidadLeida.unidadId
+    pedidoDeudores.current = pedido
+    setUnidadId(pedido)
+    setPersonaId("")
+    setDeudores([])
+    setErrorDeudores(null)
+    setCargandoDeudores(true)
+
+    const respuesta = await leerJson(
+      `${RUTA.deudores}?unidadId=${encodeURIComponent(pedido)}`
+    )
+    // Otra unidad se eligió mientras esta respuesta viajaba: manda la última.
+    if (pedidoDeudores.current !== pedido) return
+    setCargandoDeudores(false)
+
+    if (!respuesta.ok) {
+      setErrorDeudores(respuesta.mensaje)
+      return
+    }
+    const lista = respuesta.cuerpo?.data
+    if (!Array.isArray(lista)) {
+      setErrorDeudores(sinLista("propietarios vigentes de la unidad"))
+      return
+    }
+
+    const leidos = lista as DeudorLeido[]
+    setDeudores(leidos)
+    // Un solo propietario vigente: elegirlo no agrega nada, se preselecciona.
+    if (leidos.length === 1) setPersonaId(leidos[0]!.personaId)
+  }
 
   function abrirCuota(convenio: ConvenioLeido, cuota: CuotaLeida) {
     setCuotaAPagar({ convenio, cuota })
@@ -518,6 +629,12 @@ export function ConsolaConvenios({
 
     setUnidadId("")
     setPersonaId("")
+    // El deudor se deriva de la unidad: sin unidad no hay deudor que ofrecer.
+    setDeudores([])
+    setErrorDeudores(null)
+    pedidoDeudores.current = null
+    // La búsqueda vuelve al principio para que la lista muestre la deuda vigente.
+    setBusquedaUnidad("")
     setAcuerdoId("")
     setMontoTotal("")
     setNumeroCuotas("")
@@ -733,80 +850,131 @@ export function ConsolaConvenios({
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
-            {erroresCatalogo.length > 0 && (
-              <div className="flex flex-col gap-1">
-                {erroresCatalogo.map((mensaje) => (
-                  <p
-                    key={mensaje}
-                    role="alert"
-                    className="flex items-center gap-2 text-sm text-destructive"
-                  >
-                    <IconAlertTriangle className="size-4" aria-hidden="true" />
-                    {mensaje}
-                  </p>
-                ))}
-              </div>
+            {errorAcuerdos && (
+              <p
+                role="alert"
+                className="flex items-center gap-2 text-sm text-destructive"
+              >
+                <IconAlertTriangle className="size-4" aria-hidden="true" />
+                {errorAcuerdos}
+              </p>
             )}
 
             <form className="flex flex-col gap-4" onSubmit={(e) => void crear(e)}>
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="flex flex-col gap-1">
-                  <Label htmlFor="convenio-unidad">Unidad</Label>
-                  <Select
-                    value={unidadId}
-                    onValueChange={(valor) => setUnidadId(valor)}
-                  >
-                    <SelectTrigger id="convenio-unidad" className="w-full">
-                      <SelectValue placeholder="Elegí la unidad deudora" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {unidades.map((unidadLeida) => (
-                        <SelectItem key={unidadLeida.id} value={unidadLeida.id}>
-                          {unidadLeida.etiqueta
-                            ? `${unidadLeida.numero} · ${unidadLeida.etiqueta}`
-                            : unidadLeida.numero}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Label htmlFor="convenio-unidad-buscar">Unidad deudora</Label>
+                  <Input
+                    id="convenio-unidad-buscar"
+                    value={busquedaUnidad}
+                    onChange={(e) => setBusquedaUnidad(e.target.value)}
+                    placeholder="Buscá por número o etiqueta (101, Depto…)"
+                    disabled={enviandoAlta}
+                  />
+                  <div className="max-h-48 overflow-y-auto rounded-md border">
+                    {cargandoUnidades && unidadesConDeuda.length === 0 ? (
+                      <p className="px-2 py-2 text-xs text-muted-foreground">
+                        Buscando las unidades con deuda…
+                      </p>
+                    ) : errorUnidades ? (
+                      <p
+                        role="alert"
+                        className="px-2 py-2 text-xs text-destructive"
+                      >
+                        {errorUnidades}
+                      </p>
+                    ) : unidadesConDeuda.length === 0 ? (
+                      <p className="px-2 py-2 text-xs text-muted-foreground">
+                        {busquedaUnidad.trim() === ""
+                          ? "La comunidad no tiene unidades con cobros vencidos: no hay deuda que convenir."
+                          : "Ninguna unidad con deuda coincide con la búsqueda."}
+                      </p>
+                    ) : (
+                      <ul aria-label="Unidades con deuda" className="divide-y">
+                        {unidadesConDeuda.map((unidadLeida) => {
+                          const elegida = unidadLeida.unidadId === unidadId
+                          return (
+                            <li key={unidadLeida.unidadId}>
+                              <button
+                                type="button"
+                                aria-pressed={elegida}
+                                onClick={() => void elegirUnidad(unidadLeida)}
+                                className={cn(
+                                  "flex w-full flex-col items-start gap-0.5 px-2 py-1.5 text-left text-xs transition-colors hover:bg-muted/60",
+                                  elegida && "bg-muted"
+                                )}
+                              >
+                                <span className="font-medium">
+                                  {unidadLeida.etiqueta
+                                    ? `${unidadLeida.numero} · ${unidadLeida.etiqueta}`
+                                    : unidadLeida.numero}
+                                </span>
+                                <span className="text-muted-foreground tabular-nums">
+                                  {`${unidadLeida.periodosVencidos} período(s) vencidos · ${pesos(
+                                    unidadLeida.deudaVencida
+                                  )}`}
+                                </span>
+                              </button>
+                            </li>
+                          )
+                        })}
+                      </ul>
+                    )}
+                  </div>
                   <AvisoTruncamiento
                     mostrados={totalUnidades.leidos}
                     total={totalUnidades.total}
                   />
-                  {unidades.length === 0 && erroresCatalogo.length === 0 && (
-                    <p className="text-xs text-muted-foreground">
-                      La comunidad no tiene unidades declaradas.
-                    </p>
-                  )}
+                  <p className="text-xs text-muted-foreground">
+                    Sólo se ofrecen las unidades con cobros vencidos: la deuda la
+                    deriva el servidor de los cargos del módulo FI.
+                  </p>
                 </div>
 
                 <div className="flex flex-col gap-1">
                   <Label htmlFor="convenio-deudor">Deudor</Label>
-                  <Select
-                    value={personaId}
-                    onValueChange={(valor) => setPersonaId(valor)}
-                  >
-                    <SelectTrigger id="convenio-deudor" className="w-full">
-                      <SelectValue placeholder="Elegí al copropietario deudor" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {personas.map((personaLeida) => (
-                        <SelectItem key={personaLeida.id} value={personaLeida.id}>
-                          {personaLeida.rut
-                            ? `${personaLeida.nombreCompleto} · ${personaLeida.rut}`
-                            : personaLeida.nombreCompleto}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <AvisoTruncamiento
-                    mostrados={totalPersonas.leidos}
-                    total={totalPersonas.total}
-                  />
-                  {personas.length === 0 && erroresCatalogo.length === 0 && (
+                  {unidadId === "" ? (
                     <p className="text-xs text-muted-foreground">
-                      La comunidad no tiene personas en el maestro.
+                      Elegí primero la unidad: el deudor del convenio es su
+                      propietario vigente.
                     </p>
+                  ) : cargandoDeudores ? (
+                    <p className="text-xs text-muted-foreground">
+                      Leyendo los propietarios vigentes de la unidad…
+                    </p>
+                  ) : errorDeudores ? (
+                    <p role="alert" className="text-sm text-destructive">
+                      {errorDeudores}
+                    </p>
+                  ) : deudores.length === 0 ? (
+                    <p role="alert" className="text-sm text-destructive">
+                      La unidad no tiene propietario vigente en el registro: la
+                      administración tiene que corregir el vínculo de la unidad
+                      antes de suscribir el convenio.
+                    </p>
+                  ) : (
+                    <>
+                      <Select value={personaId} onValueChange={setPersonaId}>
+                        <SelectTrigger id="convenio-deudor" className="w-full">
+                          <SelectValue placeholder="Elegí al copropietario deudor" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {deudores.map((deudor) => (
+                            <SelectItem
+                              key={deudor.personaId}
+                              value={deudor.personaId}
+                            >
+                              {`${deudor.nombreCompleto} · ${deudor.rut}`}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">
+                        {deudores.length === 1
+                          ? "Es el único propietario vigente de la unidad y queda preseleccionado."
+                          : `La unidad tiene ${deudores.length} propietarios vigentes: elegí el que firma el convenio.`}
+                      </p>
+                    </>
                   )}
                 </div>
               </div>

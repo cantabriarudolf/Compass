@@ -51,6 +51,7 @@ import {
   vistaDeConvenio,
   type ConvenioEnLaVista,
 } from "./_vista"
+import { esPropietarioVigenteDeUnidad } from "./_deudores"
 
 /**
  * Recurso de la matriz que gobierna el convenio: `fi:cobranza`.
@@ -115,6 +116,25 @@ export async function POST(req: Request): Promise<Response> {
     select: { id: true, nombreCompleto: true },
   })
   if (!persona) return jsonError(404, "Persona no encontrada.")
+
+  // El deudor del convenio es el PROPIETARIO VIGENTE de la unidad (rol
+  // `propietario`, `fechaFin` null: el criterio con el que la cobranza FI decide a
+  // quién se le cobra). La ley faculta al administrador a convenir con el
+  // COPROPIETARIO MOROSO (art. 6), así que aceptar a cualquier persona de la
+  // comunidad permitía suscribir el convenio de la deuda de una unidad a nombre de
+  // quien vive en otra: un registro válido de una deuda ajena. El vínculo cerrado
+  // (dueño anterior) y el arrendatario vigente tampoco son deudores del convenio.
+  const esDuenoVigente = await esPropietarioVigenteDeUnidad(
+    scope.comunidadId,
+    unidad.id,
+    persona.id
+  )
+  if (!esDuenoVigente) {
+    return jsonError(
+      400,
+      "No se puede suscribir el convenio: el deudor no es propietario vigente de la unidad."
+    )
+  }
 
   // El acuerdo del Comité es la AUTORIZACIÓN del convenio (art. 6): se lee la fila
   // real. Cada condición tiene su motivo, porque «no autorizado» no dice qué falta.

@@ -53,9 +53,19 @@ vi.setConfig({ testTimeout: 60_000 })
 
 const RUTA_ALTA = "/api/convenios"
 const RUTA_PAGO = "/api/convenios/pago"
+const RUTA_UNIDADES_DEUDA = "/api/convenios/unidades-con-deuda"
+const RUTA_DEUDORES = "/api/convenios/deudores"
+/** Los catálogos truncados que la pantalla YA NO pide (ver el caso de regresión). */
 const RUTA_UNIDADES = "/api/unidades"
 const RUTA_PERSONAS = "/api/personas"
 const RUTA_ACUERDOS = "/api/acuerdos"
+
+/**
+ * Mensaje literal de la unidad sin propietario vigente: no se ofrece una lista
+ * vacía ni se deja elegir a cualquiera — la salida es corregir el registro.
+ */
+const MENSAJE_SIN_PROPIETARIO =
+  "La unidad no tiene propietario vigente en el registro: la administración tiene que corregir el vínculo de la unidad antes de suscribir el convenio."
 
 const fetchFalso = vi.fn()
 
@@ -70,13 +80,20 @@ function initDe(llamada: unknown[] | undefined): RequestInit | undefined {
   return llamada?.[1] as RequestInit | undefined
 }
 
-/** Las llamadas GET hechas a un prefijo de ruta, en orden. */
-function lecturas(prefijo: string): unknown[][] {
-  return fetchFalso.mock.calls.filter(
-    (llamada) =>
-      String(llamada[0]).startsWith(prefijo) &&
-      (initDe(llamada)?.method ?? "GET") === "GET"
-  )
+/**
+ * Las llamadas GET a una ruta EXACTA (la query no cuenta), en orden. La
+ * comparación es por pathname y no por prefijo: `/api/convenios` es el listado y
+ * no las rutas de derivación que cuelgan de él.
+ */
+function lecturas(ruta: string): unknown[][] {
+  return fetchFalso.mock.calls.filter((llamada) => {
+    if ((initDe(llamada)?.method ?? "GET") !== "GET") return false
+    try {
+      return new URL(String(llamada[0]), "http://localhost").pathname === ruta
+    } catch {
+      return false
+    }
+  })
 }
 
 /** Las llamadas POST hechas a una ruta exacta, en orden. */
@@ -146,15 +163,45 @@ const CONVENIO = {
   totales: { pagado: 166666, pendiente: 500000 },
 }
 
-const UNIDADES = [
-  { id: "uni-101", numero: "101", etiqueta: "Depto" },
-  { id: "uni-102", numero: "102", etiqueta: "Oficina" },
+const UNIDADES_CON_DEUDA = [
+  {
+    unidadId: "uni-101",
+    numero: "101",
+    etiqueta: "Depto",
+    periodosVencidos: 3,
+    deudaVencida: 500_000,
+  },
+  {
+    unidadId: "uni-102",
+    numero: "102",
+    etiqueta: "Oficina",
+    periodosVencidos: 1,
+    deudaVencida: 120_000,
+  },
+  {
+    unidadId: "uni-201",
+    numero: "201",
+    etiqueta: "Depto",
+    periodosVencidos: 2,
+    deudaVencida: 90_000,
+  },
 ]
 
-const PERSONAS = [
-  { id: "per-ana", nombreCompleto: "Ana Pérez", rut: "11.111.111-1" },
-  { id: "per-luis", nombreCompleto: "Luis Soto", rut: "22.222.222-2" },
-]
+/**
+ * Los propietarios VIGENTES de cada unidad, como los devuelve la API: la 101 con
+ * uno solo (se preselecciona), la 102 con dos y la 201 sin ninguno.
+ */
+const DEUDORES_POR_UNIDAD: Record<
+  string,
+  Array<{ personaId: string; nombreCompleto: string; rut: string }>
+> = {
+  "uni-101": [{ personaId: "per-ana", nombreCompleto: "Ana Pérez", rut: "11.111.111-1" }],
+  "uni-102": [
+    { personaId: "per-luis", nombreCompleto: "Luis Soto", rut: "22.222.222-2" },
+    { personaId: "per-maria", nombreCompleto: "María Díaz", rut: "33.333.333-3" },
+  ],
+  "uni-201": [],
+}
 
 const ACUERDOS = [
   {
@@ -186,10 +233,12 @@ interface PostFalso {
 }
 
 /**
- * Instala el servidor falso: el listado de convenios y las tres colecciones que
- * necesita el alta, más lo que el caso declare para los POST. El listado se sirve
- * siempre igual: lo que se afirma de la relectura es que OCURRIÓ, no que cambió
- * la fila (eso lo decide el servidor de verdad).
+ * Instala el servidor falso: el listado de convenios, el buscador de unidades
+ * CON DEUDA y los propietarios vigentes de una unidad —las dos rutas que
+ * reemplazaron a los catálogos truncados—, más lo que el caso declare para los POST.
+ *
+ * El buscador filtra de verdad por número y etiqueta: así el caso del buscador
+ * afirma la respuesta que el servidor real da con su `q`.
  */
 function servir(manejadores: {
   convenios?: unknown[]
@@ -209,6 +258,30 @@ function servir(manejadores: {
       if (url.startsWith(RUTA_PAGO)) {
         return respuestaJson({ error: "El pago se registra por POST." }, 405)
       }
+      if (url.startsWith(RUTA_UNIDADES_DEUDA)) {
+        const q = new URL(url, "http://localhost").searchParams.get("q") ?? ""
+        const buscado = q.trim().toLowerCase()
+        const filtradas =
+          buscado === ""
+            ? UNIDADES_CON_DEUDA
+            : UNIDADES_CON_DEUDA.filter(
+                (unidad) =>
+                  unidad.numero.includes(buscado) ||
+                  (unidad.etiqueta ?? "").toLowerCase().includes(buscado)
+              )
+        return respuestaJson({
+          data: filtradas,
+          total: filtradas.length,
+          limite: 50,
+          mostrados: filtradas.length,
+        })
+      }
+      if (url.startsWith(RUTA_DEUDORES)) {
+        const unidadId =
+          new URL(url, "http://localhost").searchParams.get("unidadId") ?? ""
+        const data = DEUDORES_POR_UNIDAD[unidadId] ?? []
+        return respuestaJson({ data, total: data.length })
+      }
       if (url.startsWith(RUTA_ALTA)) {
         const listado = manejadores.listado
         if (listado) return respuestaJson(listado.cuerpo, listado.status ?? 200)
@@ -216,22 +289,6 @@ function servir(manejadores: {
           data: convenios,
           total: convenios.length,
           mostrados: convenios.length,
-        })
-      }
-      if (url.startsWith(RUTA_UNIDADES)) {
-        return respuestaJson({
-          data: UNIDADES,
-          page: 1,
-          pageSize: 100,
-          total: UNIDADES.length,
-        })
-      }
-      if (url.startsWith(RUTA_PERSONAS)) {
-        return respuestaJson({
-          data: PERSONAS,
-          page: 1,
-          pageSize: 100,
-          total: PERSONAS.length,
         })
       }
       if (url.startsWith(RUTA_ACUERDOS)) {
@@ -268,6 +325,33 @@ async function elegirOpcion(
     .find((o) => patron.test(o.textContent ?? ""))
   if (!opcion) throw new Error(`sin opción ${String(patron)}`)
   await user.click(opcion)
+}
+
+/**
+ * Busca una unidad CON DEUDA en el buscador y la elige de la lista.
+ *
+ * El buscador pide al servidor con su `q` y la respuesta reemplaza la lista, así
+ * que se espera a que la opción buscada esté en pantalla antes de hacer clic: la
+ * lista anterior no sirve de atajo.
+ */
+async function elegirUnidadConDeuda(
+  user: ReturnType<typeof userEvent.setup>,
+  texto: string
+): Promise<void> {
+  const buscador = screen.getByRole("textbox", { name: "Unidad deudora" })
+  await user.clear(buscador)
+  await user.type(buscador, texto)
+
+  let opcion: HTMLElement | null = null
+  await waitFor(() => {
+    const lista = screen.getByRole("list", { name: "Unidades con deuda" })
+    opcion =
+      within(lista)
+        .getAllByRole("button")
+        .find((boton) => (boton.textContent ?? "").includes(texto)) ?? null
+    expect(opcion).not.toBeNull()
+  })
+  await user.click(opcion!)
 }
 
 beforeEach(() => {
@@ -404,6 +488,8 @@ describe("Convenios de pago — el listado y las cuotas los dice el servidor", (
     ).toBeNull()
     // Y sin permiso de alta no se pide el catálogo ni se pinta el formulario.
     expect(lecturas(RUTA_UNIDADES)).toHaveLength(0)
+    expect(lecturas(RUTA_UNIDADES_DEUDA)).toHaveLength(0)
+    expect(lecturas(RUTA_DEUDORES)).toHaveLength(0)
     expect(screen.queryByRole("button", { name: "Suscribir convenio" })).toBeNull()
   })
 
@@ -450,15 +536,13 @@ describe("Convenios de pago — el alta manda los términos y el servidor hace l
     expect(screen.getByText("Nuevo convenio de pago")).toBeTruthy()
     expect(screen.queryByText(/se reparte en .* cuotas mensuales/)).toBeNull()
 
-    await elegirOpcion(
-      user,
-      screen.getByRole("combobox", { name: "Unidad" }),
-      /^101/
-    )
-    await elegirOpcion(
-      user,
-      screen.getByRole("combobox", { name: "Deudor" }),
-      /^Ana Pérez/
+    await elegirUnidadConDeuda(user, "101")
+    // Un solo propietario vigente: la pantalla lo preselecciona, no hay lista
+    // ciega de personas de la comunidad.
+    await waitFor(() =>
+      expect(
+        screen.getByRole("combobox", { name: "Deudor" }).textContent
+      ).toContain("Ana Pérez")
     )
 
     // Sólo los acuerdos APROBADOS del Comité: el rechazado y el de la asamblea
@@ -557,15 +641,12 @@ describe("Convenios de pago — el alta manda los términos y el servidor hace l
 async function completarAlta(
   user: ReturnType<typeof userEvent.setup>
 ): Promise<void> {
-  await elegirOpcion(
-    user,
-    screen.getByRole("combobox", { name: "Unidad" }),
-    /^101/
-  )
-  await elegirOpcion(
-    user,
-    screen.getByRole("combobox", { name: "Deudor" }),
-    /^Ana Pérez/
+  // La 101 tiene UN propietario vigente y la pantalla lo deriva de la unidad.
+  await elegirUnidadConDeuda(user, "101")
+  await waitFor(() =>
+    expect(
+      screen.getByRole("combobox", { name: "Deudor" }).textContent
+    ).toContain("Ana Pérez")
   )
   await elegirOpcion(
     user,
@@ -577,6 +658,127 @@ async function completarAlta(
   await user.type(screen.getByLabelText("Primera cuota"), "166666")
   await user.click(screen.getByRole("button", { name: "Suscribir convenio" }))
 }
+
+describe("Convenios de pago — el deudor se deriva de la unidad, no se elige a ciegas", () => {
+  it("el buscador pide al servidor con `q` y no trae los catálogos truncados", async () => {
+    const user = userEvent.setup({ delay: null })
+    servir({ convenios: [] })
+
+    render(<ConsolaConvenios puedeCrear puedeRegistrarPago={false} />)
+
+    // Sólo se ofrecen las unidades CON deuda: el buscador no es el padrón entero.
+    const lista = await screen.findByRole("list", { name: "Unidades con deuda" })
+    expect(within(lista).getAllByRole("button")).toHaveLength(
+      UNIDADES_CON_DEUDA.length
+    )
+
+    // Los dos catálogos truncados a 100 ya no se piden: esa lista ciega se fue.
+    expect(lecturas(RUTA_UNIDADES)).toHaveLength(0)
+    expect(lecturas(RUTA_PERSONAS)).toHaveLength(0)
+
+    await user.type(
+      screen.getByRole("textbox", { name: "Unidad deudora" }),
+      "102"
+    )
+
+    await waitFor(() =>
+      expect(
+        lecturas(RUTA_UNIDADES_DEUDA).some((llamada) =>
+          String(llamada[0]).includes("q=102")
+        )
+      ).toBe(true)
+    )
+
+    // La lista queda acotada a lo que el servidor devolvió para ese `q`.
+    await waitFor(() =>
+      expect(
+        within(
+          screen.getByRole("list", { name: "Unidades con deuda" })
+        ).getAllByRole("button")
+      ).toHaveLength(1)
+    )
+    expect(
+      within(
+        screen.getByRole("list", { name: "Unidades con deuda" })
+      ).getByRole("button", { name: /^102 · Oficina/ })
+    ).toBeTruthy()
+  })
+
+  it("elegir una unidad llena el deudor con sus propietarios vigentes", async () => {
+    const user = userEvent.setup({ delay: null })
+    servir({ convenios: [] })
+
+    render(<ConsolaConvenios puedeCrear puedeRegistrarPago={false} />)
+
+    // Un solo propietario vigente: se preselecciona y se pide SU unidad.
+    await elegirUnidadConDeuda(user, "101")
+    await waitFor(() =>
+      expect(
+        screen.getByRole("combobox", { name: "Deudor" }).textContent
+      ).toContain("Ana Pérez")
+    )
+    expect(lecturas(RUTA_DEUDORES).map((llamada) => String(llamada[0]))).toContain(
+      `${RUTA_DEUDORES}?unidadId=uni-101`
+    )
+
+    // Dos propietarios vigentes: se ofrecen los dos y ninguno viene precargado.
+    await elegirUnidadConDeuda(user, "102")
+    await waitFor(() => expect(lecturas(RUTA_DEUDORES)).toHaveLength(2))
+    await user.click(screen.getByRole("combobox", { name: "Deudor" }))
+    const listbox = await screen.findByRole("listbox")
+    expect(
+      within(listbox)
+        .getAllByRole("option")
+        .map((opcion) => opcion.textContent)
+    ).toEqual(["Luis Soto · 22.222.222-2", "María Díaz · 33.333.333-3"])
+    expect(
+      lecturas(RUTA_DEUDORES).map((llamada) => String(llamada[0]))
+    ).toContain(`${RUTA_DEUDORES}?unidadId=uni-102`)
+  })
+
+  it("una unidad sin propietario vigente lo dice, no ofrece a cualquiera y no deja suscribir", async () => {
+    const user = userEvent.setup({ delay: null })
+    servir({ convenios: [] })
+
+    render(<ConsolaConvenios puedeCrear puedeRegistrarPago={false} />)
+
+    await elegirUnidadConDeuda(user, "201")
+
+    // La salida es corregir el registro, no elegir a una persona al azar.
+    const aviso = await screen.findByText(MENSAJE_SIN_PROPIETARIO)
+    expect(aviso).toBeTruthy()
+    expect(screen.queryByRole("combobox", { name: "Deudor" })).toBeNull()
+    expect(
+      screen.getByRole("button", { name: "Suscribir convenio" })
+    ).toBeDisabled()
+  })
+
+  it("cambiar de unidad no arrastra el deudor de la anterior", async () => {
+    const user = userEvent.setup({ delay: null })
+    servir({ convenios: [] })
+
+    render(<ConsolaConvenios puedeCrear puedeRegistrarPago={false} />)
+
+    await elegirUnidadConDeuda(user, "101")
+    await waitFor(() =>
+      expect(
+        screen.getByRole("combobox", { name: "Deudor" }).textContent
+      ).toContain("Ana Pérez")
+    )
+
+    // La 102 tiene otros dueños: el deudor de la 101 no puede quedar elegido en
+    // silencio sobre una unidad que no es la suya.
+    await elegirUnidadConDeuda(user, "102")
+    await waitFor(() =>
+      expect(
+        screen.getByRole("combobox", { name: "Deudor" }).textContent
+      ).not.toContain("Ana Pérez")
+    )
+    expect(
+      screen.getByRole("button", { name: "Suscribir convenio" })
+    ).toBeDisabled()
+  })
+})
 
 describe("Convenios de pago — el portón es el de la matriz", () => {
   it("administración administra los convenios; el comité sólo los audita", () => {
