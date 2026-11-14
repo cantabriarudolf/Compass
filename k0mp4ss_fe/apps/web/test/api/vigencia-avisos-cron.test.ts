@@ -73,6 +73,20 @@ const COMUNIDADES = [
   COM_CREDENCIAL_SIN_CF,
 ] as const
 
+/**
+ * Las comunidades de este fixture que SÍ tienen caso de vigencia: el cron las
+ * barre. La de unidades sin caso queda afuera y se afirma que no aparece.
+ * Los números del resumen se miden sólo sobre estas filas: el cron barre TODAS
+ * las comunidades con caso de la base, y otra suite puede sembrar las suyas
+ * mientras esta corre (ver `vigencia-registro.test.ts`).
+ */
+const COMUNIDADES_BARRIDAS = [
+  COM_SIN_CREDENCIAL,
+  COM_EMISOR_ACEPTA,
+  COM_EMISOR_RECHAZA,
+  COM_CREDENCIAL_SIN_CF,
+] as const
+
 const EMAIL_ADMIN = "vig-cron-admin@comunidad-vig-cron.cl"
 const EMAIL_RESIDENTE = "vig-cron-residente@comunidad-vig-cron.cl"
 const USER_ADMIN = "vig-cron-user-admin"
@@ -486,12 +500,7 @@ describe("con el secreto corre el barrido de todas las comunidades con caso", ()
     expect(json.comunidades?.length ?? 0).toBeGreaterThanOrEqual(4)
     expect(resumenDe(json, COM_SIN_CASOS)).toBeUndefined()
 
-    for (const comunidadId of [
-      COM_SIN_CREDENCIAL,
-      COM_EMISOR_ACEPTA,
-      COM_EMISOR_RECHAZA,
-      COM_CREDENCIAL_SIN_CF,
-    ]) {
+    for (const comunidadId of COMUNIDADES_BARRIDAS) {
       const resumen = resumenDe(json, comunidadId)
       expect(resumen).toBeDefined()
       expect(resumen?.ok).toBe(true)
@@ -610,15 +619,24 @@ describe("con el secreto corre el barrido de todas las comunidades con caso", ()
 
     const { status, json } = await pedirCron(autorizado())
     expect(status).toBe(200)
-    expect(json.totales).toMatchObject({
-      comunidades: json.comunidades?.length,
-      emitidos: 0,
-      omitidos: 24,
-      enviados: 0,
-      fallidos: 0,
-      sinEmisor: 0,
-      enBandeja: 0,
-    })
+    // `totales` es parte del contrato, pero es la suma de TODAS las comunidades
+    // que el barrido encontró en la base, no sólo las de este fixture. Se
+    // conserva la forma (el total de comunidades es el de las filas devueltas)
+    // y los números se miden en las comunidades propias, una por una.
+    expect(json.totales?.comunidades).toBe(json.comunidades?.length)
+    expect(resumenDe(json, COM_SIN_CASOS)).toBeUndefined()
+    for (const comunidadId of COMUNIDADES_BARRIDAS) {
+      const resumen = resumenDe(json, comunidadId)
+      expect(resumen).toBeDefined()
+      expect(resumen?.ok).toBe(true)
+      // Cero avisos nuevos: los seis de la primera corrida ya están emitidos.
+      expect(resumen?.emitidos).toBe(0)
+      expect(resumen?.omitidos).toBe(6)
+      expect(resumen?.enviados).toBe(0)
+      expect(resumen?.fallidos).toBe(0)
+      expect(resumen?.sinEmisor).toBe(0)
+      expect(resumen?.enBandeja).toBe(0)
+    }
     expect(await contarAvisos()).toBe(24)
     expect(await contarNotificaciones()).toBe(24)
     // Ni una conexión nueva: no se reenvía lo que ya está emitido.
