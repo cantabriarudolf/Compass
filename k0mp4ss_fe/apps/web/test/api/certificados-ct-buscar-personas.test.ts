@@ -62,6 +62,9 @@ const EMAIL = {
   comite: "f36b-comite@test.cl",
   sinFicha: "f36b-sinficha@test.cl",
   adminB: "f36b-admin-b@test.cl",
+  // Usuario propio del caso de rate limit: el contador es por usuario, así que
+  // gastar 60 búsquedas acá no debe tocar la cuota de los demás casos.
+  limite: "f36b-limite@test.cl",
 }
 
 const moduloBuscador = () => import("@/app/api/certificados-ct/buscar-personas/route")
@@ -209,6 +212,7 @@ describe("F36 — GET /api/certificados-ct/buscar-personas", () => {
       { email: EMAIL.comite, comunidadId: COM_A, rol: "comite", personaId: null },
       { email: EMAIL.sinFicha, comunidadId: COM_A, rol: "residente", personaId: null },
       { email: EMAIL.adminB, comunidadId: COM_B, rol: "administrador", personaId: null },
+      { email: EMAIL.limite, comunidadId: COM_A, rol: "administrador", personaId: null },
     ]) {
       const usuario = await prisma.usuario.upsert({
         where: { email: u.email },
@@ -391,6 +395,50 @@ describe("F36 — GET /api/certificados-ct/buscar-personas", () => {
       expect(vista.data[0]?.vinculos).toEqual([
         { id: "f36b-v-ana", unidadId: U_A1, unidad: "Depto 101", rol: "propietario" },
       ])
+    })
+  })
+
+  it("`q` de un carácter responde 400: el mínimo de dos no lo pone sólo el componente", async () => {
+    // Hasta la ventana 2026-11-15 el mínimo vivía únicamente en
+    // `components/buscador-entidad.tsx` (`MINIMO_CARACTERES = 2`): la ruta
+    // aceptaba un carácter, así que el techo lo imponía la UI y cualquier otro
+    // cliente podía barrer el padrón 25 filas por letra. El 400 es literal y no
+    // viaja ninguna fila: el rechazo no se disfraza de 200 vacío.
+    await conSesion(EMAIL.admin, async () => {
+      const letra = await buscar("A")
+      expect(letra.status).toBe(400)
+      const vista = await cuerpo(letra)
+      expect(vista.error).toBe("El parámetro q necesita al menos dos caracteres.")
+      expect(vista.data).toBeUndefined()
+
+      // Un dígito solo tampoco entra: el RUT se busca con más de un carácter.
+      expect((await buscar("7")).status).toBe(400)
+
+      // El borde de arriba sigue entrando: dos caracteres son una búsqueda.
+      expect((await buscar("7.")).status).toBe(200)
+    })
+  })
+
+  it("más de 60 búsquedas por minuto responden 429 sin emitir filas, y el bloqueo es por usuario", async () => {
+    // El límite corre ANTES de validar `q`, así que las 60 se gastan con 400
+    // baratos: la prueba no golpea la base y de paso fija el orden de las
+    // guardas (si el limiter pasara después, este bucle haría 60 búsquedas).
+    await conSesion(EMAIL.limite, async () => {
+      for (let n = 0; n < 60; n++) {
+        expect((await buscar("A")).status).toBe(400)
+      }
+      const cortada = await buscar("Ana Buscada")
+      expect(cortada.status).toBe(429)
+      const vista = await cuerpo(cortada)
+      expect(vista.error).toBe("Demasiadas solicitudes.")
+      expect(vista.data).toBeUndefined()
+    })
+
+    // El lado atractivo del pin: la clave es el `usuarioId`, no la comunidad ni
+    // la IP. Si se cambiara a `comunidadId`, los residentes de un mismo edificio
+    // se bloquearían entre sí y este 200 se volvería 429.
+    await conSesion(EMAIL.admin, async () => {
+      expect((await buscar("Ana Buscada")).status).toBe(200)
     })
   })
 })

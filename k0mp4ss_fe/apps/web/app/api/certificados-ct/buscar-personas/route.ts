@@ -34,10 +34,20 @@
  *     la persona solicitante del certificado de residencia. El fallback de
  *     prefijo de `puede()` da la misma población que la compuerta de
  *     `mis-vinculos` —todo rol con `ct` `ver` entra—, expresada con la clave
- *     granular que exige el candado R1 de recursos.
+ *     granular que exige el candado R1 de recursos;
+ *   · `q` necesita AL MENOS DOS caracteres. El mínimo ya existía, pero vivía sólo
+ *     en `components/buscador-entidad.tsx` (`MINIMO_CARACTERES = 2`): un techo
+ *     que sólo impone la UI no es un techo, y cualquier otro cliente podía barrer
+ *     el padrón 25 filas por letra;
+ *   · sesenta búsquedas por minuto por usuario, con el contador en memoria del
+ *     mismo patrón que `app/api/csp-report/route.ts`. La clave es el `usuarioId` y
+ *     no la IP: una conserjería con varios residentes detrás de la misma IP se
+ *     bloquearía a sí misma. El límite corre ANTES de validar `q`, así que una
+ *     ráfaga inválida también se paga.
  *
- * La ruta es ESTÁTICA —sin segmento `[id]`— y sin `q` responde 400: la búsqueda
- * es la razón de la ruta (un browse sin término es el padrón, no una búsqueda).
+ * La ruta es ESTÁTICA —sin segmento `[id]`— y responde 400 sin `q` y con `q` de un
+ * solo carácter: la búsqueda es la razón de la ruta (un browse sin término es el
+ * padrón, no una búsqueda).
  */
 import { puede } from "@/lib/authz"
 import { prisma } from "@/lib/prisma"
@@ -51,6 +61,35 @@ import { alcancePorFilasDeSesion } from "@/lib/api/sesion-persona"
  * respuesta y el buscador declara cuántas quedaron fuera.
  */
 const PERSONAS_POR_PAGINA = 25
+
+/**
+ * Mínimo de caracteres de `q`, espejo de `MINIMO_CARACTERES` del buscador de la
+ * pantalla. Con un carácter la búsqueda deja de ser una búsqueda y pasa a ser un
+ * barrido del padrón de 25 filas por letra.
+ */
+const MINIMO_CARACTERES = 2
+
+/**
+ * Volumen del typeahead: 60 búsquedas por minuto alcanzan de sobra para tipear y
+ * cortan el barrido. Mismo techo que `app/api/csp-report/route.ts`.
+ */
+const MAX_BUSQUEDAS_POR_VENTANA = 60
+const VENTANA_LIMITE_MS = 60_000
+
+/** Contador en memoria por usuario (clave usuarioId → { n, reset }). */
+const contador = new Map<string, { n: number; reset: number }>()
+
+function excedeLimite(clave: string, ahora: number): boolean {
+  const registro = contador.get(clave)
+  if (!registro || ahora >= registro.reset) {
+    // Poda oportunista para que el Map no crezca sin límite.
+    if (contador.size > 1000) contador.clear()
+    contador.set(clave, { n: 1, reset: ahora + VENTANA_LIMITE_MS })
+    return false
+  }
+  registro.n += 1
+  return registro.n > MAX_BUSQUEDAS_POR_VENTANA
+}
 
 /** Vínculo vigente de una fila, con el rótulo que imprime el certificado. */
 interface VinculoBuscado {
@@ -82,6 +121,12 @@ export async function GET(req: Request): Promise<Response> {
     return jsonError(403, "Permiso denegado.")
   }
 
+  // El límite va acá, después de la compuerta y antes de validar `q`: protege la
+  // base de la ráfaga y no deja que un `q` inválido sea barato de spamear.
+  if (excedeLimite(scope.usuarioId, Date.now())) {
+    return jsonError(429, "Demasiadas solicitudes.")
+  }
+
   let url: URL
   try {
     url = new URL(req.url)
@@ -91,6 +136,9 @@ export async function GET(req: Request): Promise<Response> {
 
   const q = url.searchParams.get("q")?.trim() ?? ""
   if (q === "") return jsonError(400, "Falta el parámetro q.")
+  if (q.length < MINIMO_CARACTERES) {
+    return jsonError(400, "El parámetro q necesita al menos dos caracteres.")
+  }
   const page = Math.max(1, Number.parseInt(url.searchParams.get("page") ?? "1", 10) || 1)
 
   // Alcance por filas (misma decisión de toda la serie): comunidad para
