@@ -52,6 +52,7 @@
 import { puede } from "@/lib/authz"
 import { prisma } from "@/lib/prisma"
 import { logger } from "@/lib/logger"
+import { excedeVolumen } from "@/lib/rate-limit-volumen"
 import { jsonError, withComunidadScope } from "@/lib/api/with-comunidad-scope"
 import { alcancePorFilasDeSesion } from "@/lib/api/sesion-persona"
 
@@ -68,28 +69,6 @@ const PERSONAS_POR_PAGINA = 25
  * barrido del padrón de 25 filas por letra.
  */
 const MINIMO_CARACTERES = 2
-
-/**
- * Volumen del typeahead: 60 búsquedas por minuto alcanzan de sobra para tipear y
- * cortan el barrido. Mismo techo que `app/api/csp-report/route.ts`.
- */
-const MAX_BUSQUEDAS_POR_VENTANA = 60
-const VENTANA_LIMITE_MS = 60_000
-
-/** Contador en memoria por usuario (clave usuarioId → { n, reset }). */
-const contador = new Map<string, { n: number; reset: number }>()
-
-function excedeLimite(clave: string, ahora: number): boolean {
-  const registro = contador.get(clave)
-  if (!registro || ahora >= registro.reset) {
-    // Poda oportunista para que el Map no crezca sin límite.
-    if (contador.size > 1000) contador.clear()
-    contador.set(clave, { n: 1, reset: ahora + VENTANA_LIMITE_MS })
-    return false
-  }
-  registro.n += 1
-  return registro.n > MAX_BUSQUEDAS_POR_VENTANA
-}
 
 /** Vínculo vigente de una fila, con el rótulo que imprime el certificado. */
 interface VinculoBuscado {
@@ -123,7 +102,7 @@ export async function GET(req: Request): Promise<Response> {
 
   // El límite va acá, después de la compuerta y antes de validar `q`: protege la
   // base de la ráfaga y no deja que un `q` inválido sea barato de spamear.
-  if (excedeLimite(scope.usuarioId, Date.now())) {
+  if (excedeVolumen("certificados-ct", scope.usuarioId)) {
     return jsonError(429, "Demasiadas solicitudes.")
   }
 
@@ -139,7 +118,10 @@ export async function GET(req: Request): Promise<Response> {
   if (q.length < MINIMO_CARACTERES) {
     return jsonError(400, "El parámetro q necesita al menos dos caracteres.")
   }
-  const page = Math.max(1, Number.parseInt(url.searchParams.get("page") ?? "1", 10) || 1)
+  // El tope del `page` no es cosmético: con un número fuera del rango de Int, Prisma
+  // rechaza el `skip` y la ruta responde 500 en vez de una página vacía.
+  const paginaPedida = Number.parseInt(url.searchParams.get("page") ?? "1", 10) || 1
+  const page = Math.min(10_000, Math.max(1, paginaPedida))
 
   // Alcance por filas (misma decisión de toda la serie): comunidad para
   // administración y comité; para un rol acotado, SU persona o nada.

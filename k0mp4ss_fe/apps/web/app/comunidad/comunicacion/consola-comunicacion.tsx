@@ -40,6 +40,8 @@ import {
 } from "@tabler/icons-react"
 import { MetricaLecturas } from "@/components/co/metrica-lecturas"
 import { totalesDeEnvio } from "@/components/co/totales-envio"
+import { BuscadorEntidad, type EntidadSeleccion } from "@/components/buscador-entidad"
+import { AvisoTruncamiento } from "@/components/pe/aviso-truncamiento"
 import type { EstadoBuzonCO, MensajeBuzonCO, PlantillaCO } from "@/lib/schemas"
 import { generarId } from "@/lib/id-utils"
 import { hoyISO } from "@/lib/date-utils"
@@ -68,6 +70,22 @@ const CATEGORIA_LABEL: Record<string, string> = {
 }
 
 /**
+ * S10 — el buscador de vecinos del buzón, resuelto en el servidor.
+ *
+ * El reportante se ofrecía con `usePersonas()` (`/api/personas?pageSize=100`): una
+ * persona fuera de las primeras cien filas del padrón no se podía elegir.
+ */
+const BUSCADOR_REPORTANTE = "/api/comunicacion/buscar-personas"
+
+/** Fila de `GET /api/comunicacion/buscar-personas`. */
+interface PersonaBuscada {
+  id: string
+  nombres: string
+  apellidos: string
+  rut: string
+}
+
+/**
  * consola-comunicacion — consola de administración de CO (redacción, plantillas y
  * buzón).
  * publicación-portal", "co/plantillas")
@@ -85,9 +103,9 @@ const CATEGORIA_LABEL: Record<string, string> = {
  * residente y el comité reciben `components/co/bandeja-residente.tsx`.
  */
 export function ConsolaComunicacionCO() {
-  const { personas, isLoading: cPersonas } = usePersonas()
+  const { personas, total: totalPersonas, isLoading: cPersonas } = usePersonas()
   const { vinculos, isLoading: cVinculos } = useVinculos()
-  const { items: unidades, isLoading: cUnidades } = useUnidades()
+  const { items: unidades, total: totalUnidades, isLoading: cUnidades } = useUnidades()
   const { items: macroSectores, isLoading: cMacro } = useMacroSectores()
   const { items: microSectores, isLoading: cMicro } = useMicroSectores()
   const { items: plantillasCO, isLoading: cPlantillas, create: crearPlantillaApi, update: actualizarPlantillaApi, remove: eliminarPlantillaApi } = usePlantillasCO()
@@ -109,7 +127,7 @@ export function ConsolaComunicacionCO() {
 
   // --- Buzón ---
   const [clasificacion, setClasificacion] = React.useState<"felicitacion" | "sugerencia" | "reclamo">("felicitacion")
-  const [reportanteId, setReportanteId] = React.useState("")
+  const [reportanteSel, setReportanteSel] = React.useState<EntidadSeleccion | null>(null)
   const [buzonAsunto, setBuzonAsunto] = React.useState("")
   const [buzonCuerpo, setBuzonCuerpo] = React.useState("")
   const [visibilidadComite, setVisibilidadComite] = React.useState(false)
@@ -193,8 +211,14 @@ export function ConsolaComunicacionCO() {
       const enviarBuzon = async () => {
         setError(null); setExito(null)
         if (!buzonAsunto.trim() || !buzonCuerpo.trim()) { setError("Asunto y mensaje son obligatorios."); return }
-        const reportante = reportanteId || personas[0]?.id
-        const persona = personas.find(p => p.id === reportante)
+        // S10 — sin selección no se indica persona. Acá había un `|| personas[0]?.id`:
+        // elegir «La Administración» caía en la PRIMERA fila del padrón truncado y el
+        // servidor —que sólo honra la persona indicada si es de la comunidad y el rol es
+        // administrador (`resolverReportante`)— la aceptaba, así que el reclamo quedaba a
+        // nombre de un vecino que nadie eligió. Sin indicación, el servidor resuelve la
+        // identidad de la sesión: el nombre y el `personaId` que viajan desde acá son sólo
+        // la etiqueta que se ve mientras tanto, nunca la verdad almacenada.
+        const reportante = reportanteSel?.id ?? null
         // Folio BUZ-#### único por construcción (misma regla que la acción legacy del store).
         const numeros = mensajesBuzonCO
           .map(m => Number.parseInt(m.folio.replace(/^BUZ-/, ""), 10))
@@ -205,7 +229,7 @@ export function ConsolaComunicacionCO() {
           folio: `BUZ-${String(siguiente).padStart(4, "0")}`,
           clasificacion,
           ...(reportante ? { reportantePersonaId: reportante } : {}),
-          reportanteNombre: persona ? `${persona.nombres} ${persona.apellidos}` : "Vecino/a",
+          reportanteNombre: reportanteSel?.etiqueta ?? "Administración",
           asunto: buzonAsunto,
           cuerpo: buzonCuerpo,
           visibilidadComite,
@@ -391,9 +415,23 @@ export function ConsolaComunicacionCO() {
                         {unidadesVisibles.map(u => <SelectItem key={u.id} value={u.id}>{u.etiqueta} {u.numero}</SelectItem>)}
                       </SelectContent>
                     </Select>
+                    {/* S10 — las opciones de este filtro salen de `useUnidades()`
+                        (`pageSize=100`): si la comunidad tiene más unidades, el filtro no
+                        las ofrece. Se declara en vez de esconderse. */}
+                    <AvisoTruncamiento mostrados={unidades.length} total={totalUnidades} />
                   </div>
                 </div>
                 <div className="rounded-md border p-3">
+                  {/* S10 — el alcance se resuelve en el CLIENTE cruzando tres colecciones
+                      paginadas a cien (personas, vínculos y unidades). Si el padrón trae más
+                      filas de las que se montaron, el alcance está recortado y hay que decirlo:
+                      resolver los destinatarios en el servidor es una unidad aparte, con su
+                      propia decisión, y no se disfraza de aviso. */}
+                  <AvisoTruncamiento
+                    mostrados={personas.length}
+                    total={totalPersonas}
+                    className="mb-2"
+                  />
                   <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-2">Alcance resuelto: {destinatarios.length} destinatario(s)</p>
                   <ul className="max-h-40 space-y-1 overflow-y-auto text-xs">
                     {destinatarios.slice(0, 50).map(d => (
@@ -489,15 +527,18 @@ export function ConsolaComunicacionCO() {
                   sin selección, el mensaje queda a nombre de la Administración. */}
               <div className="space-y-1">
                 <Label className="text-xs">Registrar a nombre de (reclamo recibido en oficina)</Label>
-                <Select value={reportanteId || "administracion"} onValueChange={v => setReportanteId(v === "administracion" ? "" : v)}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="administracion">La Administración (sin nombre de vecino)</SelectItem>
-                    {personas.filter(p => p.estadoCuenta === "activa").map(p => (
-                      <SelectItem key={p.id} value={p.id}>{p.nombres} {p.apellidos}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {/* S10 — la lista de vecinos se BUSCA en el servidor (padrón completo, con
+                    `total` declarado) en vez de montarse desde la primera página del padrón. */}
+                <BuscadorEntidad<PersonaBuscada>
+                  url={BUSCADOR_REPORTANTE}
+                  idDe={p => p.id}
+                  etiquetaDe={p => `${p.nombres} ${p.apellidos}`}
+                  seleccion={reportanteSel}
+                  onSeleccion={setReportanteSel}
+                  placeholder="Buscar por nombre o RUT…"
+                  vacio="Ningún vecino activo coincide."
+                />
+                <p className="text-xs text-muted-foreground">Sin selección, el reclamo se registra con tu propia identidad de Administración.</p>
               </div>
               <div className="space-y-1">
                 <Label className="text-xs">Asunto</Label>
