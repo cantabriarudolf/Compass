@@ -18,7 +18,9 @@
  *
  * Qué puebla:
  *   - EF: 5 tiposUnidad, 7 macroSectores, 25 microSectores, 166 unidades
- *   - MP: 54 personas, 51 vinculos
+ *   - MP: 105 personas, 185 vínculos (54 + 51 de la semilla histórica y la cola
+ *     de `data/comunidad/titulares.ts`, que completa la titularidad: las 166
+ *     unidades quedan con un propietario vigente)
  *   - CF: configuración global (configuracionDefault)
  *   - MA: maestros admin (AFP, salud, bancos, feriados, etc.) + @@maestros.ts
  *     (categorías EF, estados de ocupación) + estados inmobiliarios (VU)
@@ -33,11 +35,13 @@
 import { cargarUrlBase } from "../lib/database-url"
 
 import { PrismaClient, Prisma } from "@prisma/client"
-import { personas } from "../data/comunidad/personas"
+import { personas, type Persona } from "../data/comunidad/personas"
 import {
   vinculos,
   ESTADOS_INMOBILIARIOS,
+  type VinculoUnidad,
 } from "../data/comunidad/vinculos"
+import { titularesDeDemo } from "../data/comunidad/titulares"
 import { documentosArchivo } from "../data/comunidad/documentos-archivo"
 import {
   tiposUnidad,
@@ -245,20 +249,24 @@ async function main(): Promise<void> {
     }
 
     // --- MP/VU: personas y vínculos (personas antes de vínculos) ---
-        for (const p of personas) {
-          // JSON nullable: Prisma exige DbNull para "vaciar" una columna Json.
-          // SAFETY: el mock tipa ExtensionLaboral/Gobernanza como interfaces;
-          // Prisma.InputJsonValue es el input JSON equivalente que tsc no puede
-          // inferir estructuralmente (soporta valores Json arbitrarios).
-          const datosLaborales = p.datosLaborales
-            ? (p.datosLaborales as unknown as Prisma.InputJsonValue)
-            : Prisma.DbNull
-          // SAFETY: idem datosLaborales — ExtensionGobernanza es un objeto JSON
-          // arbitrario en la columna Json `datosGobernanza`.
-          const datosGobernanza = p.datosGobernanza
-            ? (p.datosGobernanza as unknown as Prisma.InputJsonValue)
-            : Prisma.DbNull
-          const fila = {
+    // Un solo escritor para las dos fuentes: la semilla histórica de `data/` y la
+    // cola de `data/comunidad/titulares.ts`, que completa la titularidad de las
+    // unidades que no tenían dueño. Si hubiera dos formas de escribir la fila, se
+    // separarían a la primera corrección (campo nuevo en una y no en la otra).
+    const sembrarPersona = async (p: Persona): Promise<void> => {
+      // JSON nullable: Prisma exige DbNull para "vaciar" una columna Json.
+      // SAFETY: el mock tipa ExtensionLaboral/Gobernanza como interfaces;
+      // Prisma.InputJsonValue es el input JSON equivalente que tsc no puede
+      // inferir estructuralmente (soporta valores Json arbitrarios).
+      const datosLaborales = p.datosLaborales
+        ? (p.datosLaborales as unknown as Prisma.InputJsonValue)
+        : Prisma.DbNull
+      // SAFETY: idem datosLaborales — ExtensionGobernanza es un objeto JSON
+      // arbitrario en la columna Json `datosGobernanza`.
+      const datosGobernanza = p.datosGobernanza
+        ? (p.datosGobernanza as unknown as Prisma.InputJsonValue)
+        : Prisma.DbNull
+      const fila = {
         rut: p.rut,
         nombreCompleto: p.nombreCompleto,
         nombres: p.nombres,
@@ -280,7 +288,8 @@ async function main(): Promise<void> {
         create: { id: p.id, ...fila, comunidadId },
       })
     }
-    for (const v of vinculos) {
+
+    const sembrarVinculo = async (v: VinculoUnidad): Promise<void> => {
       const fila = {
         personaId: v.personaId,
         unidadId: v.unidadId,
@@ -289,6 +298,10 @@ async function main(): Promise<void> {
         fechaFin: v.fechaFin ?? null,
         estadoOcupacionPropiedad: v.estadoOcupacionPropiedad ?? null,
         permiteVerFinanzas: v.permiteVerFinanzas,
+        // S5 — el permiso lo enciende el propietario; sembrar el campo es lo que
+        // hace que el camino «arrendatario habilitado» exista en la base y no
+        // sólo en el formulario.
+        puedeDeclararRegistro: v.puedeDeclararRegistro ?? false,
         cerrarAnterior: v.cerrarAnterior ?? null,
       }
       await prisma.vinculoUnidad.upsert({
@@ -297,6 +310,15 @@ async function main(): Promise<void> {
         create: { id: v.id, ...fila, comunidadId },
       })
     }
+
+    for (const p of personas) await sembrarPersona(p)
+    for (const p of titularesDeDemo.personas) await sembrarPersona(p)
+    for (const v of vinculos) await sembrarVinculo(v)
+    for (const v of titularesDeDemo.vinculos) await sembrarVinculo(v)
+    console.log(
+      `[seed-mocks] titulares de demo: ${titularesDeDemo.personas.length} personas y ` +
+        `${titularesDeDemo.vinculos.length} vínculos completan la titularidad de las ${unidades.length} unidades`
+    )
 
     // --- IN: catálogo de tipos de infracción ---
     for (const t of tiposInfraccionSeed) {

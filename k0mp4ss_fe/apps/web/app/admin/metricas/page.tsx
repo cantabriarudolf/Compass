@@ -7,6 +7,8 @@ import { useMaestros } from "@/lib/api/use-maestros"
 import { useEmisionesGC } from "@/lib/api/use-emisiones-gc"
 import { variacionTarifaria } from "@/lib/metricas-utils"
 import { useKpiVigencia } from "./use-kpi-vigencia"
+import { useTitularidad } from "./use-titularidad"
+import type { CausaSinTitular } from "./_titularidad"
 import { Card, CardContent } from "@workspace/ui/components/card"
 import { Badge } from "@workspace/ui/components/badge"
 import { 
@@ -16,6 +18,7 @@ import {
   IconFingerprint,
   IconBolt,
   IconClipboardCheck,
+  IconKey,
 } from "@tabler/icons-react"
 
 /**
@@ -34,6 +37,17 @@ const ESTADOS_VIGENCIA = [
   { estado: "sin_declaracion", etiqueta: "Sin declaración" },
 ] as const
 
+/**
+ * Las dos causas de titularidad faltante con su rótulo en español. Se arreglan
+ * distinto: la primera falta de alta, la segunda es una venta sin comprador.
+ * La lista es fija para que el desglose no cambie de forma según qué causas
+ * tenga la comunidad: `nunca_declarado: 0` también informa.
+ */
+const ETIQUETAS_CAUSA: Record<CausaSinTitular, string> = {
+  nunca_declarado: "Nunca declarado",
+  vinculo_cerrado_sin_reemplazo: "Vínculo cerrado sin reemplazo",
+}
+
 export default function MetricasPage() {
   const { items: unidades, isLoading: cargandoUnidades } = useUnidades()
   const { items: tiposUnidad, isLoading: cargandoTipos } = useTiposUnidad()
@@ -47,6 +61,13 @@ export default function MetricasPage() {
     isLoading: cargandoKpiVigencia,
     error: errorKpiVigencia,
   } = useKpiVigencia()
+  // La titularidad vive en el servidor (ruta propia); acá sólo se lee. El cuerpo
+  // nunca trae persona: unidad, número y causa.
+  const {
+    titularidad,
+    isLoading: cargandoTitularidad,
+    error: errorTitularidad,
+  } = useTitularidad()
   const isLoading =
     cargandoUnidades ||
     cargandoTipos ||
@@ -54,7 +75,8 @@ export default function MetricasPage() {
     cargandoMacro ||
     cargandoMicro ||
     cargandoEmisiones ||
-    cargandoKpiVigencia
+    cargandoKpiVigencia ||
+    cargandoTitularidad
 
   // CÁLCULOS POR MÓDULO
   
@@ -268,6 +290,100 @@ export default function MetricasPage() {
                   <p className="text-[10px] text-muted-foreground italic">
                     La comunidad no tiene unidades cargadas todavía.
                   </p>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        )}
+      </section>
+
+      {/* --- MÓDULO: TITULARIDAD DE UNIDADES --- */}
+      <section className="space-y-4">
+        <div className="flex items-center gap-2 text-amber-600 font-bold uppercase text-xs tracking-widest px-1">
+          <IconKey className="size-4" /> Módulo: Titularidad de Unidades
+        </div>
+        {errorTitularidad ? (
+          // El error de la API se muestra con su mensaje: sin permiso no hay cifra,
+          // y un cero acá se leería como «todas las unidades tienen dueño».
+          <Card className="shadow-none border-muted-foreground/10">
+            <CardContent className="pt-4">
+              <p className="text-sm text-destructive">
+                {errorTitularidad.message}
+              </p>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <ModuleMetric
+              label="Unidades sin propietario vigente"
+              value={titularidad ? titularidad.sinTitular : "—"}
+              sub="Cada una bloquea el cobro de su unidad (emisión y morosidad)"
+              color={
+                titularidad
+                  ? titularidad.sinTitular > 0
+                    ? "text-amber-600"
+                    : "text-green-600"
+                  : "text-foreground"
+              }
+            />
+            <Card className="shadow-none border-muted-foreground/10">
+              <CardContent className="pt-4 space-y-2">
+                <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">
+                  Desglose por causa
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  <Badge variant="secondary" className="font-normal">
+                    Nunca declarado:
+                    <span className="font-bold">
+                      {titularidad?.nuncaDeclarado ?? 0}
+                    </span>
+                  </Badge>
+                  <Badge variant="secondary" className="font-normal">
+                    Vínculo cerrado sin reemplazo:
+                    <span className="font-bold">
+                      {titularidad?.vinculoCerradoSinReemplazo ?? 0}
+                    </span>
+                  </Badge>
+                </div>
+                <p className="text-[10px] text-muted-foreground italic">
+                  La primera falta de alta; la segunda es una venta sin comprador.
+                </p>
+              </CardContent>
+            </Card>
+            <Card className="shadow-none border-muted-foreground/10">
+              <CardContent className="pt-4 space-y-2">
+                <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-widest">
+                  Unidades sin titular
+                </p>
+                {titularidad && titularidad.sinTitular === 0 ? (
+                  // El estado bueno se dice con palabras: un cero solo no se lee.
+                  <p className="text-[10px] text-muted-foreground italic">
+                    Todas las unidades evaluadas tienen propietario vigente.
+                  </p>
+                ) : (
+                  <>
+                    <ul className="space-y-1">
+                      {(titularidad?.unidades ?? []).map((unidad) => (
+                        <li
+                          key={unidad.numero}
+                          className="flex items-center justify-between gap-2 text-sm"
+                        >
+                          <span className="font-medium">{unidad.numero}</span>
+                          <span className="text-xs text-muted-foreground">
+                            {ETIQUETAS_CAUSA[unidad.causa]}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                    {titularidad &&
+                      titularidad.unidades.length < titularidad.sinTitular && (
+                        // La lista viene cortada desde la API: el total se declara.
+                        <p className="text-[10px] text-muted-foreground italic">
+                          Mostrando {titularidad.unidades.length} de{" "}
+                          {titularidad.sinTitular} unidades sin titular.
+                        </p>
+                      )}
+                  </>
                 )}
               </CardContent>
             </Card>

@@ -6,6 +6,7 @@ export type RolVinculo = "propietario" | "arrendatario" | "copropietario" | "ocu
 
 export const ESTADOS_INMOBILIARIOS = [
   { id: "habitada", nombre: "Habitada", color: "bg-emerald-500 text-white" },
+  { id: "desocupada", nombre: "Desocupada", color: "bg-zinc-500 text-white" },
   { id: "proxima_vacancia", nombre: "Próxima Vacancia", color: "bg-amber-500 text-black" },
   { id: "en_arriendo", nombre: "En Arriendo", color: "bg-blue-500 text-white" },
   { id: "arrendada", nombre: "Arrendada", color: "bg-purple-500 text-white" },
@@ -34,7 +35,7 @@ export const vinculos: VinculoUnidad[] = [
   // ===== TORRE A (16 unidades) =====
   { id: "v-1",  personaId: "p-1",  unidadId: "u-A-101", rol: "propietario",  fechaInicio: "2024-01-15", estadoOcupacionPropiedad: "habitada",       permiteVerFinanzas: true },
   { id: "v-11", personaId: "p-11", unidadId: "u-A-102", rol: "propietario",  fechaInicio: "2020-03-10", estadoOcupacionPropiedad: "habitada",       permiteVerFinanzas: true },
-  { id: "v-12", personaId: "p-12", unidadId: "u-A-103", rol: "arrendatario", fechaInicio: "2025-06-01", permiteVerFinanzas: false },
+  { id: "v-12", personaId: "p-12", unidadId: "u-A-103", rol: "arrendatario", fechaInicio: "2025-06-01", permiteVerFinanzas: false, puedeDeclararRegistro: true },
   { id: "v-13", personaId: "p-13", unidadId: "u-A-104", rol: "propietario",  fechaInicio: "2019-11-20", estadoOcupacionPropiedad: "en_venta",       permiteVerFinanzas: false },
   { id: "v-14", personaId: "p-14", unidadId: "u-A-201", rol: "propietario",  fechaInicio: "2021-05-08", estadoOcupacionPropiedad: "habitada",       permiteVerFinanzas: true },
   { id: "v-15", personaId: "p-15", unidadId: "u-A-202", rol: "arrendatario", fechaInicio: "2024-09-01", permiteVerFinanzas: false },

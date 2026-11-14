@@ -47,7 +47,9 @@
     "db:push": "prisma db push --schema=prisma/schema.sqlite.prisma",
     "db:prod:generate": "prisma generate",
     "db:prod:deploy": "prisma migrate deploy",
-    "db:prod:migrar-datos": "node scripts/deploy-migrar-datos.mjs"
+    "db:prod:migrar-datos": "node scripts/deploy-migrar-datos.mjs",
+    "check:titularidad": "vite-node scripts/check-unidades-sin-propietario.ts",
+    "db:fixture-integridad": "vite-node scripts/fixture-integridad-titularidad.ts"
   },
   "dependencies": {
     "@opentelemetry/api": "^1.9.1",

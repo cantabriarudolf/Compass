@@ -17,6 +17,7 @@ k0mp4ss_fe/apps/web/data/
 ├── comunidad/
 │   ├── personas.ts                ← Maestro de Personas (identidades + roles)
 │   ├── vinculos.ts                ← Vínculos persona ↔ unidad (VU)
+│   ├── titulares.ts               ← Titularidad de cada unidad: quién responde (VU)
 │   ├── plantillas-co.ts           ← Seed del Maestro de Plantillas (CO, Sesión 2)
 │   └── plantillas-cv.ts           ← Seed del Maestro de Plantillas Rápidas (CV, Sesión 4)
 ├── finanzas/
@@ -32,10 +33,19 @@ k0mp4ss_fe/apps/web/data/
 
 ---
 
+## 🏠 Invariante de titularidad de la semilla
+
+Toda unidad de la comunidad de demo tiene **exactamente un propietario vigente** (`rol: propietario`, `fechaFin: null`). Sin eso la semilla no sirve para probar: una unidad sin dueño no se puede cobrar, no admite convenio de pago y ensucia cualquier lista de morosos. Antes del 2026-11-14 la demo tenía **132 de 166 unidades sin dueño**; hoy tiene 166 de 166.
+
+El surtido está pensado para que las pantallas tengan casos reales que mirar: unidades **habitadas** por su dueño, unidades **desocupadas con dueño** (el dueño no vive ahí y paga igual), **en venta**, **arrendadas** (con arrendatario, y una de ellas con `puedeDeclararRegistro` para probar el camino del residente), y unidades con **copropietario** (dos dueños, **un solo voto**: la asamblea vota una vez por unidad y lo emite el propietario).
+
+Los datos **rotos a propósito** no viven acá: `scripts/fixture-integridad-titularidad.ts` los aplica y los quita a demanda, para poder probar que el chequeo detecta las dos causas —«nunca declarado» y «vínculo cerrado sin reemplazo»— sin ensuciar la semilla de demo.
+
+El chequeo es `npm run check:titularidad` (`--strict` hace fallar el comando); el panel de métricas muestra el mismo número.
+
 ## 📦 Archivo por Archivo
 
 ### 1. `data/maestros.ts`
-
 | Campo | Detalle |
 |-------|---------|
 | **Ruta** | `k0mp4ss_fe/apps/web/data/maestros.ts` |
