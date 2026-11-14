@@ -1,0 +1,16 @@
+-- V3 · F28 — la revocación del corte dice CUÁNDO vuelve el servicio.
+--
+-- La ley ya fijaba el plazo (Ley 21.442 art. 20 N°9: regularizada la deuda, la
+-- reposición corre «al día hábil siguiente») y el sistema no lo registraba: revocar
+-- dejaba el motivo y el estado, y la administración no tenía con qué avisarle al
+-- deudor cuándo se repone. Esta columna guarda ese día, DERIVADO del calendario por
+-- la regla pura `siguienteDiaHabil` (sábados, domingos y los feriados del maestro
+-- `Feriado` de la comunidad) al revocar un corte que llegó a `ejecutado`.
+--
+-- NULL significa «no hay reposición» y no es un dato que falte: un corte revocado
+-- desde `preaviso` nunca cortó el servicio, así que no hay nada que reponer. Por eso
+-- NO HAY BACKFILL: los cortes ya revocados no tienen este día y fabricarlo con fecha
+-- de hoy declararía una reposición que nadie ordenó.
+--
+-- Aditiva: una columna nullable. Ninguna fila existente cambia.
+ALTER TABLE "cortes_servicio" ADD COLUMN "fechaReposicion" DATETIME;

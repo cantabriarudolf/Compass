@@ -106,6 +106,27 @@ const EMAIL_RESIDENTE = "cse-residente@test.cl"
 /** Corte de la OTRA comunidad, escrito directo en la base. */
 const CORTE_COM_B = "cse-corte-b"
 
+/**
+ * Feriado del maestro de la comunidad (`maestros_feriado`), con fecha FIJA y lejos
+ * de hoy: la reposición se mide contra el calendario, así que el feriado tiene que
+ * caer en un día que el caso nombra y no en el día en que corre la suite.
+ */
+const FERIADO_VIERNES = {
+  id: "cse-feriado-viernes",
+  fecha: "2027-03-12",
+  nombre: "Feriado de la fixture (viernes)",
+}
+
+/**
+ * Cortes que la revocación de los últimos casos escribe directo en la base: el
+ * estado del que se parte (un `ejecutado` con su fecha de ejecución, o un
+ * `preaviso` que nunca se cortó) es parte del caso y no se fabrica a través de tres
+ * actos HTTP con sus plazos.
+ */
+const CORTE_REP_VIERNES = "cse-corte-rep-viernes"
+const CORTE_REP_FERIADO = "cse-corte-rep-feriado"
+const CORTE_REP_PREAVISO = "cse-corte-rep-preaviso"
+
 /** Milisegundos de un día: el plazo del preaviso son días corridos. */
 const MS_POR_DIA = 24 * 60 * 60 * 1000
 
@@ -196,6 +217,12 @@ interface VistaCorte {
   revocadoPor: string | null
   revocadoEn: string | null
   motivo: string | null
+  /**
+   * Día hábil siguiente de la reposición (Ley 21.442 art. 20 N°9), derivado del
+   * calendario al revocar un corte EJECUTADO. `null` cuando el corte se revoca en
+   * `preaviso`: nunca se cortó el servicio y no hay nada que reponer.
+   */
+  fechaReposicion: string | null
   creadoPor: string
 }
 
@@ -524,6 +551,9 @@ describe("/api/cortes-servicio — corte de servicios por morosidad (F28)", () =
       await prisma.corteServicio.deleteMany({
         where: { comunidadId: { in: [COM_A, COM_B] } },
       })
+      await prisma.feriado.deleteMany({
+        where: { comunidadId: { in: [COM_A, COM_B] } },
+      })
       await prisma.cobroFI.deleteMany({
         where: { comunidadId: { in: [COM_A, COM_B] } },
       })
@@ -616,6 +646,40 @@ describe("/api/cortes-servicio — corte de servicios por morosidad (F28)", () =
         { method: "GET" }
       )
     )
+  }
+
+  /**
+   * Corte sembrado directo en la base.
+   *
+   * `ejecutado` es el corte que SÍ se cortó: tiene la constancia del acto
+   * (`ejecutadoPor`/`ejecutadoEn`) y su revocación obliga a reponer el servicio.
+   * `preaviso` es el que nunca llegó a cortar: no hay nada que reponer.
+   */
+  async function sembrarCorte(opciones: {
+    id: string
+    unidadId: string
+    estado: "preaviso" | "ejecutado"
+  }): Promise<void> {
+    const { id, unidadId, estado } = opciones
+    await prisma.corteServicio.deleteMany({ where: { id } })
+    await prisma.corteServicio.create({
+      data: {
+        id,
+        comunidadId: COM_A,
+        unidadId,
+        servicio: "electricidad",
+        acuerdoId: ACUERDO_OK,
+        cuotasImpagas: 3,
+        montoAdeudado: 300_000,
+        fechaPreaviso: new Date("2027-02-20T12:00:00.000Z"),
+        fechaHabilitada: new Date("2027-02-25T00:00:00.000Z"),
+        estado,
+        ejecutadoPor: estado === "ejecutado" ? "cse-usuario-admin" : null,
+        ejecutadoEn:
+          estado === "ejecutado" ? new Date("2027-02-26T12:00:00.000Z") : null,
+        creadoPor: "cse-usuario-admin",
+      },
+    })
   }
 
   /**
@@ -1314,5 +1378,155 @@ describe("/api/cortes-servicio — corte de servicios por morosidad (F28)", () =
         where: { comunidadId: COM_A, unidadId: U_CON_PROPIETARIO },
       })
     ).toBe(1)
+  })
+
+  it("revocar un corte EJECUTADO un viernes repone el lunes siguiente", async () => {
+    // 2027-03-05 es VIERNES: sábado y domingo no son hábiles, así que el día hábil
+    // siguiente es el lunes 8. El día de la revocación no cuenta aunque sea hábil.
+    await sembrarCorte({
+      id: CORTE_REP_VIERNES,
+      unidadId: U_UNO,
+      estado: "ejecutado",
+    })
+
+    vi.useFakeTimers({ toFake: ["Date"] })
+    vi.setSystemTime(new Date("2027-03-05T15:30:00.000Z"))
+    try {
+      await conSesion(EMAIL_ADMIN, async () => {
+        const res = await POST_REVOCAR({
+          corteId: CORTE_REP_VIERNES,
+          motivo: "El deudor pagó la deuda",
+        })
+        expect(res.status).toBe(200)
+        const vista = (await res.json()) as VistaCorte
+        expect(vista.estado).toBe("revocado")
+        // La revocación quedó fechada en el instante del acto…
+        expect(vista.revocadoEn).toBe("2027-03-05T15:30:00.000Z")
+        // …y la reposición en el INICIO del día hábil siguiente, no 120 horas después.
+        expect(vista.fechaReposicion).toBe("2027-03-08T00:00:00.000Z")
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+
+    const enBd = await prisma.corteServicio.findUnique({
+      where: { id: CORTE_REP_VIERNES },
+    })
+    expect(enBd?.estado).toBe("revocado")
+    expect(enBd?.fechaReposicion?.toISOString()).toBe("2027-03-08T00:00:00.000Z")
+
+    // La orden a la empresa proveedora necesita la fecha en la bitácora, no sólo en
+    // la respuesta: el evento es lo que queda.
+    const evento = await prisma.eventoAuditoria.findFirst({
+      where: {
+        comunidadId: COM_A,
+        tipoAccion: "FI_CORTE_REVOCADO",
+        referenciaId: CORTE_REP_VIERNES,
+      },
+    })
+    expect(evento).not.toBeNull()
+    expect(evento?.descripcion).toContain("2027-03-08")
+    expect(evento?.descripcion).toContain("El deudor pagó la deuda")
+  })
+
+  it("revocar la víspera de un feriado del maestro saltea el feriado y el fin de semana", async () => {
+    // El feriado es DATO: la regla pura salta los que le pasan y la ruta los lee del
+    // maestro `Feriado` de la comunidad. 2027-03-11 es JUEVES y el viernes 12 es
+    // feriado: sin el maestro la reposición caería el viernes, con él cae el lunes.
+    await prisma.feriado.deleteMany({ where: { id: FERIADO_VIERNES.id } })
+    await prisma.feriado.create({
+      data: {
+        id: FERIADO_VIERNES.id,
+        comunidadId: COM_A,
+        fecha: FERIADO_VIERNES.fecha,
+        nombre: FERIADO_VIERNES.nombre,
+        irrenunciable: true,
+      },
+    })
+    await sembrarCorte({
+      id: CORTE_REP_FERIADO,
+      unidadId: U_DOS,
+      estado: "ejecutado",
+    })
+
+    vi.useFakeTimers({ toFake: ["Date"] })
+    vi.setSystemTime(new Date("2027-03-11T09:00:00.000Z"))
+    try {
+      await conSesion(EMAIL_ADMIN, async () => {
+        const res = await POST_REVOCAR({
+          corteId: CORTE_REP_FERIADO,
+          motivo: "El deudor pagó la deuda",
+        })
+        expect(res.status).toBe(200)
+        const vista = (await res.json()) as VistaCorte
+        expect(vista.estado).toBe("revocado")
+        expect(vista.fechaReposicion).toBe("2027-03-15T00:00:00.000Z")
+        // Ni el viernes feriado ni el fin de semana son hábiles: el lunes sí.
+        const reposicion = new Date(String(vista.fechaReposicion))
+        expect(reposicion.toISOString().slice(0, 10)).not.toBe(
+          FERIADO_VIERNES.fecha
+        )
+        expect(reposicion.getUTCDay()).toBe(1)
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+
+    const enBd = await prisma.corteServicio.findUnique({
+      where: { id: CORTE_REP_FERIADO },
+    })
+    expect(enBd?.fechaReposicion?.toISOString()).toBe("2027-03-15T00:00:00.000Z")
+
+    const evento = await prisma.eventoAuditoria.findFirst({
+      where: {
+        comunidadId: COM_A,
+        tipoAccion: "FI_CORTE_REVOCADO",
+        referenciaId: CORTE_REP_FERIADO,
+      },
+    })
+    expect(evento?.descripcion).toContain("2027-03-15")
+  })
+
+  it("revocar un corte que sólo estaba en preaviso no inventa fecha de reposición", async () => {
+    // Nunca se cortó el servicio: no hay nada que reponer y la fila no inventa un
+    // día que la administración tendría que cumplir.
+    await sembrarCorte({
+      id: CORTE_REP_PREAVISO,
+      unidadId: U_SIN_DEUDA,
+      estado: "preaviso",
+    })
+
+    vi.useFakeTimers({ toFake: ["Date"] })
+    vi.setSystemTime(new Date("2027-03-08T09:00:00.000Z"))
+    try {
+      await conSesion(EMAIL_ADMIN, async () => {
+        const res = await POST_REVOCAR({
+          corteId: CORTE_REP_PREAVISO,
+          motivo: "El corte se cursó por error del trámite",
+        })
+        expect(res.status).toBe(200)
+        const vista = (await res.json()) as VistaCorte
+        expect(vista.estado).toBe("revocado")
+        expect(vista.ejecutadoEn).toBeNull()
+        expect(vista.fechaReposicion).toBeNull()
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+
+    const enBd = await prisma.corteServicio.findUnique({
+      where: { id: CORTE_REP_PREAVISO },
+    })
+    expect(enBd?.estado).toBe("revocado")
+    expect(enBd?.fechaReposicion).toBeNull()
+
+    const evento = await prisma.eventoAuditoria.findFirst({
+      where: {
+        comunidadId: COM_A,
+        tipoAccion: "FI_CORTE_REVOCADO",
+        referenciaId: CORTE_REP_PREAVISO,
+      },
+    })
+    expect(evento?.descripcion).toContain("El corte se cursó por error del trámite")
   })
 })

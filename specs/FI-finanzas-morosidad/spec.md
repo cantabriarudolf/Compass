@@ -650,7 +650,12 @@ vez de suspender dos veces. `POST /api/cortes-servicio/revocar` (editar) SHALL d
 el corte en `revocado` con motivo obligatorio, tanto desde `preaviso` como desde
 `ejecutado`: **la reposición del servicio procede al día hábil siguiente de
 regularizada la deuda** (Ley 21.442 art. 20 N°9), y el sistema registra el hecho
-administrativo, no la reconexión. `GET /api/cortes-servicio` (ver) SHALL devolver los
+administrativo, no la reconexión. La revocación de un corte `ejecutado` SHALL
+guardar ese día en `fechaReposicion` (aditivo y nullable, sin backfill) y SHALL
+devolverlo en la respuesta y registrarlo en el evento `FI_CORTE_REVOCADO`: la
+administración es la que le comunica al deudor cuándo vuelve el servicio. La
+revocación desde `preaviso` NO SHALL inventar esa fecha —la columna queda NULL—
+porque el servicio nunca se cortó. `GET /api/cortes-servicio` (ver) SHALL devolver los
 cortes de la comunidad de la sesión con su estado y sus fechas en un número FIJO de
 consultas. El sistema SHALL auditar `FI_CORTE_PREAVISO`, `FI_CORTE_EJECUTADO` y
 `FI_CORTE_REVOCADO` en la misma transacción que escribe el hecho.
@@ -752,6 +757,14 @@ la ruta no la inventa leyendo el cuerpo de la petición.
 - **THEN** responde 200 con estado `revocado`, audita `FI_CORTE_REVOCADO` y no se
   puede revocar una segunda vez (409); la reposición del servicio corre desde el
   día hábil siguiente de regularizada la deuda
+
+#### Scenario: La revocación de un corte ejecutado fija el día de reposición
+- **WHEN** la administración revoca un corte `ejecutado` un viernes o la víspera de
+  un feriado del maestro de la comunidad, o revoca uno que sólo estaba en `preaviso`
+- **THEN** en los dos primeros casos la respuesta y la fila traen `fechaReposicion`
+  en el primer día hábil posterior —el lunes, o el siguiente al feriado— y el evento
+  `FI_CORTE_REVOCADO` registra esa fecha, y en el tercero `fechaReposicion` es NULL
+  porque el servicio nunca se cortó y no hay nada que reponer
 
 #### Scenario: La lectura está acotada a la comunidad de la sesión
 - **WHEN** el Comité consulta `GET /api/cortes-servicio`, incluso con un

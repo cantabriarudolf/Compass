@@ -811,6 +811,16 @@ model CorteServicio {
   revocadoPor     String? // usuario de sesión que dejó el corte sin efecto
   revocadoEn      DateTime?
   motivo          String? // por qué se revocó (pago de la deuda o error del trámite)
+  /// V3 — el DÍA HÁBIL SIGUIENTE de la reposición del servicio (Ley 21.442 art. 20
+  /// N°9), derivado del calendario cuando se revoca un corte que llegó a
+  /// `ejecutado`: la administración tiene que poder decirle al deudor CUÁNDO vuelve
+  /// el servicio, y ese día no se tipea —la regla pura `siguienteDiaHabil` salta
+  /// sábados, domingos y los feriados del maestro de la comunidad—. Se guarda al
+  /// inicio (00:00 UTC) del día, la misma convención que `fechaHabilitada`.
+  /// Es NULL en un corte revocado desde `preaviso` —nunca se cortó el servicio y no
+  /// hay nada que reponer— y en los cortes revocados antes de esta columna (no hay
+  /// backfill: el día que corrió no se puede reconstruir sin inventarlo).
+  fechaReposicion DateTime?
   /// S8 — el REQUERIMIENTO ESCRITO que el preaviso emitió, en el archivo de la
   /// comunidad. El corte existía y el papel que prueba el aviso al deudor no: hoy
   /// el preaviso escribe el `Documento` legal con los bytes reales del escrito y

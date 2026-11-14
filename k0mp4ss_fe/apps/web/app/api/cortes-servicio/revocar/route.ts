@@ -15,6 +15,15 @@
  * estado se cambia con un `updateMany` CONDICIONAL, así que la segunda revocación
  * actualiza cero filas y responde 409 en vez de reescribir el motivo del primero.
  *
+ * Reponer tiene FECHA, y la fecha no se tipea: revocar un corte `ejecutado` fija
+ * `fechaReposicion` en el DÍA HÁBIL SIGUIENTE, derivado del calendario por la regla
+ * pura `siguienteDiaHabil` (`lib/dias-habiles.ts`, sin base y sin reloj) con los
+ * feriados que el maestro `Feriado` de la comunidad declara. Es la fecha que la
+ * administración le comunica al deudor, así que viaja en la respuesta y en el evento
+ * de bitácora. Un corte revocado desde `preaviso` NO tiene reposición —nunca se cortó
+ * el servicio— y la columna queda NULL: la ruta no inventa un día que nadie debe
+ * cumplir.
+ *
  * Guard `fi:cobranza` + editar (administración). El motivo es obligatorio: la
  * revocación deja sin efecto un acto administrativo y la bitácora tiene que decir
  * por qué.
@@ -25,6 +34,7 @@ import { prisma } from "@/lib/prisma"
 import { logger } from "@/lib/logger"
 import { generarId } from "@/lib/id-utils"
 import { registrarEventoAuditoria } from "@/lib/auditoria"
+import { siguienteDiaHabil } from "@/lib/dias-habiles"
 import {
   jsonError,
   withComunidadScope,
@@ -40,6 +50,21 @@ const CORTE_YA_REVOCADO = "CORTE_YA_REVOCADO"
 
 /** Estados que la revocación puede dejar sin efecto: el preaviso y el ejecutado. */
 const ESTADOS_REVOCABLES = ["preaviso", "ejecutado"] as const
+
+/**
+ * Los feriados de la comunidad, en la forma `AAAA-MM-DD` que la regla pura espera.
+ *
+ * `Feriado.fecha` ya se guarda así (`FeriadoSchema.fecha`), de modo que no hay nada
+ * que convertir: la regla compara el DÍA de la fecha con el del maestro y no el
+ * instante, y por eso el formato es el del dato y no el de un `Date`.
+ */
+async function feriadosDeLaComunidad(comunidadId: string): Promise<string[]> {
+  const feriados = await prisma.feriado.findMany({
+    where: { comunidadId },
+    select: { fecha: true },
+  })
+  return feriados.map((feriado) => feriado.fecha)
+}
 
 export async function POST(req: Request): Promise<Response> {
   const resultado = await withComunidadScope()
@@ -83,6 +108,17 @@ export async function POST(req: Request): Promise<Response> {
   const ahora = new Date()
 
   try {
+    // El día hábil siguiente sólo existe si el servicio llegó a CORTARSE: se DERIVA
+    // del calendario de la comunidad (la regla pura no lee base ni reloj) y se lee
+    // antes del acto para escribirlo junto con él. Un corte en `preaviso` no repone
+    // nada, así que ni se consultan los feriados.
+    const feriados =
+      corte.estado === "ejecutado"
+        ? await feriadosDeLaComunidad(scope.comunidadId)
+        : []
+    const fechaReposicion =
+      corte.estado === "ejecutado" ? siguienteDiaHabil(ahora, feriados) : null
+
     const revocado = await prisma.$transaction(async (tx) => {
       const cambiadas = await tx.corteServicio.updateMany({
         where: {
@@ -95,6 +131,10 @@ export async function POST(req: Request): Promise<Response> {
           revocadoPor: scope.usuarioId,
           revocadoEn: ahora,
           motivo,
+          // Sin reposición la columna NO se toca: queda NULL, que es su valor por
+          // defecto, y así una revocación desde `preaviso` no escribe una fecha que
+          // después alguien tendría que cumplir.
+          ...(fechaReposicion ? { fechaReposicion } : {}),
         },
       })
       if (cambiadas.count === 0) throw new Error(CORTE_YA_REVOCADO)
@@ -108,7 +148,11 @@ export async function POST(req: Request): Promise<Response> {
           categoria: "FI",
           tipoAccion: "FI_CORTE_REVOCADO",
           referenciaId: corte.id,
-          descripcion: `Se dejó sin efecto el corte de ${corte.servicio} de la unidad ${unidad.numero}, que estaba en estado ${corte.estado}: ${motivo}. La reposición del servicio corre desde el día hábil siguiente de regularizada la deuda (Ley 21.442 art. 20 N°9).`,
+          descripcion:
+            `Se dejó sin efecto el corte de ${corte.servicio} de la unidad ${unidad.numero}, que estaba en estado ${corte.estado}: ${motivo}. ` +
+            (fechaReposicion
+              ? `El servicio se repone el ${fechaReposicion.toISOString().slice(0, 10)}, día hábil siguiente de regularizada la deuda (Ley 21.442 art. 20 N°9).`
+              : "La reposición del servicio corre desde el día hábil siguiente de regularizada la deuda (Ley 21.442 art. 20 N°9)."),
         },
         tx
       )
@@ -118,12 +162,15 @@ export async function POST(req: Request): Promise<Response> {
       return fila
     })
 
-    return Response.json(
-      vistaDeCorte(revocado, {
+    return Response.json({
+      ...vistaDeCorte(revocado, {
         unidadNumero: unidad.numero,
         acuerdoFolio: acuerdo?.folio ?? null,
-      })
-    )
+      }),
+      // La fecha se devuelve desde la fila REVOCADA y no desde la decisión: la
+      // respuesta dice lo que quedó escrito, y en un `preaviso` no quedó ninguna.
+      fechaReposicion: revocado.fechaReposicion?.toISOString() ?? null,
+    })
   } catch (e) {
     if (e instanceof Error && e.message === CORTE_YA_REVOCADO) {
       return jsonError(409, "El corte ya está revocado.")
