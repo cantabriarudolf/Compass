@@ -2,9 +2,7 @@
 
 import * as React from "react"
 import { usePlantillasCO, useEnviosCO, useMensajesBuzonCO } from "@/lib/api/use-co"
-import { usePersonas } from "@/lib/api/use-personas"
 import { useUnidades } from "@/lib/api/use-unidades"
-import { useVinculos } from "@/lib/api/use-vinculos"
 import { useMacroSectores } from "@/lib/api/use-macro-sectores"
 import { useMicroSectores } from "@/lib/api/use-micro-sectores"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
@@ -86,6 +84,50 @@ interface PersonaBuscada {
 }
 
 /**
+ * T14 (S10) — el alcance del envío masivo se resuelve en el SERVIDOR.
+ *
+ * Hasta hoy la pantalla cruzaba TRES colecciones paginadas a cien (personas,
+ * vínculos y unidades) en un `useMemo` del cliente: una comunidad con más de
+ * cien filas recibía el envío incompleto y nadie se entera. El endpoint
+ * (`app/api/co/alcance-masivo`) aplica las mismas reglas sobre la comunidad
+ * completa; esta pantalla consulta, camina sus páginas hasta el `total` que el
+ * servidor declara y muestra su error verbatim.
+ */
+const ALCANCE_MASIVO = "/api/co/alcance-masivo"
+
+/**
+ * Tope de páginas que la pantalla camina sola (200 × 100 = 20.000 filas). Si una
+ * comunidad lo superara, el recorte del TRANSPORTE se declara con el `total` del
+ * servidor (AvisoTruncamiento); la resolución del alcance nunca se recorta.
+ */
+const MAXIMO_PAGINAS_ALCANCE = 200
+
+/** Fila de `GET /api/co/alcance-masivo`. */
+interface FilaAlcance {
+  personaId: string
+  unidadId?: string
+  personaNombre: string
+}
+
+/** Envelope paginado del endpoint del alcance. */
+interface ColeccionAlcance {
+  data?: FilaAlcance[]
+  page: number
+  pageSize: number
+  total: number
+}
+
+/** Consulta una página del alcance; el error del servidor viaja verbatim. */
+async function pedirAlcance(url: string, signal: AbortSignal): Promise<ColeccionAlcance> {
+  const res = await fetch(url, { headers: { accept: "application/json" }, signal })
+  if (!res.ok) {
+    const cuerpo = (await res.json().catch(() => null)) as { error?: string } | null
+    throw new Error(cuerpo?.error ?? `Error ${res.status} al consultar ${url}.`)
+  }
+  return (await res.json()) as ColeccionAlcance
+}
+
+/**
  * consola-comunicacion — consola de administración de CO (redacción, plantillas y
  * buzón).
  * publicación-portal", "co/plantillas")
@@ -103,8 +145,6 @@ interface PersonaBuscada {
  * residente y el comité reciben `components/co/bandeja-residente.tsx`.
  */
 export function ConsolaComunicacionCO() {
-  const { personas, total: totalPersonas, isLoading: cPersonas } = usePersonas()
-  const { vinculos, isLoading: cVinculos } = useVinculos()
   const { items: unidades, total: totalUnidades, isLoading: cUnidades } = useUnidades()
   const { items: macroSectores, isLoading: cMacro } = useMacroSectores()
   const { items: microSectores, isLoading: cMicro } = useMicroSectores()
@@ -124,6 +164,14 @@ export function ConsolaComunicacionCO() {
   const [macroSel, setMacroSel] = React.useState<string>("todos")
   const [microSel, setMicroSel] = React.useState<string>("todos")
   const [unidadSel, setUnidadSel] = React.useState<string>("todas")
+  // T14 — el alcance consultado al servidor: filas resueltas, `total` declarado,
+  // estado de carga y error verbatim del endpoint.
+  const [alcance, setAlcance] = React.useState<{ filas: FilaAlcance[]; total: number }>({
+    filas: [],
+    total: 0,
+  })
+  const [cargandoAlcance, setCargandoAlcance] = React.useState(true)
+  const [errorAlcance, setErrorAlcance] = React.useState<string | null>(null)
 
   // --- Buzón ---
   const [clasificacion, setClasificacion] = React.useState<"felicitacion" | "sugerencia" | "reclamo">("felicitacion")
@@ -138,45 +186,75 @@ export function ConsolaComunicacionCO() {
   // --- Plantillas ---
   const [editandoPlantilla, setEditandoPlantilla] = React.useState<PlantillaCO | null>(null)
 
-      const cargando = cPersonas || cVinculos || cUnidades || cMacro || cMicro || cPlantillas || cEnvios || cBuzon
-
-      const nombrePersona = (id: string) => {
-        const p = personas.find(x => x.id === id)
-        return p ? `${p.nombres} ${p.apellidos}` : id
-      }
+      const cargando = cUnidades || cMacro || cMicro || cPlantillas || cEnvios || cBuzon
 
       const microsVisibles = macroSel === "todos" ? microSectores : microSectores.filter(m => m.macroSectorId === macroSel)
       const unidadesVisibles = microSel === "todos" ? unidades : unidades.filter(u => u.microSectorId === microSel)
 
-      const destinatarios = React.useMemo(() => {
-        const rolPersona = (personaId: string): string[] => {
-          const vigs = vinculos.filter(v => v.personaId === personaId && !v.fechaFin).map(v => v.rol)
-          if (vigs.length > 0) return vigs
-          const p = personas.find(x => x.id === personaId)
-          return p?.roles.filter(r => r !== "directiva") ?? []
+      // T14 (S10) — el alcance lo resuelve el SERVIDOR. Hasta acá un `useMemo`
+      // cruzaba TRES colecciones paginadas a cien (personas, vínculos y unidades):
+      // el alcance mostrado era el alcance enviado, así que una comunidad con más
+      // de cien filas recibía el envío incompleto. El endpoint aplica las mismas
+      // reglas sobre la comunidad completa; acá sólo se consulta y se caminan sus
+      // páginas hasta agotar el `total` declarado, para que el payload del envío
+      // siga siendo la lista COMPLETA: el transporte pagina, la resolución no.
+      // Una respuesta de un pedido anterior no se aplica (aborta y se compara la
+      // clave del filtro), igual que los hooks con `keepPreviousData`.
+      const claveVigente = React.useRef("")
+      React.useEffect(() => {
+        const clave = JSON.stringify([rolesFiltro, macroSel, microSel, unidadSel])
+        claveVigente.current = clave
+        const controlador = new AbortController()
+        const query = new URLSearchParams()
+        if (rolesFiltro.length > 0) query.set("roles", rolesFiltro.join(","))
+        if (macroSel !== "todos") query.set("macro", macroSel)
+        if (microSel !== "todos") query.set("micro", microSel)
+        if (unidadSel !== "todas") query.set("unidad", unidadSel)
+        const urlDe = (page: number): string => {
+          const conPagina = new URLSearchParams(query)
+          conPagina.set("page", String(page))
+          return `${ALCANCE_MASIVO}?${conPagina.toString()}`
         }
-        const base = new Map<string, string | undefined>()
-        for (const p of personas) {
-          if (p.estadoCuenta !== "activa") continue
-          const roles = rolPersona(p.id)
-          if (roles.includes("personal")) {
-            if (rolesFiltro.includes("personal")) base.set(p.id, undefined)
-            continue
+        setAlcance({ filas: [], total: 0 })
+        setErrorAlcance(null)
+        setCargandoAlcance(true)
+        void (async () => {
+          const desactualizado = () =>
+            controlador.signal.aborted || claveVigente.current !== clave
+          try {
+            const primera = await pedirAlcance(urlDe(1), controlador.signal)
+            if (desactualizado()) return
+            const filas = [...(primera.data ?? [])]
+            const total = primera.total ?? filas.length
+            let pagina = primera.page ?? 1
+            while (filas.length < total && pagina < MAXIMO_PAGINAS_ALCANCE) {
+              const siguiente = await pedirAlcance(urlDe(pagina + 1), controlador.signal)
+              if (desactualizado()) return
+              pagina += 1
+              const filasSiguientes = siguiente.data ?? []
+              if (filasSiguientes.length === 0) break
+              filas.push(...filasSiguientes)
+            }
+            setAlcance({ filas, total })
+          } catch (e) {
+            if (desactualizado()) return
+            setAlcance({ filas: [], total: 0 })
+            // El mensaje del servidor viaja verbatim; sólo la desconexión usa el
+            // literal de red que ya es convención del repo (`lib/api/use-vinculos`).
+            setErrorAlcance(e instanceof Error ? e.message : "Sin conexión con el servidor.")
+          } finally {
+            if (!desactualizado()) setCargandoAlcance(false)
           }
-          const vigs = vinculos.filter(v => v.personaId === p.id && !v.fechaFin)
-          if (vigs.length === 0) continue
-          for (const v of vigs) {
-            if (!rolesFiltro.includes(v.rol)) continue
-            if (!base.has(p.id)) base.set(p.id, v.unidadId)
-          }
-        }
-        let lista = Array.from(base.entries()).map(([personaId, unidadId]) => ({ personaId, unidadId }))
-        if (macroSel !== "todos" || microSel !== "todos" || unidadSel !== "todas") {
-          const idsUnidades = new Set(unidadesVisibles.map(u => u.id))
-          lista = lista.filter(d => d.unidadId && idsUnidades.has(d.unidadId))
-        }
-        return lista
-      }, [personas, vinculos, rolesFiltro, macroSel, microSel, unidadSel, unidadesVisibles])
+        })()
+        return () => controlador.abort()
+      }, [rolesFiltro, macroSel, microSel, unidadSel])
+
+      // El payload del envío conserva EXACTAMENTE el shape de antes
+      // (`{personaId, unidadId}`); `personaNombre` es sólo para la vista previa.
+      const destinatarios = React.useMemo(
+        () => alcance.filas.map(f => ({ personaId: f.personaId, unidadId: f.unidadId })),
+        [alcance.filas]
+      )
 
       const cargarPlantilla = (id: string) => {
         setPlantillaSel(id)
@@ -360,7 +438,9 @@ export function ConsolaComunicacionCO() {
                     placeholder="Estimado/a [Nombre_Usuario]…"
                   />
                 </div>
-                <Button onClick={enviarMasivo}><IconSend className="size-4 mr-1" /> Enviar a destinatarios filtrados</Button>
+                {/* T14 — con el alcance en vuelo o fallando, el envío no sale: el error
+                    del servidor queda verbatim y un click no lo pisa con otro mensaje. */}
+                <Button onClick={enviarMasivo} disabled={cargandoAlcance || !!errorAlcance}><IconSend className="size-4 mr-1" /> Enviar a destinatarios filtrados</Button>
               </CardContent>
             </Card>
 
@@ -422,25 +502,26 @@ export function ConsolaComunicacionCO() {
                   </div>
                 </div>
                 <div className="rounded-md border p-3">
-                  {/* S10 — el alcance se resuelve en el CLIENTE cruzando tres colecciones
-                      paginadas a cien (personas, vínculos y unidades). Si el padrón trae más
-                      filas de las que se montaron, el alcance está recortado y hay que decirlo:
-                      resolver los destinatarios en el servidor es una unidad aparte, con su
-                      propia decisión, y no se disfraza de aviso. */}
+                  {/* T14 — el alcance lo resuelve el endpoint sobre la comunidad completa.
+                      El aviso declara el recorte del TRANSPORTE (filas montadas vs `total`
+                      del servidor): la resolución ya no depende del padrón truncado del
+                      cliente, que ni siquiera se consulta para esto. */}
+                  {cargandoAlcance && <p role="status" className="text-xs text-muted-foreground mb-2">Resolviendo destinatarios en el servidor…</p>}
+                  {errorAlcance && <p className="text-sm text-destructive mb-2">{errorAlcance}</p>}
                   <AvisoTruncamiento
-                    mostrados={personas.length}
-                    total={totalPersonas}
+                    mostrados={alcance.filas.length}
+                    total={alcance.total}
                     className="mb-2"
                   />
-                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-2">Alcance resuelto: {destinatarios.length} destinatario(s)</p>
+                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-2">Alcance resuelto: {alcance.filas.length} destinatario(s)</p>
                   <ul className="max-h-40 space-y-1 overflow-y-auto text-xs">
-                    {destinatarios.slice(0, 50).map(d => (
-                      <li key={`${d.personaId}-${d.unidadId ?? ""}`} className="flex items-center justify-between gap-2">
-                        <span>{nombrePersona(d.personaId)}</span>
-                        {d.unidadId && <Badge variant="outline" className="text-[10px]">{unidades.find(u => u.id === d.unidadId)?.numero}</Badge>}
+                    {alcance.filas.slice(0, 50).map(f => (
+                      <li key={`${f.personaId}-${f.unidadId ?? ""}`} className="flex items-center justify-between gap-2">
+                        <span>{f.personaNombre}</span>
+                        {f.unidadId && <Badge variant="outline" className="text-[10px]">{unidades.find(u => u.id === f.unidadId)?.numero}</Badge>}
                       </li>
                     ))}
-                    {destinatarios.length > 50 && <li className="text-muted-foreground">…y {destinatarios.length - 50} más</li>}
+                    {alcance.filas.length > 50 && <li className="text-muted-foreground">…y {alcance.filas.length - 50} más</li>}
                   </ul>
                 </div>
               </CardContent>

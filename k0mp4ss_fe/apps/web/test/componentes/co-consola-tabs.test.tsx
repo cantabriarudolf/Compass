@@ -56,10 +56,34 @@ import { ConsolaComunicacionCO } from "@/app/comunidad/comunicacion/consola-comu
 
 beforeEach(() => {
   instalarEntornoRadix()
+  // T14: la consola ahora consulta `GET /api/co/alcance-masivo` al montar (el alcance
+  // del envío masivo se resuelve en el servidor). El stub evita que la guarda global
+  // de MSW (`onUnhandledRequest: "error"`, que NO se baja) vuelva rojo el run.
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((recurso: string | URL | Request) => {
+      const url = typeof recurso === "string" ? recurso : String(recurso)
+      if (url.startsWith("/api/co/alcance-masivo")) {
+        return Promise.resolve(
+          new Response(JSON.stringify({ data: [], total: 0, page: 1, pageSize: 100 }), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          })
+        )
+      }
+      return Promise.resolve(
+        new Response(JSON.stringify({ data: [], total: 0 }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        })
+      )
+    })
+  )
 })
 
 afterEach(() => {
   cleanup()
+  vi.unstubAllGlobals()
 })
 
 describe("Consola de Comunicación — pestañas después de retirar la Biblioteca", () => {

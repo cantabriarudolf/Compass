@@ -13,9 +13,14 @@
  *     reclamo se arma con la fila buscada, aunque el padrón del cliente esté VACÍO;
  *   · sin selección, el reclamo queda a nombre de la Administración y NO hereda la
  *     primera fila del padrón (con el código anterior este caso guardaba «Primera Fila»);
- *   · el recorte del padrón se DECLARA en pantalla cuando el total del servidor supera
- *     las filas montadas (los destinatarios del envío masivo se resuelven en el cliente,
- *     así que callarlo sería peor que la lista ciega original).
+ *   · el recorte del SELECTOR DE UNIDAD se declara en pantalla — ese techo de
+ *     `useUnidades` sigue teniendo sujeto en el filtro del envío masivo.
+ *
+ * T14: el alcance del envío masivo se movió al servidor (`GET /api/co/alcance-masivo`),
+ * así que el tercer caso CAMBIÓ DE SUJETO — pinnea el aviso del selector de unidad y el
+ * alcance que resuelve el endpoint, no el padrón del cliente que ya no se consulta. No
+ * se retiró ninguna guarda por comodidad: el pin que existía sobre el padrón moría con
+ * el cálculo cliente que protegía.
  */
 import * as React from "react"
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest"
@@ -38,6 +43,9 @@ const padron = vi.hoisted(() => ({
     estadoCuenta: string
     roles: string[]
   }[],
+  /** Unidades montadas y total del servidor, para el aviso del selector (T14). */
+  unidadesFilas: [] as { id: string; numero: string; etiqueta: string; microSectorId: string }[],
+  unidadesTotal: 0,
   crearBuzon: vi.fn<(registro: unknown) => Promise<{ ok: false; error: string }>>(
     async () => ({ ok: true as unknown as false, error: "" })
   ),
@@ -74,7 +82,7 @@ vi.mock("@/lib/api/use-personas", () => ({
 }))
 
 vi.mock("@/lib/api/use-unidades", () => ({
-  useUnidades: () => coleccion([]),
+  useUnidades: () => coleccion(padron.unidadesFilas, padron.unidadesTotal),
 }))
 
 vi.mock("@/lib/api/use-vinculos", () => ({
@@ -107,6 +115,21 @@ const FILA_BUSCADA = {
   rut: "7.123.456-8",
 }
 
+/** 100 unidades montadas de 166 que reporta el servidor: el techo de `useUnidades`. */
+const LOTE_UNIDADES = Array.from({ length: 100 }, (_, i) => ({
+  id: `s10-uni-${String(i + 1).padStart(3, "0")}`,
+  numero: String(101 + i),
+  etiqueta: "Depto",
+  microSectorId: "s10-micro-1",
+}))
+
+/** Fila que responde `GET /api/co/alcance-masivo` y NINGÚN hook del cliente tiene (T14). */
+const FILA_FUERA_DEL_PADRON = {
+  personaId: "s10-per-fuera",
+  unidadId: "s10-uni-100",
+  personaNombre: "Zoila Fuera Del Padron",
+}
+
 beforeAll(() => {
   instalarEntornoRadix()
 })
@@ -117,16 +140,33 @@ afterEach(() => {
   padron.crearBuzon.mockClear()
   padron.total = 0
   padron.filas = []
+  padron.unidadesFilas = []
+  padron.unidadesTotal = 0
 })
 
-/** Stub de fetch que responde la búsqueda del servidor y graba cada URL pedida. */
-function stubBuscarReportante(): { llamadas: string[] } {
+/** Stub de fetch que responde la búsqueda del servidor y graba cada URL pedida.
+ *
+ *  T14: la consola también consulta `/api/co/alcance-masivo` al montar; el despacho
+ *  por URL devuelve el alcance que pide cada caso (vacío por defecto) y deja la
+ *  búsqueda del reportante igual que siempre.
+ */
+function stubBuscarReportante(
+  alcance: { data: unknown[]; total: number } = { data: [], total: 0 }
+): { llamadas: string[] } {
   const llamadas: string[] = []
   vi.stubGlobal(
     "fetch",
     vi.fn((recurso: string | URL | Request) => {
       const url = typeof recurso === "string" ? recurso : String(recurso)
       llamadas.push(url)
+      if (url.startsWith("/api/co/alcance-masivo")) {
+        return Promise.resolve(
+          new Response(JSON.stringify({ ...alcance, page: 1, pageSize: 100 }), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          })
+        )
+      }
       return Promise.resolve(
         new Response(JSON.stringify({ data: [FILA_BUSCADA], page: 1, pageSize: 25, total: 1 }), {
           status: 200,
@@ -197,16 +237,28 @@ describe("S10 — el reportante del buzón se busca en el servidor", () => {
     expect(registro.reportanteNombre).toBe("Administración")
   }, PRESUPUESTO_CARGA)
 
-  it("el padrón recortado se declara en pantalla en vez de esconderse", async () => {
-    // 166 personas en la comunidad, una sola montada: el alcance del envío masivo sale
-    // recortado y el operador tiene que verlo.
+  it("el recorte del selector de unidad se declara y el alcance ya no sale del padrón del cliente", async () => {
+    // T14 movió el alcance al servidor: con los hooks truncados (1 persona y 100
+    // unidades montadas de 166 cada una), el endpoint devuelve una persona que
+    // NINGÚN hook tiene y la pantalla la muestra. El pin anterior («Mostrando 1 de
+    // 166» del padrón) protegía el cálculo cliente que T14 retiró.
     padron.total = 166
     padron.filas = [
       { id: "s10-per-primera", nombres: "Primera", apellidos: "Fila", estadoCuenta: "activa", roles: [] },
     ]
-    stubBuscarReportante()
+    padron.unidadesFilas = LOTE_UNIDADES
+    padron.unidadesTotal = 166
+    stubBuscarReportante({ data: [FILA_FUERA_DEL_PADRON], total: 1 })
     render(<ConsolaComunicacionCO />)
 
-    expect(screen.getByText(/Mostrando 1 de 166/)).toBeTruthy()
+    // El alcance del SERVIDOR incluye a quien el padrón truncado no monta.
+    expect(await screen.findByText("Zoila Fuera Del Padron")).toBeTruthy()
+    expect(screen.getByText("Alcance resuelto: 1 destinatario(s)")).toBeTruthy()
+
+    // El aviso del SELECTOR DE UNIDAD sigue declarando su recorte (T14 no lo toca;
+    // también queda pineado en comunicacion-alcance-masivo.test.tsx).
+    expect(screen.getByText(/Mostrando 100 de 166/)).toBeTruthy()
+    // El aviso del padrón —el sujeto que T14 retiró— ya no existe.
+    expect(screen.queryByText(/Mostrando 1 de 166/)).toBeNull()
   }, PRESUPUESTO_CARGA)
 })
