@@ -117,14 +117,50 @@ interface ColeccionAlcance {
   total: number
 }
 
-/** Consulta una página del alcance; el error del servidor viaja verbatim. */
-async function pedirAlcance(url: string, signal: AbortSignal): Promise<ColeccionAlcance> {
-  const res = await fetch(url, { headers: { accept: "application/json" }, signal })
-  if (!res.ok) {
-    const cuerpo = (await res.json().catch(() => null)) as { error?: string } | null
-    throw new Error(cuerpo?.error ?? `Error ${res.status} al consultar ${url}.`)
+/** Error de una página del alcance, con el estado HTTP que lo originó: el
+ *  reintento decide con él (sólo 5xx reintentan) y el mensaje viaja verbatim igual. */
+class ErrorAlcance extends Error {
+  readonly status?: number
+  constructor(mensaje: string, status?: number) {
+    super(mensaje)
+    this.name = "ErrorAlcance"
+    this.status = status
   }
-  return (await res.json()) as ColeccionAlcance
+}
+
+/** Consulta una página del alcance; el error del servidor viaja verbatim.
+ *
+ *  T16 (R3-error-sin-reintento): UN reintento acotado por página, sólo para error
+ *  de red (el `TypeError` que lanza `fetch`) o respuesta 5xx — una desconexión de
+ *  un instante no tiene que abortar la caminata de un envío masivo. El reintento
+ *  usa la MISMA señal (`AbortController` de la caminata) y el segundo intento no
+ *  se vuelve a envolver: si también falla, el error sube tal cual y el mensaje del
+ *  servidor llega verbatim a la pantalla. Un 4xx no reintenta: es una respuesta
+ *  definitiva, no una falla de transporte.
+ */
+async function pedirAlcance(url: string, signal: AbortSignal): Promise<ColeccionAlcance> {
+  const pedir = async (): Promise<ColeccionAlcance> => {
+    const res = await fetch(url, { headers: { accept: "application/json" }, signal })
+    if (!res.ok) {
+      const cuerpo = (await res.json().catch(() => null)) as { error?: string } | null
+      throw new ErrorAlcance(
+        cuerpo?.error ?? `Error ${res.status} al consultar ${url}.`,
+        res.status
+      )
+    }
+    return (await res.json()) as ColeccionAlcance
+  }
+  try {
+    return await pedir()
+  } catch (e) {
+    // Ni el abort ni un 4xx reintentan: el abort ya no es un pedido vigente y el 4xx
+    // es definitivo. El reintento es UNO — el segundo intento no se envuelve.
+    const reintentable =
+      !signal.aborted &&
+      (e instanceof TypeError || (e instanceof ErrorAlcance && (e.status ?? 0) >= 500))
+    if (!reintentable) throw e
+    return pedir()
+  }
 }
 
 /**
@@ -224,7 +260,22 @@ export function ConsolaComunicacionCO() {
           try {
             const primera = await pedirAlcance(urlDe(1), controlador.signal)
             if (desactualizado()) return
-            const filas = [...(primera.data ?? [])]
+            // T16 (R3-walk-duplicados): dos páginas pueden solaparse y empujar la MISMA
+            // fila dos veces — el mismo destinatario recibiría el envío dos veces. La
+            // caminata deduplica por `personaId|unidadId` conservando la primera
+            // aparición, y corta en la página que no aporta nada nuevo (un servidor
+            // que repitiera la misma página no produce una caminata de 200 pedidos).
+            const filas: FilaAlcance[] = []
+            const vistas = new Set<string>()
+            const agregar = (nuevas: FilaAlcance[]): void => {
+              for (const f of nuevas) {
+                const claveFila = `${f.personaId}|${f.unidadId ?? ""}`
+                if (vistas.has(claveFila)) continue
+                vistas.add(claveFila)
+                filas.push(f)
+              }
+            }
+            agregar(primera.data ?? [])
             const total = primera.total ?? filas.length
             let pagina = primera.page ?? 1
             while (filas.length < total && pagina < MAXIMO_PAGINAS_ALCANCE) {
@@ -233,8 +284,15 @@ export function ConsolaComunicacionCO() {
               pagina += 1
               const filasSiguientes = siguiente.data ?? []
               if (filasSiguientes.length === 0) break
-              filas.push(...filasSiguientes)
+              const antes = filas.length
+              agregar(filasSiguientes)
+              if (filas.length === antes) break
             }
+            // T16 (R3-orden-locale): el orden del alcance heredaba la colación de la
+            // base (en SQLite el orden binario deja los nombres acentuados al final:
+            // «Á» es U+00C1, mayor que «Z»). Ordenar con la collation española sobre
+            // el nombre hace la vista previa —y el orden del envío— predecible.
+            filas.sort((a, b) => a.personaNombre.localeCompare(b.personaNombre, "es"))
             setAlcance({ filas, total })
           } catch (e) {
             if (desactualizado()) return
@@ -605,7 +663,8 @@ export function ConsolaComunicacionCO() {
               {/* D7: la Administración registra en el buzón los reclamos que recibe
                   en la oficina a nombre de un vecino. El reportante se resuelve en el
                   servidor contra la comunidad y el nombre sale de la ficha de Persona;
-                  sin selección, el mensaje queda a nombre de la Administración. */}
+                  sin selección, el servidor deriva el reportante de la sesión (L9d):
+                  el nombre que viaja en el payload es una etiqueta, no el registro. */}
               <div className="space-y-1">
                 <Label className="text-xs">Registrar a nombre de (reclamo recibido en oficina)</Label>
                 {/* S10 — la lista de vecinos se BUSCA en el servidor (padrón completo, con
@@ -619,7 +678,7 @@ export function ConsolaComunicacionCO() {
                   placeholder="Buscar por nombre o RUT…"
                   vacio="Ningún vecino activo coincide."
                 />
-                <p className="text-xs text-muted-foreground">Sin selección, el reclamo se registra con tu propia identidad de Administración.</p>
+                <p className="text-xs text-muted-foreground">Sin selección, el servidor resuelve la identidad de quien reporta desde tu sesión; el nombre que viaja en el envío es una etiqueta provisoria.</p>
               </div>
               <div className="space-y-1">
                 <Label className="text-xs">Asunto</Label>

@@ -12,7 +12,8 @@
  *   · la compuerta de la matriz es `co:buzon` con `crear` —el permiso de registrar un
  *     reclamo en la oficina—, clave granular, así que pasa el candado R1 del guardián de
  *     inventario. Por el fallback de prefijo de `puede()`, administración y residente
- *     entran igual, que es la población del buzón;
+ *     entran igual, que es la población del buzón. El 403 es un handler a medida, así
+ *     que deja constancia de sí mismo (`RP_PERMISSION_DENIED`, RP §Menor Privilegio);
  *   · el scope de comunidad sale de la sesión (`withComunidadScope`): la fila de otra
  *     comunidad no es un dato ajeno que se ignora, es una fila que no existe;
  *   · alcance por filas de la serie «permisos por objeto» (`alcancePorFilasDeSesion`):
@@ -34,6 +35,7 @@ import { logger } from "@/lib/logger"
 import { excedeVolumen } from "@/lib/rate-limit-volumen"
 import { jsonError, withComunidadScope } from "@/lib/api/with-comunidad-scope"
 import { alcancePorFilasDeSesion } from "@/lib/api/sesion-persona"
+import { registrarDenegacionCo } from "@/app/api/co/_lib/denegacion"
 
 /** Mismo tamaño de página que el buscador de certificados. */
 const PERSONAS_POR_PAGINA = 25
@@ -62,6 +64,10 @@ export async function GET(req: Request): Promise<Response> {
   }
 
   if (!puede(scope.rol, "crear", "co:buzon")) {
+    // El 403 de un handler a medida no pasa por el `authzCheck` del factory: la
+    // constancia de la denegación se emite acá (T16, hallazgo L9c de la revisión de
+    // S10 — RP §Menor Privilegio exige el evento).
+    registrarDenegacionCo(scope, "co:buzon", "crear")
     return jsonError(403, "Permiso denegado.")
   }
 
@@ -82,14 +88,17 @@ export async function GET(req: Request): Promise<Response> {
   const paginaPedida = Number.parseInt(url.searchParams.get("page") ?? "1", 10) || 1
   const page = Math.min(10_000, Math.max(1, paginaPedida))
 
-  // Alcance por filas (misma decisión de toda la serie): comunidad para administración
-  // y comité; para un rol acotado, SU persona o nada.
-  const alcance = await alcancePorFilasDeSesion(scope)
-  if (alcance.tipo === "denegado") {
-    return Response.json({ data: [], page, pageSize: PERSONAS_POR_PAGINA, total: 0 })
-  }
-
   try {
+    // Alcance por filas (misma decisión de toda la serie): comunidad para administración
+    // y comité; para un rol acotado, SU persona o nada. Va DENTRO del `try` (T16,
+    // R3-alcance-fuera-de-try / R4-4): la consulta de identidad puede fallar igual que
+    // Prisma, y un fallo acá tiene que morir en el 500 propio de la ruta con su
+    // constancia en el log, no escapar del handler sin registrar nada.
+    const alcance = await alcancePorFilasDeSesion(scope)
+    if (alcance.tipo === "denegado") {
+      return Response.json({ data: [], page, pageSize: PERSONAS_POR_PAGINA, total: 0 })
+    }
+
     // Mismos tres campos de búsqueda que `/api/personas` (nombre, RUT, email) y la
     // misma regla de la pantalla (`estadoCuenta: "activa"`), resuelta en el servidor.
     const where = {

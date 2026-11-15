@@ -228,7 +228,12 @@ describe("S10 — el reportante del buzón se busca en el servidor", () => {
     const user = userEvent.setup()
     await abrirBuzon(user)
 
-    expect(screen.getByText(/Sin selección, el reclamo se registra con tu propia identidad/)).toBeTruthy()
+    // T16 (L9d): la copia anterior — «Sin selección, el reclamo se registra con tu
+    // propia identidad de Administración» — prometía lo que la base NO guarda: el
+    // servidor resuelve la identidad de la sesión, y el nombre del payload es una
+    // etiqueta provisoria. La copia dice lo que sí pasa; el payload no cambia.
+    expect(screen.getByText(/Sin selección, el servidor resuelve la identidad/)).toBeTruthy()
+    expect(screen.queryByText(/tu propia identidad de Administración/)).toBeNull()
     await enviarReclamo(user)
 
     expect(padron.crearBuzon).toHaveBeenCalledTimes(1)

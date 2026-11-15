@@ -37,12 +37,32 @@ export function excedeVolumen(ambito: string, clave: string, ahora: number = Dat
   const llave = `${ambito}:${clave}`
   const registro = contador.get(llave)
   if (!registro || ahora >= registro.reset) {
-    // Poda oportunista para que el Map no crezca sin límite (mismo criterio que los
-    // dos consumidores que ya lo escribían a mano).
-    if (contador.size > 1000) contador.clear()
+    // Poda oportunista por ENTRADA VENCIDA, nunca `clear()` (T16,
+    // R3-limiter-bulk-clear + R4-1): barrer el Map entero borra las ventanas
+    // VIGENTES de usuarios que no son el que llama, y el techo falla abierto justo
+    // bajo la ráfaga de usuarios distintos que existe para frenar — el mismo
+    // defecto que `77ceeff` cerró en el Map del evento. El Map queda acotado por
+    // los usuarios DISTINTOS dentro de la ventana y se auto-sana en la primera
+    // pasada posterior al vencimiento; `ventanasEnMemoria` es la única ventana
+    // observable de ese acotamiento.
+    if (contador.size > 1000) {
+      for (const [claveVieja, registroViejo] of contador) {
+        if (ahora >= registroViejo.reset) contador.delete(claveVieja)
+      }
+    }
     contador.set(llave, { n: 1, reset: ahora + VENTANA_LIMITE_MS })
     return false
   }
   registro.n += 1
   return registro.n > MAX_SOLICITUDES_POR_VENTANA
+}
+
+/**
+ * Cantidad de ventanas vivas en el contador. Existe para que los tests observen
+ * la memoria del Map: la poda de entradas vencidas no se ve en el valor de
+ * retorno de `excedeVolumen` — una ventana vencida y una ausente se comportan
+ * igual —, así que el acotamiento de memoria sólo es observable por acá.
+ */
+export function ventanasEnMemoria(): number {
+  return contador.size
 }

@@ -235,6 +235,53 @@ function stubAlcancePorPagina(
   return { paginasPedidas }
 }
 
+/**
+ * T16 (R3-error-sin-reintento) — stub que sirve el alcance por página con FALLAS
+ * inyectadas: para cada página con entrada en `fallas`, las primeras `veces`
+ * llamadas fallan — con `red: true` lanza el TypeError del fallo de red, con
+ * `status` responde ese HTTP con `cuerpo` — y las siguientes devuelven el lote
+ * normal. Cuenta las llamadas por página: el reintento acotado tiene que poder
+ * verse en esa cuenta (UNA llamada más, no un bucle).
+ */
+function stubAlcanceConFallas(
+  respuestaDePagina: (page: number) => { data: unknown[]; total: number },
+  fallas: Record<number, { veces: number; status?: number; cuerpo?: unknown; red?: boolean }>
+): { llamadasPorPagina: Record<string, number> } {
+  const llamadasPorPagina: Record<string, number> = {}
+  const restantes = new Map(Object.entries(fallas).map(([p, f]) => [Number(p), { ...f }]))
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((recurso: string | URL | Request) => {
+      const url = typeof recurso === "string" ? recurso : String(recurso)
+      // R3-001 (T15): URL no declarada es error nombrado, no un vacío en silencio.
+      if (!url.startsWith("/api/co/alcance-masivo")) {
+        throw new Error(`[stub] URL inesperada para este caso: ${url}`)
+      }
+      const page = Number(new URLSearchParams(url.slice(url.indexOf("?") + 1)).get("page") ?? "1")
+      llamadasPorPagina[String(page)] = (llamadasPorPagina[String(page)] ?? 0) + 1
+      const fallo = restantes.get(page)
+      if (fallo && fallo.veces > 0) {
+        fallo.veces -= 1
+        if (fallo.red) return Promise.reject(new TypeError("Failed to fetch"))
+        return Promise.resolve(
+          new Response(JSON.stringify(fallo.cuerpo ?? {}), {
+            status: fallo.status ?? 503,
+            headers: { "content-type": "application/json" },
+          })
+        )
+      }
+      const respuesta = respuestaDePagina(page)
+      return Promise.resolve(
+        new Response(JSON.stringify({ ...respuesta, page, pageSize: 100 }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        })
+      )
+    })
+  )
+  return { llamadasPorPagina }
+}
+
 /** Fila del alcance con ids deterministas por orden global (1..250). */
 function filaAlcance(n: number): { personaId: string; unidadId: string; personaNombre: string } {
   const orden = String(n).padStart(3, "0")
@@ -293,6 +340,10 @@ describe("T14 — el alcance del envío masivo se consulta al servidor", () => {
     expect(llamadas.some((u) => u.includes("roles=propietario"))).toBe(true)
 
     // El envío lleva el alcance completo, con el MISMO payload shape de antes.
+    // T16 (R3-orden-locale): el orden CAMBIA — el alcance resuelto se ordena con la
+    // collation española sobre el nombre, así que el payload (mismo estado) viaja en
+    // orden determinista y no en el orden de la colación de la base. Contenido y
+    // shape intactos.
     await enviarMasivo(user)
     expect(estado.crearEnvio).toHaveBeenCalledTimes(1)
     const registro = estado.crearEnvio.mock.calls[0]?.[0] as RegistroEnvio
@@ -301,8 +352,8 @@ describe("T14 — el alcance del envío masivo se consulta al servidor", () => {
     expect(registro.plantillaId).toBeUndefined()
     expect(typeof registro.id).toBe("string")
     expect(registro.destinatarios).toEqual([
-      { personaId: "t14c-per-166", unidadId: "t14c-uni-166" },
-      { personaId: "t14c-per-001", unidadId: "t14c-uni-001" },
+      { personaId: "t14c-per-001", unidadId: "t14c-uni-001" }, // «Ana Montada»
+      { personaId: "t14c-per-166", unidadId: "t14c-uni-166" }, // «Zoraida Mas Alla»
     ])
   }, PRESUPUESTO_CARGA)
 
@@ -391,6 +442,136 @@ describe("T15 — la caminata multi-página del alcance masivo (advisory R3-walk
     expect(registro.destinatarios).toEqual([
       ...destinatariosDe(1, 100),
       ...destinatariosDe(101, 200),
+    ])
+  }, PRESUPUESTO_CARGA)
+})
+
+describe("T16 — los huecos chicos de la caminata del alcance", () => {
+  it("dos páginas que se solapan no empujan la misma fila dos veces (dedupe por persona|unidad)", async () => {
+    // R3-walk-duplicados (T16): la página 2 devuelve filas que la página 1 ya trajo
+    // (51..100 repetidas). Sin deduplicar, el alcance mostrado y el payload del envío
+    // llevan 300 filas con 50 repetidas — el mismo destinatario recibiría el envío
+    // dos veces. La caminata conserva la primera aparición de cada fila.
+    const { paginasPedidas } = stubAlcancePorPagina((page) => {
+      if (page === 1) return { data: loteAlcance(1, 100), total: 250 }
+      if (page === 2) return { data: loteAlcance(51, 150), total: 250 }
+      return { data: loteAlcance(151, 250), total: 250 }
+    })
+    const user = userEvent.setup()
+    render(<ConsolaComunicacionCO />)
+
+    expect(await screen.findByText("Alcance resuelto: 250 destinatario(s)")).toBeTruthy()
+    expect(paginasPedidas).toEqual(["1", "2", "3"])
+
+    await enviarMasivo(user)
+    expect(estado.crearEnvio).toHaveBeenCalledTimes(1)
+    const registro = estado.crearEnvio.mock.calls[0]?.[0] as RegistroEnvio
+    // Los 250 ÚNICOS, en orden de primera aparición: el solape de la página 2 no
+    // duplica filas y las 50 que faltaban (151..250) vienen de la página 3.
+    expect(registro.destinatarios).toEqual(destinatariosDe(1, 250))
+    const claves = registro.destinatarios.map((d) => `${d.personaId}|${d.unidadId ?? ""}`)
+    expect(new Set(claves).size).toBe(250)
+  }, PRESUPUESTO_CARGA)
+
+  it("una desconexión en la primera página reintenta UNA vez y la caminata sigue completa", async () => {
+    // R3-error-sin-reintento (T16): UN reintento por página, sólo para error de red o
+    // 5xx. La primera llamada a la página 1 cae en red; el reintento (misma señal)
+    // alcanza el 200 y las tres páginas llegan completas.
+    const { llamadasPorPagina } = stubAlcanceConFallas(
+      (page) => ({ data: loteAlcance((page - 1) * 100 + 1, Math.min(page * 100, 250)), total: 250 }),
+      { 1: { veces: 1, red: true } }
+    )
+    const user = userEvent.setup()
+    render(<ConsolaComunicacionCO />)
+
+    expect(
+      await screen.findByText("Alcance resuelto: 250 destinatario(s)", undefined, { timeout: 3000 })
+    ).toBeTruthy()
+    // La página 1 se llamó DOS veces (el reintento), el resto una sola vez.
+    expect(llamadasPorPagina["1"]).toBe(2)
+    expect(llamadasPorPagina["2"]).toBe(1)
+    expect(llamadasPorPagina["3"]).toBe(1)
+
+    await enviarMasivo(user)
+    const registro = estado.crearEnvio.mock.calls[0]?.[0] as RegistroEnvio
+    expect(registro.destinatarios).toEqual(destinatariosDe(1, 250))
+  }, PRESUPUESTO_CARGA)
+
+  it("un 503 en la primera página reintenta UNA vez y el alcance llega completo", async () => {
+    // Misma regla que la desconexión, con la otra señal reintentable: 5xx.
+    const { llamadasPorPagina } = stubAlcanceConFallas(
+      (page) => ({ data: loteAlcance((page - 1) * 100 + 1, Math.min(page * 100, 250)), total: 250 }),
+      { 1: { veces: 1, status: 503, cuerpo: { error: "Servicio momentáneamente no disponible." } } }
+    )
+    const user = userEvent.setup()
+    render(<ConsolaComunicacionCO />)
+
+    expect(
+      await screen.findByText("Alcance resuelto: 250 destinatario(s)", undefined, { timeout: 3000 })
+    ).toBeTruthy()
+    expect(llamadasPorPagina["1"]).toBe(2)
+    expect(llamadasPorPagina["2"]).toBe(1)
+    expect(llamadasPorPagina["3"]).toBe(1)
+  }, PRESUPUESTO_CARGA)
+
+  it("el segundo intento que también falla deja el error verbatim, y el reintento es UNO por página", async () => {
+    // Cuando el segundo intento también falla, el error del servidor viaja VERBATIM
+    // (sin traducir ni reemplazar) y la caminata no insiste: dos llamadas, no tres.
+    const { llamadasPorPagina } = stubAlcanceConFallas(
+      () => ({ data: [], total: 0 }),
+      { 1: { veces: 2, status: 503, cuerpo: { error: "Error interno del servidor." } } }
+    )
+    render(<ConsolaComunicacionCO />)
+
+    expect(
+      await screen.findByText("Error interno del servidor.", undefined, { timeout: 3000 })
+    ).toBeTruthy()
+    expect(llamadasPorPagina["1"]).toBe(2)
+  }, PRESUPUESTO_CARGA)
+
+  it("un 4xx no reintenta: la respuesta definitiva del servidor viaja verbatim al primer intento", async () => {
+    // El reintento es sólo para error de red o 5xx: un 4xx es una respuesta
+    // definitiva (aquí, el portón) y se muestra al primer intento, una sola vez.
+    const { llamadasPorPagina } = stubAlcanceConFallas(
+      () => ({ data: [], total: 0 }),
+      { 1: { veces: 99, status: 403, cuerpo: { error: "Permiso denegado." } } }
+    )
+    render(<ConsolaComunicacionCO />)
+
+    expect(await screen.findByText("Permiso denegado.", undefined, { timeout: 3000 })).toBeTruthy()
+    expect(llamadasPorPagina["1"]).toBe(1)
+  }, PRESUPUESTO_CARGA)
+
+  it("el orden del alcance es la collation española sobre el nombre, no la colación de la base", async () => {
+    // R3-orden-locale (T16): el orden del alcance heredaba la colación de la base —
+    // en SQLite el orden binario deja los nombres acentuados al final («Á» es
+    // U+00C1, mayor que «Z»). El stub devuelve las filas en ese orden de base y la
+    // vista previa tiene que mostrarlas en orden es: Álvarez, Ana, Zúñiga.
+    stubAlcancePorPagina(() => ({
+      data: [
+        { personaId: "t16-per-z", unidadId: "t16-uni-z", personaNombre: "Zúñiga Última" },
+        { personaId: "t16-per-a2", unidadId: "t16-uni-a2", personaNombre: "Álvarez Acentuada" },
+        { personaId: "t16-per-a1", unidadId: "t16-uni-a1", personaNombre: "Ana Llana" },
+      ],
+      total: 3,
+    }))
+    render(<ConsolaComunicacionCO />)
+
+    expect(await screen.findByText("Alcance resuelto: 3 destinatario(s)")).toBeTruthy()
+    const alvarez = screen.getByText("Álvarez Acentuada")
+    const ana = screen.getByText("Ana Llana")
+    const zuniga = screen.getByText("Zúñiga Última")
+    expect(alvarez.compareDocumentPosition(ana) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(ana.compareDocumentPosition(zuniga) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+
+    // El orden determinista también llega al payload del envío (mismo estado).
+    const user = userEvent.setup()
+    await enviarMasivo(user)
+    const registro = estado.crearEnvio.mock.calls[0]?.[0] as RegistroEnvio
+    expect(registro.destinatarios.map((d) => d.personaId)).toEqual([
+      "t16-per-a2",
+      "t16-per-a1",
+      "t16-per-z",
     ])
   }, PRESUPUESTO_CARGA)
 })

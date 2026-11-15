@@ -20,6 +20,7 @@
  */
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest"
 import { prisma } from "@/lib/prisma"
+import { logger } from "@/lib/logger"
 import { cookieDeUsuario, invocarApi } from "../helpers/api-sesion"
 
 const state = vi.hoisted(() => ({ cookie: "" }))
@@ -33,6 +34,24 @@ vi.mock("next/headers", () => ({
       )
     ),
 }))
+
+/**
+ * T16 (R3-alcance-fuera-de-try): interruptor para que `alcancePorFilasDeSesion`
+ * falle. El resto de los casos usan la implementación real sin enterarse.
+ */
+const alcanceControl = vi.hoisted(() => ({ fallar: false }))
+vi.mock("@/lib/api/sesion-persona", async (importOriginal) => {
+  const original = await importOriginal<typeof import("@/lib/api/sesion-persona")>()
+  return {
+    ...original,
+    alcancePorFilasDeSesion: async (
+      scope: Parameters<typeof original.alcancePorFilasDeSesion>[0]
+    ) => {
+      if (alcanceControl.fallar) throw new Error("fallo simulado del alcance por filas")
+      return original.alcancePorFilasDeSesion(scope)
+    },
+  }
+})
 
 const COM_A = "s10b-com-a"
 const COM_B = "s10b-com-b"
@@ -183,10 +202,49 @@ describe("S10 — GET /api/comunicacion/buscar-personas", () => {
 
   it("un rol sin `co:buzon` crear no busca el padrón del buzón (403 literal)", async () => {
     // Mantención no tiene el buzón: el 403 es explícito, no un vacío silencioso que se
-    // leería como «la persona no existe».
-    const res = await conSesion(EMAIL.mantencion, () => buscar("Ana"))
-    expect(res.status).toBe(403)
-    expect((await cuerpo(res)).error).toBe("Permiso denegado.")
+    // leería como «la persona no existe». Y el 403 de un handler a medida deja
+    // constancia: RP §Menor Privilegio exige el evento `RP_PERMISSION_DENIED`
+    // (T16, hallazgo L9c).
+    const espia = vi.spyOn(logger, "warn").mockImplementation(() => {})
+    try {
+      const res = await conSesion(EMAIL.mantencion, () => buscar("Ana"))
+      expect(res.status).toBe(403)
+      expect((await cuerpo(res)).error).toBe("Permiso denegado.")
+
+      const eventos = (
+        espia.mock.calls as unknown as [Record<string, unknown>, string][]
+      ).filter(([ctx]) => ctx?.event === "RP_PERMISSION_DENIED")
+      expect(eventos).toHaveLength(1)
+      expect(eventos[0]?.[0]).toMatchObject({
+        rol: "mantencion",
+        recurso: "co:buzon",
+        accion: "crear",
+        comunidadId: COM_A,
+      })
+      expect(typeof eventos[0]?.[0]?.usuarioId).toBe("string")
+    } finally {
+      espia.mockRestore()
+    }
+  })
+
+  it("un fallo del alcance por filas muere en el 500 propio de la ruta, con constancia", async () => {
+    // T16 (R3-alcance-fuera-de-try, R4-4): la resolución del alcance se esperaba
+    // FUERA del `try`, así que un fallo de esa consulta escapaba del handler — la
+    // promesa del GET se rechazaba sin `logger.error` ni 500 propio. Con el
+    // interruptor activado, la respuesta tiene que ser la de la ruta, no una
+    // excepción sin capturar que aterriza en la mano del test.
+    const espia = vi.spyOn(logger, "error").mockImplementation(() => {})
+    alcanceControl.fallar = true
+    try {
+      const res = await conSesion(EMAIL.admin, () => buscar("Ana"))
+      expect(res.status).toBe(500)
+      expect((await cuerpo(res)).error).toBe("Error interno del servidor.")
+      const llamadas = espia.mock.calls as unknown as [unknown, string][]
+      expect(llamadas.some(([, mensaje]) => mensaje.includes("buscar-personas"))).toBe(true)
+    } finally {
+      alcanceControl.fallar = false
+      espia.mockRestore()
+    }
   })
 
   it("la persona fuera de las primeras cien filas del padrón SÍ se encuentra", async () => {
