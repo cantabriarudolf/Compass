@@ -101,6 +101,7 @@ const EMAIL = {
   adminB: "t14a-admin-b@test.cl",
   auditA: "t14a-audit-a@test.cl", // cuota DEDICADA del caso de eventos R4-001 (el usuario que cruza)
   auditB: "t14a-audit-b@test.cl", // cuota DEDICADA del caso de eventos R4-001 (el otro usuario)
+  auditC: "t14a-audit-c@test.cl", // cuota DEDICADA del caso del 403 (sin `co` crear, usuario virgen)
 }
 
 const moduloAlcance = () => import("@/app/api/co/alcance-masivo/route")
@@ -307,6 +308,7 @@ describe("T14 — GET /api/co/alcance-masivo", () => {
       { email: EMAIL.adminB, comunidadId: COM_B, rol: "administrador", personaId: null },
       { email: EMAIL.auditA, comunidadId: COM_A, rol: "administrador", personaId: null },
       { email: EMAIL.auditB, comunidadId: COM_B, rol: "administrador", personaId: null },
+      { email: EMAIL.auditC, comunidadId: COM_A, rol: "mantencion", personaId: null },
     ]) {
       const usuario = await prisma.usuario.upsert({
         where: { email: u.email },
@@ -538,13 +540,17 @@ describe("T14 — GET /api/co/alcance-masivo", () => {
 
     it("una denegación de permiso emite RP_PERMISSION_DENIED (una vez, con el usuarioId)", async () => {
       const espia = vi.spyOn(logger, "warn")
-      const res = await conSesion(EMAIL.residente, () => alcance("?roles=propietario"))
+      // Usuario DEDICADO, no `EMAIL.residente`: este caso movía la cuota
+      // compartida del residente y podía volverse 429 por orden de casos si
+      // otros acumulaban requests en la misma ventana (advisory `R3-002` de la
+      // revisión nativa de `91df430`).
+      const res = await conSesion(EMAIL.auditC, () => alcance("?roles=propietario"))
       expect(res.status).toBe(403)
       const eventos = llamadasDelEspia(espia).filter(
         ([cuerpo]) => cuerpo?.event === "RP_PERMISSION_DENIED"
       )
       expect(eventos).toHaveLength(1)
-      const usuario = await prisma.usuario.findUnique({ where: { email: EMAIL.residente } })
+      const usuario = await prisma.usuario.findUnique({ where: { email: EMAIL.auditC } })
       expect((eventos[0]?.[0] as { usuarioId?: string } | undefined)?.usuarioId).toBe(usuario?.id)
     })
 

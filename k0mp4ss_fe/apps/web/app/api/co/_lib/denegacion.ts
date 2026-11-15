@@ -46,10 +46,15 @@ const VENTANA_EVENTO_VOLUMEN_MS = 60_000
  * respuesta: una inundación produce un 429 por request, y un evento por respuesta
  * reconstruiría la misma inundación de log que el techo existe para frenar.
  *
- * La poda del Map replica el criterio oportunista de `lib/rate-limit-volumen.ts`
- * (tope de tamaño y limpieza) para que no crezca sin límite. Este Map es ajeno al
- * contador del techo y no importa sus internos: ese archivo es dueño del CONTADOR;
- * este, del EVENTO de auditoría.
+ * La poda del Map es DELIBERADAMENTE distinta de la del contador
+ * (`lib/rate-limit-volumen.ts` vacía el Map entero arriba de mil entradas): aquí
+ * borrar entradas VIGENTES reabriría el dedup de sus dueños y reconstruiría la
+ * inundación que el evento acotado existe para frenar. Lo encontró la revisión
+ * nativa de `91df430` —dos lentes lo marcaron— y lo pinea
+ * `test/lib/denegacion-co-volumen.test.ts`. Se borran sólo las entradas vencidas,
+ * así el Map queda acotado por las ventanas realmente activas. Este Map es ajeno
+ * al contador y no importa sus internos: ese archivo es dueño del CONTADOR; este,
+ * del EVENTO de auditoría.
  *
  * Sin PII: se identifica por `usuarioId`, nunca por email ni nombre.
  */
@@ -58,9 +63,14 @@ const eventosVolumenEmitidos = new Map<string, number>()
 export function registrarLimiteVolumen(usuarioId: string, ahora: number = Date.now()): void {
   const expira = eventosVolumenEmitidos.get(usuarioId)
   if (expira !== undefined && ahora < expira) return
-  // Poda oportunista, el mismo criterio del contador de volumen: fuera de
-  // memoria antes de que el Map crezca sin límite.
-  if (eventosVolumenEmitidos.size > 1000) eventosVolumenEmitidos.clear()
+  // Poda por ENTRADA VENCIDA, nunca `clear()`: barrer las ventanas vigentes
+  // reabriría el dedup de sus dueños, o sea la inundación de log que este
+  // evento acotado evita. Basta para que el Map no crezca sin límite.
+  if (eventosVolumenEmitidos.size > 1000) {
+    for (const [clave, vence] of eventosVolumenEmitidos) {
+      if (ahora >= vence) eventosVolumenEmitidos.delete(clave)
+    }
+  }
   eventosVolumenEmitidos.set(usuarioId, ahora + VENTANA_EVENTO_VOLUMEN_MS)
   logger.warn({ event: "RP_VOLUME_LIMITED", usuarioId }, "[authz] RP_VOLUME_LIMITED")
 }
