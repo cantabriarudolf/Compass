@@ -7,6 +7,13 @@
  * además, sobre el fuente, que la página no nombra el store: desde F22a el store
  * no existe en el navegador, así que no hay señuelos que inyectar y el candado
  * es el mismo evaluador de `npm run audit:store`.
+ *
+ * Adaptación T13 (S10): el Select de unidad de `estado_cuenta`/`al_dia` pasó a
+ * búsqueda server-side (`BuscadorEntidad` contra `/api/unidades?q=`); el test
+ * del gate Al Día ahora elige la unidad por el buscador con un stub de fetch.
+ * La mecánica cambió, la intención no: el saldo visible sigue saliendo de los
+ * cobros de `useCobrosFI` (3.000 + 2.000 de `uni-hook`; los 50.000 de
+ * `uni-hook-2` no suman).
  */
 import React from "react"
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
@@ -195,6 +202,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup()
+  vi.unstubAllGlobals()
   vi.restoreAllMocks()
 })
 
@@ -215,6 +223,47 @@ async function elegir(user: ReturnType<typeof userEvent.setup>, comboIndex: numb
     )
   }
   await user.click(opcion)
+}
+
+/**
+ * Stub de la búsqueda server-side de unidades (T13/S10): el buscador de la
+ * unidad consulta `GET /api/unidades?q=…&page=…` y acá el servidor simulado
+ * devuelve UNA fila concreta —la misma unidad que el assert de negocio usa—.
+ * Cualquier otra fetch rompe el test: el flujo de este arnés es todo hooks
+ * mockeados, la única fetch real posible es la del buscador.
+ */
+function stubBuscarUnidad(unidad: { id: string; etiqueta: string; numero: string }): void {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((recurso: string | URL | Request) => {
+      const url = typeof recurso === "string" ? recurso : String(recurso)
+      if (!url.startsWith("/api/unidades?q=")) {
+        throw new Error(`Fetch inesperada en este flujo: ${url}`)
+      }
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({ data: [unidad], page: 1, pageSize: 50, total: 1 }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        )
+      )
+    })
+  )
+}
+
+/**
+ * Elige la unidad por el BUSCADOR server-side (T13): tipea el término, espera la
+ * fila del servidor y la elige. Es la misma elección concreta que hacía el
+ * listbox Radix del padrón truncado, por la misma unidad.
+ */
+async function elegirUnidadBuscada(
+  user: ReturnType<typeof userEvent.setup>,
+  unidad: { etiqueta: string; numero: string },
+  termino: string
+): Promise<void> {
+  const input = screen.getByPlaceholderText("Buscar por etiqueta, número o rol SII…")
+  await user.type(input, termino)
+  await screen.findByText(`${unidad.etiqueta} ${unidad.numero}`)
+  await user.click(screen.getByText(`${unidad.etiqueta} ${unidad.numero}`))
 }
 
 function liquidacion(parcial: Partial<LiquidacionPL> & Pick<LiquidacionPL, "id" | "folio" | "estado">): LiquidacionPL {
@@ -318,11 +367,15 @@ describe("comunidad/certificados — fuente de datos vía hooks SWR", () => {
       cobro({ id: "cob-hook-3", unidadId: "uni-hook-2", montoBase: 50_000 }),
     ]
 
+    // T13: la unidad ya no sale del listbox del padrón truncado sino de la
+    // búsqueda server-side; la fila devuelta es LA MISMA unidad de los cobros
+    // (uni-hook), así que el assert de negocio no cambia.
+    stubBuscarUnidad({ id: "uni-hook", etiqueta: "Depto", numero: "101" })
     const user = userEvent.setup()
     render(<CertificadosEmision tiposEmisibles={[...TIPOS_DEL_ARNES]} />)
 
     await elegir(user, 0, /Al Día/i)
-    await elegir(user, 1, /101/)
+    await elegirUnidadBuscada(user, { etiqueta: "Depto", numero: "101" }, "101")
 
     // 3.000 + 2.000 de los cobros del hook (la unidad 102 no suma).
     expect(await screen.findByText(/Saldo pendiente actual: \$5\.000/)).toBeTruthy()

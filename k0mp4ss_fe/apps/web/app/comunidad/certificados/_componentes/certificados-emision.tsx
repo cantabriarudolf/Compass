@@ -6,6 +6,7 @@ import { useCertificadosCT } from "@/lib/api/use-certificados-ct"
 import { useCobrosFI } from "@/lib/api/use-cobros-fi"
 import { useLiquidaciones } from "@/lib/api/use-liquidaciones"
 import { BuscadorEntidad } from "@/components/buscador-entidad"
+import { AvisoTruncamiento } from "@/components/pe/aviso-truncamiento"
 import { usePersonas } from "@/lib/api/use-personas"
 import { useUnidades } from "@/lib/api/use-unidades"
 import { useVinculos } from "@/lib/api/use-vinculos"
@@ -29,7 +30,7 @@ import {
   SelectValue,
 } from "@workspace/ui/components/select"
 import { IconCertificate, IconFileText, IconTrash } from "@tabler/icons-react"
-import type { CertificadoCT, CertificadoCTAlta, ConfiguracionGlobal } from "@/lib/schemas"
+import type { CertificadoCT, CertificadoCTAlta, ConfiguracionGlobal, Unidad } from "@/lib/schemas"
 import { CertificadoCTAltaSchema } from "@/lib/schemas"
 import { documentoCertificadoPDF } from "@/lib/pdf-utils"
 
@@ -65,6 +66,19 @@ const MIS_VINCULOS = "/api/certificados-ct/mis-vinculos"
  * persona fuera de esas páginas no podía certificarse.
  */
 const BUSCADOR_PERSONAS = "/api/certificados-ct/buscar-personas"
+
+/**
+ * URL del buscador de unidades (T13/S10).
+ *
+ * `GET /api/unidades` ya es un endpoint de buscador: la factory CRUD responde el
+ * envelope que `BuscadorEntidad` espera (`{ data, page, pageSize, total }`),
+ * acepta `?q=` sobre número, etiqueta y rol SII (`busqueda` declarada en la
+ * ruta) y pagina con `?page=`. La emisión de `estado_cuenta`/`al_dia` pega acá
+ * en vez de montar la primera página del padrón —eso hacía el `Select` con
+ * `useUnidades()`: una unidad fuera de las primeras cien filas no se podía
+ * certificar.
+ */
+const BUSCADOR_UNIDADES = "/api/unidades"
 
 /**
  * Fila del buscador de personas (`GET /api/certificados-ct/buscar-personas`).
@@ -227,8 +241,8 @@ function HistorialCertificados({
  */
 function CertificadosGestion({ tiposEmisibles }: CertificadosEmisionProps) {
   const { items: certificados, isLoading: cCertificados, create: crearCertificadoApi, remove: removeCertificadoApi } = useCertificadosCT()
-  const { personas, isLoading: cPersonas } = usePersonas()
-  const { items: unidades, isLoading: cUnidades } = useUnidades()
+  const { personas, total: totalPersonas, isLoading: cPersonas } = usePersonas()
+  const { items: unidades, total: totalUnidades, isLoading: cUnidades } = useUnidades()
   const { vinculos, isLoading: cVinculos } = useVinculos()
   const { config, isLoading: cConfig } = useConfiguracion()
   const { vigente: periodoVigente, isLoading: cPeriodosDirectiva } = usePeriodosDirectiva()
@@ -250,6 +264,12 @@ function CertificadosGestion({ tiposEmisibles }: CertificadosEmisionProps) {
   const [personaElegida, setPersonaElegida] = React.useState<PersonaBuscada | null>(null)
   const personaId = personaElegida?.id ?? ""
   const [unidadId, setUnidadId] = React.useState("")
+  /**
+   * La unidad elegida en el buscador (T13). La FILA COMPLETA es la que arma el
+   * rótulo del papel cuando la unidad queda fuera de la primera página del
+   * padrón del cliente (donde `refUnidadUI` sólo tendría el id crudo).
+   */
+  const [unidadElegida, setUnidadElegida] = React.useState<Unidad | null>(null)
   const [liquidacionId, setLiquidacionId] = React.useState("")
   const [solicitanteNombre, setSolicitanteNombre] = React.useState("")
   const [error, setError] = React.useState<string | null>(null)
@@ -270,6 +290,16 @@ function CertificadosGestion({ tiposEmisibles }: CertificadosEmisionProps) {
     if (!id) return "—"
     const u = unidades.find(x => x.id === id)
     return u ? `${u.etiqueta} ${u.numero}` : id
+  }
+  /**
+   * Rótulo de la unidad del certificado (T13): la FILA del buscador trae la
+   * etiqueta y el número completos aunque la unidad quede fuera de la primera
+   * página del padrón del cliente —donde `refUnidadUI` sólo tendría el id
+   * crudo—. Si la unidad está en la página, la resolución es la de siempre.
+   */
+  const refUnidadElegida = (id?: string) => {
+    if (unidadElegida && unidadElegida.id === id) return `${unidadElegida.etiqueta} ${unidadElegida.numero}`
+    return refUnidadUI(id)
   }
   const saldoUnidad = (id: string): number =>
     cobrosFI.filter(c => c.unidadId === id).reduce((acc, c) => acc + saldoPendiente(c), 0)
@@ -322,12 +352,12 @@ function CertificadosGestion({ tiposEmisibles }: CertificadosEmisionProps) {
       const propietario = vinculos.find(v => v.unidadId === unidadId && v.rol === "propietario" && !v.fechaFin)
       const nombreProp = propietario ? nombrePersona(propietario.personaId) : "—"
       if (tipoActual === "estado_cuenta") {
-        resumen = `Estado de cuenta oficial de ${refUnidadUI(unidadId)}: detalle de gastos comunes pagados, cuotas extraordinarias y fondos pendientes según el libro de Finanzas.`
+        resumen = `Estado de cuenta oficial de ${refUnidadElegida(unidadId)}: detalle de gastos comunes pagados, cuotas extraordinarias y fondos pendientes según el libro de Finanzas.`
       } else {
-        resumen = `Se certifica que la unidad ${refUnidadUI(unidadId)} NO registra deudas pendientes con la comunidad a la fecha de emisión.`
+        resumen = `Se certifica que la unidad ${refUnidadElegida(unidadId)} NO registra deudas pendientes con la comunidad a la fecha de emisión.`
       }
       detalle = [
-        ["Unidad", refUnidadUI(unidadId)],
+        ["Unidad", refUnidadElegida(unidadId)],
         ["Propietario", nombreProp],
         ["Cobros registrados", String(cobros.length)],
         ["Total cargado", `$${totalCargado.toLocaleString("es-CL")}`],
@@ -481,7 +511,7 @@ function CertificadosGestion({ tiposEmisibles }: CertificadosEmisionProps) {
       <CardContent className="grid gap-4 md:grid-cols-2">
         <div className="flex flex-col gap-1.5">
           <Label>Tipo de certificado *</Label>
-          <Select value={tipo} onValueChange={v => { setTipo(v as CertificadoCT["tipo"]); setPersonaElegida(null); setUnidadId(""); setLiquidacionId("") }}>
+          <Select value={tipo} onValueChange={v => { setTipo(v as CertificadoCT["tipo"]); setPersonaElegida(null); setUnidadElegida(null); setUnidadId(""); setLiquidacionId("") }}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
               {tiposEmisibles.map(t => (
@@ -530,15 +560,20 @@ function CertificadosGestion({ tiposEmisibles }: CertificadosEmisionProps) {
 
         {(tipo === "estado_cuenta" || tipo === "al_dia") && (
           <div className="flex flex-col gap-1.5">
-            <Label>Unidad *</Label>
-            <Select value={unidadId || undefined} onValueChange={setUnidadId}>
-              <SelectTrigger><SelectValue placeholder="Selecciona unidad" /></SelectTrigger>
-              <SelectContent>
-                {unidades.map(u => (
-                  <SelectItem key={u.id} value={u.id}>{u.etiqueta} {u.numero}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {/* T13/S10: la unidad se BUSCA en el servidor (padrón completo, con
+                total declarado) en vez de ofrecerse en una lista truncada a 100.
+                El endpoint es el padrón entero de unidades con búsqueda por
+                número, etiqueta y rol SII, y responde el envelope del buscador. */}
+            <BuscadorEntidad<Unidad>
+              etiqueta="Unidad *"
+              url={BUSCADOR_UNIDADES}
+              placeholder="Buscar por etiqueta, número o rol SII…"
+              idDe={u => u.id}
+              etiquetaDe={u => `${u.etiqueta} ${u.numero}`}
+              seleccion={unidadElegida ? { id: unidadElegida.id, etiqueta: `${unidadElegida.etiqueta} ${unidadElegida.numero}` } : null}
+              onSeleccion={(_seleccion, fila) => { setUnidadElegida(fila ?? null); setUnidadId(fila?.id ?? "") }}
+              vacio="Sin unidades para esa búsqueda."
+            />
             {gateAlDia !== null && (
               <p className={`text-xs ${gateAlDia <= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-destructive"}`}>
                 Saldo pendiente actual: ${gateAlDia.toLocaleString("es-CL")} {gateAlDia > 0 ? "— la emisión Al Día será rechazada" : "— unidad califica para Al Día"}
@@ -585,14 +620,23 @@ function CertificadosGestion({ tiposEmisibles }: CertificadosEmisionProps) {
       okMsg={okMsg}
       generar={generar}
       historial={
-        <HistorialCertificados
-          certificados={certificados}
-          pdfBusy={pdfBusy}
-          onDescargar={c => { void descargar(c) }}
-          onEliminar={id => { void removeCertificadoApi(id) }}
-          nombrePersona={nombrePersona}
-          refUnidad={refUnidadUI}
-        />
+        <div className="flex flex-col gap-3">
+          {/* S10/T13 — el historial resuelve sus referencias con los padrones del
+              cliente (personas y unidades, `pageSize=100`): la fila cuya persona
+              o unidad quedó fuera de la primera página muestra el id crudo. La
+              resolución no se rediseña; el recorte se declara con el total que
+              reporta el servidor en el envelope. */}
+          <AvisoTruncamiento mostrados={personas.length} total={totalPersonas} />
+          <AvisoTruncamiento mostrados={unidades.length} total={totalUnidades} />
+          <HistorialCertificados
+            certificados={certificados}
+            pdfBusy={pdfBusy}
+            onDescargar={c => { void descargar(c) }}
+            onEliminar={id => { void removeCertificadoApi(id) }}
+            nombrePersona={nombrePersona}
+            refUnidad={refUnidadUI}
+          />
+        </div>
       }
     />
   )

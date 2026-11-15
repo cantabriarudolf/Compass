@@ -11,6 +11,13 @@
  *   2. El folio `CT-####` lo asigna el servidor: la página ya no lo inventa con
  *      `max+1`. El test simula el alta y verifica que el PDF usa el folio que
  *      devolvió el servidor (el del mock), no uno calculado en el cliente.
+ *
+ * Adaptación T13 (S10): el Select de unidad de `estado_cuenta`/`al_dia` pasó a
+ * búsqueda server-side (`BuscadorEntidad` contra `/api/unidades?q=`); la
+ * mecánica del test cambió —el listbox Radix del padrón truncado se reemplaza
+ * por un stub que responde la búsqueda con la misma fila («Depto 101», id
+ * `unidad-1`)— y el assert de negocio es el MISMO: el PDF usa el folio que
+ * asignó el servidor y los mensajes siguen siendo los honestos.
  */
 import React from "react"
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
@@ -190,6 +197,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup()
+  vi.unstubAllGlobals()
 })
 
 /** Abre el combobox `indice` y elige la opción cuyo texto matchea. */
@@ -210,11 +218,45 @@ async function elegir(
   await user.click(opcion)
 }
 
+/**
+ * Stub de la búsqueda server-side de unidades (T13/S10): el buscador consulta
+ * `GET /api/unidades?q=…&page=…` y acá el servidor simulado devuelve la MISMA
+ * fila que el antiguo `Select` ofrecía del padrón («Depto 101», id `unidad-1`),
+ * así que el folio y los mensajes que el test afirma no cambian. Cualquier otra
+ * fetch rompe el test: este arnés es todo hooks mockeados.
+ */
+function stubBuscarUnidad(): void {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((recurso: string | URL | Request) => {
+      const url = typeof recurso === "string" ? recurso : String(recurso)
+      if (!url.startsWith("/api/unidades?q=")) {
+        throw new Error(`Fetch inesperada en este flujo: ${url}`)
+      }
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            data: [{ id: "unidad-1", etiqueta: "Depto", numero: "101" }],
+            page: 1,
+            pageSize: 50,
+            total: 1,
+          }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        )
+      )
+    })
+  )
+}
+
 /** Completa el formulario mínimo (estado de cuenta: unidad + solicitante). */
 async function emitir(user: ReturnType<typeof userEvent.setup>): Promise<void> {
-  // 0: tipo de certificado; 1: unidad.
+  // 0: tipo de certificado; la unidad se elige por el buscador server-side (T13).
   await elegir(user, 0, /Estado de Cuenta/i)
-  await elegir(user, 1, /Depto 101/i)
+  stubBuscarUnidad()
+  const input = screen.getByPlaceholderText("Buscar por etiqueta, número o rol SII…")
+  await user.type(input, "101")
+  await screen.findByText("Depto 101")
+  await user.click(screen.getByText("Depto 101"))
   await user.type(
     screen.getByPlaceholderText("Nombre de quien solicita"),
     "Ana Solicitante"
