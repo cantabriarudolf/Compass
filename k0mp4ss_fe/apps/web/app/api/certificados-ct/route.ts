@@ -56,7 +56,7 @@ import { CertificadoCTSchema, type MoraCobroFI, type PagoCobroFI, type TipoCerti
 import { normalizaRol, puede } from "@/lib/authz"
 import { prisma } from "@/lib/prisma"
 import { logger } from "@/lib/logger"
-import { saldoPendiente } from "@/lib/finanzas-utils"
+import { exigibleTotal, saldoPendiente } from "@/lib/finanzas-utils"
 import { createCrudHandlers } from "@/lib/api/crud-factory"
 import {
   personaIdDelUsuarioDb,
@@ -201,51 +201,133 @@ export async function GET(req: Request): Promise<Response> {
   }
 }
 
+/** Las tres cifras del estado de cuenta de una unidad, calculadas en el servidor. */
+interface CifrasEstadoCuenta {
+  cobrosRegistrados: number
+  totalCargado: number
+  saldoPendiente: number
+}
+
+/** Claves del `detalle` que el servidor se reserva: las cifras del papel. */
+const CLAVES_CIFRAS_SERVIDOR = new Set([
+  "Cobros registrados",
+  "Total cargado",
+  "Saldo pendiente",
+])
+
 /**
- * Gate de emisión del certificado Al Día (paridad server-side con
- * `generarCertificadoCT` del store legacy): exige saldo pendiente <= 0 sobre
- * TODOS los cobros FI de la unidad, no solo el gasto común. Se evalúa en la
- * capa API para que ningún consumidor distinto del QA-Lab pueda saltarlo.
- *
- * Devuelve el `Response` de rechazo, o `null` si la emisión procede / el gate
- * no aplica (otros tipos de certificado y certificados sin unidad).
+ * Cifras del estado de cuenta sobre el CONJUNTO COMPLETO de cobros FI de la
+ * unidad (T20, R3-001): el cliente derivaba «Cobros registrados / Total
+ * cargado / Saldo pendiente» de su pad paginado a 100 y, con más de cien
+ * cobros, el papel imprimía un total más bajo que el real sin declarar el
+ * recorte. Las reglas son las de `lib/finanzas-utils.ts`, las mismas que
+ * aplicaba el cliente: cargado = montoBase + Σ moras; saldo = max(0,
+ * cargado − Σ pagos).
  */
-async function gateSaldoAlDia(cuerpo: string): Promise<Response | null> {
-  let body: { tipo?: unknown; unidadId?: unknown }
-  try {
-    body = JSON.parse(cuerpo) as { tipo?: unknown; unidadId?: unknown }
-  } catch {
-    return null // JSON inválido: lo reporta la factory con 400.
+async function cifrasDeUnidad(
+  comunidadId: string,
+  unidadId: string
+): Promise<CifrasEstadoCuenta> {
+  const cobros = await prisma.cobroFI.findMany({
+    where: { comunidadId, unidadId },
+  })
+  let totalCargado = 0
+  let saldoPendienteTotal = 0
+  for (const c of cobros) {
+    // SAFETY: moras/pagos son Json con shape validado por CobroFISchema.
+    const moras = (c.moras ?? []) as unknown as MoraCobroFI[]
+    // SAFETY: idem moras: Json del cobro, shape PagoCobroFI[].
+    const pagos = (c.pagos ?? []) as unknown as PagoCobroFI[]
+    totalCargado += exigibleTotal({ montoBase: c.montoBase, moras })
+    saldoPendienteTotal += saldoPendiente({ montoBase: c.montoBase, moras, pagos })
   }
-  if (body.tipo !== "al_dia") return null
-  const unidadId = typeof body.unidadId === "string" ? body.unidadId : ""
-  if (!unidadId) return null
+  return {
+    cobrosRegistrados: cobros.length,
+    totalCargado,
+    saldoPendiente: saldoPendienteTotal,
+  }
+}
+
+/** Las tres filas del `detalle` con el formato del papel (`es-CL`). */
+function filasDeCifras(cifras: CifrasEstadoCuenta): { clave: string; valor: string }[] {
+  return [
+    { clave: "Cobros registrados", valor: String(cifras.cobrosRegistrados) },
+    { clave: "Total cargado", valor: `$${cifras.totalCargado.toLocaleString("es-CL")}` },
+    { clave: "Saldo pendiente", valor: `$${cifras.saldoPendiente.toLocaleString("es-CL")}` },
+  ]
+}
+
+/**
+ * Reemplaza las filas de cifras del `detalle` por las del servidor: las que
+ * lleguen con esas claves (cliente viejo, QA-Lab) se descartan y las tres
+ * calculadas se agregan al final. Para el cliente nuevo el orden queda
+ * Unidad, Propietario y las cifras — el mismo del papel de siempre.
+ */
+function conCifrasDelServidor(
+  datos: Record<string, unknown>,
+  cifras: CifrasEstadoCuenta
+): Record<string, unknown> {
+  const detalle = Array.isArray(datos.detalle) ? (datos.detalle as unknown[]) : []
+  const sinLasCifras = detalle.filter(
+    (fila) =>
+      typeof fila !== "object" ||
+      fila === null ||
+      !CLAVES_CIFRAS_SERVIDOR.has(String((fila as { clave?: unknown }).clave))
+  )
+  return { ...datos, detalle: [...sinLasCifras, ...filasDeCifras(cifras)] }
+}
+
+/**
+ * Cifras y gate del certificado de estado de cuenta, en UNA lectura (T20).
+ *
+ * Sustituye al gate de saldo: para `estado_cuenta`/`al_dia` con unidad, el
+ * servidor calcula las tres cifras del papel sobre TODOS los cobros FI de la
+ * unidad —el cliente ya no las deriva de su pad paginado— y el gate de Al Día
+ * se decide con esas MISMAS cifras, así que gate y papel no pueden diverger.
+ * Las tipologías sin unidad siguen sin gate ni cifras: no hay libro que leer.
+ *
+ * Devuelve el cuerpo/datos con las filas de cifras ya inyectadas, o el
+ * `Response` de rechazo: 409 (gate de saldo, el mensaje de siempre con el
+ * monto completo) y 500 si la lectura falla. 401/403 los resuelve la factory,
+ * así que sin sesión válida el cuerpo vuelve sin cambios.
+ */
+async function resolverEstadoCuenta(
+  cuerpo: string,
+  datos: Record<string, unknown> | null
+): Promise<
+  | { ok: true; cuerpo: string; datos: Record<string, unknown> | null }
+  | { ok: false; response: Response }
+> {
+  const sinCambios = { ok: true as const, cuerpo, datos }
+  if (!datos) return sinCambios // JSON inválido: lo reporta la factory con 400.
+  const tipo = typeof datos.tipo === "string" ? datos.tipo : ""
+  if (tipo !== "estado_cuenta" && tipo !== "al_dia") return sinCambios
+  const unidadId = typeof datos.unidadId === "string" ? datos.unidadId : ""
+  if (!unidadId) return sinCambios
 
   const resultado = await withComunidadScope()
-  if (!resultado.ok) return null // 401/403 los resuelve la factory.
+  if (!resultado.ok) return sinCambios // 401/403 los resuelve la factory.
 
   try {
-    const cobros = await prisma.cobroFI.findMany({
-      where: { comunidadId: resultado.scope.comunidadId, unidadId },
-    })
-    const pendiente = cobros.reduce(
-      (acc, c) => {
-        // SAFETY: moras/pagos son Json con shape validado por CobroFISchema.
-        const moras = (c.moras ?? []) as unknown as MoraCobroFI[]
-        // SAFETY: idem moras: Json del cobro, shape PagoCobroFI[].
-        const pagos = (c.pagos ?? []) as unknown as PagoCobroFI[]
-        return acc + saldoPendiente({ montoBase: c.montoBase, moras, pagos })
-      },
-      0
-    )
-    if (pendiente <= 0) return null
-    return jsonError(
-      409,
-      `No se puede emitir: la unidad mantiene $${pendiente.toLocaleString("es-CL")} pendiente(s). El certificado Al Día exige saldo <= 0.`
-    )
+    const cifras = await cifrasDeUnidad(resultado.scope.comunidadId, unidadId)
+    if (tipo === "al_dia" && cifras.saldoPendiente > 0) {
+      return {
+        ok: false,
+        response: jsonError(
+          409,
+          `No se puede emitir: la unidad mantiene $${cifras.saldoPendiente.toLocaleString("es-CL")} pendiente(s). El certificado Al Día exige saldo <= 0.`
+        ),
+      }
+    }
+    if (!Array.isArray(datos.detalle)) return sinCambios
+    const completos = conCifrasDelServidor(datos, cifras)
+    return { ok: true, cuerpo: JSON.stringify(completos), datos: completos }
   } catch (e) {
-    logger.error({ err: e }, "[api/certificados-ct] error en gate de saldo")
-    return jsonError(500, "Error interno del servidor.")
+    logger.error(
+      { err: e },
+      "[api/certificados-ct] error al calcular las cifras del estado de cuenta"
+    )
+    return { ok: false, response: jsonError(500, "Error interno del servidor.") }
   }
 }
 
@@ -256,7 +338,7 @@ async function gateSaldoAlDia(cuerpo: string): Promise<Response | null> {
  * Existe porque `ct` crear está abierto al residente y el POST aceptaba cualquier
  * `unidadId` de la comunidad: con `tipo: "al_dia"` el gate de saldo respondía 409
  * con el monto pendiente de la unidad ajena en el mensaje. Por eso corre ANTES de
- * `gateSaldoAlDia`, y por eso el rechazo es 404 y no 403: 403 diría que la unidad
+ * `resolverEstadoCuenta`, y por eso el rechazo es 404 y no 403: 403 diría que la unidad
  * existe. Sin `unidadId`/`personaId` no hay dueño que verificar y no hay tercero
  * al que aludir, así que la emisión sigue su curso.
  */
@@ -285,7 +367,7 @@ async function rechazoDeEmisionAjena(
  * tipo de certificado.
  *
  * Corre después de `rechazoDeEmisionAjena` (la fila ajena ya respondió 404, así que
- * acá el único dato que se mira es el tipo) y antes de `gateSaldoAlDia` (cuyo 409
+ * acá el único dato que se mira es el tipo) y antes de `resolverEstadoCuenta` (cuyo 409
  * imprime el monto de la unidad). El rechazo es 403 y no 404 porque no niega la
  * existencia de nada: niega una capacidad —la ley reserva el estado de deudas al
  * administrador—, igual que el resto de las claves de la matriz.
@@ -376,8 +458,9 @@ async function anclarResidencia(
 const MAX_INTENTOS_CORRELATIVO = 3
 
 /**
- * POST upsert idempotente por id, con gate de deuda/saldo previo y folio
- * `CT-####` correlativo por comunidad asignado en el servidor.
+ * POST upsert idempotente por id, con las cifras del estado de cuenta y el
+ * gate de deuda/saldo resueltos en el servidor (T20), y folio `CT-####`
+ * correlativo por comunidad asignado en el servidor.
  *
  * Folio server-side (auditoría "funciones de palo" 2026-10-23): el cliente lo
  * calculaba con `max+1` sobre la lista que tenía cargada, así que dos clientes
@@ -397,19 +480,22 @@ export async function POST(req: Request): Promise<Response> {
   const original = await req.text()
   const anclaje = await anclarResidencia(original, leerObjeto(original))
   if (!anclaje.ok) return anclaje.response
-  // Cuerpo que sigue el camino: el original, o el anclado cuando el servidor
-  // completó la unidad y la persona del residente.
-  const cuerpo = anclaje.cuerpo
-  const datos = anclaje.datos
+  const cuerpoAnclado = anclaje.cuerpo
+  const datosAnclados = anclaje.datos
 
-  const rechazoAlcance = await rechazoDeEmisionAjena(datos)
+  const rechazoAlcance = await rechazoDeEmisionAjena(datosAnclados)
   if (rechazoAlcance) return rechazoAlcance
 
-  const rechazoEmision = await rechazoDeTipoNoEmisible(datos)
+  const rechazoEmision = await rechazoDeTipoNoEmisible(datosAnclados)
   if (rechazoEmision) return rechazoEmision
 
-  const rechazo = await gateSaldoAlDia(cuerpo)
-  if (rechazo) return rechazo
+  // Cuerpo que sigue el camino: el original, el anclado, o el anclado con las
+  // cifras del estado de cuenta calculadas por el servidor (T20). El gate de
+  // saldo viaja en la misma lectura, así que gate y papel no pueden diverger.
+  const resolucion = await resolverEstadoCuenta(cuerpoAnclado, datosAnclados)
+  if (!resolucion.ok) return resolucion.response
+  const cuerpo = resolucion.cuerpo
+  const datos = resolucion.datos
 
   // Folio y código explícitos: no hay nada que completar (el folio que manda el
   // QA-Lab o un import masivo se respeta tal cual, ver tests).

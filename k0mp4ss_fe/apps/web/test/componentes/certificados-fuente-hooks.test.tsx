@@ -11,9 +11,10 @@
  * Adaptación T13 (S10): el Select de unidad de `estado_cuenta`/`al_dia` pasó a
  * búsqueda server-side (`BuscadorEntidad` contra `/api/unidades?q=`); el test
  * del gate Al Día ahora elige la unidad por el buscador con un stub de fetch.
- * La mecánica cambió, la intención no: el saldo visible sigue saliendo de los
- * cobros de `useCobrosFI` (3.000 + 2.000 de `uni-hook`; los 50.000 de
- * `uni-hook-2` no suman).
+ * Adaptación T20 (S10): las cifras del papel y la decisión Al Día ya NO se
+ * derivan en el cliente del pad de `useCobrosFI` —el servidor las calcula
+ * sobre el conjunto completo y el componente imprime lo que él devuelve—, así
+ * que el arnés ya no alimenta ninguna cifra de negocio con sus cobros.
  */
 import React from "react"
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
@@ -323,11 +324,13 @@ function cobro(parcial: Partial<CobroFI> & Pick<CobroFI, "id" | "unidadId" | "mo
 
 describe("comunidad/certificados — fuente de datos vía hooks SWR", () => {
   it("muestra el estado de carga mientras un hook de la colección sigue cargando", () => {
-    fuente.cargandoCobros = true
+    fuente.cargandoLiquidaciones = true
     const { container } = render(<CertificadosEmision tiposEmisibles={[...TIPOS_DEL_ARNES]} />)
 
     // El skeleton reemplaza el contenido (mismo gate de carga de siempre, ahora
-    // alimentado por los flags `isLoading` de los hooks).
+    // alimentado por los flags `isLoading` de los hooks). Desde T20 la pantalla
+    // ya no consume el pad de cobros, así que el flag de la colección que queda
+    // es el de liquidaciones.
     expect(screen.queryByRole("heading", { name: /Certificados/ })).toBeNull()
     expect(container.querySelector(".animate-pulse")).not.toBeNull()
   })
@@ -357,19 +360,28 @@ describe("comunidad/certificados — fuente de datos vía hooks SWR", () => {
     expect(textos.some((t) => t.includes("PL-2026-08-0008"))).toBe(false) // borrador
   }, PRESUPUESTO_CARGA)
 
-  it("el gate Al Día se calcula con los cobros de useCobrosFI y no con el store", async () => {
+  it("T20: el componente no deriva el estado Al Día — sin línea de saldo y con el 409 del servidor verbatim", async () => {
     expect(archivosQueUsanElStore("app/comunidad/certificados/page.tsx")).toEqual([])
 
+    // Cobros en el pad del cliente: si el componente siguiera derivando el
+    // saldo, mostraría «$5.000» y pre-gatearía con esa cifra. Ya no calcula
+    // nada acá: el servidor decide sobre el libro completo de la unidad.
     fuente.cobros = [
       cobro({ id: "cob-hook-1", unidadId: "uni-hook", montoBase: 3_000 }),
       cobro({ id: "cob-hook-2", unidadId: "uni-hook", montoBase: 2_000 }),
-      // otro unidad no debe sumar
+      // otra unidad no debe sumar (y ya no suma en ninguna parte del cliente)
       cobro({ id: "cob-hook-3", unidadId: "uni-hook-2", montoBase: 50_000 }),
     ]
+    // El servidor responde su 409 con el monto COMPLETO: es lo que se muestra.
+    fuente.crear.mockResolvedValueOnce({
+      ok: false as const,
+      error:
+        "No se puede emitir: la unidad mantiene $120.000 pendiente(s). El certificado Al Día exige saldo <= 0.",
+    })
 
-    // T13: la unidad ya no sale del listbox del padrón truncado sino de la
-    // búsqueda server-side; la fila devuelta es LA MISMA unidad de los cobros
-    // (uni-hook), así que el assert de negocio no cambia.
+    // T13: la unidad sale de la búsqueda server-side; la fila devuelta es LA
+    // MISMA unidad de los cobros del pad (uni-hook), así que cualquier cifra
+    // derivada en el cliente sería visible si el defecto regresara.
     stubBuscarUnidad({ id: "uni-hook", etiqueta: "Depto", numero: "101" })
     const user = userEvent.setup()
     render(<CertificadosEmision tiposEmisibles={[...TIPOS_DEL_ARNES]} />)
@@ -377,8 +389,26 @@ describe("comunidad/certificados — fuente de datos vía hooks SWR", () => {
     await elegir(user, 0, /Al Día/i)
     await elegirUnidadBuscada(user, { etiqueta: "Depto", numero: "101" }, "101")
 
-    // 3.000 + 2.000 de los cobros del hook (la unidad 102 no suma).
-    expect(await screen.findByText(/Saldo pendiente actual: \$5\.000/)).toBeTruthy()
+    // Sin la línea derivada del pad: el saldo visible ya no se calcula acá.
+    expect(screen.queryByText(/Saldo pendiente actual/)).toBeNull()
+
+    await user.type(screen.getByPlaceholderText("Nombre de quien solicita"), "QA T20")
+    await user.click(screen.getByRole("button", { name: /Generar certificado PDF firmado/ }))
+
+    // La emisión LLEGA al servidor (el gate ya no es del cliente) sin ninguna
+    // fila de cifras derivada: las calcula él sobre el conjunto completo.
+    expect(fuente.crear).toHaveBeenCalledTimes(1)
+    const registro = fuente.crear.mock.calls[0]?.[0] as {
+      detalle: { clave: string; valor: string }[]
+    }
+    expect(registro.detalle.some((d) => d.clave === "Cobros registrados")).toBe(false)
+    expect(registro.detalle.some((d) => d.clave === "Total cargado")).toBe(false)
+    expect(registro.detalle.some((d) => d.clave === "Saldo pendiente")).toBe(false)
+
+    // Y el 409 del servidor se muestra verbatim.
+    expect(
+      await screen.findByText(/No se puede emitir: la unidad mantiene \$120\.000/)
+    ).toBeTruthy()
   }, PRESUPUESTO_CARGA)
 
   it("el registro emitido se construye con la liquidación que entrega el hook", async () => {

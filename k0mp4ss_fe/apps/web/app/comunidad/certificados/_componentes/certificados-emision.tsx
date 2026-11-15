@@ -3,7 +3,6 @@
 import * as React from "react"
 import { esMiembroDirectivaVigente } from "@/lib/store/helpers"
 import { useCertificadosCT } from "@/lib/api/use-certificados-ct"
-import { useCobrosFI } from "@/lib/api/use-cobros-fi"
 import { useLiquidaciones } from "@/lib/api/use-liquidaciones"
 import { BuscadorEntidad } from "@/components/buscador-entidad"
 import { AvisoTruncamiento } from "@/components/pe/aviso-truncamiento"
@@ -14,7 +13,6 @@ import { useConfiguracion } from "@/lib/api/use-configuracion"
 import { usePeriodosDirectiva } from "@/lib/api/use-periodos-directiva"
 import { generarId } from "@/lib/id-utils"
 import { hoyISO } from "@/lib/date-utils"
-import { exigibleTotal, saldoPendiente } from "@/lib/finanzas-utils"
 import { ETIQUETA_POR_TIPO_CERTIFICADO } from "@/lib/certificados-ct"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import { Input } from "@workspace/ui/components/input"
@@ -247,7 +245,6 @@ function CertificadosGestion({ tiposEmisibles }: CertificadosEmisionProps) {
   const { config, isLoading: cConfig } = useConfiguracion()
   const { vigente: periodoVigente, isLoading: cPeriodosDirectiva } = usePeriodosDirectiva()
   const { liquidaciones: liquidacionesPL, isLoading: cLiquidaciones } = useLiquidaciones()
-  const { items: cobrosFI, isLoading: cCobrosFI } = useCobrosFI()
   const configuracion = config
 
   // La tipología inicial tiene que ser una que el rol pueda emitir: si no, el
@@ -276,7 +273,7 @@ function CertificadosGestion({ tiposEmisibles }: CertificadosEmisionProps) {
   const [okMsg, setOkMsg] = React.useState<string | null>(null)
   const [pdfBusy, setPdfBusy] = React.useState<string | null>(null)
 
-  const cargando = cCertificados || cPersonas || cUnidades || cVinculos || cConfig || cPeriodosDirectiva || cLiquidaciones || cCobrosFI
+  const cargando = cCertificados || cPersonas || cUnidades || cVinculos || cConfig || cPeriodosDirectiva || cLiquidaciones
   if (cargando) {
     return <div className="h-64 w-full animate-pulse rounded-lg bg-muted" />
   }
@@ -301,12 +298,8 @@ function CertificadosGestion({ tiposEmisibles }: CertificadosEmisionProps) {
     if (unidadElegida && unidadElegida.id === id) return `${unidadElegida.etiqueta} ${unidadElegida.numero}`
     return refUnidadUI(id)
   }
-  const saldoUnidad = (id: string): number =>
-    cobrosFI.filter(c => c.unidadId === id).reduce((acc, c) => acc + saldoPendiente(c), 0)
-
   // Destinos válidos según tipología.
   const liquidacionesConfirmadas = liquidacionesPL.filter(l => l.estado === "confirmada")
-  const gateAlDia = tipo === "al_dia" && unidadId ? saldoUnidad(unidadId) : null
 
   /**
    * Construye el payload de ALTA del CertificadoCT con la misma lógica de
@@ -343,12 +336,12 @@ function CertificadosGestion({ tiposEmisibles }: CertificadosEmisionProps) {
       ]
     } else if (tipoActual === "estado_cuenta" || tipoActual === "al_dia") {
       if (!unidadId) throw new Error(`El certificado de ${tipoActual === "al_dia" ? "unidad al día" : "estado de cuenta"} exige una unidad.`)
-      const cobros = cobrosFI.filter(c => c.unidadId === unidadId)
-      const totalCargado = cobros.reduce((acc, c) => acc + exigibleTotal(c), 0)
-      const saldoPendienteTotal = cobros.reduce((acc, c) => acc + saldoPendiente(c), 0)
-      if (tipoActual === "al_dia" && saldoPendienteTotal > 0) {
-        throw new Error(`No se puede emitir: la unidad mantiene $${saldoPendienteTotal.toLocaleString("es-CL")} pendiente(s). El certificado Al Día exige saldo <= 0.`)
-      }
+      // T20: las tres cifras del papel («Cobros registrados», «Total cargado»,
+      // «Saldo pendiente») y la decisión Al Día las calcula el SERVIDOR sobre
+      // el conjunto completo de cobros FI de la unidad. El cliente ya no las
+      // deriva de su pad paginado —con más de cien cobros el papel imprimía un
+      // total más bajo que el real, sin declarar el recorte— y el gate de
+      // saldo del servidor responde 409 verbatim cuando la unidad no califica.
       const propietario = vinculos.find(v => v.unidadId === unidadId && v.rol === "propietario" && !v.fechaFin)
       const nombreProp = propietario ? nombrePersona(propietario.personaId) : "—"
       if (tipoActual === "estado_cuenta") {
@@ -359,9 +352,6 @@ function CertificadosGestion({ tiposEmisibles }: CertificadosEmisionProps) {
       detalle = [
         ["Unidad", refUnidadElegida(unidadId)],
         ["Propietario", nombreProp],
-        ["Cobros registrados", String(cobros.length)],
-        ["Total cargado", `$${totalCargado.toLocaleString("es-CL")}`],
-        ["Saldo pendiente", `$${saldoPendienteTotal.toLocaleString("es-CL")}`],
       ]
     } else {
       const liq = liquidacionesPL.find(l => l.id === liquidacionId)
@@ -574,9 +564,9 @@ function CertificadosGestion({ tiposEmisibles }: CertificadosEmisionProps) {
               onSeleccion={(_seleccion, fila) => { setUnidadElegida(fila ?? null); setUnidadId(fila?.id ?? "") }}
               vacio="Sin unidades para esa búsqueda."
             />
-            {gateAlDia !== null && (
-              <p className={`text-xs ${gateAlDia <= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-destructive"}`}>
-                Saldo pendiente actual: ${gateAlDia.toLocaleString("es-CL")} {gateAlDia > 0 ? "— la emisión Al Día será rechazada" : "— unidad califica para Al Día"}
+            {tipo === "al_dia" && (
+              <p className="text-xs text-muted-foreground">
+                La condición Al Día la evalúa el servidor sobre el libro completo de Finanzas de la unidad al emitir; si registra deuda, la emisión se rechaza mostrando el monto pendiente.
               </p>
             )}
           </div>

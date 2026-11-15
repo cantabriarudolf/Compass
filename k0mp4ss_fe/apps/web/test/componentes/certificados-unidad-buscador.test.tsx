@@ -223,12 +223,13 @@ describe("T13 — la unidad de estado de cuenta se busca en el servidor", () => 
     expect(registro.resumen).toBe(
       "Estado de cuenta oficial de Depto 966: detalle de gastos comunes pagados, cuotas extraordinarias y fondos pendientes según el libro de Finanzas."
     )
+    // T20: el payload ya no trae las tres cifras —las calcula el servidor sobre
+    // el conjunto completo de cobros y las inyecta en el `detalle` del registro
+    // que él devuelve—. El cliente manda identidad, no cifras derivadas de su
+    // pad paginado.
     expect(registro.detalle).toEqual([
       { clave: "Unidad", valor: "Depto 966" },
       { clave: "Propietario", valor: "—" },
-      { clave: "Cobros registrados", valor: "0" },
-      { clave: "Total cargado", valor: "$0" },
-      { clave: "Saldo pendiente", valor: "$0" },
     ])
   }, PRESUPUESTO_CARGA)
 
