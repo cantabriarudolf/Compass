@@ -145,6 +145,11 @@ const MATRIZ: Record<Rol, Record<string, Set<Accion>>> = {
     // borrar sigue siendo de administración (y lo legal responde 409 igual).
     "doc": new Set<Accion>(["ver", "crear"]),
     "co:buzon": new Set<Accion>(["ver", "crear"]),
+    // Difusiones masivas (candado R1, T14): la raíz desnuda `co` sigue en la allowlist como
+    // deuda de 7 rutas, pero un ENDPOINT NUEVO que la use tiene que traer su propia clave. Esta
+    // la pide la previsualización del alcance, que existe para el mismo acto que
+    // `POST /api/co/envios`: previsualizar y enviar tienen que exigir lo mismo.
+    "co:difusiones": new Set<Accion>(["ver", "crear"]),
     "co:lecturas": new Set<Accion>([]),
     // explícitamente sin permisos: FI crear/editar/eliminar, PE bitacora, PL, IR:interno, admin:usuarios, backup
   },
@@ -589,6 +594,7 @@ export const RECURSOS_CONOCIDOS = [
   "co",
   "doc",
   "co:buzon",
+  "co:difusiones",
   "co:lecturas",
   "gd",
   "cv",

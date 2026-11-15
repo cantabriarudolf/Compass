@@ -14,7 +14,7 @@ type AccionDenegada = "ver" | "crear" | "editar" | "eliminar" | "ejecutar"
 
 export function registrarDenegacionCo(
   scope: { usuarioId: string; rol: string; comunidadId: string },
-  recurso: "co" | "co:buzon" | "co:lecturas",
+  recurso: "co" | "co:buzon" | "co:lecturas" | "co:difusiones",
   accion: AccionDenegada
 ): void {
   logger.warn(

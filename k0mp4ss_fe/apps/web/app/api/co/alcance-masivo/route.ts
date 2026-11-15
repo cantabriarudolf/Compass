@@ -75,18 +75,23 @@ export async function GET(req: Request): Promise<Response> {
   if (!resultado.ok) return resultado.response
   const { scope } = resultado
 
-  // La compuerta del envío masivo: crear sobre `co`, la clave del alta de la
-  // difusión (POST /api/co/envios). El 403 emite RP_PERMISSION_DENIED (AM §Menor
-  // Privilegio) porque es un handler a medida, no el factory.
-  if (!puede(scope.rol, "crear", "co")) {
-    registrarDenegacionCo(scope, "co", "crear")
-    return jsonError(403, "Permiso denegado.")
-  }
-
-  // Después de la compuerta: protege la base de la ráfaga de cambios de filtro.
+  // El techo de volumen va ANTES del portón. Si quedaba después, un rechazo no se contaba
+  // nunca y una cuenta sin privilegios podía inundar la auditoría con `RP_PERMISSION_DENIED`
+  // sin tope (hallazgo R1-001 de la revisión nativa).
   // La clave es el usuario, no la IP (una conserjería compartida no se bloquea sola).
   if (excedeVolumen("co-alcance", scope.usuarioId)) {
     return jsonError(429, "Demasiadas solicitudes.")
+  }
+
+  // La compuerta del envío masivo: crear sobre `co:difusiones`, la clave GRANULAR de la
+  // difusión. La raíz desnuda `co` no sirve en un endpoint nuevo: la MATRIZ ya declara
+  // hermanos granulares, así que el fallback de prefijo se la heredaría a todo rol con `co`
+  // (candado R1 del repo). Previsualizar el alcance y enviar tienen que exigir lo
+  // mismo, que es por qué esta clave existe. El 403 emite RP_PERMISSION_DENIED (AM §Menor
+  // Privilegio) porque es un handler a medida, no el factory.
+  if (!puede(scope.rol, "crear", "co:difusiones")) {
+    registrarDenegacionCo(scope, "co:difusiones", "crear")
+    return jsonError(403, "Permiso denegado.")
   }
 
   let url: URL

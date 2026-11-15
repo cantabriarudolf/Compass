@@ -54,14 +54,15 @@ export async function GET(req: Request): Promise<Response> {
   if (!resultado.ok) return resultado.response
   const { scope } = resultado
 
-  if (!puede(scope.rol, "crear", "co:buzon")) {
-    return jsonError(403, "Permiso denegado.")
-  }
-
-  // Después de la compuerta y antes de validar `q`: protege la base de la ráfaga y no
-  // deja que un `q` inválido sea barato de spamear. La clave es el usuario, no la IP.
+  // El techo de volumen va ANTES del portón: si quedaba después, un rechazo no se contaba
+  // nunca y una cuenta sin privilegios podía insistir sin tope (hallazgo R1-001).
+  // La clave es el usuario, no la IP.
   if (excedeVolumen("comunicacion", scope.usuarioId)) {
     return jsonError(429, "Demasiadas solicitudes.")
+  }
+
+  if (!puede(scope.rol, "crear", "co:buzon")) {
+    return jsonError(403, "Permiso denegado.")
   }
 
   let url: URL

@@ -95,15 +95,15 @@ export async function GET(req: Request): Promise<Response> {
   // La familia `gd` es la del libro de la directiva (actas + períodos): la misma
   // compuerta de las rutas hermanas `app/api/periodos-directiva`. Lectura, así
   // que `ver`: quien escribe la nómina la exige la colección (crear/editar).
-  if (!puede(scope.rol, "ver", "gd")) {
-    return jsonError(403, "Permiso denegado.")
-  }
-
-  // El límite va acá, después de la compuerta y antes de validar `q`: protege la
-  // base de la ráfaga y no deja que un `q` inválido sea barato de spamear. El
-  // ámbito es propio de esta ruta — no comparte pozo con otros buscadores.
+  // El techo de volumen va ANTES del portón: si quedaba después, un rechazo no se contaba
+  // nunca (hallazgo R1-001). El ámbito es propio de esta ruta — no comparte pozo con otros
+  // buscadores, y la clave es el usuario, no la IP.
   if (excedeVolumen("periodos-directiva", scope.usuarioId)) {
     return jsonError(429, "Demasiadas solicitudes.")
+  }
+
+  if (!puede(scope.rol, "ver", "gd")) {
+    return jsonError(403, "Permiso denegado.")
   }
 
   let url: URL

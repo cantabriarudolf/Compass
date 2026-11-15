@@ -96,14 +96,15 @@ export async function GET(req: Request): Promise<Response> {
   // solicitante existe sólo en el flujo del certificado de residencia
   // (`RECURSO_DE_EMISION_POR_TIPO.residencia`). Por el fallback de prefijo de
   // `puede()`, todo rol con `ct` `ver` entra igual que en `mis-vinculos`.
-  if (!puede(scope.rol, "ver", "ct:residencia")) {
-    return jsonError(403, "Permiso denegado.")
-  }
-
-  // El límite va acá, después de la compuerta y antes de validar `q`: protege la
-  // base de la ráfaga y no deja que un `q` inválido sea barato de spamear.
+  // El techo de volumen va ANTES del portón: si quedaba después, un rechazo no se contaba
+  // nunca y una cuenta sin privilegios podía insistir sin tope (hallazgo R1-001 de la
+  // revisión nativa del alcance masivo, misma forma acá).
   if (excedeVolumen("certificados-ct", scope.usuarioId)) {
     return jsonError(429, "Demasiadas solicitudes.")
+  }
+
+  if (!puede(scope.rol, "ver", "ct:residencia")) {
+    return jsonError(403, "Permiso denegado.")
   }
 
   let url: URL
