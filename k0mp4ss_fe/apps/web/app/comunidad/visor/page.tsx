@@ -2,7 +2,6 @@
 
 import * as React from "react"
 import { useAvisosCV, usePlantillasCV, useActasPublicadasCV } from "@/lib/api/use-cv"
-import { usePersonas } from "@/lib/api/use-personas"
 import { useConfiguracion } from "@/lib/api/use-configuracion"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import { Input } from "@workspace/ui/components/input"
@@ -84,6 +83,23 @@ const FORM_AVISO: FormAviso = {
   tags: "",
 }
 
+/**
+ * T12 (S10) — el padrón de la creación manual del visor viene COMPLETO del
+ * servidor (`GET /api/cv/personas-habilitadas`): el universo es deliberadamente
+ * chico (sólo quien tiene el flag), así que no hay buscador ni recorte que
+ * declarar. Antes se filtraba `usePersonas()` —el padrón truncado a cien—, así
+ * que una persona habilitada fuera de las primeras cien filas no existía ni para
+ * la lista de habilitación ni para el Select del autor. Si algún día el conjunto
+ * dejara de ser acotado, la respuesta declara `total` para poder decirlo.
+ */
+interface PersonaHabilitada {
+  id: string
+  nombres: string
+  apellidos: string
+}
+
+const RUTA_HABILITADAS = "/api/cv/personas-habilitadas"
+
 export default function VisorPanelPage() {
   const { items: avisosCV, isLoading: cAvisos, create: crearAvisoApi, update: actualizarAvisoApi, remove: eliminarAvisoApi } = useAvisosCV()
   const { items: plantillasCV, isLoading: cPlantillas, update: actualizarPlantillaApi } = usePlantillasCV()
@@ -99,9 +115,15 @@ export default function VisorPanelPage() {
     despublicar: despublicarActaDelVisor,
   } = useActasPublicadasCV()
   const { config: configuracion, isLoading: cConfig, updateConfig } = useConfiguracion()
-  const { personas, isLoading: cPersonas } = usePersonas()
+  // T12 (S10): la habilitación de creación manual la resuelve el SERVIDOR sobre
+  // TODA la comunidad — sin el techo de cien filas de `usePersonas()`. Un fallo
+  // no puede decirse «Nadie habilitado»: ese texto es un vacío VERIFICADO, y el
+  // error de la API se muestra textual (S1: verbatim).
+  const [personasHabilitadas, setPersonasHabilitadas] = React.useState<PersonaHabilitada[]>([])
+  const [cHabilitadas, setCHabilitadas] = React.useState(true)
+  const [errorHabilitadas, setErrorHabilitadas] = React.useState<string | null>(null)
   const caducadosRef = React.useRef(false)
-  const cargando = cAvisos || cPlantillas || cConfig || cPersonas || cActasPublicadas
+  const cargando = cAvisos || cPlantillas || cConfig || cHabilitadas || cActasPublicadas
 
   const [error, setError] = React.useState<string | null>(null)
   const [msg, setMsg] = React.useState<string | null>(null)
@@ -121,6 +143,38 @@ export default function VisorPanelPage() {
     if (vencidos.length === 0) return
     void Promise.all(vencidos.map(v => actualizarAvisoApi(v.id, { estado: "archivado", fechaArchivado: hoy })))
   }, [cAvisos, avisosCV, actualizarAvisoApi])
+
+  // T12 (S10): la lista de habilitados sale del servidor, completa y filtrada
+  // ahí (flag + alcance por filas). El cliente no recorta nada.
+  React.useEffect(() => {
+    let vigente = true
+    const cargar = async () => {
+      setCHabilitadas(true)
+      try {
+        const respuesta = await fetch(RUTA_HABILITADAS, { headers: { accept: "application/json" } })
+        const cuerpo = (await respuesta.json().catch(() => null)) as
+          | { data?: PersonaHabilitada[]; total?: number; error?: string }
+          | null
+        if (!vigente) return
+        if (!respuesta.ok) {
+          setErrorHabilitadas(cuerpo?.error ?? `Error ${respuesta.status} al consultar ${RUTA_HABILITADAS}.`)
+          setPersonasHabilitadas([])
+        } else {
+          setErrorHabilitadas(null)
+          setPersonasHabilitadas(cuerpo?.data ?? [])
+        }
+      } catch {
+        if (vigente) {
+          setErrorHabilitadas("Sin conexión con el servidor.")
+          setPersonasHabilitadas([])
+        }
+      } finally {
+        if (vigente) setCHabilitadas(false)
+      }
+    }
+    void cargar()
+    return () => { vigente = false }
+  }, [])
 
   const guardarAviso = async () => {
     if (!form) return
@@ -526,12 +580,14 @@ export default function VisorPanelPage() {
               <div>
                 <Label className="text-xs">Habilitación de creación manual (perfiles MP)</Label>
                 <ul className="mt-2 space-y-1 text-xs">
-                  {personas.filter(p => p.permiteCreacionManualCV).map(p => (
+                  {personasHabilitadas.map(p => (
                     <li key={p.id}>{p.nombres} {p.apellidos} — <Badge variant="secondary" className="text-[9px]">puede crear</Badge></li>
                   ))}
-                  {personas.filter(p => p.permiteCreacionManualCV).length === 0 && (
+                  {errorHabilitadas ? (
+                    <li className="text-destructive">{errorHabilitadas}</li>
+                  ) : personasHabilitadas.length === 0 ? (
                     <li className="text-muted-foreground">Nadie habilitado además de administración. Edita la persona en Comunidad → Directorio para conceder el permiso especial.</li>
-                  )}
+                  ) : null}
                 </ul>
               </div>
             </CardContent>
@@ -597,14 +653,14 @@ export default function VisorPanelPage() {
                   <input type="checkbox" checked={form.pantallaCompleta} onChange={e => setForm({ ...form, pantallaCompleta: e.target.checked })} />
                   Modo pantalla completa en el visor (mayor impacto)
                 </label>
-                {!editandoId && personas.some(p => p.permiteCreacionManualCV) && (
+                {!editandoId && personasHabilitadas.length > 0 && (
                   <div className="space-y-1 rounded-md border p-3">
                     <Label className="text-xs">Registrar como creación de tercero habilitado (simula VB)</Label>
                     <Select value={autorPersonaId || "admin"} onValueChange={v => setAutorPersonaId(v === "admin" ? "" : v)}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="admin">Administración (sin VB)</SelectItem>
-                        {personas.filter(p => p.permiteCreacionManualCV).map(p => (
+                        {personasHabilitadas.map(p => (
                           <SelectItem key={p.id} value={p.id}>{p.nombres} {p.apellidos} (con VB)</SelectItem>
                         ))}
                       </SelectContent>
