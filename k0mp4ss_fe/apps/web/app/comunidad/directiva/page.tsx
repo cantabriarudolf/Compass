@@ -32,6 +32,7 @@ import {
   IconLock,
 } from "@tabler/icons-react"
 import { puedeContextual } from "@/lib/authz"
+import { BuscadorEntidad } from "@/components/buscador-entidad"
 import type { ActaGD, CapacidadDirectiva, ExtensionGobernanza, PeriodoDirectiva } from "@/lib/schemas"
 import { leerMiembrosPeriodo } from "@/lib/schemas"
 import { periodoDirectivaVigente, esMiembroDirectivaVigente } from "@/lib/store/helpers"
@@ -59,6 +60,21 @@ const CAPACIDAD_LABEL: Record<string, string> = {
   conyuge_conviviente: "Cónyuge/conviviente civil",
   apoderado: "Apoderado con poder notarial",
   representante_persona_juridica: "Representante de persona jurídica",
+}
+
+// S10/T11 — endpoint ligero que resuelve la búsqueda de la nómina EN el servidor:
+// el padrón del cliente (`usePersonas` → `/api/personas?pageSize=100`) dejaba fuera
+// de la elección a toda persona que no estuviera en sus primeras cien filas.
+const BUSCADOR_NOMINA = "/api/periodos-directiva/buscar-personas"
+
+/** Fila que devuelve `GET /api/periodos-directiva/buscar-personas`: identidad
+ * mínima de una persona ELEGIBLE. `nombreCompleto` es lo que se muestra y lo que
+ * el payload del período guarda como nombre del miembro — el padrón del cliente
+ * puede no conocer a quien quedó fuera de sus primeras cien filas. */
+interface PersonaNominaBuscada {
+  id: string
+  nombreCompleto: string
+  rut: string
 }
 
 // Motivo del término del mandato: información de cierre que guarda el período.
@@ -113,11 +129,34 @@ export default function DirectivaPage() {
   const [selMiembros, setSelMiembros] = React.useState<Record<string, string>>({})
   // Capacidad declarada por miembro seleccionado (elegibilidad del cargo).
   const [selCapacidad, setSelCapacidad] = React.useState<Record<string, string>>({})
+  // S10/T11 — filas halladas por el buscador del servidor, por id: el nombre que
+  // la nómina muestra y el payload guarda para quien el padrón del cliente no conoce.
+  const [buscadasNomina, setBuscadasNomina] = React.useState<Record<string, PersonaNominaBuscada>>({})
   const [tablaTemasTexto, setTablaTemasTexto] = React.useState("")
   const [invitadosTexto, setInvitadosTexto] = React.useState("")
 
   const periodoVigente = periodoDirectivaVigente({ periodosDirectiva: periodos })
   const directivaVigente = personas.filter(p => esMiembroDirectivaVigente(p, periodoVigente?.id))
+  // S10/T11 — nombre visible de un miembro de la nómina: el padrón del cliente
+  // manda; si no lo conoce (quedó fuera de sus primeras cien filas), manda la
+  // fila buscada en el servidor; y si tampoco la hay, el id, como hasta hoy.
+  const nombreMiembro = (id: string) =>
+    personas.find(p => p.id === id)?.nombreCompleto
+    ?? buscadasNomina[id]?.nombreCompleto
+    ?? id
+
+  // S10/T11 — agrega a la nómina a la persona hallada por el buscador (servidor).
+  const agregarMiembroNomina = (fila: PersonaNominaBuscada) => {
+    setBuscadasNomina(prev => (prev[fila.id] ? prev : { ...prev, [fila.id]: fila }))
+    setSelMiembros(prev => {
+      // Ya está en la nómina: no se pisa su cargo (buscar otra vez no resetea).
+      if (prev[fila.id] !== undefined) return prev
+      // Paridad con el checkbox que había: si la ficha del padrón declara cargo
+      // de directiva, se prefill; si no, entra sin cargo hasta elegirlo.
+      const cargoPrevio = personas.find(p => p.id === fila.id)?.datosGobernanza?.cargoDirectiva ?? ""
+      return { ...prev, [fila.id]: cargoPrevio }
+    })
+  }
   const nombrePersona = (id: string) => {
     const p = personas.find(x => x.id === id)
     return p ? `${p.nombres} ${p.apellidos}` : id
@@ -469,62 +508,72 @@ export default function DirectivaPage() {
                 </div>
                 <div className="space-y-1">
                   <Label className="text-xs">Nómina (impar de 3 a 5) *</Label>
+                  {/* S10/T11 — la nómina pasa a dos partes: los miembros YA ELEGIDOS (con su
+                      checkbox para quitarlos, como antes) y un buscador que consulta al
+                      SERVIDOR. El checkbox sobre el padrón del cliente truncaba la elección a
+                      las primeras cien filas de `/api/personas`: una persona legalmente
+                      nombrable no podía ser directora. La búsqueda es sobre TODAS las cuentas
+                      activas de la comunidad (misma regla que aplicaba el filtro, sin
+                      requisitos nuevos) y el servidor declara el total. */}
+                  <BuscadorEntidad<PersonaNominaBuscada>
+                    url={BUSCADOR_NOMINA}
+                    idDe={p => p.id}
+                    etiquetaDe={p => p.nombreCompleto}
+                    onSeleccion={(sel, fila) => { if (sel && fila) agregarMiembroNomina(fila) }}
+                    placeholder="Buscar por nombre, RUT o email…"
+                    vacio="Ninguna persona con cuenta activa coincide."
+                  />
                   <div className="flex max-h-48 flex-col gap-1 overflow-y-auto rounded-md border p-2">
-                    {personas.filter(p => p.estadoCuenta === "activa").map(p => {
-                      const sel = selMiembros[p.id] !== undefined
+                    {Object.entries(selMiembros).map(([personaId, cargo]) => {
+                      const enPadron = personas.find(p => p.id === personaId)
                       return (
-                        <div key={p.id} className="flex items-center gap-2 text-xs">
+                        <div key={personaId} className="flex items-center gap-2 text-xs">
                           <input
                             type="checkbox"
-                            checked={sel}
+                            checked
                             onChange={() => {
-                              const seleccionando = !sel
                               setSelMiembros(prev => {
                                 const next = { ...prev }
-                                if (seleccionando) next[p.id] = p.datosGobernanza?.cargoDirectiva ?? ""
-                                else delete next[p.id]
+                                delete next[personaId]
                                 return next
                               })
-                              // Al deseleccionar se olvida también la capacidad declarada.
-                              if (!seleccionando) {
-                                setSelCapacidad(prev => {
-                                  const next = { ...prev }
-                                  delete next[p.id]
-                                  return next
-                                })
-                              }
+                              // Al quitar se olvida también la capacidad declarada.
+                              setSelCapacidad(prev => {
+                                const next = { ...prev }
+                                delete next[personaId]
+                                return next
+                              })
                             }}
                           />
-                          <span className="flex-1">{p.nombres} {p.apellidos}</span>
-                          {sel && (
-                            <Select value={selMiembros[p.id] ?? ""} onValueChange={v => setSelMiembros(prev => ({ ...prev, [p.id]: v }))}>
-                              <SelectTrigger className="h-7 w-32"><SelectValue placeholder="Cargo" /></SelectTrigger>
-                              <SelectContent>
-                                {Object.entries(CARGO_LABEL).map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}
-                              </SelectContent>
-                            </Select>
-                          )}
-                          {sel && (
-                            <Select
-                              // La ficha legacy de MP (data/comunidad/personas) no declara
-                              // `capacidad`; se lee con cast para prefillar la elegibilidad ya
-                              // registrada. También viaja en `ExtensionGobernanza` (lib/schemas).
-                              value={
-                                selCapacidad[p.id] ??
-                                (p.datosGobernanza as unknown as { capacidad?: string } | undefined)?.capacidad ??
-                                ""
-                              }
-                              onValueChange={v => setSelCapacidad(prev => ({ ...prev, [p.id]: v }))}
-                            >
-                              <SelectTrigger className="h-7 w-44"><SelectValue placeholder="Capacidad (art. 17)" /></SelectTrigger>
-                              <SelectContent>
-                                {Object.entries(CAPACIDAD_LABEL).map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}
-                              </SelectContent>
-                            </Select>
-                          )}
+                          <span className="flex-1">{nombreMiembro(personaId)}</span>
+                          <Select value={cargo} onValueChange={v => setSelMiembros(prev => ({ ...prev, [personaId]: v }))}>
+                            <SelectTrigger className="h-7 w-32"><SelectValue placeholder="Cargo" /></SelectTrigger>
+                            <SelectContent>
+                              {Object.entries(CARGO_LABEL).map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                          <Select
+                            // La ficha legacy de MP (data/comunidad/personas) no declara
+                            // `capacidad`; se lee con cast para prefillar la elegibilidad ya
+                            // registrada. También viaja en `ExtensionGobernanza` (lib/schemas).
+                            value={
+                              selCapacidad[personaId] ??
+                              (enPadron?.datosGobernanza as unknown as { capacidad?: string } | undefined)?.capacidad ??
+                              ""
+                            }
+                            onValueChange={v => setSelCapacidad(prev => ({ ...prev, [personaId]: v }))}
+                          >
+                            <SelectTrigger className="h-7 w-44"><SelectValue placeholder="Capacidad (art. 17)" /></SelectTrigger>
+                            <SelectContent>
+                              {Object.entries(CAPACIDAD_LABEL).map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
                         </div>
                       )
                     })}
+                    {Object.keys(selMiembros).length === 0 && (
+                      <span className="text-xs text-muted-foreground">Sin miembros elegidos todavía. Buscá personas activas y agregalas a la nómina.</span>
+                    )}
                   </div>
                 </div>
               </div>
@@ -535,7 +584,9 @@ export default function DirectivaPage() {
                         .filter(([, c]) => !!c)
                         .map(([personaId, cargo]) => ({
                           personaId,
-                          nombre: personas.find(p => p.id === personaId)?.nombreCompleto ?? personaId,
+                          // S10/T11 — el nombre de un miembro buscado en el servidor sale de la
+                          // fila buscada (el padrón del cliente puede no conocerlo).
+                          nombre: nombreMiembro(personaId),
                           cargo: cargo as "presidente" | "tesorero" | "secretario" | "director",
                           fechaAsuncion: perInicio,
                           ...(selCapacidad[personaId] ? { capacidad: selCapacidad[personaId] as CapacidadDirectiva } : {}),
@@ -586,7 +637,7 @@ export default function DirectivaPage() {
                       }
                       setError(null)
                       setPeriodoDialogo(false)
-                      setPerInicio(""); setPerDuracion("36"); setPerInscripcion(""); setPerReferencia(""); setSelMiembros({}); setSelCapacidad({})
+                      setPerInicio(""); setPerDuracion("36"); setPerInscripcion(""); setPerReferencia(""); setSelMiembros({}); setSelCapacidad({}); setBuscadasNomina({})
                     }}>Registrar período</Button>
               </DialogFooter>
             </DialogContent>
