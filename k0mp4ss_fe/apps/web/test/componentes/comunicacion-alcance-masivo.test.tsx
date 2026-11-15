@@ -17,6 +17,18 @@
  *     envío queda bloqueado: no se manda nada sobre un alcance vacío en silencio;
  *   · el recorte del selector de unidad (el filtro, no el alcance) se sigue
  *     declarando con su aviso, tal como quedó en 228fe26.
+ *
+ * T15 (S10, advisory R3-walk-sin-cobertura) — la caminata multi-página. La
+ * consola camina las páginas de `/api/co/alcance-masivo` hasta el `total`
+ * declarado, pero los stubs que pinneaban T14 devolvían UNA sola página cuya
+ * `data.length` ya igualaba el `total`: el cuerpo del loop nunca se ejecutaba
+ * y la promesa central de T14 —el envío sale COMPLETO cuando la comunidad pasa
+ * de cien filas— sólo estaba afirmada a nivel de envelope de la API. Acá la
+ * caminata se ejecuta de verdad: `total = 250` y tres páginas (100 + 100 + 50)
+ * servidas por número de `page`, el payload del envío con los 250 y las tres
+ * URLs pedidas. El control negativo fija los dos comportamientos que hoy están
+ * en el código: tercera página vacía con el `total` en 250 → el loop corta sin
+ * colgar ni inventar filas, y el recorte del transporte queda declarado.
  */
 import * as React from "react"
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest"
@@ -184,6 +196,72 @@ function stubAlcance(
   return { llamadas }
 }
 
+/**
+ * Stub de `fetch` que sirve el alcance POR PÁGINA: la caminata pide `page=1..n`
+ * y el stub resuelve cada número por separado. Devuelve el `page` de cada URL
+ * pedida, en orden, para afirmar cuántas páginas caminó la pantalla.
+ */
+function stubAlcancePorPagina(
+  respuestaDePagina: (page: number) => { data: unknown[]; total: number } | { status: number; cuerpo: unknown }
+): { paginasPedidas: string[] } {
+  const paginasPedidas: string[] = []
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((recurso: string | URL | Request) => {
+      const url = typeof recurso === "string" ? recurso : String(recurso)
+      if (!url.startsWith("/api/co/alcance-masivo")) {
+        return Promise.resolve(
+          new Response(JSON.stringify({ data: [], total: 0 }), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          })
+        )
+      }
+      const page = new URLSearchParams(url.slice(url.indexOf("?") + 1)).get("page") ?? "1"
+      paginasPedidas.push(page)
+      const respuesta = respuestaDePagina(Number(page))
+      if ("status" in respuesta) {
+        return Promise.resolve(
+          new Response(JSON.stringify(respuesta.cuerpo), {
+            status: respuesta.status,
+            headers: { "content-type": "application/json" },
+          })
+        )
+      }
+      return Promise.resolve(
+        new Response(JSON.stringify({ ...respuesta, page: Number(page), pageSize: 100 }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        })
+      )
+    })
+  )
+  return { paginasPedidas }
+}
+
+/** Fila del alcance con ids deterministas por orden global (1..250). */
+function filaAlcance(n: number): { personaId: string; unidadId: string; personaNombre: string } {
+  const orden = String(n).padStart(3, "0")
+  return {
+    personaId: `t14w-per-${orden}`,
+    unidadId: `t14w-uni-${orden}`,
+    personaNombre: `Caminata ${orden}`,
+  }
+}
+
+/** Rango contiguo de filas [desde..hasta]: una página del stub. */
+function loteAlcance(desde: number, hasta: number): unknown[] {
+  return Array.from({ length: hasta - desde + 1 }, (_, i) => filaAlcance(desde + i))
+}
+
+/** Destinatario del payload: el shape exacto que arma la pantalla ({personaId, unidadId}). */
+function destinatariosDe(desde: number, hasta: number): { personaId: string; unidadId: string }[] {
+  return Array.from({ length: hasta - desde + 1 }, (_, i) => {
+    const fila = filaAlcance(desde + i)
+    return { personaId: fila.personaId, unidadId: fila.unidadId }
+  })
+}
+
 interface Destinatario {
   personaId: string
   unidadId?: string
@@ -255,5 +333,68 @@ describe("T14 — el alcance del envío masivo se consulta al servidor", () => {
 
     expect(await screen.findByText("Alcance resuelto: 1 destinatario(s)")).toBeTruthy()
     expect(screen.getByText(/Mostrando 100 de 166/)).toBeTruthy()
+  }, PRESUPUESTO_CARGA)
+})
+
+describe("T15 — la caminata multi-página del alcance masivo (advisory R3-walk-sin-cobertura)", () => {
+  it("camina 100+100+50 hasta el total 250: el envío lleva los 250, sin repetidos, y pide exactamente tres páginas", async () => {
+    // Tres páginas reales servidas por `page`: 100 + 100 + 50 filas, `total` 250.
+    const { paginasPedidas } = stubAlcancePorPagina((page) => ({
+      data: loteAlcance((page - 1) * 100 + 1, Math.min(page * 100, 250)),
+      total: 250,
+    }))
+    const user = userEvent.setup()
+    render(<ConsolaComunicacionCO />)
+
+    expect(await screen.findByText("Alcance resuelto: 250 destinatario(s)")).toBeTruthy()
+
+    // Se pidieron EXACTAMENTE las tres páginas, una vez cada una, en orden.
+    expect(paginasPedidas).toEqual(["1", "2", "3"])
+
+    await enviarMasivo(user)
+    expect(estado.crearEnvio).toHaveBeenCalledTimes(1)
+    const registro = estado.crearEnvio.mock.calls[0]?.[0] as RegistroEnvio
+    // Los 250, con los ids de las TRES páginas, en orden, sin repetidos —
+    // y el shape del payload intacto ({personaId, unidadId}, sin nombre).
+    expect(registro.destinatarios).toEqual([
+      ...destinatariosDe(1, 100),
+      ...destinatariosDe(101, 200),
+      ...destinatariosDe(201, 250),
+    ])
+    const ids = registro.destinatarios.map((d) => d.personaId)
+    expect(new Set(ids).size).toBe(250)
+    expect(ids[0]).toBe("t14w-per-001") // primera de la página 1
+    expect(ids[100]).toBe("t14w-per-101") // primera de la página 2
+    expect(ids[249]).toBe("t14w-per-250") // última de la página 3
+  }, PRESUPUESTO_CARGA)
+
+  it("tercera página vacía con total en 250: el loop corta, no cuelga, no inventa filas y declara el recorte", async () => {
+    // Control negativo barato (comportamientos tal como están en el código):
+    // las dos primeras páginas completas y la tercera VACÍA con el `total`
+    // todavía en 250. El loop corta en la vacía: no cuelga pidiendo páginas
+    // hasta el `total` ni rellena filas para alcanzarlo.
+    const { paginasPedidas } = stubAlcancePorPagina((page) => {
+      if (page === 1) return { data: loteAlcance(1, 100), total: 250 }
+      if (page === 2) return { data: loteAlcance(101, 200), total: 250 }
+      return { data: [], total: 250 }
+    })
+    const user = userEvent.setup()
+    render(<ConsolaComunicacionCO />)
+
+    // 100 + 100 conservadas; ni una fila inventada para llegar a 250.
+    expect(await screen.findByText("Alcance resuelto: 200 destinatario(s)")).toBeTruthy()
+    // El recorte del TRANSPORTE queda declarado por el aviso, no escondido.
+    expect(await screen.findByText(/Mostrando 200 de 250/)).toBeTruthy()
+
+    // Se pidió la página vacía y NINGUNA más: el break es lo que evita el colgado.
+    expect(paginasPedidas).toEqual(["1", "2", "3"])
+
+    await enviarMasivo(user)
+    expect(estado.crearEnvio).toHaveBeenCalledTimes(1)
+    const registro = estado.crearEnvio.mock.calls[0]?.[0] as RegistroEnvio
+    expect(registro.destinatarios).toEqual([
+      ...destinatariosDe(1, 100),
+      ...destinatariosDe(101, 200),
+    ])
   }, PRESUPUESTO_CARGA)
 })

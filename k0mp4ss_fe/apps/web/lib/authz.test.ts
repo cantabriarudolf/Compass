@@ -10,6 +10,7 @@ import {
   puedeContextual,
   reglasContextuales,
   RECURSOS_CONOCIDOS,
+  type Rol,
 } from "./authz"
 
 describe("lib/authz — matriz RP (pure, sin IO)", () => {
@@ -743,6 +744,38 @@ describe("lib/authz — recursos co, co:buzon y co:lecturas (difusión vs buzón
     expect(matriz.administrador.find((e) => e.recurso === "co:lecturas")).toBeUndefined() // wildcard
     for (const rol of ["comite", "residente"] as const) {
       expect(matriz[rol].find((e) => e.recurso === "co:lecturas")!.acciones).toEqual([])
+    }
+  })
+})
+
+// R4-002 — la compuerta del alcance masivo (`app/api/co/alcance-masivo/route.ts`)
+// pide `co:difusiones` con `crear`. La clave está declarada EXPLÍCITA en el bloque
+// del comité y el administrador la alcanza por el wildcard, pero el motor `puede()`
+// también concede por el FALLBACK DE PREFIJO: cualquier rol con `co` `crear` que no
+// tenga la clave granular la obtiene de su clave padre. Ese camino es el que
+// alcanzaría al comité si la entrada explícita se quitara, y el único que conoce la
+// MATRIZ para un rol futuro con `co` crear — el próximo lector no debe asumir que la
+// entrada explícita del comité es la que cubre esos roles. Este caso fija la tabla
+// de verdad de HOY por rol para que, el día que alguien angoste el fallback (o la
+// entrada), el test lo diga por nombre: hoy esa pérdida no haría caer ningún otro test.
+describe("lib/authz — recurso co:difusiones: tabla de verdad del alcance masivo (R4-002)", () => {
+  it("puede(rol, 'crear', 'co:difusiones') hoy — comité y administrador true; residente, conserjería y mantención false", () => {
+    // Lectura de la MATRIZ (no supuesta): `co` con `crear` lo tiene el comité
+    // (ver+crear); el residente tiene `co` SOLO ver —el fallback de prefijo no
+    // le alcanza `crear`—; conserjería y mantención no tienen `co` en absoluto;
+    // el administrador entra por el wildcard.
+    const veredictoHoy: Record<Rol, boolean> = {
+      administrador: true, // wildcard; no depende del fallback de prefijo
+      comite: true, // clave explícita `co:difusiones`; el fallback sobre `co` crear es su respaldo
+      conserjeria: false, // sin `co` ni `co:difusiones`: menor privilegio
+      residente: false, // `co` sólo ver: el fallback de prefijo deniega `crear` (D-3)
+      mantencion: false, // sin `co` ni `co:difusiones`: menor privilegio
+    }
+    for (const rol of ROLES) {
+      expect(
+        puede(rol, "crear", "co:difusiones"),
+        `puede(${rol}, "crear", "co:difusiones")`
+      ).toBe(veredictoHoy[rol])
     }
   })
 })
