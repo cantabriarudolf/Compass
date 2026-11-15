@@ -52,7 +52,11 @@ const VENTANA_EVENTO_VOLUMEN_MS = 60_000
  * inundación que el evento acotado existe para frenar. Lo encontró la revisión
  * nativa de `91df430` —dos lentes lo marcaron— y lo pinea
  * `test/lib/denegacion-co-volumen.test.ts`. Se borran sólo las entradas vencidas,
- * así el Map queda acotado por las ventanas realmente activas. Este Map es ajeno
+ * o sea que el Map queda acotado por la CANTIDAD de usuarios distintos que
+ * cruzaron el techo dentro de la ventana de 60 s —proporcional al tráfico real y
+ * auto-sanante en la primera pasada posterior al vencimiento—, NO por una
+ * constante: un tope duro tipo «descarto el más viejo» evictaría ventanas
+ * vigentes, que es justo el defecto que esta poda cierra. Este Map es ajeno
  * al contador y no importa sus internos: ese archivo es dueño del CONTADOR; este,
  * del EVENTO de auditoría.
  *
@@ -63,9 +67,10 @@ const eventosVolumenEmitidos = new Map<string, number>()
 export function registrarLimiteVolumen(usuarioId: string, ahora: number = Date.now()): void {
   const expira = eventosVolumenEmitidos.get(usuarioId)
   if (expira !== undefined && ahora < expira) return
-  // Poda por ENTRADA VENCIDA, nunca `clear()`: barrer las ventanas vigentes
-  // reabriría el dedup de sus dueños, o sea la inundación de log que este
-  // evento acotado evita. Basta para que el Map no crezca sin límite.
+  // Poda por ENTRADA VENCIDA, nunca `clear()` ni un tope duro: barrer ventanas
+  // vigentes reabriría el dedup de sus dueños, o sea la inundación de log que
+  // este evento acotado evita. El Map queda acotado por los usuarios DISTINTOS
+  // de la ventana y se auto-sana en la primera pasada posterior al vencimiento.
   if (eventosVolumenEmitidos.size > 1000) {
     for (const [clave, vence] of eventosVolumenEmitidos) {
       if (ahora >= vence) eventosVolumenEmitidos.delete(clave)
