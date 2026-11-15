@@ -35,10 +35,14 @@
  *     si la matriz alguna vez cambia);
  *   · el envelope pagina de verdad (`page`, `pageSize` con tope, `total`) y el
  *     techo de volumen (`co-alcance`) es por usuario: otro usuario no hereda
- *     el bloqueo.
+ *     el bloqueo;
+ *   · T15 (R4-001): el 403 del portón emite `RP_PERMISSION_DENIED` y el 429 del
+ *     techo emite `RP_VOLUME_LIMITED` UNA vez por ventana por usuario — dos 429
+ *     del mismo usuario, un solo evento; el 429 de otro usuario, el suyo.
  */
-import { describe, it, expect, beforeAll, afterAll, vi } from "vitest"
+import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from "vitest"
 import { prisma } from "@/lib/prisma"
+import { logger } from "@/lib/logger"
 import { cookieDeUsuario, invocarApi } from "../helpers/api-sesion"
 
 const state = vi.hoisted(() => ({ cookie: "" }))
@@ -95,6 +99,8 @@ const EMAIL = {
   mantencion: "t14a-mantencion@test.cl",
   limite: "t14a-limite@test.cl", // cuota propia del caso de volumen
   adminB: "t14a-admin-b@test.cl",
+  auditA: "t14a-audit-a@test.cl", // cuota DEDICADA del caso de eventos R4-001 (el usuario que cruza)
+  auditB: "t14a-audit-b@test.cl", // cuota DEDICADA del caso de eventos R4-001 (el otro usuario)
 }
 
 const moduloAlcance = () => import("@/app/api/co/alcance-masivo/route")
@@ -299,6 +305,8 @@ describe("T14 — GET /api/co/alcance-masivo", () => {
       { email: EMAIL.mantencion, comunidadId: COM_A, rol: "mantencion", personaId: null },
       { email: EMAIL.limite, comunidadId: COM_A, rol: "administrador", personaId: null },
       { email: EMAIL.adminB, comunidadId: COM_B, rol: "administrador", personaId: null },
+      { email: EMAIL.auditA, comunidadId: COM_A, rol: "administrador", personaId: null },
+      { email: EMAIL.auditB, comunidadId: COM_B, rol: "administrador", personaId: null },
     ]) {
       const usuario = await prisma.usuario.upsert({
         where: { email: u.email },
@@ -509,4 +517,74 @@ describe("T14 — GET /api/co/alcance-masivo", () => {
       expect((await alcance("?roles=personal")).status).toBe(200)
     })
   }, 60_000)
+
+  // T15 (R4-001) — los eventos de auditoría del techo de volumen y del portón.
+  // El techo va DELANTE del portón, así que la inundación legítima —el llamador
+  // tiene `co:difusiones` crear— responde 429 sin tocar `RP_PERMISSION_DENIED`:
+  // el evento del techo es SU PROPIO evento (`RP_VOLUME_LIMITED`) y es por
+  // EVENTO del limitador (uno por ventana por usuario), no por respuesta. Cada
+  // caso usa un usuario con cuota DEDICADA: la cuota del techo y la ventana del
+  // evento viven en Maps en memoria por usuario, y compartirlas con la prueba
+  // del techo de arriba las robaría o envenenaría la ventana del evento.
+  describe("T15 (R4-001) — eventos de auditoría: 403 del portón y techo de volumen", () => {
+    afterEach(() => {
+      // Cada caso restaura el espía: los casos quedan independientes.
+      vi.restoreAllMocks()
+    })
+
+    function llamadasDelEspia(espia: ReturnType<typeof vi.spyOn>): [Record<string, unknown>, string?][] {
+      return espia.mock.calls as unknown as [Record<string, unknown>, string?][]
+    }
+
+    it("una denegación de permiso emite RP_PERMISSION_DENIED (una vez, con el usuarioId)", async () => {
+      const espia = vi.spyOn(logger, "warn")
+      const res = await conSesion(EMAIL.residente, () => alcance("?roles=propietario"))
+      expect(res.status).toBe(403)
+      const eventos = llamadasDelEspia(espia).filter(
+        ([cuerpo]) => cuerpo?.event === "RP_PERMISSION_DENIED"
+      )
+      expect(eventos).toHaveLength(1)
+      const usuario = await prisma.usuario.findUnique({ where: { email: EMAIL.residente } })
+      expect((eventos[0]?.[0] as { usuarioId?: string } | undefined)?.usuarioId).toBe(usuario?.id)
+    })
+
+    it("dos 429 del MISMO usuario emiten exactamente UN RP_VOLUME_LIMITED", async () => {
+      const espia = vi.spyOn(logger, "warn")
+      // La cuota de auditA es VIRGEN (ningún otro caso la consulta): 60 × 200 y
+      // el cruce de verdad en la 61. El 429 no se supone, se OBSERVA — la lección
+      // del proyecto: una cuota mal dimensionada no muerde nunca.
+      await conSesion(EMAIL.auditA, async () => {
+        for (let n = 0; n < 60; n++) {
+          expect((await alcance("?roles=personal")).status).toBe(200)
+        }
+        const primera = await alcance("?roles=personal")
+        expect(primera.status).toBe(429)
+        const segunda = await alcance("?roles=personal")
+        expect(segunda.status).toBe(429)
+      })
+      const eventos = llamadasDelEspia(espia).filter(
+        ([cuerpo]) => cuerpo?.event === "RP_VOLUME_LIMITED"
+      )
+      expect(eventos).toHaveLength(1)
+      const usuario = await prisma.usuario.findUnique({ where: { email: EMAIL.auditA } })
+      expect((eventos[0]?.[0] as { usuarioId?: string } | undefined)?.usuarioId).toBe(usuario?.id)
+    }, 60_000)
+
+    it("el 429 de OTRO usuario emite su propio RP_VOLUME_LIMITED", async () => {
+      const espia = vi.spyOn(logger, "warn")
+      await conSesion(EMAIL.auditB, async () => {
+        for (let n = 0; n < 60; n++) {
+          expect((await alcance("?roles=personal")).status).toBe(200)
+        }
+        const cortada = await alcance("?roles=personal")
+        expect(cortada.status).toBe(429)
+      })
+      const eventos = llamadasDelEspia(espia).filter(
+        ([cuerpo]) => cuerpo?.event === "RP_VOLUME_LIMITED"
+      )
+      expect(eventos).toHaveLength(1)
+      const usuario = await prisma.usuario.findUnique({ where: { email: EMAIL.auditB } })
+      expect((eventos[0]?.[0] as { usuarioId?: string } | undefined)?.usuarioId).toBe(usuario?.id)
+    }, 60_000)
+  })
 })

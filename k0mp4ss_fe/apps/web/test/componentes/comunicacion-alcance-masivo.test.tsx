@@ -159,6 +159,10 @@ afterEach(() => {
 /**
  * Stub de `fetch` para el endpoint del alcance. `respuesta` puede ser un cuerpo
  * 200 o un par `{ status, cuerpo }` para los casos de error.
+ *
+ * R3-001 (T15): una URL que el caso no declaró LANZA — el stub que respondía
+ * vacío se tragaba una pantalla mal ruteada: la consulta a otro endpoint lucía
+ * verde con un alcance vacío en silencio.
  */
 function stubAlcance(
   respuesta: { data: unknown[]; total: number } | { status: number; cuerpo: unknown }
@@ -170,12 +174,7 @@ function stubAlcance(
       const url = typeof recurso === "string" ? recurso : String(recurso)
       llamadas.push(url)
       if (!url.startsWith("/api/co/alcance-masivo")) {
-        return Promise.resolve(
-          new Response(JSON.stringify({ data: [], total: 0 }), {
-            status: 200,
-            headers: { "content-type": "application/json" },
-          })
-        )
+        throw new Error(`[stub] URL inesperada para este caso: ${url}`)
       }
       if ("status" in respuesta) {
         return Promise.resolve(
@@ -209,13 +208,10 @@ function stubAlcancePorPagina(
     "fetch",
     vi.fn((recurso: string | URL | Request) => {
       const url = typeof recurso === "string" ? recurso : String(recurso)
+      // R3-001 (T15): igual que `stubAlcance` — URL no declarada es error nombrado,
+      // no un alcance vacío en silencio.
       if (!url.startsWith("/api/co/alcance-masivo")) {
-        return Promise.resolve(
-          new Response(JSON.stringify({ data: [], total: 0 }), {
-            status: 200,
-            headers: { "content-type": "application/json" },
-          })
-        )
+        throw new Error(`[stub] URL inesperada para este caso: ${url}`)
       }
       const page = new URLSearchParams(url.slice(url.indexOf("?") + 1)).get("page") ?? "1"
       paginasPedidas.push(page)

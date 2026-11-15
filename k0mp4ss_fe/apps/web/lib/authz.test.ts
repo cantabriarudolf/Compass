@@ -778,6 +778,24 @@ describe("lib/authz — recurso co:difusiones: tabla de verdad del alcance masiv
       ).toBe(veredictoHoy[rol])
     }
   })
+
+  // R3-002 (T15) — pin ESTRUCTURAL de la entrada explícita. El veredicto de
+  // arriba se mantiene verde aunque la entrada explícita `co:difusiones` del
+  // comité se borre de la MATRIZ: el fallback de prefijo sobre `co` crear la
+  // concedería igual. Este caso exige la ENTRADA DECLARADA en la snapshot
+  // `matrizPermisos()` —derivada en runtime de la MATRIZ, documentada como
+  // nunca desincronizada con el motor—: recurso EXACTO `co:difusiones` con
+  // `crear` entre sus acciones. No re-deriva el veredicto del permiso: constata
+  // que la declaración existe. Si la entrada desaparece, este caso muere por
+  // nombre aunque ningún otro test lo note.
+  it("la entrada explícita co:difusiones del comité está DECLARADA en la matriz (R3-002)", () => {
+    const entrada = matrizPermisos().comite.find((e) => e.recurso === "co:difusiones")
+    expect(
+      entrada,
+      "el comité debe declarar co:difusiones explícitamente en su matriz"
+    ).toBeDefined()
+    expect(entrada!.acciones).toContain("crear")
+  })
 })
 
 describe("lib/authz — recurso pe:cierre_turno (F25)", () => {

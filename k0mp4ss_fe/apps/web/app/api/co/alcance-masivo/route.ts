@@ -44,7 +44,10 @@
  *     el vacío con `total: 0` antes de Prisma como guardia por si la matriz
  *     cambia;
  *   · `excedeVolumen("co-alcance", usuarioId)`: la pantalla vuelve a consultar
- *     en cada cambio de filtro, y el techo de volumen es por usuario, no por IP;
+ *     en cada cambio de filtro, y el techo de volumen es por usuario, no por IP.
+ *     El 429 deja constancia en SU PROPIO evento de auditoría
+ *     (`RP_VOLUME_LIMITED`, una vez por ventana por usuario — R4-001): un 429 no
+ *     es una denegación de permiso y no toca `RP_PERMISSION_DENIED`;
  *   · la respuesta es `{ data, total, page, pageSize }` con filas
  *     `{ personaId, unidadId, personaNombre }` — el nombre sale de la ficha en
  *     el servidor, porque la pantalla no puede resolver el de una persona fuera
@@ -57,7 +60,7 @@ import { logger } from "@/lib/logger"
 import { excedeVolumen } from "@/lib/rate-limit-volumen"
 import { jsonError, withComunidadScope } from "@/lib/api/with-comunidad-scope"
 import { alcancePorFilasDeSesion } from "@/lib/api/sesion-persona"
-import { registrarDenegacionCo } from "../_lib/denegacion"
+import { registrarDenegacionCo, registrarLimiteVolumen } from "../_lib/denegacion"
 
 /** Tamaño de página por defecto y tope: los mismos de las colecciones CO a medida. */
 const PAGE_SIZE_DEFECTO = 100
@@ -80,6 +83,11 @@ export async function GET(req: Request): Promise<Response> {
   // sin tope (hallazgo R1-001 de la revisión nativa).
   // La clave es el usuario, no la IP (una conserjería compartida no se bloquea sola).
   if (excedeVolumen("co-alcance", scope.usuarioId)) {
+    // R4-001 (T15): el 429 deja constancia en su PROPIO evento de auditoría,
+    // una vez por ventana por usuario — NO por respuesta: una inundación
+    // produce un 429 por request y un evento por respuesta reconstruiría la
+    // inundación de log que el techo existe para frenar.
+    registrarLimiteVolumen(scope.usuarioId)
     return jsonError(429, "Demasiadas solicitudes.")
   }
 
