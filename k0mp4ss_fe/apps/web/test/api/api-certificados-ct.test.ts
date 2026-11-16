@@ -35,9 +35,14 @@ function certificadoValido(overrides: Record<string, unknown> = {}): Record<stri
 
 describe("/api/certificados-ct — CT con BD real (BD-FUENTE-VERDAD)", () => {
   const comunidadA = "ct-comunidad-a"
+  /** Comunidad VECINA (A4): existe en la base, no es la de la sesión. */
+  const comunidadB = "ct-comunidad-b"
   const emailAdmin = "ct-admin@test.cl"
   const unidadConDeuda = "ct-u-con-deuda"
   const unidadAlDia = "ct-u-al-dia"
+  /** Unidad y persona de la comunidad B: la fila que la sesión de A no puede emitir. */
+  const unidadComunidadB = "ct-u-b-9001"
+  const personaComunidadB = "ct-p-b-1"
 
   async function nuevaUnidad(id: string, numero: string): Promise<void> {
     await prisma.unidad.upsert({
@@ -85,6 +90,45 @@ describe("/api/certificados-ct — CT con BD real (BD-FUENTE-VERDAD)", () => {
     await prisma.unidad.deleteMany({ where: { comunidadId: comunidadA } })
     await nuevaUnidad(unidadConDeuda, "9001")
     await nuevaUnidad(unidadAlDia, "9002")
+    // A4 — la comunidad vecina y una fila de cada padrón. La sesión de `comunidadA`
+    // no las puede nombrar: `withComunidadScope` las trata como inexistentes.
+    await prisma.comunidad.upsert({
+      where: { id: comunidadB },
+      update: {},
+      create: { id: comunidadB, nombre: "Comunidad B CT", slug: "ct-comunidad-b" },
+    })
+    await prisma.unidad.deleteMany({ where: { comunidadId: comunidadB } })
+    await prisma.unidad.create({
+      data: {
+        id: unidadComunidadB,
+        comunidadId: comunidadB,
+        microSectorId: "ct-b-ms-1",
+        numero: "9001",
+        etiqueta: "Depto 9001",
+        tipoUnidadId: "ct-b-tu-1",
+        metraje: 60,
+        prorrateo: 1,
+        rolSii: "ct-b-9001",
+        estadoId: "ct-b-ocu-1",
+        servicios: {},
+      },
+    })
+    await prisma.persona.deleteMany({ where: { comunidadId: comunidadB } })
+    await prisma.persona.create({
+      data: {
+        id: personaComunidadB,
+        comunidadId: comunidadB,
+        nombreCompleto: "Persona Vecina CT",
+        nombres: "Persona Vecina",
+        apellidos: "CT",
+        rut: "11.111.111-1",
+        email: "vecina-ct@test.cl",
+        telefonoMovil: "+56911111111",
+        estadoCuenta: "activa",
+        condicionesEspecialesIds: [],
+        roles: [],
+      },
+    })
     await prisma.cobroFI.create({
       data: {
         id: "ct-cobro-deuda-1",
@@ -114,6 +158,10 @@ describe("/api/certificados-ct — CT con BD real (BD-FUENTE-VERDAD)", () => {
       await prisma.membresia.deleteMany({ where: { usuarioId: "ct-usuario-admin" } })
       await prisma.usuario.delete({ where: { id: "ct-usuario-admin" } }).catch(() => {})
       await prisma.comunidad.delete({ where: { id: comunidadA } }).catch(() => {})
+      // A4 — la comunidad vecina y sus filas no quedan en la base de la suite.
+      await prisma.unidad.deleteMany({ where: { comunidadId: comunidadB } })
+      await prisma.persona.deleteMany({ where: { comunidadId: comunidadB } })
+      await prisma.comunidad.delete({ where: { id: comunidadB } }).catch(() => {})
     } catch { /* best-effort */ }
   })
 
@@ -260,6 +308,70 @@ describe("/api/certificados-ct — CT con BD real (BD-FUENTE-VERDAD)", () => {
       const enBd = await prisma.certificadoCT.findUnique({ where: { id: "ct-cert-1" } })
       expect(enBd).not.toBeNull()
       expect(enBd?.folio).toBe("CERT-001")
+    })
+  })
+
+  // A4 (advisory de la revisión de T20) — fuga de ALCANCE: la gestión emite para
+  // toda la COMUNIDAD DE LA SESIÓN, no para cualquier comunidad. Antes de este
+  // pin, `rechazoDeEmisionAjena` devolvía `null` para administración/comité sin
+  // mirar la fila: un `unidadId` de la comunidad B llegaba hasta `cifrasDeUnidad`,
+  // que acota por `comunidadId` de la sesión, no encontraba cobros y dejaba pasar
+  // el portón de Al Día con 0/0/0 — un certificado 201 que afirmaba «al día»
+  // sobre una unidad que esa comunidad no conoce y con cifras inventadas.
+  it("A4 — unidad de OTRA comunidad: 404 y no queda certificado emitido", async () => {
+    await conSesion(emailAdmin, async () => {
+      const res = await POST(
+        certificadoValido({
+          id: "ct-cert-unidad-ajena",
+          folio: "CERT-AJENA",
+          codigoVerificacion: "AJENA1",
+          tipo: "al_dia",
+          unidadId: unidadComunidadB,
+        })
+      )
+      expect(res.status).toBe(404)
+      const json = await res.json()
+      expect(String(json.error)).toBe("Registro no encontrado.")
+      expect(
+        await prisma.certificadoCT.findUnique({ where: { id: "ct-cert-unidad-ajena" } }),
+        "una emisión vacía sobre una unidad que la comunidad no ve no deja documento"
+      ).toBeNull()
+    })
+  })
+
+  it("A4 — persona de OTRA comunidad: 404 y no queda certificado emitido", async () => {
+    await conSesion(emailAdmin, async () => {
+      const res = await POST(
+        certificadoValido({
+          id: "ct-cert-persona-ajena",
+          folio: "CERT-AJENA-P",
+          codigoVerificacion: "AJENAP",
+          tipo: "residencia",
+          personaId: personaComunidadB,
+        })
+      )
+      expect(res.status).toBe(404)
+      expect(
+        await prisma.certificadoCT.findUnique({ where: { id: "ct-cert-persona-ajena" } })
+      ).toBeNull()
+    })
+  })
+
+  it("PRESERVE — la unidad y la persona de la comunidad de la sesión siguen emitiendo", async () => {
+    await conSesion(emailAdmin, async () => {
+      expect(
+        (
+          await POST(
+            certificadoValido({
+              id: "ct-cert-propia",
+              folio: "CERT-PROPIA",
+              codigoVerificacion: "PROPIA",
+              tipo: "al_dia",
+              unidadId: unidadAlDia,
+            })
+          )
+        ).status
+      ).toBe(201)
     })
   })
 })

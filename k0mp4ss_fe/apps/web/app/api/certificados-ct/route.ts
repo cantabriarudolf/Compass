@@ -333,7 +333,8 @@ async function resolverEstadoCuenta(
 
 /**
  * Guardia de emisión: fuera de la gestión, la unidad y la persona pedidas tienen
- * que ser del actor (unidad con vínculo vigente, persona propia).
+ * que ser del actor (unidad con vínculo vigente, persona propia); dentro de la
+ * gestión, tienen que existir en la COMUNIDAD DE LA SESIÓN.
  *
  * Existe porque `ct` crear está abierto al residente y el POST aceptaba cualquier
  * `unidadId` de la comunidad: con `tipo: "al_dia"` el gate de saldo respondía 409
@@ -341,6 +342,11 @@ async function resolverEstadoCuenta(
  * `resolverEstadoCuenta`, y por eso el rechazo es 404 y no 403: 403 diría que la unidad
  * existe. Sin `unidadId`/`personaId` no hay dueño que verificar y no hay tercero
  * al que aludir, así que la emisión sigue su curso.
+ *
+ * La rama de gestión también verifica (A4): «toda la comunidad» son las filas de
+ * la comunidad de la sesión. Un id de otra comunidad no se ignora —eso dejaba
+ * pasar un certificado con cifras 0/0/0 sobre una unidad inexistente para el
+ * tenant—, se rechaza con el mismo 404.
  */
 async function rechazoDeEmisionAjena(
   datos: Record<string, unknown> | null
@@ -353,7 +359,34 @@ async function rechazoDeEmisionAjena(
   const resultado = await withComunidadScope()
   if (!resultado.ok) return resultado.response
   const scope = resultado.scope
-  if (veTodaLaComunidad(scope)) return null // gestión: emite para toda la comunidad
+  if (veTodaLaComunidad(scope)) {
+    // Gestión: emite para toda la comunidad **de la sesión**, no para cualquier
+    // comunidad (A4, advisory de la revisión de T20). La fila de otra comunidad
+    // no es un dato ajeno que se ignora: es una fila que no existe, el mismo
+    // criterio de `withComunidadScope`. Sin esta guarda, `cifrasDeUnidad`
+    // —acotada por `comunidadId` de la sesión— no encontraba cobros, el portón de
+    // Al Día veía 0 y la emisión salía 201 con las cifras en 0/0/0: un
+    // documento que afirma «al día» sobre una unidad que esta comunidad no
+    // conoce. Y el 404 no adelanta nada: quien pide una fila ajena ya sabe que
+    // existe en alguna parte.
+    const [unidadDeLaComunidad, personaDeLaComunidad] = await Promise.all([
+      unidadPedida
+        ? prisma.unidad.findFirst({
+            where: { id: unidadPedida, comunidadId: scope.comunidadId },
+            select: { id: true },
+          })
+        : null,
+      personaPedida
+        ? prisma.persona.findFirst({
+            where: { id: personaPedida, comunidadId: scope.comunidadId },
+            select: { id: true },
+          })
+        : null,
+    ])
+    if (unidadPedida && !unidadDeLaComunidad) return jsonError(404, "Registro no encontrado.")
+    if (personaPedida && !personaDeLaComunidad) return jsonError(404, "Registro no encontrado.")
+    return null
+  }
 
   const { personaId, unidades } = await vinculosDelActor(scope)
   const unidadPropia = unidadPedida === "" || unidades.includes(unidadPedida)
