@@ -141,8 +141,14 @@ isLoading: cReservas,
 create: crearReservaApi,
 update: actualizarReservaApi,
   } = useReservasRA()
-  const { personas, isLoading: cPersonas } = usePersonas()
-  const { items: unidades, isLoading: cUnidades } = useUnidades()
+  // Los dos padrones son universo acotado (el padrón de una comunidad): los
+  // hooks completan las páginas ellos solos (`todasLasPaginas`), para que la
+  // identidad de la fila del calendario (`nombrePersona`, rótulo de la unidad)
+  // y las opciones de los `Select` cubran el padrón entero.
+  const { personas, isLoading: cPersonas } = usePersonas(undefined, {
+    todasLasPaginas: true,
+  })
+  const { items: unidades, isLoading: cUnidades } = useUnidades({ todasLasPaginas: true })
   const { items: microSectores, isLoading: cMicro } = useMicroSectores()
   const { items: activosIR, isLoading: cActivosIR } = useRecursosIR()
   const cargandoAPI = cElementos || cReservas || cPersonas || cUnidades || cMicro || cActivosIR
