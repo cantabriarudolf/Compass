@@ -18,7 +18,7 @@ Cada vista abierta del mando queda auditada (`RE_DASHBOARD_VIEW`). **Emitir cong
     - *Censo*: ratio de ocupación habitable, unidades con propietario/arrendatario vigente y unidades con residentes con condiciones especiales.
     - *Pulso diario*: eficiencia de turnos ("X de Y cerrados hoy" desde cierres PE), visitas pre-agendadas confirmadas y **tasa huérfanos ST** (0 esperado post-carga).
     - *Centro de Gestiones*: embudo GE cuantitativo — total, tasa de resolución, nuevas/pendientes, en revisión, notificadas (en proceso), solucionadas y dadas en conocimiento.
-    - *Salud de Caja*: recaudación vs emitido por fondo (GC/reserva/amenities), diferencia de caja (ingresos netos − egresos) y **termómetro de gastos fijos** verde/rojo según si la caja cubre los recurrentes.
+    - *Salud de Caja*: recaudación vs emitido por fondo (GC/reserva/amenities), diferencia de caja (ingresos netos − egresos) y **termómetro de gastos fijos** verde/rojo según si la caja cubre los recurrentes. Estas cifras se calculan sobre el **libro completo** de cobros y egresos, no sobre la primera página: la tarjeta camina las páginas del libro como el resto del panel y, mientras la caminata no terminó, muestra «Cargando el libro completo de cobros y egresos…» en vez de una suma parcial con cara de total (`ae2f73f`). El snapshot del informe emitido lo sigue congelando el servidor.
   - **Reportes y Segmentación**:
     - Bloques extraíbles: Resumen de Gastos del Mes, Novedades de Bitácora, Estado de Morosidad General y Consumo de Insumos (IR).
     - Segmentación granular: edificio/piso/unidad (**EF**) + perfil administración/personal/propietario/residente (**MP/RP**) + tenencia propietarios/arrendatarios (**VU**). Vista previa del alcance antes de distribuir.
