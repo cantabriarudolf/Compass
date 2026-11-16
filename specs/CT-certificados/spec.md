@@ -76,7 +76,7 @@ La pantalla de emisión SHALL ofrecer la persona solicitante del certificado de 
 - **THEN** sólo encuentra su propia persona; sin ficha en el Maestro de Personas la respuesta es vacía (falla cerrado) y las filas de otra comunidad nunca aparecen
 
 ### Requirement: Historial de Emisión con código de verificación
-Cada certificado emitido SHALL registrarse en `certificadosCT` con folio CT-#### correlativo, código de verificación único, fecha, solicitante, tipología y snapshot inmutable del payload usado. El historial es auditablemente inmutable: solo registros TEST son eliminables. Cuando exista un período de directiva vigente al momento de emitir, el registro SHALL incluir además `directivaRef` como snapshot no bloqueante: el `periodoId` del período vigente y sus `firmantes` (`personaId`, `nombre` y `cargo` de los miembros vigentes de ese período). La ausencia de período vigente NO SHALL bloquear la emisión: en ese caso `directivaRef` queda ausente.
+Cada certificado emitido SHALL registrarse en `certificadosCT` con folio CT-#### correlativo, código de verificación único, fecha, solicitante, tipología y snapshot inmutable del payload usado. El historial es auditablemente inmutable: solo registros TEST son eliminables, y el `PUT` de un certificado no TEST SHALL rechazar con 409 el cambio de `tipo`, `unidadId`, `personaId` o `detalle`, evaluando sesión (401), permiso (403) y alcance por objeto (404) ANTES del rechazo para no revelar registros ajenos. Un campo inmutable reenviado con su mismo valor NO SHALL considerarse un cambio. Cuando exista un período de directiva vigente al momento de emitir, el registro SHALL incluir además `directivaRef` como snapshot no bloqueante: el `periodoId` del período vigente y sus `firmantes` (`personaId`, `nombre` y `cargo` de los miembros vigentes de ese período). La ausencia de período vigente NO SHALL bloquear la emisión: en ese caso `directivaRef` queda ausente.
 
 #### Scenario: Código único verificable
 - **WHEN** se generan varios certificados
@@ -85,6 +85,10 @@ Cada certificado emitido SHALL registrarse en `certificadosCT` con folio CT-####
 #### Scenario: Historial inmutable
 - **WHEN** se intenta eliminar un certificado emitido no TEST
 - **THEN** la acción retorna `{ok:false}` preservando la trazabilidad documental
+
+#### Scenario: Actualización rechazada sobre un documento emitido
+- **WHEN** se envía un `PUT` que cambia `tipo`, `unidadId`, `personaId` o `detalle` de un certificado emitido
+- **THEN** la respuesta es 409 «Documento inmutable: no se puede cambiar el tipo, la unidad, la persona ni el detalle de un certificado.» y la fila guardada no cambia, con la misma compuerta que el `DELETE`: 401 de sesión, 403 de permiso y 404 de fila ajena se resuelven antes del 409
 
 #### Scenario: Snapshot de la directiva vigente
 - **WHEN** se emite un certificado existiendo un período de directiva vigente
