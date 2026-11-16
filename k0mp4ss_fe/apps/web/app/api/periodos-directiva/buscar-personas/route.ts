@@ -63,6 +63,11 @@
  *     pozo entre buscadores dejaba sin cuota a endpoints ajenos — cuarenta
  *     búsquedas de certificados cortaban al buzón en la solicitud 21. El límite
  *     corre ANTES de validar `q`, así que una ráfaga inválida también se paga;
+ *   · el 429 emite SU evento `RP_VOLUME_LIMITED` con el emisor de esta ruta
+ *     (`lib/aviso-volumen`, el helper neutro): un 429 no es una denegación de
+ *     privilegio y no debe tapar una, ni quedar sin rastro. Es el mismo
+ *     contrato que ya tienen los buscadores de `certificados-ct` y de
+ *     `comunicacion` (T24), con dedup por emisor y usuario;
  *   · el tope del `page` no es cosmético: con un número fuera del rango de Int,
  *     Prisma rechaza el `skip` y la ruta responde 500 en vez de una página vacía
  *     (hallazgo L9 de la serie). Se topa en 10 000 antes de calcular el `skip`.
@@ -75,6 +80,7 @@ import { puede } from "@/lib/authz"
 import { prisma } from "@/lib/prisma"
 import { logger } from "@/lib/logger"
 import { excedeVolumen } from "@/lib/rate-limit-volumen"
+import { registrarLimiteVolumen } from "@/lib/aviso-volumen"
 import { jsonError, withComunidadScope } from "@/lib/api/with-comunidad-scope"
 import { alcancePorFilasDeSesion } from "@/lib/api/sesion-persona"
 import { proveedorDeUrl, type ProveedorBase } from "@/lib/database-url"
@@ -152,8 +158,13 @@ export async function GET(req: Request): Promise<Response> {
   // que `ver`: quien escribe la nómina la exige la colección (crear/editar).
   // El techo de volumen va ANTES del portón: si quedaba después, un rechazo no se contaba
   // nunca (hallazgo R1-001). El ámbito es propio de esta ruta — no comparte pozo con otros
-  // buscadores, y la clave es el usuario, no la IP.
+  // buscadores, y la clave es el usuario, no la IP. El 429 deja rastro propio (T24, mismo
+  // criterio que R4-001 y que los otros dos buscadores): SU evento `RP_VOLUME_LIMITED`,
+  // deduplicado por ventana de 60 s por emisor y usuario — un 429 no es una denegación de
+  // privilegio. El helper es el NEUTRO de `lib/aviso-volumen` con el emisor de esta ruta:
+  // no se importa el de CO, porque los módulos de un dominio no son la biblioteca de otro.
   if (excedeVolumen("periodos-directiva", scope.usuarioId)) {
+    registrarLimiteVolumen("periodos-directiva", scope.usuarioId)
     return jsonError(429, "Demasiadas solicitudes.")
   }
 

@@ -37,6 +37,7 @@
  */
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest"
 import { prisma } from "@/lib/prisma"
+import { logger } from "@/lib/logger"
 import { cookieDeUsuario, invocarApi } from "../helpers/api-sesion"
 
 const state = vi.hoisted(() => ({ cookie: "" }))
@@ -455,6 +456,12 @@ describe("T11 — GET /api/periodos-directiva/buscar-personas", () => {
     // El límite corre ANTES de validar `q`, así que las 60 se gastan con 400
     // baratos: la prueba no golpea la base y de paso fija el orden de las
     // guardas (si el limiter pasara después, este bucle haría 60 búsquedas).
+    //
+    // T21/R4-001: el 429 deja rastro propio — SU evento `RP_VOLUME_LIMITED` con
+    // el emisor de esta ruta — y no una denegación de privilegio. Como en los
+    // otros dos buscadores, el evento es por EVENTO del limitador: dos 429 del
+    // mismo usuario dentro de la ventana emiten UN aviso, no uno por respuesta.
+    const espia = vi.spyOn(logger, "warn").mockImplementation(() => {})
     await conSesion(EMAIL.limite, async () => {
       for (let n = 0; n < 60; n++) {
         expect((await buscar("A")).status).toBe(400)
@@ -464,7 +471,19 @@ describe("T11 — GET /api/periodos-directiva/buscar-personas", () => {
       const vista = await cuerpo(cortada)
       expect(vista.error).toBe("Demasiadas solicitudes.")
       expect(vista.data).toBeUndefined()
+      // Segundo 429 del mismo usuario, adentro de la ventana: no re-emite.
+      expect((await buscar("Ana Buscada")).status).toBe(429)
     })
+    const eventos = (espia.mock.calls as unknown as [Record<string, unknown>][]).filter(
+      ([cuerpo]) => cuerpo?.event === "RP_VOLUME_LIMITED"
+    )
+    expect(eventos, "el 429 emite RP_VOLUME_LIMITED").toHaveLength(1)
+    const usuario = await prisma.usuario.findUnique({ where: { email: EMAIL.limite } })
+    expect((eventos[0]?.[0] as { usuarioId?: string } | undefined)?.usuarioId).toBe(usuario?.id)
+    // El emisor dice de dónde viene el techo: el evento es de ESTA ruta, no del
+    // pozo compartido de los otros buscadores.
+    expect((eventos[0]?.[0] as { emisor?: string } | undefined)?.emisor).toBe("periodos-directiva")
+    vi.restoreAllMocks()
 
     // El pin inverso: la clave es `ambito:usuarioId` — y el ámbito es PROPIO de
     // esta ruta (`"periodos-directiva"`, no el pozo de otros buscadores). El
