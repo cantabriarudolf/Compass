@@ -62,7 +62,14 @@ export default function RemuneracionesPage() {
   // Liquidaciones y adelantos vía API REST (BD fuente de verdad).
   const { liquidaciones, isLoading: cLiquidaciones, generar: generarApi, confirmar: confirmarApi, remove: removeApi } = useLiquidaciones()
   const { adelantos, isLoading: cAdelantos, crear: crearAdelantoApi, desestimar: desestimarAdelantoApi } = useAdelantosPL()
-  const { personas: personasApi, isLoading: cPersonas } = usePersonas()
+  // `trabajadores` deriva una regla de negocio sobre el padrón (ficha + estado
+  // de cuenta) y `nombrePersona`/`rutPersona` resuelven identidad contra él:
+  // universo acotado (el padrón de una comunidad), así que la colección se
+  // completa (`todasLasPaginas`) para que el trabajador de la página 2 se
+  // pueda liquidar y el folio imprima su nombre.
+  const { personas: personasApi, isLoading: cPersonas } = usePersonas(undefined, {
+    todasLasPaginas: true,
+  })
   // SAFETY: la API /api/personas serializa el schema completo (MP con ficha integral);
   // el hook tipa la variante resumida de los mocks. El cast adapta tipos sin cambiar valores.
   const personas = personasApi as unknown as PersonaFull[]

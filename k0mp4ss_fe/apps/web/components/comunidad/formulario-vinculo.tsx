@@ -62,7 +62,10 @@ export function FormularioVinculoUnidad({
   onCancel,
 }: FormularioVinculoUnidadProps) {
   const isEditing = !!vinculo
-  const { items: unidades } = useUnidades()
+  // El Select de unidad sale del padrón: universo acotado (el padrón de una
+  // comunidad), así que la colección se completa (`todasLasPaginas`) para que
+  // la unidad de la página 2 aparezca y se pueda vincular.
+  const { items: unidades } = useUnidades({ todasLasPaginas: true })
   const { items: microSectores } = useMicroSectores()
   const { items: macroSectores } = useMacroSectores()
   const { data: estadosInmobiliarios } = useMaestros<EstadoInmobiliario>("estados-inmobiliarios")

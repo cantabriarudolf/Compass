@@ -186,7 +186,16 @@ function mesSugerido(): string {
 
 export default function PersonalPage() {
   // Datos de dominio vía API REST; fallbacks legacy del store solo donde no hay hook.
-  const { personas: personasApi, isLoading: cPersonas, create: crearPersonaApi } = usePersonas()
+  // `personal` deriva una regla de negocio sobre el padrón (roles y ficha, el
+  // conteo de activos, el cruce con trabajos MT y el selector de turno):
+  // universo acotado (el padrón de una comunidad), así que la colección se
+  // completa (`todasLasPaginas`) para que el trabajador de la página 2 exista
+  // para la pantalla.
+  const {
+    personas: personasApi,
+    isLoading: cPersonas,
+    create: crearPersonaApi,
+  } = usePersonas(undefined, { todasLasPaginas: true })
   // SAFETY: la API /api/personas serializa el schema completo (MP con ficha integral);
   // el hook tipa la variante resumida de los mocks. El cast adapta tipos sin cambiar valores.
   const personas = personasApi as unknown as PersonaFull[]
