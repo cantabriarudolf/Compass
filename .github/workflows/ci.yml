@@ -35,6 +35,10 @@ jobs:
       # aborta siempre si el destino resuelve a `dev.db`.
       DATABASE_URL: file:./perf-test.db
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # No dejamos el token del repo en el .git/config: ningún job pushea.
+          persist-credentials: false
       # Los runners vienen con el disco casi lleno: el job de PostgreSQL moria
       # con SQLITE_IOERR: disco lleno al escribir la base de los tests.
       - name: Liberar disco
@@ -43,10 +47,6 @@ jobs:
                       /opt/hostedtoolcache/CodeQL /usr/local/.ghcup \
                       /usr/share/swift /usr/local/share/boost 2>/dev/null || true
           df -h /
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          # No dejamos el token del repo en el .git/config: ningún job pushea.
-          persist-credentials: false
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           # Node 24: mismo runtime de desarrollo. En Node 22 la intercepción
@@ -107,6 +107,10 @@ jobs:
       # PostgreSQL efímero del service container (sin secretos reales).
       DATABASE_URL: postgresql://compass:compass_ci@localhost:5432/compass_test
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # No dejamos el token del repo en el .git/config: ningún job pushea.
+          persist-credentials: false
       # Los runners vienen con el disco casi lleno: el job de PostgreSQL moria
       # con SQLITE_IOERR: disco lleno al escribir la base de los tests.
       - name: Liberar disco
@@ -115,10 +119,6 @@ jobs:
                       /opt/hostedtoolcache/CodeQL /usr/local/.ghcup \
                       /usr/share/swift /usr/local/share/boost 2>/dev/null || true
           df -h /
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          # No dejamos el token del repo en el .git/config: ningún job pushea.
-          persist-credentials: false
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           # Node 24: mismo runtime de desarrollo. En Node 22 la intercepción
@@ -169,6 +169,10 @@ jobs:
       GOOGLE_CLIENT_ID: ci-dummy-client-id
       GOOGLE_CLIENT_SECRET: ci-dummy-client-secret
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # No dejamos el token del repo en el .git/config: ningún job pushea.
+          persist-credentials: false
       # Los runners vienen con el disco casi lleno: el job de PostgreSQL moria
       # con SQLITE_IOERR: disco lleno al escribir la base de los tests.
       - name: Liberar disco
@@ -177,10 +181,6 @@ jobs:
                       /opt/hostedtoolcache/CodeQL /usr/local/.ghcup \
                       /usr/share/swift /usr/local/share/boost 2>/dev/null || true
           df -h /
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          # No dejamos el token del repo en el .git/config: ningún job pushea.
-          persist-credentials: false
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
@@ -276,6 +276,10 @@ jobs:
       GOOGLE_CLIENT_ID: ci-dummy-client-id
       GOOGLE_CLIENT_SECRET: ci-dummy-client-secret
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # No dejamos el token del repo en el .git/config: ningún job pushea.
+          persist-credentials: false
       # Los runners vienen con el disco casi lleno: el job de PostgreSQL moria
       # con SQLITE_IOERR: disco lleno al escribir la base de los tests.
       - name: Liberar disco
@@ -284,10 +288,6 @@ jobs:
                       /opt/hostedtoolcache/CodeQL /usr/local/.ghcup \
                       /usr/share/swift /usr/local/share/boost 2>/dev/null || true
           df -h /
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          # No dejamos el token del repo en el .git/config: ningún job pushea.
-          persist-credentials: false
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
@@ -355,6 +355,7 @@ jobs:
     if: github.event_name == 'push'
     timeout-minutes: 10
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       # Los runners vienen con el disco casi lleno: el job de PostgreSQL moria
       # con SQLITE_IOERR: disco lleno al escribir la base de los tests.
       - name: Liberar disco
@@ -363,7 +364,6 @@ jobs:
                       /opt/hostedtoolcache/CodeQL /usr/local/.ghcup \
                       /usr/share/swift /usr/local/share/boost 2>/dev/null || true
           df -h /
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
