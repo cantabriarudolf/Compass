@@ -60,9 +60,14 @@ function PlaceholderFoto({ tipo }: { tipo?: string }) {
 }
 
 export default function PortalInmobiliarioPage() {
-  const { personas, isLoading: cPersonas } = usePersonas()
+  // El padrón alimenta identidad: rótulos de unidad en el catálogo y nombre del
+  // propietario en la ficha. La colección se completa (`todasLasPaginas`) para
+  // que una persona de la página 2 no deje de existir para la pantalla.
+  const { personas, isLoading: cPersonas } = usePersonas(undefined, { todasLasPaginas: true })
   const { vinculos, isLoading: cVinculos } = useVinculos()
-  const { items: unidades, isLoading: cUnidades } = useUnidades()
+  // Mismo contrato para las unidades: `refUnidad` resuelve el rótulo de la
+  // publicación y la derivación de `disponible` recorre el padrón entero.
+  const { items: unidades, isLoading: cUnidades } = useUnidades({ todasLasPaginas: true })
   // PI vía API REST (SERIE-GATED-API-BD P2): publicaciones y leads persisten en BD.
   const { items: publicaciones, isLoading: cPublicaciones, create: crearPublicacion, update: actualizarPublicacion, remove: eliminarPublicacion } = usePublicacionesPortal()
   const { items: leads, isLoading: cLeads, create: crearLead } = useLeadsPortal()

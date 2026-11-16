@@ -72,7 +72,10 @@ export default function PersonaPerfilPage() {
 
   const { persona, isLoading, error, update: actualizarPersona } = usePersona(id)
   const { vinculos: vinculosTodos, isLoading: cVinculos, create: crearVinculo, update: actualizarVinculo, remove: removeVinculoApi } = useVinculos()
-  const { items: unidades, isLoading: cUnidades } = useUnidades()
+  // El rótulo del vínculo se resuelve contra el padrón de unidades: la
+  // colección se completa (`todasLasPaginas`) para que la unidad de la página 2
+  // imprima su nombre y no el id crudo.
+  const { items: unidades, isLoading: cUnidades } = useUnidades({ todasLasPaginas: true })
   const { data: condicionesEspeciales, isLoading: cMaestros } = useMaestros<CondicionEspecial>("condiciones-especiales")
   const cargando = isLoading || cVinculos || cUnidades || cMaestros
 
