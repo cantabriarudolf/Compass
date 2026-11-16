@@ -12,8 +12,9 @@
 import * as React from "react"
 import { hoyISO } from "@/lib/date-utils"
 import { useCobrosFI } from "@/lib/api/use-cobros-fi"
+import { useColeccionCompleta } from "@/lib/api/use-coleccion-completa"
 import { IconGavel } from "@tabler/icons-react"
-import { Aviso, CargandoPanel, Cifra, Panel, SinMovimiento, useColeccionCompleta } from "./piezas"
+import { Aviso, CargandoPanel, Cifra, Panel, SinMovimiento } from "./piezas"
 import { clp, deudaDeUnidades } from "./agregados"
 
 export function DeudaUnidades() {

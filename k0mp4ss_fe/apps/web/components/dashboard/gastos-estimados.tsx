@@ -13,9 +13,10 @@
  */
 import * as React from "react"
 import { useEgresosFI } from "@/lib/api/use-egresos-fi"
+import { useColeccionCompleta } from "@/lib/api/use-coleccion-completa"
 import { Badge } from "@workspace/ui/components/badge"
 import { IconReceipt2 } from "@tabler/icons-react"
-import { Aviso, CargandoPanel, Panel, SinMovimiento, useColeccionCompleta } from "./piezas"
+import { Aviso, CargandoPanel, Panel, SinMovimiento } from "./piezas"
 import { clp, gastosMensualesPorServicio } from "./agregados"
 
 export function GastosEstimados() {

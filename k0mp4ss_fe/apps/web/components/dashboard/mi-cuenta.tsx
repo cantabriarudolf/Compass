@@ -16,8 +16,9 @@ import * as React from "react"
 import { hoyISO } from "@/lib/date-utils"
 import { useCobrosFI } from "@/lib/api/use-cobros-fi"
 import { useElementosRA, useReservasRA } from "@/lib/api/use-ra"
+import { useColeccionCompleta } from "@/lib/api/use-coleccion-completa"
 import { IconCalendarEvent, IconReceipt } from "@tabler/icons-react"
-import { Aviso, CargandoPanel, Cifra, Panel, SinMovimiento, useColeccionCompleta } from "./piezas"
+import { Aviso, CargandoPanel, Cifra, Panel, SinMovimiento } from "./piezas"
 import { clp, cuentaPropia, fechaCorta, reservasProximas } from "./agregados"
 
 export function MiEstadoDeCuenta() {

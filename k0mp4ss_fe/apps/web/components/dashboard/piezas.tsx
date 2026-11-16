@@ -7,16 +7,21 @@
  * `@workspace/ui` sin sombra, borde tenue, títulos con icono de Tabler y cifras
  * en `font-black`. Los estados de carga y de error son explícitos (D5): nunca
  * un esqueleto infinito ni un cero silencioso cuando el dato no llegó.
+ *
+ * `useColeccionCompleta` vive en `lib/api/use-coleccion-completa.ts` desde que
+ * dejó de ser exclusivo del dashboard: pantallas que derivan cifra o identidad
+ * de una colección entera (finanzas/multas) usan el mismo helper. Acá queda el
+ * reexport para el consumidor que todavía importa desde este módulo
+ * (`/admin/reporteria`); los consumidores del dashboard importan directo de la
+ * ubicación compartida.
  */
 import * as React from "react"
 import Link from "next/link"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import { cn } from "@workspace/ui/lib/utils"
 import { IconAlertTriangle, IconArrowRight, IconInfoCircle } from "@tabler/icons-react"
-import type { CrudCollection } from "@/lib/api/use-crud-collection"
 
-/** Página por defecto de `useCrudCollection` (`pageSize=100`). */
-const FILA_POR_PAGINA = 100
+export { useColeccionCompleta } from "@/lib/api/use-coleccion-completa"
 
 export function Panel({
   titulo,
@@ -134,29 +139,4 @@ export function CargandoPanel({ filas = 3 }: { filas?: number }) {
       ))}
     </div>
   )
-}
-
-/**
- * useColeccionCompleta — pagina la colección hasta el final antes de agregarla.
- *
- * `useCrudCollection` trae `pageSize=100`: con 501 cobros o 182 egresos, sumar
- * `items` sin completar las páginas daría un total falso (D4). El efecto pide la
- * página siguiente mientras `hasMore`; el tope de pedidos evita un bucle si una
- * página falla de forma persistente (`cargarMas` no propaga el error).
- */
-export function useColeccionCompleta<T extends { id: string }>(
-  coleccion: CrudCollection<T>
-): { items: T[]; total: number; completa: boolean; isLoading: boolean; error: Error | null } {
-  const { items, total, hasMore, cargandoMas, cargarMas, isLoading, error } = coleccion
-  const pedidos = React.useRef(0)
-  const maximoPedidos = Math.ceil(total / FILA_POR_PAGINA) + 1
-
-  React.useEffect(() => {
-    if (!hasMore || cargandoMas) return
-    if (pedidos.current >= maximoPedidos) return
-    pedidos.current += 1
-    void cargarMas()
-  }, [hasMore, cargandoMas, maximoPedidos, cargarMas])
-
-  return { items, total, completa: !hasMore, isLoading, error }
 }

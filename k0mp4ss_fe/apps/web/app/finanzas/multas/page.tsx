@@ -6,6 +6,7 @@ import { usePersonas } from "@/lib/api/use-personas"
 import { useUnidades } from "@/lib/api/use-unidades"
 import { useInfraccionesIN, useTiposInfraccionIN } from "@/lib/api/use-in"
 import { useMensajesBuzonCO } from "@/lib/api/use-co"
+import { useColeccionCompleta } from "@/lib/api/use-coleccion-completa"
 import { aTituloCaso, aOracion } from "@/lib/normalizacion"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import { Input } from "@workspace/ui/components/input"
@@ -96,16 +97,32 @@ export default function MultasPage() {
   const {
 items: tipos, isLoading: cTipos, create: crearTipoApi, update: actualizarTipoApi, remove: eliminarTipoApi,
   } = useTiposInfraccionIN()
+  const coleccionInfracciones = useInfraccionesIN()
   const {
-items: infracciones, isLoading: cInfracciones, create: crearInfraccionApi,
+isLoading: cInfracciones, create: crearInfraccionApi,
     aplicar: aplicarInfraccionApi, desestimar: desestimarInfraccionApi, apelar: apelarInfraccionApi,
-  } = useInfraccionesIN()
-  const { personas, isLoading: cPersonas } = usePersonas()
-  const { items: unidades, isLoading: cUnidades } = useUnidades()
+  } = coleccionInfracciones
+  // El libro de infracciones se acumula sin techo: los contadores, el monto
+  // aplicado, las categorías y el folio correlativo `IN-####` se derivan de la
+  // colección COMPLETA. `useCrudCollection` trae `pageSize=100`: sin caminar las
+  // páginas siguientes la cifra miente y dos expedientes pueden recibir el
+  // mismo folio.
+  const { items: infracciones, completa: infraccionesCompletas } = useColeccionCompleta(
+    coleccionInfracciones
+  )
+  // Los dos padrones son universo acotado (el padrón de una comunidad): el hook
+  // completa las páginas él solo (`todasLasPaginas`), para que la identidad del
+  // expediente y las opciones de los `Select` cubran el padrón entero.
+  const { personas, isLoading: cPersonas } = usePersonas(undefined, { todasLasPaginas: true })
+  const { items: unidades, isLoading: cUnidades } = useUnidades({ todasLasPaginas: true })
   // Buzón CO: el hook del módulo (`/api/co/mensajes-buzon`) reemplaza la lectura
   // legacy del store; mismos campos usados acá (id, folio, asunto, cuerpo).
   const { items: mensajesBuzonCO, isLoading: cMensajesBuzon } = useMensajesBuzonCO()
-  const isLoading = cTipos || cInfracciones || cPersonas || cUnidades || cMensajesBuzon
+  // `!infraccionesCompletas` sostiene el esqueleto mientras el libro camina sus
+  // páginas: sin eso la cifra mostrada sería parcial (D5, mismo criterio del
+  // dashboard operativo).
+  const isLoading =
+    cTipos || cInfracciones || cPersonas || cUnidades || cMensajesBuzon || !infraccionesCompletas
 
   const [error, setError] = React.useState<string | null>(null)
   // El expediente abierto se referencia por id y se resuelve contra la
