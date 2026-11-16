@@ -125,6 +125,16 @@ function invalidarPersonas(): void {
   )
 }
 
+/**
+ * Techo por petición del padrón (`?pageSize=100`): lo que una llamada del hook
+ * trae aunque el servidor tenga más filas. S11 — el techo del hook no se hereda
+ * en silencio: el dato derivado `recortada` lo expone desde la raíz para que la
+ * pantalla lo declare con una línea en el borde donde muestra la lista (S10,
+ * `components/pe/aviso-truncamiento.tsx`), sin que cada consumidor tenga que
+ * conocer el número ni inventar una llamada extra.
+ */
+const PAGE_SIZE_PADRON = 100
+
 export interface UsePersonasResultado {
   personas: Persona[]
   /**
@@ -136,6 +146,15 @@ export interface UsePersonasResultado {
    * el resto avisa el recorte (ver `components/pe/aviso-truncamiento.tsx`).
    */
   total: number
+  /**
+   * El `total` del servidor excede el techo por petición del hook
+   * (`PAGE_SIZE_PADRON`), así que una página no alcanza: la lista que se
+   * muestra sin paginar viene recortada y el borde que la presenta DEBE
+   * declararlo (S10/S11, ver `components/pe/aviso-truncamiento.tsx`). Se compara
+   * contra lo pedido, no contra las filas acumuladas; los consumidores con
+   * paginación siguen usando `hasMore`/`cargarMas`.
+   */
+  recortada: boolean
   /**
    * Vínculos vigentes de las personas cargadas. Solo llega poblado con
    * `soloResidentes`; el servidor ya filtró a propietario/arrendatario vigente.
@@ -217,6 +236,10 @@ function sufijoDeFiltros(opciones: UsePersonasOpciones): string {
 /**
  * Lista paginada de personas, filtrable por ?q= (nombreCompleto | rut | email).
  *
+ * S11 — el techo por petición se declara: `recortada` es true cuando el `total`
+ * del servidor excede lo que una petición trae (`PAGE_SIZE_PADRON`), y la
+ * pantalla que muestra la lista sin paginar lo declara en el borde (S10).
+ *
  * Las opciones nuevas son aditivas: sin ellas la petición es la misma de siempre
  * (`?pageSize=100`, o `?q=…&pageSize=100`), así que todos los consumidores que ya
  * existían siguen pidiendo exactamente lo mismo.
@@ -231,8 +254,8 @@ export function usePersonas(
   // Se arma a mano (y no con URLSearchParams) para que la clave SWR de los
   // consumidores que no usan opciones nuevas sea byte a byte la de antes.
   const base = termino
-    ? `${LISTA}?q=${encodeURIComponent(termino)}&pageSize=100`
-    : `${LISTA}?pageSize=100`
+    ? `${LISTA}?q=${encodeURIComponent(termino)}&pageSize=${PAGE_SIZE_PADRON}`
+    : `${LISTA}?pageSize=${PAGE_SIZE_PADRON}`
   const url = `${base}${soloResidentes ? "&esResidente=1" : ""}${sufijoDeFiltros(opciones)}`
   const { data, error, isLoading, isValidating, mutate } = useSWR<ColeccionPersonas, Error>(
     url,
@@ -269,6 +292,9 @@ export function usePersonas(
   )
   const total = data?.total ?? 0
   const hasMore = personas.length < total
+  // S11: el techo se declara comparando el total del servidor contra lo que una
+  // petición trae, no contra las filas acumuladas con `cargarMas`.
+  const recortada = total > PAGE_SIZE_PADRON
 
   const urlDePagina = (page: number): string =>
     `${url}${url.includes("?") ? "&" : "?"}page=${page}`
@@ -343,6 +369,7 @@ export function usePersonas(
   return {
     personas,
     total,
+    recortada,
     vinculosVigentes,
     isLoading,
     isValidando: isValidating,

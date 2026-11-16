@@ -40,7 +40,26 @@ import {
 export interface UseUnidadesResultado extends CrudCollection<Unidad> {
   /** Hay una consulta en vuelo (incluye la revalidación con las filas previas en pantalla). */
   isValidando: boolean
+  /**
+   * El `total` del servidor excede el techo por petición del hook
+   * (`PAGE_SIZE_COLECCION`), así que una página no alcanza: la lista que se
+   * muestra sin paginar viene recortada y el borde que la presenta DEBE
+   * declararlo (S10/S11, ver `components/pe/aviso-truncamiento.tsx`). Se compara
+   * contra lo pedido, no contra las filas acumuladas; los consumidores con
+   * paginación siguen usando `hasMore`/`cargarMas`.
+   */
+  recortada: boolean
 }
+
+/**
+ * Techo por petición de la colección EF (`?pageSize=100`): lo que una llamada del
+ * hook trae aunque el servidor tenga más filas. S11 — el techo del hook no se
+ * hereda en silencio: el dato derivado `recortada` lo expone desde la raíz para
+ * que la pantalla lo declare con una línea en el borde donde muestra la lista
+ * (S10, `components/pe/aviso-truncamiento.tsx`), sin que cada consumidor tenga
+ * que conocer el número ni inventar una llamada extra.
+ */
+const PAGE_SIZE_COLECCION = 100
 
 /** Opciones de lectura de la colección EF. Aditivas: sin ellas nada cambia. */
 export interface UseUnidadesOpciones {
@@ -86,9 +105,12 @@ export function useUnidades(opciones: UseUnidadesOpciones = {}): UseUnidadesResu
   // Con `q` la búsqueda viaja al servidor; sin `q` la query queda vacía y la URL es la de antes.
   const coleccion = useCrudCollection<Unidad>(
     "/api/unidades",
-    q ? `pageSize=100&q=${encodeURIComponent(q)}` : ""
+    q ? `pageSize=${PAGE_SIZE_COLECCION}&q=${encodeURIComponent(q)}` : ""
   )
-  const url = q ? `/api/unidades?pageSize=100&q=${encodeURIComponent(q)}` : "/api/unidades?pageSize=100"
+  const url =
+    q
+      ? `/api/unidades?pageSize=${PAGE_SIZE_COLECCION}&q=${encodeURIComponent(q)}`
+      : `/api/unidades?pageSize=${PAGE_SIZE_COLECCION}`
 
   /**
    * Última consulta resuelta con filas: es lo que se sigue viendo mientras la siguiente está
@@ -125,6 +147,10 @@ export function useUnidades(opciones: UseUnidadesOpciones = {}): UseUnidadesResu
   const items = mostrandoPrevias ? ultima.filas : filasFrescas
   const total = mostrandoPrevias ? ultima.total : totalFresco
   const hasMore = items.length < total
+  // S11: el techo se declara comparando el total del servidor contra lo que una
+  // petición trae, no contra las filas acumuladas con `cargarMas`. Sigue al
+  // `total` mostrado (con `mantenerFilasPrevias`, el de la consulta previa).
+  const recortada = total > PAGE_SIZE_COLECCION
 
   // Auto-paginación: un pedido por tamaño de colección. Así una página vacía no deja el bucle
   // girando (el contador de filas no cambia y no se vuelve a pedir) y el tope acota el resto.
@@ -153,6 +179,7 @@ export function useUnidades(opciones: UseUnidadesOpciones = {}): UseUnidadesResu
     items,
     total,
     hasMore,
+    recortada,
     isValidando: cargandoPrimera,
   }
 }
