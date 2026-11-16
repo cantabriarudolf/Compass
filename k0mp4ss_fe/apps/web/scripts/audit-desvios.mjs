@@ -28,6 +28,13 @@
  *   R6  Búsqueda por LIKE sin rechazo de los comodines: una ruta route.ts de app/api/**
  *       que arma `contains` con el término de la query construye el patrón %q% sin escapar,
  *       y `q=%%` o `q=__` enumeran la tabla entera, salvo que la ruta declare el rechazo.
+ *   R7  Hook de colección (lib/api/use-*.ts) que fija el techo de la página en código propio
+ *       (`?pageSize=100` en la URL, `pageSize: "100"` en URLSearchParams o la constante de
+ *       módulo = 100 interpolada) y no expone en código la forma de completar la colección
+ *       (`cargarMas`/`todasLasPaginas`). Un booleano (`hasMore`, `completo`) no es la palanca:
+ *       no hay función que lo use. La regla es textual a nivel de archivo (molde R2/R6): el
+ *       hook que delega en el factory sin nombrar la palanca se registra como falso positivo
+ *       declarado en la allowlist, no con una heurística de delegación.
  *
  * Excepciones: la allowlist vive abajo, con el motivo escrito al lado. Nunca se silencia un
  * hallazgo con un catch vacío ni con un `return` temprano: si no hay motivo, es hallazgo.
@@ -689,6 +696,98 @@ function reglaR6(raiz, archivos, excepciones) {
 }
 
 // ---------------------------------------------------------------------------
+// R7 — hook de colección que fija el techo y no expone la palanca
+// ---------------------------------------------------------------------------
+
+/** Módulos de hook de colección: `lib/api/use-*.ts`. */
+const RE_HOOK_COLECCION = /^lib\/api\/use-.+\.ts$/
+
+/**
+ * Los dos helpers que SON la palanca o la completan: quedan fuera del alcance,
+ * y delegarles la colección es justamente la forma correcta de exponerla.
+ */
+const HELPERS_PALANCA = new Set([
+  "lib/api/use-crud-collection.ts",
+  "lib/api/use-coleccion-completa.ts",
+])
+
+/**
+ * Fijar el techo, en código y no en comentario: la URL con `?pageSize=100`
+ * escrita como literal, la variante `URLSearchParams({ pageSize: "100" })`, o la
+ * constante de módulo con valor 100 interpolada en la URL (`pageSize=${PAGE_SIZE}`
+ * con `const PAGE_SIZE = 100` en el mismo archivo).
+ */
+const RE_FIJA_URL = /[?&]pageSize=100(?!\d)/
+const RE_FIJA_PARAMETRO = /pageSize:\s*(?:"100"|'100'|100)(?![\d.])/
+const RE_FIJA_CONSTANTE = /pageSize=\$\{([A-Za-z_]\w*)\}/
+const RE_CONSTANTE_100 = /(?:export\s+)?const\s+([A-Za-z_]\w*)\s*=\s*100(?!\d)/
+
+/**
+ * Exponer la palanca, en código: los nombres que completan la colección
+ * (`cargarMas`, `todasLasPaginas`) apareciendo en el archivo. Un booleano
+ * (`hasMore`, `completo`) no es la palanca: no hay función que lo use. La regla es
+ * textual a nivel de archivo (molde R2/R6): el hook que delega en el factory sin
+ * nombrar la palanca se registra como falso positivo declarado en la allowlist.
+ */
+const RE_PALANCA = /\b(?:cargarMas|todasLasPaginas)\b/
+
+/**
+ * Un hook de colección que arma su propia petición paginada (`?pageSize=100` en su
+ * código, no en un doc comment) y no expone la forma de completar la colección:
+ * la primera página es todo lo que el consumidor puede leer, y el que filtra, cuenta
+ * o resuelve identidad sobre la lista miente. Es la propiedad estructural que hizo
+ * barato el arreglo de F38/F40, y no depende de interpretar una pantalla.
+ */
+function reglaR7(raiz, archivos, excepciones) {
+  const hallazgos = []
+  for (const absoluta of archivos) {
+    const archivo = rutaRelativa(raiz, absoluta)
+    if (!RE_HOOK_COLECCION.test(archivo)) continue
+    if (HELPERS_PALANCA.has(archivo)) continue
+    const lineas = lineasDe(absoluta)
+    // Constantes con valor 100 definidas en el archivo: la interpolación
+    // `pageSize=${NOMBRE}` fija el techo sólo si NOMBRE vale 100.
+    const constantesCien = new Set()
+    for (const linea of lineas) {
+      if (RE_COMENTARIO.test(linea)) continue
+      const definida = RE_CONSTANTE_100.exec(linea)
+      if (definida) constantesCien.add(definida[1])
+    }
+    let lineaFija = 0
+    let exponePalanca = false
+    for (let i = 0; i < lineas.length; i++) {
+      const linea = lineas[i] ?? ""
+      if (RE_COMENTARIO.test(linea)) continue
+      if (RE_PALANCA.test(linea)) exponePalanca = true
+      if (lineaFija !== 0) continue
+      const interpolada = RE_FIJA_CONSTANTE.exec(linea)
+      const fija =
+        RE_FIJA_URL.test(linea) ||
+        RE_FIJA_PARAMETRO.test(linea) ||
+        (interpolada !== null && constantesCien.has(interpolada[1]))
+      if (fija) lineaFija = i + 1
+    }
+    if (lineaFija === 0 || exponePalanca) continue
+    if (
+      exceptuado("R7", excepciones, {
+        archivo,
+        texto: lineas[lineaFija - 1] ?? "",
+      })
+    )
+      continue
+    hallazgos.push({
+      regla: "R7",
+      archivo,
+      linea: lineaFija,
+      detalle: `hook de colección con pageSize fijo en 100 (petición propia, no la del factory) y sin la forma de completarla —sin cargarMas ni todasLasPaginas en código—: ${recorta(lineas[lineaFija - 1] ?? "")}`,
+      accion:
+        "exponer la palanca en el contrato del hook (molde lib/api/use-unidades.ts: opción `todasLasPaginas` y `cargarMas` del factory) o resolver el universo en el servidor; si el estado medido es el correcto, registrar la entrada en la allowlist del candado",
+    })
+  }
+  return hallazgos
+}
+
+// ---------------------------------------------------------------------------
 // Allowlist — cada entrada con su motivo. Una excepción sin motivo es deuda.
 // ---------------------------------------------------------------------------
 
@@ -979,6 +1078,61 @@ const EXCEPCIONES_R6 = [
 ]
 
 /**
+ * R7 · baseline de los hooks de colección de `lib/api/` que hoy fijan el techo de la
+ * página en su propio código y no exponen la palanca, más los falsos positivos declarados
+ * de la regla textual. Es el registro de la deuda medida y no un aval: este lote no los
+ * arregla (las pantallas se cerraron por consumidor en F38/F40). Un hook que nazca flojo
+ * no está acá y el candado lo reporta; darle la palanca a uno de estos quita su entrada.
+ */
+const EXCEPCIONES_R7 = [
+  {
+    archivo: "lib/api/use-actas-gd.ts",
+    motivo:
+      "Estado medido el 2026-11-16 (registro de la deuda, NO un aval): useActasGD arma su propia petición paginada en la línea 82 (`${LISTA}?pageSize=100`, useSWR directo, sin el factory) y no expone cargarMas ni todasLasPaginas; la lista llega cortada en la fila 100 y la consumen app/comunidad/directiva/page.tsx y app/comunidad/visor/page.tsx. Este lote no lo arregla: la entrada existe para que la lista no crezca.",
+  },
+  {
+    archivo: "lib/api/use-avisos-cobro.ts",
+    motivo:
+      "Estado medido el 2026-11-16 (registro de la deuda, NO un aval): useAvisosCobro fija el techo en la línea 59 (`${BASE}?pageSize=100`) y se lo pasa a useServerCollection, que es una lectura sin palanca; la consola app/comunidad/avisos-cobro/consola-avisos-cobro.tsx consume la primera página entera. Este lote no lo arregla: la entrada existe para que la lista no crezca.",
+  },
+  {
+    archivo: "lib/api/use-cobros-fi.ts",
+    motivo:
+      "Estado medido el 2026-11-16 (falso positivo declarado de la regla textual, no es deuda): useCobrosFI arma los parámetros con pageSize=100 en la línea 34 (`new URLSearchParams({ pageSize: \"100\" })`) pero la petición no es propia: la pasa a useCrudCollection, y el contrato CrudCollection que devuelve expone cargarMas/todasLasPaginas al consumidor — la palanca viaja con la colección. Si la petición deja de ir al factory, la excepción deja de aplicar y el candado vuelve a morder.",
+  },
+  {
+    archivo: "lib/api/use-controles-propiedad.ts",
+    motivo:
+      "Estado medido el 2026-11-16 (registro de la deuda, NO un aval): useControlesPropiedad arma su propia petición paginada en la línea 80 (`${LISTA}?pageSize=100`, useSWR directo) y no expone la palanca; la sufren app/comunidad/directiva/page.tsx y app/admin/gestion/page.tsx. Este lote no lo arregla: la entrada existe para que la lista no crezca.",
+  },
+  {
+    archivo: "lib/api/use-maestros.ts",
+    motivo:
+      "Estado medido el 2026-11-16 (registro de la deuda, NO un aval): useMaestros arma su propia petición paginada en la línea 86 (`${baseTipo(tipo)}?pageSize=100`, useSWR directo) y no expone la palanca; la sufren los ocho consumidores de maestros administrativos (app/admin/maestros, app/admin/metricas, app/inventario/tipos, app/inventario/estructura, app/inventario/recursos, app/personas/personal, app/finanzas/remuneraciones y app/comunidad/personas/[id]). Este lote no lo arregla: la entrada existe para que la lista no crezca.",
+  },
+  {
+    archivo: "lib/api/use-pe.ts",
+    motivo:
+      "Estado medido el 2026-11-16 (registro de la deuda, NO un aval): useTurnosIniciadosPE pega en la línea 189 (`${BASE_TURNOS}?pageSize=100`, useSWR directo) y no expone la palanca; lee turnos iniciados HOY (universo acotado por el propio endpoint) para app/personas/personal/page.tsx, pero el hook no declara ni el techo ni la forma de completarlo. Este lote no lo arregla: la entrada existe para que la lista no crezca.",
+  },
+  {
+    archivo: "lib/api/use-periodos-directiva.ts",
+    motivo:
+      "Estado medido el 2026-11-16 (registro de la deuda, NO un aval): usePeriodosDirectiva arma su propia petición paginada en la línea 82 (`${LISTA}?pageSize=100`, useSWR directo) y no expone la palanca; los períodos históricos del libro quedan fuera de la primera página y la sufren app/comunidad/directiva/page.tsx, app/comunidad/certificados/_componentes/certificados-emision.tsx y app/comunidad/archivo/use-destinatarios-archivo.ts. Este lote no lo arregla: la entrada existe para que la lista no crezca.",
+  },
+  {
+    archivo: "lib/api/use-resumen-fi.ts",
+    motivo:
+      "Estado medido el 2026-11-16 (registro de la deuda, NO un aval): useResumenFI pide `/api/fi?pageSize=100` en la línea 84 (useSWR directo) y no expone la palanca: devuelve `completo`, un booleano sin la función que pida el resto del envelope, mismo caso que `hasMore`; los agregados que el cliente arma sobre `items` cubren sólo la primera página y la sufren app/finanzas/page.tsx y components/dashboard/bloque-financiero.tsx. Este lote no lo arregla: la entrada existe para que la lista no crezca.",
+  },
+  {
+    archivo: "lib/api/use-vinculos.ts",
+    motivo:
+      "Estado medido el 2026-11-16 (registro de la deuda, NO un aval): useVinculos arma su propia petición paginada en la línea 79 (`${LISTA}?pageSize=100`, useSWR directo) y no expone la palanca; el filtrado por persona es responsabilidad del consumidor (doc del propio hook) sobre la primera página y la sufren app/comunidad/portal, app/comunidad/personas/[id], app/comunidad/certificados/_componentes/certificados-emision.tsx, app/finanzas/gastos-comunes, app/operaciones/solicitudes, app/inventario/estructura y app/admin/gestion. Este lote no lo arregla: la entrada existe para que la lista no crezca.",
+  },
+]
+
+/**
  * Allowlist real del candado. Exportada para que el test pueda citar cada motivo y verificar
  * que el baseline de raíz desnuda nombra exactamente las rutas medidas.
  */
@@ -989,6 +1143,7 @@ export const EXCEPCIONES = {
   R4: EXCEPCIONES_R4,
   R5: EXCEPCIONES_R5,
   R6: EXCEPCIONES_R6,
+  R7: EXCEPCIONES_R7,
 }
 
 /** ¿Hay una excepción para este hallazgo? Devuelve la entrada o null. */
@@ -1028,6 +1183,7 @@ const TITULOS = {
   R4: "R4 · Truncamientos silenciosos de listas",
   R5: "R5 · Catch vacío que confirma éxito",
   R6: "R6 · Búsqueda por LIKE sin rechazo de los comodines",
+  R7: "R7 · Hook de colección que fija el techo de 100 sin exponer la palanca",
 }
 
 function archivosDe(raiz, directorios) {
@@ -1062,6 +1218,7 @@ export function auditar(opciones = {}) {
     ...reglaR4(raiz, archivosDe(raiz, ["app", "components"]), excepciones),
     ...reglaR5(raiz, codigo, excepciones),
     ...reglaR6(raiz, archivosDe(raiz, ["app/api"]), excepciones),
+    ...reglaR7(raiz, codigo, excepciones),
   ]
 }
 

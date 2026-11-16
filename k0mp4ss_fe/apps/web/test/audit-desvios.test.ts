@@ -505,36 +505,246 @@ export async function GET(q: string) {
   })
 })
 
-describe("CLI", () => {
-  it("sale 1 con hallazgos y 0 con un árbol limpio", () => {
-    const limpio = crearRaiz({ "lib/authz.ts": AUTHZ_MIN })
-    const sucio = crearRaiz({
-      "lib/authz.ts": AUTHZ_MIN,
-      "app/api/x/route.ts": `export function GET(rol: string) {
-  return puede(rol, "ver", "zzz")
+describe("R7 · hook de colección que fija el techo sin palanca", () => {
+  // Censo medido el 2026-11-16 sobre el árbol real (ver "el repo real, sin allowlist"):
+  // ocho hooks en deuda + use-cobros-fi, falso positivo declarado de la regla textual.
+  const HOOKS_MEDIDOS_R7 = [
+    "lib/api/use-actas-gd.ts",
+    "lib/api/use-avisos-cobro.ts",
+    "lib/api/use-cobros-fi.ts",
+    "lib/api/use-controles-propiedad.ts",
+    "lib/api/use-maestros.ts",
+    "lib/api/use-pe.ts",
+    "lib/api/use-periodos-directiva.ts",
+    "lib/api/use-resumen-fi.ts",
+    "lib/api/use-vinculos.ts",
+  ]
+
+  it("reporta el hook que arma su propia petición paginada y no expone la palanca", () => {
+    const raiz = crearRaiz({
+      // Ruta de fixture sin choque con la allowlist: una ruta exceptuada queda silenciada.
+      "lib/api/use-sonda-actas.ts": `"use client"
+
+import useSWR from "swr"
+
+const LISTA = "/api/sonda-actas"
+
+/** Lista paginada de actas de la sonda (el servidor filtra por rol). */
+export function useSondaActas() {
+  const url = \`\${LISTA}?pageSize=100\`
+  const { data, error, isLoading } = useSWR(url, traer)
+  return { items: data?.data ?? [], error, isLoading }
 }
 `,
     })
-    const ok = spawnSync(process.execPath, [SCRIPT, "--raiz", limpio], {
-      encoding: "utf8",
+    const hallazgos = hallazgosDe(raiz, "R7")
+    expect(hallazgos).toHaveLength(1)
+    expect(hallazgos[0]?.archivo).toBe("lib/api/use-sonda-actas.ts")
+    expect(hallazgos[0]?.linea).toBe(9)
+    expect(hallazgos[0]?.detalle).toContain("pageSize=100")
+    expect(hallazgos[0]?.accion).toContain("todasLasPaginas")
+  })
+
+  it("no reporta el hook que expone la palanca, con todasLasPaginas o con cargarMas", () => {
+    const conOpcion = crearRaiz({
+      "lib/api/use-sonda-actas.ts": `"use client"
+
+import useSWR from "swr"
+
+const LISTA = "/api/sonda-actas"
+
+export interface UseSondaActasOpciones {
+  /** Completa la colección pidiendo las páginas siguientes hasta agotar el total. */
+  todasLasPaginas?: boolean
+}
+
+export function useSondaActas(opciones: UseSondaActasOpciones = {}) {
+  const url = \`\${LISTA}?pageSize=100\`
+  const completa = opciones.todasLasPaginas === true
+  const { data } = useSWR(url, traer)
+  return { items: completa ? (data?.data ?? []) : [], error: null }
+}
+`,
     })
-    const falla = spawnSync(
-      process.execPath,
-      [SCRIPT, "--raiz", sucio, "--json"],
-      { encoding: "utf8" }
+    const conFuncion = crearRaiz({
+      "lib/api/use-sonda-actas.ts": `"use client"
+
+import useSWR from "swr"
+
+const LISTA = "/api/sonda-actas"
+
+export function useSondaActas() {
+  const url = \`\${LISTA}?pageSize=100\`
+  const { data, mutate } = useSWR(url, traer)
+  const cargarMas = async () => {
+    await mutate()
+  }
+  return { items: data?.data ?? [], cargarMas }
+}
+`,
+    })
+    expect(hallazgosDe(conOpcion, "R7")).toHaveLength(0)
+    expect(hallazgosDe(conFuncion, "R7")).toHaveLength(0)
+  })
+
+  it("la mención del techo en un doc comment no lo fija: mencionar no es armar la petición", () => {
+    const raiz = crearRaiz({
+      "lib/api/use-sonda-lectura.ts": `"use client"
+
+import useSWR from "swr"
+
+/**
+ * Lista de lectura. Sin opciones la petición es la de siempre (\`?pageSize=100\`),
+ * la misma clave SWR de los consumidores que ya existían.
+ */
+const LISTA = "/api/sonda-lectura"
+
+export function useSondaLectura() {
+  const { data } = useSWR(LISTA, traer)
+  return { items: data?.data ?? [] }
+}
+`,
+    })
+    expect(hallazgosDe(raiz, "R7")).toHaveLength(0)
+  })
+
+  it("la constante interpolada en la URL fija el techo, pero sólo si vale 100", () => {
+    const fijaCien = crearRaiz({
+      "lib/api/use-sonda-padron.ts": `"use client"
+
+import useSWR from "swr"
+
+const LISTA = "/api/sonda-padron"
+
+/** Techo por petición de la colección de la sonda. */
+const PAGE_SIZE_SONDA = 100
+
+export function useSondaPadron() {
+  const url = \`\${LISTA}?pageSize=\${PAGE_SIZE_SONDA}\`
+  const { data } = useSWR(url, traer)
+  return { items: data?.data ?? [] }
+}
+`,
+    })
+    const fijaVeinticinco = crearRaiz({
+      "lib/api/use-sonda-busqueda.ts": `"use client"
+
+import useSWR from "swr"
+
+const LISTA = "/api/sonda-busqueda"
+
+/** Tamaño de página de la búsqueda: el resto la resuelve el servidor con \`q\`. */
+const PAGE_SIZE_BUSQUEDA_SONDA = 25
+
+export function useSondaBusqueda() {
+  const url = \`\${LISTA}?q=x&pageSize=\${PAGE_SIZE_BUSQUEDA_SONDA}\`
+  const { data } = useSWR(url, traer)
+  return { items: data?.data ?? [] }
+}
+`,
+    })
+    const fija = hallazgosDe(fijaCien, "R7")
+    expect(fija).toHaveLength(1)
+    expect(fija[0]?.linea).toBe(11)
+    expect(hallazgosDe(fijaVeinticinco, "R7")).toHaveLength(0)
+  })
+
+  it("la regla es textual: delegar en el factory sin nombrar la palanca se registra como falso positivo declarado, no se silencia con heurística", () => {
+    const contenido = `"use client"
+
+import { useCrudCollection, type CrudCollection } from "./use-crud-collection"
+
+const BASE = "/api/sonda-cobros"
+
+export function useSondaCobros(): CrudCollection<{ id: string }> {
+  const params = new URLSearchParams({ pageSize: "100" })
+  return useCrudCollection("/api/sonda-cobros", params.toString())
+}
+`
+    // Con una ruta sin entrada en la allowlist, la regla textual lo reporta.
+    const sonda = crearRaiz({ "lib/api/use-sonda-cobros.ts": contenido })
+    expect(hallazgosDe(sonda, "R7")).toHaveLength(1)
+    // El caso real del árbol (misma forma, ruta allowlistada) queda declarado, no tapado:
+    // el silencio vive en la entrada de EXCEPCIONES_R7, que documenta por qué no es deuda.
+    const real = crearRaiz({ "lib/api/use-cobros-fi.ts": contenido })
+    expect(hallazgosDe(real, "R7")).toHaveLength(0)
+
+    const propia = crearRaiz({
+      "lib/api/use-sonda-cobros.ts": `"use client"
+
+import useSWR from "swr"
+
+const BASE = "/api/sonda-cobros"
+
+export function useSondaCobros() {
+  const params = new URLSearchParams({ pageSize: "100" })
+  const { data } = useSWR(\`\${BASE}?\${params.toString()}\`, traer)
+  return { items: data?.data ?? [] }
+}
+`,
+    })
+    const hallazgos = hallazgosDe(propia, "R7")
+    expect(hallazgos).toHaveLength(1)
+    expect(hallazgos[0]?.linea).toBe(8)
+  })
+
+  it("hasMore solo no es la palanca: el booleano sin la función que completa sigue siendo hallazgo", () => {
+    const raiz = crearRaiz({
+      "lib/api/use-sonda-activos.ts": `"use client"
+
+import useSWR from "swr"
+
+const LISTA = "/api/sonda-activos"
+
+export function useSondaActivos() {
+  const url = \`\${LISTA}?pageSize=100\`
+  const { data } = useSWR(url, traer)
+  const total = data?.total ?? 0
+  const hasMore = (data?.data?.length ?? 0) < total
+  return { items: data?.data ?? [], hasMore }
+}
+`,
+    })
+    const hallazgos = hallazgosDe(raiz, "R7")
+    expect(hallazgos).toHaveLength(1)
+    expect(hallazgos[0]?.linea).toBe(8)
+  })
+
+  it("no mira los dos helpers que son la palanca o la completan", () => {
+    const raiz = crearRaiz({
+      "lib/api/use-crud-collection.ts": `export function useCrudCollection<T extends { id: string }>(base: string) {
+  const url = \`\${base}?pageSize=100\`
+  return { url, items: [] as T[] }
+}
+`,
+      "lib/api/use-coleccion-completa.ts": `const PAGE_SIZE_COLECCION = 100
+
+export function useColeccionCompleta(base: string) {
+  const url = \`\${base}?pageSize=\${PAGE_SIZE_COLECCION}\`
+  return { url, completa: false }
+}
+`,
+    })
+    expect(hallazgosDe(raiz, "R7")).toHaveLength(0)
+  })
+
+  it("la allowlist de R7 nombra exactamente los nueve hooks medidos, cada uno con su motivo", () => {
+    const entradas = (EXCEPCIONES.R7 ?? []) as { archivo?: string; motivo: string }[]
+    expect(entradas.map((e) => e.archivo).sort()).toEqual([...HOOKS_MEDIDOS_R7].sort())
+    expect(entradas.every((e) => e.motivo.trim().length > 0)).toBe(true)
+    expect(entradas.every((e) => e.motivo.includes("Estado medido"))).toBe(true)
+  })
+
+  it("el repo real, sin allowlist, da exactamente los nueve hallazgos medidos", () => {
+    const sinAllowlist = auditar({ raiz: RAIZ_APP, excepciones: { R7: [] } }).filter(
+      (h) => h.regla === "R7"
     )
+    expect(sinAllowlist.map((h) => h.archivo).sort()).toEqual([...HOOKS_MEDIDOS_R7].sort())
+    expect(sinAllowlist.every((h) => h.linea > 0)).toBe(true)
+  })
 
-    expect(ok.status).toBe(0)
-    expect(ok.stdout).toContain("RESUMEN: 0 hallazgos")
-
-    expect(falla.status).toBe(1)
-    const salida = JSON.parse(falla.stdout) as {
-      hallazgos: unknown[]
-      excepciones: Record<string, unknown[]>
-    }
-    expect(salida.hallazgos.length).toBeGreaterThan(0)
-    // La allowlist viaja en el JSON: el reporte puede citar cada motivo.
-    expect(salida.excepciones.R1).toBeDefined()
-    expect(salida.excepciones.R1?.length).toBeGreaterThan(0)
+  it("el repo real queda en verde con la allowlist medida", () => {
+    expect(hallazgosDe(RAIZ_APP, "R7")).toHaveLength(0)
   })
 })
+
