@@ -328,6 +328,30 @@ describe("S10 — GET /api/comunicacion/buscar-personas", () => {
     })
   })
 
+  it("`q` con comodines de LIKE responde 400: el comodín no puede enumerar el padrón (R1-001)", async () => {
+    // `%%` cumple el mínimo de dos caracteres y el comodín de LIKE convierte la
+    // búsqueda en un barrido del padrón completo: el patrón que arma `contains`
+    // es `%q%`, con `q` sin escapar. El término con comodín se rechaza; el orden
+    // de las guardas deja el mínimo de dos PRIMERO, así que `%` solo sigue siendo
+    // el 400 del mínimo.
+    await conSesion(EMAIL.admin, async () => {
+      const doble = await buscar("%%")
+      expect(doble.status).toBe(400)
+      const vista = await cuerpo(doble)
+      expect(vista.error).toBe("El parámetro q no acepta los comodines % y _.")
+      expect(vista.data).toBeUndefined()
+
+      // Un comodín escondido en un término plausiblemente real también se rechaza.
+      expect((await buscar("9%")).status).toBe(400)
+      expect((await buscar("a_b")).status).toBe(400)
+
+      // Y `%` a secas no llega a la guarda de comodines: el mínimo de dos manda.
+      expect((await cuerpo(await buscar("%"))).error).toBe(
+        "El parámetro q necesita al menos dos caracteres."
+      )
+    })
+  })
+
   it("la cuota es por RUTA: las búsquedas de certificados no gastan la del buzón", async () => {
     // Lo encontró el verificador independiente midiendo: con el contador compartido y sin
     // ámbito, cuarenta búsquedas de certificados dejaban al mismo usuario con el buzón

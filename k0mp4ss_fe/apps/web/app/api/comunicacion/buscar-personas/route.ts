@@ -23,9 +23,17 @@
  *   · el universo es el que la pantalla ya aplicaba —`estadoCuenta: "activa"`—, sin
  *     agregarle el vínculo vigente: acotar la población sería una decisión de negocio
  *     sobre quién puede reclamar, y esta ruta sólo reemplaza el recorte por la búsqueda;
- *   · `q` filtra por nombre, RUT y email sobre TODA la comunidad, y necesita dos
+ *   · `q` filtra por nombre y RUT sobre TODA la comunidad, y necesita dos
  *     caracteres como el resto de los buscadores: con uno el barrido de 25 filas por
  *     letra vuelve a ser posible;
+ *   · `q` no acepta los comodines de LIKE (`%` y `_`, R1-001): `contains` arma el
+ *     patrón `%q%` sin escapar, así que `q=%%` cumplía el mínimo de dos caracteres y
+ *     enumeraba el padrón entero. Los nombres y RUT no usan esos caracteres: el
+ *     término con comodín se rechaza;
+ *   · el email sale del OR por la misma razón que en `periodos-directiva` (T21): al
+ *     rechazar el comodín, una búsqueda legítima por una dirección con guion bajo
+ *     habría pasado de 200 a 400, y la salida honesta es sacarlo del criterio, no
+ *     reabrir el comodín. Que deje de ser criterio no lo saca de la base;
  *   · la respuesta declara `data`, `page`, `pageSize` y `total`, así que el recorte se
  *     ve («Mostrando N de M») y no se esconde.
  */
@@ -43,6 +51,9 @@ const PERSONAS_POR_PAGINA = 25
 
 /** Mínimo de caracteres de `q`, espejo de `MINIMO_CARACTERES` del buscador de la UI. */
 const MINIMO_CARACTERES = 2
+
+/** Comodines de LIKE: `contains` arma `%q%` sin escapar, así que entran por el patrón. */
+const COMODINES_LIKE = /[%_]/
 
 /** Fila del buscador: lo mínimo para elegir a la persona y armar el reclamo. */
 interface PersonaBuscada {
@@ -87,6 +98,12 @@ export async function GET(req: Request): Promise<Response> {
   if (q.length < MINIMO_CARACTERES) {
     return jsonError(400, "El parámetro q necesita al menos dos caracteres.")
   }
+  // R1-001: `%%` cumple el mínimo de dos y el comodín de LIKE enumera el padrón
+  // entero, porque `contains` arma el patrón `%q%` sin escapar. El término con
+  // comodín se rechaza en vez de reescribirse por detrás.
+  if (COMODINES_LIKE.test(q)) {
+    return jsonError(400, "El parámetro q no acepta los comodines % y _.")
+  }
   // El tope del `page` no es cosmético: con un número fuera del rango de Int, Prisma
   // rechaza el `skip` y la ruta responde 500 en vez de una página vacía.
   const paginaPedida = Number.parseInt(url.searchParams.get("page") ?? "1", 10) || 1
@@ -103,17 +120,14 @@ export async function GET(req: Request): Promise<Response> {
       return Response.json({ data: [], page, pageSize: PERSONAS_POR_PAGINA, total: 0 })
     }
 
-    // Mismos tres campos de búsqueda que `/api/personas` (nombre, RUT, email) y la
-    // misma regla de la pantalla (`estadoCuenta: "activa"`), resuelta en el servidor.
+    // Mismos dos campos de búsqueda que `periodos-directiva` después de T21 (nombre y
+    // RUT; el email salió al rechazar los comodines) y la misma regla de la pantalla
+    // (`estadoCuenta: "activa"`), resuelta en el servidor.
     const where = {
       comunidadId: scope.comunidadId,
       estadoCuenta: "activa",
       ...(alcance.tipo === "propio" ? { id: alcance.personaId } : {}),
-      OR: [
-        { nombreCompleto: { contains: q } },
-        { rut: { contains: q } },
-        { email: { contains: q } },
-      ],
+      OR: [{ nombreCompleto: { contains: q } }, { rut: { contains: q } }],
     }
 
     const [filas, total] = await Promise.all([

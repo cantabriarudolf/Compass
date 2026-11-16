@@ -13,8 +13,13 @@
  *
  *   · sólo personas con vínculo VIGENTE (`fechaFin: null`) en la comunidad — la
  *     misma regla del gate de residencia y de `unidadesVinculadasDb`;
- *   · `q` filtra por nombre, RUT y email (los mismos tres campos de
- *     `/api/personas`), sobre TODA la comunidad, no sobre la página traída;
+ *   · `q` filtra por nombre y RUT (los dos campos de `periodos-directiva` después
+ *     del T21), sobre TODA la comunidad, no sobre la página traída;
+ *   · `q` no acepta los comodines de LIKE (`%` y `_`, R1-001): `contains` arma el
+ *     patrón `%q%` sin escapar, así que `q=%%` cumplía el mínimo de dos caracteres
+ *     y enumeraba el padrón. El email salió del OR con la misma decisión que en
+ *     `periodos-directiva`: rechazar el comodín habría dejado en 400 una búsqueda
+ *     legítima por una dirección con guion bajo;
  *   · cada fila trae sus vínculos vigentes con el rótulo de la unidad, para que
  *     el formulario ofrezca la unidad del vínculo y arme el payload de emisión
  *     sin volver a las colecciones truncadas del cliente;
@@ -71,6 +76,9 @@ const PERSONAS_POR_PAGINA = 25
  */
 const MINIMO_CARACTERES = 2
 
+/** Comodines de LIKE: `contains` arma `%q%` sin escapar, así que entran por el patrón. */
+const COMODINES_LIKE = /[%_]/
+
 /** Vínculo vigente de una fila, con el rótulo que imprime el certificado. */
 interface VinculoBuscado {
   id: string
@@ -126,6 +134,12 @@ export async function GET(req: Request): Promise<Response> {
   if (q.length < MINIMO_CARACTERES) {
     return jsonError(400, "El parámetro q necesita al menos dos caracteres.")
   }
+  // R1-001: `%%` cumple el mínimo de dos y el comodín de LIKE enumera el padrón
+  // entero, porque `contains` arma el patrón `%q%` sin escapar. El término con
+  // comodín se rechaza en vez de reescribirse por detrás.
+  if (COMODINES_LIKE.test(q)) {
+    return jsonError(400, "El parámetro q no acepta los comodines % y _.")
+  }
   // El tope del `page` no es cosmético: con un número fuera del rango de Int, Prisma
   // rechaza el `skip` y la ruta responde 500 en vez de una página vacía.
   const paginaPedida = Number.parseInt(url.searchParams.get("page") ?? "1", 10) || 1
@@ -153,15 +167,12 @@ export async function GET(req: Request): Promise<Response> {
     })
     const idsConVinculo = conVinculo.map((v) => v.personaId)
 
-    // Mismos tres campos de búsqueda que `/api/personas` (nombre, RUT, email).
+    // Los mismos dos campos de búsqueda que `periodos-directiva` después de T21
+    // (nombre y RUT: el email salió del OR con el rechazo de comodines).
     const where = {
       comunidadId: scope.comunidadId,
       id: { in: idsConVinculo },
-      OR: [
-        { nombreCompleto: { contains: q } },
-        { rut: { contains: q } },
-        { email: { contains: q } },
-      ],
+      OR: [{ nombreCompleto: { contains: q } }, { rut: { contains: q } }],
     }
 
     const [filas, total] = await Promise.all([

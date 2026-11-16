@@ -420,6 +420,23 @@ describe("F36 — GET /api/certificados-ct/buscar-personas", () => {
     })
   })
 
+  it("`q` con comodines de LIKE responde 400: el comodín no puede enumerar el padrón (R1-001)", async () => {
+    // `%%` cumple el mínimo de dos caracteres y el comodín de LIKE convierte la
+    // búsqueda en un barrido del padrón certificable: el patrón que arma `contains`
+    // es `%q%`, con `q` sin escapar. El término con comodín se rechaza.
+    await conSesion(EMAIL.admin, async () => {
+      const doble = await buscar("%%")
+      expect(doble.status).toBe(400)
+      const vista = await cuerpo(doble)
+      expect(vista.error).toBe("El parámetro q no acepta los comodines % y _.")
+      expect(vista.data).toBeUndefined()
+
+      // Un comodín escondido en un término plausiblemente real también se rechaza.
+      expect((await buscar("9%")).status).toBe(400)
+      expect((await buscar("a_b")).status).toBe(400)
+    })
+  })
+
   it("más de 60 búsquedas por minuto responden 429 sin emitir filas, y el bloqueo es por usuario", async () => {
     // El límite corre ANTES de validar `q`, así que las 60 se gastan con 400
     // baratos: la prueba no golpea la base y de paso fija el orden de las
