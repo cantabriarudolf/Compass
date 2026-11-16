@@ -25,6 +25,9 @@
  *   R3  Tests apagados o aserciones complacientes sin justificación escrita.
  *   R4  Truncamientos silenciosos de listas (.slice(0, N) sin AvisoTruncamiento/LIMITE_SELECT).
  *   R5  Catch vacío que igual confirma éxito (el usuario cree que se guardó y no se guardó).
+ *   R6  Búsqueda por LIKE sin rechazo de los comodines: una ruta route.ts de app/api/**
+ *       que arma `contains` con el término de la query construye el patrón %q% sin escapar,
+ *       y `q=%%` o `q=__` enumeran la tabla entera, salvo que la ruta declare el rechazo.
  *
  * Excepciones: la allowlist vive abajo, con el motivo escrito al lado. Nunca se silencia un
  * hallazgo con un catch vacío ni con un `return` temprano: si no hay motivo, es hallazgo.
@@ -623,6 +626,69 @@ function reglaR5(raiz, archivos, excepciones) {
 }
 
 // ---------------------------------------------------------------------------
+// R6 — búsqueda por LIKE sin rechazo de los comodines
+// ---------------------------------------------------------------------------
+
+/**
+ * Declaración válida del rechazo: el archivo tiene una clase de caracteres de regex que
+ * contiene `%` y `_` (p. ej. `const COMODINES_LIKE = /[%_]/`) Y al menos un `.test(`. Es
+ * exactamente el marcador de las tres rutas que hoy rechazan los comodines antes de armar
+ * el where.
+ */
+function archivoDeclaraRechazoComodines(texto) {
+  const clase = /\[[^\]\n]*%[^\]\n]*_[^\]\n]*\]|\[[^\]\n]*_[^\]\n]*%[^\]\n]*\]/
+  return clase.test(texto) && /\.test\(/.test(texto)
+}
+
+/**
+ * Una ruta route.ts de `app/api/**` que arma `contains` con un valor que NO es un literal
+ * de cadena está construyendo el patrón `%q%` de Prisma con el término de la query sin
+ * escapar: `q=%%` o `q=__` enumeran la tabla entera. Es hallazgo salvo que la ruta declare
+ * el rechazo de los comodines.
+ */
+function reglaR6(raiz, archivos, excepciones) {
+  const hallazgos = []
+  for (const absoluta of archivos) {
+    if (!absoluta.endsWith("route.ts")) continue
+    const texto = readFileSync(absoluta, "utf8")
+    if (!texto.includes("contains:")) continue
+    if (archivoDeclaraRechazoComodines(texto)) continue
+    const lineas = texto.split(/\r?\n/)
+    const re = /\bcontains:\s*([^,}\n]+)/g
+    // Una línea puede armar dos `contains` (nombre y RUT, por ejemplo): el `detalle`
+    // ya cita la línea entera, así que repetir el mismo hallazgo sólo infla el conteo.
+    const vistas = new Set()
+    let m
+    while ((m = re.exec(texto)) !== null) {
+      const valor = m[1].trim()
+      // Un literal fijo no es término de búsqueda: `contains: "activo"` no arma %q%.
+      if (/^["'`]/.test(valor)) continue
+      const linea = texto.slice(0, m.index).split("\n").length
+      const clave = `${linea}:${valor}`
+      if (vistas.has(clave)) continue
+      vistas.add(clave)
+      const archivo = rutaRelativa(raiz, absoluta)
+      if (
+        exceptuado("R6", excepciones, {
+          archivo,
+          texto: lineas[linea - 1] ?? "",
+        })
+      )
+        continue
+      hallazgos.push({
+        regla: "R6",
+        archivo,
+        linea,
+        detalle: `contains sobre "${valor}" sin rechazo declarado de los comodines de LIKE: ${recorta(lineas[linea - 1] ?? "")}`,
+        accion:
+          `rechazar "%" y "_" antes de armar el where (const COMODINES_LIKE = /[%_]/ y COMODINES_LIKE.test(q) → 400) o justificarlo en la allowlist del candado`,
+      })
+    }
+  }
+  return hallazgos
+}
+
+// ---------------------------------------------------------------------------
 // Allowlist — cada entrada con su motivo. Una excepción sin motivo es deuda.
 // ---------------------------------------------------------------------------
 
@@ -874,6 +940,45 @@ const EXCEPCIONES_R5 = [
 ]
 
 /**
+ * R6 · baseline de las rutas que arman `contains` sobre el término de búsqueda sin
+ * declarar el rechazo de los comodines de LIKE. Es el registro de la deuda y no un aval:
+ * este lote no las arregla. Una ruta que nazca floja no está acá y el candado la reporta;
+ * arreglar una de estas quita su entrada.
+ */
+const EXCEPCIONES_R6 = [
+  {
+    archivo: "app/api/personas/route.ts",
+    motivo:
+      "Estado medido el 2026-11-16 (registro de la deuda, NO un aval): el listado del padrón arma 3 contains sobre q (nombreCompleto, rut, email) sin rechazar los comodines de LIKE; un q=%% o q=__ enumera la tabla entera de personas. Este lote no la arregla: la entrada existe para que la lista no crezca.",
+  },
+  {
+    archivo: "app/api/fi/route.ts",
+    motivo:
+      "Estado medido el 2026-11-16 (registro de la deuda, NO un aval): el listado financiero arma 4 contains sobre q — egresos (descripcion, folio) e ingresos (concepto, familia) — sin rechazar los comodines de LIKE; un q=%% o q=__ enumera la tabla entera de movimientos. Este lote no la arregla: la entrada existe para que la lista no crezca.",
+  },
+  {
+    archivo: "app/api/auditoria/route.ts",
+    motivo:
+      "Estado medido el 2026-11-16 (registro de la deuda, NO un aval): el listado de la bitácora arma 3 contains sobre q (descripcion, tipoAccion, referenciaId) sin rechazar los comodines de LIKE; un q=%% o q=__ enumera los registros de auditoría enteros. Este lote no la arregla: la entrada existe para que la lista no crezca.",
+  },
+  {
+    archivo: "app/api/pe/unidades/route.ts",
+    motivo:
+      "Estado medido el 2026-11-16 (registro de la deuda, NO un aval): el listado de unidades arma 3 contains sobre q (numero, etiqueta, rolSii) sin rechazar los comodines de LIKE; un q=%% o q=__ enumera la tabla entera de unidades. Este lote no la arregla: la entrada existe para que la lista no crezca.",
+  },
+  {
+    archivo: "app/api/pe/personas/route.ts",
+    motivo:
+      "Estado medido el 2026-11-16 (registro de la deuda, NO un aval): la búsqueda del padrón arma 2 contains sobre q (nombreCompleto, rut) sin rechazar los comodines de LIKE; un q=%% o q=__ enumera la tabla entera de personas. Este lote no la arregla: la entrada existe para que la lista no crezca.",
+  },
+  {
+    archivo: "app/api/convenios/unidades-con-deuda/route.ts",
+    motivo:
+      "Estado medido el 2026-11-16 (registro de la deuda, NO un aval): el listado de unidades con deuda arma 2 contains sobre q (numero, etiqueta) sin rechazar los comodines de LIKE; un q=%% o q=__ enumera la tabla entera de unidades. Este lote no la arregla: la entrada existe para que la lista no crezca.",
+  },
+]
+
+/**
  * Allowlist real del candado. Exportada para que el test pueda citar cada motivo y verificar
  * que el baseline de raíz desnuda nombra exactamente las rutas medidas.
  */
@@ -883,6 +988,7 @@ export const EXCEPCIONES = {
   R3: EXCEPCIONES_R3,
   R4: EXCEPCIONES_R4,
   R5: EXCEPCIONES_R5,
+  R6: EXCEPCIONES_R6,
 }
 
 /** ¿Hay una excepción para este hallazgo? Devuelve la entrada o null. */
@@ -890,7 +996,7 @@ function buscarExcepcion(regla, excepciones, hallazgo) {
   const lista = excepciones[regla] ?? []
   return (
     lista.find((excepcion) => {
-      // `archivo` puede venir sola (R2-R5) o acompañando a `recurso` (R1 de raíz desnuda,
+      // `archivo` puede venir sola (R2-R6) o acompañando a `recurso` (R1 de raíz desnuda,
       // donde el mismo recurso se permite en una ruta y se prohíbe en otra).
       if (excepcion.archivo !== undefined && excepcion.archivo !== hallazgo.archivo)
         return false
@@ -921,6 +1027,7 @@ const TITULOS = {
   R3: "R3 · Tests apagados sin justificación",
   R4: "R4 · Truncamientos silenciosos de listas",
   R5: "R5 · Catch vacío que confirma éxito",
+  R6: "R6 · Búsqueda por LIKE sin rechazo de los comodines",
 }
 
 function archivosDe(raiz, directorios) {
@@ -931,7 +1038,8 @@ function archivosDe(raiz, directorios) {
 
 /**
  * Una excepción de la allowlist: `recurso` (R1, sola) o `recurso` + `rutas` (R1 de raíz
- * desnuda, con su lista de rutas) o `archivo` + `fragmento` (R2-R5), siempre con su motivo.
+ * desnuda, con su lista de rutas) o `archivo` (R2-R6; `fragmento` opcional para afinar),
+ * siempre con su motivo.
  * @typedef {{ recurso?: string, rutas?: string[], archivo?: string, fragmento?: string, motivo: string }} Excepcion
  */
 /**
@@ -939,7 +1047,7 @@ function archivosDe(raiz, directorios) {
  * @typedef {Record<string, Excepcion[]>} Excepciones
  */
 /**
- * Ejecuta las 5 reglas. Pura respecto del repo: todo sale de `raiz`.
+ * Ejecuta las 6 reglas. Pura respecto del repo: todo sale de `raiz`.
  * @param {{ raiz?: string, excepciones?: Excepciones }} opciones
  */
 export function auditar(opciones = {}) {
@@ -953,6 +1061,7 @@ export function auditar(opciones = {}) {
     ...reglaR3(raiz, pruebas, excepciones),
     ...reglaR4(raiz, archivosDe(raiz, ["app", "components"]), excepciones),
     ...reglaR5(raiz, codigo, excepciones),
+    ...reglaR6(raiz, archivosDe(raiz, ["app/api"]), excepciones),
   ]
 }
 

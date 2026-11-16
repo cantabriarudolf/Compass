@@ -423,6 +423,88 @@ export async function POST() {
   })
 })
 
+describe("R6 · búsqueda por LIKE sin comodines escapados", () => {
+  it("reporta el contains armado con el término de búsqueda y sin rechazo declarado", () => {
+    const raiz = crearRaiz({
+      "app/api/personas/buscar/route.ts": `import { prisma } from "@/lib/prisma"
+
+export async function GET(q: string) {
+  const personas = await prisma.persona.findMany({
+    where: { OR: [{ nombreCompleto: { contains: q } }] },
+  })
+  return personas
+}
+`,
+    })
+    const hallazgos = hallazgosDe(raiz, "R6")
+    expect(hallazgos).toHaveLength(1)
+    expect(hallazgos[0]?.archivo).toBe("app/api/personas/buscar/route.ts")
+    expect(hallazgos[0]?.detalle).toContain('contains sobre "q"')
+    expect(hallazgos[0]?.accion).toContain("COMODINES_LIKE")
+  })
+
+  it("no reporta la ruta que declara el rechazo de % y _ con .test(", () => {
+    const raiz = crearRaiz({
+      "app/api/personas/buscar/route.ts": `import { prisma } from "@/lib/prisma"
+
+const COMODINES_LIKE = /[%_]/
+
+export async function GET(q: string) {
+  if (COMODINES_LIKE.test(q)) return null
+  return prisma.persona.findMany({
+    where: { OR: [{ nombreCompleto: { contains: q } }] },
+  })
+}
+`,
+    })
+    expect(hallazgosDe(raiz, "R6")).toHaveLength(0)
+  })
+
+  it("no reporta el contains con un literal fijo (no es término de búsqueda)", () => {
+    const raiz = crearRaiz({
+      "app/api/inventario/route.ts": `import { prisma } from "@/lib/prisma"
+
+export async function GET() {
+  return prisma.item.findMany({
+    where: { nombre: { contains: "literal fijo" } },
+  })
+}
+`,
+    })
+    expect(hallazgosDe(raiz, "R6")).toHaveLength(0)
+  })
+
+  it("no repite el hallazgo cuando una misma línea arma dos contains del mismo término", () => {
+    const raiz = crearRaiz({
+      "app/api/personas/buscar/route.ts": `import { prisma } from "@/lib/prisma"
+
+export async function GET(q: string) {
+  return prisma.persona.findMany({
+    where: { OR: [{ nombreCompleto: { contains: q } }, { rut: { contains: q } }] },
+  })
+}
+`,
+    })
+    const hallazgos = hallazgosDe(raiz, "R6")
+    expect(hallazgos).toHaveLength(1)
+    expect(hallazgos[0]?.detalle).toContain("nombreCompleto")
+  })
+
+  it("la allowlist de R6 nombra exactamente las seis rutas medidas, cada una con su motivo", () => {
+    const rutasMedidas = [
+      "app/api/personas/route.ts",
+      "app/api/fi/route.ts",
+      "app/api/auditoria/route.ts",
+      "app/api/pe/unidades/route.ts",
+      "app/api/pe/personas/route.ts",
+      "app/api/convenios/unidades-con-deuda/route.ts",
+    ]
+    const entradas = EXCEPCIONES.R6 ?? []
+    expect(entradas.map((e) => e.archivo).sort()).toEqual([...rutasMedidas].sort())
+    expect(entradas.every((e) => e.motivo.trim().length > 0)).toBe(true)
+  })
+})
+
 describe("CLI", () => {
   it("sale 1 con hallazgos y 0 con un árbol limpio", () => {
     const limpio = crearRaiz({ "lib/authz.ts": AUTHZ_MIN })
