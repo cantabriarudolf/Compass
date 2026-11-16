@@ -13,9 +13,12 @@
  *
  *   · universo: personas con `estadoCuenta: "activa"` de la comunidad — la MISMA
  *     regla del checkbox, sin requisitos nuevos (ni vínculo ni unidad);
- *   · `q` filtra por nombre, RUT y email (los mismos tres campos de
- *     `/api/personas`), sobre TODA la comunidad, sin el techo de 100 filas del
- *     padrón del cliente;
+ *   · `q` filtra por nombre y RUT sobre TODA la comunidad, sin el techo de 100
+ *     filas del padrón del cliente. El email NO es criterio (T21, decisión del
+ *     owner): al rechazar los comodines de LIKE (`%` y `_`), una búsqueda por
+ *     email con guion bajo que antes daba 200 pasó a 400 — la salida honesta
+ *     fue sacarlo del OR, no reabrir el comodín. Sigue siendo un campo que la
+ *     base guarda; sólo deja de ser criterio de búsqueda;
  *   · cada fila trae `nombreCompleto` y `rut`: el payload de la nómina necesita
  *     el nombre de la persona elegida, y el padrón del cliente puede no conocerla;
  *   · la página es chica y la respuesta declara `total`, `page` y `pageSize`:
@@ -42,7 +45,7 @@
  *     padrón 25 filas por letra;
  *   · `q` no acepta los comodines de LIKE (`%` y `_`, R1-001): `contains` arma
  *     el patrón `%q%` sin escapar, así que `q=%%` cumplía el mínimo de dos y
- *     enumeraba el padrón entero. Los nombres, RUT y emails no usan esos
+ *     enumeraba el padrón entero. Los nombres y RUT no usan esos
  *     caracteres: el término con comodín se rechaza;
  *   · el `contains` declara `mode: "insensitive"` SÓLO cuando la base es
  *     PostgreSQL según `DATABASE_URL` (R3-1, derivado con `proveedorDeUrl` de
@@ -110,16 +113,22 @@ function proveedorDeLaBase(): ProveedorBase | null {
 }
 
 /**
- * El OR de los tres campos de búsqueda (los mismos de `/api/personas`: nombre,
- * RUT y email). `mode: "insensitive"` va SÓLO para el cliente PostgreSQL (R3-1):
- * allá `contains` es case-sensitive; en SQLite el conector rechaza `mode` y su
- * `LIKE` ya es case-insensitive para ASCII. Exportado para que el test pinee las
- * dos formas sin una base PostgreSQL al lado.
+ * El OR de los campos de búsqueda: nombre y RUT. El email NO está (T21, decisión
+ * del owner): el comodín `_` de LIKE matchea un carácter y `__` enumera, así que
+ * rechazar comodines —correcto— rompía la búsqueda legítima por email con guion
+ * bajo (antes 200, después 400); la salida fue sacar el email del OR, no abrir
+ * el comodín. Que deje de ser criterio no lo saca de la base: si alguna fila
+ * necesitara devolverlo, sería campo devuelto — sólo dejó de ser campo buscado.
+ *
+ * `mode: "insensitive"` va SÓLO para el cliente PostgreSQL (R3-1): allá `contains`
+ * es case-sensitive; en SQLite el conector rechaza `mode` y su `LIKE` ya es
+ * case-insensitive para ASCII. Exportado para que el test pinee las dos formas sin
+ * una base PostgreSQL al lado.
  */
 export function filtroDeBusqueda(q: string, proveedor: ProveedorBase | null) {
   const contiene: { contains: string; mode?: "insensitive" } =
     proveedor === "postgresql" ? { contains: q, mode: "insensitive" } : { contains: q }
-  return [{ nombreCompleto: contiene }, { rut: contiene }, { email: contiene }]
+  return [{ nombreCompleto: contiene }, { rut: contiene }]
 }
 
 /**
@@ -190,8 +199,9 @@ export async function GET(req: Request): Promise<Response> {
       comunidadId: scope.comunidadId,
       estadoCuenta: "activa",
       ...(alcance.tipo === "propio" ? { id: alcance.personaId } : {}),
-      // Mismos tres campos de búsqueda que `/api/personas` (nombre, RUT, email),
-      // con `mode` sólo cuando `DATABASE_URL` es de PostgreSQL (R3-1).
+      // Criterios de búsqueda: nombre y RUT (el email salió del OR: T21, decisión
+      // del owner — el comodín `_` de LIKE lo hacía morder en emails con guion
+      // bajo). `mode` sólo cuando `DATABASE_URL` es de PostgreSQL (R3-1).
       OR: filtroDeBusqueda(q, proveedorDeLaBase()),
     }
 

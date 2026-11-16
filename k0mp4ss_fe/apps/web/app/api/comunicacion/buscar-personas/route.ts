@@ -61,9 +61,9 @@ export async function GET(req: Request): Promise<Response> {
   // nunca y una cuenta sin privilegios podía insistir sin tope (hallazgo R1-001).
   // La clave es el usuario, no la IP. El 429 deja rastro propio (T21, mismo
   // criterio que R4-001): SU evento `RP_VOLUME_LIMITED`, deduplicado por ventana
-  // de 60 s por usuario — un 429 no es una denegación de privilegio.
+  // de 60 s por emisor y usuario — un 429 no es una denegación de privilegio.
   if (excedeVolumen("comunicacion", scope.usuarioId)) {
-    registrarLimiteVolumen(scope.usuarioId)
+    registrarLimiteVolumen("comunicacion", scope.usuarioId)
     return jsonError(429, "Demasiadas solicitudes.")
   }
 

@@ -87,7 +87,10 @@ describe("T21 — el proveedor del filtro no degrada en silencio", () => {
         | undefined
       expect(Array.isArray(argumentos?.where?.OR)).toBe(true)
       const ramas = argumentos?.where?.OR ?? []
-      expect(ramas).toHaveLength(3)
+      // T21 (decisión del owner): el email SALIÓ del OR — al rechazar los
+      // comodines de LIKE (`_` matchea un carácter), la búsqueda por email
+      // rompía; se saca el email como criterio en vez de reabrir el comodín.
+      expect(ramas).toHaveLength(2)
 
       const campos = new Set<string>()
       for (const rama of ramas) {
@@ -99,7 +102,7 @@ describe("T21 — el proveedor del filtro no degrada en silencio", () => {
         // búsqueda muda de Postgres (cero filas, sin aviso).
         expect(condicion).toEqual({ contains: "Buscada", mode: "insensitive" })
       }
-      expect(campos).toEqual(new Set(["nombreCompleto", "rut", "email"]))
+      expect(campos).toEqual(new Set(["nombreCompleto", "rut"]))
     } finally {
       buscarMany.mockRestore()
       contar.mockRestore()

@@ -13,8 +13,10 @@
  * comunidad, sin requisitos nuevos— y las garantías de la serie «permisos por
  * objeto»:
  *
- *   · `q` filtra nombre, RUT y email (los mismos tres campos de `/api/personas`)
- *     sobre TODA la comunidad, sin el techo de 100 filas del padrón del cliente;
+ *   · `q` filtra nombre y RUT sobre TODA la comunidad, sin el techo de 100
+ *     filas del padrón del cliente. El email NO es criterio (T21, decisión del
+ *     owner): al rechazar los comodines de LIKE, una búsqueda por email con
+ *     guion bajo rompía; se sacó el email del OR en vez de abrir el comodín;
  *   · la página es chica y la respuesta declara `total`, `page` y `pageSize`:
  *     el recorte se DECLARA, no se esconde (S10);
  *   · el scope de comunidad sale de la sesión (`withComunidadScope`): la fila de
@@ -263,7 +265,7 @@ describe("T11 — GET /api/periodos-directiva/buscar-personas", () => {
     })
   })
 
-  it("`q` filtra por nombre, RUT y email sobre toda la comunidad", async () => {
+  it("`q` filtra por nombre y RUT sobre toda la comunidad; el email deja de ser criterio (T21)", async () => {
     await conSesion(EMAIL.admin, async () => {
       const porNombre = await cuerpo(await buscar("Ana Buscada"))
       expect(porNombre.total).toBe(1)
@@ -273,9 +275,15 @@ describe("T11 — GET /api/periodos-directiva/buscar-personas", () => {
       expect(porRut.total).toBe(1)
       expect(porRut.data.map((p) => p.id)).toEqual([P_ANA])
 
-      const porEmail = await cuerpo(await buscar("t11-p-ana@"))
-      expect(porEmail.total).toBe(1)
-      expect(porEmail.data.map((p) => p.id)).toEqual([P_ANA])
+      // T21 (decisión del owner): el email SALIÓ del OR. Al rechazar los comodines
+      // de LIKE —correcto: `_` matchea un carácter y `__` enumera—, una búsqueda
+      // por email que antes daba 200 pasó a 400; la salida honesta fue sacar el
+      // email del OR, no reabrir el comodín. El propio email de Ana ya no la
+      // encuentra por email (200 con cero filas, nunca 400), mientras el nombre y
+      // el RUT de arriba siguen encontrándola.
+      const porEmail = await cuerpo(await buscar("t11-p-ana@t11.test.cl"))
+      expect(porEmail.total).toBe(0)
+      expect(porEmail.data).toEqual([])
     })
   })
 
@@ -338,17 +346,16 @@ describe("T11 — GET /api/periodos-directiva/buscar-personas", () => {
     // una búsqueda en minúsculas no encontraba nada. El filtro declara `mode`
     // sólo cuando el cliente generado es PostgreSQL.
     const ruta = await import("@/app/api/periodos-directiva/buscar-personas/route")
+    // El OR es nombre y RUT: el email salió del OR (T21, decisión del owner).
     expect(ruta.filtroDeBusqueda("ana", "postgresql")).toEqual([
       { nombreCompleto: { contains: "ana", mode: "insensitive" } },
       { rut: { contains: "ana", mode: "insensitive" } },
-      { email: { contains: "ana", mode: "insensitive" } },
     ])
     // SQLite —y un proveedor desconocido— no declara `mode`: el conector lo
     // rechaza y con él cada búsqueda de la ruta respondería 500.
     const enSqlite = [
       { nombreCompleto: { contains: "ana" } },
       { rut: { contains: "ana" } },
-      { email: { contains: "ana" } },
     ]
     expect(ruta.filtroDeBusqueda("ana", "sqlite")).toEqual(enSqlite)
     expect(ruta.filtroDeBusqueda("ana", null)).toEqual(enSqlite)
