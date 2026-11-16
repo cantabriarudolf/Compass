@@ -94,9 +94,14 @@ const FORM_NUEVA: FormNueva = {
 }
 
 export default function SolicitudesPage() {
-  const { personas, isLoading: cPersonas } = usePersonas()
+  // El padrón de la comunidad es un universo acotado: esta pantalla resuelve la
+  // identidad del ticket (solicitante por nombre y unidad por rótulo) y llena
+  // cuatro Select con estos padrones, así que la colección se completa con la
+  // paginación del servidor (`&page=N`) para que la fila fuera de la primera
+  // página se imprima y se pueda elegir.
+  const { personas, isLoading: cPersonas } = usePersonas(undefined, { todasLasPaginas: true })
   const { vinculos, isLoading: cVinculos } = useVinculos()
-  const { items: unidades, isLoading: cUnidades } = useUnidades()
+  const { items: unidades, isLoading: cUnidades } = useUnidades({ todasLasPaginas: true })
   const {
 items: solicitudesGE,
 isLoading: cSolicitudes,
