@@ -133,8 +133,13 @@ export default function ProyectosPage() {
   // paginación del servidor (`&page=N`), igual que `/inventario/tipos` con el padrón de unidades.
   const { items: trabajosMT, total: totalTrabajos, isLoading: cargandoTrabajos, create: crearTrabajo, update: actualizarTrabajo } = useTrabajosMT({ todasLasPaginas: true })
   const { items: proyectosMT, isLoading: cargandoProyectos, create: crearProyecto, remove: eliminarProyecto } = useProyectosMT({ todasLasPaginas: true })
-  const { personas, isLoading: cargandoPersonas } = usePersonas()
-  const { items: unidades, isLoading: cargandoUnidades } = useUnidades()
+  // El padrón de la comunidad es un universo acotado: la columna Responsable y
+  // la columna Ubicación se resuelven con `find()` sobre estos padrones y el
+  // formulario llena «Unidad EF» y «Responsable interno» con los mismos, así que
+  // la colección se completa con la paginación del servidor (`&page=N`) para que
+  // la fila fuera de la primera página se imprima y se pueda elegir.
+  const { personas, isLoading: cargandoPersonas } = usePersonas(undefined, { todasLasPaginas: true })
+  const { items: unidades, isLoading: cargandoUnidades } = useUnidades({ todasLasPaginas: true })
   const { items: microSectores, isLoading: cargandoMicro } = useMicroSectores()
   // El selector «Equipo crítico del catálogo IR» filtra por naturaleza en el navegador: sobre la
   // primera página ofrecía solo los equipos de las 100 filas más nuevas del catálogo.
