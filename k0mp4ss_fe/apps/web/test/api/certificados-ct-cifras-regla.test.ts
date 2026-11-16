@@ -134,15 +134,15 @@ describe("T20 — invariantes de las cifras server-side", () => {
     })
   })
 
-  it("PRESERVE: el PUT sigue aceptando el detalle del cliente (documento no inmutable por API)", async () => {
+  it("el PUT ya no reescribe el detalle: las cifras del papel no se cambian desde el cliente", async () => {
     await conSesion(async () => {
       expect((await emitir(cert("ctregla-7", "estado_cuenta", U_VACIA, BASE2))).status).toBe(201)
       const put = await invocarApi(modItem(), "PUT", "certificados-ct/[id]", {
         params: { id: "ctregla-7" },
         body: { detalle: [...BASE2, { clave: "Saldo pendiente", valor: "$1" }] },
       })
-      expect(put.status).toBe(200)
-      expect(suma(await enBd("ctregla-7"))).toContain("Saldo pendiente=$1")
+      expect(put.status).toBe(409)
+      expect(suma(await enBd("ctregla-7"))).not.toContain("Saldo pendiente=$1")
     })
   })
 })

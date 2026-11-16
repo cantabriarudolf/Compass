@@ -67,6 +67,24 @@ async function DELETE(id: string): Promise<Response> {
   )
 }
 
+async function PUT(id: string, body: unknown): Promise<Response> {
+  const { PUT: handler } = await import("@/app/api/certificados-ct/[id]/route")
+  return handler(
+    new NextRequest(`http://localhost/api/certificados-ct/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+      headers: { "content-type": "application/json" },
+    }),
+    { params: Promise.resolve({ id }) }
+  )
+}
+
+const enBd = (id: string) => prisma.certificadoCT.findUnique({ where: { id } })
+
+/** Texto exacto del rechazo: el documento emitido no cambia. */
+const INMUTABLE =
+  "Documento inmutable: no se puede cambiar el tipo, la unidad, la persona ni el detalle de un certificado."
+
 const sembrarCertificado = (id: string, comunidadId: string): Promise<unknown> =>
   prisma.certificadoCT.create({
     data: {
@@ -112,6 +130,24 @@ describe("/api/certificados-ct/[id] — detalle y baja inmutable scoped", () => 
         data: { usuarioId: idDe(email), comunidadId, rol },
       })
     }
+    // La unidad de la comunidad vecina: existe de verdad, así que un `unidadId`
+    // ajeno no falla por clave foránea sino por la guarda.
+    await prisma.unidad.deleteMany({ where: { id: "ctitem-unidad-b" } })
+    await prisma.unidad.create({
+      data: {
+        id: "ctitem-unidad-b",
+        comunidadId: otraComunidad,
+        microSectorId: "ctitem-b-ms",
+        numero: "101",
+        etiqueta: "Depto 101",
+        tipoUnidadId: "ctitem-b-tu",
+        metraje: 55,
+        prorrateo: 1,
+        rolSii: "ctitem-b-101",
+        estadoId: "ctitem-b-ocu",
+        servicios: {},
+      },
+    })
   }, 30_000)
 
   beforeEach(async () => {
@@ -133,6 +169,7 @@ describe("/api/certificados-ct/[id] — detalle y baja inmutable scoped", () => 
         await prisma.membresia.deleteMany({ where: { usuarioId: idDe(email) } })
         await prisma.usuario.delete({ where: { id: idDe(email) } }).catch(() => {})
       }
+      await prisma.unidad.deleteMany({ where: { id: "ctitem-unidad-b" } })
       await prisma.comunidad.delete({ where: { id: otraComunidad } }).catch(() => {})
       await prisma.comunidad.delete({ where: { id: comunidad } }).catch(() => {})
     } catch {
@@ -241,9 +278,86 @@ describe("/api/certificados-ct/[id] — detalle y baja inmutable scoped", () => 
       expect(await res.json()).toEqual({
         error: "Documento inmutable: no se puede eliminar un certificado.",
       })
-      expect(
-        await prisma.certificadoCT.findUnique({ where: { id: "ctitem-cert-1" } })
-      ).not.toBeNull()
+      expect(await enBd("ctitem-cert-1")).not.toBeNull()
+    })
+  })
+
+  it("PUT con un `unidadId` de OTRA comunidad → 409 y la unidad no se guarda", async () => {
+    await conSesion(emailAdmin, async () => {
+      const res = await PUT("ctitem-cert-1", { unidadId: "ctitem-unidad-b" })
+      expect(res.status).toBe(409)
+      expect(await res.json()).toEqual({ error: INMUTABLE })
+      expect((await enBd("ctitem-cert-1"))?.unidadId).toBeNull()
+    })
+  })
+
+  it("PUT que cambia el `tipo` → 409 y el tipo emitido sigue siendo el mismo", async () => {
+    await conSesion(emailAdmin, async () => {
+      const res = await PUT("ctitem-cert-1", { tipo: "al_dia" })
+      expect(res.status).toBe(409)
+      expect(await res.json()).toEqual({ error: INMUTABLE })
+      expect((await enBd("ctitem-cert-1"))?.tipo).toBe("residencia")
+    })
+  })
+
+  it("PUT que cambia la `personaId` → 409 y la persona no se guarda", async () => {
+    await conSesion(emailAdmin, async () => {
+      const res = await PUT("ctitem-cert-1", { personaId: "ctitem-persona-otra" })
+      expect(res.status).toBe(409)
+      expect(await res.json()).toEqual({ error: INMUTABLE })
+      expect((await enBd("ctitem-cert-1"))?.personaId).toBeNull()
+    })
+  })
+
+  it("PUT que cambia el `detalle` → 409 y el detalle archivado no se toca", async () => {
+    await conSesion(emailAdmin, async () => {
+      const res = await PUT("ctitem-cert-1", {
+        detalle: [{ clave: "Saldo pendiente", valor: "$1" }],
+      })
+      expect(res.status).toBe(409)
+      expect(await res.json()).toEqual({ error: INMUTABLE })
+      expect((await enBd("ctitem-cert-1"))?.detalle).toEqual([
+        { clave: "Unidad", valor: "101" },
+      ])
+    })
+  })
+
+  it("PUT que reenvía un campo inmutable con su MISMO valor sí pasa: la guarda rechaza mutaciones, no reenvíos", async () => {
+    await conSesion(emailAdmin, async () => {
+      const antes = await enBd("ctitem-cert-1")
+      const res = await PUT("ctitem-cert-1", {
+        tipo: antes?.tipo,
+        detalle: antes?.detalle,
+        resumen: "Certificado de residencia (actualizado)",
+      })
+      expect(res.status).toBe(200)
+      const despues = await enBd("ctitem-cert-1")
+      expect(despues?.resumen).toBe("Certificado de residencia (actualizado)")
+      expect(despues?.tipo).toBe("residencia")
+    })
+  })
+
+  it("PUT sin sesión → 401 antes que la guarda", async () => {
+    state.cookie = ""
+    expect((await PUT("ctitem-cert-1", { tipo: "al_dia" })).status).toBe(401)
+  })
+
+  it("PUT con rol sin `ct` editar (comité y residente) → 403, no 409", async () => {
+    for (const email of [emailComite, emailResidente]) {
+      await conSesion(email, async () => {
+        const res = await PUT("ctitem-cert-1", { tipo: "al_dia" })
+        expect(res.status).toBe(403)
+        expect(await res.json()).toEqual({ error: "Permiso denegado." })
+      })
+    }
+  })
+
+  it("PUT de un certificado de otra comunidad → 404, no 409 (no filtra existencia)", async () => {
+    await conSesion(emailAdmin, async () => {
+      const res = await PUT("ctitem-cert-b", { tipo: "al_dia" })
+      expect(res.status).toBe(404)
+      expect(await res.json()).toEqual({ error: "Registro no encontrado." })
+      expect((await enBd("ctitem-cert-b"))?.tipo).toBe("residencia")
     })
   })
 })
