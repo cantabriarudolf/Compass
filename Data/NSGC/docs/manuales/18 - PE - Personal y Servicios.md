@@ -9,7 +9,7 @@ Dos mundos que comparten módulo: **RRHH** profundiza la extensión laboral mín
 ## 🛠️ Secciones
 
 - **Personal (`/personas/personal`)**:
-  - **Trabajadores**: ficha integral 1:1 con la persona; las FKs legales (`afpId`, `saludId`, `asignacionFamiliarId`, `bancoId`, `mutualidadId`) se validan en escritura y bloquean la eliminación del maestro referenciado. Horas extras y evaluaciones quedan auditadas.
+  - **Trabajadores**: ficha integral 1:1 con la persona; las FKs legales (`afpId`, `saludId`, `asignacionFamiliarId`, `bancoId`, `mutualidadId`) se validan en escritura y bloquean la eliminación del maestro referenciado. Horas extras y evaluaciones quedan auditadas. La pantalla y sus derivaciones (conteo de activos, cruce con tareas MT del panel de monitoreo, selector de turno y de responsable interno) operan sobre el padrón completo de la comunidad: el trabajador fuera de la primera página ya existe para la pantalla.
   - **Feriados y Proyección**: CRUD del maestro `feriados` (con importación anual) + cruce feriados × jornadas rotativas: *"necesitará N parches"*; el costo estimado (parches + día extra de planta) se envía a Finanzas como `proyeccionesPE` con marcador `liquidacionPLReferencia:"pendiente"` hasta PL (ventana 8).
   - **Panel de Monitoreo**: quién informó turno hoy (tarjetas Informado/No Informado por jornada), botón Iniciar Turno (`PE_START_SHIFT`) y tareas MT pendientes por trabajador con cierre directo (`PE_TASK_DONE`).
   - **Transiciones guardadas en la base**: iniciar turno, registrar hora extra, registrar evaluación, completar tarea de monitoreo y enviar proyección de costo ahora persisten en la base de datos — recargar la página ya no las pierde (antes vivían en el navegador).

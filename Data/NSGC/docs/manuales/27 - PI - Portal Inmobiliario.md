@@ -19,6 +19,7 @@ Vitrina digital que se alimenta sola: cuando un propietario marca su unidad "En 
 - **Fotos sin peso muerto**: las imágenes van por referencia (URL + metadatos), nunca incrustadas (decisión D1).
 - **Bandeja, no buzón real**: las notificaciones de leads son simuladas (decisión D3); revisa la bandeja interna del sistema.
 - **Auditoría**: cada publicación/despublicación/lead genera eventos `PI_PROPERTY_LISTED`, `PI_PROPERTY_UNLISTED` y `PI_LEAD_CONTACT`.
+- **Identidad contra el padrón completo**: el catálogo resuelve el rótulo de cada unidad y la ficha imprime el nombre del propietario leyendo el padrón entero de personas y unidades de la comunidad — alguien fuera de la primera página ya no aparece como id crudo.
 
 ## 🔗 Dependencias
 

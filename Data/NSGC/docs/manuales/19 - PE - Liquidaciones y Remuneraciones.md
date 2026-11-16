@@ -9,7 +9,7 @@ Cada liquidación es un **snapshot inmutable**: al generarla el sistema congela 
 ## 🛠️ Secciones
 
 - **Remuneraciones (`/finanzas/remuneraciones`)**:
-  - **Liquidaciones**: selector de trabajador con ficha PE (exige `sueldoBase`), periodo y días trabajados; bonos/aguinaldos manuales con flag imponible; movilización y colación como no imponibles; vista previa en vivo del cálculo antes de generar. Folio correlativo **LIQ-####**.
+  - **Liquidaciones**: selector de trabajador con ficha PE (exige `sueldoBase`), periodo y días trabajados; bonos/aguinaldos manuales con flag imponible; movilización y colación como no imponibles; vista previa en vivo del cálculo antes de generar. Folio correlativo **LIQ-####**. El selector de trabajador recorre el padrón completo de la comunidad (ficha laboral y cuenta activa): el trabajador fuera de la primera página ya se puede elegir y liquidar, y el folio imprime su nombre.
   - **Adelantos**: registro con glosa explicativa obligatoria → comprobante **ADE-####** notificado al trabajador (`email_simulado`). Hay **dos naturalezas distintas**, nunca una sola:
     - **Anticipo de sueldo**: pago anticipado de lo ya devengado. Se descuenta **completo** en la liquidación siguiente, **sin tope**.
     - **Préstamo o deuda**: exige **acuerdo escrito adjunto**; el descuento se topa al **15% mensual** de la remuneración y al **45% en conjunto** con las otras deducciones.

@@ -39,6 +39,7 @@ El expediente se resuelve también en el servidor, con **un evento de auditoría
 - **Aplicar fija el monto**: monto fijo del catálogo o costo del daño; el % GC se convierte a pesos contra el último GC emitido de la unidad (sin historial usa el valor nominal). Toda aplicación genera el cobro real de multa en FI y materializa `cargoFIReferencia` con su id; además notifica al propietario vigente de la unidad (pasa por gate AD).
 - **Desestimación exige justificación**: queda escrita en el expediente.
 - **Tipo en uso no eliminable**: el catálogo bloquea borrar faltas con infracciones registradas.
+- **El libro se camina entero**: la identidad del expediente (persona y unidad por nombre, no id crudo), los contadores por estado y categoría, el monto aplicado y el folio correlativo `IN-####` se derivan del libro completo de infracciones y del padrón completo — con más de cien filas la cifra ya no baja ni dos expedientes comparten folio, y mientras el libro completa sus páginas la pantalla muestra su carga en vez de una suma parcial.
 - **Auditoría**: `IN_REG_EVENT`, `IN_APELACION`, `IN_APPLY_FINE`.
 
 ## 🔗 Dependencias

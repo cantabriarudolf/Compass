@@ -32,6 +32,7 @@ La bitácora técnica quedó también en el servidor, con transiciones exactly-o
 - **Pagos sin saltos raros**: Pendiente → Parcial → Pagado; volver atrás requiere pasar por Pendiente.
 - **Ubicación obligatoria**: sin unidad ni sub-sector el trabajo no se guarda; vincular el activo IR habilita histórico por equipo crítico.
 - **Auditoría**: `MT_WORK_CREATED`, `MT_WORK_STARTED`, `MT_WORK_FINISHED`, `MT_PREVENTIVE_GENERATED`, `MT_GUARANTEE_EXPIRED`.
+- **Responsable y ubicación contra el padrón completo**: la columna Responsable y la columna Ubicación resuelven el nombre y el rótulo leyendo el padrón entero de personas y unidades, y los `Select` de «Responsable interno» y «Unidad EF» del formulario ofrecen toda la comunidad — la fila fuera de la primera página se imprime y se puede elegir.
 
 ## 🔗 Dependencias
 

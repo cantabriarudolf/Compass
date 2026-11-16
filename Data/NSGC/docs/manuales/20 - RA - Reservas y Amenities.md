@@ -45,6 +45,7 @@ La reserva y sus cobros se materializan en el servidor, dentro de la misma trans
 - **Una reserva ajena no se abre ni se edita**: el detalle y el PUT de una reserva de otra persona responden 404 —nunca 403, que confirmaría que existe—, y la reserva a nombre de un tercero no se puede crear.
 - **Cobros vivos en FI**: tarifas, penalizaciones y garantías retenidas se materializan como cobros del Fondo de Amenities y `cargoFIReferencia` guarda el id del cobro (conexión FI, Sesión 5); el gate de morosidad está activo: quien arrastra deuda vencida no puede reservar.
 - **Auditoría**: `RA_BOOKING_CREATED`, `RA_BOOKING_AUTHORIZED`, `RA_BOOKING_REJECTED`, `RA_BOOKING_CANCELLED`, `RA_WARRANTY_RETAINED`.
+- **Solicitante y unidad contra el padrón completo**: la fila del calendario imprime el nombre del solicitante y el rótulo de la unidad leyendo el padrón entero de la comunidad, y los `Select` del alta ofrecen todas las personas y unidades — el vecino de la página 2 también se puede elegir y su nombre sale impreso.
 
 ## 🔗 Dependencias
 

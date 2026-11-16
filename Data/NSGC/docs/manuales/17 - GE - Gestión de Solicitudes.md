@@ -25,6 +25,7 @@ Cada solicitud entra como ticket con folio único `GE-####` y estado Nuevo; el s
 - **Grabaciones sin unidad no existen**: la regla obliga a vincular unidad/residente incluso cuando lo pide el personal de conserjería.
 - **Referencia pendiente IR**: los insumos hoy usan texto libre auditado; cuando exista **IR - Inventario y Recursos** se endurecerá al catálogo real.
 - **Auditoría**: `GE_TICKET_CREATED`, `GE_TICKET_STATE_CHANGE`, `GE_TICKET_RESOLVED`.
+- **Identidad y selección sobre el padrón completo**: el ticket imprime el nombre del solicitante y el rótulo de la unidad resolviéndolos contra el padrón entero de la comunidad, y sus cuatro `Select` de padrón (persona y unidad) ofrecen todas las filas — el residente o la unidad fuera de la primera página ya no desaparece del formulario.
 - **El ticket ajeno no existe**: el residente no ve el expediente de otra unidad ni puede crear uno a nombre de un tercero. La guardia corre antes de escribir, así que no queda fila ni evento.
 
 ## 🔗 Dependencias

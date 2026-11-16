@@ -22,6 +22,10 @@ El sistema rechaza el vínculo (y te muestra el motivo) si:
 - **Vínculo duplicado**: La persona ya tiene un vínculo **activo** con la misma unidad.
 - **Solapamiento de arriendos**: Un contrato de arriendo (`Arrendatario`) se solapa con otro contrato vigente en la misma unidad.
 
+## 🔍 El padrón completo detrás del vínculo
+
+El formulario de vínculo ofrece **todas las unidades de la comunidad** en su selector, no sólo la primera página del padrón: la unidad de la fila 101 en adelante también se puede vincular. La ficha de la persona (`/comunidad/personas/[id]`) imprime el rótulo real de cada unidad vinculada, resuelto contra ese mismo padrón completo — ya no un id crudo cuando la unidad queda fuera de las primeras cien filas.
+
 ## 💡 ¿Para qué sirve esto?
 Gracias a esta vinculación, el sistema puede:
 1.  **Automatizar Cobros**: Sabe a quién mandarle el mail del Gasto Común.
