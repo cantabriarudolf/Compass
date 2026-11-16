@@ -134,7 +134,12 @@ jobs:
       - run: npx prisma db push
       # Paridad con el job SQLite: typecheck también contra el esquema PG.
       - run: npx tsc --noEmit
-      - run: npm test
+      # Este test se arma su PROPIA base SQLite (prisma/schema.sqlite.prisma) y
+      # hace new PrismaClient({ datasourceUrl: "file:..." }). En este job el
+      # cliente se genera desde schema.prisma (postgresql), asi que un cliente
+      # postgres contra una URL file: no valida y el job moria siempre. El test
+      # corre completo en el job "unit", que es el que genera el cliente SQLite.
+      - run: npm test -- --exclude test/api/integridad-titularidad.test.ts
 
   e2e:
     name: E2E Playwright (build producción)
