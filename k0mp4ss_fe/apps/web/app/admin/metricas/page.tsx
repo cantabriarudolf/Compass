@@ -49,7 +49,10 @@ const ETIQUETAS_CAUSA: Record<CausaSinTitular, string> = {
 }
 
 export default function MetricasPage() {
-  const { items: unidades, isLoading: cargandoUnidades } = useUnidades()
+  // Universo acotado (las unidades de una comunidad): el hook completa las
+  // páginas él solo (`todasLasPaginas`) para que las cifras derivadas cubran
+  // el padrón entero y no mientan con más de cien unidades.
+  const { items: unidades, isLoading: cargandoUnidades } = useUnidades({ todasLasPaginas: true })
   const { items: tiposUnidad, isLoading: cargandoTipos } = useTiposUnidad()
   const { data: estadosOcupacion, isLoading: cargandoEstados } = useMaestros("estados-ocupacion")
   const { data: categoriasMacro, isLoading: cargandoMacro } = useMaestros("categorias-macro")
