@@ -491,6 +491,37 @@ async function anclarResidencia(
 const MAX_INTENTOS_CORRELATIVO = 3
 
 /**
+ * Normaliza el ANCLAJE del certificado antes de cualquier guarda o lectura (A4).
+ *
+ * Los identificadores que el papel guarda son `unidadId` y `personaId`, y las
+ * compuertas los leen con `trim`. Sin normalizar el cuerpo, un `unidadId` con un
+ * espacio final pasaba la guarda —que compara ya recortado— y llegaba CRUDO a
+ * `cifrasDeUnidad`, que no encontraba cobros: el portón de Al Día veía 0 y la
+ * emisión salía 201 con las cifras en 0/0/0, guardando además un id inválido
+ * (sonda del verificador independiente del lote, 2026-11-16). Normalizar acá
+ * deja un solo valor en juego: el que la guarda validó es el que se persiste y
+ * el que se lee para las cifras.
+ *
+ * No toca nada más del cuerpo: el resto de los campos viaja igual.
+ */
+function normalizarAnclaje(
+  cuerpo: string,
+  datos: Record<string, unknown> | null
+): { cuerpo: string; datos: Record<string, unknown> | null } {
+  if (!datos) return { cuerpo, datos }
+  const unidad = typeof datos.unidadId === "string" ? datos.unidadId.trim() : null
+  const persona = typeof datos.personaId === "string" ? datos.personaId.trim() : null
+  const unidadCambia = unidad !== null && unidad !== datos.unidadId
+  const personaCambia = persona !== null && persona !== datos.personaId
+  if (!unidadCambia && !personaCambia) return { cuerpo, datos }
+
+  const siguientes: Record<string, unknown> = { ...datos }
+  if (unidadCambia) siguientes.unidadId = unidad
+  if (personaCambia) siguientes.personaId = persona
+  return { cuerpo: JSON.stringify(siguientes), datos: siguientes }
+}
+
+/**
  * POST upsert idempotente por id, con las cifras del estado de cuenta y el
  * gate de deuda/saldo resueltos en el servidor (T20), y folio `CT-####`
  * correlativo por comunidad asignado en el servidor.
@@ -513,8 +544,11 @@ export async function POST(req: Request): Promise<Response> {
   const original = await req.text()
   const anclaje = await anclarResidencia(original, leerObjeto(original))
   if (!anclaje.ok) return anclaje.response
-  const cuerpoAnclado = anclaje.cuerpo
-  const datosAnclados = anclaje.datos
+  // A4: el anclaje se normaliza ANTES de la guarda de alcance, así el id que la
+  // guarda valida es el mismo que se persiste y el que alimenta las cifras.
+  const normalizado = normalizarAnclaje(anclaje.cuerpo, anclaje.datos)
+  const cuerpoAnclado = normalizado.cuerpo
+  const datosAnclados = normalizado.datos
 
   const rechazoAlcance = await rechazoDeEmisionAjena(datosAnclados)
   if (rechazoAlcance) return rechazoAlcance

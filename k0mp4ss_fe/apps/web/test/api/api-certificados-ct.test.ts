@@ -357,8 +357,58 @@ describe("/api/certificados-ct — CT con BD real (BD-FUENTE-VERDAD)", () => {
     })
   })
 
-  it("PRESERVE — la unidad y la persona de la comunidad de la sesión siguen emitiendo", async () => {
+  // A4, segunda sonda (verificador independiente del lote): la guarda compara
+  // con `trim`, así que un id con espacio final la pasaba y llegaba CRUDO a
+  // `cifrasDeUnidad` —que no encontraba cobros—: `al_dia` salía 201 con 0/0/0 y
+  // el documento guardaba un id inválido. El anclaje se normaliza antes de la
+  // guarda, así que el veredicto con espacio es el mismo que sin espacio.
+  it("A4 — un espacio al final del id no reintroduce la emisión vacía", async () => {
     await conSesion(emailAdmin, async () => {
+      const sinEspacio = await POST(
+        certificadoValido({
+          id: "ct-cert-espacio-0",
+          folio: "CERT-ESP-0",
+          codigoVerificacion: "ESP0001",
+          tipo: "al_dia",
+          unidadId: unidadConDeuda,
+        })
+      )
+      const conEspacio = await POST(
+        certificadoValido({
+          id: "ct-cert-espacio-1",
+          folio: "CERT-ESP-1",
+          codigoVerificacion: "ESP0002",
+          tipo: "al_dia",
+          unidadId: `${unidadConDeuda} `,
+        })
+      )
+      expect(conEspacio.status, "el espacio final no cambia el veredicto").toBe(sinEspacio.status)
+      expect(conEspacio.status).not.toBe(201)
+      expect(
+        await prisma.certificadoCT.findUnique({ where: { id: "ct-cert-espacio-1" } }),
+        "no queda un documento emitido sobre un id que no es el de la unidad"
+      ).toBeNull()
+    })
+  })
+
+  it("A4 — con espacio el id se persiste normalizado (el que la guarda validó)", async () => {
+    await conSesion(emailAdmin, async () => {
+      const res = await POST(
+        certificadoValido({
+          id: "ct-cert-espacio-ok",
+          folio: "CERT-ESP-OK",
+          codigoVerificacion: "ESPOK01",
+          tipo: "estado_cuenta",
+          unidadId: `${unidadAlDia} `,
+        })
+      )
+      expect(res.status).toBe(201)
+      const enBd = await prisma.certificadoCT.findUnique({ where: { id: "ct-cert-espacio-ok" } })
+      expect(enBd?.unidadId).toBe(unidadAlDia)
+    })
+  })
+
+  it("PRESERVE — la unidad y la persona de la comunidad de la sesión siguen emitiendo", async () => {    await conSesion(emailAdmin, async () => {
       expect(
         (
           await POST(
