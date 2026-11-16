@@ -91,6 +91,33 @@ const { default: VisorPanelPage } = await import("@/app/comunidad/visor/page")
 /** La fila que responde `GET /api/cv/personas-habilitadas`. */
 const FILA_HABILITADA = { id: "t12-cv-autor-1", nombres: "Ana", apellidos: "Habilitada" }
 
+/** Espejo de la constante `RUTA_HABILITADAS` de la página. */
+const RUTA = "/api/cv/personas-habilitadas"
+
+/**
+ * Stub ESTRICTO por turno para los casos de error (T21): responde la secuencia
+ * declarada y lanza nombrando la URL no declarada — misma lección de R3-001:
+ * un misroute no puede lucir verde.
+ */
+function stubPorTurno(respuestas: Array<() => Promise<Response>>): { llamadas: string[] } {
+  const llamadas: string[] = []
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((recurso: string | URL | Request) => {
+      const url = typeof recurso === "string" ? recurso : String(recurso)
+      if (!url.startsWith(RUTA)) {
+        throw new Error(`[stub] URL inesperada para este caso: ${url}`)
+      }
+      const turno = llamadas.length
+      llamadas.push(url)
+      const responder = respuestas[Math.min(turno, respuestas.length - 1)]
+      if (!responder) throw new Error(`[stub] sin respuesta declarada para el turno ${turno}`)
+      return responder()
+    })
+  )
+  return { llamadas }
+}
+
 beforeAll(() => {
   instalarEntornoRadix()
 })
@@ -181,4 +208,111 @@ describe("T12 — el autor habilitado del visor viene del servidor", () => {
     expect(screen.queryByText(/Registrar como creación de tercero habilitado/)).toBeNull()
     expect(estado.crearAviso).not.toHaveBeenCalled()
   }, PRESUPUESTO_CARGA)
+
+  // T21 — el falso-vacío y el reintento. Un 200 cuyo cuerpo no se puede leer
+  // (o que parsea sin la lista) NO es un vacío verificado: mostrar «Nadie
+  // habilitado» ahí es exactamente el falso-vacío que el lote vino a eliminar.
+  describe("T21 — un 200 ilegible no es un vacío verificado y el fetch reintenta", () => {
+    it("un 200 con cuerpo ilegible muestra el error y nunca «Nadie habilitado» (R3-ok-body-unparsed-empty)", async () => {
+      stubPorTurno([
+        () =>
+          Promise.resolve(
+            new Response("<html>mantenimiento</html>", {
+              status: 200,
+              headers: { "content-type": "text/html" },
+            })
+          ),
+      ])
+      const user = userEvent.setup()
+      render(<VisorPanelPage />)
+
+      await user.click(await screen.findByRole("tab", { name: /Configuración/i }))
+
+      expect(
+        await screen.findByText(`Respuesta ilegible del servidor al consultar ${RUTA}.`)
+      ).toBeTruthy()
+      expect(screen.queryByText(/Nadie habilitado además de administración/)).toBeNull()
+      expect(screen.queryByText(/Ana Habilitada/)).toBeNull()
+    }, PRESUPUESTO_CARGA)
+
+    it("un 200 que parsea pero no trae la lista tampoco es un vacío verificado", async () => {
+      stubPorTurno([
+        () =>
+          Promise.resolve(
+            new Response(JSON.stringify({ total: 3 }), {
+              status: 200,
+              headers: { "content-type": "application/json" },
+            })
+          ),
+      ])
+      const user = userEvent.setup()
+      render(<VisorPanelPage />)
+
+      await user.click(await screen.findByRole("tab", { name: /Configuración/i }))
+
+      expect(await screen.findByText(/Respuesta ilegible del servidor/)).toBeTruthy()
+      expect(screen.queryByText(/Nadie habilitado además de administración/)).toBeNull()
+    }, PRESUPUESTO_CARGA)
+
+    it("un fallo de red reintenta UNA vez: con el segundo intento sano muestra la lista (R3-no-retry-once)", async () => {
+      const { llamadas } = stubPorTurno([
+        () => Promise.reject(new Error("red caída")),
+        () =>
+          Promise.resolve(
+            new Response(JSON.stringify({ data: [FILA_HABILITADA], total: 1 }), {
+              status: 200,
+              headers: { "content-type": "application/json" },
+            })
+          ),
+      ])
+      const user = userEvent.setup()
+      render(<VisorPanelPage />)
+
+      await user.click(await screen.findByRole("tab", { name: /Configuración/i }))
+
+      expect(await screen.findByText(/Ana Habilitada/)).toBeTruthy()
+      expect(llamadas).toHaveLength(2)
+      expect(screen.queryByText(/Sin conexión con el servidor/)).toBeNull()
+    }, PRESUPUESTO_CARGA)
+
+    it("un 500 que persiste viaja verbatim tras el reintento, y reintenta UNA vez (no en bucle)", async () => {
+      const { llamadas } = stubPorTurno([
+        () =>
+          Promise.resolve(
+            new Response(JSON.stringify({ error: "Catástrofe simulada." }), {
+              status: 500,
+              headers: { "content-type": "application/json" },
+            })
+          ),
+      ])
+      const user = userEvent.setup()
+      render(<VisorPanelPage />)
+
+      await user.click(await screen.findByRole("tab", { name: /Configuración/i }))
+
+      expect(await screen.findByText("Catástrofe simulada.")).toBeTruthy()
+      expect(llamadas).toHaveLength(2)
+    }, PRESUPUESTO_CARGA)
+
+    it("un 4xx es veredicto del servidor: viaja verbatim sin reintento", async () => {
+      // Pin del borde del reintento: sólo red, 5xx y 200 ilegible reintentan.
+      // Un rechazo del servidor no se insiste.
+      const { llamadas } = stubPorTurno([
+        () =>
+          Promise.resolve(
+            new Response(JSON.stringify({ error: "Sin permiso." }), {
+              status: 403,
+              headers: { "content-type": "application/json" },
+            })
+          ),
+      ])
+      const user = userEvent.setup()
+      render(<VisorPanelPage />)
+
+      await user.click(await screen.findByRole("tab", { name: /Configuración/i }))
+
+      expect(await screen.findByText("Sin permiso.")).toBeTruthy()
+      expect(llamadas).toHaveLength(1)
+    }, PRESUPUESTO_CARGA)
+  })
 })

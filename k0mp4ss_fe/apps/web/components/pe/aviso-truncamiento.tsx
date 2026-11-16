@@ -28,21 +28,33 @@ export const LIMITE_SELECT = 100
 export function AvisoTruncamiento({
   mostrados,
   total,
+  entidad,
   className,
 }: {
   /** Filas efectivamente renderizadas en la lista. */
   mostrados: number
   /** Filas que existen (o que reporta el servidor) para esa misma lista. */
   total: number
+  /**
+   * Qué lista se recorta («personas», «unidades»): el consumidor lo sabe y sin
+   * él el aviso es un conteo ambiguo cuando dos listas apiladas lo muestran a
+   * la vez (R2-003). Opcional: sin él el aviso queda exactamente como siempre.
+   * La entidad viaja en el nombre accesible y en el tooltip — el texto visible
+   * no cambia, porque los avisos de S10 se pinnean por su frase exacta.
+   */
+  entidad?: string
   className?: string
 }) {
   if (!Number.isFinite(total) || !Number.isFinite(mostrados)) return null
   if (total <= mostrados) return null
 
+  const texto = `Mostrando ${mostrados} de ${total}${entidad ? ` ${entidad}` : ""} — refiná la búsqueda para ver el resto.`
+
   return (
     <p
       role="status"
       aria-live="polite"
+      {...(entidad ? { "aria-label": texto, title: texto } : {})}
       className={cn(
         "flex items-start gap-1.5 rounded-md border border-amber-300 bg-amber-50 px-2 py-1.5 text-xs leading-snug text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200",
         className

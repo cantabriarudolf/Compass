@@ -33,6 +33,7 @@ import { puede } from "@/lib/authz"
 import { prisma } from "@/lib/prisma"
 import { logger } from "@/lib/logger"
 import { excedeVolumen } from "@/lib/rate-limit-volumen"
+import { registrarLimiteVolumen } from "@/lib/aviso-volumen"
 import { jsonError, withComunidadScope } from "@/lib/api/with-comunidad-scope"
 import { alcancePorFilasDeSesion } from "@/lib/api/sesion-persona"
 import { registrarDenegacionCo } from "@/app/api/co/_lib/denegacion"
@@ -58,8 +59,11 @@ export async function GET(req: Request): Promise<Response> {
 
   // El techo de volumen va ANTES del portón: si quedaba después, un rechazo no se contaba
   // nunca y una cuenta sin privilegios podía insistir sin tope (hallazgo R1-001).
-  // La clave es el usuario, no la IP.
+  // La clave es el usuario, no la IP. El 429 deja rastro propio (T21, mismo
+  // criterio que R4-001): SU evento `RP_VOLUME_LIMITED`, deduplicado por ventana
+  // de 60 s por usuario — un 429 no es una denegación de privilegio.
   if (excedeVolumen("comunicacion", scope.usuarioId)) {
+    registrarLimiteVolumen(scope.usuarioId)
     return jsonError(429, "Demasiadas solicitudes.")
   }
 

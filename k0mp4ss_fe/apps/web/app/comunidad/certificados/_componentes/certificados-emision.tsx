@@ -283,10 +283,17 @@ function CertificadosGestion({ tiposEmisibles }: CertificadosEmisionProps) {
     const p = personas.find(x => x.id === id)
     return p ? `${p.nombres} ${p.apellidos}` : id
   }
+  /**
+   * Rótulo de una unidad (`etiqueta numero`), el ÚNICO formato del módulo
+   * (R2-001): lo usan el buscador (`etiquetaDe`), el chip de selección y los
+   * rótulos del papel, para que un cambio de etiqueta no tenga que hacerse en
+   * tres lugares o se desalineen la búsqueda, el chip y el PDF.
+   */
+  const rotuloUnidad = (u: Pick<Unidad, "etiqueta" | "numero">) => `${u.etiqueta} ${u.numero}`
   const refUnidadUI = (id?: string) => {
     if (!id) return "—"
     const u = unidades.find(x => x.id === id)
-    return u ? `${u.etiqueta} ${u.numero}` : id
+    return u ? rotuloUnidad(u) : id
   }
   /**
    * Rótulo de la unidad del certificado (T13): la FILA del buscador trae la
@@ -295,7 +302,7 @@ function CertificadosGestion({ tiposEmisibles }: CertificadosEmisionProps) {
    * crudo—. Si la unidad está en la página, la resolución es la de siempre.
    */
   const refUnidadElegida = (id?: string) => {
-    if (unidadElegida && unidadElegida.id === id) return `${unidadElegida.etiqueta} ${unidadElegida.numero}`
+    if (unidadElegida && unidadElegida.id === id) return rotuloUnidad(unidadElegida)
     return refUnidadUI(id)
   }
   // Destinos válidos según tipología.
@@ -559,8 +566,8 @@ function CertificadosGestion({ tiposEmisibles }: CertificadosEmisionProps) {
               url={BUSCADOR_UNIDADES}
               placeholder="Buscar por etiqueta, número o rol SII…"
               idDe={u => u.id}
-              etiquetaDe={u => `${u.etiqueta} ${u.numero}`}
-              seleccion={unidadElegida ? { id: unidadElegida.id, etiqueta: `${unidadElegida.etiqueta} ${unidadElegida.numero}` } : null}
+              etiquetaDe={rotuloUnidad}
+              seleccion={unidadElegida ? { id: unidadElegida.id, etiqueta: rotuloUnidad(unidadElegida) } : null}
               onSeleccion={(_seleccion, fila) => { setUnidadElegida(fila ?? null); setUnidadId(fila?.id ?? "") }}
               vacio="Sin unidades para esa búsqueda."
             />
@@ -616,8 +623,8 @@ function CertificadosGestion({ tiposEmisibles }: CertificadosEmisionProps) {
               o unidad quedó fuera de la primera página muestra el id crudo. La
               resolución no se rediseña; el recorte se declara con el total que
               reporta el servidor en el envelope. */}
-          <AvisoTruncamiento mostrados={personas.length} total={totalPersonas} />
-          <AvisoTruncamiento mostrados={unidades.length} total={totalUnidades} />
+          <AvisoTruncamiento mostrados={personas.length} total={totalPersonas} entidad="personas" />
+          <AvisoTruncamiento mostrados={unidades.length} total={totalUnidades} entidad="unidades" />
           <HistorialCertificados
             certificados={certificados}
             pdfBusy={pdfBusy}

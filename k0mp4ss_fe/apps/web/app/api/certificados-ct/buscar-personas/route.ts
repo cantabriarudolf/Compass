@@ -53,6 +53,7 @@ import { puede } from "@/lib/authz"
 import { prisma } from "@/lib/prisma"
 import { logger } from "@/lib/logger"
 import { excedeVolumen } from "@/lib/rate-limit-volumen"
+import { registrarLimiteVolumen } from "@/lib/aviso-volumen"
 import { jsonError, withComunidadScope } from "@/lib/api/with-comunidad-scope"
 import { alcancePorFilasDeSesion } from "@/lib/api/sesion-persona"
 
@@ -98,8 +99,13 @@ export async function GET(req: Request): Promise<Response> {
   // `puede()`, todo rol con `ct` `ver` entra igual que en `mis-vinculos`.
   // El techo de volumen va ANTES del portón: si quedaba después, un rechazo no se contaba
   // nunca y una cuenta sin privilegios podía insistir sin tope (hallazgo R1-001 de la
-  // revisión nativa del alcance masivo, misma forma acá).
+  // revisión nativa del alcance masivo, misma forma acá). La clave es el usuario, no
+  // la IP. El 429 deja rastro propio (T21, mismo criterio que R4-001): SU evento
+  // `RP_VOLUME_LIMITED`, deduplicado por ventana de 60 s por usuario — un 429 no es
+  // una denegación de privilegio. El helper es el neutro de `lib/aviso-volumen`:
+  // no se importa el de CO, porque un helper de CO no entra en una ruta de CT.
   if (excedeVolumen("certificados-ct", scope.usuarioId)) {
+    registrarLimiteVolumen(scope.usuarioId)
     return jsonError(429, "Demasiadas solicitudes.")
   }
 

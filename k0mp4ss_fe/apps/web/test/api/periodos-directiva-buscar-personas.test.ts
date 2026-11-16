@@ -279,6 +279,57 @@ describe("T11 — GET /api/periodos-directiva/buscar-personas", () => {
     })
   })
 
+  it("`q` con comodines de LIKE responde 400: el comodín no puede enumerar el padrón (R1-001)", async () => {
+    // `%%` cumple el mínimo de dos caracteres y el comodín de LIKE convierte la
+    // búsqueda en un barrido del padrón completo: el patrón que arma `contains`
+    // es `%q%`, con `q` sin escapar. El término con comodín se rechaza.
+    await conSesion(EMAIL.admin, async () => {
+      const doble = await buscar("%%")
+      expect(doble.status).toBe(400)
+      const vista = await cuerpo(doble)
+      expect(vista.error).toBe("El parámetro q no acepta los comodines % y _.")
+      expect(vista.data).toBeUndefined()
+
+      // Un comodín escondido en un término plausiblemente real también se
+      // rechaza: `_` es comodín de un carácter en LIKE, igual que `%`.
+      expect((await buscar("9%")).status).toBe(400)
+      expect((await buscar("a_b")).status).toBe(400)
+    })
+  })
+
+  it("el filtro de búsqueda declara `mode: insensitive` sólo para el cliente PostgreSQL (R3-1)", async () => {
+    // En SQLite el `contains` ya es case-insensitive (LIKE de ASCII) y el
+    // conector RECHAZA `mode`; en PostgreSQL el `contains` es case-sensitive y
+    // una búsqueda en minúsculas no encontraba nada. El filtro declara `mode`
+    // sólo cuando el cliente generado es PostgreSQL.
+    const ruta = await import("@/app/api/periodos-directiva/buscar-personas/route")
+    expect(ruta.filtroDeBusqueda("ana", "postgresql")).toEqual([
+      { nombreCompleto: { contains: "ana", mode: "insensitive" } },
+      { rut: { contains: "ana", mode: "insensitive" } },
+      { email: { contains: "ana", mode: "insensitive" } },
+    ])
+    // SQLite —y un proveedor desconocido— no declara `mode`: el conector lo
+    // rechaza y con él cada búsqueda de la ruta respondería 500.
+    const enSqlite = [
+      { nombreCompleto: { contains: "ana" } },
+      { rut: { contains: "ana" } },
+      { email: { contains: "ana" } },
+    ]
+    expect(ruta.filtroDeBusqueda("ana", "sqlite")).toEqual(enSqlite)
+    expect(ruta.filtroDeBusqueda("ana", null)).toEqual(enSqlite)
+  })
+
+  it("la búsqueda en minúsculas encuentra a la persona (el `contains` de SQLite ya es case-insensitive)", async () => {
+    // Guarda de la rama SQLite: si `mode: "insensitive"` llegara a declararse
+    // sin condicional, el conector SQLite lo rechaza y ESTA búsqueda se vuelve
+    // 500 en toda la suite.
+    await conSesion(EMAIL.admin, async () => {
+      const vista = await cuerpo(await buscar("ana buscada"))
+      expect(vista.total).toBe(1)
+      expect(vista.data.map((p) => p.id)).toEqual([P_ANA])
+    })
+  })
+
   it("el universo es `estadoCuenta: \"activa\"` — la misma regla que la pantalla aplicaba, sin requisitos nuevos", async () => {
     // Ni vínculo ni unidad: la pantalla filtraba SÓLO por cuenta activa.
     await conSesion(EMAIL.admin, async () => {

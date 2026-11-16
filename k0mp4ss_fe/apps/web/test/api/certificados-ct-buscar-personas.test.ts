@@ -25,6 +25,7 @@
  */
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest"
 import { prisma } from "@/lib/prisma"
+import { logger } from "@/lib/logger"
 import { cookieDeUsuario, invocarApi } from "../helpers/api-sesion"
 
 const state = vi.hoisted(() => ({ cookie: "" }))
@@ -423,6 +424,14 @@ describe("F36 — GET /api/certificados-ct/buscar-personas", () => {
     // El límite corre ANTES de validar `q`, así que las 60 se gastan con 400
     // baratos: la prueba no golpea la base y de paso fija el orden de las
     // guardas (si el limiter pasara después, este bucle haría 60 búsquedas).
+    //
+    // T21: el 429 deja rastro propio — SU evento `RP_VOLUME_LIMITED` (mismo
+    // criterio que R4-001), no una denegación de privilegio — y el evento es
+    // por EVENTO del limitador: dos 429 del mismo usuario emiten UN evento, no
+    // uno por respuesta. El espía vive en ESTE caso porque es el dueño
+    // exclusivo de la cuota de `limite`: otro caso con el mismo usuario dentro
+    // de la ventana robaría la cuota o el dedup.
+    const espia = vi.spyOn(logger, "warn").mockImplementation(() => {})
     await conSesion(EMAIL.limite, async () => {
       for (let n = 0; n < 60; n++) {
         expect((await buscar("A")).status).toBe(400)
@@ -432,7 +441,16 @@ describe("F36 — GET /api/certificados-ct/buscar-personas", () => {
       const vista = await cuerpo(cortada)
       expect(vista.error).toBe("Demasiadas solicitudes.")
       expect(vista.data).toBeUndefined()
+      // El segundo 429 del mismo usuario, dentro de la ventana, no re-emite.
+      expect((await buscar("Ana Buscada")).status).toBe(429)
     })
+    const eventos = (espia.mock.calls as unknown as [Record<string, unknown>][]).filter(
+      ([cuerpo]) => cuerpo?.event === "RP_VOLUME_LIMITED"
+    )
+    expect(eventos).toHaveLength(1)
+    const usuario = await prisma.usuario.findUnique({ where: { email: EMAIL.limite } })
+    expect((eventos[0]?.[0] as { usuarioId?: string } | undefined)?.usuarioId).toBe(usuario?.id)
+    vi.restoreAllMocks()
 
     // El lado atractivo del pin: la clave es el `usuarioId`, no la comunidad ni
     // la IP. Si se cambiara a `comunidadId`, los residentes de un mismo edificio

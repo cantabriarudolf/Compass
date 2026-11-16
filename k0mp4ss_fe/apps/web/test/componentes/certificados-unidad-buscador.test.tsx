@@ -167,6 +167,12 @@ function stubBuscarUnidades(): { llamadas: string[] } {
     vi.fn((recurso: string | URL | Request) => {
       const url = typeof recurso === "string" ? recurso : String(recurso)
       llamadas.push(url)
+      // R2-002 (T21): la lección de R3-001 de T15 que este stub tenía atrás —
+      // respondía el payload a CUALQUIER URL y un misroute lucía verde. La URL
+      // no declarada es error nombrado, no una búsqueda que «funciona».
+      if (!url.startsWith("/api/unidades?")) {
+        throw new Error(`[stub] URL inesperada para este caso: ${url}`)
+      }
       return Promise.resolve(
         new Response(JSON.stringify({ data: [FILA_UNIDAD], page: 1, pageSize: 50, total: 166 }), {
           status: 200,
@@ -247,5 +253,24 @@ describe("T13 — la unidad de estado de cuenta se busca en el servidor", () => 
     // La frase exacta de siempre: el reemplazo del selector no cambió los mensajes.
     expect(await screen.findByText("El certificado de estado de cuenta exige una unidad.")).toBeTruthy()
     expect(fuente.crear).not.toHaveBeenCalled()
+  }, PRESUPUESTO_CARGA)
+
+  it("el aviso de truncamiento del historial declara la entidad en su nombre accesible (R2-003)", async () => {
+    // Dos padrones apilados con avisos de sólo conteo son ambiguos: «Mostrando
+    // 0 de 166» no dice de qué. La entidad viaja en el NOMBRE ACCESIBLE y en el
+    // tooltip; el texto visible no cambia (los avisos de S10 pinnean la frase
+    // exacta en el historial) y el conteo queda intacto.
+    stubBuscarUnidades()
+    render(<CertificadosEmision tiposEmisibles={["estado_cuenta", "al_dia"]} />)
+
+    await userEvent.setup().click(screen.getByRole("tab", { name: /Historial de Emisión/i }))
+
+    const aviso = screen.getByRole("status", { name: /unidades/ })
+    // El texto visible es el de siempre, sin la entidad.
+    expect(aviso.textContent).toBe("Mostrando 0 de 166 — refiná la búsqueda para ver el resto.")
+    // El nombre accesible y el tooltip sí dicen de qué lista hablan.
+    expect(aviso.getAttribute("title")).toBe(
+      "Mostrando 0 de 166 unidades — refiná la búsqueda para ver el resto."
+    )
   }, PRESUPUESTO_CARGA)
 })

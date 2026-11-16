@@ -406,6 +406,13 @@ describe("S10 — GET /api/comunicacion/buscar-personas", () => {
   })
 
   it("más de 60 búsquedas por minuto responden 429 sin filas, y el bloqueo es por usuario", async () => {
+    // T21: el 429 deja rastro propio — SU evento `RP_VOLUME_LIMITED` (mismo
+    // criterio que R4-001), no una denegación de privilegio — y el evento es
+    // por EVENTO del limitador: dos 429 del mismo usuario emiten UN evento, no
+    // uno por respuesta. El espía vive en ESTE caso porque es el dueño
+    // exclusivo de la cuota de `limite`: otro caso con el mismo usuario dentro
+    // de la ventana robaría la cuota o el dedup.
+    const espia = vi.spyOn(logger, "warn").mockImplementation(() => {})
     await conSesion(EMAIL.limite, async () => {
       for (let n = 0; n < 60; n++) {
         expect((await buscar("A")).status).toBe(400)
@@ -415,7 +422,16 @@ describe("S10 — GET /api/comunicacion/buscar-personas", () => {
       const vista = await cuerpo(cortada)
       expect(vista.error).toBe("Demasiadas solicitudes.")
       expect(vista.data).toBeUndefined()
+      // El segundo 429 del mismo usuario, dentro de la ventana, no re-emite.
+      expect((await buscar("Ana Vecina")).status).toBe(429)
     })
+    const eventos = (espia.mock.calls as unknown as [Record<string, unknown>][]).filter(
+      ([cuerpo]) => cuerpo?.event === "RP_VOLUME_LIMITED"
+    )
+    expect(eventos).toHaveLength(1)
+    const usuario = await prisma.usuario.findUnique({ where: { email: EMAIL.limite } })
+    expect((eventos[0]?.[0] as { usuarioId?: string } | undefined)?.usuarioId).toBe(usuario?.id)
+    vi.restoreAllMocks()
 
     // Otro usuario no hereda el bloqueo: si la clave pasara a `comunidadId` o a la IP,
     // este 200 se volvería 429.

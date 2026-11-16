@@ -146,31 +146,61 @@ export default function VisorPanelPage() {
 
   // T12 (S10): la lista de habilitados sale del servidor, completa y filtrada
   // ahí (flag + alcance por filas). El cliente no recorta nada.
+  // T21 (R3-ok-body-unparsed-empty + R3-no-retry-once): un 200 cuyo cuerpo no
+  // se puede leer —o que parsea sin la lista— NO es un vacío verificado:
+  // mostrar «Nadie habilitado» ahí es el falso-vacío que este lote vino a
+  // eliminar. Y la lectura reintenta UNA vez, sólo para las señales
+  // transitorias (fallo de red, 5xx, 200 ilegible); un 4xx es veredicto del
+  // servidor y viaja verbatim sin insistir.
   React.useEffect(() => {
     let vigente = true
     const cargar = async () => {
       setCHabilitadas(true)
-      try {
-        const respuesta = await fetch(RUTA_HABILITADAS, { headers: { accept: "application/json" } })
+      const pedir = () => fetch(RUTA_HABILITADAS, { headers: { accept: "application/json" } })
+      type Intento =
+        | { clase: "lista"; filas: PersonaHabilitada[] }
+        | { clase: "error"; mensaje: string; reintenable: boolean }
+      const intentar = async (): Promise<Intento> => {
+        let respuesta: Response
+        try {
+          respuesta = await pedir()
+        } catch {
+          return { clase: "error", mensaje: "Sin conexión con el servidor.", reintenable: true }
+        }
         const cuerpo = (await respuesta.json().catch(() => null)) as
-          | { data?: PersonaHabilitada[]; total?: number; error?: string }
+          | { data?: unknown; total?: number; error?: string }
           | null
-        if (!vigente) return
         if (!respuesta.ok) {
-          setErrorHabilitadas(cuerpo?.error ?? `Error ${respuesta.status} al consultar ${RUTA_HABILITADAS}.`)
-          setPersonasHabilitadas([])
-        } else {
-          setErrorHabilitadas(null)
-          setPersonasHabilitadas(cuerpo?.data ?? [])
+          return {
+            clase: "error",
+            mensaje: cuerpo?.error ?? `Error ${respuesta.status} al consultar ${RUTA_HABILITADAS}.`,
+            reintenable: respuesta.status >= 500,
+          }
         }
-      } catch {
-        if (vigente) {
-          setErrorHabilitadas("Sin conexión con el servidor.")
-          setPersonasHabilitadas([])
+        // 200 con cuerpo ilegible (no parsea, o parsea sin la lista): error,
+        // nunca el estado vacío — un cuerpo roto no verifica nada.
+        if (!Array.isArray(cuerpo?.data)) {
+          return {
+            clase: "error",
+            mensaje: `Respuesta ilegible del servidor al consultar ${RUTA_HABILITADAS}.`,
+            reintenable: true,
+          }
         }
-      } finally {
-        if (vigente) setCHabilitadas(false)
+        return { clase: "lista", filas: cuerpo.data as PersonaHabilitada[] }
       }
+      let intento = await intentar()
+      if (intento.clase === "error" && intento.reintenable && vigente) {
+        intento = await intentar()
+      }
+      if (!vigente) return
+      if (intento.clase === "lista") {
+        setErrorHabilitadas(null)
+        setPersonasHabilitadas(intento.filas)
+      } else {
+        setErrorHabilitadas(intento.mensaje)
+        setPersonasHabilitadas([])
+      }
+      setCHabilitadas(false)
     }
     void cargar()
     return () => { vigente = false }

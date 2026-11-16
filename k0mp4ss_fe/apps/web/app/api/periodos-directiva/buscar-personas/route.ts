@@ -40,6 +40,15 @@
  *     `components/buscador-entidad.tsx` (`MINIMO_CARACTERES = 2`): un techo que
  *     sólo impone la UI no es un techo, y cualquier otro cliente podía barrer el
  *     padrón 25 filas por letra;
+ *   · `q` no acepta los comodines de LIKE (`%` y `_`, R1-001): `contains` arma
+ *     el patrón `%q%` sin escapar, así que `q=%%` cumplía el mínimo de dos y
+ *     enumeraba el padrón entero. Los nombres, RUT y emails no usan esos
+ *     caracteres: el término con comodín se rechaza;
+ *   · el `contains` declara `mode: "insensitive"` SÓLO cuando el cliente
+ *     Prisma generado es PostgreSQL (R3-1): allá el `contains` es
+ *     case-sensitive y una búsqueda en minúsculas no encontraba nada. En
+ *     SQLite —dev y suite— el conector RECHAZA `mode` y su `LIKE` ya es
+ *     case-insensitive para ASCII, así que allá el filtro queda como siempre;
  *   · sesenta búsquedas por minuto por usuario, con el contador en memoria del
  *     patrón `lib/rate-limit-volumen` y con el ámbito PROPIO de esta ruta
  *     (`"periodos-directiva"`): el verificador de la serie midió que compartir el
@@ -60,6 +69,7 @@ import { logger } from "@/lib/logger"
 import { excedeVolumen } from "@/lib/rate-limit-volumen"
 import { jsonError, withComunidadScope } from "@/lib/api/with-comunidad-scope"
 import { alcancePorFilasDeSesion } from "@/lib/api/sesion-persona"
+import { leerProveedorDelClienteGenerado, type ProveedorBase } from "@/lib/database-url"
 
 /**
  * Tamaño de página de la búsqueda: el mismo orden de magnitud que
@@ -75,6 +85,36 @@ const PERSONAS_POR_PAGINA = 25
  * barrido del padrón de 25 filas por letra.
  */
 const MINIMO_CARACTERES = 2
+
+/** Comodines de LIKE: `contains` arma `%q%` sin escapar, así que entran por el patrón. */
+const COMODINES_LIKE = /[%_]/
+
+/**
+ * Proveedor del cliente Prisma GENERADO, leído UNA vez por proceso. En dev y en
+ * la suite es SQLite; en producción, PostgreSQL. `null` = no se pudo leer: el
+ * filtro queda como siempre (sin `mode`), que es el comportamiento de antes.
+ */
+let PROVEEDOR_MEMOIZADO: ProveedorBase | null | undefined
+
+function proveedorDeLaBase(): ProveedorBase | null {
+  if (PROVEEDOR_MEMOIZADO === undefined) {
+    PROVEEDOR_MEMOIZADO = leerProveedorDelClienteGenerado(process.cwd())
+  }
+  return PROVEEDOR_MEMOIZADO
+}
+
+/**
+ * El OR de los tres campos de búsqueda (los mismos de `/api/personas`: nombre,
+ * RUT y email). `mode: "insensitive"` va SÓLO para el cliente PostgreSQL (R3-1):
+ * allá `contains` es case-sensitive; en SQLite el conector rechaza `mode` y su
+ * `LIKE` ya es case-insensitive para ASCII. Exportado para que el test pinee las
+ * dos formas sin una base PostgreSQL al lado.
+ */
+export function filtroDeBusqueda(q: string, proveedor: ProveedorBase | null) {
+  const contiene: { contains: string; mode?: "insensitive" } =
+    proveedor === "postgresql" ? { contains: q, mode: "insensitive" } : { contains: q }
+  return [{ nombreCompleto: contiene }, { rut: contiene }, { email: contiene }]
+}
 
 /**
  * Fila del buscador: identidad mínima de una persona ELEGIBLE para la nómina.
@@ -118,6 +158,12 @@ export async function GET(req: Request): Promise<Response> {
   if (q.length < MINIMO_CARACTERES) {
     return jsonError(400, "El parámetro q necesita al menos dos caracteres.")
   }
+  // R1-001: `%%` cumple el mínimo de dos y el comodín de LIKE enumera el
+  // padrón entero, porque `contains` arma el patrón `%q%` sin escapar. El
+  // término con comodín se rechaza en vez de reescribirse por detrás.
+  if (COMODINES_LIKE.test(q)) {
+    return jsonError(400, "El parámetro q no acepta los comodines % y _.")
+  }
   // El tope del `page` no es cosmético: con un número fuera del rango de Int, Prisma
   // rechaza el `skip` y la ruta responde 500 en vez de una página vacía.
   const paginaPedida = Number.parseInt(url.searchParams.get("page") ?? "1", 10) || 1
@@ -138,12 +184,9 @@ export async function GET(req: Request): Promise<Response> {
       comunidadId: scope.comunidadId,
       estadoCuenta: "activa",
       ...(alcance.tipo === "propio" ? { id: alcance.personaId } : {}),
-      // Mismos tres campos de búsqueda que `/api/personas` (nombre, RUT, email).
-      OR: [
-        { nombreCompleto: { contains: q } },
-        { rut: { contains: q } },
-        { email: { contains: q } },
-      ],
+      // Mismos tres campos de búsqueda que `/api/personas` (nombre, RUT, email),
+      // con `mode` sólo cuando el cliente generado es PostgreSQL (R3-1).
+      OR: filtroDeBusqueda(q, proveedorDeLaBase()),
     }
 
     const [filas, total] = await Promise.all([
