@@ -106,6 +106,11 @@ export default function PagosPage() {
 
   const recaudado = cobros.reduce((acc, c) => acc + c.pagos.reduce((x, p) => x + p.monto, 0), 0)
   const porCobrar = cobros.reduce((acc, c) => acc + saldoPendiente(c), 0)
+  // T26 (S10): las tres tarjetas suman sobre la lista CARGADA, que con un libro
+  // de más de 100 filas es sólo la primera página. Con recorte lo declaran: la
+  // cantidad muestra «N de M» y los dos montos dicen que son una suma parcial
+  // sobre lo cargado. Con la colección completa se ve exactamente lo de antes.
+  const libroParcial = hasMore
 
   const abrirPago = (c: CobroFI) => {
     setError(null)
@@ -188,15 +193,27 @@ export default function PagosPage() {
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader className="pb-1"><CardTitle className="flex items-center gap-2 text-sm font-medium text-muted-foreground"><IconCash className="size-4" /> Recaudado</CardTitle></CardHeader>
-          <CardContent><p className="text-2xl font-semibold tabular-nums">${recaudado.toLocaleString("es-CL")}</p></CardContent>
+          <CardContent>
+            <p className="text-2xl font-semibold tabular-nums">${recaudado.toLocaleString("es-CL")}</p>
+            {libroParcial && (
+              <p className="text-xs text-muted-foreground">Suma parcial: cubre {cobros.length} de {totalCobros} cobros cargados.</p>
+            )}
+          </CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-1"><CardTitle className="text-sm font-medium text-muted-foreground">Por cobrar</CardTitle></CardHeader>
-          <CardContent><p className="text-2xl font-semibold tabular-nums">${porCobrar.toLocaleString("es-CL")}</p></CardContent>
+          <CardContent>
+            <p className="text-2xl font-semibold tabular-nums">${porCobrar.toLocaleString("es-CL")}</p>
+            {libroParcial && (
+              <p className="text-xs text-muted-foreground">Suma parcial: cubre {cobros.length} de {totalCobros} cobros cargados.</p>
+            )}
+          </CardContent>
         </Card>
         <Card>
           <CardHeader className="pb-1"><CardTitle className="text-sm font-medium text-muted-foreground">Cobros registrados</CardTitle></CardHeader>
-          <CardContent><p className="text-2xl font-semibold tabular-nums">{cobros.length}</p></CardContent>
+          <CardContent>
+            <p className="text-2xl font-semibold tabular-nums">{libroParcial ? `${cobros.length} de ${totalCobros}` : cobros.length}</p>
+          </CardContent>
         </Card>
       </div>
 

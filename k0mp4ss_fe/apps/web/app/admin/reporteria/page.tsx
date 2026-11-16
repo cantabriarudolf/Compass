@@ -14,6 +14,7 @@ import { useFondosFI } from "@/lib/api/use-fondos-fi"
 import { useMacroSectores } from "@/lib/api/use-macro-sectores"
 import { useMicroSectores } from "@/lib/api/use-micro-sectores"
 import { useReportesRE, useAccionesRE } from "@/lib/api/use-reportes-re"
+import { useColeccionCompleta } from "@/components/dashboard/piezas"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
@@ -63,8 +64,17 @@ export default function ReporteriaPage() {
   const { items: bitacoraVisitasPE, isLoading: cBitacora } = useBitacoraVisitasPE()
   const { data: jornadas, isLoading: cJornadas } = useMaestros<{ id: string }>("jornadas")
   const { items: solicitudesGE, isLoading: cSolicitudes } = useSolicitudesGE()
-  const { items: cobrosFI, isLoading: cCobros } = useCobrosFI()
-  const { items: egresosFI, isLoading: cEgresos } = useEgresosFI()
+  const cobrosFI = useCobrosFI()
+  const egresosFI = useEgresosFI()
+  // T26 (S10): «Ingresos netos», «Egresos totales», «Diferencia de caja», el
+  // termómetro y el desglose por fondo se muestran como totales de la comunidad,
+  // así que se calculan sobre la colección COMPLETA — la misma caminata de
+  // páginas que `DeudaUnidades` (D4). El snapshot del informe emitido lo congela
+  // el servidor: acá sólo se corrige la pantalla.
+  const cobrosCompletos = useColeccionCompleta(cobrosFI)
+  const egresosCompletos = useColeccionCompleta(egresosFI)
+  const cCobros = cobrosFI.isLoading
+  const cEgresos = egresosFI.isLoading
   const { items: fondosFI, isLoading: cFondos } = useFondosFI()
   const { items: macroSectores, isLoading: cMacro } = useMacroSectores()
   const { items: microSectores, isLoading: cMicro } = useMicroSectores()
@@ -79,7 +89,7 @@ cSolicitudes || cCobros || cEgresos || cFondos || cMacro || cMicro || cReportes
   const store = {
 unidades, vinculos, personas,
 cierresTurnoPE, bitacoraVisitasPE, solicitudesGE,
-cobrosFI, egresosFI, fondosFI,
+cobrosFI: cobrosCompletos.items, egresosFI: egresosCompletos.items, fondosFI,
 macroSectores, microSectores, reportesRE,
 maestros: { jornadas },
   }
@@ -137,11 +147,17 @@ maestros: { jornadas },
     fecha: hoyISOStr,
   })
   const embudo = embudoGestionesGE(store.solicitudesGE.map(s => ({ estado: s.estado })))
-  const caja = saludCajaFI({
-    cobrosFI: store.cobrosFI,
-    egresosFI: store.egresosFI,
-    fondos: store.fondosFI.filter(f => f.activo).map(f => ({ id: f.id, nombre: f.nombre })),
-  })
+  // Mientras la caminata de páginas no terminó, no hay caja que mostrar: una
+  // suma sobre la página cargada tendría cara de total, igual que hace
+  // `TotalARecaudarEmision` en gastos comunes con los cobros de una emisión.
+  const caja =
+    cobrosCompletos.completa && egresosCompletos.completa
+      ? saludCajaFI({
+          cobrosFI: store.cobrosFI,
+          egresosFI: store.egresosFI,
+          fondos: store.fondosFI.filter(f => f.activo).map(f => ({ id: f.id, nombre: f.nombre })),
+        })
+      : null
   const huerfanos = tasaHuerfanosRE({
     unidades: store.unidades.map(u => ({ id: u.id, microSectorId: u.microSectorId })),
     microSectores: store.microSectores,
@@ -263,32 +279,43 @@ maestros: { jornadas },
               <CardDescription>Recaudación por fondo, diferencia de caja y termómetro de gastos fijos.</CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-3">
-              <div className="overflow-x-auto rounded-md border">
-                <table className="w-full text-sm">
-                  <thead className="bg-muted/50 text-left text-xs uppercase tracking-wide text-muted-foreground">
-                    <tr><th className="px-3 py-2">Fondo</th><th className="px-3 py-2 text-right">Emitido</th><th className="px-3 py-2 text-right">Recaudado</th></tr>
-                  </thead>
-                  <tbody>
-                    {caja.recaudacionPorFondo.map(f => (
-                      <tr key={f.fondoId} className="border-t">
-                        <td className="px-3 py-2">{f.nombre}</td>
-                        <td className="px-3 py-2 text-right">{CLP(f.emitido)}</td>
-                        <td className="px-3 py-2 text-right">{CLP(f.recaudado)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-                <Metrica etiqueta="Ingresos netos" valor={CLP(caja.ingresosNetos)} />
-                <Metrica etiqueta="Egresos totales" valor={CLP(caja.egresosTotales)} />
-                <Metrica etiqueta="Diferencia de caja" valor={CLP(caja.diferenciaCaja)} />
-                <div className={`rounded-lg border p-3 ${caja.termometroVerde ? "border-emerald-400 bg-emerald-50 dark:border-emerald-900 dark:bg-emerald-950/20" : "border-red-400 bg-red-50 dark:border-red-900 dark:bg-red-950/20"}`}>
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Termómetro gastos fijos</p>
-                  <p className={`text-xl font-bold ${caja.termometroVerde ? "text-emerald-700 dark:text-emerald-400" : "text-destructive"}`}>{caja.termometroVerde ? "Verde" : "Rojo"}</p>
-                  <p className="text-xs text-muted-foreground">Fijos recurrentes: {CLP(caja.gastosFijosRecurrentes)}</p>
+              {caja === null ? (
+                <p
+                  className="text-sm text-muted-foreground"
+                  title="La pantalla no tiene cargados todos los movimientos del libro: se evita mostrar sumas incompletas como si fueran totales."
+                >
+                  Cargando el libro completo de cobros y egresos…
+                </p>
+              ) : (
+                <>
+                <div className="overflow-x-auto rounded-md border">
+                  <table className="w-full text-sm">
+                    <thead className="bg-muted/50 text-left text-xs uppercase tracking-wide text-muted-foreground">
+                      <tr><th className="px-3 py-2">Fondo</th><th className="px-3 py-2 text-right">Emitido</th><th className="px-3 py-2 text-right">Recaudado</th></tr>
+                    </thead>
+                    <tbody>
+                      {caja.recaudacionPorFondo.map(f => (
+                        <tr key={f.fondoId} className="border-t">
+                          <td className="px-3 py-2">{f.nombre}</td>
+                          <td className="px-3 py-2 text-right">{CLP(f.emitido)}</td>
+                          <td className="px-3 py-2 text-right">{CLP(f.recaudado)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
-              </div>
+                <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                  <Metrica etiqueta="Ingresos netos" valor={CLP(caja.ingresosNetos)} />
+                  <Metrica etiqueta="Egresos totales" valor={CLP(caja.egresosTotales)} />
+                  <Metrica etiqueta="Diferencia de caja" valor={CLP(caja.diferenciaCaja)} />
+                  <div className={`rounded-lg border p-3 ${caja.termometroVerde ? "border-emerald-400 bg-emerald-50 dark:border-emerald-900 dark:bg-emerald-950/20" : "border-red-400 bg-red-50 dark:border-red-900 dark:bg-red-950/20"}`}>
+                    <p className="text-xs uppercase tracking-wide text-muted-foreground">Termómetro gastos fijos</p>
+                    <p className={`text-xl font-bold ${caja.termometroVerde ? "text-emerald-700 dark:text-emerald-400" : "text-destructive"}`}>{caja.termometroVerde ? "Verde" : "Rojo"}</p>
+                    <p className="text-xs text-muted-foreground">Fijos recurrentes: {CLP(caja.gastosFijosRecurrentes)}</p>
+                  </div>
+                </div>
+                </>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
