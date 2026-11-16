@@ -62,71 +62,45 @@ test.describe("CRUD — Comunidad/Certificados", () => {
         }
       }
 
-      // Persona solicitante * = la TEST propia (nombre único por corrida)
-      const labelPersona = page.getByText("Persona solicitante *").first()
-      await expect(labelPersona).toBeVisible({ timeout: 10_000 })
-      let comboPersona = labelPersona.locator("..").getByRole("combobox").first()
-      if (!(await comboPersona.isVisible().catch(() => false))) {
-        const combos = page.getByRole("combobox")
-        const n = await combos.count()
-        for (let i = 0; i < n; i++) {
-          const cb = combos.nth(i)
-          const t = (await cb.textContent())?.trim() ?? ""
-          if (t.includes("Selecciona persona") || t === "") {
-            comboPersona = cb
-            break
-          }
-        }
-      }
-      await expect(comboPersona).toBeVisible({ timeout: 10_000 })
-      await comboPersona.click({ force: true, noWaitAfter: true })
-      await page.waitForTimeout(400)
-      const optPersona = page.getByRole("option", { name: "TEST Cert P1" }).first()
-      if (await optPersona.isVisible().catch(() => false)) {
-        await optPersona.click({ force: true, noWaitAfter: true })
-      } else {
-        // fallback: opción que contenga el nombre único completo
-        const opts = page.getByRole("option")
-        const c = await opts.count()
-        for (let i = 0; i < c; i++) {
-          const o = opts.nth(i)
-          const txt = (await o.textContent()) ?? ""
-          if (txt.includes(nombrePersona)) {
-            await o.click({ force: true, noWaitAfter: true }).catch(() => {})
-            break
-          }
-        }
-      }
-      await page.waitForTimeout(400)
+      // Persona solicitante * = la TEST propia (nombre único por corrida).
+      //
+      // F36: el campo es un `BuscadorEntidad` — la consulta viaja al servidor y
+      // **sin texto tipeado no hay petición** (`.sin texto no hay petición`), así
+      // que un clic no despliega nada. El flujo viejo (clic en el combobox y
+      // buscar la opción) dejaba la persona SIN elegir; el `Select` de unidades
+      // —que arma sus opciones desde los vínculos de la persona elegida— quedaba
+      // abierto y sin opciones, y ese listbox modal esconde el resto del árbol de
+      // accesibilidad: el botón de generar «no existe» en el trace (`- listbox`).
+      // Tipear el nombre único es lo que dispara la búsqueda del servidor.
+      const campoPersona = page.getByRole("combobox", { name: "Persona solicitante *" }).first()
+      await expect(campoPersona).toBeVisible({ timeout: 10_000 })
+      // El término que viaja al servidor es el `nombreCompleto` (la ruta filtra por
+      // nombre y RUT con `contains`), pero la OPCIÓN se rotula `nombres apellidos`
+      // (`etiquetaDe` del buscador), que no es el `nombreCompleto`: el helper arma
+      // `nombres: "TEST Cert"` + `apellidos: "P1 <ts corto>"`. Se elige por el
+      // sufijo único de la corrida, que es lo que ambos tienen en común.
+      await campoPersona.fill(nombrePersona)
+      const sufijoPersona = nombrePersona.slice(-6)
+      const optPersona = page.getByRole("option").filter({ hasText: sufijoPersona }).first()
+      await expect(optPersona, "el buscador de personas debe encontrar a la TEST recién creada").toBeVisible({
+        timeout: 20_000,
+      })
+      await optPersona.click({ force: true, noWaitAfter: true })
 
-      // Unidad * = la TEST propia (número único por corrida)
+      // Unidad * = la TEST propia (número único por corrida). El rótulo de cada
+      // opción es `etiqueta numero` («TEST-P1 T1P-######»), así que se elige por
+      // el número adentro del texto y no por nombre accesible exacto.
       const labelUnidad = page.getByText("Unidad *").first()
       await expect(labelUnidad).toBeVisible({ timeout: 10_000 })
-      let comboUnidad = labelUnidad.locator("..").getByRole("combobox").first()
-      if (!(await comboUnidad.isVisible().catch(() => false))) {
-        const combos = page.getByRole("combobox")
-        const n = await combos.count()
-        comboUnidad = combos.nth(n - 1)
-      }
+      const comboUnidad = labelUnidad.locator("..").getByRole("combobox").first()
       await expect(comboUnidad).toBeVisible({ timeout: 10_000 })
       await comboUnidad.click({ force: true, noWaitAfter: true })
-      await page.waitForTimeout(400)
-      const optUnidad = page.getByRole("option", { name: numeroUnidad }).first()
-      if (await optUnidad.isVisible().catch(() => false)) {
-        await optUnidad.click({ force: true, noWaitAfter: true })
-      } else {
-        const opts = page.getByRole("option")
-        const c = await opts.count()
-        for (let i = 0; i < c; i++) {
-          const o = opts.nth(i)
-          const txt = (await o.textContent())?.trim() ?? ""
-          if (txt && !txt.includes("Selecciona")) {
-            await o.click({ force: true, noWaitAfter: true }).catch(() => {})
-            break
-          }
-        }
-      }
-      await page.waitForTimeout(400)
+      const optUnidad = page.getByRole("option").filter({ hasText: numeroUnidad }).first()
+      await expect(
+        optUnidad,
+        "el select de unidades se llena con los vínculos vigentes de la persona elegida",
+      ).toBeVisible({ timeout: 10_000 })
+      await optUnidad.click({ force: true, noWaitAfter: true })
 
       // Solicitante * input placeholder "Nombre de quien solicita"
       const inputSolicitante = page.getByPlaceholder("Nombre de quien solicita")
