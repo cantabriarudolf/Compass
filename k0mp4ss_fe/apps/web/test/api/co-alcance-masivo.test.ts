@@ -491,13 +491,34 @@ describe("T14 — GET /api/co/alcance-masivo", () => {
       expect(pagina2.total).toBe(122)
       expect(pagina2.data).toHaveLength(25)
 
+      // El lote por página de la ruta NO es el de las colecciones CO a medida: con 122
+      // propietarios, la página por defecto los trae a todos en una sola respuesta.
       const tope = await cuerpo(await alcance("?roles=propietario&pageSize=500"))
-      expect(tope.pageSize).toBe(100)
-      expect(tope.data).toHaveLength(100)
+      expect(tope.pageSize).toBe(500)
+      expect(tope.data).toHaveLength(122)
 
       const vacia = await cuerpo(await alcance("?roles=propietario&page=99"))
       expect(vacia.data).toEqual([])
       expect(vacia.total).toBe(122)
+    })
+  })
+
+  it("F37 — el lote por página resuelve un universo de 6.000 en 12 solicitudes, no en 60", async () => {
+    await conSesion(EMAIL.admin, async () => {
+      // La consola NO manda `pageSize`: camina con el default de la ruta, y cada página
+      // es una solicitud contra el techo de 60/min por usuario. Con el lote en 100, un
+      // universo de 6.000 necesitaba 60 solicitudes —justo el techo: la caminata moría
+      // en el 429, el alcance se limpiaba y el envío no se podía resolver
+      // (`R1-ALCANCE-RATE-LIMIT` del refuter de `review-7ac93a0a9180ee0a`).
+      const universo = 6_000
+      const primera = await cuerpo(await alcance("?roles=propietario"))
+      const porPagina = primera.pageSize
+      expect(porPagina).toBe(500)
+      expect(Math.ceil(universo / porPagina)).toBe(12)
+      // El techo no se toca: el lote tampoco puede crecer más allá de esta constante a
+      // pedido del cliente, así que el default y el tope son el mismo número.
+      const masGrande = await cuerpo(await alcance("?roles=propietario&pageSize=5000"))
+      expect(masGrande.pageSize).toBe(500)
     })
   })
 

@@ -62,9 +62,20 @@ import { jsonError, withComunidadScope } from "@/lib/api/with-comunidad-scope"
 import { alcancePorFilasDeSesion } from "@/lib/api/sesion-persona"
 import { registrarDenegacionCo, registrarLimiteVolumen } from "../_lib/denegacion"
 
-/** Tamaño de página por defecto y tope: los mismos de las colecciones CO a medida. */
-const PAGE_SIZE_DEFECTO = 100
-const PAGE_SIZE_MAXIMO = 100
+/**
+ * Tamaño de página por defecto y tope de la ruta.
+ *
+ * NO son los cien de las colecciones CO a medida: la consola camina las páginas
+ * hasta el `total` que el servidor declara, y cada página es una solicitud
+ * contra el techo de volumen de 60/min por usuario. Con lotes de 100, un
+ * universo de 6.000 destinatarios necesita 60 solicitudes —las justas para
+ * morir en el 429— y el alcance se limpia sin que nadie pueda enviar (F37,
+ * `R1-ALCANCE-RATE-LIMIT` del refuter de `review-7ac93a0a9180ee0a`, CRITICAL
+ * `introduced` de `337d2a7`). Con 500, ese universo entra en 12. El techo y el
+ * contrato del cuerpo no cambian: cambia cuántas filas viajan por respuesta.
+ */
+const PAGE_SIZE_DEFECTO = 500
+const PAGE_SIZE_MAXIMO = 500
 
 /** Fila del alcance: lo que la pantalla imprime y lo que arma el envío. */
 interface FilaAlcance {

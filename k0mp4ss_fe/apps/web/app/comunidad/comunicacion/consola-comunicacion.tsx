@@ -96,7 +96,7 @@ interface PersonaBuscada {
 const ALCANCE_MASIVO = "/api/co/alcance-masivo"
 
 /**
- * Tope de páginas que la pantalla camina sola (200 × 100 = 20.000 filas). Si una
+ * Tope de páginas que la pantalla camina sola (200 × 500 = 100.000 filas). Si una
  * comunidad lo superara, el recorte del TRANSPORTE se declara con el `total` del
  * servidor (AvisoTruncamiento); la resolución del alcance nunca se recorta.
  */
