@@ -314,5 +314,41 @@ describe("T12 — el autor habilitado del visor viene del servidor", () => {
       expect(await screen.findByText("Sin permiso.")).toBeTruthy()
       expect(llamadas).toHaveLength(1)
     }, PRESUPUESTO_CARGA)
+
+    it("desmontar durante el primer intento NO dispara el reintento (guarda `vigente`)", async () => {
+      // La guarda `vigente` del efecto (cleanup → `vigente = false`) corta
+      // ANTES del reintento: si el desmonte llega mientras el primer intento
+      // sigue en el aire, el catch no patea ninguna segunda intentona. Hoy la
+      // guarda no tiene test: este pin muere si alguien quita `&& vigente` de
+      // la condición del reintento.
+      let rechazarPrimerIntento: ((motivo: Error) => void) | undefined
+      const primerIntento = new Promise<Response>((_resolver, rechazar) => {
+        rechazarPrimerIntento = rechazar
+      })
+      const llamadas: string[] = []
+      vi.stubGlobal(
+        "fetch",
+        vi.fn((recurso: string | URL | Request) => {
+          const url = typeof recurso === "string" ? recurso : String(recurso)
+          if (!url.startsWith(RUTA)) {
+            throw new Error(`[stub] URL inesperada para este caso: ${url}`)
+          }
+          llamadas.push(url)
+          return primerIntento
+        })
+      )
+
+      const vista = render(<VisorPanelPage />)
+      await vi.waitFor(() => expect(llamadas).toHaveLength(1))
+
+      // El desmonte llega con el primer intento TODAVÍA pendiente.
+      vista.unmount()
+      rechazarPrimerIntento?.(new Error("red caída"))
+      await new Promise((resolver) => setTimeout(resolver, 0))
+
+      // UNA sola llamada: el reintento no se dispara desde un componente que
+      // ya no está.
+      expect(llamadas).toHaveLength(1)
+    })
   })
 })

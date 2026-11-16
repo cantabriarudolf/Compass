@@ -297,6 +297,41 @@ describe("T11 — GET /api/periodos-directiva/buscar-personas", () => {
     })
   })
 
+  it("el orden de las guardas de `q` queda pineado con sus mensajes exactos (T21)", async () => {
+    // El orden importa y se lee en los mensajes: el mínimo de dos corre ANTES
+    // que la guarda de comodines, y el trim corre ANTES de la guarda de
+    // parámetro faltante. Cualquier reorden de las guardas cambia alguno de
+    // estos cuatro textos y este pin muere.
+    await conSesion(EMAIL.admin, async () => {
+      // Un solo `%` es comodín pero NO alcanza el mínimo: el error es el del
+      // mínimo de dos, NO el de comodines.
+      const soloComodin = await buscar("%")
+      expect(soloComodin.status).toBe(400)
+      expect((await cuerpo(soloComodin)).error).toBe(
+        "El parámetro q necesita al menos dos caracteres."
+      )
+
+      // Dos guiones bajos SÍ alcanzan el mínimo y recién ahí muerde la guarda
+      // de comodines.
+      const dosComodines = await buscar("__")
+      expect(dosComodines.status).toBe(400)
+      expect((await cuerpo(dosComodines)).error).toBe(
+        "El parámetro q no acepta los comodines % y _."
+      )
+
+      // Dos espacios se recortan a vacío: el error es el del parámetro
+      // faltante, no el del mínimo.
+      const soloEspacios = await buscar("  ")
+      expect(soloEspacios.status).toBe(400)
+      expect((await cuerpo(soloEspacios)).error).toBe("Falta el parámetro q.")
+
+      // Un RUT parcial con puntos sigue siendo una búsqueda válida (200): el
+      // punto no es comodín de LIKE.
+      const rutParcial = await buscar("123.456")
+      expect(rutParcial.status).toBe(200)
+    })
+  })
+
   it("el filtro de búsqueda declara `mode: insensitive` sólo para el cliente PostgreSQL (R3-1)", async () => {
     // En SQLite el `contains` ya es case-insensitive (LIKE de ASCII) y el
     // conector RECHAZA `mode`; en PostgreSQL el `contains` es case-sensitive y

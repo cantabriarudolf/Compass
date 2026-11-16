@@ -44,11 +44,16 @@
  *     el patrón `%q%` sin escapar, así que `q=%%` cumplía el mínimo de dos y
  *     enumeraba el padrón entero. Los nombres, RUT y emails no usan esos
  *     caracteres: el término con comodín se rechaza;
- *   · el `contains` declara `mode: "insensitive"` SÓLO cuando el cliente
- *     Prisma generado es PostgreSQL (R3-1): allá el `contains` es
- *     case-sensitive y una búsqueda en minúsculas no encontraba nada. En
- *     SQLite —dev y suite— el conector RECHAZA `mode` y su `LIKE` ya es
- *     case-insensitive para ASCII, así que allá el filtro queda como siempre;
+ *   · el `contains` declara `mode: "insensitive"` SÓLO cuando la base es
+ *     PostgreSQL según `DATABASE_URL` (R3-1, derivado con `proveedorDeUrl` de
+ *     `lib/database-url.ts`): allá el `contains` es case-sensitive y una
+ *     búsqueda en minúsculas no encontraba nada. En SQLite —dev y suite— el
+ *     conector RECHAZA `mode` y su `LIKE` ya es case-insensitive para ASCII,
+ *     así que allá el filtro queda como siempre. La detección NO lee el
+ *     cliente generado ni camina el sistema de archivos: depende del MISMO
+ *     entorno que lee el cliente Prisma para conectarse, así que no hay un
+ *     artefacto cuya ausencia apague el modo en silencio, ni una lectura de
+ *     99 KB por cold start;
  *   · sesenta búsquedas por minuto por usuario, con el contador en memoria del
  *     patrón `lib/rate-limit-volumen` y con el ámbito PROPIO de esta ruta
  *     (`"periodos-directiva"`): el verificador de la serie midió que compartir el
@@ -69,7 +74,7 @@ import { logger } from "@/lib/logger"
 import { excedeVolumen } from "@/lib/rate-limit-volumen"
 import { jsonError, withComunidadScope } from "@/lib/api/with-comunidad-scope"
 import { alcancePorFilasDeSesion } from "@/lib/api/sesion-persona"
-import { leerProveedorDelClienteGenerado, type ProveedorBase } from "@/lib/database-url"
+import { proveedorDeUrl, type ProveedorBase } from "@/lib/database-url"
 
 /**
  * Tamaño de página de la búsqueda: el mismo orden de magnitud que
@@ -90,17 +95,18 @@ const MINIMO_CARACTERES = 2
 const COMODINES_LIKE = /[%_]/
 
 /**
- * Proveedor del cliente Prisma GENERADO, leído UNA vez por proceso. En dev y en
- * la suite es SQLite; en producción, PostgreSQL. `null` = no se pudo leer: el
- * filtro queda como siempre (sin `mode`), que es el comportamiento de antes.
+ * Proveedor de la base, derivado de `process.env.DATABASE_URL` con
+ * `proveedorDeUrl` (`lib/database-url.ts`, el mismo criterio que la resolución
+ * de URLs de los scripts de datos): `postgresql://` → PostgreSQL, `file:` →
+ * SQLite, `null` si no se puede determinar — el filtro queda como siempre (sin
+ * `mode`), que es el comportamiento de antes. La detección es una inspección
+ * del entorno del proceso: no lee el disco, no camina directorios ni depende
+ * del cliente generado. El test de proveedor
+ * (`test/api/periodos-directiva-buscar-personas-proveedor.test.ts`) fuerza el
+ * caso PostgreSQL mockeando este helper y espía el `where.OR` real.
  */
-let PROVEEDOR_MEMOIZADO: ProveedorBase | null | undefined
-
 function proveedorDeLaBase(): ProveedorBase | null {
-  if (PROVEEDOR_MEMOIZADO === undefined) {
-    PROVEEDOR_MEMOIZADO = leerProveedorDelClienteGenerado(process.cwd())
-  }
-  return PROVEEDOR_MEMOIZADO
+  return proveedorDeUrl(process.env.DATABASE_URL ?? "")
 }
 
 /**
@@ -185,7 +191,7 @@ export async function GET(req: Request): Promise<Response> {
       estadoCuenta: "activa",
       ...(alcance.tipo === "propio" ? { id: alcance.personaId } : {}),
       // Mismos tres campos de búsqueda que `/api/personas` (nombre, RUT, email),
-      // con `mode` sólo cuando el cliente generado es PostgreSQL (R3-1).
+      // con `mode` sólo cuando `DATABASE_URL` es de PostgreSQL (R3-1).
       OR: filtroDeBusqueda(q, proveedorDeLaBase()),
     }
 
