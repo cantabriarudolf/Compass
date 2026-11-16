@@ -432,6 +432,14 @@ export interface UsePersonasOperacionResultado {
    * silencio (ver `components/pe/aviso-truncamiento.tsx`).
    */
   total: number
+  /**
+   * El `total` del servidor excede el techo por petición del hook
+   * (`PAGE_SIZE_PADRON`), así que una página no alcanza: la lista que se muestra
+   * sin paginar viene recortada y el borde que la presenta DEBE declararlo
+   * (S10/S11, ver `components/pe/aviso-truncamiento.tsx`). Mismo dato aditivo que
+   * exponen `usePersonas`/`useUnidades` desde `db16b1a`.
+   */
+  recortada: boolean
   isLoading: boolean
   error: Error | null
 }
@@ -444,14 +452,19 @@ export interface UsePersonasOperacionResultado {
  * `usePersonas`, pero sin mutaciones: los padrones de la operación son de solo lectura.
  */
 export function usePersonasOperacion(): UsePersonasOperacionResultado {
-  const url = `${LISTA_OPERACION}?pageSize=100`
+  const url = `${LISTA_OPERACION}?pageSize=${PAGE_SIZE_PADRON}`
   const { data, error, isLoading } = useSWR<ColeccionOperacion, Error>(url, fetcher, {
     revalidateOnFocus: true,
   })
 
+  const total = data?.total ?? 0
+
   return {
     personas: data?.data ?? [],
-    total: data?.total ?? 0,
+    total,
+    // S11: el techo se declara comparando el total del servidor contra lo que una
+    // petición trae, no contra las filas acumuladas.
+    recortada: total > PAGE_SIZE_PADRON,
     isLoading,
     error: error ?? null,
   }

@@ -230,6 +230,14 @@ export interface UseUnidadesOperacionResultado {
    * silencio (ver `components/pe/aviso-truncamiento.tsx`).
    */
   total: number
+  /**
+   * El `total` del servidor excede el techo por petición del hook
+   * (`PAGE_SIZE_PADRON`), así que una página no alcanza: la lista que se muestra
+   * sin paginar viene recortada y el borde que la presenta DEBE declararlo
+   * (S10/S11, ver `components/pe/aviso-truncamiento.tsx`). Mismo dato aditivo que
+   * exponen `usePersonas`/`useUnidades` desde `db16b1a`.
+   */
+  recortada: boolean
   isLoading: boolean
   error: Error | null
 }
@@ -248,9 +256,14 @@ export function useUnidadesOperacion(): UseUnidadesOperacionResultado {
     revalidateOnFocus: true,
   })
 
+  const total = data?.total ?? 0
+
   return {
     unidades: data?.data ?? [],
-    total: data?.total ?? 0,
+    total,
+    // S11: el techo se declara comparando el total del servidor contra lo que una
+    // petición trae, no contra las filas acumuladas.
+    recortada: total > PAGE_SIZE_PADRON,
     isLoading,
     error: error ?? null,
   }
