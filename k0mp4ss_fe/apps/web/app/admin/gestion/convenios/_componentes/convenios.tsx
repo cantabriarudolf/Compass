@@ -44,6 +44,15 @@
  *     obligatorio: el diálogo no deja enviar sin él. El botón sólo se ofrece
  *     donde el estado lo permite (`vigente`/`incumplido`): un convenio
  *     `saldado` es historia y el servidor responde 409;
+ *   · la CONSTANCIA del papel firmado (F29 · T2b) se pinta tal como el servidor
+ *     la tiene: chip con el estado de la entrega al deudor —`pendiente`,
+ *     `entregado`, `fallido`— y el motivo verbatim, y el REENVÍO sólo donde la
+ *     ruta lo admite (`pendiente` y `fallido`; sobre `entregado` responde 409 y
+ *     la pantalla no ofrece un botón condenado). Después del reenvío la lista
+ *     se RELEE: el estado nuevo lo dice el servidor en su colección —si el
+ *     envío rebotó, la fila muestra `fallido` y su motivo, nunca un
+ *     `entregado` deducido del click—. Un convenio sin papel archivado lo dice
+ *     con su propio texto;
  *   · el ACUERDO del Comité que autoriza el convenio se elige entre los
  *     `aprobado` de `cuerpo === "comite"`, que es exactamente lo que la ruta
  *     exige de la fila real; uno rechazado o de la asamblea no se ofrece porque
@@ -103,6 +112,7 @@ import {
   IconLoader2,
   IconPlus,
   IconReceipt,
+  IconRefresh,
 } from "@tabler/icons-react"
 import { AvisoTruncamiento } from "@/components/pe/aviso-truncamiento"
 import { cn } from "@workspace/ui/lib/utils"
@@ -118,6 +128,9 @@ const RUTA = {
   unidadesConDeuda: "/api/convenios/unidades-con-deuda",
   // El deudor DERIVADO de la unidad: sus propietarios vigentes.
   deudores: "/api/convenios/deudores",
+  // El REENVÍO de la constancia de entrega del papel firmado (F29 · T2b):
+  // `{ convenioId }`, con el estado nuevo escrito por el servidor.
+  reenviar: "/api/convenios/documento/reenviar",
   acuerdos: "/api/acuerdos",
 } as const
 
@@ -129,6 +142,16 @@ interface CuotaLeida {
   estado: string
   pagadaEn: string | null
   registradaPor: string | null
+}
+
+/**
+ * La constancia de entrega del papel firmado, tal como la devuelve la vista del
+ * servidor. El estado y el motivo son EXACTAMENTE los que el servidor tiene
+ * persistidos: la pantalla no los redacta ni los traduce.
+ */
+interface ConstanciaLeida {
+  estado: string
+  motivo: string | null
 }
 
 /** Un convenio tal como lo devuelve `GET /api/convenios` (vista + nombres). */
@@ -148,6 +171,14 @@ interface ConvenioLeido {
   unidadNumero: string | null
   deudorNombre: string | null
   acuerdoFolio: string | null
+  /**
+   * El papel firmado archivado (F29 · T2b): `null` mientras la administración
+   * no lo suba. Los bytes se leen por la ruta del documento, con su guard; acá
+   * sólo viaja el id.
+   */
+  documentoId: string | null
+  /** La constancia de entrega de ese papel, con su motivo verbatim. */
+  constanciaEntrega: ConstanciaLeida | null
 }
 
 /**
@@ -219,6 +250,24 @@ const COLOR_CUOTA: Record<string, string> = {
   pendiente:
     "bg-amber-100 text-amber-900 dark:bg-amber-950/40 dark:text-amber-300",
   anulada: "bg-rose-100 text-rose-800 dark:bg-rose-950/40 dark:text-rose-300",
+}
+
+/**
+ * El estado de la constancia del papel firmado: la ruta del archivo y la del
+ * reenvío escriben estos tres y ninguno otro.
+ */
+const ETIQUETA_CONSTANCIA: Record<string, string> = {
+  pendiente: "Pendiente",
+  entregado: "Entregado",
+  fallido: "Fallido",
+}
+
+const COLOR_CONSTANCIA: Record<string, string> = {
+  pendiente:
+    "bg-amber-100 text-amber-900 dark:bg-amber-950/40 dark:text-amber-300",
+  entregado:
+    "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300",
+  fallido: "bg-rose-100 text-rose-800 dark:bg-rose-950/40 dark:text-rose-300",
 }
 
 /** Pesos en formato chileno, igual que el resto de las pantallas de finanzas. */
@@ -325,9 +374,10 @@ export interface ConsolaConveniosProps {
   /** `fi:cobranza` con `crear`: habilita el formulario de alta. */
   puedeCrear: boolean
   /**
-   * `fi:cobranza` con `editar`: habilita registrar el pago de una cuota y
-   * anular el convenio (F29 · S1). Es la MISMA clave de la matriz para las dos
-   * acciones: ambas son actos de administración de la cobranza.
+   * `fi:cobranza` con `editar`: habilita registrar el pago de una cuota, anular
+   * el convenio (F29 · S1) y reenviar la constancia de entrega del papel
+   * firmado (F29 · T2b). Es la MISMA clave de la matriz para las tres acciones:
+   * todas son actos de administración de la cobranza.
    */
   puedeRegistrarPago: boolean
 }
@@ -355,6 +405,15 @@ export function ConsolaConvenios({
   const [anulando, setAnulando] = React.useState(false)
   const [errorAnulacion, setErrorAnulacion] = React.useState<string | null>(null)
   const [avisoAnulacion, setAvisoAnulacion] = React.useState<string | null>(null)
+
+  // El REENVÍO de la constancia del papel firmado (F29 · T2b): un botón por
+  // fila, sólo donde la ruta lo admite (`pendiente` y `fallido`). El aviso dice
+  // el estado que DEVOLVIÓ el servidor —no un éxito deducido del click— y el
+  // error de la API va verbatim.
+  const [avisoReenvio, setAvisoReenvio] = React.useState<string | null>(null)
+  const [errorReenvio, setErrorReenvio] = React.useState<string | null>(null)
+  /** El convenio cuyo reenvío está en vuelo: un sólo click a la vez. */
+  const [reenviandoId, setReenviandoId] = React.useState<string | null>(null)
 
   // Catálogo del alta. Se pide sólo si el rol puede suscribir: un rol que sólo
   // audita no necesita el libro de acuerdos ni las unidades con deuda.
@@ -634,6 +693,40 @@ export function ConsolaConvenios({
     await cargar()
   }
 
+  /**
+   * El REENVÍO de la constancia del papel firmado (F29 · T2b). La ruta lo
+   * admite sólo para `pendiente` y `fallido`, y el estado nuevo lo dice SU
+   * respuesta: puede quedar `entregado`, volver a `fallido` o seguir
+   * `pendiente`. La pantalla no deduce nada del click: relee la colección,
+   * que es donde el servidor dice la verdad del envío.
+   */
+  async function confirmarReenvio(convenio: ConvenioLeido): Promise<void> {
+    if (reenviandoId !== null) return
+    setReenviandoId(convenio.id)
+    setErrorReenvio(null)
+    setAvisoReenvio(null)
+    const respuesta = await enviarJson(RUTA.reenviar, { convenioId: convenio.id })
+    setReenviandoId(null)
+
+    // Sin 2xx la constancia no cambió: el error de la API se muestra tal cual
+    // y la fila no se repinta, porque el servidor no la cambió.
+    if (!respuesta.ok) {
+      setErrorReenvio(respuesta.mensaje)
+      return
+    }
+
+    const constancia = respuesta.cuerpo?.constancia as { estado?: unknown } | undefined
+    const estado = typeof constancia?.estado === "string" ? constancia.estado : null
+    setAvisoReenvio(
+      estado !== null
+        ? `El servidor cursó el reenvío y la constancia quedó en estado «${estado}».`
+        : "El servidor cursó el reenvío de la constancia."
+    )
+    // El estado nuevo lo escribe el servidor: la lista se relee desde el GET.
+    // Nunca se pinta un estado derivado de que el click se cursó bien.
+    await cargar()
+  }
+
   const monto = Number(montoTotal)
   const cuotas = Number(numeroCuotas)
   const primera = Number(primeraCuota)
@@ -767,6 +860,23 @@ export function ConsolaConvenios({
         </p>
       )}
 
+      {avisoReenvio && (
+        <p
+          role="status"
+          className="flex items-center gap-2 text-sm text-muted-foreground"
+        >
+          <IconCircleCheck className="size-4" aria-hidden="true" />
+          {avisoReenvio}
+        </p>
+      )}
+
+      {errorReenvio && (
+        <p role="alert" className="flex items-center gap-2 text-sm text-destructive">
+          <IconAlertTriangle className="size-4" aria-hidden="true" />
+          {errorReenvio}
+        </p>
+      )}
+
       {errorCarga && (
         <Card className="border-destructive/50">
           <CardContent className="py-3">
@@ -808,6 +918,7 @@ export function ConsolaConvenios({
                   </TableHead>
                   <TableHead className="w-[110px]">Cuotas del saldo</TableHead>
                   <TableHead className="w-[110px]">Estado</TableHead>
+                  <TableHead className="w-[180px]">Constancia de entrega</TableHead>
                   <TableHead className="w-[110px] text-right">Pagado</TableHead>
                   <TableHead className="w-[110px] text-right">
                     Pendiente
@@ -848,6 +959,66 @@ export function ConsolaConvenios({
                               convenio.estado}
                           </Badge>
                         </TableCell>
+                        <TableCell className="whitespace-normal align-top">
+                          {(convenio.documentoId ?? null) === null ? (
+                            // Sin papel archivado: su propio texto, no un chip
+                            // vacío ni un «—» ambiguo.
+                            <p className="text-xs text-muted-foreground">
+                              Sin papel firmado archivado.
+                            </p>
+                          ) : convenio.constanciaEntrega == null ? (
+                            // Estado que el archivo no produce: con papel la
+                            // constancia nace en la misma transacción. Si esta
+                            // fila llegara acá, se dice lo que hay y nada más.
+                            <p className="text-xs text-muted-foreground">
+                              Papel archivado sin constancia registrada.
+                            </p>
+                          ) : (
+                            <div className="flex flex-col items-start gap-1">
+                              <Badge
+                                variant="secondary"
+                                className={`text-[11px] ${
+                                  COLOR_CONSTANCIA[
+                                    convenio.constanciaEntrega.estado
+                                  ] ?? ""
+                                }`}
+                              >
+                                {ETIQUETA_CONSTANCIA[
+                                  convenio.constanciaEntrega.estado
+                                ] ?? convenio.constanciaEntrega.estado}
+                              </Badge>
+                              {convenio.constanciaEntrega.motivo && (
+                                <p className="text-[11px] leading-snug text-muted-foreground break-words whitespace-normal">
+                                  {convenio.constanciaEntrega.motivo}
+                                </p>
+                              )}
+                              {puedeRegistrarPago &&
+                                (convenio.constanciaEntrega.estado === "pendiente" ||
+                                  convenio.constanciaEntrega.estado === "fallido") && (
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    disabled={reenviandoId === convenio.id}
+                                    onClick={() => void confirmarReenvio(convenio)}
+                                  >
+                                    {reenviandoId === convenio.id ? (
+                                      <IconLoader2
+                                        className="size-4 animate-spin"
+                                        aria-hidden="true"
+                                      />
+                                    ) : (
+                                      <IconRefresh
+                                        className="size-4"
+                                        aria-hidden="true"
+                                      />
+                                    )}
+                                    Reenviar constancia
+                                  </Button>
+                                )}
+                            </div>
+                          )}
+                        </TableCell>
                         <TableCell className="text-right tabular-nums">
                           {pesos(convenio.totales.pagado)}
                         </TableCell>
@@ -873,7 +1044,7 @@ export function ConsolaConvenios({
                       </TableRow>
                       {abierto && (
                         <TableRow>
-                          <TableCell colSpan={8} className="bg-muted/20">
+                          <TableCell colSpan={9} className="bg-muted/20">
                             <div
                               role="region"
                               aria-label={`Cuotas del convenio de la unidad ${unidad}`}

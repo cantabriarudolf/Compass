@@ -23,9 +23,9 @@
  *   nada.
  * - GET: guard `fi:cobranza` + ver. Acotado a la comunidad de la sesión —el
  *   `comunidadId` nunca viene del cliente— y leído en un número FIJO de consultas:
- *   los convenios con sus cuotas en una, el conteo en otra, y los nombres (unidad,
- *   deudor, folio del acuerdo) en tres más para todo el listado, nunca una por
- *   convenio ni una por cuota.
+ *   los convenios con sus cuotas en una, el conteo en otra, los nombres (unidad,
+ *   deudor, folio del acuerdo) en tres más y las constancias de entrega del papel
+ *   firmado en una, para todo el listado — nunca una por convenio ni una por cuota.
  *
  * No hay PUT ni DELETE: un convenio suscrito es un hecho con cuotas emitidas, no
  * se reescribe. La anulación es una decisión de negocio que todavía no existe y
@@ -362,6 +362,12 @@ export async function POST(req: Request): Promise<Response> {
 /**
  * GET /api/convenios — lectura de los convenios de la comunidad con sus cuotas.
  *
+ * Cada fila lleva además el papel firmado archivado (`documentoId`) y la
+ * constancia de entrega de ese papel al deudor, con su estado y motivo (F29 ·
+ * T2b): es lo que la pantalla pinta en la fila y lo que el reenvío manual
+ * actualiza. El pathname privado del depósito no viaja: los bytes se leen por la
+ * ruta del documento, con su guard.
+ *
  * `_req` se declara porque Next lo entrega, pero NO se lee: no hay parámetro que
  * cambie el alcance. La comunidad sale de `withComunidadScope()`, la única fuente,
  * así que un `?comunidadId=` del cliente no mueve nada.
@@ -385,14 +391,22 @@ export async function GET(_req: Request): Promise<Response> {
       prisma.convenioPago.count({ where: { comunidadId: scope.comunidadId } }),
     ])
 
-    // Nombres en TRES consultas para todo el listado (no una por convenio ni una
-    // por cuota): el convenio se lee por la unidad, el deudor y el acuerdo que lo
-    // autoriza, y los ids repetidos se piden una sola vez.
+    // Nombres en TRES consultas y constancias en UNA para todo el listado (no
+    // una por convenio ni una por cuota): el convenio se lee por la unidad, el
+    // deudor y el acuerdo que lo autoriza, y los ids repetidos se piden una sola
+    // vez. Las constancias van por los ids de papel archivado (F29 · T2b).
     const unidadIds = [...new Set(convenios.map((convenio) => convenio.unidadId))]
     const personaIds = [...new Set(convenios.map((convenio) => convenio.personaId))]
     const acuerdoIds = [...new Set(convenios.map((convenio) => convenio.acuerdoId))]
+    const documentoIds = [
+      ...new Set(
+        convenios
+          .map((convenio) => convenio.documentoId)
+          .filter((documentoId): documentoId is string => documentoId !== null)
+      ),
+    ]
 
-    const [unidades, personas, acuerdos] = await Promise.all([
+    const [unidades, personas, acuerdos, constancias] = await Promise.all([
       unidadIds.length === 0
         ? []
         : prisma.unidad.findMany({
@@ -411,6 +425,19 @@ export async function GET(_req: Request): Promise<Response> {
             where: { comunidadId: scope.comunidadId, id: { in: acuerdoIds } },
             select: { id: true, folio: true },
           }),
+      // El criterio es el del reenvío (`app/api/convenios/documento/reenviar`):
+      // canal `email` y la fila más antigua primero, que con el archivo del papel
+      // es la única que existe.
+      documentoIds.length === 0
+        ? []
+        : prisma.envioDocumento.findMany({
+            where: {
+              comunidadId: scope.comunidadId,
+              documentoId: { in: documentoIds },
+              canal: "email",
+            },
+            orderBy: { createdAt: "asc" },
+          }),
     ])
 
     const numeroPorUnidad = new Map(unidades.map((unidad) => [unidad.id, unidad.numero]))
@@ -418,14 +445,27 @@ export async function GET(_req: Request): Promise<Response> {
       personas.map((persona) => [persona.id, persona.nombreCompleto])
     )
     const folioPorAcuerdo = new Map(acuerdos.map((acuerdo) => [acuerdo.id, acuerdo.folio]))
-
-    const data = convenios.map((convenio) =>
-      vistaDeConvenio(convenio, convenio.cuotas, {
-        unidadNumero: numeroPorUnidad.get(convenio.unidadId) ?? null,
-        deudorNombre: nombrePorPersona.get(convenio.personaId) ?? null,
-        acuerdoFolio: folioPorAcuerdo.get(convenio.acuerdoId) ?? null,
-      })
+    const constanciaPorDocumento = new Map(
+      constancias.map((constancia) => [constancia.documentoId, constancia])
     )
+
+    const data = convenios.map((convenio) => {
+      const constancia = convenio.documentoId
+        ? constanciaPorDocumento.get(convenio.documentoId)
+        : undefined
+      return vistaDeConvenio(
+        convenio,
+        convenio.cuotas,
+        {
+          unidadNumero: numeroPorUnidad.get(convenio.unidadId) ?? null,
+          deudorNombre: nombrePorPersona.get(convenio.personaId) ?? null,
+          acuerdoFolio: folioPorAcuerdo.get(convenio.acuerdoId) ?? null,
+        },
+        constancia
+          ? { estado: constancia.estado, motivo: constancia.motivo }
+          : null
+      )
+    })
 
     return Response.json({ data, total, mostrados: data.length })
   } catch (e) {

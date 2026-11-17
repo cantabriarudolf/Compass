@@ -11,6 +11,13 @@
  * El dinero se opera en CENTAVOS enteros: sumar floats de pesos da $666.666,9999
  * y un total que no cuadra con la última cuota. La conversión es local a esta
  * función, que es la única que suma dinero de un convenio.
+ *
+ * F29 · T2b: la vista también expone el PAPEL FIRMADO archivado (`documentoId`)
+ * y la CONSTANCIA DE ENTREGA de ese papel al deudor, con el estado y el motivo
+ * EXACTOS que el servidor tiene persistidos. El pathname privado del depósito no
+ * viaja en ninguna respuesta: los bytes del papel se leen por
+ * `GET /api/convenios/documento?convenioId=…`, que tiene su guard `fi:cobranza`
+ * ver y sirve los bytes archivados, no la ruta del depósito.
  */
 
 /** Cuota ya persistida, en la forma mínima que la vista necesita. */
@@ -35,6 +42,8 @@ export interface ConvenioPersistido {
   readonly primeraCuota: number
   readonly estado: string
   readonly observaciones: string | null
+  /** El papel firmado archivado (V5): null mientras la administración no lo suba. */
+  readonly documentoId: string | null
 }
 
 /** Cuota tal como viaja al cliente. */
@@ -65,6 +74,41 @@ export interface ConvenioEnLaVista {
   readonly unidadNumero: string | null
   readonly deudorNombre: string | null
   readonly acuerdoFolio: string | null
+  /**
+   * El PAPEL FIRMADO archivado (F29 · V5/T2b): el id del documento legal que
+   * guarda el escaneo. Sólo el id, y `null` cuando todavía no hay papel: los
+   * bytes no se sirven acá —se leen por `GET /api/convenios/documento`, con su
+   * guard— y el pathname privado del depósito NO aparece en la respuesta.
+   */
+  readonly documentoId: string | null
+  /**
+   * La constancia de entrega del papel al deudor (F29 · T2b), tal como el
+   * servidor la tiene persistida: el estado (`pendiente` | `entregado` |
+   * `fallido`) y el motivo VERBATIM —para `fallido`, el error que devolvió el
+   * SMTP; para `entregado`, la aceptación del servidor—.
+   *
+   * Es `null` cuando la ruta no consultó constancias: el listado (`GET
+   * /api/convenios`) la trae siempre —con papel, la fila que el reenvío va a
+   * actualizar; sin papel, no hay constancia que traer— y el alta de un convenio
+   * nuevo la trae `null` porque todavía no existe el papel. Las rutas de pago y
+   * anulación no la consultan: la constancia vigente se lee del listado, que es
+   * la única fuente de esta pantalla. La distinción que el cliente necesita no
+   * depende de este campo sino de `documentoId`: sin papel es `documentoId`
+   * `null` y con papel hay una constancia real que puede estar `pendiente`.
+   */
+  readonly constanciaEntrega: ConstanciaEntregaEnLaVista | null
+}
+
+/**
+ * La constancia de entrega del papel firmado, tal como viaja al cliente.
+ *
+ * Es la fila de `EnvioDocumento` que nace con el archivo del papel y que el
+ * reenvío manual actualiza; acá va sin su id y sin su clave de envío —no son
+ * datos que la pantalla necesite para decir la verdad del envío—.
+ */
+export interface ConstanciaEntregaEnLaVista {
+  readonly estado: string
+  readonly motivo: string | null
 }
 
 /** Pesos → centavos enteros. */
@@ -109,11 +153,15 @@ export interface NombresDelConvenio {
 /**
  * Arma la vista de un convenio. Las cuotas se ordenan por número acá (no en el
  * llamador): la cuota 0 es el pago al suscribir y tiene que leerse primero.
+ *
+ * La constancia de entrega llega como cuarto parámetro cuando la ruta la
+ * consultó (el listado): la vista no la busca sola —ninguna consulta vive acá—.
  */
 export function vistaDeConvenio(
   convenio: ConvenioPersistido,
   cuotas: readonly CuotaDelConvenioPersistida[],
-  nombres: NombresDelConvenio = {}
+  nombres: NombresDelConvenio = {},
+  constanciaEntrega: ConstanciaEntregaEnLaVista | null = null
 ): ConvenioEnLaVista {
   const ordenadas = [...cuotas].sort((a, b) => a.numero - b.numero)
   return {
@@ -139,5 +187,7 @@ export function vistaDeConvenio(
     unidadNumero: nombres.unidadNumero ?? null,
     deudorNombre: nombres.deudorNombre ?? null,
     acuerdoFolio: nombres.acuerdoFolio ?? null,
+    documentoId: convenio.documentoId,
+    constanciaEntrega,
   }
 }
