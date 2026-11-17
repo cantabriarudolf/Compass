@@ -35,7 +35,7 @@ import {
   type ComunidadScope,
 } from "@/lib/api/with-comunidad-scope"
 import { idsDirectivaVigenteDb, periodoVigenteDb } from "@/lib/api/gd-guard"
-import { resultadoDelAcuerdo, type CuerpoDelAcuerdo } from "@/lib/acuerdos"
+import { resultadoDelAcuerdo, resolucionPresencial, esResultadoProclamado, type CuerpoDelAcuerdo } from "@/lib/acuerdos"
 import { puedeGestionarAcuerdos } from "./_guard"
 import { anioDeFecha, siguienteFolioAcuerdo } from "./_folio"
 
@@ -241,6 +241,8 @@ export async function GET(_req: Request): Promise<Response> {
           fecha: true,
           resueltoEn: true,
           actaId: true,
+          modalidad: true,
+          resultado: true,
           votos: {
             orderBy: { fecha: "asc" },
             select: {
@@ -290,6 +292,33 @@ export async function GET(_req: Request): Promise<Response> {
       const cuerpo = cuerpoDelAcuerdo(acuerdo.cuerpo)
       const derechosTotales =
         cuerpo === "asamblea" ? derechosAsambleaTotal : derechosComite
+      // La modalidad manda (S2/S4): el presencial no se deduce de votos —se
+      // contrasta con lo que la sala proclamó, registrado en `resultado`—; el
+      // electrónico se sigue derivando de los votos exactamente como hoy.
+      const proclamado = esResultadoProclamado(acuerdo.resultado)
+        ? acuerdo.resultado
+        : null
+      const derivado =
+        acuerdo.modalidad === "presencial"
+          ? proclamado
+            ? resolucionPresencial({
+                quorumRequerido: acuerdo.quorumRequerido,
+                proclamado,
+              })
+            : {
+                resultado: "pendiente" as const,
+                aFavor: 0,
+                enContra: 0,
+                abstenciones: 0,
+                motivo:
+                  "El acuerdo presencial todavía no tiene el resultado proclamado en la sala.",
+              }
+          : resultadoDelAcuerdo({
+              cuerpo,
+              quorumRequerido: acuerdo.quorumRequerido,
+              votos: acuerdo.votos,
+              derechosTotales,
+            })
       return {
         id: acuerdo.id,
         folio: acuerdo.folio,
@@ -300,15 +329,15 @@ export async function GET(_req: Request): Promise<Response> {
         fecha: acuerdo.fecha.toISOString(),
         resueltoEn: acuerdo.resueltoEn?.toISOString() ?? null,
         actaId: acuerdo.actaId,
+        modalidad: acuerdo.modalidad,
         derechosTotales,
         // Derivado, nunca guardado aparte: la regla pura es la misma que usa el
-        // POST del voto al resolver el acuerdo.
-        resultado: resultadoDelAcuerdo({
-          cuerpo,
-          quorumRequerido: acuerdo.quorumRequerido,
-          votos: acuerdo.votos,
-          derechosTotales,
-        }),
+        // POST del voto al resolver el acuerdo (y el cierre al contrastar la
+        // proclama del presencial).
+        resultado: derivado,
+        // El acta del resultado proclamado, tal cual la sala la declaró. null
+        // en el electrónico: ahí no hay proclama que respaldar.
+        proclamado,
         votos: acuerdo.votos.map((voto) => ({
           personaId: voto.personaId,
           nombre: nombrePorPersona.get(voto.personaId) ?? null,

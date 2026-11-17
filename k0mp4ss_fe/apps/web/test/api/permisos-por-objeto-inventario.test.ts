@@ -235,6 +235,12 @@ const DECLARACIONES: readonly Declaracion[] = [
       "el votante se deriva de la sesión y del padrón de la comunidad (`gd`/`ad`): emite su propio voto sobre un acuerdo del scope y responde 404/403 sin devolver datos de una fila ajena.",
   },
   {
+    ruta: "acuerdos/[id]",
+    clase: "exento",
+    motivo:
+      "sólo administración y Comité (`gd` crear): cierra el acuerdo presencial del scope con el resultado proclamado en sala y responde 404 sin distinguir casos; no devuelve datos de una fila ajena.",
+  },
+  {
     ruta: "vigencia-registro/multa/[id]/aplicar",
     clase: "exento",
     motivo:

@@ -65,6 +65,37 @@ export const DECISIONES_DEL_VOTO = [
 export type DecisionDelVoto = (typeof DECISIONES_DEL_VOTO)[number]
 
 /**
+ * Modalidades de la votación (S2/S4). `electronica` es el default y lo que ya
+ * son todos los acuerdos existentes: se resuelve sumando los `VotoAcuerdo`.
+ * `presencial` se proclama en la sala: no tiene votos por persona (el
+ * `VotoAcuerdo` queda vacío a propósito, es el modelo) y se cierra con su acta
+ * firmada archivada y el `resultado` registrado.
+ */
+export const MODALIDADES_DEL_ACUERDO = ["electronica", "presencial"] as const
+
+export type ModalidadDelAcuerdo = (typeof MODALIDADES_DEL_ACUERDO)[number]
+
+/**
+ * El acta del resultado proclamado en sala (S2): lo que el acta declara, tal
+ * cual. Los números son los del acta, en la unidad que el acta use (personas en
+ * el comité, derechos ponderados en la asamblea): el sistema los registra como
+ * evidencia y NO los reinterpretan — la regla no se recalcula, se registra en
+ * `quorumRequerido` y se contrasta contra lo proclamado.
+ *
+ * `quorumAlcanzado` es la proclama: la sala declaró si se alcanzó la mayoría
+ * que exige la regla aplicada (`quorumRequerido`). El contraste es esa
+ * proclama leída contra la regla registrada (ver `resolucionPresencial`), no
+ * una recomputación de la aritmética de la sala.
+ */
+export interface ResultadoProclamado {
+  readonly aFavor: number
+  readonly enContra: number
+  readonly abstenciones: number
+  readonly presentes: number
+  readonly quorumAlcanzado: boolean
+}
+
+/**
  * Umbral de la mayoría reforzada: 66% de los derechos (Ley 21.442 art. 15,
  * tabla MINVU). El borde es cerrado (`>=`): 66 de 100 derechos alcanza.
  * No se aproxima a 2/3 por cuenta propia: el número es el verificado.
@@ -256,5 +287,86 @@ export function resultadoDelAcuerdo(
     ...totales,
     resultado: "pendiente",
     motivo: `${regla}: ${marcador}; restan ${formatearNumero(restante)} ${unidadRestante} por pronunciarse y el resultado todavía puede cambiar.`,
+  }
+}
+
+/** ¿El valor leído de la columna Json es un resultado proclamado completo? */
+export function esResultadoProclamado(valor: unknown): valor is ResultadoProclamado {
+  if (typeof valor !== "object" || valor === null) return false
+  const v = valor as Record<string, unknown>
+  return (
+    typeof v.aFavor === "number" &&
+    Number.isFinite(v.aFavor) &&
+    v.aFavor >= 0 &&
+    typeof v.enContra === "number" &&
+    Number.isFinite(v.enContra) &&
+    v.enContra >= 0 &&
+    typeof v.abstenciones === "number" &&
+    Number.isFinite(v.abstenciones) &&
+    v.abstenciones >= 0 &&
+    typeof v.presentes === "number" &&
+    Number.isFinite(v.presentes) &&
+    v.presentes >= 0 &&
+    typeof v.quorumAlcanzado === "boolean"
+  )
+}
+
+/** Entrada del contraste presencial: la regla registrada y lo proclamado. */
+export interface EntradaResolucionPresencial {
+  /** La regla APLICADA, registrada en el acuerdo (`Acuerdo.quorumRequerido`). */
+  readonly quorumRequerido: string
+  /** Lo que la sala proclamó, tal cual quedó en el acta del resultado. */
+  readonly proclamado: ResultadoProclamado
+}
+
+/**
+ * La resolución de un acuerdo PRESENCIAL: el resultado NO se deduce de votos
+ * (no hay, y es el modelo); se toma lo proclamado y se contrasta con la regla
+ * registrada en `quorumRequerido` —la que el acuerdo declara, no una que el
+ * sistema recomputa—. La sala proclamó si la mayoría exigida por esa regla se
+ * alcanzó (`quorumAlcanzado`): el contraste es esa proclama leída contra la
+ * regla, y el desenlace es final, nunca `pendiente` — la sala ya sesionó.
+ *
+ * Un acuerdo presencial que no alcanza la mayoría se resuelve `rechazado` de
+ * todas formas: la sala votó, aunque no pase, y el resultado queda registrado
+ * igual — es evidencia de lo que ocurrió, no un estado de ánimo.
+ */
+export function resolucionPresencial(
+  entrada: EntradaResolucionPresencial
+): ResultadoDelAcuerdo {
+  const { quorumRequerido, proclamado } = entrada
+  // Los números del acta se registran, no se recalculan: son la evidencia que
+  // el acta firmada respalda (S1/S3).
+  const totales = {
+    aFavor: proclamado.aFavor,
+    enContra: proclamado.enContra,
+    abstenciones: proclamado.abstenciones,
+  }
+
+  // Defensa, no camino: una fila con regla corrupta no puede cerrarse. La ruta
+  // de cierre la rechaza antes de llegar acá.
+  if (!esQuorumDelAcuerdo(quorumRequerido)) {
+    return {
+      ...totales,
+      resultado: "pendiente",
+      motivo: `No se reconoce la regla de quórum declarada («${quorumRequerido}»): el acuerdo no se resuelve.`,
+    }
+  }
+
+  const regla = NOMBRE_DE_LA_REGLA[quorumRequerido]
+  const marcador = `resultado proclamado en sala: ${formatearNumero(proclamado.aFavor)} a favor, ${formatearNumero(proclamado.enContra)} en contra, ${formatearNumero(proclamado.abstenciones)} abstenciones, ${formatearNumero(proclamado.presentes)} presentes`
+
+  if (proclamado.quorumAlcanzado) {
+    return {
+      ...totales,
+      resultado: "aprobado",
+      motivo: `${regla}: ${marcador}; la sala proclamó que se alcanzó la mayoría exigida.`,
+    }
+  }
+
+  return {
+    ...totales,
+    resultado: "rechazado",
+    motivo: `${regla}: ${marcador}; la sala proclamó que la mayoría exigida no se alcanzó, y el resultado queda registrado igual.`,
   }
 }

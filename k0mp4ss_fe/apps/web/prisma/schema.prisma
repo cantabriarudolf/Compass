@@ -724,15 +724,33 @@ model Acuerdo {
   // contra la carrera (el POST reintenta con el siguiente correlativo).
   folio           String
   estado          String    @default("abierto") // abierto | aprobado | rechazado
+  // Modalidad de la votación (S2/S4): `electronica` —el default, y lo que ya
+  // son todos los acuerdos existentes— se resuelve sumando los `VotoAcuerdo`
+  // con `resultadoDelAcuerdo`; `presencial` se proclama en la sala —no tiene
+  // votos por persona y `VotoAcuerdo` queda vacío a propósito— y se cierra con
+  // su acta firmada archivada y el `resultado` proclamado. Aditiva pura: la
+  // migración nace con default `electronica`, así que ninguna fila existente
+  // cambia de comportamiento (S4).
+  modalidad       String    @default("electronica") // electronica | presencial
   // La regla APLICADA, en texto: un_voto_por_miembro |
   // mayoria_absoluta_presentes | mayoria_absoluta_derechos |
   // mayoria_reforzada_derechos (ver lib/acuerdos.ts).
   quorumRequerido String
   fecha           DateTime  @default(now())
-  // Acta que respalda la sesión (asamblea) o la reunión (comité), si consta.
+  // El acta que respalda la sesión (asamblea) o la reunión (comité), si consta.
   actaId          String?
   creadoPor       String // usuario de sesión que registró el acuerdo
   resueltoEn      DateTime?
+  // El resultado PROCLAMADO en sala (solo `presencial`): lo que el acta declara
+  // — a favor, en contra, abstenciones, presentes y si se alcanzó el quórum
+  // (la mayoría que exige la regla aplicada `quorumRequerido`). El sistema lo
+  // registra tal cual y lo contrasta con esa regla: no lo deduce de los votos
+  // (en presencial no hay) ni recalcula la regla. La forma y el contraste viven
+  // en `lib/acuerdos.ts` (`esResultadoProclamado` / `resolucionPresencial`); la
+  // escritura pasa por el cierre en `app/api/acuerdos/[id]/route.ts`, que exige
+  // además el acta firmada archivada (S1). En `electronica` queda null para
+  // siempre: ahí el resultado se deriva de los votos, exactamente como hoy.
+  resultado       Json?
   createdAt       DateTime  @default(now())
 
   votos VotoAcuerdo[]

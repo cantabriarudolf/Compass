@@ -118,6 +118,7 @@ export async function POST(request: Request, ctx: Ctx): Promise<Response> {
       quorumRequerido: true,
       folio: true,
       estado: true,
+      modalidad: true,
     },
   })
   // 404 sin filtrar existencia: un acuerdo de otra comunidad no se ve.
@@ -151,6 +152,17 @@ export async function POST(request: Request, ctx: Ctx): Promise<Response> {
     return jsonError(
       403,
       "Tu ficha no pertenece al Maestro de Personas de esta comunidad."
+    )
+  }
+
+  // La modalidad es del modelo, no de esta ruta (S2/S4): un acuerdo presencial
+  // no acumula votos — `VotoAcuerdo` queda vacío a propósito, porque el
+  // resultado se PROCLAMA en la sala y se registra con su acta. Sumar votos
+  // que no existen deduciría lo que la sala ya declaró.
+  if (acuerdo.modalidad === "presencial") {
+    return jsonError(
+      409,
+      "El acuerdo presencial no admite votos: el resultado se proclama en la sala y se registra con su acta."
     )
   }
 
