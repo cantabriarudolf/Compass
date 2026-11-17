@@ -61,6 +61,18 @@
  * (`lib/pdf-utils`), así que un lector viejo de una fila v2 sigue viendo el
  * período donde siempre lo vio.
  *
+ * ── El convenio de pago vigente se declara al emitir (F29 · S3) ───────────
+ *
+ * Mientras el convenio de la unidad rige, el papel no lo calla: el contenido
+ * declara el folio del ACUERDO del Comité que lo autorizó —`ConvenioPago` no
+ * tiene folio propio y no se inventa un correlativo—, la cuota que va al
+ * emitir (la primera impaga, con su número y el total de cuotas, M de N), su
+ * monto y su vencimiento. Es un dato más del documento congelado: se toma de
+ * la base al emitir y una anulación o un saldo posteriores no reescriben el
+ * papel ya emitido. Sin convenio `vigente` el campo NO existe en el contenido
+ * (ni como `null`): el aviso de una unidad sin convenio queda byte a byte
+ * como siempre fue.
+ *
  * ── La regla del dato que falta ──────────────────────────────────────────────
  *
  * Un monto que la ley exige y no se puede computar NO se imprime como cero: se
@@ -201,6 +213,13 @@ export interface EntradaContenidoAviso {
   cobrosAnteriores: readonly CobroDelAviso[]
   /** Totales de comunidad del período (`cargarResumenMensual`). */
   resumen: ResumenMensual
+  /**
+   * El convenio de pago de la unidad tal como la base lo tiene AL EMITIR
+   * (F29 · S3), con el folio del acuerdo del Comité que lo autoriza; `null` o
+   * ausente cuando no hay convenio. La ruta lee la fila real —nunca lo declara
+   * el cliente— y `declaracionConvenio` decide qué se congela.
+   */
+  convenio?: ConvenioLeidoAlEmitir | null
 }
 
 /** Por qué un dato que la ley pide no se pudo computar. */
@@ -257,6 +276,55 @@ export interface DeudaAnteriorDelAviso {
   total: number
 }
 
+/**
+ * El convenio de pago de la unidad, tal como la ruta lo leyó de la base AL
+ * EMITIR (F29 · S3): su estado real, el folio del acuerdo del Comité que lo
+ * autoriza (`ConvenioPago.acuerdoId` → `Acuerdo.folio` —el convenio no tiene
+ * folio propio—) y sus cuotas con el estado que la base declara.
+ */
+export interface ConvenioLeidoAlEmitir {
+  /** Estado del convenio en la base al emitir: sólo `vigente` se declara. */
+  estado: string
+  /**
+   * Folio del acuerdo del Comité que autorizó el convenio. `null` es la
+   * ausencia DECLARADA —un acuerdo sin folio legible se dice, no se inventa—.
+   */
+  acuerdoFolio: string | null
+  /** Total de cuotas mensuales del convenio: la N de "M de N". */
+  numeroCuotas: number
+  /** Las cuotas 0..N del convenio, con su estado en la base. */
+  cuotas: ReadonlyArray<{
+    numero: number
+    monto: number
+    /** Vencimiento de la cuota: fila de la base (Date) o texto ISO-8601. */
+    venceEn: Date | string
+    estado: string
+  }>
+}
+
+/**
+ * El convenio `vigente` congelado dentro del contenido del aviso (F29 · S3).
+ * Todo lo que lleva se leyó al emitir: es constancia, no estado vivo.
+ */
+export interface ConvenioDelAviso {
+  /** El folio del acuerdo que lo autoriza, tal como se leyó al emitir. */
+  acuerdoFolio: string | null
+  /**
+   * La cuota que va al emitir: la primera impaga del convenio, con su número
+   * y el total de cuotas (M de N), su monto y su vencimiento. `null` cuando
+   * el convenio no declara ninguna cuota impaga: la ausencia se declara, no
+   * se rellena con la cuota que fuera.
+   */
+  cuota: {
+    numero: number
+    de: number
+    monto: number
+    vencimiento: string
+  } | null
+  /** La línea redactada que imprime el papel, congelada con los mismos datos. */
+  texto: string
+}
+
 export interface MontosDelAviso {
   gastoComun: number
   recargoFondoReserva: number
@@ -309,12 +377,92 @@ export interface ContenidoAviso {
   /** Deuda de períodos anteriores (vacía si no hay, nunca ausente). */
   deudaAnterior: DeudaAnteriorDelAviso
   montos: MontosDelAviso
+  /**
+   * El convenio de pago `vigente` de la unidad, congelado al emitir (F29 · S3):
+   * el folio del acuerdo del Comité que lo autoriza, la cuota que va (M de N)
+   * y la línea que imprime el papel. El campo entra SOLO cuando había convenio
+   * vigente al emitir; su ausencia declara que no lo había —ni `null` ni hueco
+   * vacío—, y una anulación o un saldo posteriores no reescriben este
+   * documento ya emitido.
+   */
+  convenio?: ConvenioDelAviso
   resumenComunidad: ResumenMensual
   noComputables: ValorNoComputable[]
 }
 
 function suma(valores: readonly number[]): number {
   return valores.reduce((total, valor) => total + valor, 0)
+}
+
+/**
+ * El formato de dinero del papel (`$250.000`): la misma regla que imprime el
+ * documento (`lib/pdf-utils`), para que la línea congelada diga lo mismo que
+ * las cifras del papel.
+ */
+function dineroDelPapel(monto: number): string {
+  return `$${Math.round(monto).toLocaleString("es-CL")}`
+}
+
+/**
+ * Fecha `AAAA-MM-DD` de una fila de la base, sobre el reloj UTC del documento
+ * (el mismo que el resto del contenido usa; una fecha nunca se lee en la zona
+ * del servidor). Un texto debe venir en ISO-8601.
+ */
+function fechaDeLaFila(valor: Date | string): string {
+  return (typeof valor === "string" ? valor : valor.toISOString()).slice(0, 10)
+}
+
+/**
+ * La cita del acuerdo que autorizó el convenio. Sin folio legible, la ausencia
+ * se DECLARA: fabricar un correlativo sería fabricar la autorización.
+ */
+function citaDelAcuerdo(folio: string | null): string {
+  return folio === null
+    ? "y el folio del acuerdo del Comité que lo autoriza no se pudo leer"
+    : `autorizado por el acuerdo del Comité folio ${folio}`
+}
+
+/** La parte de la línea que nombra la cuota que va, o declara que no hay. */
+function lineaDeLaCuota(cuota: ConvenioDelAviso["cuota"]): string {
+  if (cuota === null) {
+    return "Al emitir este aviso el convenio no declara ninguna cuota impaga."
+  }
+  return `La cuota que va al emitir este aviso es la ${cuota.numero} de ${cuota.de}, por ${dineroDelPapel(cuota.monto)}, con vencimiento el ${cuota.vencimiento}.`
+}
+
+/**
+ * La declaración del convenio vigente que el aviso congela (F29 · S3).
+ *
+ * Regla completa: sólo un convenio en estado `vigente` se declara —un convenio
+ * anulado, saldado o incumplido al emitir no rige y el papel no lo nombra—, y
+ * "la cuota que va" es la PRIMERA IMPAGA por número: la cuota 0 nació pagada al
+ * suscribir, una cuota `pagada` ya se pagó y una `anulada` ya no se cobra; una
+ * `vencida` sigue siendo deuda. La referencia es el folio del acuerdo del
+ * Comité que lo autorizó (`ConvenioPago` no tiene folio propio y no se inventa
+ * un correlativo nuevo). Devuelve `undefined` cuando nada se declara: el
+ * llamador distingue "no hubo convenio vigente" de un convenio sin datos.
+ */
+export function declaracionConvenio(
+  convenio: ConvenioLeidoAlEmitir | null | undefined
+): ConvenioDelAviso | undefined {
+  if (!convenio || convenio.estado !== "vigente") return undefined
+  const impagas = [...convenio.cuotas]
+    .filter((cuota) => cuota.estado === "pendiente" || cuota.estado === "vencida")
+    .sort((a, b) => a.numero - b.numero)
+  const primera = impagas[0]
+  const cuota = primera
+    ? {
+        numero: primera.numero,
+        de: convenio.numeroCuotas,
+        monto: primera.monto,
+        vencimiento: fechaDeLaFila(primera.venceEn),
+      }
+    : null
+  return {
+    acuerdoFolio: convenio.acuerdoFolio,
+    cuota,
+    texto: `La unidad tiene un convenio de pago de deuda vigente, ${citaDelAcuerdo(convenio.acuerdoFolio)}. ${lineaDeLaCuota(cuota)}`,
+  }
 }
 
 /** Comparación lexicográfica de fechas ISO `AAAA-MM-DD` (nunca pasa por `Date`). */
@@ -489,6 +637,13 @@ export function contenidoAviso(entrada: EntradaContenidoAviso): ContenidoAviso {
   )
   const totalAdeudado = Math.max(0, exigible - pagado)
 
+  // La declaración del convenio vigente (F29 · S3), tomada de la entrada tal
+  // como la base la tiene AL EMITIR: queda congelada dentro del contenido y una
+  // anulación o un saldo posteriores no la alcanzan —este documento ya se
+  // emitió—. Sin convenio vigente no hay campo: el contenido queda como siempre
+  // fue (el JSON canónico omite las claves sin valor).
+  const convenio = declaracionConvenio(entrada.convenio)
+
   return {
     version: 2,
     periodo,
@@ -523,6 +678,11 @@ export function contenidoAviso(entrada: EntradaContenidoAviso): ContenidoAviso {
       totalDeudaAnterior: deudaAnterior.total,
       totalAdeudadoConsolidado: totalAdeudado + deudaAnterior.total,
     },
+    // El campo entra SOLO cuando la unidad tenía convenio `vigente` al emitir:
+    // su ausencia es la declaración de que no lo había. Un hueco vacío (un
+    // `null` impreso) se leería como dato y el aviso sin convenio tiene que
+    // quedar byte a byte como siempre fue.
+    ...(convenio ? { convenio } : {}),
     resumenComunidad: resumen,
     noComputables,
   }

@@ -35,6 +35,15 @@
  * períodos. `contenidoAviso` decide cuáles son deuda (saldo pendiente positivo) y
  * los congela en `deudaAnterior`; la ruta no filtra ni recalcula ningún monto.
  * *
+ * El aviso también declara el CONVENIO DE PAGO vigente de la unidad (F29 · S3):
+ * lo lee de la base AL EMITIR —una consulta indexada más, nunca un dato del
+ * cliente— con el folio del acuerdo del Comité que lo autorizó
+ * (`ConvenioPago.acuerdoId` → `Acuerdo.folio`; el convenio no tiene folio
+ * propio) y `contenidoAviso` lo congela en el contenido. La lectura sólo
+ * alcanza al papel que se emite desde ahora: un convenio anulado o saldado
+ * después no reescribe el aviso ya emitido, y sin convenio vigente el campo no
+ * existe —el aviso de una unidad sin convenio queda byte a byte como antes—.
+ *
  * Lo que la ley exige y no se puede computar (reglamento vigente, prorrateo de
  * la unidad) NO bloquea la emisión: queda declarado en `contenido.noComputables`
  * con su motivo, y el documento lo imprime en vez de un cero. Ver
@@ -505,6 +514,55 @@ export async function POST(req: Request): Promise<Response> {
       orderBy: [{ periodo: "asc" }, { fechaCargo: "asc" }, { id: "asc" }],
     })
 
+    // 7. El convenio de pago `vigente` de cada unidad objetivo (F29 · S3), leído
+    // AL EMITIR: lo que el aviso declare queda congelado en su contenido y una
+    // anulación o un saldo posteriores no lo reescriben. La referencia legal es
+    // el folio del acuerdo del Comité que autorizó el convenio (`acuerdoId`),
+    // nunca un correlativo inventado —el convenio no tiene folio propio—. El
+    // alta garantiza un solo convenio `vigente` por unidad, así que el mapa es
+    // uno a uno; una unidad sin convenio no gana campo en el contenido.
+    const conveniosVigentes = await prisma.convenioPago.findMany({
+      where: {
+        comunidadId: scope.comunidadId,
+        unidadId: { in: objetivos.map((u) => u.id) },
+        estado: "vigente",
+      },
+      select: {
+        unidadId: true,
+        estado: true,
+        acuerdoId: true,
+        numeroCuotas: true,
+        cuotas: {
+          select: { numero: true, monto: true, venceEn: true, estado: true },
+          orderBy: { numero: "asc" },
+        },
+      },
+    })
+    const foliosPorAcuerdo = new Map<string, string>()
+    if (conveniosVigentes.length > 0) {
+      const acuerdos = await prisma.acuerdo.findMany({
+        where: {
+          comunidadId: scope.comunidadId,
+          id: { in: conveniosVigentes.map((convenio) => convenio.acuerdoId) },
+        },
+        select: { id: true, folio: true },
+      })
+      for (const acuerdo of acuerdos) foliosPorAcuerdo.set(acuerdo.id, acuerdo.folio)
+    }
+    const conveniosPorUnidad = new Map(
+      conveniosVigentes.map((convenio) => [
+        convenio.unidadId,
+        {
+          estado: convenio.estado,
+          // Sin fila de acuerdo no hay folio que citar: la declaración lo
+          // dirá, no lo reemplazará con un dato inventado.
+          acuerdoFolio: foliosPorAcuerdo.get(convenio.acuerdoId) ?? null,
+          numeroCuotas: convenio.numeroCuotas,
+          cuotas: convenio.cuotas,
+        },
+      ])
+    )
+
     const fechaEmision = hoyISO()
     // El plazo de pago (S6) es del DOCUMENTO, no del cargo: emisión + los días
     // que declara la versión que rige el período. Sin versión no hay plazo y el
@@ -532,6 +590,7 @@ export async function POST(req: Request): Promise<Response> {
         cobros,
         cobrosAnteriores: anteriores,
         resumen: totales.resumen,
+        convenio: conveniosPorUnidad.get(unidad.id),
       })
       return {
         id: generarId("avi", idx),
