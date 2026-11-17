@@ -59,3 +59,6 @@ k0mp4ss_fe/apps/web/e2e/.auth/
 
 # xlsx financiero: dato del owner, no se publica (ver docs/SECRETOS.md)
 Data/NSGC/ingresosvsegresos.23y24/
+
+# Artefactos del harness (extensiones locales de la sesión), no del repo
+.pi/
