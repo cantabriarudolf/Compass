@@ -2,6 +2,10 @@
   <img src="docs/brand/band.svg" alt="" width="100%">
 </p>
 
+<p align="center">
+  <img src="docs/brand/logo.png" alt="Rosa de los vientos de Compass" width="150">
+</p>
+
 <h1 align="center">Compass</h1>
 
 <p align="center">
