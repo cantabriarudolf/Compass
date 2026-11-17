@@ -209,13 +209,22 @@ async function abrirSelectorTrabajador(
 }
 
 describe("personal — la regla de negocio opera sobre el padrón completo", () => {
-  it("el trabajador de la página 2 cuenta, se elige y cruza con los trabajos MT", async () => {
+  it("el trabajador de la página 2 cuenta, se elige y cruza con los trabajos MT; quien no cumple no se ofrece", async () => {
     const api = instalarApiArnés(estadoPadronDeDosPaginas())
     const user = userEvent.setup({ delay: null })
     renderPagina()
 
     // El portón de carga abre cuando todas las colecciones de la página llegaron.
     await screen.findByText("Personal y Servicios")
+
+    // El conteo es sobre el padrón entero y sobre la regla: Eva (rol personal) +
+    // Hugo (ficha) = 2. Ni los cien vecinos ni Rosa, que llegan con
+    // `datosLaborales: null` como en la API real, cuentan como personal.
+    await waitFor(
+      () =>
+        expect(screen.getByRole("tab", { name: "Trabajadores (2)" })).toBeInTheDocument(),
+      { timeout: 10_000 }
+    )
 
     // La caminata pidió la página 2 del padrón de personas: con una sola página
     // Eva no existiría para la pantalla.
@@ -247,11 +256,13 @@ describe("personal — la regla de negocio opera sobre el padrón completo", () 
       },
       { timeout: 10_000 }
     )
-    // La lista se llenó con el padrón entero, no con las cien filas de la página 1.
+    // La lista se llenó con el padrón entero (más de cien opciones posibles),
+    // pero la regla sigue mandando quién entra.
     const textos = within(lista)
       .getAllByRole("option")
       .map((o) => o.textContent)
-    expect(textos.length).toBeGreaterThan(100)
+    expect(textos).not.toContain("Rosa Sin Condicion")
+    expect(textos).not.toContain("Relleno 50 Vecino")
 
     await user.click(
       within(lista)
@@ -270,6 +281,10 @@ describe("personal — la regla de negocio opera sobre el padrón completo", () 
 
     await screen.findByText("Personal y Servicios")
 
+    // Sólo Lidia es personal: Rosa llega con `datosLaborales: null`, el payload
+    // real de quien no tiene ficha.
+    expect(screen.getByRole("tab", { name: "Trabajadores (1)" })).toBeInTheDocument()
+
     // El padrón cabe en una página: la fila se resuelve igual en el panel de tareas.
     await user.click(screen.getByRole("tab", { name: "Panel de Monitoreo" }))
     const filaTarea = (await screen.findByText("Revision de ficha")).closest(
@@ -287,7 +302,7 @@ describe("personal — la regla de negocio opera sobre el padrón completo", () 
     const textos = within(lista)
       .getAllByRole("option")
       .map((o) => o.textContent)
-    expect(textos).toContain("Rosa Sin Condicion")
+    expect(textos).not.toContain("Rosa Sin Condicion")
 
     // El padrón completo cabe en una página: completarlo no agrega peticiones.
     expect(peticionesDePersonas(api).some((p) => p.includes("page=2"))).toBe(false)

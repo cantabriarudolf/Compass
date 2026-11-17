@@ -241,8 +241,12 @@ export default function PersonalPage() {
   const [turnoPersona, setTurnoPersona] = React.useState("")
   const [turnoJornada, setTurnoJornada] = React.useState("")
 
+  // La ficha laboral llega como `null` (columna nullable de Prisma) cuando la
+  // persona no tiene una: comparar contra `undefined` metía al padrón entero de
+  // personal. El rol `personal` es el que la ruta ya deriva con el mismo criterio
+  // (`app/api/personas/route.ts`), así que las dos condiciones coinciden.
   const personal = personas.filter(
-    p => p.roles.includes("personal") || p.datosLaborales !== undefined
+    p => p.roles.includes("personal") || p.datosLaborales != null
   )
   const editando = editandoId ? personas.find(p => p.id === editandoId) : undefined
   const hoy = new Date().toISOString().slice(0, 10)
