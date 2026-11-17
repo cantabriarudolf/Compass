@@ -537,6 +537,31 @@ export function documentoAvisoCobroPDF(
     ? bloqueDeuda.periodos
     : null
 
+  // La declaración del convenio vigente (F29 · S3) llega congelada en el
+  // contenido y el papel la imprime TAL CUAL: `texto` ya trae el acuerdo del
+  // Comité y la cuota que va redactados AL EMITIR, y re-redactarlos o
+  // recomponerlos desde los datos sueltos sería una segunda versión que podría
+  // contradecir el documento firmado. Sin convenio declarado el papel no agrega
+  // nodo alguno: queda byte a byte como se emitía antes de la declaración (el
+  // pin de bytes vive en `test/lib/pdf-aviso-cobro-convenio.test.ts`).
+  const traeConvenio =
+    contenido.convenio !== null &&
+    typeof contenido.convenio === "object" &&
+    !Array.isArray(contenido.convenio)
+  const lineaConvenio = traeConvenio
+    ? textoDe(objetoDe(contenido.convenio).texto)
+    : null
+  const seccionConvenio = (): any[] =>
+    traeConvenio
+      ? [
+          seccion("CONVENIO DE PAGO DE DEUDA"),
+          // La línea congelada, tal cual salió al emitir. Si el JSON no la trae
+          // legible, el faltante se DECLARA con su nombre (la regla del dato
+          // que falta es también del papel, nunca un hueco y nunca un cero).
+          { text: lineaConvenio ?? NO_DISPONIBLE, marginBottom: 4 },
+        ]
+      : []
+
   /** Una celda de dinero de la tabla de deuda: la cifra congelada o el faltante. */
   const celdaDinero = (valor: unknown): any => ({
     text: dinero(cifraDe(valor)),
@@ -651,6 +676,7 @@ export function documentoAvisoCobroPDF(
         filaTotal("TOTAL ADEUDADO", montos.totalAdeudado),
       ]),
       ...seccionDeudaAnterior(),
+      ...seccionConvenio(),
       seccion(
         `TOTALES DE LA COMUNIDAD (período ${aviso.periodo}, corte ${hasta})`
       ),
