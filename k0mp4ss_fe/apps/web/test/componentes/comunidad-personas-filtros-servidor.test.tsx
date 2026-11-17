@@ -79,7 +79,12 @@ describe("Directorio de Comunidad — filtros de rol y estado en el servidor", (
     expect(screen.getByText("101 personas en este filtro.")).toBeInTheDocument()
     expect(screen.getByText(/Mostrando 100 de 101/)).toBeInTheDocument()
     // El donut y los contadores por rol también describen los 101, no las 100 de la página.
-    expect(screen.getByTestId("roles-donut")).toHaveTextContent("roles recibidos: 101")
+    // Se espera el asentamiento: bajo carga el agregado del servidor puede llegar un tick
+    // después que la primera página, y afirmar en ese instante mide la carrera, no la regla.
+    await waitFor(
+      () => expect(screen.getByTestId("roles-donut")).toHaveTextContent("roles recibidos: 101"),
+      { timeout: 10_000 }
+    )
 
     await user.click(screen.getByRole("button", { name: /PERSONAL/i }))
 
