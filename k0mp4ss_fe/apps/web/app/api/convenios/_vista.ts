@@ -77,8 +77,13 @@ function aCentavos(monto: number): number {
  *
  * `pendiente` es la suma de las cuotas NO pagadas (no `montoTotal − pagado`): si
  * alguna cuota quedara fuera del reparto, la resta lo escondería y la suma de las
- * filas lo delata. Como las cuotas suman el monto total, las dos cuentas coinciden
- * y la vista lo puede afirmar.
+ * filas lo delata. Mientras el convenio rige, las cuotas suman el monto total y
+ * las dos cuentas coinciden.
+ *
+ * La excepción es la anulación (F29 · S1): una cuota `anulada` tampoco es
+ * pendiente —la deuda que representaba terminó por el acto, no se cobra, y la
+ * fila queda en el libro por su traza—. Después de anular, pagado + pendiente es
+ * MENOR que `montoTotal` y la diferencia son exactamente las cuotas anuladas.
  */
 export function totalesDelConvenio(
   cuotas: readonly { readonly monto: number; readonly estado: string }[]
@@ -87,7 +92,9 @@ export function totalesDelConvenio(
   let pendiente = 0
   for (const cuota of cuotas) {
     if (cuota.estado === "pagada") pagado += aCentavos(cuota.monto)
-    else pendiente += aCentavos(cuota.monto)
+    // Una cuota `anulada` no es deuda pendiente: la anulación la quitó de lo
+    // que se cobra, sin borrarla.
+    else if (cuota.estado !== "anulada") pendiente += aCentavos(cuota.monto)
   }
   return { pagado: pagado / 100, pendiente: pendiente / 100 }
 }

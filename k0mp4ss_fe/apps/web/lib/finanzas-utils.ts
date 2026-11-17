@@ -71,6 +71,25 @@ export function montoMoraPropuesta(exigiblePendiente: number, diasAtraso: number
 }
 
 /**
+ * La marca de la anulación del convenio de pago (F29 · S1): los cargos FI de
+ * las cuotas impagas quedan con `anuladoEn` cuando el convenio se anuló. Un
+ * cargo con la marca NO es deuda: ya no cuenta para la morosidad ni suma al
+ * saldo que la unidad adeuda.
+ *
+ * El campo vive en la fila de la base (migración 20261117090000) y no en
+ * `CobroFISchema` —el contrato de lectura del cobro no lo publica—, así que la
+ * lectura es ESTRUCTURAL: una fila de la base lo trae y se respeta, y una
+ * derivación que no lo selecciona no cambia de conducta —un cargo sin la marca
+ * sigue contando exactamente igual que siempre—.
+ */
+export type MarcaDeAnulacionDeCobro = { anuladoEn?: Date | string | null }
+
+/** El cargo quedó anulado por la anulación del convenio al que pertenece. */
+export function estaAnulado(cobro: CobroFI | MarcaDeAnulacionDeCobro): boolean {
+  return "anuladoEn" in cobro && cobro.anuladoEn != null
+}
+
+/**
  * Reparte lo pagado entre los fondos que nombran las líneas del cobro, en
  * proporción al monto de cada línea; una línea sin `fondoId` se imputa al fondo
  * del cobro. El cobro legacy (sin líneas) es una sola línea a su propio
@@ -122,8 +141,11 @@ export type MorosidadUnidad = {
 }
 
 export function morosidadPorUnidad(unidadId: string, cobros: CobroFI[], hoy = hoyISO()): MorosidadUnidad {
-  const vencidos = cobros.filter(
-    c => c.unidadId === unidadId && estadoDeCobro(c, hoy) === "vencido"
+  // Un cargo anulado con su convenio (F29) ya no es deuda: no vence, no cuenta
+  // sus períodos y no suma a la deuda vencida de la unidad.
+  const vigentes = cobros.filter((c) => !estaAnulado(c))
+  const vencidos = vigentes.filter(
+    (c) => c.unidadId === unidadId && estadoDeCobro(c, hoy) === "vencido"
   )
   return {
     unidadId,

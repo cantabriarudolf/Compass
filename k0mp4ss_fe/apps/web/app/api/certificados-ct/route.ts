@@ -56,7 +56,7 @@ import { CertificadoCTSchema, type MoraCobroFI, type PagoCobroFI, type TipoCerti
 import { normalizaRol, puede } from "@/lib/authz"
 import { prisma } from "@/lib/prisma"
 import { logger } from "@/lib/logger"
-import { exigibleTotal, saldoPendiente } from "@/lib/finanzas-utils"
+import { exigibleTotal, estaAnulado, saldoPendiente } from "@/lib/finanzas-utils"
 import { createCrudHandlers } from "@/lib/api/crud-factory"
 import {
   personaIdDelUsuarioDb,
@@ -239,7 +239,13 @@ async function cifrasDeUnidad(
     // SAFETY: idem moras: Json del cobro, shape PagoCobroFI[].
     const pagos = (c.pagos ?? []) as unknown as PagoCobroFI[]
     totalCargado += exigibleTotal({ montoBase: c.montoBase, moras })
-    saldoPendienteTotal += saldoPendiente({ montoBase: c.montoBase, moras, pagos })
+    // F29: el cargo de una cuota de convenio anulada NO es deuda —su saldo ya
+    // no suma al del papel ni bloquea el Certificado Al Día—. «Cobros
+    // registrados» y «Total cargado» lo siguen contando: el libro conserva la
+    // traza, la deuda se fue.
+    if (!estaAnulado(c)) {
+      saldoPendienteTotal += saldoPendiente({ montoBase: c.montoBase, moras, pagos })
+    }
   }
   return {
     cobrosRegistrados: cobros.length,

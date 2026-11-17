@@ -98,14 +98,19 @@ export async function GET(req: Request): Promise<Response> {
           moras: true,
           pagos: true,
           fechaVencimiento: true,
+          // F29: la marca de la anulación del convenio, para que la morosidad
+          // pueda dejar fuera los cargos que ya no son deuda.
+          anuladoEn: true,
         },
       }),
     ])
 
     // SAFETY: `morosidadPorUnidad` sólo lee de cada cobro su unidad, su período, su
-    // monto base, sus moras, sus pagos y su vencimiento —todos seleccionados
-    // arriba—, los mismos helpers (`estadoDeCobro`/`saldoPendiente`) del tablero de
-    // morosos y del trámite de corte.
+    // monto base, sus moras, sus pagos, su vencimiento y su marca de anulación
+    // (`anuladoEn`, F29: el cargo de una cuota de convenio anulado ya no es
+    // deuda) —todos seleccionados arriba—, los mismos helpers
+    // (`estadoDeCobro`/`saldoPendiente`) del tablero de morosos y del trámite
+    // de corte.
     const cobrosDeLaComunidad = cobros as unknown as CobroFI[]
     const hoy = hoyISO()
 
