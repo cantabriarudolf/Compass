@@ -20,6 +20,7 @@ import { generarId } from "@/lib/id-utils"
 import { registrarEventoAuditoria } from "@/lib/auditoria"
 import {
   exigibleTotal,
+  estaAnulado,
   hoyISO,
   saldoPendiente,
   totalPagado,
@@ -58,6 +59,13 @@ export async function POST(req: Request, ctx: Ctx): Promise<Response> {
     const cobro = await prisma.cobroFI.findUnique({ where: { id } })
     if (!cobro || cobro.comunidadId !== scope.comunidadId) {
       return jsonError(404, "Registro no encontrado.")
+    }
+    // F29: un cargo anulado con su convenio ya no es deuda, y un cobro que ya
+    // no es deuda no la recibe. La compuerta corre después del 404 y antes del
+    // resto: las validaciones del monto y del ajuste son condiciones del mismo
+    // camino de escritura, y el cargo anulado no lo recorre ninguna de las dos.
+    if (estaAnulado(cobro)) {
+      return jsonError(409, "El cargo fue anulado con su convenio y no admite pagos.")
     }
 
     const monto = typeof body.monto === "number" ? body.monto : Number.NaN

@@ -242,6 +242,11 @@ function comoDelAviso(
     fechaVencimiento: fechaVencimiento ?? cobro.fechaVencimiento,
     moras: cobro.moras as unknown as MoraCobroFI[],
     pagos: cobro.pagos as unknown as PagoCobroFI[],
+    // F29: la marca de la anulación del convenio viaja con el cargo, para que
+    // `contenidoAviso` pueda limpiar de la deuda los cargos anulados del
+    // período y de la deuda anterior. Sin ella el builder no vería la marca y
+    // el papel nuevo seguiría cobrando lo que la comunidad dejó de cobrar.
+    anuladoEn: cobro.anuladoEn ?? null,
   }
 }
 

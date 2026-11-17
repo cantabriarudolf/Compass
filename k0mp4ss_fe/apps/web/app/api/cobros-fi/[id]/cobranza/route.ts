@@ -34,7 +34,7 @@ import { prisma } from "@/lib/prisma"
 import { logger } from "@/lib/logger"
 import { hoyISO } from "@/lib/date-utils"
 import { generarId } from "@/lib/id-utils"
-import { estadoDeCobro, saldoPendiente } from "@/lib/finanzas-utils"
+import { estadoDeCobro, estaAnulado, saldoPendiente } from "@/lib/finanzas-utils"
 import { enviarCorreoComunidad, estadoRegistroSMTP, motivoSMTP } from "@/lib/smtp"
 import { CANALES_COBRANZA_FI, type CanalCobranzaFI } from "@/lib/schemas"
 import { jsonError } from "@/lib/api/with-comunidad-scope"
@@ -72,6 +72,8 @@ type CobroParaSaldo = {
   moras: unknown
   pagos: unknown
   fechaVencimiento: string | null
+  /** La marca de la anulación del convenio, si la fila la trae (F29). */
+  anuladoEn?: Date | string | null
 }
 
 export async function POST(req: Request, ctx: Ctx): Promise<Response> {
@@ -103,22 +105,31 @@ export async function POST(req: Request, ctx: Ctx): Promise<Response> {
         moras: true,
         pagos: true,
         fechaVencimiento: true,
+        // F29: la marca de la anulación del convenio, para que el mensaje no
+        // le diga «debes» por un cargo que ya no es deuda.
+        anuladoEn: true,
       },
       orderBy: [{ periodo: "desc" }, { id: "desc" }],
     })
     const hoy = hoyISO()
-    const vencidos = (cobrosUnidad as CobroParaSaldo[]).filter(
-      (c) =>
-        estadoDeCobro(
-          {
-            montoBase: c.montoBase,
-            moras: c.moras as never,
-            pagos: c.pagos as never,
-            fechaVencimiento: c.fechaVencimiento ?? undefined,
-          },
-          hoy
-        ) === "vencido"
-    )
+    // F29: el cargo anulado se EXCLUYE del cálculo de la gestión, no se oculta
+    // del libro —la fila sigue en la base con su anulación y el historial lo
+    // conserva—. Sin la marca (una fila que no la trae), el filtro es un no-op
+    // y el cobro cuenta igual que siempre.
+    const vencidos = (cobrosUnidad as CobroParaSaldo[])
+      .filter((c) => !estaAnulado(c))
+      .filter(
+        (c) =>
+          estadoDeCobro(
+            {
+              montoBase: c.montoBase,
+              moras: c.moras as never,
+              pagos: c.pagos as never,
+              fechaVencimiento: c.fechaVencimiento ?? undefined,
+            },
+            hoy
+          ) === "vencido"
+      )
     if (vencidos.length === 0) {
       return jsonError(
         400,

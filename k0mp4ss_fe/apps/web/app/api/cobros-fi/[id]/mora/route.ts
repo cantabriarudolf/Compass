@@ -14,6 +14,7 @@ import { generarId } from "@/lib/id-utils"
 import { registrarEventoAuditoria } from "@/lib/auditoria"
 import {
   diasDeAtraso,
+  estaAnulado,
   hoyISO,
   montoMoraPropuesta,
   saldoPendiente,
@@ -48,6 +49,13 @@ export async function POST(req: Request, ctx: Ctx): Promise<Response> {
     const cobro = await prisma.cobroFI.findUnique({ where: { id } })
     if (!cobro || cobro.comunidadId !== scope.comunidadId) {
       return jsonError(404, "Registro no encontrado.")
+    }
+    // F29: un cargo anulado con su convenio ya no es deuda —acumularle mora
+    // sería resucitar una deuda que la comunidad dejó de cobrar. La compuerta
+    // corre después del 404 y antes del resto: el estado del cargo manda sobre
+    // su fecha y su saldo.
+    if (estaAnulado(cobro)) {
+      return jsonError(409, "El cargo fue anulado con su convenio y no acumula mora.")
     }
     if (!cobro.fechaVencimiento) {
       return jsonError(400, "El cobro no tiene fecha de vencimiento registrada.")

@@ -18,7 +18,13 @@
  *      `morosidad`) deja de sumar el cargo anulad al total vencido;
  *   4. el aviso NUEVO (`contenidoAviso`) deja de cobrar los cargos anulados,
  *      tanto del período del papel como de la deuda anterior —los avisos ya
- *      emitidos no se tocan: son documentos congelados en su `contenido`—.
+ *      emitidos no se tocan: son documentos congelados en su `contenido`—;
+ *   5. la emisión REAL del aviso (`POST /api/avisos-cobro`) también lo excluye:
+ *      el contenido congelado sale de la ruta, no sólo del builder;
+ *   6. un cargo anulado no vuelve a ser deuda por un botón: `pagar` → 409,
+ *      `mora` → 409, y la cobranza no le dice «debes» al deudor por él (sale
+ *      del cálculo de `vencidos`/`montoTotal` de la gestión). Cada 409 con su
+ *      mensaje literal y su pin de que la base no escribió nada.
  *
  * Pin de no sobre-exclusión (S1): un cargo SIN `anuladoEn` sigue contando en
  * los CUATRO lados —así se prueba que la exclusión no encoge la deuda de
@@ -266,6 +272,10 @@ describe("F29 · T1c — los lectores de deuda no le siguen cobrando al cargo an
 
     // La base de la suite es compartida: se parte sin filas propias viejas,
     // también las que una corrida anterior (o un RED interrumpido) dejó.
+    await prisma.notificacion.deleteMany({ where: { comunidadId: { in: [COM_D, COM_R] } } })
+    await prisma.envioCobranzaFI.deleteMany({ where: { comunidadId: { in: [COM_D, COM_R] } } })
+    await prisma.configuracionCobranzaFI.deleteMany({ where: { comunidadId: { in: [COM_D, COM_R] } } })
+    await prisma.emisionGC.deleteMany({ where: { comunidadId: { in: [COM_D, COM_R] } } })
     await prisma.reporteRE.deleteMany({ where: { comunidadId: { in: [COM_D, COM_R] } } })
     await prisma.envioDocumento.deleteMany({ where: { comunidadId: { in: [COM_D, COM_R] } } })
     await prisma.documento.deleteMany({ where: { comunidadId: { in: [COM_D, COM_R] } } })
@@ -280,6 +290,10 @@ describe("F29 · T1c — los lectores de deuda no le siguen cobrando al cargo an
   afterAll(async () => {
     try {
       state.cookie = ""
+      await prisma.notificacion.deleteMany({ where: { comunidadId: { in: [COM_D, COM_R] } } })
+      await prisma.envioCobranzaFI.deleteMany({ where: { comunidadId: { in: [COM_D, COM_R] } } })
+      await prisma.configuracionCobranzaFI.deleteMany({ where: { comunidadId: { in: [COM_D, COM_R] } } })
+      await prisma.emisionGC.deleteMany({ where: { comunidadId: { in: [COM_D, COM_R] } } })
       await prisma.reporteRE.deleteMany({ where: { comunidadId: { in: [COM_D, COM_R] } } })
       await prisma.envioDocumento.deleteMany({ where: { comunidadId: { in: [COM_D, COM_R] } } })
       await prisma.documento.deleteMany({ where: { comunidadId: { in: [COM_D, COM_R] } } })
@@ -492,6 +506,17 @@ describe("F29 · T1c — los lectores de deuda no le siguen cobrando al cargo an
     })
   }
 
+  /** Marca un cargo como anulado: la MISMA escritura que hace
+   * `POST /api/convenios/anular` (`anuladoEn = ahora`). La regla de la deuda
+   * lee la marca en la fila, no quién la escribió.
+   */
+  async function anularCargo(id: string): Promise<void> {
+    await prisma.cobroFI.update({
+      where: { id },
+      data: { anuladoEn: new Date("2026-11-01T12:00:00.000Z") },
+    })
+  }
+
   /** Los ids de los cargos que el convenio emitió (los que la anulación marca). */
   async function cargosDelConvenio(
     comunidadId: string,
@@ -503,6 +528,57 @@ describe("F29 · T1c — los lectores de deuda no le siguen cobrando al cargo an
       orderBy: { id: "asc" },
     })
     return cargos.map((c) => c.id)
+  }
+
+  /** POST /api/cobros-fi/[id]/pagar — registrar pago de un cobro FI. */
+  async function POST_PAGAR(id: string, body: unknown): Promise<Response> {
+    const { POST } = await import("@/app/api/cobros-fi/[id]/pagar/route")
+    return POST(
+      new NextRequest("http://localhost/api/cobros-fi/x/pagar", {
+        method: "POST",
+        body: JSON.stringify(body),
+        headers: { "content-type": "application/json" },
+      }),
+      { params: Promise.resolve({ id }) }
+    )
+  }
+
+  /** POST /api/cobros-fi/[id]/mora — aplicar mora a un cobro vencido FI. */
+  async function POST_MORA(id: string, body: unknown = {}): Promise<Response> {
+    const { POST } = await import("@/app/api/cobros-fi/[id]/mora/route")
+    return POST(
+      new NextRequest("http://localhost/api/cobros-fi/x/mora", {
+        method: "POST",
+        body: JSON.stringify(body),
+        headers: { "content-type": "application/json" },
+      }),
+      { params: Promise.resolve({ id }) }
+    )
+  }
+
+  /** POST /api/cobros-fi/[id]/cobranza — la gestión multicanal por unidad. */
+  async function POST_COBRANZA(id: string, body: unknown = {}): Promise<Response> {
+    const { POST } = await import("@/app/api/cobros-fi/[id]/cobranza/route")
+    return POST(
+      new NextRequest("http://localhost/api/cobros-fi/x/cobranza", {
+        method: "POST",
+        body: JSON.stringify(body),
+        headers: { "content-type": "application/json" },
+      }),
+      { params: Promise.resolve({ id }) }
+    )
+  }
+
+  /** POST /api/avisos-cobro — la emisión real del papel del período. */
+  async function POST_AVISO(body: unknown): Promise<Response> {
+    const { POST } = await import("@/app/api/avisos-cobro/route")
+    return POST(
+      new NextRequest("http://localhost/api/avisos-cobro", {
+        method: "POST",
+        body: JSON.stringify(body),
+        headers: { "content-type": "application/json" },
+      })
+    )
   }
 
   interface FilaEstadoCuenta {
@@ -773,5 +849,221 @@ describe("F29 · T1c — los lectores de deuda no le siguen cobrando al cargo an
     expect(aviso.deudaAnterior.total).toBe(80_000)
     expect(aviso.montos.totalDeudaAnterior).toBe(80_000)
     expect(aviso.montos.totalAdeudadoConsolidado).toBe(120_000)
+  })
+
+  it("la emisión real del aviso excluye el cargo anulado del período y de la deuda anterior, y sigue cobrando el cargo sin marca", async () => {
+    // La emisión real corre sobre la MISMA tabla que dejó el test del estado de
+    // cuenta: en períodos anteriores de la unidad quedan los DOS cargos del
+    // convenio anulados (2024-01 y 2024-02) y el cargo propio sin marca
+    // (2024-03). Acá se agregan los cargos del período del papel: uno anulado
+    // y uno sin marca.
+    const convenioAnulado = await prisma.convenioPago.findFirst({
+      where: { unidadId: U_MC },
+      select: { id: true },
+    })
+    if (!convenioAnulado) throw new Error("el convenio anulado de la unidad no está")
+    await prisma.emisionGC.create({
+      data: {
+        id: "anlec-em-2026-10",
+        comunidadId: COM_D,
+        periodo: "2026-10",
+        modo: "prorrateo",
+        gastoTotal: 40_000,
+        lineas: [],
+        fechaEmision: "2026-10-15",
+      },
+    })
+    await crearCargoPropio(COM_D, FONDO_D, U_MC, "anlec-cob-mc-anul", 100_000, "2026-10")
+    await anularCargo("anlec-cob-mc-anul")
+    await crearCargoPropio(COM_D, FONDO_D, U_MC, "anlec-cob-mc-vig", 40_000, "2026-10")
+
+    interface ContenidoDelAvisoEmitido {
+      cargos: { id: string }[]
+      detalle: { cobroId: string }[]
+      deudaAnterior: {
+        periodos: { periodo: string; cargos: { cobroId: string }[] }[]
+        total: number
+      }
+      montos: {
+        exigible: number
+        totalAdeudado: number
+        totalDeudaAnterior: number
+        totalAdeudadoConsolidado: number
+      }
+    }
+    // El cuerpo se captura en un contenedor: la asignación dentro de la sesión
+    // es asíncrona y sobre un `let` suelto el typechecker no ve la escritura y
+    // lee `never` (mismo criterio del arnés de `convenios-anulacion-deuda.test.ts`).
+    const entregado: { avisos: { contenido: ContenidoDelAvisoEmitido }[] | null } = {
+      avisos: null,
+    }
+    await conSesion(EMAIL_ADMIN, async () => {
+      const res = await POST_AVISO({ periodo: "2026-10", unidadId: U_MC })
+      expect(res.status).toBe(201)
+      const cuerpo = (await res.json()) as {
+        avisos: { contenido: ContenidoDelAvisoEmitido }[]
+        sinAviso: unknown[]
+      }
+      expect(cuerpo.avisos).toHaveLength(1)
+      expect(cuerpo.sinAviso).toEqual([])
+      entregado.avisos = cuerpo.avisos
+    })
+    const aviso: ContenidoDelAvisoEmitido | undefined = entregado.avisos?.[0]?.contenido
+    if (!aviso) throw new Error("la emisión no devolvió el aviso")
+
+    // El papel NUEVO cobra sólo lo que sigue siendo deuda: el cargo anulado del
+    // período no está en `cargos` ni en la línea del detalle, y el exigible es
+    // el del cargo sin marca. Los sin marca del período y de la deuda anterior
+    // siguen cobrándose (pin de no sobre-exclusión).
+    expect(aviso.cargos.map((c) => c.id)).toEqual(["anlec-cob-mc-vig"])
+    expect(aviso.detalle.map((l) => l.cobroId)).toEqual(["anlec-cob-mc-vig"])
+    expect(aviso.montos.exigible).toBe(40_000)
+    expect(aviso.montos.totalAdeudado).toBe(40_000)
+    expect(aviso.deudaAnterior.periodos.map((p) => p.periodo)).toEqual(["2024-03"])
+    expect(aviso.deudaAnterior.periodos[0]!.cargos.map((c) => c.cobroId)).toEqual([
+      "anlec-cob-mc-1",
+    ])
+    expect(aviso.deudaAnterior.total).toBe(40_000)
+    expect(aviso.montos.totalDeudaAnterior).toBe(40_000)
+    expect(aviso.montos.totalAdeudadoConsolidado).toBe(80_000)
+
+    // La marca se EXCLUYE, no se oculta: los cargos anulados siguen en el libro
+    // con su fecha de anulación (la traza del convenio no se borra).
+    const anuladosEnLibro = await prisma.cobroFI.findMany({
+      where: { comunidadId: COM_D, origenRef: convenioAnulado.id, anuladoEn: { not: null } },
+      select: { id: true },
+    })
+    expect(anuladosEnLibro).toHaveLength(2)
+  }, 30_000)
+
+  it("pagar un cargo anulado responde 409 y no escribe nada; un cargo sin marca se paga igual que siempre", async () => {
+    await crearCargoPropio(COM_D, FONDO_D, U_MC, "anlec-cob-mr-anu", 50_000, "2024-06")
+    await anularCargo("anlec-cob-mr-anu")
+    await crearCargoPropio(COM_D, FONDO_D, U_MC, "anlec-cob-mr-vig", 50_000, "2024-06")
+
+    await conSesion(EMAIL_ADMIN, async () => {
+      const res = await POST_PAGAR("anlec-cob-mr-anu", { monto: 50_000, medio: "transferencia" })
+      expect(res.status).toBe(409)
+      expect(((await res.json()) as { error: string }).error).toBe(
+        "El cargo fue anulado con su convenio y no admite pagos."
+      )
+    })
+    // La base no escribió nada: sin pago registrado, el saldo quedó igual.
+    const anulado = await prisma.cobroFI.findUnique({
+      where: { id: "anlec-cob-mr-anu" },
+      select: { pagos: true, diferencias: true },
+    })
+    expect((anulado?.pagos as unknown[])).toHaveLength(0)
+    expect((anulado?.diferencias as unknown[])).toHaveLength(0)
+
+    // PIN: el cargo sin `anuladoEn` se paga exactamente igual que hoy. La ruta
+    // tiene UN solo camino (el POST completo: validate, lecturas, escritura);
+    // no hay vía alternativa de pago parcial que se salte la compuerta.
+    await conSesion(EMAIL_ADMIN, async () => {
+      const res = await POST_PAGAR("anlec-cob-mr-vig", { monto: 50_000, medio: "transferencia" })
+      expect(res.status).toBe(200)
+      expect(((await res.json()) as { ok: boolean }).ok).toBe(true)
+    })
+    const vigente = await prisma.cobroFI.findUnique({
+      where: { id: "anlec-cob-mr-vig" },
+      select: { pagos: true },
+    })
+    expect((vigente?.pagos as { monto: number }[]).map((p) => p.monto)).toEqual([50_000])
+  })
+
+  it("aplicar mora a un cargo anulado responde 409 y no escribe nada; un cargo sin marca acumula igual que siempre", async () => {
+    await crearCargoPropio(COM_D, FONDO_D, U_MC, "anlec-cob-mo-anu", 60_000, "2024-07")
+    await anularCargo("anlec-cob-mo-anu")
+    await crearCargoPropio(COM_D, FONDO_D, U_MC, "anlec-cob-mo-vig", 60_000, "2024-07")
+
+    await conSesion(EMAIL_ADMIN, async () => {
+      const res = await POST_MORA("anlec-cob-mo-anu", { tasaMensualPct: 1 })
+      expect(res.status).toBe(409)
+      expect(((await res.json()) as { error: string }).error).toBe(
+        "El cargo fue anulado con su convenio y no acumula mora."
+      )
+    })
+    // La base no escribió nada: sin mora devengada, el cargo seguía limpio.
+    const anulado = await prisma.cobroFI.findUnique({
+      where: { id: "anlec-cob-mo-anu" },
+      select: { moras: true },
+    })
+    expect((anulado?.moras as unknown[])).toHaveLength(0)
+
+    // PIN: el cargo sin `anuladoEn` acumula la mora igual que hoy.
+    await conSesion(EMAIL_ADMIN, async () => {
+      const res = await POST_MORA("anlec-cob-mo-vig", { tasaMensualPct: 1 })
+      expect(res.status).toBe(200)
+      expect(((await res.json()) as { ok: boolean }).ok).toBe(true)
+    })
+    const vigente = await prisma.cobroFI.findUnique({
+      where: { id: "anlec-cob-mo-vig" },
+      select: { moras: true },
+    })
+    expect((vigente?.moras as { monto: number }[])).toHaveLength(1)
+  })
+
+  it("la cobranza no le dice «debes» al deudor por el cargo anulado, y el cargo sin marca sigue contando", async () => {
+    // Unidad LIMPIA para la gestión: la cobranza mide TODA la deuda vencida de
+    // la unidad del ancla, así que reaprovechar una unidad con cargos de los
+    // tests anteriores ensuciaría la cifra. Usted carga dos cargos: uno
+    // anulado y uno sin marca.
+    await prisma.unidad.upsert({
+      where: { id: "anlec-u-cz" },
+      update: {},
+      create: datosUnidad("anlec-u-cz", COM_D, "105"),
+    })
+    await prisma.vinculoUnidad.upsert({
+      where: { id: "anlec-v-cz" },
+      update: {},
+      create: {
+        id: "anlec-v-cz",
+        comunidadId: COM_D,
+        personaId: P_DUEÑA,
+        unidadId: "anlec-u-cz",
+        rol: "propietario",
+        fechaInicio: "2024-01-01",
+        fechaFin: null,
+        permiteVerFinanzas: true,
+      },
+    })
+    await crearCargoPropio(COM_D, FONDO_D, "anlec-u-cz", "anlec-cob-cz-anu", 100_000, "2024-08")
+    await anularCargo("anlec-cob-cz-anu")
+    await crearCargoPropio(COM_D, FONDO_D, "anlec-u-cz", "anlec-cob-cz-vig", 25_000, "2024-08")
+    // Sólo el visor: sin emisor SMTP en el arnés, el correo queda en pendiente
+    // y lo que esta prueba mide es el MENSAJE, no la entrega.
+    await prisma.configuracionCobranzaFI.upsert({
+      where: { comunidadId: COM_D },
+      update: { canalVisor: true, canalEmail: false },
+      create: {
+        id: "anlec-conf-cobranza-d",
+        comunidadId: COM_D,
+        canalVisor: true,
+        canalEmail: false,
+      },
+    })
+
+    // El cuerpo se captura en un contenedor por el mismo porqué de arriba: el
+    // `let` suelto no deja que el typechecker vea la escritura del closure.
+    const gestionado: { respuesta: Response | null } = { respuesta: null }
+    await conSesion(EMAIL_ADMIN, async () => {
+      gestionado.respuesta = await POST_COBRANZA("anlec-cob-cz-vig")
+    })
+    const resPost = gestionado.respuesta
+    if (!resPost) throw new Error("la cobranza de prueba no respondió")
+    expect(resPost.status).toBe(200)
+    const cuerpo = (await resPost.json()) as {
+      montoTotal: number
+      cobrosVencidos: string[]
+      canales: { visor?: { estado: string }; email?: { estado: string } }
+    }
+    // El cargo anulado no suma al «debes» del mensaje ni figura como cobrado:
+    // la gestión declara SOLO los 25.000 del cargo sin marca. La marca se
+    // EXCLUYE del cálculo, no se oculta del libro (el cargo sigue en la base
+    // con su anulación).
+    expect(centavos(cuerpo.montoTotal)).toBe(centavos(25_000))
+    expect(cuerpo.cobrosVencidos).toEqual(["anlec-cob-cz-vig"])
+    expect(cuerpo.canales.visor?.estado).toBe("enviado")
+    expect(cuerpo.canales.email?.estado).toBe("omitido")
   })
 })
