@@ -34,6 +34,20 @@
  * queda como fila nueva marcada `reenvio: true`, igual que la cobranza.
  */
 import { prisma } from "@/lib/prisma"
+import { logger } from "@/lib/logger"
+import { generarId } from "@/lib/id-utils"
+import { registrarEventoAuditoria } from "@/lib/auditoria"
+import {
+  descargarArchivoPrivado,
+  ErrorDelDeposito,
+} from "@/lib/almacen-documentos"
+import {
+  CANAL_DE_LA_CONSTANCIA_DEL_CONVENIO,
+  MIME_DEL_CONVENIO,
+  MOTIVO_CONSTANCIA_PENDIENTE,
+  esRutaDelConvenioFirmado,
+  nombreDelConvenioFirmado,
+} from "@/lib/convenio-documento"
 import { enviarCorreoComunidad, estadoRegistroSMTP, motivoSMTP } from "@/lib/smtp"
 import type { CanalEntregaAviso, EstadoEntregaAviso } from "@/lib/schemas"
 
@@ -192,4 +206,183 @@ export function cuerpoNotificacionAviso(input: {
   referenciaUnidad: string
 }): string {
   return `Su aviso de cobro ${input.folio} del período ${input.periodo} para la unidad ${input.referenciaUnidad} está disponible en el visor. Conserve el folio ${input.folio}: identifica el documento emitido con el que se cobra el período.`
+}
+
+// ── F29 · T2 — la constancia de entrega del convenio firmado (S2) ───────────
+//
+// El papel firmado del convenio de pago se archiva con una constancia de
+// entrega al deudor que nace `pendiente`; esta sección es la que CURSA el envío
+// real después del commit del archivo. Reusa el emisor de la comunidad (la
+// misma credencial cifrada del aviso de cobro) con el PDF ADJUNTO, leído del
+// depósito privado, y la regla del contrato de los envíos: `entregado` (la
+// aceptación del servidor, que el aviso llama `enviado`) sólo si el SMTP
+// aceptó, `fallido` con el error verbatim si rebotó, y `pendiente` —con el
+// motivo con el que la constancia nació— cuando no hay con qué cursar (sin
+// emisor configurado o sin correo del deudor). Sin credencial no se finge el
+// envío.
+
+/** Asunto del correo del papel firmado del convenio. */
+export function asuntoConstanciaConvenio(input: {
+  referenciaUnidad: string
+}): string {
+  return `Convenio de pago firmado — unidad ${input.referenciaUnidad}`
+}
+
+/** Cuerpo del correo: presenta el adjunto y deja dicho que el mensaje es la constancia. */
+export function cuerpoConstanciaConvenio(input: {
+  referenciaUnidad: string
+  deudorNombre: string
+  fechaSuscripcion: string
+}): string {
+  return `Se adjunta el convenio de pago firmado de la unidad ${input.referenciaUnidad} con ${input.deudorNombre}, suscrito el ${input.fechaSuscripcion}. Este mensaje deja constancia de su entrega; el papel también queda disponible en el archivo de documentos de la comunidad.`
+}
+
+/** El estado final de la constancia después de un intento de cursada. */
+export interface ConstanciaConvenioCursada {
+  estado: "entregado" | "pendiente" | "fallido"
+  motivo: string
+}
+
+/**
+ * Cursa el envío real del papel firmado del convenio y actualiza SU constancia.
+ *
+ * Corre SIEMPRE fuera de cualquier transacción (el diálogo SMTP no retiene el
+ * lock de la base). El destinatario es el DEUDOR del convenio —la persona que
+ * firmó el papel— y el PDF sale adjunto con los bytes leídos del depósito
+ * privado. Actualiza la fila de `EnvioDocumento` en el lugar y suma UN evento
+ * por intento (`FI_CONVENIO_DOCUMENTO_ENVIADO` en la cursada del archivo,
+ * `FI_CONVENIO_DOCUMENTO_REENVIO` en el reenvío manual); nunca crea filas
+ * nuevas: el reenvío es el MISMO registro contado de nuevo, no una segunda
+ * constancia.
+ */
+export async function cursarConstanciaDelConvenio(input: {
+  comunidadId: string
+  convenioId: string
+  documentoId: string
+  /** La fila de la constancia que nació con el archivo del papel. */
+  constanciaId: string
+  personaId: string
+  usuarioId: string
+  reenvio: boolean
+}): Promise<ConstanciaConvenioCursada> {
+  const [convenio, persona] = await Promise.all([
+    prisma.convenioPago.findFirst({
+      where: { id: input.convenioId, comunidadId: input.comunidadId },
+      select: { unidadId: true, fechaSuscripcion: true },
+    }),
+    prisma.persona.findFirst({
+      where: { id: input.personaId, comunidadId: input.comunidadId },
+      select: { email: true, nombreCompleto: true },
+    }),
+  ])
+  const unidad = convenio
+    ? await prisma.unidad.findFirst({
+        where: { id: convenio.unidadId, comunidadId: input.comunidadId },
+        select: { etiqueta: true, numero: true },
+      })
+    : null
+  const referenciaUnidad = referenciaDeUnidad(unidad, input.convenioId)
+
+  let estado: ConstanciaConvenioCursada["estado"] = "pendiente"
+  let motivo = MOTIVO_CONSTANCIA_PENDIENTE
+  let detalleDelIntento: string
+
+  const destinatario = persona?.email?.trim() ?? ""
+  if (destinatario === "") {
+    // Sin correo del deudor no se abre ninguna conexión y no se inventa un
+    // envío: el intento no puede siquiera empezar.
+    detalleDelIntento =
+      "el deudor no tiene correo electrónico registrado, así que el envío no se pudo intentar"
+  } else if (!convenio) {
+    detalleDelIntento =
+      "el convenio no se encontró en esta comunidad, así que el envío no se pudo intentar"
+  } else {
+    const documento = await prisma.documento.findFirst({
+      where: { id: input.documentoId, comunidadId: input.comunidadId },
+      select: { archivoUrl: true, archivoNombre: true },
+    })
+    if (!documento || !esRutaDelConvenioFirmado(documento.archivoUrl)) {
+      detalleDelIntento =
+        "el papel firmado no está servible desde el depósito privado, así que el envío no se pudo intentar"
+    } else {
+      try {
+        const bytes = await descargarArchivoPrivado({ pathname: documento.archivoUrl })
+        const resultado = await enviarCorreoComunidad(input.comunidadId, {
+          to: destinatario,
+          subject: asuntoConstanciaConvenio({ referenciaUnidad }),
+          text: cuerpoConstanciaConvenio({
+            referenciaUnidad,
+            deudorNombre: persona?.nombreCompleto ?? "el deudor",
+            fechaSuscripcion: convenio.fechaSuscripcion.toISOString().slice(0, 10),
+          }),
+          adjuntos: [
+            {
+              nombre: nombreDelConvenioFirmado(documento.archivoNombre, input.convenioId),
+              bytes,
+              tipoMime: MIME_DEL_CONVENIO,
+            },
+          ],
+        })
+
+        if (resultado.estado === "no_configurado") {
+          // Condición de configuración, no envío fallido: la constancia se queda
+          // con el motivo con el que nació; el reenvío manual la recupera cuando
+          // la comunidad configure su emisor.
+          detalleDelIntento =
+            "la comunidad no tiene emisor de correo configurado, así que el envío no se pudo intentar"
+        } else {
+          estado = resultado.estado === "enviado" ? "entregado" : "fallido"
+          motivo = motivoSMTP(resultado)
+          detalleDelIntento =
+            resultado.estado === "enviado"
+              ? `el servidor de correo aceptó el mensaje${resultado.messageId ? ` (id ${resultado.messageId})` : ""}`
+              : "el envío por SMTP rebotó y el error del servidor quedó verbatim en el motivo de la constancia"
+        }
+      } catch (e) {
+        if (e instanceof ErrorDelDeposito) {
+          logger.error(
+            { err: e, convenioId: input.convenioId, documentoId: input.documentoId },
+            "[entrega-aviso] el depósito no entregó el papel del convenio para su constancia"
+          )
+        } else {
+          logger.error(
+            { err: e, convenioId: input.convenioId, documentoId: input.documentoId },
+            "[entrega-aviso] la cursada de la constancia del convenio falló de forma inesperada"
+          )
+        }
+        detalleDelIntento =
+          "no se pudo leer el papel desde el depósito privado, así que el envío no se pudo intentar"
+      }
+    }
+  }
+
+  const actualizada = await prisma.envioDocumento.updateMany({
+    where: {
+      id: input.constanciaId,
+      comunidadId: input.comunidadId,
+      documentoId: input.documentoId,
+    },
+    data: { estado, motivo },
+  })
+  if (actualizada.count === 0) {
+    logger.warn(
+      { constanciaId: input.constanciaId, convenioId: input.convenioId },
+      "[entrega-aviso] la constancia del convenio no se encontró para actualizar"
+    )
+  }
+
+  await registrarEventoAuditoria({
+    id: generarId("ev"),
+    comunidadId: input.comunidadId,
+    timestamp: new Date().toISOString(),
+    usuario: input.usuarioId,
+    categoria: "FI",
+    tipoAccion: input.reenvio
+      ? "FI_CONVENIO_DOCUMENTO_REENVIO"
+      : "FI_CONVENIO_DOCUMENTO_ENVIADO",
+    referenciaId: input.convenioId,
+    descripcion: `${input.reenvio ? "Reenvío manual de la" : "Cursada de la"} constancia de entrega del convenio ${input.convenioId} (${referenciaUnidad}) al deudor ${input.personaId} por el canal ${CANAL_DE_LA_CONSTANCIA_DEL_CONVENIO}: ${detalleDelIntento}. La constancia quedó en estado ${estado}.`,
+  })
+
+  return { estado, motivo }
 }

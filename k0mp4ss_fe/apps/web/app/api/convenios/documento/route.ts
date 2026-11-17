@@ -19,9 +19,13 @@
  *     formato no se puede abrir como papel firmado (400 con el motivo);
  *   · el tamaño y el hash salen de los bytes, y lo que se archiva como URL es el
  *     pathname del depósito: NUNCA una URL pública (el store es privado);
- *   · la constancia de entrega al deudor nace `pendiente`, con su motivo: el
- *     contrato de los envíos admite `entregado` SÓLO si el servidor aceptó el
- *     mensaje, y acá no se cursa ningún envío.
+ *   · la constancia de entrega al deudor nace `pendiente`, con su motivo, y el
+ *     envío real se cursa DESPUÉS del commit (etapa 3): por el emisor de la
+ *     comunidad, con el PDF ADJUNTO leído del depósito privado. La constancia
+ *     queda `entregado` sólo si el servidor de correo aceptó el mensaje,
+ *     `fallido` con el error verbatim si rebotó, y `pendiente` —con el motivo
+ *     con el que nació— cuando no hay con qué cursar (sin credencial de correo
+ *     o sin correo del deudor): sin credencial NO se finge el envío.
  *
  * ── El orden importa: archivo primero, transacción después ──────────────────
  *
@@ -51,6 +55,7 @@ import { logger } from "@/lib/logger"
 import { generarId } from "@/lib/id-utils"
 import { registrarEventoAuditoria } from "@/lib/auditoria"
 import { claveEnvioDocumento } from "@/app/api/documentos/_lib/envio-documento"
+import { cursarConstanciaDelConvenio } from "@/lib/entrega-aviso"
 import {
   borrarArchivoPrivado,
   descargarArchivoPrivado,
@@ -286,9 +291,9 @@ export async function POST(req: Request): Promise<Response> {
             },
           })
 
-          // La CONSTANCIA DE ENTREGA al deudor, en `pendiente`: esta unidad no cursa
-          // ningún envío, y declarar `entregado` sin que el servidor aceptara el
-          // mensaje sería escribir un hecho que no ocurrió.
+          // La CONSTANCIA DE ENTREGA al deudor, en `pendiente`: nace con su motivo
+          // honesto y el envío real se cursa DESPUÉS del commit (etapa 3) — el
+          // diálogo SMTP nunca retiene el lock de la base.
           await tx.envioDocumento.create({
             data: {
               id: envioId,
@@ -335,6 +340,34 @@ export async function POST(req: Request): Promise<Response> {
         }
       )
 
+      // ── 3. La cursada del envío real, DESPUÉS del commit ────────────────────
+      // El diálogo SMTP NUNCA dentro de la transacción: una tx interactiva
+      // reteniendo el lock de escritura mientras el emisor espera al servidor
+      // bloquearía a toda la comunidad (hasta 15 s por el tope del emisor). La
+      // constancia nació `pendiente` en la transacción; acá se intenta el envío
+      // por el emisor de la comunidad y la constancia dice lo que pasó. Si esta
+      // etapa falla (red, depósito, base), el archivo no se pierde ni la
+      // respuesta miente: la constancia queda `pendiente` con su motivo y el
+      // reenvío manual la recupera.
+      let constanciaFinal: ConstanciaEnLaVista = constancia
+      try {
+        const cursada = await cursarConstanciaDelConvenio({
+          comunidadId: scope.comunidadId,
+          convenioId: convenio.id,
+          documentoId,
+          constanciaId: constancia.id,
+          personaId: convenio.personaId,
+          usuarioId: scope.usuarioId,
+          reenvio: false,
+        })
+        constanciaFinal = { ...constancia, estado: cursada.estado, motivo: cursada.motivo }
+      } catch (e) {
+        logger.error(
+          { err: e, convenioId: convenio.id, documentoId },
+          "[api/convenios/documento] la cursada del envío del papel firmado falló: la constancia queda pendiente"
+        )
+      }
+
       return Response.json(
         {
           id: documentoId,
@@ -342,7 +375,7 @@ export async function POST(req: Request): Promise<Response> {
           hash,
           tamanoBytes: bytes.length,
           archivoNombre,
-          constancia,
+          constancia: constanciaFinal,
         },
         { status: 201 }
       )

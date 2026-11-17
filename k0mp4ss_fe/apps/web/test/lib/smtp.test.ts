@@ -490,3 +490,197 @@ describe("traducción a la cola de salida", () => {
     expect(motivoSMTP({ estado: "fallido", motivo: "rebotó" })).toBe("rebotó")
   })
 })
+
+// ── Adjuntos (F29 · T2): multipart/mixed sin cambiar el mensaje de texto ────
+//
+// El papel firmado del convenio de pago viaja ADJUNTO al correo (S2). La regla
+// dura del cambio: SIN adjuntos el mensaje emitido queda BYTE A BYTE idéntico
+// a lo que este módulo siempre envió (el camino de texto lo usa todo el correo
+// del sistema); CON adjuntos el mensaje es multipart/mixed con el texto como
+// primera parte y el archivo en base64.
+const PDF_DE_PRUEBA = Buffer.from(
+  ["%PDF-1.4", "% convenio firmado de prueba", "%%EOF", ""].join("\n"),
+  "latin1"
+)
+
+function base64Trozado(bytes: Uint8Array): string {
+  const base64 = Buffer.from(bytes).toString("base64")
+  return (base64.match(/.{1,76}/g) ?? []).join("\r\n")
+}
+
+/** El boundary que declara la cabecera superior del mensaje multipart. */
+function boundaryDe(crudo: string): string {
+  const encontrado = /Content-Type: multipart\/mixed; boundary="([^"]+)"/.exec(crudo)
+  if (!encontrado) throw new Error("el mensaje no declara multipart/mixed")
+  return encontrado[1]!
+}
+
+describe("adjuntos: multipart/mixed sin cambiar el mensaje de texto", () => {
+  it("PIN · sin adjuntos el mensaje emitido es byte a byte el de siempre (text/plain)", async () => {
+    const servidor = await levantarServidor({ modo: "aceptar" })
+    const resultado = await enviarCorreoSMTP(filaBase(servidor.port), mensajeDePrueba, {
+      env: { SMTP_PASSWORD: CLAVE_FALSA },
+    })
+
+    expect(resultado.estado).toBe("enviado")
+    expect(servidor.mensajes).toHaveLength(1)
+    const crudo = servidor.mensajes[0]!.crudo
+
+    // La fecha y el Message-ID son dinámicos por diseño (reloj y uuid): se
+    // extraen para fijar su FORMATO, y todo lo demás se compara EXACTO.
+    const fecha = /\r\nDate: ([^\r]+)\r\n/.exec(`\r\n${crudo}`)?.[1]
+    const messageId = /\r\nMessage-ID: ([^\r]+)\r\n/.exec(`\r\n${crudo}`)?.[1]
+    expect(fecha).toMatch(/^[A-Z][a-z]{2}, \d{2} [A-Z][a-z]{2} \d{4} .+GMT$/)
+    expect(messageId).toMatch(/^<[^>\s]+@ejemplo\.test>$/)
+
+    // El mensaje completo, byte a byte (cabeceras en ORDEN, cuerpo y separadores).
+    expect(crudo).toBe(
+      [
+        "From: Comunidad de prueba <no-responder@ejemplo.test>",
+        `To: <${DESTINATARIO}>`,
+        "Subject: Recordatorio de deuda vencida (Torre A 101)",
+        `Date: ${fecha}`,
+        `Message-ID: ${messageId}`,
+        "MIME-Version: 1.0",
+        "Content-Type: text/plain; charset=UTF-8",
+        "Content-Transfer-Encoding: 8bit",
+        "",
+        "Su unidad registra $120.000 en 1 cobro(s) vencido(s).",
+      ].join("\r\n")
+    )
+
+    // Y nada del mundo multipart se cuela en el camino de texto.
+    expect(crudo).not.toContain("multipart")
+    expect(crudo).not.toContain("boundary")
+    expect(crudo).not.toContain("Content-Disposition")
+  })
+
+  it("con adjunto el mensaje es multipart/mixed: texto como primera parte y el PDF en base64", async () => {
+    const servidor = await levantarServidor({ modo: "aceptar" })
+    const resultado = await enviarCorreoSMTP(
+      filaBase(servidor.port),
+      {
+        ...mensajeDePrueba,
+        adjuntos: [
+          {
+            nombre: "convenio-firmado-101.pdf",
+            bytes: PDF_DE_PRUEBA,
+            tipoMime: "application/pdf",
+          },
+        ],
+      },
+      { env: { SMTP_PASSWORD: CLAVE_FALSA } }
+    )
+
+    expect(resultado.estado).toBe("enviado")
+    expect(servidor.mensajes).toHaveLength(1)
+    const crudo = servidor.mensajes[0]!.crudo
+
+    // Cabecera superior multipart con su boundary único.
+    expect(crudo).toMatch(/^Content-Type: multipart\/mixed; boundary="[^"]+"/m)
+    const boundary = boundaryDe(crudo)
+
+    // Primera parte: el texto de siempre, como antes.
+    expect(crudo).toContain(
+      [
+        `--${boundary}`,
+        "Content-Type: text/plain; charset=UTF-8",
+        "Content-Transfer-Encoding: 8bit",
+        "",
+        "Su unidad registra $120.000 en 1 cobro(s) vencido(s).",
+      ].join("\r\n")
+    )
+
+    // Segunda parte: el adjunto con su MIME, su base64 (RFC 2045: ≤76 columnas)
+    // y su disposición de adjunto con el nombre.
+    expect(crudo).toContain(
+      [
+        `--${boundary}`,
+        "Content-Type: application/pdf",
+        "Content-Transfer-Encoding: base64",
+        'Content-Disposition: attachment; filename="convenio-firmado-101.pdf"',
+        "",
+        base64Trozado(PDF_DE_PRUEBA),
+      ].join("\r\n")
+    )
+
+    // El cierre cierra el multipart.
+    expect(crudo).toContain(`\r\n--${boundary}--`)
+
+    // El sobre SMTP no cambia: mismo destinatario, el adjunto no toca RCPT.
+    expect(servidor.mensajes[0]!.to).toEqual([DESTINATARIO])
+  })
+
+  it("el base64 del adjunto viaja en líneas de a lo más 76 columnas (RFC 2045)", async () => {
+    // Un PDF más largo que una línea de 76: la envoltura se mira de verdad.
+    const pdf = Buffer.concat([PDF_DE_PRUEBA, Buffer.alloc(300, 0x41)])
+    const servidor = await levantarServidor({ modo: "aceptar" })
+    await enviarCorreoSMTP(
+      filaBase(servidor.port),
+      {
+        ...mensajeDePrueba,
+        adjuntos: [{ nombre: "largo.pdf", bytes: pdf, tipoMime: "application/pdf" }],
+      },
+      { env: { SMTP_PASSWORD: CLAVE_FALSA } }
+    )
+
+    const crudo = servidor.mensajes[0]!.crudo
+    const trozado = base64Trozado(pdf)
+    expect(crudo).toContain(trozado)
+    // El tope del RFC 2045 es para las líneas CODIFICADAS en base64 (las
+    // cabeceras del mensaje se rigen por el 998 de RFC 5322): la sección del
+    // adjunto no tiene ni una línea sobre 76 columnas.
+    const indice = crudo.lastIndexOf("Content-Transfer-Encoding: base64")
+    expect(indice).toBeGreaterThan(0)
+    const bloque = crudo.slice(indice).split("\r\n\r\n")[1] ?? ""
+    const lineasBase64 = bloque.split("\r\n--")[0] ?? ""
+    expect(lineasBase64.length).toBeGreaterThan(0)
+    for (const linea of lineasBase64.split("\r\n")) {
+      expect(linea.length).toBeLessThanOrEqual(76)
+    }
+  })
+
+  it("un nombre de adjunto hostil no inyecta cabeceras: se sanea antes de la cabecera", async () => {
+    const servidor = await levantarServidor({ modo: "aceptar" })
+    await enviarCorreoSMTP(
+      filaBase(servidor.port),
+      {
+        ...mensajeDePrueba,
+        adjuntos: [
+          {
+            // Comillas y CRLF: tal cual inyectarían una cabecera X-Inject falsa.
+            nombre: 'papel".pdf\r\nX-Inject: cabecera-inyectada',
+            bytes: PDF_DE_PRUEBA,
+            tipoMime: "application/pdf",
+          },
+        ],
+      },
+      { env: { SMTP_PASSWORD: CLAVE_FALSA } }
+    )
+
+    const crudo = servidor.mensajes[0]!.crudo
+    // La cabecera inyectada NO existe: sin CRLF, el nombre es un solo parámetro.
+    expect(crudo).not.toMatch(/\r\nX-Inject:/)
+    // El nombre saneado conserva lo imprimible y viaja citado en UNA línea
+    // (la disposición completa cierra su cita sin nada detrás en esa línea).
+    expect(crudo).toContain(
+      'Content-Disposition: attachment; filename="papel.pdfX-Inject: cabecera-inyectada"\r\n'
+    )
+  })
+
+  it("dos mensajes con adjunto usan boundaries distintos", async () => {
+    const servidor = await levantarServidor({ modo: "aceptar" })
+    const adjunto = { nombre: "papel.pdf", bytes: PDF_DE_PRUEBA, tipoMime: "application/pdf" }
+    await enviarCorreoSMTP(filaBase(servidor.port), { ...mensajeDePrueba, adjuntos: [adjunto] }, {
+      env: { SMTP_PASSWORD: CLAVE_FALSA },
+    })
+    await enviarCorreoSMTP(filaBase(servidor.port), { ...mensajeDePrueba, adjuntos: [adjunto] }, {
+      env: { SMTP_PASSWORD: CLAVE_FALSA },
+    })
+
+    expect(servidor.mensajes).toHaveLength(2)
+    const primero = boundaryDe(servidor.mensajes[0]!.crudo)
+    const segundo = boundaryDe(servidor.mensajes[1]!.crudo)
+    expect(primero).not.toBe(segundo)
+  })
+})

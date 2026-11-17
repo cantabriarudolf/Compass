@@ -103,11 +103,27 @@ export interface FilaConfiguracionSMTP {
   smtpRecepcion?: string | null
 }
 
+/** Un adjunto binario: el papel firmado del convenio (F29 · T2), por ejemplo. */
+export interface AdjuntoSMTP {
+  /** Nombre del archivo; se SANEAN comillas, barras y bytes de control al armar el mensaje. */
+  nombre: string
+  bytes: Uint8Array
+  /** MIME de la parte. Default: `application/octet-stream`. */
+  tipoMime?: string
+}
+
 /** Un mensaje de texto plano: lo único que la plataforma envía hoy. */
 export interface MensajeSMTP {
   to: string
   subject: string
   text: string
+  /**
+   * Adjuntos binarios (F29 · T2). Su presencia cambia el mensaje a
+   * `multipart/mixed` con el texto como primera parte; SIN adjuntos el mensaje
+   * emitido queda BYTE A BYTE igual al de siempre (el camino de texto lo usa
+   * todo el correo del sistema).
+   */
+  adjuntos?: AdjuntoSMTP[]
 }
 
 /** Entorno inyectable (en producción es `process.env`; los tests pasan el suyo). */
@@ -775,11 +791,55 @@ function armarMensaje(
   mensaje: MensajeSMTP,
   messageId: string
 ): string {
-  const cuerpo = mensaje.text
+  const adjuntos = mensaje.adjuntos ?? []
+
+  // ── Camino de SIEMPRE: texto plano, byte a byte el mensaje de siempre ──────
+  if (adjuntos.length === 0) {
+    const cuerpo = mensaje.text
+      .replace(/\r\n/g, "\n")
+      .split("\n")
+      .map((linea) => (linea.startsWith(".") ? `.${linea}` : linea))
+      .join("\r\n")
+    const cabeceras = [
+      `From: ${headerSeguro(config.fromName)} ${direccion(config.from)}`,
+      `To: ${direccion(mensaje.to)}`,
+      ...(config.replyTo ? [`Reply-To: ${direccion(config.replyTo)}`] : []),
+      `Subject: ${headerSeguro(mensaje.subject)}`,
+      `Date: ${new Date().toUTCString()}`,
+      `Message-ID: ${messageId}`,
+      "MIME-Version: 1.0",
+      "Content-Type: text/plain; charset=UTF-8",
+      "Content-Transfer-Encoding: 8bit",
+    ]
+    return `${cabeceras.join("\r\n")}\r\n\r\n${cuerpo}\r\n`
+  }
+
+  // ── Con adjuntos: multipart/mixed, texto primero y un adjunto por parte ────
+  const texto = mensaje.text
     .replace(/\r\n/g, "\n")
     .split("\n")
     .map((linea) => (linea.startsWith(".") ? `.${linea}` : linea))
     .join("\r\n")
+  const boundary = `compass-mixed-${randomUUID()}`
+  const partes = [
+    [
+      `--${boundary}`,
+      "Content-Type: text/plain; charset=UTF-8",
+      "Content-Transfer-Encoding: 8bit",
+      "",
+      texto,
+    ].join("\r\n"),
+    ...adjuntos.map((adjunto) =>
+      [
+        `--${boundary}`,
+        `Content-Type: ${adjunto.tipoMime ?? "application/octet-stream"}`,
+        "Content-Transfer-Encoding: base64",
+        `Content-Disposition: attachment; filename="${nombreAdjuntoSeguro(adjunto.nombre)}"`,
+        "",
+        base64EnLineas(adjunto.bytes),
+      ].join("\r\n")
+    ),
+  ]
   const cabeceras = [
     `From: ${headerSeguro(config.fromName)} ${direccion(config.from)}`,
     `To: ${direccion(mensaje.to)}`,
@@ -788,10 +848,25 @@ function armarMensaje(
     `Date: ${new Date().toUTCString()}`,
     `Message-ID: ${messageId}`,
     "MIME-Version: 1.0",
-    "Content-Type: text/plain; charset=UTF-8",
-    "Content-Transfer-Encoding: 8bit",
+    `Content-Type: multipart/mixed; boundary="${boundary}"`,
   ]
-  return `${cabeceras.join("\r\n")}\r\n\r\n${cuerpo}\r\n`
+  return `${cabeceras.join("\r\n")}\r\n\r\n${partes.join("\r\n")}\r\n--${boundary}--\r\n`
+}
+
+/**
+ * Quita del nombre de un adjunto todo lo que inyecta cabeceras: comillas,
+ * barras invertidas y bytes de control (CRLF entre ellos). Un nombre que
+ * llega con `"\r\nX-Inject: …` entraría en la cabecera como línea nueva; sin
+ * controles queda como UN parámetro citado, y un nombre vacío toma uno genérico.
+ */
+function nombreAdjuntoSeguro(nombre: string): string {
+  const limpio = nombre.replace(/[\u0000-\u001f\u007f"\\]/g, "").trim()
+  return limpio === "" ? "adjunto" : limpio
+}
+
+/** Base64 del adjunto trozado a 76 columnas (RFC 2045) separadas por CRLF. */
+function base64EnLineas(bytes: Uint8Array): string {
+  return (Buffer.from(bytes).toString("base64").match(/.{1,76}/g) ?? []).join("\r\n")
 }
 
 /** Id que devolvió el servidor (`queued as X`); si no lo dice, el Message-ID. */
