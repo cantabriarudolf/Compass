@@ -12,11 +12,11 @@
  * escriben acá, en la MISMA transacción que el resultado y la auditoría.
  *
  * Compuertas, en orden 401 → 403 → 404 → 409:
- * - S1: cerrar un presencial SIN acta firmada archivada en la comunidad → 409
- *   literal. El acta es el papel que respalda los libros físicos (la subida al
- *   archivo legal como `Documento` es la unidad T2); lo que el sistema exige
- *   acá es que el acta referenciada exista en ESTA comunidad, esté publicada
- *   en el libro y tenga su folio.
+ * - S1: cerrar un presencial SIN acta firmada → 409 literal. El acta es el papel
+ *   que respalda los libros físicos, en sus dos piezas: la acta del libro
+ *   (publicada, con su folio) y el acta FIRMADA escaneada y subida al archivo
+ *   legal (`actaDocumentoId`, T2) — sin ese papel no hay acuerdo presencial y
+ *   cada compuerta responde 409 con SU mensaje, distinguibles entre sí.
  * - S5: un acuerdo ya resuelto responde 409 a cualquier intento de cerrarse
  *   otra vez: el resultado y los papeles son inmutables, el acta archivada con
  *   folio es lo que congela lo declarado. La garantía de la carrera es la toma
@@ -119,6 +119,7 @@ export async function POST(request: Request, ctx: Ctx): Promise<Response> {
       modalidad: true,
       estado: true,
       actaId: true,
+      actaDocumentoId: true,
       quorumRequerido: true,
     },
   })
@@ -152,6 +153,17 @@ export async function POST(request: Request, ctx: Ctx): Promise<Response> {
     return jsonError(
       409,
       "No se puede cerrar un acuerdo presencial sin su acta firmada archivada en esta comunidad."
+    )
+  }
+
+  // S1 — y sin el papel subido tampoco: el acta del libro no es la firma. El
+  // acta firmada se escanea y se SUBE al archivo legal como documento legal con
+  // su hash (`POST /api/acuerdos/[id]/documento`, T2); sin ese papel no hay
+  // acuerdo presencial — la documentación se sube, nunca se referencia por URL.
+  if (!acuerdo.actaDocumentoId) {
+    return jsonError(
+      409,
+      "No se puede cerrar un acuerdo presencial sin el acta firmada subida al archivo legal: la documentación se sube, no se referencia por URL."
     )
   }
 

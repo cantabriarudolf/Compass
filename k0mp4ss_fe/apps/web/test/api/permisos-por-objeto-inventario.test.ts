@@ -241,6 +241,12 @@ const DECLARACIONES: readonly Declaracion[] = [
       "sólo administración y Comité (`gd` crear): cierra el acuerdo presencial del scope con el resultado proclamado en sala y responde 404 sin distinguir casos; no devuelve datos de una fila ajena.",
   },
   {
+    ruta: "acuerdos/[id]/documento",
+    clase: "exento",
+    motivo:
+      "sólo administración y Comité (`gd` crear): sube el papel firmado del acuerdo del scope al depósito privado y responde 404 sin distinguir casos; no devuelve datos de una fila ajena.",
+  },
+  {
     ruta: "vigencia-registro/multa/[id]/aplicar",
     clase: "exento",
     motivo:

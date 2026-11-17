@@ -17,9 +17,12 @@
  *      exactamente como hoy —y un acuerdo existente sin `modalidad` explícita
  *      nace electrónico por el default de la base—.
  */
-import { describe, it, expect, beforeAll, afterAll, vi } from "vitest"
+import { createServer, type Server, type ServerResponse } from "node:http"
+import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from "vitest"
 import { NextRequest } from "next/server"
+import { http, passthrough } from "msw"
 import { prisma } from "@/lib/prisma"
+import { server as servidorMSW } from "../setup"
 
 const state = vi.hoisted(() => ({ cookie: "" }))
 vi.mock("next/headers", () => ({
@@ -89,6 +92,143 @@ function proclamado(sobre: {
   return sobre
 }
 
+// ── Depósito privado falso (T2) ─────────────────────────────────────────────
+//
+// El cierre de un presencial exige el acta firmada SUBIDA al archivo legal
+// (`POST /api/acuerdos/[id]/documento`), así que este archivo necesita el
+// depósito y el papel. El arnés es la copia del de `test/api/acuerdos-documento
+// .test.ts` (misma API REST que usa `lib/almacen-documentos`): se duplica en
+// línea porque importar un archivo de test desde otro registraría sus suites,
+// y la misma convención sigue `convenios-documento-envio.test.ts`. Ninguna
+// conexión sale a 127.0.0.1 y ninguna credencial es real.
+
+const TOKEN_DEL_DEPOSITO = "apr-token-de-deposito"
+const VERSION_API_DEL_DEPOSITO = "12"
+
+interface ObjetoDelDeposito {
+  bytes: Buffer
+  tipoMime: string
+}
+
+interface ServidorDepositoFalso {
+  readonly baseUrl: string
+  readonly objetos: Map<string, ObjetoDelDeposito>
+  cerrar(): Promise<void>
+}
+
+async function iniciarServidorDepositoFalso(): Promise<ServidorDepositoFalso> {
+  const objetos = new Map<string, ObjetoDelDeposito>()
+  let origen = ""
+  const deposito: ServidorDepositoFalso = {
+    get baseUrl() {
+      return origen
+    },
+    objetos,
+    async cerrar(): Promise<void> {
+      await new Promise<void>((resolver) => servidor.close(() => resolver()))
+    },
+  }
+
+  const responder = (res: ServerResponse, status: number, cuerpo: unknown): void => {
+    const texto = JSON.stringify(cuerpo)
+    res.writeHead(status, {
+      "content-type": "application/json",
+      "content-length": String(Buffer.byteLength(texto)),
+    })
+    res.end(texto)
+  }
+
+  const servidor: Server = createServer((req, res) => {
+    const trozos: Buffer[] = []
+    req.on("data", (trozo: Buffer) => trozos.push(Buffer.from(trozo)))
+    req.on("end", () => {
+      const url = new URL(req.url ?? "/", "http://127.0.0.1")
+      const pathname = decodeURIComponent(url.pathname.replace(/^\//, ""))
+      const autorizacion = String(req.headers.authorization ?? "")
+      const version = String(req.headers["x-api-version"] ?? "")
+      const acceso = String(req.headers["x-vercel-blob-access"] ?? "")
+      const metodo = req.method ?? ""
+
+      if (autorizacion !== `Bearer ${TOKEN_DEL_DEPOSITO}`) {
+        responder(res, 403, { error: "el depósito de prueba exige su token" })
+        return
+      }
+      if (version !== VERSION_API_DEL_DEPOSITO) {
+        responder(res, 400, { error: "el depósito de prueba exige x-api-version 12" })
+        return
+      }
+
+      if (metodo === "PUT") {
+        if (acceso !== "private") {
+          responder(res, 400, { error: "el depósito de prueba es privado" })
+          return
+        }
+        const tipoMime = String(req.headers["x-content-type"] ?? "application/octet-stream")
+        objetos.set(pathname, { bytes: Buffer.concat(trozos), tipoMime })
+        responder(res, 200, {
+          pathname,
+          url: `${url.origin}/${pathname}`,
+          contentType: tipoMime,
+        })
+        return
+      }
+
+      if (metodo === "GET") {
+        const objeto = objetos.get(pathname)
+        if (!objeto) {
+          responder(res, 404, { error: "el archivo no existe en el depósito" })
+          return
+        }
+        res.writeHead(200, {
+          "content-type": objeto.tipoMime,
+          "content-length": String(objeto.bytes.length),
+        })
+        res.end(objeto.bytes)
+        return
+      }
+
+      if (metodo === "DELETE") {
+        objetos.delete(pathname)
+        responder(res, 200, { deleted: true, pathname })
+        return
+      }
+
+      responder(res, 405, { error: "método no soportado por el depósito de prueba" })
+    })
+  })
+
+  const puerto = await new Promise<number>((resolver, rechazar) => {
+    servidor.once("error", rechazar)
+    servidor.listen(0, "127.0.0.1", () => {
+      const direccion = servidor.address()
+      if (direccion === null || typeof direccion === "string") {
+        rechazar(new Error("el depósito de prueba no obtuvo un puerto TCP"))
+        return
+      }
+      resolver(direccion.port)
+    })
+  })
+  origen = `http://127.0.0.1:${puerto}`
+  return deposito
+}
+
+/** PDF mínimo REAL: cabecera mágica `%PDF-` (la ruta mira BYTES). */
+function pdfMinimo(marca: string): Buffer {
+  const lineas = [
+    "%PDF-1.4",
+    `% ${marca}`,
+    "1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj",
+    "2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj",
+    "3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 300 400]>>endobj",
+    "trailer<</Root 1 0 R>>",
+    "startxref",
+    "0",
+    "%%EOF",
+    "",
+  ]
+  return Buffer.from(lineas.join("\n"), "latin1")
+}
+
 describe("/api/acuerdos/[id] — cierre del acuerdo presencial (S2/S4/S5)", () => {
   const cargaModulos = async () => ({
     coleccion: await import("@/app/api/acuerdos/route"),
@@ -96,8 +236,19 @@ describe("/api/acuerdos/[id] — cierre del acuerdo presencial (S2/S4/S5)", () =
     cierre: await import("@/app/api/acuerdos/[id]/route"),
   })
 
+  let deposito: ServidorDepositoFalso
+  let envBlobPrevio: { token?: string; base?: string }
+
   beforeAll(async () => {
     process.env.AUTH_SECRET = AUTH_SECRET
+    deposito = await iniciarServidorDepositoFalso()
+    envBlobPrevio = {
+      token: process.env.BLOB_READ_WRITE_TOKEN,
+      base: process.env.BLOB_API_BASE_URL,
+    }
+    process.env.BLOB_READ_WRITE_TOKEN = TOKEN_DEL_DEPOSITO
+    process.env.BLOB_API_BASE_URL = deposito.baseUrl
+
     for (const c of [
       { id: COM_A, nombre: "Comunidad Acuerdo Presencial A", slug: "apr-com-a" },
       { id: COM_B, nombre: "Comunidad Acuerdo Presencial B", slug: "apr-com-b" },
@@ -193,9 +344,23 @@ describe("/api/acuerdos/[id] — cierre del acuerdo presencial (S2/S4/S5)", () =
     }
   }, 30_000)
 
+  beforeEach(() => {
+    // El depósito sale de verdad, pero sólo a 127.0.0.1 (lo deja pasar MSW), y
+    // cada test arranca con el depósito vacío: los objetos que ve son los suyos.
+    servidorMSW.use(http.all(/^http:\/\/127\.0\.0\.1:\d+\//, () => passthrough()))
+    deposito.objetos.clear()
+  })
+
   afterAll(async () => {
     try {
       state.cookie = ""
+      await deposito?.cerrar()
+      // Las filas que la subida del acta firmada creó (T2): el papel archivado
+      // y su evento, ANTES de borrar los acuerdos que los referencian.
+      await prisma.eventoAuditoria.deleteMany({
+        where: { comunidadId: { in: [COM_A, COM_B] }, tipoAccion: { startsWith: "AD_ACUERDO" } },
+      })
+      await prisma.documento.deleteMany({ where: { comunidadId: { in: [COM_A, COM_B] } } })
       await prisma.votoAcuerdo.deleteMany({
         where: { comunidadId: { in: [COM_A, COM_B] } },
       })
@@ -219,6 +384,12 @@ describe("/api/acuerdos/[id] — cierre del acuerdo presencial (S2/S4/S5)", () =
     } catch {
       // intencional: limpieza best-effort
     }
+    if (envBlobPrevio) {
+      if (envBlobPrevio.token === undefined) delete process.env.BLOB_READ_WRITE_TOKEN
+      else process.env.BLOB_READ_WRITE_TOKEN = envBlobPrevio.token
+      if (envBlobPrevio.base === undefined) delete process.env.BLOB_API_BASE_URL
+      else process.env.BLOB_API_BASE_URL = envBlobPrevio.base
+    }
   })
 
   async function conSesion(email: string, fn: () => Promise<void>): Promise<void> {
@@ -240,6 +411,23 @@ describe("/api/acuerdos/[id] — cierre del acuerdo presencial (S2/S4/S5)", () =
       new NextRequest(`http://localhost/api/acuerdos/${id}`, {
         method: "POST",
         body: JSON.stringify(body),
+        headers: { "content-type": "application/json" },
+      }),
+      { params: Promise.resolve({ id }) }
+    )
+  }
+
+  /** El camino real de S1 (T2): el acta firmada se SUBE al archivo legal antes del cierre. */
+  async function SUBIR_ACTA(id: string, bytes: Buffer): Promise<Response> {
+    const { POST } = await import("@/app/api/acuerdos/[id]/documento/route")
+    return POST(
+      new NextRequest(`http://localhost/api/acuerdos/${id}/documento`, {
+        method: "POST",
+        body: JSON.stringify({
+          tipo: "acta",
+          nombreArchivo: "acta-firmada-comite.pdf",
+          contenidoBase64: bytes.toString("base64"),
+        }),
         headers: { "content-type": "application/json" },
       }),
       { params: Promise.resolve({ id }) }
@@ -363,6 +551,22 @@ describe("/api/acuerdos/[id] — cierre del acuerdo presencial (S2/S4/S5)", () =
       actaId: "apr-acta-publicada",
     })
     await conSesion(EMAIL_ADMIN, async () => {
+      // La otra cara de S1: sin el acta firmada subida el cierre NO pasa (409
+      // con SU mensaje, distinguible del de acta no publicada).
+      const sinPapel = await CERRAR(acuerdo.id, {
+        resultado: proclamado({ aFavor: 3, enContra: 1, abstenciones: 0, presentes: 4, quorumAlcanzado: true }),
+        actaId: "apr-acta-publicada",
+      })
+      expect(sinPapel.status).toBe(409)
+      expect(((await sinPapel.json()) as { error: string }).error).toBe(
+        "No se puede cerrar un acuerdo presencial sin el acta firmada subida al archivo legal: la documentación se sube, no se referencia por URL."
+      )
+
+      // El camino real: el papel firmado se SUBE y entonces el cierre pasa.
+      expect(
+        (await SUBIR_ACTA(acuerdo.id, pdfMinimo("acta firmada del comité, AD-2026-7002"))).status
+      ).toBe(201)
+
       const res = await CERRAR(acuerdo.id, {
         resultado: proclamado({ aFavor: 3, enContra: 1, abstenciones: 0, presentes: 4, quorumAlcanzado: true }),
         actaId: "apr-acta-publicada",
@@ -409,6 +613,20 @@ describe("/api/acuerdos/[id] — cierre del acuerdo presencial (S2/S4/S5)", () =
       actaId: "apr-acta-publicada",
     })
     await conSesion(EMAIL_ADMIN, async () => {
+      // Las dos caras de S1: sin papel no cierra; con el acta firmada subida,
+      // la sala que no alcanzó el quórum queda rechazada y registrada igual.
+      const sinPapel = await CERRAR(acuerdo.id, {
+        resultado: proclamado({ aFavor: 1, enContra: 2, abstenciones: 1, presentes: 4, quorumAlcanzado: false }),
+        actaId: "apr-acta-publicada",
+      })
+      expect(sinPapel.status).toBe(409)
+      expect(((await sinPapel.json()) as { error: string }).error).toBe(
+        "No se puede cerrar un acuerdo presencial sin el acta firmada subida al archivo legal: la documentación se sube, no se referencia por URL."
+      )
+      expect(
+        (await SUBIR_ACTA(acuerdo.id, pdfMinimo("acta firmada de la asamblea, AD-2026-7003"))).status
+      ).toBe(201)
+
       const res = await CERRAR(acuerdo.id, {
         resultado: proclamado({ aFavor: 1, enContra: 2, abstenciones: 1, presentes: 4, quorumAlcanzado: false }),
         actaId: "apr-acta-publicada",
@@ -485,6 +703,21 @@ describe("/api/acuerdos/[id] — cierre del acuerdo presencial (S2/S4/S5)", () =
       actaId: "apr-acta-publicada",
     })
     await conSesion(EMAIL_ADMIN, async () => {
+      // Las dos caras de S1 en la puerta del S5: sin papel no hay primer cierre
+      // que congelar; con el acta firmada subida, el cierre congela y el
+      // segundo intento no reescribe nada.
+      const sinPapel = await CERRAR(acuerdo.id, {
+        resultado: proclamado({ aFavor: 3, enContra: 1, abstenciones: 0, presentes: 4, quorumAlcanzado: true }),
+        actaId: "apr-acta-publicada",
+      })
+      expect(sinPapel.status).toBe(409)
+      expect(((await sinPapel.json()) as { error: string }).error).toBe(
+        "No se puede cerrar un acuerdo presencial sin el acta firmada subida al archivo legal: la documentación se sube, no se referencia por URL."
+      )
+      expect(
+        (await SUBIR_ACTA(acuerdo.id, pdfMinimo("acta firmada del comité, AD-2026-7006"))).status
+      ).toBe(201)
+
       const primera = await CERRAR(acuerdo.id, {
         resultado: proclamado({ aFavor: 3, enContra: 1, abstenciones: 0, presentes: 4, quorumAlcanzado: true }),
         actaId: "apr-acta-publicada",
@@ -629,6 +862,21 @@ describe("/api/acuerdos/[id] — cierre del acuerdo presencial (S2/S4/S5)", () =
       quorumRequerido: "mayoria_absoluta_presentes",
     })
     await conSesion(EMAIL_ADMIN, async () => {
+      // Las dos caras de S1 en el setup del GET: sin papel no cierra; con el
+      // acta firmada subida, el presencial cerrado queda en el registro.
+      const sinPapel = await CERRAR(cerrado.id, {
+        resultado: proclamado({ aFavor: 45, enContra: 10, abstenciones: 25, presentes: 80, quorumAlcanzado: true }),
+        actaId: "apr-acta-publicada",
+      })
+      expect(sinPapel.status).toBe(409)
+      expect(((await sinPapel.json()) as { error: string }).error).toBe(
+        "No se puede cerrar un acuerdo presencial sin el acta firmada subida al archivo legal: la documentación se sube, no se referencia por URL."
+      )
+      expect(
+        (
+          await SUBIR_ACTA(cerrado.id, pdfMinimo("acta firmada de la asamblea, AD-2026-7009"))
+        ).status
+      ).toBe(201)
       expect(
         (
           await CERRAR(cerrado.id, {

@@ -756,12 +756,29 @@ model Acuerdo {
   // además el acta firmada archivada (S1). En `electronica` queda null para
   // siempre: ahí el resultado se deriva de los votos, exactamente como hoy.
   resultado       Json?
-  createdAt       DateTime  @default(now())
+  // Los papeles firmados, SUBIDOS al archivo legal (S1/S3): referencias al
+  // `Documento` legal que archivó cada escaneo. Campos tipados, no tabla
+  // puente — el precedente es `CorteServicio.documentoId`. Sin backfill a
+  // propósito: los acuerdos que existieron antes no tienen escaneo y fabricar
+  // uno declararía una firma que nadie estampó. El acta firmada es OBLIGATORIA
+  // para cerrar un presencial (la compuerta del cierre lo exige); la asistencia
+  // y los poderes respaldan la habilidad acreditada en la sala (S6) y se suben
+  // cuando existen. El papel se sube UNA vez: la toma condicional del cierre
+  // del acuerdo y de la subida impide el reemplazo (S5). El binario vive en el
+  // depósito privado y en la base viven metadatos y la ruta (D1).
+  actaDocumentoId       String?
+  asistenciaDocumentoId String?
+  poderesDocumentoId    String?
+  createdAt             DateTime  @default(now())
 
   votos VotoAcuerdo[]
 
   @@unique([comunidadId, folio])
   @@index([comunidadId])
+  // La lectura inversa del archivo (qué acuerdo respalda este papel) al auditar.
+  @@index([actaDocumentoId])
+  @@index([asistenciaDocumentoId])
+  @@index([poderesDocumentoId])
   @@map("acuerdos")
 }
 
