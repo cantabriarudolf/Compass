@@ -131,30 +131,36 @@ function yaTieneElPapel(
 
 /**
  * El vínculo se RECLAMA con una actualización condicional: el `where` exige que
- * el acuerdo siga sin este papel, así que dos subidas simultáneas no pueden
- * archivar dos papeles (la segunda no reclama ninguna fila).
+ * el acuerdo siga ABIERTO y sin este papel, así que ni dos subidas simultáneas
+ * pueden archivar dos papeles (la segunda no reclama fila) ni una subida puede
+ * archivar un papel sobre un acuerdo que otro administrador resolvió mientras
+ * esta corría: la compuerta de `estado` que la ruta verifica antes de la
+ * transacción no alcanza sola, porque el acuerdo puede cerrarse en el medio.
  */
-async function reclamarPapel(
+export async function reclamarPapel(
   tx: Prisma.TransactionClient,
   papel: PapelDelAcuerdo,
   acuerdoId: string,
   comunidadId: string,
   documentoId: string
 ) {
+  // `estado: "abierto"` es parte de la condición, no una compuerta previa: es la
+  // única forma de que la inmutabilidad de S5 valga también en concurrencia.
+  const abierto = { id: acuerdoId, comunidadId, estado: "abierto" } as const
   if (papel === "acta") {
     return tx.acuerdo.updateMany({
-      where: { id: acuerdoId, comunidadId, actaDocumentoId: null },
+      where: { ...abierto, actaDocumentoId: null },
       data: { actaDocumentoId: documentoId },
     })
   }
   if (papel === "asistencia") {
     return tx.acuerdo.updateMany({
-      where: { id: acuerdoId, comunidadId, asistenciaDocumentoId: null },
+      where: { ...abierto, asistenciaDocumentoId: null },
       data: { asistenciaDocumentoId: documentoId },
     })
   }
   return tx.acuerdo.updateMany({
-    where: { id: acuerdoId, comunidadId, poderesDocumentoId: null },
+    where: { ...abierto, poderesDocumentoId: null },
     data: { poderesDocumentoId: documentoId },
   })
 }

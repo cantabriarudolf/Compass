@@ -22,7 +22,10 @@
  *      intacto (S5);
  *   8. asistencia y poderes se suben cuando existen, cada papel una vez (S3);
  *   9. si la transacción falla, el binario no queda huérfano en el depósito;
- *  10. si el depósito rechaza la subida, no se escribe ninguna fila.
+ *  10. si el depósito rechaza la subida, no se escribe ninguna fila;
+ *  11. `reclamarPapel` exige el acuerdo ABIERTO en el `where` —no basta la
+ *      compuerta previa de la ruta—: el acuerdo que otro administrador resolvió
+ *      en el medio de la subida no reclama fila (S5 en concurrencia).
  *
  * BD real + depósito HTTP falso en 127.0.0.1: ninguna conexión sale a internet
  * y ninguna credencial es real (el mismo criterio del envío del convenio).
@@ -548,6 +551,42 @@ describe("/api/acuerdos/[id]/documento — los papeles al archivo legal (S1/S3)"
     expect(fila?.actaDocumentoId).toBeNull()
     expect(deposito.objetos.size).toBe(0)
     expect(await contarDocumentos()).toBe(documentosAntes)
+  })
+
+  it("S5 en concurrencia: reclamarPapel sólo reclama un acuerdo ABIERTO — el resuelto en el medio no toma fila", async () => {
+    const { reclamarPapel } = await import("@/app/api/acuerdos/[id]/documento/route")
+
+    // (1) Acuerdo abierto: la reclamación toma UNA fila y deja el papel ligado.
+    const abierto = await crearPresencial({ folio: "AD-2026-9021" })
+    const docAbierto = "apd-doc-r3-abierto"
+    const reclamadoAbierto = await prisma.$transaction((tx) =>
+      reclamarPapel(tx, "acta", abierto.id, COM_A, docAbierto)
+    )
+    expect(reclamadoAbierto.count).toBe(1)
+    const filaAbierta = await filaDelAcuerdo(abierto.id)
+    expect(filaAbierta?.actaDocumentoId).toBe(docAbierto)
+
+    // (2) Otro administrador resolvió el acuerdo ENTRE la compuerta previa y la
+    // transacción: el `where` exige `estado: "abierto"`, así que la reclamación
+    // no toma fila y la columna sigue en null — sin esa condición en el `where`,
+    // la fila resuelta matcheaba y el papel se archivaba sobre lo cerrado (S5).
+    for (const estado of ["aprobado", "rechazado"] as const) {
+      const resuelto = await crearPresencial({
+        folio: estado === "aprobado" ? "AD-2026-9022" : "AD-2026-9023",
+      })
+      await prisma.acuerdo.update({
+        where: { id: resuelto.id },
+        data: { estado, resueltoEn: new Date("2026-11-11T12:00:00.000Z") },
+      })
+      const docResuelto = `apd-doc-r3-${estado}`
+      const reclamadoResuelto = await prisma.$transaction((tx) =>
+        reclamarPapel(tx, "acta", resuelto.id, COM_A, docResuelto)
+      )
+      expect(reclamadoResuelto.count).toBe(0)
+      const filaResuelta = await filaDelAcuerdo(resuelto.id)
+      expect(filaResuelta?.estado).toBe(estado)
+      expect(filaResuelta?.actaDocumentoId).toBeNull()
+    }
   })
 
   it("sin el acta subida no hay cierre (409 con SU mensaje); con el papel subido el acuerdo cierra (S1)", async () => {
