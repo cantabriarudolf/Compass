@@ -1483,6 +1483,15 @@ model CobroFI {
   moras            Json // MoraCobroFI[]
   pagos            Json // PagoCobroFI[]
   diferencias      Json // DiferenciaPagoFI[]
+
+  /// F29 (S1) — la marca de la anulación del convenio al que el cargo pertenece.
+  /// Anular un convenio NO borra sus cargos (el libro conserva la traza): las
+  /// cuotas impagas pasan a `anulado` y sus cargos quedan con la fecha en que se
+  /// anuló el convenio. Es NULL en todo cargo que no viene de un convenio anulado
+  /// y en los cargos de cuotas ya PAGADAS (esa plata entró: su cargo sigue siendo
+  /// un cobro válido).
+  anuladoEn        DateTime?
+
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
@@ -1715,7 +1724,9 @@ model CuotaConvenio {
   numero        Int
   monto         Float
   venceEn       DateTime
-  estado        String       @default("pendiente") // pendiente | pagada | vencida
+  // `anulada` (F29 · S1): la cuota de un convenio anulado que no se pagó. No se
+  // borra —el libro conserva la traza— y una cuota pagada nunca se vuelve anular.
+  estado        String       @default("pendiente") // pendiente | pagada | vencida | anulada
   pagadaEn      DateTime?
   registradaPor String?
   createdAt     DateTime     @default(now())

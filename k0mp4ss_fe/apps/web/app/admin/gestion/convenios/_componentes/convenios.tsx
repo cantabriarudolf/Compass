@@ -37,6 +37,13 @@
  *     fecha, el medio y el cierre del convenio como `saldado` los deriva el
  *     servidor de la cuota persistida (Ley 21.442 art. 6: la primera cuota se
  *     paga al suscribir);
+ *   · la ANULACIÓN (F29 · S1) manda `{convenioId, motivo}` y nada más: qué
+ *     cuotas pasan a `anulada` —sin borrarse— y cuáles quedan pagadas, porque
+ *     esa plata entró, lo escribe el servidor en su transacción con el evento
+ *     `FI_CONVENIO_ANULADO` que guarda el motivo y el conteo. El motivo es
+ *     obligatorio: el diálogo no deja enviar sin él. El botón sólo se ofrece
+ *     donde el estado lo permite (`vigente`/`incumplido`): un convenio
+ *     `saldado` es historia y el servidor responde 409;
  *   · el ACUERDO del Comité que autoriza el convenio se elige entre los
  *     `aprobado` de `cuerpo === "comite"`, que es exactamente lo que la ruta
  *     exige de la fila real; uno rechazado o de la asamblea no se ofrece porque
@@ -91,6 +98,7 @@ import {
 } from "@workspace/ui/components/table"
 import {
   IconAlertTriangle,
+  IconBan,
   IconCircleCheck,
   IconLoader2,
   IconPlus,
@@ -102,6 +110,9 @@ import { cn } from "@workspace/ui/lib/utils"
 const RUTA = {
   convenios: "/api/convenios",
   pago: "/api/convenios/pago",
+  // La anulación del convenio (F29 · S1): `{convenioId, motivo}`, con el resto
+  // —cuotas anuladas, evento con el conteo— escrito por el servidor.
+  anular: "/api/convenios/anular",
   // Las unidades que un convenio puede regularizar: las que tienen cobros
   // vencidos, con `q` para encontrar una en una comunidad grande.
   unidadesConDeuda: "/api/convenios/unidades-con-deuda",
@@ -175,22 +186,31 @@ function autorizaConvenio(acuerdo: AcuerdoLeido): boolean {
   return acuerdo.estado === "aprobado" && acuerdo.cuerpo === "comite"
 }
 
-/** El estado del convenio en palabras; el servidor sólo escribe estos dos. */
+/** El estado del convenio en palabras; el servidor escribe estos cuatro. */
 const ETIQUETA_CONVENIO: Record<string, string> = {
   vigente: "Vigente",
   saldado: "Saldado",
+  // F29 · S1: `incumplido` existe en el dominio y `anulado` nace con la
+  // anulación; sin etiqueta la insignia mostraría el texto crudo de la base.
+  incumplido: "Incumplido",
+  anulado: "Anulado",
 }
 
 /** El estado de la cuota: nace `pendiente` y el pago la deja `pagada`. */
 const ETIQUETA_CUOTA: Record<string, string> = {
   pagada: "Pagada",
   pendiente: "Pendiente",
+  // F29 · S1: la cuota impaga de un convenio anulado, que no se borra.
+  anulada: "Anulada",
 }
 
 const COLOR_CONVENIO: Record<string, string> = {
   vigente: "bg-sky-100 text-sky-800 dark:bg-sky-950/40 dark:text-sky-300",
   saldado:
     "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300",
+  incumplido:
+    "bg-amber-100 text-amber-900 dark:bg-amber-950/40 dark:text-amber-300",
+  anulado: "bg-rose-100 text-rose-800 dark:bg-rose-950/40 dark:text-rose-300",
 }
 
 const COLOR_CUOTA: Record<string, string> = {
@@ -198,6 +218,7 @@ const COLOR_CUOTA: Record<string, string> = {
     "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300",
   pendiente:
     "bg-amber-100 text-amber-900 dark:bg-amber-950/40 dark:text-amber-300",
+  anulada: "bg-rose-100 text-rose-800 dark:bg-rose-950/40 dark:text-rose-300",
 }
 
 /** Pesos en formato chileno, igual que el resto de las pantallas de finanzas. */
@@ -303,7 +324,11 @@ interface CuotaAPagar {
 export interface ConsolaConveniosProps {
   /** `fi:cobranza` con `crear`: habilita el formulario de alta. */
   puedeCrear: boolean
-  /** `fi:cobranza` con `editar`: habilita registrar el pago de una cuota. */
+  /**
+   * `fi:cobranza` con `editar`: habilita registrar el pago de una cuota y
+   * anular el convenio (F29 · S1). Es la MISMA clave de la matriz para las dos
+   * acciones: ambas son actos de administración de la cobranza.
+   */
   puedeRegistrarPago: boolean
 }
 
@@ -321,6 +346,15 @@ export function ConsolaConvenios({
   const [pagando, setPagando] = React.useState(false)
   const [errorPago, setErrorPago] = React.useState<string | null>(null)
   const [avisoPago, setAvisoPago] = React.useState<string | null>(null)
+
+  // La anulación del convenio (F29 · S1): diálogo con motivo obligatorio. El
+  // botón sólo se abre donde el estado lo permite y el envío no declara nada
+  // que el servidor no confirmara con 2xx.
+  const [convenioAAnular, setConvenioAAnular] = React.useState<ConvenioLeido | null>(null)
+  const [motivoAnulacion, setMotivoAnulacion] = React.useState("")
+  const [anulando, setAnulando] = React.useState(false)
+  const [errorAnulacion, setErrorAnulacion] = React.useState<string | null>(null)
+  const [avisoAnulacion, setAvisoAnulacion] = React.useState<string | null>(null)
 
   // Catálogo del alta. Se pide sólo si el rol puede suscribir: un rol que sólo
   // audita no necesita el libro de acuerdos ni las unidades con deuda.
@@ -548,6 +582,58 @@ export function ConsolaConvenios({
     await cargar()
   }
 
+  /** El estado del convenio permite anularlo: sólo `vigente` o `incumplido`. */
+  function permiteAnular(convenio: ConvenioLeido): boolean {
+    return convenio.estado === "vigente" || convenio.estado === "incumplido"
+  }
+
+  function abrirAnulacion(convenio: ConvenioLeido) {
+    setConvenioAAnular(convenio)
+    setMotivoAnulacion("")
+    setErrorAnulacion(null)
+  }
+
+  function cerrarAnulacion() {
+    if (anulando) return
+    setConvenioAAnular(null)
+    setErrorAnulacion(null)
+  }
+
+  async function confirmarAnulacion(): Promise<void> {
+    if (!convenioAAnular || anulando) return
+    const motivo = motivoAnulacion.trim()
+    if (motivo === "") return
+
+    // El cuerpo es exactamente el que la ruta de anulación espera: el estado
+    // nuevo, las cuotas que pasan a `anulada` y el evento con el conteo los
+    // escribe el servidor en su transacción.
+    setAnulando(true)
+    setErrorAnulacion(null)
+    const respuesta = await enviarJson(RUTA.anular, {
+      convenioId: convenioAAnular.id,
+      motivo,
+    })
+    setAnulando(false)
+
+    // Sin 2xx el diálogo sigue abierto y el error de la API se muestra tal cual:
+    // el 409 del saldado (que otro usuario cerró mientras se miraba) es el que
+    // el administrador va a encontrar, y no se reescribe acá.
+    if (!respuesta.ok) {
+      setErrorAnulacion(respuesta.mensaje)
+      return
+    }
+
+    const conteo = respuesta.cuerpo?.cuotasAnuladas
+    setAvisoAnulacion(
+      typeof conteo === "number"
+        ? `Convenio anulado: ${conteo} cuota(s) impaga(s) quedaron anuladas y las pagadas conservan su pago.`
+        : "El servidor confirmó la anulación del convenio."
+    )
+    setConvenioAAnular(null)
+    setMotivoAnulacion("")
+    await cargar()
+  }
+
   const monto = Number(montoTotal)
   const cuotas = Number(numeroCuotas)
   const primera = Number(primeraCuota)
@@ -668,6 +754,16 @@ export function ConsolaConvenios({
         >
           <IconCircleCheck className="size-4" aria-hidden="true" />
           {avisoPago}
+        </p>
+      )}
+
+      {avisoAnulacion && (
+        <p
+          role="status"
+          className="flex items-center gap-2 text-sm text-muted-foreground"
+        >
+          <IconCircleCheck className="size-4" aria-hidden="true" />
+          {avisoAnulacion}
         </p>
       )}
 
@@ -825,6 +921,22 @@ export function ConsolaConvenios({
                                   El servidor no devolvió cuotas para este
                                   convenio.
                                 </p>
+                              )}
+                              {puedeRegistrarPago && permiteAnular(convenio) && (
+                                <div className="flex justify-end border-t pt-2">
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => abrirAnulacion(convenio)}
+                                  >
+                                    <IconBan
+                                      className="size-4"
+                                      aria-hidden="true"
+                                    />
+                                    Anular convenio
+                                  </Button>
+                                </div>
                               )}
                             </div>
                           </TableCell>
@@ -1198,6 +1310,69 @@ export function ConsolaConvenios({
                 <IconLoader2 className="size-4 animate-spin" aria-hidden="true" />
               )}
               Registrar pago
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={convenioAAnular !== null}
+        onOpenChange={(abierto) => {
+          if (!abierto) cerrarAnulacion()
+        }}
+      >
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Anular el convenio de pago</DialogTitle>
+            <DialogDescription className="leading-relaxed">
+              {convenioAAnular &&
+                `Unidad ${
+                  convenioAAnular.unidadNumero ?? "—"
+                }, deudor ${convenioAAnular.deudorNombre ?? "—"}: las cuotas impagas pasan a «Anulada» sin borrarse, las pagadas quedan pagadas —esa plata entró— y el motivo queda registrado en el libro. La anulación es un acto de administración y no exige acuerdo del Comité, pero sí un motivo que diga por qué. El estado nuevo y el conteo de cuotas anuladas los escribe el servidor.`}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex flex-col gap-1">
+            <Label htmlFor="convenio-motivo-anulacion">
+              Motivo de la anulación
+            </Label>
+            <Input
+              id="convenio-motivo-anulacion"
+              value={motivoAnulacion}
+              onChange={(e) => setMotivoAnulacion(e.target.value)}
+              placeholder="Por qué se anula el convenio (queda en el libro)"
+              maxLength={500}
+              disabled={anulando}
+            />
+          </div>
+
+          {errorAnulacion && (
+            <p
+              role="alert"
+              className="flex items-center gap-2 text-sm text-destructive"
+            >
+              <IconAlertTriangle className="size-4" aria-hidden="true" />
+              {errorAnulacion}
+            </p>
+          )}
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={cerrarAnulacion}
+              disabled={anulando}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              onClick={() => void confirmarAnulacion()}
+              disabled={anulando || motivoAnulacion.trim() === ""}
+            >
+              {anulando && (
+                <IconLoader2 className="size-4 animate-spin" aria-hidden="true" />
+              )}
+              Anular convenio
             </Button>
           </DialogFooter>
         </DialogContent>
