@@ -153,6 +153,14 @@ export async function POST(req: Request): Promise<Response> {
             materia: datos.materia,
             folio,
             quorumRequerido: datos.quorumRequerido,
+            // La modalidad declarada (T3): presencial se cierra con el resultado
+            // proclamado y su acta. `datos.modalidad` es `undefined` cuando el
+            // cuerpo no la trae, y Prisma OMITE los campos `undefined` — la
+            // columna queda con su default de base (`electronica`), nunca null.
+            // El pin de ese comportamiento es
+            // `test/api/acuerdos-presencial.test.ts` («sin `modalidad` explícita,
+            // la fila nace `electronica`»), que hace el POST real sin el campo.
+            modalidad: datos.modalidad,
             fecha: ahora,
             actaId: datos.actaId ?? null,
             creadoPor: scope.usuarioId,
@@ -241,6 +249,9 @@ export async function GET(_req: Request): Promise<Response> {
           fecha: true,
           resueltoEn: true,
           actaId: true,
+          actaDocumentoId: true,
+          asistenciaDocumentoId: true,
+          poderesDocumentoId: true,
           modalidad: true,
           resultado: true,
           votos: {
@@ -329,6 +340,11 @@ export async function GET(_req: Request): Promise<Response> {
         fecha: acuerdo.fecha.toISOString(),
         resueltoEn: acuerdo.resueltoEn?.toISOString() ?? null,
         actaId: acuerdo.actaId,
+        // Los papeles del archivo legal (T2/S3): la pantalla muestra si el acta
+        // firmada está archivada leyendo la fila, no adivinando un click.
+        actaDocumentoId: acuerdo.actaDocumentoId,
+        asistenciaDocumentoId: acuerdo.asistenciaDocumentoId,
+        poderesDocumentoId: acuerdo.poderesDocumentoId,
         modalidad: acuerdo.modalidad,
         derechosTotales,
         // Derivado, nunca guardado aparte: la regla pura es la misma que usa el

@@ -27,6 +27,15 @@
  *     se ofrecen con su nombre legal y su ayuda, y sólo las que el cuerpo admite
  *     (`AcuerdoSchema` rechaza la combinación incoherente): la pantalla no
  *     inventa quórums ni deja elegir uno que la API va a rechazar.
+ *   · el ALTA declara la MODALIDAD (T3): `presencial` se cierra con el resultado
+ *     proclamado y su acta firmada; `electronica` es el default de la base y el
+ *     cuerpo del alta no la manda, para que el camino electrónico quede byte a
+ *     byte igual que hoy (S4).
+ *   · el CIERRE PRESENCIAL (T3 · S1/S2/S5) manda el resultado tal como la sala
+ *     lo proclamó (a favor, en contra, abstenciones, presentes y el quórum) y
+ *     deja los papeles en el archivo legal por su propia ruta. El botón de
+ *     cierre no se habilita sin el acta firmada archivada —leída de la fila del
+ *     servidor, no del click— y un 409 se muestra verbatim, sin relectura.
  *
  * Frontera deliberada: el quórum de ASISTENCIA de la asamblea (para que sesione)
  * es un requisito de la sesión y lo prueba el acta, no este registro; acá se
@@ -70,10 +79,17 @@ import {
 
 const RUTA = {
   listado: "/api/acuerdos",
+  actas: "/api/actas-gd",
 } as const
 
 /** La ruta del voto de un acuerdo concreto (un voto por persona, inmutable). */
 const rutaVoto = (id: string): string => `${RUTA.listado}/${id}/voto`
+
+/** La ruta del cierre presencial (`POST /api/acuerdos/[id]`): lo proclamado. */
+const rutaCierre = (id: string): string => `${RUTA.listado}/${id}`
+
+/** La ruta de los papeles firmados del acuerdo (acta, asistencia, poderes). */
+const rutaDocumento = (id: string): string => `${RUTA.listado}/${id}/documento`
 
 /**
  * Mínimo de la materia: es el `min(5)` de `AcuerdoSchema`. La pantalla no deja
@@ -101,6 +117,23 @@ interface ResultadoLeido {
   motivo: string
 }
 
+/** El resultado proclamado en la sala, tal como lo archivó el servidor (S2). */
+interface ProclamadoLeido {
+  aFavor: number
+  enContra: number
+  abstenciones: number
+  presentes: number
+  quorumAlcanzado: boolean
+}
+
+/** Un acta del libro (`GET /api/actas-gd`): lo que el cierre necesita saber. */
+interface ActaLeida {
+  id: string
+  folio: string | null
+  estado: string
+  fecha: string
+}
+
 /** Una fila del registro: el acuerdo con sus votos y su resultado derivado. */
 interface AcuerdoLeido {
   id: string
@@ -112,6 +145,11 @@ interface AcuerdoLeido {
   fecha: string
   resueltoEn: string | null
   actaId: string | null
+  modalidad: string | null
+  actaDocumentoId: string | null
+  asistenciaDocumentoId: string | null
+  poderesDocumentoId: string | null
+  proclamado: ProclamadoLeido | null
   derechosTotales: number
   resultado: ResultadoLeido
   votos: VotoLeido[]
@@ -141,6 +179,20 @@ const ETIQUETA_DECISION: Record<string, string> = {
   a_favor: "A favor",
   en_contra: "En contra",
   abstencion: "Abstención",
+}
+
+const ETIQUETA_MODALIDAD: Record<string, string> = {
+  electronica: "Electrónica",
+  presencial: "Presencial",
+}
+
+/** Los papeles firmados que recibe el archivo legal (S3); el acta es obligatoria. */
+type PapelDelAcuerdo = "acta" | "asistencia" | "poderes"
+
+const ETIQUETA_PAPEL: Record<PapelDelAcuerdo, string> = {
+  acta: "Acta firmada",
+  asistencia: "Lista de asistencia",
+  poderes: "Poderes acreditados",
 }
 
 /** Las tres decisiones, con el nombre del botón que las emite. */
@@ -204,6 +256,57 @@ function numero(valor: number): string {
 /** Fecha en el formato del libro (AAAA-MM-DD): la hora no la lee nadie acá. */
 function fechaCorta(iso: string | null): string {
   return iso ? iso.slice(0, 10) : "—"
+}
+
+/**
+ * El papel firmado se SUBE (nunca por URL): el escaneo se lee en el navegador y
+ * viaja en base64 dentro del JSON, que es lo que la ruta del archivo legal
+ * espera. Que sea un PDF lo verifica el servidor mirando los BYTES: duplicar
+ * acá la regla sería una segunda verdad capaz de divergir.
+ */
+function leerArchivoComoBase64(archivo: File): Promise<string> {
+  return new Promise((resolver, rechazar) => {
+    const lector = new FileReader()
+    lector.onload = () => {
+      const resultado = String(lector.result ?? "")
+      const coma = resultado.indexOf(",")
+      resolver(coma >= 0 ? resultado.slice(coma + 1) : resultado)
+    }
+    lector.onerror = () => rechazar(new Error("No se pudo leer el archivo."))
+    lector.readAsDataURL(archivo)
+  })
+}
+
+/** Los cuatro conteos proclamados: números finitos y no negativos, o nada. */
+function numerosCompletos(valores: string[]): boolean {
+  return valores.every((valor) => {
+    const recortado = valor.trim()
+    if (recortado === "") return false
+    const numero = Number(recortado)
+    return Number.isFinite(numero) && numero >= 0
+  })
+}
+
+/**
+ * Si el acta firmada está archivada lo dice la fila del servidor
+ * (`actaDocumentoId`): la pantalla no pinta «archivada» porque una subida salió
+ * bien — la relee. El acuerdo electrónico no lleva papeles.
+ */
+function notaActa(acuerdo: AcuerdoLeido): string | null {
+  if (acuerdo.modalidad !== "presencial") return null
+  if (acuerdo.actaDocumentoId) {
+    return "El acta firmada está archivada en el archivo legal."
+  }
+  return acuerdo.estado === "abierto"
+    ? "El acta firmada no está en el archivo legal: se sube al cerrar el acuerdo."
+    : "El acta firmada no está en el archivo legal."
+}
+
+/** ¿El acuerdo ya archivó ESTE papel? (cada papel se sube una sola vez). */
+function papelArchivado(acuerdo: AcuerdoLeido, papel: PapelDelAcuerdo): boolean {
+  if (papel === "acta") return acuerdo.actaDocumentoId != null
+  if (papel === "asistencia") return acuerdo.asistenciaDocumentoId != null
+  return acuerdo.poderesDocumentoId != null
 }
 
 /**
@@ -311,9 +414,31 @@ export function ConsolaAcuerdos({ puedeRegistrar }: ConsolaAcuerdosProps) {
   const [regla, setRegla] = React.useState<string>(
     REGLAS_POR_CUERPO.comite[0]!
   )
+  const [modalidadAlta, setModalidadAlta] = React.useState<
+    "electronica" | "presencial"
+  >("electronica")
   const [materia, setMateria] = React.useState("")
   const [enviandoAlta, setEnviandoAlta] = React.useState(false)
   const [errorAlta, setErrorAlta] = React.useState<string | null>(null)
+
+  // ── Cierre presencial (T3 · S1/S2/S5) ───────────────────────────────────────
+  const [cierreDe, setCierreDe] = React.useState<string | null>(null)
+  const [aFavor, setAFavor] = React.useState("")
+  const [enContra, setEnContra] = React.useState("")
+  const [abstenciones, setAbstenciones] = React.useState("")
+  const [presentes, setPresentes] = React.useState("")
+  const [quorumProclamado, setQuorumProclamado] = React.useState(false)
+  const [actaLibroId, setActaLibroId] = React.useState("")
+  /** El libro de actas leído al abrir el diálogo; `null` mientras llega. */
+  const [actas, setActas] = React.useState<ActaLeida[] | null>(null)
+  const [errorActas, setErrorActas] = React.useState<string | null>(null)
+  const [archivoPapel, setArchivoPapel] = React.useState<
+    Record<PapelDelAcuerdo, File | null>
+  >({ acta: null, asistencia: null, poderes: null })
+  const [subiendoPapel, setSubiendoPapel] = React.useState<PapelDelAcuerdo | null>(null)
+  const [errorPapel, setErrorPapel] = React.useState<ErrorDeAccion | null>(null)
+  const [cerrando, setCerrando] = React.useState(false)
+  const [errorCierre, setErrorCierre] = React.useState<string | null>(null)
 
   const cargar = React.useCallback(async (): Promise<void> => {
     setCargando(true)
@@ -377,6 +502,7 @@ export function ConsolaAcuerdos({ puedeRegistrar }: ConsolaAcuerdosProps) {
   function abrirAlta() {
     setCuerpo("comite")
     setRegla(REGLAS_POR_CUERPO.comite[0]!)
+    setModalidadAlta("electronica")
     setMateria("")
     setErrorAlta(null)
     setAltaAbierta(true)
@@ -406,6 +532,10 @@ export function ConsolaAcuerdos({ puedeRegistrar }: ConsolaAcuerdosProps) {
       cuerpo,
       materia: materiaRecortada,
       quorumRequerido: regla,
+      // La modalidad PRESENCIAL se declara; la electrónica NO viaja: la columna
+      // nace electrónica por default en la base y el cuerpo del alta queda byte
+      // a byte igual que hoy (S4 — el camino electrónico no cambia).
+      ...(modalidadAlta === "presencial" ? { modalidad: "presencial" as const } : {}),
     })
     setEnviandoAlta(false)
 
@@ -416,6 +546,134 @@ export function ConsolaAcuerdos({ puedeRegistrar }: ConsolaAcuerdosProps) {
     setAltaAbierta(false)
     setMateria("")
     // El folio y la fecha los puso el servidor: se relee para verlos.
+    await cargar()
+  }
+
+  /** El acuerdo del diálogo de cierre, re-leído del servidor en cada render. */
+  const acuerdoCierre = cierreDe
+    ? (acuerdos.find((acuerdo) => acuerdo.id === cierreDe) ?? null)
+    : null
+  const actasPublicadas = (actas ?? []).filter(
+    (acta) => acta.estado === "publicada" && !!acta.folio
+  )
+  const conteosCompletos = numerosCompletos([
+    aFavor,
+    enContra,
+    abstenciones,
+    presentes,
+  ])
+  // El botón de cierre no se habilita sin el acta (S1): los cuatro conteos, el
+  // acta firmada archivada —leída de la fila del servidor— y el acta del libro
+  // cuando el acuerdo no la declara. La pantalla no ofrece lo que el servidor
+  // va a rechazar.
+  const puedeCerrar =
+    acuerdoCierre !== null &&
+    conteosCompletos &&
+    acuerdoCierre.actaDocumentoId != null &&
+    (acuerdoCierre.actaId != null || actaLibroId !== "")
+  const actaDeclaradaDelCierre =
+    acuerdoCierre?.actaId && actas
+      ? (actas.find((acta) => acta.id === acuerdoCierre.actaId) ?? null)
+      : null
+
+  async function abrirCierre(acuerdo: AcuerdoLeido): Promise<void> {
+    setCierreDe(acuerdo.id)
+    setAFavor("")
+    setEnContra("")
+    setAbstenciones("")
+    setPresentes("")
+    setQuorumProclamado(false)
+    setActaLibroId("")
+    setArchivoPapel({ acta: null, asistencia: null, poderes: null })
+    setErrorPapel(null)
+    setErrorCierre(null)
+    setErrorActas(null)
+    // El libro de actas se lee del servidor: el selector ofrece sólo las
+    // publicadas con folio, que es lo único que el cierre acepta. El flujo
+    // borrador → publicada → cerrar se recorre con la consola del libro.
+    const respuesta = await leerJson(`${RUTA.actas}?pageSize=100`)
+    if (!respuesta.ok) {
+      setErrorActas(respuesta.mensaje)
+      setActas([])
+      return
+    }
+    const lista = respuesta.cuerpo?.data
+    setActas(Array.isArray(lista) ? (lista as ActaLeida[]) : [])
+  }
+
+  function cancelarCierre() {
+    if (cerrando || subiendoPapel) return
+    setCierreDe(null)
+    setErrorCierre(null)
+    setErrorPapel(null)
+  }
+
+  async function subirPapel(
+    acuerdo: AcuerdoLeido,
+    papel: PapelDelAcuerdo
+  ): Promise<void> {
+    const archivo = archivoPapel[papel]
+    if (!archivo || subiendoPapel) return
+    setSubiendoPapel(papel)
+    setErrorPapel(null)
+    let contenidoBase64: string
+    try {
+      contenidoBase64 = await leerArchivoComoBase64(archivo)
+    } catch {
+      setSubiendoPapel(null)
+      setErrorPapel({
+        acuerdoId: acuerdo.id,
+        mensaje: "No se pudo leer el archivo en el navegador.",
+      })
+      return
+    }
+    const respuesta = await enviarJson(rutaDocumento(acuerdo.id), "POST", {
+      tipo: papel,
+      nombreArchivo: archivo.name,
+      contenidoBase64,
+    })
+    setSubiendoPapel(null)
+    // Sin éxito no hay «archivado»: el error de la API se muestra tal cual y
+    // nada cambia (la firma no se reemplaza).
+    if (!respuesta.ok) {
+      setErrorPapel({ acuerdoId: acuerdo.id, mensaje: respuesta.mensaje })
+      return
+    }
+    // La pantalla RELEE: «archivada» lo dice la fila que devuelve el servidor,
+    // no el click que salió bien.
+    await cargar()
+  }
+
+  async function cerrarPresencial(acuerdo: AcuerdoLeido): Promise<void> {
+    if (cerrando) return
+    // Sin los cuatro números no se envía nada: declarar 0 porque el campo quedó
+    // vacío sería registrar lo que la sala no proclamó. El botón ya está
+    // deshabilitado; el envío forzado con números incompletos no viaja.
+    if (!conteosCompletos) return
+    setCerrando(true)
+    setErrorCierre(null)
+    const cuerpo: Record<string, unknown> = {
+      resultado: {
+        aFavor: Number(aFavor),
+        enContra: Number(enContra),
+        abstenciones: Number(abstenciones),
+        presentes: Number(presentes),
+        quorumAlcanzado: quorumProclamado,
+      },
+    }
+    // El acta del libro viaja sólo si el acuerdo no la declara: la demás la
+    // resuelve el servidor con la fila que ya tiene.
+    if (actaLibroId) cuerpo.actaId = actaLibroId
+    const respuesta = await enviarJson(rutaCierre(acuerdo.id), "POST", cuerpo)
+    setCerrando(false)
+    // El 409 es del servidor y se muestra verbatim: sin relectura ni éxito
+    // declarado (S5 — lo cerrado no se reescribe).
+    if (!respuesta.ok) {
+      setErrorCierre(respuesta.mensaje)
+      return
+    }
+    setCierreDe(null)
+    // El estado nuevo lo dice el servidor: la fila se relee.
     await cargar()
   }
 
@@ -486,6 +744,7 @@ export function ConsolaAcuerdos({ puedeRegistrar }: ConsolaAcuerdosProps) {
           {acuerdos.map((acuerdo) => {
             const detalleAbierto = !!abiertos[acuerdo.id]
             const esAsamblea = acuerdo.cuerpo === "asamblea"
+            const esPresencial = acuerdo.modalidad === "presencial"
             // La regla declarada, con su nombre legal; si la fila trae un código
             // que la regla pura no reconoce, se muestra el código crudo (no se
             // inventa un nombre) y el motivo del servidor dice qué pasa.
@@ -510,6 +769,8 @@ export function ConsolaAcuerdos({ puedeRegistrar }: ConsolaAcuerdosProps) {
                       </CardTitle>
                       <CardDescription>
                         {`${ETIQUETA_CUERPO[acuerdo.cuerpo] ?? acuerdo.cuerpo} · ${
+                          ETIQUETA_MODALIDAD[acuerdo.modalidad ?? ""] ?? "Electrónica"
+                        } · ${
                           reglaDeclarada?.etiqueta ?? acuerdo.quorumRequerido
                         } · Registrado el ${fechaCorta(acuerdo.fecha)}${
                           acuerdo.resueltoEn
@@ -535,6 +796,20 @@ export function ConsolaAcuerdos({ puedeRegistrar }: ConsolaAcuerdosProps) {
                 <CardContent className="flex flex-col gap-3 border-t pt-4">
                   <p className="text-sm font-medium">{acuerdo.materia}</p>
                   <p className="text-sm">{textoDeConteos(acuerdo)}</p>
+                  {acuerdo.modalidad === "presencial" && acuerdo.proclamado && (
+                    <p className="text-sm">
+                      {`Proclamado en la sala: ${numero(acuerdo.proclamado.presentes)} ${
+                        esAsamblea ? "derechos" : "personas"
+                      } presentes · quórum ${
+                        acuerdo.proclamado.quorumAlcanzado ? "alcanzado" : "no alcanzado"
+                      }`}
+                    </p>
+                  )}
+                  {notaActa(acuerdo) && (
+                    <p className="text-xs text-muted-foreground">
+                      {notaActa(acuerdo)}
+                    </p>
+                  )}
                   <p className="text-xs text-muted-foreground">
                     {acuerdo.resultado.motivo}
                   </p>
@@ -585,6 +860,30 @@ export function ConsolaAcuerdos({ puedeRegistrar }: ConsolaAcuerdosProps) {
                   )}
 
                   {acuerdo.estado === "abierto" ? (
+                    esPresencial ? (
+                      puedeRegistrar ? (
+                        <div className="flex flex-col gap-2 border-t pt-3">
+                          <p className="text-xs text-muted-foreground">
+                            El resultado se proclama en la sala: no hay votos por
+                            persona. El cierre registra lo proclamado y exige el
+                            acta firmada subida al archivo legal.
+                          </p>
+                          <Button
+                            type="button"
+                            size="sm"
+                            onClick={() => void abrirCierre(acuerdo)}
+                          >
+                            Cerrar el acuerdo presencial
+                          </Button>
+                        </div>
+                      ) : (
+                        <p className="border-t pt-3 text-xs text-muted-foreground">
+                          El resultado se proclama en la sala: el cierre lo
+                          registra quien administra el libro, y la API valida el
+                          permiso.
+                        </p>
+                      )
+                    ) : (
                     <div className="flex flex-wrap items-center gap-2 border-t pt-3">
                       <p className="w-full text-xs text-muted-foreground">
                         Tu voto lo registra el servidor con tu identidad y tu peso:
@@ -610,6 +909,7 @@ export function ConsolaAcuerdos({ puedeRegistrar }: ConsolaAcuerdosProps) {
                         </Button>
                       ))}
                     </div>
+                    )
                   ) : (
                     <p className="border-t pt-3 text-xs text-muted-foreground">
                       El acuerdo ya fue resuelto: no admite más votos (el
@@ -700,6 +1000,49 @@ export function ConsolaAcuerdos({ puedeRegistrar }: ConsolaAcuerdosProps) {
               </div>
             </fieldset>
 
+            <fieldset className="flex flex-col gap-2">
+              <legend className="mb-1 text-sm font-medium">
+                Modalidad del acuerdo
+              </legend>
+              <div className="flex items-start gap-2">
+                <input
+                  type="radio"
+                  id="acuerdo-modalidad-electronica"
+                  name="modalidad"
+                  className="mt-1"
+                  checked={modalidadAlta === "electronica"}
+                  onChange={() => setModalidadAlta("electronica")}
+                  disabled={enviandoAlta}
+                />
+                <div>
+                  <Label htmlFor="acuerdo-modalidad-electronica">Electrónica</Label>
+                  <p className="text-xs text-muted-foreground">
+                    El resultado se deduce de los votos en la base: cada miembro de
+                    la sesión vota desde su ficha. Es la modalidad de todo acuerdo
+                    existente.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-start gap-2">
+                <input
+                  type="radio"
+                  id="acuerdo-modalidad-presencial"
+                  name="modalidad"
+                  className="mt-1"
+                  checked={modalidadAlta === "presencial"}
+                  onChange={() => setModalidadAlta("presencial")}
+                  disabled={enviandoAlta}
+                />
+                <div>
+                  <Label htmlFor="acuerdo-modalidad-presencial">Presencial</Label>
+                  <p className="text-xs text-muted-foreground">
+                    El resultado se proclama en la sala y no hay votos por persona.
+                    No se puede cerrar sin el acta firmada subida al archivo legal.
+                  </p>
+                </div>
+              </div>
+            </fieldset>
+
             <div className="flex flex-col gap-1">
               <Label htmlFor="acuerdo-materia">Materia del acuerdo</Label>
               <Input
@@ -774,6 +1117,261 @@ export function ConsolaAcuerdos({ puedeRegistrar }: ConsolaAcuerdosProps) {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={cierreDe !== null}
+        onOpenChange={(abierto) => {
+          if (!abierto) cancelarCierre()
+        }}
+      >
+        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Cerrar acuerdo presencial</DialogTitle>
+            <DialogDescription className="leading-relaxed">
+              El resultado se registra tal como la sala lo proclamó: el sistema lo
+              contrasta con la regla aplicada y no lo recalcula. El cierre no se
+              reescribe y exige el acta firmada subida al archivo legal.
+            </DialogDescription>
+          </DialogHeader>
+          {acuerdoCierre && (
+            <form
+              className="flex flex-col gap-4"
+              aria-label={`Cerrar el acuerdo presencial ${acuerdoCierre.folio}`}
+              onSubmit={(evento) => {
+                evento.preventDefault()
+                void cerrarPresencial(acuerdoCierre)
+              }}
+            >
+              <p className="text-sm font-medium">{acuerdoCierre.materia}</p>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1">
+                  <Label htmlFor="cierre-a-favor">A favor</Label>
+                  <Input
+                    id="cierre-a-favor"
+                    type="number"
+                    min={0}
+                    step="any"
+                    value={aFavor}
+                    onChange={(evento) => setAFavor(evento.target.value)}
+                    disabled={cerrando}
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <Label htmlFor="cierre-en-contra">En contra</Label>
+                  <Input
+                    id="cierre-en-contra"
+                    type="number"
+                    min={0}
+                    step="any"
+                    value={enContra}
+                    onChange={(evento) => setEnContra(evento.target.value)}
+                    disabled={cerrando}
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <Label htmlFor="cierre-abstenciones">Abstenciones</Label>
+                  <Input
+                    id="cierre-abstenciones"
+                    type="number"
+                    min={0}
+                    step="any"
+                    value={abstenciones}
+                    onChange={(evento) => setAbstenciones(evento.target.value)}
+                    disabled={cerrando}
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <Label htmlFor="cierre-presentes">Presentes</Label>
+                  <Input
+                    id="cierre-presentes"
+                    type="number"
+                    min={0}
+                    step="any"
+                    value={presentes}
+                    onChange={(evento) => setPresentes(evento.target.value)}
+                    disabled={cerrando}
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-start gap-2">
+                <input
+                  type="checkbox"
+                  id="cierre-quorum"
+                  className="mt-1"
+                  checked={quorumProclamado}
+                  onChange={(evento) => setQuorumProclamado(evento.target.checked)}
+                  disabled={cerrando}
+                />
+                <div>
+                  <Label htmlFor="cierre-quorum">
+                    La sala alcanzó el quórum exigido
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    Es la proclama del acta: dejalo sin marcar si la mayoría no se
+                    alcanzó. La regla aplicada (
+                    {REGLAS[acuerdoCierre.quorumRequerido]?.etiqueta ??
+                      acuerdoCierre.quorumRequerido}
+                    ) se contrasta con lo proclamado, no se recalcula.
+                  </p>
+                </div>
+              </div>
+
+              {acuerdoCierre.actaId ? (
+                <p className="text-xs text-muted-foreground">
+                  {`El acuerdo declara el acta del libro ${
+                    actaDeclaradaDelCierre?.folio ?? acuerdoCierre.actaId
+                  }${
+                    actaDeclaradaDelCierre
+                      ? ` (${actaDeclaradaDelCierre.estado})`
+                      : ""
+                  }. ${
+                    actaDeclaradaDelCierre &&
+                    actaDeclaradaDelCierre.estado !== "publicada"
+                      ? "El servidor no cerrará el acuerdo hasta que esa acta esté publicada en el libro y con folio."
+                      : ""
+                  }`}
+                </p>
+              ) : (
+                <div className="flex flex-col gap-1">
+                  <Label htmlFor="cierre-acta-libro">
+                    Acta del libro que respalda el cierre
+                  </Label>
+                  <select
+                    id="cierre-acta-libro"
+                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
+                    value={actaLibroId}
+                    onChange={(evento) => setActaLibroId(evento.target.value)}
+                    disabled={cerrando}
+                  >
+                    <option value="">
+                      {actas === null
+                        ? "Leyendo el libro de actas…"
+                        : "Elegí el acta publicada que respalda el cierre"}
+                    </option>
+                    {actasPublicadas.map((acta) => (
+                      <option key={acta.id} value={acta.id}>
+                        {`${acta.folio} (${acta.fecha.slice(0, 10)})`}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-muted-foreground">
+                    El servidor sólo cierra con un acta publicada en el libro y con
+                    folio; el flujo borrador → publicada → cerrar se recorre con la
+                    consola del libro.
+                  </p>
+                  {errorActas && (
+                    <p role="alert" className="text-sm text-destructive">
+                      {errorActas}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              <fieldset className="flex flex-col gap-2">
+                <legend className="mb-1 text-sm font-medium">
+                  Papeles firmados al archivo legal
+                </legend>
+                {acuerdoCierre.actaDocumentoId && (
+                  <p className="text-xs text-emerald-700 dark:text-emerald-300">
+                    El acta firmada está archivada en el archivo legal.
+                  </p>
+                )}
+                {(["acta", "asistencia", "poderes"] as PapelDelAcuerdo[]).map(
+                  (papel) => (
+                    <div key={papel} className="flex flex-col gap-1">
+                      <Label htmlFor={`cierre-archivo-${papel}`}>
+                        {`${ETIQUETA_PAPEL[papel]} (PDF)`}
+                      </Label>
+                      <div className="flex items-center gap-2">
+                        <Input
+                          id={`cierre-archivo-${papel}`}
+                          type="file"
+                          accept="application/pdf"
+                          className="flex-1"
+                          onChange={(evento) =>
+                            setArchivoPapel((previo) => ({
+                              ...previo,
+                              [papel]: evento.target.files?.[0] ?? null,
+                            }))
+                          }
+                          disabled={cerrando || subiendoPapel !== null}
+                        />
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          disabled={
+                            !archivoPapel[papel] ||
+                            subiendoPapel !== null ||
+                            cerrando
+                          }
+                          onClick={() => void subirPapel(acuerdoCierre, papel)}
+                        >
+                          {subiendoPapel === papel && (
+                            <IconLoader2
+                              className="size-3.5 animate-spin"
+                              aria-hidden="true"
+                            />
+                          )}
+                          {`Subir ${ETIQUETA_PAPEL[papel].toLowerCase()}`}
+                        </Button>
+                      </div>
+                      {papel !== "acta" && papelArchivado(acuerdoCierre, papel) && (
+                        <p className="text-xs text-emerald-700 dark:text-emerald-300">
+                          {`${ETIQUETA_PAPEL[papel]} archivada en el archivo legal.`}
+                        </p>
+                      )}
+                    </div>
+                  )
+                )}
+                <p className="text-xs text-muted-foreground">
+                  El acta firmada es obligatoria para cerrar (S1); la asistencia y
+                  los poderes se archivan cuando existen. Cada papel se sube una
+                  sola vez: repetirlo lo dice el servidor con su 409.
+                </p>
+              </fieldset>
+
+              {errorPapel?.acuerdoId === acuerdoCierre.id && (
+                <p
+                  role="alert"
+                  className="flex items-center gap-2 text-sm text-destructive"
+                >
+                  <IconAlertTriangle className="size-4" aria-hidden="true" />
+                  {errorPapel.mensaje}
+                </p>
+              )}
+              {errorCierre && (
+                <p
+                  role="alert"
+                  className="flex items-center gap-2 text-sm text-destructive"
+                >
+                  <IconAlertTriangle className="size-4" aria-hidden="true" />
+                  {errorCierre}
+                </p>
+              )}
+
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={cancelarCierre}
+                  disabled={cerrando}
+                >
+                  Cancelar
+                </Button>
+                <Button type="submit" disabled={!puedeCerrar || cerrando}>
+                  {cerrando && (
+                    <IconLoader2 className="size-4 animate-spin" aria-hidden="true" />
+                  )}
+                  Cerrar acuerdo
+                </Button>
+              </DialogFooter>
+            </form>
+          )}
         </DialogContent>
       </Dialog>
     </div>

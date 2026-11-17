@@ -664,6 +664,12 @@ export const AcuerdoSchema = z
       .min(5, "La materia debe decir qué se acuerda.")
       .max(300, "La materia no puede superar los 300 caracteres."),
     quorumRequerido: QuorumAcuerdoSchema,
+    // Modalidad del acuerdo (S2/S4): `presencial` se cierra con el resultado
+    // proclamado en la sala y su acta firmada archivada; `electronica` se
+    // resuelve con los votos. Opcional y SIN default en zod: si el cuerpo no la
+    // trae, la columna aplica su default de base (`electronica`) — el camino
+    // electrónico queda idéntico incluso a nivel de fila.
+    modalidad: z.enum(["electronica", "presencial"]).optional(),
     // Acta que respalda la sesión (asamblea) o la reunión (comité), si consta.
     actaId: IdEntidadSchema.optional(),
   })
