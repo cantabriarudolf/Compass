@@ -34,6 +34,7 @@ import { prisma } from "@/lib/prisma"
 import { logger } from "@/lib/logger"
 import { puede } from "@/lib/authz"
 import {
+  estaAnulado,
   estadoDeCobro,
   saldoPendiente,
   type EstadoCobroFI,
@@ -125,7 +126,15 @@ export async function GET(_req?: Request): Promise<Response> {
       avisos.map((a) => [claveAviso(a.unidadId, a.periodo), a.id])
     )
 
-    const data: FilaEstadoCuenta[] = cobros.map((cobro) => {
+    const data: FilaEstadoCuenta[] = cobros
+      // F29: un cargo con la marca `anuladoEn` ya no es deuda, así que sale del
+      // estado de cuenta del residente: no puede figurar como vencido ni sumar
+      // al saldo —decir «debo» lo que la comunidad dejó de cobrar es mentirle
+      // al vecino—. La fila no queda como historial congelado: la historia de la
+      // cuota anulada se conserva en el libro (`/finanzas/pagos`) y en la vista
+      // del convenio, donde la cuota sigue listada con su estado `anulada`.
+      .filter((cobro) => !estaAnulado(cobro))
+      .map((cobro) => {
       // SAFETY: `moras`/`pagos` son columnas con el shape de los esquemas FI;
       // el cálculo corre con los mismos helpers que el resto de la app.
       const moras = cobro.moras as unknown as MoraCobroFI[]

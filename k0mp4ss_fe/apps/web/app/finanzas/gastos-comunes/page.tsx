@@ -40,6 +40,7 @@ import {
 } from "@tabler/icons-react"
 import type { AvisoCobro, CategoriaEgresoFI, CobroFI, EmisionGC, TipoFondoFI } from "@/lib/schemas"
 import {
+  estaAnulado,
   estadoDeCobro,
   hoyISO,
   montoMoraPropuesta,
@@ -390,8 +391,13 @@ export default function GastosComunesPage() {
     [unidadesAtrasadas, configuracion.limiteMesesAvisoCorte]
   )
 
+  // F29: un cargo anulado con su convenio ya no es deuda —no entra al detalle
+  // de vencidos por unidad ni puede ser el ancla de una cobranza—. El tablero
+  // de morosas ya lo discrimina vía `morosidadPorUnidad`; este helper alimenta
+  // la vista por unidad, que leía `estadoDeCobro` directo y contaba el cargo
+  // anulado como vencido.
   const cobrosVencidosPorUnidad = (unidadId: string) =>
-    cobros.filter(c => c.unidadId === unidadId && estadoDeCobro(c) === "vencido")
+    cobros.filter(c => c.unidadId === unidadId && !estaAnulado(c) && estadoDeCobro(c) === "vencido")
 
   // --- Cobranza FI multicanal (SERIE-FASE2 §V5) ------------------------------
   // El destinatario es el propietario vigente de la unidad: es quien recibe la

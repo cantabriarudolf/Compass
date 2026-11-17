@@ -216,12 +216,18 @@ export async function POST(req: Request): Promise<Response> {
       moras: true,
       pagos: true,
       fechaVencimiento: true,
+      // F29: la marca de la anulación del convenio, para que la morosidad
+      // derive del cargo la misma verdad que ya lee el resto de la app —sin
+      // la columna, el trámite seguiría contando como deuda lo que ya no es—.
+      anuladoEn: true,
     },
   })
   // SAFETY: `morosidadPorUnidad` sólo lee de cada cobro su unidad, su período, su
-  // monto base, sus moras, sus pagos y su vencimiento —todos seleccionados arriba—
-  // y el cálculo pasa por `estadoDeCobro`/`saldoPendiente`, los mismos helpers del
-  // resto de la app. Las columnas Json tienen la forma de los esquemas FI.
+  // monto base, sus moras, sus pagos, su vencimiento y su marca de anulación
+  // (`anuladoEn`, F29: el cargo de una cuota de convenio anulada ya no es
+  // deuda) —todos seleccionados arriba— y el cálculo pasa por
+  // `estadoDeCobro`/`saldoPendiente`, los mismos helpers del resto de la app.
+  // Las columnas Json tienen la forma de los esquemas FI.
   const morosidad = morosidadPorUnidad(
     unidad.id,
     cobrosDeLaUnidad as unknown as CobroFI[],

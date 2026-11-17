@@ -32,7 +32,7 @@ import { generarId } from "@/lib/id-utils"
 import { hoyISO } from "@/lib/date-utils"
 import { prisma } from "@/lib/prisma"
 import { registrarEventoAuditoria, type ClienteAuditoria } from "@/lib/auditoria"
-import { saldoPendiente } from "@/lib/finanzas-utils"
+import { estaAnulado, saldoPendiente } from "@/lib/finanzas-utils"
 import type { BloqueReporteRE, ReporteRE } from "@/lib/schemas"
 import {
   jsonError,
@@ -261,9 +261,23 @@ export async function calcularPayloadSnapshot(
     } else if (bloque === "morosidad") {
       const cobros = await prisma.cobroFI.findMany({
         where: { comunidadId },
-        select: { unidadId: true, montoBase: true, moras: true, pagos: true, fechaVencimiento: true },
+        select: {
+          unidadId: true,
+          montoBase: true,
+          moras: true,
+          pagos: true,
+          fechaVencimiento: true,
+          // F29: la marca de la anulación del convenio, para que el informe
+          // derive los vencidos de los mismos cobros que el resto de la app.
+          anuladoEn: true,
+        },
       })
-      const vencidos = cobros
+      // F29: el cargo de una cuota de convenio anulada ya no es deuda —no
+      // aparece en el «Cobros vencidos con deuda» ni suma a la deuda vencida
+      // total del informe—. Con la marca ausente (una fila que no la trae) el
+      // filtro es un no-op y el cobro cuenta igual que siempre.
+      const vigentesDeMorosidad = cobros.filter((c) => !estaAnulado(c))
+      const vencidos = vigentesDeMorosidad
         .map((c) => ({
           unidadId: c.unidadId,
           saldo: saldoPendiente({

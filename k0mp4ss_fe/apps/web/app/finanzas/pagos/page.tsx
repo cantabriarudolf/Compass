@@ -30,6 +30,7 @@ import {
 } from "@tabler/icons-react"
 import type { CobroFI, ConceptoCobroFI } from "@/lib/schemas"
 import {
+  estaAnulado,
   estadoDeCobro,
   exigibleTotal,
   hoyISO,
@@ -58,6 +59,23 @@ const ESTADO_COBRO_BADGE: Record<EstadoCobroFI, string> = {
   pendiente: "bg-sky-600 hover:bg-sky-700 text-white",
   parcial: "bg-amber-500 hover:bg-amber-600 text-white",
   vencido: "bg-destructive hover:bg-destructive text-white",
+}
+
+/** Con la anulación del convenio (F29) el libro agrega el estado de fila «anulado». */
+const ESTADO_COBRO_BADGE_DE_FILA: Record<EstadoCobroFI | "anulado", string> = {
+  ...ESTADO_COBRO_BADGE,
+  anulado: "bg-muted text-muted-foreground",
+}
+
+/**
+ * El estado que la fila MUESTRA: para un cargo anulado por la anulación de su
+ * convenio (F29) es «anulado» y no lo que deriva `estadoDeCobro` —el cargo ya
+ * no es deuda y presentarlo como vencido sería decirle al administrador que
+ * todavía debe—. La función pura queda intacta (12 llamadores): la decisión es
+ * de esta pantalla, donde vive la lectura del libro.
+ */
+function estadoDeFila(c: CobroFI): EstadoCobroFI | "anulado" {
+  return estaAnulado(c) ? "anulado" : estadoDeCobro(c)
 }
 
 interface FormPago {
@@ -101,11 +119,13 @@ export default function PagosPage() {
 
   const filtrados = cobros
     .filter(c => filtroConcepto === "todos" || c.concepto === filtroConcepto)
-    .filter(c => filtroEstado === "todos" || estadoDeCobro(c) === filtroEstado)
+    .filter(c => filtroEstado === "todos" || estadoDeFila(c) === filtroEstado)
     .sort((a, b) => b.fechaCargo.localeCompare(a.fechaCargo))
 
   const recaudado = cobros.reduce((acc, c) => acc + c.pagos.reduce((x, p) => x + p.monto, 0), 0)
-  const porCobrar = cobros.reduce((acc, c) => acc + saldoPendiente(c), 0)
+  // F29: el cargo anulado ya no es deuda —su saldo deja de sumar al «Por
+  // cobrar»—. El cargo sin `anuladoEn` sigue sumando exactamente igual.
+  const porCobrar = cobros.reduce((acc, c) => acc + (estaAnulado(c) ? 0 : saldoPendiente(c)), 0)
   // T26 (S10): las tres tarjetas suman sobre la lista CARGADA, que con un libro
   // de más de 100 filas es sólo la primera página. Con recorte lo declaran: la
   // cantidad muestra «N de M» y los dos montos dicen que son una suma parcial
@@ -265,7 +285,7 @@ export default function PagosPage() {
                 </thead>
                 <tbody>
                   {filtrados.map(c => {
-                    const estado = estadoDeCobro(c)
+                    const estado = estadoDeFila(c)
                     return (
                       <tr key={c.id} className="border-b last:border-0">
                         <td className="px-4 py-2">{refUnidad(c.unidadId)}</td>
@@ -274,11 +294,11 @@ export default function PagosPage() {
                         <td className="px-4 py-2 text-xs">{fondos.find(f => f.id === c.fondoId)?.nombre ?? c.fondoId}</td>
                         <td className="px-4 py-2 text-xs">{c.fechaVencimiento ?? "—"}</td>
                         <td className="px-4 py-2 text-right tabular-nums">${saldoPendiente(c).toLocaleString("es-CL")}</td>
-                        <td className="px-4 py-2 text-center"><Badge className={`${ESTADO_COBRO_BADGE[estado]} text-[10px]`}>{estado}</Badge></td>
+                        <td className="px-4 py-2 text-center"><Badge className={`${ESTADO_COBRO_BADGE_DE_FILA[estado]} text-[10px]`}>{estado}</Badge></td>
                         <td className="px-4 py-2 text-right">
                           <div className="flex justify-end gap-1">
                             <Button size="sm" variant="ghost" onClick={() => setDetalle(c)}><IconFileText className="size-3.5" /></Button>
-                            {estado !== "pagado" && (
+                            {(estado !== "pagado" && estado !== "anulado") && (
                               <Button size="sm" variant="outline" onClick={() => abrirPago(c)}>Registrar pago</Button>
                             )}
                           </div>

@@ -124,7 +124,7 @@ import type {
   ParametrosCobroReglamento,
 } from "@/lib/schemas"
 import { lineasDeCobro } from "@/lib/cobro-lineas"
-import { saldoPendiente } from "@/lib/finanzas-utils"
+import { estaAnulado, saldoPendiente } from "@/lib/finanzas-utils"
 import { cargarResumenMensual, type ResumenMensual } from "@/lib/resumen-mensual"
 import { prisma } from "@/lib/prisma"
 
@@ -152,6 +152,12 @@ export interface CobroDelAviso {
   fechaVencimiento?: string | null
   moras: MoraCobroFI[]
   pagos: PagoCobroFI[]
+  /**
+   * La marca de la anulación del convenio (F29): presente cuando la fila de la
+   * base la trae; su ausencia —el emisor que no la reenvía— deja el cargo
+   * comportándose exactamente como siempre.
+   */
+  anuladoEn?: Date | string | null
 }
 
 /** Lo mínimo de la unidad: identidad y proporción declarada. */
@@ -400,9 +406,20 @@ export function contenidoAviso(entrada: EntradaContenidoAviso): ContenidoAviso {
 
   // Detalle congelado, línea por línea. `lineasDeCobro` es el único lector que
   // sabe leer las dos formas del cargo (con detalle y legacy).
+  //
+  // Dos caminos entran al documento y los dos se limpian de cargos anulados
+  // (F29: un cargo con `anuladoEn` ya no es deuda):
+  //   1. los cargos DEL PERÍODO del papel —fijan `cargos`, `detalle` y, con
+  //      ellos, el `exigible` del período—;
+  //   2. los cargos de PERÍODOS ANTERIORES —fijan la deuda anterior que el art.
+  //      31 obliga a declarar—.
+  // Los avisos YA EMITIDOS no se tocan: son documentos congelados y su
+  // `contenido` quedó persistido —este filtro sólo alcanza al papel que se
+  // emite desde ahora—.
   const fondosPorId = new Map(entrada.fondos.map((fondo) => [fondo.id, fondo]))
+  const cobrosDelPeriodo = entrada.cobros.filter((cobro) => !estaAnulado(cobro))
   const detalle: LineaDelAviso[] = []
-  for (const cobro of entrada.cobros) {
+  for (const cobro of cobrosDelPeriodo) {
     const origen = cobro.lineas && cobro.lineas.length > 0 ? "linea" : "legacy"
     for (const linea of lineasDeCobro(cobro)) {
       const fondoId = linea.fondoId ?? cobro.fondoId
@@ -445,14 +462,14 @@ export function contenidoAviso(entrada: EntradaContenidoAviso): ContenidoAviso {
   // Intereses y pagos a la FECHA DE EMISIÓN: lo posterior no es parte de este
   // documento (un aviso no adivina lo que todavía no pasó).
   const intereses = suma(
-    entrada.cobros.flatMap((cobro) =>
+    cobrosDelPeriodo.flatMap((cobro) =>
       cobro.moras
         .filter((mora) => hastaLaFecha(mora.fecha, fechaEmision))
         .map((mora) => mora.monto)
     )
   )
   const pagado = suma(
-    entrada.cobros.flatMap((cobro) =>
+    cobrosDelPeriodo.flatMap((cobro) =>
       cobro.pagos
         .filter((pago) => hastaLaFecha(pago.fecha, fechaEmision))
         .map((pago) => pago.monto)
@@ -462,8 +479,11 @@ export function contenidoAviso(entrada: EntradaContenidoAviso): ContenidoAviso {
     gastoComun + suma(lineasReserva.map((l) => l.monto)) + multas + suma(otros.map((o) => o.monto)) + intereses
 
   // Deuda de otros períodos: lo que el vecino arrastra también es este papel.
+  // Acá está el segundo camino (períodos anteriores), ya depurado arriba de
+  // los cargos anulados —la deuda que la anulación terminó no vuelve al papel
+  // por la puerta de atrás—.
   const deudaAnterior = deudaAnteriorDe(
-    entrada.cobrosAnteriores,
+    entrada.cobrosAnteriores.filter((cobro) => !estaAnulado(cobro)),
     periodo,
     fechaEmision
   )
@@ -481,7 +501,7 @@ export function contenidoAviso(entrada: EntradaContenidoAviso): ContenidoAviso {
       porcentajeReserva: parametros?.porcentajeReserva ?? null,
       reservaIncluidaEnPresupuesto: parametros?.reservaIncluidaEnPresupuesto ?? null,
     },
-    cargos: entrada.cobros.map((cobro) => ({
+    cargos: cobrosDelPeriodo.map((cobro) => ({
       id: cobro.id,
       concepto: cobro.concepto,
       descripcion: cobro.descripcion,
