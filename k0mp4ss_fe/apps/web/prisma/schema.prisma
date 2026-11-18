@@ -22,6 +22,7 @@ model Comunidad {
   microSectores               MicroSector[]
   unidades                    Unidad[]
   personas                    Persona[]
+  invitacionesAcceso          InvitacionAcceso[]
   vinculos                    VinculoUnidad[]
   eventos                     EventoAuditoria[]
   configuraciones             ConfiguracionGlobal[]
@@ -140,6 +141,7 @@ model Usuario {
   solicitudEliminacion   Boolean     @default(false) // SERIE-PRODUCCION-FASE2 P6: derecho a olvido (Ley 21.719)
   solicitudEliminacionAt DateTime? // SERIE-PRODUCCION-FASE2 P6: fecha de la solicitud
   membresias             Membresia[]
+  invitacionesAcceso     InvitacionAcceso[]
   createdAt              DateTime    @default(now())
   updatedAt              DateTime    @updatedAt
 
@@ -159,6 +161,35 @@ model Membresia {
   @@index([comunidadId])
   @@index([usuarioId])
   @@map("membresias")
+}
+
+// Invitación de acceso (F42 T1 · S4): el administrador nunca conoce la contraseña.
+//
+// Una fila por enlace emitido. `tokenHash` es el SHA-256 del token en claro (32 bytes
+// aleatorios en base64url), así que un backup de esta tabla no abre ninguna cuenta. Los
+// dos hechos que definen el estado son `expiraEn` y `usadoEn`: pendiente (sin usar y
+// vigente), usada (con `usadoEn`) y vencida (`expiraEn` ya pasó). No hay columna de
+// estado: un booleano podría contradecir esas dos fechas.
+//
+// `usuarioId` es la cuenta que la invitación habilita —el alta ocurre en el mismo acto
+// (S3)— y `creadoPor` es el actor de la sesión que la emitió (S5). El rol no se copia
+// acá: vive en `Membresia`, y duplicarlo sería una segunda verdad que puede divergir.
+model InvitacionAcceso {
+  id          String    @id @default(cuid())
+  usuarioId   String
+  usuario     Usuario   @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  comunidadId String
+  comunidad   Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  // SHA-256 hex del token; el token en claro nunca se persiste.
+  tokenHash   String    @unique
+  expiraEn    DateTime
+  usadoEn     DateTime?
+  creadoPor   String
+  createdAt   DateTime  @default(now())
+
+  @@index([usuarioId])
+  @@index([comunidadId])
+  @@map("invitaciones_acceso")
 }
 
 // SG D-v: rate limit persistente (10 fallos/15 min por clave IP) — reemplaza el Map en memoria
