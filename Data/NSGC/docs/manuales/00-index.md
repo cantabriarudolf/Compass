@@ -36,5 +36,7 @@ Bienvenido a la documentación operativa del sistema de administración de condo
 - [19 - PE - Liquidaciones y Remuneraciones](<19 - PE - Liquidaciones y Remuneraciones.md>): Motor de remuneraciones estándar Chile (hora extra §1.1, gratificación tope, AFP/salud/SIS), adelantos ADE, egreso FI Sueldos y PDF firmado.
 - [25 - RE - Reportería y Dashboards](<25 - RE - Reportería y Dashboards.md>): Centro de mando (censo, pulso operativo, embudo GE, salud de caja con termómetro) y distribución segmentada EF×perfil×tenencia.
 
+- [42 - Puesta en Marcha por Rol](<42 - Puesta en Marcha por Rol.md>): Guía de prueba como cliente — el orden real de carga por rol (administrador → comité → conserjería → residente → mantención), con qué se verifica en cada paso y qué bloquea al siguiente.
+
 ---
 *Última actualización: 2026-11-03 - Nueva puerta única de accesos (manual 02 y 18), paneles del administrador (mantenciones, elementos, alerta de reservas), autorización de reservas por elemento (manual 20), búsqueda y filtros en el servidor para EF/TU (manuales 01/02) y MP (manual 05), portada por perfil (manual 25) y catálogo de datos semilla con la sección 15 del seed de demo consistente (manual 28). Avance `avance - 2026-11-03 00-20.md`. Anterior: 2026-10-26 - F19 carga inicial por CSV (manual 41).*
