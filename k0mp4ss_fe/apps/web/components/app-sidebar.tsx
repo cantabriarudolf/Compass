@@ -249,6 +249,12 @@ const data = {
           roles: ["administrador", "comite"],
         },
         { title: "Permisos", url: "/admin/permisos", roles: ["administrador"] },
+        // Cuentas y acceso (F42): acá nace el acceso al sistema —alta con persona
+        // del padrón, rol de acceso y estado de la invitación—, así que la entrada
+        // va en Sistema, junto a Permisos. Refleja la matriz (`admin:usuarios`
+        // ver, sólo el wildcard del administrador); el page.tsx y las tres rutas
+        // vuelven a exigir la clave en el servidor.
+        { title: "Cuentas y acceso", url: "/admin/usuarios", roles: ["administrador"] },
         { title: "Logs de Auditoría", url: "/admin/logs", roles: ["administrador"] },
         { title: "Carga inicial", url: "/admin/carga-inicial", roles: ["administrador"] },
       ],
