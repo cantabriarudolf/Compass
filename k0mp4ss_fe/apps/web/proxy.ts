@@ -10,8 +10,14 @@ const { auth } = NextAuth({ ...authConfig })
 // `/api/health`: monitoreo sin sesión (uptime checks externos).
 // `/api/csp-report`: sink anónimo del navegador (report-uri) usado como
 // telemetría del gate de enforcement CSP (0 violaciones por 7 días).
+// `/invitacion`: la PÁGINA pública donde el invitado define su contraseña (F42).
+// Es una página, no una API: quien abre el enlace todavía no tiene sesión, y el
+// único endpoint que consume es `POST /api/auth/invitacion`, ya público por el
+// prefijo `/api/auth`. Sin esta entrada, el enlace del alta y del reenvío caía en
+// el redirect a /ingresar y la invitación no se podía usar.
 const RUTAS_PUBLICAS = [
   "/ingresar",
+  "/invitacion",
   "/api/auth",
   "/api/health",
   "/api/csp-report",
