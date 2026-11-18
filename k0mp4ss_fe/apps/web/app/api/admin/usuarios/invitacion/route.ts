@@ -8,6 +8,7 @@ import { registrarEventoAuditoria } from "@/lib/auditoria"
 import {
   CATEGORIA_AUDITORIA_CUENTAS,
   crearInvitacionDeAcceso,
+  enlaceInvitacionDeAcceso,
 } from "@/lib/invitacion-acceso"
 
 export const dynamic = "force-dynamic"
@@ -36,8 +37,11 @@ const MENSAJE_CUENTA_INACTIVA =
  * sesión (`puede(rol, "crear", "admin:usuarios")`)—, porque reenviar es volver a
  * crear la puerta de entrada de esa cuenta.
  *
- * Qué NO devuelve: el token. Igual que el alta, la respuesta sólo trae la forma
- * pública (`InvitacionAccesoPublica`); el secreto lo transporta F43.
+ * Qué devuelve: el enlace completo que la administración entrega, UNA sola vez
+ * (L4). Es la excepción angosta y declarada a S4: el correo de bienvenida es F43
+ * y todavía no existe, así que sin este enlace el reenvío no le serviría a nadie.
+ * No se guarda en claro, no se puede consultar después y el `GET` del listado
+ * sigue devolviendo sólo la forma pública.
  *
  * Cuándo NO se reenvía: si la cuenta ya definió su contraseña (`passwordHash`) el
  * enlace no tiene qué habilitar, y si está inactiva el login la rechaza aunque
@@ -137,6 +141,7 @@ export async function POST(request: NextRequest) {
 
   let resultado: {
     invitacion: Awaited<ReturnType<typeof crearInvitacionDeAcceso>>["invitacion"]
+    token: string
     invalidadas: number
   }
 
@@ -164,7 +169,7 @@ export async function POST(request: NextRequest) {
         data: { expiraEn: ahora },
       })
 
-      const { invitacion } = await crearInvitacionDeAcceso({
+      const { invitacion, token } = await crearInvitacionDeAcceso({
         usuarioId,
         comunidadId: cid,
         creadoPor: actor.id,
@@ -187,7 +192,7 @@ export async function POST(request: NextRequest) {
         tx
       )
 
-      return { invitacion, invalidadas: invalidadas.count }
+      return { invitacion, token, invalidadas: invalidadas.count }
     })
   } catch (error) {
     if (error instanceof CuentaYaDefinioContrasena) {
@@ -211,12 +216,18 @@ export async function POST(request: NextRequest) {
     throw error
   }
 
-  // Sólo estado: ni token, ni hash, ni `passwordHash` en la respuesta.
+  // L4: el enlace nuevo se revela acá, una sola vez, al administrador que
+  // reenvía. El anterior quedó vencido en la misma transacción, así que este es
+  // el único enlace vivo de la cuenta y no hay forma de volver a consultarlo.
   return NextResponse.json(
     {
       ok: true,
       invitacion: resultado.invitacion,
       invalidadas: resultado.invalidadas,
+      enlace: enlaceInvitacionDeAcceso(
+        resultado.token,
+        new URL(request.url).origin
+      ),
     },
     { status: 201 }
   )

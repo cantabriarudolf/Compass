@@ -12,7 +12,11 @@
  *
  * Escritura: el alta (persona del padrón + rol) y el reenvío de la invitación.
  * Las dos DEVUELVEN el texto de error del servidor tal cual (`error`), sin
- * traducirlo: un 409 o un 403 se muestran como los redactó la ruta.
+ * traducirlo: un 409 o un 403 se muestran como los redactó la ruta. Y las dos,
+ * cuando salen bien, traen el `enlace` completo que se revela UNA sola vez (L4):
+ * el servidor no lo persiste en claro ni lo devuelve en ninguna lectura, así que
+ * este resultado es la única copia que existe. Por eso no se cachea ni se
+ * revalida: vive lo que la pantalla decida mostrarlo.
  *
  * Ninguna mutación revalida por su cuenta: la pantalla relee explícitamente
  * después de cada acto, porque el veredicto —y el estado nuevo— es del servidor.
@@ -55,8 +59,14 @@ export interface CuentaDeComunidad {
   invitacion: InvitacionPublica | null
 }
 
-/** Resultado de una mutación: éxito sin cuerpo, o el error del servidor literal. */
-export type ResultadoAccion = { ok: true } | { ok: false; error: string }
+/**
+ * Resultado de una mutación: el enlace revelado una sola vez (L4), o el error del
+ * servidor literal. `enlace` es `null` sólo si la respuesta no lo trajo, que es
+ * un caso que la ruta no produce: se contempla para no inventar un enlace.
+ */
+export type ResultadoAccion =
+  | { ok: true; enlace: string | null }
+  | { ok: false; error: string }
 
 interface RespuestaComunidades {
   comunidades?: ComunidadPropia[]
@@ -96,7 +106,11 @@ async function fetcher<T>(url: string): Promise<T> {
   return (await respuesta.json()) as T
 }
 
-/** POST JSON: éxito sin cuerpo, o el error del servidor literal. */
+/**
+ * POST JSON: el enlace revelado una sola vez (L4), o el error del servidor literal.
+ * El cuerpo se lee después de comprobar el estado: un rechazo no trae enlace y se
+ * queda con su texto de error, tal cual lo redactó la ruta.
+ */
 async function enviar(url: string, cuerpo: unknown): Promise<ResultadoAccion> {
   let respuesta: Response
   try {
@@ -115,7 +129,14 @@ async function enviar(url: string, cuerpo: unknown): Promise<ResultadoAccion> {
   if (!respuesta.ok) {
     return { ok: false, error: await mensajeDeError(respuesta) }
   }
-  return { ok: true }
+  const respuestaLeida = (await respuesta.json().catch(() => null)) as {
+    enlace?: unknown
+  } | null
+  return {
+    ok: true,
+    enlace:
+      typeof respuestaLeida?.enlace === "string" ? respuestaLeida.enlace : null,
+  }
 }
 
 export interface ComunidadesPropiasHook {
@@ -172,8 +193,9 @@ export function useCuentasDeComunidad(
 
 /**
  * Alta de una cuenta: persona del padrón + rol de acceso + invitación, en un solo
- * acto en el servidor (S1/S3). No devuelve el token: el administrador invita, no
- * conoce el enlace ni la contraseña (S4).
+ * acto en el servidor (S1/S3). La respuesta revela el enlace de un solo uso (L4):
+ * la administración no conoce la contraseña, pero sí tiene que poder entregar el
+ * enlace mientras el correo (F43) no exista.
  */
 export async function crearCuentaDeAcceso(datos: {
   comunidadId: string
@@ -188,7 +210,7 @@ export async function crearCuentaDeAcceso(datos: {
 
 /**
  * Reenvío: emite una invitación nueva para una cuenta existente. El servidor
- * vence la anterior en el mismo acto; la respuesta sólo trae la forma pública.
+ * vence la anterior en el mismo acto y revela el enlace nuevo una sola vez (L4).
  */
 export async function reenviarInvitacionDeAcceso(datos: {
   comunidadId: string

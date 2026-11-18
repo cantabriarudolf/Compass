@@ -3,18 +3,16 @@
  *
  * F42 · T1 — invitación de acceso (S4) y alta de cuentas (S1/S3).
  *
- * COSTURA DEL TOKEN EN EL CICLO DE VIDA. La respuesta HTTP nunca puede traer el
- * token (S4: el administrador no conoce la contraseña ni el enlace; quien lo
- * recibe es la persona invitada), así que los casos de un-solo-uso, vencimiento
- * y token inventado piden el token a `crearInvitacionDeAcceso()`, que es la
- * MISMA función que ejecuta el POST de alta para emitirlo. No debilita el pin
- * por tres razones: (a) el alta se prueba por su handler, no por el módulo —
- * 201, cuenta + membresía + invitación pendiente en la base, y el cuerpo de la
- * respuesta sin token ni hash; (b) el consumo se prueba por su ruta pública,
- * que es la única puerta que escribe `passwordHash`; (c) lo único que la costura
- * saltea es el TRANSPORTE del enlace, que entre T1 y F43 no existe (no hay
- * correo de bienvenida todavía) y que el test no puede inventar sin volver a
- * filtrar el token por la API, que es exactamente lo prohibido.
+ * EL ENLACE SE REVELA UNA VEZ (L4). S4 prohíbe que el administrador conozca la
+ * contraseña, pero el correo es F43 y sin enlace el alta dejaba el flujo muerto:
+ * la respuesta del alta revela el enlace completo una sola vez, al administrador
+ * autenticado que creó la cuenta, y ninguna lectura posterior lo devuelve. Este
+ * archivo lo fija por los dos lados: el `enlace` del 201 canjea de verdad y su
+ * token coincide con el hash persistido, mientras el GET del listado no trae ni
+ * ese token ni la palabra que lo nombra. El caso de un-solo-uso se maneja con el
+ * enlace del alta, que es el que la administración entrega; `emitirToken` queda
+ * sólo para los casos que necesitan una fila de invitación que puedan envejecer
+ * (vencida) o un token ajeno (inventado).
  */
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest"
 import { NextRequest } from "next/server"
@@ -247,6 +245,11 @@ describe("F42 T1 — alta con invitación y definición de contraseña", () => {
     )
   }
 
+  /** Token en claro del enlace que revela una escritura (`/invitacion?token=…`). */
+  function tokenDe(enlace: string): string {
+    return new URL(enlace).searchParams.get("token") ?? ""
+  }
+
   async function emitirToken(usuarioId: string): Promise<{ token: string; invitacionId: string }> {
     const mod = await import("@/lib/invitacion-acceso")
     if (typeof mod.crearInvitacionDeAcceso !== "function") {
@@ -261,7 +264,7 @@ describe("F42 T1 — alta con invitación y definición de contraseña", () => {
   }
 
   describe("POST /api/admin/usuarios — el alta emite la invitación (S1/S3/S4)", () => {
-    it("201: cuenta + membresía + invitación pendiente, y la respuesta no trae token ni hash", async () => {
+    it("201: cuenta + membresía + invitación pendiente, y revela el enlace una sola vez sin hash", async () => {
       await conSesion(emailAdmin)
       const res = await alta({ personaId: personaAId, rol: "Residente" })
       const texto = await res.text()
@@ -272,11 +275,21 @@ describe("F42 T1 — alta con invitación y definición de contraseña", () => {
         usuario: { id: string; email: string; personaId: string | null; activo: boolean }
         membresia: { comunidadId: string; rol: string }
         invitacion: Record<string, unknown>
+        enlace: string
       }
 
-      // Ignorante del secreto: ni el token en claro ni su hash salen por la API.
-      expect(texto.toLowerCase()).not.toContain("token")
+      // L4: el enlace completo se revela acá y sólo acá, al administrador que
+      // creó la cuenta. Consume el contrato de la página pública
+      // (`/invitacion?token=…`), el mismo del script del primer arranque.
+      const enlace = new URL(cuerpo.enlace)
+      expect(enlace.origin).toBe("http://localhost")
+      expect(enlace.pathname).toBe("/invitacion")
+      const token = tokenDe(cuerpo.enlace)
+      expect(token).toMatch(/^[A-Za-z0-9_-]{43}$/)
+
+      // Nada más del secreto sale por la API: ni el hash ni `passwordHash`.
       expect(texto).not.toMatch(/[a-f0-9]{64}/)
+      expect(texto.toLowerCase()).not.toContain("passwordhash")
       expect(Object.keys(cuerpo.invitacion).sort()).toEqual([
         "creadoEn",
         "estado",
@@ -313,6 +326,10 @@ describe("F42 T1 — alta con invitación y definición de contraseña", () => {
       expect(invitacion!.comunidadId).toBe(comunidadA)
       expect(invitacion!.tokenHash).toMatch(/^[a-f0-9]{64}$/)
       expect(invitacion!.expiraEn.getTime()).toBeGreaterThan(Date.now())
+      // El token revelado es el de ESTA invitación: el enlace entregado abre la fila.
+      expect(invitacion!.tokenHash).toBe(
+        (await import("@/lib/invitacion-acceso")).hashearTokenInvitacion(token)
+      )
 
       // S5: el alta deja su rastro con el actor de la sesión.
       const evento = await prisma.eventoAuditoria.findFirst({
@@ -327,7 +344,10 @@ describe("F42 T1 — alta con invitación y definición de contraseña", () => {
       await conSesion(emailComite)
       const res = await alta({ personaId: personaCId, rol: "residente" })
       expect(res.status).toBe(403)
-      expect(await res.json()).toEqual({ error: "Permiso denegado. Requiere rol administrador." })
+      const cuerpo = (await res.json()) as Record<string, unknown>
+      expect(cuerpo).toEqual({ error: "Permiso denegado. Requiere rol administrador." })
+      // Un rechazo no revela ningún enlace: no hubo invitación que entregar.
+      expect(cuerpo).not.toHaveProperty("enlace")
 
       expect(await prisma.usuario.findUnique({ where: { email: emailPersonaC } })).toBeNull()
       const invitaciones = await prisma.invitacionAcceso.count({
@@ -427,14 +447,19 @@ describe("F42 T1 — alta con invitación y definición de contraseña", () => {
       expect(await malFormado.json()).toEqual({ error: "Cuerpo inválido" })
     })
 
-    it("el listado de cuentas muestra el estado de la invitación y tampoco devuelve token ni hash", async () => {
+    it("el listado de cuentas muestra el estado de la invitación y no devuelve el enlace revelado en el alta", async () => {
       await conSesion(emailAdmin)
       const creada = await alta({ personaId: personaIId, rol: "conserjeria" })
       expect(creada.status).toBe(201)
+      const altaCuerpo = (await creada.json()) as { enlace: string }
+      const token = tokenDe(altaCuerpo.enlace)
+      expect(token).not.toBe("")
 
       const res = await listar()
       const texto = await res.text()
       expect(res.status).toBe(200)
+      // El pin de L4: la revelación es de la escritura, nunca de la lectura.
+      expect(texto).not.toContain(token)
       expect(texto.toLowerCase()).not.toContain("token")
       expect(texto).not.toMatch(/[a-f0-9]{64}/)
 
@@ -464,7 +489,10 @@ describe("F42 T1 — alta con invitación y definición de contraseña", () => {
 
       const mismaPersona = await alta({ personaId: personaCId, rol: "comite" })
       expect(mismaPersona.status).toBe(409)
-      expect(await mismaPersona.json()).toEqual({ error: "La persona ya tiene una cuenta." })
+      const cuerpoMismaPersona = (await mismaPersona.json()) as Record<string, unknown>
+      expect(cuerpoMismaPersona).toEqual({ error: "La persona ya tiene una cuenta." })
+      // Un conflicto no revela ningún enlace: el alta no ocurrió.
+      expect(cuerpoMismaPersona).not.toHaveProperty("enlace")
 
       const mismoCorreo = await alta({
         personaId: personaDId,
@@ -472,7 +500,9 @@ describe("F42 T1 — alta con invitación y definición de contraseña", () => {
         email: emailPersonaC,
       })
       expect(mismoCorreo.status).toBe(409)
-      expect(await mismoCorreo.json()).toEqual({ error: "Ya existe una cuenta con ese correo." })
+      const cuerpoMismoCorreo = (await mismoCorreo.json()) as Record<string, unknown>
+      expect(cuerpoMismoCorreo).toEqual({ error: "Ya existe una cuenta con ese correo." })
+      expect(cuerpoMismoCorreo).not.toHaveProperty("enlace")
 
       const cuentas = await prisma.usuario.count({ where: { personaId: { in: [personaCId, personaDId] } } })
       expect(cuentas).toBe(1)
@@ -487,6 +517,7 @@ describe("F42 T1 — alta con invitación y definición de contraseña", () => {
       await conSesion(emailAdmin)
       const creada = await alta({ personaId: personaEId, rol: "residente" })
       expect(creada.status).toBe(201)
+      const altaCuerpo = (await creada.json()) as { enlace: string }
       const usuario = await prisma.usuario.findUnique({ where: { email: emailPersonaE } })
       expect(usuario).not.toBeNull()
 
@@ -497,7 +528,10 @@ describe("F42 T1 — alta con invitación y definición de contraseña", () => {
         verificarCredenciales(emailPersonaE, PASSWORD, [clave])
       ).rejects.toBeInstanceOf(CredencialesInvalidas)
 
-      const { token } = await emitirToken(usuario!.id)
+      // El enlace que la administración recibió en el alta es el que abre la
+      // página pública: no hay un segundo camino para obtenerlo.
+      const token = tokenDe(altaCuerpo.enlace)
+      expect(token).not.toBe("")
       const primera = await canjear({ token, password: PASSWORD })
       expect(primera.status).toBe(200)
       expect(await primera.json()).toEqual({ ok: true })

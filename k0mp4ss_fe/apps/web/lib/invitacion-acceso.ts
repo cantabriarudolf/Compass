@@ -16,9 +16,14 @@
  *   mismo enlace: uno solo cuenta 1, el otro cuenta 0 y no escribe nada.
  * - **Vencido no sirve en absoluto.** La condición de vencimiento está en el
  *   `where` del consumo, no en un `if` que otra rama pueda saltear.
- * - **Nada de esto devuelve el secreto.** `crearInvitacionDeAcceso` entrega el
- *   token a quien lo va a TRANSPORTAR (el alta lo descarta; T2/F43 lo envían) y
- *   las respuestas HTTP solo ven la forma pública (`InvitacionAccesoPublica`).
+ * - **El secreto se revela una sola vez, al administrador (L4).** Emitir la
+ *   invitación entrega el token a quien lo va a TRANSPORTAR, y la ruta del alta o
+ *   del reenvío lo convierte con `enlaceInvitacionDeAcceso(...)`: esa respuesta es
+ *   la ÚNICA que lo incluye, para el administrador autenticado de la comunidad,
+ *   porque sin enlace no hay forma de invitar a nadie mientras el correo (F43) no
+ *   exista. El estado que devuelve el listado (`InvitacionAccesoPublica`) no tiene
+ *   token ni hash, y ninguna lectura posterior puede reconstruirlo: en la base
+ *   sólo vive su SHA-256.
  *
  * Sin invitación no hay alta: la cuenta nace sin `passwordHash`, así que el
  * login la rechaza (`lib/auth.ts:111-114`) hasta que este módulo la habilita.
@@ -106,6 +111,26 @@ export function hashearTokenInvitacion(token: string): string {
 }
 
 /**
+ * Ruta de la página pública donde el invitado define su contraseña. Es la que
+ * `app/invitacion/page.tsx` lee (`?token=…`) y la que arma el script del primer
+ * arranque (`scripts/crear-admin.mjs`).
+ */
+export const RUTA_PAGINA_INVITACION = "/invitacion"
+
+/**
+ * Enlace completo que la administración entrega (L4). Se arma en la MISMA
+ * respuesta que emite la invitación, porque es el único momento en que el token
+ * en claro existe fuera de la base: después sólo queda su hash y no hay forma de
+ * recuperarlo.
+ *
+ * `origen` es el origen público de la petición (`new URL(request.url).origin`),
+ * así el enlace sirve tal cual en el navegador de quien lo recibe.
+ */
+export function enlaceInvitacionDeAcceso(token: string, origen: string): string {
+  return `${origen.replace(/\/+$/, "")}${RUTA_PAGINA_INVITACION}?token=${encodeURIComponent(token)}`
+}
+
+/**
  * Comparación en tiempo constante de dos hashes hex. Devuelve false —sin lanzar—
  * si alguno no tiene la forma esperada, para que la ruta no convierta un token
  * basura en un 500.
@@ -118,8 +143,9 @@ export function tokensCoinciden(a: string, b: string): boolean {
 
 /**
  * Emite una invitación para una cuenta ya creada y devuelve el token en claro a
- * quien la va a transportar. La respuesta HTTP del alta NO lo incluye (S4): el
- * único destinatario es la persona invitada.
+ * quien la va a transportar. La respuesta de esa escritura lo convierte en el
+ * enlace completo que la administración entrega UNA vez (L4); ninguna lectura
+ * posterior lo devuelve.
  *
  * `client` acepta el `tx` del alta para que cuenta, membresía e invitación caigan
  * o suban juntas (S3).

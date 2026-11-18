@@ -1,50 +1,37 @@
 /**
  * @vitest-environment node
  *
- * F42 · T2 — reenvío de la invitación de acceso (`POST /api/admin/usuarios/invitacion`).
+ * F42 · T2 — reenvío de la invitación de acceso y revelación única del enlace (L4).
  *
  * Qué fija este archivo:
  *
- *   1. El reenvío emite una invitación NUEVA y deja la anterior inservible en el
- *      mismo acto: la vieja queda vencida en el instante del reenvío y su token
- *      deja de definir contraseña, mientras la nueva sí la define. El criterio es
- *      del owner: dos enlaces vivos para la misma cuenta son dos puertas.
+ *   1. El reenvío emite una invitación NUEVA, revela su enlace completo una sola
+ *      vez y deja la anterior inservible en el mismo acto: el token que devolvió el
+ *      alta queda vencido y deja de definir contraseña, mientras el que devuelve
+ *      el reenvío sí la define. El criterio es del owner: dos enlaces vivos para
+ *      la misma cuenta son dos puertas.
  *   2. Sólo un administrador de la comunidad reenvía. El comité recibe 403 con el
- *      mismo texto que el resto de la ruta, y no se emite ni se vence nada.
+ *      mismo texto que el resto de la ruta, sin enlace y sin emitir ni vencer nada.
  *   3. Sobre una cuenta que ya definió su contraseña no se reenvía: 409 con texto
- *      literal, sin invitación nueva. El enlace existe para DEFINIR la contraseña;
- *      si ya la tiene, no hay nada que reenviar.
+ *      literal, sin enlace y sin invitación nueva. El enlace existe para DEFINIR
+ *      la contraseña; si ya la tiene, no hay nada que reenviar.
  *   4. La cuenta de otra comunidad responde el mismo 404 que el PATCH: no se
  *      cuenta qué existe fuera del tenant de la sesión.
- *   5. La respuesta no trae token, ni hash, ni contraseña (S4).
+ *   5. Un rechazo (403, 404 o 409) no devuelve ningún enlace: no hay invitación
+ *      que entregar y la respuesta es sólo su texto de error.
  *
- * COSTURA DEL TOKEN. La respuesta HTTP nunca puede traer el token —el
- * administrador invita, no conoce la contraseña—, así que este test envuelve
- * `crearInvitacionDeAcceso` para quedarse con el token en claro que la ruta
- * emite. El envoltorio llama a la función REAL: no simula la emisión ni toca la
- * base por atrás; sólo observa el secreto que va a transportar F43. Sin esa
- * costura no habría forma de probar que el enlace nuevo sirve y el viejo no.
+ * EL ENLACE SE REVELA UNA VEZ (L4). La excepción angosta y declarada a S4 es la
+ * que evita que el flujo muera en la pantalla: quien crea o reenvía recibe el
+ * enlace completo en ESA respuesta, al administrador autenticado de la comunidad,
+ * y nunca más — no se guarda en claro ni lo devuelve una lectura posterior. Por
+ * eso acá no hay costura: el token se lee del `enlace` de la respuesta, que es
+ * exactamente lo que la administración entrega, y el canje lo consume por la
+ * misma ruta pública de siempre. Que el listado no lo traiga lo fija, del lado
+ * del GET, `test/api/admin-usuarios-invitacion.test.ts`.
  */
-import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from "vitest"
+import { describe, it, expect, beforeAll, afterAll, vi } from "vitest"
 import { NextRequest } from "next/server"
 import { prisma } from "@/lib/prisma"
-
-/** Token en claro de la última invitación emitida por la ruta en este proceso. */
-const captura = vi.hoisted(() => ({ token: "" }))
-
-vi.mock("@/lib/invitacion-acceso", async (importOriginal) => {
-  const real = await importOriginal<typeof import("@/lib/invitacion-acceso")>()
-  return {
-    ...real,
-    crearInvitacionDeAcceso: async (
-      datos: Parameters<typeof real.crearInvitacionDeAcceso>[0]
-    ) => {
-      const resultado = await real.crearInvitacionDeAcceso(datos)
-      captura.token = resultado.token
-      return resultado
-    },
-  }
-})
 
 const state = vi.hoisted(() => ({ cookie: "" }))
 vi.mock("next/headers", () => ({
@@ -176,10 +163,6 @@ describe("F42 T2 — reenvío de la invitación de acceso", () => {
     }
   })
 
-  beforeEach(() => {
-    captura.token = ""
-  })
-
   async function conSesion(email: string): Promise<void> {
     const usuario = await prisma.usuario.findUnique({ where: { email } })
     if (!usuario) throw new Error(`usuario no encontrado: ${email}`)
@@ -199,41 +182,75 @@ describe("F42 T2 — reenvío de la invitación de acceso", () => {
     })
   }
 
-  /** POST /api/admin/usuarios — el alta; deja la cuenta con su primera invitación. */
+  /** Token en claro del enlace que revela una escritura (`/invitacion?token=…`). */
+  function tokenDe(enlace: string | undefined): string {
+    if (!enlace) return ""
+    return new URL(enlace).searchParams.get("token") ?? ""
+  }
+
+  interface CuerpoEscritura {
+    ok?: boolean
+    enlace?: string
+    invitacion?: {
+      id: string
+      estado: string
+      expiraEn: string
+      usadoEn: string | null
+      creadoEn: string
+    }
+    invalidadas?: number
+    error?: string
+  }
+
+  /** Una escritura ya leída: cuerpo, enlace revelado (si lo hay) y su token. */
+  interface RespuestaEscritura {
+    res: Response
+    cuerpo: CuerpoEscritura
+    enlace: string
+    token: string
+  }
+
+  async function leerEscritura(res: Response): Promise<RespuestaEscritura> {
+    const cuerpo = (await res.json()) as CuerpoEscritura
+    const enlace = typeof cuerpo.enlace === "string" ? cuerpo.enlace : ""
+    return { res, cuerpo, enlace, token: tokenDe(enlace) }
+  }
+
+  /** POST /api/admin/usuarios — el alta; revela el enlace de la primera invitación. */
   async function alta(
     body: unknown,
     opts: { comunidadId?: string } = {}
-  ): Promise<{ res: Response; token: string }> {
+  ): Promise<RespuestaEscritura> {
     const { POST } = await import("@/app/api/admin/usuarios/route")
     const cid = opts.comunidadId ?? comunidadA
-    captura.token = ""
-    const res = await POST(
-      requestJson(
-        `http://localhost/api/admin/usuarios?comunidadId=${encodeURIComponent(cid)}`,
-        body
+    return leerEscritura(
+      await POST(
+        requestJson(
+          `http://localhost/api/admin/usuarios?comunidadId=${encodeURIComponent(cid)}`,
+          body
+        )
       )
     )
-    return { res, token: captura.token }
   }
 
   /** POST /api/admin/usuarios/invitacion — el reenvío que este archivo prueba. */
   async function reenviar(
     body: unknown,
     opts: { comunidadId?: string } = {}
-  ): Promise<{ res: Response; token: string }> {
+  ): Promise<RespuestaEscritura> {
     const { POST } = await import("@/app/api/admin/usuarios/invitacion/route")
     if (typeof POST !== "function") {
       throw new Error("POST /api/admin/usuarios/invitacion no existe en la ruta")
     }
     const cid = opts.comunidadId ?? comunidadA
-    captura.token = ""
-    const res = await POST(
-      requestJson(
-        `http://localhost/api/admin/usuarios/invitacion?comunidadId=${encodeURIComponent(cid)}`,
-        body
+    return leerEscritura(
+      await POST(
+        requestJson(
+          `http://localhost/api/admin/usuarios/invitacion?comunidadId=${encodeURIComponent(cid)}`,
+          body
+        )
       )
     )
-    return { res, token: captura.token }
   }
 
   /** POST /api/auth/invitacion — el canje público: define la contraseña. */
@@ -251,40 +268,49 @@ describe("F42 T2 — reenvío de la invitación de acceso", () => {
     return usuario
   }
 
-  it("201: emite una invitación nueva y la anterior deja de definir contraseña", async () => {
+  it("201: emite una invitación nueva, revela su enlace una sola vez y la anterior deja de definir contraseña", async () => {
     await conSesion(emailAdmin)
     const altaA = await alta({ personaId: personaAId, rol: "residente" })
     expect(altaA.res.status).toBe(201)
     expect(altaA.token).not.toBe("")
+    const { hashearTokenInvitacion } = await import("@/lib/invitacion-acceso")
     const vieja = await prisma.invitacionAcceso.findFirst({
-      where: { tokenHash: (await import("@/lib/invitacion-acceso")).hashearTokenInvitacion(altaA.token) },
+      where: { tokenHash: hashearTokenInvitacion(altaA.token) },
     })
     if (!vieja) throw new Error("fixture: la invitación del alta no quedó en la base")
 
     const reenvio = await reenviar({ usuarioId: (await cuentaDe(emailPersonaA)).id })
-    const texto = await reenvio.res.text()
     expect(reenvio.res.status).toBe(201)
 
-    // S4: la respuesta no trae el secreto ni lo que permitiría reconstruirlo.
-    expect(texto.toLowerCase()).not.toContain("token")
-    expect(texto).not.toMatch(/[a-f0-9]{64}/)
-    const cuerpo = JSON.parse(texto) as {
-      ok: boolean
-      invitacion: Record<string, unknown>
-      invalidadas: number
-    }
-    expect(Object.keys(cuerpo.invitacion).sort()).toEqual([
+    // L4: la respuesta del reenvío revela el enlace nuevo — es lo que la
+    // administración entrega — y es distinto del que reveló el alta.
+    expect(new URL(reenvio.enlace).pathname).toBe("/invitacion")
+    expect(reenvio.token).not.toBe("")
+    expect(reenvio.token).not.toBe(altaA.token)
+    expect(reenvio.enlace).not.toBe(altaA.enlace)
+
+    // Nada más del secreto sale por la respuesta: ni el hash ni la contraseña.
+    expect(JSON.stringify(reenvio.cuerpo)).not.toMatch(/[a-f0-9]{64}/)
+    expect(JSON.stringify(reenvio.cuerpo).toLowerCase()).not.toContain("passwordhash")
+
+    const cuerpo = reenvio.cuerpo
+    const invitacionNueva = cuerpo.invitacion!
+    expect(Object.keys(invitacionNueva).sort()).toEqual([
       "creadoEn",
       "estado",
       "expiraEn",
       "id",
       "usadoEn",
     ])
-    expect(cuerpo.invitacion.estado).toBe("pendiente")
-    expect(cuerpo.invitacion.id).not.toBe(vieja.id)
+    expect(invitacionNueva.estado).toBe("pendiente")
+    expect(invitacionNueva.id).not.toBe(vieja.id)
     expect(cuerpo.invalidadas).toBe(1)
-    expect(reenvio.token).not.toBe("")
-    expect(reenvio.token).not.toBe(altaA.token)
+
+    // El token revelado es el de la fila nueva: el enlace entregado abre esa fila.
+    const nueva = await prisma.invitacionAcceso.findUnique({
+      where: { id: invitacionNueva.id },
+    })
+    expect(nueva!.tokenHash).toBe(hashearTokenInvitacion(reenvio.token))
 
     // La anterior quedó vencida en el instante del reenvío: no sirve en absoluto.
     const viejaDespues = await prisma.invitacionAcceso.findUnique({
@@ -316,7 +342,7 @@ describe("F42 T2 — reenvío de la invitación de acceso", () => {
     expect(evento!.comunidadId).toBe(comunidadA)
   }, 60_000)
 
-  it("403: el comité no reenvía, y no se emite ni se vence ninguna invitación", async () => {
+  it("403: el comité no reenvía, no se emite ni se vence nada, y no hay enlace", async () => {
     await conSesion(emailAdmin)
     const altaB = await alta({ personaId: personaBId, rol: "residente" })
     expect(altaB.res.status).toBe(201)
@@ -330,8 +356,10 @@ describe("F42 T2 — reenvío de la invitación de acceso", () => {
     await conSesion(emailComite)
     const reenvio = await reenviar({ usuarioId: usuario.id })
     expect(reenvio.res.status).toBe(403)
-    expect(await reenvio.res.json()).toEqual({ error: PERMISO_DENEGADO })
-    expect(reenvio.token).toBe("")
+    expect(reenvio.cuerpo).toEqual({ error: PERMISO_DENEGADO })
+    // Un rechazo no revela ningún enlace: no hubo invitación que entregar.
+    expect(reenvio.enlace).toBe("")
+    expect(reenvio.cuerpo).not.toHaveProperty("enlace")
 
     const despues = await prisma.invitacionAcceso.findMany({
       where: { usuarioId: usuario.id },
@@ -363,7 +391,9 @@ describe("F42 T2 — reenvío de la invitación de acceso", () => {
       await conSesion(emailAdmin)
       const reenvio = await reenviar({ usuarioId: usuario.id })
       expect(reenvio.res.status).toBe(409)
-      expect(await reenvio.res.json()).toEqual({ error: YA_DEFINIO_CONTRASENA })
+      expect(reenvio.cuerpo).toEqual({ error: YA_DEFINIO_CONTRASENA })
+      // Sin invitación nueva no hay enlace que revelar.
+      expect(reenvio.cuerpo).not.toHaveProperty("enlace")
       expect(reenvio.token).toBe("")
 
       // Nada nuevo ni vencido por atrás: el acto no ocurrió.
@@ -393,7 +423,8 @@ describe("F42 T2 — reenvío de la invitación de acceso", () => {
 
       const reenvio = await reenviar({ usuarioId: usuario.id })
       expect(reenvio.res.status).toBe(409)
-      expect(await reenvio.res.json()).toEqual({ error: CUENTA_INACTIVA })
+      expect(reenvio.cuerpo).toEqual({ error: CUENTA_INACTIVA })
+      expect(reenvio.cuerpo).not.toHaveProperty("enlace")
       expect(reenvio.token).toBe("")
       expect(
         await prisma.invitacionAcceso.count({ where: { usuarioId: usuario.id } })
@@ -419,9 +450,10 @@ describe("F42 T2 — reenvío de la invitación de acceso", () => {
       await conSesion(emailAdmin)
       const reenvio = await reenviar({ usuarioId: ajena.id })
       expect(reenvio.res.status).toBe(404)
-      expect(await reenvio.res.json()).toEqual({
+      expect(reenvio.cuerpo).toEqual({
         error: "Usuario no pertenece a la comunidad",
       })
+      expect(reenvio.cuerpo).not.toHaveProperty("enlace")
       expect(reenvio.token).toBe("")
       expect(
         await prisma.invitacionAcceso.count({ where: { usuarioId: ajena.id } })

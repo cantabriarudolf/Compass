@@ -9,6 +9,7 @@ import { registrarEventoAuditoria } from "@/lib/auditoria"
 import {
   CATEGORIA_AUDITORIA_CUENTAS,
   crearInvitacionDeAcceso,
+  enlaceInvitacionDeAcceso,
   invitacionPublica,
 } from "@/lib/invitacion-acceso"
 
@@ -142,8 +143,11 @@ const CORREO_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
  * Qué: persona del padrón de ESA comunidad + rol + membresía + invitación, en una
  * transacción. Sin persona no hay cuenta (S1): no existe cuenta anónima que auditar.
  * Cómo entra la persona: por un enlace de un solo uso. La cuenta nace con
- * `passwordHash` nulo, así que el login la rechaza hasta que consuma la invitación;
- * esta ruta NUNCA devuelve el token ni su hash, y tampoco el administrador lo ve (S4).
+ * `passwordHash` nulo, así que el login la rechaza hasta que consuma la invitación.
+ * Esta respuesta revela ese enlace UNA sola vez, al administrador que acaba de
+ * crear la cuenta (L4): es lo único que le permite entregarlo mientras el correo
+ * (F43) no exista. Después no se puede consultar — sólo queda el hash— y el
+ * `GET` de esta misma ruta no lo incluye.
  */
 export async function POST(request: NextRequest) {
   const sesion = await auth()
@@ -270,6 +274,7 @@ export async function POST(request: NextRequest) {
     }
     membresiaId: string
     invitacion: ReturnType<typeof invitacionPublica>
+    token: string
   }
 
   try {
@@ -298,9 +303,10 @@ export async function POST(request: NextRequest) {
         },
       })
 
-      // S3: cuenta, membresía, invitación y rastro caen o suben juntos. El token en
-      // claro muere acá —no se devuelve— y lo transportará el correo de F43 / T2.
-      const { invitacion } = await crearInvitacionDeAcceso({
+      // S3: cuenta, membresía, invitación y rastro caen o suben juntos. El token
+      // en claro sale sólo en la respuesta de ESTA llamada (L4): no se persiste y
+      // ninguna lectura posterior lo devuelve.
+      const { invitacion, token } = await crearInvitacionDeAcceso({
         usuarioId: usuario.id,
         comunidadId: cid,
         creadoPor: actor.id,
@@ -330,6 +336,7 @@ export async function POST(request: NextRequest) {
         },
         membresiaId: membresia.id,
         invitacion,
+        token,
       }
     })
   } catch (error) {
@@ -339,7 +346,9 @@ export async function POST(request: NextRequest) {
     throw error
   }
 
-  // Sólo estado: ni token, ni hash, ni `passwordHash` en la respuesta.
+  // L4: el enlace se revela acá, una sola vez, al administrador que acaba de
+  // crear la cuenta. El token no se persiste en claro y ninguna lectura lo trae;
+  // si se pierde, la salida es reenviar (que vence este enlace).
   return NextResponse.json(
     {
       ok: true,
@@ -350,6 +359,10 @@ export async function POST(request: NextRequest) {
         rol: rolNormalizado,
       },
       invitacion: creado.invitacion,
+      enlace: enlaceInvitacionDeAcceso(
+        creado.token,
+        new URL(request.url).origin
+      ),
     },
     { status: 201 }
   )

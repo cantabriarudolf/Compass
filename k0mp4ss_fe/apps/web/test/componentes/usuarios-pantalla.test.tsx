@@ -292,6 +292,9 @@ afterEach(() => {
   cleanup()
   fetchFalso.mockReset()
   vi.unstubAllGlobals()
+  // `userEvent.setup()` instala su propio portapapeles; el caso que lo necesita
+  // lo redefine después de montar. Acá se devuelve el navegador a su estado base.
+  Reflect.deleteProperty(window.navigator, "clipboard")
 })
 
 describe("Cuentas y acceso — el estado lo dice el servidor", () => {
@@ -471,9 +474,13 @@ describe("Cuentas y acceso — el alta manda persona y rol", () => {
     const alerta = await screen.findByRole("alert")
     expect(alerta.textContent).toBe("La persona ya tiene una cuenta.")
 
-    // Sin éxito no hay relectura ni mensaje de invitación emitida.
+    // Sin éxito no hay relectura ni mensaje de invitación emitida, y tampoco
+    // enlace: el servidor no emitió nada que entregar.
     expect(llamadas(RUTA_LISTA).filter((l) => metodoDe(l) === "GET")).toHaveLength(1)
     expect(screen.queryByText(/La invitación quedó emitida/i)).toBeNull()
+    expect(
+      screen.queryByRole("region", { name: "Enlace de la invitación" })
+    ).toBeNull()
     // La fila que ya estaba sigue igual.
     const residente = filaDe("residente@test.cl")
     expect(within(residente).getByText("Pendiente")).toBeTruthy()
@@ -564,6 +571,114 @@ describe("Cuentas y acceso — el reenvío", () => {
     expect(llamadas(RUTA_LISTA).filter((l) => metodoDe(l) === "GET")).toHaveLength(1)
     expect(within(residente).getByText("Vence el 21-11-2026")).toBeTruthy()
     expect(screen.queryByText(/La invitación quedó emitida/i)).toBeNull()
+    // Un rechazo no revela ningún enlace.
+    expect(
+      screen.queryByRole("region", { name: "Enlace de la invitación" })
+    ).toBeNull()
+  })
+})
+
+describe("Cuentas y acceso — el enlace se revela una sola vez", () => {
+  const TOKEN_ALTA = "EnlaceDelAlta0001"
+  const ENLACE_ALTA = `https://compass.test/invitacion?token=${TOKEN_ALTA}`
+  const TOKEN_REENVIO = "EnlaceDelReenvio02"
+  const ENLACE_REENVIO = `https://compass.test/invitacion?token=${TOKEN_REENVIO}`
+
+  function cuerpoAltaConEnlace(): PostFalso {
+    return {
+      cuerpo: {
+        ok: true,
+        usuario: {
+          id: "u-9",
+          email: "bruno@test.cl",
+          personaId: "per-2",
+          activo: true,
+        },
+        membresia: { id: "m-9", comunidadId: "com-1", rol: "conserjeria" },
+        invitacion: {
+          id: "inv-9",
+          estado: "pendiente",
+          expiraEn: "2026-11-21T12:00:00.000Z",
+          usadoEn: null,
+          creadoEn: "2026-11-18T12:00:00.000Z",
+        },
+        enlace: ENLACE_ALTA,
+      },
+    }
+  }
+
+  it("muestra el enlace del alta, avisa que no se vuelve a mostrar y lo olvida al cerrar", async () => {
+    const user = userEvent.setup({ delay: null })
+    servir({ alta: cuerpoAltaConEnlace })
+    montarConsola()
+    await waitFor(() => filaDe("residente@test.cl"))
+
+    await elegirOpcion(
+      user,
+      screen.getByRole("combobox", { name: "Persona del padrón" }),
+      /Bruno Soto/
+    )
+    await elegirOpcion(
+      user,
+      screen.getByRole("combobox", { name: "Rol de acceso" }),
+      /Conserjería/
+    )
+    await user.click(
+      screen.getByRole("button", { name: "Crear cuenta e invitación" })
+    )
+
+    const aviso = await screen.findByRole("region", {
+      name: "Enlace de la invitación",
+    })
+    expect(within(aviso).getByDisplayValue(ENLACE_ALTA)).toBeTruthy()
+    // Las dos advertencias, dichas y no escondidas: el enlace no se repite y el
+    // correo todavía no existe, así que cerrar sin copiar lo pierde.
+    expect(aviso.textContent).toContain("No se vuelve a mostrar")
+    expect(aviso.textContent).toContain("El envío por correo todavía no existe (F43)")
+    expect(aviso.textContent).toContain("la única salida es reenviar")
+
+    // El enlace vive sólo en el aviso: no se cuela en la fila del listado.
+    expect(filaDe("residente@test.cl").textContent).not.toContain(TOKEN_ALTA)
+
+    await user.click(within(aviso).getByRole("button", { name: "Cerrar" }))
+
+    expect(
+      screen.queryByRole("region", { name: "Enlace de la invitación" })
+    ).toBeNull()
+    expect(screen.queryByDisplayValue(ENLACE_ALTA)).toBeNull()
+    expect(document.body.textContent).not.toContain(TOKEN_ALTA)
+    // Cerrar el aviso no deshace el acto: la fila sigue como la dio el servidor.
+    expect(within(filaDe("residente@test.cl")).getByText("Pendiente")).toBeTruthy()
+  })
+
+  it("muestra el enlace del reenvío y el botón de copiar lo deja en el portapapeles", async () => {
+    const user = userEvent.setup({ delay: null })
+    const escribir = vi.fn().mockResolvedValue(undefined)
+    Object.defineProperty(window.navigator, "clipboard", {
+      configurable: true,
+      value: { writeText: escribir },
+    })
+    servir({
+      reenvio: () => ({
+        cuerpo: { ok: true, enlace: ENLACE_REENVIO, invalidadas: 1 },
+      }),
+    })
+    montarConsola()
+
+    const residente = await waitFor(() => filaDe("residente@test.cl"))
+    await user.click(
+      within(residente).getByRole("button", { name: "Reenviar invitación" })
+    )
+
+    const aviso = await screen.findByRole("region", {
+      name: "Enlace de la invitación",
+    })
+    expect(within(aviso).getByDisplayValue(ENLACE_REENVIO)).toBeTruthy()
+    expect(aviso.textContent).toContain("No se vuelve a mostrar")
+
+    await user.click(within(aviso).getByRole("button", { name: "Copiar enlace" }))
+    expect(escribir).toHaveBeenCalledWith(ENLACE_REENVIO)
+    expect(within(aviso).getByText("Enlace copiado.")).toBeTruthy()
   })
 })
 

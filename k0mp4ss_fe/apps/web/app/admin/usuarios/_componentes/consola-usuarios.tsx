@@ -21,9 +21,15 @@
  *      NO da acceso. El acceso es la cuenta con su rol, y la confusión nace justo
  *      acá, así que se deshace acá.
  *   2. La invitación queda emitida, pero el envío por correo todavía no existe
- *      (F43): la persona no fue avisada y esta pantalla no puede avisarla. Ni el
- *      alta ni el reenvío devuelven el enlace, a propósito (S4): la administración
- *      invita, no conoce la contraseña.
+ *      (F43): la persona no fue avisada y esta pantalla no puede avisarla. Por eso
+ *      el enlace se revela acá, UNA sola vez, en la respuesta que crea o reenvía
+ *      (L4), con su botón de copiar y el aviso de que no se vuelve a mostrar: la
+ *      administración invita sin conocer la contraseña, pero tiene que poder
+ *      entregar el enlace o no está invitando a nadie.
+ *
+ * El enlace no entra al listado ni a ninguna caché: vive en el estado local que
+ * esta pantalla borra al cerrar el aviso. Si se cierra sin copiarlo, se perdió y
+ * la única salida es reenviar, que vence el anterior — y la pantalla lo dice.
  *
  * Honestidad de la UI: después de cada acto se vuelve a leer el listado —el
  * veredicto es del servidor— y un 403/409 se muestra con el texto de la ruta tal
@@ -40,6 +46,7 @@ import {
   CardTitle,
 } from "@workspace/ui/components/card"
 import { Label } from "@workspace/ui/components/label"
+import { Input } from "@workspace/ui/components/input"
 import {
   Select,
   SelectContent,
@@ -58,7 +65,9 @@ import {
 import {
   IconAlertTriangle,
   IconCircleCheck,
+  IconCopy,
   IconKey,
+  IconLink,
   IconLoader2,
   IconRefresh,
   IconUserPlus,
@@ -176,6 +185,41 @@ export function ConsolaUsuarios() {
   const [reenviandoId, setReenviandoId] = React.useState<string | null>(null)
   const [errorReenvio, setErrorReenvio] = React.useState<string | null>(null)
 
+  // L4: el enlace se revela una sola vez y vive sólo acá, hasta que se cierra el
+  // aviso. No se guarda en el listado ni en la caché de SWR: el servidor no lo
+  // persiste en claro y no puede volver a emitirlo. `para` nombra la cuenta a la
+  // que pertenece: sin eso, el enlace sería un texto suelto que nadie puede
+  // atribuir a quién invitar.
+  const [entrega, setEntrega] = React.useState<{
+    enlace: string
+    para: string
+  } | null>(null)
+  const [copiado, setCopiado] = React.useState(false)
+  const [errorCopia, setErrorCopia] = React.useState<string | null>(null)
+
+  /** Cierra el aviso y olvida el enlace: no queda en ningún estado de la pantalla. */
+  function olvidarEnlace(): void {
+    setEntrega(null)
+    setCopiado(false)
+    setErrorCopia(null)
+  }
+
+  async function copiarEnlace(): Promise<void> {
+    if (!entrega) return
+    try {
+      await navigator.clipboard.writeText(entrega.enlace)
+      setCopiado(true)
+      setErrorCopia(null)
+    } catch {
+      // El navegador puede negar el portapapeles. Se dice y no se declara
+      // copiado: el enlace sigue a la vista para copiarlo a mano.
+      setCopiado(false)
+      setErrorCopia(
+        "No se pudo copiar automáticamente: seleccioná el enlace y copialo a mano."
+      )
+    }
+  }
+
   const puedeCrear = comunidad !== null && personaId !== "" && rol !== ""
 
   async function crear(): Promise<void> {
@@ -184,6 +228,7 @@ export function ConsolaUsuarios() {
     setCreando(true)
     setErrorAlta(null)
     setAviso(null)
+    olvidarEnlace()
     const resultado = await crearCuentaDeAcceso({
       comunidadId: comunidad.id,
       personaId,
@@ -205,6 +250,13 @@ export function ConsolaUsuarios() {
         persona?.email ?? "la persona elegida"
       } con rol ${ETIQUETA_ROL[rol]}. ${AVISO_SIN_CORREO}`
     )
+    // El enlace existe sólo en esta respuesta: se muestra acá o se pierde.
+    if (resultado.enlace) {
+      setEntrega({
+        enlace: resultado.enlace,
+        para: persona?.email ?? "la persona elegida",
+      })
+    }
     await refrescar()
   }
 
@@ -213,6 +265,7 @@ export function ConsolaUsuarios() {
     setReenviandoId(cuenta.usuario.id)
     setErrorReenvio(null)
     setAviso(null)
+    olvidarEnlace()
     const resultado = await reenviarInvitacionDeAcceso({
       comunidadId: comunidad.id,
       usuarioId: cuenta.usuario.id,
@@ -227,6 +280,10 @@ export function ConsolaUsuarios() {
     setAviso(
       `La invitación quedó emitida de nuevo para ${cuenta.usuario.email}. ${AVISO_SIN_CORREO}`
     )
+    // El anterior quedó vencido en el servidor: este es el único enlace vivo.
+    if (resultado.enlace) {
+      setEntrega({ enlace: resultado.enlace, para: cuenta.usuario.email })
+    }
     await refrescar()
   }
 
@@ -272,6 +329,74 @@ export function ConsolaUsuarios() {
           <IconCircleCheck className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
           {aviso}
         </p>
+      )}
+
+      {entrega && (
+        <Card
+          role="region"
+          aria-label="Enlace de la invitación"
+          className="border-sky-500/40 bg-sky-50/60 dark:border-sky-500/30 dark:bg-sky-950/20"
+        >
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-sm">
+              <IconLink className="size-4 text-primary" aria-hidden="true" />
+              Enlace para entregar
+            </CardTitle>
+            <CardDescription className="text-xs">
+              Para {entrega.para}. El envío por correo todavía no existe (F43),
+              así que este enlace es lo único que abre el acceso: entregalo por un
+              canal seguro.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-3">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="enlace-invitacion">Enlace de un solo uso</Label>
+              <Input
+                id="enlace-invitacion"
+                readOnly
+                value={entrega.enlace}
+                onFocus={(evento) => evento.currentTarget.select()}
+              />
+            </div>
+            <p className="text-xs text-foreground">
+              <span className="font-medium">No se vuelve a mostrar.</span> Si cerrás
+              este aviso sin copiarlo, el enlace se perdió y la única salida es
+              reenviar la invitación, que vence el anterior.
+            </p>
+            {errorCopia && (
+              <p
+                role="alert"
+                className="flex items-center gap-2 text-sm text-destructive"
+              >
+                <IconAlertTriangle className="size-4" aria-hidden="true" />
+                {errorCopia}
+              </p>
+            )}
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => void copiarEnlace()}
+              >
+                <IconCopy className="size-4" aria-hidden="true" />
+                Copiar enlace
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={olvidarEnlace}
+              >
+                Cerrar
+              </Button>
+              {copiado && (
+                <span className="text-xs text-emerald-700 dark:text-emerald-300">
+                  Enlace copiado.
+                </span>
+              )}
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       {errorReenvio && (
