@@ -39,6 +39,7 @@ Esta estructura aplica un diseño de **Navegación Basada en Dominios**, agrupan
 | | Maestros Administrativos | `/admin/maestros` | MA | |
 | | Configuración | `/admin/configuracion` | CF, RG | |
 | | Permisos | `/admin/permisos` | RP | |
+| | Cuentas y acceso | `/admin/usuarios` | RP | |
 | | Logs de Auditoría | `/admin/logs` | AM | |
 | | Carga inicial | `/admin/carga-inicial` | EF, MP, VU | |
 
@@ -59,6 +60,14 @@ Tres pantallas nacieron como pestañas de otros módulos y ahora son entradas pr
 | **Elementos** | `/admin/elementos` | Catálogo de amenities reservables, incluido el interruptor «Requiere autorización del administrador» |
 | **Alerta de reservas** | `/admin/reservas` | Cola de solicitudes para autorizar o rechazar con motivo |
 
+### 🔑 Cuentas y acceso: la puerta de entrada vive en Sistema (2026-11-18)
+
+| Entrada | Ruta | Roles del menú | Qué se hace ahí |
+| :--- | :--- | :--- | :--- |
+| **Cuentas y acceso** | `/admin/usuarios` | administrador | Alta de cuentas con invitación de un solo uso (persona del padrón + rol de acceso), estado de cada invitación y reenvío. |
+
+Va en **Sistema**, junto a **Permisos**, porque las dos son la misma materia —quién entra y qué puede hacer—: Permisos muestra la matriz y Cuentas y acceso crea la cuenta que la ejerce. La entrada declara el rol en el menú, y la pantalla y sus tres rutas vuelven a exigir la clave `admin:usuarios` en el servidor: un rol sin la clave no ve la entrada y, si llega por URL, recibe un estado «sin permiso» que explica el motivo, no una tabla vacía que se leería como «la comunidad no tiene cuentas».
+
 ### 🗂️ Las dos entradas nuevas de Comunidad (2026-11-07)
 
 | Entrada | Ruta | Roles del menú | Qué se hace ahí |
@@ -74,7 +83,7 @@ Las dos abren con el permiso en el servidor, no con la lista de roles copiada: `
 
 Cinco roles (`administrador`, `comite`, `conserjeria`, `residente`, `mantencion`). Un grupo o ítem se ve si **tu unión de membresías** intersecta los roles declarados; los ítems sin `roles` heredan la visibilidad del grupo.
 
-1.  **Administrador**: ve los 7 grupos y todas sus entradas; además es el único con `Remuneraciones`, `Estructura Física`, `Tipos de Unidad`, `Gestión Administrativa`, `Maestros`, `Configuración`, `Permisos`, `Logs de Auditoría`, `Carga inicial`, `Auditoría y Métricas`, `Mantenciones Preventivas`, `Elementos` y `Alerta de reservas`.
+1.  **Administrador**: ve los 7 grupos y todas sus entradas; además es el único con `Remuneraciones`, `Estructura Física`, `Tipos de Unidad`, `Gestión Administrativa`, `Maestros`, `Configuración`, `Permisos`, `Cuentas y acceso`, `Logs de Auditoría`, `Carga inicial`, `Auditoría y Métricas`, `Mantenciones Preventivas`, `Elementos` y `Alerta de reservas`.
 2.  **Comité**: Inicio, Finanzas (sin Remuneraciones), Comunidad y Sistema (solo Reportería y Dashboards).
 3.  **Conserjería**: Inicio y Operaciones. No ve el grupo Sistema, así que los paneles del administrador no aparecen en su menú.
 4.  **Residente**: Inicio, Operaciones, Finanzas y Comunidad.
