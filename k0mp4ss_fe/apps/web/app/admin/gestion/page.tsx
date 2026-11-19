@@ -616,7 +616,7 @@ export default function GestionAdministrativaPage() {
                 className="pl-8 pr-8"
                 value={busqueda}
                 onChange={e => setBusqueda(e.target.value)}
-                placeholder="Buscar por nombre, RUT o email…"
+                placeholder="Buscar por nombre o RUT…"
                 aria-label="Buscar personas"
               />
               {busqueda && (

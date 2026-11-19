@@ -154,7 +154,7 @@ describe("T11 — la nómina de la directiva se busca en el servidor", () => {
     const user = userEvent.setup()
     const dialogo = await abrirDialogoPeriodo(user)
 
-    await user.type(screen.getByPlaceholderText("Buscar por nombre, RUT o email…"), "ana")
+    await user.type(screen.getByPlaceholderText("Buscar por nombre o RUT…"), "ana")
     await screen.findByText("Ana Directora")
     await user.click(screen.getByText("Ana Directora"))
 
@@ -199,7 +199,7 @@ describe("T11 — la nómina de la directiva se busca en el servidor", () => {
     const user = userEvent.setup()
     const dialogo = await abrirDialogoPeriodo(user)
 
-    await user.type(screen.getByPlaceholderText("Buscar por nombre, RUT o email…"), "ana")
+    await user.type(screen.getByPlaceholderText("Buscar por nombre o RUT…"), "ana")
     await screen.findByText("Ana Directora")
     await user.click(screen.getByText("Ana Directora"))
     expect(within(dialogo).getByText("Ana Directora")).toBeTruthy()

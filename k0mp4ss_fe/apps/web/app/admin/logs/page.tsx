@@ -236,7 +236,7 @@ export default function LogsPage() {
           <Input
             value={busqueda}
             onChange={e => setBusqueda(e.target.value)}
-            placeholder="Buscar por descripción, referencia o acción…"
+            placeholder="Buscar por descripción o referencia…"
             className="pl-8"
             aria-label="Buscar eventos"
           />

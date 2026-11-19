@@ -234,7 +234,9 @@ function sufijoDeFiltros(opciones: UsePersonasOpciones): string {
 }
 
 /**
- * Lista paginada de personas, filtrable por ?q= (nombreCompleto | rut | email).
+ * Lista paginada de personas, filtrable por ?q= (nombreCompleto | rut). El email NO
+ * es criterio (F39, paridad con las tres rutas de referencia): al rechazar los comodines
+ * de LIKE, una dirección con guion bajo chocaría con el comodín y se sacó del OR.
  *
  * S11 — el techo por petición se declara: `recortada` es true cuando el `total`
  * del servidor excede lo que una petición trae (`PAGE_SIZE_PADRON`), y la

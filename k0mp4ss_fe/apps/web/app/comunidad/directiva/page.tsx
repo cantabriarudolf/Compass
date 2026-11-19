@@ -520,7 +520,7 @@ export default function DirectivaPage() {
                     idDe={p => p.id}
                     etiquetaDe={p => p.nombreCompleto}
                     onSeleccion={(sel, fila) => { if (sel && fila) agregarMiembroNomina(fila) }}
-                    placeholder="Buscar por nombre, RUT o email…"
+                    placeholder="Buscar por nombre o RUT…"
                     vacio="Ninguna persona con cuenta activa coincide."
                   />
                   <div className="flex max-h-48 flex-col gap-1 overflow-y-auto rounded-md border p-2">

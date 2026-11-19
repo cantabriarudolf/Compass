@@ -128,7 +128,7 @@ async function accion(
   }
 }
 
-/** Búsqueda de solicitantes en el servidor (`?q=` sobre nombre, RUT y email). */
+/** Búsqueda de solicitantes en el servidor (`?q=` sobre nombre y RUT; el email no es criterio). */
 async function buscarSolicitantes(
   q: string,
   contexto: ContextoBusqueda
@@ -319,7 +319,7 @@ export function PanelReservas() {
             valorEtiqueta={solicitante?.etiqueta}
             onSeleccionar={setSolicitante}
             buscar={buscarSolicitantes}
-            placeholder="Nombre, RUT o email del solicitante…"
+            placeholder="Nombre o RUT del solicitante…"
             vacio="Ningún solicitante coincide. Revisá el nombre o el RUT."
           />
           <SelectorBuscable
