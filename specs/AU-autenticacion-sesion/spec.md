@@ -221,3 +221,63 @@ El módulo `k0mp4ss_fe/apps/web/lib/auth.ts` SHALL interpretar `process.env.GOOG
 
 - **GIVEN** se leen `k0mp4ss_fe/apps/web/.env.example` y `k0mp4ss_fe/apps/web/docs/runbook-operaciones.md`
 - **THEN** ambos mencionan `GOOGLE_PROVIDER_DISABLED` con su efecto exacto (sin fail-fast de producción y sin provider Google, solo Credentials) y la restricción de no usarla donde el SSO Google esté activo
+
+### Requirement: Alta de cuentas de acceso con invitación de un solo uso (F42)
+
+El sistema SHALL crear cuentas de acceso desde la pantalla `/admin/usuarios` y por `POST /api/admin/usuarios`, bajo el permiso `admin:usuarios` (`ver` para el listado, `crear` para el alta y el reenvío, `editar` para el cambio de estado) y SIEMPRE acotado a la comunidad de la sesión: el `comunidadId` no se acepta del cliente. El acto de alta SHALL escribir en una transacción la `Membresia(usuarioId, comunidadId, rol)` y una `InvitacionAcceso`, y la cuenta SHALL nacer **sin `passwordHash`**: no puede iniciar sesión hasta que el invitado defina su contraseña. La contraseña NO la define el administrador.
+
+El token de la invitación SHALL ser de un solo uso, SHALL persistirse únicamente como SHA-256 (`tokenHash`, nunca en claro) y SHALL vencer a las 72 h (`VIGENCIA_INVITACION_MS`). La proyección pública de la invitación (`invitacionPublica`) SHALL exponer su estado (`pendiente | usada | vencida`) y SHALL NOT exponer el token en ninguna lectura. El enlace en claro SHALL viajar **una sola vez**, en la respuesta del alta o del reenvío, porque es lo único que permite entregarlo; ninguna lectura posterior lo devuelve. Reenviar SHALL vencer la invitación anterior. El consumo SHALL vivir bajo el prefijo público `/api/auth/invitacion` (igual que `/api/auth/2fa/*`) y la página `/invitacion` SHALL funcionar sin sesión, porque quien la abre no la tiene todavía.
+
+#### Scenario: El alta crea la cuenta sin contraseña y devuelve el enlace una sola vez
+- **WHEN** un `administrador` de la comunidad da de alta una persona con un rol de `ROLES`
+- **THEN** la respuesta trae la `Membresia`, la invitación en estado `pendiente` y el enlace con el token en claro, y la fila de `Usuario` queda sin `passwordHash`
+
+#### Scenario: El enlace no se puede volver a consultar
+- **WHEN** se lee el listado `GET /api/admin/usuarios` después del alta
+- **THEN** la invitación aparece con su estado y sin token, y ninguna ruta devuelve el enlace otra vez (la salida es reenviar)
+
+#### Scenario: Un solo uso
+- **WHEN** se consume dos veces el mismo token en `POST /api/auth/invitacion`
+- **THEN** el primero define la contraseña y marca la invitación `usada`; el segundo responde `MENSAJE_INVITACION_INVALIDA` y no cambia la contraseña
+
+#### Scenario: Vencimiento a las 72 h
+- **WHEN** el token se consume pasadas 72 h desde su emisión
+- **THEN** la invitación se lee como `vencida` y el consumo responde `MENSAJE_INVITACION_INVALIDA`
+
+#### Scenario: Reenviar vence el enlace anterior
+- **WHEN** el administrador reenvía la invitación de una cuenta `pendiente`
+- **THEN** la invitación anterior deja de servir, la nueva nace `pendiente` y la respuesta trae el enlace nuevo
+
+### Requirement: Correo de bienvenida al emitir la invitación (F43)
+
+El sistema SHALL enviar un correo de bienvenida al invitado **en el mismo acto** en que se emite la invitación —alta y reenvío—, porque el token en claro sólo existe en ese instante y no se puede recuperar después. El mensaje SHALL llevar el nombre de la persona, el nombre de la comunidad, el rol asignado, **qué puede hacer ese rol** en la plataforma y el enlace para definir la contraseña.
+
+El texto SHALL NOT citar artículos ni números de ley: la base legal vive en este requirement y en el manual del módulo, no en la bandeja del invitado. El correo SHALL explicar cada rol según su naturaleza: `administrador` (custodia del archivo de la comunidad y rendición de cuentas — mensual al comité y anual a la asamblea; arts. 9 y 21 de la Ley 21.442), `comite` (las facultades de la asamblea, salvo las materias que la ley reserva a sesión extraordinaria; art. 17) y `residente` (ve sus unidades, sus gastos y sus trámites, y no ve los datos de otros; Ley 19.628 vigente). Para `conserjeria` y `mantencion` el correo SHALL declarar que lo que sigue es **criterio del proyecto**, no una obligación legal.
+
+Las viñetas de «qué puede hacer» SHALL corresponder a capacidades que la matriz `lib/authz.ts` concede realmente a ese rol, y un test SHALL fallar si el rol pierde la capacidad que la viñeta promete: un correo que promete permisos que el motor niega es peor que no mandar correo.
+
+El envío SHALL usar el canal de correo de la comunidad (`lib/entrega-aviso.ts`) y SHALL dejar constancia con los estados de `ESTADOS_ENTREGA_AVISO`: `enviado` **sólo** si el servidor SMTP aceptó el mensaje, `fallido` con el motivo del servidor, y `pendiente` con `MOTIVO_SIN_SMTP` cuando la comunidad no tiene emisor configurado —sin abrir conexión y **sin fingir envío**. La constancia SHALL vivir en la fila de `InvitacionAcceso`, de modo que el historial de envíos sea la cadena de invitaciones y ningún intento pise al anterior. El token en claro SHALL NOT persistirse en la constancia, en el motivo ni en los logs. La respuesta al administrador SHALL seguir trayendo el enlace aunque el envío quede `pendiente` o `fallido`: el correo es un atajo, no la única puerta.
+
+#### Scenario: Envío aceptado por el servidor
+- **WHEN** se da de alta una cuenta en una comunidad con emisor configurado y el servidor SMTP acepta el mensaje
+- **THEN** la invitación queda con constancia `enviado` y el cuerpo del correo lleva el enlace, el rol y las viñetas de ese rol
+
+#### Scenario: Comunidad sin emisor de correo
+- **WHEN** la comunidad no tiene credencial de correo configurada
+- **THEN** la cuenta queda creada, la constancia queda `pendiente` con `MOTIVO_SIN_SMTP`, no se abre ninguna conexión SMTP y la respuesta al administrador trae el enlace
+
+#### Scenario: Rebotado
+- **WHEN** el servidor SMTP rechaza el mensaje
+- **THEN** la constancia queda `fallido` con el motivo del servidor, la cuenta queda creada y el enlace sigue en la respuesta (el invitado no queda sin puerta)
+
+#### Scenario: El reenvío registra un envío nuevo
+- **WHEN** se reenvía la invitación
+- **THEN** se emite una invitación nueva con su propio envío, y la constancia de la anterior no se modifica ni se borra
+
+#### Scenario: El token no queda escrito en la constancia
+- **WHEN** se inspecciona la constancia del envío y el motivo registrado
+- **THEN** ninguno contiene el token en claro ni el enlace completo
+
+#### Scenario: Las viñetas no mienten
+- **WHEN** se quita de `lib/authz.ts` una capacidad que una viñeta del correo promete a un rol
+- **THEN** el test del correo falla nombrando el rol y la capacidad
