@@ -36,8 +36,9 @@ tiene contraseña, que es el «cambio forzado» sin columna de por medio—; al 
 administradora; el enlace usado, vencido o inventado responde el mismo rechazo. Si la corrida
 falla, no queda comunidad, cuenta ni invitación a medias.
 
-**El envío del enlace por correo es F43** y todavía no existe: el script lo imprime y quien opera
-lo entrega por un canal seguro. Es deuda declarada, no una función en curso.
+**Este script no manda correo:** imprime el enlace y quien opera lo entrega por un canal seguro. El
+correo de bienvenida existe desde F43 y empieza a salir en el paso 1.7, desde la pantalla de
+cuentas, donde el alta dispara el aviso en el mismo acto en que emite la invitación.
 
 ---
 
@@ -67,11 +68,16 @@ que sigue, y cada bloque depende del anterior.
 - El **saldo del residente**: su estado de cuenta tiene que coincidir con el de administración. Si
   uno dice una cosa y el otro otra, el sistema miente en algún lado.
 
-**El matiz del paso 1.7:** la pantalla crea la cuenta y emite la invitación, pero el enlace no se lo
-devuelve a la administración —a propósito: el administrador invita y no conoce la contraseña— y el
-correo que lo transporta es F43. Hoy el enlace que se puede entregar es el del primer arranque;
-para las cuentas siguientes, la invitación queda emitida y su estado visible a la espera de ese
-correo. La pantalla lo dice en su propio texto en vez de declarar un aviso que no ocurrió.
+**El matiz del paso 1.7:** la pantalla crea la cuenta, emite la invitación y manda el correo de
+bienvenida en el mismo acto —el token en claro sólo existe en ese instante—, y en esa misma
+respuesta la administración **sí ve el enlace una sola vez**, con su botón de copiar, y **después
+nunca más**: ninguna lectura posterior lo devuelve y la salida es reenviar. No es una concesión: el
+administrador sigue invitando sin conocer la contraseña, pero quien invita tiene que poder entregar
+el enlace, y el correo es un atajo, no la única puerta. Por eso el enlace sigue en la respuesta en
+los tres desenlaces del aviso —correo enviado, correo pendiente porque la comunidad no tiene
+emisor, correo fallido con el motivo del servidor— y la columna **Correo de bienvenida** de la
+tabla dice cuál de esos desenlaces ocurrió, o que nadie intentó el envío todavía. Si se cierra el
+aviso sin copiarlo, se perdió: se reenvía.
 
 ---
 
@@ -144,7 +150,10 @@ anterior contamina todo lo que viene y se lee como un error del módulo equivoca
 
 ## Lo que esta guía todavía no puede cubrir
 
-- **F43 — el correo que transporta la invitación.** La Fase 0 y el paso 1.7 ya tienen cómo hacerse
-  (el script del primer arranque y la pantalla de cuentas), pero el enlace se entrega a mano porque
-  no hay correo que lo lleve. El texto del correo se redacta después de la consulta al especialista
-  en administración de comunidades, porque explica obligaciones del rol y toca datos personales.
+- **El correo va sólo a la dirección de la cuenta.** El aviso de bienvenida viaja al email de la
+  cuenta —el de la ficha o el que declare el alta— y por ningún otro canal: no hay SMS, ni
+  mensajería, ni impresión del enlace. Quien no lea ese buzón necesita que la administración le
+  entregue el enlace a mano, y para eso está la copia de la respuesta del alta o del reenvío.
+- **El primer arranque no manda correo.** `scripts/crear-admin.mjs` imprime el enlace y se termina
+  ahí: lo entrega quien opera. El aviso de bienvenida empieza a salir con el paso 1.7, desde la
+  pantalla de cuentas.
