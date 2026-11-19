@@ -660,7 +660,8 @@ sobre la primera página de 100 y se presentaban como el universo. Misma familia
 trunca en silencio» (PR #7), ahora cerrada también acá.
 
 Además la búsqueda server-side **ya existía y no se usaba**: `usePersonas(q)` arma `?q=`
-(nombreCompleto | rut | email) y la página llamaba al hook sin argumento.
+(nombreCompleto | rut; el email dejó de ser criterio de búsqueda en **F39**, 2026-11-19) y la página
+llamaba al hook sin argumento.
 
 ### Lo que cambió
 
