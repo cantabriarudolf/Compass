@@ -23,8 +23,8 @@ Este documento vincula la arquitectura del menú con los archivos de especificac
 | **03** | **0** | **RP** | `RP - Roles y Permisos.md` | Permisos | `/admin/permisos` (+ Cuentas y acceso `/admin/usuarios`) | 🟡 Documentado |
 | **04** | **1** | **MA** | `MA - Maestros Administrativos.md` | Maestros | `/admin/maestros` | 🟡 Documentado |
 | **05** | **1** | **TU** | `TU - Tipos de Unidad.md` | Infraestructura | `/inventario/tipos` | 🟢 Completado (`TU-tipos-unidad` archivado `2026-08-24`) |
-| **06** | **1** | **EF** | `EF - Estructura Física.md` | Estructura Física | `/inventario/estructura` | 🟢 Completado (`EF-estructura-fisica` archivado `2026-08-24`) |
-| **07** | **1** | **ES** | `ES - Estacionamientos.md` | Estacionamientos | `/inventario/estacionamientos` (deprecado v8) | 🟢 Completado (`ES-estacionamientos` archivado como absorbido `u-E-*` en EF) |
+| **06** | **1** | **EF** | `02 - Estructura Física.md` | Estructura Física | `/inventario/estructura` | 🟢 Completado (`EF-estructura-fisica` archivado `2026-08-24`) |
+| **07** | **1** | **ES** | `03 - Estacionamientos.md` (retirado) | Estacionamientos | `/inventario/estructura` (tipo de unidad) | 🟢 Completado (`ES-estacionamientos` archivado como absorbido `u-E-*` en EF) |
 | **08** | **2** | **MP** | `05 - Maestro de Personas.md` | Directorio Personas | `/comunidad/personas` | 🟡 Documentado (spec re-sincronizada `2026-08-24`) |
 | **09** | **2** | **VU** | `VU - Vinculacion Unidades.md` | Pestaña Unidades | `/comunidad/personas/[id]` | 🟢 Completado (`VU-vinculacion-unidades` + `VU-historial-asignaciones-unidad`, archivados `2026-08-24`) |
 | **10** | **2** | **CF** | `CF - Configuración Global.md` | Configuración | `/admin/configuracion` | 🟡 Documentado (D4 parametrización legal Chile en spec vía `prep-fundamentos-serie-2`) |

@@ -6,7 +6,7 @@ Bienvenido a la documentación operativa del sistema de administración de condo
 - [41 - Carga Inicial de una Comunidad](<41 - Carga Inicial de una Comunidad.md>): Instructivo del importador CSV para el administrador: bajar plantillas de estructura, personas y vínculos, llenarlas en Excel → CSV, revisar la vista previa fila por fila e importar sin duplicar (orden estructura → personas → vínculos).
 - [01 - Tipos de Unidad](<01 - Tipos de Unidad.md>): Gestión de plantillas y modelos base de propiedades.
 - [02 - Estructura Física](<02 - Estructura Física.md>): Configuración de torres, niveles y departamentos.
-- [03 - Estacionamientos](<03 - Estacionamientos.md>): Inventario de parking y vinculación granulada.
+- [03 - Estacionamientos](<03 - Estacionamientos.md>): **RETIRADO** — la pantalla de la v8 ya no existe; el estacionamiento es un tipo de unidad en `02 - Estructura Física`.
 
 ## ⚙️ Fase 2: Configuración Administrativa
 - [04 - Auditoría y Métricas](<04 - Auditoría y Métricas.md>): Control de logs y reportes de gestión.
