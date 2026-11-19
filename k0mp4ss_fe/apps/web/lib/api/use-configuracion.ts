@@ -99,7 +99,7 @@ export interface ComunidadActualHook {
  * Es la calle de uso que la app completa tiene disponible: no exige `cf`, así que
  * conserjería, residente y mantención obtienen la misma respuesta que el administrador.
  * Mientras carga o si la petición falla, `nombre` viene vacío y `logoUrl` undefined: los
- * componentes caen a su fallback ("GECOS" + ícono) sin parpadeos raros.
+ * componentes caen a su fallback ("Compass" + ícono) sin parpadeos raros.
  */
 /**
  * Hook de marca de la comunidad activa.

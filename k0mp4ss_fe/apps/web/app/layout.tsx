@@ -20,8 +20,8 @@ import { auth } from "@/lib/auth";
 // client no exportan metadata propia — el default del root layout las cubre.
 export const metadata: Metadata = {
   title: {
-    default: "GECOS — Sistema de Gestión de Condominios",
-    template: "%s · GECOS",
+    default: "Compass — Gestión de comunidades",
+    template: "%s · Compass",
   },
   description: "Sistema de gestión de comunidades: finanzas, operaciones, comunidad e inventario.",
 }

@@ -265,7 +265,7 @@ const data = {
 export function AppSidebar({ roles = [], ...props }: React.ComponentProps<typeof Sidebar> & { roles?: string[] }) {
   const pathname = usePathname()
   // Marca desde la proyección /api/comunidad-actual (cualquier rol la consulta):
-  // mientras carga o si falla, cae al fallback "GECOS" + ícono sin romper la navegación.
+  // mientras carga o si falla, cae al fallback "Compass" + ícono sin romper la navegación.
   const { nombre: nombreComunidad, logoUrl } = useComunidadActual()
   const hasBrand = Boolean(logoUrl)
 
@@ -297,7 +297,7 @@ export function AppSidebar({ roles = [], ...props }: React.ComponentProps<typeof
                 </div>
                 <div className="grid flex-1 text-left text-sm leading-tight">
                   <span className="truncate font-semibold">
-                    {nombreComunidad || "GECOS"}
+                    {nombreComunidad || "Compass"}
                   </span>
                   <span className="truncate text-xs">Administración</span>
                 </div>

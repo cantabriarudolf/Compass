@@ -38,7 +38,7 @@ export function CommunityHeader({ logueado = true }: { logueado?: boolean }) {
           <IconCommand className="size-4" />
         </div>
       )}
-      <h2 className="text-sm font-medium">{nombreComunidad || "GECOS"}</h2>
+      <h2 className="text-sm font-medium">{nombreComunidad || "Compass"}</h2>
     </div>
   )
 }
