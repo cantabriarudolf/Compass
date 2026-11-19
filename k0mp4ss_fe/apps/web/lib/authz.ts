@@ -7,11 +7,36 @@
  * Menor privilegio: lo no listado = denegado; unión de roles vía tienePermiso().
  * Pura, sin IO, testeable. Proxy solo autenticación (SG §4.1).
  */
+import { aOracion } from "@/lib/normalizacion"
 
 export const ROLES = ["administrador", "comite", "conserjeria", "residente", "mantencion"] as const
 export type Rol = (typeof ROLES)[number]
 export type Accion = "ver" | "crear" | "editar" | "eliminar" | "ejecutar"
 export type Recurso = string
+
+/**
+ * Cómo se nombra cada rol cuando se lo muestra. Una sola fuente para el correo y
+ * la pantalla: acá vive la forma que pide la oración —«Tu rol es residente.»—, y
+ * la pantalla la capitaliza con `etiquetaRol`. La capitalización es
+ * presentación, no identidad del rol: no hay una segunda lista de etiquetas.
+ */
+export const ETIQUETA_ROL: Record<Rol, string> = {
+  administrador: "administrador",
+  comite: "comité",
+  conserjeria: "conserjería",
+  residente: "residente",
+  mantencion: "mantención",
+}
+
+/**
+ * Etiqueta del rol tal como la muestra la pantalla: la inicial en mayúscula
+ * («Administrador», «Comité», «Conserjería», «Residente», «Mantención»). Un valor
+ * que no es un rol conocido se devuelve crudo: la tabla muestra el dato tal como
+ * vino antes que inventar una etiqueta.
+ */
+export function etiquetaRol(rol: string): string {
+  return ROLES.includes(rol as Rol) ? aOracion(ETIQUETA_ROL[rol as Rol]) : rol
+}
 
 // Matriz interna: Rol -> Recurso -> Set<Accion>
 // Claves normalizadas lower. "*" = wildcard para administrador.

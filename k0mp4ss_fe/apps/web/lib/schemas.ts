@@ -2060,6 +2060,25 @@ export const ESTADOS_ENTREGA_AVISO = [
 export const EstadoEntregaAvisoSchema = z.enum(ESTADOS_ENTREGA_AVISO)
 export type EstadoEntregaAviso = (typeof ESTADOS_ENTREGA_AVISO)[number]
 
+// --- Constancia del correo de bienvenida (F43 — `InvitacionAcceso.envioEstado`) ---
+//
+// Estados del envío del correo de bienvenida de una invitación. Son los de
+// `ESTADOS_ENTREGA_AVISO` menos `entregado`: esa palabra describe la entrega que
+// prueba una `Notificacion` del visor, y el correo no crea ninguna, así que el
+// éxito del correo es `enviado` y nunca `entregado`.
+//
+// Es UN catálogo, no dos: lo escribe el alta y el reenvío (`enviarBienvenida`, en
+// `lib/correo-bienvenida.ts`) y lo proyecta el listado
+// (`envioInvitacionPublico`, en `lib/invitacion-acceso.ts`), sobre la misma
+// columna. Con una copia por orilla, un estado nuevo del escritor se leería como
+// «nunca se intentó» en la pantalla. Vive acá —módulo puro— porque
+// `lib/invitacion-acceso.ts` importa Prisma y este catálogo también lo consume un
+// componente de cliente.
+
+export const ESTADOS_ENVIO_INVITACION = ["enviado", "pendiente", "fallido"] as const
+export const EstadoEnvioInvitacionSchema = z.enum(ESTADOS_ENVIO_INVITACION)
+export type EstadoEnvioInvitacion = (typeof ESTADOS_ENVIO_INVITACION)[number]
+
 /** Registro de una entrega: aviso, destinatario, canal, estado, fecha y motivo. */
 export const EnvioAvisoCobroSchema = z.object({
   id: IdEntidadSchema,

@@ -30,31 +30,23 @@
  * diálogo SMTP no retiene el lock de la base y una falla del correo no puede
  * deshacer la cuenta ni el enlace (el correo es un atajo, no la única puerta).
  */
-import { puede, type Accion, type Recurso, type Rol } from "@/lib/authz"
+import { ETIQUETA_ROL, puede, type Accion, type Recurso, type Rol } from "@/lib/authz"
 import { planDeCanal } from "@/lib/entrega-aviso"
 import { logger } from "@/lib/logger"
 import { prisma } from "@/lib/prisma"
-import type { EstadoEntregaAviso } from "@/lib/schemas"
+import type { EstadoEntregaAviso, EstadoEnvioInvitacion } from "@/lib/schemas"
 
 /** Máximo de viñetas por rol: tres. Se eligen las más consecuentes, no se rellena. */
 export const MAX_VINETAS_POR_ROL = 3
 
-/**
- * Estados del envío del correo de bienvenida. Son los de `ESTADOS_ENTREGA_AVISO`
- * menos `entregado`: esa palabra describe la entrega que prueba una
- * `Notificacion` del visor, y el correo no crea ninguna.
- */
-export const ESTADOS_ENVIO_BIENVENIDA = ["enviado", "pendiente", "fallido"] as const
-export type EstadoEnvioBienvenida = (typeof ESTADOS_ENVIO_BIENVENIDA)[number]
+// El catálogo de estados de la constancia (`enviado | pendiente | fallido`) y su
+// tipo viven en `lib/schemas.ts`, junto a `ESTADOS_ENTREGA_AVISO`: es el mismo
+// catálogo que proyecta `lib/invitacion-acceso.ts` sobre la columna
+// `envioEstado`.
 
-/** Cómo se nombra cada rol en el correo (el rol técnico no se muestra crudo). */
-export const ETIQUETA_ROL: Record<Rol, string> = {
-  administrador: "administrador",
-  comite: "comité",
-  conserjeria: "conserjería",
-  residente: "residente",
-  mantencion: "mantención",
-}
+// Reexportada, no redeclarada: `ETIQUETA_ROL` tiene una sola definición en
+// `lib/authz.ts` y este módulo la usa en minúsculas, dentro de la oración.
+export { ETIQUETA_ROL }
 
 /**
  * Párrafo por rol: qué implica el rol en lenguaje llano. Sale de la redacción
@@ -285,7 +277,7 @@ export function sinEnlaceEnElMotivo(
  * `entregado` es del visor y el canal email no lo produce; si apareciera, el
  * hecho real es que el correo no salió.
  */
-function estadoDelCorreo(estado: EstadoEntregaAviso): EstadoEnvioBienvenida {
+function estadoDelCorreo(estado: EstadoEntregaAviso): EstadoEnvioInvitacion {
   if (estado === "enviado" || estado === "pendiente" || estado === "fallido") {
     return estado
   }
@@ -310,7 +302,7 @@ export interface DatosEnvioBienvenida {
 
 /** La constancia tal como queda escrita (y tal como la lee la pantalla). */
 export interface ConstanciaEnvioBienvenida {
-  estado: EstadoEnvioBienvenida
+  estado: EstadoEnvioInvitacion
   motivo: string | null
   /** ISO sólo cuando el servidor aceptó el mensaje; null en `pendiente` y `fallido`. */
   enviadoEn: string | null
@@ -321,13 +313,14 @@ export interface ConstanciaEnvioBienvenida {
  *
  * Corre fuera de la transacción del alta o del reenvío. No lanza: un envío que
  * falla —o una constancia que no se puede guardar— no puede deshacer la cuenta
- * ni el enlace. Si la fila no se puede actualizar queda el rastro en el log y la
- * respuesta al administrador sigue trayendo el enlace.
+ * ni el enlace. Si la fila no se puede actualizar queda el rastro en el log —el
+ * estado y el motivo, ya redactado— y la respuesta al administrador sigue
+ * trayendo el enlace.
  */
 export async function enviarBienvenida(
   datos: DatosEnvioBienvenida
 ): Promise<ConstanciaEnvioBienvenida> {
-  let estado: EstadoEnvioBienvenida
+  let estado: EstadoEnvioInvitacion
   let motivo: string | null
 
   try {
@@ -366,6 +359,10 @@ export async function enviarBienvenida(
         event: "INVITACION_ENVIO_SIN_CONSTANCIA",
         invitacionId: datos.invitacionId,
         estado,
+        // Ya redactado por `sinEnlaceEnElMotivo`: sin enlace y sin token. Sin
+        // este campo, quien investiga el envío no sabe por qué concluyó lo que
+        // concluyó.
+        motivo,
       },
       "[f43] no se pudo guardar la constancia del correo de bienvenida"
     )

@@ -84,7 +84,7 @@ import {
   IconRefresh,
   IconUserPlus,
 } from "@tabler/icons-react"
-import { ROLES, type Rol } from "@/lib/authz"
+import { ROLES, etiquetaRol, type Rol } from "@/lib/authz"
 import { usePersonas } from "@/lib/api/use-personas"
 import {
   crearCuentaDeAcceso,
@@ -94,15 +94,6 @@ import {
   type CuentaDeComunidad,
   type InvitacionPublica,
 } from "@/lib/api/use-admin-usuarios"
-
-/** Etiqueta corta del rol DE ACCESO (no del rol de la persona en el padrón). */
-const ETIQUETA_ROL: Record<Rol, string> = {
-  administrador: "Administrador",
-  comite: "Comité",
-  conserjeria: "Conserjería",
-  residente: "Residente",
-  mantencion: "Mantención",
-}
 
 /**
  * El aviso que acompaña a toda invitación emitida: el correo sale en el mismo
@@ -323,7 +314,7 @@ export function ConsolaUsuarios() {
     setAviso(
       `La invitación quedó emitida para ${
         persona?.email ?? "la persona elegida"
-      } con rol ${ETIQUETA_ROL[rol]}. ${AVISO_ESTADO_CORREO}`
+      } con rol ${etiquetaRol(rol)}. ${AVISO_ESTADO_CORREO}`
     )
     // El enlace existe sólo en esta respuesta: se muestra acá o se pierde.
     if (resultado.enlace) {
@@ -547,7 +538,7 @@ export function ConsolaUsuarios() {
                 <SelectContent>
                   {ROLES.map((opcion) => (
                     <SelectItem key={opcion} value={opcion}>
-                      {ETIQUETA_ROL[opcion]}
+                      {etiquetaRol(opcion)}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -631,7 +622,7 @@ export function ConsolaUsuarios() {
                       {cuenta.usuario.email}
                     </TableCell>
                     <TableCell>
-                      {ETIQUETA_ROL[cuenta.rol as Rol] ?? cuenta.rol}
+                      {etiquetaRol(cuenta.rol)}
                     </TableCell>
                     <TableCell>
                       <EstadoInvitacion invitacion={cuenta.invitacion} />

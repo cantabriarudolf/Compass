@@ -34,6 +34,10 @@ import { createHash, randomBytes, randomUUID, timingSafeEqual } from "node:crypt
 import bcrypt from "bcryptjs"
 import { prisma } from "@/lib/prisma"
 import { registrarEventoAuditoria } from "@/lib/auditoria"
+import {
+  ESTADOS_ENVIO_INVITACION,
+  type EstadoEnvioInvitacion,
+} from "@/lib/schemas"
 
 /** Vigencia del enlace: 72 h. Una invitación es un trámite, no una credencial permanente. */
 export const VIGENCIA_INVITACION_MS = 72 * 60 * 60 * 1000
@@ -54,13 +58,9 @@ const COSTO_BCRYPT = 10
 
 export type EstadoInvitacion = "pendiente" | "usada" | "vencida"
 
-/**
- * Estados del envío del correo de bienvenida de ESTA invitación (F43). Son los de
- * `ESTADOS_ENTREGA_AVISO` menos `entregado`: esa palabra describe la entrega que
- * prueba una `Notificacion` del visor, y el correo no crea ninguna.
- */
-export const ESTADOS_ENVIO_INVITACION = ["enviado", "pendiente", "fallido"] as const
-export type EstadoEnvioInvitacion = (typeof ESTADOS_ENVIO_INVITACION)[number]
+// Los estados de la constancia del envío (`ESTADOS_ENVIO_INVITACION` y su tipo)
+// viven en `lib/schemas.ts`: una sola copia para el escritor
+// (`lib/correo-bienvenida.ts`) y esta proyección.
 
 /**
  * La constancia del envío, en la proyección pública. `enviadoEn` sólo lleva fecha
@@ -117,7 +117,7 @@ export function estadoInvitacion(
   return fila.expiraEn.getTime() <= ahora.getTime() ? "vencida" : "pendiente"
 }
 
-/** `true` sólo para los estados que esta constancia puede escribir. */
+/** `true` sólo para los estados del catálogo compartido de la constancia. */
 function esEstadoEnvioInvitacion(valor: string): valor is EstadoEnvioInvitacion {
   return (ESTADOS_ENVIO_INVITACION as readonly string[]).includes(valor)
 }
