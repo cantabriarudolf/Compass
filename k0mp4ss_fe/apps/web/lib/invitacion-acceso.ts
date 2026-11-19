@@ -19,11 +19,13 @@
  * - **El secreto se revela una sola vez, al administrador (L4).** Emitir la
  *   invitación entrega el token a quien lo va a TRANSPORTAR, y la ruta del alta o
  *   del reenvío lo convierte con `enlaceInvitacionDeAcceso(...)`: esa respuesta es
- *   la ÚNICA que lo incluye, para el administrador autenticado de la comunidad,
- *   porque sin enlace no hay forma de invitar a nadie mientras el correo (F43) no
- *   exista. El estado que devuelve el listado (`InvitacionAccesoPublica`) no tiene
- *   token ni hash, y ninguna lectura posterior puede reconstruirlo: en la base
- *   sólo vive su SHA-256.
+ *   la ÚNICA que lo incluye, para el administrador autenticado de la comunidad.
+ *   Desde F43 el enlace también viaja en el correo de bienvenida que sale en el
+ *   mismo acto (`lib/correo-bienvenida.ts`), pero el correo es un atajo: si queda
+ *   `pendiente` o `fallido`, la respuesta es la puerta que queda. El estado que
+ *   devuelve el listado (`InvitacionAccesoPublica`) no tiene token ni hash, y
+ *   ninguna lectura posterior puede reconstruirlo: en la base sólo vive su
+ *   SHA-256.
  *
  * Sin invitación no hay alta: la cuenta nace sin `passwordHash`, así que el
  * login la rechaza (`lib/auth.ts:111-114`) hasta que este módulo la habilita.
@@ -53,8 +55,28 @@ const COSTO_BCRYPT = 10
 export type EstadoInvitacion = "pendiente" | "usada" | "vencida"
 
 /**
+ * Estados del envío del correo de bienvenida de ESTA invitación (F43). Son los de
+ * `ESTADOS_ENTREGA_AVISO` menos `entregado`: esa palabra describe la entrega que
+ * prueba una `Notificacion` del visor, y el correo no crea ninguna.
+ */
+export const ESTADOS_ENVIO_INVITACION = ["enviado", "pendiente", "fallido"] as const
+export type EstadoEnvioInvitacion = (typeof ESTADOS_ENVIO_INVITACION)[number]
+
+/**
+ * La constancia del envío, en la proyección pública. `enviadoEn` sólo lleva fecha
+ * cuando el servidor aceptó el mensaje: un `pendiente` o un `fallido` no se
+ * fechan como enviados. Nunca contiene el token ni el enlace.
+ */
+export interface EnvioInvitacionPublico {
+  estado: EstadoEnvioInvitacion
+  motivo: string | null
+  enviadoEn: string | null
+}
+
+/**
  * Forma PÚBLICA de una invitación: lo único que puede salir por una respuesta.
- * No tiene token, ni hash, ni `usuarioId`: el estado se lee para mostrarlo.
+ * No tiene token, ni hash, ni `usuarioId`: el estado y la constancia del envío se
+ * leen para mostrarlos.
  */
 export interface InvitacionAccesoPublica {
   id: string
@@ -62,6 +84,12 @@ export interface InvitacionAccesoPublica {
   expiraEn: string
   usadoEn: string | null
   creadoEn: string
+  /**
+   * Constancia del correo de bienvenida de ESTA invitación, o `null` cuando
+   * todavía no hubo intento (una fila recién emitida, o una anterior a F43).
+   * `null` no es `pendiente`: `pendiente` es un intento con la cola sin emisor.
+   */
+  envio: EnvioInvitacionPublico | null
 }
 
 /** Cliente Prisma mínimo: el singleton o el `tx` de `prisma.$transaction`. */
@@ -72,6 +100,9 @@ type FilaInvitacion = {
   expiraEn: Date
   usadoEn: Date | null
   createdAt: Date
+  envioEstado: string | null
+  envioMotivo: string | null
+  envioEn: Date | null
 }
 
 /**
@@ -86,6 +117,28 @@ export function estadoInvitacion(
   return fila.expiraEn.getTime() <= ahora.getTime() ? "vencida" : "pendiente"
 }
 
+/** `true` sólo para los estados que esta constancia puede escribir. */
+function esEstadoEnvioInvitacion(valor: string): valor is EstadoEnvioInvitacion {
+  return (ESTADOS_ENVIO_INVITACION as readonly string[]).includes(valor)
+}
+
+/**
+ * Constancia pública del envío de una fila. Un estado fuera del catálogo —dato
+ * escrito por fuera de la API— se proyecta como ausencia de constancia: no se
+ * traduce a una promesa que la plataforma no puede sostener.
+ */
+export function envioInvitacionPublico(
+  fila: Pick<FilaInvitacion, "envioEstado" | "envioMotivo" | "envioEn">
+): EnvioInvitacionPublico | null {
+  const estado = fila.envioEstado
+  if (estado === null || !esEstadoEnvioInvitacion(estado)) return null
+  return {
+    estado,
+    motivo: fila.envioMotivo,
+    enviadoEn: fila.envioEn ? fila.envioEn.toISOString() : null,
+  }
+}
+
 /** Proyección pública de una fila (sin secreto y con fechas ISO). */
 export function invitacionPublica(
   fila: FilaInvitacion,
@@ -97,6 +150,7 @@ export function invitacionPublica(
     expiraEn: fila.expiraEn.toISOString(),
     usadoEn: fila.usadoEn ? fila.usadoEn.toISOString() : null,
     creadoEn: fila.createdAt.toISOString(),
+    envio: envioInvitacionPublico(fila),
   }
 }
 

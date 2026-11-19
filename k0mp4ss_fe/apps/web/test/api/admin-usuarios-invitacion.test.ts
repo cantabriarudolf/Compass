@@ -292,6 +292,7 @@ describe("F42 T1 — alta con invitación y definición de contraseña", () => {
       expect(texto.toLowerCase()).not.toContain("passwordhash")
       expect(Object.keys(cuerpo.invitacion).sort()).toEqual([
         "creadoEn",
+        "envio",
         "estado",
         "expiraEn",
         "id",
@@ -473,6 +474,7 @@ describe("F42 T1 — alta con invitación y definición de contraseña", () => {
       expect(fila).toBeDefined()
       expect(Object.keys(fila!.invitacion!).sort()).toEqual([
         "creadoEn",
+        "envio",
         "estado",
         "expiraEn",
         "id",

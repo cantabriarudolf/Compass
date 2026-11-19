@@ -297,6 +297,7 @@ describe("F42 T2 — reenvío de la invitación de acceso", () => {
     const invitacionNueva = cuerpo.invitacion!
     expect(Object.keys(invitacionNueva).sort()).toEqual([
       "creadoEn",
+      "envio",
       "estado",
       "expiraEn",
       "id",

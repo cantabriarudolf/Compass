@@ -1,7 +1,7 @@
 import { NextResponse, NextRequest } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { auth } from "@/lib/auth"
-import { puede } from "@/lib/authz"
+import { normalizaRol, puede } from "@/lib/authz"
 import { logger } from "@/lib/logger"
 import { randomUUID } from "node:crypto"
 import { registrarEventoAuditoria } from "@/lib/auditoria"
@@ -10,6 +10,7 @@ import {
   crearInvitacionDeAcceso,
   enlaceInvitacionDeAcceso,
 } from "@/lib/invitacion-acceso"
+import { enviarBienvenida } from "@/lib/correo-bienvenida"
 
 export const dynamic = "force-dynamic"
 
@@ -38,10 +39,11 @@ const MENSAJE_CUENTA_INACTIVA =
  * crear la puerta de entrada de esa cuenta.
  *
  * Qué devuelve: el enlace completo que la administración entrega, UNA sola vez
- * (L4). Es la excepción angosta y declarada a S4: el correo de bienvenida es F43
- * y todavía no existe, así que sin este enlace el reenvío no le serviría a nadie.
- * No se guarda en claro, no se puede consultar después y el `GET` del listado
- * sigue devolviendo sólo la forma pública.
+ * (L4), y la constancia del correo de bienvenida que sale en el mismo acto (F43).
+ * La excepción angosta y declarada a S4 sigue en pie: el enlace viaja en la
+ * respuesta porque es lo que permite entregarlo a mano si el correo queda
+ * `pendiente` o `fallido`; no se guarda en claro, no se puede consultar después y
+ * el `GET` del listado sigue devolviendo sólo la forma pública.
  *
  * Cuándo NO se reenvía: si la cuenta ya definió su contraseña (`passwordHash`) el
  * enlace no tiene qué habilitar, y si está inactiva el login la rechaza aunque
@@ -130,7 +132,7 @@ export async function POST(request: NextRequest) {
   // mismo para una cuenta inexistente: no se cuenta qué existe fuera del tenant.
   const membresiaDestino = await prisma.membresia.findFirst({
     where: { usuarioId, comunidadId: cid },
-    select: { id: true },
+    select: { id: true, rol: true },
   })
   if (!membresiaDestino) {
     return NextResponse.json(
@@ -143,19 +145,38 @@ export async function POST(request: NextRequest) {
     invitacion: Awaited<ReturnType<typeof crearInvitacionDeAcceso>>["invitacion"]
     token: string
     invalidadas: number
+    /** Correo de la cuenta: destinatario del aviso de bienvenida (F43). */
+    destinatario: string
+    /** Nombre de la persona para saludarla; sin ficha, el correo de la cuenta. */
+    nombre: string
   }
 
   try {
     resultado = await prisma.$transaction(async (tx) => {
       const cuenta = await tx.usuario.findUnique({
         where: { id: usuarioId },
-        select: { passwordHash: true, activo: true },
+        select: {
+          passwordHash: true,
+          activo: true,
+          email: true,
+          personaId: true,
+        },
       })
       // La membresía se leyó arriba; si la cuenta desapareció en el medio, el
       // mismo 404 que si nunca hubiera estado en esta comunidad.
       if (!cuenta) throw new CuentaNoPertenece()
       if (!cuenta.activo) throw new CuentaInactiva()
       if (cuenta.passwordHash !== null) throw new CuentaYaDefinioContrasena()
+
+      // El nombre para saludar sale de la ficha. `Usuario.personaId` no es FK
+      // estricta (Auth.js crea la cuenta antes de saber quién es), así que la
+      // ficha se lee aparte y acotada a la comunidad de la sesión.
+      const ficha = cuenta.personaId
+        ? await tx.persona.findFirst({
+            where: { id: cuenta.personaId, comunidadId: cid },
+            select: { nombreCompleto: true },
+          })
+        : null
 
       const ahora = new Date()
       // La anterior deja de servir AHORA: vencida, con el rastro intacto.
@@ -192,7 +213,13 @@ export async function POST(request: NextRequest) {
         tx
       )
 
-      return { invitacion, token, invalidadas: invalidadas.count }
+      return {
+        invitacion,
+        token,
+        invalidadas: invalidadas.count,
+        destinatario: cuenta.email,
+        nombre: ficha?.nombreCompleto?.trim() || cuenta.email,
+      }
     })
   } catch (error) {
     if (error instanceof CuentaYaDefinioContrasena) {
@@ -219,15 +246,36 @@ export async function POST(request: NextRequest) {
   // L4: el enlace nuevo se revela acá, una sola vez, al administrador que
   // reenvía. El anterior quedó vencido en la misma transacción, así que este es
   // el único enlace vivo de la cuenta y no hay forma de volver a consultarlo.
+  const enlace = enlaceInvitacionDeAcceso(
+    resultado.token,
+    new URL(request.url).origin
+  )
+
+  // F43 · S5/S6: cada reenvío es una invitación NUEVA y deja SU propia constancia
+  // (la de la anterior no se toca), y el correo sale en este acto porque el token
+  // en claro sólo existe acá. Una membresía con un rol que la matriz no conoce no
+  // tiene texto honesto que mandar —no se inventan capacidades—, así que el
+  // enlace igual se entrega. `enviarBienvenida` registra la constancia y no lanza:
+  // un rebote no deshace la invitación.
+  const rolDestino = normalizaRol(membresiaDestino.rol)
+  if (rolDestino) {
+    await enviarBienvenida({
+      invitacionId: resultado.invitacion.id,
+      comunidadId: cid,
+      comunidad: comunidad.nombre,
+      destinatario: resultado.destinatario,
+      nombre: resultado.nombre,
+      rol: rolDestino,
+      enlace,
+    })
+  }
+
   return NextResponse.json(
     {
       ok: true,
       invitacion: resultado.invitacion,
       invalidadas: resultado.invalidadas,
-      enlace: enlaceInvitacionDeAcceso(
-        resultado.token,
-        new URL(request.url).origin
-      ),
+      enlace,
     },
     { status: 201 }
   )

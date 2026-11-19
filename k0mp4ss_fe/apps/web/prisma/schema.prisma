@@ -184,6 +184,13 @@ model InvitacionAcceso {
   tokenHash   String    @unique
   expiraEn    DateTime
   usadoEn     DateTime?
+  // F43 — constancia del correo de bienvenida de ESTA invitación. `enviado` sólo
+  // con la aceptación del servidor SMTP; `pendiente` sin emisor configurado;
+  // `fallido` con el motivo del servidor. `envioEn` sólo cuando se envió: un
+  // rebote no se fecha como enviado. Esta fila no guarda el token en claro.
+  envioEstado String?
+  envioMotivo String?
+  envioEn     DateTime?
   creadoPor   String
   createdAt   DateTime  @default(now())
 

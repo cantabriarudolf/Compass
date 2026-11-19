@@ -12,6 +12,7 @@ import {
   enlaceInvitacionDeAcceso,
   invitacionPublica,
 } from "@/lib/invitacion-acceso"
+import { enviarBienvenida } from "@/lib/correo-bienvenida"
 
 export const dynamic = "force-dynamic"
 
@@ -145,9 +146,9 @@ const CORREO_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
  * Cómo entra la persona: por un enlace de un solo uso. La cuenta nace con
  * `passwordHash` nulo, así que el login la rechaza hasta que consuma la invitación.
  * Esta respuesta revela ese enlace UNA sola vez, al administrador que acaba de
- * crear la cuenta (L4): es lo único que le permite entregarlo mientras el correo
- * (F43) no exista. Después no se puede consultar — sólo queda el hash— y el
- * `GET` de esta misma ruta no lo incluye.
+ * crear la cuenta (L4): es lo que le permite entregarlo, además del correo de
+ * bienvenida que sale en este mismo acto (F43). Después no se puede consultar —
+ * sólo queda el hash— y el `GET` de esta misma ruta no lo incluye.
  */
 export async function POST(request: NextRequest) {
   const sesion = await auth()
@@ -349,6 +350,27 @@ export async function POST(request: NextRequest) {
   // L4: el enlace se revela acá, una sola vez, al administrador que acaba de
   // crear la cuenta. El token no se persiste en claro y ninguna lectura lo trae;
   // si se pierde, la salida es reenviar (que vence este enlace).
+  const enlace = enlaceInvitacionDeAcceso(
+    creado.token,
+    new URL(request.url).origin
+  )
+
+  // F43 · S1/S6: el correo de bienvenida sale en el MISMO acto, porque el token en
+  // claro sólo existe en este instante. Corre DESPUÉS del commit y no puede
+  // deshacer la cuenta ni la invitación: si queda `pendiente` o `fallido`, la
+  // respuesta sigue trayendo el enlace (el correo es un atajo, no la única
+  // puerta). `enviarBienvenida` registra la constancia en la fila de la
+  // invitación y no lanza.
+  await enviarBienvenida({
+    invitacionId: creado.invitacion.id,
+    comunidadId: cid,
+    comunidad: comunidad.nombre,
+    destinatario: creado.usuario.email,
+    nombre: persona.nombreCompleto,
+    rol: rolNormalizado,
+    enlace,
+  })
+
   return NextResponse.json(
     {
       ok: true,
@@ -359,10 +381,7 @@ export async function POST(request: NextRequest) {
         rol: rolNormalizado,
       },
       invitacion: creado.invitacion,
-      enlace: enlaceInvitacionDeAcceso(
-        creado.token,
-        new URL(request.url).origin
-      ),
+      enlace,
     },
     { status: 201 }
   )
