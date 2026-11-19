@@ -490,6 +490,64 @@ export async function GET(q: string) {
     expect(hallazgos[0]?.detalle).toContain("nombreCompleto")
   })
 
+  // F44 (S2) · el punto compartido del factory, por donde nacen las colecciones.
+  const FACTORY_COMPARTIDO = "lib/api/crud-factory.ts"
+
+  it("reporta el punto busqueda: del factory que arma contains con el término y sin rechazo", () => {
+    const raiz = crearRaiz({
+      [FACTORY_COMPARTIDO]: `export function createCrudHandlers(config) {
+  const camposBusqueda = config.busqueda?.campos ?? []
+  if (q && camposBusqueda.length > 0) {
+    where = { OR: camposBusqueda.map((campo) => ({ [campo]: { contains: q } })) }
+  }
+  return where
+}
+`,
+    })
+    const hallazgos = hallazgosDe(raiz, "R6")
+    expect(hallazgos).toHaveLength(1)
+    expect(hallazgos[0]?.archivo).toBe(FACTORY_COMPARTIDO)
+    // La acción manda la guarda al factory una sola vez, no a cada colección.
+    expect(hallazgos[0]?.accion).toContain("punto busqueda: del factory")
+  })
+
+  it("no reporta el factory que rechaza con el 400 y el mensaje literal de la serie", () => {
+    const raiz = crearRaiz({
+      [FACTORY_COMPARTIDO]: `const COMODINES_LIKE = /[%_]/
+
+export function createCrudHandlers(config) {
+  const q = url.searchParams.get("q")?.trim()
+  const camposBusqueda = config.busqueda?.campos ?? []
+  if (q && camposBusqueda.length > 0 && COMODINES_LIKE.test(q)) {
+    return jsonError(400, "El parámetro q no acepta los comodines % y _.")
+  }
+  where = { OR: camposBusqueda.map((campo) => ({ [campo]: { contains: q } })) }
+  return where
+}
+`,
+    })
+    expect(hallazgosDe(raiz, "R6")).toHaveLength(0)
+  })
+
+  it("reporta el factory que tiene el marcador de comodines pero no responde el 400 literal", () => {
+    // Un `.test(` que no rechaza no es una guarda: en el punto compartido el candado
+    // exige el 400 con el mensaje que el cliente ya conoce.
+    const raiz = crearRaiz({
+      [FACTORY_COMPARTIDO]: `const COMODINES_LIKE = /[%_]/
+
+export function createCrudHandlers(config) {
+  const camposBusqueda = config.busqueda?.campos ?? []
+  const conComodin = Boolean(q) && COMODINES_LIKE.test(q)
+  where = { conComodin, OR: camposBusqueda.map((campo) => ({ [campo]: { contains: q } })) }
+  return where
+}
+`,
+    })
+    const hallazgos = hallazgosDe(raiz, "R6")
+    expect(hallazgos).toHaveLength(1)
+    expect(hallazgos[0]?.archivo).toBe(FACTORY_COMPARTIDO)
+  })
+
   it("la allowlist de R6 quedó vacía: la deuda medida se cerró (F39)", () => {
     // Las seis rutas declararon el rechazo de los comodines, así que el registro
     // de la deuda deja de tener entradas. Una ruta nueva que nazca floja no está

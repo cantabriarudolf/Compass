@@ -21,6 +21,16 @@ import {
   type ComunidadScope,
 } from "./with-comunidad-scope"
 
+/**
+ * Comodines de LIKE: `contains` arma el patrón `%q%` sin escapar, así que `q=%%` o
+ * `q=__` dejan de ser un término y pasan a enumerar la colección entera.
+ *
+ * El rechazo vive acá, UNA vez, y lo hereda toda colección que declare `busqueda:`
+ * (F44): el camino compartido es por donde nacen las colecciones, así que ninguna
+ * colección nueva puede nacer con la búsqueda floja.
+ */
+const COMODINES_LIKE = /[%_]/
+
 /** Delegado Prisma mínimo que la factory necesita (independiente del modelo). */
 export interface CrudDelegate {
   findMany(args?: Record<string, unknown>): Promise<unknown[]>
@@ -166,6 +176,11 @@ export interface CrudConfig {
    * `contains` sobre estos campos. Sin la opción —o sin `q`— el `where` es
    * exactamente el de siempre, así que las rutas que no la configuran no
    * cambian de comportamiento.
+   *
+   * Un `q` con comodines de LIKE (`%` o `_`) se rechaza con 400 antes de armar el
+   * `where` (F44): `contains` no escapa el patrón y el comodín enumeraría la
+   * colección. El rechazo vive en la factory, así que toda colección que declare
+   * esta opción lo hereda sin escribirlo.
    *
    * `mode: "insensitive"` no se usa a propósito: SQLite (motor de dev y de la
    * suite) no lo soporta y su `LIKE` ya es case-insensitive para ASCII.
@@ -364,6 +379,14 @@ export function createCrudHandlers(config: CrudConfig): CrudHandlers {
     let where: Record<string, unknown> = { comunidadId: scope.comunidadId }
     const q = url.searchParams.get("q")?.trim()
     const camposBusqueda = config.busqueda?.campos ?? []
+    // F44: el rechazo de los comodines corre ANTES de armar el `where` y sin tocar la
+    // base. Un término con comodín no es una búsqueda: es un barrido de la colección.
+    // El mensaje es el literal de la serie de buscadores (F39), sin variantes. Sin
+    // `busqueda:` declarada no se arma ningún `contains`, así que `q` se sigue ignorando
+    // como siempre: la guarda no cambia el comportamiento de las rutas que no buscan.
+    if (q && camposBusqueda.length > 0 && COMODINES_LIKE.test(q)) {
+      return jsonError(400, "El parámetro q no acepta los comodines % y _.")
+    }
     if (q && camposBusqueda.length > 0) {
       where = {
         ...where,

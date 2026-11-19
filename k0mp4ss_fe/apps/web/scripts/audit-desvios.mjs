@@ -28,6 +28,9 @@
  *   R6  Búsqueda por LIKE sin rechazo de los comodines: una ruta route.ts de app/api/**
  *       que arma `contains` con el término de la query construye el patrón %q% sin escapar,
  *       y `q=%%` o `q=__` enumeran la tabla entera, salvo que la ruta declare el rechazo.
+ *       Desde F44 la regla mira también el punto `busqueda:` de `lib/api/crud-factory.ts`,
+ *       que es por donde nacen las colecciones: allá el rechazo tiene que ser el 400 con el
+ *       mensaje literal de la serie, no un descarte que no responda nada.
  *   R7  Hook de colección (lib/api/use-*.ts) que fija el techo de la página en código propio
  *       (`?pageSize=100` en la URL, `pageSize: "100"` en URLSearchParams o la constante de
  *       módulo = 100 interpolada) y no expone en código la forma de completar la colección
@@ -637,6 +640,17 @@ function reglaR5(raiz, archivos, excepciones) {
 // ---------------------------------------------------------------------------
 
 /**
+ * Archivos compartidos que arman el `where` de una búsqueda por texto y lo heredan a todas
+ * las colecciones que declaran la opción. Se auditan igual que una ruta: si el factory arma
+ * `contains` con el término de la query y no rechaza los comodines, el defecto entra a TODAS
+ * las colecciones presentes y futuras de una sola vez (F44).
+ */
+const ARCHIVOS_BUSQUEDA_COMPARTIDA = new Set(["lib/api/crud-factory.ts"])
+
+/** Mensaje literal del rechazo, el de la serie de buscadores (F39). Sin variantes. */
+const MENSAJE_COMODINES_LIKE = "El parámetro q no acepta los comodines % y _."
+
+/**
  * Declaración válida del rechazo: el archivo tiene una clase de caracteres de regex que
  * contiene `%` y `_` (p. ej. `const COMODINES_LIKE = /[%_]/`) Y al menos un `.test(`. Es
  * exactamente el marcador de las tres rutas que hoy rechazan los comodines antes de armar
@@ -648,18 +662,37 @@ function archivoDeclaraRechazoComodines(texto) {
 }
 
 /**
- * Una ruta route.ts de `app/api/**` que arma `contains` con un valor que NO es un literal
- * de cadena está construyendo el patrón `%q%` de Prisma con el término de la query sin
- * escapar: `q=%%` o `q=__` enumeran la tabla entera. Es hallazgo salvo que la ruta declare
- * el rechazo de los comodines.
+ * Declaración del rechazo en el punto compartido: el mismo marcador de una ruta MÁS el 400
+ * con el mensaje literal de la serie. Un `.test(` que no responda el 400 deja la búsqueda
+ * igual de floja, y el literal es el contrato que el cliente ya conoce: por eso se exige.
+ */
+function factoryDeclaraRechazoComodines(texto) {
+  return (
+    archivoDeclaraRechazoComodines(texto) &&
+    texto.includes(MENSAJE_COMODINES_LIKE)
+  )
+}
+
+/**
+ * Una ruta route.ts de `app/api/**` —o el punto `busqueda:` compartido del factory— que arma
+ * `contains` con un valor que NO es un literal de cadena está construyendo el patrón `%q%`
+ * de Prisma con el término de la query sin escapar: `q=%%` o `q=__` enumeran la tabla entera.
+ * Es hallazgo salvo que el archivo declare el rechazo de los comodines.
  */
 function reglaR6(raiz, archivos, excepciones) {
   const hallazgos = []
   for (const absoluta of archivos) {
-    if (!absoluta.endsWith("route.ts")) continue
+    const archivo = rutaRelativa(raiz, absoluta)
+    const esRutaApi =
+      archivo.startsWith("app/api/") && archivo.endsWith("route.ts")
+    const esCompartido = ARCHIVOS_BUSQUEDA_COMPARTIDA.has(archivo)
+    if (!esRutaApi && !esCompartido) continue
     const texto = readFileSync(absoluta, "utf8")
     if (!texto.includes("contains:")) continue
-    if (archivoDeclaraRechazoComodines(texto)) continue
+    const declaraRechazo = esCompartido
+      ? factoryDeclaraRechazoComodines(texto)
+      : archivoDeclaraRechazoComodines(texto)
+    if (declaraRechazo) continue
     const lineas = texto.split(/\r?\n/)
     const re = /\bcontains:\s*([^,}\n]+)/g
     // Una línea puede armar dos `contains` (nombre y RUT, por ejemplo): el `detalle`
@@ -674,7 +707,6 @@ function reglaR6(raiz, archivos, excepciones) {
       const clave = `${linea}:${valor}`
       if (vistas.has(clave)) continue
       vistas.add(clave)
-      const archivo = rutaRelativa(raiz, absoluta)
       if (
         exceptuado("R6", excepciones, {
           archivo,
@@ -687,8 +719,9 @@ function reglaR6(raiz, archivos, excepciones) {
         archivo,
         linea,
         detalle: `contains sobre "${valor}" sin rechazo declarado de los comodines de LIKE: ${recorta(lineas[linea - 1] ?? "")}`,
-        accion:
-          `rechazar "%" y "_" antes de armar el where (const COMODINES_LIKE = /[%_]/ y COMODINES_LIKE.test(q) → 400) o justificarlo en la allowlist del candado`,
+        accion: esCompartido
+          ? `rechazar "%" y "_" UNA vez en el punto busqueda: del factory, antes del where: COMODINES_LIKE.test(q) → jsonError(400, "${MENSAJE_COMODINES_LIKE}")`
+          : `rechazar "%" y "_" antes de armar el where (const COMODINES_LIKE = /[%_]/ y COMODINES_LIKE.test(q) → 400) o justificarlo en la allowlist del candado`,
       })
     }
   }
@@ -986,6 +1019,12 @@ const EXCEPCIONES_R2 = [
     motivo:
       "documenta una decisión ya tomada y cerrada (por qué el desafío 2FA vive en su propio endpoint porque `authorize` no puede transportar el tempToken): no queda nada pendiente.",
   },
+  {
+    archivo: "test/api/busqueda-comodines-factory.test.ts",
+    fragmento: "scripts/audit-desvios.mjs",
+    motivo:
+      "falso positivo del marcador: el test importa el candado para probar que R6 muerde en el punto `busqueda:` del factory (F44, S4). Aquí la palabra es el nombre del script, no un pendiente postergado, y la sonda se arma en un directorio temporal fuera del árbol.",
+  },
 ]
 
 const EXCEPCIONES_R3 = [
@@ -1043,7 +1082,8 @@ const EXCEPCIONES_R5 = [
  * búsqueda declaran el rechazo de los comodines de LIKE, así que no queda deuda que
  * registrar. Una ruta que nazca floja no está acá y el candado la reporta; si una de estas
  * vuelve a armar el patrón `%q%` sin rechazo, el hallazgo es suyo y no se hereda de este
- * registro.
+ * registro. Desde F44 el candado también audita el punto `busqueda:` compartido del factory,
+ * que es por donde nacen las colecciones.
  */
 const EXCEPCIONES_R6 = []
 
@@ -1187,7 +1227,18 @@ export function auditar(opciones = {}) {
     ...reglaR3(raiz, pruebas, excepciones),
     ...reglaR4(raiz, archivosDe(raiz, ["app", "components"]), excepciones),
     ...reglaR5(raiz, codigo, excepciones),
-    ...reglaR6(raiz, archivosDe(raiz, ["app/api"]), excepciones),
+    ...reglaR6(
+      raiz,
+      [
+        ...archivosDe(raiz, ["app/api"]),
+        // El punto compartido se audita aunque no sea una ruta: es de donde cuelgan
+        // todas las colecciones que declaran búsqueda (F44).
+        ...[...ARCHIVOS_BUSQUEDA_COMPARTIDA]
+          .map((relativa) => join(raiz, relativa))
+          .filter((absoluta) => existsSync(absoluta)),
+      ],
+      excepciones
+    ),
     ...reglaR7(raiz, codigo, excepciones),
   ]
 }
