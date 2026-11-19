@@ -24,6 +24,7 @@ Cada unidad tiene una ficha ultra detallada que incluye:
 ## 🔎 Búsqueda y padrón completo
 El endpoint de unidades devuelve páginas ordenadas por más reciente, así que mirar solo la primera dejaba gente afuera: en el padrón de la demo (184 unidades) la página 1 son 79 estacionamientos privados, 20 de visita y 1 local — **cero departamentos**.
 - **La búsqueda viaja al servidor** por **N°, etiqueta o rol SII** y se aplica sobre todo el padrón, no sobre la página cargada: buscar «101» encuentra el 101 aunque esté veinte páginas más abajo (commit `e05c10f`).
+- **La búsqueda no acepta los comodines de LIKE (`%` y `_`)**: un término con comodín responde **400 «El parámetro q no acepta los comodines % y _.»** antes de consultar la base, porque `contains` arma el patrón `%q%` sin escapar y `q=%%` enumeraba el padrón entero (F44, 2026-11-19). El rechazo vive **una sola vez** en el factory CRUD compartido (`lib/api/crud-factory.ts`), así que **toda colección que declare `busqueda:` lo hereda** —hoy la de unidades es la única que lo declara— y una colección nueva no puede nacer con la búsqueda floja; el candado R6 de la auditoría mira ese punto compartido y falla si alguien le quita la guarda. Las colecciones que **no** declaran búsqueda **ignoran `q`** y responden 200 como siempre: ahí no se arma ningún `contains`, así que `q` no llega a la base.
 - **La tabla pagina** de a 20 filas sobre lo cargado y el pie muestra el total real: «*N* unidades con este filtro · el padrón tiene *M*» + «Ver más» para traer las páginas que faltan del servidor (o de la búsqueda).
 - Los filtros de estado y la selección de sector actualizan ese total; el gráfico de dona sigue calculándose sobre el alcance seleccionado.
 
@@ -50,3 +51,4 @@ Toda acción administrativa realizada en este módulo (enrolamiento de medidores
 
 *Actualizado: 27/08/2026 — P3 D5 aviso duplicados EF por nombre/etiqueta (no bloqueante)*
 *Actualizado: 03/11/2026 — búsqueda en el servidor y padrón completo (184 unidades en la demo, 80 departamentos alcanzables); el conteo por tipo de `Tipos de Unidad` ya no se recorta a la primera página.*
+*Actualizado: 19/11/2026 — la búsqueda rechaza los comodines de LIKE (`%` y `_`) con 400 «El parámetro q no acepta los comodines % y _.»; el rechazo vive una vez en el factory CRUD y lo hereda toda colección que declare búsqueda.*
