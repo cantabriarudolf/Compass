@@ -18,13 +18,23 @@
  * este resultado es la única copia que existe. Por eso no se cachea ni se
  * revalida: vive lo que la pantalla decida mostrarlo.
  *
+ * El envío del correo de bienvenida (F43) NO se lee de esa respuesta: la
+ * `invitacion` que el alta o el reenvío devuelven se proyecta ANTES de que el
+ * correo salga, así que su `envio` todavía es `null`. El estado del envío vive en
+ * el listado (`InvitacionPublica.envio`), que la pantalla relee después del acto;
+ * pintar `enviado` porque el `POST` respondió 200 sería declarar un hecho que el
+ * servidor no confirmó.
+ *
  * Ninguna mutación revalida por su cuenta: la pantalla relee explícitamente
  * después de cada acto, porque el veredicto —y el estado nuevo— es del servidor.
  * Si la mutación revalidara acá, el acto y la relectura se pisarían y la pantalla
  * podría pintar una fila antes de saber si el acto ocurrió.
  */
 import useSWR from "swr"
-import type { EstadoInvitacion } from "@/lib/invitacion-acceso"
+import type {
+  EnvioInvitacionPublico,
+  EstadoInvitacion,
+} from "@/lib/invitacion-acceso"
 
 const BASE = "/api/admin/usuarios"
 const REENVIO = `${BASE}/invitacion`
@@ -43,6 +53,13 @@ export interface InvitacionPublica {
   expiraEn: string
   usadoEn: string | null
   creadoEn: string
+  /**
+   * Constancia del correo de bienvenida de ESTA invitación (F43), o `null` cuando
+   * nadie intentó el envío: una invitación anterior a F43 o una recién emitida sin
+   * constancia. `null` no es `pendiente` —`pendiente` es un intento con la cola sin
+   * emisor— así que la pantalla no puede traducirlo a un estado de envío.
+   */
+  envio: EnvioInvitacionPublico | null
 }
 
 /** Una fila del listado: la membresía y la cuenta que la ejerce. */
@@ -195,7 +212,10 @@ export function useCuentasDeComunidad(
  * Alta de una cuenta: persona del padrón + rol de acceso + invitación, en un solo
  * acto en el servidor (S1/S3). La respuesta revela el enlace de un solo uso (L4):
  * la administración no conoce la contraseña, pero sí tiene que poder entregar el
- * enlace mientras el correo (F43) no exista.
+ * enlace —quien invita tiene que poder invitar—, y esa es la razón de que se
+ * revele una vez y nunca más. El correo de bienvenida sale en el mismo acto
+ * (F43); por eso la `invitacion` de esta respuesta se proyecta ANTES del envío y
+ * su `envio` llega `null`: el estado real del aviso lo da el listado.
  */
 export async function crearCuentaDeAcceso(datos: {
   comunidadId: string

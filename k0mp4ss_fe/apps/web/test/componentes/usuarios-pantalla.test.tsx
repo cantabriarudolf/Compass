@@ -12,8 +12,8 @@
  *      acceso es la cuenta con su rol.
  *   3. El alta manda lo que corresponde —persona del padrón + rol— a su ruta y,
  *      si sale bien, vuelve a leer el listado y dice que la invitación quedó
- *      emitida y que el envío por correo todavía no existe (F43). Nadie puede
- *      creer que la persona ya fue avisada.
+ *      emitida; el resultado del correo de bienvenida (F43) lo dice la fila de la
+ *      cuenta, porque lo registra el servidor y no el 200 del clic.
  *   4. Un 409 del servidor se muestra con su texto tal cual, sin releer y sin
  *      cambiar ninguna fila: la pantalla no declara un acto que no ocurrió.
  *   5. El reenvío emite una invitación nueva y la pantalla relee: la fecha que
@@ -93,10 +93,19 @@ interface CuentaFalsa {
     expiraEn: string
     usadoEn: string | null
     creadoEn: string
+    envio: {
+      estado: "enviado" | "pendiente" | "fallido"
+      motivo: string | null
+      enviadoEn: string | null
+    } | null
   } | null
 }
 
-/** Las cuatro formas del estado de la invitación, una por fila. */
+/**
+ * Las cuatro formas del estado de la invitación, una por fila. Ninguna trae
+ * constancia del correo de bienvenida (`envio: null`): ese eje —y sus tres
+ * estados— lo fija `usuarios-aviso-bienvenida.test.tsx`.
+ */
 const CUENTAS: CuentaFalsa[] = [
   {
     membresiaId: "m-1",
@@ -109,6 +118,7 @@ const CUENTAS: CuentaFalsa[] = [
       expiraEn: "2026-11-10T12:00:00.000Z",
       usadoEn: "2026-11-09T15:30:00.000Z",
       creadoEn: "2026-11-06T15:30:00.000Z",
+      envio: null,
     },
   },
   {
@@ -122,6 +132,7 @@ const CUENTAS: CuentaFalsa[] = [
       expiraEn: "2026-11-21T12:00:00.000Z",
       usadoEn: null,
       creadoEn: "2026-11-18T12:00:00.000Z",
+      envio: null,
     },
   },
   {
@@ -135,6 +146,7 @@ const CUENTAS: CuentaFalsa[] = [
       expiraEn: "2026-11-01T12:00:00.000Z",
       usadoEn: null,
       creadoEn: "2026-10-29T12:00:00.000Z",
+      envio: null,
     },
   },
   {
@@ -356,14 +368,17 @@ describe("Cuentas y acceso — el estado lo dice el servidor", () => {
     expect(screen.getByText(/El acceso es la cuenta con su rol/i)).toBeTruthy()
   })
 
-  it("avisa que el envío por correo todavía no existe (F43)", async () => {
+  it("avisa que el correo de bienvenida sale con la invitación y que su estado lo dice la fila", async () => {
     servir()
     montarConsola()
     await waitFor(() => filaDe("residente@test.cl"))
 
     expect(
-      screen.getByText(/El envío por correo todavía no existe \(F43\)/i)
+      screen.getByText(/El correo de bienvenida sale con la invitación/i)
     ).toBeTruthy()
+    // Sin constancia en el listado, la columna del aviso dice que nadie intentó
+    // el envío: no se pinta `pendiente` ni se deja la celda vacía.
+    expect(screen.getAllByText("Nunca se intentó")).toHaveLength(CUENTAS.length - 1)
   })
 
   it("un 403 de la ruta se muestra con su texto tal cual", async () => {
@@ -440,10 +455,14 @@ describe("Cuentas y acceso — el alta manda persona y rol", () => {
     expect(cuerpoDe(altas[0])).toEqual({ personaId: "per-2", rol: "conserjeria" })
 
     // El acto ocurrió: el estado se relee (dos lecturas del listado) y el aviso
-    // dice las dos cosas — invitación emitida y correo que todavía no existe.
+    // dice las dos cosas — invitación emitida y que el correo lo registra el
+    // servidor, no el 200 del clic.
     const estado = await screen.findByRole("status")
     expect(estado.textContent).toContain("La invitación quedó emitida")
-    expect(estado.textContent).toContain("El envío por correo todavía no existe (F43)")
+    expect(estado.textContent).toContain(
+      "El correo de bienvenida sale en el mismo acto"
+    )
+    expect(estado.textContent).toContain("lo dice la fila de la cuenta")
   })
 
   it("un 409 del servidor se muestra tal cual, sin releer y sin cambiar la fila", async () => {
@@ -507,6 +526,7 @@ describe("Cuentas y acceso — el reenvío", () => {
                   expiraEn: "2026-11-24T12:00:00.000Z",
                   usadoEn: null,
                   creadoEn: "2026-11-18T13:00:00.000Z",
+                  envio: null,
                 },
               }
             : cuenta
@@ -544,7 +564,9 @@ describe("Cuentas y acceso — el reenvío", () => {
 
     const estado = await screen.findByRole("status")
     expect(estado.textContent).toContain("La invitación quedó emitida")
-    expect(estado.textContent).toContain("El envío por correo todavía no existe (F43)")
+    expect(estado.textContent).toContain(
+      "El correo de bienvenida sale en el mismo acto"
+    )
   })
 
   it("el 409 del reenvío se muestra tal cual y no reescribe la fila", async () => {
@@ -632,9 +654,11 @@ describe("Cuentas y acceso — el enlace se revela una sola vez", () => {
     })
     expect(within(aviso).getByDisplayValue(ENLACE_ALTA)).toBeTruthy()
     // Las dos advertencias, dichas y no escondidas: el enlace no se repite y el
-    // correo todavía no existe, así que cerrar sin copiar lo pierde.
+    // correo puede quedar pendiente o fallido, así que cerrar sin copiar lo pierde.
     expect(aviso.textContent).toContain("No se vuelve a mostrar")
-    expect(aviso.textContent).toContain("El envío por correo todavía no existe (F43)")
+    expect(aviso.textContent).toContain(
+      "El estado del correo de bienvenida lo dice la fila de la cuenta"
+    )
     expect(aviso.textContent).toContain("la única salida es reenviar")
 
     // El enlace vive sólo en el aviso: no se cuela en la fila del listado.

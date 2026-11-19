@@ -15,17 +15,27 @@
  *     misma cuenta serían dos puertas. El botón se ofrece sólo donde el servidor
  *     lo acepta; sobre una invitación usada no hay nada que reenviar.
  *
+ * Tres ejes que esta pantalla NO mezcla:
+ *
+ *   · El rol de acceso de la cuenta.
+ *   · El estado de la INVITACIÓN (pendiente / vencida / usada): si el enlace
+ *     todavía abre algo.
+ *   · El estado del CORREO de bienvenida (`enviado` / `pendiente` / `fallido`, o
+ *     `envio: null` cuando nadie intentó el envío), cada uno con el motivo del
+ *     servidor verbatim cuando lo hay. Son hechos distintos: una invitación
+ *     pendiente puede tener el correo fallido, y eso se dice en su columna.
+ *
  * Dos cosas que el texto de esta pantalla dice y no esconde:
  *
  *   1. El rol de la persona en la comunidad —propietario, arrendatario, personal—
  *      NO da acceso. El acceso es la cuenta con su rol, y la confusión nace justo
  *      acá, así que se deshace acá.
- *   2. La invitación queda emitida, pero el envío por correo todavía no existe
- *      (F43): la persona no fue avisada y esta pantalla no puede avisarla. Por eso
- *      el enlace se revela acá, UNA sola vez, en la respuesta que crea o reenvía
- *      (L4), con su botón de copiar y el aviso de que no se vuelve a mostrar: la
- *      administración invita sin conocer la contraseña, pero tiene que poder
- *      entregar el enlace o no está invitando a nadie.
+ *   2. El correo de bienvenida sale en el mismo acto (F43), así que la persona se
+ *      entera sola; pero el correo es un atajo y puede quedar pendiente o
+ *      fallido, así que el enlace se revela acá, UNA sola vez, en la respuesta que
+ *      crea o reenvía (L4), con su botón de copiar y el aviso de que no se vuelve
+ *      a mostrar: la administración invita sin conocer la contraseña, pero tiene
+ *      que poder entregar el enlace o no está invitando a nadie.
  *
  * El enlace no entra al listado ni a ninguna caché: vive en el estado local que
  * esta pantalla borra al cerrar el aviso. Si se cierra sin copiarlo, se perdió y
@@ -33,7 +43,9 @@
  *
  * Honestidad de la UI: después de cada acto se vuelve a leer el listado —el
  * veredicto es del servidor— y un 403/409 se muestra con el texto de la ruta tal
- * cual, sin traducirlo ni declarar un éxito que no ocurrió.
+ * cual, sin traducirlo ni declarar un éxito que no ocurrió. El chip del correo
+ * sale de esa relectura y NUNCA del 200 del clic: un reenvío aceptado cuyo envío
+ * el servidor registró `fallido` se pinta `fallido`, con el motivo del emisor.
  */
 import * as React from "react"
 import { Badge } from "@workspace/ui/components/badge"
@@ -93,11 +105,12 @@ const ETIQUETA_ROL: Record<Rol, string> = {
 }
 
 /**
- * El aviso que acompaña a toda invitación emitida. Es el hueco que hay que decir
- * en pantalla y no esconder: el correo de bienvenida es F43 y todavía no existe.
+ * El aviso que acompaña a toda invitación emitida: el correo sale en el mismo
+ * acto (F43), pero su desenlace NO lo decide el 200 del clic. El veredicto lo
+ * registra el servidor y lo muestra la fila de la cuenta.
  */
-const AVISO_SIN_CORREO =
-  "El envío por correo todavía no existe (F43): la persona todavía no fue avisada."
+const AVISO_ESTADO_CORREO =
+  "El correo de bienvenida sale en el mismo acto. Su resultado lo registra el servidor y lo dice la fila de la cuenta."
 
 /** Fecha corta de una marca ISO, sin depender de la zona del navegador. */
 function fechaCorta(iso: string): string {
@@ -151,6 +164,68 @@ function EstadoInvitacion({ invitacion }: { invitacion: InvitacionPublica | null
 /** Una invitación se reenvía sólo si todavía puede abrir algo (S4). */
 function admiteReenvio(invitacion: InvitacionPublica | null): boolean {
   return invitacion?.estado === "pendiente" || invitacion?.estado === "vencida"
+}
+
+/**
+ * Estado del correo de bienvenida de UNA invitación (F43 · T4 · S4).
+ *
+ * Es el otro eje: `EstadoInvitacion` dice si el enlace sirve, esto dice qué pasó
+ * con el aviso. Nada se deriva acá —el estado, la fecha y el motivo los registró
+ * el servidor— y `envio: null` NO es `pendiente`: significa que nadie intentó ese
+ * envío, y pintarlo `pendiente` afirmaría un intento que no existió.
+ */
+function EstadoAvisoBienvenida({
+  invitacion,
+}: {
+  invitacion: InvitacionPublica | null
+}) {
+  if (!invitacion) {
+    return (
+      <span className="text-sm text-muted-foreground">No hay invitación</span>
+    )
+  }
+  // Una lectura sin el campo (anterior a F43) y `null` son el mismo hecho: no hay
+  // constancia que mostrar, y no se supone ninguna.
+  const envio = invitacion.envio ?? null
+  if (!envio) {
+    return (
+      <div className="flex flex-col gap-1">
+        <span className="w-fit text-sm font-medium">Nunca se intentó</span>
+        <span className="text-xs text-muted-foreground">
+          No hay un intento de envío registrado para esta invitación.
+        </span>
+      </div>
+    )
+  }
+  if (envio.estado === "enviado") {
+    return (
+      <div className="flex flex-col gap-1">
+        <Badge className="w-fit bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300">
+          Correo enviado
+        </Badge>
+        {envio.enviadoEn && (
+          <span className="text-xs text-muted-foreground">
+            {`Enviado el ${fechaCorta(envio.enviadoEn)}`}
+          </span>
+        )}
+      </div>
+    )
+  }
+  // `pendiente` y `fallido` traen el motivo que redactó el servidor: se muestra
+  // verbatim, sin traducirlo ni reemplazarlo por una sugerencia de reintento.
+  return (
+    <div className="flex flex-col gap-1">
+      <Badge
+        variant={envio.estado === "pendiente" ? "secondary" : "destructive"}
+        className="w-fit"
+      >
+        {envio.estado === "pendiente" ? "Correo pendiente" : "Correo fallido"}
+      </Badge>
+      {envio.motivo && (
+        <span className="text-xs text-muted-foreground">{envio.motivo}</span>
+      )}
+    </div>
+  )
 }
 
 export function ConsolaUsuarios() {
@@ -248,7 +323,7 @@ export function ConsolaUsuarios() {
     setAviso(
       `La invitación quedó emitida para ${
         persona?.email ?? "la persona elegida"
-      } con rol ${ETIQUETA_ROL[rol]}. ${AVISO_SIN_CORREO}`
+      } con rol ${ETIQUETA_ROL[rol]}. ${AVISO_ESTADO_CORREO}`
     )
     // El enlace existe sólo en esta respuesta: se muestra acá o se pierde.
     if (resultado.enlace) {
@@ -278,7 +353,7 @@ export function ConsolaUsuarios() {
     }
 
     setAviso(
-      `La invitación quedó emitida de nuevo para ${cuenta.usuario.email}. ${AVISO_SIN_CORREO}`
+      `La invitación quedó emitida de nuevo para ${cuenta.usuario.email}. ${AVISO_ESTADO_CORREO}`
     )
     // El anterior quedó vencido en el servidor: este es el único enlace vivo.
     if (resultado.enlace) {
@@ -305,8 +380,9 @@ export function ConsolaUsuarios() {
           persona define su contraseña al abrir el enlace, y la administración
           nunca la conoce.{" "}
           <span className="font-medium text-foreground">
-            El envío por correo todavía no existe (F43), así que la invitación no
-            le llega sola a nadie.
+            El correo de bienvenida sale con la invitación. Si no pudo salir, la
+            fila de la cuenta dice por qué y el enlace sigue acá para entregarlo
+            a mano.
           </span>
         </p>
       </div>
@@ -343,9 +419,9 @@ export function ConsolaUsuarios() {
               Enlace para entregar
             </CardTitle>
             <CardDescription className="text-xs">
-              Para {entrega.para}. El envío por correo todavía no existe (F43),
-              así que este enlace es lo único que abre el acceso: entregalo por un
-              canal seguro.
+              Para {entrega.para}. El estado del correo de bienvenida lo dice la
+              fila de la cuenta; este enlace es la copia que la administración
+              entrega por un canal seguro.
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
@@ -517,9 +593,11 @@ export function ConsolaUsuarios() {
               : "Cuentas de la comunidad"}
           </CardTitle>
           <CardDescription className="text-xs">
-            Una fila por cuenta con su rol de acceso y el estado de su invitación.
-            Reenviar invalida el enlace anterior en el mismo acto: dos enlaces vivos
-            para la misma cuenta son dos puertas.
+            Una fila por cuenta con su rol de acceso, el estado de su invitación y
+            el del correo de bienvenida. Son dos ejes: la invitación dice si el
+            enlace sirve, el correo dice qué pasó con el aviso. Reenviar invalida
+            el enlace anterior en el mismo acto: dos enlaces vivos para la misma
+            cuenta son dos puertas.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -542,6 +620,7 @@ export function ConsolaUsuarios() {
                   <TableHead>Correo de la cuenta</TableHead>
                   <TableHead>Rol de acceso</TableHead>
                   <TableHead>Invitación</TableHead>
+                  <TableHead>Correo de bienvenida</TableHead>
                   <TableHead className="text-right">Acción</TableHead>
                 </TableRow>
               </TableHeader>
@@ -557,6 +636,9 @@ export function ConsolaUsuarios() {
                     <TableCell>
                       <EstadoInvitacion invitacion={cuenta.invitacion} />
                     </TableCell>
+                    <TableCell>
+                      <EstadoAvisoBienvenida invitacion={cuenta.invitacion} />
+                    </TableCell>
                     <TableCell className="text-right">
                       {admiteReenvio(cuenta.invitacion) ? (
                         <Button
@@ -565,7 +647,7 @@ export function ConsolaUsuarios() {
                           size="sm"
                           onClick={() => void reenviar(cuenta)}
                           disabled={reenviandoId !== null}
-                          title="Emite una invitación nueva y vence la anterior en el mismo acto. El correo de bienvenida todavía no existe (F43)."
+                          title="Emite una invitación nueva, vence la anterior en el mismo acto y manda el correo de bienvenida con el enlace nuevo."
                         >
                           {reenviandoId === cuenta.usuario.id ? (
                             <IconLoader2

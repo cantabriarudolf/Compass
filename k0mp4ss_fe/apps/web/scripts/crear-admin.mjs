@@ -26,8 +26,9 @@
  * medias), la usa y crea la primera: no se recrea la comunidad.
  *
  * La salida es el enlace completo a `/invitacion?token=…`, que es la página
- * pública donde la persona define su contraseña. Se imprime que el envío por
- * correo todavía no existe (F43): el script no finge haber avisado a nadie.
+ * pública donde la persona define su contraseña. Este script NO manda correo:
+ * el aviso de bienvenida sale desde la pantalla de cuentas (F43), no acá, y el
+ * script no finge haber avisado a nadie.
  *
  * Uso (desde `k0mp4ss_fe/apps/web`):
  *   npx vite-node --config vitest.config.ts scripts/crear-admin.mjs \
