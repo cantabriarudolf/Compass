@@ -23,16 +23,20 @@ import { MantencionesPreventivas } from "./mantenciones-preventivas"
 import { MiEstadoDeCuenta, MisReservas } from "./mi-cuenta"
 import { VisitasTecnicas } from "./visitas-tecnicas"
 import { puedeVer } from "./perfiles"
+import { etiquetaRol, type Rol } from "@/lib/authz"
 
-const ETIQUETA_ROL: Record<string, string> = {
-  conserjeria: "Conserjería",
-  mantencion: "Mantención",
-  residente: "Residente",
-}
+/**
+ * Roles que este panel nombra. No es una tabla de etiquetas: es la lista de
+ * quién aporta nombre a la cabecera. Las etiquetas viven en `lib/authz.ts`, una
+ * sola vez, para que el panel y el resto del sistema no puedan discrepar.
+ */
+const ROLES_CON_ETIQUETA: Rol[] = ["conserjeria", "mantencion", "residente"]
 
 export function DashboardOperativo({ roles }: { roles: string[] }) {
   const verOperaciones = puedeVer(roles, "ver", "pe")
-  const etiqueta = roles.map((rol) => ETIQUETA_ROL[rol]).find((nombre) => nombre !== undefined)
+  const etiqueta = roles
+    .filter((rol) => (ROLES_CON_ETIQUETA as string[]).includes(rol))
+    .map(etiquetaRol)[0]
 
   return (
     <div className="flex flex-col gap-6">
