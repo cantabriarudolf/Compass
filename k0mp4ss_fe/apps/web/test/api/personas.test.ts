@@ -221,7 +221,7 @@ describe("/api/personas — MP con BD real (BD-FUENTE-VERDAD)", () => {
     })
   })
 
-  it("GET lista con ?q= filtra por nombre/rut/email", async () => {
+  it("GET lista con ?q= filtra por nombre y RUT; el email no es criterio (F39)", async () => {
     await conSesion(emailAdmin, async () => {
       const res = await GET("?q=Ana")
       expect(res.status).toBe(200)
@@ -234,9 +234,21 @@ describe("/api/personas — MP con BD real (BD-FUENTE-VERDAD)", () => {
       const jRut = (await resRut.json()) as { data: { id: string }[]; total: number }
       expect(jRut.total).toBe(0) // RUT_BETO nunca se creó (fue rechazado por email duplicado)
 
+      // F39 (S2, paridad con las tres rutas de referencia): el email salió del
+      // OR. La dirección sigue guardada en la base, pero ya no es criterio de
+      // búsqueda: un término sin comodines responde 200 con cero filas.
       const resEmail = await GET("?q=residente-ficha@test.cl")
+      expect(resEmail.status).toBe(200)
       const jEmail = (await resEmail.json()) as { data: { id: string }[]; total: number }
-      expect(jEmail.data.map((p) => p.id)).toEqual(["mp-pers-residente"])
+      expect(jEmail.total).toBe(0)
+      expect(jEmail.data).toEqual([])
+
+      // Y un término con guion bajo se rechaza con el mensaje exacto de las tres
+      // rutas de referencia: `_` es comodín de LIKE, no un carácter del término.
+      const conComodin = await GET("?q=residente_ficha@test.cl")
+      expect(conComodin.status).toBe(400)
+      const jComodin = (await conComodin.json()) as { error: string }
+      expect(jComodin.error).toBe("El parámetro q no acepta los comodines % y _.")
     })
   })
 

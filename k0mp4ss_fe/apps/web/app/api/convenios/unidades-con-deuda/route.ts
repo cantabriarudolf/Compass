@@ -52,6 +52,9 @@ const RECURSO_CONVENIOS = "fi:cobranza"
  */
 const LIMITE_UNIDADES = 50
 
+/** Comodines de LIKE: `contains` arma `%q%` sin escapar, así que entran por el patrón. */
+const COMODINES_LIKE = /[%_]/
+
 export async function GET(req: Request): Promise<Response> {
   const resultado = await withComunidadScope()
   if (!resultado.ok) return resultado.response
@@ -68,6 +71,12 @@ export async function GET(req: Request): Promise<Response> {
     return jsonError(400, "URL de solicitud inválida.")
   }
   const q = url.searchParams.get("q")?.trim() ?? ""
+  // F39 (R6): `contains` arma `%q%` sin escapar, así que `q=%%` o `q=__` dejan de
+  // ser término y enumeran el padrón de unidades. El rechazo corre antes de la
+  // primera consulta.
+  if (COMODINES_LIKE.test(q)) {
+    return jsonError(400, "El parámetro q no acepta los comodines % y _.")
+  }
 
   try {
     // Dos consultas fijas: las unidades que pueden coincidir con el `q` y los

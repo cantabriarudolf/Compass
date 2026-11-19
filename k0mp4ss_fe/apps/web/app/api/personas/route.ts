@@ -308,6 +308,9 @@ function denegar(rol: string, accion: "ver" | "crear" | "editar" | "eliminar"): 
   return jsonError(403, "Permiso denegado.")
 }
 
+/** Comodines de LIKE: `contains` arma `%q%` sin escapar, así que entran por el patrón. */
+const COMODINES_LIKE = /[%_]/
+
 /** Roles de vínculo que hacen «residente» a una persona (regla del directorio). */
 const ROLES_RESIDENTE = ["propietario", "arrendatario"] as const
 
@@ -461,7 +464,10 @@ async function vinculosDeResidentes(
   return filas.map((f) => ({ ...f, unidadEtiqueta: etiquetas.get(f.unidadId) ?? null }))
 }
 
-/** GET lista paginada, filtrable por ?q= (nombreCompleto | rut | email).
+/** GET lista paginada, filtrable por ?q= (nombreCompleto | rut).
+ * El email NO es criterio (F39, paridad con las tres rutas de referencia): al
+ * rechazar los comodines de LIKE, una dirección con guion bajo se rechazaría; la
+ * salida honesta fue sacar el email del OR, no reabrir el comodín.
  * Residente: ve únicamente su propia ficha (ABAC mp:propios).
  * `?esResidente=1` agrega el filtro de residente y `vinculosVigentes` al envelope.
  * `?rol=`, `?rolDirectorio=` y `?estadoCuenta=` son filtros aditivos de los directorios. */
@@ -486,6 +492,12 @@ export async function GET(req: Request): Promise<Response> {
     Math.max(1, Number.parseInt(url.searchParams.get("pageSize") ?? "50", 10) || 50)
   )
   const q = url.searchParams.get("q")?.trim()
+  // F39 (R6): `contains` arma `%q%` sin escapar, así que `q=%%` o `q=__` dejan de
+  // ser término y enumeran el padrón. El rechazo corre ANTES de cualquier consulta
+  // a la base y con el mensaje exacto de las tres rutas de referencia.
+  if (q && COMODINES_LIKE.test(q)) {
+    return jsonError(400, "El parámetro q no acepta los comodines % y _.")
+  }
   const rut = url.searchParams.get("rut")?.trim()
   const esResidente = url.searchParams.get("esResidente") === "1"
   // Filtros aditivos: ausentes (o vacíos) no cambian nada del comportamiento de siempre.
@@ -499,10 +511,11 @@ export async function GET(req: Request): Promise<Response> {
     where.id = personaId ?? "__sin_persona__"
   }
   if (q) {
+    // Criterio único de la serie (F39): nombre y RUT. El email salió del OR para
+    // no dejar un campo donde el guion bajo legítimo choca con el comodín de LIKE.
     where.OR = [
       { nombreCompleto: { contains: q } },
       { rut: { contains: q } },
-      { email: { contains: q } },
     ]
   }
   if (rut) {

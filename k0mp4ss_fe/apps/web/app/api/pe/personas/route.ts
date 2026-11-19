@@ -49,6 +49,9 @@ const PAGE_SIZE_MAXIMO = 100
 /** Tope de la lista cerrada `?ids=`: es la cota del lote que piden los paneles del día. */
 export const MAXIMO_IDS = 50
 
+/** Comodines de LIKE: `contains` arma `%q%` sin escapar, así que entran por el patrón. */
+const COMODINES_LIKE = /[%_]/
+
 /**
  * Lista cerrada de `?ids=`: recorta, quita vacíos y responde 400 si pasa el tope. `null` cuando
  * el parámetro no viene, para distinguir «sin filtro» de «filtro por lista vacía».
@@ -87,6 +90,11 @@ export async function GET(req: Request): Promise<Response> {
 
   const rut = url.searchParams.get("rut")?.trim() ?? ""
   const q = url.searchParams.get("q")?.trim() ?? ""
+  // F39 (R6): `contains` arma `%q%` sin escapar, así que `q=%%` o `q=__` dejan de
+  // ser término y enumeran el padrón. El rechazo corre antes de armar el `where`.
+  if (COMODINES_LIKE.test(q)) {
+    return jsonError(400, "El parámetro q no acepta los comodines % y _.")
+  }
   const pageSize = Math.min(
     PAGE_SIZE_MAXIMO,
     Math.max(

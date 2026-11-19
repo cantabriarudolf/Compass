@@ -1039,43 +1039,13 @@ const EXCEPCIONES_R5 = [
 ]
 
 /**
- * R6 · baseline de las rutas que arman `contains` sobre el término de búsqueda sin
- * declarar el rechazo de los comodines de LIKE. Es el registro de la deuda y no un aval:
- * este lote no las arregla. Una ruta que nazca floja no está acá y el candado la reporta;
- * arreglar una de estas quita su entrada.
+ * R6 · allowlist VACÍA desde F39: las nueve rutas que arman `contains` sobre el término de
+ * búsqueda declaran el rechazo de los comodines de LIKE, así que no queda deuda que
+ * registrar. Una ruta que nazca floja no está acá y el candado la reporta; si una de estas
+ * vuelve a armar el patrón `%q%` sin rechazo, el hallazgo es suyo y no se hereda de este
+ * registro.
  */
-const EXCEPCIONES_R6 = [
-  {
-    archivo: "app/api/personas/route.ts",
-    motivo:
-      "Estado medido el 2026-11-16 (registro de la deuda, NO un aval): el listado del padrón arma 3 contains sobre q (nombreCompleto, rut, email) sin rechazar los comodines de LIKE; un q=%% o q=__ enumera la tabla entera de personas. Este lote no la arregla: la entrada existe para que la lista no crezca.",
-  },
-  {
-    archivo: "app/api/fi/route.ts",
-    motivo:
-      "Estado medido el 2026-11-16 (registro de la deuda, NO un aval): el listado financiero arma 4 contains sobre q — egresos (descripcion, folio) e ingresos (concepto, familia) — sin rechazar los comodines de LIKE; un q=%% o q=__ enumera la tabla entera de movimientos. Este lote no la arregla: la entrada existe para que la lista no crezca.",
-  },
-  {
-    archivo: "app/api/auditoria/route.ts",
-    motivo:
-      "Estado medido el 2026-11-16 (registro de la deuda, NO un aval): el listado de la bitácora arma 3 contains sobre q (descripcion, tipoAccion, referenciaId) sin rechazar los comodines de LIKE; un q=%% o q=__ enumera los registros de auditoría enteros. Este lote no la arregla: la entrada existe para que la lista no crezca.",
-  },
-  {
-    archivo: "app/api/pe/unidades/route.ts",
-    motivo:
-      "Estado medido el 2026-11-16 (registro de la deuda, NO un aval): el listado de unidades arma 3 contains sobre q (numero, etiqueta, rolSii) sin rechazar los comodines de LIKE; un q=%% o q=__ enumera la tabla entera de unidades. Este lote no la arregla: la entrada existe para que la lista no crezca.",
-  },
-  {
-    archivo: "app/api/pe/personas/route.ts",
-    motivo:
-      "Estado medido el 2026-11-16 (registro de la deuda, NO un aval): la búsqueda del padrón arma 2 contains sobre q (nombreCompleto, rut) sin rechazar los comodines de LIKE; un q=%% o q=__ enumera la tabla entera de personas. Este lote no la arregla: la entrada existe para que la lista no crezca.",
-  },
-  {
-    archivo: "app/api/convenios/unidades-con-deuda/route.ts",
-    motivo:
-      "Estado medido el 2026-11-16 (registro de la deuda, NO un aval): el listado de unidades con deuda arma 2 contains sobre q (numero, etiqueta) sin rechazar los comodines de LIKE; un q=%% o q=__ enumera la tabla entera de unidades. Este lote no la arregla: la entrada existe para que la lista no crezca.",
-  },
-]
+const EXCEPCIONES_R6 = []
 
 /**
  * R7 · baseline de los hooks de colección de `lib/api/` que hoy fijan el techo de la

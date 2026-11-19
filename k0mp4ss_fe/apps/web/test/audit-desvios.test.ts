@@ -490,18 +490,18 @@ export async function GET(q: string) {
     expect(hallazgos[0]?.detalle).toContain("nombreCompleto")
   })
 
-  it("la allowlist de R6 nombra exactamente las seis rutas medidas, cada una con su motivo", () => {
-    const rutasMedidas = [
-      "app/api/personas/route.ts",
-      "app/api/fi/route.ts",
-      "app/api/auditoria/route.ts",
-      "app/api/pe/unidades/route.ts",
-      "app/api/pe/personas/route.ts",
-      "app/api/convenios/unidades-con-deuda/route.ts",
-    ]
-    const entradas = EXCEPCIONES.R6 ?? []
-    expect(entradas.map((e) => e.archivo).sort()).toEqual([...rutasMedidas].sort())
-    expect(entradas.every((e) => e.motivo.trim().length > 0)).toBe(true)
+  it("la allowlist de R6 quedó vacía: la deuda medida se cerró (F39)", () => {
+    // Las seis rutas declararon el rechazo de los comodines, así que el registro
+    // de la deuda deja de tener entradas. Una ruta nueva que nazca floja no está
+    // acá y el candado la reporta: el silencio no se hereda.
+    expect(EXCEPCIONES.R6 ?? []).toEqual([])
+  })
+
+  it("el repo real, sin allowlist de R6, no tiene hallazgos: cada ruta declara el rechazo", () => {
+    const hallazgos = auditar({ raiz: RAIZ_APP, excepciones: { R6: [] } }).filter(
+      (h) => h.regla === "R6"
+    )
+    expect(hallazgos).toEqual([])
   })
 })
 

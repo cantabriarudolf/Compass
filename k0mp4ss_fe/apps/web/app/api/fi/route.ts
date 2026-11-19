@@ -8,6 +8,9 @@ import type { ConceptoCobroFI, LineaCobroFI, PagoCobroFI } from "@/lib/schemas"
 
 export const dynamic = "force-dynamic"
 
+/** Comodines de LIKE: `contains` arma `%q%` sin escapar, así que entran por el patrón. */
+const COMODINES_LIKE = /[%_]/
+
 /**
  * GET /api/fi?fondoId=&q=&page=&pageSize= — lectura del espejo BD de Finanzas (fi-sync-bd).
  * Retorna egresos e ingresos paginados (misma page/pageSize), fondos completos y
@@ -60,6 +63,15 @@ export async function GET(request: Request) {
 
   const fondoId = url.searchParams.get("fondoId")?.trim() || undefined
   const q = url.searchParams.get("q")?.trim() || undefined
+  // F39 (R6): `contains` arma `%q%` sin escapar, así que `q=%%` o `q=__` dejan de
+  // ser término y enumeran los dos libros. El rechazo corre antes de armar los
+  // `where` y de consultar la base.
+  if (q && COMODINES_LIKE.test(q)) {
+    return NextResponse.json(
+      { error: "El parámetro q no acepta los comodines % y _." },
+      { status: 400 }
+    )
+  }
   const page = Math.max(1, Number.parseInt(url.searchParams.get("page") ?? "1", 10) || 1)
   const pageSizeRaw = Number.parseInt(url.searchParams.get("pageSize") ?? "50", 10) || 50
   const pageSize = Math.min(100, Math.max(1, pageSizeRaw))

@@ -6,6 +6,9 @@ import { logger } from "@/lib/logger"
 
 export const dynamic = "force-dynamic"
 
+/** Comodines de LIKE: `contains` arma `%q%` sin escapar, así que entran por el patrón. */
+const COMODINES_LIKE = /[%_]/
+
 /**
  * Tope de filas que devuelve `exportar=1` (el CSV de /admin/logs).
  *
@@ -73,6 +76,14 @@ export async function GET(request: Request) {
   const categoria = url.searchParams.get("categoria")?.trim() || undefined
   const tipoAccion = url.searchParams.get("tipoAccion")?.trim() || undefined
   const q = url.searchParams.get("q")?.trim() || undefined
+  // F39 (R6): `contains` arma `%q%` sin escapar, así que `q=%%` o `q=__` dejan de
+  // ser término y enumeran la bitácora. El rechazo corre antes del primer `count`.
+  if (q && COMODINES_LIKE.test(q)) {
+    return NextResponse.json(
+      { error: "El parámetro q no acepta los comodines % y _." },
+      { status: 400 }
+    )
+  }
   const page = Math.max(1, Number.parseInt(url.searchParams.get("page") ?? "1", 10) || 1)
   const pageSizeRaw = Number.parseInt(url.searchParams.get("pageSize") ?? "20", 10) || 20
   const pageSize = Math.min(100, Math.max(1, pageSizeRaw))
