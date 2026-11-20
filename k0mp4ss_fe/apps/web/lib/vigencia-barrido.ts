@@ -73,8 +73,14 @@ import {
   type FilaConfiguracionSMTP,
 } from "@/lib/smtp"
 
-/** Desenlace del correo de un aviso. Cuatro estados que no se confunden. */
-export type EstadoEntregaAviso =
+/**
+ * Desenlace del correo de vigencia para UN destinatario en UNA corrida. NO es el
+ * vocabulario persistido de una entrega (`EstadoEntregaCorreo`, en
+ * `lib/schemas.ts`): incluye condiciones del barrido (`sin_emisor`, `en_bandeja`)
+ * que no son estados de ninguna columna. Los nombres distintos son a propósito: el
+ * homónimo anterior compilaba al importarse desde el archivo equivocado (hallazgo 21).
+ */
+export type EstadoBarridoVigencia =
   | "enviado"
   | "fallido"
   | "sin_emisor"
@@ -82,7 +88,7 @@ export type EstadoEntregaAviso =
 
 /** Un desenlace con su motivo: el texto que el resumen y la bitácora citan. */
 export interface EntregaAviso {
-  readonly estado: EstadoEntregaAviso
+  readonly estado: EstadoBarridoVigencia
   readonly motivo: string
 }
 
@@ -434,7 +440,7 @@ export async function barrerAvisosDeVigencia(
     }
   }
 
-  const contar = (estado: EstadoEntregaAviso) =>
+  const contar = (estado: EstadoBarridoVigencia) =>
     entregas.filter((entrega) => entrega.estado === estado).length
   const enviados = contar("enviado")
   const fallidos = contar("fallido")

@@ -2036,48 +2036,90 @@ export const AvisoCobroSchema = z.object({
   totalesComunidad: z.record(z.unknown()),
 })
 
-// --- Entrega del aviso de cobro (S3 — serie aviso-de-cobro) ---
+// --- Entrega de un mensaje de la comunidad: UN vocabulario de estados ---
 //
-// El aviso se ENTREGA por el visor interno (la notificación que el residente
-// ve) y se ENVÍA por correo con el emisor SMTP real (`lib/smtp.ts`, F4). Por eso
-// los estados son `entregado | enviado | pendiente | fallido`, y no se
-// confunden: `entregado` es el visor, cuya entrega la prueba la fila de
-// `Notificacion`; `enviado` es el correo, que sólo se declara cuando el servidor
-// SMTP aceptó el mensaje; `pendiente` es el correo que quedó en la cola de
-// salida porque la comunidad no tiene emisor configurado; `fallido` es el envío
-// que se intentó y rebotó.
+// El mismo hecho —«¿salió?»— se persiste en cuatro columnas:
+// `envios_aviso_cobro.estado`, `envios_documento.estado`,
+// `envios_cobranza_fi.estado` y `invitaciones_acceso.envioEstado` (más
+// `cola_salida_co.estado`). El schema de Prisma no tiene `enum` —todas son
+// `String`—, así que el catálogo ES esta tupla: cada columna declara su
+// subconjunto y un valor nuevo sólo puede entrar acá.
+//
+// Los cuatro desenlaces no se confunden entre sí (S3 — serie aviso-de-cobro):
+// `entregado` es el visor interno, cuya entrega la prueba la fila de
+// `Notificacion`; `enviado` es el correo que el servidor SMTP aceptó;
+// `pendiente` es el que quedó en la cola porque la comunidad no tiene emisor
+// configurado; `fallido` es el que se intentó y rebotó (siempre con motivo).
+//
+// Auditoría `odd/auditorias/catalogos-y-estados.md` (hallazgo 1): antes cada
+// entidad copiaba su lista, así que agregar un desenlace (`rebotado`) compilaba
+// en todas y el documento lo persistía tal cual. Regla desde entonces: un
+// subconjunto con valores DISTINTOS se declara `satisfies` esta tupla y se
+// traduce con una función total; un subconjunto con los MISMOS valores es la
+// misma referencia (`ESTADOS_ENVIO_SMTP`), nunca una copia.
 
-export const CANALES_ENTREGA_AVISO = ["visor", "email"] as const
-export const CanalEntregaAvisoSchema = z.enum(CANALES_ENTREGA_AVISO)
-export type CanalEntregaAviso = (typeof CANALES_ENTREGA_AVISO)[number]
-
-export const ESTADOS_ENTREGA_AVISO = [
+export const ESTADOS_ENTREGA_CORREO = [
   "entregado",
   "enviado",
   "pendiente",
   "fallido",
 ] as const
-export const EstadoEntregaAvisoSchema = z.enum(ESTADOS_ENTREGA_AVISO)
-export type EstadoEntregaAviso = (typeof ESTADOS_ENTREGA_AVISO)[number]
+export const EstadoEntregaCorreoSchema = z.enum(ESTADOS_ENTREGA_CORREO)
+export type EstadoEntregaCorreo = (typeof ESTADOS_ENTREGA_CORREO)[number]
+
+/**
+ * Lo que un emisor REAL produce: el catálogo sin `entregado`, la palabra que sólo
+ * prueba una `Notificacion` del visor. Es la referencia que comparten las columnas
+ * cuyo conjunto es este mismo (invitación, cobranza FI, cola de salida): se
+ * importa, no se copia.
+ */
+export const ESTADOS_ENVIO_SMTP = [
+  "enviado",
+  "pendiente",
+  "fallido",
+] as const satisfies readonly EstadoEntregaCorreo[]
+export type EstadoEnvioSMTP = (typeof ESTADOS_ENVIO_SMTP)[number]
+
+/**
+ * Subconjunto del documento (`envios_documento.estado`): no usa `enviado` porque
+ * cuando el servidor acepta, la constancia dice `entregado` — lo traduce
+ * `estadoDocumentoDesdeEntrega` en `app/api/documentos/_lib/envio-documento.ts`.
+ * `pendiente` y `fallido` significan lo mismo que en el catálogo.
+ */
+export const ESTADOS_ENVIO_DOCUMENTO = [
+  "entregado",
+  "pendiente",
+  "fallido",
+] as const satisfies readonly EstadoEntregaCorreo[]
+export type EstadoEnvioDocumento = (typeof ESTADOS_ENVIO_DOCUMENTO)[number]
+
+// --- Canales de entrega del aviso de cobro (S3 — serie aviso-de-cobro) ---
+//
+// El aviso se ENTREGA por el visor interno (la notificación que el residente ve)
+// y se ENVÍA por correo con el emisor SMTP real (`lib/smtp.ts`, F4).
+
+export const CANALES_ENTREGA_AVISO = ["visor", "email"] as const
+export const CanalEntregaAvisoSchema = z.enum(CANALES_ENTREGA_AVISO)
+export type CanalEntregaAviso = (typeof CANALES_ENTREGA_AVISO)[number]
 
 // --- Constancia del correo de bienvenida (F43 — `InvitacionAcceso.envioEstado`) ---
 //
-// Estados del envío del correo de bienvenida de una invitación. Son los de
-// `ESTADOS_ENTREGA_AVISO` menos `entregado`: esa palabra describe la entrega que
-// prueba una `Notificacion` del visor, y el correo no crea ninguna, así que el
-// éxito del correo es `enviado` y nunca `entregado`.
+// Estados del envío del correo de bienvenida de una invitación: el subconjunto de
+// envío del catálogo (`ESTADOS_ENVIO_SMTP`), sin `entregado` — esa palabra
+// describe la entrega que prueba una `Notificacion` del visor, y el correo no crea
+// ninguna, así que el éxito del correo es `enviado` y nunca `entregado`.
 //
-// Es UN catálogo, no dos: lo escribe el alta y el reenvío (`enviarBienvenida`, en
-// `lib/correo-bienvenida.ts`) y lo proyecta el listado
+// Es la MISMA referencia, no una copia: lo escribe el alta y el reenvío
+// (`enviarBienvenida`, en `lib/correo-bienvenida.ts`) y lo proyecta el listado
 // (`envioInvitacionPublico`, en `lib/invitacion-acceso.ts`), sobre la misma
 // columna. Con una copia por orilla, un estado nuevo del escritor se leería como
 // «nunca se intentó» en la pantalla. Vive acá —módulo puro— porque
 // `lib/invitacion-acceso.ts` importa Prisma y este catálogo también lo consume un
 // componente de cliente.
 
-export const ESTADOS_ENVIO_INVITACION = ["enviado", "pendiente", "fallido"] as const
+export const ESTADOS_ENVIO_INVITACION = ESTADOS_ENVIO_SMTP
 export const EstadoEnvioInvitacionSchema = z.enum(ESTADOS_ENVIO_INVITACION)
-export type EstadoEnvioInvitacion = (typeof ESTADOS_ENVIO_INVITACION)[number]
+export type EstadoEnvioInvitacion = EstadoEnvioSMTP
 
 /** Registro de una entrega: aviso, destinatario, canal, estado, fecha y motivo. */
 export const EnvioAvisoCobroSchema = z.object({
@@ -2085,7 +2127,7 @@ export const EnvioAvisoCobroSchema = z.object({
   avisoId: IdEntidadSchema,
   personaId: IdEntidadSchema,
   canal: CanalEntregaAvisoSchema,
-  estado: EstadoEntregaAvisoSchema,
+  estado: EstadoEntregaCorreoSchema,
   fecha: FechaISOSchema,
   motivo: z.string().nullable().optional(),
   notificacionId: IdEntidadSchema.nullable().optional(),
@@ -2104,14 +2146,12 @@ export const CANALES_COBRANZA_FI = ["visor", "email"] as const
 export const CanalCobranzaFISchema = z.enum(CANALES_COBRANZA_FI)
 export type CanalCobranzaFI = (typeof CANALES_COBRANZA_FI)[number]
 
-export const ESTADOS_ENVIO_COBRANZA_FI = [
-  "pendiente",
-  "enviado",
-  "fallido",
-] as const
+// El estado de UN canal de la cobranza es el del emisor: la misma referencia que
+// la constancia de la invitación. `entregado` no entra: el visor de la cobranza
+// se materializa como notificación y su constancia es `enviado`.
+export const ESTADOS_ENVIO_COBRANZA_FI = ESTADOS_ENVIO_SMTP
 export const EstadoEnvioCobranzaFISchema = z.enum(ESTADOS_ENVIO_COBRANZA_FI)
-export type EstadoEnvioCobranzaFI =
-  (typeof ESTADOS_ENVIO_COBRANZA_FI)[number]
+export type EstadoEnvioCobranzaFI = EstadoEnvioSMTP
 
 /** Registro de un envío: canal, fecha, destinatario, estado y motivo. */
 export const EnvioCobranzaFISchema = z.object({
@@ -3228,13 +3268,15 @@ export const BloqueReporteRESchema = z.enum(BLOQUES_REPORTE_RE)
 // SERIE-FASE2 §V3 — distribución del reporte: el visor interno siempre se
 // publica; el email se encola como canal aparte. `pendiente` es el estado
 // honesto de un envío que todavía no salió (sin SMTP el correo NO se envió).
+// `publicado` es la excepción declarada del catálogo de entrega: el visor de RE
+// publica el reporte, no lo envía. Los otros tres son los del emisor.
 export const CANALES_ENVIO_RE = ["visor", "email"] as const
 export const ESTADOS_ENVIO_RE = [
   "publicado",
   "pendiente",
   "enviado",
   "fallido",
-] as const
+] as const satisfies readonly (EstadoEntregaCorreo | "publicado")[]
 export const EnvioReporteRESchema = z.object({
   canal: z.enum(CANALES_ENVIO_RE),
   destinatarioPersonaId: IdEntidadSchema.optional(),

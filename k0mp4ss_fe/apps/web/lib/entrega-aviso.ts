@@ -49,7 +49,11 @@ import {
   nombreDelConvenioFirmado,
 } from "@/lib/convenio-documento"
 import { enviarCorreoComunidad, estadoRegistroSMTP, motivoSMTP } from "@/lib/smtp"
-import type { CanalEntregaAviso, EstadoEntregaAviso } from "@/lib/schemas"
+import type {
+  CanalEntregaAviso,
+  EstadoEntregaCorreo,
+  EstadoEnvioDocumento,
+} from "@/lib/schemas"
 
 /**
  * Motivo del correo en cola. Es el mismo hecho que declara
@@ -123,7 +127,7 @@ export function claveEntregaAviso(input: {
 /** Lo que se va a registrar en UN canal (antes de escribirlo). */
 export interface PlanEntregaCanal {
   canal: CanalEntregaAviso
-  estado: EstadoEntregaAviso
+  estado: EstadoEntregaCorreo
   motivo: string | null
 }
 
@@ -237,9 +241,13 @@ export function cuerpoConstanciaConvenio(input: {
   return `Se adjunta el convenio de pago firmado de la unidad ${input.referenciaUnidad} con ${input.deudorNombre}, suscrito el ${input.fechaSuscripcion}. Este mensaje deja constancia de su entrega; el papel también queda disponible en el archivo de documentos de la comunidad.`
 }
 
-/** El estado final de la constancia después de un intento de cursada. */
+/**
+ * El estado final de la constancia después de un intento de cursada. Es el
+ * subconjunto del documento (`EstadoEnvioDocumento`): la constancia ES la fila de
+ * `envios_documento` que se actualiza, así que no declara un vocabulario propio.
+ */
 export interface ConstanciaConvenioCursada {
-  estado: "entregado" | "pendiente" | "fallido"
+  estado: EstadoEnvioDocumento
   motivo: string
 }
 

@@ -188,8 +188,9 @@ model InvitacionAcceso {
   usadoEn     DateTime?
   // F43 — constancia del correo de bienvenida de ESTA invitación. `enviado` sólo
   // con la aceptación del servidor SMTP; `pendiente` sin emisor configurado;
-  // `fallido` con el motivo del servidor. `envioEn` sólo cuando se envió: un
-  // rebote no se fecha como enviado. Esta fila no guarda el token en claro.
+  // `fallido` con el motivo del servidor (ESTADOS_ENVIO_SMTP en lib/schemas.ts).
+  // `envioEn` sólo cuando se envió: un rebote no se fecha como enviado. Esta fila
+  // no guarda el token en claro.
   envioEstado String?
   envioMotivo String?
   envioEn     DateTime?
@@ -1004,6 +1005,8 @@ model ColaSalidaCO {
   destinatario String?
   asunto       String
   cuerpo       String
+  // Los tres estados del emisor (ESTADOS_ENVIO_SMTP en lib/schemas.ts): la cola
+  // registra intentos de correo, nunca `entregado`.
   estado       String    @default("pendiente")
   intentos     Int       @default(0)
   ultimoError  String?
@@ -1109,7 +1112,9 @@ model EnvioDocumento {
   personaId      String
   // `visor` | `email` (CANALES_ENVIO_DOCUMENTO en app/api/documentos/_lib).
   canal          String
-  // `entregado` | `pendiente` | `fallido` (ver arriba qué significa cada uno).
+  // `entregado` | `pendiente` | `fallido` (ESTADOS_ENVIO_DOCUMENTO en
+  // lib/schemas.ts). `enviado` no entra: la aceptación del servidor se registra
+  // `entregado`.
   estado         String
   fecha          String
   motivo         String?
@@ -1692,9 +1697,10 @@ model EnvioAvisoCobro {
   personaId      String
   // `visor` | `email` (CANALES_ENTREGA_AVISO en lib/schemas.ts).
   canal          String
-  // `entregado` | `pendiente` | `fallido`. El visor es `entregado` porque la
-  // fila de `Notificacion` se creó en la misma transacción; el email es
-  // `pendiente` mientras no exista emisor SMTP (F4).
+  // Los cuatro del catálogo único (ESTADOS_ENTREGA_CORREO en lib/schemas.ts):
+  // `entregado` porque la fila de `Notificacion` se creó en la misma transacción;
+  // `enviado` cuando el servidor SMTP aceptó; `pendiente` mientras no exista
+  // emisor SMTP (F4); `fallido` con el motivo del rebote.
   estado         String
   fecha          String
   motivo         String?
@@ -1768,6 +1774,7 @@ model EnvioCobranzaFI {
   unidadId        String
   personaId       String?
   canal           String
+  // Los tres estados del emisor (ESTADOS_ENVIO_COBRANZA_FI en lib/schemas.ts).
   estado          String
   fecha           String
   motivo          String?

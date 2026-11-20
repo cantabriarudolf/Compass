@@ -67,6 +67,7 @@ import { randomUUID } from "node:crypto"
 import { connect as conectarRed, isIP, type Socket } from "node:net"
 import { connect as conectarTls, type TLSSocket } from "node:tls"
 import { prisma } from "@/lib/prisma"
+import type { EstadoEnvioSMTP } from "@/lib/schemas"
 import {
   EXPLICACION_MOTIVO_GLOBAL,
   resolverCredencialDeComunidad,
@@ -88,8 +89,11 @@ export type ResultadoEnvioSMTP =
   | { estado: "no_configurado"; motivo: string; motivoGlobal?: MotivoCredencialGlobal }
   | { estado: "fallido"; motivo: string; motivoGlobal?: MotivoCredencialGlobal }
 
-/** Estado tal como se persiste en la cola de salida (`pendiente|enviado|fallido`). */
-export type EstadoRegistroSMTP = "pendiente" | "enviado" | "fallido"
+/**
+ * El estado que se persiste no se declara acá: es el subconjunto de envío del
+ * catálogo único (`ESTADOS_ENVIO_SMTP`, en `lib/schemas.ts`). Una lista propia en
+ * este módulo era una de las cinco copias del hallazgo 1 y volvería a divergir.
+ */
 
 /** Campos de CF que usa el emisor (la contraseña NO está en esta lista). */
 export interface FilaConfiguracionSMTP {
@@ -342,7 +346,7 @@ export async function enviarCorreoSMTP(
  * Estado que se persiste en la cola de salida. `no_configurado` es una
  * CONDICIÓN DE CONFIGURACIÓN, no un envío fallido: queda `pendiente`.
  */
-export function estadoRegistroSMTP(resultado: ResultadoEnvioSMTP): EstadoRegistroSMTP {
+export function estadoRegistroSMTP(resultado: ResultadoEnvioSMTP): EstadoEnvioSMTP {
   return resultado.estado === "no_configurado" ? "pendiente" : resultado.estado
 }
 

@@ -42,7 +42,7 @@ import { puede } from "@/lib/authz"
 import {
   CANALES_ENTREGA_AVISO,
   type CanalEntregaAviso,
-  type EstadoEntregaAviso,
+  type EstadoEntregaCorreo,
 } from "@/lib/schemas"
 import { jsonError, withComunidadScope } from "@/lib/api/with-comunidad-scope"
 import {
@@ -71,7 +71,7 @@ const EntradaEntregaSchema = z.object({
  */
 export type ResultadoCanalEntrega = {
   canal: CanalEntregaAviso
-  estado: EstadoEntregaAviso | "duplicado"
+  estado: EstadoEntregaCorreo | "duplicado"
   motivo?: string
   envioId?: string
   notificacionId?: string
@@ -81,7 +81,7 @@ export type ResultadoCanalEntrega = {
 /** Fila que se va a escribir y el resultado de la respuesta que completa sus ids. */
 interface EntregaPendiente {
   resultado: ResultadoCanalEntrega
-  estado: EstadoEntregaAviso
+  estado: EstadoEntregaCorreo
   motivo: string | null
   claveEnvio: string
 }

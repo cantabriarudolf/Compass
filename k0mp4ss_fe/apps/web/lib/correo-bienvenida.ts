@@ -34,13 +34,13 @@ import { ETIQUETA_ROL, puede, type Accion, type Recurso, type Rol } from "@/lib/
 import { planDeCanal } from "@/lib/entrega-aviso"
 import { logger } from "@/lib/logger"
 import { prisma } from "@/lib/prisma"
-import type { EstadoEntregaAviso, EstadoEnvioInvitacion } from "@/lib/schemas"
+import type { EstadoEntregaCorreo, EstadoEnvioInvitacion } from "@/lib/schemas"
 
 /** Máximo de viñetas por rol: tres. Se eligen las más consecuentes, no se rellena. */
 export const MAX_VINETAS_POR_ROL = 3
 
 // El catálogo de estados de la constancia (`enviado | pendiente | fallido`) y su
-// tipo viven en `lib/schemas.ts`, junto a `ESTADOS_ENTREGA_AVISO`: es el mismo
+// tipo viven en `lib/schemas.ts`, junto a `ESTADOS_ENTREGA_CORREO`: es el mismo
 // catálogo que proyecta `lib/invitacion-acceso.ts` sobre la columna
 // `envioEstado`.
 
@@ -277,7 +277,7 @@ export function sinEnlaceEnElMotivo(
  * `entregado` es del visor y el canal email no lo produce; si apareciera, el
  * hecho real es que el correo no salió.
  */
-function estadoDelCorreo(estado: EstadoEntregaAviso): EstadoEnvioInvitacion {
+function estadoDelCorreo(estado: EstadoEntregaCorreo): EstadoEnvioInvitacion {
   if (estado === "enviado" || estado === "pendiente" || estado === "fallido") {
     return estado
   }

@@ -36,7 +36,7 @@ import { hoyISO } from "@/lib/date-utils"
 import { generarId } from "@/lib/id-utils"
 import { estadoDeCobro, estaAnulado, saldoPendiente } from "@/lib/finanzas-utils"
 import { enviarCorreoComunidad, estadoRegistroSMTP, motivoSMTP } from "@/lib/smtp"
-import { CANALES_COBRANZA_FI, type CanalCobranzaFI } from "@/lib/schemas"
+import { CANALES_COBRANZA_FI, type CanalCobranzaFI, type EstadoEnvioCobranzaFI } from "@/lib/schemas"
 import { jsonError } from "@/lib/api/with-comunidad-scope"
 import {
   clp,
@@ -58,7 +58,7 @@ const EntradaCobranzaSchema = z.object({
 /** Estado de UN canal en la respuesta: enviado, en cola, fallido, omitido o ya existente. */
 export type ResultadoCanalCobranza = {
   canal: CanalCobranzaFI
-  estado: "enviado" | "pendiente" | "fallido" | "omitido" | "duplicado"
+  estado: EstadoEnvioCobranzaFI | "omitido" | "duplicado"
   motivo?: string
   envioId?: string
   fecha?: string
@@ -203,7 +203,7 @@ export async function POST(req: Request, ctx: Ctx): Promise<Response> {
     const resultados: ResultadoCanalCobranza[] = []
     const aEscribir: Array<{
       canal: CanalCobranzaFI
-      estado: "pendiente" | "enviado" | "fallido"
+      estado: EstadoEnvioCobranzaFI
       claveEnvio: string
       motivo?: string
       envioId: string
@@ -246,7 +246,7 @@ export async function POST(req: Request, ctx: Ctx): Promise<Response> {
       // registro solo dice `enviado` si el servidor aceptó el mensaje.
       const esEmail = canal === "email"
       const envioId = generarId("env-cob")
-      let estado: "pendiente" | "enviado" | "fallido" = "enviado"
+      let estado: EstadoEnvioCobranzaFI = "enviado"
       let motivoEnvio: string | undefined
       if (esEmail) {
         const envio = emailDestino

@@ -40,16 +40,38 @@
  */
 import { ETIQUETAS_TIPO_DOCUMENTAL, type TipoDocumental } from "@/lib/documento-archivo"
 import { planDeCanal } from "@/lib/entrega-aviso"
+import type { EstadoEntregaCorreo, EstadoEnvioDocumento } from "@/lib/schemas"
 
 /** Canales de entrega del documento: el visor de la comunidad y el correo. */
 export const CANALES_ENVIO_DOCUMENTO = ["visor", "email"] as const
 
 export type CanalEnvioDocumento = (typeof CANALES_ENVIO_DOCUMENTO)[number]
 
-/** Estados que se persisten en `envios_documento`. */
-export const ESTADOS_ENVIO_DOCUMENTO = ["entregado", "pendiente", "fallido"] as const
+/**
+ * Traducción TOTAL del desenlace del canal al vocabulario de la constancia:
+ * `enviado` (aviso) = aceptación del servidor = `entregado` (documento); los otros
+ * dos significan lo mismo en las dos entidades.
+ *
+ * El vocabulario del documento NO se declara acá: es el subconjunto del catálogo
+ * único (`ESTADOS_ENVIO_DOCUMENTO`, en `lib/schemas.ts`). Y la traducción es un
+ * `Record` del catálogo COMPLETO, no un `?:` que deja pasar cualquier palabra: un
+ * desenlace nuevo rompe la compilación acá, y uno que no esté en el catálogo (fila
+ * vieja, escritor de otra versión) se registra `fallido` — nunca se declara
+ * entregado ni se persiste un valor que la columna no conozca (hallazgo 1).
+ */
+const MAPA_ESTADO_DOCUMENTO: Record<EstadoEntregaCorreo, EstadoEnvioDocumento> = {
+  entregado: "entregado",
+  enviado: "entregado",
+  pendiente: "pendiente",
+  fallido: "fallido",
+}
 
-export type EstadoEnvioDocumento = (typeof ESTADOS_ENVIO_DOCUMENTO)[number]
+export function estadoDocumentoDesdeEntrega(
+  estado: EstadoEntregaCorreo
+): EstadoEnvioDocumento {
+  const traducido: EstadoEnvioDocumento | undefined = MAPA_ESTADO_DOCUMENTO[estado]
+  return traducido ?? "fallido"
+}
 
 /**
  * S8 · Mensaje único del rechazo: lo usan la ruta (409) y el test de contrato.
@@ -139,10 +161,7 @@ export async function planDeEnvioDocumento(
     },
   })
 
-  // `enviado` (aviso) = aceptación del servidor = `entregado` (documento). Los
-  // otros dos estados significan lo mismo en las dos entidades.
-  const estado: EstadoEnvioDocumento = plan.estado === "enviado" ? "entregado" : plan.estado
-  return { canal, estado, motivo: plan.motivo }
+  return { canal, estado: estadoDocumentoDesdeEntrega(plan.estado), motivo: plan.motivo }
 }
 
 /** Asunto del documento: nombra la glosa (visor y correo dicen lo mismo). */

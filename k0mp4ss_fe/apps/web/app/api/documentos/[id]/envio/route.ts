@@ -51,8 +51,8 @@ import {
   planDeEnvioDocumento,
   rolBandejaDe,
   type CanalEnvioDocumento,
-  type EstadoEnvioDocumento,
 } from "../../_lib/envio-documento"
+import type { EstadoEnvioDocumento } from "@/lib/schemas"
 
 type Ctx = { params: Promise<{ id: string }> }
 

@@ -37,10 +37,16 @@ import type { Prisma } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { generarId } from "@/lib/id-utils"
 import { planDeCanal } from "@/lib/entrega-aviso"
+import { ESTADOS_ENVIO_SMTP, type EstadoEnvioSMTP } from "@/lib/schemas"
 
-/** Los tres estados de la cola. `entregado` no es uno de ellos (S4). */
-export const ESTADOS_COLA_SALIDA_CO = ["pendiente", "enviado", "fallido"] as const
-export type EstadoColaSalidaCO = (typeof ESTADOS_COLA_SALIDA_CO)[number]
+/**
+ * Los tres estados de la cola: la MISMA referencia que el subconjunto de envío del
+ * catálogo (`ESTADOS_ENVIO_SMTP`), importada y no copiada. `entregado` no es uno de
+ * ellos (S4): la cola registra intentos de correo, y la entrega la prueba la
+ * `Notificacion` del visor.
+ */
+export const ESTADOS_COLA_SALIDA_CO = ESTADOS_ENVIO_SMTP
+export type EstadoColaSalidaCO = EstadoEnvioSMTP
 
 /**
  * Tope de intentos reales por fila. Un `fallido` se vuelve a tomar en el drenaje

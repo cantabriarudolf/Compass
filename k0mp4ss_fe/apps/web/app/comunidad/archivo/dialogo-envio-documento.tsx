@@ -43,10 +43,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@workspace/ui/components/select"
-import type {
-  CanalEnvioDocumento,
-  EstadoEnvioDocumento,
-} from "@/app/api/documentos/_lib/envio-documento"
+import type { CanalEnvioDocumento } from "@/app/api/documentos/_lib/envio-documento"
+import type { EstadoEnvioDocumento } from "@/lib/schemas"
 import {
   ETIQUETAS_GRUPO_DESTINATARIO,
   GRUPOS_DESTINATARIO,
