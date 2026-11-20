@@ -45,40 +45,46 @@ import {
 import Link from "next/link"
 
 import { Persona } from "@/data/comunidad/personas"
-import { ESTADOS_CUENTA_PERSONA, type EstadoCuentaPersona } from "@/lib/schemas"
+import {
+  ESTADOS_CUENTA_PERSONA,
+  ROLES_PERSONA,
+  type EstadoCuentaPersona,
+  type RolPersona,
+} from "@/lib/schemas"
 import { FormularioPersona } from "@/components/comunidad/formulario-persona"
 import { RolesDonut } from "@/components/comunidad/roles-donut"
 import { VerMas } from "@/components/ver-mas"
 
-const ROLES_TAB_CONFIG: { id: string; label: string; icon: React.ReactNode }[] =
-  [
-    { id: "todos", label: "TODOS", icon: <IconUsers className="size-4" /> },
-    {
-      id: "propietario",
-      label: "PROPIETARIOS",
-      icon: <IconBuildingSkyscraper className="size-4" />,
-    },
-    {
-      id: "residente",
-      label: "RESIDENTES",
-      icon: <IconBuildingSkyscraper className="size-4" />,
-    },
-    {
-      id: "personal",
-      label: "PERSONAL",
-      icon: <IconBriefcase className="size-4" />,
-    },
-    {
-      id: "directiva",
-      label: "DIRECTIVA",
-      icon: <IconGavel className="size-4" />,
-    },
-    {
-      id: "contratista",
-      label: "CONTRATISTAS",
-      icon: <IconTool className="size-4" />,
-    },
-  ]
+/**
+ * Etiqueta e ícono de cada pestaña de rol. `Record` del catálogo completo
+ * (`RolPersona`): un rol nuevo rompe la compilación acá; antes el `id` era `string`
+ * y viajaba crudo como `?rol=`, así que un rol inventado dejaba una pestaña que el
+ * servidor rechazaba con 400 y la lista entera sin responder (hallazgo 4).
+ */
+const ETIQUETA_TAB_ROL: Record<RolPersona, string> = {
+  propietario: "PROPIETARIOS",
+  residente: "RESIDENTES",
+  personal: "PERSONAL",
+  directiva: "DIRECTIVA",
+  contratista: "CONTRATISTAS",
+}
+
+const ICONO_TAB_ROL: Record<RolPersona, React.ReactNode> = {
+  propietario: <IconBuildingSkyscraper className="size-4" />,
+  residente: <IconBuildingSkyscraper className="size-4" />,
+  personal: <IconBriefcase className="size-4" />,
+  directiva: <IconGavel className="size-4" />,
+  contratista: <IconTool className="size-4" />,
+}
+
+const ROLES_TAB_CONFIG: { id: RolPersona | "todos"; label: string; icon: React.ReactNode }[] = [
+  { id: "todos", label: "TODOS", icon: <IconUsers className="size-4" /> },
+  ...ROLES_PERSONA.map((rol) => ({
+    id: rol,
+    label: ETIQUETA_TAB_ROL[rol],
+    icon: ICONO_TAB_ROL[rol],
+  })),
+]
 
 /** Espera del buscador antes de consultar al servidor (una tecla, una request). */
 const DEBOUNCE_BUSQUEDA_MS = 300

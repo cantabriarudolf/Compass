@@ -2,7 +2,11 @@
 // Relación entre Personas (MP) y Unidades físicas (EF).
 // Mock realista: ~55 vinculos activos cubriendo ~55 unidades de 83 totales.
 
-export type RolVinculo = "propietario" | "arrendatario" | "copropietario" | "ocupante";
+// El rol del vínculo NO se declara acá: es `RolVinculo` de `lib/schemas.ts`, que
+// deriva de `RolesVinculo`. Una unión propia en la semilla era una de las copias
+// del hallazgo 4: un rol nuevo en el catálogo compilaba acá con el valor viejo.
+import type { RolVinculo } from "@/lib/schemas"
+export type { RolVinculo }
 
 export const ESTADOS_INMOBILIARIOS = [
   { id: "habitada", nombre: "Habitada", color: "bg-emerald-500 text-white" },

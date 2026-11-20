@@ -398,6 +398,23 @@ export const ROLES_PERSONA = [
   "directiva",
   "contratista",
 ] as const
+export type RolPersona = (typeof ROLES_PERSONA)[number]
+
+/**
+ * Roles derivados del Directorio de Gestión Administrativa (`?rolDirectorio=`).
+ *
+ * SUBCONJUNTO A PROPÓSITO de `ROLES_PERSONA` (S5): `contratista` no pertenece al
+ * directorio administrativo de la comunidad. Lo que se declara una sola vez es la
+ * DEFINICIÓN —la importan la ruta y la pantalla de gestión, que antes tenían una
+ * copia cada una—; los valores no se unifican con los de la persona.
+ */
+export const ROLES_DIRECTORIO = [
+  "propietario",
+  "residente",
+  "directiva",
+  "personal",
+] as const satisfies readonly RolPersona[]
+export type RolDirectorio = (typeof ROLES_DIRECTORIO)[number]
 
 // --- Portal Inmobiliario (PI) ---
 

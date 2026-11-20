@@ -23,7 +23,13 @@
  *   `esResidente` y con el ABAC: siempre suman condiciones a `where.AND`, nunca reemplazan el
  *   `where` de permisos.
  */
-import { esEstadoCuentaPersona, PersonaSchema, ROLES_PERSONA } from "@/lib/schemas"
+import {
+  esEstadoCuentaPersona,
+  PersonaSchema,
+  ROLES_DIRECTORIO,
+  ROLES_PERSONA,
+  type RolVinculo,
+} from "@/lib/schemas"
 import { puede } from "@/lib/authz"
 import { prisma } from "@/lib/prisma"
 import { logger } from "@/lib/logger"
@@ -313,16 +319,8 @@ function denegar(rol: string, accion: "ver" | "crear" | "editar" | "eliminar"): 
 const COMODINES_LIKE = /[%_]/
 
 /** Roles de vínculo que hacen «residente» a una persona (regla del directorio). */
-const ROLES_RESIDENTE = ["propietario", "arrendatario"] as const
+const ROLES_RESIDENTE = ["propietario", "arrendatario"] as const satisfies readonly RolVinculo[]
 
-/** Roles derivados del Directorio de Gestión Administrativa (`?rolDirectorio=`). */
-const ROLES_DIRECTORIO = ["propietario", "residente", "directiva", "personal"] as const
-
-/**
- * Valores de un query param en CSV (`?rol=propietario,residente`): recortados, sin
- * vacíos y sin repetidos. Ausente o vacío → lista vacía, que significa «no filtrar»:
- * así los parámetros son aditivos y ningún caller de antes cambia de resultado.
- */
 function valoresCsv(valor: string | null): string[] {
   if (!valor) return []
   return [...new Set(valor.split(",").map((v) => v.trim()).filter(Boolean))]

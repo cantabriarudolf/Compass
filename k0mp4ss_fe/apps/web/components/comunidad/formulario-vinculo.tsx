@@ -7,8 +7,9 @@ import { useUnidades } from "@/lib/api/use-unidades"
 import { useMicroSectores } from "@/lib/api/use-micro-sectores"
 import { useMacroSectores } from "@/lib/api/use-macro-sectores"
 import { useMaestros } from "@/lib/api/use-maestros"
-import type { EstadoInmobiliario } from "@/lib/schemas"
-import { RolVinculo, VinculoUnidad } from "@/data/comunidad/vinculos"
+import type { EstadoInmobiliario, RolVinculo } from "@/lib/schemas"
+import { RolesVinculo } from "@/lib/schemas"
+import { VinculoUnidad } from "@/data/comunidad/vinculos"
 
 import { Button } from "@workspace/ui/components/button"
 import { Input } from "@workspace/ui/components/input"
@@ -26,12 +27,23 @@ import {
   SelectValue,
 } from "@workspace/ui/components/select"
 
-const ROLES_VINCULO: { id: RolVinculo; nombre: string }[] = [
-  { id: "propietario", nombre: "Propietario" },
-  { id: "arrendatario", nombre: "Arrendatario" },
-  { id: "copropietario", nombre: "Copropietario / Familiar" },
-  { id: "ocupante", nombre: "Ocupante" },
-]
+/**
+ * Nombre de cada rol de vínculo. `Record` del catálogo completo (`RolVinculo`, que
+ * deriva de `RolesVinculo`): un rol nuevo rompe la compilación acá en vez de
+ * quedar sin opción en el formulario — el hallazgo 4 lo decía así, porque el array
+ * tipado aceptaba quedarse corto.
+ */
+const NOMBRE_ROL_VINCULO: Record<RolVinculo, string> = {
+  propietario: "Propietario",
+  arrendatario: "Arrendatario",
+  copropietario: "Copropietario / Familiar",
+  ocupante: "Ocupante",
+}
+
+const ROLES_VINCULO: { id: RolVinculo; nombre: string }[] = RolesVinculo.map((id) => ({
+  id,
+  nombre: NOMBRE_ROL_VINCULO[id],
+}))
 
 function etiquetaUnidad(u: Unidad) {
   return `${u.etiqueta} ${u.numero}`

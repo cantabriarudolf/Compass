@@ -1,9 +1,16 @@
 "use client"
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
+import type { RolPersona } from "@/lib/schemas"
 import { IconChartDonut } from "@tabler/icons-react"
 
-const ROLE_HEX: Record<string, string> = {
+/**
+ * Color y etiqueta de cada rol de la persona. `Record` del catálogo completo
+ * (`RolPersona`, en `lib/schemas.ts`): antes eran `Record<string, string>`, así que
+ * un rol nuevo del catálogo se pintaba con el color de reserva y su nombre crudo
+ * (hallazgo 4). La lectura desde el dato mantiene el fallback.
+ */
+const ROLE_HEX: Record<RolPersona, string> = {
   propietario: "#4f46e5",
   residente: "#059669",
   personal: "#475569",
@@ -11,7 +18,7 @@ const ROLE_HEX: Record<string, string> = {
   contratista: "#6b7280",
 }
 
-const ROLE_LABELS: Record<string, string> = {
+const ROLE_LABELS: Record<RolPersona, string> = {
   propietario: "Propietarios",
   residente: "Residentes",
   personal: "Personal",
@@ -36,9 +43,9 @@ export function RolesDonut({ roles, scopeLabel, selectedId, onSelect }: RolesDon
     }, {})
   ).map(([id, count]) => ({
     id,
-    nombre: ROLE_LABELS[id] || id,
+    nombre: ROLE_LABELS[id as RolPersona] ?? id,
     count,
-    color: ROLE_HEX[id] || "#6b7280",
+    color: ROLE_HEX[id as RolPersona] ?? "#6b7280",
   })).filter(d => d.count > 0)
 
   const size = 168

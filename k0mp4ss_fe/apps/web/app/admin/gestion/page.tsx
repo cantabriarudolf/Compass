@@ -62,6 +62,7 @@ import {
   IconLock,
 } from "@tabler/icons-react"
 import type { Persona, ControlPropiedad, ExtensionGobernanza } from "@/lib/schemas"
+import { ROLES_DIRECTORIO, type RolDirectorio } from "@/lib/schemas"
 
 const CARGO_LABEL: Record<string, string> = {
   presidente: "Presidente",
@@ -70,14 +71,21 @@ const CARGO_LABEL: Record<string, string> = {
   director: "Director",
 }
 
-type RolDirectorio = "propietario" | "residente" | "directiva" | "personal"
+/**
+ * Etiqueta e ícono de cada rol del directorio. `Record` de la unión completa
+ * (`RolDirectorio`, en `lib/schemas.ts`): un rol nuevo en el catálogo rompe la
+ * compilación acá en vez de faltar en la pantalla, que es lo que pasaba con la
+ * lista escrita dos veces (hallazgo 4).
+ */
+const DIRECTORIO_UI: Record<RolDirectorio, { etiqueta: string; icono: React.ElementType }> = {
+  propietario: { etiqueta: "Propietario", icono: IconHome },
+  residente: { etiqueta: "Residente", icono: IconUsers },
+  directiva: { etiqueta: "Directiva", icono: IconGavel },
+  personal: { etiqueta: "Personal", icono: IconBriefcase },
+}
 
-const ROLES_DIRECTORIO: { id: RolDirectorio; etiqueta: string; icono: React.ElementType }[] = [
-  { id: "propietario", etiqueta: "Propietario", icono: IconHome },
-  { id: "residente", etiqueta: "Residente", icono: IconUsers },
-  { id: "directiva", etiqueta: "Directiva", icono: IconGavel },
-  { id: "personal", etiqueta: "Personal", icono: IconBriefcase },
-]
+const ROLES_DIRECTORIO_UI: { id: RolDirectorio; etiqueta: string; icono: React.ElementType }[] =
+  ROLES_DIRECTORIO.map((id) => ({ id, ...DIRECTORIO_UI[id] }))
 
 type Vinculo = ReturnType<typeof useVinculos>["vinculos"][number]
 type Unidad = ReturnType<typeof useUnidades>["items"][number]
@@ -184,7 +192,7 @@ function FichaDetalle({
           ) : (
             roles.map(r => (
               <Badge key={r} variant="secondary">
-                {ROLES_DIRECTORIO.find(x => x.id === r)?.etiqueta ?? r}
+                {ROLES_DIRECTORIO_UI.find(x => x.id === r)?.etiqueta ?? r}
               </Badge>
             ))
           )}
@@ -420,7 +428,7 @@ export default function GestionAdministrativaPage() {
 
   const conteoPorRol = React.useMemo(() => {
     const m = new Map<RolDirectorio, number>()
-    for (const r of ROLES_DIRECTORIO) m.set(r.id, 0)
+    for (const r of ROLES_DIRECTORIO_UI) m.set(r.id, 0)
     for (const p of personasCompletas) {
       for (const r of rolesDe(p)) m.set(r, (m.get(r) ?? 0) + 1)
     }
@@ -632,7 +640,7 @@ export default function GestionAdministrativaPage() {
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
-              {ROLES_DIRECTORIO.map(r => {
+              {ROLES_DIRECTORIO_UI.map(r => {
                 const activo = rolesFiltro.includes(r.id)
                 const Icono = r.icono
                 return (
@@ -718,7 +726,7 @@ export default function GestionAdministrativaPage() {
                               ) : (
                                 roles.map(r => (
                                   <Badge key={r} variant="secondary">
-                                    {ROLES_DIRECTORIO.find(x => x.id === r)?.etiqueta ?? r}
+                                    {ROLES_DIRECTORIO_UI.find(x => x.id === r)?.etiqueta ?? r}
                                   </Badge>
                                 ))
                               )}
