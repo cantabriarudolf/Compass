@@ -37,10 +37,19 @@
  *     respuesta. Sin 2xx no se limpia el formulario ni se afirma que quedó guardado.
  *
  * Frontera deliberada: la única guardia del cliente es de FORMA —los cuatro campos
- * escritos y un puerto entero en rango—, no una copia de las reglas del servidor. Que
- * la clave maestra exista, que el secreto se cifre y que el SMTP acepte la conexión lo
- * deciden `lib/cifrado-secretos.ts` y `lib/smtp.ts`, y sus mensajes se muestran tal
- * cual: bloquear acá una combinación que el servidor acepte sería una segunda verdad.
+ * escritos, un puerto entero en rango y una casilla completa—, no una copia de las
+ * reglas del servidor. Que la clave maestra exista, que el secreto se cifre y que el
+ * SMTP acepte la conexión lo deciden `lib/cifrado-secretos.ts` y `lib/smtp.ts`, y sus
+ * mensajes se muestran tal cual: bloquear acá una combinación que el servidor acepte
+ * sería una segunda verdad.
+ *
+ * F33 · U5 (mejora de la consola): la persona no repite el dominio. El campo de la
+ * casilla acepta la dirección completa —se respeta tal cual— o sólo la parte local, y
+ * en ese caso el dominio se deduce del servidor SMTP que ya está escrito arriba
+ * (`smtp.comunidadlosalmendros.cl` → `comunidadlosalmendros.cl`). El resultado completo
+ * se ve antes de guardar: no se completa en silencio. De un servidor del que no se
+ * puede deducir dominio no se inventa nada: se pide la dirección completa y lo dice.
+ * Lo que viaja al endpoint es siempre la dirección completa, igual que antes.
  */
 import * as React from "react"
 import { Badge } from "@workspace/ui/components/badge"
@@ -105,6 +114,27 @@ const TEXTO_SIN_ESTADO =
 /** La prueba respondió algo que no es ninguno de los dos desenlaces del contrato. */
 const TEXTO_PRUEBA_ILEGIBLE =
   "La respuesta del servidor no dice si el envío de prueba salió: no se puede afirmar nada."
+
+/**
+ * La ayuda de cada campo, en criollo: qué es, para qué sirve y quién lo da. Es la
+ * solicitud de datos de la consola, campo por campo; el rol del remitente vive en la
+ * pestaña «Correo SMTP» de Configuración Global, que es donde está ese campo.
+ */
+const AYUDA_SERVIDOR =
+  "El dato te lo da tu proveedor de correo. Suele empezar con smtp."
+const AYUDA_PUERTO = "587 si tu proveedor usa TLS. Si no sabés, dejá 587."
+const AYUDA_CASILLA =
+  "La cuenta desde la que sale el correo. Escribí sólo lo que va antes de la arroba."
+const AYUDA_SECRETO =
+  "La del buzón. Se guarda cifrada y no se vuelve a mostrar."
+
+/** Por qué la casilla no se puede completar sola y qué se pide en su lugar. */
+const TEXTO_CASILLA_SIN_SERVIDOR =
+  "El dominio se completa desde el servidor: escribí primero el servidor, o la dirección completa con arroba."
+const TEXTO_CASILLA_SIN_DOMINIO =
+  "Del servidor no se puede deducir el dominio: escribí la dirección completa, con arroba."
+const TEXTO_CASILLA_INCOMPLETA =
+  "Escribí sólo lo que va antes de la arroba, sin espacios, o la dirección completa."
 
 /** El guardado respondió 2xx sin la credencial: no se declara guardada. */
 const TEXTO_GUARDADO_ILEGIBLE =
@@ -276,6 +306,84 @@ function textoAceptado(messageId: string | null): string {
     : `El servidor aceptó el envío de prueba (messageId: ${messageId}).`
 }
 
+/** Los subdominios con los que los proveedores nombran su servidor de salida. */
+const PREFIJOS_SMTP = ["smtp", "smtps", "mail", "correo", "webmail", "email"]
+
+/**
+ * Dominios de proveedores públicos. Detrás de uno de ellos hay millones de buzones de
+ * gente distinta, así que `smtp.gmail.com` no dice cuál es el dominio de la comunidad:
+ * completar la casilla con `gmail.com` sería inventar. Se compara por sufijo para
+ * cubrir los que el proveedor nombra con más etiquetas (`outlook.office365.com`).
+ */
+const DOMINIOS_DE_PROVEEDOR_PUBLICO = [
+  "gmail.com",
+  "googlemail.com",
+  "outlook.com",
+  "office365.com",
+  "hotmail.com",
+  "live.com",
+  "msn.com",
+  "yahoo.com",
+  "yahoo.es",
+  "icloud.com",
+  "me.com",
+  "mac.com",
+  "aol.com",
+  "protonmail.com",
+  "proton.me",
+  "zoho.com",
+  "gmx.net",
+  "gmx.com",
+  "mail.com",
+  "yandex.com",
+  "yandex.ru",
+  "tutanota.com",
+]
+
+/** Lo que puede ir antes de la arroba: sin arroba, sin espacios y sin vacíos. */
+const PARTE_LOCAL = /^[^\s@]+$/
+
+/**
+ * El dominio del buzón deducido del servidor SMTP que ya se escribió arriba, o `null`
+ * cuando no se puede deducir.
+ *
+ * No adivina: sólo toma el dominio de un servidor con la forma `smtp.dominio.tld`
+ * —`smtp.comunidadlosalmendros.cl` → `comunidadlosalmendros.cl`—. Un servidor sin esa
+ * forma, o cuyo resto es un proveedor público, devuelve `null`: la pantalla pide la
+ * dirección completa en vez de completarla con algo inventado.
+ */
+export function dominioDeducibleDe(host: string): string | null {
+  // El host puede venir con puerto —que ya tiene su campo— o con el punto final del
+  // nombre absoluto: ninguno de los dos es parte del dominio.
+  const limpio = host
+    .trim()
+    .toLowerCase()
+    .replace(/:\d+$/, "")
+    .replace(/\.$/, "")
+  if (!/^[a-z0-9.-]+$/.test(limpio)) return null
+  const etiquetas = limpio.split(".")
+  // `smtp.dominio.tld`: el prefijo del servidor y, al menos, un dominio con su TLD.
+  if (etiquetas.length < 3) return null
+  if (!PREFIJOS_SMTP.includes(etiquetas[0] ?? "")) return null
+  const dominio = etiquetas.slice(1).join(".")
+  if (!/^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(dominio)) return null
+  const deProveedorPublico = DOMINIOS_DE_PROVEEDOR_PUBLICO.some(
+    (publico) => dominio === publico || dominio.endsWith(`.${publico}`)
+  )
+  return deProveedorPublico ? null : dominio
+}
+
+/**
+ * El resultado completo de la casilla, a la vista ANTES de guardar. `derivada` dice si
+ * el dominio lo puso la pantalla con el del servidor: completar sin decirlo sería
+ * adivinar en silencio.
+ */
+function textoCasillaResuelta(direccion: string, derivada: boolean): string {
+  return derivada
+    ? `Se va a guardar como ${direccion}. El dominio lo completa la pantalla a partir del servidor.`
+    : `Se va a guardar como ${direccion}.`
+}
+
 export interface ConsolaCredencialCorreoProps {
   /** `cf` con `editar`: habilita el formulario y la prueba de envío. */
   puedeEditar: boolean
@@ -327,19 +435,36 @@ export function ConsolaCredencialCorreo({
     void cargar()
   }, [cargar])
 
-  // Guardia de FORMA, no de negocio: los cuatro campos escritos y un puerto entero en
-  // rango, que es lo mismo que exige el esquema. Que la clave maestra exista y que el
-  // SMTP acepte la conexión lo decide el servidor, y su mensaje se lee tal cual.
+  // Guardia de FORMA, no de negocio: los cuatro campos escritos, un puerto entero en
+  // rango, que es lo mismo que exige el esquema, y una casilla COMPLETA. Que la clave
+  // maestra exista y que el SMTP acepte la conexión lo decide el servidor, y su mensaje
+  // se lee tal cual.
   const puertoNumero = Number(puerto)
   const puertoValido =
     puerto.trim() !== "" &&
     Number.isInteger(puertoNumero) &&
     puertoNumero >= 1 &&
     puertoNumero <= 65535
+
+  // El dominio de la casilla sale del servidor que ya está escrito arriba: la persona
+  // no lo repite. Una dirección completa se respeta tal cual; de un servidor del que no
+  // se puede deducir dominio no se inventa nada y se pide la dirección completa.
+  const dominioDelServidor = dominioDeducibleDe(host)
+  const casillaEscrita = usuario.trim()
+  const casillaCompleta = casillaEscrita.includes("@")
+  const casillaResuelta =
+    casillaEscrita === ""
+      ? ""
+      : casillaCompleta
+        ? casillaEscrita
+        : dominioDelServidor !== null && PARTE_LOCAL.test(casillaEscrita)
+          ? `${casillaEscrita}@${dominioDelServidor}`
+          : ""
+
   const formularioCompleto =
     host.trim() !== "" &&
     puertoValido &&
-    usuario.trim() !== "" &&
+    casillaResuelta !== "" &&
     secreto.trim() !== ""
 
   async function guardar(
@@ -350,11 +475,12 @@ export function ConsolaCredencialCorreo({
 
     // El cuerpo es exactamente el de `CredencialCorreoComunidadSchema`. El secreto no
     // se recorta: una contraseña puede tener espacios y el esquema sólo exige que no
-    // sea vacía.
+    // sea vacía. El usuario viaja COMPLETO —con el dominio que la persona no repitió—,
+    // igual que antes de esta mejora: el contrato del endpoint no cambia.
     const cuerpo: Record<string, unknown> = {
       host: host.trim(),
       puerto: puertoNumero,
-      usuario: usuario.trim(),
+      usuario: casillaResuelta,
       secreto,
     }
 
@@ -485,7 +611,7 @@ export function ConsolaCredencialCorreo({
               <dl className="grid gap-3 text-sm sm:grid-cols-2">
                 <div className="flex flex-col gap-0.5">
                   <dt className="text-xs text-muted-foreground">
-                    Servidor SMTP
+                    Servidor de correo
                   </dt>
                   <dd className="font-medium">
                     {credencial.host ?? NO_INFORMADO}
@@ -500,7 +626,9 @@ export function ConsolaCredencialCorreo({
                   </dd>
                 </div>
                 <div className="flex flex-col gap-0.5">
-                  <dt className="text-xs text-muted-foreground">Usuario SMTP</dt>
+                  <dt className="text-xs text-muted-foreground">
+                    Casilla de correo
+                  </dt>
                   <dd className="font-medium">
                     {credencial.usuario ?? NO_INFORMADO}
                   </dd>
@@ -575,7 +703,7 @@ export function ConsolaCredencialCorreo({
             <form className="flex flex-col gap-4" onSubmit={(e) => void guardar(e)}>
               <div className="grid gap-4 sm:grid-cols-[1fr_140px]">
                 <div className="flex flex-col gap-1">
-                  <Label htmlFor="credencial-host">Servidor SMTP</Label>
+                  <Label htmlFor="credencial-host">Servidor de correo</Label>
                   <Input
                     id="credencial-host"
                     value={host}
@@ -585,6 +713,9 @@ export function ConsolaCredencialCorreo({
                     autoComplete="off"
                     disabled={guardando}
                   />
+                  <p className="text-xs leading-relaxed text-muted-foreground">
+                    {AYUDA_SERVIDOR}
+                  </p>
                 </div>
                 <div className="flex flex-col gap-1">
                   <Label htmlFor="credencial-puerto">Puerto</Label>
@@ -599,24 +730,45 @@ export function ConsolaCredencialCorreo({
                     placeholder="587"
                     disabled={guardando}
                   />
+                  <p className="text-xs leading-relaxed text-muted-foreground">
+                    {AYUDA_PUERTO}
+                  </p>
                 </div>
               </div>
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="flex flex-col gap-1">
-                  <Label htmlFor="credencial-usuario">Usuario SMTP</Label>
+                  <Label htmlFor="credencial-usuario">Casilla de correo</Label>
                   <Input
                     id="credencial-usuario"
                     value={usuario}
                     onChange={(e) => setUsuario(e.target.value)}
-                    placeholder="notificaciones@tu-comunidad.cl"
+                    placeholder="soporte"
                     maxLength={255}
                     autoComplete="off"
                     disabled={guardando}
                   />
+                  <p className="text-xs leading-relaxed text-muted-foreground">
+                    {AYUDA_CASILLA}
+                  </p>
+                  {casillaEscrita === "" ? null : casillaResuelta !== "" ? (
+                    <p className="text-xs leading-relaxed text-muted-foreground">
+                      {textoCasillaResuelta(casillaResuelta, !casillaCompleta)}
+                    </p>
+                  ) : (
+                    <p className="text-xs leading-relaxed text-destructive">
+                      {host.trim() === ""
+                        ? TEXTO_CASILLA_SIN_SERVIDOR
+                        : dominioDelServidor === null
+                          ? TEXTO_CASILLA_SIN_DOMINIO
+                          : TEXTO_CASILLA_INCOMPLETA}
+                    </p>
+                  )}
                 </div>
                 <div className="flex flex-col gap-1">
-                  <Label htmlFor="credencial-secreto">Contraseña SMTP</Label>
+                  <Label htmlFor="credencial-secreto">
+                    Contraseña del buzón
+                  </Label>
                   <Input
                     id="credencial-secreto"
                     type="password"
@@ -626,6 +778,9 @@ export function ConsolaCredencialCorreo({
                     autoComplete="new-password"
                     disabled={guardando}
                   />
+                  <p className="text-xs leading-relaxed text-muted-foreground">
+                    {AYUDA_SECRETO}
+                  </p>
                 </div>
               </div>
 

@@ -192,16 +192,16 @@ async function completarFormulario(
   } = {}
 ): Promise<void> {
   await user.type(
-    screen.getByLabelText("Servidor SMTP"),
+    screen.getByLabelText("Servidor de correo"),
     opciones.host ?? "smtp.comunidad.cl"
   )
   await user.type(screen.getByLabelText("Puerto"), opciones.puerto ?? "587")
   await user.type(
-    screen.getByLabelText("Usuario SMTP"),
+    screen.getByLabelText("Casilla de correo"),
     opciones.usuario ?? "notificaciones@comunidad.cl"
   )
   await user.type(
-    screen.getByLabelText("Contraseña SMTP"),
+    screen.getByLabelText("Contraseña del buzón"),
     opciones.secreto ?? SECRETO_NUEVO
   )
 }
@@ -256,7 +256,7 @@ describe("Credencial de correo — el estado lo dice el servidor", () => {
     // …ni un sustituto que aparente mostrarlo: el campo de la contraseña está
     // vacío y su placeholder no promete una máscara de la guardada.
     const campoSecreto = screen.getByLabelText(
-      "Contraseña SMTP"
+      "Contraseña del buzón"
     ) as HTMLInputElement
     expect(campoSecreto.value).toBe("")
     expect(campoSecreto.type).toBe("password")
@@ -317,7 +317,7 @@ describe("Credencial de correo — guardar manda el cuerpo exacto", () => {
 
     // El campo de la contraseña arranca vacío: la guardada no se muestra nunca.
     expect(
-      (screen.getByLabelText("Contraseña SMTP") as HTMLInputElement).value
+      (screen.getByLabelText("Contraseña del buzón") as HTMLInputElement).value
     ).toBe("")
 
     await completarFormulario(user)
@@ -348,7 +348,7 @@ describe("Credencial de correo — guardar manda el cuerpo exacto", () => {
 
     // …y la contraseña tipeada no queda en el formulario ni en el documento.
     const campoSecreto = screen.getByLabelText(
-      "Contraseña SMTP"
+      "Contraseña del buzón"
     ) as HTMLInputElement
     expect(campoSecreto.value).toBe("")
     expect(container.innerHTML).not.toContain(SECRETO_NUEVO)
@@ -382,7 +382,7 @@ describe("Credencial de correo — guardar manda el cuerpo exacto", () => {
     expect(screen.getByText(AVISO_SIN_CREDENCIAL)).toBeTruthy()
     // El formulario conserva lo escrito: nada se guardó y nada se limpia.
     expect(
-      (screen.getByLabelText("Servidor SMTP") as HTMLInputElement).value
+      (screen.getByLabelText("Servidor de correo") as HTMLInputElement).value
     ).toBe("smtp.comunidad.cl")
   })
 })
@@ -505,7 +505,7 @@ describe("Credencial de correo — el portón es el de la matriz", () => {
     // …pero no se le pinta un formulario ni una prueba condenados al 403 de la ruta.
     expect(screen.queryByRole("button", { name: "Guardar credencial" })).toBeNull()
     expect(screen.queryByRole("button", { name: "Probar envío" })).toBeNull()
-    expect(screen.queryByLabelText("Contraseña SMTP")).toBeNull()
+    expect(screen.queryByLabelText("Contraseña del buzón")).toBeNull()
     // Y no se le pide nada al servidor que no pueda hacer.
     expect(llamadas(RUTA_CREDENCIAL, "PUT")).toHaveLength(0)
     expect(llamadas(RUTA_PRUEBA, "POST")).toHaveLength(0)

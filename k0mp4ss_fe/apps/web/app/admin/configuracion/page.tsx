@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import Link from "next/link"
 import { mutate } from "swr"
 import { ConfiguracionGlobal } from "@/data/admin/configuracion"
 import { useConfiguracion } from "@/lib/api/use-configuracion"
@@ -47,6 +48,26 @@ const PESTANAS = [
   { value: "notificaciones", etiqueta: "Notificaciones", Icono: IconBell },
   { value: "operacion", etiqueta: "Operación y Seguridad", Icono: IconShield },
 ] as const
+
+/**
+ * La ayuda del remitente, en criollo: qué rol cumple. La pregunta textual del dueño
+ * fue «¿el correo remitente sería el correo de log, del administrador?» — no es la
+ * cuenta con la que se entra al sistema, es la dirección que ve el vecino.
+ */
+const AYUDA_REMITENTE =
+  "Es la dirección que va a ver el vecino cuando abra su correo. No es tu usuario para entrar al sistema: es la cara pública de la comunidad. Conviene que sea del mismo dominio del servidor, o el correo puede caer en spam."
+
+/** Cómo se ve la comunidad al lado de la dirección del remitente. */
+const AYUDA_NOMBRE_REMITENTE =
+  "Cómo se ve la comunidad al lado de la dirección, por ejemplo Administración Los Almendros."
+
+/**
+ * La trampa de esta pestaña, dicha: los campos de arriba no guardan la contraseña del
+ * buzón —vive cifrada en la credencial POR COMUNIDAD—, así que acá se avisa dónde se
+ * carga en vez de dejar que se busque una y otra vez en el formulario equivocado.
+ */
+const AVISO_CREDENCIAL_EN_CONSOLA =
+  "La contraseña del buzón no se edita acá: se carga cifrada en la consola de la comunidad, junto con el servidor, el puerto y la casilla, y esa credencial se usa antes que la del entorno."
 
 export default function ConfiguracionPage() {
   const { config: configuracionRemota, error, updateConfig } = useConfiguracion()
@@ -355,6 +376,15 @@ export default function ConfiguracionPage() {
                     </code>
                     ) — no se edita en el cliente (C2-final).
                   </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {AVISO_CREDENCIAL_EN_CONSOLA}{" "}
+                    <Link
+                      href="/admin/configuracion/correo"
+                      className="font-medium underline underline-offset-4"
+                    >
+                      Ir a la credencial de correo de la comunidad
+                    </Link>
+                  </p>
                 </div>
                 <div className="space-y-2">
                   <Label>Seguridad *</Label>
@@ -384,6 +414,9 @@ export default function ConfiguracionPage() {
                     onChange={(e) => updateField("smtpFrom", e.target.value)}
                     required
                   />
+                  <p className="text-xs leading-relaxed text-muted-foreground">
+                    {AYUDA_REMITENTE}
+                  </p>
                 </div>
                 <div className="space-y-2">
                   <Label>Nombre Remitente *</Label>
@@ -394,6 +427,9 @@ export default function ConfiguracionPage() {
                     }
                     required
                   />
+                  <p className="text-xs leading-relaxed text-muted-foreground">
+                    {AYUDA_NOMBRE_REMITENTE}
+                  </p>
                 </div>
                 <div className="space-y-2">
                   <Label>Correo BCC (Auditoría)</Label>
