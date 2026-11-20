@@ -50,8 +50,8 @@
     "db:prod:migrar-datos": "node scripts/deploy-migrar-datos.mjs",
     "check:titularidad": "vite-node scripts/check-unidades-sin-propietario.ts",
     "db:fixture-integridad": "vite-node scripts/fixture-integridad-titularidad.ts",
-    "predev": "prisma generate",
-    "pretest": "npm run db:generate"
+    "predev": "node scripts/preparar-cliente.mjs postgres",
+    "pretest": "node scripts/preparar-cliente.mjs sqlite"
   },
   "dependencies": {
     "@opentelemetry/api": "^1.9.1",
