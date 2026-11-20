@@ -54,7 +54,12 @@ import { useEgresosFI } from "@/lib/api/use-egresos-fi"
 import { useIngresosFI } from "@/lib/api/use-ingresos-fi"
 import { useEmisionesGC } from "@/lib/api/use-emisiones-gc"
 import { emitirAvisosCobro, entregarAvisoCobro, type UnidadSinAviso } from "@/lib/api/use-avisos-cobro"
-import { useCobrosFI, useAccionesCobranzaFI, useCanalesCobranzaFI } from "@/lib/api/use-cobros-fi"
+import {
+  resumenDeCanales,
+  useAccionesCobranzaFI,
+  useCanalesCobranzaFI,
+  useCobrosFI,
+} from "@/lib/api/use-cobros-fi"
 import { useUnidades } from "@/lib/api/use-unidades"
 import { useTiposUnidad } from "@/lib/api/use-tipos-unidad"
 
@@ -408,18 +413,6 @@ export default function GastosComunesPage() {
   const preferenciaDe = (personaId: string) =>
     preferenciasCanal.find(p => p.personaId === personaId)
 
-  /** Resumen por canal de lo que el servidor realmente hizo (nunca lo simula). */
-  const resumenCanales = (r: Awaited<ReturnType<typeof enviarCobranza>>) => {
-    const partes = [r.resultado?.canales?.visor, r.resultado?.canales?.email]
-      .filter((c): c is NonNullable<typeof c> => Boolean(c))
-      .map(c =>
-        c.estado === "omitido"
-          ? `${c.canal} omitido (${c.motivo ?? "sin motivo"})`
-          : `${c.canal} ${c.estado}`
-      )
-    return partes.join(" · ")
-  }
-
   const enviarCobranzaClick = async (m: { unidadId: string; ref: string }) => {
     setError(null)
     setOkMsg(null)
@@ -433,7 +426,7 @@ export default function GastosComunesPage() {
       setError(r.error ?? "No se pudo enviar la cobranza.")
       return
     }
-    setOkMsg(`Cobranza de ${m.ref}: ${resumenCanales(r)}.`)
+    setOkMsg(`Cobranza de ${m.ref}: ${resumenDeCanales(r.resultado?.canales)}.`)
   }
 
   const cambiarCanalGlobal = async (canal: "visor" | "email", activo: boolean) => {

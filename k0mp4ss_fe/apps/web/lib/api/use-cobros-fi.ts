@@ -24,7 +24,7 @@ import {
   useCrudCollection,
   type CrudCollection,
 } from "./use-crud-collection"
-import type { CanalCobranzaFI, CobroFI } from "@/lib/schemas"
+import type { CanalCobranzaFI, CobroFI, EstadoCanalCobranzaFI } from "@/lib/schemas"
 import type { StoreResult } from "@/lib/store"
 
 const BASE_COBROS = "/api/cobros-fi"
@@ -116,10 +116,23 @@ export interface CanalesCobranzaRespuesta {
   propio: PreferenciaCanalCobranza | null
 }
 
+/**
+ * Etiqueta de cada desenlace por canal. `Record` de la unión completa: un estado
+ * nuevo rompe la compilación acá en vez de pintarse crudo. Antes el tipo no conocía
+ * `fallido` y la pantalla de gastos comunes imprimía `email fallido`.
+ */
+export const ETIQUETA_ESTADO_CANAL: Record<EstadoCanalCobranzaFI, string> = {
+  enviado: "Enviado",
+  pendiente: "Pendiente",
+  fallido: "Fallido",
+  omitido: "Omitido",
+  duplicado: "Ya registrado",
+}
+
 /** Estado de UN canal en la respuesta de la gestión. */
 export interface ResumenCanalCobranza {
   canal: CanalCobranzaFI
-  estado: "enviado" | "pendiente" | "omitido" | "duplicado"
+  estado: EstadoCanalCobranzaFI
   motivo?: string
   envioId?: string
   fecha?: string
@@ -137,6 +150,27 @@ export interface ResultadoCobranzaFI {
     visor?: ResumenCanalCobranza
     email?: ResumenCanalCobranza
   }
+}
+
+/** Cómo se nombra un desenlace: etiqueta humana más el motivo cuando lo manda. */
+function parteDeCanal(canal: ResumenCanalCobranza): string {
+  const etiqueta = `${canal.canal} ${ETIQUETA_ESTADO_CANAL[canal.estado]}`
+  if (canal.motivo) return `${etiqueta} (${canal.motivo})`
+  if (canal.estado === "omitido") return `${etiqueta} (sin motivo)`
+  return etiqueta
+}
+
+/**
+ * Resumen legible de lo que el servidor realmente hizo, una parte por canal
+ * (`visor Enviado · email Fallido (Rebotó.)`). Vive acá —y no en la pantalla— para
+ * que la etiqueta de cada desenlace tenga un solo dueño y se pueda pinar sin montar
+ * la página entera.
+ */
+export function resumenDeCanales(canales?: ResultadoCobranzaFI["canales"]): string {
+  return [canales?.visor, canales?.email]
+    .filter((canal): canal is ResumenCanalCobranza => Boolean(canal))
+    .map(parteDeCanal)
+    .join(" · ")
 }
 
 export interface StoreResultCobranza extends StoreResult {

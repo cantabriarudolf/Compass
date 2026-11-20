@@ -2169,6 +2169,21 @@ export const EnvioCobranzaFISchema = z.object({
   reenvio: z.boolean(),
 })
 
+/**
+ * Desenlace que la gestión reporta por canal: los tres del emisor más los dos que
+ * NO son estados de la columna —`omitido` (el canal está apagado para esa
+ * comunidad o persona) y `duplicado` (la gestión ya se había hecho)—. Lo comparten
+ * la ruta y el hook del cliente. Antes cada orilla tenía su lista, y a la del
+ * cliente le faltaba `fallido`: un rebote no tenía rama y la pantalla pintaba el
+ * valor crudo (hallazgo 2 del informe).
+ */
+export const ESTADOS_CANAL_COBRANZA_FI = [
+  ...ESTADOS_ENVIO_SMTP,
+  "omitido",
+  "duplicado",
+] as const
+export type EstadoCanalCobranzaFI = (typeof ESTADOS_CANAL_COBRANZA_FI)[number]
+
 /** Interruptor global de la comunidad (singleton). */
 export const ConfiguracionCobranzaFISchema = z.object({
   canalVisor: z.boolean(),

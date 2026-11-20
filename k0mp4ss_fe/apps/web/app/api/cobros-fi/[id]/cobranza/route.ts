@@ -36,7 +36,12 @@ import { hoyISO } from "@/lib/date-utils"
 import { generarId } from "@/lib/id-utils"
 import { estadoDeCobro, estaAnulado, saldoPendiente } from "@/lib/finanzas-utils"
 import { enviarCorreoComunidad, estadoRegistroSMTP, motivoSMTP } from "@/lib/smtp"
-import { CANALES_COBRANZA_FI, type CanalCobranzaFI, type EstadoEnvioCobranzaFI } from "@/lib/schemas"
+import {
+  CANALES_COBRANZA_FI,
+  type CanalCobranzaFI,
+  type EstadoCanalCobranzaFI,
+  type EstadoEnvioCobranzaFI,
+} from "@/lib/schemas"
 import { jsonError } from "@/lib/api/with-comunidad-scope"
 import {
   clp,
@@ -58,7 +63,7 @@ const EntradaCobranzaSchema = z.object({
 /** Estado de UN canal en la respuesta: enviado, en cola, fallido, omitido o ya existente. */
 export type ResultadoCanalCobranza = {
   canal: CanalCobranzaFI
-  estado: EstadoEnvioCobranzaFI | "omitido" | "duplicado"
+  estado: EstadoCanalCobranzaFI
   motivo?: string
   envioId?: string
   fecha?: string
