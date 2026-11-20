@@ -16,7 +16,7 @@ monorepos — no usarlo como base fundacional).
 ## Stack y rutas de código
 
 - Todo el código vive en `k0mp4ss_fe/` (monorepo): app en `apps/web`, UI compartida en `packages/ui`
-- Next.js 16 (App Router, Turbopack) · TypeScript estricto · Prisma + SQLite en dev (`DATABASE_URL` en `apps/web/.env`)
+- Next.js 16 (App Router, Turbopack) · TypeScript estricto · **Prisma + Postgres en dev** (rama `dev` de Neon, `DATABASE_URL` en `apps/web/.env`) — el mismo motor que producción, para no descubrir diferencias recién al publicar · los tests corren contra **SQLite descartable** (`prisma/perf-test.db`), y el carril Postgres del CI es el guardián de esa diferencia · `prisma/schema.prisma` es Postgres y `prisma/schema.sqlite.prisma` es el de los tests: **el cliente de Prisma no puede servir a los dos a la vez**, por eso `predev` genera el de Postgres y `pretest` el de SQLite
 - Auth.js credentials + rate limit persistente · Tailwind v4 + shadcn/ui vía `@workspace/ui/components`
 - Estado del cliente: estado de UI en `lib/store-ui.ts`. `lib/store.ts` es legacy `@deprecated` (STORE_VERSION 28 congelado, sin migraciones de dominio) y los datos de dominio viven en la base vía API
 - Tests: Vitest (unit/integración, `test/`) + Playwright (e2e, `e2e/` — lanes crud/flujo/smoke/auth)

@@ -116,7 +116,14 @@ describe("F42 T3 — crear-admin: el primer arranque con invitación", () => {
         adminEmail: emailAdmin,
       })
     )
-    expect(corrida.stderr).toBe("")
+    // El script avisa por stderr qué `DATABASE_URL` descartó: es contrato de las CLI de
+    // datos informar el motivo (nunca el valor), y ese aviso aparece siempre que el
+    // `.env` apunte a un motor distinto del cliente generado. Cualquier otra línea de
+    // stderr sigue siendo un fallo.
+    const ruido = corrida.stderr
+      .split("\n")
+      .filter((linea) => linea.trim() !== "" && !linea.startsWith("[db-url] descartado:"))
+    expect(ruido).toEqual([])
     expect(corrida.status).toBe(0)
 
     // El enlace completo, con su token, es la salida útil del script.
