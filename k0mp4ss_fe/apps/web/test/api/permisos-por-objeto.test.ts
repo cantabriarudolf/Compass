@@ -136,9 +136,17 @@ const EMAIL = {
   conserjeA: "ppo-conserje-a@test.cl",
   trabajadorA: "ppo-trabajador-a@test.cl",
   resSinId: "ppo-res-sin-id@test.cl",
+  firmante: "ppo-admin-firmante@test.cl",
 }
 
 // Notificaciones de la comunidad A.
+/**
+ * Persona del padrón que firma los papeles de A. Es ADITIVA: el adminA sin
+ * `personaId` sigue siendo el caso de «gestión sin identidad MP» que otros tests
+ * ejercitan a propósito; el resolver del firmante salta esa membresía y usa ésta.
+ */
+const P_ADMIN_FIRMANTE = "ppo-admin-firmante"
+
 const NOTI_A1 = "ppo-noti-a1" // puntual a A-1
 const NOTI_A2 = "ppo-noti-a2" // puntual a A-2 (otra unidad)
 const NOTI_DIFUSION_ROL = "ppo-noti-difusion-rol" // difusión al rol sin unidad
@@ -510,6 +518,43 @@ beforeAll(async () => {
       data: { usuarioId: usuario.id, comunidadId: u.comunidadId, rol: u.rol },
     })
   }
+
+  // Firmante de los papeles: persona del padrón + membresía administrador que la
+  // apunta. No reemplaza al administrador sin ficha del arnés; lo complementa.
+  await prisma.persona.upsert({
+    where: { id: P_ADMIN_FIRMANTE },
+    update: {},
+    create: {
+      id: P_ADMIN_FIRMANTE,
+      comunidadId: COM_A,
+      rut: "13.246.801-5",
+      nombreCompleto: "Rosa Firmante Padrón",
+      nombres: "Rosa",
+      apellidos: "Firmante Padrón",
+      email: `${P_ADMIN_FIRMANTE}@ppo.test.cl`,
+      telefonoMovil: "+56911111111",
+      estadoCuenta: "activa",
+      condicionesEspecialesIds: [],
+      roles: ["propietario"],
+    },
+  })
+  const usuarioFirmante = await prisma.usuario.upsert({
+    where: { email: EMAIL.firmante },
+    update: { personaId: P_ADMIN_FIRMANTE },
+    create: {
+      email: EMAIL.firmante,
+      personaId: P_ADMIN_FIRMANTE,
+      activo: true,
+    },
+  })
+  await prisma.membresia.deleteMany({ where: { usuarioId: usuarioFirmante.id } })
+  await prisma.membresia.create({
+    data: {
+      usuarioId: usuarioFirmante.id,
+      comunidadId: COM_A,
+      rol: "administrador",
+    },
+  })
 
   const notificacion = (id: string, overrides: Record<string, unknown>) => ({
     id,
@@ -1348,14 +1393,17 @@ afterAll(async () => {
 })
 
 describe("personas — propio, otra unidad, otra comunidad (T3)", () => {
-  it("control: el administrador de A sí ve las dos fichas de A (y no la de B)", async () => {
+  it("control: el administrador de A sí ve las fichas de A (y no la de B)", async () => {
     await conSesion(EMAIL.adminA, async () => {
       const res = await invocarApi(moduloPersonas(), "GET", "personas?pageSize=100")
       expect(res.status).toBe(200)
       const j = await cuerpoJson<Envelope<{ id: string }>>(res)
       // app/api/personas/route.ts:496 — el `where` base de la factory es la comunidad:
-      // las dos fichas de A existen y son legibles; lo que las oculta a A-1 es el ABAC.
-      expect(new Set(j.data.map((p) => p.id))).toEqual(new Set([P_A1, P_A2]))
+      // las fichas de A existen y son legibles; lo que las oculta a A-1 es el ABAC.
+      // La tercera es la firmante de los papeles (fixture aditivo de esta unidad).
+      expect(new Set(j.data.map((p) => p.id))).toEqual(
+        new Set([P_A1, P_A2, P_ADMIN_FIRMANTE])
+      )
     })
   })
 

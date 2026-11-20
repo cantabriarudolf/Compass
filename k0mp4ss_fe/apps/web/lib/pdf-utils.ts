@@ -1,7 +1,7 @@
 // Motor documental pdfmake (PL liquidaciones + CT certificados). Restricción de
 // salida D1: el PDF y la firma viven SOLO en memoria del documento generado;
 // jamás se persisten base64/Blob en el store. Carga dinámica client-side.
-import type { ConfiguracionGlobal, LiquidacionPL } from "./schemas"
+import type { LiquidacionPL } from "./schemas"
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -113,12 +113,14 @@ export async function urlADataUrl(url: string): Promise<string | null> {
 const CLP = (n: number): string => `$${Math.round(n).toLocaleString("es-CL")}`
 
 /**
- * Identidad institucional que imprime un papel: el nombre de la comunidad y los
- * datos legales de la administración.
+ * Identidad institucional que imprime un papel: el nombre de la comunidad, sus
+ * datos legales y la persona que firma.
  *
- * `nombreComunidad` es el valor de `Comunidad.nombre` (fuente única, S1) que el
- * llamador ya resolvió. Este módulo es de presentación: no consulta la base ni
- * decide de dónde sale el nombre.
+ * NO es `ConfiguracionGlobal`: el firmante (`administradorResponsable`,
+ * `rutAdministrador`) no se escribe a mano en ninguna columna, lo resuelve
+ * `identidadDelPapel` (`app/api/configuracion/_lib/identidad-papel.ts`) desde la
+ * membresía `administrador` y la persona del padrón. Este módulo es de
+ * presentación: no consulta la base ni decide de dónde sale ningún dato.
  */
 export interface IdentidadInstitucional {
   nombreComunidad: string
@@ -126,7 +128,30 @@ export interface IdentidadInstitucional {
   rutComunidad: string
   administradorResponsable: string
   rutAdministrador: string
+  /** Imagen opcional de la firma; ausente o `null` deja la línea en blanco. */
+  firmaDigitalizadaUrl?: string | null
 }
+
+/**
+ * Texto ÚNICO del fallo cerrado del firmante: sin una persona del padrón con
+ * membresía `administrador` vigente no hay papel que emitir.
+ *
+ * El servidor repite este mismo texto literal en su `jsonError` —el guardián de
+ * mensajes (`test/api/permisos-por-objeto-mensajes.test.ts`) sólo audita los
+ * literales de las rutas, no las constantes con nombre— y
+ * `test/papeles-identidad.test.ts` prueba que las dos copias son el mismo texto.
+ * Las pantallas que arman el PDF en el navegador lo importan de acá: un solo
+ * mensaje para el mismo hecho.
+ */
+export const MENSAJE_SIN_ADMINISTRADOR_DESIGNADO =
+  "El papel no se puede emitir: la comunidad no tiene administrador designado con ficha en el padrón. Asigná el rol administrador a la persona que administra, con su nombre y RUT, y volvé a intentar."
+
+/**
+ * Texto ÚNICO del otro fallo cerrado: sin nombre real no hay documento. El id
+ * interno de la comunidad NUNCA se imprime como si fuera su nombre.
+ */
+export const MENSAJE_COMUNIDAD_SIN_NOMBRE =
+  "El papel no se puede emitir: la comunidad no tiene nombre registrado. Cargá el nombre real de la comunidad y volvé a intentar."
 
 /**
  * Encabezado institucional de TODOS los papeles: nombre, dirección · RUT y
@@ -143,7 +168,7 @@ export function encabezadoInstitucional(config: IdentidadInstitucional) {
 }
 
 export interface FirmaPdfInput {
-  config: ConfiguracionGlobal
+  config: IdentidadInstitucional
   firmaDataUrl?: string | null
 }
 
@@ -180,7 +205,7 @@ export async function documentoLiquidacionPDF(
   liq: LiquidacionPL,
   nombreTrabajador: string,
   rutTrabajador: string,
-  config: ConfiguracionGlobal,
+  config: IdentidadInstitucional,
   firmaResuelta?: string | null
 ): Promise<Record<string, unknown>> {
   const firmaDataUrl =
@@ -349,7 +374,7 @@ export async function documentoCertificadoPDF(input: {
   parrafos: string[]
   detalle: [string, string][]
   solicitanteNombre: string
-  config: ConfiguracionGlobal
+  config: IdentidadInstitucional
 }): Promise<Record<string, unknown>> {
   const { config } = input
   const firmaDataUrl = config.firmaDigitalizadaUrl
@@ -434,7 +459,7 @@ export interface FilaAvisoCobroPdf {
 
 export interface AvisoPdfInput {
   aviso: FilaAvisoCobroPdf
-  config: ConfiguracionGlobal
+  config: IdentidadInstitucional
   /** Firma ya resuelta a data URL (`urlADataUrl`); `null` = bloque en blanco. */
   firmaDataUrl?: string | null
   /**

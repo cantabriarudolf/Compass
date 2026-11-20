@@ -8,9 +8,10 @@
  *   - `aviso`: la fila CONGELADA de `AvisoCobro` (folio, código, período,
  *     fechas y `contenido`). De ahí salen todas las cifras: no se recalcula
  *     ningún monto al imprimir.
- *   - `config`: la proyección de `ConfiguracionGlobal` que el papel imprime
- *     (identidad de la comunidad, administrador responsable y firma). El SMTP y
- *     la clave de eliminación no son parte del documento y no se leen.
+ *   - `identidad`: la identidad del papel que resolvió `identidadDelPapel`
+ *     (nombre real de la comunidad, datos legales y firmante derivado de la
+ *     membresía `administrador`). El SMTP, la clave de eliminación y las
+ *     columnas deprecadas de CF no son parte del documento y no se leen.
  *   - `hash`: `hashContenido(contenido)`, la huella del contenido congelado que
  *     el papel imprime para poder verificarlo.
  *
@@ -19,26 +20,12 @@
  * no se puede resolver, el documento sale igual con la línea en blanco: la
  * firma no puede impedir que el residente descargue su aviso.
  */
-import type { ConfiguracionGlobal } from "@/lib/schemas"
 import { hashContenido } from "@/lib/aviso-cobro"
-import { documentoAvisoCobroPDF } from "@/lib/pdf-utils"
+import {
+  documentoAvisoCobroPDF,
+  type IdentidadInstitucional,
+} from "@/lib/pdf-utils"
 import { compilarPdf } from "@/lib/api/pdf-servidor"
-
-/**
- * Columnas de CF que el papel imprime: identidad de la comunidad, administrador
- * responsable y firma. Es lo que necesita el PDF; el SMTP y la clave de
- * eliminación NO son parte del documento y no salen de acá.
- *
- * `nombreComunidad` NO está: la columna está deprecada (S1) y el nombre que se
- * imprime sale de `Comunidad.nombre`. La ruta completa la proyección con ese valor.
- */
-export const COLUMNAS_DOCUMENTO = {
-  direccionOficial: true,
-  rutComunidad: true,
-  administradorResponsable: true,
-  rutAdministrador: true,
-  firmaDigitalizadaUrl: true,
-} as const
 
 /** La fila del aviso que el builder necesita (columnas + `contenido` congelado). */
 export interface AvisoParaPdf {
@@ -94,12 +81,12 @@ async function firmaDataUrlDe(
  */
 export async function pdfDeAviso(
   aviso: AvisoParaPdf,
-  config: ConfiguracionGlobal
+  identidad: IdentidadInstitucional
 ): Promise<Uint8Array<ArrayBuffer>> {
   const definicion = documentoAvisoCobroPDF({
     aviso,
-    config,
-    firmaDataUrl: await firmaDataUrlDe(config.firmaDigitalizadaUrl ?? null),
+    config: identidad,
+    firmaDataUrl: await firmaDataUrlDe(identidad.firmaDigitalizadaUrl ?? null),
     hash: hashContenido(aviso.contenido),
   })
   return compilarPdf(definicion)

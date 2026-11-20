@@ -30,7 +30,10 @@ import {
 import { IconCertificate, IconFileText, IconTrash } from "@tabler/icons-react"
 import type { CertificadoCT, CertificadoCTAlta, ConfiguracionGlobal, Unidad } from "@/lib/schemas"
 import { CertificadoCTAltaSchema } from "@/lib/schemas"
-import { documentoCertificadoPDF } from "@/lib/pdf-utils"
+import {
+  MENSAJE_SIN_ADMINISTRADOR_DESIGNADO,
+  documentoCertificadoPDF,
+} from "@/lib/pdf-utils"
 
 /**
  * Etiqueta visible de cada tipología. Exportada para que el arnés compare textos.
@@ -410,6 +413,12 @@ function CertificadosGestion({ tiposEmisibles }: CertificadosEmisionProps) {
 
   const generarYDescargar = async () => {
     setError(null); setOkMsg(null)
+    // Sin firmante derivado no hay papel: se dice con el MISMO texto del servidor
+    // y no se emite el certificado ni se arma el PDF.
+    if (!configuracion?.administradorResponsable || !configuracion.rutAdministrador) {
+      setError(MENSAJE_SIN_ADMINISTRADOR_DESIGNADO)
+      return
+    }
     if (!solicitanteNombre.trim()) {
       setError("Debe identificar al solicitante del certificado.")
       return
@@ -462,6 +471,11 @@ function CertificadosGestion({ tiposEmisibles }: CertificadosEmisionProps) {
     c: CertificadoCT
   ): Promise<{ ok: boolean; error?: string }> => {
     setPdfBusy(c.id)
+    // El historial tampoco imprime sin firmante: mismo fallo cerrado y mismo texto.
+    if (!configuracion?.administradorResponsable || !configuracion.rutAdministrador) {
+      setPdfBusy(null)
+      return { ok: false, error: MENSAJE_SIN_ADMINISTRADOR_DESIGNADO }
+    }
     try {
       const doc = await documentoCertificadoPDF({
         tipo: TIPO_LABEL[c.tipo],

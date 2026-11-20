@@ -12,9 +12,10 @@
  *   - `trabajador`: nombre y RUT de la persona de la liquidación, leídos de
  *     `Persona`. `LiquidacionPL` guarda `trabajadorPersonaId`, no la identidad:
  *     el papel la necesita y no es una cifra que se pueda recalcular.
- *   - `config`: la proyección de `ConfiguracionGlobal` que el papel imprime
- *     (identidad de la comunidad, administrador responsable y firma). El SMTP y
- *     la clave de eliminación no son parte del documento y no se leen.
+ *   - `identidad`: la identidad del papel que resolvió `identidadDelPapel`
+ *     (nombre real de la comunidad, datos legales y firmante derivado de la
+ *     membresía `administrador`). El SMTP, la clave de eliminación y las
+ *     columnas deprecadas de CF no son parte del documento y no se leen.
  *
  * La firma se resuelve acá porque el papel la espera como data URL y el
  * `urlADataUrl` de `lib/pdf-utils` es de navegador (Image + canvas): en Node
@@ -23,25 +24,12 @@
  * descargue su liquidación—, con el mismo criterio que el aviso de cobro
  * (`app/api/avisos-cobro/_documento.ts`), que es el módulo gemelo de este.
  */
-import type { ConfiguracionGlobal, LiquidacionPL } from "@/lib/schemas"
-import { documentoLiquidacionPDF } from "@/lib/pdf-utils"
+import type { LiquidacionPL } from "@/lib/schemas"
+import {
+  documentoLiquidacionPDF,
+  type IdentidadInstitucional,
+} from "@/lib/pdf-utils"
 import { compilarPdf } from "@/lib/api/pdf-servidor"
-
-/**
- * Columnas de CF que el papel imprime: identidad de la comunidad, administrador
- * responsable y firma. Es lo que necesita el PDF; el SMTP y la clave de
- * eliminación NO son parte del documento y no salen de acá.
- *
- * `nombreComunidad` NO está: la columna está deprecada (S1) y el nombre que se
- * imprime sale de `Comunidad.nombre`. La ruta completa la proyección con ese valor.
- */
-export const COLUMNAS_DOCUMENTO = {
-  direccionOficial: true,
-  rutComunidad: true,
-  administradorResponsable: true,
-  rutAdministrador: true,
-  firmaDigitalizadaUrl: true,
-} as const
 
 /** La identidad del trabajador que el papel imprime (no vive en la liquidación). */
 export interface TrabajadorParaPdf {
@@ -94,14 +82,14 @@ async function firmaDataUrlDe(
 export async function pdfDeLiquidacion(
   liq: LiquidacionPL,
   trabajador: TrabajadorParaPdf,
-  config: ConfiguracionGlobal
+  identidad: IdentidadInstitucional
 ): Promise<Uint8Array<ArrayBuffer>> {
   const definicion = await documentoLiquidacionPDF(
     liq,
     trabajador.nombreCompleto,
     trabajador.rut,
-    config,
-    await firmaDataUrlDe(config.firmaDigitalizadaUrl ?? null)
+    identidad,
+    await firmaDataUrlDe(identidad.firmaDigitalizadaUrl ?? null)
   )
   return compilarPdf(definicion)
 }

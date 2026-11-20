@@ -20,10 +20,11 @@
  */
 import { prisma } from "@/lib/prisma"
 import { logger } from "@/lib/logger"
-import type { ConfiguracionGlobal, LiquidacionPL } from "@/lib/schemas"
+import type { LiquidacionPL } from "@/lib/schemas"
 import { jsonError, withComunidadScope } from "@/lib/api/with-comunidad-scope"
+import { identidadDelPapel } from "@/app/api/configuracion/_lib/identidad-papel"
 import { alcanceDeLectura, whereDeLiquidacion } from "../../_alcance"
-import { COLUMNAS_DOCUMENTO, pdfDeLiquidacion } from "../../_documento"
+import { pdfDeLiquidacion } from "../../_documento"
 
 type Ctx = { params: Promise<{ id: string }> }
 
@@ -72,19 +73,15 @@ export async function GET(_req: Request, ctx: Ctx): Promise<Response> {
       )
     }
 
-    const [configuracion, comunidad] = await Promise.all([
-      prisma.configuracionGlobal.findUnique({
-        where: { comunidadId: scope.comunidadId },
-        select: COLUMNAS_DOCUMENTO,
-      }),
-      prisma.comunidad.findUnique({
-        where: { id: scope.comunidadId },
-        select: { nombre: true },
-      }),
-    ])
-    if (!configuracion) {
-      // Sin identidad de la comunidad ni administrador responsable el papel no
-      // se puede afirmar: mismo criterio que el aviso de cobro.
+    // La identidad del papel se resuelve en UN lugar (`identidadDelPapel`): sin
+    // nombre real o sin firmante derivado no hay documento, se responde 409 y no
+    // se compila ningún byte.
+    const identidad = await identidadDelPapel(scope.comunidadId)
+    if (!identidad.ok) return identidad.response
+    const { institucional } = identidad.identidad
+    if (!institucional) {
+      // Sin identidad legal de la comunidad el papel no se puede afirmar: mismo
+      // criterio que el aviso de cobro.
       return jsonError(
         409,
         "La comunidad no tiene configuración registrada: sin ella no se puede armar la liquidación."
@@ -94,16 +91,11 @@ export async function GET(_req: Request, ctx: Ctx): Promise<Response> {
     // SAFETY: la fila guardada es exactamente el snapshot que valida
     // `LiquidacionPLSchema` al crearse (`POST /api/liquidaciones`, safeParse
     // antes de persistir) y el builder solo lee los campos que el papel imprime;
-    // los casts adaptan los `Json` de Prisma y la proyección de CF sin cambiar
-    // ningún valor. El nombre de la comunidad se completa desde la fuente única
-    // (`Comunidad.nombre`, S1): la columna deprecada de CF no se lee.
+    // el cast adapta los `Json` de Prisma sin cambiar ningún valor.
     const bytes = await pdfDeLiquidacion(
       liq as unknown as LiquidacionPL,
       trabajador,
-      {
-        ...configuracion,
-        nombreComunidad: comunidad?.nombre ?? scope.comunidadId,
-      } as unknown as ConfiguracionGlobal
+      institucional
     )
 
     return new Response(bytes, {

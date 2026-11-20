@@ -127,10 +127,15 @@ export default function ConfiguracionPage() {
         body: JSON.stringify({ nombre }),
       })
       const cuerpo = (await res.json().catch(() => null)) as
-        | { error?: string }
+        | {
+            error?: string
+            // La ruta transporta el mensaje exacto del schema (ahí vive el máximo).
+            detalles?: { fieldErrors?: { nombre?: string[] } }
+          }
         | null
       if (!res.ok) {
         return (
+          cuerpo?.detalles?.fieldErrors?.nombre?.[0] ??
           cuerpo?.error ??
           `Error ${res.status} al guardar el nombre de la comunidad.`
         )
@@ -305,25 +310,33 @@ export default function ConfiguracionPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Administrador Responsable *</Label>
+                  <Label>Administrador Responsable</Label>
                   <Input
-                    value={config.administradorResponsable}
-                    onChange={(e) =>
-                      updateField("administradorResponsable", e.target.value)
+                    value={
+                      config.administradorResponsable ||
+                      "Sin administrador designado"
                     }
-                    required
+                    readOnly
+                    aria-readonly="true"
+                    className="bg-muted/40"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>RUT Administrador *</Label>
+                  <Label>RUT Administrador</Label>
                   <Input
-                    value={config.rutAdministrador}
-                    onChange={(e) =>
-                      updateField("rutAdministrador", e.target.value)
-                    }
-                    required
+                    value={config.rutAdministrador || "—"}
+                    readOnly
+                    aria-readonly="true"
+                    className="bg-muted/40"
                   />
                 </div>
+                <p className="text-xs leading-relaxed text-muted-foreground md:col-span-2">
+                  El firmante de los papeles no se escribe acá: se deriva de la
+                  cuenta con rol administrador que tiene ficha en el padrón, con
+                  su nombre y su RUT. Se cambia desde Cuentas y Personas. Si la
+                  comunidad no tiene administrador con ficha, los papeles no se
+                  emiten hasta que lo tenga.
+                </p>
                 <div className="space-y-2">
                   <Label>Teléfono Admin *</Label>
                   <Input

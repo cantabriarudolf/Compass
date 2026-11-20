@@ -42,14 +42,9 @@ import {
   documentoLiquidacionPDF,
   encabezadoInstitucional,
 } from "@/lib/pdf-utils"
-import {
-  COLUMNAS_IDENTIDAD_INSTITUCIONAL,
-  definicionDelRequerimiento,
-} from "@/lib/requerimiento-corte"
+import { definicionDelRequerimiento } from "@/lib/requerimiento-corte"
 import { asuntoBienvenida, cuerpoBienvenida } from "@/lib/correo-bienvenida"
 import { nombreDelRemitente, leerConfiguracionSMTP } from "@/lib/smtp"
-import { COLUMNAS_DOCUMENTO as COLUMNAS_AVISO } from "@/app/api/avisos-cobro/_documento"
-import { COLUMNAS_DOCUMENTO as COLUMNAS_LIQUIDACION } from "@/app/api/liquidaciones/_documento"
 import type { ConfiguracionGlobal, LiquidacionPL } from "@/lib/schemas"
 
 const state = vi.hoisted(() => ({ cookie: "" }))
@@ -540,27 +535,24 @@ describe("Identidad única de la comunidad y encabezado de los papeles", () => {
   const PROYECTAN_EL_NOMBRE: Record<string, string> = {
     "app/admin/configuracion/page.tsx":
       "formulario: muestra la proyección y manda el renombre a PUT /api/comunidad-actual",
-    "app/api/avisos-cobro/[id]/pdf/route.ts":
-      "proyección: compone el nombre desde Comunidad.nombre antes de imprimir",
     "app/api/avisos-cobro/route.ts":
-      "proyección: compone el nombre desde Comunidad.nombre para la pantalla",
-    "app/api/certificados-ct/[id]/pdf/route.ts":
-      "proyección: compone el nombre desde Comunidad.nombre antes de imprimir",
+      "payload `documento` del LISTADO (no es un papel): compone el nombre desde Comunidad.nombre para la pantalla",
+    "app/api/configuracion/_lib/identidad-papel.ts":
+      "ÚNICO resolvedor de la identidad del papel: nombre real + firmante derivado, con fallo cerrado",
     "app/api/configuracion/route.ts":
-      "GET proyecta Comunidad.nombre y omite la columna; PUT escribe el snapshot de creación y descarta el campo",
+      "GET proyecta Comunidad.nombre y el firmante derivado, y omite las columnas; PUT escribe los snapshots de creación y descarta los campos",
     "app/api/cortes-servicio/requerimiento/route.ts":
-      "proyección: compone la identidad del encabezado (nombre desde Comunidad.nombre)",
+      "proyección: consume la identidad resuelta por identidadDelPapel antes de servir el papel",
     "app/api/cortes-servicio/route.ts":
-      "proyección: compone la identidad del encabezado (nombre desde Comunidad.nombre)",
-    "app/api/liquidaciones/[id]/pdf/route.ts":
-      "proyección: compone el nombre desde Comunidad.nombre antes de imprimir",
+      "proyección: consume la identidad resuelta por identidadDelPapel antes de emitir el escrito",
     "app/comunidad/comunicacion/page.tsx":
       "prop con el nombre de la comunidad para el texto de lectura; no toca la columna",
     "app/visor-mensajes/page.tsx":
       "pinta la proyección de GET /api/configuracion; no toca la columna",
     "lib/api/use-avisos-cobro.ts":
       "tipo del documento que sirve la API, con el nombre ya proyectado",
-    "lib/pdf-utils.ts": "recibe el nombre ya resuelto; no consulta la base",
+    "lib/pdf-utils.ts":
+      "recibe la identidad ya resuelta (tipo `IdentidadInstitucional`); no consulta la base",
     "lib/schemas.ts":
       "campo del contrato (marcado deprecado), su exclusión en el schema de escritura y la regla reutilizable del nombre",
   }
@@ -574,17 +566,22 @@ describe("Identidad única de la comunidad y encabezado de los papeles", () => {
 
   it("ningún select pide la columna: sólo se excluye (omit) o se escribe el snapshot", () => {
     for (const archivo of archivosDeCodigo()) {
-      for (const linea of lineasDeCodigo(archivo)) {
-        if (!/nombreComunidad\s*:\s*true/.test(linea)) continue
-        // `omit: { nombreComunidad: true }` es lo contrario de leerla: la deja afuera.
-        expect(linea, `${archivo}: ${linea}`).toMatch(/omit/)
-      }
+      const lineas = lineasDeCodigo(archivo)
+      lineas.forEach((linea, indice) => {
+        if (!/nombreComunidad\s*:\s*true/.test(linea)) return
+        // `omit: { nombreComunidad: true }` es lo contrario de leerla: la deja
+        // afuera. Se mira el bloque (el `omit` puede estar en la línea anterior o
+        // abrir varias líneas arriba), no sólo la línea del campo.
+        const contexto = lineas.slice(Math.max(0, indice - 3), indice + 1).join("\n")
+        expect(contexto, `${archivo}: ${linea}`).toMatch(/omit/)
+      })
     }
-    // Las dos proyecciones compartidas por los papeles no la piden.
-    expect(COLUMNAS_AVISO).not.toHaveProperty("nombreComunidad")
-    expect(COLUMNAS_LIQUIDACION).not.toHaveProperty("nombreComunidad")
-    // Y la del requerimiento de corte tampoco: el nombre lo completa la ruta desde
-    // `Comunidad.nombre`.
-    expect(COLUMNAS_IDENTIDAD_INSTITUCIONAL).not.toHaveProperty("nombreComunidad")
+    // Las proyecciones de CF de los papeles ya no existen: la identidad se resuelve
+    // en `identidadDelPapel`, que no pide la columna (selecciona sólo las legales).
+    const resolvedor = readFileSync(
+      path.join(RAIZ, "app", "api", "configuracion", "_lib", "identidad-papel.ts"),
+      "utf8"
+    )
+    expect(resolvedor).not.toMatch(/nombreComunidad\s*:\s*true/)
   })
 })

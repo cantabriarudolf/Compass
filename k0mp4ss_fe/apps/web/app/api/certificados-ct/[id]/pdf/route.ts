@@ -33,30 +33,14 @@
 import { puede } from "@/lib/authz"
 import { prisma } from "@/lib/prisma"
 import { logger } from "@/lib/logger"
-import type { ConfiguracionGlobal } from "@/lib/schemas"
 import { jsonError, withComunidadScope } from "@/lib/api/with-comunidad-scope"
+import { identidadDelPapel } from "@/app/api/configuracion/_lib/identidad-papel"
 import { compilarPdf } from "@/lib/api/pdf-servidor"
 import { documentoCertificadoPDF } from "@/lib/pdf-utils"
 import { etiquetaDeTipoCertificado } from "@/lib/certificados-ct"
 import { alcanceCertificadosCT } from "../../route"
 
 type Ctx = { params: Promise<{ id: string }> }
-
-/**
- * Columnas de CF que el papel imprime: identidad de la comunidad, administrador
- * responsable y firma. Es exactamente lo que `documentoCertificadoPDF` lee; el
- * SMTP y la clave de eliminación NO son parte del documento y no se proyectan.
- *
- * `nombreComunidad` NO está: la columna está deprecada (S1) y el nombre sale de
- * `Comunidad.nombre`; la ruta completa la proyección.
- */
-const COLUMNAS_DOCUMENTO = {
-  direccionOficial: true,
-  rutComunidad: true,
-  administradorResponsable: true,
-  rutAdministrador: true,
-  firmaDigitalizadaUrl: true,
-} as const
 
 /** Lo que el papel necesita de la fila; nada más se carga. */
 const CAMPOS_DEL_PDF = {
@@ -112,19 +96,15 @@ export async function GET(_req: Request, ctx: Ctx): Promise<Response> {
     })
     if (!certificado) return jsonError(404, "Registro no encontrado.")
 
-    const [configuracion, comunidad] = await Promise.all([
-      prisma.configuracionGlobal.findUnique({
-        where: { comunidadId: scope.comunidadId },
-        select: COLUMNAS_DOCUMENTO,
-      }),
-      prisma.comunidad.findUnique({
-        where: { id: scope.comunidadId },
-        select: { nombre: true },
-      }),
-    ])
-    if (!configuracion) {
-      // Sin identidad de la comunidad ni administrador responsable el papel no se
-      // puede afirmar: se dice, en vez de servir un documento incompleto.
+    // La identidad del papel se resuelve en UN lugar (`identidadDelPapel`): sin
+    // nombre real o sin firmante derivado no hay documento, se responde 409 y no
+    // se compila ningún byte.
+    const identidad = await identidadDelPapel(scope.comunidadId)
+    if (!identidad.ok) return identidad.response
+    const { institucional } = identidad.identidad
+    if (!institucional) {
+      // Sin identidad legal de la comunidad el papel no se puede afirmar: se
+      // dice, en vez de servir un documento incompleto.
       return jsonError(
         409,
         "La comunidad no tiene configuración registrada: sin ella no se puede armar el certificado."
@@ -132,11 +112,8 @@ export async function GET(_req: Request, ctx: Ctx): Promise<Response> {
     }
 
     const etiqueta = etiquetaDeTipoCertificado(certificado.tipo)
-    // SAFETY: la proyección de CF es exactamente lo que el builder imprime —las
-    // mismas columnas de `COLUMNAS_DOCUMENTO`, más el nombre de la fuente única
-    // (`Comunidad.nombre`, S1)— y el detalle es el `Json` que validó
-    // `CertificadoCTSchema` al emitirse; el cast sólo borra el resto del modelo
-    // prisma (SMTP, clave de eliminación) y no cambia ningún valor.
+    // SAFETY: el detalle es el `Json` que validó `CertificadoCTSchema` al
+    // emitirse; el cast sólo adapta los `Json` de Prisma y no cambia ningún valor.
     const definicion = await documentoCertificadoPDF({
       tipo: etiqueta,
       titulo: etiqueta,
@@ -146,10 +123,7 @@ export async function GET(_req: Request, ctx: Ctx): Promise<Response> {
       parrafos: [certificado.resumen],
       detalle: detalleImprimible(certificado.detalle),
       solicitanteNombre: certificado.solicitanteNombre,
-      config: {
-        ...configuracion,
-        nombreComunidad: comunidad?.nombre ?? scope.comunidadId,
-      } as unknown as ConfiguracionGlobal,
+      config: institucional,
     })
     const bytes = await compilarPdf(definicion)
 

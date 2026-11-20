@@ -2715,6 +2715,16 @@ export const MAESTRO_SCHEMAS = {
 
 export const SeguridadSMTPSchema = z.enum(["ssl", "tls", "none"])
 
+/**
+ * Tope del nombre de la comunidad.
+ *
+ * Una sola definición: la usan el endpoint de renombre (`PUT /api/comunidad-actual`,
+ * vía `NombreComunidadSchema`) y la semilla (`scripts/seed-db-from-data.ts`), y el
+ * mensaje del schema es el que la pantalla muestra. Sin tope, un nombre de miles
+ * de caracteres se imprimía en cada papel.
+ */
+export const NOMBRE_COMUNIDAD_MAX = 120
+
 export const ConfiguracionGlobalSchema = z.object({
   // 1. Identidad y Representación Legal
   //
@@ -2725,11 +2735,24 @@ export const ConfiguracionGlobalSchema = z.object({
   // se escribe: ver `ConfiguracionGlobalEscrituraSchema`.
   nombreComunidad: z
     .string()
-    .min(1, "El nombre de la comunidad es obligatorio."),
+    // El tope se mide sobre el nombre recortado: los espacios de los bordes no
+    // convierten un nombre válido en inválido.
+    .trim()
+    .min(1, "El nombre de la comunidad es obligatorio.")
+    .max(
+      NOMBRE_COMUNIDAD_MAX,
+      `El nombre de la comunidad no puede superar los ${NOMBRE_COMUNIDAD_MAX} caracteres.`
+    ),
   logoUrl: z.string().nullable().optional(),
   faviconUrl: z.string().nullable().optional(),
   rutComunidad: DocumentoIdentidadSchema,
   direccionOficial: z.string().min(1, "La dirección oficial es obligatoria."),
+  // DEPRECADAS (2026-11-21, hallazgo #3/#4 de `odd/auditorias/identidad-comunidad.md`):
+  // el firmante de los papeles se DERIVA de la membresía `administrador` vigente y
+  // de la persona del padrón (nombre y RUT), no de estas columnas. Sobreviven en el
+  // shape de LECTURA porque `GET /api/configuracion` las proyecta con el firmante
+  // derivado (vacías si no hay) y la forma del formulario no cambia de contrato.
+  // Nadie las escribe: ver `ConfiguracionGlobalEscrituraSchema`.
   administradorResponsable: z
     .string()
     .min(1, "El administrador responsable es obligatorio."),
@@ -2932,12 +2955,18 @@ export const NombreComunidadSchema =
 /**
  * Shape de ESCRITURA de `ConfiguracionGlobal` (PUT `/api/configuracion`).
  *
- * `nombreComunidad` queda afuera a propósito (S1): la columna está deprecada y se
- * escribe UNA sola vez, como snapshot de `Comunidad.nombre`, al crear la fila. El
- * nombre de la comunidad se edita por `PUT /api/comunidad-actual`.
+ * Quedan afuera a propósito las tres columnas deprecadas:
+ *   · `nombreComunidad` (S1): la fuente única es `Comunidad.nombre` y se edita por
+ *     `PUT /api/comunidad-actual`; la columna sólo guarda un snapshot al crear.
+ *   · `administradorResponsable` y `rutAdministrador` (hallazgos #3/#4): el
+ *     firmante se deriva de la membresía `administrador` + la persona del padrón.
+ *     El formulario puede reenviarlos; el PUT los descarta y no se escriben.
  */
-export const ConfiguracionGlobalEscrituraSchema =
-  ConfiguracionGlobalSchema.omit({ nombreComunidad: true })
+export const ConfiguracionGlobalEscrituraSchema = ConfiguracionGlobalSchema.omit({
+  nombreComunidad: true,
+  administradorResponsable: true,
+  rutAdministrador: true,
+})
 export type EventoAuditoria = z.infer<typeof EventoAuditoriaSchema>
 export type ImagenReferencia = z.infer<typeof ImagenReferenciaSchema>
 export type OperacionPortal = z.infer<typeof OperacionPortalSchema>

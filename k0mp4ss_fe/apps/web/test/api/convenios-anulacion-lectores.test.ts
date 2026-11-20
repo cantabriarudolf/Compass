@@ -81,6 +81,9 @@ const AC_D = "anlec-ac-deuda"
 const AC_R = "anlec-ac-reportes"
 
 const EMAIL_ADMIN = "anlec-admin@test.cl"
+/** Cuenta con ficha en el padrón: firma los papeles de la comunidad del arnés. */
+const EMAIL_FIRMANTE = "anlec-admin-firmante@test.cl"
+const PERSONA_FIRMANTE = "anlec-p-firmante"
 const EMAIL_ADMIN_R = "anlec-admin-r@test.cl"
 const EMAIL_RESIDENTE = "anlec-residente@test.cl"
 
@@ -262,11 +265,42 @@ describe("F29 · T1c — los lectores de deuda no le siguen cobrando al cargo an
         },
       },
     })
+    // Firmante de los papeles (fixture ADITIVO): persona del padrón + membresía
+    // administrador que la apunta. Los admins del arnés no tienen ficha a
+    // propósito; el requerimiento del corte se firma con esta persona.
+    await prisma.persona.upsert({
+      where: { id: PERSONA_FIRMANTE },
+      update: {},
+      create: {
+        id: PERSONA_FIRMANTE,
+        comunidadId: COM_D,
+        rut: "13.246.804-K",
+        nombreCompleto: "Rosa Firmante Padrón",
+        nombres: "Rosa",
+        apellidos: "Firmante Padrón",
+        email: "anlec-persona-firmante@test.cl",
+        telefonoMovil: "+56911111111",
+        estadoCuenta: "activa",
+        condicionesEspecialesIds: [],
+        roles: ["propietario"],
+      },
+    })
+    const usuarioFirmante = await prisma.usuario.upsert({
+      where: { email: EMAIL_FIRMANTE },
+      update: { personaId: PERSONA_FIRMANTE },
+      create: {
+        email: EMAIL_FIRMANTE,
+        personaId: PERSONA_FIRMANTE,
+        activo: true,
+      },
+    })
+    await prisma.membresia.deleteMany({ where: { usuarioId: usuarioFirmante.id } })
     await prisma.membresia.createMany({
       data: [
         { usuarioId: "anlec-usuario-admin", comunidadId: COM_D, rol: "administrador" },
         { usuarioId: "anlec-usuario-admin-r", comunidadId: COM_R, rol: "administrador" },
         { usuarioId: "anlec-usuario-residente", comunidadId: COM_D, rol: "residente" },
+        { usuarioId: usuarioFirmante.id, comunidadId: COM_D, rol: "administrador" },
       ],
     })
 
@@ -315,8 +349,13 @@ describe("F29 · T1c — los lectores de deuda no le siguen cobrando al cargo an
           },
         },
       })
+      await prisma.membresia.deleteMany({
+        where: { usuario: { email: EMAIL_FIRMANTE } },
+      })
       await prisma.usuario.deleteMany({
-        where: { email: { in: [EMAIL_ADMIN, EMAIL_ADMIN_R, EMAIL_RESIDENTE] } },
+        where: {
+          email: { in: [EMAIL_ADMIN, EMAIL_ADMIN_R, EMAIL_RESIDENTE, EMAIL_FIRMANTE] },
+        },
       })
       for (const id of [COM_D, COM_R]) {
         await prisma.comunidad.delete({ where: { id } }).catch(() => {})

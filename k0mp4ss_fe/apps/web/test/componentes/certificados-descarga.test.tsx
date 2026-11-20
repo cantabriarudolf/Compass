@@ -41,6 +41,14 @@ const fuente = vi.hoisted(() => ({
   documentoCertificadoPDF: vi.fn(),
 }))
 
+/**
+ * CF que ve la pantalla. Se reemplaza por caso: el `{ administradorResponsable: "" }`
+ * es el que prueba el fallo cerrado del firmante.
+ */
+const configuracionFuente = vi.hoisted(() => ({
+  actual: null as Record<string, unknown> | null,
+}))
+
 vi.mock("@/lib/api/use-certificados-ct", () => ({
   useCertificadosCT: () => ({
     items: [],
@@ -89,7 +97,7 @@ vi.mock("@/lib/api/use-vinculos", () => ({
 
 vi.mock("@/lib/api/use-configuracion", () => ({
   useConfiguracion: () => ({
-    config: null,
+    config: configuracionFuente.actual,
     isLoading: false,
     error: null,
     updateConfig: vi.fn(),
@@ -134,14 +142,20 @@ vi.mock("@/lib/api/use-cobros-fi", () => ({
   }),
 }))
 
-// El PDF se mockea entero: acá interesa el MENSAJE, no el binario.
-vi.mock("@/lib/pdf-utils", () => ({
-  documentoCertificadoPDF: fuente.documentoCertificadoPDF,
-  descargarPdf: fuente.descargarPdf,
-}))
+// El PDF se mockea entero: acá interesa el MENSAJE, no el binario. El resto del
+// módulo se conserva para que la pantalla importe el texto único del guard.
+vi.mock("@/lib/pdf-utils", async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>()
+  return {
+    ...actual,
+    documentoCertificadoPDF: fuente.documentoCertificadoPDF,
+    descargarPdf: fuente.descargarPdf,
+  }
+})
 
 import CertificadosEmision from "@/app/comunidad/certificados/_componentes/certificados-emision"
 import { TIPOS_CERTIFICADO_CT } from "@/lib/schemas"
+import { MENSAJE_SIN_ADMINISTRADOR_DESIGNADO } from "@/lib/pdf-utils"
 
 /** Las cuatro tipologías: el caso de administración, que es el que estos tests cubren. */
 const TIPOS_DEL_ARNES = TIPOS_CERTIFICADO_CT
@@ -189,6 +203,12 @@ beforeEach(() => {
   fuente.crear.mockReset()
   fuente.descargarPdf.mockReset()
   fuente.documentoCertificadoPDF.mockReset()
+  // CF completa: el papel tiene firmante derivado y la pantalla puede emitir.
+  configuracionFuente.actual = {
+    administradorResponsable: "Rosa Firmante del Padrón",
+    rutAdministrador: "12.345.678-9",
+    firmaDigitalizadaUrl: null,
+  }
   // Alta exitosa: el servidor respondió con el registro emitido.
   fuente.crear.mockResolvedValue({ ok: true, registro: REGISTRO_EMITIDO })
   fuente.documentoCertificadoPDF.mockResolvedValue({} as never)
@@ -302,5 +322,23 @@ describe("comunidad/certificados — emisión y descarga del PDF", () => {
     // Ni el mensaje de éxito ni el genérico de PDF generado.
     expect(screen.queryByText(/emitido y firmado/i)).toBeNull()
     expect(screen.queryByText(/PDF .* generado con firma embebida/i)).toBeNull()
+  })
+
+  it("sin administrador designado no emite ni arma el PDF: muestra el mismo mensaje del servidor", { timeout: PRESUPUESTO_CARGA }, async () => {
+    configuracionFuente.actual = {
+      administradorResponsable: "",
+      rutAdministrador: "",
+      firmaDigitalizadaUrl: null,
+    }
+    const user = userEvent.setup()
+    render(<CertificadosEmision tiposEmisibles={[...TIPOS_DEL_ARNES]} />)
+    await emitir(user)
+
+    const aviso = await screen.findByText(MENSAJE_SIN_ADMINISTRADOR_DESIGNADO)
+    expect(texto(aviso)).toBe(MENSAJE_SIN_ADMINISTRADOR_DESIGNADO)
+    // Ni el alta ni el documento: sin firmante no hay papel que firmar.
+    expect(fuente.crear).not.toHaveBeenCalled()
+    expect(fuente.documentoCertificadoPDF).not.toHaveBeenCalled()
+    expect(fuente.descargarPdf).not.toHaveBeenCalled()
   })
 })

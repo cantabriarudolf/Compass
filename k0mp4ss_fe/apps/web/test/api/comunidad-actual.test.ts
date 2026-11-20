@@ -222,6 +222,28 @@ describe("GET /api/comunidad-actual — proyección de marca para el encabezado 
     expect(enBd?.nombre).toBe(NOMBRE_COMUNIDAD)
   })
 
+  it("el nombre tiene un máximo de 120: el borde entra, 121 no y el texto se guarda recortado", async () => {
+    const alLimite = "A".repeat(120)
+    // El máximo se mide sobre el nombre recortado: los espacios de los bordes no
+    // convierten un nombre válido en inválido.
+    const conEspacios = `  ${alLimite}  `
+    expect((await renombrar("administrador", { nombre: conEspacios })).status).toBe(200)
+    expect((await prisma.comunidad.findUnique({ where: { id: COMUNIDAD } }))?.nombre).toBe(alLimite)
+
+    const deMas = await renombrar("administrador", { nombre: "B".repeat(121) })
+    expect(deMas.status).toBe(400)
+    const cuerpo = (await deMas.json()) as {
+      error: string
+      detalles?: { fieldErrors?: { nombre?: string[] } }
+    }
+    expect(cuerpo.error).toBe("El nombre de la comunidad es demasiado largo.")
+    // El número vive en UNA definición (el schema); el error lo transporta tal cual.
+    expect(cuerpo.detalles?.fieldErrors?.nombre?.[0]).toContain("120")
+    expect((await prisma.comunidad.findUnique({ where: { id: COMUNIDAD } }))?.nombre).toBe(alLimite)
+
+    expect((await renombrar("administrador", { nombre: NOMBRE_COMUNIDAD })).status).toBe(200)
+  })
+
   it("un cuerpo que no es JSON o no trae el nombre no escribe nada", async () => {
     const invalido = await renombrar("administrador", "{no-json")
     expect(invalido.status).toBe(400)

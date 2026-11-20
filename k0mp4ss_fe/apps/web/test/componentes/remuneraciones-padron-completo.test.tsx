@@ -26,6 +26,7 @@ import userEvent from "@testing-library/user-event"
 import { SWRConfig } from "swr"
 import { instalarEntornoRadix } from "./entorno-radix"
 import RemuneracionesPage from "@/app/finanzas/remuneraciones/page"
+import { MENSAJE_SIN_ADMINISTRADOR_DESIGNADO } from "@/lib/pdf-utils"
 
 vi.setConfig({ testTimeout: 60_000 })
 
@@ -34,15 +35,19 @@ const pdfCapturado = vi.hoisted(() => ({
   actual: null as null | { nombre: string; rut: string },
 }))
 
-vi.mock("@/lib/pdf-utils", () => ({
-  documentoLiquidacionPDF: vi.fn(
-    async (_liq: unknown, nombreTrabajador: string, rutTrabajador: string) => {
-      pdfCapturado.actual = { nombre: nombreTrabajador, rut: rutTrabajador }
-      return {}
-    }
-  ),
-  descargarPdf: vi.fn(async () => {}),
-}))
+vi.mock("@/lib/pdf-utils", async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>()
+  return {
+    ...actual,
+    documentoLiquidacionPDF: vi.fn(
+      async (_liq: unknown, nombreTrabajador: string, rutTrabajador: string) => {
+        pdfCapturado.actual = { nombre: nombreTrabajador, rut: rutTrabajador }
+        return {}
+      }
+    ),
+    descargarPdf: vi.fn(async () => {}),
+  }
+})
 
 interface PersonaFalsa {
   id: string
@@ -186,8 +191,18 @@ function estadoPadronChico(): EstadoArnés {
   }
 }
 
+/** La CF que sirve el falso: sin firmante derivado la pantalla no arma el PDF. */
+const CF_CON_FIRMANTE = {
+  administradorResponsable: "Rosa Firmante del Padrón",
+  rutAdministrador: "12.345.678-9",
+  firmaDigitalizadaUrl: null,
+}
+
 /** Instala el servidor falso. Limpiar con `vi.unstubAllGlobals()`. */
-function instalarApiArnés(estado: EstadoArnés): ApiArnés {
+function instalarApiArnés(
+  estado: EstadoArnés,
+  configuracion: Record<string, unknown> = CF_CON_FIRMANTE
+): ApiArnés {
   const api: ApiArnés = { peticiones: [], cuerposEnviados: [] }
 
   vi.stubGlobal(
@@ -219,7 +234,7 @@ function instalarApiArnés(estado: EstadoArnés): ApiArnés {
       if (ruta.startsWith("/api/maestros/")) {
         return respuestaJson({ data: [], page: 1, pageSize: 100, total: 0 })
       }
-      if (ruta === "/api/configuracion") return respuestaJson({})
+      if (ruta === "/api/configuracion") return respuestaJson(configuracion)
 
       // Cualquier otra ruta es un contrato que el falso no declaró: 404 a la vista.
       return respuestaJson({ error: `ruta no servida por el falso: ${ruta}` }, 404)
@@ -349,5 +364,23 @@ describe("remuneraciones — la regla de negocio opera sobre el padrón completo
 
     // El padrón completo cabe en una página: completarlo no agrega peticiones.
     expect(peticionesDePersonas(api).some((p) => p.includes("page=2"))).toBe(false)
+  })
+
+  it("sin administrador designado no arma el PDF: muestra el mismo mensaje del servidor", async () => {
+    instalarApiArnés(estadoPadronChico(), {
+      administradorResponsable: "",
+      rutAdministrador: "",
+      firmaDigitalizadaUrl: null,
+    })
+    const user = userEvent.setup({ delay: null })
+    renderPagina()
+
+    await screen.findByText("Remuneraciones")
+    const fila = (await screen.findByText("LIQ-1")).closest("tr") as HTMLElement
+    await user.click(within(fila).getByRole("button", { name: /PDF/i }))
+
+    expect(await screen.findByText(MENSAJE_SIN_ADMINISTRADOR_DESIGNADO)).toBeInTheDocument()
+    // Ningún papel se armó: el firmante falta.
+    expect(pdfCapturado.actual).toBeNull()
   })
 })

@@ -44,7 +44,10 @@ import {
   pactoDeAdelanto,
   saldoVivoAdelanto,
 } from "@/app/api/liquidaciones/adelantos/_calculo"
-import { documentoLiquidacionPDF } from "@/lib/pdf-utils"
+import {
+  MENSAJE_SIN_ADMINISTRADOR_DESIGNADO,
+  documentoLiquidacionPDF,
+} from "@/lib/pdf-utils"
 
 interface BonoForm {
   glosa: string
@@ -242,6 +245,11 @@ export default function RemuneracionesPage() {
   const descargarPdf = async (liq: LiquidacionPL) => {
     setError(null); setOkMsg(null)
     if (!configuracion) { setError("La configuración aún no está cargada."); return }
+    // Sin firmante derivado no hay papel: mismo texto que el servidor y ningún PDF.
+    if (!configuracion.administradorResponsable || !configuracion.rutAdministrador) {
+      setError(MENSAJE_SIN_ADMINISTRADOR_DESIGNADO)
+      return
+    }
     setPdfBusy(liq.id)
     try {
       const doc = await documentoLiquidacionPDF(liq, nombrePersona(liq.trabajadorPersonaId), rutPersona(liq.trabajadorPersonaId), configuracion)

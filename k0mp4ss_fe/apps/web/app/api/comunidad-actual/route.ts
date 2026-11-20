@@ -103,13 +103,17 @@ export async function PUT(req: Request): Promise<Response> {
 
   const parsed = NombreDeLaComunidadSchema.safeParse(body)
   if (!parsed.success) {
+    // El máximo vive en UNA definición (`NOMBRE_COMUNIDAD_MAX`, en el schema): acá
+    // no se repite el número, el detalle del schema lo transporta tal cual.
+    if (parsed.error.issues.some((issue) => issue.code === "too_big")) {
+      return jsonError(400, "El nombre de la comunidad es demasiado largo.", {
+        detalles: parsed.error.flatten(),
+      })
+    }
     return jsonError(400, "El nombre de la comunidad es obligatorio.")
   }
-  // El contrato exige no-vacío después de recortar: "   " no es un nombre.
+  // El contrato recorta y exige no-vacío: "   " no es un nombre.
   const nombre = parsed.data.nombre.trim()
-  if (nombre === "") {
-    return jsonError(400, "El nombre de la comunidad es obligatorio.")
-  }
 
   try {
     const comunidad = await prisma.comunidad.findUnique({

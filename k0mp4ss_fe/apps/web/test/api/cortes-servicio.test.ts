@@ -102,6 +102,9 @@ const ACUERDO_OK_SIN_PROPIETARIO = "cse-ac-ok-sin-propietario"
 const EMAIL_ADMIN = "cse-admin@test.cl"
 const EMAIL_COMITE = "cse-comite@test.cl"
 const EMAIL_RESIDENTE = "cse-residente@test.cl"
+/** Cuenta con ficha en el padrón que firma el requerimiento escrito. */
+const EMAIL_FIRMANTE = "cse-admin-firmante@test.cl"
+const PERSONA_FIRMANTE = "cse-persona-firmante"
 
 /** Corte de la OTRA comunidad, escrito directo en la base. */
 const CORTE_COM_B = "cse-corte-b"
@@ -536,6 +539,44 @@ describe("/api/cortes-servicio — corte de servicios por morosidad (F28)", () =
         data: { usuarioId: u.id, comunidadId: u.comunidadId, rol: u.rol },
       })
     }
+
+    // Firmante de los papeles (fixture ADITIVO): persona del padrón + membresía
+    // administrador que la apunta. El admin del arnés no tiene ficha a propósito
+    // en otros casos; el requerimiento escrito se firma con esta persona.
+    await prisma.persona.upsert({
+      where: { id: PERSONA_FIRMANTE },
+      update: {},
+      create: {
+        id: PERSONA_FIRMANTE,
+        comunidadId: COM_A,
+        rut: "13.246.803-1",
+        nombreCompleto: "Rosa Firmante Padrón",
+        nombres: "Rosa",
+        apellidos: "Firmante Padrón",
+        email: "cse-persona-firmante@test.cl",
+        telefonoMovil: "+56911111111",
+        estadoCuenta: "activa",
+        condicionesEspecialesIds: [],
+        roles: ["propietario"],
+      },
+    })
+    const usuarioFirmante = await prisma.usuario.upsert({
+      where: { email: EMAIL_FIRMANTE },
+      update: { personaId: PERSONA_FIRMANTE },
+      create: {
+        email: EMAIL_FIRMANTE,
+        personaId: PERSONA_FIRMANTE,
+        activo: true,
+      },
+    })
+    await prisma.membresia.deleteMany({ where: { usuarioId: usuarioFirmante.id } })
+    await prisma.membresia.create({
+      data: {
+        usuarioId: usuarioFirmante.id,
+        comunidadId: COM_A,
+        rol: "administrador",
+      },
+    })
   }, 30_000)
 
   afterAll(async () => {
@@ -577,7 +618,11 @@ describe("/api/cortes-servicio — corte de servicios por morosidad (F28)", () =
         where: { comunidadId: { in: [COM_A, COM_B] } },
       })
       await prisma.usuario.deleteMany({
-        where: { email: { in: [EMAIL_ADMIN, EMAIL_COMITE, EMAIL_RESIDENTE] } },
+        where: {
+          email: {
+            in: [EMAIL_ADMIN, EMAIL_COMITE, EMAIL_RESIDENTE, EMAIL_FIRMANTE],
+          },
+        },
       })
       for (const id of [COM_A, COM_B]) {
         await prisma.comunidad.delete({ where: { id } }).catch(() => {})

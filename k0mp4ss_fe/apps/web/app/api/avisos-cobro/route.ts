@@ -95,7 +95,6 @@ import {
   alcanceAvisosCobro,
   puedeLeerAvisosCobro,
 } from "./_alcance"
-import { COLUMNAS_DOCUMENTO } from "./_documento"
 import { createCrudHandlers, type CrudDelegate } from "@/lib/api/crud-factory"
 import { jsonError, withComunidadScope } from "@/lib/api/with-comunidad-scope"
 
@@ -103,6 +102,24 @@ import { jsonError, withComunidadScope } from "@/lib/api/with-comunidad-scope"
 function delegado(modelo: unknown): CrudDelegate {
   return modelo as CrudDelegate
 }
+
+/**
+ * Proyección del payload `documento` del LISTADO (no de un papel).
+ *
+ * La consola de avisos sólo lo usa para saber si puede habilitar el enlace de
+ * descarga; el PDF lo sirve `GET /api/avisos-cobro/[id]/pdf`, que resuelve la
+ * identidad con `identidadDelPapel` y falla cerrado. Este objeto conserva la forma
+ * histórica (incluidas las columnas deprecadas de CF) porque su contrato tiene
+ * consumidores y tests propios: no se imprime en ningún documento. La fuente
+ * única del nombre sigue siendo `Comunidad.nombre`, que la ruta compone acá.
+ */
+const COLUMNAS_DOCUMENTO_DEL_LISTADO = {
+  direccionOficial: true,
+  rutComunidad: true,
+  administradorResponsable: true,
+  rutAdministrador: true,
+  firmaDigitalizadaUrl: true,
+} as const
 
 /**
  * Handlers de la colección y del detalle. `ver` acepta las DOS lecturas de F27
@@ -175,7 +192,7 @@ export async function GET(req: Request): Promise<Response> {
       prisma.avisoCobro.count({ where }),
       prisma.configuracionGlobal.findUnique({
         where: { comunidadId: scope.comunidadId },
-        select: COLUMNAS_DOCUMENTO,
+        select: COLUMNAS_DOCUMENTO_DEL_LISTADO,
       }),
       prisma.comunidad.findUnique({
         where: { id: scope.comunidadId },
@@ -191,14 +208,14 @@ export async function GET(req: Request): Promise<Response> {
       page,
       pageSize,
       total,
-      // El nombre que la pantalla usa para emitir es el de la fuente única (S1);
-      // no se pide la columna deprecada de CF.
-      documento: configuracion
-        ? {
-            ...configuracion,
-            nombreComunidad: comunidad?.nombre ?? scope.comunidadId,
-          }
-        : null,
+      // El nombre que la pantalla usa para habilitar la descarga es el de la
+      // fuente única (S1); sin fila de comunidad no hay payload (nunca el id
+      // interno). El papel lo sirve la ruta del PDF, que resuelve la identidad con
+      // `identidadDelPapel` y falla cerrado si falta el firmante.
+      documento:
+        configuracion && comunidad
+          ? { ...configuracion, nombreComunidad: comunidad.nombre }
+          : null,
     })
   } catch (e) {
     logger.error({ err: e }, "[api/avisos-cobro] error GET")

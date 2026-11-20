@@ -384,6 +384,13 @@ model ConfiguracionGlobal {
   faviconUrl                    String?
   rutComunidad                  String
   direccionOficial              String
+  /// DEPRECADAS el 2026-11-21 (hallazgos #3/#4 de
+  /// `odd/auditorias/identidad-comunidad.md`): el firmante de los papeles se DERIVA
+  /// de la membresía `administrador` vigente y de la persona del padrón (nombre y
+  /// RUT), resuelto en `app/api/configuracion/_lib/identidad-papel.ts`. Estas dos
+  /// columnas quedan por compatibilidad de datos (sin migración), NO se leen para
+  /// firmar y NO se actualizan: sólo guardan un snapshot al crear la fila. Ver
+  /// `ConfiguracionGlobalEscrituraSchema` y `GET /api/configuracion`.
   administradorResponsable      String
   rutAdministrador              String
   telefonoAdmin                 String

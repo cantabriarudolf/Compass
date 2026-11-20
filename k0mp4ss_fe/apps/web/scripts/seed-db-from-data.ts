@@ -33,6 +33,7 @@
  */
 /* global process */
 import { cargarUrlBase } from "../lib/database-url"
+import { NombreComunidadSchema } from "../lib/schemas"
 
 import { PrismaClient, Prisma } from "@prisma/client"
 import { personas, type Persona } from "../data/comunidad/personas"
@@ -123,7 +124,10 @@ async function main(): Promise<void> {
       comunidad = await prisma.comunidad.create({
         data: {
           id: "comunidad-mocks",
-          nombre: "Edificio Plaza Central",
+          // La regla del nombre es la del contrato (una sola definición, la misma
+          // que usa `PUT /api/comunidad-actual`): mínimo no-vacío y máximo. La
+          // semilla no inventa su propio tope.
+          nombre: NombreComunidadSchema.parse("Edificio Plaza Central"),
           slug: "edificio-plaza-central",
         },
       })

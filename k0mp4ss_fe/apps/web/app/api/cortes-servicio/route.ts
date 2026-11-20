@@ -52,7 +52,6 @@ import { propietarioVigenteDeUnidad } from "@/lib/entrega-aviso"
 import { claveEnvioDocumento } from "@/app/api/documentos/_lib/envio-documento"
 import {
   CANAL_DE_LA_CONSTANCIA,
-  COLUMNAS_IDENTIDAD_INSTITUCIONAL,
   MOTIVO_CONSTANCIA_PENDIENTE,
   TIPO_DOCUMENTAL_REQUERIMIENTO,
   archivoDelRequerimiento,
@@ -71,6 +70,7 @@ import {
   withComunidadScope,
   type ComunidadScope,
 } from "@/lib/api/with-comunidad-scope"
+import { identidadDelPapel } from "@/app/api/configuracion/_lib/identidad-papel"
 import {
   vistaDeCorte,
   vistaDePreaviso,
@@ -288,19 +288,13 @@ export async function POST(req: Request): Promise<Response> {
   // certificado y la liquidación) y los ids se conocen de antemano, así que el
   // papel que se archiva es el del corte que se va a escribir y la compilación no
   // tiene una transacción de base abierta esperando.
-  const [comunidad, configuracionIdentidad] = await Promise.all([
-    prisma.comunidad.findUnique({
-      where: { id: scope.comunidadId },
-      select: { nombre: true },
-    }),
-    // Identidad del encabezado (S3): las mismas columnas del aviso de cobro. Si la
-    // comunidad todavía no tiene CF (S6), el papel sale con el encabezado mínimo:
-    // sin fila no hay RUT ni administrador que imprimir, y no se inventan.
-    prisma.configuracionGlobal.findUnique({
-      where: { comunidadId: scope.comunidadId },
-      select: COLUMNAS_IDENTIDAD_INSTITUCIONAL,
-    }),
-  ])
+  // La identidad del papel se resuelve en UN lugar (`identidadDelPapel`). Sin
+  // nombre real o sin administrador designado con ficha, el preaviso NO se cursa:
+  // 409 antes de compilar el escrito y antes de abrir la transacción. Sin escrito
+  // no hay aviso, y un corte sin aviso no se ejecuta.
+  const identidad = await identidadDelPapel(scope.comunidadId)
+  if (!identidad.ok) return identidad.response
+
   const corteId = generarId("cse")
   const documentoId = generarId("doc")
   const envioId = generarId("env-doc")
@@ -325,13 +319,8 @@ export async function POST(req: Request): Promise<Response> {
   try {
     const definicion = definicionDelRequerimiento({
       corteId,
-      comunidadNombre: comunidad?.nombre ?? scope.comunidadId,
-      identidad: configuracionIdentidad
-        ? {
-            ...configuracionIdentidad,
-            nombreComunidad: comunidad?.nombre ?? scope.comunidadId,
-          }
-        : undefined,
+      comunidadNombre: identidad.identidad.nombreComunidad,
+      identidad: identidad.identidad.institucional ?? undefined,
       unidadNumero: unidad.numero,
       servicio: datos.servicio,
       cuotasImpagas: morosidad.periodosVencidos,

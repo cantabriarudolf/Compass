@@ -18,9 +18,9 @@
 import { prisma } from "@/lib/prisma"
 import { logger } from "@/lib/logger"
 import { jsonError, withComunidadScope } from "@/lib/api/with-comunidad-scope"
-import type { ConfiguracionGlobal } from "@/lib/schemas"
+import { identidadDelPapel } from "@/app/api/configuracion/_lib/identidad-papel"
 import { alcanceAvisosCobro, puedeLeerAvisosCobro } from "../../_alcance"
-import { COLUMNAS_DOCUMENTO, pdfDeAviso } from "../../_documento"
+import { pdfDeAviso } from "../../_documento"
 
 type Ctx = { params: Promise<{ id: string }> }
 
@@ -66,33 +66,22 @@ export async function GET(_req: Request, ctx: Ctx): Promise<Response> {
     })
     if (!aviso) return jsonError(404, "Registro no encontrado.")
 
-    const [configuracion, comunidad] = await Promise.all([
-      prisma.configuracionGlobal.findUnique({
-        where: { comunidadId: scope.comunidadId },
-        select: COLUMNAS_DOCUMENTO,
-      }),
-      prisma.comunidad.findUnique({
-        where: { id: scope.comunidadId },
-        select: { nombre: true },
-      }),
-    ])
-    if (!configuracion) {
-      // Sin identidad de la comunidad ni administrador responsable el papel no
-      // se puede afirmar: se dice, en vez de servir un documento incompleto.
+    // La identidad del papel se resuelve en UN lugar (`identidadDelPapel`): sin
+    // nombre real o sin firmante derivado no hay documento, se responde 409 y no
+    // se compila ningún byte.
+    const identidad = await identidadDelPapel(scope.comunidadId)
+    if (!identidad.ok) return identidad.response
+    const { institucional } = identidad.identidad
+    if (!institucional) {
+      // Sin identidad legal de la comunidad el papel no se puede afirmar: se
+      // dice, en vez de servir un documento incompleto.
       return jsonError(
         409,
         "La comunidad no tiene configuración registrada: sin ella no se puede armar el aviso."
       )
     }
 
-    // SAFETY: la proyección es exactamente lo que el builder imprime —las mismas
-    // columnas que la colección sirve a la pantalla, más el nombre de la fuente
-    // única (`Comunidad.nombre`, S1)— y el cast solo borra el resto del modelo
-    // prisma (SMTP, clave de eliminación).
-    const bytes = await pdfDeAviso(aviso, {
-      ...configuracion,
-      nombreComunidad: comunidad?.nombre ?? scope.comunidadId,
-    } as unknown as ConfiguracionGlobal)
+    const bytes = await pdfDeAviso(aviso, institucional)
 
     return new Response(bytes, {
       status: 200,

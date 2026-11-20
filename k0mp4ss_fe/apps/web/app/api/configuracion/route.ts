@@ -14,6 +14,14 @@
  *     snapshot congelado de `Comunidad.nombre`; después nadie la actualiza.
  * Renombrar la comunidad es `PUT /api/comunidad-actual`.
  *
+ * Firmante (hallazgos #3/#4 de `odd/auditorias/identidad-comunidad.md`):
+ * `administradorResponsable` y `rutAdministrador` están DEPRECADAS por el mismo
+ * criterio. GET las OMITE y proyecta el firmante DERIVADO —la persona del padrón
+ * con membresía `administrador` vigente, resuelta por `identidadDelPapel`—;
+ * vacías si la comunidad no tiene administrador designado. PUT no las escribe. El
+ * formulario sigue mostrando la forma, pero el valor que muestra es el que firma
+ * los papeles, no texto libre guardado.
+ *
  * Authz: recurso "cf" (admin full, comité ver, residente sin acceso).
  * No POST ni DELETE: solo hay una config por comunidad.
  */
@@ -28,6 +36,7 @@ import {
 import { logger } from "@/lib/logger"
 import { generarId } from "@/lib/id-utils"
 import { registrarEventoAuditoria } from "@/lib/auditoria"
+import { firmanteDeLaComunidad } from "./_lib/identidad-papel"
 import crypto from "node:crypto"
 import type { Prisma } from "@prisma/client"
 
@@ -49,16 +58,22 @@ export async function GET(): Promise<Response> {
   }
 
   try {
-    const [comunidad, config] = await Promise.all([
+    const [comunidad, config, firmante] = await Promise.all([
       prisma.comunidad.findUnique({
         where: { id: scope.comunidadId },
         select: { nombre: true },
       }),
       prisma.configuracionGlobal.findUnique({
         where: { comunidadId: scope.comunidadId },
-        // La columna deprecada no se lee: el nombre se proyecta desde la comunidad.
-        omit: { nombreComunidad: true },
+        // Las tres columnas deprecadas no se leen: el nombre se proyecta desde la
+        // comunidad y el firmante desde la membresía administrador.
+        omit: {
+          nombreComunidad: true,
+          administradorResponsable: true,
+          rutAdministrador: true,
+        },
       }),
+      firmanteDeLaComunidad(scope.comunidadId),
     ])
     if (!comunidad) {
       return jsonError(404, "Comunidad no encontrada.")
@@ -66,7 +81,14 @@ export async function GET(): Promise<Response> {
     if (!config) {
       return jsonError(404, "Configuración no encontrada.")
     }
-    return Response.json({ ...config, nombreComunidad: comunidad.nombre })
+    return Response.json({
+      ...config,
+      nombreComunidad: comunidad.nombre,
+      // Vacíos cuando no hay administrador designado: la pantalla lo muestra y
+      // los papeles responden 409 (nunca el texto libre que quedó en la columna).
+      administradorResponsable: firmante?.nombreCompleto ?? "",
+      rutAdministrador: firmante?.rut ?? "",
+    })
   } catch (e) {
     logger.error({ err: e }, "[configuracion] error GET")
     return jsonError(500, "Error interno del servidor.")
@@ -99,12 +121,14 @@ export async function PUT(req: Request): Promise<Response> {
   const datos = parsed.data as Record<string, unknown>
   delete datos.id
   delete datos.comunidadId
-  // Defensa explícita: el schema de escritura ya excluye el nombre, pero si el
-  // shape cambia, la columna deprecada no se escribe nunca (S1).
+  // Defensa explícita: el schema de escritura ya excluye las tres columnas
+  // deprecadas, pero si el shape cambia no se escriben nunca.
   delete datos.nombreComunidad
+  delete datos.administradorResponsable
+  delete datos.rutAdministrador
 
   try {
-    const [configActual, comunidad] = await Promise.all([
+    const [configActual, comunidad, firmante] = await Promise.all([
       prisma.configuracionGlobal.findUnique({
         where: { comunidadId: scope.comunidadId },
       }),
@@ -112,6 +136,7 @@ export async function PUT(req: Request): Promise<Response> {
         where: { id: scope.comunidadId },
         select: { nombre: true },
       }),
+      firmanteDeLaComunidad(scope.comunidadId),
     ])
     if (!comunidad) {
       return jsonError(404, "Comunidad no encontrada.")
@@ -136,9 +161,13 @@ export async function PUT(req: Request): Promise<Response> {
       : await prisma.configuracionGlobal.create({
           data: {
             ...defaults,
-            // Snapshot congelado de la fuente única (S1): se escribe una sola vez,
-            // acá. Ningún lector lo usa y ninguna actualización lo reescribe.
+            // Snapshots congelados de las fuentes únicas, escritos UNA sola vez al
+            // crear la fila: el nombre de la comunidad (S1) y el firmante derivado
+            // de la membresía administrador (vacío si todavía no hay). Ningún
+            // lector los usa y ninguna actualización los reescribe.
             nombreComunidad: comunidad.nombre,
+            administradorResponsable: firmante?.nombreCompleto ?? "",
+            rutAdministrador: firmante?.rut ?? "",
             ...datos,
             id: crypto.randomUUID(),
             comunidadId: scope.comunidadId,
@@ -175,9 +204,15 @@ export async function PUT(req: Request): Promise<Response> {
     }
 
     return Response.json(
-      // Mismo shape que el GET: el nombre es la proyección de la fuente única (S1),
-      // nunca la columna deprecada que acaba de quedar (o seguir) congelada.
-      { ...registro, nombreComunidad: comunidad.nombre },
+      // Mismo shape que el GET: nombre y firmante son la proyección de sus fuentes
+      // únicas, nunca las columnas deprecadas que acaban de quedar (o seguir)
+      // congeladas.
+      {
+        ...registro,
+        nombreComunidad: comunidad.nombre,
+        administradorResponsable: firmante?.nombreCompleto ?? "",
+        rutAdministrador: firmante?.rut ?? "",
+      },
       { status: configActual ? 200 : 201 }
     )
   } catch (e) {

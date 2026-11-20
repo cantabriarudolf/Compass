@@ -179,13 +179,15 @@ export interface DatosDelRequerimiento {
   /** Nombre de la comunidad (`Comunidad.nombre`, fuente única de S1). */
   readonly comunidadNombre: string
   /**
-   * Identidad institucional para el encabezado (S3): dirección, RUT, administrador.
+   * Identidad institucional para el encabezado (S3): dirección, RUT y firmante.
    *
-   * Se resuelve en la ruta que emite/sirve el papel, con las mismas columnas que
-   * imprime el aviso de cobro y el nombre de `Comunidad.nombre`. Ausente cuando la
+   * La resuelve `identidadDelPapel` (`app/api/configuracion/_lib/identidad-papel.ts`)
+   * en UN solo lugar, a partir de `Comunidad.nombre`, las columnas legales de CF y
+   * la persona del padrón con membresía `administrador`. Ausente cuando la
    * comunidad todavía no tiene fila de configuración (S6): en ese caso no hay RUT
-   * ni administrador que imprimir y el papel conserva el encabezado mínimo —nunca
-   * se inventan datos legales.
+   * ni firmante que imprimir y el papel conserva el encabezado mínimo —nunca se
+   * inventan datos legales—. Las rutas preguntan por el firmante ANTES de llegar
+   * acá: sin administrador designado el papel no se emite.
    */
   readonly identidad?: IdentidadInstitucional
   readonly unidadNumero: string
@@ -196,19 +198,6 @@ export interface DatosDelRequerimiento {
   readonly fechaHabilitada: Date
   readonly acuerdoFolio: string
 }
-
-/**
- * Columnas de `ConfiguracionGlobal` que componen la identidad del encabezado.
- *
- * NO incluye `nombreComunidad`: esa columna está deprecada (S1) y el nombre que se
- * imprime es `Comunidad.nombre`. La proyección la completan las rutas del trámite.
- */
-export const COLUMNAS_IDENTIDAD_INSTITUCIONAL = {
-  direccionOficial: true,
-  rutComunidad: true,
-  administradorResponsable: true,
-  rutAdministrador: true,
-} as const
 
 /**
  * Definición pdfmake del requerimiento.

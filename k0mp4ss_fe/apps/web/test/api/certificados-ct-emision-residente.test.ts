@@ -82,6 +82,7 @@ const EMAIL = {
   multi: "ctres-multi@test.cl",
   mantencion: "ctres-mantencion@test.cl",
   sinFicha: "ctres-sin-ficha@test.cl",
+  firmante: "ctres-admin-firmante@test.cl",
 }
 
 /** CF de la comunidad del arnés: sin ella el PDF no se puede armar (409). */
@@ -302,6 +303,44 @@ describe("F34 — emisión del propio certificado por tipología", () => {
         data: { usuarioId: usuario.id, comunidadId: u.comunidadId, rol: u.rol },
       })
     }
+
+    // Firmante de los papeles (fixture ADITIVO): persona del padrón + membresía
+    // administrador que la apunta. El `EMAIL.admin` sin ficha sigue existiendo y
+    // prueba lo suyo; el resolver del firmante usa esta persona.
+    await prisma.persona.upsert({
+      where: { id: "ctres-persona-firmante" },
+      update: {},
+      create: {
+        id: "ctres-persona-firmante",
+        comunidadId: COM_A,
+        rut: "13.246.802-3",
+        nombreCompleto: "Rosa Firmante Padrón",
+        nombres: "Rosa",
+        apellidos: "Firmante Padrón",
+        email: "ctres-persona-firmante@ctres.test.cl",
+        telefonoMovil: "+56911111111",
+        estadoCuenta: "activa",
+        condicionesEspecialesIds: [],
+        roles: ["propietario"],
+      },
+    })
+    const usuarioFirmante = await prisma.usuario.upsert({
+      where: { email: EMAIL.firmante },
+      update: { personaId: "ctres-persona-firmante" },
+      create: {
+        email: EMAIL.firmante,
+        personaId: "ctres-persona-firmante",
+        activo: true,
+      },
+    })
+    await prisma.membresia.deleteMany({ where: { usuarioId: usuarioFirmante.id } })
+    await prisma.membresia.create({
+      data: {
+        usuarioId: usuarioFirmante.id,
+        comunidadId: COM_A,
+        rol: "administrador",
+      },
+    })
 
     // CF de la comunidad A: el papel imprime su identidad y al administrador
     // responsable. La firma queda en `null` a propósito —el PDF del arnés se
