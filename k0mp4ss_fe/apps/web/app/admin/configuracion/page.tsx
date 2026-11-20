@@ -69,6 +69,33 @@ const AYUDA_NOMBRE_REMITENTE =
 const AVISO_CREDENCIAL_EN_CONSOLA =
   "La contraseña del buzón no se edita acá: se carga cifrada en la consola de la comunidad, junto con el servidor, el puerto y la casilla, y esa credencial se usa antes que la del entorno."
 
+/**
+ * Lo que se aplica en TODOS los envíos, tenga o no credencial la comunidad: el
+ * remitente, su nombre, la copia de auditoría y la seguridad de la conexión. No
+ * tienen equivalente en la consola de la comunidad (esa carga servidor, puerto,
+ * casilla y contraseña), así que quedan acá, primero y dichos como tales.
+ */
+const TITULO_SIEMPRE_APLICA = "Estos datos se usan siempre"
+
+const DESCRIPCION_SIEMPRE_APLICA =
+  "El remitente, su nombre, la copia de auditoría y la seguridad de la conexión no se cargan en la consola de la comunidad: se aplican en todos los envíos, tenga o no credencial propia."
+
+/**
+ * El bloque de la credencial del entorno, declarado por lo que es: el RESPALDO.
+ *
+ * La precedencia no la inventa esta pantalla, la decide el emisor: `lib/smtp.ts:513`
+ * («la credencial de la comunidad manda sobre host/puerto/usuario y sobre el
+ * secreto», con el remitente y la seguridad viniendo siempre de CF) y
+ * `lib/smtp.ts:295` (el secreto es `credencial.secreto` o `SMTP_PASSWORD`). Si la
+ * comunidad no cargó credencial, el envío usa estos datos y `SMTP_PASSWORD`
+ * (`lib/smtp.ts:560` nombra la variable que falta).
+ */
+const TITULO_RESPALDO_SERVIDOR =
+  "Respaldo del servidor (sólo si la comunidad no cargó su credencial)"
+
+const FRASE_PRECEDENCIA_CREDENCIAL =
+  "Si la comunidad cargó su credencial, esa manda y estos datos no se usan. Si no la cargó, el sistema usa esto. La contraseña de la comunidad se carga allá, no acá."
+
 export default function ConfiguracionPage() {
   const { config: configuracionRemota, error, updateConfig } = useConfiguracion()
   const [config, setConfig] = React.useState<ConfiguracionGlobal | null>(null)
@@ -337,107 +364,163 @@ export default function ConfiguracionPage() {
                   Parámetros críticos para comunicaciones y cobranza.
                 </CardDescription>
               </CardHeader>
-              <CardContent className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <div className="space-y-2">
-                  <Label>Servidor SMTP *</Label>
-                  <Input
-                    value={config.smtpHost}
-                    onChange={(e) => updateField("smtpHost", e.target.value)}
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Puerto *</Label>
-                  <Input
-                    type="number"
-                    value={config.smtpPort}
-                    onChange={(e) =>
-                      updateField("smtpPort", Number(e.target.value))
-                    }
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Usuario *</Label>
-                  <Input
-                    value={config.smtpUser}
-                    onChange={(e) => updateField("smtpUser", e.target.value)}
-                    required
-                  />
-                </div>
-                <div className="space-y-2 rounded-md border border-dashed bg-muted/20 p-3">
-                  <Label className="text-xs font-bold tracking-widest uppercase">
-                    Contraseña / Token
-                  </Label>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Gestionado por el servidor (variable de entorno{" "}
-                    <code className="rounded bg-muted px-1 font-mono">
-                      SMTP_PASSWORD
-                    </code>
-                    ) — no se edita en el cliente (C2-final).
-                  </p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {AVISO_CREDENCIAL_EN_CONSOLA}{" "}
-                    <Link
-                      href="/admin/configuracion/correo"
-                      className="font-medium underline underline-offset-4"
+              <CardContent className="flex flex-col gap-6">
+                {/* Lo que sólo vive acá: aplica siempre, con credencial de la
+                    comunidad o sin ella, y no se carga en su consola. */}
+                <section
+                  aria-labelledby="smtp-datos-siempre"
+                  className="flex flex-col gap-4"
+                >
+                  <div className="space-y-1">
+                    <h3
+                      id="smtp-datos-siempre"
+                      className="text-sm font-semibold"
                     >
-                      Ir a la credencial de correo de la comunidad
-                    </Link>
-                  </p>
-                </div>
-                <div className="space-y-2">
-                  <Label>Seguridad *</Label>
-                  <Select
-                    value={config.smtpSecurity}
-                    onValueChange={(v) =>
-                      updateField(
-                        "smtpSecurity",
-                        v as ConfiguracionGlobal["smtpSecurity"]
-                      )
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="tls">TLS</SelectItem>
-                      <SelectItem value="ssl">SSL</SelectItem>
-                      <SelectItem value="none">Sin seguridad</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Correo Remitente *</Label>
-                  <Input
-                    value={config.smtpFrom}
-                    onChange={(e) => updateField("smtpFrom", e.target.value)}
-                    required
-                  />
-                  <p className="text-xs leading-relaxed text-muted-foreground">
-                    {AYUDA_REMITENTE}
-                  </p>
-                </div>
-                <div className="space-y-2">
-                  <Label>Nombre Remitente *</Label>
-                  <Input
-                    value={config.smtpFromName}
-                    onChange={(e) =>
-                      updateField("smtpFromName", e.target.value)
-                    }
-                    required
-                  />
-                  <p className="text-xs leading-relaxed text-muted-foreground">
-                    {AYUDA_NOMBRE_REMITENTE}
-                  </p>
-                </div>
-                <div className="space-y-2">
-                  <Label>Correo BCC (Auditoría)</Label>
-                  <Input
-                    value={config.smtpBcc}
-                    onChange={(e) => updateField("smtpBcc", e.target.value)}
-                  />
-                </div>
+                      {TITULO_SIEMPRE_APLICA}
+                    </h3>
+                    <p className="text-xs leading-relaxed text-muted-foreground">
+                      {DESCRIPCION_SIEMPRE_APLICA}
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label>Correo Remitente *</Label>
+                      <Input
+                        value={config.smtpFrom}
+                        onChange={(e) =>
+                          updateField("smtpFrom", e.target.value)
+                        }
+                        required
+                      />
+                      <p className="text-xs leading-relaxed text-muted-foreground">
+                        {AYUDA_REMITENTE}
+                      </p>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Nombre Remitente *</Label>
+                      <Input
+                        value={config.smtpFromName}
+                        onChange={(e) =>
+                          updateField("smtpFromName", e.target.value)
+                        }
+                        required
+                      />
+                      <p className="text-xs leading-relaxed text-muted-foreground">
+                        {AYUDA_NOMBRE_REMITENTE}
+                      </p>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Correo BCC (Auditoría)</Label>
+                      <Input
+                        value={config.smtpBcc}
+                        onChange={(e) =>
+                          updateField("smtpBcc", e.target.value)
+                        }
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Seguridad *</Label>
+                      <Select
+                        value={config.smtpSecurity}
+                        onValueChange={(v) =>
+                          updateField(
+                            "smtpSecurity",
+                            v as ConfiguracionGlobal["smtpSecurity"]
+                          )
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="tls">TLS</SelectItem>
+                          <SelectItem value="ssl">SSL</SelectItem>
+                          <SelectItem value="none">Sin seguridad</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </section>
+
+                {/* El respaldo: visualmente secundario y dicho como respaldo. Los
+                    campos NO se deshabilitan —siguen siendo el fallback de las
+                    comunidades sin credencial propia—. */}
+                <section
+                  aria-labelledby="smtp-respaldo-servidor"
+                  className="flex flex-col gap-4 rounded-lg border border-dashed bg-muted/20 p-4"
+                >
+                  <div className="space-y-1">
+                    <h3
+                      id="smtp-respaldo-servidor"
+                      className="text-sm font-semibold"
+                    >
+                      {TITULO_RESPALDO_SERVIDOR}
+                    </h3>
+                    <p className="text-sm leading-relaxed text-muted-foreground">
+                      {FRASE_PRECEDENCIA_CREDENCIAL}{" "}
+                      <Link
+                        href="/admin/configuracion/correo"
+                        className="font-medium underline underline-offset-4"
+                      >
+                        Ir a la consola de la comunidad
+                      </Link>
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label>Servidor SMTP *</Label>
+                      <Input
+                        value={config.smtpHost}
+                        onChange={(e) =>
+                          updateField("smtpHost", e.target.value)
+                        }
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Puerto *</Label>
+                      <Input
+                        type="number"
+                        value={config.smtpPort}
+                        onChange={(e) =>
+                          updateField("smtpPort", Number(e.target.value))
+                        }
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Usuario *</Label>
+                      <Input
+                        value={config.smtpUser}
+                        onChange={(e) =>
+                          updateField("smtpUser", e.target.value)
+                        }
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2 rounded-md border bg-background p-3">
+                      <Label className="text-xs font-bold tracking-widest uppercase">
+                        Contraseña / Token
+                      </Label>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Gestionado por el servidor (variable de entorno{" "}
+                        <code className="rounded bg-muted px-1 font-mono">
+                          SMTP_PASSWORD
+                        </code>
+                        ) — no se edita en el cliente (C2-final).
+                      </p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {AVISO_CREDENCIAL_EN_CONSOLA}{" "}
+                        <Link
+                          href="/admin/configuracion/correo"
+                          className="font-medium underline underline-offset-4"
+                        >
+                          Ir a la credencial de correo de la comunidad
+                        </Link>
+                      </p>
+                    </div>
+                  </div>
+                </section>
               </CardContent>
             </Card>
           </TabsContent>
