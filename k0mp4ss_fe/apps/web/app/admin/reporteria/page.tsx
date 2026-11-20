@@ -32,6 +32,12 @@ import {
 import { IconChartBar, IconSend, IconPlus, IconTrash } from "@tabler/icons-react"
 import type { ReporteRE } from "@/lib/schemas"
 import {
+  ETIQUETA_PERFIL_SEGMENTACION_RE,
+  ETIQUETA_TENENCIA_SEGMENTACION_RE,
+  PERFILES_SEGMENTACION_RE,
+  TENENCIAS_SEGMENTACION_RE,
+} from "@/lib/schemas"
+import {
   metricasDemograficasRE,
   metricasOperativasRE,
   embudoGestionesGE,
@@ -386,16 +392,16 @@ maestros: { jornadas },
                 <div className="flex flex-col gap-1.5">
                   <Label>Perfil de persona (MP/RP)</Label>
                   <div className="flex flex-wrap gap-2">
-                    {(["administracion", "personal", "propietario", "residente"] as const).map(v => (
-                      <Button key={v} size="sm" variant={perfiles.includes(v) ? "default" : "outline"} onClick={() => toggleArray(perfiles, v, setPerfiles)}>{v === "administracion" ? "Administración/Directiva" : v === "personal" ? "Trabajador de servicio" : v === "propietario" ? "Propietarios" : "Residentes"}</Button>
+                    {PERFILES_SEGMENTACION_RE.map(v => (
+                      <Button key={v} size="sm" variant={perfiles.includes(v) ? "default" : "outline"} onClick={() => toggleArray(perfiles, v, setPerfiles)}>{ETIQUETA_PERFIL_SEGMENTACION_RE[v]}</Button>
                     ))}
                   </div>
                 </div>
                 <div className="flex flex-col gap-1.5">
                   <Label>Tipo de tenencia</Label>
                   <div className="flex flex-wrap gap-2">
-                    {[["propietarios", "Solo propietarios"], ["arrendatarios", "Solo residentes (arrendatarios)"]].map(([v, l]) => (
-                      <Button key={v} size="sm" variant={tenencias.includes(v!) ? "default" : "outline"} onClick={() => toggleArray(tenencias, v!, setTenencias)}>{l}</Button>
+                    {TENENCIAS_SEGMENTACION_RE.map(v => (
+                      <Button key={v} size="sm" variant={tenencias.includes(v) ? "default" : "outline"} onClick={() => toggleArray(tenencias, v, setTenencias)}>{ETIQUETA_TENENCIA_SEGMENTACION_RE[v]}</Button>
                     ))}
                   </div>
                 </div>

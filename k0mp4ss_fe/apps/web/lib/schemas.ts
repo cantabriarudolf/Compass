@@ -3339,6 +3339,52 @@ export const LecturaReporteRESchema = z.object({
 // SERIE-FASE2 §V3: los campos de emisión (número, periodo, autor) y de
 // distribución (estado, envíos, lecturas) son OPCIONALES para no romper los
 // reportes históricos, que solo tienen payloadSnapshot + fechaGeneracion.
+// --- Segmentación de un reporte RE (a quién va) ---
+//
+// El vocabulario de la segmentación vive acá —y no en `lib/reporteria-utils.ts`—
+// porque lo comparten tres consumidores: el contrato persistido (`ReporteRESchema`),
+// la entrada de `POST /api/reportes-re/generar` y los botones del generador; el
+// motor (`resolverSegmentacionRE`) lo importa desde este módulo.
+//
+// Auditoría `odd/auditorias/catalogos-y-estados.md` (hallazgo 5): antes eran cuatro
+// copias sin relación y un perfil aceptado por la ruta podía no tener rama en el
+// motor — el reporte se emitía a 0 destinatarios, con `distribuidoA` en 0 y sin
+// error, mientras el selector decía que se había distribuido.
+
+export const PERFILES_SEGMENTACION_RE = [
+  "administracion",
+  "personal",
+  "propietario",
+  "residente",
+] as const
+export type PerfilSegmentacionRE = (typeof PERFILES_SEGMENTACION_RE)[number]
+
+/** Etiqueta de cada perfil: la que usan los botones del generador de reportes. */
+export const ETIQUETA_PERFIL_SEGMENTACION_RE: Record<PerfilSegmentacionRE, string> = {
+  administracion: "Administración/Directiva",
+  personal: "Trabajador de servicio",
+  propietario: "Propietarios",
+  residente: "Residentes",
+}
+
+export const TENENCIAS_SEGMENTACION_RE = ["propietarios", "arrendatarios"] as const
+export type TenenciaSegmentacionRE = (typeof TENENCIAS_SEGMENTACION_RE)[number]
+
+/** Etiqueta de cada tenencia en el generador ("solo…": la tenencia no es el rol). */
+export const ETIQUETA_TENENCIA_SEGMENTACION_RE: Record<TenenciaSegmentacionRE, string> = {
+  propietarios: "Solo propietarios",
+  arrendatarios: "Solo residentes (arrendatarios)",
+}
+
+/** A quién va el reporte: alcance físico (EF), perfil (MP/RP) y tenencia (VU). */
+export const SegmentoReporteRESchema = z.object({
+  macroSectorIds: z.array(IdEntidadSchema),
+  microSectorIds: z.array(IdEntidadSchema),
+  unidadIds: z.array(IdEntidadSchema),
+  perfiles: z.array(z.enum(PERFILES_SEGMENTACION_RE)),
+  tenencias: z.array(z.enum(TENENCIAS_SEGMENTACION_RE)),
+})
+
 export const ReporteRESchema = z.object({
   id: IdEntidadSchema,
   titulo: z
@@ -3347,15 +3393,7 @@ export const ReporteRESchema = z.object({
   bloques: z
     .array(BloqueReporteRESchema)
     .min(1, "Selecciona al menos un bloque de información."),
-  segmento: z.object({
-    macroSectorIds: z.array(IdEntidadSchema),
-    microSectorIds: z.array(IdEntidadSchema),
-    unidadIds: z.array(IdEntidadSchema),
-    perfiles: z.array(
-      z.enum(["administracion", "personal", "propietario", "residente"])
-    ),
-    tenencias: z.array(z.enum(["propietarios", "arrendatarios"])),
-  }),
+  segmento: SegmentoReporteRESchema,
   payloadSnapshot: z.array(
     z.object({
       bloque: BloqueReporteRESchema,

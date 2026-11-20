@@ -24,6 +24,7 @@ import {
   BloqueReporteRESchema,
   IdEntidadSchema,
   ReporteRESchema,
+  SegmentoReporteRESchema,
   validarConEsquema,
   type BloqueReporteRE,
   type ReporteRE,
@@ -48,17 +49,7 @@ const EntradaGenerarSchema = z.object({
   bloques: z
     .array(BloqueReporteRESchema)
     .min(1, "Selecciona al menos un bloque de información."),
-  segmento: z
-    .object({
-      macroSectorIds: z.array(IdEntidadSchema).optional(),
-      microSectorIds: z.array(IdEntidadSchema).optional(),
-      unidadIds: z.array(IdEntidadSchema).optional(),
-      perfiles: z
-        .array(z.enum(["administracion", "personal", "propietario", "residente"]))
-        .optional(),
-      tenencias: z.array(z.enum(["propietarios", "arrendatarios"])).optional(),
-    })
-    .optional(),
+  segmento: SegmentoReporteRESchema.partial().optional(),
   periodo: z
     .string()
     .regex(/^\d{4}-\d{2}$/, "El periodo debe tener formato AAAA-MM.")

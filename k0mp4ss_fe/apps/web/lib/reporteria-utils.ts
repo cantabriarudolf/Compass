@@ -1,6 +1,15 @@
 // Helpers puros de RE - Reportería y Dashboards (ventana 8). Sin acceso al
 // store: reciben slices tipados y devuelven derivaciones testables.
-import type { CierreTurnoPE, SolicitudGE, CobroFI, EgresoFI, Persona, VinculoUnidad } from "./schemas"
+import type {
+  CierreTurnoPE,
+  PerfilSegmentacionRE,
+  SolicitudGE,
+  TenenciaSegmentacionRE,
+  CobroFI,
+  EgresoFI,
+  Persona,
+  VinculoUnidad,
+} from "./schemas"
 import { lineasDeCobro } from "./cobro-lineas"
 
 // --- Métricas demográficas (censo) ---
@@ -180,12 +189,10 @@ export function saludCajaFI(input: {
 }
 
 // --- Segmentación granular (motor de distribución) ---
-
-export const PERFILES_SEGMENTACION_RE = ["administracion", "personal", "propietario", "residente"] as const
-export type PerfilSegmentacionRE = (typeof PERFILES_SEGMENTACION_RE)[number]
-
-export const TENENCIAS_SEGMENTACION_RE = ["propietarios", "arrendatarios"] as const
-export type TenenciaSegmentacionRE = (typeof TENENCIAS_SEGMENTACION_RE)[number]
+//
+// El vocabulario (perfiles y tenencias) NO se declara acá: vive en `lib/schemas.ts`,
+// junto a `SegmentoReporteRESchema`, que comparten el payload persistido y la entrada
+// de la API. Este módulo sólo resuelve quién recibe.
 
 export interface SegmentoRE {
   macroSectorIds: string[]
@@ -198,6 +205,40 @@ export interface SegmentoRE {
 // Resuelve personaIds únicos combinando alcance físico (EF), tenencia (VU) y
 // perfil (MP). Los perfiles administracion/personal no exigen vínculo de
 // unidad (el personal de servicio no vive necesariamente en la comunidad).
+//
+// Las DOS tablas de abajo son `Record` del catálogo completo: un perfil o una
+// tenencia nuevos rompen la compilación acá en vez de caer en la rama de nadie y
+// emitir el reporte a 0 destinatarios sin error (hallazgo 5 del informe).
+
+/** Rol de vínculo que corresponde a cada tenencia declarada. */
+const ROL_DE_TENENCIA: Record<TenenciaSegmentacionRE, string> = {
+  propietarios: "propietario",
+  arrendatarios: "arrendatario",
+}
+
+/** Cómo se resuelve cada perfil, sin contar el alcance físico ni la cuenta activa. */
+const RESUELVE_PERFIL: Record<
+  PerfilSegmentacionRE,
+  (persona: Persona, contexto: ContextoResolucion) => boolean
+> = {
+  personal: (persona) => persona.roles.includes("personal"),
+  administracion: (persona) =>
+    persona.roles.includes("directiva") || persona.datosGobernanza !== undefined,
+  propietario: (persona, contexto) =>
+    contexto.sinAlcanceFisico && contexto.tieneVinculo(persona.id, "propietario"),
+  residente: (persona, contexto) =>
+    contexto.sinAlcanceFisico && contexto.tieneVinculo(persona.id),
+}
+
+interface ContextoResolucion {
+  vinculos: VinculoUnidad[]
+  /** Roles de vínculo que piden las tenencias (vacío = no filtran). */
+  rolesBuscados: Set<string>
+  /** `true` cuando el segmento no fija unidades: sólo entonces decide el perfil. */
+  sinAlcanceFisico: boolean
+  tieneVinculo: (personaId: string, rolExigido?: string) => boolean
+}
+
 export function resolverSegmentacionRE(input: {
   segmento: Pick<SegmentoRE, "perfiles" | "tenencias">
   unidadesAlcanceIds: string[]
@@ -206,37 +247,69 @@ export function resolverSegmentacionRE(input: {
 }): string[] {
   const { segmento, unidadesAlcanceIds } = input
   const destinatarios = new Set<string>()
-  const tenencias = new Set(segmento.tenencias)
+  const rolesBuscados = rolesDeTenencias(segmento.tenencias)
 
-  // Piscina por EF + tenencia.
-  if (unidadesAlcanceIds.length > 0 || tenencias.size > 0) {
-    for (const v of input.vinculos.filter(v => !v.fechaFin)) {
+  // Piscina por EF + tenencia. Sólo cuentas activas: el informe no se distribuye a
+  // una cuenta bloqueada, la misma regla que el ramal de perfiles aplica abajo (antes
+  // este ramal la omitía y un propietario inactivo recibía el reporte).
+  if (unidadesAlcanceIds.length > 0 || rolesBuscados.size > 0) {
+    const activos = new Set(
+      input.personas.filter((p) => p.estadoCuenta === "activa").map((p) => p.id)
+    )
+    for (const v of input.vinculos.filter((v) => !v.fechaFin)) {
+      if (!activos.has(v.personaId)) continue
       if (unidadesAlcanceIds.length > 0 && !unidadesAlcanceIds.includes(v.unidadId)) continue
-      if (tenencias.size > 0 && !(
-        (v.rol === "propietario" && tenencias.has("propietarios")) ||
-        (v.rol === "arrendatario" && tenencias.has("arrendatarios"))
-      )) continue
+      if (rolesBuscados.size > 0 && !rolesBuscados.has(v.rol)) continue
       destinatarios.add(v.personaId)
     }
   }
 
+  const contexto: ContextoResolucion = {
+    vinculos: input.vinculos,
+    rolesBuscados,
+    sinAlcanceFisico: unidadesAlcanceIds.length === 0,
+    tieneVinculo: (personaId, rolExigido) =>
+      input.vinculos.some(
+        (v) =>
+          v.personaId === personaId &&
+          !v.fechaFin &&
+          (rolExigido === undefined || v.rol === rolExigido) &&
+          (rolesBuscados.size === 0 || rolesBuscados.has(v.rol))
+      ),
+  }
+
   // Perfiles sin exigencia de unidad.
   for (const perfil of segmento.perfiles) {
+    const resuelve: ((persona: Persona, contexto: ContextoResolucion) => boolean) | undefined =
+      RESUELVE_PERFIL[perfil]
+    if (!resuelve) {
+      // Un valor fuera del catálogo (fila vieja o cast) NO puede degradar a
+      // «nadie»: eso es exactamente el defecto que el informe describe.
+      throw new Error(`Perfil de segmentación desconocido: ${String(perfil)}`)
+    }
     for (const p of input.personas) {
       if (p.estadoCuenta !== "activa") continue
-      if (perfil === "personal" && p.roles.includes("personal")) destinatarios.add(p.id)
-      if (perfil === "administracion" && (p.roles.includes("directiva") || p.datosGobernanza !== undefined)) destinatarios.add(p.id)
-      if ((perfil === "propietario" || perfil === "residente")) {
-        const tieneVinculo = input.vinculos.some(
-          v => v.personaId === p.id && !v.fechaFin &&
-            (perfil === "propietario" ? v.rol === "propietario" : true)
-        )
-        if (tieneVinculo && (unidadesAlcanceIds.length === 0)) destinatarios.add(p.id)
-      }
+      if (!resuelve(p, contexto)) continue
+      destinatarios.add(p.id)
     }
   }
 
   return [...destinatarios]
+}
+
+/**
+ * Roles de vínculo que piden las tenencias del segmento. Una tenencia fuera del
+ * catálogo lanza: filtrar por una palabra que ningún vínculo tiene devolvería 0
+ * destinatarios sin error.
+ */
+function rolesDeTenencias(tenencias: readonly string[]): Set<string> {
+  const roles = new Set<string>()
+  for (const tenencia of tenencias) {
+    const rol: string | undefined = ROL_DE_TENENCIA[tenencia as TenenciaSegmentacionRE]
+    if (!rol) throw new Error(`Tenencia de segmentación desconocida: ${String(tenencia)}`)
+    roles.add(rol)
+  }
+  return roles
 }
 
 // Tasa huérfanos ST (dangling FK / total sobre núcleos estructurales).
