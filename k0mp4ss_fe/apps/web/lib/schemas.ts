@@ -2592,13 +2592,24 @@ export const PlantillaCVSchema = z
 // El visor NO copia el acta: guarda `actaId` + visibilidad y resuelve el
 // contenido al leer. El acta canónica sigue siendo el documento inmutable de GD.
 
-export const ESTADOS_PUBLICACION_ACTA_CV = ["publicado", "despublicado"] as const
+/**
+ * Estados de visibilidad de un acta en el visor (CV).
+ *
+ * Los dos valores con nombre son la fuente y la tupla se deriva de ellos: antes la
+ * tupla vivía acá y las constantes en `app/api/cv/_actas.ts`, así que cambiar un
+ * valor en un lado dejaba el otro con la palabra vieja y el acta desaparecía del
+ * visor sin error (hallazgo 19 del informe).
+ */
+export const ESTADO_ACTA_PUBLICADA = "publicado"
+export const ESTADO_ACTA_DESPUBLICADA = "despublicado"
+export const ESTADOS_PUBLICACION_ACTA_CV = [
+  ESTADO_ACTA_PUBLICADA,
+  ESTADO_ACTA_DESPUBLICADA,
+] as const
 export const EstadoPublicacionActaCVSchema = z.enum(
   ESTADOS_PUBLICACION_ACTA_CV
 )
-export type EstadoPublicacionActaCV = z.infer<
-  typeof EstadoPublicacionActaCVSchema
->
+export type EstadoPublicacionActaCV = (typeof ESTADOS_PUBLICACION_ACTA_CV)[number]
 
 /** Texto obligatorio de la vista general del visor (Ley 19.628 / libro de actas). */
 export const TEXTO_ACTA_INFORMATIVA_CV =

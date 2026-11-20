@@ -30,9 +30,13 @@ import {
 /** Recurso de la matriz que gobierna el visor (avisos y actas publicadas). */
 export const RECURSO_ACTAS_CV = "cv"
 
-/** Estados de visibilidad de un acta publicada en el visor. */
-export const ESTADO_ACTA_PUBLICADA = "publicado"
-export const ESTADO_ACTA_DESPUBLICADA = "despublicado"
+/**
+ * Estados de visibilidad de un acta publicada en el visor. No se declaran acá: son
+ * los de `lib/schemas.ts`, junto al catálogo (`ESTADOS_PUBLICACION_ACTA_CV`) y al
+ * schema que valida la fila. Se reexportan para no mover a sus consumidores
+ * (hallazgo 19 del informe: eran dos declaraciones del mismo valor).
+ */
+export { ESTADO_ACTA_PUBLICADA, ESTADO_ACTA_DESPUBLICADA } from "@/lib/schemas"
 
 /** Roles con vista restringida: solo ven actas si el propietario lo autorizó. */
 export function esRolResidente(rol: string): boolean {
