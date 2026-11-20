@@ -14,9 +14,11 @@ export interface ExtensionLaboral {
   fechaIngreso: string;
 }
 
+import type { CargoDirectiva } from "@/lib/schemas"
+
 export interface ExtensionGobernanza {
   id: string;
-  cargoDirectiva: "presidente" | "tesorero" | "secretario" | "director";
+  cargoDirectiva: CargoDirectiva;
   firmaDigital?: string;
   fechaAsuncion: string;
 }

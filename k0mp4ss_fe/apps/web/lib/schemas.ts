@@ -270,15 +270,32 @@ export const MotivoTerminoDirectivaSchema = z.enum(MOTIVOS_TERMINO_DIRECTIVA)
 
 export type MotivoTerminoDirectiva = z.infer<typeof MotivoTerminoDirectivaSchema>
 
+/**
+ * Cargos de la directiva (art. 18).
+ *
+ * Una sola definición: la usan las DOS fichas que registran el cargo —
+ * `ExtensionGobernanzaSchema` (la ficha de la persona) y `MiembroPeriodoSchema`
+ * (la nómina del período, la que firma el acta)—, más el formulario de gobernanza
+ * y la semilla. Antes cada una tenía su `z.enum` inline en este mismo archivo:
+ * agregar un cargo en una sola lo aceptaba en la ficha y lo rechazaba en el
+ * período, y el acta no podía registrar al miembro (hallazgo 6 del informe).
+ *
+ * Sumar un cargo es una decisión de producto: se agrega acá y el compilador señala
+ * cada ficha, el formulario y las etiquetas.
+ */
+export const CARGOS_DIRECTIVA = [
+  "presidente",
+  "tesorero",
+  "secretario",
+  "director",
+] as const
+export const CargoDirectivaSchema = z.enum(CARGOS_DIRECTIVA)
+export type CargoDirectiva = (typeof CARGOS_DIRECTIVA)[number]
+
 export const ExtensionGobernanzaSchema = z
   .object({
     id: IdEntidadSchema,
-    cargoDirectiva: z.enum([
-      "presidente",
-      "tesorero",
-      "secretario",
-      "director",
-    ]),
+    cargoDirectiva: CargoDirectivaSchema,
     // Elegibilidad del cargo (art. 17 inc. 4). Opcional: las fichas anteriores a
     // este campo siguen valiendo; su ausencia no invalida el mandato.
     capacidad: CapacidadDirectivaSchema.optional(),
@@ -314,7 +331,7 @@ export const ExtensionGobernanzaSchema = z
 export const MiembroPeriodoSchema = z.object({
   personaId: IdEntidadSchema,
   nombre: z.string().min(1),
-  cargo: z.enum(["presidente", "tesorero", "secretario", "director"]),
+  cargo: CargoDirectivaSchema,
   fechaAsuncion: FechaISOSchema,
   // Elegibilidad con que ocupó el cargo (art. 17 inc. 4).
   capacidad: CapacidadDirectivaSchema.optional(),

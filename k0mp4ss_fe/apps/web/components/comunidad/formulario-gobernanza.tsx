@@ -22,9 +22,13 @@ interface FormularioGobernanzaProps {
   onCancel: () => void
 }
 
-const CARGOS = ["presidente", "tesorero", "secretario", "director"] as const
+import { CARGOS_DIRECTIVA, type CargoDirectiva } from "@/lib/schemas"
 
-const CARGO_LABEL: Record<(typeof CARGOS)[number], string> = {
+/**
+ * Etiqueta de cada cargo. `Record` del catálogo completo (`CargoDirectiva`): un
+ * cargo nuevo rompe la compilación acá en vez de quedar sin nombre en el selector.
+ */
+const CARGO_LABEL: Record<CargoDirectiva, string> = {
   presidente: "Presidente",
   tesorero: "Tesorero",
   secretario: "Secretario",
@@ -88,7 +92,7 @@ export function FormularioGobernanza({ persona, onSave, onCancel }: FormularioGo
                 <Select value={cargo} onValueChange={setCargo}>
                   <SelectTrigger id="cargoDirectiva"><SelectValue placeholder="Seleccioná el cargo" /></SelectTrigger>
                   <SelectContent>
-                    {CARGOS.map(c => (
+                    {CARGOS_DIRECTIVA.map(c => (
                       <SelectItem key={c} value={c}>{CARGO_LABEL[c]}</SelectItem>
                     ))}
                   </SelectContent>
