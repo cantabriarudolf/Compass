@@ -112,7 +112,29 @@ export async function urlADataUrl(url: string): Promise<string | null> {
 
 const CLP = (n: number): string => `$${Math.round(n).toLocaleString("es-CL")}`
 
-function encabezadoInstitucional(config: ConfiguracionGlobal) {
+/**
+ * Identidad institucional que imprime un papel: el nombre de la comunidad y los
+ * datos legales de la administración.
+ *
+ * `nombreComunidad` es el valor de `Comunidad.nombre` (fuente única, S1) que el
+ * llamador ya resolvió. Este módulo es de presentación: no consulta la base ni
+ * decide de dónde sale el nombre.
+ */
+export interface IdentidadInstitucional {
+  nombreComunidad: string
+  direccionOficial: string
+  rutComunidad: string
+  administradorResponsable: string
+  rutAdministrador: string
+}
+
+/**
+ * Encabezado institucional de TODOS los papeles: nombre, dirección · RUT y
+ * administrador · RUT. Es el único constructor (S3): el aviso de cobro, la
+ * liquidación, el certificado y el requerimiento de corte imprimen este mismo
+ * bloque, en este orden.
+ */
+export function encabezadoInstitucional(config: IdentidadInstitucional) {
   return [
     { text: config.nombreComunidad, style: "titulo" },
     `${config.direccionOficial} · RUT ${config.rutComunidad}`,

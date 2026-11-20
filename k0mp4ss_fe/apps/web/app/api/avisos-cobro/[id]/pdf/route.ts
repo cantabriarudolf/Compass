@@ -66,10 +66,16 @@ export async function GET(_req: Request, ctx: Ctx): Promise<Response> {
     })
     if (!aviso) return jsonError(404, "Registro no encontrado.")
 
-    const configuracion = await prisma.configuracionGlobal.findUnique({
-      where: { comunidadId: scope.comunidadId },
-      select: COLUMNAS_DOCUMENTO,
-    })
+    const [configuracion, comunidad] = await Promise.all([
+      prisma.configuracionGlobal.findUnique({
+        where: { comunidadId: scope.comunidadId },
+        select: COLUMNAS_DOCUMENTO,
+      }),
+      prisma.comunidad.findUnique({
+        where: { id: scope.comunidadId },
+        select: { nombre: true },
+      }),
+    ])
     if (!configuracion) {
       // Sin identidad de la comunidad ni administrador responsable el papel no
       // se puede afirmar: se dice, en vez de servir un documento incompleto.
@@ -80,12 +86,13 @@ export async function GET(_req: Request, ctx: Ctx): Promise<Response> {
     }
 
     // SAFETY: la proyección es exactamente lo que el builder imprime —las mismas
-    // columnas que la colección sirve a la pantalla— y el cast solo borra el
-    // resto del modelo prisma (SMTP, clave de eliminación).
-    const bytes = await pdfDeAviso(
-      aviso,
-      configuracion as unknown as ConfiguracionGlobal
-    )
+    // columnas que la colección sirve a la pantalla, más el nombre de la fuente
+    // única (`Comunidad.nombre`, S1)— y el cast solo borra el resto del modelo
+    // prisma (SMTP, clave de eliminación).
+    const bytes = await pdfDeAviso(aviso, {
+      ...configuracion,
+      nombreComunidad: comunidad?.nombre ?? scope.comunidadId,
+    } as unknown as ConfiguracionGlobal)
 
     return new Response(bytes, {
       status: 200,

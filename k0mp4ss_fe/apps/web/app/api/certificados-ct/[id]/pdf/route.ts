@@ -46,9 +46,11 @@ type Ctx = { params: Promise<{ id: string }> }
  * Columnas de CF que el papel imprime: identidad de la comunidad, administrador
  * responsable y firma. Es exactamente lo que `documentoCertificadoPDF` lee; el
  * SMTP y la clave de eliminación NO son parte del documento y no se proyectan.
+ *
+ * `nombreComunidad` NO está: la columna está deprecada (S1) y el nombre sale de
+ * `Comunidad.nombre`; la ruta completa la proyección.
  */
 const COLUMNAS_DOCUMENTO = {
-  nombreComunidad: true,
   direccionOficial: true,
   rutComunidad: true,
   administradorResponsable: true,
@@ -110,10 +112,16 @@ export async function GET(_req: Request, ctx: Ctx): Promise<Response> {
     })
     if (!certificado) return jsonError(404, "Registro no encontrado.")
 
-    const configuracion = await prisma.configuracionGlobal.findUnique({
-      where: { comunidadId: scope.comunidadId },
-      select: COLUMNAS_DOCUMENTO,
-    })
+    const [configuracion, comunidad] = await Promise.all([
+      prisma.configuracionGlobal.findUnique({
+        where: { comunidadId: scope.comunidadId },
+        select: COLUMNAS_DOCUMENTO,
+      }),
+      prisma.comunidad.findUnique({
+        where: { id: scope.comunidadId },
+        select: { nombre: true },
+      }),
+    ])
     if (!configuracion) {
       // Sin identidad de la comunidad ni administrador responsable el papel no se
       // puede afirmar: se dice, en vez de servir un documento incompleto.
@@ -125,7 +133,8 @@ export async function GET(_req: Request, ctx: Ctx): Promise<Response> {
 
     const etiqueta = etiquetaDeTipoCertificado(certificado.tipo)
     // SAFETY: la proyección de CF es exactamente lo que el builder imprime —las
-    // mismas columnas de `COLUMNAS_DOCUMENTO`— y el detalle es el `Json` que validó
+    // mismas columnas de `COLUMNAS_DOCUMENTO`, más el nombre de la fuente única
+    // (`Comunidad.nombre`, S1)— y el detalle es el `Json` que validó
     // `CertificadoCTSchema` al emitirse; el cast sólo borra el resto del modelo
     // prisma (SMTP, clave de eliminación) y no cambia ningún valor.
     const definicion = await documentoCertificadoPDF({
@@ -137,7 +146,10 @@ export async function GET(_req: Request, ctx: Ctx): Promise<Response> {
       parrafos: [certificado.resumen],
       detalle: detalleImprimible(certificado.detalle),
       solicitanteNombre: certificado.solicitanteNombre,
-      config: configuracion as unknown as ConfiguracionGlobal,
+      config: {
+        ...configuracion,
+        nombreComunidad: comunidad?.nombre ?? scope.comunidadId,
+      } as unknown as ConfiguracionGlobal,
     })
     const bytes = await compilarPdf(definicion)
 

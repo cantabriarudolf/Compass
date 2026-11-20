@@ -5,6 +5,14 @@ export type SeguridadSMTP = "ssl" | "tls" | "none"
 
 export interface ConfiguracionGlobal {
   // 1. Identidad y Representación Legal
+  /**
+   * DEPRECADO (2026-11-20, S1 de `odd/tasks/identidad-unica.md`).
+   *
+   * La fuente única del nombre es `Comunidad.nombre`. Se conserva acá sólo por
+   * compatibilidad de shape: la proyección de `GET /api/configuracion` lo completa
+   * con el nombre de la comunidad para que el formulario y los papeles no cambien
+   * de contrato. No se escribe (ver `ConfiguracionGlobalEscrituraSchema`).
+   */
   nombreComunidad: string
   logoUrl?: string
   faviconUrl?: string
@@ -45,6 +53,8 @@ export interface ConfiguracionGlobal {
 }
 
 export const configuracionDefault: ConfiguracionGlobal = {
+  /** DEPRECADO (2026-11-20, S1): la fuente única es `Comunidad.nombre`. Este valor
+   *  sólo mantiene válido el shape del seed; nunca se usa como identidad. */
   nombreComunidad: "Edificio Plaza Central",
   rutComunidad: "77.123.456-9",
   direccionOficial: "Av. Libertador 1234, Santiago",

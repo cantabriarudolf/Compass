@@ -112,9 +112,56 @@ export default function ConfiguracionPage() {
     setConfig((prev) => (prev ? { ...prev, [field]: value } : prev))
   }
 
+  /**
+   * Renombra la comunidad por su ruta (`PUT /api/comunidad-actual`), que es la
+   * única superficie de escritura de `Comunidad.nombre`. Devuelve el motivo del
+   * fallo, o `null` si se guardó. La ruta exige `cf: editar` y valida el nombre.
+   */
+  const guardarNombreDeLaComunidad = async (
+    nombre: string
+  ): Promise<string | null> => {
+    try {
+      const res = await fetch("/api/comunidad-actual", {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ nombre }),
+      })
+      const cuerpo = (await res.json().catch(() => null)) as
+        | { error?: string }
+        | null
+      if (!res.ok) {
+        return (
+          cuerpo?.error ??
+          `Error ${res.status} al guardar el nombre de la comunidad.`
+        )
+      }
+      // La barra lateral y el encabezado leen esta proyección: se refresca con el
+      // nombre nuevo en el mismo acto.
+      void mutate("/api/comunidad-actual")
+      return null
+    } catch {
+      return "Sin conexión con el servidor."
+    }
+  }
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!config) return
+
+    // S1: el nombre no se guarda en la configuración global. Se escribe contra la
+    // fuente única (`Comunidad.nombre`) por su propia ruta, y ANTES del resto: si
+    // el renombre falla, la pantalla no puede decir «guardado» con un nombre que
+    // quedó viejo.
+    const nombre = config.nombreComunidad.trim()
+    if (nombre !== (configuracionRemota?.nombreComunidad ?? "")) {
+      const errorNombre = await guardarNombreDeLaComunidad(nombre)
+      if (errorNombre) {
+        alert(`No se pudo guardar el nombre de la comunidad: ${errorNombre}`)
+        return
+      }
+      setConfig((prev) => (prev ? { ...prev, nombreComunidad: nombre } : prev))
+    }
+
     // SAFETY: el formulario edita el shape de data/admin (seed); la API valida
     // por schema y rechaza campos inválidos con error visible.
     const resultado = await updateConfig(config as unknown as Parameters<typeof updateConfig>[0])
@@ -230,6 +277,12 @@ export default function ConfiguracionPage() {
                     }
                     required
                   />
+                  <p className="text-xs leading-relaxed text-muted-foreground">
+                    Es el nombre que ve el vecino en toda la app y el que se
+                    imprime en los papeles. Se guarda en la ficha de la
+                    comunidad, no en estos parámetros: al guardar, el cambio
+                    llega a todas las pantallas y a los documentos.
+                  </p>
                 </div>
                 <div className="space-y-2">
                   <Label>RUT de la Comunidad *</Label>
@@ -397,13 +450,13 @@ export default function ConfiguracionPage() {
                       </p>
                     </div>
                     <div className="space-y-2">
-                      <Label>Nombre Remitente *</Label>
+                      <Label>Nombre Remitente</Label>
                       <Input
                         value={config.smtpFromName}
                         onChange={(e) =>
                           updateField("smtpFromName", e.target.value)
                         }
-                        required
+                        placeholder="Si queda vacío, se usa el nombre de la comunidad"
                       />
                       <p className="text-xs leading-relaxed text-muted-foreground">
                         {AYUDA_NOMBRE_REMITENTE}

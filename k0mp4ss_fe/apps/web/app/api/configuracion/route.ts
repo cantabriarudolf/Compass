@@ -5,10 +5,19 @@
  * GET: devuelve la config existente de la comunidad (404 si no hay).
  * PUT: upsert — crea si no existe, update si existe.
  *
+ * S1 (`odd/tasks/identidad-unica.md`): `ConfiguracionGlobal.nombreComunidad` está
+ * DEPRECADA. La fuente única del nombre es `Comunidad.nombre`:
+ *   · GET la OMITE de la fila (`omit`) y completa `nombreComunidad` con el nombre de
+ *     la comunidad, para que el formulario y los papeles conserven su shape;
+ *   · PUT usa `ConfiguracionGlobalEscrituraSchema`, que excluye el campo: no se
+ *     edita por acá. La columna se escribe UNA sola vez, al crear la fila, como
+ *     snapshot congelado de `Comunidad.nombre`; después nadie la actualiza.
+ * Renombrar la comunidad es `PUT /api/comunidad-actual`.
+ *
  * Authz: recurso "cf" (admin full, comité ver, residente sin acceso).
  * No POST ni DELETE: solo hay una config por comunidad.
  */
-import { ConfiguracionGlobalSchema } from "@/lib/schemas"
+import { ConfiguracionGlobalEscrituraSchema } from "@/lib/schemas"
 import { configuracionDefault } from "@/data/admin/configuracion"
 import { puede } from "@/lib/authz"
 import { prisma } from "@/lib/prisma"
@@ -40,13 +49,24 @@ export async function GET(): Promise<Response> {
   }
 
   try {
-    const config = await prisma.configuracionGlobal.findUnique({
-      where: { comunidadId: scope.comunidadId },
-    })
+    const [comunidad, config] = await Promise.all([
+      prisma.comunidad.findUnique({
+        where: { id: scope.comunidadId },
+        select: { nombre: true },
+      }),
+      prisma.configuracionGlobal.findUnique({
+        where: { comunidadId: scope.comunidadId },
+        // La columna deprecada no se lee: el nombre se proyecta desde la comunidad.
+        omit: { nombreComunidad: true },
+      }),
+    ])
+    if (!comunidad) {
+      return jsonError(404, "Comunidad no encontrada.")
+    }
     if (!config) {
       return jsonError(404, "Configuración no encontrada.")
     }
-    return Response.json(config)
+    return Response.json({ ...config, nombreComunidad: comunidad.nombre })
   } catch (e) {
     logger.error({ err: e }, "[configuracion] error GET")
     return jsonError(500, "Error interno del servidor.")
@@ -69,7 +89,7 @@ export async function PUT(req: Request): Promise<Response> {
     return jsonError(400, "Cuerpo JSON inválido.")
   }
 
-  const parsed = ConfiguracionGlobalSchema.partial().safeParse(body)
+  const parsed = ConfiguracionGlobalEscrituraSchema.partial().safeParse(body)
   if (!parsed.success) {
     return jsonError(400, "Datos inválidos.", {
       detalles: parsed.error.flatten(),
@@ -79,11 +99,23 @@ export async function PUT(req: Request): Promise<Response> {
   const datos = parsed.data as Record<string, unknown>
   delete datos.id
   delete datos.comunidadId
+  // Defensa explícita: el schema de escritura ya excluye el nombre, pero si el
+  // shape cambia, la columna deprecada no se escribe nunca (S1).
+  delete datos.nombreComunidad
 
   try {
-    const configActual = await prisma.configuracionGlobal.findUnique({
-      where: { comunidadId: scope.comunidadId },
-    })
+    const [configActual, comunidad] = await Promise.all([
+      prisma.configuracionGlobal.findUnique({
+        where: { comunidadId: scope.comunidadId },
+      }),
+      prisma.comunidad.findUnique({
+        where: { id: scope.comunidadId },
+        select: { nombre: true },
+      }),
+    ])
+    if (!comunidad) {
+      return jsonError(404, "Comunidad no encontrada.")
+    }
 
     // Creación inicial: defaults del seed (válidos según schema, de modo que
     // el form puede reenviar la fila completa sin 400).
@@ -104,6 +136,9 @@ export async function PUT(req: Request): Promise<Response> {
       : await prisma.configuracionGlobal.create({
           data: {
             ...defaults,
+            // Snapshot congelado de la fuente única (S1): se escribe una sola vez,
+            // acá. Ningún lector lo usa y ninguna actualización lo reescribe.
+            nombreComunidad: comunidad.nombre,
             ...datos,
             id: crypto.randomUUID(),
             comunidadId: scope.comunidadId,
@@ -139,7 +174,12 @@ export async function PUT(req: Request): Promise<Response> {
       }
     }
 
-    return Response.json(registro, { status: configActual ? 200 : 201 })
+    return Response.json(
+      // Mismo shape que el GET: el nombre es la proyección de la fuente única (S1),
+      // nunca la columna deprecada que acaba de quedar (o seguir) congelada.
+      { ...registro, nombreComunidad: comunidad.nombre },
+      { status: configActual ? 200 : 201 }
+    )
   } catch (e) {
     logger.error({ err: e }, "[configuracion] error PUT")
     return jsonError(500, "Error interno del servidor.")

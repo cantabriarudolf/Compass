@@ -109,41 +109,45 @@ describe("/api/configuracion — CF singleton con BD real (BD-FUENTE-VERDAD)", (
     })
   })
 
-  it("PUT crea config → 201 y queda en BD", async () => {
+  it("PUT crea config → 201 y el nombre queda como snapshot congelado", async () => {
     await conSesion(emailAdmin, async () => {
-      const res = await PUT({ nombreComunidad: "Mi Comunidad" })
+      const res = await PUT({ diaCortePago: 12 })
       expect(res.status).toBe(201)
       const enBd = await prisma.configuracionGlobal.findUnique({
         where: { comunidadId: comunidadA },
       })
       expect(enBd).not.toBeNull()
-      expect(enBd?.nombreComunidad).toBe("Mi Comunidad")
       expect(enBd?.comunidadId).toBe(comunidadA)
+      // S1: al crear la fila se escribe `Comunidad.nombre`, no el default del seed.
+      // Desde ahí la columna queda congelada y ningún lector la usa.
+      expect(enBd?.nombreComunidad).toBe("Comunidad A CF")
+      expect(enBd?.diaCortePago).toBe(12)
     })
   })
 
-  it("GET con config → 200", async () => {
+  it("GET con config → 200 y expone el nombre de la comunidad, no el de la columna", async () => {
     await conSesion(emailAdmin, async () => {
       const res = await GET()
       expect(res.status).toBe(200)
       const json = await res.json()
-      expect(json.nombreComunidad).toBe("Mi Comunidad")
+      // La pestaña «Identidad Legal» pinta este valor: es la fuente única.
+      expect(json.nombreComunidad).toBe("Comunidad A CF")
     })
   })
 
-  it("PUT update → 200 y refleja en BD", async () => {
+  it("PUT update → 200 y refleja en BD sin tocar el nombre", async () => {
     await conSesion(emailAdmin, async () => {
-      const res = await PUT({ nombreComunidad: "Comunidad Actualizada", diaCortePago: 15 })
+      const res = await PUT({ diaCortePago: 15 })
       expect(res.status).toBe(200)
       const enBd = await prisma.configuracionGlobal.findUnique({
         where: { comunidadId: comunidadA },
       })
-      expect(enBd?.nombreComunidad).toBe("Comunidad Actualizada")
       expect(enBd?.diaCortePago).toBe(15)
+      expect(enBd?.nombreComunidad).toBe("Comunidad A CF")
     })
   })
 
-  it("PUT objeto completo estilo Prisma (rutComunidad + nulls) → 200 y persiste nombre (P2 E2E-FULL-VERDE)", async () => {
+  it("PUT con `nombreComunidad` no escribe la columna deprecada ni cambia la fuente", async () => {
     await conSesion(emailAdmin, async () => {
       const { configuracionDefault } = await import("@/data/admin/configuracion")
       // Parte de una fila válida completa (como la que deja el seed en dev).
@@ -155,10 +159,17 @@ describe("/api/configuracion — CF singleton con BD real (BD-FUENTE-VERDAD)", (
       // El GET expone rutComunidad (columna renombrada RG §4), nunca legacy.
       expect(actual.rutComunidad).toBe(configuracionDefault.rutComunidad)
       expect(actual.rutCondominio).toBeUndefined()
-      const res = await PUT({ ...actual, nombreComunidad: "QA-Comunidad-Persistida" })
+
+      const res = await PUT({ ...actual, nombreComunidad: "Intento de Sobrescritura" })
       expect(res.status).toBe(200)
+      const enBd = await prisma.configuracionGlobal.findUnique({
+        where: { comunidadId: comunidadA },
+      })
+      // La columna conserva el snapshot de la creación: nadie la reescribe.
+      expect(enBd?.nombreComunidad).toBe("Comunidad A CF")
+      // Y lo que se lee sigue siendo el nombre de la comunidad.
       const reget = await (await cargaModulo()).GET()
-      expect((await reget.json()).nombreComunidad).toBe("QA-Comunidad-Persistida")
+      expect((await reget.json()).nombreComunidad).toBe("Comunidad A CF")
     })
   })
 

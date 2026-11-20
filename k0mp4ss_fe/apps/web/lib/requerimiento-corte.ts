@@ -39,6 +39,10 @@
  * (`lib/api/pdf-servidor.ts`), no se agrega ninguna dependencia.
  */
 import { createHash } from "node:crypto"
+import {
+  encabezadoInstitucional,
+  type IdentidadInstitucional,
+} from "./pdf-utils"
 
 /** Tipo documental de la lista cerrada: ver el encabezado (ninguno de los doce aplica). */
 export const TIPO_DOCUMENTAL_REQUERIMIENTO = "otros" as const
@@ -172,7 +176,18 @@ export function archivoDelRequerimiento(
 /** Todo lo que el papel imprime y que ya está en la fila del corte. */
 export interface DatosDelRequerimiento {
   readonly corteId: string
+  /** Nombre de la comunidad (`Comunidad.nombre`, fuente única de S1). */
   readonly comunidadNombre: string
+  /**
+   * Identidad institucional para el encabezado (S3): dirección, RUT, administrador.
+   *
+   * Se resuelve en la ruta que emite/sirve el papel, con las mismas columnas que
+   * imprime el aviso de cobro y el nombre de `Comunidad.nombre`. Ausente cuando la
+   * comunidad todavía no tiene fila de configuración (S6): en ese caso no hay RUT
+   * ni administrador que imprimir y el papel conserva el encabezado mínimo —nunca
+   * se inventan datos legales.
+   */
+  readonly identidad?: IdentidadInstitucional
   readonly unidadNumero: string
   readonly servicio: string
   readonly cuotasImpagas: number
@@ -183,11 +198,30 @@ export interface DatosDelRequerimiento {
 }
 
 /**
+ * Columnas de `ConfiguracionGlobal` que componen la identidad del encabezado.
+ *
+ * NO incluye `nombreComunidad`: esa columna está deprecada (S1) y el nombre que se
+ * imprime es `Comunidad.nombre`. La proyección la completan las rutas del trámite.
+ */
+export const COLUMNAS_IDENTIDAD_INSTITUCIONAL = {
+  direccionOficial: true,
+  rutComunidad: true,
+  administradorResponsable: true,
+  rutAdministrador: true,
+} as const
+
+/**
  * Definición pdfmake del requerimiento.
  *
  * Imprime: la unidad, el servicio afectado, las cuotas impagas y el monto adeudado
  * (la deuda del preaviso), la fecha desde la cual la suspensión es posible (el
  * quinto día corrido) y la base legal.
+ *
+ * El encabezado es el MISMO bloque que imprime el aviso de cobro (S3): sale del
+ * constructor único `encabezadoInstitucional`, así que este papel dejó de salir con
+ * el nombre suelto y ahora lleva dirección, RUT de la comunidad y administrador
+ * responsable. Sin `identidad` (comunidad sin configuración, S6) se conserva el
+ * encabezado mínimo de antes: el papel no inventa datos legales.
  *
  * `info` fija `CreationDate`/`ModDate` al día del preaviso: sin eso pdfmake
  * estampa la hora de compilación y el mismo documento saldría con otro hash cada
@@ -213,10 +247,12 @@ export function definicionDelRequerimiento(
       CreationDate: datos.fechaPreaviso,
       ModDate: datos.fechaPreaviso,
     },
-    header: [
-      { text: datos.comunidadNombre, bold: true, fontSize: 13 },
-      "Requerimiento de suspensión de servicios · Ley 21.442 art. 20 N°9",
-    ],
+    header: datos.identidad
+      ? encabezadoInstitucional(datos.identidad)
+      : [
+          { text: datos.comunidadNombre, bold: true, fontSize: 13 },
+          "Requerimiento de suspensión de servicios · Ley 21.442 art. 20 N°9",
+        ],
     footer: (pagina: number) => ({
       columns: [
         { text: `Trámite de corte ${datos.corteId}`, fontSize: 8 },

@@ -2636,6 +2636,12 @@ export const SeguridadSMTPSchema = z.enum(["ssl", "tls", "none"])
 
 export const ConfiguracionGlobalSchema = z.object({
   // 1. Identidad y Representación Legal
+  //
+  // DEPRECADA (2026-11-20, S1 de `odd/tasks/identidad-unica.md`): la fuente única
+  // del nombre es `Comunidad.nombre`. Este campo sobrevive sólo como parte de la
+  // LECTURA (la proyección de `GET /api/configuracion` completa acá el nombre de
+  // la comunidad para que el formulario y los papeles no cambien de shape). Nunca
+  // se escribe: ver `ConfiguracionGlobalEscrituraSchema`.
   nombreComunidad: z
     .string()
     .min(1, "El nombre de la comunidad es obligatorio."),
@@ -2674,7 +2680,7 @@ export const ConfiguracionGlobalSchema = z.object({
   smtpUser: z.string().min(1, "El usuario SMTP es obligatorio."),
   smtpSecurity: SeguridadSMTPSchema,
   smtpFrom: z.string().min(1, "El remitente SMTP es obligatorio."),
-  smtpFromName: z.string().min(1, "El nombre del remitente es obligatorio."),
+  smtpFromName: z.string(),
   smtpBcc: z.string().nullable().optional(),
   smtpRecepcion: z.string().nullable().optional(),
 
@@ -2833,6 +2839,24 @@ export type EstadoInmobiliario = z.infer<typeof EstadoInmobiliarioSchema>
 export type ModoCalculoGC = z.infer<typeof ModoCalculoGCSchema>
 export type SeguridadSMTP = z.infer<typeof SeguridadSMTPSchema>
 export type ConfiguracionGlobal = z.infer<typeof ConfiguracionGlobalSchema>
+
+/**
+ * Regla del nombre de la comunidad, reutilizada por el único camino de escritura
+ * (`PUT /api/comunidad-actual`): la fuente única es `Comunidad.nombre` y la
+ * validación es la del contrato, no una copia con otro mensaje.
+ */
+export const NombreComunidadSchema =
+  ConfiguracionGlobalSchema.shape.nombreComunidad
+
+/**
+ * Shape de ESCRITURA de `ConfiguracionGlobal` (PUT `/api/configuracion`).
+ *
+ * `nombreComunidad` queda afuera a propósito (S1): la columna está deprecada y se
+ * escribe UNA sola vez, como snapshot de `Comunidad.nombre`, al crear la fila. El
+ * nombre de la comunidad se edita por `PUT /api/comunidad-actual`.
+ */
+export const ConfiguracionGlobalEscrituraSchema =
+  ConfiguracionGlobalSchema.omit({ nombreComunidad: true })
 export type EventoAuditoria = z.infer<typeof EventoAuditoriaSchema>
 export type ImagenReferencia = z.infer<typeof ImagenReferenciaSchema>
 export type OperacionPortal = z.infer<typeof OperacionPortalSchema>

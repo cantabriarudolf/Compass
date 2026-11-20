@@ -134,7 +134,6 @@ async function main(): Promise<void> {
 
     // --- CF: Configuración Global (1 fila por comunidad) ---
     const configRow = {
-      nombreComunidad: configuracionDefault.nombreComunidad,
       rutComunidad: configuracionDefault.rutComunidad,
       direccionOficial: configuracionDefault.direccionOficial,
       administradorResponsable: configuracionDefault.administradorResponsable,
@@ -169,7 +168,14 @@ async function main(): Promise<void> {
     await prisma.configuracionGlobal.upsert({
       where: { comunidadId },
       update: configRow,
-      create: { id: `cfg-mocks-${comunidadId}`, ...configRow, comunidadId },
+      create: {
+        id: `cfg-mocks-${comunidadId}`,
+        ...configRow,
+        comunidadId,
+        // Snapshot congelado de la fuente única (S1), SOLO al crear: la columna está
+        // deprecada y ninguna corrida posterior la vuelve a escribir.
+        nombreComunidad: comunidad.nombre,
+      },
     })
 
     // --- EF: estructura física (orden: tipos → macro → micro → unidades) ---

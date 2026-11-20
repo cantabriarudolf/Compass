@@ -165,7 +165,7 @@ export async function GET(req: Request): Promise<Response> {
     const fragmento = await alcanceAvisosCobro(scope)
     if (fragmento) where = { AND: [where, fragmento] }
 
-    const [filas, total, configuracion] = await Promise.all([
+    const [filas, total, configuracion, comunidad] = await Promise.all([
       prisma.avisoCobro.findMany({
         where,
         orderBy: { createdAt: "desc" },
@@ -177,6 +177,10 @@ export async function GET(req: Request): Promise<Response> {
         where: { comunidadId: scope.comunidadId },
         select: COLUMNAS_DOCUMENTO,
       }),
+      prisma.comunidad.findUnique({
+        where: { id: scope.comunidadId },
+        select: { nombre: true },
+      }),
     ])
 
     return Response.json({
@@ -187,7 +191,14 @@ export async function GET(req: Request): Promise<Response> {
       page,
       pageSize,
       total,
-      documento: configuracion ?? null,
+      // El nombre que la pantalla usa para emitir es el de la fuente única (S1);
+      // no se pide la columna deprecada de CF.
+      documento: configuracion
+        ? {
+            ...configuracion,
+            nombreComunidad: comunidad?.nombre ?? scope.comunidadId,
+          }
+        : null,
     })
   } catch (e) {
     logger.error({ err: e }, "[api/avisos-cobro] error GET")

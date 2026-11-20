@@ -101,6 +101,13 @@ export interface FilaConfiguracionSMTP {
   smtpFromName: string
   smtpBcc?: string | null
   smtpRecepcion?: string | null
+  /**
+   * `Comunidad.nombre` (fuente única de S1). Lo completa `leerConfiguracionSMTP`
+   * para que un `smtpFromName` vacío no deje el correo sin nombre visible: el
+   * emisor cae al nombre de la comunidad (ver `nombreDelRemitente`). Opcional
+   * porque quien arma una fila a mano (tests, llamadas directas) no lo trae.
+   */
+  nombreDeLaComunidad?: string | null
 }
 
 /** Un adjunto binario: el papel firmado del convenio (F29 · T2), por ejemplo. */
@@ -175,24 +182,49 @@ const NOMBRE_CLIENTE = "compass.local"
  * Lee la configuración SMTP de una comunidad (CF) con un `select` explícito que
  * NO pide `smtpPassword`: el secreto no entra en memoria desde la base.
  * Devuelve `null` cuando la comunidad todavía no tiene fila de configuración.
+ *
+ * Trae además `Comunidad.nombre` (fuente única de S1): es el nombre con el que el
+ * correo se presenta cuando la comunidad no eligió uno propio para el remitente.
  */
 export async function leerConfiguracionSMTP(
   comunidadId: string
 ): Promise<FilaConfiguracionSMTP | null> {
-  const fila = await prisma.configuracionGlobal.findUnique({
-    where: { comunidadId },
-    select: {
-      smtpHost: true,
-      smtpPort: true,
-      smtpUser: true,
-      smtpSecurity: true,
-      smtpFrom: true,
-      smtpFromName: true,
-      smtpBcc: true,
-      smtpRecepcion: true,
-    },
-  })
-  return fila
+  const [fila, comunidad] = await Promise.all([
+    prisma.configuracionGlobal.findUnique({
+      where: { comunidadId },
+      select: {
+        smtpHost: true,
+        smtpPort: true,
+        smtpUser: true,
+        smtpSecurity: true,
+        smtpFrom: true,
+        smtpFromName: true,
+        smtpBcc: true,
+        smtpRecepcion: true,
+      },
+    }),
+    prisma.comunidad.findUnique({
+      where: { id: comunidadId },
+      select: { nombre: true },
+    }),
+  ])
+  if (!fila) return null
+  return { ...fila, nombreDeLaComunidad: comunidad?.nombre ?? null }
+}
+
+/**
+ * Nombre visible del remitente (`From: Nombre <dirección>`).
+ *
+ * `smtpFromName` es legítimamente distinto del nombre de la comunidad (la
+ * administración puede firmar «Administración Los Almendros»), pero si está vacío
+ * NO se inventa otro nombre ni se bloquea el envío: se usa `Comunidad.nombre`, la
+ * fuente única de S1. Se resuelve acá, en el emisor, y no en cada pantalla.
+ */
+export function nombreDelRemitente(fila: {
+  smtpFromName?: string | null
+  nombreDeLaComunidad?: string | null
+}): string {
+  return fila.smtpFromName?.trim() || fila.nombreDeLaComunidad?.trim() || ""
 }
 
 /**
@@ -511,11 +543,13 @@ function resolverConfiguracion(
   }
 
   // Camino de F33: la credencial de la comunidad manda sobre host/puerto/usuario
-  // y sobre el secreto. El remitente y la seguridad siguen viniendo de CF.
+  // y sobre el secreto. El remitente y la seguridad siguen viniendo de CF; el
+  // nombre visible, si CF no lo declara, es `Comunidad.nombre` (S1).
   if (credencial) {
+    const fromName = nombreDelRemitente(fila)
     const faltantesCredencial: string[] = []
     if (!fila.smtpFrom?.trim()) faltantesCredencial.push("smtpFrom")
-    if (!fila.smtpFromName?.trim()) faltantesCredencial.push("smtpFromName")
+    if (!fromName) faltantesCredencial.push("smtpFromName")
     if (!credencial.host?.trim()) faltantesCredencial.push("host")
     if (!credencial.puerto || credencial.puerto <= 0) faltantesCredencial.push("puerto")
     if (!credencial.usuario?.trim()) faltantesCredencial.push("usuario")
@@ -534,19 +568,20 @@ function resolverConfiguracion(
         user: credencial.usuario.trim(),
         seguridad: seguridadValida(fila.smtpSecurity),
         from: fila.smtpFrom.trim(),
-        fromName: fila.smtpFromName.trim(),
+        fromName,
         bcc: listaDeCorreos(fila.smtpBcc),
         replyTo: listaDeCorreos(fila.smtpRecepcion)[0] ?? null,
       },
     }
   }
 
+  const fromName = nombreDelRemitente(fila)
   const faltantes: string[] = []
   if (!fila.smtpHost?.trim()) faltantes.push("smtpHost")
   if (!fila.smtpPort || fila.smtpPort <= 0) faltantes.push("smtpPort")
   if (!fila.smtpUser?.trim()) faltantes.push("smtpUser")
   if (!fila.smtpFrom?.trim()) faltantes.push("smtpFrom")
-  if (!fila.smtpFromName?.trim()) faltantes.push("smtpFromName")
+  if (!fromName) faltantes.push("smtpFromName")
   if (faltantes.length > 0) {
     return {
       ok: false,
@@ -568,7 +603,7 @@ function resolverConfiguracion(
       user: fila.smtpUser.trim(),
       seguridad: seguridadValida(fila.smtpSecurity),
       from: fila.smtpFrom.trim(),
-      fromName: fila.smtpFromName.trim(),
+      fromName,
       bcc: listaDeCorreos(fila.smtpBcc),
       replyTo: listaDeCorreos(fila.smtpRecepcion)[0] ?? null,
     },

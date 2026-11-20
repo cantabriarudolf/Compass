@@ -28,9 +28,11 @@ import { compilarPdf } from "@/lib/api/pdf-servidor"
  * Columnas de CF que el papel imprime: identidad de la comunidad, administrador
  * responsable y firma. Es lo que necesita el PDF; el SMTP y la clave de
  * eliminación NO son parte del documento y no salen de acá.
+ *
+ * `nombreComunidad` NO está: la columna está deprecada (S1) y el nombre que se
+ * imprime sale de `Comunidad.nombre`. La ruta completa la proyección con ese valor.
  */
 export const COLUMNAS_DOCUMENTO = {
-  nombreComunidad: true,
   direccionOficial: true,
   rutComunidad: true,
   administradorResponsable: true,

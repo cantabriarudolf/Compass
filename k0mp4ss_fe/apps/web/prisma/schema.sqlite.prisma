@@ -378,6 +378,11 @@ model ConfiguracionGlobal {
   id                            String    @id
   comunidadId                   String    @unique
   comunidad                     Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  /// Deprecada el 2026-11-20 (S1 de `odd/tasks/identidad-unica.md`): la fuente única
+  /// del nombre de la comunidad es `Comunidad.nombre`. La columna queda por
+  /// compatibilidad de datos (sin migración) y NO se lee ni se actualiza: sólo se
+  /// escribe una vez, como snapshot congelado, al crear la fila. Ver
+  /// `ConfiguracionGlobalEscrituraSchema` y `GET /api/configuracion`.
   nombreComunidad               String
   logoUrl                       String?
   faviconUrl                    String?

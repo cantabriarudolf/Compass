@@ -28,7 +28,10 @@ import { prisma } from "@/lib/prisma"
 import { logger } from "@/lib/logger"
 import { jsonError, withComunidadScope } from "@/lib/api/with-comunidad-scope"
 import { compilarPdf } from "@/lib/api/pdf-servidor"
-import { definicionDelRequerimiento } from "@/lib/requerimiento-corte"
+import {
+  COLUMNAS_IDENTIDAD_INSTITUCIONAL,
+  definicionDelRequerimiento,
+} from "@/lib/requerimiento-corte"
 
 /** Mismo recurso que el resto del trámite: el corte es cobranza (ver `../route.ts`). */
 const RECURSO_CORTES = "fi:cobranza"
@@ -75,7 +78,7 @@ export async function GET(req: Request): Promise<Response> {
       )
     }
 
-    const [documento, unidad, acuerdo, comunidad] = await Promise.all([
+    const [documento, unidad, acuerdo, comunidad, configuracionIdentidad] = await Promise.all([
       prisma.documento.findFirst({
         where: { id: corte.documentoId, comunidadId: scope.comunidadId },
         select: { archivoNombre: true },
@@ -91,6 +94,12 @@ export async function GET(req: Request): Promise<Response> {
       prisma.comunidad.findUnique({
         where: { id: scope.comunidadId },
         select: { nombre: true },
+      }),
+      // Identidad del encabezado (S3): la misma proyección del aviso de cobro. Sin
+      // fila de configuración (S6) el papel conserva el encabezado mínimo.
+      prisma.configuracionGlobal.findUnique({
+        where: { comunidadId: scope.comunidadId },
+        select: COLUMNAS_IDENTIDAD_INSTITUCIONAL,
       }),
     ])
     if (!documento) {
@@ -111,6 +120,12 @@ export async function GET(req: Request): Promise<Response> {
     const definicion = definicionDelRequerimiento({
       corteId: corte.id,
       comunidadNombre: comunidad?.nombre ?? scope.comunidadId,
+      identidad: configuracionIdentidad
+        ? {
+            ...configuracionIdentidad,
+            nombreComunidad: comunidad?.nombre ?? scope.comunidadId,
+          }
+        : undefined,
       unidadNumero: unidad.numero,
       servicio: corte.servicio,
       cuotasImpagas: corte.cuotasImpagas,

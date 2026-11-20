@@ -52,6 +52,7 @@ import { propietarioVigenteDeUnidad } from "@/lib/entrega-aviso"
 import { claveEnvioDocumento } from "@/app/api/documentos/_lib/envio-documento"
 import {
   CANAL_DE_LA_CONSTANCIA,
+  COLUMNAS_IDENTIDAD_INSTITUCIONAL,
   MOTIVO_CONSTANCIA_PENDIENTE,
   TIPO_DOCUMENTAL_REQUERIMIENTO,
   archivoDelRequerimiento,
@@ -287,10 +288,19 @@ export async function POST(req: Request): Promise<Response> {
   // certificado y la liquidación) y los ids se conocen de antemano, así que el
   // papel que se archiva es el del corte que se va a escribir y la compilación no
   // tiene una transacción de base abierta esperando.
-  const comunidad = await prisma.comunidad.findUnique({
-    where: { id: scope.comunidadId },
-    select: { nombre: true },
-  })
+  const [comunidad, configuracionIdentidad] = await Promise.all([
+    prisma.comunidad.findUnique({
+      where: { id: scope.comunidadId },
+      select: { nombre: true },
+    }),
+    // Identidad del encabezado (S3): las mismas columnas del aviso de cobro. Si la
+    // comunidad todavía no tiene CF (S6), el papel sale con el encabezado mínimo:
+    // sin fila no hay RUT ni administrador que imprimir, y no se inventan.
+    prisma.configuracionGlobal.findUnique({
+      where: { comunidadId: scope.comunidadId },
+      select: COLUMNAS_IDENTIDAD_INSTITUCIONAL,
+    }),
+  ])
   const corteId = generarId("cse")
   const documentoId = generarId("doc")
   const envioId = generarId("env-doc")
@@ -316,6 +326,12 @@ export async function POST(req: Request): Promise<Response> {
     const definicion = definicionDelRequerimiento({
       corteId,
       comunidadNombre: comunidad?.nombre ?? scope.comunidadId,
+      identidad: configuracionIdentidad
+        ? {
+            ...configuracionIdentidad,
+            nombreComunidad: comunidad?.nombre ?? scope.comunidadId,
+          }
+        : undefined,
       unidadNumero: unidad.numero,
       servicio: datos.servicio,
       cuotasImpagas: morosidad.periodosVencidos,

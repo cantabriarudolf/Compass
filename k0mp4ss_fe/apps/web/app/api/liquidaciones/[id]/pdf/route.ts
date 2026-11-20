@@ -72,10 +72,16 @@ export async function GET(_req: Request, ctx: Ctx): Promise<Response> {
       )
     }
 
-    const configuracion = await prisma.configuracionGlobal.findUnique({
-      where: { comunidadId: scope.comunidadId },
-      select: COLUMNAS_DOCUMENTO,
-    })
+    const [configuracion, comunidad] = await Promise.all([
+      prisma.configuracionGlobal.findUnique({
+        where: { comunidadId: scope.comunidadId },
+        select: COLUMNAS_DOCUMENTO,
+      }),
+      prisma.comunidad.findUnique({
+        where: { id: scope.comunidadId },
+        select: { nombre: true },
+      }),
+    ])
     if (!configuracion) {
       // Sin identidad de la comunidad ni administrador responsable el papel no
       // se puede afirmar: mismo criterio que el aviso de cobro.
@@ -89,11 +95,15 @@ export async function GET(_req: Request, ctx: Ctx): Promise<Response> {
     // `LiquidacionPLSchema` al crearse (`POST /api/liquidaciones`, safeParse
     // antes de persistir) y el builder solo lee los campos que el papel imprime;
     // los casts adaptan los `Json` de Prisma y la proyección de CF sin cambiar
-    // ningún valor.
+    // ningún valor. El nombre de la comunidad se completa desde la fuente única
+    // (`Comunidad.nombre`, S1): la columna deprecada de CF no se lee.
     const bytes = await pdfDeLiquidacion(
       liq as unknown as LiquidacionPL,
       trabajador,
-      configuracion as unknown as ConfiguracionGlobal
+      {
+        ...configuracion,
+        nombreComunidad: comunidad?.nombre ?? scope.comunidadId,
+      } as unknown as ConfiguracionGlobal
     )
 
     return new Response(bytes, {
