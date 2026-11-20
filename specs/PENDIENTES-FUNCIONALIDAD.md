@@ -15,7 +15,11 @@
 
 ## Abiertos
 
-> **Nota de registro:** el 2026-11-19 la sección se vació al cerrar F39, se reabrió el mismo día con F44 —la misma clase por el camino del factory, no deuda nueva sino el resto que F39 no alcanzaba— y F44 se cerró también el mismo día. Al 2026-11-19 no hay filas abiertas.
+| # | Qué debe existir | Por qué falta | Estado | Desbloquea |
+| --- | --- | --- | --- | --- |
+| F45 | **El envío masivo de CO no deja la notificación in-app que su spec manda** | La spec de CO dice, en «Envío Masivo con Filtros Dinámicos de Destinatarios», que el envío «materializa una notificación por destinatario vía `notify()` con canal `email_simulado`». Medido el 2026-11-20: `app/api/co/envios/route.ts` **no menciona `Notificacion` en ninguna línea** —sólo persiste `EnvioCO` y sus destinatarios—, así que la bandeja del residente nunca recibe el mensaje masivo. De la misma familia, ocho módulos más siguen declarando `email_simulado` sin correo real: `cobros-fi/[id]/cobranza`, `leads-portal`, `reportes-re/[id]/distribuir`, `pe/proyecciones/enviar`, `documentos/[id]/envio`, `liquidaciones/adelantos`, `avisos-cobro/[id]/entrega` y `lib/vigencia-barrido.ts`. | **Abierto — medido el 2026-11-20.** No es efecto de la cola de salida: la cola (`cola_salida_co` + `POST /api/co/cola`) manda el correo real, pero la notificación in-app que la spec pide sigue sin crearse. Divergencia spec↔código de antes de esta unidad. | Nadie por ahora: es completar un requirement que existe y no se cumple, con su test. |
+
+> **Nota de registro:** el 2026-11-19 la sección se vació al cerrar F39, se reabrió el mismo día con F44 —la misma clase por el camino del factory, no deuda nueva sino el resto que F39 no alcanzaba— y F44 se cerró también el mismo día. El 2026-11-20 se reabre con F45, que es otra clase: un requirement escrito en una spec que el código no cumple.
 
 ## Hecho (para no volver a listarlo)
 
