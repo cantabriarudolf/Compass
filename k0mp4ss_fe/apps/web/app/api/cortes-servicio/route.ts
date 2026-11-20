@@ -64,6 +64,7 @@ import {
 import {
   cortePermitido,
   fechaHabilitadaDelCorte,
+  ESTADOS_VIGENTES_DEL_CORTE,
 } from "@/lib/cortes-servicio"
 import {
   jsonError,
@@ -100,7 +101,6 @@ const YA_HAY_CORTE_DEL_SERVICIO = "CORTE_YA_VIGENTE_DEL_SERVICIO"
  * cursado y el corte ejecutado. `revocado` deja la unidad habilitada, así que no
  * cuenta para ninguna de las dos comprobaciones.
  */
-const ESTADOS_VIGENTES = ["preaviso", "ejecutado"] as const
 
 /**
  * Pesos en formato chileno para la bitácora.
@@ -188,7 +188,7 @@ export async function POST(req: Request): Promise<Response> {
     where: {
       comunidadId: scope.comunidadId,
       unidadId: unidad.id,
-      estado: { in: [...ESTADOS_VIGENTES] },
+      estado: { in: [...ESTADOS_VIGENTES_DEL_CORTE] },
     },
     select: { servicio: true, estado: true },
   })
@@ -351,7 +351,7 @@ export async function POST(req: Request): Promise<Response> {
           where: {
             comunidadId: scope.comunidadId,
             unidadId: unidad.id,
-            estado: { in: [...ESTADOS_VIGENTES] },
+            estado: { in: [...ESTADOS_VIGENTES_DEL_CORTE] },
           },
           select: { servicio: true },
         })

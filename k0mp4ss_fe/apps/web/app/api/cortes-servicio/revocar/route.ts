@@ -35,6 +35,7 @@ import { logger } from "@/lib/logger"
 import { generarId } from "@/lib/id-utils"
 import { registrarEventoAuditoria } from "@/lib/auditoria"
 import { siguienteDiaHabil } from "@/lib/dias-habiles"
+import { ESTADOS_VIGENTES_DEL_CORTE } from "@/lib/cortes-servicio"
 import {
   jsonError,
   withComunidadScope,
@@ -49,7 +50,6 @@ const RECURSO_CORTES = "fi:cobranza"
 const CORTE_YA_REVOCADO = "CORTE_YA_REVOCADO"
 
 /** Estados que la revocación puede dejar sin efecto: el preaviso y el ejecutado. */
-const ESTADOS_REVOCABLES = ["preaviso", "ejecutado"] as const
 
 /**
  * Los feriados de la comunidad, en la forma `AAAA-MM-DD` que la regla pura espera.
@@ -124,7 +124,7 @@ export async function POST(req: Request): Promise<Response> {
         where: {
           id: corte.id,
           comunidadId: scope.comunidadId,
-          estado: { in: [...ESTADOS_REVOCABLES] },
+          estado: { in: [...ESTADOS_VIGENTES_DEL_CORTE] },
         },
         data: {
           estado: "revocado",

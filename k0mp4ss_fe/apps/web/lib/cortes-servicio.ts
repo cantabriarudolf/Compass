@@ -53,6 +53,19 @@ export type ServicioCortable = (typeof SERVICIOS_CORTABLES)[number]
  */
 export const ESTADOS_DEL_CORTE = ["preaviso", "ejecutado", "revocado"] as const
 
+/**
+ * Los estados que mantienen el servicio «vigente» a los ojos del trámite: el
+ * preaviso cursado y el corte ejecutado. Es SUBCONJUNTO A PROPÓSITO (S5):
+ * `revocado` deja la unidad habilitada, así que no bloquea un corte nuevo ni es
+ * revocable. Una sola definición: la usan las dos rutas del trámite —la de alta,
+ * para impedir un segundo corte del mismo servicio, y la de revocación— y antes
+ * cada una tenía su propio par `preaviso · ejecutado` (hallazgo 9 del informe).
+ */
+export const ESTADOS_VIGENTES_DEL_CORTE = [
+  "preaviso",
+  "ejecutado",
+] as const satisfies readonly EstadoDelCorte[]
+
 export type EstadoDelCorte = (typeof ESTADOS_DEL_CORTE)[number]
 
 /** Tres cuotas: el mínimo que la ley exige para habilitar el corte. */
