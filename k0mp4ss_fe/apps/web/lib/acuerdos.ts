@@ -28,10 +28,17 @@
  * otro punto queda `pendiente`, y el motivo dice cuántos derechos faltan.
  */
 
-/** Cuerpos que adoptan acuerdos: el comité (art. 6/17/20) y la asamblea (art. 15). */
-export const CUERPOS_DEL_ACUERDO = ["comite", "asamblea"] as const
+import { CUERPOS_DEL_ACUERDO, type CuerpoDelAcuerdo } from "@/lib/schemas"
 
-export type CuerpoDelAcuerdo = (typeof CUERPOS_DEL_ACUERDO)[number]
+/**
+ * Cuerpos que adoptan acuerdos: el comité (art. 6/17/20) y la asamblea (art. 15).
+ * No se declaran acá: el catálogo vive en `lib/schemas.ts`, junto al schema que
+ * valida la fila. Se reexporta para no romper a quien ya lo importaba de este
+ * módulo (hallazgo 7 del informe: esta lista y la del presupuesto eran dos copias
+ * gemelas y una de ellas estaba inerte).
+ */
+export { CUERPOS_DEL_ACUERDO }
+export type { CuerpoDelAcuerdo }
 
 /**
  * Reglas de quórum que el registro puede declarar. Se guardan como TEXTO en el

@@ -1,3 +1,5 @@
+import { CUERPOS_DEL_ACUERDO, type CuerpoDelAcuerdo } from "@/lib/schemas"
+
 /**
  * lib/presupuesto.ts — presupuesto por partidas aprobado por el cuerpo que el
  * reglamento de la comunidad defina (F31, Ley 21.442 arts. 15 y 17).
@@ -28,10 +30,14 @@
  *      de dos vigentes se evita versionando, no rechazando el acuerdo nuevo.
  */
 
-/** Cuerpos que pueden aprobar el presupuesto (art. 17 comité; art. 15 asamblea). */
-export const CUERPOS_DEL_PRESUPUESTO = ["comite", "asamblea"] as const
+/**
+ * Cuerpos que pueden aprobar el presupuesto (art. 17 comité; art. 15 asamblea):
+ * la MISMA referencia que el catálogo de `lib/schemas.ts`. No es un subconjunto
+ * propio —los dos cuerpos son los mismos— así que acá sólo se aliasa el nombre.
+ */
+export const CUERPOS_DEL_PRESUPUESTO = CUERPOS_DEL_ACUERDO
 
-export type CuerpoDelPresupuesto = (typeof CUERPOS_DEL_PRESUPUESTO)[number]
+export type CuerpoDelPresupuesto = CuerpoDelAcuerdo
 
 /** Estados de un presupuesto: sólo uno `vigente` por comunidad y período. */
 export const ESTADOS_DEL_PRESUPUESTO = ["vigente", "reemplazado"] as const

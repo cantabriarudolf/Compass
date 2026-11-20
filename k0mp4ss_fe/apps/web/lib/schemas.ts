@@ -670,7 +670,18 @@ export const ActaGDSchema = z.object({
 // --- Registro de Acuerdos de gobernanza (U3 de la serie de pruebas manuales) ---
 
 /** Cuerpos que adoptan acuerdos: el comité y la asamblea. */
-export const CuerpoAcuerdoSchema = z.enum(["comite", "asamblea"])
+/**
+ * Cuerpos que adoptan un acuerdo: el comité (art. 6/17/20) y la asamblea (art. 15).
+ *
+ * Definición única: la valida `CuerpoAcuerdoSchema` sobre la fila persistida, la
+ * usan los acuerdos y el presupuesto (`CUERPOS_DEL_PRESUPUESTO` y
+ * `CUERPOS_DEL_ACUERDO` en `lib/` son la MISMA referencia, no copias). Antes había
+ * tres listas y la de `lib/acuerdos.ts` no la importaba nadie: parecía canónica y
+ * no gobernaba nada (hallazgo 7 del informe).
+ */
+export const CUERPOS_DEL_ACUERDO = ["comite", "asamblea"] as const
+export const CuerpoAcuerdoSchema = z.enum(CUERPOS_DEL_ACUERDO)
+export type CuerpoDelAcuerdo = (typeof CUERPOS_DEL_ACUERDO)[number]
 
 /**
  * Reglas de quórum que el acuerdo puede declarar como APLICADAS. La ley reparte

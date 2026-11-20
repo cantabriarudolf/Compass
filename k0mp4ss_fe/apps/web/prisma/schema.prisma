@@ -770,7 +770,7 @@ model Acuerdo {
   id              String    @id
   comunidadId     String
   comunidad       Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
-  cuerpo          String // comite | asamblea
+  cuerpo          String // CUERPOS_DEL_ACUERDO (lib/schemas.ts): comite | asamblea
   materia         String // qué se acordó (corte de servicios, convenio de pago, presupuesto…)
   // Folio del libro de acuerdos: `AD-<año>-<correlativo>`, asignado por el
   // servidor al crear y nunca reasignado. El índice único es la garantía dura
@@ -1892,7 +1892,7 @@ model Presupuesto {
   comunidadId String
   comunidad   Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
   periodo     String // AAAA
-  cuerpo      String // comite | asamblea — copiado del acuerdo que lo aprueba
+  cuerpo      String // CUERPOS_DEL_ACUERDO (lib/schemas.ts) — copiado del acuerdo que lo aprueba
   acuerdoId   String // acuerdo foliado que lo aprueba (estado y cuerpo verificados)
   version     Int // 1, 2, 3… por comunidad y período
   estado      String    @default("vigente") // vigente | reemplazado
