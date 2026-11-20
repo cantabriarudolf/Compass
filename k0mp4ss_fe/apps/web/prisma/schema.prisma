@@ -46,6 +46,8 @@ model Comunidad {
   actasPublicadasCV           ActaPublicadaCV[]
   plantillasCO                PlantillaCO[]
   enviosCO                    EnvioCO[]
+  // CO — la cola de salida del correo de las difusiones masivas (S2).
+  colaSalidaCO                ColaSalidaCO[]
   mensajesBuzonCO             MensajeBuzonCO[]
   // F35 serie A — archivo de documentos de la comunidad (legal + comunitario).
   documentos                  Documento[]
@@ -936,6 +938,8 @@ model EnvioCO {
 
   // Fuente de verdad de pertenencia y de estado de lectura (change co-lectura-residente D3).
   destinatariosCO EnvioDestinatarioCO[]
+  // El correo de esta difusión vive en su propia cola de salida, no en la request (S2).
+  colaSalida ColaSalidaCO[]
 
   @@index([comunidadId])
   @@map("envios_co")
@@ -955,6 +959,55 @@ model EnvioDestinatarioCO {
   @@unique([envioId, personaId])
   @@index([personaId])
   @@map("envio_destinatarios_co")
+}
+
+/// CO — la cola de salida (outbox) del correo de una difusión masiva (S2/S3/S4/S6).
+///
+/// Por qué existe: el envío masivo NO puede mandar correo dentro de la request de
+/// negocio. La acción guarda —el envío, sus destinatarios y esta cola, en la MISMA
+/// `$transaction`— y un proceso explícito drena el lote después (S2, decisión del
+/// owner del 2026-10-21). Sin invocación no sale un solo correo: no hay
+/// `setInterval` ni envío al importar el módulo (S6).
+///
+/// `estado` — nunca se escribe `entregado`:
+///   · `pendiente`  sin emisor configurado. El motivo queda en `ultimoError`
+///                  (`MOTIVO_SIN_SMTP`) y NO se abre ninguna conexión: no se
+///                  finge un envío (S3).
+///   · `enviado`    SOLO si el servidor SMTP aceptó el mensaje (250 del DATA).
+///                  `enviadoEn` se fecha únicamente en este estado (S4).
+///   · `fallido`    el envío se intentó y rebotó; `ultimoError` lleva el motivo
+///                  redactado del servidor o el rechazo local del destinatario.
+///
+/// `intentos` cuenta INTENTOS REALES: un `pendiente` no lo incrementa (no hubo
+/// envío), un `enviado`/`fallido` sí. El drenaje vuelve a tomar un `fallido`
+/// hasta `MAX_INTENTOS_COLA_SALIDA_CO` y nunca reinicia el contador: reintentar
+/// suma, no borra el historial (S4).
+///
+/// `envioId` es la referencia que ya existe: el alta del envío masivo persiste
+/// `EnvioCO` y `EnvioDestinatarioCO` (la notificación in-app con canal
+/// `email_simulado` de S1 sigue exactamente como está). El índice único
+/// `(envioId, personaId)` es la idempotencia: volver a mandar el mismo envío no
+/// duplica filas y no reescribe las que ya salieron.
+model ColaSalidaCO {
+  id           String    @id
+  comunidadId  String
+  comunidad    Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  envioId      String
+  envio        EnvioCO   @relation(fields: [envioId], references: [id], onDelete: Cascade)
+  // Destinatario del envío (la misma persona de `EnvioDestinatarioCO`) y su correo.
+  personaId    String
+  destinatario String?
+  asunto       String
+  cuerpo       String
+  estado       String    @default("pendiente")
+  intentos     Int       @default(0)
+  ultimoError  String?
+  creadoEn     DateTime  @default(now())
+  enviadoEn    DateTime?
+
+  @@unique([envioId, personaId])
+  @@index([comunidadId, estado])
+  @@map("cola_salida_co")
 }
 
 model MensajeBuzonCO {

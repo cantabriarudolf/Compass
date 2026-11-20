@@ -8,6 +8,11 @@
  *
  * POST a medida (tarea 1.6): el alta escribe el envío, sus filas de
  * `EnvioDestinatarioCO` y el `lecturas` derivado en una sola `$transaction`.
+ *
+ * CO · cola de salida (S2): en la MISMA `$transaction` de arriba se encola una
+ * fila de correo por destinatario (`lib/co-cola.ts`). Acá no se manda nada: la
+ * acción guarda y un proceso explícito drena el lote después. La notificación
+ * in-app con canal `email_simulado` (S1) sigue exactamente como está.
  */
 import { EnvioCOSchema } from "@/lib/schemas"
 import { puede } from "@/lib/authz"
@@ -22,6 +27,7 @@ import {
   whereEnvios,
 } from "../_lib/proyeccion-envio"
 import { escribirEnvioCO } from "../_lib/escritura-envio"
+import { encolarEnvioCO } from "@/lib/co-cola"
 import { registrarDenegacionCo } from "../_lib/denegacion"
 
 export async function GET(req: Request): Promise<Response> {
@@ -122,8 +128,8 @@ export async function POST(req: Request): Promise<Response> {
       return jsonError(403, "Permiso denegado.")
     }
 
-    await prisma.$transaction((tx) =>
-      escribirEnvioCO(
+    await prisma.$transaction(async (tx) => {
+      await escribirEnvioCO(
         tx,
         {
           id,
@@ -136,7 +142,17 @@ export async function POST(req: Request): Promise<Response> {
         },
         { crear: !existente }
       )
-    )
+      // S2: una fila de cola por destinatario, en la misma transacción del alta.
+      // Idempotente por (envío, persona): reenviar el alta no duplica ni pisa
+      // las filas que ya salieron.
+      await encolarEnvioCO(tx, {
+        comunidadId: scope.comunidadId,
+        envioId: id,
+        asunto: datos.asunto,
+        cuerpo: datos.cuerpo,
+        destinatarios: datos.destinatarios,
+      })
+    })
     const record = await prisma.envioCO.findUnique({ where: { id } })
     return Response.json(record, { status: existente ? 200 : 201 })
   } catch (e) {

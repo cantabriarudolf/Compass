@@ -96,6 +96,23 @@ interface PersonaBuscada {
 const ALCANCE_MASIVO = "/api/co/alcance-masivo"
 
 /**
+ * S2/S5/S6 — la cola de salida del correo del envío masivo.
+ *
+ * La consola NO drena sola: el botón invoca UN lote acotado y sólo cuando se
+ * pide, y la métrica se LEE de la API cuando la comunidad ya tiene envíos. Sin
+ * temporizador y sin envío al montar: abrir la pantalla no manda ni un correo.
+ */
+const COLA_SALIDA = "/api/co/cola"
+
+/** Métrica honesta de la cola (S5): enviados, fallidos y pendientes, sin aperturas. */
+interface ResumenCola {
+  enviados: number
+  fallidos: number
+  pendientes: number
+  ultimoError: string | null
+}
+
+/**
  * Tope de páginas que la pantalla camina sola (200 × 500 = 100.000 filas). Si una
  * comunidad lo superara, el recorte del TRANSPORTE se declara con el `total` del
  * servidor (AvisoTruncamiento); la resolución del alcance nunca se recorta.
@@ -209,6 +226,11 @@ export function ConsolaComunicacionCO() {
   const [cargandoAlcance, setCargandoAlcance] = React.useState(true)
   const [errorAlcance, setErrorAlcance] = React.useState<string | null>(null)
 
+  // --- Cola de correo saliente (S2/S4/S5/S6) ---
+  const [estadoCola, setEstadoCola] = React.useState<ResumenCola | null>(null)
+  const [procesandoCola, setProcesandoCola] = React.useState(false)
+  const [errorCola, setErrorCola] = React.useState<string | null>(null)
+
   // --- Buzón ---
   const [clasificacion, setClasificacion] = React.useState<"felicitacion" | "sugerencia" | "reclamo">("felicitacion")
   const [reportanteSel, setReportanteSel] = React.useState<EntidadSeleccion | null>(null)
@@ -307,6 +329,37 @@ export function ConsolaComunicacionCO() {
         return () => controlador.abort()
       }, [rolesFiltro, macroSel, microSel, unidadSel])
 
+      // S5 — la métrica de la cola de correo se LEE de la API, no se calcula en el
+      // cliente. Sin envíos no hay nada que reportar (y no se pide nada): el panel
+      // aparece en cuanto la comunidad tiene difusiones. La métrica no se inventa
+      // localmente: si la lectura falla, el botón de procesar muestra su propio error.
+      const hayEnvios = enviosCO.length > 0
+      React.useEffect(() => {
+        if (!hayEnvios) return
+        const controlador = new AbortController()
+        void (async () => {
+          try {
+            const res = await fetch(COLA_SALIDA, {
+              headers: { accept: "application/json" },
+              signal: controlador.signal,
+            })
+            const cuerpo = (await res.json().catch(() => null)) as
+              | (ResumenCola & { error?: string })
+              | null
+            if (!res.ok || !cuerpo || controlador.signal.aborted) return
+            setEstadoCola({
+              enviados: cuerpo.enviados ?? 0,
+              fallidos: cuerpo.fallidos ?? 0,
+              pendientes: cuerpo.pendientes ?? 0,
+              ultimoError: cuerpo.ultimoError ?? null,
+            })
+          } catch {
+            // Sin conexión no se pinta una métrica: la acción de procesar informa el fallo.
+          }
+        })()
+        return () => controlador.abort()
+      }, [hayEnvios])
+
       // El payload del envío conserva EXACTAMENTE el shape de antes
       // (`{personaId, unidadId}`); `personaNombre` es sólo para la vista previa.
       const destinatarios = React.useMemo(
@@ -320,6 +373,32 @@ export function ConsolaComunicacionCO() {
         if (pl) {
           setAsunto(pl.asunto)
           setCuerpo(pl.cuerpo)
+        }
+      }
+
+      // S2/S4/S5/S6 — la cola de correo del envío masivo. El botón es la ÚNICA
+      // invocación del proceso: drena un lote acotado y reporta el desenlace con
+      // la misma honestidad del servidor (`enviado` sólo si el emisor aceptó).
+      const procesarCola = async () => {
+        setProcesandoCola(true); setErrorCola(null)
+        try {
+          const res = await fetch(COLA_SALIDA, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({}),
+          })
+          const cuerpo = (await res.json().catch(() => null)) as
+            | { totales?: ResumenCola; ultimoError?: string | null; error?: string }
+            | null
+          if (!res.ok) { setErrorCola(cuerpo?.error ?? `Error ${res.status} al procesar la cola.`); return }
+          const totales = cuerpo?.totales
+          if (!totales) { setErrorCola("La respuesta de la cola no informó contadores."); return }
+          setEstadoCola({ ...totales, ultimoError: cuerpo?.ultimoError ?? totales.ultimoError ?? null })
+        } catch {
+          // Mismo literal de red que usa el alcance masivo.
+          setErrorCola("Sin conexión con el servidor.")
+        } finally {
+          setProcesandoCola(false)
         }
       }
 
@@ -610,6 +689,30 @@ export function ConsolaComunicacionCO() {
                     )
                   })}
                 </ul>
+                {/* S2/S4/S5/S6 — la métrica honesta de la cola de correo: enviados,
+                    fallidos y pendientes con el motivo del último error. No hay tasa
+                    de apertura ni «entregados»: SMTP no informa aperturas, y el envío
+                    sólo se declara enviado si el servidor aceptó el mensaje. */}
+                <div className="mt-2 rounded-md border p-3 text-xs" aria-label="Cola de correo saliente">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="font-medium">Cola de correo saliente</p>
+                    <Button size="sm" variant="outline" onClick={procesarCola} disabled={procesandoCola}>
+                      {procesandoCola ? "Procesando…" : "Procesar cola de correo"}
+                    </Button>
+                  </div>
+                  <p className="mt-1 text-muted-foreground">El envío masivo guarda y este proceso envía: la cola se drena sólo cuando se pide, nunca por un temporizador. Cada destinatario conserva además su notificación en la bandeja.</p>
+                  {errorCola && <p className="mt-1 text-destructive">{errorCola}</p>}
+                  {estadoCola ? (
+                    <div className="mt-2 flex flex-col gap-1">
+                      <p className="font-medium">Enviados: {estadoCola.enviados} · Fallidos: {estadoCola.fallidos} · Pendientes: {estadoCola.pendientes}</p>
+                      <p className="text-muted-foreground">
+                        {estadoCola.ultimoError ? `Último error: ${estadoCola.ultimoError}` : "Sin errores registrados en la cola."}
+                      </p>
+                    </div>
+                  ) : (
+                    <p className="mt-2 text-muted-foreground">Procesá la cola para ver enviados, fallidos y pendientes.</p>
+                  )}
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
