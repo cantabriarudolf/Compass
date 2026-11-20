@@ -25,6 +25,7 @@
 import * as React from "react"
 import useSWR, { mutate as mutateGlobal } from "swr"
 import type { Persona } from "@/data/comunidad/personas"
+import type { EstadoCuentaPersona } from "@/lib/schemas"
 import type { ContextoBusqueda, PaginaOpciones } from "@/components/selector-buscable"
 import type { StoreResult } from "@/lib/store"
 import { normalizarRun } from "@/lib/validacion-rut"
@@ -174,6 +175,20 @@ export interface UsePersonasResultado {
   remove: (id: string) => Promise<StoreResult>
 }
 
+/**
+ * Etiqueta de cada estado de cuenta de la persona. `Record` del catálogo completo
+ * (`ESTADOS_CUENTA_PERSONA`): un estado nuevo rompe la compilación acá en vez de
+ * pintarse crudo en el filtro. Vive en este módulo —y no en la pantalla— para que la
+ * etiqueta tenga un solo dueño y se pueda pinar sin montar la página (mismo criterio
+ * que `ETIQUETA_ESTADO_CANAL`). Ninguna etiqueta repite el valor de la columna ni el
+ * plural histórico (`activos|inactivos|bloqueados`): esos fueron el defecto.
+ */
+export const ETIQUETA_ESTADO_CUENTA: Record<EstadoCuentaPersona, string> = {
+  activa: "Cuenta activa",
+  inactiva: "Cuenta inactiva",
+  bloqueada: "Cuenta bloqueada",
+}
+
 /** Opciones del padrón. Sin opciones, la clave SWR es la de siempre (`?pageSize=100`). */
 export interface UsePersonasOpciones {
   /**
@@ -199,10 +214,12 @@ export interface UsePersonasOpciones {
    */
   rolesDirectorio?: readonly string[]
   /**
-   * Filtra en el servidor por el estado de cuenta exacto (`?estadoCuenta=a,b`):
-   * `activa`, `inactiva` o `bloqueada`.
+   * Filtra en el servidor por el estado de cuenta exacto (`?estadoCuenta=a,b`). Sólo
+   * acepta los valores del catálogo (`ESTADOS_CUENTA_PERSONA`, en `lib/schemas.ts`),
+   * que son los que persiste `Persona.estadoCuenta`: la ruta rechaza cualquier otro
+   * con 400.
    */
-  estadoCuenta?: readonly string[]
+  estadoCuenta?: readonly EstadoCuentaPersona[]
   /**
    * Completa la colección pidiendo las páginas siguientes hasta agotar el `total`
    * del servidor. Es para las vistas que CUENTAN filas (contadores por rol y por

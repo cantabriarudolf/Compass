@@ -105,9 +105,12 @@ describe("Directorio de Comunidad — filtros de rol y estado en el servidor", (
     expect(screen.queryByText("Zoe Inalcanzable")).toBeNull()
 
     // El panel lateral y el filtro rápido ofrecen el mismo estado: cualquiera de los dos sirve.
-    const [botonInactivos] = screen.getAllByRole("button", { name: /INACTIVOS/i })
-    if (!botonInactivos) throw new Error("no se encontró el filtro INACTIVOS")
-    await user.click(botonInactivos)
+    // La etiqueta ya NO es el plural histórico (`INACTIVOS`), que fue el defecto: es la del
+    // `Record` exhaustivo de `lib/api/use-personas.ts`, y el pedido sigue viajando con el
+    // valor persistido (`estadoCuenta=inactiva`).
+    const [botonInactiva] = screen.getAllByRole("button", { name: /Cuenta inactiva/i })
+    if (!botonInactiva) throw new Error("no se encontró el filtro Cuenta inactiva")
+    await user.click(botonInactiva)
 
     await waitFor(() =>
       expect(

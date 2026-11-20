@@ -1,4 +1,5 @@
 import { VinculoUnidad } from "./vinculos"
+import type { EstadoCuentaPersona } from "@/lib/schemas"
 
 // --- INTERFACES ---
 
@@ -30,7 +31,7 @@ export interface Persona {
   telefonoMovil: string;
   telefonoFijo?: string;
   fotografiaUrl?: string;
-  estadoCuenta: "activa" | "inactiva" | "bloqueada";
+  estadoCuenta: EstadoCuentaPersona;
   
   // Vulnerabilidades (referencia a IDs de MA)
   condicionesEspecialesIds: string[]; 

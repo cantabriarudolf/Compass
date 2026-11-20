@@ -18,11 +18,12 @@
  * - Filtros aditivos de los directorios (opcionales, sin parámetros nuevos no cambia nada):
  *   `?rol=` (roles propios de `Persona.roles`), `?rolDirectorio=` (roles derivados del
  *   Directorio de Gestión Administrativa: propietario/residente/directiva/personal) y
- *   `?estadoCuenta=` (`activa|inactiva|bloqueada`). Se intersectan entre sí, con `q`/`rut`/
+ *   `?estadoCuenta=` (el catálogo `ESTADOS_CUENTA_PERSONA` de `lib/schemas.ts`:
+ *   `activa|inactiva|bloqueada`). Se intersectan entre sí, con `q`/`rut`/
  *   `esResidente` y con el ABAC: siempre suman condiciones a `where.AND`, nunca reemplazan el
  *   `where` de permisos.
  */
-import { PersonaSchema, ROLES_PERSONA } from "@/lib/schemas"
+import { esEstadoCuentaPersona, PersonaSchema, ROLES_PERSONA } from "@/lib/schemas"
 import { puede } from "@/lib/authz"
 import { prisma } from "@/lib/prisma"
 import { logger } from "@/lib/logger"
@@ -314,9 +315,6 @@ const COMODINES_LIKE = /[%_]/
 /** Roles de vínculo que hacen «residente» a una persona (regla del directorio). */
 const ROLES_RESIDENTE = ["propietario", "arrendatario"] as const
 
-/** Estados de cuenta que persiste `Persona.estadoCuenta` (MP). */
-const ESTADOS_CUENTA = ["activa", "inactiva", "bloqueada"] as const
-
 /** Roles derivados del Directorio de Gestión Administrativa (`?rolDirectorio=`). */
 const ROLES_DIRECTORIO = ["propietario", "residente", "directiva", "personal"] as const
 
@@ -538,7 +536,9 @@ export async function GET(req: Request): Promise<Response> {
   if (rolesDirectorio.some((rol) => !(ROLES_DIRECTORIO as readonly string[]).includes(rol))) {
     return jsonError(400, "El rol de directorio informado no es válido.")
   }
-  if (estadosCuenta.some((estado) => !(ESTADOS_CUENTA as readonly string[]).includes(estado))) {
+  // `?estadoCuenta=` valida con el catálogo único (`lib/schemas.ts`): sin copia local,
+  // los plurales históricos (`activos|inactivos|bloqueados`) siguen siendo un 400.
+  if (estadosCuenta.some((estado) => !esEstadoCuentaPersona(estado))) {
     return jsonError(400, "El estado de cuenta informado no es válido.")
   }
 

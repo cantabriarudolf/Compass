@@ -934,6 +934,35 @@ const DocumentoIdentidadSchema = z
     message: MensajeDocumentoInvalido,
   })
 
+// --- Estado de cuenta de la persona (MP) ---
+//
+// `Persona.estadoCuenta` es `String` en `prisma/schema.prisma` (el schema no tiene
+// ningún `enum`), así que el catálogo ES esta tupla: la validación del alta/edición
+// (`PersonaSchema`), el rechazo del filtro `?estadoCuenta=` de la ruta, el tipo de la
+// semilla (`data/comunidad/personas.ts`) y las etiquetas de la pantalla salen de acá.
+//
+// Auditoría `odd/auditorias/catalogos-y-estados.md` (hallazgo 3): antes eran cinco
+// copias sin relación, y la pantalla ya pagó el defecto —filtró con los plurales
+// `activos|inactivos|bloqueados` contra el dato `activa|inactiva|bloqueada`, así que
+// el filtro y sus contadores no coincidían con nadie—. Los valores son SINGULARES a
+// propósito: el plural describe el filtro, no la fila.
+
+export const ESTADOS_CUENTA_PERSONA = ["activa", "inactiva", "bloqueada"] as const
+export const EstadoCuentaPersonaSchema = z.enum(ESTADOS_CUENTA_PERSONA, {
+  required_error: "El estado de cuenta es obligatorio.",
+  invalid_type_error: "Estado de cuenta inválido.",
+})
+export type EstadoCuentaPersona = (typeof ESTADOS_CUENTA_PERSONA)[number]
+
+/**
+ * ¿Es un estado de cuenta de persona? Es el validador del filtro `?estadoCuenta=` de
+ * `app/api/personas/route.ts`, que acepta varios valores en CSV: un valor fuera del
+ * catálogo es un 400, nunca una lista vacía que parezca «no hay nadie».
+ */
+export function esEstadoCuentaPersona(valor: string): valor is EstadoCuentaPersona {
+  return (ESTADOS_CUENTA_PERSONA as readonly string[]).includes(valor)
+}
+
 export const PersonaSchema = z.object({
   id: IdEntidadSchema,
   rut: DocumentoIdentidadSchema,
@@ -954,10 +983,7 @@ export const PersonaSchema = z.object({
     .min(1, "El teléfono móvil es obligatorio."),
   telefonoFijo: z.string().optional(),
   fotografiaUrl: z.string().optional(),
-  estadoCuenta: z.enum(["activa", "inactiva", "bloqueada"], {
-    required_error: "El estado de cuenta es obligatorio.",
-    invalid_type_error: "Estado de cuenta inválido.",
-  }),
+  estadoCuenta: EstadoCuentaPersonaSchema,
   condicionesEspecialesIds: z.array(z.string()),
   roles: z.array(z.enum(ROLES_PERSONA)),
   vinculosUnidad: z.array(VinculoUnidadSchema).optional(),

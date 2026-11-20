@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import type { StoreResult } from "@/lib/store/helpers"
-import { usePersonas } from "@/lib/api/use-personas"
+import { usePersonas, ETIQUETA_ESTADO_CUENTA } from "@/lib/api/use-personas"
 
 import {
   Card,
@@ -45,6 +45,7 @@ import {
 import Link from "next/link"
 
 import { Persona } from "@/data/comunidad/personas"
+import { ESTADOS_CUENTA_PERSONA, type EstadoCuentaPersona } from "@/lib/schemas"
 import { FormularioPersona } from "@/components/comunidad/formulario-persona"
 import { RolesDonut } from "@/components/comunidad/roles-donut"
 import { VerMas } from "@/components/ver-mas"
@@ -83,16 +84,20 @@ const ROLES_TAB_CONFIG: { id: string; label: string; icon: React.ReactNode }[] =
 const DEBOUNCE_BUSQUEDA_MS = 300
 
 /**
- * Estados de cuenta REALES de `Persona.estadoCuenta` (MP). Antes la pantalla usaba
- * los plurales `activos|inactivos|bloqueados` y comparaba contra `persona.estadoCuenta`
- * (`activa|inactiva|bloqueada`), así que el filtro y sus contadores nunca coincidían con
- * nadie. Ahora el estado viaja al servidor con el valor persistido.
+ * Estados de cuenta de `Persona.estadoCuenta` (MP), derivados del catálogo único de
+ * `lib/schemas.ts`: el `id` es el valor persistido y la etiqueta sale del `Record`
+ * exhaustivo de `use-personas`. Antes la pantalla filtraba con los plurales
+ * `activos|inactivos|bloqueados` y comparaba contra el dato (`activa|inactiva|bloqueada`),
+ * así que el filtro y sus contadores nunca coincidían con nadie. Hoy el estado viaja al
+ * servidor con el valor persistido, y un estado nuevo en el catálogo entra acá solo.
  */
-const ESTADOS_CUENTA = [
-  { id: "activa", label: "ACTIVOS" },
-  { id: "inactiva", label: "INACTIVOS" },
-  { id: "bloqueada", label: "BLOQUEADOS" },
-] as const
+const ESTADOS_CUENTA = ESTADOS_CUENTA_PERSONA.map((id) => ({
+  id,
+  label: ETIQUETA_ESTADO_CUENTA[id],
+}))
+
+/** Estado del filtro lateral: uno del catálogo o `todos` (sin filtro). */
+type FiltroEstadoCuenta = EstadoCuentaPersona | "todos"
 
 const getRoleBadgeVariant = (rol: string) => {
   switch (rol) {
@@ -146,7 +151,7 @@ export default function DirectorioPersonasPage() {
   const [selectedRole, setSelectedRole] = React.useState("todos")
 
   // Sidebar state (por estado de cuenta)
-  const [selectedEstado, setSelectedEstado] = React.useState<string>("todos")
+  const [selectedEstado, setSelectedEstado] = React.useState<FiltroEstadoCuenta>("todos")
 
   // Donut filter (por rol, sincronizado con tabs)
   const [donutRole, setDonutRole] = React.useState<string | undefined>(
@@ -193,11 +198,13 @@ export default function DirectorioPersonasPage() {
     return counts
   }, [personasCompletas, totalCompleto])
 
-  // Contadores por estado
+  // Contadores por estado: arrancan en 0 para TODO estado del catálogo, así una pestaña
+  // nueva nunca queda sin contador (y no hay una segunda lista de estados que mantener).
   const countByEstado = React.useMemo(() => {
-    const counts: Record<string, number> = { todos: totalCompleto }
+    const counts: Partial<Record<FiltroEstadoCuenta, number>> = { todos: totalCompleto }
+    for (const estado of ESTADOS_CUENTA_PERSONA) counts[estado] = 0
     for (const p of personasCompletas) {
-      counts[p.estadoCuenta] = (counts[p.estadoCuenta] || 0) + 1
+      counts[p.estadoCuenta] = (counts[p.estadoCuenta] ?? 0) + 1
     }
     return counts
   }, [personasCompletas, totalCompleto])
@@ -395,7 +402,7 @@ export default function DirectorioPersonasPage() {
                   >
                     VER TODOS
                     <span className="text-[9px] font-bold text-foreground tabular-nums">
-                      {countByEstado.todos}
+                      {countByEstado.todos ?? 0}
                     </span>
                   </button>
                   {ESTADOS_CUENTA.map((estado) => (
