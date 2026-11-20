@@ -44,6 +44,7 @@ import {
   estadoDocumentoDesdeEntrega,
   planDeEnvioDocumento,
 } from "@/app/api/documentos/_lib/envio-documento"
+import * as moduloEnviosDocumento from "@/app/api/documentos/_lib/envio-documento"
 
 /**
  * El planificador se dobla: acá se mide el vocabulario y la traducción, no el
@@ -78,6 +79,12 @@ describe("S1 — un vocabulario, una tupla", () => {
 
   it("el documento declara su subconjunto: registra `entregado`, nunca `enviado`", () => {
     expect([...ESTADOS_ENVIO_DOCUMENTO]).toEqual(["entregado", "pendiente", "fallido"])
+  })
+
+  it("el documento no vuelve a declarar el catálogo: usa el subconjunto de `schemas`", () => {
+    // El hueco que una copia con los MISMOS valores dejaría abierto: el `satisfies`
+    // del subconjunto la aceptaría. Esto pina que el módulo del documento no lo declare.
+    expect(moduloEnviosDocumento).not.toHaveProperty("ESTADOS_ENVIO_DOCUMENTO")
   })
 
   it("todo valor de un subconjunto pertenece al catálogo", () => {

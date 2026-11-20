@@ -210,7 +210,16 @@ export interface SegmentoRE {
 // tenencia nuevos rompen la compilación acá en vez de caer en la rama de nadie y
 // emitir el reporte a 0 destinatarios sin error (hallazgo 5 del informe).
 
-/** Rol de vínculo que corresponde a cada tenencia declarada. */
+/**
+ * Rol de vínculo que corresponde a cada tenencia declarada.
+ *
+ * SUBCONJUNTO A PROPÓSITO (S5): `tenencias` nombra el rol TITULAR —el mismo criterio
+ * que el ramal de alcance físico aplica desde siempre—, así que `copropietario` y
+ * `ocupante` no entran por `tenencias`; sí entran por el perfil `residente` a secas,
+ * que es «cualquier vínculo vigente». Si el owner quiere que un copropietario reciba
+ * los informes «solo propietarios», se agrega acá —con su test— y no en una copia de
+ * la pantalla. Lo pina `test/lib/segmentacion-re-perfiles.test.ts`.
+ */
 const ROL_DE_TENENCIA: Record<TenenciaSegmentacionRE, string> = {
   propietarios: "propietario",
   arrendatarios: "arrendatario",

@@ -35,6 +35,7 @@ import {
   type PerfilSegmentacionRE,
 } from "@/lib/schemas"
 import { resolverSegmentacionRE } from "@/lib/reporteria-utils"
+import * as moduloReporteria from "@/lib/reporteria-utils"
 import type { Persona } from "@/data/comunidad/personas"
 import type { VinculoUnidad } from "@/lib/schemas"
 
@@ -129,9 +130,40 @@ describe("R5 — cada perfil del catálogo resuelve a quien le corresponde", () 
     }
   })
 
+  it("el motor no declara el vocabulario: lo importa del contrato", () => {
+    // El hueco que una copia con los MISMOS valores dejaría abierto: el `satisfies`
+    // del contrato la acepta. Esto pina que el motor no vuelva a tener la suya.
+    expect(moduloReporteria).not.toHaveProperty("PERFILES_SEGMENTACION_RE")
+    expect(moduloReporteria).not.toHaveProperty("TENENCIAS_SEGMENTACION_RE")
+  })
+
   it("las tenencias filtran el vínculo por rol", () => {
     expect(resolver(["residente"], ["propietarios"])).toEqual(["p-propietario"])
     expect(resolver(["residente"], ["arrendatarios"])).toEqual(["p-arrendatario"])
+  })
+})
+
+describe("R5 — el subconjunto de tenencias es a propósito", () => {
+  it("la tenencia nombra el rol titular: copropietario y ocupante no entran por `tenencias`", () => {
+    // Declarado en `ROL_DE_TENENCIA` (lib/reporteria-utils.ts) y pineado acá: es el
+    // mismo criterio que el ramal de alcance físico aplicaba antes de unificar los dos
+    // ramales. Entran por el perfil `residente` a secas, que es «cualquier vínculo».
+    const personasCo = [persona("p-copropietario"), persona("p-ocupante"), persona("p-titular")]
+    const vinculosCo = [
+      vinculo("p-copropietario", "copropietario" as never),
+      vinculo("p-ocupante", "ocupante" as never),
+      vinculo("p-titular", "propietario"),
+    ]
+    const resolverCo = (perfiles: PerfilSegmentacionRE[], tenencias: string[] = []) =>
+      resolverSegmentacionRE({
+        segmento: { perfiles, tenencias: tenencias as never },
+        unidadesAlcanceIds: [],
+        vinculos: vinculosCo,
+        personas: personasCo,
+      }).sort()
+
+    expect(resolverCo(["residente"], ["propietarios"])).toEqual(["p-titular"])
+    expect(resolverCo(["residente"])).toEqual(["p-copropietario", "p-ocupante", "p-titular"])
   })
 })
 
