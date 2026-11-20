@@ -85,9 +85,22 @@ vi.mock("@/lib/api/use-vinculos", () => ({
   }),
 }))
 
+/**
+ * La CF que devuelve `GET /api/configuracion` (app/api/configuracion/route.ts, ~89):
+ * los dos campos van PROYECTADOS desde el firmante derivado de la membresía
+ * administrador (`?? ""` cuando no hay administrador con ficha en el padrón).
+ * Sin firmante la pantalla no emite —falla cerrada—, así que el fixture trae
+ * nombre y RUT no vacíos y las validaciones de este arnés vuelven a ejecutarse.
+ */
+const CF_CON_FIRMANTE = vi.hoisted(() => ({
+  administradorResponsable: "Rosa Firmante del Padrón",
+  rutAdministrador: "12.345.678-9",
+  firmaDigitalizadaUrl: null,
+}))
+
 vi.mock("@/lib/api/use-configuracion", () => ({
   useConfiguracion: () => ({
-    config: null,
+    config: CF_CON_FIRMANTE,
     isLoading: false,
     error: null,
     updateConfig: vi.fn(),

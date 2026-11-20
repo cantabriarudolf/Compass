@@ -42,6 +42,19 @@ const fuente = vi.hoisted(() => ({
 }))
 
 /**
+ * La CF que devuelve `GET /api/configuracion` (app/api/configuracion/route.ts, ~89):
+ * los dos campos van PROYECTADOS desde el firmante derivado de la membresía
+ * administrador (`?? ""` cuando no hay administrador con ficha en el padrón).
+ * Es el mismo fixture de nombre y valores que el resto de los arneses de
+ * certificados: un solo firmante de prueba, no dos formas distintas.
+ */
+const CF_CON_FIRMANTE = vi.hoisted(() => ({
+  administradorResponsable: "Rosa Firmante del Padrón",
+  rutAdministrador: "12.345.678-9",
+  firmaDigitalizadaUrl: null,
+}))
+
+/**
  * CF que ve la pantalla. Se reemplaza por caso: el `{ administradorResponsable: "" }`
  * es el que prueba el fallo cerrado del firmante.
  */
@@ -204,11 +217,7 @@ beforeEach(() => {
   fuente.descargarPdf.mockReset()
   fuente.documentoCertificadoPDF.mockReset()
   // CF completa: el papel tiene firmante derivado y la pantalla puede emitir.
-  configuracionFuente.actual = {
-    administradorResponsable: "Rosa Firmante del Padrón",
-    rutAdministrador: "12.345.678-9",
-    firmaDigitalizadaUrl: null,
-  }
+  configuracionFuente.actual = CF_CON_FIRMANTE
   // Alta exitosa: el servidor respondió con el registro emitido.
   fuente.crear.mockResolvedValue({ ok: true, registro: REGISTRO_EMITIDO })
   fuente.documentoCertificadoPDF.mockResolvedValue({} as never)
