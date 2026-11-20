@@ -28,7 +28,12 @@
  * otro punto queda `pendiente`, y el motivo dice cuántos derechos faltan.
  */
 
-import { CUERPOS_DEL_ACUERDO, type CuerpoDelAcuerdo } from "@/lib/schemas"
+import {
+  CUERPOS_DEL_ACUERDO,
+  MODALIDADES_DEL_ACUERDO,
+  type CuerpoDelAcuerdo,
+  type ModalidadDelAcuerdo,
+} from "@/lib/schemas"
 
 /**
  * Cuerpos que adoptan acuerdos: el comité (art. 6/17/20) y la asamblea (art. 15).
@@ -78,9 +83,14 @@ export type DecisionDelVoto = (typeof DECISIONES_DEL_VOTO)[number]
  * `VotoAcuerdo` queda vacío a propósito, es el modelo) y se cierra con su acta
  * firmada archivada y el `resultado` registrado.
  */
-export const MODALIDADES_DEL_ACUERDO = ["electronica", "presencial"] as const
-
-export type ModalidadDelAcuerdo = (typeof MODALIDADES_DEL_ACUERDO)[number]
+/**
+ * Modalidad de un acuerdo: cómo se celebró. No se declara acá: el catálogo vive en
+ * `lib/schemas.ts`, junto al schema que valida la fila. Esta lista era una tupla
+ * inerte —nadie la importaba y agregarle un valor no habilitaba nada (hallazgo 8)—;
+ * se reexporta para no romper a quien la importaba de este módulo.
+ */
+export { MODALIDADES_DEL_ACUERDO }
+export type { ModalidadDelAcuerdo }
 
 /**
  * El acta del resultado proclamado en sala (S2): lo que el acta declara, tal

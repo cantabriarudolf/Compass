@@ -784,7 +784,7 @@ model Acuerdo {
   // su acta firmada archivada y el `resultado` proclamado. Aditiva pura: la
   // migración nace con default `electronica`, así que ninguna fila existente
   // cambia de comportamiento (S4).
-  modalidad       String    @default("electronica") // electronica | presencial
+  modalidad       String    @default("electronica") // MODALIDADES_DEL_ACUERDO (lib/schemas.ts)
   // La regla APLICADA, en texto: un_voto_por_miembro |
   // mayoria_absoluta_presentes | mayoria_absoluta_derechos |
   // mayoria_reforzada_derechos (ver lib/acuerdos.ts).

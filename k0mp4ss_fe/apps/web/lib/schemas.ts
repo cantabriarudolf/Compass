@@ -684,6 +684,18 @@ export const CuerpoAcuerdoSchema = z.enum(CUERPOS_DEL_ACUERDO)
 export type CuerpoDelAcuerdo = (typeof CUERPOS_DEL_ACUERDO)[number]
 
 /**
+ * Modalidad de un acuerdo: cómo se celebró.
+ *
+ * Definición única: la valida `ModalidadAcuerdoSchema` sobre la fila persistida y
+ * `MODALIDADES_DEL_ACUERDO` en `lib/acuerdos.ts` es la MISMA referencia. Antes esta
+ * tupla era una copia inerte: nadie la importaba y la validación real era un
+ * `z.enum` inline sin relación con ella (hallazgo 8 del informe).
+ */
+export const MODALIDADES_DEL_ACUERDO = ["electronica", "presencial"] as const
+export const ModalidadAcuerdoSchema = z.enum(MODALIDADES_DEL_ACUERDO)
+export type ModalidadDelAcuerdo = (typeof MODALIDADES_DEL_ACUERDO)[number]
+
+/**
  * Reglas de quórum que el acuerdo puede declarar como APLICADAS. La ley reparte
  * la competencia (corte de servicios → comité, art. 20 N°9; convenio de pago →
  * comité, art. 6) y el reglamento de cada comunidad define quién aprueba su
@@ -714,7 +726,7 @@ export const AcuerdoSchema = z
     // resuelve con los votos. Opcional y SIN default en zod: si el cuerpo no la
     // trae, la columna aplica su default de base (`electronica`) — el camino
     // electrónico queda idéntico incluso a nivel de fila.
-    modalidad: z.enum(["electronica", "presencial"]).optional(),
+    modalidad: ModalidadAcuerdoSchema.optional(),
     // Acta que respalda la sesión (asamblea) o la reunión (comité), si consta.
     actaId: IdEntidadSchema.optional(),
   })
