@@ -1337,6 +1337,35 @@ export const ESTADOS_INFRACCION_IN = [
 ] as const
 export const EstadoInfraccionINSchema = z.enum(ESTADOS_INFRACCION_IN)
 
+/**
+ * Las infracciones que todavía no se resolvieron: se pueden aplicar o desestimar.
+ *
+ * SUBCONJUNTO A PROPÓSITO (S5): con un estado nuevo (`prescrita`, por ejemplo) el
+ * guard de `aplicar` y el de `desestimar` tienen que decidir de qué lado cae, y el
+ * test de la invariante (`todo estado está en trámite o resuelto, nunca en los
+ * dos`) lo obliga. Antes cada ruta escribía el par a mano (hallazgo 17).
+ */
+export const ESTADOS_INFRACCION_EN_TRAMITE = [
+  "en_revision",
+  "apelada",
+] as const satisfies readonly EstadoInfraccionIN[]
+
+/** Las infracciones ya resueltas: la aplicación o el descargo ya se decidieron. */
+export const ESTADOS_INFRACCION_RESUELTAS = [
+  "aplicada",
+  "desestimada",
+] as const satisfies readonly EstadoInfraccionIN[]
+
+/** ¿La infracción todavía admite aplicación o descargo? */
+export function esInfraccionEnTramite(valor: string): valor is "en_revision" | "apelada" {
+  return (ESTADOS_INFRACCION_EN_TRAMITE as readonly string[]).includes(valor)
+}
+
+/** ¿La infracción ya se resolvió (aplicada o desestimada)? */
+export function esInfraccionResuelta(valor: string): valor is "aplicada" | "desestimada" {
+  return (ESTADOS_INFRACCION_RESUELTAS as readonly string[]).includes(valor)
+}
+
 // Cobro directo por daños (responsabilidad civil): sin tipo de catálogo.
 export const DanoDirectoINSchema = z.object({
   descripcionDaño: z

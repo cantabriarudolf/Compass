@@ -14,7 +14,7 @@ import { prisma } from "@/lib/prisma"
 import { logger } from "@/lib/logger"
 import { generarId } from "@/lib/id-utils"
 import { vencimientoDesdeDiaCorte } from "@/lib/finanzas-utils"
-import { CobroFIEscrituraCompletaSchema } from "@/lib/schemas"
+import { CobroFIEscrituraCompletaSchema, esInfraccionEnTramite, ESTADOS_INFRACCION_EN_TRAMITE } from "@/lib/schemas"
 import { jsonError } from "@/lib/api/with-comunidad-scope"
 import {
   cargarInfraccion,
@@ -36,7 +36,7 @@ export async function POST(_req: Request, ctx: Ctx): Promise<Response> {
   try {
     const infraccion = await cargarInfraccion(id, scope)
     if (!infraccion) return jsonError(404, "Registro no encontrado.")
-    if (!["en_revision", "apelada"].includes(infraccion.estado)) {
+    if (!esInfraccionEnTramite(infraccion.estado)) {
       return jsonError(
         400,
         "Solo una infracción En Revisión o Apelada puede aplicarse."
@@ -183,7 +183,7 @@ export async function POST(_req: Request, ctx: Ctx): Promise<Response> {
         where: {
           id,
           comunidadId: scope.comunidadId,
-          estado: { in: ["en_revision", "apelada"] },
+          estado: { in: [...ESTADOS_INFRACCION_EN_TRAMITE] },
         },
         data: {
           estado: "aplicada",

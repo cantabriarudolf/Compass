@@ -9,6 +9,7 @@
 import { prisma } from "@/lib/prisma"
 import { logger } from "@/lib/logger"
 import { jsonError } from "@/lib/api/with-comunidad-scope"
+import { esInfraccionResuelta } from "@/lib/schemas"
 import {
   cargarInfraccion,
   contextoAccionIN,
@@ -32,7 +33,7 @@ export async function POST(req: Request, ctx: Ctx): Promise<Response> {
   try {
     const infraccion = await cargarInfraccion(id, scope)
     if (!infraccion) return jsonError(404, "Registro no encontrado.")
-    if (["aplicada", "desestimada"].includes(infraccion.estado)) {
+    if (esInfraccionResuelta(infraccion.estado)) {
       return jsonError(400, "La infracción ya tiene resolución final.")
     }
 

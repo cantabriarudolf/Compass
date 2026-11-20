@@ -42,6 +42,7 @@ import type {
   InfraccionIN,
   TipoInfraccionIN,
 } from "@/lib/schemas"
+import { esInfraccionEnTramite } from "@/lib/schemas"
 
 const CATEGORIA_LABEL: Record<CategoriaInfraccionIN, string> = {
   leve: "Leve",
@@ -320,7 +321,7 @@ isLoading: cInfracciones, create: crearInfraccionApi,
               <CardDescription>Comentarios internos y respaldos visibles solo para administración y directiva.</CardDescription>
             </CardHeader>
             <CardContent>
-              {ordenadas.filter(i => ["en_revision", "apelada"].includes(i.estado)).length === 0 ? (
+              {ordenadas.filter(i => esInfraccionEnTramite(i.estado)).length === 0 ? (
                 <p className="py-6 text-center text-sm text-muted-foreground">Sin expedientes en curso.</p>
               ) : (
                 <table className="w-full text-left text-sm">
@@ -334,7 +335,7 @@ isLoading: cInfracciones, create: crearInfraccionApi,
                     </tr>
                   </thead>
                   <tbody>
-                    {ordenadas.filter(i => ["en_revision", "apelada"].includes(i.estado)).map(i => (
+                    {ordenadas.filter(i => esInfraccionEnTramite(i.estado)).map(i => (
                       <tr key={i.id} className="border-b last:border-0">
                         <td className="py-2 pr-3 font-mono text-xs">{i.folio}</td>
                         <td className="py-2 pr-3">{i.danoDirecto?.descripcionDaño ?? tipos.find(t => t.id === i.tipoInfraccionId)?.nombre}</td>
@@ -454,7 +455,7 @@ isLoading: cInfracciones, create: crearInfraccionApi,
                   </div>
                 )}
 
-                {["en_revision", "apelada"].includes(detalle.estado) && (
+                {esInfraccionEnTramite(detalle.estado) && (
                   <div className="flex flex-wrap gap-2 rounded-md border p-3">
                     <Button size="sm" onClick={async () => {
                       const r = await aplicarInfraccionApi(detalle.id)
