@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { matrizPermisos, reglasContextuales, ROLES, type EntradaABAC, type EntradaMatriz, type Rol } from "@/lib/authz"
+import { ETIQUETA_ROL_RP, matrizPermisos, reglasContextuales, ROLES, type EntradaABAC, type EntradaMatriz, type Rol } from "@/lib/authz"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import { Badge } from "@workspace/ui/components/badge"
 import {
@@ -21,13 +21,9 @@ import {
 } from "@workspace/ui/components/table"
 import { IconShieldCheck, IconLock, IconUsers, IconGripHorizontal } from "@tabler/icons-react"
 
-const ETIQUETAS_ROL: Record<Rol, string> = {
-  administrador: "Administrador Maestro",
-  comite: "Miembro del Comité",
-  conserjeria: "Conserjería / Seguridad",
-  residente: "Propietario / Residente",
-  mantencion: "Personal de Mantención",
-}
+// El nombre del rol como oficio vive en `lib/authz.ts`, junto al de la forma de
+// oración: son dos registros a propósito y el motivo está escrito en `ETIQUETA_ROL_RP`.
+
 
 interface ComunidadPropia {
   id: string
@@ -55,7 +51,7 @@ function MatrizRol({ rol, entradas }: { rol: Rol; entradas: EntradaMatriz[] }) {
     <Card className={esAdmin ? "border-primary/40" : ""}>
       <CardHeader className="pb-2">
         <CardTitle className="text-sm flex items-center gap-2">
-          <IconShieldCheck className="size-4 text-primary" /> {ETIQUETAS_ROL[rol]}
+          <IconShieldCheck className="size-4 text-primary" /> {ETIQUETA_ROL_RP[rol]}
           {esAdmin && <Badge className="bg-primary text-[10px] text-primary-foreground">wildcard</Badge>}
         </CardTitle>
         {esAdmin && (
@@ -108,7 +104,7 @@ function SeccionABAC({ reglas }: { reglas: EntradaABAC[] }) {
         <Card key={rol}>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm flex items-center gap-2">
-              <IconShieldCheck className="size-4 text-primary" /> {ETIQUETAS_ROL[rol]}
+              <IconShieldCheck className="size-4 text-primary" /> {ETIQUETA_ROL_RP[rol]}
             </CardTitle>
             <CardDescription className="text-xs">
               {porRol.get(rol)!.length} regla(s) ABAC

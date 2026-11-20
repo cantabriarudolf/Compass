@@ -29,6 +29,30 @@ export const ETIQUETA_ROL: Record<Rol, string> = {
 }
 
 /**
+ * Nombre del rol como OFICIO, para la matriz de permisos: «Administrador Maestro»,
+ * «Miembro del Comité». Es el segundo registro de nombre de rol, y es a propósito
+ * (auditoría `odd/auditorias/catalogos-y-estados.md`, hallazgo 14):
+ *
+ * - `ETIQUETA_ROL` responde «quién sos» dentro de una oración, y por eso va en
+ *   minúscula («Tu rol es residente.»). La usan el correo de bienvenida y el badge,
+ *   vía `etiquetaRol`.
+ * - Este responde «qué oficio administra esta fila de la matriz» y por eso lleva el
+ *   nombre formal del rol en el reglamento.
+ *
+ * No derivan uno del otro porque no dicen lo mismo; los dos son
+ * `Record<Rol, string>`, así que un rol nuevo rompe la compilación en ambos, y
+ * cambiar una cadena acá no cambia el correo. Eso es la decisión, no un descuido:
+ * lo pina `test/lib/etiqueta-rol-dos-registros.test.ts`.
+ */
+export const ETIQUETA_ROL_RP: Record<Rol, string> = {
+  administrador: "Administrador Maestro",
+  comite: "Miembro del Comité",
+  conserjeria: "Conserjería / Seguridad",
+  residente: "Propietario / Residente",
+  mantencion: "Personal de Mantención",
+}
+
+/**
  * Etiqueta del rol tal como la muestra la pantalla: la inicial en mayúscula
  * («Administrador», «Comité», «Conserjería», «Residente», «Mantención»). Un valor
  * que no es un rol conocido se devuelve crudo: la tabla muestra el dato tal como
