@@ -33,8 +33,15 @@ const RUTA_COMUNIDAD_ACTUAL = "/api/comunidad-actual"
 const NOMBRE_VIEJO = "Comunidad Vieja"
 const NOMBRE_NUEVO = "Comunidad Nueva"
 
-/** La fila tal como la sirve la API: el nombre ya viene proyectado de la comunidad. */
-const CONFIGURACION = { ...configuracionDefault, nombreComunidad: NOMBRE_VIEJO }
+/** La fila tal como la sirve la API: el nombre ya viene proyectado de la comunidad
+ *  y el firmante en su propio campo. Las dos columnas deprecadas (`administradorResponsable`,
+ *  `rutAdministrador`) ya no viajan en la respuesta, así que el fixture tampoco las trae. */
+const { administradorResponsable: _colDeprecada1, rutAdministrador: _colDeprecada2, ...CF_DEL_SEED } =
+  configuracionDefault
+
+const FIRMANTE = { nombre: "Rosa Firmante del Padrón", rut: "12.345.678-9" }
+
+const CONFIGURACION = { ...CF_DEL_SEED, nombreComunidad: NOMBRE_VIEJO, firmante: FIRMANTE }
 
 const fetchFalso = vi.fn()
 
@@ -68,7 +75,8 @@ function cuerpoDe(llamada: unknown[] | undefined): Record<string, unknown> | nul
 /** La pantalla real: lee la configuración y responde como las dos rutas. */
 function servirPantalla(
   respuestaRenombre: () => Response = () =>
-    respuestaJson({ data: { nombre: NOMBRE_NUEVO, logoUrl: null } })
+    respuestaJson({ data: { nombre: NOMBRE_NUEVO, logoUrl: null } }),
+  configuracion: Record<string, unknown> = CONFIGURACION
 ): void {
   fetchFalso.mockImplementation(
     async (entrada: unknown, init?: RequestInit): Promise<Response> => {
@@ -76,8 +84,8 @@ function servirPantalla(
       const metodo = init?.method ?? "GET"
       if (url === RUTA_CONFIGURACION) {
         return metodo === "PUT"
-          ? respuestaJson(cuerpoDe([entrada, init]) ?? CONFIGURACION)
-          : respuestaJson(CONFIGURACION)
+          ? respuestaJson(cuerpoDe([entrada, init]) ?? configuracion)
+          : respuestaJson(configuracion)
       }
       if (url === RUTA_COMUNIDAD_ACTUAL) {
         return metodo === "PUT"
@@ -128,6 +136,23 @@ describe("Configuración Global — Identidad Legal edita la fuente única del n
     expect(
       screen.getByText(/Se guarda en la ficha de la comunidad/)
     ).toBeTruthy()
+  })
+
+  it("muestra el administrador derivado desde el campo `firmante`", async () => {
+    servirPantalla()
+    await montar()
+
+    // Nombre y RUT del firmante: la pestaña los pinta del campo propio del contrato.
+    expect(await screen.findByDisplayValue(FIRMANTE.nombre)).toBeTruthy()
+    expect(screen.getByDisplayValue(FIRMANTE.rut)).toBeTruthy()
+  })
+
+  it("sin firmante la pestaña dice que no hay administrador designado", async () => {
+    servirPantalla(undefined, { ...CONFIGURACION, firmante: null })
+    await montar()
+
+    expect(await screen.findByDisplayValue("Sin administrador designado")).toBeTruthy()
+    expect(screen.getByDisplayValue("—")).toBeTruthy()
   })
 
   it("al guardar un nombre nuevo, el renombre va a /api/comunidad-actual ANTES de la configuración", async () => {

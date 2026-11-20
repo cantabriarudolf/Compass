@@ -135,6 +135,21 @@ describe("/api/configuracion — CF singleton con BD real (BD-FUENTE-VERDAD)", (
     })
   })
 
+  it("GET con config → 200 y el firmante derivado va en su propio campo `firmante`", async () => {
+    await conSesion(emailAdmin, async () => {
+      const res = await GET()
+      expect(res.status).toBe(200)
+      const json = await res.json()
+      // La cuenta administradora del arnés no tiene ficha en el padrón: fallo
+      // cerrado, no texto libre del seed.
+      expect(json.firmante).toBeNull()
+      // Las dos columnas deprecadas ya no viajan en la respuesta: quien lea esos
+      // nombres lee `undefined`, no el firmante derivado.
+      expect(json).not.toHaveProperty("administradorResponsable")
+      expect(json).not.toHaveProperty("rutAdministrador")
+    })
+  })
+
   it("PUT update → 200 y refleja en BD sin tocar el nombre", async () => {
     await conSesion(emailAdmin, async () => {
       const res = await PUT({ diaCortePago: 15 })
@@ -170,6 +185,19 @@ describe("/api/configuracion — CF singleton con BD real (BD-FUENTE-VERDAD)", (
       // Y lo que se lee sigue siendo el nombre de la comunidad.
       const reget = await (await cargaModulo()).GET()
       expect((await reget.json()).nombreComunidad).toBe("Comunidad A CF")
+    })
+  })
+
+  it("PUT responde el MISMO shape que el GET: `firmante` y sin las columnas deprecadas", async () => {
+    await conSesion(emailAdmin, async () => {
+      const res = await PUT({ diaCortePago: 14 })
+      expect(res.status).toBe(200)
+      const json = await res.json()
+      expect(json.firmante).toBeNull()
+      expect(json).not.toHaveProperty("administradorResponsable")
+      expect(json).not.toHaveProperty("rutAdministrador")
+      // El resto de la fila sigue llegando: la respuesta no se vació.
+      expect(json.diaCortePago).toBe(14)
     })
   })
 

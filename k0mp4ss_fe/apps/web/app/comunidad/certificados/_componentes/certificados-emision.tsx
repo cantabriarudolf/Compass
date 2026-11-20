@@ -28,11 +28,12 @@ import {
   SelectValue,
 } from "@workspace/ui/components/select"
 import { IconCertificate, IconFileText, IconTrash } from "@tabler/icons-react"
-import type { CertificadoCT, CertificadoCTAlta, ConfiguracionGlobal, Unidad } from "@/lib/schemas"
+import type { CertificadoCT, CertificadoCTAlta, Unidad } from "@/lib/schemas"
 import { CertificadoCTAltaSchema } from "@/lib/schemas"
 import {
   MENSAJE_SIN_ADMINISTRADOR_DESIGNADO,
   documentoCertificadoPDF,
+  identidadInstitucionalDesdeConfiguracion,
 } from "@/lib/pdf-utils"
 
 /**
@@ -414,8 +415,9 @@ function CertificadosGestion({ tiposEmisibles }: CertificadosEmisionProps) {
   const generarYDescargar = async () => {
     setError(null); setOkMsg(null)
     // Sin firmante derivado no hay papel: se dice con el MISMO texto del servidor
-    // y no se emite el certificado ni se arma el PDF.
-    if (!configuracion?.administradorResponsable || !configuracion.rutAdministrador) {
+    // y no se emite el certificado ni se arma el PDF. El firmante viene en su
+    // propio campo del contrato (`firmante`), no en una columna deprecada.
+    if (!configuracion?.firmante) {
       setError(MENSAJE_SIN_ADMINISTRADOR_DESIGNADO)
       return
     }
@@ -472,7 +474,11 @@ function CertificadosGestion({ tiposEmisibles }: CertificadosEmisionProps) {
   ): Promise<{ ok: boolean; error?: string }> => {
     setPdfBusy(c.id)
     // El historial tampoco imprime sin firmante: mismo fallo cerrado y mismo texto.
-    if (!configuracion?.administradorResponsable || !configuracion.rutAdministrador) {
+    // El bloque impreso se arma desde el campo `firmante` del contrato.
+    const identidad = configuracion
+      ? identidadInstitucionalDesdeConfiguracion(configuracion)
+      : null
+    if (!identidad) {
       setPdfBusy(null)
       return { ok: false, error: MENSAJE_SIN_ADMINISTRADOR_DESIGNADO }
     }
@@ -486,7 +492,7 @@ function CertificadosGestion({ tiposEmisibles }: CertificadosEmisionProps) {
         parrafos: [c.resumen],
         detalle: c.detalle.map(d => [d.clave, d.valor] as [string, string]),
         solicitanteNombre: c.solicitanteNombre,
-        config: configuracion as ConfiguracionGlobal,
+        config: identidad,
       })
       const { descargarPdf: descargarArchivo } = await import("@/lib/pdf-utils")
       await descargarArchivo(doc, `certificado-${c.folio}.pdf`)

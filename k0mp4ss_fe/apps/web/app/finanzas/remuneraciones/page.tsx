@@ -47,6 +47,7 @@ import {
 import {
   MENSAJE_SIN_ADMINISTRADOR_DESIGNADO,
   documentoLiquidacionPDF,
+  identidadInstitucionalDesdeConfiguracion,
 } from "@/lib/pdf-utils"
 
 interface BonoForm {
@@ -246,13 +247,15 @@ export default function RemuneracionesPage() {
     setError(null); setOkMsg(null)
     if (!configuracion) { setError("La configuración aún no está cargada."); return }
     // Sin firmante derivado no hay papel: mismo texto que el servidor y ningún PDF.
-    if (!configuracion.administradorResponsable || !configuracion.rutAdministrador) {
+    // El bloque impreso se arma desde el campo `firmante` del contrato.
+    const identidad = identidadInstitucionalDesdeConfiguracion(configuracion)
+    if (!identidad) {
       setError(MENSAJE_SIN_ADMINISTRADOR_DESIGNADO)
       return
     }
     setPdfBusy(liq.id)
     try {
-      const doc = await documentoLiquidacionPDF(liq, nombrePersona(liq.trabajadorPersonaId), rutPersona(liq.trabajadorPersonaId), configuracion)
+      const doc = await documentoLiquidacionPDF(liq, nombrePersona(liq.trabajadorPersonaId), rutPersona(liq.trabajadorPersonaId), identidad)
       const { descargarPdf: descargar } = await import("@/lib/pdf-utils")
       await descargar(doc, `liquidacion-${liq.folio}-${liq.periodo}.pdf`)
       setOkMsg(`PDF ${liq.folio} generado con firma embebida.`)

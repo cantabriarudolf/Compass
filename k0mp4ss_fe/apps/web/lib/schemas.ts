@@ -2750,6 +2750,20 @@ export const MAESTRO_SCHEMAS = {
 export const SeguridadSMTPSchema = z.enum(["ssl", "tls", "none"])
 
 /**
+ * El firmante de los papeles, tal como lo sirve `GET /api/configuracion` (S2 de
+ * `odd/tasks/identidad-unica.md`).
+ *
+ * NO es una columna: se deriva de la membresía `administrador` vigente y de la
+ * persona del padrón (`identidadDelPapel`). `null` es fallo cerrado —la comunidad
+ * no tiene administrador con ficha en el padrón— y las pantallas que emiten
+ * papeles no emiten, con el mismo texto que el servidor.
+ */
+export const FirmanteSchema = z.object({
+  nombre: z.string().min(1, "El nombre del firmante no puede estar vacío."),
+  rut: z.string().min(1, "El RUT del firmante no puede estar vacío."),
+})
+
+/**
  * Tope del nombre de la comunidad.
  *
  * Una sola definición: la usan el endpoint de renombre (`PUT /api/comunidad-actual`,
@@ -2781,16 +2795,24 @@ export const ConfiguracionGlobalSchema = z.object({
   faviconUrl: z.string().nullable().optional(),
   rutComunidad: DocumentoIdentidadSchema,
   direccionOficial: z.string().min(1, "La dirección oficial es obligatoria."),
-  // DEPRECADAS (2026-11-21, hallazgo #3/#4 de `odd/auditorias/identidad-comunidad.md`):
+  // DEPRECADAS (2026-11-21, hallazgos #3/#4 de `odd/auditorias/identidad-comunidad.md`):
   // el firmante de los papeles se DERIVA de la membresía `administrador` vigente y
-  // de la persona del padrón (nombre y RUT), no de estas columnas. Sobreviven en el
-  // shape de LECTURA porque `GET /api/configuracion` las proyecta con el firmante
-  // derivado (vacías si no hay) y la forma del formulario no cambia de contrato.
-  // Nadie las escribe: ver `ConfiguracionGlobalEscrituraSchema`.
+  // de la persona del padrón (nombre y RUT), y `GET /api/configuracion` lo sirve en
+  // el campo `firmante` de abajo. Estas dos claves NO viajan en la respuesta: quedan
+  // declaradas porque las columnas de la base siguen existiendo (deprecadas, sólo
+  // congeladas al crear la fila) y porque el bloque que imprimen los papeles
+  // `IdentidadInstitucional` de `lib/pdf-utils.ts`) nombra así sus dos campos.
+  // Ningún lector las usa: el firmante se lee del campo `firmante` de abajo. Nadie
+  // las escribe: ver `ConfiguracionGlobalEscrituraSchema`.
   administradorResponsable: z
     .string()
     .min(1, "El administrador responsable es obligatorio."),
   rutAdministrador: DocumentoIdentidadSchema,
+  // El firmante en su propio campo: `{ nombre, rut }` de la persona del padrón que
+  // firma, o `null` si no hay administrador con ficha (fallo cerrado). Opcional en
+  // el schema porque la semilla describe la fila que se escribe en la base —las
+  // columnas congeladas—, no la respuesta del endpoint, que siempre lo trae.
+  firmante: FirmanteSchema.nullable().optional(),
   telefonoAdmin: z
     .string()
     .min(1, "El teléfono del administrador es obligatorio."),
@@ -2976,6 +2998,7 @@ export type EstadoOcupacion = z.infer<typeof EstadoOcupacionSchema>
 export type EstadoInmobiliario = z.infer<typeof EstadoInmobiliarioSchema>
 export type ModoCalculoGC = z.infer<typeof ModoCalculoGCSchema>
 export type SeguridadSMTP = z.infer<typeof SeguridadSMTPSchema>
+export type Firmante = z.infer<typeof FirmanteSchema>
 export type ConfiguracionGlobal = z.infer<typeof ConfiguracionGlobalSchema>
 
 /**
@@ -2989,17 +3012,19 @@ export const NombreComunidadSchema =
 /**
  * Shape de ESCRITURA de `ConfiguracionGlobal` (PUT `/api/configuracion`).
  *
- * Quedan afuera a propósito las tres columnas deprecadas:
+ * Quedan afuera a propósito las columnas deprecadas y lo que se deriva:
  *   · `nombreComunidad` (S1): la fuente única es `Comunidad.nombre` y se edita por
  *     `PUT /api/comunidad-actual`; la columna sólo guarda un snapshot al crear.
  *   · `administradorResponsable` y `rutAdministrador` (hallazgos #3/#4): el
  *     firmante se deriva de la membresía `administrador` + la persona del padrón.
- *     El formulario puede reenviarlos; el PUT los descarta y no se escriben.
+ *   · `firmante` (S2): es esa derivación, no un dato del formulario.
+ *     El formulario puede reenviar los tres; el PUT los descarta y no se escriben.
  */
 export const ConfiguracionGlobalEscrituraSchema = ConfiguracionGlobalSchema.omit({
   nombreComunidad: true,
   administradorResponsable: true,
   rutAdministrador: true,
+  firmante: true,
 })
 export type EventoAuditoria = z.infer<typeof EventoAuditoriaSchema>
 export type ImagenReferencia = z.infer<typeof ImagenReferenciaSchema>

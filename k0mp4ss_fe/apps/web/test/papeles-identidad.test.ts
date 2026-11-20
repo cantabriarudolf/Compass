@@ -646,8 +646,11 @@ describe("identidad de los papeles — firmante derivado y fallo cerrado", () =>
       expect(res.status).toBe(200)
       const config = await cuerpoJson<Record<string, unknown>>(res)
       expect(config.nombreComunidad).toBe(NOMBRE)
-      expect(config.administradorResponsable).toBe(NOMBRE_FIRMANTE)
-      expect(config.rutAdministrador).toBe(RUT_FIRMANTE)
+      // El firmante va en su propio campo, con la persona del padrón.
+      expect(config.firmante).toEqual({ nombre: NOMBRE_FIRMANTE, rut: RUT_FIRMANTE })
+      // Y las dos columnas deprecadas ya no viajan en la respuesta.
+      expect(config).not.toHaveProperty("administradorResponsable")
+      expect(config).not.toHaveProperty("rutAdministrador")
       const plano = JSON.stringify(config)
       expect(plano).not.toContain(ADMIN_TEXTO_LIBRE)
       expect(plano).not.toContain(RUT_ADMIN_TEXTO_LIBRE)
@@ -655,7 +658,7 @@ describe("identidad de los papeles — firmante derivado y fallo cerrado", () =>
     })
   })
 
-  it("un PUT del formulario no escribe las columnas deprecadas del administrador", async () => {
+  it("un PUT del formulario no escribe el firmante ni las columnas deprecadas del administrador", async () => {
     await como("firmante", async () => {
       const res = await invocarApi(
         import("@/app/api/configuracion/route"),
@@ -663,8 +666,11 @@ describe("identidad de los papeles — firmante derivado y fallo cerrado", () =>
         "configuracion",
         {
           body: {
+            // Los tres nombres viejos del firmante: las dos columnas deprecadas y el
+            // campo derivado. Ninguno se escribe.
             administradorResponsable: "Intento de Sobrescritura",
             rutAdministrador: "11.111.111-1",
+            firmante: { nombre: "Intento de Sobrescritura", rut: "11.111.111-1" },
             diaCortePago: 17,
           },
         }
@@ -676,15 +682,16 @@ describe("identidad de los papeles — firmante derivado y fallo cerrado", () =>
       expect(fila?.administradorResponsable).toBe(ADMIN_TEXTO_LIBRE)
       expect(fila?.rutAdministrador).toBe(RUT_ADMIN_TEXTO_LIBRE)
       expect(fila?.diaCortePago).toBe(17)
-      // La proyección sigue siendo la persona del padrón.
+      // La proyección sigue siendo la persona del padrón: `firmante` no se escribe.
       const get = await invocarApi(
         import("@/app/api/configuracion/route"),
         "GET",
         "configuracion"
       )
-      expect((await cuerpoJson<Record<string, unknown>>(get)).administradorResponsable).toBe(
-        NOMBRE_FIRMANTE
-      )
+      expect((await cuerpoJson<Record<string, unknown>>(get)).firmante).toEqual({
+        nombre: NOMBRE_FIRMANTE,
+        rut: RUT_FIRMANTE,
+      })
     })
   })
 
@@ -785,7 +792,7 @@ describe("identidad de los papeles — firmante derivado y fallo cerrado", () =>
     })
   })
 
-  it("GET /api/configuracion de una comunidad sin firmante proyecta vacíos, no el texto viejo", async () => {
+  it("GET /api/configuracion de una comunidad sin firmante devuelve `firmante: null`, no el texto viejo", async () => {
     await como("sinFirmante", async () => {
       const res = await invocarApi(
         import("@/app/api/configuracion/route"),
@@ -794,8 +801,10 @@ describe("identidad de los papeles — firmante derivado y fallo cerrado", () =>
       )
       expect(res.status).toBe(200)
       const config = await cuerpoJson<Record<string, unknown>>(res)
-      expect(config.administradorResponsable).toBe("")
-      expect(config.rutAdministrador).toBe("")
+      // Falla cerrado: `null`, no cadenas vacías ni el texto que quedó en la columna.
+      expect(config.firmante).toBeNull()
+      expect(config).not.toHaveProperty("administradorResponsable")
+      expect(config).not.toHaveProperty("rutAdministrador")
       const plano = JSON.stringify(config)
       expect(plano).not.toContain(ADMIN_TEXTO_LIBRE)
       expect(plano).not.toContain(RUT_ADMIN_TEXTO_LIBRE)

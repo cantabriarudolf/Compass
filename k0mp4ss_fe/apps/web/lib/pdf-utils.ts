@@ -116,11 +116,12 @@ const CLP = (n: number): string => `$${Math.round(n).toLocaleString("es-CL")}`
  * Identidad institucional que imprime un papel: el nombre de la comunidad, sus
  * datos legales y la persona que firma.
  *
- * NO es `ConfiguracionGlobal`: el firmante (`administradorResponsable`,
- * `rutAdministrador`) no se escribe a mano en ninguna columna, lo resuelve
- * `identidadDelPapel` (`app/api/configuracion/_lib/identidad-papel.ts`) desde la
- * membresía `administrador` y la persona del padrón. Este módulo es de
- * presentación: no consulta la base ni decide de dónde sale ningún dato.
+ * NO es `ConfiguracionGlobal`: el firmante no se escribe a mano en ninguna columna.
+ * Lo resuelve `identidadDelPapel` (`app/api/configuracion/_lib/identidad-papel.ts`)
+ * desde la membresía `administrador` y la persona del padrón cuando el PDF lo sirve
+ * el servidor, y `identidadInstitucionalDesdeConfiguracion` cuando lo arma el
+ * navegador a partir del campo `firmante` de `GET /api/configuracion`. Este módulo
+ * es de presentación: no consulta la base ni decide de dónde sale ningún dato.
  */
 export interface IdentidadInstitucional {
   nombreComunidad: string
@@ -152,6 +153,34 @@ export const MENSAJE_SIN_ADMINISTRADOR_DESIGNADO =
  */
 export const MENSAJE_COMUNIDAD_SIN_NOMBRE =
   "El papel no se puede emitir: la comunidad no tiene nombre registrado. Cargá el nombre real de la comunidad y volvé a intentar."
+
+/**
+ * El bloque impreso a partir de la configuración que sirve `GET /api/configuracion`.
+ *
+ * El navegador que arma el PDF no puede consultar la base: recibe la configuración
+ * del endpoint y de ahí saca el firmante del campo `firmante` —la persona del
+ * padrón con membresía `administrador`, ya resuelta en el servidor—. Sin firmante
+ * devuelve `null`: fallo cerrado, el mismo que `identidadDelPapel` aplica al servir
+ * el papel, y ninguna cadena vacía se imprime como si fuera una persona.
+ */
+export function identidadInstitucionalDesdeConfiguracion(config: {
+  nombreComunidad: string
+  direccionOficial: string
+  rutComunidad: string
+  firmaDigitalizadaUrl?: string | null
+  firmante?: { nombre: string; rut: string } | null
+}): IdentidadInstitucional | null {
+  const firmante = config.firmante
+  if (!firmante) return null
+  return {
+    nombreComunidad: config.nombreComunidad,
+    direccionOficial: config.direccionOficial,
+    rutComunidad: config.rutComunidad,
+    firmaDigitalizadaUrl: config.firmaDigitalizadaUrl,
+    administradorResponsable: firmante.nombre,
+    rutAdministrador: firmante.rut,
+  }
+}
 
 /**
  * Encabezado institucional de TODOS los papeles: nombre, dirección · RUT y

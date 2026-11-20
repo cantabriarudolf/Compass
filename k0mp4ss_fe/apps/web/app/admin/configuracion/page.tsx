@@ -311,9 +311,12 @@ export default function ConfiguracionPage() {
                 </div>
                 <div className="space-y-2">
                   <Label>Administrador Responsable</Label>
+                  {/* Firmante DERIVADO: sale del campo `firmante` de la configuración
+                      (la persona del padrón con membresía administrador), no de una
+                      columna editable ni de un nombre guardado a mano. */}
                   <Input
                     value={
-                      config.administradorResponsable ||
+                      configuracionRemota?.firmante?.nombre ||
                       "Sin administrador designado"
                     }
                     readOnly
@@ -324,7 +327,7 @@ export default function ConfiguracionPage() {
                 <div className="space-y-2">
                   <Label>RUT Administrador</Label>
                   <Input
-                    value={config.rutAdministrador || "—"}
+                    value={configuracionRemota?.firmante?.rut || "—"}
                     readOnly
                     aria-readonly="true"
                     className="bg-muted/40"

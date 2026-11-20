@@ -14,13 +14,13 @@
  *     snapshot congelado de `Comunidad.nombre`; después nadie la actualiza.
  * Renombrar la comunidad es `PUT /api/comunidad-actual`.
  *
- * Firmante (hallazgos #3/#4 de `odd/auditorias/identidad-comunidad.md`):
- * `administradorResponsable` y `rutAdministrador` están DEPRECADAS por el mismo
- * criterio. GET las OMITE y proyecta el firmante DERIVADO —la persona del padrón
- * con membresía `administrador` vigente, resuelta por `identidadDelPapel`—;
- * vacías si la comunidad no tiene administrador designado. PUT no las escribe. El
- * formulario sigue mostrando la forma, pero el valor que muestra es el que firma
- * los papeles, no texto libre guardado.
+ * Firmante (hallazgos #3/#4 de `odd/auditorias/identidad-comunidad.md`, S2 de
+ * `odd/tasks/identidad-unica.md`): el firmante que imprimen los papeles se DERIVA
+ * de la membresía `administrador` vigente y de la persona del padrón, y viaja en su
+ * propio campo `firmante: { nombre, rut } | null` — `null` si la comunidad no tiene
+ * administrador designado. Las columnas `administradorResponsable` y
+ * `rutAdministrador` están DEPRECADAS: seguirán en la base (nadie las borra), pero
+ * no se leen, no se proyectan en la respuesta y PUT no las escribe.
  *
  * Authz: recurso "cf" (admin full, comité ver, residente sin acceso).
  * No POST ni DELETE: solo hay una config por comunidad.
@@ -84,10 +84,13 @@ export async function GET(): Promise<Response> {
     return Response.json({
       ...config,
       nombreComunidad: comunidad.nombre,
-      // Vacíos cuando no hay administrador designado: la pantalla lo muestra y
-      // los papeles responden 409 (nunca el texto libre que quedó en la columna).
-      administradorResponsable: firmante?.nombreCompleto ?? "",
-      rutAdministrador: firmante?.rut ?? "",
+      // El firmante derivado en su propio campo; las dos columnas deprecadas ya no
+      // viajan en la respuesta. `null` cuando no hay administrador designado: la
+      // pantalla lo muestra y los papeles responden 409 (nunca el texto libre que
+      // quedó en la columna).
+      firmante: firmante
+        ? { nombre: firmante.nombreCompleto, rut: firmante.rut }
+        : null,
     })
   } catch (e) {
     logger.error({ err: e }, "[configuracion] error GET")
@@ -126,6 +129,8 @@ export async function PUT(req: Request): Promise<Response> {
   delete datos.nombreComunidad
   delete datos.administradorResponsable
   delete datos.rutAdministrador
+  // `firmante` es la proyección derivada: nunca un dato que el formulario escriba.
+  delete datos.firmante
 
   try {
     const [configActual, comunidad, firmante] = await Promise.all([
@@ -157,6 +162,8 @@ export async function PUT(req: Request): Promise<Response> {
       ? await prisma.configuracionGlobal.update({
           where: { comunidadId: scope.comunidadId },
           data: datos as Prisma.ConfiguracionGlobalUpdateInput,
+          // Las columnas deprecadas no vuelven al cliente: mismo shape que el GET.
+          omit: { administradorResponsable: true, rutAdministrador: true },
         })
       : await prisma.configuracionGlobal.create({
           data: {
@@ -172,6 +179,7 @@ export async function PUT(req: Request): Promise<Response> {
             id: crypto.randomUUID(),
             comunidadId: scope.comunidadId,
           },
+          omit: { administradorResponsable: true, rutAdministrador: true },
         })
 
     // Auditoría `CF_UPDATE_PARAM` (certificado por PL): solo los parámetros
@@ -204,14 +212,15 @@ export async function PUT(req: Request): Promise<Response> {
     }
 
     return Response.json(
-      // Mismo shape que el GET: nombre y firmante son la proyección de sus fuentes
-      // únicas, nunca las columnas deprecadas que acaban de quedar (o seguir)
-      // congeladas.
+      // Mismo shape que el GET: el nombre y el firmante son la proyección de sus
+      // fuentes únicas, nunca las columnas deprecadas que acaban de quedar (o
+      // seguir) congeladas en la base.
       {
         ...registro,
         nombreComunidad: comunidad.nombre,
-        administradorResponsable: firmante?.nombreCompleto ?? "",
-        rutAdministrador: firmante?.rut ?? "",
+        firmante: firmante
+          ? { nombre: firmante.nombreCompleto, rut: firmante.rut }
+          : null,
       },
       { status: configActual ? 200 : 201 }
     )

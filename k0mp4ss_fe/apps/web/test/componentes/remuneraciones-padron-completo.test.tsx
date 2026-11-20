@@ -30,9 +30,10 @@ import { MENSAJE_SIN_ADMINISTRADOR_DESIGNADO } from "@/lib/pdf-utils"
 
 vi.setConfig({ testTimeout: 60_000 })
 
-/** El PDF captura el nombre y el RUT que la página resolvió del padrón. */
+/** El PDF captura el nombre y el RUT que la página resolvió del padrón, y el
+ *  firmante con el que se armó el bloque impreso. */
 const pdfCapturado = vi.hoisted(() => ({
-  actual: null as null | { nombre: string; rut: string },
+  actual: null as null | { nombre: string; rut: string; firmante: string },
 }))
 
 vi.mock("@/lib/pdf-utils", async (importOriginal) => {
@@ -40,8 +41,17 @@ vi.mock("@/lib/pdf-utils", async (importOriginal) => {
   return {
     ...actual,
     documentoLiquidacionPDF: vi.fn(
-      async (_liq: unknown, nombreTrabajador: string, rutTrabajador: string) => {
-        pdfCapturado.actual = { nombre: nombreTrabajador, rut: rutTrabajador }
+      async (
+        _liq: unknown,
+        nombreTrabajador: string,
+        rutTrabajador: string,
+        config: { administradorResponsable: string }
+      ) => {
+        pdfCapturado.actual = {
+          nombre: nombreTrabajador,
+          rut: rutTrabajador,
+          firmante: config.administradorResponsable,
+        }
         return {}
       }
     ),
@@ -193,8 +203,7 @@ function estadoPadronChico(): EstadoArnés {
 
 /** La CF que sirve el falso: sin firmante derivado la pantalla no arma el PDF. */
 const CF_CON_FIRMANTE = {
-  administradorResponsable: "Rosa Firmante del Padrón",
-  rutAdministrador: "12.345.678-9",
+  firmante: { nombre: "Rosa Firmante del Padrón", rut: "12.345.678-9" },
   firmaDigitalizadaUrl: null,
 }
 
@@ -336,6 +345,8 @@ describe("remuneraciones — la regla de negocio opera sobre el padrón completo
     await waitFor(() => expect(pdfCapturado.actual).not.toBeNull())
     expect(pdfCapturado.actual?.nombre).toBe("Zully Fuera De Pagina")
     expect(pdfCapturado.actual?.rut).toBe("12.345.678-9")
+    // El bloque impreso se arma desde `firmante`: no llega `undefined`.
+    expect(pdfCapturado.actual?.firmante).toBe(CF_CON_FIRMANTE.firmante.nombre)
   })
 
   it("con el padrón entero en la página 1 nada cambia y no se piden páginas extra", async () => {
@@ -368,8 +379,7 @@ describe("remuneraciones — la regla de negocio opera sobre el padrón completo
 
   it("sin administrador designado no arma el PDF: muestra el mismo mensaje del servidor", async () => {
     instalarApiArnés(estadoPadronChico(), {
-      administradorResponsable: "",
-      rutAdministrador: "",
+      firmante: null,
       firmaDigitalizadaUrl: null,
     })
     const user = userEvent.setup({ delay: null })

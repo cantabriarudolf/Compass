@@ -43,19 +43,18 @@ const fuente = vi.hoisted(() => ({
 
 /**
  * La CF que devuelve `GET /api/configuracion` (app/api/configuracion/route.ts, ~89):
- * los dos campos van PROYECTADOS desde el firmante derivado de la membresía
- * administrador (`?? ""` cuando no hay administrador con ficha en el padrón).
+ * el firmante derivado de la membresía administrador viaja en su propio campo
+ * (`firmante: null` cuando no hay administrador con ficha en el padrón).
  * Es el mismo fixture de nombre y valores que el resto de los arneses de
  * certificados: un solo firmante de prueba, no dos formas distintas.
  */
 const CF_CON_FIRMANTE = vi.hoisted(() => ({
-  administradorResponsable: "Rosa Firmante del Padrón",
-  rutAdministrador: "12.345.678-9",
+  firmante: { nombre: "Rosa Firmante del Padrón", rut: "12.345.678-9" },
   firmaDigitalizadaUrl: null,
 }))
 
 /**
- * CF que ve la pantalla. Se reemplaza por caso: el `{ administradorResponsable: "" }`
+ * CF que ve la pantalla. Se reemplaza por caso: el `{ firmante: null }`
  * es el que prueba el fallo cerrado del firmante.
  */
 const configuracionFuente = vi.hoisted(() => ({
@@ -308,10 +307,20 @@ describe("comunidad/certificados — emisión y descarga del PDF", () => {
     // El PDF se armó con el folio del servidor, no con un `max+1` del cliente.
     expect(fuente.documentoCertificadoPDF).toHaveBeenCalledTimes(1)
     const llamada = fuente.documentoCertificadoPDF.mock.calls[0]?.[0] as
-      | { folio?: string; codigoVerificacion?: string }
+      | {
+          folio?: string
+          codigoVerificacion?: string
+          config?: { administradorResponsable?: string; rutAdministrador?: string }
+        }
       | undefined
     expect(llamada?.folio).toBe(FOLIO_SERVIDOR)
     expect(llamada?.codigoVerificacion).toBe(CODIGO_SERVIDOR)
+    // El bloque que imprime el papel se arma desde `firmante`: la firma llega con
+    // nombre y RUT, no como `undefined`.
+    expect(llamada?.config?.administradorResponsable).toBe(
+      CF_CON_FIRMANTE.firmante.nombre
+    )
+    expect(llamada?.config?.rutAdministrador).toBe(CF_CON_FIRMANTE.firmante.rut)
     // El alta NO manda folio: lo completa el servidor.
     const alta = fuente.crear.mock.calls[0]?.[0] as Record<string, unknown> | undefined
     expect(alta).toBeTruthy()
@@ -335,8 +344,7 @@ describe("comunidad/certificados — emisión y descarga del PDF", () => {
 
   it("sin administrador designado no emite ni arma el PDF: muestra el mismo mensaje del servidor", { timeout: PRESUPUESTO_CARGA }, async () => {
     configuracionFuente.actual = {
-      administradorResponsable: "",
-      rutAdministrador: "",
+      firmante: null,
       firmaDigitalizadaUrl: null,
     }
     const user = userEvent.setup()
