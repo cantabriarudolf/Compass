@@ -16,6 +16,7 @@ import { prisma } from "@/lib/prisma"
 import { puede } from "@/lib/authz"
 import type { Accion } from "@/lib/authz"
 import { unidadesVinculadasDb } from "./sesion-persona"
+import { ESTADO_CUENTA_ACTIVA } from "@/lib/schemas"
 
 export const CARGOS_DIRECTIVA = [
   "presidente",
@@ -45,7 +46,7 @@ export function esMiembroVigente(
   vigenteId: string | undefined
 ): boolean {
   const ficha = persona.datosGobernanza
-  if (!ficha || persona.estadoCuenta !== "activa" || ficha.fechaTermino)
+  if (!ficha || persona.estadoCuenta !== ESTADO_CUENTA_ACTIVA || ficha.fechaTermino)
     return false
   if (!ficha.periodoId) return vigenteId === undefined
   return ficha.periodoId === vigenteId
@@ -71,7 +72,7 @@ export async function idsDirectivaVigenteDb(
   vigenteId: string | undefined
 ): Promise<string[]> {
   const personas = await prisma.persona.findMany({
-    where: { comunidadId, estadoCuenta: "activa" },
+    where: { comunidadId, estadoCuenta: ESTADO_CUENTA_ACTIVA },
     select: { id: true, estadoCuenta: true, datosGobernanza: true },
   })
   return personas

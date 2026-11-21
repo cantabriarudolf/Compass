@@ -19,6 +19,11 @@ import {
 } from "@workspace/ui/components/select"
 import { Checkbox } from "@workspace/ui/components/checkbox"
 import { ScrollArea } from "@workspace/ui/components/scroll-area"
+import {
+  ESTADOS_CUENTA_PERSONA,
+  ESTADO_CUENTA_ACTIVA,
+  type EstadoCuentaPersona,
+} from "@/lib/schemas"
 
 interface FormularioPersonaProps {
   persona?: Persona;
@@ -26,6 +31,18 @@ interface FormularioPersonaProps {
   personas: Persona[];
   onSave: (personaData: Partial<Persona>) => Promise<StoreResult>;
   onCancel: () => void;
+}
+
+/**
+ * Etiqueta de cada estado de cuenta en el formulario de alta/edición. `Record` del
+ * catálogo completo: un estado nuevo rompe la compilación acá en vez de faltar en
+ * el selector. El texto es el del formulario (explica qué significa cada uno), no
+ * el de la pestaña del directorio.
+ */
+const ETIQUETA_ESTADO_CUENTA_FORM: Record<EstadoCuentaPersona, string> = {
+  activa: "Activa (Vigente)",
+  inactiva: "Inactiva (Archivada)",
+  bloqueada: "Bloqueada (Morosidad/Conflicto)",
 }
 
 export function FormularioPersona({ persona, personas, onSave, onCancel }: FormularioPersonaProps) {
@@ -39,7 +56,9 @@ export function FormularioPersona({ persona, personas, onSave, onCancel }: Formu
   const [apellidos, setApellidos] = React.useState(persona?.apellidos || "")
   const [email, setEmail] = React.useState(persona?.email || "")
   const [telefonoMovil, setTelefonoMovil] = React.useState(persona?.telefonoMovil || "")
-  const [estadoCuenta, setEstadoCuenta] = React.useState(persona?.estadoCuenta || "activa")
+  const [estadoCuenta, setEstadoCuenta] = React.useState<EstadoCuentaPersona>(
+    persona?.estadoCuenta ?? ESTADO_CUENTA_ACTIVA
+  )
 
   // Roles y Condiciones (Arrays)
   const [roles, setRoles] = React.useState<string[]>(persona?.roles || [])
@@ -91,7 +110,7 @@ export function FormularioPersona({ persona, personas, onSave, onCancel }: Formu
       apellidos,
       email,
       telefonoMovil,
-      estadoCuenta: estadoCuenta as "activa" | "inactiva" | "bloqueada",
+      estadoCuenta,
       // SAFETY: los checkboxes solo ofrecen valores de ROLES_PERSONA (misma fuente
       // que el schema); el cast alinea el string[] del estado con el tipo del dominio.
       roles: roles as unknown as (typeof ROLES_PERSONA[number])[],
@@ -131,12 +150,14 @@ export function FormularioPersona({ persona, personas, onSave, onCancel }: Formu
               </div>
               <div className="space-y-2">
                 <Label>Estado de la Cuenta</Label>
-                <Select value={estadoCuenta} onValueChange={(v) => setEstadoCuenta(v as "activa" | "inactiva" | "bloqueada")}>
+                <Select value={estadoCuenta} onValueChange={(v) => setEstadoCuenta(v as EstadoCuentaPersona)}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="activa">Activa (Vigente)</SelectItem>
-                    <SelectItem value="inactiva">Inactiva (Archivada)</SelectItem>
-                    <SelectItem value="bloqueada">Bloqueada (Morosidad/Conflicto)</SelectItem>
+                    {ESTADOS_CUENTA_PERSONA.map((estado) => (
+                      <SelectItem key={estado} value={estado}>
+                        {ETIQUETA_ESTADO_CUENTA_FORM[estado]}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>

@@ -1012,7 +1012,10 @@ const DocumentoIdentidadSchema = z
 // el filtro y sus contadores no coincidían con nadie—. Los valores son SINGULARES a
 // propósito: el plural describe el filtro, no la fila.
 
-export const ESTADOS_CUENTA_PERSONA = ["activa", "inactiva", "bloqueada"] as const
+/** La cuenta con acceso: es el filtro que usan los guards y las semillas. */
+export const ESTADO_CUENTA_ACTIVA = "activa"
+
+export const ESTADOS_CUENTA_PERSONA = [ESTADO_CUENTA_ACTIVA, "inactiva", "bloqueada"] as const
 export const EstadoCuentaPersonaSchema = z.enum(ESTADOS_CUENTA_PERSONA, {
   required_error: "El estado de cuenta es obligatorio.",
   invalid_type_error: "Estado de cuenta inválido.",

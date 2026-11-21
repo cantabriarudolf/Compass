@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- seed idempotente idéntico al patrón QA Lab; clientes Prisma tipados en runtime */
 import type { PrismaClient } from "@prisma/client"
 import bcrypt from "bcryptjs"
+import { ESTADO_CUENTA_ACTIVA } from "@/lib/schemas"
 
 /**
  * Password TEST de los usuarios de seed (AU §3 P5): dato de demo en BD,
@@ -136,7 +137,7 @@ export async function seedUsuariosMembresias(client?: PrismaClient): Promise<See
     apellidos: "Fuenzalida Soto",
     email: "arrendatario@test.cl",
     telefonoMovil: "+56 9 5555 1212",
-    estadoCuenta: "activa",
+    estadoCuenta: ESTADO_CUENTA_ACTIVA,
     condicionesEspecialesIds: [],
     roles: ["residente"],
     permiteCreacionManualCV: false,

@@ -41,6 +41,7 @@ import type {
   ReporteFila,
   ResumenEstructura,
 } from "@/lib/importar/estructura"
+import { ESTADO_CUENTA_ACTIVA } from "@/lib/schemas"
 
 /** Encabezados canónicos del bloque personas: fuente única de la plantilla. */
 export const ENCABEZADOS_PERSONAS = [
@@ -466,7 +467,7 @@ export async function importarPersonas({
               apellidos: e.datos.apellidos,
               email: e.datos.email,
               telefonoMovil: e.datos.telefonoMovil,
-              estadoCuenta: "activa",
+              estadoCuenta: ESTADO_CUENTA_ACTIVA,
               condicionesEspecialesIds: [],
               roles: e.datos.roles,
             },
