@@ -11,12 +11,11 @@ The system MUST store and display the community's legal identity and visual bran
 #### Scenario: Identity Fields
 - **WHEN** the admin edits Configuración Global
 - **THEN** the following fields MUST be editable:
-  - `nombreComunidad` (required)
   - `rutCondominio` (required)
   - `direccionOficial` (required)
-  - `administradorResponsable` (required)
-  - `rutAdministrador` (required)
   - `telefonoAdmin` (required)
+- **AND** `nombreComunidad` MUST NOT be editable here: el nombre visible sale de `Comunidad.nombre` y se edita por `PUT /api/comunidad-actual`; la columna guarda sólo un snapshot tomado al crear la fila.
+- **AND** `administradorResponsable` y `rutAdministrador` MUST NOT be editable: son columnas deprecadas que `GET /api/configuracion` proyecta a partir del firmante derivado (la persona con membresía `administrador` vigente y fila en el padrón). Sin administrador designado los papeles no se emiten.
 
 #### Scenario: Logo Upload
 - **WHEN** the admin uploads an image in the "Identidad Legal" section
