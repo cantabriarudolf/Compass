@@ -72,10 +72,18 @@ const MATRIZ: Record<Rol, Record<string, Set<Accion>>> = {
     // H7 — declarado por claridad: el wildcard ya lo cubre, pero el granular deja
     // visible la regla "marcar leída es acto propio del destinatario"
     "notificaciones:propias": new Set<Accion>(["editar"]),
+    // F48 — importar el histórico financiero es un acto de CARGA, no de operación
+    // diaria: el wildcard ya lo cubre, pero el granular deja la regla visible y le
+    // da a las rutas una clave propia (la raíz `fi` las habría dejado heredadas).
+    "fi:importar": new Set<Accion>(["crear"]),
   },
   // Miembro del Comité: lectura financiera + auditoría; aprueba gastos; RE centro de mando lectura; CT historial lectura
   comite: {
     "fi": new Set<Accion>(["ver", "ejecutar"]), // ver balance, ejecutar aprobar gasto
+    // F48: importar el histórico es carga de datos, no lectura del balance. Vacío a
+    // propósito: sin la entrada, `crear` caería al prefijo `fi` y cualquier rol con
+    // `fi` heredaría la carga masiva de movimientos.
+    "fi:importar": new Set<Accion>([]),
     // Vacío a propósito (decisión 2026-11-07, D1 de «Permisos por objeto»): nadie pide
     // `fi:balance`. El comité ya tiene `fi` ver, así que esta clave era una segunda
     // verdad sin puerta. El Set vacío corta el fallback de prefijo de `puede()`.

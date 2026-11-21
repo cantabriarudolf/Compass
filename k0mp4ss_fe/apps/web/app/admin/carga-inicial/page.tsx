@@ -2,10 +2,10 @@
 
 /**
  * /admin/carga-inicial — pantalla única del importador CSV de carga inicial
- * (ODD carga-inicial-csv U3).
+ * (ODD carga-inicial-csv U3 · F48 T3).
  *
- * Tres bloques idénticos (estructura, personas, vínculos), uno por ruta del
- * importador. El flujo por bloque es siempre el mismo:
+ * Cinco bloques idénticos (estructura, personas, vínculos, egresos, ingresos),
+ * uno por ruta del importador. El flujo por bloque es siempre el mismo:
  *   1. «Descargar plantilla» — enlace directo a la ruta de plantilla (nada
  *      de fetch en JS: el navegador descarga con content-disposition).
  *   2. Elegir el archivo y «Ver vista previa» — POST con `?dryRun=1` y el
@@ -43,9 +43,11 @@ import {
   IconAlertTriangle,
   IconBuildingSkyscraper,
   IconCircleCheck,
+  IconCoins,
   IconDownload,
   IconInfoCircle,
   IconLoader2,
+  IconReceipt,
   IconUpload,
   IconUserHeart,
   IconLink,
@@ -93,6 +95,20 @@ const BLOQUES = [
       "Quién vive o trabaja en cada unidad (residente, propietario, conserje, etc.). Requiere que las unidades y las personas ya estén cargadas.",
     icono: IconLink,
   },
+  {
+    slug: "egresos",
+    titulo: "Egresos",
+    descripcion:
+      "Gastos históricos de la comunidad (fecha, monto, descripción, categoría y fondo). El fondo tiene que existir antes de importar: este bloque no crea fondos.",
+    icono: IconReceipt,
+  },
+  {
+    slug: "ingresos",
+    titulo: "Ingresos",
+    descripcion:
+      "Ingresos históricos a los fondos (fecha, monto, descripción, categoría y fondo). Igual que los egresos, imputa a un fondo que ya existe.",
+    icono: IconCoins,
+  },
 ] as const
 
 type Bloque = (typeof BLOQUES)[number]
@@ -111,16 +127,22 @@ class ErrorEstado extends Error {}
  * esperados en mensajes legibles para el administrador.
  */
 async function leerRespuesta(response: Response): Promise<ReporteImportador> {
-  let cuerpo: { error?: string } | null = null
+  let cuerpo: { error?: string; detalle?: string } | null = null
   try {
-    cuerpo = (await response.json()) as { error?: string } | null
+    cuerpo = (await response.json()) as { error?: string; detalle?: string } | null
   } catch {
     cuerpo = null
   }
   if (!response.ok) {
+    // `detalle` es el texto extra del servidor (por ejemplo, qué encabezado
+    // falta en el archivo): se suma al mensaje para no obligar a adivinarlo.
     const detalle =
       typeof cuerpo?.error === "string" && cuerpo.error !== ""
-        ? `: ${cuerpo.error}`
+        ? `: ${cuerpo.error}${
+            typeof cuerpo.detalle === "string" && cuerpo.detalle !== ""
+              ? ` (${cuerpo.detalle})`
+              : ""
+          }`
         : "."
     if (response.status === 401) {
       throw new ErrorEstado(
@@ -498,8 +520,9 @@ export default function CargaInicialPage() {
         </p>
         <p className="text-xs text-muted-foreground">
           Orden recomendado: Estructura → Personas → Vínculos (los vínculos
-          requieren unidades y personas ya cargadas). Cada bloque usa su propio
-          archivo.
+          requieren unidades y personas ya cargadas). Si además traes tu
+          historial financiero, Egresos e Ingresos van después de crear los
+          fondos: el importador no los crea. Cada bloque usa su propio archivo.
         </p>
       </header>
       <div className="space-y-6">
