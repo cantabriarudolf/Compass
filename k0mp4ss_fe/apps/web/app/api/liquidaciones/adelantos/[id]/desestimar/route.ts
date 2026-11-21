@@ -18,10 +18,11 @@ import {
   jsonError,
   withComunidadScope,
 } from "@/lib/api/with-comunidad-scope"
+import { ESTADOS_ADELANTO_DESESTIMABLES } from "@/lib/schemas"
 import { RECURSO_ADELANTOS_PL } from "../../route"
 
-/** Estados con saldo vivo: los únicos que se pueden desestimar. */
-const ESTADOS_DESESTIMABLES = new Set(["pendiente", "descontado_parcial"])
+/** Estados con saldo vivo: los únicos que se pueden desestimar (catálogo, no copia). */
+const ESTADOS_DESESTIMABLES = new Set<string>(ESTADOS_ADELANTO_DESESTIMABLES)
 
 /** POST desestima el adelanto conservando el registro. */
 export async function POST(

@@ -34,7 +34,7 @@ import {
   IconReceipt2,
   IconCheck,
 } from "@tabler/icons-react"
-import type { LiquidacionPL, PactoAdelantoPL } from "@/lib/schemas"
+import { ESTADOS_ADELANTO_CON_DESCUENTO, type LiquidacionPL, type PactoAdelantoPL } from "@/lib/schemas"
 import { calcularLiquidacion } from "@/lib/pl-utils"
 // Doctrina de adelantos §V4 (módulo puro): el preview usa el mismo cálculo que el
 // servidor — anticipo 100% sin tope 15%, préstamo al 15% con tope conjunto 45%.
@@ -635,7 +635,7 @@ export default function RemuneracionesPage() {
                           <td className="px-3 py-2 text-right">{CLP(a.monto)}</td>
                           <td className="px-3 py-2 text-right">{CLP(saldoVivoAdelanto(a))}</td>
                           <td className="px-3 py-2">
-                            {a.estado === "saldado" || a.estado === "descontado"
+                            {a.estado === "saldado" || ESTADOS_ADELANTO_CON_DESCUENTO.includes(a.estado as never)
                               ? <Badge className="bg-emerald-600 hover:bg-emerald-700 text-white">Saldado</Badge>
                               : a.estado === "descontado_parcial"
                                 ? <Badge className="bg-amber-600 hover:bg-amber-700 text-white">Descontado parcial</Badge>

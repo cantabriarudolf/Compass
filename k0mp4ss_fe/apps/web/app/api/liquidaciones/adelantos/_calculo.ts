@@ -16,17 +16,19 @@
  * y el anticipo regular se lleva lo que quede del líquido. Si el anticipo no
  * cabe completo, arrastra saldo; nunca se deja el líquido en negativo.
  */
-import type { PactoAdelantoPL } from "@/lib/schemas"
+import { ESTADOS_ADELANTO_VIGENTES, type PactoAdelantoPL } from "@/lib/schemas"
 
 /** Tope mensual del préstamo: 15% de la remuneración bruta (art. 58 inc. 3). */
 export const TOPE_PRESTAMO_PCT = 0.15
 /** Tope conjunto de deducciones: 45% de la remuneración bruta (art. 58 inc. 4). */
 export const TOPE_CONJUNTO_PCT = 0.45
 
-export type EstadoDeduccionAdelantoPL =
-  | "pendiente"
-  | "descontado_parcial"
-  | "saldado"
+/**
+ * El cálculo de la deducción trabaja con los tres estados canónicos del catálogo
+ * (`ESTADOS_ADELANTO_VIGENTES`, en `lib/schemas.ts`): el legado `descontado` valida
+ * la fila vieja pero no entra en la doctrina DT. Antes era una unión inline acá.
+ */
+export type EstadoDeduccionAdelantoPL = (typeof ESTADOS_ADELANTO_VIGENTES)[number]
 
 /** Adelanto imputable: lo mínimo que el cálculo necesita de la fila. */
 export interface AdelantoImputablePL {

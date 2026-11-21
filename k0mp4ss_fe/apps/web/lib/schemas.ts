@@ -3279,6 +3279,34 @@ export const ESTADOS_ADELANTO_PL = [
 ] as const
 export const EstadoAdelantoPLSchema = z.enum(ESTADOS_ADELANTO_PL)
 
+/**
+ * Los tres estados canónicos de la doctrina DT, sin el legado `descontado`: es el
+ * conjunto con el que trabaja el cálculo de la deducción.
+ */
+export const ESTADOS_ADELANTO_VIGENTES = [
+  "pendiente",
+  "descontado_parcial",
+  "saldado",
+] as const satisfies readonly (typeof ESTADOS_ADELANTO_PL)[number][]
+
+/**
+ * Los que llevan descuento aplicado: la pantalla los pinta como descontados. El
+ * legado `descontado` entra a propósito —sigue vivo en filas viejas— y
+ * `descontado_parcial` también: antes la pantalla sólo miraba `saldado` y
+ * `descontado`, así que un adelanto parcialmente descontado se pintaba como si no
+ * tuviera descuento (hallazgo 18 del informe).
+ */
+export const ESTADOS_ADELANTO_CON_DESCUENTO = [
+  "descontado_parcial",
+  "descontado",
+] as const satisfies readonly (typeof ESTADOS_ADELANTO_PL)[number][]
+
+/** Estados con saldo vivo: los únicos que se pueden desestimar. */
+export const ESTADOS_ADELANTO_DESESTIMABLES = [
+  "pendiente",
+  "descontado_parcial",
+] as const satisfies readonly (typeof ESTADOS_ADELANTO_PL)[number][]
+
 // SERIE-FASE2 §V4 — dos naturalezas, nunca una sola (DT ORD 2676/140):
 // - anticipo_regular: pago anticipado de lo devengado, se descuenta 100% en la
 //   liquidación siguiente y NO es descuento del art. 58 (sin tope 15%).
