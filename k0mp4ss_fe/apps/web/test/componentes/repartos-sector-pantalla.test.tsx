@@ -499,6 +499,31 @@ describe("Reparto por sector — el alta manda el sector, el período, el concep
     ).toBe("Reparación de la bomba del jardín")
   })
 
+  it("el 409 de reemitir el mismo reparto se muestra verbatim y no duplica la fila", async () => {
+    // F32 · S4: el caso que faltaba. La ruta responde 409 cuando ya existe un reparto
+    // del mismo sector, período y concepto, porque reemitirlo cobraría dos veces. La
+    // pantalla no tiene rama especial: pinta el mensaje del servidor tal cual.
+    const user = userEvent.setup({ delay: null })
+    const MENSAJE_DUPLICADO =
+      "Ya existe un reparto de ese sector para ese período y concepto."
+    servir({
+      repartos: [],
+      post: () => ({ status: 409, cuerpo: { error: MENSAJE_DUPLICADO } }),
+    })
+
+    render(<ConsolaRepartosSector puedeCrear />)
+    await screen.findByText("La comunidad todavía no emitió ningún reparto por sector.")
+
+    await completarAlta(user)
+    await user.click(screen.getByRole("button", { name: "Emitir reparto" }))
+
+    const alerta = await screen.findByRole("alert")
+    expect(alerta.textContent).toBe(MENSAJE_DUPLICADO)
+    // No se declara emitido y no se relee: la fila no existe.
+    expect(screen.queryByText(/emitido por/)).toBeNull()
+    expect(lecturas(RUTA_REPARTOS)).toHaveLength(1)
+  })
+
   it("si la colección de sectores responde 403 se lee tal cual y no se ofrece un sector inventado", async () => {
     const user = userEvent.setup({ delay: null })
     servir({
