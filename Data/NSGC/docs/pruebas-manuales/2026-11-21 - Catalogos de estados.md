@@ -9,16 +9,21 @@ sigue es lo que **una máquina no puede ver**: que la pantalla diga lo que tiene
 
 ---
 
-## 0. Antes de arrancar
+## 0. Antes de arrancar — verificado por el agente, no por vos
 
-- [ ] Cliente de Prisma en **postgres**: `node scripts/preparar-cliente.mjs postgres` (en `k0mp4ss_fe/apps/web`).
-- [ ] `DATABASE_URL` apuntando a la rama de desarrollo, y migraciones al día (`npx prisma migrate status`).
-- [ ] Server de dev levantado (`npm run dev` en `apps/web`) y sesión con rol **administrador**.
-- [ ] Segunda sesión (o ventana privada) con rol **residente** para los checks de alcance.
+- [x] Cliente de Prisma en **postgres** (verificado 2026-11-21).
+- [x] `DATABASE_URL` de la rama de desarrollo cargada y el server puede conectar.
+- [ ] **Vos**: server de dev levantado (`npm run dev` en `apps/web`) y sesión con rol **administrador**.
+- [ ] **Vos**: segunda sesión (ventana privada) con rol **residente** para los checks de alcance.
 
-**Datos que esta base NO tiene** (no son fallas): las tablas de **acuerdos**, **convenios** y
-**cuotas de convenio** están vacías. Los bloques que dependen de ellas están marcados
-«requiere sembrar».
+**Estado de los datos en esta base** (medido, no supuesto): estructura completa (166 unidades),
+padrón **parcial** (55 de 105 personas, 52 de 185 vínculos) y **sin motor financiero** (0 emisiones,
+0 cobros). Las tablas de **acuerdos**, **convenios** y **cuotas** están vacías.
+
+Eso no es una falla: es el punto de partida. Para los dos escenarios de datos —demo completo y
+onboarding de una comunidad nueva— está la página hermana
+**`2026-11-21 - Onboarding y datos.md`**, que dice qué se puede cargar en masa, qué no, en qué orden
+y qué falta para que el sistema opere.
 
 ---
 
