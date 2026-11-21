@@ -49,6 +49,7 @@ import {
   TableRow,
 } from "@workspace/ui/components/table"
 import { IconReceipt } from "@tabler/icons-react"
+import type { ConceptoCobroFI } from "@/lib/schemas"
 
 const NO_DISPONIBLE = "No disponible"
 
@@ -56,7 +57,7 @@ const NO_DISPONIBLE = "No disponible"
 type VarianteBadge = React.ComponentProps<typeof Badge>["variant"]
 
 /** Los conceptos del cobro FI con las palabras del resto de la app. */
-const CONCEPTO_LABEL: Record<string, string> = {
+const CONCEPTO_LABEL: Record<ConceptoCobroFI, string> = {
   gasto_comun: "Gasto Común",
   cuota_extraordinaria: "Cuota Extraordinaria",
   multa_in: "Multa",
@@ -64,6 +65,7 @@ const CONCEPTO_LABEL: Record<string, string> = {
   reserva_ra: "Reserva de Amenities",
   penalizacion_ra: "Penalización de Reserva",
   garantia_ra: "Garantía de Reserva",
+  saldo_apertura: "Deuda anterior (saldo de apertura)",
 }
 
 /** Los cuatro estados de `estadoDeCobro`, con el rótulo de la pantalla. */
@@ -128,7 +130,10 @@ function agruparPorPeriodo(cobros: readonly CobroEstadoCuenta[]): PeriodoDeuda[]
     const saldo = filas.reduce((acc, f) => acc + f.saldoPendiente, 0)
     const conceptos: string[] = []
     for (const fila of filas) {
-      const etiqueta = CONCEPTO_LABEL[fila.concepto] ?? fila.concepto
+      // El concepto viene de la base como texto: si no está en el catálogo (una fila
+      // vieja con un valor retirado) se muestra crudo en vez de romper la pantalla.
+      const etiqueta =
+        CONCEPTO_LABEL[fila.concepto as ConceptoCobroFI] ?? fila.concepto
       if (!conceptos.includes(etiqueta)) conceptos.push(etiqueta)
     }
     return {

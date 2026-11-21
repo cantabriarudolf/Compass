@@ -58,25 +58,28 @@ afterEach(() => {
 })
 
 describe("pantalla Carga inicial", () => {
-  it("lista los cinco bloques con su botón de descarga apuntando a la ruta correcta", () => {
+  it("lista los seis bloques con su botón de descarga apuntando a la ruta correcta", () => {
     render(<CargaInicialPage />)
 
     expect(screen.getByRole("region", { name: "Estructura" })).toBeTruthy()
     expect(screen.getByRole("region", { name: "Personas" })).toBeTruthy()
     expect(screen.getByRole("region", { name: "Vínculos" })).toBeTruthy()
+    expect(screen.getByRole("region", { name: "Saldos de apertura" })).toBeTruthy()
 
     const descargas = screen.getAllByRole("link", { name: /descargar plantilla/i })
-    expect(descargas.length).toBe(5)
+    expect(descargas.length).toBe(6)
     expect(
       descargas.map((d) => d.getAttribute("href")).sort()
     ).toEqual([
       // La lista se compara ordenada (`sort()`), no en el orden de la pantalla.
-      // Los dos últimos son F48: el histórico financiero entra por el mismo flujo de
-      // plantilla → vista previa → importar.
+      // Los dos de F48 son el histórico financiero y el último es la deuda a la
+      // fecha de corte: los tres entran por el mismo flujo de plantilla → vista
+      // previa → importar.
       "/api/importar/egresos/plantilla",
       "/api/importar/estructura/plantilla",
       "/api/importar/ingresos/plantilla",
       "/api/importar/personas/plantilla",
+      "/api/importar/saldos/plantilla",
       "/api/importar/vinculos/plantilla",
     ])
   })

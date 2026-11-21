@@ -2092,6 +2092,11 @@ export const CONCEPTOS_COBRO_FI = [
   "reserva_ra",
   "penalizacion_ra",
   "garantia_ra",
+  // Deuda que la comunidad ya tenía cuando entró al sistema: la crea la carga de
+  // saldos de apertura (manual 43) y se comporta como cualquier otra deuda —cuenta
+  // para mora, corte y estado de cuenta—. Sin este valor en el catálogo, el vecino
+  // vería «saldo_apertura» crudo en su estado de cuenta.
+  "saldo_apertura",
 ] as const
 export const ConceptoCobroFISchema = z.enum(CONCEPTOS_COBRO_FI)
 

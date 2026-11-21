@@ -52,6 +52,7 @@ const CONCEPTO_LABEL: Record<ConceptoCobroFI, string> = {
   reserva_ra: "Reserva (RA)",
   penalizacion_ra: "Penalización (RA)",
   garantia_ra: "Garantía retenida (RA)",
+  saldo_apertura: "Deuda anterior (saldo de apertura)",
 }
 
 const ESTADO_COBRO_BADGE: Record<EstadoCobroFI, string> = {

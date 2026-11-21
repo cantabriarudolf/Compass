@@ -4,8 +4,9 @@
  * /admin/carga-inicial — pantalla única del importador CSV de carga inicial
  * (ODD carga-inicial-csv U3 · F48 T3).
  *
- * Cinco bloques idénticos (estructura, personas, vínculos, egresos, ingresos),
- * uno por ruta del importador. El flujo por bloque es siempre el mismo:
+ * Seis bloques idénticos (estructura, personas, vínculos, egresos, ingresos,
+ * saldos de apertura), uno por ruta del importador. El flujo por bloque es
+ * siempre el mismo:
  *   1. «Descargar plantilla» — enlace directo a la ruta de plantilla (nada
  *      de fetch en JS: el navegador descarga con content-disposition).
  *   2. Elegir el archivo y «Ver vista previa» — POST con `?dryRun=1` y el
@@ -51,6 +52,7 @@ import {
   IconUpload,
   IconUserHeart,
   IconLink,
+  IconWallet,
 } from "@tabler/icons-react"
 
 type ResumenImportador = {
@@ -108,6 +110,13 @@ const BLOQUES = [
     descripcion:
       "Ingresos históricos a los fondos (fecha, monto, descripción, categoría y fondo). Igual que los egresos, imputa a un fondo que ya existe.",
     icono: IconCoins,
+  },
+  {
+    slug: "saldos",
+    titulo: "Saldos de apertura",
+    descripcion:
+      "La deuda que cada unidad ya tenía a la fecha de corte (rol SII, fecha y monto). Se imputa al fondo de gasto común activo y se rechaza si la comunidad ya emitió gasto común para ese período o uno anterior: contaría dos veces el mismo mes.",
+    icono: IconWallet,
   },
 ] as const
 
@@ -522,7 +531,10 @@ export default function CargaInicialPage() {
           Orden recomendado: Estructura → Personas → Vínculos (los vínculos
           requieren unidades y personas ya cargadas). Si además traes tu
           historial financiero, Egresos e Ingresos van después de crear los
-          fondos: el importador no los crea. Cada bloque usa su propio archivo.
+          fondos: el importador no los crea. Los Saldos de apertura van al
+          final: son la deuda que ya existía a la fecha de corte, así que la
+          comunidad todavía no puede tener gasto común emitido para ese período
+          ni para uno anterior. Cada bloque usa su propio archivo.
         </p>
       </header>
       <div className="space-y-6">
