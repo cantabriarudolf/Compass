@@ -24,28 +24,15 @@ monorepos — no usarlo como base fundacional).
 
 ## Continuidad: un plan aprobado se ejecuta hasta el final
 
-El owner no quiere ir y volver para informar algo que ya estaba detectado. Esto **manda sobre la
-costumbre de reportar por unidad**:
+La regla vive **global** en `~/.agents/AGENTS.md`, así que aplica a todos los proyectos y a los nuevos:
+el plan escrito y el `todo` son el driver; un turno termina sólo por decisión del owner, consentimiento
+del portón, chequeo sin presupuesto o plan completo; prohibido cerrar con «sigo con X»; un reporte por
+lote y no por unidad.
 
-- **El documento de feature (`odd/tasks/<feature>.md`) y el `todo` son el driver**, no la
-  conversación. Si hay una tarea pendiente y nada la bloquea, se ejecuta sin volver a consultar.
-- **Un reporte no es un límite de turno.** Un turno termina sólo por: (a) una decisión que es del
-  owner, (b) una autorización o consentimiento que el agente no puede dar, (c) un chequeo que falla
-  sin presupuesto de corrección, (d) el plan completo.
-- **Prohibido cerrar con «sigo con X».** O se hace X en el mismo turno, o se dice exactamente qué lo
-  bloquea.
-- **Un reporte por lote, no por unidad.** Al cerrar una unidad: como máximo una línea
-  (`R7 cerrado: <sha>`). El reporte completo va al final del plan.
-- **Nunca preguntar «¿sigo?»** ni pedir permiso para el paso siguiente que ya está planeado.
-
-Lo que **sí** se sigue consultando, porque es del owner: decisiones de producto o de diseño, el
-consentimiento del portón de RDD, y cualquier acción destructiva o de publicación.
-
-**Nota de mecánica:** cuando el agente termina un turno, nada lo vuelve a despertar salvo el humano, un
-job en background o la finalización de un subagente. Por eso el trabajo largo se encadena: lo mecánico
-va a un worker o a un `bash_background`, cuya finalización reanuda la conversación sin que el owner
-escriba nada. Un plan con diez unidades y cero encadenamiento obliga a diez «continúa»; con
-encadenamiento, a ninguno.
+Lo propio de este repo: el driver es `specs/BACKLOG-100.md` + `specs/PENDIENTES-FUNCIONALIDAD.md` +
+`odd/tasks/<feature>.md` + el `todo`; lo mecánico se encadena a un worker o a un `bash_background`, y la
+finalización de ese job reanuda la conversación sin que el owner escriba. Un plan de diez unidades sin
+encadenamiento obliga a diez «continúa»; encadenado, a ninguno.
 
 ## Convenciones críticas
 
