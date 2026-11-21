@@ -207,6 +207,9 @@ export default function MaestrosPage() {
   const [duplicateError, setDuplicateError] = React.useState<string | null>(null)
   // Mensaje de las acciones de fila (ocultar/borrar): texto exacto del servidor.
   const [errorAccion, setErrorAccion] = React.useState<string | null>(null)
+  // F46: estado del botón que asegura los catálogos del país, con su resultado.
+  const [sembrandoCatalogo, setSembrandoCatalogo] = React.useState(false)
+  const [resultadoCatalogo, setResultadoCatalogo] = React.useState<string | null>(null)
   // F20: campos extra del diálogo para entradas propias de catálogos del país
   // (Select y Checkbox de Radix no viajan en FormData: se llevan por estado).
   const [tipoCatalogo, setTipoCatalogo] = React.useState("")
@@ -436,6 +439,32 @@ export default function MaestrosPage() {
     )
   }
 
+  /**
+   * F46 — asegura los ocho catálogos del país (AFP, salud, bancos, índices,
+   * feriados...) en la base. Es idempotente y global: la primera comunidad que lo
+   * corre deja el catálogo para todas. Sin esto, una base recién migrada deja los
+   * selects vacíos y las liquidaciones y el corte no pueden operar.
+   */
+  async function handleAsegurarCatalogo() {
+    setSembrandoCatalogo(true)
+    setResultadoCatalogo(null)
+    try {
+      const res = await fetch("/api/maestros/catalogo-nacional", { method: "POST" })
+      const cuerpo = (await res.json()) as { ok?: boolean; aseguradas?: number; error?: string }
+      if (!res.ok) {
+        setErrorAccion(cuerpo.error ?? "No se pudo asegurar el catálogo nacional.")
+        return
+      }
+      setResultadoCatalogo(
+        `Catálogo del país asegurado: ${cuerpo.aseguradas ?? 0} filas en ocho colecciones. Correrlo de nuevo no duplica nada.`
+      )
+    } catch {
+      setErrorAccion("No se pudo asegurar el catálogo nacional.")
+    } finally {
+      setSembrandoCatalogo(false)
+    }
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
@@ -443,10 +472,27 @@ export default function MaestrosPage() {
           <h1 className="text-3xl font-bold tracking-tight">Maestros Administrativos</h1>
           <p className="text-muted-foreground">Acá se cargan las categorías que el sistema usa en toda la comunidad: tipos de sectores (Torre, Piso…), categorías de unidades, estados de ocupación, etc. Lo que crees acá aparece como opción en los formularios de Inventario, Estructura Física y demás módulos.</p>
         </div>
-        <Button disabled={!isValidSubTab} onClick={handleNuevo} className="gap-2" title={!isValidSubTab ? "Seleccioná una categoría de la izquierda primero" : undefined}>
-          <IconPlus className="size-4" /> Nuevo Registro
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="outline"
+            onClick={handleAsegurarCatalogo}
+            disabled={sembrandoCatalogo}
+            className="gap-2"
+            title="Asegura AFP, salud, mutuales, bancos, índices, feriados, cajas y unidades de medida. Es idempotente."
+          >
+            {sembrandoCatalogo ? "Asegurando…" : "Asegurar catálogo del país"}
+          </Button>
+          <Button disabled={!isValidSubTab} onClick={handleNuevo} className="gap-2" title={!isValidSubTab ? "Seleccioná una categoría de la izquierda primero" : undefined}>
+            <IconPlus className="size-4" /> Nuevo Registro
+          </Button>
+        </div>
       </div>
+
+      {resultadoCatalogo && (
+        <div role="status" className="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-700 dark:text-emerald-400">
+          {resultadoCatalogo}
+        </div>
+      )}
 
       {errorAccion && (
         <div role="alert" className="flex items-center gap-1 text-sm text-destructive">

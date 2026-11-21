@@ -35,16 +35,11 @@
 import { cargarUrlBase } from "../lib/database-url"
 
 import { PrismaClient } from "@prisma/client"
-import {
-  AFPS,
-  BANCOS,
-  CAJAS_FONDOS,
-  FERIADOS,
-  INDICES_AJUSTE,
-  MUTUALES_CAJAS,
-  PREVISIONES_SALUD,
-  UNIDADES_MEDIDA,
-} from "../data/admin/maestros"
+import { asegurarCatalogoNacional } from "../lib/catalogo-nacional"
+
+// El test del script importa la función desde acá: se reexporta la MISMA
+// implementación que usa la ruta (no hay dos versiones del upsert).
+export { asegurarCatalogoNacional }
 
 function resolverComunidadId(): string | null {
   const flag = process.argv
@@ -55,60 +50,6 @@ function resolverComunidadId(): string | null {
   const env = process.env.COMUNIDAD_ID?.trim()
   if (env) return env
   return null
-}
-
-/**
- * Los ocho catálogos del país: tipo kebab-case (el mismo que resuelve
- * `app/api/maestros/[tipo]/route.ts` y `CATALOGOS_NACIONALES`) → filas de la
- * semilla. Fuente única del contenido: `data/admin/maestros.ts`; nada
- * hardcodeado acá. El resto de maestros (jornadas, couriers, categorías de
- * inventario...) NO está acá a propósito: es propio de la comunidad.
- */
-const CATALOGOS = [
-  { tipo: "bancos", filas: BANCOS, modelo: "banco" },
-  { tipo: "afps", filas: AFPS, modelo: "afp" },
-  { tipo: "previsiones-salud", filas: PREVISIONES_SALUD, modelo: "previsionSalud" },
-  { tipo: "mutuales-cajas", filas: MUTUALES_CAJAS, modelo: "mutualCaja" },
-  { tipo: "feriados", filas: FERIADOS, modelo: "feriado" },
-  { tipo: "indices-ajuste", filas: INDICES_AJUSTE, modelo: "indiceAjuste" },
-  { tipo: "cajas-fondos", filas: CAJAS_FONDOS, modelo: "cajaFondo" },
-  { tipo: "unidades-medida", filas: UNIDADES_MEDIDA, modelo: "unidadMedida" },
-] as const
-
-/**
- * Upsert idempotente por id de los ocho catálogos para una comunidad.
- * Devuelve los tipos asegurados con su cantidad de filas.
- */
-export async function asegurarCatalogoNacional(
-  prisma: PrismaClient,
-  comunidadId: string
-): Promise<Map<string, number>> {
-  const porTipo = new Map<string, number>(CATALOGOS.map((c) => [c.tipo, 0]))
-  for (const catalogo of CATALOGOS) {
-    // SAFETY: delegates de maestros comparten la firma upsert por id; el
-    // runtime de Prisma valida el modelo contra la fila tipada de la semilla.
-    const modelo = prisma[catalogo.modelo] as unknown as {
-      upsert(args: {
-        where: { id: string }
-        update: Record<string, unknown>
-        create: Record<string, unknown>
-      }): Promise<unknown>
-    }
-    for (const fila of catalogo.filas) {
-      // SAFETY: las filas de la semilla son uniones literales por catálogo; el
-      // spread sólo necesita la forma genérica y Prisma valida los campos.
-      const datos = fila as unknown as Record<string, unknown>
-      await modelo.upsert({
-        where: { id: fila.id },
-        // El catálogo es global por id: si la fila ya existe (sembrada antes
-        // por otra comunidad o por una corrida anterior) se deja tal cual.
-        update: {},
-        create: { ...datos, comunidadId },
-      })
-    }
-    porTipo.set(catalogo.tipo, catalogo.filas.length)
-  }
-  return porTipo
 }
 
 async function main(): Promise<void> {

@@ -100,6 +100,11 @@ const MATRIZ: Record<Rol, Record<string, Set<Accion>>> = {
     // impide el filtro por fila, así que no hay capacidad de morosidad que gobernar.
     // Vacía —no borrada— porque borrarla devolvería la concesión por el fallback a `mp`.
     "mp:morosidad": new Set<Accion>([]),
+    // F46: asegurar el catálogo del país es un acto de PROVISIÓN de la instalación,
+    // no de lectura de maestros. Vacío a propósito: sin esta entrada, `crear` caería
+    // al prefijo `mp` (que el comité tiene con ver/editar) y cualquier miembro podría
+    // re-sembrar el catálogo global. El administrador lo alcanza por el wildcard.
+    "mp:catalogo_nacional": new Set<Accion>([]),
     "re": new Set<Accion>(["ver"]),
     "re:centro_mando": new Set<Accion>(["ver"]),
     // SERIE-FASE2 §V4 (decisión del plan): el comité LEE los adelantos PL
