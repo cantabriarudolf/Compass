@@ -51,6 +51,13 @@ import {
   withComunidadScope,
 } from "@/lib/api/with-comunidad-scope"
 import { vistaDeConvenio } from "../_vista"
+import {
+  ESTADOS_CONVENIO_ANULABLES,
+  ESTADOS_CUOTA_ANULABLES,
+  ESTADO_CONVENIO_ANULADO,
+  ESTADO_CONVENIO_SALDADO,
+  ESTADO_CUOTA_ANULADA,
+} from "@/lib/schemas"
 
 /** Mismo recurso que el alta y el pago: el convenio es un acto de cobranza. */
 const RECURSO_CONVENIOS = "fi:cobranza"
@@ -110,10 +117,10 @@ export async function POST(req: Request): Promise<Response> {
 
   // El estado decide si hay algo que anular. Un saldado es historia: la plata
   // entró y su fila no se reescribe. Un anulado ya pasó por esta ruta.
-  if (convenio.estado === "saldado") {
+  if (convenio.estado === ESTADO_CONVENIO_SALDADO) {
     return jsonError(409, "El convenio está saldado: su historia no se anula.")
   }
-  if (convenio.estado === "anulado") {
+  if (convenio.estado === ESTADO_CONVENIO_ANULADO) {
     return jsonError(409, "El convenio ya está anulado.")
   }
 
@@ -142,9 +149,9 @@ export async function POST(req: Request): Promise<Response> {
         where: {
           id: convenio.id,
           comunidadId: scope.comunidadId,
-          estado: { in: ["vigente", "incumplido"] },
+          estado: { in: [...ESTADOS_CONVENIO_ANULABLES] },
         },
-        data: { estado: "anulado" },
+        data: { estado: ESTADO_CONVENIO_ANULADO },
       })
       if (tomado.count === 0) throw new Error(CONVENIO_NO_DISPONIBLE)
 
@@ -154,7 +161,7 @@ export async function POST(req: Request): Promise<Response> {
         where: {
           convenioId: convenio.id,
           comunidadId: scope.comunidadId,
-          estado: { in: ["pendiente", "vencida"] },
+          estado: { in: [...ESTADOS_CUOTA_ANULABLES] },
         },
         select: { numero: true, venceEn: true },
         orderBy: { numero: "asc" },
@@ -167,9 +174,9 @@ export async function POST(req: Request): Promise<Response> {
         where: {
           convenioId: convenio.id,
           comunidadId: scope.comunidadId,
-          estado: { in: ["pendiente", "vencida"] },
+          estado: { in: [...ESTADOS_CUOTA_ANULABLES] },
         },
-        data: { estado: "anulada" },
+        data: { estado: ESTADO_CUOTA_ANULADA },
       })
 
       // La marca en el libro: los cargos FI de las cuotas anuladas quedan con la

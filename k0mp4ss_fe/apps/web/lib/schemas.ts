@@ -433,6 +433,48 @@ export const ROLES_DIRECTORIO = [
 ] as const satisfies readonly RolPersona[]
 export type RolDirectorio = (typeof ROLES_DIRECTORIO)[number]
 
+// --- Convenio de pago (F29) y sus cuotas ---
+//
+// Estos dos catálogos vivían SOLO en un comentario de `prisma/schema.prisma` y en
+// literales repartidos por seis archivos (hallazgo 11 del informe): la anulación del
+// convenio filtrada por `{ in: ["pendiente","vencida"] }` dejaba viva cualquier
+// cuota con un estado impago nuevo, y el deudor seguía pagando un convenio anulado,
+// sin error ni test. Los valores no cambian: lo que cambia es que ahora se declaran
+// una vez, con sus subconjuntos y su invariante pineada.
+
+export const ESTADOS_CONVENIO_PAGO = [
+  "vigente",
+  "saldado",
+  "incumplido",
+  "anulado",
+] as const
+export type EstadoConvenioPago = (typeof ESTADOS_CONVENIO_PAGO)[number]
+
+/** Lo que se puede anular: los vivos. `saldado` y `anulado` son historia. */
+export const ESTADOS_CONVENIO_ANULABLES = [
+  "vigente",
+  "incumplido",
+] as const satisfies readonly EstadoConvenioPago[]
+
+export const ESTADO_CONVENIO_ANULADO = "anulado" satisfies EstadoConvenioPago
+export const ESTADO_CONVENIO_SALDADO = "saldado" satisfies EstadoConvenioPago
+
+export const ESTADOS_CUOTA_CONVENIO = [
+  "pendiente",
+  "pagada",
+  "vencida",
+  "anulada",
+] as const
+export type EstadoCuotaConvenio = (typeof ESTADOS_CUOTA_CONVENIO)[number]
+
+/** Lo que se puede anular: las cuotas impagas. Una pagada no se toca. */
+export const ESTADOS_CUOTA_ANULABLES = [
+  "pendiente",
+  "vencida",
+] as const satisfies readonly EstadoCuotaConvenio[]
+
+export const ESTADO_CUOTA_ANULADA = "anulada" satisfies EstadoCuotaConvenio
+
 // --- Portal Inmobiliario (PI) ---
 
 // D1 (media por referencia): solo metadatos + URL; jamás payload binario.

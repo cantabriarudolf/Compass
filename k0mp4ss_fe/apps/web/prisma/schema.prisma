@@ -1828,7 +1828,7 @@ model ConvenioPago {
   fechaSuscripcion  DateTime
   // Lo que se pagó al suscribir: la cuota 0, que no se genera como deuda.
   primeraCuota      Float
-  estado            String    @default("vigente") // vigente | saldado | incumplido | anulado
+  estado            String    @default("vigente") // ESTADOS_CONVENIO_PAGO (lib/schemas.ts): vigente | saldado | incumplido | anulado
   observaciones     String?
   creadoPor         String
   createdAt         DateTime  @default(now())
@@ -1867,7 +1867,7 @@ model CuotaConvenio {
   venceEn       DateTime
   // `anulada` (F29 · S1): la cuota de un convenio anulado que no se pagó. No se
   // borra —el libro conserva la traza— y una cuota pagada nunca se vuelve anular.
-  estado        String       @default("pendiente") // pendiente | pagada | vencida | anulada
+  estado        String       @default("pendiente") // ESTADOS_CUOTA_CONVENIO (lib/schemas.ts): pendiente | pagada | vencida | anulada
   pagadaEn      DateTime?
   registradaPor String?
   createdAt     DateTime     @default(now())
