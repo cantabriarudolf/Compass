@@ -2629,7 +2629,21 @@ export const TIPOLOGIAS_CV = [
 ] as const
 export const TipologiaCVSchema = z.enum(TIPOLOGIAS_CV)
 
-export const ESTADOS_AVISO_CV = ["borrador", "publicado", "archivado"] as const
+/**
+ * Estados de un aviso del visor. Los valores con nombre son la fuente de la tupla:
+ * la purga por vencimiento y la pantalla comparaban contra literales sueltos
+ * (hallazgo 22 del informe), así que cambiar un valor en la tupla no movía al que
+ * escribía `"archivado"` a mano.
+ */
+export const ESTADO_AVISO_BORRADOR = "borrador"
+export const ESTADO_AVISO_PUBLICADO = "publicado"
+export const ESTADO_AVISO_ARCHIVADO = "archivado"
+
+export const ESTADOS_AVISO_CV = [
+  ESTADO_AVISO_BORRADOR,
+  ESTADO_AVISO_PUBLICADO,
+  ESTADO_AVISO_ARCHIVADO,
+] as const
 export const EstadoAvisoCVSchema = z.enum(ESTADOS_AVISO_CV)
 
 export const ORIGENES_AVISO_CV = ["manual", "plantilla", "acta_gd"] as const

@@ -17,6 +17,7 @@ import { hoyISO } from "@/lib/date-utils"
 import { generarId } from "@/lib/id-utils"
 import { logger } from "@/lib/logger"
 import { registrarEventosAuditoria } from "@/lib/auditoria"
+import { ESTADO_AVISO_ARCHIVADO, ESTADO_AVISO_PUBLICADO } from "@/lib/schemas"
 
 const handlers = createCrudHandlers({
   model: delegado(prisma.avisoCV),
@@ -32,7 +33,7 @@ const MAX_CADUCADOS_POR_LECTURA = 200
  *
  * - Un solo `findMany` acotado + un solo `updateMany` + un `createMany` de
  *   eventos: nada de N+1.
- * - Idempotente: solo toca `estado === "publicado"` con `expiresAt < hoy`.
+ * - Idempotente: solo toca `estado === ESTADO_AVISO_PUBLICADO` con `expiresAt < hoy`.
  * - Best-effort: cualquier fallo se loguea y la lista responde igual; la
  *   caducidad no puede tumbar la lectura del visor.
  */
@@ -45,7 +46,7 @@ async function archivarVencidosAlLeer(): Promise<void> {
   const vencidos = await prisma.avisoCV.findMany({
     where: {
       comunidadId: scope.comunidadId,
-      estado: "publicado",
+      estado: ESTADO_AVISO_PUBLICADO,
       expiresAt: { not: null, lt: hoy },
     },
     select: { id: true, titulo: true, expiresAt: true },
@@ -56,7 +57,7 @@ async function archivarVencidosAlLeer(): Promise<void> {
 
   await prisma.avisoCV.updateMany({
     where: { id: { in: vencidos.map((v) => v.id) } },
-    data: { estado: "archivado", fechaArchivado: hoy },
+    data: { estado: ESTADO_AVISO_ARCHIVADO, fechaArchivado: hoy },
   })
 
   // INV-03: cada evento pasa por la única puerta (`lib/auditoria.ts`), que

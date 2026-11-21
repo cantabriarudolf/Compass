@@ -6,6 +6,7 @@ import { useCrudCollection, type CrudCollection } from "./use-crud-collection"
 import type { AvisoCV, PlantillaCV, PublicacionActaCV } from "@/lib/schemas"
 import type { StoreResult } from "@/lib/store"
 import { hoyISO } from "@/lib/date-utils"
+import { ESTADO_AVISO_PUBLICADO } from "@/lib/schemas"
 
 const ACTAS_PUBLICADAS = "/api/cv/actas"
 
@@ -20,7 +21,7 @@ export function usePlantillasCV(): CrudCollection<PlantillaCV> {
 /**
  * avisosVencidos — avisos publicados cuyo `expiresAt` ya pasó (regla de la
  * caducidad del visor). Misma semántica que la acción legacy
- * `caducarAvisosCV` del store (`estado === "publicado"` + `expiresAt < hoy`);
+ * `caducarAvisosCV` del store (`estado === ESTADO_AVISO_PUBLICADO` + `expiresAt < hoy`);
  * el archivado lo hace el llamador con `update` del hook, contra
  * `PUT /api/cv/avisos/[id]` (contrato ya existente, igual que
  * `app/comunidad/visor`).
@@ -28,7 +29,7 @@ export function usePlantillasCV(): CrudCollection<PlantillaCV> {
 export function avisosVencidos(items: AvisoCV[], hoy: string = hoyISO()): AvisoCV[] {
   return items.filter(
     (a) =>
-      a.estado === "publicado" &&
+      a.estado === ESTADO_AVISO_PUBLICADO &&
       a.expiresAt !== undefined &&
       a.expiresAt !== "" &&
       a.expiresAt < hoy
