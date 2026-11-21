@@ -312,7 +312,7 @@ model Persona {
   telefonoMovil            String
   telefonoFijo             String?
   fotografiaUrl            String?
-  estadoCuenta             String // EstadoCuentaPersona (lib/schemas.ts): activa | inactiva | bloqueada
+  estadoCuenta             String // ESTADOS_CUENTA_PERSONA (lib/schemas.ts): activa | inactiva | bloqueada
   condicionesEspecialesIds Json // string[]
   roles                    Json // ROLES_PERSONA[]
   datosLaborales           Json? // ExtensionLaboral
