@@ -162,6 +162,25 @@ describe("/api/maestros/catalogo-nacional — asegurar el catálogo del país (F
     expect(new Set(ids).size).toBe(TOTAL_SEMILLA)
   })
 
+  it("con el catálogo a medias, `creadas` cuenta sólo lo que faltaba", async () => {
+    // La distinción que introduce el arreglo: `aseguradas` es la semilla entera,
+    // `creadas` es lo que este POST creó. Se borran dos filas para forzar el estado
+    // parcial y se comprueba que el número las separa.
+    const faltantes = UNIDADES_MEDIDA.slice(0, 2).map((f) => f.id)
+    await prisma.unidadMedida.deleteMany({ where: { id: { in: faltantes } } })
+    expect(await prisma.unidadMedida.count()).toBe(TOTAL_SEMILLA - faltantes.length)
+
+    state.cookie = cookieAdminA
+    const { POST } = await import("@/app/api/maestros/catalogo-nacional/route")
+    const respuesta = await POST()
+    expect(respuesta.status).toBe(200)
+    const cuerpo = (await respuesta.json()) as { creadas: number; aseguradas: number }
+
+    expect(cuerpo.creadas).toBe(faltantes.length)
+    expect(cuerpo.aseguradas).toBeGreaterThanOrEqual(TOTAL_SEMILLA)
+    expect(await prisma.unidadMedida.count()).toBe(TOTAL_SEMILLA)
+  })
+
   it("repetirlo es idempotente: no duplica ni cambia", async () => {
     const antes = await prisma.unidadMedida.count()
     state.cookie = cookieAdminA
