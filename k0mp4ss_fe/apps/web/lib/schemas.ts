@@ -2231,9 +2231,21 @@ export type EstadoEnvioDocumento = (typeof ESTADOS_ENVIO_DOCUMENTO)[number]
 // El aviso se ENTREGA por el visor interno (la notificación que el residente ve)
 // y se ENVÍA por correo con el emisor SMTP real (`lib/smtp.ts`, F4).
 
-export const CANALES_ENTREGA_AVISO = ["visor", "email"] as const
-export const CanalEntregaAvisoSchema = z.enum(CANALES_ENTREGA_AVISO)
-export type CanalEntregaAviso = (typeof CANALES_ENTREGA_AVISO)[number]
+// --- Canales de entrega de un mensaje de la comunidad ---
+//
+// El mismo par `visor · email` lo nombran cuatro constantes: el aviso de cobro, la
+// cobranza FI, la entrega de documentos y la distribución de reportes. Antes cada
+// una declaraba su lista: los tipos eran compatibles por VALOR y no por tipo, así
+// que agregar un canal en una dejaba a `planDeCanal` cayendo en la rama del correo
+// (hallazgo 13 del informe). Ahora hay una definición y los cuatro nombres son la
+// MISMA referencia.
+export const CANALES_ENTREGA_CORREO = ["visor", "email"] as const
+export const CanalEntregaCorreoSchema = z.enum(CANALES_ENTREGA_CORREO)
+export type CanalEntregaCorreo = (typeof CANALES_ENTREGA_CORREO)[number]
+
+export const CANALES_ENTREGA_AVISO = CANALES_ENTREGA_CORREO
+export const CanalEntregaAvisoSchema = CanalEntregaCorreoSchema
+export type CanalEntregaAviso = CanalEntregaCorreo
 
 // --- Constancia del correo de bienvenida (F43 — `InvitacionAcceso.envioEstado`) ---
 //
@@ -2275,7 +2287,7 @@ export const EnvioAvisoCobroSchema = z.object({
 // enviado. El estado `fallido` exige motivo; `pendiente` lo usa para explicar
 // por qué todavía no salió.
 
-export const CANALES_COBRANZA_FI = ["visor", "email"] as const
+export const CANALES_COBRANZA_FI = CANALES_ENTREGA_CORREO
 export const CanalCobranzaFISchema = z.enum(CANALES_COBRANZA_FI)
 export type CanalCobranzaFI = (typeof CANALES_COBRANZA_FI)[number]
 
@@ -3483,7 +3495,7 @@ export const BloqueReporteRESchema = z.enum(BLOQUES_REPORTE_RE)
 // honesto de un envío que todavía no salió (sin SMTP el correo NO se envió).
 // `publicado` es la excepción declarada del catálogo de entrega: el visor de RE
 // publica el reporte, no lo envía. Los otros tres son los del emisor.
-export const CANALES_ENVIO_RE = ["visor", "email"] as const
+export const CANALES_ENVIO_RE = CANALES_ENTREGA_CORREO
 export const ESTADOS_ENVIO_RE = [
   "publicado",
   "pendiente",

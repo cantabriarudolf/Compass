@@ -44,7 +44,7 @@ import {
   SelectValue,
 } from "@workspace/ui/components/select"
 import type { CanalEnvioDocumento } from "@/app/api/documentos/_lib/envio-documento"
-import type { EstadoEnvioDocumento } from "@/lib/schemas"
+import { CANALES_ENTREGA_CORREO, type EstadoEnvioDocumento } from "@/lib/schemas"
 import {
   ETIQUETAS_GRUPO_DESTINATARIO,
   GRUPOS_DESTINATARIO,
@@ -63,13 +63,20 @@ export interface DocumentoParaEnviar {
  * (`import type`: no arrastra Prisma al navegador); la lista de opciones es de
  * la pantalla.
  */
-const CANALES_ENVIO: ReadonlyArray<{ valor: CanalEnvioDocumento; etiqueta: string }> = [
-  { valor: "visor", etiqueta: "Visor de la comunidad" },
-  { valor: "email", etiqueta: "Correo electrónico" },
-]
+const ETIQUETA_CANAL: Record<CanalEnvioDocumento, string> = {
+  visor: "Visor de la comunidad",
+  email: "Correo electrónico",
+}
 
-/** Etiqueta de cada estado registrado; `duplicado` es la respuesta idempotente. */
-const ETIQUETA_ESTADO: Record<string, string> = {
+const CANALES_ENVIO: ReadonlyArray<{ valor: CanalEnvioDocumento; etiqueta: string }> =
+  CANALES_ENTREGA_CORREO.map((valor) => ({ valor, etiqueta: ETIQUETA_CANAL[valor] }))
+
+/**
+ * Etiqueta de cada estado registrado; `duplicado` es la respuesta idempotente.
+ * `Record` de la unión completa (los del documento más la respuesta): un estado
+ * nuevo rompe la compilación acá en vez de pintarse crudo.
+ */
+const ETIQUETA_ESTADO: Record<EstadoEnvioDocumento | "duplicado", string> = {
   entregado: "Entregado",
   pendiente: "Pendiente",
   fallido: "Fallido",
@@ -80,7 +87,7 @@ const ETIQUETA_ESTADO: Record<string, string> = {
 interface ResultadoEnvio {
   personaId: string
   canal: string
-  estado: EstadoEnvioDocumento | "duplicado" | string
+  estado: EstadoEnvioDocumento | "duplicado"
   motivo?: string
   fecha?: string
 }
@@ -332,7 +339,7 @@ export function DialogoEnvioDocumento({
                             : "secondary"
                       }
                     >
-                      {ETIQUETA_ESTADO[fila.estado] ?? fila.estado}
+                      {ETIQUETA_ESTADO[fila.estado]}
                     </Badge>
                     {fila.motivo && (
                       <span className="text-muted-foreground">{fila.motivo}</span>

@@ -40,12 +40,22 @@
  */
 import { ETIQUETAS_TIPO_DOCUMENTAL, type TipoDocumental } from "@/lib/documento-archivo"
 import { planDeCanal } from "@/lib/entrega-aviso"
-import type { EstadoEntregaCorreo, EstadoEnvioDocumento } from "@/lib/schemas"
+import {
+  CANALES_ENTREGA_CORREO,
+  type CanalEntregaCorreo,
+  type EstadoEntregaCorreo,
+  type EstadoEnvioDocumento,
+} from "@/lib/schemas"
 
-/** Canales de entrega del documento: el visor de la comunidad y el correo. */
-export const CANALES_ENVIO_DOCUMENTO = ["visor", "email"] as const
+/**
+ * Canales de entrega del documento: el visor de la comunidad y el correo. Es la
+ * MISMA referencia que el catálogo (`CANALES_ENTREGA_CORREO`, en `lib/schemas.ts`):
+ * antes era una lista propia, y como los tipos eran compatibles por valor y no por
+ * tipo, un canal nuevo acá llegaba a `planDeCanal` sin rama (hallazgo 13).
+ */
+export const CANALES_ENVIO_DOCUMENTO = CANALES_ENTREGA_CORREO
 
-export type CanalEnvioDocumento = (typeof CANALES_ENVIO_DOCUMENTO)[number]
+export type CanalEnvioDocumento = CanalEntregaCorreo
 
 /**
  * Traducción TOTAL del desenlace del canal al vocabulario de la constancia:
