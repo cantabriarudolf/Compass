@@ -1614,6 +1614,27 @@ export const ElementoRASchema = z
 export const ESTADOS_RESERVA_RA = ["confirmada", "cancelada", "solicitada"] as const
 export const EstadoReservaRASchema = z.enum(ESTADOS_RESERVA_RA)
 
+/**
+ * Las reservas que OCUPAN su tramo: bloquean el solape con otra reserva del mismo
+ * elemento, día y hora. `cancelada` lo libera.
+ *
+ * SUBCONJUNTO A PROPÓSITO (S5) y declarado una sola vez: el control de solape
+ * preguntaba `estado: { not: "cancelada" }`, o sea definía su conjunto por
+ * negación —con un estado nuevo (`vencida`) el control cambiaba de significado sin
+ * que nadie lo decidiera— (hallazgo 16 del informe). La invariante que lo hace
+ * seguro está en `test/lib/reserva-ra-catalogo.test.ts`: lo que ocupa más lo
+ * cancelado es el catálogo entero.
+ */
+export const ESTADOS_RESERVA_OCUPAN = [
+  "confirmada",
+  "solicitada",
+] as const satisfies readonly (typeof ESTADOS_RESERVA_RA)[number][]
+
+/** ¿Esta reserva ocupa su tramo (y por lo tanto bloquea el solape)? */
+export function esReservaQueOcupa(valor: string): boolean {
+  return (ESTADOS_RESERVA_OCUPAN as readonly string[]).includes(valor)
+}
+
 export const CancelacionRASchema = z.object({
   fecha: FechaISOSchema,
   tardia: z.boolean({

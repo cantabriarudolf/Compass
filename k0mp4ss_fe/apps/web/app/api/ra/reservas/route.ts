@@ -39,7 +39,7 @@
  * Amenities de la unidad que el payload nombraba—. La gestión reserva para cualquiera.
  */
 import { z } from "zod"
-import { ReservaRASchema } from "@/lib/schemas"
+import { ESTADOS_RESERVA_OCUPAN, ReservaRASchema } from "@/lib/schemas"
 import { puede } from "@/lib/authz"
 import { prisma } from "@/lib/prisma"
 import { logger } from "@/lib/logger"
@@ -185,7 +185,9 @@ export async function POST(req: Request): Promise<Response> {
           comunidadId: scope.comunidadId,
           elementoId: datos.elementoId,
           fecha: datos.fecha,
-          estado: { not: "cancelada" },
+          // Lo que ocupa el tramo, declarado en el catálogo — no `not: "cancelada"`,
+          // que cambiaba de significado con un estado nuevo (hallazgo 16).
+          estado: { in: [...ESTADOS_RESERVA_OCUPAN] },
           ...(existente ? { id: { not: existente.id } } : {}),
         },
         select: { horaInicio: true, horaFin: true },
