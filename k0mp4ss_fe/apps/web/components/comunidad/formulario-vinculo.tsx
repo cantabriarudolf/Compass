@@ -104,10 +104,12 @@ export function FormularioVinculoUnidad({
   const [puedeDeclararRegistro, setPuedeDeclararRegistro] = React.useState(
     vinculo?.puedeDeclararRegistro ?? false
   )
-  const [estadoOcupacionPropiedad, setEstadoOcupacionPropiedad] =
-    React.useState<VinculoUnidad["estadoOcupacionPropiedad"]>(
-      vinculo?.estadoOcupacionPropiedad ?? "habitada"
-    )
+  // Sin default inventado: `habitada` es una fila del maestro de la comunidad, y
+  // una comunidad puede no tenerla (hallazgo 20). Se exige elegir una de las que
+  // su maestro ofrece.
+  const [estadoOcupacionPropiedad, setEstadoOcupacionPropiedad] = React.useState<string>(
+    vinculo?.estadoOcupacionPropiedad ?? ""
+  )
   const [cerrarAnterior, setCerrarAnterior] = React.useState(
     vinculo?.cerrarAnterior !== false
   )
@@ -151,6 +153,13 @@ export function FormularioVinculoUnidad({
         "Esta persona ya posee un vínculo activo con esta unidad."
     }
 
+    // La ocupación es una fila del maestro de ESA comunidad: escribir `habitada`
+    // cuando la comunidad no la sembró deja el vínculo apuntando a la nada.
+    if (rol === "propietario" && estadoOcupacionPropiedad.trim() === "") {
+      nuevosErrores.estadoOcupacionPropiedad =
+        "Elegí el estado de ocupación de la propiedad: sale del maestro de la comunidad."
+    }
+
     setErrores(nuevosErrores)
     if (Object.keys(nuevosErrores).length > 0) return
 
@@ -165,7 +174,7 @@ export function FormularioVinculoUnidad({
       puedeDeclararRegistro,
       ...(rol === "propietario"
         ? {
-            estadoOcupacionPropiedad: estadoOcupacionPropiedad ?? "habitada",
+            estadoOcupacionPropiedad,
             permiteVerFinanzas,
           }
         : { permiteVerFinanzas: false }),
@@ -414,6 +423,11 @@ export function FormularioVinculoUnidad({
                     ))}
                   </SelectContent>
                 </Select>
+                {errores.estadoOcupacionPropiedad && (
+                  <p className="text-xs text-destructive font-medium">
+                    {errores.estadoOcupacionPropiedad}
+                  </p>
+                )}
               </div>
             </div>
           )}
