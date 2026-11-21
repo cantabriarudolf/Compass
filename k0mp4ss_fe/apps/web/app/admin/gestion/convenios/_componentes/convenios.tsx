@@ -116,6 +116,7 @@ import {
 } from "@tabler/icons-react"
 import { AvisoTruncamiento } from "@/components/pe/aviso-truncamiento"
 import { cn } from "@workspace/ui/lib/utils"
+import { ESTADO_ACUERDO_APROBADO } from "@/lib/schemas"
 
 const RUTA = {
   convenios: "/api/convenios",
@@ -214,7 +215,7 @@ interface AcuerdoLeido {
 
 /** Filtro del acuerdo que autoriza: el mismo que exige la ruta sobre la fila real. */
 function autorizaConvenio(acuerdo: AcuerdoLeido): boolean {
-  return acuerdo.estado === "aprobado" && acuerdo.cuerpo === "comite"
+  return acuerdo.estado === ESTADO_ACUERDO_APROBADO && acuerdo.cuerpo === "comite"
 }
 
 /** El estado del convenio en palabras; el servidor escribe estos cuatro. */

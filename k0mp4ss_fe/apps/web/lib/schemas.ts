@@ -433,6 +433,24 @@ export const ROLES_DIRECTORIO = [
 ] as const satisfies readonly RolPersona[]
 export type RolDirectorio = (typeof ROLES_DIRECTORIO)[number]
 
+// --- Acuerdo del comité o de la asamblea (art. 6/15/17/20) ---
+//
+// El catálogo vivía SOLO en un comentario de `prisma/schema.prisma` y en una decena
+// de literales repartidos por rutas y pantallas (hallazgo 10 del informe). Un typo
+// en cualquiera de esos sitios compilaba, y el acuerdo aprobado dejaba de habilitar
+// el convenio de pago y el corte de servicios con el mensaje «el acuerdo no está
+// aprobado» sobre un acuerdo que sí lo estaba.
+//
+// Decisión explícita: NO se estrecha el contrato de lectura. Lo que se ataca es el
+// typo en las comparaciones y en las escrituras, no la forma de leer una fila.
+
+export const ESTADOS_ACUERDO = ["abierto", "aprobado", "rechazado"] as const
+export type EstadoAcuerdo = (typeof ESTADOS_ACUERDO)[number]
+
+export const ESTADO_ACUERDO_ABIERTO = "abierto" satisfies EstadoAcuerdo
+export const ESTADO_ACUERDO_APROBADO = "aprobado" satisfies EstadoAcuerdo
+export const ESTADO_ACUERDO_RECHAZADO = "rechazado" satisfies EstadoAcuerdo
+
 // --- Convenio de pago (F29) y sus cuotas ---
 //
 // Estos dos catálogos vivían SOLO en un comentario de `prisma/schema.prisma` y en

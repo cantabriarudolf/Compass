@@ -777,7 +777,7 @@ model Acuerdo {
   // servidor al crear y nunca reasignado. El índice único es la garantía dura
   // contra la carrera (el POST reintenta con el siguiente correlativo).
   folio           String
-  estado          String    @default("abierto") // abierto | aprobado | rechazado
+  estado          String    @default("abierto") // ESTADOS_ACUERDO (lib/schemas.ts): abierto | aprobado | rechazado
   // Modalidad de la votación (S2/S4): `electronica` —el default, y lo que ya
   // son todos los acuerdos existentes— se resuelve sumando los `VotoAcuerdo`
   // con `resultadoDelAcuerdo`; `presencial` se proclama en la sala —no tiene

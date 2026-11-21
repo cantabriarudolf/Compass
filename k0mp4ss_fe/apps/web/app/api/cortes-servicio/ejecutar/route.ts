@@ -37,6 +37,7 @@ import {
   type ComunidadScope,
 } from "@/lib/api/with-comunidad-scope"
 import { vistaDeCorte } from "../_vista"
+import { ESTADO_ACUERDO_APROBADO } from "@/lib/schemas"
 
 /** Mismo recurso que el preaviso: el corte es cobranza (ver `../route.ts`). */
 const RECURSO_CORTES = "fi:cobranza"
@@ -90,7 +91,7 @@ export async function POST(req: Request): Promise<Response> {
   if (acuerdo.cuerpo !== "comite") {
     return jsonError(400, "No se puede ejecutar el corte: el acuerdo no es del Comité.")
   }
-  if (acuerdo.estado !== "aprobado") {
+  if (acuerdo.estado !== ESTADO_ACUERDO_APROBADO) {
     return jsonError(400, "No se puede ejecutar el corte: el acuerdo no está aprobado.")
   }
 

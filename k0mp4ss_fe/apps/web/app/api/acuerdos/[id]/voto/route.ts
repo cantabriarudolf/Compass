@@ -48,6 +48,7 @@ import {
   resultadoDelAcuerdo,
   type ResultadoDelAcuerdo,
 } from "@/lib/acuerdos"
+import { ESTADO_ACUERDO_ABIERTO } from "@/lib/schemas"
 
 type Ctx = { params: Promise<{ id: string }> }
 
@@ -245,7 +246,7 @@ export async function POST(request: Request, ctx: Ctx): Promise<Response> {
         if (!vigente) {
           return { ok: false, status: 404, error: "Acuerdo no encontrado." }
         }
-        if (vigente.estado !== "abierto") {
+        if (vigente.estado !== ESTADO_ACUERDO_ABIERTO) {
           return {
             ok: false,
             status: 409,
@@ -333,7 +334,7 @@ export async function POST(request: Request, ctx: Ctx): Promise<Response> {
         if (computo.resultado !== "pendiente") {
           // Toma condicional: si otra resolución ganó la carrera, no se reescribe.
           await tx.acuerdo.updateMany({
-            where: { id, comunidadId: scope.comunidadId, estado: "abierto" },
+            where: { id, comunidadId: scope.comunidadId, estado: ESTADO_ACUERDO_ABIERTO },
             data: { estado: computo.resultado, resueltoEn: ahora },
           })
         }

@@ -76,6 +76,7 @@ import {
   IconLoader2,
   IconPlus,
 } from "@tabler/icons-react"
+import { ESTADO_ACUERDO_ABIERTO } from "@/lib/schemas"
 
 const RUTA = {
   listado: "/api/acuerdos",
@@ -297,7 +298,7 @@ function notaActa(acuerdo: AcuerdoLeido): string | null {
   if (acuerdo.actaDocumentoId) {
     return "El acta firmada está archivada en el archivo legal."
   }
-  return acuerdo.estado === "abierto"
+  return acuerdo.estado === ESTADO_ACUERDO_ABIERTO
     ? "El acta firmada no está en el archivo legal: se sube al cerrar el acuerdo."
     : "El acta firmada no está en el archivo legal."
 }
@@ -859,7 +860,7 @@ export function ConsolaAcuerdos({ puedeRegistrar }: ConsolaAcuerdosProps) {
                     </Table>
                   )}
 
-                  {acuerdo.estado === "abierto" ? (
+                  {acuerdo.estado === ESTADO_ACUERDO_ABIERTO ? (
                     esPresencial ? (
                       puedeRegistrar ? (
                         <div className="flex flex-col gap-2 border-t pt-3">

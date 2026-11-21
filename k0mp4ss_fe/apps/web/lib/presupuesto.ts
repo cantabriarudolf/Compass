@@ -1,4 +1,8 @@
-import { CUERPOS_DEL_ACUERDO, type CuerpoDelAcuerdo } from "@/lib/schemas"
+import {
+  CUERPOS_DEL_ACUERDO,
+  ESTADO_ACUERDO_APROBADO,
+  type CuerpoDelAcuerdo,
+} from "@/lib/schemas"
 
 /**
  * lib/presupuesto.ts — presupuesto por partidas aprobado por el cuerpo que el
@@ -125,7 +129,7 @@ export function totalDePartidas(
 export function presupuestoPermitido(
   entrada: EntradaPresupuestoPermitido
 ): DictamenPresupuesto {
-  if (entrada.acuerdoEstado !== "aprobado") {
+  if (entrada.acuerdoEstado !== ESTADO_ACUERDO_APROBADO) {
     return { permitido: false, motivo: MOTIVO_ACUERDO_NO_APROBADO }
   }
   if (!esCuerpoDelPresupuesto(entrada.acuerdoCuerpo)) {

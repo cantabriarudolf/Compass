@@ -20,7 +20,7 @@
  * - S5: un acuerdo ya resuelto responde 409 a cualquier intento de cerrarse
  *   otra vez: el resultado y los papeles son inmutables, el acta archivada con
  *   folio es lo que congela lo declarado. La garantía de la carrera es la toma
- *   condicional (`estado: "abierto"`) dentro de la transacción: si otra
+ *   condicional (`estado: ESTADO_ACUERDO_ABIERTO`) dentro de la transacción: si otra
  *   resolución ganó, no se reescribe nada.
  * - S4: un acuerdo `electronica` no se proclama — se resuelve con los votos
  *   (409). Es el pin del camino electrónico: nada de lo existente cambia.
@@ -46,6 +46,7 @@ import {
   type ResultadoDelAcuerdo,
 } from "@/lib/acuerdos"
 import { puedeGestionarAcuerdos } from "../_guard"
+import { ESTADO_ACUERDO_ABIERTO } from "@/lib/schemas"
 
 type Ctx = { params: Promise<{ id: string }> }
 
@@ -133,7 +134,7 @@ export async function POST(request: Request, ctx: Ctx): Promise<Response> {
     )
   }
 
-  if (acuerdo.estado !== "abierto") {
+  if (acuerdo.estado !== ESTADO_ACUERDO_ABIERTO) {
     return jsonError(
       409,
       "El acuerdo ya fue resuelto: su resultado y sus papeles no se editan ni se borran (el acta archivada con folio congela lo declarado)."
@@ -195,14 +196,14 @@ export async function POST(request: Request, ctx: Ctx): Promise<Response> {
       if (!vigente) {
         return { ok: false, status: 404 }
       }
-      if (vigente.estado !== "abierto") {
+      if (vigente.estado !== ESTADO_ACUERDO_ABIERTO) {
         return { ok: false, status: 409 }
       }
 
       // Toma condicional (S5): si otra resolución ganó la carrera, no se
       // reescribe nada — ni estado, ni resultado, ni acta.
       const cerrado = await tx.acuerdo.updateMany({
-        where: { id, comunidadId: scope.comunidadId, estado: "abierto" },
+        where: { id, comunidadId: scope.comunidadId, estado: ESTADO_ACUERDO_ABIERTO },
         data: {
           estado: computo.resultado,
           resueltoEn: ahora,

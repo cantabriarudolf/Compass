@@ -69,6 +69,7 @@ import {
   tamanoEnKB,
   type PapelDelAcuerdo,
 } from "@/lib/acuerdo-documento"
+import { ESTADO_ACUERDO_ABIERTO } from "@/lib/schemas"
 
 type Ctx = { params: Promise<{ id: string }> }
 
@@ -144,9 +145,9 @@ export async function reclamarPapel(
   comunidadId: string,
   documentoId: string
 ) {
-  // `estado: "abierto"` es parte de la condición, no una compuerta previa: es la
+  // `estado: ESTADO_ACUERDO_ABIERTO` es parte de la condición, no una compuerta previa: es la
   // única forma de que la inmutabilidad de S5 valga también en concurrencia.
-  const abierto = { id: acuerdoId, comunidadId, estado: "abierto" } as const
+  const abierto = { id: acuerdoId, comunidadId, estado: ESTADO_ACUERDO_ABIERTO } as const
   if (papel === "acta") {
     return tx.acuerdo.updateMany({
       where: { ...abierto, actaDocumentoId: null },
@@ -218,7 +219,7 @@ export async function POST(request: Request, ctx: Ctx): Promise<Response> {
 
   // S5 — lo cerrado no se reescribe: un acuerdo resuelto no acepta papeles
   // nuevos (el acta archivada con folio congeló lo declarado).
-  if (acuerdo.estado !== "abierto") {
+  if (acuerdo.estado !== ESTADO_ACUERDO_ABIERTO) {
     return jsonError(
       409,
       "El acuerdo ya fue resuelto: su resultado y sus papeles no se editan ni se borran (el acta archivada con folio congela lo declarado)."

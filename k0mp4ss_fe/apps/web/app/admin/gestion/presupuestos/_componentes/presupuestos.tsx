@@ -86,6 +86,7 @@ import {
 import type { CategoriaEgresoFI } from "@/lib/schemas"
 import { esCuerpoDelPresupuesto } from "@/lib/presupuesto"
 import { AvisoTruncamiento } from "@/components/pe/aviso-truncamiento"
+import { ESTADO_ACUERDO_APROBADO } from "@/lib/schemas"
 
 const RUTA = {
   presupuestos: "/api/presupuestos",
@@ -182,7 +183,7 @@ const FORMATO_PERIODO = /^(19|20)\d{2}$/
  * `aprobado` es lo que habilita el alta.
  */
 function apruebaPresupuesto(acuerdo: AcuerdoLeido): boolean {
-  return acuerdo.estado === "aprobado" && esCuerpoDelPresupuesto(acuerdo.cuerpo)
+  return acuerdo.estado === ESTADO_ACUERDO_APROBADO && esCuerpoDelPresupuesto(acuerdo.cuerpo)
 }
 
 interface RespuestaLeida {

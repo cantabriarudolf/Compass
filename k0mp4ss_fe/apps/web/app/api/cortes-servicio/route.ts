@@ -77,6 +77,7 @@ import {
   vistaDePreaviso,
   type ConstanciaDeEntregaEnLaVista,
 } from "./_vista"
+import { ESTADO_ACUERDO_APROBADO } from "@/lib/schemas"
 
 /**
  * Recurso de la matriz que gobierna el corte: `fi:cobranza`.
@@ -175,7 +176,7 @@ export async function POST(req: Request): Promise<Response> {
   if (acuerdo.cuerpo !== "comite") {
     return jsonError(400, "No se puede preavisar el corte: el acuerdo no es del Comité.")
   }
-  if (acuerdo.estado !== "aprobado") {
+  if (acuerdo.estado !== ESTADO_ACUERDO_APROBADO) {
     return jsonError(400, "No se puede preavisar el corte: el acuerdo no está aprobado.")
   }
 

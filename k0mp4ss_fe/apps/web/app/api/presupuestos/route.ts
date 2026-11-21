@@ -53,6 +53,7 @@ import {
   type ComunidadScope,
 } from "@/lib/api/with-comunidad-scope"
 import { vistaDePresupuesto, type PresupuestoEnLaVista } from "./_vista"
+import { ESTADO_ACUERDO_APROBADO } from "@/lib/schemas"
 
 /**
  * Recurso de la matriz que gobierna el presupuesto: `fi:gasto_comun`.
@@ -118,7 +119,7 @@ export async function POST(req: Request): Promise<Response> {
       "No se puede crear el presupuesto: el acuerdo no existe en esta comunidad."
     )
   }
-  if (acuerdo.estado !== "aprobado") {
+  if (acuerdo.estado !== ESTADO_ACUERDO_APROBADO) {
     return jsonError(
       400,
       "No se puede crear el presupuesto: el acuerdo no está aprobado."

@@ -52,6 +52,7 @@ import {
   type ConvenioEnLaVista,
 } from "./_vista"
 import { esPropietarioVigenteDeUnidad } from "./_deudores"
+import { ESTADO_ACUERDO_APROBADO } from "@/lib/schemas"
 
 /**
  * Recurso de la matriz que gobierna el convenio: `fi:cobranza`.
@@ -144,7 +145,7 @@ export async function POST(req: Request): Promise<Response> {
   })
   if (!acuerdo) return jsonError(400, "No se puede suscribir el convenio: el acuerdo del Comité no existe en esta comunidad.")
   if (acuerdo.cuerpo !== "comite") return jsonError(400, "No se puede suscribir el convenio: el acuerdo no es del Comité.")
-  if (acuerdo.estado !== "aprobado") {
+  if (acuerdo.estado !== ESTADO_ACUERDO_APROBADO) {
     return jsonError(400, "No se puede suscribir el convenio: el acuerdo no está aprobado.")
   }
 
