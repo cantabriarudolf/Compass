@@ -22,6 +22,31 @@ monorepos — no usarlo como base fundacional).
 - Tests: Vitest (unit/integración, `test/`) + Playwright (e2e, `e2e/` — lanes crud/flujo/smoke/auth)
 - Cualquier comando de build/test: `workdir k0mp4ss_fe/apps/web`
 
+## Continuidad: un plan aprobado se ejecuta hasta el final
+
+El owner no quiere ir y volver para informar algo que ya estaba detectado. Esto **manda sobre la
+costumbre de reportar por unidad**:
+
+- **El documento de feature (`odd/tasks/<feature>.md`) y el `todo` son el driver**, no la
+  conversación. Si hay una tarea pendiente y nada la bloquea, se ejecuta sin volver a consultar.
+- **Un reporte no es un límite de turno.** Un turno termina sólo por: (a) una decisión que es del
+  owner, (b) una autorización o consentimiento que el agente no puede dar, (c) un chequeo que falla
+  sin presupuesto de corrección, (d) el plan completo.
+- **Prohibido cerrar con «sigo con X».** O se hace X en el mismo turno, o se dice exactamente qué lo
+  bloquea.
+- **Un reporte por lote, no por unidad.** Al cerrar una unidad: como máximo una línea
+  (`R7 cerrado: <sha>`). El reporte completo va al final del plan.
+- **Nunca preguntar «¿sigo?»** ni pedir permiso para el paso siguiente que ya está planeado.
+
+Lo que **sí** se sigue consultando, porque es del owner: decisiones de producto o de diseño, el
+consentimiento del portón de RDD, y cualquier acción destructiva o de publicación.
+
+**Nota de mecánica:** cuando el agente termina un turno, nada lo vuelve a despertar salvo el humano, un
+job en background o la finalización de un subagente. Por eso el trabajo largo se encadena: lo mecánico
+va a un worker o a un `bash_background`, cuya finalización reanuda la conversación sin que el owner
+escriba nada. Un plan con diez unidades y cero encadenamiento obliga a diez «continúa»; con
+encadenamiento, a ninguno.
+
 ## Convenciones críticas
 
 - **Terminología RG §4**: el término oficial es **"comunidad"**; "condominio" está en desuso y no debe introducirse en ningún archivo
