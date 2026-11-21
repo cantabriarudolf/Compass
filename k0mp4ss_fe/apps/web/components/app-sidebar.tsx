@@ -241,6 +241,9 @@ const data = {
           url: "/admin/gestion/repartos-sector",
           roles: ["administrador", "comite"],
         },
+        // F47: el arranque de la comunidad va primero en la lista porque es lo que
+        // un administrador nuevo necesita ver antes que nada — qué le falta para operar.
+        { title: "Arranque de la comunidad", url: "/admin/arranque", roles: ["administrador", "comite"] },
         { title: "Maestros Administrativos", url: "/admin/maestros", roles: ["administrador"] },
         { title: "Configuración", url: "/admin/configuracion", roles: ["administrador"] },
         {
