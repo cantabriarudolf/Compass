@@ -450,13 +450,22 @@ export default function MaestrosPage() {
     setResultadoCatalogo(null)
     try {
       const res = await fetch("/api/maestros/catalogo-nacional", { method: "POST" })
-      const cuerpo = (await res.json()) as { ok?: boolean; aseguradas?: number; error?: string }
+      const cuerpo = (await res.json()) as {
+        ok?: boolean
+        aseguradas?: number
+        creadas?: number
+        error?: string
+      }
       if (!res.ok) {
         setErrorAccion(cuerpo.error ?? "No se pudo asegurar el catálogo nacional.")
         return
       }
+      const nuevas = cuerpo.creadas ?? 0
+      const total = cuerpo.aseguradas ?? 0
       setResultadoCatalogo(
-        `Catálogo del país asegurado: ${cuerpo.aseguradas ?? 0} filas en ocho colecciones. Correrlo de nuevo no duplica nada.`
+        nuevas > 0
+          ? `Catálogo del país asegurado: ${nuevas} filas nuevas de ${total}. Las que ya estaban quedaron intactas.`
+          : `El catálogo del país ya estaba completo (${total} filas): no se creó ninguna.`
       )
     } catch {
       setErrorAccion("No se pudo asegurar el catálogo nacional.")

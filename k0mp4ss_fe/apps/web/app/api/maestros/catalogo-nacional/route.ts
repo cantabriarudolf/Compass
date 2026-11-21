@@ -29,13 +29,13 @@ export async function POST(): Promise<Response> {
   }
 
   try {
-    const porTipo = await asegurarCatalogoNacional(prisma, scope.comunidadId)
+    const { porTipo, creadas } = await asegurarCatalogoNacional(prisma, scope.comunidadId)
     const aseguradas = [...porTipo.values()].reduce((a, b) => a + b, 0)
     logger.info(
-      { event: "MAESTROS_CATALOGO_NACIONAL_ASEGURADO", comunidadId: scope.comunidadId, usuarioId: scope.usuarioId, aseguradas },
+      { event: "MAESTROS_CATALOGO_NACIONAL_ASEGURADO", comunidadId: scope.comunidadId, usuarioId: scope.usuarioId, aseguradas, creadas },
       "Catálogo nacional asegurado"
     )
-    return Response.json({ ok: true, aseguradas, porTipo: Object.fromEntries(porTipo) })
+    return Response.json({ ok: true, aseguradas, creadas, porTipo: Object.fromEntries(porTipo) })
   } catch (error) {
     logger.error({ err: error }, "[api/maestros/catalogo-nacional] error inesperado")
     return jsonError(500, "No se pudo asegurar el catálogo nacional.")

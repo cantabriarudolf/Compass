@@ -53,14 +53,27 @@ const CATALOGOS = [
 export const TIPOS_CATALOGO_NACIONAL = CATALOGOS.map((c) => c.tipo)
 
 /**
- * Upsert idempotente por id de los ocho catálogos. Devuelve los tipos asegurados
- * con la cantidad de filas que declara la semilla.
+ * Resultado del asegurado: las filas por tipo (lo que la semilla declara) y
+ * `creadas`, que cuenta **sólo las filas que no existían**. La distinción importa
+ * para no mentir: `update: {}` deja las existentes intactas, así que decir «38
+ * aseguradas» cuando 37 ya estaban es un número que no cambia nada y confunde al
+ * que lo lee (hallazgos R1-report-size y R3-reliability-3 de la revisión nativa).
+ */
+export interface ResultadoCatalogoNacional {
+  porTipo: Map<string, number>
+  creadas: number
+}
+
+/**
+ * Upsert idempotente por id de los ocho catálogos. Devuelve las filas por tipo y
+ * cuántas se crearon realmente.
  */
 export async function asegurarCatalogoNacional(
   prisma: PrismaClient,
   comunidadId: string
-): Promise<Map<string, number>> {
+): Promise<ResultadoCatalogoNacional> {
   const porTipo = new Map<string, number>(CATALOGOS.map((c) => [c.tipo, 0]))
+  let creadas = 0
   for (const catalogo of CATALOGOS) {
     // SAFETY: los delegates de maestros comparten la firma upsert por id; el
     // runtime de Prisma valida el modelo contra la fila tipada de la semilla.
@@ -71,6 +84,20 @@ export async function asegurarCatalogoNacional(
         create: Record<string, unknown>
       }): Promise<unknown>
     }
+    // Cuántas de estas filas ya existen: el resto es lo que este POST creó.
+    const existentes = await (
+      prisma[catalogo.modelo] as unknown as {
+        findMany(args: {
+          where: { id: { in: string[] } }
+          select: { id: true }
+        }): Promise<{ id: string }[]>
+      }
+    ).findMany({
+      where: { id: { in: catalogo.filas.map((f) => f.id) } },
+      select: { id: true },
+    })
+    creadas += catalogo.filas.length - existentes.length
+
     for (const fila of catalogo.filas) {
       // SAFETY: las filas de la semilla son uniones literales por catálogo; el
       // spread sólo necesita la forma genérica y Prisma valida los campos.
@@ -85,5 +112,5 @@ export async function asegurarCatalogoNacional(
     }
     porTipo.set(catalogo.tipo, catalogo.filas.length)
   }
-  return porTipo
+  return { porTipo, creadas }
 }

@@ -79,7 +79,7 @@ async function main(): Promise<void> {
 
     let total = 0
     for (const comunidad of comunidades) {
-      const porTipo = await asegurarCatalogoNacional(prisma, comunidad.id)
+      const { porTipo } = await asegurarCatalogoNacional(prisma, comunidad.id)
       const filas = [...porTipo.values()].reduce((a, b) => a + b, 0)
       total += filas
       const detalle = [...porTipo.entries()]

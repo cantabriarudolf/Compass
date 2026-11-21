@@ -138,6 +138,7 @@ describe("/api/maestros/catalogo-nacional — asegurar el catálogo del país (F
     const cuerpo = (await respuesta.json()) as {
       ok: boolean
       aseguradas: number
+      creadas: number
       porTipo: Record<string, number>
     }
     expect(cuerpo.ok).toBe(true)
@@ -145,6 +146,9 @@ describe("/api/maestros/catalogo-nacional — asegurar el catálogo del país (F
     // de unidades de medida quede completo (los otros siete también se aseguran).
     expect(cuerpo.porTipo["unidades-medida"]).toBe(TOTAL_SEMILLA)
     expect(cuerpo.aseguradas).toBeGreaterThanOrEqual(TOTAL_SEMILLA)
+    // `creadas` cuenta sólo las filas que no existían: el catálogo estaba vacío,
+    // así que coincide con el total de la semilla (no con «la intención»).
+    expect(cuerpo.creadas).toBe(cuerpo.aseguradas)
 
     const filas = await prisma.unidadMedida.count()
     expect(filas).toBe(TOTAL_SEMILLA)
@@ -164,6 +168,9 @@ describe("/api/maestros/catalogo-nacional — asegurar el catálogo del país (F
     const { POST } = await import("@/app/api/maestros/catalogo-nacional/route")
     const respuesta = await POST()
     expect(respuesta.status).toBe(200)
+    const cuerpo = (await respuesta.json()) as { creadas: number }
+    // La segunda corrida no crea nada: el mensaje no puede decir «38 aseguradas».
+    expect(cuerpo.creadas).toBe(0)
     expect(await prisma.unidadMedida.count()).toBe(antes)
   })
 
