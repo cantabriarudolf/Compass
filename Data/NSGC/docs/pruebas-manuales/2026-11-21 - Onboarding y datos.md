@@ -79,19 +79,26 @@ Cada bloque tiene **plantilla descargable** y **vista previa** (`?dryRun=1`) que
 botón «Importar» queda bloqueado hasta que la vista previa da 0 errores. Las filas de la
 plantilla vienen marcadas `EJEMPLO-` y el importador las rechaza a propósito.
 
-### B2. Lo que **no** se puede cargar en masa, y por qué
+### B2. Lo que **no** se puede cargar en masa — y si hay pantalla o no
 
-| Qué | Por qué no | Qué se hace |
-|---|---|---|
-| Fondos, egresos, emisiones de GC, cobros | No hay importador; `CobroFI` exige `fondoId` y `unidadId` | Alta manual, o el script de histórico para el caso del owner |
-| Presupuestos | Exige `acuerdoId` (un acuerdo foliado que lo aprueba) | Manual: acuerdo → presupuesto |
-| Acuerdos y gobernanza (directiva, períodos, actas) | No hay import; el CSV de personas **descarta** los datos de gobernanza | Manual |
-| Ficha laboral (jornadas, contratos, remuneraciones) | No hay import; el CSV escribe sólo `estadoCuenta: activa` | Manual |
-| Usuarios, credenciales y roles | No hay import; se invita de a uno | `scripts/seed-authz.mjs` sólo para demo |
-| Configuración global | Es singleton | Manual (`/admin/configuracion`) |
-| Fotos, certificados, actas PDF | No hay import de binarios | Manual, uno por uno |
-| Medidores de servicios y etiqueta de sector | El CSV no los trae: sectores nuevos quedan «Sector» y `servicios: {}` | Manual después de importar |
-| Micro sector **sin unidades** | El formato es una fila = una unidad | No se puede expresar |
+La distinción importa: «no hay import» es tedioso; «no hay pantalla» sería imposible. **Salvo un
+campo, todo tiene pantalla**: un administrador puede armar su comunidad hoy, a mano.
+
+| Qué | Import masivo | ¿Pantalla? | Dónde |
+|---|---|---|---|
+| Fondos FI | no | **sí** | `/finanzas/gastos-comunes` pestaña Fondos |
+| Emisión de GC + cobros | no | **sí** | `/finanzas/gastos-comunes` pestaña Emisión GC |
+| Presupuesto | no | **sí** (sólo ofrece acuerdos aprobados) | `/admin/gestion/presupuestos` |
+| Acuerdo (alta y cierre con votos) | no | **sí** | `/comunidad/directiva/acuerdos` |
+| Configuración global | no (singleton) | **sí**, salvo `firmaDigitalizadaUrl` | `/admin/configuracion` |
+| Usuarios y roles | no | **sí** (exige persona del padrón con email) | `/admin/usuarios` |
+| Maestros: AFP, salud, mutuales, bancos, índices, feriados, unidades de medida | no | **sí, fila por fila** | `/admin/maestros`; feriados también en `/personas/personal` |
+| Tipos de unidad y estados de ocupación | no | **sí** | `/inventario/tipos`, `/admin/maestros` |
+| Medidores de servicios y etiqueta de sector | no (el CSV no los trae) | **sí**, después del import | `/inventario/estructura` |
+| Tipos de infracción | no | **sí** | `/finanzas/multas` |
+| Proveedores, ficha laboral, liquidaciones | no | **sí** (la ficha laboral se crea sobre una persona existente) | `/operaciones/proveedores`, `/personas/personal`, `/finanzas/remuneraciones` |
+| Fotos, certificados, actas PDF | no | **sí**, uno por uno | según módulo |
+| Micro sector **sin unidades** | no | no aplica | el formato es una fila = una unidad |
 
 ### B3. El orden (no es opcional: hay FK)
 
@@ -148,3 +155,27 @@ asignar roles. Pero el sistema *no opera* hasta que además existan, en este ord
    del caso 2023-24 (`data/finanzas/punto-cero-2324.json`); para otro formato no hay camino.
 3. **¿Qué se acepta cargar después del import?** Medidores, etiqueta de sector y ficha laboral
    quedan pendientes y son manuales uno por uno: conviene saber cuántas filas son antes de empezar.
+
+---
+
+## B5 · Lo que realmente falta para que el MVP esté saldado
+
+Tres cosas, ya anotadas en `specs/PENDIENTES-FUNCIONALIDAD.md` con su medición:
+
+- **F46 · Los catálogos nacionales de una comunidad nueva arrancan vacíos.** Todos los maestros
+  cuelgan de `comunidadId`, así que una comunidad nueva ve AFP, salud, mutuales, bancos, índices y
+  feriados **en blanco**. Hay pantalla fila por fila y existe el script
+  `seed-catalogo-nacional.ts`, pero **nada en la UI lo invita**. Sin AFP ni salud no hay
+  liquidación; sin feriados el corte no calcula el día hábil; sin bancos no se concilia.
+- **F47 · No hay flujo de arranque que diga qué falta.** El orden está escrito en el manual 41, no
+  en la pantalla: el administrador descubre cada dependencia al chocar con un 400 («No existe un
+  Fondo de Gasto Común activo…», «El libro no tiene acuerdos aprobados…»). Falta una pantalla que
+  liste los pasos con su estado y enlace a cada uno.
+- **F48 · El histórico financiero sólo entra por el script del caso 2023-24.** Los cobros los crea
+  la emisión y los pagos se registran de a uno; no hay import de egresos, ingresos ni pagos. Una
+  comunidad que llega con dos años en una planilla arranca en cero.
+
+**Traducción para la prueba manual:** el sistema **se puede** dejar operativo a mano hoy —una
+tarde larga tipeando maestros— pero **no hay onboarding de producto**. Si el MVP pide «el
+administrador carga su comunidad y opera», falta F46 (sin eso no opera) y F47 (sin eso no sabe qué
+le falta). F48 es decisión de formato.
