@@ -487,6 +487,14 @@ export const LeadPortalSchema = z.object({
   atendido: z.boolean({ required_error: "El estado atendido es obligatorio." }),
 })
 
+/**
+ * Canal de una notificación in-app. El valor existe en el código —no como literal
+ * suelto en cada escritor— porque hoy es el único: agregar un canal real obliga a
+ * tocar esta constante y el compilador señala a los ocho escritores (hallazgo 15
+ * del informe). El `@default` de Prisma lo repite: está anotado en el schema.
+ */
+export const CANAL_NOTIFICACION_EMAIL_SIMULADO = "email_simulado"
+
 // D3 (notificaciones simuladas): bandeja in-app con canal email_simulado.
 export const NotificacionSchema = z.object({
   id: IdEntidadSchema,
@@ -502,7 +510,7 @@ export const NotificacionSchema = z.object({
   unidadId: IdEntidadSchema.optional(),
   asunto: z.string().min(1, "El asunto es obligatorio."),
   cuerpo: z.string().min(1, "El cuerpo es obligatorio."),
-  canal: z.literal("email_simulado"),
+  canal: z.literal(CANAL_NOTIFICACION_EMAIL_SIMULADO),
   moduloOrigen: z.string().min(1),
   fecha: FechaISOSchema,
   leida: z.boolean(),

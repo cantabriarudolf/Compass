@@ -31,6 +31,7 @@ import { hoyISO } from "@/lib/date-utils"
 import { calcularProyeccionCobertura, costoProyeccionPE } from "@/lib/personal-utils"
 import { jsonError } from "@/lib/api/with-comunidad-scope"
 import { contextoAccionPE, RECURSO_ENVIO_PROYECCION_PE, registrarEventoPE } from "../../_acciones"
+import { CANAL_NOTIFICACION_EMAIL_SIMULADO } from "@/lib/schemas"
 
 /** Entrada del POST: mes AAA-MM y los dos costos unitarios de la proyección. */
 const EntradaProyeccionSchema = z.object({
@@ -124,7 +125,7 @@ export async function POST(req: Request): Promise<Response> {
           destinatarioRol: "administracion",
           asunto: `Proyección operativa ${mesAnio}: ${proyeccionBase.diasFeriados} feriado(s)`,
           cuerpo: `Se requerirán ${proyeccionBase.reemplazosNecesarios} reemplazo(s) (parches) para cubrir los descansos legales. Sobrecosto estimado: $${costoEstimado.toLocaleString("es-CL")}. Proyección enviada a Finanzas.`,
-          canal: "email_simulado",
+          canal: CANAL_NOTIFICACION_EMAIL_SIMULADO,
           moduloOrigen: "PE",
           fecha: hoyISO(),
           leida: false,

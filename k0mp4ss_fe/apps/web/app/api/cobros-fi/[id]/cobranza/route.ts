@@ -52,6 +52,7 @@ import {
   registrarEventoCobranza,
   resolverCanalesCobranza,
 } from "../../_cobranza"
+import { CANAL_NOTIFICACION_EMAIL_SIMULADO } from "@/lib/schemas"
 
 type Ctx = { params: Promise<{ id: string }> }
 
@@ -325,7 +326,7 @@ export async function POST(req: Request, ctx: Ctx): Promise<Response> {
               destinatarioPersonaId: personaId,
               asunto: asuntoEnvio,
               cuerpo: cuerpoEnvio,
-              canal: "email_simulado",
+              canal: CANAL_NOTIFICACION_EMAIL_SIMULADO,
               moduloOrigen: "FI",
               fecha,
               leida: false,

@@ -43,6 +43,7 @@ import {
   topePrestamoDelPeriodo,
   validarTopeAdelanto,
 } from "./_calculo"
+import { CANAL_NOTIFICACION_EMAIL_SIMULADO } from "@/lib/schemas"
 
 /** Recurso RBAC de los adelantos: admin gestiona, comité lee. */
 export const RECURSO_ADELANTOS_PL = "pl:adelantos"
@@ -300,7 +301,7 @@ export async function POST(req: Request): Promise<Response> {
           destinatarioPersonaId: trabajador.id,
           asunto: `Comprobante de adelanto ${folio}`,
           cuerpo: `Se registró ${pacto === "prestamo" ? "un préstamo" : "un anticipo"} de $${monto.toLocaleString("es-CL")} (${input.glosa}). Será descontado en la liquidación de ${periodoImputacion}.`,
-          canal: "email_simulado",
+          canal: CANAL_NOTIFICACION_EMAIL_SIMULADO,
           moduloOrigen: "PL",
           fecha,
           leida: false,

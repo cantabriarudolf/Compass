@@ -53,6 +53,7 @@ import {
   type CanalEnvioDocumento,
 } from "../../_lib/envio-documento"
 import type { EstadoEnvioDocumento } from "@/lib/schemas"
+import { CANAL_NOTIFICACION_EMAIL_SIMULADO } from "@/lib/schemas"
 
 type Ctx = { params: Promise<{ id: string }> }
 
@@ -266,7 +267,7 @@ export async function POST(req: Request, ctx: Ctx): Promise<Response> {
                 destinatarioPersonaId: entrega.personaId,
                 asunto,
                 cuerpo,
-                canal: "email_simulado",
+                canal: CANAL_NOTIFICACION_EMAIL_SIMULADO,
                 moduloOrigen: "AD",
                 fecha,
                 leida: false,

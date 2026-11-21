@@ -28,6 +28,7 @@ import { enviarCorreoComunidad, estadoRegistroSMTP, motivoSMTP } from "@/lib/smt
 import type { EnvioReporteRE, ReporteRE } from "@/lib/schemas"
 import { jsonError } from "@/lib/api/with-comunidad-scope"
 import { cargarReporteRE, contextoAccionRE, registrarEventoRE } from "../../_acciones"
+import { CANAL_NOTIFICACION_EMAIL_SIMULADO } from "@/lib/schemas"
 
 type Ctx = { params: Promise<{ id: string }> }
 
@@ -188,7 +189,7 @@ export async function POST(req: Request, ctx: Ctx): Promise<Response> {
             destinatarioPersonaId: personaId,
             asunto: asuntoEnvio,
             cuerpo: cuerpoEnvio,
-            canal: "email_simulado",
+            canal: CANAL_NOTIFICACION_EMAIL_SIMULADO,
             moduloOrigen: "RE",
             fecha,
             leida: false,

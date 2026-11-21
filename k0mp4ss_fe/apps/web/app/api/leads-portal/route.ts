@@ -19,6 +19,7 @@ import {
   jsonError,
   withComunidadScope,
 } from "@/lib/api/with-comunidad-scope"
+import { CANAL_NOTIFICACION_EMAIL_SIMULADO } from "@/lib/schemas"
 
 function delegado(modelo: unknown) {
   return modelo as import("@/lib/api/crud-factory").CrudDelegate
@@ -104,7 +105,7 @@ export async function POST(req: Request): Promise<Response> {
           destinatarioPersonaId: propietario?.personaId,
           asunto: "Nuevo interesado en tu propiedad",
           cuerpo: `${datos.nombreContacto} mostró interés en ${ref} (${publicacion.operacion}). Contacto: ${datos.contacto}`,
-          canal: "email_simulado",
+          canal: CANAL_NOTIFICACION_EMAIL_SIMULADO,
           moduloOrigen: "PI",
           fecha: new Date().toISOString().slice(0, 10),
           leida: false,

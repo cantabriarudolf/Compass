@@ -72,6 +72,7 @@ import {
   type CredencialSMTP,
   type FilaConfiguracionSMTP,
 } from "@/lib/smtp"
+import { CANAL_NOTIFICACION_EMAIL_SIMULADO } from "@/lib/schemas"
 
 /**
  * Desenlace del correo de vigencia para UN destinatario en UNA corrida. NO es el
@@ -221,7 +222,7 @@ async function emitirAviso({
           unidadId,
           asunto: aviso.asunto,
           cuerpo: aviso.cuerpo,
-          canal: "email_simulado",
+          canal: CANAL_NOTIFICACION_EMAIL_SIMULADO,
           moduloOrigen: "AD_VIGENCIA",
           fecha,
           leida: false,

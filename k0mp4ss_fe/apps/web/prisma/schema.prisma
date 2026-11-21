@@ -513,6 +513,7 @@ model Notificacion {
   unidadId              String?
   asunto                String
   cuerpo                String
+  // CANAL_NOTIFICACION_EMAIL_SIMULADO (lib/schemas.ts): hoy es el único canal de la bandeja.
   canal                 String    @default("email_simulado")
   moduloOrigen          String
   fecha                 String
