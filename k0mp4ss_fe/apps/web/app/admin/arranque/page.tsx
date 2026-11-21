@@ -63,6 +63,12 @@ export default async function ArranquePage() {
         <h1 className="flex items-center gap-2 text-3xl font-bold tracking-tight">
           <IconListCheck className="size-7 text-primary" /> Arranque de la comunidad
         </h1>
+        <Link
+          href="/admin/arranque/pauta"
+          className="w-fit text-sm font-medium text-primary underline underline-offset-2"
+        >
+          Ver la pauta de migración paso a paso
+        </Link>
         <p className="text-muted-foreground" role="status">
           {faltantes === 0
             ? "No falta ningún paso: la comunidad tiene todo lo que necesita para operar."

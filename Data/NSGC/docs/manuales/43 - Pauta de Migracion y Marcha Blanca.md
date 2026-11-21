@@ -1,6 +1,10 @@
 # 43 - Pauta de migración y marcha blanca
 
-Esta es la pauta para **pasar de la planilla al sistema**. No es un manual de pantallas: es lo que hay
+Esta es la pauta para **pasar de la planilla al sistema**.
+
+> **En el sistema:** `/admin/arranque/pauta` (misma pauta, para leerla y seguirla sin abrir un
+> repositorio). Este archivo es el registro del repo; si cambia una regla, se cambian los dos en el
+> mismo commit. No es un manual de pantallas: es lo que hay
 que decidir y hacer **antes**, para que la carga no deje dos verdades.
 
 ---
