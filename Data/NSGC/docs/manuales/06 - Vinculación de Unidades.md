@@ -12,6 +12,16 @@ Cuando vinculái a alguien a una unidad, tenís que elegir su rol:
 - **Copropietario / Familiar**: Personas que viven en la unidad pero no son el titular principal.
 - **Ocupante**: Otros residentes registrados.
 
+## 🏠 Estado de Ocupación de la Propiedad
+La ficha del vínculo de un propietario declara además **cómo está ocupada la unidad**: el valor sale del
+**maestro de estados inmobiliarios de esa comunidad** (Maestros Administrativos), no de una lista fija
+del código. Es una fila por comunidad: una puede tener `habitada`, otra puede llamarla distinto.
+
+Por eso el formulario **exige elegir** una fila del maestro y ya no propone `habitada` por defecto: si
+la comunidad no sembró esa fila, el vínculo quedaba apuntando a un id que no existe en ningún maestro y
+el filtro de ocupación no lo encontraba — sin error, porque el contrato de la columna acepta cualquier
+texto no vacío.
+
 ## 🏢 Vinculación Múltiple
 Una persona puede tener vínculos con varias unidades. 
 *Ejemplo: El Sr. Pérez es **Propietario** del Depto 101, pero también es **Propietario** del Estacionamiento E-15 y la Bodega B-02.*
