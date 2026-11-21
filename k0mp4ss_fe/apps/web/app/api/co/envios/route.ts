@@ -29,6 +29,7 @@ import {
 import { escribirEnvioCO } from "../_lib/escritura-envio"
 import { encolarEnvioCO } from "@/lib/co-cola"
 import { registrarDenegacionCo } from "../_lib/denegacion"
+import { notificarEnvioCO } from "@/lib/co-notificacion-envio"
 
 export async function GET(req: Request): Promise<Response> {
   const resultado = await withComunidadScope()
@@ -150,6 +151,16 @@ export async function POST(req: Request): Promise<Response> {
         envioId: id,
         asunto: datos.asunto,
         cuerpo: datos.cuerpo,
+        destinatarios: datos.destinatarios,
+      })
+      // F45: la notificación in-app que la spec manda, en la MISMA transacción. El
+      // correo sale por la cola; esto es lo que el residente ve en su bandeja.
+      await notificarEnvioCO(tx, {
+        comunidadId: scope.comunidadId,
+        envioId: id,
+        asunto: datos.asunto,
+        cuerpo: datos.cuerpo,
+        fecha: datos.fechaEnvio,
         destinatarios: datos.destinatarios,
       })
     })
