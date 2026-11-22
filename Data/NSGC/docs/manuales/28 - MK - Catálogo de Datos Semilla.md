@@ -133,7 +133,7 @@ El chequeo es `npm run check:titularidad` (`--strict` hace fallar el comando); e
 | **Ruta** | `k0mp4ss_fe/apps/web/data/comunidad/personas.ts` |
 | **Propósito** | Maestro de identidades del sistema. Cada persona tiene roles y extensiones (laboral, gobernanza, vínculos con unidades). |
 | **Líneas** | ~208 |
-| **Depende de** | `maestros.ts` → `ESTADOS_OCUPACION`, `estructura.ts` → `unidades`, `estacionamientos` |
+| **Depende de** | `maestros.ts` → `ESTADOS_OCUPACION`, `estructura.ts` → `unidades`, `estacionamientos`, `lib/schemas.ts` → `EstadoCuentaPersona` (tipo, no dato) |
 
 #### Interfaces definidas:
 
@@ -143,6 +143,11 @@ El chequeo es `npm run check:titularidad` (`--strict` hace fallar el comando); e
 | `ExtensionLaboral` | `id`, `cargo`, `afp`, `prevision`, `fechaIngreso` | Datos de personal contratado |
 | `ExtensionGobernanza` | `id`, `cargoDirectiva`, `firmaDigital?`, `fechaAsuncion` | Datos de cargos de directiva |
 | `Persona` | `id`, `rut`, `nombreCompleto`, `nombres`, `apellidos`, `email`, `telefonoMovil`, `telefonoFijo?`, `fotografiaUrl?`, `estadoCuenta`, `condicionesEspecialesIds[]`, `roles[]`, `vinculosUnidad?`, `datosLaborales?`, `datosGobernanza?` | La identidad atómica del sistema |
+
+> **Estado de cuenta (2026-11-22):** los registros de la semilla **no cambiaron**. El campo
+> `estadoCuenta` se tipa desde el catálogo único `EstadoCuentaPersona` (`lib/schemas.ts`), cuyos
+> valores son `activa` / `inactiva` / `bloqueada`. Un registro nuevo a mano tiene que usar una de
+> esas tres palabras: cualquier otra la rechaza el alta y el filtro `?estadoCuenta=`.
 
 #### Los 10 personajes del dataset:
 
