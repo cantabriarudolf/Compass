@@ -358,6 +358,12 @@ const EXENCIONES: readonly Exencion[] = [
     motivo:
       "sin consumidor: el comité la tenía con ver y ninguna ruta la pide —la deuda propia del residente se lee con `fi:aviso:propio` (F27) y la ajena la impide el filtro por fila—. Vacía corta el fallback de prefijo hacia `mp`, que el comité conserva con ver+editar.",
   },
+  {
+    clave: "mp:catalogo_nacional",
+    clase: "vacia-a-proposito",
+    motivo:
+      "F46: asegurar el catálogo del país es un acto de PROVISIÓN de la instalación, no de lectura de maestros. La pide `POST /api/maestros/catalogo-nacional` (existe la puerta) y la alcanza el administrador por el wildcard; vacía corta el fallback hacia `mp`, que el comité conserva con ver+editar, para que no pueda re-sembrar el catálogo global.",
+  },
   // ── Vacías a propósito: existen para cortar el fallback de prefijo ────────
   {
     clave: "co:lecturas",
