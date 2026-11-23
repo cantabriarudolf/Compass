@@ -705,3 +705,31 @@ estado que el efecto escribe).
 - `useVinculos()` también pagina a 100: una unidad cuyo vínculo de propiedad quede fuera de esa
   página muestra «—» en la columna Propietario. Está declarado en pantalla, no silenciado.
 - La vista desplegada no se pudo inspeccionar (login); la verificación es sobre código y compuertas.
+
+## Arnés: dos copias de gentle-pi y cinco linajes de revisión viejos (medido 2026-11-23)
+
+Estado del subsistema de revisión en esta máquina (`gentle-ai 5.0.0`, `doctor` healthy 10/10):
+
+- **Dos copias del mismo plugin se cargan a la vez.** La del runtime versionado
+  (`~/.gentle-shell/versions/5.0.0-1.6.0/node_modules/.pnpm/gentle-pi@5.0.0_.../node_modules/gentle-pi`,
+  la que provee el binario pineado `agent/bin/gentle-ai`) y la del juego de extensiones
+  (`~/.gentle-shell/agent/npm/node_modules/gentle-pi`, reinstalada el 2026-11-23 05:27 por
+  `gentle-shell setup`). En cada arranque los tools chocan entre raíces (`read`, `todo`,
+  `ask_user_choice`, `gentle_review*`); ganan los del runtime, así que el portón **opera** y el
+  arranque queda con ~40 errores de conflicto.
+- **No se arregla borrando la copia de `agent/npm`**: `gentle-engram`, `pi-btw`, `pi-web-access` y
+  `gentle-emote` viven en ese mismo `node_modules`, así que sacar `gentle-pi` de ahí deja el juego
+  incompleto. El defecto es del instalador (provisiona el mismo plugin por dos caminos), no de este
+  repo. **Decisión pendiente del owner**: dejarlo, reportarlo upstream, o deduplicar en la config de
+  extensiones. Un cambio local es **riesgo item 5** (entorno) y se verifica con `doctor` más un
+  cierre y apertura de ventana.
+- **Cinco linajes activos** de sesiones anteriores, ninguno atado a un candidato de este repo
+  (`gentle-ai review status` del 2026-11-23): `review-00dd19af88131256` (`reviewing`, sin
+  hallazgos), `review-19ab5b4f1c7e3625` (`reviewing`, con hallazgos), `review-7ac93a0a9180ee0a`
+  (`correction_required`, con hallazgos), `review-a2cb869683daafd6` (`correction_required`, con
+  hallazgos) y `review-c615c8f00009e991` (`reviewing`, con hallazgos). `review repair --preflight`
+  los clasifica `unsupported`, con 0 candidatos elegibles: son escombro histórico, no autoridad
+  viva, y no bloquean un linaje nuevo.
+- **Receta si algún día estorban**: se liberan **uno por uno**, con el lineage id a la vista y
+  autorización explícita del owner por linaje (RESET/RECOVER son destructivos y piden aprobación en
+  la UI). Nunca en lote y nunca por deducción.
