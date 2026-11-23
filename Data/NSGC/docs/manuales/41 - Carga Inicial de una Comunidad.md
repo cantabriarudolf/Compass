@@ -4,9 +4,9 @@ Partir una comunidad nueva no debería significar picar unidad por unidad ni per
 Este módulo te deja bajar **planillas de Excel**, llenarlas con los datos reales de la comunidad y
 subirlas al sistema para que la carga sea una vez y sin duplicados.
 
-## 🚦 El orden importa: estructura → personas → vínculos
+## 🚦 El orden importa: estructura → personas → vínculos → finanzas
 
-Hay tres bloques y se cargan en este orden, porque cada uno necesita al anterior:
+Hay **seis bloques** y se cargan en este orden, porque cada uno necesita al anterior:
 
 1. **Estructura**: los sectores (macro y micro) y las unidades con su Rol SII, metraje, prorrateo,
    tipo y estado de ocupación.
@@ -15,9 +15,19 @@ Hay tres bloques y se cargan en este orden, porque cada uno necesita al anterior
 3. **Vínculos**: quién vive o trabaja en cada unidad. El vínculo necesita **la unidad ya cargada**
    (la busca por Rol SII) y **la persona ya cargada** (la busca por RUT). Si lo subís antes, el
    sistema rechaza fila por fila con el motivo — no hay vuelta que darle.
+4. **Egresos**: los gastos históricos de la comunidad, un documento por fila.
+5. **Ingresos**: los ingresos históricos a los fondos, con el mismo formato que los egresos.
+6. **Saldos de apertura**: la deuda anterior de cada unidad al día de corte. Va **al final**: crea
+   un cobro por unidad imputado al fondo de gasto común activo y **rechaza la importación entera**
+   si ya hay una emisión de gastos comunes del período del corte o de uno anterior — si no, el mes
+   se cobraría dos veces.
 
-> Los datos vienen en el orden del menú: la pantalla anuncia arriba el orden recomendado
-> («Estructura → Personas → Vínculos»).
+Los dos bloques del historial financiero van **después de los fondos**: el importador imputa a un
+fondo que ya existe y **nunca lo crea**. Si el nombre del fondo no aparece, esa fila falla con el
+motivo y hay que crearlo primero en la pantalla de Finanzas.
+
+> La pantalla anuncia arriba el orden recomendado y sus dependencias: la estructura primero, las
+> finanzas después de los fondos.
 
 ## 🖥️ Dónde está la pantalla
 
@@ -27,7 +37,8 @@ usarla, el servidor le responde **403 Permiso denegado**.
 
 Lo que se ve:
 
-- **Tres tarjetas iguales**: *Estructura*, *Personas* y *Vínculos*, cada una con su descripción.
+- **Seis tarjetas iguales**: *Estructura*, *Personas*, *Vínculos*, *Egresos*, *Ingresos* y *Saldos
+  de apertura*, cada una con su descripción.
 - En cada tarjeta:
   1. Un **aviso amarillo** permanente: que un `.xlsx` hay que guardarlo como CSV, y que las filas
      de ejemplo de la plantilla vienen marcadas con «EJEMPLO-» y el importador las rechaza a
@@ -102,6 +113,39 @@ Al importar un vínculo, si la persona ya tenía un tramo vigente en esa unidad,
 cierra automáticamente** y deja vigente el nuevo (misma regla que el módulo de Vinculación de
 Unidades; las reglas del módulo viven ahí, no en el importador).
 
+### Bloque Egresos (5 columnas)
+
+Los gastos históricos de la comunidad, **una fila por documento**. La plantilla es
+`plantilla-egresos.csv`.
+
+| Encabezado | Qué es | Ejemplo de valor |
+| --- | --- | --- |
+| `fecha` | Fecha del egreso, **AAAA-MM-DD**, real y no futura | `2024-05-14` |
+| `monto` | Monto en pesos, **mayor que 0**, con punto decimal | `185000.50` |
+| `descripcion` | Qué fue ese gasto | `Mantención ascensor` |
+| `categoria` | Texto libre de hasta 120 caracteres. Puede ir vacío | `Mantención` |
+| `fondo` | **Nombre o id de un fondo que ya existe** en la comunidad. El importador no crea fondos | `Fondo de Gasto Común` |
+
+### Bloque Ingresos (5 columnas)
+
+Los ingresos históricos a los fondos, con **los mismos cinco encabezados** y las mismas reglas que
+Egresos. Cambia sólo a qué libro entran. La plantilla es `plantilla-ingresos.csv`.
+
+### Bloque Saldos de apertura (3 columnas)
+
+La **deuda anterior** de cada unidad: lo que el vecino debía antes de empezar a usar el sistema.
+La plantilla es `plantilla-saldos.csv`.
+
+| Encabezado | Qué es | Ejemplo de valor |
+| --- | --- | --- |
+| `unidad` | Rol SII o número de una unidad que **ya existe** en la comunidad | `12345-1101` |
+| `fecha_corte` | Hasta qué día llega esa deuda, **AAAA-MM-DD**, real y no futura | `2024-12-31` |
+| `monto` | Lo que se debía a esa fecha, **mayor que 0** | `240000` |
+
+Cada fila crea un cobro de concepto **«Deuda anterior (saldo de apertura)»** con vencimiento en la
+fecha de corte, para que la mora y el estado de cuenta lo vean. Es **idempotente por unidad y
+período**: volver a subir el mismo archivo no duplica la deuda.
+
 ## 📏 Formatos que importan
 
 - **Fechas**: formato ISO `AAAA-MM-DD` (`2024-03-01`). Si viene con otro formato, la fila da error.
@@ -157,16 +201,51 @@ otra vez sin miedo.
 
 ## 🚫 Qué NO se puede cargar todavía (por CSV)
 
-El importador cubre **estructura, personas y vínculos** y nada más. Todavía **no** se puede cargar
-por CSV:
+El importador cubre **seis bloques** y nada más. Todavía **no** se puede cargar por CSV:
 
+- **El detalle de los pagos históricos**: el saldo de apertura de cada unidad sí entra, pero cada
+  comprobante viejo —pago por pago— no.
+- **Emisiones y cobros de gastos comunes**: se generan emitiendo en la pantalla de Gastos Comunes.
 - **Ficha laboral del personal** (jornadas, contratos, remuneraciones).
 - **Datos de gobernanza** (directiva, períodos, actas).
-- **Finanzas** (fondos, egresos, emisiones de gastos comunes, cobros).
 - **Fotos ni documentos** (imágenes, certificados, actas en PDF).
 
 Esos módulos **siguen cargándose por su pantalla** de siempre. En el padrón de personas vía CSV
 van sólo los datos básicos: lo laboral y lo de gobernanza se completa módulo a módulo.
+
+Dos límites del historial financiero que conviene tener a la vista: el **`folio`** de un egreso
+importado queda **vacío** (la numeración la asigna la pantalla de alta, no el CSV) y el importador
+**no enciende el fondo**: si el fondo que nombrás está inactivo, la fila pasa igual — darlo de alta
+como activo es de la pantalla de Finanzas.
+
+## 🪜 El arranque completo: los doce pasos
+
+Los seis bloques de arriba son la mitad de la puesta en marcha. La otra mitad vive en
+**`/admin/arranque`** (menú de **Sistema**): una pantalla que mide **doce pasos** contra la base y
+anuncia cuántos faltan («faltan N de 12»). Cada paso muestra **el número medido** —«0 unidades», «2
+fondos de gasto común activos»— y el enlace a la pantalla donde se resuelve.
+
+Nada se guarda como «paso hecho»: se vuelve a medir en cada visita, así que si borrás el dato, el
+paso vuelve a **pendiente**. El orden es este y la pantalla no lo reordena:
+
+| # | Paso | Qué mide | Pantalla |
+| --- | --- | --- | --- |
+| 1 | Catálogo del país | AFP y previsiones de salud cargadas. Es un maestro **compartido**: lo que asegura una comunidad lo ven todas | `/admin/maestros` |
+| 2 | Tipos de unidad | Tipos creados en la comunidad | `/inventario/tipos` |
+| 3 | Estados de ocupación | Estados creados en la comunidad | `/admin/maestros` |
+| 4 | Estructura física | Unidades cargadas | `/inventario/estructura` |
+| 5 | Personas del padrón | Personas cargadas | `/personas/residentes` |
+| 6 | Vínculos con la unidad | Vínculos vigentes (sin fecha de término) | `/comunidad/personas` |
+| 7 | Configuración de la comunidad | La fila de configuración **y** que haya firmante derivado: sin firmante no se emite ningún papel | `/admin/configuracion` |
+| 8 | Fondo de gasto común | Fondos de tipo gasto común **activos** | `/finanzas/gastos-comunes` |
+| 9 | Acuerdo aprobado | Acuerdos en estado aprobado | `/comunidad/directiva/acuerdos` |
+| 10 | Presupuesto vigente | Presupuesto **vigente del año en curso** | `/admin/gestion/presupuestos` |
+| 11 | Emisión de gasto común | Emisiones hechas | `/finanzas/gastos-comunes` |
+| 12 | Usuarios de la comunidad | Usuarios **además de tu cuenta**: una comunidad de una sola cuenta no tiene a quién notificar | `/admin/usuarios` |
+
+Los pasos 1 a 6 son los que resuelven los seis bloques de carga de este manual (el catálogo del
+país va por su botón en `/admin/maestros`, los demás por CSV). Del 7 en adelante se cargan por
+pantalla, uno por módulo.
 
 ## 🩹 Errores frecuentes y qué significan
 
