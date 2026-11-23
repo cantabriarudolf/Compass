@@ -36,6 +36,8 @@ model Comunidad {
   publicacionesPortal         PublicacionPortal[]
   leadsPortal                 LeadPortal[]
   notificaciones              Notificacion[]
+  // S3 — la constancia de cada intento de entrega de un aviso.
+  entregasNotificacion       EntregaNotificacion[]
   controlesPropiedades        ControlPropiedad[]
   // Vigencia del Registro de Copropietarios (S2: el reloj corre por unidad).
   vigenciasRegistro           VigenciaRegistroUnidad[]
@@ -193,8 +195,9 @@ model InvitacionAcceso {
   usadoEn     DateTime?
   // F43 — constancia del correo de bienvenida de ESTA invitación. `enviado` sólo
   // con la aceptación del servidor SMTP; `pendiente` sin emisor configurado;
-  // `fallido` con el motivo del servidor. `envioEn` sólo cuando se envió: un
-  // rebote no se fecha como enviado. Esta fila no guarda el token en claro.
+  // `fallido` con el motivo del servidor (ESTADOS_ENVIO_SMTP en lib/schemas.ts).
+  // `envioEn` sólo cuando se envió: un rebote no se fecha como enviado. Esta fila
+  // no guarda el token en claro.
   envioEstado String?
   envioMotivo String?
   envioEn     DateTime?
@@ -316,7 +319,7 @@ model Persona {
   telefonoMovil            String
   telefonoFijo             String?
   fotografiaUrl            String?
-  estadoCuenta             String // activa | inactiva | bloqueada
+  estadoCuenta             String // ESTADOS_CUENTA_PERSONA (lib/schemas.ts): activa | inactiva | bloqueada
   condicionesEspecialesIds Json // string[]
   roles                    Json // ROLES_PERSONA[]
   datosLaborales           Json? // ExtensionLaboral
@@ -517,17 +520,61 @@ model Notificacion {
   unidadId              String?
   asunto                String
   cuerpo                String
+  // CANAL_NOTIFICACION_EMAIL_SIMULADO (lib/schemas.ts): hoy es el único canal de la bandeja.
   canal                 String    @default("email_simulado")
   moduloOrigen          String
   fecha                 String
   leida                 Boolean   @default(false)
   fechaLectura          String? // ISO de la primera lectura (métrica enviados/leídos); null = no leída
   createdAt             DateTime  @default(now())
+  // S3 — el desenlace de cada intento de entrega de este aviso.
+  entregas              EntregaNotificacion[]
 
   @@index([comunidadId])
   @@index([destinatarioRol])
   @@index([unidadId])
   @@map("notificaciones")
+}
+
+/// Entrega de un aviso (S3 — `odd/tasks/un-camino-de-entrega.md`): el desenlace
+/// de cada intento queda persistido. Una fila por intento, nunca una por aviso.
+///
+/// Por qué existe: la fila in-app (`Notificacion`) prueba que el residente TIENE
+/// el aviso en su bandeja, pero no dice qué pasó con el correo. Antes ese
+/// desenlace sólo vivía en la respuesta HTTP de cada módulo; el barrido de
+/// vigencia lo declara como diseño actual (`lib/vigencia-barrido.ts`).
+///
+/// · `notificacionId` nullable: el aviso in-app SIEMPRE se escribe (S6), y el
+///   intento de correo lo referencia igual; la fila sobrevive al borrado de la
+///   notificación (`onDelete: SetNull`) porque la constancia de la entrega no
+///   se pierde con el mensaje.
+/// · `canal` es el canal DECLARADO por el llamador (`visor` | `email`), no el
+///   `@default("email_simulado")` de `Notificacion` (S2).
+/// · `estado` es el catálogo único (`ESTADOS_ENTREGA_CORREO`, lib/schemas.ts):
+///   `entregado` lo prueba la fila in-app, `enviado` exige la aceptación del
+///   servidor SMTP, `pendiente` es falta de emisor y `fallido` lleva motivo.
+/// · `intentos` cuenta intentos REALES: cada fila creada registra 1. No se
+///   reinicia ni se pisa: un reintento es otra fila.
+/// · `enviadoEn` es cuándo salió. NULL en `pendiente` y `fallido` (no se fecha
+///   como enviado lo que no salió) y en el visor, cuya fecha es `creadoEn`.
+model EntregaNotificacion {
+  id             String        @id
+  comunidadId    String
+  comunidad      Comunidad     @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  notificacionId String?
+  notificacion   Notificacion? @relation(fields: [notificacionId], references: [id], onDelete: SetNull)
+  canal          String
+  estado         String
+  motivo         String?
+  intentos       Int           @default(0)
+  creadoEn       DateTime      @default(now())
+  enviadoEn      DateTime?
+
+  @@index([comunidadId])
+  @@index([notificacionId])
+  // La lectura de la métrica: cuántas entregas y de qué estado tiene una comunidad.
+  @@index([comunidadId, estado])
+  @@map("entregas_notificacion")
 }
 
 // Gestión Administrativa (AD) / Directiva (GD)
@@ -774,13 +821,13 @@ model Acuerdo {
   id              String    @id
   comunidadId     String
   comunidad       Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
-  cuerpo          String // comite | asamblea
+  cuerpo          String // CUERPOS_DEL_ACUERDO (lib/schemas.ts): comite | asamblea
   materia         String // qué se acordó (corte de servicios, convenio de pago, presupuesto…)
   // Folio del libro de acuerdos: `AD-<año>-<correlativo>`, asignado por el
   // servidor al crear y nunca reasignado. El índice único es la garantía dura
   // contra la carrera (el POST reintenta con el siguiente correlativo).
   folio           String
-  estado          String    @default("abierto") // abierto | aprobado | rechazado
+  estado          String    @default("abierto") // ESTADOS_ACUERDO (lib/schemas.ts): abierto | aprobado | rechazado
   // Modalidad de la votación (S2/S4): `electronica` —el default, y lo que ya
   // son todos los acuerdos existentes— se resuelve sumando los `VotoAcuerdo`
   // con `resultadoDelAcuerdo`; `presencial` se proclama en la sala —no tiene
@@ -788,7 +835,7 @@ model Acuerdo {
   // su acta firmada archivada y el `resultado` proclamado. Aditiva pura: la
   // migración nace con default `electronica`, así que ninguna fila existente
   // cambia de comportamiento (S4).
-  modalidad       String    @default("electronica") // electronica | presencial
+  modalidad       String    @default("electronica") // MODALIDADES_DEL_ACUERDO (lib/schemas.ts)
   // La regla APLICADA, en texto: un_voto_por_miembro |
   // mayoria_absoluta_presentes | mayoria_absoluta_derechos |
   // mayoria_reforzada_derechos (ver lib/acuerdos.ts).
@@ -1016,6 +1063,8 @@ model ColaSalidaCO {
   destinatario String?
   asunto       String
   cuerpo       String
+  // Los tres estados del emisor (ESTADOS_ENVIO_SMTP en lib/schemas.ts): la cola
+  // registra intentos de correo, nunca `entregado`.
   estado       String    @default("pendiente")
   intentos     Int       @default(0)
   ultimoError  String?
@@ -1121,7 +1170,9 @@ model EnvioDocumento {
   personaId      String
   // `visor` | `email` (CANALES_ENVIO_DOCUMENTO en app/api/documentos/_lib).
   canal          String
-  // `entregado` | `pendiente` | `fallido` (ver arriba qué significa cada uno).
+  // `entregado` | `pendiente` | `fallido` (ESTADOS_ENVIO_DOCUMENTO en
+  // lib/schemas.ts). `enviado` no entra: la aceptación del servidor se registra
+  // `entregado`.
   estado         String
   fecha          String
   motivo         String?
@@ -1704,9 +1755,10 @@ model EnvioAvisoCobro {
   personaId      String
   // `visor` | `email` (CANALES_ENTREGA_AVISO en lib/schemas.ts).
   canal          String
-  // `entregado` | `pendiente` | `fallido`. El visor es `entregado` porque la
-  // fila de `Notificacion` se creó en la misma transacción; el email es
-  // `pendiente` mientras no exista emisor SMTP (F4).
+  // Los cuatro del catálogo único (ESTADOS_ENTREGA_CORREO en lib/schemas.ts):
+  // `entregado` porque la fila de `Notificacion` se creó en la misma transacción;
+  // `enviado` cuando el servidor SMTP aceptó; `pendiente` mientras no exista
+  // emisor SMTP (F4); `fallido` con el motivo del rebote.
   estado         String
   fecha          String
   motivo         String?
@@ -1780,6 +1832,7 @@ model EnvioCobranzaFI {
   unidadId        String
   personaId       String?
   canal           String
+  // Los tres estados del emisor (ESTADOS_ENVIO_COBRANZA_FI en lib/schemas.ts).
   estado          String
   fecha           String
   motivo          String?
@@ -1825,7 +1878,7 @@ model ConvenioPago {
   fechaSuscripcion  DateTime
   // Lo que se pagó al suscribir: la cuota 0, que no se genera como deuda.
   primeraCuota      Float
-  estado            String    @default("vigente") // vigente | saldado | incumplido | anulado
+  estado            String    @default("vigente") // ESTADOS_CONVENIO_PAGO (lib/schemas.ts): vigente | saldado | incumplido | anulado
   observaciones     String?
   creadoPor         String
   createdAt         DateTime  @default(now())
@@ -1864,7 +1917,7 @@ model CuotaConvenio {
   venceEn       DateTime
   // `anulada` (F29 · S1): la cuota de un convenio anulado que no se pagó. No se
   // borra —el libro conserva la traza— y una cuota pagada nunca se vuelve anular.
-  estado        String       @default("pendiente") // pendiente | pagada | vencida | anulada
+  estado        String       @default("pendiente") // ESTADOS_CUOTA_CONVENIO (lib/schemas.ts): pendiente | pagada | vencida | anulada
   pagadaEn      DateTime?
   registradaPor String?
   createdAt     DateTime     @default(now())
@@ -1890,7 +1943,7 @@ model Presupuesto {
   comunidadId String
   comunidad   Comunidad @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
   periodo     String // AAAA
-  cuerpo      String // comite | asamblea — copiado del acuerdo que lo aprueba
+  cuerpo      String // CUERPOS_DEL_ACUERDO (lib/schemas.ts) — copiado del acuerdo que lo aprueba
   acuerdoId   String // acuerdo foliado que lo aprueba (estado y cuerpo verificados)
   version     Int // 1, 2, 3… por comunidad y período
   estado      String    @default("vigente") // vigente | reemplazado
