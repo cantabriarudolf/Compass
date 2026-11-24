@@ -15,21 +15,22 @@
  * 1. **Un solo barrido.** `barrerAvisosDeVigencia()` recibe el `comunidadId`
  *    explícito y hace exactamente lo que hacía el `POST`: lee los hechos de la
  *    base, deriva el veredicto con `estadoDelCaso`, decide con `avisosDelCaso`,
- *    escribe la `Notificacion` y su constancia en `avisos_vigencia` —las dos en
- *    la misma transacción— y deja UN evento `AD_VIGENCIA_AVISOS` por corrida.
+ *    escribe el aviso in-app con el puente (`notificar`) y su constancia en
+ *    `avisos_vigencia` —las dos en la MISMA transacción, que es pura: el visor no
+ *    abre ninguna conexión— y deja UN evento `AD_VIGENCIA_AVISOS` por corrida.
  *    El scope de la sesión NO se resuelve acá: la ruta lo hace
  *    (`withComunidadScope`) y el cron lo saca de la lista de comunidades con
  *    caso de vigencia. Este módulo no conoce sesiones ni secretos HTTP.
- * 2. **El correo sale con la credencial cifrada de la comunidad (F33).** Si la
- *    comunidad tiene `CredencialCorreoComunidad`, el secreto se descifra EN
- *    MEMORIA con la clave maestra del entorno y se pasa al emisor de
- *    `lib/smtp.ts`; acá no se persiste, no se devuelve y no se registra. La fila
- *    de CF aporta remitente y seguridad, el resto lo aporta la credencial.
- * 3. **Sin credencial no se finge un envío (S4).** El aviso se escribe igual —la
- *    bandeja es el canal real— y el desenlace se declara `sin_emisor` con el
- *    motivo. Lo mismo si el secreto no se puede descifrar (clave maestra
- *    ausente, rotación, dato alterado) o si CF no tiene remitente: en esos casos
- *    NO se abre ninguna conexión.
+ * 2. **El correo sale por la puerta única.** La credencial de la comunidad
+ *    (`CredencialCorreoComunidad`) la resuelve el emisor dentro de
+ *    `planDeCanal`/`enviarCorreoComunidad`: el barrido ya NO descifra el secreto
+ *    ni lo pasa por su cuenta, y no llama a `enviarCorreoSMTP` directo (S4). El
+ *    correo sale por el puente, con el cliente PLANO: el diálogo SMTP nunca
+ *    corre dentro de una transacción.
+ * 3. **Sin emisor no se finge un envío (S4).** El aviso se escribe igual —la
+ *    bandeja es el canal real— y la entrega del correo queda `pendiente` con
+ *    `MOTIVO_SIN_SMTP` (sin credencial, sin CF o con la credencial ilegible: en
+ *    los tres casos no se abre ninguna conexión).
  * 4. **`enviado` sólo cuando el servidor aceptó.** El desenlace sale del código
  *    final del DATA (`lib/smtp.ts`), nunca de que la conexión se haya abierto.
  *    Los estados no se mezclan:
@@ -48,12 +49,11 @@
  *    se revierte entera y el aviso se cuenta como `omitido`. Un aviso omitido
  *    tampoco se reenvía: el correo se intenta UNA vez, cuando el aviso se escribe.
  *
- * **Lo que este módulo NO persiste por aviso**: el desenlace del correo. No hay
- * columna ni tabla donde guardarlo sin cambiar el modelo (`AvisoVigencia` y
- * `Notificacion` tienen contrato congelado), así que la constancia es la del
- * barrido: el resumen que devuelve esta función y el evento `AD_VIGENCIA_AVISOS`,
- * que ahora lleva los envíos y los motivos. Persistir un desenlace por aviso es
- * una decisión aparte y exige migración.
+ * **La constancia por aviso ya existe (S3)**: cada aviso escrito deja su fila en
+ * `entregas_notificacion` —el visor `entregado`, el correo con el desenlace real
+ * del emisor— colgada de su notificación. Antes el barrido DESCARTABA el
+ * desenlace por aviso: sólo quedaban las cifras del resumen y el evento. El
+ * resumen y la bitácora se conservan con los mismos contadores.
  */
 import { prisma } from "@/lib/prisma"
 import { generarId } from "@/lib/id-utils"
@@ -64,14 +64,11 @@ import {
   type AvisoVigenciaDecidido,
   type DestinatarioAvisoVigencia,
 } from "@/lib/vigencia-avisos"
-import { descifrarSecreto } from "@/lib/cifrado-secretos"
+import { notificar } from "@/lib/entrega/notificar"
 import {
-  enviarCorreoSMTP,
-  leerConfiguracionSMTP,
-  motivoSMTP,
-  type CredencialSMTP,
-  type FilaConfiguracionSMTP,
-} from "@/lib/smtp"
+  MOTIVO_SIN_DESTINATARIO,
+  MOTIVO_SIN_SMTP,
+} from "@/lib/entrega-aviso"
 import { CANAL_NOTIFICACION_EMAIL_SIMULADO } from "@/lib/schemas"
 
 /**
@@ -128,14 +125,6 @@ export const USUARIO_CRON = "cron"
 /** Tipo de acción de la bitácora: uno por corrida, no uno por aviso. */
 export const TIPO_ACCION_BARRIDO = "AD_VIGENCIA_AVISOS"
 
-/** El aviso queda en la bandeja: la comunidad no tiene credencial de correo. */
-export const MOTIVO_SIN_CREDENCIAL =
-  "La comunidad no tiene credencial de correo guardada: el aviso queda en la bandeja y no se envió ningún correo."
-
-/** El aviso queda en la bandeja: la credencial guardada no se puede abrir. */
-export const MOTIVO_CREDENCIAL_ILEGIBLE =
-  "No se pudo descifrar la credencial de correo de la comunidad con la clave maestra del servidor: el aviso queda en la bandeja y no se envió ningún correo."
-
 /** El aviso queda en la bandeja: es para un rol, no para una persona. */
 export function motivoBandejaDeRol(destinatario: DestinatarioAvisoVigencia): string {
   return `El aviso es para la bandeja del rol «${destinatario}» de la comunidad: no es una persona con correo electrónico, así que no hay a quién enviarlo y el aviso queda en la bandeja.`
@@ -171,19 +160,9 @@ export async function comunidadesConCasoDeVigencia(): Promise<string[]> {
   return filas.map((fila) => fila.comunidadId)
 }
 
-/** Correos de las personas destinatarias, en UNA consulta (sin N+1). */
-async function correosDePersonas(
-  comunidadId: string,
-  personaIds: readonly string[]
-): Promise<Map<string, string>> {
-  const ids = [...new Set(personaIds)]
-  if (ids.length === 0) return new Map()
-  const personas = await prisma.persona.findMany({
-    where: { comunidadId, id: { in: ids } },
-    select: { id: true, email: true },
-  })
-  return new Map(personas.map((persona) => [persona.id, persona.email]))
-}
+/** El barrido ya no resuelve correos: el puente usa la definición única
+ * (`lib/personas-contacto.ts`) y una sola consulta por lote.
+ */
 
 interface EmisionAviso {
   comunidadId: string
@@ -198,7 +177,11 @@ interface EmisionAviso {
  *
  * La transacción es la que impide el medio aviso: si la constancia choca contra
  * el índice único, la notificación de esa misma transacción se revierte y el
- * aviso queda como `omitido` —el mismo aviso ya estaba emitido—.
+ * aviso queda como `omitido` —el mismo aviso ya estaba emitido—. El puente
+ * escribe la notificación y su fila de entrega del visor EN la transacción, y
+ * acá no hay red: `planDeCanal("visor")` no abre ninguna conexión.
+ *
+ * Devuelve el id del aviso in-app escrito, o `null` si el aviso ya existía.
  */
 async function emitirAviso({
   comunidadId,
@@ -206,27 +189,24 @@ async function emitirAviso({
   personaId,
   aviso,
   fecha,
-}: EmisionAviso): Promise<boolean> {
+}: EmisionAviso): Promise<string | null> {
   try {
-    await prisma.$transaction(async (tx) => {
-      const notificacionId = generarId("not")
-      await tx.notificacion.create({
-        data: {
-          id: notificacionId,
-          comunidadId,
-          destinatarioRol: aviso.destinatario,
-          // Sólo el propietario es una persona concreta; el administrador y el
-          // Comité son roles y su bandeja se acota por `unidadId` (F5).
-          destinatarioPersonaId:
-            aviso.destinatario === "propietario" ? personaId : null,
-          unidadId,
-          asunto: aviso.asunto,
-          cuerpo: aviso.cuerpo,
-          canal: CANAL_NOTIFICACION_EMAIL_SIMULADO,
-          moduloOrigen: "AD_VIGENCIA",
-          fecha,
-          leida: false,
-        },
+    return await prisma.$transaction(async (tx) => {
+      const { notificacionId } = await notificar(tx, {
+        comunidadId,
+        destinatarioRol: aviso.destinatario,
+        // Sólo el propietario es una persona concreta; el administrador y el
+        // Comité son roles y su bandeja se acota por `unidadId` (F5).
+        destinatarioPersonaId:
+          aviso.destinatario === "propietario" ? personaId : null,
+        unidadId,
+        asunto: aviso.asunto,
+        cuerpo: aviso.cuerpo,
+        canal: CANAL_NOTIFICACION_EMAIL_SIMULADO,
+        moduloOrigen: "AD_VIGENCIA",
+        fecha,
+        leida: false,
+        canales: ["visor"],
       })
       await tx.avisoVigencia.create({
         data: {
@@ -238,108 +218,77 @@ async function emitirAviso({
           notificacionId,
         },
       })
+      return notificacionId
     })
-    return true
   } catch (error) {
-    if (esDuplicado(error)) return false
+    if (esDuplicado(error)) return null
     throw error
   }
 }
 
 interface PedidoEntrega {
-  aviso: AvisoVigenciaDecidido
+  comunidadId: string
+  unidadId: string
+  notificacionId: string
   personaId: string | null
-  correos: Map<string, string>
+  aviso: AvisoVigenciaDecidido
+  fecha: string
 }
 
 /**
- * El emisor de UNA corrida para UNA comunidad. Resuelve la credencial y la fila
- * de CF una sola vez (lazy: sólo si hay algún aviso con correo a dónde ir) y
- * nunca guarda el secreto fuera de memoria.
+ * El desenlace del CORREO de UN aviso, persistido (S3) y sin perder el resumen.
+ *
+ * El destinatario del correo es el propietario vigente de la unidad. Un aviso
+ * para un rol (administración, comité) no tiene dirección y no se le inventa un
+ * buzón (S5): se declara `en_bandeja` sin abrir ninguna conexión.
+ *
+ * Para el propietario, el intento va por el puente, que resuelve el correo con
+ * la definición única y persiste su fila en `entregas_notificacion` colgada del
+ * aviso ya escrito (`notificacionId`). El cliente es el PLANO: el diálogo SMTP
+ * corre fuera de toda transacción. El estado del puente se traduce al
+ * vocabulario del resumen (que no cambió):
+ *   - `enviado`   → `enviado`
+ *   - `fallido` por falta de dirección → `en_bandeja` (la persona no tiene buzón)
+ *   - `fallido`   → `fallido`, con el motivo del emisor
+ *   - `pendiente` → `sin_emisor`, con `MOTIVO_SIN_SMTP` (condición de configuración)
  */
-function crearEmisor(comunidadId: string) {
-  let credencial: CredencialSMTP | null | undefined
-  // `undefined` = todavía no se leyó; `null` = la comunidad no tiene fila de CF.
-  let filaCF: FilaConfiguracionSMTP | null | undefined
-  let motivoSinEmisor: string | null = null
-
-  async function resolver(): Promise<{
-    credencial: CredencialSMTP
-    filaCF: FilaConfiguracionSMTP | null
-  } | null> {
-    if (motivoSinEmisor !== null) return null
-    if (credencial === undefined) {
-      const fila = await prisma.credencialCorreoComunidad.findUnique({
-        where: { comunidadId },
-      })
-      if (!fila) {
-        credencial = null
-        motivoSinEmisor = MOTIVO_SIN_CREDENCIAL
-        return null
-      }
-      try {
-        credencial = {
-          host: fila.host,
-          puerto: fila.puerto,
-          usuario: fila.usuario,
-          // El secreto se descifra en memoria y muere con la corrida: no se
-          // guarda, no se loguea y no vuelve en ninguna respuesta.
-          secreto: descifrarSecreto({
-            secretoCifrado: fila.secretoCifrado,
-            iv: fila.iv,
-            authTag: fila.authTag,
-          }),
-        }
-      } catch {
-        credencial = null
-        motivoSinEmisor = MOTIVO_CREDENCIAL_ILEGIBLE
-        return null
-      }
-    }
-    if (credencial === null) return null
-    if (filaCF === undefined) filaCF = await leerConfiguracionSMTP(comunidadId)
-    return { credencial, filaCF: filaCF ?? null }
-  }
-
-  return async function entregar({ aviso, personaId, correos }: PedidoEntrega) {
-    if (aviso.destinatario !== "propietario") {
-      return {
-        estado: "en_bandeja" as const,
-        motivo: motivoBandejaDeRol(aviso.destinatario),
-      }
-    }
-    const correo = (personaId ? correos.get(personaId) ?? "" : "").trim()
-    if (correo === "") {
-      return { estado: "en_bandeja" as const, motivo: MOTIVO_SIN_CORREO_DE_LA_PERSONA }
-    }
-
-    const resuelto = await resolver()
-    if (resuelto === null) {
-      return {
-        estado: "sin_emisor" as const,
-        motivo: motivoSinEmisor ?? MOTIVO_SIN_CREDENCIAL,
-      }
-    }
-
-    const resultado = await enviarCorreoSMTP(
-      resuelto.filaCF,
-      { to: correo, subject: aviso.asunto, text: aviso.cuerpo },
-      { credencial: resuelto.credencial }
-    )
-
-    if (resultado.estado === "enviado") {
-      return { estado: "enviado" as const, motivo: motivoSMTP(resultado) }
-    }
-    if (resultado.estado === "fallido") {
-      return { estado: "fallido" as const, motivo: motivoSMTP(resultado) }
-    }
-    // `no_configurado`: falta CF o algún campo obligatorio del remitente. No se
-    // abrió ninguna conexión, así que el aviso queda en la bandeja con el motivo.
+async function entregarElCorreo({
+  comunidadId,
+  unidadId,
+  notificacionId,
+  personaId,
+  aviso,
+  fecha,
+}: PedidoEntrega): Promise<EntregaAviso> {
+  if (aviso.destinatario !== "propietario") {
     return {
-      estado: "sin_emisor" as const,
-      motivo: `${resultado.motivo} El aviso queda en la bandeja y no se reporta como enviado.`,
+      estado: "en_bandeja",
+      motivo: motivoBandejaDeRol(aviso.destinatario),
     }
   }
+
+  const { entregas } = await notificar(prisma, {
+    comunidadId,
+    destinatarioRol: aviso.destinatario,
+    destinatarioPersonaId: personaId,
+    unidadId,
+    asunto: aviso.asunto,
+    cuerpo: aviso.cuerpo,
+    canal: CANAL_NOTIFICACION_EMAIL_SIMULADO,
+    moduloOrigen: "AD_VIGENCIA",
+    fecha,
+    notificacionId,
+    canales: ["email"],
+  })
+  const plan = entregas.find((entrega) => entrega.canal === "email")
+  const motivo = plan?.motivo ?? MOTIVO_SIN_SMTP
+
+  if (plan?.estado === "enviado") return { estado: "enviado", motivo }
+  if (plan?.estado === "pendiente") return { estado: "sin_emisor", motivo }
+  if (motivo === MOTIVO_SIN_DESTINATARIO) {
+    return { estado: "en_bandeja", motivo: MOTIVO_SIN_CORREO_DE_LA_PERSONA }
+  }
+  return { estado: "fallido", motivo }
 }
 
 /** Motivos únicos, en orden de aparición: el resumen no repite el mismo texto. */
@@ -396,10 +345,6 @@ export async function barrerAvisosDeVigencia(
       propietarioPorUnidad.set(vinculo.unidadId, vinculo.personaId)
     }
   }
-  const correos = await correosDePersonas(comunidadId, [
-    ...propietarioPorUnidad.values(),
-  ])
-  const entregar = crearEmisor(comunidadId)
 
   let emitidos = 0
   let omitidos = 0
@@ -424,20 +369,34 @@ export async function barrerAvisosDeVigencia(
     })
 
     for (const aviso of avisos) {
-      const emitido = await emitirAviso({
+      // 1. El aviso in-app y su constancia, juntos y en una transacción corta
+      //    (el visor no abre ninguna conexión).
+      const notificacionId = await emitirAviso({
         comunidadId,
         unidadId: unidad.id,
         personaId,
         aviso,
         fecha,
       })
-      if (!emitido) {
+      if (notificacionId === null) {
         omitidos += 1
         // Un aviso ya emitido no se reenvía: el correo se intenta cuando nace.
         continue
       }
       emitidos += 1
-      entregas.push(await entregar({ aviso, personaId, correos }))
+      // 2. El correo, por el puente y con el cliente plano: el diálogo SMTP
+      //    nunca corre dentro de una transacción, y su desenlace queda
+      //    persistido por aviso (S3) en vez de perderse.
+      entregas.push(
+        await entregarElCorreo({
+          comunidadId,
+          unidadId: unidad.id,
+          notificacionId,
+          personaId,
+          aviso,
+          fecha,
+        })
+      )
     }
   }
 

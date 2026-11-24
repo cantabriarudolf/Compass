@@ -14,13 +14,17 @@
  *   explícito (`{ reenviar: true }`) agrega `:reenvio:<epoch>` y deja una fila
  *   nueva marcada `reenvio: true`, igual que el aviso de cobro.
  * - **Visor**: `entregado` sólo porque se crea la `Notificacion` de cada
- *   destinatario en la MISMA transacción; el registro apunta a ella
- *   (`notificacionId`) y no hay entrega declarada sin la fila que la prueba.
+ *   destinatario en la MISMA transacción —la escribe el PUENTE de entrega,
+ *   `lib/entrega/notificar.ts`, junto con su fila de `entregas_notificacion`—; el
+ *   registro apunta a ella (`notificacionId`) y no hay entrega declarada sin la
+ *   fila que la prueba.
  * - **Email**: sale por el emisor SMTP real que ya usa el aviso (`lib/smtp.ts`
  *   vía `planDeCanal`), sin inventar transporte. Queda `entregado` SOLO si el
  *   servidor aceptó el mensaje, `pendiente` con el motivo del outbox cuando la
  *   comunidad no tiene emisor configurado y `fallido` con el motivo redactado
- *   cuando se intentó y rebotó.
+ *   cuando se intentó y rebotó. El correo NO crea notificación (su prueba es la
+ *   aceptación del servidor), así que no pasa por el puente: su constancia es la
+ *   fila de `envios_documento` y el visor conserva su bandeja intacta.
  * - **Lo comunitario no se entrega** (S8): se publica al visor de toda la
  *   comunidad y su constancia es "publicado", no una entrega por persona, así
  *   que la ruta responde 409 en vez de fabricar una constancia que nadie pidió.
@@ -40,6 +44,7 @@ import { hoyISO } from "@/lib/date-utils"
 import { generarId } from "@/lib/id-utils"
 import { puede } from "@/lib/authz"
 import { registrarEventoAuditoria } from "@/lib/auditoria"
+import { notificar } from "@/lib/entrega/notificar"
 import { IdEntidadSchema } from "@/lib/schemas"
 import { jsonError, withComunidadScope } from "@/lib/api/with-comunidad-scope"
 import {
@@ -256,23 +261,27 @@ export async function POST(req: Request, ctx: Ctx): Promise<Response> {
           const envioId = generarId("env-doc")
           let notificacionDelCanal: string | null = null
           // El visor se materializa en la notificación de la persona: es la
-          // entrega, no un aviso de que hubo entrega.
+          // entrega, no un aviso de que hubo entrega. La escribe el puente
+          // (`notificar`) y deja su fila en `entregas_notificacion` (S3) dentro
+          // de la MISMA transacción. El visor no habla con el transporte
+          // (`planDeCanal("visor")` es puro), así que esta transacción no queda
+          // abierta durante ningún diálogo SMTP. El canal email NO crea
+          // notificación —su prueba es la aceptación del servidor y su
+          // constancia es la fila de `envios_documento`—, así que no pasa por el
+          // puente: su correo ya salió por `planDeCanal` antes de esta escritura.
           if (canal === "visor") {
-            notificacionDelCanal = generarId("not")
-            await tx.notificacion.create({
-              data: {
-                id: notificacionDelCanal,
-                comunidadId: scope.comunidadId,
-                destinatarioRol: entrega.rolBandeja,
-                destinatarioPersonaId: entrega.personaId,
-                asunto,
-                cuerpo,
-                canal: CANAL_NOTIFICACION_EMAIL_SIMULADO,
-                moduloOrigen: "AD",
-                fecha,
-                leida: false,
-              },
+            const resultado = await notificar(tx, {
+              comunidadId: scope.comunidadId,
+              destinatarioRol: entrega.rolBandeja,
+              destinatarioPersonaId: entrega.personaId,
+              asunto,
+              cuerpo,
+              canal: CANAL_NOTIFICACION_EMAIL_SIMULADO,
+              moduloOrigen: "AD",
+              fecha,
+              canales: ["visor"],
             })
+            notificacionDelCanal = resultado.notificacionId
           }
 
           await tx.envioDocumento.create({

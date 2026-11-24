@@ -36,6 +36,7 @@ import {
   iniciarServidorSMTPFalso,
   type ServidorSMTPFalso,
 } from "../lib/servidor-smtp-falso"
+import { MOTIVO_SIN_SMTP } from "@/lib/entrega-aviso"
 
 const state = vi.hoisted(() => ({ cookie: "" }))
 vi.mock("next/headers", () => ({
@@ -136,6 +137,7 @@ async function configurarSMTP(puerto: number): Promise<void> {
 async function limpiar(): Promise<void> {
   const where = { comunidadId: COMUNIDAD }
   await prisma.credencialCorreoComunidad.deleteMany({ where })
+  await prisma.entregaNotificacion.deleteMany({ where })
   await prisma.envioAvisoCobro.deleteMany({ where })
   await prisma.notificacion.deleteMany({ where })
   await prisma.eventoAuditoria.deleteMany({ where })
@@ -373,6 +375,24 @@ describe("entrega del aviso por correo: los tres estados del emisor SMTP", () =>
     expect(filas.visor?.estado).toBe("entregado")
     expect(filas.visor?.notificacionId).not.toBeNull()
 
+    // La entrega compartida dejó su fila por canal: el correo `pendiente` con
+    // el motivo del catálogo y el visor `entregado` (su prueba es la notificación).
+    const entregasDelPuente = await prisma.entregaNotificacion.findMany({
+      where: { notificacionId: filas.visor?.notificacionId ?? "" },
+      orderBy: { canal: "asc" },
+    })
+    expect(entregasDelPuente).toHaveLength(2)
+    expect(entregasDelPuente.find((e) => e.canal === "email")).toMatchObject({
+      estado: "pendiente",
+      motivo: MOTIVO_SIN_SMTP,
+      intentos: 1,
+      enviadoEn: null,
+    })
+    expect(entregasDelPuente.find((e) => e.canal === "visor")).toMatchObject({
+      estado: "entregado",
+      motivo: null,
+    })
+
     expect(servidor.mensajes).toHaveLength(0)
     expect(servidor.autenticaciones).toHaveLength(0)
   })
@@ -406,6 +426,18 @@ describe("entrega del aviso por correo: los tres estados del emisor SMTP", () =>
     expect(filas.email?.notificacionId).toBeNull()
     expect(filas.visor?.estado).toBe("entregado")
     expect(filas.visor?.notificacionId).not.toBeNull()
+
+    // El desenlace REAL del emisor también queda en la entrega compartida: con
+    // el servidor aceptando, la fila del correo es `enviado` y lleva la fecha de
+    // salida; el motivo es el mismo que declara la constancia del aviso.
+    const entregasDelPuente = await prisma.entregaNotificacion.findMany({
+      where: { notificacionId: filas.visor?.notificacionId ?? "" },
+    })
+    const correoDelPuente = entregasDelPuente.find((e) => e.canal === "email")
+    expect(correoDelPuente?.estado).toBe("enviado")
+    expect(correoDelPuente?.motivo).toContain("falso-0001@ejemplo.test")
+    expect(correoDelPuente?.enviadoEn).toBeInstanceOf(Date)
+    expect(correoDelPuente?.intentos).toBe(1)
 
     // El mensaje que llegó al servidor es el del aviso: folio y período.
     expect(servidor.mensajes).toHaveLength(1)

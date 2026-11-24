@@ -32,6 +32,7 @@ import { describe, it, expect, beforeAll, afterAll, vi } from "vitest"
 import { NextRequest } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { hoyISO } from "@/lib/date-utils"
+import { MOTIVO_SIN_SMTP } from "@/lib/entrega-aviso"
 
 const state = vi.hoisted(() => ({ cookie: "" }))
 vi.mock("next/headers", () => ({
@@ -176,6 +177,9 @@ describe("/api/avisos-cobro/[id]/entrega — visor con prueba, correo en cola (S
 
   async function limpiar(): Promise<void> {
     const comunidades = [COM_A, COM_B]
+    await prisma.entregaNotificacion.deleteMany({
+      where: { comunidadId: { in: comunidades } },
+    })
     await prisma.envioAvisoCobro.deleteMany({
       where: { comunidadId: { in: comunidades } },
     })
@@ -492,6 +496,27 @@ describe("/api/avisos-cobro/[id]/entrega — visor con prueba, correo en cola (S
     expect(notificacion?.cuerpo).toContain(PERIODO)
     expect(notificacion?.moduloOrigen).toBe("FI")
     expect(json.notificacionId).toBe(notificacion?.id)
+
+    // La entrega compartida (S3) dejó UNA fila por canal intentado, colgada del
+    // aviso in-app: el visor queda `entregado` (la notificación lo prueba) y el
+    // correo `pendiente` con el motivo del catálogo (no hay emisor configurado).
+    const entregasDelPuente = await prisma.entregaNotificacion.findMany({
+      where: { notificacionId: visor?.notificacionId ?? "" },
+      orderBy: { canal: "asc" },
+    })
+    expect(entregasDelPuente).toHaveLength(2)
+    expect(entregasDelPuente.find((e) => e.canal === "visor")).toMatchObject({
+      estado: "entregado",
+      motivo: null,
+      intentos: 1,
+      enviadoEn: null,
+    })
+    expect(entregasDelPuente.find((e) => e.canal === "email")).toMatchObject({
+      estado: "pendiente",
+      motivo: MOTIVO_SIN_SMTP,
+      intentos: 1,
+      enviadoEn: null,
+    })
   })
 
   it("sin emisor configurado el correo queda pendiente y nunca se reporta como entregado ni enviado", async () => {

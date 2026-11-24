@@ -267,6 +267,7 @@ describe("F35-A3 · envío de documentos legales con constancia por destinatario
 
   async function limpiar(): Promise<void> {
     const where = { comunidadId: { in: [COM_A, COM_B] } }
+    await prisma.entregaNotificacion.deleteMany({ where })
     await prisma.envioDocumento.deleteMany({ where })
     await prisma.notificacion.deleteMany({ where })
     await prisma.eventoAuditoria.deleteMany({ where })
@@ -321,6 +322,30 @@ describe("F35-A3 · envío de documentos legales con constancia por destinatario
       expect(notificacion?.asunto).toContain("Acta de asamblea ordinaria 2026")
       expect(notificacion?.cuerpo).toContain("Acta de asamblea ordinaria 2026")
       expect(notificacion?.cuerpo).toContain("versión 1")
+    }
+
+    // La entrega compartida (S3) se SUMA a la constancia propia: una fila por
+    // notificación, escrita por el puente. El visor es el canal real, así que su
+    // desenlace es `entregado` y no lleva motivo.
+    const entregasDelPuente = await prisma.entregaNotificacion.findMany({
+      where: {
+        notificacionId: {
+          in: persistidas
+            .map((fila) => fila.notificacionId)
+            .filter((id): id is string => id !== null),
+        },
+      },
+    })
+    expect(entregasDelPuente).toHaveLength(3)
+    for (const entrega of entregasDelPuente) {
+      expect(entrega).toMatchObject({
+        comunidadId: COM_A,
+        canal: "visor",
+        estado: "entregado",
+        motivo: null,
+        intentos: 1,
+        enviadoEn: null,
+      })
     }
 
     // El envío es un acto auditable: deja su evento en la bitácora.

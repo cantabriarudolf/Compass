@@ -33,6 +33,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from "vitest"
 import { prisma } from "@/lib/prisma"
 import { configuracionDefault } from "@/data/admin/configuracion"
 import { VARIABLE_CLAVE_MAESTRA, cifrarSecreto } from "@/lib/cifrado-secretos"
+import { MOTIVO_SIN_SMTP } from "@/lib/entrega-aviso"
 import {
   iniciarServidorSMTPFalso,
   type ServidorSMTPFalso,
@@ -280,6 +281,7 @@ async function guardarCredencial(
 
 async function limpiar(): Promise<void> {
   const where = { comunidadId: { in: [...COMUNIDADES] } }
+  await prisma.entregaNotificacion.deleteMany({ where })
   await prisma.avisoVigencia.deleteMany({ where })
   await prisma.notificacion.deleteMany({ where })
   await prisma.revalidacionVigencia.deleteMany({ where })
@@ -550,9 +552,9 @@ describe("con el secreto corre el barrido de todas las comunidades con caso", ()
     const resumen = resumenDe(primeraCorrida, COM_SIN_CREDENCIAL)
     expect(resumen?.sinEmisor).toBe(2)
     expect(resumen?.enviados).toBe(0)
-    expect(resumen?.motivos).toContain(
-      "La comunidad no tiene credencial de correo guardada: el aviso queda en la bandeja y no se envió ningún correo."
-    )
+    // El motivo ya no es uno propio del barrido: es el del catálogo único de
+    // entrega (`MOTIVO_SIN_SMTP`), porque el correo sale por `planDeCanal`.
+    expect(resumen?.motivos).toContain(MOTIVO_SIN_SMTP)
     // El aviso del propietario existe igual: la bandeja es el canal real.
     const avisosDelPropietario = await prisma.notificacion.findMany({
       where: {
@@ -606,11 +608,85 @@ describe("con el secreto corre el barrido de todas las comunidades con caso", ()
     const resumen = resumenDe(primeraCorrida, COM_CREDENCIAL_SIN_CF)
     expect(resumen?.sinEmisor).toBe(2)
     expect(resumen?.enviados).toBe(0)
+    // Sin CF tampoco hay emisor: mismo motivo del catálogo, sin conexión.
+    expect(resumen?.motivos).toContain(MOTIVO_SIN_SMTP)
+  })
+
+  it("S3: el desenlace del correo de cada aviso queda persistido, no perdido", async () => {
+    const entregasDe = (comunidadId: string) =>
+      prisma.entregaNotificacion.findMany({
+        where: { comunidadId },
+        orderBy: [{ canal: "asc" }, { creadoEn: "asc" }],
+      })
+
+    // Cada aviso escrito deja su fila del visor (6 por comunidad) y el correo
+    // deja la suya cuando hay a quién enviarlo (2 por comunidad: los dos avisos
+    // del propietario vigente). Antes del puente este desenlace se descartaba.
+    for (const comunidadId of COMUNIDADES_BARRIDAS) {
+      const filas = await entregasDe(comunidadId)
+      expect(filas).toHaveLength(8)
+      expect(filas.filter((f) => f.canal === "visor")).toHaveLength(6)
+      expect(filas.filter((f) => f.canal === "email")).toHaveLength(2)
+      // Toda entrega cuelga de un aviso in-app: la bandeja es el canal real.
+      expect(filas.every((f) => f.notificacionId !== null)).toBe(true)
+      for (const visor of filas.filter((f) => f.canal === "visor")) {
+        expect(visor).toMatchObject({
+          estado: "entregado",
+          motivo: null,
+          intentos: 1,
+          enviadoEn: null,
+        })
+      }
+    }
+
+    // Con el servidor aceptando: `enviado` y la fecha de salida sólo ahí.
+    const correosAcepta = (await entregasDe(COM_EMISOR_ACEPTA)).filter(
+      (f) => f.canal === "email"
+    )
+    for (const correo of correosAcepta) {
+      expect(correo.estado).toBe("enviado")
+      expect(correo.enviadoEn).toBeInstanceOf(Date)
+      expect(String(correo.motivo)).toMatch(/aceptado por el servidor SMTP/i)
+    }
+
+    // Cuando el servidor rechaza, el intento queda `fallido` con su motivo.
+    for (const correo of (await entregasDe(COM_EMISOR_RECHAZA)).filter(
+      (f) => f.canal === "email"
+    )) {
+      expect(correo.estado).toBe("fallido")
+      expect(correo.enviadoEn).toBeNull()
+      expect(String(correo.motivo)).toMatch(/falló el envío por SMTP/i)
+    }
+
+    // Sin credencial (o sin CF) la condición de configuración se declara con el
+    // motivo del catálogo: nunca en silencio y nunca como enviado.
+    for (const comunidadId of [COM_SIN_CREDENCIAL, COM_CREDENCIAL_SIN_CF]) {
+      const correos = (await entregasDe(comunidadId)).filter((f) => f.canal === "email")
+      expect(correos).toHaveLength(2)
+      for (const correo of correos) {
+        expect(correo.estado).toBe("pendiente")
+        expect(correo.motivo).toBe(MOTIVO_SIN_SMTP)
+        expect(correo.enviadoEn).toBeNull()
+      }
+    }
+
+    // La fila del correo cuelga del aviso de la unidad que lo recibió: es el
+    // desenlace POR AVISO, no una cifra de la corrida.
+    const notificaciones = await prisma.notificacion.findMany({
+      where: {
+        id: { in: correosAcepta.map((f) => f.notificacionId ?? "") },
+      },
+      select: { destinatarioPersonaId: true, unidadId: true },
+    })
     expect(
-      (resumen?.motivos ?? []).some((motivo) =>
-        motivo.includes("no tiene configuración global (CF)")
-      )
-    ).toBe(true)
+      notificaciones.map((n) => n.destinatarioPersonaId).sort()
+    ).toEqual(
+      [
+        personaDe(COM_EMISOR_ACEPTA, "por-vencer"),
+        personaDe(COM_EMISOR_ACEPTA, "vencida"),
+      ].sort()
+    )
+    expect(notificaciones.every((n) => n.unidadId !== null)).toBe(true)
   })
 
   it("es idempotente: una segunda corrida no emite avisos ni vuelve a abrir el SMTP", async () => {

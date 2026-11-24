@@ -7,24 +7,30 @@
  * - **Distribuir = publicar en el visor interno con permiso + email opcional.**
  *   Los destinatarios se resuelven AHORA (segmentación EF + perfil + tenencia),
  *   no al emitir: el informe congelado no cambia, la audiencia sí puede.
- * - El **email sale por el emisor SMTP real** (`lib/smtp.ts`, F4): `enviado`
- *   solo cuando el servidor aceptó el mensaje, `fallido` con el motivo cuando
- *   rebotó y `pendiente` cuando no hay emisor configurado (falta la CF o
- *   `SMTP_PASSWORD`). Esta ruta NUNCA responde que se envió algo que el servidor
- *   no aceptó. Solo el visor queda en estado `publicado`.
+ * - El **email sale por la puerta única** (`planDeCanal` de
+ *   `lib/entrega-aviso.ts`, que habla con `lib/smtp.ts`) a través del PUENTE de
+ *   entrega (`lib/entrega/notificar.ts`): `enviado` solo cuando el servidor
+ *   aceptó el mensaje, `fallido` con el motivo cuando rebotó y `pendiente` con
+ *   `MOTIVO_SIN_SMTP` cuando no hay emisor configurado. Esta ruta NUNCA responde
+ *   que se envió algo que el servidor no aceptó. Solo el visor queda en estado
+ *   `publicado`.
+ * - **El aviso y su entrega son un solo acto por destinatario**: el puente
+ *   escribe la notificación del visor y deja una fila por canal en
+ *   `entregas_notificacion` (S3) —una `entregado` del visor y una del correo con
+ *   su desenlace real—, fuera de toda transacción: el diálogo SMTP no retiene el
+ *   lock de la base. La constancia propia del informe (`envios`) se escribe
+ *   después, en una transacción corta, y sigue siendo la fuente de su estado.
  * - El estado del envío se persiste en `envios` (una entrada por canal y
  *   destinatario, con fecha y estado) y se resume en `estadoDistribucion` con el
- *   estado más restrictivo: `pendiente` > `fallido` > `enviado` > `publicado`.
- *
+ *   estado más restrictivo: `pendiente` > `fallido` > `enviado` > `publicado`. *
  * Authz: SOLO administrador (`re` editar); el comité solo lee (`re` ver).
  */
 import { z } from "zod"
 import { prisma } from "@/lib/prisma"
 import { logger } from "@/lib/logger"
 import { hoyISO } from "@/lib/date-utils"
-import { generarId } from "@/lib/id-utils"
 import { resolverSegmentacionRE } from "@/lib/reporteria-utils"
-import { enviarCorreoComunidad, estadoRegistroSMTP, motivoSMTP } from "@/lib/smtp"
+import { notificar } from "@/lib/entrega/notificar"
 import type { EnvioReporteRE, ReporteRE } from "@/lib/schemas"
 import { jsonError } from "@/lib/api/with-comunidad-scope"
 import { cargarReporteRE, contextoAccionRE, registrarEventoRE } from "../../_acciones"
@@ -36,6 +42,37 @@ type Ctx = { params: Promise<{ id: string }> }
 const EntradaDistribuirSchema = z.object({
   email: z.boolean().optional(),
 })
+
+/**
+ * Rol de bandeja del destinatario: la notificación va dirigida a una persona
+ * (`destinatarioPersonaId`), así que el rol es sólo la etiqueta de su bandeja y
+ * se deriva de su ficha, nunca del rol de la sesión que distribuye.
+ */
+function rolBandejaDe(persona: { roles: unknown; datosGobernanza: unknown } | undefined): string {
+  const roles = Array.isArray(persona?.roles) ? (persona.roles as string[]) : []
+  if (roles.includes("personal")) return "personal"
+  if (
+    roles.includes("directiva") ||
+    (persona?.datosGobernanza !== null && persona?.datosGobernanza !== undefined)
+  ) {
+    return "directiva"
+  }
+  return "residente"
+}
+
+/**
+ * El estado que la constancia del informe registra para el correo.
+ *
+ * El puente entrega los tres estados del emisor (más `entregado`, que el correo
+ * nunca produce). Se traducen SIN inventar: `entregado` —la aceptación del
+ * servidor en el vocabulario del aviso— se registra `enviado`, que es como lo
+ * llama el catálogo de RE, y los otros tres viajan tal cual.
+ */
+function estadoReporteDeLaEntrega(
+  estado: "entregado" | "enviado" | "pendiente" | "fallido"
+): EnvioReporteRE["estado"] {
+  return estado === "entregado" ? "enviado" : estado
+}
 
 /** POST publica en el visor, encola el email y deja el estado del envío. */
 export async function POST(req: Request, ctx: Ctx): Promise<Response> {
@@ -125,34 +162,37 @@ export async function POST(req: Request, ctx: Ctx): Promise<Response> {
         : ""
     }`
 
-    // Envíos por email: UN mensaje por destinatario con correo registrado, fuera
-    // de la transacción (la red no se mezcla con la escritura en la base). El
-    // estado es el que declaró el servidor SMTP; los destinatarios sin correo
-    // quedan `fallido` (no hay a dónde entregar) en vez de un `pendiente` falso.
+    // Envíos por email y aviso in-app: UNA llamada al puente por destinatario.
+    // El puente escribe la notificación del visor, deja una fila por canal en
+    // `entregas_notificacion` y manda el correo por `planDeCanal` con el cliente
+    // PLANO —fuera de toda transacción, porque el diálogo SMTP no puede retener
+    // el lock de la base—. El estado es el que declaró el servidor SMTP; los
+    // destinatarios sin correo quedan `fallido` (no hay a dónde entregar) en vez
+    // de un `pendiente` falso.
     const enviosEmail: EnvioReporteRE[] = []
     const motivosEmail = new Set<string>()
-    if (encolarEmail) {
-      for (const personaId of destinatarios) {
-        const destino = porPersona.get(personaId)?.email?.trim() ?? ""
-        const envio = destino
-          ? await enviarCorreoComunidad(scope.comunidadId, {
-              to: destino,
-              subject: asuntoEnvio,
-              text: cuerpoEnvio,
-            })
-          : ({
-              estado: "fallido" as const,
-              motivo:
-                "Falló el envío por SMTP: el destinatario no tiene correo electrónico registrado.",
-            })
-        motivosEmail.add(motivoSMTP(envio))
-        enviosEmail.push({
-          canal: "email",
-          destinatarioPersonaId: personaId,
-          fecha,
-          estado: estadoRegistroSMTP(envio),
-        })
-      }
+    for (const personaId of destinatarios) {
+      const { entregas } = await notificar(prisma, {
+        comunidadId: scope.comunidadId,
+        destinatarioRol: rolBandejaDe(porPersona.get(personaId)),
+        destinatarioPersonaId: personaId,
+        asunto: asuntoEnvio,
+        cuerpo: cuerpoEnvio,
+        canal: CANAL_NOTIFICACION_EMAIL_SIMULADO,
+        moduloOrigen: "RE",
+        fecha,
+        canales: encolarEmail ? ["visor", "email"] : ["visor"],
+      })
+      if (!encolarEmail) continue
+      const entregaEmail = entregas.find((entrega) => entrega.canal === "email")
+      if (!entregaEmail) continue
+      if (entregaEmail.motivo) motivosEmail.add(entregaEmail.motivo)
+      enviosEmail.push({
+        canal: "email",
+        destinatarioPersonaId: personaId,
+        fecha,
+        estado: estadoReporteDeLaEntrega(entregaEmail.estado),
+      })
     }
 
     // Envíos: el visor interno queda publicado y el email con el estado real.
@@ -171,32 +211,8 @@ export async function POST(req: Request, ctx: Ctx): Promise<Response> {
     const estadoDistribucion = estadoEmail === "publicado" ? "publicado" : estadoEmail
 
     await prisma.$transaction(async (tx) => {
-      // El informe se publica en la bandeja interna de cada destinatario
-      // resuelto (mismo texto que el legacy: el contenido congelado).
-      for (const personaId of destinatarios) {
-        const persona = porPersona.get(personaId)
-        const rolBandeja = (persona?.roles as string[] | undefined)?.includes("personal")
-          ? "personal"
-          : (persona?.roles as string[] | undefined)?.includes("directiva") ||
-              persona?.datosGobernanza !== null && persona?.datosGobernanza !== undefined
-            ? "directiva"
-            : "residente"
-        await tx.notificacion.create({
-          data: {
-            id: generarId("not"),
-            comunidadId: scope.comunidadId,
-            destinatarioRol: rolBandeja,
-            destinatarioPersonaId: personaId,
-            asunto: asuntoEnvio,
-            cuerpo: cuerpoEnvio,
-            canal: CANAL_NOTIFICACION_EMAIL_SIMULADO,
-            moduloOrigen: "RE",
-            fecha,
-            leida: false,
-          },
-        })
-      }
-
+      // El puente ya escribió el aviso de cada destinatario; acá sólo se cierra
+      // la distribución del informe y se audita, en una transacción corta.
       await tx.reporteRE.update({
         where: { id },
         data: {

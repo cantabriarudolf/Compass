@@ -25,6 +25,7 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
 import { NextRequest } from "next/server"
 import { prisma } from "@/lib/prisma"
+import { MOTIVO_SIN_SMTP } from "@/lib/entrega-aviso"
 import { configuracionDefault } from "@/data/admin/configuracion"
 import {
   VARIABLE_CLAVE_MAESTRA,
@@ -206,6 +207,7 @@ beforeEach(async () => {
   fijarSecreto(CLAVE_FALSA)
   fijarClaveMaestra(CLAVE_MAESTRA)
   await prisma.credencialCorreoComunidad.deleteMany({ where: { comunidadId: comunidad } })
+  await prisma.entregaNotificacion.deleteMany({ where: { comunidadId: comunidad } })
   await prisma.envioCobranzaFI.deleteMany({ where: { comunidadId: comunidad } })
   await prisma.notificacion.deleteMany({ where: { comunidadId: comunidad } })
   await prisma.eventoAuditoria.deleteMany({ where: { comunidadId: comunidad } })
@@ -285,6 +287,7 @@ afterAll(async () => {
   fijarClaveMaestra(clavePrevia)
   try {
     await prisma.credencialCorreoComunidad.deleteMany({ where: { comunidadId: comunidad } })
+    await prisma.entregaNotificacion.deleteMany({ where: { comunidadId: comunidad } })
     await prisma.envioCobranzaFI.deleteMany({ where: { comunidadId: comunidad } })
     await prisma.notificacion.deleteMany({ where: { comunidadId: comunidad } })
     await prisma.eventoAuditoria.deleteMany({ where: { comunidadId: comunidad } })
@@ -315,7 +318,11 @@ describe("cobranza por email con el emisor SMTP real", () => {
       const json = await res.json()
       expect(json.canales.email.estado).toBe("pendiente")
       expect(json.canales.email.motivo).toMatch(/sin emisor SMTP configurado/i)
-      expect(json.canales.email.motivo).toMatch(/SMTP_PASSWORD/)
+      // S3 (`odd/tasks/un-camino-de-entrega.md`): el correo sale por
+      // `planDeCanal` y el estado se declara con el motivo del catálogo único
+      // (`MOTIVO_SIN_SMTP`). El detalle de POR QUÉ falta el emisor lo resuelve el
+      // emisor; la constancia ya no lleva una redacción propia de la cobranza.
+      expect(json.canales.email.motivo).toBe(MOTIVO_SIN_SMTP)
       // PRESERVE: el visor no depende del SMTP.
       expect(json.canales.visor.estado).toBe("enviado")
     })
@@ -348,6 +355,15 @@ describe("cobranza por email con el emisor SMTP real", () => {
     const email = await envioEmail()
     expect(email?.estado).toBe("enviado")
     expect(email?.motivo).toMatch(/aceptado por el servidor SMTP/i)
+
+    // La entrega compartida (S3) dice lo mismo, con la fecha de salida: el
+    // desenlace del transporte queda registrado junto al aviso in-app.
+    const aviso = await prisma.notificacion.findFirst({ where: { comunidadId: comunidad } })
+    const entregaDelPuente = await prisma.entregaNotificacion.findFirst({
+      where: { notificacionId: aviso?.id ?? "", canal: "email" },
+    })
+    expect(entregaDelPuente?.estado).toBe("enviado")
+    expect(entregaDelPuente?.enviadoEn).toBeInstanceOf(Date)
 
     expect(servidor.mensajes).toHaveLength(1)
     // La autenticación ocurrió de verdad, con el usuario de CF.

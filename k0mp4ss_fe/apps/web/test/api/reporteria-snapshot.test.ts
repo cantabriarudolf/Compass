@@ -20,6 +20,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from "vitest"
 import { NextRequest } from "next/server"
 import { prisma } from "@/lib/prisma"
+import { MOTIVO_SIN_SMTP } from "@/lib/entrega-aviso"
 
 const state = vi.hoisted(() => ({ cookie: "" }))
 vi.mock("next/headers", () => ({
@@ -196,6 +197,9 @@ beforeAll(async () => {
 
 beforeEach(async () => {
   state.cookie = ""
+  await prisma.entregaNotificacion.deleteMany({
+    where: { comunidadId: { in: [comunidad, otraComunidad] } },
+  })
   await prisma.reporteRE.deleteMany({
     where: { comunidadId: { in: [comunidad, otraComunidad] } },
   })
@@ -216,6 +220,9 @@ beforeEach(async () => {
 afterAll(async () => {
   try {
     state.cookie = ""
+    await prisma.entregaNotificacion.deleteMany({
+      where: { comunidadId: { in: [comunidad, otraComunidad] } },
+    })
     await prisma.reporteRE.deleteMany({
       where: { comunidadId: { in: [comunidad, otraComunidad] } },
     })
@@ -409,6 +416,58 @@ describe("POST /api/reportes-re/[id]/distribuir — visor + outbox", () => {
         where: { comunidadId: comunidad, moduloOrigen: "RE" },
       })
       expect(notificacion?.asunto).toBe("Reporte distribuido: Informe distribuible")
+    })
+  })
+
+  it("S3 · deja la entrega persistida del aviso y del correo, y la constancia propia intacta", async () => {
+    const id = await emitirParaDistribuir()
+
+    await conSesion(emailAdmin, async () => {
+      const res = await distribuir(id)
+      expect(res.status).toBe(200)
+      const json = await res.json()
+      // La respuesta no cambia: el correo queda en cola, nunca enviado.
+      expect(json.estadoDistribucion).toBe("pendiente")
+      expect(json.email).toBe("pendiente")
+
+      const notificacion = await prisma.notificacion.findFirst({
+        where: {
+          comunidadId: comunidad,
+          moduloOrigen: "RE",
+          asunto: "Reporte distribuido: Informe distribuible",
+        },
+        orderBy: { createdAt: "desc" },
+      })
+      expect(notificacion).not.toBeNull()
+
+      // El puente dejó UNA fila por canal intentado (S3): el visor se prueba con
+      // la notificación y el correo con el desenlace del emisor (sin emisor
+      // configurado ⇒ `pendiente` con el motivo del catálogo).
+      const entregas = await prisma.entregaNotificacion.findMany({
+        where: { notificacionId: notificacion?.id ?? "" },
+        orderBy: { canal: "asc" },
+      })
+      expect(entregas).toHaveLength(2)
+      expect(entregas.find((e) => e.canal === "visor")).toMatchObject({
+        estado: "entregado",
+        motivo: null,
+        intentos: 1,
+        enviadoEn: null,
+      })
+      expect(entregas.find((e) => e.canal === "email")).toMatchObject({
+        estado: "pendiente",
+        motivo: MOTIVO_SIN_SMTP,
+        intentos: 1,
+        enviadoEn: null,
+      })
+
+      // La constancia propia del informe sigue siendo la fuente de su estado
+      // por entidad: la entrega compartida se suma, no la reemplaza.
+      const enBd = await reporteEnBd(id)
+      const envios = enBd?.envios as Array<{ canal: string; estado: string }>
+      expect(envios.map((e) => e.canal).sort()).toEqual(["email", "visor"])
+      expect(envios.find((e) => e.canal === "visor")?.estado).toBe("publicado")
+      expect(envios.find((e) => e.canal === "email")?.estado).toBe("pendiente")
     })
   })
 

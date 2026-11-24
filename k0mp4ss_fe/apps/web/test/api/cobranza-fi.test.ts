@@ -18,6 +18,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from "vitest"
 import { NextRequest } from "next/server"
 import { prisma } from "@/lib/prisma"
+import { MOTIVO_SIN_SMTP } from "@/lib/entrega-aviso"
 
 const state = vi.hoisted(() => ({ cookie: "" }))
 vi.mock("next/headers", () => ({
@@ -219,6 +220,9 @@ beforeAll(async () => {
 
 beforeEach(async () => {
   state.cookie = ""
+  await prisma.entregaNotificacion.deleteMany({
+    where: { comunidadId: { in: [comunidad, otraComunidad] } },
+  })
   await prisma.envioCobranzaFI.deleteMany({
     where: { comunidadId: { in: [comunidad, otraComunidad] } },
   })
@@ -285,6 +289,9 @@ beforeEach(async () => {
 afterAll(async () => {
   try {
     state.cookie = ""
+    await prisma.entregaNotificacion.deleteMany({
+      where: { comunidadId: { in: [comunidad, otraComunidad] } },
+    })
     await prisma.envioCobranzaFI.deleteMany({
       where: { comunidadId: { in: [comunidad, otraComunidad] } },
     })
@@ -371,6 +378,50 @@ describe("POST /api/cobros-fi/[id]/cobranza — ambos canales encendidos", () =>
     expect(evento?.usuario).toBe(emailToId(emailAdmin))
     expect(evento?.descripcion).toMatch(/visor: enviado/)
     expect(evento?.descripcion).toMatch(/email: pendiente/)
+  })
+
+  it("S3 · la entrega de cada canal queda persistida y ligada al aviso de la gestión", async () => {
+    let notificacionId = ""
+    await conSesion(emailAdmin, async () => {
+      const res = await ejecutarCobranza(cobroId)
+      expect(res.status).toBe(200)
+      const json = await res.json()
+      // La respuesta no cambia: el visor sigue `enviado` y el correo `pendiente`.
+      expect(json.canales.visor.estado).toBe("enviado")
+      expect(json.canales.email.estado).toBe("pendiente")
+      expect(json.notificacionId).toBeTruthy()
+      notificacionId = String(json.notificacionId)
+    })
+
+    // La constancia del módulo sigue escribiéndose igual: la entrega compartida
+    // se SUMA a `envios_cobranza_fi`, no la reemplaza.
+    const envios = await enviosDe(unidadId)
+    expect(envios.map((e) => e.canal).sort()).toEqual(["email", "visor"])
+
+    const aviso = await prisma.notificacion.findUnique({ where: { id: notificacionId } })
+    expect(aviso?.moduloOrigen).toBe("FI")
+    expect(aviso?.destinatarioPersonaId).toBe(propietarioId)
+
+    // Y la entrega compartida dejó UNA fila por canal intentado (S3), con su
+    // estado y su motivo: el visor se prueba con la notificación, el correo con
+    // el desenlace del emisor (acá, sin emisor configurado).
+    const entregas = await prisma.entregaNotificacion.findMany({
+      where: { notificacionId },
+      orderBy: { canal: "asc" },
+    })
+    expect(entregas).toHaveLength(2)
+    expect(entregas.find((e) => e.canal === "visor")).toMatchObject({
+      estado: "entregado",
+      motivo: null,
+      intentos: 1,
+      enviadoEn: null,
+    })
+    expect(entregas.find((e) => e.canal === "email")).toMatchObject({
+      estado: "pendiente",
+      motivo: MOTIVO_SIN_SMTP,
+      intentos: 1,
+      enviadoEn: null,
+    })
   })
 })
 
