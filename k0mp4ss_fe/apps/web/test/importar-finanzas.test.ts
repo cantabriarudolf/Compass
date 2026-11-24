@@ -571,6 +571,158 @@ describe("plantillas descargables (S1/S2)", () => {
   })
 })
 
+/**
+ * F48 · T5/S5 — el folio del egreso importado y el fondo activo.
+ *
+ * El folio sale de la MISMA secuencia que la pantalla de alta (`FE-####`,
+ * `siguienteFolioFE`) y una fila cuyo fondo existe pero está inactivo es error
+ * con el motivo literal: el archivo entero queda bloqueado y no escribe nada.
+ * Ingresos no cambia (su modelo no tiene folio y S5 no lo alcanza).
+ */
+describe("folio del egreso importado y fondo activo (S5)", () => {
+  /** Filas nuevas del archivo de folio: claves que no chocan con las de arriba. */
+  const FILA_JARDIN =
+    "2024-08-01,45000,Poda del jardín,mantencion,Fondo Gastos Comunes"
+  const FILA_PINTURA =
+    "2024-08-05,12000,Pintura del hall,otro,imp-f48-fondo-ahorro"
+  const FILA_REJA =
+    "2024-08-09,7300.75,Reja del frontis,servicios,Fondo Gastos Comunes"
+  const FILAS_FOLIO = [FILA_JARDIN, FILA_PINTURA, FILA_REJA]
+  const DESCRIPCIONES_FOLIO = ["Poda del jardín", "Pintura del hall", "Reja del frontis"]
+
+  const FONDO_INACTIVO = "imp-f48-fondo-inactivo"
+  const FILA_VALIDA_FONDO =
+    "2024-09-05,9900,Hidrolavado del acceso,otro,Fondo Gastos Comunes"
+  const FILA_FONDO_INACTIVO =
+    "2024-09-01,5000,Reparación de la reja,mantencion,Fondo Cerrado"
+
+  /** `descripcion → folio` de las filas del archivo de folio, leído de la base. */
+  async function foliosImportados(): Promise<Map<string, string | null>> {
+    const filas = await prisma.egresoFI.findMany({
+      where: { comunidadId: COMUNIDAD, descripcion: { in: DESCRIPCIONES_FOLIO } },
+      select: { descripcion: true, folio: true },
+    })
+    return new Map(filas.map((f) => [f.descripcion, f.folio] as const))
+  }
+
+  it("cada egreso importado toma el siguiente folio FE-#### de la secuencia del alta", async () => {
+    // Dos altas ya existentes, con hueco: la secuencia continúa desde el máximo
+    // (FE-0042), no desde la cantidad de egresos.
+    await prisma.egresoFI.createMany({
+      data: [
+        {
+          id: "imp-f48-egreso-folio-40",
+          comunidadId: COMUNIDAD,
+          folio: "FE-0040",
+          fecha: "2024-01-10",
+          monto: 1000,
+          descripcion: "Alta previa 40",
+          categoria: "otro",
+          fondoId: FONDO_GC,
+          esRecurrente: false,
+        },
+        {
+          id: "imp-f48-egreso-folio-42",
+          comunidadId: COMUNIDAD,
+          folio: "FE-0042",
+          fecha: "2024-01-11",
+          monto: 2000,
+          descripcion: "Alta previa 42",
+          categoria: "otro",
+          fondoId: FONDO_GC,
+          esRecurrente: false,
+        },
+      ],
+    })
+    const antes = await contarEgresos()
+
+    const res = await pedirImport("egresos", "administrador", csv(...FILAS_FOLIO))
+    expect(res.status).toBe(200)
+    const reporte = (await res.json()) as Reporte
+    expect(reporte.resumen).toEqual({
+      total: 3,
+      validas: 3,
+      conError: 0,
+      crear: 3,
+      actualizar: 0,
+      sinCambios: 0,
+    })
+    expect(await contarEgresos()).toBe(antes + 3)
+
+    // Continuos con el máximo ya usado (42), distintos entre sí y no vacíos:
+    // 43, 44 y 45 en el orden del archivo.
+    const folios = await foliosImportados()
+    expect(folios.get("Poda del jardín")).toBe("FE-0043")
+    expect(folios.get("Pintura del hall")).toBe("FE-0044")
+    expect(folios.get("Reja del frontis")).toBe("FE-0045")
+    expect(new Set([...folios.values()]).size).toBe(3)
+  })
+
+  it("una fila con el fondo inactivo falla con el motivo literal y bloquea el archivo entero", async () => {
+    await prisma.fondoFI.create({
+      data: {
+        id: FONDO_INACTIVO,
+        comunidadId: COMUNIDAD,
+        nombre: "Fondo Cerrado",
+        tipo: "gasto_comun",
+        activo: false,
+      },
+    })
+    const antes = await contarEgresos()
+
+    const res = await pedirImport(
+      "egresos",
+      "administrador",
+      csv(FILA_VALIDA_FONDO, FILA_FONDO_INACTIVO)
+    )
+    expect(res.status).toBe(400)
+    const cuerpo = (await res.json()) as RespuestaBloqueada
+    expect(cuerpo.error).toMatch(/filas con error/i)
+    expect(cuerpo.reporte?.resumen).toEqual({
+      total: 2,
+      validas: 1,
+      conError: 1,
+      crear: 1,
+      actualizar: 0,
+      sinCambios: 0,
+    })
+    // El motivo es literal y nombra el fondo inactivo con su nombre canónico.
+    expect(cuerpo.reporte?.filas[1]?.errores).toEqual([
+      'fondo: el fondo "Fondo Cerrado" está inactivo; un egreso debe imputarse a un fondo activo. (línea 3)',
+    ])
+    // El archivo entero queda bloqueado: la fila válida tampoco se escribió.
+    expect(await contarEgresos()).toBe(antes)
+    expect(
+      await prisma.egresoFI.count({
+        where: { comunidadId: COMUNIDAD, descripcion: "Hidrolavado del acceso" },
+      })
+    ).toBe(0)
+  })
+
+  it("reimportar el archivo no duplica ni reasigna folios sobre el fondo activo", async () => {
+    const antes = await contarEgresos()
+
+    const res = await pedirImport("egresos", "administrador", csv(...FILAS_FOLIO))
+    expect(res.status).toBe(200)
+    const reporte = (await res.json()) as Reporte
+    expect(reporte.resumen).toEqual({
+      total: 3,
+      validas: 3,
+      conError: 0,
+      crear: 0,
+      actualizar: 3,
+      sinCambios: 0,
+    })
+    expect(await contarEgresos()).toBe(antes)
+
+    // El folio ya asignado no se reescribe: el archivo no lo declara.
+    const folios = await foliosImportados()
+    expect(folios.get("Poda del jardín")).toBe("FE-0043")
+    expect(folios.get("Pintura del hall")).toBe("FE-0044")
+    expect(folios.get("Reja del frontis")).toBe("FE-0045")
+  })
+})
+
 describe("authz y archivos que no son del bloque", () => {
   it("residente recibe 403 en las cuatro rutas", async () => {
     expect(
