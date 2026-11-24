@@ -14,9 +14,10 @@
 import { EncomiendaPESchema } from "@/lib/schemas"
 import { puede } from "@/lib/authz"
 import { prisma } from "@/lib/prisma"
-import { generarId } from "@/lib/id-utils"
 import { createCrudHandlers, delegado } from "@/lib/api/crud-factory"
 import { registrarEventoPE } from "@/app/api/pe/_acciones"
+import { avisar } from "@/lib/entrega/notificar"
+import { CANAL_NOTIFICACION_EMAIL_SIMULADO } from "@/lib/schemas"
 import type { ComunidadScope } from "@/lib/api/with-comunidad-scope"
 
 interface FilaEncomienda {
@@ -46,19 +47,21 @@ async function avisarResidenteEncomienda(
     select: { notificarEncomiendas: true },
   })
   if (cfg?.notificarEncomiendas === false) return
-  await prisma.notificacion.create({
-    data: {
-      id: generarId("not"),
+  // Camino único (S2): el canal se declara acá, no se hereda del `@default` de
+  // Prisma, y la entrega al visor queda persistida junto al aviso.
+  await prisma.$transaction((tx) =>
+    avisar(tx, {
       comunidadId: scope.comunidadId,
       destinatarioRol: "residente",
       destinatarioPersonaId: fila.destinatarioPersonaId,
       unidadId: fila.unidadId ?? null,
       asunto: "Encomienda recibida en conserjería",
       cuerpo: `Tiene una encomienda recibida el ${fila.fechaRecepcion}. Retírela presentando su identificación.`,
+      canal: CANAL_NOTIFICACION_EMAIL_SIMULADO,
       moduloOrigen: "PE",
       fecha: fila.fechaRecepcion,
-    },
-  })
+    })
+  )
 }
 
 const handlers = createCrudHandlers({

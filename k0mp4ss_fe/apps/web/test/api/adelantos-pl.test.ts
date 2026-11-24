@@ -15,6 +15,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from "vitest"
 import { NextRequest } from "next/server"
 import { prisma } from "@/lib/prisma"
+import { CANAL_NOTIFICACION_EMAIL_SIMULADO } from "@/lib/schemas"
 import {
   adelantoImputableAlPeriodo,
   calcularDeduccionAdelantos,
@@ -271,6 +272,9 @@ beforeEach(async () => {
   await prisma.notificacion.deleteMany({
     where: { comunidadId: { in: [comunidad, otraComunidad] }, moduloOrigen: "PL" },
   })
+  await prisma.entregaNotificacion.deleteMany({
+    where: { comunidadId: { in: [comunidad, otraComunidad] } },
+  })
   await prisma.eventoAuditoria.deleteMany({
     where: { comunidadId: { in: [comunidad, otraComunidad] }, categoria: "PL" },
   })
@@ -325,6 +329,9 @@ afterAll(async () => {
       where: { comunidadId: { in: [comunidad, otraComunidad] } },
     })
     await prisma.notificacion.deleteMany({
+      where: { comunidadId: { in: [comunidad, otraComunidad] } },
+    })
+    await prisma.entregaNotificacion.deleteMany({
       where: { comunidadId: { in: [comunidad, otraComunidad] } },
     })
     await prisma.eventoAuditoria.deleteMany({
@@ -495,6 +502,42 @@ describe("POST /api/liquidaciones/adelantos — alta", () => {
         where: { comunidadId: comunidad, tipoAccion: "PL_ADD_ADVANCE" },
       })
       expect(evento).not.toBeNull()
+
+      // S2/S3 — el comprobante in-app es el MISMO de antes (campo por campo),
+      // con el canal declarado por el llamador y su entrega al visor colgada.
+      const aviso = await prisma.notificacion.findFirst({
+        where: {
+          comunidadId: comunidad,
+          moduloOrigen: "PL",
+          destinatarioPersonaId: "ade-trab-1",
+        },
+      })
+      expect(aviso).toMatchObject({
+        comunidadId: comunidad,
+        destinatarioRol: "personal",
+        destinatarioPersonaId: "ade-trab-1",
+        unidadId: null,
+        asunto: `Comprobante de adelanto ${enBd?.folio}`,
+        cuerpo: "Se registró un anticipo de $150.000 (Anticipo de quincena solicitado por el trabajador). Será descontado en la liquidación de 2026-06.",
+        canal: CANAL_NOTIFICACION_EMAIL_SIMULADO,
+        moduloOrigen: "PL",
+        fecha: new Date().toISOString().slice(0, 10),
+        leida: false,
+        fechaLectura: null,
+      })
+      const entregas = await prisma.entregaNotificacion.findMany({
+        where: { notificacionId: aviso!.id },
+      })
+      expect(entregas).toHaveLength(1)
+      expect(entregas[0]).toMatchObject({
+        comunidadId: comunidad,
+        notificacionId: aviso!.id,
+        canal: "visor",
+        estado: "entregado",
+        motivo: null,
+        intentos: 1,
+        enviadoEn: null,
+      })
     })
   })
 
