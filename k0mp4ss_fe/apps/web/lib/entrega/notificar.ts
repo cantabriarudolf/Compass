@@ -310,8 +310,12 @@ export async function entregarPorCorreo(
   cliente: PrismaClient,
   correo: CorreoPorEntregar
 ): Promise<EntregaPersistida> {
+  // `null` explícito significa «este correo no tiene persona»; un `??` lo
+  // confundiría con «no se declaró» y resolvería el correo del aviso igual.
   const personaDelCorreo =
-    correo.personaDelCorreo ?? correo.destinatarioPersonaId ?? null
+    correo.personaDelCorreo === undefined
+      ? (correo.destinatarioPersonaId ?? null)
+      : correo.personaDelCorreo
 
   // Sin persona no hay consulta: no hay a quién resolverle el correo.
   let destinatario = ""
