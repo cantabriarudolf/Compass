@@ -4,9 +4,9 @@
  * /admin/carga-inicial — pantalla única del importador CSV de carga inicial
  * (ODD carga-inicial-csv U3 · F48 T3).
  *
- * Seis bloques idénticos (estructura, personas, vínculos, egresos, ingresos,
- * saldos de apertura), uno por ruta del importador. El flujo por bloque es
- * siempre el mismo:
+ * Siete bloques idénticos (estructura, personas, vínculos, egresos, ingresos,
+ * saldos de apertura y pagos históricos), uno por ruta del importador. El flujo
+ * por bloque es siempre el mismo:
  *   1. «Descargar plantilla» — enlace directo a la ruta de plantilla (nada
  *      de fetch en JS: el navegador descarga con content-disposition).
  *   2. Elegir el archivo y «Ver vista previa» — POST con `?dryRun=1` y el
@@ -48,6 +48,7 @@ import {
   IconDownload,
   IconInfoCircle,
   IconLoader2,
+  IconCoin,
   IconReceipt,
   IconUpload,
   IconUserHeart,
@@ -110,6 +111,13 @@ const BLOQUES = [
     descripcion:
       "Ingresos históricos a los fondos (fecha, monto, descripción, categoría y fondo). Igual que los egresos, imputa a un fondo que ya existe.",
     icono: IconCoins,
+  },
+  {
+    slug: "pagos-historicos",
+    titulo: "Pagos históricos",
+    descripcion:
+      "El detalle de lo que cada unidad ya pagó (rol SII, fecha, monto y medio). Se registra en los pagos del cobro de gasto común de ese período: el cobro tiene que existir antes de importar, porque este bloque no crea cobros ni asientos. Reimportar el mismo archivo no duplica.",
+    icono: IconCoin,
   },
   {
     slug: "saldos",
@@ -531,10 +539,13 @@ export default function CargaInicialPage() {
           Orden recomendado: Estructura → Personas → Vínculos (los vínculos
           requieren unidades y personas ya cargadas). Si además traes tu
           historial financiero, Egresos e Ingresos van después de crear los
-          fondos: el importador no los crea. Los Saldos de apertura van al
-          final: son la deuda que ya existía a la fecha de corte, así que la
-          comunidad todavía no puede tener gasto común emitido para ese período
-          ni para uno anterior. Cada bloque usa su propio archivo.
+          fondos y el gasto común: el importador no los crea. Los Pagos
+          históricos van después del gasto común del período, porque se anexan
+          a los pagos de ese cobro; no crean cobros ni asientos. Los Saldos de
+          apertura van al final: son la deuda que ya existía a la fecha de
+          corte, así que la comunidad todavía no puede tener gasto común
+          emitido para ese período ni para uno anterior. Cada bloque usa su
+          propio archivo.
         </p>
       </header>
       <div className="space-y-6">
