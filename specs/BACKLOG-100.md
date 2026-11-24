@@ -733,3 +733,17 @@ Estado del subsistema de revisión en esta máquina (`gentle-ai 5.0.0`, `doctor`
 - **Receta si algún día estorban**: se liberan **uno por uno**, con el lineage id a la vista y
   autorización explícita del owner por linaje (RESET/RECOVER son destructivos y piden aprobación en
   la UI). Nunca en lote y nunca por deducción.
+
+## Migraciones: un solo carril de dialecto (medido 2026-11-24)
+
+La revisión nativa de la feature `un-camino-de-entrega` marcó como BLOCKER que la migración nueva
+declare `creadoEn`/`enviadoEn` como `DATETIME` mientras `prisma/schema.prisma` es Postgres. **Medido
+en el repo: todas las migraciones de `prisma/migrations/` son dialecto SQLite** (`add_cola_salida_co`,
+`add_envio_invitacion`, `add_invitacion_acceso` y las anteriores). El defecto, entonces, no es de la
+unidad nueva: es del carril entero.
+
+**La pregunta que queda para el owner**: `db:prod:deploy` es `prisma migrate deploy` contra
+Postgres, y con estas migraciones ese comando falla antes de crear nada. O producción nunca se armó
+por ahí (y entonces la carpeta `migrations/` sólo sirve al carril SQLite de tests, y hay que decirlo),
+o producción está sin migraciones reproducibles y eso es deuda de primer orden. Hasta decidirlo, la
+convención vigente es `DATETIME` y cualquier migración nueva la sigue.
