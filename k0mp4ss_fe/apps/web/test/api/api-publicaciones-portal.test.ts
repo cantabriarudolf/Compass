@@ -1,10 +1,11 @@
 /**
  * @vitest-environment node
  */
-import { describe, it, expect, beforeAll, afterAll, vi } from "vitest"
+import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from "vitest"
 import { NextRequest } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { CANAL_NOTIFICACION_EMAIL_SIMULADO } from "@/lib/schemas"
+import { MOTIVO_SIN_CASILLA_COMUNIDAD } from "@/lib/entrega/notificar"
 
 const state = vi.hoisted(() => ({ cookie: "" }))
 vi.mock("next/headers", () => ({
@@ -17,6 +18,18 @@ vi.mock("next/headers", () => ({
       )
     ),
 }))
+
+/**
+ * El doble del transporte (mismo criterio que `test/entrega/notificar.test.ts`):
+ * `planDeCanal` —la política canal→estado— corre de verdad y lo único que se
+ * decide acá es qué responde el servidor de correo. Sin el doble, S2 no se
+ * puede medir: el correo al rol interno sale con el emisor real.
+ */
+const transporte = vi.hoisted(() => ({ enviar: vi.fn() }))
+vi.mock("@/lib/smtp", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@/lib/smtp")>()
+  return { ...real, enviarCorreoComunidad: transporte.enviar }
+})
 
 const AUTH_SECRET = "test-secret-12345678"
 
@@ -51,6 +64,8 @@ describe("/api/publicaciones-portal + /api/leads-portal — PI con BD real", () 
   const comunidadB = "pi-comunidad-b"
   const emailAdmin = "pi-admin@test.cl"
   const emailResidente = "pi-residente@test.cl"
+  /** Casilla de recepción de la comunidad: `ConfiguracionGlobal.smtpRecepcion`. */
+  const casillaComunidad = "pi-recepcion@test.cl"
 
   const cargaModulos = async () => ({
     pubs: await import("@/app/api/publicaciones-portal/route"),
@@ -71,6 +86,41 @@ describe("/api/publicaciones-portal + /api/leads-portal — PI con BD real", () 
         create: { id: cid, nombre, slug },
       })
     }
+    // CF de la comunidad A con la forma que YA existe (S2 no agrega campos): la
+    // casilla de recepción nace vacía y cada caso de S2 la decide.
+    await prisma.configuracionGlobal.upsert({
+      where: { comunidadId: comunidadA },
+      update: { smtpRecepcion: null },
+      create: {
+        id: "pi-cfg-a",
+        comunidadId: comunidadA,
+        nombreComunidad: "Comunidad A PI",
+        rutComunidad: "11.111.111-1",
+        direccionOficial: "Calle PI 742",
+        administradorResponsable: "Administración PI",
+        rutAdministrador: "12.345.678-5",
+        telefonoAdmin: "+56900000001",
+        modoCalculoGC: "prorrateo",
+        diaCortePago: 5,
+        limiteMesesAvisoCorte: 3,
+        smtpHost: "localhost",
+        smtpPort: 25,
+        smtpUser: "pi",
+        smtpSecurity: "none",
+        smtpFrom: "publicaciones@test.cl",
+        smtpFromName: "Comunidad A PI",
+        smtpRecepcion: null,
+        notificarEmisionGC: false,
+        notificarRegistroVisitas: false,
+        notificarEncomiendas: false,
+        notificarReservas: false,
+        notificarAvisosSistema: false,
+        notificarSugerenciasReclamos: false,
+        diasMesComercial: 30,
+        diasVacacionesMes: 1.25,
+        jornadaSemanalEstandar: 45,
+      },
+    })
     await prisma.usuario.upsert({
       where: { email: emailAdmin },
       update: {},
@@ -111,6 +161,14 @@ describe("/api/publicaciones-portal + /api/leads-portal — PI con BD real", () 
       await prisma.comunidad.delete({ where: { id: comunidadA } }).catch(() => {})
       await prisma.comunidad.delete({ where: { id: comunidadB } }).catch(() => {})
     } catch { /* best-effort */ }
+  })
+
+  beforeEach(() => {
+    transporte.enviar.mockReset()
+    transporte.enviar.mockResolvedValue({
+      estado: "enviado",
+      messageId: "<pi-mensaje-de-prueba@servidor>",
+    })
   })
 
   async function conSesion(email: string, fn: () => Promise<void>): Promise<void> {
@@ -264,8 +322,12 @@ describe("/api/publicaciones-portal + /api/leads-portal — PI con BD real", () 
       const entregas = await prisma.entregaNotificacion.findMany({
         where: { notificacionId: aviso!.id },
       })
-      expect(entregas).toHaveLength(1)
-      expect(entregas[0]).toMatchObject({
+      // S2: el aviso del lead es de un rol interno sin dirección propia, así que
+      // además del visor deja su intento de correo a la casilla de la comunidad.
+      // Sin casilla configurada queda `pendiente` con su motivo — nunca
+      // `enviado` en falso.
+      expect(entregas).toHaveLength(2)
+      expect(entregas.find((entrega) => entrega.canal === "visor")).toMatchObject({
         comunidadId: comunidadA,
         notificacionId: aviso!.id,
         canal: "visor",
@@ -274,11 +336,126 @@ describe("/api/publicaciones-portal + /api/leads-portal — PI con BD real", () 
         intentos: 1,
         enviadoEn: null,
       })
+      expect(entregas.find((entrega) => entrega.canal === "email")).toMatchObject({
+        comunidadId: comunidadA,
+        notificacionId: aviso!.id,
+        canal: "email",
+        estado: "pendiente",
+        motivo: MOTIVO_SIN_CASILLA_COMUNIDAD,
+        intentos: 1,
+        enviadoEn: null,
+      })
 
       // El lead de este caso no puede alterar el flujo del test de borrado que
       // viene después: la publicación no se borra mientras le queden leads.
       await prisma.leadPortal.deleteMany({ where: { id: "pi-lead-camino" } })
     })
+  })
+
+  it("S2: el correo del lead va a la casilla de recepción de la comunidad", async () => {
+    const { leads } = await cargaModulos()
+    await prisma.configuracionGlobal.update({
+      where: { comunidadId: comunidadA },
+      data: { smtpRecepcion: casillaComunidad },
+    })
+    try {
+      await conSesion(emailResidente, async () => {
+        const res = await req(
+          leads,
+          "POST",
+          "http://localhost/api/leads-portal",
+          leadValido({
+            id: "pi-lead-casilla",
+            nombreContacto: "Interesado CASILLA",
+            contacto: "+56 9 0000 0008",
+          })
+        )
+        expect(res.status).toBe(201)
+
+        const aviso = await prisma.notificacion.findFirst({
+          where: {
+            comunidadId: comunidadA,
+            moduloOrigen: "PI",
+            cuerpo: { contains: "Interesado CASILLA" },
+          },
+        })
+        // El aviso in-app no cambia: sigue siendo del rol que lo recibe.
+        expect(aviso).toMatchObject({
+          destinatarioRol: "propietario",
+          destinatarioPersonaId: null,
+        })
+
+        const entregas = await prisma.entregaNotificacion.findMany({
+          where: { notificacionId: aviso!.id },
+        })
+        expect(entregas).toHaveLength(2)
+        const email = entregas.find((entrega) => entrega.canal === "email")
+        expect(email).toMatchObject({ estado: "enviado", intentos: 1 })
+        expect(email?.enviadoEn).toBeInstanceOf(Date)
+
+        // El transporte recibió la casilla configurada, no una persona.
+        expect(transporte.enviar).toHaveBeenCalledTimes(1)
+        expect(transporte.enviar).toHaveBeenCalledWith(
+          comunidadA,
+          expect.objectContaining({ to: casillaComunidad })
+        )
+      })
+    } finally {
+      await prisma.configuracionGlobal.update({
+        where: { comunidadId: comunidadA },
+        data: { smtpRecepcion: null },
+      })
+      await prisma.leadPortal.deleteMany({ where: { id: "pi-lead-casilla" } })
+    }
+  })
+
+  it("S2: sin casilla de la comunidad el correo queda `pendiente` y el aviso existe", async () => {
+    const { leads } = await cargaModulos()
+    await prisma.configuracionGlobal.update({
+      where: { comunidadId: comunidadA },
+      data: { smtpRecepcion: null },
+    })
+    try {
+      await conSesion(emailResidente, async () => {
+        const res = await req(
+          leads,
+          "POST",
+          "http://localhost/api/leads-portal",
+          leadValido({
+            id: "pi-lead-sin-casilla",
+            nombreContacto: "Interesado SIN CASILLA",
+            contacto: "+56 9 0000 0009",
+          })
+        )
+        expect(res.status).toBe(201)
+
+        const aviso = await prisma.notificacion.findFirst({
+          where: {
+            comunidadId: comunidadA,
+            moduloOrigen: "PI",
+            cuerpo: { contains: "Interesado SIN CASILLA" },
+          },
+        })
+        expect(aviso).not.toBeNull()
+
+        const entregas = await prisma.entregaNotificacion.findMany({
+          where: { notificacionId: aviso!.id },
+        })
+        expect(entregas).toHaveLength(2)
+        expect(entregas.find((entrega) => entrega.canal === "email")).toMatchObject(
+          {
+            estado: "pendiente",
+            motivo: MOTIVO_SIN_CASILLA_COMUNIDAD,
+            intentos: 1,
+            enviadoEn: null,
+          }
+        )
+        // Sin casilla no hay a dónde mandar: no se abre ninguna conexión.
+        expect(transporte.enviar).not.toHaveBeenCalled()
+      })
+    } finally {
+      await prisma.leadPortal.deleteMany({ where: { id: "pi-lead-sin-casilla" } })
+    }
   })
 
   it("interés en publicación retirada o inexistente → 400", async () => {
