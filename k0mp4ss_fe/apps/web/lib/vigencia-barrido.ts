@@ -15,7 +15,7 @@
  * 1. **Un solo barrido.** `barrerAvisosDeVigencia()` recibe el `comunidadId`
  *    explícito y hace exactamente lo que hacía el `POST`: lee los hechos de la
  *    base, deriva el veredicto con `estadoDelCaso`, decide con `avisosDelCaso`,
- *    escribe el aviso in-app con el puente (`notificar`) y su constancia en
+ *    escribe el aviso in-app con el puente (`avisar`) y su constancia en
  *    `avisos_vigencia` —las dos en la MISMA transacción, que es pura: el visor no
  *    abre ninguna conexión— y deja UN evento `AD_VIGENCIA_AVISOS` por corrida.
  *    El scope de la sesión NO se resuelve acá: la ruta lo hace
@@ -25,8 +25,8 @@
  *    (`CredencialCorreoComunidad`) la resuelve el emisor dentro de
  *    `planDeCanal`/`enviarCorreoComunidad`: el barrido ya NO descifra el secreto
  *    ni lo pasa por su cuenta, y no llama a `enviarCorreoSMTP` directo (S4). El
- *    correo sale por el puente, con el cliente PLANO: el diálogo SMTP nunca
- *    corre dentro de una transacción.
+ *    correo sale por `entregarPorCorreo`, con el cliente PLANO: el diálogo SMTP
+ *    nunca corre dentro de una transacción (S3b).
  * 3. **Sin emisor no se finge un envío (S4).** El aviso se escribe igual —la
  *    bandeja es el canal real— y la entrega del correo queda `pendiente` con
  *    `MOTIVO_SIN_SMTP` (sin credencial, sin CF o con la credencial ilegible: en
@@ -64,7 +64,7 @@ import {
   type AvisoVigenciaDecidido,
   type DestinatarioAvisoVigencia,
 } from "@/lib/vigencia-avisos"
-import { notificar } from "@/lib/entrega/notificar"
+import { avisar, entregarPorCorreo } from "@/lib/entrega/notificar"
 import {
   MOTIVO_SIN_DESTINATARIO,
   MOTIVO_SIN_SMTP,
@@ -192,7 +192,7 @@ async function emitirAviso({
 }: EmisionAviso): Promise<string | null> {
   try {
     return await prisma.$transaction(async (tx) => {
-      const { notificacionId } = await notificar(tx, {
+      const { notificacionId } = await avisar(tx, {
         comunidadId,
         destinatarioRol: aviso.destinatario,
         // Sólo el propietario es una persona concreta; el administrador y el
@@ -206,7 +206,6 @@ async function emitirAviso({
         moduloOrigen: "AD_VIGENCIA",
         fecha,
         leida: false,
-        canales: ["visor"],
       })
       await tx.avisoVigencia.create({
         data: {
@@ -242,11 +241,11 @@ interface PedidoEntrega {
  * para un rol (administración, comité) no tiene dirección y no se le inventa un
  * buzón (S5): se declara `en_bandeja` sin abrir ninguna conexión.
  *
- * Para el propietario, el intento va por el puente, que resuelve el correo con
- * la definición única y persiste su fila en `entregas_notificacion` colgada del
- * aviso ya escrito (`notificacionId`). El cliente es el PLANO: el diálogo SMTP
- * corre fuera de toda transacción. El estado del puente se traduce al
- * vocabulario del resumen (que no cambió):
+ * Para el propietario, el intento va por `entregarPorCorreo`, que resuelve el
+ * correo con la definición única y persiste su fila en `entregas_notificacion`
+ * colgada del aviso ya escrito (`notificacionId`). El cliente es el PLANO: el
+ * diálogo SMTP corre fuera de toda transacción (S3b). El estado del puente se
+ * traduce al vocabulario del resumen (que no cambió):
  *   - `enviado`   → `enviado`
  *   - `fallido` por falta de dirección → `en_bandeja` (la persona no tiene buzón)
  *   - `fallido`   → `fallido`, con el motivo del emisor
@@ -267,24 +266,17 @@ async function entregarElCorreo({
     }
   }
 
-  const { entregas } = await notificar(prisma, {
+  const entrega = await entregarPorCorreo(prisma, {
     comunidadId,
-    destinatarioRol: aviso.destinatario,
-    destinatarioPersonaId: personaId,
-    unidadId,
     asunto: aviso.asunto,
     cuerpo: aviso.cuerpo,
-    canal: CANAL_NOTIFICACION_EMAIL_SIMULADO,
-    moduloOrigen: "AD_VIGENCIA",
-    fecha,
+    destinatarioPersonaId: personaId,
     notificacionId,
-    canales: ["email"],
   })
-  const plan = entregas.find((entrega) => entrega.canal === "email")
-  const motivo = plan?.motivo ?? MOTIVO_SIN_SMTP
+  const motivo = entrega.motivo ?? MOTIVO_SIN_SMTP
 
-  if (plan?.estado === "enviado") return { estado: "enviado", motivo }
-  if (plan?.estado === "pendiente") return { estado: "sin_emisor", motivo }
+  if (entrega.estado === "enviado") return { estado: "enviado", motivo }
+  if (entrega.estado === "pendiente") return { estado: "sin_emisor", motivo }
   if (motivo === MOTIVO_SIN_DESTINATARIO) {
     return { estado: "en_bandeja", motivo: MOTIVO_SIN_CORREO_DE_LA_PERSONA }
   }

@@ -468,6 +468,42 @@ describe("F35-A3 · envío de documentos legales con constancia por destinatario
     expect(envios.map((e) => e.estado)).not.toContain("entregado")
   })
 
+  it("S3b · el correo de un documento deja su fila compartida SIN notificación in-app", async () => {
+    const notificacionesAntes = await notificacionesDeLaComunidad()
+    const compartidasAntes = await prisma.entregaNotificacion.count({
+      where: { comunidadId: COM_A, notificacionId: null },
+    })
+
+    const res = await conUsuario(EMAIL_ADMIN, () =>
+      enviar(DOC_EMAIL, { personasIds: [P3], canal: "email" })
+    )
+    expect(res.status).toBe(200)
+    const json = await cuerpoJson<Json>(res)
+    expect((json.resultados as Json[])[0]?.estado).toBe("pendiente")
+
+    // El canal email no crea aviso in-app ni fila en `envios_documento` ligada a
+    // una notificación…
+    expect(await notificacionesDeLaComunidad()).toBe(notificacionesAntes)
+    const persistidas = (await filas(DOC_EMAIL)).filter((fila) => fila.personaId === P3)
+    expect(persistidas).toHaveLength(1)
+    expect(persistidas[0]?.notificacionId).toBeNull()
+
+    // …pero el intento NO se pierde: deja su fila compartida, con el
+    // `notificacionId` en `null` porque no hay aviso del que colgar (S3b).
+    const compartidas = await prisma.entregaNotificacion.findMany({
+      where: { comunidadId: COM_A, notificacionId: null },
+      orderBy: { creadoEn: "asc" },
+    })
+    expect(compartidas).toHaveLength(compartidasAntes + 1)
+    expect(compartidas[compartidas.length - 1]).toMatchObject({
+      canal: "email",
+      estado: "pendiente",
+      motivo: String((json.resultados as Json[])[0]?.motivo),
+      intentos: 1,
+      enviadoEn: null,
+    })
+  })
+
   it("S7 · un correo que no puede llegar queda fallido con su motivo y sin conexión", async () => {
     const res = await conUsuario(EMAIL_ADMIN, () =>
       enviar(DOC_EMAIL_FALLIDO, { personasIds: [P4, P5], canal: "email" })

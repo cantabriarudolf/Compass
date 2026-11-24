@@ -19,6 +19,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from "vites
 import { NextRequest } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { MOTIVO_SIN_SMTP } from "@/lib/entrega-aviso"
+import { fallaDeConstancia } from "../helpers/prisma-con-fallas"
 
 const state = vi.hoisted(() => ({ cookie: "" }))
 vi.mock("next/headers", () => ({
@@ -31,6 +32,14 @@ vi.mock("next/headers", () => ({
       )
     ),
 }))
+
+// El cliente real, con la falla de constancia inyectable (ver el helper).
+vi.mock("@/lib/prisma", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@/lib/prisma")>()
+  const { conFallaDeConstancia } = await import("../helpers/prisma-con-fallas")
+  const prisma = conFallaDeConstancia(real.prisma)
+  return { prisma, default: prisma }
+})
 
 const AUTH_SECRET = "test-secret-12345678"
 
@@ -687,5 +696,71 @@ describe("todos los canales apagados", () => {
     expect(evento?.descripcion).toMatch(/no se envió/)
     expect(evento?.descripcion).toMatch(/visor: Interruptor global/)
     expect(evento?.descripcion).toMatch(/email: Interruptor global/)
+  })
+})
+
+// --- 7. S3b — el correo sin visor y la atomicidad del aviso -----------------
+
+describe("S3b · el correo sin aviso y el aviso con su constancia", () => {
+  it("con el visor apagado, el correo deja su fila compartida y NINGUNA notificación", async () => {
+    await conSesion(emailAdmin, async () => {
+      const put = await putJson((await cargaModulos()).canales, "/api/cobros-fi/canales", {
+        global: { canalVisor: false },
+      })
+      expect(put.status).toBe(200)
+
+      const res = await ejecutarCobranza(cobroId)
+      expect(res.status).toBe(200)
+      const json = await res.json()
+      expect(json.canales.visor.estado).toBe("omitido")
+      expect(json.canales.email.estado).toBe("pendiente")
+      expect(json.notificacionId).toBeNull()
+    })
+
+    // El canal apagado no crea aviso in-app (le mostraría al residente un canal
+    // que apagó), y el intento de correo NO se pierde: queda su fila (S3b).
+    expect(await notificacionesDe()).toHaveLength(0)
+    const entregas = await prisma.entregaNotificacion.findMany({
+      where: { comunidadId: comunidad },
+    })
+    expect(entregas).toHaveLength(1)
+    expect(entregas[0]).toMatchObject({
+      canal: "email",
+      estado: "pendiente",
+      motivo: MOTIVO_SIN_SMTP,
+      notificacionId: null,
+      intentos: 1,
+      enviadoEn: null,
+    })
+    // La constancia propia del módulo sigue siendo su fuente: el correo queda
+    // en cola y el visor no se escribe.
+    const envios = await enviosDe(unidadId)
+    expect(envios.map((e) => e.canal)).toEqual(["email"])
+    expect(envios[0]?.estado).toBe("pendiente")
+  })
+
+  it("si la constancia de la cobranza falla, no queda ni el aviso ni su entrega", async () => {
+    fallaDeConstancia.escritura = "envioCobranzaFI"
+    try {
+      await conSesion(emailAdmin, async () => {
+        const res = await ejecutarCobranza(cobroId)
+        expect(res.status).toBe(500)
+      })
+    } finally {
+      fallaDeConstancia.escritura = null
+    }
+
+    // El aviso in-app y su fila de visor entran en la transacción de la
+    // constancia: si esa escritura falla, no queda ninguno de los tres (S3b).
+    expect(await notificacionesDe()).toHaveLength(0)
+    expect(
+      await prisma.entregaNotificacion.count({ where: { comunidadId: comunidad } })
+    ).toBe(0)
+    expect(await enviosDe(unidadId)).toHaveLength(0)
+    expect(
+      await prisma.eventoAuditoria.count({
+        where: { comunidadId: comunidad, tipoAccion: "FI_COBRANZA_SENT" },
+      })
+    ).toBe(0)
   })
 })

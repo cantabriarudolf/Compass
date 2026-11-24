@@ -21,6 +21,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from "vites
 import { NextRequest } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { MOTIVO_SIN_SMTP } from "@/lib/entrega-aviso"
+import { fallaDeConstancia } from "../helpers/prisma-con-fallas"
 
 const state = vi.hoisted(() => ({ cookie: "" }))
 vi.mock("next/headers", () => ({
@@ -33,6 +34,14 @@ vi.mock("next/headers", () => ({
       )
     ),
 }))
+
+// El cliente real, con la falla de constancia inyectable (ver el helper).
+vi.mock("@/lib/prisma", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@/lib/prisma")>()
+  const { conFallaDeConstancia } = await import("../helpers/prisma-con-fallas")
+  const prisma = conFallaDeConstancia(real.prisma)
+  return { prisma, default: prisma }
+})
 
 const AUTH_SECRET = "test-secret-12345678"
 
@@ -678,5 +687,48 @@ describe("guardias RE", () => {
       expect((await leerReporte(id)).status).toBe(404)
     })
     expect((await reporteEnBd(id))?.distribuidoA).toBe(0)
+  })
+
+  it("S3b · si la constancia del informe falla, no queda ni el aviso ni su entrega", async () => {
+    // Un informe distribuible hoy: una persona alcanzada por el segmento.
+    await crearPersona({ roles: ["personal"] })
+    let id = ""
+    await conSesion(emailAdmin, async () => {
+      const res = await emitir({
+        titulo: "Informe distribuible",
+        bloques: ["gastos_mes"],
+        periodo,
+        segmento: { perfiles: ["personal"] },
+      })
+      expect(res.status).toBe(201)
+      id = (await res.json()).id
+    })
+
+    fallaDeConstancia.escritura = "reporteRE"
+    try {
+      await conSesion(emailAdmin, async () => {
+        expect((await distribuir(id)).status).toBe(500)
+      })
+    } finally {
+      fallaDeConstancia.escritura = null
+    }
+
+    // El aviso de cada destinatario entra en la transacción que publica el
+    // informe: si esa constancia falla, el aviso y sus filas se revierten (S3b).
+    expect(
+      await prisma.notificacion.count({
+        where: { comunidadId: comunidad, moduloOrigen: "RE" },
+      })
+    ).toBe(0)
+    expect(
+      await prisma.entregaNotificacion.count({ where: { comunidadId: comunidad } })
+    ).toBe(0)
+    expect((await reporteEnBd(id))?.distribuidoA).toBe(0)
+    expect((await reporteEnBd(id))?.fechaDistribucion).toBeNull()
+    expect(
+      await prisma.eventoAuditoria.count({
+        where: { comunidadId: comunidad, tipoAccion: "RE_REPORT_DISTRIBUTED" },
+      })
+    ).toBe(0)
   })
 })

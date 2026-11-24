@@ -1,27 +1,48 @@
 /**
- * entrega/notificar — el puente único entre un aviso in-app y su entrega (T1 de
- * `odd/tasks/un-camino-de-entrega.md`, specs S1, S2, S3 y S6).
+ * entrega/notificar — el puente único entre un aviso in-app y su entrega (T1 y
+ * T1b de `odd/tasks/un-camino-de-entrega.md`, specs S1, S2, S3, S3b y S6).
  *
- * Por qué existe: hasta hoy la constancia in-app y el correo eran dos
+ * Por qué existe: hasta T1 la constancia in-app y el correo eran dos
  * preocupaciones sin puente. Once módulos escribían su `Notificacion` inline —y
  * cinco de ellos nunca mandaban nada—, el correo salía por caminos distintos y el
  * desenlace de la entrega sólo vivía en la respuesta HTTP de cada módulo. Este
- * módulo junta las tres cosas en UNA llamada, para que los once avisos tengan el
- * mismo camino y cada intento deje su fila.
+ * módulo junta las tres cosas en DOS piezas componibles, para que los once avisos
+ * tengan el mismo camino y cada intento deje su fila.
+ *
+ * ── Las dos piezas (y por qué son dos, S3b) ─────────────────────────────────
+ *
+ * `avisar(cliente, aviso)` — el aviso in-app y su fila de `visor`. NO hay red de
+ * por medio: el llamador pasa el cliente de SU transacción, así el aviso y la
+ * constancia que lo acompaña se confirman o se revierten juntos. Un fallo al
+ * escribir la constancia del módulo revierte el aviso: nunca queda un aviso
+ * confirmado sin la constancia de lo que anunció.
+ *
+ * `entregarPorCorreo(cliente, correo)` — el intento de correo por `planDeCanal`
+ * y su fila con el desenlace REAL. Se llama SIEMPRE con el cliente plano
+ * (`prisma`), NUNCA dentro de una transacción: el diálogo SMTP no puede retener
+ * el lock de la base. Deja su fila después del aviso —con el `notificacionId` del
+ * aviso cuando existe y `null` cuando el módulo entrega sólo por correo— y nunca
+ * lanza.
+ *
+ * La composición de las dos es el camino completo: `avisar(tx)` dentro de la
+ * transacción del llamador, y `entregarPorCorreo(prisma, { notificacionId })`
+ * después del commit. Un solo `notificar()` que hiciera las dos cosas a la vez
+ * obligaría a elegir entre meter la red en la transacción o confirmar el aviso
+ * antes de su constancia: los dos defectos que S3b prohíbe.
  *
  * ── Las reglas que están codificadas acá (no reinterpretar) ─────────────────
  *
- * 1. **El aviso in-app se escribe SIEMPRE (S6).** Antes de resolver la
- *    dirección y antes de intentar el correo. Si el transporte falla, rebota o
- *    no hay emisor, la fila in-app queda: la entrega falla, el aviso no. Por eso
- *    el puente NUNCA propaga una excepción del transporte; la convierte en
- *    `fallido` con `MOTIVO_TRANSPORTE_FALLO` y la deja registrada.
+ * 1. **El aviso in-app no se pierde (S6).** `avisar` escribe la notificación
+ *    antes de cualquier intento de correo, y `entregarPorCorreo` convierte una
+ *    excepción del transporte en `fallido` con `MOTIVO_TRANSPORTE_FALLO`: la
+ *    entrega falla, el aviso no. El correo NUNCA propaga una excepción.
  * 2. **El canal de la constancia in-app lo declara el llamador (S2).** `canal`
  *    es un campo OBLIGATORIO del aviso: el puente no lo escribe por su cuenta
  *    ni deja actuar al `@default("email_simulado")` de Prisma. El canal de la
- *    ENTREGA es otro dato: va en `canales` (`visor` | `email`, el catálogo de
- *    `lib/schemas.ts`). Confundirlos escribiría «email» en la bandeja in-app.
- * 3. **Cada intento deja UNA fila (S3).** Por cada canal declarado se llama a
+ *    ENTREGA es otro dato: `avisar` escribe el visor y `entregarPorCorreo` el
+ *    correo, cada uno con su fila. Confundirlos escribiría «email» en la
+ *    bandeja in-app.
+ * 3. **Cada intento deja UNA fila (S3).** Por cada canal se llama a
  *    `planDeCanal` —la puerta única de la política canal→estado— y se persiste
  *    una `EntregaNotificacion` con canal, estado, motivo, intentos y fecha. El
  *    correo sale por `planDeCanal` (y por lo tanto por `enviarCorreoComunidad`),
@@ -30,35 +51,31 @@
  * 4. **La dirección se resuelve con la definición única.** `correosDePersonas`
  *    (`lib/personas-contacto.ts`) devuelve el correo recortado y `""` cuando no
  *    hay: sin dirección la entrega queda `fallido` con
- *    `MOTIVO_SIN_DESTINATARIO` y no se abre ninguna conexión.
- * 5. **El cliente es del llamador.** La `Notificacion` entra en la transacción
- *    que el llamador abre (`Prisma.TransactionClient`), así un aviso y su
- *    constancia se confirman o se revierten juntos. Ojo: el envío SMTP ocurre
- *    DENTRO de esa llamada, así que un llamador que declara `email` dentro de
- *    una transacción la mantiene abierta durante el diálogo SMTP; quien no
- *    quiera eso pasa `prisma` para el intento de correo y usa la transacción
- *    sólo para el aviso (eso lo decide el llamador, no este módulo).
+ *    `MOTIVO_SIN_DESTINATARIO` —o con el motivo que el módulo declare— y no se
+ *    abre ninguna conexión.
+ * 5. **El destino del correo es explícito.** `entregarPorCorreo` exige
+ *    `notificacionId: string | null`: `null` es la entrega SÓLO por correo (un
+ *    módulo con el visor apagado, un documento con `canal: email`), no un
+ *    olvido. Ese caso deja su fila y NO crea ninguna `Notificacion`.
  *
- * ── Reintentos y multicanal ────────────────────────────────────────────────
+ * ── Reintentos ─────────────────────────────────────────────────────────────
  *
- * `canales` acepta más de un canal: es UN aviso con dos entregas y, por lo
- * tanto, dos filas. Y `notificacionId` permite colgar un intento posterior (un
- * reenvío, un correo que quedó `pendiente` y se vuelve a intentar) del MISMO
- * aviso in-app: el puente reutiliza la notificación de la comunidad y NUNCA la
- * reescribe —el mensaje es el original, no una copia del estado actual—. Cada
- * intento agrega su fila con `intentos: 1`; el contador de un intento anterior
- * no se pisa ni se reinicia.
+ * `notificacionId` permite colgar un intento posterior (un reenvío, un correo
+ * que quedó `pendiente` y se vuelve a intentar) del MISMO aviso in-app: el
+ * puente reutiliza la notificación de la comunidad y NUNCA la reescribe —el
+ * mensaje es el original, no una copia del estado actual—. Cada intento agrega
+ * su fila con `intentos: 1`; el contador de un intento anterior no se pisa ni
+ * se reinicia.
  */
-import type { Prisma } from "@prisma/client"
-import { prisma } from "@/lib/prisma"
+import type { Prisma, PrismaClient } from "@prisma/client"
 import { generarId } from "@/lib/id-utils"
 import { logger } from "@/lib/logger"
 import { correosDePersonas } from "@/lib/personas-contacto"
 import {
+  MOTIVO_SIN_DESTINATARIO,
   planDeCanal,
   type PlanEntregaCanal,
 } from "@/lib/entrega-aviso"
-import type { CanalEntregaAviso } from "@/lib/schemas"
 
 /**
  * Motivo del intento que no llegó a tener desenlace: el transporte lanzó una
@@ -72,8 +89,8 @@ import type { CanalEntregaAviso } from "@/lib/schemas"
 export const MOTIVO_TRANSPORTE_FALLO =
   "Falló el transporte de correo con un error inesperado: el intento no se completó y el aviso queda en la bandeja."
 
-/** Lo que el llamador declara para escribir UN aviso y sus entregas. */
-export interface AvisoPorNotificar {
+/** Lo que el llamador declara para escribir UN aviso in-app y su entrega al visor. */
+export interface AvisoInApp {
   readonly comunidadId: string
   readonly destinatarioRol: string
   readonly destinatarioPersonaId?: string | null
@@ -88,19 +105,33 @@ export interface AvisoPorNotificar {
   readonly moduloOrigen: string
   readonly fecha: string
   readonly leida?: boolean
-  /** Canales de entrega declarados. Cada uno deja su fila (S3). */
-  readonly canales: readonly CanalEntregaAviso[]
   /**
-   * Persona a la que se dirige el correo. Por defecto, la persona destinataria
-   * del aviso; un aviso al rol (administración, comité) no tiene dirección y
-   * eso se declara, no se inventa (S5).
-   */
-  readonly personaDelCorreo?: string | null
-  /**
-   * Aviso in-app ya escrito al que se cuelga este intento (reenvío o segundo
-   * canal). Si se omite, el puente genera el id y escribe la notificación.
+   * Aviso in-app ya escrito al que se cuelga esta entrega (un reenvío del
+   * visor). Si se omite, el puente genera el id y escribe la notificación.
    */
   readonly notificacionId?: string
+}
+
+/** Lo que el llamador declara para intentar el correo de UN aviso. */
+export interface CorreoPorEntregar {
+  readonly comunidadId: string
+  readonly asunto: string
+  readonly cuerpo: string
+  /** Persona a la que se le resuelve la dirección (una sola por intento). */
+  readonly destinatarioPersonaId?: string | null
+  /** Destinatario de la dirección cuando no es el del aviso (`S5`). */
+  readonly personaDelCorreo?: string | null
+  /**
+   * El aviso del que cuelga el intento. `null` = el módulo entrega SÓLO por
+   * correo: la fila queda sin aviso y no se crea ninguna `Notificacion` (S3b).
+   */
+  readonly notificacionId: string | null
+  /**
+   * Motivo con el que se declara el intento cuando la persona no tiene
+   * dirección. Por defecto, el del catálogo; un módulo cuyo destinatario no es
+   * «el propietario vigente de la unidad» conserva su propia redacción.
+   */
+  readonly motivoSinDestinatario?: string
 }
 
 /** La entrega persistida: el plan del canal más los datos de su fila. */
@@ -111,16 +142,16 @@ export interface EntregaPersistida extends PlanEntregaCanal {
   readonly enviadoEn: Date | null
 }
 
-/** Lo que devuelve el puente: el aviso escrito y el plan de cada intento. */
-export interface ResultadoNotificar {
+/** Lo que devuelve `avisar`: el aviso escrito y su fila de visor. */
+export interface ResultadoAvisar {
   readonly notificacionId: string
-  readonly entregas: EntregaPersistida[]
+  readonly entrega: EntregaPersistida
 }
 
-/** Datos de la `Notificacion` que el puente escribe o reutiliza. */
+/** Datos de la `Notificacion` que `avisar` escribe o reutiliza. */
 function datosDeLaNotificacion(
   id: string,
-  aviso: AvisoPorNotificar
+  aviso: AvisoInApp
 ): Prisma.NotificacionUncheckedCreateInput {
   return {
     id,
@@ -148,7 +179,7 @@ function datosDeLaNotificacion(
  */
 async function asegurarNotificacion(
   cliente: Prisma.TransactionClient,
-  aviso: AvisoPorNotificar
+  aviso: AvisoInApp
 ): Promise<string> {
   const id = aviso.notificacionId ?? generarId("not")
   if (aviso.notificacionId !== undefined) {
@@ -163,7 +194,73 @@ async function asegurarNotificacion(
 }
 
 /**
- * El plan del canal, sin dejar que el transporte rompa el puente (S6).
+ * Persiste UNA fila de `entregas_notificacion` con el desenlace del canal.
+ *
+ * `enviadoEn` sólo se fecha cuando el servidor aceptó (`enviado`): no se fecha
+ * como enviado lo que no salió. La fecha del visor es `creadoEn`, no una salida
+ * por correo. Cada intento nace con `intentos: 1`.
+ */
+async function registrarEntrega(
+  cliente: Prisma.TransactionClient,
+  input: {
+    comunidadId: string
+    notificacionId: string | null
+    plan: PlanEntregaCanal
+  }
+): Promise<EntregaPersistida> {
+  const id = generarId("ent")
+  const intentos = 1
+  const enviadoEn = input.plan.estado === "enviado" ? new Date() : null
+
+  await cliente.entregaNotificacion.create({
+    data: {
+      id,
+      comunidadId: input.comunidadId,
+      notificacionId: input.notificacionId,
+      canal: input.plan.canal,
+      estado: input.plan.estado,
+      motivo: input.plan.motivo,
+      intentos,
+      enviadoEn,
+    },
+  })
+
+  return { ...input.plan, id, intentos, enviadoEn }
+}
+
+/**
+ * Escribe el aviso in-app y su fila de `visor` en la transacción del llamador.
+ *
+ * No hay red de por medio: `planDeCanal("visor")` es puro (el visor se prueba
+ * con la notificación, no con un envío), así que el llamador puede pasar su
+ * `tx` sin retener ningún lock durante un diálogo SMTP. El aviso y la
+ * constancia del módulo que lo acompaña se confirman o se revierten juntos
+ * (S3b), y el correo —si lo hay— se intenta DESPUÉS, con `entregarPorCorreo` y
+ * el cliente plano.
+ */
+export async function avisar(
+  cliente: Prisma.TransactionClient,
+  aviso: AvisoInApp
+): Promise<ResultadoAvisar> {
+  const notificacionId = await asegurarNotificacion(cliente, aviso)
+  const plan = await planDeCanal("visor", {
+    email: {
+      comunidadId: aviso.comunidadId,
+      destinatario: null,
+      asunto: aviso.asunto,
+      cuerpo: aviso.cuerpo,
+    },
+  })
+  const entrega = await registrarEntrega(cliente, {
+    comunidadId: aviso.comunidadId,
+    notificacionId,
+    plan,
+  })
+  return { notificacionId, entrega }
+}
+
+/**
+ * El plan del correo, sin dejar que el transporte rompa la entrega (S6).
  *
  * `planDeCanal` ya traduce `no_configurado` a `pendiente` y la falta de
  * dirección a `fallido` con su motivo. Lo único que puede escaparse es una
@@ -171,95 +268,79 @@ async function asegurarNotificacion(
  * deja el detalle en el log (sin direcciones: el logger lo permite, pero el
  * motivo persistido no las lleva).
  */
-async function planSinRomperElAviso(
-  canal: CanalEntregaAviso,
-  contexto: {
-    comunidadId: string
-    correo: string
-    asunto: string
-    cuerpo: string
-  }
-): Promise<PlanEntregaCanal> {
+async function planDelCorreoSinRomperLaEntrega(contexto: {
+  comunidadId: string
+  destinatario: string
+  asunto: string
+  cuerpo: string
+}): Promise<PlanEntregaCanal> {
   try {
-    return await planDeCanal(canal, {
+    return await planDeCanal("email", {
       email: {
         comunidadId: contexto.comunidadId,
-        destinatario: contexto.correo,
+        destinatario: contexto.destinatario,
         asunto: contexto.asunto,
         cuerpo: contexto.cuerpo,
       },
     })
   } catch (error) {
     logger.error(
-      { err: error, comunidadId: contexto.comunidadId, canal },
+      { err: error, comunidadId: contexto.comunidadId, canal: "email" },
       "[entrega] el transporte de correo lanzó una excepción: la entrega queda fallida y el aviso in-app se conserva"
     )
-    return { canal, estado: "fallido", motivo: MOTIVO_TRANSPORTE_FALLO }
+    return { canal: "email", estado: "fallido", motivo: MOTIVO_TRANSPORTE_FALLO }
   }
 }
 
 /**
- * Escribe el aviso in-app y persiste el desenlace de cada canal declarado.
+ * Intenta el correo de UN aviso y persiste su desenlace (S3 y S3b).
  *
- * Devuelve el id del aviso (nuevo o reutilizado) y el plan de cada intento, ya
- * con el id, los intentos y la fecha de su fila. Un canal `email` sin persona o
- * sin correo queda `fallido` con `MOTIVO_SIN_DESTINATARIO`; sin emisor SMTP,
+ * Se llama SIEMPRE con el cliente plano, NUNCA dentro de una transacción: el
+ * diálogo SMTP no retiene el lock de la base, y la fila se escribe después del
+ * aviso. `notificacionId` cuelga el intento del aviso que lo anuncia; `null`
+ * declara una entrega SÓLO por correo y no crea ninguna notificación.
+ *
+ * Sin persona o sin dirección queda `fallido` con el motivo del catálogo (o el
+ * que el módulo declare) y no abre ninguna conexión; sin emisor SMTP queda
  * `pendiente` con `MOTIVO_SIN_SMTP`; con el servidor aceptando, `enviado` y
  * `enviadoEn` con la fecha del intento. En ningún caso se lanza por el
  * transporte (S6).
  */
-export async function notificar(
-  cliente: Prisma.TransactionClient,
-  aviso: AvisoPorNotificar
-): Promise<ResultadoNotificar> {
-  const notificacionId = await asegurarNotificacion(cliente, aviso)
-
-  const canales = [...new Set(aviso.canales)]
+export async function entregarPorCorreo(
+  cliente: PrismaClient,
+  correo: CorreoPorEntregar
+): Promise<EntregaPersistida> {
   const personaDelCorreo =
-    aviso.personaDelCorreo ?? aviso.destinatarioPersonaId ?? null
+    correo.personaDelCorreo ?? correo.destinatarioPersonaId ?? null
 
-  // Una sola resolución para todos los canales de la llamada (sin N+1). Sin
-  // persona no hay consulta: no hay a quién resolverle el correo.
-  let correo = ""
-  if (personaDelCorreo !== null && canales.includes("email")) {
+  // Sin persona no hay consulta: no hay a quién resolverle el correo.
+  let destinatario = ""
+  if (personaDelCorreo !== null) {
     const correos = await correosDePersonas(
-      aviso.comunidadId,
+      correo.comunidadId,
       [personaDelCorreo],
       cliente
     )
-    correo = correos.get(personaDelCorreo) ?? ""
+    destinatario = correos.get(personaDelCorreo) ?? ""
   }
 
-  const entregas: EntregaPersistida[] = []
-  for (const canal of canales) {
-    const plan = await planSinRomperElAviso(canal, {
-      comunidadId: aviso.comunidadId,
-      correo,
-      asunto: aviso.asunto,
-      cuerpo: aviso.cuerpo,
-    })
+  const plan =
+    destinatario === ""
+      ? {
+          canal: "email" as const,
+          estado: "fallido" as const,
+          motivo: correo.motivoSinDestinatario ?? MOTIVO_SIN_DESTINATARIO,
+        }
+      : await planDelCorreoSinRomperLaEntrega({
+          comunidadId: correo.comunidadId,
+          destinatario,
+          asunto: correo.asunto,
+          cuerpo: correo.cuerpo,
+        })
 
-    const id = generarId("ent")
-    // `enviadoEn` sólo cuando el servidor aceptó: no se fecha como enviado lo
-    // que no salió. La fecha del visor es `creadoEn`, no una salida por correo.
-    const enviadoEn = plan.estado === "enviado" ? new Date() : null
-    const intentos = 1
-
-    await cliente.entregaNotificacion.create({
-      data: {
-        id,
-        comunidadId: aviso.comunidadId,
-        notificacionId,
-        canal: plan.canal,
-        estado: plan.estado,
-        motivo: plan.motivo,
-        intentos,
-        enviadoEn,
-      },
-    })
-
-    entregas.push({ ...plan, id, intentos, enviadoEn })
-  }
-
-  return { notificacionId, entregas }
+  return registrarEntrega(cliente, {
+    comunidadId: correo.comunidadId,
+    notificacionId: correo.notificacionId,
+    plan,
+  })
 }

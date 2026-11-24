@@ -33,6 +33,7 @@ import { NextRequest } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { hoyISO } from "@/lib/date-utils"
 import { MOTIVO_SIN_SMTP } from "@/lib/entrega-aviso"
+import { fallaDeConstancia } from "../helpers/prisma-con-fallas"
 
 const state = vi.hoisted(() => ({ cookie: "" }))
 vi.mock("next/headers", () => ({
@@ -45,6 +46,14 @@ vi.mock("next/headers", () => ({
       )
     ),
 }))
+
+// El cliente real, con la falla de constancia inyectable (ver el helper).
+vi.mock("@/lib/prisma", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@/lib/prisma")>()
+  const { conFallaDeConstancia } = await import("../helpers/prisma-con-fallas")
+  const prisma = conFallaDeConstancia(real.prisma)
+  return { prisma, default: prisma }
+})
 
 const AUTH_SECRET = "test-secret-12345678"
 
@@ -669,5 +678,37 @@ describe("/api/avisos-cobro/[id]/entrega — visor con prueba, correo en cola (S
     expect(status).toBe(400)
     expect(json.error).toBe("Datos de la entrega inválidos.")
     expect(await entregasDe(avisoU1.id)).toHaveLength(antes.length)
+  })
+
+  it("S3b · si la constancia del aviso falla, no queda ni el aviso ni su entrega", async () => {
+    const notificacionesAntes = await notificacionesDe(avisoU1.id)
+    const entregasAntes = await entregasDe(avisoU1.id)
+    const compartidasAntes = await prisma.entregaNotificacion.count({
+      where: { comunidadId: COM_A },
+    })
+
+    fallaDeConstancia.escritura = "envioAvisoCobro"
+    try {
+      const { status } = await como(EMAIL_ADMIN, () =>
+        entregar(avisoU1.id, { reenviar: true })
+      )
+      expect(status).toBe(500)
+    } finally {
+      fallaDeConstancia.escritura = null
+    }
+
+    // El aviso in-app y su fila de visor entran en la transacción de la
+    // constancia del aviso: si esa escritura falla, no queda ninguno de los
+    // tres (S3b), y el reenvío no se registra a medias.
+    expect(await notificacionesDe(avisoU1.id)).toBe(notificacionesAntes)
+    expect(await entregasDe(avisoU1.id)).toHaveLength(entregasAntes.length)
+    expect(
+      await prisma.entregaNotificacion.count({ where: { comunidadId: COM_A } })
+    ).toBe(compartidasAntes)
+    expect(
+      await prisma.eventoAuditoria.count({
+        where: { referenciaId: avisoU1.id, tipoAccion: "FI_AVISO_ENTREGA_RESENT" },
+      })
+    ).toBe(1)
   })
 })

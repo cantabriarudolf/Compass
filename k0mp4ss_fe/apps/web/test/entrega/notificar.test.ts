@@ -1,22 +1,29 @@
 /** @vitest-environment node */
 /**
- * El puente de entrega (T1 — specs S1, S2, S3 y S6 de
+ * El puente de entrega, partido en dos (T1b — specs S3 y S3b de
  * `odd/tasks/un-camino-de-entrega.md`).
  *
  * Qué fija este archivo, contra la base real y con el transporte DOBLADO (nunca
  * se abre una conexión: `enviarCorreoComunidad` es un mock, y `planDeCanal` —la
  * política canal→estado— corre de verdad):
  *
- *   1. S2 — el canal de la constancia in-app viaja desde el llamador. El test
- *      usa un valor SENTINELA distinto del `@default("email_simulado")`: si el
- *      puente omitiera el campo y dejara actuar al default, la aserción falla.
- *   2. S3 — cada intento deja UNA fila en `entregas_notificacion` con su canal,
- *      estado, motivo, intentos y fecha; el visor queda `entregado` sólo porque
- *      la `Notificacion` se escribió en la misma transacción.
- *   3. S6 — el aviso in-app no se pierde por el correo: sin dirección, sin SMTP,
- *      con rebote o con el transporte lanzando una excepción, la fila in-app
- *      queda escrita y la entrega dice qué pasó con su motivo.
- *   4. La `Notificacion` entra en la transacción del LLAMADOR: si el llamador
+ *   1. `avisar()` — S2 — el canal de la constancia in-app viaja desde el
+ *      llamador. El test usa un valor SENTINELA distinto del
+ *      `@default("email_simulado")`: si el puente omitiera el campo y dejara
+ *      actuar al default, la aserción falla. Escribe el aviso y su fila de
+ *      `visor`, sin red, dentro de la transacción del llamador.
+ *   2. `avisar()` + `entregarPorCorreo()` — S3 — cada intento deja UNA fila en
+ *      `entregas_notificacion` con su canal, estado, motivo, intentos y fecha;
+ *      el visor queda `entregado` sólo porque la `Notificacion` se escribió en
+ *      la misma transacción, y el correo se cuelga de ese aviso.
+ *   3. `entregarPorCorreo()` sin aviso — S3b — el módulo que entrega SÓLO por
+ *      correo deja su fila con `notificacionId: null` y NO crea ninguna
+ *      `Notificacion`: un correo que sale sin fila es el defecto que la spec
+ *      prohíbe, y un aviso inventado sería el canal que el módulo no declaró.
+ *   4. S6 — el aviso in-app no se pierde por el correo: sin dirección, sin SMTP,
+ *      con rebote o con el transporte lanzando una excepción, la entrega dice
+ *      qué pasó con su motivo y `entregarPorCorreo` nunca lanza.
+ *   5. La `Notificacion` entra en la transacción del LLAMADOR: si el llamador
  *      revierte, no queda ni el aviso ni su entrega.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
@@ -27,8 +34,10 @@ import {
 } from "@/lib/entrega-aviso"
 import {
   MOTIVO_TRANSPORTE_FALLO,
-  notificar,
-  type AvisoPorNotificar,
+  avisar,
+  entregarPorCorreo,
+  type AvisoInApp,
+  type CorreoPorEntregar,
 } from "@/lib/entrega/notificar"
 import { CANAL_NOTIFICACION_EMAIL_SIMULADO } from "@/lib/schemas"
 
@@ -73,18 +82,29 @@ async function crearPersona(id: string, email: string): Promise<void> {
 }
 
 /** Un aviso in-app mínimo; cada test cambia sólo lo que mide. */
-function aviso(cambios: Partial<AvisoPorNotificar> = {}): AvisoPorNotificar {
+function aviso(cambios: Partial<AvisoInApp> = {}): AvisoInApp {
   return {
     comunidadId: COM,
     destinatarioRol: "residente",
     destinatarioPersonaId: PERSONA_CON_CORREO,
     unidadId: "entrega-notif-unidad-101",
     asunto: "Encomienda recibida en conserjería",
-    cuerpo: "Tiene una encomienda recibida el 2026-11-23. Retírela con su identificación.",
+    cuerpo: "Tiene una encomienda recibida el 2026-03-23. Retírela con su identificación.",
     canal: CANAL_NOTIFICACION_EMAIL_SIMULADO,
     moduloOrigen: "PE",
-    fecha: "2026-11-23T12:00:00.000Z",
-    canales: ["visor"],
+    fecha: "2026-03-23T12:00:00.000Z",
+    ...cambios,
+  }
+}
+
+/** Un correo mínimo; `notificacionId` es obligatorio y explícito (S3b). */
+function correo(cambios: Partial<CorreoPorEntregar> = {}): CorreoPorEntregar {
+  return {
+    comunidadId: COM,
+    asunto: "Encomienda recibida en conserjería",
+    cuerpo: "Tiene una encomienda recibida el 2026-03-23. Retírela con su identificación.",
+    destinatarioPersonaId: PERSONA_CON_CORREO,
+    notificacionId: null,
     ...cambios,
   }
 }
@@ -110,12 +130,16 @@ afterAll(async () => {
   await prisma.comunidad.delete({ where: { id: COM } }).catch(() => {})
 })
 
-beforeEach(() => {
+beforeEach(async () => {
   transporte.enviar.mockReset()
   transporte.enviar.mockResolvedValue({
     estado: "enviado",
     messageId: "<mensaje-de-prueba@servidor>",
   })
+  // Cada test parte de una comunidad sin avisos ni entregas: las filas de uno
+  // no se cuelan en las cuentas del siguiente.
+  await prisma.entregaNotificacion.deleteMany({ where: { comunidadId: COM } })
+  await prisma.notificacion.deleteMany({ where: { comunidadId: COM } })
 })
 
 function filasDeLaNotificacion(notificacionId: string) {
@@ -125,10 +149,13 @@ function filasDeLaNotificacion(notificacionId: string) {
   })
 }
 
+const contarNotificaciones = () =>
+  prisma.notificacion.count({ where: { comunidadId: COM } })
+
 describe("S2 — el canal de la constancia in-app lo declara el llamador", () => {
   it("persiste el canal EXPLÍCITO, aunque sea distinto del default de Prisma", async () => {
     const sentinela = "canal-declarado-por-el-llamador"
-    const resultado = await notificar(prisma, aviso({ canal: sentinela, canales: ["visor"] }))
+    const resultado = await avisar(prisma, aviso({ canal: sentinela }))
 
     const notificacion = await prisma.notificacion.findUnique({
       where: { id: resultado.notificacionId },
@@ -141,10 +168,9 @@ describe("S2 — el canal de la constancia in-app lo declara el llamador", () =>
 
 describe("S3 — cada intento deja su fila con canal, estado, motivo, intentos y fecha", () => {
   it("el visor queda `entregado` y prueba su hecho con la notificación escrita", async () => {
-    const resultado = await notificar(prisma, aviso({ canales: ["visor"] }))
+    const resultado = await avisar(prisma, aviso())
 
-    expect(resultado.entregas).toHaveLength(1)
-    expect(resultado.entregas[0]).toMatchObject({
+    expect(resultado.entrega).toMatchObject({
       canal: "visor",
       estado: "entregado",
       motivo: null,
@@ -168,25 +194,25 @@ describe("S3 — cada intento deja su fila con canal, estado, motivo, intentos y
   })
 
   it("persiste UNA fila por intento, cada una con su motivo e intentos, sin duplicar el aviso", async () => {
-    const primero = await notificar(prisma, aviso({ canales: ["visor"] }))
+    const primero = await avisar(prisma, aviso())
     transporte.enviar.mockResolvedValue({
       estado: "no_configurado",
       motivo: "Sin emisor SMTP configurado (F4).",
     })
-    // El segundo intento es un correo que queda en la cola: se cuelga de la
-    // MISMA notificación, así que el aviso in-app no se repite.
-    const segundo = await notificar(
+    // El correo es un intento POSTERIOR al aviso: se cuelga del MISMO
+    // `notificacionId`, así que el aviso in-app no se repite (S3b).
+    const segundo = await entregarPorCorreo(
       prisma,
-      aviso({
-        notificacionId: primero.notificacionId,
-        canales: ["email"],
-      })
+      correo({ notificacionId: primero.notificacionId })
     )
 
-    expect(segundo.notificacionId).toBe(primero.notificacionId)
-    expect(
-      await prisma.notificacion.count({ where: { id: primero.notificacionId } })
-    ).toBe(1)
+    expect(segundo).toMatchObject({
+      canal: "email",
+      estado: "pendiente",
+      motivo: MOTIVO_SIN_SMTP,
+      intentos: 1,
+    })
+    expect(await contarNotificaciones()).toBe(1)
 
     const filas = await filasDeLaNotificacion(primero.notificacionId)
     expect(filas).toHaveLength(2)
@@ -203,14 +229,46 @@ describe("S3 — cada intento deja su fila con canal, estado, motivo, intentos y
   })
 })
 
+describe("S3b — el correo sin aviso in-app no pierde su fila ni inventa un aviso", () => {
+  it("con `notificacionId: null` deja UNA fila propia y NINGUNA notificación", async () => {
+    const entrega = await entregarPorCorreo(prisma, correo())
+
+    expect(entrega).toMatchObject({
+      canal: "email",
+      estado: "enviado",
+      intentos: 1,
+    })
+    expect(entrega.enviadoEn).toBeInstanceOf(Date)
+    expect(await contarNotificaciones()).toBe(0)
+
+    const filas = await prisma.entregaNotificacion.findMany({
+      where: { comunidadId: COM },
+    })
+    expect(filas).toHaveLength(1)
+    expect(filas[0]).toMatchObject({
+      canal: "email",
+      notificacionId: null,
+      estado: "enviado",
+      intentos: 1,
+    })
+  })
+})
+
 describe("S6 — ningún aviso se pierde por el correo", () => {
   it("una persona sin dirección deja la entrega `fallido` con MOTIVO_SIN_DESTINATARIO y el aviso escrito", async () => {
-    const resultado = await notificar(
+    const escrito = await avisar(
       prisma,
-      aviso({ destinatarioPersonaId: PERSONA_SIN_CORREO, canales: ["email"] })
+      aviso({ destinatarioPersonaId: PERSONA_SIN_CORREO })
+    )
+    const entrega = await entregarPorCorreo(
+      prisma,
+      correo({
+        destinatarioPersonaId: PERSONA_SIN_CORREO,
+        notificacionId: escrito.notificacionId,
+      })
     )
 
-    expect(resultado.entregas[0]).toMatchObject({
+    expect(entrega).toMatchObject({
       canal: "email",
       estado: "fallido",
       motivo: MOTIVO_SIN_DESTINATARIO,
@@ -221,7 +279,7 @@ describe("S6 — ningún aviso se pierde por el correo", () => {
     expect(transporte.enviar).not.toHaveBeenCalled()
 
     const notificacion = await prisma.notificacion.findUnique({
-      where: { id: resultado.notificacionId },
+      where: { id: escrito.notificacionId },
     })
     expect(notificacion).not.toBeNull()
     expect(notificacion?.destinatarioPersonaId).toBe(PERSONA_SIN_CORREO)
@@ -233,46 +291,54 @@ describe("S6 — ningún aviso se pierde por el correo", () => {
       motivo: "Sin emisor SMTP configurado (F4).",
     })
 
-    const resultado = await notificar(prisma, aviso({ canales: ["email"] }))
+    const escrito = await avisar(prisma, aviso())
+    const entrega = await entregarPorCorreo(
+      prisma,
+      correo({ notificacionId: escrito.notificacionId })
+    )
 
-    expect(resultado.entregas[0]).toMatchObject({
+    expect(entrega).toMatchObject({
       canal: "email",
       estado: "pendiente",
       motivo: MOTIVO_SIN_SMTP,
       intentos: 1,
       enviadoEn: null,
     })
-    expect(
-      await prisma.notificacion.count({ where: { id: resultado.notificacionId } })
-    ).toBe(1)
+    expect(await contarNotificaciones()).toBe(1)
   })
 
-  it("si el transporte lanza una excepción, el puente NO la propaga: `fallido` y el aviso queda", async () => {
+  it("si el transporte lanza una excepción, `entregarPorCorreo` NO la propaga: `fallido` y la fila queda", async () => {
     transporte.enviar.mockRejectedValue(new Error("socket hang up"))
 
-    const resultado = await notificar(prisma, aviso({ canales: ["email"] }))
+    const escrito = await avisar(prisma, aviso())
+    const entrega = await entregarPorCorreo(
+      prisma,
+      correo({ notificacionId: escrito.notificacionId })
+    )
 
-    expect(resultado.entregas[0]).toMatchObject({
+    expect(entrega).toMatchObject({
       canal: "email",
       estado: "fallido",
       motivo: MOTIVO_TRANSPORTE_FALLO,
       intentos: 1,
       enviadoEn: null,
     })
-    expect(
-      await prisma.notificacion.count({ where: { id: resultado.notificacionId } })
-    ).toBe(1)
+    expect(await contarNotificaciones()).toBe(1)
     expect(
       await prisma.entregaNotificacion.count({
-        where: { notificacionId: resultado.notificacionId },
+        where: { notificacionId: escrito.notificacionId },
       })
-    ).toBe(1)
+    ).toBe(2)
   })
 })
 
 describe("el correo sale por la puerta única y se reporta como pasó", () => {
   it("con el servidor aceptando, la entrega queda `enviado` con su fecha y el id del mensaje", async () => {
-    const resultado = await notificar(prisma, aviso({ canales: ["email"] }))
+    const escrito = await avisar(prisma, aviso())
+    const entrega = await entregarPorCorreo(
+      prisma,
+      correo({ notificacionId: escrito.notificacionId })
+    )
 
     // `planDeCanal` es el que habla con `enviarCorreoComunidad`: el puente nunca
     // llama al SMTP directo, así que el destinatario resuelto y el texto del
@@ -281,10 +347,9 @@ describe("el correo sale por la puerta única y se reporta como pasó", () => {
     expect(transporte.enviar).toHaveBeenCalledWith(COM, {
       to: CORREO,
       subject: "Encomienda recibida en conserjería",
-      text: "Tiene una encomienda recibida el 2026-11-23. Retírela con su identificación.",
+      text: "Tiene una encomienda recibida el 2026-03-23. Retírela con su identificación.",
     })
 
-    const entrega = resultado.entregas[0]!
     expect(entrega).toMatchObject({
       canal: "email",
       estado: "enviado",
@@ -293,10 +358,11 @@ describe("el correo sale por la puerta única y se reporta como pasó", () => {
     expect(entrega.motivo).toContain("<mensaje-de-prueba@servidor>")
     expect(entrega.enviadoEn).toBeInstanceOf(Date)
 
-    const filas = await filasDeLaNotificacion(resultado.notificacionId)
-    expect(filas).toHaveLength(1)
-    expect(filas[0]!.estado).toBe("enviado")
-    expect(filas[0]!.enviadoEn).toBeInstanceOf(Date)
+    const filas = await filasDeLaNotificacion(escrito.notificacionId)
+    expect(filas).toHaveLength(2)
+    const correoPersistido = filas.find((fila) => fila.canal === "email")
+    expect(correoPersistido?.estado).toBe("enviado")
+    expect(correoPersistido?.enviadoEn).toBeInstanceOf(Date)
   })
 })
 
@@ -305,7 +371,7 @@ describe("la notificación entra en la transacción del llamador", () => {
     let notificacionId = ""
     await expect(
       prisma.$transaction(async (tx) => {
-        const resultado = await notificar(tx, aviso({ canales: ["visor"] }))
+        const resultado = await avisar(tx, aviso())
         notificacionId = resultado.notificacionId
         throw new Error("rollback-del-llamador")
       })

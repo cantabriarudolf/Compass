@@ -14,12 +14,15 @@
  *   `MOTIVO_SIN_SMTP` cuando no hay emisor configurado. Esta ruta NUNCA responde
  *   que se envió algo que el servidor no aceptó. Solo el visor queda en estado
  *   `publicado`.
- * - **El aviso y su entrega son un solo acto por destinatario**: el puente
- *   escribe la notificación del visor y deja una fila por canal en
- *   `entregas_notificacion` (S3) —una `entregado` del visor y una del correo con
- *   su desenlace real—, fuera de toda transacción: el diálogo SMTP no retiene el
- *   lock de la base. La constancia propia del informe (`envios`) se escribe
- *   después, en una transacción corta, y sigue siendo la fuente de su estado.
+ * - **El aviso y la publicación del informe son un solo acto** (S3b): las
+ *   notificaciones del visor y la constancia del informe entran en la MISMA
+ *   transacción —el visor no habla con el transporte—, así que un fallo al
+ *   escribir la constancia no deja avisos confirmados. El correo, si se pidió,
+ *   sale DESPUÉS por `entregarPorCorreo`, con el cliente plano, y deja su fila
+ *   en `entregas_notificacion` colgada del aviso de cada destinatario (S3): el
+ *   diálogo SMTP no retiene el lock de la base. La constancia propia del informe
+ *   (`envios`) se completa con el desenlace real del correo y sigue siendo la
+ *   fuente de su estado.
  * - El estado del envío se persiste en `envios` (una entrada por canal y
  *   destinatario, con fecha y estado) y se resume en `estadoDistribucion` con el
  *   estado más restrictivo: `pendiente` > `fallido` > `enviado` > `publicado`. *
@@ -30,7 +33,7 @@ import { prisma } from "@/lib/prisma"
 import { logger } from "@/lib/logger"
 import { hoyISO } from "@/lib/date-utils"
 import { resolverSegmentacionRE } from "@/lib/reporteria-utils"
-import { notificar } from "@/lib/entrega/notificar"
+import { avisar, entregarPorCorreo } from "@/lib/entrega/notificar"
 import type { EnvioReporteRE, ReporteRE } from "@/lib/schemas"
 import { jsonError } from "@/lib/api/with-comunidad-scope"
 import { cargarReporteRE, contextoAccionRE, registrarEventoRE } from "../../_acciones"
@@ -162,37 +165,73 @@ export async function POST(req: Request, ctx: Ctx): Promise<Response> {
         : ""
     }`
 
-    // Envíos por email y aviso in-app: UNA llamada al puente por destinatario.
-    // El puente escribe la notificación del visor, deja una fila por canal en
-    // `entregas_notificacion` y manda el correo por `planDeCanal` con el cliente
-    // PLANO —fuera de toda transacción, porque el diálogo SMTP no puede retener
-    // el lock de la base—. El estado es el que declaró el servidor SMTP; los
-    // destinatarios sin correo quedan `fallido` (no hay a dónde entregar) en vez
-    // de un `pendiente` falso.
+    // El aviso de cada destinatario y la publicación del informe se escriben
+    // JUNTOS: si la constancia del informe falla, el aviso se revierte (S3b). No
+    // hay red en esta transacción —el visor se prueba con la notificación—, así
+    // que el correo se intenta después, con el cliente PLANO.
+    const avisoPorPersona = new Map<string, string>()
+    await prisma.$transaction(async (tx) => {
+      for (const personaId of destinatarios) {
+        const aviso = await avisar(tx, {
+          comunidadId: scope.comunidadId,
+          destinatarioRol: rolBandejaDe(porPersona.get(personaId)),
+          destinatarioPersonaId: personaId,
+          asunto: asuntoEnvio,
+          cuerpo: cuerpoEnvio,
+          canal: CANAL_NOTIFICACION_EMAIL_SIMULADO,
+          moduloOrigen: "RE",
+          fecha,
+        })
+        avisoPorPersona.set(personaId, aviso.notificacionId)
+      }
+
+      // La distribución queda publicada en el visor con su constancia propia.
+      // El desenlace del correo se agrega después, cuando existe.
+      await tx.reporteRE.update({
+        where: { id },
+        data: {
+          destinatariosPersonaId: destinatarios as never,
+          distribuidoA: destinatarios.length,
+          fechaDistribucion: fecha,
+          envios: [{ canal: "visor", fecha, estado: "publicado" }] as never,
+          estadoDistribucion: "publicado",
+        },
+      })
+
+      if (!encolarEmail) {
+        await registrarEventoRE(
+          scope,
+          "RE_REPORT_DISTRIBUTED",
+          id,
+          `Reporte "${reporte.titulo}"${reporte.numero ? ` N°${reporte.numero}` : ""} publicado en el visor interno para ${destinatarios.length} destinatario(s) (sin email).`,
+          tx
+        )
+      }
+    })
+
+    // Correo por destinatario, FUERA de toda transacción y colgado de su aviso
+    // (S3b): el diálogo SMTP no retiene el lock de la base. El estado es el que
+    // declaró el servidor; los destinatarios sin correo quedan `fallido` (no hay
+    // a dónde entregar) en vez de un `pendiente` falso.
     const enviosEmail: EnvioReporteRE[] = []
     const motivosEmail = new Set<string>()
-    for (const personaId of destinatarios) {
-      const { entregas } = await notificar(prisma, {
-        comunidadId: scope.comunidadId,
-        destinatarioRol: rolBandejaDe(porPersona.get(personaId)),
-        destinatarioPersonaId: personaId,
-        asunto: asuntoEnvio,
-        cuerpo: cuerpoEnvio,
-        canal: CANAL_NOTIFICACION_EMAIL_SIMULADO,
-        moduloOrigen: "RE",
-        fecha,
-        canales: encolarEmail ? ["visor", "email"] : ["visor"],
-      })
-      if (!encolarEmail) continue
-      const entregaEmail = entregas.find((entrega) => entrega.canal === "email")
-      if (!entregaEmail) continue
-      if (entregaEmail.motivo) motivosEmail.add(entregaEmail.motivo)
-      enviosEmail.push({
-        canal: "email",
-        destinatarioPersonaId: personaId,
-        fecha,
-        estado: estadoReporteDeLaEntrega(entregaEmail.estado),
-      })
+    if (encolarEmail) {
+      for (const personaId of destinatarios) {
+        const entregaEmail = await entregarPorCorreo(prisma, {
+          comunidadId: scope.comunidadId,
+          asunto: asuntoEnvio,
+          cuerpo: cuerpoEnvio,
+          destinatarioPersonaId: personaId,
+          notificacionId: avisoPorPersona.get(personaId) ?? null,
+        })
+        if (entregaEmail.motivo) motivosEmail.add(entregaEmail.motivo)
+        enviosEmail.push({
+          canal: "email",
+          destinatarioPersonaId: personaId,
+          fecha,
+          estado: estadoReporteDeLaEntrega(entregaEmail.estado),
+        })
+      }
     }
 
     // Envíos: el visor interno queda publicado y el email con el estado real.
@@ -210,32 +249,27 @@ export async function POST(req: Request, ctx: Ctx): Promise<Response> {
           : "publicado"
     const estadoDistribucion = estadoEmail === "publicado" ? "publicado" : estadoEmail
 
-    await prisma.$transaction(async (tx) => {
-      // El puente ya escribió el aviso de cada destinatario; acá sólo se cierra
-      // la distribución del informe y se audita, en una transacción corta.
-      await tx.reporteRE.update({
-        where: { id },
-        data: {
-          destinatariosPersonaId: destinatarios as never,
-          distribuidoA: destinatarios.length,
-          fechaDistribucion: fecha,
-          envios: envios as never,
-          estadoDistribucion,
-        },
-      })
+    if (encolarEmail) {
+      await prisma.$transaction(async (tx) => {
+        // El informe cierra su distribución con el desenlace del correo y se
+        // audita, en una transacción corta (sin red adentro).
+        await tx.reporteRE.update({
+          where: { id },
+          data: {
+            envios: envios as never,
+            estadoDistribucion,
+          },
+        })
 
-      await registrarEventoRE(
-        scope,
-        "RE_REPORT_DISTRIBUTED",
-        id,
-        `Reporte "${reporte.titulo}"${reporte.numero ? ` N°${reporte.numero}` : ""} publicado en el visor interno para ${destinatarios.length} destinatario(s)${
-          encolarEmail
-            ? `; email → ${estadoEmail} (${enviosEmail.length} envío(s) registrado(s))${[...motivosEmail].length > 0 ? `: ${[...motivosEmail].join(" | ")}` : ""}.`
-            : " (sin email)."
-        }`,
-        tx
-      )
-    })
+        await registrarEventoRE(
+          scope,
+          "RE_REPORT_DISTRIBUTED",
+          id,
+          `Reporte "${reporte.titulo}"${reporte.numero ? ` N°${reporte.numero}` : ""} publicado en el visor interno para ${destinatarios.length} destinatario(s); email → ${estadoEmail} (${enviosEmail.length} envío(s) registrado(s))${[...motivosEmail].length > 0 ? `: ${[...motivosEmail].join(" | ")}` : ""}.`,
+          tx
+        )
+      })
+    }
 
     return Response.json({
       ok: true,

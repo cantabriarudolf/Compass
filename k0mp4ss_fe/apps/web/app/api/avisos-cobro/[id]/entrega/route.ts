@@ -9,17 +9,20 @@
  *   escribe nada: un aviso entregado al vacío arrancaría un plazo de pago que
  *   nadie recibió.
  * - **Visor** (`entregado`): se crea la `Notificacion` que el residente ve, con
- *   el folio y el período del aviso, y el registro apunta a ella. El aviso y su
- *   fila de entrega compartida (`entregas_notificacion`) los escribe el PUENTE
- *   (`lib/entrega/notificar.ts`) en la MISMA llamada; el estado se escribe en la
- *   constancia del aviso dentro de una transacción corta, sin diálogo SMTP
- *   adentro: no hay entrega declarada sin la fila que la prueba.
+ *   el folio y el período del aviso, y el registro apunta a ella. El aviso, su
+ *   fila de entrega compartida (`entregas_notificacion`) y la constancia del
+ *   visor entran en UNA transacción (`avisar` + `envioAvisoCobro.create`): un
+ *   fallo de la constancia no deja el aviso confirmado (S3b). No hay entrega
+ *   declarada sin la fila que la prueba, ni diálogo SMTP adentro de la
+ *   transacción.
  * - **Email** (emisión real): sale por la puerta única (`planDeCanal`) a través
- *   del puente, con el cliente PLANO, y el registro dice la verdad del intento:
- *   `enviado` SOLO si el servidor aceptó el mensaje (el motivo guarda el id que
- *   devolvió), `fallido` con el motivo redactado si se intentó y rebotó, y
- *   `pendiente` con `MOTIVO_SIN_SMTP` si la comunidad no tiene emisor
- *   configurado. Nunca `entregado`: el correo no crea notificación que lo pruebe.
+ *   de `entregarPorCorreo`, con el cliente PLANO y fuera de toda transacción, y
+ *   deja su propia fila en `entregas_notificacion`. El registro dice la verdad
+ *   del intento: `enviado` SOLO si el servidor aceptó el mensaje (el motivo
+ *   guarda el id que devolvió), `fallido` con el motivo redactado si se intentó
+ *   y rebotó, y `pendiente` con `MOTIVO_SIN_SMTP` si la comunidad no tiene
+ *   emisor configurado. Nunca `entregado`: el correo no crea notificación que lo
+ *   pruebe.
  * - **Idempotencia**: reentregar el mismo aviso a la misma persona por el mismo
  *   canal devuelve `duplicado` y no escribe nada; el body acepta
  *   `{ reenviar: true }` para un reenvío explícito, que agrega una fila nueva
@@ -36,12 +39,13 @@
  * y la entrega nunca se declara sola.
  */
 import { z } from "zod"
+import type { Prisma } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { logger } from "@/lib/logger"
 import { hoyISO } from "@/lib/date-utils"
 import { generarId } from "@/lib/id-utils"
 import { puede } from "@/lib/authz"
-import { notificar } from "@/lib/entrega/notificar"
+import { avisar, entregarPorCorreo } from "@/lib/entrega/notificar"
 import {
   CANALES_ENTREGA_AVISO,
   type CanalEntregaAviso,
@@ -183,25 +187,116 @@ export async function POST(req: Request, ctx: Ctx): Promise<Response> {
       })
     }
 
-    // La entrega es UNA sola llamada: el puente escribe el aviso in-app, deja
-    // UNA fila por canal en `entregas_notificacion` (S3) y manda el correo por
-    // `planDeCanal`. El cliente es el PLANO: el diálogo SMTP NO corre dentro de
-    // ninguna transacción; la constancia del aviso se escribe después, en una
-    // transacción corta.
+    // La entrega se compone de dos piezas (S3b): el aviso in-app y su fila de
+    // visor entran en la MISMA transacción que la constancia del visor, y el
+    // correo sale después por `entregarPorCorreo`, con el cliente PLANO y fuera
+    // de toda transacción. Si el visor de esta corrida ya estaba registrado, el
+    // correo se cuelga del aviso que ya está en la bandeja.
+    const visorPendiente = pendientes.find((pendiente) => pendiente.canal === "visor")
+    const correoPendiente = pendientes.find((pendiente) => pendiente.canal === "email")
     let notificacionId: string | null = null
-    const planes = new Map<CanalEntregaAviso, { estado: EstadoEntregaCorreo; motivo: string | null }>()
-    if (pendientes.length > 0) {
-      const canalesAEscribir = pendientes.map((pendiente) => pendiente.canal)
-      const visorEscrito = canalesAEscribir.includes("visor")
-      // Si el visor de esta corrida ya estaba registrado, el intento del correo
-      // se cuelga del aviso que ya está en la bandeja: no se escribe uno nuevo.
+
+    const resumenDeCanales = () =>
+      CANALES_ENTREGA_AVISO.map((canal) => resultadoPorCanal.get(canal))
+        .filter((resultado): resultado is ResultadoCanalEntrega => resultado !== undefined)
+        .map((r) =>
+          r.motivo ? `${r.canal}: ${r.estado} (${r.motivo})` : `${r.canal}: ${r.estado}`
+        )
+        .join("; ")
+
+    const descripcionDeLaEntrega = () =>
+      `${reenviar ? "Reenvío explícito de la entrega del" : "Entrega del"} aviso ${aviso.folio} del período ${aviso.periodo} a ${referenciaUnidad} (${personaId}). Canales → ${resumenDeCanales()}.`
+
+    const escribirConstancia = async (
+      tx: Prisma.TransactionClient,
+      pendiente: { canal: CanalEntregaAviso; claveEnvio: string },
+      estado: EstadoEntregaCorreo,
+      motivo: string | null,
+      notificacionDelCanal: string | null
+    ) => {
+      const envioId = generarId("env-avi")
+      await tx.envioAvisoCobro.create({
+        data: {
+          id: envioId,
+          comunidadId: scope.comunidadId,
+          avisoId: aviso.id,
+          personaId,
+          canal: pendiente.canal,
+          estado,
+          fecha,
+          motivo,
+          notificacionId: notificacionDelCanal,
+          claveEnvio: pendiente.claveEnvio,
+          reenvio: reenviar,
+        },
+      })
+      const resultado = resultadoPorCanal.get(pendiente.canal)
+      if (resultado) {
+        resultado.envioId = envioId
+        if (notificacionDelCanal) resultado.notificacionId = notificacionDelCanal
+      }
+    }
+
+    // 1. El aviso in-app, su fila de visor y la constancia del visor, juntos: si
+    //    la constancia falla, el aviso no queda confirmado (S3b).
+    if (visorPendiente) {
+      await prisma.$transaction(async (tx) => {
+        const avisoEscrito = await avisar(tx, {
+          comunidadId: scope.comunidadId,
+          destinatarioRol: "propietario",
+          destinatarioPersonaId: personaId,
+          unidadId: aviso.unidadId,
+          asunto: asuntoNotificacionAviso({
+            folio: aviso.folio,
+            periodo: aviso.periodo,
+          }),
+          cuerpo: cuerpoNotificacionAviso({
+            folio: aviso.folio,
+            periodo: aviso.periodo,
+            referenciaUnidad,
+          }),
+          canal: CANAL_NOTIFICACION_EMAIL_SIMULADO,
+          moduloOrigen: "FI",
+          fecha,
+        })
+        // La respuesta sólo declara la notificación cuando esta corrida
+        // entregó por el visor: el correo no crea notificación que lo pruebe.
+        notificacionId = avisoEscrito.notificacionId
+        resultadoPorCanal.set("visor", {
+          canal: "visor",
+          estado: avisoEscrito.entrega.estado,
+          motivo: avisoEscrito.entrega.motivo ?? undefined,
+          fecha,
+        })
+        await escribirConstancia(
+          tx,
+          visorPendiente,
+          avisoEscrito.entrega.estado,
+          avisoEscrito.entrega.motivo,
+          avisoEscrito.notificacionId
+        )
+        // Sin correo que intentar, el evento cierra la corrida acá: el aviso y
+        // su constancia no se separan.
+        if (!correoPendiente) {
+          await registrarEventoCobranza(
+            scope,
+            reenviar ? "FI_AVISO_ENTREGA_RESENT" : "FI_AVISO_ENTREGADO",
+            aviso.id,
+            descripcionDeLaEntrega(),
+            tx
+          )
+        }
+      })
+    }
+
+    // 2. El correo sale FUERA de toda transacción. Si esta corrida no escribió
+    //    el visor, se cuelga del aviso que ya estaba en la bandeja (o de ninguno,
+    //    si sólo se entrega por correo: `notificacionId: null`, S3b).
+    if (correoPendiente) {
       const notificacionPrevia =
         existentes.find((existente) => existente.canal === "visor")?.notificacionId ?? null
-      const { notificacionId: avisoEscrito, entregas } = await notificar(prisma, {
+      const entrega = await entregarPorCorreo(prisma, {
         comunidadId: scope.comunidadId,
-        destinatarioRol: "propietario",
-        destinatarioPersonaId: personaId,
-        unidadId: aviso.unidadId,
         asunto: asuntoNotificacionAviso({
           folio: aviso.folio,
           periodo: aviso.periodo,
@@ -211,28 +306,33 @@ export async function POST(req: Request, ctx: Ctx): Promise<Response> {
           periodo: aviso.periodo,
           referenciaUnidad,
         }),
-        canal: CANAL_NOTIFICACION_EMAIL_SIMULADO,
-        moduloOrigen: "FI",
-        fecha,
-        canales: canalesAEscribir,
-        notificacionId: visorEscrito ? undefined : notificacionPrevia ?? undefined,
+        destinatarioPersonaId: personaId,
+        notificacionId: visorPendiente ? notificacionId : notificacionPrevia,
       })
-      // La respuesta sólo declara la notificación cuando esta corrida entregó
-      // por el visor: el correo no crea notificación que lo pruebe.
-      if (visorEscrito) notificacionId = avisoEscrito
-      for (const entrega of entregas) {
-        planes.set(entrega.canal, { estado: entrega.estado, motivo: entrega.motivo })
-      }
-    }
-
-    for (const pendiente of pendientes) {
-      const plan = planes.get(pendiente.canal)
-      if (!plan) continue
-      resultadoPorCanal.set(pendiente.canal, {
-        canal: pendiente.canal,
-        estado: plan.estado,
-        motivo: plan.motivo ?? undefined,
+      resultadoPorCanal.set("email", {
+        canal: "email",
+        estado: entrega.estado,
+        motivo: entrega.motivo ?? undefined,
         fecha,
+      })
+
+      // 3. La constancia del correo con su desenlace real y el evento, en una
+      //    transacción corta. El correo nunca crea notificación que lo pruebe.
+      await prisma.$transaction(async (tx) => {
+        await escribirConstancia(
+          tx,
+          correoPendiente,
+          entrega.estado,
+          entrega.motivo,
+          null
+        )
+        await registrarEventoCobranza(
+          scope,
+          reenviar ? "FI_AVISO_ENTREGA_RESENT" : "FI_AVISO_ENTREGADO",
+          aviso.id,
+          descripcionDeLaEntrega(),
+          tx
+        )
       })
     }
 
@@ -240,56 +340,6 @@ export async function POST(req: Request, ctx: Ctx): Promise<Response> {
     const resultados = CANALES_ENTREGA_AVISO.map((canal) => resultadoPorCanal.get(canal)).filter(
       (resultado): resultado is ResultadoCanalEntrega => resultado !== undefined
     )
-
-    if (pendientes.length > 0) {
-      await prisma.$transaction(async (tx) => {
-        for (const pendiente of pendientes) {
-          const envioId = generarId("env-avi")
-          const plan = planes.get(pendiente.canal)
-          if (!plan) continue
-          // El visor se materializa en la notificación del residente: es la
-          // entrega, no un aviso de que hubo entrega. Ya la escribió el puente
-          // con su fila compartida; acá se registra la constancia del aviso.
-          const notificacionDelCanal =
-            pendiente.canal === "visor" ? notificacionId : null
-
-          await tx.envioAvisoCobro.create({
-            data: {
-              id: envioId,
-              comunidadId: scope.comunidadId,
-              avisoId: aviso.id,
-              personaId,
-              canal: pendiente.canal,
-              estado: plan.estado,
-              fecha,
-              motivo: plan.motivo,
-              notificacionId: notificacionDelCanal,
-              claveEnvio: pendiente.claveEnvio,
-              reenvio: reenviar,
-            },
-          })
-
-          const resultado = resultadoPorCanal.get(pendiente.canal)
-          if (resultado) {
-            resultado.envioId = envioId
-            if (notificacionDelCanal) resultado.notificacionId = notificacionDelCanal
-          }
-        }
-
-        const resumenCanales = resultados
-          .map((r) =>
-            r.motivo ? `${r.canal}: ${r.estado} (${r.motivo})` : `${r.canal}: ${r.estado}`
-          )
-          .join("; ")
-        await registrarEventoCobranza(
-          scope,
-          reenviar ? "FI_AVISO_ENTREGA_RESENT" : "FI_AVISO_ENTREGADO",
-          aviso.id,
-          `${reenviar ? "Reenvío explícito de la entrega del" : "Entrega del"} aviso ${aviso.folio} del período ${aviso.periodo} a ${referenciaUnidad} (${personaId}). Canales → ${resumenCanales}.`,
-          tx
-        )
-      })
-    }
 
     // `idempotente` describe lo único que importa para no duplicar: la entrega
     // ya estaba registrada y no se creó ninguna fila nueva.
