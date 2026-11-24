@@ -42,11 +42,19 @@
  *   `ultimoError` guarda el motivo del último desenlace. Un `pendiente` NO
  *   incrementa: sin emisor no hubo intento (no se abrió conexión). Un enviado no
  *   se vuelve a tomar: la fila deja de ser candidata.
+ * - **Un fallo del puente no aborta el lote ni se reintenta a ciegas.** Si
+ *   `entregarPorCorreo` lanza, el desenlace de ESA fila es desconocido —el
+ *   servidor pudo haber aceptado el mensaje antes de que fallara la escritura de
+ *   su constancia—, así que la fila se declara `fallido` con los intentos
+ *   agotados (`MOTIVO_PUENTE_FALLO`) y el lote sigue con la siguiente. Reintentar
+ *   a ciegas podría mandar el mismo correo dos veces, que es peor que una falla
+ *   declarada.
  */
 import type { Prisma } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { generarId } from "@/lib/id-utils"
-import { entregarPorCorreo } from "@/lib/entrega/notificar"
+import { logger } from "@/lib/logger"
+import { entregarPorCorreo, type EntregaPersistida } from "@/lib/entrega/notificar"
 import { idNotificacionEnvioCO } from "@/lib/co-notificacion-envio"
 import { ESTADOS_ENVIO_SMTP, type EstadoEnvioSMTP } from "@/lib/schemas"
 
@@ -65,6 +73,18 @@ export type EstadoColaSalidaCO = EstadoEnvioSMTP
  * sin reintentos infinitos contra un servidor que rebota.
  */
 export const MAX_INTENTOS_COLA_SALIDA_CO = 3
+
+/**
+ * Motivo del intento cuyo desenlace es DESCONOCIDO: el puente lanzó una
+ * excepción (la constancia no se pudo escribir después de que el servidor
+ * aceptó, o la resolución de la dirección falló). No se propaga —una fila no
+ * puede abortar el lote— y no se reintenta solo: el correo pudo haber salido.
+ *
+ * El motivo es una constante a propósito: el texto de una excepción puede traer
+ * direcciones o respuestas del servidor, y el registro de la cola no es un log.
+ */
+export const MOTIVO_PUENTE_FALLO =
+  "El puente de entrega lanzó un error inesperado: no se sabe si el correo salió, así que la fila no se reintenta sola."
 
 /** Lote por omisión y tope por invocación (S6): el proceso nunca drena "todo". */
 export const LOTE_COLA_SALIDA_CO_POR_DEFECTO = 25
@@ -191,6 +211,48 @@ export async function resumenColaSalidaCO(
 }
 
 /**
+ * El desenlace del puente para UNA fila, con el throw contenido (R3-004).
+ *
+ * `entregarPorCorreo` no debería lanzar (S6), pero sí puede: la constancia no se
+ * pudo escribir DESPUÉS de que el servidor aceptó el mensaje, o la resolución de
+ * la dirección falló. Si lanza, la fila de la cola queda `fallido` y con los
+ * intentos agotados —el envío pudo haber ocurrido— y el lote sigue: devuelve
+ * `null` para que el llamador sólo lo cuente. Nunca propaga el error del puente.
+ */
+async function desenlaceDelPuente(
+  comunidadId: string,
+  fila: { id: string; personaId: string; asunto: string; cuerpo: string },
+  notificacionId: string | null
+): Promise<EntregaPersistida | null> {
+  try {
+    return await entregarPorCorreo(prisma, {
+      comunidadId,
+      asunto: fila.asunto,
+      cuerpo: fila.cuerpo,
+      personaDelCorreo: fila.personaId,
+      notificacionId,
+    })
+  } catch (error) {
+    logger.error(
+      { err: error, comunidadId, filaId: fila.id },
+      "[co-cola] el puente de entrega lanzó: la fila queda fallida sin reintento automático"
+    )
+    await prisma.colaSalidaCO.update({
+      where: { id: fila.id },
+      data: {
+        estado: "fallido",
+        // Agotada: el desenlace es desconocido y reintentar podría reenviar un
+        // correo que ya salió (S6 es del aviso, no del correo).
+        intentos: MAX_INTENTOS_COLA_SALIDA_CO,
+        ultimoError: MOTIVO_PUENTE_FALLO,
+        enviadoEn: null,
+      },
+    })
+    return null
+  }
+}
+
+/**
  * Drena UN lote acotado: toma los `pendiente` (y los `fallido` que todavía
  * tienen intentos disponibles), intenta cada envío por el puente único
  * (`entregarPorCorreo`, cliente plano, fuera de toda transacción) y escribe el
@@ -247,14 +309,18 @@ export async function drenarColaSalidaCO(
     const avisoId = idNotificacionEnvioCO(fila.envioId, fila.personaId)
     // S1/S3b: el correo sale por el puente con el cliente PLANO, fuera de toda
     // transacción. La dirección la resuelve la definición única por persona, no
-    // el snapshot de la cola (que queda como lo que se encoló).
-    const entrega = await entregarPorCorreo(prisma, {
-      comunidadId: filtro.comunidadId,
-      asunto: fila.asunto,
-      cuerpo: fila.cuerpo,
-      personaDelCorreo: fila.personaId,
-      notificacionId: conAviso.has(avisoId) ? avisoId : null,
-    })
+    // el snapshot de la cola (que queda como lo que se encoló). Un throw del
+    // puente queda contenido acá: no aborta el lote (R3-004).
+    const entrega = await desenlaceDelPuente(
+      filtro.comunidadId,
+      fila,
+      conAviso.has(avisoId) ? avisoId : null
+    )
+    if (entrega === null) {
+      fallidas += 1
+      ultimoError = MOTIVO_PUENTE_FALLO
+      continue
+    }
     // `pendiente` es una condición de configuración, no un intento: no consume
     // el contador ni fecha un envío que no salió (S3/S4).
     const intentoReal = entrega.estado !== "pendiente"

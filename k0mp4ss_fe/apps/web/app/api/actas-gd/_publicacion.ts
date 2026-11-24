@@ -48,6 +48,16 @@
  * fila de entrega—: la entrega del visor es el hecho que prueba el aviso, así
  * que duplicarla declararía una entrega que no ocurrió. Es la misma disciplina
  * de id determinista que `notificarEnvioCO` (`not-co-<envío>-<persona>`).
+ *
+ * ── Costo dentro de la transacción del acta (R3-001) ────────────────────────
+ *
+ * Los avisos YA escritos se resuelven con UNA consulta por publicación, no con
+ * una por propietario: republicar es el camino que corren el upsert del libro,
+ * la edición y cada firma, y tiene que costar lo mismo con un propietario que
+ * con quinientos. La creación de avisos nuevos sí es un `avisar()` por
+ * propietario (una fila de aviso y una de entrega por persona, por diseño):
+ * batchearla exigiría una API de lote en el puente (`lib/entrega/`), que esta
+ * tarea no puede tocar; por eso lo que se acota es el camino repetido.
  */
 import type { Prisma } from "@prisma/client"
 import { hoyISO } from "@/lib/date-utils"
@@ -101,7 +111,14 @@ export function asuntoAvisoActa(acta: ActaPublicadaMin): string {
 
 /** Cuerpo del aviso: qué acta, de qué sesión y desde cuándo está publicada. */
 export function cuerpoAvisoActa(acta: ActaPublicadaMin, fecha: string): string {
-  return `${identificacionDelActa(acta)}, de la sesión del ${acta.fecha}, quedó publicada el ${fecha}. Está disponible para su consulta en el libro de actas de la comunidad.`
+  // Sin folio la fecha de la sesión es la ÚNICA identificación del acta, y ya
+  // viene dentro de `identificacionDelActa`: agregarle `, de la sesión del
+  // <fecha>` repetiría la misma frase en el aviso (R3-002). Con folio la sesión
+  // sí es un dato aparte y se nombra una vez.
+  const sujeto = acta.folio
+    ? `${identificacionDelActa(acta)}, de la sesión del ${acta.fecha},`
+    : identificacionDelActa(acta)
+  return `${sujeto} quedó publicada el ${fecha}. Está disponible para su consulta en el libro de actas de la comunidad.`
 }
 
 /**
@@ -146,15 +163,27 @@ export async function asegurarAvisosActaPublicada(
   const asunto = asuntoAvisoActa(acta)
   const cuerpo = cuerpoAvisoActa(acta, fecha)
 
+  // R3-001: los avisos ya escritos salen de UNA consulta, no de un `findFirst`
+  // por propietario. Republicar no puede costar O(N) viajes de ida y vuelta
+  // dentro de la transacción del acta: con una audiencia grande eso podía agotar
+  // el timeout de la transacción y revertir el acta —el defecto que R3-001 mide—.
+  const yaAvisados = new Set(
+    (
+      await tx.notificacion.findMany({
+        where: {
+          comunidadId: acta.comunidadId,
+          id: { in: propietarios.map((p) => idAvisoActa(acta.id, p.id)) },
+        },
+        select: { id: true },
+      })
+    ).map((n) => n.id)
+  )
+
   let avisados = 0
   for (const propietario of propietarios) {
     const notificacionId = idAvisoActa(acta.id, propietario.id)
     // El aviso ya existe: republicar no duplica ni el aviso ni su entrega.
-    const existente = await tx.notificacion.findFirst({
-      where: { id: notificacionId, comunidadId: acta.comunidadId },
-      select: { id: true },
-    })
-    if (existente) continue
+    if (yaAvisados.has(notificacionId)) continue
 
     await avisar(tx, {
       notificacionId,

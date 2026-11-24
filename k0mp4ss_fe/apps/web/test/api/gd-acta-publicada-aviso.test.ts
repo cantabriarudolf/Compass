@@ -33,9 +33,15 @@ import { describe, it, expect, beforeAll, afterAll, vi } from "vitest"
 import { NextRequest } from "next/server"
 import { readFileSync, readdirSync } from "node:fs"
 import path from "node:path"
+import type { Prisma, PrismaClient } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { CANAL_NOTIFICACION_EMAIL_SIMULADO } from "@/lib/schemas"
 import { hoyISO } from "@/lib/date-utils"
+import {
+  asegurarAvisosActaPublicada,
+  asuntoAvisoActa,
+  cuerpoAvisoActa,
+} from "@/app/api/actas-gd/_publicacion"
 
 const state = vi.hoisted(() => ({ cookie: "" }))
 vi.mock("next/headers", () => ({
@@ -87,6 +93,40 @@ function actaValida(overrides: Record<string, unknown> = {}): Record<string, unk
   }
 }
 
+/**
+ * Cliente instrumentado: cuenta CADA operación de Prisma que pasa por él.
+ *
+ * `asegurarAvisosActaPublicada` recibe el cliente de la transacción del
+ * llamador, así que este doble se le puede pasar igual que un `tx` real (misma
+ * conexión, mismos delegados) y mide los viajes de ida y vuelta sin mirar la
+ * implementación. Es la forma de fijar que republicar un acta con una audiencia
+ * grande NO cuesta una consulta por propietario (R3-001).
+ */
+function clienteQueCuentaConsultas(): {
+  cliente: Prisma.TransactionClient
+  consultas: () => number
+  reiniciar: () => void
+} {
+  const contador = { consultas: 0 }
+  const cliente = prisma.$extends({
+    query: {
+      $allModels: {
+        async $allOperations({ args, query }) {
+          contador.consultas += 1
+          return query(args)
+        },
+      },
+    },
+  })
+  return {
+    cliente: cliente as unknown as Prisma.TransactionClient,
+    consultas: () => contador.consultas,
+    reiniciar: () => {
+      contador.consultas = 0
+    },
+  }
+}
+
 function ficha(cargo: string): Record<string, unknown> {
   return {
     id: `gda-g-${cargo}`,
@@ -100,6 +140,11 @@ describe("S7 — un acta publicada deja su aviso in-app", () => {
   const comunidad = "gda-comunidad"
   /** Comunidad sin propietarios con cuenta activa: publicar no depende de la audiencia. */
   const comunidadSinPropietarios = "gda-comunidad-sin-owner"
+  /** Comunidad con MUCHOS propietarios: mide que republicar no cueste O(N). */
+  const comunidadMuchos = "gda-comunidad-muchos"
+  const propietariosMuchos = 12
+  /** Las comunidades que el fixture escribe: la limpieza las cubre todas. */
+  const COMUNIDADES_GD = [comunidad, comunidadSinPropietarios, comunidadMuchos]
   const emailAdmin = "gda-admin@test.cl"
   const emailDirectiva = "gda-m1@test.cl"
   const emailAdminSinPropietarios = "gda-admin-sin-owner@test.cl"
@@ -118,6 +163,11 @@ describe("S7 — un acta publicada deja su aviso in-app", () => {
         id: comunidadSinPropietarios,
         nombre: "Comunidad GD Sin Propietarios",
         slug: "gda-comunidad-sin-owner",
+      },
+      {
+        id: comunidadMuchos,
+        nombre: "Comunidad GD Muchos Propietarios",
+        slug: "gda-comunidad-muchos",
       },
     ]) {
       await prisma.comunidad.upsert({ where: { id: c.id }, update: {}, create: c })
@@ -224,6 +274,45 @@ describe("S7 — un acta publicada deja su aviso in-app", () => {
       })
     }
 
+    // Una comunidad con MUCHOS propietarios activos: es el caso que mide el
+    // costo de republicar un acta (R3-001). Vive aparte de `comunidad` para no
+    // tocar las aserciones que fijan el conjunto EXACTO de destinatarios.
+    for (let i = 1; i <= propietariosMuchos; i++) {
+      const n = String(i).padStart(2, "0")
+      const personaId = `gda-muchos-p${n}`
+      await prisma.persona.upsert({
+        where: { id: personaId },
+        update: {},
+        create: {
+          id: personaId,
+          comunidadId: comunidadMuchos,
+          rut: `${String(70_000_000 + i)}-K`,
+          nombreCompleto: `Propietario Masivo ${n}`,
+          nombres: "Propietario",
+          apellidos: `Masivo ${n}`,
+          email: `${personaId}@test.cl`,
+          telefonoMovil: "+56900000001",
+          estadoCuenta: "activa",
+          condicionesEspecialesIds: [],
+          roles: ["propietario"],
+        },
+      })
+      await prisma.vinculoUnidad.upsert({
+        where: { id: `gda-muchos-v${n}` },
+        update: { fechaFin: null },
+        create: {
+          id: `gda-muchos-v${n}`,
+          comunidadId: comunidadMuchos,
+          personaId,
+          unidadId: `gda-muchos-u${n}`,
+          rol: "propietario",
+          fechaInicio: "2024-01-01",
+          fechaFin: null,
+          permiteVerFinanzas: false,
+        } as never,
+      })
+    }
+
     // La directiva vigente es de un solo miembro: una firma completa el quórum
     // de 100% (el camino real de la pantalla para publicar un acta).
     const usuarios: Array<{ id: string; email: string; personaId: string | null }> = [
@@ -251,29 +340,40 @@ describe("S7 — un acta publicada deja su aviso in-app", () => {
     }
   }, 30_000)
 
+  /**
+   * La limpieza del fixture, en un solo lugar: la llaman `afterAll` y el test
+   * que prueba que no deja avisos ni entregas atrás (R3-003). Recibe el cliente
+   * para que el test pueda pasar uno que bloquee el borrado de la comunidad.
+   */
+  async function limpiarComunidadesGD(cliente: PrismaClient = prisma): Promise<void> {
+    state.cookie = ""
+    // R3-003: los avisos y sus entregas se borran EXPLÍCITOS, antes de las
+    // personas y de la comunidad. Sin esto la limpieza depende del borrado en
+    // cascada de `Comunidad`: si un paso anterior falla, el `catch` de
+    // `afterAll` se traga el error y deja filas GD atrás —y el primer test
+    // cuenta TODAS las de la comunidad, así que la corrida siguiente fallaría
+    // por las viejas—. Primero la entrega, que es la que referencia al aviso.
+    await cliente.entregaNotificacion.deleteMany({
+      where: { comunidadId: { in: COMUNIDADES_GD } },
+    })
+    await cliente.notificacion.deleteMany({ where: { comunidadId: { in: COMUNIDADES_GD } } })
+    await cliente.actaGD.deleteMany({ where: { comunidadId: { in: COMUNIDADES_GD } } })
+    await cliente.vinculoUnidad.deleteMany({ where: { comunidadId: { in: COMUNIDADES_GD } } })
+    await cliente.unidad.deleteMany({ where: { comunidadId: { in: COMUNIDADES_GD } } })
+    await cliente.periodoDirectiva.deleteMany({ where: { comunidadId: { in: COMUNIDADES_GD } } })
+    await cliente.persona.deleteMany({ where: { comunidadId: { in: COMUNIDADES_GD } } })
+    await cliente.membresia.deleteMany({ where: { comunidadId: { in: COMUNIDADES_GD } } })
+    for (const email of [emailAdmin, emailDirectiva, emailAdminSinPropietarios]) {
+      await cliente.usuario.delete({ where: { email } }).catch(() => {})
+    }
+    for (const id of COMUNIDADES_GD) {
+      await cliente.comunidad.delete({ where: { id } }).catch(() => {})
+    }
+  }
+
   afterAll(async () => {
     try {
-      state.cookie = ""
-      await prisma.actaGD.deleteMany({
-        where: { comunidadId: { in: [comunidad, comunidadSinPropietarios] } },
-      })
-      await prisma.vinculoUnidad.deleteMany({
-        where: { comunidadId: { in: [comunidad, comunidadSinPropietarios] } },
-      })
-      await prisma.unidad.deleteMany({ where: { comunidadId: comunidad } })
-      await prisma.periodoDirectiva.deleteMany({
-        where: { comunidadId: { in: [comunidad, comunidadSinPropietarios] } },
-      })
-      await prisma.persona.deleteMany({ where: { comunidadId: comunidad } })
-      await prisma.membresia.deleteMany({
-        where: { comunidadId: { in: [comunidad, comunidadSinPropietarios] } },
-      })
-      for (const email of [emailAdmin, emailDirectiva, emailAdminSinPropietarios]) {
-        await prisma.usuario.delete({ where: { email } }).catch(() => {})
-      }
-      for (const id of [comunidad, comunidadSinPropietarios]) {
-        await prisma.comunidad.delete({ where: { id } }).catch(() => {})
-      }
+      await limpiarComunidadesGD()
     } catch {
       // intencional: limpieza best-effort
     }
@@ -501,6 +601,58 @@ describe("S7 — un acta publicada deja su aviso in-app", () => {
     ).toBe(0)
   })
 
+  it("un acta sin folio no repite la sesión en el aviso", () => {
+    // Sin folio, la fecha de la sesión es la ÚNICA identificación del acta: el
+    // cuerpo no puede nombrarla dos veces (R3-002).
+    const sinFolio = {
+      id: "gda-acta-sin-folio",
+      comunidadId: comunidad,
+      fecha: "2026-09-10",
+      estado: "publicada",
+      folio: null,
+      fechaPublicacion: "2026-09-12",
+    }
+    expect(asuntoAvisoActa(sinFolio)).toBe("Acta de la sesión del 2026-09-10 publicada")
+    const cuerpo = cuerpoAvisoActa(sinFolio, "2026-09-12")
+    expect(cuerpo).toBe(
+      "El acta de la sesión del 2026-09-10 quedó publicada el 2026-09-12. Está disponible para su consulta en el libro de actas de la comunidad."
+    )
+    expect(cuerpo.match(/de la sesión del/g)).toHaveLength(1)
+  })
+
+  it("una comunidad con muchos propietarios republica con un número acotado de consultas", async () => {
+    const acta = {
+      id: "gda-acta-muchos",
+      comunidadId: comunidadMuchos,
+      fecha: "2026-10-01",
+      estado: "publicada",
+      folio: "77/2026",
+      fechaPublicacion: "2026-10-02",
+    }
+    const medidor = clienteQueCuentaConsultas()
+
+    expect(await asegurarAvisosActaPublicada(medidor.cliente, acta)).toBe(propietariosMuchos)
+
+    // Republicar es el caso que se repite en CADA PUT/POST de un acta publicada
+    // y en cada firma: con todos los avisos ya escritos no puede costar una
+    // consulta por propietario. El tope es constante —vínculos + personas + UNA
+    // consulta de avisos existentes— y no crece con la audiencia (R3-001).
+    medidor.reiniciar()
+    expect(await asegurarAvisosActaPublicada(medidor.cliente, acta)).toBe(0)
+    expect(medidor.consultas()).toBeLessThanOrEqual(3)
+
+    // Y republicar no escribió nada de más: sigue habiendo UN aviso y UNA
+    // entrega de visor por propietario.
+    expect(
+      await prisma.notificacion.count({
+        where: { comunidadId: comunidadMuchos, moduloOrigen: "GD" },
+      })
+    ).toBe(propietariosMuchos)
+    expect(
+      await prisma.entregaNotificacion.count({ where: { comunidadId: comunidadMuchos } })
+    ).toBe(propietariosMuchos)
+  })
+
   it("la pantalla describe el aviso in-app y ya no afirma un envío formal", () => {
     const fuente = readFileSync(path.join(RAIZ, PANTALLA_DIRECTIVA), "utf8")
     expect(fuente).toContain(FRASE_DE_LA_PANTALLA)
@@ -535,5 +687,75 @@ describe("S7 — un acta publicada deja su aviso in-app", () => {
         "asegurarAvisosActaPublicada("
       )
     }
+  })
+
+  it("la limpieza del fixture borra los avisos y sus entregas sin depender de la cascada", async () => {
+    // Lo que dejaría una corrida anterior si la limpieza se cortara antes de la
+    // comunidad (el `catch` de `afterAll` se traga el error): un aviso GD y su
+    // entrega, sembrados a mano para no depender de las rutas.
+    await prisma.notificacion.create({
+      data: {
+        id: "not-gd-residuo-limpieza",
+        comunidadId: comunidad,
+        destinatarioRol: "residente",
+        destinatarioPersonaId: "gda-p2",
+        asunto: "Residuo de una corrida anterior",
+        cuerpo: "Fila que la limpieza tiene que dejar en cero.",
+        canal: CANAL_NOTIFICACION_EMAIL_SIMULADO,
+        moduloOrigen: "GD",
+        fecha: "2026-09-12",
+      },
+    })
+    await prisma.entregaNotificacion.create({
+      data: {
+        id: "ent-gd-residuo-limpieza",
+        comunidadId: comunidad,
+        notificacionId: "not-gd-residuo-limpieza",
+        canal: "visor",
+        estado: "entregado",
+        intentos: 1,
+      },
+    })
+
+    // La cascada de `Comunidad` NO puede ser la red de la limpieza: se limpia
+    // con un cliente cuyo borrado de comunidad FALLA (lo que en la vida real
+    // hace una FK) y las dos tablas tienen que quedar en cero igual.
+    const sinCascada = prisma.$extends({
+      query: {
+        comunidad: {
+          async delete() {
+            throw new Error("borrado de la comunidad bloqueado")
+          },
+        },
+      },
+    }) as unknown as PrismaClient
+    await limpiarComunidadesGD(sinCascada)
+
+    expect(
+      await prisma.notificacion.count({ where: { comunidadId: { in: COMUNIDADES_GD } } })
+    ).toBe(0)
+    expect(
+      await prisma.entregaNotificacion.count({
+        where: { comunidadId: { in: COMUNIDADES_GD } },
+      })
+    ).toBe(0)
+    // Y la prueba de que las filas NO se fueron por la cascada: las comunidades
+    // siguen ahí (su borrado falló), así que lo que las borró fueron los
+    // `deleteMany` explícitos del fixture.
+    expect(await prisma.comunidad.count({ where: { id: { in: COMUNIDADES_GD } } })).toBe(
+      COMUNIDADES_GD.length
+    )
+
+    // La limpieza normal (la de `afterAll`) no deja nada para la corrida siguiente.
+    await limpiarComunidadesGD()
+    expect(await prisma.comunidad.count({ where: { id: { in: COMUNIDADES_GD } } })).toBe(0)
+    expect(
+      await prisma.notificacion.count({ where: { comunidadId: { in: COMUNIDADES_GD } } })
+    ).toBe(0)
+    expect(
+      await prisma.entregaNotificacion.count({
+        where: { comunidadId: { in: COMUNIDADES_GD } },
+      })
+    ).toBe(0)
   })
 })

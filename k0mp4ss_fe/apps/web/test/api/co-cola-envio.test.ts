@@ -31,6 +31,7 @@ import { prisma } from "@/lib/prisma"
 import { configuracionDefault } from "@/data/admin/configuracion"
 import { VARIABLE_CLAVE_MAESTRA, cifrarSecreto } from "@/lib/cifrado-secretos"
 import { MOTIVO_SIN_SMTP } from "@/lib/entrega-aviso"
+import { MAX_INTENTOS_COLA_SALIDA_CO, MOTIVO_PUENTE_FALLO } from "@/lib/co-cola"
 import { cookieDeUsuario, cuerpoJson, invocarApi } from "../helpers/api-sesion"
 import {
   iniciarServidorSMTPFalso,
@@ -48,6 +49,33 @@ vi.mock("next/headers", () => ({
       )
     ),
 }))
+
+/**
+ * El puente lanza cuando el test lo pide (R3-004).
+ *
+ * `entregarPorCorreo` no debería lanzar (S6), pero SÍ puede: la constancia no se
+ * pudo escribir DESPUÉS de que el servidor aceptó el mensaje, o la resolución de
+ * la dirección falló. Este doble delega en el puente real salvo cuando
+ * `fallosPendientes > 0`, así el resto del archivo mide el camino real y sólo el
+ * test del puente que lanza lo fuerza. El defecto que se fija es del LLAMADOR:
+ * qué hace el drenaje cuando el puente lanza.
+ */
+const puente = vi.hoisted(() => ({ fallosPendientes: 0 }))
+vi.mock("@/lib/entrega/notificar", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@/lib/entrega/notificar")>()
+  return {
+    ...real,
+    entregarPorCorreo: async (
+      ...args: Parameters<typeof real.entregarPorCorreo>
+    ): Promise<Awaited<ReturnType<typeof real.entregarPorCorreo>>> => {
+      if (puente.fallosPendientes > 0) {
+        puente.fallosPendientes -= 1
+        throw new Error("falla forzada: el puente de entrega lanzó")
+      }
+      return real.entregarPorCorreo(...args)
+    },
+  }
+})
 
 const AUTH_SECRET = "test-secret-12345678"
 /** Contraseña inventada del emisor global: texto de prueba, no una credencial. */
@@ -313,6 +341,7 @@ beforeAll(async () => {
 beforeEach(async () => {
   fijarSecreto(undefined)
   fijarClaveMaestra(CLAVE_MAESTRA)
+  puente.fallosPendientes = 0
   await limpiar()
 }, 60_000)
 
@@ -706,6 +735,61 @@ describe("POST /api/co/cola — la entrega compartida del correo (S1/S3)", () =>
     expect(new Set(correo.map((e) => e.notificacionId))).toEqual(
       new Set([`not-co-${ENV}-${P_1}`, `not-co-${ENV}-${P_2}`])
     )
+  })
+
+  it("si el puente lanza, el lote sigue y la fila no se reintenta: no reenvía un correo aceptado", async () => {
+    const servidor = await levantarServidor({ secreto: CLAVE_GLOBAL })
+    await configurarCF(servidor.port, "emisor@ejemplo.test")
+    fijarSecreto(CLAVE_GLOBAL)
+    // Lanza en la PRIMERA fila que toma el drenaje: el lote no puede abortarse
+    // ni esa fila puede quedar sin desenlace (R3-004).
+    puente.fallosPendientes = 1
+
+    await conSesion(usuarios.admin, async () => {
+      expect((await enviarMasivo(envioBody())).status).toBe(201)
+      const res = await drenar()
+      expect(res.status).toBe(200)
+      const resumen = await cuerpoJson<ResumenDrenaje>(res)
+      expect(resumen.tomadas).toBe(2)
+      // La otra fila se mandó igual: un throw no aborta el lote.
+      expect(resumen.enviadas).toBe(1)
+      expect(resumen.fallidas).toBe(1)
+      expect(resumen.pendientes).toBe(0)
+      expect(resumen.ultimoError).toBe(MOTIVO_PUENTE_FALLO)
+    })
+
+    const filas = await filasDe()
+    const fallidasFilas = filas.filter((f) => f.estado === "fallido")
+    const enviadasFilas = filas.filter((f) => f.estado === "enviado")
+    expect(fallidasFilas).toHaveLength(1)
+    expect(enviadasFilas).toHaveLength(1)
+    const fallida = fallidasFilas[0]!
+    const enviada = enviadasFilas[0]!
+    // El desenlace de la fila que falló es DESCONOCIDO (el correo pudo haber
+    // salido antes de que fallara la escritura de su constancia), así que la
+    // fila se declara fallida y agotada: no se reintenta a ciegas.
+    expect(fallida.estado).toBe("fallido")
+    expect(fallida.intentos).toBe(MAX_INTENTOS_COLA_SALIDA_CO)
+    expect(fallida.ultimoError).toBe(MOTIVO_PUENTE_FALLO)
+    expect(fallida.enviadoEn).toBeNull()
+    expect(enviada.intentos).toBe(1)
+    expect(enviada.enviadoEn).not.toBeNull()
+
+    // Un único mensaje salió: el de la fila que no falló.
+    const correoDe = (personaId: string): string => (personaId === P_1 ? EMAIL_1 : EMAIL_2)
+    expect(servidor.mensajes.map((m) => m.to)).toEqual([[correoDe(enviada.personaId)]])
+    expect(await entregasDeCorreo()).toHaveLength(1)
+
+    // Un drenaje posterior no vuelve a mandar nada: ni la fila agotada ni el
+    // correo que ya salió.
+    await conSesion(usuarios.admin, async () => {
+      const segundo = await cuerpoJson<ResumenDrenaje>(await drenar())
+      expect(segundo.tomadas).toBe(0)
+      expect(segundo.enviadas).toBe(0)
+      expect(segundo.pendientes).toBe(0)
+    })
+    expect(servidor.mensajes).toHaveLength(1)
+    expect(await entregasDeCorreo()).toHaveLength(1)
   })
 
   it("un envío aceptado no se reintenta: el segundo drenaje no manda otro correo", async () => {
