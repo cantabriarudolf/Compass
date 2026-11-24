@@ -742,8 +742,14 @@ en el repo: todas las migraciones de `prisma/migrations/` son dialecto SQLite** 
 `add_envio_invitacion`, `add_invitacion_acceso` y las anteriores). El defecto, entonces, no es de la
 unidad nueva: es del carril entero.
 
-**La pregunta que queda para el owner**: `db:prod:deploy` es `prisma migrate deploy` contra
-Postgres, y con estas migraciones ese comando falla antes de crear nada. O producción nunca se armó
-por ahí (y entonces la carpeta `migrations/` sólo sirve al carril SQLite de tests, y hay que decirlo),
-o producción está sin migraciones reproducibles y eso es deuda de primer orden. Hasta decidirlo, la
-convención vigente es `DATETIME` y cualquier migración nueva la sigue.
+**Resuelto el 2026-11-24 midiendo CI, no preguntando**: la carpeta `migrations/` sirve **sólo al
+carril SQLite**. `.github/workflows/ci.yml` aplica `prisma migrate deploy --schema=prisma/schema.sqlite.prisma`
+(líneas 64, 222 y 325) y para la base real usa **`prisma db push`** con `schema.prisma` (`ci.yml:134`,
+`db-prod.yml:175` y `:231`). O sea que producción **no** se arma con migraciones: se arma con `db push`,
+y por eso el dialecto `DATETIME` de las migraciones no bloquea ningún despliegue. El hallazgo del
+revisor es un falso positivo en este repo.
+
+**Lo que sí es deuda**: `k0mp4ss_fe/apps/web/package.json` expone `db:prod:deploy` = `prisma migrate
+deploy` (sin schema, o sea contra Postgres), un comando que **falla** si alguien lo corre. La decisión
+es dejarlo anotado y no tocarlo ahora: quitarlo o corregirlo es otra unidad. La convención vigente
+sigue siendo `DATETIME` para toda migración nueva.
