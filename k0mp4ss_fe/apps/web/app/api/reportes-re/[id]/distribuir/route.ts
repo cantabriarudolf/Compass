@@ -169,6 +169,14 @@ export async function POST(req: Request, ctx: Ctx): Promise<Response> {
     // JUNTOS: si la constancia del informe falla, el aviso se revierte (S3b). No
     // hay red en esta transacción —el visor se prueba con la notificación—, así
     // que el correo se intenta después, con el cliente PLANO.
+    //
+    // R3-001 (revisión nativa, refutado con evidencia): el aviso y la publicación
+    // van en ESTA transacción, así que nadie recibe aviso de una distribución que
+    // no quedó; y un reintento no puede duplicar nada porque el 409 de arriba se
+    // alimenta de los campos que escribe este bloque. El residuo real es otro: si
+    // la transacción final —la que anota el desenlace del correo— falla después de
+    // que el correo salió, el informe queda `publicado` con el visor y las filas
+    // del correo viven en `entregas_notificacion`, recuperables desde ahí.
     const avisoPorPersona = new Map<string, string>()
     await prisma.$transaction(async (tx) => {
       for (const personaId of destinatarios) {
