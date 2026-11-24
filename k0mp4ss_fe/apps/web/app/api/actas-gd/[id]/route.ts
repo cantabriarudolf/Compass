@@ -22,6 +22,7 @@ import {
   limpiarPayloadActa,
   validarAsistentesYPeriodo,
 } from "../route"
+import { asegurarAvisosActaPublicada } from "../_publicacion"
 
 type CtxTipo = { params: Promise<{ id: string }> }
 
@@ -125,9 +126,16 @@ export async function PUT(req: Request, ctx: CtxTipo): Promise<Response> {
     }
 
     // SAFETY: payload blanqueado; Json arrays ya validados por zod.
-    const actualizado = await prisma.actaGD.update({
-      where: { id },
-      data: limpiarPayloadActa(datos) as never,
+    // La edición y el aviso in-app de los propietarios se confirman juntos
+    // (S7): un PUT que deja el acta publicada no puede quedar sin su aviso, y
+    // una edición de un acta ya publicada no duplica el aviso (id determinista).
+    const actualizado = await prisma.$transaction(async (tx) => {
+      const fila = await tx.actaGD.update({
+        where: { id },
+        data: limpiarPayloadActa(datos) as never,
+      })
+      await asegurarAvisosActaPublicada(tx, fila)
+      return fila
     })
     return Response.json(actualizado)
   } catch (e) {

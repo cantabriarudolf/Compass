@@ -468,7 +468,7 @@ export default function DirectivaPage() {
                   </div>
                 )}
                 {acta.estado === "publicada" && (
-                  <p className="text-xs text-muted-foreground">Publicada el {acta.fechaPublicacion} · notificación formal enviada a propietarios (email_simulado) · aviso en CV: pendiente.</p>
+                  <p className="text-xs text-muted-foreground">Publicada el {acta.fechaPublicacion} · notificación en la bandeja de cada propietario con cuenta activa (email_simulado) · aviso en CV: pendiente.</p>
                 )}
               </CardContent>
             </Card>

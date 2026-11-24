@@ -20,6 +20,7 @@ import {
   type FichaGobernanzaMin,
 } from "@/lib/api/gd-guard"
 import { errorActas } from "../../route"
+import { asegurarAvisosActaPublicada } from "../../_publicacion"
 
 const AprobarSchema = z.object({
   personaId: z.string().min(1, "personaId es obligatorio."),
@@ -100,18 +101,25 @@ export async function POST(req: Request, ctx: CtxTipo): Promise<Response> {
       directiva.length > 0 && directiva.every((m) => aprobaciones.includes(m))
 
     // SAFETY: update parcial con campos escalares del modelo; Json ya validado.
-    const actualizada = await prisma.actaGD.update({
-      where: { id },
-      data: {
-        aprobaciones: aprobaciones as never,
-        ...(quorumCompleto
-          ? {
-              estado: "publicada",
-              fechaPublicacion: hoyISO(),
-              avisoCVReferencia: "pendiente",
-            }
-          : {}),
-      },
+    // El acta y el aviso in-app de los propietarios se confirman juntos (S7 y
+    // S3b): la pantalla afirma que la notificación salió, así que la firma no
+    // puede completar el quórum y dejar el acta publicada sin su aviso.
+    const actualizada = await prisma.$transaction(async (tx) => {
+      const fila = await tx.actaGD.update({
+        where: { id },
+        data: {
+          aprobaciones: aprobaciones as never,
+          ...(quorumCompleto
+            ? {
+                estado: "publicada",
+                fechaPublicacion: hoyISO(),
+                avisoCVReferencia: "pendiente",
+              }
+            : {}),
+        },
+      })
+      await asegurarAvisosActaPublicada(tx, fila)
+      return fila
     })
     return Response.json({ acta: actualizada, publicada: quorumCompleto })
   } catch (e) {
