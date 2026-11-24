@@ -17,10 +17,19 @@
  *
  * ── Las reglas que están codificadas acá (no reinterpretar) ─────────────────
  *
- * - **El canal es el real, con la credencial de la comunidad.** Cada envío pasa
- *   por `planDeCanal("email", …)` de `lib/entrega-aviso.ts` —el mismo canal que
- *   ya usan el aviso de cobro (F29) y la bienvenida (F43)—, así que la
- *   credencial la resuelve el emisor (`lib/smtp.ts` → F33) y no este llamador.
+ * - **El envío sale por el puente único (S1).** Cada fila pasa por
+ *   `entregarPorCorreo` de `lib/entrega/notificar.ts`, con el cliente PLANO
+ *   (`prisma`) y nunca dentro de una transacción: el diálogo SMTP no retiene el
+ *   lock de la base (S3b). El puente resuelve la dirección con la definición
+ *   única (`lib/personas-contacto.ts`), aplica `planDeCanal` con la credencial de
+ *   la comunidad (`lib/smtp.ts` → F33) y escribe la constancia compartida
+ *   `entregas_notificacion`, colgada del aviso in-app del envío (S3). Este módulo
+ *   no resuelve credenciales ni habla SMTP.
+ * - **La cola y la constancia dicen lo mismo.** El estado de la fila es el que
+ *   devolvió el puente (`enviado` | `pendiente` | `fallido`) y `enviadoEn` es la
+ *   fecha REAL del envío que registró el puente, `null` en todo lo demás. Un
+ *   intento deja UNA fila compartida; el reintento es otra fila, nunca la misma
+ *   reescrita.
  * - **Sin emisor no se finge un envío (S3).** `planDeCanal` devuelve `pendiente`
  *   con `MOTIVO_SIN_SMTP` sin abrir ninguna conexión: la fila queda en la cola y
  *   la consola la cuenta como pendiente.
@@ -31,12 +40,14 @@
  * - **Reintentar suma, no borra.** Un `fallido` se vuelve a tomar hasta
  *   `MAX_INTENTOS_COLA_SALIDA_CO`; cada intento real incrementa `intentos` y
  *   `ultimoError` guarda el motivo del último desenlace. Un `pendiente` NO
- *   incrementa: sin emisor no hubo intento (no se abrió conexión).
+ *   incrementa: sin emisor no hubo intento (no se abrió conexión). Un enviado no
+ *   se vuelve a tomar: la fila deja de ser candidata.
  */
 import type { Prisma } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { generarId } from "@/lib/id-utils"
-import { planDeCanal } from "@/lib/entrega-aviso"
+import { entregarPorCorreo } from "@/lib/entrega/notificar"
+import { idNotificacionEnvioCO } from "@/lib/co-notificacion-envio"
 import { ESTADOS_ENVIO_SMTP, type EstadoEnvioSMTP } from "@/lib/schemas"
 
 /**
@@ -181,12 +192,20 @@ export async function resumenColaSalidaCO(
 
 /**
  * Drena UN lote acotado: toma los `pendiente` (y los `fallido` que todavía
- * tienen intentos disponibles), intenta cada envío con `planDeCanal("email", …)`
- * y escribe el desenlace real en la fila.
+ * tienen intentos disponibles), intenta cada envío por el puente único
+ * (`entregarPorCorreo`, cliente plano, fuera de toda transacción) y escribe el
+ * desenlace real en la fila Y en la constancia compartida.
  *
  * El lote se procesa de a uno: la conversación SMTP es serial, no se abre una
  * conexión por fila en paralelo. Los envíos ya escritos no se tocan si el
  * llamado se corta a la mitad: cada desenlace se persiste en su fila.
+ *
+ * Orden de las dos escrituras: el puente persiste la constancia del correo y
+ * DESPUÉS se actualiza la fila de la cola, igual que antes (el diálogo SMTP no
+ * puede ir dentro de una transacción, S3b). Si la actualización de la cola
+ * fallara tras un envío aceptado, queda la constancia que lo prueba y la fila
+ * se vuelve a intentar en el drenaje siguiente: es la misma ventana que la cola
+ * ya tenía, ahora con evidencia.
  */
 export async function drenarColaSalidaCO(
   filtro: FiltroColaSalidaCO & { limite?: unknown }
@@ -202,37 +221,59 @@ export async function drenarColaSalidaCO(
     take: limite,
   })
 
+  // El aviso in-app de cada fila lo escribió el alta (`not-co-<envío>-<persona>`).
+  // Se resuelve de una sola consulta por lote: el intento de correo se cuelga de
+  // SU aviso cuando existe y queda con `notificacionId: null` cuando no —el
+  // drenaje no inventa notificaciones ni falla por un aviso ausente (S3b)—.
+  const conAviso = new Set(
+    filas.length === 0
+      ? []
+      : (
+          await prisma.notificacion.findMany({
+            where: {
+              comunidadId: filtro.comunidadId,
+              id: { in: filas.map((f) => idNotificacionEnvioCO(f.envioId, f.personaId)) },
+            },
+            select: { id: true },
+          })
+        ).map((n) => n.id)
+  )
+
   let enviadas = 0
   let fallidas = 0
   let ultimoError: string | null = null
-  const ahora = new Date()
 
   for (const fila of filas) {
-    const plan = await planDeCanal("email", {
-      email: {
-        comunidadId: filtro.comunidadId,
-        destinatario: fila.destinatario,
-        asunto: fila.asunto,
-        cuerpo: fila.cuerpo,
-      },
+    const avisoId = idNotificacionEnvioCO(fila.envioId, fila.personaId)
+    // S1/S3b: el correo sale por el puente con el cliente PLANO, fuera de toda
+    // transacción. La dirección la resuelve la definición única por persona, no
+    // el snapshot de la cola (que queda como lo que se encoló).
+    const entrega = await entregarPorCorreo(prisma, {
+      comunidadId: filtro.comunidadId,
+      asunto: fila.asunto,
+      cuerpo: fila.cuerpo,
+      personaDelCorreo: fila.personaId,
+      notificacionId: conAviso.has(avisoId) ? avisoId : null,
     })
     // `pendiente` es una condición de configuración, no un intento: no consume
     // el contador ni fecha un envío que no salió (S3/S4).
-    const intentoReal = plan.estado !== "pendiente"
+    const intentoReal = entrega.estado !== "pendiente"
     await prisma.colaSalidaCO.update({
       where: { id: fila.id },
       data: {
-        estado: plan.estado,
+        estado: entrega.estado,
         ...(intentoReal ? { intentos: { increment: 1 } } : {}),
-        ultimoError: plan.motivo,
-        enviadoEn: plan.estado === "enviado" ? ahora : null,
+        ultimoError: entrega.motivo,
+        // La fecha del envío es la que registró el puente: `null` salvo
+        // `enviado` (no se fecha un correo que no salió).
+        enviadoEn: entrega.enviadoEn,
       },
     })
-    if (plan.estado === "enviado") {
+    if (entrega.estado === "enviado") {
       enviadas += 1
-    } else if (plan.estado === "fallido") {
+    } else if (entrega.estado === "fallido") {
       fallidas += 1
-      ultimoError = plan.motivo
+      ultimoError = entrega.motivo
     }
   }
 

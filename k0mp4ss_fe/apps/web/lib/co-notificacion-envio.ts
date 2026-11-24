@@ -7,9 +7,17 @@
  * la bandeja del residente nunca recibía el mensaje masivo, así que el envío existía y
  * no llegaba.
  *
+ * Desde T5 (`odd/tasks/un-camino-de-entrega.md`, S1 y S3) el aviso no se escribe
+ * acá: entra por el puente único `avisar()` (`lib/entrega/notificar.ts`), que escribe
+ * la `Notificacion` Y su constancia de entrega `visor`/`entregado` en
+ * `entregas_notificacion`. Este módulo conserva lo que es delgada propiedad de CO —el
+ * id determinista `not-co-<envío>-<persona>` y el rol de bandeja que sale de los
+ * roles REALES de la persona— y delega el resto.
+ *
  * Corre **dentro de la transacción del alta** (`POST /api/co/envios`), junto al
  * snapshot de destinatarios y a la cola: o queda el envío con sus notificaciones, o no
- * queda nada.
+ * queda nada (S3b: el aviso no tiene red de por medio, así que puede vivir en la
+ * transacción del llamador; el correo sale después, por la cola).
  *
  * El `destinatarioRol` sale de los roles REALES de la persona (`Persona.roles`), no de
  * una constante: es lo que `lib/api/notificaciones-scope.ts` usa cuando la notificación
@@ -18,6 +26,7 @@
  * `residente` y `propietario`.
  */
 import type { Prisma } from "@prisma/client"
+import { avisar } from "@/lib/entrega/notificar"
 import { CANAL_NOTIFICACION_EMAIL_SIMULADO } from "@/lib/schemas"
 
 /** Roles de `Persona.roles` que la bandeja reconoce, en orden de prioridad. */
@@ -47,9 +56,24 @@ export interface EnvioAVisar {
 }
 
 /**
- * Crea (idempotente) una notificación por destinatario. El id es determinista —
- * `not-co-<envío>-<persona>`—, así que reenviar o reeditar el mismo envío no duplica
- * el mensaje en la bandeja de nadie.
+ * Id determinista del aviso de un envío a una persona: `not-co-<envío>-<persona>`.
+ *
+ * La disciplina es la misma que `notificarEnvioCO` ya tenía y que
+ * `asegurarAvisosActaPublicada` (GD) copió: reenviar o reeditar el mismo envío no
+ * duplica el mensaje en la bandeja de nadie. El drenaje de la cola usa este mismo id
+ * para colgar el intento de correo del aviso que lo anuncia (S3).
+ */
+export function idNotificacionEnvioCO(envioId: string, personaId: string): string {
+  return `not-co-${envioId}-${personaId}`
+}
+
+/**
+ * Crea (idempotente) una notificación por destinatario, por el puente único.
+ *
+ * El id determinista es la idempotencia: si el aviso ya existe, acá no se escribe
+ * NADA —ni la notificación ni una segunda constancia de visor, que declararía una
+ * entrega que no ocurrió—. La notificación es el mensaje original, no una copia del
+ * estado actual del envío.
  */
 export async function notificarEnvioCO(
   tx: Prisma.TransactionClient,
@@ -66,13 +90,16 @@ export async function notificarEnvioCO(
 
   let aseguradas = 0
   for (const destinatario of datos.destinatarios) {
-    await tx.notificacion.upsert({
-      where: { id: `not-co-${datos.envioId}-${destinatario.personaId}` },
-      // Ya existe (mismo envío, misma persona): no se toca. La notificación es el
-      // mensaje original, no una copia del estado actual del envío.
-      update: {},
-      create: {
-        id: `not-co-${datos.envioId}-${destinatario.personaId}`,
+    const notificacionId = idNotificacionEnvioCO(datos.envioId, destinatario.personaId)
+    const existente = await tx.notificacion.findFirst({
+      where: { id: notificacionId, comunidadId: datos.comunidadId },
+      select: { id: true },
+    })
+    if (!existente) {
+      // S1: el aviso y su fila de visor salen por el puente, dentro de la
+      // transacción del alta (S3b: no hay red de por medio).
+      await avisar(tx, {
+        notificacionId,
         comunidadId: datos.comunidadId,
         destinatarioRol: rolPorPersona.get(destinatario.personaId) ?? "residente",
         destinatarioPersonaId: destinatario.personaId,
@@ -83,8 +110,8 @@ export async function notificarEnvioCO(
         moduloOrigen: "CO",
         fecha: datos.fecha,
         leida: false,
-      },
-    })
+      })
+    }
     aseguradas++
   }
   return aseguradas
