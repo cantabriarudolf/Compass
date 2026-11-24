@@ -16,12 +16,32 @@
  * finalidad): el aviso va SÓLO al destinatario. En la bandeja el residente ve
  * lo suyo por persona, la difusión de rol sin unidad y la difusión de rol de
  * sus unidades vinculas vigentes; NUNCA la de otra unidad. administrador,
- * comité, conserjería y mantención conservan su visibilidad histórica.
+ * conserjería y mantención conservan su visibilidad histórica.
+ *
+ * S1 de `odd/tasks/saldar-f45-f48.md`: el MISMO evento operativo sale por
+ * correo por el puente (`lib/entrega/notificar.ts`) y deja su constancia en
+ * `entregas_notificacion`. Las dos compuertas se respetan igual que hoy: con la
+ * compuerta apagada no se escribe NADA (ni aviso, ni entrega), y sin correo
+ * cargado la entrega queda `fallido` con `MOTIVO_SIN_DESTINATARIO` mientras el
+ * aviso in-app se escribe igual. El transporte SMTP es el único doble: el
+ * puente y la política canal→estado (`planDeCanal`) corren de verdad.
  */
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from "vitest"
 import { NextRequest } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { CANAL_NOTIFICACION_EMAIL_SIMULADO } from "@/lib/schemas"
+import { MOTIVO_SIN_DESTINATARIO } from "@/lib/entrega-aviso"
+
+/**
+ * El doble del transporte (mismo criterio que `test/entrega/notificar.test.ts`):
+ * `planDeCanal` sigue siendo el real, así que el motivo que se persiste es el
+ * del catálogo. Acá sólo se decide qué responde el servidor de correo.
+ */
+const transporte = vi.hoisted(() => ({ enviar: vi.fn() }))
+vi.mock("@/lib/smtp", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@/lib/smtp")>()
+  return { ...real, enviarCorreoComunidad: transporte.enviar }
+})
 
 const state = vi.hoisted(() => ({ cookie: "" }))
 vi.mock("next/headers", () => ({
@@ -42,6 +62,13 @@ const EMAIL_CONSERJERIA = "pe-av-conserjeria@test.cl"
 const EMAIL_ADMIN = "pe-av-admin@test.cl"
 const EMAIL_RESIDENTE_A = "pe-av-residente-a@test.cl"
 const EMAIL_RESIDENTE_B = "pe-av-residente-b@test.cl"
+/**
+ * Correo del maestro de personas, DISTINTO del de la membresía a propósito: el
+ * aviso lo resuelve `correosDePersonas` sobre la persona, no sobre el usuario.
+ */
+const EMAIL_PERSONA_A = "pe-av-persona-a@test.cl"
+/** Mensaje que el doble del transporte devuelve cuando el servidor acepta. */
+const MENSAJE_SMTP = "pe-av-smtp-1"
 
 /** Unidades ficticias: `Notificacion.unidadId` y `vinculos.unidadId` no tienen FK estricta. */
 const UNIDAD_A = "pe-av-unidad-a"
@@ -49,6 +76,8 @@ const UNIDAD_B = "pe-av-unidad-b"
 
 const PERSONA_A = "pe-av-persona-a"
 const PERSONA_B = "pe-av-persona-b"
+/** Residente del maestro SIN dirección cargada (cadena vacía, como lo declara la base). */
+const PERSONA_SIN_CORREO = "pe-av-persona-sin-correo"
 
 const FECHA = "2026-10-25"
 
@@ -99,6 +128,38 @@ const encomiendaBase = (overrides: Record<string, unknown> = {}): Record<string,
   ...overrides,
 })
 
+/**
+ * Personas del maestro que la suite necesita: la que tiene dirección cargada y
+ * la que no (cadena vacía, que es como el maestro declara «sin correo»). De acá
+ * sale la dirección del correo (S1), nunca de la membresía del usuario.
+ */
+const personasDelMaestro = [
+  { id: PERSONA_A, email: EMAIL_PERSONA_A, rut: "20.000.001-0" },
+  { id: PERSONA_SIN_CORREO, email: "", rut: "20.000.002-9" },
+] as const
+
+/** Deja el maestro en el estado que la suite espera (borra y recrea). */
+const sembrarPersonas = async (): Promise<void> => {
+  await prisma.persona.deleteMany({ where: { comunidadId: COMUNIDAD } })
+  for (const persona of personasDelMaestro) {
+    await prisma.persona.create({
+      data: {
+        id: persona.id,
+        comunidadId: COMUNIDAD,
+        rut: persona.rut,
+        nombreCompleto: `Persona ${persona.id}`,
+        nombres: "Persona",
+        apellidos: persona.id,
+        email: persona.email,
+        telefonoMovil: "+56900000000",
+        estadoCuenta: "activa",
+        condicionesEspecialesIds: [],
+        roles: ["propietario"],
+      },
+    })
+  }
+}
+
 /** Cuenta las notificaciones de aviso PE de la comunidad de prueba. */
 const avisosDe = (asunto: string, overrides: Record<string, unknown> = {}) =>
   prisma.notificacion.findMany({
@@ -107,16 +168,19 @@ const avisosDe = (asunto: string, overrides: Record<string, unknown> = {}) =>
   })
 
 /**
- * Filas de entrega del aviso (S3 del camino único): una por canal intentado.
- * El aviso in-app de PE entrega por el visor, así que se espera UNA fila
- * `visor`/`entregado` colgada de la notificación.
+ * Filas de entrega del aviso (S3 del camino único y S1 de `saldar-f45-f48`):
+ * una por canal intentado. El aviso in-app de PE entrega por el visor y —desde
+ * S1— además intenta el correo del residente destinatario: se esperan DOS filas
+ * colgadas de la MISMA notificación, `visor` y `email`.
  */
-const entregaDe = async (notificacionId: string) => {
+const entregasDe = async (notificacionId: string) => {
   const entregas = await prisma.entregaNotificacion.findMany({
     where: { notificacionId },
   })
-  expect(entregas).toHaveLength(1)
-  expect(entregas[0]).toMatchObject({
+  expect(entregas).toHaveLength(2)
+  const visor = entregas.find((entrega) => entrega.canal === "visor")
+  const email = entregas.find((entrega) => entrega.canal === "email")
+  expect(visor).toMatchObject({
     comunidadId: COMUNIDAD,
     notificacionId,
     canal: "visor",
@@ -125,7 +189,8 @@ const entregaDe = async (notificacionId: string) => {
     intentos: 1,
     enviadoEn: null,
   })
-  return entregas[0]!
+  expect(email).toBeDefined()
+  return { visor: visor!, email: email! }
 }
 
 /** Nada escrito: ni aviso in-app ni fila de entrega (el early return se respeta). */
@@ -178,12 +243,18 @@ beforeAll(async () => {
       },
     })
   }
+  // Personas del maestro: `PERSONA_A` tiene dirección y `PERSONA_SIN_CORREO` no.
+  await sembrarPersonas()
 }, 60_000)
 
 beforeEach(async () => {
+  transporte.enviar.mockReset()
+  transporte.enviar.mockResolvedValue({ estado: "enviado", messageId: MENSAJE_SMTP })
   await prisma.notificacion.deleteMany({ where: { comunidadId: COMUNIDAD } })
   await prisma.entregaNotificacion.deleteMany({ where: { comunidadId: COMUNIDAD } })
   await prisma.configuracionGlobal.deleteMany({ where: { comunidadId: COMUNIDAD } })
+  // El maestro se recrea desde cero: un test no puede heredar la dirección de otro.
+  await sembrarPersonas()
 })
 
 afterAll(async () => {
@@ -193,6 +264,7 @@ afterAll(async () => {
     await prisma.entregaNotificacion.deleteMany({ where: { comunidadId: COMUNIDAD } })
     await prisma.configuracionGlobal.deleteMany({ where: { comunidadId: COMUNIDAD } })
     await prisma.vinculoUnidad.deleteMany({ where: { id: { startsWith: "pe-av-vinculo-" } } })
+    await prisma.persona.deleteMany({ where: { comunidadId: COMUNIDAD } })
     await prisma.membresia.deleteMany({ where: { comunidadId: COMUNIDAD } })
     await prisma.usuario.deleteMany({
       where: { id: { in: ["pe-av-user-conserjeria", "pe-av-user-admin", "pe-av-user-res-a", "pe-av-user-res-b"] } },
@@ -253,7 +325,7 @@ describe("POST /api/pe/bitacora-visitas — aviso al residente (F13)", () => {
         leida: false,
         fechaLectura: null,
       })
-      await entregaDe(aviso!.id)
+      await entregasDe(aviso!.id)
     })
   })
 
@@ -352,7 +424,7 @@ describe("POST /api/pe/encomiendas — aviso al residente (F13)", () => {
         leida: false,
         fechaLectura: null,
       })
-      await entregaDe(aviso!.id)
+      await entregasDe(aviso!.id)
     })
   })
 
@@ -560,5 +632,178 @@ describe("PUT /api/pe/bitacora-visitas/[id] — el aviso sale cuando la visita e
     // 3) Un reintento idéntico del PUT no repite el aviso (dedup por estado previo).
     await respuestaPut("14:30")
     expect(await avisosDe("Visita recibida: Agendada Aviso")).toHaveLength(1)
+  })
+})
+
+// --- S1: el aviso operativo sale por correo -----------------------------------
+
+/**
+ * S1 de `odd/tasks/saldar-f45-f48.md`: el mismísimo evento operativo que escribe
+ * el aviso in-app sale por correo por el puente, con su constancia en
+ * `entregas_notificacion`. La compuerta de CF (`notificarRegistroVisitas` /
+ * `notificarEncomiendas`) sigue gobernando el evento COMPLETO —con la compuerta
+ * apagada no se escribe nada, ni aviso ni entrega—, y sin dirección cargada el
+ * aviso in-app se escribe igual mientras la entrega se declara `fallido`.
+ */
+describe("S1 — visitas y encomiendas notifican al residente por el puente", () => {
+  it("visita con correo del residente → el correo sale `enviado` y su fila cuelga del aviso", async () => {
+    const asunto = "Visita recibida: Mario Pérez"
+    const cuerpo = "Mario Pérez fue ingresada por conserjería a las 14:30."
+
+    await conSesion(EMAIL_CONSERJERIA, async () => {
+      const res = await POSTJson(
+        (await visitas()).POST,
+        "/api/pe/bitacora-visitas",
+        visitaBase()
+      )
+      expect(res.status).toBe(201)
+    })
+
+    const avisos = await avisosDe(asunto)
+    expect(avisos).toHaveLength(1)
+    const aviso = avisos[0]!
+
+    // El puente llamó al emisor con la dirección del MAESTRO de personas y con
+    // el mismo asunto y cuerpo del aviso in-app: un evento, dos canales.
+    expect(transporte.enviar).toHaveBeenCalledTimes(1)
+    expect(transporte.enviar).toHaveBeenCalledWith(COMUNIDAD, {
+      to: EMAIL_PERSONA_A,
+      subject: asunto,
+      text: cuerpo,
+    })
+
+    // Dos filas, una por canal, y las dos colgadas de la MISMA notificación.
+    expect(
+      await prisma.entregaNotificacion.count({ where: { comunidadId: COMUNIDAD } })
+    ).toBe(2)
+    const { email } = await entregasDe(aviso.id)
+    expect(email).toMatchObject({
+      comunidadId: COMUNIDAD,
+      notificacionId: aviso.id,
+      canal: "email",
+      estado: "enviado",
+      motivo: `Aceptado por el servidor SMTP (id ${MENSAJE_SMTP}).`,
+      intentos: 1,
+    })
+    expect(email.enviadoEn).toBeInstanceOf(Date)
+  })
+
+  it("encomienda con correo del residente → el correo sale `enviado` y su fila cuelga del aviso", async () => {
+    const asunto = "Encomienda recibida en conserjería"
+    const cuerpo = `Tiene una encomienda recibida el ${FECHA}. Retírela presentando su identificación.`
+
+    await conSesion(EMAIL_CONSERJERIA, async () => {
+      const res = await POSTJson(
+        (await encomiendas()).POST,
+        "/api/pe/encomiendas",
+        encomiendaBase()
+      )
+      expect(res.status).toBe(201)
+    })
+
+    const avisos = await avisosDe(asunto)
+    expect(avisos).toHaveLength(1)
+    const aviso = avisos[0]!
+
+    expect(transporte.enviar).toHaveBeenCalledTimes(1)
+    expect(transporte.enviar).toHaveBeenCalledWith(COMUNIDAD, {
+      to: EMAIL_PERSONA_A,
+      subject: asunto,
+      text: cuerpo,
+    })
+
+    expect(
+      await prisma.entregaNotificacion.count({ where: { comunidadId: COMUNIDAD } })
+    ).toBe(2)
+    const { email } = await entregasDe(aviso.id)
+    expect(email).toMatchObject({
+      comunidadId: COMUNIDAD,
+      notificacionId: aviso.id,
+      canal: "email",
+      estado: "enviado",
+      motivo: `Aceptado por el servidor SMTP (id ${MENSAJE_SMTP}).`,
+      intentos: 1,
+    })
+    expect(email.enviadoEn).toBeInstanceOf(Date)
+  })
+
+  it("visita sin correo del residente → la entrega queda `fallido` y el aviso in-app se escribe igual", async () => {
+    await conSesion(EMAIL_CONSERJERIA, async () => {
+      const res = await POSTJson(
+        (await visitas()).POST,
+        "/api/pe/bitacora-visitas",
+        visitaBase({ destinoPersonaId: PERSONA_SIN_CORREO, nombre: "Sin Correo" })
+      )
+      expect(res.status).toBe(201)
+    })
+
+    // El aviso in-app no se pierde por el correo (S6 del puente).
+    const avisos = await avisosDe("Visita recibida: Sin Correo")
+    expect(avisos).toHaveLength(1)
+    const aviso = avisos[0]!
+    expect(aviso).toMatchObject({
+      destinatarioPersonaId: PERSONA_SIN_CORREO,
+      unidadId: UNIDAD_A,
+      canal: CANAL_NOTIFICACION_EMAIL_SIMULADO,
+      moduloOrigen: "PE",
+      cuerpo: "Sin Correo fue ingresada por conserjería a las 14:30.",
+      leida: false,
+      fechaLectura: null,
+    })
+
+    // Sin dirección no se abre ninguna conexión y el motivo es el del catálogo.
+    expect(transporte.enviar).not.toHaveBeenCalled()
+    expect(
+      await prisma.entregaNotificacion.count({ where: { comunidadId: COMUNIDAD } })
+    ).toBe(2)
+    const { email } = await entregasDe(aviso.id)
+    expect(email).toMatchObject({
+      comunidadId: COMUNIDAD,
+      notificacionId: aviso.id,
+      canal: "email",
+      estado: "fallido",
+      motivo: MOTIVO_SIN_DESTINATARIO,
+      intentos: 1,
+      enviadoEn: null,
+    })
+  })
+
+  it("encomienda sin correo del residente → la entrega queda `fallido` y el aviso in-app se escribe igual", async () => {
+    await conSesion(EMAIL_CONSERJERIA, async () => {
+      const res = await POSTJson(
+        (await encomiendas()).POST,
+        "/api/pe/encomiendas",
+        encomiendaBase({ destinatarioPersonaId: PERSONA_SIN_CORREO })
+      )
+      expect(res.status).toBe(201)
+    })
+
+    const avisos = await avisosDe("Encomienda recibida en conserjería")
+    expect(avisos).toHaveLength(1)
+    const aviso = avisos[0]!
+    expect(aviso).toMatchObject({
+      destinatarioPersonaId: PERSONA_SIN_CORREO,
+      unidadId: UNIDAD_A,
+      canal: CANAL_NOTIFICACION_EMAIL_SIMULADO,
+      moduloOrigen: "PE",
+      cuerpo: `Tiene una encomienda recibida el ${FECHA}. Retírela presentando su identificación.`,
+      leida: false,
+      fechaLectura: null,
+    })
+
+    expect(transporte.enviar).not.toHaveBeenCalled()
+    expect(
+      await prisma.entregaNotificacion.count({ where: { comunidadId: COMUNIDAD } })
+    ).toBe(2)
+    const { email } = await entregasDe(aviso.id)
+    expect(email).toMatchObject({
+      comunidadId: COMUNIDAD,
+      notificacionId: aviso.id,
+      canal: "email",
+      estado: "fallido",
+      motivo: MOTIVO_SIN_DESTINATARIO,
+      intentos: 1,
+      enviadoEn: null,
+    })
   })
 })
