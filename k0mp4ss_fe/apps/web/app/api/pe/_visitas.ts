@@ -15,9 +15,10 @@
  * corresponde (una visita ya `ingresada` no vuelve a emitir ni a avisar).
  */
 import { prisma } from "@/lib/prisma"
-import { generarId } from "@/lib/id-utils"
 import type { ComunidadScope } from "@/lib/api/with-comunidad-scope"
 import { registrarEventoPE } from "@/app/api/pe/_acciones"
+import { avisar } from "@/lib/entrega/notificar"
+import { CANAL_NOTIFICACION_EMAIL_SIMULADO } from "@/lib/schemas"
 
 /** Campos de la fila que estos efectos necesitan. */
 export interface FilaVisita {
@@ -71,17 +72,19 @@ export async function avisarResidenteVisita(
     select: { notificarRegistroVisitas: true },
   })
   if (cfg?.notificarRegistroVisitas === false) return
-  await prisma.notificacion.create({
-    data: {
-      id: generarId("not"),
+  // Camino único (S2): el canal se declara acá, no se hereda del `@default` de
+  // Prisma, y la entrega al visor queda persistida junto al aviso.
+  await prisma.$transaction((tx) =>
+    avisar(tx, {
       comunidadId: scope.comunidadId,
       destinatarioRol: "residente",
       destinatarioPersonaId: fila.destinoPersonaId,
       unidadId: fila.unidadId ?? null,
       asunto: `Visita recibida: ${fila.nombre}`,
       cuerpo: `${fila.nombre} fue ingresada por conserjería a las ${hora}.`,
+      canal: CANAL_NOTIFICACION_EMAIL_SIMULADO,
       moduloOrigen: "PE",
       fecha: fila.fecha,
-    },
-  })
+    })
+  )
 }

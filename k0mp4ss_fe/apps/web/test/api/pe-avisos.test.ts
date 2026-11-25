@@ -21,6 +21,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from "vitest"
 import { NextRequest } from "next/server"
 import { prisma } from "@/lib/prisma"
+import { CANAL_NOTIFICACION_EMAIL_SIMULADO } from "@/lib/schemas"
 
 const state = vi.hoisted(() => ({ cookie: "" }))
 vi.mock("next/headers", () => ({
@@ -105,6 +106,36 @@ const avisosDe = (asunto: string, overrides: Record<string, unknown> = {}) =>
     orderBy: { createdAt: "asc" },
   })
 
+/**
+ * Filas de entrega del aviso (S3 del camino único): una por canal intentado.
+ * El aviso in-app de PE entrega por el visor, así que se espera UNA fila
+ * `visor`/`entregado` colgada de la notificación.
+ */
+const entregaDe = async (notificacionId: string) => {
+  const entregas = await prisma.entregaNotificacion.findMany({
+    where: { notificacionId },
+  })
+  expect(entregas).toHaveLength(1)
+  expect(entregas[0]).toMatchObject({
+    comunidadId: COMUNIDAD,
+    notificacionId,
+    canal: "visor",
+    estado: "entregado",
+    motivo: null,
+    intentos: 1,
+    enviadoEn: null,
+  })
+  return entregas[0]!
+}
+
+/** Nada escrito: ni aviso in-app ni fila de entrega (el early return se respeta). */
+const nadaEscrito = async (): Promise<void> => {
+  expect(await prisma.notificacion.count({ where: { comunidadId: COMUNIDAD } })).toBe(0)
+  expect(
+    await prisma.entregaNotificacion.count({ where: { comunidadId: COMUNIDAD } })
+  ).toBe(0)
+}
+
 beforeAll(async () => {
   process.env.AUTH_SECRET = AUTH_SECRET
 
@@ -151,6 +182,7 @@ beforeAll(async () => {
 
 beforeEach(async () => {
   await prisma.notificacion.deleteMany({ where: { comunidadId: COMUNIDAD } })
+  await prisma.entregaNotificacion.deleteMany({ where: { comunidadId: COMUNIDAD } })
   await prisma.configuracionGlobal.deleteMany({ where: { comunidadId: COMUNIDAD } })
 })
 
@@ -158,6 +190,7 @@ afterAll(async () => {
   try {
     state.cookie = ""
     await prisma.notificacion.deleteMany({ where: { comunidadId: COMUNIDAD } })
+    await prisma.entregaNotificacion.deleteMany({ where: { comunidadId: COMUNIDAD } })
     await prisma.configuracionGlobal.deleteMany({ where: { comunidadId: COMUNIDAD } })
     await prisma.vinculoUnidad.deleteMany({ where: { id: { startsWith: "pe-av-vinculo-" } } })
     await prisma.membresia.deleteMany({ where: { comunidadId: COMUNIDAD } })
@@ -203,6 +236,24 @@ describe("POST /api/pe/bitacora-visitas — aviso al residente (F13)", () => {
       expect(aviso?.moduloOrigen).toBe("PE")
       expect(aviso?.fecha).toBe(FECHA)
       expect(aviso?.cuerpo).toBe("Mario Pérez fue ingresada por conserjería a las 14:30.")
+
+      // El camino único (S2/S3) no cambia NINGÚN campo del aviso: el canal se
+      // declara en el llamador —el valor que antes ponía el default de Prisma—
+      // y la entrega al visor queda persistida junto al aviso.
+      expect(aviso).toMatchObject({
+        comunidadId: COMUNIDAD,
+        destinatarioRol: "residente",
+        destinatarioPersonaId: PERSONA_A,
+        unidadId: UNIDAD_A,
+        asunto: "Visita recibida: Mario Pérez",
+        cuerpo: "Mario Pérez fue ingresada por conserjería a las 14:30.",
+        canal: CANAL_NOTIFICACION_EMAIL_SIMULADO,
+        moduloOrigen: "PE",
+        fecha: FECHA,
+        leida: false,
+        fechaLectura: null,
+      })
+      await entregaDe(aviso!.id)
     })
   })
 
@@ -215,6 +266,7 @@ describe("POST /api/pe/bitacora-visitas — aviso al residente (F13)", () => {
       )
       expect(res.status).toBe(201)
       expect(await avisosDe("Visita recibida: Sin Destino")).toHaveLength(0)
+      await nadaEscrito()
     })
   })
 
@@ -257,6 +309,8 @@ describe("POST /api/pe/bitacora-visitas — aviso al residente (F13)", () => {
       )
       expect(res.status).toBe(201)
       expect(await avisosDe("Visita recibida: CF Apagado")).toHaveLength(0)
+      // La compuerta apagada no escribe NADA: ni aviso ni constancia de entrega.
+      await nadaEscrito()
     })
   })
 })
@@ -282,6 +336,23 @@ describe("POST /api/pe/encomiendas — aviso al residente (F13)", () => {
       expect(aviso?.cuerpo).toBe(
         `Tiene una encomienda recibida el ${FECHA}. Retírela presentando su identificación.`
       )
+
+      // Mismo aviso, campo por campo, con el canal declarado (S2) y su entrega
+      // al visor persistida (S3).
+      expect(aviso).toMatchObject({
+        comunidadId: COMUNIDAD,
+        destinatarioRol: "residente",
+        destinatarioPersonaId: PERSONA_A,
+        unidadId: UNIDAD_A,
+        asunto: "Encomienda recibida en conserjería",
+        cuerpo: `Tiene una encomienda recibida el ${FECHA}. Retírela presentando su identificación.`,
+        canal: CANAL_NOTIFICACION_EMAIL_SIMULADO,
+        moduloOrigen: "PE",
+        fecha: FECHA,
+        leida: false,
+        fechaLectura: null,
+      })
+      await entregaDe(aviso!.id)
     })
   })
 
@@ -294,6 +365,7 @@ describe("POST /api/pe/encomiendas — aviso al residente (F13)", () => {
       )
       expect(res.status).toBe(201)
       expect(await avisosDe("Encomienda recibida en conserjería")).toHaveLength(0)
+      await nadaEscrito()
     })
   })
 
@@ -336,6 +408,8 @@ describe("POST /api/pe/encomiendas — aviso al residente (F13)", () => {
       )
       expect(res.status).toBe(201)
       expect(await avisosDe("Encomienda recibida en conserjería")).toHaveLength(0)
+      // La compuerta apagada no escribe NADA: ni aviso ni constancia de entrega.
+      await nadaEscrito()
     })
   })
 })

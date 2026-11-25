@@ -28,6 +28,7 @@ import {
 } from "@/lib/api/gd-guard"
 import { personaIdDelUsuarioDb } from "@/lib/api/sesion-persona"
 import { anioDeFecha, siguienteFolioActa } from "./_folio"
+import { asegurarAvisosActaPublicada } from "./_publicacion"
 
 /** Intentos de asignación de folio antes de rendirse ante colisiones reales. */
 const MAX_INTENTOS_FOLIO = 3
@@ -258,14 +259,20 @@ export async function POST(req: Request): Promise<Response> {
     // cliente no puede fijarlo ni pisarlo.
     if (existente) {
       // SAFETY: payload blanqueado por CAMPOS_ACTA + comunidad del servidor; Json arrays ya validados por zod.
-      const record = await prisma.actaGD.upsert({
-        where: { id },
-        create: {
-          ...payload,
-          id,
-          comunidadId: scope.comunidadId,
-        } as never,
-        update: payload as never,
+      // El acta publicada y el aviso in-app de los propietarios se confirman
+      // juntos (S7): si el aviso falla, el guardado no queda a medias.
+      const record = await prisma.$transaction(async (tx) => {
+        const fila = await tx.actaGD.upsert({
+          where: { id },
+          create: {
+            ...payload,
+            id,
+            comunidadId: scope.comunidadId,
+          } as never,
+          update: payload as never,
+        })
+        await asegurarAvisosActaPublicada(tx, fila)
+        return fila
       })
       return Response.json(record, { status: 200 })
     }
@@ -276,15 +283,22 @@ export async function POST(req: Request): Promise<Response> {
       const folio = await asignarFolio(scope.comunidadId, anio)
       try {
         // SAFETY: payload blanqueado por CAMPOS_ACTA + comunidad y folio del servidor; Json arrays ya validados por zod.
-        const record = await prisma.actaGD.upsert({
-          where: { id },
-          create: {
-            ...payload,
-            id,
-            comunidadId: scope.comunidadId,
-            folio,
-          } as never,
-          update: payload as never,
+        // El alta y el aviso in-app de los propietarios se confirman juntos
+        // (S7): la colisión de folio (P2002) también revierte el aviso y el
+        // reintento vuelve a empezar con la transacción completa.
+        const record = await prisma.$transaction(async (tx) => {
+          const fila = await tx.actaGD.upsert({
+            where: { id },
+            create: {
+              ...payload,
+              id,
+              comunidadId: scope.comunidadId,
+              folio,
+            } as never,
+            update: payload as never,
+          })
+          await asegurarAvisosActaPublicada(tx, fila)
+          return fila
         })
         return Response.json(record, { status: 201 })
       } catch (e) {

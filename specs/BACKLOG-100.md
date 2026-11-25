@@ -733,3 +733,23 @@ Estado del subsistema de revisión en esta máquina (`gentle-ai 5.0.0`, `doctor`
 - **Receta si algún día estorban**: se liberan **uno por uno**, con el lineage id a la vista y
   autorización explícita del owner por linaje (RESET/RECOVER son destructivos y piden aprobación en
   la UI). Nunca en lote y nunca por deducción.
+
+## Migraciones: un solo carril de dialecto (medido 2026-11-24)
+
+La revisión nativa de la feature `un-camino-de-entrega` marcó como BLOCKER que la migración nueva
+declare `creadoEn`/`enviadoEn` como `DATETIME` mientras `prisma/schema.prisma` es Postgres. **Medido
+en el repo: todas las migraciones de `prisma/migrations/` son dialecto SQLite** (`add_cola_salida_co`,
+`add_envio_invitacion`, `add_invitacion_acceso` y las anteriores). El defecto, entonces, no es de la
+unidad nueva: es del carril entero.
+
+**Resuelto el 2026-11-24 midiendo CI, no preguntando**: la carpeta `migrations/` sirve **sólo al
+carril SQLite**. `.github/workflows/ci.yml` aplica `prisma migrate deploy --schema=prisma/schema.sqlite.prisma`
+(líneas 64, 222 y 325) y para la base real usa **`prisma db push`** con `schema.prisma` (`ci.yml:134`,
+`db-prod.yml:175` y `:231`). O sea que producción **no** se arma con migraciones: se arma con `db push`,
+y por eso el dialecto `DATETIME` de las migraciones no bloquea ningún despliegue. El hallazgo del
+revisor es un falso positivo en este repo.
+
+**Lo que sí es deuda**: `k0mp4ss_fe/apps/web/package.json` expone `db:prod:deploy` = `prisma migrate
+deploy` (sin schema, o sea contra Postgres), un comando que **falla** si alguien lo corre. La decisión
+es dejarlo anotado y no tocarlo ahora: quitarlo o corregirlo es otra unidad. La convención vigente
+sigue siendo `DATETIME` para toda migración nueva.

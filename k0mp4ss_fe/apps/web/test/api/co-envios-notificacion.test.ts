@@ -15,7 +15,11 @@
  * 2. El `destinatarioRol` sale de los roles reales de la persona, no de una constante:
  *    es lo que el filtro de bandeja usa cuando la notificación no tiene destinatario
  *    puntual.
- * 3. Reprocesar el mismo envío **no duplica** la notificación (id determinista).
+ * 3. Reprocesar el mismo envío **no duplica** la notificación (id determinista) ni
+ *    su entrega al visor (`entregas_notificacion`, S3): duplicar la constancia
+ *    declararía una entrega que no ocurrió.
+ * 4. El aviso y su entrega salen por el puente único (S1): el alta no escribe la
+ *    `Notificacion` por su cuenta.
  */
 
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest"
@@ -87,6 +91,7 @@ describe("F45 · envío masivo de CO — la notificación in-app", () => {
       })
     }
     await prisma.notificacion.deleteMany({ where: { comunidadId: COMUNIDAD } })
+    await prisma.entregaNotificacion.deleteMany({ where: { comunidadId: COMUNIDAD } })
     await prisma.envioCO.deleteMany({ where: { comunidadId: COMUNIDAD } })
   }, 30_000)
 
@@ -94,6 +99,7 @@ describe("F45 · envío masivo de CO — la notificación in-app", () => {
     state.cookie = ""
     try {
       await prisma.notificacion.deleteMany({ where: { comunidadId: COMUNIDAD } })
+      await prisma.entregaNotificacion.deleteMany({ where: { comunidadId: COMUNIDAD } })
       await prisma.envioCO.deleteMany({ where: { comunidadId: COMUNIDAD } })
       await prisma.persona.deleteMany({ where: { id: { in: [PERSONA_A, PERSONA_B] } } })
       await prisma.membresia.deleteMany({ where: { usuarioId: "f45-usuario-admin" } })
@@ -145,14 +151,40 @@ describe("F45 · envío masivo de CO — la notificación in-app", () => {
     expect(porPersona.get(PERSONA_A)?.destinatarioRol).toBe("residente")
     expect(porPersona.get(PERSONA_B)?.destinatarioRol).toBe("personal")
     expect(porPersona.get(PERSONA_B)?.unidadId).toBeNull()
+
+    // S1/S3: el aviso entró por el puente, así que su id es el determinista del
+    // envío y dejó su constancia de visor (una por aviso).
+    expect(porPersona.get(PERSONA_A)?.id).toBe(`not-co-${ENVIO_ID}-${PERSONA_A}`)
+    expect(porPersona.get(PERSONA_B)?.id).toBe(`not-co-${ENVIO_ID}-${PERSONA_B}`)
+    const entregas = await prisma.entregaNotificacion.findMany({
+      where: { comunidadId: COMUNIDAD },
+    })
+    const visor = entregas.filter((e) => e.canal === "visor")
+    expect(visor).toHaveLength(2)
+    expect(new Set(visor.map((e) => e.notificacionId))).toEqual(
+      new Set([`not-co-${ENVIO_ID}-${PERSONA_A}`, `not-co-${ENVIO_ID}-${PERSONA_B}`])
+    )
+    for (const fila of visor) {
+      expect(fila.estado).toBe("entregado")
+      expect(fila.intentos).toBe(1)
+      expect(fila.enviadoEn).toBeNull()
+    }
   })
 
-  it("reprocesar el mismo envío no duplica la notificación", async () => {
+  it("reprocesar el mismo envío no duplica la notificación ni su entrega", async () => {
     const respuesta = await enviar()
     expect([200, 201]).toContain(respuesta.status)
     const total = await prisma.notificacion.count({
       where: { comunidadId: COMUNIDAD, moduloOrigen: "CO" },
     })
     expect(total).toBe(2)
+    // Ni una fila de visor de más: la entrega se escribió con el aviso, y volver a
+    // editar el envío no declara una segunda entrega que no ocurrió. El alta
+    // tampoco manda correo: no hay canal `email` que registrar acá.
+    const entregas = await prisma.entregaNotificacion.findMany({
+      where: { comunidadId: COMUNIDAD },
+    })
+    expect(entregas.filter((e) => e.canal === "visor")).toHaveLength(2)
+    expect(entregas.filter((e) => e.canal === "email")).toHaveLength(0)
   })
 })

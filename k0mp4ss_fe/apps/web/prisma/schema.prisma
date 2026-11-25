@@ -31,6 +31,8 @@ model Comunidad {
   publicacionesPortal         PublicacionPortal[]
   leadsPortal                 LeadPortal[]
   notificaciones              Notificacion[]
+  // S3 — la constancia de cada intento de entrega de un aviso.
+  entregasNotificacion       EntregaNotificacion[]
   controlesPropiedades        ControlPropiedad[]
   // Vigencia del Registro de Copropietarios (S2: el reloj corre por unidad).
   vigenciasRegistro           VigenciaRegistroUnidad[]
@@ -520,11 +522,54 @@ model Notificacion {
   leida                 Boolean   @default(false)
   fechaLectura          String? // ISO de la primera lectura (métrica enviados/leídos); null = no leída
   createdAt             DateTime  @default(now())
+  // S3 — el desenlace de cada intento de entrega de este aviso.
+  entregas              EntregaNotificacion[]
 
   @@index([comunidadId])
   @@index([destinatarioRol])
   @@index([unidadId])
   @@map("notificaciones")
+}
+
+/// Entrega de un aviso (S3 — `odd/tasks/un-camino-de-entrega.md`): el desenlace
+/// de cada intento queda persistido. Una fila por intento, nunca una por aviso.
+///
+/// Por qué existe: la fila in-app (`Notificacion`) prueba que el residente TIENE
+/// el aviso en su bandeja, pero no dice qué pasó con el correo. Antes ese
+/// desenlace sólo vivía en la respuesta HTTP de cada módulo; el barrido de
+/// vigencia lo declara como diseño actual (`lib/vigencia-barrido.ts`).
+///
+/// · `notificacionId` nullable: el aviso in-app SIEMPRE se escribe (S6), y el
+///   intento de correo lo referencia igual; la fila sobrevive al borrado de la
+///   notificación (`onDelete: SetNull`) porque la constancia de la entrega no
+///   se pierde con el mensaje.
+/// · `canal` es el canal DECLARADO por el llamador (`visor` | `email`), no el
+///   `@default("email_simulado")` de `Notificacion` (S2).
+/// · `estado` es el catálogo único (`ESTADOS_ENTREGA_CORREO`, lib/schemas.ts):
+///   `entregado` lo prueba la fila in-app, `enviado` exige la aceptación del
+///   servidor SMTP, `pendiente` es falta de emisor y `fallido` lleva motivo.
+/// · `intentos` cuenta intentos REALES: cada fila creada registra 1. No se
+///   reinicia ni se pisa: un reintento es otra fila.
+/// · `enviadoEn` es cuándo salió. NULL en `pendiente` y `fallido` (no se fecha
+///   como enviado lo que no salió) y en el visor, cuya fecha es `creadoEn`.
+model EntregaNotificacion {
+  id             String        @id
+  comunidadId    String
+  comunidad      Comunidad     @relation(fields: [comunidadId], references: [id], onDelete: Cascade)
+  notificacionId String?
+  notificacion   Notificacion? @relation(fields: [notificacionId], references: [id], onDelete: SetNull)
+  canal          String
+  estado         String
+  motivo         String?
+  intentos       Int           @default(0)
+  creadoEn       DateTime      @default(now())
+  enviadoEn      DateTime?
+
+  @@index([comunidadId])
+  @@index([notificacionId])
+  // La lectura de la métrica: cuántas entregas y de qué estado tiene una comunidad.
+  @@index([comunidadId, estado])
+  @@map("entregas_notificacion")
 }
 
 // Gestión Administrativa (AD) / Directiva (GD)

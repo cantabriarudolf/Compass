@@ -4,6 +4,7 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest"
 import { NextRequest } from "next/server"
 import { prisma } from "@/lib/prisma"
+import { CANAL_NOTIFICACION_EMAIL_SIMULADO } from "@/lib/schemas"
 
 const state = vi.hoisted(() => ({ cookie: "" }))
 vi.mock("next/headers", () => ({
@@ -100,6 +101,7 @@ describe("/api/publicaciones-portal + /api/leads-portal — PI con BD real", () 
       await prisma.leadPortal.deleteMany({ where: { comunidadId: { in: [comunidadA, comunidadB] } } })
       await prisma.publicacionPortal.deleteMany({ where: { comunidadId: { in: [comunidadA, comunidadB] } } })
       await prisma.notificacion.deleteMany({ where: { comunidadId: comunidadA, moduloOrigen: "PI" } })
+      await prisma.entregaNotificacion.deleteMany({ where: { comunidadId: comunidadA } })
       await prisma.eventoAuditoria.deleteMany({
         where: { comunidadId: comunidadA, tipoAccion: "PI_LEAD_CONTACT" },
       })
@@ -219,6 +221,63 @@ describe("/api/publicaciones-portal + /api/leads-portal — PI con BD real", () 
         where: { comunidadId: comunidadA, tipoAccion: "PI_LEAD_CONTACT" },
       })
       expect(evento.length).toBeGreaterThanOrEqual(1)
+    })
+  })
+
+  it("el aviso del lead pasa por el camino único: canal declarado y entrega al visor", async () => {
+    // S2/S3: el aviso de PI es el MISMO que la ruta escribía a mano (campo por
+    // campo), con el canal declarado en el llamador y su constancia de entrega.
+    const { leads } = await cargaModulos()
+    const hoy = new Date().toISOString().slice(0, 10)
+    const cuerpo =
+      "Interesado CAMINO mostró interés en pi-unidad-1 (venta). Contacto: +56 9 0000 0007"
+    await conSesion(emailResidente, async () => {
+      const res = await req(
+        leads,
+        "POST",
+        "http://localhost/api/leads-portal",
+        leadValido({
+          id: "pi-lead-camino",
+          nombreContacto: "Interesado CAMINO",
+          contacto: "+56 9 0000 0007",
+        })
+      )
+      expect(res.status).toBe(201)
+
+      const aviso = await prisma.notificacion.findFirst({
+        where: { comunidadId: comunidadA, moduloOrigen: "PI", cuerpo },
+      })
+      expect(aviso).toMatchObject({
+        comunidadId: comunidadA,
+        destinatarioRol: "propietario",
+        destinatarioPersonaId: null,
+        unidadId: null,
+        asunto: "Nuevo interesado en tu propiedad",
+        cuerpo,
+        canal: CANAL_NOTIFICACION_EMAIL_SIMULADO,
+        moduloOrigen: "PI",
+        fecha: hoy,
+        leida: false,
+        fechaLectura: null,
+      })
+
+      const entregas = await prisma.entregaNotificacion.findMany({
+        where: { notificacionId: aviso!.id },
+      })
+      expect(entregas).toHaveLength(1)
+      expect(entregas[0]).toMatchObject({
+        comunidadId: comunidadA,
+        notificacionId: aviso!.id,
+        canal: "visor",
+        estado: "entregado",
+        motivo: null,
+        intentos: 1,
+        enviadoEn: null,
+      })
+
+      // El lead de este caso no puede alterar el flujo del test de borrado que
+      // viene después: la publicación no se borra mientras le queden leads.
+      await prisma.leadPortal.deleteMany({ where: { id: "pi-lead-camino" } })
     })
   })
 

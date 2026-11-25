@@ -22,6 +22,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from "vites
 import { NextRequest } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { costoProyeccionPE } from "@/lib/personal-utils"
+import { CANAL_NOTIFICACION_EMAIL_SIMULADO } from "@/lib/schemas"
 
 const state = vi.hoisted(() => ({ cookie: "" }))
 vi.mock("next/headers", () => ({
@@ -276,6 +277,9 @@ beforeEach(async () => {
   await prisma.notificacion.deleteMany({
     where: { comunidadId: { in: [comunidad, otraComunidad] }, moduloOrigen: "PE" },
   })
+  await prisma.entregaNotificacion.deleteMany({
+    where: { comunidadId: { in: [comunidad, otraComunidad] } },
+  })
   await prisma.proyeccionPE.deleteMany({
     where: { comunidadId: { in: [comunidad, otraComunidad] } },
   })
@@ -295,6 +299,9 @@ afterAll(async () => {
       where: { comunidadId: { in: [comunidad, otraComunidad] } },
     })
     await prisma.notificacion.deleteMany({
+      where: { comunidadId: { in: [comunidad, otraComunidad] } },
+    })
+    await prisma.entregaNotificacion.deleteMany({
       where: { comunidadId: { in: [comunidad, otraComunidad] } },
     })
     await prisma.proyeccionPE.deleteMany({
@@ -789,6 +796,35 @@ describe("POST /api/pe/proyecciones/enviar", () => {
     })
     expect(notificacion?.destinatarioRol).toBe("administracion")
     expect(notificacion?.asunto).toContain("2 feriado(s)")
+    // S2/S3 — el aviso es el MISMO de antes (campo por campo), el canal viaja
+    // declarado desde el llamador y la entrega al visor queda persistida. El
+    // acto financiero del envío NO cambia: `enviadoAFI` y su evento siguen arriba.
+    expect(notificacion).toMatchObject({
+      comunidadId: comunidad,
+      destinatarioRol: "administracion",
+      destinatarioPersonaId: null,
+      unidadId: null,
+      asunto: `Proyección operativa ${mesAnio}: 2 feriado(s)`,
+      cuerpo: `Se requerirán 4 reemplazo(s) (parches) para cubrir los descansos legales. Sobrecosto estimado: $${costoProyeccionPE(4, 2, 35_000, 28_000).toLocaleString("es-CL")}. Proyección enviada a Finanzas.`,
+      canal: CANAL_NOTIFICACION_EMAIL_SIMULADO,
+      moduloOrigen: "PE",
+      fecha: hoy(),
+      leida: false,
+      fechaLectura: null,
+    })
+    const entregas = await prisma.entregaNotificacion.findMany({
+      where: { notificacionId: notificacion!.id },
+    })
+    expect(entregas).toHaveLength(1)
+    expect(entregas[0]).toMatchObject({
+      comunidadId: comunidad,
+      notificacionId: notificacion!.id,
+      canal: "visor",
+      estado: "entregado",
+      motivo: null,
+      intentos: 1,
+      enviadoEn: null,
+    })
     expect(
       await prisma.eventoAuditoria.count({
         where: { comunidadId: comunidad, tipoAccion: "PE_PROYECCION_ENVIADA" },

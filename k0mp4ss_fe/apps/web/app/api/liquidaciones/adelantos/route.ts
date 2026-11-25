@@ -30,6 +30,7 @@ import { prisma } from "@/lib/prisma"
 import { logger } from "@/lib/logger"
 import { generarId } from "@/lib/id-utils"
 import { registrarEventoAuditoria } from "@/lib/auditoria"
+import { avisar } from "@/lib/entrega/notificar"
 import { createCrudHandlers, delegado } from "@/lib/api/crud-factory"
 import {
   jsonError,
@@ -293,19 +294,18 @@ export async function POST(req: Request): Promise<Response> {
         },
         tx
       )
-      await tx.notificacion.create({
-        data: {
-          id: generarId("not"),
-          comunidadId: scope.comunidadId,
-          destinatarioRol: "personal",
-          destinatarioPersonaId: trabajador.id,
-          asunto: `Comprobante de adelanto ${folio}`,
-          cuerpo: `Se registró ${pacto === "prestamo" ? "un préstamo" : "un anticipo"} de $${monto.toLocaleString("es-CL")} (${input.glosa}). Será descontado en la liquidación de ${periodoImputacion}.`,
-          canal: CANAL_NOTIFICACION_EMAIL_SIMULADO,
-          moduloOrigen: "PL",
-          fecha,
-          leida: false,
-        },
+      // Camino único (S2): el canal se declara acá y la entrega al visor entra
+      // en esta misma transacción, junto al adelanto y su evento.
+      await avisar(tx, {
+        comunidadId: scope.comunidadId,
+        destinatarioRol: "personal",
+        destinatarioPersonaId: trabajador.id,
+        asunto: `Comprobante de adelanto ${folio}`,
+        cuerpo: `Se registró ${pacto === "prestamo" ? "un préstamo" : "un anticipo"} de $${monto.toLocaleString("es-CL")} (${input.glosa}). Será descontado en la liquidación de ${periodoImputacion}.`,
+        canal: CANAL_NOTIFICACION_EMAIL_SIMULADO,
+        moduloOrigen: "PL",
+        fecha,
+        leida: false,
       })
       return creado
     })

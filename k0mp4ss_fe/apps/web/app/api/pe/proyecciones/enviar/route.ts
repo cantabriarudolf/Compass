@@ -30,6 +30,7 @@ import { generarId } from "@/lib/id-utils"
 import { hoyISO } from "@/lib/date-utils"
 import { calcularProyeccionCobertura, costoProyeccionPE } from "@/lib/personal-utils"
 import { jsonError } from "@/lib/api/with-comunidad-scope"
+import { avisar } from "@/lib/entrega/notificar"
 import { contextoAccionPE, RECURSO_ENVIO_PROYECCION_PE, registrarEventoPE } from "../../_acciones"
 import { CANAL_NOTIFICACION_EMAIL_SIMULADO } from "@/lib/schemas"
 
@@ -116,20 +117,19 @@ export async function POST(req: Request): Promise<Response> {
         },
       })
 
-      // Aviso a administración (mismo texto del legacy). Sin SMTP queda como
+      // Aviso a administración (mismo texto del legacy) por el camino único
+      // (S2): el canal se declara acá y la entrega al visor queda persistida en
+      // la misma transacción que la proyección y su evento. Sin SMTP queda como
       // notificación en la bandeja del rol; nunca se reporta como email enviado.
-      await tx.notificacion.create({
-        data: {
-          id: generarId("not"),
-          comunidadId: scope.comunidadId,
-          destinatarioRol: "administracion",
-          asunto: `Proyección operativa ${mesAnio}: ${proyeccionBase.diasFeriados} feriado(s)`,
-          cuerpo: `Se requerirán ${proyeccionBase.reemplazosNecesarios} reemplazo(s) (parches) para cubrir los descansos legales. Sobrecosto estimado: $${costoEstimado.toLocaleString("es-CL")}. Proyección enviada a Finanzas.`,
-          canal: CANAL_NOTIFICACION_EMAIL_SIMULADO,
-          moduloOrigen: "PE",
-          fecha: hoyISO(),
-          leida: false,
-        },
+      await avisar(tx, {
+        comunidadId: scope.comunidadId,
+        destinatarioRol: "administracion",
+        asunto: `Proyección operativa ${mesAnio}: ${proyeccionBase.diasFeriados} feriado(s)`,
+        cuerpo: `Se requerirán ${proyeccionBase.reemplazosNecesarios} reemplazo(s) (parches) para cubrir los descansos legales. Sobrecosto estimado: $${costoEstimado.toLocaleString("es-CL")}. Proyección enviada a Finanzas.`,
+        canal: CANAL_NOTIFICACION_EMAIL_SIMULADO,
+        moduloOrigen: "PE",
+        fecha: hoyISO(),
+        leida: false,
       })
 
       await registrarEventoPE(
