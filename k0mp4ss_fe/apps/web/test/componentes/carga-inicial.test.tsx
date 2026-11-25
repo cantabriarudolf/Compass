@@ -58,26 +58,29 @@ afterEach(() => {
 })
 
 describe("pantalla Carga inicial", () => {
-  it("lista los seis bloques con su botón de descarga apuntando a la ruta correcta", () => {
+  it("lista los siete bloques con su botón de descarga apuntando a la ruta correcta", () => {
     render(<CargaInicialPage />)
 
     expect(screen.getByRole("region", { name: "Estructura" })).toBeTruthy()
     expect(screen.getByRole("region", { name: "Personas" })).toBeTruthy()
     expect(screen.getByRole("region", { name: "Vínculos" })).toBeTruthy()
     expect(screen.getByRole("region", { name: "Saldos de apertura" })).toBeTruthy()
+    expect(screen.getByRole("region", { name: "Pagos históricos" })).toBeTruthy()
 
     const descargas = screen.getAllByRole("link", { name: /descargar plantilla/i })
-    expect(descargas.length).toBe(6)
+    expect(descargas.length).toBe(7)
     expect(
       descargas.map((d) => d.getAttribute("href")).sort()
     ).toEqual([
       // La lista se compara ordenada (`sort()`), no en el orden de la pantalla.
       // Los dos de F48 son el histórico financiero y el último es la deuda a la
       // fecha de corte: los tres entran por el mismo flujo de plantilla → vista
-      // previa → importar.
+      // previa → importar. El detalle de los pagos históricos (S4) usa el mismo
+      // flujo con su propia ruta.
       "/api/importar/egresos/plantilla",
       "/api/importar/estructura/plantilla",
       "/api/importar/ingresos/plantilla",
+      "/api/importar/pagos-historicos/plantilla",
       "/api/importar/personas/plantilla",
       "/api/importar/saldos/plantilla",
       "/api/importar/vinculos/plantilla",
