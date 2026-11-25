@@ -538,19 +538,43 @@ function destinoPostgres(url) {
   return chequeo
 }
 
-async function conectar(url, { soloLectura = false } = {}) {
+async function conectar(url, { soloLectura = false, intentos = 4 } = {}) {
   const { Client } = await import("pg")
-  const cliente = new Client({
-    connectionString: url,
-    connectionTimeoutMillis: 20_000,
-    application_name: "jdd",
-  })
-  await cliente.connect()
-  if (soloLectura) {
-    // La rama de Neon de la que se lee no debe recibir escrituras ni por accidente.
-    await cliente.query("SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY")
+  // Neon por pooler es intermitente desde una máquina de trabajo: el primer
+  // intento muere con ETIMEDOUT y el segundo entra. Reintentar acá evita que el
+  // operador lea «jdd FALLO:» vacío y crea que rompió algo. NUNCA se reintenta
+  // una escritura a medias: esto sólo cubre el connect, antes de tocar datos.
+  let ultimoError = null
+  for (let intento = 1; intento <= intentos; intento++) {
+    const cliente = new Client({
+      connectionString: url,
+      connectionTimeoutMillis: 20_000,
+      application_name: "jdd",
+    })
+    try {
+      await cliente.connect()
+      if (soloLectura) {
+        // La rama de Neon de la que se lee no debe recibir escrituras ni por accidente.
+        await cliente.query("SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY")
+      }
+      if (intento > 1) console.log(`  (conexión establecida en el intento ${intento}/${intentos})`)
+      return cliente
+    } catch (error) {
+      ultimoError = error
+      try {
+        await cliente.end()
+      } catch {
+        // el cliente nunca llegó a conectar: cerrar puede fallar sin consecuencias
+      }
+      if (intento < intentos) {
+        const espera = 2000 * intento
+        console.log(`  (conexión intento ${intento}/${intentos} falló: ${error?.code ?? "error"}; reintento en ${espera / 1000}s)`)
+        await new Promise((listo) => setTimeout(listo, espera))
+      }
+    }
   }
-  return cliente
+  const codigo = ultimoError?.code ?? "sin código"
+  throw new Error(`no se pudo conectar a la base después de ${intentos} intentos (${codigo}); no se tocó nada`)
 }
 
 async function listarTablas(cliente) {
@@ -1293,7 +1317,8 @@ if (esProgramaPrincipal) {
       process.exitCode = codigo
     })
     .catch((error) => {
-      console.error(`✗ jdd FALLO: ${redactar(error?.message ?? error)}`)
+      const mensaje = error?.message || error?.code || String(error)
+      console.error(`✗ jdd FALLO: ${redactar(mensaje)}`)
       process.exitCode = SALIDA_ERROR
     })
 }
