@@ -34,6 +34,8 @@
  *   npm run jdd -- restore jdd1-pre-reset-20261125 --confirmo=BORRAR
  *   npm run jdd -- restore jdd1-pre-reset-20261125 --confirmo=BORRAR          # aborta si el origen está vacío
  *   npm run jdd -- restore jdd1-pre-reset-20261125 --confirmo=BORRAR --permitir-vacio
+ *   npm run jdd -- seed --comunidad=comunidad-a            (defaults: sin datos de la comunidad)
+ *   npm run jdd -- seed --comunidad=comunidad-a --con-datos (defaults + el bulk de data/)
  *
  * Variables: `DATABASE_URL` (Postgres), `NEON_PROJECT_ID` y `NEON_ORG_ID` (o `--project-id=` /
  * `--org-id=`). Sin `DATABASE_URL` en el entorno se lee `apps/web/.env`, misma convención que
@@ -75,6 +77,7 @@ export function parsearArgs(argv = []) {
     dryRun: false,
     confirmo: false,
     permitirVacio: false,
+    conDatos: false,
     comunidad: null,
     proyecto: null,
     org: null,
@@ -96,6 +99,13 @@ export function parsearArgs(argv = []) {
     if (token === "--permitir-vacio") {
       // Escape hatch del preflight del restore: aceptar un origen vacío a propósito.
       args.permitirVacio = true
+      continue
+    }
+    if (token === "--con-datos") {
+      // `seed` arranca con los defaults del sistema y NADA de la comunidad: el
+      // juego de datos que se puebla a mano necesita la base vacía de unidades,
+      // personas y vínculos. El bulk de `data/` es opt-in.
+      args.conDatos = true
       continue
     }
     if (token === "--help" || token === "-h") {
@@ -908,11 +918,18 @@ async function cmdWipe({ args, url }) {
   }
 }
 
-function pasosSeed(comunidad) {
+function pasosSeed(comunidad, conDatos = false) {
   return [
     { etiqueta: "seed:authz (usuarios, roles y comunidades base)", args: ["run", "seed:authz"] },
     { etiqueta: "db:catalogo-nacional (catálogo nacional)", args: ["run", "db:catalogo-nacional"] },
-    { etiqueta: "seed:datos (datos de la comunidad)", args: ["run", "seed:datos", "--", `--comunidad-id=${comunidad}`] },
+    ...(conDatos
+      ? [
+          {
+            etiqueta: "seed:datos (datos de la comunidad, bulk de data/)",
+            args: ["run", "seed:datos", "--", `--comunidad-id=${comunidad}`],
+          },
+        ]
+      : []),
     { etiqueta: "db:fondos-fi (fondos F/I de la comunidad)", args: ["run", "db:fondos-fi", "--", `--comunidad-id=${comunidad}`] },
   ]
 }
@@ -924,7 +941,7 @@ async function cmdSeed({ args, url }) {
   }
 
   const destino = destinoPostgres(url)
-  const pasos = pasosSeed(args.comunidad)
+  const pasos = pasosSeed(args.comunidad, args.conDatos)
   console.log(`Base destino: ${destino.host} / ${destino.base}`)
   console.log(`Seed de defaults del sistema · comunidad: ${args.comunidad}`)
 
