@@ -74,7 +74,16 @@ jobs:
       # centralizadas en lib/invariantes/. Corre sólo esas pruebas, con el
       # rechazo como caso principal; es barato y dice qué ruta se desvió.
       - run: npm run check:invariantes
-      - run: npm test
+      # `onboarding-arranque` es el ÚNICO archivo que borra y repone filas GLOBALES
+      # (afp y previsión de salud) para medir la comunidad vacía: `sinCatalogoNacional`
+      # hace findMany → deleteMany({}) → mide → createMany con la foto. Con la suite en
+      # paralelo, otro archivo que lee o siembra ese catálogo en la misma ventana rompe
+      # la corrida DENTRO del helper (test/api/onboarding-arranque.test.ts:136), no en el
+      # código que el test mide: era el rojo intermitente que rotaba entre las dos lanes
+      # del 2026-11-21 al 2026-11-25. Se corre solo y primero, y se excluye del resto:
+      # el paralelismo de la suite no se toca.
+      - run: npx vitest run test/api/onboarding-arranque.test.ts
+      - run: npx vitest run --exclude test/api/onboarding-arranque.test.ts
       # Drill de restauración automatizado (SG §3 D-vi): backup → fila
       # marcadora → restore → verificación de conteos, contra ESTA BD
       # descartable del job (DATABASE_URL=file:./perf-test.db). Sin secretos:
@@ -139,7 +148,10 @@ jobs:
       # cliente se genera desde schema.prisma (postgresql), asi que un cliente
       # postgres contra una URL file: no valida y el job moria siempre. El test
       # corre completo en el job "unit", que es el que genera el cliente SQLite.
-      - run: npm test -- --exclude test/api/integridad-titularidad.test.ts
+      # Mismo motivo que en el job SQLite: el archivo que muta el catálogo nacional corre
+      # solo y primero, y queda excluido del resto de la suite.
+      - run: npx vitest run test/api/onboarding-arranque.test.ts
+      - run: npx vitest run --exclude test/api/onboarding-arranque.test.ts --exclude test/api/integridad-titularidad.test.ts
 
   e2e:
     name: E2E Playwright (build producción)
