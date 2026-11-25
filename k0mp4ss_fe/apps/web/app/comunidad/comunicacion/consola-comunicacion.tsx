@@ -700,7 +700,7 @@ export function ConsolaComunicacionCO() {
                       {procesandoCola ? "Procesando…" : "Procesar cola de correo"}
                     </Button>
                   </div>
-                  <p className="mt-1 text-muted-foreground">El envío masivo guarda y este proceso envía: la cola se drena sólo cuando se pide, nunca por un temporizador. Cada destinatario conserva además su notificación en la bandeja.</p>
+                  <p className="mt-1 text-muted-foreground">El envío masivo guarda y este proceso envía: la cola se drena ahora o sola, con el cron diario de Vercel (<code>GET /api/co/cola</code>, lote acotado por comunidad); este botón sigue sirviendo para drenarla en el momento. Cada destinatario conserva además su notificación en la bandeja.</p>
                   {errorCola && <p className="mt-1 text-destructive">{errorCola}</p>}
                   {estadoCola ? (
                     <div className="mt-2 flex flex-col gap-1">
