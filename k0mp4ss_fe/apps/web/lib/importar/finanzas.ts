@@ -21,15 +21,19 @@
  *
  * Mapeo a los dos modelos (los dos campos que no se llaman igual):
  *
- *   - egresos  → `EgresoFI.descripcion` / `EgresoFI.categoria`. El CSV no trae
- *                folio ni recurrencia: el alta deja `folio` en null (el folio
- *                FE-#### lo asigna la ruta de gastos, no un archivo) y
- *                `esRecurrente` en false (una fila histórica no declara
- *                recurrencia). En una fila ya existente esos dos campos no se
- *                tocan, porque el archivo tampoco los declara.
+ *   - egresos  → `EgresoFI.descripcion` / `EgresoFI.categoria` / `EgresoFI.folio`.
+ *                El CSV no trae folio ni recurrencia: la fila NUEVA toma el
+ *                siguiente `FE-####` de la MISMA secuencia que el alta
+ *                (`siguienteFolioFE`, app/api/egresos-fi/route.ts) y
+ *                `esRecurrente` queda en false (una fila histórica no declara
+ *                recurrencia). En una fila ya existente el folio no se toca,
+ *                porque el archivo tampoco lo declara. El fondo, además de
+ *                existir, tiene que estar activo (S5, regla espejo del alta).
  *   - ingresos → `IngresoFI.concepto` (la descripción) y `IngresoFI.familia`
  *                (la categoría; vacía = sin familia). `IngresoFI` no tiene
- *                columna `categoria` y `familia` es su etiqueta libre.
+ *                columna `categoria` ni `folio` y `familia` es su etiqueta libre;
+ *                su bloque no declara fondo activo, así que se comporta igual
+ *                que antes de S5.
  *
  * Clave de idempotencia (S2): `fecha + monto + descripcion + fondo` **dentro de
  * la comunidad**. Se compone con el id del fondo ya resuelto y el monto en su
@@ -38,7 +42,8 @@
  * existente se reporta como «actualizar».
  *
  * Lo que NO hace (S3): no crea fondos, ni categorías, ni unidades, ni personas
- * (si falta un fondo la fila es error con el motivo literal), no calcula saldos
+ * (si falta un fondo la fila es error con el motivo literal, y si está inactivo
+ * también, en el bloque de egresos: S5), no calcula saldos
  * ni reescribe `FondoFI.saldoInicial`, y no toca cobros, pagos, emisiones ni
  * presupuestos. Tampoco escribe nada en la vista previa (`dryRun`), y la
  * importación real no corre si la vista previa tiene filas con error: en ese
@@ -58,6 +63,7 @@ import {
   type ResumenEstructura,
 } from "@/lib/importar/estructura"
 import { hoyISO } from "@/lib/date-utils"
+import { siguienteFolioFE } from "@/app/api/egresos-fi/route"
 
 /** Encabezados canónicos de los dos bloques: fuente única de la plantilla y del parser. */
 export const ENCABEZADOS_FINANZAS = [
@@ -146,12 +152,25 @@ export interface DatosFilaFinanzas {
   fondoNombre: string
 }
 
+/** Fondo de la comunidad reducido a lo que la validación de la fila necesita. */
+export interface FondoResuelto {
+  id: string
+  nombre: string
+  activo: boolean
+}
+
 /** Contexto de la validación: lo que la fila no puede saber sola. */
 export interface ContextoFilaFinanzas {
   /** Hoy en AAAA-MM-DD (inyectable: el borde de fecha futura se pinea en el test). */
   hoy: string
   /** Resuelve el `fondo` del archivo (nombre o id) a un fondo de la comunidad. */
-  resolverFondo: (referencia: string) => { id: string; nombre: string } | null
+  resolverFondo: (referencia: string) => FondoResuelto | null
+  /**
+   * S5: sólo el egreso importado exige un fondo activo (la misma regla que el
+   * alta). En ingresos queda apagado: su bloque no lo declara y su
+   * comportamiento observable no cambia.
+   */
+  exigirFondoActivo?: boolean
 }
 
 export interface FilaFinanzasValidada {
@@ -208,6 +227,14 @@ export function validarFilaFinanzas(
         `no existe el fondo "${v.fondo}" en la comunidad; ` +
         "debe estar creado antes de importar.",
     })
+  } else if (contexto.exigirFondoActivo && !fondo.activo) {
+    // S5: un fondo inactivo no recibe imputaciones, igual que en el alta.
+    errores.push({
+      columna: "fondo",
+      mensaje:
+        `el fondo "${fondo.nombre}" está inactivo; ` +
+        "un egreso debe imputarse a un fondo activo.",
+    })
   }
   if (!fondo || errores.length > 0) {
     return { linea: fila.linea, datos: null, errores }
@@ -245,8 +272,8 @@ function normalizaNombre(nombre: string): string {
  * devuelve null y la fila se reporta con su error.
  */
 export function contextoDeFondos(
-  fondos: readonly { id: string; nombre: string }[]
-): (referencia: string) => { id: string; nombre: string } | null {
+  fondos: readonly FondoResuelto[]
+): (referencia: string) => FondoResuelto | null {
   const porId = new Map(fondos.map((f) => [f.id, f] as const))
   const porNombre = new Map(fondos.map((f) => [normalizaNombre(f.nombre), f] as const))
   return (referencia) =>
@@ -298,6 +325,26 @@ export interface ResultadoImportarFinanzas {
   bloqueada: boolean
 }
 
+// --- Folio del egreso importado (S5) ---
+
+/**
+ * Folios consecutivos a partir del que entrega la secuencia del alta
+ * (`siguienteFolioFE` → `FE-0043`). El prefijo y el ancho del relleno salen de
+ * ese mismo folio (siempre termina en dígitos) y el correlativo avanza uno por
+ * fila nueva: la regla del máximo vive entera en la secuencia del alta, acá
+ * sólo se continúa el número para que un archivo con varias filas no repita.
+ */
+function foliosDelArchivo(folioBase: string, cantidad: number): string[] {
+  const prefijo = folioBase.replace(/\d+$/, "")
+  const ancho = folioBase.length - prefijo.length
+  const desde = Number.parseInt(folioBase.slice(prefijo.length), 10)
+  const folios: string[] = []
+  for (let paso = 0; paso < cantidad; paso++) {
+    folios.push(`${prefijo}${String(desde + paso).padStart(ancho, "0")}`)
+  }
+  return folios
+}
+
 /** Un movimiento ya guardado, reducido a lo que la clave y el reporte necesitan. */
 interface MovimientoExistente {
   id: string
@@ -309,6 +356,8 @@ interface FilaProcesada extends ReporteFila {
   conError: boolean
   datos: DatosFilaFinanzas | null
   id: string
+  /** Folio reservado para esta fila cuando crea un egreso (S5); el resto no. */
+  folio?: string
 }
 
 /**
@@ -318,7 +367,8 @@ interface FilaProcesada extends ReporteFila {
  * tiene error devuelve `bloqueada: true` sin escribir: la importación real exige
  * una vista previa limpia. Si todas las filas son válidas, escribe en una
  * transacción: la clave de idempotencia ya existe en la comunidad → actualiza
- * los campos que no son clave; no existe → crea con id determinista.
+ * los campos que no son clave; no existe → crea con id determinista y, en
+ * egresos, con el folio siguiente de la secuencia del alta (S5).
  */
 export async function importarFinanzas({
   prisma,
@@ -331,7 +381,7 @@ export async function importarFinanzas({
   const [fondos, existentes] = await Promise.all([
     prisma.fondoFI.findMany({
       where: { comunidadId },
-      select: { id: true, nombre: true },
+      select: { id: true, nombre: true, activo: true },
     }),
     bloque === "egresos"
       ? prisma.egresoFI.findMany({
@@ -374,6 +424,7 @@ export async function importarFinanzas({
   const contexto: ContextoFilaFinanzas = {
     hoy,
     resolverFondo: contextoDeFondos(fondos),
+    exigirFondoActivo: bloque === "egresos",
   }
   const prefijoId = bloque === "egresos" ? "imp-egr-" : "imp-ing-"
 
@@ -423,6 +474,23 @@ export async function importarFinanzas({
   // filas que se puedan» y reportar el resto (S1).
   if (reporte.resumen.conError > 0) return { reporte, bloqueada: true }
 
+  // S5: las filas nuevas de egresos toman el folio del alta. El tramo se
+  // reserva una sola vez, con el archivo ya limpio y antes de la transacción:
+  // `siguienteFolioFE` lee los folios confirmados y continuar el correlativo
+  // dentro del archivo evita que dos filas nuevas repitan número.
+  if (bloque === "egresos") {
+    const nuevas = procesadas.filter((p) => p.datos !== null && p.accion === "crear")
+    if (nuevas.length > 0) {
+      const folios = foliosDelArchivo(
+        await siguienteFolioFE(comunidadId),
+        nuevas.length
+      )
+      for (const [indice, fila] of nuevas.entries()) {
+        fila.folio = folios[indice]
+      }
+    }
+  }
+
   await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     for (const p of procesadas) {
       if (!p.datos) continue
@@ -433,6 +501,7 @@ export async function importarFinanzas({
             data: {
               id: p.id,
               comunidadId,
+              folio: p.folio,
               fecha: d.fecha,
               monto: d.monto,
               descripcion: d.descripcion,
