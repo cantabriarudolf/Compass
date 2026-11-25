@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import NextAuth from "next-auth"
 import { authConfig } from "@/lib/auth.config"
+import { esRutaPublica } from "@/lib/rutas-publicas"
 
 // Instancia edge-safe (sin Prisma): verifica el JWT de sesión en el borde.
 // El provider Credentials + adapter viven solo en lib/auth.ts (runtime Node).
@@ -15,13 +16,9 @@ const { auth } = NextAuth({ ...authConfig })
 // único endpoint que consume es `POST /api/auth/invitacion`, ya público por el
 // prefijo `/api/auth`. Sin esta entrada, el enlace del alta y del reenvío caía en
 // el redirect a /ingresar y la invitación no se podía usar.
-const RUTAS_PUBLICAS = [
-  "/ingresar",
-  "/invitacion",
-  "/api/auth",
-  "/api/health",
-  "/api/csp-report",
-]
+// La lista vive en `lib/rutas-publicas.ts` para poder probarla sin arrastrar
+// `next-auth`: ahí también están las dos rutas de cron, que se autentican con
+// `CRON_SECRET` dentro del handler.
 
 type GlobalConCripto = typeof globalThis & {
   crypto?: {
@@ -97,9 +94,7 @@ export default (
   const { pathname } = request.nextUrl
   let res: NextResponse
   if (
-    RUTAS_PUBLICAS.some(
-      (ruta) => pathname === ruta || pathname.startsWith(`${ruta}/`)
-    )
+    esRutaPublica(pathname)
   ) {
     res = NextResponse.next()
   } else {
