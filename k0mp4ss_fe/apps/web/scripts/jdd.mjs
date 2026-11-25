@@ -14,9 +14,15 @@
  *  3. `wipe` y `restore` exigen `--confirmo=BORRAR` exacto; sin guarda imprimen el plan y
  *     salen con código 2. `--dry-run` imprime el plan y no escribe nada.
  *  4. El orden de tablas sale de `pg_constraint` (topológico), no de una lista fija.
- *  5. `restore` lee de una rama de Neon vía `neonctl connection-string`, trunca el destino y
- *     después inserta padres antes que hijos, una transacción por tabla y lotes de 500 filas.
- *  6. `seed` delega en los scripts existentes; no reimplementa seeds.
+ *  5. `restore` lee de una rama de Neon vía `neonctl connection-string`, cuenta las filas del
+ *     ORIGEN antes de tocar el destino y aborta (código 1, sin truncar) si el origen está vacío:
+ *     un restore vacío no es una restauración. Después trunca el destino e inserta padres antes
+ *     que hijos, una transacción por tabla y lotes de 500 filas. Escape hatch explícito para los
+ *     casos legítimos: `--permitir-vacio`.
+ *  6. Un restore que termina con 0 filas escritas, o que se detiene en una tabla, es FALLO aunque
+ *     todo lo copiado haya cuadrado; si se detiene, imprime el estado mixto tabla por tabla y la
+ *     instrucción de recuperación (volver a correr `restore` con un snapshot sano).
+ *  7. `seed` delega en los scripts existentes; no reimplementa seeds.
  *
  * Uso (desde k0mp4ss_fe/apps/web):
  *   npm run jdd -- estado
@@ -26,6 +32,8 @@
  *   npm run jdd -- seed --comunidad=comunidad-a
  *   npm run jdd -- snapshot jdd2-pre-pruebas
  *   npm run jdd -- restore jdd1-pre-reset-20261125 --confirmo=BORRAR
+ *   npm run jdd -- restore jdd1-pre-reset-20261125 --confirmo=BORRAR          # aborta si el origen está vacío
+ *   npm run jdd -- restore jdd1-pre-reset-20261125 --confirmo=BORRAR --permitir-vacio
  *
  * Variables: `DATABASE_URL` (Postgres), `NEON_PROJECT_ID` y `NEON_ORG_ID` (o `--project-id=` /
  * `--org-id=`). Sin `DATABASE_URL` en el entorno se lee `apps/web/.env`, misma convención que
@@ -44,6 +52,8 @@ const LOTE_FILAS = 500
 const MAX_PARAMETROS = 30_000
 /** `_prisma_migrations` no se trunca: sin su historial, `prisma migrate deploy` se rompe. */
 const TABLAS_DEL_SISTEMA = new Set(["_prisma_migrations"])
+/** Rama de Neon con los datos reales: a donde se vuelve cuando un restore queda a medias. */
+const SNAPSHOT_RECUPERACION = "jdd1-pre-reset-20261125"
 const SALIDA_OK = 0
 const SALIDA_ERROR = 1
 const SALIDA_SIN_GUARDA = 2
@@ -55,8 +65,8 @@ const SALIDA_SIN_GUARDA = 2
 /**
  * @param {string[]} argv
  * @returns {{comando: string|null, posicional: string[], dryRun: boolean, confirmo: boolean,
- *   comunidad: string|null, proyecto: string|null, org: string|null, ayuda: boolean,
- *   desconocidos: string[]}}
+ *   permitirVacio: boolean, comunidad: string|null, proyecto: string|null, org: string|null,
+ *   ayuda: boolean, desconocidos: string[]}}
  */
 export function parsearArgs(argv = []) {
   const args = {
@@ -64,6 +74,7 @@ export function parsearArgs(argv = []) {
     posicional: [],
     dryRun: false,
     confirmo: false,
+    permitirVacio: false,
     comunidad: null,
     proyecto: null,
     org: null,
@@ -80,6 +91,11 @@ export function parsearArgs(argv = []) {
     }
     if (token === "--dry-run") {
       args.dryRun = true
+      continue
+    }
+    if (token === "--permitir-vacio") {
+      // Escape hatch del preflight del restore: aceptar un origen vacío a propósito.
+      args.permitirVacio = true
       continue
     }
     if (token === "--help" || token === "-h") {
@@ -267,6 +283,141 @@ export function armarResumen({
     descuadres: filas.filter((fila) => fila.estado === "descuadre").map((fila) => fila.tabla),
     todoCuadra: filas.every((fila) => fila.estado !== "descuadre"),
   }
+}
+
+function totalDeFilas(filasOrigen) {
+  if (typeof filasOrigen === "number") {
+    return Number.isFinite(filasOrigen) ? Math.max(0, Math.trunc(filasOrigen)) : 0
+  }
+  if (!filasOrigen || typeof filasOrigen !== "object") return 0
+  let total = 0
+  for (const filas of Object.values(filasOrigen)) {
+    const numero = Number(filas ?? 0)
+    if (Number.isFinite(numero) && numero > 0) total += numero
+  }
+  return total
+}
+
+/**
+ * Orden de las compuertas del restore, en un solo lugar: `--dry-run` gana (sale 0 sin escribir),
+ * después la guarda (sin `--confirmo=BORRAR` sale 2, como siempre) y recién entonces el preflight
+ * (origen vacío sale 1 sin truncar). Así la guarda conserva exactamente su precedencia previa.
+ *
+ * @param {{dryRun?: boolean, confirmo?: boolean, preflight?: {abortar?: boolean}|null}} [datos]
+ * @returns {{accion: "simular"|"sin-guarda"|"abortar"|"ejecutar", codigo: number}}
+ */
+export function evaluarGuardasRestore({ dryRun = false, confirmo = false, preflight = null } = {}) {
+  if (dryRun) return { accion: "simular", codigo: SALIDA_OK }
+  if (!confirmo) return { accion: "sin-guarda", codigo: SALIDA_SIN_GUARDA }
+  if (preflight?.abortar) return { accion: "abortar", codigo: SALIDA_ERROR }
+  return { accion: "ejecutar", codigo: SALIDA_OK }
+}
+
+/**
+ * Preflight del restore: cuenta el ORIGEN antes de tocar el destino. Un origen vacío convierte
+ * el restore en un borrado sin vuelta, así que sin `--permitir-vacio` se aborta SIN truncar. Un
+ * conteo ilegible (`null`) cuenta como cero: ante la duda, no se destruye nada.
+ *
+ * @param {{filasOrigen?: Record<string, number|null>|number, permitirVacio?: boolean}} [datos]
+ * @returns {{abortar: boolean, vacio: boolean, totalOrigen: number, motivo: string}}
+ */
+export function evaluarPreflightRestore({ filasOrigen = {}, permitirVacio = false } = {}) {
+  const totalOrigen = totalDeFilas(filasOrigen)
+  const vacio = totalOrigen === 0
+
+  if (!vacio) {
+    return {
+      abortar: false,
+      vacio,
+      totalOrigen,
+      motivo: `El origen tiene ${totalOrigen} filas: se puede truncar el destino y reinsertarlas.`,
+    }
+  }
+  if (permitirVacio) {
+    return {
+      abortar: false,
+      vacio,
+      totalOrigen,
+      motivo:
+        "La rama de origen no tiene filas, pero --permitir-vacio está presente: el destino se trunca y queda a cero.",
+    }
+  }
+  return {
+    abortar: true,
+    vacio,
+    totalOrigen,
+    motivo:
+      "La rama de origen no tiene filas: restaurar vaciaría la base destino y no traería nada. " +
+      "No se truncó nada: el destino quedó como estaba. Si el vacío es intencional, repetí con --permitir-vacio.",
+  }
+}
+
+/**
+ * Veredicto final del restore. Escribir cero filas no es un éxito aunque cada tabla haya
+ * cuadrado: el destino quedó vacío y no se restauró nada.
+ *
+ * @param {{totalEscrito?: number, detenidoEn?: string|null}} [datos]
+ * @returns {{ok: boolean, motivo: string}}
+ */
+export function evaluarRestoreCompletado({ totalEscrito = 0, detenidoEn = null } = {}) {
+  const escritas = Number(totalEscrito) || 0
+
+  if (detenidoEn) {
+    return {
+      ok: false,
+      motivo: `El restore se detuvo en "${detenidoEn}" y no siguió con las tablas siguientes.`,
+    }
+  }
+  if (escritas === 0) {
+    return {
+      ok: false,
+      motivo:
+        "El restore terminó con 0 filas escritas: el destino quedó vacío y la restauración no trajo nada. " +
+        "Revisá la rama de origen antes de volver a intentar.",
+    }
+  }
+  return { ok: true, motivo: `Restore completo: ${escritas} filas escritas.` }
+}
+
+/**
+ * Bloque de diagnóstico del estado mixto: una tabla falló, las anteriores ya estaban commiteadas
+ * con datos nuevos, la fallida revirtió a vacío y las siguientes quedaron truncadas sin intentar.
+ * El texto nombra las tres categorías y la recuperación concreta; es sólo texto, no escribe.
+ *
+ * @param {{copiadas?: string[], fallida?: string|null, noIntentadas?: string[],
+ *   escritas?: Record<string, number>, snapshot?: string}} [datos]
+ */
+export function textoEstadoMixto({
+  copiadas = [],
+  fallida = null,
+  noIntentadas = [],
+  escritas = {},
+  snapshot = SNAPSHOT_RECUPERACION,
+} = {}) {
+  const conFilas = copiadas.filter((tabla) => Number(escritas?.[tabla] ?? 0) > 0)
+  const sinFilas = copiadas.filter((tabla) => Number(escritas?.[tabla] ?? 0) === 0)
+  const listaCopiadas =
+    conFilas.length > 0 ? conFilas.map((tabla) => `${tabla} (${Number(escritas?.[tabla] ?? 0)})`).join(", ") : "(ninguna)"
+
+  const lineas = [
+    "✗ RESTORE A MEDIAS: el destino quedó en un estado mixto (no hay rollback global)",
+    `  Copiadas con filas (${conFilas.length}): ${listaCopiadas}`,
+  ]
+  if (sinFilas.length > 0) {
+    lineas.push(`  Copiadas vacías (${sinFilas.length}, el origen no tenía filas): ${sinFilas.join(", ")}`)
+  }
+  lineas.push(
+    `  Fallida (1): ${fallida ?? "(desconocida)"} → su transacción revirtió esa tabla: quedó VACÍA y no se reintenta sola`,
+  )
+  lineas.push(
+    `  Truncadas y no intentadas (${noIntentadas.length}): ${
+      noIntentadas.length > 0 ? noIntentadas.join(", ") : "(ninguna)"
+    } → quedaron VACÍAS (se truncaron y no se copiaron)`,
+  )
+  lineas.push("  Recuperación: volvé a correr con un snapshot sano")
+  lineas.push(`    npm run jdd -- restore ${snapshot} --confirmo=${GUARDA}`)
+  lineas.push(`  El snapshot de los datos reales es ${snapshot}. El estado mixto no se arregla solo.`)
+  return lineas.join("\n")
 }
 
 /**
@@ -676,6 +827,8 @@ Comandos (desde k0mp4ss_fe/apps/web):
 
 Todos aceptan --dry-run: imprimen el plan y no escriben nada.
 Guarda de borrado: --confirmo=BORRAR exacto (sin ella, wipe y restore salen con código 2).
+Restore: cuenta el origen antes de truncar; si está vacío aborta con código 1 y no toca el destino
+salvo que pases --permitir-vacio. Cero filas escritas también es fallo (código 1).
 Sólo Postgres: la base SQLite de los tests no se toca desde acá. La URL nunca se imprime.
 Variables: DATABASE_URL, NEON_PROJECT_ID, NEON_ORG_ID (o --project-id=/--org-id=).
 `)
@@ -892,13 +1045,40 @@ async function cmdRestore({ args, url, rama }) {
       )
     }
 
-    if (args.dryRun) {
-      console.log("✓ Simulación: no se truncó ni se insertó nada.")
-      return SALIDA_OK
+    // Preflight: el origen se cuenta ANTES de truncar. Un origen vacío no restaura nada y dejaría
+    // el destino a cero, así que la decisión se toma con el destino todavía intacto.
+    const filasOrigen = await contarFilas(origen, aCopiar)
+    const preflight = evaluarPreflightRestore({ filasOrigen, permitirVacio: args.permitirVacio })
+    console.log(
+      `  Filas origen : ${preflight.totalOrigen} en ${aCopiar.length} tablas (contadas antes de truncar)`,
+    )
+    if (aCopiar.length > 0) {
+      console.log(
+        `    ${aCopiar.map((tabla) => `${tabla} ${filasOrigen[tabla] === null ? "?" : filasOrigen[tabla]}`).join(" · ")}`,
+      )
     }
-    if (!args.confirmo) {
+
+    const guardas = evaluarGuardasRestore({ dryRun: args.dryRun, confirmo: args.confirmo, preflight })
+    if (guardas.accion === "simular") {
+      if (preflight.vacio) {
+        console.log(
+          `  ⚠ Origen vacío (0 filas): ${
+            args.permitirVacio
+              ? "--permitir-vacio está presente, así que el restore procedería y dejaría el destino a cero."
+              : "sin --permitir-vacio el restore se abortaría antes de truncar; no destruiría nada."
+          }`,
+        )
+      }
+      console.log("✓ Simulación: no se truncó ni se insertó nada.")
+      return guardas.codigo
+    }
+    if (guardas.accion === "sin-guarda") {
       console.error(`✗ Falta --confirmo=${GUARDA}: no se truncó ni se insertó nada.`)
-      return SALIDA_SIN_GUARDA
+      return guardas.codigo
+    }
+    if (guardas.accion === "abortar") {
+      console.error(`✗ Restore abortado: ${preflight.motivo}`)
+      return guardas.codigo
     }
 
     const vaciadas = await truncar(cliente, tablasDestino)
@@ -906,17 +1086,27 @@ async function cmdRestore({ args, url, rama }) {
 
     const leidas = {}
     const escritas = {}
+    const copiadas = []
+    const noIntentadas = []
     let detenidoEn = null
-    for (const tabla of aCopiar) {
+    for (const [indice, tabla] of aCopiar.entries()) {
       const columnas = columnasComunes.get(tabla) ?? []
-      if (columnas.length === 0) continue
+      if (columnas.length === 0) {
+        noIntentadas.push(tabla)
+        continue
+      }
       try {
         const resultado = await restaurarTabla({ origen, destino: cliente, tabla, columnas })
         leidas[tabla] = resultado.leidas
         escritas[tabla] = resultado.escritas
+        copiadas.push(tabla)
         console.log(`  ✓ ${tabla}: ${resultado.leidas} leídas · ${resultado.escritas} escritas`)
       } catch (error) {
         detenidoEn = tabla
+        // Truncadas y nunca intentadas: todo lo que venía después de la tabla que falló.
+        for (const restante of aCopiar.slice(indice + 1)) {
+          if (!noIntentadas.includes(restante)) noIntentadas.push(restante)
+        }
         console.error(`  ✗ ${redactar(error.message)}`)
         console.error("  El restore se detiene acá: seguir con los hijos dejaría huérfanos.")
         break
@@ -958,9 +1148,25 @@ async function cmdRestore({ args, url, rama }) {
         `${aCopiar.length} tablas copiadas${detenidoEn ? ` · DETENIDO en "${detenidoEn}"` : ""}`,
     )
 
-    if (detenidoEn) return SALIDA_ERROR
+    if (detenidoEn) {
+      console.error(
+        textoEstadoMixto({
+          copiadas,
+          fallida: detenidoEn,
+          noIntentadas,
+          escritas,
+        }),
+      )
+      return SALIDA_ERROR
+    }
     if (!resumen.todoCuadra) {
       console.error(`✗ Descuadre en: ${resumen.descuadres.join(", ")}`)
+      return SALIDA_ERROR
+    }
+
+    const completado = evaluarRestoreCompletado({ totalEscrito: resumen.totales.escritas, detenidoEn })
+    if (!completado.ok) {
+      console.error(`✗ ${completado.motivo}`)
       return SALIDA_ERROR
     }
     console.log("✓ restore completo: todo cuadró tabla por tabla.")
@@ -999,6 +1205,11 @@ async function main() {
     console.error(
       `✗ Flag desconocido: ${args.desconocidos.join(", ")}. La única guarda de borrado es --confirmo=${GUARDA}.`,
     )
+    return SALIDA_ERROR
+  }
+  if (args.permitirVacio && args.comando !== "restore") {
+    // El escape hatch del preflight sólo existe en restore: aceptarlo en wipe sería un pie de banco.
+    console.error(`✗ --permitir-vacio sólo aplica a restore. La única guarda de borrado es --confirmo=${GUARDA}.`)
     return SALIDA_ERROR
   }
 

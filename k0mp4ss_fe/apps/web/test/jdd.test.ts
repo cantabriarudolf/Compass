@@ -4,12 +4,22 @@
  * `scripts/jdd.mjs` — interruptor entre los dos juegos de datos del MISMO Postgres.
  *
  * Se prueban sólo las piezas puras: parseo de argumentos, clasificación de la URL, orden
- * topológico de tablas y el resumen del restore. Nada de base ni de red: el script mueve
- * datos de producción, así que la decisión (qué comando, contra qué motor, en qué orden,
- * si cuadró) es lo que hay que blindar antes de tocar un solo registro.
+ * topológico de tablas, el resumen del restore, el preflight del origen y el diagnóstico del
+ * estado mixto. Nada de base ni de red: el script mueve datos de producción, así que la
+ * decisión (qué comando, contra qué motor, en qué orden, si cuadró) es lo que hay que blindar
+ * antes de tocar un solo registro.
  */
 import { describe, expect, it } from "vitest"
-import { armarResumen, evaluarUrl, ordenTopologico, parsearArgs } from "../scripts/jdd.mjs"
+import {
+  armarResumen,
+  evaluarGuardasRestore,
+  evaluarPreflightRestore,
+  evaluarRestoreCompletado,
+  evaluarUrl,
+  ordenTopologico,
+  parsearArgs,
+  textoEstadoMixto,
+} from "../scripts/jdd.mjs"
 
 /** Fila de FK tal como la devuelve `pg_constraint`: hija depende de padre. */
 interface Fk {
@@ -57,6 +67,12 @@ describe("parsearArgs — la guarda de borrado se gana con el literal exacto", (
 
     expect(args.comunidad).toBe("comunidad-a")
     expect(args.desconocidos).toEqual(["--si-se-que-borro"])
+  })
+
+  it("reconoce --permitir-vacio como escape hatch explícito del restore", () => {
+    expect(parsearArgs(["restore", "jdd1", "--permitir-vacio"]).permitirVacio).toBe(true)
+    expect(parsearArgs(["restore", "jdd1"]).permitirVacio).toBe(false)
+    expect(parsearArgs(["restore", "jdd1", "--permitir-vacio"]).desconocidos).toEqual([])
   })
 })
 
@@ -128,6 +144,128 @@ describe("ordenTopologico — padres antes que hijos, ciclo es error", () => {
   it("ignora autos-referencias y FKs hacia tablas fuera del conjunto", () => {
     expect(ordenDe(["unidad"], [{ hija: "unidad", padre: "unidad" }])).toEqual(["unidad"])
     expect(ordenDe(["unidad"], [{ hija: "unidad", padre: "ajena" }])).toEqual(["unidad"])
+  })
+})
+
+describe("evaluarGuardasRestore — la guarda conserva su precedencia", () => {
+  const origenVacio = evaluarPreflightRestore({ filasOrigen: { comunidad: 0 }, permitirVacio: false })
+  const origenConFilas = evaluarPreflightRestore({ filasOrigen: { comunidad: 4 }, permitirVacio: false })
+
+  it("ejecuta cuando hay guarda y el origen tiene filas", () => {
+    expect(evaluarGuardasRestore({ confirmo: true, preflight: origenConFilas })).toEqual({
+      accion: "ejecutar",
+      codigo: 0,
+    })
+  })
+
+  it("sigue saliendo con 2 sin --confirmo=BORRAR aunque el origen esté vacío", () => {
+    expect(evaluarGuardasRestore({ confirmo: false, preflight: origenVacio })).toEqual({
+      accion: "sin-guarda",
+      codigo: 2,
+    })
+  })
+
+  it("sigue simulando con --dry-run: sale 0 y no escribe", () => {
+    expect(evaluarGuardasRestore({ dryRun: true, confirmo: true, preflight: origenVacio })).toEqual({
+      accion: "simular",
+      codigo: 0,
+    })
+    expect(evaluarGuardasRestore({ dryRun: true, confirmo: false, preflight: origenConFilas }).accion).toBe("simular")
+  })
+
+  it("aborta con 1 cuando hay guarda pero el origen está vacío", () => {
+    expect(evaluarGuardasRestore({ confirmo: true, preflight: origenVacio })).toEqual({
+      accion: "abortar",
+      codigo: 1,
+    })
+  })
+})
+
+describe("evaluarPreflightRestore — el origen se cuenta antes de truncar", () => {
+  it("aborta si el origen está vacío y no hay --permitir-vacio, y dice que no se truncó", () => {
+    const r = evaluarPreflightRestore({ filasOrigen: { comunidad: 0, unidad: 0 }, permitirVacio: false })
+
+    expect(r.abortar).toBe(true)
+    expect(r.totalOrigen).toBe(0)
+    expect(r.motivo).toMatch(/no se trunc/i)
+    expect(r.motivo).toContain("--permitir-vacio")
+    expect(r.motivo).toMatch(/vaciaría la base destino/)
+  })
+
+  it("procede con --permitir-vacio aunque el origen esté vacío", () => {
+    const r = evaluarPreflightRestore({ filasOrigen: { comunidad: 0 }, permitirVacio: true })
+
+    expect(r.abortar).toBe(false)
+    expect(r.totalOrigen).toBe(0)
+    expect(r.motivo).toContain("--permitir-vacio")
+  })
+
+  it("procede cuando el origen tiene filas", () => {
+    const r = evaluarPreflightRestore({ filasOrigen: { comunidad: 3, unidad: 9 }, permitirVacio: false })
+
+    expect(r.abortar).toBe(false)
+    expect(r.totalOrigen).toBe(12)
+    expect(r.motivo).toContain("12 filas")
+  })
+
+  it("trata un conteo ilegible (null) como cero filas y aborta por precaución", () => {
+    const r = evaluarPreflightRestore({ filasOrigen: { comunidad: null, unidad: null }, permitirVacio: false })
+
+    expect(r.totalOrigen).toBe(0)
+    expect(r.abortar).toBe(true)
+  })
+})
+
+describe("evaluarRestoreCompletado — cero filas escritas no es éxito", () => {
+  it("clasifica como fallo un restore que no escribió ninguna fila", () => {
+    const r = evaluarRestoreCompletado({ totalEscrito: 0, detenidoEn: null })
+
+    expect(r.ok).toBe(false)
+    expect(r.motivo).toMatch(/0 filas escritas/)
+    expect(r.motivo).not.toMatch(/todo cuadró/i)
+  })
+
+  it("clasifica como éxito un restore que escribió filas sin detenerse", () => {
+    expect(evaluarRestoreCompletado({ totalEscrito: 7, detenidoEn: null }).ok).toBe(true)
+  })
+
+  it("clasifica como fallo un restore detenido aunque haya escrito algo", () => {
+    const r = evaluarRestoreCompletado({ totalEscrito: 7, detenidoEn: "cobro_gc" })
+
+    expect(r.ok).toBe(false)
+    expect(r.motivo).toContain("cobro_gc")
+  })
+})
+
+describe("textoEstadoMixto — qué quedó a medias y cómo recuperar", () => {
+  it("nombra copiadas, la tabla fallida y las no intentadas, más el snapshot de recuperación", () => {
+    const texto = textoEstadoMixto({
+      copiadas: ["comunidad", "unidad"],
+      fallida: "cobro_gc",
+      noIntentadas: ["pago", "gasto"],
+      escritas: { comunidad: 3, unidad: 9 },
+    })
+
+    expect(texto).toMatch(/copiadas/i)
+    expect(texto).toMatch(/Fallida/)
+    expect(texto).toMatch(/sin intentar|no intentad/i)
+    expect(texto).toContain("cobro_gc")
+    expect(texto).toContain("pago")
+    expect(texto).toContain("comunidad (3)")
+    expect(texto).toContain("jdd1-pre-reset-20261125")
+    expect(texto).toMatch(/restore jdd1-pre-reset-20261125/)
+  })
+
+  it("acepta otro snapshot de recuperación sin perder la instrucción", () => {
+    const texto = textoEstadoMixto({
+      copiadas: [],
+      fallida: "unidad",
+      noIntentadas: ["pago"],
+      snapshot: "jdd2-pre-pruebas",
+    })
+
+    expect(texto).toContain("jdd2-pre-pruebas")
+    expect(texto).not.toContain("jdd1-pre-reset-20261125")
   })
 })
 
