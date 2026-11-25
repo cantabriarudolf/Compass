@@ -6,7 +6,7 @@ subirlas al sistema para que la carga sea una vez y sin duplicados.
 
 ## 🚦 El orden importa: estructura → personas → vínculos → finanzas
 
-Hay **seis bloques** y se cargan en este orden, porque cada uno necesita al anterior:
+Hay **siete bloques** y se cargan en este orden, porque cada uno necesita al anterior:
 
 1. **Estructura**: los sectores (macro y micro) y las unidades con su Rol SII, metraje, prorrateo,
    tipo y estado de ocupación.
@@ -17,7 +17,9 @@ Hay **seis bloques** y se cargan en este orden, porque cada uno necesita al ante
    sistema rechaza fila por fila con el motivo — no hay vuelta que darle.
 4. **Egresos**: los gastos históricos de la comunidad, un documento por fila.
 5. **Ingresos**: los ingresos históricos a los fondos, con el mismo formato que los egresos.
-6. **Saldos de apertura**: la deuda anterior de cada unidad al día de corte. Va **al final**: crea
+6. **Pagos históricos**: lo que cada unidad ya pagó, comprobante por comprobante. Va después del
+   gasto común del período: se anexa a los pagos de ese cobro y **no crea** cobros ni asientos.
+7. **Saldos de apertura**: la deuda anterior de cada unidad al día de corte. Va **al final**: crea
    un cobro por unidad imputado al fondo de gasto común activo y **rechaza la importación entera**
    si ya hay una emisión de gastos comunes del período del corte o de uno anterior — si no, el mes
    se cobraría dos veces.
@@ -37,8 +39,8 @@ usarla, el servidor le responde **403 Permiso denegado**.
 
 Lo que se ve:
 
-- **Seis tarjetas iguales**: *Estructura*, *Personas*, *Vínculos*, *Egresos*, *Ingresos* y *Saldos
-  de apertura*, cada una con su descripción.
+- **Siete tarjetas iguales**: *Estructura*, *Personas*, *Vínculos*, *Egresos*, *Ingresos*, *Pagos
+  históricos* y *Saldos de apertura*, cada una con su descripción.
 - En cada tarjeta:
   1. Un **aviso amarillo** permanente: que un `.xlsx` hay que guardarlo como CSV, y que las filas
      de ejemplo de la plantilla vienen marcadas con «EJEMPLO-» y el importador las rechaza a
@@ -124,12 +126,39 @@ Los gastos históricos de la comunidad, **una fila por documento**. La plantilla
 | `monto` | Monto en pesos, **mayor que 0**, con punto decimal | `185000.50` |
 | `descripcion` | Qué fue ese gasto | `Mantención ascensor` |
 | `categoria` | Texto libre de hasta 120 caracteres. Puede ir vacío | `Mantención` |
-| `fondo` | **Nombre o id de un fondo que ya existe** en la comunidad. El importador no crea fondos | `Fondo de Gasto Común` |
+| `fondo` | **Nombre o id de un fondo que ya existe y está activo**. El importador no crea fondos ni imputa a uno inactivo | `Fondo de Gasto Común` |
+
+Cada egreso importado recibe su **`folio`** de la misma numeración que la pantalla de alta
+(`FE-0043`, `FE-0044`…): el tramo se reserva una vez, con el archivo ya limpio, así que un archivo
+con tres filas nuevas toma tres folios consecutivos y **no repite** el de un egreso que ya estaba.
+Si el fondo que nombrás **existe pero está inactivo**, la fila falla con el motivo («el fondo … está
+inactivo») y la importación queda bloqueada hasta corregirla: darlo de alta como activo es de la
+pantalla de Finanzas.
 
 ### Bloque Ingresos (5 columnas)
 
-Los ingresos históricos a los fondos, con **los mismos cinco encabezados** y las mismas reglas que
-Egresos. Cambia sólo a qué libro entran. La plantilla es `plantilla-ingresos.csv`.
+Los ingresos históricos a los fondos, con **los mismos cinco encabezados** que Egresos y las
+mismas reglas de fecha, monto y fondo existente. Cambia sólo a qué libro entran y que **no** lleva
+`folio` ni exige fondo activo: `IngresoFI` no tiene numeración propia. La plantilla es
+`plantilla-ingresos.csv`.
+
+### Bloque Pagos históricos (4 columnas)
+
+El **detalle** de lo que cada unidad ya pagó, comprobante por comprobante. La plantilla es
+`plantilla-pagos-historicos.csv`.
+
+| Encabezado | Qué es | Ejemplo de valor |
+| --- | --- | --- |
+| `unidad` | Rol SII de una unidad que **ya existe** en la comunidad | `12345-1101` |
+| `fecha` | Fecha del pago, **AAAA-MM-DD**, real. Su mes fija el período del cobro al que se imputa | `2024-03-08` |
+| `monto` | Lo pagado, **mayor que 0**, con punto decimal | `45000.50` |
+| `medio` | Cómo se pagó, texto libre | `Transferencia` |
+
+Cada fila se anexa a los **pagos del cobro de ese período**, el de gasto común cuando la unidad
+tiene más de uno. El pago histórico **no crea un cobro ni un asiento**: si la unidad no tiene cobro
+en ese período, la fila falla con el motivo y hay que emitir el gasto común primero. Es
+**idempotente** por unidad + fecha + monto + medio dentro de la comunidad: reimportar el mismo
+archivo no duplica, cada fila vuelve como «Sin cambios».
 
 ### Bloque Saldos de apertura (3 columnas)
 
@@ -201,10 +230,8 @@ otra vez sin miedo.
 
 ## 🚫 Qué NO se puede cargar todavía (por CSV)
 
-El importador cubre **seis bloques** y nada más. Todavía **no** se puede cargar por CSV:
+El importador cubre **siete bloques** y nada más. Todavía **no** se puede cargar por CSV:
 
-- **El detalle de los pagos históricos**: el saldo de apertura de cada unidad sí entra, pero cada
-  comprobante viejo —pago por pago— no.
 - **Emisiones y cobros de gastos comunes**: se generan emitiendo en la pantalla de Gastos Comunes.
 - **Ficha laboral del personal** (jornadas, contratos, remuneraciones).
 - **Datos de gobernanza** (directiva, períodos, actas).
@@ -213,14 +240,13 @@ El importador cubre **seis bloques** y nada más. Todavía **no** se puede carga
 Esos módulos **siguen cargándose por su pantalla** de siempre. En el padrón de personas vía CSV
 van sólo los datos básicos: lo laboral y lo de gobernanza se completa módulo a módulo.
 
-Dos límites del historial financiero que conviene tener a la vista: el **`folio`** de un egreso
-importado queda **vacío** (la numeración la asigna la pantalla de alta, no el CSV) y el importador
-**no enciende el fondo**: si el fondo que nombrás está inactivo, la fila pasa igual — darlo de alta
-como activo es de la pantalla de Finanzas.
+Un límite del historial financiero que conviene tener a la vista: el bloque de **pagos históricos**
+no emite nada. Si el período no tiene gasto común emitido, no hay dónde registrar el pago y la fila
+falla — primero se emite, después se carga el detalle de lo pagado.
 
 ## 🪜 El arranque completo: los doce pasos
 
-Los seis bloques de arriba son la mitad de la puesta en marcha. La otra mitad vive en
+Los siete bloques de arriba son la mitad de la puesta en marcha. La otra mitad vive en
 **`/admin/arranque`** (menú de **Sistema**): una pantalla que mide **doce pasos** contra la base y
 anuncia cuántos faltan («faltan N de 12»). Cada paso muestra **el número medido** —«0 unidades», «2
 fondos de gasto común activos»— y el enlace a la pantalla donde se resuelve.
@@ -243,9 +269,10 @@ paso vuelve a **pendiente**. El orden es este y la pantalla no lo reordena:
 | 11 | Emisión de gasto común | Emisiones hechas | `/finanzas/gastos-comunes` |
 | 12 | Usuarios de la comunidad | Usuarios **además de tu cuenta**: una comunidad de una sola cuenta no tiene a quién notificar | `/admin/usuarios` |
 
-Los pasos 1 a 6 son los que resuelven los seis bloques de carga de este manual (el catálogo del
-país va por su botón en `/admin/maestros`, los demás por CSV). Del 7 en adelante se cargan por
-pantalla, uno por módulo.
+Los pasos 1 a 6 son los que resuelven los siete bloques de carga de este manual (el catálogo del
+país va por su botón en `/admin/maestros`, los demás por CSV); el detalle de **pagos históricos**
+necesita además el paso 11, la emisión del período. Del 7 en adelante se cargan por pantalla, uno
+por módulo.
 
 ## 🩹 Errores frecuentes y qué significan
 

@@ -10,7 +10,7 @@ nombres, para qué sirven y cuándo conviene rotarlas o borrarlas.
 |---|---|---|---|---|
 | `BLOB_READ_WRITE_TOKEN` | token del store privado de archivos `compass-docs` (`store_N6nhGocrimNsD5Mr`, región `iad1`). Lo usan las subidas de PDF firmados (convenios) | production, preview, development | inyectado por Vercel al conectar el store | si se filtra, **rotar desde el store** en el panel de Vercel; el store nuevo inyecta el token solo |
 | `CLAVE_MAESTRA_SECRETOS` | clave maestra (32 bytes en hex) con la que se cifra en la base la credencial SMTP **de cada comunidad**. AES-256-GCM, IV y tag por registro | production, preview, development | `openssl rand -hex 32` | **rotarla invalida los paquetes guardados**: hay que volver a cargar la credencial de cada comunidad desde `/admin/configuracion/correo`. Rotar si se sospecha del entorno, no periódicamente |
-| `CRON_SECRET` | secreto que Vercel envía como `Authorization: Bearer` al barrido diario de avisos (`GET /api/vigencia-registro/avisos`) | production, preview, development | `openssl rand -hex 24` | rotar sin efecto colateral: el cron toma el valor del entorno en la siguiente corrida. Rotar si alguien dejó de tener acceso al proyecto |
+| `CRON_SECRET` | secreto que Vercel envía como `Authorization: Bearer` a **los dos** crons: el barrido diario de avisos (`GET /api/vigencia-registro/avisos`, `0 12 * * *`) y la cola de salida de CO (`GET /api/co/cola`, `0 13 * * *`, un lote acotado por comunidad) | production, preview, development | `openssl rand -hex 24` | rotar sin efecto colateral: los dos crons toman el valor del entorno en la siguiente corrida. Rotar si alguien dejó de tener acceso al proyecto |
 
 ## Heredadas, siguen en uso
 
@@ -26,9 +26,11 @@ nombres, para qué sirven y cuándo conviene rotarlas o borrarlas.
 
 Las tres de arriba **fallan cerrado**: el sistema se niega a hacer la operación en vez
 de hacerla mal. Sin `CLAVE_MAESTRA_SECRETOS` no se guarda la credencial de correo (500 y
-cero filas escritas); sin `CRON_SECRET` el barrido responde 500 sin ejecutar nada; sin
-el token del blob no se puede subir un PDF firmado. El mensaje de error nombra la
-variable que falta.
+cero filas escritas); sin `CRON_SECRET` las dos rutas de cron también fallan cerrado, pero
+**no con el mismo estado**: el barrido de vigencia responde **500** y la cola de CO responde
+**401** —sin la variable el llamador no está autorizado y la ruta no drena, porque no
+distingue «no hay secreto» de «el secreto no coincide»—; sin el token del blob no se puede
+subir un PDF firmado. El mensaje de error nombra la variable que falta.
 
 ## Cómo revisarlas sin exponerlas
 
