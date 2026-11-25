@@ -18,7 +18,11 @@
  *      del servidor —nunca `pendiente`, nunca `enviado`, nunca `entregado`—;
  *   5. el lote es acotado: pedir 100 con tope 50 toma 50 y deja el saldo dicho;
  *   6. la ruta es administrativa: 401 sin sesión, 403 con un rol sin la clave
- *      del envío masivo, y 404 cuando el envío es de otra comunidad.
+ *      del envío masivo, y 404 cuando el envío es de otra comunidad;
+ *   7. el cron de Vercel drena por `GET` con `Authorization: Bearer
+ *      <CRON_SECRET>` (`S3`), sin sesión; sin el secreto correcto —o sin la
+ *      variable en el entorno— responde 401 y no toca ni una fila, y el `POST`
+ *      manual y la métrica de la sesión conservan su contrato.
  *
  * El servidor SMTP es el falso en memoria de `test/lib/servidor-smtp-falso.ts`
  * (el mismo de F29/F43): escucha en `127.0.0.1` efímero y no abre conexiones.
@@ -78,6 +82,8 @@ vi.mock("@/lib/entrega/notificar", async (importOriginal) => {
 })
 
 const AUTH_SECRET = "test-secret-12345678"
+/** Secreto inventado del cron: texto de prueba, no una credencial. */
+const SECRETO_CRON = "secreto-cron-cola-co-inventado"
 /** Contraseña inventada del emisor global: texto de prueba, no una credencial. */
 const CLAVE_GLOBAL = "clave-inventada-cola-co"
 /** Credencial de la comunidad: usuario y secreto DISTINTOS del camino global. */
@@ -110,6 +116,7 @@ const LOTE_CANTIDAD = 52
 
 const secretoPrevio = process.env.SMTP_PASSWORD
 const clavePrevia = process.env[VARIABLE_CLAVE_MAESTRA]
+const secretoCronPrevio = process.env.CRON_SECRET
 const servidores: ServidorSMTPFalso[] = []
 const contadores: Server[] = []
 
@@ -135,6 +142,11 @@ function fijarClaveMaestra(valor: string | undefined): void {
   else process.env[VARIABLE_CLAVE_MAESTRA] = valor
 }
 
+function fijarSecretoCron(valor: string | undefined): void {
+  if (valor === undefined) delete process.env.CRON_SECRET
+  else process.env.CRON_SECRET = valor
+}
+
 function envioBody(id: string = ENV, personas: string[] = [P_1, P_2]) {
   return {
     id,
@@ -158,6 +170,33 @@ async function pedirMetrica(): Promise<Response> {
   return invocarApi(moduloCola(), "GET", "co/cola")
 }
 
+/**
+ * `GET /api/co/cola` con el encabezado del cron (S3). El `Request` se arma acá y
+ * no con `invocarApi` porque ese helper no acepta encabezados: el cron de Vercel
+ * no manda cookie, su credencial es el secreto compartido.
+ */
+async function pedirCron(autorizacion?: string): Promise<Response> {
+  const { GET } = await moduloCola()
+  return GET(
+    new Request("http://localhost/api/co/cola", {
+      method: "GET",
+      headers: autorizacion === undefined ? {} : { authorization: autorizacion },
+    })
+  )
+}
+
+/**
+ * Foto de TODA la cola, sin filtrar por comunidad: el cron no tiene sesión y
+ * drena lo que encuentre, así que «no drenó nada» se prueba sobre el estado
+ * completo de la tabla y no sólo sobre el fixture de este archivo.
+ */
+async function fotoDeLaCola() {
+  return prisma.colaSalidaCO.findMany({
+    orderBy: [{ comunidadId: "asc" }, { id: "asc" }],
+    select: { id: true, estado: true, intentos: true, enviadoEn: true, ultimoError: true },
+  })
+}
+
 interface ResumenDrenaje {
   tomadas: number
   enviadas: number
@@ -174,6 +213,30 @@ interface Resumen {
   pendientes: number
   ultimoError: string | null
   error?: string
+}
+
+/** Una comunidad dentro de la respuesta del cron (mismo envelope que el barrido). */
+interface ResumenCronComunidad {
+  comunidadId: string
+  ok: boolean
+  error: string | null
+  tomadas: number
+  enviadas: number
+  fallidas: number
+  pendientes: number
+  ultimoError: string | null
+}
+
+interface ResumenCron {
+  ok: boolean
+  comunidades: ResumenCronComunidad[]
+  totales: {
+    comunidades: number
+    tomadas: number
+    enviadas: number
+    fallidas: number
+    pendientes: number
+  }
 }
 
 async function filasDe(envioId: string = ENV) {
@@ -341,6 +404,7 @@ beforeAll(async () => {
 beforeEach(async () => {
   fijarSecreto(undefined)
   fijarClaveMaestra(CLAVE_MAESTRA)
+  fijarSecretoCron(SECRETO_CRON)
   puente.fallosPendientes = 0
   await limpiar()
 }, 60_000)
@@ -353,6 +417,7 @@ afterEach(async () => {
   }
   fijarSecreto(secretoPrevio)
   fijarClaveMaestra(clavePrevia)
+  fijarSecretoCron(secretoCronPrevio)
 })
 
 afterAll(async () => {
@@ -360,6 +425,7 @@ afterAll(async () => {
     state.cookie = ""
     fijarSecreto(secretoPrevio)
     fijarClaveMaestra(clavePrevia)
+    fijarSecretoCron(secretoCronPrevio)
     await prisma.colaSalidaCO.deleteMany({ where: { comunidadId: { in: [COM, COM_B] } } })
     await prisma.envioDestinatarioCO.deleteMany({
       where: { envio: { comunidadId: { in: [COM, COM_B] } } },
@@ -887,5 +953,122 @@ describe("POST/GET /api/co/cola — compuertas del endpoint administrativo", () 
     // La fila ajena no se tocó: sigue pendiente y no se envió nada.
     const ajena = await prisma.colaSalidaCO.findUnique({ where: { id: "co-cola-fila-ajena" } })
     expect(ajena?.estado).toBe("pendiente")
+  })
+})
+
+describe("GET /api/co/cola — el cron drena la cola (S3)", () => {
+  /** Siembra un envío masivo con su cola pendiente, con el emisor de prueba listo. */
+  async function sembrarColaConEmisor(): Promise<ServidorSMTPFalso> {
+    const servidor = await levantarServidor({ secreto: CLAVE_GLOBAL })
+    await configurarCF(servidor.port, "emisor@ejemplo.test")
+    fijarSecreto(CLAVE_GLOBAL)
+    await conSesion(usuarios.admin, async () => {
+      expect((await enviarMasivo(envioBody())).status).toBe(201)
+    })
+    return servidor
+  }
+
+  it("con Authorization: Bearer <CRON_SECRET> drena la cola sin sesión", async () => {
+    const servidor = await sembrarColaConEmisor()
+    expect((await filasDe()).map((f) => f.estado)).toEqual(["pendiente", "pendiente"])
+
+    // Sin cookie de sesión: el cron de Vercel no la tiene.
+    const res = await pedirCron(`Bearer ${SECRETO_CRON}`)
+    expect(res.status).toBe(200)
+    const cuerpo = await cuerpoJson<ResumenCron>(res)
+    expect(cuerpo.ok).toBe(true)
+    // Cada comunidad con filas drenables aparece con su propio lote.
+    const propia = cuerpo.comunidades.find((fila) => fila.comunidadId === COM)
+    expect(propia).toEqual({
+      comunidadId: COM,
+      ok: true,
+      error: null,
+      tomadas: 2,
+      enviadas: 2,
+      fallidas: 0,
+      pendientes: 0,
+      ultimoError: null,
+    })
+    expect(cuerpo.totales.comunidades).toBe(cuerpo.comunidades.length)
+    expect(cuerpo.totales.enviadas).toBeGreaterThanOrEqual(2)
+
+    // El estado guardado es el del drenaje: las filas del fixture salieron.
+    const filas = await filasDe()
+    expect(filas.map((f) => f.estado)).toEqual(["enviado", "enviado"])
+    for (const fila of filas) {
+      expect(fila.intentos).toBe(1)
+      expect(fila.enviadoEn).not.toBeNull()
+    }
+    // Y el drenaje mandó de verdad: el emisor recibió un mensaje por fila.
+    expect(servidor.mensajes.map((m) => m.to)).toEqual([[EMAIL_1], [EMAIL_2]])
+  })
+
+  it("sin el secreto correcto responde 401 y no drena nada", async () => {
+    const servidor = await sembrarColaConEmisor()
+    const antes = await fotoDeLaCola()
+
+    // Un secreto que no coincide: 401 con el cuerpo de error del vecino.
+    const ajeno = await pedirCron("Bearer otro-secreto-cualquiera")
+    expect(ajeno.status).toBe(401)
+    expect(await cuerpoJson<Resumen>(ajeno)).toEqual({
+      error:
+        "No autorizado: la cola de salida de CO exige el secreto del cron en el encabezado Authorization (Bearer).",
+    })
+
+    // Una sesión válida tampoco convierte un bearer equivocado en autorización:
+    // el encabezado elige el camino del cron, y ese camino no se salta.
+    const conSesionValida = await conSesion(usuarios.admin, () =>
+      pedirCron("Bearer otro-secreto-cualquiera")
+    )
+    expect(conSesionValida.status).toBe(401)
+
+    // Sin encabezado no es el cron: es una consulta sin sesión, y también 401.
+    const sinEncabezado = await pedirCron()
+    expect(sinEncabezado.status).toBe(401)
+    expect(await cuerpoJson<Resumen>(sinEncabezado)).toEqual({ error: "No autenticado." })
+
+    // Ninguna fila cambió y no salió un solo correo.
+    expect(await fotoDeLaCola()).toEqual(antes)
+    expect(servidor.mensajes).toHaveLength(0)
+  })
+
+  it("sin CRON_SECRET en el entorno responde 401 y no drena nada", async () => {
+    const servidor = await sembrarColaConEmisor()
+    const antes = await fotoDeLaCola()
+    fijarSecretoCron(undefined)
+
+    // Falla cerrada: sin secreto configurado no hay forma de autorizar al cron,
+    // así que el encabezado correcto tampoco abre la puerta.
+    const res = await pedirCron(`Bearer ${SECRETO_CRON}`)
+    expect(res.status).toBe(401)
+    expect(await cuerpoJson<Resumen>(res)).toEqual({
+      error:
+        "No autorizado: falta la variable de entorno CRON_SECRET en el servidor, así que la cola de salida de CO no se drena.",
+    })
+
+    expect(await fotoDeLaCola()).toEqual(antes)
+    expect(servidor.mensajes).toHaveLength(0)
+  })
+
+  it("el POST manual y la métrica de la sesión conservan su contrato", async () => {
+    const servidor = await sembrarColaConEmisor()
+
+    await conSesion(usuarios.admin, async () => {
+      const drenaje = await cuerpoJson<ResumenDrenaje>(await drenar())
+      expect(drenaje.tomadas).toBe(2)
+      expect(drenaje.enviadas).toBe(2)
+
+      // El `GET` de la sesión sigue siendo la lectura, no el drenaje: sin
+      // encabezado `Authorization` no hay camino de cron que tomar.
+      expect(await cuerpoJson<Resumen>(await pedirMetrica())).toEqual({
+        enviados: 2,
+        fallidos: 0,
+        pendientes: 0,
+        ultimoError: null,
+      })
+    })
+
+    expect(servidor.mensajes).toHaveLength(2)
+    expect((await filasDe()).map((f) => f.estado)).toEqual(["enviado", "enviado"])
   })
 })

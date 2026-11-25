@@ -12,8 +12,10 @@
  *      idempotencia — volver a mandar el mismo envío no duplica filas ni
  *      reescribe las que ya salieron.
  *   2. **drenarColaSalidaCO** — drena UN lote acotado y escribe el desenlace real
- *      de cada fila. Sin `setInterval` y sin envío al importar el módulo: si
- *      nadie invoca el drenaje, no sale un solo correo (S6).
+ *      de cada fila. Sin `setInterval` y sin envío al importar el módulo: el
+ *      drenaje sólo corre cuando alguien lo invoca —el `POST` manual de la
+ *      consola o el cron de Vercel (`GET /api/co/cola`, S3)—. Si ninguna de las
+ *      dos vías se ejecuta, no sale un solo correo (S6).
  *
  * ── Las reglas que están codificadas acá (no reinterpretar) ─────────────────
  *
@@ -176,6 +178,19 @@ function whereDeCola(filtro: FiltroColaSalidaCO): Prisma.ColaSalidaCOWhereInput 
 }
 
 /**
+ * Las filas que un drenaje todavía puede tomar: `pendiente` y el `fallido` que
+ * no agotó sus intentos. La definición vive acá y no en cada llamador —el drenaje
+ * de una comunidad y el cron que las recorre— para que no se separen: una fila
+ * que el cron barre es exactamente la que el `POST` manual habría tomado.
+ */
+function filtroDrenable(): Prisma.ColaSalidaCOWhereInput {
+  return {
+    estado: { in: ["pendiente", "fallido"] },
+    intentos: { lt: MAX_INTENTOS_COLA_SALIDA_CO },
+  }
+}
+
+/**
  * Acota el lote pedido por el llamador: entero ≥ 1, tope
  * `LOTE_COLA_SALIDA_CO_MAXIMO`. Un valor ausente o ilegible cae al de omisión;
  * un número mayor al tope se recorta, nunca se rechaza (pedir de más no puede
@@ -208,6 +223,24 @@ export async function resumenColaSalidaCO(
     }),
   ])
   return { enviados, fallidos, pendientes, ultimoError: ultimaFalla?.ultimoError ?? null }
+}
+
+/**
+ * Las comunidades con filas que el drenaje todavía puede tomar: las que el cron
+ * recorre en su corrida (S3).
+ *
+ * El cron no tiene sesión, así que no hay «comunidad del cron»: la lista sale de
+ * la cola misma —sólo las comunidades con trabajo pendiente pagan una consulta—
+ * y el `comunidadId` de cada lote lo decide este módulo, nunca el cliente.
+ */
+export async function comunidadesConColaSalidaCO(): Promise<string[]> {
+  const filas = await prisma.colaSalidaCO.findMany({
+    where: filtroDrenable(),
+    distinct: ["comunidadId"],
+    select: { comunidadId: true },
+    orderBy: { comunidadId: "asc" },
+  })
+  return filas.map((fila) => fila.comunidadId)
 }
 
 /**
@@ -276,8 +309,7 @@ export async function drenarColaSalidaCO(
   const filas = await prisma.colaSalidaCO.findMany({
     where: {
       ...whereDeCola(filtro),
-      estado: { in: ["pendiente", "fallido"] },
-      intentos: { lt: MAX_INTENTOS_COLA_SALIDA_CO },
+      ...filtroDrenable(),
     },
     orderBy: [{ creadoEn: "asc" }, { id: "asc" }],
     take: limite,
