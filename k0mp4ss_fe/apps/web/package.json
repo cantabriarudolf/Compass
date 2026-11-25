@@ -25,6 +25,7 @@
     "db:demo-consistente": "vite-node scripts/seed-demo-consistente.ts",
     "db:catalogo-nacional": "vite-node --config vitest.config.ts scripts/seed-catalogo-nacional.ts",
     "datos:reset": "node --env-file-if-exists=.env scripts/datos-reset.mjs",
+    "jdd": "node --env-file-if-exists=.env scripts/jdd.mjs",
     "datos:anonimizar": "node --env-file-if-exists=.env scripts/anonimizar-bitacora.mjs",
     "cifrar:datos": "node --env-file-if-exists=.env scripts/cifrar-datos-existentes.mjs",
     "backup:db": "node scripts/backup-db.mjs",
