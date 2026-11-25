@@ -89,6 +89,18 @@ import {
 export const MOTIVO_TRANSPORTE_FALLO =
   "Falló el transporte de correo con un error inesperado: el intento no se completó y el aviso queda en la bandeja."
 
+/**
+ * Motivo del aviso a un rol interno —administración, directiva— cuando la
+ * comunidad no configuró su casilla de recepción (`ConfiguracionGlobal.smtpRecepcion`).
+ *
+ * Es una condición de CONFIGURACIÓN, no un envío fallido: el correo queda en la
+ * cola de salida como `pendiente` con este motivo y NUNCA se reporta como
+ * `enviado` (S2 de `odd/tasks/saldar-f45-f48.md`). La redacción nombra el campo
+ * que falta —el operador puede completarlo— y no inventa un buzón por rol.
+ */
+export const MOTIVO_SIN_CASILLA_COMUNIDAD =
+  "Sin casilla de recepción de la comunidad configurada (ConfiguracionGlobal.smtpRecepcion): el aviso a la administración queda en la cola de salida y no se reporta como enviado."
+
 /** Lo que el llamador declara para escribir UN aviso in-app y su entrega al visor. */
 export interface AvisoInApp {
   readonly comunidadId: string
@@ -132,6 +144,18 @@ export interface CorreoPorEntregar {
    * «el propietario vigente de la unidad» conserva su propia redacción.
    */
   readonly motivoSinDestinatario?: string
+  /**
+   * El correo va a un rol interno que no tiene dirección propia (S2 de
+   * `saldar-f45-f48`): si la persona declarada no resuelve ninguna dirección, la
+   * entrega usa la casilla de recepción de la comunidad
+   * (`ConfiguracionGlobal.smtpRecepcion`), y sin ella queda `pendiente` con
+   * `MOTIVO_SIN_CASILLA_COMUNIDAD` — nunca `enviado` en falso.
+   *
+   * Sin esta marca una persona sin dirección sigue quedando `fallido` con el
+   * motivo del catálogo: el camino es opt-in para que ninguna entrega existente
+   * cambie de desenlace.
+   */
+  readonly casillaDeLaComunidad?: boolean
 }
 
 /** La entrega persistida: el plan del canal más los datos de su fila. */
@@ -293,6 +317,27 @@ async function planDelCorreoSinRomperLaEntrega(contexto: {
 }
 
 /**
+ * Casilla de recepción de la comunidad: `ConfiguracionGlobal.smtpRecepcion`, el
+ * buzón que el emisor usa hoy como Reply-To de todo correo saliente.
+ *
+ * Es la ÚNICA dirección de la administración que existe (S2 de
+ * `odd/tasks/saldar-f45-f48.md`): no se inventa un campo nuevo ni un buzón por
+ * rol. Se devuelve recortada y `""` cuando la comunidad no la configuró, para
+ * que el llamador declare ese hecho con su motivo en vez de enviar a una
+ * dirección vacía.
+ */
+export async function casillaDeRecepcionDeLaComunidad(
+  comunidadId: string,
+  cliente: Prisma.TransactionClient
+): Promise<string> {
+  const fila = await cliente.configuracionGlobal.findUnique({
+    where: { comunidadId },
+    select: { smtpRecepcion: true },
+  })
+  return fila?.smtpRecepcion?.trim() ?? ""
+}
+
+/**
  * Intenta el correo de UN aviso y persiste su desenlace (S3 y S3b).
  *
  * Se llama SIEMPRE con el cliente plano, NUNCA dentro de una transacción: el
@@ -303,8 +348,13 @@ async function planDelCorreoSinRomperLaEntrega(contexto: {
  * Sin persona o sin dirección queda `fallido` con el motivo del catálogo (o el
  * que el módulo declare) y no abre ninguna conexión; sin emisor SMTP queda
  * `pendiente` con `MOTIVO_SIN_SMTP`; con el servidor aceptando, `enviado` y
- * `enviadoEn` con la fecha del intento. En ningún caso se lanza por el
- * transporte (S6).
+ * `enviadoEn` con la fecha del intento. Un aviso a un rol interno sin dirección
+ * propia no tiene persona a la que resolverle el correo: con
+ * `casillaDeLaComunidad` la dirección sale de `ConfiguracionGlobal.smtpRecepcion`
+ * y, si la comunidad no la configuró, queda `pendiente` con
+ * `MOTIVO_SIN_CASILLA_COMUNIDAD` —tampoco `enviado` (S2 de
+ * `odd/tasks/saldar-f45-f48.md`)—. En ningún caso se lanza por el transporte
+ * (S6).
  */
 export async function entregarPorCorreo(
   cliente: PrismaClient,
@@ -328,19 +378,43 @@ export async function entregarPorCorreo(
     destinatario = correos.get(personaDelCorreo) ?? ""
   }
 
-  const plan =
-    destinatario === ""
-      ? {
-          canal: "email" as const,
-          estado: "fallido" as const,
-          motivo: correo.motivoSinDestinatario ?? MOTIVO_SIN_DESTINATARIO,
-        }
-      : await planDelCorreoSinRomperLaEntrega({
-          comunidadId: correo.comunidadId,
-          destinatario,
-          asunto: correo.asunto,
-          cuerpo: correo.cuerpo,
-        })
+  // S2 (`saldar-f45-f48`): un rol interno —administración, directiva— no tiene
+  // dirección propia, así que su correo va a la casilla de recepción de la
+  // comunidad. Sólo se consulta cuando la persona declarada no resolvió una
+  // dirección: una entrega con dirección no cambia de destinatario, y una
+  // entrega sin la marca sigue siendo `fallido` como siempre.
+  let faltaLaCasilla = false
+  if (destinatario === "" && correo.casillaDeLaComunidad === true) {
+    destinatario = await casillaDeRecepcionDeLaComunidad(
+      correo.comunidadId,
+      cliente
+    )
+    faltaLaCasilla = destinatario === ""
+  }
+
+  let plan: PlanEntregaCanal
+  if (faltaLaCasilla) {
+    // Condición de configuración, no envío fallido: queda en la cola de salida
+    // con el motivo que nombra el campo que falta.
+    plan = {
+      canal: "email",
+      estado: "pendiente",
+      motivo: MOTIVO_SIN_CASILLA_COMUNIDAD,
+    }
+  } else if (destinatario === "") {
+    plan = {
+      canal: "email",
+      estado: "fallido",
+      motivo: correo.motivoSinDestinatario ?? MOTIVO_SIN_DESTINATARIO,
+    }
+  } else {
+    plan = await planDelCorreoSinRomperLaEntrega({
+      comunidadId: correo.comunidadId,
+      destinatario,
+      asunto: correo.asunto,
+      cuerpo: correo.cuerpo,
+    })
+  }
 
   return registrarEntrega(cliente, {
     comunidadId: correo.comunidadId,

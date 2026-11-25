@@ -25,6 +25,11 @@
  *      qué pasó con su motivo y `entregarPorCorreo` nunca lanza.
  *   5. La `Notificacion` entra en la transacción del LLAMADOR: si el llamador
  *      revierte, no queda ni el aviso ni su entrega.
+ *   6. S2 de `saldar-f45-f48` — el aviso que va a un rol interno que no tiene
+ *      dirección propia sale a la casilla de recepción de la comunidad
+ *      (`ConfiguracionGlobal.smtpRecepcion`) y sin ella queda `pendiente` con su
+ *      motivo: nunca `enviado` en falso, y sin ningún campo de configuración
+ *      nuevo.
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest"
 import { prisma } from "@/lib/prisma"
@@ -33,6 +38,7 @@ import {
   MOTIVO_SIN_SMTP,
 } from "@/lib/entrega-aviso"
 import {
+  MOTIVO_SIN_CASILLA_COMUNIDAD,
   MOTIVO_TRANSPORTE_FALLO,
   avisar,
   entregarPorCorreo,
@@ -57,6 +63,12 @@ const COM = "entrega-notif-comunidad"
 const PERSONA_CON_CORREO = "entrega-notif-p-con-correo"
 const PERSONA_SIN_CORREO = "entrega-notif-p-sin-correo"
 const CORREO = "residente@residencialpruebadestino.cl"
+/**
+ * Casilla de recepción de la comunidad: `ConfiguracionGlobal.smtpRecepcion`, la
+ * columna que ya existe y que hoy viaja como Reply-To. S2 no agrega ninguna.
+ */
+const CASILLA = "recepcion@residencialpruebadestino.cl"
+const CONFIGURACION = "entrega-notif-cfg"
 const RUT_BASE = 20_000_000
 
 let rut = RUT_BASE
@@ -121,12 +133,46 @@ beforeAll(async () => {
   await crearPersona(PERSONA_CON_CORREO, `  ${CORREO}  `)
   // Sin dirección: el maestro guarda la cadena vacía, no una dirección inventada.
   await crearPersona(PERSONA_SIN_CORREO, "")
+  // La comunidad tiene fila de CF: es la FORMA que ya existe (S2 no agrega
+  // campos). La casilla de recepción nace vacía y cada caso la decide.
+  await prisma.configuracionGlobal.create({
+    data: {
+      id: CONFIGURACION,
+      comunidadId: COM,
+      nombreComunidad: "Comunidad de la entrega",
+      rutComunidad: "11.111.111-1",
+      direccionOficial: "Calle de la entrega 742",
+      administradorResponsable: "Administración de la entrega",
+      rutAdministrador: "12.345.678-5",
+      telefonoAdmin: "+56900000001",
+      modoCalculoGC: "prorrateo",
+      diaCortePago: 5,
+      limiteMesesAvisoCorte: 3,
+      smtpHost: "localhost",
+      smtpPort: 25,
+      smtpUser: "entrega",
+      smtpSecurity: "none",
+      smtpFrom: "avisos@residencialpruebadestino.cl",
+      smtpFromName: "Comunidad de la entrega",
+      smtpRecepcion: null,
+      notificarEmisionGC: false,
+      notificarRegistroVisitas: false,
+      notificarEncomiendas: false,
+      notificarReservas: false,
+      notificarAvisosSistema: false,
+      notificarSugerenciasReclamos: false,
+      diasMesComercial: 30,
+      diasVacacionesMes: 1.25,
+      jornadaSemanalEstandar: 45,
+    },
+  })
 }, 30_000)
 
 afterAll(async () => {
   await prisma.entregaNotificacion.deleteMany({ where: { comunidadId: COM } })
   await prisma.notificacion.deleteMany({ where: { comunidadId: COM } })
   await prisma.persona.deleteMany({ where: { comunidadId: COM } })
+  await prisma.configuracionGlobal.deleteMany({ where: { comunidadId: COM } })
   await prisma.comunidad.delete({ where: { id: COM } }).catch(() => {})
 })
 
@@ -384,5 +430,90 @@ describe("la notificación entra en la transacción del llamador", () => {
     expect(
       await prisma.entregaNotificacion.count({ where: { notificacionId } })
     ).toBe(0)
+  })
+})
+
+describe("S2 — el aviso a un rol interno sin dirección va a la casilla de la comunidad", () => {
+  it("con `smtpRecepcion` en CF, la entrega queda `enviado` a esa casilla", async () => {
+    // La casilla es una columna que YA existe: el aviso no necesita ningún campo
+    // nuevo ni un buzón por rol (S2), así que el caso escribe sólo esa.
+    await prisma.configuracionGlobal.update({
+      where: { comunidadId: COM },
+      data: { smtpRecepcion: CASILLA },
+    })
+    const escrito = await avisar(
+      prisma,
+      aviso({ destinatarioRol: "administracion", destinatarioPersonaId: null })
+    )
+    const entrega = await entregarPorCorreo(
+      prisma,
+      correo({
+        destinatarioPersonaId: null,
+        casillaDeLaComunidad: true,
+        notificacionId: escrito.notificacionId,
+      })
+    )
+
+    // El destinatario del transporte es la casilla configurada, no una persona.
+    expect(transporte.enviar).toHaveBeenCalledTimes(1)
+    expect(transporte.enviar).toHaveBeenCalledWith(COM, {
+      to: CASILLA,
+      subject: "Encomienda recibida en conserjería",
+      text: "Tiene una encomienda recibida el 2026-03-23. Retírela con su identificación.",
+    })
+
+    expect(entrega).toMatchObject({ canal: "email", estado: "enviado", intentos: 1 })
+    expect(entrega.enviadoEn).toBeInstanceOf(Date)
+
+    const filas = await filasDeLaNotificacion(escrito.notificacionId)
+    expect(filas).toHaveLength(2)
+    expect(filas.find((fila) => fila.canal === "visor")).toMatchObject({
+      estado: "entregado",
+      motivo: null,
+    })
+    const correoPersistido = filas.find((fila) => fila.canal === "email")
+    expect(correoPersistido).toMatchObject({ estado: "enviado", intentos: 1 })
+    expect(correoPersistido?.enviadoEn).toBeInstanceOf(Date)
+    expect(await contarNotificaciones()).toBe(1)
+  })
+
+  it("sin `smtpRecepcion` queda `pendiente` con su motivo, nunca `enviado`, y el aviso existe", async () => {
+    await prisma.configuracionGlobal.update({
+      where: { comunidadId: COM },
+      data: { smtpRecepcion: null },
+    })
+    const escrito = await avisar(
+      prisma,
+      aviso({ destinatarioRol: "administracion", destinatarioPersonaId: null })
+    )
+    const entrega = await entregarPorCorreo(
+      prisma,
+      correo({
+        destinatarioPersonaId: null,
+        casillaDeLaComunidad: true,
+        notificacionId: escrito.notificacionId,
+      })
+    )
+
+    expect(entrega).toMatchObject({
+      canal: "email",
+      estado: "pendiente",
+      motivo: MOTIVO_SIN_CASILLA_COMUNIDAD,
+      intentos: 1,
+      enviadoEn: null,
+    })
+    // Sin casilla no hay a dónde mandar: no se abre ninguna conexión.
+    expect(transporte.enviar).not.toHaveBeenCalled()
+
+    const notificacion = await prisma.notificacion.findUnique({
+      where: { id: escrito.notificacionId },
+    })
+    expect(notificacion?.destinatarioRol).toBe("administracion")
+    const filas = await filasDeLaNotificacion(escrito.notificacionId)
+    expect(filas.find((fila) => fila.canal === "email")).toMatchObject({
+      estado: "pendiente",
+      motivo: MOTIVO_SIN_CASILLA_COMUNIDAD,
+      enviadoEn: null,
+    })
   })
 })

@@ -15,7 +15,7 @@ import { prisma } from "@/lib/prisma"
 import { logger } from "@/lib/logger"
 import { createCrudHandlers } from "@/lib/api/crud-factory"
 import { registrarEventoAuditoria } from "@/lib/auditoria"
-import { avisar } from "@/lib/entrega/notificar"
+import { avisar, entregarPorCorreo } from "@/lib/entrega/notificar"
 import {
   jsonError,
   withComunidadScope,
@@ -98,16 +98,18 @@ export async function POST(req: Request): Promise<Response> {
         }),
       ])
       const ref = unidad ? `${unidad.etiqueta} ${unidad.numero}` : publicacion.unidadId
+      const asunto = "Nuevo interesado en tu propiedad"
+      const cuerpo = `${datos.nombreContacto} mostró interés en ${ref} (${publicacion.operacion}). Contacto: ${datos.contacto}`
       // El aviso pasa por el camino único (S2): el llamador declara el canal
       // —el valor que antes ponía el `@default` de Prisma— y el puente escribe
       // el aviso y su constancia de entrega al visor en la misma transacción.
-      await prisma.$transaction((tx) =>
+      const { notificacionId } = await prisma.$transaction((tx) =>
         avisar(tx, {
           comunidadId: scope.comunidadId,
           destinatarioRol: "propietario",
           destinatarioPersonaId: propietario?.personaId ?? null,
-          asunto: "Nuevo interesado en tu propiedad",
-          cuerpo: `${datos.nombreContacto} mostró interés en ${ref} (${publicacion.operacion}). Contacto: ${datos.contacto}`,
+          asunto,
+          cuerpo,
           canal: CANAL_NOTIFICACION_EMAIL_SIMULADO,
           moduloOrigen: "PI",
           fecha: new Date().toISOString().slice(0, 10),
@@ -123,6 +125,18 @@ export async function POST(req: Request): Promise<Response> {
         tipoAccion: "PI_LEAD_CONTACT",
         referenciaId: id,
         descripcion: `Interés registrado en ${ref} por ${datos.nombreContacto}.`,
+      })
+      // El correo sale DESPUÉS del commit y con el cliente PLANO (S3b): el
+      // diálogo SMTP no retiene el lock de la base. El aviso es de un rol
+      // interno (el propietario) que no tiene dirección propia, así que su
+      // copia va a la casilla de recepción de la comunidad (S2 de
+      // `saldar-f45-f48`); sin ella queda `pendiente` con su motivo.
+      await entregarPorCorreo(prisma, {
+        comunidadId: scope.comunidadId,
+        asunto,
+        cuerpo,
+        casillaDeLaComunidad: true,
+        notificacionId,
       })
     }
 

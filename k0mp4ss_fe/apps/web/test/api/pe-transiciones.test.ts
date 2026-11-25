@@ -23,6 +23,7 @@ import { NextRequest } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { costoProyeccionPE } from "@/lib/personal-utils"
 import { CANAL_NOTIFICACION_EMAIL_SIMULADO } from "@/lib/schemas"
+import { MOTIVO_SIN_CASILLA_COMUNIDAD } from "@/lib/entrega/notificar"
 
 const state = vi.hoisted(() => ({ cookie: "" }))
 vi.mock("next/headers", () => ({
@@ -35,6 +36,17 @@ vi.mock("next/headers", () => ({
       )
     ),
 }))
+
+/**
+ * El doble del transporte, que sólo usan los casos de S2 (abajo): `planDeCanal`
+ * corre de verdad y lo único que se decide es qué responde el servidor de
+ * correo, para medir la casilla del aviso sin abrir ninguna conexión.
+ */
+const transporte = vi.hoisted(() => ({ enviar: vi.fn() }))
+vi.mock("@/lib/smtp", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@/lib/smtp")>()
+  return { ...real, enviarCorreoComunidad: transporte.enviar }
+})
 
 const AUTH_SECRET = "test-secret-12345678"
 
@@ -815,13 +827,25 @@ describe("POST /api/pe/proyecciones/enviar", () => {
     const entregas = await prisma.entregaNotificacion.findMany({
       where: { notificacionId: notificacion!.id },
     })
-    expect(entregas).toHaveLength(1)
-    expect(entregas[0]).toMatchObject({
+    // S2: el aviso a administración también deja su intento de correo a la
+    // casilla de la comunidad. Esta suite no siembra CF, así que la casilla no
+    // existe: `pendiente` con su motivo, nunca `enviado` en falso.
+    expect(entregas).toHaveLength(2)
+    expect(entregas.find((entrega) => entrega.canal === "visor")).toMatchObject({
       comunidadId: comunidad,
       notificacionId: notificacion!.id,
       canal: "visor",
       estado: "entregado",
       motivo: null,
+      intentos: 1,
+      enviadoEn: null,
+    })
+    expect(entregas.find((entrega) => entrega.canal === "email")).toMatchObject({
+      comunidadId: comunidad,
+      notificacionId: notificacion!.id,
+      canal: "email",
+      estado: "pendiente",
+      motivo: MOTIVO_SIN_CASILLA_COMUNIDAD,
       intentos: 1,
       enviadoEn: null,
     })
@@ -867,6 +891,134 @@ describe("POST /api/pe/proyecciones/enviar", () => {
       expect(await negativo.json()).toEqual({
         error: "Los costos de parche y día extra no pueden ser negativos.",
       })
+    })
+  })
+
+  describe("S2 — el aviso a la proyección va a la casilla de la comunidad", () => {
+    /** Casilla de recepción de la comunidad: la columna que CF ya tiene. */
+    const casilla = "pe-trans-recepcion@test.cl"
+
+    /**
+     * CF de la comunidad con la forma que YA existe (S2 no agrega ningún campo):
+     * la única columna que cada caso decide es `smtpRecepcion`.
+     */
+    const sembrarConfiguracion = async (
+      smtpRecepcion: string | null
+    ): Promise<void> => {
+      await prisma.configuracionGlobal.upsert({
+        where: { comunidadId: comunidad },
+        update: { smtpRecepcion },
+        create: {
+          id: "pe-trans-cfg",
+          comunidadId: comunidad,
+          nombreComunidad: "Comunidad PE Transiciones",
+          rutComunidad: "11.111.111-1",
+          direccionOficial: "Calle PE 742",
+          administradorResponsable: "Administración PE",
+          rutAdministrador: "12.345.678-5",
+          telefonoAdmin: "+56900000001",
+          modoCalculoGC: "prorrateo",
+          diaCortePago: 5,
+          limiteMesesAvisoCorte: 3,
+          smtpHost: "localhost",
+          smtpPort: 25,
+          smtpUser: "pe",
+          smtpSecurity: "none",
+          smtpFrom: "proyecciones@test.cl",
+          smtpFromName: "Comunidad PE Transiciones",
+          smtpRecepcion,
+          notificarEmisionGC: false,
+          notificarRegistroVisitas: false,
+          notificarEncomiendas: false,
+          notificarReservas: false,
+          notificarAvisosSistema: false,
+          notificarSugerenciasReclamos: false,
+          diasMesComercial: 30,
+          diasVacacionesMes: 1.25,
+          jornadaSemanalEstandar: 45,
+        },
+      })
+    }
+
+    it("con `smtpRecepcion` en CF, la entrega del aviso queda `enviado` a esa casilla", async () => {
+      transporte.enviar.mockReset()
+      transporte.enviar.mockResolvedValue({
+        estado: "enviado",
+        messageId: "<pe-trans-mensaje@servidor>",
+      })
+      await sembrarConfiguracion(casilla)
+      try {
+        await crearFeriado(`${mesAnio}-18`)
+        await conSesion(emailAdmin, async () => {
+          const res = await postJson(await rutaProyeccion(), "/api/pe/proyecciones/enviar", {
+            mesAnio,
+            costoParche: 35_000,
+            costoDiaExtra: 28_000,
+          })
+          expect(res.status).toBe(200)
+
+          const notificacion = await prisma.notificacion.findFirst({
+            where: { comunidadId: comunidad, moduloOrigen: "PE" },
+          })
+          expect(notificacion).toMatchObject({
+            destinatarioRol: "administracion",
+            destinatarioPersonaId: null,
+          })
+
+          const entregas = await prisma.entregaNotificacion.findMany({
+            where: { notificacionId: notificacion!.id },
+          })
+          expect(entregas).toHaveLength(2)
+          const email = entregas.find((entrega) => entrega.canal === "email")
+          expect(email).toMatchObject({ estado: "enviado", intentos: 1 })
+          expect(email?.enviadoEn).toBeInstanceOf(Date)
+
+          // El transporte recibió la casilla configurada, no una persona.
+          expect(transporte.enviar).toHaveBeenCalledTimes(1)
+          expect(transporte.enviar).toHaveBeenCalledWith(
+            comunidad,
+            expect.objectContaining({ to: casilla })
+          )
+        })
+      } finally {
+        await prisma.configuracionGlobal.deleteMany({ where: { comunidadId: comunidad } })
+      }
+    })
+
+    it("sin casilla de la comunidad la entrega queda `pendiente` con su motivo y el aviso existe", async () => {
+      transporte.enviar.mockReset()
+      await sembrarConfiguracion(null)
+      try {
+        await crearFeriado(`${mesAnio}-18`)
+        await conSesion(emailAdmin, async () => {
+          const res = await postJson(await rutaProyeccion(), "/api/pe/proyecciones/enviar", {
+            mesAnio,
+            costoParche: 35_000,
+            costoDiaExtra: 28_000,
+          })
+          expect(res.status).toBe(200)
+
+          const notificacion = await prisma.notificacion.findFirst({
+            where: { comunidadId: comunidad, moduloOrigen: "PE" },
+          })
+          expect(notificacion).not.toBeNull()
+
+          const entregas = await prisma.entregaNotificacion.findMany({
+            where: { notificacionId: notificacion!.id },
+          })
+          expect(entregas).toHaveLength(2)
+          expect(entregas.find((entrega) => entrega.canal === "email")).toMatchObject({
+            estado: "pendiente",
+            motivo: MOTIVO_SIN_CASILLA_COMUNIDAD,
+            intentos: 1,
+            enviadoEn: null,
+          })
+          // Sin casilla no hay a dónde mandar: no se abre ninguna conexión.
+          expect(transporte.enviar).not.toHaveBeenCalled()
+        })
+      } finally {
+        await prisma.configuracionGlobal.deleteMany({ where: { comunidadId: comunidad } })
+      }
     })
   })
 })

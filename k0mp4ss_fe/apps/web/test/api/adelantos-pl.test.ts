@@ -16,6 +16,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from "vites
 import { NextRequest } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { CANAL_NOTIFICACION_EMAIL_SIMULADO } from "@/lib/schemas"
+import { MOTIVO_SIN_CASILLA_COMUNIDAD } from "@/lib/entrega/notificar"
 import {
   adelantoImputableAlPeriodo,
   calcularDeduccionAdelantos,
@@ -37,6 +38,17 @@ vi.mock("next/headers", () => ({
     ),
 }))
 
+/**
+ * El doble del transporte (mismo criterio que `test/entrega/notificar.test.ts`):
+ * `planDeCanal` —la política canal→estado— corre de verdad; acá sólo se decide
+ * qué responde el servidor de correo, para poder medir S2 sin abrir conexiones.
+ */
+const transporte = vi.hoisted(() => ({ enviar: vi.fn() }))
+vi.mock("@/lib/smtp", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@/lib/smtp")>()
+  return { ...real, enviarCorreoComunidad: transporte.enviar }
+})
+
 const AUTH_SECRET = "test-secret-12345678"
 
 const comunidad = "ade-comunidad"
@@ -44,6 +56,8 @@ const otraComunidad = "ade-otra-comunidad"
 const emailAdmin = "ade-admin@test.cl"
 const emailComite = "ade-comite@test.cl"
 const emailAdminOtra = "ade-admin-otra@test.cl"
+/** Casilla de recepción de la comunidad: `ConfiguracionGlobal.smtpRecepcion`. */
+const casillaComunidad = "ade-recepcion@test.cl"
 
 const emailToId = (email: string): string => email.split("@")[0] ?? email
 
@@ -260,6 +274,11 @@ beforeAll(async () => {
 
 beforeEach(async () => {
   state.cookie = ""
+  transporte.enviar.mockReset()
+  transporte.enviar.mockResolvedValue({
+    estado: "enviado",
+    messageId: "<ade-mensaje-de-prueba@servidor>",
+  })
   await prisma.adelantoPL.deleteMany({
     where: { comunidadId: { in: [comunidad, otraComunidad] } },
   })
@@ -528,8 +547,10 @@ describe("POST /api/liquidaciones/adelantos — alta", () => {
       const entregas = await prisma.entregaNotificacion.findMany({
         where: { notificacionId: aviso!.id },
       })
-      expect(entregas).toHaveLength(1)
-      expect(entregas[0]).toMatchObject({
+      // S2: el comprobante también deja su intento de correo, y va a la casilla
+      // de la comunidad (acá sin configurar: `pendiente` con su motivo).
+      expect(entregas).toHaveLength(2)
+      expect(entregas.find((entrega) => entrega.canal === "visor")).toMatchObject({
         comunidadId: comunidad,
         notificacionId: aviso!.id,
         canal: "visor",
@@ -538,6 +559,86 @@ describe("POST /api/liquidaciones/adelantos — alta", () => {
         intentos: 1,
         enviadoEn: null,
       })
+      expect(entregas.find((entrega) => entrega.canal === "email")).toMatchObject({
+        comunidadId: comunidad,
+        notificacionId: aviso!.id,
+        canal: "email",
+        estado: "pendiente",
+        motivo: MOTIVO_SIN_CASILLA_COMUNIDAD,
+        intentos: 1,
+        enviadoEn: null,
+      })
+    })
+  })
+
+  it("S2: el correo del comprobante va a la casilla de recepción de la comunidad", async () => {
+    await prisma.configuracionGlobal.update({
+      where: { comunidadId: comunidad },
+      data: { smtpRecepcion: casillaComunidad },
+    })
+    try {
+      await conSesion(emailAdmin, async () => {
+        const res = await crearAdelanto(alta({ monto: 150_000 }))
+        expect(res.status).toBe(201)
+
+        const aviso = await prisma.notificacion.findFirst({
+          where: { comunidadId: comunidad, moduloOrigen: "PL" },
+        })
+        // El aviso in-app sigue siendo del trabajador; la copia por correo no.
+        expect(aviso).toMatchObject({
+          destinatarioRol: "personal",
+          destinatarioPersonaId: "ade-trab-1",
+        })
+
+        const entregas = await prisma.entregaNotificacion.findMany({
+          where: { notificacionId: aviso!.id },
+        })
+        expect(entregas).toHaveLength(2)
+        const email = entregas.find((entrega) => entrega.canal === "email")
+        expect(email).toMatchObject({ estado: "enviado", intentos: 1 })
+        expect(email?.enviadoEn).toBeInstanceOf(Date)
+
+        // El transporte recibió la casilla configurada, no la persona.
+        expect(transporte.enviar).toHaveBeenCalledTimes(1)
+        expect(transporte.enviar).toHaveBeenCalledWith(
+          comunidad,
+          expect.objectContaining({ to: casillaComunidad })
+        )
+      })
+    } finally {
+      await prisma.configuracionGlobal.update({
+        where: { comunidadId: comunidad },
+        data: { smtpRecepcion: null },
+      })
+    }
+  })
+
+  it("S2: sin casilla de la comunidad el correo queda `pendiente` y el comprobante existe", async () => {
+    await prisma.configuracionGlobal.update({
+      where: { comunidadId: comunidad },
+      data: { smtpRecepcion: null },
+    })
+    await conSesion(emailAdmin, async () => {
+      const res = await crearAdelanto(alta({ monto: 150_000 }))
+      expect(res.status).toBe(201)
+
+      const aviso = await prisma.notificacion.findFirst({
+        where: { comunidadId: comunidad, moduloOrigen: "PL" },
+      })
+      expect(aviso).not.toBeNull()
+
+      const entregas = await prisma.entregaNotificacion.findMany({
+        where: { notificacionId: aviso!.id },
+      })
+      expect(entregas).toHaveLength(2)
+      expect(entregas.find((entrega) => entrega.canal === "email")).toMatchObject({
+        estado: "pendiente",
+        motivo: MOTIVO_SIN_CASILLA_COMUNIDAD,
+        intentos: 1,
+        enviadoEn: null,
+      })
+      // Sin casilla no hay a dónde mandar: no se abre ninguna conexión.
+      expect(transporte.enviar).not.toHaveBeenCalled()
     })
   })
 

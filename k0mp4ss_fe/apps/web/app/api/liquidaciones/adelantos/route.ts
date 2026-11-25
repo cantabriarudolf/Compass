@@ -30,7 +30,7 @@ import { prisma } from "@/lib/prisma"
 import { logger } from "@/lib/logger"
 import { generarId } from "@/lib/id-utils"
 import { registrarEventoAuditoria } from "@/lib/auditoria"
-import { avisar } from "@/lib/entrega/notificar"
+import { avisar, entregarPorCorreo } from "@/lib/entrega/notificar"
 import { createCrudHandlers, delegado } from "@/lib/api/crud-factory"
 import {
   jsonError,
@@ -277,7 +277,12 @@ export async function POST(req: Request): Promise<Response> {
       })
     }
 
-    const record = await prisma.$transaction(async (tx) => {
+    // El comprobante dice lo mismo en la bandeja y en el correo: el texto se
+    // declara UNA vez y lo usan los dos canales.
+    const asunto = `Comprobante de adelanto ${folio}`
+    const cuerpo = `Se registró ${pacto === "prestamo" ? "un préstamo" : "un anticipo"} de $${monto.toLocaleString("es-CL")} (${input.glosa}). Será descontado en la liquidación de ${periodoImputacion}.`
+
+    const { record, notificacionId } = await prisma.$transaction(async (tx) => {
       const creado = await tx.adelantoPL.create({
         data: { ...candidato, comunidadId: scope.comunidadId } as never,
       })
@@ -296,18 +301,32 @@ export async function POST(req: Request): Promise<Response> {
       )
       // Camino único (S2): el canal se declara acá y la entrega al visor entra
       // en esta misma transacción, junto al adelanto y su evento.
-      await avisar(tx, {
+      const aviso = await avisar(tx, {
         comunidadId: scope.comunidadId,
         destinatarioRol: "personal",
         destinatarioPersonaId: trabajador.id,
-        asunto: `Comprobante de adelanto ${folio}`,
-        cuerpo: `Se registró ${pacto === "prestamo" ? "un préstamo" : "un anticipo"} de $${monto.toLocaleString("es-CL")} (${input.glosa}). Será descontado en la liquidación de ${periodoImputacion}.`,
+        asunto,
+        cuerpo,
         canal: CANAL_NOTIFICACION_EMAIL_SIMULADO,
         moduloOrigen: "PL",
         fecha,
         leida: false,
       })
-      return creado
+      return { record: creado, notificacionId: aviso.notificacionId }
+    })
+
+    // El correo sale DESPUÉS del commit y con el cliente PLANO (S3b): el
+    // diálogo SMTP no retiene el lock de la base. El comprobante in-app es del
+    // trabajador, pero su copia por correo es de un rol interno que no tiene
+    // dirección propia: va a la casilla de recepción de la comunidad (S2 de
+    // `saldar-f45-f48`) y, sin ella, queda `pendiente` con su motivo — nunca
+    // `enviado` en falso.
+    await entregarPorCorreo(prisma, {
+      comunidadId: scope.comunidadId,
+      asunto,
+      cuerpo,
+      casillaDeLaComunidad: true,
+      notificacionId,
     })
 
     return Response.json(record, { status: 201 })
