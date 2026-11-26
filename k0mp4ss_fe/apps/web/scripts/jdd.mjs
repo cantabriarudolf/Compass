@@ -958,8 +958,34 @@ function pasosSeed(comunidad, conDatos = false) {
   ]
 }
 
-async function cmdSeed({ args, url }) {
-  if (!args.comunidad) {
+/**
+ * Retira los residuos de demo que deja `seed:authz` para que el juego que se
+ * puebla a mano arranque con el padrón vacío: deja una persona y un vínculo a
+ * `u-A-101`, una unidad que en un juego limpio no existe, y en pantalla se ve un
+ * residente colgado de una unidad fantasma.
+ *
+ * Guarda dura: si hay unidades cargadas, esta base no es un juego limpio y no se
+ * borra ni una persona. Devuelve cuántas filas retiró para poder informarlo.
+ */
+async function limpiarResiduosDeSeed(url) {
+  const cliente = await conectar(url)
+  try {
+    const unidades = Number((await cliente.query("SELECT count(*)::int AS n FROM unidades")).rows[0].n)
+    if (unidades > 0) {
+      return {
+        ok: false,
+        motivo: `hay ${unidades} unidades cargadas: esta base no es un juego limpio y no se retiró ninguna persona`,
+      }
+    }
+    const vinculos = await cliente.query("DELETE FROM vinculos")
+    const personas = await cliente.query("DELETE FROM personas")
+    return { ok: true, vinculos: vinculos.rowCount ?? 0, personas: personas.rowCount ?? 0 }
+  } finally {
+    await cliente.end()
+  }
+}
+
+async function cmdSeed({ args, url }) {  if (!args.comunidad) {
     console.error("✗ Falta --comunidad=<id> (ej.: --comunidad=comunidad-a). No se ejecutó ningún seed.")
     return SALIDA_ERROR
   }
@@ -993,6 +1019,20 @@ async function cmdSeed({ args, url }) {
       return SALIDA_ERROR
     }
     console.log(`✓ ${paso.etiqueta}`)
+  }
+
+  // `seed:authz` crea una persona de demo (`p-arrendatario-1`) y un vínculo a
+  // `u-A-101`, una unidad que en un juego limpio NO existe: en pantalla aparece un
+  // residente colgado de una unidad fantasma. El juego que se puebla a mano tiene
+  // que arrancar sin nadie en el padrón, así que se barren los residuos. La guarda
+  // es la que importa: si hay unidades reales, no se borra ni una persona.
+  if (!args.dryRun && !args.conDatos) {
+    const limpieza = await limpiarResiduosDeSeed(url)
+    if (!limpieza.ok) {
+      console.error(`✗ Limpieza de residuos: ${limpieza.motivo}`)
+      return SALIDA_ERROR
+    }
+    console.log(`✓ limpieza: ${limpieza.vinculos} vínculos y ${limpieza.personas} personas de demo retirados`)
   }
 
   const total = pasos.length
