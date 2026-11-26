@@ -41,6 +41,12 @@ export interface ConfirmarEliminacionProps {
   onCancelar: () => void
   /** Hay una baja en vuelo: el botón de confirmar queda deshabilitado. */
   ocupado?: boolean
+  /**
+   * Motivo del rechazo del servidor, para leerlo sin salir del diálogo. El
+   * overlay tapa el banner de la pantalla: si el motivo se reportara sólo ahí,
+   * el diálogo quedaría abierto sin decir por qué.
+   */
+  error?: string
 }
 
 export function ConfirmarEliminacion({
@@ -51,6 +57,7 @@ export function ConfirmarEliminacion({
   onConfirmar,
   onCancelar,
   ocupado = false,
+  error,
 }: ConfirmarEliminacionProps) {
   return (
     <AlertDialog
@@ -63,6 +70,11 @@ export function ConfirmarEliminacion({
         <AlertDialogHeader>
           <AlertDialogTitle>{titulo}</AlertDialogTitle>
           <AlertDialogDescription>{consecuencia}</AlertDialogDescription>
+          {error ? (
+            <p role="alert" className="text-sm font-medium text-destructive">
+              {error}
+            </p>
+          ) : null}
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel>Cancelar</AlertDialogCancel>
