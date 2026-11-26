@@ -18,6 +18,7 @@ import {
   evaluarUrl,
   ordenTopologico,
   parsearArgs,
+  pasosSeed,
   textoEstadoMixto,
 } from "../scripts/jdd.mjs"
 
@@ -295,5 +296,39 @@ describe("armarResumen — origen con menos tablas que destino", () => {
 
     expect(r.filas[0]?.estado).toBe("descuadre")
     expect(r.todoCuadra).toBe(false)
+  })
+})
+
+describe("pasosSeed — el seed del sistema no reemplaza al bulk de la comunidad", () => {
+  const pasosDeDatos = (pasos: { args: string[] }[]) => pasos.filter((paso) => paso.args[1] === "seed:datos")
+
+  it("sin --con-datos agrega seed:datos --solo-sistema como último paso", () => {
+    const pasos = pasosSeed("comunidad-a", false)
+
+    expect(pasos.at(-1)).toEqual({
+      etiqueta: "seed:datos --solo-sistema (configuración y maestros de estructura)",
+      args: ["run", "seed:datos", "--", "--comunidad-id=comunidad-a", "--solo-sistema"],
+    })
+    expect(pasosDeDatos(pasos)).toHaveLength(1)
+    expect(pasos).toHaveLength(4)
+  })
+
+  it("con --con-datos usa el bulk completo y no repite el paso de sistema", () => {
+    const pasos = pasosSeed("comunidad-a", true)
+
+    expect(pasos.map((paso) => paso.args[1])).toEqual([
+      "seed:authz",
+      "db:catalogo-nacional",
+      "seed:datos",
+      "db:fondos-fi",
+    ])
+    expect(pasosDeDatos(pasos)).toEqual([
+      {
+        etiqueta: "seed:datos (datos de la comunidad, bulk de data/)",
+        args: ["run", "seed:datos", "--", "--comunidad-id=comunidad-a"],
+      },
+    ])
+    expect(JSON.stringify(pasos)).not.toContain("--solo-sistema")
+    expect(pasos).toHaveLength(4)
   })
 })

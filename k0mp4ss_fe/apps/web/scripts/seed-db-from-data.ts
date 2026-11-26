@@ -10,22 +10,30 @@
  * alineados con la convención de `migrate-punto-cero-a-db.ts`.
  *
  * Uso (desde k0mp4ss_fe/apps/web):
- *   npx tsx scripts/seed-db-from-data.ts [--comunidad-id=xxx]
+ *   npx tsx scripts/seed-db-from-data.ts [--comunidad-id=xxx] [--solo-sistema]
+ *
+ * `--solo-sistema` siembra SÓLO configuración global y catálogos de sistema —lo
+ * que el sistema necesita para operar— y saltea todo lo que es dato de una
+ * comunidad concreta. Con el flag la comunidad destino NO se crea: tiene que
+ * existir ya (la crea `seed:authz`). Sin el flag el script se comporta igual
+ * que siempre.
  *
  * Comunidad destino: flag `--comunidad-id`, o env `COMUNIDAD_ID`, o la
  * primera Comunidad de la BD (orden de creación). Sin comunidad → crea
- * "Edificio Plaza Central" (la comunidad del mock).
+ * "Edificio Plaza Central" (la comunidad del mock); con `--solo-sistema` en
+ * cambio falla, porque la comunidad es dato del owner y no un maestro.
  *
- * Qué puebla:
- *   - EF: 5 tiposUnidad, 7 macroSectores, 25 microSectores, 166 unidades
- *   - MP: 105 personas, 185 vínculos (54 + 51 de la semilla histórica y la cola
- *     de `data/comunidad/titulares.ts`, que completa la titularidad: las 166
- *     unidades quedan con un propietario vigente)
+ * Qué puebla (entre corchetes, lo que saltea `--solo-sistema`):
  *   - CF: configuración global (configuracionDefault)
  *   - MA: maestros admin (AFP, salud, bancos, feriados, etc.) + @@maestros.ts
  *     (categorías EF, estados de ocupación) + estados inmobiliarios (VU)
  *   - IN: 5 tipos de infracción
- *   - AD/F35: 4 documentos del archivo de la comunidad (3 legales + 1 comunitario)
+ *   - EF: 5 tiposUnidad y [7 macroSectores, 25 microSectores, 166 unidades]
+ *   - MP: [105 personas, 185 vínculos (54 + 51 de la semilla histórica y la cola
+ *     de `data/comunidad/titulares.ts`, que completa la titularidad: las 166
+ *     unidades quedan con un propietario vigente)]
+ *   - AD/F35: [4 documentos del archivo de la comunidad (3 legales + 1 comunitario)]
+ *   - Contratistas de la comunidad: [los de `data/admin/maestros`]
  *
  * El punto cero financiero (182 egresos + 44 ingresos) NO vive aquí: tiene su
  * propio script `scripts/migrate-punto-cero-a-db.ts` (misma comunidad destino
@@ -87,6 +95,15 @@ function resolverComunidadId(): string | null {
   return null
 }
 
+/**
+ * `--solo-sistema`: sólo configuración y catálogos de sistema. Las filas de la
+ * comunidad (sectores, unidades, contratistas, personas, vínculos, documentos)
+ * quedan fuera: este paso prepara el sistema, no puebla una comunidad.
+ */
+function soloSistema(): boolean {
+  return process.argv.includes("--solo-sistema")
+}
+
 /* SAFETY: helper genérico de seed — tipar el delegate de cada modelo choca
  * con la contravarianza del genérico upsert de Prisma y `Record<string,
  * unknown>` excluye interfaces sin index signature. Uso acotado a este
@@ -113,6 +130,10 @@ async function main(): Promise<void> {
     datasourceUrl: cargarUrlBase(),
   })
   try {
+    // `--solo-sistema` escribe sólo configuración y catálogos de sistema: la
+    // comunidad es dato del owner, así que no se crea ni se inventa.
+    const soloCatalogo = soloSistema()
+
     // --- Comunidad destino ---
     const flagId = resolverComunidadId()
     let comunidad = flagId
@@ -120,6 +141,17 @@ async function main(): Promise<void> {
       : await prisma.comunidad.findFirst({
           orderBy: [{ createdAt: "asc" }, { id: "asc" }],
         })
+    if (!comunidad && soloCatalogo) {
+      // Sin comunidad no hay FK para la configuración ni para los maestros. La
+      // crea `seed:authz` (o el owner): este paso no inventa "Edificio Plaza Central".
+      const destino = flagId
+        ? `la comunidad "${flagId}" no existe en la base`
+        : "la base no tiene ninguna comunidad"
+      throw new Error(
+        `--solo-sistema no crea la comunidad: ${destino}. ` +
+          "Corré `npm run seed:authz` (crea las comunidades base) o creá la comunidad, y volvé a intentar.",
+      )
+    }
     if (!comunidad) {
       comunidad = await prisma.comunidad.create({
         data: {
@@ -186,14 +218,18 @@ async function main(): Promise<void> {
     for (const t of tiposUnidad) {
       await sembrarFila(prisma.tipoUnidad, t, comunidadId)
     }
-    for (const m of macroSectores) {
-      await sembrarFila(prisma.macroSector, m, comunidadId)
-    }
-    for (const m of microSectores) {
-      await sembrarFila(prisma.microSector, m, comunidadId)
-    }
-    for (const u of unidades) {
-      await sembrarFila(prisma.unidad, u, comunidadId)
+    // Sectores y unidades son estructura de UNA comunidad, no maestros: con
+    // `--solo-sistema` no se siembran.
+    if (!soloCatalogo) {
+      for (const m of macroSectores) {
+        await sembrarFila(prisma.macroSector, m, comunidadId)
+      }
+      for (const m of microSectores) {
+        await sembrarFila(prisma.microSector, m, comunidadId)
+      }
+      for (const u of unidades) {
+        await sembrarFila(prisma.unidad, u, comunidadId)
+      }
     }
 
     // --- MA: maestros de estructura/inventario + estados ocupación (EF) ---
@@ -227,8 +263,11 @@ async function main(): Promise<void> {
     for (const m of COURIERS) {
       await sembrarFila(prisma.courier, m, comunidadId)
     }
-    for (const m of CONTRATISTAS) {
-      await sembrarFila(prisma.contratista, m, comunidadId)
+    // Contratistas: a quién contrata la comunidad, no un maestro del sistema.
+    if (!soloCatalogo) {
+      for (const m of CONTRATISTAS) {
+        await sembrarFila(prisma.contratista, m, comunidadId)
+      }
     }
     for (const m of FERIADOS) {
       await sembrarFila(prisma.feriado, m, comunidadId)
@@ -321,14 +360,18 @@ async function main(): Promise<void> {
       })
     }
 
-    for (const p of personas) await sembrarPersona(p)
-    for (const p of titularesDeDemo.personas) await sembrarPersona(p)
-    for (const v of vinculos) await sembrarVinculo(v)
-    for (const v of titularesDeDemo.vinculos) await sembrarVinculo(v)
-    console.log(
-      `[seed-mocks] titulares de demo: ${titularesDeDemo.personas.length} personas y ` +
-        `${titularesDeDemo.vinculos.length} vínculos completan la titularidad de las ${unidades.length} unidades`
-    )
+    // El padrón (personas y vínculos) es dato de la comunidad: con
+    // `--solo-sistema` los helpers quedan definidos pero no escriben una fila.
+    if (!soloCatalogo) {
+      for (const p of personas) await sembrarPersona(p)
+      for (const p of titularesDeDemo.personas) await sembrarPersona(p)
+      for (const v of vinculos) await sembrarVinculo(v)
+      for (const v of titularesDeDemo.vinculos) await sembrarVinculo(v)
+      console.log(
+        `[seed-mocks] titulares de demo: ${titularesDeDemo.personas.length} personas y ` +
+          `${titularesDeDemo.vinculos.length} vínculos completan la titularidad de las ${unidades.length} unidades`
+      )
+    }
 
     // --- IN: catálogo de tipos de infracción ---
     for (const t of tiposInfraccionSeed) {
@@ -351,51 +394,63 @@ async function main(): Promise<void> {
     // apunta a la URL del colorín por decisión del owner: es la broma.
     // `version` va fija (1) porque la asigna el servidor para las altas nuevas;
     // `subidoPorPersonaId` queda null (columna sin FK a propósito).
-    for (const d of documentosArchivo) {
-      const fila = {
-        naturaleza: d.naturaleza,
-        tipoDocumental: d.tipoDocumental,
-        glosa: d.glosa,
-        referenciaAutentica: d.referenciaAutentica ?? null,
-        archivoNombre: d.archivoNombre,
-        archivoTipoMime: d.archivoTipoMime,
-        archivoTamanoKB: d.archivoTamanoKB,
-        archivoUrl: d.archivoUrl,
-        hash: d.hash ?? null,
-        version: d.version,
-        vigenteDesde: d.vigenteDesde,
-        subidoPorPersonaId: d.subidoPorPersonaId,
+    // Los documentos son del archivo de esa comunidad, no un catálogo del sistema:
+    // con `--solo-sistema` no se siembran.
+    if (!soloCatalogo) {
+      for (const d of documentosArchivo) {
+        const fila = {
+          naturaleza: d.naturaleza,
+          tipoDocumental: d.tipoDocumental,
+          glosa: d.glosa,
+          referenciaAutentica: d.referenciaAutentica ?? null,
+          archivoNombre: d.archivoNombre,
+          archivoTipoMime: d.archivoTipoMime,
+          archivoTamanoKB: d.archivoTamanoKB,
+          archivoUrl: d.archivoUrl,
+          hash: d.hash ?? null,
+          version: d.version,
+          vigenteDesde: d.vigenteDesde,
+          subidoPorPersonaId: d.subidoPorPersonaId,
+        }
+        await prisma.documento.upsert({
+          where: { id: d.id },
+          update: { ...fila, comunidadId },
+          create: { id: d.id, ...fila, comunidadId },
+        })
       }
-      await prisma.documento.upsert({
-        where: { id: d.id },
-        update: { ...fila, comunidadId },
-        create: { id: d.id, ...fila, comunidadId },
-      })
     }
 
     // --- Verificación de conteos (reporte final) ---
+    // Con `--solo-sistema` se cuentan sólo las tablas que este paso escribe: un
+    // cero de unidades o personas no diría nada, porque el paso no las toca.
     const conteos = {
       configuracion: await prisma.configuracionGlobal.count({
         where: { comunidadId },
       }),
       tiposUnidad: await prisma.tipoUnidad.count({ where: { comunidadId } }),
-      macroSectores: await prisma.macroSector.count({
-        where: { comunidadId },
-      }),
-      microSectores: await prisma.microSector.count({
-        where: { comunidadId },
-      }),
-      unidades: await prisma.unidad.count({ where: { comunidadId } }),
-      personas: await prisma.persona.count({ where: { comunidadId } }),
-      vinculos: await prisma.vinculoUnidad.count({
-        where: { comunidadId },
-      }),
+      ...(soloCatalogo
+        ? {}
+        : {
+            macroSectores: await prisma.macroSector.count({
+              where: { comunidadId },
+            }),
+            microSectores: await prisma.microSector.count({
+              where: { comunidadId },
+            }),
+            unidades: await prisma.unidad.count({ where: { comunidadId } }),
+            personas: await prisma.persona.count({ where: { comunidadId } }),
+            vinculos: await prisma.vinculoUnidad.count({
+              where: { comunidadId },
+            }),
+          }),
       afps: await prisma.afp.count({ where: { comunidadId } }),
       feriados: await prisma.feriado.count({ where: { comunidadId } }),
       tiposInfraccion: await prisma.tipoInfraccionIN.count({
         where: { comunidadId },
       }),
-      documentos: await prisma.documento.count({ where: { comunidadId } }),
+      ...(soloCatalogo
+        ? {}
+        : { documentos: await prisma.documento.count({ where: { comunidadId } }) }),
     }
     console.log(`[seed-mocks] ok comunidad=${comunidadId}`, conteos)
   } finally {
