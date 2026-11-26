@@ -34,6 +34,8 @@
  *   npm run jdd -- restore jdd1-pre-reset-20261125 --confirmo=BORRAR
  *   npm run jdd -- restore jdd1-pre-reset-20261125 --confirmo=BORRAR          # aborta si el origen está vacío
  *   npm run jdd -- restore jdd1-pre-reset-20261125 --confirmo=BORRAR --permitir-vacio
+ *   npm run jdd -- seed --comunidad=comunidad-a            (defaults: sin datos de la comunidad)
+ *   npm run jdd -- seed --comunidad=comunidad-a --con-datos (defaults + el bulk de data/)
  *
  * Variables: `DATABASE_URL` (Postgres), `NEON_PROJECT_ID` y `NEON_ORG_ID` (o `--project-id=` /
  * `--org-id=`). Sin `DATABASE_URL` en el entorno se lee `apps/web/.env`, misma convención que
@@ -75,6 +77,7 @@ export function parsearArgs(argv = []) {
     dryRun: false,
     confirmo: false,
     permitirVacio: false,
+    conDatos: false,
     comunidad: null,
     proyecto: null,
     org: null,
@@ -96,6 +99,13 @@ export function parsearArgs(argv = []) {
     if (token === "--permitir-vacio") {
       // Escape hatch del preflight del restore: aceptar un origen vacío a propósito.
       args.permitirVacio = true
+      continue
+    }
+    if (token === "--con-datos") {
+      // `seed` arranca con los defaults del sistema y NADA de la comunidad: el
+      // juego de datos que se puebla a mano necesita la base vacía de unidades,
+      // personas y vínculos. El bulk de `data/` es opt-in.
+      args.conDatos = true
       continue
     }
     if (token === "--help" || token === "-h") {
@@ -528,19 +538,43 @@ function destinoPostgres(url) {
   return chequeo
 }
 
-async function conectar(url, { soloLectura = false } = {}) {
+async function conectar(url, { soloLectura = false, intentos = 4 } = {}) {
   const { Client } = await import("pg")
-  const cliente = new Client({
-    connectionString: url,
-    connectionTimeoutMillis: 20_000,
-    application_name: "jdd",
-  })
-  await cliente.connect()
-  if (soloLectura) {
-    // La rama de Neon de la que se lee no debe recibir escrituras ni por accidente.
-    await cliente.query("SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY")
+  // Neon por pooler es intermitente desde una máquina de trabajo: el primer
+  // intento muere con ETIMEDOUT y el segundo entra. Reintentar acá evita que el
+  // operador lea «jdd FALLO:» vacío y crea que rompió algo. NUNCA se reintenta
+  // una escritura a medias: esto sólo cubre el connect, antes de tocar datos.
+  let ultimoError = null
+  for (let intento = 1; intento <= intentos; intento++) {
+    const cliente = new Client({
+      connectionString: url,
+      connectionTimeoutMillis: 20_000,
+      application_name: "jdd",
+    })
+    try {
+      await cliente.connect()
+      if (soloLectura) {
+        // La rama de Neon de la que se lee no debe recibir escrituras ni por accidente.
+        await cliente.query("SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY")
+      }
+      if (intento > 1) console.log(`  (conexión establecida en el intento ${intento}/${intentos})`)
+      return cliente
+    } catch (error) {
+      ultimoError = error
+      try {
+        await cliente.end()
+      } catch {
+        // el cliente nunca llegó a conectar: cerrar puede fallar sin consecuencias
+      }
+      if (intento < intentos) {
+        const espera = 2000 * intento
+        console.log(`  (conexión intento ${intento}/${intentos} falló: ${error?.code ?? "error"}; reintento en ${espera / 1000}s)`)
+        await new Promise((listo) => setTimeout(listo, espera))
+      }
+    }
   }
-  return cliente
+  const codigo = ultimoError?.code ?? "sin código"
+  throw new Error(`no se pudo conectar a la base después de ${intentos} intentos (${codigo}); no se tocó nada`)
 }
 
 async function listarTablas(cliente) {
@@ -908,11 +942,18 @@ async function cmdWipe({ args, url }) {
   }
 }
 
-function pasosSeed(comunidad) {
+function pasosSeed(comunidad, conDatos = false) {
   return [
     { etiqueta: "seed:authz (usuarios, roles y comunidades base)", args: ["run", "seed:authz"] },
     { etiqueta: "db:catalogo-nacional (catálogo nacional)", args: ["run", "db:catalogo-nacional"] },
-    { etiqueta: "seed:datos (datos de la comunidad)", args: ["run", "seed:datos", "--", `--comunidad-id=${comunidad}`] },
+    ...(conDatos
+      ? [
+          {
+            etiqueta: "seed:datos (datos de la comunidad, bulk de data/)",
+            args: ["run", "seed:datos", "--", `--comunidad-id=${comunidad}`],
+          },
+        ]
+      : []),
     { etiqueta: "db:fondos-fi (fondos F/I de la comunidad)", args: ["run", "db:fondos-fi", "--", `--comunidad-id=${comunidad}`] },
   ]
 }
@@ -924,7 +965,7 @@ async function cmdSeed({ args, url }) {
   }
 
   const destino = destinoPostgres(url)
-  const pasos = pasosSeed(args.comunidad)
+  const pasos = pasosSeed(args.comunidad, args.conDatos)
   console.log(`Base destino: ${destino.host} / ${destino.base}`)
   console.log(`Seed de defaults del sistema · comunidad: ${args.comunidad}`)
 
@@ -1276,7 +1317,8 @@ if (esProgramaPrincipal) {
       process.exitCode = codigo
     })
     .catch((error) => {
-      console.error(`✗ jdd FALLO: ${redactar(error?.message ?? error)}`)
+      const mensaje = error?.message || error?.code || String(error)
+      console.error(`✗ jdd FALLO: ${redactar(mensaje)}`)
       process.exitCode = SALIDA_ERROR
     })
 }
