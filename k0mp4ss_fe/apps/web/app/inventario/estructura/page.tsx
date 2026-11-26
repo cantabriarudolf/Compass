@@ -375,11 +375,15 @@ export default function EstructuraFisicaPage() {
           <CardHeader>
             <CardTitle className="text-lg">Faltan sectores reales</CardTitle>
             <CardDescription className="space-y-2">
+              {/* Antes esta frase afirmaba "las categorías que creaste en Maestros
+                  Administrativos", y en una comunidad recién sembrada eso es falso: no
+                  creaste nada. El disparador (cero macro-sectores) sí es real; la prosa
+                  no debe afirmar lo que no comprueba. */}
               <p>
-                Las categorías que creaste en <strong>Maestros Administrativos</strong> (Torre, Piso…) definen los tipos de sectores, pero todavía no son sectores reales.
-              </p>
-              <p>
-                Para crear una unidad necesitás sectores <strong>concretos</strong> acá: por ejemplo, <em>Torre A</em> y <em>Piso 1</em>.
+                Todavía no hay sectores <strong>concretos</strong>. Los tipos de sector
+                (<em>Torre</em>, <em>Piso</em>…) se definen en{" "}
+                <strong>Maestros Administrativos</strong>; acá se crean los sectores
+                reales, por ejemplo <em>Torre A</em> y <em>Piso 1</em>.
               </p>
             </CardDescription>
           </CardHeader>
