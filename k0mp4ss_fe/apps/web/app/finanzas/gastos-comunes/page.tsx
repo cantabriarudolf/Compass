@@ -12,6 +12,7 @@ import { Badge } from "@workspace/ui/components/badge"
 import { Switch } from "@workspace/ui/components/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@workspace/ui/components/tabs"
 import { AvisoTruncamiento } from "@/components/pe/aviso-truncamiento"
+import { ConfirmarEliminacion } from "@/components/confirmar-eliminacion"
 import {
   Select,
   SelectContent,
@@ -345,6 +346,8 @@ export default function GastosComunesPage() {
   const [gastoTotal, setGastoTotal] = React.useState("")
   const [unidadIdsEmision, setUnidadIdsEmision] = React.useState<string>("todas")
   const [moraTasa, setMoraTasa] = React.useState("1")
+  const [fondoAEliminar, setFondoAEliminar] = React.useState<{ id: string; nombre: string } | null>(null)
+  const [eliminandoFondo, setEliminandoFondo] = React.useState(false)
 
 
   const saldoInicialPorFondo = React.useMemo(
@@ -554,8 +557,15 @@ export default function GastosComunesPage() {
     }
   }
 
-      const eliminarFondoClick = async (id: string) => {
-        const r = await eliminarFondo(id)
+      /** La baja se ejecuta recién con la confirmación del diálogo. */
+      const eliminarFondoClick = async () => {
+        if (!fondoAEliminar) return
+        setError(null)
+        setEliminandoFondo(true)
+        const r = await eliminarFondo(fondoAEliminar.id)
+        setEliminandoFondo(false)
+        // El 409 del servidor se muestra en el aviso inline, igual que antes.
+        setFondoAEliminar(null)
         if (!r.ok) setError(r.error ?? "")
         else setOkMsg("Fondo eliminado.")
       }
@@ -657,7 +667,7 @@ export default function GastosComunesPage() {
                     <Button size="sm" variant="outline" onClick={() => { setEditandoFondoId(f.id); setFormFondo({ nombre: f.nombre, tipo: f.tipo, descripcion: f.descripcion ?? "", porcentajeAporte: f.porcentajeAporte?.toString() ?? "", activo: f.activo, saldoInicial: f.saldoInicial?.toString() ?? "" }) }}>
                       <IconPencil className="size-3.5 mr-1" /> Editar
                     </Button>
-                    <Button size="sm" variant="ghost" className="text-destructive" onClick={() => void eliminarFondoClick(f.id)}>
+                    <Button size="sm" variant="ghost" className="text-destructive" onClick={() => { setError(null); setFondoAEliminar({ id: f.id, nombre: f.nombre }) }}>
                       <IconTrash className="size-3.5 mr-1" /> Eliminar
                     </Button>
                   </div>
@@ -1140,6 +1150,18 @@ export default function GastosComunesPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {fondoAEliminar && (
+        <ConfirmarEliminacion
+          abierto
+          titulo={`¿Eliminar el fondo "${fondoAEliminar.nombre}"?`}
+          consecuencia="Los egresos, ingresos y proyectos de mantenimiento que lo usan quedan sin fondo. Si el fondo tiene movimientos, el sistema no lo va a borrar."
+          etiquetaConfirmar="Eliminar"
+          onConfirmar={() => void eliminarFondoClick()}
+          onCancelar={() => setFondoAEliminar(null)}
+          ocupado={eliminandoFondo}
+        />
+      )}
     </div>
   )
 }
