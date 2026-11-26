@@ -29,7 +29,7 @@ export const fondosHandlers = createCrudHandlers({
   authzCheck: (rol, accion) => puede(rol, accion, "fi"),
   beforeDelete: async (record, scope) => {
     const id = (record as { id: string }).id
-    const [egresos, ingresos, cobros] = await Promise.all([
+    const [egresos, ingresos, cobros, proyectos] = await Promise.all([
       prisma.egresoFI.count({
         where: { comunidadId: scope.comunidadId, fondoId: id },
       }),
@@ -42,6 +42,11 @@ export const fondosHandlers = createCrudHandlers({
       prisma.cobroFI.findMany({
         where: { comunidadId: scope.comunidadId },
         select: { fondoId: true, concepto: true, montoBase: true, lineas: true },
+      }),
+      // Un proyecto de mantenimiento financiado por el fondo quedaría apuntando
+      // a un fondo inexistente: la dependencia real también bloquea la baja.
+      prisma.proyectoMT.count({
+        where: { comunidadId: scope.comunidadId, fondoFinanciamientoId: id },
       }),
     ])
     // Un cobro cuenta una vez aunque más de una línea nombre el fondo: el
@@ -57,7 +62,7 @@ export const fondosHandlers = createCrudHandlers({
     ).length
     // El aporte declarado de una emisión (`fondoReservaAporte`) ya no cuenta
     // como movimiento: el recargo real es una línea del cobro, contada arriba.
-    const total = egresos + ingresos + cobrosQueLoImputan
+    const total = egresos + ingresos + cobrosQueLoImputan + proyectos
     if (total > 0) {
       return jsonError(
         409,
