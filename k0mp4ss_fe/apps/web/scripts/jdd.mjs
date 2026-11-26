@@ -34,8 +34,8 @@
  *   npm run jdd -- restore jdd1-pre-reset-20261125 --confirmo=BORRAR
  *   npm run jdd -- restore jdd1-pre-reset-20261125 --confirmo=BORRAR          # aborta si el origen está vacío
  *   npm run jdd -- restore jdd1-pre-reset-20261125 --confirmo=BORRAR --permitir-vacio
- *   npm run jdd -- seed --comunidad=comunidad-a            (defaults: sin datos de la comunidad)
- *   npm run jdd -- seed --comunidad=comunidad-a --con-datos (defaults + el bulk de data/)
+ *   npm run jdd -- seed --comunidad=comunidad-a            (defaults + configuración y maestros de estructura)
+ *   npm run jdd -- seed --comunidad=comunidad-a --con-datos (defaults + el bulk completo de data/)
  *
  * Variables: `DATABASE_URL` (Postgres), `NEON_PROJECT_ID` y `NEON_ORG_ID` (o `--project-id=` /
  * `--org-id=`). Sin `DATABASE_URL` en el entorno se lee `apps/web/.env`, misma convención que
@@ -855,11 +855,14 @@ jdd — cambia entre los dos juegos de datos del MISMO Postgres.
 Comandos (desde k0mp4ss_fe/apps/web):
   npm run jdd -- estado                          a qué base apunta y cuántas filas por tabla
   npm run jdd -- wipe --confirmo=BORRAR         vacía las tablas de public
-  npm run jdd -- seed --comunidad=<id>          defaults del sistema (scripts existentes)
+  npm run jdd -- seed --comunidad=<id>          defaults + configuración y maestros de estructura
   npm run jdd -- restore <rama-neon>            trae de vuelta los datos de una rama de Neon
   npm run jdd -- snapshot <nombre>              crea una rama de Neon como copia de seguridad
 
 Todos aceptan --dry-run: imprimen el plan y no escriben nada.
+Seed (4 pasos): seed:authz → db:catalogo-nacional → db:fondos-fi → seed:datos --solo-sistema
+(configuración global y maestros de estructura; la comunidad queda sin unidades ni personas).
+Con --con-datos el paso de seed:datos es el bulk completo de data/ y NO se repite el de sistema.
 Guarda de borrado: --confirmo=BORRAR exacto (sin ella, wipe y restore salen con código 2).
 Restore: cuenta el origen antes de truncar; si está vacío aborta con código 1 y no toca el destino
 salvo que pases --permitir-vacio. Cero filas escritas también es fallo (código 1).
@@ -942,20 +945,45 @@ async function cmdWipe({ args, url }) {
   }
 }
 
-function pasosSeed(comunidad, conDatos = false) {
-  return [
+/**
+ * Plan del seed. Siempre: authz (crea las comunidades base) → catálogo nacional → fondos F/I.
+ * Sin `--con-datos` cierra con `seed:datos --solo-sistema`, que deja configuración y maestros de
+ * estructura para que `/admin/configuracion` y el alta de unidades tengan con qué trabajar; con
+ * `--con-datos` el paso de `seed:datos` es el bulk completo de `data/` y no se repite.
+ *
+ * @param {string} comunidad
+ * @param {boolean} [conDatos]
+ * @returns {{etiqueta: string, args: string[]}[]}
+ */
+export function pasosSeed(comunidad, conDatos = false) {
+  /** @type {{etiqueta: string, args: string[]}[]} */
+  const pasos = [
     { etiqueta: "seed:authz (usuarios, roles y comunidades base)", args: ["run", "seed:authz"] },
     { etiqueta: "db:catalogo-nacional (catálogo nacional)", args: ["run", "db:catalogo-nacional"] },
-    ...(conDatos
-      ? [
-          {
-            etiqueta: "seed:datos (datos de la comunidad, bulk de data/)",
-            args: ["run", "seed:datos", "--", `--comunidad-id=${comunidad}`],
-          },
-        ]
-      : []),
-    { etiqueta: "db:fondos-fi (fondos F/I de la comunidad)", args: ["run", "db:fondos-fi", "--", `--comunidad-id=${comunidad}`] },
   ]
+
+  if (conDatos) {
+    pasos.push({
+      etiqueta: "seed:datos (datos de la comunidad, bulk de data/)",
+      args: ["run", "seed:datos", "--", `--comunidad-id=${comunidad}`],
+    })
+  }
+
+  pasos.push({
+    etiqueta: "db:fondos-fi (fondos F/I de la comunidad)",
+    args: ["run", "db:fondos-fi", "--", `--comunidad-id=${comunidad}`],
+  })
+
+  if (!conDatos) {
+    // `--solo-sistema` no toca la comunidad: sólo configuración y catálogos de
+    // sistema. Va al final porque necesita la comunidad que crea `seed:authz`.
+    pasos.push({
+      etiqueta: "seed:datos --solo-sistema (configuración y maestros de estructura)",
+      args: ["run", "seed:datos", "--", `--comunidad-id=${comunidad}`, "--solo-sistema"],
+    })
+  }
+
+  return pasos
 }
 
 /**
