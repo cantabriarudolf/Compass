@@ -18,8 +18,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@workspace/ui/components/select"
-import { IconCheck, IconTrash } from "@tabler/icons-react"
+import { IconCheck } from "@tabler/icons-react"
 import { AvisoTruncamiento, LIMITE_SELECT } from "@/components/pe/aviso-truncamiento"
+import { EliminarConConfirmacion } from "@/components/eliminar-con-confirmacion"
 import type { IngresoContratistaPE } from "@/lib/schemas"
 
 interface FormContratista {
@@ -178,11 +179,6 @@ export function ContratistasPanel({
     else onSuccess("Ingreso de contratista confirmado.")
   }
 
-  const eliminarIngreso = async (id: string) => {
-    const r = await eliminarIngresoApi(id)
-    if (!r.ok) onError(r.error ?? "")
-  }
-
   return (
     <div className="grid gap-4 lg:grid-cols-[420px_1fr]">
       <Card>
@@ -336,13 +332,13 @@ export function ContratistasPanel({
                             >
                               Confirmar
                             </Button>
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              onClick={() => void eliminarIngreso(i.id)}
-                            >
-                              <IconTrash className="size-4" />
-                            </Button>
+                            <EliminarConConfirmacion
+                              titulo={`Eliminar el ingreso de ${nombreContratista(i.contratistaId)} · ${i.motivo}`}
+                              consecuencia="Se pierde la constancia de que ese contratista entró, con hora y motivo."
+                              ariaLabel={`Eliminar el ingreso de ${nombreContratista(i.contratistaId)}`}
+                              onEliminar={() => eliminarIngresoApi(i.id)}
+                              onError={onError}
+                            />
                           </>
                         )}
                       </td>
