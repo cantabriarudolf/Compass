@@ -733,7 +733,10 @@ describe("menú — la entrada de Cuentas y acceso", () => {
     servir()
     montarSidebar(["comite"])
 
-    await screen.findByRole("link", { name: "Reportería y Dashboards" })
+    // Se espera la etiqueta del grupo y no un item: los grupos ahora se abren por
+    // su propia ruta, así que un link de otro grupo puede estar plegado y no ser
+    // el marcador correcto de "el sidebar ya renderizó".
+    await screen.findAllByText("Control")
     expect(screen.queryByRole("link", { name: "Cuentas y acceso" })).toBeNull()
   })
 })

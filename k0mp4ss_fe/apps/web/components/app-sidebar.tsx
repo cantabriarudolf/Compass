@@ -369,7 +369,16 @@ export function AppSidebar({ roles = [], ...props }: React.ComponentProps<typeof
         {data.navMain
           .filter((group) => group.roles.some((r: string) => userRoles.includes(r)))
           .map((group) => {
-            const isGroupActive = pathname.startsWith(group.url)
+            // El grupo se abre solo si la ruta actual es suya O la de alguno de sus
+            // items: reagrupar cambia la `url` del grupo y, si sólo se mirara esa,
+            // la entrada de la pantalla en la que estás quedaría plegada (pasó al
+            // partir «Sistema»: /admin/usuarios ya no abre «Configuración»).
+            const isGroupActive =
+              pathname.startsWith(group.url) ||
+              group.items.some(
+                (item: { url: string }) =>
+                  pathname === item.url || pathname.startsWith(`${item.url}/`)
+              )
             return (
               <SidebarGroup key={group.title}>
                 <SidebarGroupLabel>{group.title}</SidebarGroupLabel>
