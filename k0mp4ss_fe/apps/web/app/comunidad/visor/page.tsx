@@ -29,13 +29,13 @@ import {
   IconPlus,
   IconSend,
   IconArchive,
-  IconTrash,
   IconEye,
   IconGavel,
   IconExternalLink,
 } from "@tabler/icons-react"
 import type { AvisoCV, TipologiaCV } from "@/lib/schemas"
 import { useActasGD } from "@/lib/api/use-actas-gd"
+import { EliminarConConfirmacion } from "@/components/eliminar-con-confirmacion"
 
 const TIPOLOGIA_CLASE: Record<TipologiaCV, string> = {
   info: "bg-sky-600 hover:bg-sky-700 text-white",
@@ -258,6 +258,7 @@ export default function VisorPanelPage() {
       const eliminarAviso = async (id: string) => {
         const r = await eliminarAvisoApi(id)
         if (!r.ok) setError(r.error ?? "")
+        return r
       }
 
       const activarPlantilla = async (id: string) => {
@@ -420,9 +421,12 @@ export default function VisorPanelPage() {
                                 </Button>
                               )}
                               {a.estado === "borrador" && (
-                                <Button size="sm" variant="ghost" className="text-destructive" onClick={() => { void eliminarAviso(a.id) }}>
-                                  <IconTrash className="size-3.5 mr-1" /> Eliminar
-                                </Button>
+                                <EliminarConConfirmacion
+                                  titulo={`Eliminar el aviso «${a.titulo}»`}
+                                  consecuencia="Se pierde el texto del aviso, sin forma de recuperarlo."
+                                  ariaLabel={`Eliminar el aviso «${a.titulo}»`}
+                                  onEliminar={() => eliminarAviso(a.id)}
+                                />
                               )}
                             </div>
                           </td>
