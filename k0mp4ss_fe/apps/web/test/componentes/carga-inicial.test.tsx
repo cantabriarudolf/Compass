@@ -272,6 +272,48 @@ describe("pantalla Carga inicial", () => {
     ).toBeTruthy()
   })
 
+  it("tarjeta de datos de la comunidad: existe, nombra los cinco campos y lleva a Configuración", () => {
+    render(<CargaInicialPage />)
+
+    const tarjeta = screen.getByTestId("aviso-datos-comunidad")
+    expect(tarjeta).toHaveTextContent(/antes de cargar: los datos de la comunidad/i)
+    expect(tarjeta).toHaveTextContent(/no se cargan por archivo/i)
+    for (const campo of [
+      "Nombre de la comunidad",
+      "RUT de la comunidad",
+      "Dirección oficial",
+      "RUT del administrador",
+      "Teléfono del administrador",
+    ]) {
+      expect(within(tarjeta).getByText(campo)).toBeTruthy()
+    }
+    const enlace = within(tarjeta).getByRole("link", {
+      name: "Ir a Configuración",
+    })
+    expect(enlace.getAttribute("href")).toBe("/admin/configuracion")
+    // La tarjeta va arriba de los bloques: se lee antes de elegir un archivo.
+    const estructura = screen.getByRole("region", { name: "Estructura" })
+    expect(
+      tarjeta.compareDocumentPosition(estructura) &
+        Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy()
+  })
+
+  it("el orden de carga es el que el sistema necesita, no uno recomendado", () => {
+    render(<CargaInicialPage />)
+
+    const orden = screen.getByTestId("orden-carga")
+    expect(orden).toHaveTextContent(/este no es un orden sugerido/i)
+    expect(orden).toHaveTextContent(/orden que el sistema necesita/i)
+    expect(orden).toHaveTextContent(
+      /estructura → personas → vínculos → egresos e ingresos → saldos de apertura/i
+    )
+    expect(orden).toHaveTextContent(
+      /emití el gasto común del período antes de subir los pagos históricos/i
+    )
+    expect(document.body).not.toHaveTextContent(/orden recomendado/i)
+  })
+
   it("con un fondo inactivo: lo marca al lado del nombre", async () => {
     fondosFalsos = [
       { id: "f-res", nombre: "Fondo de Reserva", tipo: "reserva", activo: false },

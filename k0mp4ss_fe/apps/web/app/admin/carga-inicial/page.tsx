@@ -51,6 +51,7 @@ import {
   IconLoader2,
   IconCoin,
   IconReceipt,
+  IconSettings,
   IconUpload,
   IconUserHeart,
   IconLink,
@@ -102,15 +103,33 @@ const BLOQUES = [
   {
     slug: "egresos",
     titulo: "Egresos",
-    descripcion:
-      "Gastos históricos de la comunidad (fecha, monto, descripción, categoría y fondo). El fondo tiene que existir antes de importar: este bloque no crea fondos.",
+    descripcion: (
+      <>
+        Gastos históricos de la comunidad (fecha, monto, descripción,
+        categoría y fondo). Los fondos{" "}
+        <strong className="font-semibold text-foreground">
+          no se cargan acá
+        </strong>
+        : este bloque no los crea. Los de esta comunidad están en la tarjeta de
+        arriba, y el CSV los reconoce por nombre exacto o id.
+      </>
+    ),
     icono: IconReceipt,
   },
   {
     slug: "ingresos",
     titulo: "Ingresos",
-    descripcion:
-      "Ingresos históricos a los fondos (fecha, monto, descripción, categoría y fondo). Igual que los egresos, imputa a un fondo que ya existe.",
+    descripcion: (
+      <>
+        Ingresos históricos a los fondos (fecha, monto, descripción, categoría
+        y fondo). Los fondos{" "}
+        <strong className="font-semibold text-foreground">
+          no se cargan acá
+        </strong>
+        : este bloque no los crea. Los de esta comunidad están en la tarjeta de
+        arriba, y el CSV los reconoce por nombre exacto o id.
+      </>
+    ),
     icono: IconCoins,
   },
   {
@@ -199,6 +218,48 @@ function AvisoFondos() {
         )}
         <Button asChild variant="outline" size="sm">
           <a href="/finanzas/gastos-comunes">Ir a Finanzas</a>
+        </Button>
+      </CardContent>
+    </Card>
+  )
+}
+
+/**
+ * Aviso de los datos de la comunidad: el nombre del encabezado, el RUT, la
+ * dirección y los datos del administrador son un único registro que se edita
+ * en Configuración; ninguna planilla los trae. Va después de los fondos y
+ * antes de los bloques para que se lea antes de elegir el primer archivo.
+ */
+function AvisoDatosComunidad() {
+  return (
+    <Card
+      data-testid="aviso-datos-comunidad"
+      className="border-muted-foreground/10 shadow-none"
+    >
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <IconSettings className="size-5 text-primary" />
+          Antes de cargar: los datos de la comunidad
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3 text-sm text-muted-foreground">
+        <p>
+          Estos datos{" "}
+          <strong className="font-semibold text-foreground">
+            no se cargan por archivo
+          </strong>
+          : son un solo registro y se editan en Configuración.
+        </p>
+        <ul className="list-disc space-y-1 pl-5">
+          <li>Nombre de la comunidad</li>
+          <li>RUT de la comunidad</li>
+          <li>Dirección oficial</li>
+          <li>RUT del administrador</li>
+          <li>Teléfono del administrador</li>
+        </ul>
+        <p>El nombre que ves en el encabezado sale de acá.</p>
+        <Button asChild variant="outline" size="sm">
+          <a href="/admin/configuracion">Ir a Configuración</a>
         </Button>
       </CardContent>
     </Card>
@@ -610,20 +671,22 @@ export default function CargaInicialPage() {
           muestra la vista previa fila por fila antes de escribir y se puede
           repetir sin crear duplicados.
         </p>
-        <p className="text-xs text-muted-foreground">
-          Orden recomendado: Estructura → Personas → Vínculos (los vínculos
-          requieren unidades y personas ya cargadas). Si además traes tu
-          historial financiero, Egresos e Ingresos van después de crear los
-          fondos y el gasto común: el importador no los crea. Los Pagos
-          históricos van después del gasto común del período, porque se anexan
-          a los pagos de ese cobro; no crean cobros ni asientos. Los Saldos de
-          apertura van al final: son la deuda que ya existía a la fecha de
-          corte, así que la comunidad todavía no puede tener gasto común
-          emitido para ese período ni para uno anterior. Cada bloque usa su
-          propio archivo.
+        <p className="text-xs text-muted-foreground" data-testid="orden-carga">
+          <strong className="font-semibold text-foreground">
+            Este no es un orden sugerido: es el orden que el sistema necesita.
+          </strong>{" "}
+          Estructura → Personas → Vínculos → Egresos e Ingresos → Saldos de
+          apertura. Si subís un bloque antes que el suyo, todas sus filas fallan
+          con el motivo y no se escribe nada. Y la secuencia financiera tiene un
+          paso que no es de esta pantalla:{" "}
+          <strong className="font-semibold text-foreground">
+            emití el gasto común del período antes de subir los pagos históricos
+          </strong>
+          , porque ese bloque no crea cobros.
         </p>
       </header>
       <AvisoFondos />
+      <AvisoDatosComunidad />
       <div className="space-y-6">
         {BLOQUES.map((bloque) => (
           <BloqueImportador key={bloque.slug} bloque={bloque} />
