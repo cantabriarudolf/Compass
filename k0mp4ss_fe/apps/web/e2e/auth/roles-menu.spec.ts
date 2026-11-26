@@ -14,7 +14,11 @@ const GRUPOS = [
   "Comunidad",
   "Inventario",
   "Personas",
-  "Sistema",
+  "Arranque",
+  "Gestión",
+  "Control",
+  "Configuración",
+  "Mantención y reservas",
 ] as const
 
 type Matriz = Record<string, { visibles: string[]; ocultos: string[] }>
@@ -26,7 +30,9 @@ type Matriz = Record<string, { visibles: string[]; ocultos: string[] }>
 // - Comunidad: ["administrador","residente"]
 // - Inventario: ["administrador"]
 // - Personas: ["administrador"]
-// - Sistema: ["administrador"]
+// - Arranque / Gestión / Control / Configuración: ["administrador","comite"] — Configuración
+//   llega al comité por «Credencial de correo»; el resto de sus items es admin-only
+// - Mantención y reservas: ["administrador"]
 const MATRIZ: Matriz = {
   "admin@test.cl": {
     visibles: [...GRUPOS],
@@ -41,12 +47,24 @@ const MATRIZ: Matriz = {
       "Finanzas",
       "Inventario",
       "Personas",
-      "Sistema",
+      "Arranque",
+      "Gestión",
+      "Control",
+      "Configuración",
+      "Mantención y reservas",
     ],
   },
   "residente@test.cl": {
     visibles: ["Inicio", "Operaciones", "Finanzas", "Comunidad"],
-    ocultos: ["Inventario", "Personas",  "Sistema"],
+    ocultos: [
+      "Inventario",
+      "Personas",
+      "Arranque",
+      "Gestión",
+      "Control",
+      "Configuración",
+      "Mantención y reservas",
+    ],
   },
 }
 

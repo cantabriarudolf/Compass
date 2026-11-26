@@ -3,7 +3,10 @@
 // Usa test.use({ storageState }) por archivo; no 5 proyectos en config.
 import { expect, test } from "@playwright/test"
 
-const GRUPOS = ["Inicio","Operaciones","Finanzas","Comunidad","Inventario","Personas","Sistema"] as const
+const GRUPOS = [
+  "Inicio","Operaciones","Finanzas","Comunidad","Inventario","Personas",
+  "Arranque","Gestión","Control","Configuración","Mantención y reservas",
+] as const
 
 type Matriz = Record<string, { visibles: string[]; ocultos: string[] }>
 
@@ -16,27 +19,29 @@ type Matriz = Record<string, { visibles: string[]; ocultos: string[] }>
 // conservan sus roles explícitos.
 // Inventario: [admin,mantencion] (Estructura/Tipos solo admin; Recursos/Mantenimiento admin+mantencion)
 // Personas: [admin]
-// Sistema: [admin,comite] (Reportería: [admin,comite]; resto admin)
+// Arranque / Gestión / Control / Configuración: [admin,comite] (Configuración llega al
+// comité por «Credencial de correo»; el resto de sus items es admin-only)
+// Mantención y reservas: [admin]
 const MATRIZ: Matriz = {
   "comite@test.cl": {
-    visibles: ["Inicio","Finanzas","Comunidad","Sistema"],
-    ocultos: ["Operaciones","Inventario","Personas"],
+    visibles: ["Inicio","Finanzas","Comunidad","Arranque","Gestión","Control","Configuración"],
+    ocultos: ["Operaciones","Inventario","Personas","Mantención y reservas"],
   },
   "conserjeria@test.cl": {
     visibles: ["Inicio","Operaciones","Comunidad"],
-    ocultos: ["Finanzas","Inventario","Personas","Sistema"],
+    ocultos: ["Finanzas","Inventario","Personas","Arranque","Gestión","Control","Configuración","Mantención y reservas"],
   },
   "residente@test.cl": {
     visibles: ["Inicio","Operaciones","Finanzas","Comunidad"],
-    ocultos: ["Inventario","Personas","Sistema"],
+    ocultos: ["Inventario","Personas","Arranque","Gestión","Control","Configuración","Mantención y reservas"],
   },
   "arrendatario@test.cl": {
     visibles: ["Inicio","Operaciones","Finanzas","Comunidad"],
-    ocultos: ["Inventario","Personas","Sistema"],
+    ocultos: ["Inventario","Personas","Arranque","Gestión","Control","Configuración","Mantención y reservas"],
   },
   "mantencion@test.cl": {
     visibles: ["Inicio","Operaciones","Inventario","Comunidad"],
-    ocultos: ["Finanzas","Personas","Sistema"],
+    ocultos: ["Finanzas","Personas","Arranque","Gestión","Control","Configuración","Mantención y reservas"],
   },
 }
 
@@ -71,10 +76,13 @@ test.describe("comite@test.cl — matriz + 403 admin:usuarios", () => {
     await page.getByRole("button",{name:"Finanzas"}).click().catch(()=>{})
     await page.waitForTimeout(600)
     await expect(page.getByText("Remuneraciones",{exact:true})).toBeHidden({timeout:10_000})
-    // Granular Sistema: Reportería visible, Gestión oculta — Sistema está expandido por defecto en /admin/gestion (active), no click necesario
-    await page.waitForTimeout(500)
+    // Granular: Reportería vive en Control, que no es el grupo activo (en /admin/gestion
+    // lo está Gestión), así que hay que expandirlo para que el item entre al DOM.
+    await page.getByRole("button",{name:"Control"}).click().catch(()=>{})
+    await page.waitForTimeout(600)
     await expect(page.getByRole("link",{name:/Reportería/})).toHaveCount(1, { timeout: 10_000 })
-    // Gestión Administrativa debe estar ausente del DOM para comite (filtrado por roles)
+    // Gestión Administrativa debe estar ausente del DOM para comite (filtrado por roles);
+    // el grupo Gestión está expandido por defecto en /admin/gestion (activo).
     await expect(page.locator('a[href="/admin/gestion"]')).toHaveCount(0)
     // Denegación server-side real
     const status = await page.evaluate(async () => {
@@ -212,7 +220,7 @@ test.describe("arrendatario@test.cl — matriz + 403", () => {
 
 test.describe("admin@test.cl — control 200 admin:usuarios", () => {
   test.use({ storageState: "e2e/.auth/admin.json" })
-  test("admin ve 8/8 y 200 en admin:usuarios", async ({ page }) => {
+  test("admin ve 12/12 y 200 en admin:usuarios", async ({ page }) => {
     const errores: string[] = []
     page.on("pageerror", e=>errores.push(e.message))
     await gotoEstable(page)
