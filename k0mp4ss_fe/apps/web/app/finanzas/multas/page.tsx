@@ -43,6 +43,7 @@ import type {
   TipoInfraccionIN,
 } from "@/lib/schemas"
 import { esInfraccionEnTramite } from "@/lib/schemas"
+import { EliminarConConfirmacion } from "@/components/eliminar-con-confirmacion"
 
 const CATEGORIA_LABEL: Record<CategoriaInfraccionIN, string> = {
   leve: "Leve",
@@ -381,10 +382,17 @@ isLoading: cInfracciones, create: crearInfraccionApi,
                             setEditandoTipoId(t.id)
                             setFormTipo({ nombre: t.nombre, categoria: t.categoria, tipoSancion: t.tipoSancion, valor: t.valor.toString() })
                           }}>Editar</Button>
-                          <Button size="sm" variant="ghost" onClick={async () => {
-                            const r = await eliminarTipoApi(t.id)
-                            if (!r.ok) setError(r.error ?? "No se pudo eliminar.")
-                          }}>Eliminar</Button>
+                          <EliminarConConfirmacion
+                            etiqueta="Eliminar"
+                            ariaLabel={`Eliminar el tipo de infracción «${t.nombre}»`}
+                            titulo={`Eliminar el tipo de infracción «${t.nombre}» · ${CATEGORIA_LABEL[t.categoria]}`}
+                            consecuencia="Las multas aplicadas con él quedan sin la categoría ni el monto que las fundó."
+                            onEliminar={async () => {
+                              const r = await eliminarTipoApi(t.id)
+                              if (!r.ok) setError(r.error ?? "No se pudo eliminar.")
+                              return r
+                            }}
+                          />
                         </div>
                       </td>
                     </tr>
