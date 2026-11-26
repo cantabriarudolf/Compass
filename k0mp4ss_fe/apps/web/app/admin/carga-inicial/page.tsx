@@ -40,6 +40,7 @@ import {
   TableHeader,
   TableRow,
 } from "@workspace/ui/components/table"
+import { useFondosFI } from "@/lib/api/use-fondos-fi"
 import {
   IconAlertTriangle,
   IconBuildingSkyscraper,
@@ -129,6 +130,80 @@ const BLOQUES = [
 ] as const
 
 type Bloque = (typeof BLOQUES)[number]
+
+/**
+ * Aviso de fondos: responde «¿dónde cargo mis fondos?» antes de la primera
+ * planilla. Egresos e ingresos imputan cada fila a un fondo que ya existe, por
+ * nombre exacto o id; el importador no los crea. Mientras SWR carga no se pinta
+ * nada: un esqueleto acá sería un salto de altura sin información.
+ */
+function AvisoFondos() {
+  const { items, isLoading } = useFondosFI()
+
+  if (isLoading) return null
+
+  return (
+    <Card
+      data-testid="aviso-fondos"
+      className="border-primary/20 bg-primary/5 shadow-none"
+    >
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <IconWallet className="size-5 text-primary" />
+          Antes de cargar: los fondos
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3 text-sm text-muted-foreground">
+        {items.length === 0 ? (
+          <p>
+            Todavía no hay fondos. Egresos e ingresos imputan cada fila a un
+            fondo que ya existe y este importador{" "}
+            <strong className="font-semibold text-foreground">
+              no los crea
+            </strong>
+            : creá al menos uno en Finanzas antes de subir esas planillas.
+          </p>
+        ) : (
+          <>
+            <p>
+              Este importador{" "}
+              <strong className="font-semibold text-foreground">
+                no crea fondos
+              </strong>
+              : los egresos y los ingresos se imputan a un fondo que ya existe,
+              por{" "}
+              <strong className="font-semibold text-foreground">
+                nombre exacto o id
+              </strong>
+              . Si el nombre del CSV no coincide, la fila falla con el motivo.
+            </p>
+            <div className="space-y-1.5">
+              <p>
+                Hoy la comunidad tiene{" "}
+                <strong className="font-semibold text-foreground">
+                  {items.length}
+                </strong>
+                :
+              </p>
+              <ul className="list-disc space-y-1 pl-5">
+                {items.map((fondo) => (
+                  <li key={fondo.id}>
+                    {fondo.nombre}
+                    {fondo.activo === false ? " (inactivo)" : ""}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <p>Se crean y se renombran en Finanzas.</p>
+          </>
+        )}
+        <Button asChild variant="outline" size="sm">
+          <a href="/finanzas/gastos-comunes">Ir a Finanzas</a>
+        </Button>
+      </CardContent>
+    </Card>
+  )
+}
 
 /** Nombre visible de la acción de la fila en el reporte. */
 const ETIQUETA_ACCION: Record<string, string> = {
@@ -548,6 +623,7 @@ export default function CargaInicialPage() {
           propio archivo.
         </p>
       </header>
+      <AvisoFondos />
       <div className="space-y-6">
         {BLOQUES.map((bloque) => (
           <BloqueImportador key={bloque.slug} bloque={bloque} />
