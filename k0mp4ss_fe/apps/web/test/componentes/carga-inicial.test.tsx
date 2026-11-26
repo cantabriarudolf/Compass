@@ -12,6 +12,7 @@ import React from "react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { cleanup, render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
+import { SWRConfig } from "swr"
 import CargaInicialPage from "@/app/admin/carga-inicial/page"
 
 /** El bloque <section> de la página lleva aria-label con el título. */
@@ -46,9 +47,35 @@ function reporte(
 
 const fetchFalso = vi.fn()
 
-/** Instala el fetch falso antes de cada caso como fetch global. */
+/** Fondos que el servidor falso devuelve en `/api/fondos-fi` para el caso actual. */
+type FondoFalso = { id: string; nombre: string; tipo: string; activo: boolean }
+
+let fondosFalsos: FondoFalso[] = []
+
+/**
+ * Instala el fetch falso antes de cada caso como fetch global. El hook
+ * `useFondosFI()` pide `{ data, page, pageSize, total }`; esa ruta se responde
+ * aparte para que no cuente como llamada del importador en los casos de vista
+ * previa (que miran `fetchFalso`).
+ */
 beforeEach(() => {
-  vi.stubGlobal("fetch", fetchFalso)
+  fondosFalsos = []
+  vi.stubGlobal(
+    "fetch",
+    (entrada: RequestInfo | URL, init?: RequestInit) => {
+      if (String(entrada).startsWith("/api/fondos-fi")) {
+        return Promise.resolve(
+          responderJson({
+            data: fondosFalsos,
+            page: 1,
+            pageSize: 100,
+            total: fondosFalsos.length,
+          })
+        )
+      }
+      return fetchFalso(entrada, init)
+    }
+  )
 })
 
 afterEach(() => {
@@ -56,6 +83,18 @@ afterEach(() => {
   fetchFalso.mockReset()
   vi.unstubAllGlobals()
 })
+
+/**
+ * Monta la página con caché SWR propia: los fondos de un caso no se heredan
+ * del anterior aunque compartan la misma clave (`/api/fondos-fi?pageSize=100`).
+ */
+function renderizarConFondos(): ReturnType<typeof render> {
+  return render(
+    <SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}>
+      <CargaInicialPage />
+    </SWRConfig>
+  )
+}
 
 describe("pantalla Carga inicial", () => {
   it("lista los siete bloques con su botón de descarga apuntando a la ruta correcta", () => {
@@ -198,5 +237,50 @@ describe("pantalla Carga inicial", () => {
     expect(screen.getByText(/permiso denegado/i)).toBeTruthy()
     expect(b.queryByRole("table")).toBeNull()
     expect(b.getByRole("button", { name: "Importar" })).toBeDisabled()
+  })
+
+  it("sin fondos: avisa que el importador no los crea y lleva a Finanzas", async () => {
+    renderizarConFondos()
+
+    const tarjeta = await screen.findByTestId("aviso-fondos")
+    expect(tarjeta).toHaveTextContent(/todavía no hay fondos/i)
+    expect(tarjeta).toHaveTextContent(/no los crea/i)
+    const enlace = within(tarjeta).getByRole("link", { name: "Ir a Finanzas" })
+    expect(enlace.getAttribute("href")).toBe("/finanzas/gastos-comunes")
+  })
+
+  it("con fondos: muestra cuántos hay y el nombre de cada uno", async () => {
+    fondosFalsos = [
+      { id: "f-gc", nombre: "Fondo de Gasto Común", tipo: "gasto_comun", activo: true },
+      { id: "f-res", nombre: "Fondo de Reserva", tipo: "reserva", activo: true },
+      { id: "f-am", nombre: "Fondo de Amenities", tipo: "amenities", activo: true },
+    ]
+    renderizarConFondos()
+
+    const tarjeta = await screen.findByTestId("aviso-fondos")
+    // La tarjeta aparece una sola vez, arriba del listado de bloques.
+    expect(screen.getAllByTestId("aviso-fondos")).toHaveLength(1)
+    expect(tarjeta).toHaveTextContent(/no crea fondos/i)
+    expect(tarjeta).toHaveTextContent(/hoy la comunidad tiene 3:/i)
+    expect(within(tarjeta).getByText("Fondo de Gasto Común")).toBeTruthy()
+    expect(within(tarjeta).getByText("Fondo de Reserva")).toBeTruthy()
+    expect(within(tarjeta).getByText("Fondo de Amenities")).toBeTruthy()
+    const estructura = screen.getByRole("region", { name: "Estructura" })
+    expect(
+      tarjeta.compareDocumentPosition(estructura) &
+        Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy()
+  })
+
+  it("con un fondo inactivo: lo marca al lado del nombre", async () => {
+    fondosFalsos = [
+      { id: "f-res", nombre: "Fondo de Reserva", tipo: "reserva", activo: false },
+    ]
+    renderizarConFondos()
+
+    const tarjeta = await screen.findByTestId("aviso-fondos")
+    expect(
+      within(tarjeta).getByText("Fondo de Reserva (inactivo)")
+    ).toBeTruthy()
   })
 })
