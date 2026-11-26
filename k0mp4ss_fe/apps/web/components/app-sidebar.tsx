@@ -48,10 +48,16 @@ export const SIDEBAR_GROUPS = [
   "Comunidad",
   "Inventario",
   "Personas",
-  "Sistema",
+  "Arranque",
+  "Gestión",
+  "Control",
+  "Configuración",
+  "Mantención y reservas",
 ] as const
 
-const data = {
+// Exportado para las pruebas del menú: el candado de inventario compara la lista de rutas
+// de cada rol contra la que existía antes de reagrupar.
+export const data = {
   navMain: [
     {
       title: "Inicio",
@@ -187,38 +193,42 @@ const data = {
         { title: "Personal", url: "/personas/personal" },
       ],
     },
+    // El antiguo grupo «Sistema» juntaba las 19 opciones del administrador en un solo
+    // bloque interminable. Se parte en cinco grupos por foco —arranque, gestión del día,
+    // control, configuración y mantenciones— sin cambiar ninguna ruta ni ningún rol de
+    // sus items: cada grupo declara la unión de los roles de lo que contiene, y el item
+    // sigue llevando los suyos cuando es más angosto (p. ej. métricas y auditoría).
     {
-      title: "Sistema",
-      url: "/admin",
+      // Primer día: qué le falta a la comunidad para operar. Se consulta al empezar y
+      // después casi nunca, así que no comparte bloque con la operación corriente.
+      title: "Arranque",
+      url: "/admin/arranque",
       icon: IconSettings,
       roles: ["administrador", "comite"],
       items: [
-        { title: "Reportería y Dashboards", url: "/admin/reporteria", roles: ["administrador", "comite"] },
-        { title: "Auditoría y Métricas", url: "/admin/metricas", roles: ["administrador"] },
-        // El calendario preventivo vivía dentro de /operaciones/proveedores; el owner
-        // lo separó a un panel propio, así que la entrada va en Sistema (grupo del
-        // administrador) y no en Operaciones. El page.tsx del panel además exige rol
-        // administrador en el servidor.
-        { title: "Mantenciones Preventivas", url: "/admin/mantenciones", roles: ["administrador"] },
-        // Los elementos reservables se creaban dentro de la pestaña "Elementos" de
-        // /operaciones/reservas; el owner pidió esa misma opción en el menú del
-        // administrador. Acá se administra el catálogo de amenities (crear, editar,
-        // habilitar/deshabilitar) y las reservas de los residentes siguen en
-        // Operaciones. El page.tsx del panel además exige rol administrador en el servidor.
-        { title: "Elementos", url: "/admin/elementos", roles: ["administrador"] },
-        // Alerta de reservas: la cola de autorización del administrador. Va junto a
-        // Elementos porque es la otra mitad del mismo módulo (el dueño del pedido: la
-        // lista de reservas de Operaciones no dice qué autorizar). El page.tsx del panel
-        // exige rol administrador en el servidor y la API de la cola exige `editar` en RA.
-        { title: "Alerta de reservas", url: "/admin/reservas", roles: ["administrador"] },
+        // F47: el arranque de la comunidad va primero en la lista porque es lo que
+        // un administrador nuevo necesita ver antes que nada — qué le falta para operar.
+        { title: "Arranque de la comunidad", url: "/admin/arranque", roles: ["administrador", "comite"] },
+        { title: "Carga inicial", url: "/admin/carga-inicial", roles: ["administrador"] },
+      ],
+    },
+    {
+      // La administración del día a día: presupuesto, reparto, convenios, conciliación y
+      // la vigencia del Registro. Todo cuelga de /admin/gestion salvo la vigencia.
+      title: "Gestión",
+      url: "/admin/gestion",
+      icon: IconSettings,
+      roles: ["administrador", "comite"],
+      items: [
         { title: "Gestión Administrativa", url: "/admin/gestion", roles: ["administrador"] },
-        // Vigencia del Registro de Copropietarios (Ley 21.442 art. 9): la ley
-        // obliga a la administración a requerir la actualización cada año y el
-        // Comité debe ver el estado. La entrada refleja la matriz (`ad` + `editar`),
-        // no la amplía: el portón real está en la página y en las cuatro rutas.
         {
-          title: "Vigencia del Registro",
-          url: "/admin/gestion/vigencia-registro",
+          title: "Presupuesto por Partidas",
+          url: "/admin/gestion/presupuestos",
+          roles: ["administrador", "comite"],
+        },
+        {
+          title: "Reparto por Sector",
+          url: "/admin/gestion/repartos-sector",
           roles: ["administrador", "comite"],
         },
         {
@@ -231,35 +241,81 @@ const data = {
           url: "/admin/gestion/conciliacion",
           roles: ["administrador", "comite"],
         },
+        // Vigencia del Registro de Copropietarios (Ley 21.442 art. 9): la ley
+        // obliga a la administración a requerir la actualización cada año y el
+        // Comité debe ver el estado. La entrada refleja la matriz (`ad` + `editar`),
+        // no la amplía: el portón real está en la página y en las cuatro rutas.
         {
-          title: "Presupuesto por Partidas",
-          url: "/admin/gestion/presupuestos",
+          title: "Vigencia del Registro",
+          url: "/admin/gestion/vigencia-registro",
           roles: ["administrador", "comite"],
         },
-        {
-          title: "Reparto por Sector",
-          url: "/admin/gestion/repartos-sector",
-          roles: ["administrador", "comite"],
-        },
-        // F47: el arranque de la comunidad va primero en la lista porque es lo que
-        // un administrador nuevo necesita ver antes que nada — qué le falta para operar.
-        { title: "Arranque de la comunidad", url: "/admin/arranque", roles: ["administrador", "comite"] },
-        { title: "Maestros Administrativos", url: "/admin/maestros", roles: ["administrador"] },
+      ],
+    },
+    {
+      // Lectura y control: reportería, métricas y auditoría son consultas, no operación.
+      // Logs y métricas son pantallas distintas (/admin/logs y /admin/metricas), así que
+      // las dos entradas se conservan.
+      title: "Control",
+      url: "/admin/reporteria",
+      icon: IconSettings,
+      roles: ["administrador", "comite"],
+      items: [
+        { title: "Reportería y Dashboards", url: "/admin/reporteria", roles: ["administrador", "comite"] },
+        { title: "Auditoría y Métricas", url: "/admin/metricas", roles: ["administrador"] },
+        { title: "Logs de Auditoría", url: "/admin/logs", roles: ["administrador"] },
+      ],
+    },
+    {
+      // Configuración de la comunidad y sus accesos. El grupo incluye al comité porque
+      // «Credencial de correo» lo declara (`cf` ver, F33); el resto de los items es del
+      // administrador y se gatea con sus propios roles.
+      title: "Configuración",
+      url: "/admin/configuracion",
+      icon: IconSettings,
+      roles: ["administrador", "comite"],
+      items: [
         { title: "Configuración", url: "/admin/configuracion", roles: ["administrador"] },
         {
           title: "Credencial de correo",
           url: "/admin/configuracion/correo",
           roles: ["administrador", "comite"],
         },
+        { title: "Maestros Administrativos", url: "/admin/maestros", roles: ["administrador"] },
         { title: "Permisos", url: "/admin/permisos", roles: ["administrador"] },
         // Cuentas y acceso (F42): acá nace el acceso al sistema —alta con persona
         // del padrón, rol de acceso y estado de la invitación—, así que la entrada
-        // va en Sistema, junto a Permisos. Refleja la matriz (`admin:usuarios`
+        // va en Configuración, junto a Permisos. Refleja la matriz (`admin:usuarios`
         // ver, sólo el wildcard del administrador); el page.tsx y las tres rutas
         // vuelven a exigir la clave en el servidor.
         { title: "Cuentas y acceso", url: "/admin/usuarios", roles: ["administrador"] },
-        { title: "Logs de Auditoría", url: "/admin/logs", roles: ["administrador"] },
-        { title: "Carga inicial", url: "/admin/carga-inicial", roles: ["administrador"] },
+      ],
+    },
+    {
+      // El otro mitad del módulo de reservas (catálogo de amenities y cola de autorización)
+      // más el calendario preventivo. Es del administrador: el residente reserva desde
+      // Operaciones y acá no entra.
+      title: "Mantención y reservas",
+      url: "/admin/mantenciones",
+      icon: IconSettings,
+      roles: ["administrador"],
+      items: [
+        // El calendario preventivo vivía dentro de /operaciones/proveedores; el owner
+        // lo separó a un panel propio, así que la entrada va en Mantención y reservas
+        // (grupo del administrador) y no en Operaciones. El page.tsx del panel además
+        // exige rol administrador en el servidor.
+        { title: "Mantenciones Preventivas", url: "/admin/mantenciones", roles: ["administrador"] },
+        // Los elementos reservables se creaban dentro de la pestaña "Elementos" de
+        // /operaciones/reservas; el owner pidió esa misma opción en el menú del
+        // administrador. Acá se administra el catálogo de amenities (crear, editar,
+        // habilitar/deshabilitar) y las reservas de los residentes siguen en
+        // Operaciones. El page.tsx del panel además exige rol administrador en el servidor.
+        { title: "Elementos", url: "/admin/elementos", roles: ["administrador"] },
+        // Alerta de reservas: la cola de autorización del administrador. Va junto a
+        // Elementos porque es la otra mitad del mismo módulo (el dueño del pedido: la
+        // lista de reservas de Operaciones no dice qué autorizar). El page.tsx del panel
+        // exige rol administrador en el servidor y la API de la cola exige `editar` en RA.
+        { title: "Alerta de reservas", url: "/admin/reservas", roles: ["administrador"] },
       ],
     },
   ],
