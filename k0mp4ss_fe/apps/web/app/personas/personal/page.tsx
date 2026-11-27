@@ -22,6 +22,7 @@
 import { aTituloCaso, aOracion } from "@/lib/normalizacion"
 import { VERSION_POLITICA_PRIVACIDAD } from "@/lib/politica-privacidad"
 import { ConsentimientoDatosSensibles } from "@/components/personas/consentimiento-datos-sensibles"
+import { EliminarConConfirmacion } from "@/components/eliminar-con-confirmacion"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
@@ -50,7 +51,6 @@ import {
   IconClipboardCheck,
   IconPlus,
   IconPencil,
-  IconTrash,
   IconSend,
   IconUserShield,
   IconPhotoOff,
@@ -517,7 +517,18 @@ export default function PersonalPage() {
                       <td className="p-3">{f.irrenunciable ? <Badge variant="destructive">Irrenunciable</Badge> : <Badge variant="secondary">Legal</Badge>}</td>
                       <td className="p-3 flex gap-1">
                         <Button size="icon" variant="ghost" onClick={() => setFormFeriado({ id: f.id, fecha: f.fecha, nombre: f.nombre, irrenunciable: f.irrenunciable })}><IconPencil className="size-4" /></Button>
-                        <Button size="icon" variant="ghost" onClick={async () => { const r = await eliminarFeriadoApi(f.id); if (!r.ok) setError(r.error ?? ""); else setOkMsg("Feriado eliminado.") }}><IconTrash className="size-4" /></Button>
+                        <EliminarConConfirmacion
+                          titulo={`Eliminar el feriado «${f.nombre}» del ${f.fecha}`}
+                          consecuencia="El cálculo de remuneraciones de ese día deja de considerar el feriado legal."
+                          ariaLabel={`Eliminar el feriado ${f.nombre}`}
+                          onError={setError}
+                          onEliminar={async () => {
+                            const r = await eliminarFeriadoApi(f.id)
+                            if (!r.ok) return { ok: false, error: r.error }
+                            setOkMsg("Feriado eliminado.")
+                            return { ok: true }
+                          }}
+                        />
                       </td>
                     </tr>
                   ))}

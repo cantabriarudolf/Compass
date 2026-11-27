@@ -26,6 +26,7 @@ import {
 import { hoyISO } from "@/lib/date-utils"
 import { alertasMantencionesVencidas } from "@/lib/personal-utils"
 import { VerMas } from "@/components/ver-mas"
+import { EliminarConConfirmacion } from "@/components/eliminar-con-confirmacion"
 import {
   Card,
   CardContent,
@@ -58,7 +59,6 @@ import {
   IconPlus,
   IconPencil,
   IconPower,
-  IconTrash,
 } from "@tabler/icons-react"
 
 interface FormMantencion {
@@ -187,27 +187,6 @@ export function PanelMantenciones() {
     }
     setError(null)
     setOkMsg(activo ? "Mantención desactivada." : "Mantención activada.")
-  }
-
-  const eliminar = async (id: string, descripcion: string) => {
-    const vinculadas = visitasTecnicas.filter((v) => v.mantencionId === id).length
-    if (vinculadas > 0) {
-      setError(
-        `No se puede eliminar la mantención: ${vinculadas} visita(s) técnica(s) asociadas.`
-      )
-      return
-    }
-    const resultado = await eliminarMantencion(id)
-    if (!resultado.ok) {
-      setError(resultado.error ?? "No se pudo eliminar la mantención.")
-      return
-    }
-    if (editandoId === id) {
-      setEditandoId(null)
-      setForm(null)
-    }
-    setError(null)
-    setOkMsg(`Mantención «${descripcion}» eliminada.`)
   }
 
   if (cargando) {
@@ -451,14 +430,41 @@ export function PanelMantenciones() {
                             >
                               <IconPower className="size-4" />
                             </Button>
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              aria-label={`Eliminar ${m.descripcion}`}
-                              onClick={() => eliminar(m.id, m.descripcion)}
-                            >
-                              <IconTrash className="size-4" />
-                            </Button>
+                            <EliminarConConfirmacion
+                              titulo={`Eliminar la mantención «${m.descripcion}»`}
+                              consecuencia="Se pierde su programación; las visitas técnicas que la ejecutaron apuntan a una mantención inexistente."
+                              ariaLabel={`Eliminar ${m.descripcion}`}
+                              onError={setError}
+                              onEliminar={async () => {
+                                // Guarda del panel (paridad con la regla legacy): no se
+                                // elimina una mantención con visitas técnicas asociadas.
+                                // El motivo vuelve a la guarda para leerse en el diálogo.
+                                const vinculadas = visitasTecnicas.filter(
+                                  (v) => v.mantencionId === m.id
+                                ).length
+                                if (vinculadas > 0) {
+                                  return {
+                                    ok: false,
+                                    error: `No se puede eliminar la mantención: ${vinculadas} visita(s) técnica(s) asociadas.`,
+                                  }
+                                }
+                                const resultado = await eliminarMantencion(m.id)
+                                if (!resultado.ok) {
+                                  return {
+                                    ok: false,
+                                    error:
+                                      resultado.error ?? "No se pudo eliminar la mantención.",
+                                  }
+                                }
+                                if (editandoId === m.id) {
+                                  setEditandoId(null)
+                                  setForm(null)
+                                }
+                                setError(null)
+                                setOkMsg(`Mantención «${m.descripcion}» eliminada.`)
+                                return { ok: true }
+                              }}
+                            />
                           </div>
                         </TableCell>
                       </TableRow>
