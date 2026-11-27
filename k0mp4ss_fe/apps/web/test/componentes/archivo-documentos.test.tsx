@@ -320,13 +320,30 @@ describe("Archivo de documentos — la pantalla dice lo que la entidad permite",
     expect(eliminarLegal).toBeDisabled()
     expect(eliminarLegal).toHaveAttribute("title", MENSAJE_LEGAL_INMUTABLE)
 
-    // S4 · lo comunitario se elimina con la clave `doc`.
+    // S4 · lo comunitario se elimina con la clave `doc`, y desde S1 con guarda:
+    // el primer click no borra, abre el diálogo con la glosa y qué se pierde.
     const eliminarComunitario = screen.getByRole("button", {
       name: "Eliminar Circular del plan de emergencia",
     })
     expect(eliminarComunitario).toBeEnabled()
     await user.click(eliminarComunitario)
-    expect(api.remove).toHaveBeenCalledWith("doc-archivo-circular-emergencia")
+
+    const dialogo = await screen.findByRole("alertdialog")
+    expect(
+      within(dialogo).getByText(
+        "Eliminar el documento «Circular del plan de emergencia» · v1"
+      )
+    ).toBeTruthy()
+    expect(dialogo).toHaveTextContent(
+      "Se pierde el documento con su glosa, su versión y la URL del archivo"
+    )
+    expect(api.remove).not.toHaveBeenCalled()
+
+    // Recién al confirmar dentro del diálogo la baja llega al hook.
+    await user.click(within(dialogo).getByRole("button", { name: "Eliminar" }))
+    await waitFor(() =>
+      expect(api.remove).toHaveBeenCalledWith("doc-archivo-circular-emergencia")
+    )
   })
 
   it("no deja registrar un legal sin referencia auténtica y manda el archivo derivado de la extensión", async () => {
@@ -369,12 +386,21 @@ describe("Archivo de documentos — la pantalla dice lo que la entidad permite",
     expect(screen.getByRole("alert")).toHaveTextContent(MENSAJE_REFERENCIA_AUTENTICA)
 
     // 409 · la fila comunitaria cambió de naturaleza entre el render y el click:
-    // el texto que explica el rechazo es el de la API, no uno inventado acá.
+    // el texto que explica el rechazo es el de la API, no uno inventado acá, y se
+    // lee DENTRO de la guarda (el overlay tapa el banner de la pantalla).
     api.remove.mockResolvedValueOnce({ ok: false, error: MENSAJE_LEGAL_INMUTABLE })
     await user.click(
       screen.getByRole("button", { name: "Eliminar Circular del plan de emergencia" })
     )
-    expect(screen.getByRole("alert")).toHaveTextContent(MENSAJE_LEGAL_INMUTABLE)
+    const dialogo = await screen.findByRole("alertdialog")
+    await user.click(within(dialogo).getByRole("button", { name: "Eliminar" }))
+
+    const sigueAbierto = await screen.findByRole("alertdialog")
+    expect(within(sigueAbierto).getByRole("alert")).toHaveTextContent(
+      MENSAJE_LEGAL_INMUTABLE
+    )
+    // El aviso de la pantalla que ya existía tampoco se pierde.
+    expect(screen.getAllByText(MENSAJE_LEGAL_INMUTABLE)).toHaveLength(2)
   })
 
   it("abrir resuelve primero el detalle auditado y recién después abre la URL del archivo", async () => {

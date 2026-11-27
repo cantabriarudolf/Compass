@@ -66,6 +66,10 @@ import { useDocumentos, type DocumentoArchivoEnLista } from "@/lib/api/use-docum
 import { generarId } from "@/lib/id-utils"
 import { hoyISO } from "@/lib/date-utils"
 import { VerMas } from "@/components/ver-mas"
+import {
+  EliminarConConfirmacion,
+  type ResultadoBorrado,
+} from "@/components/eliminar-con-confirmacion"
 import { DialogoEnvioDocumento } from "./dialogo-envio-documento"
 
 type FiltroNaturaleza = "todos" | NaturalezaDocumento
@@ -83,6 +87,17 @@ const NATURALEZA_LABEL: Record<NaturalezaDocumento, string> = {
  */
 const MOTIVO_SIN_PERMISO_EDITAR = "Tu rol no puede editar documentos (clave doc)."
 const MOTIVO_SIN_PERMISO_ELIMINAR = "Tu rol no puede eliminar documentos (clave doc)."
+
+/**
+ * Qué se pierde al eliminar un documento comunitario (S1).
+ *
+ * El archivo guarda metadatos y una referencia, nunca el binario (D1), así que
+ * lo que se va con la fila es la glosa, la versión asignada por el servidor y la
+ * URL con la que el documento se abría. Lo legal no llega acá: su acción está
+ * deshabilitada con el motivo y el DELETE responde 409.
+ */
+const CONSECUENCIA_BORRADO =
+  "Se pierde el documento con su glosa, su versión y la URL del archivo: sale del archivo de la comunidad y no se puede recuperar."
 
 /** D1: el MIME se deriva de la extensión; sin bytes, todo lo demás es binario. */
 function tipoMimeDelArchivo(url: string, nombre: string): string {
@@ -330,19 +345,23 @@ export function ConsolaArchivo({ roles }: { roles: string[] }) {
     }
   }
 
-  const borrar = async (documento: DocumentoArchivoEnLista): Promise<void> => {
+  const borrar = async (documento: DocumentoArchivoEnLista): Promise<ResultadoBorrado> => {
     setError(null)
     setExito(null)
     const resultado = await remove(documento.id)
     if (!resultado.ok) {
-      setError(resultado.error ?? "No se pudo eliminar el documento.")
-      return
+      const motivo = resultado.error ?? "No se pudo eliminar el documento."
+      // El aviso de la pantalla se conserva; además el motivo vuelve a la
+      // guarda para leerse dentro del diálogo (el overlay tapa el banner).
+      setError(motivo)
+      return { ok: false, error: motivo }
     }
     if (editandoId === documento.id) {
       setEditandoId(null)
       setFormulario(formularioVacio())
     }
     setExito("Documento comunitario eliminado.")
+    return { ok: true }
   }
 
   /**
@@ -755,16 +774,28 @@ export function ConsolaArchivo({ roles }: { roles: string[] }) {
                               >
                                 <IconPencil className="size-4" />
                               </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon-sm"
-                                aria-label={`Eliminar ${documento.glosa}`}
-                                title={bloqueoEliminar ?? "Eliminar documento"}
-                                disabled={!!bloqueoEliminar}
-                                onClick={() => void borrar(documento)}
-                              >
-                                <IconTrash className="size-4" />
-                              </Button>
+                              {bloqueoEliminar ? (
+                                // Sin permiso o documento legal: no hay baja que
+                                // ofrecer. Se conserva el botón apagado con el
+                                // motivo en el `title`, que es lo que ya leía
+                                // quien pasaba el mouse por la fila.
+                                <Button
+                                  variant="ghost"
+                                  size="icon-sm"
+                                  aria-label={`Eliminar ${documento.glosa}`}
+                                  title={bloqueoEliminar}
+                                  disabled
+                                >
+                                  <IconTrash className="size-4" />
+                                </Button>
+                              ) : (
+                                <EliminarConConfirmacion
+                                  titulo={`Eliminar el documento «${documento.glosa}» · v${documento.version}`}
+                                  consecuencia={CONSECUENCIA_BORRADO}
+                                  ariaLabel={`Eliminar ${documento.glosa}`}
+                                  onEliminar={() => borrar(documento)}
+                                />
+                              )}
                             </div>
                           </TableCell>
                         </TableRow>
