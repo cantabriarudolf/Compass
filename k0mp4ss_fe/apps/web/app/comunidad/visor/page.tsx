@@ -425,6 +425,7 @@ export default function VisorPanelPage() {
                                   titulo={`Eliminar el aviso «${a.titulo}»`}
                                   consecuencia="Se pierde el texto del aviso, sin forma de recuperarlo."
                                   ariaLabel={`Eliminar el aviso «${a.titulo}»`}
+                                  etiqueta="Eliminar"
                                   onEliminar={() => eliminarAviso(a.id)}
                                 />
                               )}

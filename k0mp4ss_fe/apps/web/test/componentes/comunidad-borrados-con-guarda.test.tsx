@@ -348,6 +348,12 @@ describe("el primer click en la papelera no borra: abre la guarda", () => {
     const usuario = userEvent.setup()
     render(<VisorPanelPage />)
 
+    const disparador = await screen.findByRole("button", { name: ARIA_AVISO })
+    // El aviso se borraba con la palabra «Eliminar» a la vista y no se degrada a
+    // un icono mudo: la guarda conserva el verbo del disparador. Se mira antes de
+    // abrir, porque el modal deja el fondo fuera del árbol accesible.
+    expect(disparador).toHaveTextContent("Eliminar")
+
     const dialogo = await abrirDesdePapelera(usuario, ARIA_AVISO)
 
     expect(within(dialogo).getByText(TITULO_AVISO)).toBeTruthy()

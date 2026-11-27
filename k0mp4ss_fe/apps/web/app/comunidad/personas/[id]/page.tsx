@@ -168,8 +168,11 @@ export default function PersonaPerfilPage() {
   const eliminarVinculo = async (vinculoId: string): Promise<StoreResult> => {
     const resultado = await removeVinculoApi(vinculoId)
     if (!resultado.ok) {
-      setErrorVinculos(resultado.error ?? "No se pudo eliminar el vínculo.")
-      return resultado
+      // El motivo vuelve normalizado: la guarda lo pinta dentro del diálogo y un
+      // `error` vacío dejaría el modal abierto sin explicar nada.
+      const motivo = resultado.error ?? "No se pudo eliminar el vínculo."
+      setErrorVinculos(motivo)
+      return { ok: false, error: motivo }
     }
     setErrorVinculos("")
     const nuevos = vinculosUnidad.filter(v => v.id !== vinculoId)

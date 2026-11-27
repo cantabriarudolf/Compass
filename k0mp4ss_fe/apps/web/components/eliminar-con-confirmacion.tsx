@@ -97,6 +97,12 @@ export function EliminarConConfirmacion({
         setError(motivo)
         onError?.(motivo)
       }
+    } catch {
+      // Una promesa rechazada no es un resultado: sin esto el diálogo quedaba
+      // abierto con el motivo vacío y nadie se enteraba de la baja que no fue.
+      const motivo = "No se pudo completar la baja: la pantalla no recibió respuesta del servidor."
+      setError(motivo)
+      onError?.(motivo)
     } finally {
       enVuelo.current = false
       setOcupado(false)
