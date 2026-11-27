@@ -569,14 +569,14 @@ export default function GastosComunesPage() {
   }
 
   const eliminarEgresoClick = async (id: string) => {
-        const r = await eliminarEgreso(id)
-        if (!r.ok) setError(r.error ?? "No se pudo eliminar el gasto.")
-      }
+    const r = await eliminarEgreso(id)
+    if (!r.ok) setError(r.error ?? "No se pudo eliminar el gasto.")
+  }
 
-      const eliminarIngresoClick = async (id: string) => {
-        const r = await eliminarIngreso(id)
-        if (!r.ok) setError(r.error ?? "No se pudo eliminar el ingreso.")
-      }
+  const eliminarIngresoClick = async (id: string) => {
+    const r = await eliminarIngreso(id)
+    if (!r.ok) setError(r.error ?? "No se pudo eliminar el ingreso.")
+  }
 
       /** Mora espejo de aplicarMoraFI: cálculo local + PUT del cobro. */
       const aplicarMoraClick = async (cobro: CobroFI, tasa: number) => {

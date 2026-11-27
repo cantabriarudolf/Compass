@@ -123,6 +123,19 @@ describe("EliminarConConfirmacion", () => {
     expect(sigueAbierto).toHaveTextContent(MOTIVO)
   })
 
+  it("un rechazo sin texto no deja la línea vacía: el diálogo dice que el servidor no explicó", async () => {
+    const usuario = userEvent.setup()
+    const onEliminar = vi.fn(async (): Promise<ResultadoBorrado> => ({ ok: false }))
+    const { onError } = montar({ onEliminar })
+
+    const dialogo = await abrirDialogo(usuario)
+    await usuario.click(within(dialogo).getByRole("button", { name: "Eliminar" }))
+
+    await waitFor(() => expect(onError).toHaveBeenCalledTimes(1))
+    const sigueAbierto = screen.getByRole("alertdialog")
+    expect(within(sigueAbierto).getByRole("alert").textContent).toContain("no explicó el motivo")
+  })
+
   it("una promesa rechazada no deja el diálogo mudo: reporta el motivo y sigue abierto", async () => {
     const usuario = userEvent.setup()
     const onEliminar = vi.fn(async (): Promise<ResultadoBorrado> => {

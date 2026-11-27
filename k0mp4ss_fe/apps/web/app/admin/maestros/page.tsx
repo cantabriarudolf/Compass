@@ -201,7 +201,7 @@ const BORRADO_POR_TIPO: Record<
 }
 
 /** Un tipo sin texto propio se nombra a sí mismo en vez de caer en un genérico mudo. */
-function borradoDelTipo(tipo: string): { entidad: string; consecuencia: string } {
+function descripcionDeBorrado(tipo: string): { entidad: string; consecuencia: string } {
   return (
     BORRADO_POR_TIPO[tipo] ?? {
       entidad: `el maestro «${tipo}»`,
@@ -244,7 +244,7 @@ function AccionesFila({
       </Button>
     )
   }
-  const { entidad, consecuencia } = borradoDelTipo(tipo)
+  const { entidad, consecuencia } = descripcionDeBorrado(tipo)
   return (
     <>
       <Button variant="ghost" size="icon" aria-label={`Editar ${item.nombre}`} onClick={() => onEditar(item)}>

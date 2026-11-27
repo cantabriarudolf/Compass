@@ -93,7 +93,10 @@ export function EliminarConConfirmacion({
       } else {
         // El diálogo NO se cierra: el usuario tiene que leer el motivo literal
         // del servidor y decidir con esa información.
-        const motivo = resultado.error ?? ""
+        // Un rechazo sin texto no puede llegar mudo al diálogo: si el servidor no
+        // explica el motivo, se dice eso mismo en vez de dejar la línea vacía.
+        const motivo =
+          resultado.error?.trim() || "La baja no se completó y el servidor no explicó el motivo."
         setError(motivo)
         onError?.(motivo)
       }
