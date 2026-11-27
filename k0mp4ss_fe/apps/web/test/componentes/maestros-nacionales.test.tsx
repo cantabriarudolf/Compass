@@ -173,10 +173,24 @@ describe("pantalla Maestros — catálogo nacional (F20 fase 1b)", () => {
     expect(propia.getByRole("button", { name: "Editar Banco Propio" })).toBeTruthy()
 
     await user.click(propia.getByRole("button", { name: "Borrar Banco Propio" }))
-    await waitFor(() => {
-      const borrado = fetchFalso.mock.calls.find(
-        (c) => String(c[0]).endsWith("/api/maestros/bancos/f20-banco-propio")
+
+    // S1/S2 · el primer click no borra: abre la guarda con el tipo de maestro y
+    // el nombre de la fila, y el DELETE todavía no salió.
+    const borradosDelBanco = () =>
+      fetchFalso.mock.calls.filter((c) =>
+        String(c[0]).endsWith("/api/maestros/bancos/f20-banco-propio")
       )
+    const dialogo = await screen.findByRole("alertdialog")
+    expect(within(dialogo).getByText("Eliminar el banco «Banco Propio»")).toBeTruthy()
+    expect(dialogo).toHaveTextContent(
+      "Las fichas laborales que lo tienen quedan sin banco."
+    )
+    expect(borradosDelBanco()).toHaveLength(0)
+
+    // Recién al confirmar dentro del diálogo la baja viaja al endpoint.
+    await user.click(within(dialogo).getByRole("button", { name: "Eliminar" }))
+    await waitFor(() => {
+      const borrado = borradosDelBanco()[0]
       expect(borrado).toBeTruthy()
       expect((borrado?.[1] as { method?: string } | undefined)?.method).toBe("DELETE")
     })

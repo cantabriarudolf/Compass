@@ -36,19 +36,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@workspace/ui/components/dialog"
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@workspace/ui/components/alert-dialog"
 import { FormularioVinculoUnidad } from "@/components/comunidad/formulario-vinculo"
 import { FormularioGobernanza } from "@/components/comunidad/formulario-gobernanza"
+import { EliminarConConfirmacion } from "@/components/eliminar-con-confirmacion"
 import {
   IconArrowLeft,
   IconUserCircle,
@@ -60,7 +50,6 @@ import {
   IconShieldLock,
   IconPlus,
   IconPencil,
-  IconTrash,
   IconHistory,
   IconCalendarEvent,
 } from "@tabler/icons-react"
@@ -176,15 +165,19 @@ export default function PersonaPerfilPage() {
     return resultado
   }
 
-  const eliminarVinculo = async (vinculoId: string) => {
+  const eliminarVinculo = async (vinculoId: string): Promise<StoreResult> => {
     const resultado = await removeVinculoApi(vinculoId)
     if (!resultado.ok) {
-      setErrorVinculos(resultado.error ?? "No se pudo eliminar el vínculo.")
-      return
+      // El motivo vuelve normalizado: la guarda lo pinta dentro del diálogo y un
+      // `error` vacío dejaría el modal abierto sin explicar nada.
+      const motivo = resultado.error ?? "No se pudo eliminar el vínculo."
+      setErrorVinculos(motivo)
+      return { ok: false, error: motivo }
     }
     setErrorVinculos("")
     const nuevos = vinculosUnidad.filter(v => v.id !== vinculoId)
     actualizarRolesPersona(nuevos)
+    return resultado
   }
 
   const etiquetaUnidad = (unidadId: string) => {
@@ -371,27 +364,14 @@ export default function PersonaPerfilPage() {
                       </Button>
 
                       {/* TAREA 4.4: Eliminar / Desvincular */}
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button variant="outline" size="sm" className="gap-1.5 text-destructive">
-                            <IconTrash className="size-3.5" /> Desvincular
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>¿Desvincular unidad?</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              Se eliminará el vínculo de {etiquetaUnidad(v.unidadId)} ({NOMBRE_ROL[v.rol]}) para {persona.nombreCompleto}. Esta acción no se puede deshacer.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                            <AlertDialogAction variant="destructive" onClick={() => { void eliminarVinculo(v.id) }}>
-                              Desvincular
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
+                      <EliminarConConfirmacion
+                        titulo={`Desvincular ${etiquetaUnidad(v.unidadId)} de ${persona.nombreCompleto}`}
+                        consecuencia={`Se elimina el vínculo de ${etiquetaUnidad(v.unidadId)} (${NOMBRE_ROL[v.rol]}) para ${persona.nombreCompleto}: la unidad deja de contar a esa persona como ${NOMBRE_ROL[v.rol]}. Esta acción no se puede deshacer.`}
+                        ariaLabel={`Desvincular ${etiquetaUnidad(v.unidadId)} de ${persona.nombreCompleto}`}
+                        etiquetaConfirmar="Desvincular"
+                        etiqueta="Desvincular"
+                        onEliminar={() => eliminarVinculo(v.id)}
+                      />
                     </div>
                   </div>
                 </CardContent>

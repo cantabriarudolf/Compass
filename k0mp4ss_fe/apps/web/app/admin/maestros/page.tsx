@@ -41,7 +41,6 @@ import {
   IconAlertTriangle,
   IconEye,
   IconEyeOff,
-  IconTrash,
   IconFlag,
   IconPigMoney,
   IconHeartbeat,
@@ -53,6 +52,10 @@ import {
 } from "@tabler/icons-react"
 import { Checkbox } from "@workspace/ui/components/checkbox"
 import { esNacional, esTipoNacional } from "@/lib/maestros-nacionales"
+import {
+  EliminarConConfirmacion,
+  type ResultadoBorrado,
+} from "@/components/eliminar-con-confirmacion"
 
 const BADGE_OPTIONS = [
   { value: "bg-blue-500 text-white", label: "Azul" },
@@ -95,11 +98,127 @@ interface RegistroMaestro {
   abreviatura?: string
 }
 
+/**
+ * Qué se pierde al borrar un maestro, por tipo.
+ *
+ * Esta pantalla es UN punto de montaje que borra quince catálogos
+ * (`TIPO_POR_SUBTAB`), y no todos alimentan lo mismo: el estado de ocupación lo
+ * consultan los vínculos de unidad, la AFP y el banco los consultan las fichas
+ * laborales, el feriado lo consulta el cálculo de remuneraciones, y hay
+ * catálogos del país que hoy no los consume ningún registro. Una sola frase
+ * genérica diría de menos en unos casos y de más en otros, así que el texto va
+ * por tipo.
+ *
+ * La consecuencia sale de lo que el árbol ya dice: la descripción de cada
+ * catálogo en esta misma pantalla (`CardDescription`), el consumidor real del
+ * maestro (`useMaestros` en Estructura Física, Tipos de Unidad, Recursos,
+ * Vinculación de Unidades, ficha de persona) y el rechazo literal que ya
+ * devuelve el endpoint (`beforeDeleteMaestro` en `app/api/maestros/[tipo]/route.ts`).
+ */
+const BORRADO_POR_TIPO: Record<
+  string,
+  { readonly entidad: string; readonly consecuencia: string }
+> = {
+  // Estructura e inventario
+  "estados-ocupacion": {
+    entidad: "el estado de ocupación",
+    consecuencia:
+      "Las unidades y los vínculos de unidad quedan con un estado que ya no existe. El servidor rechaza la baja si algún vínculo lo usa («Conflicto: el estado de ocupación está en uso por vínculos de unidad.»).",
+  },
+  "categorias-macro": {
+    entidad: "la categoría macro",
+    consecuencia:
+      "Deja de ofrecerse como etiqueta al crear un macro sector en Inventario → Estructura Física; los sectores ya creados conservan la etiqueta con que se guardaron.",
+  },
+  "categorias-micro": {
+    entidad: "la categoría micro",
+    consecuencia:
+      "Deja de ofrecerse como etiqueta al crear un micro sector en Inventario → Estructura Física; los sectores ya creados conservan la etiqueta con que se guardaron.",
+  },
+  "categorias-unidad": {
+    entidad: "la categoría de unidad",
+    consecuencia:
+      "Deja de ofrecerse como categoría en Tipos de Unidad (TU), Estructura Física y el formulario de unidad; las unidades ya creadas conservan la categoría con que se guardaron.",
+  },
+  // Personas y comunidad
+  "condiciones-especiales": {
+    entidad: "la condición especial",
+    consecuencia:
+      "Las personas la pierden de su ficha. El servidor rechaza la baja si alguna persona de la comunidad la tiene asignada («Conflicto: la condición especial está asignada a personas de la comunidad.»).",
+  },
+  "estados-inmobiliarios": {
+    entidad: "el estado inmobiliario",
+    consecuencia:
+      "Deja de ofrecerse al vincular una unidad en Vinculación de Unidades (VU), y los vínculos que ya lo tienen quedan apuntando a un estado que no existe.",
+  },
+  "contactos-emergencia": {
+    entidad: "el contacto de emergencia",
+    consecuencia:
+      "El número sale del directorio de emergencias de la comunidad, que es lo que se consulta ante una urgencia.",
+  },
+  // Finanzas y RRHH
+  bancos: {
+    entidad: "el banco",
+    consecuencia:
+      "Las fichas laborales que lo tienen quedan sin banco. El servidor rechaza la baja si alguna ficha laboral lo usa («Conflicto: el maestro está en uso por fichas laborales (campo bancoId).»).",
+  },
+  // Catálogos del país
+  afps: {
+    entidad: "la AFP",
+    consecuencia:
+      "Las fichas laborales que la tienen quedan sin AFP. El servidor rechaza la baja si alguna ficha laboral la usa («Conflicto: el maestro está en uso por fichas laborales (campo afpId).»).",
+  },
+  "previsiones-salud": {
+    entidad: "la previsión de salud",
+    consecuencia:
+      "Las fichas laborales que la tienen quedan sin previsión. El servidor rechaza la baja si alguna ficha laboral la usa («Conflicto: el maestro está en uso por fichas laborales (campo saludId).»).",
+  },
+  "mutuales-cajas": {
+    entidad: "la mutual o caja de compensación",
+    consecuencia:
+      "Las fichas laborales que la tienen quedan sin mutualidad. El servidor rechaza la baja si alguna ficha laboral la usa («Conflicto: el maestro está en uso por fichas laborales (campo mutualidadId).»).",
+  },
+  feriados: {
+    entidad: "el feriado",
+    consecuencia:
+      "El cálculo de remuneraciones de ese día deja de considerar el feriado legal.",
+  },
+  "indices-ajuste": {
+    entidad: "el índice de ajuste",
+    consecuencia:
+      "Se pierde el índice con su código; ningún registro del sistema lo usa, así que la baja no deja referencias huérfanas.",
+  },
+  "cajas-fondos": {
+    entidad: "la caja de fondos",
+    consecuencia:
+      "Se pierde el tipo de fondo del catálogo; ningún registro del sistema lo usa, así que la baja no deja referencias huérfanas.",
+  },
+  "unidades-medida": {
+    entidad: "la unidad de medida",
+    consecuencia:
+      "Deja de ofrecerse como unidad de medida de los recursos de Inventario; los recursos que ya la usan quedan con una unidad que no existe.",
+  },
+}
+
+/** Un tipo sin texto propio se nombra a sí mismo en vez de caer en un genérico mudo. */
+function descripcionDeBorrado(tipo: string): { entidad: string; consecuencia: string } {
+  return (
+    BORRADO_POR_TIPO[tipo] ?? {
+      entidad: `el maestro «${tipo}»`,
+      consecuencia:
+        "Se pierde el registro del catálogo y los formularios que lo ofrecen dejan de listarlo.",
+    }
+  )
+}
+
 /** Acciones de una fila de maestro según si la fila es del catálogo nacional.
  *
  * F20 fase 1b: la fila nacional es de sólo lectura — sin editar ni borrar;
  * ofrece Ocultar, o Mostrar si la comunidad ya la ocultó. La fila propia
  * conserva el comportamiento de siempre: editar y borrar.
+ *
+ * El borrado va por la guarda única (S1/S2): el primer click abre el diálogo con
+ * el tipo de maestro y el nombre de la fila, y la baja viaja al confirmar.
  */
 function AccionesFila({
   tipo,
@@ -111,7 +230,7 @@ function AccionesFila({
   tipo: string
   item: RegistroMaestro
   onEditar: (item: RegistroMaestro) => void
-  onBorrar: (item: RegistroMaestro) => void
+  onBorrar: (item: RegistroMaestro) => Promise<ResultadoBorrado>
   onOcultar: (item: RegistroMaestro) => void
 }) {
   if (esNacional(tipo, item.id)) {
@@ -125,14 +244,18 @@ function AccionesFila({
       </Button>
     )
   }
+  const { entidad, consecuencia } = descripcionDeBorrado(tipo)
   return (
     <>
       <Button variant="ghost" size="icon" aria-label={`Editar ${item.nombre}`} onClick={() => onEditar(item)}>
         <IconPencil className="size-4" />
       </Button>
-      <Button variant="ghost" size="icon" aria-label={`Borrar ${item.nombre}`} onClick={() => onBorrar(item)}>
-        <IconTrash className="size-4" />
-      </Button>
+      <EliminarConConfirmacion
+        titulo={`Eliminar ${entidad} «${item.nombre}»`}
+        consecuencia={consecuencia}
+        ariaLabel={`Borrar ${item.nombre}`}
+        onEliminar={() => onBorrar(item)}
+      />
     </>
   )
 }
@@ -299,12 +422,18 @@ export default function MaestrosPage() {
     }
   }
 
-  const handleBorrar = async (item: RegistroMaestro) => {
+  /** Baja del maestro: el resultado vuelve a la guarda, que no cierra si falló. */
+  const handleBorrar = async (item: RegistroMaestro): Promise<ResultadoBorrado> => {
     setErrorAccion(null)
     const resultado = await borrarRegistro(item.id)
     if (!resultado.ok) {
-      setErrorAccion(resultado.error ?? "No se pudo borrar el registro.")
+      const motivo = resultado.error ?? "No se pudo borrar el registro."
+      // El aviso de la pantalla se conserva tal como estaba; además el motivo
+      // vuelve a la guarda para leerse dentro del diálogo.
+      setErrorAccion(motivo)
+      return { ok: false, error: motivo }
     }
+    return { ok: true }
   }
 
   const handleSave = async (e: React.FormEvent<HTMLFormElement>) => {

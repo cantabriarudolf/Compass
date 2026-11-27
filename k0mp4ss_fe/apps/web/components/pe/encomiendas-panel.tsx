@@ -27,8 +27,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@workspace/ui/components/dialog"
-import { IconCheck, IconTrash } from "@tabler/icons-react"
+import { IconCheck } from "@tabler/icons-react"
 import { AvisoTruncamiento, LIMITE_SELECT } from "@/components/pe/aviso-truncamiento"
+import { EliminarConConfirmacion } from "@/components/eliminar-con-confirmacion"
 import type { EncomiendaPE } from "@/lib/schemas"
 
 interface FormEncomienda {
@@ -210,11 +211,6 @@ export function EncomiendasPanel({
     onSuccess("Retiro registrado.")
   }
 
-  const eliminarEncomienda = async (id: string) => {
-    const r = await eliminarEncomiendaApi(id)
-    if (!r.ok) onError(r.error ?? "")
-  }
-
   return (
     <>
       <div className="grid gap-4 lg:grid-cols-[420px_1fr]">
@@ -382,13 +378,13 @@ export function EncomiendasPanel({
                               >
                                 Registrar retiro
                               </Button>
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                onClick={() => void eliminarEncomienda(e.id)}
-                              >
-                                <IconTrash className="size-4" />
-                              </Button>
+                              <EliminarConConfirmacion
+                                titulo={`Eliminar la encomienda de ${nombreCourier(e.courierId)}${e.descripcionPaquete ? ` · ${e.descripcionPaquete}` : ""}`}
+                                consecuencia="Se pierde la constancia de quién la recibió y quién la retiró."
+                                ariaLabel={`Eliminar la encomienda de ${nombreCourier(e.courierId)}`}
+                                onEliminar={() => eliminarEncomiendaApi(e.id)}
+                                onError={onError}
+                              />
                             </>
                           )}
                         </td>

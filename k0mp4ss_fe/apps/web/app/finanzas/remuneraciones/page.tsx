@@ -49,6 +49,7 @@ import {
   documentoLiquidacionPDF,
   identidadInstitucionalDesdeConfiguracion,
 } from "@/lib/pdf-utils"
+import { EliminarConConfirmacion } from "@/components/eliminar-con-confirmacion"
 
 interface BonoForm {
   glosa: string
@@ -237,10 +238,12 @@ export default function RemuneracionesPage() {
     else setOkMsg("Liquidación confirmada: egreso de sueldos sincronizado en Finanzas.")
   }
 
+  /** La baja la ejecuta la guarda única: el borrador se elimina recién al confirmar. */
   const eliminar = async (id: string) => {
     setError(null); setOkMsg(null)
     const r = await removeApi(id)
     if (!r.ok) setError(r.error ?? "Error al eliminar")
+    return r
   }
 
   const descargarPdf = async (liq: LiquidacionPL) => {
@@ -499,7 +502,12 @@ export default function RemuneracionesPage() {
                               {l.estado === "borrador" && (
                                 <>
                                   <Button size="sm" variant="outline" onClick={() => { void confirmar(l.id) }}>Confirmar</Button>
-                                  <Button size="sm" variant="ghost" onClick={() => { void eliminar(l.id) }}><IconTrash className="size-4" /></Button>
+                                  <EliminarConConfirmacion
+                                    ariaLabel={`Eliminar la liquidación ${l.folio}`}
+                                    titulo={`Eliminar la liquidación ${l.folio} de ${nombrePersona(l.trabajadorPersonaId)} · periodo ${l.periodo}`}
+                                    consecuencia="Se pierden los haberes y descuentos calculados; los adelantos que la nombraban quedan sin liquidación."
+                                    onEliminar={() => eliminar(l.id)}
+                                  />
                                 </>
                               )}
                               {l.estado === "confirmada" && l.proyeccionPEReferencia && (

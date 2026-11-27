@@ -27,7 +27,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@workspace/ui/components/select"
-import { IconCertificate, IconFileText, IconTrash } from "@tabler/icons-react"
+import { IconCertificate, IconFileText } from "@tabler/icons-react"
+import {
+  EliminarConConfirmacion,
+  type ResultadoBorrado,
+} from "@/components/eliminar-con-confirmacion"
 import type { CertificadoCT, CertificadoCTAlta, Unidad } from "@/lib/schemas"
 import { CertificadoCTAltaSchema } from "@/lib/schemas"
 import {
@@ -168,7 +172,14 @@ function MarcoCertificados({
   )
 }
 
-/** Historial de emisión (inmutable): la misma tabla para la gestión y el residente. */
+/**
+ * Historial de emisión (inmutable): la misma tabla para la gestión y el residente.
+ *
+ * La baja de una fila de prueba pasa por la guarda única (S1/S2): el primer click
+ * abre el diálogo con el folio y la tipología, y el motivo del rechazo —el 409 de
+ * inmutabilidad del endpoint— se lee dentro, porque esta tabla no tiene banner
+ * propio donde mostrarlo.
+ */
 function HistorialCertificados({
   certificados,
   pdfBusy,
@@ -180,7 +191,7 @@ function HistorialCertificados({
   certificados: CertificadoCT[]
   pdfBusy: string | null
   onDescargar: (c: CertificadoCT) => void
-  onEliminar: (id: string) => void
+  onEliminar: (id: string) => Promise<ResultadoBorrado>
   nombrePersona: (id?: string) => string
   refUnidad: (id?: string) => string
 }) {
@@ -222,7 +233,12 @@ function HistorialCertificados({
                           <IconFileText className="size-4 mr-1" /> PDF
                         </Button>
                         {c.id.startsWith("test-") && (
-                          <Button size="sm" variant="ghost" onClick={() => { onEliminar(c.id) }}><IconTrash className="size-4" /></Button>
+                          <EliminarConConfirmacion
+                            titulo={`Eliminar el certificado ${c.folio} · ${TIPO_LABEL[c.tipo]}`}
+                            consecuencia="Se pierde la constancia de la emisión: su folio y su código de verificación dejan de poder contrastarse contra el historial."
+                            ariaLabel={`Eliminar el certificado ${c.folio}`}
+                            onEliminar={() => onEliminar(c.id)}
+                          />
                         )}
                       </div>
                     </td>
@@ -649,7 +665,7 @@ function CertificadosGestion({ tiposEmisibles }: CertificadosEmisionProps) {
             certificados={certificados}
             pdfBusy={pdfBusy}
             onDescargar={c => { void descargar(c) }}
-            onEliminar={id => { void removeCertificadoApi(id) }}
+            onEliminar={(id) => removeCertificadoApi(id)}
             nombrePersona={nombrePersona}
             refUnidad={refUnidadUI}
           />
@@ -931,7 +947,7 @@ function CertificadosPropios() {
           certificados={certificados}
           pdfBusy={pdfBusy}
           onDescargar={c => { void descargar(c) }}
-          onEliminar={id => { void removeCertificadoApi(id) }}
+          onEliminar={(id) => removeCertificadoApi(id)}
           nombrePersona={nombrePersona}
           refUnidad={refUnidad}
         />

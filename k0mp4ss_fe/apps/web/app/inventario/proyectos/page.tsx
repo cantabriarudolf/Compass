@@ -7,6 +7,7 @@ import { useRecursosIR } from "@/lib/api/use-ir"
 import { usePersonas } from "@/lib/api/use-personas"
 import { useUnidades } from "@/lib/api/use-unidades"
 import { useMicroSectores } from "@/lib/api/use-micro-sectores"
+import { EliminarConConfirmacion } from "@/components/eliminar-con-confirmacion"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@workspace/ui/components/card"
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
@@ -618,10 +619,18 @@ export default function ProyectosPage() {
                       <td className="py-2 pr-3">{p.plazoMeses} meses{p.fechaObjetivo ? ` · objetivo ${p.fechaObjetivo}` : ""}</td>
                       <td className="py-2 pr-3 font-medium">${Math.round(p.presupuestoEstimado / p.plazoMeses).toLocaleString("es-CL")}</td>
                       <td className="py-2">
-                        <Button size="sm" variant="ghost" onClick={async () => {
-                          const r = await eliminarProyecto(p.id)
-                          if (!r.ok) setError(r.error ?? "")
-                        }}>Eliminar</Button>
+                        <EliminarConConfirmacion
+                          titulo={`Eliminar el proyecto «${p.nombre}» · ${ESTADO_PROYECTO_LABEL[p.estado]} · $${p.presupuestoEstimado.toLocaleString("es-CL")}`}
+                          consecuencia="Se pierde el proyecto con su presupuesto y plazo; el fondo que lo financiaba pierde la imputación."
+                          ariaLabel={`Eliminar el proyecto ${p.nombre}`}
+                          etiqueta="Eliminar"
+                          onError={setError}
+                          onEliminar={async () => {
+                            const r = await eliminarProyecto(p.id)
+                            if (!r.ok) return { ok: false, error: r.error }
+                            return { ok: true }
+                          }}
+                        />
                       </td>
                     </tr>
                   ))}

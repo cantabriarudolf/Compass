@@ -39,6 +39,7 @@ import { periodoDirectivaVigente, esMiembroDirectivaVigente } from "@/lib/store/
 import { useActasGD } from "@/lib/api/use-actas-gd"
 import { usePeriodosDirectiva } from "@/lib/api/use-periodos-directiva"
 import { useControlesPropiedad } from "@/lib/api/use-controles-propiedad"
+import { EliminarConConfirmacion } from "@/components/eliminar-con-confirmacion"
 
 type Vista = "administrador" | "propietario" | "residente"
 
@@ -390,14 +391,18 @@ export default function DirectivaPage() {
                       >
                         <IconPencil className="size-4" />
                       </Button>
-                      <Button variant="ghost" size="icon" aria-label="Eliminar acta"
-                        onClick={async () => {
+                      <EliminarConConfirmacion
+                        titulo={`Archivar el acta folio ${acta.folio ?? "sin folio"} del ${acta.fecha} · ${acta.hora}`}
+                        consecuencia="El acta sale del libro y queda desestimada; los acuerdos y publicaciones que la citan apuntan a un acta desestimada."
+                        ariaLabel={`Archivar el acta folio ${acta.folio ?? "sin folio"}`}
+                        etiquetaConfirmar="Archivar"
+                        onError={(mensaje) => setError(mensaje)}
+                        onEliminar={async () => {
                           const r = await eliminarActa(acta.id)
-                          if (!r.ok) setError(r.error ?? "No se pudo eliminar.")
+                          if (!r.ok) return { ok: false, error: r.error ?? "No se pudo eliminar." }
+                          return { ok: true }
                         }}
-                      >
-                        ✕
-                      </Button>
+                      />
                     </div>
                   )}
                 </div>

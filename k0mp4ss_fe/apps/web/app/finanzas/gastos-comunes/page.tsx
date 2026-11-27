@@ -12,7 +12,7 @@ import { Badge } from "@workspace/ui/components/badge"
 import { Switch } from "@workspace/ui/components/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@workspace/ui/components/tabs"
 import { AvisoTruncamiento } from "@/components/pe/aviso-truncamiento"
-import { ConfirmarEliminacion } from "@/components/confirmar-eliminacion"
+import { EliminarConConfirmacion } from "@/components/eliminar-con-confirmacion"
 import {
   Select,
   SelectContent,
@@ -346,8 +346,6 @@ export default function GastosComunesPage() {
   const [gastoTotal, setGastoTotal] = React.useState("")
   const [unidadIdsEmision, setUnidadIdsEmision] = React.useState<string>("todas")
   const [moraTasa, setMoraTasa] = React.useState("1")
-  const [fondoAEliminar, setFondoAEliminar] = React.useState<{ id: string; nombre: string } | null>(null)
-  const [eliminandoFondo, setEliminandoFondo] = React.useState(false)
 
 
   const saldoInicialPorFondo = React.useMemo(
@@ -557,28 +555,28 @@ export default function GastosComunesPage() {
     }
   }
 
-      /** La baja se ejecuta recién con la confirmación del diálogo. */
-      const eliminarFondoClick = async () => {
-        if (!fondoAEliminar) return
-        setError(null)
-        setEliminandoFondo(true)
-        const r = await eliminarFondo(fondoAEliminar.id)
-        setEliminandoFondo(false)
-        // El 409 del servidor se muestra en el aviso inline, igual que antes.
-        setFondoAEliminar(null)
-        if (!r.ok) setError(r.error ?? "")
-        else setOkMsg("Fondo eliminado.")
-      }
+  /**
+   * La baja del fondo la ejecuta la guarda única, recién con la confirmación.
+   * El 409 del servidor (movimientos o proyectos en el fondo) queda en el aviso
+   * inline, igual que antes; la guarda además lo muestra dentro del diálogo.
+   */
+  const eliminarFondoClick = async (id: string) => {
+    setError(null)
+    const r = await eliminarFondo(id)
+    if (!r.ok) setError(r.error ?? "")
+    else setOkMsg("Fondo eliminado.")
+    return r
+  }
 
-      const eliminarEgresoClick = async (id: string) => {
-        const r = await eliminarEgreso(id)
-        if (!r.ok) setError(r.error ?? "No se pudo eliminar el gasto.")
-      }
+  const eliminarEgresoClick = async (id: string) => {
+    const r = await eliminarEgreso(id)
+    if (!r.ok) setError(r.error ?? "No se pudo eliminar el gasto.")
+  }
 
-      const eliminarIngresoClick = async (id: string) => {
-        const r = await eliminarIngreso(id)
-        if (!r.ok) setError(r.error ?? "No se pudo eliminar el ingreso.")
-      }
+  const eliminarIngresoClick = async (id: string) => {
+    const r = await eliminarIngreso(id)
+    if (!r.ok) setError(r.error ?? "No se pudo eliminar el ingreso.")
+  }
 
       /** Mora espejo de aplicarMoraFI: cálculo local + PUT del cobro. */
       const aplicarMoraClick = async (cobro: CobroFI, tasa: number) => {
@@ -667,9 +665,13 @@ export default function GastosComunesPage() {
                     <Button size="sm" variant="outline" onClick={() => { setEditandoFondoId(f.id); setFormFondo({ nombre: f.nombre, tipo: f.tipo, descripcion: f.descripcion ?? "", porcentajeAporte: f.porcentajeAporte?.toString() ?? "", activo: f.activo, saldoInicial: f.saldoInicial?.toString() ?? "" }) }}>
                       <IconPencil className="size-3.5 mr-1" /> Editar
                     </Button>
-                    <Button size="sm" variant="ghost" className="text-destructive" onClick={() => { setError(null); setFondoAEliminar({ id: f.id, nombre: f.nombre }) }}>
-                      <IconTrash className="size-3.5 mr-1" /> Eliminar
-                    </Button>
+                    <EliminarConConfirmacion
+                      etiqueta="Eliminar"
+                      ariaLabel={`Eliminar el fondo "${f.nombre}"`}
+                      titulo={`¿Eliminar el fondo "${f.nombre}"?`}
+                      consecuencia="Los egresos, ingresos y proyectos de mantenimiento que lo usan quedan sin fondo. Si el fondo tiene movimientos, el sistema no lo va a borrar."
+                      onEliminar={() => eliminarFondoClick(f.id)}
+                    />
                   </div>
                 </CardContent>
               </Card>
@@ -1150,18 +1152,6 @@ export default function GastosComunesPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      {fondoAEliminar && (
-        <ConfirmarEliminacion
-          abierto
-          titulo={`¿Eliminar el fondo "${fondoAEliminar.nombre}"?`}
-          consecuencia="Los egresos, ingresos y proyectos de mantenimiento que lo usan quedan sin fondo. Si el fondo tiene movimientos, el sistema no lo va a borrar."
-          etiquetaConfirmar="Eliminar"
-          onConfirmar={() => void eliminarFondoClick()}
-          onCancelar={() => setFondoAEliminar(null)}
-          ocupado={eliminandoFondo}
-        />
-      )}
     </div>
   )
 }

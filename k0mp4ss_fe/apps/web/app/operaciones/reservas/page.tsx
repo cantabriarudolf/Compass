@@ -10,6 +10,7 @@ import { useUnidades } from "@/lib/api/use-unidades"
 import { useMicroSectores } from "@/lib/api/use-micro-sectores"
 import { useRecursosIR } from "@/lib/api/use-ir"
 import { useElementosRA, useReservasRA } from "@/lib/api/use-ra"
+import { EliminarConConfirmacion } from "@/components/eliminar-con-confirmacion"
 import {
   Card,
   CardContent,
@@ -650,17 +651,18 @@ update: actualizarReservaApi,
                             >
                               Editar
                             </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="text-destructive"
-                              onClick={async () => {
+                            <EliminarConConfirmacion
+                              titulo={`Eliminar el elemento «${e.nombre}» · ${TIPO_LABEL[e.tipo]} · ${refUbicacion(e)}`}
+                              consecuencia="Se pierden sus reservas históricas, que quedan apuntando a un elemento inexistente."
+                              ariaLabel={`Eliminar el elemento ${e.nombre}`}
+                              etiqueta="Eliminar"
+                              onError={setError}
+                              onEliminar={async () => {
                                 const r2 = await eliminarElementoApi(e.id)
-                                if (!r2.ok) setError(r2.error ?? "")
+                                if (!r2.ok) return { ok: false, error: r2.error }
+                                return { ok: true }
                               }}
-                            >
-                              Eliminar
-                            </Button>
+                            />
                           </td>
                         </tr>
                       ))}

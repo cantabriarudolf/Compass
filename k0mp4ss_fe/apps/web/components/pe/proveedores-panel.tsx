@@ -74,8 +74,8 @@ import {
   IconClipboardList,
   IconPlus,
   IconPencil,
-  IconTrash,
 } from "@tabler/icons-react"
+import { EliminarConConfirmacion } from "@/components/eliminar-con-confirmacion"
 import type { VisitaTecnicaPE } from "@/lib/schemas"
 
 interface FormProveedor {
@@ -403,25 +403,27 @@ export function ProveedoresPanel({ roles }: ProveedoresPanelProps) {
                             </Button>
                           )}
                           {escritura.eliminar && (
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              aria-label={`Eliminar ${p.nombre}`}
-                              onClick={async () => {
+                            <EliminarConConfirmacion
+                              titulo={`Eliminar el proveedor ${p.nombre}`}
+                              consecuencia="Se pierde la ficha y sus datos de contacto; las mantenciones y visitas técnicas quedan nombrando un proveedor inexistente."
+                              ariaLabel={`Eliminar ${p.nombre}`}
+                              onError={setError}
+                              onEliminar={async () => {
                                 // Paridad con la regla legacy: no se elimina un proveedor con mantenciones o visitas asociadas.
                                 const mant = mantenciones.filter((m) => m.proveedorId === p.id).length
                                 const vis = visitasTecnicas.filter((v) => v.proveedorId === p.id).length
                                 if (mant > 0 || vis > 0) {
-                                  setError(`No se puede eliminar el proveedor: ${mant} mantención(es) y ${vis} visita(s) técnica(s) asociadas.`)
-                                  return
+                                  return {
+                                    ok: false,
+                                    error: `No se puede eliminar el proveedor: ${mant} mantención(es) y ${vis} visita(s) técnica(s) asociadas.`,
+                                  }
                                 }
                                 const r = await eliminarProveedorApi(p.id)
-                                if (!r.ok) setError(r.error ?? "")
-                                else setOkMsg("Proveedor eliminado.")
+                                if (!r.ok) return { ok: false, error: r.error }
+                                setOkMsg("Proveedor eliminado.")
+                                return { ok: true }
                               }}
-                            >
-                              <IconTrash className="size-4" />
-                            </Button>
+                            />
                           )}
                         </td>
                       </tr>

@@ -44,6 +44,7 @@ import {
 } from "@tabler/icons-react"
 import Link from "next/link"
 import type { PublicacionPortal, ImagenReferencia } from "@/lib/schemas"
+import { EliminarConConfirmacion } from "@/components/eliminar-con-confirmacion"
 
 const formatoPrecio = (precio: number, moneda?: string) => {
   if (moneda === "UF") return `${precio.toLocaleString("es-CL")} UF`
@@ -348,15 +349,17 @@ export default function PortalInmobiliarioPage() {
                           <Button variant="ghost" size="icon" aria-label="Editar" onClick={() => { setEditando({ ...p }); setNuevaUrlImagen(""); }}>
                             <IconPencil className="size-4" />
                           </Button>
-                          <Button variant="ghost" size="icon" aria-label="Eliminar"
-                            onClick={() => {
-                              void eliminarPublicacion(p.id).then(r => {
-                                if (!r.ok) setErrorGestion(r.error ?? "No se pudo eliminar.")
-                              })
+                          <EliminarConConfirmacion
+                            titulo={`Eliminar la publicación de ${refUnidad(p.unidadId)} · ${p.operacion}`}
+                            consecuencia="Se pierden fotos y descripción; las consultas que captó quedan sin publicación."
+                            ariaLabel={`Eliminar la publicación de ${refUnidad(p.unidadId)}`}
+                            onError={(mensaje) => setErrorGestion(mensaje)}
+                            onEliminar={async () => {
+                              const r = await eliminarPublicacion(p.id)
+                              if (!r.ok) return { ok: false, error: r.error ?? "No se pudo eliminar." }
+                              return { ok: true }
                             }}
-                          >
-                            <IconTrash className="size-4" />
-                          </Button>
+                          />
                         </div>
                       </td>
                     </tr>

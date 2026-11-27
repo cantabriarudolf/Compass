@@ -27,8 +27,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@workspace/ui/components/select"
-import { IconCheck, IconQrcode, IconSearch, IconTrash } from "@tabler/icons-react"
+import { IconCheck, IconQrcode, IconSearch } from "@tabler/icons-react"
 import { EscaneoQrCedula } from "@/components/pe/escaneo-qr-cedula"
+import { EliminarConConfirmacion } from "@/components/eliminar-con-confirmacion"
 import { SelectorBuscable, type Opcion } from "@/components/selector-buscable"
 import { buscarPersonaPorRun, buscarPersonas, nombresDePersonas, usePersonasOperacion } from "@/lib/api/use-personas"
 import { buscarUnidades, etiquetasDeUnidades, useUnidadesOperacion } from "@/lib/api/use-unidades"
@@ -440,11 +441,6 @@ export function VisitasPanel({
     else onSuccess(`Visita ${visita.nombre} ingresada.`)
   }
 
-  const eliminarVisita = async (id: string) => {
-    const r = await eliminarVisitaApi(id)
-    if (!r.ok) onError(r.error ?? "")
-  }
-
   return (
     <div className="grid gap-4 lg:grid-cols-[420px_1fr]">
       <Card>
@@ -737,13 +733,13 @@ export function VisitasPanel({
                           </Button>
                         )}
                         {v.estado !== "ingresada" && (
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            onClick={() => void eliminarVisita(v.id)}
-                          >
-                            <IconTrash className="size-4" />
-                          </Button>
+                          <EliminarConConfirmacion
+                            titulo={`Eliminar la visita de ${v.nombre} · ${v.dni} · ${refUnidad(v.unidadId)}`}
+                            consecuencia="Se pierde la constancia del ingreso en la bitácora."
+                            ariaLabel={`Eliminar la visita de ${v.nombre}`}
+                            onEliminar={() => eliminarVisitaApi(v.id)}
+                            onError={onError}
+                          />
                         )}
                       </td>
                     </tr>

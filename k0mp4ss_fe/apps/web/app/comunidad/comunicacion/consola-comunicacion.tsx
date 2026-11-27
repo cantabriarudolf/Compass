@@ -33,13 +33,13 @@ import {
   IconInbox,
   IconPlus,
   IconPencil,
-  IconTrash,
   IconCheck,
 } from "@tabler/icons-react"
 import { MetricaLecturas } from "@/components/co/metrica-lecturas"
 import { totalesDeEnvio } from "@/components/co/totales-envio"
 import { BuscadorEntidad, type EntidadSeleccion } from "@/components/buscador-entidad"
 import { AvisoTruncamiento } from "@/components/pe/aviso-truncamiento"
+import { EliminarConConfirmacion } from "@/components/eliminar-con-confirmacion"
 import type { EstadoBuzonCO, MensajeBuzonCO, PlantillaCO } from "@/lib/schemas"
 import { generarId } from "@/lib/id-utils"
 import { hoyISO } from "@/lib/date-utils"
@@ -732,10 +732,17 @@ export function ConsolaComunicacionCO() {
                       </div>
                       <div className="flex gap-1">
                         <Button variant="ghost" size="icon" aria-label="Editar plantilla" onClick={() => setEditandoPlantilla({ ...pl })}><IconPencil className="size-4" /></Button>
-                        <Button variant="ghost" size="icon" aria-label="Eliminar plantilla" onClick={() => { void (async () => {
-                          const r = await eliminarPlantillaApi(pl.id)
-                          if (!r.ok) setError(r.error ?? "No se pudo eliminar.")
-                        })() }}><IconTrash className="size-4" /></Button>
+                        <EliminarConConfirmacion
+                          titulo={`Eliminar la plantilla «${pl.nombre}» · ${pl.categoria}`}
+                          consecuencia="Se pierde la plantilla; los envíos que la usaron quedan sin la plantilla que los originó."
+                          ariaLabel={`Eliminar la plantilla «${pl.nombre}»`}
+                          onError={(mensaje) => setError(mensaje)}
+                          onEliminar={async () => {
+                            const r = await eliminarPlantillaApi(pl.id)
+                            if (!r.ok) return { ok: false, error: r.error ?? "No se pudo eliminar." }
+                            return { ok: true }
+                          }}
+                        />
                       </div>
                     </div>
                   </CardHeader>
