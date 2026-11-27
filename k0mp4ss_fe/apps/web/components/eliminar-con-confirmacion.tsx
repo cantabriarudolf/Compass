@@ -100,10 +100,13 @@ export function EliminarConConfirmacion({
         setError(motivo)
         onError?.(motivo)
       }
-    } catch {
+    } catch (causa) {
       // Una promesa rechazada no es un resultado: sin esto el diálogo quedaba
       // abierto con el motivo vacío y nadie se enteraba de la baja que no fue.
-      const motivo = "No se pudo completar la baja: la pantalla no recibió respuesta del servidor."
+      // Si el rechazo trae su propio texto, ése es el motivo — cambiarlo por un
+      // genérico escondería justo lo que el usuario necesita leer.
+      const texto = causa instanceof Error ? causa.message.trim() : ""
+      const motivo = texto || "La baja no pudo completarse."
       setError(motivo)
       onError?.(motivo)
     } finally {

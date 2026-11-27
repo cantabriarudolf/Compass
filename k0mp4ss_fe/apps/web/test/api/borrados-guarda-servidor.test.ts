@@ -450,6 +450,22 @@ describe("DELETE con dependientes por texto — 409 literal y ninguna fila borra
     ).not.toBeNull()
   })
 
+  it("proveedor con una sola mantención INACTIVA → 409 (la inactiva se sigue listando con su proveedor)", async () => {
+    const res = await borrar(eliminarProveedor, ID.proveedorSosten)
+
+    expect(res.status).toBe(409)
+    await expect(res.json()).resolves.toEqual({
+      error:
+        "No se puede eliminar el proveedor: tiene 1 mantención(es) preventiva(s) asociada(s).",
+    })
+    expect(
+      await prisma.proveedorPE.findUnique({ where: { id: ID.proveedorSosten } })
+    ).not.toBeNull()
+    expect(
+      await prisma.mantencionPreventivaPE.findUnique({ where: { id: ID.mantencionLibre } })
+    ).not.toBeNull()
+  })
+
   it("proveedor con una visita técnica → 409 y no borra nada", async () => {
     const res = await borrar(eliminarProveedor, ID.proveedorConVisita)
 

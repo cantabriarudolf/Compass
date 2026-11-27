@@ -136,10 +136,10 @@ describe("EliminarConConfirmacion", () => {
     expect(within(sigueAbierto).getByRole("alert").textContent).toContain("no explicó el motivo")
   })
 
-  it("una promesa rechazada no deja el diálogo mudo: reporta el motivo y sigue abierto", async () => {
+  it("una promesa rechazada conserva el texto del rechazo y deja el diálogo abierto", async () => {
     const usuario = userEvent.setup()
     const onEliminar = vi.fn(async (): Promise<ResultadoBorrado> => {
-      throw new Error("network down")
+      throw new Error("Se cayó la conexión con el servidor.")
     })
     const { onError } = montar({ onEliminar })
 
@@ -147,8 +147,24 @@ describe("EliminarConConfirmacion", () => {
     await usuario.click(within(dialogo).getByRole("button", { name: "Eliminar" }))
 
     await waitFor(() => expect(onError).toHaveBeenCalledTimes(1))
+    expect(onError).toHaveBeenCalledWith("Se cayó la conexión con el servidor.")
     const sigueAbierto = screen.getByRole("alertdialog")
-    expect(within(sigueAbierto).getByRole("alert").textContent).toContain("no recibió respuesta")
+    expect(within(sigueAbierto).getByRole("alert").textContent).toContain("Se cayó la conexión")
+  })
+
+  it("un rechazo que no es un error trae su propio motivo genérico, no una línea vacía", async () => {
+    const usuario = userEvent.setup()
+    const onEliminar = vi.fn(async (): Promise<ResultadoBorrado> => {
+      throw "boom"
+    })
+    const { onError } = montar({ onEliminar })
+
+    const dialogo = await abrirDialogo(usuario)
+    await usuario.click(within(dialogo).getByRole("button", { name: "Eliminar" }))
+
+    await waitFor(() => expect(onError).toHaveBeenCalledWith("La baja no pudo completarse."))
+    const sigueAbierto = screen.getByRole("alertdialog")
+    expect(within(sigueAbierto).getByRole("alert").textContent).toContain("no pudo completarse")
   })
 
   it("un segundo click con la baja en vuelo no dispara otra baja", async () => {
