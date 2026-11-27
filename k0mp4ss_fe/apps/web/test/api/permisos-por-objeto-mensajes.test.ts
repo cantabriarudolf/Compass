@@ -1314,6 +1314,63 @@ const DECLARACIONES: readonly Declaracion[] = [
     motivo:
       "el número cuenta usuarios que apuntan a la persona del path; no describe la fila de un tercero y la ruta exige `mp` eliminar.",
   },
+  // ── Guardas de baja por dependientes que son texto sin FK (T6) ───────
+  {
+    archivo: "app/api/pe/proveedores/[id]/route.ts",
+    mensaje:
+      "`No se puede eliminar el proveedor: tiene ${} mantención(es) preventiva(s) asociada(s).`",
+    clase: "no-fila",
+    motivo:
+      "el número cuenta mantenciones de la propia comunidad cuyo `proveedorId` (texto) apunta al proveedor del path; no describe la fila de un tercero y borrar exige `pe` eliminar.",
+  },
+  {
+    archivo: "app/api/pe/proveedores/[id]/route.ts",
+    mensaje:
+      "`No se puede eliminar el proveedor: tiene ${} visita(s) técnica(s) asociada(s).`",
+    clase: "no-fila",
+    motivo:
+      "el número cuenta visitas técnicas de la propia comunidad cuyo `proveedorId` (texto) apunta al proveedor del path; el conteo va acotado por `comunidadId`.",
+  },
+  {
+    archivo: "app/api/pe/mantenciones/[id]/route.ts",
+    mensaje:
+      "`No se puede eliminar la mantención: tiene ${} visita(s) técnica(s) asociada(s).`",
+    clase: "no-fila",
+    motivo:
+      "el número cuenta visitas técnicas de la propia comunidad cuyo `mantencionId` (texto) apunta a la mantención del path; el conteo va acotado por `comunidadId`.",
+  },
+  {
+    archivo: "app/api/co/plantillas/[id]/route.ts",
+    mensaje:
+      "`No se puede eliminar la plantilla: tiene ${} envío(s) asociado(s).`",
+    clase: "no-fila",
+    motivo:
+      "el número cuenta envíos de la propia comunidad cuyo `plantillaId` (texto) apunta a la plantilla del path; el conteo va acotado por `comunidadId`.",
+  },
+  {
+    archivo: "app/api/in/tipos/[id]/route.ts",
+    mensaje:
+      "`No se puede eliminar el tipo de infracción: tiene ${} infracción(es) asociada(s).`",
+    clase: "no-fila",
+    motivo:
+      "el número cuenta infracciones de la propia comunidad cuyo `tipoInfraccionId` (texto) apunta al tipo del path; el conteo va acotado por `comunidadId`.",
+  },
+  {
+    archivo: "app/api/in/tipos/[id]/route.ts",
+    mensaje:
+      "`No se puede eliminar el tipo de infracción: tiene ${} propuesta(s) de multa asociada(s).`",
+    clase: "no-fila",
+    motivo:
+      "el número cuenta propuestas de multa no desestimadas de la propia comunidad cuyo `tipoInfraccionId` (texto) apunta al tipo del path.",
+  },
+  {
+    archivo: "app/api/ra/elementos/[id]/route.ts",
+    mensaje:
+      "`No se puede eliminar el elemento: tiene ${} reserva(s) asociada(s).`",
+    clase: "no-fila",
+    motivo:
+      "el número cuenta reservas de la propia comunidad cuyo `elementoId` (texto) apunta al elemento del path; el conteo va acotado por `comunidadId`.",
+  },
 ]
 
 describe("mensajes de error — T12: ningún mensaje que interpola datos queda sin declarar", () => {
